@@ -1,24 +1,16 @@
 use super::run_group_ref;
 
-use crate::utils::arb_dependent_cost_values;
+use crate::utils::{
+    arb_dependent_cost_values,
+    set_full_word,
+};
+
 use criterion::{
     Criterion,
     Throughput,
 };
 use fuel_core_benches::*;
 use fuel_core_types::fuel_asm::*;
-
-/// Set a register `r` to a Word-sized number value using left-shifts
-fn set_full_word(r: RegisterId, v: Word) -> Vec<Instruction> {
-    let r = u8::try_from(r).unwrap();
-    let mut ops = vec![op::movi(r, 0)];
-    for byte in v.to_be_bytes() {
-        ops.push(op::ori(r, r, byte as u16));
-        ops.push(op::slli(r, r, 8));
-    }
-    ops.pop().unwrap(); // Remove last shift
-    ops
-}
 
 pub fn run(c: &mut Criterion) {
     run_group_ref(

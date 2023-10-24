@@ -27,13 +27,6 @@ pub fn run_alu(group: &mut BenchmarkGroup<WallTime>) {
     );
 
     run(
-        "alu/aloc opcode",
-        group,
-        [op::aloc(0x10), op::jmpb(RegId::ZERO, 0)].to_vec(),
-        vec![],
-    );
-
-    run(
         "alu/and opcode",
         group,
         [
