@@ -37,10 +37,7 @@ use rand::{
     Rng,
     SeedableRng,
 };
-use std::{
-    io,
-    io::ErrorKind::NotFound,
-};
+use std::io::ErrorKind::NotFound;
 
 mod predicates;
 mod tx_pointer;
@@ -647,38 +644,6 @@ async fn get_owned_transactions() {
     assert_eq!(&alice_txs, &[tx1]);
     assert_eq!(&bob_txs, &[tx2, tx3]);
     assert_eq!(&charlie_txs, &[tx1, tx2, tx3]);
-}
-
-impl TestContext {
-    async fn transfer(
-        &mut self,
-        from: Address,
-        to: Address,
-        amount: u64,
-    ) -> io::Result<Bytes32> {
-        let script = op::ret(0x10).to_bytes().to_vec();
-        let tx = Transaction::script(
-            Default::default(),
-            1_000_000,
-            Default::default(),
-            script,
-            vec![],
-            vec![Input::coin_signed(
-                self.rng.gen(),
-                from,
-                amount,
-                Default::default(),
-                Default::default(),
-                Default::default(),
-                Default::default(),
-            )],
-            vec![Output::coin(to, amount, Default::default())],
-            vec![vec![].into()],
-        )
-        .into();
-        self.client.submit_and_await_commit(&tx).await?;
-        Ok(tx.id(&Default::default()))
-    }
 }
 
 fn get_executor_and_db() -> (Executor<MaybeRelayerAdapter>, Database) {
