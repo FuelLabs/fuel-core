@@ -2,6 +2,7 @@ use crate::{
     BLOCK_PRODUCTION,
     P2P,
 };
+use atty::Stream;
 use clap::ValueEnum;
 use fuel_core_types::{
     fuel_crypto::{
@@ -20,9 +21,16 @@ use libp2p_identity::{
 };
 use serde_json::json;
 use std::{
+    io::{
+        stdin,
+        stdout,
+        Read,
+        Write,
+    },
     ops::Deref,
     str::FromStr,
 };
+use termion::screen::IntoAlternateScreen;
 
 /// Generate a random new secret & public key in the format expected by fuel-core
 #[derive(Debug, clap::Args)]
@@ -126,6 +134,27 @@ impl ParseSecret {
     }
 }
 
+fn wait_for_keypress() {
+    let mut single_key = [0u8];
+    stdin().read_exact(&mut single_key).unwrap();
+}
+
+fn display_string_discreetly(
+    discreet_string: &str,
+    continue_message: &str,
+) -> anyhow::Result<()> {
+    if atty::is(Stream::Stdout) {
+        let mut screen = stdout().into_alternate_screen()?;
+        writeln!(screen, "{discreet_string}")?;
+        screen.flush()?;
+        println!("{continue_message}");
+        wait_for_keypress();
+    } else {
+        println!("{discreet_string}");
+    }
+    Ok(())
+}
+
 fn print_value(output: serde_json::Value, pretty: bool) -> anyhow::Result<()> {
     let output = if pretty {
         serde_json::to_string_pretty(&output)
@@ -133,6 +162,10 @@ fn print_value(output: serde_json::Value, pretty: bool) -> anyhow::Result<()> {
         serde_json::to_string(&output)
     }
     .map_err(anyhow::Error::msg);
-    println!("{}", output?);
+
+    let _ = display_string_discreetly(
+        &output?,
+        "### Do not share or lose this private key! Press any key to complete. ###",
+    );
     Ok(())
 }

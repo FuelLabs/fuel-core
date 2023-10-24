@@ -45,7 +45,7 @@ pub struct DenseMerkleMetadata {
 
 impl Default for DenseMerkleMetadata {
     fn default() -> Self {
-        let empty_merkle_tree = binary::in_memory::MerkleTree::new();
+        let empty_merkle_tree = binary::root_calculator::MerkleRootCalculator::new();
         Self {
             root: empty_merkle_tree.root(),
             version: 0,
