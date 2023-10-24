@@ -221,6 +221,34 @@ pub fn run_memory(group: &mut BenchmarkGroup<WallTime>) {
     }
 
     run(
+        "memory/poph opcode",
+        group,
+        vec![op::poph(0), op::jmpb(RegId::ZERO, 0)],
+        vec![],
+    );
+
+    run(
+        "memory/popl opcode",
+        group,
+        vec![op::pshl(0), op::jmpb(RegId::ZERO, 0)],
+        vec![],
+    );
+
+    run(
+        "memory/pshh opcode",
+        group,
+        vec![op::pshh(0), op::jmpb(RegId::ZERO, 0)],
+        vec![],
+    );
+
+    run(
+        "memory/pshl opcode",
+        group,
+        vec![op::pshl(0), op::jmpb(RegId::ZERO, 0)],
+        vec![],
+    );
+
+    run(
         "memory/sb opcode",
         group,
         vec![
