@@ -226,17 +226,27 @@ pub fn run_memory(group: &mut BenchmarkGroup<WallTime>) {
 
     let full_mask = (1 << 24) - 1;
 
+    // Assumes that `pshh` has a correct cost
     run(
         "memory/poph opcode",
         group,
-        vec![op::poph(0), op::jmpb(RegId::ZERO, 0)],
+        vec![
+            op::pshh(full_mask),
+            op::poph(full_mask),
+            op::jmpb(RegId::ZERO, 1),
+        ],
         vec![],
     );
 
+    // Assumes that `pshl` has a correct cost
     run(
         "memory/popl opcode",
         group,
-        vec![op::pshl(0), op::jmpb(RegId::ZERO, 0)],
+        vec![
+            op::pshl(full_mask),
+            op::popl(full_mask),
+            op::jmpb(RegId::ZERO, 1),
+        ],
         vec![],
     );
 
