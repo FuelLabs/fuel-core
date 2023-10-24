@@ -1,6 +1,6 @@
 use super::run_group_ref;
 
-use crate::utils::generate_linear_costs;
+use crate::utils::arb_dependent_cost_values;
 use criterion::{
     Criterion,
     Throughput,
@@ -54,7 +54,7 @@ pub fn run(c: &mut Criterion) {
         ]),
     );
 
-    let linear = generate_linear_costs();
+    let linear = arb_dependent_cost_values();
 
     run_group_ref(
         &mut c.benchmark_group("cfei"),
