@@ -28,7 +28,12 @@ pub fn run_memory(group: &mut BenchmarkGroup<WallTime>) {
     run(
         "memory/aloc opcode",
         group,
-        [op::aloc(0x10), op::jmpb(RegId::ZERO, 0)].to_vec(),
+        [
+            op::movi(0x10, 1000),
+            op::aloc(0x10),
+            op::jmpb(RegId::ZERO, 0),
+        ]
+        .to_vec(),
         vec![],
     );
 
@@ -211,14 +216,15 @@ pub fn run_memory(group: &mut BenchmarkGroup<WallTime>) {
 
     for i in arb_dependent_cost_values() {
         let id = format!("memory/meq opcode {:?}", i);
-        let mut script = vec![op::move_(0x11, RegId::ZERO), op::move_(0x12, RegId::ZERO)];
-        script.extend(set_full_word(0x13, i as u64));
+        let mut script = set_full_word(0x13, i as u64);
         script.extend(vec![
-            op::meq(0x10, 0x11, 0x12, 0x13),
+            op::meq(0x10, RegId::ZERO, RegId::ZERO, 0x13),
             op::jmpb(RegId::ZERO, 0),
         ]);
         run(&id, group, script, vec![]);
     }
+
+    let full_mask = (1 << 24) - 1;
 
     run(
         "memory/poph opcode",
@@ -237,14 +243,14 @@ pub fn run_memory(group: &mut BenchmarkGroup<WallTime>) {
     run(
         "memory/pshh opcode",
         group,
-        vec![op::pshh(0), op::jmpb(RegId::ZERO, 0)],
+        vec![op::pshh(full_mask), op::jmpb(RegId::ZERO, 0)],
         vec![],
     );
 
     run(
         "memory/pshl opcode",
         group,
-        vec![op::pshl(0), op::jmpb(RegId::ZERO, 0)],
+        vec![op::pshl(full_mask), op::jmpb(RegId::ZERO, 0)],
         vec![],
     );
 
