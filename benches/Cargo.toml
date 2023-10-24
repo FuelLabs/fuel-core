@@ -19,11 +19,13 @@ fuel-core-services = { path = "./../crates/services" }
 fuel-core-storage = { path = "./../crates/storage" }
 fuel-core-sync = { path = "./../crates/services/sync", features = ["benchmarking"] }
 fuel-core-types = { path = "./../crates/types", features = ["test-helpers"] }
+futures = "0.3"
 p256 =  { version = "0.13", default-features = false, features = ["digest", "ecdsa"] }
 rand = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 serde_yaml = "0.9.13"
+test-helpers = { path = "../tests/test-helpers" }
 tikv-jemallocator = { workspace = true }
 tokio = { workspace = true, features = ["full"] }
 
@@ -45,3 +47,7 @@ default = ["fuel-core/rocksdb"]
 [[bench]]
 harness = false
 name = "block_target_gas"
+
+[[bench]]
+harness = false
+name = "transaction_throughput"
