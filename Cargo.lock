@@ -2772,12 +2772,14 @@ dependencies = [
  "fuel-core-storage",
  "fuel-core-sync",
  "fuel-core-types",
+ "futures",
  "p256 0.13.2",
  "rand 0.7.3",
  "rand 0.8.5",
  "serde",
  "serde_json",
  "serde_yaml",
+ "test-helpers",
  "tikv-jemallocator",
  "tokio",
 ]
@@ -3155,6 +3157,7 @@ dependencies = [
  "serde_json",
  "tempfile",
  "test-case",
+ "test-helpers",
  "tokio",
 ]
 
@@ -7881,6 +7884,23 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 1.0.109",
+]
+
+[[package]]
+name = "test-helpers"
+version = "0.0.0"
+dependencies = [
+ "fuel-core",
+ "fuel-core-client",
+ "fuel-core-p2p",
+ "fuel-core-poa",
+ "fuel-core-relayer",
+ "fuel-core-storage",
+ "fuel-core-trace",
+ "fuel-core-txpool",
+ "fuel-core-types",
+ "itertools 0.10.5",
+ "rand 0.8.5",
 ]
 
 [[package]]

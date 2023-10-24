@@ -1,5 +1,5 @@
 use crate::{
-    utils::generate_linear_costs,
+    utils::arb_dependent_cost_values,
     *,
 };
 use rand::{
@@ -135,7 +135,7 @@ pub fn run_crypto(group: &mut BenchmarkGroup<WallTime>) {
             .collect(),
     );
 
-    for i in generate_linear_costs() {
+    for i in arb_dependent_cost_values() {
         let id = format!("crypto/s256 opcode {:?}", i);
         run(
             &id,
@@ -152,7 +152,7 @@ pub fn run_crypto(group: &mut BenchmarkGroup<WallTime>) {
         )
     }
 
-    for i in generate_linear_costs() {
+    for i in arb_dependent_cost_values() {
         let id = format!("crypto/k256 opcode {:?}", i);
         run(
             &id,

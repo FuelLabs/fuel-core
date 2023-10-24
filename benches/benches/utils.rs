@@ -27,7 +27,7 @@ pub fn make_u256(reg: u8, v: U256) -> Vec<Instruction> {
     aloc_bytearray(reg, v.to_be_bytes())
 }
 
-pub fn generate_linear_costs() -> Vec<u32> {
+pub fn arb_dependent_cost_values() -> Vec<u32> {
     let mut linear = vec![1, 10, 100, 1000, 10_000];
     let mut l = successors(Some(100_000.0f64), |n| Some(n / 1.5))
         .take(5)
