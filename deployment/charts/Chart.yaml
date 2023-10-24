@@ -2,5 +2,5 @@ apiVersion: v2
 name: ${fuel_core_service_name}
 description: ${fuel_core_service_name} Helm Chart
 type: application
-appVersion: "0.20.4"
+appVersion: "0.20.8"
 version: 0.1.0
