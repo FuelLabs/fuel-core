@@ -107,25 +107,32 @@ impl Wallet {
     pub async fn owns_coin(&self, utxo_id: UtxoId) -> anyhow::Result<bool> {
         let mut first_page = true;
         let mut results = vec![];
+        let mut cursor = None;
 
         while first_page || !results.is_empty() {
             first_page = false;
-            results = self
+            let response = self
                 .client
                 .coins(
                     &self.address,
                     None,
                     PaginationRequest {
-                        cursor: None,
+                        cursor,
                         results: 100,
                         direction: PageDirection::Forward,
                     },
                 )
-                .await?
-                .results;
+                .await?;
+            results = response.results;
             // check if page has the utxos we're looking for
             if results.iter().any(|coin| coin.utxo_id == utxo_id) {
                 return Ok(true)
+            }
+            // otherwise update the cursor to check the next page
+            if response.has_next_page {
+                cursor = response.cursor;
+            } else {
+                break
             }
         }
 
