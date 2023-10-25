@@ -86,7 +86,7 @@ pub struct PeerReportBehaviour {
     heartbeat: Heartbeat,
     identify: Identify,
     pending_events: VecDeque<PeerReportEvent>,
-    // regulary checks if reserved nodes are connected
+    // regularly checks if reserved nodes are connected
     health_check: Interval,
     decay_interval: Interval,
 }

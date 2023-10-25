@@ -1159,7 +1159,7 @@ mod tests {
     }
 
     // Simulates 2 p2p nodes that connect to each other and consequently exchange Peer Info
-    // On sucessful connection, node B updates its latest BlockHeight
+    // On successful connection, node B updates its latest BlockHeight
     // and shares it with Peer A via Heartbeat protocol
     #[tokio::test]
     #[instrument]
@@ -1492,7 +1492,7 @@ mod tests {
 
                         // Node B received the correct message
                         // If we try to publish it again we will get `PublishError::Duplicate`
-                        // This asserts that our MessageId calculation is consistant irrespective of which Peer sends it
+                        // This asserts that our MessageId calculation is consistent irrespective of which Peer sends it
                         let broadcast_request = broadcast_request.clone();
                         matches!(node_b.publish_message(broadcast_request), Err(PublishError::Duplicate));
 
