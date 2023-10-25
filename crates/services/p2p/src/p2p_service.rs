@@ -377,8 +377,15 @@ impl<Codec: NetworkCodec> FuelP2PService<Codec> {
         &mut self,
         msg_id: &MessageId,
         propagation_source: PeerId,
-        acceptance: MessageAcceptance,
+        mut acceptance: MessageAcceptance,
     ) {
+        // Even invalid transactions shouldn't affect reserved peer reputation.
+        if let MessageAcceptance::Reject = acceptance {
+            if self.peer_manager.is_reserved(&propagation_source) {
+                acceptance = MessageAcceptance::Ignore;
+            }
+        }
+
         if let Some(gossip_score) = self
             .swarm
             .behaviour_mut()

@@ -1,9 +1,15 @@
 use core::iter::successors;
 use ethnum::U256;
-use fuel_core_types::fuel_asm::{
-    op,
-    Instruction,
-    RegId,
+use fuel_core_types::{
+    fuel_asm::{
+        op,
+        Instruction,
+        RegId,
+    },
+    fuel_types::{
+        RegisterId,
+        Word,
+    },
 };
 
 /// Allocates a byte array from heap and initializes it. Then points `reg` to it.
@@ -27,7 +33,7 @@ pub fn make_u256(reg: u8, v: U256) -> Vec<Instruction> {
     aloc_bytearray(reg, v.to_be_bytes())
 }
 
-pub fn generate_linear_costs() -> Vec<u32> {
+pub fn arb_dependent_cost_values() -> Vec<u32> {
     let mut linear = vec![1, 10, 100, 1000, 10_000];
     let mut l = successors(Some(100_000.0f64), |n| Some(n / 1.5))
         .take(5)
@@ -36,4 +42,16 @@ pub fn generate_linear_costs() -> Vec<u32> {
     l.sort_unstable();
     linear.extend(l);
     linear
+}
+
+/// Set a register `r` to a Word-sized number value using left-shifts
+pub fn set_full_word(r: RegisterId, v: Word) -> Vec<Instruction> {
+    let r = u8::try_from(r).unwrap();
+    let mut ops = vec![op::movi(r, 0)];
+    for byte in v.to_be_bytes() {
+        ops.push(op::ori(r, r, byte as u16));
+        ops.push(op::slli(r, r, 8));
+    }
+    ops.pop().unwrap(); // Remove last shift
+    ops
 }

@@ -120,7 +120,35 @@ enum TaskRequest {
 
 impl Debug for TaskRequest {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "TaskRequest")
+        match self {
+            TaskRequest::BroadcastTransaction(_) => {
+                write!(f, "TaskRequest::BroadcastTransaction")
+            }
+            TaskRequest::BroadcastBlock(_) => {
+                write!(f, "TaskRequest::BroadcastBlock")
+            }
+            TaskRequest::BroadcastVote(_) => {
+                write!(f, "TaskRequest::BroadcastVote")
+            }
+            TaskRequest::GetPeerIds(_) => {
+                write!(f, "TaskRequest::GetPeerIds")
+            }
+            TaskRequest::GetBlock { .. } => {
+                write!(f, "TaskRequest::GetBlock")
+            }
+            TaskRequest::GetSealedHeaders { .. } => {
+                write!(f, "TaskRequest::GetSealedHeaders")
+            }
+            TaskRequest::GetTransactions { .. } => {
+                write!(f, "TaskRequest::GetTransactions")
+            }
+            TaskRequest::RespondWithGossipsubMessageReport(_) => {
+                write!(f, "TaskRequest::RespondWithGossipsubMessageReport")
+            }
+            TaskRequest::RespondWithPeerReport { .. } => {
+                write!(f, "TaskRequest::RespondWithPeerReport")
+            }
+        }
     }
 }
 
@@ -318,9 +346,9 @@ impl<D> Task<FuelP2PService<PostcardCodec>, D, SharedState> {
             heartbeat_max_time_since_last,
             ..
         } = config;
-        let (request_sender, request_receiver) = mpsc::channel(100);
-        let (tx_broadcast, _) = broadcast::channel(100);
-        let (block_height_broadcast, _) = broadcast::channel(100);
+        let (request_sender, request_receiver) = mpsc::channel(1024 * 10);
+        let (tx_broadcast, _) = broadcast::channel(1024 * 10);
+        let (block_height_broadcast, _) = broadcast::channel(1024 * 10);
 
         // Hardcoded for now, but left here to be configurable in the future.
         // TODO: https://github.com/FuelLabs/fuel-core/issues/1340
@@ -814,7 +842,7 @@ where
     ))
 }
 
-pub(crate) fn to_message_acceptance(
+pub fn to_message_acceptance(
     acceptance: &GossipsubMessageAcceptance,
 ) -> MessageAcceptance {
     match acceptance {

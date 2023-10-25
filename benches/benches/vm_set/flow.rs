@@ -1,12 +1,11 @@
-use std::iter::successors;
-
 use super::run_group_ref;
 
+use crate::utils::arb_dependent_cost_values;
 use criterion::{
     Criterion,
     Throughput,
 };
-use fuel_core_benches::*;
+use fuel_core_benches::VmBench;
 use fuel_core_types::fuel_asm::*;
 use rand::{
     rngs::StdRng,
@@ -16,13 +15,7 @@ use rand::{
 pub fn run(c: &mut Criterion) {
     let rng = &mut StdRng::seed_from_u64(2322u64);
 
-    let mut linear = vec![1, 10, 100, 1000, 10_000];
-    let mut l = successors(Some(100_000.0f64), |n| Some(n / 1.5))
-        .take(5)
-        .map(|f| f as u32)
-        .collect::<Vec<_>>();
-    l.sort_unstable();
-    linear.extend(l);
+    let linear = arb_dependent_cost_values();
 
     run_group_ref(
         &mut c.benchmark_group("jmp"),

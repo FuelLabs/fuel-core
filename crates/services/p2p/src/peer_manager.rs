@@ -94,6 +94,10 @@ impl PeerManager {
         self.reserved_peers_updates.clone()
     }
 
+    pub fn is_reserved(&self, peer_id: &PeerId) -> bool {
+        self.reserved_peers.contains(peer_id)
+    }
+
     pub fn handle_gossip_score_update<T: Punisher>(
         &self,
         peer_id: PeerId,
