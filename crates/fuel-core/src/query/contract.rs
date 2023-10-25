@@ -11,7 +11,9 @@ use fuel_core_storage::{
         ContractsRawCode,
     },
     Result as StorageResult,
+    StorageAsMut,
     StorageAsRef,
+    StorageMutate,
 };
 use fuel_core_types::{
     fuel_types::{
@@ -41,6 +43,15 @@ pub trait ContractQueryData: Send + Sync {
         start_asset: Option<AssetId>,
         direction: IterDirection,
     ) -> BoxedIter<StorageResult<ContractBalance>>;
+}
+
+#[cfg(feature = "test-helpers")]
+pub trait ContractMutateData {
+    fn insert_contract_bytecode(
+        &mut self,
+        id: ContractId,
+        bytecode: &[u8],
+    ) -> StorageResult<()>;
 }
 
 impl<D: DatabasePort + ?Sized> ContractQueryData for D {
@@ -98,5 +109,23 @@ impl<D: DatabasePort + ?Sized> ContractQueryData for D {
         direction: IterDirection,
     ) -> BoxedIter<StorageResult<ContractBalance>> {
         self.contract_balances(contract_id, start_asset, direction)
+    }
+}
+
+#[cfg(feature = "test-helpers")]
+impl<D> ContractMutateData for D
+where
+    D: StorageMutate<ContractsRawCode>,
+{
+    fn insert_contract_bytecode(
+        &mut self,
+        id: ContractId,
+        bytecode: &[u8],
+    ) -> StorageResult<()> {
+        let _ = self
+            .storage_as_mut::<ContractsRawCode>()
+            .insert(&id, &bytecode);
+
+        Ok(())
     }
 }

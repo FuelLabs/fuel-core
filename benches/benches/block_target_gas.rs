@@ -22,6 +22,7 @@ use rand::SeedableRng;
 
 use ethnum::U256;
 use fuel_core_benches::*;
+use fuel_core_chain_config::ContractConfig;
 use fuel_core_types::{
     fuel_asm::{
         op,
@@ -41,8 +42,15 @@ use fuel_core_types::{
         secp256r1,
         *,
     },
-    fuel_tx::UniqueIdentifier,
-    fuel_types::AssetId,
+    fuel_tx::{
+        ContractIdExt,
+        UniqueIdentifier,
+    },
+    fuel_types::{
+        AssetId,
+        Bytes32,
+        ContractId,
+    },
 };
 
 mod utils;
@@ -65,6 +73,9 @@ fn run(
     script_data: Vec<u8>,
 ) {
     group.bench_function(id, |b| {
+
+        const STATE_SIZE: u64 = 10_000_000;
+
         let rt = tokio::runtime::Builder::new_current_thread()
             .enable_all()
             .build()
@@ -73,9 +84,44 @@ fn run(
         const TARGET_BLOCK_GAS_LIMIT: u64 = 100_000;
         const BASE: u64 = 10_000;
 
-        let database = Database::rocksdb();
+        let mut database = Database::rocksdb();
         let mut config = Config::local_node();
         config.chain_conf.consensus_parameters.tx_params.max_gas_per_tx = TARGET_BLOCK_GAS_LIMIT;
+        let contract_id = ContractId::zeroed();
+        config.chain_conf.initial_state.as_mut().unwrap().contracts = Some(vec![ContractConfig {
+            contract_id: contract_id.clone(),
+            code: vec![],
+            salt: Default::default(),
+            state: None,
+            balances: None,
+            tx_id: None,
+            output_index: None,
+            tx_pointer_block_height: None,
+            tx_pointer_tx_idx: None,
+        }]);
+        database.init_contract_state(
+            &contract_id,
+            (0..STATE_SIZE).map(|k| {
+                let mut key = Bytes32::zeroed();
+                key.as_mut()[..8].copy_from_slice(&k.to_be_bytes());
+                (key, key)
+            }),
+        ).unwrap();
+        database.init_contract_balances(
+            &contract_id,
+            (0..STATE_SIZE).map(|k| {
+                let key = k / 2;
+                let mut sub_id = Bytes32::zeroed();
+                sub_id.as_mut()[..8].copy_from_slice(&key.to_be_bytes());
+
+                let asset = if k % 2 == 0 {
+                    VmBench::CONTRACT.asset_id(&sub_id)
+                } else {
+                    AssetId::new(*sub_id)
+                };
+                (asset, key + 1_000)
+            }),
+        ).unwrap();
         config
             .chain_conf
             .consensus_parameters
