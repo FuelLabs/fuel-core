@@ -17,4 +17,4 @@ jobs:
           envsubst < ${{ github.workspace }}/.github/workflows/e2e_config/beta-4.toml.template > ${{ github.workspace }}/.github/workflows/e2e_config/beta-4.toml
 
       - name: Run e2e tests with docker
-        run: docker run -v ${{ github.workspace }}/.github/workflows/e2e_config:/etc/e2e_config -e FUEL_CORE_E2E_CONFIG='/etc/e2e_config/beta-4.toml' ghcr.io/fuellabs/fuel-core-e2e-client:v0.20.7 ./fuel-core-e2e-client -- alice
+        run: docker run -v ${{ github.workspace }}/.github/workflows/e2e_config:/etc/e2e_config -e FUEL_CORE_E2E_CONFIG='/etc/e2e_config/beta-4.toml' ghcr.io/fuellabs/fuel-core-e2e-client:sha-ccba276 ./fuel-core-e2e-client -- alice

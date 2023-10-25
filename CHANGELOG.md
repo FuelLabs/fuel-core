@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 Description of the upcoming release here.
 
 ### Added
-
+- [#1449](https://github.com/FuelLabs/fuel-core/pull/1449): fix coin pagination in e2e test client
 - [#1447](https://github.com/FuelLabs/fuel-core/pull/1447): Add timeout for continuous e2e tests
 - [#1444](https://github.com/FuelLabs/fuel-core/pull/1444): Add "sanity" benchmarks for memory opcodes.
 - [#1437](https://github.com/FuelLabs/fuel-core/pull/1437): Add some transaction throughput tests for basic transfers.
