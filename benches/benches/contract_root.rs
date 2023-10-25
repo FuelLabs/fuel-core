@@ -9,7 +9,6 @@ use rand::{
     Rng,
     SeedableRng,
 };
-use std::time::Duration;
 
 // 17 mb contract size
 const MAX_CONTRACT_SIZE: usize = 17 * 1024 * 1024;
@@ -27,17 +26,11 @@ fn contract_root_from_code(c: &mut Criterion) {
 
     let mut group = c.benchmark_group("contract_root");
 
+    let bytes = random_bytes::<MAX_CONTRACT_SIZE, _>(rng);
     group.bench_function("root-from-set", |b| {
-        b.iter_custom(|iters| {
-            let mut elapsed_time = Duration::default();
-            for _ in 0..iters {
-                let bytes = random_bytes::<MAX_CONTRACT_SIZE, _>(rng);
-                let contract = Contract::from(bytes.as_slice());
-                let start = std::time::Instant::now();
-                contract.root();
-                elapsed_time += start.elapsed();
-            }
-            elapsed_time
+        b.iter(|| {
+            let contract = Contract::from(bytes.as_slice());
+            contract.root();
         })
     });
 
