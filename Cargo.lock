@@ -2693,6 +2693,7 @@ dependencies = [
 [[package]]
 name = "fuel-asm"
 version = "0.39.0"
+source = "git+https://github.com/FuelLabs/fuel-vm?branch=dento/pub-test-receiptsctx#e5dd8b1f000920e6f3276867e5a092c41aa45fdd"
 dependencies = [
  "bitflags 1.3.2",
  "fuel-types",
@@ -3212,6 +3213,7 @@ dependencies = [
 [[package]]
 name = "fuel-crypto"
 version = "0.39.0"
+source = "git+https://github.com/FuelLabs/fuel-vm?branch=dento/pub-test-receiptsctx#e5dd8b1f000920e6f3276867e5a092c41aa45fdd"
 dependencies = [
  "coins-bip32",
  "coins-bip39",
@@ -3231,6 +3233,7 @@ dependencies = [
 [[package]]
 name = "fuel-derive"
 version = "0.39.0"
+source = "git+https://github.com/FuelLabs/fuel-vm?branch=dento/pub-test-receiptsctx#e5dd8b1f000920e6f3276867e5a092c41aa45fdd"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -3241,6 +3244,7 @@ dependencies = [
 [[package]]
 name = "fuel-merkle"
 version = "0.39.0"
+source = "git+https://github.com/FuelLabs/fuel-vm?branch=dento/pub-test-receiptsctx#e5dd8b1f000920e6f3276867e5a092c41aa45fdd"
 dependencies = [
  "derive_more",
  "digest 0.10.7",
@@ -3254,10 +3258,12 @@ dependencies = [
 [[package]]
 name = "fuel-storage"
 version = "0.39.0"
+source = "git+https://github.com/FuelLabs/fuel-vm?branch=dento/pub-test-receiptsctx#e5dd8b1f000920e6f3276867e5a092c41aa45fdd"
 
 [[package]]
 name = "fuel-tx"
 version = "0.39.0"
+source = "git+https://github.com/FuelLabs/fuel-vm?branch=dento/pub-test-receiptsctx#e5dd8b1f000920e6f3276867e5a092c41aa45fdd"
 dependencies = [
  "derivative",
  "derive_more",
@@ -3278,6 +3284,7 @@ dependencies = [
 [[package]]
 name = "fuel-types"
 version = "0.39.0"
+source = "git+https://github.com/FuelLabs/fuel-vm?branch=dento/pub-test-receiptsctx#e5dd8b1f000920e6f3276867e5a092c41aa45fdd"
 dependencies = [
  "fuel-derive",
  "hex",
@@ -3288,6 +3295,7 @@ dependencies = [
 [[package]]
 name = "fuel-vm"
 version = "0.39.0"
+source = "git+https://github.com/FuelLabs/fuel-vm?branch=dento/pub-test-receiptsctx#e5dd8b1f000920e6f3276867e5a092c41aa45fdd"
 dependencies = [
  "anyhow",
  "async-trait",

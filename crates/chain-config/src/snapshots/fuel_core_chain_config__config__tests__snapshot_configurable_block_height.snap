@@ -10,11 +10,11 @@ expression: json
   },
   "consensus_parameters": {
     "tx_params": {
-      "max_size": 17825792,
       "max_inputs": 255,
       "max_outputs": 255,
       "max_witnesses": 255,
-      "max_gas_per_tx": 100000000
+      "max_gas_per_tx": 100000000,
+      "max_size": 17825792
     },
     "predicate_params": {
       "max_predicate_length": 1048576,
