@@ -84,44 +84,9 @@ fn run(
         const TARGET_BLOCK_GAS_LIMIT: u64 = 100_000;
         const BASE: u64 = 10_000;
 
-        let mut database = Database::rocksdb();
+        let database = Database::rocksdb();
         let mut config = Config::local_node();
         config.chain_conf.consensus_parameters.tx_params.max_gas_per_tx = TARGET_BLOCK_GAS_LIMIT;
-        let contract_id = ContractId::zeroed();
-        config.chain_conf.initial_state.as_mut().unwrap().contracts = Some(vec![ContractConfig {
-            contract_id: contract_id.clone(),
-            code: vec![],
-            salt: Default::default(),
-            state: None,
-            balances: None,
-            tx_id: None,
-            output_index: None,
-            tx_pointer_block_height: None,
-            tx_pointer_tx_idx: None,
-        }]);
-        database.init_contract_state(
-            &contract_id,
-            (0..STATE_SIZE).map(|k| {
-                let mut key = Bytes32::zeroed();
-                key.as_mut()[..8].copy_from_slice(&k.to_be_bytes());
-                (key, key)
-            }),
-        ).unwrap();
-        database.init_contract_balances(
-            &contract_id,
-            (0..STATE_SIZE).map(|k| {
-                let key = k / 2;
-                let mut sub_id = Bytes32::zeroed();
-                sub_id.as_mut()[..8].copy_from_slice(&key.to_be_bytes());
-
-                let asset = if k % 2 == 0 {
-                    VmBench::CONTRACT.asset_id(&sub_id)
-                } else {
-                    AssetId::new(*sub_id)
-                };
-                (asset, key + 1_000)
-            }),
-        ).unwrap();
         config
             .chain_conf
             .consensus_parameters
@@ -138,6 +103,7 @@ fn run(
 
         b.to_async(&rt).iter(|| {
             let shared = service.shared.clone();
+
             let tx = fuel_core_types::fuel_tx::TransactionBuilder::script(
                 // Infinite loop
                 script.clone().into_iter().collect(),
@@ -156,6 +122,150 @@ fn run(
                 .finalize_as_transaction();
             async move {
                 let tx_id = tx.id(&config.chain_conf.consensus_parameters.chain_id);
+
+                let mut sub = shared.block_importer.block_importer.subscribe();
+                shared
+                    .txpool
+                    .insert(vec![std::sync::Arc::new(tx)])
+                    .await
+                    .into_iter()
+                    .next()
+                    .expect("Should be at least 1 element")
+                    .expect("Should include transaction successfully");
+                let res = sub.recv().await.expect("Should produce a block");
+                assert_eq!(res.tx_status.len(), 2);
+                assert_eq!(res.sealed_block.entity.transactions().len(), 2);
+                assert_eq!(res.tx_status[0].id, tx_id);
+
+                let fuel_core_types::services::executor::TransactionExecutionResult::Failed {
+                    reason,
+                    ..
+                } = &res.tx_status[0].result
+                    else {
+                        panic!("The execution should fails with out of gas")
+                    };
+                assert!(reason.contains("OutOfGas"));
+            }
+        })
+    });
+}
+
+fn service_with_contract_id(contract_id: ContractId) -> fuel_core::service::FuelService {
+    const STATE_SIZE: u64 = 10_000_000;
+
+    let rt = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .unwrap();
+    let _drop = rt.enter();
+    const TARGET_BLOCK_GAS_LIMIT: u64 = 100_000;
+    const BASE: u64 = 10_000;
+    let mut database = Database::rocksdb();
+    let mut config = Config::local_node();
+    config
+        .chain_conf
+        .consensus_parameters
+        .tx_params
+        .max_gas_per_tx = TARGET_BLOCK_GAS_LIMIT;
+    config.chain_conf.initial_state.as_mut().unwrap().contracts =
+        Some(vec![ContractConfig {
+            contract_id: contract_id.clone(),
+            code: vec![],
+            salt: Default::default(),
+            state: None,
+            balances: None,
+            tx_id: None,
+            output_index: None,
+            tx_pointer_block_height: None,
+            tx_pointer_tx_idx: None,
+        }]);
+
+    config
+        .chain_conf
+        .consensus_parameters
+        .predicate_params
+        .max_gas_per_predicate = TARGET_BLOCK_GAS_LIMIT;
+    config.chain_conf.block_gas_limit = TARGET_BLOCK_GAS_LIMIT;
+    config.utxo_validation = false;
+    config.block_production = Trigger::Instant;
+
+    database
+        .init_contract_state(
+            &contract_id,
+            (0..STATE_SIZE).map(|k| {
+                let mut key = Bytes32::zeroed();
+                key.as_mut()[..8].copy_from_slice(&k.to_be_bytes());
+                (key, key)
+            }),
+        )
+        .unwrap();
+    database
+        .init_contract_balances(
+            &contract_id,
+            (0..STATE_SIZE).map(|k| {
+                let key = k / 2;
+                let mut sub_id = Bytes32::zeroed();
+                sub_id.as_mut()[..8].copy_from_slice(&key.to_be_bytes());
+
+                let asset = if k % 2 == 0 {
+                    VmBench::CONTRACT.asset_id(&sub_id)
+                } else {
+                    AssetId::new(*sub_id)
+                };
+                (asset, key + 1_000)
+            }),
+        )
+        .unwrap();
+
+    let service = fuel_core::service::FuelService::new(database, config.clone())
+        .expect("Unable to start a FuelService");
+    service.start().expect("Unable to start the service");
+    service
+}
+
+fn run_with_service(
+    id: &str,
+    group: &mut BenchmarkGroup<WallTime>,
+    script: Vec<Instruction>,
+    script_data: Vec<u8>,
+    service: fuel_core::service::FuelService,
+) {
+    group.bench_function(id, |b| {
+
+        const STATE_SIZE: u64 = 10_000_000;
+
+        let rt = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap();
+        let _drop = rt.enter();
+        const TARGET_BLOCK_GAS_LIMIT: u64 = 100_000;
+        const BASE: u64 = 10_000;
+
+
+        let mut rng = rand::rngs::StdRng::seed_from_u64(2322u64);
+
+        b.to_async(&rt).iter(|| {
+            let shared = service.shared.clone();
+
+            let tx = fuel_core_types::fuel_tx::TransactionBuilder::script(
+                // Infinite loop
+                script.clone().into_iter().collect(),
+                script_data.clone(),
+            )
+                .gas_limit(TARGET_BLOCK_GAS_LIMIT - BASE)
+                .gas_price(1)
+                .add_unsigned_coin_input(
+                    SecretKey::random(&mut rng),
+                    rng.gen(),
+                    u64::MAX,
+                    AssetId::BASE,
+                    Default::default(),
+                    Default::default(),
+                )
+                .finalize_as_transaction();
+            async move {
+                let tx_id = tx.id(&service.shared.config.chain_conf.consensus_parameters.chain_id);
 
                 let mut sub = shared.block_importer.block_importer.subscribe();
                 shared

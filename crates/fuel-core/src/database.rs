@@ -20,7 +20,10 @@ use fuel_core_storage::{
     },
     Result as StorageResult,
 };
-use fuel_core_types::fuel_types::BlockHeight;
+use fuel_core_types::fuel_types::{
+    BlockHeight,
+    ContractId,
+};
 use itertools::Itertools;
 use serde::{
     de::DeserializeOwned,
@@ -419,6 +422,18 @@ impl Database {
                     Ok((key, value))
                 })
             })
+    }
+
+    #[cfg(feature = "test-helpers")]
+    pub fn insert_contract_bytecode(
+        &mut self,
+        id: ContractId,
+        bytecode: &[u8],
+    ) -> DatabaseResult<()> {
+        let column = Column::ContractsRawCode;
+        let _: Option<Vec<u8>> = self.insert(&id, column, &bytecode)?;
+
+        Ok(())
     }
 }
 

@@ -67,14 +67,14 @@ pub struct BenchDb {
 impl BenchDb {
     const STATE_SIZE: u64 = 10_000_000;
 
-    fn new(contract: &ContractId) -> anyhow::Result<Self> {
+    fn new(contract_id: &ContractId) -> anyhow::Result<Self> {
         let tmp_dir = ShallowTempDir::new();
 
         let db = Arc::new(RocksDb::default_open(&tmp_dir.path, None).unwrap());
 
         let mut database = Database::new(db.clone());
         database.init_contract_state(
-            contract,
+            contract_id,
             (0..Self::STATE_SIZE).map(|k| {
                 let mut key = Bytes32::zeroed();
                 key.as_mut()[..8].copy_from_slice(&k.to_be_bytes());
@@ -82,7 +82,7 @@ impl BenchDb {
             }),
         )?;
         database.init_contract_balances(
-            &ContractId::zeroed(),
+            contract_id,
             (0..Self::STATE_SIZE).map(|k| {
                 let key = k / 2;
                 let mut sub_id = Bytes32::zeroed();
