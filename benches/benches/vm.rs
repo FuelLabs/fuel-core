@@ -9,7 +9,6 @@ use criterion::{
     BenchmarkGroup,
     Criterion,
 };
-use std::time::Duration;
 
 use fuel_core_benches::*;
 use fuel_core_storage::transactional::Transaction;
@@ -41,9 +40,17 @@ where
                 db_txn
             };
 
-            let mut elapsed_time = Duration::default();
+            // Measure the total time to revert the VM to the initial state.
+            // It should always do the same things regardless of the number of
+            // iterations because we use a `diff` benchmarked during the initialization.
+            let start = std::time::Instant::now();
             for _ in 0..iters {
-                let start = std::time::Instant::now();
+                vm.reset_vm_state(diff);
+            }
+            let time_to_reset = start.elapsed();
+
+            let start = std::time::Instant::now();
+            for _ in 0..iters {
                 match instruction {
                     Instruction::CALL(call) => {
                         let (ra, rb, rc, rd) = call.unpack();
@@ -53,13 +60,19 @@ where
                         black_box(vm.instruction(*instruction).unwrap());
                     }
                 }
-                elapsed_time += start.elapsed();
                 vm.reset_vm_state(diff);
             }
+            let final_time = start.elapsed().checked_sub(time_to_reset).expect(
+                "It may overflow when the benchmarks run in an unstable environment. \
+                If the hardware is busy during the measuring time to reset the VM, \
+                it will produce `time_to_reset` more than the actual time to reset \
+                and run the instruction. ",
+            );
+
             db_txn.commit().unwrap();
             // restore original db
             *vm.as_mut().database_mut() = original_db;
-            elapsed_time
+            final_time
         })
     });
 }
