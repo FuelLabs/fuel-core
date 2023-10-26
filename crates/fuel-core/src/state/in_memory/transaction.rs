@@ -284,7 +284,13 @@ impl KeyValueStore for MemoryTransactionView {
 
 impl BatchOperations for MemoryTransactionView {}
 
-impl TransactableStorage for MemoryTransactionView {}
+impl TransactableStorage for MemoryTransactionView {
+    fn flush(&self) -> DatabaseResult<()> {
+        self.commit()?;
+        self.data_source.flush()?;
+        self.view_layer.flush()
+    }
+}
 
 #[cfg(test)]
 mod tests {
