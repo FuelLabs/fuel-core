@@ -286,9 +286,11 @@ impl BatchOperations for MemoryTransactionView {}
 
 impl TransactableStorage for MemoryTransactionView {
     fn flush(&self) -> DatabaseResult<()> {
-        self.commit()?;
-        self.data_source.flush()?;
-        self.view_layer.flush()
+        for lock in self.changes.iter() {
+            lock.lock().expect("poisoned lock").clear();
+        }
+        self.view_layer.flush()?;
+        self.data_source.flush()
     }
 }
 
