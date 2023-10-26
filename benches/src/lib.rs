@@ -24,6 +24,7 @@ use fuel_core_types::{
         interpreter::{
             diff,
             InterpreterParams,
+            ReceiptsCtx,
         },
         *,
     },
@@ -73,6 +74,7 @@ pub struct PrepareCall {
     rb: RegId,
     rc: RegId,
     rd: RegId,
+    receipts_ctx: ReceiptsCtx,
 }
 
 pub struct VmBench {
@@ -194,6 +196,7 @@ impl VmBench {
             rb: RegId::ZERO,
             rc: RegId::new(0x11),
             rd: RegId::new(0x12),
+            receipts_ctx: ReceiptsCtx::default(),
         };
 
         Ok(bench
@@ -209,7 +212,6 @@ impl VmBench {
         self.db.replace(db);
         self
     }
-
     pub fn with_params(mut self, params: ConsensusParameters) -> Self {
         self.params = params;
         self
@@ -276,6 +278,14 @@ impl VmBench {
 
     pub fn with_prepare_call(mut self, call: PrepareCall) -> Self {
         self.prepare_call.replace(call);
+        self
+    }
+
+    pub fn set_call_receipts(mut self, receipts_ctx: ReceiptsCtx) -> Self {
+        self.prepare_call
+            .as_mut()
+            .expect("This needs a prepare_call context")
+            .receipts_ctx = receipts_ctx;
         self
     }
 
@@ -434,7 +444,15 @@ impl TryFrom<VmBench> for VmBenchPrepared {
         let mut vm: Interpreter<_, _> = txtor.into();
 
         if let Some(p) = prepare_call {
-            let PrepareCall { ra, rb, rc, rd } = p;
+            let PrepareCall {
+                ra,
+                rb,
+                rc,
+                rd,
+                receipts_ctx,
+            } = p;
+
+            *vm.receipts_mut() = receipts_ctx;
 
             vm.prepare_call(ra, rb, rc, rd)
                 .map_err(anyhow::Error::msg)?;

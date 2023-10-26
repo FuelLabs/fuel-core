@@ -21,6 +21,7 @@ pub struct ConsensusParameters {
 #[derive(cynic::QueryFragment, Debug)]
 #[cynic(schema_path = "./assets/schema.sdl")]
 pub struct TxParameters {
+    pub max_size: U64,
     pub max_inputs: U64,
     pub max_outputs: U64,
     pub max_witnesses: U64,
@@ -30,6 +31,7 @@ pub struct TxParameters {
 impl From<TxParameters> for fuel_core_types::fuel_tx::TxParameters {
     fn from(params: TxParameters) -> Self {
         Self {
+            max_size: params.max_size.into(),
             max_inputs: params.max_inputs.into(),
             max_outputs: params.max_outputs.into(),
             max_witnesses: params.max_witnesses.into(),

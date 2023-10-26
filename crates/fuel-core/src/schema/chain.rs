@@ -113,6 +113,10 @@ impl ConsensusParameters {
 
 #[Object]
 impl TxParameters {
+    async fn max_size(&self) -> U64 {
+        self.0.max_size.into()
+    }
+
     async fn max_inputs(&self) -> U64 {
         self.0.max_inputs.into()
     }

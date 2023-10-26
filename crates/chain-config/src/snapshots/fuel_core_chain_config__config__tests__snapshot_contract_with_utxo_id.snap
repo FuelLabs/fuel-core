@@ -18,6 +18,7 @@ expression: json
   },
   "consensus_parameters": {
     "tx_params": {
+      "max_size": 17825792,
       "max_inputs": 255,
       "max_outputs": 255,
       "max_witnesses": 255,

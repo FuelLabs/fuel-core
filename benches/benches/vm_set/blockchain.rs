@@ -23,13 +23,17 @@ use fuel_core_types::{
         RegId,
     },
     fuel_tx::{
+        self,
         ContractIdExt,
         Input,
         Output,
         Word,
     },
     fuel_types::*,
-    fuel_vm::consts::*,
+    fuel_vm::{
+        consts::*,
+        interpreter::ReceiptsCtx,
+    },
 };
 use rand::{
     rngs::StdRng,
@@ -133,6 +137,19 @@ pub fn run(c: &mut Criterion) {
     let contract: ContractId = rng.gen();
 
     let db = BenchDb::new(&contract).expect("Unable to fill contract storage");
+
+    let mut receipts_ctx = ReceiptsCtx::default();
+    for _ in 0..10_000 {
+        receipts_ctx.push(fuel_tx::Receipt::Log {
+            id: ContractId::zeroed(),
+            ra: 1,
+            rb: 2,
+            rc: 3,
+            rd: 4,
+            pc: 5,
+            is: 6,
+        });
+    }
 
     run_group_ref(
         &mut c.benchmark_group("bal"),
@@ -409,7 +426,8 @@ pub fn run(c: &mut Criterion) {
         "burn",
         VmBench::contract_using_db(rng, db.checkpoint(), op::burn(RegId::ONE, RegId::HP))
             .expect("failed to prepare contract")
-            .prepend_prepare_script(vec![op::movi(0x10, 32), op::aloc(0x10)]),
+            .prepend_prepare_script(vec![op::movi(0x10, 32), op::aloc(0x10)])
+            .set_call_receipts(receipts_ctx),
     );
 
     run_group_ref(

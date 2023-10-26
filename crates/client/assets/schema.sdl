@@ -903,6 +903,7 @@ scalar TransactionId
 union TransactionStatus = SubmittedStatus | SuccessStatus | SqueezedOutStatus | FailureStatus
 
 type TxParameters {
+	maxSize: U64!
 	maxInputs: U64!
 	maxOutputs: U64!
 	maxWitnesses: U64!
