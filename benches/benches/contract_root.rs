@@ -37,7 +37,6 @@ pub fn contract_root(c: &mut Criterion) {
     // 2^24 < MAX_CONTRACT_SIZE < 2^25.
     const N: usize = 25;
     let sizes = successors(Some(2), |n| Some(n * 2)).take(N);
-    dbg!(sizes.clone().collect::<Vec<_>>());
     for (i, size) in sizes.enumerate() {
         let bytes = random_bytes(size, rng);
         group.throughput(Throughput::Bytes(size as u64));
