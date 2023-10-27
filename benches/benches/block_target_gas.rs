@@ -230,22 +230,12 @@ fn run_with_service(
     service: fuel_core::service::FuelService,
     rt: tokio::runtime::Runtime,
 ) {
-    dbg!("beep");
+    let mut rng = rand::rngs::StdRng::seed_from_u64(2322u64);
     group.bench_function(id, |b| {
-        dbg!("boop");
-        // let rt = tokio::runtime::Builder::new_current_thread()
-        //     .enable_all()
-        //     .build()
-        //     .unwrap();
-        // let _drop = rt.enter();
         const TARGET_BLOCK_GAS_LIMIT: u64 = 100_000;
         const BASE: u64 = 10_000;
 
-        let mut rng = rand::rngs::StdRng::seed_from_u64(2322u64);
-
         b.to_async(&rt).iter(|| {
-            dbg!(&script);
-            dbg!(&script_data);
             let shared = service.shared.clone();
 
             let tx = fuel_core_types::fuel_tx::TransactionBuilder::script(
@@ -268,7 +258,6 @@ fn run_with_service(
                 let tx_id = tx.id(&shared.config.chain_conf.consensus_parameters.chain_id);
 
                 let mut sub = shared.block_importer.block_importer.subscribe();
-                dbg!(&tx);
                 shared
                     .txpool
                     .insert(vec![std::sync::Arc::new(tx)])
@@ -278,7 +267,6 @@ fn run_with_service(
                     .expect("Should be at least 1 element")
                     .expect("Should include transaction successfully");
                 let res = sub.recv().await.expect("Should produce a block");
-                dbg!(&res.tx_status);
                 assert_eq!(res.tx_status.len(), 2);
                 assert_eq!(res.sealed_block.entity.transactions().len(), 2);
                 assert_eq!(res.tx_status[0].id, tx_id);
