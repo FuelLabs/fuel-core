@@ -147,7 +147,9 @@ fn run(
     });
 }
 
-fn service_with_contract_id(contract_id: ContractId) -> fuel_core::service::FuelService {
+fn service_with_contract_id(
+    contract_id: ContractId,
+) -> (fuel_core::service::FuelService, tokio::runtime::Runtime) {
     const STATE_SIZE: u64 = 10_000_000;
 
     let rt = tokio::runtime::Builder::new_current_thread()
@@ -186,38 +188,38 @@ fn service_with_contract_id(contract_id: ContractId) -> fuel_core::service::Fuel
     config.utxo_validation = false;
     config.block_production = Trigger::Instant;
 
-    database
-        .init_contract_state(
-            &contract_id,
-            (0..STATE_SIZE).map(|k| {
-                let mut key = Bytes32::zeroed();
-                key.as_mut()[..8].copy_from_slice(&k.to_be_bytes());
-                (key, key)
-            }),
-        )
-        .unwrap();
-    database
-        .init_contract_balances(
-            &contract_id,
-            (0..STATE_SIZE).map(|k| {
-                let key = k / 2;
-                let mut sub_id = Bytes32::zeroed();
-                sub_id.as_mut()[..8].copy_from_slice(&key.to_be_bytes());
-
-                let asset = if k % 2 == 0 {
-                    VmBench::CONTRACT.asset_id(&sub_id)
-                } else {
-                    AssetId::new(*sub_id)
-                };
-                (asset, key + 1_000)
-            }),
-        )
-        .unwrap();
+    // database
+    //     .init_contract_state(
+    //         &contract_id,
+    //         (0..STATE_SIZE).map(|k| {
+    //             let mut key = Bytes32::zeroed();
+    //             key.as_mut()[..8].copy_from_slice(&k.to_be_bytes());
+    //             (key, key)
+    //         }),
+    //     )
+    //     .unwrap();
+    // database
+    //     .init_contract_balances(
+    //         &contract_id,
+    //         (0..STATE_SIZE).map(|k| {
+    //             let key = k / 2;
+    //             let mut sub_id = Bytes32::zeroed();
+    //             sub_id.as_mut()[..8].copy_from_slice(&key.to_be_bytes());
+    //
+    //             let asset = if k % 2 == 0 {
+    //                 VmBench::CONTRACT.asset_id(&sub_id)
+    //             } else {
+    //                 AssetId::new(*sub_id)
+    //             };
+    //             (asset, key + 1_000)
+    //         }),
+    //     )
+    //     .unwrap();
 
     let service = fuel_core::service::FuelService::new(database, config.clone())
         .expect("Unable to start a FuelService");
     service.start().expect("Unable to start the service");
-    service
+    (service, rt)
 }
 
 fn run_with_service(
@@ -226,23 +228,24 @@ fn run_with_service(
     script: Vec<Instruction>,
     script_data: Vec<u8>,
     service: fuel_core::service::FuelService,
+    rt: tokio::runtime::Runtime,
 ) {
+    dbg!("beep");
     group.bench_function(id, |b| {
-
-        const STATE_SIZE: u64 = 10_000_000;
-
-        let rt = tokio::runtime::Builder::new_current_thread()
-            .enable_all()
-            .build()
-            .unwrap();
-        let _drop = rt.enter();
+        dbg!("boop");
+        // let rt = tokio::runtime::Builder::new_current_thread()
+        //     .enable_all()
+        //     .build()
+        //     .unwrap();
+        // let _drop = rt.enter();
         const TARGET_BLOCK_GAS_LIMIT: u64 = 100_000;
         const BASE: u64 = 10_000;
-
 
         let mut rng = rand::rngs::StdRng::seed_from_u64(2322u64);
 
         b.to_async(&rt).iter(|| {
+            dbg!(&script);
+            dbg!(&script_data);
             let shared = service.shared.clone();
 
             let tx = fuel_core_types::fuel_tx::TransactionBuilder::script(
@@ -262,9 +265,10 @@ fn run_with_service(
                 )
                 .finalize_as_transaction();
             async move {
-                let tx_id = tx.id(&service.shared.config.chain_conf.consensus_parameters.chain_id);
+                let tx_id = tx.id(&shared.config.chain_conf.consensus_parameters.chain_id);
 
                 let mut sub = shared.block_importer.block_importer.subscribe();
+                dbg!(&tx);
                 shared
                     .txpool
                     .insert(vec![std::sync::Arc::new(tx)])
@@ -274,6 +278,7 @@ fn run_with_service(
                     .expect("Should be at least 1 element")
                     .expect("Should include transaction successfully");
                 let res = sub.recv().await.expect("Should produce a block");
+                dbg!(&res.tx_status);
                 assert_eq!(res.tx_status.len(), 2);
                 assert_eq!(res.sealed_block.entity.transactions().len(), 2);
                 assert_eq!(res.tx_status[0].id, tx_id);
