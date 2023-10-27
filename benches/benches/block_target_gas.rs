@@ -73,9 +73,6 @@ fn run(
     script_data: Vec<u8>,
 ) {
     group.bench_function(id, |b| {
-
-        const STATE_SIZE: u64 = 10_000_000;
-
         let rt = tokio::runtime::Builder::new_current_thread()
             .enable_all()
             .build()

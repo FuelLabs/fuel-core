@@ -20,9 +20,12 @@ use fuel_core_storage::{
     },
     Result as StorageResult,
 };
-use fuel_core_types::fuel_types::{
-    BlockHeight,
-    ContractId,
+use fuel_core_types::{
+    fuel_tx::Contract,
+    fuel_types::{
+        BlockHeight,
+        ContractId,
+    },
 };
 use itertools::Itertools;
 use serde::{
@@ -431,7 +434,7 @@ impl Database {
         bytecode: &[u8],
     ) -> DatabaseResult<()> {
         let column = Column::ContractsRawCode;
-        let _: Option<Vec<u8>> = self.insert(&id, column, &bytecode)?;
+        let _: Option<Contract> = self.insert(&id, column, &bytecode)?;
 
         Ok(())
     }

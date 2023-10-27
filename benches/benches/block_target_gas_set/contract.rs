@@ -1,4 +1,8 @@
 use crate::*;
+use fuel_core_storage::{
+    tables::ContractsRawCode,
+    StorageAsMut,
+};
 use fuel_core_types::{
     fuel_types::Word,
     fuel_vm::consts::WORD_SIZE,
@@ -124,7 +128,7 @@ pub fn run_contract(group: &mut BenchmarkGroup<WallTime>) {
         op::addi(0x11, 0x11, WORD_SIZE.try_into().unwrap()),
         op::movi(0x12, 100_000),
         op::call(0x10, RegId::ZERO, 0x11, 0x12),
-        op::jmpb(RegId::ZERO, 0),
+        // op::jmpb(RegId::ZERO, 0),
     ];
     let contract_id = ContractId::zeroed();
     let mut service = service_with_contract_id(contract_id);
@@ -133,7 +137,8 @@ pub fn run_contract(group: &mut BenchmarkGroup<WallTime>) {
     service
         .shared
         .database
-        .insert_contract_bytecode(contract_id, &contract_bytecode)
+        .storage_as_mut::<ContractsRawCode>()
+        .insert(&contract_id, &contract_bytecode)
         .unwrap();
 
     let script_data = contract_id
