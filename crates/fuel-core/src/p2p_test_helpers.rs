@@ -361,9 +361,6 @@ pub async fn make_nodes(
         validators.push(make_node(node_config, Vec::with_capacity(0)).await)
     }
 
-    // Give time to nodes meet each other.
-    tokio::time::sleep(Duration::from_secs(1)).await;
-
     Nodes {
         bootstrap_nodes,
         producers,
@@ -525,7 +522,7 @@ impl ProducerSetup {
             secret,
             num_test_txs: Default::default(),
             utxo_validation: true,
-            bootstrap_type: BootstrapType::BootstrapNodes,
+            bootstrap_type: BootstrapType::ReservedNodes,
         }
     }
 
