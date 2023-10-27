@@ -608,7 +608,7 @@ impl GasCosts {
         self.0.swwq.into()
     }
 
-    async fn contract_root(&self) -> U64 {
+    async fn contract_root(&self) -> DependentCost {
         self.0.contract_root.into()
     }
 }

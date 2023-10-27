@@ -140,7 +140,7 @@ include_from_impls! {
         pub srwq: DependentCost,
         pub swwq: DependentCost,
 
-        pub contract_root: u64,
+        pub contract_root: DependentCost,
     }
 }
 

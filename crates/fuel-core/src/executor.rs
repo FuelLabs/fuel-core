@@ -2023,6 +2023,7 @@ mod tests {
             let price = 1;
             let limit = 0;
             let gas_used_by_predicates = 0;
+            let gas_used_by_signature_checks = 0;
             let gas_price_factor = 1;
             let script = TxBuilder::new(1u64)
                 .gas_limit(limit)
@@ -2061,6 +2062,7 @@ mod tests {
                 producer.config.consensus_parameters.fee_params(),
                 script.metered_bytes_size() as Word,
                 gas_used_by_predicates,
+                gas_used_by_signature_checks,
                 limit,
                 price,
             )
@@ -2132,6 +2134,7 @@ mod tests {
                 producer.config.consensus_parameters.fee_params(),
                 script.metered_bytes_size() as Word,
                 gas_used_by_predicates,
+                gas_used_by_signature_checks,
                 limit,
                 price,
             )

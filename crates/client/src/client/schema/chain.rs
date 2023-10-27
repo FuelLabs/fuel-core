@@ -238,7 +238,7 @@ include_from_impls_and_cynic! {
         pub srwq: DependentCost,
         pub swwq: DependentCost,
 
-        pub contract_root: U64,
+        pub contract_root: DependentCost,
     }
 }
 
