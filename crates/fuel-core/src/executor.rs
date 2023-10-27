@@ -1693,7 +1693,7 @@ where
             }
         }
 
-        //  owners from inputs and outputs prior to indexing
+        // deduplicate owners from inputs and outputs prior to indexing
         owners.sort();
         owners.dedup();
 
@@ -3257,7 +3257,7 @@ mod tests {
         // Create a contract that modifies the state
         let (create, contract_id) = create_contract(
             vec![
-                // Sets the state `[0x1; 32]` = value of `RegId::PC`;
+                // Sets the state `STATE[0x1; 32]` = value of `RegId::PC`;
                 op::sww(0x1, 0x29, RegId::PC),
                 op::ret(1),
             ]
@@ -3373,7 +3373,7 @@ mod tests {
         // Create a contract that modifies the state
         let (create, contract_id) = create_contract(
             vec![
-                // Sets the state `[0x1; 32]` = value of `RegId::PC`;
+                // Sets the state `STATE[0x1; 32]` = value of `RegId::PC`;
                 op::sww(0x1, 0x29, RegId::PC),
                 op::ret(1),
             ]

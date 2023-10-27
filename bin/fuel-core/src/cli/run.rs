@@ -266,7 +266,7 @@ impl Command {
             info!("Block production disabled");
         }
 
-        // if consensus key is not configured, fallback to Dev consensus key
+        // if consensus key is not configured, fallback to dev consensus key
         let consensus_key = load_consensus_key(consensus_key)?.or_else(|| {
             if consensus_dev_key && trigger != Trigger::Never {
                 let key = default_consensus_dev_key();
@@ -276,7 +276,7 @@ impl Command {
                 );
                 Some(Secret::new(key.into()))
             } else {
-                // if consensus Dev key is disabled, use no key
+                // if consensus dev key is disabled, use no key
                 None
             }
         });

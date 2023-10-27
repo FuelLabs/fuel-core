@@ -77,9 +77,9 @@ pub enum TransactionExecutionResult {
 pub enum ExecutionTypes<P, V> {
     /// `DryRun` mode where P is being produced.
     DryRun(P),
-    /// Production mode where P is being produced.
+    /// `Production` mode where P is being produced.
     Production(P),
-    /// Validation mode where V is being checked.
+    /// `Validation` mode where V is being checked.
     Validation(V),
 }
 

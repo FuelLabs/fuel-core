@@ -15,7 +15,7 @@ use crate::{
     StorageMutate,
 };
 
-/// The empty  storage.
+/// The empty transactional storage.
 #[derive(Default, Clone, Copy, Debug)]
 pub struct EmptyStorage;
 

@@ -41,11 +41,11 @@ use tracing::warn;
 /// about depth of connection
 #[derive(Debug, Clone)]
 pub struct Dependency {
-    /// mapping of all ` relationships in TxPool
+    /// mapping of all `UtxoId` relationships in TxPool
     coins: HashMap<UtxoId, CoinState>,
     /// Contract-> Tx mapping.
     contracts: HashMap<ContractId, ContractState>,
-    /// `messageId` -> tx mapping
+    /// `MessageId` -> tx mapping
     messages: HashMap<Nonce, MessageState>,
     /// max depth of dependency.
     max_depth: usize,

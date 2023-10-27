@@ -437,8 +437,8 @@ impl AsRef<Database> for Database {
 }
 
 /// Construct an ephemeral database
-/// uses  when  features are enabled
-/// uses in-memory when  features are disabled
+/// uses RocksDB when `rocksdb` features are enabled
+/// uses in-memory when `rocksdb` features are disabled
 impl Default for Database {
     fn default() -> Self {
         #[cfg(not(feature = "rocksdb"))]

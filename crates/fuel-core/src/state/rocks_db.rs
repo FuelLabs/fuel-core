@@ -342,18 +342,18 @@ impl KeyValueStore for RocksDb {
         column: Column,
         buf: &[u8],
     ) -> DatabaseResult<(usize, Option<Value>)> {
-        // : This is a race condition. We should use a transaction.
+        // FIXME: This is a race condition. We should use a transaction.
         let existing = self.read_alloc(key, column)?;
-        // : This is a race condition. We should use a transaction.
+        // FIXME: This is a race condition. We should use a transaction.
         let r = self.write(key, column, buf)?;
 
         Ok((r, existing))
     }
 
     fn take(&self, key: &[u8], column: Column) -> DatabaseResult<Option<Value>> {
-        // : This is a race condition. We should use a transaction.
+        // FIXME: This is a race condition. We should use a transaction.
         let prev = self.read_alloc(key, column)?;
-        // : This is a race condition. We should use a transaction.
+        // FIXME: This is a race condition. We should use a transaction.
         self.db
             .delete_cf(&self.cf(column), key)
             .map_err(|e| DatabaseError::Other(e.into()))
