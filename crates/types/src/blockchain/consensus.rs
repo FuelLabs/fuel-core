@@ -91,7 +91,7 @@ pub struct ConsensusVote {
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Genesis {
-    /// The chain config define what consensus type to use, what settlement layer to use,
+    /// The chain config defines what consensus type to use, what settlement layer to use,
     /// rules of block validity, etc.
     pub chain_config_hash: Bytes32,
     /// The Binary Merkle Tree root of all genesis coins.

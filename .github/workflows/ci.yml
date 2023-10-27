@@ -54,7 +54,7 @@ jobs:
 
       - uses: actions/checkout@v3
       - name: Run cargo-spellcheck
-        run: cargo spellcheck check --cfg=.cargo/spellcheck.toml
+        run: cargo spellcheck check --cfg=.cargo/spellcheck.toml --code 1
 
   lint-toml-files:
     runs-on: buildjet-4vcpu-ubuntu-2204

@@ -13,7 +13,7 @@
 >
 async
 backend
-backtraces
+backtrace/S
 Bech32
 behaviour
 benchmark

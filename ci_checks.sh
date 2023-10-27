@@ -6,9 +6,11 @@
 # - Rust `1.72.0`
 # - Nightly rust formatter
 # - `cargo install cargo-sort`
+# - `cargo install cargo-spellcheck`
 
 cargo +nightly fmt --all -- --check &&
 cargo sort -w --check &&
+cargo spellcheck check --cfg=.cargo/spellcheck.toml --code 1 &&
 source .github/workflows/scripts/verify_openssl.sh &&
 cargo clippy --all-targets --all-features &&
 cargo make check --locked &&

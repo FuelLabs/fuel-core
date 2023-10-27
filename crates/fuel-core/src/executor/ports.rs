@@ -52,7 +52,7 @@ pub trait RelayerPort {
 #[cfg(test)]
 /// For some tests we don't care about the actual
 /// implementation of the `RelayerPort`
-/// and using a pass through is fine.
+/// and using a pass-through is fine.
 impl RelayerPort for crate::database::Database {
     fn get_message(
         &self,

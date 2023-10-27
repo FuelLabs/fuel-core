@@ -964,7 +964,7 @@ where
         let (used_gas, tx_fee) =
             self.total_fee_paid(min_fee, max_fee, tx.price(), &receipts)?;
 
-        // Ensure tx matches vm output exactly
+        // Ensure tx matches VM output exactly
         if let ExecutionKind::Validation = execution_kind {
             if &tx != checked_tx.transaction() {
                 return Err(ExecutorError::InvalidTransactionOutcome {
@@ -1479,7 +1479,7 @@ where
         }
     }
 
-    /// Log a VM backtraces if configured to do so
+    /// Log a VM backtrace if configured to do so
     fn log_backtrace<Tx>(&self, vm: &Interpreter<VmDatabase, Tx>, receipts: &[Receipt]) {
         if self.config.backtrace {
             if let Some(backtrace) = receipts
