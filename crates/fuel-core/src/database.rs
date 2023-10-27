@@ -232,6 +232,10 @@ impl Database {
     pub fn transaction(&self) -> DatabaseTransaction {
         self.into()
     }
+
+    pub fn flush(self) -> DatabaseResult<()> {
+        self.data.flush()
+    }
 }
 
 /// Mutable methods.

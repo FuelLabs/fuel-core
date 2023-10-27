@@ -212,7 +212,14 @@ impl KeyValueStore for MemoryStore {
 
 impl BatchOperations for MemoryStore {}
 
-impl TransactableStorage for MemoryStore {}
+impl TransactableStorage for MemoryStore {
+    fn flush(&self) -> DatabaseResult<()> {
+        for lock in self.inner.iter() {
+            lock.lock().expect("poisoned").clear();
+        }
+        Ok(())
+    }
+}
 
 #[cfg(test)]
 mod tests {

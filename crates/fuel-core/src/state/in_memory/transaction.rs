@@ -284,7 +284,15 @@ impl KeyValueStore for MemoryTransactionView {
 
 impl BatchOperations for MemoryTransactionView {}
 
-impl TransactableStorage for MemoryTransactionView {}
+impl TransactableStorage for MemoryTransactionView {
+    fn flush(&self) -> DatabaseResult<()> {
+        for lock in self.changes.iter() {
+            lock.lock().expect("poisoned lock").clear();
+        }
+        self.view_layer.flush()?;
+        self.data_source.flush()
+    }
+}
 
 #[cfg(test)]
 mod tests {
