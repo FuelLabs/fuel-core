@@ -69,10 +69,10 @@ async fn messages_returns_messages_for_all_owners() {
 
     // configure the messages
     let mut config = Config::local_node();
-    config.chain_conf.initial_state = Some(StateConfig {
+    config.chain_state = StateConfig {
         messages: Some(vec![first_msg, second_msg, third_msg]),
         ..Default::default()
-    });
+    };
 
     // setup server & client
     let srv = FuelService::new_node(config).await.unwrap();
@@ -118,10 +118,10 @@ async fn messages_by_owner_returns_messages_for_the_given_owner() {
 
     // configure the messages
     let mut config = Config::local_node();
-    config.chain_conf.initial_state = Some(StateConfig {
+    config.chain_state = StateConfig {
         messages: Some(vec![first_msg, second_msg, third_msg]),
         ..Default::default()
-    });
+    };
 
     // setup server & client
     let srv = FuelService::new_node(config).await.unwrap();
@@ -206,10 +206,10 @@ async fn message_status__can_get_unspent() {
     };
 
     let mut config = Config::local_node();
-    config.chain_conf.initial_state = Some(StateConfig {
+    config.chain_state = StateConfig {
         messages: Some(vec![msg]),
         ..Default::default()
-    });
+    };
 
     let srv = FuelService::new_node(config).await.unwrap();
     let client = FuelClient::from(srv.bound_address);
@@ -240,10 +240,10 @@ async fn message_status__can_get_spent() {
     };
 
     let mut config = Config::local_node();
-    config.chain_conf.initial_state = Some(StateConfig {
+    config.chain_state = StateConfig {
         messages: Some(vec![msg]),
         ..Default::default()
-    });
+    };
 
     let srv = FuelService::new_node(config).await.unwrap();
     let client = FuelClient::from(srv.bound_address);
@@ -301,10 +301,7 @@ async fn can_get_message_proof() {
         let config = Config::local_node();
 
         let coin = config
-            .chain_conf
-            .initial_state
-            .as_ref()
-            .unwrap()
+            .chain_state
             .coins
             .as_ref()
             .unwrap()

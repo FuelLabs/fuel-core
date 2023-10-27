@@ -66,7 +66,7 @@ async fn block() {
 #[tokio::test]
 async fn get_genesis_block() {
     let mut config = Config::local_node();
-    config.chain_conf.initial_state.as_mut().unwrap().height = Some(13u32.into());
+    config.chain_parameters.height = 13u32.into();
     let srv = FuelService::from_database(Database::default(), config)
         .await
         .unwrap();

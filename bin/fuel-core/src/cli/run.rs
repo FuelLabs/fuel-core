@@ -14,7 +14,7 @@ use clap::Parser;
 use fuel_core::{
     chain_config::{
         default_consensus_dev_key,
-        ChainConfig,
+        ChainConfig, StateConfig, LOCAL_TESTNET,
     },
     producer::Config as ProducerConfig,
     service::{
@@ -104,7 +104,8 @@ pub struct Command {
     )]
     pub database_type: DbType,
 
-    /// Specify either an alias to a built-in configuration or filepath to a JSON file.
+    /// Specify either an alias to a built-in configuration or filepath to a directory
+    /// that contains the chain parameters and chain state config JSON files.
     #[arg(
         name = "CHAIN_CONFIG",
         long = "chain",
@@ -251,6 +252,16 @@ impl Command {
         let addr = net::SocketAddr::new(ip, port);
 
         let chain_conf: ChainConfig = chain_config.as_str().parse()?;
+        let (chain_params, chain_state) = match chain_config.as_str() {
+            LOCAL_TESTNET => {
+                (ChainConfig::local_testnet(), StateConfig::local_testnet())
+            }
+            _ => {
+                let chain_conf = ChainConfig::load_from_file(&chain_config)?;
+                let chain_state = StateConfig::load_from_file(&chain_config)?;
+                (chain_conf, chain_state)
+            }
+        };
 
         #[cfg(feature = "relayer")]
         let relayer_cfg = relayer_args.into_config();
@@ -306,7 +317,8 @@ impl Command {
             max_database_cache_size,
             database_path,
             database_type,
-            chain_conf: chain_conf.clone(),
+            chain_parameters: chain_conf.clone(),
+            chain_state: chain_state.clone(),
             debug,
             utxo_validation,
             block_production: trigger,

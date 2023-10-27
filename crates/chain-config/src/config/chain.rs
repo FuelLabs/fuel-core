@@ -1,8 +1,5 @@
-use bech32::{
-    ToBase32,
-    Variant::Bech32m,
-};
 use core::str::FromStr;
+use std::path::Path;
 use fuel_core_storage::MerkleRoot;
 use fuel_core_types::{
     fuel_crypto::Hasher,
@@ -10,16 +7,12 @@ use fuel_core_types::{
         ConsensusParameters,
         GasCosts,
         TxParameters,
-        UtxoId,
     },
     fuel_types::{
-        Address,
         AssetId,
-        Bytes32,
+        BlockHeight,
     },
-    fuel_vm::SecretKey,
 };
-use itertools::Itertools;
 use serde::{
     Deserialize,
     Serialize,
@@ -35,10 +28,6 @@ use std::{
 };
 
 use crate::{
-    config::{
-        coin::CoinConfig,
-        state::StateConfig,
-    },
     genesis::GenesisCommitment,
     ConsensusConfig,
 };
@@ -56,10 +45,9 @@ pub const TESTNET_INITIAL_BALANCE: u64 = 10_000_000;
 pub struct ChainConfig {
     pub chain_name: String,
     pub block_gas_limit: u64,
-    #[serde(default)]
-    pub initial_state: Option<StateConfig>,
     pub consensus_parameters: ConsensusParameters,
     pub consensus: ConsensusConfig,
+    pub height: BlockHeight,
 }
 
 impl Default for ChainConfig {
@@ -68,8 +56,8 @@ impl Default for ChainConfig {
             chain_name: "local".into(),
             block_gas_limit: TxParameters::DEFAULT.max_gas_per_tx * 10, /* TODO: Pick a sensible default */
             consensus_parameters: ConsensusParameters::default(),
-            initial_state: None,
             consensus: ConsensusConfig::default_poa(),
+            height: Default::default(),
         }
     }
 }
@@ -77,93 +65,19 @@ impl Default for ChainConfig {
 impl ChainConfig {
     pub const BASE_ASSET: AssetId = AssetId::zeroed();
 
+    pub fn load_from_file(path: impl AsRef<Path>) -> anyhow::Result<Self> {
+        let contents = std::fs::read(path.as_ref().join("chain_parameters.json"))?;
+        serde_json::from_slice(&contents).map_err(|e| {
+            anyhow::Error::new(e).context(format!(
+                "an error occurred while loading the chain parameters file"
+            ))
+        })
+    }
+
     pub fn local_testnet() -> Self {
-        // endow some preset accounts with an initial balance
-        tracing::info!("Initial Accounts");
-        let secrets = [
-            "0xde97d8624a438121b86a1956544bd72ed68cd69f2c99555b08b1e8c51ffd511c",
-            "0x37fa81c84ccd547c30c176b118d5cb892bdb113e8e80141f266519422ef9eefd",
-            "0x862512a2363db2b3a375c0d4bbbd27172180d89f23f2e259bac850ab02619301",
-            "0x976e5c3fa620092c718d852ca703b6da9e3075b9f2ecb8ed42d9f746bf26aafb",
-            "0x7f8a325504e7315eda997db7861c9447f5c3eff26333b20180475d94443a10c6",
-        ];
-        let initial_coins = secrets
-            .into_iter()
-            .map(|secret| {
-                let secret = SecretKey::from_str(secret).expect("Expected valid secret");
-                let address = Address::from(*secret.public_key().hash());
-                let bech32_data = Bytes32::new(*address).to_base32();
-                let bech32_encoding =
-                    bech32::encode(FUEL_BECH32_HRP, bech32_data, Bech32m).unwrap();
-                tracing::info!(
-                    "PrivateKey({:#x}), Address({:#x} [bech32: {}]), Balance({})",
-                    secret,
-                    address,
-                    bech32_encoding,
-                    TESTNET_INITIAL_BALANCE
-                );
-                Self::initial_coin(secret, TESTNET_INITIAL_BALANCE, None)
-            })
-            .collect_vec();
-
         Self {
             chain_name: LOCAL_TESTNET.to_string(),
-            initial_state: Some(StateConfig {
-                coins: Some(initial_coins),
-                ..StateConfig::default()
-            }),
             ..Default::default()
-        }
-    }
-
-    #[cfg(feature = "random")]
-    pub fn random_testnet() -> Self {
-        tracing::info!("Initial Accounts");
-        let mut rng = rand::thread_rng();
-        let initial_coins = (0..5)
-            .map(|_| {
-                let secret = SecretKey::random(&mut rng);
-                let address = Address::from(*secret.public_key().hash());
-                let bech32_data = Bytes32::new(*address).to_base32();
-                let bech32_encoding =
-                    bech32::encode(FUEL_BECH32_HRP, bech32_data, Bech32m).unwrap();
-                tracing::info!(
-                    "PrivateKey({:#x}), Address({:#x} [bech32: {}]), Balance({})",
-                    secret,
-                    address,
-                    bech32_encoding,
-                    TESTNET_INITIAL_BALANCE
-                );
-                Self::initial_coin(secret, TESTNET_INITIAL_BALANCE, None)
-            })
-            .collect_vec();
-
-        Self {
-            chain_name: LOCAL_TESTNET.to_string(),
-            initial_state: Some(StateConfig {
-                coins: Some(initial_coins),
-                ..StateConfig::default()
-            }),
-            ..Default::default()
-        }
-    }
-
-    pub fn initial_coin(
-        secret: SecretKey,
-        amount: u64,
-        utxo_id: Option<UtxoId>,
-    ) -> CoinConfig {
-        let address = Address::from(*secret.public_key().hash());
-
-        CoinConfig {
-            tx_id: utxo_id.as_ref().map(|u| *u.tx_id()),
-            output_index: utxo_id.as_ref().map(|u| u.output_index()),
-            tx_pointer_block_height: None,
-            tx_pointer_tx_idx: None,
-            maturity: None,
-            owner: address,
-            amount,
-            asset_id: Default::default(),
         }
     }
 }
@@ -200,10 +114,9 @@ impl GenesisCommitment for ChainConfig {
         let ChainConfig {
             chain_name,
             block_gas_limit,
-            // Skip the `initial_state` bec
-            initial_state: _,
             consensus_parameters,
             consensus,
+            height,
         } = self;
 
         // TODO: Hash settlement configuration when it will be available.
@@ -212,6 +125,7 @@ impl GenesisCommitment for ChainConfig {
             .chain(block_gas_limit.to_be_bytes())
             .chain(consensus_parameters.root()?)
             .chain(consensus.root()?)
+            .chain(height.to_bytes())
             .finalize();
 
         Ok(config_hash)

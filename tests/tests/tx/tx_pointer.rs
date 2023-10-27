@@ -63,7 +63,7 @@ async fn tx_pointer_set_from_genesis_for_coin_and_contract_inputs() {
     });
 
     // set starting block >= tx_pointer.block_height()
-    test_builder.starting_block = Some(starting_block);
+    test_builder.starting_block = starting_block;
 
     // construct a transaction that uses both the coin and contract from genesis,
     // with the tx_pointer's left as null
@@ -112,7 +112,7 @@ async fn tx_pointer_set_from_previous_block() {
     let (_, contract_id) = test_builder.setup_contract(vec![], None, None, None);
 
     // set starting block >= tx_pointer.block_height()
-    test_builder.starting_block = Some(block_height.into());
+    test_builder.starting_block = block_height.into();
 
     // setup genesis coin
     let coin_utxo_id: UtxoId = rng.gen();
@@ -188,7 +188,7 @@ async fn tx_pointer_unset_when_utxo_validation_disabled() {
     let (_, contract_id) = test_builder.setup_contract(vec![], None, None, None);
 
     // set starting block >= tx_pointer.block_height()
-    test_builder.starting_block = Some(block_height.into());
+    test_builder.starting_block = block_height.into();
     test_builder.utxo_validation = false;
 
     let secret_key: SecretKey = SecretKey::random(&mut rng);

@@ -31,6 +31,7 @@ pub enum SubCommands {
         /// Specify either an alias to a built-in configuration or filepath to a JSON file.
         #[clap(name = "CHAIN_CONFIG", long = "chain", default_value = "local_testnet")]
         chain_config: String,
+        output_dir: String,
     },
     /// Creates a config for the contract.
     #[command(arg_required_else_help = true)]
@@ -51,6 +52,8 @@ pub async fn exec(command: Command) -> anyhow::Result<()> {
 
 #[cfg(any(feature = "rocksdb", feature = "rocksdb-production"))]
 pub async fn exec(command: Command) -> anyhow::Result<()> {
+    use std::fs::File;
+
     use anyhow::Context;
     use fuel_core::{
         chain_config::{
@@ -69,19 +72,20 @@ pub async fn exec(command: Command) -> anyhow::Result<()> {
     let db = Database::new(std::sync::Arc::new(data_source));
 
     match command.subcommand {
-        SubCommands::Everything { chain_config } => {
-            let config: ChainConfig = chain_config.parse()?;
-            let state_conf = StateConfig::generate_state_config(db)?;
+        SubCommands::Everything { chain_config, output_dir } => {
+            let chain_params: ChainConfig = chain_config.parse()?;
+            let chain_state = StateConfig::generate_state_config(db)?;
 
-            let chain_conf = ChainConfig {
-                initial_state: Some(state_conf),
-                ..config
-            };
+            //let stdout = std::io::stdout().lock();
+            std::fs::create_dir_all(output_dir)?;
+            let parameters_writer = File::create("chain_parameters.json")?;
+            let state_writer = File::create("chain_state.json")?;
 
-            let stdout = std::io::stdout().lock();
+            serde_json::to_writer_pretty(parameters_writer, &chain_params)
+                .context("failed to dump chain parameters snapshot to JSON")?;
 
-            serde_json::to_writer_pretty(stdout, &chain_conf)
-                .context("failed to dump snapshot to JSON")?;
+            serde_json::to_writer_pretty(state_writer, &chain_state)
+                .context("failed to dump chain state snapshot to JSON")?;
         }
         SubCommands::Contract { contract_id } => {
             let config = db.get_contract_config_by_id(contract_id)?;

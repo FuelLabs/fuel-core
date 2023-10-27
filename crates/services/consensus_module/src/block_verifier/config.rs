@@ -8,7 +8,7 @@ use fuel_core_types::blockchain::primitives::DaBlockHeight;
 /// The config of the block verifier.
 pub struct Config {
     /// The chain configuration.
-    pub chain_config: ChainConfig,
+    pub chain_params: ChainConfig,
     /// Config for settings the verifier needs that are related to the relayer.
     pub relayer: RelayerVerifierConfig,
 }
@@ -34,9 +34,9 @@ impl Default for RelayerVerifierConfig {
 
 impl Config {
     /// Creates the verifier config for all possible consensuses.
-    pub fn new(chain_config: ChainConfig, relayer: RelayerVerifierConfig) -> Self {
+    pub fn new(chain_params: ChainConfig, relayer: RelayerVerifierConfig) -> Self {
         Self {
-            chain_config,
+            chain_params,
             relayer,
         }
     }
