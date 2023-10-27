@@ -1,4 +1,4 @@
-//! MessageCoin
+//! `MessageCoin`
 
 use crate::{
     blockchain::primitives::DaBlockHeight,
@@ -9,11 +9,11 @@ use crate::{
     },
 };
 
-/// Message send from Da layer to fuel by bridge
+/// Message send from DA layer to fuel by bridge
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug, Default, Copy, Clone, PartialEq, Eq)]
 pub struct MessageCoin {
-    /// Account that sent the message from the da layer
+    /// Account that sent the message from the DA layer
     pub sender: Address,
     /// Fuel account receiving the message
     pub recipient: Address,
@@ -21,6 +21,6 @@ pub struct MessageCoin {
     pub nonce: Nonce,
     /// The amount of the base asset of Fuel chain sent along this message
     pub amount: Word,
-    /// The block height from the parent da layer that originated this message
+    /// The block height from the parent DA layer that originated this message
     pub da_height: DaBlockHeight,
 }

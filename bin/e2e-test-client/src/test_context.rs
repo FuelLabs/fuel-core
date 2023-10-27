@@ -81,7 +81,6 @@ impl Wallet {
     pub async fn new(secret: SecretKey, client: FuelClient) -> Self {
         let public_key: PublicKey = (&secret).into();
         let address = Input::owner(&public_key);
-        // get consensus params
         let consensus_params = client
             .chain_info()
             .await
@@ -124,7 +123,7 @@ impl Wallet {
                 )
                 .await?;
             results = response.results;
-            // check if page has the utxos we're looking for
+            // check if page has the UTXOs we're looking for
             if results.iter().any(|coin| coin.utxo_id == utxo_id) {
                 return Ok(true)
             }
@@ -202,7 +201,7 @@ impl Wallet {
         // we know the transferred coin should be output 0 from above
         let transferred_utxo = UtxoId::new(tx_id, 0);
 
-        // get status and return the utxo id of transferred coin
+        // get status and return the UTXO id of transferred coin
         Ok(TransferResult {
             tx_id,
             transferred_utxo,

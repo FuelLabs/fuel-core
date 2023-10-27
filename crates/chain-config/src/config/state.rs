@@ -18,7 +18,7 @@ use super::{
     message::MessageConfig,
 };
 
-// TODO: do streaming deserialization to handle large state configs
+// TODO: do streaming deserialization to handle large state config
 #[serde_as]
 #[skip_serializing_none]
 #[derive(Clone, Debug, Default, Deserialize, Serialize, Eq, PartialEq)]

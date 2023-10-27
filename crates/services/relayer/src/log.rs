@@ -18,7 +18,7 @@ use fuel_core_types::{
     },
 };
 
-/// Bridge message send from da to fuel network.
+/// Bridge message send from DA to fuel network.
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct MessageLog {
     pub sender: Address,
@@ -44,7 +44,7 @@ impl From<&MessageLog> for Message {
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub enum EthEventLog {
-    // Bridge message from da side
+    // Bridge message from DA side
     Message(MessageLog),
     Ignored,
 }
@@ -84,8 +84,8 @@ impl TryFrom<&Log> for EthEventLog {
                     sender,
                     recipient,
                     // Safety: logs without block numbers are rejected by
-                    // FinalizationQueue::append_eth_log before the conversion to EthEventLog happens.
-                    // If block_number is none, that means the log is pending.
+                    // `FinalizationQueue::append_eth_log` before the conversion to `EthEventLog` happens.
+                    // If `block_number` is none, that means the log is pending.
                     da_height: DaBlockHeight::from(
                         log.block_number
                             .ok_or(anyhow!("Log missing block height"))?

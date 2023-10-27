@@ -104,7 +104,7 @@ pub struct Command {
     )]
     pub database_type: DbType,
 
-    /// Specify either an alias to a built-in configuration or filepath to a JSON file.
+    /// Specify either an alias to a built-in configuration or file path to a JSON file.
     #[arg(
         name = "CHAIN_CONFIG",
         long = "chain",
@@ -120,11 +120,11 @@ pub struct Command {
     #[arg(long = "debug", env)]
     pub debug: bool,
 
-    /// Enable logging of backtraces from vm errors
+    /// Enable logging of backtraces from VM errors
     #[arg(long = "vm-backtrace", env)]
     pub vm_backtrace: bool,
 
-    /// Enable full utxo stateful validation
+    /// Enable full UTXO stateful validation
     /// disabled by default until downstream consumers stabilize
     #[arg(long = "utxo-validation", env)]
     pub utxo_validation: bool,
@@ -266,7 +266,7 @@ impl Command {
             info!("Block production disabled");
         }
 
-        // if consensus key is not configured, fallback to dev consensus key
+        // if consensus key is not configured, fallback to Dev consensus key
         let consensus_key = load_consensus_key(consensus_key)?.or_else(|| {
             if consensus_dev_key && trigger != Trigger::Never {
                 let key = default_consensus_dev_key();
@@ -276,7 +276,7 @@ impl Command {
                 );
                 Some(Secret::new(key.into()))
             } else {
-                // if consensus dev key is disabled, use no key
+                // if consensus Dev key is disabled, use no key
                 None
             }
         });
@@ -365,7 +365,7 @@ pub async fn exec(command: Command) -> anyhow::Result<()> {
     let profiling = command.profiling.clone();
     let config = command.get_config()?;
 
-    // start profiling agent if url is configured
+    // start profiling agent if URL is configured
     let _profiling_agent = start_pyroscope_agent(profiling, &config, network_name)?;
 
     // log fuel-core version
@@ -386,7 +386,7 @@ pub async fn exec(command: Command) -> anyhow::Result<()> {
     Ok(())
 }
 
-// Attempt to load the consensus key from cli arg first, otherwise check the env.
+// Attempt to load the consensus key from CLI argument first, otherwise check the env.
 fn load_consensus_key(
     cli_arg: Option<String>,
 ) -> anyhow::Result<Option<Secret<SecretKeyWrapper>>> {

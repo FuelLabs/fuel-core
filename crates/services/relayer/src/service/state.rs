@@ -1,5 +1,5 @@
 //! # State
-//! Tracks all state that determines the actions of the relayer.
+//! Tracks all state that determines the actions of the Relayer.
 
 use core::ops::RangeInclusive;
 pub use state_builder::*;
@@ -12,9 +12,9 @@ mod test;
 #[derive(Debug)]
 /// The state of the Ethereum node.
 pub struct EthState {
-    /// The state that the relayer thinks the remote Ethereum node is in.
+    /// The state that the Relayer thinks the remote Ethereum node is in.
     remote: EthHeight,
-    /// State related to the Ethereum node that is tracked by the relayer.
+    /// State related to the Ethereum node that is tracked by the Relayer.
     local: Option<EthHeight>,
 }
 
@@ -25,8 +25,8 @@ type EthHeight = u64;
 struct Heights<T>(RangeInclusive<T>);
 
 #[derive(Clone, Debug)]
-/// The gap between the eth block height on
-/// the relayer and the Ethereum node.
+/// The gap between the Ethereum block height on
+/// the Relayer and the Ethereum node.
 pub struct EthSyncGap(EthHeight, EthHeight);
 
 #[derive(Clone, Debug)]
@@ -42,7 +42,7 @@ pub struct EthSyncPage {
 }
 
 impl EthState {
-    /// Is the relayer in sync with the Ethereum node?
+    /// Is the Relayer in sync with the Ethereum node?
     pub fn is_synced(&self) -> bool {
         self.is_synced_at().is_some()
     }
@@ -51,7 +51,7 @@ impl EthState {
         self.local.filter(|local| *local >= self.remote)
     }
 
-    /// Get the gap between the relayer and the Ethereum node if
+    /// Get the gap between the Relayer and the Ethereum node if
     /// a sync is required.
     pub fn needs_to_sync_eth(&self) -> Option<EthSyncGap> {
         (!self.is_synced()).then(|| {
@@ -63,17 +63,17 @@ impl EthState {
 }
 
 impl EthSyncGap {
-    /// Create a new sync gap between the relayer and Ethereum node.
+    /// Create a new sync gap between the Relayer and Ethereum node.
     pub(crate) fn new(local: u64, remote: u64) -> Self {
         Self(local, remote)
     }
 
-    /// Get the oldest block height (which will be the relayers eth block height).
+    /// Get the oldest block height (which will be the `Relayer`'s Ethereum block height).
     pub fn oldest(&self) -> u64 {
         self.0
     }
 
-    /// Get the latest block height (which will be the Ethereum nodes eth block height).
+    /// Get the latest block height (which will be the Ethereum nodes Ethereum block height).
     pub fn latest(&self) -> u64 {
         self.1
     }

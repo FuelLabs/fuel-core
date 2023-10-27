@@ -242,7 +242,7 @@ where
 
         // Update the total tx count in chain metadata
         let total_txs = db_after_execution
-            // Safety: casting len to u64 since it's impossible to execute a block with more than 2^64 txs
+            // Safety: casting length to `u64` since it's impossible to execute a block with more than `2^64` txs
             .increase_tx_count(result.sealed_block.entity.transactions().len() as u64)?;
 
         db_tx.commit()?;
@@ -271,7 +271,7 @@ where
 
         // Errors are optimistically handled via fallback to default values since the metrics
         // should get updated regularly anyways and these errors will be discovered and handled
-        // correctly in more mission critical areas (such as _commit_result)
+        // correctly in more mission critical areas (such as `_commit_result`)
         let current_block_height =
             self.database.latest_block_height().unwrap_or_default();
         let total_tx_count = self.database.increase_tx_count(0).unwrap_or_default();
@@ -282,7 +282,7 @@ where
         importer_metrics()
             .block_height
             .set(current_block_height.as_usize() as i64);
-        // on init just set to current time since it's not worth tracking in the db
+        // on initialization just set to current time since it's not worth tracking in the db
         let current_time = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap()
@@ -379,7 +379,7 @@ where
         let start = Instant::now();
         let result = self.verify_and_execute_block(sealed_block)?;
         let commit_result = self._commit_result(result);
-        // record the execution time to prometheus
+        // record the execution time to Prometheus
         let time = start.elapsed().as_secs_f64();
         importer_metrics().execute_and_commit_duration.observe(time);
         // return execution result

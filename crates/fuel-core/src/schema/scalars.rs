@@ -29,7 +29,7 @@ pub mod utxo_id;
 
 macro_rules! number_scalar {
     ($i:ident, $t:ty, $name:expr) => {
-        /// Need our own scalar type since GraphQL integers are restricted to i32.
+        /// Need our own scalar type since GraphQL integers are restricted to `i32`.
         #[derive(
             Copy, Clone, Debug, derive_more::Into, derive_more::From, PartialEq, Eq,
         )]
@@ -100,7 +100,7 @@ impl From<U32> for usize {
     }
 }
 
-/// Need our own u64 type since GraphQL integers are restricted to i32.
+/// Need our own `u64` type since GraphQL integers are restricted to `i32`.
 #[derive(Copy, Clone, Debug, derive_more::Into, derive_more::From)]
 pub struct Tai64Timestamp(pub Tai64);
 
@@ -244,7 +244,7 @@ macro_rules! fuel_type_scalar {
             fn from_str(s: &str) -> Result<Self, Self::Err> {
                 // trim leading 0x
                 let value = s.strip_prefix("0x").unwrap_or(s);
-                // pad input to $len bytes
+                // pad input to `$len` bytes
                 let mut bytes = ((value.len() / 2)..$len).map(|_| 0).collect::<Vec<u8>>();
                 // decode into bytes
                 bytes.extend(hex::decode(value).map_err(|e| e.to_string())?);

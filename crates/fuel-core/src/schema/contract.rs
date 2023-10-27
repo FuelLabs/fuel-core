@@ -138,7 +138,7 @@ impl ContractBalanceQuery {
     > {
         let query: &Database = ctx.data_unchecked();
 
-        // Rocksdb doesn't support reverse iteration over a prefix
+        // RocksDB doesn't support reverse iteration over a prefix
         if matches!(last, Some(last) if last > 0) {
             return Err(
                 anyhow!("reverse pagination isn't supported for this resource").into(),

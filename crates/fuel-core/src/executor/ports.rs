@@ -40,8 +40,8 @@ pub trait TransactionsSource {
 }
 
 pub trait RelayerPort {
-    /// Get a message from the relayer if it has been
-    /// synced and is <= the given da height.
+    /// Get a message from the Relayer if it has been
+    /// synced and is <= the given DA height.
     fn get_message(
         &self,
         id: &Nonce,
@@ -51,8 +51,8 @@ pub trait RelayerPort {
 
 #[cfg(test)]
 /// For some tests we don't care about the actual
-/// implementation of the RelayerPort
-/// and using a passthrough is fine.
+/// implementation of the `RelayerPort`
+/// and using a pass through is fine.
 impl RelayerPort for crate::database::Database {
     fn get_message(
         &self,

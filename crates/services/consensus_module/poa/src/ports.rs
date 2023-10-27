@@ -77,11 +77,11 @@ pub trait Database {
 
 #[cfg_attr(test, mockall::automock)]
 #[async_trait::async_trait]
-/// Port for communication with the relayer.
+/// Port for communication with the Relayer.
 pub trait RelayerPort {
-    /// Wait for the relayer to be in sync with the given DA height
+    /// Wait for the Relayer to be in sync with the given DA height
     /// if the `da_height` is within the range of the current
-    /// relayer sync'd height - `max_da_lag`.
+    /// Relayer synced height - `max_da_lag`.
     async fn await_until_if_in_range(
         &self,
         da_height: &DaBlockHeight,

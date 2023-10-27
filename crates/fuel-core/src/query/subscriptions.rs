@@ -45,7 +45,7 @@ where
         .transpose()
         .map(TxStatusMessage::from);
 
-    // Oneshot channel to signal that the stream should be closed.
+    // One-shot channel to signal that the stream should be closed.
     let (close, closed) = tokio::sync::oneshot::channel();
     let mut close = Some(close);
 
@@ -53,7 +53,7 @@ where
     // Note the option will make an empty stream if it is None.
     futures::stream::iter(check_db_first)
         .chain(stream)
-        // Keep taking the stream until the oneshot channel is closed.
+        // Keep taking the stream until the one-shot channel is closed.
         .take_until(closed)
         .map(move |status| {
             // Close the stream if the transaction is anything other than
@@ -69,7 +69,7 @@ where
 
             match status {
                 TxStatusMessage::Status(status) => Ok(status.into()),
-                // Map a failed status to an error for the api.
+                // Map a failed status to an error for the API.
                 TxStatusMessage::FailedStatus => {
                     Err(anyhow::anyhow!("Failed to get transaction status"))
                 }

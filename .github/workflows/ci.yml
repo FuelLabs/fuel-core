@@ -44,6 +44,18 @@ jobs:
       - name: Rustfmt check
         run: cargo +${{ env.NIGHTLY_RUST_VERSION }} fmt --all -- --check
 
+  spellcheck:
+    runs-on: buildjet-4vcpu-ubuntu-2204
+    steps:
+      - name: Install cargo-spellcheck
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-spellcheck
+
+      - uses: actions/checkout@v3
+      - name: Run cargo-spellcheck
+        run: cargo spellcheck check --cfg=.cargo/spellcheck.toml
+
   lint-toml-files:
     runs-on: buildjet-4vcpu-ubuntu-2204
     steps:

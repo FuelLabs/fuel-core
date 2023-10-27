@@ -353,7 +353,7 @@ impl FuelClient {
     pub async fn dry_run_opt(
         &self,
         tx: &Transaction,
-        // Disable utxo input checks (exists, unspent, and valid signature)
+        // Disable UTXO input checks (exists, unspent, and valid signature)
         utxo_validation: Option<bool>,
     ) -> io::Result<Vec<Receipt>> {
         let tx = tx.clone().to_bytes();
@@ -612,7 +612,7 @@ impl FuelClient {
         id: &TxId,
     ) -> io::Result<TransactionStatus> {
         // skip until we've reached a final status and then stop consuming the stream
-        // to avoid an EOF which the eventsource client considers as an error.
+        // to avoid an `EOF` which the event source client considers as an error.
         let status_result = self
             .subscribe_transaction_status(id)
             .await?
@@ -642,7 +642,7 @@ impl FuelClient {
         Ok(transactions)
     }
 
-    /// Returns a paginated set of transactions associated with a txo owner address.
+    /// Returns a paginated set of transactions associated with an owner address.
     pub async fn transactions_by_owner(
         &self,
         owner: &Address,
@@ -766,7 +766,6 @@ impl FuelClient {
         &self,
         owner: &Address,
         spend_query: Vec<(AssetId, u64, Option<u64>)>,
-        // (Utxos, Messages Nonce)
         excluded_ids: Option<(Vec<UtxoId>, Vec<Nonce>)>,
     ) -> io::Result<Vec<Vec<types::CoinType>>> {
         let owner: schema::Address = (*owner).into();

@@ -31,11 +31,11 @@ pub trait GossipsubCodec {
 }
 
 pub trait RequestResponseConverter {
-    /// Response that is ready to be converted into NetworkResponse
+    /// Response that is ready to be converted into `NetworkResponse`
     type OutboundResponse;
     /// Response that is sent over the network
     type NetworkResponse;
-    /// Final Response Message deserialized from IntermediateResponse
+    /// Final Response Message deserialized from `IntermediateResponse`
     type ResponseMessage;
 
     fn convert_to_network_response(
@@ -49,8 +49,8 @@ pub trait RequestResponseConverter {
     ) -> Result<Self::ResponseMessage, io::Error>;
 }
 
-/// Main Codec trait
-/// Needs to be implemented and provided to FuelBehaviour
+/// Main `Codec` trait
+/// Needs to be implemented and provided to `FuelBehaviour`
 pub trait NetworkCodec:
     GossipsubCodec<
         RequestMessage = GossipsubBroadcastRequest,
@@ -64,7 +64,7 @@ pub trait NetworkCodec:
     + Send
     + 'static
 {
-    /// Returns RequestResponse's Protocol
-    /// Needed for initialization of RequestResponse Behaviour
+    /// Returns `RequestResponse`'s Protocol
+    /// Needed for initialization of `RequestResponse` Behaviour
     fn get_req_res_protocol(&self) -> <Self as RequestResponseCodec>::Protocol;
 }

@@ -79,7 +79,7 @@ impl RocksDb {
 
         let db = match DB::open_cf_descriptors(&opts, &path, cf_descriptors) {
             Err(_) => {
-                // setup cfs
+                // setup configurations
                 match DB::open_cf(&opts, &path, &[] as &[&str]) {
                     Ok(db) => {
                         for i in columns {
@@ -203,7 +203,7 @@ impl KeyValueStore for RocksDb {
     }
 
     fn exists(&self, key: &[u8], column: Column) -> DatabaseResult<bool> {
-        // use pinnable mem ref to avoid memcpy of values associated with the key
+        // use pinnable memory ref to avoid `memcpy` of values associated with the key
         // since we're just checking for the existence of the key
         self.db
             .get_pinned_cf(&self.cf(column), key)
@@ -221,7 +221,7 @@ impl KeyValueStore for RocksDb {
         match (prefix, start) {
             (None, None) => {
                 let iter_mode =
-                    // if no start or prefix just start iterating over entire keyspace
+                    // if no start or prefix just start iterating over entire key space
                     match direction {
                         IterDirection::Forward => IteratorMode::Start,
                         // end always iterates in reverse
@@ -231,7 +231,7 @@ impl KeyValueStore for RocksDb {
                     .into_boxed()
             }
             (Some(prefix), None) => {
-                // start iterating in a certain direction within the keyspace
+                // start iterating in a certain direction within the key space
                 let iter_mode =
                     IteratorMode::From(prefix, convert_to_rocksdb_direction(direction));
                 let mut opts = ReadOptions::default();
@@ -342,18 +342,18 @@ impl KeyValueStore for RocksDb {
         column: Column,
         buf: &[u8],
     ) -> DatabaseResult<(usize, Option<Value>)> {
-        // FIXME: This is a race condition. We should use a transaction.
+        // : This is a race condition. We should use a transaction.
         let existing = self.read_alloc(key, column)?;
-        // FIXME: This is a race condition. We should use a transaction.
+        // : This is a race condition. We should use a transaction.
         let r = self.write(key, column, buf)?;
 
         Ok((r, existing))
     }
 
     fn take(&self, key: &[u8], column: Column) -> DatabaseResult<Option<Value>> {
-        // FIXME: This is a race condition. We should use a transaction.
+        // : This is a race condition. We should use a transaction.
         let prev = self.read_alloc(key, column)?;
-        // FIXME: This is a race condition. We should use a transaction.
+        // : This is a race condition. We should use a transaction.
         self.db
             .delete_cf(&self.cf(column), key)
             .map_err(|e| DatabaseError::Other(e.into()))

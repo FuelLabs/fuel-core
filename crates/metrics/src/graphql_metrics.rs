@@ -11,7 +11,7 @@ use std::sync::OnceLock;
 
 #[derive(Clone, Debug, Hash, PartialEq, Eq, EncodeLabelSet)]
 pub struct Label {
-    // the graphql path
+    // the GraphQL path
     path: String,
 }
 

@@ -15,32 +15,32 @@ use std::str::FromStr;
 #[derive(Debug, Clone, Args)]
 pub struct RelayerArgs {
     /// Enable the Relayer. By default, the Relayer is disabled, even when the binary is compiled
-    /// with the "relayer" feature flag. Providing `--enable-relayer` will enable the relayer
+    /// with the "Relayer" feature flag. Providing `--enable-relayer` will enable the Relayer
     /// service.
     #[clap(long = "enable-relayer", action)]
     pub enable_relayer: bool,
 
-    /// Uri address to ethereum client. It can be in format of `http://localhost:8545/` or `ws://localhost:8545/`.
-    /// If not set relayer will not start.
+    /// Uri address to Ethereum client. It can be in format of `http://localhost:8545/` or `ws://localhost:8545/`.
+    /// If not set Relayer will not start.
     #[arg(long = "relayer", env)]
     #[arg(required_if_eq("enable_relayer", "true"))]
     #[arg(requires_if(IsPresent, "enable_relayer"))]
     pub relayer: Option<url::Url>,
 
-    /// Ethereum contract address. Create EthAddress into fuel_types
+    /// Ethereum contract address. Create `EthAddress` into `fuel_types`
     #[arg(long = "relayer-v2-listening-contracts", value_parser = parse_h160, env)]
     pub eth_v2_listening_contracts: Vec<H160>,
 
-    /// Number of da block that the contract is deployed at.
+    /// Number of DA block that the contract is deployed at.
     #[clap(long = "relayer-da-deploy-height", default_value_t = Config::DEFAULT_DA_DEPLOY_HEIGHT, env)]
     pub da_deploy_height: u64,
 
     /// Number of pages or blocks containing logs that
-    /// should be downloaded in a single call to the da layer
+    /// should be downloaded in a single call to the DA layer
     #[clap(long = "relayer-log-page-size", default_value_t = Config::DEFAULT_LOG_PAGE_SIZE, env)]
     pub log_page_size: u64,
 
-    /// The minimum number of seconds that the relayer polling loop
+    /// The minimum number of seconds that the Relayer polling loop
     /// will take before running again. If this is too low the DA layer
     /// risks being spammed.
     #[clap(long = "relayer-min-duration-s", default_value_t = Config::DEFAULT_SYNC_MINIMUM_DURATION.as_secs(), env)]

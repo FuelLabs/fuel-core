@@ -49,7 +49,7 @@ pub enum FuelBehaviourEvent {
     RequestResponse(RequestResponseEvent<RequestMessage, NetworkResponse>),
 }
 
-/// Handles all p2p protocols needed for Fuel.
+/// Handles all P2P protocols needed for Fuel.
 #[derive(NetworkBehaviour)]
 #[behaviour(out_event = "FuelBehaviourEvent")]
 pub struct FuelBehaviour<Codec: NetworkCodec> {
@@ -59,10 +59,10 @@ pub struct FuelBehaviour<Codec: NetworkCodec> {
     /// Identifies and periodically requests `BlockHeight` from connected nodes
     peer_report: PeerReportBehaviour,
 
-    /// Message propagation for p2p
+    /// Message propagation for P2P
     gossipsub: Gossipsub,
 
-    /// RequestResponse protocol
+    /// `RequestResponse` protocol
     request_response: RequestResponse<Codec>,
 }
 

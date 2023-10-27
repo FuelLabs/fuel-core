@@ -40,22 +40,22 @@ pub struct ContractConfig {
     #[serde_as(as = "Option<Vec<(HexType, HexNumber)>>")]
     #[serde(default)]
     pub balances: Option<Vec<(AssetId, u64)>>,
-    /// UtxoId: auto-generated if None
+    /// `UtxoId`: auto-generated if None
     #[serde_as(as = "Option<HexType>")]
     #[serde(default)]
     pub tx_id: Option<Bytes32>,
-    /// UtxoId: auto-generated if None
+    /// `UtxoId`: auto-generated if None
     #[serde_as(as = "Option<HexNumber>")]
     #[serde(default)]
     pub output_index: Option<u8>,
-    /// TxPointer: auto-generated if None
-    /// used if contract is forked from another chain to preserve id & tx_pointer
+    /// `TxPointer`: auto-generated if None
+    /// used if contract is forked from another chain to preserve id & `tx_pointer`
     /// The block height that the contract was last used in
     #[serde_as(as = "Option<HexNumber>")]
     #[serde(default)]
     pub tx_pointer_block_height: Option<BlockHeight>,
-    /// TxPointer: auto-generated if None
-    /// used if contract is forked from another chain to preserve id & tx_pointer
+    /// `TxPointer`: auto-generated if None
+    /// used if contract is forked from another chain to preserve id & `tx_pointer`
     /// The index of the originating tx within `tx_pointer_block_height`
     #[serde_as(as = "Option<HexNumber>")]
     #[serde(default)]

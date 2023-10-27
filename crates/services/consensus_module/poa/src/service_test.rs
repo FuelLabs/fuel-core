@@ -347,7 +347,7 @@ async fn remove_skipped_transactions() {
 #[tokio::test]
 async fn does_not_produce_when_txpool_empty_in_instant_mode() {
     // verify the PoA service doesn't trigger empty blocks to be produced when there are
-    // irrelevant updates from the txpool
+    // irrelevant updates from the TxPool
     let mut rng = StdRng::seed_from_u64(2322);
     let secret_key = SecretKey::random(&mut rng);
 
@@ -389,7 +389,7 @@ async fn does_not_produce_when_txpool_empty_in_instant_mode() {
         p2p_port,
     );
 
-    // simulate some txpool event to see if any block production is erroneously triggered
+    // simulate some TxPool event to see if any block production is erroneously triggered
     task.on_txpool_event().await.unwrap();
 }
 

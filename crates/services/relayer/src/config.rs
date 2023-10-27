@@ -17,17 +17,17 @@ pub(crate) static ETH_LOG_MESSAGE: Lazy<H256> =
 #[derive(Clone, Debug)]
 /// Configuration settings for the Relayer.
 pub struct Config {
-    /// The da block to which the contract was deployed.
+    /// The DA block to which the contract was deployed.
     pub da_deploy_height: DaBlockHeight,
-    /// Uri address to ethereum client.
+    /// Uri address to Ethereum client.
     pub relayer: Option<url::Url>,
     // TODO: Create `EthAddress` into `fuel_core_types`.
     /// Ethereum contract address.
     pub eth_v2_listening_contracts: Vec<H160>,
     /// Number of pages or blocks containing logs that
-    /// should be downloaded in a single call to the da layer
+    /// should be downloaded in a single call to the DA layer
     pub log_page_size: u64,
-    /// This throttles the background relayer loop to
+    /// This throttles the background Relayer loop to
     /// at least this duration to prevent spamming the DA node.
     pub sync_minimum_duration: Duration,
     /// How often calls are made to the DA node when the DA node

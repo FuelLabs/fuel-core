@@ -41,7 +41,7 @@ pub enum RequestMessage {
     Transactions(Range<u32>),
 }
 
-/// Final Response Message that p2p service sends to the Orchestrator
+/// Final Response Message that P2P service sends to the `Orchestrator`
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub enum ResponseMessage {
     SealedBlock(Box<Option<SealedBlock>>),
@@ -49,7 +49,7 @@ pub enum ResponseMessage {
     Transactions(Option<Vec<Transactions>>),
 }
 
-/// Holds oneshot channels for specific responses
+/// Holds one-shot channels for specific responses
 #[derive(Debug)]
 pub enum ResponseChannelItem {
     Block(oneshot::Sender<Option<SealedBlock>>),

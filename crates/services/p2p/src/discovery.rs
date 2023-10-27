@@ -43,7 +43,7 @@ pub use discovery_config::DiscoveryConfig;
 
 const SIXTY_SECONDS: Duration = Duration::from_secs(60);
 
-/// NetworkBehavior for discovery of nodes
+/// `NetworkBehavior` for discovery of nodes
 pub struct DiscoveryBehaviour {
     /// List of bootstrap nodes and their addresses
     bootstrap_nodes: Vec<(PeerId, Multiaddr)>,
@@ -57,7 +57,7 @@ pub struct DiscoveryBehaviour {
     /// For discovery on local network, optionally available
     mdns: MdnsWrapper,
 
-    /// Kademlia with MemoryStore
+    /// Kademlia with `MemoryStore`
     kademlia: Kademlia<MemoryStore>,
 
     /// If enabled, the Stream that will fire after the delay expires,
@@ -70,7 +70,7 @@ pub struct DiscoveryBehaviour {
     /// Maximum amount of allowed peers
     max_peers_connected: usize,
 
-    /// If false, `addresses_of_peer` won't return any private IPv4/IPv6 address,
+    /// If false, `addresses_of_peer` won't return any private `IPv4`/`IPv6` address,
     /// except for the ones stored in `bootstrap_nodes` and `reserved_peers`.
     allow_private_addresses: bool,
 }
@@ -88,11 +88,11 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 
     // Initializes new handler on a new opened connection
     fn new_handler(&mut self) -> Self::ConnectionHandler {
-        // in our case we just return KademliaHandlerProto
+        // in our case we just return `KademliaHandlerProto`
         self.kademlia.new_handler()
     }
 
-    // receive events from KademliaHandler and pass it down to kademlia
+    // receive events from `KademliaHandler` and pass it down to Kademlia
     fn on_connection_handler_event(
         &mut self,
         peer_id: PeerId,
@@ -316,8 +316,8 @@ mod tests {
     }
 
     // builds 25 discovery swarms,
-    // initially, only connects first_swarm to the rest of the swarms
-    // after that each swarm uses kademlia to discover other swarms
+    // initially, only connects `first_swarm` to the rest of the swarms
+    // after that each swarm uses Kademlia to discover other swarms
     // test completes after all swarms have connected to each other
     #[tokio::test]
     async fn discovery_works() {
@@ -339,15 +339,15 @@ mod tests {
 
         discovery_swarms.push_front((first_swarm, first_peer_addr, first_peer_id));
 
-        // HashSet of swarms to discover for each swarm
+        // `HashSet` of swarms to discover for each swarm
         let mut left_to_discover = (0..discovery_swarms.len())
             .map(|current_index| {
                 (0..discovery_swarms.len())
-                    .skip(1) // first_swarm is already connected
+                    .skip(1) // `first_swarm` is already connected
                     .filter_map(|swarm_index| {
                         // filter your self
                         if swarm_index != current_index {
-                            // get the PeerId
+                            // get the `PeerId`
                             Some(*Swarm::local_peer_id(&discovery_swarms[swarm_index].0))
                         } else {
                             None
@@ -371,7 +371,7 @@ mod tests {
                             SwarmEvent::Behaviour(KademliaEvent::UnroutablePeer {
                                 peer: peer_id,
                             }) => {
-                                // kademlia discovered a peer but does not have it's address
+                                // Kademlia discovered a peer but does not have it's address
                                 // we simulate Identify happening and provide the address
                                 let unroutable_peer_addr = discovery_swarms
                                     .iter()
@@ -386,7 +386,7 @@ mod tests {
                                     })
                                     .unwrap();
 
-                                // kademlia must be informed of a peer's address before
+                                // Kademlia must be informed of a peer's address before
                                 // adding it to the routing table
                                 discovery_swarms[swarm_index]
                                     .0

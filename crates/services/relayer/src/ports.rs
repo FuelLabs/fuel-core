@@ -1,4 +1,4 @@
-//! Ports used by the relayer to access the outside world
+//! Ports used by the Relayer to access the outside world
 
 use async_trait::async_trait;
 use fuel_core_storage::{
@@ -23,21 +23,21 @@ mod tests;
 #[async_trait]
 pub trait RelayerDb: Send + Sync {
     /// Add bridge messages to database. Messages are not revertible.
-    /// Must only set a new da height if it is greater than the current.
+    /// Must only set a new DA height if it is greater than the current.
     fn insert_messages(
         &mut self,
         da_height: &DaBlockHeight,
         messages: &[Message],
     ) -> StorageResult<()>;
 
-    /// Set finalized da height that represent last block from da layer that got finalized.
+    /// Set finalized DA height that represent last block from DA layer that got finalized.
     /// This will only set the value if it is greater than the current.
     fn set_finalized_da_height_to_at_least(
         &mut self,
         block: &DaBlockHeight,
     ) -> StorageResult<()>;
 
-    /// Get finalized da height that represent last block from da layer that got finalized.
+    /// Get finalized DA height that represent last block from DA layer that got finalized.
     /// Panics if height is not set as of initialization of database.
     fn get_finalized_da_height(&self) -> StorageResult<DaBlockHeight>;
 }
@@ -125,7 +125,7 @@ where
     Ok(())
 }
 
-/// Metadata for relayer.
+/// Metadata for Relayer.
 pub struct RelayerMetadata;
 impl Mappable for RelayerMetadata {
     type Key = Self::OwnedKey;
@@ -134,7 +134,7 @@ impl Mappable for RelayerMetadata {
     type OwnedValue = DaBlockHeight;
 }
 
-/// Key for da height.
-/// If the relayer metadata ever contains more than one key, this should be
+/// Key for DA height.
+/// If the Relayer metadata ever contains more than one key, this should be
 /// changed from a unit value.
 const METADATA_KEY: () = ();

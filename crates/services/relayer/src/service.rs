@@ -63,21 +63,21 @@ mod test;
 type Synced = watch::Receiver<Option<DaBlockHeight>>;
 type NotifySynced = watch::Sender<Option<DaBlockHeight>>;
 
-/// The alias of runnable relayer service.
+/// The alias of runnable Relayer service.
 pub type Service<D> = CustomizableService<Provider<Http>, D>;
 type CustomizableService<P, D> = ServiceRunner<NotInitializedTask<P, D>>;
 
-/// The shared state of the relayer task.
+/// The shared state of the Relayer task.
 #[derive(Clone)]
 pub struct SharedState<D> {
-    /// Receives signals when the relayer reaches consistency with the DA layer.
+    /// Receives signals when the Relayer reaches consistency with the DA layer.
     synced: Synced,
     database: D,
 }
 
 /// Not initialized version of the [`Task`].
 pub struct NotInitializedTask<P, D> {
-    /// Sends signals when the relayer reaches consistency with the DA layer.
+    /// Sends signals when the Relayer reaches consistency with the DA layer.
     synced: NotifySynced,
     /// The node that communicates with Ethereum.
     eth_node: P,
@@ -87,9 +87,9 @@ pub struct NotInitializedTask<P, D> {
     config: Config,
 }
 
-/// The actual relayer background task that syncs with the DA layer.
+/// The actual Relayer background task that syncs with the DA layer.
 pub struct Task<P, D> {
-    /// Sends signals when the relayer reaches consistency with the DA layer.
+    /// Sends signals when the Relayer reaches consistency with the DA layer.
     synced: NotifySynced,
     /// The node that communicates with Ethereum.
     eth_node: P,
@@ -103,7 +103,7 @@ pub struct Task<P, D> {
 }
 
 impl<P, D> NotInitializedTask<P, D> {
-    /// Create a new relayer task.
+    /// Create a new Relayer task.
     fn new(eth_node: P, database: D, config: Config) -> Self {
         let (synced, _) = watch::channel(None);
         Self {
@@ -229,7 +229,7 @@ where
         if self.shutdown.borrow_and_update().started()
             && (result.is_err() | self.synced.borrow().is_some())
         {
-            // Sleep the loop so the da node is not spammed.
+            // Sleep the loop so the DA node is not spammed.
             tokio::time::sleep(
                 self.config
                     .sync_minimum_duration
@@ -252,13 +252,13 @@ impl<D> SharedState<D> {
     /// Wait for the [`Task`] to be in sync with
     /// the data availability layer.
     ///
-    /// Yields until the relayer reaches a point where it
+    /// Yields until the Relayer reaches a point where it
     /// considered up to date. Note that there's no guarantee
-    /// the relayer will ever catch up to the da layer and
+    /// the Relayer will ever catch up to the DA layer and
     /// may fall behind immediately after this future completes.
     ///
     /// The only guarantee is that if this future completes then
-    /// the relayer did reach consistency with the da layer for
+    /// the Relayer did reach consistency with the DA layer for
     /// some period of time.
     pub async fn await_synced(&self) -> anyhow::Result<()> {
         let mut rx = self.synced.clone();
@@ -298,8 +298,8 @@ impl<D> SharedState<D> {
             .filter(|message| message.da_height <= *da_height))
     }
 
-    /// Get finalized da height that represents last block from da layer that got finalized.
-    /// Panics if height is not set as of initialization of the relayer.
+    /// Get finalized DA height that represents last block from DA layer that got finalized.
+    /// Panics if height is not set as of initialization of the Relayer.
     pub fn get_finalized_da_height(&self) -> anyhow::Result<DaBlockHeight>
     where
         D: RelayerDb + 'static,
@@ -343,7 +343,7 @@ where
     }
 }
 
-/// Creates an instance of runnable relayer service.
+/// Creates an instance of runnable Relayer service.
 pub fn new_service<D>(database: D, config: Config) -> anyhow::Result<Service<D>>
 where
     D: RelayerDb + Clone + 'static,
@@ -353,14 +353,14 @@ where
             "Tried to start Relayer without setting an eth_client in the config"
         )
     })?;
-    // TODO: Does this handle https?
+    // TODO: Does this handle HTTPS?
     let http = Http::new(url);
     let eth_node = Provider::new(http);
     Ok(new_service_internal(eth_node, database, config))
 }
 
 #[cfg(any(test, feature = "test-helpers"))]
-/// Start a test relayer.
+/// Start a test Relayer.
 pub fn new_service_test<P, D>(
     eth_node: P,
     database: D,

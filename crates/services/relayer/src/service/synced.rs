@@ -1,6 +1,6 @@
 //! Synced State
 //! Handles the logic for updating the [`RelayerHandle`](crate::RelayerHandle)
-//! if the relayer has reached a consistent state with the DA layer.
+//! if the Relayer has reached a consistent state with the DA layer.
 
 use fuel_core_types::blockchain::primitives::DaBlockHeight;
 use tokio::sync::watch;
@@ -36,14 +36,14 @@ mod tests {
     use super::*;
     use test_case::test_case;
 
-    // The input is the sync state change of the relayer and
+    // The input is the sync state change of the Relayer and
     // on the result is the `RelayerHandle` observed state.
     //
     // `should_wait` means calls to `await_synced` will yield
-    // until a future state change that puts the relayer in sync
-    // with the ethereum node.
+    // until a future state change that puts the Relayer in sync
+    // with the Ethereum node.
     //
-    // previous_state, new_state => keep waiting
+    // `previous_state`, `new_state` => keep waiting
     #[test_case(None, None => true; "if nothing updated with nothing then keep waiting")]
     #[test_case(None, Some(0) => false; "if nothing updated with something then stop waiting")]
     #[test_case(Some(0), Some(0) => false; "if something updated with same thing then stop waiting")]

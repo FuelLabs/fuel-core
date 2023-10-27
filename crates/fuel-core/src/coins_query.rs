@@ -198,7 +198,7 @@ pub fn random_improve(
             coins.push(coin);
         }
 
-        // Fallback to largest_first if we can't fit more coins
+        // Fallback to `largest_first` if we can't fit more coins
         if collected_amount < query.asset.target {
             swap(&mut coins, &mut largest_first(&query)?);
         }
@@ -401,7 +401,7 @@ mod tests {
                 };
             }
 
-            // Query with too small max_inputs
+            // Query with too small `max_inputs`
             let coins = query(
                 &[AssetSpendTarget::new(asset_id, 6, 1)],
                 &owner,
@@ -561,7 +561,7 @@ mod tests {
                 };
             }
 
-            // Query with too small max_inputs
+            // Query with too small `max_inputs`
             let coins = query(
                 vec![AssetSpendTarget::new(
                     asset_id, 6, // target

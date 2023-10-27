@@ -77,8 +77,8 @@ impl<Codec: NetworkCodec> Punisher for Swarm<FuelBehaviour<Codec>> {
     }
 }
 
-/// Listens to the events on the p2p network
-/// And forwards them to the Orchestrator
+/// Listens to the events on the P2P network
+/// And forwards them to the `Orchestrator`
 pub struct FuelP2PService<Codec: NetworkCodec> {
     /// Store the local peer id
     pub local_peer_id: PeerId,
@@ -89,23 +89,23 @@ pub struct FuelP2PService<Codec: NetworkCodec> {
     /// The TCP port that Swarm listens on
     tcp_port: u16,
 
-    /// Swarm handler for FuelBehaviour
+    /// Swarm handler for `FuelBehaviour`
     swarm: Swarm<FuelBehaviour<Codec>>,
 
-    /// Holds the Sender(s) part of the Oneshot Channel from the NetworkOrchestrator
-    /// Once the ResponseMessage is received from the p2p Network
-    /// It will send it to the NetworkOrchestrator via its unique Sender    
+    /// Holds the Sender(s) part of the One-shot Channel from the `NetworkOrchestrator`
+    /// Once the `ResponseMessage` is received from the P2P Network
+    /// It will send it to the `NetworkOrchestrator` via its unique `Sender`    
     outbound_requests_table: HashMap<RequestId, ResponseChannelItem>,
 
-    /// Holds the ResponseChannel(s) for the inbound requests from the p2p Network
-    /// Once the Response is prepared by the NetworkOrchestrator
-    /// It will send it to the specified Peer via its unique ResponseChannel    
+    /// Holds the `ResponseChannel`(s) for the inbound requests from the P2P Network
+    /// Once the Response is prepared by the `NetworkOrchestrator`
+    /// It will send it to the specified Peer via its unique `ResponseChannel`    
     inbound_requests_table: HashMap<RequestId, ResponseChannel<NetworkResponse>>,
 
-    /// NetworkCodec used as <GossipsubCodec> for encoding and decoding of Gossipsub messages    
+    /// `NetworkCodec` used as <GossipsubCodec> for encoding and decoding of Gossipsub messages    
     network_codec: Codec,
 
-    /// Stores additional p2p network info    
+    /// Stores additional P2P network info    
     network_metadata: NetworkMetadata,
 
     /// Whether or not metrics collection is enabled
@@ -126,7 +126,7 @@ impl GossipsubData {
     }
 }
 
-/// Holds additional Network data for FuelBehavior
+/// Holds additional Network data for `FuelBehavior`
 #[derive(Debug)]
 struct NetworkMetadata {
     gossipsub_data: GossipsubData,
@@ -298,7 +298,7 @@ impl<Codec: NetworkCodec> FuelP2PService<Codec> {
         }
     }
 
-    /// Sends RequestMessage to a peer
+    /// Sends `RequestMessage` to a peer
     /// If the peer is not defined it will pick one at random
     pub fn send_request_msg(
         &mut self,
@@ -332,7 +332,7 @@ impl<Codec: NetworkCodec> FuelP2PService<Codec> {
         Ok(request_id)
     }
 
-    /// Sends ResponseMessage to a peer that requested the data
+    /// Sends `ResponseMessage` to a peer that requested the data
     pub fn send_response_msg(
         &mut self,
         request_id: RequestId,
@@ -406,7 +406,7 @@ impl<Codec: NetworkCodec> FuelP2PService<Codec> {
 
     /// Report application score
     /// If application peer score is below allowed threshold
-    /// the peer is banend
+    /// the peer is banned
     pub fn report_peer(
         &mut self,
         peer_id: PeerId,
@@ -430,7 +430,7 @@ impl<Codec: NetworkCodec> FuelP2PService<Codec> {
         ret
     )]
     /// Handles P2P Events.
-    /// Returns only events that are of interest to the Network Orchestrator.
+    /// Returns only events that are of interest to the Network `Orchestrator`.
     pub async fn next_event(&mut self) -> Option<FuelP2PEvent> {
         // TODO: add handling for when the stream closes and return None only when there are no
         //       more events to consume
@@ -746,7 +746,7 @@ mod tests {
 
     type P2PService = FuelP2PService<PostcardCodec>;
 
-    /// helper function for building FuelP2PService
+    /// helper function for building `FuelP2PService`
     async fn build_service_from_config(mut p2p_config: Config) -> P2PService {
         p2p_config.keypair = Keypair::generate_secp256k1(); // change keypair for each Node
         let max_block_size = p2p_config.max_block_size;
@@ -871,8 +871,8 @@ mod tests {
         stop_sender.send(()).unwrap();
     }
 
-    // We start with two nodes, node_a and node_b, bootstrapped with `bootstrap_nodes_count` other nodes.
-    // Yet node_a and node_b are only allowed to connect to specified amount of nodes.
+    // We start with two nodes, `node_a` and `node_b`, bootstrapped with `bootstrap_nodes_count` other nodes.
+    // Yet `node_a` and `node_b` are only allowed to connect to specified amount of nodes.
     #[tokio::test]
     #[instrument]
     async fn max_peers_connected_works() {
@@ -920,7 +920,7 @@ mod tests {
         let mut node_b_hit_limit = false;
         let mut instance = tokio::time::Instant::now();
 
-        // After we hit limit for node_a and node_b start timer.
+        // After we hit limit for `node_a` and `node_b` start timer.
         // If we don't exceed the limit during 5 seconds, finish the test successfully.
         while instance.elapsed().as_secs() < 5 {
             tokio::select! {
@@ -967,7 +967,7 @@ mod tests {
             let (reserved_nodes, reserved_multiaddrs) =
                 setup_bootstrap_nodes(&p2p_config, RESERVED_NODE_SIZE).await;
 
-            // set up the guraded node service with `reserved_nodes_only_mode`
+            // set up the guarded node service with `reserved_nodes_only_mode`
             let guarded_node_service = {
                 let mut p2p_config = p2p_config.clone();
                 p2p_config.reserved_nodes = reserved_multiaddrs;
@@ -1052,7 +1052,7 @@ mod tests {
         stop_sender.send(()).unwrap();
     }
 
-    // Simulates 2 p2p nodes that are on the same network and should connect via mDNS
+    // Simulates 2 P2P nodes that are on the same network and should connect via `MDNS`
     // without any additional bootstrapping
     #[tokio::test]
     #[instrument]
@@ -1081,7 +1081,7 @@ mod tests {
         }
     }
 
-    // Simulates 2 p2p nodes that are on the same network but their Fuel Upgrade checksum is different
+    // Simulates 2 P2P nodes that are on the same network but their Fuel Upgrade `Checksum` is different
     // (different chain id or chain config)
     // So they are not able to connect
     #[tokio::test]
@@ -1118,7 +1118,7 @@ mod tests {
         }
     }
 
-    // Simulates 3 p2p nodes, Node B & Node C are bootstrapped with Node A
+    // Simulates 3 P2P nodes, Node B & Node C are bootstrapped with Node A
     // Using Identify Protocol Node C should be able to identify and connect to Node B
     #[tokio::test]
     #[instrument]
@@ -1158,8 +1158,8 @@ mod tests {
         }
     }
 
-    // Simulates 2 p2p nodes that connect to each other and consequently exchange Peer Info
-    // On sucessful connection, node B updates its latest BlockHeight
+    // Simulates 2 P2P nodes that connect to each other and consequently exchange Peer Info
+    // On successful connection, node B updates its latest `BlockHeight`
     // and shares it with Peer A via Heartbeat protocol
     #[tokio::test]
     #[instrument]
@@ -1183,7 +1183,7 @@ mod tests {
                             // Exits after it verifies that:
                             // 1. Peer Addresses are known
                             // 2. Client Version is known
-                            // 3. Node has responded with their latest BlockHeight
+                            // 3. Node has responded with their latest `BlockHeight`
                             if !peer_addresses.is_empty() && client_version.is_some() && heartbeat_data.block_height == Some(latest_block_height) {
                                 break;
                             }
@@ -1195,7 +1195,7 @@ mod tests {
                 node_b_event = node_b.next_event() => {
                     if let Some(FuelP2PEvent::PeerConnected(_)) = node_b_event {
                         // we've connected to Peer A
-                        // let's update our BlockHeight
+                        // let's update our `BlockHeight`
                         node_b.update_block_height(latest_block_height);
                     }
                     tracing::info!("Node B Event: {:?}", node_b_event);
@@ -1277,7 +1277,7 @@ mod tests {
     }
 
     /// At `GRAYLIST_THRESHOLD` the node will ignore all messages from the peer
-    /// And our PeerManager will ban the peer at that point - leading to disconnect
+    /// And our `PeerManager` will ban the peer at that point - leading to disconnect
     #[tokio::test]
     #[instrument]
     #[ignore]
@@ -1436,7 +1436,7 @@ mod tests {
         p2p_config.bootstrap_nodes = node_b.multiaddrs();
         let mut node_c = build_service_from_config(p2p_config.clone()).await;
 
-        // Node C does not connecto to Node A
+        // Node C does not connect to Node A
         // it should receive the propagated message from Node B if `GossipsubMessageAcceptance` is `Accept`
         node_c.swarm.ban_peer_id(node_a.local_peer_id);
 
@@ -1492,7 +1492,7 @@ mod tests {
 
                         // Node B received the correct message
                         // If we try to publish it again we will get `PublishError::Duplicate`
-                        // This asserts that our MessageId calculation is consistant irrespective of which Peer sends it
+                        // This asserts that our `MessageId` calculation is consistent irrespective of which Peer sends it
                         let broadcast_request = broadcast_request.clone();
                         matches!(node_b.publish_message(broadcast_request), Err(PublishError::Duplicate));
 
@@ -1638,7 +1638,7 @@ mod tests {
                     tracing::info!("Node A Event: {:?}", node_a_event);
                 },
                 node_b_event = node_b.next_event() => {
-                    // 2. Node B receives the RequestMessage from Node A initiated by the NetworkOrchestrator
+                    // 2. Node B receives the `RequestMessage` from Node A initiated by the `NetworkOrchestrator`
                     if let Some(FuelP2PEvent::RequestMessage{ request_id, request_message: received_request_message }) = &node_b_event {
                         match received_request_message {
                             RequestMessage::Block(_) => {
@@ -1720,23 +1720,23 @@ mod tests {
                             if !peer_addresses.is_empty() && !request_sent {
                                 request_sent = true;
 
-                                // 1. Simulating Oneshot channel from the NetworkOrchestrator
+                                // 1. Simulating One-shot channel from the `NetworkOrchestrator`
                                 let (tx_orchestrator, rx_orchestrator) = oneshot::channel();
 
-                                // 2a. there should be ZERO pending outbound requests in the table
+                                // 2. there should be ZERO pending outbound requests in the table
                                 assert_eq!(node_a.outbound_requests_table.len(), 0);
 
                                 // Request successfully sent
                                 let requested_block_height = RequestMessage::Block(0.into());
                                 assert!(node_a.send_request_msg(None, requested_block_height, ResponseChannelItem::Block(tx_orchestrator)).is_ok());
 
-                                // 2b. there should be ONE pending outbound requests in the table
+                                // 3. there should be ONE pending outbound requests in the table
                                 assert_eq!(node_a.outbound_requests_table.len(), 1);
 
                                 let tx_test_end = tx_test_end.clone();
 
                                 tokio::spawn(async move {
-                                    // 3. Simulating NetworkOrchestrator receiving a Timeout Error Message!
+                                    // 4. Simulating `NetworkOrchestrator` receiving a Timeout Error Message!
                                     if (rx_orchestrator.await).is_err() {
                                         let _ = tx_test_end.send(()).await;
                                     }

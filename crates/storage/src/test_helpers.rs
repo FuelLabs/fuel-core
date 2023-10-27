@@ -15,7 +15,7 @@ use crate::{
     StorageMutate,
 };
 
-/// The empty transactional storage.
+/// The empty  storage.
 #[derive(Default, Clone, Copy, Debug)]
 pub struct EmptyStorage;
 
@@ -48,29 +48,29 @@ impl Transaction<EmptyStorage> for EmptyStorage {
 /// The trait is used to provide a generic mocked implementation for all possible `StorageInspect`,
 /// `StorageMutate`, and `MerkleRootStorage` traits.
 pub trait MockStorageMethods {
-    /// The mocked implementation fot the `StorageInspect<M>::get` method.
+    /// The mocked implementation for the `StorageInspect<M>::get` method.
     fn get<M: Mappable + 'static>(
         &self,
         key: &M::Key,
     ) -> StorageResult<Option<std::borrow::Cow<'_, M::OwnedValue>>>;
 
-    /// The mocked implementation fot the `StorageInspect<M>::contains_key` method.
+    /// The mocked implementation for the `StorageInspect<M>::contains_key` method.
     fn contains_key<M: Mappable + 'static>(&self, key: &M::Key) -> StorageResult<bool>;
 
-    /// The mocked implementation fot the `StorageMutate<M>::insert` method.
+    /// The mocked implementation for the `StorageMutate<M>::insert` method.
     fn insert<M: Mappable + 'static>(
         &mut self,
         key: &M::Key,
         value: &M::Value,
     ) -> StorageResult<Option<M::OwnedValue>>;
 
-    /// The mocked implementation fot the `StorageMutate<M>::remove` method.
+    /// The mocked implementation for the `StorageMutate<M>::remove` method.
     fn remove<M: Mappable + 'static>(
         &mut self,
         key: &M::Key,
     ) -> StorageResult<Option<M::OwnedValue>>;
 
-    /// The mocked implementation fot the `MerkleRootStorage<Key, M>::root` method.
+    /// The mocked implementation for the `MerkleRootStorage<Key, M>::root` method.
     fn root<Key: 'static, M: Mappable + 'static>(
         &self,
         key: &Key,

@@ -9,11 +9,11 @@ pub struct Config {
     pub max_depth: usize,
     /// The minimum allowed gas price
     pub min_gas_price: u64,
-    /// Flag to disable utxo existence and signature checks
+    /// Flag to disable UTXO existence and signature checks
     pub utxo_validation: bool,
     /// chain config
     pub chain_config: ChainConfig,
-    /// Enables prometheus metrics for this fuel-service
+    /// Enables Prometheus metrics for this fuel-service
     pub metrics: bool,
     /// Transaction TTL
     pub transaction_ttl: Duration,

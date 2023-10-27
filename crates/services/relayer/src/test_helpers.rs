@@ -93,7 +93,7 @@ pub fn eth_log_message(
 ) -> Log {
     let mut b: Vec<u8> = Vec::new();
     // owner nonce amount data
-    // 32 + 32 + 32 + dyn
+    // 32 + 32 + 32 + dynamic data
 
     b.extend(owner.as_ref());
     b.extend(H256::from_low_u64_be(nonce as u64).as_ref());

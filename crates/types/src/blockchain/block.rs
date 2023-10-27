@@ -41,7 +41,7 @@ pub type CompressedBlock = Block<TxId>;
 
 /// Fuel block with all transaction data included
 /// but without any data generated.
-/// This type can be created with unexecuted
+/// This type can be created with non-executed
 /// transactions to produce a [`Block`] or
 /// it can be created with pre-executed transactions in
 /// order to validate they were constructed correctly.
@@ -99,7 +99,7 @@ impl Block<Transaction> {
 }
 
 impl<T> Block<T> {
-    /// Destructure into the inner types.
+    /// Destructs into the inner types.
     pub fn into_inner(self) -> (BlockHeader, Vec<T>) {
         (self.header, self.transactions)
     }

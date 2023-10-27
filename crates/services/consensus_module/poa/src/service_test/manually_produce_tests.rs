@@ -59,7 +59,7 @@ async fn can_manually_produce_block(
         ..Default::default()
     });
 
-    // initialize txpool with some txs
+    // initialize TxPool with some txs
     let txs = (0..num_txns).map(|_| make_tx(&mut rng)).collect::<Vec<_>>();
     let TxPoolContext {
         txpool,

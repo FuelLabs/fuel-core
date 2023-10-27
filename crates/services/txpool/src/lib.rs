@@ -40,7 +40,7 @@ pub(crate) mod test_helpers;
 #[cfg(test)]
 fuel_core_trace::enable_tracing!();
 
-/// Information of a transaction fetched from the txpool.
+/// Information of a transaction fetched from the TxPool.
 #[derive(Debug, Clone)]
 pub struct TxInfo {
     tx: ArcPoolTx,

@@ -130,7 +130,7 @@ trait BlockImporter {
 }
 
 trait Relayer {
-    // wait until the relayer eth node is synced
+    // wait until the relayer Ethereum node is synced
     async fn await_synced() -> Result<()>;
     // wait until the relayer reaches a desired da_height
     async fn await_da_height(da_height: DaHeight) -> Result<()>;

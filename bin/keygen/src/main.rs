@@ -1,4 +1,4 @@
-//! A simple keygen cli utility tool for configuring fuel-core
+//! A simple keygen CLI utility tool for configuring fuel-core
 
 use clap::Parser;
 use fuel_core_keygen::keygen;

@@ -55,7 +55,7 @@ const MAX_IDENTIFY_ADDRESSES: usize = 10;
 const HEALTH_CHECK_INTERVAL_IN_SECONDS: u64 = 10;
 const REPUTATION_DECAY_INTERVAL_IN_SECONDS: u64 = 1;
 
-/// Events emitted by PeerReportBehavior
+/// Events emitted by `PeerReportBehavior`
 #[derive(Debug, Clone)]
 pub enum PeerReportEvent {
     PeerConnected {
@@ -75,9 +75,9 @@ pub enum PeerReportEvent {
         peer_id: PeerId,
         block_height: BlockHeight,
     },
-    /// Informs p2p service / PeerManager to check health of reserved nodes' connections
+    /// Informs P2P service / `PeerManager` to check health of reserved nodes' connections
     CheckReservedNodesHealth,
-    /// Informs p2p service / PeerManager to perform reputation decay of connected nodes
+    /// Informs P2P service / `PeerManager` to perform reputation decay of connected nodes
     PerformDecay,
 }
 
@@ -86,7 +86,7 @@ pub struct PeerReportBehaviour {
     heartbeat: Heartbeat,
     identify: Identify,
     pending_events: VecDeque<PeerReportEvent>,
-    // regulary checks if reserved nodes are connected
+    // regularly checks if reserved nodes are connected
     health_check: Interval,
     decay_interval: Interval,
 }

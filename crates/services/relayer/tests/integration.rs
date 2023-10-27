@@ -24,7 +24,7 @@ fuel_core_trace::enable_tracing!();
 async fn can_set_da_height() {
     let mock_db = MockDb::default();
     let eth_node = MockMiddleware::default();
-    // Setup the eth node with a block high enough that there
+    // Setup the Ethereum node with a block high enough that there
     // will be some finalized blocks.
     eth_node.update_data(|data| data.best_block.number = Some(100.into()));
     let relayer = new_service_test(eth_node, mock_db.clone(), Default::default());
@@ -42,7 +42,7 @@ async fn stop_service_at_the_begin() {
     // `tokio::task::yield_now().await` in each method of the `MockMiddleware`.
     let mock_db = MockDb::default();
     let eth_node = MockMiddleware::default();
-    // Setup the eth node with a block high enough that there
+    // Setup the Ethereum node with a block high enough that there
     // will be some finalized blocks.
     eth_node.update_data(|data| data.best_block.number = Some(100.into()));
     let relayer = new_service_test(eth_node, mock_db.clone(), Default::default());
@@ -111,7 +111,7 @@ async fn can_get_messages() {
     let logs = vec![message(1, 3), message(2, 5)];
     let expected_messages: Vec<_> = logs.iter().map(|l| l.to_msg()).collect();
     eth_node.update_data(|data| data.logs_batch = vec![logs.clone()]);
-    // Setup the eth node with a block high enough that there
+    // Setup the Ethereum node with a block high enough that there
     // will be some finalized blocks.
     eth_node.update_data(|data| data.best_block.number = Some(100.into()));
     let relayer = new_service_test(eth_node, mock_db.clone(), config);

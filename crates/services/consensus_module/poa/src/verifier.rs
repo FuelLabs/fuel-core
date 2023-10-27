@@ -13,7 +13,7 @@ use fuel_core_types::{
 #[cfg(test)]
 mod tests;
 
-// TODO: Make this function `async` and await the synchronization with the relayer.
+// TODO: Make this function `async` and await the synchronization with the Relayer.
 pub fn verify_consensus(
     consensus_config: &ConsensusConfig,
     header: &BlockHeader,

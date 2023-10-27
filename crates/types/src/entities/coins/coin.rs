@@ -17,7 +17,7 @@ use crate::{
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug, Copy, Clone, Eq, PartialOrd, PartialEq)]
 pub struct Coin {
-    /// The coin utxo id.
+    /// The coin UTXO id.
     pub utxo_id: UtxoId,
     /// The address with permission to spend this coin
     pub owner: Address,

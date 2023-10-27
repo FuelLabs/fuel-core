@@ -36,7 +36,7 @@ struct Args {
     #[arg(short, long)]
     output: Option<PathBuf>,
 
-    /// Path to saved json for input. Defaults to stdin.
+    /// Path to saved JSON for input. Defaults to stdin.
     #[arg(short, long)]
     input: Option<PathBuf>,
 
@@ -44,7 +44,7 @@ struct Args {
     #[arg(short, long)]
     debug: bool,
 
-    /// Include all sample values for dependant measurements.
+    /// Include all sample values for dependent measurements.
     #[arg(short, long)]
     all: bool,
 

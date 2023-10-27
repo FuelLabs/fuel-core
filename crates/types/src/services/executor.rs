@@ -75,7 +75,7 @@ pub enum TransactionExecutionResult {
 /// depend on the type of execution.
 #[derive(Debug, Clone, Copy)]
 pub enum ExecutionTypes<P, V> {
-    /// DryRun mode where P is being produced.
+    /// `DryRun` mode where P is being produced.
     DryRun(P),
     /// Production mode where P is being produced.
     Production(P),

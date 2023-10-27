@@ -35,7 +35,7 @@ pub struct MessageConfig {
     pub amount: Word,
     #[serde_as(as = "HexType")]
     pub data: Vec<u8>,
-    /// The block height from the parent da layer that originated this message
+    /// The block height from the parent DA layer that originated this message
     #[serde_as(as = "HexNumber")]
     pub da_height: DaBlockHeight,
 }

@@ -80,7 +80,7 @@ pub struct ProducerSetup {
     pub secret: SecretKey,
     /// Number of test transactions to create for this producer.
     pub num_test_txs: usize,
-    /// Enable full utxo stateful validation.
+    /// Enable full UTXO stateful validation.
     pub utxo_validation: bool,
     /// Indicates the type of initial connections.
     pub bootstrap_type: BootstrapType,
@@ -93,7 +93,7 @@ pub struct ValidatorSetup {
     pub name: String,
     /// Public key of the producer to sync from.
     pub pub_key: Address,
-    /// Enable full utxo stateful validation.
+    /// Enable full UTXO stateful validation.
     pub utxo_validation: bool,
     /// Indicates the type of initial connections.
     pub bootstrap_type: BootstrapType,

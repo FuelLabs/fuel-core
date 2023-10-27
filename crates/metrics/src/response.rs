@@ -17,7 +17,7 @@ use libp2p_prom_client::encoding::text::encode as libp2p_encode;
 use prometheus_client::encoding::text::encode;
 
 pub fn encode_metrics_response() -> impl IntoResponse {
-    // encode libp2p metrics using older prometheus
+    // encode libp2p metrics using older Prometheus
     let mut libp2p_bytes = Vec::<u8>::new();
     if let Some(value) = p2p_metrics().gossip_sub_registry.get() {
         if libp2p_encode(&mut libp2p_bytes, value).is_err() {
@@ -30,7 +30,7 @@ pub fn encode_metrics_response() -> impl IntoResponse {
 
     let mut encoded = String::from_utf8_lossy(&libp2p_bytes).into_owned();
 
-    // encode the rest of the fuel-core metrics using latest prometheus
+    // encode the rest of the fuel-core metrics using latest Prometheus
     {
         let lock = services_metrics()
             .registry

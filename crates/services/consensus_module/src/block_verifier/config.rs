@@ -9,17 +9,17 @@ use fuel_core_types::blockchain::primitives::DaBlockHeight;
 pub struct Config {
     /// The chain configuration.
     pub chain_config: ChainConfig,
-    /// Config for settings the verifier needs that are related to the relayer.
+    /// Config for settings the verifier needs that are related to the Relayer.
     pub relayer: RelayerVerifierConfig,
 }
 
-/// Config for settings the verifier needs that are related to the relayer.
+/// Config for settings the verifier needs that are related to the Relayer.
 #[derive(Clone, Debug)]
 pub struct RelayerVerifierConfig {
     /// The maximum number of blocks that need to be synced before we start
-    /// awaiting relayer syncing.
+    /// awaiting Relayer syncing.
     pub max_da_lag: DaBlockHeight,
-    /// The maximum time to wait for the relayer to sync.
+    /// The maximum time to wait for the Relayer to sync.
     pub max_wait_time: Duration,
 }
 

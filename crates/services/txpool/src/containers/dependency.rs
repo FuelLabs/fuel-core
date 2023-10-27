@@ -41,11 +41,11 @@ use tracing::warn;
 /// about depth of connection
 #[derive(Debug, Clone)]
 pub struct Dependency {
-    /// mapping of all UtxoId relationships in txpool
+    /// mapping of all ` relationships in TxPool
     coins: HashMap<UtxoId, CoinState>,
     /// Contract-> Tx mapping.
     contracts: HashMap<ContractId, ContractState>,
-    /// messageId -> tx mapping
+    /// `messageId` -> tx mapping
     messages: HashMap<Nonce, MessageState>,
     /// max depth of dependency.
     max_depth: usize,
@@ -55,7 +55,7 @@ pub struct Dependency {
 
 #[derive(Debug, Clone)]
 pub struct CoinState {
-    /// is Utxo spend as other Tx input
+    /// is UTXO spend as other Tx input
     is_spend_by: Option<TxId>,
     /// how deep are we inside UTXO dependency
     depth: usize,
@@ -70,13 +70,13 @@ impl CoinState {
 
 #[derive(Debug, Clone)]
 pub struct ContractState {
-    /// is Utxo spend as other Tx input
+    /// is UTXO spend as other Tx input
     used_by: HashSet<TxId>,
     /// how deep are we inside UTXO dependency
     depth: usize,
     /// origin is needed for child to parent rel, in case when contract is in dependency this is how we make a chain.
     origin: Option<UtxoId>,
-    /// gas_price. We can probably derive this from Tx
+    /// `gas_price`. We can probably derive this from Tx
     gas_price: GasPrice,
 }
 
@@ -88,7 +88,7 @@ impl ContractState {
 }
 
 /// Always in database. No need for optional spenders, as this state would just be removed from
-/// the hashmap if the message id isn't being spent.
+/// the hash map if the message id isn't being spent.
 #[derive(Debug, Clone)]
 pub struct MessageState {
     spent_by: TxId,
@@ -106,15 +106,15 @@ impl Dependency {
         }
     }
 
-    /// find all dependent Transactions that are inside txpool.
-    /// Does not check db. They can be sorted by gasPrice to get order of dependency
+    /// find all dependent Transactions that are inside TxPool.
+    /// Does not check db. They can be sorted by `gasPrice` to get order of dependency
     pub(crate) fn find_dependent(
         &self,
         tx: ArcPoolTx,
         seen: &mut HashMap<TxId, ArcPoolTx>,
         txs: &HashMap<TxId, TxInfo>,
     ) {
-        // for every input aggregate UtxoId and check if it is inside
+        // for every input aggregate `UtxoId` and check if it is inside
         let mut check = vec![tx.id()];
         while let Some(parent_txhash) = check.pop() {
             let mut is_new = false;
@@ -125,7 +125,7 @@ impl Dependency {
                 parent_tx = Some(parent.clone());
                 parent.tx().clone()
             });
-            // for every input check if tx_id is inside seen. if not, check coins/contract map.
+            // for every input check if `tx_id` is inside seen. if not, check coins/contract map.
             if let Some(parent_tx) = parent_tx {
                 for input in parent_tx.inputs() {
                     // if found and depth is not zero add it to `check`.
@@ -337,7 +337,7 @@ impl Dependency {
 
     /// Check for collision. Used only inside insert function.
     /// Id doesn't change any dependency it just checks if it has possibility to be included.
-    /// Returns: (max_depth, db_coins, db_contracts, collided_transactions);
+    /// Returns: `(max_depth, db_coins, db_contracts, collided_transactions)`
     #[allow(clippy::type_complexity)]
     fn check_for_collision<'a>(
         &'a self,
@@ -427,7 +427,6 @@ impl Dependency {
                             depth: max_depth - 1,
                         },
                     );
-                    // yey we got our coin
                 }
                 Input::MessageCoinSigned(MessageCoinSigned { nonce, .. })
                 | Input::MessageCoinPredicate(MessageCoinPredicate { nonce, .. })
@@ -475,7 +474,7 @@ impl Dependency {
                     );
                 }
                 Input::Contract(Contract { contract_id, .. }) => {
-                    // Does contract exist. We don't need to do any check here other then if contract_id exist or not.
+                    // Does contract exist. We don't need to do any check here other then if `contract_id` exist or not.
                     if let Some(state) = self.contracts.get(contract_id) {
                         // check if contract is created after this transaction.
                         if tx.price() > state.gas_price {
@@ -510,13 +509,10 @@ impl Dependency {
                             .used_by
                             .insert(tx.id());
                     }
-
-                    // yey we got our contract
                 }
             }
         }
-
-        // nice, our inputs don't collide. Now check if our newly created contracts collide on ContractId
+        // nice, our inputs don't collide. Now check if our newly created contracts collide on `ContractId`
         for output in tx.outputs() {
             if let Output::ContractCreated { contract_id, .. } = output {
                 if let Some(contract) = self.contracts.get(contract_id) {
@@ -547,7 +543,7 @@ impl Dependency {
     }
 
     /// insert tx inside dependency
-    /// return list of transactions that are removed from txpool
+    /// return list of transactions that are removed from TxPool
     pub(crate) fn insert<'a, DB>(
         &'a mut self,
         txs: &'a HashMap<TxId, TxInfo>,
@@ -583,8 +579,8 @@ impl Dependency {
                 }
                 Input::Contract(Contract { contract_id, .. }) => {
                     // Contract that we want to use can be already inside dependency (this case)
-                    // or it will be added when db_contracts extends self.contracts (and it
-                    // already contains changed used_by)
+                    // or it will be added when `db_contracts` extends self.contracts (and it
+                    // already contains changed `used_by`)
                     if let Some(state) = self.contracts.get_mut(contract_id) {
                         state.used_by.insert(tx.id());
                     }
@@ -598,7 +594,7 @@ impl Dependency {
 
         // insert all coins/contracts that we got from db;
         self.coins.extend(db_coins);
-        // for contracts from db that are not found in dependency, we already inserted used_by
+        // for contracts from db that are not found in dependency, we already inserted `used_by`
         // and are okay to just extend current list
         self.contracts.extend(db_contracts);
         // insert / overwrite all applicable message id spending relations
@@ -609,7 +605,7 @@ impl Dependency {
             let utxo_id = UtxoId::new(tx.id(), index as u8);
             match output {
                 Output::Coin { .. } | Output::Change { .. } | Output::Variable { .. } => {
-                    // insert output coin inside by_coin
+                    // insert output coin inside `by_coin`
                     self.coins.insert(
                         utxo_id,
                         CoinState {
@@ -632,7 +628,7 @@ impl Dependency {
                 }
                 Output::Contract(_) => {
                     // do nothing, this contract is already already found in dependencies.
-                    // as it is tied with input and used_by is already inserted.
+                    // as it is tied with input and `used_by` is already inserted.
                 }
             };
         }
@@ -700,7 +696,7 @@ impl Dependency {
                 | Input::CoinPredicate(CoinPredicate { utxo_id, .. }) => {
                     // Input coin cases
                     // 1. coin state was already removed if parent tx was also removed, no cleanup required.
-                    // 2. coin state spent_by needs to be freed from this tx if parent tx isn't being removed
+                    // 2. coin state `spent_by` needs to be freed from this tx if parent tx isn't being removed
                     // 3. coin state can be removed if this is a database coin, as no other txs are involved.
                     if let Some(state) = self.coins.get_mut(utxo_id) {
                         if !state.is_in_database() {

@@ -139,7 +139,7 @@ impl BlockHeader {
     }
 }
 
-// Accessors for the consensus header.
+/// Getters for the consensus header.
 impl BlockHeader {
     /// Merkle root of all previous block header hashes.
     pub fn prev_root(&self) -> &Bytes32 {
@@ -164,7 +164,7 @@ impl BlockHeader {
     }
 }
 
-/// Accessors for the consensus header.
+/// Getters for the consensus header.
 impl PartialBlockHeader {
     /// Merkle root of all previous block header hashes.
     pub fn prev_root(&self) -> &Bytes32 {

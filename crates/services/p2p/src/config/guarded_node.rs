@@ -23,7 +23,7 @@ impl GuardedNode {
 }
 
 impl Approver for GuardedNode {
-    /// Checks if PeerId of the remote node is contained within the reserved nodes.
+    /// Checks if `PeerId` of the remote node is contained within the reserved nodes.
     /// It rejects the connection otherwise.
     fn allow_peer(&self, peer_id: &PeerId) -> bool {
         self.reserved_nodes.contains(peer_id)

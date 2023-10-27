@@ -77,7 +77,7 @@ where
     SchemaValue: OutputType,
     // TODO: Optimization: Support `count` here including skipping of entities.
     //  It means also returning `has_previous_page` and `has_next_page` values.
-    // entries(start_key: Option<DBKey>)
+    // entries(: Option<DBKey>)
     F: FnOnce(&Option<SchemaKey>, IterDirection) -> StorageResult<Entries>,
     Entries: Iterator<Item = StorageResult<(SchemaKey, SchemaValue)>>,
     SchemaKey: Eq,

@@ -88,14 +88,14 @@ where
         max_gas: Word,
     ) -> anyhow::Result<UncommittedResult<StorageTransaction<ExecutorDB>>> {
         //  - get previous block info (hash, root, etc)
-        //  - select best da_height from relayer
-        //  - get available txs from txpool
+        //  - select best `da_height` from Relayer
+        //  - get available txs from TxPool
         //  - select best txs based on factors like:
         //      1. fees
         //      2. parallel throughput
-        //  - Execute block with production mode to correctly malleate txs outputs and block headers
+        //  - Execute block with production mode to correctly malleable txs outputs and block headers
 
-        // prevent simultaneous block production calls, the guard will drop at the end of this fn.
+        // prevent simultaneous block production calls, the guard will drop at the end of this function.
         let _production_guard = self.lock.lock().await;
 
         let source = self.txpool.get_source(height);
@@ -108,7 +108,7 @@ where
             gas_limit: max_gas,
         };
 
-        // Store the context string incase we error.
+        // Store the context string in case we error.
         let context_string =
             format!("Failed to produce block {height:?} due to execution failure");
         let result = self
@@ -122,7 +122,7 @@ where
     }
 
     // TODO: Support custom `block_time` for `dry_run`.
-    /// Simulate a transaction without altering any state. Does not aquire the production lock
+    /// Simulate a transaction without altering any state. Does not acquire the production lock
     /// since it is basically a "read only" operation and shouldn't get in the way of normal
     /// production.
     pub async fn dry_run(
@@ -144,8 +144,8 @@ where
         // The dry run execution should use the state of the blockchain based on the
         // last available block, not on the upcoming one. It means that we need to
         // use the same configuration as the last block -> the same DA height.
-        // It is deterministic from the result perspective, plus it is more performant
-        // because we don't need to wait for the relayer to sync.
+        // It is deterministic from the result perspective, plus it is more performer
+        // because we don't need to wait for the Relayer to sync.
         let header = self._new_header(height, Tai64::now())?;
         let gas_limit = match &transaction {
             Transaction::Script(script) => *script.gas_limit(),
@@ -159,7 +159,7 @@ where
         };
 
         let executor = self.executor.clone();
-        // use the blocking threadpool for dry_run to avoid clogging up the main async runtime
+        // use the blocking thread pool for `dry_run` to avoid clogging up the main async
         let res: Vec<_> =
             tokio_rayon::spawn_fifo(move || -> anyhow::Result<Vec<Receipt>> {
                 Ok(executor
@@ -201,7 +201,7 @@ where
         let best_height = self.relayer.wait_for_at_least(&previous_da_height).await?;
         if best_height < previous_da_height {
             // If this happens, it could mean a block was erroneously imported
-            // without waiting for our relayer's da_height to catch up to imported da_height.
+            // without waiting for our `Relayer`'s `da_height` to catch up to imported `da_height`.
             return Err(Error::InvalidDaFinalizationState {
                 best: best_height,
                 previous_block: previous_da_height,

@@ -52,8 +52,8 @@ use strum::EnumCount;
 #[cfg(feature = "rocksdb")]
 use tempfile::TempDir;
 
-// Storages implementation
-// TODO: Move to separate `database/storage` folder, because it is only implementation of storages traits.
+// Storage implementation
+// TODO: Move to separate `database/storage` folder, because it is only implementation of storage traits.
 mod block;
 mod code_root;
 mod contracts;
@@ -121,7 +121,7 @@ pub enum Column {
     /// Existence of a key in this column means that the message has been spent.
     /// See [`SpentMessages`](fuel_core_storage::tables::SpentMessages)
     SpentMessages = 19,
-    /// Metadata for the relayer
+    /// Metadata for the Relayer
     /// See [`RelayerMetadata`](fuel_core_relayer::ports::RelayerMetadata)
     RelayerMetadata = 20,
     /// See [`ContractsAssetsMerkleData`](storage::ContractsAssetsMerkleData)
@@ -220,7 +220,7 @@ impl Database {
             _drop: Arc::new(
                 {
                     move || {
-                        // cleanup temp dir
+                        // cleanup temp directory
                         drop(tmp_dir);
                     }
                 }
@@ -437,8 +437,8 @@ impl AsRef<Database> for Database {
 }
 
 /// Construct an ephemeral database
-/// uses rocksdb when rocksdb features are enabled
-/// uses in-memory when rocksdb features are disabled
+/// uses  when  features are enabled
+/// uses in-memory when  features are disabled
 impl Default for Database {
     fn default() -> Self {
         #[cfg(not(feature = "rocksdb"))]

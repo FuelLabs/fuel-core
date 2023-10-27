@@ -35,7 +35,7 @@ use std::iter;
 const LARGE_GAS_LIMIT: u64 = u64::MAX - 1001;
 
 fn new_db() -> VmDatabase {
-    // when rocksdb is enabled, this creates a new db instance with a temporary path
+    // when RocksDB is enabled, this creates a new db instance with a temporary path
     VmDatabase::default()
 }
 

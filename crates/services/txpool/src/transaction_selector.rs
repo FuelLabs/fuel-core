@@ -106,7 +106,7 @@ mod tests {
                 })
                 .with_fee_params(fee_params)
                 // The block producer assumes transactions are already checked
-                // so it doesn't need to compute valid sigs for tests
+                // so it doesn't need to compute valid signatures for tests
                 .finalize_checked_basic(Default::default()).into()
             })
             .map(Arc::new)

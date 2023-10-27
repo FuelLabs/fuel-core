@@ -55,7 +55,7 @@ mod guarded_node;
 
 const REQ_RES_TIMEOUT: Duration = Duration::from_secs(20);
 
-/// Maximum response size from the p2p.
+/// Maximum response size from the P2P.
 /// The configuration of the ingress should be the same:
 /// - `nginx.org/client-max-body-size`
 /// - `nginx.ingress.kubernetes.io/proxy-body-size`
@@ -70,7 +70,7 @@ const TRANSPORT_TIMEOUT: Duration = Duration::from_secs(20);
 
 #[derive(Clone, Debug)]
 pub struct Config<State = Initialized> {
-    /// The keypair used for for handshake during communication with other p2p nodes.
+    /// The keypair used for for handshake during communication with other P2P nodes.
     pub keypair: Keypair,
 
     /// Name of the Network
@@ -125,7 +125,7 @@ pub struct Config<State = Initialized> {
 
     pub heartbeat_config: HeartbeatConfig,
 
-    // RequestResponse related fields
+    // `RequestResponse` related fields
     /// Sets the timeout for inbound and outbound requests.
     pub set_request_timeout: Duration,
     /// Sets the keep-alive timeout of idle connections.
@@ -138,7 +138,7 @@ pub struct Config<State = Initialized> {
     /// Max time since a given peer has sent a heartbeat before getting reputation penalty
     pub heartbeat_max_time_since_last: Duration,
 
-    /// Enables prometheus metrics for this fuel-service
+    /// Enables Prometheus metrics for this fuel-service
     pub metrics: bool,
 
     /// It is the state of the config initialization. Everyone can create an instance of the `Self`
@@ -155,7 +155,7 @@ pub struct Initialized(());
 pub struct NotInitialized;
 
 impl Config<NotInitialized> {
-    /// Inits the `P2PConfig` with some lazily loaded data.
+    /// Initialize the `P2PConfig` with some lazily loaded data.
     pub fn init(self, genesis: Genesis) -> anyhow::Result<Config<Initialized>> {
         use fuel_core_chain_config::GenesisCommitment;
 
@@ -193,7 +193,7 @@ impl Config<NotInitialized> {
 }
 
 /// Takes secret key bytes generated outside of libp2p.
-/// And converts it into libp2p's `Keypair::Secp256k1`.
+/// And converts it into libp2p `Keypair::Secp256k1`.
 pub fn convert_to_libp2p_keypair(
     secret_key_bytes: impl AsMut<[u8]>,
 ) -> anyhow::Result<Keypair> {
@@ -324,7 +324,7 @@ pub fn peer_ids_set_from(multiaddr: &[Multiaddr]) -> HashSet<PeerId> {
     multiaddr
         .iter()
         // Safety: as is the case with `bootstrap_nodes` it is assumed that `reserved_nodes` [`Multiadr`]
-        // come with PeerId included, in case they are not the `unwrap()` will only panic when the node is started.
+        // come with `PeerId` included, in case they are not the `unwrap()` will only panic when the node is started.
         .map(|address| PeerId::try_from_multiaddr(address).unwrap())
         .collect()
 }

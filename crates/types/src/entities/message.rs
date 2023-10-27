@@ -15,11 +15,11 @@ use crate::{
     },
 };
 
-/// Message send from Da layer to fuel by bridge
+/// Message send from DA layer to fuel by bridge
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
 pub struct Message {
-    /// Account that sent the message from the da layer
+    /// Account that sent the message from the DA layer
     pub sender: Address,
     /// Fuel account receiving the message
     pub recipient: Address,
@@ -29,7 +29,7 @@ pub struct Message {
     pub amount: Word,
     /// Arbitrary message data
     pub data: Vec<u8>,
-    /// The block height from the parent da layer that originated this message
+    /// The block height from the parent DA layer that originated this message
     pub da_height: DaBlockHeight,
 }
 
@@ -60,7 +60,7 @@ pub struct MerkleProof {
     pub proof_index: u64,
 }
 
-/// Proves to da layer that this message was included in a Fuel block.
+/// Proves to DA layer that this message was included in a Fuel block.
 pub struct MessageProof {
     /// Proof that message is contained within the provided block header.
     pub message_proof: MerkleProof,

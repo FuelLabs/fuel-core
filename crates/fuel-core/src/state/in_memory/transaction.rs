@@ -38,7 +38,7 @@ use std::{
 pub struct MemoryTransactionView {
     view_layer: MemoryStore,
     // TODO: Remove `Mutex`.
-    // use hashmap to collapse changes (e.g. insert then remove the same key)
+    // use hash map to collapse changes (e.g. insert then remove the same key)
     changes: [Mutex<HashMap<Vec<u8>, WriteOperation>>; Column::COUNT],
     data_source: DataSource,
 }
@@ -138,9 +138,9 @@ impl KeyValueStore for MemoryTransactionView {
         start: Option<&[u8]>,
         direction: IterDirection,
     ) -> BoxedIter<KVItem> {
-        // iterate over inmemory + db while also filtering deleted entries
+        // iterate over in memory + db while also filtering deleted entries
         self.view_layer
-                // iter_all returns items in sorted order
+                // `iter_all` returns items in sorted order
                 .iter_all(column, prefix, start, direction)
                 // Merge two sorted iterators (our current view overlay + backing data source)
                 .merge_join_by(

@@ -22,7 +22,7 @@ use std::{
     pin::Pin,
 };
 
-/// Sha256 hash of ChainConfig
+/// Sha256 hash of `ChainConfig`
 #[derive(Debug, Clone, Copy, Default)]
 pub struct Checksum([u8; 32]);
 
@@ -33,9 +33,9 @@ impl From<[u8; 32]> for Checksum {
 }
 
 /// When two nodes want to establish a connection they need to
-/// exchange the Hash of their respective Chain Id and Chain Config.
+/// exchange the Hash of their respective `ChainId` and `ChainConfig`.
 /// The connection is only accepted if their hashes match.
-/// This is used to aviod peers having same network name but different configurations connecting to each other.
+/// This is used to avoid peers having same network name but different configurations connecting to each other.
 #[derive(Debug, Clone)]
 pub(crate) struct FuelUpgrade {
     checksum: Checksum,

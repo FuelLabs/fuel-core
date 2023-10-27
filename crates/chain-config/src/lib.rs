@@ -13,7 +13,7 @@ pub use genesis::GenesisCommitment;
 pub fn default_consensus_dev_key() -> SecretKey {
     // Derived from:
     //  - Mnemonic phrase: "winner alley monkey elephant sun off boil hope toward boss bronze dish"
-    //  - Path: "m/44'/60'/0'/0/0"
+    //  - Path: `m/44'/60'/0'/0/0`
     // Equivalent to:
     //  `SecretKey::new_from_mnemonic_phrase_with_path(..)`
     let bytes: [u8; 32] = [

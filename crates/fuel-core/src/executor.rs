@@ -293,7 +293,7 @@ where
         component: Components<Transaction>,
         utxo_validation: Option<bool>,
     ) -> ExecutorResult<Vec<Vec<Receipt>>> {
-        // fallback to service config value if no utxo_validation override is provided
+        // fallback to service config value if no `utxo_validation` override is provided
         let utxo_validation =
             utxo_validation.unwrap_or(self.config.utxo_validation_default);
 
@@ -542,7 +542,7 @@ where
 
         let block_height = *block.header.height();
 
-        // ALl transactions should be in the `TxSource`.
+        // All transactions should be in the `TxSource`.
         // We use `block.transactions` to store executed transactions.
         debug_assert!(block.transactions.is_empty());
         let mut iter = source.next(remaining_gas_limit).into_iter().peekable();
@@ -765,7 +765,7 @@ where
             let mut outputs = [Output::Contract(output)];
 
             if options.utxo_validation {
-                // validate utxos exist
+                // validate UTXOs exist
                 self.verify_input_state(
                     block_db_transaction.deref(),
                     inputs.as_mut_slice(),
@@ -899,7 +899,7 @@ where
         debug_assert!(checked_tx.checks().contains(Checks::Predicates));
 
         if options.utxo_validation {
-            // validate utxos exist and maturity is properly set
+            // validate UTXOs exist and maturity is properly set
             self.verify_input_state(
                 tx_db_transaction.deref(),
                 checked_tx.transaction().inputs(),
@@ -914,10 +914,10 @@ where
         }
 
         // execute transaction
-        // setup database view that only lives for the duration of vm execution
+        // setup database view that only lives for the duration of VM execution
         let mut sub_block_db_commit = tx_db_transaction.transaction();
         let sub_db_view = sub_block_db_commit.as_mut();
-        // execution vm
+        // execution VM
         let vm_db = VmDatabase::new(
             sub_db_view.clone(),
             &header.consensus,
@@ -967,7 +967,7 @@ where
         // Check or set the executed transaction.
         match execution_kind {
             ExecutionKind::Validation => {
-                // ensure tx matches vm output exactly
+                // ensure tx matches VM output exactly
                 if &tx != checked_tx.transaction() {
                     return Err(ExecutorError::InvalidTransactionOutcome {
                         transaction_id: tx_id,
@@ -975,14 +975,14 @@ where
                 }
             }
             ExecutionKind::DryRun | ExecutionKind::Production => {
-                // malleate the block with the resultant tx from the vm
+                // malleable the block with the resultant tx from the VM
             }
         }
 
         // change the spent status of the tx inputs
         self.spend_input_utxos(tx.inputs(), tx_db_transaction.deref_mut(), reverted)?;
 
-        // Persist utxos first and after calculate the not utxo outputs
+        // Persist UTXOs first and after calculate the not UTXO outputs
         self.persist_output_utxos(
             *header.height(),
             execution_data.tx_count,
@@ -1030,7 +1030,7 @@ where
                 .find_map(|receipt| match receipt {
                     // Format as `Revert($rA)`
                     Receipt::Revert { ra, .. } => Some(format!("Revert({ra})")),
-                    // Display PanicReason e.g. `OutOfGas`
+                    // Display `PanicReason` e.g. `OutOfGas`
                     Receipt::Panic { reason, .. } => Some(format!("{}", reason.reason())),
                     _ => None,
                 })
@@ -1193,7 +1193,7 @@ where
         Ok(())
     }
 
-    /// Mark input utxos as spent
+    /// Mark input UTXOs as spent
     fn spend_input_utxos(
         &self,
         inputs: &[Input],
@@ -1204,7 +1204,7 @@ where
             match input {
                 Input::CoinSigned(CoinSigned { utxo_id, .. })
                 | Input::CoinPredicate(CoinPredicate { utxo_id, .. }) => {
-                    // prune utxo from db
+                    // prune UTXO from db
                     db.storage::<Coins>().remove(utxo_id)?;
                 }
                 Input::MessageDataSigned(_)
@@ -1474,7 +1474,7 @@ where
                 ))
                 .map(Cow::into_owned)
         } else {
-            // if utxo validation is disabled, just assign this new input to the original block
+            // if UTXO validation is disabled, just assign this new input to the original block
             Ok(CompressedCoin {
                 owner,
                 amount,
@@ -1485,7 +1485,7 @@ where
         }
     }
 
-    /// Log a VM backtrace if configured to do so
+    /// Log a VM backtraces if configured to do so
     fn log_backtrace<Tx>(&self, vm: &Interpreter<VmDatabase, Tx>, receipts: &[Receipt]) {
         if self.config.backtrace {
             if let Some(backtrace) = receipts
@@ -1599,7 +1599,7 @@ where
     ) -> ExecutorResult<()> {
         // Only insert a coin output if it has some amount.
         // This is because variable or transfer outputs won't have any value
-        // if there's a revert or panic and shouldn't be added to the utxo set.
+        // if there's a revert or panic and shouldn't be added to the UTXO set.
         if *amount > Word::MIN {
             let coin = CompressedCoin {
                 owner: *to,
@@ -1693,7 +1693,7 @@ where
             }
         }
 
-        // dedupe owners from inputs and outputs prior to indexing
+        //  owners from inputs and outputs prior to indexing
         owners.sort();
         owners.dedup();
 
@@ -1828,15 +1828,15 @@ mod tests {
 
         let (create, contract_id) = create_contract(
             vec![
-                // load amount of coins to 0x10
+                // load amount of coins to `0x10`
                 op::addi(0x10, RegId::FP, CallFrame::a_offset().try_into().unwrap()),
                 op::lw(0x10, 0x10, 0),
-                // load asset id to 0x11
+                // load asset id to `0x11`
                 op::addi(0x11, RegId::FP, CallFrame::b_offset().try_into().unwrap()),
                 op::lw(0x11, 0x11, 0),
-                // load address to 0x12
+                // load address to `0x12`
                 op::addi(0x12, 0x11, 32),
-                // load output index (0) to 0x13
+                // load output index (0) to `0x13`
                 op::addi(0x13, RegId::ZERO, 0),
                 op::tro(0x12, 0x13, 0x10, 0x11),
                 op::ret(RegId::ONE),
@@ -1848,13 +1848,13 @@ mod tests {
         let (script, data_offset) = script_with_data_offset!(
             data_offset,
             vec![
-                // set reg 0x10 to call data
+                // set reg `0x10` to call data
                 op::movi(0x10, data_offset + 64),
-                // set reg 0x11 to asset id
+                // set reg `0x11` to asset id
                 op::movi(0x11, data_offset),
-                // set reg 0x12 to call amount
+                // set reg `0x12` to call amount
                 op::movi(0x12, variable_transfer_amount),
-                // call contract without any tokens to transfer in (3rd arg arbitrary when 2nd is zero)
+                // call contract without any tokens to transfer in (3rd argument arbitrary when 2nd is zero)
                 op::call(0x10, 0x12, 0x11, RegId::CGAS),
                 op::ret(RegId::ONE),
             ],
@@ -2335,7 +2335,7 @@ mod tests {
                         // Store the pointer to the beginning of the free memory into 
                         // register `0x10`.
                         op::move_(0x10, RegId::HP),
-                        // Store `config_coinbase` `Address` into MEM[$0x10; 32].
+                        // Store `config_coinbase` `Address` into `MEM[$0x10; 32]`.
                         op::cb(0x10),
                         // Store the pointer on the beginning of script data into register `0x12`.
                         // Script data contains `expected_in_tx_coinbase` - 32 bytes of data.
@@ -2694,7 +2694,7 @@ mod tests {
     // invalidate a block if a tx input doesn't exist
     #[test]
     fn executor_invalidates_missing_inputs() {
-        // create an input which doesn't exist in the utxo set
+        // create an input which doesn't exist in the UTXO set
         let mut rng = StdRng::seed_from_u64(2322u64);
 
         let tx = TransactionBuilder::script(
@@ -3008,7 +3008,7 @@ mod tests {
             .storage::<Coins>()
             .get(first_input.utxo_id().unwrap())
             .unwrap();
-        // verify coin is pruned from utxo set
+        // verify coin is pruned from UTXO set
         assert!(coin.is_none());
         // The second input should be `Unspent` after execution.
         db.storage::<Coins>()
@@ -3024,8 +3024,8 @@ mod tests {
         // `tx3` is a `Script` transaction that depends on `tx2`. It will be skipped
         // if `tx2` is not executed before `tx3`.
         //
-        // The test checks that execution for the block with transactions [tx1, tx2, tx3] skips
-        // transaction `tx1` and produce a block [tx2, tx3] with the expected order.
+        // The test checks that execution for the block with transactions [`tx1`, `tx2`, `tx3`] skips
+        // transaction `tx1` and produce a block [`tx2`, `tx3`] with the expected order.
         let tx1 = TransactionBuilder::script(vec![], vec![])
             .add_random_fee_input()
             .gas_limit(1000000)
@@ -3257,7 +3257,7 @@ mod tests {
         // Create a contract that modifies the state
         let (create, contract_id) = create_contract(
             vec![
-                // Sets the state STATE[0x1; 32] = value of `RegId::PC`;
+                // Sets the state `[0x1; 32]` = value of `RegId::PC`;
                 op::sww(0x1, 0x29, RegId::PC),
                 op::ret(1),
             ]
@@ -3373,7 +3373,7 @@ mod tests {
         // Create a contract that modifies the state
         let (create, contract_id) = create_contract(
             vec![
-                // Sets the state STATE[0x1; 32] = value of `RegId::PC`;
+                // Sets the state `[0x1; 32]` = value of `RegId::PC`;
                 op::sww(0x1, 0x29, RegId::PC),
                 op::ret(1),
             ]
@@ -3630,7 +3630,7 @@ mod tests {
     fn validation_succeeds_when_input_contract_utxo_id_uses_expected_value() {
         let mut rng = StdRng::seed_from_u64(2322);
         // create a contract in block 1
-        // verify a block 2 with tx containing contract id from block 1, using the correct contract utxo_id from block 1.
+        // verify a block 2 with tx containing contract id from block 1, using the correct contract `utxo_id` from block 1.
         let (tx, contract_id) = create_contract(vec![], &mut rng);
         let first_block = PartialFuelBlock {
             header: Default::default(),
@@ -3695,7 +3695,7 @@ mod tests {
         let mut rng = StdRng::seed_from_u64(2322);
 
         // create a contract in block 1
-        // verify a block 2 containing contract id from block 1, with wrong input contract utxo_id
+        // verify a block 2 containing contract id from block 1, with wrong input contract `utxo_id`
         let (tx, contract_id) = create_contract(vec![], &mut rng);
         let tx2: Transaction = TxBuilder::new(2322)
             .start_script(vec![op::addi(0x10, RegId::ZERO, 0), op::ret(1)], vec![])
@@ -3757,7 +3757,7 @@ mod tests {
                 Default::default(),
             )
             .unwrap();
-        // Corrupt the utxo_id of the contract output
+        // Corrupt the `utxo_id` of the contract output
         if let Transaction::Script(script) = &mut second_block.transactions_mut()[0] {
             if let Input::Contract(Contract { utxo_id, .. }) = &mut script.inputs_mut()[0]
             {
@@ -3797,7 +3797,7 @@ mod tests {
             .execute_and_commit(ExecutionBlock::Production(block), Default::default())
             .unwrap();
 
-        // ensure that all utxos with an amount are stored into the utxo set
+        // ensure that all UTXO with an amount are stored into the UTXO set
         for (idx, output) in block.transactions()[1]
             .as_script()
             .unwrap()
@@ -4121,7 +4121,7 @@ mod tests {
     fn message_fails_when_spending_da_height_gt_block_da_height() {
         let mut rng = StdRng::seed_from_u64(2322);
 
-        let (tx, message) = make_tx_and_message(&mut rng, 1); // Block has zero da_height
+        let (tx, message) = make_tx_and_message(&mut rng, 1); // Block has zero `da_height`
 
         let mut block = Block::default();
         *block.transactions_mut() = vec![tx.clone()];

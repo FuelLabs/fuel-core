@@ -2,7 +2,7 @@ use clap::Args;
 
 #[derive(Debug, Clone, Args)]
 pub struct ProfilingArgs {
-    /// Enables realtime profiling with pyroscope if set, and streams results to the pyroscope endpoint.
+    /// Enables real time profiling with Pyroscope if set, and streams results to the Pyroscope endpoint.
     /// For best results, the binary should be built with debug symbols included.
     #[clap(long = "pyroscope-url", env)]
     pub pyroscope_url: Option<String>,

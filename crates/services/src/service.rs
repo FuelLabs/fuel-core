@@ -66,13 +66,13 @@ pub trait Service {
 /// Trait used by `ServiceRunner` to encapsulate the business logic tasks for a service.
 #[async_trait::async_trait]
 pub trait RunnableService: Send {
-    /// The name of the runnable service, used for namespacing error messages.
+    /// The name of the runnable service, used for name spacing error messages.
     const NAME: &'static str;
 
     /// Service specific shared data. This is used when you have data that needs to be shared by
-    /// one or more tasks. It is the implementors responsibility to ensure cloning this
-    /// type is shallow and doesn't provide a full duplication of data that is meant
-    /// to be shared between asynchronous processes.
+    /// one or more tasks. The implementer is responsible for ensuring the cloning of this
+    /// type is shallow and doesn't provide a full duplication of data that is meant to be
+    /// shared between asynchronous processes.
     type SharedData: Clone + Send + Sync;
 
     /// The initialized runnable task type.

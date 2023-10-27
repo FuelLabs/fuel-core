@@ -64,7 +64,7 @@ pub trait PeerToPeerPort {
 pub trait ConsensusPort {
     /// Check if the given sealed block header is valid.
     fn check_sealed_header(&self, header: &SealedBlockHeader) -> anyhow::Result<bool>;
-    /// await for this DA height to be sync'd.
+    /// await for this DA height to be synced.
     async fn await_da_height(&self, da_height: &DaBlockHeight) -> anyhow::Result<()>;
 }
 

@@ -14,7 +14,7 @@ pub mod peer_reputation;
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Transactions(pub Vec<Transaction>);
 
-/// Lightweight representation of gossipped data that only includes IDs
+/// Lightweight representation of gossiped data that only includes IDs
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct GossipsubMessageInfo {
@@ -38,10 +38,10 @@ pub enum GossipsubMessageAcceptance {
     Ignore,
 }
 
-/// A gossipped message from the network containing all relevant data.
+/// A gossiped message from the network containing all relevant data.
 #[derive(Debug, Clone)]
 pub struct GossipData<T> {
-    /// The gossipped message payload
+    /// The gossiped message payload
     /// This is meant to be consumed once to avoid cloning. Subsequent attempts to fetch data from
     /// the message should return None.
     pub data: Option<T>,
@@ -91,9 +91,9 @@ impl<T> GossipData<T> {
     }
 }
 
-/// A generic representation of data that's been gossipped by the network
+/// A generic representation of data that's been gossiped by the network
 pub trait NetworkData<T>: Debug + Send {
-    /// Consume ownership of data from a gossipped message
+    /// Consume ownership of data from a gossiped message
     fn take_data(&mut self) -> Option<T>;
 }
 
@@ -105,9 +105,9 @@ impl<T: Debug + Send + 'static> NetworkData<T> for GossipData<T> {
 /// Used for relying latest `BlockHeight` info from connected peers
 #[derive(Debug, Clone)]
 pub struct BlockHeightHeartbeatData {
-    /// PeerId as bytes
+    /// `PeerId` as bytes
     pub peer_id: PeerId,
-    /// Latest BlockHeight received
+    /// Latest `BlockHeight` received
     pub block_height: BlockHeight,
 }
 
@@ -135,8 +135,8 @@ impl From<PeerId> for Vec<u8> {
 }
 
 impl PeerId {
-    /// Bind the PeerId and given data of type T together to generate a
-    /// SourcePeer<T>
+    /// Bind the `PeerId` and given data of type T together to generate a
+    /// `SourcePeer`<T>
     pub fn bind<T>(self, data: T) -> SourcePeer<T> {
         SourcePeer {
             peer_id: self,

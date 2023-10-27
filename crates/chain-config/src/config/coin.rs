@@ -36,11 +36,11 @@ pub struct CoinConfig {
     #[serde_as(as = "Option<HexNumber>")]
     #[serde(default)]
     pub output_index: Option<u8>,
-    /// used if coin is forked from another chain to preserve id & tx_pointer
+    /// used if coin is forked from another chain to preserve id & `tx_pointer`
     #[serde_as(as = "Option<HexNumber>")]
     #[serde(default)]
     pub tx_pointer_block_height: Option<BlockHeight>,
-    /// used if coin is forked from another chain to preserve id & tx_pointer
+    /// used if coin is forked from another chain to preserve id & `tx_pointer`
     /// The index of the originating tx within `tx_pointer_block_height`
     #[serde_as(as = "Option<HexNumber>")]
     #[serde(default)]

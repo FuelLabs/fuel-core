@@ -114,7 +114,7 @@ impl DiscoveryConfig {
             ..
         } = self;
 
-        // kademlia setup
+        // Kademlia setup
         let memory_store = MemoryStore::new(local_peer_id.to_owned());
         let mut kademlia_config = KademliaConfig::default();
         let network = format!("/fuel/kad/{network_name}/kad/1.0.0");
@@ -125,7 +125,7 @@ impl DiscoveryConfig {
         let mut kademlia =
             Kademlia::with_config(local_peer_id, memory_store, kademlia_config);
 
-        // bootstrap nodes need to have their peer_id defined in the Multiaddr
+        // bootstrap nodes need to have their `peer_id` defined in the `Multiaddr`
         let bootstrap_nodes = bootstrap_nodes
             .into_iter()
             .filter_map(|node| {
@@ -133,7 +133,7 @@ impl DiscoveryConfig {
             })
             .collect::<Vec<_>>();
 
-        // reserved nodes need to have their peer_id defined in the Multiaddr
+        // reserved nodes need to have their `peer_id` defined in the `Multiaddr`
         let reserved_nodes = reserved_nodes
             .into_iter()
             .filter_map(|node| {
@@ -161,7 +161,7 @@ impl DiscoveryConfig {
                 .random_walk
                 .map(|duration| Box::pin(tokio::time::sleep(duration)));
 
-            // no need to preferm random walk if we don't want the node to connect to non-whitelisted peers
+            // no need to prefer random walk if we don't want the node to connect to non-whitelisted peers
             if !reserved_nodes_only_mode {
                 random_walk
             } else {
@@ -169,7 +169,7 @@ impl DiscoveryConfig {
             }
         };
 
-        // mdns setup
+        // MDNS setup
         let mdns = if self.with_mdns {
             MdnsWrapper::default()
         } else {

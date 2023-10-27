@@ -86,7 +86,7 @@ impl FuelService {
         let database = match config.database_type {
             #[cfg(feature = "rocksdb")]
             DbType::RocksDb => {
-                // use a default tmp rocksdb if no path is provided
+                // use a default temp RocksDB if no path is provided
                 if config.database_path.as_os_str().is_empty() {
                     warn!(
                         "No RocksDB path configured, initializing database with a tmp directory"
@@ -118,13 +118,13 @@ impl FuelService {
     /// Wait for the [`Relayer`] to be in sync with
     /// the data availability layer.
     ///
-    /// Yields until the relayer reaches a point where it
+    /// Yields until the Relayer reaches a point where it
     /// considered up to date. Note that there's no guarantee
-    /// the relayer will ever catch up to the da layer and
+    /// the Relayer will ever catch up to the DA layer and
     /// may fall behind immediately after this future completes.
     ///
     /// The only guarantee is that if this future completes then
-    /// the relayer did reach consistency with the da layer for
+    /// the Relayer did reach consistency with the DA layer for
     /// some period of time.
     pub async fn await_relayer_synced(&self) -> anyhow::Result<()> {
         if let Some(relayer_handle) = &self.runner.shared.relayer {
@@ -294,18 +294,13 @@ mod tests {
             i += 1;
         }
 
-        // current services: graphql, txpool, PoA
+        // current services: GraphQL, TxPool, PoA
         #[allow(unused_mut)]
         let mut expected_services = 3;
 
-        // Relayer service is disabled with `Config::local_node`.
-        // #[cfg(feature = "relayer")]
-        // {
-        //     expected_services += 1;
-        // }
         #[cfg(feature = "p2p")]
         {
-            // p2p & sync
+            // P2P & sync
             expected_services += 2;
         }
 

@@ -36,7 +36,7 @@ pub async fn run<R>(relayer: &mut R) -> anyhow::Result<()>
 where
     R: RelayerData,
 {
-    // Await the eth node to sync.
+    // Await the Ethereum node to sync.
     relayer.wait_if_eth_syncing().await?;
 
     // Build the DA layer state.

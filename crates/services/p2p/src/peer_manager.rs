@@ -246,7 +246,7 @@ impl PeerManager {
         let mut range = rand::thread_rng();
         // TODO: Optimize the selection of the peer.
         //  We can store pair `(peer id, height)` for all nodes(reserved and not) in the
-        //  https://docs.rs/sorted-vec/latest/sorted_vec/struct.SortedVec.html
+        //  `https://docs.rs/sorted-vec/latest/sorted_vec/struct.SortedVec.html`
         self.non_reserved_connected_peers
             .iter()
             .chain(self.reserved_connected_peers.iter())
@@ -257,7 +257,7 @@ impl PeerManager {
             .choose(&mut range)
     }
 
-    /// Handles the first connnection established with a Peer    
+    /// Handles the first connection established with a Peer    
     fn handle_initial_connection(
         &mut self,
         peer_id: &PeerId,

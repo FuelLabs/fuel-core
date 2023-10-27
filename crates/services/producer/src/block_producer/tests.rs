@@ -121,7 +121,7 @@ async fn cant_produce_if_no_previous_block() {
 
 #[tokio::test]
 async fn cant_produce_if_previous_block_da_height_too_high() {
-    // setup previous block with a high da_height
+    // setup previous block with a high `da_height`
     let prev_da_height = 100u64.into();
     let prev_height = 1u32.into();
     let previous_block = PartialFuelBlock {
@@ -147,7 +147,7 @@ async fn cant_produce_if_previous_block_da_height_too_high() {
     };
     let ctx = TestContext {
         relayer: MockRelayer {
-            // set our relayer best finalized height to less than previous
+            // set our Relayer best finalized height to less than previous
             best_finalized_height: prev_da_height - 1u64.into(),
             ..Default::default()
         },

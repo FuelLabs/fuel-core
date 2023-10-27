@@ -17,7 +17,7 @@ use serde_with::{
 };
 use std::convert::TryFrom;
 
-/// Used for primitive number types which don't implement AsRef or TryFrom<&[u8]>
+/// Used for primitive number types which don't implement `AsRef` or `TryFrom<&[u8]>`
 pub(crate) struct HexNumber;
 
 impl SerializeAs<BlockHeight> for HexNumber {
@@ -155,7 +155,7 @@ macro_rules! impl_hex_number {
                     }
                     _ => {}
                 }
-                // We've already verified the bytes.len == WORD_SIZE, force the conversion here.
+                // We've already verified the `bytes.len` == `WORD_SIZE`, force the conversion here.
                 Ok($i::from_be_bytes(
                     bytes.try_into().expect("byte lengths checked"),
                 ))

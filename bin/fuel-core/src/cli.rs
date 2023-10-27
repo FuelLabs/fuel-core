@@ -84,13 +84,13 @@ pub async fn init_logging() -> anyhow::Result<()> {
             .with_ansi(false)
             .with_level(true)
             .with_line_number(true)
-            // use json
+            // use JSON
             .json()
             .boxed()
     };
 
     let subscriber = registry::Registry::default() // provide underlying span data store
-        .with(filter) // filter out low-level debug tracing (eg tokio executor)
+        .with(filter) // filter out low-level debug tracing (e.g. tokio executor)
         .with(fmt); // log to stdout
 
     tracing::subscriber::set_global_default(subscriber)

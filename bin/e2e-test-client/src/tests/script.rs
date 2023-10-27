@@ -17,7 +17,7 @@ use tokio::time::timeout;
 
 // Executes transfer script and gets the receipts.
 pub async fn receipts(ctx: &TestContext) -> Result<(), Failed> {
-    // alice makes transfer to bob
+    // Alice makes transfer to bob
     let result = tokio::time::timeout(
         ctx.config.sync_timeout(),
         ctx.alice.transfer(ctx.bob.address, BASE_AMOUNT, None),

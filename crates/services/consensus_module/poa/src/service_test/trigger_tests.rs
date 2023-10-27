@@ -40,7 +40,7 @@ async fn never_trigger_never_produces_blocks() {
         ..Default::default()
     });
 
-    // initialize txpool with some txs
+    // initialize TxPool with some txs
     let txs = (0..TX_COUNT).map(|_| make_tx(&mut rng)).collect::<Vec<_>>();
     let TxPoolContext {
         txpool,
@@ -82,7 +82,7 @@ impl DefaultContext {
         let mut rng = StdRng::seed_from_u64(1234u64);
         let mut ctx_builder = TestContextBuilder::new();
         ctx_builder.with_config(config);
-        // initialize txpool with some txs
+        // initialize TxPool with some txs
         let tx1 = make_tx(&mut rng);
         let TxPoolContext {
             txpool,
@@ -215,7 +215,7 @@ async fn interval_trigger_doesnt_react_to_full_txpool() -> anyhow::Result<()> {
     // Brackets to release the lock.
     {
         let mut guard = ctx.txs.lock().unwrap();
-        // Fill txpool completely and notify about new transaction.
+        // Fill TxPool completely and notify about new transaction.
         for _ in 0..1_000 {
             guard.push(make_tx(&mut ctx.rng));
         }

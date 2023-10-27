@@ -1,4 +1,4 @@
-//! Types for interoperability with the txpool service
+//! Types for interoperability with the TxPool service
 
 use crate::{
     blockchain::primitives::BlockId,
@@ -164,9 +164,9 @@ pub struct InsertionResult {
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum TransactionStatus {
-    /// Transaction was submitted into the txpool
+    /// Transaction was submitted into the TxPool
     Submitted {
-        /// Timestamp of submission into the txpool
+        /// `Timestamp` of submission into the TxPool
         time: Tai64,
     },
     /// Transaction was successfully included in a block
@@ -178,12 +178,12 @@ pub enum TransactionStatus {
         /// Result of executing the transaction for scripts
         result: Option<ProgramState>,
     },
-    /// Transaction was squeezed of the txpool
+    /// Transaction was squeezed of the TxPool
     SqueezedOut {
         /// Why this happened
         reason: String,
     },
-    /// Transaction was included in a block, but the exection was reverted
+    /// Transaction was included in a block, but the execution was reverted
     Failed {
         /// Included in this block
         block_id: BlockId,
@@ -260,7 +260,7 @@ pub enum Error {
     NotInsertedMaxDepth,
     #[error("Transaction exceeds the max gas per block limit. Tx gas: {tx_gas}, block limit {block_limit}")]
     NotInsertedMaxGasLimit { tx_gas: Word, block_limit: Word },
-    // small todo for now it can pass but in future we should include better messages
+    // small TODO for now it can pass but in future we should include better messages
     #[error("Transaction removed.")]
     Removed,
     #[error("Transaction expired because it exceeded the configured time to live `tx-pool-ttl`.")]

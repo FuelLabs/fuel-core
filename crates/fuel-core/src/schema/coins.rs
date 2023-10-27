@@ -65,12 +65,12 @@ impl Coin {
         self.0.maturity.into()
     }
 
-    /// TxPointer - the height of the block this coin was created in
+    /// `TxPointer` - the height of the block this coin was created in
     async fn block_created(&self) -> U32 {
         u32::from(self.0.tx_pointer.block_height()).into()
     }
 
-    /// TxPointer - the index of the transaction that created this coin
+    /// `TxPointer` - the index of the transaction that created this coin
     async fn tx_created_idx(&self) -> U64 {
         u64::from(self.0.tx_pointer.tx_index()).into()
     }
@@ -136,7 +136,7 @@ pub struct SpendQueryElementInput {
 
 #[derive(async_graphql::InputObject)]
 pub struct ExcludeInput {
-    /// Utxos to exclude from the selection.
+    /// UTXO to exclude from the selection.
     utxos: Vec<UtxoId>,
     /// Messages to exclude from the selection.
     messages: Vec<Nonce>,
@@ -167,7 +167,7 @@ impl CoinQuery {
         last: Option<i32>,
         before: Option<String>,
     ) -> async_graphql::Result<Connection<UtxoId, Coin, EmptyFields, EmptyFields>> {
-        // Rocksdb doesn't support reverse iteration over a prefix
+        // RocksDB doesn't support reverse iteration over a prefix
         if matches!(last, Some(last) if last > 0) {
             return Err(anyhow!("reverse pagination isn't supported for this coins").into())
         }

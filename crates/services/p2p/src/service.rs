@@ -90,11 +90,11 @@ use tracing::warn;
 pub type Service<D> = ServiceRunner<Task<FuelP2PService<PostcardCodec>, D, SharedState>>;
 
 enum TaskRequest {
-    // Broadcast requests to p2p network
+    // Broadcast requests to P2P network
     BroadcastTransaction(Arc<Transaction>),
     BroadcastBlock(Arc<Block>),
     BroadcastVote(Arc<ConsensusVote>),
-    // Request to get one-off data from p2p network
+    // Request to get one-off data from P2P network
     GetPeerIds(oneshot::Sender<Vec<PeerId>>),
     GetBlock {
         height: BlockHeight,
@@ -109,7 +109,7 @@ enum TaskRequest {
         from_peer: PeerId,
         channel: oneshot::Sender<Option<Vec<Transactions>>>,
     },
-    // Responds back to the p2p network
+    // Responds back to the P2P network
     RespondWithGossipsubMessageReport((GossipsubMessageInfo, GossipsubMessageAcceptance)),
     RespondWithPeerReport {
         peer_id: PeerId,
@@ -530,7 +530,6 @@ where
                         let _ = self.p2p_service.send_request_msg(Some(from_peer), request_msg, channel_item);
                     }
                     Some(TaskRequest::RespondWithGossipsubMessageReport((message, acceptance))) => {
-                        // report_message(&mut self.p2p_service, message, acceptance);
                         self.p2p_service.report_message(message, acceptance)?;
                     }
                     Some(TaskRequest::RespondWithPeerReport { peer_id, score, reporting_service }) => {
@@ -562,11 +561,11 @@ where
                                 let _ = self.broadcast.tx_broadcast(next_transaction);
                             },
                             GossipsubMessage::NewBlock(block) => {
-                                // todo: add logic to gossip newly received blocks
+                                // TODO: add logic to gossip newly received blocks
                                 let _new_block = GossipData::new(block, peer_id, message_id);
                             },
                             GossipsubMessage::ConsensusVote(vote) => {
-                                // todo: add logic to gossip newly received votes
+                                // TODO: add logic to gossip newly received votes
                                 let _new_vote = GossipData::new(vote, peer_id, message_id);
                             },
                         }
@@ -667,13 +666,13 @@ where
 
 #[derive(Clone)]
 pub struct SharedState {
-    /// Sender of p2p transaction used for subscribing.
+    /// Sender of P2P transaction used for subscribing.
     tx_broadcast: broadcast::Sender<TransactionGossipData>,
     /// Sender of reserved peers connection updates.
     reserved_peers_broadcast: broadcast::Sender<usize>,
     /// Used for communicating with the `Task`.
     request_sender: mpsc::Sender<TaskRequest>,
-    /// Sender of p2p blopck height data
+    /// Sender of P2P block height data
     block_height_broadcast: broadcast::Sender<BlockHeightHeartbeatData>,
 }
 
@@ -938,9 +937,9 @@ pub mod tests {
         let service =
             new_service(ChainId::default(), p2p_config, FakeDb, FakeBlockImporter);
 
-        // Node with p2p service started
+        // Node with P2P service started
         assert!(service.start_and_await().await.unwrap().started());
-        // Node with p2p service stopped
+        // Node with P2P service stopped
         assert!(service.stop_and_await().await.unwrap().stopped());
     }
 

@@ -43,7 +43,7 @@ use crate::{
     ConsensusConfig,
 };
 
-// Fuel Network human-readable part for bech32 encoding
+// Fuel Network human-readable part for Bech32 encoding
 pub const FUEL_BECH32_HRP: &str = "fuel";
 pub const LOCAL_TESTNET: &str = "local_testnet";
 pub const TESTNET_INITIAL_BALANCE: u64 = 10_000_000;
@@ -200,7 +200,7 @@ impl GenesisCommitment for ChainConfig {
         let ChainConfig {
             chain_name,
             block_gas_limit,
-            // Skip the `initial_state` bec
+            // Skip the `initial_state`
             initial_state: _,
             consensus_parameters,
             consensus,

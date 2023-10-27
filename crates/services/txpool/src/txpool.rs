@@ -158,7 +158,7 @@ where
                 Vec::new()
             }
         } else {
-            // remove ret from by_hash and from by_price
+            // remove `ret` from `by_hash` and from `by_price`
             for rem in rem.iter() {
                 self.remove_tx(&rem.id());
             }
@@ -227,8 +227,8 @@ where
         tx_status_sender: &TxStatusChange,
         txs: Vec<Checked<Transaction>>,
     ) -> Vec<anyhow::Result<InsertionResult>> {
-        // Check if that data is okay (witness match input/output, and if recovered signatures ara valid).
-        // should be done before transaction comes to txpool, or before it enters RwLocked region.
+        // Check if that data is okay (witness match input/output, and if recovered signatures  valid).
+        // should be done before transaction comes to TxPool, or before it enters `RwLocked` region.
         let mut res = Vec::new();
 
         for tx in txs.into_iter() {
@@ -244,7 +244,7 @@ where
                     submitted_time,
                 }) => {
                     for removed in removed {
-                        // small todo there is possibility to have removal reason (ReplacedByHigherGas, DependencyRemoved)
+                        // small TODO there is possibility to have removal reason (`ReplacedByHigherGas`, `DependencyRemoved`)
                         // but for now it is okay to just use Error::Removed.
                         tx_status_sender.send_squeezed_out(removed.id(), Error::Removed);
                     }
@@ -311,13 +311,12 @@ where
         self.sorted_includable()
     }
 
-    /// When block is updated we need to receive all spend outputs and remove them from txpool.
+    /// When block is updated we need to receive all spend outputs and remove them from TxPool.
     pub fn block_update(
         &mut self,
         tx_status_sender: &TxStatusChange,
         height: &BlockHeight,
         transactions: &[TxId],
-        // spend_outputs: [Input], added_outputs: [AddedOutputs]
     ) {
         for tx_id in transactions {
             let tx_id = *tx_id;

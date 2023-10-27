@@ -35,7 +35,7 @@ const MAX_RESPONSE_SIZE_STR: &str = const_format::formatcp!("{MAX_RESPONSE_SIZE}
 
 #[derive(Debug, Clone, Args)]
 pub struct P2PArgs {
-    /// Enable P2P. By default, P2P is disabled, even when the binary is compiled with the "p2p"
+    /// Enable P2P. By default, P2P is disabled, even when the binary is compiled with the "P2P"
     /// feature flag. Providing `--enable-p2p` will enable the P2P service.
     #[clap(long = "enable-p2p", action)]
     pub enable_p2p: bool,
@@ -46,13 +46,13 @@ pub struct P2PArgs {
     #[arg(requires_if(IsPresent, "enable_p2p"))]
     pub keypair: Option<KeypairArg>,
 
-    /// The name of the p2p Network
+    /// The name of the P2P Network
     #[clap(long = "network", env)]
     #[arg(required_if_eq("enable_p2p", "true"))]
     #[arg(requires_if(IsPresent, "enable_p2p"))]
     pub network: Option<String>,
 
-    /// p2p network's IP Address
+    /// P2P network's IP Address
     #[clap(long = "address", env)]
     pub address: Option<IpAddr>,
 
@@ -60,7 +60,7 @@ pub struct P2PArgs {
     #[clap(long = "public-address", env)]
     pub public_address: Option<Multiaddr>,
 
-    /// p2p network's TCP Port
+    /// P2P network's TCP Port
     #[clap(long = "peering-port", default_value = "30333", env)]
     pub peering_port: u16,
 
@@ -73,12 +73,12 @@ pub struct P2PArgs {
     pub max_headers_per_request: u32,
 
     /// Addresses of the bootstrap nodes
-    /// They should contain PeerId within their `Multiaddr`
+    /// They should contain `PeerId` within their `Multiaddr`
     #[clap(long = "bootstrap-nodes", value_delimiter = ',', env)]
     pub bootstrap_nodes: Vec<Multiaddr>,
 
     /// Addresses of the reserved nodes
-    /// They should contain PeerId within their `Multiaddr`
+    /// They should contain `PeerId` within their `Multiaddr`
     #[clap(long = "reserved-nodes", value_delimiter = ',', env)]
     pub reserved_nodes: Vec<Multiaddr>,
 
@@ -101,14 +101,14 @@ pub struct P2PArgs {
     #[clap(long = "max-connections-per-peer", default_value = "3", env)]
     pub max_connections_per_peer: u32,
 
-    /// Set the delay between random walks for p2p node discovery in seconds.
+    /// Set the delay between random walks for P2P node discovery in seconds.
     /// If it's not set the random walk will be disabled.
     /// Also if `reserved_nodes_only_mode` is set to `true`,
     /// the random walk will be disabled.
     #[clap(long = "random-walk", default_value = "0", env)]
     pub random_walk: u64,
 
-    /// Choose to include private IPv4/IPv6 addresses as discoverable
+    /// Choose to include private `IPv4`/`IPv6` addresses as discoverable
     /// except for the ones stored in `bootstrap_nodes`
     #[clap(long = "allow-private-addresses", env)]
     pub allow_private_addresses: bool,
@@ -117,7 +117,7 @@ pub struct P2PArgs {
     #[clap(long = "connection-idle-timeout", default_value = "120", env)]
     pub connection_idle_timeout: u64,
 
-    /// Choose how often to receive PeerInfo from other nodes
+    /// Choose how often to receive `PeerInfo` from other nodes
     #[clap(long = "info-interval", default_value = "3", env)]
     pub info_interval: u64,
 
@@ -154,11 +154,11 @@ pub struct P2PArgs {
     #[clap(long = "max-transmit-size", default_value = MAX_RESPONSE_SIZE_STR, env)]
     pub max_transmit_size: usize,
 
-    /// Choose timeout for sent requests in RequestResponse protocol
+    /// Choose timeout for sent requests in `RequestResponse` protocol
     #[clap(long = "request-timeout", default_value = "20", env)]
     pub request_timeout: u64,
 
-    /// Choose how long RequestResponse protocol connections will live if idle
+    /// Choose how long `RequestResponse` protocol connections will live if idle
     #[clap(long = "connection-keep-alive", default_value = "20", env)]
     pub connection_keep_alive: u64,
 
@@ -208,7 +208,7 @@ pub enum KeypairArg {
 impl KeypairArg {
     pub fn try_from_string(s: &str) -> anyhow::Result<KeypairArg> {
         // first try to parse as inline secret
-        // then try to parse as a pathbuf
+        // then try to parse as a `Pathbuf`
 
         let secret = SecretKey::from_str(s);
         if let Ok(secret) = secret {

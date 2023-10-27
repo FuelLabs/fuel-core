@@ -1,4 +1,4 @@
-// Rust isn't smart enough to detect cross module test deps
+// Rust isn't smart enough to detect cross module test dependencies
 #![allow(dead_code)]
 
 use crate::MockDb;
@@ -35,7 +35,7 @@ use fuel_core_types::{
     fuel_vm::checked_transaction::EstimatePredicates,
 };
 
-// use some arbitrary large amount, this shouldn't affect the txpool logic except for covering
+// use some arbitrary large amount, this shouldn't affect the TxPool logic except for covering
 // the byte and gas price fees.
 pub const TEST_COIN_AMOUNT: u64 = 100_000_000u64;
 

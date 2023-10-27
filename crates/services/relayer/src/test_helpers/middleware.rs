@@ -165,7 +165,7 @@ impl Default for MockMiddleware {
 #[derive(Error, Debug)]
 /// Thrown when an error happens at the Nonce Manager
 pub enum MockMiddlewareError {
-    /// Thrown when the internal middleware errors
+    /// Thrown when the internal middle ware errors
     #[error("Test")]
     MiddlewareError(),
     #[error("Internal error")]
@@ -238,7 +238,7 @@ impl Middleware for MockMiddleware {
         self.inner.as_ref().as_ref().unwrap()
     }
 
-    /// Needs for initial sync of relayer
+    /// Needs for initial sync of Relayer
     async fn syncing(&self) -> Result<SyncingStatus, Self::Error> {
         tokio::task::yield_now().await;
         self.before_event(TriggerType::Syncing);
@@ -247,7 +247,7 @@ impl Middleware for MockMiddleware {
         r
     }
 
-    /// Used in initial sync to get current best eth block
+    /// Used in initial sync to get current best Ethereum block
     async fn get_block_number(&self) -> Result<U64, Self::Error> {
         tokio::task::yield_now().await;
         let this = self;

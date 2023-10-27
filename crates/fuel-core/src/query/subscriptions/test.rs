@@ -39,17 +39,17 @@ use proptest::{
 };
 use test_strategy::*;
 
-/// Returns a Transaction ID value from a u8
+/// Returns a Transaction ID value from a `u8`
 fn txn_id(i: u8) -> Bytes32 {
     [i; 32].into()
 }
 
-/// Returns a TransactionStatus with Submitted status and time set to 0
+/// Returns a `TransactionStatus` with Submitted status and time set to 0
 fn submitted() -> TransactionStatus {
     TransactionStatus::Submitted { time: Tai64(0) }
 }
 
-/// Returns a TransactionStatus with Success status, time set to 0, and result set to None
+/// Returns a `TransactionStatus` with Success status, time set to 0, and result set to None
 fn success() -> TransactionStatus {
     TransactionStatus::Success {
         block_id: Default::default(),
@@ -58,7 +58,7 @@ fn success() -> TransactionStatus {
     }
 }
 
-/// Returns a TransactionStatus with Failed status, time set to 0, result set to None, and empty reason
+/// Returns a `TransactionStatus` with Failed status, time set to 0, result set to None, and empty reason
 fn failed() -> TransactionStatus {
     TransactionStatus::Failed {
         block_id: Default::default(),
@@ -68,7 +68,7 @@ fn failed() -> TransactionStatus {
     }
 }
 
-/// Returns a TransactionStatus with SqueezedOut status and an empty error message
+/// Returns a `TransactionStatus` with `SqueezedOut` status and an empty error message
 fn squeezed() -> TransactionStatus {
     TransactionStatus::SqueezedOut {
         reason: fuel_core_txpool::Error::SqueezedOut(String::new()).to_string(),
@@ -77,7 +77,7 @@ fn squeezed() -> TransactionStatus {
 
 /// Represents the different status that a transaction can have.
 /// Submitted represents the initial status of the transaction,
-/// in which it has been sent to the txpool but has not yet been included into a block.
+/// in which it has been sent to the TxPool but has not yet been included into a block.
 /// Final indicates that the transaction has reached one of the final statuses (Success, Squeezed, or Failed).
 #[derive(Debug, Clone, PartialEq, Eq, Arbitrary)]
 enum TxStatus {
@@ -92,24 +92,24 @@ enum TxStatus {
 enum FinalTxStatus {
     /// The transaction was successfully included in a block.
     Success,
-    /// The transaction was squeezed out of the txpool (or block)
+    /// The transaction was squeezed out of the TxPool (or block)
     /// because it was not valid to include in the block.
     Squeezed,
     /// The transaction failed to execute and was included in a block.
     Failed,
 }
 
-/// Strategy to generate an Option<TransactionStatus>
+/// Strategy to generate an `Option<TransactionStatus>`
 fn state() -> impl Strategy<Value = Option<TransactionStatus>> {
     prop::option::of(transaction_status())
 }
 
-/// Strategy to generate a Result<Option<TransactionStatus>, Error>
+/// Strategy to generate a `Result<Option<TransactionStatus>, Error>`
 fn state_result() -> impl Strategy<Value = Result<Option<TransactionStatus>, Error>> {
     prop::result::maybe_ok(state(), Just(Error))
 }
 
-/// Strategy to generate a TxStatusMessage
+/// Strategy to generate a `TxStatusMessage`
 fn tx_status_message() -> impl Strategy<Value = TxStatusMessage> {
     prop_oneof![
         Just(TxStatusMessage::FailedStatus),
@@ -117,7 +117,7 @@ fn tx_status_message() -> impl Strategy<Value = TxStatusMessage> {
     ]
 }
 
-/// Strategy to generate a TransactionStatus
+/// Strategy to generate a `TransactionStatus`
 fn transaction_status() -> impl Strategy<Value = TransactionStatus> {
     prop_oneof![
         Just(submitted()),
@@ -127,12 +127,12 @@ fn transaction_status() -> impl Strategy<Value = TransactionStatus> {
     ]
 }
 
-/// Strategy to generate a Vec<TxStatusMessage> of length 0 to 5
+/// Strategy to generate a `Vec<TxStatusMessage>` of length 0 to 5
 fn input_stream() -> impl Strategy<Value = Vec<TxStatusMessage>> {
     prop::collection::vec(tx_status_message(), 0..=5)
 }
 
-/// Represents all errors the transaction_status_change function can return.
+/// Represents all errors the `transaction_status_change` function can return.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Arbitrary)]
 struct Error;
 
@@ -205,7 +205,7 @@ fn next_state(state: TransactionStatus) -> Flow {
     }
 }
 
-// Thread-local to reuse a tokio Runtime
+// Thread-local to reuse a tokio runtime
 thread_local!(static RT: tokio::runtime::Runtime =
     tokio::runtime::Builder::new_current_thread()
         .enable_all()
@@ -213,7 +213,7 @@ thread_local!(static RT: tokio::runtime::Runtime =
         .unwrap()
 );
 
-/// Property-based test for transaction_status_change
+/// Property-based test for `transaction_status_change`
 #[proptest]
 fn test_tsc(
     #[strategy(state_result())] state: Result<Option<TransactionStatus>, Error>,
@@ -222,7 +222,7 @@ fn test_tsc(
     test_tsc_inner(state, stream)
 }
 
-/// Helper function called by test_tsc to actually run the tests
+/// Helper function called by `test_tsc` to actually run the tests
 fn test_tsc_inner(
     state: Result<Option<TransactionStatus>, Error>,
     stream: Vec<TxStatusMessage>,

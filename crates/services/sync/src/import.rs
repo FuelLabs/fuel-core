@@ -95,7 +95,7 @@ pub struct Import<P, E, C> {
 
 impl<P, E, C> Import<P, E, C> {
     /// Configure an import behavior from a shared state, configuration and
-    /// services that can be executed by an ImportTask.
+    /// services that can be executed by an `ImportTask`.
     pub fn new(
         state: SharedMutex<State>,
         notify: Arc<Notify>,

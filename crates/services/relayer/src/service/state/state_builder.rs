@@ -11,7 +11,7 @@ pub trait EthRemote {
 
 #[async_trait]
 pub trait EthLocal {
-    /// The current finalized eth block that the relayer has seen.
+    /// The current finalized Ethereum block that the relayer has seen.
     fn observed(&self) -> Option<u64>;
 }
 

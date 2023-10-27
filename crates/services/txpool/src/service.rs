@@ -378,7 +378,7 @@ where
                 Ok(_) => {
                     let result = self.p2p.broadcast_transaction(tx.clone());
                     if let Err(e) = result {
-                        // It can be only in the case of p2p being down or requests overloading it.
+                        // It can be only in the case of P2P being down or requests overloading it.
                         tracing::error!(
                             "Unable to broadcast transaction, got an {} error",
                             e
@@ -458,7 +458,7 @@ where
                 number_of_active_subscription,
                 // The connection should be closed automatically after the `SqueezedOut` event.
                 // But because of slow/malicious consumers, the subscriber can still be occupied.
-                // We allow the subscriber to receive the event produced by TxPool's TTL.
+                // We allow the subscriber to receive the event produced by `TxPool`'s TTL.
                 // But we still want to drop subscribers after `2 * TxPool_TTL`.
                 2 * config.transaction_ttl,
             ),

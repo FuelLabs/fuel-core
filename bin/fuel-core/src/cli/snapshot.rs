@@ -28,7 +28,7 @@ pub enum SubCommands {
     /// Creates a snapshot of the entire database and produces a chain config.
     #[command(arg_required_else_help = true)]
     Everything {
-        /// Specify either an alias to a built-in configuration or filepath to a JSON file.
+        /// Specify either an alias to a built-in configuration or file path to a JSON file.
         #[clap(name = "CHAIN_CONFIG", long = "chain", default_value = "local_testnet")]
         chain_config: String,
     },

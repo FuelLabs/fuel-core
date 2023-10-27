@@ -168,7 +168,7 @@ impl TxQuery {
         before: Option<String>,
     ) -> async_graphql::Result<Connection<TxPointer, Transaction, EmptyFields, EmptyFields>>
     {
-        // Rocksdb doesn't support reverse iteration over a prefix
+        // RocksDB doesn't support reverse iteration over a prefix
         if matches!(last, Some(last) if last > 0) {
             return Err(
                 anyhow!("reverse pagination isn't supported for this resource").into(),
@@ -242,7 +242,7 @@ impl TxMutation {
         &self,
         ctx: &Context<'_>,
         tx: HexString,
-        // If set to false, disable input utxo validation, overriding the configuration of the node.
+        // If set to false, disable input UTXO validation, overriding the configuration of the node.
         // This allows for non-existent inputs to be used without signature validation
         // for read-only calls.
         utxo_validation: Option<bool>,

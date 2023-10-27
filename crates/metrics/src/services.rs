@@ -11,7 +11,7 @@ use std::{
     },
 };
 
-/// The statistic of the service life cycle.
+/// The statistic of the service lifecycle.
 #[derive(Default, Debug)]
 pub struct ServiceLifecycle {
     /// The time spent for real actions by the service.

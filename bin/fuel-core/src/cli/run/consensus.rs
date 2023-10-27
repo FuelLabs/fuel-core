@@ -15,7 +15,7 @@ pub struct PoATriggerArgs {
     interval: Interval,
 }
 
-// Convert from arg struct to PoATrigger enum
+// Convert from argument struct to `PoATrigger` enum
 impl From<PoATriggerArgs> for PoATrigger {
     fn from(value: PoATriggerArgs) -> Self {
         match value {
@@ -40,7 +40,7 @@ impl From<PoATriggerArgs> for PoATrigger {
 struct Instant {
     /// Use instant block production mode.
     /// Newly submitted txs will immediately trigger the production of the next block.
-    /// Cannot be combined with other poa flags.
+    /// Cannot be combined with other PoA flags.
     #[arg(long = "poa-instant", default_value = "true", value_parser, env)]
     instant: Boolean,
 }
@@ -57,8 +57,8 @@ enum Boolean {
 )]
 struct Interval {
     /// Interval trigger option.
-    /// Produces blocks on a fixed interval regardless of txpool activity.
-    /// Cannot be combined with other poa flags.
+    /// Produces blocks on a fixed interval regardless of TxPool activity.
+    /// Cannot be combined with other PoA flags.
     #[clap(long = "poa-interval-period", env)]
     pub period: Option<Duration>,
 }

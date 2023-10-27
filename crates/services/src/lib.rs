@@ -15,11 +15,11 @@ pub mod stream {
         Stream,
     };
 
-    /// A Send + Sync BoxStream
+    /// A `Send` + `Sync` `BoxStream`
     pub type BoxStream<T> =
         core::pin::Pin<Box<dyn Stream<Item = T> + Send + Sync + 'static>>;
 
-    /// A Send + Sync BoxFuture
+    /// A `Send` + `Sync` `BoxFuture`
     pub type BoxFuture<'a, T> =
         core::pin::Pin<Box<dyn futures::Future<Output = T> + Send + Sync + 'a>>;
 
