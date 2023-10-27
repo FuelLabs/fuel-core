@@ -15,7 +15,7 @@ use std::str::FromStr;
 #[derive(Debug, Clone, Args)]
 pub struct RelayerArgs {
     /// Enable the Relayer. By default, the Relayer is disabled, even when the binary is compiled
-    /// with the "Relayer" feature flag. Providing `--enable-relayer` will enable the Relayer
+    /// with the `relayer` feature flag. Providing `--enable-relayer` will enable the Relayer
     /// service.
     #[clap(long = "enable-relayer", action)]
     pub enable_relayer: bool,

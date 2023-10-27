@@ -964,18 +964,12 @@ where
         let (used_gas, tx_fee) =
             self.total_fee_paid(min_fee, max_fee, tx.price(), &receipts)?;
 
-        // Check or set the executed transaction.
-        match execution_kind {
-            ExecutionKind::Validation => {
-                // ensure tx matches VM output exactly
-                if &tx != checked_tx.transaction() {
-                    return Err(ExecutorError::InvalidTransactionOutcome {
-                        transaction_id: tx_id,
-                    })
-                }
-            }
-            ExecutionKind::DryRun | ExecutionKind::Production => {
-                // malleable the block with the resultant tx from the VM
+        // Ensure tx matches vm output exactly
+        if let ExecutionKind::Validation = execution_kind {
+            if &tx != checked_tx.transaction() {
+                return Err(ExecutorError::InvalidTransactionOutcome {
+                    transaction_id: tx_id,
+                })
             }
         }
 
