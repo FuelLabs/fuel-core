@@ -77,6 +77,8 @@ impl RocksDb {
             opts.set_row_cache(&cache);
         }
 
+        DB::repair(&opts, &path).map_err(|e| DatabaseError::Other(e.into()))?;
+
         let db = match DB::open_cf_descriptors(&opts, &path, cf_descriptors) {
             Err(_) => {
                 // setup cfs
@@ -390,7 +392,17 @@ impl BatchOperations for RocksDb {
     }
 }
 
-impl TransactableStorage for RocksDb {}
+impl TransactableStorage for RocksDb {
+    fn flush(&self) -> DatabaseResult<()> {
+        self.db
+            .flush_wal(true)
+            .map_err(|e| anyhow::anyhow!("Unable to flush WAL file: {}", e))?;
+        self.db
+            .flush()
+            .map_err(|e| anyhow::anyhow!("Unable to flush SST files: {}", e))?;
+        Ok(())
+    }
+}
 
 #[cfg(test)]
 mod tests {
