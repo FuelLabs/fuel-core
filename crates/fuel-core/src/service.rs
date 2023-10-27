@@ -68,7 +68,6 @@ impl FuelService {
     #[tracing::instrument(skip_all, fields(name = %config.name))]
     pub fn new(database: Database, config: Config) -> anyhow::Result<Self> {
         let config = config.make_config_consistent();
-        database.init(&config.chain_conf)?;
         let task = Task::new(database, config)?;
         let runner = ServiceRunner::new(task);
         let shared = runner.shared.clone();
@@ -93,6 +92,11 @@ impl FuelService {
                     );
                     Database::default()
                 } else {
+                    tracing::info!(
+                        "Opening database {:?} with cache size \"{}\"",
+                        config.database_path,
+                        config.max_database_cache_size
+                    );
                     Database::open(&config.database_path, config.max_database_cache_size)?
                 }
             }
@@ -182,9 +186,12 @@ impl Task {
     /// Private inner method for initializing the fuel service task
     pub fn new(database: Database, config: Config) -> anyhow::Result<Task> {
         // initialize state
+        tracing::info!("Initializing database");
+        database.init(&config.chain_conf)?;
         genesis::maybe_initialize_state(&config, &database)?;
 
         // initialize sub services
+        tracing::info!("Initializing sub services");
         let (services, shared) = sub_services::init_sub_services(&config, &database)?;
         Ok(Task { services, shared })
     }
@@ -251,6 +258,7 @@ impl RunnableTask for Task {
                 );
             }
         }
+        self.shared.database.flush()?;
         Ok(())
     }
 }

@@ -86,7 +86,9 @@ pub enum WriteOperation {
     Remove,
 }
 
-pub trait TransactableStorage: BatchOperations + Debug + Send + Sync {}
+pub trait TransactableStorage: BatchOperations + Debug + Send + Sync {
+    fn flush(&self) -> DatabaseResult<()>;
+}
 
 pub mod in_memory;
 #[cfg(feature = "rocksdb")]
