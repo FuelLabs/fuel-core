@@ -72,11 +72,14 @@ pub async fn exec(command: Command) -> anyhow::Result<()> {
     let db = Database::new(std::sync::Arc::new(data_source));
 
     match command.subcommand {
-        SubCommands::Everything { chain_config, output_dir } => {
+        SubCommands::Everything {
+            chain_config,
+            output_dir,
+        } => {
             let chain_params: ChainConfig = chain_config.parse()?;
             let chain_state = StateConfig::generate_state_config(db)?;
 
-            //let stdout = std::io::stdout().lock();
+            // let stdout = std::io::stdout().lock();
             std::fs::create_dir_all(output_dir)?;
             let parameters_writer = File::create("chain_parameters.json")?;
             let state_writer = File::create("chain_state.json")?;

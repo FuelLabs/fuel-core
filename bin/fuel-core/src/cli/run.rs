@@ -14,7 +14,9 @@ use clap::Parser;
 use fuel_core::{
     chain_config::{
         default_consensus_dev_key,
-        ChainConfig, StateConfig, LOCAL_TESTNET,
+        ChainConfig,
+        StateConfig,
+        LOCAL_TESTNET,
     },
     producer::Config as ProducerConfig,
     service::{
@@ -253,9 +255,7 @@ impl Command {
 
         let chain_conf: ChainConfig = chain_config.as_str().parse()?;
         let (chain_params, chain_state) = match chain_config.as_str() {
-            LOCAL_TESTNET => {
-                (ChainConfig::local_testnet(), StateConfig::local_testnet())
-            }
+            LOCAL_TESTNET => (ChainConfig::local_testnet(), StateConfig::local_testnet()),
             _ => {
                 let chain_conf = ChainConfig::load_from_file(&chain_config)?;
                 let chain_state = StateConfig::load_from_file(&chain_config)?;

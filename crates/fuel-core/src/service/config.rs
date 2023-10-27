@@ -1,7 +1,8 @@
 use clap::ValueEnum;
 use fuel_core_chain_config::{
     default_consensus_dev_key,
-    ChainConfig, StateConfig,
+    ChainConfig,
+    StateConfig,
 };
 use fuel_core_types::{
     blockchain::primitives::SecretKeyWrapper,

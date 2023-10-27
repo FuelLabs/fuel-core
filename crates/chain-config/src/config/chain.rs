@@ -1,5 +1,4 @@
 use core::str::FromStr;
-use std::path::Path;
 use fuel_core_storage::MerkleRoot;
 use fuel_core_types::{
     fuel_crypto::Hasher,
@@ -21,6 +20,7 @@ use serde_with::{
     serde_as,
     skip_serializing_none,
 };
+use std::path::Path;
 #[cfg(feature = "std")]
 use std::{
     io::ErrorKind,

@@ -60,10 +60,7 @@ where
     ) -> anyhow::Result<()> {
         match consensus {
             Consensus::Genesis(_) => {
-                let expected_genesis_height = self
-                    .config
-                    .chain_params
-                    .height;
+                let expected_genesis_height = self.config.chain_params.height;
                 verify_genesis_block_fields(expected_genesis_height, block.header())
             }
             Consensus::PoA(_) => {

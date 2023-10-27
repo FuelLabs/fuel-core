@@ -1,13 +1,27 @@
-use std::{str::FromStr, path::Path};
 use bech32::{
     ToBase32,
     Variant::Bech32m,
 };
+use std::{
+    path::Path,
+    str::FromStr,
+};
 
-use crate::{FUEL_BECH32_HRP, TESTNET_INITIAL_BALANCE};
+use crate::{
+    FUEL_BECH32_HRP,
+    TESTNET_INITIAL_BALANCE,
+};
 
 use fuel_core_storage::Result as StorageResult;
-use fuel_core_types::{fuel_types::{BlockHeight, Address, Bytes32}, fuel_vm::SecretKey, fuel_tx::UtxoId};
+use fuel_core_types::{
+    fuel_tx::UtxoId,
+    fuel_types::{
+        Address,
+        BlockHeight,
+        Bytes32,
+    },
+    fuel_vm::SecretKey,
+};
 
 use itertools::Itertools;
 use serde::{
@@ -155,10 +169,31 @@ pub trait ChainConfigDb {
 
 #[cfg(test)]
 mod tests {
-    use fuel_core_types::{fuel_types::{Bytes32, AssetId}, fuel_tx::{UtxoId, TxPointer}, fuel_vm::Contract, fuel_asm::op, blockchain::primitives::DaBlockHeight};
-    use rand::{rngs::StdRng, SeedableRng, Rng, RngCore};
+    use fuel_core_types::{
+        blockchain::primitives::DaBlockHeight,
+        fuel_asm::op,
+        fuel_tx::{
+            TxPointer,
+            UtxoId,
+        },
+        fuel_types::{
+            AssetId,
+            Bytes32,
+        },
+        fuel_vm::Contract,
+    };
+    use rand::{
+        rngs::StdRng,
+        Rng,
+        RngCore,
+        SeedableRng,
+    };
 
-    use crate::{ContractConfig, CoinConfig, MessageConfig};
+    use crate::{
+        CoinConfig,
+        ContractConfig,
+        MessageConfig,
+    };
 
     use super::StateConfig;
 
@@ -309,19 +344,19 @@ mod tests {
         let contract = Contract::from(op::ret(0x10).to_bytes().to_vec());
 
         StateConfig {
-                contracts: Some(vec![ContractConfig {
-                    contract_id: Default::default(),
-                    code: contract.into(),
-                    salt: Default::default(),
-                    state,
-                    balances,
-                    tx_id: utxo_id.map(|utxo_id| *utxo_id.tx_id()),
-                    output_index: utxo_id.map(|utxo_id| utxo_id.output_index()),
-                    tx_pointer_block_height: tx_pointer.map(|p| p.block_height()),
-                    tx_pointer_tx_idx: tx_pointer.map(|p| p.tx_index()),
-                }]),
-                ..Default::default()
-            }
+            contracts: Some(vec![ContractConfig {
+                contract_id: Default::default(),
+                code: contract.into(),
+                salt: Default::default(),
+                state,
+                balances,
+                tx_id: utxo_id.map(|utxo_id| *utxo_id.tx_id()),
+                output_index: utxo_id.map(|utxo_id| utxo_id.output_index()),
+                tx_pointer_block_height: tx_pointer.map(|p| p.block_height()),
+                tx_pointer_tx_idx: tx_pointer.map(|p| p.tx_index()),
+            }]),
+            ..Default::default()
+        }
     }
 
     fn test_config_coin_state() -> StateConfig {
@@ -336,33 +371,33 @@ mod tests {
         let asset_id = rng.gen();
 
         StateConfig {
-                coins: Some(vec![CoinConfig {
-                    tx_id,
-                    output_index,
-                    tx_pointer_block_height: block_created,
-                    tx_pointer_tx_idx: block_created_tx_idx,
-                    maturity,
-                    owner,
-                    amount,
-                    asset_id,
-                }]),
-                ..Default::default()
-            }
+            coins: Some(vec![CoinConfig {
+                tx_id,
+                output_index,
+                tx_pointer_block_height: block_created,
+                tx_pointer_tx_idx: block_created_tx_idx,
+                maturity,
+                owner,
+                amount,
+                asset_id,
+            }]),
+            ..Default::default()
+        }
     }
 
     fn test_message_config() -> StateConfig {
         let mut rng = StdRng::seed_from_u64(1);
 
         StateConfig {
-                messages: Some(vec![MessageConfig {
-                    sender: rng.gen(),
-                    recipient: rng.gen(),
-                    nonce: rng.gen(),
-                    amount: rng.gen(),
-                    data: vec![rng.gen()],
-                    da_height: DaBlockHeight(rng.gen()),
-                }]),
-                ..Default::default()
-            }
+            messages: Some(vec![MessageConfig {
+                sender: rng.gen(),
+                recipient: rng.gen(),
+                nonce: rng.gen(),
+                amount: rng.gen(),
+                data: vec![rng.gen()],
+                da_height: DaBlockHeight(rng.gen()),
+            }]),
+            ..Default::default()
+        }
     }
 }

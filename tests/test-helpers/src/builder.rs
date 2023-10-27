@@ -186,7 +186,10 @@ impl TestSetupBuilder {
             height: self.starting_block,
             ..ChainConfig::local_testnet()
         };
-        chain_parameters.consensus_parameters.tx_params.max_gas_per_tx = self.gas_limit;
+        chain_parameters
+            .consensus_parameters
+            .tx_params
+            .max_gas_per_tx = self.gas_limit;
         chain_parameters.block_gas_limit = self.gas_limit;
 
         let chain_state = StateConfig {

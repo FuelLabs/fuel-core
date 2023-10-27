@@ -21,7 +21,11 @@ mod tests {
         path::PathBuf,
     };
 
-    use rand::{rngs::StdRng, SeedableRng, RngCore};
+    use rand::{
+        rngs::StdRng,
+        RngCore,
+        SeedableRng,
+    };
 
     use super::chain::ChainConfig;
 

@@ -408,8 +408,11 @@ pub async fn check_single_tx(
 
         tx
     } else {
-        tx.into_checked_basic(current_height, &config.chain_parameters.consensus_parameters)
-            .map_err(|e| anyhow::anyhow!("{e:?}"))?
+        tx.into_checked_basic(
+            current_height,
+            &config.chain_parameters.consensus_parameters,
+        )
+        .map_err(|e| anyhow::anyhow!("{e:?}"))?
     };
 
     Ok(tx)
