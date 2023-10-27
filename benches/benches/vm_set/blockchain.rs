@@ -5,6 +5,8 @@ use std::{
     sync::Arc,
 };
 
+use crate::utils::make_receipts;
+
 use super::run_group_ref;
 
 use criterion::{
@@ -23,17 +25,13 @@ use fuel_core_types::{
         RegId,
     },
     fuel_tx::{
-        self,
         ContractIdExt,
         Input,
         Output,
         Word,
     },
     fuel_types::*,
-    fuel_vm::{
-        consts::*,
-        interpreter::ReceiptsCtx,
-    },
+    fuel_vm::consts::*,
 };
 use rand::{
     rngs::StdRng,
@@ -138,18 +136,7 @@ pub fn run(c: &mut Criterion) {
 
     let db = BenchDb::new(&contract).expect("Unable to fill contract storage");
 
-    let mut receipts_ctx = ReceiptsCtx::default();
-    for _ in 0..10_000 {
-        receipts_ctx.push(fuel_tx::Receipt::Log {
-            id: ContractId::zeroed(),
-            ra: 1,
-            rb: 2,
-            rc: 3,
-            rd: 4,
-            pc: 5,
-            is: 6,
-        });
-    }
+    let receipts_ctx = make_receipts(rng);
 
     run_group_ref(
         &mut c.benchmark_group("bal"),
@@ -272,7 +259,8 @@ pub fn run(c: &mut Criterion) {
                 .with_db(db.checkpoint())
                 .with_contract_code(code)
                 .with_data(data)
-                .with_prepare_script(prepare_script),
+                .with_prepare_script(prepare_script)
+                .set_call_receipts(receipts_ctx.clone()),
         );
     }
 
@@ -418,7 +406,8 @@ pub fn run(c: &mut Criterion) {
             db.checkpoint(),
             op::mint(RegId::ONE, RegId::ZERO),
         )
-        .expect("failed to prepare contract"),
+        .expect("failed to prepare contract")
+        .set_call_receipts(receipts_ctx.clone()),
     );
 
     run_group_ref(
@@ -427,7 +416,7 @@ pub fn run(c: &mut Criterion) {
         VmBench::contract_using_db(rng, db.checkpoint(), op::burn(RegId::ONE, RegId::HP))
             .expect("failed to prepare contract")
             .prepend_prepare_script(vec![op::movi(0x10, 32), op::aloc(0x10)])
-            .set_call_receipts(receipts_ctx),
+            .set_call_receipts(receipts_ctx.clone()),
     );
 
     run_group_ref(
@@ -443,7 +432,8 @@ pub fn run(c: &mut Criterion) {
     {
         let mut input =
             VmBench::contract_using_db(rng, db.checkpoint(), op::tr(0x15, 0x14, 0x15))
-                .expect("failed to prepare contract");
+                .expect("failed to prepare contract")
+                .set_call_receipts(receipts_ctx.clone());
         input
             .prepare_script
             .extend(vec![op::movi(0x15, 2000), op::movi(0x14, 100)]);
@@ -456,7 +446,8 @@ pub fn run(c: &mut Criterion) {
             db.checkpoint(),
             op::tro(RegId::ZERO, 0x15, 0x14, RegId::HP),
         )
-        .expect("failed to prepare contract");
+        .expect("failed to prepare contract")
+        .set_call_receipts(receipts_ctx.clone());
         let coin_output = Output::variable(Address::zeroed(), 100, AssetId::zeroed());
         input.outputs.push(coin_output);
         let predicate = op::ret(RegId::ONE).to_bytes().to_vec();
@@ -527,7 +518,8 @@ pub fn run(c: &mut Criterion) {
             db.checkpoint(),
             op::smo(0x15, 0x16, 0x17, 0x18),
         )
-        .expect("failed to prepare contract");
+        .expect("failed to prepare contract")
+        .set_call_receipts(receipts_ctx.clone());
         input.post_call.extend(vec![
             op::gtf_args(0x15, 0x00, GTFArgs::ScriptData),
             // Offset 32 + 8 + 8 + 32
