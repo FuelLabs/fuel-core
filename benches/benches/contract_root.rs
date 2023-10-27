@@ -21,13 +21,13 @@ fn random_bytes<const N: usize, R: Rng + ?Sized>(rng: &mut R) -> Box<[u8; N]> {
     bytes
 }
 
-fn contract_root_from_code(c: &mut Criterion) {
+pub fn contract_root(c: &mut Criterion) {
     let rng = &mut StdRng::seed_from_u64(8586);
 
     let mut group = c.benchmark_group("contract_root");
 
     let bytes = random_bytes::<MAX_CONTRACT_SIZE, _>(rng);
-    group.bench_function("root-from-set", |b| {
+    group.bench_function("root_from_bytecode", |b| {
         b.iter(|| {
             let contract = Contract::from(bytes.as_slice());
             contract.root();
@@ -36,6 +36,3 @@ fn contract_root_from_code(c: &mut Criterion) {
 
     group.finish();
 }
-
-criterion_group!(benches, contract_root_from_code);
-criterion_main!(benches);

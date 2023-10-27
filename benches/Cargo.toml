@@ -51,7 +51,3 @@ name = "block_target_gas"
 [[bench]]
 harness = false
 name = "transaction_throughput"
-
-[[bench]]
-harness = false
-name = "contract_root"

@@ -1,3 +1,4 @@
+mod contract_root;
 mod utils;
 mod vm_set;
 
@@ -11,6 +12,7 @@ use criterion::{
 };
 use std::time::Duration;
 
+use contract_root::*;
 use fuel_core_benches::*;
 use fuel_core_storage::transactional::Transaction;
 use fuel_core_types::fuel_asm::Instruction;
@@ -63,12 +65,14 @@ where
         })
     });
 }
+
 fn vm(c: &mut Criterion) {
     alu::run(c);
     blockchain::run(c);
     crypto::run(c);
     flow::run(c);
     mem::run(c);
+    contract_root(c);
 }
 
 criterion_group!(benches, vm);

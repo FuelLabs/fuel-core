@@ -34,6 +34,7 @@ impl From<TxParameters> for fuel_core_types::fuel_tx::TxParameters {
             max_outputs: params.max_outputs.into(),
             max_witnesses: params.max_witnesses.into(),
             max_gas_per_tx: params.max_gas_per_tx.into(),
+            max_size: Default::default(),
         }
     }
 }
@@ -236,6 +237,8 @@ include_from_impls_and_cynic! {
         pub smo: DependentCost,
         pub srwq: DependentCost,
         pub swwq: DependentCost,
+
+        pub contract_root: U64,
     }
 }
 
