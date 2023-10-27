@@ -458,7 +458,7 @@ where
                 number_of_active_subscription,
                 // The connection should be closed automatically after the `SqueezedOut` event.
                 // But because of slow/malicious consumers, the subscriber can still be occupied.
-                // We allow the subscriber to receive the event produced by `TxPool`'s TTL.
+                // We allow the subscriber to receive the event produced by TxPool's TTL.
                 // But we still want to drop subscribers after `2 * TxPool_TTL`.
                 2 * config.transaction_ttl,
             ),

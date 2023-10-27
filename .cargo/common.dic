@@ -62,6 +62,7 @@ keypair
 libp2p
 lifecycle
 MDNS
+malleate
 merkle
 metadata
 MMR
@@ -72,11 +73,12 @@ opcode
 P2P
 parseable
 pinnable
+performant
 PoA
 Prometheus
 Pyroscope
 RAII
-Relayer/S
+Relayer/SM
 resize
 retryable
 RFC
@@ -105,7 +107,7 @@ tokio
 transactional
 TTL
 tx
-TxPool/S
+TxPool/SM
 txs
 uncompress
 uri

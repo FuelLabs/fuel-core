@@ -68,7 +68,7 @@ impl EthSyncGap {
         Self(local, remote)
     }
 
-    /// Get the oldest block height (which will be the `Relayer`'s Ethereum block height).
+    /// Get the oldest block height (which will be the Relayer's Ethereum block height).
     pub fn oldest(&self) -> u64 {
         self.0
     }

@@ -93,7 +93,7 @@ where
         //  - select best txs based on factors like:
         //      1. fees
         //      2. parallel throughput
-        //  - Execute block with production mode to correctly malleable txs outputs and block headers
+        //  - Execute block with production mode to correctly malleate txs outputs and block headers
 
         // prevent simultaneous block production calls, the guard will drop at the end of this function.
         let _production_guard = self.lock.lock().await;
@@ -144,7 +144,7 @@ where
         // The dry run execution should use the state of the blockchain based on the
         // last available block, not on the upcoming one. It means that we need to
         // use the same configuration as the last block -> the same DA height.
-        // It is deterministic from the result perspective, plus it is more performer
+        // It is deterministic from the result perspective, plus it is more performant
         // because we don't need to wait for the Relayer to sync.
         let header = self._new_header(height, Tai64::now())?;
         let gas_limit = match &transaction {
@@ -201,7 +201,7 @@ where
         let best_height = self.relayer.wait_for_at_least(&previous_da_height).await?;
         if best_height < previous_da_height {
             // If this happens, it could mean a block was erroneously imported
-            // without waiting for our `Relayer`'s `da_height` to catch up to imported `da_height`.
+            // without waiting for our Relayer's `da_height` to catch up to imported `da_height`.
             return Err(Error::InvalidDaFinalizationState {
                 best: best_height,
                 previous_block: previous_da_height,
