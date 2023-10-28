@@ -295,6 +295,8 @@ where
                 }
             });
 
+            tracing::info!("The service {} is shut down", S::NAME);
+
             if let State::StoppedWithError(err) = stopped_state {
                 std::panic::resume_unwind(Box::new(err));
             }
@@ -325,6 +327,7 @@ async fn run<S>(
     }
 
     // We can panic here, because it is inside of the task.
+    tracing::info!("Starting {} service", S::NAME);
     let mut task = service
         .into_task(&state, params)
         .await
@@ -375,6 +378,7 @@ async fn run<S>(
         }
     }
 
+    tracing::info!("Shutting down {} service", S::NAME);
     let shutdown = std::panic::AssertUnwindSafe(task.shutdown());
     match shutdown.catch_unwind().await {
         Ok(Ok(_)) => {}
