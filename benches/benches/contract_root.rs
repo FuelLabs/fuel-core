@@ -24,8 +24,6 @@ fn random_bytes<R: Rng + ?Sized>(n: usize, rng: &mut R) -> Vec<u8> {
 pub fn contract_root(c: &mut Criterion) {
     let rng = &mut StdRng::seed_from_u64(8586);
 
-    let _x = random_bytes(32 * 5, rng);
-
     let mut group = c.benchmark_group("contract_root");
 
     // Let MAX_CONTRACT_SIZE be the maximum size of a contract's bytecode.
