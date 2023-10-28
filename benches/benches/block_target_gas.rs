@@ -44,7 +44,11 @@ use fuel_core_types::{
     },
     fuel_tx::{
         ContractIdExt,
+        Input,
+        Output,
+        TxPointer,
         UniqueIdentifier,
+        UtxoId,
     },
     fuel_types::{
         AssetId,
@@ -188,33 +192,33 @@ fn service_with_contract_id(
     config.utxo_validation = false;
     config.block_production = Trigger::Instant;
 
-    // database
-    //     .init_contract_state(
-    //         &contract_id,
-    //         (0..STATE_SIZE).map(|k| {
-    //             let mut key = Bytes32::zeroed();
-    //             key.as_mut()[..8].copy_from_slice(&k.to_be_bytes());
-    //             (key, key)
-    //         }),
-    //     )
-    //     .unwrap();
-    // database
-    //     .init_contract_balances(
-    //         &contract_id,
-    //         (0..STATE_SIZE).map(|k| {
-    //             let key = k / 2;
-    //             let mut sub_id = Bytes32::zeroed();
-    //             sub_id.as_mut()[..8].copy_from_slice(&key.to_be_bytes());
-    //
-    //             let asset = if k % 2 == 0 {
-    //                 VmBench::CONTRACT.asset_id(&sub_id)
-    //             } else {
-    //                 AssetId::new(*sub_id)
-    //             };
-    //             (asset, key + 1_000)
-    //         }),
-    //     )
-    //     .unwrap();
+    database
+        .init_contract_state(
+            &contract_id,
+            (0..STATE_SIZE).map(|k| {
+                let mut key = Bytes32::zeroed();
+                key.as_mut()[..8].copy_from_slice(&k.to_be_bytes());
+                (key, key)
+            }),
+        )
+        .unwrap();
+    database
+        .init_contract_balances(
+            &contract_id,
+            (0..STATE_SIZE).map(|k| {
+                let key = k / 2;
+                let mut sub_id = Bytes32::zeroed();
+                sub_id.as_mut()[..8].copy_from_slice(&key.to_be_bytes());
+
+                let asset = if k % 2 == 0 {
+                    VmBench::CONTRACT.asset_id(&sub_id)
+                } else {
+                    AssetId::new(*sub_id)
+                };
+                (asset, key + 1_000)
+            }),
+        )
+        .unwrap();
 
     let service = fuel_core::service::FuelService::new(database, config.clone())
         .expect("Unable to start a FuelService");
@@ -228,6 +232,7 @@ fn run_with_service(
     script: Vec<Instruction>,
     script_data: Vec<u8>,
     service: fuel_core::service::FuelService,
+    contract_id: ContractId,
     rt: tokio::runtime::Runtime,
 ) {
     let mut rng = rand::rngs::StdRng::seed_from_u64(2322u64);
@@ -238,11 +243,13 @@ fn run_with_service(
         b.to_async(&rt).iter(|| {
             let shared = service.shared.clone();
 
-            let tx = fuel_core_types::fuel_tx::TransactionBuilder::script(
+
+            let mut tx_builder = fuel_core_types::fuel_tx::TransactionBuilder::script(
                 // Infinite loop
                 script.clone().into_iter().collect(),
                 script_data.clone(),
-            )
+            );
+            tx_builder
                 .gas_limit(TARGET_BLOCK_GAS_LIMIT - BASE)
                 .gas_price(1)
                 .add_unsigned_coin_input(
@@ -252,8 +259,22 @@ fn run_with_service(
                     AssetId::BASE,
                     Default::default(),
                     Default::default(),
-                )
-                .finalize_as_transaction();
+                );
+            let input_count = tx_builder.inputs().len();
+
+            let contract_input = Input::contract(
+                UtxoId::default(),
+                Bytes32::zeroed(),
+                Bytes32::zeroed(),
+                TxPointer::default(),
+                contract_id,
+            );
+            let contract_output = Output::contract(input_count as u8, Bytes32::zeroed(), Bytes32::zeroed());
+
+            tx_builder
+                .add_input(contract_input)
+                .add_output(contract_output);
+            let tx = tx_builder.finalize_as_transaction();
             async move {
                 let tx_id = tx.id(&shared.config.chain_conf.consensus_parameters.chain_id);
 
