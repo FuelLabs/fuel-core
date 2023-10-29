@@ -4,7 +4,16 @@ use criterion::{
     Criterion,
     Throughput,
 };
-use fuel_core_types::fuel_tx::Contract;
+use fuel_core_types::{
+    fuel_tx::{
+        Contract,
+        StorageSlot,
+    },
+    fuel_types::{
+        Bytes32,
+        Salt,
+    },
+};
 use rand::{
     rngs::StdRng,
     Rng,
@@ -19,6 +28,23 @@ fn random_bytes<R: Rng + ?Sized>(n: usize, rng: &mut R) -> Vec<u8> {
     }
 
     bytes.into()
+}
+
+pub fn contract_id(c: &mut Criterion) {
+    let rng = &mut StdRng::seed_from_u64(8586);
+
+    let mut group = c.benchmark_group("contract_id");
+
+    let name = "contract_id";
+    group.bench_function(name, |b| {
+        let contract: Contract = random_bytes(1024, rng).into();
+        let salt = rng.gen::<Salt>();
+        let contract_root = rng.gen::<Bytes32>();
+        let state_root = rng.gen::<Bytes32>();
+        b.iter(|| {
+            contract.id(&salt, &contract_root, &state_root);
+        })
+    });
 }
 
 pub fn contract_root(c: &mut Criterion) {
@@ -50,5 +76,29 @@ pub fn contract_root(c: &mut Criterion) {
     group.finish();
 }
 
-criterion_group!(benches, contract_root);
+pub fn state_root(c: &mut Criterion) {
+    let rng = &mut StdRng::seed_from_u64(8586);
+
+    let mut group = c.benchmark_group("state_root");
+
+    const N: usize = 20;
+    let sizes = successors(Some(2), |n| Some(n * 2)).take(N);
+    for (i, size) in sizes.enumerate() {
+        let gen_storage_slot = || rng.gen::<StorageSlot>();
+        let storage_slots = std::iter::repeat_with(gen_storage_slot)
+            .take(size)
+            .collect::<Vec<_>>();
+        group.throughput(Throughput::Bytes(size as u64));
+        let name = format!("state_root_from_slots_2^{exp:#02}", exp = i + 1);
+        group.bench_function(name, |b| {
+            b.iter(|| {
+                Contract::initial_state_root(storage_slots.iter());
+            })
+        });
+    }
+
+    group.finish();
+}
+
+criterion_group!(benches, contract_id, contract_root, state_root);
 criterion_main!(benches);

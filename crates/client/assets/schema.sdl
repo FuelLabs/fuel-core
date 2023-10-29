@@ -387,7 +387,9 @@ type GasCosts {
 	smo: DependentCost!
 	srwq: DependentCost!
 	swwq: DependentCost!
+	contractId: U64!
 	contractRoot: DependentCost!
+	stateRoot: DependentCost!
 }
 
 type Genesis {
