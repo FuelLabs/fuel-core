@@ -16,7 +16,7 @@ pub struct Config {
 /// Config for settings the verifier needs that are related to the Relayer.
 #[derive(Clone, Debug)]
 pub struct RelayerVerifierConfig {
-    /// The maximum number of blocks that need to be synced before we start
+    /// The maximum number of blocks that need to be synchronized before we start
     /// awaiting Relayer syncing.
     pub max_da_lag: DaBlockHeight,
     /// The maximum time to wait for the Relayer to sync.

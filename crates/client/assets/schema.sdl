@@ -258,7 +258,7 @@ type DependentCost {
 
 input ExcludeInput {
 	"""
-	UTXO to exclude from the selection.
+	UTXOs to exclude from the selection.
 	"""
 	utxos: [UtxoId!]!
 	"""

@@ -371,7 +371,7 @@ mod tests {
                             SwarmEvent::Behaviour(KademliaEvent::UnroutablePeer {
                                 peer: peer_id,
                             }) => {
-                                // Kademlia discovered a peer but does not have it's address
+                                // Kademlia discovered a peer but does not have its address
                                 // we simulate Identify happening and provide the address
                                 let unroutable_peer_addr = discovery_swarms
                                     .iter()

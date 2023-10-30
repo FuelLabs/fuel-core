@@ -136,7 +136,7 @@ pub struct SpendQueryElementInput {
 
 #[derive(async_graphql::InputObject)]
 pub struct ExcludeInput {
-    /// UTXO to exclude from the selection.
+    /// UTXOs to exclude from the selection.
     utxos: Vec<UtxoId>,
     /// Messages to exclude from the selection.
     messages: Vec<Nonce>,

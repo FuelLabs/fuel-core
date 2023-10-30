@@ -16,7 +16,9 @@ use libp2p::{
         Keypair,
     },
     mplex,
-    noise::{self,},
+    noise::{
+        self,
+    },
     tcp::{
         tokio::Transport as TokioTcpTransport,
         Config as TcpConfig,
@@ -76,7 +78,7 @@ pub struct Config<State = Initialized> {
     /// Name of the Network
     pub network_name: String,
 
-    /// Checksum is a hash(sha256) of [`Genesis`](fuel_core_types::blockchain::consensus::Genesis) - chain id.
+    /// Checksum is a hash(SHA256) of [`Genesis`](fuel_core_types::blockchain::consensus::Genesis) - chain id.
     pub checksum: Checksum,
 
     /// IP address for Swarm to listen on

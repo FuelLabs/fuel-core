@@ -85,7 +85,7 @@ impl FuelService {
         let database = match config.database_type {
             #[cfg(feature = "rocksdb")]
             DbType::RocksDb => {
-                // use a default temp RocksDB if no path is provided
+                // use a default temporary RocksDB if no path is provided
                 if config.database_path.as_os_str().is_empty() {
                     warn!(
                         "No RocksDB path configured, initializing database with a tmp directory"
@@ -122,7 +122,7 @@ impl FuelService {
     /// Wait for the [`Relayer`] to be in sync with
     /// the data availability layer.
     ///
-    /// Yields until the Relayer reaches a point where it
+    /// Yields until the Relayer reaches a point where it is
     /// considered up to date. Note that there's no guarantee
     /// the Relayer will ever catch up to the DA layer and
     /// may fall behind immediately after this future completes.

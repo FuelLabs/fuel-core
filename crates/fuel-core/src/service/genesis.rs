@@ -154,7 +154,7 @@ fn init_coin_state(
     state: &Option<StateConfig>,
 ) -> anyhow::Result<MerkleRoot> {
     let mut coins_tree = binary::in_memory::MerkleTree::new();
-    // TODO: Store merkle sum tree root over coins with unspecified utxo ids.
+    // TODO: Store Merkle sum tree root over coins with unspecified utxo ids.
     let mut generated_output_index: u64 = 0;
     if let Some(state) = &state {
         if let Some(coins) = &state.coins {

@@ -165,7 +165,7 @@ impl Default for MockMiddleware {
 #[derive(Error, Debug)]
 /// Thrown when an error happens at the Nonce Manager
 pub enum MockMiddlewareError {
-    /// Thrown when the internal middle ware errors
+    /// Thrown when the internal middleware errors
     #[error("Test")]
     MiddlewareError(),
     #[error("Internal error")]

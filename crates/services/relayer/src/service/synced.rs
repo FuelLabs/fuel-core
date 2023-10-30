@@ -10,7 +10,7 @@ use super::{
     NotifySynced,
 };
 
-/// Notify the handle if the state is synced with the DA layer.
+/// Notify the handle if the state is synchronized with the DA layer.
 pub fn update_synced(synced: &NotifySynced, state: &EthState) {
     update_synced_inner(synced, state.is_synced_at())
 }

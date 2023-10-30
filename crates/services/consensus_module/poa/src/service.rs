@@ -426,7 +426,7 @@ where
 {
     async fn run(&mut self, watcher: &mut StateWatcher) -> anyhow::Result<bool> {
         let should_continue;
-        // make sure we're synced first
+        // make sure we're synchronized first
         while *self.sync_task_handle.shared.borrow() == SyncState::NotSynced {
             tokio::select! {
                 biased;
@@ -464,7 +464,7 @@ where
                     unreachable!("The task is the holder of the `Sender` too")
                 }
             }
-            // TODO: This should likely be re-factored to use something like tokio::sync::Notify.
+            // TODO: This should likely be refactored to use something like tokio::sync::Notify.
             //       Otherwise, if a bunch of txs are submitted at once and all the txs are included
             //       into the first block production trigger, we'll still call the event handler
             //       for each tx after they've already been included into a block.

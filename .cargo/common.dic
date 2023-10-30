@@ -63,11 +63,13 @@ libp2p
 lifecycle
 MDNS
 malleate
-merkle
+Merkle
 metadata
+middleware
 MMR
 mplex
 mutex
+namespacing
 O_o
 opcode
 P2P
@@ -78,6 +80,7 @@ PoA
 Prometheus
 Pyroscope
 RAII
+refactored
 Relayer/SM
 resize
 retryable
@@ -88,8 +91,7 @@ runnable
 runtime
 serialization
 serialized
-sha256
-Sha256
+SHA256
 SMT
 sq_x
 startup
@@ -109,6 +111,7 @@ TTL
 tx
 TxPool/SM
 txs
+unexecuted
 uncompress
 uri
 UTXO/S

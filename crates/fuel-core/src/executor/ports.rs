@@ -41,7 +41,7 @@ pub trait TransactionsSource {
 
 pub trait RelayerPort {
     /// Get a message from the Relayer if it has been
-    /// synced and is <= the given DA height.
+    /// synchronized and is <= the given DA height.
     fn get_message(
         &self,
         id: &Nonce,

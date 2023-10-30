@@ -434,7 +434,7 @@ mod tests {
                         &BlockHeight::from(genesis_height + l as u32),
                         &BlockHeight::from(genesis_height + r as u32),
                     )
-                    .expect("Should return the merkle proof");
+                    .expect("Should return the Merkle proof");
                 assert_eq!(proof.proof_index, l as u64);
             }
         }

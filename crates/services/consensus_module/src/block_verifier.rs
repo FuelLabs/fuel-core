@@ -93,7 +93,7 @@ where
 
     /// Wait for the Relayer to be in sync with the given DA height
     /// if the `da_height` is within the range of the current
-    /// Relayer synced height - `max_da_lag`.
+    /// Relayer synchronized height - `max_da_lag`.
     pub async fn await_da_height(&self, da_height: &DaBlockHeight) -> anyhow::Result<()> {
         tokio::time::timeout(
             self.config.relayer.max_wait_time,

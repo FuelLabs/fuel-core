@@ -78,7 +78,7 @@ sequenceDiagram
 
 ## PoA Gossip-Sync Flow
 
-When a full-node is synced to the network, the synchronizer module can switch to using gossip to capture newly finalized blocks.
+When a full-node is synchronized to the network, the synchronizer module can switch to using gossip to capture newly finalized blocks.
 
 ```mermaid
 sequenceDiagram

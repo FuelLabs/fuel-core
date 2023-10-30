@@ -247,7 +247,7 @@ fn message_receipts_proof<T: MessageProofData + ?Sized>(
         .flat_map(|receipts|
             receipts.into_iter().filter_map(|r| r.message_id()));
 
-    // Build the merkle proof from the above iterator.
+    // Build the Merkle proof from the above iterator.
     let mut tree = MerkleTree::new();
 
     let mut proof_index = None;
@@ -259,14 +259,14 @@ fn message_receipts_proof<T: MessageProofData + ?Sized>(
             proof_index = Some(index as u64);
         }
 
-        // Build the merkle tree.
+        // Build the Merkle tree.
         tree.push(id.as_ref());
     }
 
     // If we found the leaf proof index then return the proof.
     match proof_index {
         Some(proof_index) => {
-            // Generate the actual merkle proof.
+            // Generate the actual Merkle proof.
             match tree.prove(proof_index) {
                 Some((_, proof_set)) => Ok(Some(MerkleProof {
                     proof_set,

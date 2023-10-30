@@ -41,7 +41,7 @@ pub type CompressedBlock = Block<TxId>;
 
 /// Fuel block with all transaction data included
 /// but without any data generated.
-/// This type can be created with non-executed
+/// This type can be created with unexecuted
 /// transactions to produce a [`Block`] or
 /// it can be created with pre-executed transactions in
 /// order to validate they were constructed correctly.

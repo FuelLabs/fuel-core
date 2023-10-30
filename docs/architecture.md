@@ -183,7 +183,7 @@ impl fuel_poa_consensus::ports::BlockProducer for Service<BlockProducer> {
 
 ```rust
 trait Relayer {
-    // wait until the relayer is synced with ethereum
+    // wait until the relayer is synchronized with ethereum
     async fn await_synced() -> Result<()>;
     // wait until a specific da_height is reached
     async fn await_da_height(da_height: DaHeight) -> Result<()>;

@@ -227,7 +227,7 @@ where
         tx_status_sender: &TxStatusChange,
         txs: Vec<Checked<Transaction>>,
     ) -> Vec<anyhow::Result<InsertionResult>> {
-        // Check if that data is okay (witness match input/output, and if recovered signatures  valid).
+        // Check if that data is okay (witness matches input/output, and recovered signatures are valid).
         // should be done before transaction comes to TxPool, or before it enters `RwLocked` region.
         let mut res = Vec::new();
 

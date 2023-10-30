@@ -252,7 +252,7 @@ impl<D> SharedState<D> {
     /// Wait for the [`Task`] to be in sync with
     /// the data availability layer.
     ///
-    /// Yields until the Relayer reaches a point where it
+    /// Yields until the Relayer reaches a point where it is
     /// considered up to date. Note that there's no guarantee
     /// the Relayer will ever catch up to the DA layer and
     /// may fall behind immediately after this future completes.

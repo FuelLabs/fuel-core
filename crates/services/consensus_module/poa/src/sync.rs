@@ -178,7 +178,7 @@ impl RunnableTask for SyncTask {
                                 has_sufficient_peers: *has_sufficient_peers
                             };
                         } else {
-                            // we considered to be synced but we're obviously not!
+                            // we considered to be synchronized but we're obviously not!
                             if *has_sufficient_peers {
                                 self.inner_state = InnerSyncState::SufficientPeers(block_info.block_header);
                                 self.restart_timer().await;

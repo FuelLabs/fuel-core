@@ -81,7 +81,7 @@ pub trait Database {
 pub trait RelayerPort {
     /// Wait for the Relayer to be in sync with the given DA height
     /// if the `da_height` is within the range of the current
-    /// Relayer synced height - `max_da_lag`.
+    /// Relayer synchronized height - `max_da_lag`.
     async fn await_until_if_in_range(
         &self,
         da_height: &DaBlockHeight,

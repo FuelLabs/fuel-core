@@ -51,7 +51,7 @@ impl Message {
     }
 }
 
-/// Type containing merkle proof data.
+/// Type containing Merkle proof data.
 #[derive(Default, Debug, Clone, PartialEq, Eq)]
 pub struct MerkleProof {
     /// The proof set.

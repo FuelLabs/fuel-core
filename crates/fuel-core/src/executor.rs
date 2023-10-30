@@ -2828,7 +2828,7 @@ mod tests {
         ));
     }
 
-    // corrupt the merkle sum tree commitment from a produced block and verify that the
+    // corrupt the Merkle sum tree commitment from a produced block and verify that the
     // validation logic will reject the block
     #[test]
     fn executor_invalidates_blocks_with_diverging_tx_commitment() {

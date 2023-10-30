@@ -22,7 +22,7 @@ use std::{
     pin::Pin,
 };
 
-/// Sha256 hash of `ChainConfig`
+/// SHA256 hash of `ChainConfig`
 #[derive(Debug, Clone, Copy, Default)]
 pub struct Checksum([u8; 32]);
 

@@ -7,7 +7,7 @@ use fuel_core_types::{
 // TODO: Replace `anyhow` with own `Error` related to genesis.
 
 pub trait GenesisCommitment {
-    /// Calculates the merkle root of the state of the entity.
+    /// Calculates the Merkle root of the state of the entity.
     fn root(&self) -> anyhow::Result<MerkleRoot>;
 }
 

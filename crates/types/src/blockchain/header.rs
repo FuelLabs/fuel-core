@@ -215,7 +215,7 @@ impl BlockHeader {
 
     /// Validate the transactions match the header.
     pub fn validate_transactions(&self, transactions: &[Transaction]) -> bool {
-        // Generate the transaction merkle root.
+        // Generate the transaction Merkle root.
         let transactions_root = generate_txns_root(transactions);
 
         transactions_root == self.application.transactions_root
@@ -240,10 +240,10 @@ impl PartialBlockHeader {
         transactions: &[Transaction],
         message_ids: &[MessageId],
     ) -> BlockHeader {
-        // Generate the transaction merkle root.
+        // Generate the transaction Merkle root.
         let transactions_root = generate_txns_root(transactions);
 
-        // Generate the message merkle root.
+        // Generate the message Merkle root.
         let mut message_tree =
             fuel_merkle::binary::root_calculator::MerkleRootCalculator::new();
         for id in message_ids {
@@ -285,7 +285,7 @@ fn generate_txns_root(transactions: &[Transaction]) -> Bytes32 {
     // TODO: The `to_bytes` requires mutability(but it is problem of the API).
     //  Remove `clone` when we can use `to_bytes` without mutability.
     let transaction_ids = transactions.iter().map(|tx| tx.clone().to_bytes());
-    // Generate the transaction merkle root.
+    // Generate the transaction Merkle root.
     let mut transaction_tree =
         fuel_merkle::binary::root_calculator::MerkleRootCalculator::new();
     for id in transaction_ids {
