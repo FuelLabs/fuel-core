@@ -1,6 +1,4 @@
 use criterion::{
-    criterion_group,
-    criterion_main,
     Criterion,
     Throughput,
 };
@@ -99,6 +97,3 @@ pub fn state_root(c: &mut Criterion) {
 
     group.finish();
 }
-
-criterion_group!(benches, contract_id, contract_root, state_root);
-criterion_main!(benches);
