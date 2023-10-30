@@ -88,7 +88,8 @@ impl RocksDb {
                         }
                         Ok(db)
                     }
-                    _ => {
+                    Err(err) => {
+                        tracing::error!("Couldn't open the database with an error: {}. \nTrying to repair the database", err);
                         DB::repair(&opts, &path)
                             .map_err(|e| DatabaseError::Other(e.into()))?;
 
