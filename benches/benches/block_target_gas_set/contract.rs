@@ -1,4 +1,7 @@
-use crate::*;
+use crate::{
+    utils::arb_dependent_cost_values,
+    *,
+};
 use fuel_core_storage::{
     tables::ContractsRawCode,
     StorageAsMut,
@@ -11,7 +14,6 @@ use fuel_core_types::{
     fuel_types::Word,
     fuel_vm::consts::WORD_SIZE,
 };
-// use crate::utils::arb_dependent_cost_values;
 
 // BAL: Balance of contract ID
 // BHEI: Block height
@@ -122,47 +124,55 @@ pub fn run_contract(group: &mut BenchmarkGroup<WallTime>) {
     //                 .with_prepare_script(prepare_script),
     //         );
     //     }
-
-    let contract_instructions = vec![op::noop(), op::ret(0x10)];
-
-    let instructions = vec![
-        op::gtf_args(0x10, 0x00, GTFArgs::ScriptData),
-        op::addi(0x11, 0x10, ContractId::LEN.try_into().unwrap()),
-        op::addi(0x11, 0x11, WORD_SIZE.try_into().unwrap()),
-        op::addi(0x11, 0x11, WORD_SIZE.try_into().unwrap()),
-        op::movi(0x12, 100_000),
-        op::call(0x10, RegId::ZERO, 0x11, 0x12),
-        op::jmpb(RegId::ZERO, 0),
-    ];
     let contract_id = ContractId::zeroed();
     let (mut service, rt) = service_with_contract_id(contract_id);
-    let contract_bytecode: Vec<_> = contract_instructions
-        .iter()
-        .map(|x| x.to_bytes())
-        .flatten()
-        .collect();
-    service
-        .shared
-        .database
-        .storage_as_mut::<ContractsRawCode>()
-        .insert(&contract_id, &contract_bytecode)
-        .unwrap();
+    let mut rng = rand::rngs::StdRng::seed_from_u64(2322u64);
 
-    let script_data = contract_id
-        .iter()
-        .copied()
-        .chain((0 as Word).to_be_bytes().iter().copied())
-        .chain((0 as Word).to_be_bytes().iter().copied())
-        .chain(AssetId::default().iter().copied())
-        .collect();
+    for size in arb_dependent_cost_values() {
+        let mut contract_instructions = std::iter::repeat(op::noop())
+            .take(size as usize)
+            .collect::<Vec<_>>();
+        contract_instructions.push(op::ret(0x10));
 
-    run_with_service(
-        "contract/call",
-        group,
-        instructions,
-        script_data,
-        service,
-        contract_id,
-        rt,
-    );
+        let instructions = vec![
+            op::gtf_args(0x10, 0x00, GTFArgs::ScriptData),
+            op::addi(0x11, 0x10, ContractId::LEN.try_into().unwrap()),
+            op::addi(0x11, 0x11, WORD_SIZE.try_into().unwrap()),
+            op::addi(0x11, 0x11, WORD_SIZE.try_into().unwrap()),
+            op::movi(0x12, 100_000),
+            op::call(0x10, RegId::ZERO, 0x11, 0x12),
+            op::jmpb(RegId::ZERO, 0),
+        ];
+        let contract_bytecode: Vec<_> = contract_instructions
+            .iter()
+            .map(|x| x.to_bytes())
+            .flatten()
+            .collect();
+        service
+            .shared
+            .database
+            .storage_as_mut::<ContractsRawCode>()
+            .insert(&contract_id, &contract_bytecode)
+            .unwrap();
+
+        let script_data = contract_id
+            .iter()
+            .copied()
+            .chain((0 as Word).to_be_bytes().iter().copied())
+            .chain((0 as Word).to_be_bytes().iter().copied())
+            .chain(AssetId::default().iter().copied())
+            .collect();
+
+        let id = format!("contract/call {:?}", size);
+        run_with_service(
+            &id,
+            group,
+            instructions,
+            script_data,
+            &service,
+            contract_id,
+            &rt,
+            &mut rng,
+        );
+    }
 }

@@ -231,16 +231,16 @@ fn run_with_service(
     group: &mut BenchmarkGroup<WallTime>,
     script: Vec<Instruction>,
     script_data: Vec<u8>,
-    service: fuel_core::service::FuelService,
+    service: &fuel_core::service::FuelService,
     contract_id: ContractId,
-    rt: tokio::runtime::Runtime,
+    rt: &tokio::runtime::Runtime,
+    rng: &mut rand::rngs::StdRng,
 ) {
-    let mut rng = rand::rngs::StdRng::seed_from_u64(2322u64);
     group.bench_function(id, |b| {
         const TARGET_BLOCK_GAS_LIMIT: u64 = 100_000;
         const BASE: u64 = 10_000;
 
-        b.to_async(&rt).iter(|| {
+        b.to_async(rt).iter(|| {
             let shared = service.shared.clone();
 
 
@@ -253,7 +253,7 @@ fn run_with_service(
                 .gas_limit(TARGET_BLOCK_GAS_LIMIT - BASE)
                 .gas_price(1)
                 .add_unsigned_coin_input(
-                    SecretKey::random(&mut rng),
+                    SecretKey::random(rng),
                     rng.gen(),
                     u64::MAX,
                     AssetId::BASE,
@@ -288,7 +288,7 @@ fn run_with_service(
                     .expect("Should be at least 1 element")
                     .expect("Should include transaction successfully");
                 let res = sub.recv().await.expect("Should produce a block");
-                assert_eq!(res.tx_status.len(), 2);
+                assert_eq!(res.tx_status.len(), 2, "res.tx_status: {:?}", res.tx_status);
                 assert_eq!(res.sealed_block.entity.transactions().len(), 2);
                 assert_eq!(res.tx_status[0].id, tx_id);
 
