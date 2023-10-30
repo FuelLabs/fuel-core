@@ -69,7 +69,7 @@ impl Ord for TimeSortKey {
     fn cmp(&self, other: &Self) -> cmp::Ordering {
         let cmp = self.time.cmp(&other.time);
         if cmp == cmp::Ordering::Equal {
-            return self.tx_id.cmp(&other.tx_id);
+            return self.tx_id.cmp(&other.tx_id)
         }
         cmp
     }

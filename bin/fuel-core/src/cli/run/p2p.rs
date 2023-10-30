@@ -212,11 +212,11 @@ impl KeypairArg {
 
         let secret = SecretKey::from_str(s);
         if let Ok(secret) = secret {
-            return Ok(KeypairArg::InlineSecret(secret));
+            return Ok(KeypairArg::InlineSecret(secret))
         }
         let path = PathBuf::from_str(s);
         if let Ok(pathbuf) = path {
-            return Ok(KeypairArg::Path(pathbuf));
+            return Ok(KeypairArg::Path(pathbuf))
         }
         Err(anyhow!(
             "invalid keypair argument, neither a valid key or path"
@@ -240,7 +240,7 @@ impl P2PArgs {
     ) -> anyhow::Result<Option<Config<NotInitialized>>> {
         if !self.enable_p2p {
             tracing::info!("P2P service disabled");
-            return Ok(None);
+            return Ok(None)
         }
 
         let local_keypair = {

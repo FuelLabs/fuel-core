@@ -156,7 +156,7 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 
         // poll sub-behaviors
         if let Poll::Ready(kad_action) = self.kademlia.poll(cx, params) {
-            return Poll::Ready(kad_action);
+            return Poll::Ready(kad_action)
         };
         while let Poll::Ready(mdns_event) = self.mdns.poll(cx, params) {
             match mdns_event {
@@ -399,10 +399,10 @@ mod tests {
                             }
                             _ => {}
                         }
-                        continue 'polling;
+                        continue 'polling
                     }
                 }
-                break;
+                break
             }
 
             // if there are no swarms left to discover we are done with the discovery

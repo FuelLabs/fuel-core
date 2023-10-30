@@ -165,7 +165,7 @@ where
         loop {
             let state = start.borrow().clone();
             if !state.starting() {
-                return Ok(state);
+                return Ok(state)
             }
             start.changed().await?;
         }
@@ -175,7 +175,7 @@ where
         loop {
             let state = stop.borrow().clone();
             if state.stopped() {
-                return Ok(state);
+                return Ok(state)
             }
             stop.changed().await?;
         }
@@ -323,7 +323,7 @@ async fn run<S>(
 
     // If the state after update is not `Starting` then return to stop the service.
     if !state.borrow().starting() {
-        return;
+        return
     }
 
     // We can panic here, because it is inside of the task.
@@ -352,7 +352,7 @@ async fn run<S>(
         if let Err(panic) = panic_result {
             tracing::debug!("got a panic");
             got_panic = Some(panic);
-            break;
+            break
         }
 
         let tracked_result = panic_result.expect("Checked the panic above");
@@ -367,7 +367,7 @@ async fn run<S>(
             Ok(should_continue) => {
                 if !should_continue {
                     tracing::debug!("stopping");
-                    break;
+                    break
                 }
                 tracing::debug!("run loop");
             }

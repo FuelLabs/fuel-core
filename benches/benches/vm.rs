@@ -72,7 +72,7 @@ where
                 // to run the instruction and reset the VM.
                 if let Some(result) = only_instruction {
                     final_time = result;
-                    break;
+                    break
                 } else {
                     println!("The environment is unstable. Rerunning the benchmark.");
                 }

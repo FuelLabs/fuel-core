@@ -298,7 +298,7 @@ impl BlockMutation {
         let config = ctx.data_unchecked::<GraphQLConfig>().clone();
 
         if !config.debug {
-            return Err(anyhow!("`debug` must be enabled to use this endpoint").into());
+            return Err(anyhow!("`debug` must be enabled to use this endpoint").into())
         }
 
         let start_time = start_timestamp.map(|timestamp| timestamp.0);

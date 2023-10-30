@@ -191,11 +191,11 @@ fn init_coin_state(
             if coin.tx_pointer.block_height() > height.unwrap_or_default() {
                 return Err(anyhow!(
                     "coin tx_pointer height cannot be greater than genesis block"
-                ));
+                ))
             }
 
             if db.storage::<Coins>().insert(&utxo_id, &coin)?.is_some() {
-                return Err(anyhow!("Coin should not exist"));
+                return Err(anyhow!("Coin should not exist"))
             }
             coins_tree.push(coin.root()?.as_slice())
         }
@@ -250,7 +250,7 @@ fn init_contracts(
             if tx_pointer.block_height() > height.unwrap_or_default() {
                 return Err(anyhow!(
                     "contract tx_pointer cannot be greater than genesis block"
-                ));
+                ))
             }
 
             // insert contract code
@@ -259,7 +259,7 @@ fn init_contracts(
                 .insert(&contract_id, contract.as_ref())?
                 .is_some()
             {
-                return Err(anyhow!("Contract code should not exist"));
+                return Err(anyhow!("Contract code should not exist"))
             }
 
             // insert contract root
@@ -268,7 +268,7 @@ fn init_contracts(
                 .insert(&contract_id, &(salt, root))?
                 .is_some()
             {
-                return Err(anyhow!("Contract info should not exist"));
+                return Err(anyhow!("Contract info should not exist"))
             }
             if db
                 .storage::<ContractsLatestUtxo>()
@@ -281,7 +281,7 @@ fn init_contracts(
                 )?
                 .is_some()
             {
-                return Err(anyhow!("Contract utxo should not exist"));
+                return Err(anyhow!("Contract utxo should not exist"))
             }
             init_contract_state(db, &contract_id, contract_config)?;
             init_contract_balance(db, &contract_id, contract_config)?;
@@ -325,7 +325,7 @@ fn init_da_messages(
                 .insert(message.id(), &message)?
                 .is_some()
             {
-                return Err(anyhow!("Message should not exist"));
+                return Err(anyhow!("Message should not exist"))
             }
             message_tree.push(message.root()?.as_slice());
         }

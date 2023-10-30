@@ -244,7 +244,7 @@ impl InterpreterStorage for VmDatabase {
 
             if entry.is_none() {
                 // We out of `contract_id` prefix
-                break;
+                break
             }
 
             let (multikey, value) =

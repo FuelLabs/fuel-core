@@ -206,7 +206,7 @@ impl MockTransactionPool {
                             let status = *receiver.borrow_and_update();
                             if let Some(status) = status {
                                 sender.send_replace(None);
-                                return Some((status, (sender, receiver)));
+                                return Some((status, (sender, receiver)))
                             }
                             receiver.changed().await.unwrap();
                         }

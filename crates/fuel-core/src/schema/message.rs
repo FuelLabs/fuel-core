@@ -94,7 +94,7 @@ impl MessageQuery {
                         return Err(anyhow!(
                             "reverse pagination isn't supported for this resource"
                         )
-                        .into());
+                        .into())
                     }
 
                     query.owned_messages(&owner.0, start, direction)
