@@ -3,7 +3,7 @@ name: Notify downstream repos
 on:
   push:
     branches:
-    - main 
+    - master
 
 jobs:
 
