@@ -63,11 +63,10 @@ impl RocksDb {
         columns: Vec<Column>,
         capacity: Option<usize>,
     ) -> DatabaseResult<RocksDb> {
-        let cf_descriptors: Vec<_> = columns
+        let cf_descriptors = columns
             .clone()
             .into_iter()
-            .map(|i| ColumnFamilyDescriptor::new(RocksDb::col_name(i), Self::cf_opts(i)))
-            .collect();
+            .map(|i| ColumnFamilyDescriptor::new(RocksDb::col_name(i), Self::cf_opts(i)));
 
         let mut opts = Options::default();
         opts.create_if_missing(true);
@@ -76,8 +75,6 @@ impl RocksDb {
             let cache = Cache::new_lru_cache(capacity);
             opts.set_row_cache(&cache);
         }
-
-        DB::repair(&opts, &path).map_err(|e| DatabaseError::Other(e.into()))?;
 
         let db = match DB::open_cf_descriptors(&opts, &path, cf_descriptors) {
             Err(_) => {
@@ -91,7 +88,19 @@ impl RocksDb {
                         }
                         Ok(db)
                     }
-                    err => err,
+                    Err(err) => {
+                        tracing::error!("Couldn't open the database with an error: {}. \nTrying to repair the database", err);
+                        DB::repair(&opts, &path)
+                            .map_err(|e| DatabaseError::Other(e.into()))?;
+
+                        let cf_descriptors = columns.clone().into_iter().map(|i| {
+                            ColumnFamilyDescriptor::new(
+                                RocksDb::col_name(i),
+                                Self::cf_opts(i),
+                            )
+                        });
+                        DB::open_cf_descriptors(&opts, &path, cf_descriptors)
+                    }
                 }
             }
             ok => ok,
