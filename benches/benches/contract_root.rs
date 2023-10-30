@@ -49,6 +49,3 @@ pub fn contract_root(c: &mut Criterion) {
 
     group.finish();
 }
-
-criterion_group!(benches, contract_root);
-criterion_main!(benches);
