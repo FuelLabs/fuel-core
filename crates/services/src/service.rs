@@ -358,8 +358,14 @@ async fn run<S>(
         let tracked_result = panic_result.expect("Checked the panic above");
 
         // TODO: Use `u128` when `AtomicU128` is stable.
-        metric.busy.inc_by(tracked_result.busy.as_nanos() as u64);
-        metric.idle.inc_by(tracked_result.idle.as_nanos() as u64);
+        metric.busy.inc_by(
+            u64::try_from(tracked_result.busy.as_nanos())
+                .expect("The task doesn't live longer than `u64`"),
+        );
+        metric.idle.inc_by(
+            u64::try_from(tracked_result.idle.as_nanos())
+                .expect("The task doesn't live longer than `u64`"),
+        );
 
         let result = tracked_result.output;
 

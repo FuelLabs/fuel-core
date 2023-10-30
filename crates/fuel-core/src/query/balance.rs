@@ -52,7 +52,7 @@ impl BalanceQueryData for Database {
     ) -> StorageResult<AddressBalance> {
         let amount = AssetQuery::new(
             &owner,
-            &AssetSpendTarget::new(asset_id, u64::MAX, u64::MAX),
+            &AssetSpendTarget::new(asset_id, u64::MAX, usize::MAX),
             &base_asset_id,
             None,
             self,

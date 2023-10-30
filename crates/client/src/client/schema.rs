@@ -263,14 +263,14 @@ impl<T: Into<String>> From<PaginationRequest<T>> for ConnectionArgs {
             PageDirection::Forward => Self {
                 after: req.cursor.map(Into::into),
                 before: None,
-                first: Some(req.results as i32),
+                first: Some(req.results),
                 last: None,
             },
             PageDirection::Backward => Self {
                 after: None,
                 before: req.cursor.map(Into::into),
                 first: None,
-                last: Some(req.results as i32),
+                last: Some(req.results),
             },
         }
     }

@@ -1500,7 +1500,7 @@ where
                     backtrace.contract(),
                     backtrace.registers(),
                     backtrace.call_stack(),
-                    hex::encode(&backtrace.memory()[..backtrace.registers()[RegId::SP] as usize]), // print stack
+                    hex::encode(&backtrace.memory()[..usize::try_from(backtrace.registers()[RegId::SP]).expect("`$sp` can't be more than memory - `usize`")]), // print stack
                 );
             }
         }
@@ -1516,7 +1516,9 @@ where
         outputs: &[Output],
     ) -> ExecutorResult<()> {
         for (output_index, output) in outputs.iter().enumerate() {
-            let utxo_id = UtxoId::new(*tx_id, output_index as u8);
+            let index = u8::try_from(output_index)
+                .expect("Transaction can have only up to `u8::MAX` outputs");
+            let utxo_id = UtxoId::new(*tx_id, index);
             match output {
                 Output::Coin {
                     amount,
@@ -1639,6 +1641,8 @@ where
             let block_height = *block.header().height();
             let inputs;
             let outputs;
+            let tx_idx =
+                u16::try_from(tx_idx).map_err(|_| ExecutorError::TooManyTransactions)?;
             let tx_id = tx.id(&self.config.consensus_parameters.chain_id);
             match tx {
                 Transaction::Script(tx) => {
@@ -1656,7 +1660,7 @@ where
                 inputs,
                 outputs,
                 &tx_id,
-                tx_idx as u16,
+                tx_idx,
                 block_db_transaction.deref_mut(),
             )?;
         }
@@ -1771,6 +1775,7 @@ impl Fee for CreateCheckedMetadata {
     }
 }
 
+#[allow(clippy::cast_possible_truncation)]
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -291,7 +291,7 @@ impl BlockMutation {
         &self,
         ctx: &Context<'_>,
         start_timestamp: Option<Tai64Timestamp>,
-        blocks_to_produce: U64,
+        blocks_to_produce: U32,
     ) -> async_graphql::Result<U32> {
         let query: &Database = ctx.data_unchecked();
         let consensus_module = ctx.data_unchecked::<ConsensusModule>();
@@ -302,9 +302,9 @@ impl BlockMutation {
         }
 
         let start_time = start_timestamp.map(|timestamp| timestamp.0);
-        let blocks_to_produce: u64 = blocks_to_produce.into();
+        let blocks_to_produce: u32 = blocks_to_produce.into();
         consensus_module
-            .manually_produce_blocks(start_time, blocks_to_produce as u32)
+            .manually_produce_blocks(start_time, blocks_to_produce)
             .await?;
 
         query

@@ -63,7 +63,7 @@ impl From<(Address, AssetId, PaginationRequest<String>)> for CoinsConnectionArgs
                 },
                 after: r.2.cursor,
                 before: None,
-                first: Some(r.2.results as i32),
+                first: Some(r.2.results),
                 last: None,
             },
             PageDirection::Backward => CoinsConnectionArgs {
@@ -74,7 +74,7 @@ impl From<(Address, AssetId, PaginationRequest<String>)> for CoinsConnectionArgs
                 after: None,
                 before: r.2.cursor,
                 first: None,
-                last: Some(r.2.results as i32),
+                last: Some(r.2.results),
             },
         }
     }
