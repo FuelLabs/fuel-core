@@ -79,7 +79,6 @@ pub async fn exec(command: Command) -> anyhow::Result<()> {
             let chain_params: ChainConfig = chain_config.parse()?;
             let chain_state = StateConfig::generate_state_config(db)?;
 
-            // let stdout = std::io::stdout().lock();
             std::fs::create_dir_all(output_dir)?;
             let parameters_writer = File::create("chain_parameters.json")?;
             let state_writer = File::create("chain_state.json")?;

@@ -139,7 +139,7 @@ impl TxQuery {
                     .skip_while(move |result| {
                         if let Ok(sorted) = result {
                             if let Some(start) = start {
-                                return sorted != &start
+                                return sorted != &start;
                             }
                         }
                         false
@@ -172,7 +172,7 @@ impl TxQuery {
         if matches!(last, Some(last) if last > 0) {
             return Err(
                 anyhow!("reverse pagination isn't supported for this resource").into(),
-            )
+            );
         }
 
         let query: &Database = ctx.data_unchecked();

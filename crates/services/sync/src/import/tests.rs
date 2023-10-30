@@ -956,7 +956,7 @@ async fn test_import_inner(
                 import.notify.notify_one();
                 r = import.import(&mut watcher).await.is_ok();
                 if !r {
-                    break
+                    break;
                 }
             }
             r

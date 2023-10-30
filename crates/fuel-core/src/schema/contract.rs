@@ -142,7 +142,7 @@ impl ContractBalanceQuery {
         if matches!(last, Some(last) if last > 0) {
             return Err(
                 anyhow!("reverse pagination isn't supported for this resource").into(),
-            )
+            );
         }
 
         crate::schema::query_pagination(after, before, first, last, |start, direction| {

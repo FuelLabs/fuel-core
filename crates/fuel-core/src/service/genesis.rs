@@ -111,7 +111,7 @@ fn import_genesis_block(
                 prev_root: Bytes32::zeroed(),
                 // The initial height is defined by the `ChainConfig`.
                 // If it is `None` then it will be zero.
-                height: config.chain_parameters.height,
+                height: config.chain_parameters.height.unwrap_or_default(),
                 time: fuel_core_types::tai64::Tai64::UNIX_EPOCH,
                 generated: Empty,
             },
@@ -148,7 +148,7 @@ fn import_genesis_block(
 fn init_coin_state(
     db: &mut Database,
     state: &StateConfig,
-    height: BlockHeight,
+    height: Option<BlockHeight>,
 ) -> anyhow::Result<MerkleRoot> {
     let mut coins_tree = binary::in_memory::MerkleTree::new();
     // TODO: Store merkle sum tree root over coins with unspecified utxo ids.
@@ -188,14 +188,14 @@ fn init_coin_state(
             };
 
             // ensure coin can't point to blocks in the future
-            if coin.tx_pointer.block_height() > height {
+            if coin.tx_pointer.block_height() > height.unwrap_or_default() {
                 return Err(anyhow!(
                     "coin tx_pointer height cannot be greater than genesis block"
-                ))
+                ));
             }
 
             if db.storage::<Coins>().insert(&utxo_id, &coin)?.is_some() {
-                return Err(anyhow!("Coin should not exist"))
+                return Err(anyhow!("Coin should not exist"));
             }
             coins_tree.push(coin.root()?.as_slice())
         }
@@ -206,7 +206,7 @@ fn init_coin_state(
 fn init_contracts(
     db: &mut Database,
     state: &StateConfig,
-    height: BlockHeight,
+    height: Option<BlockHeight>,
 ) -> anyhow::Result<MerkleRoot> {
     let mut contracts_tree = binary::in_memory::MerkleTree::new();
     // initialize contract state
@@ -247,10 +247,10 @@ fn init_contracts(
                 TxPointer::default()
             };
 
-            if tx_pointer.block_height() > height {
+            if tx_pointer.block_height() > height.unwrap_or_default() {
                 return Err(anyhow!(
                     "contract tx_pointer cannot be greater than genesis block"
-                ))
+                ));
             }
 
             // insert contract code
@@ -259,7 +259,7 @@ fn init_contracts(
                 .insert(&contract_id, contract.as_ref())?
                 .is_some()
             {
-                return Err(anyhow!("Contract code should not exist"))
+                return Err(anyhow!("Contract code should not exist"));
             }
 
             // insert contract root
@@ -268,7 +268,7 @@ fn init_contracts(
                 .insert(&contract_id, &(salt, root))?
                 .is_some()
             {
-                return Err(anyhow!("Contract info should not exist"))
+                return Err(anyhow!("Contract info should not exist"));
             }
             if db
                 .storage::<ContractsLatestUtxo>()
@@ -281,7 +281,7 @@ fn init_contracts(
                 )?
                 .is_some()
             {
-                return Err(anyhow!("Contract utxo should not exist"))
+                return Err(anyhow!("Contract utxo should not exist"));
             }
             init_contract_state(db, &contract_id, contract_config)?;
             init_contract_balance(db, &contract_id, contract_config)?;
@@ -325,7 +325,7 @@ fn init_da_messages(
                 .insert(message.id(), &message)?
                 .is_some()
             {
-                return Err(anyhow!("Message should not exist"))
+                return Err(anyhow!("Message should not exist"));
             }
             message_tree.push(message.root()?.as_slice());
         }
@@ -414,7 +414,7 @@ mod tests {
         let height = BlockHeight::from(99u32);
         let service_config = Config {
             chain_parameters: ChainConfig {
-                height,
+                height: Some(height),
                 ..ChainConfig::local_testnet()
             },
             chain_state: Default::default(),
@@ -457,7 +457,7 @@ mod tests {
         let starting_height = {
             let mut h: u32 = alice_block_created.into();
             h = h.saturating_add(rng.next_u32());
-            h.into()
+            Some(h.into())
         };
         let service_config = Config {
             chain_parameters: ChainConfig {
@@ -661,7 +661,7 @@ mod tests {
     async fn coin_tx_pointer_cant_exceed_genesis_height() {
         let service_config = Config {
             chain_parameters: ChainConfig {
-                height: BlockHeight::from(10u32),
+                height: Some(BlockHeight::from(10u32)),
                 ..ChainConfig::local_testnet()
             },
             chain_state: StateConfig {
@@ -699,7 +699,7 @@ mod tests {
 
         let service_config = Config {
             chain_parameters: ChainConfig {
-                height: BlockHeight::from(10u32),
+                height: Some(BlockHeight::from(10u32)),
                 ..ChainConfig::local_testnet()
             },
             chain_state: StateConfig {

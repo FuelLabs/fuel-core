@@ -38,11 +38,11 @@ impl ConnectionTracker {
 impl Approver for ConnectionTracker {
     fn allow_peer(&self, peer_id: &PeerId) -> bool {
         if self.reserved_nodes.contains(peer_id) {
-            return true
+            return true;
         }
 
         if let Ok(connection_state) = self.connection_state.read() {
-            return connection_state.available_slot()
+            return connection_state.available_slot();
         }
 
         false

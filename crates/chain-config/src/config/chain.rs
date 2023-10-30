@@ -19,15 +19,19 @@ use serde_with::{
     serde_as,
     skip_serializing_none,
 };
-use std::{path::Path, str::FromStr};
 #[cfg(feature = "std")]
 use std::{
     io::ErrorKind,
     path::PathBuf,
 };
+use std::{
+    path::Path,
+    str::FromStr,
+};
 
 use crate::{
     genesis::GenesisCommitment,
+    serialization::HexNumber,
     ConsensusConfig,
 };
 
@@ -46,7 +50,9 @@ pub struct ChainConfig {
     pub block_gas_limit: u64,
     pub consensus_parameters: ConsensusParameters,
     pub consensus: ConsensusConfig,
-    pub height: BlockHeight,
+    #[serde_as(as = "Option<HexNumber>")]
+    #[serde(default)]
+    pub height: Option<BlockHeight>,
 }
 
 impl Default for ChainConfig {
@@ -124,7 +130,7 @@ impl GenesisCommitment for ChainConfig {
             .chain(block_gas_limit.to_be_bytes())
             .chain(consensus_parameters.root()?)
             .chain(consensus.root()?)
-            .chain(height.to_bytes())
+            .chain(height.unwrap_or_default().to_bytes())
             .finalize();
 
         Ok(config_hash)

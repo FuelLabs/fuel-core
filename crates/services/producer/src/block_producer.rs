@@ -170,7 +170,7 @@ where
             })
             .await?;
         if is_script && res.is_empty() {
-            return Err(anyhow!("Expected at least one set of receipts"))
+            return Err(anyhow!("Expected at least one set of receipts"));
         }
         Ok(res)
     }
@@ -206,7 +206,7 @@ where
                 best: best_height,
                 previous_block: previous_da_height,
             }
-            .into())
+            .into());
         }
         Ok(best_height)
     }

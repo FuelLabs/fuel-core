@@ -185,7 +185,7 @@ impl ConnectionHandler for HeartbeatHandler {
                     // report newly received `BlockHeight` to the Behaviour
                     return Poll::Ready(ConnectionHandlerEvent::Custom(
                         HeartbeatOutEvent::BlockHeight(block_height),
-                    ))
+                    ));
                 }
                 _ => {}
             }
@@ -196,7 +196,7 @@ impl ConnectionHandler for HeartbeatHandler {
                 // Request from `Swarm` to close the faulty connection
                 return Poll::Ready(ConnectionHandlerEvent::Close(
                     HeartbeatFailure::Timeout,
-                ))
+                ));
             }
 
             match self.outbound.take() {
@@ -209,10 +209,10 @@ impl ConnectionHandler for HeartbeatHandler {
                     if !requested {
                         return Poll::Ready(ConnectionHandlerEvent::Custom(
                             HeartbeatOutEvent::RequestBlockHeight,
-                        ))
+                        ));
                     }
 
-                    break
+                    break;
                 }
                 Some(OutboundState::SendingBlockHeight(mut outbound_block_height)) => {
                     match outbound_block_height.poll_unpin(cx) {
@@ -225,7 +225,7 @@ impl ConnectionHandler for HeartbeatHandler {
                                 self.outbound = Some(OutboundState::SendingBlockHeight(
                                     outbound_block_height,
                                 ));
-                                break
+                                break;
                             }
                         }
                         Poll::Ready(Ok(stream)) => {
@@ -244,7 +244,7 @@ impl ConnectionHandler for HeartbeatHandler {
                 Some(OutboundState::Idle(stream)) => match self.timer.poll_unpin(cx) {
                     Poll::Pending => {
                         self.outbound = Some(OutboundState::Idle(stream));
-                        break
+                        break;
                     }
                     Poll::Ready(()) => {
                         self.outbound = Some(OutboundState::RequestingBlockHeight {
@@ -255,7 +255,7 @@ impl ConnectionHandler for HeartbeatHandler {
                 },
                 Some(OutboundState::NegotiatingStream) => {
                     self.outbound = Some(OutboundState::NegotiatingStream);
-                    break
+                    break;
                 }
                 None => {
                     // Request new stream
@@ -263,9 +263,9 @@ impl ConnectionHandler for HeartbeatHandler {
                     let protocol =
                         SubstreamProtocol::new(ReadyUpgrade::new(HEARTBEAT_PROTOCOL), ())
                             .with_timeout(self.config.send_timeout);
-                    return Poll::Ready(ConnectionHandlerEvent::OutboundSubstreamRequest {
-                        protocol,
-                    })
+                    return Poll::Ready(
+                        ConnectionHandlerEvent::OutboundSubstreamRequest { protocol },
+                    );
                 }
             }
         }

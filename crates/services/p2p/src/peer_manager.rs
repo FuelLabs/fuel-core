@@ -194,7 +194,7 @@ impl PeerManager {
 
     pub fn get_peer_info(&self, peer_id: &PeerId) -> Option<&PeerInfo> {
         if self.reserved_peers.contains(peer_id) {
-            return self.reserved_connected_peers.get(peer_id)
+            return self.reserved_connected_peers.get(peer_id);
         }
         self.non_reserved_connected_peers.get(peer_id)
     }
@@ -271,7 +271,7 @@ impl PeerManager {
             // check if all the slots are already taken
             if non_reserved_peers_connected >= self.max_non_reserved_peers {
                 // Too many peers already connected, disconnect the Peer
-                return true
+                return true;
             }
 
             if non_reserved_peers_connected + 1 == self.max_non_reserved_peers {

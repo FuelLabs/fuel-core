@@ -195,7 +195,7 @@ async fn test_regression_in_subscribe() {
             }
             Err(e) => {
                 assert!(!model_result, "{:?}", e);
-                continue
+                continue;
             }
         };
         match r {

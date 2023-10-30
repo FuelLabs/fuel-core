@@ -320,7 +320,7 @@ where
 
         // If one of the transactions fails, return an error.
         if let Some((_, err)) = skipped_transactions.into_iter().next() {
-            return Err(err)
+            return Err(err);
         }
 
         block
@@ -474,7 +474,7 @@ where
         if let Some(pre_exec_block_id) = pre_exec_block_id {
             // The block id comparison compares the whole blocks including all fields.
             if pre_exec_block_id != finalized_block_id {
-                return Err(ExecutorError::InvalidBlockId)
+                return Err(ExecutorError::InvalidBlockId);
             }
         }
 
@@ -579,13 +579,13 @@ where
                                 Ok(())
                             }
                             ExecutionKind::DryRun | ExecutionKind::Validation => Err(err),
-                        }
+                        };
                     }
                     Ok(tx) => tx,
                 };
 
                 if let Err(err) = tx_db_transaction.commit() {
-                    return Err(err.into())
+                    return Err(err.into());
                 }
                 tx
             };
@@ -643,7 +643,7 @@ where
         }
 
         if execution_kind != ExecutionKind::DryRun && !data.found_mint {
-            return Err(ExecutorError::MintMissing)
+            return Err(ExecutorError::MintMissing);
         }
 
         Ok(data)
@@ -661,7 +661,7 @@ where
         options: ExecutionOptions,
     ) -> ExecutorResult<Transaction> {
         if execution_data.found_mint {
-            return Err(ExecutorError::MintIsNotLastTransaction)
+            return Err(ExecutorError::MintIsNotLastTransaction);
         }
 
         // Throw a clear error if the transaction id is a duplicate
@@ -670,7 +670,7 @@ where
             .storage::<Transactions>()
             .contains_key(tx_id)?
         {
-            return Err(ExecutorError::TransactionIdCollision(*tx_id))
+            return Err(ExecutorError::TransactionIdCollision(*tx_id));
         }
 
         let block_height = *header.height();
@@ -721,7 +721,7 @@ where
         execution_data.found_mint = true;
 
         if checked_mint.transaction().tx_pointer().tx_index() != execution_data.tx_count {
-            return Err(ExecutorError::MintHasUnexpectedIndex)
+            return Err(ExecutorError::MintHasUnexpectedIndex);
         }
 
         let coinbase_id = checked_mint.id();
@@ -729,7 +729,7 @@ where
 
         fn verify_mint_for_empty_contract(mint: &Mint) -> ExecutorResult<()> {
             if *mint.mint_amount() != 0 {
-                return Err(ExecutorError::CoinbaseAmountMismatch)
+                return Err(ExecutorError::CoinbaseAmountMismatch);
             }
 
             let input = input::contract::Contract {
@@ -745,7 +745,7 @@ where
                 state_root: Bytes32::zeroed(),
             };
             if mint.input_contract() != &input || mint.output_contract() != &output {
-                return Err(ExecutorError::MintMismatch)
+                return Err(ExecutorError::MintMismatch);
             }
             Ok(())
         }
@@ -754,7 +754,7 @@ where
             verify_mint_for_empty_contract(&mint)?;
         } else {
             if *mint.mint_amount() != execution_data.coinbase {
-                return Err(ExecutorError::CoinbaseAmountMismatch)
+                return Err(ExecutorError::CoinbaseAmountMismatch);
             }
 
             let block_height = *header.height();
@@ -843,7 +843,7 @@ where
 
             if execution_kind == ExecutionKind::Validation {
                 if mint.input_contract() != &input || mint.output_contract() != &output {
-                    return Err(ExecutorError::MintMismatch)
+                    return Err(ExecutorError::MintMismatch);
                 }
             } else {
                 *mint.input_contract_mut() = input;
@@ -864,7 +864,7 @@ where
             .insert(&coinbase_id, &tx)?
             .is_some()
         {
-            return Err(ExecutorError::TransactionIdCollision(coinbase_id))
+            return Err(ExecutorError::TransactionIdCollision(coinbase_id));
         }
         Ok(tx)
     }
@@ -971,7 +971,7 @@ where
                 if &tx != checked_tx.transaction() {
                     return Err(ExecutorError::InvalidTransactionOutcome {
                         transaction_id: tx_id,
-                    })
+                    });
                 }
             }
             ExecutionKind::DryRun | ExecutionKind::Production => {
@@ -1088,12 +1088,12 @@ where
                             return Err(TransactionValidityError::CoinHasNotMatured(
                                 *utxo_id,
                             )
-                            .into())
+                            .into());
                         }
                     } else {
                         return Err(
                             TransactionValidityError::CoinDoesNotExist(*utxo_id).into()
-                        )
+                        );
                     }
                 }
                 Input::Contract(_) => {
@@ -1131,7 +1131,7 @@ where
                     if db.message_is_spent(nonce)? {
                         return Err(
                             TransactionValidityError::MessageAlreadySpent(*nonce).into()
-                        )
+                        );
                     }
                     if let Some(message) = self
                         .relayer
@@ -1142,13 +1142,13 @@ where
                             return Err(TransactionValidityError::MessageSpendTooEarly(
                                 *nonce,
                             )
-                            .into())
+                            .into());
                         }
                         if message.sender != *sender {
                             return Err(TransactionValidityError::MessageSenderMismatch(
                                 *nonce,
                             )
-                            .into())
+                            .into());
                         }
                         if message.recipient != *recipient {
                             return Err(
@@ -1156,19 +1156,19 @@ where
                                     *nonce,
                                 )
                                 .into(),
-                            )
+                            );
                         }
                         if message.amount != *amount {
                             return Err(TransactionValidityError::MessageAmountMismatch(
                                 *nonce,
                             )
-                            .into())
+                            .into());
                         }
                         if message.nonce != *nonce {
                             return Err(TransactionValidityError::MessageNonceMismatch(
                                 *nonce,
                             )
-                            .into())
+                            .into());
                         }
                         let expected_data = if message.data.is_empty() {
                             None
@@ -1179,12 +1179,12 @@ where
                             return Err(TransactionValidityError::MessageDataMismatch(
                                 *nonce,
                             )
-                            .into())
+                            .into());
                         }
                     } else {
                         return Err(
                             TransactionValidityError::MessageDoesNotExist(*nonce).into()
-                        )
+                        );
                     }
                 }
             }
@@ -1253,7 +1253,7 @@ where
                 .and_then(|refund| max_fee.checked_sub(refund))
                 .ok_or(ExecutorError::FeeOverflow)?;
 
-                return Ok((used_gas, fee))
+                return Ok((used_gas, fee));
             }
         }
         // if there's no script result (i.e. create) then fee == base amount
@@ -1347,7 +1347,7 @@ where
                             if tx_pointer != &coin.tx_pointer {
                                 return Err(ExecutorError::InvalidTransactionOutcome {
                                     transaction_id: tx_id,
-                                })
+                                });
                             }
                         }
                         Input::Contract(Contract {
@@ -1368,17 +1368,17 @@ where
                             {
                                 return Err(ExecutorError::InvalidTransactionOutcome {
                                     transaction_id: tx_id,
-                                })
+                                });
                             }
                             if balance_root != &contract.balance_root()? {
                                 return Err(ExecutorError::InvalidTransactionOutcome {
                                     transaction_id: tx_id,
-                                })
+                                });
                             }
                             if state_root != &contract.state_root()? {
                                 return Err(ExecutorError::InvalidTransactionOutcome {
                                     transaction_id: tx_id,
-                                })
+                                });
                             }
                         }
                         _ => {}
@@ -1413,7 +1413,7 @@ where
                             } else {
                                 return Err(ExecutorError::InvalidTransactionOutcome {
                                     transaction_id: tx_id,
-                                })
+                                });
                             };
 
                         let mut contract = ContractRef::new(&mut *db, *contract_id);
@@ -1434,19 +1434,19 @@ where
                             } else {
                                 return Err(ExecutorError::InvalidTransactionOutcome {
                                     transaction_id: tx_id,
-                                })
+                                });
                             };
 
                         let mut contract = ContractRef::new(&mut *db, *contract_id);
                         if contract_output.balance_root != contract.balance_root()? {
                             return Err(ExecutorError::InvalidTransactionOutcome {
                                 transaction_id: tx_id,
-                            })
+                            });
                         }
                         if contract_output.state_root != contract.state_root()? {
                             return Err(ExecutorError::InvalidTransactionOutcome {
                                 transaction_id: tx_id,
-                            })
+                            });
                         }
                     }
                 }
@@ -1545,7 +1545,7 @@ where
                     } else {
                         return Err(ExecutorError::TransactionValidity(
                             TransactionValidityError::InvalidContractInputIndex(utxo_id),
-                        ))
+                        ));
                     }
                 }
                 Output::Change {
@@ -1610,7 +1610,7 @@ where
             };
 
             if db.storage::<Coins>().insert(&utxo_id, &coin)?.is_some() {
-                return Err(ExecutorError::OutputAlreadyExists)
+                return Err(ExecutorError::OutputAlreadyExists);
             }
         }
 
@@ -1624,7 +1624,7 @@ where
         db: &mut Database,
     ) -> ExecutorResult<()> {
         if db.storage::<Receipts>().insert(tx_id, receipts)?.is_some() {
-            return Err(ExecutorError::OutputAlreadyExists)
+            return Err(ExecutorError::OutputAlreadyExists);
         }
         Ok(())
     }

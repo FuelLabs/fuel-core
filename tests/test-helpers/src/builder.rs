@@ -183,7 +183,7 @@ impl TestSetupBuilder {
     // setup chainspec and spin up a fuel-node
     pub async fn finalize(&mut self) -> TestContext {
         let mut chain_parameters = ChainConfig {
-            height: self.starting_block,
+            height: Some(self.starting_block),
             ..ChainConfig::local_testnet()
         };
         chain_parameters

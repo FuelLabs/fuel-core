@@ -173,7 +173,7 @@ impl Database {
         {
             return Err(
                 anyhow::anyhow!("The contract balances is already initialized").into(),
-            )
+            );
         }
 
         let balances = balances.collect_vec();

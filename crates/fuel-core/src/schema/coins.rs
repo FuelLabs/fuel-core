@@ -169,7 +169,9 @@ impl CoinQuery {
     ) -> async_graphql::Result<Connection<UtxoId, Coin, EmptyFields, EmptyFields>> {
         // Rocksdb doesn't support reverse iteration over a prefix
         if matches!(last, Some(last) if last > 0) {
-            return Err(anyhow!("reverse pagination isn't supported for this coins").into())
+            return Err(
+                anyhow!("reverse pagination isn't supported for this coins").into()
+            );
         }
 
         let query: &Database = ctx.data_unchecked();
@@ -181,7 +183,7 @@ impl CoinQuery {
                     if let (Ok(coin), Some(filter_asset_id)) = (&result, &filter.asset_id)
                     {
                         if coin.asset_id != filter_asset_id.0 {
-                            return None
+                            return None;
                         }
                     }
 

@@ -64,7 +64,7 @@ mod tests {
     fn snapshot_configurable_block_height() {
         let mut rng = StdRng::seed_from_u64(2);
         let config = ChainConfig {
-            height: rng.next_u32().into(),
+            height: Some(rng.next_u32().into()),
             ..ChainConfig::local_testnet()
         };
         let json = serde_json::to_string_pretty(&config).unwrap();
@@ -75,7 +75,7 @@ mod tests {
     fn can_roundtrip_serialize_block_height_config() {
         let mut rng = StdRng::seed_from_u64(2);
         let config = ChainConfig {
-            height: rng.next_u32().into(),
+            height: Some(rng.next_u32().into()),
             ..ChainConfig::local_testnet()
         };
         let json = serde_json::to_string(&config).unwrap();
