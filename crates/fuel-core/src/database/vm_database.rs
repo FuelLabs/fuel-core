@@ -234,7 +234,8 @@ impl InterpreterStorage for VmDatabase {
             Some(ContractsStateKey::new(contract_id, start_key)),
             Some(IterDirection::Forward),
         );
-        let range = range as usize;
+        let range = usize::try_from(range)
+            .expect("Corresponding PR in `fuel-vm` https://github.com/FuelLabs/fuel-vm/pull/619 will use `usize`");
 
         let mut expected_key = U256::from_big_endian(start_key.as_ref());
         let mut results = vec![];
@@ -609,7 +610,7 @@ mod tests {
             .is_some();
 
         // check stored data
-        let results: Vec<_> = (0..(remove_count as usize))
+        let results: Vec<_> = (0..remove_count)
             .filter_map(|i| {
                 let current_key = U256::from_big_endian(&start_key) + i;
                 let current_key = u256_to_bytes32(current_key);

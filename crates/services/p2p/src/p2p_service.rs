@@ -167,8 +167,10 @@ impl<Codec: NetworkCodec> FuelP2PService<Codec> {
 
         let total_connections = {
             // Reserved nodes do not count against the configured peer input/output limits.
-            let total_peers =
-                config.max_peers_connected + config.reserved_nodes.len() as u32;
+            let total_peers = config.max_peers_connected
+                + u32::try_from(config.reserved_nodes.len()).expect(
+                    "The number of reserved nodes should be less than `u32::MAX`",
+                );
 
             total_peers * config.max_connections_per_peer
         };
@@ -664,6 +666,7 @@ impl<Codec: NetworkCodec> FuelP2PService<Codec> {
     }
 }
 
+#[allow(clippy::cast_possible_truncation)]
 #[cfg(test)]
 mod tests {
     use super::FuelP2PService;
