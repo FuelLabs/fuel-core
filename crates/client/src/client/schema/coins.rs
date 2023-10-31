@@ -146,7 +146,7 @@ pub struct SpendQueryElementInput {
     /// address of the owner
     pub amount: U64,
     /// the maximum number of coins per asset from the owner to return.
-    pub max: Option<U64>,
+    pub max: Option<U32>,
 }
 
 #[derive(cynic::QueryFragment, Debug, Clone)]
