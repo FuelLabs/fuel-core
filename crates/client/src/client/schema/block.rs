@@ -176,7 +176,7 @@ mod tests {
     fn block_by_height_query_gql_output() {
         use cynic::QueryBuilder;
         let operation = BlockByHeightQuery::build(BlockByHeightArgs {
-            height: Some(U64(0)),
+            height: Some(U32(0)),
         });
         insta::assert_snapshot!(operation.query)
     }
