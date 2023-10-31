@@ -57,11 +57,7 @@ impl Eq for TimeSortKey {}
 
 impl PartialOrd for TimeSortKey {
     fn partial_cmp(&self, other: &Self) -> Option<cmp::Ordering> {
-        match self.time.partial_cmp(&other.time) {
-            Some(core::cmp::Ordering::Equal) => {}
-            ord => return ord,
-        }
-        self.tx_id.partial_cmp(&other.tx_id)
+        Some(self.cmp(other))
     }
 }
 

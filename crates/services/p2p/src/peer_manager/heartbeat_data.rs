@@ -32,7 +32,10 @@ impl HeartbeatData {
         if self.durations.is_empty() {
             Duration::from_secs(0)
         } else {
-            self.durations.iter().sum::<Duration>() / self.durations.len() as u32
+            self.durations.iter().sum::<Duration>()
+                / u32::try_from(self.durations.len()).expect(
+                    "The size of window is `u32`, so it is impossible to overflow",
+                )
         }
     }
 
@@ -52,6 +55,7 @@ impl HeartbeatData {
     }
 }
 
+#[allow(clippy::cast_possible_truncation)]
 #[cfg(test)]
 mod tests {
     #![allow(non_snake_case)]

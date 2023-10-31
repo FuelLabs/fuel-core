@@ -2789,11 +2789,6 @@ dependencies = [
 [[package]]
 name = "fuel-core-bft"
 version = "0.20.8"
-dependencies = [
- "anyhow",
- "parking_lot 0.12.1",
- "tokio",
-]
 
 [[package]]
 name = "fuel-core-bin"

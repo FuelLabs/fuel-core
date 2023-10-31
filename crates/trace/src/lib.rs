@@ -1,3 +1,5 @@
+#![deny(clippy::cast_possible_truncation)]
+
 use ctor::ctor;
 use std::env::var;
 use tracing_subscriber::{
