@@ -1,6 +1,7 @@
 //! A simple keygen cli utility tool for configuring fuel-core
 use atty::Stream;
 use clap::Parser;
+use crossterm::terminal;
 use fuel_core_keygen::{
     new_key,
     parse_secret,
@@ -79,7 +80,9 @@ fn main() -> anyhow::Result<()> {
 
 fn wait_for_keypress() {
     let mut single_key = [0u8];
+    terminal::enable_raw_mode().expect("enable_raw_mode failed");
     stdin().read_exact(&mut single_key).unwrap();
+    terminal::disable_raw_mode().expect("disable_raw_mode failed");
 }
 
 fn display_string_discreetly(

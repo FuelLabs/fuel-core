@@ -23,7 +23,6 @@ use std::{
     str::FromStr,
 };
 
-
 #[derive(Clone, Copy, Debug, Default, Serialize, ValueEnum)]
 #[serde(rename_all = "kebab-case")]
 pub enum KeyType {
