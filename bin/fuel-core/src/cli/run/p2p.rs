@@ -46,12 +46,6 @@ pub struct P2PArgs {
     #[arg(requires_if(IsPresent, "enable_p2p"))]
     pub keypair: Option<KeypairArg>,
 
-    /// The name of the p2p Network
-    #[clap(long = "network", env)]
-    #[arg(required_if_eq("enable_p2p", "true"))]
-    #[arg(requires_if(IsPresent, "enable_p2p"))]
-    pub network: Option<String>,
-
     /// p2p network's IP Address
     #[clap(long = "address", env)]
     pub address: Option<IpAddr>,
