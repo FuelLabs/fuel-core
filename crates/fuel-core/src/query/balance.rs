@@ -63,7 +63,7 @@ impl BalanceQueryData for Database {
             let amount = res?;
 
             // Increase the balance
-            balance += amount;
+            balance = balance.saturating_add(amount);
 
             Ok(balance)
         })?;
@@ -87,9 +87,10 @@ impl BalanceQueryData for Database {
         for coin in AssetsQuery::new(&owner, None, None, self, &base_asset_id).coins() {
             match coin {
                 Ok(coin) => {
-                    *amounts_per_asset
+                    let amount: &mut u64 = amounts_per_asset
                         .entry(*coin.asset_id(&base_asset_id))
-                        .or_default() += coin.amount();
+                        .or_default();
+                    *amount = amount.saturating_add(coin.amount());
                 }
                 Err(err) => {
                     errors.push(err);

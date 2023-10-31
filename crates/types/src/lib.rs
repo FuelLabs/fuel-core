@@ -2,6 +2,7 @@
 //! libraries. This crate doesn't contain any business logic and is to be such primitive as that
 //! is possible.
 
+#![deny(clippy::arithmetic_side_effects)]
 #![deny(clippy::cast_possible_truncation)]
 #![deny(unused_crate_dependencies)]
 #![deny(missing_docs)]

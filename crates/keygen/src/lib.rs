@@ -1,5 +1,6 @@
 //! Keygen crate
 
+#![deny(clippy::arithmetic_side_effects)]
 #![deny(clippy::cast_possible_truncation)]
 
 pub const BLOCK_PRODUCTION: &str = "block-production";

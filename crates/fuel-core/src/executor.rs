@@ -1780,6 +1780,7 @@ impl Fee for CreateCheckedMetadata {
     }
 }
 
+#[allow(clippy::arithmetic_side_effects)]
 #[allow(clippy::cast_possible_truncation)]
 #[cfg(test)]
 mod tests {
