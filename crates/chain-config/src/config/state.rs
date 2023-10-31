@@ -19,6 +19,7 @@ use fuel_core_types::{
     fuel_vm::SecretKey,
 };
 
+use core::str::FromStr;
 use itertools::Itertools;
 use serde::{
     Deserialize,
@@ -29,12 +30,9 @@ use serde_with::{
     skip_serializing_none,
 };
 #[cfg(feature = "std")]
-use std::{
-    path::{
-        Path,
-        PathBuf,
-    },
-    str::FromStr,
+use std::path::{
+    Path,
+    PathBuf,
 };
 
 use super::{
@@ -85,6 +83,7 @@ impl StateConfig {
         })
     }
 
+    #[cfg(feature = "std")]
     pub fn local_testnet() -> Self {
         // endow some preset accounts with an initial balance
         tracing::info!("Initial Accounts");

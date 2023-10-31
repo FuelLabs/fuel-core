@@ -1,3 +1,4 @@
+use core::str::FromStr;
 use fuel_core_storage::MerkleRoot;
 use fuel_core_types::{
     fuel_crypto::Hasher,
@@ -20,12 +21,9 @@ use serde_with::{
     skip_serializing_none,
 };
 #[cfg(feature = "std")]
-use std::{
-    path::{
-        Path,
-        PathBuf,
-    },
-    str::FromStr,
+use std::path::{
+    Path,
+    PathBuf,
 };
 
 use crate::{
