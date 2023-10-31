@@ -809,7 +809,7 @@ mod tests {
         let p2p_config = Config::default_initialized("reserved_nodes_reconnect_works");
 
         // total amount will be `max_peers_allowed` + `reserved_nodes.len()`
-        let max_peers_allowed = 3;
+        let max_peers_allowed: usize = 3;
 
         let (bootstrap_nodes, bootstrap_multiaddrs) =
             setup_bootstrap_nodes(&p2p_config, max_peers_allowed.saturating_mul(5)).await;
