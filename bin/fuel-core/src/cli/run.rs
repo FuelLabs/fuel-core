@@ -253,12 +253,11 @@ impl Command {
 
         let addr = net::SocketAddr::new(ip, port);
 
-        let chain_conf: ChainConfig = chain_config.as_str().parse()?;
         let (chain_params, chain_state) = match chain_config.as_str() {
             LOCAL_TESTNET => (ChainConfig::local_testnet(), StateConfig::local_testnet()),
             _ => {
-                let chain_conf = ChainConfig::load_from_file(&chain_config)?;
-                let chain_state = StateConfig::load_from_file(&chain_config)?;
+                let chain_conf = ChainConfig::load_from_directory(&chain_config)?;
+                let chain_state = StateConfig::load_from_directory(&chain_config)?;
                 (chain_conf, chain_state)
             }
         };
@@ -317,7 +316,7 @@ impl Command {
             max_database_cache_size,
             database_path,
             database_type,
-            chain_parameters: chain_conf.clone(),
+            chain_parameters: chain_params.clone(),
             chain_state: chain_state.clone(),
             debug,
             utxo_validation,
@@ -328,7 +327,7 @@ impl Command {
             txpool: TxPoolConfig::new(
                 tx_max_number,
                 tx_max_depth,
-                chain_conf,
+                chain_params,
                 min_gas_price,
                 utxo_validation,
                 metrics,

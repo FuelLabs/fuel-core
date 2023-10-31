@@ -59,6 +59,7 @@ pub async fn exec(command: Command) -> anyhow::Result<()> {
         chain_config::{
             ChainConfig,
             StateConfig,
+            LOCAL_TESTNET,
         },
         database::Database,
     };
@@ -76,7 +77,10 @@ pub async fn exec(command: Command) -> anyhow::Result<()> {
             chain_config,
             output_dir,
         } => {
-            let chain_params: ChainConfig = chain_config.parse()?;
+            let chain_params = match chain_config.as_str() {
+                LOCAL_TESTNET => ChainConfig::local_testnet(),
+                _ => ChainConfig::load_from_directory(&chain_config)?,
+            };
             let chain_state = StateConfig::generate_state_config(db)?;
 
             std::fs::create_dir_all(output_dir)?;

@@ -2,10 +2,6 @@ use bech32::{
     ToBase32,
     Variant::Bech32m,
 };
-use std::{
-    path::Path,
-    str::FromStr,
-};
 
 use crate::{
     FUEL_BECH32_HRP,
@@ -31,6 +27,14 @@ use serde::{
 use serde_with::{
     serde_as,
     skip_serializing_none,
+};
+#[cfg(feature = "std")]
+use std::{
+    path::{
+        Path,
+        PathBuf,
+    },
+    str::FromStr,
 };
 
 use super::{
@@ -64,11 +68,19 @@ impl StateConfig {
         })
     }
 
-    pub fn load_from_file(path: impl AsRef<Path>) -> anyhow::Result<Self> {
-        let contents = std::fs::read(path.as_ref().join("chain_state.json"))?;
+    #[cfg(feature = "std")]
+    pub fn load_from_directory(path: &str) -> Result<Self, anyhow::Error> {
+        let path = PathBuf::from_str(path)?.join("chain_state.json");
+        Self::load_from_file(path)
+    }
+
+    #[cfg(feature = "std")]
+    pub fn load_from_file(path: impl AsRef<Path>) -> Result<Self, anyhow::Error> {
+        let contents = std::fs::read(path.as_ref())?;
         serde_json::from_slice(&contents).map_err(|e| {
             anyhow::Error::new(e).context(format!(
-                "an error occurred while loading the chain parameters file"
+                "an error occurred while loading the chain state file: {:?}",
+                path.as_ref().to_str()
             ))
         })
     }
@@ -195,7 +207,34 @@ mod tests {
         MessageConfig,
     };
 
+    #[cfg(feature = "std")]
+    use std::{
+        env::temp_dir,
+        fs::write,
+        path::PathBuf,
+    };
+
     use super::StateConfig;
+
+    #[cfg(feature = "std")]
+    fn tmp_path() -> PathBuf {
+        let mut path = temp_dir();
+        path.push(rand::random::<u16>().to_string());
+        path
+    }
+
+    #[cfg(feature = "std")]
+    #[test]
+    fn from_file_loads_from_file() {
+        // setup chain config in a temp file
+        let tmp_file = tmp_path();
+        let disk_config = StateConfig::local_testnet();
+        let json = serde_json::to_string_pretty(&disk_config).unwrap();
+        write(tmp_file.clone(), json).unwrap();
+
+        let load_config = StateConfig::load_from_file(&tmp_file).unwrap();
+        assert_eq!(disk_config, load_config);
+    }
 
     #[test]
     fn snapshot_simple_contract() {

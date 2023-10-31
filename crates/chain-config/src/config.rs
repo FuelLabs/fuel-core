@@ -31,16 +31,14 @@ mod tests {
 
     #[cfg(feature = "std")]
     #[test]
-    fn from_str_loads_from_file() {
+    fn from_file_loads_from_file() {
         // setup chain config in a temp file
         let tmp_file = tmp_path();
         let disk_config = ChainConfig::local_testnet();
         let json = serde_json::to_string_pretty(&disk_config).unwrap();
         write(tmp_file.clone(), json).unwrap();
 
-        // test loading config from file path string
-        let load_config: ChainConfig =
-            tmp_file.to_string_lossy().into_owned().parse().unwrap();
+        let load_config = ChainConfig::load_from_file(&tmp_file).unwrap();
         assert_eq!(disk_config, load_config);
     }
 

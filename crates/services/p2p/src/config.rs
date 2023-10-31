@@ -16,9 +16,7 @@ use libp2p::{
         Keypair,
     },
     mplex,
-    noise::{
-        self,
-    },
+    noise::{self,},
     tcp::{
         tokio::Transport as TokioTcpTransport,
         Config as TcpConfig,

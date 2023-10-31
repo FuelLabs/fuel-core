@@ -21,11 +21,10 @@ use serde_with::{
 };
 #[cfg(feature = "std")]
 use std::{
-    io::ErrorKind,
-    path::PathBuf,
-};
-use std::{
-    path::Path,
+    path::{
+        Path,
+        PathBuf,
+    },
     str::FromStr,
 };
 
@@ -70,11 +69,19 @@ impl Default for ChainConfig {
 impl ChainConfig {
     pub const BASE_ASSET: AssetId = AssetId::zeroed();
 
-    pub fn load_from_file(path: impl AsRef<Path>) -> anyhow::Result<Self> {
-        let contents = std::fs::read(path.as_ref().join("chain_parameters.json"))?;
+    #[cfg(feature = "std")]
+    pub fn load_from_directory(path: &str) -> Result<Self, anyhow::Error> {
+        let path = PathBuf::from_str(path)?.join("chain_parameters.json");
+        Self::load_from_file(path)
+    }
+
+    #[cfg(feature = "std")]
+    pub fn load_from_file(path: impl AsRef<Path>) -> Result<Self, anyhow::Error> {
+        let contents = std::fs::read(path.as_ref())?;
         serde_json::from_slice(&contents).map_err(|e| {
             anyhow::Error::new(e).context(format!(
-                "an error occurred while loading the chain parameters file"
+                "an error occurred while loading the chain state file: {:?}",
+                path.as_ref().to_str()
             ))
         })
     }
@@ -83,30 +90,6 @@ impl ChainConfig {
         Self {
             chain_name: LOCAL_TESTNET.to_string(),
             ..Default::default()
-        }
-    }
-}
-
-#[cfg(feature = "std")]
-impl FromStr for ChainConfig {
-    type Err = std::io::Error;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s {
-            LOCAL_TESTNET => Ok(Self::local_testnet()),
-            s => {
-                // Attempt to load chain config from path
-                let path = PathBuf::from(s.to_string());
-                let contents = std::fs::read(path)?;
-                serde_json::from_slice(&contents).map_err(|e| {
-                    std::io::Error::new(
-                        ErrorKind::InvalidData,
-                        anyhow::Error::new(e).context(format!(
-                            "an error occurred while loading the chain config file {s}"
-                        )),
-                    )
-                })
-            }
         }
     }
 }
