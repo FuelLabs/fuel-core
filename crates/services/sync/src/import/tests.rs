@@ -115,7 +115,8 @@ async fn test_import_3_to_5() {
 #[tokio::test]
 async fn test_import_0_to_499() {
     // The observed block height
-    let end = 499;
+    let end_u32: u32 = 499;
+    let end = end_u32 as usize;
     // The number of headers/blocks in range 0..end
     let n = end + 1;
     // The number of headers/blocks per batch
@@ -162,7 +163,7 @@ async fn test_import_0_to_499() {
 
     let params = Config {
         block_stream_buffer_size: 10,
-        header_batch_size: header_batch_size as u32,
+        header_batch_size,
     };
     let mocks = Mocks {
         consensus_port,
@@ -170,10 +171,10 @@ async fn test_import_0_to_499() {
         executor: DefaultMocks::times([n]),
     };
 
-    let state = State::new(None, end as u32);
+    let state = State::new(None, end_u32);
     let state = SharedMutex::new(state);
     let v = test_import_inner(state, mocks, None, params).await;
-    let expected = (State::new(end as u32, None), true);
+    let expected = (State::new(end_u32, None), true);
     assert_eq!(v, expected);
 }
 

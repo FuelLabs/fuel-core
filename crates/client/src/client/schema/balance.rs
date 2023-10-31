@@ -56,7 +56,7 @@ impl From<(Address, PaginationRequest<String>)> for BalancesConnectionArgs {
                 filter: BalanceFilterInput { owner: r.0 },
                 after: r.1.cursor,
                 before: None,
-                first: Some(r.1.results as i32),
+                first: Some(r.1.results),
                 last: None,
             },
             PageDirection::Backward => BalancesConnectionArgs {
@@ -64,7 +64,7 @@ impl From<(Address, PaginationRequest<String>)> for BalancesConnectionArgs {
                 after: None,
                 before: r.1.cursor,
                 first: None,
-                last: Some(r.1.results as i32),
+                last: Some(r.1.results),
             },
         }
     }

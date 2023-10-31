@@ -67,6 +67,7 @@ Description of the upcoming release here.
 - [#1408](https://github.com/FuelLabs/fuel-core/pull/1408): Update gas benchmarks for storage opcodes to use a pre-populated database to get more accurate worst-case costs.
 
 #### Breaking
+- [#1464](https://github.com/FuelLabs/fuel-core/pull/1464): Avoid possible truncation of higher bits. It may invalidate the code that truncated higher bits causing different behavior on 32-bit vs. 64-bit systems. The change affects some endpoints that now require lesser integers.
 - [#1432](https://github.com/FuelLabs/fuel-core/pull/1432): All subscriptions and requests have a TTL now. So each subscription lifecycle is limited in time. If the subscription is closed because of TTL, it means that you subscribed after your transaction had been dropped by the network.
 - [#1407](https://github.com/FuelLabs/fuel-core/pull/1407): The recipient is a `ContractId` instead of `Address`. The block producer should deploy its contract to receive the transaction fee. The collected fee is zero until the recipient contract is set.
 - [#1407](https://github.com/FuelLabs/fuel-core/pull/1407): The `Mint` transaction is reworked with new fields to support the account-base model. It affects serialization and deserialization of the transaction and also affects GraphQL schema.

@@ -125,16 +125,6 @@ impl DaBlockHeight {
         self.0.to_be_bytes()
     }
 
-    /// Convert to usize
-    pub fn to_usize(self) -> usize {
-        self.0 as usize
-    }
-
-    /// Convert to usize
-    pub fn as_usize(&self) -> usize {
-        self.0 as usize
-    }
-
     /// Convert to u64
     pub fn as_u64(&self) -> u64 {
         self.0
