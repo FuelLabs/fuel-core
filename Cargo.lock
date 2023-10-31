@@ -2946,12 +2946,10 @@ name = "fuel-core-keygen"
 version = "0.20.8"
 dependencies = [
  "anyhow",
- "atty",
  "clap 4.4.7",
  "fuel-core-types",
  "libp2p-identity 0.2.7",
- "serde_json",
- "termion",
+ "serde",
 ]
 
 [[package]]
@@ -2959,8 +2957,11 @@ name = "fuel-core-keygen-bin"
 version = "0.20.8"
 dependencies = [
  "anyhow",
+ "atty",
  "clap 4.4.7",
  "fuel-core-keygen",
+ "serde_json",
+ "termion",
 ]
 
 [[package]]
