@@ -812,7 +812,7 @@ mod tests {
         let max_peers_allowed = 3;
 
         let (bootstrap_nodes, bootstrap_multiaddrs) =
-            setup_bootstrap_nodes(&p2p_config, max_peers_allowed * 5).await;
+            setup_bootstrap_nodes(&p2p_config, max_peers_allowed.saturating_mul(5)).await;
         let (mut reserved_nodes, reserved_multiaddrs) =
             setup_bootstrap_nodes(&p2p_config, max_peers_allowed).await;
 
