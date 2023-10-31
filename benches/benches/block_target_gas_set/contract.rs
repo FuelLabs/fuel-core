@@ -257,7 +257,7 @@ pub fn run_contract(group: &mut BenchmarkGroup<WallTime>) {
             op::ccp(0x15, 0x10, RegId::ZERO, 0x13),
             op::jmpb(RegId::ZERO, 0),
         ]);
-        replace_contract_in_service(&mut service, &contract_id, contract_instructions);
+        replace_contract_in_service(&mut service, &contract_id, contract);
         run_with_service(
             id,
             group,
@@ -299,7 +299,7 @@ pub fn run_contract(group: &mut BenchmarkGroup<WallTime>) {
         op::move_(0x14, RegId::HP),
         op::call(0x10, RegId::ZERO, 0x11, 0x12),
     ]);
-    replace_contract_in_service(&mut service, &contract_id, contract_instructions);
+    replace_contract_in_service(&mut service, &contract_id, contract);
     run_with_service(
         "contract/croo",
         group,
@@ -350,7 +350,7 @@ pub fn run_contract(group: &mut BenchmarkGroup<WallTime>) {
             op::csiz(0x11, 0x10),
             op::jmpb(RegId::ZERO, 0),
         ]);
-        replace_contract_in_service(&mut service, &contract_id, contract_instructions);
+        replace_contract_in_service(&mut service, &contract_id, contract);
         run_with_service(
             id,
             group,
@@ -411,16 +411,11 @@ pub fn run_contract(group: &mut BenchmarkGroup<WallTime>) {
             .collect();
         let mut instructions = setup_instructions();
         instructions.extend(vec![
-            op::gtf_args(0x10, 0x00, GTFArgs::ScriptData),
-            op::addi(0x11, 0x10, ContractId::LEN.try_into().unwrap()),
-            op::addi(0x11, 0x11, WORD_SIZE.try_into().unwrap()),
-            op::addi(0x11, 0x11, WORD_SIZE.try_into().unwrap()),
-            op::movi(0x12, 100_000),
             op::movi(0x13, size.try_into().unwrap()),
             op::ldc(0x10, RegId::ZERO, 0x13),
             op::jmpb(RegId::ZERO, 0),
         ]);
-        replace_contract_in_service(&mut service, &contract_id, contract_instructions);
+        replace_contract_in_service(&mut service, &contract_id, contract);
         run_with_service(
             id,
             group,
@@ -447,6 +442,20 @@ pub fn run_contract(group: &mut BenchmarkGroup<WallTime>) {
     //         )
     //         .expect("failed to prepare contract"),
     //     );
+
+    let contract = vec![op::mint(RegId::ONE, RegId::ZERO)];
+    let instructions = call_contract_repeat();
+    replace_contract_in_service(&mut service, &contract_id, contract);
+    run_with_service(
+        "contract/mint",
+        group,
+        instructions,
+        script_data,
+        &service,
+        contract_id,
+        &rt,
+        &mut rng,
+    );
 
     // retd
 
@@ -494,6 +503,25 @@ pub fn run_contract(group: &mut BenchmarkGroup<WallTime>) {
     //     }
     //
     //     smo.finish();
+
+    for size in arb_dependent_cost_values() {
+        let contract = std::iter::repeat(op::noop())
+            .take(size as usize)
+            .chain(vec![op::ret(RegId::ZERO)])
+            .collect();
+        let mut instructions = setup_instructions();
+        instructions.extend(vec![
+            op::gtf_args(0x15, 0x00, GTFArgs::ScriptData),
+            // Offset 32 + 8 + 8 + 32
+            op::addi(0x15, 0x15, 32 + 8 + 8 + 32), // target address pointer
+            op::addi(0x16, 0x15, 32),              // data ppinter
+            op::movi(0x17, size.try_into().unwrap()), // data length
+            op::movi(0x18, 10),                    // coins to send
+            op::smo(0x15, 0x16, 0x17, 0x18),
+            op::jmpb(RegId::ZERO, 0),
+        ]);
+        replace_contract_in_service(&mut service, &contract_id, contract);
+    }
 
     //     let mut scwq = c.benchmark_group("scwq");
     //
@@ -704,12 +732,16 @@ fn setup_instructions() -> Vec<Instruction> {
 }
 
 fn call_contract_repeat() -> Vec<Instruction> {
-    setup_instructions().extend(vec![
+    let mut instructions = setup_instructions();
+    instructions.extend(vec![
         op::call(0x10, RegId::ZERO, 0x11, 0x12),
         op::jmpb(RegId::ZERO, 0),
-    ])
+    ]);
+    instructions
 }
 
 fn call_contract_once() -> Vec<Instruction> {
-    setup_instructions().extend(vec![op::call(0x10, RegId::ZERO, 0x11, 0x12)])
+    let mut instructions = setup_instructions();
+    instructions.extend(vec![op::call(0x10, RegId::ZERO, 0x11, 0x12)]);
+    instructions
 }
