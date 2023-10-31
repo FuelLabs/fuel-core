@@ -169,7 +169,7 @@ impl<Codec: NetworkCodec> FuelP2PService<Codec> {
             // Reserved nodes do not count against the configured peer input/output limits.
             let total_peers = config.max_peers_connected
                 + u32::try_from(config.reserved_nodes.len()).expect(
-                    "The numbere of reserved nodes should be less than `u32::max`",
+                    "The number of reserved nodes should be less than `u32::MAX`",
                 );
 
             total_peers * config.max_connections_per_peer
