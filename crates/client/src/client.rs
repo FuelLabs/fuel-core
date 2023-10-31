@@ -466,7 +466,7 @@ impl FuelClient {
         self.query(query).await.map(|r| r.execute)
     }
 
-    pub async fn register(&self, id: &str, register: u32) -> io::Result<Word> {
+    pub async fn register(&self, id: &str, register: RegisterId) -> io::Result<Word> {
         let query = schema::Register::build(RegisterArgs {
             id: id.into(),
             register: register.into(),
