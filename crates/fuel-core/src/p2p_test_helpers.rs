@@ -226,7 +226,6 @@ pub async fn make_nodes(
         .max_storage_slots = 1 << 17; // 131072
 
     let mut chain_state = StateConfig::local_testnet();
-
     for (all, producer) in txs_coins.into_iter().zip(producers.into_iter()) {
         match all {
             Some(all) => {
@@ -247,6 +246,7 @@ pub async fn make_nodes(
         futures::stream::iter(bootstrap_setup.into_iter().enumerate())
             .then(|(i, boot)| {
                 let chain_config = chain_config.clone();
+                let chain_state = chain_state.clone();
                 async move {
                     let chain_config = chain_config.clone();
                     let name = boot.as_ref().map_or(String::new(), |s| s.name.clone());
@@ -255,6 +255,7 @@ pub async fn make_nodes(
                             .then_some(name)
                             .unwrap_or_else(|| format!("b:{i}")),
                         chain_config.clone(),
+                        chain_state,
                     );
                     if let Some(BootstrapSetup { pub_key, .. }) = boot {
                         match &mut node_config.chain_parameters.consensus {
@@ -274,12 +275,14 @@ pub async fn make_nodes(
     let mut producers = Vec::with_capacity(producers_with_txs.len());
     for (i, s) in producers_with_txs.into_iter().enumerate() {
         let chain_config = chain_config.clone();
+        let chain_state = chain_state.clone();
         let name = s.as_ref().map_or(String::new(), |s| s.0.name.clone());
         let mut node_config = make_config(
             (!name.is_empty())
                 .then_some(name)
                 .unwrap_or_else(|| format!("p:{i}")),
             chain_config.clone(),
+            chain_state,
         );
 
         let mut test_txs = Vec::with_capacity(0);
@@ -324,12 +327,14 @@ pub async fn make_nodes(
     let mut validators = vec![];
     for (i, s) in validators_setup.into_iter().enumerate() {
         let chain_config = chain_config.clone();
+        let chain_state = chain_state.clone();
         let name = s.as_ref().map_or(String::new(), |s| s.name.clone());
         let mut node_config = make_config(
             (!name.is_empty())
                 .then_some(name)
                 .unwrap_or_else(|| format!("v:{i}")),
             chain_config.clone(),
+            chain_state,
         );
         node_config.block_production = Trigger::Never;
 
@@ -366,9 +371,14 @@ pub async fn make_nodes(
     }
 }
 
-pub fn make_config(name: String, chain_config: ChainConfig) -> Config {
+pub fn make_config(
+    name: String,
+    chain_params: ChainConfig,
+    chain_state: StateConfig,
+) -> Config {
     let mut node_config = Config::local_node();
-    node_config.chain_parameters = chain_config;
+    node_config.chain_parameters = chain_params;
+    node_config.chain_state = chain_state;
     node_config.utxo_validation = true;
     node_config.name = name;
     node_config
