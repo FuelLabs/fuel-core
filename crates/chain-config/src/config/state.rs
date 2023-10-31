@@ -1,25 +1,23 @@
-use bech32::{
-    ToBase32,
-    Variant::Bech32m,
-};
-
-use crate::{
-    FUEL_BECH32_HRP,
-    TESTNET_INITIAL_BALANCE,
-};
-
 use fuel_core_storage::Result as StorageResult;
 use fuel_core_types::{
     fuel_tx::UtxoId,
     fuel_types::{
         Address,
         BlockHeight,
-        Bytes32,
     },
     fuel_vm::SecretKey,
 };
 
+#[cfg(feature = "std")]
+use bech32::{
+    ToBase32,
+    Variant::Bech32m,
+};
+#[cfg(feature = "std")]
 use core::str::FromStr;
+#[cfg(feature = "std")]
+use fuel_core_types::fuel_types::Bytes32;
+#[cfg(feature = "std")]
 use itertools::Itertools;
 use serde::{
     Deserialize,
@@ -40,6 +38,10 @@ use super::{
     contract::ContractConfig,
     message::MessageConfig,
 };
+
+// Fuel Network human-readable part for bech32 encoding
+pub const FUEL_BECH32_HRP: &str = "fuel";
+pub const TESTNET_INITIAL_BALANCE: u64 = 10_000_000;
 
 // TODO: do streaming deserialization to handle large state configs
 #[serde_as]

@@ -1,3 +1,4 @@
+#[cfg(feature = "std")]
 use core::str::FromStr;
 use fuel_core_storage::MerkleRoot;
 use fuel_core_types::{
@@ -32,10 +33,7 @@ use crate::{
     ConsensusConfig,
 };
 
-// Fuel Network human-readable part for bech32 encoding
-pub const FUEL_BECH32_HRP: &str = "fuel";
 pub const LOCAL_TESTNET: &str = "local_testnet";
-pub const TESTNET_INITIAL_BALANCE: u64 = 10_000_000;
 
 #[serde_as]
 // TODO: Remove not consensus/network fields from `ChainConfig` or create a new config only

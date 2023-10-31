@@ -102,7 +102,7 @@ pub fn init_sub_services(
             let p2p_config = p2p_config.init(genesis)?;
 
             Some(fuel_core_p2p::service::new_service(
-                config.chain_conf.consensus_parameters.chain_id,
+                config.chain_parameters.consensus_parameters.chain_id,
                 p2p_config,
                 p2p_db,
                 importer_adapter.clone(),
