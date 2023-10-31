@@ -1494,13 +1494,18 @@ where
                 .copied()
                 .map(|result| FuelBacktrace::from_vm_error(vm, result))
             {
+                let sp = usize::try_from(backtrace.registers()[RegId::SP]).expect(
+                    "The `$sp` register points to the memory of the VM. \
+                    Because the VM's memory is limited by the `usize` of the system, \
+                    it is impossible to lose higher bits during truncation.",
+                );
                 warn!(
                     target = "vm",
                     "Backtrace on contract: 0x{:x}\nregisters: {:?}\ncall_stack: {:?}\nstack\n: {}",
                     backtrace.contract(),
                     backtrace.registers(),
                     backtrace.call_stack(),
-                    hex::encode(&backtrace.memory()[..usize::try_from(backtrace.registers()[RegId::SP]).expect("`$sp` can't be more than memory - `usize`")]), // print stack
+                    hex::encode(&backtrace.memory()[..sp]), // print stack
                 );
             }
         }
