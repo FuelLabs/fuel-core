@@ -16,9 +16,7 @@ use libp2p::{
         Keypair,
     },
     mplex,
-    noise::{
-        self,
-    },
+    noise::{self,},
     tcp::{
         tokio::Transport as TokioTcpTransport,
         Config as TcpConfig,
@@ -74,9 +72,6 @@ const TRANSPORT_TIMEOUT: Duration = Duration::from_secs(20);
 pub struct Config<State = Initialized> {
     /// The keypair used for for handshake during communication with other p2p nodes.
     pub keypair: Keypair,
-
-    /// Name of the Network
-    pub network_name: String,
 
     /// Checksum is a hash(sha256) of [`Genesis`](fuel_core_types::blockchain::consensus::Genesis) - chain id.
     pub checksum: Checksum,

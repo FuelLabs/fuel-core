@@ -284,7 +284,6 @@ impl P2PArgs {
 
         let config = Config {
             keypair: local_keypair,
-            network_name: self.network.expect("mandatory value"),
             checksum: Default::default(),
             address: self
                 .address
