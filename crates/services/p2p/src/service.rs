@@ -520,7 +520,7 @@ where
                         let request_msg = RequestMessage::SealedHeaders(block_height_range.clone());
                         let channel_item = ResponseChannelItem::SealedHeaders(response);
 
-                        // Note: this range has already been check for
+                        // Note: this range has already been checked for
                         // validity in `SharedState::get_sealed_block_headers`.
                         let block_height = BlockHeight::from(block_height_range.end.saturating_sub(1));
                         let peer = self.p2p_service
