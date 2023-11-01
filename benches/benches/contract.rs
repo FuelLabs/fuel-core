@@ -2,15 +2,9 @@ use criterion::{
     Criterion,
     Throughput,
 };
-use fuel_core_types::{
-    fuel_tx::{
-        Contract,
-        StorageSlot,
-    },
-    fuel_types::{
-        Bytes32,
-        Salt,
-    },
+use fuel_core_types::fuel_tx::{
+    Contract,
+    StorageSlot,
 };
 use rand::{
     rngs::StdRng,
@@ -26,23 +20,6 @@ fn random_bytes<R: Rng + ?Sized>(n: usize, rng: &mut R) -> Vec<u8> {
     }
 
     bytes.into()
-}
-
-pub fn contract_id(c: &mut Criterion) {
-    let rng = &mut StdRng::seed_from_u64(8586);
-
-    let mut group = c.benchmark_group("contract_id");
-
-    let name = "contract_id";
-    group.bench_function(name, |b| {
-        let contract: Contract = random_bytes(1024, rng).into();
-        let salt = rng.gen::<Salt>();
-        let contract_root = rng.gen::<Bytes32>();
-        let state_root = rng.gen::<Bytes32>();
-        b.iter(|| {
-            contract.id(&salt, &contract_root, &state_root);
-        })
-    });
 }
 
 pub fn contract_root(c: &mut Criterion) {
