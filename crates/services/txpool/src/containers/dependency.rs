@@ -425,7 +425,9 @@ impl Dependency {
                         *utxo_id,
                         CoinState {
                             is_spend_by: Some(tx.id() as TxId),
-                            depth: max_depth.saturating_sub(1),
+                            depth: max_depth
+                                .checked_sub(1)
+                                .expect("The `max_depth` is always more than zero above"),
                         },
                     );
                     // yey we got our coin
