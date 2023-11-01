@@ -1798,7 +1798,6 @@ mod tests {
                 Outputs,
                 Script as ScriptField,
             },
-            Chargeable,
             CheckError,
             ConsensusParameters,
             Create,
@@ -2068,13 +2067,10 @@ mod tests {
 
             let producer = Executor::test(database.clone(), config);
 
-            let expected_fee_amount_1 = TransactionFee::checked_from_values(
+            let expected_fee_amount_1 = TransactionFee::checked_from_tx(
+                producer.config.consensus_parameters.gas_costs(),
                 producer.config.consensus_parameters.fee_params(),
-                script.metered_bytes_size() as Word,
-                gas_used_by_predicates,
-                gas_used_by_signature_checks,
-                limit,
-                price,
+                &script,
             )
             .unwrap()
             .max_fee();
@@ -2140,13 +2136,10 @@ mod tests {
                 .transaction()
                 .clone();
 
-            let expected_fee_amount_2 = TransactionFee::checked_from_values(
+            let expected_fee_amount_2 = TransactionFee::checked_from_tx(
+                producer.config.consensus_parameters.gas_costs(),
                 producer.config.consensus_parameters.fee_params(),
-                script.metered_bytes_size() as Word,
-                gas_used_by_predicates,
-                gas_used_by_signature_checks,
-                limit,
-                price,
+                &script,
             )
             .unwrap()
             .max_fee();
