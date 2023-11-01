@@ -70,11 +70,10 @@ impl From<Vec<u8>> for ContractCode {
 }
 
 pub struct PrepareCall {
-    ra: RegId,
-    rb: RegId,
-    rc: RegId,
-    rd: RegId,
-    receipts_ctx: ReceiptsCtx,
+    pub ra: RegId,
+    pub rb: RegId,
+    pub rc: RegId,
+    pub rd: RegId,
 }
 
 pub struct VmBench {
@@ -94,6 +93,7 @@ pub struct VmBench {
     pub prepare_call: Option<PrepareCall>,
     pub dummy_contract: Option<ContractId>,
     pub contract_code: Option<ContractCode>,
+    pub receipts_ctx: Option<ReceiptsCtx>,
     pub prepare_db: Option<Box<dyn FnMut(VmDatabase) -> anyhow::Result<VmDatabase>>>,
 }
 
@@ -133,6 +133,7 @@ impl VmBench {
             prepare_call: None,
             dummy_contract: None,
             contract_code: None,
+            receipts_ctx: None,
             prepare_db: None,
         }
     }
@@ -196,7 +197,6 @@ impl VmBench {
             rb: RegId::ZERO,
             rc: RegId::new(0x11),
             rd: RegId::new(0x12),
-            receipts_ctx: ReceiptsCtx::default(),
         };
 
         Ok(bench
@@ -281,11 +281,8 @@ impl VmBench {
         self
     }
 
-    pub fn set_call_receipts(mut self, receipts_ctx: ReceiptsCtx) -> Self {
-        self.prepare_call
-            .as_mut()
-            .expect("This needs a prepare_call context")
-            .receipts_ctx = receipts_ctx;
+    pub fn with_call_receipts(mut self, receipts_ctx: ReceiptsCtx) -> Self {
+        self.receipts_ctx = Some(receipts_ctx);
         self
     }
 
@@ -333,6 +330,7 @@ impl TryFrom<VmBench> for VmBenchPrepared {
             prepare_call,
             dummy_contract,
             contract_code,
+            receipts_ctx,
             prepare_db,
         } = case;
 
@@ -443,16 +441,12 @@ impl TryFrom<VmBench> for VmBenchPrepared {
 
         let mut vm: Interpreter<_, _> = txtor.into();
 
-        if let Some(p) = prepare_call {
-            let PrepareCall {
-                ra,
-                rb,
-                rc,
-                rd,
-                receipts_ctx,
-            } = p;
-
+        if let Some(receipts_ctx) = receipts_ctx {
             *vm.receipts_mut() = receipts_ctx;
+        }
+
+        if let Some(p) = prepare_call {
+            let PrepareCall { ra, rb, rc, rd } = p;
 
             vm.prepare_call(ra, rb, rc, rd)
                 .map_err(anyhow::Error::msg)?;

@@ -260,7 +260,7 @@ pub fn run(c: &mut Criterion) {
                 .with_contract_code(code)
                 .with_data(data)
                 .with_prepare_script(prepare_script)
-                .set_call_receipts(receipts_ctx.clone()),
+                .with_call_receipts(receipts_ctx.clone()),
         );
     }
 
@@ -407,7 +407,7 @@ pub fn run(c: &mut Criterion) {
             op::mint(RegId::ONE, RegId::ZERO),
         )
         .expect("failed to prepare contract")
-        .set_call_receipts(receipts_ctx.clone()),
+        .with_call_receipts(receipts_ctx.clone()),
     );
 
     run_group_ref(
@@ -416,7 +416,7 @@ pub fn run(c: &mut Criterion) {
         VmBench::contract_using_db(rng, db.checkpoint(), op::burn(RegId::ONE, RegId::HP))
             .expect("failed to prepare contract")
             .prepend_prepare_script(vec![op::movi(0x10, 32), op::aloc(0x10)])
-            .set_call_receipts(receipts_ctx.clone()),
+            .with_call_receipts(receipts_ctx.clone()),
     );
 
     run_group_ref(
@@ -433,7 +433,7 @@ pub fn run(c: &mut Criterion) {
         let mut input =
             VmBench::contract_using_db(rng, db.checkpoint(), op::tr(0x15, 0x14, 0x15))
                 .expect("failed to prepare contract")
-                .set_call_receipts(receipts_ctx.clone());
+                .with_call_receipts(receipts_ctx.clone());
         input
             .prepare_script
             .extend(vec![op::movi(0x15, 2000), op::movi(0x14, 100)]);
@@ -447,7 +447,7 @@ pub fn run(c: &mut Criterion) {
             op::tro(RegId::ZERO, 0x15, 0x14, RegId::HP),
         )
         .expect("failed to prepare contract")
-        .set_call_receipts(receipts_ctx.clone());
+        .with_call_receipts(receipts_ctx.clone());
         let coin_output = Output::variable(Address::zeroed(), 100, AssetId::zeroed());
         input.outputs.push(coin_output);
         let predicate = op::ret(RegId::ONE).to_bytes().to_vec();
@@ -519,7 +519,7 @@ pub fn run(c: &mut Criterion) {
             op::smo(0x15, 0x16, 0x17, 0x18),
         )
         .expect("failed to prepare contract")
-        .set_call_receipts(receipts_ctx.clone());
+        .with_call_receipts(receipts_ctx.clone());
         input.post_call.extend(vec![
             op::gtf_args(0x15, 0x00, GTFArgs::ScriptData),
             // Offset 32 + 8 + 8 + 32
