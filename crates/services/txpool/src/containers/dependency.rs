@@ -606,7 +606,13 @@ impl Dependency {
 
         // iterate over all outputs and insert them, marking them as available.
         for (index, output) in tx.outputs().iter().enumerate() {
-            let utxo_id = UtxoId::new(tx.id(), index as u8);
+            let index = u8::try_from(index).map_err(|_| {
+                anyhow::anyhow!(
+                    "The number of outputs in `{}` is more than `u8::max`",
+                    tx.id()
+                )
+            })?;
+            let utxo_id = UtxoId::new(tx.id(), index);
             match output {
                 Output::Coin { .. } | Output::Change { .. } | Output::Variable { .. } => {
                     // insert output coin inside by_coin
@@ -655,8 +661,11 @@ impl Dependency {
                     // no other transactions can depend on these types of outputs
                 }
                 Output::Coin { .. } | Output::Change { .. } | Output::Variable { .. } => {
+                    let index = u8::try_from(index)
+                        .expect("The number of outputs is more than `u8::max`. \
+                        But it should be impossible because we don't include transactions with so many outputs.");
                     // remove transactions that depend on this coin output
-                    let utxo = UtxoId::new(tx.id(), index as u8);
+                    let utxo = UtxoId::new(tx.id(), index);
                     if let Some(state) = self.coins.remove(&utxo).map(|c| c.is_spend_by) {
                         // there may or may not be any dependents for this coin output
                         if let Some(spend_by) = state {

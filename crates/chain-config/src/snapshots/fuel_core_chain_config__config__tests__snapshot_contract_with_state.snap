@@ -204,6 +204,14 @@ expression: json
       "swwq": {
         "base": 44,
         "dep_per_unit": 5
+      },
+      "contract_root": {
+        "base": 75,
+        "dep_per_unit": 1
+      },
+      "state_root": {
+        "base": 412,
+        "dep_per_unit": 1
       }
     },
     "base_asset_id": "0000000000000000000000000000000000000000000000000000000000000000"

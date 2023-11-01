@@ -71,7 +71,8 @@ async fn reset() {
     assert!(result);
 
     let memory = client.register(id, 0x11).await.unwrap();
-    let memory = client.memory(id, memory as RegisterId, 8).await.unwrap();
+    let memory = u32::try_from(memory).unwrap();
+    let memory = client.memory(id, memory, 8).await.unwrap();
     let memory = Word::from_be_bytes(memory.as_slice().try_into().unwrap());
     assert_eq!(0xfa, memory);
 

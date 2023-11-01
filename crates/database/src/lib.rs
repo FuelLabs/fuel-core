@@ -4,6 +4,7 @@
 //! defined here are used by services but are flexible enough to customize the
 //! logic when the `Database` is known.
 
+#![deny(clippy::cast_possible_truncation)]
 #![deny(missing_docs)]
 #![deny(unused_crate_dependencies)]
 #![deny(warnings)]

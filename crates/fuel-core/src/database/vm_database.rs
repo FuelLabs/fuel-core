@@ -225,7 +225,7 @@ impl InterpreterStorage for VmDatabase {
         &self,
         contract_id: &ContractId,
         start_key: &Bytes32,
-        range: Word,
+        range: usize,
     ) -> Result<Vec<Option<Cow<Bytes32>>>, Self::DataError> {
         // TODO: Optimization: Iterate only over `range` elements.
         let mut iterator = self.database.iter_all_filtered::<Vec<u8>, Bytes32, _, _>(
@@ -234,7 +234,6 @@ impl InterpreterStorage for VmDatabase {
             Some(ContractsStateKey::new(contract_id, start_key)),
             Some(IterDirection::Forward),
         );
-        let range = range as usize;
 
         let mut expected_key = U256::from_big_endian(start_key.as_ref());
         let mut results = vec![];
@@ -312,7 +311,7 @@ impl InterpreterStorage for VmDatabase {
         &mut self,
         contract_id: &ContractId,
         start_key: &Bytes32,
-        range: Word,
+        range: usize,
     ) -> Result<Option<()>, Self::DataError> {
         let mut found_unset = false;
 
@@ -416,7 +415,7 @@ mod tests {
     fn read_sequential_range(
         prefilled_slots: &[([u8; 32], [u8; 32])],
         start_key: [u8; 32],
-        range: u64,
+        range: usize,
     ) -> Result<Vec<Option<[u8; 32]>>, ()> {
         let mut db = VmDatabase::default();
 
@@ -582,7 +581,7 @@ mod tests {
     fn remove_range(
         prefilled_slots: &[([u8; 32], [u8; 32])],
         start_key: [u8; 32],
-        remove_count: Word,
+        remove_count: usize,
     ) -> (Vec<[u8; 32]>, bool) {
         let mut db = VmDatabase::default();
 
@@ -609,7 +608,7 @@ mod tests {
             .is_some();
 
         // check stored data
-        let results: Vec<_> = (0..(remove_count as usize))
+        let results: Vec<_> = (0..remove_count)
             .filter_map(|i| {
                 let current_key = U256::from_big_endian(&start_key) + i;
                 let current_key = u256_to_bytes32(current_key);

@@ -295,6 +295,8 @@ where
                 }
             });
 
+            tracing::info!("The service {} is shut down", S::NAME);
+
             if let State::StoppedWithError(err) = stopped_state {
                 std::panic::resume_unwind(Box::new(err));
             }
@@ -325,6 +327,7 @@ async fn run<S>(
     }
 
     // We can panic here, because it is inside of the task.
+    tracing::info!("Starting {} service", S::NAME);
     let mut task = service
         .into_task(&state, params)
         .await
@@ -355,8 +358,14 @@ async fn run<S>(
         let tracked_result = panic_result.expect("Checked the panic above");
 
         // TODO: Use `u128` when `AtomicU128` is stable.
-        metric.busy.inc_by(tracked_result.busy.as_nanos() as u64);
-        metric.idle.inc_by(tracked_result.idle.as_nanos() as u64);
+        metric.busy.inc_by(
+            u64::try_from(tracked_result.busy.as_nanos())
+                .expect("The task doesn't live longer than `u64`"),
+        );
+        metric.idle.inc_by(
+            u64::try_from(tracked_result.idle.as_nanos())
+                .expect("The task doesn't live longer than `u64`"),
+        );
 
         let result = tracked_result.output;
 
@@ -375,6 +384,7 @@ async fn run<S>(
         }
     }
 
+    tracing::info!("Shutting down {} service", S::NAME);
     let shutdown = std::panic::AssertUnwindSafe(task.shutdown());
     match shutdown.catch_unwind().await {
         Ok(Ok(_)) => {}

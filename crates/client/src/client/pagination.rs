@@ -11,7 +11,7 @@ pub struct PaginationRequest<T> {
     /// The cursor returned from a previous query to indicate an offset
     pub cursor: Option<T>,
     /// The number of results to take
-    pub results: usize,
+    pub results: i32,
     /// The direction of the query (e.g. asc, desc order).
     pub direction: PageDirection,
 }

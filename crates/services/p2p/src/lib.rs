@@ -1,3 +1,5 @@
+#![deny(clippy::cast_possible_truncation)]
+
 pub mod behavior;
 pub mod codecs;
 pub mod config;
