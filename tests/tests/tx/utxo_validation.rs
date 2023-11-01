@@ -222,7 +222,7 @@ async fn dry_run_no_utxo_validation_override() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 8)]
 async fn concurrent_tx_submission_produces_expected_blocks() {
-    const TEST_TXS: usize = 10;
+    const TEST_TXS: i32 = 10;
 
     let mut rng = StdRng::seed_from_u64(2322u64);
     let mut test_builder = TestSetupBuilder::new(100);

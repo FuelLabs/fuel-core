@@ -228,7 +228,7 @@ impl From<SyncArgs> for fuel_core::sync::Config {
     fn from(value: SyncArgs) -> Self {
         Self {
             block_stream_buffer_size: value.block_stream_buffer_size,
-            header_batch_size: value.header_batch_size,
+            header_batch_size: value.header_batch_size as usize,
         }
     }
 }

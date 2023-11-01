@@ -33,7 +33,7 @@ pub struct BlockByIdQuery {
 
 #[derive(cynic::QueryVariables, Debug)]
 pub struct BlockByHeightArgs {
-    pub height: Option<U64>,
+    pub height: Option<U32>,
 }
 
 #[derive(cynic::QueryFragment, Debug)]
@@ -90,7 +90,7 @@ pub struct BlockIdFragment {
 #[derive(cynic::QueryVariables, Debug)]
 pub struct ProduceBlockArgs {
     pub start_timestamp: Option<Tai64Timestamp>,
-    pub blocks_to_produce: U64,
+    pub blocks_to_produce: U32,
 }
 
 #[derive(cynic::QueryFragment, Debug)]
@@ -176,7 +176,7 @@ mod tests {
     fn block_by_height_query_gql_output() {
         use cynic::QueryBuilder;
         let operation = BlockByHeightQuery::build(BlockByHeightArgs {
-            height: Some(U64(0)),
+            height: Some(U32(0)),
         });
         insta::assert_snapshot!(operation.query)
     }
@@ -185,7 +185,7 @@ mod tests {
     fn block_mutation_query_gql_output() {
         use cynic::MutationBuilder;
         let operation = BlockMutation::build(ProduceBlockArgs {
-            blocks_to_produce: U64(0),
+            blocks_to_produce: U32(0),
             start_timestamp: None,
         });
         insta::assert_snapshot!(operation.query)

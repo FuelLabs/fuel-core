@@ -190,7 +190,7 @@ impl BlockQuery {
         &self,
         ctx: &Context<'_>,
         #[graphql(desc = "ID of the block")] id: Option<BlockId>,
-        #[graphql(desc = "Height of the block")] height: Option<U64>,
+        #[graphql(desc = "Height of the block")] height: Option<U32>,
     ) -> async_graphql::Result<Option<Block>> {
         let data: &Database = ctx.data_unchecked();
         let id = match (id, height) {
@@ -201,8 +201,7 @@ impl BlockQuery {
             }
             (Some(id), None) => Ok(id.0.into()),
             (None, Some(height)) => {
-                let height: u64 = height.into();
-                let height: u32 = height.try_into()?;
+                let height: u32 = height.into();
                 data.block_id(&height.into())
             }
             (None, None) => {
@@ -238,7 +237,7 @@ impl HeaderQuery {
         &self,
         ctx: &Context<'_>,
         #[graphql(desc = "ID of the block")] id: Option<BlockId>,
-        #[graphql(desc = "Height of the block")] height: Option<U64>,
+        #[graphql(desc = "Height of the block")] height: Option<U32>,
     ) -> async_graphql::Result<Option<Header>> {
         Ok(BlockQuery {}
             .block(ctx, id, height)
@@ -291,7 +290,7 @@ impl BlockMutation {
         &self,
         ctx: &Context<'_>,
         start_timestamp: Option<Tai64Timestamp>,
-        blocks_to_produce: U64,
+        blocks_to_produce: U32,
     ) -> async_graphql::Result<U32> {
         let query: &Database = ctx.data_unchecked();
         let consensus_module = ctx.data_unchecked::<ConsensusModule>();
@@ -302,9 +301,9 @@ impl BlockMutation {
         }
 
         let start_time = start_timestamp.map(|timestamp| timestamp.0);
-        let blocks_to_produce: u64 = blocks_to_produce.into();
+        let blocks_to_produce: u32 = blocks_to_produce.into();
         consensus_module
-            .manually_produce_blocks(start_time, blocks_to_produce as u32)
+            .manually_produce_blocks(start_time, blocks_to_produce)
             .await?;
 
         query

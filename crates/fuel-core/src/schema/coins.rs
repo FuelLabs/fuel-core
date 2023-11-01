@@ -131,7 +131,7 @@ pub struct SpendQueryElementInput {
     /// Target amount for the query.
     amount: U64,
     /// The maximum number of currencies for selection.
-    max: Option<U64>,
+    max: Option<U32>,
 }
 
 #[derive(async_graphql::InputObject)]
@@ -226,9 +226,7 @@ impl CoinQuery {
                 AssetSpendTarget::new(
                     e.asset_id.0,
                     e.amount.0,
-                    e.max
-                        .map(|max| max.0)
-                        .unwrap_or(config.consensus_parameters.tx_params().max_inputs),
+                    e.max.map(|max| max.0 as usize).unwrap_or(usize::MAX),
                 )
             })
             .collect_vec();

@@ -64,7 +64,7 @@ pub struct Config {
     /// The maximum number of get transaction requests to make in a single batch.
     pub block_stream_buffer_size: usize,
     /// The maximum number of headers to request in a single batch.
-    pub header_batch_size: u32,
+    pub header_batch_size: usize,
 }
 
 impl Default for Config {
@@ -165,11 +165,13 @@ where
             let count = self.launch_stream(range.clone(), shutdown).await;
 
             // Get the size of the range.
-            let range_len = range.size_hint().0 as u32;
+            let range_len = range.size_hint().0;
 
             // If we did not process the entire range, mark the failed heights as failed.
-            if (count as u32) < range_len {
-                let incomplete_range = (*range.start() + count as u32)..=*range.end();
+            if count < range_len {
+                let count = u32::try_from(count)
+                    .expect("Size of the range can't be more than maximum `BlockHeight`");
+                let incomplete_range = (*range.start() + count)..=*range.end();
                 self.state
                     .apply(|s| s.failed_to_process(incomplete_range.clone()));
                 Err(anyhow::anyhow!(
@@ -367,11 +369,14 @@ fn get_header_batch_stream<P: PeerToPeerPort + Send + Sync + 'static>(
 
 fn range_chunks(
     range: RangeInclusive<u32>,
-    chunk_size: u32,
+    chunk_size: usize,
 ) -> impl Iterator<Item = Range<u32>> {
     let end = *range.end() + 1;
-    range.step_by(chunk_size as usize).map(move |chunk_start| {
-        let block_end = (chunk_start + chunk_size).min(end);
+    range.step_by(chunk_size).map(move |chunk_start| {
+        let block_end = (chunk_start
+            + u32::try_from(chunk_size)
+                .expect("The size of the chunk can't exceed `u32`"))
+        .min(end);
         chunk_start..block_end
     })
 }

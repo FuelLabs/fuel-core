@@ -185,7 +185,7 @@ fn main() {
     let mut reader = readers.next().unwrap();
     while let Err(TryRecvError::Empty) = rx.try_recv() {
         match reader.read_line(&mut line) {
-            Ok(amount) if amount == 0 => {
+            Ok(0) => {
                 reader = match readers.next() {
                     Some(r) => r,
                     None => break,

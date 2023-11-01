@@ -51,6 +51,7 @@ use tracing::{
 };
 use uuid::Uuid;
 
+use crate::schema::scalars::U32;
 use fuel_core_types::fuel_vm::state::DebugEval;
 
 pub struct Config {
@@ -82,7 +83,7 @@ impl ConcreteStorage {
 
     pub fn memory(&self, id: &ID, start: usize, size: usize) -> Option<&[u8]> {
         let (end, overflow) = start.overflowing_add(size);
-        if overflow || end > consts::VM_MAX_RAM as usize {
+        if overflow || end as u64 > consts::VM_MAX_RAM {
             return None
         }
 
@@ -221,7 +222,7 @@ impl DapQuery {
         &self,
         ctx: &Context<'_>,
         id: ID,
-        register: U64,
+        register: U32,
     ) -> async_graphql::Result<U64> {
         require_debug(ctx)?;
         ctx.data_unchecked::<GraphStorage>()
@@ -236,8 +237,8 @@ impl DapQuery {
         &self,
         ctx: &Context<'_>,
         id: ID,
-        start: U64,
-        size: U64,
+        start: U32,
+        size: U32,
     ) -> async_graphql::Result<String> {
         require_debug(ctx)?;
         ctx.data_unchecked::<GraphStorage>()

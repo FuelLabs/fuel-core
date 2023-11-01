@@ -344,7 +344,7 @@ mod tests {
             // Query some targets, including higher than the owner's balance
             for target in 0..20 {
                 let coins = query(
-                    &[AssetSpendTarget::new(asset_id, target, u64::MAX)],
+                    &[AssetSpendTarget::new(asset_id, target, usize::MAX)],
                     &owner,
                     base_asset_id,
                     &db.service_database(),
@@ -440,8 +440,8 @@ mod tests {
         ) {
             let coins = query(
                 &[
-                    AssetSpendTarget::new(asset_ids[0], 3, u64::MAX),
-                    AssetSpendTarget::new(asset_ids[1], 6, u64::MAX),
+                    AssetSpendTarget::new(asset_ids[0], 3, usize::MAX),
+                    AssetSpendTarget::new(asset_ids[1], 6, usize::MAX),
                 ],
                 &owner,
                 base_asset_id,
@@ -514,7 +514,7 @@ mod tests {
             // Query some amounts, including higher than the owner's balance
             for amount in 0..20 {
                 let coins = query(
-                    vec![AssetSpendTarget::new(asset_id, amount, u64::MAX)],
+                    vec![AssetSpendTarget::new(asset_id, amount, usize::MAX)],
                     owner,
                     asset_ids,
                     base_asset_id,
@@ -706,7 +706,7 @@ mod tests {
             // Query some amounts, including higher than the owner's balance
             for amount in 0..20 {
                 let coins = query(
-                    vec![AssetSpendTarget::new(asset_id, amount, u64::MAX)],
+                    vec![AssetSpendTarget::new(asset_id, amount, usize::MAX)],
                     excluded_ids.clone(),
                 );
 
