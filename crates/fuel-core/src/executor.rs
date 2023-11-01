@@ -2031,8 +2031,6 @@ mod tests {
             // state transition between blocks.
             let price = 1;
             let limit = 0;
-            let gas_used_by_predicates = 0;
-            let gas_used_by_signature_checks = 0;
             let gas_price_factor = 1;
             let script = TxBuilder::new(1u64)
                 .gas_limit(limit)
