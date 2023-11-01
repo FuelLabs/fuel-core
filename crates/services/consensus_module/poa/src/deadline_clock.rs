@@ -131,7 +131,13 @@ impl DeadlineClock {
 
     /// Sets the timeout, optionally overwriting the existing value
     pub async fn set_timeout(&self, after: Duration, on_conflict: OnConflict) {
-        self.set_deadline(Instant::now() + after, on_conflict).await;
+        self.set_deadline(
+            Instant::now()
+                .checked_add(after)
+                .expect("Setting timeout after many years doesn't make a lot of sense"),
+            on_conflict,
+        )
+        .await;
     }
 
     /// Clears the timeout, so that now event is produced when it expires.

@@ -1,3 +1,4 @@
+#![allow(clippy::arithmetic_side_effects)]
 #![allow(non_snake_case)]
 
 use crate::{

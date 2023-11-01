@@ -610,7 +610,13 @@ mod tests {
         // check stored data
         let results: Vec<_> = (0..remove_count)
             .filter_map(|i| {
-                let current_key = U256::from_big_endian(&start_key) + i;
+                let (current_key, overflow) =
+                    U256::from_big_endian(&start_key).overflowing_add(i.into());
+
+                if overflow {
+                    return None
+                }
+
                 let current_key = u256_to_bytes32(current_key);
                 let result = db
                     .merkle_contract_state(&contract_id, &current_key)

@@ -1,3 +1,4 @@
+#![deny(clippy::arithmetic_side_effects)]
 #![deny(clippy::cast_possible_truncation)]
 
 use ctor::ctor;
