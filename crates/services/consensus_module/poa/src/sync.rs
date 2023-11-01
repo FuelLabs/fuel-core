@@ -264,6 +264,7 @@ impl InnerSyncState {
     }
 }
 
+#[allow(clippy::arithmetic_side_effects)]
 #[cfg(test)]
 mod tests {
     use super::*;

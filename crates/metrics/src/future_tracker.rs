@@ -45,7 +45,7 @@ impl<'a> Entered<'a> {
 impl<'a> Drop for Entered<'a> {
     #[inline(always)]
     fn drop(&mut self) {
-        self.span.busy += self.busy_instant.elapsed();
+        self.span.busy = self.span.busy.saturating_add(self.busy_instant.elapsed());
         self.span.do_exit()
     }
 }
@@ -77,7 +77,7 @@ impl Span {
         let idle_instant = core::mem::take(&mut self.idle_instant);
 
         if let Some(idle_instant) = idle_instant {
-            self.idle += idle_instant.elapsed();
+            self.idle = self.idle.saturating_add(idle_instant.elapsed());
         }
     }
 

@@ -365,7 +365,8 @@ impl Dependency {
                     // is it dependent output?
                     if let Some(state) = self.coins.get(utxo_id) {
                         // check depth
-                        max_depth = core::cmp::max(state.depth + 1, max_depth);
+                        max_depth =
+                            core::cmp::max(state.depth.saturating_add(1), max_depth);
                         if max_depth > self.max_depth {
                             return Err(Error::NotInsertedMaxDepth.into())
                         }
@@ -424,7 +425,9 @@ impl Dependency {
                         *utxo_id,
                         CoinState {
                             is_spend_by: Some(tx.id() as TxId),
-                            depth: max_depth - 1,
+                            depth: max_depth
+                                .checked_sub(1)
+                                .expect("The `max_depth` is always more than zero above"),
                         },
                     );
                     // yey we got our coin

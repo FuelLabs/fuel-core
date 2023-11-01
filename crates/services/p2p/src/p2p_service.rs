@@ -166,13 +166,14 @@ impl<Codec: NetworkCodec> FuelP2PService<Codec> {
         let behaviour = FuelBehaviour::new(&config, codec.clone());
 
         let total_connections = {
+            let reserved_nodes_count = u32::try_from(config.reserved_nodes.len())
+                .expect("The number of reserved nodes should be less than `u32::max`");
             // Reserved nodes do not count against the configured peer input/output limits.
-            let total_peers = config.max_peers_connected
-                + u32::try_from(config.reserved_nodes.len()).expect(
-                    "The number of reserved nodes should be less than `u32::MAX`",
-                );
+            let total_peers = config
+                .max_peers_connected
+                .saturating_add(reserved_nodes_count);
 
-            total_peers * config.max_connections_per_peer
+            total_peers.saturating_mul(config.max_connections_per_peer)
         };
 
         let max_established_incoming = {
@@ -808,10 +809,10 @@ mod tests {
         let p2p_config = Config::default_initialized("reserved_nodes_reconnect_works");
 
         // total amount will be `max_peers_allowed` + `reserved_nodes.len()`
-        let max_peers_allowed = 3;
+        let max_peers_allowed: usize = 3;
 
         let (bootstrap_nodes, bootstrap_multiaddrs) =
-            setup_bootstrap_nodes(&p2p_config, max_peers_allowed * 5).await;
+            setup_bootstrap_nodes(&p2p_config, max_peers_allowed.saturating_mul(5)).await;
         let (mut reserved_nodes, reserved_multiaddrs) =
             setup_bootstrap_nodes(&p2p_config, max_peers_allowed).await;
 
