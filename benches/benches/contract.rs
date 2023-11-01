@@ -2,7 +2,10 @@ use criterion::{
     Criterion,
     Throughput,
 };
-use fuel_core_types::fuel_tx::Contract;
+use fuel_core_types::fuel_tx::{
+    Contract,
+    StorageSlot,
+};
 use rand::{
     rngs::StdRng,
     Rng,
@@ -40,6 +43,30 @@ pub fn contract_root(c: &mut Criterion) {
             b.iter(|| {
                 let contract = Contract::from(bytes.as_slice());
                 contract.root();
+            })
+        });
+    }
+
+    group.finish();
+}
+
+pub fn state_root(c: &mut Criterion) {
+    let rng = &mut StdRng::seed_from_u64(8586);
+
+    let mut group = c.benchmark_group("state_root");
+
+    const N: usize = 20;
+    let sizes = successors(Some(2), |n| Some(n * 2)).take(N);
+    for (i, size) in sizes.enumerate() {
+        let gen_storage_slot = || rng.gen::<StorageSlot>();
+        let storage_slots = std::iter::repeat_with(gen_storage_slot)
+            .take(size)
+            .collect::<Vec<_>>();
+        group.throughput(Throughput::Bytes(size as u64));
+        let name = format!("state_root_from_slots_2^{exp:#02}", exp = i + 1);
+        group.bench_function(name, |b| {
+            b.iter(|| {
+                Contract::initial_state_root(storage_slots.iter());
             })
         });
     }

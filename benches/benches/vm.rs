@@ -1,4 +1,4 @@
-mod contract_root;
+mod contract;
 mod utils;
 mod vm_set;
 
@@ -11,7 +11,7 @@ use criterion::{
     Criterion,
 };
 
-use contract_root::*;
+use contract::*;
 use fuel_core_benches::*;
 use fuel_core_storage::transactional::Transaction;
 use fuel_core_types::fuel_asm::Instruction;
@@ -95,6 +95,7 @@ fn vm(c: &mut Criterion) {
     flow::run(c);
     mem::run(c);
     contract_root(c);
+    state_root(c);
 }
 
 criterion_group!(benches, vm);
