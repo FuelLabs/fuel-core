@@ -57,7 +57,7 @@ where
                     match instruction {
                         Instruction::CALL(call) => {
                             let (ra, rb, rc, rd) = call.unpack();
-                            vm.prepare_call(ra, rb, rc, rd).unwrap();
+                            black_box(vm.prepare_call(ra, rb, rc, rd)).unwrap();
                         }
                         _ => {
                             black_box(vm.instruction(*instruction).unwrap());
