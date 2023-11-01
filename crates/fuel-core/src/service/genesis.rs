@@ -178,7 +178,7 @@ fn init_coin_state(
                     coin.output_index.unwrap_or_else(|| {
                         generated_output_index = generated_output_index
                             .checked_add(1)
-                            .expect("We don't support so many UTXOs in the genesis");
+                            .expect("The maximum number of UTXOs supported in the genesis configuration has been exceeded.");
                         (generated_output_index % 255) as u8
                     }),
                 );
