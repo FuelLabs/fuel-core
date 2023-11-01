@@ -33,7 +33,6 @@ pub struct TxParameters {
 impl From<TxParameters> for fuel_core_types::fuel_tx::TxParameters {
     fn from(params: TxParameters) -> Self {
         Self {
-            max_size: params.max_size.into(),
             max_inputs: params.max_inputs.into(),
             max_outputs: params.max_outputs.into(),
             max_witnesses: params.max_witnesses.into(),

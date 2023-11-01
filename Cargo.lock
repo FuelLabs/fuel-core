@@ -9496,8 +9496,3 @@ dependencies = [
  "cc",
  "pkg-config",
 ]
-
-[[patch.unused]]
-name = "fuel-vm"
-version = "0.39.0"
-source = "git+https://github.com/FuelLabs/fuel-vm?branch=dento/pub-test-receiptsctx#e5dd8b1f000920e6f3276867e5a092c41aa45fdd"
