@@ -11,5 +11,9 @@ description = "Command line utilities for fuel-core key management"
 
 [dependencies]
 anyhow = { workspace = true }
+atty = "0.2.14"
 clap = { workspace = true, features = ["derive", "env"] }
+crossterm = "0.27.0"
 fuel-core-keygen = { workspace = true }
+serde_json = { workspace = true, features = ["raw_value"] }
+termion = "2.0.1"

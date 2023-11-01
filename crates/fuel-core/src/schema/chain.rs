@@ -11,7 +11,9 @@ use crate::{
         block::Block,
         scalars::{
             AssetId,
+            U32,
             U64,
+            U8,
         },
     },
 };
@@ -113,20 +115,24 @@ impl ConsensusParameters {
 
 #[Object]
 impl TxParameters {
-    async fn max_inputs(&self) -> U64 {
+    async fn max_inputs(&self) -> U8 {
         self.0.max_inputs.into()
     }
 
-    async fn max_outputs(&self) -> U64 {
+    async fn max_outputs(&self) -> U8 {
         self.0.max_outputs.into()
     }
 
-    async fn max_witnesses(&self) -> U64 {
+    async fn max_witnesses(&self) -> U32 {
         self.0.max_witnesses.into()
     }
 
     async fn max_gas_per_tx(&self) -> U64 {
         self.0.max_gas_per_tx.into()
+    }
+
+    async fn max_size(&self) -> U64 {
+        self.0.max_size.into()
     }
 }
 
@@ -608,9 +614,7 @@ impl GasCosts {
         self.0.swwq.into()
     }
 
-    async fn contract_id(&self) -> U64 {
-        self.0.contract_id.into()
-    }
+    // Non-opcode prices
 
     async fn contract_root(&self) -> DependentCost {
         self.0.contract_root.into()

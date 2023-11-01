@@ -140,7 +140,7 @@ include_from_impls! {
         pub srwq: DependentCost,
         pub swwq: DependentCost,
 
-        pub contract_id: u64,
+        // Non-opcode prices
         pub contract_root: DependentCost,
         pub state_root: DependentCost,
     }
