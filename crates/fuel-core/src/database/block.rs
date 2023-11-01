@@ -275,7 +275,10 @@ impl Database {
             MerkleTree::load(storage, commit_merkle_metadata.version)
                 .map_err(|err| StorageError::Other(anyhow::anyhow!(err)))?;
 
-        let proof_index = message_merkle_metadata.version - 1;
+        let proof_index = message_merkle_metadata
+            .version
+            .checked_sub(1)
+            .ok_or(anyhow::anyhow!("The count of leafs - messages is zero"))?;
         let (_, proof_set) = tree
             .prove(proof_index)
             .map_err(|err| StorageError::Other(anyhow::anyhow!(err)))?;
@@ -287,6 +290,7 @@ impl Database {
     }
 }
 
+#[allow(clippy::arithmetic_side_effects)]
 #[cfg(test)]
 mod tests {
     use super::*;

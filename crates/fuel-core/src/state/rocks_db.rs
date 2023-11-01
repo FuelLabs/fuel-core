@@ -159,9 +159,9 @@ impl RocksDb {
                     let key_as_vec = Vec::from(key);
 
                     database_metrics().read_meter.inc();
-                    database_metrics()
-                        .bytes_read
-                        .observe((key_as_vec.len() + value_as_vec.len()) as f64);
+                    database_metrics().bytes_read.observe(
+                        (key_as_vec.len().saturating_add(value_as_vec.len())) as f64,
+                    );
 
                     (key_as_vec, Arc::new(value_as_vec))
                 })
