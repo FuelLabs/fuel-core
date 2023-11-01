@@ -62,6 +62,7 @@ where
                             black_box(vm.instruction(*instruction).unwrap());
                         }
                     }
+                    black_box(&vm);
                     vm.reset_vm_state(diff);
                 }
                 let only_instruction = start.elapsed().checked_sub(time_to_reset);
