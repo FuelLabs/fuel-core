@@ -18,8 +18,7 @@ fn random_bytes<R: Rng + ?Sized>(n: usize, rng: &mut R) -> Vec<u8> {
     for chunk in bytes.chunks_mut(32) {
         rng.fill(chunk);
     }
-
-    bytes.into()
+    bytes
 }
 
 pub fn contract_root(c: &mut Criterion) {
