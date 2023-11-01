@@ -39,7 +39,6 @@ query {
     }
     consensusParameters {
       txParams {
-        maxSize
         maxInputs
         maxOutputs
         maxWitnesses
