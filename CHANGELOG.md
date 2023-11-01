@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 Description of the upcoming release here.
 
 ### Added
+- [#1465](https://github.com/FuelLabs/fuel-core/pull/1465): Improvements for keygen cli and crates
 - [#1457](https://github.com/FuelLabs/fuel-core/pull/1457): Fixing incorrect measurement for fast(µs) opcodes.
 - [#1456](https://github.com/FuelLabs/fuel-core/pull/1456): Added flushing of the RocksDB during a graceful shutdown.
 - [#1456](https://github.com/FuelLabs/fuel-core/pull/1456): Added more logs to track the service lifecycle.

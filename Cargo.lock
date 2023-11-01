@@ -1457,6 +1457,31 @@ dependencies = [
 ]
 
 [[package]]
+name = "crossterm"
+version = "0.27.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f476fe445d41c9e991fd07515a6f463074b782242ccf4a5b7b1d1012e70824df"
+dependencies = [
+ "bitflags 2.4.1",
+ "crossterm_winapi",
+ "libc",
+ "mio",
+ "parking_lot 0.12.1",
+ "signal-hook",
+ "signal-hook-mio",
+ "winapi",
+]
+
+[[package]]
+name = "crossterm_winapi"
+version = "0.9.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "acdd7c62a3665c7f6830a51635d9ac9b23ed385797f70a83bb8bafe9c572ab2b"
+dependencies = [
+ "winapi",
+]
+
+[[package]]
 name = "crunchy"
 version = "0.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2946,12 +2971,10 @@ name = "fuel-core-keygen"
 version = "0.20.8"
 dependencies = [
  "anyhow",
- "atty",
  "clap 4.4.7",
  "fuel-core-types",
  "libp2p-identity 0.2.7",
- "serde_json",
- "termion",
+ "serde",
 ]
 
 [[package]]
@@ -2959,8 +2982,12 @@ name = "fuel-core-keygen-bin"
 version = "0.20.8"
 dependencies = [
  "anyhow",
+ "atty",
  "clap 4.4.7",
+ "crossterm",
  "fuel-core-keygen",
+ "serde_json",
+ "termion",
 ]
 
 [[package]]
@@ -5040,6 +5067,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3dce281c5e46beae905d4de1870d8b1509a9142b62eedf18b443b011ca8343d0"
 dependencies = [
  "libc",
+ "log",
  "wasi 0.11.0+wasi-snapshot-preview1",
  "windows-sys 0.48.0",
 ]
@@ -7366,6 +7394,27 @@ name = "shlex"
 version = "1.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a7cee0529a6d40f580e7a5e6c495c8fbfe21b7b52795ed4bb5e62cdf92bc6380"
+
+[[package]]
+name = "signal-hook"
+version = "0.3.17"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8621587d4798caf8eb44879d42e56b9a93ea5dcd315a6487c357130095b62801"
+dependencies = [
+ "libc",
+ "signal-hook-registry",
+]
+
+[[package]]
+name = "signal-hook-mio"
+version = "0.2.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "29ad2e15f37ec9a6cc544097b78a1ec90001e9f71b81338ca39f430adaca99af"
+dependencies = [
+ "libc",
+ "mio",
+ "signal-hook",
+]
 
 [[package]]
 name = "signal-hook-registry"
