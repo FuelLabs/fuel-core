@@ -1799,7 +1799,6 @@ mod tests {
                 Outputs,
                 Script as ScriptField,
             },
-            Chargeable,
             CheckError,
             ConsensusParameters,
             Create,
@@ -2033,7 +2032,6 @@ mod tests {
             // state transition between blocks.
             let price = 1;
             let limit = 0;
-            let gas_used_by_predicates = 0;
             let gas_price_factor = 1;
             let script = TxBuilder::new(1u64)
                 .gas_limit(limit)
@@ -2068,12 +2066,10 @@ mod tests {
 
             let producer = Executor::test(database.clone(), config);
 
-            let expected_fee_amount_1 = TransactionFee::checked_from_values(
+            let expected_fee_amount_1 = TransactionFee::checked_from_tx(
+                producer.config.consensus_parameters.gas_costs(),
                 producer.config.consensus_parameters.fee_params(),
-                script.metered_bytes_size() as Word,
-                gas_used_by_predicates,
-                limit,
-                price,
+                &script,
             )
             .unwrap()
             .max_fee();
@@ -2139,12 +2135,10 @@ mod tests {
                 .transaction()
                 .clone();
 
-            let expected_fee_amount_2 = TransactionFee::checked_from_values(
+            let expected_fee_amount_2 = TransactionFee::checked_from_tx(
+                producer.config.consensus_parameters.gas_costs(),
                 producer.config.consensus_parameters.fee_params(),
-                script.metered_bytes_size() as Word,
-                gas_used_by_predicates,
-                limit,
-                price,
+                &script,
             )
             .unwrap()
             .max_fee();

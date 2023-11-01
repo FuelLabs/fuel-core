@@ -43,6 +43,7 @@ query {
         maxOutputs
         maxWitnesses
         maxGasPerTx
+        maxSize
       }
       predicateParams {
         maxPredicateLength
@@ -219,6 +220,14 @@ query {
           depPerUnit
         }
         swwq {
+          base
+          depPerUnit
+        }
+        contractRoot {
+          base
+          depPerUnit
+        }
+        stateRoot {
           base
           depPerUnit
         }
