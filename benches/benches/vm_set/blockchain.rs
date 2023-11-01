@@ -169,60 +169,60 @@ pub fn run(c: &mut Criterion) {
         run_group_ref(&mut c.benchmark_group("srw"), "srw", input);
     }
 
-    let mut scwq = c.benchmark_group("scwq");
+    // let mut scwq = c.benchmark_group("scwq");
 
-    for i in linear.clone() {
-        let start_key = Bytes32::zeroed();
-        let data = start_key.iter().copied().collect::<Vec<_>>();
+    // for i in linear.clone() {
+    //     let start_key = Bytes32::zeroed();
+    //     let data = start_key.iter().copied().collect::<Vec<_>>();
 
-        let post_call = vec![
-            op::gtf_args(0x10, 0x00, GTFArgs::ScriptData),
-            op::addi(0x11, 0x10, ContractId::LEN.try_into().unwrap()),
-            op::addi(0x11, 0x11, WORD_SIZE.try_into().unwrap()),
-            op::addi(0x11, 0x11, WORD_SIZE.try_into().unwrap()),
-            op::movi(0x12, i as u32),
-        ];
-        let mut bench =
-            VmBench::contract_using_db(rng, db.checkpoint(), op::scwq(0x11, 0x29, 0x12))
-                .expect("failed to prepare contract")
-                .with_post_call(post_call);
-        bench.data.extend(data);
+    //     let post_call = vec![
+    //         op::gtf_args(0x10, 0x00, GTFArgs::ScriptData),
+    //         op::addi(0x11, 0x10, ContractId::LEN.try_into().unwrap()),
+    //         op::addi(0x11, 0x11, WORD_SIZE.try_into().unwrap()),
+    //         op::addi(0x11, 0x11, WORD_SIZE.try_into().unwrap()),
+    //         op::movi(0x12, i as u32),
+    //     ];
+    //     let mut bench =
+    //         VmBench::contract_using_db(rng, db.checkpoint(), op::scwq(0x11, 0x29, 0x12))
+    //             .expect("failed to prepare contract")
+    //             .with_post_call(post_call);
+    //     bench.data.extend(data);
 
-        scwq.throughput(Throughput::Bytes(i));
+    //     scwq.throughput(Throughput::Bytes(i));
 
-        run_group_ref(&mut scwq, format!("{i}"), bench);
-    }
+    //     run_group_ref(&mut scwq, format!("{i}"), bench);
+    // }
 
-    scwq.finish();
+    // scwq.finish();
 
-    let mut swwq = c.benchmark_group("swwq");
+    // let mut swwq = c.benchmark_group("swwq");
 
-    for i in linear.clone() {
-        let start_key = Bytes32::zeroed();
-        let data = start_key.iter().copied().collect::<Vec<_>>();
+    // for i in linear.clone() {
+    //     let start_key = Bytes32::zeroed();
+    //     let data = start_key.iter().copied().collect::<Vec<_>>();
 
-        let post_call = vec![
-            op::gtf_args(0x10, 0x00, GTFArgs::ScriptData),
-            op::addi(0x11, 0x10, ContractId::LEN.try_into().unwrap()),
-            op::addi(0x11, 0x11, WORD_SIZE.try_into().unwrap()),
-            op::addi(0x11, 0x11, WORD_SIZE.try_into().unwrap()),
-            op::movi(0x12, i as u32),
-        ];
-        let mut bench = VmBench::contract_using_db(
-            rng,
-            db.checkpoint(),
-            op::swwq(0x10, 0x11, 0x20, 0x12),
-        )
-        .expect("failed to prepare contract")
-        .with_post_call(post_call);
-        bench.data.extend(data);
+    //     let post_call = vec![
+    //         op::gtf_args(0x10, 0x00, GTFArgs::ScriptData),
+    //         op::addi(0x11, 0x10, ContractId::LEN.try_into().unwrap()),
+    //         op::addi(0x11, 0x11, WORD_SIZE.try_into().unwrap()),
+    //         op::addi(0x11, 0x11, WORD_SIZE.try_into().unwrap()),
+    //         op::movi(0x12, i as u32),
+    //     ];
+    //     let mut bench = VmBench::contract_using_db(
+    //         rng,
+    //         db.checkpoint(),
+    //         op::swwq(0x10, 0x11, 0x20, 0x12),
+    //     )
+    //     .expect("failed to prepare contract")
+    //     .with_post_call(post_call);
+    //     bench.data.extend(data);
 
-        swwq.throughput(Throughput::Bytes(i));
+    //     swwq.throughput(Throughput::Bytes(i));
 
-        run_group_ref(&mut swwq, format!("{i}"), bench);
-    }
+    //     run_group_ref(&mut swwq, format!("{i}"), bench);
+    // }
 
-    swwq.finish();
+    // swwq.finish();
 
     let mut call = c.benchmark_group("call");
 
