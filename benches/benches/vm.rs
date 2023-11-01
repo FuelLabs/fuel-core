@@ -49,6 +49,7 @@ where
                 for _ in 0..iters {
                     vm.reset_vm_state(diff);
                 }
+                black_box(&vm);
                 let time_to_reset = start.elapsed();
 
                 let start = std::time::Instant::now();
