@@ -44,7 +44,7 @@ struct Args {
     #[arg(short, long)]
     debug: bool,
 
-    /// Include all sample values for dependant measurements.
+    /// Include all sample values for dependent measurements.
     #[arg(short, long)]
     all: bool,
 
@@ -104,6 +104,18 @@ struct State {
     throughput: HashMap<String, u64>,
     /// Map of groups to their ids.
     groups: HashMap<String, Vec<String>>,
+}
+
+impl Default for State {
+    fn default() -> Self {
+        State {
+            all: false,
+            ids: HashMap::new(),
+            throughput: HashMap::new(),
+            groups: HashMap::new(),
+            baseline: "noop/noop".to_string(),
+        }
+    }
 }
 
 #[derive(Debug, Default, Clone, Serialize, Deserialize)]
@@ -363,7 +375,6 @@ impl State {
             .into_iter()
             .collect::<HashSet<_>>();
         let mut value = serde_yaml::to_value(self.to_gas_costs()).unwrap();
-
         let mut yaml = self.to_yaml();
 
         let update_values = |values: &mut serde_yaml::Value| {
@@ -472,7 +483,7 @@ impl State {
     }
 
     fn into_costs(self) -> Costs {
-        let (state, costs) = self.into_dependant_costs();
+        let (state, costs) = self.into_dependent_costs();
         state.into_relative_costs(costs)
     }
 
@@ -491,7 +502,7 @@ impl State {
             .unwrap()
     }
 
-    fn into_dependant_costs(self) -> (Self, Costs) {
+    fn into_dependent_costs(self) -> (Self, Costs) {
         let baseline = self.get_baseline();
         let State {
             all,
@@ -502,7 +513,7 @@ impl State {
         } = self;
 
         let mut costs = Costs::with_capacity(groups.len());
-        let dependant_groups = groups
+        let dependent_groups = groups
             .iter()
             .filter(|(_, samples)| {
                 samples.iter().any(|sample| throughput.contains_key(sample))
@@ -521,7 +532,7 @@ impl State {
             .collect::<Vec<_>>();
 
         if all {
-            let iter = dependant_groups.into_iter().map(|(name, x_y)| {
+            let iter = dependent_groups.into_iter().map(|(name, x_y)| {
                 groups.remove(&name);
                 let samples = x_y
                     .iter()
@@ -541,7 +552,7 @@ impl State {
             });
             costs.0.extend(iter);
         } else {
-            let iter = dependant_groups.into_iter().map(|(name, x_y)| {
+            let iter = dependent_groups.into_iter().map(|(name, x_y)| {
                 groups.remove(&name);
 
                 let (base, dep_per_unit) = dependent_cost(&name, x_y);
@@ -570,9 +581,10 @@ impl State {
         let relative = groups.into_iter().filter_map(|(name, samples)| {
             let relative = samples
                 .into_iter()
-                .find(|sample| sample.ends_with(&name))
+                .find(|sample| sample.starts_with(&name) && ids.contains_key(sample))
                 .and_then(|sample| ids.remove(&sample))
                 .map(|mean| Cost::Relative(map_to_ratio(baseline, mean)))?;
+
             Some((name, relative))
         });
         costs.0.extend(relative);
@@ -747,6 +759,27 @@ mod tests {
         let baseline: u64 = baseline.as_nanos().try_into().unwrap();
         let ratio = map_to_ratio(baseline, mean);
         dbg!(ratio);
+    }
+
+    #[test]
+    fn state_into_relative_costs_matches_samples_to_groups() {
+        let input = r#"
+        {"reason":"benchmark-complete","id":"noop/noop","report_directory":"/fuel-core/target/criterion/reports/noop/noop","iteration_count":[20579,41158,61737,82316,102895,123474,144053,164632,185211,205790,226369,246948,267527,288106,308685,329264,349843,370422,391001,411580,432159,452738,473317,493896,514475,535054,555633,576212,596791,617370,637949,658528,679107,699686,720265,740844,761423,782002,802581,823160,843739,864318,884897,905476,926055,946634,967213,987792,1008371,1028950,1049529,1070108,1090687,1111266,1131845,1152424,1173003,1193582,1214161,1234740,1255319,1275898,1296477,1317056,1337635,1358214,1378793,1399372,1419951,1440530,1461109,1481688,1502267,1522846,1543425,1564004,1584583,1605162,1625741,1646320,1666899,1687478,1708057,1728636,1749215,1769794,1790373,1810952,1831531,1852110,1872689,1893268,1913847,1934426,1955005,1975584,1996163,2016742,2037321,2057900],"measured_values":[389282.0,770797.0,1188427.0,1550880.0,1941738.0,2338649.0,2689515.0,3102895.0,3493736.0,3843974.0,4345608.0,4790617.0,5032116.0,5425160.0,5782422.0,6153689.0,6527003.0,6929596.0,7311469.0,7752961.0,8096879.0,8440853.0,8842395.0,9257219.0,10058182.0,10224299.0,10949755.0,11828899.0,12883105.0,13683938.0,16413343.0,13627041.0,13087408.0,13304575.0,13535697.0,13883527.0,15506137.0,14755226.0,15066220.0,15405773.0,15805531.0,16349976.0,16704086.0,16977259.0,17408869.0,17807203.0,18342606.0,18449738.0,18872388.0,19338438.0,19700298.0,20244544.0,20463792.0,21100051.0,21257107.0,21702514.0,22155040.0,22306333.0,22956387.0,23142080.0,23621411.0,23980328.0,24399532.0,24637273.0,25046541.0,25815672.0,25814418.0,26145303.0,26599206.0,26974627.0,28274114.0,27701356.0,28189035.0,28535485.0,28911095.0,29433053.0,29861502.0,30290108.0,30611717.0,30947687.0,31334219.0,31575650.0,32031711.0,32432008.0,32871005.0,33160229.0,33498200.0,34082473.0,34816058.0,34897933.0,35246469.0,35780041.0,36011687.0,36196850.0,36776318.0,36994151.0,37516038.0,37769430.0,38243417.0,38656250.0],"unit":"ns","throughput":[],"typical":{"estimate":18.857469852901115,"lower_bound":18.80991755561779,"upper_bound":18.923223760418672,"unit":"ns"},"mean":{"estimate":19.018693172864804,"lower_bound":18.874689771701124,"upper_bound":19.208667956348382,"unit":"ns"},"median":{"estimate":18.7980051843273,"lower_bound":18.77140984193862,"upper_bound":18.820593660892023,"unit":"ns"},"median_abs_dev":{"estimate":0.10730922897391375,"lower_bound":0.0812325582132701,"upper_bound":0.14041547076097582,"unit":"ns"},"slope":{"estimate":18.857469852901115,"lower_bound":18.80991755561779,"upper_bound":18.923223760418672,"unit":"ns"},"change":{"mean":{"estimate":-0.022826223844162996,"lower_bound":-0.04175747264497742,"upper_bound":-0.005980222776105934,"unit":"%"},"median":{"estimate":-0.009987775466800741,"lower_bound":-0.01278779831658372,"upper_bound":-0.007773882142105615,"unit":"%"},"change":"NoChange"}}
+        {"reason":"group-complete","group_name":"noop","benchmarks":["noop/noop"],"report_directory":"/fuel-core/target/criterion/reports/noop"}
+        {"reason":"benchmark-complete","id":"contract_root/test_b","report_directory":"/Volumes/Fuel/projects/FuelLabs/fuel-core/target/criterion/reports/contract_root/test_b","iteration_count":[1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],"measured_values":[55969125.0,56143708.0,56070875.0,56446083.0,55284458.0,55575958.0,55562292.0,54611625.0,55169583.0,55756625.0,55473416.0,55187959.0,54961625.0,55105083.0,55144916.0,55879209.0,54749250.0,54745459.0,54731458.0,54612375.0,55069250.0,55551750.0,54944375.0,55457792.0,55276000.0,55580375.0,54754208.0,55046875.0,55313875.0,54756083.0,55104791.0,54734125.0,54853125.0,55141584.0,55071209.0,54997375.0,54770375.0,55104833.0,54911917.0,54924125.0,54923625.0,54617167.0,55281834.0,54639000.0,55284417.0,56533209.0,56687417.0,55747375.0,54843125.0,54792791.0,54881208.0,54618250.0,55585291.0,54643708.0,55165458.0,55089000.0,55331458.0,55029542.0,54938083.0,54980625.0,55133833.0,55131542.0,55607208.0,54999250.0,55162292.0,55075375.0,55621375.0,54975500.0,54729125.0,55682291.0,55181375.0,55166666.0,54747334.0,54719250.0,55561667.0,54923250.0,55619666.0,55118875.0,55347000.0,55339917.0,54804708.0,55304083.0,54754625.0,55773583.0,55411666.0,55134166.0,54958375.0,54873583.0,55044291.0,55179500.0,55161417.0,55459583.0,54935708.0,55161416.0,54972083.0,55446542.0,54918250.0,54687041.0,55506125.0,54776708.0],"unit":"ns","throughput":[],"typical":{"estimate":55182639.51,"lower_bound":55102229.70249999,"upper_bound":55267996.49725,"unit":"ns"},"mean":{"estimate":55182639.51,"lower_bound":55102229.70249999,"upper_bound":55267996.49725,"unit":"ns"},"median":{"estimate":55111979.0,"lower_bound":55022125.0,"upper_bound":55165458.0,"unit":"ns"},"median_abs_dev":{"estimate":350944.01586949825,"lower_bound":269307.6135188341,"upper_bound":506401.31334207935,"unit":"ns"},"slope":null,"change":null}
+        {"reason":"benchmark-complete","id":"contract_root/test_c","report_directory":"/Volumes/Fuel/projects/FuelLabs/fuel-core/target/criterion/reports/contract_root/test_c","iteration_count":[1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],"measured_values":[54881541.0,55167084.0,55069750.0,55097041.0,55038333.0,55082500.0,54983958.0,54867250.0,55324833.0,54954416.0,55007291.0,55436500.0,54699584.0,55743417.0,54767292.0,55069209.0,54756042.0,54812709.0,55476000.0,54692625.0,55201208.0,55067791.0,54872000.0,55866125.0,54966417.0,54780667.0,54879917.0,55085041.0,54680958.0,54851583.0,54747666.0,54879250.0,55303542.0,54986042.0,54796667.0,54376459.0,54536625.0,54535958.0,56011875.0,54531959.0,54355875.0,55293542.0,54396125.0,54930666.0,54472875.0,55089583.0,54641125.0,54417334.0,54606917.0,54407667.0,54895959.0,55105709.0,54491625.0,54695458.0,54567083.0,54873125.0,54544542.0,64412958.0,56095209.0,54300250.0,55058000.0,54617417.0,55095542.0,55600000.0,56537375.0,71663708.0,59887709.0,58745792.0,62623500.0,60810750.0,66510625.0,61822250.0,57435917.0,57221042.0,56591250.0,56781291.0,56302583.0,55933875.0,55793875.0,55166250.0,55924958.0,55800042.0,56612125.0,59934583.0,57355042.0,56426750.0,55144458.0,55987041.0,54776708.0,54834458.0,55490625.0,55277583.0,55151208.0,55024000.0,54754500.0,55358791.0,54915375.0,55410334.0,54941166.0,55122375.0],"unit":"ns","throughput":[],"typical":{"estimate":55889196.25,"lower_bound":55433887.1785,"upper_bound":56437883.57525,"unit":"ns"},"mean":{"estimate":55889196.25,"lower_bound":55433887.1785,"upper_bound":56437883.57525,"unit":"ns"},"median":{"estimate":55069479.5,"lower_bound":54953791.5,"upper_bound":55151208.0,"unit":"ns"},"median_abs_dev":{"estimate":546275.8211016655,"lower_bound":363514.981046319,"upper_bound":765701.3585060835,"unit":"ns"},"slope":null,"change":null}
+        {"reason":"group-complete","group_name":"contract_root","benchmarks":["contract_root/test_a","contract_root/test_b","contract_root/test_c"],"report_directory":"/Volumes/Fuel/projects/FuelLabs/fuel-core/target/criterion/reports/contract_root"}
+        "#;
+
+        let mut state = State::default();
+        for line in input.lines() {
+            extract_state(line, &mut state, false);
+        }
+        let costs = Costs::default();
+        let costs = state.into_relative_costs(costs);
+
+        assert!(costs.0.contains_key("noop"));
+        assert!(costs.0.contains_key("contract_root"));
     }
 
     #[test]
