@@ -1,8 +1,17 @@
-use crate::{utils::arb_dependent_cost_values, *};
+use crate::{
+    utils::arb_dependent_cost_values,
+    *,
+};
 use fuel_core::service::FuelService;
-use fuel_core_storage::{tables::ContractsRawCode, StorageAsMut};
+use fuel_core_storage::{
+    tables::ContractsRawCode,
+    StorageAsMut,
+};
 use fuel_core_types::{
-    fuel_tx::{TxPointer, UtxoId},
+    fuel_tx::{
+        TxPointer,
+        UtxoId,
+    },
     fuel_types::Word,
     fuel_vm::consts::WORD_SIZE,
 };
@@ -50,39 +59,43 @@ pub fn run_contract(group: &mut BenchmarkGroup<WallTime>) {
     //             ])
     //             .with_dummy_contract(contract),
     //     );
-    let contract_instructions = vec![op::bal(0x13, 0x11, 0x10), op::jmpb(RegId::ZERO, 0)];
+    {
+        let contract_instructions =
+            vec![op::bal(0x13, 0x11, 0x10), op::jmpb(RegId::ZERO, 0)];
 
-    let mut instructions = setup_instructions();
-    instructions.extend(vec![op::call(0x10, RegId::ZERO, 0x11, 0x12)]);
+        let mut instructions = setup_instructions();
+        instructions.extend(vec![op::call(0x10, RegId::ZERO, 0x11, 0x12)]);
 
-    replace_contract_in_service(&mut service, &contract_id, contract_instructions);
+        replace_contract_in_service(&mut service, &contract_id, contract_instructions);
 
-    let id = "contract/bal contract";
-    run_with_service(
-        id,
-        group,
-        instructions,
-        script_data.clone(),
-        &service,
-        contract_id,
-        &rt,
-        &mut rng,
-    );
+        let id = "contract/bal contract";
+        run_with_service(
+            &id,
+            group,
+            instructions,
+            script_data.clone(),
+            &service,
+            contract_id,
+            &rt,
+            &mut rng,
+        );
+    }
+    {
+        let mut instructions = setup_instructions();
+        instructions.extend(vec![op::bal(0x13, 0x11, 0x10), op::jmpb(RegId::ZERO, 0)]);
 
-    let mut instructions = setup_instructions();
-    instructions.extend(vec![op::bal(0x13, 0x11, 0x10), op::jmpb(RegId::ZERO, 0)]);
-
-    let id = "contract/bal script";
-    run_with_service(
-        id,
-        group,
-        instructions,
-        script_data,
-        &service,
-        contract_id,
-        &rt,
-        &mut rng,
-    );
+        let id = "contract/bal script";
+        run_with_service(
+            &id,
+            group,
+            instructions,
+            script_data.clone(),
+            &service,
+            contract_id,
+            &rt,
+            &mut rng,
+        );
+    }
 
     //     run_group_ref(
     //         &mut c.benchmark_group("bhei"),
@@ -125,18 +138,27 @@ pub fn run_contract(group: &mut BenchmarkGroup<WallTime>) {
     //             .expect("failed to prepare contract")
     //             .prepend_prepare_script(vec![op::movi(0x10, 32), op::aloc(0x10)]),
     //     );
-    let contract = vec![op::burn(RegId::ONE, RegId::HP), op::jmpb(RegId::ZERO, 0)];
-    replace_contract_in_service(&mut service, &contract_id, contract);
-    run_with_service(
-        "contract/burn",
-        group,
-        call_contract_once(),
-        script_data.clone(),
-        &service,
-        contract_id,
-        &rt,
-        &mut rng,
-    );
+    {
+        let contract = vec![op::burn(RegId::ONE, RegId::HP), op::jmpb(RegId::ZERO, 0)];
+        let mut instructions = setup_instructions();
+        // TODO: I don't know why we need these extra ops
+        instructions.extend(vec![
+            op::movi(0x10, 32),
+            op::aloc(0x10),
+            op::call(0x10, RegId::ZERO, 0x11, 0x12),
+        ]);
+        replace_contract_in_service(&mut service, &contract_id, contract);
+        run_with_service(
+            "contract/burn",
+            group,
+            instructions,
+            script_data.clone(),
+            &service,
+            contract_id,
+            &rt,
+            &mut rng,
+        );
+    }
 
     // Call
 
@@ -258,11 +280,12 @@ pub fn run_contract(group: &mut BenchmarkGroup<WallTime>) {
             op::jmpb(RegId::ZERO, 0),
         ]);
         replace_contract_in_service(&mut service, &contract_id, contract);
+        let id = format!("contract/ccp {:?}", i);
         run_with_service(
-            id,
+            &id,
             group,
             instructions,
-            script_data,
+            script_data.clone(),
             &service,
             contract_id,
             &rt,
@@ -282,29 +305,23 @@ pub fn run_contract(group: &mut BenchmarkGroup<WallTime>) {
     //         run_group_ref(&mut c.benchmark_group("croo"), "croo", input);
     //     }
 
-    // TODO: What is the post_call stuff doing here?
-    let contract = vec![
-        op::croo(0x14, 0x16),
-        // op::gtf_args(0x16, 0x00, GTFArgs::ScriptData),
-        // op::movi(0x15, 2000),
-        // op::aloc(0x15),
-        // op::move_(0x14, RegId::HP),
-        op::ret(RegId::ZERO),
-    ];
+    let contract = vec![op::croo(0x14, 0x16), op::ret(RegId::ZERO)];
     let mut instructions = setup_instructions();
+    // TODO: What is the "post_call" stuff doing?
     instructions.extend(vec![
         op::gtf_args(0x16, 0x00, GTFArgs::ScriptData),
         op::movi(0x15, 2000),
         op::aloc(0x15),
         op::move_(0x14, RegId::HP),
         op::call(0x10, RegId::ZERO, 0x11, 0x12),
+        op::jmpb(RegId::ZERO, 0),
     ]);
     replace_contract_in_service(&mut service, &contract_id, contract);
     run_with_service(
         "contract/croo",
         group,
         instructions,
-        script_data,
+        script_data.clone(),
         &service,
         contract_id,
         &rt,
@@ -351,11 +368,12 @@ pub fn run_contract(group: &mut BenchmarkGroup<WallTime>) {
             op::jmpb(RegId::ZERO, 0),
         ]);
         replace_contract_in_service(&mut service, &contract_id, contract);
+        let id = format!("contract/csiz {:?}", size);
         run_with_service(
-            id,
+            &id,
             group,
             instructions,
-            script_data,
+            script_data.clone(),
             &service,
             contract_id,
             &rt,
@@ -416,11 +434,12 @@ pub fn run_contract(group: &mut BenchmarkGroup<WallTime>) {
             op::jmpb(RegId::ZERO, 0),
         ]);
         replace_contract_in_service(&mut service, &contract_id, contract);
+        let id = format!("contract/ldc {:?}", size);
         run_with_service(
-            id,
+            &id,
             group,
             instructions,
-            script_data,
+            script_data.clone(),
             &service,
             contract_id,
             &rt,
@@ -450,7 +469,7 @@ pub fn run_contract(group: &mut BenchmarkGroup<WallTime>) {
         "contract/mint",
         group,
         instructions,
-        script_data,
+        script_data.clone(),
         &service,
         contract_id,
         &rt,
@@ -521,6 +540,17 @@ pub fn run_contract(group: &mut BenchmarkGroup<WallTime>) {
             op::jmpb(RegId::ZERO, 0),
         ]);
         replace_contract_in_service(&mut service, &contract_id, contract);
+        let id = format!("contract/smo {:?}", size);
+        run_with_service(
+            &id,
+            group,
+            instructions,
+            script_data.clone(),
+            &service,
+            contract_id,
+            &rt,
+            &mut rng,
+        );
     }
 
     //     let mut scwq = c.benchmark_group("scwq");
@@ -548,6 +578,37 @@ pub fn run_contract(group: &mut BenchmarkGroup<WallTime>) {
     //     }
     //
     //     scwq.finish();
+
+    // TODO: Is this going to mess up other benchmarks?
+    for size in arb_dependent_cost_values() {
+        let contract = std::iter::repeat(op::noop())
+            .take(size as usize)
+            .chain(vec![op::scwq(0x11, 0x29, 0x12)])
+            .chain(vec![op::ret(RegId::ZERO)])
+            .collect();
+        let mut instructions = setup_instructions();
+        instructions.extend(vec![
+            op::gtf_args(0x10, 0x00, GTFArgs::ScriptData),
+            op::addi(0x11, 0x10, ContractId::LEN.try_into().unwrap()),
+            op::addi(0x11, 0x11, WORD_SIZE.try_into().unwrap()),
+            op::addi(0x11, 0x11, WORD_SIZE.try_into().unwrap()),
+            op::movi(0x12, size.try_into().unwrap()),
+            op::call(0x10, RegId::ZERO, 0x11, 0x12),
+            op::jmpb(RegId::ZERO, 0),
+        ]);
+        replace_contract_in_service(&mut service, &contract_id, contract);
+        let id = format!("contract/scwq {:?}", size);
+        // run_with_service(
+        //     &id,
+        //     group,
+        //     instructions,
+        //     script_data.clone(),
+        //     &service,
+        //     contract_id,
+        //     &rt,
+        //     &mut rng,
+        // );
+    }
 
     //     let mut srwq = c.benchmark_group("srwq");
     //
@@ -653,6 +714,27 @@ pub fn run_contract(group: &mut BenchmarkGroup<WallTime>) {
     //         run_group_ref(&mut c.benchmark_group("tr"), "tr", input);
     //     }
 
+    {
+        let contract = vec![op::tr(0x15, 0x14, 0x15), op::ret(RegId::ZERO)];
+        let instructions = vec![
+            op::movi(0x15, 2000),
+            op::movi(0x14, 100),
+            op::call(0x10, RegId::ZERO, 0x11, 0x12),
+            op::jmpb(RegId::ZERO, 0),
+        ];
+        replace_contract_in_service(&mut service, &contract_id, contract);
+        run_with_service(
+            "contract/tr",
+            group,
+            instructions,
+            script_data.clone(),
+            &service,
+            contract_id,
+            &rt,
+            &mut rng,
+        );
+    }
+
     //    {
     //         let mut input = VmBench::contract_using_db(
     //             rng,
@@ -691,6 +773,14 @@ pub fn run_contract(group: &mut BenchmarkGroup<WallTime>) {
     //
     //         run_group_ref(&mut c.benchmark_group("tro"), "tro", input);
     //     }
+
+    {
+        let contract = vec![
+            op::tro(RegId::ZERO, 0x15, 0x14, RegId::HP),
+            op::ret(RegId::ZERO),
+        ];
+
+    }
 }
 
 fn replace_contract_in_service(
