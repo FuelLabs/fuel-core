@@ -22,7 +22,8 @@ expression: json
       "max_inputs": 255,
       "max_outputs": 255,
       "max_witnesses": 255,
-      "max_gas_per_tx": 100000000
+      "max_gas_per_tx": 100000000,
+      "max_size": 17825792
     },
     "predicate_params": {
       "max_predicate_length": 1048576,
@@ -200,6 +201,14 @@ expression: json
       "swwq": {
         "base": 44,
         "dep_per_unit": 5
+      },
+      "contract_root": {
+        "base": 75,
+        "dep_per_unit": 1
+      },
+      "state_root": {
+        "base": 412,
+        "dep_per_unit": 1
       }
     },
     "base_asset_id": "0000000000000000000000000000000000000000000000000000000000000000"

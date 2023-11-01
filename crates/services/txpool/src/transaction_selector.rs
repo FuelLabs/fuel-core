@@ -53,6 +53,7 @@ mod tests {
         },
         fuel_tx::{
             FeeParameters,
+            GasCosts,
             Output,
             TransactionBuilder,
         },
@@ -105,6 +106,7 @@ mod tests {
                     asset_id: Default::default(),
                 })
                 .with_fee_params(fee_params)
+                .with_gas_costs(GasCosts::free())
                 // The block producer assumes transactions are already checked
                 // so it doesn't need to compute valid sigs for tests
                 .finalize_checked_basic(Default::default()).into()

@@ -2694,9 +2694,9 @@ dependencies = [
 
 [[package]]
 name = "fuel-asm"
-version = "0.39.0"
+version = "0.40.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3e79e6f14f8df22e2c61956fcfc4505b38fe16b48b7a4c7cc46c5d73b90664aa"
+checksum = "4a2dce6ade2d7804096e6dfd51e6fd9a16a87ee32b28bcc7a47674c2b497f363"
 dependencies = [
  "bitflags 1.3.2",
  "fuel-types",
@@ -3210,9 +3210,9 @@ dependencies = [
 
 [[package]]
 name = "fuel-crypto"
-version = "0.39.0"
+version = "0.40.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a92ed9e3741b068beef7748973d82a8f6637fbc76427e3d822bfb19eed93a804"
+checksum = "e2c58f23beb866369a194b21635f969fd94538cf3cea8e9bebd9d828042f0cf2"
 dependencies = [
  "coins-bip32",
  "coins-bip39",
@@ -3231,9 +3231,9 @@ dependencies = [
 
 [[package]]
 name = "fuel-derive"
-version = "0.39.0"
+version = "0.40.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "92fb2450e57506fc9176adf80ac7280b66f53de683c6187351225695e609d5fe"
+checksum = "adba9deee62a53830736cfdd6a08192c399a3f92f67d26b6c550b544f24bd1e1"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -3243,9 +3243,9 @@ dependencies = [
 
 [[package]]
 name = "fuel-merkle"
-version = "0.39.0"
+version = "0.40.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f3afe7705ca2760598b1b35a6f2a114ebec8331ac4d05d78682854faecfa0cc4"
+checksum = "6dd20b9ea8b953040507c39bc498478cfa17ecb9831f9fac9b6ca1f7f5ffd921"
 dependencies = [
  "derive_more",
  "digest 0.10.7",
@@ -3258,15 +3258,15 @@ dependencies = [
 
 [[package]]
 name = "fuel-storage"
-version = "0.39.0"
+version = "0.40.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ddc3d59dadd998c035bb65040be9d6eaead1d9bba1bd106b0b9e8c28b293c9ee"
+checksum = "636d286c2c195f44587c69ae73d08ae9801ac8ee310ef4e87f1d493ed87f2e47"
 
 [[package]]
 name = "fuel-tx"
-version = "0.39.0"
+version = "0.40.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9c077189abf9e558be50ec5459ad11366b17368a62da9221facdf7efe9d88ac0"
+checksum = "b0e23732f33ace2ec5b48f17085ec9397f35c465538070269b1965723ed351fa"
 dependencies = [
  "derivative",
  "derive_more",
@@ -3286,9 +3286,9 @@ dependencies = [
 
 [[package]]
 name = "fuel-types"
-version = "0.39.0"
+version = "0.40.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bea56d08a2958fb8f6969acc0130513e44796d66282b741f92aa6f33f6e4c5bc"
+checksum = "1465ab5a63b2d867ab1900d34dd6eee2e7cf1e1ad54d23fb6cd89f892367ff02"
 dependencies = [
  "fuel-derive",
  "hex",
@@ -3298,9 +3298,9 @@ dependencies = [
 
 [[package]]
 name = "fuel-vm"
-version = "0.39.0"
+version = "0.40.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6c3b5d3b2913553bb15c26ed644bc94b6ee06725eda6ace3001927a710c71564"
+checksum = "13437b5beecd473be158198bcd2ec0c1979783db3d4ed82ffff4fb8d9acb890f"
 dependencies = [
  "anyhow",
  "async-trait",

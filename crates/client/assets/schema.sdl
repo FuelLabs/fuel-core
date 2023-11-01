@@ -386,6 +386,8 @@ type GasCosts {
 	scwq: DependentCost!
 	smo: DependentCost!
 	srwq: DependentCost!
+	contractRoot: DependentCost!
+	stateRoot: DependentCost!
 	swwq: DependentCost!
 }
 
@@ -903,10 +905,11 @@ scalar TransactionId
 union TransactionStatus = SubmittedStatus | SuccessStatus | SqueezedOutStatus | FailureStatus
 
 type TxParameters {
-	maxInputs: U64!
-	maxOutputs: U64!
-	maxWitnesses: U64!
+	maxInputs: U8!
+	maxOutputs: U8!
+	maxWitnesses: U32!
 	maxGasPerTx: U64!
+	maxSize: U64!
 }
 
 scalar TxPointer
@@ -914,6 +917,8 @@ scalar TxPointer
 scalar U32
 
 scalar U64
+
+scalar U8
 
 scalar UtxoId
 
