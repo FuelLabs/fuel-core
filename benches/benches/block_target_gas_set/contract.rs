@@ -579,36 +579,33 @@ pub fn run_contract(group: &mut BenchmarkGroup<WallTime>) {
     //
     //     scwq.finish();
 
-    // TODO: Is this going to mess up other benchmarks?
-    for size in arb_dependent_cost_values() {
-        let contract = std::iter::repeat(op::noop())
-            .take(size as usize)
-            .chain(vec![op::scwq(0x11, 0x29, 0x12)])
-            .chain(vec![op::ret(RegId::ZERO)])
-            .collect();
-        let mut instructions = setup_instructions();
-        instructions.extend(vec![
-            op::gtf_args(0x10, 0x00, GTFArgs::ScriptData),
-            op::addi(0x11, 0x10, ContractId::LEN.try_into().unwrap()),
-            op::addi(0x11, 0x11, WORD_SIZE.try_into().unwrap()),
-            op::addi(0x11, 0x11, WORD_SIZE.try_into().unwrap()),
-            op::movi(0x12, size.try_into().unwrap()),
-            op::call(0x10, RegId::ZERO, 0x11, 0x12),
-            op::jmpb(RegId::ZERO, 0),
-        ]);
-        replace_contract_in_service(&mut service, &contract_id, contract);
-        let id = format!("contract/scwq {:?}", size);
-        // run_with_service(
-        //     &id,
-        //     group,
-        //     instructions,
-        //     script_data.clone(),
-        //     &service,
-        //     contract_id,
-        //     &rt,
-        //     &mut rng,
-        // );
-    }
+    // TODO: This is way too under-costed, so it runs forever
+    // let size = 2620_u32; // 18bit integer maxes at 262144
+    // let contract: Vec<_> = (0..100_u32)
+    //     .map(|x| x * size)
+    //     .map(|x| vec![op::movi(0x13, x), op::scwq(0x13, 0x29, 0x14)]) // copy range starting at $rA of size $rC
+    //     .flatten()
+    //     .collect();
+    // let instructions = vec![
+    //     op::gtf_args(0x10, 0x00, GTFArgs::ScriptData),
+    //     op::addi(0x11, 0x10, ContractId::LEN.try_into().unwrap()),
+    //     op::addi(0x11, 0x11, WORD_SIZE.try_into().unwrap()),
+    //     op::addi(0x11, 0x11, WORD_SIZE.try_into().unwrap()),
+    //     op::movi(0x12, 10_000),
+    //     op::movi(0x14, size),
+    //     op::call(0x10, RegId::ZERO, 0x11, 0x12),
+    // ];
+    // replace_contract_in_service(&mut service, &contract_id, contract);
+    // run_with_service(
+    //     "contract/scwq",
+    //     group,
+    //     instructions,
+    //     script_data.clone(),
+    //     &service,
+    //     contract_id,
+    //     &rt,
+    //     &mut rng,
+    // );
 
     //     let mut srwq = c.benchmark_group("srwq");
     //
@@ -702,7 +699,7 @@ pub fn run_contract(group: &mut BenchmarkGroup<WallTime>) {
             op::jmpb(RegId::ZERO, 0),
         ],
         vec![],
-    )
+    );
 
     //     {
     //         let mut input =
@@ -779,7 +776,6 @@ pub fn run_contract(group: &mut BenchmarkGroup<WallTime>) {
             op::tro(RegId::ZERO, 0x15, 0x14, RegId::HP),
             op::ret(RegId::ZERO),
         ];
-
     }
 }
 
