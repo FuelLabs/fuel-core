@@ -48,17 +48,7 @@ pub fn run_contract(group: &mut BenchmarkGroup<WallTime>) {
     let contract_id = ContractId::zeroed();
     let script_data = script_data(&contract_id, &asset_id);
 
-    //     run_group_ref(
-    //         &mut c.benchmark_group("bal"),
-    //         "bal",
-    //         VmBench::new(op::bal(0x10, 0x10, 0x11))
-    //             .with_data(asset.iter().chain(contract.iter()).copied().collect())
-    //             .with_prepare_script(vec![
-    //                 op::gtf_args(0x10, 0x00, GTFArgs::ScriptData),
-    //                 op::addi(0x11, 0x10, asset.len().try_into().unwrap()),
-    //             ])
-    //             .with_dummy_contract(contract),
-    //     );
+    // bal contract
     {
         let contract_instructions =
             vec![op::bal(0x13, 0x11, 0x10), op::jmpb(RegId::ZERO, 0)];
@@ -97,11 +87,7 @@ pub fn run_contract(group: &mut BenchmarkGroup<WallTime>) {
         );
     }
 
-    //     run_group_ref(
-    //         &mut c.benchmark_group("bhei"),
-    //         "bhei",
-    //         VmBench::new(op::bhei(0x10)),
-    //     );
+    // bhei
     run(
         "contract/bhei",
         group,
@@ -109,15 +95,7 @@ pub fn run_contract(group: &mut BenchmarkGroup<WallTime>) {
         vec![],
     );
 
-    //     run_group_ref(
-    //         &mut c.benchmark_group("bhsh"),
-    //         "bhsh",
-    //         VmBench::new(op::bhsh(0x10, RegId::ZERO)).with_prepare_script(vec![
-    //             op::movi(0x10, Bytes32::LEN.try_into().unwrap()),
-    //             op::aloc(0x10),
-    //             op::move_(0x10, RegId::HP),
-    //         ]),
-    //     );
+    // bhsh
     run(
         "contract/bhsh",
         group,
@@ -131,13 +109,7 @@ pub fn run_contract(group: &mut BenchmarkGroup<WallTime>) {
         vec![],
     );
 
-    //     run_group_ref(
-    //         &mut c.benchmark_group("burn"),
-    //         "burn",
-    //         VmBench::contract_using_db(rng, db.checkpoint(), op::burn(RegId::ONE, RegId::HP))
-    //             .expect("failed to prepare contract")
-    //             .prepend_prepare_script(vec![op::movi(0x10, 32), op::aloc(0x10)]),
-    //     );
+    // burn
     {
         let contract = vec![op::burn(RegId::ONE, RegId::HP), op::jmpb(RegId::ZERO, 0)];
         let mut instructions = setup_instructions();
@@ -160,8 +132,7 @@ pub fn run_contract(group: &mut BenchmarkGroup<WallTime>) {
         );
     }
 
-    // Call
-
+    // call
     for size in arb_dependent_cost_values() {
         let mut contract_instructions = std::iter::repeat(op::noop())
             .take(size as usize)
@@ -193,15 +164,7 @@ pub fn run_contract(group: &mut BenchmarkGroup<WallTime>) {
         );
     }
 
-    //     run_group_ref(
-    //         &mut c.benchmark_group("cb"),
-    //         "cb",
-    //         VmBench::new(op::cb(0x10)).with_prepare_script(vec![
-    //             op::movi(0x10, Bytes32::LEN.try_into().unwrap()),
-    //             op::aloc(0x10),
-    //             op::move_(0x10, RegId::HP),
-    //         ]),
-    //     );
+    // cb
     run(
         "contract/cb",
         group,
@@ -215,52 +178,7 @@ pub fn run_contract(group: &mut BenchmarkGroup<WallTime>) {
         vec![],
     );
 
-    //     let mut ccp = c.benchmark_group("ccp");
-    //
-    //     for i in linear.clone() {
-    //         let mut code = vec![0u8; i as usize];
-    //
-    //         rng.fill_bytes(&mut code);
-    //
-    //         let code = ContractCode::from(code);
-    //         let id = code.id;
-    //
-    //         let data = id
-    //             .iter()
-    //             .copied()
-    //             .chain((0 as Word).to_be_bytes().iter().copied())
-    //             .chain((0 as Word).to_be_bytes().iter().copied())
-    //             .chain(AssetId::default().iter().copied())
-    //             .collect();
-    //
-    //         let prepare_script = vec![
-    //             op::gtf_args(0x10, 0x00, GTFArgs::ScriptData),
-    //             op::addi(0x11, 0x10, ContractId::LEN.try_into().unwrap()),
-    //             op::addi(0x11, 0x11, WORD_SIZE.try_into().unwrap()),
-    //             op::addi(0x11, 0x11, WORD_SIZE.try_into().unwrap()),
-    //             op::movi(0x12, 100_000),
-    //             op::movi(0x13, i.try_into().unwrap()),
-    //             op::movi(0x14, i.try_into().unwrap()),
-    //             op::movi(0x15, i.try_into().unwrap()),
-    //             op::add(0x15, 0x15, 0x15),
-    //             op::addi(0x15, 0x15, 32),
-    //             op::aloc(0x15),
-    //             op::move_(0x15, RegId::HP),
-    //         ];
-    //
-    //         ccp.throughput(Throughput::Bytes(i));
-    //
-    //         run_group_ref(
-    //             &mut ccp,
-    //             format!("{i}"),
-    //             VmBench::new(op::ccp(0x15, 0x10, RegId::ZERO, 0x13))
-    //                 .with_contract_code(code)
-    //                 .with_data(data)
-    //                 .with_prepare_script(prepare_script),
-    //         );
-    //     }
-    //
-    //     ccp.finish();
+    // ccp
     for i in arb_dependent_cost_values() {
         let contract = std::iter::repeat(op::noop())
             .take(i as usize)
@@ -293,19 +211,7 @@ pub fn run_contract(group: &mut BenchmarkGroup<WallTime>) {
         );
     }
 
-    //     {
-    //         let mut input = VmBench::contract(rng, op::croo(0x14, 0x16))
-    //             .expect("failed to prepare contract");
-    //         input.post_call.extend(vec![
-    //             op::gtf_args(0x16, 0x00, GTFArgs::ScriptData),
-    //             op::movi(0x15, 2000),
-    //             op::aloc(0x15),
-    //             op::move_(0x14, RegId::HP),
-    //         ]);
-    //         run_group_ref(&mut c.benchmark_group("croo"), "croo", input);
-    //     }
-
-    // TODO: What is the "post_call" stuff doing?
+    // croo
     let contract = vec![
         op::gtf_args(0x16, 0x00, GTFArgs::ScriptData),
         op::movi(0x15, 2000),
@@ -327,34 +233,7 @@ pub fn run_contract(group: &mut BenchmarkGroup<WallTime>) {
         &mut rng,
     );
 
-    //     let mut csiz = c.benchmark_group("csiz");
-    //
-    //     for i in linear.clone() {
-    //         let mut code = vec![0u8; i as usize];
-    //
-    //         rng.fill_bytes(&mut code);
-    //
-    //         let code = ContractCode::from(code);
-    //         let id = code.id;
-    //
-    //         let data = id.iter().copied().collect();
-    //
-    //         let prepare_script = vec![op::gtf_args(0x10, 0x00, GTFArgs::ScriptData)];
-    //
-    //         csiz.throughput(Throughput::Bytes(i));
-    //
-    //         run_group_ref(
-    //             &mut csiz,
-    //             format!("{i}"),
-    //             VmBench::new(op::csiz(0x11, 0x10))
-    //                 .with_contract_code(code)
-    //                 .with_data(data)
-    //                 .with_prepare_script(prepare_script),
-    //         );
-    //     }
-    //
-    //     csiz.finish();
-
+    // csiz
     for size in arb_dependent_cost_values() {
         let contract = std::iter::repeat(op::noop())
             .take(size as usize)
@@ -380,47 +259,7 @@ pub fn run_contract(group: &mut BenchmarkGroup<WallTime>) {
         );
     }
 
-    //     let mut ldc = c.benchmark_group("ldc");
-    //
-    //     for i in linear.clone() {
-    //         let mut code = vec![0u8; i as usize];
-    //
-    //         rng.fill_bytes(&mut code);
-    //
-    //         let code = ContractCode::from(code);
-    //         let id = code.id;
-    //
-    //         let data = id
-    //             .iter()
-    //             .copied()
-    //             .chain((0 as Word).to_be_bytes().iter().copied())
-    //             .chain((0 as Word).to_be_bytes().iter().copied())
-    //             .chain(AssetId::default().iter().copied())
-    //             .collect();
-    //
-    //         let prepare_script = vec![
-    //             op::gtf_args(0x10, 0x00, GTFArgs::ScriptData),
-    //             op::addi(0x11, 0x10, ContractId::LEN.try_into().unwrap()),
-    //             op::addi(0x11, 0x11, WORD_SIZE.try_into().unwrap()),
-    //             op::addi(0x11, 0x11, WORD_SIZE.try_into().unwrap()),
-    //             op::movi(0x12, 100_000),
-    //             op::movi(0x13, i.try_into().unwrap()),
-    //         ];
-    //
-    //         ldc.throughput(Throughput::Bytes(i));
-    //
-    //         run_group_ref(
-    //             &mut ldc,
-    //             format!("{i}"),
-    //             VmBench::new(op::ldc(0x10, RegId::ZERO, 0x13))
-    //                 .with_contract_code(code)
-    //                 .with_data(data)
-    //                 .with_prepare_script(prepare_script),
-    //         );
-    //     }
-    //
-    //     ldc.finish();
-
+    // ldc
     for size in arb_dependent_cost_values() {
         let contract = std::iter::repeat(op::noop())
             .take(size as usize)
@@ -446,11 +285,7 @@ pub fn run_contract(group: &mut BenchmarkGroup<WallTime>) {
         );
     }
 
-    //     run_group_ref(
-    //         &mut c.benchmark_group("log"),
-    //         "log",
-    //         VmBench::new(op::log(0x10, 0x11, 0x12, 0x13)),
-    //     );
+    // log
     {
         run(
             "contract/log",
@@ -460,17 +295,7 @@ pub fn run_contract(group: &mut BenchmarkGroup<WallTime>) {
         );
     }
 
-    //     let mut logd = c.benchmark_group("logd");
-    //     for i in &linear {
-    //         logd.throughput(Throughput::Bytes(*i as u64));
-    //         run_group_ref(
-    //             &mut logd,
-    //             format!("{i}"),
-    //             VmBench::new(op::logd(0x10, 0x11, RegId::ZERO, 0x13))
-    //                 .with_prepare_script(vec![op::movi(0x13, *i)]),
-    //         );
-    //     }
-    //     logd.finish();
+    // logd
     {
         for i in arb_dependent_cost_values() {
             let mut instructions = setup_instructions();
@@ -493,16 +318,7 @@ pub fn run_contract(group: &mut BenchmarkGroup<WallTime>) {
         }
     }
 
-    //     run_group_ref(
-    //         &mut c.benchmark_group("mint"),
-    //         "mint",
-    //         VmBench::contract_using_db(
-    //             rng,
-    //             db.checkpoint(),
-    //             op::mint(RegId::ONE, RegId::ZERO),
-    //         )
-    //         .expect("failed to prepare contract"),
-    //     );
+    // mint
     {
         let contract = vec![op::mint(RegId::ONE, RegId::ZERO), op::ret(RegId::ZERO)];
         let instructions = call_contract_repeat();
@@ -519,11 +335,7 @@ pub fn run_contract(group: &mut BenchmarkGroup<WallTime>) {
         );
     }
 
-    //     run_group_ref(
-    //         &mut c.benchmark_group("ret_contract"),
-    //         "ret_contract",
-    //         VmBench::contract(rng, op::ret(RegId::ONE)).unwrap(),
-    //     );"
+    // ret contract
     {
         let contract = vec![op::ret(RegId::ONE), op::ret(RegId::ZERO)];
         let instructions = call_contract_repeat();
@@ -540,18 +352,7 @@ pub fn run_contract(group: &mut BenchmarkGroup<WallTime>) {
         );
     }
 
-    //        let mut retd_contract = c.benchmark_group("retd_contract");
-    //     for i in &linear {
-    //         retd_contract.throughput(Throughput::Bytes(*i as u64));
-    //         run_group_ref(
-    //             &mut retd_contract,
-    //             format!("{i}"),
-    //             VmBench::contract(rng, op::retd(RegId::ONE, 0x10))
-    //                 .unwrap()
-    //                 .with_post_call(vec![op::movi(0x10, *i)]),
-    //         );
-    //     }
-    //     retd_contract.finish();
+    // retd contract
     {
         for i in arb_dependent_cost_values() {
             let contract = vec![
@@ -695,7 +496,8 @@ pub fn run_contract(group: &mut BenchmarkGroup<WallTime>) {
     //
     //     scwq.finish();
 
-    // TODO: This is way too under-costed, so it runs forever
+    // TODO: This is way too under-costed, so it runs too long and will complete before running out
+    //   of gas at 100_000.
     // let size = 2620_u32; // 18bit integer maxes at 262144
     // let contract: Vec<_> = (0..100_u32)
     //     .map(|x| x * size)
@@ -723,13 +525,7 @@ pub fn run_contract(group: &mut BenchmarkGroup<WallTime>) {
     //     &mut rng,
     // );
 
-    //     {
-    //         let mut input =
-    //             VmBench::contract_using_db(rng, db.checkpoint(), op::srw(0x13, 0x14, 0x15))
-    //                 .expect("failed to prepare contract");
-    //         input.prepare_script.extend(vec![op::movi(0x15, 2000)]);
-    //         run_group_ref(&mut c.benchmark_group("srw"), "srw", input);
-    //     }
+    // srw
 
     {
         let contract = vec![op::srw(0x13, 0x14, 0x15), op::ret(RegId::ZERO)];
@@ -791,16 +587,7 @@ pub fn run_contract(group: &mut BenchmarkGroup<WallTime>) {
 
     // TODO: Add `srwq` benchmark
 
-    //     run_group_ref(
-    //         &mut c.benchmark_group("sww"),
-    //         "sww",
-    //         VmBench::contract_using_db(
-    //             rng,
-    //             db.checkpoint(),
-    //             op::sww(RegId::ZERO, 0x29, RegId::ONE),
-    //         )
-    //         .expect("failed to prepare contract"),
-    //     );
+    // sww
 
     {
         let contract = vec![op::sww(RegId::ZERO, 0x29, RegId::ONE), op::ret(RegId::ZERO)];
@@ -849,11 +636,7 @@ pub fn run_contract(group: &mut BenchmarkGroup<WallTime>) {
 
     // TODO: Add `swwq` benchmark
 
-    //    run_group_ref(
-    //         &mut c.benchmark_group("time"),
-    //         "time",
-    //         VmBench::new(op::time(0x11, 0x10)).with_prepare_script(vec![op::movi(0x10, 0)]),
-    //     );
+    // time
 
     {
         run(
@@ -868,15 +651,7 @@ pub fn run_contract(group: &mut BenchmarkGroup<WallTime>) {
         );
     }
 
-    //     {
-    //         let mut input =
-    //             VmBench::contract_using_db(rng, db.checkpoint(), op::tr(0x15, 0x14, 0x15))
-    //                 .expect("failed to prepare contract");
-    //         input
-    //             .prepare_script
-    //             .extend(vec![op::movi(0x15, 2000), op::movi(0x14, 100)]);
-    //         run_group_ref(&mut c.benchmark_group("tr"), "tr", input);
-    //     }
+    // tr
 
     {
         let contract = vec![op::tr(0x15, 0x14, 0x15), op::ret(RegId::ZERO)];
