@@ -48,7 +48,7 @@ pub fn provision_import_test(
 ) {
     let shared_notify = Arc::new(Notify::new());
     let params = Config {
-        header_batch_size,
+        header_batch_size: header_batch_size as usize,
         block_stream_buffer_size,
     };
     let p2p = Arc::new(PressurePeerToPeer::new(

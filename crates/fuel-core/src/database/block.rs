@@ -275,7 +275,10 @@ impl Database {
             MerkleTree::load(storage, commit_merkle_metadata.version)
                 .map_err(|err| StorageError::Other(anyhow::anyhow!(err)))?;
 
-        let proof_index = message_merkle_metadata.version - 1;
+        let proof_index = message_merkle_metadata
+            .version
+            .checked_sub(1)
+            .ok_or(anyhow::anyhow!("The count of leafs - messages is zero"))?;
         let (_, proof_set) = tree
             .prove(proof_index)
             .map_err(|err| StorageError::Other(anyhow::anyhow!(err)))?;
@@ -287,6 +290,7 @@ impl Database {
     }
 }
 
+#[allow(clippy::arithmetic_side_effects)]
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -371,20 +375,20 @@ mod tests {
         assert!(matches!(err, fuel_core_storage::Error::NotFound(_, _)));
     }
 
-    const TEST_BLOCKS_COUNT: usize = 10;
+    const TEST_BLOCKS_COUNT: u32 = 10;
 
     fn insert_test_ascending_blocks(
         database: &mut Database,
         genesis_height: BlockHeight,
     ) {
-        let start = genesis_height.as_usize();
+        let start = *genesis_height;
         // Generate 10 blocks with ascending heights
         let blocks = (start..start + TEST_BLOCKS_COUNT)
             .map(|height| {
                 let header = PartialBlockHeader {
                     application: Default::default(),
                     consensus: ConsensusHeader::<Empty> {
-                        height: BlockHeight::from(height as u32),
+                        height: BlockHeight::from(height),
                         ..Default::default()
                     },
                 };
@@ -431,8 +435,8 @@ mod tests {
             for r in l..TEST_BLOCKS_COUNT {
                 let proof = database
                     .block_history_proof(
-                        &BlockHeight::from(genesis_height + l as u32),
-                        &BlockHeight::from(genesis_height + r as u32),
+                        &BlockHeight::from(genesis_height + l),
+                        &BlockHeight::from(genesis_height + r),
                     )
                     .expect("Should return the merkle proof");
                 assert_eq!(proof.proof_index, l as u64);
@@ -447,8 +451,8 @@ mod tests {
         insert_test_ascending_blocks(&mut database, BlockHeight::from(0));
 
         let result = database.block_history_proof(
-            &BlockHeight::from(TEST_BLOCKS_COUNT as u32),
-            &BlockHeight::from(TEST_BLOCKS_COUNT as u32 - 1),
+            &BlockHeight::from(TEST_BLOCKS_COUNT),
+            &BlockHeight::from(TEST_BLOCKS_COUNT - 1),
         );
         assert!(result.is_err());
     }

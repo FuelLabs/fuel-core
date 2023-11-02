@@ -1,3 +1,4 @@
+mod contract;
 mod utils;
 mod vm_set;
 
@@ -9,10 +10,9 @@ use criterion::{
     BenchmarkGroup,
     Criterion,
 };
-use std::time::Duration;
 
+use contract::*;
 use fuel_core_benches::*;
-use fuel_core_storage::transactional::Transaction;
 use fuel_core_types::fuel_asm::Instruction;
 use vm_set::*;
 
@@ -32,43 +32,66 @@ where
                 instruction,
                 diff,
             } = &mut i;
-            let original_db = vm.as_mut().database_mut().clone();
-            let mut db_txn = {
-                let db = vm.as_mut().database_mut();
-                let db_txn = db.transaction();
-                // update vm database in-place to use transaction
-                *db = db_txn.as_ref().clone();
-                db_txn
-            };
+            let checkpoint = vm
+                .as_mut()
+                .database_mut()
+                .checkpoint()
+                .expect("Should be able to create a checkpoint");
+            let original_db = core::mem::replace(vm.as_mut().database_mut(), checkpoint);
 
-            let mut elapsed_time = Duration::default();
-            for _ in 0..iters {
+            let final_time;
+            loop {
+                // Measure the total time to revert the VM to the initial state.
+                // It should always do the same things regardless of the number of
+                // iterations because we use a `diff` from the `VmBenchPrepared` initialization.
                 let start = std::time::Instant::now();
-                match instruction {
-                    Instruction::CALL(call) => {
-                        let (ra, rb, rc, rd) = call.unpack();
-                        vm.prepare_call(ra, rb, rc, rd).unwrap();
-                    }
-                    _ => {
-                        black_box(vm.instruction(*instruction).unwrap());
-                    }
+                for _ in 0..iters {
+                    vm.reset_vm_state(diff);
                 }
-                elapsed_time += start.elapsed();
-                vm.reset_vm_state(diff);
+                let time_to_reset = start.elapsed();
+
+                let start = std::time::Instant::now();
+                for _ in 0..iters {
+                    match instruction {
+                        Instruction::CALL(call) => {
+                            let (ra, rb, rc, rd) = call.unpack();
+                            vm.prepare_call(ra, rb, rc, rd).unwrap();
+                        }
+                        _ => {
+                            black_box(vm.instruction(*instruction).unwrap());
+                        }
+                    }
+                    vm.reset_vm_state(diff);
+                }
+                let only_instruction = start.elapsed().checked_sub(time_to_reset);
+
+                // It may overflow when the benchmarks run in an unstable environment.
+                // If the hardware is busy during the measuring time to reset the VM,
+                // it will produce `time_to_reset` more than the actual time
+                // to run the instruction and reset the VM.
+                if let Some(result) = only_instruction {
+                    final_time = result;
+                    break
+                } else {
+                    println!("The environment is unstable. Rerunning the benchmark.");
+                }
             }
-            db_txn.commit().unwrap();
+
             // restore original db
             *vm.as_mut().database_mut() = original_db;
-            elapsed_time
+            final_time
         })
     });
 }
+
 fn vm(c: &mut Criterion) {
     alu::run(c);
     blockchain::run(c);
     crypto::run(c);
     flow::run(c);
     mem::run(c);
+    contract_root(c);
+    state_root(c);
 }
 
 criterion_group!(benches, vm);

@@ -344,7 +344,12 @@ where
 
     /// Remove all old transactions from the pool.
     pub fn prune_old_txs(&mut self) -> Vec<ArcPoolTx> {
-        let deadline = tokio::time::Instant::now() - self.config.transaction_ttl;
+        let Some(deadline) =
+            tokio::time::Instant::now().checked_sub(self.config.transaction_ttl)
+        else {
+            // TTL is so big that we don't need to prune any transactions
+            return vec![]
+        };
 
         let mut result = vec![];
 

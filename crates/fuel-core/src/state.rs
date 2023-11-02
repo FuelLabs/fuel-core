@@ -1,5 +1,7 @@
 use crate::database::{
     Column,
+    Database,
+    Error as DatabaseError,
     Result as DatabaseResult,
 };
 use fuel_core_storage::iter::{
@@ -86,7 +88,15 @@ pub enum WriteOperation {
     Remove,
 }
 
-pub trait TransactableStorage: BatchOperations + Debug + Send + Sync {}
+pub trait TransactableStorage: BatchOperations + Debug + Send + Sync {
+    fn checkpoint(&self) -> DatabaseResult<Database> {
+        Err(DatabaseError::Other(anyhow::anyhow!(
+            "Checkpoint is not supported"
+        )))
+    }
+
+    fn flush(&self) -> DatabaseResult<()>;
+}
 
 pub mod in_memory;
 #[cfg(feature = "rocksdb")]

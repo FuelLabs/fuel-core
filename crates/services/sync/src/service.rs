@@ -124,7 +124,6 @@ where
     }
 
     async fn shutdown(self) -> anyhow::Result<()> {
-        tracing::info!("Sync task shutting down");
         self.import_task_handle.stop_and_await().await?;
         Ok(())
     }
