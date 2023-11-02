@@ -55,6 +55,7 @@ use fuel_core_types::{
         Bytes32,
         ContractId,
     },
+    fuel_vm::checked_transaction::EstimatePredicates,
 };
 
 mod utils;
@@ -115,7 +116,7 @@ fn run(
                 .add_unsigned_coin_input(
                     SecretKey::random(&mut rng),
                     rng.gen(),
-                    u64::MAX,
+                    u64::MAX / 2,
                     AssetId::BASE,
                     Default::default(),
                     Default::default(),
@@ -247,6 +248,30 @@ fn run_with_service(
     rt: &tokio::runtime::Runtime,
     rng: &mut rand::rngs::StdRng,
 ) {
+    run_with_service_with_extra_inputs(
+        id,
+        group,
+        script,
+        script_data,
+        service,
+        contract_id,
+        rt,
+        rng,
+        vec![],
+    );
+}
+
+fn run_with_service_with_extra_inputs(
+    id: &str,
+    group: &mut BenchmarkGroup<WallTime>,
+    script: Vec<Instruction>,
+    script_data: Vec<u8>,
+    service: &fuel_core::service::FuelService,
+    contract_id: ContractId,
+    rt: &tokio::runtime::Runtime,
+    rng: &mut rand::rngs::StdRng,
+    extra_inputs: Vec<Input>,
+) {
     group.bench_function(id, |b| {
         const TARGET_BLOCK_GAS_LIMIT: u64 = 100_000;
         const BASE: u64 = 10_000;
@@ -266,12 +291,12 @@ fn run_with_service(
                 .add_unsigned_coin_input(
                     SecretKey::random(rng),
                     rng.gen(),
-                    u64::MAX,
+                    u32::MAX as u64,
                     AssetId::BASE,
                     Default::default(),
                     Default::default(),
                 );
-            let input_count = tx_builder.inputs().len();
+            let mut input_count = tx_builder.inputs().len();
 
             let contract_input = Input::contract(
                 UtxoId::default(),
@@ -285,7 +310,12 @@ fn run_with_service(
             tx_builder
                 .add_input(contract_input)
                 .add_output(contract_output);
-            let tx = tx_builder.finalize_as_transaction();
+
+            for input in &extra_inputs {
+                tx_builder.add_input(input.clone());
+            }
+            let mut tx = tx_builder.finalize_as_transaction();
+            tx.estimate_predicates(&shared.config.chain_conf.consensus_parameters.clone().into()).unwrap();
             async move {
                 let tx_id = tx.id(&shared.config.chain_conf.consensus_parameters.chain_id);
 
@@ -299,7 +329,7 @@ fn run_with_service(
                     .expect("Should be at least 1 element")
                     .expect("Should include transaction successfully");
                 let res = sub.recv().await.expect("Should produce a block");
-                dbg!(&res.tx_status);
+                // dbg!(&res.tx_status);
                 assert_eq!(res.tx_status.len(), 2, "res.tx_status: {:?}", res.tx_status);
                 assert_eq!(res.sealed_block.entity.transactions().len(), 2);
                 assert_eq!(res.tx_status[0].id, tx_id);
