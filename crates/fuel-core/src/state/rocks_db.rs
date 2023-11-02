@@ -2,6 +2,7 @@ use crate::{
     database::{
         convert_to_rocksdb_direction,
         Column,
+        Database,
         Error as DatabaseError,
         Result as DatabaseResult,
     },
@@ -20,8 +21,10 @@ use fuel_core_storage::iter::{
     BoxedIter,
     IntoBoxedIter,
 };
+use rand::RngCore;
 use rocksdb::{
     checkpoint::Checkpoint,
+    BlockBasedOptions,
     BoundColumnFamily,
     Cache,
     ColumnFamilyDescriptor,
@@ -35,15 +38,56 @@ use rocksdb::{
     WriteBatch,
 };
 use std::{
+    env,
     iter,
-    path::Path,
+    path::{
+        Path,
+        PathBuf,
+    },
     sync::Arc,
 };
 
 type DB = DBWithThreadMode<MultiThreaded>;
+
+/// Reimplementation of `tempdir::TempDir` that allows creating a new
+/// instance without actually creating a new directory on the filesystem.
+/// This is needed since rocksdb requires empty directory for checkpoints.
+pub struct ShallowTempDir {
+    path: PathBuf,
+}
+
+impl Default for ShallowTempDir {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl ShallowTempDir {
+    /// Creates a random directory.
+    pub fn new() -> Self {
+        let mut rng = rand::thread_rng();
+        let mut path = env::temp_dir();
+        path.push(format!("fuel-core-shallow-{}", rng.next_u64()));
+        Self { path }
+    }
+
+    /// Returns the path of teh directory.
+    pub fn path(&self) -> &PathBuf {
+        &self.path
+    }
+}
+
+impl Drop for ShallowTempDir {
+    fn drop(&mut self) {
+        // Ignore errors
+        let _ = std::fs::remove_dir_all(&self.path);
+    }
+}
+
 #[derive(Debug)]
 pub struct RocksDb {
     db: DB,
+    capacity: Option<usize>,
 }
 
 impl RocksDb {
@@ -63,16 +107,43 @@ impl RocksDb {
         columns: Vec<Column>,
         capacity: Option<usize>,
     ) -> DatabaseResult<RocksDb> {
-        let cf_descriptors = columns
-            .clone()
-            .into_iter()
-            .map(|i| ColumnFamilyDescriptor::new(RocksDb::col_name(i), Self::cf_opts(i)));
+        let mut block_opts = BlockBasedOptions::default();
+        // See https://github.com/facebook/rocksdb/blob/a1523efcdf2f0e8133b9a9f6e170a0dad49f928f/include/rocksdb/table.h#L246-L271 for details on what the format versions are/do.
+        block_opts.set_format_version(5);
+
+        if let Some(capacity) = capacity {
+            // Set cache size 1/3 of the capacity as recommended by
+            // https://github.com/facebook/rocksdb/wiki/Setup-Options-and-Basic-Tuning#block-cache-size
+            let block_cache_size = capacity / 3;
+            let cache = Cache::new_lru_cache(block_cache_size);
+            block_opts.set_block_cache(&cache);
+            // "index and filter blocks will be stored in block cache, together with all other data blocks."
+            // See: https://github.com/facebook/rocksdb/wiki/Memory-usage-in-RocksDB#indexes-and-filter-blocks
+            block_opts.set_cache_index_and_filter_blocks(true);
+            // Don't evict L0 filter/index blocks from the cache
+            block_opts.set_pin_l0_filter_and_index_blocks_in_cache(true);
+        } else {
+            block_opts.disable_cache();
+        }
+        block_opts.set_bloom_filter(10.0, true);
+
+        let cf_descriptors = columns.clone().into_iter().map(|i| {
+            ColumnFamilyDescriptor::new(
+                RocksDb::col_name(i),
+                Self::cf_opts(i, &block_opts),
+            )
+        });
 
         let mut opts = Options::default();
         opts.create_if_missing(true);
         opts.set_compression_type(DBCompressionType::Lz4);
         if let Some(capacity) = capacity {
-            let cache = Cache::new_lru_cache(capacity);
+            // Set cache size 1/3 of the capacity. Another 1/3 is
+            // used by block cache and the last 1 / 3 remains for other purposes:
+            //
+            // https://github.com/facebook/rocksdb/wiki/Setup-Options-and-Basic-Tuning#block-cache-size
+            let row_cache_size = capacity / 3;
+            let cache = Cache::new_lru_cache(row_cache_size);
             opts.set_row_cache(&cache);
         }
 
@@ -82,7 +153,7 @@ impl RocksDb {
                 match DB::open_cf(&opts, &path, &[] as &[&str]) {
                     Ok(db) => {
                         for i in columns {
-                            let opts = Self::cf_opts(i);
+                            let opts = Self::cf_opts(i, &block_opts);
                             db.create_cf(RocksDb::col_name(i), &opts)
                                 .map_err(|e| DatabaseError::Other(e.into()))?;
                         }
@@ -96,7 +167,7 @@ impl RocksDb {
                         let cf_descriptors = columns.clone().into_iter().map(|i| {
                             ColumnFamilyDescriptor::new(
                                 RocksDb::col_name(i),
-                                Self::cf_opts(i),
+                                Self::cf_opts(i, &block_opts),
                             )
                         });
                         DB::open_cf_descriptors(&opts, &path, cf_descriptors)
@@ -106,12 +177,19 @@ impl RocksDb {
             ok => ok,
         }
         .map_err(|e| DatabaseError::Other(e.into()))?;
-        let rocks_db = RocksDb { db };
+        let rocks_db = RocksDb { db, capacity };
         Ok(rocks_db)
     }
 
-    pub fn checkpoint<P: AsRef<Path>>(&self, path: P) -> Result<(), rocksdb::Error> {
-        Checkpoint::new(&self.db)?.create_checkpoint(path)
+    pub fn checkpoint<P: AsRef<Path>>(&self, path: P) -> DatabaseResult<()> {
+        Checkpoint::new(&self.db)
+            .and_then(|checkpoint| checkpoint.create_checkpoint(path))
+            .map_err(|e| {
+                DatabaseError::Other(anyhow::anyhow!(
+                    "Failed to create a checkpoint: {}",
+                    e
+                ))
+            })
     }
 
     fn cf(&self, column: Column) -> Arc<BoundColumnFamily> {
@@ -121,13 +199,14 @@ impl RocksDb {
     }
 
     fn col_name(column: Column) -> String {
-        format!("column-{}", column.as_usize())
+        format!("col-{}", column.as_usize())
     }
 
-    fn cf_opts(column: Column) -> Options {
+    fn cf_opts(column: Column, block_opts: &BlockBasedOptions) -> Options {
         let mut opts = Options::default();
         opts.create_if_missing(true);
         opts.set_compression_type(DBCompressionType::Lz4);
+        opts.set_block_based_table_factory(block_opts);
 
         // All double-keys should be configured here
         match column {
@@ -402,6 +481,17 @@ impl BatchOperations for RocksDb {
 }
 
 impl TransactableStorage for RocksDb {
+    fn checkpoint(&self) -> DatabaseResult<Database> {
+        let tmp_dir = ShallowTempDir::new();
+        self.checkpoint(&tmp_dir.path)?;
+        let db = RocksDb::default_open(&tmp_dir.path, self.capacity)?;
+        let database = Database::new(Arc::new(db)).with_drop(Box::new(move || {
+            drop(tmp_dir);
+        }));
+
+        Ok(database)
+    }
+
     fn flush(&self) -> DatabaseResult<()> {
         self.db
             .flush_wal(true)
