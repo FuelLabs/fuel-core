@@ -192,10 +192,21 @@ fn service_with_contract_id(
     config.utxo_validation = false;
     config.block_production = Trigger::Instant;
 
+    // Override state size if the env var is set
+    let state_size_env_var = "STATE_SIZE";
+    let state_size = if let Some(value) = std::env::var_os(state_size_env_var) {
+        let value = value.to_str().unwrap();
+        let value = value.parse::<u64>().unwrap();
+        println!("Overriding state size with {}", value);
+        value
+    } else {
+        STATE_SIZE
+    };
+
     database
         .init_contract_state(
             &contract_id,
-            (0..STATE_SIZE).map(|k| {
+            (0..state_size).map(|k| {
                 let mut key = Bytes32::zeroed();
                 key.as_mut()[..8].copy_from_slice(&k.to_be_bytes());
                 (key, key)
@@ -205,7 +216,7 @@ fn service_with_contract_id(
     database
         .init_contract_balances(
             &contract_id,
-            (0..STATE_SIZE).map(|k| {
+            (0..state_size).map(|k| {
                 let key = k / 2;
                 let mut sub_id = Bytes32::zeroed();
                 sub_id.as_mut()[..8].copy_from_slice(&key.to_be_bytes());
@@ -288,6 +299,7 @@ fn run_with_service(
                     .expect("Should be at least 1 element")
                     .expect("Should include transaction successfully");
                 let res = sub.recv().await.expect("Should produce a block");
+                dbg!(&res.tx_status);
                 assert_eq!(res.tx_status.len(), 2, "res.tx_status: {:?}", res.tx_status);
                 assert_eq!(res.sealed_block.entity.transactions().len(), 2);
                 assert_eq!(res.tx_status[0].id, tx_id);
