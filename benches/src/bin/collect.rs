@@ -633,6 +633,7 @@ fn linear_regression(x_y: Vec<(u64, u64)>) -> f64 {
 fn dependent_cost(name: &String, x_y: Vec<(u64, u64)>) -> (u64, u64) {
     const NEAR_LINEAR: f64 = 0.1;
 
+    #[derive(PartialEq, Eq)]
     enum Type {
         /// The points have a linear property. The first point
         /// and the last points are almost the same(The difference is < 0.1).
@@ -671,7 +672,7 @@ fn dependent_cost(name: &String, x_y: Vec<(u64, u64)>) -> (u64, u64) {
 
     let linear_regression = linear_regression(x_y.clone());
 
-    let mut x_y = x_y
+    let x_y = x_y
         .into_iter()
         .map(|(x, y)| Point { x, y })
         .collect::<Vec<_>>();
@@ -704,7 +705,15 @@ fn dependent_cost(name: &String, x_y: Vec<(u64, u64)>) -> (u64, u64) {
                 .unwrap();
             (base, amount as u64)
         }
-        Type::Logarithm => {
+        Type::Logarithm | Type::Exp => {
+            if expected_type == Type::Exp {
+                println!(
+                    "The {} is exponential. We don't support exponential chart. \
+                The opcode should be limited with upper bound. \n {:?}",
+                    name, x_y
+                );
+            }
+
             // The logarithm function slows down fast, and the point where it becomes more
             // linear is the base point. After this point we use linear strategy.
             let last = x_y.last().unwrap().amount();
@@ -725,17 +734,6 @@ fn dependent_cost(name: &String, x_y: Vec<(u64, u64)>) -> (u64, u64) {
                 .min_by(|a, b| a.partial_cmp(b).unwrap())
                 .unwrap_or(last);
             (base.y, amount as u64)
-        }
-        Type::Exp => {
-            println!(
-                "The {} is exponential. We don't support exponential chart. \
-                The opcode should be limited with upper bound. \n {:?}",
-                name, x_y
-            );
-
-            x_y.sort_unstable_by_key(|a| a.amount() as u64);
-            let base = x_y.last().unwrap();
-            (base.y, 0)
         }
     }
 }

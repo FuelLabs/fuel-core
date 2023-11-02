@@ -233,6 +233,10 @@ impl Database {
         self.into()
     }
 
+    pub fn checkpoint(&self) -> DatabaseResult<Self> {
+        self.data.checkpoint()
+    }
+
     pub fn flush(self) -> DatabaseResult<()> {
         self.data.flush()
     }

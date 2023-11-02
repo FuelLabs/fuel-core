@@ -13,7 +13,6 @@ use criterion::{
 
 use contract::*;
 use fuel_core_benches::*;
-use fuel_core_storage::transactional::Transaction;
 use fuel_core_types::fuel_asm::Instruction;
 use vm_set::*;
 
@@ -33,14 +32,12 @@ where
                 instruction,
                 diff,
             } = &mut i;
-            let original_db = vm.as_mut().database_mut().clone();
-            let mut db_txn = {
-                let db = vm.as_mut().database_mut();
-                let db_txn = db.transaction();
-                // update vm database in-place to use transaction
-                *db = db_txn.as_ref().clone();
-                db_txn
-            };
+            let checkpoint = vm
+                .as_mut()
+                .database_mut()
+                .checkpoint()
+                .expect("Should be able to create a checkpoint");
+            let original_db = core::mem::replace(vm.as_mut().database_mut(), checkpoint);
 
             let final_time;
             loop {
@@ -80,7 +77,6 @@ where
                 }
             }
 
-            db_txn.commit().unwrap();
             // restore original db
             *vm.as_mut().database_mut() = original_db;
             final_time

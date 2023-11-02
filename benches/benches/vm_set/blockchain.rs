@@ -1,7 +1,5 @@
 use std::{
-    env,
     iter::successors,
-    path::PathBuf,
     sync::Arc,
 };
 
@@ -13,7 +11,10 @@ use criterion::{
 };
 use fuel_core::{
     database::vm_database::VmDatabase,
-    state::rocks_db::RocksDb,
+    state::rocks_db::{
+        RocksDb,
+        ShallowTempDir,
+    },
 };
 use fuel_core_benches::*;
 use fuel_core_types::{
@@ -37,27 +38,6 @@ use rand::{
     SeedableRng,
 };
 
-/// Reimplementation of `tempdir::TempDir` that allows creating a new
-/// instance without actually creating a new directory on the filesystem.
-/// This is needed since rocksdb requires empty directory for checkpoints.
-pub struct ShallowTempDir {
-    path: PathBuf,
-}
-impl ShallowTempDir {
-    pub fn new() -> Self {
-        let mut rng = rand::thread_rng();
-        let mut path = env::temp_dir();
-        path.push(format!("fuel-core-bench-rocksdb-{}", rng.next_u64()));
-        Self { path }
-    }
-}
-impl Drop for ShallowTempDir {
-    fn drop(&mut self) {
-        // Ignore errors
-        let _ = std::fs::remove_dir_all(&self.path);
-    }
-}
-
 pub struct BenchDb {
     db: RocksDb,
     /// Used for RAII cleanup. Contents of this directory are deleted on drop.
@@ -70,7 +50,7 @@ impl BenchDb {
     fn new(contract: &ContractId) -> anyhow::Result<Self> {
         let tmp_dir = ShallowTempDir::new();
 
-        let db = Arc::new(RocksDb::default_open(&tmp_dir.path, None).unwrap());
+        let db = Arc::new(RocksDb::default_open(tmp_dir.path(), None).unwrap());
 
         let mut database = Database::new(db.clone());
         database.init_contract_state(
@@ -106,14 +86,9 @@ impl BenchDb {
 
     /// Create a new separate database instance using a rocksdb checkpoint
     fn checkpoint(&self) -> VmDatabase {
-        let tmp_dir = ShallowTempDir::new();
-        self.db
-            .checkpoint(&tmp_dir.path)
+        use fuel_core::state::TransactableStorage;
+        let database = TransactableStorage::checkpoint(&self.db)
             .expect("Unable to create checkpoint");
-        let db = RocksDb::default_open(&tmp_dir.path, None).unwrap();
-        let database = Database::new(Arc::new(db)).with_drop(Box::new(move || {
-            drop(tmp_dir);
-        }));
         VmDatabase::default_from_database(database)
     }
 }
