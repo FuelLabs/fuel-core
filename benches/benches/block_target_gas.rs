@@ -1,23 +1,12 @@
 use block_target_gas_set::{
-    alu::run_alu,
-    contract::run_contract,
-    crypto::run_crypto,
-    flow::run_flow,
+    alu::run_alu, contract::run_contract, crypto::run_crypto, flow::run_flow,
     memory::run_memory,
 };
 use criterion::{
-    criterion_group,
-    criterion_main,
-    measurement::WallTime,
-    BenchmarkGroup,
-    Criterion,
+    criterion_group, criterion_main, measurement::WallTime, BenchmarkGroup, Criterion,
 };
 use ed25519_dalek::Signer;
-use fuel_core::service::{
-    config::Trigger,
-    Config,
-    ServiceTrait,
-};
+use fuel_core::service::{config::Trigger, Config, ServiceTrait};
 use rand::SeedableRng;
 
 use ethnum::U256;
@@ -26,35 +15,12 @@ use fuel_core_chain_config::ContractConfig;
 use fuel_core_types::{
     fuel_asm::{
         op,
-        wideint::{
-            CompareArgs,
-            CompareMode,
-            DivArgs,
-            MathArgs,
-            MathOp,
-            MulArgs,
-        },
-        GTFArgs,
-        Instruction,
-        RegId,
+        wideint::{CompareArgs, CompareMode, DivArgs, MathArgs, MathOp, MulArgs},
+        GTFArgs, Instruction, RegId,
     },
-    fuel_crypto::{
-        secp256r1,
-        *,
-    },
-    fuel_tx::{
-        ContractIdExt,
-        Input,
-        Output,
-        TxPointer,
-        UniqueIdentifier,
-        UtxoId,
-    },
-    fuel_types::{
-        AssetId,
-        Bytes32,
-        ContractId,
-    },
+    fuel_crypto::{secp256r1, *},
+    fuel_tx::{ContractIdExt, Input, Output, TxPointer, UniqueIdentifier, UtxoId},
+    fuel_types::{AssetId, Bytes32, ContractId},
     fuel_vm::checked_transaction::EstimatePredicates,
 };
 
@@ -62,14 +28,15 @@ mod utils;
 
 mod block_target_gas_set;
 
-use utils::{
-    make_u128,
-    make_u256,
-};
+use utils::{make_u128, make_u256};
 
 // Use Jemalloc during benchmarks
 #[global_allocator]
 static GLOBAL: tikv_jemallocator::Jemalloc = tikv_jemallocator::Jemalloc;
+
+const STATE_SIZE: u64 = 10_000_000;
+const TARGET_BLOCK_GAS_LIMIT: u64 = 100_000;
+const BASE: u64 = 10_000;
 
 fn run(
     id: &str,
@@ -83,8 +50,6 @@ fn run(
             .build()
             .unwrap();
         let _drop = rt.enter();
-        const TARGET_BLOCK_GAS_LIMIT: u64 = 100_000;
-        const BASE: u64 = 10_000;
 
         let database = Database::rocksdb();
         let mut config = Config::local_node();
@@ -155,15 +120,11 @@ fn run(
 fn service_with_contract_id(
     contract_id: ContractId,
 ) -> (fuel_core::service::FuelService, tokio::runtime::Runtime) {
-    const STATE_SIZE: u64 = 10_000_000;
-
     let rt = tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build()
         .unwrap();
     let _drop = rt.enter();
-    const TARGET_BLOCK_GAS_LIMIT: u64 = 100_000;
-    const BASE: u64 = 10_000;
     let mut database = Database::rocksdb();
     let mut config = Config::local_node();
     config
@@ -275,8 +236,6 @@ fn run_with_service_with_extra_inputs(
     extra_outputs: Vec<Output>,
 ) {
     group.bench_function(id, |b| {
-        const TARGET_BLOCK_GAS_LIMIT: u64 = 100_000;
-        const BASE: u64 = 10_000;
 
         b.to_async(rt).iter(|| {
             let shared = service.shared.clone();
@@ -298,7 +257,7 @@ fn run_with_service_with_extra_inputs(
                     Default::default(),
                     Default::default(),
                 );
-            let mut input_count = tx_builder.inputs().len();
+            let input_count = tx_builder.inputs().len();
 
             let contract_input = Input::contract(
                 UtxoId::default(),

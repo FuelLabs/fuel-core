@@ -2,7 +2,6 @@ use crate::{utils::arb_dependent_cost_values, *};
 use fuel_core::service::FuelService;
 use fuel_core_storage::{tables::ContractsRawCode, StorageAsMut};
 use fuel_core_types::{
-    fuel_tx::{TxPointer, UtxoId},
     fuel_types::{Address, Word},
     fuel_vm::consts::WORD_SIZE,
 };
@@ -135,7 +134,7 @@ pub fn run_contract(group: &mut BenchmarkGroup<WallTime>) {
             op::addi(0x11, 0x10, ContractId::LEN.try_into().unwrap()),
             op::addi(0x11, 0x11, WORD_SIZE.try_into().unwrap()),
             op::addi(0x11, 0x11, WORD_SIZE.try_into().unwrap()),
-            op::movi(0x12, 100_000),
+            op::movi(0x12, TARGET_BLOCK_GAS_LIMIT as u32),
             op::call(0x10, RegId::ZERO, 0x11, 0x12),
             op::jmpb(RegId::ZERO, 0),
         ];
@@ -214,7 +213,7 @@ pub fn run_contract(group: &mut BenchmarkGroup<WallTime>) {
             op::croo(0x14, 0x16),
             op::ret(RegId::ZERO),
         ];
-        let mut instructions = call_contract_repeat();
+        let instructions = call_contract_repeat();
         replace_contract_in_service(&mut service, &contract_id, contract);
         run_with_service(
             "contract/croo",
@@ -338,7 +337,7 @@ pub fn run_contract(group: &mut BenchmarkGroup<WallTime>) {
         run_with_service(
             "contract/ret contract",
             group,
-            call_contract_repeat(),
+            instructions,
             script_data.clone(),
             &service,
             contract_id,
@@ -354,7 +353,7 @@ pub fn run_contract(group: &mut BenchmarkGroup<WallTime>) {
                 op::movi(0x14, i.try_into().unwrap()),
                 op::retd(RegId::ONE, 0x14),
             ];
-            let mut instructions = call_contract_repeat();
+            let instructions = call_contract_repeat();
             replace_contract_in_service(&mut service, &contract_id, contract);
             let id = format!("contract/retd contract {:?}", i);
             run_with_service(
@@ -723,7 +722,7 @@ fn setup_instructions() -> Vec<Instruction> {
         op::addi(0x11, 0x10, ContractId::LEN.try_into().unwrap()),
         op::addi(0x11, 0x11, WORD_SIZE.try_into().unwrap()),
         op::addi(0x11, 0x11, WORD_SIZE.try_into().unwrap()),
-        op::movi(0x12, 100_000),
+        op::movi(0x12, TARGET_BLOCK_GAS_LIMIT as u32),
     ]
 }
 
@@ -733,11 +732,5 @@ fn call_contract_repeat() -> Vec<Instruction> {
         op::call(0x10, RegId::ZERO, 0x11, 0x12),
         op::jmpb(RegId::ZERO, 0),
     ]);
-    instructions
-}
-
-fn call_contract_once() -> Vec<Instruction> {
-    let mut instructions = setup_instructions();
-    instructions.extend(vec![op::call(0x10, RegId::ZERO, 0x11, 0x12)]);
     instructions
 }
