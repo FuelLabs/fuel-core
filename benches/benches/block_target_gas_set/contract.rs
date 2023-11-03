@@ -59,7 +59,7 @@ pub fn run_contract(group: &mut BenchmarkGroup<WallTime>) {
 
         let id = "contract/bal contract";
         run_with_service(
-            &id,
+            id,
             group,
             instructions,
             script_data.clone(),
@@ -75,7 +75,7 @@ pub fn run_contract(group: &mut BenchmarkGroup<WallTime>) {
 
         let id = "contract/bal script";
         run_with_service(
-            &id,
+            id,
             group,
             instructions,
             script_data.clone(),
@@ -188,9 +188,9 @@ pub fn run_contract(group: &mut BenchmarkGroup<WallTime>) {
 
         let mut instructions = setup_instructions();
         instructions.extend(vec![
-            op::movi(0x13, i.try_into().unwrap()),
-            op::movi(0x14, i.try_into().unwrap()),
-            op::movi(0x15, i.try_into().unwrap()),
+            op::movi(0x13, i),
+            op::movi(0x14, i),
+            op::movi(0x15, i),
             op::add(0x15, 0x15, 0x15),
             op::addi(0x15, 0x15, 32),
             op::aloc(0x15),
@@ -270,7 +270,7 @@ pub fn run_contract(group: &mut BenchmarkGroup<WallTime>) {
             .collect();
         let mut instructions = setup_instructions();
         instructions.extend(vec![
-            op::movi(0x13, size.try_into().unwrap()),
+            op::movi(0x13, size),
             op::ldc(0x10, RegId::ZERO, 0x13),
             op::jmpb(RegId::ZERO, 0),
         ]);
@@ -303,7 +303,7 @@ pub fn run_contract(group: &mut BenchmarkGroup<WallTime>) {
         for i in arb_dependent_cost_values() {
             let mut instructions = setup_instructions();
             instructions.extend(vec![
-                op::movi(0x13, i.try_into().unwrap()),
+                op::movi(0x13, i),
                 op::logd(0x10, 0x11, RegId::ZERO, 0x13),
                 op::jmpb(RegId::ZERO, 0),
             ]);
@@ -358,10 +358,7 @@ pub fn run_contract(group: &mut BenchmarkGroup<WallTime>) {
     // retd contract
     {
         for i in arb_dependent_cost_values() {
-            let contract = vec![
-                op::movi(0x14, i.try_into().unwrap()),
-                op::retd(RegId::ONE, 0x14),
-            ];
+            let contract = vec![op::movi(0x14, i), op::retd(RegId::ONE, 0x14)];
             let instructions = call_contract_repeat();
             replace_contract_in_service(&mut service, &contract_id, contract);
             let id = format!("contract/retd contract {:?}", i);
@@ -424,7 +421,7 @@ pub fn run_contract(group: &mut BenchmarkGroup<WallTime>) {
                 // Offset 32 + 8 + 8 + 32
                 op::addi(0x15, 0x15, 32 + 8 + 8 + 32), // target address pointer
                 op::addi(0x16, 0x15, 32),              // data ppinter
-                op::movi(0x17, i.try_into().unwrap()), // data length
+                op::movi(0x17, i),                     // data length
                 op::smo(0x15, 0x16, 0x17, 0x18),
                 op::ret(RegId::ZERO),
             ];
@@ -704,8 +701,7 @@ fn replace_contract_in_service(
 ) {
     let contract_bytecode: Vec<_> = contract_instructions
         .iter()
-        .map(|x| x.to_bytes())
-        .flatten()
+        .flat_map(|x| x.to_bytes())
         .collect();
     service
         .shared

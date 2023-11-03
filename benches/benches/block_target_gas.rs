@@ -173,7 +173,7 @@ fn service_with_contract_id(
         .max_gas_per_tx = TARGET_BLOCK_GAS_LIMIT;
     config.chain_conf.initial_state.as_mut().unwrap().contracts =
         Some(vec![ContractConfig {
-            contract_id: contract_id.clone(),
+            contract_id,
             code: vec![],
             salt: Default::default(),
             state: None,
@@ -240,6 +240,7 @@ fn service_with_contract_id(
 
 /// Runs benchmark for `script` with prepared `service` and specified contract (by 'contract_id') which should be
 /// included in service
+#[allow(clippy::too_many_arguments)]
 fn run_with_service(
     id: &str,
     group: &mut BenchmarkGroup<WallTime>,
@@ -267,6 +268,7 @@ fn run_with_service(
 /// Runs benchmark for `script` with prepared `service` and specified contract (by `contract_id`) which should be
 /// included in service.
 /// Also include additional inputs and outputs in transaction
+#[allow(clippy::too_many_arguments)]
 fn run_with_service_with_extra_inputs(
     id: &str,
     group: &mut BenchmarkGroup<WallTime>,
@@ -321,7 +323,7 @@ fn run_with_service_with_extra_inputs(
             }
 
             for output in &extra_outputs {
-                tx_builder.add_output(output.clone());
+                tx_builder.add_output(*output);
             }
             let mut tx = tx_builder.finalize_as_transaction();
             tx.estimate_predicates(&shared.config.chain_conf.consensus_parameters.clone().into()).unwrap();
