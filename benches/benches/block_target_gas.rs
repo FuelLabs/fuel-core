@@ -154,6 +154,8 @@ fn run(
     });
 }
 
+/// Sets up a service with a full database. Returns the service with the associated Runtime.
+/// The size of the database can be overridden with the `STATE_SIZE` environment variable.
 fn service_with_contract_id(
     contract_id: ContractId,
 ) -> (fuel_core::service::FuelService, tokio::runtime::Runtime) {
@@ -236,6 +238,8 @@ fn service_with_contract_id(
     (service, rt)
 }
 
+/// Runs benchmark for `script` with prepared `service` and specified contract (by 'contract_id') which should be
+/// included in service
 fn run_with_service(
     id: &str,
     group: &mut BenchmarkGroup<WallTime>,
@@ -260,6 +264,9 @@ fn run_with_service(
     );
 }
 
+/// Runs benchmark for `script` with prepared `service` and specified contract (by `contract_id`) which should be
+/// included in service.
+/// Also include additional inputs and outputs in transaction
 fn run_with_service_with_extra_inputs(
     id: &str,
     group: &mut BenchmarkGroup<WallTime>,
