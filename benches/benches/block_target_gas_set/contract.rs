@@ -1,21 +1,9 @@
-use crate::{
-    utils::arb_dependent_cost_values,
-    *,
-};
+use crate::{utils::arb_dependent_cost_values, *};
 use fuel_core::service::FuelService;
-use fuel_core_storage::{
-    tables::ContractsRawCode,
-    StorageAsMut,
-};
+use fuel_core_storage::{tables::ContractsRawCode, StorageAsMut};
 use fuel_core_types::{
-    fuel_tx::{
-        TxPointer,
-        UtxoId,
-    },
-    fuel_types::{
-        Address,
-        Word,
-    },
+    fuel_tx::{TxPointer, UtxoId},
+    fuel_types::{Address, Word},
     fuel_vm::consts::WORD_SIZE,
 };
 
@@ -405,50 +393,8 @@ pub fn run_contract(group: &mut BenchmarkGroup<WallTime>) {
     //     );
     // }
 
-    //     let mut smo = c.benchmark_group("smo");
-    //
-    //     for i in linear.clone() {
-    //         let mut input = VmBench::contract_using_db(
-    //             rng,
-    //             db.checkpoint(),
-    //             op::smo(0x15, 0x16, 0x17, 0x18),
-    //         )
-    //         .expect("failed to prepare contract");
-    //         input.post_call.extend(vec![
-    //             op::gtf_args(0x15, 0x00, GTFArgs::ScriptData),
-    //             // Offset 32 + 8 + 8 + 32
-    //             op::addi(0x15, 0x15, 32 + 8 + 8 + 32), // target address pointer
-    //             op::addi(0x16, 0x15, 32),              // data ppinter
-    //             op::movi(0x17, i.try_into().unwrap()), // data length
-    //             op::movi(0x18, 10),                    // coins to send
-    //         ]);
-    //         input.data.extend(
-    //             Address::new([1u8; 32])
-    //                 .iter()
-    //                 .copied()
-    //                 .chain(vec![2u8; i as usize]),
-    //         );
-    //         let predicate = op::ret(RegId::ONE).to_bytes().to_vec();
-    //         let owner = Input::predicate_owner(&predicate);
-    //         let coin_input = Input::coin_predicate(
-    //             Default::default(),
-    //             owner,
-    //             Word::MAX,
-    //             AssetId::zeroed(),
-    //             Default::default(),
-    //             Default::default(),
-    //             Default::default(),
-    //             predicate,
-    //             vec![],
-    //         );
-    //         input.inputs.push(coin_input);
-    //         smo.throughput(Throughput::Bytes(i));
-    //         run_group_ref(&mut smo, format!("{i}"), input);
-    //     }
-    //
-    //     smo.finish();
+    // amo
 
-    // TODO: Figure out the input stuff?
     {
         let predicate = op::ret(RegId::ONE).to_bytes().to_vec();
         let owner = Input::predicate_owner(&predicate);
@@ -504,60 +450,37 @@ pub fn run_contract(group: &mut BenchmarkGroup<WallTime>) {
         }
     }
 
-    //     let mut scwq = c.benchmark_group("scwq");
-    //
-    //     for i in linear.clone() {
-    //         let start_key = Bytes32::zeroed();
-    //         let data = start_key.iter().copied().collect::<Vec<_>>();
-    //
-    //         let post_call = vec![
-    //             op::gtf_args(0x10, 0x00, GTFArgs::ScriptData),
-    //             op::addi(0x11, 0x10, ContractId::LEN.try_into().unwrap()),
-    //             op::addi(0x11, 0x11, WORD_SIZE.try_into().unwrap()),
-    //             op::addi(0x11, 0x11, WORD_SIZE.try_into().unwrap()),
-    //             op::movi(0x12, i as u32),
-    //         ];
-    //         let mut bench =
-    //             VmBench::contract_using_db(rng, db.checkpoint(), op::scwq(0x11, 0x29, 0x12))
-    //                 .expect("failed to prepare contract")
-    //                 .with_post_call(post_call);
-    //         bench.data.extend(data);
-    //
-    //         scwq.throughput(Throughput::Bytes(i));
-    //
-    //         run_group_ref(&mut scwq, format!("{i}"), bench);
-    //     }
-    //
-    //     scwq.finish();
+    // scwq
 
-    // TODO: This is way too under-costed, so it runs too long and will complete before running out
+    // TODO: This is under-costed, so it runs too long and will complete before running out
     //   of gas at 100_000.
-    // let size = 2620_u32; // 18bit integer maxes at 262144
-    // let contract: Vec<_> = (0..100_u32)
-    //     .map(|x| x * size)
-    //     .map(|x| vec![op::movi(0x13, x), op::scwq(0x13, 0x29, 0x14)]) // copy range starting at $rA of size $rC
-    //     .flatten()
-    //     .collect();
-    // let instructions = vec![
-    //     op::gtf_args(0x10, 0x00, GTFArgs::ScriptData),
-    //     op::addi(0x11, 0x10, ContractId::LEN.try_into().unwrap()),
-    //     op::addi(0x11, 0x11, WORD_SIZE.try_into().unwrap()),
-    //     op::addi(0x11, 0x11, WORD_SIZE.try_into().unwrap()),
-    //     op::movi(0x12, 10_000),
-    //     op::movi(0x14, size),
-    //     op::call(0x10, RegId::ZERO, 0x11, 0x12),
-    // ];
-    // replace_contract_in_service(&mut service, &contract_id, contract);
-    // run_with_service(
-    //     "contract/scwq",
-    //     group,
-    //     instructions,
-    //     script_data.clone(),
-    //     &service,
-    //     contract_id,
-    //     &rt,
-    //     &mut rng,
-    // );
+    let size = 2620_u32; // 18bit integer maxes at 262144
+    let contract: Vec<_> = (0..100_u32)
+        .map(|x| x * size)
+        .map(|x| vec![op::movi(0x13, x), op::scwq(0x13, 0x29, 0x14)]) // copy range starting at $rA of size $rC
+        .flatten()
+        .collect();
+    let gas = 100_000;
+    let instructions = vec![
+        op::gtf_args(0x10, 0x00, GTFArgs::ScriptData),
+        op::addi(0x11, 0x10, ContractId::LEN.try_into().unwrap()),
+        op::addi(0x11, 0x11, WORD_SIZE.try_into().unwrap()),
+        op::addi(0x11, 0x11, WORD_SIZE.try_into().unwrap()),
+        op::movi(0x12, gas),
+        op::movi(0x14, size),
+        op::call(0x10, RegId::ZERO, 0x11, 0x12),
+    ];
+    replace_contract_in_service(&mut service, &contract_id, contract);
+    run_with_service(
+        "contract/scwq",
+        group,
+        instructions,
+        script_data.clone(),
+        &service,
+        contract_id,
+        &rt,
+        &mut rng,
+    );
 
     // srw
 
@@ -582,44 +505,36 @@ pub fn run_contract(group: &mut BenchmarkGroup<WallTime>) {
         );
     }
 
-    //     let mut srwq = c.benchmark_group("srwq");
-    //
-    //     for i in linear.clone() {
-    //         let start_key = Bytes32::zeroed();
-    //         let data = start_key.iter().copied().collect::<Vec<_>>();
-    //
-    //         let post_call = vec![
-    //             op::movi(0x16, i as u32),
-    //             op::movi(0x17, 2000),
-    //             op::move_(0x15, 0x16),
-    //             op::muli(0x15, 0x15, 32),
-    //             op::addi(0x15, 0x15, 1),
-    //             op::aloc(0x15),
-    //             op::move_(0x14, RegId::HP),
-    //         ];
-    //         let mut bench = VmBench::contract(rng, op::srwq(0x14, 0x11, 0x27, 0x16))
-    //             .expect("failed to prepare contract")
-    //             .with_post_call(post_call)
-    //             .with_prepare_db(move |mut db| {
-    //                 let slots = (0u64..i).map(|key_number| {
-    //                     let mut key = Bytes32::zeroed();
-    //                     key.as_mut()[..8].copy_from_slice(&key_number.to_be_bytes());
-    //                     (key, key)
-    //                 });
-    //                 db.database_mut()
-    //                     .init_contract_state(&contract, slots)
-    //                     .unwrap();
-    //
-    //                 Ok(db)
-    //             });
-    //         bench.data.extend(data);
-    //         srwq.throughput(Throughput::Bytes(i));
-    //         run_group_ref(&mut srwq, format!("{i}"), bench);
-    //     }
-    //
-    //     srwq.finish();
+    // srwq
 
-    // TODO: Add `srwq` benchmark
+    // TODO: This is under-costed, so it runs too long and will complete before running out of gas
+    // let size = 2620_u32;
+    // let contract = (0..2620)
+    //     .map(|x| x * size)
+    //     .map(|x| vec![op::movi(0x13, x), op::srwq(0x14, 0x29, 0x13, 0x15)])
+    //     .flatten()
+    //     .collect();
+    // let gas = 100_000;
+    // let instructions = vec![
+    //     op::gtf_args(0x10, 0x00, GTFArgs::ScriptData),
+    //     op::addi(0x11, 0x10, ContractId::LEN.try_into().unwrap()),
+    //     op::addi(0x11, 0x11, WORD_SIZE.try_into().unwrap()),
+    //     op::addi(0x11, 0x11, WORD_SIZE.try_into().unwrap()),
+    //     op::movi(0x12, gas),
+    //     op::movi(0x15, size),
+    //     op::call(0x10, RegId::ZERO, 0x11, 0x12),
+    // ];
+    // replace_contract_in_service(&mut service, &contract_id, contract);
+    // run_with_service(
+    //     "contract/srwq",
+    //     group,
+    //     instructions,
+    //     script_data.clone(),
+    //     &service,
+    //     contract_id,
+    //     &rt,
+    //     &mut rng,
+    // );
 
     // sww
 
@@ -639,36 +554,38 @@ pub fn run_contract(group: &mut BenchmarkGroup<WallTime>) {
         );
     }
 
-    //      let mut swwq = c.benchmark_group("swwq");
-    //
-    //     for i in linear.clone() {
-    //         let start_key = Bytes32::zeroed();
-    //         let data = start_key.iter().copied().collect::<Vec<_>>();
-    //
-    //         let post_call = vec![
-    //             op::gtf_args(0x10, 0x00, GTFArgs::ScriptData),
-    //             op::addi(0x11, 0x10, ContractId::LEN.try_into().unwrap()),
-    //             op::addi(0x11, 0x11, WORD_SIZE.try_into().unwrap()),
-    //             op::addi(0x11, 0x11, WORD_SIZE.try_into().unwrap()),
-    //             op::movi(0x12, i as u32),
-    //         ];
-    //         let mut bench = VmBench::contract_using_db(
-    //             rng,
-    //             db.checkpoint(),
-    //             op::swwq(0x10, 0x11, 0x20, 0x12),
-    //         )
-    //         .expect("failed to prepare contract")
-    //         .with_post_call(post_call);
-    //         bench.data.extend(data);
-    //
-    //         swwq.throughput(Throughput::Bytes(i));
-    //
-    //         run_group_ref(&mut swwq, format!("{i}"), bench);
-    //     }
-    //
-    //     swwq.finish();
+    // swwq
 
-    // TODO: Add `swwq` benchmark
+    // TODO: This is under-costed, so it runs too long and will complete before running out of gas
+    // let size = 2620_u32;
+    // // Copy value stored at $rC to the state starting at 0x13
+    // let contract = (0..2620)
+    //     .map(|x| x * size)
+    //     .map(|x| vec![op::movi(0x13, x), op::swwq(0x13, 0x29, 0x14, 0x15)])         .flatten()
+    //     .collect();
+    // let gas = 100_000;
+    // let value = 2000;
+    // let instructions = vec![
+    //     op::gtf_args(0x10, 0x00, GTFArgs::ScriptData),
+    //     op::addi(0x11, 0x10, ContractId::LEN.try_into().unwrap()),
+    //     op::addi(0x11, 0x11, WORD_SIZE.try_into().unwrap()),
+    //     op::addi(0x11, 0x11, WORD_SIZE.try_into().unwrap()),
+    //     op::movi(0x12, gas),
+    //     op::movi(0x14, value),
+    //     op::movi(0x15, size),
+    //     op::call(0x10, RegId::ZERO, 0x11, 0x12),
+    // ];
+    // replace_contract_in_service(&mut service, &contract_id, contract);
+    // run_with_service(
+    //     "contract/swwq",
+    //     group,
+    //     instructions,
+    //     script_data.clone(),
+    //     &service,
+    //     contract_id,
+    //     &rt,
+    //     &mut rng,
+    // );
 
     // time
 
