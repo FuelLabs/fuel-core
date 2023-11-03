@@ -1,8 +1,17 @@
-use crate::{utils::arb_dependent_cost_values, *};
+use crate::{
+    utils::arb_dependent_cost_values,
+    *,
+};
 use fuel_core::service::FuelService;
-use fuel_core_storage::{tables::ContractsRawCode, StorageAsMut};
+use fuel_core_storage::{
+    tables::ContractsRawCode,
+    StorageAsMut,
+};
 use fuel_core_types::{
-    fuel_types::{Address, Word},
+    fuel_types::{
+        Address,
+        Word,
+    },
     fuel_vm::consts::WORD_SIZE,
 };
 

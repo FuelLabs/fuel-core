@@ -1,12 +1,23 @@
 use block_target_gas_set::{
-    alu::run_alu, contract::run_contract, crypto::run_crypto, flow::run_flow,
+    alu::run_alu,
+    contract::run_contract,
+    crypto::run_crypto,
+    flow::run_flow,
     memory::run_memory,
 };
 use criterion::{
-    criterion_group, criterion_main, measurement::WallTime, BenchmarkGroup, Criterion,
+    criterion_group,
+    criterion_main,
+    measurement::WallTime,
+    BenchmarkGroup,
+    Criterion,
 };
 use ed25519_dalek::Signer;
-use fuel_core::service::{config::Trigger, Config, ServiceTrait};
+use fuel_core::service::{
+    config::Trigger,
+    Config,
+    ServiceTrait,
+};
 use rand::SeedableRng;
 
 use ethnum::U256;
@@ -15,12 +26,35 @@ use fuel_core_chain_config::ContractConfig;
 use fuel_core_types::{
     fuel_asm::{
         op,
-        wideint::{CompareArgs, CompareMode, DivArgs, MathArgs, MathOp, MulArgs},
-        GTFArgs, Instruction, RegId,
+        wideint::{
+            CompareArgs,
+            CompareMode,
+            DivArgs,
+            MathArgs,
+            MathOp,
+            MulArgs,
+        },
+        GTFArgs,
+        Instruction,
+        RegId,
     },
-    fuel_crypto::{secp256r1, *},
-    fuel_tx::{ContractIdExt, Input, Output, TxPointer, UniqueIdentifier, UtxoId},
-    fuel_types::{AssetId, Bytes32, ContractId},
+    fuel_crypto::{
+        secp256r1,
+        *,
+    },
+    fuel_tx::{
+        ContractIdExt,
+        Input,
+        Output,
+        TxPointer,
+        UniqueIdentifier,
+        UtxoId,
+    },
+    fuel_types::{
+        AssetId,
+        Bytes32,
+        ContractId,
+    },
     fuel_vm::checked_transaction::EstimatePredicates,
 };
 
@@ -28,7 +62,10 @@ mod utils;
 
 mod block_target_gas_set;
 
-use utils::{make_u128, make_u256};
+use utils::{
+    make_u128,
+    make_u256,
+};
 
 // Use Jemalloc during benchmarks
 #[global_allocator]
