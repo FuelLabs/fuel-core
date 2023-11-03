@@ -401,7 +401,7 @@ pub fn run_contract(group: &mut BenchmarkGroup<WallTime>) {
     //     );
     // }
 
-    // amo
+    // smo
 
     {
         let predicate = op::ret(RegId::ONE).to_bytes().to_vec();
@@ -462,33 +462,33 @@ pub fn run_contract(group: &mut BenchmarkGroup<WallTime>) {
 
     // TODO: This is under-costed, so it runs too long and will complete before running out
     //   of gas at 100_000.
-    let size = 2620_u32; // 18bit integer maxes at 262144
-    let contract: Vec<_> = (0..100_u32)
-        .map(|x| x * size)
-        .map(|x| vec![op::movi(0x13, x), op::scwq(0x13, 0x29, 0x14)]) // copy range starting at $rA of size $rC
-        .flatten()
-        .collect();
-    let gas = 100_000;
-    let instructions = vec![
-        op::gtf_args(0x10, 0x00, GTFArgs::ScriptData),
-        op::addi(0x11, 0x10, ContractId::LEN.try_into().unwrap()),
-        op::addi(0x11, 0x11, WORD_SIZE.try_into().unwrap()),
-        op::addi(0x11, 0x11, WORD_SIZE.try_into().unwrap()),
-        op::movi(0x12, gas),
-        op::movi(0x14, size),
-        op::call(0x10, RegId::ZERO, 0x11, 0x12),
-    ];
-    replace_contract_in_service(&mut service, &contract_id, contract);
-    run_with_service(
-        "contract/scwq",
-        group,
-        instructions,
-        script_data.clone(),
-        &service,
-        contract_id,
-        &rt,
-        &mut rng,
-    );
+    // let size = 2620_u32; // 18bit integer maxes at 262144
+    // let contract: Vec<_> = (0..100_u32)
+    //     .map(|x| x * size)
+    //     .map(|x| vec![op::movi(0x13, x), op::scwq(0x13, 0x29, 0x14)]) // copy range starting at $rA of size $rC
+    //     .flatten()
+    //     .collect();
+    // let gas = 100_000;
+    // let instructions = vec![
+    //     op::gtf_args(0x10, 0x00, GTFArgs::ScriptData),
+    //     op::addi(0x11, 0x10, ContractId::LEN.try_into().unwrap()),
+    //     op::addi(0x11, 0x11, WORD_SIZE.try_into().unwrap()),
+    //     op::addi(0x11, 0x11, WORD_SIZE.try_into().unwrap()),
+    //     op::movi(0x12, gas),
+    //     op::movi(0x14, size),
+    //     op::call(0x10, RegId::ZERO, 0x11, 0x12),
+    // ];
+    // replace_contract_in_service(&mut service, &contract_id, contract);
+    // run_with_service(
+    //     "contract/scwq",
+    //     group,
+    //     instructions,
+    //     script_data.clone(),
+    //     &service,
+    //     contract_id,
+    //     &rt,
+    //     &mut rng,
+    // );
 
     // srw
 
