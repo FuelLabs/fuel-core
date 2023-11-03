@@ -650,31 +650,6 @@ impl GasCosts {
     }
 }
 
-// #[Enum]
-// impl DependentCost {
-//     async fn base(&self) -> U64 {
-//         self.0.base().into()
-//     }
-//
-//     // async fn gas_per_unit(&self) -> Option<U64> {
-//     //     match self.0 {
-//     //         fuel_tx::DependentCost::HeavyOperation { gas_per_unit, .. } => {
-//     //             Some(gas_per_unit.into())
-//     //         }
-//     //         _ => None,
-//     //     }
-//     // }
-//     //
-//     // async fn units_per_gas(&self) -> Option<U64> {
-//     //     match self.0 {
-//     //         fuel_tx::DependentCost::LightOperation { units_per_gas, .. } => {
-//     //             Some(units_per_gas.into())
-//     //         }
-//     //         _ => None,
-//     //     }
-//     // }
-// }
-
 #[Object]
 impl LightOperation {
     async fn base(&self) -> U64 {
