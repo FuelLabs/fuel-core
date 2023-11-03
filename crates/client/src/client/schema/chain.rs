@@ -287,8 +287,8 @@ impl From<DependentCost> for fuel_core_types::fuel_tx::DependentCost {
                 }
             }
             _ => fuel_core_types::fuel_tx::DependentCost::HeavyOperation {
-                base: 0u64.into(),
-                gas_per_unit: 0u64.into(),
+                base: 0u64,
+                gas_per_unit: 0u64,
             },
         }
     }
