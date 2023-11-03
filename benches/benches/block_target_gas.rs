@@ -258,6 +258,7 @@ fn run_with_service(
         rt,
         rng,
         vec![],
+        vec![],
     );
 }
 
@@ -271,6 +272,7 @@ fn run_with_service_with_extra_inputs(
     rt: &tokio::runtime::Runtime,
     rng: &mut rand::rngs::StdRng,
     extra_inputs: Vec<Input>,
+    extra_outputs: Vec<Output>,
 ) {
     group.bench_function(id, |b| {
         const TARGET_BLOCK_GAS_LIMIT: u64 = 100_000;
@@ -314,6 +316,11 @@ fn run_with_service_with_extra_inputs(
             for input in &extra_inputs {
                 tx_builder.add_input(input.clone());
             }
+
+            for output in &extra_outputs {
+                tx_builder.add_output(output.clone());
+            }
+            dbg!(&tx_builder.outputs().len());
             let mut tx = tx_builder.finalize_as_transaction();
             tx.estimate_predicates(&shared.config.chain_conf.consensus_parameters.clone().into()).unwrap();
             async move {
@@ -329,7 +336,7 @@ fn run_with_service_with_extra_inputs(
                     .expect("Should be at least 1 element")
                     .expect("Should include transaction successfully");
                 let res = sub.recv().await.expect("Should produce a block");
-                // dbg!(&res.tx_status);
+                dbg!(&res.tx_status);
                 assert_eq!(res.tx_status.len(), 2, "res.tx_status: {:?}", res.tx_status);
                 assert_eq!(res.sealed_block.entity.transactions().len(), 2);
                 assert_eq!(res.tx_status[0].id, tx_id);
