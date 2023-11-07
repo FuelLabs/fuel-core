@@ -20,9 +20,9 @@ use serde_with::{
     skip_serializing_none,
 };
 #[cfg(feature = "std")]
-use std::path::Path;
-#[cfg(feature = "std")]
 use std::fs::File;
+#[cfg(feature = "std")]
+use std::path::Path;
 
 use crate::{
     genesis::GenesisCommitment,
@@ -65,16 +65,16 @@ impl ChainConfig {
     #[cfg(feature = "std")]
     pub fn load_from_directory(path: impl AsRef<Path>) -> Result<Self, anyhow::Error> {
         let path = path.as_ref().join("chain_parameters.json");
-    
+
         let contents = std::fs::read(&path)?;
         serde_json::from_slice(&contents).map_err(|e| {
-        anyhow::Error::new(e).context(format!(
-            "an error occurred while loading the chain state file: {:?}",
-            path.to_str()
+            anyhow::Error::new(e).context(format!(
+                "an error occurred while loading the chain state file: {:?}",
+                path.to_str()
             ))
         })
     }
-    
+
     #[cfg(feature = "std")]
     pub fn create_config_file(&self, path: impl AsRef<Path>) -> anyhow::Result<()> {
         use anyhow::Context;
@@ -184,7 +184,8 @@ mod tests {
         let json = serde_json::to_string_pretty(&disk_config).unwrap();
         write(&tmp_file, json).unwrap();
 
-        let load_config = ChainConfig::load_from_directory(&tmp_file.parent().unwrap()).unwrap();
+        let load_config =
+            ChainConfig::load_from_directory(&tmp_file.parent().unwrap()).unwrap();
         assert_eq!(disk_config, load_config);
     }
 
@@ -195,7 +196,8 @@ mod tests {
         let disk_config = ChainConfig::local_testnet();
         disk_config.create_config_file(&tmp_file).unwrap();
 
-        let load_config = ChainConfig::load_from_directory(&tmp_file.parent().unwrap()).unwrap();
+        let load_config =
+            ChainConfig::load_from_directory(&tmp_file.parent().unwrap()).unwrap();
 
         assert_eq!(disk_config, load_config);
     }
