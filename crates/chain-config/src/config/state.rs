@@ -41,6 +41,8 @@ use super::{
 pub const FUEL_BECH32_HRP: &str = "fuel";
 pub const TESTNET_INITIAL_BALANCE: u64 = 10_000_000;
 
+pub const CHAIN_STATE_FILENAME: &str = "chain_state.json";
+
 // TODO: do streaming deserialization to handle large state configs
 #[serde_as]
 #[skip_serializing_none]
@@ -68,7 +70,7 @@ impl StateConfig {
 
     #[cfg(feature = "std")]
     pub fn load_from_directory(path: impl AsRef<Path>) -> Result<Self, anyhow::Error> {
-        let path = path.as_ref().join("chain_parameters.json");
+        let path = path.as_ref().join(CHAIN_STATE_FILENAME);
 
         let contents = std::fs::read(&path)?;
         serde_json::from_slice(&contents).map_err(|e| {
@@ -83,7 +85,7 @@ impl StateConfig {
     pub fn create_config_file(&self, path: impl AsRef<Path>) -> anyhow::Result<()> {
         use anyhow::Context;
 
-        let state_writer = File::create(path.as_ref().join("chain_state.json"))?;
+        let state_writer = File::create(path.as_ref().join(CHAIN_STATE_FILENAME))?;
 
         serde_json::to_writer_pretty(state_writer, self)
             .context("failed to dump chain parameters snapshot to JSON")?;

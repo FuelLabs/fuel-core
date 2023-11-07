@@ -86,14 +86,8 @@ pub async fn exec(command: Command) -> anyhow::Result<()> {
             let chain_state = StateConfig::generate_state_config(db)?;
 
             std::fs::create_dir_all(&output_dir)?;
-            let parameters_writer =
-                File::create(output_dir.join("chain_parameters.json"))?;
-            serde_json::to_writer_pretty(parameters_writer, &chain_params)
-                .context("failed to dump chain parameters snapshot to JSON")?;
-
-            let state_writer = File::create(output_dir.join("chain_state.json"))?;
-            serde_json::to_writer_pretty(state_writer, &chain_state)
-                .context("failed to dump chain state snapshot to JSON")?;
+            chain_params.create_config_file(&output_dir)?;
+            chain_state.create_config_file(&output_dir)?;
         }
         SubCommands::Contract { contract_id } => {
             let config = db.get_contract_config_by_id(contract_id)?;
