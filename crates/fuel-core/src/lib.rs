@@ -3,6 +3,8 @@
 #![deny(unused_crate_dependencies)]
 #![deny(warnings)]
 
+pub const VERSION: &str = env!("CARGO_PKG_VERSION");
+
 #[doc(no_inline)]
 pub use fuel_core_chain_config as chain_config;
 #[cfg(feature = "p2p")]
