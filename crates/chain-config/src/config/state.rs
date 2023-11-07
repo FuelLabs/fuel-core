@@ -27,6 +27,7 @@ use serde_with::{
     serde_as,
     skip_serializing_none,
 };
+#[cfg(feature = "std")]
 use std::fs::File;
 #[cfg(feature = "std")]
 use std::path::Path;
