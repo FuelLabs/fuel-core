@@ -44,59 +44,28 @@ where
 
             let clock = quanta::Clock::new();
 
-            let final_time;
-            loop {
-                // Measure the total time to revert the VM to the initial state.
-                // It should always do the same things regardless of the number of
-                // iterations because we use a `diff` from the `VmBenchPrepared` initialization.
-                let mut total = Duration::ZERO;
-                for _ in 0..iters {
-                    let start = black_box(clock.raw());
-                    vm.reset_vm_state(diff);
-                    let end = black_box(clock.raw());
-                    total += clock.delta(start, end);
-                    black_box(&vm);
-                }
-                let time_to_reset = total;
-
-                let mut total = Duration::ZERO;
-                for _ in 0..iters {
-                    let start = black_box(clock.raw());
-                    match instruction {
-                        Instruction::CALL(call) => {
-                            let (ra, rb, rc, rd) = call.unpack();
-                            black_box(vm.prepare_call(ra, rb, rc, rd)).unwrap();
-                        }
-                        _ => {
-                            black_box(vm.instruction(*instruction).unwrap());
-                        }
+            let mut total = Duration::ZERO;
+            for _ in 0..iters {
+                let start = black_box(clock.raw());
+                match instruction {
+                    Instruction::CALL(call) => {
+                        let (ra, rb, rc, rd) = call.unpack();
+                        black_box(vm.prepare_call(ra, rb, rc, rd)).unwrap();
                     }
-                    black_box(&vm);
-                    let end = black_box(clock.raw());
-                    total += clock.delta(start, end);
-                    vm.reset_vm_state(diff);
+                    _ => {
+                        black_box(vm.instruction(*instruction).unwrap());
+                    }
                 }
-                let only_instruction = total.checked_sub(time_to_reset);
-
-                // It may overflow when the benchmarks run in an unstable environment.
-                // If the hardware is busy during the measuring time to reset the VM,
-                // it will produce `time_to_reset` more than the actual time
-                // to run the instruction and reset the VM.
-                if let Some(result) = only_instruction {
-                    final_time = result;
-                    break
-                } else {
-                    println!(
-                        "The environment is unstable. Rerunning the benchmark. {:?} {:?}",
-                        total, time_to_reset
-                    );
-                }
+                black_box(&vm);
+                let end = black_box(clock.raw());
+                total += clock.delta(start, end);
+                vm.reset_vm_state(diff);
             }
 
             db_txn.commit().unwrap();
             // restore original db
             *vm.as_mut().database_mut() = original_db;
-            final_time
+            total
         })
     });
 }
