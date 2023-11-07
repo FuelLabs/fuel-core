@@ -316,7 +316,7 @@ impl Command {
             max_database_cache_size,
             database_path,
             database_type,
-            chain_parameters: chain_params.clone(),
+            chain_config: chain_params.clone(),
             chain_state,
             debug,
             utxo_validation,

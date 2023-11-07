@@ -74,7 +74,7 @@ pub fn init_sub_services(
     let executor = ExecutorAdapter {
         relayer: relayer_adapter.clone(),
         config: Arc::new(fuel_core_executor::Config {
-            consensus_parameters: config.chain_parameters.consensus_parameters.clone(),
+            consensus_parameters: config.chain_config.consensus_parameters.clone(),
             coinbase_recipient: config
                 .block_producer
                 .coinbase_recipient
@@ -102,7 +102,7 @@ pub fn init_sub_services(
             let p2p_config = p2p_config.init(genesis)?;
 
             Some(fuel_core_p2p::service::new_service(
-                config.chain_parameters.consensus_parameters.chain_id,
+                config.chain_conf.consensus_parameters.chain_id,
                 p2p_config,
                 p2p_db,
                 importer_adapter.clone(),
@@ -186,7 +186,7 @@ pub fn init_sub_services(
     // TODO: Figure out on how to move it into `fuel-core-graphql-api`.
     let schema = crate::schema::dap::init(
         build_schema(),
-        config.chain_parameters.consensus_parameters.clone(),
+        config.chain_config.consensus_parameters.clone(),
         config.debug,
     )
     .data(database.clone());
@@ -200,7 +200,7 @@ pub fn init_sub_services(
             min_gas_price: config.txpool.min_gas_price,
             max_tx: config.txpool.max_tx,
             max_depth: config.txpool.max_depth,
-            consensus_parameters: config.chain_parameters.consensus_parameters.clone(),
+            consensus_parameters: config.chain_config.consensus_parameters.clone(),
             consensus_key: config.consensus_key.clone(),
         },
         schema,

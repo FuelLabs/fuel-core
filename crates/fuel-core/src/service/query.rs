@@ -45,7 +45,7 @@ impl FuelService {
         let id = tx.id(&self
             .shared
             .config
-            .chain_parameters
+            .chain_config
             .consensus_parameters
             .chain_id);
         let stream = self.transaction_status_change(id)?;
@@ -61,7 +61,7 @@ impl FuelService {
         let id = tx.id(&self
             .shared
             .config
-            .chain_parameters
+            .chain_config
             .consensus_parameters
             .chain_id);
         let stream = self.transaction_status_change(id)?.filter(|status| {

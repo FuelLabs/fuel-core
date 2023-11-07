@@ -182,15 +182,12 @@ impl TestSetupBuilder {
 
     // setup chainspec and spin up a fuel-node
     pub async fn finalize(&mut self) -> TestContext {
-        let mut chain_parameters = ChainConfig {
+        let mut chain_conf = ChainConfig {
             height: Some(self.starting_block),
             ..ChainConfig::local_testnet()
         };
-        chain_parameters
-            .consensus_parameters
-            .tx_params
-            .max_gas_per_tx = self.gas_limit;
-        chain_parameters.block_gas_limit = self.gas_limit;
+        chain_conf.consensus_parameters.tx_params.max_gas_per_tx = self.gas_limit;
+        chain_conf.block_gas_limit = self.gas_limit;
 
         let chain_state = StateConfig {
             coins: Some(self.initial_coins.clone()),
@@ -201,11 +198,11 @@ impl TestSetupBuilder {
         let config = Config {
             utxo_validation: self.utxo_validation,
             txpool: fuel_core_txpool::Config {
-                chain_parameters: chain_parameters.clone(),
+                chain_config: chain_conf.clone(),
                 min_gas_price: self.min_gas_price,
                 ..fuel_core_txpool::Config::default()
             },
-            chain_parameters,
+            chain_config: chain_conf,
             chain_state,
             block_production: self.trigger,
             ..Config::local_node()

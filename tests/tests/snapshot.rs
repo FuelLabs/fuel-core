@@ -34,7 +34,7 @@ async fn snapshot_state_config() {
 
     // setup config
     let mut config = Config::local_node();
-    config.chain_parameters.height = Some(BlockHeight::from(10));
+    config.chain_config.height = Some(BlockHeight::from(10));
     let starting_state = StateConfig {
         contracts: Some(vec![ContractConfig {
             contract_id: [11; 32].into(),

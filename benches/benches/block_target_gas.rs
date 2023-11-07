@@ -75,13 +75,13 @@ fn run(
 
         let database = Database::rocksdb();
         let mut config = Config::local_node();
-        config.chain_parameters.consensus_parameters.tx_params.max_gas_per_tx = TARGET_BLOCK_GAS_LIMIT;
+        config.chain_config.consensus_parameters.tx_params.max_gas_per_tx = TARGET_BLOCK_GAS_LIMIT;
         config
-            .chain_parameters
+            .chain_config
             .consensus_parameters
             .predicate_params
             .max_gas_per_predicate = TARGET_BLOCK_GAS_LIMIT;
-        config.chain_parameters.block_gas_limit = TARGET_BLOCK_GAS_LIMIT;
+        config.chain_config.block_gas_limit = TARGET_BLOCK_GAS_LIMIT;
         config.utxo_validation = false;
         config.block_production = Trigger::Instant;
 
@@ -109,7 +109,7 @@ fn run(
                 )
                 .finalize_as_transaction();
             async move {
-                let tx_id = tx.id(&config.chain_parameters.consensus_parameters.chain_id);
+                let tx_id = tx.id(&config.chain_config.consensus_parameters.chain_id);
 
                 let mut sub = shared.block_importer.block_importer.subscribe();
                 shared

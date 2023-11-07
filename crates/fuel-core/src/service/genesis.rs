@@ -85,8 +85,8 @@ fn import_genesis_block(
     let database = database_transaction.as_mut();
     // Initialize the chain id and height.
 
-    let height = config.chain_parameters.height;
-    let chain_config_hash = config.chain_parameters.root()?.into();
+    let height = config.chain_config.height;
+    let chain_config_hash = config.chain_config.root()?.into();
     let coins_root = init_coin_state(database, &config.chain_state, height)?.into();
     let contracts_root = init_contracts(database, &config.chain_state, height)?.into();
     let messages_root = init_da_messages(database, &config.chain_state)?;
@@ -111,7 +111,7 @@ fn import_genesis_block(
                 prev_root: Bytes32::zeroed(),
                 // The initial height is defined by the `ChainConfig`.
                 // If it is `None` then it will be zero.
-                height: config.chain_parameters.height.unwrap_or_default(),
+                height: config.chain_config.height.unwrap_or_default(),
                 time: fuel_core_types::tai64::Tai64::UNIX_EPOCH,
                 generated: Empty,
             },
@@ -124,7 +124,7 @@ fn import_genesis_block(
     let block_id = block.id();
     database.storage::<FuelBlocks>().insert(
         &block_id,
-        &block.compress(&config.chain_parameters.consensus_parameters.chain_id),
+        &block.compress(&config.chain_config.consensus_parameters.chain_id),
     )?;
     let consensus = Consensus::Genesis(genesis);
     let block = SealedBlock {
@@ -389,7 +389,7 @@ mod tests {
     async fn config_initializes_chain_name() {
         let test_name = "test_net_123".to_string();
         let service_config = Config {
-            chain_parameters: ChainConfig {
+            chain_config: ChainConfig {
                 chain_name: test_name.clone(),
                 ..ChainConfig::local_testnet()
             },
@@ -413,7 +413,7 @@ mod tests {
     async fn config_initializes_block_height() {
         let height = BlockHeight::from(99u32);
         let service_config = Config {
-            chain_parameters: ChainConfig {
+            chain_config: ChainConfig {
                 height: Some(height),
                 ..ChainConfig::local_testnet()
             },
@@ -460,7 +460,7 @@ mod tests {
             Some(h.into())
         };
         let service_config = Config {
-            chain_parameters: ChainConfig {
+            chain_config: ChainConfig {
                 height: starting_height,
                 ..ChainConfig::local_testnet()
             },
@@ -543,7 +543,7 @@ mod tests {
         let contract_id = contract.id(&salt, &root, &Contract::default_state_root());
 
         let service_config = Config {
-            chain_parameters: ChainConfig::local_testnet(),
+            chain_config: ChainConfig::local_testnet(),
             chain_state: StateConfig {
                 contracts: Some(vec![ContractConfig {
                     contract_id,
@@ -624,7 +624,7 @@ mod tests {
         let contract_id = contract.id(&salt, &root, &Contract::default_state_root());
 
         let service_config = Config {
-            chain_parameters: ChainConfig::local_testnet(),
+            chain_config: ChainConfig::local_testnet(),
             chain_state: StateConfig {
                 contracts: Some(vec![ContractConfig {
                     contract_id,
@@ -660,7 +660,7 @@ mod tests {
     #[tokio::test]
     async fn coin_tx_pointer_cant_exceed_genesis_height() {
         let service_config = Config {
-            chain_parameters: ChainConfig {
+            chain_config: ChainConfig {
                 height: Some(BlockHeight::from(10u32)),
                 ..ChainConfig::local_testnet()
             },
@@ -698,7 +698,7 @@ mod tests {
         let contract = Contract::from(op::ret(0x10).to_bytes().to_vec());
 
         let service_config = Config {
-            chain_parameters: ChainConfig {
+            chain_config: ChainConfig {
                 height: Some(BlockHeight::from(10u32)),
                 ..ChainConfig::local_testnet()
             },

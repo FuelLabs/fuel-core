@@ -187,7 +187,7 @@ impl Task {
     pub fn new(database: Database, config: Config) -> anyhow::Result<Task> {
         // initialize state
         tracing::info!("Initializing database");
-        database.init(&config.chain_parameters)?;
+        database.init(&config.chain_config)?;
         genesis::maybe_initialize_state(&config, &database)?;
 
         // initialize sub services

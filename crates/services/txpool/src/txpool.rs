@@ -106,10 +106,10 @@ where
         }
 
         // verify max gas is less than block limit
-        if tx.max_gas() > self.config.chain_parameters.block_gas_limit {
+        if tx.max_gas() > self.config.chain_config.block_gas_limit {
             return Err(Error::NotInsertedMaxGasLimit {
                 tx_gas: tx.max_gas(),
-                block_limit: self.config.chain_parameters.block_gas_limit,
+                block_limit: self.config.chain_config.block_gas_limit,
             }
             .into())
         }
@@ -389,7 +389,7 @@ pub async fn check_single_tx(
     verify_tx_min_gas_price(&tx, config)?;
 
     let tx: Checked<Transaction> = if config.utxo_validation {
-        let consensus_params = &config.chain_parameters.consensus_parameters;
+        let consensus_params = &config.chain_config.consensus_parameters;
 
         let tx = tx
             .into_checked_basic(current_height, consensus_params)
@@ -408,11 +408,8 @@ pub async fn check_single_tx(
 
         tx
     } else {
-        tx.into_checked_basic(
-            current_height,
-            &config.chain_parameters.consensus_parameters,
-        )
-        .map_err(|e| anyhow::anyhow!("{e:?}"))?
+        tx.into_checked_basic(current_height, &config.chain_config.consensus_parameters)
+            .map_err(|e| anyhow::anyhow!("{e:?}"))?
     };
 
     Ok(tx)

@@ -34,7 +34,7 @@ impl VerifierAdapter {
         relayer: MaybeRelayerAdapter,
     ) -> Self {
         let config =
-            VerifierConfig::new(config.chain_parameters.clone(), config.verifier.clone());
+            VerifierConfig::new(config.chain_config.clone(), config.verifier.clone());
         Self {
             block_verifier: Arc::new(Verifier::new(config, database, relayer)),
         }

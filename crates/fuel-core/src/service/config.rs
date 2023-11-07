@@ -40,7 +40,7 @@ pub struct Config {
     pub max_database_cache_size: usize,
     pub database_path: PathBuf,
     pub database_type: DbType,
-    pub chain_parameters: ChainConfig,
+    pub chain_config: ChainConfig,
     pub chain_state: StateConfig,
     /// When `true`:
     /// - Enables manual block production.
@@ -90,13 +90,13 @@ impl Config {
             #[cfg(not(feature = "rocksdb"))]
             database_type: DbType::InMemory,
             debug: true,
-            chain_parameters: chain_params.clone(),
+            chain_config: chain_params.clone(),
             chain_state: chain_state.clone(),
             block_production: Trigger::Instant,
             vm: Default::default(),
             utxo_validation,
             txpool: fuel_core_txpool::Config {
-                chain_parameters: chain_params,
+                chain_config: chain_params,
                 min_gas_price,
                 utxo_validation,
                 transaction_ttl: Duration::from_secs(60 * 100000000),
@@ -129,9 +129,9 @@ impl Config {
             self.utxo_validation = true;
         }
 
-        if self.txpool.chain_parameters != self.chain_parameters {
+        if self.txpool.chain_config != self.chain_config {
             tracing::warn!("The `ChainConfig` of `TxPool` was inconsistent");
-            self.txpool.chain_parameters = self.chain_parameters.clone();
+            self.txpool.chain_config = self.chain_config.clone();
         }
         if self.txpool.utxo_validation != self.utxo_validation {
             tracing::warn!("The `utxo_validation` of `TxPool` was inconsistent");
@@ -150,10 +150,10 @@ impl From<&Config> for fuel_core_poa::Config {
     fn from(config: &Config) -> Self {
         fuel_core_poa::Config {
             trigger: config.block_production,
-            block_gas_limit: config.chain_parameters.block_gas_limit,
+            block_gas_limit: config.chain_config.block_gas_limit,
             signing_key: config.consensus_key.clone(),
             metrics: false,
-            consensus_params: config.chain_parameters.consensus_parameters.clone(),
+            consensus_params: config.chain_config.consensus_parameters.clone(),
             min_connected_reserved_peers: config.min_connected_reserved_peers,
             time_until_synced: config.time_until_synced,
         }

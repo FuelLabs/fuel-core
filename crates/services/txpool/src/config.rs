@@ -12,7 +12,7 @@ pub struct Config {
     /// Flag to disable utxo existence and signature checks
     pub utxo_validation: bool,
     /// chain config
-    pub chain_parameters: ChainConfig,
+    pub chain_config: ChainConfig,
     /// Enables prometheus metrics for this fuel-service
     pub metrics: bool,
     /// Transaction TTL
@@ -63,7 +63,7 @@ impl Config {
             max_depth,
             min_gas_price,
             utxo_validation,
-            chain_parameters: chain_config,
+            chain_config,
             metrics,
             transaction_ttl,
             number_of_active_subscription,

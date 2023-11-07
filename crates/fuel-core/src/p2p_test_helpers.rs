@@ -258,7 +258,7 @@ pub async fn make_nodes(
                         chain_state,
                     );
                     if let Some(BootstrapSetup { pub_key, .. }) = boot {
-                        match &mut node_config.chain_parameters.consensus {
+                        match &mut node_config.chain_config.consensus {
                             crate::chain_config::ConsensusConfig::PoA { signing_key } => {
                                 *signing_key = pub_key;
                             }
@@ -309,7 +309,7 @@ pub async fn make_nodes(
 
             node_config.utxo_validation = utxo_validation;
             let pub_key = secret.public_key();
-            match &mut node_config.chain_parameters.consensus {
+            match &mut node_config.chain_conf.consensus {
                 crate::chain_config::ConsensusConfig::PoA { signing_key } => {
                     *signing_key = Input::owner(&pub_key);
                 }
@@ -355,7 +355,7 @@ pub async fn make_nodes(
                     node_config.p2p.as_mut().unwrap().reserved_nodes = boots.clone();
                 }
             }
-            match &mut node_config.chain_parameters.consensus {
+            match &mut node_config.chain_config.consensus {
                 crate::chain_config::ConsensusConfig::PoA { signing_key } => {
                     *signing_key = pub_key;
                 }
@@ -377,7 +377,7 @@ pub fn make_config(
     chain_state: StateConfig,
 ) -> Config {
     let mut node_config = Config::local_node();
-    node_config.chain_parameters = chain_params;
+    node_config.chain_conf = chain_params;
     node_config.chain_state = chain_state;
     node_config.utxo_validation = true;
     node_config.name = name;
