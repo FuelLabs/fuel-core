@@ -259,11 +259,10 @@ async fn message_status__can_get_spent() {
     let output = Output::coin(output_recipient, amount, Default::default());
 
     let tx = Transaction::script(
-        Default::default(),
         1_000_000,
-        Default::default(),
         vec![],
         vec![],
+        policies::Policies::new().with_gas_price(0),
         vec![input],
         vec![output],
         vec![Vec::new().into()],
@@ -438,11 +437,10 @@ async fn can_get_message_proof() {
 
         // Create the contract calling script.
         let script = Transaction::script(
-            Default::default(),
             1_000_000,
-            Default::default(),
             script,
             script_data,
+            policies::Policies::new().with_gas_price(0),
             inputs,
             outputs,
             vec![],

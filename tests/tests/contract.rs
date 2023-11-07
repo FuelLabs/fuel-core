@@ -241,11 +241,10 @@ async fn can_get_message_proof() {
 
     // Create the contract calling script.
     let script = Transaction::script(
-        Default::default(),
         1_000_000,
-        Default::default(),
         script,
         script_data,
+        policies::Policies::new().with_gas_price(0),
         inputs,
         outputs,
         vec![],

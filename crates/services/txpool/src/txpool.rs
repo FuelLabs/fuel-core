@@ -302,7 +302,7 @@ where
 
     /// The amount of gas in all includable transactions combined
     pub fn consumable_gas(&self) -> u64 {
-        self.by_hash.values().map(|tx| tx.limit()).sum()
+        self.by_hash.values().map(|tx| tx.max_gas()).sum()
     }
 
     /// Return all sorted transactions that are includable in next block.
@@ -337,6 +337,11 @@ where
         for tx_id in tx_ids {
             let rem = self.remove_by_tx_id(tx_id);
             tx_status_sender.send_squeezed_out(*tx_id, Error::Removed);
+            for dependent_tx in rem.iter() {
+                if tx_id != &dependent_tx.id() {
+                    tx_status_sender.send_squeezed_out(dependent_tx.id(), Error::Removed);
+                }
+            }
             removed.extend(rem.into_iter());
         }
         removed
@@ -409,7 +414,7 @@ pub async fn check_single_tx(
             .await
             .map_err(|e| anyhow::anyhow!("{e:?}"))?;
 
-        debug_assert!(tx.checks().contains(Checks::All));
+        debug_assert!(tx.checks().contains(Checks::all()));
 
         tx
     } else {

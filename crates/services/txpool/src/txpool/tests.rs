@@ -143,7 +143,6 @@ async fn faulty_t2_collided_on_contract_id_from_tx1() {
         Default::default(),
     )
     .gas_price(10)
-    .gas_limit(GAS_LIMIT)
     .add_input(gas_coin)
     .add_output(create_contract_output(contract_id))
     .add_output(output)
@@ -160,7 +159,6 @@ async fn faulty_t2_collided_on_contract_id_from_tx1() {
         Default::default(),
     )
     .gas_price(9)
-    .gas_limit(GAS_LIMIT)
     .add_input(gas_coin)
     .add_input(input)
     .add_output(create_contract_output(contract_id))
@@ -196,7 +194,6 @@ async fn fail_to_insert_tx_with_dependency_on_invalid_utxo_type() {
     )
     .add_input(gas_coin)
     .add_output(create_contract_output(contract_id))
-    .gas_limit(GAS_LIMIT)
     .finalize_as_transaction();
 
     // create a second transaction with utxo id referring to
@@ -374,7 +371,6 @@ async fn overpriced_tx_contract_input_not_inserted() {
         Default::default(),
     )
     .gas_price(10)
-    .gas_limit(GAS_LIMIT)
     .add_input(gas_funds)
     .add_output(create_contract_output(contract_id))
     .finalize_as_transaction();
@@ -422,7 +418,6 @@ async fn dependent_contract_input_inserted() {
         Default::default(),
     )
     .gas_price(10)
-    .gas_limit(GAS_LIMIT)
     .add_input(gas_funds)
     .add_output(create_contract_output(contract_id))
     .finalize_as_transaction();

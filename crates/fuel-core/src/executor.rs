@@ -133,6 +133,7 @@ use fuel_core_types::{
         },
         input,
         output,
+        Chargeable,
     },
     fuel_vm,
 };
@@ -884,7 +885,6 @@ where
         <Tx as IntoChecked>::Metadata: Fee + CheckedMetadata + Clone + Send + Sync,
     {
         let tx_id = checked_tx.id();
-        let min_fee = checked_tx.metadata().min_fee();
         let max_fee = checked_tx.metadata().max_fee();
 
         checked_tx = checked_tx
@@ -961,8 +961,7 @@ where
         }
 
         // update block commitment
-        let (used_gas, tx_fee) =
-            self.total_fee_paid(min_fee, max_fee, tx.price(), &receipts)?;
+        let (used_gas, tx_fee) = self.total_fee_paid(&tx, max_fee, &receipts)?;
 
         // Check or set the executed transaction.
         match execution_kind {
@@ -1234,30 +1233,34 @@ where
         Ok(())
     }
 
-    fn total_fee_paid(
+    fn total_fee_paid<Tx: Chargeable>(
         &self,
-        min_fee: u64,
-        max_fee: u64,
-        gas_price: u64,
+        tx: &Tx,
+        max_fee: Word,
         receipts: &[Receipt],
     ) -> ExecutorResult<(Word, Word)> {
         let mut used_gas = 0;
         for r in receipts {
             if let Receipt::ScriptResult { gas_used, .. } = r {
                 used_gas = *gas_used;
-                let fee = TransactionFee::gas_refund_value(
-                    self.config.consensus_parameters.fee_params(),
-                    used_gas,
-                    gas_price,
-                )
-                .and_then(|refund| max_fee.checked_sub(refund))
-                .ok_or(ExecutorError::FeeOverflow)?;
-
-                return Ok((used_gas, fee))
+                break;
             }
         }
+
+        let fee = tx
+            .refund_fee(
+                self.config.consensus_parameters.gas_costs(),
+                self.config.consensus_parameters.fee_params(),
+                used_gas,
+            )
+            .ok_or(ExecutorError::FeeOverflow)?;
         // if there's no script result (i.e. create) then fee == base amount
-        Ok((used_gas, min_fee))
+        Ok((
+            used_gas,
+            max_fee
+                .checked_sub(fee)
+                .expect("Refunded fee can't be more than `max_fee`."),
+        ))
     }
 
     /// Computes all zeroed or variable inputs.
@@ -1888,7 +1891,7 @@ mod tests {
         .collect();
 
         let script = TxBuilder::new(2322)
-            .gas_limit(fuel_tx::TxParameters::DEFAULT.max_gas_per_tx)
+            .gas_limit(fuel_tx::TxParameters::DEFAULT.max_gas_per_tx >> 1)
             .start_script(script, script_data)
             .contract_input(contract_id)
             .coin_input(asset_id, input_amount)
@@ -2558,17 +2561,13 @@ mod tests {
     fn executor_invalidates_missing_gas_input() {
         let mut rng = StdRng::seed_from_u64(2322u64);
         let producer = Executor::test(Default::default(), Default::default());
-        let factor = producer
-            .config
-            .consensus_parameters
-            .fee_params()
-            .gas_price_factor as f64;
+        let consensus_parameters = &producer.config.consensus_parameters;
 
         let verifier = Executor::test(Default::default(), Default::default());
 
         let gas_limit = 100;
         let gas_price = 1;
-        let tx = TransactionBuilder::script(vec![], vec![])
+        let script = TransactionBuilder::script(vec![], vec![])
             .add_unsigned_coin_input(
                 SecretKey::random(&mut rng),
                 rng.gen(),
@@ -2579,7 +2578,15 @@ mod tests {
             )
             .gas_limit(gas_limit)
             .gas_price(gas_price)
-            .finalize_as_transaction();
+            .finalize();
+        let max_fee: u64 = script
+            .max_fee(
+                consensus_parameters.gas_costs(),
+                consensus_parameters.fee_params(),
+            )
+            .try_into()
+            .unwrap();
+        let tx: Transaction = script.into();
 
         let mut block = PartialFuelBlock {
             header: Default::default(),
@@ -2602,7 +2609,7 @@ mod tests {
         let produce_result = &skipped_transactions[0].1;
         assert!(matches!(
             produce_result,
-            &ExecutorError::InvalidTransaction(CheckError::InsufficientFeeAmount { expected, .. }) if expected == (gas_limit as f64 / factor).ceil() as u64
+            &ExecutorError::InvalidTransaction(CheckError::InsufficientFeeAmount { expected, .. }) if expected == max_fee
         ));
 
         // Produced block is valid
@@ -2629,7 +2636,7 @@ mod tests {
         );
         assert!(matches!(
             verify_result,
-            Err(ExecutorError::InvalidTransaction(CheckError::InsufficientFeeAmount { expected, ..})) if expected == (gas_limit as f64 / factor).ceil() as u64
+            Err(ExecutorError::InvalidTransaction(CheckError::InsufficientFeeAmount { expected, ..})) if expected == max_fee
         ))
     }
 
