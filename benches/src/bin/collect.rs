@@ -122,13 +122,16 @@ impl Default for State {
 struct Costs(HashMap<String, Cost>);
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+enum DependentCost {
+    LightOperation { base: u64, units_per_gas: u64 },
+    HeavyOperation { base: u64, gas_per_unit: u64 },
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(untagged)]
 enum Cost {
     Relative(u64),
-    Dependent {
-        base: u64,
-        dep_per_unit: u64,
-    },
+    Dependent(DependentCost),
     DependentAll {
         samples: Vec<Sample>,
         dep_per_unit: u64,
@@ -139,6 +142,67 @@ enum Cost {
 struct Sample {
     throughput: u64,
     time: u64,
+}
+
+const NEAR_LINEAR: f64 = 0.1;
+
+#[derive(PartialEq, Eq)]
+enum Function {
+    /// The points have a linear property. The first point
+    /// and the last points are almost the same(The difference is < 0.1).
+    Linear,
+    /// When the delta of the last point is much lower than
+    /// the first point, it is a logarithmic chart.
+    Logarithmic,
+    /// When the delta of the last point is much more than
+    /// the first point, it is an exponential chart.
+    Exponential,
+}
+
+fn estimate_function(linear_regression: f64, points: &Vec<Point>) -> Function {
+    let first = points.first().unwrap();
+    let last = points.last().unwrap();
+
+    let first_amount = first.amount();
+    let first_price = first.price();
+    dbg!(first_amount, first_price);
+
+    let near_linear = linear_regression * NEAR_LINEAR;
+    let expected_type = if (linear_regression - first.amount()).abs() < near_linear
+        && (linear_regression - last.amount()).abs() < near_linear
+    {
+        Function::Linear
+    } else if first.price() > last.price() {
+        Function::Logarithmic
+    } else {
+        Function::Exponential
+    };
+
+    expected_type
+}
+
+#[derive(Debug, Clone, Copy)]
+struct Point {
+    /// Number of elements for the opcode.
+    x: u64,
+    /// Time in `noop`s required to process `x` elements.
+    ///
+    /// Note: If the time to process `noop` opcode is `20` nanoseconds
+    /// and the time required to process `x` elements is `140`,
+    /// the `y` is 7 in this case.
+    y: u64,
+}
+
+impl Point {
+    /// The price in `noop` time to process a single element.
+    fn price(&self) -> f64 {
+        (self.y as f64) / (self.x as f64)
+    }
+
+    /// The amount that this operation costs per increase in one `noop` time.
+    fn amount(&self) -> f64 {
+        (self.x as f64) / (self.y as f64)
+    }
 }
 
 fn main() {
@@ -318,9 +382,12 @@ fn decode_input(line: &str) -> Option<Output> {
     }
 }
 
-fn map_to_ratio(baseline: u64, mean: Duration) -> u64 {
-    let mean: u64 = mean.as_nanos().try_into().unwrap();
-    mean.checked_div(baseline).unwrap_or(1).max(1)
+fn map_to_ratio(baseline: Duration, mean: Duration) -> u64 {
+    assert!(!baseline.is_zero());
+    let mean = mean.as_nanos();
+    let baseline = baseline.as_nanos();
+    let ratio = mean / baseline;
+    ratio as u64
 }
 
 impl Display for State {
@@ -423,7 +490,9 @@ impl State {
                     serde_yaml::Value::Number(i) => {
                         format!("\n{}{}: {},", indent, name, i.as_u64().unwrap())
                     }
-                    serde_yaml::Value::Mapping(m) => {
+                    serde_yaml::Value::Tagged(m) => {
+                        let m = &m.value;
+                        dbg!(m);
                         format!(
                             "\n{}{}: DependentCost {{\n{}    base: {},\n{}    dep_per_unit: {},\n{}}},",
                             indent,
@@ -464,7 +533,9 @@ impl State {
     }
 
     fn to_gas_costs(&self) -> GasCostsValues {
-        serde_yaml::from_value(self.to_yaml()).unwrap()
+        let yaml = self.to_yaml();
+        dbg!(&yaml);
+        serde_yaml::from_value(yaml).unwrap()
     }
 
     fn to_yaml(&self) -> serde_yaml::Value {
@@ -487,8 +558,9 @@ impl State {
         state.into_relative_costs(costs)
     }
 
-    fn get_baseline(&self) -> u64 {
-        self.ids
+    fn baseline_duration(&self) -> core::time::Duration {
+        let nanos = self
+            .ids
             .get(&self.baseline)
             .copied()
             .unwrap_or_else(|| {
@@ -497,13 +569,14 @@ impl State {
                     self.baseline
                 )
             })
-            .as_nanos()
-            .try_into()
-            .unwrap()
+            .as_nanos();
+        let seconds = (nanos / 1_000_000_000) as u64;
+        let nanos = (nanos % 1_000_000_000) as u32;
+        Duration::new(seconds, nanos)
     }
 
     fn into_dependent_costs(self) -> (Self, Costs) {
-        let baseline = self.get_baseline();
+        let baseline = self.baseline_duration();
         let State {
             all,
             mut ids,
@@ -522,41 +595,49 @@ impl State {
                 let mut samples = samples
                     .iter()
                     .filter_map(|sample| {
-                        Some((ids.remove(sample)?, throughput.get(sample).copied()?))
+                        let mean = ids.remove(sample)?;
+                        let throughput = *throughput.get(sample)?;
+                        Some((mean, throughput))
                     })
-                    .map(|(mean, t)| (t, map_to_ratio(baseline, mean)))
+                    .map(|(mean, throughput)| {
+                        let ratio = map_to_ratio(baseline, mean);
+                        (throughput, ratio)
+                    })
                     .collect::<Vec<_>>();
-                samples.sort_unstable_by_key(|(_, mean)| *mean);
+                samples.sort_unstable_by_key(|(_, ratio)| *ratio);
                 (name.clone(), samples)
             })
             .collect::<Vec<_>>();
 
         if all {
-            let iter = dependent_groups.into_iter().map(|(name, x_y)| {
-                groups.remove(&name);
-                let samples = x_y
-                    .iter()
-                    .map(|(x, y)| Sample {
-                        throughput: *x,
-                        time: *y,
-                    })
-                    .collect();
-                let (_, dep_per_unit) = dependent_cost(&name, x_y);
-                (
-                    name,
-                    Cost::DependentAll {
-                        samples,
-                        dep_per_unit,
-                    },
-                )
-            });
-            costs.0.extend(iter);
+            // let iter = dependent_groups.into_iter().map(|(name, x_y)| {
+            //     groups.remove(&name);
+            //     let samples = x_y
+            //         .iter()
+            //         .map(|(x, y)| Sample {
+            //             throughput: *x,
+            //             time: *y,
+            //         })
+            //         .collect();
+            //     let (_, dep_per_unit) = dependent_cost(&name, x_y);
+            //     (
+            //         name,
+            //         Cost::DependentAll {
+            //             samples,
+            //             dep_per_unit,
+            //         },
+            //     )
+            // });
+            // costs.0.extend(iter);
         } else {
-            let iter = dependent_groups.into_iter().map(|(name, x_y)| {
+            let iter = dependent_groups.into_iter().map(|(name, points)| {
                 groups.remove(&name);
-
-                let (base, dep_per_unit) = dependent_cost(&name, x_y);
-                (name, Cost::Dependent { base, dep_per_unit })
+                let (base, dep_per_unit) = dependent_cost(&name, points);
+                let dependent_cost = DependentCost::LightOperation {
+                    base,
+                    units_per_gas: dep_per_unit,
+                };
+                (name, Cost::Dependent(dependent_cost))
             });
             costs.0.extend(iter);
         }
@@ -573,7 +654,7 @@ impl State {
     }
 
     fn into_relative_costs(self, mut costs: Costs) -> Costs {
-        let baseline = self.get_baseline();
+        let baseline = self.baseline_duration();
         let State {
             mut ids, groups, ..
         } = self;
@@ -598,126 +679,58 @@ impl Costs {
     }
 }
 
-fn linear_regression(x_y: Vec<(u64, u64)>) -> f64 {
-    let avg_x =
-        x_y.iter().map(|(x, _)| x).copied().sum::<u64>() as f64 / x_y.len() as f64;
-    let avg_y =
-        x_y.iter().map(|(_, y)| y).copied().sum::<u64>() as f64 / x_y.len() as f64;
-    let sum_x_y: f64 = x_y
+fn linear_regression(points: &Vec<(u64, u64)>) -> f64 {
+    let avg_x = points.iter().map(|(x, _)| *x).sum::<u64>() as f64 / points.len() as f64;
+    let avg_y = points.iter().map(|(_, y)| *y).sum::<u64>() as f64 / points.len() as f64;
+    let covariance: f64 = points
         .iter()
         .map(|(x, y)| (*x as f64 - avg_x) * (*y as f64 - avg_y))
         .sum();
-    let sq_x: f64 = x_y.iter().map(|(x, _)| (*x as f64 - avg_x).powi(2)).sum();
-
-    // The original formula says:
-    //
-    // y = B * x,
-    // where B = sum((x_i - x_avg) * (y_i - y_avg)) / sum((x_i - x_avg) ^ 2) = sum_x_y / sq_x
-    //
-    // We want to know how many elements fit into one `noop` opcode timing,
-    // so we need value of `x / y`:
-    //
-    // y = B * x
-    //     |
-    //    \|/
-    // 1 / B = x / y
-    //     |
-    //    \|/
-    // 1 / sum_x_y / sq_x = x / y
-    //     |
-    //    \|/
-    // sq_x / sum_x_y = x / y
-    sq_x / sum_x_y
+    let variance: f64 = points
+        .iter()
+        .map(|(x, _)| (*x as f64 - avg_x).powi(2))
+        .sum();
+    covariance / variance
 }
 
-fn dependent_cost(name: &String, x_y: Vec<(u64, u64)>) -> (u64, u64) {
-    const NEAR_LINEAR: f64 = 0.1;
+fn dependent_cost(name: &String, points: Vec<(u64, u64)>) -> (u64, u64) {
+    let slope = linear_regression(&points);
+    // 1 / (rise / run)
+    let linear_regression = 1.0 / slope;
 
-    #[derive(PartialEq, Eq)]
-    enum Type {
-        /// The points have a linear property. The first point
-        /// and the last points are almost the same(The difference is < 0.1).
-        Linear,
-        /// When the delta of the last point is much lower than
-        /// the first point, it is a logarithmic chart.
-        Logarithm,
-        /// When the delta of the last point is much more than
-        /// the first point, it is an exponential chart.
-        Exp,
-    }
-
-    #[derive(Debug, Clone, Copy)]
-    struct Point {
-        /// Number of elements for the opcode.
-        x: u64,
-        /// Time in `noop`s required to process `x` elements.
-        ///
-        /// Note: If the time to process `noop` opcode is `20` nanoseconds
-        /// and the time required to process `x` elements is `140`,
-        /// the `y` is 7 in this case.
-        y: u64,
-    }
-
-    impl Point {
-        /// The price in `noop` time to process a single element.
-        fn price(&self) -> f64 {
-            (self.y as f64) / (self.x as f64)
-        }
-
-        /// The amount that this operation costs per increase in one `noop` time.
-        fn amount(&self) -> f64 {
-            (self.x as f64) / (self.y as f64)
-        }
-    }
-
-    let linear_regression = linear_regression(x_y.clone());
-
-    let x_y = x_y
+    let points = points
         .into_iter()
         .map(|(x, y)| Point { x, y })
         .collect::<Vec<_>>();
 
-    let first = x_y.first().unwrap();
-    let last = x_y.last().unwrap();
-
-    let near_linear = linear_regression * NEAR_LINEAR;
-    let expected_type = if (linear_regression - first.amount()).abs() < near_linear
-        && (linear_regression - last.amount()).abs() < near_linear
-    {
-        Type::Linear
-    } else if first.price() > last.price() {
-        Type::Logarithm
-    } else {
-        Type::Exp
-    };
+    let expected_type = estimate_function(linear_regression, &points);
 
     match expected_type {
-        Type::Linear => {
+        Function::Linear => {
             // The time of the first point is a base.
             // The minimal charge per element is the worse scenario
             // and we use it as an amount per unit.
-            let mut x_y = x_y.into_iter();
+            let mut x_y = points.into_iter();
             let base = x_y.next().unwrap().y;
-
             let amount = x_y
                 .map(|p| p.amount())
                 .min_by(|a, b| a.partial_cmp(b).unwrap())
                 .unwrap();
             (base, amount as u64)
         }
-        Type::Logarithm | Type::Exp => {
-            if expected_type == Type::Exp {
+        Function::Logarithmic | Function::Exponential => {
+            if expected_type == Function::Exponential {
                 println!(
                     "The {} is exponential. We don't support exponential chart. \
                 The opcode should be limited with upper bound. \n {:?}",
-                    name, x_y
+                    name, points
                 );
             }
 
             // The logarithm function slows down fast, and the point where it becomes more
             // linear is the base point. After this point we use linear strategy.
-            let last = x_y.last().unwrap().amount();
-            let mut x_y = x_y.into_iter();
+            let last = points.last().unwrap().amount();
+            let mut x_y = points.into_iter();
 
             let mut base = x_y.next().unwrap();
 
@@ -754,7 +767,6 @@ mod tests {
     fn test_ratio() {
         let baseline = Duration::from_nanos(19);
         let mean = Duration::from_nanos(200);
-        let baseline: u64 = baseline.as_nanos().try_into().unwrap();
         let ratio = map_to_ratio(baseline, mean);
         dbg!(ratio);
     }
@@ -868,9 +880,8 @@ mod tests {
 
     #[test]
     fn test_linear_regression() {
-        assert_eq!(
-            linear_regression(vec![(4, 2), (8, 3), (12, 4), (16, 5)]),
-            4.0
-        );
+        // Rises by 1, runs by 4
+        let slope = linear_regression(&vec![(4, 2), (8, 3), (12, 4), (16, 5)]);
+        assert_eq!(slope, 1.0 / 4.0);
     }
 }

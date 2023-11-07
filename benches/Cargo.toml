@@ -20,6 +20,7 @@ fuel-core-storage = { path = "./../crates/storage" }
 fuel-core-sync = { path = "./../crates/services/sync", features = ["benchmarking"] }
 fuel-core-types = { path = "./../crates/types", features = ["test-helpers"] }
 futures = "0.3"
+nalgebra = "0.32"
 p256 =  { version = "0.13", default-features = false, features = ["digest", "ecdsa"] }
 rand = { workspace = true }
 serde = { workspace = true, features = ["derive"] }

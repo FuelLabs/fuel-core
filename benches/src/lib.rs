@@ -1,4 +1,5 @@
 pub mod import;
+mod model;
 
 use fuel_core::database::vm_database::VmDatabase;
 pub use fuel_core::database::Database;
