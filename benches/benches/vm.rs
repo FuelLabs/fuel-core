@@ -86,7 +86,10 @@ where
                     final_time = result;
                     break
                 } else {
-                    println!("The environment is unstable. Rerunning the benchmark.");
+                    println!(
+                        "The environment is unstable. Rerunning the benchmark. {:?} {:?}",
+                        total, time_to_reset
+                    );
                 }
             }
 
