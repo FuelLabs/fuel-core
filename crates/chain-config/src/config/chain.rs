@@ -79,7 +79,7 @@ impl ChainConfig {
     pub fn create_config_file(&self, path: impl AsRef<Path>) -> anyhow::Result<()> {
         use anyhow::Context;
 
-        let state_writer = File::create(path.as_ref())?;
+        let state_writer = File::create(path.as_ref().join("chain_parameters.json"))?;
 
         serde_json::to_writer_pretty(state_writer, self)
             .context("failed to dump chain parameters snapshot to JSON")?;
@@ -154,11 +154,7 @@ impl GenesisCommitment for ConsensusConfig {
 #[cfg(test)]
 mod tests {
     #[cfg(feature = "std")]
-    use std::{
-        env::temp_dir,
-        fs::write,
-        path::PathBuf,
-    };
+    use std::env::temp_dir;
 
     use rand::{
         rngs::StdRng,
@@ -169,35 +165,13 @@ mod tests {
     use super::ChainConfig;
 
     #[cfg(feature = "std")]
-    fn tmp_path() -> PathBuf {
-        let mut path = temp_dir();
-        path.push("chain_parameters.json");
-        path
-    }
-
-    #[cfg(feature = "std")]
-    #[test]
-    fn loads_from_directory() {
-        // setup chain config in a temp file
-        let tmp_file = tmp_path();
-        let disk_config = ChainConfig::local_testnet();
-        let json = serde_json::to_string_pretty(&disk_config).unwrap();
-        write(&tmp_file, json).unwrap();
-
-        let load_config =
-            ChainConfig::load_from_directory(&tmp_file.parent().unwrap()).unwrap();
-        assert_eq!(disk_config, load_config);
-    }
-
-    #[cfg(feature = "std")]
     #[test]
     fn can_roundrip_write_and_read() {
-        let tmp_file = tmp_path();
+        let tmp_file = temp_dir();
         let disk_config = ChainConfig::local_testnet();
         disk_config.create_config_file(&tmp_file).unwrap();
 
-        let load_config =
-            ChainConfig::load_from_directory(&tmp_file.parent().unwrap()).unwrap();
+        let load_config = ChainConfig::load_from_directory(&tmp_file).unwrap();
 
         assert_eq!(disk_config, load_config);
     }
