@@ -54,8 +54,6 @@ pub async fn exec(command: Command) -> anyhow::Result<()> {
 
 #[cfg(any(feature = "rocksdb", feature = "rocksdb-production"))]
 pub async fn exec(command: Command) -> anyhow::Result<()> {
-    use std::fs::File;
-
     use anyhow::Context;
     use fuel_core::{
         chain_config::{
