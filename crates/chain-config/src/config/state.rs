@@ -15,6 +15,7 @@ use bech32::{
 };
 #[cfg(feature = "std")]
 use core::str::FromStr;
+use std::fs::File;
 #[cfg(feature = "std")]
 use fuel_core_types::fuel_types::Bytes32;
 #[cfg(feature = "std")]
@@ -28,10 +29,7 @@ use serde_with::{
     skip_serializing_none,
 };
 #[cfg(feature = "std")]
-use std::path::{
-    Path,
-    PathBuf,
-};
+use std::path::Path;
 
 use super::{
     coin::CoinConfig,
@@ -69,20 +67,27 @@ impl StateConfig {
     }
 
     #[cfg(feature = "std")]
-    pub fn load_from_directory(path: &str) -> Result<Self, anyhow::Error> {
-        let path = PathBuf::from_str(path)?.join("chain_state.json");
-        Self::load_from_file(path)
-    }
-
-    #[cfg(feature = "std")]
-    pub fn load_from_file(path: impl AsRef<Path>) -> Result<Self, anyhow::Error> {
-        let contents = std::fs::read(path.as_ref())?;
+    pub fn load_from_directory(path: impl AsRef<Path>) -> Result<Self, anyhow::Error> {
+        let path = path.as_ref().join("chain_parameters.json");
+    
+        let contents = std::fs::read(&path)?;
         serde_json::from_slice(&contents).map_err(|e| {
-            anyhow::Error::new(e).context(format!(
-                "an error occurred while loading the chain state file: {:?}",
-                path.as_ref().to_str()
+        anyhow::Error::new(e).context(format!(
+            "an error occurred while loading the chain state file: {:?}",
+            path.to_str()
             ))
         })
+    }
+    
+    #[cfg(feature = "std")]
+    pub fn create_config_file(&self, path: impl AsRef<Path>) -> anyhow::Result<()> {
+        use anyhow::Context;
+
+        let state_writer = File::create(path.as_ref().join( "chain_parameters.json"))?;
+        serde_json::to_writer_pretty(state_writer, self)
+            .context("failed to dump chain parameters snapshot to JSON")?;
+    
+        Ok(())
     }
 
     #[cfg(feature = "std")]
@@ -220,20 +225,32 @@ mod tests {
     #[cfg(feature = "std")]
     fn tmp_path() -> PathBuf {
         let mut path = temp_dir();
-        path.push(rand::random::<u16>().to_string());
+        path.push("chain_state.json");
         path
     }
 
     #[cfg(feature = "std")]
     #[test]
-    fn from_file_loads_from_file() {
+    fn loads_from_directory() {
         // setup chain config in a temp file
         let tmp_file = tmp_path();
         let disk_config = StateConfig::local_testnet();
         let json = serde_json::to_string_pretty(&disk_config).unwrap();
-        write(tmp_file.clone(), json).unwrap();
+        write(&tmp_file, json).unwrap();
 
-        let load_config = StateConfig::load_from_file(&tmp_file).unwrap();
+        let load_config = StateConfig::load_from_directory(&tmp_file.parent().unwrap()).unwrap();
+        assert_eq!(disk_config, load_config);
+    }
+
+    #[cfg(feature = "std")]
+    #[test]
+    fn can_roundrip_write_read() {
+        let tmp_file = tmp_path();
+        let disk_config = StateConfig::local_testnet();
+        disk_config.create_config_file(&tmp_file).unwrap();
+
+        let load_config = StateConfig::load_from_directory(&tmp_file).unwrap();
+
         assert_eq!(disk_config, load_config);
     }
 

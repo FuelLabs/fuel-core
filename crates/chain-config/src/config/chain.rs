@@ -1,5 +1,3 @@
-#[cfg(feature = "std")]
-use core::str::FromStr;
 use fuel_core_storage::MerkleRoot;
 use fuel_core_types::{
     fuel_crypto::Hasher,
@@ -22,10 +20,9 @@ use serde_with::{
     skip_serializing_none,
 };
 #[cfg(feature = "std")]
-use std::path::{
-    Path,
-    PathBuf,
-};
+use std::path::Path;
+#[cfg(feature = "std")]
+use std::fs::File;
 
 use crate::{
     genesis::GenesisCommitment,
@@ -66,20 +63,27 @@ impl ChainConfig {
     pub const BASE_ASSET: AssetId = AssetId::zeroed();
 
     #[cfg(feature = "std")]
-    pub fn load_from_directory(path: &str) -> Result<Self, anyhow::Error> {
-        let path = PathBuf::from_str(path)?.join("chain_parameters.json");
-        Self::load_from_file(path)
-    }
-
-    #[cfg(feature = "std")]
-    pub fn load_from_file(path: impl AsRef<Path>) -> Result<Self, anyhow::Error> {
-        let contents = std::fs::read(path.as_ref())?;
+    pub fn load_from_directory(path: impl AsRef<Path>) -> Result<Self, anyhow::Error> {
+        let path = path.as_ref().join("chain_parameters.json");
+    
+        let contents = std::fs::read(&path)?;
         serde_json::from_slice(&contents).map_err(|e| {
-            anyhow::Error::new(e).context(format!(
-                "an error occurred while loading the chain state file: {:?}",
-                path.as_ref().to_str()
+        anyhow::Error::new(e).context(format!(
+            "an error occurred while loading the chain state file: {:?}",
+            path.to_str()
             ))
         })
+    }
+    
+    #[cfg(feature = "std")]
+    pub fn create_config_file(&self, path: impl AsRef<Path>) -> anyhow::Result<()> {
+        use anyhow::Context;
+
+        let state_writer = File::create(path.as_ref().join( "chain_parameters.json"))?;
+        serde_json::to_writer_pretty(state_writer, self)
+            .context("failed to dump chain parameters snapshot to JSON")?;
+    
+        Ok(())
     }
 
     pub fn local_testnet() -> Self {
@@ -143,5 +147,95 @@ impl GenesisCommitment for ConsensusConfig {
         let hash = Hasher::default().chain(bytes).finalize();
 
         Ok(hash.into())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    #[cfg(feature = "std")]
+    use std::{
+        env::temp_dir,
+        fs::write,
+        path::PathBuf,
+    };
+
+    use rand::{
+        rngs::StdRng,
+        RngCore,
+        SeedableRng,
+    };
+
+    use super::ChainConfig;
+
+    #[cfg(feature = "std")]
+    fn tmp_path() -> PathBuf {
+        let mut path = temp_dir();
+        path.push("chain_parameters.json");
+        path
+    }
+
+    #[cfg(feature = "std")]
+    #[test]
+    fn loads_from_directory() {
+        // setup chain config in a temp file
+        let tmp_file = tmp_path();
+        let disk_config = ChainConfig::local_testnet();
+        let json = serde_json::to_string_pretty(&disk_config).unwrap();
+        write(&tmp_file, json).unwrap();
+
+        let load_config = ChainConfig::load_from_directory(&tmp_file.parent().unwrap()).unwrap();
+        assert_eq!(disk_config, load_config);
+    }
+
+    #[cfg(feature = "std")]
+    #[test]
+    fn can_roundrip_write_and_read() {
+        let tmp_file = tmp_path();
+        let disk_config = ChainConfig::local_testnet();
+        disk_config.create_config_file(&tmp_file).unwrap();
+
+        let load_config = ChainConfig::load_from_directory(&tmp_file.parent().unwrap()).unwrap();
+
+        assert_eq!(disk_config, load_config);
+    }
+
+    #[test]
+    fn snapshot_local_testnet_config() {
+        let config = ChainConfig::local_testnet();
+        let json = serde_json::to_string_pretty(&config).unwrap();
+        insta::assert_snapshot!(json);
+    }
+
+    #[test]
+    fn can_roundtrip_serialize_local_testnet_config() {
+        let config = ChainConfig::local_testnet();
+        let json = serde_json::to_string(&config).unwrap();
+        let deserialized_config: ChainConfig =
+            serde_json::from_str(json.as_str()).unwrap();
+        assert_eq!(config, deserialized_config);
+    }
+
+    #[test]
+    fn snapshot_configurable_block_height() {
+        let mut rng = StdRng::seed_from_u64(2);
+        let config = ChainConfig {
+            height: Some(rng.next_u32().into()),
+            ..ChainConfig::local_testnet()
+        };
+        let json = serde_json::to_string_pretty(&config).unwrap();
+        insta::assert_snapshot!(json);
+    }
+
+    #[test]
+    fn can_roundtrip_serialize_block_height_config() {
+        let mut rng = StdRng::seed_from_u64(2);
+        let config = ChainConfig {
+            height: Some(rng.next_u32().into()),
+            ..ChainConfig::local_testnet()
+        };
+        let json = serde_json::to_string(&config).unwrap();
+        let deserialized_config: ChainConfig =
+            serde_json::from_str(json.as_str()).unwrap();
+        assert_eq!(config, deserialized_config);
     }
 }

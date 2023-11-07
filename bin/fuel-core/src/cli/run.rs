@@ -317,7 +317,7 @@ impl Command {
             database_path,
             database_type,
             chain_parameters: chain_params.clone(),
-            chain_state: chain_state.clone(),
+            chain_state: chain_state,
             debug,
             utxo_validation,
             block_production: trigger,

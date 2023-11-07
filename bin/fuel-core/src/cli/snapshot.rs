@@ -31,7 +31,9 @@ pub enum SubCommands {
         /// Specify either an alias to a built-in configuration or filepath to a JSON file.
         #[clap(name = "CHAIN_CONFIG", long = "chain", default_value = "local_testnet")]
         chain_config: String,
-        output_dir: String,
+        /// Specify a path to an output directory for the chain config files.
+        #[clap(name = "OUTPUT_DIR", long = "output directory")]
+        output_dir: PathBuf,
     },
     /// Creates a config for the contract.
     #[command(arg_required_else_help = true)]
@@ -83,13 +85,12 @@ pub async fn exec(command: Command) -> anyhow::Result<()> {
             };
             let chain_state = StateConfig::generate_state_config(db)?;
 
-            std::fs::create_dir_all(output_dir)?;
-            let parameters_writer = File::create("chain_parameters.json")?;
-            let state_writer = File::create("chain_state.json")?;
-
+            std::fs::create_dir_all(&output_dir)?;
+            let parameters_writer = File::create(output_dir.join( "chain_parameters.json"))?;
             serde_json::to_writer_pretty(parameters_writer, &chain_params)
                 .context("failed to dump chain parameters snapshot to JSON")?;
 
+            let state_writer = File::create(output_dir.join("chain_state.json"))?;
             serde_json::to_writer_pretty(state_writer, &chain_state)
                 .context("failed to dump chain state snapshot to JSON")?;
         }
