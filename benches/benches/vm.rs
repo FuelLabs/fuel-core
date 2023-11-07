@@ -1,6 +1,8 @@
 mod utils;
 mod vm_set;
 
+use std::time::Duration;
+
 use criterion::{
     black_box,
     criterion_group,
@@ -40,20 +42,26 @@ where
                 db_txn
             };
 
+            let clock = quanta::Clock::new();
+
             let final_time;
             loop {
                 // Measure the total time to revert the VM to the initial state.
                 // It should always do the same things regardless of the number of
                 // iterations because we use a `diff` from the `VmBenchPrepared` initialization.
-                let start = std::time::Instant::now();
+                let mut total = Duration::ZERO;
                 for _ in 0..iters {
+                    let start = black_box(clock.raw());
                     vm.reset_vm_state(diff);
+                    let end = black_box(clock.raw());
+                    total += clock.delta(start, end);
+                    black_box(&vm);
                 }
-                black_box(&vm);
-                let time_to_reset = start.elapsed();
+                let time_to_reset = total;
 
-                let start = std::time::Instant::now();
+                let mut total = Duration::ZERO;
                 for _ in 0..iters {
+                    let start = black_box(clock.raw());
                     match instruction {
                         Instruction::CALL(call) => {
                             let (ra, rb, rc, rd) = call.unpack();
@@ -64,9 +72,11 @@ where
                         }
                     }
                     black_box(&vm);
+                    let end = black_box(clock.raw());
+                    total += clock.delta(start, end);
                     vm.reset_vm_state(diff);
                 }
-                let only_instruction = start.elapsed().checked_sub(time_to_reset);
+                let only_instruction = total.checked_sub(time_to_reset);
 
                 // It may overflow when the benchmarks run in an unstable environment.
                 // If the hardware is busy during the measuring time to reset the VM,

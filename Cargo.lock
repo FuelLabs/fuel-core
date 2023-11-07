@@ -2720,8 +2720,7 @@ dependencies = [
 [[package]]
 name = "fuel-asm"
 version = "0.40.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4a2dce6ade2d7804096e6dfd51e6fd9a16a87ee32b28bcc7a47674c2b497f363"
+source = "git+https://github.com/FuelLabs/fuel-vm?branch=dento/overflow-rework#06ac15101da8bc9d969d91ffa7c79693028b0b84"
 dependencies = [
  "bitflags 1.3.2",
  "fuel-types",
@@ -2801,6 +2800,7 @@ dependencies = [
  "fuel-core-types",
  "futures",
  "p256 0.13.2",
+ "quanta",
  "rand 0.7.3",
  "rand 0.8.5",
  "serde",
@@ -3238,8 +3238,7 @@ dependencies = [
 [[package]]
 name = "fuel-crypto"
 version = "0.40.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e2c58f23beb866369a194b21635f969fd94538cf3cea8e9bebd9d828042f0cf2"
+source = "git+https://github.com/FuelLabs/fuel-vm?branch=dento/overflow-rework#06ac15101da8bc9d969d91ffa7c79693028b0b84"
 dependencies = [
  "coins-bip32",
  "coins-bip39",
@@ -3259,8 +3258,7 @@ dependencies = [
 [[package]]
 name = "fuel-derive"
 version = "0.40.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "adba9deee62a53830736cfdd6a08192c399a3f92f67d26b6c550b544f24bd1e1"
+source = "git+https://github.com/FuelLabs/fuel-vm?branch=dento/overflow-rework#06ac15101da8bc9d969d91ffa7c79693028b0b84"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -3271,8 +3269,7 @@ dependencies = [
 [[package]]
 name = "fuel-merkle"
 version = "0.40.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6dd20b9ea8b953040507c39bc498478cfa17ecb9831f9fac9b6ca1f7f5ffd921"
+source = "git+https://github.com/FuelLabs/fuel-vm?branch=dento/overflow-rework#06ac15101da8bc9d969d91ffa7c79693028b0b84"
 dependencies = [
  "derive_more",
  "digest 0.10.7",
@@ -3286,14 +3283,12 @@ dependencies = [
 [[package]]
 name = "fuel-storage"
 version = "0.40.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "636d286c2c195f44587c69ae73d08ae9801ac8ee310ef4e87f1d493ed87f2e47"
+source = "git+https://github.com/FuelLabs/fuel-vm?branch=dento/overflow-rework#06ac15101da8bc9d969d91ffa7c79693028b0b84"
 
 [[package]]
 name = "fuel-tx"
 version = "0.40.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b0e23732f33ace2ec5b48f17085ec9397f35c465538070269b1965723ed351fa"
+source = "git+https://github.com/FuelLabs/fuel-vm?branch=dento/overflow-rework#06ac15101da8bc9d969d91ffa7c79693028b0b84"
 dependencies = [
  "derivative",
  "derive_more",
@@ -3314,8 +3309,7 @@ dependencies = [
 [[package]]
 name = "fuel-types"
 version = "0.40.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1465ab5a63b2d867ab1900d34dd6eee2e7cf1e1ad54d23fb6cd89f892367ff02"
+source = "git+https://github.com/FuelLabs/fuel-vm?branch=dento/overflow-rework#06ac15101da8bc9d969d91ffa7c79693028b0b84"
 dependencies = [
  "fuel-derive",
  "hex",
@@ -3326,8 +3320,7 @@ dependencies = [
 [[package]]
 name = "fuel-vm"
 version = "0.40.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "13437b5beecd473be158198bcd2ec0c1979783db3d4ed82ffff4fb8d9acb890f"
+source = "git+https://github.com/FuelLabs/fuel-vm?branch=dento/overflow-rework#06ac15101da8bc9d969d91ffa7c79693028b0b84"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -4970,6 +4963,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "mach2"
+version = "0.4.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6d0d1830bcd151a6fc4aea1369af235b36c1528fe976b8ff678683c9995eade8"
+dependencies = [
+ "libc",
+]
+
+[[package]]
 name = "match_cfg"
 version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6332,6 +6334,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "quanta"
+version = "0.12.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "577c55a090a94ed7da0e6580cc38a553558e2d736398b5d8ebf81bc9880f8acd"
+dependencies = [
+ "crossbeam-utils",
+ "libc",
+ "mach2",
+ "once_cell",
+ "raw-cpuid",
+ "wasi 0.11.0+wasi-snapshot-preview1",
+ "web-sys",
+ "winapi",
+]
+
+[[package]]
 name = "quick-error"
 version = "1.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6481,6 +6499,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d25bf25ec5ae4a3f1b92f929810509a2f53d7dca2f50b794ff57e3face536c8f"
 dependencies = [
  "rand_core 0.6.4",
+]
+
+[[package]]
+name = "raw-cpuid"
+version = "11.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9d86a7c4638d42c44551f4791a20e687dbb4c3de1f33c43dd71e355cd429def1"
+dependencies = [
+ "bitflags 2.4.1",
 ]
 
 [[package]]
