@@ -1,3 +1,4 @@
+mod contract;
 mod utils;
 mod vm_set;
 
@@ -12,8 +13,8 @@ use criterion::{
     Criterion,
 };
 
+use contract::*;
 use fuel_core_benches::*;
-use fuel_core_storage::transactional::Transaction;
 use fuel_core_types::fuel_asm::Instruction;
 use vm_set::*;
 
@@ -33,14 +34,12 @@ where
                 instruction,
                 diff,
             } = &mut i;
-            let original_db = vm.as_mut().database_mut().clone();
-            let mut db_txn = {
-                let db = vm.as_mut().database_mut();
-                let db_txn = db.transaction();
-                // update vm database in-place to use transaction
-                *db = db_txn.as_ref().clone();
-                db_txn
-            };
+            let checkpoint = vm
+                .as_mut()
+                .database_mut()
+                .checkpoint()
+                .expect("Should be able to create a checkpoint");
+            let original_db = core::mem::replace(vm.as_mut().database_mut(), checkpoint);
 
             let clock = quanta::Clock::new();
 
@@ -62,19 +61,21 @@ where
                 vm.reset_vm_state(diff);
             }
 
-            db_txn.commit().unwrap();
             // restore original db
             *vm.as_mut().database_mut() = original_db;
             total
         })
     });
 }
+
 fn vm(c: &mut Criterion) {
     alu::run(c);
     blockchain::run(c);
     crypto::run(c);
     flow::run(c);
     mem::run(c);
+    contract_root(c);
+    state_root(c);
 }
 
 criterion_group!(benches, vm);

@@ -610,6 +610,10 @@ impl GasCosts {
         self.0.srwq.into()
     }
 
+    async fn swwq(&self) -> DependentCost {
+        self.0.swwq.into()
+    }
+
     // Non-opcode prices
 
     async fn contract_root(&self) -> DependentCost {
@@ -618,10 +622,6 @@ impl GasCosts {
 
     async fn state_root(&self) -> DependentCost {
         self.0.state_root.into()
-    }
-
-    async fn swwq(&self) -> DependentCost {
-        self.0.swwq.into()
     }
 }
 

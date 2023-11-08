@@ -154,7 +154,7 @@ where
                 false
             });
 
-            let mut count = count + 1 /* for `has_next_page` */;
+            let mut count = count.saturating_add(1) /* for `has_next_page` */;
             let entries = entries.take(count).take_while(|result| {
                 if let Ok((key, _)) = result {
                     if let Some(end) = end.as_ref() {
@@ -164,7 +164,7 @@ where
                             return false
                         }
                     }
-                    count -= 1;
+                    count = count.saturating_sub(1);
                     has_next_page |= count == 0;
                     count != 0
                 } else {

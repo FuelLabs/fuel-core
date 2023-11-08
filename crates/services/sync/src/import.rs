@@ -171,7 +171,7 @@ where
             if count < range_len {
                 let count = u32::try_from(count)
                     .expect("Size of the range can't be more than maximum `BlockHeight`");
-                let incomplete_range = (*range.start() + count)..=*range.end();
+                let incomplete_range = range.start().saturating_add(count)..=*range.end();
                 self.state
                     .apply(|s| s.failed_to_process(incomplete_range.clone()));
                 Err(anyhow::anyhow!(
@@ -285,7 +285,7 @@ where
             // Count the number of successfully executed blocks.
             // Fold the stream into a count.
             .fold(0usize, |count, batch| async move {
-                count + batch.results.len()
+                count.checked_add(batch.results.len()).expect("It is impossible to fetch so much data to overflow `usize`")
             })
             .await;
 
@@ -371,12 +371,11 @@ fn range_chunks(
     range: RangeInclusive<u32>,
     chunk_size: usize,
 ) -> impl Iterator<Item = Range<u32>> {
-    let end = *range.end() + 1;
+    let end = range.end().saturating_add(1);
+    let chunk_size_u32 =
+        u32::try_from(chunk_size).expect("The size of the chunk can't exceed `u32`");
     range.step_by(chunk_size).map(move |chunk_start| {
-        let block_end = (chunk_start
-            + u32::try_from(chunk_size)
-                .expect("The size of the chunk can't exceed `u32`"))
-        .min(end);
+        let block_end = (chunk_start.saturating_add(chunk_size_u32)).min(end);
         chunk_start..block_end
     })
 }

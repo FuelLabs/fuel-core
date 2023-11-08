@@ -116,7 +116,11 @@ fn initialize_topic_score_params(topic_weight: f64) -> TopicScoreParams {
 
     // The decay time for the first message delivered score, set to 100 times the epoch duration.
     // This means that the score given for first message deliveries will decay over this time period.
-    params.first_message_deliveries_decay = score_parameter_decay(EPOCH * 100);
+    params.first_message_deliveries_decay = score_parameter_decay(
+        EPOCH
+            .checked_mul(100)
+            .expect("`EPOCH` is usually not more than a year"),
+    );
     params.first_message_deliveries_cap = 1000.0;
     params.first_message_deliveries_weight = 0.5;
 
@@ -130,7 +134,11 @@ fn initialize_topic_score_params(topic_weight: f64) -> TopicScoreParams {
     params.mesh_failure_penalty_weight = 0.0;
 
     params.invalid_message_deliveries_weight = -10.0 / params.topic_weight; // -200 per invalid message
-    params.invalid_message_deliveries_decay = score_parameter_decay(EPOCH * 50);
+    params.invalid_message_deliveries_decay = score_parameter_decay(
+        EPOCH
+            .checked_mul(50)
+            .expect("`EPOCH` is usually not more than a year"),
+    );
 
     params
 }
@@ -144,11 +152,17 @@ fn initialize_peer_score_params(thresholds: &PeerScoreThresholds) -> PeerScorePa
     let mut params = PeerScoreParams {
         decay_interval: DECAY_INTERVAL,
         decay_to_zero: DECAY_TO_ZERO,
-        retain_score: EPOCH * 100,
+        retain_score: EPOCH
+            .checked_mul(100)
+            .expect("`EPOCH` is usually not more than a year"),
         app_specific_weight: 0.0,
         ip_colocation_factor_threshold: 8.0, // Allow up to 8 nodes per IP
         behaviour_penalty_threshold: 6.0,
-        behaviour_penalty_decay: score_parameter_decay(EPOCH * 10),
+        behaviour_penalty_decay: score_parameter_decay(
+            EPOCH
+                .checked_mul(10)
+                .expect("`EPOCH` is usually not more than a year"),
+        ),
         ..Default::default()
     };
 

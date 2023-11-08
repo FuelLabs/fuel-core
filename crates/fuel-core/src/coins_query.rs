@@ -185,9 +185,12 @@ pub fn random_improve(
                 }
 
                 // Break if adding doesn't improve the distance
-                let change_amount = collected_amount - target;
+                let change_amount = collected_amount
+                    .checked_sub(target)
+                    .expect("We checked it above");
                 let distance = target.abs_diff(change_amount);
-                let next_distance = target.abs_diff(change_amount + coin.amount());
+                let next_distance =
+                    target.abs_diff(change_amount.saturating_add(coin.amount()));
                 if next_distance >= distance {
                     break
                 }
@@ -215,6 +218,7 @@ impl From<StorageError> for CoinsQueryError {
     }
 }
 
+#[allow(clippy::arithmetic_side_effects)]
 #[cfg(test)]
 mod tests {
     use crate::{

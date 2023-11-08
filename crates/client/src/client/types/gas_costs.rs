@@ -141,9 +141,8 @@ include_from_impls! {
         pub swwq: DependentCost,
 
         // Non-opcode prices
-
-        pub state_root: DependentCost,
         pub contract_root: DependentCost,
+        pub state_root: DependentCost,
     }
 }
 
