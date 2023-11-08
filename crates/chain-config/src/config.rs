@@ -4,6 +4,8 @@ mod consensus;
 mod contract;
 mod message;
 mod state;
+
+#[cfg(feature = "std")]
 mod state_importer;
 
 pub use chain::*;
