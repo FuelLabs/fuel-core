@@ -705,6 +705,16 @@ fn dependent_cost(name: &String, points: Vec<(u64, u64)>) -> DependentCost {
                 gas_per_unit: 0,
             }
         }
+        Model::Other => {
+            // Other
+            // Currently, this includes logarithmic functions
+            let warning = format!("Warning: Evaluating the  regression on the dataset for {name} produced an unsupported function.", name = name);
+            println!("{}", warning);
+            DependentCost::HeavyOperation {
+                base: 0,
+                gas_per_unit: 0,
+            }
+        }
     }
 
     // match expected_type {

@@ -1,5 +1,6 @@
 pub mod import;
 pub mod model;
+pub mod regression;
 
 use fuel_core::database::vm_database::VmDatabase;
 pub use fuel_core::database::Database;
