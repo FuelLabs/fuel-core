@@ -27,6 +27,7 @@ serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 serde_yaml = "0.9.13"
 test-helpers = { path = "../tests/test-helpers" }
+test-case = { workspace = true }
 tikv-jemallocator = { workspace = true }
 tokio = { workspace = true, features = ["full"] }
 

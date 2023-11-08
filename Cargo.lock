@@ -2821,6 +2821,7 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_yaml",
+ "test-case",
  "test-helpers",
  "tikv-jemallocator",
  "tokio",
