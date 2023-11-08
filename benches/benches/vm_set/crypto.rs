@@ -101,9 +101,8 @@ pub fn run(c: &mut Criterion) {
     }
     bench_s256.finish();
 
-    let ed19_keypair =
-        ed25519_dalek::Keypair::generate(&mut ed25519_dalek_old_rand::rngs::OsRng {});
-    let ed19_signature = ed19_keypair.sign(&*message);
+    let ed19_secret = ed25519_dalek::SigningKey::generate(&mut rand::rngs::OsRng {});
+    let ed19_signature = ed19_secret.sign(&*message);
 
     run_group_ref(
         &mut c.benchmark_group("ed19"),
@@ -114,17 +113,22 @@ pub fn run(c: &mut Criterion) {
                 op::addi(
                     0x21,
                     0x20,
-                    ed19_keypair.public.as_ref().len().try_into().unwrap(),
+                    ed19_secret
+                        .verifying_key()
+                        .as_bytes()
+                        .len()
+                        .try_into()
+                        .unwrap(),
                 ),
                 op::addi(
                     0x22,
                     0x21,
-                    ed19_signature.as_ref().len().try_into().unwrap(),
+                    ed19_signature.to_bytes().len().try_into().unwrap(),
                 ),
             ])
             .with_data(
-                ed19_keypair
-                    .public
+                ed19_secret
+                    .verifying_key()
                     .to_bytes()
                     .iter()
                     .chain(ed19_signature.to_bytes().iter())
