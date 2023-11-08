@@ -1,4 +1,8 @@
+use fuel_core_benches::model::*;
+
 use clap::Parser;
+use fuel_core::txpool::types::Word;
+use fuel_core_benches::Model;
 use fuel_core_types::fuel_tx::GasCostsValues;
 use serde::{
     Deserialize,
@@ -142,43 +146,6 @@ enum Cost {
 struct Sample {
     throughput: u64,
     time: u64,
-}
-
-const NEAR_LINEAR: f64 = 0.1;
-
-#[derive(PartialEq, Eq)]
-enum Function {
-    /// The points have a linear property. The first point
-    /// and the last points are almost the same(The difference is < 0.1).
-    Linear,
-    /// When the delta of the last point is much lower than
-    /// the first point, it is a logarithmic chart.
-    Logarithmic,
-    /// When the delta of the last point is much more than
-    /// the first point, it is an exponential chart.
-    Exponential,
-}
-
-fn estimate_function(linear_regression: f64, points: &Vec<Point>) -> Function {
-    let first = points.first().unwrap();
-    let last = points.last().unwrap();
-
-    let first_amount = first.amount();
-    let first_price = first.price();
-    dbg!(first_amount, first_price);
-
-    let near_linear = linear_regression * NEAR_LINEAR;
-    let expected_type = if (linear_regression - first.amount()).abs() < near_linear
-        && (linear_regression - last.amount()).abs() < near_linear
-    {
-        Function::Linear
-    } else if first.price() > last.price() {
-        Function::Logarithmic
-    } else {
-        Function::Exponential
-    };
-
-    expected_type
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -632,11 +599,7 @@ impl State {
         } else {
             let iter = dependent_groups.into_iter().map(|(name, points)| {
                 groups.remove(&name);
-                let (base, dep_per_unit) = dependent_cost(&name, points);
-                let dependent_cost = DependentCost::LightOperation {
-                    base,
-                    units_per_gas: dep_per_unit,
-                };
+                let dependent_cost = dependent_cost(&name, points);
                 (name, Cost::Dependent(dependent_cost))
             });
             costs.0.extend(iter);
@@ -679,76 +642,115 @@ impl Costs {
     }
 }
 
-fn linear_regression(points: &Vec<(u64, u64)>) -> f64 {
-    let avg_x = points.iter().map(|(x, _)| *x).sum::<u64>() as f64 / points.len() as f64;
-    let avg_y = points.iter().map(|(_, y)| *y).sum::<u64>() as f64 / points.len() as f64;
-    let covariance: f64 = points
-        .iter()
-        .map(|(x, y)| (*x as f64 - avg_x) * (*y as f64 - avg_y))
-        .sum();
-    let variance: f64 = points
-        .iter()
-        .map(|(x, _)| (*x as f64 - avg_x).powi(2))
-        .sum();
-    covariance / variance
-}
+fn dependent_cost(name: &String, points: Vec<(u64, u64)>) -> DependentCost {
+    let data = points.iter().map(|(x, y)| (*x as f64, *y as f64)).collect();
+    let model = evaluate_model(&data).expect("Unable to evaluate model");
 
-fn dependent_cost(name: &String, points: Vec<(u64, u64)>) -> (u64, u64) {
-    let slope = linear_regression(&points);
-    // 1 / (rise / run)
-    let linear_regression = 1.0 / slope;
-
-    let points = points
-        .into_iter()
-        .map(|(x, y)| Point { x, y })
-        .collect::<Vec<_>>();
-
-    let expected_type = estimate_function(linear_regression, &points);
-
-    match expected_type {
-        Function::Linear => {
-            // The time of the first point is a base.
-            // The minimal charge per element is the worse scenario
-            // and we use it as an amount per unit.
-            let mut x_y = points.into_iter();
-            let base = x_y.next().unwrap().y;
-            let amount = x_y
-                .map(|p| p.amount())
-                .min_by(|a, b| a.partial_cmp(b).unwrap())
-                .unwrap();
-            (base, amount as u64)
-        }
-        Function::Logarithmic | Function::Exponential => {
-            if expected_type == Function::Exponential {
-                println!(
-                    "The {} is exponential. We don't support exponential chart. \
-                The opcode should be limited with upper bound. \n {:?}",
-                    name, points
-                );
+    match model {
+        Model::Zero => {
+            // Zero
+            let warning = format!("Warning: Evaluating the regression on the dataset for {name} produced the zero function. This implies a non-monotonic behavior in cost and is not supported.", name = name);
+            println!("{}", warning);
+            DependentCost::HeavyOperation {
+                base: 0,
+                gas_per_unit: 0,
             }
-
-            // The logarithm function slows down fast, and the point where it becomes more
-            // linear is the base point. After this point we use linear strategy.
-            let last = points.last().unwrap().amount();
-            let mut x_y = points.into_iter();
-
-            let mut base = x_y.next().unwrap();
-
-            let amount = x_y
-                .skip_while(|p| {
-                    if p.amount() < linear_regression - base.amount() {
-                        base = *p;
-                        true
-                    } else {
-                        false
-                    }
-                })
-                .map(|p| p.amount())
-                .min_by(|a, b| a.partial_cmp(b).unwrap())
-                .unwrap_or(last);
-            (base.y, amount as u64)
+        }
+        Model::Constant(coefficients) => {
+            // Constant
+            let warning = format!("Warning: Evaluating the regression on the dataset for {name} produced a constant function. This implies a non-monotonic behavior in cost and is not supported.", name = name);
+            println!("{}", warning);
+            let base = coefficients.y as Word;
+            DependentCost::HeavyOperation {
+                base,
+                gas_per_unit: 0,
+            }
+        }
+        Model::Linear(coefficients) => match coefficients.slope {
+            slope if slope > 0.0 && slope < 1.0 => {
+                // Slope is between (0.0, 1.0)
+                // Light operation
+                let base = coefficients.intercept as Word;
+                let inverse_slope = 1.0 / slope;
+                let units_per_gas = inverse_slope as Word;
+                DependentCost::LightOperation {
+                    base,
+                    units_per_gas,
+                }
+            }
+            slope if slope >= 1.0 => {
+                // Slope is greater than 1.0
+                // Heavy operation
+                let base = coefficients.intercept as Word;
+                let gas_per_unit = slope as Word;
+                DependentCost::HeavyOperation { base, gas_per_unit }
+            }
+            _ => {
+                // Slope is negative
+                let warning = format!("Warning: Evaluating the regression on the dataset for {name} produced a negative slope. This implies a non-monotonic behavior in cost and is not supported.", name = name);
+                println!("{}", warning);
+                let base = coefficients.intercept as Word;
+                DependentCost::HeavyOperation {
+                    base,
+                    gas_per_unit: 0,
+                }
+            }
+        },
+        Model::Quadratic(coefficients) => {
+            // Quadratic
+            let warning = format!("Warning: Evaluating the  regression on the dataset for {name} produced a quadratic function. Quadratic behavior is not supported.", name = name);
+            println!("{}", warning);
+            DependentCost::HeavyOperation {
+                base: 0,
+                gas_per_unit: 0,
+            }
         }
     }
+
+    // match expected_type {
+    //     Function::Linear => {
+    //         // The time of the first point is a base.
+    //         // The minimal charge per element is the worse scenario
+    //         // and we use it as an amount per unit.
+    //         let mut x_y = points.into_iter();
+    //         let base = x_y.next().unwrap().y;
+    //         let amount = x_y
+    //             .map(|p| p.amount())
+    //             .min_by(|a, b| a.partial_cmp(b).unwrap())
+    //             .unwrap();
+    //         (base, amount as u64)
+    //     }
+    //     Function::Logarithmic | Function::Exponential => {
+    //         if expected_type == Function::Exponential {
+    //             println!(
+    //                 "The {} is exponential. We don't support exponential chart. \
+    //             The opcode should be limited with upper bound. \n {:?}",
+    //                 name, points
+    //             );
+    //         }
+    //
+    //         // The logarithm function slows down fast, and the point where it becomes more
+    //         // linear is the base point. After this point we use linear strategy.
+    //         let last = points.last().unwrap().amount();
+    //         let mut x_y = points.into_iter();
+    //
+    //         let mut base = x_y.next().unwrap();
+    //
+    //         let amount = x_y
+    //             .skip_while(|p| {
+    //                 if p.amount() < linear_regression - base.amount() {
+    //                     base = *p;
+    //                     true
+    //                 } else {
+    //                     false
+    //                 }
+    //             })
+    //             .map(|p| p.amount())
+    //             .min_by(|a, b| a.partial_cmp(b).unwrap())
+    //             .unwrap_or(last);
+    //         (base.y, amount as u64)
+    //     }
+    // }
 }
 
 #[cfg(test)]
@@ -876,12 +878,5 @@ mod tests {
         println!("{}", String::from_utf8(output.stderr).unwrap());
 
         assert!(output.status.success());
-    }
-
-    #[test]
-    fn test_linear_regression() {
-        // Rises by 1, runs by 4
-        let slope = linear_regression(&vec![(4, 2), (8, 3), (12, 4), (16, 5)]);
-        assert_eq!(slope, 1.0 / 4.0);
     }
 }
