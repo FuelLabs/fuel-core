@@ -4,7 +4,7 @@ use crate::{
         in_memory::memory_store::MemoryStore,
         DataSource,
         WriteOperation,
-    },
+    }, service::DbType,
 };
 use fuel_core_chain_config::{
     ChainConfigDb,
@@ -26,6 +26,7 @@ use serde::{
     de::DeserializeOwned,
     Serialize,
 };
+use tracing::warn;
 use std::{
     fmt::{
         self,
@@ -34,7 +35,7 @@ use std::{
     },
     marker::Send,
     ops::Deref,
-    sync::Arc,
+    sync::Arc, path::PathBuf,
 };
 
 pub use fuel_core_database::Error;
@@ -144,6 +145,15 @@ impl Column {
     }
 }
 
+#[derive(
+    Clone, Debug, Eq, PartialEq,
+)]
+pub struct DatabaseConfig {
+    pub database_path: PathBuf,
+    pub database_type: DbType,
+    pub max_database_cache_size: usize,
+}
+
 #[derive(Clone, Debug)]
 pub struct Database {
     data: DataSource,
@@ -185,6 +195,26 @@ impl Database {
         Self {
             data: data_source,
             _drop: Default::default(),
+        }
+    }
+
+    pub fn from_config(config: &DatabaseConfig) -> DatabaseResult<Self> {
+        match config.database_type {
+            #[cfg(feature = "rocksdb")]
+            DbType::RocksDb => {
+                // use a default tmp rocksdb if no path is provided
+                if config.database_path.as_os_str().is_empty() {
+                    warn!(
+                        "No RocksDB path configured, initializing database with a tmp directory"
+                    );
+                    Ok(Database::default())
+                } else {
+                    Database::open(&config.database_path, config.max_database_cache_size)
+                }
+            }
+            DbType::InMemory => Ok(Database::in_memory()),
+            #[cfg(not(feature = "rocksdb"))]
+            _ => Database::in_memory(),
         }
     }
 

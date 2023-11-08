@@ -76,6 +76,7 @@ impl ContractConfig {
             .as_ref()
             .map(|slots| Contract::initial_state_root(slots.iter()))
             .unwrap_or(Contract::default_state_root());
+
         let contract = Contract::from(bytes.clone());
         let root = contract.root();
         let contract_id = contract.id(&salt, &root, &state_root);

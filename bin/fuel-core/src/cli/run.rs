@@ -33,7 +33,7 @@ use fuel_core::{
         fuel_tx::ContractId,
         fuel_vm::SecretKey,
         secrecy::Secret,
-    },
+    }, database::DatabaseConfig,
 };
 use pyroscope::{
     pyroscope::PyroscopeAgentRunning,
@@ -253,7 +253,7 @@ impl Command {
 
         let addr = net::SocketAddr::new(ip, port);
 
-        let (chain_params, chain_state) = match chain_config.as_str() {
+        let (chain_config, chain_state) = match chain_config.as_str() {
             LOCAL_TESTNET => (ChainConfig::local_testnet(), StateConfig::local_testnet()),
             _ => {
                 let chain_conf = ChainConfig::load_from_directory(&chain_config)?;
@@ -310,14 +310,18 @@ impl Command {
             max_wait_time: max_wait_time.into(),
         };
 
+        let db_config = DatabaseConfig {
+            database_path,
+            database_type,
+            max_database_cache_size,
+        };
+
         let config = Config {
             addr,
             api_request_timeout: api_request_timeout.into(),
-            max_database_cache_size,
-            database_path,
-            database_type,
-            chain_config: chain_params.clone(),
-            chain_state,
+            db_config,
+            chain_config: chain_config.clone(),
+            chain_state: chain_state.clone(),
             debug,
             utxo_validation,
             block_production: trigger,
@@ -327,7 +331,7 @@ impl Command {
             txpool: TxPoolConfig::new(
                 tx_max_number,
                 tx_max_depth,
-                chain_params,
+                chain_config,
                 min_gas_price,
                 utxo_validation,
                 metrics,

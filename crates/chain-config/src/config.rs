@@ -4,6 +4,7 @@ mod consensus;
 mod contract;
 mod message;
 mod state;
+mod state_importer;
 
 pub use chain::*;
 pub use coin::*;

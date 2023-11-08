@@ -373,11 +373,11 @@ pub async fn make_nodes(
 
 pub fn make_config(
     name: String,
-    chain_params: ChainConfig,
+    chain_config: ChainConfig,
     chain_state: StateConfig,
 ) -> Config {
     let mut node_config = Config::local_node();
-    node_config.chain_config = chain_params;
+    node_config.chain_config = chain_config;
     node_config.chain_state = chain_state;
     node_config.utxo_validation = true;
     node_config.name = name;

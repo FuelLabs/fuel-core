@@ -14,9 +14,9 @@ use fuel_core::chain_config::{
     "Dev chainconfig"
 )]
 fn test_deployment_chainconfig(params_bytes: &str, state_bytes: &str) {
-    let chain_params: ChainConfig = serde_json::from_str(params_bytes)
+    let chain_config: ChainConfig = serde_json::from_str(params_bytes)
         .expect("Should be able to decode chain config");
-    let params_actual_bytes = serde_json::to_string_pretty(&chain_params)
+    let params_actual_bytes = serde_json::to_string_pretty(&chain_config)
         .expect("Should be able to encode the chain config");
 
     let chain_state: StateConfig =

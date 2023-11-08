@@ -13,7 +13,6 @@ use std::{
         Ipv4Addr,
         SocketAddr,
     },
-    path::PathBuf,
     time::Duration,
 };
 use strum_macros::{
@@ -33,13 +32,13 @@ use fuel_core_relayer::Config as RelayerConfig;
 
 pub use fuel_core_poa::Trigger;
 
+use crate::database::DatabaseConfig;
+
 #[derive(Clone, Debug)]
 pub struct Config {
     pub addr: SocketAddr,
     pub api_request_timeout: Duration,
-    pub max_database_cache_size: usize,
-    pub database_path: PathBuf,
-    pub database_type: DbType,
+    pub db_config: DatabaseConfig,
     pub chain_config: ChainConfig,
     pub chain_state: StateConfig,
     /// When `true`:
@@ -74,14 +73,12 @@ pub struct Config {
 
 impl Config {
     pub fn local_node() -> Self {
-        let chain_params = ChainConfig::local_testnet();
+        let chain_config = ChainConfig::local_testnet();
         let chain_state = StateConfig::local_testnet();
         let utxo_validation = false;
         let min_gas_price = 0;
 
-        Self {
-            addr: SocketAddr::new(Ipv4Addr::new(127, 0, 0, 1).into(), 0),
-            api_request_timeout: Duration::from_secs(60),
+        let db_config = DatabaseConfig {
             // Set the cache for tests = 10MB
             max_database_cache_size: 10 * 1024 * 1024,
             database_path: Default::default(),
@@ -89,14 +86,20 @@ impl Config {
             database_type: DbType::RocksDb,
             #[cfg(not(feature = "rocksdb"))]
             database_type: DbType::InMemory,
+        };
+
+        Self {
+            addr: SocketAddr::new(Ipv4Addr::new(127, 0, 0, 1).into(), 0),
+            api_request_timeout: Duration::from_secs(60),
+            db_config,
             debug: true,
-            chain_config: chain_params.clone(),
+            chain_config: chain_config.clone(),
             chain_state: chain_state.clone(),
             block_production: Trigger::Instant,
             vm: Default::default(),
             utxo_validation,
             txpool: fuel_core_txpool::Config {
-                chain_config: chain_params,
+                chain_config,
                 min_gas_price,
                 utxo_validation,
                 transaction_ttl: Duration::from_secs(60 * 100000000),

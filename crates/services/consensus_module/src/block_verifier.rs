@@ -61,7 +61,7 @@ where
         match consensus {
             Consensus::Genesis(_) => {
                 let expected_genesis_height =
-                    self.config.chain_params.height.unwrap_or_default();
+                    self.config.chain_config.height.unwrap_or_default();
                 verify_genesis_block_fields(expected_genesis_height, block.header())
             }
             Consensus::PoA(_) => {
@@ -79,7 +79,7 @@ where
         match consensus {
             Consensus::Genesis(_) => true,
             Consensus::PoA(consensus) => fuel_core_poa::verifier::verify_consensus(
-                &self.config.chain_params.consensus,
+                &self.config.chain_config.consensus,
                 header,
                 consensus,
             ),

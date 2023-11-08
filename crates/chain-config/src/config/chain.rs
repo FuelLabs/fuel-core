@@ -31,7 +31,7 @@ use crate::{
 };
 
 pub const LOCAL_TESTNET: &str = "local_testnet";
-pub const CHAIN_PARAMS_FILENAME: &str = "chain_params.json";
+pub const CHAIN_CONFIG_FILENAME: &str = "chain_config.json";
 
 #[serde_as]
 // TODO: Remove not consensus/network fields from `ChainConfig` or create a new config only
@@ -65,7 +65,7 @@ impl ChainConfig {
 
     #[cfg(feature = "std")]
     pub fn load_from_directory(path: impl AsRef<Path>) -> Result<Self, anyhow::Error> {
-        let path = path.as_ref().join(CHAIN_PARAMS_FILENAME);
+        let path = path.as_ref().join(CHAIN_CONFIG_FILENAME);
 
         let contents = std::fs::read(&path)?;
         serde_json::from_slice(&contents).map_err(|e| {
@@ -80,7 +80,7 @@ impl ChainConfig {
     pub fn create_config_file(&self, path: impl AsRef<Path>) -> anyhow::Result<()> {
         use anyhow::Context;
 
-        let state_writer = File::create(path.as_ref().join(CHAIN_PARAMS_FILENAME))?;
+        let state_writer = File::create(path.as_ref().join(CHAIN_CONFIG_FILENAME))?;
 
         serde_json::to_writer_pretty(state_writer, self)
             .context("failed to dump chain parameters snapshot to JSON")?;
