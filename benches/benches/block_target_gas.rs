@@ -194,15 +194,12 @@ fn service_with_contract_id(
     config.block_production = Trigger::Instant;
 
     // Override state size if the env var is set
-    let state_size_env_var = "STATE_SIZE";
-    let state_size = if let Some(value) = std::env::var_os(state_size_env_var) {
+    let state_size = std::env::var_os("STATE_SIZE").map(|value| {
         let value = value.to_str().unwrap();
         let value = value.parse::<u64>().unwrap();
         println!("Overriding state size with {}", value);
         value
-    } else {
-        STATE_SIZE
-    };
+    }).unwrap_or(STATE_SIZE);
 
     database
         .init_contract_state(
