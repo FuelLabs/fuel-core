@@ -109,7 +109,6 @@ fn run(
             let shared = service.shared.clone();
 
             let tx = fuel_core_types::fuel_tx::TransactionBuilder::script(
-                // Infinite loop
                 script.clone().into_iter().collect(),
                 script_data.clone(),
             )
@@ -194,12 +193,14 @@ fn service_with_contract_id(
     config.block_production = Trigger::Instant;
 
     // Override state size if the env var is set
-    let state_size = std::env::var_os("STATE_SIZE").map(|value| {
-        let value = value.to_str().unwrap();
-        let value = value.parse::<u64>().unwrap();
-        println!("Overriding state size with {}", value);
-        value
-    }).unwrap_or(STATE_SIZE);
+    let state_size = std::env::var_os("STATE_SIZE")
+        .map(|value| {
+            let value = value.to_str().unwrap();
+            let value = value.parse::<u64>().unwrap();
+            println!("Overriding state size with {}", value);
+            value
+        })
+        .unwrap_or(STATE_SIZE);
 
     database
         .init_contract_state(
@@ -285,7 +286,6 @@ fn run_with_service_with_extra_inputs(
 
 
             let mut tx_builder = fuel_core_types::fuel_tx::TransactionBuilder::script(
-                // Infinite loop
                 script.clone().into_iter().collect(),
                 script_data.clone(),
             );
