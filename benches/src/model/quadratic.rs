@@ -40,7 +40,8 @@ impl QuadraticCoefficients {
 
     pub fn is_quadratic(&self) -> bool {
         let a_is_nonzero = !within_epsilon(self.a, 0.0, 0.01);
-        a_is_nonzero
+        let a_is_number = self.a.is_finite() && self.a.is_normal();
+        a_is_nonzero && a_is_number
     }
 
     /// Residual sum of squares
@@ -67,7 +68,7 @@ impl QuadraticCoefficients {
     }
 
     /// R^2 = 1 - (sst/sse)
-    fn r_squared(&self, points: &Vec<(f64, f64)>) -> f64 {
+    pub(crate) fn r_squared(&self, points: &Vec<(f64, f64)>) -> f64 {
         let ssr = self.ssr(points);
         let sst = self.sst(points);
         if sst == 0.0 {
@@ -170,12 +171,7 @@ mod tests {
         let data = points.take(50).collect();
         let quadratic_coefficients =
             quadratic_regression(&data).expect("Expected quadratic regression");
-        dbg!(
-            &quadratic_coefficients,
-            quadratic_coefficients.is_constant(),
-            quadratic_coefficients.is_linear(),
-            quadratic_coefficients.is_quadratic()
-        );
+
         let quadratic_fit = quadratic_coefficients.r_squared(&data);
 
         let linear_coefficients = linear_regression(&data);
@@ -184,34 +180,36 @@ mod tests {
         dbg!(quadratic_fit, linear_fit);
     }
 
-    #[test_case(QuadraticCoefficients::new( 02.00,  10.00,  05.00); "y = 2x^2 + 10x + 5")]
-    #[test_case(QuadraticCoefficients::new(-03.00, -01.00,  10.00); "y = -3x^2 -x + 10")]
-    #[test_case(QuadraticCoefficients::new( 01.60,  04.50,  02.10); "y = 1.6x^2 + 4.5x + 2")]
-    #[test_case(QuadraticCoefficients::new( 01.25,  50.00, -13.50); "y = 0.25x + 50x -13.5")]
-    fn quadratic_regression_on_quadratic_function(coefficients: QuadraticCoefficients) {
-        let mut rng = thread_rng();
-        let function = |x: f64| {
-            let QuadraticCoefficients { a, b, c } = coefficients;
-            a * x.powi(2) - b * x + c
-        };
-        let noise =
-            |(x, y): (_, f64)| -> (f64, f64) { (x, apply_noise(y, 0.5, &mut rng)) };
-        let independent = core::iter::successors(Some(0.0), |n| Some(n + 1.0));
-        let points = independent.map(|x| (x, function(x))).map(noise);
-        let data = points.take(50).collect();
-        let quadratic_coefficients =
-            quadratic_regression(&data).expect("Expected quadratic fit");
-        dbg!(
-            &quadratic_coefficients,
-            quadratic_coefficients.is_constant(),
-            quadratic_coefficients.is_linear(),
-            quadratic_coefficients.is_quadratic()
-        );
-        let quadratic_fit = quadratic_coefficients.r_squared(&data);
-
-        let linear_coefficients = linear_regression(&data);
-        let linear_fit = linear_coefficients.r_squared(&data);
-
-        dbg!(quadratic_fit, linear_fit);
-    }
+    // #[test_case(QuadraticCoefficients::new( 02.00,  10.00); "y = log2(x) + 10")]
+    // #[test_case(QuadraticCoefficients::new( 03.00, -01.00); "y = log3(x) - 1")]
+    // #[test_case(QuadraticCoefficients::new( 2.718,  04.50); "y = ln(x) + 4.5")]
+    // #[test_case(QuadraticCoefficients::new( 00.00,  50.00); "y = log0(x) + 50")]
+    // fn quadratic_regression_on_logarithmic_function(
+    //     coefficients: LogarithmicCoefficients,
+    // ) {
+    //     let mut rng = thread_rng();
+    //     let function = |x: f64| {
+    //         let QuadraticCoefficients { a, b, c } = coefficients;
+    //         a * x.powi(2) - b * x + c
+    //     };
+    //     let noise =
+    //         |(x, y): (_, f64)| -> (f64, f64) { (x, apply_noise(y, 0.5, &mut rng)) };
+    //     let independent = core::iter::successors(Some(0.0), |n| Some(n + 1.0));
+    //     let points = independent.map(|x| (x, function(x))).map(noise);
+    //     let data = points.take(50).collect();
+    //     let quadratic_coefficients =
+    //         quadratic_regression(&data).expect("Expected quadratic fit");
+    //     dbg!(
+    //         &quadratic_coefficients,
+    //         quadratic_coefficients.is_constant(),
+    //         quadratic_coefficients.is_linear(),
+    //         quadratic_coefficients.is_quadratic()
+    //     );
+    //     let quadratic_fit = quadratic_coefficients.r_squared(&data);
+    //
+    //     let linear_coefficients = linear_regression(&data);
+    //     let linear_fit = linear_coefficients.r_squared(&data);
+    //
+    //     dbg!(quadratic_fit, linear_fit);
+    // }
 }

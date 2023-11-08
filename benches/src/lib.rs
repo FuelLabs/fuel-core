@@ -1,5 +1,5 @@
 pub mod import;
-mod model;
+pub mod model;
 
 use fuel_core::database::vm_database::VmDatabase;
 pub use fuel_core::database::Database;
@@ -29,6 +29,7 @@ use fuel_core_types::{
         *,
     },
 };
+pub use model::*;
 
 pub use rand::Rng;
 use std::iter;

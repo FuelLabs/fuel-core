@@ -1,5 +1,6 @@
 mod constant;
 mod linear;
+mod logarithmic;
 mod quadratic;
 
 use rand::Rng;
@@ -9,6 +10,7 @@ pub use linear::{
     linear_regression,
     LinearCoefficients,
 };
+pub use logarithmic::LogarithmicCoefficients;
 pub use quadratic::{
     quadratic_regression,
     QuadraticCoefficients,
@@ -42,6 +44,7 @@ impl From<LinearCoefficients> for ConstantCoefficients {
 }
 
 /// Model
+#[derive(Debug, Clone)]
 pub enum Model {
     Zero,
     Constant(ConstantCoefficients),
@@ -189,5 +192,23 @@ mod tests {
         let model = evaluate_model(&data).expect("Expected evaluation");
 
         assert!(model.is_quadratic());
+    }
+
+    #[test_case(LogarithmicCoefficients::new( 02.00,  10.00); "y = log2(x) + 10")]
+    #[test_case(LogarithmicCoefficients::new( 03.00, -01.00); "y = log3(x) - 1")]
+    #[test_case(LogarithmicCoefficients::new( 2.718,  04.50); "y = ln(x) + 4.5")]
+    #[test_case(LogarithmicCoefficients::new( 01.00,  50.00); "y = log0(x) + 50")]
+    fn evaluate_logarithmic_function(coefficients: LogarithmicCoefficients) {
+        let mut rng = StdRng::seed_from_u64(0xF00DF00D);
+        let function = |x: f64| coefficients.resolve(x);
+        let noise =
+            |(x, y): (_, f64)| -> (f64, f64) { (x, apply_noise(y, 0.5, &mut rng)) };
+        let independent = core::iter::successors(Some(0.0), |n| Some(n + 1.0));
+        let points = independent.map(|x| (x, function(x))).map(noise);
+        let data = points.take(50).collect();
+
+        let model = evaluate_model(&data).expect("Expected evaluation");
+
+        dbg!(coefficients, model);
     }
 }
