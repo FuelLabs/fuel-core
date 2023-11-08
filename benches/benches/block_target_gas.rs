@@ -22,8 +22,13 @@ use fuel_core::service::{
 use rand::SeedableRng;
 
 use ethnum::U256;
+use fuel_core::service::FuelService;
 use fuel_core_benches::*;
 use fuel_core_chain_config::ContractConfig;
+use fuel_core_storage::{
+    tables::ContractsRawCode,
+    StorageAsMut,
+};
 use fuel_core_types::{
     fuel_asm::{
         op,
@@ -55,8 +60,12 @@ use fuel_core_types::{
         AssetId,
         Bytes32,
         ContractId,
+        Word,
     },
-    fuel_vm::checked_transaction::EstimatePredicates,
+    fuel_vm::{
+        checked_transaction::EstimatePredicates,
+        consts::WORD_SIZE,
+    },
 };
 
 mod utils;
@@ -355,6 +364,52 @@ fn run_with_service_with_extra_inputs(
     });
 }
 
+pub fn replace_contract_in_service(
+    service: &mut FuelService,
+    contract_id: &ContractId,
+    contract_instructions: Vec<Instruction>,
+) {
+    let contract_bytecode: Vec<_> = contract_instructions
+        .iter()
+        .flat_map(|x| x.to_bytes())
+        .collect();
+    service
+        .shared
+        .database
+        .storage_as_mut::<ContractsRawCode>()
+        .insert(contract_id, &contract_bytecode)
+        .unwrap();
+}
+
+pub fn script_data(contract_id: &ContractId, asset_id: &AssetId) -> Vec<u8> {
+    contract_id
+        .iter()
+        .copied()
+        .chain((0 as Word).to_be_bytes().iter().copied())
+        .chain((0 as Word).to_be_bytes().iter().copied())
+        .chain(asset_id.iter().copied())
+        .collect()
+}
+
+pub fn setup_instructions() -> Vec<Instruction> {
+    vec![
+        op::gtf_args(0x10, 0x00, GTFArgs::ScriptData),
+        op::addi(0x11, 0x10, ContractId::LEN.try_into().unwrap()),
+        op::addi(0x11, 0x11, WORD_SIZE.try_into().unwrap()),
+        op::addi(0x11, 0x11, WORD_SIZE.try_into().unwrap()),
+        op::movi(0x12, TARGET_BLOCK_GAS_LIMIT as u32),
+    ]
+}
+
+pub fn call_contract_repeat() -> Vec<Instruction> {
+    let mut instructions = setup_instructions();
+    instructions.extend(vec![
+        op::call(0x10, RegId::ZERO, 0x11, 0x12),
+        op::jmpb(RegId::ZERO, 0),
+    ]);
+    instructions
+}
+
 fn block_target_gas(c: &mut Criterion) {
     let mut group = c.benchmark_group("block target estimation");
 
@@ -395,7 +450,7 @@ fn block_target_gas(c: &mut Criterion) {
 
     run_alu(&mut group);
 
-    // run_contract(&mut group);
+    run_contract(&mut group);
 
     run_crypto(&mut group);
 
