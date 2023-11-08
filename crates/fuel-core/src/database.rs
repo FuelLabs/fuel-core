@@ -1,10 +1,11 @@
 use crate::{
     database::transaction::DatabaseTransaction,
+    service::DbType,
     state::{
         in_memory::memory_store::MemoryStore,
         DataSource,
         WriteOperation,
-    }, service::DbType,
+    },
 };
 use fuel_core_chain_config::{
     ChainConfigDb,
@@ -26,7 +27,6 @@ use serde::{
     de::DeserializeOwned,
     Serialize,
 };
-use tracing::warn;
 use std::{
     fmt::{
         self,
@@ -35,8 +35,10 @@ use std::{
     },
     marker::Send,
     ops::Deref,
-    sync::Arc, path::PathBuf,
+    path::PathBuf,
+    sync::Arc,
 };
+use tracing::warn;
 
 pub use fuel_core_database::Error;
 pub type Result<T> = core::result::Result<T, Error>;
@@ -145,9 +147,7 @@ impl Column {
     }
 }
 
-#[derive(
-    Clone, Debug, Eq, PartialEq,
-)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct DatabaseConfig {
     pub database_path: PathBuf,
     pub database_type: DbType,

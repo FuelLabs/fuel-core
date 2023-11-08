@@ -1,8 +1,27 @@
-use std::{
-    marker::PhantomData,
-    path::Path, io::{Write, BufWriter, Cursor, Read, Seek, BufReader, IntoInnerError, BufRead}, sync::{Arc, atomic::AtomicU64},
+use bincode::config::{
+    Configuration,
+    LittleEndian,
+    NoLimit,
+    Varint,
 };
-use bincode::config::{Configuration, LittleEndian, NoLimit, Varint};
+use std::{
+    io::{
+        BufRead,
+        BufReader,
+        BufWriter,
+        Cursor,
+        IntoInnerError,
+        Read,
+        Seek,
+        Write,
+    },
+    marker::PhantomData,
+    path::Path,
+    sync::{
+        atomic::AtomicU64,
+        Arc,
+    },
+};
 
 use fuel_core_types::fuel_types::{
     Bytes32,
@@ -194,7 +213,10 @@ impl<W: Write + Debug> StateWriter<W> {
         }
     }
 
-    pub fn write_batch(&mut self, coins: Vec<impl serde::Serialize>) -> anyhow::Result<()> {
+    pub fn write_batch(
+        &mut self,
+        coins: Vec<impl serde::Serialize>,
+    ) -> anyhow::Result<()> {
         bincode::serde::encode_into_std_write(
             coins,
             &mut self.dest,
@@ -282,28 +304,27 @@ mod tests {
 
     #[test]
     fn test() {
-        /*
-        let mut importer = StateImporter::<CoinConfig> {
-            phantom_data: std::marker::PhantomData,
-        };
-
-        let next_item = importer.next();
-        let cursor = importer.current_cursor();
-
-        for coin in importer {}
-
-        let mut importer = importer.messages();
-
-        let next_item = importer.next();
-        let cursor = importer.current_cursor();
-
-        for message in importer {}
-
-        let mut importer = importer.contracts();
-
-        let next_item = importer.next();
-        let cursor = importer.current_cursor();
-
-        for contract in importer {} */
+        // let mut importer = StateImporter::<CoinConfig> {
+        // phantom_data: std::marker::PhantomData,
+        // };
+        //
+        // let next_item = importer.next();
+        // let cursor = importer.current_cursor();
+        //
+        // for coin in importer {}
+        //
+        // let mut importer = importer.messages();
+        //
+        // let next_item = importer.next();
+        // let cursor = importer.current_cursor();
+        //
+        // for message in importer {}
+        //
+        // let mut importer = importer.contracts();
+        //
+        // let next_item = importer.next();
+        // let cursor = importer.current_cursor();
+        //
+        // for contract in importer {}
     }
 }
