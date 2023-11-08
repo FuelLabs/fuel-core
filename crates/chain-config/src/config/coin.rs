@@ -1,29 +1,15 @@
 use crate::{
-    serialization::{
-        HexNumber,
-        HexType,
-    },
+    serialization::{HexNumber, HexType},
     GenesisCommitment,
 };
 use fuel_core_storage::MerkleRoot;
 use fuel_core_types::{
     entities::coins::coin::CompressedCoin,
     fuel_crypto::Hasher,
-    fuel_types::{
-        Address,
-        AssetId,
-        BlockHeight,
-        Bytes32,
-    },
+    fuel_types::{Address, AssetId, BlockHeight, Bytes32},
 };
-use serde::{
-    Deserialize,
-    Serialize,
-};
-use serde_with::{
-    serde_as,
-    skip_serializing_none,
-};
+use serde::{Deserialize, Serialize};
+use serde_with::{serde_as, skip_serializing_none};
 
 #[skip_serializing_none]
 #[serde_as]
@@ -54,6 +40,22 @@ pub struct CoinConfig {
     pub amount: u64,
     #[serde_as(as = "HexType")]
     pub asset_id: AssetId,
+}
+
+#[cfg(all(test, feature = "random"))]
+impl CoinConfig {
+    pub fn random(rng: &mut impl ::rand::Rng) -> Self {
+        Self {
+            tx_id: Some(super::random_bytes_32(rng).into()),
+            output_index: Some(rng.gen()),
+            tx_pointer_block_height: Some(BlockHeight::new(rng.gen())),
+            tx_pointer_tx_idx: Some(rng.gen()),
+            maturity: Some(BlockHeight::new(rng.gen())),
+            owner: Address::new(super::random_bytes_32(rng)),
+            amount: rng.gen(),
+            asset_id: AssetId::new(super::random_bytes_32(rng)),
+        }
+    }
 }
 
 impl GenesisCommitment for CompressedCoin {

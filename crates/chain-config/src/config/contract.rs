@@ -1,28 +1,10 @@
-use crate::serialization::{
-    HexNumber,
-    HexType,
-};
+use crate::serialization::{HexNumber, HexType};
 use fuel_core_types::{
-    fuel_tx::{
-        Contract,
-        ContractId,
-        StorageSlot,
-    },
-    fuel_types::{
-        AssetId,
-        BlockHeight,
-        Bytes32,
-        Salt,
-    },
+    fuel_tx::{Contract, ContractId, StorageSlot},
+    fuel_types::{AssetId, BlockHeight, Bytes32, Salt},
 };
-use serde::{
-    Deserialize,
-    Serialize,
-};
-use serde_with::{
-    serde_as,
-    skip_serializing_none,
-};
+use serde::{Deserialize, Serialize};
+use serde_with::{serde_as, skip_serializing_none};
 
 #[skip_serializing_none]
 #[serde_as]
@@ -60,6 +42,24 @@ pub struct ContractConfig {
     #[serde_as(as = "Option<HexNumber>")]
     #[serde(default)]
     pub tx_pointer_tx_idx: Option<u16>,
+}
+
+#[cfg(all(test, feature = "random"))]
+impl ContractConfig {
+    pub fn random(rng: &mut impl ::rand::Rng) -> Self {
+        Self {
+            contract_id: ContractId::new(super::random_bytes_32(rng)),
+            code: (super::random_bytes_32(rng)).to_vec(),
+            salt: Salt::new(super::random_bytes_32(rng)),
+            tx_id: Some(super::random_bytes_32(rng).into()),
+            output_index: Some(rng.gen()),
+            tx_pointer_block_height: Some(BlockHeight::from(rng.gen::<u32>())),
+            tx_pointer_tx_idx: Some(rng.gen()),
+            // not populated since they have to be removed from the ContractConfig
+            balances: None,
+            state: None,
+        }
+    }
 }
 
 impl ContractConfig {

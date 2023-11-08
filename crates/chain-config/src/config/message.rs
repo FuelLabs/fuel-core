@@ -1,8 +1,5 @@
 use crate::{
-    serialization::{
-        HexNumber,
-        HexType,
-    },
+    serialization::{HexNumber, HexType},
     GenesisCommitment,
 };
 use fuel_core_storage::MerkleRoot;
@@ -11,15 +8,9 @@ use fuel_core_types::{
     entities::message::Message,
     fuel_asm::Word,
     fuel_crypto::Hasher,
-    fuel_types::{
-        Address,
-        Nonce,
-    },
+    fuel_types::{Address, Nonce},
 };
-use serde::{
-    Deserialize,
-    Serialize,
-};
+use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 
 #[serde_as]
@@ -38,6 +29,20 @@ pub struct MessageConfig {
     /// The block height from the parent da layer that originated this message
     #[serde_as(as = "HexNumber")]
     pub da_height: DaBlockHeight,
+}
+
+#[cfg(all(test, feature = "random"))]
+impl MessageConfig {
+    pub fn random(rng: &mut impl rand::Rng) -> Self {
+        MessageConfig {
+            sender: Address::new(super::random_bytes_32(rng)),
+            recipient: Address::new(super::random_bytes_32(rng)),
+            nonce: Nonce::new(super::random_bytes_32(rng)),
+            amount: rng.gen(),
+            data: (super::random_bytes_32(rng)).to_vec(),
+            da_height: DaBlockHeight(rng.gen()),
+        }
+    }
 }
 
 impl From<MessageConfig> for Message {
