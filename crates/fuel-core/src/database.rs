@@ -38,7 +38,6 @@ use std::{
     path::PathBuf,
     sync::Arc,
 };
-use tracing::warn;
 
 pub use fuel_core_database::Error;
 pub type Result<T> = core::result::Result<T, Error>;
@@ -54,6 +53,8 @@ use std::path::Path;
 use strum::EnumCount;
 #[cfg(feature = "rocksdb")]
 use tempfile::TempDir;
+#[cfg(feature = "rocksdb")]
+use tracing::warn;
 
 // Storages implementation
 // TODO: Move to separate `database/storage` folder, because it is only implementation of storages traits.
@@ -214,7 +215,7 @@ impl Database {
             }
             DbType::InMemory => Ok(Database::in_memory()),
             #[cfg(not(feature = "rocksdb"))]
-            _ => Database::in_memory(),
+            _ => Ok(Database::in_memory()),
         }
     }
 
