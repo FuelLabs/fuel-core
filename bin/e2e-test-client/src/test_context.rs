@@ -157,7 +157,7 @@ impl Wallet {
         // build transaction
         let mut tx = TransactionBuilder::script(Default::default(), Default::default());
         tx.gas_price(1);
-        tx.gas_limit(BASE_AMOUNT);
+        tx.script_gas_limit(BASE_AMOUNT);
 
         for coin in coins {
             if let CoinType::Coin(coin) = coin {

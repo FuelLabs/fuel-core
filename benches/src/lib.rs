@@ -220,7 +220,7 @@ impl VmBench {
         self
     }
 
-    pub fn with_gas_limit(mut self, gas_limit: Word) -> Self {
+    pub fn with_script_gas_limit(mut self, gas_limit: Word) -> Self {
         self.gas_limit = gas_limit;
         self
     }
@@ -419,7 +419,7 @@ impl TryFrom<VmBench> for VmBenchPrepared {
         p.gas_costs = GasCosts::free();
         let mut tx = tx
             .gas_price(gas_price)
-            .gas_limit(gas_limit)
+            .script_gas_limit(gas_limit)
             .maturity(maturity)
             .with_params(p.clone())
             .finalize();

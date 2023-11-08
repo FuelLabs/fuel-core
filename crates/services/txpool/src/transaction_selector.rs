@@ -91,7 +91,7 @@ mod tests {
                     vec![],
                 )
                 .gas_price(tx_gas.price)
-                .gas_limit(tx_gas.limit)
+                .script_gas_limit(tx_gas.limit)
                 .add_unsigned_coin_input(
                     SecretKey::random(&mut rng),
                     rng.gen(),
@@ -118,7 +118,7 @@ mod tests {
         select_transactions(txs.into_iter(), block_gas_limit)
             .into_iter()
             .map(|tx| TxGas {
-                limit: tx.gas_limit().unwrap_or_default(),
+                limit: tx.script_gas_limit().unwrap_or_default(),
                 price: tx.price(),
             })
             .collect()

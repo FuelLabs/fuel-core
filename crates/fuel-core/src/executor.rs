@@ -1891,7 +1891,7 @@ mod tests {
         .collect();
 
         let script = TxBuilder::new(2322)
-            .gas_limit(fuel_tx::TxParameters::DEFAULT.max_gas_per_tx >> 1)
+            .script_gas_limit(fuel_tx::TxParameters::DEFAULT.max_gas_per_tx >> 1)
             .start_script(script, script_data)
             .contract_input(contract_id)
             .coin_input(asset_id, input_amount)
@@ -1910,7 +1910,7 @@ mod tests {
         let transactions = (1..num_txs + 1)
             .map(|i| {
                 TxBuilder::new(2322u64)
-                    .gas_limit(10)
+                    .script_gas_limit(10)
                     .coin_input(AssetId::default(), (i as Word) * 100)
                     .coin_output(AssetId::default(), (i as Word) * 50)
                     .change_output(AssetId::default())
@@ -2037,7 +2037,7 @@ mod tests {
             let limit = 0;
             let gas_price_factor = 1;
             let script = TxBuilder::new(1u64)
-                .gas_limit(limit)
+                .script_gas_limit(limit)
                 // Set a price for the test
                 .gas_price(price)
                 .coin_input(AssetId::BASE, 10000)
@@ -2129,7 +2129,7 @@ mod tests {
             assert_eq!(amount, expected_fee_amount_1);
 
             let script = TxBuilder::new(2u64)
-                .gas_limit(limit)
+                .script_gas_limit(limit)
                 // Set a price for the test
                 .gas_price(price)
                 .coin_input(AssetId::BASE, 10000)
@@ -2214,7 +2214,7 @@ mod tests {
             let limit = 0;
             let gas_price_factor = 1;
             let script = TxBuilder::new(2322u64)
-                .gas_limit(limit)
+                .script_gas_limit(limit)
                 // Set a price for the test
                 .gas_price(price)
                 .coin_input(AssetId::BASE, 10000)
@@ -2254,7 +2254,7 @@ mod tests {
             let limit = 0;
             let gas_price_factor = 1;
             let script = TxBuilder::new(2322u64)
-                .gas_limit(limit)
+                .script_gas_limit(limit)
                 // Set a price for the test
                 .gas_price(price)
                 .coin_input(AssetId::BASE, 10000)
@@ -2332,7 +2332,7 @@ mod tests {
                 expected_in_tx_coinbase: ContractId,
             ) -> bool {
                 let script = TxBuilder::new(2322u64)
-                    .gas_limit(100000)
+                    .script_gas_limit(100000)
                     // Set a price for the test
                     .gas_price(0)
                     .start_script(vec![
@@ -2576,7 +2576,7 @@ mod tests {
                 Default::default(),
                 Default::default(),
             )
-            .gas_limit(gas_limit)
+            .script_gas_limit(gas_limit)
             .gas_price(gas_price)
             .finalize();
         let max_fee: u64 = script
@@ -2807,7 +2807,7 @@ mod tests {
         let fake_output_amount = 100;
 
         let tx: Transaction = TxBuilder::new(2322u64)
-            .gas_limit(1)
+            .script_gas_limit(1)
             .coin_input(Default::default(), input_amount)
             .change_output(Default::default())
             .build()
@@ -2852,7 +2852,7 @@ mod tests {
     fn executor_invalidates_blocks_with_diverging_tx_commitment() {
         let mut rng = StdRng::seed_from_u64(2322u64);
         let tx: Transaction = TxBuilder::new(2322u64)
-            .gas_limit(1)
+            .script_gas_limit(1)
             .coin_input(Default::default(), 10)
             .change_output(Default::default())
             .build()
@@ -3040,7 +3040,7 @@ mod tests {
         // transaction `tx1` and produce a block [tx2, tx3] with the expected order.
         let tx1 = TransactionBuilder::script(vec![], vec![])
             .add_random_fee_input()
-            .gas_limit(1000000)
+            .script_gas_limit(1000000)
             .gas_price(1000000)
             .finalize_as_transaction();
         let (tx2, tx3) = setup_executable_script();
@@ -3127,7 +3127,7 @@ mod tests {
 
         let (create, contract_id) = create_contract(vec![], &mut rng);
         let non_modify_state_tx: Transaction = TxBuilder::new(2322)
-            .gas_limit(10000)
+            .script_gas_limit(10000)
             .coin_input(AssetId::zeroed(), 10000)
             .start_script(vec![op::ret(1)], vec![])
             .contract_input(contract_id)
@@ -3307,7 +3307,7 @@ mod tests {
         .collect();
 
         let modify_balance_and_state_tx = TxBuilder::new(2322)
-            .gas_limit(10000)
+            .script_gas_limit(10000)
             .coin_input(AssetId::zeroed(), 10000)
             .start_script(script, script_data)
             .contract_input(contract_id)
@@ -3423,7 +3423,7 @@ mod tests {
         .collect();
 
         let modify_balance_and_state_tx = TxBuilder::new(2322)
-            .gas_limit(10000)
+            .script_gas_limit(10000)
             .coin_input(AssetId::zeroed(), 10000)
             .start_script(script, script_data)
             .contract_input(contract_id)
@@ -3503,7 +3503,7 @@ mod tests {
         let transfer_amount = 100 as Word;
         let asset_id = AssetId::from([2; 32]);
         let mut foreign_transfer = TxBuilder::new(2322)
-            .gas_limit(10000)
+            .script_gas_limit(10000)
             .coin_input(AssetId::zeroed(), 10000)
             .start_script(vec![op::ret(1)], vec![])
             .coin_input(asset_id, transfer_amount)
@@ -4270,7 +4270,7 @@ mod tests {
         // return current block height
         let script = vec![op::bhei(0x10), op::ret(0x10)];
         let tx = TransactionBuilder::script(script.into_iter().collect(), vec![])
-            .gas_limit(10000)
+            .script_gas_limit(10000)
             .add_unsigned_coin_input(
                 SecretKey::random(&mut rng),
                 rng.gen(),
@@ -4348,7 +4348,7 @@ mod tests {
         // return current block height
         let script = vec![op::bhei(0x10), op::time(0x11, 0x10), op::ret(0x11)];
         let tx = TransactionBuilder::script(script.into_iter().collect(), vec![])
-            .gas_limit(10000)
+            .script_gas_limit(10000)
             .add_unsigned_coin_input(
                 SecretKey::random(&mut rng),
                 rng.gen(),

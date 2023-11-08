@@ -5,9 +5,9 @@ use crate::{
     fuel_asm::Word,
     fuel_tx::{
         field::{
-            GasLimit,
             Inputs,
             Outputs,
+            ScriptGasLimit,
         },
         Cacheable,
         Chargeable,
@@ -86,9 +86,11 @@ impl PoolTransaction {
 
 #[allow(missing_docs)]
 impl PoolTransaction {
-    pub fn gas_limit(&self) -> Option<Word> {
+    pub fn script_gas_limit(&self) -> Option<Word> {
         match self {
-            PoolTransaction::Script(script) => Some(*script.transaction().gas_limit()),
+            PoolTransaction::Script(script) => {
+                Some(*script.transaction().script_gas_limit())
+            }
             PoolTransaction::Create(_) => None,
         }
     }

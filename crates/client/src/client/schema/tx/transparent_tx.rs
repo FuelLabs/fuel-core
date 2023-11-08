@@ -81,8 +81,8 @@ pub struct TransactionEdge {
 #[derive(cynic::QueryFragment, Debug)]
 #[cynic(schema_path = "./assets/schema.sdl")]
 pub struct Transaction {
-    /// The field of the `Transaction` type.
-    pub gas_limit: Option<U64>,
+    /// The field of the `Transaction::Script` type.
+    pub script_gas_limit: Option<U64>,
     /// The field of the `Transaction` type.
     pub id: TransactionId,
     /// The field of the `Transaction::Mint`.
@@ -157,7 +157,7 @@ impl TryFrom<Transaction> for fuel_tx::Transaction {
     fn try_from(tx: Transaction) -> Result<Self, Self::Error> {
         let tx = if tx.is_script {
             let mut script = fuel_tx::Transaction::script(
-                tx.gas_limit
+                tx.script_gas_limit
                     .ok_or_else(|| {
                         ConversionError::MissingField("gas_limit".to_string())
                     })?

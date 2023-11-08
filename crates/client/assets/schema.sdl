@@ -859,7 +859,7 @@ type Transaction {
 	inputContract: InputContract
 	policies: Policies
 	gasPrice: U64
-	gasLimit: U64
+	scriptGasLimit: U64
 	maturity: U32
 	mintAmount: U64
 	mintAssetId: AssetId

@@ -6,8 +6,8 @@ use fuel_core_chain_config::ContractConfig;
 use fuel_core_types::{
     fuel_tx::{
         field::{
-            GasLimit,
             GasPrice,
+            ScriptGasLimit,
         },
         Receipt,
         ScriptExecutionResult,
@@ -110,7 +110,7 @@ pub async fn non_specific_transaction(ctx: &TestContext) -> Result<(), Failed> {
         .expect("Should be able do decode the Transaction");
 
     if let Some(script) = dry_run.as_script_mut() {
-        *script.gas_limit_mut() = 100000;
+        *script.script_gas_limit_mut() = 100000;
         script.set_gas_price(0);
     }
 

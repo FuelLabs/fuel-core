@@ -47,7 +47,7 @@ async fn transaction_with_valid_predicate_is_executed() {
                 vec![],
             ))
             .add_output(Output::change(rng.gen(), 0, asset_id))
-            .gas_limit(limit)
+            .script_gas_limit(limit)
             .finalize();
 
     assert_eq!(predicate_tx.inputs()[0].predicate_gas_used().unwrap(), 0);

@@ -152,7 +152,7 @@ async fn test_regression_in_subscribe() {
 
     let mut empty_script =
         TransactionBuilder::script(vec![op::ret(0)].into_iter().collect(), vec![]);
-    empty_script.gas_limit(100000);
+    empty_script.script_gas_limit(100000);
 
     let empty_create = TransactionBuilder::create(rng.gen(), rng.gen(), vec![]);
     let txs = [

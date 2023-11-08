@@ -51,7 +51,6 @@ use fuel_core_types::{
         field::{
             BytecodeLength,
             BytecodeWitnessIndex,
-            GasLimit,
             InputContract,
             Inputs,
             Maturity,
@@ -64,6 +63,7 @@ use fuel_core_types::{
             Salt as SaltField,
             Script as ScriptField,
             ScriptData,
+            ScriptGasLimit,
             StorageSlots,
             TxPointer as TxPointerField,
             Witnesses,
@@ -370,9 +370,11 @@ impl Transaction {
         }
     }
 
-    async fn gas_limit(&self) -> Option<U64> {
+    async fn script_gas_limit(&self) -> Option<U64> {
         match &self.0 {
-            fuel_tx::Transaction::Script(script) => Some((*script.gas_limit()).into()),
+            fuel_tx::Transaction::Script(script) => {
+                Some((*script.script_gas_limit()).into())
+            }
             fuel_tx::Transaction::Create(_) => Some(0.into()),
             fuel_tx::Transaction::Mint(_) => None,
         }
