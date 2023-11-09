@@ -364,6 +364,7 @@ query {
             gasPerUnit
           }
         }
+        vmInitialization
       }
     }
   }
