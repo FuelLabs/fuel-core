@@ -2737,8 +2737,8 @@ dependencies = [
 
 [[package]]
 name = "fuel-asm"
-version = "0.40.0"
-source = "git+https://github.com/FuelLabs/fuel-vm/?branch=feature/transaction-policy#044b3a18d0c961685d2f0ae90b094f58c71ac52e"
+version = "0.41.0"
+source = "git+https://github.com/FuelLabs/fuel-vm/?branch=master#694b63636a125536346a8f5e25aa45a683312c43"
 dependencies = [
  "bitflags 2.4.1",
  "fuel-types",
@@ -2809,7 +2809,8 @@ dependencies = [
  "clap 4.4.7",
  "criterion",
  "ctrlc",
- "ed25519-dalek 1.0.1",
+ "digest 0.10.7",
+ "ed25519-dalek 2.0.0",
  "ethnum",
  "fuel-core",
  "fuel-core-services",
@@ -2819,11 +2820,11 @@ dependencies = [
  "futures",
  "nalgebra",
  "p256 0.13.2",
- "rand 0.7.3",
  "rand 0.8.5",
  "serde",
  "serde_json",
  "serde_yaml",
+ "sha2 0.10.8",
  "test-case",
  "test-helpers",
  "tikv-jemallocator",
@@ -3256,8 +3257,8 @@ dependencies = [
 
 [[package]]
 name = "fuel-crypto"
-version = "0.40.0"
-source = "git+https://github.com/FuelLabs/fuel-vm/?branch=feature/transaction-policy#69c08efc8fea39a878b0b9a4e6fa6fa8ce028d3f"
+version = "0.41.0"
+source = "git+https://github.com/FuelLabs/fuel-vm/?branch=master#694b63636a125536346a8f5e25aa45a683312c43"
 dependencies = [
  "coins-bip32",
  "coins-bip39",
@@ -3276,8 +3277,8 @@ dependencies = [
 
 [[package]]
 name = "fuel-derive"
-version = "0.40.0"
-source = "git+https://github.com/FuelLabs/fuel-vm/?branch=feature/transaction-policy#69c08efc8fea39a878b0b9a4e6fa6fa8ce028d3f"
+version = "0.41.0"
+source = "git+https://github.com/FuelLabs/fuel-vm/?branch=master#694b63636a125536346a8f5e25aa45a683312c43"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -3287,8 +3288,8 @@ dependencies = [
 
 [[package]]
 name = "fuel-merkle"
-version = "0.40.0"
-source = "git+https://github.com/FuelLabs/fuel-vm/?branch=feature/transaction-policy#69c08efc8fea39a878b0b9a4e6fa6fa8ce028d3f"
+version = "0.41.0"
+source = "git+https://github.com/FuelLabs/fuel-vm/?branch=master#694b63636a125536346a8f5e25aa45a683312c43"
 dependencies = [
  "derive_more",
  "digest 0.10.7",
@@ -3301,13 +3302,13 @@ dependencies = [
 
 [[package]]
 name = "fuel-storage"
-version = "0.40.0"
-source = "git+https://github.com/FuelLabs/fuel-vm/?branch=feature/transaction-policy#69c08efc8fea39a878b0b9a4e6fa6fa8ce028d3f"
+version = "0.41.0"
+source = "git+https://github.com/FuelLabs/fuel-vm/?branch=master#694b63636a125536346a8f5e25aa45a683312c43"
 
 [[package]]
 name = "fuel-tx"
-version = "0.40.0"
-source = "git+https://github.com/FuelLabs/fuel-vm/?branch=feature/transaction-policy#69c08efc8fea39a878b0b9a4e6fa6fa8ce028d3f"
+version = "0.41.0"
+source = "git+https://github.com/FuelLabs/fuel-vm/?branch=master#694b63636a125536346a8f5e25aa45a683312c43"
 dependencies = [
  "bitflags 2.4.1",
  "derivative",
@@ -3327,8 +3328,8 @@ dependencies = [
 
 [[package]]
 name = "fuel-types"
-version = "0.40.0"
-source = "git+https://github.com/FuelLabs/fuel-vm/?branch=feature/transaction-policy#69c08efc8fea39a878b0b9a4e6fa6fa8ce028d3f"
+version = "0.41.0"
+source = "git+https://github.com/FuelLabs/fuel-vm/?branch=master#694b63636a125536346a8f5e25aa45a683312c43"
 dependencies = [
  "fuel-derive",
  "hex",
@@ -3338,8 +3339,8 @@ dependencies = [
 
 [[package]]
 name = "fuel-vm"
-version = "0.40.0"
-source = "git+https://github.com/FuelLabs/fuel-vm/?branch=feature/transaction-policy#69c08efc8fea39a878b0b9a4e6fa6fa8ce028d3f"
+version = "0.41.0"
+source = "git+https://github.com/FuelLabs/fuel-vm/?branch=master#694b63636a125536346a8f5e25aa45a683312c43"
 dependencies = [
  "anyhow",
  "async-trait",

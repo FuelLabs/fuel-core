@@ -244,6 +244,7 @@ include_from_impls_and_cynic! {
         // Non-opcodes prices
         pub contract_root: DependentCost,
         pub state_root: DependentCost,
+        pub vm_initialization: U64,
     }
 }
 

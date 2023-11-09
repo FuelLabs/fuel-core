@@ -117,4 +117,4 @@ tempfile = "3.4"
 tikv-jemallocator = "0.5"
 
 [patch.crates-io]
-fuel-vm = { git = "https://github.com/FuelLabs/fuel-vm/", branch = "feature/transaction-policy" }
+fuel-vm = { git = "https://github.com/FuelLabs/fuel-vm/", branch = "master" }

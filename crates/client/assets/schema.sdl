@@ -386,6 +386,7 @@ type GasCosts {
 	swwq: DependentCost!
 	contractRoot: DependentCost!
 	stateRoot: DependentCost!
+	vmInitialization: U64!
 }
 
 type Genesis {
