@@ -13,7 +13,6 @@ use std::{
     },
     time::Instant,
 };
-use tai64::Tai64;
 /// Contains types and logic for Peer Reputation
 pub mod peer_reputation;
 
@@ -144,7 +143,7 @@ impl From<PeerId> for Vec<u8> {
 
 impl Display for PeerId {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        bs58::encode(&self.0).fmt(f)
+        f.write_str(&bs58::encode(&self.0).into_string())
     }
 }
 
@@ -159,14 +158,22 @@ impl PeerId {
     }
 }
 
+/// Contains metadata about a connected peer
 pub struct PeerInfo {
+    /// all known multi-addresses of the peer
     pub peer_addresses: HashSet<String>,
+    /// the version of fuel-core reported by the peer
     pub client_version: Option<String>,
+    /// recent heartbeat from the peer
     pub heartbeat_data: HeartbeatData,
+    /// the current application reputation score of the peer
     pub app_score: f64,
 }
 
+/// Contains information from the most recent heartbeat received by the peer
 pub struct HeartbeatData {
+    /// The currently reported block height of the peer
     pub block_height: Option<BlockHeight>,
+    /// The instant representing when the latest heartbeat was received.
     pub last_heartbeat: Option<Instant>,
 }

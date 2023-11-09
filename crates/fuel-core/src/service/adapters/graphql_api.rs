@@ -66,7 +66,6 @@ use fuel_core_types::{
     services::{
         graphql_api::ContractBalance,
         p2p::{
-            HeartbeatData,
             PeerId,
             PeerInfo,
         },
@@ -274,6 +273,7 @@ impl DryRunExecution for BlockProducerAdapter {
 
 impl BlockProducerPort for BlockProducerAdapter {}
 
+#[async_trait::async_trait]
 impl P2pPort for P2PAdapter {
     async fn connected_peers(&self) -> anyhow::Result<Vec<PeerId>> {
         if let Some(service) = &self.service {
@@ -288,31 +288,25 @@ impl P2pPort for P2PAdapter {
         }
     }
 
-    async fn peer_info(&self, peer_id: &PeerId) -> anyhow::Result<Option<PeerInfo>> {
+    async fn all_peer_info(&self) -> anyhow::Result<Vec<(PeerId, PeerInfo)>> {
         if let Some(service) = &self.service {
-            service
-                .get_peer_info(peer_id.clone().into())
-                .await
-                .map(|peer_info| {
-                    peer_info.map(|peer_info| PeerInfo {
-                        peer_addresses: peer_info
-                            .peer_addresses
-                            .iter()
-                            .map(|addresses| addresses.to_string())
-                            .collect(),
-                        client_version: peer_info.client_version,
-                        heartbeat_data: HeartbeatData {
-                            block_height: peer_info.heartbeat_data.block_height,
-                            last_heartbeat: peer_info
-                                .heartbeat_data
-                                .last_heartbeat
-                                .map(Into::into),
+            let peers = service.get_all_peers().await?;
+            Ok(peers
+                .into_iter()
+                .map(|(peer_id, peer_info)| {
+                    (
+                        PeerId::from(peer_id.to_bytes()),
+                        PeerInfo {
+                            peer_addresses: peer_info.peer_addresses.iter().map(),
+                            client_version: None,
+                            heartbeat_data: HeartbeatData {},
+                            app_score: 0.0,
                         },
-                        app_score: peer_info.score,
-                    })
+                    )
                 })
+                .collect())
         } else {
-            Ok(None)
+            Ok(vec![])
         }
     }
 }

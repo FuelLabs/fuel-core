@@ -96,10 +96,9 @@ enum TaskRequest {
     BroadcastVote(Arc<ConsensusVote>),
     // Request to get one-off data from p2p network
     GetPeerIds(oneshot::Sender<Vec<PeerId>>),
-    // Request to get information about a connected peer
-    GetPeerInfo {
-        peer_id: PeerId,
-        channel: oneshot::Sender<Option<PeerInfo>>,
+    // Request to get information about all connected peers
+    GetAllPeerInfo {
+        channel: oneshot::Sender<Vec<(PeerId, PeerInfo)>>,
     },
     GetBlock {
         height: BlockHeight,
@@ -152,6 +151,9 @@ impl Debug for TaskRequest {
             }
             TaskRequest::RespondWithPeerReport { .. } => {
                 write!(f, "TaskRequest::RespondWithPeerReport")
+            }
+            TaskRequest::GetAllPeerInfo { .. } => {
+                write!(f, "TaskRequest::GetPeerInfo")
             }
         }
     }
@@ -494,7 +496,7 @@ where
                         let broadcast = GossipsubBroadcastRequest::NewTx(transaction);
                         let result = self.p2p_service.publish_message(broadcast);
                         if let Err(e) = result {
-                            tracing::error!("Got an error during transaction {} broadcasting for tx_id ({:?}): {}", transaction.cached_id(), tx_id, e);
+                            tracing::error!("Got an error during transaction {} broadcasting {}", tx_id, e);
                         }
                     }
                     Some(TaskRequest::BroadcastBlock(block)) => {
@@ -543,6 +545,13 @@ where
                     }
                     Some(TaskRequest::RespondWithPeerReport { peer_id, score, reporting_service }) => {
                         let _ = self.p2p_service.report_peer(peer_id, score, reporting_service);
+                    }
+                    Some(TaskRequest::GetAllPeerInfo { channel }) => {
+                        let peers = self.p2p_service.get_all_peer_info()
+                            .into_iter()
+                            .map(|(id, info)| (id.clone(), info.clone()))
+                            .collect::<Vec<_>>();
+                        let _ = channel.send(peers);
                     }
                     None => {
                         unreachable!("The `Task` is holder of the `Sender`, so it should not be possible");
@@ -791,17 +800,11 @@ impl SharedState {
         receiver.await.map_err(|e| anyhow!("{}", e))
     }
 
-    pub async fn get_peer_info(
-        &self,
-        peer_id: PeerId,
-    ) -> anyhow::Result<Option<PeerInfo>> {
+    pub async fn get_all_peers(&self) -> anyhow::Result<Vec<(PeerId, PeerInfo)>> {
         let (sender, receiver) = oneshot::channel();
 
         self.request_sender
-            .send(TaskRequest::GetPeerInfo {
-                peer_id,
-                channel: sender,
-            })
+            .send(TaskRequest::GetAllPeerInfo { channel: sender })
             .await?;
 
         receiver.await.map_err(|e| anyhow!("{}", e))

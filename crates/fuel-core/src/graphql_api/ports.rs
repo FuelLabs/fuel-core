@@ -208,7 +208,8 @@ pub trait DatabaseMessageProof: Send + Sync {
     ) -> StorageResult<MerkleProof>;
 }
 
+#[async_trait::async_trait]
 pub trait P2pPort: Send + Sync {
-    fn connected_peers(&self) -> Vec<PeerId>;
-    fn peer_info(&self, peer_id: &PeerId) -> anyhow::Result<Option<PeerInfo>>;
+    async fn connected_peers(&self) -> anyhow::Result<Vec<PeerId>>;
+    async fn all_peer_info(&self) -> anyhow::Result<Vec<(PeerId, PeerInfo)>>;
 }

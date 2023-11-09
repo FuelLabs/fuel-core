@@ -25,15 +25,8 @@ use async_graphql::{
 };
 use fuel_core_types::{
     fuel_tx,
-    fuel_types::BlockHeight,
-    fuel_vm,
     services::p2p::PeerId,
     tai64::Tai64,
-};
-use itertools::Itertools;
-use std::time::{
-    Instant,
-    UNIX_EPOCH,
 };
 
 pub struct ChainInfo;
@@ -638,39 +631,38 @@ impl GasCosts {
     }
 }
 
-#[Object]
 struct PeerInfo(PeerId, fuel_core_types::services::p2p::PeerInfo);
 
 #[Object]
 impl PeerInfo {
-    fn id(&self) -> String {
+    async fn id(&self) -> String {
         self.0.to_string()
     }
 
-    fn addresses(&self) -> Vec<String> {
-        self.1.peer_addresses.iter().collect()
+    async fn addresses(&self) -> Vec<String> {
+        self.1.peer_addresses.iter().cloned().collect()
     }
 
-    fn client_version(&self) -> Option<String> {
+    async fn client_version(&self) -> Option<String> {
         self.1.client_version.clone()
     }
 
-    fn block_height(&self) -> Option<U32> {
+    async fn block_height(&self) -> Option<U32> {
         self.1
             .heartbeat_data
             .block_height
             .map(|height| (*height).into())
     }
 
-    fn time_since_last_heartbeat(&self) -> Option<Tai64Timestamp> {
+    async fn time_since_last_heartbeat(&self) -> Option<Tai64Timestamp> {
         self.1.heartbeat_data.last_heartbeat.map(|time| {
             let time_since = time.elapsed().as_secs_f64();
-            Tai64Timestamp(Tai64::from_unix(time_since.as_i64()))
+            Tai64Timestamp(Tai64::from_unix(time_since as i64))
         })
     }
 
-    fn app_score(&self) -> f64 {
-        *self.1.app_score
+    async fn app_score(&self) -> f64 {
+        self.1.app_score
     }
 }
 
@@ -709,22 +701,14 @@ impl ChainInfo {
         height.0.into()
     }
 
-    async fn peer_count(&self, ctx: &Context<'_>) -> u16 {
-        let query: &P2pService = ctx.data_unchecked();
-        query.connected_peers().len() as u16
-    }
-
-    async fn peers(&self, ctx: &Context<'_>) -> Vec<PeerInfo> {
+    async fn peers(&self, ctx: &Context<'_>) -> anyhow::Result<Vec<PeerInfo>> {
         let p2p: &P2pService = ctx.data_unchecked();
-        p2p.connected_peers()
-            .iter()
-            .map(|peer_id| {
-                p2p.peer_info(peer_id)
-                    .map(|o| o.map(|info| (peer_id.clone(), info)))
-            })
-            .filter_map(|result| result.ok().and_then(|opt| opt))
+        let peer_info = p2p.all_peer_info().await?;
+        let peers = peer_info
+            .into_iter()
             .map(|(peer_id, peer_info)| PeerInfo(peer_id, peer_info))
-            .collect()
+            .collect();
+        Ok(peers)
     }
 
     async fn consensus_parameters(
