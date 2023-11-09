@@ -6,7 +6,7 @@ use crate::{
         contract_balance::ContractBalance,
         contract_state::ContractState,
     },
-    CoinConfig, ContractConfig, MessageConfig,
+    ContractConfig, MessageConfig,
 };
 
 use super::chain_state::ChainState;
@@ -59,12 +59,6 @@ impl JsonBatchReader {
             data: chunk,
             batch_cursor: old_batch_cursor,
         })
-    }
-}
-
-impl BatchReader<CoinConfig> for JsonBatchReader {
-    fn read_batch(&mut self) -> anyhow::Result<Option<Batch<CoinConfig>>> {
-        Ok(self.next_batch(|ctx| &ctx.source.coins))
     }
 }
 

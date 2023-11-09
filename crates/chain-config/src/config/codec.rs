@@ -1,5 +1,5 @@
 mod json;
-// mod parquet;
+mod parquet;
 // mod util;
 
 pub struct Batch<T> {

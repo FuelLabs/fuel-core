@@ -20,6 +20,7 @@ fuel-core-types = { workspace = true, default-features = false, features = [
 ] }
 hex = { version = "0.4", features = ["serde"] }
 itertools = { workspace = true, optional = true }
+parquet = "48.0.0"
 postcard = { version = "1.0", features = ["alloc"] }
 rand = { workspace = true, optional = true }
 serde = { workspace = true, features = ["derive", "rc"] }

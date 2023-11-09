@@ -2,8 +2,8 @@ use fuel_core_types::fuel_types::AssetId;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct ContractBalance {
-    asset_id: AssetId,
-    amount: u64,
+    pub asset_id: AssetId,
+    pub amount: u64,
 }
 
 #[cfg(all(test, feature = "random"))]

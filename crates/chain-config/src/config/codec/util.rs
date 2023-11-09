@@ -1,11 +1,11 @@
-// pub(crate) struct InMemorySource {
-//     // The encoded data inside a `Cursor`. Note this is not our cursor i.e. progress tracker, but
-//     // rather something rust provides so that you may mimic a file using only a Vec<u8>
-//     data: Cursor<Vec<u8>>,
-//     // also has a handy field containing the cursors of all batches encoded in `self.data`. Useful
-//     // for testing
-//     element_cursors: Vec<u64>,
-// }
+pub(crate) struct InMemorySource {
+    // The encoded data inside a `Cursor`. Note this is not our cursor i.e. progress tracker, but
+    // rather something rust provides so that you may mimic a file using only a Vec<u8>
+    data: Cursor<Vec<u8>>,
+    // also has a handy field containing the cursors of all batches encoded in `self.data`. Useful
+    // for testing
+    element_cursors: Vec<u64>,
+}
 
 // impl InMemorySource {
 //     pub fn new<T: serde::Serialize>(
