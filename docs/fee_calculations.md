@@ -1,4 +1,4 @@
-:## Fee calculations
+## Fee calculations
 
 ### Storage fees
 
