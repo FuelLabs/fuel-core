@@ -62,13 +62,13 @@ fn main() {
                     .unwrap()
                     .filter_map(|dir| {
                         let dir = dir.unwrap();
-                        dir.file_type()
-                            .unwrap()
-                            .is_file()
-                            .then(|| File::open(dir.path()).unwrap())
+                        dir.file_type().unwrap().is_file().then(|| {
+                            let r: Box<dyn BufRead> = Box::new(BufReader::new(
+                                std::fs::File::open(dir.path()).unwrap(),
+                            ));
+                            r
+                        })
                     })
-                    .map(BufReader::new)
-                    .map(Box::new)
                     .collect()
             } else {
                 let reader = BufReader::new(File::open(path).unwrap());
@@ -78,7 +78,7 @@ fn main() {
         }
         None => {
             let stdin = std::io::stdin();
-            vec![BufReader::new(stdin)]
+            vec![Box::new(BufReader::new(stdin))]
         }
     };
 
