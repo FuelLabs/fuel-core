@@ -42,6 +42,14 @@ use super::{
 pub const FUEL_BECH32_HRP: &str = "fuel";
 pub const TESTNET_INITIAL_BALANCE: u64 = 10_000_000;
 
+pub const TESTNET_WALLET_SECRETS: [&str; 5] = [
+    "0xde97d8624a438121b86a1956544bd72ed68cd69f2c99555b08b1e8c51ffd511c",
+    "0x37fa81c84ccd547c30c176b118d5cb892bdb113e8e80141f266519422ef9eefd",
+    "0x862512a2363db2b3a375c0d4bbbd27172180d89f23f2e259bac850ab02619301",
+    "0x976e5c3fa620092c718d852ca703b6da9e3075b9f2ecb8ed42d9f746bf26aafb",
+    "0x7f8a325504e7315eda997db7861c9447f5c3eff26333b20180475d94443a10c6",
+];
+
 pub const CHAIN_STATE_FILENAME: &str = "chain_state.json";
 
 // TODO: do streaming deserialization to handle large state configs
@@ -98,14 +106,7 @@ impl StateConfig {
     pub fn local_testnet() -> Self {
         // endow some preset accounts with an initial balance
         tracing::info!("Initial Accounts");
-        let secrets = [
-            "0xde97d8624a438121b86a1956544bd72ed68cd69f2c99555b08b1e8c51ffd511c",
-            "0x37fa81c84ccd547c30c176b118d5cb892bdb113e8e80141f266519422ef9eefd",
-            "0x862512a2363db2b3a375c0d4bbbd27172180d89f23f2e259bac850ab02619301",
-            "0x976e5c3fa620092c718d852ca703b6da9e3075b9f2ecb8ed42d9f746bf26aafb",
-            "0x7f8a325504e7315eda997db7861c9447f5c3eff26333b20180475d94443a10c6",
-        ];
-        let initial_coins = secrets
+        let initial_coins = TESTNET_WALLET_SECRETS
             .into_iter()
             .map(|secret| {
                 let secret = SecretKey::from_str(secret).expect("Expected valid secret");
