@@ -98,9 +98,15 @@ impl crate::executor::RelayerPort for MaybeRelayerAdapter {
         }
         #[cfg(not(feature = "relayer"))]
         {
-            let _ = id;
-            let _ = da_height;
-            Ok(None)
+            if *da_height <= self.da_deploy_height {
+                Ok(fuel_core_storage::StorageAsRef::storage::<
+                    fuel_core_storage::tables::Messages,
+                >(&self.database)
+                .get(id)?
+                .map(std::borrow::Cow::into_owned))
+            } else {
+                Ok(None)
+            }
         }
     }
 }
