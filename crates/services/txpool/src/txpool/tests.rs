@@ -1041,7 +1041,8 @@ async fn predicate_without_enough_gas_returns_out_of_gas() {
         .expect_err("Transaction should be err, got ok");
 
     assert!(
-        err.to_string().contains("PredicateExhaustedGas"),
+        err.to_string()
+            .contains("PredicateVerificationFailed(OutOfGas)"),
         "unexpected error: {err}",
     )
 }
