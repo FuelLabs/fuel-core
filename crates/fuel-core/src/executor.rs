@@ -77,6 +77,7 @@ use fuel_core_types::{
         TxPointer,
         UniqueIdentifier,
         UtxoId,
+        ValidityError,
     },
     fuel_types::{
         canonical::Serialize,
@@ -85,6 +86,7 @@ use fuel_core_types::{
     },
     fuel_vm::{
         checked_transaction::{
+            CheckError,
             CheckPredicateParams,
             CheckPredicates,
             Checked,
@@ -1802,7 +1804,6 @@ mod tests {
                 Outputs,
                 Script as ScriptField,
             },
-            CheckError,
             ConsensusParameters,
             Create,
             Finalizable,
@@ -2497,9 +2498,9 @@ mod tests {
                 .expect_err("Expected error because coinbase if invalid");
             assert!(matches!(
                 validation_err,
-                ExecutorError::InvalidTransaction(
-                    CheckError::TransactionMintIncorrectBlockHeight
-                )
+                ExecutorError::InvalidTransaction(CheckError::Validity(
+                    ValidityError::TransactionMintIncorrectBlockHeight
+                ))
             ));
         }
 
@@ -2525,9 +2526,9 @@ mod tests {
                 .expect_err("Expected error because coinbase if invalid");
             assert!(matches!(
                 validation_err,
-                ExecutorError::InvalidTransaction(
-                    CheckError::TransactionMintNonBaseAsset
-                )
+                ExecutorError::InvalidTransaction(CheckError::Validity(
+                    ValidityError::TransactionMintNonBaseAsset
+                ))
             ));
         }
 
@@ -2609,7 +2610,11 @@ mod tests {
         let produce_result = &skipped_transactions[0].1;
         assert!(matches!(
             produce_result,
-            &ExecutorError::InvalidTransaction(CheckError::InsufficientFeeAmount { expected, .. }) if expected == max_fee
+            &ExecutorError::InvalidTransaction(
+                CheckError::Validity(
+                    ValidityError::InsufficientFeeAmount { expected, .. }
+                )
+            ) if expected == max_fee
         ));
 
         // Produced block is valid
@@ -2636,7 +2641,11 @@ mod tests {
         );
         assert!(matches!(
             verify_result,
-            Err(ExecutorError::InvalidTransaction(CheckError::InsufficientFeeAmount { expected, ..})) if expected == max_fee
+            Err(ExecutorError::InvalidTransaction(
+                CheckError::Validity(
+                    ValidityError::InsufficientFeeAmount { expected, .. }
+                )
+            )) if expected == max_fee
         ))
     }
 
@@ -2918,7 +2927,9 @@ mod tests {
         // assert block failed to validate when transaction didn't contain any coin inputs
         assert!(matches!(
             err,
-            &ExecutorError::InvalidTransaction(CheckError::NoSpendableInput)
+            &ExecutorError::InvalidTransaction(CheckError::Validity(
+                ValidityError::NoSpendableInput
+            ))
         ));
     }
 
