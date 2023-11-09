@@ -27,8 +27,8 @@ serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 serde_yaml = "0.9.13"
 sha2 = { version = "0.10.8", features = [] }
-test-helpers = { path = "../tests/test-helpers" }
 test-case = { workspace = true }
+test-helpers = { path = "../tests/test-helpers" }
 tikv-jemallocator = { workspace = true }
 tokio = { workspace = true, features = ["full"] }
 
