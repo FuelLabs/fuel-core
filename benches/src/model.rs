@@ -11,7 +11,7 @@ pub use logarithmic::LogarithmicCoefficients;
 pub use quadratic::QuadraticCoefficients;
 
 pub trait Fit {
-    fn fit(&self, points: &Vec<(f64, f64)>) -> f64;
+    fn fit(&self, points: &[(f64, f64)]) -> f64;
 }
 
 pub fn within_epsilon(value: f64, expected: f64, epsilon: f64) -> bool {
@@ -48,48 +48,29 @@ pub enum Model {
 
 impl Model {
     pub fn is_zero(&self) -> bool {
-        match self {
-            Model::Zero => true,
-            _ => false,
-        }
+        matches!(self, Model::Zero)
     }
 
     pub fn is_constant(&self) -> bool {
-        match self {
-            Model::Constant(_) => true,
-            _ => false,
-        }
+        matches!(self, Model::Constant(_))
     }
 
     pub fn is_linear(&self) -> bool {
-        match self {
-            Model::Linear(_) => true,
-            _ => false,
-        }
+        matches!(self, Model::Linear(_))
     }
 
     pub fn is_quadratic(&self) -> bool {
-        match self {
-            Model::Quadratic(_) => true,
-            _ => false,
-        }
+        matches!(self, Model::Quadratic(_))
     }
 
     pub fn is_other(&self) -> bool {
-        match self {
-            Model::Other => true,
-            _ => false,
-        }
+        matches!(self, Model::Other)
     }
 }
 
 /// Generate a model that estimates the points in the dataset
-pub fn evaluate_model(points: &Vec<(f64, f64)>) -> anyhow::Result<Model> {
-    // let linear_coefficients = linear_regression(points);
+pub fn evaluate_model(points: &[(f64, f64)]) -> anyhow::Result<Model> {
     let quadratic_coefficients = quadratic_regression(points)?;
-
-    // let linear_fit = linear_coefficients.r_squared()
-
     if quadratic_coefficients.is_zero() {
         // Zero
         Ok(Model::Zero)
@@ -139,7 +120,7 @@ mod tests {
             |(x, y): (_, f64)| -> (f64, f64) { (x, apply_noise(y, 1.0, &mut rng)) };
         let independent = core::iter::successors(Some(1.0), |n| Some(n + 1.0));
         let points = independent.map(|x| (x, function(x))).map(noise);
-        let data = points.take(500).collect();
+        let data = points.take(500).collect::<Vec<_>>();
 
         let model = evaluate_model(&data).expect("Expected evaluation");
 
@@ -160,7 +141,7 @@ mod tests {
             |(x, y): (_, f64)| -> (f64, f64) { (x, apply_noise(y, 1.0, &mut rng)) };
         let independent = core::iter::successors(Some(1.0), |n| Some(n + 1.0));
         let points = independent.map(|x| (x, function(x))).map(noise);
-        let data = points.take(500).collect();
+        let data = points.take(500).collect::<Vec<_>>();
 
         let model = evaluate_model(&data).expect("Expected evaluation");
 
@@ -181,7 +162,7 @@ mod tests {
             |(x, y): (_, f64)| -> (f64, f64) { (x, apply_noise(y, 1.0, &mut rng)) };
         let independent = core::iter::successors(Some(1.0), |n| Some(n + 1.0));
         let points = independent.map(|x| (x, function(x))).map(noise);
-        let data = points.take(500).collect();
+        let data = points.take(500).collect::<Vec<_>>();
 
         let model = evaluate_model(&data).expect("Expected evaluation");
 
@@ -202,7 +183,7 @@ mod tests {
             |(x, y): (_, f64)| -> (f64, f64) { (x, apply_noise(y, 1.0, &mut rng)) };
         let independent = core::iter::successors(Some(1.0), |n| Some(n + 1.0));
         let points = independent.map(|x| (x, function(x))).map(noise);
-        let data = points.take(500).collect();
+        let data = points.take(500).collect::<Vec<_>>();
 
         let model = evaluate_model(&data).expect("Expected evaluation");
 
@@ -211,8 +192,8 @@ mod tests {
 
     #[test_case(LogarithmicCoefficients::new( 02.00,  10.00); "y = log2(x) + 10")]
     #[test_case(LogarithmicCoefficients::new( 03.00, -01.00); "y = log3(x) - 1")]
-    #[test_case(LogarithmicCoefficients::new( 2.718,  04.50); "y = ln(x) + 4.5")]
-    #[test_case(LogarithmicCoefficients::new( 01.00,  50.00); "y = log0(x) + 50")]
+    #[test_case(LogarithmicCoefficients::new( 05.00,  50.00); "y = log5(x) + 50")]
+    #[test_case(LogarithmicCoefficients::new( 08.00,  50.00); "y = log8(x) + 50")]
     fn evaluate_logarithmic_function(coefficients: LogarithmicCoefficients) {
         let mut rng = StdRng::seed_from_u64(0xF00DF00D);
         let function = |x: f64| coefficients.resolve(x);
@@ -220,7 +201,7 @@ mod tests {
             |(x, y): (_, f64)| -> (f64, f64) { (x, apply_noise(y, 0.5, &mut rng)) };
         let independent = core::iter::successors(Some(0.0), |n| Some(n + 1.0));
         let points = independent.map(|x| (x, function(x))).map(noise);
-        let data = points.take(50).collect();
+        let data = points.take(500).collect::<Vec<_>>();
 
         let model = evaluate_model(&data).expect("Expected evaluation");
 

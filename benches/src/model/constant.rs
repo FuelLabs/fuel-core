@@ -18,7 +18,7 @@ impl ConstantCoefficients {
 
 impl ConstantCoefficients {
     /// Sum of square residuals
-    fn ssr(&self, points: &Vec<(f64, f64)>) -> f64 {
+    fn ssr(&self, points: &[(f64, f64)]) -> f64 {
         let ConstantCoefficients { y } = self;
         let real_values = points.iter().map(|(_, y)| *y);
         let predicted_values = points.iter().map(|(_, _)| y);
@@ -30,7 +30,7 @@ impl ConstantCoefficients {
     }
 
     /// Sum of square errors
-    fn sst(&self, points: &Vec<(f64, f64)>) -> f64 {
+    fn sst(&self, points: &[(f64, f64)]) -> f64 {
         let real_values = points.iter().map(|(_, y)| *y);
         let avg_y = real_values.clone().sum::<f64>() / points.len() as f64;
         real_values
@@ -40,7 +40,7 @@ impl ConstantCoefficients {
     }
 
     /// R^2 = 1 - (ssr/sst)
-    pub fn r_squared(&self, points: &Vec<(f64, f64)>) -> f64 {
+    pub fn r_squared(&self, points: &[(f64, f64)]) -> f64 {
         let ssr = self.ssr(points);
         let sst = self.sst(points);
         1.0 - ssr / sst
@@ -48,7 +48,7 @@ impl ConstantCoefficients {
 }
 
 impl Fit for ConstantCoefficients {
-    fn fit(&self, points: &Vec<(f64, f64)>) -> f64 {
+    fn fit(&self, points: &[(f64, f64)]) -> f64 {
         self.r_squared(points)
     }
 }

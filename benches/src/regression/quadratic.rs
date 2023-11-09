@@ -5,7 +5,7 @@ use nalgebra::{
 
 use crate::QuadraticCoefficients;
 
-fn design_matrix(points: &Vec<(f64, f64)>) -> DMatrix<f64> {
+fn design_matrix(points: &[(f64, f64)]) -> DMatrix<f64> {
     let x_data = points.iter().map(|(x, _)| *x).collect::<Vec<_>>();
     let n = points.len();
     let ones = DVector::from_element(n, 1.0);
@@ -15,7 +15,7 @@ fn design_matrix(points: &Vec<(f64, f64)>) -> DMatrix<f64> {
 }
 
 pub fn quadratic_regression(
-    points: &Vec<(f64, f64)>,
+    points: &[(f64, f64)],
 ) -> anyhow::Result<QuadraticCoefficients> {
     let y_data = points.iter().map(|(_, y)| *y).collect::<Vec<_>>();
     let y_vec = DVector::from_column_slice(y_data.as_slice());
@@ -75,7 +75,7 @@ mod tests {
             |(x, y): (_, f64)| -> (f64, f64) { (x, apply_noise(y, 0.5, &mut rng)) };
         let independent = core::iter::successors(Some(0.0), |n| Some(n + 1.0));
         let points = independent.map(|x| (x, function(x))).map(noise);
-        let data = points.take(500).collect();
+        let data = points.take(500).collect::<Vec<_>>();
         let quadratic_coefficients =
             quadratic_regression(&data).expect("Expected quadratic regression");
 
@@ -98,7 +98,7 @@ mod tests {
             |(x, y): (_, f64)| -> (f64, f64) { (x, apply_noise(y, 0.5, &mut rng)) };
         let independent = core::iter::successors(Some(0.0), |n| Some(n + 1.0));
         let points = independent.map(|x| (x, function(x))).map(noise);
-        let data = points.take(500).collect();
+        let data = points.take(500).collect::<Vec<_>>();
         let quadratic_coefficients =
             quadratic_regression(&data).expect("Expected quadratic regression");
 
@@ -121,7 +121,7 @@ mod tests {
             |(x, y): (_, f64)| -> (f64, f64) { (x, apply_noise(y, 1.0, &mut rng)) };
         let independent = core::iter::successors(Some(1.0), |n| Some(n + 1.0));
         let points = independent.map(|x| (x, function(x))).map(noise);
-        let data = points.take(500).collect();
+        let data = points.take(500).collect::<Vec<_>>();
         let quadratic_coefficients =
             quadratic_regression(&data).expect("Expected quadratic regression");
 

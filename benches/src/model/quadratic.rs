@@ -44,7 +44,7 @@ impl QuadraticCoefficients {
     }
 
     /// Residual sum of squares
-    fn ssr(&self, points: &Vec<(f64, f64)>) -> f64 {
+    fn ssr(&self, points: &[(f64, f64)]) -> f64 {
         let QuadraticCoefficients { a, b, c } = self;
         let real_values = points.iter().map(|(_, y)| *y);
         let f = |x: f64| a * x.powi(2) + b * x + c;
@@ -57,7 +57,7 @@ impl QuadraticCoefficients {
     }
 
     /// Total sum of squares
-    fn sst(&self, points: &Vec<(f64, f64)>) -> f64 {
+    fn sst(&self, points: &[(f64, f64)]) -> f64 {
         let real_values = points.iter().map(|(_, y)| *y);
         let avg_y = real_values.clone().sum::<f64>() / points.len() as f64;
         real_values
@@ -67,7 +67,7 @@ impl QuadraticCoefficients {
     }
 
     /// R^2 = 1 - (sst/sse)
-    fn r_squared(&self, points: &Vec<(f64, f64)>) -> f64 {
+    fn r_squared(&self, points: &[(f64, f64)]) -> f64 {
         let ssr = self.ssr(points);
         let sst = self.sst(points);
         if sst == 0.0 {
@@ -79,7 +79,7 @@ impl QuadraticCoefficients {
 }
 
 impl Fit for QuadraticCoefficients {
-    fn fit(&self, points: &Vec<(f64, f64)>) -> f64 {
+    fn fit(&self, points: &[(f64, f64)]) -> f64 {
         self.r_squared(points)
     }
 }

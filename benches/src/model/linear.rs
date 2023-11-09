@@ -18,12 +18,11 @@ impl LinearCoefficients {
     }
 
     pub fn is_linear(&self) -> bool {
-        let slope_is_nonzero = !within_epsilon(self.slope, 0.0, 0.01);
-        slope_is_nonzero
+        !within_epsilon(self.slope, 0.0, 0.01)
     }
 
     /// Residual sum of squares
-    fn ssr(&self, points: &Vec<(f64, f64)>) -> f64 {
+    fn ssr(&self, points: &[(f64, f64)]) -> f64 {
         let LinearCoefficients { slope, intercept } = self;
         let real_values = points.iter().map(|(_, y)| *y);
         let predicted = points.iter().map(|(x, _)| *slope * *x + *intercept);
@@ -35,7 +34,7 @@ impl LinearCoefficients {
     }
 
     /// Total sum of squares
-    fn sst(&self, points: &Vec<(f64, f64)>) -> f64 {
+    fn sst(&self, points: &[(f64, f64)]) -> f64 {
         let real_values = points.iter().map(|(_, y)| *y);
         let avg_y = real_values.clone().sum::<f64>() / points.len() as f64;
         real_values
@@ -45,7 +44,7 @@ impl LinearCoefficients {
     }
 
     /// R^2 = 1 - (sst/sse)
-    fn r_squared(&self, points: &Vec<(f64, f64)>) -> f64 {
+    fn r_squared(&self, points: &[(f64, f64)]) -> f64 {
         let ssr = self.ssr(points);
         let sst = self.sst(points);
         if sst == 0.0 {
@@ -57,7 +56,7 @@ impl LinearCoefficients {
 }
 
 impl Fit for LinearCoefficients {
-    fn fit(&self, points: &Vec<(f64, f64)>) -> f64 {
+    fn fit(&self, points: &[(f64, f64)]) -> f64 {
         self.r_squared(points)
     }
 }

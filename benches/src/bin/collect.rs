@@ -636,7 +636,10 @@ impl Costs {
 fn dependent_cost(name: &String, points: Vec<(u64, u64)>) -> DependentCost {
     println!("Evaluating {}", name);
     dbg!(&points);
-    let data = points.iter().map(|(x, y)| (*x as f64, *y as f64)).collect();
+    let data = points
+        .iter()
+        .map(|(x, y)| (*x as f64, *y as f64))
+        .collect::<Vec<_>>();
     let model = evaluate_model(&data).expect("Unable to evaluate model");
     dbg!(&model);
     match model {

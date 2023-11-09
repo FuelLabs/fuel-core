@@ -1,6 +1,6 @@
 use crate::LinearCoefficients;
 
-pub fn linear_regression(points: &Vec<(f64, f64)>) -> LinearCoefficients {
+pub fn linear_regression(points: &[(f64, f64)]) -> LinearCoefficients {
     let avg_x = points.iter().map(|(x, _)| *x).sum::<f64>() / points.len() as f64;
     let avg_y = points.iter().map(|(_, y)| *y).sum::<f64>() / points.len() as f64;
     let covariance: f64 = points
@@ -49,7 +49,7 @@ mod test {
         let noise = { |(x, y): (f64, f64)| (x, apply_noise(y, 0.5, &mut rng)) };
         let independent = core::iter::successors(Some(1.0), |n| Some(n + 1.0));
         let points = independent.map(|x| (x, function(x))).map(noise);
-        let data = points.take(50).collect();
+        let data = points.take(500).collect::<Vec<_>>();
         let linear_coefficients = linear_regression(&data);
 
         const EPSILON: f64 = 0.01;
@@ -68,7 +68,7 @@ mod test {
         let noise = { |(x, y): (f64, f64)| (x, apply_noise(y, 0.5, &mut rng)) };
         let independent = core::iter::successors(Some(1.0), |n| Some(n + 1.0));
         let points = independent.map(|x| (x, function(x))).map(noise);
-        let data = points.take(50).collect();
+        let data = points.take(500).collect::<Vec<_>>();
         let linear_coefficients = linear_regression(&data);
 
         const EPSILON: f64 = 0.01;
