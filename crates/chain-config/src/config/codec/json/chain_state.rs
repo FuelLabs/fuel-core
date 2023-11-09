@@ -5,11 +5,6 @@ use crate::{
     CoinConfig, ContractConfig, MessageConfig,
 };
 
-pub(crate) struct JsonBatchReader {
-    source: ChainState,
-    batch_size: usize,
-    current_batch_cursor: usize,
-}
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) struct ChainState {
     pub(crate) coins: Vec<CoinConfig>,
@@ -33,13 +28,13 @@ impl ChainState {
                 .take(amount)
                 .collect(),
             contract_state: std::iter::repeat_with(|| ContractState::random(rng))
-                .chunks(100)
+                .chunks(per_contract)
                 .into_iter()
                 .map(|chunk| chunk.collect_vec())
                 .take(amount)
                 .collect(),
             contract_balance: std::iter::repeat_with(|| ContractBalance::random(rng))
-                .chunks(100)
+                .chunks(per_contract)
                 .into_iter()
                 .map(|chunk| chunk.collect_vec())
                 .take(amount)

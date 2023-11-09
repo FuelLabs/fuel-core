@@ -29,6 +29,7 @@ serde_with = "1.11"
 tracing = { version = "0.1", optional = true }
 
 [dev-dependencies]
+bytes = "1.5.0"
 fuel-core-types = { workspace = true, default-features = false, features = [
   "random",
   "serde",

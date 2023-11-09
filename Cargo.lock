@@ -3020,6 +3020,7 @@ dependencies = [
  "anyhow",
  "bech32",
  "bincode 2.0.0-rc.3",
+ "bytes",
  "fuel-core-storage",
  "fuel-core-types",
  "hex",

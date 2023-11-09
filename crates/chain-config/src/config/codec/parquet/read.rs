@@ -95,7 +95,7 @@ where
     T: ParquetSchema + From<Row>,
     R: ChunkReader + 'static,
 {
-    fn batch_iter(self) -> Self {
+    fn batches(self) -> Self {
         self
     }
 }
@@ -300,11 +300,4 @@ impl From<Row> for ContractConfig {
             balances: None,
         }
     }
-}
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_name() {}
 }
