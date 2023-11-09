@@ -77,14 +77,14 @@ pub async fn exec(command: Command) -> anyhow::Result<()> {
             chain_config,
             output_dir,
         } => {
-            let chain_params = match chain_config.as_str() {
+            let chain_config = match chain_config.as_str() {
                 LOCAL_TESTNET => ChainConfig::local_testnet(),
                 _ => ChainConfig::load_from_directory(&chain_config)?,
             };
             let chain_state = StateConfig::generate_state_config(db)?;
 
             std::fs::create_dir_all(&output_dir)?;
-            chain_params.create_config_file(&output_dir)?;
+            chain_config.create_config_file(&output_dir)?;
             chain_state.create_config_file(&output_dir)?;
         }
         SubCommands::Contract { contract_id } => {

@@ -1,10 +1,11 @@
 use crate::{
     database::transaction::DatabaseTransaction,
+    service::DbType,
     state::{
         in_memory::memory_store::MemoryStore,
         DataSource,
         WriteOperation,
-    }, service::DbType,
+    },
 };
 use fuel_core_chain_config::{
     ChainConfigDb,
@@ -26,7 +27,6 @@ use serde::{
     de::DeserializeOwned,
     Serialize,
 };
-use tracing::warn;
 use std::{
     fmt::{
         self,
@@ -35,7 +35,8 @@ use std::{
     },
     marker::Send,
     ops::Deref,
-    sync::Arc, path::PathBuf,
+    path::PathBuf,
+    sync::Arc,
 };
 
 pub use fuel_core_database::Error;
@@ -52,6 +53,8 @@ use std::path::Path;
 use strum::EnumCount;
 #[cfg(feature = "rocksdb")]
 use tempfile::TempDir;
+#[cfg(feature = "rocksdb")]
+use tracing::warn;
 
 // Storages implementation
 // TODO: Move to separate `database/storage` folder, because it is only implementation of storages traits.
@@ -145,9 +148,7 @@ impl Column {
     }
 }
 
-#[derive(
-    Clone, Debug, Eq, PartialEq,
-)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct DatabaseConfig {
     pub database_path: PathBuf,
     pub database_type: DbType,
@@ -214,7 +215,7 @@ impl Database {
             }
             DbType::InMemory => Ok(Database::in_memory()),
             #[cfg(not(feature = "rocksdb"))]
-            _ => Database::in_memory(),
+            _ => Ok(Database::in_memory()),
         }
     }
 

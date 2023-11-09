@@ -18,6 +18,7 @@ use fuel_core::{
         StateConfig,
         LOCAL_TESTNET,
     },
+    database::DatabaseConfig,
     producer::Config as ProducerConfig,
     service::{
         config::Trigger,
@@ -33,7 +34,7 @@ use fuel_core::{
         fuel_tx::ContractId,
         fuel_vm::SecretKey,
         secrecy::Secret,
-    }, database::DatabaseConfig,
+    },
 };
 use pyroscope::{
     pyroscope::PyroscopeAgentRunning,
