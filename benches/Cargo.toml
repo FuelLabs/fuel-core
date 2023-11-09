@@ -11,6 +11,7 @@ async-trait = { workspace = true }
 clap = { workspace = true, features = ["derive"] }
 criterion = { version = "0.5", features = ["html_reports", "async", "async_tokio"] }
 ctrlc = "3.2.3"
+digest = "0.10"
 ed25519-dalek = "1.0" # TODO: upgrade to 2.0 when it's released, and remove rand below
 ed25519-dalek_old_rand = { package = "rand", version = "0.7.3" }
 ethnum = "1.3"
@@ -26,6 +27,7 @@ rand = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 serde_yaml = "0.9.13"
+sha2 = { version = "0.10.8", features = [] }
 test-helpers = { path = "../tests/test-helpers" }
 test-case = { workspace = true }
 tikv-jemallocator = { workspace = true }
@@ -34,6 +36,10 @@ tokio = { workspace = true, features = ["full"] }
 [[bin]]
 name = "collect"
 path = "src/bin/collect.rs"
+
+[[bench]]
+harness = false
+name = "generate_test_data"
 
 [[bench]]
 harness = false

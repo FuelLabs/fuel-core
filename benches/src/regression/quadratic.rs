@@ -24,7 +24,9 @@ pub fn quadratic_regression(
     // (X^T * X)^-1 * X^T
     let xtx_inv_xt = (design_matrix_transpose.clone() * design_matrix)
         .try_inverse()
-        .ok_or(anyhow::anyhow!("Matrix cannot be inverted."))?
+        .ok_or(anyhow::anyhow!(
+            "Regression failed: Matrix cannot be inverted."
+        ))?
         * design_matrix_transpose;
 
     let v = xtx_inv_xt * y_vec;

@@ -3,8 +3,6 @@ mod linear;
 mod logarithmic;
 mod quadratic;
 
-use rand::Rng;
-
 use crate::regression::quadratic_regression;
 
 pub use constant::ConstantCoefficients;
@@ -49,35 +47,35 @@ pub enum Model {
 }
 
 impl Model {
-    fn is_zero(&self) -> bool {
+    pub fn is_zero(&self) -> bool {
         match self {
             Model::Zero => true,
             _ => false,
         }
     }
 
-    fn is_constant(&self) -> bool {
+    pub fn is_constant(&self) -> bool {
         match self {
             Model::Constant(_) => true,
             _ => false,
         }
     }
 
-    fn is_linear(&self) -> bool {
+    pub fn is_linear(&self) -> bool {
         match self {
             Model::Linear(_) => true,
             _ => false,
         }
     }
 
-    fn is_quadratic(&self) -> bool {
+    pub fn is_quadratic(&self) -> bool {
         match self {
             Model::Quadratic(_) => true,
             _ => false,
         }
     }
 
-    fn is_other(&self) -> bool {
+    pub fn is_other(&self) -> bool {
         match self {
             Model::Other => true,
             _ => false,
@@ -123,6 +121,7 @@ mod tests {
     use super::*;
     use rand::{
         rngs::StdRng,
+        Rng,
         SeedableRng,
     };
     use test_case::test_case;

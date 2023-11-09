@@ -2735,7 +2735,7 @@ dependencies = [
 [[package]]
 name = "fuel-asm"
 version = "0.40.0"
-source = "git+https://github.com/FuelLabs/fuel-vm/?branch=bvrooman/feat/separate-light-heavy-gas-costs#130127425334a3a75ad351993066175081bf6ea5"
+source = "git+https://github.com/FuelLabs/fuel-vm/?branch=master#264ca3cb286c51cc2d1c5c292e897e0dda09cd4d"
 dependencies = [
  "bitflags 1.3.2",
  "fuel-types",
@@ -2806,6 +2806,7 @@ dependencies = [
  "clap 4.4.7",
  "criterion",
  "ctrlc",
+ "digest 0.10.7",
  "ed25519-dalek 1.0.1",
  "ethnum",
  "fuel-core",
@@ -2821,6 +2822,7 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_yaml",
+ "sha2 0.10.8",
  "test-case",
  "test-helpers",
  "tikv-jemallocator",
@@ -3254,7 +3256,7 @@ dependencies = [
 [[package]]
 name = "fuel-crypto"
 version = "0.40.0"
-source = "git+https://github.com/FuelLabs/fuel-vm/?branch=bvrooman/feat/separate-light-heavy-gas-costs#130127425334a3a75ad351993066175081bf6ea5"
+source = "git+https://github.com/FuelLabs/fuel-vm/?branch=master#264ca3cb286c51cc2d1c5c292e897e0dda09cd4d"
 dependencies = [
  "coins-bip32",
  "coins-bip39",
@@ -3274,7 +3276,7 @@ dependencies = [
 [[package]]
 name = "fuel-derive"
 version = "0.40.0"
-source = "git+https://github.com/FuelLabs/fuel-vm/?branch=bvrooman/feat/separate-light-heavy-gas-costs#130127425334a3a75ad351993066175081bf6ea5"
+source = "git+https://github.com/FuelLabs/fuel-vm/?branch=master#264ca3cb286c51cc2d1c5c292e897e0dda09cd4d"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -3285,7 +3287,7 @@ dependencies = [
 [[package]]
 name = "fuel-merkle"
 version = "0.40.0"
-source = "git+https://github.com/FuelLabs/fuel-vm/?branch=bvrooman/feat/separate-light-heavy-gas-costs#130127425334a3a75ad351993066175081bf6ea5"
+source = "git+https://github.com/FuelLabs/fuel-vm/?branch=master#264ca3cb286c51cc2d1c5c292e897e0dda09cd4d"
 dependencies = [
  "derive_more",
  "digest 0.10.7",
@@ -3299,12 +3301,12 @@ dependencies = [
 [[package]]
 name = "fuel-storage"
 version = "0.40.0"
-source = "git+https://github.com/FuelLabs/fuel-vm/?branch=bvrooman/feat/separate-light-heavy-gas-costs#130127425334a3a75ad351993066175081bf6ea5"
+source = "git+https://github.com/FuelLabs/fuel-vm/?branch=master#264ca3cb286c51cc2d1c5c292e897e0dda09cd4d"
 
 [[package]]
 name = "fuel-tx"
 version = "0.40.0"
-source = "git+https://github.com/FuelLabs/fuel-vm/?branch=bvrooman/feat/separate-light-heavy-gas-costs#130127425334a3a75ad351993066175081bf6ea5"
+source = "git+https://github.com/FuelLabs/fuel-vm/?branch=master#264ca3cb286c51cc2d1c5c292e897e0dda09cd4d"
 dependencies = [
  "derivative",
  "derive_more",
@@ -3325,7 +3327,7 @@ dependencies = [
 [[package]]
 name = "fuel-types"
 version = "0.40.0"
-source = "git+https://github.com/FuelLabs/fuel-vm/?branch=bvrooman/feat/separate-light-heavy-gas-costs#130127425334a3a75ad351993066175081bf6ea5"
+source = "git+https://github.com/FuelLabs/fuel-vm/?branch=master#264ca3cb286c51cc2d1c5c292e897e0dda09cd4d"
 dependencies = [
  "fuel-derive",
  "hex",
@@ -3336,7 +3338,7 @@ dependencies = [
 [[package]]
 name = "fuel-vm"
 version = "0.40.0"
-source = "git+https://github.com/FuelLabs/fuel-vm/?branch=bvrooman/feat/separate-light-heavy-gas-costs#130127425334a3a75ad351993066175081bf6ea5"
+source = "git+https://github.com/FuelLabs/fuel-vm/?branch=master#264ca3cb286c51cc2d1c5c292e897e0dda09cd4d"
 dependencies = [
  "anyhow",
  "async-trait",
