@@ -1,10 +1,16 @@
+use std::marker::PhantomData;
+
 use fuel_core_types::{
     blockchain::primitives::DaBlockHeight,
     fuel_types::{Address, AssetId, BlockHeight, Bytes32, ContractId, Nonce},
     fuel_vm::Salt,
 };
+use itertools::Itertools;
 use parquet::{
-    file::{reader::ChunkReader, serialized_reader::SerializedFileReader},
+    file::{
+        reader::{ChunkReader, FileReader},
+        serialized_reader::SerializedFileReader,
+    },
     record::{Field, Row},
 };
 
@@ -19,37 +25,78 @@ use crate::{
 
 use super::schema::ParquetSchema;
 
-pub(crate) struct ParquetBatchReader<R: ChunkReader> {
-    batch_size: usize,
-    compression_level: u32,
-    reader: SerializedFileReader<R>,
+pub(crate) struct ParquetBatchReader<R: ChunkReader, T> {
+    data_source: SerializedFileReader<R>,
+    _data: PhantomData<T>,
 }
 
-impl<R: ChunkReader + 'static> ParquetBatchReader<R> {
-    pub fn new(
-        batch_size: usize,
-        compression_level: u32,
-        reader: R,
-    ) -> anyhow::Result<Self> {
+impl<R: ChunkReader + 'static, T: From<Row>> IntoIterator for ParquetBatchReader<R, T> {
+    type Item = anyhow::Result<Batch<T>>;
+
+    type IntoIter = ParquetIterator<R, T>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        ParquetIterator {
+            data_source: self.data_source,
+            group_index: 0,
+            _data: PhantomData,
+        }
+    }
+}
+
+pub struct ParquetIterator<R: ChunkReader, T> {
+    data_source: SerializedFileReader<R>,
+    group_index: usize,
+    _data: PhantomData<T>,
+}
+
+impl<R: ChunkReader + 'static, T: From<Row>> Iterator for ParquetIterator<R, T> {
+    type Item = anyhow::Result<Batch<T>>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.group_index >= self.data_source.metadata().num_row_groups() {
+            return None;
+        }
+
+        let data = self
+            .data_source
+            .get_row_group(self.group_index)
+            .unwrap()
+            .get_row_iter(None)
+            .unwrap()
+            .map_ok(|row| row.into())
+            .collect::<Result<Vec<_>, _>>()
+            .unwrap();
+
+        let group_index = self.group_index;
+
+        self.group_index += 1;
+
+        Some(Ok(Batch { data, group_index }))
+    }
+
+    fn nth(&mut self, n: usize) -> Option<Self::Item> {
+        self.group_index = n;
+        self.next()
+    }
+}
+
+impl<R: ChunkReader + 'static, T> ParquetBatchReader<R, T> {
+    pub fn new(reader: R) -> anyhow::Result<Self> {
         Ok(Self {
-            batch_size,
-            compression_level,
-            reader: SerializedFileReader::new(reader)?,
+            data_source: SerializedFileReader::new(reader)?,
+            _data: PhantomData,
         })
     }
 }
 
-impl<T, R> BatchReader<T> for ParquetBatchReader<R>
+impl<T, R> BatchReader<T, Self> for ParquetBatchReader<R, T>
 where
     T: ParquetSchema + From<Row>,
     R: ChunkReader + 'static,
 {
-    fn read_batch(&mut self) -> anyhow::Result<Option<Batch<T>>> {
-        todo!()
-        // self.reader.get_row_iter(projection)
-        // for row in reader.get_row_iter(Some(T::schema())).unwrap() {
-        //     let _ = T::from(row.unwrap());
-        // }
+    fn batch_iter(self) -> Self {
+        self
     }
 }
 
@@ -253,4 +300,11 @@ impl From<Row> for ContractConfig {
             balances: None,
         }
     }
+}
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_name() {}
 }

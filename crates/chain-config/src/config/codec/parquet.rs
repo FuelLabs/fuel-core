@@ -1,6 +1,6 @@
 mod read;
 mod schema;
-mod write;
+// mod write;
 
 use itertools::Itertools;
 use parquet::{

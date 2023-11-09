@@ -4,11 +4,11 @@ mod parquet;
 
 pub struct Batch<T> {
     pub data: Vec<T>,
-    pub batch_cursor: usize,
+    pub group_index: usize,
 }
 
-pub trait BatchReader<T> {
-    fn read_batch(&mut self) -> anyhow::Result<Option<Batch<T>>>;
+pub trait BatchReader<T, I: IntoIterator<Item = anyhow::Result<Batch<T>>>> {
+    fn batch_iter(self) -> I;
 }
 
 pub trait BatchWriter<T> {
