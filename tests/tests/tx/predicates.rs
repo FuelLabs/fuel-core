@@ -159,7 +159,8 @@ async fn transaction_with_predicates_that_exhaust_gas_limit_are_rejected() {
         .expect_err("expected tx to fail");
 
     assert!(
-        err.to_string().contains("PredicateExhaustedGas"),
+        err.to_string()
+            .contains("PredicateVerificationFailed(OutOfGas)"),
         "got unexpected error {err}"
     )
 }

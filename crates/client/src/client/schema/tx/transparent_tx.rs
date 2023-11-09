@@ -159,7 +159,7 @@ impl TryFrom<Transaction> for fuel_tx::Transaction {
             let mut script = fuel_tx::Transaction::script(
                 tx.script_gas_limit
                     .ok_or_else(|| {
-                        ConversionError::MissingField("gas_limit".to_string())
+                        ConversionError::MissingField("script_gas_limit".to_string())
                     })?
                     .into(),
                 tx.script
