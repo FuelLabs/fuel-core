@@ -32,10 +32,6 @@ test-case = { workspace = true }
 tikv-jemallocator = { workspace = true }
 tokio = { workspace = true, features = ["full"] }
 
-[[bin]]
-name = "collect"
-path = "src/bin/collect.rs"
-
 [[bench]]
 harness = false
 name = "generate_test_data"
