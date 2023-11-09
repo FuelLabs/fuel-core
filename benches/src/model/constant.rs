@@ -17,7 +17,7 @@ impl ConstantCoefficients {
 }
 
 impl ConstantCoefficients {
-    /// Sum of square residuals
+    /// Sum of squares residual
     fn ssr(&self, points: &[(f64, f64)]) -> f64 {
         let ConstantCoefficients { y } = self;
         let real_values = points.iter().map(|(_, y)| *y);
@@ -29,7 +29,7 @@ impl ConstantCoefficients {
             .sum()
     }
 
-    /// Sum of square errors
+    /// Sum of squares total
     fn sst(&self, points: &[(f64, f64)]) -> f64 {
         let real_values = points.iter().map(|(_, y)| *y);
         let avg_y = real_values.clone().sum::<f64>() / points.len() as f64;

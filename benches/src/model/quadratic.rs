@@ -43,7 +43,7 @@ impl QuadraticCoefficients {
         is_nonzero(self.a)
     }
 
-    /// Residual sum of squares
+    /// Sum of squares residual
     fn ssr(&self, points: &[(f64, f64)]) -> f64 {
         let QuadraticCoefficients { a, b, c } = self;
         let real_values = points.iter().map(|(_, y)| *y);
@@ -56,7 +56,7 @@ impl QuadraticCoefficients {
             .sum()
     }
 
-    /// Total sum of squares
+    /// Sum of squares total
     fn sst(&self, points: &[(f64, f64)]) -> f64 {
         let real_values = points.iter().map(|(_, y)| *y);
         let avg_y = real_values.clone().sum::<f64>() / points.len() as f64;

@@ -1,7 +1,9 @@
+pub mod collect;
 pub mod import;
 pub mod model;
 pub mod regression;
 
+pub use collect::collect;
 use fuel_core::database::vm_database::VmDatabase;
 pub use fuel_core::database::Database;
 use fuel_core_types::{

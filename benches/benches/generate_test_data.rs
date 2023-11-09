@@ -29,7 +29,7 @@ fn hash(bytes: &[u8]) -> [u8; 32] {
     hash.finalize().into()
 }
 
-const COEF: f64 = 100.0;
+const UNIT_COEF: f64 = 100.0;
 
 fn busy<R>(coefficient: f64, rng: &mut R)
 where
@@ -46,7 +46,7 @@ where
 fn generate_baseline(c: &mut Criterion) {
     let mut rng = StdRng::seed_from_u64(8586);
     let mut group = c.benchmark_group("baseline");
-    group.bench_function("baseline", |b| b.iter(|| busy(COEF, &mut rng)));
+    group.bench_function("baseline", |b| b.iter(|| busy(UNIT_COEF, &mut rng)));
     group.finish();
 }
 
@@ -56,7 +56,7 @@ fn generate_linear_data(c: &mut Criterion) {
     // f(x) = x
     let mut function = |n| {
         for _ in 0..n {
-            busy(COEF, &mut rng);
+            busy(UNIT_COEF, &mut rng);
         }
     };
 
@@ -76,9 +76,9 @@ fn generate_light_linear_data(c: &mut Criterion) {
     // f(x) = (1/5)x + 5
     let mut function = |n| {
         for _ in 0..n {
-            busy(COEF * 0.2, &mut rng);
+            busy(0.2 * UNIT_COEF, &mut rng);
         }
-        busy(COEF * 5.0, &mut rng);
+        busy(5.0 * UNIT_COEF, &mut rng);
     };
     let mut group = c.benchmark_group("light_linear_data");
     let independent = successors(Some(0u64), |n| Some(n + 5)).take(40);
@@ -96,9 +96,9 @@ fn generate_heavy_linear_data(c: &mut Criterion) {
     // f(x) = 2x + 10
     let mut function = |n| {
         for _ in 0..n {
-            busy(COEF * 2.0, &mut rng);
+            busy(2.0 * UNIT_COEF, &mut rng);
         }
-        busy(COEF * 10.0, &mut rng);
+        busy(10.0 * UNIT_COEF, &mut rng);
     };
     let mut group = c.benchmark_group("heavy_linear_data");
     let independent = successors(Some(0u64), |n| Some(n + 5)).take(40);

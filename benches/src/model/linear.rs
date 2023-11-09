@@ -21,7 +21,7 @@ impl LinearCoefficients {
         !within_epsilon(self.slope, 0.0, 0.01)
     }
 
-    /// Residual sum of squares
+    /// Sum of squares residual
     fn ssr(&self, points: &[(f64, f64)]) -> f64 {
         let LinearCoefficients { slope, intercept } = self;
         let real_values = points.iter().map(|(_, y)| *y);
@@ -33,7 +33,7 @@ impl LinearCoefficients {
             .sum()
     }
 
-    /// Total sum of squares
+    /// Sum of squares total
     fn sst(&self, points: &[(f64, f64)]) -> f64 {
         let real_values = points.iter().map(|(_, y)| *y);
         let avg_y = real_values.clone().sum::<f64>() / points.len() as f64;

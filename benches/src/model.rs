@@ -69,7 +69,7 @@ impl Model {
 }
 
 /// Generate a model that estimates the points in the dataset
-pub fn evaluate_model(points: &[(f64, f64)]) -> anyhow::Result<Model> {
+pub fn estimate_model(points: &[(f64, f64)]) -> anyhow::Result<Model> {
     let quadratic_coefficients = quadratic_regression(points)?;
     if quadratic_coefficients.is_zero() {
         // Zero
@@ -122,7 +122,7 @@ mod tests {
         let points = independent.map(|x| (x, function(x))).map(noise);
         let data = points.take(500).collect::<Vec<_>>();
 
-        let model = evaluate_model(&data).expect("Expected evaluation");
+        let model = estimate_model(&data).expect("Expected evaluation");
 
         assert!(model.is_zero());
     }
@@ -143,7 +143,7 @@ mod tests {
         let points = independent.map(|x| (x, function(x))).map(noise);
         let data = points.take(500).collect::<Vec<_>>();
 
-        let model = evaluate_model(&data).expect("Expected evaluation");
+        let model = estimate_model(&data).expect("Expected evaluation");
 
         assert!(model.is_constant());
     }
@@ -164,7 +164,7 @@ mod tests {
         let points = independent.map(|x| (x, function(x))).map(noise);
         let data = points.take(500).collect::<Vec<_>>();
 
-        let model = evaluate_model(&data).expect("Expected evaluation");
+        let model = estimate_model(&data).expect("Expected evaluation");
 
         assert!(model.is_linear());
     }
@@ -185,7 +185,7 @@ mod tests {
         let points = independent.map(|x| (x, function(x))).map(noise);
         let data = points.take(500).collect::<Vec<_>>();
 
-        let model = evaluate_model(&data).expect("Expected evaluation");
+        let model = estimate_model(&data).expect("Expected evaluation");
 
         assert!(model.is_quadratic());
     }
@@ -203,7 +203,7 @@ mod tests {
         let points = independent.map(|x| (x, function(x))).map(noise);
         let data = points.take(500).collect::<Vec<_>>();
 
-        let model = evaluate_model(&data).expect("Expected evaluation");
+        let model = estimate_model(&data).expect("Expected evaluation");
 
         // Currently, the logarithmic model is not supported
         assert!(model.is_other());
