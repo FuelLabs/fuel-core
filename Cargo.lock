@@ -641,6 +641,7 @@ dependencies = [
  "miniz_oxide",
  "object",
  "rustc-demangle",
+ "serde",
 ]
 
 [[package]]
@@ -3258,7 +3259,7 @@ dependencies = [
 [[package]]
 name = "fuel-crypto"
 version = "0.41.0"
-source = "git+https://github.com/FuelLabs/fuel-vm/?branch=master#694b63636a125536346a8f5e25aa45a683312c43"
+source = "git+https://github.com/FuelLabs/fuel-vm/?branch=master#9c750065b166c76ded3bf94749a34107a0280318"
 dependencies = [
  "coins-bip32",
  "coins-bip39",
@@ -3278,7 +3279,7 @@ dependencies = [
 [[package]]
 name = "fuel-derive"
 version = "0.41.0"
-source = "git+https://github.com/FuelLabs/fuel-vm/?branch=master#694b63636a125536346a8f5e25aa45a683312c43"
+source = "git+https://github.com/FuelLabs/fuel-vm/?branch=master#9c750065b166c76ded3bf94749a34107a0280318"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -3289,7 +3290,7 @@ dependencies = [
 [[package]]
 name = "fuel-merkle"
 version = "0.41.0"
-source = "git+https://github.com/FuelLabs/fuel-vm/?branch=master#694b63636a125536346a8f5e25aa45a683312c43"
+source = "git+https://github.com/FuelLabs/fuel-vm/?branch=master#9c750065b166c76ded3bf94749a34107a0280318"
 dependencies = [
  "derive_more",
  "digest 0.10.7",
@@ -3303,12 +3304,12 @@ dependencies = [
 [[package]]
 name = "fuel-storage"
 version = "0.41.0"
-source = "git+https://github.com/FuelLabs/fuel-vm/?branch=master#694b63636a125536346a8f5e25aa45a683312c43"
+source = "git+https://github.com/FuelLabs/fuel-vm/?branch=master#9c750065b166c76ded3bf94749a34107a0280318"
 
 [[package]]
 name = "fuel-tx"
 version = "0.41.0"
-source = "git+https://github.com/FuelLabs/fuel-vm/?branch=master#694b63636a125536346a8f5e25aa45a683312c43"
+source = "git+https://github.com/FuelLabs/fuel-vm/?branch=master#9c750065b166c76ded3bf94749a34107a0280318"
 dependencies = [
  "bitflags 2.4.1",
  "derivative",
@@ -3329,7 +3330,7 @@ dependencies = [
 [[package]]
 name = "fuel-types"
 version = "0.41.0"
-source = "git+https://github.com/FuelLabs/fuel-vm/?branch=master#694b63636a125536346a8f5e25aa45a683312c43"
+source = "git+https://github.com/FuelLabs/fuel-vm/?branch=master#9c750065b166c76ded3bf94749a34107a0280318"
 dependencies = [
  "fuel-derive",
  "hex",
@@ -3340,10 +3341,11 @@ dependencies = [
 [[package]]
 name = "fuel-vm"
 version = "0.41.0"
-source = "git+https://github.com/FuelLabs/fuel-vm/?branch=master#694b63636a125536346a8f5e25aa45a683312c43"
+source = "git+https://github.com/FuelLabs/fuel-vm/?branch=master#9c750065b166c76ded3bf94749a34107a0280318"
 dependencies = [
  "anyhow",
  "async-trait",
+ "backtrace",
  "bitflags 2.4.1",
  "derivative",
  "derive_more",
