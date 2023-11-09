@@ -1,10 +1,11 @@
 mod costs;
 mod state;
 
-use crate::collect::state::{
+use state::{
     extract_state,
     State,
 };
+
 use std::{
     collections::HashMap,
     io::{
