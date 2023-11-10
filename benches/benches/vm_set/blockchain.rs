@@ -98,8 +98,11 @@ impl BenchDb {
 pub fn run(c: &mut Criterion) {
     let rng = &mut StdRng::seed_from_u64(2322u64);
 
+    const LAST_VALUE: u64 = 100_000;
     let mut linear: Vec<u64> = vec![1, 10, 100, 1000, 10_000];
-    let mut l = successors(Some(100_000.0f64), |n| Some(n / 1.5))
+    let mut linear_short = linear.clone();
+    linear_short.push(LAST_VALUE);
+    let mut l = successors(Some(LAST_VALUE as f64), |n| Some(n / 1.5))
         .take(5)
         .map(|f| f as u64)
         .collect::<Vec<_>>();
@@ -146,9 +149,9 @@ pub fn run(c: &mut Criterion) {
 
     // let mut scwq = c.benchmark_group("scwq");
 
-    // for i in linear.clone() {
-    //     let start_key = Bytes32::zeroed();
-    //     let data = start_key.iter().copied().collect::<Vec<_>>();
+    for i in linear_short.clone() {
+        let start_key = Bytes32::zeroed();
+        let data = start_key.iter().copied().collect::<Vec<_>>();
 
     //     let post_call = vec![
     //         op::gtf_args(0x10, 0x00, GTFArgs::ScriptData),
@@ -172,9 +175,9 @@ pub fn run(c: &mut Criterion) {
 
     // let mut swwq = c.benchmark_group("swwq");
 
-    // for i in linear.clone() {
-    //     let start_key = Bytes32::zeroed();
-    //     let data = start_key.iter().copied().collect::<Vec<_>>();
+    for i in linear_short.clone() {
+        let start_key = Bytes32::zeroed();
+        let data = start_key.iter().copied().collect::<Vec<_>>();
 
     //     let post_call = vec![
     //         op::gtf_args(0x10, 0x00, GTFArgs::ScriptData),
@@ -531,7 +534,7 @@ pub fn run(c: &mut Criterion) {
 
     let mut srwq = c.benchmark_group("srwq");
 
-    for i in linear.clone() {
+    for i in linear_short.clone() {
         let start_key = Bytes32::zeroed();
         let data = start_key.iter().copied().collect::<Vec<_>>();
 
