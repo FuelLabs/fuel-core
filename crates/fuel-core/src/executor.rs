@@ -889,18 +889,18 @@ where
         let tx_id = checked_tx.id();
         let max_fee = checked_tx.metadata().max_fee();
 
-        checked_tx = checked_tx
-            .check_predicates(&CheckPredicateParams::from(
-                &self.config.consensus_parameters,
-            ))
-            .map_err(|_| {
-                ExecutorError::TransactionValidity(
-                    TransactionValidityError::InvalidPredicate(tx_id),
-                )
-            })?;
-        debug_assert!(checked_tx.checks().contains(Checks::Predicates));
-
         if options.utxo_validation {
+            checked_tx = checked_tx
+                .check_predicates(&CheckPredicateParams::from(
+                    &self.config.consensus_parameters,
+                ))
+                .map_err(|_| {
+                    ExecutorError::TransactionValidity(
+                        TransactionValidityError::InvalidPredicate(tx_id),
+                    )
+                })?;
+            debug_assert!(checked_tx.checks().contains(Checks::Predicates));
+
             // validate utxos exist and maturity is properly set
             self.verify_input_state(
                 tx_db_transaction.deref(),
