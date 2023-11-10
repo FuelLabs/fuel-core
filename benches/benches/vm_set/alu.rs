@@ -114,6 +114,16 @@ pub fn run(c: &mut Criterion) {
     );
 
     run_group_ref(
+        &mut c.benchmark_group("mldv"),
+        "mldv",
+        VmBench::new(op::mldv(0x10, 0x11, 0x12, 0x13)).with_prepare_script(vec![
+            op::movi(0x11, 1234567),
+            op::not(0x12, RegId::ZERO),
+            op::movi(0x13, 3456789),
+        ]),
+    );
+
+    run_group_ref(
         &mut c.benchmark_group("mlog"),
         "mlog",
         VmBench::new(op::mlog(0x10, 0x11, 0x12))
