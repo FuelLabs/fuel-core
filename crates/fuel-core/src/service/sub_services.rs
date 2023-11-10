@@ -175,7 +175,7 @@ pub fn init_sub_services(
     #[cfg(feature = "p2p")]
     let sync = fuel_core_sync::service::new_service(
         *last_block.header().height(),
-        p2p_adapter,
+        p2p_adapter.clone(),
         importer_adapter.clone(),
         verifier,
         config.sync,

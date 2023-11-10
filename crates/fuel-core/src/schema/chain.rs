@@ -12,7 +12,6 @@ use crate::{
         block::Block,
         scalars::{
             AssetId,
-            Tai64Timestamp,
             U32,
             U64,
             U8,
@@ -26,7 +25,6 @@ use async_graphql::{
 use fuel_core_types::{
     fuel_tx,
     services::p2p::PeerId,
-    tai64::Tai64,
 };
 
 pub struct ChainInfo;
@@ -654,11 +652,10 @@ impl PeerInfo {
             .map(|height| (*height).into())
     }
 
-    async fn time_since_last_heartbeat(&self) -> Option<Tai64Timestamp> {
-        self.1.heartbeat_data.last_heartbeat.map(|time| {
-            let time_since = time.elapsed().as_secs_f64();
-            Tai64Timestamp(Tai64::from_unix(time_since as i64))
-        })
+    async fn time_since_last_heartbeat(&self) -> u32 {
+        let time = self.1.heartbeat_data.last_heartbeat;
+        let time_since = time.elapsed().as_millis();
+        time_since as u32
     }
 
     async fn app_score(&self) -> f64 {

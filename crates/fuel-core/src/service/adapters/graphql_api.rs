@@ -276,36 +276,61 @@ impl BlockProducerPort for BlockProducerAdapter {}
 #[async_trait::async_trait]
 impl P2pPort for P2PAdapter {
     async fn connected_peers(&self) -> anyhow::Result<Vec<PeerId>> {
-        if let Some(service) = &self.service {
-            service.get_peer_ids().await.map(|peers| {
-                peers
-                    .iter()
-                    .map(|peer_id| peer_id.to_bytes().into())
-                    .collect()
-            })
-        } else {
+        #[cfg(feature = "p2p")]
+        {
+            if let Some(service) = &self.service {
+                service.get_peer_ids().await.map(|peers| {
+                    peers
+                        .iter()
+                        .map(|peer_id| peer_id.to_bytes().into())
+                        .collect()
+                })
+            } else {
+                Ok(vec![])
+            }
+        }
+        #[cfg(not(feature = "p2p"))]
+        {
             Ok(vec![])
         }
     }
 
     async fn all_peer_info(&self) -> anyhow::Result<Vec<(PeerId, PeerInfo)>> {
-        if let Some(service) = &self.service {
-            let peers = service.get_all_peers().await?;
-            Ok(peers
-                .into_iter()
-                .map(|(peer_id, peer_info)| {
-                    (
-                        PeerId::from(peer_id.to_bytes()),
-                        PeerInfo {
-                            peer_addresses: peer_info.peer_addresses.iter().map(),
-                            client_version: None,
-                            heartbeat_data: HeartbeatData {},
-                            app_score: 0.0,
-                        },
-                    )
-                })
-                .collect())
-        } else {
+        #[cfg(feature = "p2p")]
+        {
+            use fuel_core_types::services::p2p::HeartbeatData;
+            if let Some(service) = &self.service {
+                let peers = service.get_all_peers().await?;
+                Ok(peers
+                    .into_iter()
+                    .map(|(peer_id, peer_info)| {
+                        (
+                            PeerId::from(peer_id.to_bytes()),
+                            PeerInfo {
+                                peer_addresses: peer_info
+                                    .peer_addresses
+                                    .iter()
+                                    .map(|addr| addr.to_string())
+                                    .collect(),
+                                client_version: None,
+                                heartbeat_data: HeartbeatData {
+                                    block_height: peer_info.heartbeat_data.block_height,
+                                    last_heartbeat: peer_info
+                                        .heartbeat_data
+                                        .last_heartbeat
+                                        .into(),
+                                },
+                                app_score: peer_info.score,
+                            },
+                        )
+                    })
+                    .collect())
+            } else {
+                Ok(vec![])
+            }
+        }
+        #[cfg(not(feature = "p2p"))]
+        {
             Ok(vec![])
         }
     }

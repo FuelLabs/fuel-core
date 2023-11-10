@@ -175,5 +175,5 @@ pub struct HeartbeatData {
     /// The currently reported block height of the peer
     pub block_height: Option<BlockHeight>,
     /// The instant representing when the latest heartbeat was received.
-    pub last_heartbeat: Option<Instant>,
+    pub last_heartbeat: Instant,
 }
