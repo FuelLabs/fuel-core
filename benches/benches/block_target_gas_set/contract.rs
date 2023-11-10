@@ -2,11 +2,6 @@ use crate::{
     utils::arb_dependent_cost_values,
     *,
 };
-use fuel_core::service::FuelService;
-use fuel_core_storage::{
-    tables::ContractsRawCode,
-    StorageAsMut,
-};
 use fuel_core_types::{
     fuel_types::{
         Address,
@@ -41,11 +36,10 @@ use fuel_core_types::{
 // TRO: Transfer coins to output
 pub fn run_contract(group: &mut BenchmarkGroup<WallTime>) {
     let contract_id = ContractId::zeroed();
-    let (mut service, rt) = service_with_contract_id(contract_id);
-    let mut rng = rand::rngs::StdRng::seed_from_u64(2322u64);
     let asset_id = AssetId::zeroed();
-    let contract_id = ContractId::zeroed();
     let script_data = script_data(&contract_id, &asset_id);
+
+    let mut shared_factory = SanityBenchmarkFactory::new_shared(contract_id);
 
     // bal contract
     {
@@ -54,36 +48,20 @@ pub fn run_contract(group: &mut BenchmarkGroup<WallTime>) {
 
         let mut instructions = setup_instructions();
         instructions.extend(vec![op::call(0x10, RegId::ZERO, 0x11, 0x12)]);
-
-        replace_contract_in_service(&mut service, &contract_id, contract_instructions);
-
         let id = "contract/bal contract";
-        run_with_service(
-            id,
-            group,
-            instructions,
-            script_data.clone(),
-            &service,
-            contract_id,
-            &rt,
-            &mut rng,
-        );
+
+        shared_factory
+            .build_with_new_contract(contract_instructions)
+            .run(id, group, instructions, script_data.clone());
     }
+
     {
         let mut instructions = setup_instructions();
         instructions.extend(vec![op::bal(0x13, 0x11, 0x10), op::jmpb(RegId::ZERO, 0)]);
-
         let id = "contract/bal script";
-        run_with_service(
-            id,
-            group,
-            instructions,
-            script_data.clone(),
-            &service,
-            contract_id,
-            &rt,
-            &mut rng,
-        );
+        shared_factory
+            .build()
+            .run(id, group, instructions, script_data.clone());
     }
 
     // bhei
@@ -112,22 +90,16 @@ pub fn run_contract(group: &mut BenchmarkGroup<WallTime>) {
     {
         let contract = vec![op::burn(RegId::ONE, RegId::HP), op::jmpb(RegId::ZERO, 0)];
         let mut instructions = setup_instructions();
-        // TODO: I don't know why we need these extra ops
         instructions.extend(vec![
             op::movi(0x10, 32),
             op::aloc(0x10),
             op::call(0x10, RegId::ZERO, 0x11, 0x12),
         ]);
-        replace_contract_in_service(&mut service, &contract_id, contract);
-        run_with_service(
+        shared_factory.build_with_new_contract(contract).run(
             "contract/burn",
             group,
             instructions,
             script_data.clone(),
-            &service,
-            contract_id,
-            &rt,
-            &mut rng,
         );
     }
 
@@ -148,19 +120,10 @@ pub fn run_contract(group: &mut BenchmarkGroup<WallTime>) {
             op::jmpb(RegId::ZERO, 0),
         ];
 
-        replace_contract_in_service(&mut service, &contract_id, contract_instructions);
-
         let id = format!("contract/call {:?}", size);
-        run_with_service(
-            &id,
-            group,
-            instructions,
-            script_data.clone(),
-            &service,
-            contract_id,
-            &rt,
-            &mut rng,
-        );
+        shared_factory
+            .build_with_new_contract(contract_instructions)
+            .run(&id, group, instructions, script_data.clone());
     }
 
     // cb
@@ -198,20 +161,14 @@ pub fn run_contract(group: &mut BenchmarkGroup<WallTime>) {
             op::ccp(0x15, 0x10, RegId::ZERO, 0x13),
             op::jmpb(RegId::ZERO, 0),
         ]);
-        replace_contract_in_service(&mut service, &contract_id, contract);
         let id = format!("contract/ccp {:?}", i);
-        run_with_service(
+        shared_factory.build_with_new_contract(contract).run(
             &id,
             group,
             instructions,
             script_data.clone(),
-            &service,
-            contract_id,
-            &rt,
-            &mut rng,
         );
     }
-
     // croo
     {
         let contract = vec![
@@ -223,16 +180,11 @@ pub fn run_contract(group: &mut BenchmarkGroup<WallTime>) {
             op::ret(RegId::ZERO),
         ];
         let instructions = call_contract_repeat();
-        replace_contract_in_service(&mut service, &contract_id, contract);
-        run_with_service(
+        shared_factory.build_with_new_contract(contract).run(
             "contract/croo",
             group,
             instructions,
             script_data.clone(),
-            &service,
-            contract_id,
-            &rt,
-            &mut rng,
         );
     }
 
@@ -248,17 +200,12 @@ pub fn run_contract(group: &mut BenchmarkGroup<WallTime>) {
             op::csiz(0x11, 0x10),
             op::jmpb(RegId::ZERO, 0),
         ]);
-        replace_contract_in_service(&mut service, &contract_id, contract);
         let id = format!("contract/csiz {:?}", size);
-        run_with_service(
+        shared_factory.build_with_new_contract(contract).run(
             &id,
             group,
             instructions,
             script_data.clone(),
-            &service,
-            contract_id,
-            &rt,
-            &mut rng,
         );
     }
 
@@ -274,17 +221,12 @@ pub fn run_contract(group: &mut BenchmarkGroup<WallTime>) {
             op::ldc(0x10, RegId::ZERO, 0x13),
             op::jmpb(RegId::ZERO, 0),
         ]);
-        replace_contract_in_service(&mut service, &contract_id, contract);
         let id = format!("contract/ldc {:?}", size);
-        run_with_service(
+        shared_factory.build_with_new_contract(contract).run(
             &id,
             group,
             instructions,
             script_data.clone(),
-            &service,
-            contract_id,
-            &rt,
-            &mut rng,
         );
     }
 
@@ -308,16 +250,9 @@ pub fn run_contract(group: &mut BenchmarkGroup<WallTime>) {
                 op::jmpb(RegId::ZERO, 0),
             ]);
             let id = format!("contract/logd {:?}", i);
-            run_with_service(
-                &id,
-                group,
-                instructions,
-                script_data.clone(),
-                &service,
-                contract_id,
-                &rt,
-                &mut rng,
-            );
+            shared_factory
+                .build()
+                .run(&id, group, instructions, script_data.clone());
         }
     }
 
@@ -325,16 +260,11 @@ pub fn run_contract(group: &mut BenchmarkGroup<WallTime>) {
     {
         let contract = vec![op::mint(RegId::ONE, RegId::ZERO), op::ret(RegId::ZERO)];
         let instructions = call_contract_repeat();
-        replace_contract_in_service(&mut service, &contract_id, contract);
-        run_with_service(
+        shared_factory.build_with_new_contract(contract).run(
             "contract/mint",
             group,
             instructions,
             script_data.clone(),
-            &service,
-            contract_id,
-            &rt,
-            &mut rng,
         );
     }
 
@@ -342,16 +272,11 @@ pub fn run_contract(group: &mut BenchmarkGroup<WallTime>) {
     {
         let contract = vec![op::ret(RegId::ONE), op::ret(RegId::ZERO)];
         let instructions = call_contract_repeat();
-        replace_contract_in_service(&mut service, &contract_id, contract);
-        run_with_service(
+        shared_factory.build_with_new_contract(contract).run(
             "contract/ret contract",
             group,
             instructions,
             script_data.clone(),
-            &service,
-            contract_id,
-            &rt,
-            &mut rng,
         );
     }
 
@@ -360,17 +285,13 @@ pub fn run_contract(group: &mut BenchmarkGroup<WallTime>) {
         for i in arb_dependent_cost_values() {
             let contract = vec![op::movi(0x14, i), op::retd(RegId::ONE, 0x14)];
             let instructions = call_contract_repeat();
-            replace_contract_in_service(&mut service, &contract_id, contract);
+            // replace_contract_in_service(&mut service, &contract_id, contract);
             let id = format!("contract/retd contract {:?}", i);
-            run_with_service(
+            shared_factory.build_with_new_contract(contract).run(
                 &id,
                 group,
                 instructions,
                 script_data.clone(),
-                &service,
-                contract_id,
-                &rt,
-                &mut rng,
             );
         }
     }
@@ -423,15 +344,13 @@ pub fn run_contract(group: &mut BenchmarkGroup<WallTime>) {
                 op::addi(0x16, 0x15, 32),              // data ppinter
                 op::movi(0x17, i),                     // data length
                 op::smo(0x15, 0x16, 0x17, 0x18),
-                op::ret(RegId::ZERO),
+                op::jmpb(RegId::ZERO, 0),
             ];
             let mut instructions = setup_instructions();
             instructions.extend(vec![
-                op::movi(0x18, 10), // coins to send
-                op::call(0x10, 0x18, 0x11, 0x12),
-                op::jmpb(RegId::ZERO, 0),
+                op::movi(0x18, 1), // coins to send
+                op::call(0x10, 0x12, 0x11, 0x12),
             ]);
-            replace_contract_in_service(&mut service, &contract_id, contract);
             let mut data = script_data.clone();
             data.extend(
                 Address::new([1u8; 32])
@@ -440,18 +359,10 @@ pub fn run_contract(group: &mut BenchmarkGroup<WallTime>) {
                     .chain(vec![2u8; i as usize]),
             );
             let id = format!("contract/smo {:?}", i);
-            run_with_service_with_extra_inputs(
-                &id,
-                group,
-                instructions,
-                script_data.clone(),
-                &service,
-                contract_id,
-                &rt,
-                &mut rng,
-                extra_inputs.clone(),
-                vec![],
-            );
+            shared_factory
+                .build_with_new_contract(contract)
+                .with_extra_inputs(extra_inputs.clone())
+                .run(&id, group, instructions, data);
         }
     }
 
@@ -497,16 +408,11 @@ pub fn run_contract(group: &mut BenchmarkGroup<WallTime>) {
             op::call(0x10, RegId::ZERO, 0x11, 0x12),
             op::jmpb(RegId::ZERO, 0),
         ]);
-        replace_contract_in_service(&mut service, &contract_id, contract);
-        run_with_service(
+        shared_factory.build_with_new_contract(contract).run(
             "contract/srw",
             group,
             instructions,
             script_data.clone(),
-            &service,
-            contract_id,
-            &rt,
-            &mut rng,
         );
     }
 
@@ -543,19 +449,19 @@ pub fn run_contract(group: &mut BenchmarkGroup<WallTime>) {
 
     // sww
 
-    {
-        let contract = vec![op::sww(RegId::ZERO, 0x29, RegId::ONE), op::ret(RegId::ZERO)];
-        let instructions = call_contract_repeat();
-        replace_contract_in_service(&mut service, &contract_id, contract);
-        run_with_service(
-            "contract/sww",
+    for i in 1..5 {
+        let contract = vec![op::sww(RegId::ZERO, 0x29, 0x13), op::jmpb(RegId::ZERO, 0)];
+        let mut instructions = setup_instructions();
+        instructions.extend(vec![
+            op::movi(0x13, i),
+            op::call(0x10, RegId::ZERO, 0x11, 0x12),
+        ]);
+        let id = format!("contract/sww {:?}", i);
+        shared_factory.build_with_new_contract(contract).run(
+            &id,
             group,
             instructions,
             script_data.clone(),
-            &service,
-            contract_id,
-            &rt,
-            &mut rng,
         );
     }
 
@@ -608,7 +514,6 @@ pub fn run_contract(group: &mut BenchmarkGroup<WallTime>) {
     }
 
     // tr
-
     {
         let contract = vec![op::tr(0x15, 0x14, 0x15), op::ret(RegId::ZERO)];
         let mut instructions = setup_instructions();
@@ -618,16 +523,11 @@ pub fn run_contract(group: &mut BenchmarkGroup<WallTime>) {
             op::call(0x10, RegId::ZERO, 0x11, 0x12),
             op::jmpb(RegId::ZERO, 0),
         ]);
-        replace_contract_in_service(&mut service, &contract_id, contract);
-        run_with_service(
+        shared_factory.build_with_new_contract(contract).run(
             "contract/tr",
             group,
             instructions,
             script_data.clone(),
-            &service,
-            contract_id,
-            &rt,
-            &mut rng,
         );
     }
 
@@ -692,50 +592,4 @@ pub fn run_contract(group: &mut BenchmarkGroup<WallTime>) {
     //         extra_outputs,
     //     );
     // }
-}
-
-fn replace_contract_in_service(
-    service: &mut FuelService,
-    contract_id: &ContractId,
-    contract_instructions: Vec<Instruction>,
-) {
-    let contract_bytecode: Vec<_> = contract_instructions
-        .iter()
-        .flat_map(|x| x.to_bytes())
-        .collect();
-    service
-        .shared
-        .database
-        .storage_as_mut::<ContractsRawCode>()
-        .insert(contract_id, &contract_bytecode)
-        .unwrap();
-}
-
-fn script_data(contract_id: &ContractId, asset_id: &AssetId) -> Vec<u8> {
-    contract_id
-        .iter()
-        .copied()
-        .chain((0 as Word).to_be_bytes().iter().copied())
-        .chain((0 as Word).to_be_bytes().iter().copied())
-        .chain(asset_id.iter().copied())
-        .collect()
-}
-
-fn setup_instructions() -> Vec<Instruction> {
-    vec![
-        op::gtf_args(0x10, 0x00, GTFArgs::ScriptData),
-        op::addi(0x11, 0x10, ContractId::LEN.try_into().unwrap()),
-        op::addi(0x11, 0x11, WORD_SIZE.try_into().unwrap()),
-        op::addi(0x11, 0x11, WORD_SIZE.try_into().unwrap()),
-        op::movi(0x12, TARGET_BLOCK_GAS_LIMIT as u32),
-    ]
-}
-
-fn call_contract_repeat() -> Vec<Instruction> {
-    let mut instructions = setup_instructions();
-    instructions.extend(vec![
-        op::call(0x10, RegId::ZERO, 0x11, 0x12),
-        op::jmpb(RegId::ZERO, 0),
-    ]);
-    instructions
 }

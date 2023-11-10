@@ -16,13 +16,19 @@ use ed25519_dalek::Signer;
 use fuel_core::service::{
     config::Trigger,
     Config,
+    FuelService,
     ServiceTrait,
 };
 use rand::SeedableRng;
 
 use ethnum::U256;
+use fuel_core::txpool::types::Word;
 use fuel_core_benches::*;
 use fuel_core_chain_config::ContractConfig;
+use fuel_core_storage::{
+    tables::ContractsRawCode,
+    StorageAsMut,
+};
 use fuel_core_types::{
     fuel_asm::{
         op,
@@ -55,7 +61,10 @@ use fuel_core_types::{
         Bytes32,
         ContractId,
     },
-    fuel_vm::checked_transaction::EstimatePredicates,
+    fuel_vm::{
+        checked_transaction::EstimatePredicates,
+        consts::WORD_SIZE,
+    },
 };
 
 mod utils;
@@ -72,8 +81,99 @@ use utils::{
 static GLOBAL: tikv_jemallocator::Jemalloc = tikv_jemallocator::Jemalloc;
 
 const STATE_SIZE: u64 = 10_000_000;
-const TARGET_BLOCK_GAS_LIMIT: u64 = 100_000;
+const TARGET_BLOCK_GAS_LIMIT: u64 = 262143;
 const BASE: u64 = 10_000;
+
+pub struct SanityBenchmarkFactory;
+
+pub struct SharedSanityBenchmarkFactory {
+    service: FuelService,
+    rt: tokio::runtime::Runtime,
+    contract_id: ContractId,
+    rng: rand::rngs::StdRng,
+}
+
+impl SanityBenchmarkFactory {
+    /// Creates a factory for benchmarks that share a service with a contract, `contract_id`, pre-
+    /// deployed.
+    pub fn new_shared(contract_id: ContractId) -> SharedSanityBenchmarkFactory {
+        let (service, rt) = service_with_contract_id(contract_id);
+        let rng = rand::rngs::StdRng::seed_from_u64(2322u64);
+        SharedSanityBenchmarkFactory {
+            service,
+            rt,
+            contract_id,
+            rng,
+        }
+    }
+}
+
+impl SharedSanityBenchmarkFactory {
+    pub fn build(&mut self) -> SanityBenchmark {
+        SanityBenchmark {
+            service: &mut self.service,
+            rt: &self.rt,
+            rng: &mut self.rng,
+            has_contract_input: true,
+            extra_inputs: vec![],
+            extra_outputs: vec![],
+        }
+    }
+
+    pub fn build_with_new_contract(
+        &mut self,
+        contract_instructions: Vec<Instruction>,
+    ) -> SanityBenchmark {
+        replace_contract_in_service(
+            &mut self.service,
+            &self.contract_id,
+            contract_instructions,
+        );
+        self.build()
+    }
+}
+
+pub struct SanityBenchmark<'a> {
+    service: &'a mut FuelService,
+    rt: &'a tokio::runtime::Runtime,
+    rng: &'a mut rand::rngs::StdRng,
+    has_contract_input: bool,
+    extra_inputs: Vec<Input>,
+    extra_outputs: Vec<Output>,
+}
+
+impl<'a> SanityBenchmark<'a> {
+    pub fn with_extra_inputs(mut self, extra_inputs: Vec<Input>) -> Self {
+        self.extra_inputs = extra_inputs;
+        self
+    }
+
+    pub fn with_extra_outputs(mut self, extra_outputs: Vec<Output>) -> Self {
+        self.extra_outputs = extra_outputs;
+        self
+    }
+
+    pub fn run(
+        self,
+        id: &str,
+        group: &mut BenchmarkGroup<WallTime>,
+        script: Vec<Instruction>,
+        script_data: Vec<u8>,
+    ) {
+        run_with_service_with_extra_inputs(
+            id,
+            group,
+            script,
+            script_data,
+            self.service,
+            VmBench::CONTRACT,
+            self.rt,
+            self.rng,
+            self.extra_inputs,
+            self.extra_outputs,
+        );
+    }
+}
 
 fn run(
     id: &str,
@@ -188,7 +288,8 @@ fn service_with_contract_id(
         .consensus_parameters
         .predicate_params
         .max_gas_per_predicate = TARGET_BLOCK_GAS_LIMIT;
-    config.chain_conf.block_gas_limit = TARGET_BLOCK_GAS_LIMIT;
+    // Some txs (e.g. smo) are too big so increasing this arbitrarily
+    config.chain_conf.block_gas_limit = TARGET_BLOCK_GAS_LIMIT * 3;
     config.utxo_validation = false;
     config.block_production = Trigger::Instant;
 
@@ -236,36 +337,9 @@ fn service_with_contract_id(
     (service, rt)
 }
 
-/// Runs benchmark for `script` with prepared `service` and specified contract (by 'contract_id') which should be
-/// included in service
-#[allow(clippy::too_many_arguments)]
-fn run_with_service(
-    id: &str,
-    group: &mut BenchmarkGroup<WallTime>,
-    script: Vec<Instruction>,
-    script_data: Vec<u8>,
-    service: &fuel_core::service::FuelService,
-    contract_id: ContractId,
-    rt: &tokio::runtime::Runtime,
-    rng: &mut rand::rngs::StdRng,
-) {
-    run_with_service_with_extra_inputs(
-        id,
-        group,
-        script,
-        script_data,
-        service,
-        contract_id,
-        rt,
-        rng,
-        vec![],
-        vec![],
-    );
-}
-
-/// Runs benchmark for `script` with prepared `service` and specified contract (by `contract_id`) which should be
-/// included in service.
-/// Also include additional inputs and outputs in transaction
+// Runs benchmark for `script` with prepared `service` and specified contract (by `contract_id`) which should be
+// included in service.
+// Also include additional inputs and outputs in transaction
 #[allow(clippy::too_many_arguments)]
 fn run_with_service_with_extra_inputs(
     id: &str,
@@ -300,20 +374,20 @@ fn run_with_service_with_extra_inputs(
                     Default::default(),
                     Default::default(),
                 );
-            let input_count = tx_builder.inputs().len();
+                let input_count = tx_builder.inputs().len();
 
-            let contract_input = Input::contract(
-                UtxoId::default(),
-                Bytes32::zeroed(),
-                Bytes32::zeroed(),
-                TxPointer::default(),
-                contract_id,
-            );
-            let contract_output = Output::contract(input_count as u8, Bytes32::zeroed(), Bytes32::zeroed());
+                let contract_input = Input::contract(
+                    UtxoId::default(),
+                    Bytes32::zeroed(),
+                    Bytes32::zeroed(),
+                    TxPointer::default(),
+                    contract_id,
+                );
+                let contract_output = Output::contract(input_count as u8, Bytes32::zeroed(), Bytes32::zeroed());
 
-            tx_builder
-                .add_input(contract_input)
-                .add_output(contract_output);
+                tx_builder
+                    .add_input(contract_input)
+                    .add_output(contract_output);
 
             for input in &extra_inputs {
                 tx_builder.add_input(input.clone());
@@ -403,6 +477,58 @@ fn block_target_gas(c: &mut Criterion) {
     run_memory(&mut group);
 
     group.finish();
+}
+
+fn replace_contract_in_service(
+    service: &mut FuelService,
+    contract_id: &ContractId,
+    contract_instructions: Vec<Instruction>,
+) {
+    let contract_bytecode: Vec<_> = contract_instructions
+        .iter()
+        .flat_map(|x| x.to_bytes())
+        .collect();
+    service
+        .shared
+        .database
+        .storage_as_mut::<ContractsRawCode>()
+        .insert(contract_id, &contract_bytecode)
+        .unwrap();
+}
+
+fn script_data(contract_id: &ContractId, asset_id: &AssetId) -> Vec<u8> {
+    contract_id
+        .iter()
+        .copied()
+        .chain((0 as Word).to_be_bytes().iter().copied())
+        .chain((0 as Word).to_be_bytes().iter().copied())
+        .chain(asset_id.iter().copied())
+        .collect()
+}
+
+fn setup_instructions() -> Vec<Instruction> {
+    vec![
+        op::gtf_args(0x10, 0x00, GTFArgs::ScriptData),
+        op::addi(0x11, 0x10, ContractId::LEN.try_into().unwrap()),
+        op::addi(0x11, 0x11, WORD_SIZE.try_into().unwrap()),
+        op::addi(0x11, 0x11, WORD_SIZE.try_into().unwrap()),
+        op::movi(0x12, TARGET_BLOCK_GAS_LIMIT as u32),
+    ]
+}
+
+fn call_contract_repeat() -> Vec<Instruction> {
+    let mut instructions = setup_instructions();
+    instructions.extend(vec![
+        op::call(0x10, RegId::ZERO, 0x11, 0x12),
+        op::jmpb(RegId::ZERO, 0),
+    ]);
+    instructions
+}
+
+fn call_contract_once() -> Vec<Instruction> {
+    let mut instructions = setup_instructions();
+    instructions.extend(vec![op::call(0x10, RegId::ZERO, 0x11, 0x12)]);
+    instructions
 }
 
 criterion_group!(benches, block_target_gas);
