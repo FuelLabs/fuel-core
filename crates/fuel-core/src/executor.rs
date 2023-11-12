@@ -25,6 +25,7 @@ use fuel_core_storage::{
     StorageAsMut,
     StorageAsRef,
     StorageInspect,
+    StorageMutate,
 };
 #[allow(unused_imports)]
 use fuel_core_types::{
@@ -122,6 +123,7 @@ use fuel_core_types::{
     },
 };
 
+use fuel_core_executor::refs::ExecutorDatabaseTrait;
 use fuel_core_txpool::types::ContractId;
 use fuel_core_types::{
     fuel_tx::{
@@ -189,11 +191,12 @@ impl TransactionsSource for OnceTransactionsSource {
 /// In production mode, block fields like transaction commitments are set based on the executed txs.
 /// In validation mode, the processed block commitments are compared with the proposed block.
 #[derive(Clone, Debug)]
-pub struct Executor<R>
-where
-    R: RelayerPort + Clone,
+pub struct Executor<R, D>
+// where
+// R: RelayerPort + Clone,
+// D: ExecutorDatabaseTrait<D> + Clone
 {
-    pub database: Database,
+    pub database: D,
     pub relayer: R,
     pub config: Arc<Config>,
 }
@@ -232,9 +235,13 @@ impl From<&Config> for ExecutionOptions {
     }
 }
 
-impl<R> Executor<R>
+impl<R, D> Executor<R, D>
 where
     R: RelayerPort + Clone,
+    D: ExecutorDatabaseTrait<D>
+        + StorageMutate<FuelBlocks>
+        + StorageInspect<FuelBlocks, Error = ExecutorError>
+        + Clone,
 {
     #[cfg(any(test, feature = "test-helpers"))]
     /// Executes the block and commits the result of the execution into the inner `Database`.
@@ -263,8 +270,8 @@ where
 }
 
 #[cfg(test)]
-impl Executor<Database> {
-    fn test(database: Database, config: Config) -> Self {
+impl<D: Clone> Executor<D, D> {
+    fn test(database: D, config: Config) -> Self {
         Self {
             relayer: database.clone(),
             database,
@@ -273,9 +280,13 @@ impl Executor<Database> {
     }
 }
 
-impl<R> Executor<R>
+impl<R, D> Executor<R, D>
 where
     R: RelayerPort + Clone,
+    D: ExecutorDatabaseTrait<D>
+        + StorageMutate<FuelBlocks>
+        + StorageInspect<FuelBlocks, Error = ExecutorError>
+        + Clone,
 {
     pub fn execute_without_commit<TxSource>(
         &self,
@@ -380,15 +391,19 @@ mod private {
 }
 use private::*;
 
-impl<R> Executor<R>
+impl<R, D> Executor<R, D>
 where
     R: RelayerPort + Clone,
+    D: ExecutorDatabaseTrait<D>
+        + StorageMutate<FuelBlocks>
+        + StorageInspect<FuelBlocks, Error = ExecutorError>
+        + Clone,
 {
     #[tracing::instrument(skip_all)]
     fn execute_inner<TxSource>(
         &self,
         block: ExecutionBlockWithSource<TxSource>,
-        database: &Database,
+        database: &D,
         options: ExecutionOptions,
     ) -> ExecutorResult<UncommittedResult<StorageTransaction<Database>>>
     where
@@ -487,14 +502,15 @@ where
         // ------------ GraphQL API Functionality BEGIN ------------
 
         // save the status for every transaction using the finalized block id
+
         self.persist_transaction_status(&result, block_db_transaction.deref_mut())?;
 
         // save the associated owner for each transaction in the block
         self.index_tx_owners_for_block(&result.block, &mut block_db_transaction)?;
 
         // ------------ GraphQL API Functionality   END ------------
-
         // insert block into database
+
         block_db_transaction
             .deref_mut()
             .storage::<FuelBlocks>()
@@ -516,7 +532,7 @@ where
     /// Execute the fuel block with all transactions.
     fn execute_block<TxSource>(
         &self,
-        block_db_transaction: &mut DatabaseTransaction,
+        block_db_transaction: &mut impl StorageTransactionTrait<D>,
         block: ExecutionType<PartialBlockComponent<TxSource>>,
         options: ExecutionOptions,
     ) -> ExecutorResult<ExecutionData>
@@ -1640,7 +1656,7 @@ where
     fn index_tx_owners_for_block(
         &self,
         block: &Block,
-        block_db_transaction: &mut DatabaseTransaction,
+        block_db_transaction: &mut impl StorageTransactionTrait<D>,
     ) -> ExecutorResult<()> {
         for (tx_idx, tx) in block.transactions().iter().enumerate() {
             let block_height = *block.header().height();
@@ -1680,7 +1696,7 @@ where
         outputs: &[Output],
         tx_id: &Bytes32,
         tx_idx: u16,
-        db: &mut Database,
+        db: &mut impl ExecutorDatabaseTrait<D>,
     ) -> ExecutorResult<()> {
         let mut owners = vec![];
         for input in inputs {
@@ -1721,7 +1737,7 @@ where
     fn persist_transaction_status(
         &self,
         result: &ExecutionResult,
-        db: &Database,
+        db: &impl ExecutorDatabaseTrait<D>,
     ) -> ExecutorResult<()> {
         let time = result.block.header().time();
         let block_id = result.block.id();
@@ -3891,10 +3907,9 @@ mod tests {
     }
 
     /// Helper to build database and executor for some of the message tests
-    fn make_executor(messages: &[&Message]) -> Executor<Database> {
+    fn make_executor<R, D>(messages: &[&Message]) -> Executor<R, D> {
         let mut database = Database::default();
         let database_ref = &mut database;
-
         for message in messages {
             database_ref
                 .storage::<Messages>()

@@ -46,6 +46,7 @@ type DatabaseResult<T> = Result<T>;
 // TODO: Extract `Database` and all belongs into `fuel-core-database`.
 #[cfg(feature = "rocksdb")]
 use crate::state::rocks_db::RocksDb;
+use fuel_core_executor::refs::ExecutorDatabaseTrait;
 #[cfg(feature = "rocksdb")]
 use std::path::Path;
 use strum::EnumCount;
@@ -435,6 +436,14 @@ impl Transactional for Database {
 
     fn transaction(&self) -> StorageTransaction<Database> {
         StorageTransaction::new(self.transaction())
+    }
+}
+
+impl ExecutorDatabaseTrait<Database> for Database {
+    type T = DatabaseTransaction;
+
+    fn transaction(&self) -> Self::T {
+        self.transaction()
     }
 }
 
