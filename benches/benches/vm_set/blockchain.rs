@@ -39,7 +39,7 @@ use rand::{
 };
 
 pub struct BenchDb {
-    db: RocksDb,
+    db: Database,
     /// Used for RAII cleanup. Contents of this directory are deleted on drop.
     _tmp_dir: ShallowTempDir,
 }
@@ -51,14 +51,17 @@ impl BenchDb {
         let tmp_dir = ShallowTempDir::new();
 
         let db = Arc::new(RocksDb::default_open(tmp_dir.path(), None).unwrap());
+        let mut storage_key = primitive_types::U256::zero();
+        let mut key_bytes = Bytes32::zeroed();
 
-        let mut database = Database::new(db.clone());
+        let mut database = Database::new(db);
         database.init_contract_state(
             contract,
-            (0..Self::STATE_SIZE).map(|k| {
-                let mut key = Bytes32::zeroed();
-                key.as_mut()[..8].copy_from_slice(&k.to_be_bytes());
-                (key, key)
+            (0..Self::STATE_SIZE).map(|_| {
+                use fuel_core::database::vm_database::IncreaseStorageKey;
+                storage_key.to_big_endian(key_bytes.as_mut());
+                storage_key.increase().unwrap();
+                (key_bytes, key_bytes)
             }),
         )?;
         database.init_contract_balances(
@@ -77,19 +80,15 @@ impl BenchDb {
             }),
         )?;
 
-        drop(database); // Drops one reference to the db wrapper, but we still hold the last one
         Ok(Self {
             _tmp_dir: tmp_dir,
-            db: Arc::into_inner(db).expect("All other references must be dropped"),
+            db: database,
         })
     }
 
     /// Create a new separate database instance using a rocksdb checkpoint
     fn checkpoint(&self) -> VmDatabase {
-        use fuel_core::state::TransactableStorage;
-        let database = TransactableStorage::checkpoint(&self.db)
-            .expect("Unable to create checkpoint");
-        VmDatabase::default_from_database(database)
+        VmDatabase::default_from_database(self.db.clone())
     }
 }
 
@@ -124,16 +123,30 @@ pub fn run(c: &mut Criterion) {
             .with_dummy_contract(contract),
     );
 
-    run_group_ref(
-        &mut c.benchmark_group("sww"),
-        "sww",
-        VmBench::contract_using_db(
+    {
+        let mut start_key = Bytes32::zeroed();
+        // The checkpoint was initialized with entries starting `0..Self::STATE_SIZE`.
+        // We want to write new entry to the database, so the starting key is far.
+        start_key.as_mut()[0] = 255;
+        let data = start_key.iter().copied().collect::<Vec<_>>();
+
+        let post_call = vec![
+            op::gtf_args(0x10, 0x00, GTFArgs::ScriptData),
+            op::addi(0x11, 0x10, ContractId::LEN.try_into().unwrap()),
+            op::addi(0x11, 0x11, WORD_SIZE.try_into().unwrap()),
+            op::addi(0x11, 0x11, WORD_SIZE.try_into().unwrap()),
+        ];
+        let mut bench = VmBench::contract_using_db(
             rng,
             db.checkpoint(),
-            op::sww(RegId::ZERO, 0x29, RegId::ONE),
+            op::sww(0x11, 0x29, RegId::ONE),
         )
-        .expect("failed to prepare contract"),
-    );
+        .expect("failed to prepare contract")
+        .with_post_call(post_call);
+        bench.data.extend(data);
+
+        run_group_ref(&mut c.benchmark_group("sww"), "sww", bench);
+    }
 
     {
         let mut input =
@@ -146,6 +159,7 @@ pub fn run(c: &mut Criterion) {
     let mut scwq = c.benchmark_group("scwq");
 
     for i in linear_short.clone() {
+        // We want to clear entries from the checkpoint, so the starting key is zero.
         let start_key = Bytes32::zeroed();
         let data = start_key.iter().copied().collect::<Vec<_>>();
 
@@ -172,7 +186,10 @@ pub fn run(c: &mut Criterion) {
     let mut swwq = c.benchmark_group("swwq");
 
     for i in linear_short.clone() {
-        let start_key = Bytes32::zeroed();
+        let mut start_key = Bytes32::zeroed();
+        // The checkpoint was initialized with entries starting `0..Self::STATE_SIZE`.
+        // We want to write new entries to the database, so the starting key is far.
+        start_key.as_mut()[0] = 255;
         let data = start_key.iter().copied().collect::<Vec<_>>();
 
         let post_call = vec![
@@ -522,42 +539,33 @@ pub fn run(c: &mut Criterion) {
 
     smo.finish();
 
-    let mut srwq = c.benchmark_group("srwq");
+    {
+        let mut srwq = c.benchmark_group("srwq");
 
-    for i in linear_short.clone() {
-        let start_key = Bytes32::zeroed();
-        let data = start_key.iter().copied().collect::<Vec<_>>();
+        for i in linear_short.clone() {
+            // We want to iterate over initialized entries starting key 0.
+            let start_key = Bytes32::zeroed();
+            let data = start_key.iter().copied().collect::<Vec<_>>();
 
-        let post_call = vec![
-            op::movi(0x16, i as u32),
-            op::movi(0x17, 2000),
-            op::move_(0x15, 0x16),
-            op::muli(0x15, 0x15, 32),
-            op::addi(0x15, 0x15, 1),
-            op::aloc(0x15),
-            op::move_(0x14, RegId::HP),
-        ];
-        let mut bench = VmBench::contract(rng, op::srwq(0x14, 0x11, 0x27, 0x16))
-            .expect("failed to prepare contract")
-            .with_post_call(post_call)
-            .with_prepare_db(move |mut db| {
-                let slots = (0u64..i).map(|key_number| {
-                    let mut key = Bytes32::zeroed();
-                    key.as_mut()[..8].copy_from_slice(&key_number.to_be_bytes());
-                    (key, key)
-                });
-                db.database_mut()
-                    .init_contract_state(&contract, slots)
-                    .unwrap();
+            let post_call = vec![
+                op::movi(0x16, i as u32),
+                op::movi(0x17, 2000),
+                op::move_(0x15, 0x16),
+                op::muli(0x15, 0x15, 32),
+                op::addi(0x15, 0x15, 1),
+                op::aloc(0x15),
+                op::move_(0x14, RegId::HP),
+            ];
+            let mut bench = VmBench::contract(rng, op::srwq(0x14, 0x11, 0x27, 0x16))
+                .expect("failed to prepare contract")
+                .with_post_call(post_call);
+            bench.data.extend(data);
+            srwq.throughput(Throughput::Bytes(i));
+            run_group_ref(&mut srwq, format!("{i}"), bench);
+        }
 
-                Ok(db)
-            });
-        bench.data.extend(data);
-        srwq.throughput(Throughput::Bytes(i));
-        run_group_ref(&mut srwq, format!("{i}"), bench);
+        srwq.finish();
     }
-
-    srwq.finish();
 
     run_group_ref(
         &mut c.benchmark_group("time"),

@@ -92,7 +92,6 @@ pub struct VmBench {
     pub prepare_call: Option<PrepareCall>,
     pub dummy_contract: Option<ContractId>,
     pub contract_code: Option<ContractCode>,
-    pub prepare_db: Option<Box<dyn FnMut(VmDatabase) -> anyhow::Result<VmDatabase>>>,
 }
 
 #[derive(Debug, Clone)]
@@ -131,7 +130,6 @@ impl VmBench {
             prepare_call: None,
             dummy_contract: None,
             contract_code: None,
-            prepare_db: None,
         }
     }
 
@@ -289,14 +287,6 @@ impl VmBench {
         self
     }
 
-    pub fn with_prepare_db<F>(mut self, prepare_db: F) -> Self
-    where
-        F: FnMut(VmDatabase) -> anyhow::Result<VmDatabase> + 'static,
-    {
-        self.prepare_db.replace(Box::new(prepare_db));
-        self
-    }
-
     pub fn prepare(self) -> anyhow::Result<VmBenchPrepared> {
         self.try_into()
     }
@@ -323,7 +313,6 @@ impl TryFrom<VmBench> for VmBenchPrepared {
             prepare_call,
             dummy_contract,
             contract_code,
-            prepare_db,
         } = case;
 
         let mut db = db.unwrap_or_else(new_db);
@@ -393,11 +382,6 @@ impl TryFrom<VmBench> for VmBenchPrepared {
 
             db.deploy_contract_with_id(&salt, &slots, &contract, &root, &id)?;
         }
-
-        let db = match prepare_db {
-            Some(mut prepare_db) => prepare_db(db)?,
-            None => db,
-        };
 
         inputs.into_iter().for_each(|i| {
             tx.add_input(i);

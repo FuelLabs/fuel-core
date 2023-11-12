@@ -48,7 +48,7 @@ pub struct VmDatabase {
     database: Database,
 }
 
-trait IncreaseStorageKey {
+pub trait IncreaseStorageKey {
     fn increase(&mut self) -> anyhow::Result<()>;
 }
 

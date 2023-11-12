@@ -2821,6 +2821,7 @@ dependencies = [
  "futures",
  "nalgebra",
  "p256 0.13.2",
+ "primitive-types",
  "quanta",
  "rand 0.8.5",
  "serde",

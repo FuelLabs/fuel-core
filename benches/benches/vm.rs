@@ -32,17 +32,13 @@ where
                 instruction,
                 diff,
             } = &mut i;
-            let checkpoint = vm
-                .as_mut()
-                .database_mut()
-                .checkpoint()
-                .expect("Should be able to create a checkpoint");
+            let database = vm.as_mut().database_mut().clone();
 
             let clock = quanta::Clock::new();
 
             let mut total = core::time::Duration::ZERO;
             for _ in 0..iters {
-                let database_tx = checkpoint.transaction().as_ref().clone();
+                let database_tx = database.transaction().as_ref().clone();
                 let original_db =
                     core::mem::replace(vm.as_mut().database_mut(), database_tx);
                 let start = black_box(clock.raw());
@@ -68,8 +64,8 @@ where
 }
 
 fn vm(c: &mut Criterion) {
-    alu::run(c);
     blockchain::run(c);
+    alu::run(c);
     crypto::run(c);
     flow::run(c);
     mem::run(c);
