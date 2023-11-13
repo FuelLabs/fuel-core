@@ -90,12 +90,16 @@ pub fn collect(
 
     match format {
         OutputFormat::Yaml => {
-            serde_yaml::to_writer(writer, &state.to_yaml()).unwrap();
+            let yaml = state.to_yaml();
+            serde_yaml::to_writer(writer, &yaml).unwrap();
         }
         OutputFormat::Json => {
             serde_json::to_writer(writer, &state.to_json()).unwrap();
         }
-        OutputFormat::Rust => write!(&mut writer, "{}", state.to_rust_code()).unwrap(),
+        OutputFormat::Rust => {
+            let mut yaml = state.to_yaml();
+            write!(&mut writer, "{}", state.to_rust_code(&mut yaml)).unwrap()
+        }
     }
 
     println!("Successfully wrote output to {}", output.display());

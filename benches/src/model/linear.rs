@@ -1,5 +1,8 @@
 use super::within_epsilon;
-use crate::Fit;
+use crate::{
+    Fit,
+    Resolve,
+};
 
 /// Linear Coefficients
 #[derive(Debug, Clone, Copy)]
@@ -8,17 +11,29 @@ pub struct LinearCoefficients {
     pub intercept: f64,
 }
 
+fn is_zero(value: f64) -> bool {
+    within_epsilon(value, 0.0, 0.0001)
+}
+
+fn is_nonzero(value: f64) -> bool {
+    !is_zero(value) && value.is_normal() && value.is_finite()
+}
+
 impl LinearCoefficients {
     pub fn new(slope: f64, intercept: f64) -> Self {
         Self { slope, intercept }
     }
 
-    pub fn resolve(&self, x: f64) -> f64 {
-        self.slope * x + self.intercept
+    pub fn is_zero(&self) -> bool {
+        is_zero(self.slope) && is_zero(self.intercept)
+    }
+
+    pub fn is_constant(&self) -> bool {
+        is_zero(self.slope) && is_nonzero(self.intercept)
     }
 
     pub fn is_linear(&self) -> bool {
-        !within_epsilon(self.slope, 0.0, 0.01)
+        is_nonzero(self.slope)
     }
 
     /// Sum of squares residual
@@ -58,5 +73,11 @@ impl LinearCoefficients {
 impl Fit for LinearCoefficients {
     fn fit(&self, points: &[(f64, f64)]) -> f64 {
         self.r_squared(points)
+    }
+}
+
+impl Resolve for LinearCoefficients {
+    fn resolve(&self, x: f64) -> f64 {
+        self.slope * x + self.intercept
     }
 }

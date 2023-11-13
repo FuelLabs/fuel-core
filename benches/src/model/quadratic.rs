@@ -1,5 +1,8 @@
 use super::within_epsilon;
-use crate::Fit;
+use crate::{
+    Fit,
+    Resolve,
+};
 
 /// Quadratic coefficients
 #[derive(Debug, Clone, Copy)]
@@ -10,7 +13,7 @@ pub struct QuadraticCoefficients {
 }
 
 fn is_zero(value: f64) -> bool {
-    within_epsilon(value, 0.0, 0.01)
+    within_epsilon(value, 0.0, 0.0001)
 }
 
 fn is_nonzero(value: f64) -> bool {
@@ -20,11 +23,6 @@ fn is_nonzero(value: f64) -> bool {
 impl QuadraticCoefficients {
     pub fn new(a: f64, b: f64, c: f64) -> Self {
         Self { a, b, c }
-    }
-
-    pub fn resolve(&self, x: f64) -> f64 {
-        let QuadraticCoefficients { a, b, c } = self;
-        a * x.powi(2) + b * x + c
     }
 
     pub fn is_zero(&self) -> bool {
@@ -81,5 +79,12 @@ impl QuadraticCoefficients {
 impl Fit for QuadraticCoefficients {
     fn fit(&self, points: &[(f64, f64)]) -> f64 {
         self.r_squared(points)
+    }
+}
+
+impl Resolve for QuadraticCoefficients {
+    fn resolve(&self, x: f64) -> f64 {
+        let QuadraticCoefficients { a, b, c } = self;
+        a * x.powi(2) + b * x + c
     }
 }

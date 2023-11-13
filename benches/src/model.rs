@@ -3,7 +3,11 @@ mod linear;
 mod logarithmic;
 mod quadratic;
 
-use crate::regression::quadratic_regression;
+use crate::regression::{
+    linear_regression,
+    quadratic_regression,
+};
+use anyhow::anyhow;
 
 pub use constant::ConstantCoefficients;
 pub use linear::LinearCoefficients;
@@ -12,6 +16,34 @@ pub use quadratic::QuadraticCoefficients;
 
 pub trait Fit {
     fn fit(&self, points: &[(f64, f64)]) -> f64;
+}
+
+pub trait Resolve {
+    fn resolve(&self, x: f64) -> f64;
+}
+
+pub trait Error {
+    fn squared_error(&self, x: f64, y: f64) -> f64;
+    fn squared_errors(&self, points: &[(f64, f64)]) -> Vec<f64>;
+}
+
+impl<T: Resolve> Error for T {
+    fn squared_error(&self, x: f64, y: f64) -> f64 {
+        let real_value = y;
+        let predicted_value = self.resolve(x);
+        let difference = real_value - predicted_value;
+        difference.powi(2)
+    }
+
+    fn squared_errors(&self, points: &[(f64, f64)]) -> Vec<f64> {
+        let real_values = points.iter().map(|(_, y)| *y);
+        let predicted_values = points.iter().map(|(x, _)| self.resolve(*x));
+        real_values
+            .zip(predicted_values)
+            .map(|(real, predicted)| real - predicted)
+            .map(|difference| difference.powi(2))
+            .collect()
+    }
 }
 
 pub fn within_epsilon(value: f64, expected: f64, epsilon: f64) -> bool {
@@ -66,31 +98,112 @@ impl Model {
     pub fn is_other(&self) -> bool {
         matches!(self, Model::Other)
     }
+
+    pub fn resolve_point(&self, x: f64) -> anyhow::Result<f64> {
+        match self {
+            Model::Zero => Ok(0.0),
+            Model::Constant(coefficients) => {
+                let y = coefficients.resolve(x);
+                Ok(y)
+            }
+            Model::Linear(coefficients) => {
+                let y = coefficients.resolve(x);
+                Ok(y)
+            }
+            Model::Quadratic(coefficients) => {
+                let y = coefficients.resolve(x);
+                Ok(y)
+            }
+            Model::Other => Err(anyhow!("Unable to resolve with undefined model")),
+        }
+    }
+
+    pub fn squared_error(&self, x: f64, y: f64) -> anyhow::Result<f64> {
+        match self {
+            Model::Zero => Ok(y.powi(2)),
+            Model::Constant(coefficients) => {
+                let error = coefficients.squared_error(x, y);
+                Ok(error)
+            }
+            Model::Linear(coefficients) => {
+                let error = coefficients.squared_error(x, y);
+                Ok(error)
+            }
+            Model::Quadratic(coefficients) => {
+                let error = coefficients.squared_error(x, y);
+                Ok(error)
+            }
+            Model::Other => Err(anyhow!(
+                "Unable to calculate squared error with undefined model"
+            )),
+        }
+    }
+
+    pub fn squared_errors(&self, points: &[(f64, f64)]) -> anyhow::Result<Vec<f64>> {
+        match self {
+            Model::Zero => Ok(vec![0.0; points.len()]),
+            Model::Constant(coefficients) => {
+                let errors = coefficients.squared_errors(points);
+                Ok(errors)
+            }
+            Model::Linear(coefficients) => {
+                let errors = coefficients.squared_errors(points);
+                Ok(errors)
+            }
+            Model::Quadratic(coefficients) => {
+                let errors = coefficients.squared_errors(points);
+                Ok(errors)
+            }
+            Model::Other => Err(anyhow!(
+                "Unable to calculate squared errors with undefined model"
+            )),
+        }
+    }
 }
 
 /// Generate a model that estimates the points in the dataset
 pub fn estimate_model(points: &[(f64, f64)]) -> anyhow::Result<Model> {
-    let quadratic_coefficients = quadratic_regression(points)?;
-    if quadratic_coefficients.is_zero() {
+    let coefficients = linear_regression(points);
+    if coefficients.is_zero() {
         // Zero
         Ok(Model::Zero)
-    } else if quadratic_coefficients.is_constant() {
+    } else if coefficients.is_constant() {
         // Constant
-        let QuadraticCoefficients { c: y, .. } = quadratic_coefficients;
-        let constant_coefficients = ConstantCoefficients { y };
+        let LinearCoefficients { intercept, .. } = coefficients;
+        let constant_coefficients = ConstantCoefficients { y: intercept };
         Ok(Model::Constant(constant_coefficients))
-    } else if quadratic_coefficients.is_linear() {
+    } else if coefficients.is_linear() {
         // Linear
-        let QuadraticCoefficients {
-            b: slope,
-            c: intercept,
-            ..
-        } = quadratic_coefficients;
-        let linear_coefficients = LinearCoefficients { slope, intercept };
+        Ok(Model::Linear(coefficients))
+    } else {
+        // Other
+        Ok(Model::Other)
+    }
+}
+
+/// Generate a model that estimates the points in the dataset
+pub fn estimate_model_2(points: &[(f64, f64)]) -> anyhow::Result<Model> {
+    dbg!(&points);
+    let coefficients = quadratic_regression(points)?;
+    dbg!(&coefficients);
+    if coefficients.is_zero() {
+        // Zero
+        Ok(Model::Zero)
+    } else if coefficients.is_constant() {
+        // Constant
+        let QuadraticCoefficients { c, .. } = coefficients;
+        let constant_coefficients = ConstantCoefficients { y: c };
+        Ok(Model::Constant(constant_coefficients))
+    } else if coefficients.is_linear() {
+        // Linear
+        let QuadraticCoefficients { b, c, .. } = coefficients;
+        let linear_coefficients = LinearCoefficients {
+            slope: b,
+            intercept: c,
+        };
         Ok(Model::Linear(linear_coefficients))
-    } else if quadratic_coefficients.is_quadratic() {
-        // Quadratic
-        Ok(Model::Quadratic(quadratic_coefficients))
+    } else if coefficients.is_quadratic() {
+        Ok(Model::Quadratic(coefficients))
     } else {
         // Other
         Ok(Model::Other)

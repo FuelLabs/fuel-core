@@ -1,4 +1,7 @@
-use crate::Fit;
+use crate::{
+    Fit,
+    Resolve,
+};
 
 /// Constant Coefficients
 #[derive(Debug, Clone, Copy)]
@@ -11,12 +14,6 @@ impl ConstantCoefficients {
         Self { y }
     }
 
-    pub fn resolve(&self, _x: f64) -> f64 {
-        self.y
-    }
-}
-
-impl ConstantCoefficients {
     /// Sum of squares residual
     fn ssr(&self, points: &[(f64, f64)]) -> f64 {
         let ConstantCoefficients { y } = self;
@@ -50,5 +47,11 @@ impl ConstantCoefficients {
 impl Fit for ConstantCoefficients {
     fn fit(&self, points: &[(f64, f64)]) -> f64 {
         self.r_squared(points)
+    }
+}
+
+impl Resolve for ConstantCoefficients {
+    fn resolve(&self, _x: f64) -> f64 {
+        self.y
     }
 }

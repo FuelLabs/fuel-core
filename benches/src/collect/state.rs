@@ -92,7 +92,7 @@ impl Display for State {
 }
 
 impl State {
-    pub fn to_rust_code(&self) -> String {
+    pub fn to_rust_code(&self, yaml: &mut serde_yaml::Value) -> String {
         let remaps = [
             ("mod", "mod_op"),
             ("move", "move_op"),
@@ -105,7 +105,6 @@ impl State {
             .collect::<HashSet<_>>();
         let gas_costs = self.to_gas_costs();
         let mut value = serde_yaml::to_value(gas_costs).unwrap();
-        let mut yaml = self.to_yaml();
 
         let update_values = |values: &mut serde_yaml::Value| {
             let m = values.as_mapping_mut().unwrap();
@@ -121,7 +120,7 @@ impl State {
         };
 
         update_values(&mut value);
-        update_values(&mut yaml);
+        update_values(yaml);
 
         let have = yaml
             .as_mapping()
@@ -235,7 +234,7 @@ impl State {
         state.into_relative_costs(costs)
     }
 
-    pub fn baseline_duration(&self) -> core::time::Duration {
+    pub fn baseline_duration(&self) -> Duration {
         let nanos = self
             .ids
             .get(&self.baseline)
@@ -269,25 +268,28 @@ impl State {
                 samples.iter().any(|sample| throughput.contains_key(sample))
             })
             .map(|(name, samples)| {
+                println!("COSTING FOR {}", name);
                 let mut samples = samples
                     .iter()
                     .filter_map(|sample| {
-                        let mean = ids.remove(sample)?;
                         let throughput = *throughput.get(sample)?;
-                        Some((mean, throughput))
+                        let mean = ids.remove(sample)?;
+                        Some((throughput, mean))
                     })
-                    .map(|(mean, throughput)| {
+                    .map(|(throughput, mean)| {
                         let ratio = map_to_ratio(baseline, mean);
-                        (throughput, ratio)
+                        (throughput as f64, ratio as f64)
                     })
                     .collect::<Vec<_>>();
-                samples.sort_unstable_by_key(|(_, ratio)| *ratio);
+                samples.sort_unstable_by_key(|(throughput, _)| (*throughput) as u64);
+                dbg!(&samples);
                 (name.clone(), samples)
             })
             .collect::<Vec<_>>();
         let iter = dependent_groups.into_iter().map(|(name, points)| {
             groups.remove(&name);
-            let dependent_cost = dependent_cost(&name, points);
+            let dependent_cost = dependent_cost(&name, points)
+                .expect("Unable to calculate dependent cost");
             (name, Cost::Dependent(dependent_cost))
         });
         costs.0.extend(iter);

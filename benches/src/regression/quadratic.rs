@@ -52,6 +52,7 @@ mod tests {
             QuadraticCoefficients,
         },
         within_epsilon,
+        Resolve,
     };
 
     fn apply_noise<R: Rng>(value: f64, bound: f64, rng: &mut R) -> f64 {
