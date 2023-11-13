@@ -3,10 +3,7 @@ mod linear;
 mod logarithmic;
 mod quadratic;
 
-use crate::regression::{
-    linear_regression,
-    quadratic_regression,
-};
+use crate::regression::linear_regression;
 use anyhow::anyhow;
 
 pub use constant::ConstantCoefficients;
