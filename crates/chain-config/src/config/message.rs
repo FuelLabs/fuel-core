@@ -1,5 +1,8 @@
 use crate::{
-    serialization::{HexNumber, HexType},
+    serialization::{
+        HexNumber,
+        HexType,
+    },
     GenesisCommitment,
 };
 use fuel_core_storage::MerkleRoot;
@@ -8,9 +11,15 @@ use fuel_core_types::{
     entities::message::Message,
     fuel_asm::Word,
     fuel_crypto::Hasher,
-    fuel_types::{Address, Nonce},
+    fuel_types::{
+        Address,
+        Nonce,
+    },
 };
-use serde::{Deserialize, Serialize};
+use serde::{
+    Deserialize,
+    Serialize,
+};
 use serde_with::serde_as;
 
 #[serde_as]

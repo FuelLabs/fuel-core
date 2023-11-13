@@ -1,12 +1,17 @@
 use itertools::Itertools;
 
 use crate::{
-    config::{contract_balance::ContractBalance, contract_state::ContractState},
-    CoinConfig, ContractConfig, MessageConfig,
+    config::{
+        contract_balance::ContractBalance,
+        contract_state::ContractState,
+    },
+    CoinConfig,
+    ContractConfig,
+    MessageConfig,
 };
 
 #[derive(Clone, Debug, PartialEq)]
-pub(crate) struct ChainState {
+pub struct ChainState {
     pub(crate) coins: Vec<CoinConfig>,
     pub(crate) messages: Vec<MessageConfig>,
     pub(crate) contracts: Vec<ContractConfig>,

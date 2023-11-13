@@ -1,10 +1,28 @@
-use crate::serialization::{HexNumber, HexType};
-use fuel_core_types::{
-    fuel_tx::{Contract, ContractId, StorageSlot},
-    fuel_types::{AssetId, BlockHeight, Bytes32, Salt},
+use crate::serialization::{
+    HexNumber,
+    HexType,
 };
-use serde::{Deserialize, Serialize};
-use serde_with::{serde_as, skip_serializing_none};
+use fuel_core_types::{
+    fuel_tx::{
+        Contract,
+        ContractId,
+        StorageSlot,
+    },
+    fuel_types::{
+        AssetId,
+        BlockHeight,
+        Bytes32,
+        Salt,
+    },
+};
+use serde::{
+    Deserialize,
+    Serialize,
+};
+use serde_with::{
+    serde_as,
+    skip_serializing_none,
+};
 
 #[skip_serializing_none]
 #[serde_as]

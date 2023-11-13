@@ -1,15 +1,29 @@
 use crate::{
-    serialization::{HexNumber, HexType},
+    serialization::{
+        HexNumber,
+        HexType,
+    },
     GenesisCommitment,
 };
 use fuel_core_storage::MerkleRoot;
 use fuel_core_types::{
     entities::coins::coin::CompressedCoin,
     fuel_crypto::Hasher,
-    fuel_types::{Address, AssetId, BlockHeight, Bytes32},
+    fuel_types::{
+        Address,
+        AssetId,
+        BlockHeight,
+        Bytes32,
+    },
 };
-use serde::{Deserialize, Serialize};
-use serde_with::{serde_as, skip_serializing_none};
+use serde::{
+    Deserialize,
+    Serialize,
+};
+use serde_with::{
+    serde_as,
+    skip_serializing_none,
+};
 
 #[skip_serializing_none]
 #[serde_as]

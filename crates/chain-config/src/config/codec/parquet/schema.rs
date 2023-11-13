@@ -1,10 +1,18 @@
 use std::sync::Arc;
 
-use parquet::{basic::Repetition, schema::types::Type};
+use parquet::{
+    basic::Repetition,
+    schema::types::Type,
+};
 
 use crate::{
-    config::{contract_balance::ContractBalance, contract_state::ContractState},
-    CoinConfig, ContractConfig, MessageConfig,
+    config::{
+        contract_balance::ContractBalance,
+        contract_state::ContractState,
+    },
+    CoinConfig,
+    ContractConfig,
+    MessageConfig,
 };
 
 pub trait ParquetSchema {

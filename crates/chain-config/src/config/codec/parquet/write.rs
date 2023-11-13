@@ -1,21 +1,36 @@
-use std::{io::Write, marker::PhantomData, sync::Arc};
+use std::{
+    io::Write,
+    marker::PhantomData,
+    sync::Arc,
+};
 
 use itertools::Itertools;
 use parquet::{
     basic::Compression,
-    data_type::{ByteArrayType, FixedLenByteArrayType, Int32Type, Int64Type},
+    data_type::{
+        ByteArrayType,
+        FixedLenByteArrayType,
+        Int32Type,
+        Int64Type,
+    },
     file::{
         properties::WriterProperties,
-        writer::{SerializedColumnWriter, SerializedFileWriter},
+        writer::{
+            SerializedColumnWriter,
+            SerializedFileWriter,
+        },
     },
 };
 
 use crate::{
     config::{
-        codec::BatchWriter, contract_balance::ContractBalance,
+        codec::BatchWriter,
+        contract_balance::ContractBalance,
         contract_state::ContractState,
     },
-    CoinConfig, ContractConfig, MessageConfig,
+    CoinConfig,
+    ContractConfig,
+    MessageConfig,
 };
 
 use super::schema::ParquetSchema;

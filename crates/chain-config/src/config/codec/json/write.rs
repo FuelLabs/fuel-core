@@ -1,9 +1,12 @@
 use crate::{
     config::{
-        codec::BatchWriter, contract_balance::ContractBalance,
+        codec::BatchWriter,
+        contract_balance::ContractBalance,
         contract_state::ContractState,
     },
-    CoinConfig, ContractConfig, MessageConfig,
+    CoinConfig,
+    ContractConfig,
+    MessageConfig,
 };
 
 use super::chain_state::ChainState;
