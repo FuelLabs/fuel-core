@@ -8,5 +8,4 @@ pub use contract::{
 
 pub use database::{
     ExecutorDatabaseTrait,
-    StorageManipulation,
 };

@@ -241,6 +241,8 @@ where
     D: ExecutorDatabaseTrait<D>
         + StorageMutate<FuelBlocks>
         + StorageInspect<FuelBlocks, Error = ExecutorError>
+        + StorageInspect<Receipts, Error = ExecutorError>
+        + StorageInspect<Transactions, Error = ExecutorError>
         + Clone,
 {
     #[cfg(any(test, feature = "test-helpers"))]
@@ -286,13 +288,15 @@ where
     D: ExecutorDatabaseTrait<D>
         + StorageMutate<FuelBlocks>
         + StorageInspect<FuelBlocks, Error = ExecutorError>
+        + StorageInspect<Receipts, Error = ExecutorError>
+        + StorageInspect<Transactions, Error = ExecutorError>
         + Clone,
 {
     pub fn execute_without_commit<TxSource>(
         &self,
         block: ExecutionBlockWithSource<TxSource>,
         options: ExecutionOptions,
-    ) -> ExecutorResult<UncommittedResult<StorageTransaction<Database>>>
+    ) -> ExecutorResult<UncommittedResult<StorageTransaction<D>>>
     where
         TxSource: TransactionsSource,
     {
@@ -405,7 +409,7 @@ where
         block: ExecutionBlockWithSource<TxSource>,
         database: &D,
         options: ExecutionOptions,
-    ) -> ExecutorResult<UncommittedResult<StorageTransaction<Database>>>
+    ) -> ExecutorResult<UncommittedResult<StorageTransaction<D>>>
     where
         TxSource: TransactionsSource,
     {
@@ -568,7 +572,7 @@ where
          -> ExecutorResult<()> {
             let tx_count = execution_data.tx_count;
             let tx = {
-                let mut tx_db_transaction = block_db_transaction.transaction();
+                let mut tx_db_transaction = block_db_transaction.as_ref().transaction(); // TODO: Check traksaction
                 let tx_id = tx.id(&self.config.consensus_parameters.chain_id);
                 let result = self.execute_transaction(
                     tx,
@@ -673,7 +677,7 @@ where
         header: &PartialBlockHeader,
         execution_data: &mut ExecutionData,
         execution_kind: ExecutionKind,
-        tx_db_transaction: &mut DatabaseTransaction,
+        tx_db_transaction: &mut StorageTransactionTrait<D>,
         options: ExecutionOptions,
     ) -> ExecutorResult<Transaction> {
         if execution_data.found_mint {
