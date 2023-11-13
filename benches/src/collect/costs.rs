@@ -6,10 +6,7 @@ use serde::{
     Deserialize,
     Serialize,
 };
-use std::collections::{
-    HashMap,
-    VecDeque,
-};
+use std::collections::HashMap;
 
 #[derive(Debug, Default, Clone, Serialize, Deserialize)]
 pub struct Costs(pub HashMap<String, Cost>);
@@ -31,12 +28,6 @@ pub enum DependentCost {
 pub enum Cost {
     Relative(u64),
     Dependent(DependentCost),
-}
-
-fn slope(a: (f64, f64), b: (f64, f64)) -> f64 {
-    let rise = b.1 - a.1;
-    let run = b.0 - a.0;
-    rise / run
 }
 
 pub fn dependent_cost(
