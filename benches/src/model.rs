@@ -3,7 +3,7 @@ mod linear;
 mod logarithmic;
 mod quadratic;
 
-use crate::regression::linear_regression;
+use crate::regression::quadratic_regression;
 use anyhow::anyhow;
 
 pub use constant::ConstantCoefficients;
@@ -160,18 +160,22 @@ impl Model {
 
 /// Generate a model that estimates the points in the dataset
 pub fn estimate_model(points: &[(f64, f64)]) -> anyhow::Result<Model> {
-    let coefficients = linear_regression(points);
+    let coefficients = quadratic_regression(points)?;
     if coefficients.is_zero() {
         // Zero
         Ok(Model::Zero)
     } else if coefficients.is_constant() {
         // Constant
-        let LinearCoefficients { intercept, .. } = coefficients;
-        let constant_coefficients = ConstantCoefficients { y: intercept };
-        Ok(Model::Constant(constant_coefficients))
+        let linear: LinearCoefficients = coefficients.into();
+        let constant: ConstantCoefficients = linear.into();
+        Ok(Model::Constant(constant))
     } else if coefficients.is_linear() {
         // Linear
-        Ok(Model::Linear(coefficients))
+        let linear: LinearCoefficients = coefficients.into();
+        Ok(Model::Linear(linear))
+    } else if coefficients.is_quadratic() {
+        // Quadratic
+        Ok(Model::Quadratic(coefficients))
     } else {
         // Other
         Ok(Model::Other)
@@ -189,7 +193,7 @@ mod tests {
     use test_case::test_case;
 
     fn apply_noise<R: Rng>(value: f64, bound: f64, rng: &mut R) -> f64 {
-        let delta = rng.gen_range(-bound..bound);
+        let delta = rng.gen_range(-bound..=bound);
         value + delta
     }
 
@@ -198,7 +202,7 @@ mod tests {
         let mut rng = StdRng::seed_from_u64(0xF00DF00D);
         let function = |_x: f64| 0.0;
         let noise =
-            |(x, y): (_, f64)| -> (f64, f64) { (x, apply_noise(y, 1.0, &mut rng)) };
+            |(x, y): (_, f64)| -> (f64, f64) { (x, apply_noise(y, 0.01, &mut rng)) };
         let independent = core::iter::successors(Some(1.0), |n| Some(n + 1.0));
         let points = independent.map(|x| (x, function(x))).map(noise);
         let data = points.take(500).collect::<Vec<_>>();
