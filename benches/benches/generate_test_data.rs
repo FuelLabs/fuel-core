@@ -114,7 +114,7 @@ criterion_group!(
     benches,
     generate_baseline,
     generate_linear_data,
-    // generate_light_linear_data,
-    // generate_heavy_linear_data,
+    generate_light_linear_data,
+    generate_heavy_linear_data,
 );
 criterion_main!(benches);
