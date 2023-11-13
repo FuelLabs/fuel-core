@@ -527,9 +527,8 @@ mod tests {
 
         let costs = state.to_gas_costs();
 
-        let ser = serde_yaml::to_string(&costs).unwrap();
-        eprintln!("{ser}");
-        eprintln!("{}", state.to_rust_code());
+        let mut ser = serde_yaml::to_value(&costs).unwrap();
+        let rust = state.to_rust_code(&mut ser);
         let path = PathBuf::from(concat!(
             env!("CARGO_MANIFEST_DIR"),
             "/benches-outputs/src/test_gas_costs_output.rs"
@@ -538,7 +537,7 @@ mod tests {
             env!("CARGO_MANIFEST_DIR"),
             "/benches-outputs/Cargo.toml"
         ));
-        std::fs::write(path, state.to_rust_code()).unwrap();
+        std::fs::write(path, rust).unwrap();
         let output = std::process::Command::new("cargo")
             .arg("check")
             .arg("--manifest-path")
