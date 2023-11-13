@@ -526,8 +526,7 @@ mod tests {
         }
 
         let costs = state.to_gas_costs();
-
-        let mut ser = serde_yaml::to_value(&costs).unwrap();
+        let mut ser = serde_yaml::to_value(costs).unwrap();
         let rust = state.to_rust_code(&mut ser);
         let path = PathBuf::from(concat!(
             env!("CARGO_MANIFEST_DIR"),
