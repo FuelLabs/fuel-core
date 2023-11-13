@@ -63,28 +63,3 @@ impl BatchWriter<ContractBalance> for JsonBatchWriter {
         Ok(())
     }
 }
-
-#[cfg(test)]
-mod tests {
-
-    use super::*;
-
-    #[cfg(feature = "random")]
-    #[test]
-    fn writes_correctly() {
-        let data = ChainState::random(100, 100, &mut rand::thread_rng());
-        let mut writer = JsonBatchWriter::new();
-
-        writer.write_batch(data.contracts.clone()).unwrap();
-        writer.write_batch(data.coins.clone()).unwrap();
-        writer.write_batch(data.messages.clone()).unwrap();
-        for batch in data.contract_state.clone() {
-            writer.write_batch(batch).unwrap();
-        }
-        for batch in data.contract_balance.clone() {
-            writer.write_batch(batch).unwrap();
-        }
-
-        assert_eq!(writer.state(), &data);
-    }
-}

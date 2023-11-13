@@ -26,6 +26,7 @@ pub struct JsonBatchReader<T> {
 }
 
 impl<T> JsonBatchReader<T> {
+impl<T> JsonBatchReader<T> {
     pub fn from_state(chain_state: ChainState, batch_size: usize) -> Self {
         Self {
             source: chain_state,
