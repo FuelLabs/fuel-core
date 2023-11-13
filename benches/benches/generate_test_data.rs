@@ -61,7 +61,7 @@ fn generate_linear_data(c: &mut Criterion) {
     };
 
     let mut group = c.benchmark_group("linear_data");
-    let independent = successors(Some(1u64), |n| Some(n + 5)).take(20);
+    let independent = successors(Some(0u64), |n| Some(n + 5)).take(40);
     for n in independent {
         group.throughput(Throughput::Elements(n));
         let name = format!("linear_data_{}", n);
@@ -114,7 +114,7 @@ criterion_group!(
     benches,
     generate_baseline,
     generate_linear_data,
-    generate_light_linear_data,
-    generate_heavy_linear_data,
+    // generate_light_linear_data,
+    // generate_heavy_linear_data,
 );
 criterion_main!(benches);
