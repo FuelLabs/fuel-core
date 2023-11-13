@@ -268,7 +268,6 @@ impl State {
                 samples.iter().any(|sample| throughput.contains_key(sample))
             })
             .map(|(name, samples)| {
-                println!("COSTING FOR {}", name);
                 let mut samples = samples
                     .iter()
                     .filter_map(|sample| {
@@ -282,7 +281,6 @@ impl State {
                     })
                     .collect::<Vec<_>>();
                 samples.sort_unstable_by_key(|(throughput, _)| (*throughput) as u64);
-                dbg!(&samples);
                 (name.clone(), samples)
             })
             .collect::<Vec<_>>();

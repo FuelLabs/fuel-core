@@ -181,35 +181,6 @@ pub fn estimate_model(points: &[(f64, f64)]) -> anyhow::Result<Model> {
     }
 }
 
-/// Generate a model that estimates the points in the dataset
-pub fn estimate_model_2(points: &[(f64, f64)]) -> anyhow::Result<Model> {
-    dbg!(&points);
-    let coefficients = quadratic_regression(points)?;
-    dbg!(&coefficients);
-    if coefficients.is_zero() {
-        // Zero
-        Ok(Model::Zero)
-    } else if coefficients.is_constant() {
-        // Constant
-        let QuadraticCoefficients { c, .. } = coefficients;
-        let constant_coefficients = ConstantCoefficients { y: c };
-        Ok(Model::Constant(constant_coefficients))
-    } else if coefficients.is_linear() {
-        // Linear
-        let QuadraticCoefficients { b, c, .. } = coefficients;
-        let linear_coefficients = LinearCoefficients {
-            slope: b,
-            intercept: c,
-        };
-        Ok(Model::Linear(linear_coefficients))
-    } else if coefficients.is_quadratic() {
-        Ok(Model::Quadratic(coefficients))
-    } else {
-        // Other
-        Ok(Model::Other)
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;

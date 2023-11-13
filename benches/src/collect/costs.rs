@@ -67,8 +67,6 @@ pub fn dependent_cost(
             }
         }
         Model::Linear(coefficients) => {
-            dbg!(&points);
-            dbg!(&coefficients);
             match coefficients.slope {
                 slope if slope > 0.0 && slope < 1.0 => {
                     // Slope is between (0.0, 1.0)
