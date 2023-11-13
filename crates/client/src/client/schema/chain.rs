@@ -245,6 +245,7 @@ include_from_impls_and_cynic! {
         pub contract_root: DependentCost,
         pub state_root: DependentCost,
         pub vm_initialization: U64,
+        pub new_storage_per_byte: U64,
     }
 }
 

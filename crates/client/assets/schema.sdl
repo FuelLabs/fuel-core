@@ -387,6 +387,7 @@ type GasCosts {
 	contractRoot: DependentCost!
 	stateRoot: DependentCost!
 	vmInitialization: U64!
+	newStoragePerByte: U64!
 }
 
 type Genesis {
