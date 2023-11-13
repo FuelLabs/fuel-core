@@ -79,6 +79,7 @@ impl BenchDb {
                 (asset, key + 1_000)
             }),
         )?;
+        database.clone().flush()?;
 
         Ok(Self {
             _tmp_dir: tmp_dir,
@@ -107,7 +108,7 @@ pub fn run(c: &mut Criterion) {
     linear.extend(l);
 
     let asset: AssetId = rng.gen();
-    let contract: ContractId = rng.gen();
+    let contract: ContractId = VmBench::CONTRACT;
 
     let db = BenchDb::new(&contract).expect("Unable to fill contract storage");
 
@@ -135,6 +136,7 @@ pub fn run(c: &mut Criterion) {
             op::addi(0x11, 0x10, ContractId::LEN.try_into().unwrap()),
             op::addi(0x11, 0x11, WORD_SIZE.try_into().unwrap()),
             op::addi(0x11, 0x11, WORD_SIZE.try_into().unwrap()),
+            op::addi(0x11, 0x11, AssetId::LEN.try_into().unwrap()),
         ];
         let mut bench = VmBench::contract_using_db(
             rng,
@@ -149,10 +151,9 @@ pub fn run(c: &mut Criterion) {
     }
 
     {
-        let mut input =
-            VmBench::contract_using_db(rng, db.checkpoint(), op::srw(0x13, 0x14, 0x15))
+        let input =
+            VmBench::contract_using_db(rng, db.checkpoint(), op::srw(0x13, 0x14, 0x10))
                 .expect("failed to prepare contract");
-        input.prepare_script.extend(vec![op::movi(0x15, 2000)]);
         run_group_ref(&mut c.benchmark_group("srw"), "srw", input);
     }
 
@@ -168,6 +169,7 @@ pub fn run(c: &mut Criterion) {
             op::addi(0x11, 0x10, ContractId::LEN.try_into().unwrap()),
             op::addi(0x11, 0x11, WORD_SIZE.try_into().unwrap()),
             op::addi(0x11, 0x11, WORD_SIZE.try_into().unwrap()),
+            op::addi(0x11, 0x11, AssetId::LEN.try_into().unwrap()),
             op::movi(0x12, i as u32),
         ];
         let mut bench =
@@ -197,12 +199,13 @@ pub fn run(c: &mut Criterion) {
             op::addi(0x11, 0x10, ContractId::LEN.try_into().unwrap()),
             op::addi(0x11, 0x11, WORD_SIZE.try_into().unwrap()),
             op::addi(0x11, 0x11, WORD_SIZE.try_into().unwrap()),
+            op::addi(0x11, 0x11, AssetId::LEN.try_into().unwrap()),
             op::movi(0x12, i as u32),
         ];
         let mut bench = VmBench::contract_using_db(
             rng,
             db.checkpoint(),
-            op::swwq(0x10, 0x11, 0x20, 0x12),
+            op::swwq(0x11, 0x20, RegId::ZERO, 0x12),
         )
         .expect("failed to prepare contract")
         .with_post_call(post_call);

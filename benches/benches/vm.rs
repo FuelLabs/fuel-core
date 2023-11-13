@@ -32,15 +32,15 @@ where
                 instruction,
                 diff,
             } = &mut i;
-            let database = vm.as_mut().database_mut().clone();
 
             let clock = quanta::Clock::new();
 
             let mut total = core::time::Duration::ZERO;
             for _ in 0..iters {
-                let database_tx = database.transaction().as_ref().clone();
-                let original_db =
-                    core::mem::replace(vm.as_mut().database_mut(), database_tx);
+                let original_db = vm.as_mut().database_mut().clone();
+                let database_tx = original_db.transaction().as_ref().clone();
+                *vm.as_mut().database_mut() = database_tx;
+
                 let start = black_box(clock.raw());
                 match instruction {
                     Instruction::CALL(call) => {

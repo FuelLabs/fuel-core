@@ -428,6 +428,9 @@ impl TryFrom<VmBench> for VmBenchPrepared {
         }
 
         let start_vm = vm.clone();
+        let original_db = vm.as_mut().database_mut().clone();
+        let database_tx = original_db.transaction().as_ref().clone();
+        *vm.as_mut().database_mut() = database_tx;
         let mut vm = vm.add_recording();
         match instruction {
             Instruction::CALL(call) => {
@@ -444,6 +447,7 @@ impl TryFrom<VmBench> for VmBenchPrepared {
         diff += storage_diff;
         let diff: diff::Diff<diff::InitialVmState> = diff.into();
         vm.reset_vm_state(&diff);
+        *vm.as_mut().database_mut() = original_db;
 
         Ok(Self {
             vm,
