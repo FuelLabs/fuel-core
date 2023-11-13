@@ -134,8 +134,6 @@ pub fn init_sub_services(
     #[cfg(not(feature = "p2p"))]
     let p2p_adapter = P2PAdapter::new();
 
-    let p2p_adapter = p2p_adapter;
-
     let txpool = fuel_core_txpool::new_service(
         config.txpool.clone(),
         database.clone(),

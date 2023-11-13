@@ -185,9 +185,12 @@ pub fn random_improve(
                 }
 
                 // Break if adding doesn't improve the distance
-                let change_amount = collected_amount - target;
+                let change_amount = collected_amount
+                    .checked_sub(target)
+                    .expect("We checked it above");
                 let distance = target.abs_diff(change_amount);
-                let next_distance = target.abs_diff(change_amount + coin.amount());
+                let next_distance =
+                    target.abs_diff(change_amount.saturating_add(coin.amount()));
                 if next_distance >= distance {
                     break
                 }
@@ -215,6 +218,7 @@ impl From<StorageError> for CoinsQueryError {
     }
 }
 
+#[allow(clippy::arithmetic_side_effects)]
 #[cfg(test)]
 mod tests {
     use crate::{
@@ -344,7 +348,7 @@ mod tests {
             // Query some targets, including higher than the owner's balance
             for target in 0..20 {
                 let coins = query(
-                    &[AssetSpendTarget::new(asset_id, target, u64::MAX)],
+                    &[AssetSpendTarget::new(asset_id, target, usize::MAX)],
                     &owner,
                     base_asset_id,
                     &db.service_database(),
@@ -440,8 +444,8 @@ mod tests {
         ) {
             let coins = query(
                 &[
-                    AssetSpendTarget::new(asset_ids[0], 3, u64::MAX),
-                    AssetSpendTarget::new(asset_ids[1], 6, u64::MAX),
+                    AssetSpendTarget::new(asset_ids[0], 3, usize::MAX),
+                    AssetSpendTarget::new(asset_ids[1], 6, usize::MAX),
                 ],
                 &owner,
                 base_asset_id,
@@ -514,7 +518,7 @@ mod tests {
             // Query some amounts, including higher than the owner's balance
             for amount in 0..20 {
                 let coins = query(
-                    vec![AssetSpendTarget::new(asset_id, amount, u64::MAX)],
+                    vec![AssetSpendTarget::new(asset_id, amount, usize::MAX)],
                     owner,
                     asset_ids,
                     base_asset_id,
@@ -706,7 +710,7 @@ mod tests {
             // Query some amounts, including higher than the owner's balance
             for amount in 0..20 {
                 let coins = query(
-                    vec![AssetSpendTarget::new(asset_id, amount, u64::MAX)],
+                    vec![AssetSpendTarget::new(asset_id, amount, usize::MAX)],
                     excluded_ids.clone(),
                 );
 

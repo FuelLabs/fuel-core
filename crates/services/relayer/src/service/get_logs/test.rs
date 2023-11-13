@@ -1,3 +1,4 @@
+#![allow(clippy::arithmetic_side_effects)]
 use ethers_core::types::U256;
 use std::{
     ops::RangeInclusive,

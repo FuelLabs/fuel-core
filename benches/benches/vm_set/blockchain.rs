@@ -1,7 +1,5 @@
 use std::{
-    env,
     iter::successors,
-    path::PathBuf,
     sync::Arc,
 };
 
@@ -13,7 +11,10 @@ use criterion::{
 };
 use fuel_core::{
     database::vm_database::VmDatabase,
-    state::rocks_db::RocksDb,
+    state::rocks_db::{
+        RocksDb,
+        ShallowTempDir,
+    },
 };
 use fuel_core_benches::*;
 use fuel_core_types::{
@@ -37,27 +38,6 @@ use rand::{
     SeedableRng,
 };
 
-/// Reimplementation of `tempdir::TempDir` that allows creating a new
-/// instance without actually creating a new directory on the filesystem.
-/// This is needed since rocksdb requires empty directory for checkpoints.
-pub struct ShallowTempDir {
-    path: PathBuf,
-}
-impl ShallowTempDir {
-    pub fn new() -> Self {
-        let mut rng = rand::thread_rng();
-        let mut path = env::temp_dir();
-        path.push(format!("fuel-core-bench-rocksdb-{}", rng.next_u64()));
-        Self { path }
-    }
-}
-impl Drop for ShallowTempDir {
-    fn drop(&mut self) {
-        // Ignore errors
-        let _ = std::fs::remove_dir_all(&self.path);
-    }
-}
-
 pub struct BenchDb {
     db: RocksDb,
     /// Used for RAII cleanup. Contents of this directory are deleted on drop.
@@ -70,7 +50,7 @@ impl BenchDb {
     fn new(contract: &ContractId) -> anyhow::Result<Self> {
         let tmp_dir = ShallowTempDir::new();
 
-        let db = Arc::new(RocksDb::default_open(&tmp_dir.path, None).unwrap());
+        let db = Arc::new(RocksDb::default_open(tmp_dir.path(), None).unwrap());
 
         let mut database = Database::new(db.clone());
         database.init_contract_state(
@@ -106,14 +86,9 @@ impl BenchDb {
 
     /// Create a new separate database instance using a rocksdb checkpoint
     fn checkpoint(&self) -> VmDatabase {
-        let tmp_dir = ShallowTempDir::new();
-        self.db
-            .checkpoint(&tmp_dir.path)
+        use fuel_core::state::TransactableStorage;
+        let database = TransactableStorage::checkpoint(&self.db)
             .expect("Unable to create checkpoint");
-        let db = RocksDb::default_open(&tmp_dir.path, None).unwrap();
-        let database = Database::new(Arc::new(db)).with_drop(Box::new(move || {
-            drop(tmp_dir);
-        }));
         VmDatabase::default_from_database(database)
     }
 }
@@ -121,8 +96,11 @@ impl BenchDb {
 pub fn run(c: &mut Criterion) {
     let rng = &mut StdRng::seed_from_u64(2322u64);
 
+    const LAST_VALUE: u64 = 100_000;
     let mut linear: Vec<u64> = vec![1, 10, 100, 1000, 10_000];
-    let mut l = successors(Some(100_000.0f64), |n| Some(n / 1.5))
+    let mut linear_short = linear.clone();
+    linear_short.push(LAST_VALUE);
+    let mut l = successors(Some(LAST_VALUE as f64), |n| Some(n / 1.5))
         .take(5)
         .map(|f| f as u64)
         .collect::<Vec<_>>();
@@ -167,7 +145,7 @@ pub fn run(c: &mut Criterion) {
 
     let mut scwq = c.benchmark_group("scwq");
 
-    for i in linear.clone() {
+    for i in linear_short.clone() {
         let start_key = Bytes32::zeroed();
         let data = start_key.iter().copied().collect::<Vec<_>>();
 
@@ -193,7 +171,7 @@ pub fn run(c: &mut Criterion) {
 
     let mut swwq = c.benchmark_group("swwq");
 
-    for i in linear.clone() {
+    for i in linear_short.clone() {
         let start_key = Bytes32::zeroed();
         let data = start_key.iter().copied().collect::<Vec<_>>();
 
@@ -546,7 +524,7 @@ pub fn run(c: &mut Criterion) {
 
     let mut srwq = c.benchmark_group("srwq");
 
-    for i in linear.clone() {
+    for i in linear_short.clone() {
         let start_key = Bytes32::zeroed();
         let data = start_key.iter().copied().collect::<Vec<_>>();
 

@@ -225,7 +225,9 @@ impl BlockProducerDatabase for MockDb {
     }
 
     fn block_header_merkle_root(&self, height: &BlockHeight) -> StorageResult<Bytes32> {
-        Ok(Bytes32::new([height.as_usize() as u8; 32]))
+        Ok(Bytes32::new(
+            [u8::try_from(height.as_usize()).expect("Test use small values"); 32],
+        ))
     }
 
     fn current_block_height(&self) -> StorageResult<BlockHeight> {

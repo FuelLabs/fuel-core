@@ -149,8 +149,10 @@ impl NetworkBehaviour for DiscoveryBehaviour {
                     Box::pin(tokio::time::sleep(self.duration_to_next_kad));
                 // duration to next random walk should either be exponentially bigger than the previous
                 // or at max 60 seconds
-                self.duration_to_next_kad =
-                    std::cmp::min(self.duration_to_next_kad * 2, SIXTY_SECONDS);
+                self.duration_to_next_kad = std::cmp::min(
+                    self.duration_to_next_kad.saturating_mul(2),
+                    SIXTY_SECONDS,
+                );
             }
         }
 

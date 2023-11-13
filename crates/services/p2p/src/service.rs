@@ -363,7 +363,10 @@ impl<D> Task<FuelP2PService<PostcardCodec>, D, SharedState> {
         let reserved_peers_broadcast =
             p2p_service.peer_manager().reserved_peers_updates();
 
-        let next_check_time = Instant::now() + heartbeat_check_interval;
+        let next_check_time =
+            Instant::now().checked_add(heartbeat_check_interval).expect(
+                "The heartbeat check interval should be small enough to do frequently",
+            );
 
         Self {
             chain_id,
@@ -517,9 +520,9 @@ where
                         let request_msg = RequestMessage::SealedHeaders(block_height_range.clone());
                         let channel_item = ResponseChannelItem::SealedHeaders(response);
 
-                        // Note: this range has already been check for
+                        // Note: this range has already been checked for
                         // validity in `SharedState::get_sealed_block_headers`.
-                        let block_height = BlockHeight::from(block_height_range.end - 1);
+                        let block_height = BlockHeight::from(block_height_range.end.saturating_sub(1));
                         let peer = self.p2p_service
                              .get_peer_id_with_height(&block_height);
                         let _ = self.p2p_service.send_request_msg(peer, request_msg, channel_item);

@@ -12,9 +12,7 @@ description = "Create to create command line utilities for fuel-core key managem
 
 [dependencies]
 anyhow = { workspace = true }
-atty = "0.2.14"
 clap = { workspace = true, features = ["derive", "env"] }
 fuel-core-types = { workspace = true, features = ["serde", "random"] }
 libp2p-identity = { version = "0.2.4", features = ["secp256k1", "peerid"] }
-serde_json = { workspace = true, features = ["raw_value"] }
-termion = "2.0.1"
+serde = { workspace = true, features = ["derive"] }
