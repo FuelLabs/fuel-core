@@ -364,6 +364,8 @@ query {
             gasPerUnit
           }
         }
+        vmInitialization
+        newStoragePerByte
       }
     }
   }

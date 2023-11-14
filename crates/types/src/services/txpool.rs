@@ -7,6 +7,7 @@ use crate::{
         field::{
             Inputs,
             Outputs,
+            ScriptGasLimit,
         },
         Cacheable,
         Chargeable,
@@ -58,11 +59,11 @@ impl PoolTransaction {
         }
     }
 
-    /// Returns the gas limit.
-    pub fn limit(&self) -> Word {
+    /// Returns the maximum amount of gas that the transaction can consume.
+    pub fn max_gas(&self) -> Word {
         match self {
-            PoolTransaction::Script(script) => script.transaction().limit(),
-            PoolTransaction::Create(create) => create.transaction().limit(),
+            PoolTransaction::Script(script) => script.metadata().fee.max_gas(),
+            PoolTransaction::Create(create) => create.metadata().fee.max_gas(),
         }
     }
 
@@ -85,6 +86,15 @@ impl PoolTransaction {
 
 #[allow(missing_docs)]
 impl PoolTransaction {
+    pub fn script_gas_limit(&self) -> Option<Word> {
+        match self {
+            PoolTransaction::Script(script) => {
+                Some(*script.transaction().script_gas_limit())
+            }
+            PoolTransaction::Create(_) => None,
+        }
+    }
+
     pub fn is_computed(&self) -> bool {
         match self {
             PoolTransaction::Script(script) => script.transaction().is_computed(),
@@ -103,13 +113,6 @@ impl PoolTransaction {
         match self {
             PoolTransaction::Script(script) => script.transaction().outputs(),
             PoolTransaction::Create(create) => create.transaction().outputs(),
-        }
-    }
-
-    pub fn max_gas(&self) -> Word {
-        match self {
-            PoolTransaction::Script(script) => script.metadata().fee.max_gas(),
-            PoolTransaction::Create(create) => create.metadata().fee.max_gas(),
         }
     }
 }

@@ -22,7 +22,7 @@ use std::{
 };
 
 #[tokio::test]
-async fn txs_max_gas_limit() {
+async fn txs_max_script_gas_limit() {
     const MAX_GAS_LIMIT: u64 = 50_000_000;
     let mut rng = StdRng::seed_from_u64(2322);
     let mut test_builder = TestSetupBuilder::new(2322);
@@ -34,7 +34,7 @@ async fn txs_max_gas_limit() {
                 op::ret(RegId::ONE).to_bytes().into_iter().collect(),
                 vec![],
             )
-            .gas_limit(MAX_GAS_LIMIT / 2)
+            .script_gas_limit(MAX_GAS_LIMIT / 2)
             .gas_price(1)
             .add_unsigned_coin_input(
                 SecretKey::random(&mut rng),

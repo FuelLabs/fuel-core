@@ -648,6 +648,14 @@ impl GasCosts {
     async fn state_root(&self) -> DependentCost {
         self.0.state_root.into()
     }
+
+    async fn vm_initialization(&self) -> U64 {
+        self.0.vm_initialization.into()
+    }
+
+    async fn new_storage_per_byte(&self) -> U64 {
+        self.0.new_storage_per_byte.into()
+    }
 }
 
 #[Object]

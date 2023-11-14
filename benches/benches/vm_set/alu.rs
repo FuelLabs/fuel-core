@@ -117,9 +117,9 @@ pub fn run(c: &mut Criterion) {
         &mut c.benchmark_group("mldv"),
         "mldv",
         VmBench::new(op::mldv(0x10, 0x11, 0x12, 0x13)).with_prepare_script(vec![
-            op::movi(0x11, 1234567),
+            op::movi(0x11, 123456),
             op::not(0x12, RegId::ZERO),
-            op::movi(0x13, 3456789),
+            op::movi(0x13, 234567),
         ]),
     );
 

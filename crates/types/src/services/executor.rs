@@ -9,9 +9,9 @@ use crate::{
         primitives::BlockId,
     },
     fuel_tx::{
-        CheckError,
         TxId,
         UtxoId,
+        ValidityError,
     },
     fuel_types::{
         Bytes32,
@@ -19,6 +19,7 @@ use crate::{
         Nonce,
     },
     fuel_vm::{
+        checked_transaction::CheckError,
         Backtrace,
         InterpreterError,
         ProgramState,
@@ -318,6 +319,12 @@ impl From<CheckError> for Error {
     }
 }
 
+impl From<ValidityError> for Error {
+    fn from(e: ValidityError) -> Self {
+        Self::InvalidTransaction(CheckError::Validity(e))
+    }
+}
+
 #[allow(missing_docs)]
 #[derive(thiserror::Error, Debug)]
 #[non_exhaustive]
@@ -361,5 +368,11 @@ pub enum TransactionValidityError {
 impl From<CheckError> for TransactionValidityError {
     fn from(e: CheckError) -> Self {
         Self::Validation(e)
+    }
+}
+
+impl From<ValidityError> for TransactionValidityError {
+    fn from(e: ValidityError) -> Self {
+        Self::Validation(CheckError::Validity(e))
     }
 }

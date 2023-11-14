@@ -240,7 +240,9 @@
           "base": 412,
           "units_per_gas": 1
         }
-      }
+      },
+      "new_storage_per_byte": 100,
+      "vm_initialization": 2000
     },
     "base_asset_id": "0000000000000000000000000000000000000000000000000000000000000000"
   },
