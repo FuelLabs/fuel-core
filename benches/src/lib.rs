@@ -398,18 +398,18 @@ impl TryFrom<VmBench> for VmBenchPrepared {
         // add at least one coin input
         tx.add_random_fee_input();
 
-        let mut p = params.clone();
-        p.fee_params.gas_per_byte = 0;
-        p.gas_costs = GasCosts::free();
+        let mut params = params;
+        params.fee_params.gas_per_byte = 0;
+        params.gas_costs = GasCosts::free();
         let mut tx = tx
             .gas_price(gas_price)
             .script_gas_limit(gas_limit)
             .maturity(maturity)
-            .with_params(p.clone())
+            .with_params(params.clone())
             .finalize();
-        tx.estimate_predicates(&CheckPredicateParams::from(&p))
+        tx.estimate_predicates(&CheckPredicateParams::from(&params))
             .unwrap();
-        let tx = tx.into_checked(height, &p).unwrap();
+        let tx = tx.into_checked(height, &params).unwrap();
 
         let mut txtor = Transactor::new(db, InterpreterParams::from(&params));
 
