@@ -230,6 +230,7 @@ impl From<SyncArgs> for fuel_core::sync::Config {
 impl P2PArgs {
     pub fn into_config(
         self,
+        network_name: String,
         metrics: bool,
     ) -> anyhow::Result<Option<Config<NotInitialized>>> {
         if !self.enable_p2p {
@@ -284,6 +285,7 @@ impl P2PArgs {
 
         let config = Config {
             keypair: local_keypair,
+            network_name,
             checksum: Default::default(),
             address: self
                 .address
