@@ -251,10 +251,7 @@ type ContractParameters {
 	maxStorageSlots: U64!
 }
 
-type DependentCost {
-	base: U64!
-	depPerUnit: U64!
-}
+union DependentCost = LightOperation | HeavyOperation
 
 input ExcludeInput {
 	"""
@@ -454,6 +451,11 @@ type Header {
 	applicationHash: Bytes32!
 }
 
+type HeavyOperation {
+	base: U64!
+	gasPerUnit: U64!
+}
+
 scalar HexString
 
 
@@ -492,6 +494,11 @@ type InputMessage {
 	predicateData: HexString!
 }
 
+
+type LightOperation {
+	base: U64!
+	unitsPerGas: U64!
+}
 
 type MerkleProof {
 	proofSet: [Bytes32!]!

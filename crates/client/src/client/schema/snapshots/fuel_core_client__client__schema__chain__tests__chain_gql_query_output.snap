@@ -156,80 +156,213 @@ query {
         xor
         xori
         call {
-          base
-          depPerUnit
+          __typename
+          ... on LightOperation {
+            base
+            unitsPerGas
+          }
+          ... on HeavyOperation {
+            base
+            gasPerUnit
+          }
         }
         ccp {
-          base
-          depPerUnit
+          __typename
+          ... on LightOperation {
+            base
+            unitsPerGas
+          }
+          ... on HeavyOperation {
+            base
+            gasPerUnit
+          }
         }
         csiz {
-          base
-          depPerUnit
+          __typename
+          ... on LightOperation {
+            base
+            unitsPerGas
+          }
+          ... on HeavyOperation {
+            base
+            gasPerUnit
+          }
         }
         k256 {
-          base
-          depPerUnit
+          __typename
+          ... on LightOperation {
+            base
+            unitsPerGas
+          }
+          ... on HeavyOperation {
+            base
+            gasPerUnit
+          }
         }
         ldc {
-          base
-          depPerUnit
+          __typename
+          ... on LightOperation {
+            base
+            unitsPerGas
+          }
+          ... on HeavyOperation {
+            base
+            gasPerUnit
+          }
         }
         logd {
-          base
-          depPerUnit
+          __typename
+          ... on LightOperation {
+            base
+            unitsPerGas
+          }
+          ... on HeavyOperation {
+            base
+            gasPerUnit
+          }
         }
         mcl {
-          base
-          depPerUnit
+          __typename
+          ... on LightOperation {
+            base
+            unitsPerGas
+          }
+          ... on HeavyOperation {
+            base
+            gasPerUnit
+          }
         }
         mcli {
-          base
-          depPerUnit
+          __typename
+          ... on LightOperation {
+            base
+            unitsPerGas
+          }
+          ... on HeavyOperation {
+            base
+            gasPerUnit
+          }
         }
         mcp {
-          base
-          depPerUnit
+          __typename
+          ... on LightOperation {
+            base
+            unitsPerGas
+          }
+          ... on HeavyOperation {
+            base
+            gasPerUnit
+          }
         }
         mcpi {
-          base
-          depPerUnit
+          __typename
+          ... on LightOperation {
+            base
+            unitsPerGas
+          }
+          ... on HeavyOperation {
+            base
+            gasPerUnit
+          }
         }
         meq {
-          base
-          depPerUnit
+          __typename
+          ... on LightOperation {
+            base
+            unitsPerGas
+          }
+          ... on HeavyOperation {
+            base
+            gasPerUnit
+          }
         }
         retd {
-          base
-          depPerUnit
+          __typename
+          ... on LightOperation {
+            base
+            unitsPerGas
+          }
+          ... on HeavyOperation {
+            base
+            gasPerUnit
+          }
         }
         s256 {
-          base
-          depPerUnit
+          __typename
+          ... on LightOperation {
+            base
+            unitsPerGas
+          }
+          ... on HeavyOperation {
+            base
+            gasPerUnit
+          }
         }
         scwq {
-          base
-          depPerUnit
+          __typename
+          ... on LightOperation {
+            base
+            unitsPerGas
+          }
+          ... on HeavyOperation {
+            base
+            gasPerUnit
+          }
         }
         smo {
-          base
-          depPerUnit
+          __typename
+          ... on LightOperation {
+            base
+            unitsPerGas
+          }
+          ... on HeavyOperation {
+            base
+            gasPerUnit
+          }
         }
         srwq {
-          base
-          depPerUnit
+          __typename
+          ... on LightOperation {
+            base
+            unitsPerGas
+          }
+          ... on HeavyOperation {
+            base
+            gasPerUnit
+          }
         }
         swwq {
-          base
-          depPerUnit
+          __typename
+          ... on LightOperation {
+            base
+            unitsPerGas
+          }
+          ... on HeavyOperation {
+            base
+            gasPerUnit
+          }
         }
         contractRoot {
-          base
-          depPerUnit
+          __typename
+          ... on LightOperation {
+            base
+            unitsPerGas
+          }
+          ... on HeavyOperation {
+            base
+            gasPerUnit
+          }
         }
         stateRoot {
-          base
-          depPerUnit
+          __typename
+          ... on LightOperation {
+            base
+            unitsPerGas
+          }
+          ... on HeavyOperation {
+            base
+            gasPerUnit
+          }
         }
       }
     }
