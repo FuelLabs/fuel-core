@@ -76,6 +76,8 @@ async fn test_peer_info() {
 
     let validator_peer_id = validator.node.shared.config.p2p.unwrap().keypair.public().to_peer_id();
 
+    // TODO: this needs to fetch peers from the GQL API, not the service directly.
+    // This is just a mock of what we should be able to do with GQL API.
     let peers = producer.node.shared.network.unwrap().get_all_peers().await.unwrap();
 
     assert_eq!(peers.len(), 2);
