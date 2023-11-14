@@ -121,18 +121,17 @@ impl Default for State {
 #[derive(Debug, Default, Clone, Serialize, Deserialize)]
 struct Costs(HashMap<String, Cost>);
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub enum DependentCost {
+    LightOperation { base: u64, units_per_gas: u64 },
+    HeavyOperation { base: u64, gas_per_unit: u64 },
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(untagged)]
-enum Cost {
+pub enum Cost {
     Relative(u64),
-    Dependent {
-        base: u64,
-        dep_per_unit: u64,
-    },
-    DependentAll {
-        samples: Vec<Sample>,
-        dep_per_unit: u64,
-    },
+    Dependent(DependentCost),
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
@@ -423,17 +422,34 @@ impl State {
                     serde_yaml::Value::Number(i) => {
                         format!("\n{}{}: {},", indent, name, i.as_u64().unwrap())
                     }
-                    serde_yaml::Value::Mapping(m) => {
-                        format!(
-                            "\n{}{}: DependentCost {{\n{}    base: {},\n{}    dep_per_unit: {},\n{}}},",
-                            indent,
-                            name,
-                            indent,
-                            m.get("base").unwrap().as_u64().unwrap(),
-                            indent,
-                            m.get("dep_per_unit").unwrap().as_u64().unwrap(),
-                            indent,
-                        )
+                    serde_yaml::Value::Tagged(m) => {
+                        let tag = &m.tag;
+                        let m = &m.value;
+                        if tag.to_string().contains("HeavyOperation") {
+                            let output = format!(
+                                r"
+        {}: DependentCost::HeavyOperation {{
+             base: {},
+             gas_per_unit: {},
+         }},",
+                                name,
+                                m.get("base").unwrap().as_u64().unwrap(),
+                                m.get("gas_per_unit").unwrap().as_u64().unwrap(),
+                            );
+                            output
+                        } else {
+                            let output = format!(
+                                r"
+        {}: DependentCost::LightOperation {{
+             base: {},
+             units_per_gas: {},
+         }},",
+                                name,
+                                m.get("base").unwrap().as_u64().unwrap(),
+                                m.get("units_per_gas").unwrap().as_u64().unwrap(),
+                            );
+                            output
+                        }
                     }
                     _ => unreachable!(),
                 }
@@ -531,35 +547,14 @@ impl State {
             })
             .collect::<Vec<_>>();
 
-        if all {
-            let iter = dependent_groups.into_iter().map(|(name, x_y)| {
-                groups.remove(&name);
-                let samples = x_y
-                    .iter()
-                    .map(|(x, y)| Sample {
-                        throughput: *x,
-                        time: *y,
-                    })
-                    .collect();
-                let (_, dep_per_unit) = dependent_cost(&name, x_y);
-                (
-                    name,
-                    Cost::DependentAll {
-                        samples,
-                        dep_per_unit,
-                    },
-                )
-            });
-            costs.0.extend(iter);
-        } else {
-            let iter = dependent_groups.into_iter().map(|(name, x_y)| {
-                groups.remove(&name);
+        let iter = dependent_groups.into_iter().map(|(name, x_y)| {
+            groups.remove(&name);
 
-                let (base, dep_per_unit) = dependent_cost(&name, x_y);
-                (name, Cost::Dependent { base, dep_per_unit })
-            });
-            costs.0.extend(iter);
-        }
+            let cost = Cost::Dependent(dependent_cost(&name, x_y));
+            (name, cost)
+        });
+        costs.0.extend(iter);
+
         (
             Self {
                 all,
@@ -630,7 +625,7 @@ fn linear_regression(x_y: Vec<(u64, u64)>) -> f64 {
     sq_x / sum_x_y
 }
 
-fn dependent_cost(name: &String, x_y: Vec<(u64, u64)>) -> (u64, u64) {
+fn dependent_cost(name: &String, x_y: Vec<(u64, u64)>) -> DependentCost {
     const NEAR_LINEAR: f64 = 0.1;
 
     #[derive(PartialEq, Eq)]
@@ -691,7 +686,7 @@ fn dependent_cost(name: &String, x_y: Vec<(u64, u64)>) -> (u64, u64) {
         Type::Exp
     };
 
-    match expected_type {
+    let (base, amount): (u64, f64) = match expected_type {
         Type::Linear => {
             // The time of the first point is a base.
             // The minimal charge per element is the worse scenario
@@ -703,7 +698,7 @@ fn dependent_cost(name: &String, x_y: Vec<(u64, u64)>) -> (u64, u64) {
                 .map(|p| p.amount())
                 .min_by(|a, b| a.partial_cmp(b).unwrap())
                 .unwrap();
-            (base, amount as u64)
+            (base, amount)
         }
         Type::Logarithm | Type::Exp => {
             if expected_type == Type::Exp {
@@ -733,7 +728,19 @@ fn dependent_cost(name: &String, x_y: Vec<(u64, u64)>) -> (u64, u64) {
                 .map(|p| p.amount())
                 .min_by(|a, b| a.partial_cmp(b).unwrap())
                 .unwrap_or(last);
-            (base.y, amount as u64)
+            (base.y, amount)
+        }
+    };
+
+    if amount > 1.0 {
+        DependentCost::LightOperation {
+            base,
+            units_per_gas: amount as u64,
+        }
+    } else {
+        DependentCost::HeavyOperation {
+            base,
+            gas_per_unit: (1.0 / amount) as u64,
         }
     }
 }
