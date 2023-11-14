@@ -64,8 +64,8 @@ where
 }
 
 fn vm(c: &mut Criterion) {
-    blockchain::run(c);
     alu::run(c);
+    blockchain::run(c);
     crypto::run(c);
     flow::run(c);
     mem::run(c);

@@ -87,8 +87,8 @@ impl BenchDb {
         })
     }
 
-    /// Create a new separate database instance using a rocksdb checkpoint
-    fn checkpoint(&self) -> VmDatabase {
+    /// Creates a `VmDatabase` instance.
+    fn to_vm_database(&self) -> VmDatabase {
         VmDatabase::default_from_database(self.db.clone())
     }
 }
@@ -140,7 +140,7 @@ pub fn run(c: &mut Criterion) {
         ];
         let mut bench = VmBench::contract_using_db(
             rng,
-            db.checkpoint(),
+            db.to_vm_database(),
             op::sww(0x11, 0x29, RegId::ONE),
         )
         .expect("failed to prepare contract")
@@ -151,9 +151,12 @@ pub fn run(c: &mut Criterion) {
     }
 
     {
-        let input =
-            VmBench::contract_using_db(rng, db.checkpoint(), op::srw(0x13, 0x14, 0x10))
-                .expect("failed to prepare contract");
+        let input = VmBench::contract_using_db(
+            rng,
+            db.to_vm_database(),
+            op::srw(0x13, 0x14, 0x10),
+        )
+        .expect("failed to prepare contract");
         run_group_ref(&mut c.benchmark_group("srw"), "srw", input);
     }
 
@@ -172,10 +175,13 @@ pub fn run(c: &mut Criterion) {
             op::addi(0x11, 0x11, AssetId::LEN.try_into().unwrap()),
             op::movi(0x12, i as u32),
         ];
-        let mut bench =
-            VmBench::contract_using_db(rng, db.checkpoint(), op::scwq(0x11, 0x29, 0x12))
-                .expect("failed to prepare contract")
-                .with_post_call(post_call);
+        let mut bench = VmBench::contract_using_db(
+            rng,
+            db.to_vm_database(),
+            op::scwq(0x11, 0x29, 0x12),
+        )
+        .expect("failed to prepare contract")
+        .with_post_call(post_call);
         bench.data.extend(data);
 
         scwq.throughput(Throughput::Bytes(i));
@@ -204,7 +210,7 @@ pub fn run(c: &mut Criterion) {
         ];
         let mut bench = VmBench::contract_using_db(
             rng,
-            db.checkpoint(),
+            db.to_vm_database(),
             op::swwq(0x11, 0x20, RegId::ZERO, 0x12),
         )
         .expect("failed to prepare contract")
@@ -250,7 +256,7 @@ pub fn run(c: &mut Criterion) {
             &mut call,
             format!("{i}"),
             VmBench::new(op::call(0x10, RegId::ZERO, 0x11, 0x12))
-                .with_db(db.checkpoint())
+                .with_db(db.to_vm_database())
                 .with_contract_code(code)
                 .with_data(data)
                 .with_prepare_script(prepare_script),
@@ -396,7 +402,7 @@ pub fn run(c: &mut Criterion) {
         "mint",
         VmBench::contract_using_db(
             rng,
-            db.checkpoint(),
+            db.to_vm_database(),
             op::mint(RegId::ONE, RegId::ZERO),
         )
         .expect("failed to prepare contract"),
@@ -405,9 +411,13 @@ pub fn run(c: &mut Criterion) {
     run_group_ref(
         &mut c.benchmark_group("burn"),
         "burn",
-        VmBench::contract_using_db(rng, db.checkpoint(), op::burn(RegId::ONE, RegId::HP))
-            .expect("failed to prepare contract")
-            .prepend_prepare_script(vec![op::movi(0x10, 32), op::aloc(0x10)]),
+        VmBench::contract_using_db(
+            rng,
+            db.to_vm_database(),
+            op::burn(RegId::ONE, RegId::HP),
+        )
+        .expect("failed to prepare contract")
+        .prepend_prepare_script(vec![op::movi(0x10, 32), op::aloc(0x10)]),
     );
 
     run_group_ref(
@@ -421,9 +431,12 @@ pub fn run(c: &mut Criterion) {
     );
 
     {
-        let mut input =
-            VmBench::contract_using_db(rng, db.checkpoint(), op::tr(0x15, 0x14, 0x15))
-                .expect("failed to prepare contract");
+        let mut input = VmBench::contract_using_db(
+            rng,
+            db.to_vm_database(),
+            op::tr(0x15, 0x14, 0x15),
+        )
+        .expect("failed to prepare contract");
         input
             .prepare_script
             .extend(vec![op::movi(0x15, 2000), op::movi(0x14, 100)]);
@@ -433,7 +446,7 @@ pub fn run(c: &mut Criterion) {
     {
         let mut input = VmBench::contract_using_db(
             rng,
-            db.checkpoint(),
+            db.to_vm_database(),
             op::tro(RegId::ZERO, 0x15, 0x14, RegId::HP),
         )
         .expect("failed to prepare contract");
@@ -504,7 +517,7 @@ pub fn run(c: &mut Criterion) {
     for i in linear.clone() {
         let mut input = VmBench::contract_using_db(
             rng,
-            db.checkpoint(),
+            db.to_vm_database(),
             op::smo(0x15, 0x16, 0x17, 0x18),
         )
         .expect("failed to prepare contract");
