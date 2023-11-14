@@ -39,7 +39,7 @@ pub fn run_contract(group: &mut BenchmarkGroup<WallTime>) {
     let asset_id = AssetId::zeroed();
     let script_data = script_data(&contract_id, &asset_id);
 
-    let mut shared_factory = SanityBenchmarkFactory::new_shared(contract_id);
+    let mut shared_runner_builder = SanityBenchmarkRunnerBuilder::new_shared(contract_id);
 
     // bal contract
     {
@@ -50,7 +50,7 @@ pub fn run_contract(group: &mut BenchmarkGroup<WallTime>) {
         instructions.extend(vec![op::call(0x10, RegId::ZERO, 0x11, 0x12)]);
         let id = "contract/bal contract";
 
-        shared_factory
+        shared_runner_builder
             .build_with_new_contract(contract_instructions)
             .run(id, group, instructions, script_data.clone());
     }
@@ -59,7 +59,7 @@ pub fn run_contract(group: &mut BenchmarkGroup<WallTime>) {
         let mut instructions = setup_instructions();
         instructions.extend(vec![op::bal(0x13, 0x11, 0x10), op::jmpb(RegId::ZERO, 0)]);
         let id = "contract/bal script";
-        shared_factory
+        shared_runner_builder
             .build()
             .run(id, group, instructions, script_data.clone());
     }
@@ -95,7 +95,7 @@ pub fn run_contract(group: &mut BenchmarkGroup<WallTime>) {
             op::aloc(0x10),
             op::call(0x10, RegId::ZERO, 0x11, 0x12),
         ]);
-        shared_factory.build_with_new_contract(contract).run(
+        shared_runner_builder.build_with_new_contract(contract).run(
             "contract/burn",
             group,
             instructions,
@@ -121,7 +121,7 @@ pub fn run_contract(group: &mut BenchmarkGroup<WallTime>) {
         ];
 
         let id = format!("contract/call {:?}", size);
-        shared_factory
+        shared_runner_builder
             .build_with_new_contract(contract_instructions)
             .run(&id, group, instructions, script_data.clone());
     }
@@ -162,7 +162,7 @@ pub fn run_contract(group: &mut BenchmarkGroup<WallTime>) {
             op::jmpb(RegId::ZERO, 0),
         ]);
         let id = format!("contract/ccp {:?}", i);
-        shared_factory.build_with_new_contract(contract).run(
+        shared_runner_builder.build_with_new_contract(contract).run(
             &id,
             group,
             instructions,
@@ -173,14 +173,14 @@ pub fn run_contract(group: &mut BenchmarkGroup<WallTime>) {
     {
         let contract = vec![
             op::gtf_args(0x16, 0x00, GTFArgs::ScriptData),
-            op::movi(0x15, 2000),
+            op::movi(0x15, 32),
             op::aloc(0x15),
             op::move_(0x14, RegId::HP),
             op::croo(0x14, 0x16),
             op::ret(RegId::ZERO),
         ];
         let instructions = call_contract_repeat();
-        shared_factory.build_with_new_contract(contract).run(
+        shared_runner_builder.build_with_new_contract(contract).run(
             "contract/croo",
             group,
             instructions,
@@ -201,7 +201,7 @@ pub fn run_contract(group: &mut BenchmarkGroup<WallTime>) {
             op::jmpb(RegId::ZERO, 0),
         ]);
         let id = format!("contract/csiz {:?}", size);
-        shared_factory.build_with_new_contract(contract).run(
+        shared_runner_builder.build_with_new_contract(contract).run(
             &id,
             group,
             instructions,
@@ -222,7 +222,7 @@ pub fn run_contract(group: &mut BenchmarkGroup<WallTime>) {
             op::jmpb(RegId::ZERO, 0),
         ]);
         let id = format!("contract/ldc {:?}", size);
-        shared_factory.build_with_new_contract(contract).run(
+        shared_runner_builder.build_with_new_contract(contract).run(
             &id,
             group,
             instructions,
@@ -250,17 +250,20 @@ pub fn run_contract(group: &mut BenchmarkGroup<WallTime>) {
                 op::jmpb(RegId::ZERO, 0),
             ]);
             let id = format!("contract/logd {:?}", i);
-            shared_factory
-                .build()
-                .run(&id, group, instructions, script_data.clone());
+            shared_runner_builder.build().run(
+                &id,
+                group,
+                instructions,
+                script_data.clone(),
+            );
         }
     }
 
     // mint
     {
-        let contract = vec![op::mint(RegId::ONE, RegId::ZERO), op::ret(RegId::ZERO)];
-        let instructions = call_contract_repeat();
-        shared_factory.build_with_new_contract(contract).run(
+        let contract = vec![op::mint(RegId::ONE, RegId::ZERO), op::jmpb(RegId::ZERO, 0)];
+        let instructions = call_contract_once();
+        shared_runner_builder.build_with_new_contract(contract).run(
             "contract/mint",
             group,
             instructions,
@@ -272,7 +275,7 @@ pub fn run_contract(group: &mut BenchmarkGroup<WallTime>) {
     {
         let contract = vec![op::ret(RegId::ONE), op::ret(RegId::ZERO)];
         let instructions = call_contract_repeat();
-        shared_factory.build_with_new_contract(contract).run(
+        shared_runner_builder.build_with_new_contract(contract).run(
             "contract/ret contract",
             group,
             instructions,
@@ -287,7 +290,7 @@ pub fn run_contract(group: &mut BenchmarkGroup<WallTime>) {
             let instructions = call_contract_repeat();
             // replace_contract_in_service(&mut service, &contract_id, contract);
             let id = format!("contract/retd contract {:?}", i);
-            shared_factory.build_with_new_contract(contract).run(
+            shared_runner_builder.build_with_new_contract(contract).run(
                 &id,
                 group,
                 instructions,
@@ -359,7 +362,7 @@ pub fn run_contract(group: &mut BenchmarkGroup<WallTime>) {
                     .chain(vec![2u8; i as usize]),
             );
             let id = format!("contract/smo {:?}", i);
-            shared_factory
+            shared_runner_builder
                 .build_with_new_contract(contract)
                 .with_extra_inputs(extra_inputs.clone())
                 .run(&id, group, instructions, data);
@@ -408,7 +411,7 @@ pub fn run_contract(group: &mut BenchmarkGroup<WallTime>) {
             op::call(0x10, RegId::ZERO, 0x11, 0x12),
             op::jmpb(RegId::ZERO, 0),
         ]);
-        shared_factory.build_with_new_contract(contract).run(
+        shared_runner_builder.build_with_new_contract(contract).run(
             "contract/srw",
             group,
             instructions,
@@ -457,7 +460,7 @@ pub fn run_contract(group: &mut BenchmarkGroup<WallTime>) {
             op::call(0x10, RegId::ZERO, 0x11, 0x12),
         ]);
         let id = format!("contract/sww {:?}", i);
-        shared_factory.build_with_new_contract(contract).run(
+        shared_runner_builder.build_with_new_contract(contract).run(
             &id,
             group,
             instructions,
@@ -515,15 +518,16 @@ pub fn run_contract(group: &mut BenchmarkGroup<WallTime>) {
 
     // tr
     {
-        let contract = vec![op::tr(0x15, 0x14, 0x15), op::ret(RegId::ZERO)];
+        let contract = vec![op::tr(0x15, 0x14, 0x15), op::jmpb(RegId::ZERO, 0)];
         let mut instructions = setup_instructions();
         instructions.extend(vec![
+            op::movi(0x13, 1 << 18 - 1),
             op::movi(0x15, 2000),
-            op::movi(0x14, 100),
-            op::call(0x10, RegId::ZERO, 0x11, 0x12),
+            op::movi(0x14, 1),
+            op::call(0x10, 0x13, 0x15, 0x12),
             op::jmpb(RegId::ZERO, 0),
         ]);
-        shared_factory.build_with_new_contract(contract).run(
+        shared_runner_builder.build_with_new_contract(contract).run(
             "contract/tr",
             group,
             instructions,
@@ -578,18 +582,29 @@ pub fn run_contract(group: &mut BenchmarkGroup<WallTime>) {
     //     let extra_inputs = vec![coin_input];
     //     let extra_outputs = vec![coin_output];
     //
-    //     replace_contract_in_service(&mut service, &contract_id, contract);
-    //     run_with_service_with_extra_inputs(
-    //         "contract/tro",
-    //         group,
-    //         instructions,
-    //         script_data.clone(),
-    //         &service,
-    //         contract_id,
-    //         &rt,
-    //         &mut rng,
-    //         extra_inputs,
-    //         extra_outputs,
-    //     );
+    //     //     replace_contract_in_service(&mut service, &contract_id, contract);
+    //     //     run_with_service_with_extra_inputs(
+    //     //         "contract/tro",
+    //     //         group,
+    //     //         instructions,
+    //     //         script_data.clone(),
+    //     //         &service,
+    //     //         contract_id,
+    //     //         &rt,
+    //     //         &mut rng,
+    //     //         extra_inputs,
+    //     //         extra_outputs,
+    //     //     );
+    //     // }
+    //     shared_runner_builder
+    //         .build_with_new_contract(contract)
+    //         .with_extra_inputs(extra_inputs)
+    //         .with_extra_outputs(extra_outputs)
+    //         .run(
+    //             "contract/tro",
+    //             group,
+    //             setup_instructions(),
+    //             script_data.clone(),
+    //         );
     // }
 }

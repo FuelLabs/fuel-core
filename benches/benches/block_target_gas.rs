@@ -84,7 +84,7 @@ const STATE_SIZE: u64 = 10_000_000;
 const TARGET_BLOCK_GAS_LIMIT: u64 = 262143;
 const BASE: u64 = 10_000;
 
-pub struct SanityBenchmarkFactory;
+pub struct SanityBenchmarkRunnerBuilder;
 
 pub struct SharedSanityBenchmarkFactory {
     service: FuelService,
@@ -93,11 +93,12 @@ pub struct SharedSanityBenchmarkFactory {
     rng: rand::rngs::StdRng,
 }
 
-impl SanityBenchmarkFactory {
+impl SanityBenchmarkRunnerBuilder {
     /// Creates a factory for benchmarks that share a service with a contract, `contract_id`, pre-
     /// deployed.
     pub fn new_shared(contract_id: ContractId) -> SharedSanityBenchmarkFactory {
-        let (service, rt) = service_with_contract_id(contract_id);
+        let state_size = get_state_size();
+        let (service, rt) = service_with_contract_id(state_size, contract_id);
         let rng = rand::rngs::StdRng::seed_from_u64(2322u64);
         SharedSanityBenchmarkFactory {
             service,
@@ -109,7 +110,7 @@ impl SanityBenchmarkFactory {
 }
 
 impl SharedSanityBenchmarkFactory {
-    pub fn build(&mut self) -> SanityBenchmark {
+    fn build(&mut self) -> SanityBenchmark {
         SanityBenchmark {
             service: &mut self.service,
             rt: &self.rt,
@@ -256,6 +257,7 @@ fn run(
 /// Sets up a service with a full database. Returns the service with the associated Runtime.
 /// The size of the database can be overridden with the `STATE_SIZE` environment variable.
 fn service_with_contract_id(
+    state_size: u64,
     contract_id: ContractId,
 ) -> (fuel_core::service::FuelService, tokio::runtime::Runtime) {
     let rt = tokio::runtime::Builder::new_current_thread()
@@ -293,16 +295,6 @@ fn service_with_contract_id(
     config.utxo_validation = false;
     config.block_production = Trigger::Instant;
 
-    // Override state size if the env var is set
-    let state_size = std::env::var_os("STATE_SIZE")
-        .map(|value| {
-            let value = value.to_str().unwrap();
-            let value = value.parse::<u64>().unwrap();
-            println!("Overriding state size with {}", value);
-            value
-        })
-        .unwrap_or(STATE_SIZE);
-
     database
         .init_contract_state(
             &contract_id,
@@ -335,6 +327,19 @@ fn service_with_contract_id(
         .expect("Unable to start a FuelService");
     service.start().expect("Unable to start the service");
     (service, rt)
+}
+
+fn get_state_size() -> u64 {
+    // Override state size if the env var is set
+    let state_size = std::env::var_os("STATE_SIZE")
+        .map(|value| {
+            let value = value.to_str().unwrap();
+            let value = value.parse::<u64>().unwrap();
+            println!("Overriding state size with {}", value);
+            value
+        })
+        .unwrap_or(STATE_SIZE);
+    state_size
 }
 
 // Runs benchmark for `script` with prepared `service` and specified contract (by `contract_id`) which should be
@@ -411,6 +416,7 @@ fn run_with_service_with_extra_inputs(
                     .expect("Should be at least 1 element")
                     .expect("Should include transaction successfully");
                 let res = sub.recv().await.expect("Should produce a block");
+                dbg!(&res.tx_status);
                 assert_eq!(res.tx_status.len(), 2, "res.tx_status: {:?}", res.tx_status);
                 assert_eq!(res.sealed_block.entity.transactions().len(), 2);
                 assert_eq!(res.tx_status[0].id, tx_id);
