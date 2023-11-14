@@ -35,10 +35,13 @@ pub fn dependent_cost(
     points: Vec<(f64, f64)>,
 ) -> anyhow::Result<DependentCost> {
     let model = estimate_model(&points)?;
+
     let cost = match model {
         Model::Zero => {
             // Zero
-            let warning = format!("Warning: Evaluating the regression on the dataset for {name} produced the zero function. This implies the cost behavior is independent of input and is not supported in a dependent context.", name = name);
+            let warning = format!("Warning: \
+            Evaluating the regression on the dataset for {name} produced the zero function. \
+            This implies the cost behavior is independent of input and is not supported in a dependent context.", name = name);
             eprintln!("{}", warning);
             DependentCost::HeavyOperation {
                 base: 0,
@@ -47,7 +50,9 @@ pub fn dependent_cost(
         }
         Model::Constant(coefficients) => {
             // Constant
-            let warning = format!("Warning: Evaluating the regression on the dataset for {name} produced a constant function. This implies the cost behavior is independent of input and is not supported in a dependent context.", name = name);
+            let warning = format!("Warning: \
+            Evaluating the regression on the dataset for {name} produced a constant function. \
+            This implies the cost behavior is independent of input and is not supported in a dependent context.", name = name);
             eprintln!("{}", warning);
             let base = coefficients.y;
             let base = base.max(0.0);
@@ -83,7 +88,9 @@ pub fn dependent_cost(
                 }
                 _ => {
                     // Slope is negative
-                    let warning = format!("Warning: Evaluating the regression on the dataset for {name} produced a negative slope. This implies a negative cost behavior and is not supported in a dependent context.", name = name);
+                    let warning = format!("Warning: \
+                        Evaluating the regression on the dataset for `{name}` produced a negative slope. \
+                        This implies a negative cost behavior and is not supported in a dependent context.", name = name);
                     eprintln!("{}", warning);
                     let base = coefficients.intercept;
                     let base = base.round() as u64;
@@ -94,9 +101,11 @@ pub fn dependent_cost(
                 }
             }
         }
-        Model::Quadratic(_coefficients) => {
+        Model::Quadratic(coefficients) => {
             // Quadratic
-            let warning = format!("Warning: Evaluating the regression on the dataset for {name} produced a quadratic function. Quadratic behavior is not supported in a dependent context.", name = name);
+            let warning = format!("Warning: \
+            Evaluating the regression on the dataset for `{name}` produced a quadratic function({:?}). \
+            Quadratic behavior is not supported in a dependent context. Points: {points:?}", coefficients, name = name, points = points);
             eprintln!("{}", warning);
             DependentCost::HeavyOperation {
                 base: 0,
@@ -106,7 +115,9 @@ pub fn dependent_cost(
         Model::Other => {
             // Other
             // This includes exponential and logarithmic functions
-            let warning = format!("Warning: Evaluating the regression on the dataset for {name} produced a function that is not supported in a dependent context.", name = name);
+            let warning = format!("Warning: \
+            Evaluating the regression on the dataset for `{name}` produced a function that \
+            is not supported in a dependent context. Points: {points:?}", name = name, points = points);
             eprintln!("{}", warning);
             DependentCost::HeavyOperation {
                 base: 0,
