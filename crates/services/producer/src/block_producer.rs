@@ -1,35 +1,16 @@
-use crate::{
-    ports,
-    Config,
-};
-use anyhow::{
-    anyhow,
-    Context,
-};
+use crate::{ports, Config};
+use anyhow::{anyhow, Context};
 use fuel_core_storage::transactional::StorageTransaction;
 use fuel_core_types::{
     blockchain::{
-        header::{
-            ApplicationHeader,
-            ConsensusHeader,
-            PartialBlockHeader,
-        },
+        header::{ApplicationHeader, ConsensusHeader, PartialBlockHeader},
         primitives::DaBlockHeight,
     },
     fuel_asm::Word,
-    fuel_tx::{
-        field::GasLimit,
-        Receipt,
-        Transaction,
-    },
-    fuel_types::{
-        BlockHeight,
-        Bytes32,
-    },
-    services::{
-        block_producer::Components,
-        executor::UncommittedResult,
-    },
+    fuel_tx::{field::ScriptGasLimit, Receipt, Transaction},
+    fuel_types::{BlockHeight, Bytes32},
+    fuel_vm::interpreter::ExecutableTransaction,
+    services::{block_producer::Components, executor::UncommittedResult},
     tai64::Tai64,
 };
 use std::sync::Arc;
@@ -148,8 +129,11 @@ where
         // because we don't need to wait for the relayer to sync.
         let header = self._new_header(height, Tai64::now())?;
         let gas_limit = match &transaction {
-            Transaction::Script(script) => *script.gas_limit(),
-            Transaction::Create(create) => *create.gas_limit(),
+            Transaction::Script(script) => *script.script_gas_limit(),
+            Transaction::Create(create) => create
+                .as_script()
+                .map(|x| *x.script_gas_limit())
+                .unwrap_or_default(),
             Transaction::Mint(_) => 0,
         };
         let component = Components {
@@ -170,7 +154,7 @@ where
             })
             .await?;
         if is_script && res.is_empty() {
-            return Err(anyhow!("Expected at least one set of receipts"))
+            return Err(anyhow!("Expected at least one set of receipts"));
         }
         Ok(res)
     }
@@ -206,7 +190,7 @@ where
                 best: best_height,
                 previous_block: previous_da_height,
             }
-            .into())
+            .into());
         }
         Ok(best_height)
     }

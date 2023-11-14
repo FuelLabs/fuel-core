@@ -9,9 +9,9 @@ use crate::{
         primitives::BlockId,
     },
     fuel_tx::{
-        CheckError,
         TxId,
         UtxoId,
+        ValidityError,
     },
     fuel_types::{
         Bytes32,
@@ -283,7 +283,7 @@ pub enum Error {
         transaction_id: Bytes32,
     },
     #[display(fmt = "{_0:?}")]
-    InvalidTransaction(CheckError),
+    InvalidTransaction(ValidityError),
     #[display(fmt = "Execution error with backtrace")]
     Backtrace(Box<Backtrace>),
     #[display(fmt = "Transaction doesn't match expected result: {transaction_id:#x}")]
@@ -312,8 +312,8 @@ impl From<Backtrace> for Error {
     }
 }
 
-impl From<CheckError> for Error {
-    fn from(e: CheckError) -> Self {
+impl From<ValidityError> for Error {
+    fn from(e: ValidityError) -> Self {
         Self::InvalidTransaction(e)
     }
 }
@@ -355,11 +355,11 @@ pub enum TransactionValidityError {
     )]
     InvalidPredicate(TxId),
     #[error("Transaction validity: {0:#?}")]
-    Validation(CheckError),
+    Validation(ValidityError),
 }
 
-impl From<CheckError> for TransactionValidityError {
-    fn from(e: CheckError) -> Self {
+impl From<ValidityError> for TransactionValidityError {
+    fn from(e: ValidityError) -> Self {
         Self::Validation(e)
     }
 }

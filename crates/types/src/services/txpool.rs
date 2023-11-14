@@ -4,34 +4,17 @@ use crate::{
     blockchain::primitives::BlockId,
     fuel_asm::Word,
     fuel_tx::{
-        field::{
-            Inputs,
-            Outputs,
-        },
-        Cacheable,
-        Chargeable,
-        Create,
-        Input,
-        Output,
-        Script,
-        Transaction,
-        TxId,
-        UtxoId,
+        field::{Inputs, Outputs},
+        Cacheable, Chargeable, Create, Input, Output, Script, Transaction, TxId, UtxoId,
     },
-    fuel_types::{
-        ContractId,
-        Nonce,
-    },
-    fuel_vm::{
-        checked_transaction::Checked,
-        ProgramState,
-    },
+    fuel_types::{ContractId, Nonce},
+    fuel_vm::{checked_transaction::Checked, ProgramState},
 };
-use fuel_vm_private::checked_transaction::CheckedTransaction;
-use std::{
-    sync::Arc,
-    time::Duration,
+use fuel_vm_private::{
+    checked_transaction::CheckedTransaction, interpreter::ExecutableTransaction,
+    prelude::field::ScriptGasLimit,
 };
+use std::{sync::Arc, time::Duration};
 use tai64::Tai64;
 
 /// The alias for transaction pool result.
@@ -61,8 +44,12 @@ impl PoolTransaction {
     /// Returns the gas limit.
     pub fn limit(&self) -> Word {
         match self {
-            PoolTransaction::Script(script) => script.transaction().limit(),
-            PoolTransaction::Create(create) => create.transaction().limit(),
+            PoolTransaction::Script(script) => *script.transaction().script_gas_limit(),
+            PoolTransaction::Create(create) => create
+                .transaction()
+                .as_script()
+                .map(|x| *x.script_gas_limit())
+                .unwrap_or_default(),
         }
     }
 
