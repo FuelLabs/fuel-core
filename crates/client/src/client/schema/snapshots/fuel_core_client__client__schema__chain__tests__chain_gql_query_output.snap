@@ -365,6 +365,7 @@ query {
           }
         }
         vmInitialization
+        newStoragePerByte
       }
     }
   }
