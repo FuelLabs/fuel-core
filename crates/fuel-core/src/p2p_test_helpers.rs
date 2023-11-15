@@ -197,7 +197,7 @@ pub async fn make_nodes(
                         vec![op::ret(RegId::ONE)].into_iter().collect(),
                         vec![],
                     )
-                    .gas_limit(100000)
+                    .script_gas_limit(100000)
                     .add_unsigned_coin_input(
                         secret,
                         utxo_id,

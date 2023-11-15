@@ -83,7 +83,7 @@ async fn dry_run_script() {
         .collect();
 
     let tx = TransactionBuilder::script(script, vec![])
-        .gas_limit(gas_limit)
+        .script_gas_limit(gas_limit)
         .gas_price(gas_price)
         .maturity(maturity)
         .add_random_fee_input()
@@ -160,7 +160,7 @@ async fn submit() {
         .collect();
 
     let tx = TransactionBuilder::script(script, vec![])
-        .gas_limit(gas_limit)
+        .script_gas_limit(gas_limit)
         .gas_price(gas_price)
         .maturity(maturity)
         .add_random_fee_input()

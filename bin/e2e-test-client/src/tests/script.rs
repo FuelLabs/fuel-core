@@ -5,6 +5,10 @@ use crate::test_context::{
 use fuel_core_chain_config::ContractConfig;
 use fuel_core_types::{
     fuel_tx::{
+        field::{
+            GasPrice,
+            ScriptGasLimit,
+        },
         Receipt,
         ScriptExecutionResult,
         Transaction,
@@ -102,8 +106,13 @@ pub async fn non_specific_transaction(ctx: &TestContext) -> Result<(), Failed> {
     let dry_run = include_str!("test_data/non_specific_tx.raw");
     let bytes = dry_run.replace("0x", "");
     let hex_tx = hex::decode(bytes).expect("Expected hex string");
-    let dry_run: Transaction = Transaction::from_bytes(hex_tx.as_ref())
+    let mut dry_run: Transaction = Transaction::from_bytes(hex_tx.as_ref())
         .expect("Should be able do decode the Transaction");
+
+    if let Some(script) = dry_run.as_script_mut() {
+        *script.script_gas_limit_mut() = 100000;
+        script.set_gas_price(0);
+    }
 
     _dry_runs(ctx, &dry_run, 1000, DryRunResult::MayFail).await
 }

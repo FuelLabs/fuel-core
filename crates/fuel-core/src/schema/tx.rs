@@ -214,7 +214,8 @@ impl TxQuery {
         tx.estimate_predicates_async::<TokioWithRayon>(&CheckPredicateParams::from(
             &config.consensus_parameters,
         ))
-        .await?;
+        .await
+        .map_err(|err| anyhow::anyhow!("{:?}", err))?;
 
         Ok(Transaction::from_tx(
             tx.id(&config.consensus_parameters.chain_id),

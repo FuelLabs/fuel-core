@@ -38,7 +38,7 @@ async fn submit_utxo_verified_tx_with_min_gas_price() {
                 op::ret(RegId::ONE).to_bytes().into_iter().collect(),
                 vec![],
             )
-            .gas_limit(10000)
+            .script_gas_limit(10000)
             .gas_price(1)
             .add_unsigned_coin_input(
                 SecretKey::random(&mut rng),
@@ -111,7 +111,7 @@ async fn submit_utxo_verified_tx_below_min_gas_price_fails() {
         op::ret(RegId::ONE).to_bytes().into_iter().collect(),
         vec![],
     )
-    .gas_limit(100)
+    .script_gas_limit(100)
     .gas_price(1)
     .finalize_as_transaction();
 
@@ -145,7 +145,7 @@ async fn dry_run_override_utxo_validation() {
         op::ret(RegId::ONE).to_bytes().into_iter().collect(),
         vec![],
     )
-    .gas_limit(10000)
+    .script_gas_limit(10000)
     .add_input(Input::coin_signed(
         rng.gen(),
         rng.gen(),
@@ -190,7 +190,7 @@ async fn dry_run_no_utxo_validation_override() {
         op::ret(RegId::ONE).to_bytes().into_iter().collect(),
         vec![],
     )
-    .gas_limit(1000)
+    .script_gas_limit(1000)
     .add_input(Input::coin_signed(
         rng.gen(),
         rng.gen(),
@@ -235,7 +235,7 @@ async fn concurrent_tx_submission_produces_expected_blocks() {
                 op::ret(RegId::ONE).to_bytes().into_iter().collect(),
                 vec![],
             )
-            .gas_limit(10000)
+            .script_gas_limit(10000)
             .add_unsigned_coin_input(
                 secret,
                 rng.gen(),

@@ -69,11 +69,12 @@ async fn subscribe_txn_status() {
             vec![],
         );
         let mut tx: Transaction = Transaction::script(
-            gas_price + (i as u64),
             gas_limit,
-            maturity,
             script,
             vec![],
+            policies::Policies::new()
+                .with_gas_price(gas_price + (i as u64))
+                .with_maturity(maturity),
             vec![coin_input],
             vec![],
             vec![],
@@ -151,10 +152,9 @@ async fn test_regression_in_subscribe() {
 
     let mut empty_script =
         TransactionBuilder::script(vec![op::ret(0)].into_iter().collect(), vec![]);
-    empty_script.gas_limit(100000);
+    empty_script.script_gas_limit(100000);
 
-    let mut empty_create = TransactionBuilder::create(rng.gen(), rng.gen(), vec![]);
-    empty_create.gas_limit(100000);
+    let empty_create = TransactionBuilder::create(rng.gen(), rng.gen(), vec![]);
     let txs = [
         empty_script.clone().add_input(coin_pred).finalize().into(),
         empty_create

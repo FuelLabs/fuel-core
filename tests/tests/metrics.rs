@@ -40,7 +40,7 @@ async fn test_metrics_endpoint() {
     client
         .submit_and_await_commit(
             &TransactionBuilder::script(script, vec![])
-                .gas_limit(1000000)
+                .script_gas_limit(1000000)
                 .add_random_fee_input()
                 .finalize_as_transaction(),
         )
