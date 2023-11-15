@@ -64,7 +64,7 @@
     },
     "fee_params": {
       "gas_price_factor": 92,
-      "gas_per_byte": 4
+      "gas_per_byte": 63
     },
     "chain_id": 0,
     "gas_costs": {
