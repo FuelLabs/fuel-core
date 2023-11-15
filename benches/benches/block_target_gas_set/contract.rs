@@ -525,7 +525,6 @@ pub fn run_contract(group: &mut BenchmarkGroup<WallTime>) {
             op::movi(0x15, 2000),
             op::movi(0x14, 1),
             op::call(0x10, 0x13, 0x15, 0x12),
-            op::jmpb(RegId::ZERO, 0),
         ]);
         shared_runner_builder.build_with_new_contract(contract).run(
             "contract/tr",
@@ -540,71 +539,67 @@ pub fn run_contract(group: &mut BenchmarkGroup<WallTime>) {
     // The `tro` benchmark is disabled because it would require many, many outputs, because each
     // would get spent. But it's okay because that is putting a limit of 255 outputs per transaction
     // and that protects us from an attacker exploiting a poorly priced `tro` instruction.
-    // {
-    //     let amount = 100;
-    //
-    //     let contract = vec![
-    //         op::tro(RegId::ZERO, 0x15, 0x14, RegId::HP),
-    //         op::ret(RegId::ZERO),
-    //     ];
-    //     let mut instructions = setup_instructions();
-    //     instructions.extend(vec![
-    //         op::movi(0x14, amount),
-    //         op::movi(0x15, 1),
-    //         op::movi(0x20, 32),
-    //         op::aloc(0x20),
-    //     ]);
-    //
-    //     for (i, v) in (*AssetId::zeroed()).into_iter().enumerate() {
-    //         instructions.push(op::movi(0x20, v as u32));
-    //         instructions.push(op::sb(RegId::HP, 0x20, i as u16));
-    //     }
-    //
-    //     instructions.extend(vec![
-    //         op::call(0x10, RegId::ZERO, 0x11, 0x12),
-    //         op::jmpb(RegId::ZERO, 0),
-    //     ]);
-    //
-    //     let predicate = op::ret(RegId::ONE).to_bytes().to_vec();
-    //     let owner = Input::predicate_owner(&predicate);
-    //     let coin_input = Input::coin_predicate(
-    //         Default::default(),
-    //         owner,
-    //         1000,
-    //         AssetId::zeroed(),
-    //         Default::default(),
-    //         Default::default(),
-    //         Default::default(),
-    //         predicate,
-    //         vec![],
-    //     );
-    //     let coin_output = Output::variable(Address::zeroed(), 0, AssetId::zeroed());
-    //     let extra_inputs = vec![coin_input];
-    //     let extra_outputs = vec![coin_output];
-    //
-    //     //     replace_contract_in_service(&mut service, &contract_id, contract);
-    //     //     run_with_service_with_extra_inputs(
-    //     //         "contract/tro",
-    //     //         group,
-    //     //         instructions,
-    //     //         script_data.clone(),
-    //     //         &service,
-    //     //         contract_id,
-    //     //         &rt,
-    //     //         &mut rng,
-    //     //         extra_inputs,
-    //     //         extra_outputs,
-    //     //     );
-    //     // }
-    //     shared_runner_builder
-    //         .build_with_new_contract(contract)
-    //         .with_extra_inputs(extra_inputs)
-    //         .with_extra_outputs(extra_outputs)
-    //         .run(
-    //             "contract/tro",
-    //             group,
-    //             setup_instructions(),
-    //             script_data.clone(),
-    //         );
-    // }
+    {
+        let amount = 100;
+
+        let contract = vec![
+            op::tro(RegId::ZERO, 0x15, 0x14, RegId::HP),
+            // op::ret(RegId::ZERO),
+        ];
+        let mut instructions = setup_instructions();
+
+        instructions.extend(vec![
+            op::movi(0x14, amount),
+            op::movi(0x15, 1),
+            op::movi(0x20, 32),
+            op::aloc(0x20),
+        ]);
+
+        for (i, v) in (*AssetId::zeroed()).into_iter().enumerate() {
+            instructions.push(op::movi(0x20, v as u32));
+            instructions.push(op::sb(RegId::HP, 0x20, i as u16));
+        }
+
+        instructions.extend(vec![
+            op::call(0x10, RegId::ZERO, 0x11, 0x12),
+            // op::jmpb(RegId::ZERO, 0),
+        ]);
+
+        let predicate = op::ret(RegId::ONE).to_bytes().to_vec();
+        let owner = Input::predicate_owner(&predicate);
+        let coin_input = Input::coin_predicate(
+            Default::default(),
+            owner,
+            1000,
+            AssetId::zeroed(),
+            Default::default(),
+            Default::default(),
+            Default::default(),
+            predicate,
+            vec![],
+        );
+        let coin_output = Output::variable(Address::zeroed(), 100, AssetId::zeroed());
+        let extra_inputs = vec![coin_input];
+        let extra_outputs = vec![coin_output];
+
+        //     replace_contract_in_service(&mut service, &contract_id, contract);
+        //     run_with_service_with_extra_inputs(
+        //         "contract/tro",
+        //         group,
+        //         instructions,
+        //         script_data.clone(),
+        //         &service,
+        //         contract_id,
+        //         &rt,
+        //         &mut rng,
+        //         extra_inputs,
+        //         extra_outputs,
+        //     );
+        // }
+        shared_runner_builder
+            .build_with_new_contract(contract)
+            .with_extra_inputs(extra_inputs)
+            .with_extra_outputs(extra_outputs)
+            .run("contract/tro", group, instructions, script_data.clone());
+    }
 }
