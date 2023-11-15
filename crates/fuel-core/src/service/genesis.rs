@@ -89,8 +89,7 @@ fn import_genesis_block(
     let chain_config_hash = config.chain_config.root()?.into();
     let coins_root = init_coin_state(database, &config.chain_state, height)?.into();
     let contracts_root = init_contracts(database, &config.chain_state, height)?.into();
-    let messages_root = init_da_messages(database, &config.chain_state)?;
-    let messages_root = messages_root.into();
+    let messages_root = init_da_messages(database, &config.chain_state)?.into();
 
     let genesis = Genesis {
         chain_config_hash,
