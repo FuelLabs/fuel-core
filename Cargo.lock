@@ -2799,6 +2799,7 @@ dependencies = [
  "ed25519-dalek 2.0.0",
  "ethnum",
  "fuel-core",
+ "fuel-core-chain-config",
  "fuel-core-services",
  "fuel-core-storage",
  "fuel-core-sync",

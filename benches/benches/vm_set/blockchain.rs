@@ -47,7 +47,7 @@ pub struct BenchDb {
 impl BenchDb {
     const STATE_SIZE: u64 = 10_000_000;
 
-    fn new(contract: &ContractId) -> anyhow::Result<Self> {
+    fn new(contract_id: &ContractId) -> anyhow::Result<Self> {
         let tmp_dir = ShallowTempDir::new();
 
         let db = Arc::new(RocksDb::default_open(tmp_dir.path(), None).unwrap());
@@ -56,7 +56,7 @@ impl BenchDb {
 
         let mut database = Database::new(db);
         database.init_contract_state(
-            contract,
+            contract_id,
             (0..Self::STATE_SIZE).map(|_| {
                 use fuel_core::database::vm_database::IncreaseStorageKey;
                 storage_key.to_big_endian(key_bytes.as_mut());
@@ -65,7 +65,7 @@ impl BenchDb {
             }),
         )?;
         database.init_contract_balances(
-            &ContractId::zeroed(),
+            contract_id,
             (0..Self::STATE_SIZE).map(|k| {
                 let key = k / 2;
                 let mut sub_id = Bytes32::zeroed();
@@ -255,7 +255,7 @@ pub fn run(c: &mut Criterion) {
         run_group_ref(
             &mut call,
             format!("{i}"),
-            VmBench::new(op::call(0x10, RegId::ZERO, 0x11, 0x12))
+            VmBench::new(op::call(0x10, RegId::ZERO, 0x11, RegId::CGAS))
                 .with_db(db.to_vm_database())
                 .with_contract_code(code)
                 .with_data(data)

@@ -319,7 +319,10 @@ fn decode_input(line: &str) -> Option<Output> {
 
 fn map_to_ratio(baseline: u64, mean: Duration) -> u64 {
     let mean: u64 = mean.as_nanos().try_into().unwrap();
-    mean.checked_div(baseline).unwrap_or(1).max(1)
+    (mean + (baseline - 1))
+        .checked_div(baseline)
+        .unwrap_or(1)
+        .max(1)
 }
 
 impl Display for State {

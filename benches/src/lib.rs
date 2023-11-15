@@ -366,9 +366,9 @@ impl TryFrom<VmBench> for VmBenchPrepared {
             storage_root,
         }) = contract_code
         {
-            let input = tx.inputs().len();
+            let input_count = tx.inputs().len();
             let output =
-                Output::contract(input as u8, Bytes32::zeroed(), Bytes32::zeroed());
+                Output::contract(input_count as u8, Bytes32::zeroed(), Bytes32::zeroed());
             let input = Input::contract(
                 UtxoId::default(),
                 Bytes32::zeroed(),
