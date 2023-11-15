@@ -50,6 +50,7 @@ use fuel_core_types::{
     },
     fuel_tx::{
         ContractIdExt,
+        GasCosts,
         Input,
         Output,
         TxPointer,
@@ -71,6 +72,7 @@ mod utils;
 
 mod block_target_gas_set;
 
+use crate::block_target_gas_set::default_gas_costs::default_gas_costs;
 use utils::{
     make_u128,
     make_u256,
@@ -81,8 +83,8 @@ use utils::{
 static GLOBAL: tikv_jemallocator::Jemalloc = tikv_jemallocator::Jemalloc;
 
 const STATE_SIZE: u64 = 10_000_000;
-const TARGET_BLOCK_GAS_LIMIT: u64 = 262143;
-const BASE: u64 = 20_000;
+const TARGET_BLOCK_GAS_LIMIT: u64 = 1_000_000;
+const BASE: u64 = 100_000;
 
 pub struct SanityBenchmarkRunnerBuilder;
 
@@ -196,6 +198,8 @@ fn run(
             .predicate_params
             .max_gas_per_predicate = TARGET_BLOCK_GAS_LIMIT;
         config.chain_conf.block_gas_limit = TARGET_BLOCK_GAS_LIMIT;
+        config.chain_conf.consensus_parameters.gas_costs = GasCosts::new(default_gas_costs());
+        config.chain_conf.consensus_parameters.fee_params.gas_per_byte = 0;
         config.utxo_validation = false;
         config.block_production = Trigger::Instant;
 
@@ -289,8 +293,13 @@ fn service_with_contract_id(
         .consensus_parameters
         .predicate_params
         .max_gas_per_predicate = TARGET_BLOCK_GAS_LIMIT;
-    // Some txs (e.g. smo) are too big so increasing this arbitrarily
-    config.chain_conf.block_gas_limit = TARGET_BLOCK_GAS_LIMIT * 3;
+    config.chain_conf.block_gas_limit = TARGET_BLOCK_GAS_LIMIT;
+    config.chain_conf.consensus_parameters.gas_costs = GasCosts::new(default_gas_costs());
+    config
+        .chain_conf
+        .consensus_parameters
+        .fee_params
+        .gas_per_byte = 0;
     config.utxo_validation = false;
     config.block_production = Trigger::Instant;
 
@@ -443,41 +452,6 @@ fn run_with_service_with_extra_inputs(
 fn block_target_gas(c: &mut Criterion) {
     let mut group = c.benchmark_group("block target estimation");
 
-    run(
-        "Script with meq opcode and infinite loop",
-        &mut group,
-        [
-            op::movi(0x10, (1 << 18) - 1),
-            op::meq(0x11, RegId::SP, RegId::SP, 0x10),
-            op::jmpb(RegId::ZERO, 0),
-        ]
-        .to_vec(),
-        vec![],
-    );
-
-    run(
-        "Script with logd opcode and infinite loop",
-        &mut group,
-        [
-            op::movi(0x10, (1 << 18) - 1),
-            op::logd(RegId::ZERO, RegId::ZERO, RegId::ZERO, 0x10),
-            op::jmpb(RegId::ZERO, 0),
-        ]
-        .to_vec(),
-        vec![],
-    );
-
-    run(
-        "Script with gtf opcode and infinite loop",
-        &mut group,
-        [
-            op::gtf(0x10, RegId::ZERO, GTFArgs::InputCoinOwner as u16),
-            op::jmpb(RegId::ZERO, 0),
-        ]
-        .to_vec(),
-        vec![],
-    );
-
     run_alu(&mut group);
 
     run_contract(&mut group);
@@ -524,7 +498,7 @@ fn setup_instructions() -> Vec<Instruction> {
         op::addi(0x11, 0x10, ContractId::LEN.try_into().unwrap()),
         op::addi(0x11, 0x11, WORD_SIZE.try_into().unwrap()),
         op::addi(0x11, 0x11, WORD_SIZE.try_into().unwrap()),
-        op::movi(0x12, TARGET_BLOCK_GAS_LIMIT as u32),
+        op::movi(0x12, (1 << 18) - 1),
     ]
 }
 
@@ -533,10 +507,25 @@ fn setup_instructions() -> Vec<Instruction> {
 /// be called infinitely. The closure should accept one argument -
 /// the register where the iterator is stored.
 fn u256_iterator_loop(opcode: impl Fn(RegId) -> Instruction) -> Vec<Instruction> {
+    u256_iterator_loop_with_step(opcode, 1)
+}
+
+/// Returns a bytecode that contains an infinite loop that increases the `u256` iterator by
+/// `step` each iteration. A function expects a closure that returns an opcode that must
+/// be called infinitely. The closure should accept one argument -
+/// the register where the iterator is stored.
+fn u256_iterator_loop_with_step(
+    opcode: impl Fn(RegId) -> Instruction,
+    step: u32,
+) -> Vec<Instruction> {
     // Register where we store an iterator.
     let iterator_register = RegId::new(0x20);
+    let step_register = RegId::new(0x21);
     vec![
+        // Store size of the iterator.
         op::movi(iterator_register, 32),
+        // Store step value.
+        op::movi(step_register, step),
         // Allocate 32 bytes for u256 iterator.
         op::aloc(iterator_register),
         // Store the address of the u256 iterator into `iterator_register`.
@@ -549,7 +538,7 @@ fn u256_iterator_loop(opcode: impl Fn(RegId) -> Instruction) -> Vec<Instruction>
         op::wqop(
             iterator_register,
             iterator_register,
-            RegId::ONE,
+            step_register,
             MathOp::ADD as u8,
         ),
         // Jump 4 instructions(jmpb, wqop, opcode, noop) back.
@@ -560,7 +549,7 @@ fn u256_iterator_loop(opcode: impl Fn(RegId) -> Instruction) -> Vec<Instruction>
 fn call_contract_repeat() -> Vec<Instruction> {
     let mut instructions = setup_instructions();
     instructions.extend(vec![
-        op::call(0x10, RegId::ZERO, 0x11, 0x12),
+        op::call(0x10, RegId::ZERO, 0x11, RegId::CGAS),
         op::jmpb(RegId::ZERO, 0),
     ]);
     instructions
@@ -568,7 +557,7 @@ fn call_contract_repeat() -> Vec<Instruction> {
 
 fn call_contract_once() -> Vec<Instruction> {
     let mut instructions = setup_instructions();
-    instructions.extend(vec![op::call(0x10, RegId::ZERO, 0x11, 0x12)]);
+    instructions.extend(vec![op::call(0x10, RegId::ZERO, 0x11, RegId::CGAS)]);
     instructions
 }
 

@@ -12,6 +12,7 @@ use fuel_core_types::{
 
 // This register is used by `setup_instructions` function to set contract id.
 const CONTRACT_ID_REGISTER: RegId = RegId::new(0x10);
+const SEQUENTIAL_STEP: u32 = 10;
 
 // BAL: Balance of contract ID
 // BHEI: Block height
@@ -49,13 +50,7 @@ pub fn run_contract(group: &mut BenchmarkGroup<WallTime>) {
         let contract_instructions =
             u256_iterator_loop(|iterator| op::bal(0x13, iterator, CONTRACT_ID_REGISTER));
 
-        let mut instructions = setup_instructions();
-        instructions.extend(vec![op::call(
-            CONTRACT_ID_REGISTER,
-            RegId::ZERO,
-            0x11,
-            0x12,
-        )]);
+        let instructions = call_contract_once();
         let id = "contract/bal contract";
 
         shared_runner_builder
@@ -99,13 +94,7 @@ pub fn run_contract(group: &mut BenchmarkGroup<WallTime>) {
     // burn
     {
         let contract = u256_iterator_loop(|iterator| op::burn(RegId::ONE, iterator));
-        let mut instructions = setup_instructions();
-        instructions.extend(vec![op::call(
-            CONTRACT_ID_REGISTER,
-            RegId::ZERO,
-            0x11,
-            0x12,
-        )]);
+        let instructions = call_contract_once();
         shared_runner_builder.build_with_new_contract(contract).run(
             "contract/burn",
             group,
@@ -126,8 +115,7 @@ pub fn run_contract(group: &mut BenchmarkGroup<WallTime>) {
             op::addi(0x11, 0x10, ContractId::LEN.try_into().unwrap()),
             op::addi(0x11, 0x11, WORD_SIZE.try_into().unwrap()),
             op::addi(0x11, 0x11, WORD_SIZE.try_into().unwrap()),
-            op::movi(0x12, TARGET_BLOCK_GAS_LIMIT as u32),
-            op::call(CONTRACT_ID_REGISTER, RegId::ZERO, 0x11, 0x12),
+            op::call(CONTRACT_ID_REGISTER, RegId::ZERO, 0x11, RegId::CGAS),
             op::jmpb(RegId::ZERO, 0),
         ];
 
@@ -334,7 +322,6 @@ pub fn run_contract(group: &mut BenchmarkGroup<WallTime>) {
     // }
 
     // smo
-
     {
         let predicate = op::ret(RegId::ONE).to_bytes().to_vec();
         let owner = Input::predicate_owner(&predicate);
@@ -363,7 +350,7 @@ pub fn run_contract(group: &mut BenchmarkGroup<WallTime>) {
             let mut instructions = setup_instructions();
             instructions.extend(vec![
                 op::movi(0x18, 1), // coins to send
-                op::call(CONTRACT_ID_REGISTER, 0x12, 0x11, 0x12),
+                op::call(CONTRACT_ID_REGISTER, 0x12, 0x11, RegId::CGAS),
             ]);
             let mut data = script_data.clone();
             data.extend(
@@ -381,36 +368,19 @@ pub fn run_contract(group: &mut BenchmarkGroup<WallTime>) {
     }
 
     // scwq
-
-    // TODO: This is under-costed, so it runs too long and will complete before running out
-    //   of gas at 100_000.
-    // let size = 2620_u32; // 18bit integer maxes at 262144
-    // let contract: Vec<_> = (0..100_u32)
-    //     .map(|x| x * size)
-    //     .map(|x| vec![op::movi(0x13, x), op::scwq(0x13, 0x29, 0x14)]) // copy range starting at $rA of size $rC
-    //     .flatten()
-    //     .collect();
-    // let gas = 100_000;
-    // let instructions = vec![
-    //     op::gtf_args(CONTRACT_ID_REGISTER, 0x00, GTFArgs::ScriptData),
-    //     op::addi(0x11, 0x10, ContractId::LEN.try_into().unwrap()),
-    //     op::addi(0x11, 0x11, WORD_SIZE.try_into().unwrap()),
-    //     op::addi(0x11, 0x11, WORD_SIZE.try_into().unwrap()),
-    //     op::movi(0x12, gas),
-    //     op::movi(0x14, size),
-    //     op::call(CONTRACT_ID_REGISTER, RegId::ZERO, 0x11, 0x12),
-    // ];
-    // replace_contract_in_service(&mut service, &contract_id, contract);
-    // run_with_service(
-    //     "contract/scwq",
-    //     group,
-    //     instructions,
-    //     script_data.clone(),
-    //     &service,
-    //     contract_id,
-    //     &rt,
-    //     &mut rng,
-    // );
+    {
+        let step = SEQUENTIAL_STEP;
+        let contract =
+            u256_iterator_loop_with_step(|iterator| op::scwq(iterator, 0x13, 0x15), step);
+        let mut instructions = vec![op::movi(0x15, step)];
+        instructions.extend(call_contract_once());
+        shared_runner_builder.build_with_new_contract(contract).run(
+            "contract/scwq",
+            group,
+            instructions,
+            script_data.clone(),
+        );
+    }
 
     // srw
 
@@ -419,7 +389,7 @@ pub fn run_contract(group: &mut BenchmarkGroup<WallTime>) {
         let mut instructions = setup_instructions();
         instructions.extend(vec![
             op::movi(0x15, 2000),
-            op::call(CONTRACT_ID_REGISTER, RegId::ZERO, 0x11, 0x12),
+            op::call(CONTRACT_ID_REGISTER, RegId::ZERO, 0x11, RegId::CGAS),
         ]);
         shared_runner_builder.build_with_new_contract(contract).run(
             "contract/srw",
@@ -430,35 +400,26 @@ pub fn run_contract(group: &mut BenchmarkGroup<WallTime>) {
     }
 
     // srwq
-
-    // TODO: This is under-costed, so it runs too long and will complete before running out of gas
-    // let size = 2620_u32;
-    // let contract = (0..2620)
-    //     .map(|x| x * size)
-    //     .map(|x| vec![op::movi(0x13, x), op::srwq(0x14, 0x29, 0x13, 0x15)])
-    //     .flatten()
-    //     .collect();
-    // let gas = 100_000;
-    // let instructions = vec![
-    //     op::gtf_args(CONTRACT_ID_REGISTER, 0x00, GTFArgs::ScriptData),
-    //     op::addi(0x11, 0x10, ContractId::LEN.try_into().unwrap()),
-    //     op::addi(0x11, 0x11, WORD_SIZE.try_into().unwrap()),
-    //     op::addi(0x11, 0x11, WORD_SIZE.try_into().unwrap()),
-    //     op::movi(0x12, gas),
-    //     op::movi(0x15, size),
-    //     op::call(CONTRACT_ID_REGISTER, RegId::ZERO, 0x11, 0x12),
-    // ];
-    // replace_contract_in_service(&mut service, &contract_id, contract);
-    // run_with_service(
-    //     "contract/srwq",
-    //     group,
-    //     instructions,
-    //     script_data.clone(),
-    //     &service,
-    //     contract_id,
-    //     &rt,
-    //     &mut rng,
-    // );
+    {
+        let step = SEQUENTIAL_STEP;
+        let mut contract = vec![
+            op::movi(0x15, step),
+            op::movi(0x16, step * Bytes32::LEN as u32),
+            op::aloc(0x16),
+            op::move_(0x17, RegId::HP),
+        ];
+        contract.extend(u256_iterator_loop_with_step(
+            |iterator| op::srwq(0x17, 0x13, iterator, 0x15),
+            step,
+        ));
+        let instructions = call_contract_once();
+        shared_runner_builder.build_with_new_contract(contract).run(
+            "contract/srwq",
+            group,
+            instructions,
+            script_data.clone(),
+        );
+    }
 
     // sww
     {
@@ -468,7 +429,7 @@ pub fn run_contract(group: &mut BenchmarkGroup<WallTime>) {
             CONTRACT_ID_REGISTER,
             RegId::ZERO,
             0x11,
-            0x12,
+            RegId::CGAS,
         )]);
         shared_runner_builder.build_with_new_contract(contract).run(
             "contract/sww",
@@ -477,38 +438,23 @@ pub fn run_contract(group: &mut BenchmarkGroup<WallTime>) {
             script_data.clone(),
         );
     }
-    // swwq
 
-    // TODO: This is under-costed, so it runs too long and will complete before running out of gas
-    // let size = 2620_u32;
-    // // Copy value stored at $rC to the state starting at 0x13
-    // let contract = (0..2620)
-    //     .map(|x| x * size)
-    //     .map(|x| vec![op::movi(0x13, x), op::swwq(0x13, 0x29, 0x14, 0x15)])         .flatten()
-    //     .collect();
-    // let gas = 100_000;
-    // let value = 2000;
-    // let instructions = vec![
-    //     op::gtf_args(CONTRACT_ID_REGISTER, 0x00, GTFArgs::ScriptData),
-    //     op::addi(0x11, 0x10, ContractId::LEN.try_into().unwrap()),
-    //     op::addi(0x11, 0x11, WORD_SIZE.try_into().unwrap()),
-    //     op::addi(0x11, 0x11, WORD_SIZE.try_into().unwrap()),
-    //     op::movi(0x12, gas),
-    //     op::movi(0x14, value),
-    //     op::movi(0x15, size),
-    //     op::call(CONTRACT_ID_REGISTER, RegId::ZERO, 0x11, 0x12),
-    // ];
-    // replace_contract_in_service(&mut service, &contract_id, contract);
-    // run_with_service(
-    //     "contract/swwq",
-    //     group,
-    //     instructions,
-    //     script_data.clone(),
-    //     &service,
-    //     contract_id,
-    //     &rt,
-    //     &mut rng,
-    // );
+    // swwq
+    {
+        let step = SEQUENTIAL_STEP;
+        let contract = u256_iterator_loop_with_step(
+            |iterator| op::swwq(iterator, 0x13, RegId::ZERO, 0x15),
+            step,
+        );
+        let mut instructions = vec![op::movi(0x15, step)];
+        instructions.extend(call_contract_once());
+        shared_runner_builder.build_with_new_contract(contract).run(
+            "contract/swwq",
+            group,
+            instructions,
+            script_data.clone(),
+        );
+    }
 
     // time
     {
@@ -532,7 +478,7 @@ pub fn run_contract(group: &mut BenchmarkGroup<WallTime>) {
             op::movi(0x13, (1 << 18) - 1),
             op::movi(0x15, 2000),
             op::movi(0x14, 1),
-            op::call(CONTRACT_ID_REGISTER, 0x13, 0x15, 0x12),
+            op::call(CONTRACT_ID_REGISTER, 0x13, 0x15, RegId::CGAS),
         ]);
         shared_runner_builder.build_with_new_contract(contract).run(
             "contract/tr",
@@ -569,7 +515,7 @@ pub fn run_contract(group: &mut BenchmarkGroup<WallTime>) {
     //     }
     //
     //     instructions.extend(vec![
-    //         op::call(0x10, RegId::ZERO, 0x11, 0x12),
+    //         op::call(0x10, RegId::ZERO, 0x11, RegId::CGAS),
     //         // op::jmpb(RegId::ZERO, 0),
     //     ]);
     //

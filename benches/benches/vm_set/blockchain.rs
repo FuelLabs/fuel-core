@@ -255,7 +255,7 @@ pub fn run(c: &mut Criterion) {
         run_group_ref(
             &mut call,
             format!("{i}"),
-            VmBench::new(op::call(0x10, RegId::ZERO, 0x11, 0x12))
+            VmBench::new(op::call(0x10, RegId::ZERO, 0x11, RegId::CGAS))
                 .with_db(db.to_vm_database())
                 .with_contract_code(code)
                 .with_data(data)
