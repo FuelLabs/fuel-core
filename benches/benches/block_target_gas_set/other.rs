@@ -7,7 +7,7 @@ use crate::*;
 
 pub fn run_other(group: &mut BenchmarkGroup<WallTime>) {
     let contract_id = ContractId::zeroed();
-    let (mut service, rt) = service_with_contract_id(contract_id);
+    let mut shared_runner_builder = SanityBenchmarkRunnerBuilder::new_shared(contract_id);
     let mut rng = rand::rngs::StdRng::seed_from_u64(2322u64);
     let asset_id = AssetId::zeroed();
     let contract_id = ContractId::zeroed();
