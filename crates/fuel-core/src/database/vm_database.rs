@@ -48,7 +48,7 @@ pub struct VmDatabase {
     database: Database,
 }
 
-trait IncreaseStorageKey {
+pub trait IncreaseStorageKey {
     fn increase(&mut self) -> anyhow::Result<()>;
 }
 
@@ -276,7 +276,7 @@ impl InterpreterStorage for VmDatabase {
         contract_id: &ContractId,
         start_key: &Bytes32,
         values: &[Bytes32],
-    ) -> Result<Option<()>, Self::DataError> {
+    ) -> Result<usize, Self::DataError> {
         let mut current_key = U256::from_big_endian(start_key.as_ref());
         // verify key is in range
         current_key
@@ -286,7 +286,7 @@ impl InterpreterStorage for VmDatabase {
             })?;
 
         let mut key_bytes = Bytes32::zeroed();
-        let mut found_unset = false;
+        let mut found_unset = 0u32;
         for value in values {
             current_key.to_big_endian(key_bytes.as_mut());
 
@@ -295,16 +295,16 @@ impl InterpreterStorage for VmDatabase {
                 .storage::<ContractsState>()
                 .insert(&(contract_id, &key_bytes).into(), value)?;
 
-            found_unset |= option.is_none();
+            if option.is_none() {
+                found_unset = found_unset
+                    .checked_add(1)
+                    .expect("We've checked it above via `values.len()`");
+            }
 
             current_key.increase()?;
         }
 
-        if found_unset {
-            Ok(None)
-        } else {
-            Ok(Some(()))
-        }
+        Ok(found_unset as usize)
     }
 
     fn merkle_contract_state_remove_range(
@@ -515,7 +515,7 @@ mod tests {
                     .collect::<Vec<_>>(),
             )
             .map_err(|_| ())
-            .map(|v| v.is_some());
+            .map(|v| v == 0);
 
         // check stored data
         let results: Vec<_> = (0..insertion_range.len())

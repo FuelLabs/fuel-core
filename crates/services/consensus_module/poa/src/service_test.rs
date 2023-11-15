@@ -30,7 +30,7 @@ use fuel_core_types::{
     },
     fuel_crypto::SecretKey,
     fuel_tx::{
-        field::GasLimit,
+        field::ScriptGasLimit,
         *,
     },
     fuel_types::{
@@ -227,7 +227,7 @@ impl MockTransactionPool {
                 .lock()
                 .unwrap()
                 .iter()
-                .map(|tx| *tx.gas_limit())
+                .map(|tx| *tx.script_gas_limit())
                 .sum()
         });
         let removed = txs.clone();
@@ -252,7 +252,7 @@ impl MockTransactionPool {
 fn make_tx(rng: &mut StdRng) -> Script {
     TransactionBuilder::script(vec![], vec![])
         .gas_price(0)
-        .gas_limit(rng.gen_range(1..TxParameters::DEFAULT.max_gas_per_tx))
+        .script_gas_limit(rng.gen_range(1..TxParameters::DEFAULT.max_gas_per_tx))
         .finalize_without_signature()
 }
 

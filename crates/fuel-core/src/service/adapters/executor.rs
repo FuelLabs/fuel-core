@@ -77,14 +77,14 @@ impl crate::executor::RelayerPort for MaybeRelayerAdapter {
     fn get_message(
         &self,
         id: &Nonce,
-        da_height: &DaBlockHeight,
+        _da_height: &DaBlockHeight,
     ) -> anyhow::Result<Option<Message>> {
         #[cfg(feature = "relayer")]
         {
             match self.relayer_synced.as_ref() {
-                Some(sync) => sync.get_message(id, da_height),
+                Some(sync) => sync.get_message(id, _da_height),
                 None => {
-                    if *da_height <= self.da_deploy_height {
+                    if *_da_height <= self.da_deploy_height {
                         Ok(fuel_core_storage::StorageAsRef::storage::<
                             fuel_core_storage::tables::Messages,
                         >(&self.database)
@@ -98,9 +98,11 @@ impl crate::executor::RelayerPort for MaybeRelayerAdapter {
         }
         #[cfg(not(feature = "relayer"))]
         {
-            let _ = id;
-            let _ = da_height;
-            Ok(None)
+            Ok(fuel_core_storage::StorageAsRef::storage::<
+                fuel_core_storage::tables::Messages,
+            >(&self.database)
+            .get(id)?
+            .map(std::borrow::Cow::into_owned))
         }
     }
 }

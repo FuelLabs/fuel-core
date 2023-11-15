@@ -143,29 +143,59 @@ include_from_impls! {
         // Non-opcode prices
         pub contract_root: DependentCost,
         pub state_root: DependentCost,
+        pub vm_initialization: u64,
+        pub new_storage_per_byte: u64,
     }
 }
 
 #[derive(Clone, Debug)]
-pub struct DependentCost {
-    pub base: u64,
-    pub dep_per_unit: u64,
+pub enum DependentCost {
+    LightOperation { base: u64, units_per_gas: u64 },
+    HeavyOperation { base: u64, gas_per_unit: u64 },
 }
 
 impl From<DependentCost> for fuel_core_types::fuel_tx::DependentCost {
     fn from(value: DependentCost) -> Self {
-        Self {
-            base: value.base,
-            dep_per_unit: value.dep_per_unit,
+        match value {
+            DependentCost::LightOperation {
+                base,
+                units_per_gas,
+            } => fuel_core_types::fuel_tx::DependentCost::LightOperation {
+                base,
+                units_per_gas,
+            },
+            DependentCost::HeavyOperation { base, gas_per_unit } => {
+                fuel_core_types::fuel_tx::DependentCost::HeavyOperation {
+                    base,
+                    gas_per_unit,
+                }
+            }
         }
     }
 }
 
 impl From<schema::chain::DependentCost> for DependentCost {
     fn from(value: schema::chain::DependentCost) -> Self {
-        Self {
-            base: value.base.into(),
-            dep_per_unit: value.dep_per_unit.into(),
+        match value {
+            schema::chain::DependentCost::LightOperation(
+                schema::chain::LightOperation {
+                    base,
+                    units_per_gas,
+                },
+            ) => DependentCost::LightOperation {
+                base: base.into(),
+                units_per_gas: units_per_gas.into(),
+            },
+            schema::chain::DependentCost::HeavyOperation(
+                schema::chain::HeavyOperation { base, gas_per_unit },
+            ) => DependentCost::HeavyOperation {
+                base: base.into(),
+                gas_per_unit: gas_per_unit.into(),
+            },
+            schema::chain::DependentCost::Unknown => DependentCost::HeavyOperation {
+                base: 0,
+                gas_per_unit: 0,
+            },
         }
     }
 }
