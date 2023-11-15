@@ -43,6 +43,7 @@ use crate::{
 
 pub struct ParquetBatchReader<R: ChunkReader, T> {
     data_source: SerializedFileReader<R>,
+    group_index: usize,
     _data: PhantomData<T>,
 }
 
@@ -56,14 +57,14 @@ impl<R: ChunkReader + 'static, T: From<Row> + 'static> IntoIterator
     fn into_iter(self) -> Self::IntoIter {
         Box::new(ParquetIterator {
             data_source: self.data_source,
-            group_index: 0,
+            group_index: self.group_index,
             _data: PhantomData,
         })
     }
 }
 
-impl<R: ChunkReader> BatchGenerator<CoinConfig> for ParquetBatchReader<R, CoinConfig> {
-    fn next_batch(&mut self) -> Option<anyhow::Result<Batch<CoinConfig>>> {
+impl<R: ChunkReader + 'static, T: From<parquet::record::Row>> BatchGenerator<T> for ParquetBatchReader<R, T> {
+    fn next_batch(&mut self) -> Option<anyhow::Result<Batch<T>>> {
         if self.group_index >= self.data_source.metadata().num_row_groups() {
             return None;
         }
@@ -127,6 +128,7 @@ impl<R: ChunkReader + 'static, T> ParquetBatchReader<R, T> {
     pub fn new(reader: R) -> anyhow::Result<Self> {
         Ok(Self {
             data_source: SerializedFileReader::new(reader)?,
+            group_index: 0,
             _data: PhantomData,
         })
     }

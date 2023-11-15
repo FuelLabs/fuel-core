@@ -26,6 +26,14 @@ pub struct Batch<T> {
     pub group_index: usize,
 }
 
+pub trait BatchGenerator<T> {
+    fn next_batch(&mut self) -> Option<anyhow::Result<Batch<T>>>;
+}
+
+pub trait BatchWriter<T> {
+    fn write_batch(&mut self, elements: Vec<T>) -> anyhow::Result<()>;
+}
+
 // pub struct BatchReader<T, I: IntoIterator<Item = anyhow::Result<Batch<T>>>> {}
 pub enum BatchReader {
     JSONReader {
@@ -52,12 +60,7 @@ impl BatchReader {
 
     pub fn message_batches(
         self,
-    ) -> Box<
-        dyn IntoIterator<
-            Item = anyhow::Result<Batch<MessageConfig>>,
-            IntoIter = Box<dyn Iterator<Item = anyhow::Result<Batch<MessageConfig>>>>,
-        >,
-    > {
+    ) -> Box<dyn BatchGenerator<MessageConfig>> {
         match self {
             BatchReader::JSONReader { source, batch_size } => Box::new(
                 JsonBatchReader::<MessageConfig>::from_state(source, batch_size),
@@ -72,12 +75,7 @@ impl BatchReader {
 
     pub fn contract_batches(
         self,
-    ) -> Box<
-        dyn IntoIterator<
-            Item = anyhow::Result<Batch<ContractConfig>>,
-            IntoIter = Box<dyn Iterator<Item = anyhow::Result<Batch<ContractConfig>>>>,
-        >,
-    > {
+    ) -> Box<dyn BatchGenerator<ContractConfig>> {
         match self {
             BatchReader::JSONReader { source, batch_size } => Box::new(
                 JsonBatchReader::<ContractConfig>::from_state(source, batch_size),
@@ -92,12 +90,7 @@ impl BatchReader {
 
     pub fn contract_state_batches(
         self,
-    ) -> Box<
-        dyn IntoIterator<
-            Item = anyhow::Result<Batch<ContractState>>,
-            IntoIter = Box<dyn Iterator<Item = anyhow::Result<Batch<ContractState>>>>,
-        >,
-    > {
+    ) -> Box<dyn BatchGenerator<ContractState>> {
         match self {
             BatchReader::JSONReader { source, batch_size } => Box::new(
                 JsonBatchReader::<ContractState>::from_state(source, batch_size),
@@ -112,12 +105,7 @@ impl BatchReader {
 
     pub fn contracts_balance_batches(
         self,
-    ) -> Box<
-        dyn IntoIterator<
-            Item = anyhow::Result<Batch<ContractBalance>>,
-            IntoIter = Box<dyn Iterator<Item = anyhow::Result<Batch<ContractBalance>>>>,
-        >,
-    > {
+    ) -> Box<dyn BatchGenerator<ContractBalance>> {
         match self {
             BatchReader::JSONReader { source, batch_size } => Box::new(
                 JsonBatchReader::<ContractBalance>::from_state(source, batch_size),
@@ -130,14 +118,6 @@ impl BatchReader {
             }
         }
     }
-}
-
-pub trait BatchGenerator<T> {
-    fn next_batch(&mut self) -> Option<anyhow::Result<Batch<T>>>;
-}
-
-pub trait BatchWriter<T> {
-    fn write_batch(&mut self, elements: Vec<T>) -> anyhow::Result<()>;
 }
 
 // #[cfg(test)]

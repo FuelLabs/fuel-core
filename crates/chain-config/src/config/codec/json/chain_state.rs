@@ -1,5 +1,3 @@
-use itertools::Itertools;
-
 use crate::{
     config::{
         contract_balance::ContractBalance,
@@ -22,6 +20,8 @@ pub struct ChainState {
 #[cfg(all(test, feature = "random"))]
 impl ChainState {
     pub fn random(amount: usize, per_contract: usize, rng: &mut impl rand::Rng) -> Self {
+        use itertools::Itertools;
+
         Self {
             coins: std::iter::repeat_with(|| CoinConfig::random(rng))
                 .take(amount)
