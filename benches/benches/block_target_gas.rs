@@ -213,7 +213,7 @@ fn run(
                 script.clone().into_iter().collect(),
                 script_data.clone(),
             )
-                .gas_limit(TARGET_BLOCK_GAS_LIMIT - BASE)
+                .script_gas_limit(TARGET_BLOCK_GAS_LIMIT - BASE)
                 .gas_price(1)
                 .add_unsigned_coin_input(
                     SecretKey::random(&mut rng),
