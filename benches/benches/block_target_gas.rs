@@ -82,7 +82,7 @@ static GLOBAL: tikv_jemallocator::Jemalloc = tikv_jemallocator::Jemalloc;
 
 const STATE_SIZE: u64 = 10_000_000;
 const TARGET_BLOCK_GAS_LIMIT: u64 = 262143;
-const BASE: u64 = 10_000;
+const BASE: u64 = 20_000;
 
 pub struct SanityBenchmarkRunnerBuilder;
 
@@ -115,7 +115,6 @@ impl SharedSanityBenchmarkFactory {
             service: &mut self.service,
             rt: &self.rt,
             rng: &mut self.rng,
-            has_contract_input: true,
             extra_inputs: vec![],
             extra_outputs: vec![],
         }
@@ -138,7 +137,6 @@ pub struct SanityBenchmark<'a> {
     service: &'a mut FuelService,
     rt: &'a tokio::runtime::Runtime,
     rng: &'a mut rand::rngs::StdRng,
-    has_contract_input: bool,
     extra_inputs: Vec<Input>,
     extra_outputs: Vec<Output>,
 }
@@ -260,6 +258,7 @@ fn service_with_contract_id(
     state_size: u64,
     contract_id: ContractId,
 ) -> (fuel_core::service::FuelService, tokio::runtime::Runtime) {
+    use fuel_core::database::vm_database::IncreaseStorageKey;
     let rt = tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build()
@@ -295,30 +294,36 @@ fn service_with_contract_id(
     config.utxo_validation = false;
     config.block_production = Trigger::Instant;
 
+    let mut storage_key = primitive_types::U256::zero();
+    let mut key_bytes = Bytes32::zeroed();
+
     database
         .init_contract_state(
             &contract_id,
-            (0..state_size).map(|k| {
-                let mut key = Bytes32::zeroed();
-                key.as_mut()[..8].copy_from_slice(&k.to_be_bytes());
-                (key, key)
+            (0..state_size).map(|_| {
+                storage_key.to_big_endian(key_bytes.as_mut());
+                storage_key.increase().unwrap();
+                (key_bytes, key_bytes)
             }),
         )
         .unwrap();
+
+    let mut storage_key = primitive_types::U256::zero();
+    let mut sub_id = Bytes32::zeroed();
     database
         .init_contract_balances(
             &contract_id,
             (0..state_size).map(|k| {
-                let key = k / 2;
-                let mut sub_id = Bytes32::zeroed();
-                sub_id.as_mut()[..8].copy_from_slice(&key.to_be_bytes());
+                storage_key.to_big_endian(sub_id.as_mut());
 
                 let asset = if k % 2 == 0 {
                     VmBench::CONTRACT.asset_id(&sub_id)
                 } else {
-                    AssetId::new(*sub_id)
+                    let asset_id = AssetId::new(*sub_id);
+                    storage_key.increase().unwrap();
+                    asset_id
                 };
-                (asset, key + 1_000)
+                (asset, k / 2 + 1_000)
             }),
         )
         .unwrap();
@@ -369,7 +374,7 @@ fn run_with_service_with_extra_inputs(
                 script_data.clone(),
             );
             tx_builder
-                .gas_limit(TARGET_BLOCK_GAS_LIMIT - BASE)
+                .script_gas_limit(TARGET_BLOCK_GAS_LIMIT - BASE)
                 .gas_price(1)
                 .add_unsigned_coin_input(
                     SecretKey::random(rng),
@@ -416,7 +421,6 @@ fn run_with_service_with_extra_inputs(
                     .expect("Should be at least 1 element")
                     .expect("Should include transaction successfully");
                 let res = sub.recv().await.expect("Should produce a block");
-                dbg!(&res.tx_status);
                 assert_eq!(res.tx_status.len(), 2, "res.tx_status: {:?}", res.tx_status);
                 assert_eq!(res.sealed_block.entity.transactions().len(), 2);
                 assert_eq!(res.tx_status[0].id, tx_id);
@@ -428,7 +432,9 @@ fn run_with_service_with_extra_inputs(
                     else {
                         panic!("The execution should fails with out of gas")
                     };
-                assert!(reason.contains("OutOfGas"));
+                if !reason.contains("OutOfGas") {
+                    panic!("The test failed because of {}", reason);
+                }
             }
         })
     });
@@ -519,6 +525,35 @@ fn setup_instructions() -> Vec<Instruction> {
         op::addi(0x11, 0x11, WORD_SIZE.try_into().unwrap()),
         op::addi(0x11, 0x11, WORD_SIZE.try_into().unwrap()),
         op::movi(0x12, TARGET_BLOCK_GAS_LIMIT as u32),
+    ]
+}
+
+/// Returns a bytecode that contains an infinite loop that increases the `u256` iterator by
+/// `1` each iteration. A function expects a closure that returns an opcode that must
+/// be called infinitely. The closure should accept one argument -
+/// the register where the iterator is stored.
+fn u256_iterator_loop(opcode: impl Fn(RegId) -> Instruction) -> Vec<Instruction> {
+    // Register where we store an iterator.
+    let iterator_register = RegId::new(0x20);
+    vec![
+        op::movi(iterator_register, 32),
+        // Allocate 32 bytes for u256 iterator.
+        op::aloc(iterator_register),
+        // Store the address of the u256 iterator into `iterator_register`.
+        op::move_(iterator_register, RegId::HP),
+        // We need to pad number of isntruciton to be 8-byte aligned.
+        op::noop(),
+        // Execute benchmarking opcode.
+        opcode(iterator_register),
+        // Increment the iterator by one.
+        op::wqop(
+            iterator_register,
+            iterator_register,
+            RegId::ONE,
+            MathOp::ADD as u8,
+        ),
+        // Jump 4 instructions(jmpb, wqop, opcode, noop) back.
+        op::jmpb(RegId::ZERO, 1),
     ]
 }
 
