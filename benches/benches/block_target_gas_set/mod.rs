@@ -13,4 +13,6 @@ pub mod contract;
 
 pub mod memory;
 
+pub mod other;
+
 pub mod default_gas_costs;

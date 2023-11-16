@@ -10,8 +10,8 @@ Description of the upcoming release here.
 
 ### Added
 
-- [#1488](https://github.com/FuelLabs/fuel-core/pull/1488): Add docker login for cross binaries that use docker
 - [#1485](https://github.com/FuelLabs/fuel-core/pull/1485): Prepare rc release of fuel core v0.21
+- [#1476](https://github.com/FuelLabs/fuel-core/pull/1453): Add the majority of the "other" benchmarks for contract opcodes.
 - [#1453](https://github.com/FuelLabs/fuel-core/pull/1453): Add the majority of the "sanity" benchmarks for contract opcodes.
 - [#1473](https://github.com/FuelLabs/fuel-core/pull/1473): Expose fuel-core version as a constant
 - [#1469](https://github.com/FuelLabs/fuel-core/pull/1469): Added support of bloom filter for RocksDB tables and increased the block cache.

@@ -1,9 +1,11 @@
+use crate::block_target_gas_set::default_gas_costs::default_gas_costs;
 use block_target_gas_set::{
     alu::run_alu,
     contract::run_contract,
     crypto::run_crypto,
     flow::run_flow,
     memory::run_memory,
+    other::run_other,
 };
 use criterion::{
     criterion_group,
@@ -13,16 +15,16 @@ use criterion::{
     Criterion,
 };
 use ed25519_dalek::Signer;
-use fuel_core::service::{
-    config::Trigger,
-    Config,
-    FuelService,
-    ServiceTrait,
-};
-use rand::SeedableRng;
-
 use ethnum::U256;
-use fuel_core::txpool::types::Word;
+use fuel_core::{
+    service::{
+        config::Trigger,
+        Config,
+        FuelService,
+        ServiceTrait,
+    },
+    txpool::types::Word,
+};
 use fuel_core_benches::*;
 use fuel_core_chain_config::ContractConfig;
 use fuel_core_storage::{
@@ -67,16 +69,15 @@ use fuel_core_types::{
         consts::WORD_SIZE,
     },
 };
-
-mod utils;
-
-mod block_target_gas_set;
-
-use crate::block_target_gas_set::default_gas_costs::default_gas_costs;
+use rand::SeedableRng;
 use utils::{
     make_u128,
     make_u256,
 };
+
+mod utils;
+
+mod block_target_gas_set;
 
 // Use Jemalloc during benchmarks
 #[global_allocator]
@@ -461,6 +462,8 @@ fn block_target_gas(c: &mut Criterion) {
     run_flow(&mut group);
 
     run_memory(&mut group);
+
+    run_other(&mut group);
 
     group.finish();
 }
