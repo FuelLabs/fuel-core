@@ -381,7 +381,7 @@ async fn get_transactions() {
 }
 
 #[tokio::test]
-async fn get_transactions_by_owner_forward_and_backward_iterations() {
+async fn get_transactions_by_owner_forward() {
     let alice = Address::from([1; 32]);
     let bob = Address::from([2; 32]);
 
@@ -412,17 +412,6 @@ async fn get_transactions_by_owner_forward_and_backward_iterations() {
         })
         .collect_vec();
     assert_eq!(transactions_forward.len(), 5);
-
-    let all_transactions_backward = PaginationRequest {
-        cursor: None,
-        results: 10,
-        direction: PageDirection::Backward,
-    };
-    let response = client
-        .transactions_by_owner(&bob, all_transactions_backward)
-        .await;
-    // Backward request is not supported right now.
-    assert!(response.is_err());
 
     ///////////////// Iteration
 
@@ -472,6 +461,99 @@ async fn get_transactions_by_owner_forward_and_backward_iterations() {
     assert_eq!(
         transactions_forward_iter_next_two[1],
         transactions_forward[4]
+    );
+}
+
+#[tokio::test]
+async fn get_transactions_by_owner_backward_iterations() {
+    let alice = Address::from([1; 32]);
+    let bob = Address::from([2; 32]);
+
+    let mut context = TestContext::new(100).await;
+    let _ = context.transfer(alice, bob, 1).await.unwrap();
+    let _ = context.transfer(alice, bob, 2).await.unwrap();
+    let _ = context.transfer(alice, bob, 3).await.unwrap();
+    let _ = context.transfer(alice, bob, 4).await.unwrap();
+    let _ = context.transfer(alice, bob, 5).await.unwrap();
+
+    let client = context.client;
+
+    let all_transactions_backward = PaginationRequest {
+        cursor: None,
+        results: 10,
+        direction: PageDirection::Backward,
+    };
+    let response = client
+        .transactions_by_owner(&bob, all_transactions_backward)
+        .await
+        .unwrap();
+    let transactions_backward = response
+        .results
+        .into_iter()
+        .map(|tx| {
+            assert!(matches!(tx.status, TransactionStatus::Success { .. }));
+            tx.transaction
+        })
+        .collect_vec();
+    assert_eq!(transactions_backward.len(), 5);
+
+    ///////////////// Iteration
+
+    let backward_iter_three = PaginationRequest {
+        cursor: None,
+        results: 3,
+        direction: PageDirection::Backward,
+    };
+    let response_after_iter_three = client
+        .transactions_by_owner(&bob, backward_iter_three)
+        .await
+        .unwrap();
+    let transactions_backward_iter_three = response_after_iter_three
+        .results
+        .into_iter()
+        .map(|tx| {
+            assert!(matches!(tx.status, TransactionStatus::Success { .. }));
+            tx.transaction
+        })
+        .collect_vec();
+    assert_eq!(transactions_backward_iter_three.len(), 3);
+    assert_eq!(
+        transactions_backward_iter_three[0],
+        transactions_backward[0]
+    );
+    assert_eq!(
+        transactions_backward_iter_three[1],
+        transactions_backward[1]
+    );
+    assert_eq!(
+        transactions_backward_iter_three[2],
+        transactions_backward[2]
+    );
+
+    let backward_iter_next_two = PaginationRequest {
+        cursor: response_after_iter_three.cursor.clone(),
+        results: 2,
+        direction: PageDirection::Backward,
+    };
+    let response = client
+        .transactions_by_owner(&bob, backward_iter_next_two)
+        .await
+        .unwrap();
+    let transactions_backward_iter_next_two = response
+        .results
+        .into_iter()
+        .map(|tx| {
+            assert!(matches!(tx.status, TransactionStatus::Success { .. }));
+            tx.transaction
+        })
+        .collect_vec();
+    assert_eq!(
+        transactions_backward_iter_next_two[0],
+        transactions_backward[3]
+    );
+    assert_eq!(
+        transactions_backward_iter_next_two[1],
+        transactions_backward[4]
     );
 }
 
