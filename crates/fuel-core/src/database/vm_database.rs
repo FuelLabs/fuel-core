@@ -1,40 +1,17 @@
-use crate::database::{
-    Column,
-    Error as DatabaseError,
-};
+use crate::database::{Column, Error as DatabaseError};
 use anyhow::anyhow;
 use fuel_core_storage::{
     iter::IterDirection,
     not_found,
-    tables::{
-        ContractsAssets,
-        ContractsState,
-    },
-    ContractsAssetsStorage,
-    ContractsStateKey,
-    Error as StorageError,
-    Mappable,
-    MerkleRoot,
-    MerkleRootStorage,
-    StorageAsMut,
-    StorageInspect,
-    StorageMutate,
-    StorageRead,
-    StorageSize,
+    tables::{ContractsAssets, ContractsState},
+    ContractsAssetsStorage, ContractsStateKey, Error as StorageError, Mappable,
+    MerkleRoot, MerkleRootStorage, StorageAsMut, StorageInspect, StorageMutate,
+    StorageRead, StorageSize,
 };
 use fuel_core_types::{
     blockchain::header::ConsensusHeader,
-    fuel_tx::{
-        Contract,
-        StorageSlot,
-    },
-    fuel_types::{
-        BlockHeight,
-        Bytes32,
-        ContractId,
-        Salt,
-        Word,
-    },
+    fuel_tx::{Contract, StorageSlot},
+    fuel_types::{BlockHeight, Bytes32, ContractId, Salt, Word},
     fuel_vm::InterpreterStorage,
     tai64::Tai64,
 };
@@ -72,12 +49,12 @@ impl<D: Default> Default for VmDatabase<D> {
             current_block_height: Default::default(),
             current_timestamp: Tai64::now(),
             coinbase: Default::default(),
-            database: Default::default(),
+            database: D::default(),
         }
     }
 }
 
-impl<D: std::default::Default> VmDatabase<D> {
+impl<D> VmDatabase<D> {
     pub fn new<T>(
         database: D,
         header: &ConsensusHeader<T>,
@@ -91,15 +68,17 @@ impl<D: std::default::Default> VmDatabase<D> {
         }
     }
 
+    pub fn database_mut(&mut self) -> &mut D {
+        &mut self.database
+    }
+}
+
+impl<D: Default> VmDatabase<D> {
     pub fn default_from_database(database: D) -> Self {
         Self {
             database,
             ..Default::default()
         }
-    }
-
-    pub fn database_mut(&mut self) -> &mut D {
-        &mut self.database
     }
 }
 
@@ -189,27 +168,21 @@ pub trait DatabaseIteratorsTrait {
         S: AsRef<[u8]>;
 }
 
-use fuel_core_executor::refs::{
-    FuelBlockTrait,
-    FuelStateTrait,
-};
-use fuel_core_storage::tables::{
-    ContractsInfo,
-    ContractsRawCode,
-};
+use fuel_core_executor::refs::{FuelBlockTrait, FuelStateTrait};
+use fuel_core_storage::tables::{ContractsInfo, ContractsRawCode};
 
 impl<D> InterpreterStorage for VmDatabase<D>
 where
     D: StorageInspect<ContractsInfo, Error = StorageError>
         + StorageMutate<ContractsInfo, Error = StorageError>
         + StorageInspect<ContractsState, Error = StorageError>
-//         + StorageMutate<ContractsState, Error = StorageError>
+        //         + StorageMutate<ContractsState, Error = StorageError>
         + MerkleRootStorage<ContractId, ContractsState, Error = StorageError>
         + StorageMutate<ContractsRawCode, Error = StorageError>
         + StorageRead<ContractsRawCode, Error = StorageError>
-//         + StorageSize<ContractsRawCode, Error = StorageError>
-//         + StorageInspect<ContractsRawCode, Error = StorageError>
-//         + StorageInspect<ContractsAssets, Error = StorageError>
+        //         + StorageSize<ContractsRawCode, Error = StorageError>
+        //         + StorageInspect<ContractsRawCode, Error = StorageError>
+        //         + StorageInspect<ContractsAssets, Error = StorageError>
         + MerkleRootStorage<ContractId, ContractsAssets, Error = StorageError>
         + FuelBlockTrait<Error = StorageError>
         + FuelStateTrait<Error = StorageError>
@@ -291,7 +264,7 @@ where
 
             if entry.is_none() {
                 // We out of `contract_id` prefix
-                break
+                break;
             }
 
             let (multikey, value) =
@@ -389,6 +362,8 @@ where
 
 #[cfg(test)]
 mod tests {
+    use crate::database::Database;
+
     use super::*;
     use test_case::test_case;
 
@@ -465,7 +440,7 @@ mod tests {
         start_key: [u8; 32],
         range: usize,
     ) -> Result<Vec<Option<[u8; 32]>>, ()> {
-        let mut db = VmDatabase::default();
+        let mut db = VmDatabase::<Database>::default();
 
         let contract_id = ContractId::new([0u8; 32]);
 
@@ -538,7 +513,7 @@ mod tests {
         start_key: [u8; 32],
         insertion_range: &[[u8; 32]],
     ) -> Result<bool, ()> {
-        let mut db = VmDatabase::default();
+        let mut db = VmDatabase::<Database>::default();
 
         let contract_id = ContractId::new([0u8; 32]);
 
@@ -631,7 +606,7 @@ mod tests {
         start_key: [u8; 32],
         remove_count: usize,
     ) -> (Vec<[u8; 32]>, bool) {
-        let mut db = VmDatabase::default();
+        let mut db = VmDatabase::<Database>::default();
 
         let contract_id = ContractId::new([0u8; 32]);
 
@@ -662,7 +637,7 @@ mod tests {
                     U256::from_big_endian(&start_key).overflowing_add(i.into());
 
                 if overflow {
-                    return None
+                    return None;
                 }
 
                 let current_key = u256_to_bytes32(current_key);

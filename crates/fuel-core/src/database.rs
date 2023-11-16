@@ -1,39 +1,18 @@
 use crate::{
     database::transaction::DatabaseTransaction,
-    state::{
-        in_memory::memory_store::MemoryStore,
-        DataSource,
-        WriteOperation,
-    },
+    state::{in_memory::memory_store::MemoryStore, DataSource, WriteOperation},
 };
-use fuel_core_chain_config::{
-    ChainConfigDb,
-    CoinConfig,
-    ContractConfig,
-    MessageConfig,
-};
+use fuel_core_chain_config::{ChainConfigDb, CoinConfig, ContractConfig, MessageConfig};
 use fuel_core_storage::{
     iter::IterDirection,
-    transactional::{
-        StorageTransaction,
-        Transactional,
-    },
-    Mappable,
-    MerkleRootStorage,
+    transactional::{StorageTransaction, Transactional},
     Result as StorageResult,
 };
 use fuel_core_types::fuel_types::BlockHeight;
 use itertools::Itertools;
-use serde::{
-    de::DeserializeOwned,
-    Serialize,
-};
+use serde::{de::DeserializeOwned, Serialize};
 use std::{
-    fmt::{
-        self,
-        Debug,
-        Formatter,
-    },
+    fmt::{self, Debug, Formatter},
     marker::Send,
     ops::Deref,
     sync::Arc,
