@@ -61,7 +61,7 @@ pub struct Config {
 
 #[derive(Debug, Clone, Default)]
 pub struct ConcreteStorage {
-    vm: HashMap<ID, Interpreter<VmDatabase, Script>>,
+    vm: HashMap<ID, Interpreter<VmDatabase<Database>, Script>>,
     tx: HashMap<ID, Vec<Script>>,
     db: HashMap<ID, DatabaseTransaction>,
     params: ConsensusParameters,
@@ -156,7 +156,9 @@ impl ConcreteStorage {
             .ok_or_else(|| anyhow::anyhow!("The VM instance was not found"))
     }
 
-    fn vm_database(storage: &DatabaseTransaction) -> anyhow::Result<VmDatabase> {
+    fn vm_database(
+        storage: &DatabaseTransaction,
+    ) -> anyhow::Result<VmDatabase<Database>> {
         let block = storage
             .get_current_block()?
             .ok_or(not_found!("Block for VMDatabase"))?

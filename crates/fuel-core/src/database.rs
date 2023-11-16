@@ -18,6 +18,8 @@ use fuel_core_storage::{
         StorageTransaction,
         Transactional,
     },
+    Mappable,
+    MerkleRootStorage,
     Result as StorageResult,
 };
 use fuel_core_types::fuel_types::BlockHeight;
@@ -44,6 +46,7 @@ type DatabaseError = Error;
 type DatabaseResult<T> = Result<T>;
 
 // TODO: Extract `Database` and all belongs into `fuel-core-database`.
+use crate::database::vm_database::DatabaseIteratorsTrait;
 #[cfg(feature = "rocksdb")]
 use crate::state::rocks_db::RocksDb;
 use fuel_core_executor::refs::ExecutorDatabaseTrait;
@@ -466,6 +469,41 @@ impl Default for Database {
         {
             Self::rocksdb()
         }
+    }
+}
+
+impl DatabaseIteratorsTrait for Database {
+    // Todo Delete if possible Emir
+    fn iter_all_filtered<K, V, P, S>(
+        &self,
+        column: Column,
+        prefix: Option<P>,
+        start: Option<S>,
+        direction: Option<IterDirection>,
+    ) -> Box<dyn Iterator<Item = DatabaseResult<(K, V)>>>
+    where
+        K: From<Vec<u8>>,
+        V: DeserializeOwned,
+        P: AsRef<[u8]>,
+        S: AsRef<[u8]>,
+    {
+        Box::new(
+            self.data
+                .iter_all(
+                    column,
+                    prefix.as_ref().map(|p| p.as_ref()),
+                    start.as_ref().map(|s| s.as_ref()),
+                    direction.unwrap_or_default(),
+                )
+                .map(|val| {
+                    val.and_then(|(key, value)| {
+                        let key = K::from(key);
+                        let value: V = postcard::from_bytes(&value)
+                            .map_err(|_| DatabaseError::Codec)?;
+                        Ok((key, value))
+                    })
+                }),
+        )
     }
 }
 

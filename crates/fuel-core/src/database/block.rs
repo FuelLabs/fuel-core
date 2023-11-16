@@ -11,6 +11,7 @@ use crate::database::{
     Error as DatabaseError,
     Result as DatabaseResult,
 };
+use fuel_core_executor::refs::FuelBlockTrait;
 use fuel_core_storage::{
     iter::IterDirection,
     not_found,
@@ -120,6 +121,22 @@ impl StorageMutate<FuelBlocks> for Database {
         }
 
         Ok(prev)
+    }
+}
+
+impl FuelBlockTrait for Database {
+    type Error = StorageError;
+
+    fn latest_height(&self) -> Result<BlockHeight, Self::Error> {
+        self.latest_height()
+    }
+
+    fn block_time(&self, height: &BlockHeight) -> Result<Tai64, Self::Error> {
+        self.block_time(height)
+    }
+
+    fn get_block_id(&self, height: &BlockHeight) -> Result<Option<BlockId>, Self::Error> {
+        self.get_block_id(height)
     }
 }
 

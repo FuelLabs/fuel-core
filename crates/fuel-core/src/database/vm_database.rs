@@ -1,13 +1,15 @@
 use crate::database::{
     Column,
-    Database,
     Error as DatabaseError,
 };
 use anyhow::anyhow;
 use fuel_core_storage::{
     iter::IterDirection,
     not_found,
-    tables::ContractsState,
+    tables::{
+        ContractsAssets,
+        ContractsState,
+    },
     ContractsAssetsStorage,
     ContractsStateKey,
     Error as StorageError,
@@ -39,13 +41,16 @@ use fuel_core_types::{
 use primitive_types::U256;
 use std::borrow::Cow;
 
+use crate::database::DatabaseResult;
+use serde::de::DeserializeOwned;
+
 /// Used to store metadata relevant during the execution of a transaction
 #[derive(Clone, Debug)]
-pub struct VmDatabase {
+pub struct VmDatabase<D> {
     current_block_height: BlockHeight,
     current_timestamp: Tai64,
     coinbase: ContractId,
-    database: Database,
+    database: D,
 }
 
 trait IncreaseStorageKey {
@@ -61,7 +66,7 @@ impl IncreaseStorageKey for U256 {
     }
 }
 
-impl Default for VmDatabase {
+impl<D: Default> Default for VmDatabase<D> {
     fn default() -> Self {
         Self {
             current_block_height: Default::default(),
@@ -72,9 +77,9 @@ impl Default for VmDatabase {
     }
 }
 
-impl VmDatabase {
+impl<D: std::default::Default> VmDatabase<D> {
     pub fn new<T>(
-        database: Database,
+        database: D,
         header: &ConsensusHeader<T>,
         coinbase: ContractId,
     ) -> Self {
@@ -86,21 +91,21 @@ impl VmDatabase {
         }
     }
 
-    pub fn default_from_database(database: Database) -> Self {
+    pub fn default_from_database(database: D) -> Self {
         Self {
             database,
             ..Default::default()
         }
     }
 
-    pub fn database_mut(&mut self) -> &mut Database {
+    pub fn database_mut(&mut self) -> &mut D {
         &mut self.database
     }
 }
 
-impl<M: Mappable> StorageInspect<M> for VmDatabase
+impl<D, M: Mappable> StorageInspect<M> for VmDatabase<D>
 where
-    Database: StorageInspect<M, Error = StorageError>,
+    D: StorageInspect<M, Error = StorageError>,
 {
     type Error = StorageError;
 
@@ -113,9 +118,9 @@ where
     }
 }
 
-impl<M: Mappable> StorageMutate<M> for VmDatabase
+impl<D, M: Mappable> StorageMutate<M> for VmDatabase<D>
 where
-    Database: StorageMutate<M, Error = StorageError>,
+    D: StorageMutate<M, Error = StorageError>,
 {
     fn insert(
         &mut self,
@@ -130,18 +135,18 @@ where
     }
 }
 
-impl<M: Mappable> StorageSize<M> for VmDatabase
+impl<D, M: Mappable> StorageSize<M> for VmDatabase<D>
 where
-    Database: StorageSize<M, Error = StorageError>,
+    D: StorageSize<M, Error = StorageError>,
 {
     fn size_of_value(&self, key: &M::Key) -> Result<Option<usize>, Self::Error> {
         StorageSize::<M>::size_of_value(&self.database, key)
     }
 }
 
-impl<M: Mappable> StorageRead<M> for VmDatabase
+impl<D, M: Mappable> StorageRead<M> for VmDatabase<D>
 where
-    Database: StorageRead<M, Error = StorageError>,
+    D: StorageRead<M, Error = StorageError>,
 {
     fn read(&self, key: &M::Key, buf: &mut [u8]) -> Result<Option<usize>, Self::Error> {
         StorageRead::<M>::read(&self.database, key, buf)
@@ -155,18 +160,61 @@ where
     }
 }
 
-impl<K, M: Mappable> MerkleRootStorage<K, M> for VmDatabase
+impl<D, K, M: Mappable> MerkleRootStorage<K, M> for VmDatabase<D>
 where
-    Database: MerkleRootStorage<K, M, Error = StorageError>,
+    D: MerkleRootStorage<K, M, Error = StorageError>,
 {
     fn root(&self, key: &K) -> Result<MerkleRoot, Self::Error> {
         MerkleRootStorage::<K, M>::root(&self.database, key)
     }
 }
 
-impl ContractsAssetsStorage for VmDatabase {}
+impl<D> ContractsAssetsStorage for VmDatabase<D> where
+    D: MerkleRootStorage<ContractId, ContractsAssets, Error = StorageError>
+{
+}
 
-impl InterpreterStorage for VmDatabase {
+pub trait DatabaseIteratorsTrait {
+    fn iter_all_filtered<K, V, P, S>(
+        &self,
+        column: Column,
+        prefix: Option<P>,
+        start: Option<S>,
+        direction: Option<IterDirection>,
+    ) -> Box<dyn Iterator<Item = DatabaseResult<(K, V)>>>
+    where
+        K: From<Vec<u8>>,
+        V: DeserializeOwned,
+        P: AsRef<[u8]>,
+        S: AsRef<[u8]>;
+}
+
+use fuel_core_executor::refs::{
+    FuelBlockTrait,
+    FuelStateTrait,
+};
+use fuel_core_storage::tables::{
+    ContractsInfo,
+    ContractsRawCode,
+};
+
+impl<D> InterpreterStorage for VmDatabase<D>
+where
+    D: StorageInspect<ContractsInfo, Error = StorageError>
+        + StorageMutate<ContractsInfo, Error = StorageError>
+        + StorageInspect<ContractsState, Error = StorageError>
+//         + StorageMutate<ContractsState, Error = StorageError>
+        + MerkleRootStorage<ContractId, ContractsState, Error = StorageError>
+        + StorageMutate<ContractsRawCode, Error = StorageError>
+        + StorageRead<ContractsRawCode, Error = StorageError>
+//         + StorageSize<ContractsRawCode, Error = StorageError>
+//         + StorageInspect<ContractsRawCode, Error = StorageError>
+//         + StorageInspect<ContractsAssets, Error = StorageError>
+        + MerkleRootStorage<ContractId, ContractsAssets, Error = StorageError>
+        + FuelBlockTrait<Error = StorageError>
+        + FuelStateTrait<Error = StorageError>
+        + DatabaseIteratorsTrait,
+{
     type DataError = StorageError;
 
     fn block_height(&self) -> Result<BlockHeight, Self::DataError> {

@@ -8,6 +8,7 @@ use crate::database::{
     Column,
     Database,
 };
+use fuel_core_executor::refs::FuelStateTrait;
 use fuel_core_storage::{
     tables::ContractsState,
     ContractsStateKey,
@@ -150,6 +151,18 @@ impl MerkleRootStorage<ContractId, ContractsState> for Database {
             .map(|metadata| metadata.root)
             .unwrap_or_else(|| in_memory::MerkleTree::new().root());
         Ok(root)
+    }
+}
+
+impl FuelStateTrait for Database {
+    type Error = StorageError;
+
+    fn init_contract_state<S: Iterator<Item = (Bytes32, Bytes32)>>(
+        &mut self,
+        contract_id: &ContractId,
+        slots: S,
+    ) -> Result<(), Self::Error> {
+        self.init_contract_state(contract_id, slots)
     }
 }
 
