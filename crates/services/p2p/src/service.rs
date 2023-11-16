@@ -33,8 +33,6 @@ use fuel_core_services::{
 };
 use fuel_core_types::{
     blockchain::{
-        block::Block,
-        consensus::ConsensusVote,
         SealedBlock,
         SealedBlockHeader,
     },
@@ -92,8 +90,6 @@ pub type Service<D> = ServiceRunner<Task<FuelP2PService<PostcardCodec>, D, Share
 enum TaskRequest {
     // Broadcast requests to p2p network
     BroadcastTransaction(Arc<Transaction>),
-    BroadcastBlock(Arc<Block>),
-    BroadcastVote(Arc<ConsensusVote>),
     // Request to get one-off data from p2p network
     GetPeerIds(oneshot::Sender<Vec<PeerId>>),
     GetBlock {
@@ -123,12 +119,6 @@ impl Debug for TaskRequest {
         match self {
             TaskRequest::BroadcastTransaction(_) => {
                 write!(f, "TaskRequest::BroadcastTransaction")
-            }
-            TaskRequest::BroadcastBlock(_) => {
-                write!(f, "TaskRequest::BroadcastBlock")
-            }
-            TaskRequest::BroadcastVote(_) => {
-                write!(f, "TaskRequest::BroadcastVote")
             }
             TaskRequest::GetPeerIds(_) => {
                 write!(f, "TaskRequest::GetPeerIds")
@@ -492,20 +482,6 @@ where
                             tracing::error!("Got an error during transaction {} broadcasting {}", tx_id, e);
                         }
                     }
-                    Some(TaskRequest::BroadcastBlock(block)) => {
-                        let broadcast = GossipsubBroadcastRequest::NewBlock(block);
-                        let result = self.p2p_service.publish_message(broadcast);
-                        if let Err(e) = result {
-                            tracing::error!("Got an error during block broadcasting {}", e);
-                        }
-                    }
-                    Some(TaskRequest::BroadcastVote(vote)) => {
-                        let broadcast = GossipsubBroadcastRequest::ConsensusVote(vote);
-                        let result = self.p2p_service.publish_message(broadcast);
-                        if let Err(e) = result {
-                            tracing::error!("Got an error during vote broadcasting {}", e);
-                        }
-                    }
                     Some(TaskRequest::GetPeerIds(channel)) => {
                         let peer_ids = self.p2p_service.get_peer_ids();
                         let _ = channel.send(peer_ids);
@@ -563,14 +539,6 @@ where
                             GossipsubMessage::NewTx(transaction) => {
                                 let next_transaction = GossipData::new(transaction, peer_id, message_id);
                                 let _ = self.broadcast.tx_broadcast(next_transaction);
-                            },
-                            GossipsubMessage::NewBlock(block) => {
-                                // todo: add logic to gossip newly received blocks
-                                let _new_block = GossipData::new(block, peer_id, message_id);
-                            },
-                            GossipsubMessage::ConsensusVote(vote) => {
-                                // todo: add logic to gossip newly received votes
-                                let _new_vote = GossipData::new(vote, peer_id, message_id);
                             },
                         }
                     },
@@ -751,20 +719,6 @@ impl SharedState {
         self.request_sender.send(request).await?;
 
         receiver.await.map_err(|e| anyhow!("{}", e))
-    }
-
-    pub fn broadcast_vote(&self, vote: Arc<ConsensusVote>) -> anyhow::Result<()> {
-        self.request_sender
-            .try_send(TaskRequest::BroadcastVote(vote))?;
-
-        Ok(())
-    }
-
-    pub fn broadcast_block(&self, block: Arc<Block>) -> anyhow::Result<()> {
-        self.request_sender
-            .try_send(TaskRequest::BroadcastBlock(block))?;
-
-        Ok(())
     }
 
     pub fn broadcast_transaction(
