@@ -2,10 +2,6 @@
 
 use crate::{
     blockchain::primitives::BlockId,
-    fuel_crypto::{
-        PublicKey,
-        Signature,
-    },
     fuel_tx::Input,
     fuel_types::{
         Address,
@@ -68,20 +64,6 @@ pub struct Sealed<Entity> {
     // TODO: Rename to `seal`
     /// Consensus info
     pub consensus: Consensus,
-}
-
-/// A vote from a validator.
-///
-/// This is a dummy placeholder for the Vote Struct in fuel-bft
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub struct ConsensusVote {
-    block_id: Bytes32,
-    height: u64,
-    round: u64,
-    signature: Signature,
-    // step: Step,
-    validator: PublicKey,
 }
 
 /// The first block of the blockchain is a genesis block. It determines the initial state of the
