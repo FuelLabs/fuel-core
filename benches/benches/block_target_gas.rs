@@ -251,7 +251,9 @@ fn run(
                     else {
                         panic!("The execution should fails with out of gas")
                     };
-                assert!(reason.contains("OutOfGas"));
+                if !reason.contains("OutOfGas") {
+                    panic!("The test failed because of {}", reason);
+                }
             }
         })
     });

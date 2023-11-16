@@ -38,8 +38,11 @@ where
             let mut total = core::time::Duration::ZERO;
             for _ in 0..iters {
                 let original_db = vm.as_mut().database_mut().clone();
-                let database_tx = original_db.transaction().as_ref().clone();
-                *vm.as_mut().database_mut() = database_tx;
+                // Simulates the block production/validation with three levels of database transaction.
+                let block_database_tx = original_db.transaction().as_ref().clone();
+                let tx_database_tx = block_database_tx.transaction().as_ref().clone();
+                let vm_tx_database_tx = tx_database_tx.transaction().as_ref().clone();
+                *vm.as_mut().database_mut() = vm_tx_database_tx;
 
                 let start = black_box(clock.raw());
                 match instruction {
@@ -65,12 +68,12 @@ where
 
 fn vm(c: &mut Criterion) {
     alu::run(c);
-    blockchain::run(c);
     crypto::run(c);
     flow::run(c);
     mem::run(c);
     contract_root(c);
     state_root(c);
+    blockchain::run(c);
 }
 
 criterion_group!(benches, vm);
