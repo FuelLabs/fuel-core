@@ -1,17 +1,40 @@
-use crate::database::{Column, Error as DatabaseError};
+use crate::database::{
+    Column,
+    Error as DatabaseError,
+};
 use anyhow::anyhow;
 use fuel_core_storage::{
     iter::IterDirection,
     not_found,
-    tables::{ContractsAssets, ContractsState},
-    ContractsAssetsStorage, ContractsStateKey, Error as StorageError, Mappable,
-    MerkleRoot, MerkleRootStorage, StorageAsMut, StorageInspect, StorageMutate,
-    StorageRead, StorageSize,
+    tables::{
+        ContractsAssets,
+        ContractsState,
+    },
+    ContractsAssetsStorage,
+    ContractsStateKey,
+    Error as StorageError,
+    Mappable,
+    MerkleRoot,
+    MerkleRootStorage,
+    StorageAsMut,
+    StorageInspect,
+    StorageMutate,
+    StorageRead,
+    StorageSize,
 };
 use fuel_core_types::{
     blockchain::header::ConsensusHeader,
-    fuel_tx::{Contract, StorageSlot},
-    fuel_types::{BlockHeight, Bytes32, ContractId, Salt, Word},
+    fuel_tx::{
+        Contract,
+        StorageSlot,
+    },
+    fuel_types::{
+        BlockHeight,
+        Bytes32,
+        ContractId,
+        Salt,
+        Word,
+    },
     fuel_vm::InterpreterStorage,
     tai64::Tai64,
 };
@@ -168,21 +191,23 @@ pub trait DatabaseIteratorsTrait {
         S: AsRef<[u8]>;
 }
 
-use fuel_core_executor::refs::{FuelBlockTrait, FuelStateTrait};
-use fuel_core_storage::tables::{ContractsInfo, ContractsRawCode};
+use fuel_core_executor::refs::{
+    FuelBlockTrait,
+    FuelStateTrait,
+};
+use fuel_core_storage::tables::{
+    ContractsInfo,
+    ContractsRawCode,
+};
 
 impl<D> InterpreterStorage for VmDatabase<D>
 where
     D: StorageInspect<ContractsInfo, Error = StorageError>
         + StorageMutate<ContractsInfo, Error = StorageError>
         + StorageInspect<ContractsState, Error = StorageError>
-        //         + StorageMutate<ContractsState, Error = StorageError>
         + MerkleRootStorage<ContractId, ContractsState, Error = StorageError>
         + StorageMutate<ContractsRawCode, Error = StorageError>
         + StorageRead<ContractsRawCode, Error = StorageError>
-        //         + StorageSize<ContractsRawCode, Error = StorageError>
-        //         + StorageInspect<ContractsRawCode, Error = StorageError>
-        //         + StorageInspect<ContractsAssets, Error = StorageError>
         + MerkleRootStorage<ContractId, ContractsAssets, Error = StorageError>
         + FuelBlockTrait<Error = StorageError>
         + FuelStateTrait<Error = StorageError>
@@ -264,7 +289,7 @@ where
 
             if entry.is_none() {
                 // We out of `contract_id` prefix
-                break;
+                break
             }
 
             let (multikey, value) =
@@ -637,7 +662,7 @@ mod tests {
                     U256::from_big_endian(&start_key).overflowing_add(i.into());
 
                 if overflow {
-                    return None;
+                    return None
                 }
 
                 let current_key = u256_to_bytes32(current_key);

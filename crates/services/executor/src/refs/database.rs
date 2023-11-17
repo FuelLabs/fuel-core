@@ -1,7 +1,10 @@
 use fuel_core_storage::transactional::Transaction;
 use fuel_core_types::{
     blockchain::primitives::BlockId,
-    fuel_tx::ContractId,
+    fuel_tx::{
+        Address,
+        ContractId,
+    },
     fuel_types::{
         BlockHeight,
         Bytes32,
@@ -9,6 +12,7 @@ use fuel_core_types::{
     tai64::Tai64,
 };
 use std::ops::DerefMut;
+use fuel_core_types::services::txpool::TransactionStatus;
 
 pub trait ExecutorDatabaseTrait<D> {
     type T: Transaction<D> + DerefMut<Target = D>;
@@ -32,4 +36,23 @@ pub trait FuelStateTrait {
         contract_id: &ContractId,
         slots: S,
     ) -> Result<(), Self::Error>;
+}
+
+pub trait TxIdOwnerRecorder {
+    type Error;
+
+    fn record_tx_id_owner(
+        &self,
+        owner: &Address,
+        block_height: BlockHeight,
+        tx_idx: u16,
+        tx_id: &Bytes32,
+    ) -> Result<Option<Bytes32>, Self::Error>;
+
+
+    fn update_tx_status(
+        &self,
+        id: &Bytes32,
+        status: TransactionStatus,
+    ) -> Result<Option<TransactionStatus>, Self::Error>;
 }

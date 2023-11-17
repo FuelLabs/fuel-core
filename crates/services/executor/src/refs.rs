@@ -10,4 +10,5 @@ pub use database::{
     ExecutorDatabaseTrait,
     FuelBlockTrait,
     FuelStateTrait,
+    TxIdOwnerRecorder,
 };
