@@ -1,6 +1,16 @@
 use fuel_core_types::fuel_types::Bytes32;
+use serde::{
+    Deserialize,
+    Serialize,
+};
+use serde_with::{
+    serde_as,
+    skip_serializing_none,
+};
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[serde_as]
+#[skip_serializing_none]
+#[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq, Eq)]
 pub struct ContractState {
     pub key: Bytes32,
     pub value: Bytes32,

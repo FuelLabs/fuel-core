@@ -63,7 +63,9 @@ impl<R: ChunkReader + 'static, T: From<Row> + 'static> IntoIterator
     }
 }
 
-impl<R: ChunkReader + 'static, T: From<parquet::record::Row>> BatchGenerator<T> for ParquetBatchReader<R, T> {
+impl<R: ChunkReader + 'static, T: From<parquet::record::Row>> BatchGenerator<T>
+    for ParquetBatchReader<R, T>
+{
     fn next_batch(&mut self) -> Option<anyhow::Result<Batch<T>>> {
         if self.group_index >= self.data_source.metadata().num_row_groups() {
             return None;

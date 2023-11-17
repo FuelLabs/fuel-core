@@ -1,6 +1,7 @@
 use clap::ValueEnum;
 use fuel_core_chain_config::{
     default_consensus_dev_key,
+    BatchReader,
     ChainConfig,
     StateConfig,
 };
@@ -41,6 +42,7 @@ pub struct Config {
     pub db_config: DatabaseConfig,
     pub chain_config: ChainConfig,
     pub chain_state: StateConfig,
+    pub batch_reader: BatchReader,
     /// When `true`:
     /// - Enables manual block production.
     /// - Enables debugger endpoint.
@@ -75,6 +77,11 @@ impl Config {
     pub fn local_node() -> Self {
         let chain_config = ChainConfig::local_testnet();
         let chain_state = StateConfig::local_testnet();
+        let batch_reader = BatchReader::JSONReader {
+            source: chain_state.clone(),
+            batch_size: 1,
+        };
+
         let utxo_validation = false;
         let min_gas_price = 0;
 
@@ -95,6 +102,7 @@ impl Config {
             debug: true,
             chain_config: chain_config.clone(),
             chain_state: chain_state.clone(),
+            batch_reader,
             block_production: Trigger::Instant,
             vm: Default::default(),
             utxo_validation,

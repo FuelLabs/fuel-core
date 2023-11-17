@@ -35,6 +35,8 @@ use std::path::Path;
 use super::{
     coin::CoinConfig,
     contract::ContractConfig,
+    contract_balance::ContractBalance,
+    contract_state::ContractState,
     message::MessageConfig,
 };
 
@@ -63,6 +65,8 @@ pub struct StateConfig {
     pub contracts: Option<Vec<ContractConfig>>,
     /// Messages from Layer 1
     pub messages: Option<Vec<MessageConfig>>,
+    pub contract_state: Vec<Vec<ContractState>>,
+    pub contract_balance: Vec<Vec<ContractBalance>>,
 }
 
 impl StateConfig {
@@ -74,6 +78,8 @@ impl StateConfig {
             coins: db.get_coin_config()?,
             contracts: db.get_contract_config()?,
             messages: db.get_message_config()?,
+            contract_state: todo!(),
+            contract_balance: todo!(),
         })
     }
 

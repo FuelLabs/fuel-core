@@ -14,6 +14,7 @@ use clap::Parser;
 use fuel_core::{
     chain_config::{
         default_consensus_dev_key,
+        BatchReader,
         ChainConfig,
         StateConfig,
         LOCAL_TESTNET,
@@ -317,12 +318,18 @@ impl Command {
             max_database_cache_size,
         };
 
+        let batch_reader = BatchReader::JSONReader {
+            source: chain_state.clone(),
+            batch_size: 1,
+        };
+
         let config = Config {
             addr,
             api_request_timeout: api_request_timeout.into(),
             db_config,
             chain_config: chain_config.clone(),
             chain_state: chain_state.clone(),
+            batch_reader,
             debug,
             utxo_validation,
             block_production: trigger,
