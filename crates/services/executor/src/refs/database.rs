@@ -15,7 +15,7 @@ use std::ops::DerefMut;
 use fuel_core_types::services::txpool::TransactionStatus;
 
 pub trait ExecutorDatabaseTrait<D> {
-    type T: Transaction<D> + DerefMut<Target = D>;
+    type T: Transaction<D> + DerefMut<Target = D> + 'static;
 
     fn transaction(&self) -> Self::T;
 }

@@ -1,10 +1,10 @@
 use crate::database::{
-    transactions::TransactionIndex,
     vm_database::VmDatabase,
 };
+
 use fuel_core_executor::{
-    refs::ContractRef,
     Config,
+    refs::ContractRef
 };
 use fuel_core_storage::{
     tables::{
@@ -243,6 +243,7 @@ where
     R: RelayerPort + Clone,
     VmDatabase<D>: InterpreterStorage,
     D: ExecutorDatabaseTrait<D>
+
         + StorageMutate<FuelBlocks>
         + StorageInspect<FuelBlocks, Error = StorageError>
         + StorageInspect<Receipts, Error = StorageError>
@@ -313,6 +314,7 @@ where
     R: RelayerPort + Clone,
     VmDatabase<D>: InterpreterStorage,
     D: ExecutorDatabaseTrait<D>
+
         + StorageMutate<FuelBlocks>
         + StorageInspect<FuelBlocks, Error = StorageError>
         + StorageInspect<Receipts, Error = StorageError>
@@ -489,7 +491,7 @@ where
         let block = block.map_v(PartialFuelBlock::from);
 
         // Create a new database transaction.
-        let mut block_db_transaction = database;
+        let mut block_db_transaction = database.clone();
 
         let (block, execution_data) = match block {
             ExecutionTypes::DryRun(component) => {
@@ -502,7 +504,7 @@ where
                 );
 
                 let execution_data = self.execute_block(
-                    &mut block_db_transaction,
+                    &database,
                     ExecutionType::DryRun(component),
                     options,
                 )?;
@@ -518,7 +520,7 @@ where
                 );
 
                 let execution_data = self.execute_block(
-                    &mut block_db_transaction,
+                    &database,
                     ExecutionType::Production(component),
                     options,
                 )?;
@@ -575,7 +577,7 @@ where
 
         // save the status for every transaction using the finalized block id
 
-        self.persist_transaction_status(&result, block_db_transaction)?;
+        self.persist_transaction_status(&result, &mut block_db_transaction)?;
 
         // save the associated owner for each transaction in the block
         self.index_tx_owners_for_block(&result.block, &mut block_db_transaction)?;
@@ -617,7 +619,7 @@ where
     /// Execute the fuel block with all transactions.
     fn execute_block<TxSource>(
         &self,
-        block_db_transaction: &mut D,
+        block_db_transaction: &D,
         block: ExecutionType<PartialBlockComponent<TxSource>>,
         options: ExecutionOptions,
     ) -> ExecutorResult<ExecutionData>
@@ -653,7 +655,7 @@ where
          -> ExecutorResult<()> {
             let tx_count = execution_data.tx_count;
             let tx = {
-                let mut tx_db_transaction = block_db_transaction; // TODO: Check traksaction
+                let tx_db_transaction = block_db_transaction; // TODO: Check traksaction
                 let tx_id = tx.id(&self.config.consensus_parameters.chain_id);
                 let result = self.execute_transaction(
                     tx,
@@ -661,7 +663,7 @@ where
                     &block.header,
                     execution_data,
                     execution_kind,
-                    &mut tx_db_transaction,
+                    tx_db_transaction,
                     options,
                 );
 
@@ -758,7 +760,7 @@ where
         header: &PartialBlockHeader,
         execution_data: &mut ExecutionData,
         execution_kind: ExecutionKind,
-        tx_db_transaction: &mut D,
+        tx_db_transaction: &D,
         options: ExecutionOptions,
     ) -> ExecutorResult<Transaction> {
         if execution_data.found_mint {
@@ -815,7 +817,7 @@ where
         checked_mint: Checked<Mint>,
         header: &PartialBlockHeader,
         execution_data: &mut ExecutionData,
-        block_db_transaction: &mut D,
+        block_db_transaction: &D,
         execution_kind: ExecutionKind,
         options: ExecutionOptions,
     ) -> ExecutorResult<Transaction> {
@@ -892,10 +894,10 @@ where
                 options,
             )?;
 
-            let mut sub_block_db_commit = block_db_transaction.transaction();
-            let sub_db_view = sub_block_db_commit.as_mut();
+            let mut sub_block_db_commit = block_db_transaction.transaction(); // Todo check and solve this
+            // let sub_db_view = sub_block_db_commit.as_mut();
             let mut vm_db: VmDatabase<&mut D> = VmDatabase::new(
-                &mut sub_db_view,
+                sub_block_db_commit.deref_mut(),
                 &header.consensus,
                 self.config.coinbase_recipient,
             );
@@ -913,7 +915,7 @@ where
                 block_height,
                 execution_data.tx_count,
                 &coinbase_id,
-                block_db_transaction,
+                block_db_transaction.transaction().deref_mut(),
                 inputs.as_slice(),
                 outputs.as_slice(),
             )?;
@@ -960,7 +962,7 @@ where
         });
 
         if <D as StorageMutate<Transactions>>::insert(
-            &mut block_db_transaction,
+            block_db_transaction.transaction().deref_mut(), // TODO Emir
             &coinbase_id,
             &tx,
         )?
@@ -986,7 +988,7 @@ where
         mut checked_tx: Checked<Tx>,
         header: &PartialBlockHeader,
         execution_data: &mut ExecutionData,
-        tx_db_transaction: &mut D,
+        tx_db_transaction: &D,
         execution_kind: ExecutionKind,
         options: ExecutionOptions,
     ) -> ExecutorResult<Transaction>
@@ -1063,7 +1065,7 @@ where
                 ExecutionKind::Validation => ExecutionTypes::Validation(tx.inputs()),
             },
             tx_id,
-            tx_db_transaction.deref_mut(),
+            tx_db_transaction,
             options,
         )?;
 
@@ -1092,14 +1094,14 @@ where
         }
 
         // change the spent status of the tx inputs
-        self.spend_input_utxos(tx.inputs(), tx_db_transaction.deref_mut(), reverted)?;
+        self.spend_input_utxos(tx.inputs(), tx_db_transaction.transaction().deref_mut(), reverted)?; // Todo Check this Emir
 
         // Persist utxos first and after calculate the not utxo outputs
         self.persist_output_utxos(
             *header.height(),
             execution_data.tx_count,
             &tx_id,
-            tx_db_transaction,
+            tx_db_transaction.transaction().deref_mut(),
             tx.inputs(),
             tx.outputs(),
         )?;
@@ -1119,20 +1121,29 @@ where
                 }
             },
             tx_id,
-            tx_db_transaction.deref_mut(),
+            tx_db_transaction,
         )?;
         *tx.outputs_mut() = outputs;
 
         let final_tx = tx.into();
 
         // Store tx into the block db transaction
-        tx_db_transaction
-            .deref_mut()
-            .storage::<Transactions>()
-            .insert(&tx_id, &final_tx)?;
+
+
+        <D as StorageMutate<Transactions>>::insert(
+            tx_db_transaction.transaction().deref_mut(),
+            &tx_id,
+            &final_tx
+    )?;
+
+
+        // tx_db_transaction
+        //     .deref_mut()
+        //     .storage::<Transactions>()
+        //     .insert(&tx_id, &final_tx)?;
 
         // persist receipts
-        self.persist_receipts(&tx_id, &receipts, tx_db_transaction.deref_mut())?;
+        self.persist_receipts(&tx_id, &receipts, tx_db_transaction.transaction().deref_mut())?;
 
         let status = if reverted {
             self.log_backtrace(&vm, &receipts);
@@ -1316,14 +1327,10 @@ where
             match input {
                 Input::CoinSigned(CoinSigned { utxo_id, .. })
                 | Input::CoinPredicate(CoinPredicate { utxo_id, .. }) => {
-                    // prune utxo from db
-
-
                     <D as StorageMutate<Coins>>::remove(
                         db,
                         utxo_id
                     )?;
-                    // db.storage::<Coins>().remove(utxo_id)?;
                 }
                 Input::MessageDataSigned(_)
                 | Input::MessageDataPredicate(_)
@@ -1424,7 +1431,7 @@ where
                             ref contract_id,
                             ..
                         }) => {
-                            let mut contract = ContractRef::new(*db, *contract_id);
+                            let mut contract = ContractRef::new(db.clone(), *contract_id); // TODO try to remove Clone
                             let utxo_info =
                                 contract.validated_utxo(options.utxo_validation)?;
                             *utxo_id = utxo_info.utxo_id;
@@ -1476,7 +1483,7 @@ where
                             tx_pointer,
                             ..
                         }) => {
-                            let mut contract = ContractRef::new(&mut *db, *contract_id);
+                            let mut contract = ContractRef::new(db.clone(), *contract_id);
                             let provided_info = ContractUtxoInfo {
                                 utxo_id: *utxo_id,
                                 tx_pointer: *tx_pointer,
@@ -1516,7 +1523,7 @@ where
         &self,
         tx: ExecutionTypes<(&mut [Output], &[Input]), (&[Output], &[Input])>,
         tx_id: TxId,
-        db: &mut D,
+        db: &D,
     ) -> ExecutorResult<()> {
         match tx {
             ExecutionTypes::DryRun(tx) | ExecutionTypes::Production(tx) => {
@@ -1534,7 +1541,7 @@ where
                                 })
                             };
 
-                        let mut contract = ContractRef::new(&mut *db, *contract_id);
+                        let mut contract = ContractRef::new(db.clone(), *contract_id);
                         contract_output.balance_root = contract.balance_root()?;
                         contract_output.state_root = contract.state_root()?;
                     }
@@ -1555,7 +1562,7 @@ where
                                 })
                             };
 
-                        let mut contract = ContractRef::new(&mut *db, *contract_id);
+                        let mut contract = ContractRef::new(db.clone(), *contract_id);
                         if contract_output.balance_root != contract.balance_root()? {
                             return Err(ExecutorError::InvalidTransactionOutcome {
                                 transaction_id: tx_id,
@@ -1672,14 +1679,6 @@ where
                                 tx_pointer: TxPointer::new(block_height, tx_idx),
                             },
                         )?;
-
-                        // db.insert(
-                        //     contract_id,
-                        //     &ContractUtxoInfo {
-                        //         utxo_id,
-                        //         tx_pointer: TxPointer::new(block_height, tx_idx),
-                        //     },
-                        // )?;
                     } else {
                         return Err(ExecutorError::TransactionValidity(
                             TransactionValidityError::InvalidContractInputIndex(utxo_id),
@@ -1773,7 +1772,7 @@ where
     fn index_tx_owners_for_block(
         &self,
         block: &Block,
-        block_db_transaction: &mut D,
+        block_db_transaction: &D,
     ) -> ExecutorResult<()> {
         for (tx_idx, tx) in block.transactions().iter().enumerate() {
             let block_height = *block.header().height();
@@ -1813,7 +1812,7 @@ where
         outputs: &[Output],
         tx_id: &Bytes32,
         tx_idx: u16,
-        db: &mut D,
+        db: &D,
     ) -> ExecutorResult<()> {
         let mut owners = vec![];
         for input in inputs {
@@ -1843,7 +1842,7 @@ where
             db.record_tx_id_owner(
                 owner,
                 block_height,
-                tx_idx as TransactionIndex,
+                tx_idx,
                 tx_id,
             )?;
         }

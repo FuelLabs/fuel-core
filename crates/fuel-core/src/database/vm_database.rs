@@ -183,7 +183,7 @@ pub trait DatabaseIteratorsTrait {
         prefix: Option<P>,
         start: Option<S>,
         direction: Option<IterDirection>,
-    ) -> Box<dyn Iterator<Item = DatabaseResult<(K, V)>>>
+    ) -> Box<dyn Iterator<Item = DatabaseResult<(K, V)>> + '_>
     where
         K: From<Vec<u8>>,
         V: DeserializeOwned,
