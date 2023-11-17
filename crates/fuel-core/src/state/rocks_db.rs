@@ -569,8 +569,8 @@ impl TransactableStorage for RocksDb {
 /// The `None` means overflow, so there is not following prefix.
 fn next_prefix(mut prefix: Vec<u8>) -> Option<Vec<u8>> {
     for byte in prefix.iter_mut().rev() {
-        if byte != &u8::MAX {
-            *byte = byte.checked_add(1).expect("We've just checked it above");
+        if let Some(new_byte) = byte.checked_add(1) {
+            *byte = new_byte;
             return Some(prefix)
         }
     }
