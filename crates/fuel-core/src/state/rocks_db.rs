@@ -224,6 +224,63 @@ impl RocksDb {
         opts
     }
 
+    /// RocksDB prefix iteration doesn't support reverse order,
+    /// but seeking the start key and iterating in reverse order works.
+    /// So we can create a workaround. We need to find the next available
+    /// element and use it as an anchor for reverse iteration,
+    /// but skip the first element to jump on the previous prefix.
+    /// If we can't find the next element, we are at the end of the list,
+    /// so we can use `IteratorMode::End` to start reverse iteration.
+    fn reverse_prefix_iter(
+        &self,
+        prefix: &[u8],
+        column: Column,
+    ) -> impl Iterator<Item = KVItem> + '_ {
+        let maybe_next_item = next_prefix(prefix.to_vec())
+            .and_then(|next_prefix| {
+                self.iter_all(
+                    column,
+                    Some(next_prefix.as_slice()),
+                    None,
+                    IterDirection::Forward,
+                )
+                .next()
+            })
+            .and_then(|res| res.ok());
+
+        if let Some((next_start_key, _)) = maybe_next_item {
+            let iter_mode = IteratorMode::From(
+                next_start_key.as_slice(),
+                rocksdb::Direction::Reverse,
+            );
+            let prefix = prefix.to_vec();
+            self
+                ._iter_all(column, ReadOptions::default(), iter_mode)
+                // Skip the element under the `next_start_key` key.
+                .skip(1)
+                .take_while(move |item| {
+                    if let Ok((key, _)) = item {
+                        key.starts_with(prefix.as_slice())
+                    } else {
+                        true
+                    }
+                })
+                .into_boxed()
+        } else {
+            // No next item, so we can start backward iteration from the end.
+            let prefix = prefix.to_vec();
+            self._iter_all(column, ReadOptions::default(), IteratorMode::End)
+                .take_while(move |item| {
+                    if let Ok((key, _)) = item {
+                        key.starts_with(prefix.as_slice())
+                    } else {
+                        true
+                    }
+                })
+                .into_boxed()
+        }
+    }
+
     fn _iter_all(
         &self,
         column: Column,
@@ -321,57 +378,8 @@ impl KeyValueStore for RocksDb {
                     .into_boxed()
             }
             (Some(prefix), None) => {
-                // RocksDB prefix iteration doesn't support reverse order,
-                // but seeking the start key and iterating in reverse order works.
-                // So we can create a workaround. We need to find the next available
-                // element and use it as an anchor for reverse iteration,
-                // but skip the first element to jump on the previous prefix.
-                // If we can't find the next element, we are at the end of the list,
-                // so we can use `IteratorMode::End` to start reverse iteration.
                 if direction == IterDirection::Reverse {
-                    if let Some(next_prefix) = next_prefix(prefix.to_vec()) {
-                        let next_item = self
-                            .iter_all(
-                                column,
-                                Some(next_prefix.as_slice()),
-                                None,
-                                IterDirection::Forward,
-                            )
-                            .next();
-
-                        if let Some(Ok(next_item)) = next_item {
-                            let (next_start_key, _) = next_item;
-                            let iter_mode = IteratorMode::From(
-                                next_start_key.as_slice(),
-                                rocksdb::Direction::Reverse,
-                            );
-                            let prefix = prefix.to_vec();
-                            return self
-                                ._iter_all(column, ReadOptions::default(), iter_mode)
-                                // Skip the element under the `next_start_key` key.
-                                .skip(1)
-                                .take_while(move |item| {
-                                    if let Ok((key, _)) = item {
-                                        key.starts_with(prefix.as_slice())
-                                    } else {
-                                        true
-                                    }
-                                })
-                                .into_boxed()
-                        }
-                    }
-
-                    // No next item, so we can start backward iteration from the end.
-                    let prefix = prefix.to_vec();
-                    self._iter_all(column, ReadOptions::default(), IteratorMode::End)
-                        .take_while(move |item| {
-                            if let Ok((key, _)) = item {
-                                key.starts_with(prefix.as_slice())
-                            } else {
-                                true
-                            }
-                        })
-                        .into_boxed()
+                    self.reverse_prefix_iter(prefix, column).into_boxed()
                 } else {
                     // start iterating in a certain direction within the keyspace
                     let iter_mode = IteratorMode::From(
