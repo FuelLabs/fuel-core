@@ -7,14 +7,14 @@ use crate::{
     CoinConfig, ContractConfig, MessageConfig,
 };
 
-pub trait ParquetSchema {
+pub trait Schema {
     fn schema() -> Type;
     fn num_of_columns() -> usize {
         Self::schema().get_fields().len()
     }
 }
 
-impl ParquetSchema for ContractConfig {
+impl Schema for ContractConfig {
     fn schema() -> Type {
         use parquet::basic::Type as PhysicalType;
         let contract_id = Type::primitive_type_builder(
@@ -25,6 +25,7 @@ impl ParquetSchema for ContractConfig {
         .with_repetition(Repetition::REQUIRED)
         .build()
         .unwrap();
+
         let code = Type::primitive_type_builder("code", PhysicalType::BYTE_ARRAY)
             .with_repetition(Repetition::REQUIRED)
             .build()
@@ -84,7 +85,7 @@ impl ParquetSchema for ContractConfig {
     }
 }
 
-impl ParquetSchema for MessageConfig {
+impl Schema for MessageConfig {
     fn schema() -> Type {
         use parquet::basic::Type as PhysicalType;
         let sender =
@@ -131,7 +132,7 @@ impl ParquetSchema for MessageConfig {
     }
 }
 
-impl ParquetSchema for CoinConfig {
+impl Schema for CoinConfig {
     fn schema() -> Type {
         use parquet::basic::Type as PhysicalType;
         let tx_id =
@@ -201,15 +202,17 @@ impl ParquetSchema for CoinConfig {
     }
 }
 
-impl ParquetSchema for ContractState {
+impl Schema for ContractState {
     fn schema() -> Type {
         use parquet::basic::Type as PhysicalType;
-        let contract_id =
-            Type::primitive_type_builder("key", PhysicalType::FIXED_LEN_BYTE_ARRAY)
-                .with_length(32)
-                .with_repetition(Repetition::REQUIRED)
-                .build()
-                .unwrap();
+        let contract_id = Type::primitive_type_builder(
+            "contract_id",
+            PhysicalType::FIXED_LEN_BYTE_ARRAY,
+        )
+        .with_length(32)
+        .with_repetition(Repetition::REQUIRED)
+        .build()
+        .unwrap();
         let key = Type::primitive_type_builder("key", PhysicalType::FIXED_LEN_BYTE_ARRAY)
             .with_length(32)
             .with_repetition(Repetition::REQUIRED)
@@ -229,7 +232,7 @@ impl ParquetSchema for ContractState {
     }
 }
 
-impl ParquetSchema for ContractBalance {
+impl Schema for ContractBalance {
     fn schema() -> Type {
         use parquet::basic::Type as PhysicalType;
         let contract_id = Type::primitive_type_builder(

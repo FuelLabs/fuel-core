@@ -2,7 +2,7 @@ use std::io::Write;
 
 use crate::{
     config::{
-        codec::BatchWriterTrait, contract_balance::ContractBalance,
+        codec::GroupEncoder, contract_balance::ContractBalance,
         contract_state::ContractState,
     },
     CoinConfig, ContractConfig, MessageConfig,
@@ -30,7 +30,7 @@ impl<W> JsonBatchWriter<W> {
     }
 }
 
-impl<W: Write> BatchWriterTrait for JsonBatchWriter<W> {
+impl<W: Write> GroupEncoder for JsonBatchWriter<W> {
     fn write_coins(&mut self, elements: Vec<CoinConfig>) -> anyhow::Result<()> {
         self.temp_storage.coins.extend(elements);
         Ok(())

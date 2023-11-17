@@ -1,3 +1,4 @@
+use anyhow::anyhow;
 use std::{io::Write, sync::Arc};
 
 use itertools::Itertools;
@@ -12,15 +13,15 @@ use parquet::{
 
 use crate::{
     config::{
-        codec::BatchWriterTrait, contract_balance::ContractBalance,
+        codec::GroupEncoder, contract_balance::ContractBalance,
         contract_state::ContractState,
     },
     CoinConfig, ContractConfig, MessageConfig,
 };
 
-use super::schema::ParquetSchema;
+use super::schema::Schema;
 
-pub(crate) struct ParquetBatchWriter<W: Write> {
+pub struct ParquetEncoder<W: Write> {
     coins: SerializedFileWriter<W>,
     messages: SerializedFileWriter<W>,
     contracts: SerializedFileWriter<W>,
@@ -28,7 +29,7 @@ pub(crate) struct ParquetBatchWriter<W: Write> {
     contract_balance: SerializedFileWriter<W>,
 }
 
-impl<W: Write + Send> ParquetBatchWriter<W> {
+impl<W: Write + Send> ParquetEncoder<W> {
     pub fn new(
         coins: W,
         messages: W,
@@ -38,25 +39,25 @@ impl<W: Write + Send> ParquetBatchWriter<W> {
         compression: Compression,
     ) -> anyhow::Result<Self> {
         Ok(Self {
-            coins: Self::get_writer::<CoinConfig>(coins, compression),
-            messages: Self::get_writer::<MessageConfig>(messages, compression),
-            contracts: Self::get_writer::<ContractConfig>(contracts, compression),
+            coins: Self::get_writer::<CoinConfig>(coins, compression)?,
+            messages: Self::get_writer::<MessageConfig>(messages, compression)?,
+            contracts: Self::get_writer::<ContractConfig>(contracts, compression)?,
             contract_state: Self::get_writer::<ContractState>(
                 contract_state,
                 compression,
-            ),
+            )?,
             contract_balance: Self::get_writer::<ContractBalance>(
                 contract_balance,
                 compression,
-            ),
+            )?,
         })
     }
 
-    fn get_writer<T: ParquetSchema>(
+    fn get_writer<T: Schema>(
         writer: W,
         compression: Compression,
-    ) -> SerializedFileWriter<W> {
-        SerializedFileWriter::new(
+    ) -> anyhow::Result<SerializedFileWriter<W>> {
+        Ok(SerializedFileWriter::new(
             writer,
             Arc::new(T::schema()),
             Arc::new(
@@ -64,12 +65,11 @@ impl<W: Write + Send> ParquetBatchWriter<W> {
                     .set_compression(compression)
                     .build(),
             ),
-        )
-        .unwrap()
+        )?)
     }
 }
 
-impl<W> BatchWriterTrait for ParquetBatchWriter<W>
+impl<W> GroupEncoder for ParquetEncoder<W>
 where
     W: Write + Send,
 {
@@ -84,60 +84,66 @@ where
     }
 
     fn write_coins(&mut self, elements: Vec<CoinConfig>) -> anyhow::Result<()> {
-        elements.encode_columns(&mut self.coins);
-        Ok(())
+        elements.encode_columns(&mut self.coins)
     }
 
     fn write_contracts(&mut self, elements: Vec<ContractConfig>) -> anyhow::Result<()> {
-        elements.encode_columns(&mut self.contracts);
-        Ok(())
+        elements.encode_columns(&mut self.contracts)
     }
 
     fn write_messages(&mut self, elements: Vec<MessageConfig>) -> anyhow::Result<()> {
-        elements.encode_columns(&mut self.messages);
-        Ok(())
+        elements.encode_columns(&mut self.messages)
     }
 
     fn write_contract_state(
         &mut self,
         elements: Vec<ContractState>,
     ) -> anyhow::Result<()> {
-        elements.encode_columns(&mut self.contract_state);
-        Ok(())
+        elements.encode_columns(&mut self.contract_state)
     }
 
     fn write_contract_balance(
         &mut self,
         elements: Vec<ContractBalance>,
     ) -> anyhow::Result<()> {
-        elements.encode_columns(&mut self.contract_balance);
-        Ok(())
+        elements.encode_columns(&mut self.contract_balance)
     }
 }
 
 pub trait ColumnEncoder {
-    type ElementT: ParquetSchema;
+    type ElementT: Schema;
     fn encode_columns<W: std::io::Write + Send>(
         &self,
         writer: &mut SerializedFileWriter<W>,
-    ) {
-        let mut group = writer.next_row_group().unwrap();
+    ) -> anyhow::Result<()> {
+        let mut group = writer.next_row_group()?;
 
-        for index in 0..<Self::ElementT>::num_of_columns() {
-            let mut column = group.next_column().unwrap().unwrap();
-            self.encode_column(index, &mut column);
-            column.close().unwrap();
+        let num_of_columns = <Self::ElementT>::num_of_columns();
+        for index in 0..num_of_columns {
+            let mut column = group.next_column()?.ok_or_else(|| anyhow!("Error fetching column({index}). Expected there to be {num_of_columns} columns."))?;
+            self.encode_column(index, &mut column)?;
+            column.close()?;
         }
 
-        group.close().unwrap();
+        group.close()?;
+        Ok(())
     }
-    fn encode_column(&self, index: usize, column: &mut SerializedColumnWriter<'_>);
+
+    fn encode_column(
+        &self,
+        index: usize,
+        column: &mut SerializedColumnWriter<'_>,
+    ) -> anyhow::Result<()>;
 }
 
 impl ColumnEncoder for Vec<ContractConfig> {
     type ElementT = ContractConfig;
 
-    fn encode_column(&self, index: usize, column: &mut SerializedColumnWriter<'_>) {
+    fn encode_column(
+        &self,
+        index: usize,
+        column: &mut SerializedColumnWriter<'_>,
+    ) -> anyhow::Result<()> {
         match index {
             0 => {
                 let data = self
@@ -146,82 +152,83 @@ impl ColumnEncoder for Vec<ContractConfig> {
                     .collect_vec();
                 column
                     .typed::<FixedLenByteArrayType>()
-                    .write_batch(&data, None, None)
-                    .unwrap();
+                    .write_batch(&data, None, None)?;
             }
             1 => {
                 let data = self.iter().map(|el| el.code.clone().into()).collect_vec();
                 column
                     .typed::<ByteArrayType>()
-                    .write_batch(&data, None, None)
-                    .unwrap();
+                    .write_batch(&data, None, None)?;
             }
             2 => {
                 let data = self.iter().map(|el| el.salt.to_vec().into()).collect_vec();
                 column
                     .typed::<FixedLenByteArrayType>()
-                    .write_batch(&data, None, None)
-                    .unwrap();
+                    .write_batch(&data, None, None)?;
             }
             3 => {
                 let def_levels = self
                     .iter()
-                    .map(|el| el.tx_id.is_some() as i16)
+                    .map(|el| i16::from(el.tx_id.is_some()))
                     .collect_vec();
                 let data = self
                     .iter()
                     .filter_map(|el| el.tx_id)
                     .map(|el| el.to_vec().into())
                     .collect_vec();
-                column
-                    .typed::<FixedLenByteArrayType>()
-                    .write_batch(&data, Some(&def_levels), None)
-                    .unwrap();
+                column.typed::<FixedLenByteArrayType>().write_batch(
+                    &data,
+                    Some(&def_levels),
+                    None,
+                )?;
             }
             4 => {
                 let def_levels = self
                     .iter()
-                    .map(|el| el.output_index.is_some() as i16)
+                    .map(|el| i16::from(el.output_index.is_some()))
                     .collect_vec();
                 let data = self
                     .iter()
                     .filter_map(|el| el.output_index)
-                    .map(|el| el as i32)
+                    .map(i32::from)
                     .collect_vec();
-                column
-                    .typed::<Int32Type>()
-                    .write_batch(&data, Some(&def_levels), None)
-                    .unwrap();
+                column.typed::<Int32Type>().write_batch(
+                    &data,
+                    Some(&def_levels),
+                    None,
+                )?;
             }
             5 => {
                 let def_levels = self
                     .iter()
-                    .map(|el| el.tx_pointer_block_height.is_some() as i16)
+                    .map(|el| i16::from(el.tx_pointer_block_height.is_some()))
                     .collect_vec();
                 let data = self
                     .iter()
                     .filter_map(|el| el.tx_pointer_block_height)
                     .map(|el| *el as i32)
                     .collect_vec();
-                column
-                    .typed::<Int32Type>()
-                    .write_batch(&data, Some(&def_levels), None)
-                    .unwrap();
+                column.typed::<Int32Type>().write_batch(
+                    &data,
+                    Some(&def_levels),
+                    None,
+                )?;
             }
             6 => {
                 let def_levels = self
                     .iter()
-                    .map(|el| el.tx_pointer_tx_idx.is_some() as i16)
+                    .map(|el| i16::from(el.tx_pointer_tx_idx.is_some()))
                     .collect_vec();
                 let data = self
                     .iter()
                     .filter_map(|el| el.tx_pointer_tx_idx)
-                    .map(|el| el as i32)
+                    .map(i32::from)
                     .collect_vec();
-                column
-                    .typed::<Int32Type>()
-                    .write_batch(&data, Some(&def_levels), None)
-                    .unwrap();
+                column.typed::<Int32Type>().write_batch(
+                    &data,
+                    Some(&def_levels),
+                    None,
+                )?;
             }
             unknown_column => {
                 panic!(
@@ -230,102 +237,108 @@ impl ColumnEncoder for Vec<ContractConfig> {
                 )
             }
         }
+        Ok(())
     }
 }
 
 impl ColumnEncoder for Vec<CoinConfig> {
     type ElementT = CoinConfig;
 
-    fn encode_column(&self, index: usize, column: &mut SerializedColumnWriter<'_>) {
+    fn encode_column(
+        &self,
+        index: usize,
+        column: &mut SerializedColumnWriter<'_>,
+    ) -> anyhow::Result<()> {
         match index {
             0 => {
                 let def_levels = self
                     .iter()
-                    .map(|el| el.tx_id.is_some() as i16)
+                    .map(|el| i16::from(el.tx_id.is_some()))
                     .collect_vec();
                 let data = self
                     .iter()
                     .filter_map(|el| el.tx_id)
                     .map(|el| el.to_vec().into())
                     .collect_vec();
-                column
-                    .typed::<FixedLenByteArrayType>()
-                    .write_batch(&data, Some(&def_levels), None)
-                    .unwrap();
+                column.typed::<FixedLenByteArrayType>().write_batch(
+                    &data,
+                    Some(&def_levels),
+                    None,
+                )?;
             }
             1 => {
                 let def_levels = self
                     .iter()
-                    .map(|el| el.output_index.is_some() as i16)
+                    .map(|el| i16::from(el.output_index.is_some()))
                     .collect_vec();
                 let data = self
                     .iter()
                     .filter_map(|el| el.output_index)
-                    .map(|el| el as i32)
+                    .map(i32::from)
                     .collect_vec();
-                column
-                    .typed::<Int32Type>()
-                    .write_batch(&data, Some(&def_levels), None)
-                    .unwrap();
+                column.typed::<Int32Type>().write_batch(
+                    &data,
+                    Some(&def_levels),
+                    None,
+                )?;
             }
             2 => {
                 let def_levels = self
                     .iter()
-                    .map(|el| el.tx_pointer_block_height.is_some() as i16)
+                    .map(|el| i16::from(el.tx_pointer_block_height.is_some()))
                     .collect_vec();
                 let data = self
                     .iter()
                     .filter_map(|el| el.tx_pointer_block_height)
                     .map(|el| *el as i32)
                     .collect_vec();
-                column
-                    .typed::<Int32Type>()
-                    .write_batch(&data, Some(&def_levels), None)
-                    .unwrap();
+                column.typed::<Int32Type>().write_batch(
+                    &data,
+                    Some(&def_levels),
+                    None,
+                )?;
             }
             3 => {
                 let def_levels = self
                     .iter()
-                    .map(|el| el.tx_pointer_tx_idx.is_some() as i16)
+                    .map(|el| i16::from(el.tx_pointer_tx_idx.is_some()))
                     .collect_vec();
                 let data = self
                     .iter()
                     .filter_map(|el| el.tx_pointer_tx_idx)
-                    .map(|el| el as i32)
+                    .map(i32::from)
                     .collect_vec();
-                column
-                    .typed::<Int32Type>()
-                    .write_batch(&data, Some(&def_levels), None)
-                    .unwrap();
+                column.typed::<Int32Type>().write_batch(
+                    &data,
+                    Some(&def_levels),
+                    None,
+                )?;
             }
             4 => {
                 let def_levels = self
                     .iter()
-                    .map(|el| el.maturity.is_some() as i16)
+                    .map(|el| i16::from(el.maturity.is_some()))
                     .collect_vec();
                 let data = self
                     .iter()
                     .filter_map(|el| el.maturity)
                     .map(|el| *el as i32)
                     .collect_vec();
-                column
-                    .typed::<Int32Type>()
-                    .write_batch(&data, Some(&def_levels), None)
-                    .unwrap();
+                column.typed::<Int32Type>().write_batch(
+                    &data,
+                    Some(&def_levels),
+                    None,
+                )?;
             }
             5 => {
                 let data = self.iter().map(|el| el.owner.to_vec().into()).collect_vec();
                 column
                     .typed::<FixedLenByteArrayType>()
-                    .write_batch(&data, None, None)
-                    .unwrap();
+                    .write_batch(&data, None, None)?;
             }
             6 => {
                 let data = self.iter().map(|el| el.amount as i64).collect_vec();
-                column
-                    .typed::<Int64Type>()
-                    .write_batch(&data, None, None)
-                    .unwrap();
+                column.typed::<Int64Type>().write_batch(&data, None, None)?;
             }
             7 => {
                 let data = self
@@ -334,8 +347,7 @@ impl ColumnEncoder for Vec<CoinConfig> {
                     .collect_vec();
                 column
                     .typed::<FixedLenByteArrayType>()
-                    .write_batch(&data, None, None)
-                    .unwrap();
+                    .write_batch(&data, None, None)?;
             }
             unknown_column => {
                 panic!(
@@ -344,13 +356,18 @@ impl ColumnEncoder for Vec<CoinConfig> {
                 )
             }
         }
+        Ok(())
     }
 }
 
 impl ColumnEncoder for Vec<MessageConfig> {
     type ElementT = MessageConfig;
 
-    fn encode_column(&self, index: usize, column: &mut SerializedColumnWriter<'_>) {
+    fn encode_column(
+        &self,
+        index: usize,
+        column: &mut SerializedColumnWriter<'_>,
+    ) -> anyhow::Result<()> {
         match index {
             0 => {
                 let data = self
@@ -359,8 +376,7 @@ impl ColumnEncoder for Vec<MessageConfig> {
                     .collect_vec();
                 column
                     .typed::<FixedLenByteArrayType>()
-                    .write_batch(&data, None, None)
-                    .unwrap();
+                    .write_batch(&data, None, None)?;
             }
             1 => {
                 let data = self
@@ -369,36 +385,27 @@ impl ColumnEncoder for Vec<MessageConfig> {
                     .collect_vec();
                 column
                     .typed::<FixedLenByteArrayType>()
-                    .write_batch(&data, None, None)
-                    .unwrap();
+                    .write_batch(&data, None, None)?;
             }
             2 => {
                 let data = self.iter().map(|el| el.nonce.to_vec().into()).collect_vec();
                 column
                     .typed::<FixedLenByteArrayType>()
-                    .write_batch(&data, None, None)
-                    .unwrap();
+                    .write_batch(&data, None, None)?;
             }
             3 => {
                 let data = self.iter().map(|el| el.amount as i64).collect_vec();
-                column
-                    .typed::<Int64Type>()
-                    .write_batch(&data, None, None)
-                    .unwrap();
+                column.typed::<Int64Type>().write_batch(&data, None, None)?;
             }
             4 => {
-                let data = self.iter().map(|el| el.data.to_vec().into()).collect_vec();
+                let data = self.iter().map(|el| el.data.clone().into()).collect_vec();
                 column
                     .typed::<ByteArrayType>()
-                    .write_batch(&data, None, None)
-                    .unwrap();
+                    .write_batch(&data, None, None)?;
             }
             5 => {
                 let data = self.iter().map(|el| el.da_height.0 as i64).collect_vec();
-                column
-                    .typed::<Int64Type>()
-                    .write_batch(&data, None, None)
-                    .unwrap();
+                column.typed::<Int64Type>().write_batch(&data, None, None)?;
             }
             unknown_column => {
                 panic!(
@@ -407,27 +414,39 @@ impl ColumnEncoder for Vec<MessageConfig> {
                 )
             }
         }
+        Ok(())
     }
 }
 
 impl ColumnEncoder for Vec<ContractState> {
     type ElementT = ContractState;
 
-    fn encode_column(&self, index: usize, column: &mut SerializedColumnWriter<'_>) {
+    fn encode_column(
+        &self,
+        index: usize,
+        column: &mut SerializedColumnWriter<'_>,
+    ) -> anyhow::Result<()> {
         match index {
             0 => {
+                let data = self
+                    .iter()
+                    .map(|el| el.contract_id.to_vec().into())
+                    .collect_vec();
+                column
+                    .typed::<FixedLenByteArrayType>()
+                    .write_batch(&data, None, None)?;
+            }
+            1 => {
                 let data = self.iter().map(|el| el.key.to_vec().into()).collect_vec();
                 column
                     .typed::<FixedLenByteArrayType>()
-                    .write_batch(&data, None, None)
-                    .unwrap();
+                    .write_batch(&data, None, None)?;
             }
-            1 => {
+            2 => {
                 let data = self.iter().map(|el| el.value.to_vec().into()).collect_vec();
                 column
                     .typed::<FixedLenByteArrayType>()
-                    .write_batch(&data, None, None)
-                    .unwrap();
+                    .write_batch(&data, None, None)?;
             }
             unknown_column => {
                 panic!(
@@ -436,30 +455,40 @@ impl ColumnEncoder for Vec<ContractState> {
                 )
             }
         }
+        Ok(())
     }
 }
 
 impl ColumnEncoder for Vec<ContractBalance> {
     type ElementT = ContractBalance;
 
-    fn encode_column(&self, index: usize, column: &mut SerializedColumnWriter<'_>) {
+    fn encode_column(
+        &self,
+        index: usize,
+        column: &mut SerializedColumnWriter<'_>,
+    ) -> anyhow::Result<()> {
         match index {
             0 => {
+                let data = self
+                    .iter()
+                    .map(|el| el.contract_id.to_vec().into())
+                    .collect_vec();
+                column
+                    .typed::<FixedLenByteArrayType>()
+                    .write_batch(&data, None, None)?;
+            }
+            1 => {
                 let data = self
                     .iter()
                     .map(|el| el.asset_id.to_vec().into())
                     .collect_vec();
                 column
                     .typed::<FixedLenByteArrayType>()
-                    .write_batch(&data, None, None)
-                    .unwrap();
+                    .write_batch(&data, None, None)?;
             }
-            1 => {
+            2 => {
                 let data = self.iter().map(|el| el.amount as i64).collect_vec();
-                column
-                    .typed::<Int64Type>()
-                    .write_batch(&data, None, None)
-                    .unwrap();
+                column.typed::<Int64Type>().write_batch(&data, None, None)?;
             }
             unknown_column => {
                 panic!(
@@ -468,5 +497,6 @@ impl ColumnEncoder for Vec<ContractBalance> {
                 )
             }
         }
+        Ok(())
     }
 }

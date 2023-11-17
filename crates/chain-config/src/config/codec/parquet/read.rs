@@ -1,11 +1,11 @@
 use std::marker::PhantomData;
 
+use anyhow::{anyhow, bail, Context};
 use fuel_core_types::{
     blockchain::primitives::DaBlockHeight,
     fuel_types::{Address, AssetId, BlockHeight, Bytes32, ContractId, Nonce},
     fuel_vm::Salt,
 };
-use itertools::Itertools;
 use parquet::{
     file::{
         reader::{ChunkReader, FileReader},
@@ -16,7 +16,7 @@ use parquet::{
 
 use crate::{
     config::{
-        codec::{Batch, BatchReaderTrait},
+        codec::{Group, GroupDecoder},
         contract_balance::ContractBalance,
         contract_state::ContractState,
     },
@@ -29,30 +29,44 @@ pub struct ParquetBatchReader<R: ChunkReader, T> {
     _data: PhantomData<T>,
 }
 
-impl<R: ChunkReader + 'static, T: From<parquet::record::Row>> BatchReaderTrait
-    for ParquetBatchReader<R, T>
+impl<R, T> ParquetBatchReader<R, T>
+where
+    R: ChunkReader + 'static,
+    T: TryFrom<Row, Error = anyhow::Error>,
 {
-    type Item = T;
-    fn next_batch(&mut self) -> Option<anyhow::Result<Batch<Self::Item>>> {
+    fn get_group(&self, index: usize) -> anyhow::Result<Group<T>> {
+        let data = self
+            .data_source
+            .get_row_group(self.group_index)?
+            .get_row_iter(None)?
+            .map(|result| {
+                result
+                    .map_err(|e| anyhow!(e))
+                    .and_then(|row| T::try_from(row))
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+
+        Ok(Group { index, data })
+    }
+}
+
+impl<R, T> GroupDecoder for ParquetBatchReader<R, T>
+where
+    R: ChunkReader + 'static,
+    T: TryFrom<Row, Error = anyhow::Error>,
+{
+    type GroupItem = T;
+    fn next_group(&mut self) -> Option<anyhow::Result<Group<Self::GroupItem>>> {
         if self.group_index >= self.data_source.metadata().num_row_groups() {
             return None;
         }
 
-        let data = self
-            .data_source
-            .get_row_group(self.group_index)
-            .unwrap()
-            .get_row_iter(None)
-            .unwrap()
-            .map_ok(|row| row.into())
-            .collect::<Result<Vec<_>, _>>()
-            .unwrap();
-
         let group_index = self.group_index;
 
+        let group = self.get_group(group_index);
         self.group_index += 1;
 
-        Some(Ok(Batch { data, group_index }))
+        Some(group)
     }
 }
 
@@ -66,58 +80,50 @@ impl<R: ChunkReader + 'static, T> ParquetBatchReader<R, T> {
     }
 }
 
-impl From<Row> for CoinConfig {
-    fn from(row: Row) -> Self {
+impl TryFrom<Row> for CoinConfig {
+    type Error = anyhow::Error;
+
+    fn try_from(row: Row) -> Result<Self, Self::Error> {
         let mut iter = row.get_column_iter();
-
-        let tx_id = match iter.next().unwrap().1 {
-            Field::Null => None,
-            Field::Bytes(tx_id) => Some(tx_id),
-            _ => panic!("Unexpected type!"),
-        };
-        let tx_id = tx_id.map(|bytes| Bytes32::new(bytes.data().try_into().unwrap()));
-
-        let output_index = match iter.next().unwrap().1 {
-            Field::UByte(output_index) => Some(*output_index),
-            Field::Null => None,
-            _ => panic!("Should not happen"),
+        let mut next_field = || {
+            iter.next()
+                .map(|el| el.1)
+                .ok_or_else(|| anyhow!("Expected at least one more field. Row: {row:?}"))
         };
 
-        let tx_pointer_block_height = match iter.next().unwrap().1 {
-            Field::UInt(tx_pointer_block_height) => Some(*tx_pointer_block_height),
-            Field::Null => None,
-            _ => panic!("Should not happen"),
-        };
-        let tx_pointer_block_height = tx_pointer_block_height.map(BlockHeight::new);
+        let tx_id = next_field()
+            .and_then(decode_as_optional_bytes_32)
+            .context("While decoding `tx_id`")?;
 
-        let tx_pointer_tx_idx = match iter.next().unwrap().1 {
-            Field::UShort(tx_pointer_tx_idx) => Some(*tx_pointer_tx_idx),
-            Field::Null => None,
-            _ => panic!("Should not happen"),
-        };
-        let maturity = match iter.next().unwrap().1 {
-            Field::UInt(maturity) => Some(*maturity),
-            Field::Null => None,
-            _ => panic!("Should not happen"),
-        };
-        let maturity = maturity.map(BlockHeight::new);
+        let output_index = next_field()
+            .and_then(decode_as_optional_u8)
+            .context("While decoding `output_index`")?;
 
-        let Field::Bytes(owner) = iter.next().unwrap().1 else {
-            panic!("Unexpected type!");
-        };
-        let owner = Address::new(owner.data().try_into().unwrap());
+        let tx_pointer_block_height = next_field()
+            .and_then(decode_as_optional_block_height)
+            .context("While decoding `tx_pointer_block_height`")?;
 
-        let Field::ULong(amount) = iter.next().unwrap().1 else {
-            panic!("Unexpected type!");
-        };
-        let amount = *amount;
+        let tx_pointer_tx_idx = next_field()
+            .and_then(decode_as_optional_u16)
+            .context("While decoding `tx_pointer_tx_idx`")?;
 
-        let Field::Bytes(asset_id) = iter.next().unwrap().1 else {
-            panic!("Unexpected type!");
-        };
-        let asset_id = AssetId::new(asset_id.data().try_into().unwrap());
+        let maturity = next_field()
+            .and_then(decode_as_optional_block_height)
+            .context("While decoding `maturiy`")?;
 
-        Self {
+        let owner = next_field()
+            .and_then(decode_as_address)
+            .context("While decoding `owner`")?;
+
+        let amount = next_field()
+            .and_then(decode_as_u64)
+            .context("While decoding `amount`")?;
+
+        let asset_id = next_field()
+            .and_then(decode_as_asset_id)
+            .context("While decoding `assert_id`")?;
+
+        Ok(Self {
             tx_id,
             output_index,
             tx_pointer_block_height,
@@ -126,154 +132,244 @@ impl From<Row> for CoinConfig {
             owner,
             amount,
             asset_id,
-        }
+        })
     }
 }
 
-impl From<Row> for MessageConfig {
-    fn from(row: Row) -> Self {
+fn decode_as_bytes(field: &Field) -> anyhow::Result<&[u8]> {
+    decode_as_optional_bytes(field)?.ok_or_else(|| anyhow!("Cannot be NULL"))
+}
+
+fn decode_as_optional_bytes(field: &Field) -> anyhow::Result<Option<&[u8]>> {
+    let bytes = match field {
+        Field::Bytes(bytes) => Some(bytes.data()),
+        Field::Null => None,
+        field => bail!("Unexpected field: '{field}'"),
+    };
+    Ok(bytes)
+}
+
+fn decode_as_optional_u8(field: &Field) -> anyhow::Result<Option<u8>> {
+    let bytes = match field {
+        Field::UByte(val) => Some(*val),
+        Field::Null => None,
+        field => bail!("Unexpected field: '{field}'"),
+    };
+    Ok(bytes)
+}
+
+fn decode_as_optional_u16(field: &Field) -> anyhow::Result<Option<u16>> {
+    let val = match field {
+        Field::UShort(val) => Some(*val),
+        Field::Null => None,
+        field => bail!("Unexpected field: '{field}'"),
+    };
+    Ok(val)
+}
+
+fn decode_as_optional_u64(field: &Field) -> anyhow::Result<Option<u64>> {
+    let val = match field {
+        Field::ULong(val) => Some(*val),
+        Field::Null => None,
+        field => bail!("Unexpected field: '{field}'"),
+    };
+    Ok(val)
+}
+
+fn decode_as_u64(field: &Field) -> anyhow::Result<u64> {
+    decode_as_optional_u64(field)?.ok_or_else(|| anyhow!("Cannot be NULL"))
+}
+
+fn decode_as_optional_asset_id(field: &Field) -> anyhow::Result<Option<AssetId>> {
+    Ok(decode_as_optional_bytes_32(field)?.map(|bytes_32| AssetId::new(*bytes_32)))
+}
+
+fn decode_as_asset_id(field: &Field) -> anyhow::Result<AssetId> {
+    decode_as_optional_asset_id(field)?.ok_or_else(|| anyhow!("Cannot be NULL"))
+}
+
+fn decode_as_bytes_32(field: &Field) -> anyhow::Result<Bytes32> {
+    decode_as_optional_bytes_32(field)?.ok_or_else(|| anyhow!("Cannot be NULL"))
+}
+
+fn decode_as_optional_bytes_32(field: &Field) -> anyhow::Result<Option<Bytes32>> {
+    let bytes = decode_as_optional_bytes(field)?;
+    bytes
+        .map(|bytes| -> anyhow::Result<_> {
+            let data = bytes.try_into()?;
+            Ok(Bytes32::new(data))
+        })
+        .transpose()
+}
+
+fn decode_as_optional_block_height(field: &Field) -> anyhow::Result<Option<BlockHeight>> {
+    let val = match field {
+        Field::UInt(val) => Some(*val),
+        Field::Null => None,
+        field => bail!("Unexpected field: '{field}'"),
+    };
+    Ok(val.map(BlockHeight::new))
+}
+
+fn decode_as_optional_address(field: &Field) -> anyhow::Result<Option<Address>> {
+    Ok(decode_as_optional_bytes_32(field)?.map(|bytes_32| Address::new(*bytes_32)))
+}
+
+fn decode_as_address(field: &Field) -> anyhow::Result<Address> {
+    decode_as_optional_address(field)?.ok_or_else(|| anyhow!("Cannot be NULL"))
+}
+
+impl TryFrom<Row> for MessageConfig {
+    type Error = anyhow::Error;
+    fn try_from(row: Row) -> Result<Self, Self::Error> {
         let mut iter = row.get_column_iter();
-
-        let Field::Bytes(sender) = iter.next().unwrap().1 else {
-            panic!("Unexpected type!");
+        let mut next_field = || {
+            iter.next()
+                .map(|el| el.1)
+                .ok_or_else(|| anyhow!("Expected at least one more field. Row: {row:?}"))
         };
-        let sender = Address::new(sender.data().try_into().unwrap());
 
-        let Field::Bytes(recipient) = iter.next().unwrap().1 else {
-            panic!("Unexpected type!");
-        };
-        let recipient = Address::new(recipient.data().try_into().unwrap());
+        let sender = next_field()
+            .and_then(decode_as_address)
+            .context("While decoding `sender`")?;
 
-        let Field::Bytes(nonce) = iter.next().unwrap().1 else {
-            panic!("Unexpected type!");
-        };
-        let nonce = Nonce::new(nonce.data().try_into().unwrap());
+        let recipient = next_field()
+            .and_then(decode_as_address)
+            .context("While decoding `recipient`")?;
 
-        let Field::ULong(amount) = iter.next().unwrap().1 else {
-            panic!("Unexpected type!");
-        };
-        let amount = *amount;
+        let nonce = next_field()
+            .and_then(decode_as_bytes_32)
+            .map(|bytes_32| Nonce::new(*bytes_32))
+            .context("While decoding 'nonce'")?;
 
-        let Field::Bytes(data) = iter.next().unwrap().1 else {
-            panic!("Unexpected type!");
-        };
-        let data = data.data().to_vec();
+        let amount = next_field()
+            .and_then(decode_as_u64)
+            .context("While decoding `amount`")?;
 
-        let Field::ULong(da_height) = iter.next().unwrap().1 else {
-            panic!("Unexpected type!");
-        };
-        let da_height = DaBlockHeight(*da_height);
+        let data = next_field()
+            .and_then(decode_as_bytes)
+            .context("While decoding `data`")?
+            .to_vec();
 
-        Self {
+        let da_height = next_field()
+            .and_then(decode_as_u64)
+            .map(DaBlockHeight)
+            .context("While decoding `amount`")?;
+
+        Ok(Self {
             sender,
             recipient,
             nonce,
             amount,
             data,
             da_height,
-        }
+        })
     }
 }
 
-impl From<Row> for ContractState {
-    fn from(row: Row) -> Self {
+impl TryFrom<Row> for ContractState {
+    type Error = anyhow::Error;
+    fn try_from(row: Row) -> Result<Self, Self::Error> {
         let mut iter = row.get_column_iter();
-
-        let Field::Bytes(contract_id) = iter.next().unwrap().1 else {
-            panic!("Unexpected type!");
-        };
-        let contract_id = Bytes32::new(contract_id.data().try_into().unwrap());
-
-        let Field::Bytes(key) = iter.next().unwrap().1 else {
-            panic!("Unexpected type!");
-        };
-        let key = Bytes32::new(key.data().try_into().unwrap());
-        let Field::Bytes(value) = iter.next().unwrap().1 else {
-            panic!("Unexpected type!");
+        let mut next_field = || {
+            iter.next()
+                .map(|el| el.1)
+                .ok_or_else(|| anyhow!("Expected at least one more field. Row: {row:?}"))
         };
 
-        let value = Bytes32::new(value.data().try_into().unwrap());
+        let contract_id = next_field()
+            .and_then(decode_as_bytes_32)
+            .context("While decoding `contract_id`")?;
 
-        Self {
+        let key = next_field()
+            .and_then(decode_as_bytes_32)
+            .context("While decoding `key`")?;
+
+        let value = next_field()
+            .and_then(decode_as_bytes_32)
+            .context("While decoding `value`")?;
+
+        Ok(Self {
             contract_id,
             key,
             value,
-        }
+        })
     }
 }
 
-impl From<Row> for ContractBalance {
-    fn from(row: Row) -> Self {
+impl TryFrom<Row> for ContractBalance {
+    type Error = anyhow::Error;
+    fn try_from(row: Row) -> Result<Self, Self::Error> {
         let mut iter = row.get_column_iter();
-
-        let Field::Bytes(contract_id) = iter.next().unwrap().1 else {
-            panic!("Unexpected type!");
+        let mut next_field = || {
+            iter.next()
+                .map(|el| el.1)
+                .ok_or_else(|| anyhow!("Expected at least one more field. Row: {row:?}"))
         };
 
-        let contract_id = Bytes32::new(contract_id.data().try_into().unwrap());
-        let Field::Bytes(asset_id) = iter.next().unwrap().1 else {
-            panic!("Unexpected type!");
-        };
-        let asset_id = AssetId::new(asset_id.data().try_into().unwrap());
+        let contract_id = next_field()
+            .and_then(decode_as_bytes_32)
+            .context("While decoding `contract_id`")?;
 
-        let Field::ULong(amount) = iter.next().unwrap().1 else {
-            panic!("Unexpected type!");
-        };
-        let amount = *amount;
+        let asset_id = next_field()
+            .and_then(decode_as_bytes_32)
+            .map(|bytes_32| AssetId::new(*bytes_32))
+            .context("While decoding `contract_id`")?;
 
-        Self {
+        let amount = next_field()
+            .and_then(decode_as_u64)
+            .context("While decoding `amount`")?;
+
+        Ok(Self {
+            contract_id,
             asset_id,
             amount,
-            contract_id,
-        }
+        })
     }
 }
 
-impl From<Row> for ContractConfig {
-    fn from(row: Row) -> Self {
+impl TryFrom<Row> for ContractConfig {
+    type Error = anyhow::Error;
+    fn try_from(row: Row) -> Result<Self, Self::Error> {
         let mut iter = row.get_column_iter();
-
-        let (_, Field::Bytes(contract_id)) = iter.next().unwrap() else {
-            panic!("Unexpected type!");
-        };
-        let contract_id = ContractId::new(contract_id.data().try_into().unwrap());
-
-        let Field::Bytes(code) = iter.next().unwrap().1 else {
-            panic!("Unexpected type!");
-        };
-        let code = Vec::from(code.data());
-
-        let Field::Bytes(salt) = iter.next().unwrap().1 else {
-            panic!("Unexpected type!");
-        };
-        let salt = Salt::new(salt.data().try_into().unwrap());
-
-        let tx_id = match iter.next().unwrap().1 {
-            Field::Bytes(tx_id) => Some(tx_id),
-            Field::Null => None,
-            _ => panic!("Should not happen"),
-        };
-        let tx_id = tx_id.map(|data| Bytes32::new(data.data().try_into().unwrap()));
-
-        let output_index = match iter.next().unwrap().1 {
-            Field::UByte(output_index) => Some(*output_index),
-            Field::Null => None,
-            _ => panic!("Should not happen"),
+        let mut next_field = || {
+            iter.next()
+                .map(|el| el.1)
+                .ok_or_else(|| anyhow!("Expected at least one more field. Row: {row:?}"))
         };
 
-        let tx_pointer_block_height = match iter.next().unwrap().1 {
-            Field::UInt(tx_pointer_block_height) => Some(*tx_pointer_block_height),
-            Field::Null => None,
-            _ => panic!("Should not happen"),
-        };
-        let tx_pointer_block_height = tx_pointer_block_height.map(BlockHeight::new);
+        let contract_id = next_field()
+            .and_then(decode_as_bytes_32)
+            .map(|bytes_32| ContractId::new(*bytes_32))
+            .context("While decoding `contract_id`")?;
 
-        let tx_pointer_tx_idx = match iter.next().unwrap().1 {
-            Field::UShort(tx_pointer_tx_idx) => Some(*tx_pointer_tx_idx),
-            Field::Null => None,
-            _ => panic!("Should not happen"),
-        };
-        Self {
+        let code = next_field()
+            .and_then(decode_as_bytes)
+            .context("While decoding `code`")?
+            .to_vec();
+
+        let salt = next_field()
+            .and_then(decode_as_bytes_32)
+            .map(|bytes_32| Salt::new(*bytes_32))
+            .context("While decoding `salt`")?;
+
+        let tx_id = next_field()
+            .and_then(decode_as_optional_bytes_32)
+            .context("While decoding `tx_id`")?;
+
+        let output_index = next_field()
+            .and_then(decode_as_optional_u8)
+            .context("While decoding `output_index`")?;
+
+        let tx_pointer_block_height = next_field()
+            .and_then(decode_as_optional_block_height)
+            .context("While decoding `tx_pointer_block_height`")?;
+
+        let tx_pointer_tx_idx = next_field()
+            .and_then(decode_as_optional_u16)
+            .context("While decoding `tx_pointer_tx_idx`")?;
+
+        Ok(Self {
             contract_id,
             code,
             salt,
@@ -283,6 +379,6 @@ impl From<Row> for ContractConfig {
             tx_pointer_tx_idx,
             state: None,
             balances: None,
-        }
+        })
     }
 }
