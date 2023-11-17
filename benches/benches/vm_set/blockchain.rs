@@ -48,8 +48,6 @@ pub struct BenchDb {
 }
 
 impl BenchDb {
-    const STATE_SIZE: u64 = 10_000_000;
-
     fn new(contract_id: &ContractId) -> anyhow::Result<Self> {
         use fuel_core::database::vm_database::IncreaseStorageKey;
         let tmp_dir = ShallowTempDir::new();
@@ -58,10 +56,12 @@ impl BenchDb {
         let mut storage_key = primitive_types::U256::zero();
         let mut key_bytes = Bytes32::zeroed();
 
+        let state_size = crate::utils::get_state_size();
+
         let mut database = Database::new(db);
         database.init_contract_state(
             contract_id,
-            (0..Self::STATE_SIZE).map(|_| {
+            (0..state_size).map(|_| {
                 storage_key.to_big_endian(key_bytes.as_mut());
                 storage_key.increase().unwrap();
                 (key_bytes, key_bytes)
@@ -72,7 +72,7 @@ impl BenchDb {
         let mut sub_id = Bytes32::zeroed();
         database.init_contract_balances(
             contract_id,
-            (0..Self::STATE_SIZE).map(|k| {
+            (0..state_size).map(|k| {
                 storage_key.to_big_endian(sub_id.as_mut());
 
                 let asset = if k % 2 == 0 {
@@ -134,6 +134,7 @@ pub fn run(c: &mut Criterion) {
         &mut c.benchmark_group("bal"),
         "bal",
         VmBench::new(op::bal(0x10, 0x10, 0x11))
+            .with_db(db.to_vm_database())
             .with_data(asset.iter().chain(contract.iter()).copied().collect())
             .with_prepare_script(vec![
                 op::gtf_args(0x10, 0x00, GTFArgs::ScriptData),
@@ -144,7 +145,7 @@ pub fn run(c: &mut Criterion) {
 
     {
         let mut start_key = Bytes32::zeroed();
-        // The checkpoint was initialized with entries starting `0..Self::STATE_SIZE`.
+        // The checkpoint was initialized with entries starting `0..STATE_SIZE`.
         // We want to write new entry to the database, so the starting key is far.
         start_key.as_mut()[0] = 255;
         let data = start_key.iter().copied().collect::<Vec<_>>();
@@ -213,7 +214,7 @@ pub fn run(c: &mut Criterion) {
 
     for i in linear_short.clone() {
         let mut start_key = Bytes32::zeroed();
-        // The checkpoint was initialized with entries starting `0..Self::STATE_SIZE`.
+        // The checkpoint was initialized with entries starting `0..STATE_SIZE`.
         // We want to write new entries to the database, so the starting key is far.
         start_key.as_mut()[0] = 255;
         let data = start_key.iter().copied().collect::<Vec<_>>();
@@ -329,7 +330,7 @@ pub fn run(c: &mut Criterion) {
     let mut ccp = c.benchmark_group("ccp");
 
     for i in linear.clone() {
-        let mut code = vec![0u8; i as usize];
+        let mut code = vec![op::noop(); i as usize].into_iter().collect::<Vec<_>>();
 
         rng.fill_bytes(&mut code);
 
