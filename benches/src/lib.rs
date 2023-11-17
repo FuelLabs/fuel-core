@@ -34,7 +34,7 @@ use std::iter;
 
 const LARGE_GAS_LIMIT: u64 = u64::MAX - 1001;
 
-fn new_db() -> VmDatabase {
+fn new_db() -> VmDatabase<Database> {
     // when rocksdb is enabled, this creates a new db instance with a temporary path
     VmDatabase::default()
 }
@@ -87,17 +87,17 @@ pub struct VmBench {
     pub inputs: Vec<Input>,
     pub outputs: Vec<Output>,
     pub witnesses: Vec<Witness>,
-    pub db: Option<VmDatabase>,
+    pub db: Option<VmDatabase<Database>>,
     pub instruction: Instruction,
     pub prepare_call: Option<PrepareCall>,
     pub dummy_contract: Option<ContractId>,
     pub contract_code: Option<ContractCode>,
-    pub prepare_db: Option<Box<dyn FnMut(VmDatabase) -> anyhow::Result<VmDatabase>>>,
+    pub prepare_db: Option<Box<dyn FnMut(VmDatabase<Database>) -> anyhow::Result<VmDatabase<Database>>>>,
 }
 
 #[derive(Debug, Clone)]
 pub struct VmBenchPrepared {
-    pub vm: Interpreter<VmDatabase, Script>,
+    pub vm: Interpreter<VmDatabase<Database>, Script>,
     pub instruction: Instruction,
     pub diff: diff::Diff<diff::InitialVmState>,
 }
@@ -144,7 +144,7 @@ impl VmBench {
 
     pub fn contract_using_db<R>(
         rng: &mut R,
-        mut db: VmDatabase,
+        mut db: VmDatabase<Database>,
         instruction: Instruction,
     ) -> anyhow::Result<Self>
     where
@@ -205,7 +205,7 @@ impl VmBench {
             .with_prepare_call(prepare_call))
     }
 
-    pub fn with_db(mut self, db: VmDatabase) -> Self {
+    pub fn with_db(mut self, db: VmDatabase<Database>) -> Self {
         self.db.replace(db);
         self
     }
@@ -291,7 +291,7 @@ impl VmBench {
 
     pub fn with_prepare_db<F>(mut self, prepare_db: F) -> Self
     where
-        F: FnMut(VmDatabase) -> anyhow::Result<VmDatabase> + 'static,
+        F: FnMut(VmDatabase<Database>) -> anyhow::Result<VmDatabase<Database>> + 'static,
     {
         self.prepare_db.replace(Box::new(prepare_db));
         self
