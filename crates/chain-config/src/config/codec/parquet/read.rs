@@ -2,43 +2,25 @@ use std::marker::PhantomData;
 
 use fuel_core_types::{
     blockchain::primitives::DaBlockHeight,
-    fuel_types::{
-        Address,
-        AssetId,
-        BlockHeight,
-        Bytes32,
-        ContractId,
-        Nonce,
-    },
+    fuel_types::{Address, AssetId, BlockHeight, Bytes32, ContractId, Nonce},
     fuel_vm::Salt,
 };
 use itertools::Itertools;
 use parquet::{
     file::{
-        reader::{
-            ChunkReader,
-            FileReader,
-        },
+        reader::{ChunkReader, FileReader},
         serialized_reader::SerializedFileReader,
     },
-    record::{
-        Field,
-        Row,
-    },
+    record::{Field, Row},
 };
 
 use crate::{
     config::{
-        codec::{
-            Batch,
-            BatchGenerator,
-        },
+        codec::{Batch, BatchReaderTrait},
         contract_balance::ContractBalance,
         contract_state::ContractState,
     },
-    CoinConfig,
-    ContractConfig,
-    MessageConfig,
+    CoinConfig, ContractConfig, MessageConfig,
 };
 
 pub struct ParquetBatchReader<R: ChunkReader, T> {
@@ -47,24 +29,11 @@ pub struct ParquetBatchReader<R: ChunkReader, T> {
     _data: PhantomData<T>,
 }
 
-impl<R: ChunkReader + 'static, T: From<Row> + 'static> IntoIterator
+impl<R: ChunkReader + 'static, T: From<parquet::record::Row>> BatchReaderTrait
     for ParquetBatchReader<R, T>
 {
-    type Item = anyhow::Result<Batch<T>>;
-
-    type IntoIter = Box<dyn Iterator<Item = anyhow::Result<Batch<T>>>>;
-
-    fn into_iter(self) -> Self::IntoIter {
-        Box::new(ParquetIterator {
-            data_source: self.data_source,
-            group_index: self.group_index,
-            _data: PhantomData,
-        })
-    }
-}
-
-impl<R: ChunkReader + 'static, T: From<parquet::record::Row>> BatchGenerator<T> for ParquetBatchReader<R, T> {
-    fn next_batch(&mut self) -> Option<anyhow::Result<Batch<T>>> {
+    type Item = T;
+    fn next_batch(&mut self) -> Option<anyhow::Result<Batch<Self::Item>>> {
         if self.group_index >= self.data_source.metadata().num_row_groups() {
             return None;
         }
@@ -84,43 +53,6 @@ impl<R: ChunkReader + 'static, T: From<parquet::record::Row>> BatchGenerator<T> 
         self.group_index += 1;
 
         Some(Ok(Batch { data, group_index }))
-    }
-}
-
-pub struct ParquetIterator<R: ChunkReader, T> {
-    data_source: SerializedFileReader<R>,
-    group_index: usize,
-    _data: PhantomData<T>,
-}
-
-impl<R: ChunkReader + 'static, T: From<Row>> Iterator for ParquetIterator<R, T> {
-    type Item = anyhow::Result<Batch<T>>;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        if self.group_index >= self.data_source.metadata().num_row_groups() {
-            return None;
-        }
-
-        let data = self
-            .data_source
-            .get_row_group(self.group_index)
-            .unwrap()
-            .get_row_iter(None)
-            .unwrap()
-            .map_ok(|row| row.into())
-            .collect::<Result<Vec<_>, _>>()
-            .unwrap();
-
-        let group_index = self.group_index;
-
-        self.group_index += 1;
-
-        Some(Ok(Batch { data, group_index }))
-    }
-
-    fn nth(&mut self, n: usize) -> Option<Self::Item> {
-        self.group_index = n;
-        self.next()
     }
 }
 
@@ -247,6 +179,11 @@ impl From<Row> for ContractState {
     fn from(row: Row) -> Self {
         let mut iter = row.get_column_iter();
 
+        let Field::Bytes(contract_id) = iter.next().unwrap().1 else {
+            panic!("Unexpected type!");
+        };
+        let contract_id = Bytes32::new(contract_id.data().try_into().unwrap());
+
         let Field::Bytes(key) = iter.next().unwrap().1 else {
             panic!("Unexpected type!");
         };
@@ -254,9 +191,14 @@ impl From<Row> for ContractState {
         let Field::Bytes(value) = iter.next().unwrap().1 else {
             panic!("Unexpected type!");
         };
+
         let value = Bytes32::new(value.data().try_into().unwrap());
 
-        Self { key, value }
+        Self {
+            contract_id,
+            key,
+            value,
+        }
     }
 }
 
@@ -264,6 +206,11 @@ impl From<Row> for ContractBalance {
     fn from(row: Row) -> Self {
         let mut iter = row.get_column_iter();
 
+        let Field::Bytes(contract_id) = iter.next().unwrap().1 else {
+            panic!("Unexpected type!");
+        };
+
+        let contract_id = Bytes32::new(contract_id.data().try_into().unwrap());
         let Field::Bytes(asset_id) = iter.next().unwrap().1 else {
             panic!("Unexpected type!");
         };
@@ -274,7 +221,11 @@ impl From<Row> for ContractBalance {
         };
         let amount = *amount;
 
-        Self { asset_id, amount }
+        Self {
+            asset_id,
+            amount,
+            contract_id,
+        }
     }
 }
 

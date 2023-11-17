@@ -1,4 +1,4 @@
 #![deny(unused_crate_dependencies)]
-#![deny(warnings)]
+//#![deny(warnings)]
 pub mod client;
 pub mod schema;

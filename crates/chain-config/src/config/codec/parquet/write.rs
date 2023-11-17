@@ -1,48 +1,62 @@
-use std::{
-    io::Write,
-    marker::PhantomData,
-    sync::Arc,
-};
+use std::{io::Write, sync::Arc};
 
 use itertools::Itertools;
 use parquet::{
     basic::Compression,
-    data_type::{
-        ByteArrayType,
-        FixedLenByteArrayType,
-        Int32Type,
-        Int64Type,
-    },
+    data_type::{ByteArrayType, FixedLenByteArrayType, Int32Type, Int64Type},
     file::{
         properties::WriterProperties,
-        writer::{
-            SerializedColumnWriter,
-            SerializedFileWriter,
-        },
+        writer::{SerializedColumnWriter, SerializedFileWriter},
     },
 };
 
 use crate::{
     config::{
-        codec::BatchWriter,
-        contract_balance::ContractBalance,
+        codec::BatchWriterTrait, contract_balance::ContractBalance,
         contract_state::ContractState,
     },
-    CoinConfig,
-    ContractConfig,
-    MessageConfig,
+    CoinConfig, ContractConfig, MessageConfig,
 };
 
 use super::schema::ParquetSchema;
 
-pub(crate) struct ParquetBatchWriter<W: Write, T> {
-    writer: SerializedFileWriter<W>,
-    _data: PhantomData<T>,
+pub(crate) struct ParquetBatchWriter<W: Write> {
+    coins: SerializedFileWriter<W>,
+    messages: SerializedFileWriter<W>,
+    contracts: SerializedFileWriter<W>,
+    contract_state: SerializedFileWriter<W>,
+    contract_balance: SerializedFileWriter<W>,
 }
 
-impl<W: Write + Send, T: ParquetSchema> ParquetBatchWriter<W, T> {
-    pub fn new(writer: W, compression: Compression) -> anyhow::Result<Self> {
-        let writer = SerializedFileWriter::new(
+impl<W: Write + Send> ParquetBatchWriter<W> {
+    pub fn new(
+        coins: W,
+        messages: W,
+        contracts: W,
+        contract_state: W,
+        contract_balance: W,
+        compression: Compression,
+    ) -> anyhow::Result<Self> {
+        Ok(Self {
+            coins: Self::get_writer::<CoinConfig>(coins, compression),
+            messages: Self::get_writer::<MessageConfig>(messages, compression),
+            contracts: Self::get_writer::<ContractConfig>(contracts, compression),
+            contract_state: Self::get_writer::<ContractState>(
+                contract_state,
+                compression,
+            ),
+            contract_balance: Self::get_writer::<ContractBalance>(
+                contract_balance,
+                compression,
+            ),
+        })
+    }
+
+    fn get_writer<T: ParquetSchema>(
+        writer: W,
+        compression: Compression,
+    ) -> SerializedFileWriter<W> {
+        SerializedFileWriter::new(
             writer,
             Arc::new(T::schema()),
             Arc::new(
@@ -51,34 +65,57 @@ impl<W: Write + Send, T: ParquetSchema> ParquetBatchWriter<W, T> {
                     .build(),
             ),
         )
-        .unwrap();
-
-        Ok(Self {
-            writer,
-            _data: PhantomData,
-        })
+        .unwrap()
     }
 }
 
-impl<W: Write + Send, T> ParquetBatchWriter<W, T> {
-    pub fn into_inner(self) -> W {
-        self.writer.into_inner().unwrap()
-    }
-}
-
-impl<T, W> BatchWriter<T> for ParquetBatchWriter<W, T>
+impl<W> BatchWriterTrait for ParquetBatchWriter<W>
 where
-    T: ParquetSchema,
-    Vec<T>: ColumnEncoder,
     W: Write + Send,
 {
-    fn write_batch(&mut self, elements: Vec<T>) -> anyhow::Result<()> {
-        elements.encode_columns(&mut self.writer);
+    fn close(self: Box<Self>) -> anyhow::Result<()> {
+        self.coins.close()?;
+        self.contracts.close()?;
+        self.messages.close()?;
+        self.contract_state.close()?;
+        self.contract_balance.close()?;
+
+        Ok(())
+    }
+
+    fn write_coins(&mut self, elements: Vec<CoinConfig>) -> anyhow::Result<()> {
+        elements.encode_columns(&mut self.coins);
+        Ok(())
+    }
+
+    fn write_contracts(&mut self, elements: Vec<ContractConfig>) -> anyhow::Result<()> {
+        elements.encode_columns(&mut self.contracts);
+        Ok(())
+    }
+
+    fn write_messages(&mut self, elements: Vec<MessageConfig>) -> anyhow::Result<()> {
+        elements.encode_columns(&mut self.messages);
+        Ok(())
+    }
+
+    fn write_contract_state(
+        &mut self,
+        elements: Vec<ContractState>,
+    ) -> anyhow::Result<()> {
+        elements.encode_columns(&mut self.contract_state);
+        Ok(())
+    }
+
+    fn write_contract_balance(
+        &mut self,
+        elements: Vec<ContractBalance>,
+    ) -> anyhow::Result<()> {
+        elements.encode_columns(&mut self.contract_balance);
         Ok(())
     }
 }
 
-trait ColumnEncoder {
+pub trait ColumnEncoder {
     type ElementT: ParquetSchema;
     fn encode_columns<W: std::io::Write + Send>(
         &self,

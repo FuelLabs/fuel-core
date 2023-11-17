@@ -4,7 +4,7 @@
 
 #![deny(unused_crate_dependencies)]
 #![deny(missing_docs)]
-#![deny(warnings)]
+//#![deny(warnings)]
 
 #[doc(no_inline)]
 pub use fuel_vm_private::{

@@ -1,18 +1,10 @@
 use std::sync::Arc;
 
-use parquet::{
-    basic::Repetition,
-    schema::types::Type,
-};
+use parquet::{basic::Repetition, schema::types::Type};
 
 use crate::{
-    config::{
-        contract_balance::ContractBalance,
-        contract_state::ContractState,
-    },
-    CoinConfig,
-    ContractConfig,
-    MessageConfig,
+    config::{contract_balance::ContractBalance, contract_state::ContractState},
+    CoinConfig, ContractConfig, MessageConfig,
 };
 
 pub trait ParquetSchema {
@@ -212,6 +204,12 @@ impl ParquetSchema for CoinConfig {
 impl ParquetSchema for ContractState {
     fn schema() -> Type {
         use parquet::basic::Type as PhysicalType;
+        let contract_id =
+            Type::primitive_type_builder("key", PhysicalType::FIXED_LEN_BYTE_ARRAY)
+                .with_length(32)
+                .with_repetition(Repetition::REQUIRED)
+                .build()
+                .unwrap();
         let key = Type::primitive_type_builder("key", PhysicalType::FIXED_LEN_BYTE_ARRAY)
             .with_length(32)
             .with_repetition(Repetition::REQUIRED)
@@ -225,7 +223,7 @@ impl ParquetSchema for ContractState {
                 .unwrap();
 
         parquet::schema::types::Type::group_type_builder("ContractState")
-            .with_fields([key, value].map(Arc::new).to_vec())
+            .with_fields([contract_id, key, value].map(Arc::new).to_vec())
             .build()
             .unwrap()
     }
@@ -234,6 +232,14 @@ impl ParquetSchema for ContractState {
 impl ParquetSchema for ContractBalance {
     fn schema() -> Type {
         use parquet::basic::Type as PhysicalType;
+        let contract_id = Type::primitive_type_builder(
+            "contract_id",
+            PhysicalType::FIXED_LEN_BYTE_ARRAY,
+        )
+        .with_length(32)
+        .with_repetition(Repetition::REQUIRED)
+        .build()
+        .unwrap();
         let asset_id =
             Type::primitive_type_builder("asset_id", PhysicalType::FIXED_LEN_BYTE_ARRAY)
                 .with_length(32)
@@ -247,7 +253,7 @@ impl ParquetSchema for ContractBalance {
             .unwrap();
 
         parquet::schema::types::Type::group_type_builder("ContractBalance")
-            .with_fields([asset_id, amount].map(Arc::new).to_vec())
+            .with_fields([contract_id, asset_id, amount].map(Arc::new).to_vec())
             .build()
             .unwrap()
     }

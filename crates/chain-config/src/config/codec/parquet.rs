@@ -3,6 +3,8 @@ mod schema;
 mod write;
 
 pub use read::*;
+pub use schema::*;
+pub use write::*;
 
 #[cfg(test)]
 mod tests {
@@ -12,7 +14,7 @@ mod tests {
 
     use std::iter::repeat_with;
 
-    use crate::config::codec::BatchWriter;
+    use crate::config::codec::BatchWriterTrait;
     use bytes::Bytes;
 
     use crate::config::codec::Batch;
