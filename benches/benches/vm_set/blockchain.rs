@@ -125,7 +125,7 @@ pub fn run(c: &mut Criterion) {
     l.sort_unstable();
     linear.extend(l);
 
-    let asset: AssetId = rng.gen();
+    let asset = AssetId::zeroed();
     let contract: ContractId = VmBench::CONTRACT;
 
     let db = BenchDb::new(&contract).expect("Unable to fill contract storage");
@@ -133,7 +133,7 @@ pub fn run(c: &mut Criterion) {
     run_group_ref(
         &mut c.benchmark_group("bal"),
         "bal",
-        VmBench::new(op::bal(0x10, 0x10, 0x11))
+        VmBench::new(op::bal(0x13, 0x10, 0x11))
             .with_db(db.to_vm_database())
             .with_data(asset.iter().chain(contract.iter()).copied().collect())
             .with_prepare_script(vec![
