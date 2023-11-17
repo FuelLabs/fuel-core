@@ -88,7 +88,7 @@ impl BenchDb {
         // Adds a genesis block to the database.
         fuel_core::service::genesis::maybe_initialize_state(
             &Config::local_node(),
-            &mut database,
+            &database,
         )
         .expect("Should init with genesis block");
         database.clone().flush()?;
