@@ -6,7 +6,7 @@ pub fn default_gas_costs() -> GasCostsValues {
         aloc: 1,
         and: 2,
         andi: 2,
-        bal: 41,
+        bal: 328,
         bhei: 1,
         bhsh: 2,
         burn: 27738,
