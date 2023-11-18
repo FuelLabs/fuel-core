@@ -28,7 +28,7 @@ all blocks would be maxing out the storage.
 
 #### Generous Estimate
 
-Additionally, this will only apply to our early networks, which won't be long-live.
+Additionally, this will only apply to our early networks, which won't be long-lived.
 This allows us to take a bigger risk on the storage price and increase it over 
 time to compensate for users adding a lot of data.
 
