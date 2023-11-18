@@ -56,7 +56,7 @@ blocks_per_year = 365 * 24 * 60 * ~5 = ~2628000
 
 yearly_new_contract_bytes = blocks_per_year * contracts_per_block * max_contract_size = **378,432,000,000**
 
-Which rougly lines up with our pessimistic estimate.
+Which roughly lines up with our pessimistic estimate.
 
 #### Conclusion
 
