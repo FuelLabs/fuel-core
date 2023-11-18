@@ -22,7 +22,7 @@ This gives us this graph:
 | --------------- | --------------- | --------------- | --------------- | ------------- |
 | 500,000,000,000 |      10,000,000 |        31536000 |      **15,855** |    **630.72** |
 
-This is a harsh estimate that isn't taking into the additional base cost of tx
+This is a harsh estimate that isn't taking into account the additional base cost of tx
 execution and the cost of any additional op codes. It is also assuming that 
 all blocks would be maxing out the storage.
 
