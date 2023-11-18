@@ -29,7 +29,7 @@ all blocks would be maxing out the storage.
 #### Generous Estimate
 
 Additionally, this will only apply to our early networks, which won't be long-live.
-This allows us to take a bigger risk on the storage price and increas it over 
+This allows us to take a bigger risk on the storage price and increase it over 
 time to compensate for users adding a lot of data.
 
 All this included, if we re-estimate the yearly storage limit as 5 TB we get:
