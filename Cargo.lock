@@ -1776,7 +1776,7 @@ version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bef552e6f588e446098f6ba40d89ac146c8c7b64aade83c051ee00bb5d2bc18d"
 dependencies = [
- "uuid 1.6.1",
+ "uuid 1.5.0",
 ]
 
 [[package]]
@@ -2048,7 +2048,7 @@ checksum = "ee27f32b5c5292967d2d4a9d7f1e0b0aed2c15daded5a60300e4abb9d8020bca"
 dependencies = [
  "der 0.7.8",
  "digest 0.10.7",
- "elliptic-curve 0.13.8",
+ "elliptic-curve 0.13.7",
  "rfc6979 0.4.0",
  "signature 2.2.0",
  "spki 0.7.2",
@@ -2132,9 +2132,9 @@ dependencies = [
 
 [[package]]
 name = "elliptic-curve"
-version = "0.13.8"
+version = "0.13.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b5e6043086bf7973472e0c7dff2142ea0b680d30e18d9cc40f267efbf222bd47"
+checksum = "e9775b22bc152ad86a0cf23f0f348b884b26add12bf741e7ffc4d4ab2ab4d205"
 dependencies = [
  "base16ct 0.2.0",
  "crypto-bigint 0.5.5",
@@ -2413,7 +2413,7 @@ dependencies = [
  "cargo_metadata",
  "chrono",
  "const-hex",
- "elliptic-curve 0.13.8",
+ "elliptic-curve 0.13.7",
  "ethabi",
  "generic-array",
  "k256",
@@ -2523,7 +2523,7 @@ dependencies = [
  "coins-bip32",
  "coins-bip39",
  "const-hex",
- "elliptic-curve 0.13.8",
+ "elliptic-curve 0.13.7",
  "eth-keystore",
  "ethers-core",
  "rand 0.8.5",
@@ -2786,7 +2786,7 @@ dependencies = [
  "tokio-stream",
  "tower-http",
  "tracing",
- "uuid 1.6.1",
+ "uuid 1.5.0",
 ]
 
 [[package]]
@@ -4164,7 +4164,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cb0889898416213fab133e1d33a0e5858a48177452750691bde3666d0fdbaf8b"
 dependencies = [
  "hermit-abi 0.3.3",
- "rustix 0.38.25",
+ "rustix 0.38.24",
  "windows-sys 0.48.0",
 ]
 
@@ -4238,7 +4238,7 @@ checksum = "3f01b677d82ef7a676aa37e099defd83a28e15687112cafdd112d60236b6115b"
 dependencies = [
  "cfg-if",
  "ecdsa 0.16.9",
- "elliptic-curve 0.13.8",
+ "elliptic-curve 0.13.7",
  "once_cell",
  "sha2 0.10.8",
  "signature 2.2.0",
@@ -5603,7 +5603,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c9863ad85fa8f4460f9c48cb909d38a0d689dba1f6f6988a5e3e0d31071bcd4b"
 dependencies = [
  "ecdsa 0.16.9",
- "elliptic-curve 0.13.8",
+ "elliptic-curve 0.13.7",
  "primeorder",
  "sha2 0.10.8",
 ]
@@ -6123,7 +6123,7 @@ version = "0.13.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "353e1ca18966c16d9deb1c69278edbc5f194139612772bd9537af60ac231e1e6"
 dependencies = [
- "elliptic-curve 0.13.8",
+ "elliptic-curve 0.13.7",
 ]
 
 [[package]]
@@ -6944,9 +6944,9 @@ dependencies = [
 
 [[package]]
 name = "rustix"
-version = "0.38.25"
+version = "0.38.24"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "dc99bc2d4f1fed22595588a013687477aedf3cdcfb26558c559edb67b4d9b22e"
+checksum = "9ad981d6c340a49cdc40a1028d9c6084ec7e9fa33fcb839cab656a267071e234"
 dependencies = [
  "bitflags 2.4.1",
  "errno",
@@ -7809,7 +7809,7 @@ dependencies = [
  "debugid",
  "memmap2",
  "stable_deref_trait",
- "uuid 1.6.1",
+ "uuid 1.5.0",
 ]
 
 [[package]]
@@ -7920,7 +7920,7 @@ dependencies = [
  "cfg-if",
  "fastrand 2.0.1",
  "redox_syscall 0.4.1",
- "rustix 0.38.25",
+ "rustix 0.38.24",
  "windows-sys 0.48.0",
 ]
 
@@ -8698,9 +8698,9 @@ dependencies = [
 
 [[package]]
 name = "uuid"
-version = "1.6.1"
+version = "1.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5e395fcf16a7a3d8127ec99782007af141946b4795001f876d54fb0d55978560"
+checksum = "88ad59a7560b41a70d191093a945f0b87bc1deeda46fb237479708a1d6b6cdfc"
 dependencies = [
  "getrandom 0.2.11",
 ]
@@ -9024,7 +9024,7 @@ dependencies = [
  "tokio",
  "turn",
  "url",
- "uuid 1.6.1",
+ "uuid 1.5.0",
  "waitgroup",
  "webrtc-mdns",
  "webrtc-util",
@@ -9127,7 +9127,7 @@ dependencies = [
  "either",
  "home",
  "once_cell",
- "rustix 0.38.25",
+ "rustix 0.38.24",
 ]
 
 [[package]]
