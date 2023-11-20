@@ -38,6 +38,7 @@ pub trait GroupEncoder {
 }
 
 pub type DynGroupDecoder<T> = Box<dyn GroupDecoder<T>>;
+pub type DynStateDecoder = Box<dyn StateDecoderTrait>;
 
 #[derive(Debug, Clone)]
 pub enum StateSource {
@@ -45,70 +46,147 @@ pub enum StateSource {
     Snapshot(PathBuf),
 }
 
-#[derive(Debug, Clone)]
-pub struct StateDecoder {
-    default_batch_size: usize,
-    source: StateSource,
+pub trait StateDecoderTrait {
+    fn coins(&self) -> anyhow::Result<DynGroupDecoder<CoinConfig>>;
+    fn messages(&self) -> anyhow::Result<DynGroupDecoder<MessageConfig>>;
+    fn contracts(&self) -> anyhow::Result<DynGroupDecoder<ContractConfig>>;
+    fn contract_state(&self) -> anyhow::Result<DynGroupDecoder<ContractState>>;
+    fn contract_balance(&self) -> anyhow::Result<DynGroupDecoder<ContractBalance>>;
 }
 
-impl StateDecoder {
-    pub fn new(source: StateSource, json_batch_size: usize) -> Self {
+struct JsonStateDecoder {
+    path: PathBuf,
+    batch_size: usize,
+}
+
+impl JsonStateDecoder {
+    fn new(snapshot_path: PathBuf, default_batch_size: usize) -> Self {
         Self {
-            source,
-            default_batch_size: json_batch_size,
+            path: snapshot_path.join("state.json"),
+            batch_size: default_batch_size,
         }
     }
+}
 
-    pub fn coins(&self) -> anyhow::Result<DynGroupDecoder<CoinConfig>> {
+impl JsonStateDecoder {
+    fn decoder<T>(&self) -> anyhow::Result<DynGroupDecoder<T>>
+    where
+        T: 'static,
+        JsonDecoder<T>: GroupDecoder<T>,
+        in_memory::Decoder<StateConfig, T>: GroupDecoder<T>,
+    {
+        let file = std::fs::File::open(&self.path)?;
+        let reader = JsonDecoder::<T>::new(file, self.batch_size)?;
+        Ok(Box::new(reader))
+    }
+}
+
+impl StateDecoderTrait for JsonStateDecoder {
+    fn coins(&self) -> anyhow::Result<DynGroupDecoder<CoinConfig>> {
+        self.decoder()
+    }
+
+    fn messages(&self) -> anyhow::Result<DynGroupDecoder<MessageConfig>> {
+        self.decoder()
+    }
+
+    fn contracts(&self) -> anyhow::Result<DynGroupDecoder<ContractConfig>> {
+        self.decoder()
+    }
+
+    fn contract_state(&self) -> anyhow::Result<DynGroupDecoder<ContractState>> {
+        self.decoder()
+    }
+
+    fn contract_balance(&self) -> anyhow::Result<DynGroupDecoder<ContractBalance>> {
+        self.decoder()
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct ParquetStateDecoder {
+    snapshot_dir: PathBuf,
+}
+
+impl StateDecoderTrait for ParquetStateDecoder {
+    fn coins(&self) -> anyhow::Result<DynGroupDecoder<CoinConfig>> {
         self.decoder("coins")
     }
 
-    pub fn messages(&self) -> anyhow::Result<DynGroupDecoder<MessageConfig>> {
+    fn messages(&self) -> anyhow::Result<DynGroupDecoder<MessageConfig>> {
         self.decoder("messages")
     }
 
-    pub fn contracts(&self) -> anyhow::Result<DynGroupDecoder<ContractConfig>> {
+    fn contracts(&self) -> anyhow::Result<DynGroupDecoder<ContractConfig>> {
         self.decoder("contracts")
     }
 
-    pub fn contract_state(&self) -> anyhow::Result<DynGroupDecoder<ContractState>> {
+    fn contract_state(&self) -> anyhow::Result<DynGroupDecoder<ContractState>> {
         self.decoder("contract_state")
     }
 
-    pub fn contract_balance(&self) -> anyhow::Result<DynGroupDecoder<ContractBalance>> {
+    fn contract_balance(&self) -> anyhow::Result<DynGroupDecoder<ContractBalance>> {
         self.decoder("contract_balance")
+    }
+}
+
+impl ParquetStateDecoder {
+    pub fn new(snapshot_dir: PathBuf) -> Self {
+        Self { snapshot_dir }
     }
 
     fn decoder<T>(&self, parquet_filename: &str) -> anyhow::Result<DynGroupDecoder<T>>
     where
         T: 'static,
         ParquetBatchReader<std::fs::File, T>: GroupDecoder<T>,
-        JsonDecoder<T>: GroupDecoder<T>,
-        in_memory::Decoder<T>: GroupDecoder<T>,
     {
-        let reader = match &self.source {
-            StateSource::Snapshot(path) => {
-                let json_path = path.join("state.json");
-                if json_path.exists() {
-                    let file = std::fs::File::open(json_path)?;
-                    let reader = JsonDecoder::<T>::new(file, self.default_batch_size)?;
-                    Box::new(reader) as DynGroupDecoder<T>
-                } else {
-                    let path = path.join(format!("{parquet_filename}.parquet"));
-                    let file = std::fs::File::open(path)?;
-                    Box::new(ParquetBatchReader::new(file)?)
-                }
-            }
-            StateSource::InMemory(state_config) => {
-                let decoder = in_memory::Decoder::<T>::new(
-                    state_config.clone(),
-                    self.default_batch_size,
-                );
-                Box::new(decoder)
-            }
-        };
+        let path = self
+            .snapshot_dir
+            .join(format!("{parquet_filename}.parquet"));
+        let file = std::fs::File::open(path)?;
+        Ok(Box::new(ParquetBatchReader::new(file)?))
+    }
+}
 
-        Ok(reader)
+struct InMemoryStateDecoder {
+    state: StateConfig,
+    batch_size: usize,
+}
+
+impl InMemoryStateDecoder {
+    fn new(state: StateConfig, batch_size: usize) -> Self {
+        Self { state, batch_size }
+    }
+
+    fn decoder<T>(&self) -> anyhow::Result<DynGroupDecoder<T>>
+    where
+        T: 'static,
+        in_memory::Decoder<StateConfig, T>: GroupDecoder<T>,
+    {
+        let reader = Decoder::new(self.state.clone(), self.batch_size);
+        Ok(Box::new(reader))
+    }
+}
+
+impl StateDecoderTrait for InMemoryStateDecoder {
+    fn coins(&self) -> anyhow::Result<DynGroupDecoder<CoinConfig>> {
+        self.decoder()
+    }
+
+    fn messages(&self) -> anyhow::Result<DynGroupDecoder<MessageConfig>> {
+        self.decoder()
+    }
+
+    fn contracts(&self) -> anyhow::Result<DynGroupDecoder<ContractConfig>> {
+        self.decoder()
+    }
+
+    fn contract_state(&self) -> anyhow::Result<DynGroupDecoder<ContractState>> {
+        self.decoder()
+    }
+
+    fn contract_balance(&self) -> anyhow::Result<DynGroupDecoder<ContractBalance>> {
+        self.decoder()
     }
 }
 
@@ -140,7 +218,12 @@ fn json_writer(snapshot_dir: impl AsRef<Path>) -> anyhow::Result<Box<dyn GroupEn
 
 #[cfg(test)]
 mod tests {
-    use std::iter::repeat_with;
+    use std::{
+        cell::{RefCell, RefMut},
+        iter::repeat_with,
+        ops::Deref,
+        rc::Rc,
+    };
 
     use itertools::Itertools;
 
@@ -159,19 +242,44 @@ mod tests {
         );
     }
 
+    #[derive(Default, Clone)]
+    struct PeekableStateConfig {
+        inner: Rc<RefCell<StateConfig>>,
+    }
+    impl PeekableStateConfig {
+        fn gimme(&mut self) -> RefMut<StateConfig> {
+            self.inner.borrow_mut()
+        }
+    }
+
+    // impl BorrowMut<StateConfig> for PeekableStateConfig {
+    //     fn borrow_mut(&mut self) -> &mut StateConfig {
+    //         RefCell::borrow_mut(Rc::borrow(&self.inner))
+    //     }
+    // }
+    //
+    // impl Borrow<StateConfig> for PeekableStateConfig {
+    //     fn borrow(&self) -> &StateConfig {
+    //         todo!()
+    //     }
+    // }
+
     #[test]
     fn can_read_write() {
         enum Format {
             Json,
             Parquet,
+            InMemory,
         }
         let test = |format: Format| {
             let temp_dir = tempfile::tempdir().unwrap();
 
             let path = temp_dir.path();
+            let mut state_config = StateConfig::default();
             let mut writer = match format {
                 Format::Parquet => parquet_writer(path).unwrap(),
                 Format::Json => json_writer(path).unwrap(),
+                Format::InMemory => Box::new(Encoder::new(&mut state_config)),
             };
 
             let mut rng = rand::thread_rng();
@@ -204,10 +312,14 @@ mod tests {
                 write_batches!(ContractBalance, write_contract_balance);
             writer.close().unwrap();
 
-            let state_reader = StateDecoder::new(
-                StateSource::Snapshot(temp_dir.path().to_path_buf()),
-                batch_size,
-            );
+            let path = temp_dir.path().into();
+            let state_reader: DynStateDecoder = match format {
+                Format::Json => Box::new(JsonStateDecoder::new(path, batch_size)),
+                Format::Parquet => Box::new(ParquetStateDecoder::new(path)),
+                Format::InMemory => {
+                    Box::new(InMemoryStateDecoder::new(state_config.clone(), batch_size))
+                }
+            };
             assert_batches_identical(&coin_batches, state_reader.coins().unwrap());
             assert_batches_identical(&message_batches, state_reader.messages().unwrap());
             assert_batches_identical(
@@ -226,5 +338,6 @@ mod tests {
 
         test(Format::Json);
         test(Format::Parquet);
+        test(Format::InMemory);
     }
 }

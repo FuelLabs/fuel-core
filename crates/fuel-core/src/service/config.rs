@@ -1,6 +1,6 @@
 use clap::ValueEnum;
 use fuel_core_chain_config::{
-    default_consensus_dev_key, ChainConfig, StateConfig, StateDecoder,
+    default_consensus_dev_key, ChainConfig, ParquetStateDecoder, StateConfig,
 };
 use fuel_core_types::{blockchain::primitives::SecretKeyWrapper, secrecy::Secret};
 use std::{
@@ -26,7 +26,7 @@ pub struct Config {
     pub db_config: DatabaseConfig,
     pub chain_config: ChainConfig,
     pub chain_state: StateConfig,
-    pub snapshot_decoder: StateDecoder,
+    pub snapshot_decoder: ParquetStateDecoder,
     /// When `true`:
     /// - Enables manual block production.
     /// - Enables debugger endpoint.

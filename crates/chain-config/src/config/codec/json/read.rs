@@ -1,10 +1,10 @@
 use crate::{
     config::codec::{GroupDecoder, GroupResult},
-    Decoder,
+    Decoder, StateConfig,
 };
 
 pub struct JsonDecoder<T> {
-    in_mem: Decoder<T>,
+    in_mem: Decoder<StateConfig, T>,
 }
 
 impl<T> JsonDecoder<T> {
@@ -26,7 +26,7 @@ impl<T> JsonDecoder<T> {
 
 impl<T> Iterator for JsonDecoder<T>
 where
-    Decoder<T>: GroupDecoder<T>,
+    Decoder<StateConfig, T>: GroupDecoder<T>,
 {
     type Item = GroupResult<T>;
 
@@ -35,4 +35,4 @@ where
     }
 }
 
-impl<T> GroupDecoder<T> for JsonDecoder<T> where Decoder<T>: GroupDecoder<T> {}
+impl<T> GroupDecoder<T> for JsonDecoder<T> where Decoder<StateConfig, T>: GroupDecoder<T> {}

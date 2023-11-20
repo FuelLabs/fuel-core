@@ -5,19 +5,19 @@ use crate::{
         codec::GroupEncoder, contract_balance::ContractBalance,
         contract_state::ContractState,
     },
-    CoinConfig, ContractConfig, Encoder, MessageConfig,
+    CoinConfig, ContractConfig, Encoder, MessageConfig, StateConfig,
 };
 
 pub struct JsonBatchWriter<W> {
     sink: W,
-    temp_storage: Encoder,
+    temp_storage: Encoder<StateConfig>,
 }
 
 impl<W> JsonBatchWriter<W> {
     pub fn new(sink: W) -> Self {
         Self {
             sink,
-            temp_storage: Default::default(),
+            temp_storage: Encoder::new(StateConfig::default()),
         }
     }
 }

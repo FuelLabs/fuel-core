@@ -1,3 +1,5 @@
+use std::borrow::BorrowMut;
+
 use crate::{
     config::{
         codec::GroupEncoder, contract_balance::ContractBalance,
@@ -6,34 +8,33 @@ use crate::{
     CoinConfig, ContractConfig, MessageConfig, StateConfig,
 };
 
-#[derive(Default)]
-pub struct Encoder {
-    sink: StateConfig,
+pub struct Encoder<W> {
+    sink: W,
 }
 
-impl Encoder {
-    pub fn new() -> Self {
-        Self::default()
+impl<W> Encoder<W> {
+    pub fn new(sink: W) -> Self {
+        Self { sink }
     }
 
-    pub fn into_inner(self) -> StateConfig {
+    pub fn into_inner(self) -> W {
         self.sink
     }
 }
 
-impl GroupEncoder for Encoder {
+impl<W: BorrowMut<StateConfig>> GroupEncoder for Encoder<W> {
     fn write_coins(&mut self, elements: Vec<CoinConfig>) -> anyhow::Result<()> {
-        self.sink.coins.extend(elements);
+        self.sink.borrow_mut().coins.extend(elements);
         Ok(())
     }
 
     fn write_contracts(&mut self, elements: Vec<ContractConfig>) -> anyhow::Result<()> {
-        self.sink.contracts.extend(elements);
+        self.sink.borrow_mut().contracts.extend(elements);
         Ok(())
     }
 
     fn write_messages(&mut self, elements: Vec<MessageConfig>) -> anyhow::Result<()> {
-        self.sink.messages.extend(elements);
+        self.sink.borrow_mut().messages.extend(elements);
         Ok(())
     }
 
@@ -41,7 +42,7 @@ impl GroupEncoder for Encoder {
         &mut self,
         elements: Vec<ContractState>,
     ) -> anyhow::Result<()> {
-        self.sink.contract_state.extend(elements);
+        self.sink.borrow_mut().contract_state.extend(elements);
         Ok(())
     }
 
@@ -49,7 +50,7 @@ impl GroupEncoder for Encoder {
         &mut self,
         elements: Vec<ContractBalance>,
     ) -> anyhow::Result<()> {
-        self.sink.contract_balance.extend(elements);
+        self.sink.borrow_mut().contract_balance.extend(elements);
         Ok(())
     }
 

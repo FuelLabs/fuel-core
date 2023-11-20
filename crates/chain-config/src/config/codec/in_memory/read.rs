@@ -1,4 +1,4 @@
-use std::marker::PhantomData;
+use std::{borrow::Borrow, marker::PhantomData};
 
 use itertools::Itertools;
 
@@ -11,17 +11,17 @@ use crate::{
     CoinConfig, ContractConfig, GroupDecoder, MessageConfig, StateConfig,
 };
 
-pub struct Decoder<T> {
-    state: StateConfig,
+pub struct Decoder<R, T> {
+    source: R,
     _data_type: PhantomData<T>,
     batch_size: usize,
     next_batch: usize,
 }
 
-impl<T> Decoder<T> {
-    pub fn new(state: StateConfig, batch_size: usize) -> Self {
+impl<R, T> Decoder<R, T> {
+    pub fn new(source: R, batch_size: usize) -> Self {
         Self {
-            state,
+            source,
             batch_size,
             _data_type: PhantomData,
             next_batch: 0,
@@ -48,13 +48,14 @@ impl<T> Decoder<T> {
     }
 }
 
-impl Iterator for Decoder<CoinConfig> {
+impl<R: Borrow<StateConfig>> Iterator for Decoder<R, CoinConfig> {
     type Item = GroupResult<CoinConfig>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        let group = Self::create_batches(self.batch_size, self.state.coins.clone())
-            .into_iter()
-            .nth(self.next_batch);
+        let group =
+            Self::create_batches(self.batch_size, self.source.borrow().coins.clone())
+                .into_iter()
+                .nth(self.next_batch);
         self.next_batch += 1;
         group
     }
@@ -65,13 +66,14 @@ impl Iterator for Decoder<CoinConfig> {
     }
 }
 
-impl Iterator for Decoder<MessageConfig> {
+impl<R: Borrow<StateConfig>> Iterator for Decoder<R, MessageConfig> {
     type Item = GroupResult<MessageConfig>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        let group = Self::create_batches(self.batch_size, self.state.messages.clone())
-            .into_iter()
-            .nth(self.next_batch);
+        let group =
+            Self::create_batches(self.batch_size, self.source.borrow().messages.clone())
+                .into_iter()
+                .nth(self.next_batch);
         self.next_batch += 1;
         group
     }
@@ -82,13 +84,14 @@ impl Iterator for Decoder<MessageConfig> {
     }
 }
 
-impl Iterator for Decoder<ContractConfig> {
+impl<R: Borrow<StateConfig>> Iterator for Decoder<R, ContractConfig> {
     type Item = GroupResult<ContractConfig>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        let group = Self::create_batches(self.batch_size, self.state.contracts.clone())
-            .into_iter()
-            .nth(self.next_batch);
+        let group =
+            Self::create_batches(self.batch_size, self.source.borrow().contracts.clone())
+                .into_iter()
+                .nth(self.next_batch);
         self.next_batch += 1;
         group
     }
@@ -99,14 +102,16 @@ impl Iterator for Decoder<ContractConfig> {
     }
 }
 
-impl Iterator for Decoder<ContractState> {
+impl<R: Borrow<StateConfig>> Iterator for Decoder<R, ContractState> {
     type Item = GroupResult<ContractState>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        let group =
-            Self::create_batches(self.batch_size, self.state.contract_state.clone())
-                .into_iter()
-                .nth(self.next_batch);
+        let group = Self::create_batches(
+            self.batch_size,
+            self.source.borrow().contract_state.clone(),
+        )
+        .into_iter()
+        .nth(self.next_batch);
         self.next_batch += 1;
         group
     }
@@ -117,14 +122,19 @@ impl Iterator for Decoder<ContractState> {
     }
 }
 
-impl Iterator for Decoder<ContractBalance> {
+impl<R> Iterator for Decoder<R, ContractBalance>
+where
+    R: Borrow<StateConfig>,
+{
     type Item = GroupResult<ContractBalance>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        let group =
-            Self::create_batches(self.batch_size, self.state.contract_balance.clone())
-                .into_iter()
-                .nth(self.next_batch);
+        let group = Self::create_batches(
+            self.batch_size,
+            self.source.borrow().contract_balance.clone(),
+        )
+        .into_iter()
+        .nth(self.next_batch);
         self.next_batch += 1;
         group
     }
@@ -135,4 +145,7 @@ impl Iterator for Decoder<ContractBalance> {
     }
 }
 
-impl<T> GroupDecoder<T> for Decoder<T> where Decoder<T>: Iterator<Item = GroupResult<T>> {}
+impl<R, T> GroupDecoder<T> for Decoder<R, T> where
+    Decoder<R, T>: Iterator<Item = GroupResult<T>>
+{
+}
