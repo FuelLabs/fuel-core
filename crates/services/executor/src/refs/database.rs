@@ -1,5 +1,21 @@
-use std::borrow::Cow;
-use fuel_core_storage::transactional::Transaction;
+use fuel_core_storage::{
+    tables::{
+        ContractsAssets,
+        ContractsInfo,
+        ContractsRawCode,
+        ContractsState,
+    },
+    transactional::Transaction,
+    ContractsAssetsStorage,
+    InterpreterStorage,
+    Mappable,
+    MerkleRoot,
+    MerkleRootStorage,
+    StorageInspect,
+    StorageMutate,
+    StorageRead,
+    StorageSize,
+};
 use fuel_core_types::{
     blockchain::{
         header::ConsensusHeader,
@@ -16,9 +32,10 @@ use fuel_core_types::{
     services::txpool::TransactionStatus,
     tai64::Tai64,
 };
-use std::ops::DerefMut;
-use fuel_core_storage::{ContractsAssetsStorage, InterpreterStorage, Mappable, MerkleRoot, MerkleRootStorage, StorageInspect, StorageMutate, StorageRead, StorageSize};
-use fuel_core_storage::tables::{ContractsAssets, ContractsInfo, ContractsRawCode, ContractsState};
+use std::{
+    borrow::Cow,
+    ops::DerefMut,
+};
 
 pub trait ExecutorDatabaseTrait<D> {
     type T: Transaction<D> + DerefMut<Target = D> + 'static;
@@ -93,8 +110,8 @@ impl<D> ContractsAssetsStorage for ExecutorVmDatabase<D> where
 }
 
 impl<D, M: Mappable> StorageMutate<M> for ExecutorVmDatabase<D>
-    where
-        D: StorageMutate<M, Error = StorageError>,
+where
+    D: StorageMutate<M, Error = StorageError>,
 {
     fn insert(
         &mut self,
@@ -110,8 +127,8 @@ impl<D, M: Mappable> StorageMutate<M> for ExecutorVmDatabase<D>
 }
 
 impl<D, M: Mappable> StorageInspect<M> for ExecutorVmDatabase<D>
-    where
-        D: StorageInspect<M, Error = StorageError>,
+where
+    D: StorageInspect<M, Error = StorageError>,
 {
     type Error = StorageError;
 
@@ -125,8 +142,8 @@ impl<D, M: Mappable> StorageInspect<M> for ExecutorVmDatabase<D>
 }
 
 impl<D, K, M: Mappable> MerkleRootStorage<K, M> for ExecutorVmDatabase<D>
-    where
-        D: MerkleRootStorage<K, M, Error = StorageError>,
+where
+    D: MerkleRootStorage<K, M, Error = StorageError>,
 {
     fn root(&self, key: &K) -> Result<MerkleRoot, Self::Error> {
         MerkleRootStorage::<K, M>::root(&self.database, key)
@@ -134,8 +151,8 @@ impl<D, K, M: Mappable> MerkleRootStorage<K, M> for ExecutorVmDatabase<D>
 }
 
 impl<D, M: Mappable> StorageRead<M> for ExecutorVmDatabase<D>
-    where
-        D: StorageRead<M, Error = StorageError>,
+where
+    D: StorageRead<M, Error = StorageError>,
 {
     fn read(&self, key: &M::Key, buf: &mut [u8]) -> Result<Option<usize>, Self::Error> {
         StorageRead::<M>::read(&self.database, key, buf)
@@ -150,19 +167,17 @@ impl<D, M: Mappable> StorageRead<M> for ExecutorVmDatabase<D>
 }
 
 impl<D, M: Mappable> StorageSize<M> for ExecutorVmDatabase<D>
-    where
-        D: StorageSize<M, Error = StorageError>,
+where
+    D: StorageSize<M, Error = StorageError>,
 {
     fn size_of_value(&self, key: &M::Key) -> Result<Option<usize>, Self::Error> {
         StorageSize::<M>::size_of_value(&self.database, key)
     }
 }
 
-
 impl<D> InterpreterStorage for ExecutorVmDatabase<D>
-
-    where
-        D: StorageInspect<ContractsInfo, Error = StorageError>
+where
+    D: StorageInspect<ContractsInfo, Error = StorageError>
         + StorageMutate<ContractsInfo, Error = StorageError>
         + StorageInspect<ContractsState, Error = StorageError>
         + MerkleRootStorage<ContractId, ContractsState, Error = StorageError>
@@ -170,17 +185,24 @@ impl<D> InterpreterStorage for ExecutorVmDatabase<D>
         + MerkleRootStorage<ContractId, ContractsAssets, Error = StorageError>
         + FuelBlockTrait<Error = StorageError>
         + FuelStateTrait<Error = StorageError>
-        + StorageRead<ContractsRawCode, Error = StorageError>
-
+        + StorageRead<ContractsRawCode, Error = StorageError>,
 {
     type DataError = StorageError;
 
     fn block_height(&self) -> Result<BlockHeight, Self::DataError> {
-        todo!()
+        Ok(self.current_block_height)
     }
 
-    fn timestamp(&self, _height: BlockHeight) -> Result<Word, Self::DataError> {
-        todo!()
+    fn timestamp(&self, height: BlockHeight) -> Result<Word, Self::DataError> {
+        let timestamp = match height {
+            // panic if $rB is greater than the current block height.
+            height if height > self.current_block_height => {
+                return Err(anyhow::anyhow!("block height too high for timestamp").into())
+            }
+            height if height == self.current_block_height => self.current_timestamp,
+            height => self.database.block_time(&height)?,
+        };
+        Ok(timestamp.0)
     }
 
     fn block_hash(&self, _block_height: BlockHeight) -> Result<Bytes32, Self::DataError> {
@@ -191,15 +213,30 @@ impl<D> InterpreterStorage for ExecutorVmDatabase<D>
         todo!()
     }
 
-    fn merkle_contract_state_range(&self, _id: &ContractId, _start_key: &Bytes32, _range: usize) -> Result<Vec<Option<Cow<Bytes32>>>, Self::DataError> {
+    fn merkle_contract_state_range(
+        &self,
+        _id: &ContractId,
+        _start_key: &Bytes32,
+        _range: usize,
+    ) -> Result<Vec<Option<Cow<Bytes32>>>, Self::DataError> {
         todo!()
     }
 
-    fn merkle_contract_state_insert_range(&mut self, _contract: &ContractId, _start_key: &Bytes32, _values: &[Bytes32]) -> Result<Option<()>, Self::DataError> {
+    fn merkle_contract_state_insert_range(
+        &mut self,
+        _contract: &ContractId,
+        _start_key: &Bytes32,
+        _values: &[Bytes32],
+    ) -> Result<Option<()>, Self::DataError> {
         todo!()
     }
 
-    fn merkle_contract_state_remove_range(&mut self, _contract: &ContractId, _start_key: &Bytes32, _range: usize) -> Result<Option<()>, Self::DataError> {
+    fn merkle_contract_state_remove_range(
+        &mut self,
+        _contract: &ContractId,
+        _start_key: &Bytes32,
+        _range: usize,
+    ) -> Result<Option<()>, Self::DataError> {
         todo!()
     }
 }
