@@ -4,8 +4,7 @@ expression: operation.query
 ---
 query($id: TransactionId!) {
   transaction(id: $id) {
-    gasLimit
-    gasPrice
+    scriptGasLimit
     id
     txPointer
     inputAssetIds
@@ -93,7 +92,6 @@ query($id: TransactionId!) {
       balanceRoot
       stateRoot
     }
-    maturity
     mintAmount
     mintAssetId
     receiptsRoot
@@ -164,6 +162,12 @@ query($id: TransactionId!) {
     }
     script
     scriptData
+    policies {
+      gasPrice
+      maturity
+      witnessLimit
+      maxFee
+    }
     salt
     storageSlots
     bytecodeWitnessIndex

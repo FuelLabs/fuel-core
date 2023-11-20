@@ -37,7 +37,8 @@ pub fn run(c: &mut Criterion) {
     run_group_ref(
         &mut c.benchmark_group("aloc"),
         "aloc",
-        VmBench::new(op::aloc(0x10)),
+        VmBench::new(op::aloc(0x10))
+            .with_prepare_script(vec![op::movi(0x10, (1 << 18) - 1)]),
     );
 
     run_group_ref(
@@ -111,6 +112,16 @@ pub fn run(c: &mut Criterion) {
         "lt",
         VmBench::new(op::lt(0x10, 0x11, 0x12))
             .with_prepare_script(vec![op::movi(0x11, 100000), op::movi(0x12, 27)]),
+    );
+
+    run_group_ref(
+        &mut c.benchmark_group("mldv"),
+        "mldv",
+        VmBench::new(op::mldv(0x10, 0x11, 0x12, 0x13)).with_prepare_script(vec![
+            op::movi(0x11, 123456),
+            op::not(0x12, RegId::ZERO),
+            op::movi(0x13, 234567),
+        ]),
     );
 
     run_group_ref(

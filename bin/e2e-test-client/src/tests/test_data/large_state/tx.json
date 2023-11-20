@@ -1,8 +1,6 @@
 {
   "Script": {
-    "gas_price": 0,
-    "gas_limit": 100000000,
-    "maturity": 0,
+    "script_gas_limit": 1000000,
     "script": [
       144,
       0,
@@ -4100,6 +4098,10 @@
       74,
       162
     ],
+    "policies": {
+      "bits": "GasPrice",
+      "values": [0, 0, 0, 0]
+    },
     "inputs": [
       {
         "Contract": {

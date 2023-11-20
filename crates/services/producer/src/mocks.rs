@@ -42,6 +42,7 @@ use fuel_core_types::{
 use std::{
     borrow::Cow,
     collections::HashMap,
+    ops::Deref,
     sync::{
         Arc,
         Mutex,
@@ -226,7 +227,7 @@ impl BlockProducerDatabase for MockDb {
 
     fn block_header_merkle_root(&self, height: &BlockHeight) -> StorageResult<Bytes32> {
         Ok(Bytes32::new(
-            [u8::try_from(height.as_usize()).expect("Test use small values"); 32],
+            [u8::try_from(*height.deref()).expect("Test use small values"); 32],
         ))
     }
 

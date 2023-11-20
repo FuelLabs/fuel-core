@@ -164,14 +164,18 @@ impl Database {
     where
         S: Iterator<Item = (Bytes32, Bytes32)>,
     {
+        let slots = slots.collect_vec();
+
+        if slots.is_empty() {
+            return Ok(())
+        }
+
         if self
             .storage::<ContractsStateMerkleMetadata>()
             .contains_key(contract_id)?
         {
             return Err(anyhow::anyhow!("The contract state is already initialized").into())
         }
-
-        let slots = slots.collect_vec();
 
         // Keys and values should be original without any modifications.
         // Key is `ContractId` ++ `StorageKey`

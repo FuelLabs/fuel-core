@@ -2,8 +2,6 @@ mod contract;
 mod utils;
 mod vm_set;
 
-use std::time::Duration;
-
 use criterion::{
     black_box,
     criterion_group,
@@ -34,17 +32,18 @@ where
                 instruction,
                 diff,
             } = &mut i;
-            let checkpoint = vm
-                .as_mut()
-                .database_mut()
-                .checkpoint()
-                .expect("Should be able to create a checkpoint");
-            let original_db = core::mem::replace(vm.as_mut().database_mut(), checkpoint);
 
             let clock = quanta::Clock::new();
 
-            let mut total = Duration::ZERO;
+            let mut total = core::time::Duration::ZERO;
             for _ in 0..iters {
+                let original_db = vm.as_mut().database_mut().clone();
+                // Simulates the block production/validation with three levels of database transaction.
+                let block_database_tx = original_db.transaction().as_ref().clone();
+                let tx_database_tx = block_database_tx.transaction().as_ref().clone();
+                let vm_tx_database_tx = tx_database_tx.transaction().as_ref().clone();
+                *vm.as_mut().database_mut() = vm_tx_database_tx;
+
                 let start = black_box(clock.raw());
                 match instruction {
                     Instruction::CALL(call) => {
@@ -59,10 +58,9 @@ where
                 let end = black_box(clock.raw());
                 total += clock.delta(start, end);
                 vm.reset_vm_state(diff);
+                // restore original db
+                *vm.as_mut().database_mut() = original_db;
             }
-
-            // restore original db
-            *vm.as_mut().database_mut() = original_db;
             total
         })
     });
@@ -70,12 +68,12 @@ where
 
 fn vm(c: &mut Criterion) {
     alu::run(c);
-    blockchain::run(c);
     crypto::run(c);
     flow::run(c);
     mem::run(c);
     contract_root(c);
     state_root(c);
+    blockchain::run(c);
 }
 
 criterion_group!(benches, vm);

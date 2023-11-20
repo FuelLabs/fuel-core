@@ -102,7 +102,7 @@ impl ConcreteStorage {
         let tx = Self::dummy_tx();
         let checked_tx = tx
             .into_checked_basic(vm_database.block_height()?, &self.params)
-            .map_err(|e| anyhow::anyhow!(e))?;
+            .map_err(|e| anyhow::anyhow!("{:?}", e))?;
         self.tx
             .get_mut(&id)
             .map(|tx| tx.extend_from_slice(txs))
@@ -135,7 +135,7 @@ impl ConcreteStorage {
 
         let checked_tx = tx
             .into_checked_basic(vm_database.block_height()?, &self.params)
-            .map_err(|e| anyhow::anyhow!(e))?;
+            .map_err(|e| anyhow::anyhow!("{:?}", e))?;
 
         let mut vm = Interpreter::with_storage(vm_database, (&self.params).into());
         vm.transact(checked_tx).map_err(|e| anyhow::anyhow!(e))?;
@@ -372,7 +372,8 @@ impl DapMutation {
         let db = locked.db.get(&id).ok_or("Invalid debugging session ID")?;
 
         let checked_tx = tx
-            .into_checked_basic(db.latest_height()?, &locked.params)?
+            .into_checked_basic(db.latest_height()?, &locked.params)
+            .map_err(|err| anyhow::anyhow!("{:?}", err))?
             .into();
 
         let vm = locked
