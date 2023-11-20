@@ -28,12 +28,7 @@ pub fn run_memory(group: &mut BenchmarkGroup<WallTime>) {
     run(
         "memory/aloc opcode",
         group,
-        [
-            op::movi(0x10, 1000),
-            op::aloc(0x10),
-            op::jmpb(RegId::ZERO, 0),
-        ]
-        .to_vec(),
+        [op::movi(0x10, 0), op::aloc(0x10), op::jmpb(RegId::ZERO, 0)].to_vec(),
         vec![],
     );
 

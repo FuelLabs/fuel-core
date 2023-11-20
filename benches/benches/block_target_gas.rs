@@ -83,7 +83,6 @@ mod block_target_gas_set;
 #[global_allocator]
 static GLOBAL: tikv_jemallocator::Jemalloc = tikv_jemallocator::Jemalloc;
 
-const STATE_SIZE: u64 = 10_000_000;
 const TARGET_BLOCK_GAS_LIMIT: u64 = 1_000_000;
 const BASE: u64 = 100_000;
 
@@ -100,7 +99,7 @@ impl SanityBenchmarkRunnerBuilder {
     /// Creates a factory for benchmarks that share a service with a contract, `contract_id`, pre-
     /// deployed.
     pub fn new_shared(contract_id: ContractId) -> SharedSanityBenchmarkFactory {
-        let state_size = get_state_size();
+        let state_size = crate::utils::get_state_size();
         let (service, rt) = service_with_contract_id(state_size, contract_id);
         let rng = rand::rngs::StdRng::seed_from_u64(2322u64);
         SharedSanityBenchmarkFactory {
@@ -251,7 +250,9 @@ fn run(
                     else {
                         panic!("The execution should fails with out of gas")
                     };
-                assert!(reason.contains("OutOfGas"));
+                if !reason.contains("OutOfGas") {
+                    panic!("The test failed because of {}", reason);
+                }
             }
         })
     });
@@ -342,19 +343,6 @@ fn service_with_contract_id(
         .expect("Unable to start a FuelService");
     service.start().expect("Unable to start the service");
     (service, rt)
-}
-
-fn get_state_size() -> u64 {
-    // Override state size if the env var is set
-    let state_size = std::env::var_os("STATE_SIZE")
-        .map(|value| {
-            let value = value.to_str().unwrap();
-            let value = value.parse::<u64>().unwrap();
-            println!("Overriding state size with {}", value);
-            value
-        })
-        .unwrap_or(STATE_SIZE);
-    state_size
 }
 
 // Runs benchmark for `script` with prepared `service` and specified contract (by `contract_id`) which should be
