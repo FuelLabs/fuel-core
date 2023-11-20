@@ -1,60 +1,29 @@
 #![allow(unused_variables)]
 use crate::{
-    cli::{
-        run::consensus::PoATriggerArgs,
-        DEFAULT_DB_PATH,
-    },
+    cli::{run::consensus::PoATriggerArgs, DEFAULT_DB_PATH},
     FuelService,
 };
-use anyhow::{
-    anyhow,
-    Context,
-};
+use anyhow::{anyhow, Context};
 use clap::Parser;
 use fuel_core::{
     chain_config::{
-        default_consensus_dev_key,
-        ChainConfig,
-        StateConfig,
-        LOCAL_TESTNET,
+        default_consensus_dev_key, BatchReader, ChainConfig, StateConfig, LOCAL_TESTNET,
     },
     database::DatabaseConfig,
     producer::Config as ProducerConfig,
     service::{
-        config::Trigger,
-        Config,
-        DbType,
-        RelayerVerifierConfig,
-        ServiceTrait,
-        VMConfig,
+        config::Trigger, Config, DbType, RelayerVerifierConfig, ServiceTrait, VMConfig,
     },
     txpool::Config as TxPoolConfig,
     types::{
-        blockchain::primitives::SecretKeyWrapper,
-        fuel_tx::ContractId,
-        fuel_vm::SecretKey,
-        secrecy::Secret,
+        blockchain::primitives::SecretKeyWrapper, fuel_tx::ContractId,
+        fuel_vm::SecretKey, secrecy::Secret,
     },
 };
-use pyroscope::{
-    pyroscope::PyroscopeAgentRunning,
-    PyroscopeAgent,
-};
-use pyroscope_pprofrs::{
-    pprof_backend,
-    PprofConfig,
-};
-use std::{
-    env,
-    net,
-    path::PathBuf,
-    str::FromStr,
-};
-use tracing::{
-    info,
-    trace,
-    warn,
-};
+use pyroscope::{pyroscope::PyroscopeAgentRunning, PyroscopeAgent};
+use pyroscope_pprofrs::{pprof_backend, PprofConfig};
+use std::{env, net, path::PathBuf, str::FromStr};
+use tracing::{info, trace, warn};
 
 pub const CONSENSUS_KEY_ENV: &str = "CONSENSUS_KEY_SECRET";
 // Default database cache is 1 GB
@@ -317,12 +286,18 @@ impl Command {
             max_database_cache_size,
         };
 
+        let batch_reader = BatchReader::JSONReader {
+            source: chain_state.clone(),
+            batch_size: 1,
+        };
+
         let config = Config {
             addr,
             api_request_timeout: api_request_timeout.into(),
             db_config,
             chain_config: chain_config.clone(),
             chain_state: chain_state.clone(),
+            snapshot_decoder: batch_reader,
             debug,
             utxo_validation,
             block_production: trigger,

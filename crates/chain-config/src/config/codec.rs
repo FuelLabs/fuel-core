@@ -1,13 +1,15 @@
+mod in_memory;
 mod json;
 mod parquet;
 
 use std::path::{Path, PathBuf};
 
 use ::parquet::basic::{Compression, GzipLevel};
+pub use in_memory::*;
 pub use json::*;
 pub use parquet::*;
 
-use crate::{CoinConfig, ContractConfig, MessageConfig};
+use crate::{ChainConfig, CoinConfig, ContractConfig, MessageConfig, StateConfig};
 
 use super::{contract_balance::ContractBalance, contract_state::ContractState};
 
@@ -21,6 +23,7 @@ type GroupResult<T> = anyhow::Result<Group<T>>;
 pub trait GroupDecoder {
     type GroupItem;
     fn next_group(&mut self) -> Option<GroupResult<Self::GroupItem>>;
+    fn nth_group(&mut self, n: usize) -> Option<GroupResult<Self::GroupItem>>;
 }
 
 pub trait GroupEncoder {
@@ -39,61 +42,76 @@ pub trait GroupEncoder {
 }
 
 pub type DynGroupDecoder<T> = Box<dyn GroupDecoder<GroupItem = T>>;
+
+#[derive(Debug, Clone)]
+pub enum StateSource {
+    InMemory(StateConfig),
+    Snapshot(PathBuf),
+}
+
+#[derive(Debug, Clone)]
 pub struct StateDecoder {
-    snapshot_dir: PathBuf,
     default_batch_size: usize,
+    source: StateSource,
 }
 
 impl StateDecoder {
-    pub fn new(snapshot_dir: impl Into<PathBuf>, json_batch_size: usize) -> Self {
-        let snapshot_dir = snapshot_dir.into();
+    pub fn new(source: StateSource, json_batch_size: usize) -> Self {
         Self {
-            snapshot_dir,
+            source,
             default_batch_size: json_batch_size,
         }
     }
 
     pub fn coins(&self) -> anyhow::Result<DynGroupDecoder<CoinConfig>> {
-        self.json_or_parquet("coins")
+        self.decoder("coins")
     }
 
     pub fn messages(&self) -> anyhow::Result<DynGroupDecoder<MessageConfig>> {
-        self.json_or_parquet("messages")
+        self.decoder("messages")
     }
 
     pub fn contracts(&self) -> anyhow::Result<DynGroupDecoder<ContractConfig>> {
-        self.json_or_parquet("contracts")
+        self.decoder("contracts")
     }
 
     pub fn contract_state(&self) -> anyhow::Result<DynGroupDecoder<ContractState>> {
-        self.json_or_parquet("contract_state")
+        self.decoder("contract_state")
     }
 
     pub fn contract_balance(&self) -> anyhow::Result<DynGroupDecoder<ContractBalance>> {
-        self.json_or_parquet("contract_balance")
+        self.decoder("contract_balance")
     }
 
-    fn json_or_parquet<T>(
-        &self,
-        parquet_filename: &str,
-    ) -> anyhow::Result<DynGroupDecoder<T>>
+    fn decoder<T>(&self, parquet_filename: &str) -> anyhow::Result<DynGroupDecoder<T>>
     where
         T: 'static,
         ParquetBatchReader<std::fs::File, T>: GroupDecoder<GroupItem = T>,
         JsonDecoder<T>: GroupDecoder<GroupItem = T>,
+        in_memory::Decoder<T>: GroupDecoder<GroupItem = T>,
     {
-        let path = self.snapshot_dir.join("state.json");
-        let reader = if path.exists() {
-            let file = std::fs::File::open(path)?;
-            let reader = JsonDecoder::<T>::new(file, self.default_batch_size)?;
-            Box::new(reader) as DynGroupDecoder<T>
-        } else {
-            let path = self
-                .snapshot_dir
-                .join(format!("{parquet_filename}.parquet"));
-            let file = std::fs::File::open(path)?;
-            Box::new(ParquetBatchReader::new(file)?)
+        let reader = match &self.source {
+            StateSource::Snapshot(path) => {
+                let path = path.join("state.json");
+                if path.exists() {
+                    let file = std::fs::File::open(path)?;
+                    let reader = JsonDecoder::<T>::new(file, self.default_batch_size)?;
+                    Box::new(reader) as DynGroupDecoder<T>
+                } else {
+                    let path = path.join(format!("{parquet_filename}.parquet"));
+                    let file = std::fs::File::open(path)?;
+                    Box::new(ParquetBatchReader::new(file)?)
+                }
+            }
+            StateSource::InMemory(state_config) => {
+                let decoder = in_memory::Decoder::<T>::new(
+                    state_config.clone(),
+                    self.default_batch_size,
+                );
+                Box::new(decoder)
+            }
         };
+
         Ok(reader)
     }
 }
@@ -124,11 +142,16 @@ fn json_writer(snapshot_dir: impl AsRef<Path>) -> anyhow::Result<Box<dyn GroupEn
     Ok(Box::new(writer))
 }
 
+// TODO: Optimize for group skipping
 impl<T> Iterator for DynGroupDecoder<T> {
     type Item = anyhow::Result<Group<T>>;
 
     fn next(&mut self) -> Option<Self::Item> {
         self.next_group()
+    }
+
+    fn nth(&mut self, n: usize) -> Option<Self::Item> {
+        self.nth_group(n)
     }
 }
 
@@ -198,7 +221,10 @@ mod tests {
                 write_batches!(ContractBalance, write_contract_balance);
             writer.close().unwrap();
 
-            let state_reader = StateDecoder::new(temp_dir.path(), batch_size);
+            let state_reader = StateDecoder::new(
+                StateSource::Snapshot(temp_dir.path().to_path_buf()),
+                batch_size,
+            );
             assert_batches_identical(&coin_batches, state_reader.coins().unwrap());
             assert_batches_identical(&message_batches, state_reader.messages().unwrap());
             assert_batches_identical(

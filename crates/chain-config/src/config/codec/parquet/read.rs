@@ -16,7 +16,7 @@ use parquet::{
 
 use crate::{
     config::{
-        codec::{Group, GroupDecoder},
+        codec::{Group, GroupDecoder, GroupResult},
         contract_balance::ContractBalance,
         contract_state::ContractState,
     },
@@ -67,6 +67,11 @@ where
         self.group_index += 1;
 
         Some(group)
+    }
+
+    fn nth_group(&mut self, n: usize) -> Option<GroupResult<Self::GroupItem>> {
+        self.group_index = n;
+        self.next_group()
     }
 }
 

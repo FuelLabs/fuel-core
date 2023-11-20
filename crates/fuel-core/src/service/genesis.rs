@@ -1,9 +1,7 @@
-use std::fs::File;
-
 use crate::{database::Database, service::config::Config};
 use anyhow::anyhow;
 use fuel_core_chain_config::{
-    CoinConfig, ContractConfig, GenesisCommitment, MessageConfig,
+    CoinConfig, ContractConfig, DynGroupDecoder, GenesisCommitment, MessageConfig,
 };
 
 use fuel_core_importer::Importer;
@@ -52,14 +50,15 @@ fn import_chain_state(
     config: &Config,
     original_database: &Database,
 ) -> anyhow::Result<()> {
-    let block_height = config.chain_config.height;
+    let block_height = config.chain_config.height.unwrap_or_default();
+
+    let coins_reader = config.snapshot_decoder.coins()?;
+    let mut _coin_roots =
+        import_coin_configs(&original_database, coins_reader, block_height)?;
+
+    _coin_roots.sort();
 
     // TODO: other threads should be killed if one encounters a failure
-    let coins_reader = config.get_coins_reader()?;
-    let handle = tokio::spawn(async move {
-        import_coin_configs(&original_database, coins_reader, block_height).unwrap()
-    });
-
     // let coins_reader = config.get_message_reader()?;
     // let handle = tokio::spawn(
     // async move {
@@ -171,37 +170,46 @@ fn commit_genesis_block(
 }
 
 fn import_coin_configs(
-    mut database: &Database,
-    coins_reader: File,
+    database: &Database,
+    coin_batches: DynGroupDecoder<CoinConfig>,
     block_height: BlockHeight,
-) -> anyhow::Result<()> {
-    let (cursor, root_calculator) =
-        resume_import(database, StateImportProgressKey::Coins)?;
-    let mut state_reader = JsonBatchReader::new(coins_reader, cursor)?;
+) -> anyhow::Result<Vec<Bytes32>> {
+    // let (cursor, root_calculator) =
+    // resume_import(database, StateImportProgressKey::Coins)?;
+    // let mut state_reader = JsonBatchReader::new(coins_reader, cursor)?;
+    let mut roots = vec![];
+    let mut generated_output_idx = 0;
 
-    while let batch = state_reader.read_batch::<CoinConfig>()? {
-        if batch.is_empty() {
-            break;
-        }
-
+    for batch in coin_batches {
         let mut database_transaction = Transactional::transaction(database);
         let database = database_transaction.as_mut();
 
-        // TODO: set output_index
-        batch.iter().try_for_each(|coin| {
-            let root = init_coin(database, coin, cursor as u64, block_height)?;
-            root_calculator.push(root.as_slice());
+        // TODO
+        let batch = batch.unwrap();
 
+        // TODO: set output_index
+        batch.data.iter().try_for_each(|coin| {
+            let root  = init_coin(database, coin, generated_output_idx, block_height)?;
+            roots.push(root.into());
+
+            generated_output_idx = generated_output_idx
+                .checked_add(1)
+                .expect("The maximum number of UTXOs supported in the genesis configuration has been exceeded.");
+
+            /*
             save_import_progress(
                 database,
                 StateImportProgressKey::Coins,
                 cursor + 1, // TODO: advance by # bytes read
                 root_calculator,
-            )
+            ) */
+            Ok::<(), anyhow::Error>(())
         })?;
+
+        database_transaction.commit()?;
     }
 
-    Ok(())
+    Ok(roots)
 }
 
 fn init_coin(
@@ -251,7 +259,7 @@ fn init_coin(
     coin.root()
 }
 
-fn init_contract(
+fn _init_contract(
     db: &mut Database,
     contract_config: ContractConfig,
     output_index: u64,
@@ -330,7 +338,7 @@ fn init_contract(
     Ok(())
 }
 
-fn init_contract_state(
+fn _init_contract_state(
     db: &mut Database,
     contract_id: &ContractId,
     contract: &ContractConfig,
@@ -342,7 +350,7 @@ fn init_contract_state(
     Ok(())
 }
 
-fn init_contract_balance(
+fn _init_contract_balance(
     db: &mut Database,
     contract_id: &ContractId,
     contract: &ContractConfig,
@@ -354,7 +362,7 @@ fn init_contract_balance(
     Ok(())
 }
 
-fn init_da_message(db: &mut Database, msg: MessageConfig) -> anyhow::Result<MerkleRoot> {
+fn _init_da_message(db: &mut Database, msg: MessageConfig) -> anyhow::Result<MerkleRoot> {
     let message = Message {
         sender: msg.sender,
         recipient: msg.recipient,
@@ -474,7 +482,7 @@ mod tests {
                 ..ChainConfig::local_testnet()
             },
             chain_state: StateConfig {
-                coins: Some(vec![
+                coins: vec![
                     CoinConfig {
                         tx_id: Some(alice_tx_id),
                         output_index: Some(alice_output_index),
@@ -495,7 +503,7 @@ mod tests {
                         amount: bob_value,
                         asset_id: asset_id_bob,
                     },
-                ]),
+                ],
                 ..Default::default()
             },
             ..Config::local_node()
@@ -554,7 +562,7 @@ mod tests {
         let service_config = Config {
             chain_config: ChainConfig::local_testnet(),
             chain_state: StateConfig {
-                contracts: Some(vec![ContractConfig {
+                contracts: vec![ContractConfig {
                     contract_id,
                     code: contract.into(),
                     salt,
@@ -564,7 +572,7 @@ mod tests {
                     output_index: Some(rng.gen()),
                     tx_pointer_block_height: Some(0u32.into()),
                     tx_pointer_tx_idx: Some(rng.gen()),
-                }]),
+                }],
                 ..Default::default()
             },
             ..Config::local_node()
@@ -600,7 +608,7 @@ mod tests {
         };
 
         config.chain_state = StateConfig {
-            messages: Some(vec![msg.clone()]),
+            messages: vec![msg.clone()],
             ..Default::default()
         };
 
@@ -635,7 +643,7 @@ mod tests {
         let service_config = Config {
             chain_config: ChainConfig::local_testnet(),
             chain_state: StateConfig {
-                contracts: Some(vec![ContractConfig {
+                contracts: vec![ContractConfig {
                     contract_id,
                     code: contract.into(),
                     salt,
@@ -645,7 +653,7 @@ mod tests {
                     output_index: None,
                     tx_pointer_block_height: None,
                     tx_pointer_tx_idx: None,
-                }]),
+                }],
                 ..Default::default()
             },
             ..Config::local_node()
@@ -674,7 +682,7 @@ mod tests {
                 ..ChainConfig::local_testnet()
             },
             chain_state: StateConfig {
-                coins: Some(vec![CoinConfig {
+                coins: vec![CoinConfig {
                     tx_id: None,
                     output_index: None,
                     // set txpointer height > genesis height
@@ -684,7 +692,7 @@ mod tests {
                     owner: Default::default(),
                     amount: 10,
                     asset_id: Default::default(),
-                }]),
+                }],
                 ..Default::default()
             },
             ..Config::local_node()
@@ -712,7 +720,7 @@ mod tests {
                 ..ChainConfig::local_testnet()
             },
             chain_state: StateConfig {
-                contracts: Some(vec![ContractConfig {
+                contracts: vec![ContractConfig {
                     contract_id: Default::default(),
                     code: contract.into(),
                     salt,
@@ -723,7 +731,7 @@ mod tests {
                     // set txpointer height > genesis height
                     tx_pointer_block_height: Some(BlockHeight::from(11u32)),
                     tx_pointer_tx_idx: Some(0),
-                }]),
+                }],
                 ..Default::default()
             },
             ..Config::local_node()
