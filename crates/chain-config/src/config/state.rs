@@ -1,41 +1,27 @@
 use fuel_core_storage::Result as StorageResult;
 use fuel_core_types::{
     fuel_tx::UtxoId,
-    fuel_types::{
-        Address,
-        BlockHeight,
-    },
+    fuel_types::{Address, BlockHeight},
     fuel_vm::SecretKey,
 };
 
 #[cfg(feature = "std")]
-use bech32::{
-    ToBase32,
-    Variant::Bech32m,
-};
+use bech32::{ToBase32, Variant::Bech32m};
 #[cfg(feature = "std")]
 use core::str::FromStr;
 #[cfg(feature = "std")]
 use fuel_core_types::fuel_types::Bytes32;
 #[cfg(feature = "std")]
 use itertools::Itertools;
-use serde::{
-    Deserialize,
-    Serialize,
-};
-use serde_with::{
-    serde_as,
-    skip_serializing_none,
-};
+use serde::{Deserialize, Serialize};
 #[cfg(feature = "std")]
 use std::fs::File;
 #[cfg(feature = "std")]
 use std::path::Path;
 
 use super::{
-    coin::CoinConfig,
-    contract::ContractConfig,
-    message::MessageConfig,
+    coin::CoinConfig, contract::ContractConfig, contract_balance::ContractBalance,
+    contract_state::ContractState, message::MessageConfig,
 };
 
 // Fuel Network human-readable part for bech32 encoding
@@ -52,17 +38,18 @@ pub const TESTNET_WALLET_SECRETS: [&str; 5] = [
 
 pub const CHAIN_STATE_FILENAME: &str = "chain_state.json";
 
-// TODO: do streaming deserialization to handle large state configs
-#[serde_as]
-#[skip_serializing_none]
 #[derive(Clone, Debug, Default, Deserialize, Serialize, Eq, PartialEq)]
 pub struct StateConfig {
     /// Spendable coins
-    pub coins: Option<Vec<CoinConfig>>,
-    /// Contract state
-    pub contracts: Option<Vec<ContractConfig>>,
+    pub coins: Vec<CoinConfig>,
     /// Messages from Layer 1
-    pub messages: Option<Vec<MessageConfig>>,
+    pub messages: Vec<MessageConfig>,
+    /// Contract state
+    pub contracts: Vec<ContractConfig>,
+    /// State entries of all contracts
+    pub contract_state: Vec<ContractState>,
+    /// Balance entries of all contracts
+    pub contract_balance: Vec<ContractBalance>,
 }
 
 impl StateConfig {
@@ -70,10 +57,43 @@ impl StateConfig {
     where
         T: ChainConfigDb,
     {
+        let coins = db.get_coin_config()?.unwrap_or_default();
+        let messages = db.get_message_config()?.unwrap_or_default();
+        let contracts = db.get_contract_config()?.unwrap_or_default();
+
+        let contract_state = contracts
+            .iter()
+            .flat_map(|contract_config| {
+                let contract_id: Bytes32 = (*contract_config.contract_id).into();
+                contract_config.state.as_ref().into_iter().flatten().map(
+                    move |(key, value)| ContractState {
+                        contract_id,
+                        key: *key,
+                        value: *value,
+                    },
+                )
+            })
+            .collect();
+        let contract_balance = contracts
+            .iter()
+            .flat_map(|contract_config| {
+                let contract_id: Bytes32 = (*contract_config.contract_id).into();
+                contract_config.balances.as_ref().into_iter().flatten().map(
+                    move |(asset_id, amount)| ContractBalance {
+                        contract_id,
+                        asset_id: *asset_id,
+                        amount: *amount,
+                    },
+                )
+            })
+            .collect();
+
         Ok(StateConfig {
-            coins: db.get_coin_config()?,
-            contracts: db.get_contract_config()?,
-            messages: db.get_message_config()?,
+            coins,
+            messages,
+            contracts,
+            contract_state,
+            contract_balance,
         })
     }
 
@@ -106,7 +126,7 @@ impl StateConfig {
     pub fn local_testnet() -> Self {
         // endow some preset accounts with an initial balance
         tracing::info!("Initial Accounts");
-        let initial_coins = TESTNET_WALLET_SECRETS
+        let coins = TESTNET_WALLET_SECRETS
             .into_iter()
             .map(|secret| {
                 let secret = SecretKey::from_str(secret).expect("Expected valid secret");
@@ -126,7 +146,7 @@ impl StateConfig {
             .collect_vec();
 
         Self {
-            coins: Some(initial_coins),
+            coins,
             ..StateConfig::default()
         }
     }
@@ -135,7 +155,7 @@ impl StateConfig {
     pub fn random_testnet() -> Self {
         tracing::info!("Initial Accounts");
         let mut rng = rand::thread_rng();
-        let initial_coins = (0..5)
+        let coins = (0..5)
             .map(|_| {
                 let secret = SecretKey::random(&mut rng);
                 let address = Address::from(*secret.public_key().hash());
@@ -154,7 +174,7 @@ impl StateConfig {
             .collect_vec();
 
         Self {
-            coins: Some(initial_coins),
+            coins,
             ..StateConfig::default()
         }
     }
@@ -195,28 +215,13 @@ mod tests {
     use fuel_core_types::{
         blockchain::primitives::DaBlockHeight,
         fuel_asm::op,
-        fuel_tx::{
-            TxPointer,
-            UtxoId,
-        },
-        fuel_types::{
-            AssetId,
-            Bytes32,
-        },
+        fuel_tx::{TxPointer, UtxoId},
+        fuel_types::{AssetId, Bytes32},
         fuel_vm::Contract,
     };
-    use rand::{
-        rngs::StdRng,
-        Rng,
-        RngCore,
-        SeedableRng,
-    };
+    use rand::{rngs::StdRng, Rng, RngCore, SeedableRng};
 
-    use crate::{
-        CoinConfig,
-        ContractConfig,
-        MessageConfig,
-    };
+    use crate::{CoinConfig, ContractConfig, MessageConfig};
 
     #[cfg(feature = "std")]
     use std::env::temp_dir;
@@ -383,7 +388,7 @@ mod tests {
         let contract = Contract::from(op::ret(0x10).to_bytes().to_vec());
 
         StateConfig {
-            contracts: Some(vec![ContractConfig {
+            contracts: vec![ContractConfig {
                 contract_id: Default::default(),
                 code: contract.into(),
                 salt: Default::default(),
@@ -393,7 +398,7 @@ mod tests {
                 output_index: utxo_id.map(|utxo_id| utxo_id.output_index()),
                 tx_pointer_block_height: tx_pointer.map(|p| p.block_height()),
                 tx_pointer_tx_idx: tx_pointer.map(|p| p.tx_index()),
-            }]),
+            }],
             ..Default::default()
         }
     }
@@ -410,7 +415,7 @@ mod tests {
         let asset_id = rng.gen();
 
         StateConfig {
-            coins: Some(vec![CoinConfig {
+            coins: vec![CoinConfig {
                 tx_id,
                 output_index,
                 tx_pointer_block_height: block_created,
@@ -419,7 +424,7 @@ mod tests {
                 owner,
                 amount,
                 asset_id,
-            }]),
+            }],
             ..Default::default()
         }
     }
@@ -428,14 +433,14 @@ mod tests {
         let mut rng = StdRng::seed_from_u64(1);
 
         StateConfig {
-            messages: Some(vec![MessageConfig {
+            messages: vec![MessageConfig {
                 sender: rng.gen(),
                 recipient: rng.gen(),
                 nonce: rng.gen(),
                 amount: rng.gen(),
                 data: vec![rng.gen()],
                 da_height: DaBlockHeight(rng.gen()),
-            }]),
+            }],
             ..Default::default()
         }
     }

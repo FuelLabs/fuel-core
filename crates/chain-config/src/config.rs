@@ -7,7 +7,6 @@ mod contract_balance;
 mod contract_state;
 mod message;
 mod state;
-mod state_importer;
 
 #[cfg(all(test, feature = "random"))]
 pub(crate) fn random_bytes_32(rng: &mut impl rand::Rng) -> [u8; 32] {

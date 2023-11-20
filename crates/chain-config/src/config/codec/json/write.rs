@@ -5,20 +5,18 @@ use crate::{
         codec::GroupEncoder, contract_balance::ContractBalance,
         contract_state::ContractState,
     },
-    CoinConfig, ContractConfig, MessageConfig,
+    CoinConfig, ContractConfig, MessageConfig, StateConfig,
 };
-
-use super::chain_state::ChainState;
 
 pub struct JsonBatchWriter<W> {
     sink: W,
-    temp_storage: ChainState,
+    temp_storage: StateConfig,
 }
 
 impl<W> JsonBatchWriter<W> {
     pub(crate) fn new(sink: W) -> Self {
         Self {
-            temp_storage: ChainState {
+            temp_storage: StateConfig {
                 coins: vec![],
                 messages: vec![],
                 contracts: vec![],

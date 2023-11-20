@@ -8,13 +8,11 @@ use crate::{
         contract_balance::ContractBalance,
         contract_state::ContractState,
     },
-    CoinConfig, ContractConfig, MessageConfig,
+    CoinConfig, ContractConfig, MessageConfig, StateConfig,
 };
 
-use super::chain_state::ChainState;
-
 pub struct JsonDecoder<T> {
-    state: ChainState,
+    state: StateConfig,
     data: PhantomData<T>,
     batch_size: usize,
     next_batch: usize,

@@ -45,79 +45,56 @@ pub struct StateDecoder {
 }
 
 impl StateDecoder {
-    pub fn new(snapshot_dir: impl Into<PathBuf>, default_batch_size: usize) -> Self {
+    pub fn new(snapshot_dir: impl Into<PathBuf>, json_batch_size: usize) -> Self {
         let snapshot_dir = snapshot_dir.into();
         Self {
             snapshot_dir,
-            default_batch_size,
+            default_batch_size: json_batch_size,
         }
     }
 
-    fn json_reader<T>(&self) -> anyhow::Result<Option<DynGroupDecoder<T>>>
+    pub fn coins(&self) -> anyhow::Result<DynGroupDecoder<CoinConfig>> {
+        self.json_or_parquet("coins")
+    }
+
+    pub fn messages(&self) -> anyhow::Result<DynGroupDecoder<MessageConfig>> {
+        self.json_or_parquet("messages")
+    }
+
+    pub fn contracts(&self) -> anyhow::Result<DynGroupDecoder<ContractConfig>> {
+        self.json_or_parquet("contracts")
+    }
+
+    pub fn contract_state(&self) -> anyhow::Result<DynGroupDecoder<ContractState>> {
+        self.json_or_parquet("contract_state")
+    }
+
+    pub fn contract_balance(&self) -> anyhow::Result<DynGroupDecoder<ContractBalance>> {
+        self.json_or_parquet("contract_balance")
+    }
+
+    fn json_or_parquet<T>(
+        &self,
+        parquet_filename: &str,
+    ) -> anyhow::Result<DynGroupDecoder<T>>
     where
         T: 'static,
+        ParquetBatchReader<std::fs::File, T>: GroupDecoder<GroupItem = T>,
         JsonDecoder<T>: GroupDecoder<GroupItem = T>,
     {
         let path = self.snapshot_dir.join("state.json");
         let reader = if path.exists() {
             let file = std::fs::File::open(path)?;
             let reader = JsonDecoder::<T>::new(file, self.default_batch_size)?;
-            Some(Box::new(reader) as DynGroupDecoder<T>)
+            Box::new(reader) as DynGroupDecoder<T>
         } else {
-            None
+            let path = self
+                .snapshot_dir
+                .join(format!("{parquet_filename}.parquet"));
+            let file = std::fs::File::open(path)?;
+            Box::new(ParquetBatchReader::new(file)?)
         };
-
         Ok(reader)
-    }
-
-    fn parquet_reader<T>(&self, filename: &str) -> anyhow::Result<DynGroupDecoder<T>>
-    where
-        T: 'static,
-        ParquetBatchReader<std::fs::File, T>: GroupDecoder<GroupItem = T>,
-    {
-        let path = self.snapshot_dir.join(format!("{filename}.parquet"));
-        let file = std::fs::File::open(path)?;
-        Ok(Box::new(ParquetBatchReader::new(file)?))
-    }
-
-    pub fn coins(&self) -> anyhow::Result<DynGroupDecoder<CoinConfig>> {
-        if let Some(reader) = self.json_reader()? {
-            Ok(reader)
-        } else {
-            self.parquet_reader("coins")
-        }
-    }
-
-    pub fn messages(&self) -> anyhow::Result<DynGroupDecoder<MessageConfig>> {
-        if let Some(reader) = self.json_reader()? {
-            Ok(reader)
-        } else {
-            self.parquet_reader("messages")
-        }
-    }
-
-    pub fn contracts(&self) -> anyhow::Result<DynGroupDecoder<ContractConfig>> {
-        if let Some(reader) = self.json_reader()? {
-            Ok(reader)
-        } else {
-            self.parquet_reader("contracts")
-        }
-    }
-
-    pub fn contract_state(&self) -> anyhow::Result<DynGroupDecoder<ContractState>> {
-        if let Some(reader) = self.json_reader()? {
-            Ok(reader)
-        } else {
-            self.parquet_reader("contract_state")
-        }
-    }
-
-    pub fn contract_balance(&self) -> anyhow::Result<DynGroupDecoder<ContractBalance>> {
-        if let Some(reader) = self.json_reader()? {
-            Ok(reader)
-        } else {
-            self.parquet_reader("contract_balance")
-        }
     }
 }
 
