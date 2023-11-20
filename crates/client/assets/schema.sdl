@@ -386,6 +386,8 @@ type GasCosts {
 	swwq: DependentCost!
 	contractRoot: DependentCost!
 	stateRoot: DependentCost!
+	vmInitialization: U64!
+	newStoragePerByte: U64!
 }
 
 type Genesis {
@@ -653,6 +655,13 @@ type PoAConsensus {
 	signature: Signature!
 }
 
+type Policies {
+	gasPrice: U64
+	witnessLimit: U64
+	maturity: U32
+	maxFee: U64
+}
+
 type PredicateParameters {
 	maxPredicateLength: U64!
 	maxPredicateDataLength: U64!
@@ -850,8 +859,9 @@ type Transaction {
 	inputAssetIds: [AssetId!]
 	inputContracts: [Contract!]
 	inputContract: InputContract
+	policies: Policies
 	gasPrice: U64
-	gasLimit: U64
+	scriptGasLimit: U64
 	maturity: U32
 	mintAmount: U64
 	mintAssetId: AssetId

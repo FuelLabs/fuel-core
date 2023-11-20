@@ -27,8 +27,6 @@ use std::time::Duration;
 
 use super::topics::{
     GossipTopic,
-    CON_VOTE_GOSSIP_TOPIC,
-    NEW_BLOCK_GOSSIP_TOPIC,
     NEW_TX_GOSSIP_TOPIC,
 };
 
@@ -52,12 +50,6 @@ const MESH_SIZE: usize = 8;
 
 // The weight applied to the score for delivering new transactions.
 const NEW_TX_GOSSIP_WEIGHT: f64 = 0.05;
-
-// The weight applied to the score for delivering new blocks.
-const NEW_BLOCK_GOSSIP_WEIGHT: f64 = 0.05;
-
-// The weight applied to the score for delivering consensus votes.
-const CON_VOTE_GOSSIP_WEIGHT: f64 = 0.05;
 
 // The threshold for a peer's score to be considered for greylisting.
 // If a peer's score falls below this value, they will be greylisted.
@@ -238,11 +230,7 @@ fn initialize_gossipsub(gossipsub: &mut Gossipsub, p2p_config: &Config) {
         .with_peer_score(peer_score_params, peer_score_thresholds)
         .expect("gossipsub initialized with peer score");
 
-    let topics = vec![
-        (NEW_TX_GOSSIP_TOPIC, NEW_TX_GOSSIP_WEIGHT),
-        (NEW_BLOCK_GOSSIP_TOPIC, NEW_BLOCK_GOSSIP_WEIGHT),
-        (CON_VOTE_GOSSIP_TOPIC, CON_VOTE_GOSSIP_WEIGHT),
-    ];
+    let topics = vec![(NEW_TX_GOSSIP_TOPIC, NEW_TX_GOSSIP_WEIGHT)];
 
     // subscribe to gossipsub topics with the network name suffix
     for (topic, weight) in topics {

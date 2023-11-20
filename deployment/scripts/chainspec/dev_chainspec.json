@@ -34,7 +34,7 @@
     },
     "fee_params": {
       "gas_price_factor": 1000000000,
-      "gas_per_byte": 4
+      "gas_per_byte": 63
     },
     "chain_id": 0,
     "gas_costs": {
@@ -240,7 +240,9 @@
           "base": 412,
           "units_per_gas": 1
         }
-      }
+      },
+      "new_storage_per_byte": 100,
+      "vm_initialization": 2000
     },
     "base_asset_id": "0000000000000000000000000000000000000000000000000000000000000000"
   },

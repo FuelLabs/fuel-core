@@ -46,12 +46,6 @@ pub struct P2PArgs {
     #[arg(requires_if(IsPresent, "enable_p2p"))]
     pub keypair: Option<KeypairArg>,
 
-    /// The name of the p2p Network
-    #[clap(long = "network", env)]
-    #[arg(required_if_eq("enable_p2p", "true"))]
-    #[arg(requires_if(IsPresent, "enable_p2p"))]
-    pub network: Option<String>,
-
     /// p2p network's IP Address
     #[clap(long = "address", env)]
     pub address: Option<IpAddr>,
@@ -236,6 +230,7 @@ impl From<SyncArgs> for fuel_core::sync::Config {
 impl P2PArgs {
     pub fn into_config(
         self,
+        network_name: String,
         metrics: bool,
     ) -> anyhow::Result<Option<Config<NotInitialized>>> {
         if !self.enable_p2p {
@@ -290,7 +285,7 @@ impl P2PArgs {
 
         let config = Config {
             keypair: local_keypair,
-            network_name: self.network.expect("mandatory value"),
+            network_name,
             checksum: Default::default(),
             address: self
                 .address

@@ -32,54 +32,33 @@ where
                 instruction,
                 diff,
             } = &mut i;
-            let checkpoint = vm
-                .as_mut()
-                .database_mut()
-                .checkpoint()
-                .expect("Should be able to create a checkpoint");
-            let original_db = core::mem::replace(vm.as_mut().database_mut(), checkpoint);
 
-            let final_time;
-            loop {
-                // Measure the total time to revert the VM to the initial state.
-                // It should always do the same things regardless of the number of
-                // iterations because we use a `diff` from the `VmBenchPrepared` initialization.
-                let start = std::time::Instant::now();
-                for _ in 0..iters {
-                    vm.reset_vm_state(diff);
-                }
-                let time_to_reset = start.elapsed();
+            let clock = quanta::Clock::new();
 
-                let start = std::time::Instant::now();
-                for _ in 0..iters {
-                    match instruction {
-                        Instruction::CALL(call) => {
-                            let (ra, rb, rc, rd) = call.unpack();
-                            vm.prepare_call(ra, rb, rc, rd).unwrap();
-                        }
-                        _ => {
-                            black_box(vm.instruction(*instruction).unwrap());
-                        }
+            let mut total = core::time::Duration::ZERO;
+            for _ in 0..iters {
+                let original_db = vm.as_mut().database_mut().clone();
+                let database_tx = original_db.transaction().as_ref().clone();
+                *vm.as_mut().database_mut() = database_tx;
+
+                let start = black_box(clock.raw());
+                match instruction {
+                    Instruction::CALL(call) => {
+                        let (ra, rb, rc, rd) = call.unpack();
+                        black_box(vm.prepare_call(ra, rb, rc, rd)).unwrap();
                     }
-                    vm.reset_vm_state(diff);
+                    _ => {
+                        black_box(vm.instruction(*instruction).unwrap());
+                    }
                 }
-                let only_instruction = start.elapsed().checked_sub(time_to_reset);
-
-                // It may overflow when the benchmarks run in an unstable environment.
-                // If the hardware is busy during the measuring time to reset the VM,
-                // it will produce `time_to_reset` more than the actual time
-                // to run the instruction and reset the VM.
-                if let Some(result) = only_instruction {
-                    final_time = result;
-                    break
-                } else {
-                    println!("The environment is unstable. Rerunning the benchmark.");
-                }
+                black_box(&vm);
+                let end = black_box(clock.raw());
+                total += clock.delta(start, end);
+                vm.reset_vm_state(diff);
+                // restore original db
+                *vm.as_mut().database_mut() = original_db;
             }
-
-            // restore original db
-            *vm.as_mut().database_mut() = original_db;
-            final_time
+            total
         })
     });
 }

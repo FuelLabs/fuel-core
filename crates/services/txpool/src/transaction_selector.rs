@@ -80,7 +80,7 @@ mod tests {
 
         let fee_params = FeeParameters {
             gas_price_factor: 1,
-            ..FeeParameters::default()
+            gas_per_byte: 0,
         };
 
         let mut txs = txs
@@ -91,7 +91,7 @@ mod tests {
                     vec![],
                 )
                 .gas_price(tx_gas.price)
-                .gas_limit(tx_gas.limit)
+                .script_gas_limit(tx_gas.limit)
                 .add_unsigned_coin_input(
                     SecretKey::random(&mut rng),
                     rng.gen(),
@@ -118,7 +118,7 @@ mod tests {
         select_transactions(txs.into_iter(), block_gas_limit)
             .into_iter()
             .map(|tx| TxGas {
-                limit: tx.limit(),
+                limit: tx.script_gas_limit().unwrap_or_default(),
                 price: tx.price(),
             })
             .collect()
@@ -132,33 +132,30 @@ mod tests {
 
     #[rstest::rstest]
     #[test]
-    #[case(1000, vec![])]
-    #[case(2500, vec![TxGas { price: 5, limit: 1000 }])]
-    #[case(5000, vec![
-        TxGas { price: 5, limit: 1000 },
-        TxGas { price: 2, limit: 1000 }])
-    ]
-    #[case(7500, vec![
+    #[case(999, vec![])]
+    #[case(1000, vec![TxGas { price: 5, limit: 1000 }])]
+    #[case(2500, vec![TxGas { price: 5, limit: 1000 }, TxGas { price: 2, limit: 1000 }])]
+    #[case(4000, vec![
         TxGas { price: 5, limit: 1000 },
         TxGas { price: 4, limit: 3000 }
     ])]
-    #[case(10_000, vec![
+    #[case(5000, vec![
         TxGas { price: 5, limit: 1000 },
         TxGas { price: 4, limit: 3000 },
-        TxGas { price: 2, limit: 1000 }
-    ])]
-    #[case(12_500, vec![
+        TxGas { price: 2, limit: 1000 }])
+    ]
+    #[case(6_000, vec![
         TxGas { price: 5, limit: 1000 },
         TxGas { price: 4, limit: 3000 },
         TxGas { price: 3, limit: 2000 }
     ])]
-    #[case(15_000, vec![
+    #[case(7_000, vec![
         TxGas { price: 5, limit: 1000 },
         TxGas { price: 4, limit: 3000 },
         TxGas { price: 3, limit: 2000 },
         TxGas { price: 2, limit: 1000 }
     ])]
-    #[case(17_500, vec![
+    #[case(8_000, vec![
         TxGas { price: 5, limit: 1000 },
         TxGas { price: 4, limit: 3000 },
         TxGas { price: 3, limit: 2000 },

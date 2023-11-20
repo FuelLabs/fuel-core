@@ -141,4 +141,36 @@ pub fn run(c: &mut Criterion) {
         );
     }
     mem_meq.finish();
+
+    let full_mask = (1 << 24) - 1;
+
+    // poph
+    let prepare_script = vec![op::pshh(full_mask)];
+    run_group_ref(
+        &mut c.benchmark_group("poph"),
+        "poph",
+        VmBench::new(op::poph(full_mask)).with_prepare_script(prepare_script),
+    );
+
+    // popl
+    let prepare_script = vec![op::pshl(full_mask)];
+    run_group_ref(
+        &mut c.benchmark_group("popl"),
+        "popl",
+        VmBench::new(op::popl(full_mask)).with_prepare_script(prepare_script),
+    );
+
+    // pshh
+    run_group_ref(
+        &mut c.benchmark_group("pshh"),
+        "pshh",
+        VmBench::new(op::pshh(full_mask)),
+    );
+
+    // pshl
+    run_group_ref(
+        &mut c.benchmark_group("pshl"),
+        "pshl",
+        VmBench::new(op::pshl(full_mask)),
+    );
 }
