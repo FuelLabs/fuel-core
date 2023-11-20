@@ -2,14 +2,30 @@ pub mod in_memory;
 pub mod json;
 pub mod parquet;
 
-use std::fmt::Debug;
-use std::path::{Path, PathBuf};
+use std::{
+    fmt::Debug,
+    path::{
+        Path,
+        PathBuf,
+    },
+};
 
-use ::parquet::basic::{Compression, GzipLevel};
+use ::parquet::basic::{
+    Compression,
+    GzipLevel,
+};
 
-use crate::{CoinConfig, ContractConfig, MessageConfig, StateConfig};
+use crate::{
+    CoinConfig,
+    ContractConfig,
+    MessageConfig,
+    StateConfig,
+};
 
-use super::{contract_balance::ContractBalance, contract_state::ContractState};
+use super::{
+    contract_balance::ContractBalance,
+    contract_state::ContractState,
+};
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct Group<T> {

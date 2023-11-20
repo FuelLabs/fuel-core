@@ -1,17 +1,33 @@
 use clap::ValueEnum;
 use fuel_core_chain_config::{
-    default_consensus_dev_key, ChainConfig, StateConfig, StateDecoder,
+    default_consensus_dev_key,
+    ChainConfig,
+    StateConfig,
+    StateDecoder,
 };
-use fuel_core_types::{blockchain::primitives::SecretKeyWrapper, secrecy::Secret};
+use fuel_core_types::{
+    blockchain::primitives::SecretKeyWrapper,
+    secrecy::Secret,
+};
 use std::{
-    net::{Ipv4Addr, SocketAddr},
+    net::{
+        Ipv4Addr,
+        SocketAddr,
+    },
     sync::Arc,
     time::Duration,
 };
-use strum_macros::{Display, EnumString, EnumVariantNames};
+use strum_macros::{
+    Display,
+    EnumString,
+    EnumVariantNames,
+};
 
 #[cfg(feature = "p2p")]
-use fuel_core_p2p::config::{Config as P2PConfig, NotInitialized};
+use fuel_core_p2p::config::{
+    Config as P2PConfig,
+    NotInitialized,
+};
 
 #[cfg(feature = "relayer")]
 use fuel_core_relayer::Config as RelayerConfig;

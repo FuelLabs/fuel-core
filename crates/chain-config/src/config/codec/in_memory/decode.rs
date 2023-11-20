@@ -1,14 +1,24 @@
-use std::{borrow::Borrow, marker::PhantomData};
+use std::{
+    borrow::Borrow,
+    marker::PhantomData,
+};
 
 use itertools::Itertools;
 
 use crate::{
     config::{
-        codec::{Group, GroupResult},
+        codec::{
+            Group,
+            GroupResult,
+        },
         contract_balance::ContractBalance,
         contract_state::ContractState,
     },
-    CoinConfig, ContractConfig, GroupDecoder, MessageConfig, StateConfig,
+    CoinConfig,
+    ContractConfig,
+    GroupDecoder,
+    MessageConfig,
+    StateConfig,
 };
 
 pub struct Decoder<R, T> {

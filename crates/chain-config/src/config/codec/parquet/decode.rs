@@ -1,26 +1,49 @@
 use std::marker::PhantomData;
 
-use anyhow::{anyhow, bail, Context};
+use anyhow::{
+    anyhow,
+    bail,
+    Context,
+};
 use fuel_core_types::{
     blockchain::primitives::DaBlockHeight,
-    fuel_types::{Address, AssetId, BlockHeight, Bytes32, ContractId, Nonce},
+    fuel_types::{
+        Address,
+        AssetId,
+        BlockHeight,
+        Bytes32,
+        ContractId,
+        Nonce,
+    },
     fuel_vm::Salt,
 };
 use parquet::{
     file::{
-        reader::{ChunkReader, FileReader},
+        reader::{
+            ChunkReader,
+            FileReader,
+        },
         serialized_reader::SerializedFileReader,
     },
-    record::{Field, Row},
+    record::{
+        Field,
+        Row,
+    },
 };
 
 use crate::{
     config::{
-        codec::{Group, GroupDecoder, GroupResult},
+        codec::{
+            Group,
+            GroupDecoder,
+            GroupResult,
+        },
         contract_balance::ContractBalance,
         contract_state::ContractState,
     },
-    CoinConfig, ContractConfig, MessageConfig,
+    CoinConfig,
+    ContractConfig,
+    MessageConfig,
 };
 
 pub struct Decoder<R: ChunkReader, T> {

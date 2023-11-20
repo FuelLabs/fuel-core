@@ -1,5 +1,8 @@
 use crate::{
-    config::codec::{GroupDecoder, GroupResult},
+    config::codec::{
+        GroupDecoder,
+        GroupResult,
+    },
     in_memory::Decoder as InMemoryDecoder,
     StateConfig,
 };

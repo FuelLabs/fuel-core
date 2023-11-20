@@ -2,10 +2,14 @@ use std::io::Write;
 
 use crate::{
     config::{
-        codec::StateEncoder, contract_balance::ContractBalance,
+        codec::StateEncoder,
+        contract_balance::ContractBalance,
         contract_state::ContractState,
     },
-    CoinConfig, ContractConfig, MessageConfig, StateConfig,
+    CoinConfig,
+    ContractConfig,
+    MessageConfig,
+    StateConfig,
 };
 
 use crate::in_memory::Encoder as InMemoryEncoder;

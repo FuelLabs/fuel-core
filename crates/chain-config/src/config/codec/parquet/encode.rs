@@ -1,22 +1,36 @@
 use anyhow::anyhow;
-use std::{io::Write, sync::Arc};
+use std::{
+    io::Write,
+    sync::Arc,
+};
 
 use itertools::Itertools;
 use parquet::{
     basic::Compression,
-    data_type::{ByteArrayType, FixedLenByteArrayType, Int32Type, Int64Type},
+    data_type::{
+        ByteArrayType,
+        FixedLenByteArrayType,
+        Int32Type,
+        Int64Type,
+    },
     file::{
         properties::WriterProperties,
-        writer::{SerializedColumnWriter, SerializedFileWriter},
+        writer::{
+            SerializedColumnWriter,
+            SerializedFileWriter,
+        },
     },
 };
 
 use crate::{
     config::{
-        codec::StateEncoder, contract_balance::ContractBalance,
+        codec::StateEncoder,
+        contract_balance::ContractBalance,
         contract_state::ContractState,
     },
-    CoinConfig, ContractConfig, MessageConfig,
+    CoinConfig,
+    ContractConfig,
+    MessageConfig,
 };
 
 use super::schema::Schema;

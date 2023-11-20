@@ -1,6 +1,14 @@
 use fuel_core::{
-    chain_config::{ChainConfig, CoinConfig, ContractConfig, StateConfig},
-    service::{Config, FuelService},
+    chain_config::{
+        ChainConfig,
+        CoinConfig,
+        ContractConfig,
+        StateConfig,
+    },
+    service::{
+        Config,
+        FuelService,
+    },
 };
 use fuel_core_client::client::FuelClient;
 use fuel_core_poa::Trigger;
@@ -8,14 +16,24 @@ use fuel_core_types::{
     fuel_asm::op,
     fuel_tx::{
         field::Inputs,
-        input::coin::{CoinPredicate, CoinSigned},
+        input::coin::{
+            CoinPredicate,
+            CoinSigned,
+        },
         *,
     },
     fuel_types::BlockHeight,
 };
 use itertools::Itertools;
-use rand::{rngs::StdRng, Rng, SeedableRng};
-use std::{collections::HashMap, io};
+use rand::{
+    rngs::StdRng,
+    Rng,
+    SeedableRng,
+};
+use std::{
+    collections::HashMap,
+    io,
+};
 
 /// Helper for wrapping a currently running node environment
 pub struct TestContext {

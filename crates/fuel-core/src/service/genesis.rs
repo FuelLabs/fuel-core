@@ -1,33 +1,65 @@
-use crate::{database::Database, service::config::Config};
+use crate::{
+    database::Database,
+    service::config::Config,
+};
 use anyhow::anyhow;
 use fuel_core_chain_config::{
-    CoinConfig, ContractConfig, DynGroupDecoder, GenesisCommitment, MessageConfig,
+    CoinConfig,
+    ContractConfig,
+    DynGroupDecoder,
+    GenesisCommitment,
+    MessageConfig,
 };
 
 use fuel_core_importer::Importer;
 use fuel_core_storage::{
     tables::{
-        Coins, ContractsInfo, ContractsLatestUtxo, ContractsRawCode, FuelBlocks, Messages,
+        Coins,
+        ContractsInfo,
+        ContractsLatestUtxo,
+        ContractsRawCode,
+        FuelBlocks,
+        Messages,
     },
     transactional::Transactional,
-    MerkleRoot, StorageAsMut,
+    MerkleRoot,
+    StorageAsMut,
 };
 use fuel_core_types::{
     blockchain::{
         block::Block,
-        consensus::{Consensus, Genesis},
-        header::{ApplicationHeader, ConsensusHeader, PartialBlockHeader},
+        consensus::{
+            Consensus,
+            Genesis,
+        },
+        header::{
+            ApplicationHeader,
+            ConsensusHeader,
+            PartialBlockHeader,
+        },
         primitives::Empty,
         SealedBlock,
     },
     entities::{
-        coins::coin::CompressedCoin, contract::ContractUtxoInfo, message::Message,
+        coins::coin::CompressedCoin,
+        contract::ContractUtxoInfo,
+        message::Message,
     },
     fuel_merkle::binary,
-    fuel_tx::{Contract, TxPointer, UtxoId},
-    fuel_types::{bytes::WORD_SIZE, BlockHeight, Bytes32, ContractId},
+    fuel_tx::{
+        Contract,
+        TxPointer,
+        UtxoId,
+    },
+    fuel_types::{
+        bytes::WORD_SIZE,
+        BlockHeight,
+        Bytes32,
+        ContractId,
+    },
     services::block_importer::{
-        ImportResult, UncommittedResult as UncommittedImportResult,
+        ImportResult,
+        UncommittedResult as UncommittedImportResult,
     },
 };
 use itertools::Itertools;
@@ -387,19 +419,40 @@ fn _init_da_message(db: &mut Database, msg: MessageConfig) -> anyhow::Result<Mer
 mod tests {
     use super::*;
 
-    use crate::service::{config::Config, FuelService};
-    use fuel_core_chain_config::{ChainConfig, CoinConfig, MessageConfig, StateConfig};
+    use crate::service::{
+        config::Config,
+        FuelService,
+    };
+    use fuel_core_chain_config::{
+        ChainConfig,
+        CoinConfig,
+        MessageConfig,
+        StateConfig,
+    };
     use fuel_core_storage::{
-        tables::{ContractsAssets, ContractsState},
+        tables::{
+            ContractsAssets,
+            ContractsState,
+        },
         StorageAsRef,
     };
     use fuel_core_types::{
         blockchain::primitives::DaBlockHeight,
         entities::coins::coin::Coin,
         fuel_asm::op,
-        fuel_types::{Address, AssetId, BlockHeight, Salt},
+        fuel_types::{
+            Address,
+            AssetId,
+            BlockHeight,
+            Salt,
+        },
     };
-    use rand::{rngs::StdRng, Rng, RngCore, SeedableRng};
+    use rand::{
+        rngs::StdRng,
+        Rng,
+        RngCore,
+        SeedableRng,
+    };
     use std::vec;
 
     #[tokio::test]

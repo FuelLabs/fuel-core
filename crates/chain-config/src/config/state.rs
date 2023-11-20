@@ -1,27 +1,39 @@
 use fuel_core_storage::Result as StorageResult;
 use fuel_core_types::{
     fuel_tx::UtxoId,
-    fuel_types::{Address, BlockHeight},
+    fuel_types::{
+        Address,
+        BlockHeight,
+    },
     fuel_vm::SecretKey,
 };
 
 #[cfg(feature = "std")]
-use bech32::{ToBase32, Variant::Bech32m};
+use bech32::{
+    ToBase32,
+    Variant::Bech32m,
+};
 #[cfg(feature = "std")]
 use core::str::FromStr;
 #[cfg(feature = "std")]
 use fuel_core_types::fuel_types::Bytes32;
 #[cfg(feature = "std")]
 use itertools::Itertools;
-use serde::{Deserialize, Serialize};
+use serde::{
+    Deserialize,
+    Serialize,
+};
 #[cfg(feature = "std")]
 use std::fs::File;
 #[cfg(feature = "std")]
 use std::path::Path;
 
 use super::{
-    coin::CoinConfig, contract::ContractConfig, contract_balance::ContractBalance,
-    contract_state::ContractState, message::MessageConfig,
+    coin::CoinConfig,
+    contract::ContractConfig,
+    contract_balance::ContractBalance,
+    contract_state::ContractState,
+    message::MessageConfig,
 };
 
 // Fuel Network human-readable part for bech32 encoding
@@ -256,13 +268,28 @@ mod tests {
     use fuel_core_types::{
         blockchain::primitives::DaBlockHeight,
         fuel_asm::op,
-        fuel_tx::{TxPointer, UtxoId},
-        fuel_types::{AssetId, Bytes32},
+        fuel_tx::{
+            TxPointer,
+            UtxoId,
+        },
+        fuel_types::{
+            AssetId,
+            Bytes32,
+        },
         fuel_vm::Contract,
     };
-    use rand::{rngs::StdRng, Rng, RngCore, SeedableRng};
+    use rand::{
+        rngs::StdRng,
+        Rng,
+        RngCore,
+        SeedableRng,
+    };
 
-    use crate::{CoinConfig, ContractConfig, MessageConfig};
+    use crate::{
+        CoinConfig,
+        ContractConfig,
+        MessageConfig,
+    };
 
     #[cfg(feature = "std")]
     use std::env::temp_dir;
