@@ -24,6 +24,7 @@ use fuel_core_types::{
         interpreter::{
             diff,
             InterpreterParams,
+            ReceiptsCtx,
         },
         *,
     },
@@ -69,10 +70,10 @@ impl From<Vec<u8>> for ContractCode {
 }
 
 pub struct PrepareCall {
-    ra: RegId,
-    rb: RegId,
-    rc: RegId,
-    rd: RegId,
+    pub ra: RegId,
+    pub rb: RegId,
+    pub rc: RegId,
+    pub rd: RegId,
 }
 
 pub struct VmBench {
@@ -92,6 +93,7 @@ pub struct VmBench {
     pub prepare_call: Option<PrepareCall>,
     pub dummy_contract: Option<ContractId>,
     pub contract_code: Option<ContractCode>,
+    pub receipts_ctx: Option<ReceiptsCtx>,
 }
 
 #[derive(Debug, Clone)]
@@ -130,6 +132,7 @@ impl VmBench {
             prepare_call: None,
             dummy_contract: None,
             contract_code: None,
+            receipts_ctx: None,
         }
     }
 
@@ -207,7 +210,6 @@ impl VmBench {
         self.db.replace(db);
         self
     }
-
     pub fn with_params(mut self, params: ConsensusParameters) -> Self {
         self.params = params;
         self
@@ -277,6 +279,11 @@ impl VmBench {
         self
     }
 
+    pub fn with_call_receipts(mut self, receipts_ctx: ReceiptsCtx) -> Self {
+        self.receipts_ctx = Some(receipts_ctx);
+        self
+    }
+
     pub fn with_dummy_contract(mut self, dummy_contract: ContractId) -> Self {
         self.dummy_contract.replace(dummy_contract);
         self
@@ -313,6 +320,7 @@ impl TryFrom<VmBench> for VmBenchPrepared {
             prepare_call,
             dummy_contract,
             contract_code,
+            receipts_ctx,
         } = case;
 
         let mut db = db.unwrap_or_else(new_db);
@@ -416,6 +424,10 @@ impl TryFrom<VmBench> for VmBenchPrepared {
         txtor.transact(tx);
 
         let mut vm: Interpreter<_, _> = txtor.into();
+
+        if let Some(receipts_ctx) = receipts_ctx {
+            *vm.receipts_mut() = receipts_ctx;
+        }
 
         if let Some(p) = prepare_call {
             let PrepareCall { ra, rb, rc, rd } = p;

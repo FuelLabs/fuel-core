@@ -6,10 +6,16 @@ use fuel_core_types::{
         Instruction,
         RegId,
     },
+    fuel_tx,
     fuel_types::{
         RegisterId,
         Word,
     },
+    fuel_vm::interpreter::ReceiptsCtx,
+};
+use rand::{
+    rngs::StdRng,
+    Rng,
 };
 
 pub const STATE_SIZE: u64 = 10_000_000;
@@ -69,4 +75,25 @@ pub fn set_full_word(r: RegisterId, v: Word) -> Vec<Instruction> {
     }
     ops.pop().unwrap(); // Remove last shift
     ops
+}
+
+const BENCH_RECEIPTS: usize = (u16::MAX - 1) as usize;
+
+/// Testing receipt context
+#[allow(dead_code)] // Unsure why this is needed, as the code is used
+pub fn make_receipts(rng: &mut StdRng) -> ReceiptsCtx {
+    let mut ctx = ReceiptsCtx::default();
+    for _ in 0..BENCH_RECEIPTS {
+        ctx.push(fuel_tx::Receipt::Log {
+            id: rng.gen(),
+            ra: rng.gen(),
+            rb: rng.gen(),
+            rc: rng.gen(),
+            rd: rng.gen(),
+            pc: rng.gen(),
+            is: rng.gen(),
+        })
+        .expect("Context should not be full");
+    }
+    ctx
 }
