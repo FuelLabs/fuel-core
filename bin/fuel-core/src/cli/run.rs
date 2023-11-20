@@ -7,7 +7,7 @@ use anyhow::{anyhow, Context};
 use clap::Parser;
 use fuel_core::{
     chain_config::{
-        default_consensus_dev_key, BatchReader, ChainConfig, StateConfig, LOCAL_TESTNET,
+        default_consensus_dev_key, ChainConfig, StateConfig, StateDecoder, LOCAL_TESTNET,
     },
     database::DatabaseConfig,
     producer::Config as ProducerConfig,
@@ -228,8 +228,14 @@ impl Command {
             _ => {
                 let chain_conf = ChainConfig::load_from_directory(&chain_config)?;
                 let chain_state = StateConfig::load_from_directory(&chain_config)?;
+
                 (chain_conf, chain_state)
             }
+        };
+
+        let state_decoder = StateDecoder::InMemory {
+            state: chain_state.clone(),
+            group_size: 1,
         };
 
         #[cfg(feature = "relayer")]
@@ -286,18 +292,13 @@ impl Command {
             max_database_cache_size,
         };
 
-        let batch_reader = BatchReader::JSONReader {
-            source: chain_state.clone(),
-            batch_size: 1,
-        };
-
         let config = Config {
             addr,
             api_request_timeout: api_request_timeout.into(),
             db_config,
             chain_config: chain_config.clone(),
             chain_state: chain_state.clone(),
-            snapshot_decoder: batch_reader,
+            snapshot_decoder: state_decoder,
             debug,
             utxo_validation,
             block_production: trigger,

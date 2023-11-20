@@ -99,15 +99,56 @@ impl StateConfig {
 
     #[cfg(feature = "std")]
     pub fn load_from_directory(path: impl AsRef<Path>) -> Result<Self, anyhow::Error> {
-        let path = path.as_ref().join(CHAIN_STATE_FILENAME);
+        use crate::StateDecoder;
 
-        let contents = std::fs::read(&path)?;
-        serde_json::from_slice(&contents).map_err(|e| {
-            anyhow::Error::new(e).context(format!(
-                "an error occurred while loading the chain state file: {:?}",
-                path.to_str()
-            ))
+        let path = path.as_ref().join(CHAIN_STATE_FILENAME);
+        let decoder = StateDecoder::detect_state_encoding(path, 1);
+
+        let coins = decoder
+            .coins()?
+            .map_ok(|group| group.data)
+            .flatten_ok()
+            .try_collect()?;
+
+        let messages = decoder
+            .messages()?
+            .map_ok(|group| group.data)
+            .flatten_ok()
+            .try_collect()?;
+
+        let contracts = decoder
+            .contracts()?
+            .map_ok(|group| group.data)
+            .flatten_ok()
+            .try_collect()?;
+
+        let contract_state = decoder
+            .contract_state()?
+            .map_ok(|group| group.data)
+            .flatten_ok()
+            .try_collect()?;
+
+        let contract_balance = decoder
+            .contract_balance()?
+            .map_ok(|group| group.data)
+            .flatten_ok()
+            .try_collect()?;
+
+        Ok(Self {
+            coins,
+            messages,
+            contracts,
+            contract_state,
+            contract_balance,
         })
+
+        // let contents = std::fs::read(&path)?;
+        // serde_json::from_slice(&contents).map_err(|e| {
+        //     anyhow::Error::new(e).context(format!(
+        //         "an error occurred while loading the chain state file: {:?}",
+        //         path.to_str()
+        //     ))
+        // })
     }
 
     #[cfg(feature = "std")]

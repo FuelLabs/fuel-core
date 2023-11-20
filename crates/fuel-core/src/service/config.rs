@@ -1,10 +1,11 @@
 use clap::ValueEnum;
 use fuel_core_chain_config::{
-    default_consensus_dev_key, ChainConfig, ParquetStateDecoder, StateConfig,
+    default_consensus_dev_key, ChainConfig, StateConfig, StateDecoder,
 };
 use fuel_core_types::{blockchain::primitives::SecretKeyWrapper, secrecy::Secret};
 use std::{
     net::{Ipv4Addr, SocketAddr},
+    sync::Arc,
     time::Duration,
 };
 use strum_macros::{Display, EnumString, EnumVariantNames};
@@ -26,7 +27,7 @@ pub struct Config {
     pub db_config: DatabaseConfig,
     pub chain_config: ChainConfig,
     pub chain_state: StateConfig,
-    pub snapshot_decoder: ParquetStateDecoder,
+    pub snapshot_decoder: StateDecoder,
     /// When `true`:
     /// - Enables manual block production.
     /// - Enables debugger endpoint.
@@ -61,9 +62,9 @@ impl Config {
     pub fn local_node() -> Self {
         let chain_config = ChainConfig::local_testnet();
         let chain_state = StateConfig::local_testnet();
-        let batch_reader = BatchReader::JSONReader {
-            source: chain_state.clone(),
-            batch_size: 1,
+        let state_decoder = StateDecoder::InMemory {
+            state: chain_state.clone(),
+            group_size: 1,
         };
 
         let utxo_validation = false;
@@ -86,7 +87,7 @@ impl Config {
             debug: true,
             chain_config: chain_config.clone(),
             chain_state: chain_state.clone(),
-            snapshot_decoder: batch_reader,
+            snapshot_decoder: state_decoder,
             block_production: Trigger::Instant,
             vm: Default::default(),
             utxo_validation,
