@@ -8,7 +8,21 @@ mod genesis;
 mod serialization;
 
 pub use config::*;
-use fuel_core_types::fuel_vm::SecretKey;
+use fuel_core_types::{
+    fuel_asm::{
+        op,
+        GTFArgs,
+        RegId,
+    },
+    fuel_tx::{
+        Address,
+        OutputRepr,
+    },
+    fuel_vm::{
+        CallFrame,
+        SecretKey,
+    },
+};
 pub use genesis::GenesisCommitment;
 
 /// A default secret key to use for testing purposes only
@@ -24,4 +38,35 @@ pub fn default_consensus_dev_key() -> SecretKey {
         0x9d, 0x32, 0x7a, 0x2e, 0x9d, 0xdb,
     ];
     SecretKey::try_from(bytes.as_slice()).expect("valid key")
+}
+
+pub fn generate_fee_collection_contract(address: Address) -> Vec<u8> {
+    let asm = vec![
+        // // obtain the output type of tx.output[0]
+        // op::gtf(0x10, GTFArgs::OutputType, 0),
+        // // store the expected output type for a variable output in the next register.
+        // op::movi(0x11, OutputRepr::Variable as u32),
+        // // panic if tx.outputs[0].type != OutputType.Variable
+        // op::eq(0x12, 0x11, 0x10),
+        // op::jnzf(0x12, RegId::ZERO, 1),
+        // op::rvrt(1),
+        // Pointer to AssetID memory address in call frame param a
+        op::addi(0x10, RegId::FP, CallFrame::a_offset() as u16),
+        // pointer to the withdrawal address embedded after the contract bytecode
+        op::addi(
+            0x11,
+            RegId::IS,
+            7, // update when number of opcodes changes
+        ),
+        // get the balance of asset ID in the contract
+        op::bal(0x11, 0x10, RegId::FP),
+        // if balance > 0, withdraw
+        op::eq(0x12, 0x11, RegId::ZERO),
+        op::jnzf(0x12, RegId::ZERO, 1),
+        op::tro(0, 0, 0x11, 0x10),
+        // return
+        op::ret(RegId::ONE),
+    ];
+
+    Default::default()
 }
