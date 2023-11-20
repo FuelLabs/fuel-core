@@ -12,6 +12,21 @@ use fuel_core_types::{
     },
 };
 
+pub const STATE_SIZE: u64 = 10_000_000;
+
+pub fn get_state_size() -> u64 {
+    // Override state size if the env var is set
+    let state_size = std::env::var_os("STATE_SIZE")
+        .map(|value| {
+            let value = value.to_str().unwrap();
+            let value = value.parse::<u64>().unwrap();
+            println!("Overriding state size with {}", value);
+            value
+        })
+        .unwrap_or(STATE_SIZE);
+    state_size
+}
+
 /// Allocates a byte array from heap and initializes it. Then points `reg` to it.
 fn aloc_bytearray<const S: usize>(reg: u8, v: [u8; S]) -> Vec<Instruction> {
     let mut ops = vec![op::movi(reg, S as u32), op::aloc(reg)];
