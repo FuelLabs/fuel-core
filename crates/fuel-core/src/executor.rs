@@ -1,10 +1,6 @@
-use crate::database::{
-    vm_database::VmDatabase,
-};
-
 use fuel_core_executor::{
+    refs::ContractRef,
     Config,
-    refs::ContractRef
 };
 use fuel_core_storage::{
     tables::{
@@ -20,7 +16,6 @@ use fuel_core_storage::{
         StorageTransaction,
         Transaction as StorageTransactionTrait,
     },
-    InterpreterStorage,
     MerkleRootStorage,
     StorageAsMut,
     StorageAsRef,
@@ -125,7 +120,11 @@ use fuel_core_types::{
 
 use fuel_core_storage::Error as StorageError;
 
-use fuel_core_executor::refs::{ExecutorDatabaseTrait, TxIdOwnerRecorder};
+use fuel_core_executor::refs::{
+    ExecutorDatabaseTrait,
+    ExecutorVmDatabase,
+    TxIdOwnerRecorder,
+};
 use fuel_core_storage::tables::{
     ContractsAssets,
     ContractsState,
@@ -147,7 +146,10 @@ use fuel_core_types::{
 use parking_lot::Mutex as ParkingMutex;
 use std::{
     borrow::Cow,
-    ops::DerefMut,
+    ops::{
+        Deref,
+        DerefMut,
+    },
     sync::Arc,
 };
 use tracing::{
@@ -241,9 +243,7 @@ impl From<&Config> for ExecutionOptions {
 impl<R, D> Executor<R, D>
 where
     R: RelayerPort + Clone,
-    VmDatabase<D>: InterpreterStorage,
     D: ExecutorDatabaseTrait<D>
-
         + StorageMutate<FuelBlocks>
         + StorageInspect<FuelBlocks, Error = StorageError>
         + StorageInspect<Receipts, Error = StorageError>
@@ -269,8 +269,19 @@ where
         + StorageInspect<ContractsState, Error = StorageError>
         + StorageInspect<Receipts, Error = StorageError>
         + StorageMutate<Receipts>
-    + TxIdOwnerRecorder<Error = fuel_core_database::Error>
-,
+        + TxIdOwnerRecorder<Error = fuel_core_database::Error>
+        + StorageInspect<fuel_core_storage::tables::ContractsInfo, Error = StorageError>
+        + StorageMutate<fuel_core_storage::tables::ContractsInfo, Error = StorageError>
+        + StorageInspect<ContractsState, Error = StorageError>
+        + MerkleRootStorage<ContractId, ContractsState, Error = StorageError>
+        + StorageMutate<fuel_core_storage::tables::ContractsRawCode, Error = StorageError>
+        + fuel_core_storage::StorageRead<
+            fuel_core_storage::tables::ContractsRawCode,
+            Error = StorageError,
+        > + MerkleRootStorage<ContractId, ContractsAssets, Error = StorageError>
+        + fuel_core_executor::refs::FuelBlockTrait<Error = StorageError>
+        + fuel_core_executor::refs::FuelStateTrait<Error = StorageError>
+        + crate::database::vm_database::DatabaseIteratorsTrait,
 {
     #[cfg(any(test, feature = "test-helpers"))]
     /// Executes the block and commits the result of the execution into the inner `Database`.
@@ -312,9 +323,7 @@ impl<D: Clone> Executor<D, D> {
 impl<R, D> Executor<R, D>
 where
     R: RelayerPort + Clone,
-    VmDatabase<D>: InterpreterStorage,
     D: ExecutorDatabaseTrait<D>
-
         + StorageMutate<FuelBlocks>
         + StorageInspect<FuelBlocks, Error = StorageError>
         + StorageInspect<Receipts, Error = StorageError>
@@ -337,9 +346,19 @@ where
         + StorageInspect<ContractsState, Error = StorageError>
         + StorageInspect<Receipts, Error = StorageError>
         + StorageMutate<Receipts>
-    + TxIdOwnerRecorder<Error = fuel_core_database::Error>
-
-,
+        + TxIdOwnerRecorder<Error = fuel_core_database::Error>
+        + StorageInspect<fuel_core_storage::tables::ContractsInfo, Error = StorageError>
+        + StorageMutate<fuel_core_storage::tables::ContractsInfo, Error = StorageError>
+        + StorageInspect<ContractsState, Error = StorageError>
+        + MerkleRootStorage<ContractId, ContractsState, Error = StorageError>
+        + StorageMutate<fuel_core_storage::tables::ContractsRawCode, Error = StorageError>
+        + fuel_core_storage::StorageRead<
+            fuel_core_storage::tables::ContractsRawCode,
+            Error = StorageError,
+        > + MerkleRootStorage<ContractId, ContractsAssets, Error = StorageError>
+        + fuel_core_executor::refs::FuelBlockTrait<Error = StorageError>
+        + fuel_core_executor::refs::FuelStateTrait<Error = StorageError>
+        + crate::database::vm_database::DatabaseIteratorsTrait,
 {
     pub fn execute_without_commit<TxSource>(
         &self,
@@ -442,13 +461,13 @@ mod private {
         }
     }
 }
+
 use crate::fuel_core_graphql_api::ports::DatabaseMessages;
 use private::*;
 
 impl<R, D> Executor<R, D>
 where
     R: RelayerPort + Clone,
-    VmDatabase<D>: InterpreterStorage,
     D: Clone
         + ExecutorDatabaseTrait<D>
         + StorageInspect<FuelBlocks, Error = StorageError>
@@ -469,9 +488,19 @@ where
         + StorageInspect<ContractsState, Error = StorageError>
         + StorageInspect<Receipts, Error = StorageError>
         + StorageMutate<Receipts>
-    + TxIdOwnerRecorder<Error = fuel_core_database::Error>
-
-,
+        + TxIdOwnerRecorder<Error = fuel_core_database::Error>
+        + StorageInspect<fuel_core_storage::tables::ContractsInfo, Error = StorageError>
+        + StorageMutate<fuel_core_storage::tables::ContractsInfo, Error = StorageError>
+        + StorageInspect<ContractsState, Error = StorageError>
+        + MerkleRootStorage<ContractId, ContractsState, Error = StorageError>
+        + StorageMutate<fuel_core_storage::tables::ContractsRawCode, Error = StorageError>
+        + fuel_core_storage::StorageRead<
+            fuel_core_storage::tables::ContractsRawCode,
+            Error = StorageError,
+        > + MerkleRootStorage<ContractId, ContractsAssets, Error = StorageError>
+        + fuel_core_executor::refs::FuelBlockTrait<Error = StorageError>
+        + fuel_core_executor::refs::FuelStateTrait<Error = StorageError>
+        + crate::database::vm_database::DatabaseIteratorsTrait,
 {
     #[tracing::instrument(skip_all)]
     fn execute_inner<TxSource>(
@@ -895,12 +924,13 @@ where
             )?;
 
             let mut sub_block_db_commit = block_db_transaction.transaction(); // Todo check and solve this
-            // let sub_db_view = sub_block_db_commit.as_mut();
-            let mut vm_db: VmDatabase<&mut D> = VmDatabase::new(
+                                                                              // let sub_db_view = sub_block_db_commit.as_mut();
+            let mut vm_db = ExecutorVmDatabase::new(
                 sub_block_db_commit.deref_mut(),
                 &header.consensus,
                 self.config.coinbase_recipient,
             );
+
             fuel_vm::interpreter::contract::balance_increase(
                 &mut vm_db,
                 &mint.input_contract().contract_id,
@@ -1028,17 +1058,18 @@ where
         // Todo check this Emir
         // execute transaction
         // setup database view that only lives for the duration of vm execution
-        let mut sub_block_db_commit: <D as ExecutorDatabaseTrait<D>>::T =
-            tx_db_transaction.transaction();
-        let sub_db_view = (*sub_block_db_commit.deref_mut()).clone();
+        let mut sub_block_db_commit = tx_db_transaction.transaction();
+        let sub_db_view = sub_block_db_commit.deref().clone();
         // execution vm
-        let vm_db = VmDatabase::new(
+
+        let vm_db = ExecutorVmDatabase::new(
             sub_db_view,
             &header.consensus,
             self.config.coinbase_recipient,
         );
+
         let mut vm = Interpreter::with_storage(
-            vm_db,
+            vm_db.into(),
             InterpreterParams::from(&self.config.consensus_parameters),
         );
         let vm_result: StateTransition<_> = vm
@@ -1094,7 +1125,11 @@ where
         }
 
         // change the spent status of the tx inputs
-        self.spend_input_utxos(tx.inputs(), tx_db_transaction.transaction().deref_mut(), reverted)?; // Todo Check this Emir
+        self.spend_input_utxos(
+            tx.inputs(),
+            tx_db_transaction.transaction().deref_mut(),
+            reverted,
+        )?; // Todo Check this Emir
 
         // Persist utxos first and after calculate the not utxo outputs
         self.persist_output_utxos(
@@ -1129,13 +1164,11 @@ where
 
         // Store tx into the block db transaction
 
-
         <D as StorageMutate<Transactions>>::insert(
             tx_db_transaction.transaction().deref_mut(),
             &tx_id,
-            &final_tx
-    )?;
-
+            &final_tx,
+        )?;
 
         // tx_db_transaction
         //     .deref_mut()
@@ -1143,7 +1176,11 @@ where
         //     .insert(&tx_id, &final_tx)?;
 
         // persist receipts
-        self.persist_receipts(&tx_id, &receipts, tx_db_transaction.transaction().deref_mut())?;
+        self.persist_receipts(
+            &tx_id,
+            &receipts,
+            tx_db_transaction.transaction().deref_mut(),
+        )?;
 
         let status = if reverted {
             self.log_backtrace(&vm, &receipts);
@@ -1613,7 +1650,7 @@ where
     /// Log a VM backtrace if configured to do so
     fn log_backtrace<Tx>(
         &self,
-        vm: &Interpreter<VmDatabase<D>, Tx>,
+        vm: &Interpreter<ExecutorVmDatabase<D>, Tx>,
         receipts: &[Receipt],
     ) {
         if self.config.backtrace {
@@ -1839,12 +1876,7 @@ where
         owners.dedup();
 
         for owner in owners {
-            db.record_tx_id_owner(
-                owner,
-                block_height,
-                tx_idx,
-                tx_id,
-            )?;
+            db.record_tx_id_owner(owner, block_height, tx_idx, tx_id)?;
         }
 
         Ok(())

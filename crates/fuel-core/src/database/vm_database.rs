@@ -192,6 +192,7 @@ pub trait DatabaseIteratorsTrait {
 }
 
 use fuel_core_executor::refs::{
+    ExecutorVmDatabase,
     FuelBlockTrait,
     FuelStateTrait,
 };
@@ -199,6 +200,17 @@ use fuel_core_storage::tables::{
     ContractsInfo,
     ContractsRawCode,
 };
+
+impl<D> From<ExecutorVmDatabase<D>> for VmDatabase<D> {
+    fn from(muda: ExecutorVmDatabase<D>) -> Self {
+        VmDatabase {
+            current_block_height: muda.current_block_height,
+            current_timestamp: muda.current_timestamp,
+            coinbase: muda.coinbase,
+            database: muda.database,
+        }
+    }
+}
 
 impl<D> InterpreterStorage for VmDatabase<D>
 where

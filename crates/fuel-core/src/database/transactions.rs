@@ -1,4 +1,10 @@
-use crate::database::{storage::DatabaseColumn, Column, Database, Result as DatabaseResult, DatabaseError};
+use crate::database::{
+    storage::DatabaseColumn,
+    Column,
+    Database,
+    DatabaseError,
+    Result as DatabaseResult,
+};
 use fuel_core_executor::refs::TxIdOwnerRecorder;
 use fuel_core_storage::{
     iter::IterDirection,
@@ -41,8 +47,12 @@ impl TxIdOwnerRecorder for Database {
         self.record_tx_id_owner(owner, block_height, tx_idx, tx_id)
     }
 
-    fn update_tx_status(&self, id: &Bytes32, status: TransactionStatus) -> Result<Option<TransactionStatus>, Self::Error> {
-        self.update_tx_status(id,status)
+    fn update_tx_status(
+        &self,
+        id: &Bytes32,
+        status: TransactionStatus,
+    ) -> Result<Option<TransactionStatus>, Self::Error> {
+        self.update_tx_status(id, status)
     }
 }
 

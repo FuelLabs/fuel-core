@@ -92,7 +92,9 @@ pub struct VmBench {
     pub prepare_call: Option<PrepareCall>,
     pub dummy_contract: Option<ContractId>,
     pub contract_code: Option<ContractCode>,
-    pub prepare_db: Option<Box<dyn FnMut(VmDatabase<Database>) -> anyhow::Result<VmDatabase<Database>>>>,
+    pub prepare_db: Option<
+        Box<dyn FnMut(VmDatabase<Database>) -> anyhow::Result<VmDatabase<Database>>>,
+    >,
 }
 
 #[derive(Debug, Clone)]

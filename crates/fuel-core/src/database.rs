@@ -456,7 +456,7 @@ impl AsRef<Database> for Database {
 
 impl AsMut<Database> for Database {
     fn as_mut(&mut self) -> &mut Database {
-         self
+        self
     }
 }
 
