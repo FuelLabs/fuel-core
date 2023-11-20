@@ -11,6 +11,7 @@ async-trait = { workspace = true }
 clap = { workspace = true, features = ["derive"] }
 criterion = { version = "0.5", features = ["html_reports", "async", "async_tokio"] }
 ctrlc = "3.2.3"
+digest = "0.10"
 ed25519-dalek = { version = "2.0", features = ["rand_core"] }
 ethnum = "1.3"
 fuel-core = { path = "../crates/fuel-core", default-features = false, features = ["rocksdb-production"] }
@@ -20,6 +21,7 @@ fuel-core-storage = { path = "./../crates/storage" }
 fuel-core-sync = { path = "./../crates/services/sync", features = ["benchmarking"] }
 fuel-core-types = { path = "./../crates/types", features = ["test-helpers"] }
 futures = "0.3"
+nalgebra = "0.32"
 p256 =  { version = "0.13", default-features = false, features = ["digest", "ecdsa"] }
 primitive-types = { workspace = true }
 quanta = "0.12"
@@ -27,9 +29,15 @@ rand = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 serde_yaml = "0.9.13"
+sha2 = { version = "0.10" }
+test-case = { workspace = true }
 test-helpers = { path = "../tests/test-helpers" }
 tikv-jemallocator = { workspace = true }
 tokio = { workspace = true, features = ["full"] }
+
+[[bench]]
+harness = false
+name = "generate_test_data"
 
 [[bench]]
 harness = false

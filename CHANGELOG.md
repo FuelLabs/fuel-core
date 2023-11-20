@@ -51,6 +51,7 @@ Description of the upcoming release here.
 
 ### Changed
 
+- [#1470](https://github.com/FuelLabs/fuel-core/pull/1470): Updated algorithm for collecting gas costs.
 - [#1477](https://github.com/FuelLabs/fuel-core/pull/1477): Upgraded the Rust version used in CI and containers to 1.73.0. Also includes associated Clippy changes.
 - [#1469](https://github.com/FuelLabs/fuel-core/pull/1469): Replaced usage of `MemoryTransactionView` by `Checkpoint` database in the benchmarks.
 - [#1466](https://github.com/FuelLabs/fuel-core/pull/1466): Handling overflows during arithmetic operations.
