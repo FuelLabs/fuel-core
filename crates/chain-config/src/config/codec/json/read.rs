@@ -24,17 +24,15 @@ impl<T> JsonDecoder<T> {
     }
 }
 
-impl<T> GroupDecoder for JsonDecoder<T>
+impl<T> Iterator for JsonDecoder<T>
 where
-    Decoder<T>: GroupDecoder<GroupItem = T>,
+    Decoder<T>: GroupDecoder<T>,
 {
-    type GroupItem = T;
+    type Item = GroupResult<T>;
 
-    fn next_group(&mut self) -> Option<GroupResult<Self::GroupItem>> {
-        self.in_mem.next_group()
-    }
-
-    fn nth_group(&mut self, n: usize) -> Option<GroupResult<Self::GroupItem>> {
-        self.in_mem.nth_group(n)
+    fn next(&mut self) -> Option<Self::Item> {
+        self.in_mem.next()
     }
 }
+
+impl<T> GroupDecoder<T> for JsonDecoder<T> where Decoder<T>: GroupDecoder<T> {}

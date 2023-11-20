@@ -4,11 +4,11 @@ use itertools::Itertools;
 
 use crate::{
     config::{
-        codec::{Group, GroupDecoder, GroupResult},
+        codec::{Group, GroupResult},
         contract_balance::ContractBalance,
         contract_state::ContractState,
     },
-    CoinConfig, ContractConfig, MessageConfig, StateConfig,
+    CoinConfig, ContractConfig, GroupDecoder, MessageConfig, StateConfig,
 };
 
 pub struct Decoder<T> {
@@ -31,10 +31,7 @@ impl<T> Decoder<T> {
     pub fn create_batches(
         batch_size: usize,
         items: Vec<T>,
-    ) -> Vec<anyhow::Result<Group<T>>>
-    where
-        T: Clone,
-    {
+    ) -> Vec<anyhow::Result<Group<T>>> {
         items
             .into_iter()
             .chunks(batch_size)
@@ -51,83 +48,91 @@ impl<T> Decoder<T> {
     }
 }
 
-impl GroupDecoder for Decoder<CoinConfig> {
-    type GroupItem = CoinConfig;
-    fn next_group(&mut self) -> Option<anyhow::Result<Group<Self::GroupItem>>> {
-        let a = Self::create_batches(self.batch_size, self.state.coins.clone())
+impl Iterator for Decoder<CoinConfig> {
+    type Item = GroupResult<CoinConfig>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let group = Self::create_batches(self.batch_size, self.state.coins.clone())
             .into_iter()
             .nth(self.next_batch);
         self.next_batch += 1;
-        a
+        group
     }
 
-    fn nth_group(&mut self, n: usize) -> Option<GroupResult<Self::GroupItem>> {
+    fn nth(&mut self, n: usize) -> Option<Self::Item> {
         self.next_batch = n;
-        self.next_group()
+        self.next()
     }
 }
 
-impl GroupDecoder for Decoder<MessageConfig> {
-    type GroupItem = MessageConfig;
-    fn next_group(&mut self) -> Option<anyhow::Result<Group<Self::GroupItem>>> {
-        let a = Self::create_batches(self.batch_size, self.state.messages.clone())
+impl Iterator for Decoder<MessageConfig> {
+    type Item = GroupResult<MessageConfig>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let group = Self::create_batches(self.batch_size, self.state.messages.clone())
             .into_iter()
             .nth(self.next_batch);
         self.next_batch += 1;
-        a
+        group
     }
 
-    fn nth_group(&mut self, n: usize) -> Option<GroupResult<Self::GroupItem>> {
+    fn nth(&mut self, n: usize) -> Option<Self::Item> {
         self.next_batch = n;
-        self.next_group()
+        self.next()
     }
 }
 
-impl GroupDecoder for Decoder<ContractConfig> {
-    type GroupItem = ContractConfig;
-    fn next_group(&mut self) -> Option<anyhow::Result<Group<Self::GroupItem>>> {
-        let a = Self::create_batches(self.batch_size, self.state.contracts.clone())
+impl Iterator for Decoder<ContractConfig> {
+    type Item = GroupResult<ContractConfig>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let group = Self::create_batches(self.batch_size, self.state.contracts.clone())
             .into_iter()
             .nth(self.next_batch);
         self.next_batch += 1;
-        a
+        group
     }
 
-    fn nth_group(&mut self, n: usize) -> Option<GroupResult<Self::GroupItem>> {
+    fn nth(&mut self, n: usize) -> Option<Self::Item> {
         self.next_batch = n;
-        self.next_group()
+        self.next()
     }
 }
 
-impl GroupDecoder for Decoder<ContractState> {
-    type GroupItem = ContractState;
-    fn next_group(&mut self) -> Option<anyhow::Result<Group<Self::GroupItem>>> {
-        let a = Self::create_batches(self.batch_size, self.state.contract_state.clone())
-            .into_iter()
-            .nth(self.next_batch);
+impl Iterator for Decoder<ContractState> {
+    type Item = GroupResult<ContractState>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let group =
+            Self::create_batches(self.batch_size, self.state.contract_state.clone())
+                .into_iter()
+                .nth(self.next_batch);
         self.next_batch += 1;
-        a
+        group
     }
 
-    fn nth_group(&mut self, n: usize) -> Option<GroupResult<Self::GroupItem>> {
+    fn nth(&mut self, n: usize) -> Option<Self::Item> {
         self.next_batch = n;
-        self.next_group()
+        self.next()
     }
 }
 
-impl GroupDecoder for Decoder<ContractBalance> {
-    type GroupItem = ContractBalance;
-    fn next_group(&mut self) -> Option<anyhow::Result<Group<Self::GroupItem>>> {
-        let a =
+impl Iterator for Decoder<ContractBalance> {
+    type Item = GroupResult<ContractBalance>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let group =
             Self::create_batches(self.batch_size, self.state.contract_balance.clone())
                 .into_iter()
                 .nth(self.next_batch);
         self.next_batch += 1;
-        a
+        group
     }
 
-    fn nth_group(&mut self, n: usize) -> Option<GroupResult<Self::GroupItem>> {
+    fn nth(&mut self, n: usize) -> Option<Self::Item> {
         self.next_batch = n;
-        self.next_group()
+        self.next()
     }
 }
+
+impl<T> GroupDecoder<T> for Decoder<T> where Decoder<T>: Iterator<Item = GroupResult<T>> {}

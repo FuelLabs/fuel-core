@@ -49,14 +49,21 @@ where
         Ok(Group { index, data })
     }
 }
-
-impl<R, T> GroupDecoder for ParquetBatchReader<R, T>
+impl<R, T> GroupDecoder<T> for ParquetBatchReader<R, T>
 where
     R: ChunkReader + 'static,
     T: TryFrom<Row, Error = anyhow::Error>,
 {
-    type GroupItem = T;
-    fn next_group(&mut self) -> Option<anyhow::Result<Group<Self::GroupItem>>> {
+}
+
+impl<R, T> Iterator for ParquetBatchReader<R, T>
+where
+    R: ChunkReader + 'static,
+    T: TryFrom<Row, Error = anyhow::Error>,
+{
+    type Item = GroupResult<T>;
+
+    fn next(&mut self) -> Option<Self::Item> {
         if self.group_index >= self.data_source.metadata().num_row_groups() {
             return None;
         }
@@ -69,9 +76,9 @@ where
         Some(group)
     }
 
-    fn nth_group(&mut self, n: usize) -> Option<GroupResult<Self::GroupItem>> {
+    fn nth(&mut self, n: usize) -> Option<Self::Item> {
         self.group_index = n;
-        self.next_group()
+        self.next()
     }
 }
 

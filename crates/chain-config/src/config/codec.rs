@@ -9,7 +9,7 @@ pub use in_memory::*;
 pub use json::*;
 pub use parquet::*;
 
-use crate::{ChainConfig, CoinConfig, ContractConfig, MessageConfig, StateConfig};
+use crate::{CoinConfig, ContractConfig, MessageConfig, StateConfig};
 
 use super::{contract_balance::ContractBalance, contract_state::ContractState};
 
@@ -20,11 +20,7 @@ pub struct Group<T> {
 }
 
 type GroupResult<T> = anyhow::Result<Group<T>>;
-pub trait GroupDecoder {
-    type GroupItem;
-    fn next_group(&mut self) -> Option<GroupResult<Self::GroupItem>>;
-    fn nth_group(&mut self, n: usize) -> Option<GroupResult<Self::GroupItem>>;
-}
+pub trait GroupDecoder<T>: Iterator<Item = GroupResult<T>> {}
 
 pub trait GroupEncoder {
     fn write_coins(&mut self, elements: Vec<CoinConfig>) -> anyhow::Result<()>;
@@ -41,7 +37,7 @@ pub trait GroupEncoder {
     fn close(self: Box<Self>) -> anyhow::Result<()>;
 }
 
-pub type DynGroupDecoder<T> = Box<dyn GroupDecoder<GroupItem = T>>;
+pub type DynGroupDecoder<T> = Box<dyn GroupDecoder<T>>;
 
 #[derive(Debug, Clone)]
 pub enum StateSource {
@@ -86,15 +82,15 @@ impl StateDecoder {
     fn decoder<T>(&self, parquet_filename: &str) -> anyhow::Result<DynGroupDecoder<T>>
     where
         T: 'static,
-        ParquetBatchReader<std::fs::File, T>: GroupDecoder<GroupItem = T>,
-        JsonDecoder<T>: GroupDecoder<GroupItem = T>,
-        in_memory::Decoder<T>: GroupDecoder<GroupItem = T>,
+        ParquetBatchReader<std::fs::File, T>: GroupDecoder<T>,
+        JsonDecoder<T>: GroupDecoder<T>,
+        in_memory::Decoder<T>: GroupDecoder<T>,
     {
         let reader = match &self.source {
             StateSource::Snapshot(path) => {
-                let path = path.join("state.json");
-                if path.exists() {
-                    let file = std::fs::File::open(path)?;
+                let json_path = path.join("state.json");
+                if json_path.exists() {
+                    let file = std::fs::File::open(json_path)?;
                     let reader = JsonDecoder::<T>::new(file, self.default_batch_size)?;
                     Box::new(reader) as DynGroupDecoder<T>
                 } else {
@@ -140,19 +136,6 @@ fn json_writer(snapshot_dir: impl AsRef<Path>) -> anyhow::Result<Box<dyn GroupEn
     let state = std::fs::File::create(snapshot_dir.as_ref().join("state.json"))?;
     let writer = JsonBatchWriter::new(state);
     Ok(Box::new(writer))
-}
-
-// TODO: Optimize for group skipping
-impl<T> Iterator for DynGroupDecoder<T> {
-    type Item = anyhow::Result<Group<T>>;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        self.next_group()
-    }
-
-    fn nth(&mut self, n: usize) -> Option<Self::Item> {
-        self.nth_group(n)
-    }
 }
 
 #[cfg(test)]
