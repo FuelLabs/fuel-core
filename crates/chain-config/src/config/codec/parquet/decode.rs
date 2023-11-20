@@ -23,13 +23,13 @@ use crate::{
     CoinConfig, ContractConfig, MessageConfig,
 };
 
-pub struct ParquetBatchReader<R: ChunkReader, T> {
+pub struct Decoder<R: ChunkReader, T> {
     data_source: SerializedFileReader<R>,
     group_index: usize,
     _data: PhantomData<T>,
 }
 
-impl<R, T> ParquetBatchReader<R, T>
+impl<R, T> Decoder<R, T>
 where
     R: ChunkReader + 'static,
     T: TryFrom<Row, Error = anyhow::Error>,
@@ -49,14 +49,14 @@ where
         Ok(Group { index, data })
     }
 }
-impl<R, T> GroupDecoder<T> for ParquetBatchReader<R, T>
+impl<R, T> GroupDecoder<T> for Decoder<R, T>
 where
     R: ChunkReader + 'static,
     T: TryFrom<Row, Error = anyhow::Error>,
 {
 }
 
-impl<R, T> Iterator for ParquetBatchReader<R, T>
+impl<R, T> Iterator for Decoder<R, T>
 where
     R: ChunkReader + 'static,
     T: TryFrom<Row, Error = anyhow::Error>,
@@ -82,7 +82,7 @@ where
     }
 }
 
-impl<R: ChunkReader + 'static, T> ParquetBatchReader<R, T> {
+impl<R: ChunkReader + 'static, T> Decoder<R, T> {
     pub fn new(reader: R) -> anyhow::Result<Self> {
         Ok(Self {
             data_source: SerializedFileReader::new(reader)?,

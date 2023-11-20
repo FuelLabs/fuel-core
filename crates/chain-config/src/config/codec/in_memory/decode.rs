@@ -14,27 +14,24 @@ use crate::{
 pub struct Decoder<R, T> {
     source: R,
     _data_type: PhantomData<T>,
-    batch_size: usize,
-    next_batch: usize,
+    group_size: usize,
+    next_group: usize,
 }
 
 impl<R, T> Decoder<R, T> {
-    pub fn new(source: R, batch_size: usize) -> Self {
+    pub fn new(source: R, group_size: usize) -> Self {
         Self {
             source,
-            batch_size,
+            group_size,
             _data_type: PhantomData,
-            next_batch: 0,
+            next_group: 0,
         }
     }
 
-    pub fn create_batches(
-        batch_size: usize,
-        items: Vec<T>,
-    ) -> Vec<anyhow::Result<Group<T>>> {
+    pub fn group_up(group_size: usize, items: Vec<T>) -> Vec<anyhow::Result<Group<T>>> {
         items
             .into_iter()
-            .chunks(batch_size)
+            .chunks(group_size)
             .into_iter()
             .map(Itertools::collect_vec)
             .enumerate()
@@ -52,16 +49,15 @@ impl<R: Borrow<StateConfig>> Iterator for Decoder<R, CoinConfig> {
     type Item = GroupResult<CoinConfig>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        let group =
-            Self::create_batches(self.batch_size, self.source.borrow().coins.clone())
-                .into_iter()
-                .nth(self.next_batch);
-        self.next_batch += 1;
+        let group = Self::group_up(self.group_size, self.source.borrow().coins.clone())
+            .into_iter()
+            .nth(self.next_group);
+        self.next_group += 1;
         group
     }
 
     fn nth(&mut self, n: usize) -> Option<Self::Item> {
-        self.next_batch = n;
+        self.next_group = n;
         self.next()
     }
 }
@@ -71,15 +67,15 @@ impl<R: Borrow<StateConfig>> Iterator for Decoder<R, MessageConfig> {
 
     fn next(&mut self) -> Option<Self::Item> {
         let group =
-            Self::create_batches(self.batch_size, self.source.borrow().messages.clone())
+            Self::group_up(self.group_size, self.source.borrow().messages.clone())
                 .into_iter()
-                .nth(self.next_batch);
-        self.next_batch += 1;
+                .nth(self.next_group);
+        self.next_group += 1;
         group
     }
 
     fn nth(&mut self, n: usize) -> Option<Self::Item> {
-        self.next_batch = n;
+        self.next_group = n;
         self.next()
     }
 }
@@ -89,15 +85,15 @@ impl<R: Borrow<StateConfig>> Iterator for Decoder<R, ContractConfig> {
 
     fn next(&mut self) -> Option<Self::Item> {
         let group =
-            Self::create_batches(self.batch_size, self.source.borrow().contracts.clone())
+            Self::group_up(self.group_size, self.source.borrow().contracts.clone())
                 .into_iter()
-                .nth(self.next_batch);
-        self.next_batch += 1;
+                .nth(self.next_group);
+        self.next_group += 1;
         group
     }
 
     fn nth(&mut self, n: usize) -> Option<Self::Item> {
-        self.next_batch = n;
+        self.next_group = n;
         self.next()
     }
 }
@@ -106,18 +102,16 @@ impl<R: Borrow<StateConfig>> Iterator for Decoder<R, ContractState> {
     type Item = GroupResult<ContractState>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        let group = Self::create_batches(
-            self.batch_size,
-            self.source.borrow().contract_state.clone(),
-        )
-        .into_iter()
-        .nth(self.next_batch);
-        self.next_batch += 1;
+        let group =
+            Self::group_up(self.group_size, self.source.borrow().contract_state.clone())
+                .into_iter()
+                .nth(self.next_group);
+        self.next_group += 1;
         group
     }
 
     fn nth(&mut self, n: usize) -> Option<Self::Item> {
-        self.next_batch = n;
+        self.next_group = n;
         self.next()
     }
 }
@@ -129,18 +123,18 @@ where
     type Item = GroupResult<ContractBalance>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        let group = Self::create_batches(
-            self.batch_size,
+        let group = Self::group_up(
+            self.group_size,
             self.source.borrow().contract_balance.clone(),
         )
         .into_iter()
-        .nth(self.next_batch);
-        self.next_batch += 1;
+        .nth(self.next_group);
+        self.next_group += 1;
         group
     }
 
     fn nth(&mut self, n: usize) -> Option<Self::Item> {
-        self.next_batch = n;
+        self.next_group = n;
         self.next()
     }
 }

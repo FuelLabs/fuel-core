@@ -1,14 +1,11 @@
-mod in_memory;
-mod json;
-mod parquet;
+pub mod in_memory;
+pub mod json;
+pub mod parquet;
 
 use std::fmt::Debug;
 use std::path::{Path, PathBuf};
 
 use ::parquet::basic::{Compression, GzipLevel};
-pub use in_memory::*;
-pub use json::*;
-pub use parquet::*;
 
 use crate::{CoinConfig, ContractConfig, MessageConfig, StateConfig};
 
@@ -23,7 +20,7 @@ pub struct Group<T> {
 type GroupResult<T> = anyhow::Result<Group<T>>;
 pub trait GroupDecoder<T>: Iterator<Item = GroupResult<T>> {}
 
-pub trait GroupEncoder {
+pub trait StateEncoder {
     fn write_coins(&mut self, elements: Vec<CoinConfig>) -> anyhow::Result<()>;
     fn write_contracts(&mut self, elements: Vec<ContractConfig>) -> anyhow::Result<()>;
     fn write_messages(&mut self, elements: Vec<MessageConfig>) -> anyhow::Result<()>;
@@ -96,23 +93,23 @@ impl StateDecoder {
     fn decoder<T>(&self, parquet_filename: &str) -> anyhow::Result<DynGroupDecoder<T>>
     where
         T: 'static,
-        JsonDecoder<T>: GroupDecoder<T>,
-        ParquetBatchReader<std::fs::File, T>: GroupDecoder<T>,
+        json::Decoder<T>: GroupDecoder<T>,
+        parquet::Decoder<std::fs::File, T>: GroupDecoder<T>,
         in_memory::Decoder<StateConfig, T>: GroupDecoder<T>,
     {
         let reader = match &self {
             StateDecoder::Json { path, group_size } => {
                 let file = std::fs::File::open(path.join("state.json"))?;
-                let reader = JsonDecoder::<T>::new(file, *group_size)?;
+                let reader = json::Decoder::<T>::new(file, *group_size)?;
                 Box::new(reader)
             }
             StateDecoder::Parquet { path } => {
                 let path = path.join(format!("{parquet_filename}.parquet"));
                 let file = std::fs::File::open(path)?;
-                Box::new(ParquetBatchReader::new(file)?) as DynGroupDecoder<T>
+                Box::new(parquet::Decoder::new(file)?) as DynGroupDecoder<T>
             }
             StateDecoder::InMemory { state, group_size } => {
-                let reader = Decoder::new(state.clone(), *group_size);
+                let reader = in_memory::Decoder::new(state.clone(), *group_size);
                 Box::new(reader)
             }
         };
@@ -121,15 +118,15 @@ impl StateDecoder {
     }
 }
 
-fn parquet_writer(
+pub fn parquet_writer(
     snapshot_dir: impl AsRef<Path>,
-) -> anyhow::Result<Box<dyn GroupEncoder>> {
+) -> anyhow::Result<Box<dyn StateEncoder>> {
     let snapshot_location = snapshot_dir.as_ref();
     let open_file = |name| {
         std::fs::File::create(snapshot_location.join(format!("{name}.parquet"))).unwrap()
     };
 
-    let writer = ParquetEncoder::new(
+    let writer = parquet::Encoder::new(
         open_file("coins"),
         open_file("messages"),
         open_file("contracts"),
@@ -141,20 +138,16 @@ fn parquet_writer(
     Ok(Box::new(writer))
 }
 
-fn json_writer(snapshot_dir: impl AsRef<Path>) -> anyhow::Result<Box<dyn GroupEncoder>> {
+pub fn json_writer(
+    snapshot_dir: impl AsRef<Path>,
+) -> anyhow::Result<Box<dyn StateEncoder>> {
     let state = std::fs::File::create(snapshot_dir.as_ref().join("state.json"))?;
-    let writer = JsonBatchWriter::new(state);
+    let writer = json::Encoder::new(state);
     Ok(Box::new(writer))
 }
 
 #[cfg(test)]
 mod tests {
-    use std::{
-        cell::{RefCell, RefMut},
-        iter::repeat_with,
-        rc::Rc,
-    };
-
     use itertools::Itertools;
 
     use super::*;
@@ -172,30 +165,8 @@ mod tests {
         );
     }
 
-    #[derive(Default, Clone)]
-    struct PeekableStateConfig {
-        inner: Rc<RefCell<StateConfig>>,
-    }
-    impl PeekableStateConfig {
-        fn gimme(&mut self) -> RefMut<StateConfig> {
-            self.inner.borrow_mut()
-        }
-    }
-
-    // impl BorrowMut<StateConfig> for PeekableStateConfig {
-    //     fn borrow_mut(&mut self) -> &mut StateConfig {
-    //         RefCell::borrow_mut(Rc::borrow(&self.inner))
-    //     }
-    // }
-    //
-    // impl Borrow<StateConfig> for PeekableStateConfig {
-    //     fn borrow(&self) -> &StateConfig {
-    //         todo!()
-    //     }
-    // }
-
     #[test]
-    fn can_read_write() {
+    fn writes_and_then_reads_written() {
         enum Format {
             Json,
             Parquet,
@@ -209,7 +180,7 @@ mod tests {
             let mut writer = match format {
                 Format::Parquet => parquet_writer(path).unwrap(),
                 Format::Json => json_writer(path).unwrap(),
-                Format::InMemory => Box::new(Encoder::new(&mut state_config)),
+                Format::InMemory => Box::new(in_memory::Encoder::new(&mut state_config)),
             };
 
             let mut rng = rand::thread_rng();
@@ -217,14 +188,15 @@ mod tests {
             let num_groups = 10;
             macro_rules! write_batches {
                 ($data_type: ty, $write_method:ident) => {{
-                    let batches = repeat_with(|| <$data_type>::random(&mut rng))
-                        .chunks(group_size)
-                        .into_iter()
-                        .map(|chunk| chunk.collect_vec())
-                        .enumerate()
-                        .map(|(index, data)| Group { index, data })
-                        .take(num_groups)
-                        .collect_vec();
+                    let batches =
+                        ::std::iter::repeat_with(|| <$data_type>::random(&mut rng))
+                            .chunks(group_size)
+                            .into_iter()
+                            .map(|chunk| chunk.collect_vec())
+                            .enumerate()
+                            .map(|(index, data)| Group { index, data })
+                            .take(num_groups)
+                            .collect_vec();
 
                     for batch in &batches {
                         writer.$write_method(batch.data.clone()).unwrap();

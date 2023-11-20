@@ -1,7 +1,7 @@
-mod read;
+mod decode;
+mod encode;
 mod schema;
-mod write;
 
-pub use read::*;
+pub use decode::*;
+pub use encode::*;
 pub use schema::*;
-pub use write::*;

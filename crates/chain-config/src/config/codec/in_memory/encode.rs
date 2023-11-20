@@ -2,7 +2,7 @@ use std::borrow::BorrowMut;
 
 use crate::{
     config::{
-        codec::GroupEncoder, contract_balance::ContractBalance,
+        codec::StateEncoder, contract_balance::ContractBalance,
         contract_state::ContractState,
     },
     CoinConfig, ContractConfig, MessageConfig, StateConfig,
@@ -22,7 +22,7 @@ impl<W> Encoder<W> {
     }
 }
 
-impl<W: BorrowMut<StateConfig>> GroupEncoder for Encoder<W> {
+impl<W: BorrowMut<StateConfig>> StateEncoder for Encoder<W> {
     fn write_coins(&mut self, elements: Vec<CoinConfig>) -> anyhow::Result<()> {
         self.sink.borrow_mut().coins.extend(elements);
         Ok(())

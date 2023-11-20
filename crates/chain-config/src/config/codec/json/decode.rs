@@ -1,16 +1,17 @@
 use crate::{
     config::codec::{GroupDecoder, GroupResult},
-    Decoder, StateConfig,
+    in_memory::Decoder as InMemoryDecoder,
+    StateConfig,
 };
 
-pub struct JsonDecoder<T> {
-    in_mem: Decoder<StateConfig, T>,
+pub struct Decoder<T> {
+    in_mem: InMemoryDecoder<StateConfig, T>,
 }
 
-impl<T> JsonDecoder<T> {
+impl<T> Decoder<T> {
     pub fn new<R: std::io::Read>(
         mut reader: R,
-        batch_size: usize,
+        group_size: usize,
     ) -> anyhow::Result<Self> {
         // This is a workaround until the Deserialize implementation is fixed to not require a
         // borrowed string over in fuel-vm.
@@ -19,14 +20,14 @@ impl<T> JsonDecoder<T> {
 
         let state = serde_json::from_str(&contents)?;
         Ok(Self {
-            in_mem: Decoder::new(state, batch_size),
+            in_mem: InMemoryDecoder::new(state, group_size),
         })
     }
 }
 
-impl<T> Iterator for JsonDecoder<T>
+impl<T> Iterator for Decoder<T>
 where
-    Decoder<StateConfig, T>: GroupDecoder<T>,
+    InMemoryDecoder<StateConfig, T>: GroupDecoder<T>,
 {
     type Item = GroupResult<T>;
 
@@ -35,4 +36,7 @@ where
     }
 }
 
-impl<T> GroupDecoder<T> for JsonDecoder<T> where Decoder<StateConfig, T>: GroupDecoder<T> {}
+impl<T> GroupDecoder<T> for Decoder<T> where
+    InMemoryDecoder<StateConfig, T>: GroupDecoder<T>
+{
+}

@@ -1,5 +1,5 @@
-mod read;
-mod write;
+mod decode;
+mod encode;
 
-pub use read::*;
-pub use write::*;
+pub use decode::*;
+pub use encode::*;

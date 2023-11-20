@@ -2,27 +2,29 @@ use std::io::Write;
 
 use crate::{
     config::{
-        codec::GroupEncoder, contract_balance::ContractBalance,
+        codec::StateEncoder, contract_balance::ContractBalance,
         contract_state::ContractState,
     },
-    CoinConfig, ContractConfig, Encoder, MessageConfig, StateConfig,
+    CoinConfig, ContractConfig, MessageConfig, StateConfig,
 };
 
-pub struct JsonBatchWriter<W> {
+use crate::in_memory::Encoder as InMemoryEncoder;
+
+pub struct Encoder<W> {
     sink: W,
-    temp_storage: Encoder<StateConfig>,
+    temp_storage: InMemoryEncoder<StateConfig>,
 }
 
-impl<W> JsonBatchWriter<W> {
+impl<W> Encoder<W> {
     pub fn new(sink: W) -> Self {
         Self {
             sink,
-            temp_storage: Encoder::new(StateConfig::default()),
+            temp_storage: InMemoryEncoder::new(StateConfig::default()),
         }
     }
 }
 
-impl<W: Write> GroupEncoder for JsonBatchWriter<W> {
+impl<W: Write> StateEncoder for Encoder<W> {
     fn write_coins(&mut self, elements: Vec<CoinConfig>) -> anyhow::Result<()> {
         self.temp_storage.write_coins(elements)
     }

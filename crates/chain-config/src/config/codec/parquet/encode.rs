@@ -13,7 +13,7 @@ use parquet::{
 
 use crate::{
     config::{
-        codec::GroupEncoder, contract_balance::ContractBalance,
+        codec::StateEncoder, contract_balance::ContractBalance,
         contract_state::ContractState,
     },
     CoinConfig, ContractConfig, MessageConfig,
@@ -21,7 +21,7 @@ use crate::{
 
 use super::schema::Schema;
 
-pub struct ParquetEncoder<W: Write> {
+pub struct Encoder<W: Write> {
     coins: SerializedFileWriter<W>,
     messages: SerializedFileWriter<W>,
     contracts: SerializedFileWriter<W>,
@@ -29,7 +29,7 @@ pub struct ParquetEncoder<W: Write> {
     contract_balance: SerializedFileWriter<W>,
 }
 
-impl<W: Write + Send> ParquetEncoder<W> {
+impl<W: Write + Send> Encoder<W> {
     pub fn new(
         coins: W,
         messages: W,
@@ -69,7 +69,7 @@ impl<W: Write + Send> ParquetEncoder<W> {
     }
 }
 
-impl<W> GroupEncoder for ParquetEncoder<W>
+impl<W> StateEncoder for Encoder<W>
 where
     W: Write + Send,
 {
