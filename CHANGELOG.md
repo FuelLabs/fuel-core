@@ -10,6 +10,7 @@ Description of the upcoming release here.
 
 ### Added
 
+- [#1502](https://github.com/FuelLabs/fuel-core/pull/1502): Added price benchmark for `vm_initialization`.
 - [#1492](https://github.com/FuelLabs/fuel-core/pull/1492): Support backward iteration in the RocksDB. It allows backward queries that were not allowed before.
 - [#1490](https://github.com/FuelLabs/fuel-core/pull/1490): Add push and pop benchmarks.
 - [#1485](https://github.com/FuelLabs/fuel-core/pull/1485): Prepare rc release of fuel core v0.21
