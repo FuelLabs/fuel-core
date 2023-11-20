@@ -87,7 +87,7 @@ pub fn vm_initialization(c: &mut Criterion) {
 
     let mut group = c.benchmark_group("vm_initialization");
 
-    group.bench_function(format!("vm_initialization"), |b| {
+    group.bench_function("vm_initialization", |b| {
         b.iter(|| {
             let mut vm = black_box(
                 Interpreter::<_, Script, NotSupportedEcal>::with_memory_storage(),
