@@ -41,15 +41,20 @@ pub fn default_consensus_dev_key() -> SecretKey {
 }
 
 pub fn generate_fee_collection_contract(address: Address) -> Vec<u8> {
+    // TODO: Tests to write for this contract:
+    // 1. Happy path withdrawal case for block producer
+    //    Deploy the contract for the block producer's address
+    //    Run some blocks and accumulate fees
+    //    Attempt to withdraw the collected fees to the BP's address
+    //      (note that currently we allow anyone to initiate this withdrawal)
+    // 2. Unhappy case where tx doesn't have the expected variable output set
+    // 3. Edge case, withdrawal is attempted when there are no fees collected (shouldn't revert, but the BP's balance should be the same)
+
+    // TODO: setup cli interface for generating this contract
+    // This should be accessible to the fuel-core CLI.
+    // ie. something like `fuel-core generate-fee-contract <WITHDRAWAL_ADDRESS>` -> <CONTRACT_BYTECODE_HEX>
+
     let asm = vec![
-        // // obtain the output type of tx.output[0]
-        // op::gtf(0x10, GTFArgs::OutputType, 0),
-        // // store the expected output type for a variable output in the next register.
-        // op::movi(0x11, OutputRepr::Variable as u32),
-        // // panic if tx.outputs[0].type != OutputType.Variable
-        // op::eq(0x12, 0x11, 0x10),
-        // op::jnzf(0x12, RegId::ZERO, 1),
-        // op::rvrt(1),
         // Pointer to AssetID memory address in call frame param a
         op::addi(0x10, RegId::FP, CallFrame::a_offset() as u16),
         // pointer to the withdrawal address embedded after the contract bytecode
@@ -63,10 +68,15 @@ pub fn generate_fee_collection_contract(address: Address) -> Vec<u8> {
         // if balance > 0, withdraw
         op::eq(0x12, 0x11, RegId::ZERO),
         op::jnzf(0x12, RegId::ZERO, 1),
+        // todo: point $rA to the location of the withdrawal address in memory (after return)
         op::tro(0, 0, 0x11, 0x10),
         // return
         op::ret(RegId::ONE),
     ];
 
-    Default::default()
+    let mut asm_bytes: Vec<u8> = asm.into_iter().collect();
+    // append withdrawal address at the end of the contract bytecode.
+    asm_bytes.extend_from_slice(address.as_slice());
+
+    asm_bytes
 }
