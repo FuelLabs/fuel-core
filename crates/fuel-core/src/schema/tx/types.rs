@@ -149,6 +149,7 @@ pub struct SuccessStatus {
     block_id: primitives::BlockId,
     time: Tai64,
     result: Option<VmProgramState>,
+    receipts: Vec<fuel_tx::Receipt>,
 }
 
 #[Object]
@@ -219,10 +220,12 @@ impl From<TxStatus> for TransactionStatus {
                 block_id,
                 result,
                 time,
+                receipts,
             } => TransactionStatus::Success(SuccessStatus {
                 block_id,
                 result,
                 time,
+                receipts,
             }),
             TxStatus::SqueezedOut { reason } => {
                 TransactionStatus::SqueezedOut(SqueezedOutStatus { reason })
@@ -252,10 +255,12 @@ impl From<TransactionStatus> for TxStatus {
                 block_id,
                 result,
                 time,
+                receipts,
             }) => TxStatus::Success {
                 block_id,
                 result,
                 time,
+                receipts,
             },
             TransactionStatus::SqueezedOut(SqueezedOutStatus { reason }) => {
                 TxStatus::SqueezedOut { reason }

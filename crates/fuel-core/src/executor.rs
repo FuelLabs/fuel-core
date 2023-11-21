@@ -858,7 +858,10 @@ where
 
         execution_data.tx_status.push(TransactionExecutionStatus {
             id: coinbase_id,
-            result: TransactionExecutionResult::Success { result: None },
+            result: TransactionExecutionResult::Success {
+                result: None,
+                receipts: Default::default(),
+            },
         });
 
         if block_db_transaction
@@ -1040,11 +1043,13 @@ where
             TransactionExecutionResult::Failed {
                 reason,
                 result: Some(state),
+                receipts: receipts.clone(),
             }
         } else {
             // else tx was a success
             TransactionExecutionResult::Success {
                 result: Some(state),
+                receipts: receipts.clone(),
             }
         };
 
@@ -1732,17 +1737,18 @@ where
         let block_id = result.block.id();
         for TransactionExecutionStatus { id, result } in result.tx_status.iter() {
             match result {
-                TransactionExecutionResult::Success { result } => {
+                TransactionExecutionResult::Success { result, receipts } => {
                     db.update_tx_status(
                         id,
                         TransactionStatus::Success {
                             block_id,
                             time,
                             result: *result,
+                            receipts: receipts.clone(),
                         },
                     )?;
                 }
-                TransactionExecutionResult::Failed { result, reason } => {
+                TransactionExecutionResult::Failed { result, reason, .. } => {
                     db.update_tx_status(
                         id,
                         TransactionStatus::Failed {
@@ -1750,6 +1756,7 @@ where
                             time,
                             result: *result,
                             reason: reason.clone(),
+                            // receipts: receipts.clone(),
                         },
                     )?;
                 }

@@ -58,6 +58,7 @@ impl From<&fuel_tx::Receipt> for ReceiptType {
     }
 }
 
+#[derive(Debug)]
 pub struct Receipt(pub fuel_tx::Receipt);
 
 #[Object]

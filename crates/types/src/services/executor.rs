@@ -9,6 +9,7 @@ use crate::{
         primitives::BlockId,
     },
     fuel_tx::{
+        Receipt,
         TxId,
         UtxoId,
         ValidityError,
@@ -62,6 +63,8 @@ pub enum TransactionExecutionResult {
     Success {
         /// The result of successful transaction execution.
         result: Option<ProgramState>,
+        /// Receipts
+        receipts: Vec<Receipt>,
     },
     /// The execution of the transaction failed.
     Failed {
@@ -69,6 +72,8 @@ pub enum TransactionExecutionResult {
         result: Option<ProgramState>,
         /// The reason of execution failure.
         reason: String,
+        /// Receipts
+        receipts: Vec<Receipt>,
     },
 }
 

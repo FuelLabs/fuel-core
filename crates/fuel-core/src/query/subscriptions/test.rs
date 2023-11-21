@@ -55,6 +55,7 @@ fn success() -> TransactionStatus {
         block_id: Default::default(),
         time: Tai64(0),
         result: None,
+        receipts: Default::default(),
     }
 }
 
