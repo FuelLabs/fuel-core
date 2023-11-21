@@ -10,6 +10,7 @@ Description of the upcoming release here.
 
 ### Added
 
+- [#1503](https://github.com/FuelLabs/fuel-core/pull/1503): Add `gtf` opcode sanity check
 - [#1490](https://github.com/FuelLabs/fuel-core/pull/1490): Add push and pop benchmarks.
 - [#1485](https://github.com/FuelLabs/fuel-core/pull/1485): Prepare rc release of fuel core v0.21
 - [#1476](https://github.com/FuelLabs/fuel-core/pull/1453): Add the majority of the "other" benchmarks for contract opcodes.
