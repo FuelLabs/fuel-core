@@ -167,6 +167,10 @@ impl SuccessStatus {
     async fn program_state(&self) -> Option<ProgramState> {
         self.result.map(Into::into)
     }
+
+    async fn receipts(&self) -> Vec<Receipt> {
+        self.receipts.iter().map(Into::into).collect()
+    }
 }
 
 #[derive(Debug)]

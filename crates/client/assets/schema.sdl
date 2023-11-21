@@ -850,6 +850,7 @@ type SuccessStatus {
 	block: Block!
 	time: Tai64Timestamp!
 	programState: ProgramState
+	receipts: [Receipt!]!
 }
 
 scalar Tai64Timestamp
