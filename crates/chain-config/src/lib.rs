@@ -11,13 +11,9 @@ pub use config::*;
 use fuel_core_types::{
     fuel_asm::{
         op,
-        GTFArgs,
         RegId,
     },
-    fuel_tx::{
-        Address,
-        OutputRepr,
-    },
+    fuel_tx::Address,
     fuel_vm::{
         CallFrame,
         SecretKey,
@@ -56,7 +52,7 @@ pub fn generate_fee_collection_contract(address: Address) -> Vec<u8> {
 
     let asm = vec![
         // Pointer to AssetID memory address in call frame param a
-        op::addi(0x10, RegId::FP, CallFrame::a_offset() as u16),
+        op::addi(0x10, RegId::FP, CallFrame::a_offset().try_into().unwrap()),
         // pointer to the withdrawal address embedded after the contract bytecode
         op::addi(
             0x11,
