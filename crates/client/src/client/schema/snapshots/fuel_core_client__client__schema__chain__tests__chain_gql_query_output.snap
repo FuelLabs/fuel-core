@@ -364,7 +364,17 @@ query {
             gasPerUnit
           }
         }
-        vmInitialization
+        vmInitialization {
+          __typename
+          ... on LightOperation {
+            base
+            unitsPerGas
+          }
+          ... on HeavyOperation {
+            base
+            gasPerUnit
+          }
+        }
         newStoragePerByte
       }
     }
