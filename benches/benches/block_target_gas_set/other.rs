@@ -10,11 +10,8 @@ pub fn run_other(group: &mut BenchmarkGroup<WallTime>) {
     let asset_id = AssetId::zeroed();
     let script_data = script_data(&contract_id, &asset_id);
     let mut shared_runner_builder = SanityBenchmarkRunnerBuilder::new_shared(contract_id);
-    // run_group_ref(
-    //     &mut c.benchmark_group("flag"),
-    //     "flag",
-    //     VmBench::new(op::flag(0x10)),
-    // );
+
+    // flag
     run(
         "other/flag",
         group,

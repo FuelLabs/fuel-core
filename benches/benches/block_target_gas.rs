@@ -105,9 +105,10 @@ pub struct MultiContractBenchmarkRunnerBuilder {
 impl SanityBenchmarkRunnerBuilder {
     /// Creates a factory for benchmarks that share a service with a contract, `contract_id`, pre-
     /// deployed.
+    /// The size of the database can be overridden with the `STATE_SIZE` environment variable.
     pub fn new_shared(contract_id: ContractId) -> SharedSanityBenchmarkRunnerBuilder {
         let state_size = crate::utils::get_state_size();
-        let (service, rt) = service_with_contract_id(state_size, contract_id);
+        let (service, rt) = service_with_many_contracts(state_size, vec![contract_id]);
         let rng = rand::rngs::StdRng::seed_from_u64(2322u64);
         SharedSanityBenchmarkRunnerBuilder {
             service,
@@ -133,8 +134,8 @@ impl SanityBenchmarkRunnerBuilder {
 }
 
 impl SharedSanityBenchmarkRunnerBuilder {
-    fn build(&mut self) -> SanityBenchmark {
-        SanityBenchmark {
+    fn build(&mut self) -> SanityBenchmarkRunner {
+        SanityBenchmarkRunner {
             service: &mut self.service,
             rt: &self.rt,
             rng: &mut self.rng,
@@ -147,7 +148,7 @@ impl SharedSanityBenchmarkRunnerBuilder {
     pub fn build_with_new_contract(
         &mut self,
         contract_instructions: Vec<Instruction>,
-    ) -> SanityBenchmark {
+    ) -> SanityBenchmarkRunner {
         replace_contract_in_service(
             &mut self.service,
             &self.contract_id,
@@ -158,8 +159,8 @@ impl SharedSanityBenchmarkRunnerBuilder {
 }
 
 impl MultiContractBenchmarkRunnerBuilder {
-    pub fn build(&mut self) -> SanityBenchmark {
-        SanityBenchmark {
+    pub fn build(&mut self) -> SanityBenchmarkRunner {
+        SanityBenchmarkRunner {
             service: &mut self.service,
             rt: &self.rt,
             rng: &mut self.rng,
@@ -170,7 +171,7 @@ impl MultiContractBenchmarkRunnerBuilder {
     }
 }
 
-pub struct SanityBenchmark<'a> {
+pub struct SanityBenchmarkRunner<'a> {
     service: &'a mut FuelService,
     rt: &'a tokio::runtime::Runtime,
     rng: &'a mut rand::rngs::StdRng,
@@ -179,7 +180,7 @@ pub struct SanityBenchmark<'a> {
     extra_outputs: Vec<Output>,
 }
 
-impl<'a> SanityBenchmark<'a> {
+impl<'a> SanityBenchmarkRunner<'a> {
     pub fn with_extra_inputs(mut self, extra_inputs: Vec<Input>) -> Self {
         self.extra_inputs = extra_inputs;
         self
@@ -219,29 +220,7 @@ fn run(
     script_data: Vec<u8>,
 ) {
     group.bench_function(id, |b| {
-        let rt = tokio::runtime::Builder::new_current_thread()
-            .enable_all()
-            .build()
-            .unwrap();
-        let _drop = rt.enter();
-
-        let database = Database::rocksdb();
-        let mut config = Config::local_node();
-        config.chain_conf.consensus_parameters.tx_params.max_gas_per_tx = TARGET_BLOCK_GAS_LIMIT;
-        config
-            .chain_conf
-            .consensus_parameters
-            .predicate_params
-            .max_gas_per_predicate = TARGET_BLOCK_GAS_LIMIT;
-        config.chain_conf.block_gas_limit = TARGET_BLOCK_GAS_LIMIT;
-        config.chain_conf.consensus_parameters.gas_costs = GasCosts::new(default_gas_costs());
-        config.chain_conf.consensus_parameters.fee_params.gas_per_byte = 0;
-        config.utxo_validation = false;
-        config.block_production = Trigger::Instant;
-
-        let service = fuel_core::service::FuelService::new(database, config.clone())
-            .expect("Unable to start a FuelService");
-        service.start().expect("Unable to start the service");
+        let (service, rt) = service_with_many_contracts(0, vec![]); // Doesn't need any contracts
         let mut rng = rand::rngs::StdRng::seed_from_u64(2322u64);
 
         b.to_async(&rt).iter(|| {
@@ -263,7 +242,7 @@ fn run(
                 )
                 .finalize_as_transaction();
             async move {
-                let tx_id = tx.id(&config.chain_conf.consensus_parameters.chain_id);
+                let tx_id = tx.id(&shared.config.chain_conf.consensus_parameters.chain_id);
 
                 let mut sub = shared.block_importer.block_importer.subscribe();
                 shared
@@ -294,93 +273,8 @@ fn run(
     });
 }
 
-/// Sets up a service with a full database. Returns the service with the associated Runtime.
-/// The size of the database can be overridden with the `STATE_SIZE` environment variable.
-fn service_with_contract_id(
-    state_size: u64,
-    contract_id: ContractId,
-) -> (fuel_core::service::FuelService, tokio::runtime::Runtime) {
-    use fuel_core::database::vm_database::IncreaseStorageKey;
-    let rt = tokio::runtime::Builder::new_current_thread()
-        .enable_all()
-        .build()
-        .unwrap();
-    let _drop = rt.enter();
-    let mut database = Database::rocksdb();
-    let mut config = Config::local_node();
-    config
-        .chain_conf
-        .consensus_parameters
-        .tx_params
-        .max_gas_per_tx = TARGET_BLOCK_GAS_LIMIT;
-    config.chain_conf.initial_state.as_mut().unwrap().contracts =
-        Some(vec![ContractConfig {
-            contract_id,
-            code: vec![],
-            salt: Default::default(),
-            state: None,
-            balances: None,
-            tx_id: None,
-            output_index: None,
-            tx_pointer_block_height: None,
-            tx_pointer_tx_idx: None,
-        }]);
-
-    config
-        .chain_conf
-        .consensus_parameters
-        .predicate_params
-        .max_gas_per_predicate = TARGET_BLOCK_GAS_LIMIT;
-    config.chain_conf.block_gas_limit = TARGET_BLOCK_GAS_LIMIT;
-    config.chain_conf.consensus_parameters.gas_costs = GasCosts::new(default_gas_costs());
-    config
-        .chain_conf
-        .consensus_parameters
-        .fee_params
-        .gas_per_byte = 0;
-    config.utxo_validation = false;
-    config.block_production = Trigger::Instant;
-
-    let mut storage_key = primitive_types::U256::zero();
-    let mut key_bytes = Bytes32::zeroed();
-
-    database
-        .init_contract_state(
-            &contract_id,
-            (0..state_size).map(|_| {
-                storage_key.to_big_endian(key_bytes.as_mut());
-                storage_key.increase().unwrap();
-                (key_bytes, key_bytes)
-            }),
-        )
-        .unwrap();
-
-    let mut storage_key = primitive_types::U256::zero();
-    let mut sub_id = Bytes32::zeroed();
-    database
-        .init_contract_balances(
-            &contract_id,
-            (0..state_size).map(|k| {
-                storage_key.to_big_endian(sub_id.as_mut());
-
-                let asset = if k % 2 == 0 {
-                    VmBench::CONTRACT.asset_id(&sub_id)
-                } else {
-                    let asset_id = AssetId::new(*sub_id);
-                    storage_key.increase().unwrap();
-                    asset_id
-                };
-                (asset, k / 2 + 1_000)
-            }),
-        )
-        .unwrap();
-
-    let service = fuel_core::service::FuelService::new(database, config.clone())
-        .expect("Unable to start a FuelService");
-    service.start().expect("Unable to start the service");
-    (service, rt)
-}
-
+/// Sets up a service with a contract for each contract id. The contract state will be set to
+/// `state_size` for each contract.
 fn service_with_many_contracts(
     state_size: u64,
     contract_ids: Vec<ContractId>,
