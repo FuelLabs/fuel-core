@@ -219,58 +219,21 @@ fn run(
     script: Vec<Instruction>,
     script_data: Vec<u8>,
 ) {
-    group.bench_function(id, |b| {
-        let (service, rt) = service_with_many_contracts(0, vec![]); // Doesn't need any contracts
-        let mut rng = rand::rngs::StdRng::seed_from_u64(2322u64);
-
-        b.to_async(&rt).iter(|| {
-            let shared = service.shared.clone();
-
-            let tx = fuel_core_types::fuel_tx::TransactionBuilder::script(
-                script.clone().into_iter().collect(),
-                script_data.clone(),
-            )
-                .script_gas_limit(TARGET_BLOCK_GAS_LIMIT - BASE)
-                .gas_price(1)
-                .add_unsigned_coin_input(
-                    SecretKey::random(&mut rng),
-                    rng.gen(),
-                    u64::MAX / 2,
-                    AssetId::BASE,
-                    Default::default(),
-                    Default::default(),
-                )
-                .finalize_as_transaction();
-            async move {
-                let tx_id = tx.id(&shared.config.chain_conf.consensus_parameters.chain_id);
-
-                let mut sub = shared.block_importer.block_importer.subscribe();
-                shared
-                    .txpool
-                    .insert(vec![std::sync::Arc::new(tx)])
-                    .await
-                    .into_iter()
-                    .next()
-                    .expect("Should be at least 1 element")
-                    .expect("Should include transaction successfully");
-                let res = sub.recv().await.expect("Should produce a block");
-                assert_eq!(res.tx_status.len(), 2);
-                assert_eq!(res.sealed_block.entity.transactions().len(), 2);
-                assert_eq!(res.tx_status[0].id, tx_id);
-
-                let fuel_core_types::services::executor::TransactionExecutionResult::Failed {
-                    reason,
-                    ..
-                } = &res.tx_status[0].result
-                    else {
-                        panic!("The execution should fails with out of gas")
-                    };
-                if !reason.contains("OutOfGas") {
-                    panic!("The test failed because of {}", reason);
-                }
-            }
-        })
-    });
+    let mut rng = rand::rngs::StdRng::seed_from_u64(2322u64);
+    let contract_ids = vec![];
+    let (service, rt) = service_with_many_contracts(0, contract_ids.clone()); // Doesn't need any contracts
+    run_with_service_with_extra_inputs(
+        id,
+        group,
+        script,
+        script_data,
+        &service,
+        contract_ids,
+        &rt,
+        &mut rng,
+        vec![],
+        vec![],
+    );
 }
 
 /// Sets up a service with a contract for each contract id. The contract state will be set to
@@ -375,7 +338,7 @@ fn run_with_service_with_extra_inputs(
     group: &mut BenchmarkGroup<WallTime>,
     script: Vec<Instruction>,
     script_data: Vec<u8>,
-    service: &fuel_core::service::FuelService,
+    service: &FuelService,
     contract_ids: Vec<ContractId>,
     rt: &tokio::runtime::Runtime,
     rng: &mut rand::rngs::StdRng,
