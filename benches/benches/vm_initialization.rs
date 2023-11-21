@@ -73,7 +73,7 @@ fn transaction<R: Rng>(
         })
         .collect();
 
-    let tx = Transaction::script(
+    Transaction::script(
         1_000_000,
         script,
         script_data,
@@ -86,9 +86,7 @@ fn transaction<R: Rng>(
         vec![vec![123; 100].into(); consensus_params.tx_params.max_witnesses as usize],
     )
     .into_checked_basic(Default::default(), &consensus_params)
-    .expect("Should produce a valid transaction");
-
-    tx
+    .expect("Should produce a valid transaction")
 }
 
 pub fn vm_initialization(c: &mut Criterion) {
