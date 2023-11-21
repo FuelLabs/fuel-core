@@ -1,4 +1,5 @@
 use crate::*;
+use std::iter;
 
 // ECAL
 // FLAG
@@ -37,5 +38,35 @@ pub fn run_other(group: &mut BenchmarkGroup<WallTime>) {
             .run(id, group, instructions, script_data.clone());
     }
 
-    // gtf: TODO: As part of parent issue (https://github.com/FuelLabs/fuel-core/issues/1386)
+    // gtf
+    {
+        let count = 254;
+        let correct_index = count; // Have the last index be the correct one
+
+        let contract_ids = (0..count).map(|x| [x as u8; 32].into()).collect::<Vec<_>>();
+
+        let instructions = vec![
+            op::movi(0x11, correct_index as u32),
+            op::gtf_args(0x10, 0x11, GTFArgs::InputContractOutputIndex),
+            op::jmpb(RegId::ZERO, 0),
+        ];
+
+        SanityBenchmarkRunnerBuilder::new_with_many_contracts(contract_ids)
+            .build()
+            .run("other/gtf", group, instructions, vec![]);
+    }
+}
+
+fn output_for_input_index(index: u8) -> Output {
+    Output::contract(index, Bytes32::zeroed(), Bytes32::zeroed())
+}
+
+fn contract_input_with_id(contract_id: impl Into<ContractId>) -> Input {
+    Input::contract(
+        UtxoId::default(),
+        Bytes32::zeroed(),
+        Bytes32::zeroed(),
+        TxPointer::default(),
+        contract_id.into(),
+    )
 }

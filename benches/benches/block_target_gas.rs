@@ -88,35 +88,57 @@ const BASE: u64 = 100_000;
 
 pub struct SanityBenchmarkRunnerBuilder;
 
-pub struct SharedSanityBenchmarkFactory {
+pub struct SharedSanityBenchmarkRunnerBuilder {
     service: FuelService,
     rt: tokio::runtime::Runtime,
     contract_id: ContractId,
     rng: rand::rngs::StdRng,
 }
 
+pub struct MultiContractBenchmarkRunnerBuilder {
+    service: FuelService,
+    rt: tokio::runtime::Runtime,
+    contract_ids: Vec<ContractId>,
+    rng: rand::rngs::StdRng,
+}
+
 impl SanityBenchmarkRunnerBuilder {
     /// Creates a factory for benchmarks that share a service with a contract, `contract_id`, pre-
     /// deployed.
-    pub fn new_shared(contract_id: ContractId) -> SharedSanityBenchmarkFactory {
+    pub fn new_shared(contract_id: ContractId) -> SharedSanityBenchmarkRunnerBuilder {
         let state_size = crate::utils::get_state_size();
         let (service, rt) = service_with_contract_id(state_size, contract_id);
         let rng = rand::rngs::StdRng::seed_from_u64(2322u64);
-        SharedSanityBenchmarkFactory {
+        SharedSanityBenchmarkRunnerBuilder {
             service,
             rt,
             contract_id,
             rng,
         }
     }
+
+    pub fn new_with_many_contracts(
+        contract_ids: Vec<ContractId>,
+    ) -> MultiContractBenchmarkRunnerBuilder {
+        let state_size = 1000; // Arbitrary small state size
+        let (service, rt) = service_with_many_contracts(state_size, contract_ids.clone());
+        let rng = rand::rngs::StdRng::seed_from_u64(2322u64);
+        MultiContractBenchmarkRunnerBuilder {
+            service,
+            rt,
+            contract_ids,
+            rng,
+        }
+    }
 }
 
-impl SharedSanityBenchmarkFactory {
+impl SharedSanityBenchmarkRunnerBuilder {
     fn build(&mut self) -> SanityBenchmark {
         SanityBenchmark {
             service: &mut self.service,
             rt: &self.rt,
             rng: &mut self.rng,
+            contract_ids: vec![self.contract_id],
             extra_inputs: vec![],
             extra_outputs: vec![],
         }
@@ -135,10 +157,24 @@ impl SharedSanityBenchmarkFactory {
     }
 }
 
+impl MultiContractBenchmarkRunnerBuilder {
+    pub fn build(&mut self) -> SanityBenchmark {
+        SanityBenchmark {
+            service: &mut self.service,
+            rt: &self.rt,
+            rng: &mut self.rng,
+            contract_ids: self.contract_ids.clone(),
+            extra_inputs: vec![],
+            extra_outputs: vec![],
+        }
+    }
+}
+
 pub struct SanityBenchmark<'a> {
     service: &'a mut FuelService,
     rt: &'a tokio::runtime::Runtime,
     rng: &'a mut rand::rngs::StdRng,
+    contract_ids: Vec<ContractId>,
     extra_inputs: Vec<Input>,
     extra_outputs: Vec<Output>,
 }
@@ -167,7 +203,7 @@ impl<'a> SanityBenchmark<'a> {
             script,
             script_data,
             self.service,
-            VmBench::CONTRACT,
+            self.contract_ids,
             self.rt,
             self.rng,
             self.extra_inputs,
@@ -226,6 +262,100 @@ fn run(
                     Default::default(),
                 )
                 .finalize_as_transaction();
+            async move {
+                let tx_id = tx.id(&config.chain_conf.consensus_parameters.chain_id);
+
+                let mut sub = shared.block_importer.block_importer.subscribe();
+                shared
+                    .txpool
+                    .insert(vec![std::sync::Arc::new(tx)])
+                    .await
+                    .into_iter()
+                    .next()
+                    .expect("Should be at least 1 element")
+                    .expect("Should include transaction successfully");
+                let res = sub.recv().await.expect("Should produce a block");
+                assert_eq!(res.tx_status.len(), 2);
+                assert_eq!(res.sealed_block.entity.transactions().len(), 2);
+                assert_eq!(res.tx_status[0].id, tx_id);
+
+                let fuel_core_types::services::executor::TransactionExecutionResult::Failed {
+                    reason,
+                    ..
+                } = &res.tx_status[0].result
+                    else {
+                        panic!("The execution should fails with out of gas")
+                    };
+                if !reason.contains("OutOfGas") {
+                    panic!("The test failed because of {}", reason);
+                }
+            }
+        })
+    });
+}
+
+fn run_with_inputs_and_outputs(
+    id: &str,
+    group: &mut BenchmarkGroup<WallTime>,
+    script: Vec<Instruction>,
+    script_data: Vec<u8>,
+    inputs: Vec<Input>,
+    outputs: Vec<Output>,
+) {
+    group.bench_function(id, |b| {
+        let rt = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap();
+        let _drop = rt.enter();
+
+        let database = Database::rocksdb();
+        let mut config = Config::local_node();
+        config.chain_conf.consensus_parameters.tx_params.max_gas_per_tx = TARGET_BLOCK_GAS_LIMIT;
+        config
+            .chain_conf
+            .consensus_parameters
+            .predicate_params
+            .max_gas_per_predicate = TARGET_BLOCK_GAS_LIMIT;
+        config.chain_conf.block_gas_limit = TARGET_BLOCK_GAS_LIMIT;
+        config.chain_conf.consensus_parameters.gas_costs = GasCosts::new(default_gas_costs());
+        config.chain_conf.consensus_parameters.fee_params.gas_per_byte = 0;
+        config.utxo_validation = false;
+        config.block_production = Trigger::Instant;
+
+        let service = fuel_core::service::FuelService::new(database, config.clone())
+            .expect("Unable to start a FuelService");
+        service.start().expect("Unable to start the service");
+        let mut rng = rand::rngs::StdRng::seed_from_u64(2322u64);
+
+        b.to_async(&rt).iter(|| {
+            let shared = service.shared.clone();
+
+            let mut tx_builder = fuel_core_types::fuel_tx::TransactionBuilder::script(
+                script.clone().into_iter().collect(),
+                script_data.clone(),
+            );
+            tx_builder
+                .script_gas_limit(TARGET_BLOCK_GAS_LIMIT - BASE)
+                .gas_price(1)
+                .add_unsigned_coin_input(
+                    SecretKey::random(&mut rng),
+                    rng.gen(),
+                    u64::MAX / 2,
+                    AssetId::BASE,
+                    Default::default(),
+                    Default::default(),
+                );
+            for input in inputs.iter() {
+                tx_builder.add_input(input.clone());
+            }
+            for output in outputs.iter() {
+                tx_builder.add_output(output.clone());
+            }
+
+            let tx = tx_builder
+                .finalize_as_transaction();
+
             async move {
                 let tx_id = tx.id(&config.chain_conf.consensus_parameters.chain_id);
 
@@ -345,6 +475,97 @@ fn service_with_contract_id(
     (service, rt)
 }
 
+fn service_with_many_contracts(
+    state_size: u64,
+    contract_ids: Vec<ContractId>,
+) -> (FuelService, tokio::runtime::Runtime) {
+    use fuel_core::database::vm_database::IncreaseStorageKey;
+    let rt = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .unwrap();
+    let _drop = rt.enter();
+    let mut database = Database::rocksdb();
+    let mut config = Config::local_node();
+    config
+        .chain_conf
+        .consensus_parameters
+        .tx_params
+        .max_gas_per_tx = TARGET_BLOCK_GAS_LIMIT;
+
+    let contract_configs = contract_ids
+        .iter()
+        .map(|contract_id| ContractConfig {
+            contract_id: *contract_id,
+            code: vec![],
+            salt: Default::default(),
+            state: None,
+            balances: None,
+            tx_id: None,
+            output_index: None,
+            tx_pointer_block_height: None,
+            tx_pointer_tx_idx: None,
+        })
+        .collect::<Vec<_>>();
+    config.chain_conf.initial_state.as_mut().unwrap().contracts = Some(contract_configs);
+
+    config
+        .chain_conf
+        .consensus_parameters
+        .predicate_params
+        .max_gas_per_predicate = TARGET_BLOCK_GAS_LIMIT;
+    config.chain_conf.block_gas_limit = TARGET_BLOCK_GAS_LIMIT;
+    config.chain_conf.consensus_parameters.gas_costs = GasCosts::new(default_gas_costs());
+    config
+        .chain_conf
+        .consensus_parameters
+        .fee_params
+        .gas_per_byte = 0;
+    config.utxo_validation = false;
+    config.block_production = Trigger::Instant;
+
+    let mut storage_key = primitive_types::U256::zero();
+    let mut key_bytes = Bytes32::zeroed();
+
+    for contract_id in contract_ids.iter() {
+        database
+            .init_contract_state(
+                contract_id,
+                (0..state_size).map(|_| {
+                    storage_key.to_big_endian(key_bytes.as_mut());
+                    storage_key.increase().unwrap();
+                    (key_bytes, key_bytes)
+                }),
+            )
+            .unwrap();
+
+        let mut storage_key = primitive_types::U256::zero();
+        let mut sub_id = Bytes32::zeroed();
+        database
+            .init_contract_balances(
+                contract_id,
+                (0..state_size).map(|k| {
+                    storage_key.to_big_endian(sub_id.as_mut());
+
+                    let asset = if k % 2 == 0 {
+                        VmBench::CONTRACT.asset_id(&sub_id)
+                    } else {
+                        let asset_id = AssetId::new(*sub_id);
+                        storage_key.increase().unwrap();
+                        asset_id
+                    };
+                    (asset, k / 2 + 1_000)
+                }),
+            )
+            .unwrap();
+    }
+
+    let service = fuel_core::service::FuelService::new(database, config.clone())
+        .expect("Unable to start a FuelService");
+    service.start().expect("Unable to start the service");
+    (service, rt)
+}
+
 // Runs benchmark for `script` with prepared `service` and specified contract (by `contract_id`) which should be
 // included in service.
 // Also include additional inputs and outputs in transaction
@@ -355,7 +576,7 @@ fn run_with_service_with_extra_inputs(
     script: Vec<Instruction>,
     script_data: Vec<u8>,
     service: &fuel_core::service::FuelService,
-    contract_id: ContractId,
+    contract_ids: Vec<ContractId>,
     rt: &tokio::runtime::Runtime,
     rng: &mut rand::rngs::StdRng,
     extra_inputs: Vec<Input>,
@@ -382,6 +603,7 @@ fn run_with_service_with_extra_inputs(
                     Default::default(),
                     Default::default(),
                 );
+            for contract_id in &contract_ids {
                 let input_count = tx_builder.inputs().len();
 
                 let contract_input = Input::contract(
@@ -389,13 +611,14 @@ fn run_with_service_with_extra_inputs(
                     Bytes32::zeroed(),
                     Bytes32::zeroed(),
                     TxPointer::default(),
-                    contract_id,
+                    *contract_id,
                 );
                 let contract_output = Output::contract(input_count as u8, Bytes32::zeroed(), Bytes32::zeroed());
 
                 tx_builder
                     .add_input(contract_input)
                     .add_output(contract_output);
+            }
 
             for input in &extra_inputs {
                 tx_builder.add_input(input.clone());
