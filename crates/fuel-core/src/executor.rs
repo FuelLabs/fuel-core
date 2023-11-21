@@ -3004,7 +3004,7 @@ mod tests {
     }
 
     #[test]
-    fn coin_fails_when_mismatches_database() {
+    fn coin_input_fails_when_mismatches_database() {
         const AMOUNT: u64 = 100;
 
         let tx = TxBuilder::new(2322u64)
@@ -3062,6 +3062,68 @@ mod tests {
             &ExecutorError::TransactionValidity(TransactionValidityError::CoinMismatch(
                 _
             ))
+        ));
+    }
+
+    #[test]
+    fn contract_input_fails_when_doesnt_exist_in_database() {
+        let contract_id: ContractId = [1; 32].into();
+        let tx = TxBuilder::new(2322u64)
+            .contract_input(contract_id)
+            .coin_input(AssetId::default(), 100)
+            .change_output(AssetId::default())
+            .contract_output(&contract_id)
+            .build()
+            .transaction()
+            .clone();
+
+        let input = tx.inputs()[1].clone();
+        let db = &mut Database::default();
+
+        db.storage::<Coins>()
+            .insert(
+                &input.utxo_id().unwrap().clone(),
+                &CompressedCoin {
+                    owner: *input.input_owner().unwrap(),
+                    amount: 100,
+                    asset_id: AssetId::default(),
+                    maturity: Default::default(),
+                    tx_pointer: Default::default(),
+                },
+            )
+            .unwrap();
+        let executor = Executor::test(
+            db.clone(),
+            Config {
+                utxo_validation_default: true,
+                ..Default::default()
+            },
+        );
+
+        let block = PartialFuelBlock {
+            header: Default::default(),
+            transactions: vec![tx.into()],
+        };
+
+        let ExecutionResult {
+            skipped_transactions,
+            ..
+        } = executor
+            .execute_and_commit(
+                ExecutionBlock::Production(block),
+                ExecutionOptions {
+                    utxo_validation: true,
+                },
+            )
+            .unwrap();
+        // `tx` should be skipped.
+        assert_eq!(skipped_transactions.len(), 1);
+        let err = &skipped_transactions[0].1;
+        assert!(matches!(
+            err,
+            &ExecutorError::TransactionValidity(
+                TransactionValidityError::ContractDoesNotExist(_)
+            )
         ));
     }
 
@@ -4222,7 +4284,7 @@ mod tests {
     }
 
     #[test]
-    fn message_fails_when_mismatches_database() {
+    fn message_input_fails_when_mismatches_database() {
         let mut rng = StdRng::seed_from_u64(2322);
 
         let (tx, mut message) = make_tx_and_message(&mut rng, 0);
