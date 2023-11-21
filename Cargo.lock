@@ -2725,8 +2725,9 @@ dependencies = [
 
 [[package]]
 name = "fuel-asm"
-version = "0.42.1"
-source = "git+https://github.com/FuelLabs/fuel-vm?branch=bvrooman/chore/vm-initialization-as-dependent-cost#4a2eae4080e4b2fc84ea3869242da1b0039a065c"
+version = "0.42.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7bcff07c5aa5367e4b3c5e47e0a3c1db152c1ee44e2fcb0a19e37753b4fe3b55"
 dependencies = [
  "bitflags 2.4.1",
  "fuel-types",
@@ -3244,8 +3245,9 @@ dependencies = [
 
 [[package]]
 name = "fuel-crypto"
-version = "0.42.1"
-source = "git+https://github.com/FuelLabs/fuel-vm?branch=bvrooman/chore/vm-initialization-as-dependent-cost#4a2eae4080e4b2fc84ea3869242da1b0039a065c"
+version = "0.42.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "52166525e18d71898a7dbe877c73ba43e3ca6a28e4e51439e91a94d6f29be430"
 dependencies = [
  "coins-bip32",
  "coins-bip39",
@@ -3264,8 +3266,9 @@ dependencies = [
 
 [[package]]
 name = "fuel-derive"
-version = "0.42.1"
-source = "git+https://github.com/FuelLabs/fuel-vm?branch=bvrooman/chore/vm-initialization-as-dependent-cost#4a2eae4080e4b2fc84ea3869242da1b0039a065c"
+version = "0.42.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1b322f3999ad9d93dfa38cdeec07650b1bc9b16f93d86a85733d0323cf00f2ec"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -3275,8 +3278,9 @@ dependencies = [
 
 [[package]]
 name = "fuel-merkle"
-version = "0.42.1"
-source = "git+https://github.com/FuelLabs/fuel-vm?branch=bvrooman/chore/vm-initialization-as-dependent-cost#4a2eae4080e4b2fc84ea3869242da1b0039a065c"
+version = "0.42.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a023a4f5be24ffc5b892b76f68664df98d0b2f575cf78c144d106c4162ca553c"
 dependencies = [
  "derive_more",
  "digest 0.10.7",
@@ -3289,13 +3293,15 @@ dependencies = [
 
 [[package]]
 name = "fuel-storage"
-version = "0.42.1"
-source = "git+https://github.com/FuelLabs/fuel-vm?branch=bvrooman/chore/vm-initialization-as-dependent-cost#4a2eae4080e4b2fc84ea3869242da1b0039a065c"
+version = "0.42.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "12fa7d49a8219ff2d994a130044cdc50c32739b63365b2c10c7b95d572f59288"
 
 [[package]]
 name = "fuel-tx"
-version = "0.42.1"
-source = "git+https://github.com/FuelLabs/fuel-vm?branch=bvrooman/chore/vm-initialization-as-dependent-cost#4a2eae4080e4b2fc84ea3869242da1b0039a065c"
+version = "0.42.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "aade465a32b29bff40ddc167cbf529f6fa71862bc87d332c594ac8d2d02e3e48"
 dependencies = [
  "bitflags 2.4.1",
  "derivative",
@@ -3315,8 +3321,9 @@ dependencies = [
 
 [[package]]
 name = "fuel-types"
-version = "0.42.1"
-source = "git+https://github.com/FuelLabs/fuel-vm?branch=bvrooman/chore/vm-initialization-as-dependent-cost#4a2eae4080e4b2fc84ea3869242da1b0039a065c"
+version = "0.42.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "688c7d8bfdc40cc6818c921a60c866fc5c762afab169d8d458226a2a6e227d47"
 dependencies = [
  "fuel-derive",
  "hex",
@@ -3326,8 +3333,9 @@ dependencies = [
 
 [[package]]
 name = "fuel-vm"
-version = "0.42.1"
-source = "git+https://github.com/FuelLabs/fuel-vm?branch=bvrooman/chore/vm-initialization-as-dependent-cost#4a2eae4080e4b2fc84ea3869242da1b0039a065c"
+version = "0.42.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "68b41f6df2addb193bd69939bec36df633e3b4a2a8d6b5633e5d2c1caae7e012"
 dependencies = [
  "anyhow",
  "async-trait",
