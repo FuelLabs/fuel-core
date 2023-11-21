@@ -43,7 +43,9 @@ pub fn run_other(group: &mut BenchmarkGroup<WallTime>) {
         let count = 254;
         let correct_index = count; // Have the last index be the correct one. The builder includes an extra input, so it's the 255th index (254).
 
-        let contract_ids = (0..count).map(|x| [x as u8; 32].into()).collect::<Vec<_>>();
+        let contract_ids = (0..count)
+            .map(|x| ContractId::from([x as u8; 32]))
+            .collect::<Vec<_>>();
 
         let instructions = vec![
             op::movi(0x11, correct_index as u32),
