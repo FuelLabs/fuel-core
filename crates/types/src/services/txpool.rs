@@ -245,6 +245,8 @@ pub enum Error {
         "Transaction is not inserted. UTXO requires Contract input {0:#x} that is priced lower"
     )]
     NotInsertedContractPricedLower(ContractId),
+    #[error("Transaction is not inserted. Input coin mismatch the values from database")]
+    NotInsertedIoCoinMismatch,
     #[error("Transaction is not inserted. Input output mismatch. Coin owner is different from expected input")]
     NotInsertedIoWrongOwner,
     #[error("Transaction is not inserted. Input output mismatch. Coin output does not match expected input")]
