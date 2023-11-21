@@ -380,8 +380,12 @@ async fn get_transactions() {
     assert!(response.has_previous_page);
 }
 
+#[test_case::test_case(PageDirection::Forward; "forward")]
+#[test_case::test_case(PageDirection::Backward; "backward")]
 #[tokio::test]
-async fn get_transactions_by_owner_forward_and_backward_iterations() {
+async fn get_transactions_by_owner_returns_correct_number_of_results(
+    direction: PageDirection,
+) {
     let alice = Address::from([1; 32]);
     let bob = Address::from([2; 32]);
 
@@ -397,7 +401,7 @@ async fn get_transactions_by_owner_forward_and_backward_iterations() {
     let all_transactions_forward = PaginationRequest {
         cursor: None,
         results: 10,
-        direction: PageDirection::Forward,
+        direction,
     };
     let response = client
         .transactions_by_owner(&bob, all_transactions_forward)
@@ -412,24 +416,46 @@ async fn get_transactions_by_owner_forward_and_backward_iterations() {
         })
         .collect_vec();
     assert_eq!(transactions_forward.len(), 5);
+}
 
-    let all_transactions_backward = PaginationRequest {
+#[test_case::test_case(PageDirection::Forward; "forward")]
+#[test_case::test_case(PageDirection::Backward; "backward")]
+#[tokio::test]
+async fn get_transactions_by_owner_supports_cursor(direction: PageDirection) {
+    let alice = Address::from([1; 32]);
+    let bob = Address::from([2; 32]);
+
+    let mut context = TestContext::new(100).await;
+    let _ = context.transfer(alice, bob, 1).await.unwrap();
+    let _ = context.transfer(alice, bob, 2).await.unwrap();
+    let _ = context.transfer(alice, bob, 3).await.unwrap();
+    let _ = context.transfer(alice, bob, 4).await.unwrap();
+    let _ = context.transfer(alice, bob, 5).await.unwrap();
+
+    let client = context.client;
+
+    let all_transactions_forward = PaginationRequest {
         cursor: None,
         results: 10,
-        direction: PageDirection::Backward,
+        direction,
     };
     let response = client
-        .transactions_by_owner(&bob, all_transactions_backward)
-        .await;
-    // Backward request is not supported right now.
-    assert!(response.is_err());
-
-    ///////////////// Iteration
+        .transactions_by_owner(&bob, all_transactions_forward)
+        .await
+        .unwrap();
+    let transactions_forward = response
+        .results
+        .into_iter()
+        .map(|tx| {
+            assert!(matches!(tx.status, TransactionStatus::Success { .. }));
+            tx.transaction
+        })
+        .collect_vec();
 
     let forward_iter_three = PaginationRequest {
         cursor: None,
         results: 3,
-        direction: PageDirection::Forward,
+        direction,
     };
     let response_after_iter_three = client
         .transactions_by_owner(&bob, forward_iter_three)
@@ -451,7 +477,7 @@ async fn get_transactions_by_owner_forward_and_backward_iterations() {
     let forward_iter_next_two = PaginationRequest {
         cursor: response_after_iter_three.cursor.clone(),
         results: 2,
-        direction: PageDirection::Forward,
+        direction,
     };
     let response = client
         .transactions_by_owner(&bob, forward_iter_next_two)

@@ -1,9 +1,11 @@
+use crate::block_target_gas_set::default_gas_costs::default_gas_costs;
 use block_target_gas_set::{
     alu::run_alu,
     contract::run_contract,
     crypto::run_crypto,
     flow::run_flow,
     memory::run_memory,
+    other::run_other,
 };
 use criterion::{
     criterion_group,
@@ -13,16 +15,16 @@ use criterion::{
     Criterion,
 };
 use ed25519_dalek::Signer;
-use fuel_core::service::{
-    config::Trigger,
-    Config,
-    FuelService,
-    ServiceTrait,
-};
-use rand::SeedableRng;
-
 use ethnum::U256;
-use fuel_core::txpool::types::Word;
+use fuel_core::{
+    service::{
+        config::Trigger,
+        Config,
+        FuelService,
+        ServiceTrait,
+    },
+    txpool::types::Word,
+};
 use fuel_core_benches::*;
 use fuel_core_chain_config::ContractConfig;
 use fuel_core_storage::{
@@ -67,22 +69,20 @@ use fuel_core_types::{
         consts::WORD_SIZE,
     },
 };
-
-mod utils;
-
-mod block_target_gas_set;
-
-use crate::block_target_gas_set::default_gas_costs::default_gas_costs;
+use rand::SeedableRng;
 use utils::{
     make_u128,
     make_u256,
 };
 
+mod utils;
+
+mod block_target_gas_set;
+
 // Use Jemalloc during benchmarks
 #[global_allocator]
 static GLOBAL: tikv_jemallocator::Jemalloc = tikv_jemallocator::Jemalloc;
 
-const STATE_SIZE: u64 = 10_000_000;
 const TARGET_BLOCK_GAS_LIMIT: u64 = 1_000_000;
 const BASE: u64 = 100_000;
 
@@ -99,7 +99,7 @@ impl SanityBenchmarkRunnerBuilder {
     /// Creates a factory for benchmarks that share a service with a contract, `contract_id`, pre-
     /// deployed.
     pub fn new_shared(contract_id: ContractId) -> SharedSanityBenchmarkFactory {
-        let state_size = get_state_size();
+        let state_size = crate::utils::get_state_size();
         let (service, rt) = service_with_contract_id(state_size, contract_id);
         let rng = rand::rngs::StdRng::seed_from_u64(2322u64);
         SharedSanityBenchmarkFactory {
@@ -250,7 +250,9 @@ fn run(
                     else {
                         panic!("The execution should fails with out of gas")
                     };
-                assert!(reason.contains("OutOfGas"));
+                if !reason.contains("OutOfGas") {
+                    panic!("The test failed because of {}", reason);
+                }
             }
         })
     });
@@ -341,19 +343,6 @@ fn service_with_contract_id(
         .expect("Unable to start a FuelService");
     service.start().expect("Unable to start the service");
     (service, rt)
-}
-
-fn get_state_size() -> u64 {
-    // Override state size if the env var is set
-    let state_size = std::env::var_os("STATE_SIZE")
-        .map(|value| {
-            let value = value.to_str().unwrap();
-            let value = value.parse::<u64>().unwrap();
-            println!("Overriding state size with {}", value);
-            value
-        })
-        .unwrap_or(STATE_SIZE);
-    state_size
 }
 
 // Runs benchmark for `script` with prepared `service` and specified contract (by `contract_id`) which should be
@@ -461,6 +450,8 @@ fn block_target_gas(c: &mut Criterion) {
     run_flow(&mut group);
 
     run_memory(&mut group);
+
+    run_other(&mut group);
 
     group.finish();
 }
