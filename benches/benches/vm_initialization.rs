@@ -1,6 +1,7 @@
 use criterion::{
     black_box,
     Criterion,
+    Throughput,
 };
 use fuel_core_types::{
     fuel_asm::{
@@ -17,8 +18,13 @@ use fuel_core_types::{
         Transaction,
         Word,
     },
+    fuel_types::canonical::Serialize,
     fuel_vm::{
-        checked_transaction::IntoChecked,
+        checked_transaction::{
+            Checked,
+            CheckedTransaction,
+            IntoChecked,
+        },
         interpreter::NotSupportedEcal,
         Interpreter,
     },
@@ -29,10 +35,12 @@ use rand::{
     SeedableRng,
 };
 
-pub fn vm_initialization(c: &mut Criterion) {
-    let rng = &mut StdRng::seed_from_u64(8586);
-    let consensus_params = ConsensusParameters::default();
-
+fn transaction<R: Rng>(
+    rng: &mut R,
+    script: Vec<u8>,
+    script_data: Vec<u8>,
+) -> Checked<Script> {
+    let mut consensus_params = ConsensusParameters::default();
     let inputs = (0..consensus_params.tx_params.max_inputs)
         .map(|_| {
             Input::coin_predicate(
@@ -66,14 +74,9 @@ pub fn vm_initialization(c: &mut Criterion) {
         .collect();
 
     let tx = Transaction::script(
-        1000000,
-        vec![
-            op::ret(1);
-            consensus_params.script_params.max_script_length as usize / Instruction::SIZE
-        ]
-        .into_iter()
-        .collect(),
-        vec![255; consensus_params.script_params.max_script_data_length as usize],
+        1_000_000,
+        script,
+        script_data,
         Policies::new()
             .with_gas_price(0)
             .with_maturity(0.into())
@@ -85,18 +88,38 @@ pub fn vm_initialization(c: &mut Criterion) {
     .into_checked_basic(Default::default(), &consensus_params)
     .expect("Should produce a valid transaction");
 
+    tx
+}
+
+pub fn vm_initialization(c: &mut Criterion) {
+    let mut rng = StdRng::seed_from_u64(8586);
+
     let mut group = c.benchmark_group("vm_initialization");
 
-    group.bench_function("vm_initialization", |b| {
-        b.iter(|| {
-            let mut vm = black_box(
-                Interpreter::<_, Script, NotSupportedEcal>::with_memory_storage(),
-            );
-            // dbg!(tx.size());
-            black_box(vm.init_script(tx.clone()))
-                .expect("Should be able to execute transaction");
-        })
-    });
+    // Generate N data points
+    const N: usize = 16;
+    for i in 0..N {
+        let increment = 1024 / N;
+        let script_size = 1024 * increment * i;
+        let script = vec![op::ret(1); script_size / Instruction::SIZE]
+            .into_iter()
+            .collect();
+        let script_data_size = 1024 * increment * i;
+        let script_data = vec![255; script_data_size];
+        let tx = transaction(&mut rng, script, script_data);
+        let size = tx.transaction().size();
+        let name = format!("vm_initialization_with_tx_size_{}", size);
+        group.throughput(Throughput::Bytes(size as u64));
+        group.bench_function(name, |b| {
+            b.iter(|| {
+                let mut vm = black_box(
+                    Interpreter::<_, Script, NotSupportedEcal>::with_memory_storage(),
+                );
+                black_box(vm.init_script(tx.clone()))
+                    .expect("Should be able to execute transaction");
+            })
+        });
+    }
 
     group.finish();
 }
