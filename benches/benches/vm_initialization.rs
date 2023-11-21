@@ -97,15 +97,13 @@ pub fn vm_initialization(c: &mut Criterion) {
     let mut group = c.benchmark_group("vm_initialization");
 
     // Generate N data points
-    const N: usize = 16;
+    const N: usize = 20;
     for i in 0..N {
-        let increment = 1024 / N;
-        let script_size = 1024 * increment * i;
-        let script = vec![op::ret(1); script_size / Instruction::SIZE]
+        let size = 1 << i;
+        let script = vec![op::ret(1); size / Instruction::SIZE]
             .into_iter()
             .collect();
-        let script_data_size = 1024 * increment * i;
-        let script_data = vec![255; script_data_size];
+        let script_data = vec![255; size];
         let tx = transaction(&mut rng, script, script_data);
         let size = tx.transaction().size();
         let name = format!("vm_initialization_with_tx_size_{}", size);
