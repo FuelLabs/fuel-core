@@ -56,17 +56,3 @@ pub fn run_other(group: &mut BenchmarkGroup<WallTime>) {
             .run("other/gtf", group, instructions, vec![]);
     }
 }
-
-fn output_for_input_index(index: u8) -> Output {
-    Output::contract(index, Bytes32::zeroed(), Bytes32::zeroed())
-}
-
-fn contract_input_with_id(contract_id: impl Into<ContractId>) -> Input {
-    Input::contract(
-        UtxoId::default(),
-        Bytes32::zeroed(),
-        Bytes32::zeroed(),
-        TxPointer::default(),
-        contract_id.into(),
-    )
-}
