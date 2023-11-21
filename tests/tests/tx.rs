@@ -646,7 +646,7 @@ async fn get_owned_transactions() {
     assert_eq!(&charlie_txs, &[tx1, tx2, tx3]);
 }
 
-fn get_executor_and_db() -> (Executor<MaybeRelayerAdapter>, Database) {
+fn get_executor_and_db() -> (Executor<MaybeRelayerAdapter, Database>, Database) {
     let db = Database::default();
     let relayer = MaybeRelayerAdapter {
         database: db.clone(),

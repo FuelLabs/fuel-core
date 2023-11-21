@@ -210,7 +210,7 @@ where
     }
 
     fn coinbase(&self) -> Result<ContractId, Self::DataError> {
-        todo!()
+        Ok(self.coinbase)
     }
 
     fn merkle_contract_state_range(

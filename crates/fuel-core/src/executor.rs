@@ -18,7 +18,6 @@ use fuel_core_storage::{
     },
     MerkleRootStorage,
     StorageAsMut,
-    StorageAsRef,
     StorageInspect,
     StorageMutate,
 };
@@ -224,13 +223,14 @@ pub struct ExecutionOptions {
     pub utxo_validation: bool,
 }
 
-impl From<&crate::service::Config> for ExecutionOptions {
-    fn from(value: &crate::service::Config) -> Self {
-        Self {
-            utxo_validation: value.utxo_validation,
-        }
-    }
-}
+
+// impl From<&crate::service::Config> for ExecutionOptions {
+//     fn from(value: &crate::service::Config) -> Self {
+//         Self {
+//             utxo_validation: value.utxo_validation,
+//         }
+//     }
+// }
 
 impl From<&Config> for ExecutionOptions {
     fn from(value: &Config) -> Self {
@@ -281,7 +281,6 @@ where
         > + MerkleRootStorage<ContractId, ContractsAssets, Error = StorageError>
         + fuel_core_executor::refs::FuelBlockTrait<Error = StorageError>
         + fuel_core_executor::refs::FuelStateTrait<Error = StorageError>
-        + crate::database::vm_database::DatabaseIteratorsTrait,
 {
     #[cfg(any(test, feature = "test-helpers"))]
     /// Executes the block and commits the result of the execution into the inner `Database`.
@@ -347,7 +346,6 @@ where
         > + MerkleRootStorage<ContractId, ContractsAssets, Error = StorageError>
         + fuel_core_executor::refs::FuelBlockTrait<Error = StorageError>
         + fuel_core_executor::refs::FuelStateTrait<Error = StorageError>
-        + crate::database::vm_database::DatabaseIteratorsTrait,
 {
     pub fn execute_without_commit<TxSource>(
         &self,
@@ -489,7 +487,6 @@ where
         > + MerkleRootStorage<ContractId, ContractsAssets, Error = StorageError>
         + fuel_core_executor::refs::FuelBlockTrait<Error = StorageError>
         + fuel_core_executor::refs::FuelStateTrait<Error = StorageError>
-        + crate::database::vm_database::DatabaseIteratorsTrait,
 {
     #[tracing::instrument(skip_all)]
     fn execute_inner<TxSource>(
@@ -509,7 +506,7 @@ where
         let block = block.map_v(PartialFuelBlock::from);
 
         // Create a new database transaction.
-        let mut block_db_transaction = database.clone();
+        let mut block_db_transaction = database.transaction();
 
         let (block, execution_data) = match block {
             ExecutionTypes::DryRun(component) => {
@@ -522,7 +519,7 @@ where
                 );
 
                 let execution_data = self.execute_block(
-                    &database,
+                    &mut block_db_transaction,
                     ExecutionType::DryRun(component),
                     options,
                 )?;
@@ -538,7 +535,7 @@ where
                 );
 
                 let execution_data = self.execute_block(
-                    &database,
+                    &mut block_db_transaction,
                     ExecutionType::Production(component),
                     options,
                 )?;
@@ -594,42 +591,28 @@ where
         // ------------ GraphQL API Functionality BEGIN ------------
 
         // save the status for every transaction using the finalized block id
-
-        self.persist_transaction_status(&result, &mut block_db_transaction)?;
+        self.persist_transaction_status(&result, block_db_transaction.deref_mut())?;
 
         // save the associated owner for each transaction in the block
         self.index_tx_owners_for_block(&result.block, &mut block_db_transaction)?;
 
         // ------------ GraphQL API Functionality   END ------------
+
         // insert block into database
-
-        <D as StorageMutate<FuelBlocks>>::insert(
-            &mut block_db_transaction,
-            &finalized_block_id,
-            &result
-                .block
-                .compress(&self.config.consensus_parameters.chain_id),
-        )?;
-
-        // let block = &result
-        //     .block
-        //     .compress(&self.config.consensus_parameters.chain_id);
-        //
-        // block_db_transaction.insert(& finalized_block_id, block);
-
-        // let _ = block_db_transaction
-        //     .insert(
-        //         &finalized_block_id,
-        //         &result
-        //             .block
-        //             .compress(&self.config.consensus_parameters.chain_id),
-        //     )
-        //     .unwrap(); // Todo make Error ???????????????? Emir
+        block_db_transaction
+            .deref_mut()
+            .storage::<FuelBlocks>()
+            .insert(
+                &finalized_block_id,
+                &result
+                    .block
+                    .compress(&self.config.consensus_parameters.chain_id),
+            )?;
 
         // Get the complete fuel block.
         Ok(UncommittedResult::new(
             result,
-            StorageTransaction::new(block_db_transaction.transaction()),
+            StorageTransaction::new(block_db_transaction),
         ))
     }
 
@@ -637,7 +620,7 @@ where
     /// Execute the fuel block with all transactions.
     fn execute_block<TxSource>(
         &self,
-        block_db_transaction: &D,
+        block_db_transaction: &mut D,
         block: ExecutionType<PartialBlockComponent<TxSource>>,
         options: ExecutionOptions,
     ) -> ExecutorResult<ExecutionData>
@@ -673,7 +656,7 @@ where
          -> ExecutorResult<()> {
             let tx_count = execution_data.tx_count;
             let tx = {
-                let tx_db_transaction = block_db_transaction; // TODO: Check traksaction
+                let mut tx_db_transaction = block_db_transaction.transaction();
                 let tx_id = tx.id(&self.config.consensus_parameters.chain_id);
                 let result = self.execute_transaction(
                     tx,
@@ -681,7 +664,7 @@ where
                     &block.header,
                     execution_data,
                     execution_kind,
-                    tx_db_transaction,
+                    &mut tx_db_transaction,
                     options,
                 );
 
@@ -705,7 +688,7 @@ where
                     Ok(tx) => tx,
                 };
 
-                if let Err(err) = tx_db_transaction.transaction().commit() {
+                if let Err(err) = tx_db_transaction.commit() {
                     return Err(err.into())
                 }
                 tx
@@ -715,8 +698,6 @@ where
             execution_data.tx_count = tx_count
                 .checked_add(1)
                 .ok_or(ExecutorError::TooManyTransactions)?;
-
-
 
             Ok(())
         };
@@ -780,7 +761,7 @@ where
         header: &PartialBlockHeader,
         execution_data: &mut ExecutionData,
         execution_kind: ExecutionKind,
-        tx_db_transaction: &D,
+        mut tx_db_transaction: &mut D,
         options: ExecutionOptions,
     ) -> ExecutorResult<Transaction> {
         if execution_data.found_mint {
@@ -789,7 +770,7 @@ where
 
         // Throw a clear error if the transaction id is a duplicate
         if tx_db_transaction
-            // .deref_mut()
+            .deref_mut()
             .storage::<Transactions>()
             .contains_key(tx_id)?
         {
@@ -837,7 +818,7 @@ where
         checked_mint: Checked<Mint>,
         header: &PartialBlockHeader,
         execution_data: &mut ExecutionData,
-        block_db_transaction: &D,
+        mut block_db_transaction: &mut D,
         execution_kind: ExecutionKind,
         options: ExecutionOptions,
     ) -> ExecutorResult<Transaction> {
@@ -890,7 +871,7 @@ where
             if options.utxo_validation {
                 // validate utxos exist
                 self.verify_input_state(
-                    block_db_transaction,
+                    block_db_transaction.deref(),
                     inputs.as_mut_slice(),
                     block_height,
                     header.da_height,
@@ -910,18 +891,17 @@ where
                     }
                 },
                 coinbase_id,
-                block_db_transaction,
+                block_db_transaction.deref_mut(),
                 options,
             )?;
 
-            let mut sub_block_db_commit = block_db_transaction.transaction(); // Todo check and solve this
-                                                                              // let sub_db_view = sub_block_db_commit.as_mut();
+            let mut sub_block_db_commit = block_db_transaction.transaction();
+            let sub_db_view = sub_block_db_commit.as_mut();
             let mut vm_db = ExecutorVmDatabase::new(
-                sub_block_db_commit.deref_mut(),
+                sub_db_view.clone(),
                 &header.consensus,
                 self.config.coinbase_recipient,
             );
-
             fuel_vm::interpreter::contract::balance_increase(
                 &mut vm_db,
                 &mint.input_contract().contract_id,
@@ -936,7 +916,7 @@ where
                 block_height,
                 execution_data.tx_count,
                 &coinbase_id,
-                block_db_transaction.transaction().deref_mut(),
+                block_db_transaction,
                 inputs.as_slice(),
                 outputs.as_slice(),
             )?;
@@ -956,7 +936,7 @@ where
                     )),
                 },
                 coinbase_id,
-                block_db_transaction,
+                block_db_transaction.deref_mut(),
             )?;
             let Input::Contract(input) = core::mem::take(&mut inputs[0]) else {
                 unreachable!()
@@ -982,24 +962,14 @@ where
             result: TransactionExecutionResult::Success { result: None },
         });
 
-        if <D as StorageMutate<Transactions>>::insert(
-            block_db_transaction.transaction().deref_mut(), // TODO Emir
-            &coinbase_id,
-            &tx,
-        )?
-        .is_some()
+        if block_db_transaction
+            .deref_mut()
+            .storage::<Transactions>()
+            .insert(&coinbase_id, &tx)?
+            .is_some()
         {
             return Err(ExecutorError::TransactionIdCollision(coinbase_id))
         }
-
-        // if block_db_transaction //Todo Emir
-        //     .deref_mut()
-        // .storage::<Transactions>()
-        // .insert(&coinbase_id, &tx)?
-        // .is_some()
-        // {
-        //     return Err(ExecutorError::TransactionIdCollision(coinbase_id))
-        // }
         Ok(tx)
     }
 
@@ -1009,7 +979,7 @@ where
         mut checked_tx: Checked<Tx>,
         header: &PartialBlockHeader,
         execution_data: &mut ExecutionData,
-        tx_db_transaction: &D,
+        mut tx_db_transaction: &mut D,
         execution_kind: ExecutionKind,
         options: ExecutionOptions,
     ) -> ExecutorResult<Transaction>
@@ -1035,7 +1005,7 @@ where
         if options.utxo_validation {
             // validate utxos exist and maturity is properly set
             self.verify_input_state(
-                tx_db_transaction,
+                tx_db_transaction.deref(),
                 checked_tx.transaction().inputs(),
                 *header.height(),
                 header.da_height,
@@ -1046,24 +1016,22 @@ where
                 .map_err(TransactionValidityError::from)?;
             debug_assert!(checked_tx.checks().contains(Checks::Signatures));
         }
-        // Todo check this Emir
+
         // execute transaction
         // setup database view that only lives for the duration of vm execution
         let mut sub_block_db_commit = tx_db_transaction.transaction();
-        let sub_db_view = sub_block_db_commit.deref().clone();
+        let sub_db_view = sub_block_db_commit.as_mut();
         // execution vm
 
         let vm_db = ExecutorVmDatabase::new(
-            sub_db_view,
+            sub_db_view.clone(),
             &header.consensus,
             self.config.coinbase_recipient,
         );
-
         let mut vm = Interpreter::with_storage(
-            vm_db.into(),
+            vm_db,
             InterpreterParams::from(&self.config.consensus_parameters),
         );
-
         let vm_result: StateTransition<_> = vm
             .transact(checked_tx.clone())
             .map_err(|error| ExecutorError::VmExecution {
@@ -1071,7 +1039,6 @@ where
                 transaction_id: tx_id,
             })?
             .into();
-
         let reverted = vm_result.should_revert();
 
         let (state, mut tx, receipts) = vm_result.into_inner();
@@ -1089,7 +1056,7 @@ where
                 ExecutionKind::Validation => ExecutionTypes::Validation(tx.inputs()),
             },
             tx_id,
-            tx_db_transaction,
+            tx_db_transaction.deref_mut(),
             options,
         )?;
 
@@ -1118,18 +1085,14 @@ where
         }
 
         // change the spent status of the tx inputs
-        self.spend_input_utxos(
-            tx.inputs(),
-            tx_db_transaction.transaction().deref_mut(),
-            reverted,
-        )?; // Todo Check this Emir
+        self.spend_input_utxos(tx.inputs(), tx_db_transaction.deref_mut(), reverted)?;
 
         // Persist utxos first and after calculate the not utxo outputs
         self.persist_output_utxos(
             *header.height(),
             execution_data.tx_count,
             &tx_id,
-            tx_db_transaction.transaction().deref_mut(),
+            tx_db_transaction.deref_mut(),
             tx.inputs(),
             tx.outputs(),
         )?;
@@ -1156,24 +1119,13 @@ where
         let final_tx = tx.into();
 
         // Store tx into the block db transaction
-
-        <D as StorageMutate<Transactions>>::insert(
-            tx_db_transaction.transaction().deref_mut(),
-            &tx_id,
-            &final_tx,
-        )?;
-
-        // tx_db_transaction
-        //     .deref_mut()
-        //     .storage::<Transactions>()
-        //     .insert(&tx_id, &final_tx)?;
+        tx_db_transaction
+            .deref_mut()
+            .storage::<Transactions>()
+            .insert(&tx_id, &final_tx)?;
 
         // persist receipts
-        self.persist_receipts(
-            &tx_id,
-            &receipts,
-            tx_db_transaction.transaction().deref_mut(),
-        )?;
+        self.persist_receipts(&tx_id, &receipts, tx_db_transaction.deref_mut())?;
 
         let status = if reverted {
             self.log_backtrace(&vm, &receipts);
@@ -1422,7 +1374,7 @@ where
         &self,
         inputs: ExecutionTypes<&mut [Input], &[Input]>,
         tx_id: TxId,
-        db: &D,
+        db: &mut D,
         options: ExecutionOptions,
     ) -> ExecutorResult<()> {
         match inputs {
@@ -1461,7 +1413,7 @@ where
                             ref contract_id,
                             ..
                         }) => {
-                            let mut contract = ContractRef::new(db.clone(), *contract_id); // TODO try to remove Clone
+                            let mut contract = ContractRef::new(&mut *db, *contract_id);
                             let utxo_info =
                                 contract.validated_utxo(options.utxo_validation)?;
                             *utxo_id = utxo_info.utxo_id;
@@ -1513,7 +1465,7 @@ where
                             tx_pointer,
                             ..
                         }) => {
-                            let mut contract = ContractRef::new(db.clone(), *contract_id);
+                            let mut contract = ContractRef::new(&mut *db, *contract_id);
                             let provided_info = ContractUtxoInfo {
                                 utxo_id: *utxo_id,
                                 tx_pointer: *tx_pointer,
@@ -1553,7 +1505,7 @@ where
         &self,
         tx: ExecutionTypes<(&mut [Output], &[Input]), (&[Output], &[Input])>,
         tx_id: TxId,
-        db: &D,
+        db: &mut D,
     ) -> ExecutorResult<()> {
         match tx {
             ExecutionTypes::DryRun(tx) | ExecutionTypes::Production(tx) => {
@@ -1571,7 +1523,7 @@ where
                                 })
                             };
 
-                        let mut contract = ContractRef::new(db.clone(), *contract_id);
+                        let mut contract = ContractRef::new(&mut *db, *contract_id);
                         contract_output.balance_root = contract.balance_root()?;
                         contract_output.state_root = contract.state_root()?;
                     }
@@ -1592,7 +1544,7 @@ where
                                 })
                             };
 
-                        let mut contract = ContractRef::new(db.clone(), *contract_id);
+                        let mut contract = ContractRef::new(&mut *db, *contract_id);
                         if contract_output.balance_root != contract.balance_root()? {
                             return Err(ExecutorError::InvalidTransactionOutcome {
                                 transaction_id: tx_id,
@@ -1613,7 +1565,7 @@ where
     #[allow(clippy::too_many_arguments)]
     pub fn get_coin_or_default(
         &self,
-        db: &D,
+        db: &mut D,
         utxo_id: UtxoId,
         owner: Address,
         amount: u64,
@@ -1800,7 +1752,7 @@ where
     fn index_tx_owners_for_block(
         &self,
         block: &Block,
-        block_db_transaction: &D,
+        block_db_transaction: &mut D,
     ) -> ExecutorResult<()> {
         for (tx_idx, tx) in block.transactions().iter().enumerate() {
             let block_height = *block.header().height();
@@ -1826,7 +1778,7 @@ where
                 outputs,
                 &tx_id,
                 tx_idx,
-                block_db_transaction,
+                block_db_transaction.transaction().deref_mut(),
             )?;
         }
         Ok(())
@@ -1840,7 +1792,7 @@ where
         outputs: &[Output],
         tx_id: &Bytes32,
         tx_idx: u16,
-        db: &D,
+        db: &mut D,
     ) -> ExecutorResult<()> {
         let mut owners = vec![];
         for input in inputs {
@@ -2424,170 +2376,169 @@ mod tests {
             assert_eq!(block.transactions().len(), 1);
         }
 
-            #[test]
-            fn executor_commits_transactions_with_non_zero_coinbase_validation() {
-                let price = 1;
-                let limit = 0;
-                let gas_price_factor = 1;
+        #[test]
+        fn executor_commits_transactions_with_non_zero_coinbase_validation() {
+            let price = 1;
+            let limit = 0;
+            let gas_price_factor = 1;
+            let script = TxBuilder::new(2322u64)
+                .gas_limit(limit)
+                // Set a price for the test
+                .gas_price(price)
+                .coin_input(AssetId::BASE, 10000)
+                .change_output(AssetId::BASE)
+                .build()
+                .transaction()
+                .clone();
+            let recipient = fuel_tx::Contract::EMPTY_CONTRACT_ID;
+
+            let fee_params = FeeParameters {
+                gas_price_factor,
+                ..Default::default()
+            };
+            let config = Config {
+                coinbase_recipient: recipient,
+                consensus_parameters: ConsensusParameters {
+                    fee_params,
+                    ..Default::default()
+                },
+                ..Default::default()
+            };
+            let database = &mut Database::default();
+            database
+                .storage::<ContractsRawCode>()
+                .insert(&recipient, &[])
+                .expect("Should insert coinbase contract");
+
+            let producer = Executor::test(database.clone(), config);
+
+            let mut block = Block::default();
+            *block.transactions_mut() = vec![script.into()];
+
+            let ExecutionResult {
+                block: produced_block,
+                skipped_transactions,
+                ..
+            } = producer
+                .execute_and_commit(
+                    ExecutionBlock::Production(block.into()),
+                    Default::default(),
+                )
+                .unwrap();
+            assert!(skipped_transactions.is_empty());
+            let produced_txs = produced_block.transactions().to_vec();
+
+            let validator = Executor::test(
+                Default::default(),
+                // Use the same config as block producer
+                producer.config.as_ref().clone(),
+            );
+            let ExecutionResult {
+                block: validated_block,
+                ..
+            } = validator
+                .execute_and_commit(
+                    ExecutionBlock::Validation(produced_block),
+                    Default::default(),
+                )
+                .unwrap();
+            assert_eq!(validated_block.transactions(), produced_txs);
+            let (asset_id, amount) = validator
+                .database
+                .contract_balances(recipient, None, None)
+                .next()
+                .unwrap()
+                .unwrap();
+            assert_eq!(asset_id, AssetId::zeroed());
+            assert_ne!(amount, 0);
+        }
+
+        #[test]
+        fn execute_cb_command() {
+            fn compare_coinbase_addresses(
+                config_coinbase: ContractId,
+                expected_in_tx_coinbase: ContractId,
+            ) -> bool {
                 let script = TxBuilder::new(2322u64)
-                    .gas_limit(limit)
+                    .gas_limit(100000)
                     // Set a price for the test
-                    .gas_price(price)
-                    .coin_input(AssetId::BASE, 10000)
+                    .gas_price(0)
+                    .start_script(vec![
+                        // Store the size of the `Address`(32 bytes) into register `0x11`.
+                        op::movi(0x11, Address::LEN.try_into().unwrap()),
+                        // Allocate 32 bytes on the heap.
+                        op::aloc(0x11),
+                        // Store the pointer to the beginning of the free memory into
+                        // register `0x10`.
+                        op::move_(0x10, RegId::HP),
+                        // Store `config_coinbase` `Address` into MEM[$0x10; 32].
+                        op::cb(0x10),
+                        // Store the pointer on the beginning of script data into register `0x12`.
+                        // Script data contains `expected_in_tx_coinbase` - 32 bytes of data.
+                        op::gtf_args(0x12, 0x00, GTFArgs::ScriptData),
+                        // Compare retrieved `config_coinbase`(register `0x10`) with
+                        // passed `expected_in_tx_coinbase`(register `0x12`) where the length
+                        // of memory comparison is 32 bytes(register `0x11`) and store result into
+                        // register `0x13`(1 - true, 0 - false).
+                        op::meq(0x13, 0x10, 0x12, 0x11),
+                        // Return the result of the comparison as a receipt.
+                        op::ret(0x13)
+                    ], expected_in_tx_coinbase.to_vec() /* pass expected address as script data */)
+                    .coin_input(AssetId::BASE, 1000)
+                    .variable_output(Default::default())
+                    .coin_output(AssetId::BASE, 1000)
                     .change_output(AssetId::BASE)
                     .build()
                     .transaction()
                     .clone();
-                let recipient = fuel_tx::Contract::EMPTY_CONTRACT_ID;
 
-                let fee_params = FeeParameters {
-                    gas_price_factor,
-                    ..Default::default()
-                };
                 let config = Config {
-                    coinbase_recipient: recipient,
-                    consensus_parameters: ConsensusParameters {
-                        fee_params,
-                        ..Default::default()
-                    },
+                    coinbase_recipient: config_coinbase,
                     ..Default::default()
                 };
-                let database = &mut Database::default();
-                database
-                    .storage::<ContractsRawCode>()
-                    .insert(&recipient, &[])
-                    .expect("Should insert coinbase contract");
-
-                let producer = Executor::test(database.clone(), config);
+                let mut producer = Executor::test(Default::default(), config);
 
                 let mut block = Block::default();
-                *block.transactions_mut() = vec![script.into()];
+                *block.transactions_mut() = vec![script.clone().into()];
 
-                let ExecutionResult {
-                    block: produced_block,
-                    skipped_transactions,
-                    ..
-                } = producer
+                assert!(producer
                     .execute_and_commit(
                         ExecutionBlock::Production(block.into()),
-                        Default::default(),
+                        Default::default()
                     )
-                    .unwrap();
-                assert!(skipped_transactions.is_empty());
-                let produced_txs = produced_block.transactions().to_vec();
-
-                let validator = Executor::test(
-                    Default::default(),
-                    // Use the same config as block producer
-                    producer.config.as_ref().clone(),
-                );
-                let ExecutionResult {
-                    block: validated_block,
-                    ..
-                } = validator
-                    .execute_and_commit(
-                        ExecutionBlock::Validation(produced_block),
-                        Default::default(),
-                    )
-                    .unwrap();
-                assert_eq!(validated_block.transactions(), produced_txs);
-                let (asset_id, amount) = validator
+                    .is_ok());
+                let receipts = producer
                     .database
-                    .contract_balances(recipient, None, None)
-                    .next()
+                    .storage::<Receipts>()
+                    .get(&script.id(&producer.config.consensus_parameters.chain_id))
                     .unwrap()
                     .unwrap();
-                assert_eq!(asset_id, AssetId::zeroed());
-                assert_ne!(amount, 0);
-            }
-            }
-        /*
 
-            #[test]
-            fn execute_cb_command() {
-                fn compare_coinbase_addresses(
-                    config_coinbase: ContractId,
-                    expected_in_tx_coinbase: ContractId,
-                ) -> bool {
-                    let script = TxBuilder::new(2322u64)
-                        .gas_limit(100000)
-                        // Set a price for the test
-                        .gas_price(0)
-                        .start_script(vec![
-                            // Store the size of the `Address`(32 bytes) into register `0x11`.
-                            op::movi(0x11, Address::LEN.try_into().unwrap()),
-                            // Allocate 32 bytes on the heap.
-                            op::aloc(0x11),
-                            // Store the pointer to the beginning of the free memory into
-                            // register `0x10`.
-                            op::move_(0x10, RegId::HP),
-                            // Store `config_coinbase` `Address` into MEM[$0x10; 32].
-                            op::cb(0x10),
-                            // Store the pointer on the beginning of script data into register `0x12`.
-                            // Script data contains `expected_in_tx_coinbase` - 32 bytes of data.
-                            op::gtf_args(0x12, 0x00, GTFArgs::ScriptData),
-                            // Compare retrieved `config_coinbase`(register `0x10`) with
-                            // passed `expected_in_tx_coinbase`(register `0x12`) where the length
-                            // of memory comparison is 32 bytes(register `0x11`) and store result into
-                            // register `0x13`(1 - true, 0 - false).
-                            op::meq(0x13, 0x10, 0x12, 0x11),
-                            // Return the result of the comparison as a receipt.
-                            op::ret(0x13)
-                        ], expected_in_tx_coinbase.to_vec() /* pass expected address as script data */)
-                        .coin_input(AssetId::BASE, 1000)
-                        .variable_output(Default::default())
-                        .coin_output(AssetId::BASE, 1000)
-                        .change_output(AssetId::BASE)
-                        .build()
-                        .transaction()
-                        .clone();
-
-                    let config = Config {
-                        coinbase_recipient: config_coinbase,
-                        ..Default::default()
-                    };
-                    let producer = Executor::test(Default::default(), config);
-
-                    let mut block = Block::default();
-                    *block.transactions_mut() = vec![script.clone().into()];
-
-                    assert!(producer
-                        .execute_and_commit(
-                            ExecutionBlock::Production(block.into()),
-                            Default::default()
-                        )
-                        .is_ok());
-                    let receipts = producer
-                        .database
-                        .storage::<Receipts>()
-                        .get(&script.id(&producer.config.consensus_parameters.chain_id))
-                        .unwrap()
-                        .unwrap();
-
-                    if let Some(Receipt::Return { val, .. }) = receipts.get(0) {
-                        *val == 1
-                    } else {
-                        panic!("Execution of the `CB` script failed failed")
-                    }
+                if let Some(Receipt::Return { val, .. }) = receipts.get(0) {
+                    *val == 1
+                } else {
+                    panic!("Execution of the `CB` script failed failed")
                 }
-
-                assert!(compare_coinbase_addresses(
-                    ContractId::from([1u8; 32]),
-                    ContractId::from([1u8; 32])
-                ));
-                assert!(!compare_coinbase_addresses(
-                    ContractId::from([9u8; 32]),
-                    ContractId::from([1u8; 32])
-                ));
-                assert!(!compare_coinbase_addresses(
-                    ContractId::from([1u8; 32]),
-                    ContractId::from([9u8; 32])
-                ));
-                assert!(compare_coinbase_addresses(
-                    ContractId::from([9u8; 32]),
-                    ContractId::from([9u8; 32])
-                ));
             }
+
+            assert!(compare_coinbase_addresses(
+                ContractId::from([1u8; 32]),
+                ContractId::from([1u8; 32])
+            ));
+            assert!(!compare_coinbase_addresses(
+                ContractId::from([9u8; 32]),
+                ContractId::from([1u8; 32])
+            ));
+            assert!(!compare_coinbase_addresses(
+                ContractId::from([1u8; 32]),
+                ContractId::from([9u8; 32])
+            ));
+            assert!(compare_coinbase_addresses(
+                ContractId::from([9u8; 32]),
+                ContractId::from([9u8; 32])
+            ));
+        }
+
 
             #[test]
             fn invalidate_unexpected_index() {
@@ -2732,87 +2683,86 @@ mod tests {
                     ExecutorError::CoinbaseAmountMismatch
                 ));
             }
-        }
 
-        // Ensure tx has at least one input to cover gas
-        #[test]
-        fn executor_invalidates_missing_gas_input() {
-            let mut rng = StdRng::seed_from_u64(2322u64);
-            let producer = Executor::test(Default::default(), Default::default());
-            let factor = producer
-                .config
-                .consensus_parameters
-                .fee_params()
-                .gas_price_factor as f64;
+    // Ensure tx has at least one input to cover gas
+    #[test]
+    fn executor_invalidates_missing_gas_input() {
+        let mut rng = StdRng::seed_from_u64(2322u64);
+        let producer = Executor::test(Default::default(), Default::default());
+        let factor = producer
+            .config
+            .consensus_parameters
+            .fee_params()
+            .gas_price_factor as f64;
 
-            let verifier = Executor::test(Default::default(), Default::default());
+        let verifier = Executor::test(Default::default(), Default::default());
 
-            let gas_limit = 100;
-            let gas_price = 1;
-            let tx = TransactionBuilder::script(vec![], vec![])
-                .add_unsigned_coin_input(
-                    SecretKey::random(&mut rng),
-                    rng.gen(),
-                    rng.gen(),
-                    rng.gen(),
-                    Default::default(),
-                    Default::default(),
-                )
-                .gas_limit(gas_limit)
-                .gas_price(gas_price)
-                .finalize_as_transaction();
+        let gas_limit = 100;
+        let gas_price = 1;
+        let tx = TransactionBuilder::script(vec![], vec![])
+            .add_unsigned_coin_input(
+                SecretKey::random(&mut rng),
+                rng.gen(),
+                rng.gen(),
+                rng.gen(),
+                Default::default(),
+                Default::default(),
+            )
+            .gas_limit(gas_limit)
+            .gas_price(gas_price)
+            .finalize_as_transaction();
 
-            let mut block = PartialFuelBlock {
-                header: Default::default(),
-                transactions: vec![tx.clone()],
-            };
+        let mut block = PartialFuelBlock {
+            header: Default::default(),
+            transactions: vec![tx.clone()],
+        };
 
-            let mut block_db_transaction = producer.database.transaction();
-            let ExecutionData {
-                skipped_transactions,
-                ..
-            } = producer
-                .execute_block(
-                    &mut block_db_transaction,
-                    ExecutionType::Production(PartialBlockComponent::from_partial_block(
-                        &mut block,
-                    )),
-                    Default::default(),
-                )
-                .unwrap();
-            let produce_result = &skipped_transactions[0].1;
-            assert!(matches!(
-                produce_result,
-                &ExecutorError::InvalidTransaction(CheckError::InsufficientFeeAmount { expected, .. }) if expected == (gas_limit as f64 / factor).ceil() as u64
-            ));
+        let mut block_db_transaction = producer.database.transaction();
+        let ExecutionData {
+            skipped_transactions,
+            ..
+        } = producer
+            .execute_block(
+                &mut block_db_transaction,
+                ExecutionType::Production(PartialBlockComponent::from_partial_block(
+                    &mut block,
+                )),
+                Default::default(),
+            )
+            .unwrap();
+        let produce_result = &skipped_transactions[0].1;
+        assert!(matches!(
+            produce_result,
+            &ExecutorError::InvalidTransaction(CheckError::InsufficientFeeAmount { expected, .. }) if expected == (gas_limit as f64 / factor).ceil() as u64
+        ));
 
-            // Produced block is valid
-            let mut block_db_transaction = verifier.database.transaction();
-            verifier
-                .execute_block(
-                    &mut block_db_transaction,
-                    ExecutionType::Validation(PartialBlockComponent::from_partial_block(
-                        &mut block,
-                    )),
-                    Default::default(),
-                )
-                .unwrap();
-
-            // Invalidate the block with Insufficient tx
-            block.transactions.insert(block.transactions.len() - 1, tx);
-            let mut block_db_transaction = verifier.database.transaction();
-            let verify_result = verifier.execute_block(
+        // Produced block is valid
+        let mut block_db_transaction = verifier.database.transaction();
+        verifier
+            .execute_block(
                 &mut block_db_transaction,
                 ExecutionType::Validation(PartialBlockComponent::from_partial_block(
                     &mut block,
                 )),
                 Default::default(),
-            );
-            assert!(matches!(
-                verify_result,
-                Err(ExecutorError::InvalidTransaction(CheckError::InsufficientFeeAmount { expected, ..})) if expected == (gas_limit as f64 / factor).ceil() as u64
-            ))
-        }
+            )
+            .unwrap();
+
+        // Invalidate the block with Insufficient tx
+        block.transactions.insert(block.transactions.len() - 1, tx);
+        let mut block_db_transaction = verifier.database.transaction();
+        let verify_result = verifier.execute_block(
+            &mut block_db_transaction,
+            ExecutionType::Validation(PartialBlockComponent::from_partial_block(
+                &mut block,
+            )),
+            Default::default(),
+        );
+        assert!(matches!(
+            verify_result,
+            Err(ExecutorError::InvalidTransaction(CheckError::InsufficientFeeAmount { expected, ..})) if expected == (gas_limit as f64 / factor).ceil() as u64
+        ))
+    }
 
         #[test]
         fn executor_invalidates_duplicate_tx_id() {
@@ -3203,6 +3153,8 @@ mod tests {
                 .expect("coin should be unspent");
         }
 
+
+
         #[test]
         fn skipped_txs_not_affect_order() {
             // `tx1` is invalid because it doesn't have inputs for gas.
@@ -3267,8 +3219,8 @@ mod tests {
                 .clone()
                 .into();
 
-            let db = &Database::default();
-            let executor = Executor::test(db.clone(), Default::default());
+            let mut db = &Database::default();
+            let mut executor = Executor::test(db.clone(), Default::default());
 
             let block = PartialFuelBlock {
                 header: Default::default(),
@@ -3313,7 +3265,7 @@ mod tests {
                 .into();
             let db = &mut Database::default();
 
-            let executor = Executor::test(
+            let mut executor = Executor::test(
                 db.clone(),
                 Config {
                     utxo_validation_default: false,
@@ -3380,7 +3332,7 @@ mod tests {
                 .into();
             let db = &mut Database::default();
 
-            let executor = Executor::test(
+            let mut executor = Executor::test(
                 db.clone(),
                 Config {
                     utxo_validation_default: false,
@@ -3493,7 +3445,7 @@ mod tests {
                 .clone();
             let db = &mut Database::default();
 
-            let executor = Executor::test(
+            let mut executor = Executor::test(
                 db.clone(),
                 Config {
                     utxo_validation_default: false,
@@ -3697,7 +3649,7 @@ mod tests {
             }
             let db = &mut Database::default();
 
-            let executor = Executor::test(db.clone(), Default::default());
+            let mut executor = Executor::test(db.clone(), Default::default());
 
             let block = PartialFuelBlock {
                 header: PartialBlockHeader {
@@ -3971,8 +3923,8 @@ mod tests {
             let (deploy, script) = setup_executable_script();
             let script_id = script.id(&ChainId::default());
 
-            let database = &Database::default();
-            let executor = Executor::test(database.clone(), Default::default());
+            let mut database = &Database::default();
+            let mut executor = Executor::test(database.clone(), Default::default());
 
             let block = PartialFuelBlock {
                 header: Default::default(),
@@ -4022,8 +3974,8 @@ mod tests {
                 .into();
             let tx_id = tx.id(&ChainId::default());
 
-            let database = &Database::default();
-            let executor = Executor::test(database.clone(), Default::default());
+            let mut database = &Database::default();
+            let mut executor = Executor::test(database.clone(), Default::default());
 
             let block = PartialFuelBlock {
                 header: Default::default(),
@@ -4072,7 +4024,7 @@ mod tests {
         }
 
         /// Helper to build database and executor for some of the message tests
-        fn make_executor<D>(messages: &[&Message]) -> Executor<Database, D> {
+        fn make_executor(messages: &[&Message]) -> Executor<Database, Database> {
             let mut database = Database::default();
             let database_ref = &mut database;
 
@@ -4593,5 +4545,5 @@ mod tests {
             assert_eq!(time.0, receipts[0].val().unwrap());
         }
 
-         */
+}
 }
