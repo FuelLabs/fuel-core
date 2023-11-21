@@ -1,5 +1,4 @@
 use crate::*;
-use std::iter;
 
 // ECAL
 // FLAG
