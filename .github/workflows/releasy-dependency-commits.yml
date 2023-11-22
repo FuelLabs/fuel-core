@@ -1,0 +1,20 @@
+name: Notify downstream repos
+
+on:
+  push:
+    branches:
+    - master
+
+jobs:
+
+  notify:
+    runs-on: ubuntu-latest
+    env:
+      DISPATCH_TOKEN: ${{ secrets.DISPATCH_TOKEN }} 
+    steps:
+    - uses: actions/checkout@v4
+    - run: |
+        git clone https://github.com/FuelLabs/releasy && cd releasy && git checkout kayagokalp/releasy-handle && cd ..
+        cargo install --path ./releasy/releasy-emit
+        releasy-emit --event new-commit-to-dependency --path ./.github/workflows/repo-plan.toml --event-commit-hash ${GITHUB_SHA}
+      name: Install and run releasy

@@ -24,6 +24,7 @@ use fuel_core_types::{
         interpreter::{
             diff,
             InterpreterParams,
+            ReceiptsCtx,
         },
         *,
     },
@@ -69,10 +70,10 @@ impl From<Vec<u8>> for ContractCode {
 }
 
 pub struct PrepareCall {
-    ra: RegId,
-    rb: RegId,
-    rc: RegId,
-    rd: RegId,
+    pub ra: RegId,
+    pub rb: RegId,
+    pub rc: RegId,
+    pub rd: RegId,
 }
 
 pub struct VmBench {
@@ -92,7 +93,8 @@ pub struct VmBench {
     pub prepare_call: Option<PrepareCall>,
     pub dummy_contract: Option<ContractId>,
     pub contract_code: Option<ContractCode>,
-    pub prepare_db: Option<Box<dyn FnMut(VmDatabase) -> anyhow::Result<VmDatabase>>>,
+    pub empty_contracts: Vec<ContractId>,
+    pub receipts_ctx: Option<ReceiptsCtx>,
 }
 
 #[derive(Debug, Clone)]
@@ -131,11 +133,23 @@ impl VmBench {
             prepare_call: None,
             dummy_contract: None,
             contract_code: None,
-            prepare_db: None,
+            empty_contracts: vec![],
+            receipts_ctx: None,
         }
     }
 
     pub fn contract<R>(rng: &mut R, instruction: Instruction) -> anyhow::Result<Self>
+    where
+        R: Rng,
+    {
+        Self::contract_using_db(rng, new_db(), instruction)
+    }
+
+    pub fn contract_using_db<R>(
+        rng: &mut R,
+        mut db: VmDatabase,
+        instruction: Instruction,
+    ) -> anyhow::Result<Self>
     where
         R: Rng,
     {
@@ -159,8 +173,6 @@ impl VmBench {
 
         let input = Input::contract(utxo_id, balance_root, state_root, tx_pointer, id);
         let output = Output::contract(0, rng.gen(), rng.gen());
-
-        let mut db = new_db();
 
         db.deploy_contract_with_id(&salt, &[], &contract, &state_root, &id)?;
 
@@ -200,7 +212,6 @@ impl VmBench {
         self.db.replace(db);
         self
     }
-
     pub fn with_params(mut self, params: ConsensusParameters) -> Self {
         self.params = params;
         self
@@ -211,7 +222,7 @@ impl VmBench {
         self
     }
 
-    pub fn with_gas_limit(mut self, gas_limit: Word) -> Self {
+    pub fn with_script_gas_limit(mut self, gas_limit: Word) -> Self {
         self.gas_limit = gas_limit;
         self
     }
@@ -226,8 +237,17 @@ impl VmBench {
         self
     }
 
+    /// Replaces the current prepare script with the given one.
+    /// Not that if you've constructed this instance with `contract` or `using_contract_db`,
+    /// then this will remove the script added by it. Use `extend_prepare_script` instead.
     pub fn with_prepare_script(mut self, prepare_script: Vec<Instruction>) -> Self {
         self.prepare_script = prepare_script;
+        self
+    }
+
+    /// Adds more instructions before the current prepare script.
+    pub fn prepend_prepare_script(mut self, prepare_script: Vec<Instruction>) -> Self {
+        self.prepare_script.extend(prepare_script);
         self
     }
 
@@ -261,6 +281,11 @@ impl VmBench {
         self
     }
 
+    pub fn with_call_receipts(mut self, receipts_ctx: ReceiptsCtx) -> Self {
+        self.receipts_ctx = Some(receipts_ctx);
+        self
+    }
+
     pub fn with_dummy_contract(mut self, dummy_contract: ContractId) -> Self {
         self.dummy_contract.replace(dummy_contract);
         self
@@ -271,11 +296,12 @@ impl VmBench {
         self
     }
 
-    pub fn with_prepare_db<F>(mut self, prepare_db: F) -> Self
-    where
-        F: FnMut(VmDatabase) -> anyhow::Result<VmDatabase> + 'static,
-    {
-        self.prepare_db.replace(Box::new(prepare_db));
+    pub fn with_empty_contracts_count(mut self, count: usize) -> Self {
+        let mut contract_ids = Vec::with_capacity(count);
+        for n in 0..count {
+            contract_ids.push(ContractId::from([n as u8; 32]));
+        }
+        self.empty_contracts = contract_ids;
         self
     }
 
@@ -305,7 +331,8 @@ impl TryFrom<VmBench> for VmBenchPrepared {
             prepare_call,
             dummy_contract,
             contract_code,
-            prepare_db,
+            empty_contracts,
+            receipts_ctx,
         } = case;
 
         let mut db = db.unwrap_or_else(new_db);
@@ -359,9 +386,9 @@ impl TryFrom<VmBench> for VmBenchPrepared {
             storage_root,
         }) = contract_code
         {
-            let input = tx.inputs().len();
+            let input_count = tx.inputs().len();
             let output =
-                Output::contract(input as u8, Bytes32::zeroed(), Bytes32::zeroed());
+                Output::contract(input_count as u8, Bytes32::zeroed(), Bytes32::zeroed());
             let input = Input::contract(
                 UtxoId::default(),
                 Bytes32::zeroed(),
@@ -376,10 +403,29 @@ impl TryFrom<VmBench> for VmBenchPrepared {
             db.deploy_contract_with_id(&salt, &slots, &contract, &root, &id)?;
         }
 
-        let db = match prepare_db {
-            Some(mut prepare_db) => prepare_db(db)?,
-            None => db,
-        };
+        for contract_id in empty_contracts {
+            let input_count = tx.inputs().len();
+            let output =
+                Output::contract(input_count as u8, Bytes32::zeroed(), Bytes32::zeroed());
+            let input = Input::contract(
+                UtxoId::default(),
+                Bytes32::zeroed(),
+                Bytes32::zeroed(),
+                TxPointer::default(),
+                contract_id,
+            );
+
+            tx.add_input(input);
+            tx.add_output(output);
+
+            db.deploy_contract_with_id(
+                &VmBench::SALT,
+                &[],
+                &Contract::default(),
+                &Bytes32::zeroed(),
+                &contract_id,
+            )?;
+        }
 
         inputs.into_iter().for_each(|i| {
             tx.add_input(i);
@@ -396,24 +442,28 @@ impl TryFrom<VmBench> for VmBenchPrepared {
         // add at least one coin input
         tx.add_random_fee_input();
 
-        let mut p = params.clone();
-        p.fee_params.gas_per_byte = 0;
-        p.gas_costs = GasCosts::free();
+        let mut params = params;
+        params.fee_params.gas_per_byte = 0;
+        params.gas_costs = GasCosts::free();
         let mut tx = tx
             .gas_price(gas_price)
-            .gas_limit(gas_limit)
+            .script_gas_limit(gas_limit)
             .maturity(maturity)
-            .with_params(p.clone())
+            .with_params(params.clone())
             .finalize();
-        tx.estimate_predicates(&CheckPredicateParams::from(&p))
+        tx.estimate_predicates(&CheckPredicateParams::from(&params))
             .unwrap();
-        let tx = tx.into_checked(height, &p).unwrap();
+        let tx = tx.into_checked(height, &params).unwrap();
 
         let mut txtor = Transactor::new(db, InterpreterParams::from(&params));
 
         txtor.transact(tx);
 
         let mut vm: Interpreter<_, _> = txtor.into();
+
+        if let Some(receipts_ctx) = receipts_ctx {
+            *vm.receipts_mut() = receipts_ctx;
+        }
 
         if let Some(p) = prepare_call {
             let PrepareCall { ra, rb, rc, rd } = p;
@@ -426,6 +476,9 @@ impl TryFrom<VmBench> for VmBenchPrepared {
         }
 
         let start_vm = vm.clone();
+        let original_db = vm.as_mut().database_mut().clone();
+        let database_tx = original_db.transaction().as_ref().clone();
+        *vm.as_mut().database_mut() = database_tx;
         let mut vm = vm.add_recording();
         match instruction {
             Instruction::CALL(call) => {
@@ -442,6 +495,7 @@ impl TryFrom<VmBench> for VmBenchPrepared {
         diff += storage_diff;
         let diff: diff::Diff<diff::InitialVmState> = diff.into();
         vm.reset_vm_state(&diff);
+        *vm.as_mut().database_mut() = original_db;
 
         Ok(Self {
             vm,

@@ -29,7 +29,6 @@ use fuel_core_types::{
         Script,
         Transaction,
     },
-    fuel_types::Address,
     fuel_vm::{
         checked_transaction::{
             CheckedTransaction,
@@ -52,6 +51,7 @@ use tracing::{
 };
 use uuid::Uuid;
 
+use crate::schema::scalars::U32;
 use fuel_core_types::fuel_vm::state::DebugEval;
 
 pub struct Config {
@@ -83,7 +83,7 @@ impl ConcreteStorage {
 
     pub fn memory(&self, id: &ID, start: usize, size: usize) -> Option<&[u8]> {
         let (end, overflow) = start.overflowing_add(size);
-        if overflow || end > consts::VM_MAX_RAM as usize {
+        if overflow || end as u64 > consts::VM_MAX_RAM {
             return None
         }
 
@@ -102,7 +102,7 @@ impl ConcreteStorage {
         let tx = Self::dummy_tx();
         let checked_tx = tx
             .into_checked_basic(vm_database.block_height()?, &self.params)
-            .map_err(|e| anyhow::anyhow!(e))?;
+            .map_err(|e| anyhow::anyhow!("{:?}", e))?;
         self.tx
             .get_mut(&id)
             .map(|tx| tx.extend_from_slice(txs))
@@ -135,7 +135,7 @@ impl ConcreteStorage {
 
         let checked_tx = tx
             .into_checked_basic(vm_database.block_height()?, &self.params)
-            .map_err(|e| anyhow::anyhow!(e))?;
+            .map_err(|e| anyhow::anyhow!("{:?}", e))?;
 
         let mut vm = Interpreter::with_storage(vm_database, (&self.params).into());
         vm.transact(checked_tx).map_err(|e| anyhow::anyhow!(e))?;
@@ -166,7 +166,7 @@ impl ConcreteStorage {
             storage.as_ref().clone(),
             &block.header().consensus,
             // TODO: Use a real coinbase address
-            Address::zeroed(),
+            Default::default(),
         );
 
         Ok(vm_database)
@@ -222,7 +222,7 @@ impl DapQuery {
         &self,
         ctx: &Context<'_>,
         id: ID,
-        register: U64,
+        register: U32,
     ) -> async_graphql::Result<U64> {
         require_debug(ctx)?;
         ctx.data_unchecked::<GraphStorage>()
@@ -237,8 +237,8 @@ impl DapQuery {
         &self,
         ctx: &Context<'_>,
         id: ID,
-        start: U64,
-        size: U64,
+        start: U32,
+        size: U32,
     ) -> async_graphql::Result<String> {
         require_debug(ctx)?;
         ctx.data_unchecked::<GraphStorage>()
@@ -372,7 +372,8 @@ impl DapMutation {
         let db = locked.db.get(&id).ok_or("Invalid debugging session ID")?;
 
         let checked_tx = tx
-            .into_checked_basic(db.latest_height()?, &locked.params)?
+            .into_checked_basic(db.latest_height()?, &locked.params)
+            .map_err(|err| anyhow::anyhow!("{:?}", err))?
             .into();
 
         let vm = locked

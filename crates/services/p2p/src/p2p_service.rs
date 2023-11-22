@@ -167,11 +167,14 @@ impl<Codec: NetworkCodec> FuelP2PService<Codec> {
         let behaviour = FuelBehaviour::new(&config, codec.clone());
 
         let total_connections = {
+            let reserved_nodes_count = u32::try_from(config.reserved_nodes.len())
+                .expect("The number of reserved nodes should be less than `u32::max`");
             // Reserved nodes do not count against the configured peer input/output limits.
-            let total_peers =
-                config.max_peers_connected + config.reserved_nodes.len() as u32;
+            let total_peers = config
+                .max_peers_connected
+                .saturating_add(reserved_nodes_count);
 
-            total_peers * config.max_connections_per_peer
+            total_peers.saturating_mul(config.max_connections_per_peer)
         };
 
         let max_established_incoming = {
@@ -378,8 +381,15 @@ impl<Codec: NetworkCodec> FuelP2PService<Codec> {
         &mut self,
         msg_id: &MessageId,
         propagation_source: PeerId,
-        acceptance: MessageAcceptance,
+        mut acceptance: MessageAcceptance,
     ) {
+        // Even invalid transactions shouldn't affect reserved peer reputation.
+        if let MessageAcceptance::Reject = acceptance {
+            if self.peer_manager.is_reserved(&propagation_source) {
+                acceptance = MessageAcceptance::Ignore;
+            }
+        }
+
         if let Some(gossip_score) = self
             .swarm
             .behaviour_mut()
@@ -653,6 +663,7 @@ impl<Codec: NetworkCodec> FuelP2PService<Codec> {
     }
 }
 
+#[allow(clippy::cast_possible_truncation)]
 #[cfg(test)]
 mod tests {
     use super::FuelP2PService;
@@ -666,8 +677,6 @@ mod tests {
             },
             topics::{
                 GossipTopic,
-                CON_VOTE_GOSSIP_TOPIC,
-                NEW_BLOCK_GOSSIP_TOPIC,
                 NEW_TX_GOSSIP_TOPIC,
             },
         },
@@ -686,7 +695,6 @@ mod tests {
             consensus::{
                 poa::PoAConsensus,
                 Consensus,
-                ConsensusVote,
             },
             header::{
                 BlockHeader,
@@ -791,10 +799,10 @@ mod tests {
         let p2p_config = Config::default_initialized("reserved_nodes_reconnect_works");
 
         // total amount will be `max_peers_allowed` + `reserved_nodes.len()`
-        let max_peers_allowed = 3;
+        let max_peers_allowed: usize = 3;
 
         let (bootstrap_nodes, bootstrap_multiaddrs) =
-            setup_bootstrap_nodes(&p2p_config, max_peers_allowed * 5).await;
+            setup_bootstrap_nodes(&p2p_config, max_peers_allowed.saturating_mul(5)).await;
         let (mut reserved_nodes, reserved_multiaddrs) =
             setup_bootstrap_nodes(&p2p_config, max_peers_allowed).await;
 
@@ -1212,50 +1220,10 @@ mod tests {
 
     #[tokio::test]
     #[instrument]
-    async fn gossipsub_broadcast_vote_with_accept() {
-        gossipsub_broadcast(
-            GossipsubBroadcastRequest::ConsensusVote(Arc::new(ConsensusVote::default())),
-            GossipsubMessageAcceptance::Accept,
-        )
-        .await;
-    }
-
-    #[tokio::test]
-    #[instrument]
-    async fn gossipsub_broadcast_vote_with_reject() {
-        gossipsub_broadcast(
-            GossipsubBroadcastRequest::ConsensusVote(Arc::new(ConsensusVote::default())),
-            GossipsubMessageAcceptance::Reject,
-        )
-        .await;
-    }
-
-    #[tokio::test]
-    #[instrument]
-    async fn gossipsub_broadcast_block_with_accept() {
-        gossipsub_broadcast(
-            GossipsubBroadcastRequest::NewBlock(Arc::new(Block::default())),
-            GossipsubMessageAcceptance::Accept,
-        )
-        .await;
-    }
-
-    #[tokio::test]
-    #[instrument]
-    async fn gossipsub_broadcast_block_with_ignore() {
-        gossipsub_broadcast(
-            GossipsubBroadcastRequest::NewBlock(Arc::new(Block::default())),
-            GossipsubMessageAcceptance::Ignore,
-        )
-        .await;
-    }
-
-    #[tokio::test]
-    #[instrument]
     #[ignore]
-    async fn gossipsub_scoring_with_accapted_messages() {
+    async fn gossipsub_scoring_with_accepted_messages() {
         gossipsub_scoring_tester(
-            "gossipsub_scoring_with_accapted_messages",
+            "gossipsub_scoring_with_accepted_messages",
             100,
             GossipsubMessageAcceptance::Accept,
         )
@@ -1347,28 +1315,6 @@ mod tests {
                         }
                     }
 
-                    let mut new_block = Block::default();
-                    *new_block.transactions_mut() = transactions;
-                    let new_block = GossipsubBroadcastRequest::NewBlock(Arc::new(new_block));
-
-                    match rand::thread_rng().gen_range(1..=3) {
-                        1 => {
-                            // Node A sends a Block
-                            let _ = node_a.publish_message(new_block);
-
-                        },
-                        2 => {
-                            // Node B sends a Block
-                            let _ = node_b.publish_message(new_block);
-
-                        },
-                        3 => {
-                            // Node C sends a Block
-                            let _ = node_c.publish_message(new_block);
-                        },
-                        _ => unreachable!("Random number generator is broken")
-                    }
-
                     eprintln!("Node A WORLD VIEW");
                     eprintln!("B score: {:?}", node_a.get_peer_score(&node_b.local_peer_id).unwrap());
                     eprintln!("C score: {:?}", node_a.get_peer_score(&node_c.local_peer_id).unwrap());
@@ -1401,8 +1347,6 @@ mod tests {
 
         let selected_topic: GossipTopic = {
             let topic = match broadcast_request {
-                GossipsubBroadcastRequest::ConsensusVote(_) => CON_VOTE_GOSSIP_TOPIC,
-                GossipsubBroadcastRequest::NewBlock(_) => NEW_BLOCK_GOSSIP_TOPIC,
                 GossipsubBroadcastRequest::NewTx(_) => NEW_TX_GOSSIP_TOPIC,
             };
 
@@ -1458,18 +1402,6 @@ mod tests {
                         match &message {
                             GossipsubMessage::NewTx(tx) => {
                                 if tx != &Transaction::default_test_tx() {
-                                    tracing::error!("Wrong p2p message {:?}", message);
-                                    panic!("Wrong GossipsubMessage")
-                                }
-                            }
-                            GossipsubMessage::NewBlock(block) => {
-                                if block.header().height() != Block::<Transaction>::default().header().height() {
-                                    tracing::error!("Wrong p2p message {:?}", message);
-                                    panic!("Wrong GossipsubMessage")
-                                }
-                            }
-                            GossipsubMessage::ConsensusVote(vote) => {
-                                if vote != &ConsensusVote::default() {
                                     tracing::error!("Wrong p2p message {:?}", message);
                                     panic!("Wrong GossipsubMessage")
                                 }

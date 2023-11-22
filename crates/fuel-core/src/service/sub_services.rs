@@ -75,7 +75,10 @@ pub fn init_sub_services(
         relayer: relayer_adapter.clone(),
         config: Arc::new(fuel_core_executor::Config {
             consensus_parameters: config.chain_conf.consensus_parameters.clone(),
-            coinbase_recipient: config.block_producer.coinbase_recipient,
+            coinbase_recipient: config
+                .block_producer
+                .coinbase_recipient
+                .unwrap_or_default(),
             backtrace: config.vm.backtrace,
             utxo_validation_default: config.utxo_validation,
         }),
@@ -93,12 +96,13 @@ pub fn init_sub_services(
 
     #[cfg(feature = "p2p")]
     let mut network = {
-        if let Some(config) = config.p2p.clone() {
+        if let Some(p2p_config) = config.p2p.clone() {
             let p2p_db = database.clone();
             let genesis = p2p_db.get_genesis()?;
-            let p2p_config = config.init(genesis)?;
+            let p2p_config = p2p_config.init(genesis)?;
 
             Some(fuel_core_p2p::service::new_service(
+                config.chain_conf.consensus_parameters.chain_id,
                 p2p_config,
                 p2p_db,
                 importer_adapter.clone(),
@@ -129,8 +133,6 @@ pub fn init_sub_services(
 
     #[cfg(not(feature = "p2p"))]
     let p2p_adapter = P2PAdapter::new();
-
-    let p2p_adapter = p2p_adapter;
 
     let txpool = fuel_core_txpool::new_service(
         config.txpool.clone(),
@@ -205,6 +207,7 @@ pub fn init_sub_services(
         Box::new(producer_adapter),
         Box::new(poa_adapter),
         config.query_log_threshold_time,
+        config.api_request_timeout,
     )?;
 
     let shared = SharedState {

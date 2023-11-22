@@ -172,9 +172,7 @@ async fn messages_by_owner_returns_messages_for_the_given_owner() {
 #[rstest]
 #[tokio::test]
 async fn messages_empty_results_for_owner_with_no_messages(
-    #[values(PageDirection::Forward)] direction: PageDirection,
-    //#[values(PageDirection::Forward, PageDirection::Backward)] direction: PageDirection,
-    // reverse iteration with prefix not supported by rocksdb
+    #[values(PageDirection::Forward, PageDirection::Backward)] direction: PageDirection,
     #[values(Address::new([16; 32]), Address::new([0; 32]))] owner: Address,
 ) {
     let srv = FuelService::new_node(Config::local_node()).await.unwrap();
@@ -259,11 +257,10 @@ async fn message_status__can_get_spent() {
     let output = Output::coin(output_recipient, amount, Default::default());
 
     let tx = Transaction::script(
-        Default::default(),
         1_000_000,
-        Default::default(),
         vec![],
         vec![],
+        policies::Policies::new().with_gas_price(0),
         vec![input],
         vec![output],
         vec![Vec::new().into()],
@@ -408,7 +405,7 @@ async fn can_get_message_proof() {
             .collect();
 
         let predicate = op::ret(RegId::ONE).to_bytes().to_vec();
-        let owner = Input::predicate_owner(&predicate, &ChainId::default());
+        let owner = Input::predicate_owner(&predicate);
         let coin_input = Input::coin_predicate(
             Default::default(),
             owner,
@@ -434,19 +431,14 @@ async fn can_get_message_proof() {
         ];
 
         // The transaction will output a contract output and message output.
-        let outputs = vec![Output::Contract {
-            input_index: 0,
-            balance_root: Bytes32::zeroed(),
-            state_root: Bytes32::zeroed(),
-        }];
+        let outputs = vec![Output::contract(0, Bytes32::zeroed(), Bytes32::zeroed())];
 
         // Create the contract calling script.
         let script = Transaction::script(
-            Default::default(),
             1_000_000,
-            Default::default(),
             script,
             script_data,
+            policies::Policies::new().with_gas_price(0),
             inputs,
             outputs,
             vec![],

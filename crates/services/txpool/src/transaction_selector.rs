@@ -16,6 +16,9 @@ pub fn select_transactions(
     // Future improvements to this algorithm may take into account the parallel nature of
     // transactions to maximize throughput.
     let mut used_block_space: Word = 0;
+    // The type of the index for the transaction is `u16`, so we need to
+    // limit it to `MAX` value minus 1(because of the `Mint` transaction).
+    let takes_txs = u16::MAX - 1;
 
     // Pick as many transactions as we can fit into the block (greedy)
     includable_txs
@@ -32,6 +35,7 @@ pub fn select_transactions(
                 false
             }
         })
+        .take(takes_txs as usize)
         .collect()
 }
 
@@ -49,6 +53,7 @@ mod tests {
         },
         fuel_tx::{
             FeeParameters,
+            GasCosts,
             Output,
             TransactionBuilder,
         },
@@ -75,7 +80,7 @@ mod tests {
 
         let fee_params = FeeParameters {
             gas_price_factor: 1,
-            ..FeeParameters::default()
+            gas_per_byte: 0,
         };
 
         let mut txs = txs
@@ -86,7 +91,7 @@ mod tests {
                     vec![],
                 )
                 .gas_price(tx_gas.price)
-                .gas_limit(tx_gas.limit)
+                .script_gas_limit(tx_gas.limit)
                 .add_unsigned_coin_input(
                     SecretKey::random(&mut rng),
                     rng.gen(),
@@ -101,6 +106,7 @@ mod tests {
                     asset_id: Default::default(),
                 })
                 .with_fee_params(fee_params)
+                .with_gas_costs(GasCosts::free())
                 // The block producer assumes transactions are already checked
                 // so it doesn't need to compute valid sigs for tests
                 .finalize_checked_basic(Default::default()).into()
@@ -112,7 +118,7 @@ mod tests {
         select_transactions(txs.into_iter(), block_gas_limit)
             .into_iter()
             .map(|tx| TxGas {
-                limit: tx.limit(),
+                limit: tx.script_gas_limit().unwrap_or_default(),
                 price: tx.price(),
             })
             .collect()
@@ -126,33 +132,30 @@ mod tests {
 
     #[rstest::rstest]
     #[test]
-    #[case(1000, vec![])]
-    #[case(2500, vec![TxGas { price: 5, limit: 1000 }])]
-    #[case(5000, vec![
-        TxGas { price: 5, limit: 1000 },
-        TxGas { price: 2, limit: 1000 }])
-    ]
-    #[case(7500, vec![
+    #[case(999, vec![])]
+    #[case(1000, vec![TxGas { price: 5, limit: 1000 }])]
+    #[case(2500, vec![TxGas { price: 5, limit: 1000 }, TxGas { price: 2, limit: 1000 }])]
+    #[case(4000, vec![
         TxGas { price: 5, limit: 1000 },
         TxGas { price: 4, limit: 3000 }
     ])]
-    #[case(10_000, vec![
+    #[case(5000, vec![
         TxGas { price: 5, limit: 1000 },
         TxGas { price: 4, limit: 3000 },
-        TxGas { price: 2, limit: 1000 }
-    ])]
-    #[case(12_500, vec![
+        TxGas { price: 2, limit: 1000 }])
+    ]
+    #[case(6_000, vec![
         TxGas { price: 5, limit: 1000 },
         TxGas { price: 4, limit: 3000 },
         TxGas { price: 3, limit: 2000 }
     ])]
-    #[case(15_000, vec![
+    #[case(7_000, vec![
         TxGas { price: 5, limit: 1000 },
         TxGas { price: 4, limit: 3000 },
         TxGas { price: 3, limit: 2000 },
         TxGas { price: 2, limit: 1000 }
     ])]
-    #[case(17_500, vec![
+    #[case(8_000, vec![
         TxGas { price: 5, limit: 1000 },
         TxGas { price: 4, limit: 3000 },
         TxGas { price: 3, limit: 2000 },

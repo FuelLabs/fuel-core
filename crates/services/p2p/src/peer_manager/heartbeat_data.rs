@@ -32,7 +32,13 @@ impl HeartbeatData {
         if self.durations.is_empty() {
             Duration::from_secs(0)
         } else {
-            self.durations.iter().sum::<Duration>() / self.durations.len() as u32
+            let len = u32::try_from(self.durations.len())
+                .expect("The size of window is `u32`, so it is impossible to overflow");
+            self.durations
+                .iter()
+                .sum::<Duration>()
+                .checked_div(len)
+                .expect("The length is non-zero because of the check above")
         }
     }
 
@@ -47,11 +53,12 @@ impl HeartbeatData {
         self.block_height = Some(block_height);
         let old_hearbeat = self.last_heartbeat;
         self.last_heartbeat = Instant::now();
-        let new_duration = self.last_heartbeat - old_hearbeat;
+        let new_duration = self.last_heartbeat.saturating_duration_since(old_hearbeat);
         self.add_new_duration(new_duration);
     }
 }
 
+#[allow(clippy::cast_possible_truncation)]
 #[cfg(test)]
 mod tests {
     #![allow(non_snake_case)]

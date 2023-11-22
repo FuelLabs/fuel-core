@@ -153,7 +153,7 @@ where
         p2p_port: P,
     ) -> Self {
         let tx_status_update_stream = txpool.transaction_status_events();
-        let (request_sender, request_receiver) = mpsc::channel(100);
+        let (request_sender, request_receiver) = mpsc::channel(1024);
         let (last_height, last_timestamp, last_block_created) =
             Self::extract_block_info(last_block);
 
@@ -201,13 +201,17 @@ where
         let last_timestamp = last_block.time();
         let duration =
             Duration::from_secs(Tai64::now().0.saturating_sub(last_timestamp.0));
-        let last_block_created = Instant::now() - duration;
+        let last_block_created = Instant::now()
+            .checked_sub(duration)
+            .unwrap_or(Instant::now());
         let last_height = *last_block.height();
         (last_height, last_timestamp, last_block_created)
     }
 
     fn next_height(&self) -> BlockHeight {
-        self.last_height + 1u32.into()
+        self.last_height
+            .succ()
+            .expect("It should be impossible to produce more blocks than u32::MAX")
     }
 
     fn next_time(&self, request_type: RequestType) -> anyhow::Result<Tai64> {
@@ -338,13 +342,13 @@ where
             }
             (Trigger::Instant, _) => {}
             (Trigger::Interval { block_time }, RequestType::Trigger) => {
-                self.timer
-                    .set_deadline(last_block_created + block_time, OnConflict::Min)
-                    .await;
+                let deadline = last_block_created.checked_add(block_time).expect("It is impossible to overflow except in the case where we don't want to produce a block.");
+                self.timer.set_deadline(deadline, OnConflict::Min).await;
             }
             (Trigger::Interval { block_time }, RequestType::Manual) => {
+                let deadline = last_block_created.checked_add(block_time).expect("It is impossible to overflow except in the case where we don't want to produce a block.");
                 self.timer
-                    .set_deadline(last_block_created + block_time, OnConflict::Overwrite)
+                    .set_deadline(deadline, OnConflict::Overwrite)
                     .await;
             }
         }

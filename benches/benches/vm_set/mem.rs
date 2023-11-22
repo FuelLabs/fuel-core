@@ -1,23 +1,16 @@
 use super::run_group_ref;
 
+use crate::utils::{
+    arb_dependent_cost_values,
+    set_full_word,
+};
+
 use criterion::{
     Criterion,
     Throughput,
 };
 use fuel_core_benches::*;
 use fuel_core_types::fuel_asm::*;
-
-/// Set a register `r` to a Word-sized number value using left-shifts
-fn set_full_word(r: RegisterId, v: Word) -> Vec<Instruction> {
-    let r = u8::try_from(r).unwrap();
-    let mut ops = vec![op::movi(r, 0)];
-    for byte in v.to_be_bytes() {
-        ops.push(op::ori(r, r, byte as u16));
-        ops.push(op::slli(r, r, 8));
-    }
-    ops.pop().unwrap(); // Remove last shift
-    ops
-}
 
 pub fn run(c: &mut Criterion) {
     run_group_ref(
@@ -53,7 +46,7 @@ pub fn run(c: &mut Criterion) {
         ]),
     );
 
-    let linear = super::generate_linear_costs();
+    let linear = arb_dependent_cost_values();
 
     run_group_ref(
         &mut c.benchmark_group("cfei"),
@@ -148,4 +141,38 @@ pub fn run(c: &mut Criterion) {
         );
     }
     mem_meq.finish();
+
+    let full_mask = (1 << 24) - 1;
+
+    // poph
+    let prepare_script = vec![op::pshh(full_mask)];
+    run_group_ref(
+        &mut c.benchmark_group("poph"),
+        "poph",
+        VmBench::new(op::poph(full_mask)).with_prepare_script(prepare_script),
+    );
+
+    // popl
+    let prepare_script = vec![op::pshl(full_mask)];
+    run_group_ref(
+        &mut c.benchmark_group("popl"),
+        "popl",
+        VmBench::new(op::popl(full_mask)).with_prepare_script(prepare_script),
+    );
+
+    // pshh
+    run_group_ref(
+        &mut c.benchmark_group("pshh"),
+        "pshh",
+        VmBench::new(op::pshh(full_mask))
+            .with_prepare_script(vec![op::pshh(full_mask); 10000]),
+    );
+
+    // pshl
+    run_group_ref(
+        &mut c.benchmark_group("pshl"),
+        "pshl",
+        VmBench::new(op::pshl(full_mask))
+            .with_prepare_script(vec![op::pshl(full_mask); 10000]),
+    );
 }

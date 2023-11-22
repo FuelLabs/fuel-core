@@ -28,12 +28,9 @@ use fuel_core::{
     txpool::Config as TxPoolConfig,
     types::{
         blockchain::primitives::SecretKeyWrapper,
-        fuel_tx::Address,
+        fuel_tx::ContractId,
         fuel_vm::SecretKey,
-        secrecy::{
-            ExposeSecret,
-            Secret,
-        },
+        secrecy::Secret,
     },
 };
 use pyroscope::{
@@ -47,7 +44,6 @@ use pyroscope_pprofrs::{
 use std::{
     env,
     net,
-    ops::Deref,
     path::PathBuf,
     str::FromStr,
 };
@@ -206,6 +202,10 @@ pub struct Command {
     #[clap(long = "query-log-threshold-time", default_value = "2s", env)]
     pub query_log_threshold_time: humantime::Duration,
 
+    /// Timeout before drop the request.
+    #[clap(long = "api-request-timeout", default_value = "30m", env)]
+    pub api_request_timeout: humantime::Duration,
+
     #[clap(flatten)]
     pub profiling: profiling::ProfilingArgs,
 }
@@ -244,6 +244,7 @@ impl Command {
             min_connected_reserved_peers,
             time_until_synced,
             query_log_threshold_time,
+            api_request_timeout,
             profiling: _,
         } = self;
 
@@ -255,7 +256,7 @@ impl Command {
         let relayer_cfg = relayer_args.into_config();
 
         #[cfg(feature = "p2p")]
-        let p2p_cfg = p2p_args.into_config(metrics)?;
+        let p2p_cfg = p2p_args.into_config(chain_conf.chain_name.clone(), metrics)?;
 
         let trigger: Trigger = poa_trigger.into();
 
@@ -285,16 +286,13 @@ impl Command {
         }
 
         let coinbase_recipient = if let Some(coinbase_recipient) = coinbase_recipient {
-            Address::from_str(coinbase_recipient.as_str()).map_err(|err| anyhow!(err))?
+            Some(
+                ContractId::from_str(coinbase_recipient.as_str())
+                    .map_err(|err| anyhow!(err))?,
+            )
         } else {
-            consensus_key
-                .as_ref()
-                .cloned()
-                .map(|key| {
-                    let sk = key.expose_secret().deref();
-                    Address::from(*sk.public_key().hash())
-                })
-                .unwrap_or_default()
+            tracing::warn!("The coinbase recipient `ContractId` is not set!");
+            None
         };
 
         let verifier = RelayerVerifierConfig {
@@ -304,6 +302,7 @@ impl Command {
 
         let config = Config {
             addr,
+            api_request_timeout: api_request_timeout.into(),
             max_database_cache_size,
             database_path,
             database_type,
@@ -349,25 +348,11 @@ impl Command {
 }
 
 pub async fn exec(command: Command) -> anyhow::Result<()> {
-    let network_name = {
-        #[cfg(feature = "p2p")]
-        {
-            command
-                .p2p_args
-                .network
-                .clone()
-                .unwrap_or_else(|| "default_network".to_string())
-        }
-        #[cfg(not(feature = "p2p"))]
-        "default_network"
-    }
-    .to_string();
-
     let profiling = command.profiling.clone();
     let config = command.get_config()?;
 
     // start profiling agent if url is configured
-    let _profiling_agent = start_pyroscope_agent(profiling, &config, network_name)?;
+    let _profiling_agent = start_pyroscope_agent(profiling, &config)?;
 
     // log fuel-core version
     info!("Fuel Core version v{}", env!("CARGO_PKG_VERSION"));
@@ -410,7 +395,6 @@ fn load_consensus_key(
 fn start_pyroscope_agent(
     profiling_args: profiling::ProfilingArgs,
     config: &Config,
-    network_name: String,
 ) -> anyhow::Result<Option<PyroscopeAgent<PyroscopeAgentRunning>>> {
     profiling_args
         .pyroscope_url
@@ -420,7 +404,7 @@ fn start_pyroscope_agent(
             let agent = PyroscopeAgent::builder(url, &"fuel-core".to_string())
                 .tags(vec![
                     ("service", config.name.as_str()),
-                    ("network", network_name.as_str()),
+                    ("network", config.chain_conf.chain_name.as_str()),
                 ])
                 .backend(pprof_backend(
                     PprofConfig::new().sample_rate(profiling_args.pprof_sample_rate),

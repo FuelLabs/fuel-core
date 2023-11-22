@@ -1,0 +1,18 @@
+[package]
+name = "fuel-core-keygen"
+authors = { workspace = true }
+categories = { workspace = true }
+version = { workspace = true }
+edition = { workspace = true }
+homepage = { workspace = true }
+keywords = { workspace = true }
+license = { workspace = true }
+repository = { workspace = true }
+description = "Create to create command line utilities for fuel-core key management"
+
+[dependencies]
+anyhow = { workspace = true }
+clap = { workspace = true, features = ["derive", "env"] }
+fuel-core-types = { workspace = true, features = ["serde", "random"] }
+libp2p-identity = { version = "0.2.4", features = ["secp256k1", "peerid"] }
+serde = { workspace = true, features = ["derive"] }

@@ -176,7 +176,9 @@ fn init_coin_state(
                         .expect("Incorrect genesis transaction id byte length")
                     }),
                     coin.output_index.unwrap_or_else(|| {
-                        generated_output_index += 1;
+                        generated_output_index = generated_output_index
+                            .checked_add(1)
+                            .expect("The maximum number of UTXOs supported in the genesis configuration has been exceeded.");
                         (generated_output_index % 255) as u8
                     }),
                 );
@@ -228,6 +230,7 @@ fn init_contracts(
                 {
                     UtxoId::new(tx_id, output_idx)
                 } else {
+                    #[allow(clippy::cast_possible_truncation)]
                     UtxoId::new(
                         // generated transaction id([0..[out_index/255]])
                         Bytes32::try_from(

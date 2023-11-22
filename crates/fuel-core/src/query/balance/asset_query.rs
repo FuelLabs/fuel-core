@@ -32,12 +32,8 @@ pub struct AssetSpendTarget {
 }
 
 impl AssetSpendTarget {
-    pub fn new(id: AssetId, target: u64, max: u64) -> Self {
-        Self {
-            id,
-            target,
-            max: max as usize,
-        }
+    pub fn new(id: AssetId, target: u64, max: usize) -> Self {
+        Self { id, target, max }
     }
 }
 

@@ -22,7 +22,6 @@ use crate::{
         TxPointer,
     },
 };
-use anyhow::anyhow;
 use async_graphql::{
     connection::{
         Connection,
@@ -168,13 +167,6 @@ impl TxQuery {
         before: Option<String>,
     ) -> async_graphql::Result<Connection<TxPointer, Transaction, EmptyFields, EmptyFields>>
     {
-        // Rocksdb doesn't support reverse iteration over a prefix
-        if matches!(last, Some(last) if last > 0) {
-            return Err(
-                anyhow!("reverse pagination isn't supported for this resource").into(),
-            )
-        }
-
         let query: &Database = ctx.data_unchecked();
         let config = ctx.data_unchecked::<Config>();
         let owner = fuel_types::Address::from(owner);
@@ -214,7 +206,8 @@ impl TxQuery {
         tx.estimate_predicates_async::<TokioWithRayon>(&CheckPredicateParams::from(
             &config.consensus_parameters,
         ))
-        .await?;
+        .await
+        .map_err(|err| anyhow::anyhow!("{:?}", err))?;
 
         Ok(Transaction::from_tx(
             tx.id(&config.consensus_parameters.chain_id),
@@ -302,12 +295,13 @@ impl TxStatusSubscription {
         &self,
         ctx: &Context<'a>,
         #[graphql(desc = "The ID of the transaction")] id: TransactionId,
-    ) -> impl Stream<Item = async_graphql::Result<TransactionStatus>> + 'a {
+    ) -> anyhow::Result<impl Stream<Item = async_graphql::Result<TransactionStatus>> + 'a>
+    {
         let txpool = ctx.data_unchecked::<TxPool>();
         let db = ctx.data_unchecked::<Database>();
-        let rx = txpool.tx_update_subscribe(id.into()).await;
+        let rx = txpool.tx_update_subscribe(id.into())?;
 
-        transaction_status_change(
+        Ok(transaction_status_change(
             move |id| match db.tx_status(&id) {
                 Ok(status) => Ok(Some(status)),
                 Err(StorageError::NotFound(_, _)) => {
@@ -322,8 +316,7 @@ impl TxStatusSubscription {
             rx,
             id.into(),
         )
-        .await
-        .map_err(async_graphql::Error::from)
+        .map_err(async_graphql::Error::from))
     }
 
     /// Submits transaction to the `TxPool` and await either confirmation or failure.
@@ -338,7 +331,7 @@ impl TxStatusSubscription {
         let config = ctx.data_unchecked::<Config>();
         let tx = FuelTx::from_bytes(&tx.0)?;
         let tx_id = tx.id(&config.consensus_parameters.chain_id);
-        let subscription = txpool.tx_update_subscribe(tx_id).await;
+        let subscription = txpool.tx_update_subscribe(tx_id)?;
 
         let _: Vec<_> = txpool
             .insert(vec![Arc::new(tx)])

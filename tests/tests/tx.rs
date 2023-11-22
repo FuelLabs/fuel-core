@@ -37,10 +37,7 @@ use rand::{
     Rng,
     SeedableRng,
 };
-use std::{
-    io,
-    io::ErrorKind::NotFound,
-};
+use std::io::ErrorKind::NotFound;
 
 mod predicates;
 mod tx_pointer;
@@ -86,7 +83,7 @@ async fn dry_run_script() {
         .collect();
 
     let tx = TransactionBuilder::script(script, vec![])
-        .gas_limit(gas_limit)
+        .script_gas_limit(gas_limit)
         .gas_price(gas_price)
         .maturity(maturity)
         .add_random_fee_input()
@@ -163,7 +160,7 @@ async fn submit() {
         .collect();
 
     let tx = TransactionBuilder::script(script, vec![])
-        .gas_limit(gas_limit)
+        .script_gas_limit(gas_limit)
         .gas_price(gas_price)
         .maturity(maturity)
         .add_random_fee_input()
@@ -287,11 +284,11 @@ async fn get_transactions() {
 
     // there are 12 transactions
     // [
-    //  coinbase_tx1, tx1, coinbase_tx2, tx2, coinbase_tx3, tx3,
-    //  coinbase_tx4, tx4, coinbase_tx5, tx5, coinbase_tx6, tx6
+    //  tx1, coinbase_tx1, tx2, coinbase_tx2, tx3, coinbase_tx3,
+    //  tx4, coinbase_tx4, tx5, coinbase_tx5, tx6, coinbase_tx6,
     // ]
 
-    // Query for first 6: [coinbase_tx1, tx1, coinbase_tx2, tx2, coinbase_tx3, tx3]
+    // Query for first 6: [tx1, coinbase_tx1, tx2, coinbase_tx2, tx3, coinbase_tx3]
     let client = context.client;
     let page_request = PaginationRequest {
         cursor: None,
@@ -305,31 +302,31 @@ async fn get_transactions() {
         .iter()
         .map(|tx| tx.transaction.id(&ChainId::default()))
         .collect_vec();
+    assert_eq!(transactions[0], tx1);
     // coinbase_tx1
-    assert_eq!(transactions[1], tx1);
+    assert_eq!(transactions[2], tx2);
     // coinbase_tx2
-    assert_eq!(transactions[3], tx2);
+    assert_eq!(transactions[4], tx3);
     // coinbase_tx3
-    assert_eq!(transactions[5], tx3);
     // Check pagination state for first page
     assert!(response.has_next_page);
     assert!(!response.has_previous_page);
 
-    // Query for second page 2 with last given cursor: [coinbase_tx4, tx4, coinbase_tx5, tx5]
+    // Query for second page 2 with last given cursor: [tx4, coinbase_tx4, tx5, coinbase_tx5]
     let page_request_middle_page = PaginationRequest {
         cursor: response.cursor.clone(),
         results: 4,
         direction: PageDirection::Forward,
     };
 
-    // Query backwards from last given cursor [3]: [coinbase_tx3, tx2, coinbase_tx2, tx1, coinbase_tx1]
+    // Query backwards from last given cursor [3]: [tx3, coinbase_tx2, tx2, coinbase_tx1, tx1]
     let page_request_backwards = PaginationRequest {
         cursor: response.cursor.clone(),
         results: 6,
         direction: PageDirection::Backward,
     };
 
-    // Query forwards from last given cursor [3]: [coinbase_tx4, tx4, coinbase_tx5, tx5, coinbase_tx6, tx6]
+    // Query forwards from last given cursor [3]: [tx4, coinbase_tx4, tx5, coinbase_tx5, tx6, coinbase_tx6]
     let page_request_forwards = PaginationRequest {
         cursor: response.cursor,
         results: 6,
@@ -343,9 +340,9 @@ async fn get_transactions() {
         .map(|tx| tx.transaction.id(&ChainId::default()))
         .collect_vec();
     // coinbase_tx4
-    assert_eq!(transactions[1], tx4);
+    assert_eq!(transactions[0], tx4);
     // coinbase_tx5
-    assert_eq!(transactions[3], tx5);
+    assert_eq!(transactions[2], tx5);
     // Check pagination state for middle page
     // it should have next and previous page
     assert!(response.has_next_page);
@@ -357,11 +354,11 @@ async fn get_transactions() {
         .iter()
         .map(|tx| tx.transaction.id(&ChainId::default()))
         .collect_vec();
-    // transactions[0] - coinbase_tx3
-    assert_eq!(transactions[1], tx2);
-    // transactions[2] - coinbase_tx2
-    assert_eq!(transactions[3], tx1);
-    // transactions[4] - coinbase_tx1
+    assert_eq!(transactions[0], tx3);
+    // transactions[1] - coinbase_tx2
+    assert_eq!(transactions[2], tx2);
+    // transactions[3] - coinbase_tx1
+    assert_eq!(transactions[4], tx1);
     // Check pagination state for last page
     assert!(!response.has_next_page);
     assert!(response.has_previous_page);
@@ -372,19 +369,23 @@ async fn get_transactions() {
         .iter()
         .map(|tx| tx.transaction.id(&ChainId::default()))
         .collect_vec();
+    assert_eq!(transactions[0], tx4);
     // coinbase_tx4
-    assert_eq!(transactions[1], tx4);
+    assert_eq!(transactions[2], tx5);
     // coinbase_tx5
-    assert_eq!(transactions[3], tx5);
+    assert_eq!(transactions[4], tx6);
     // coinbase_tx6
-    assert_eq!(transactions[5], tx6);
     // Check pagination state for last page
     assert!(!response.has_next_page);
     assert!(response.has_previous_page);
 }
 
+#[test_case::test_case(PageDirection::Forward; "forward")]
+#[test_case::test_case(PageDirection::Backward; "backward")]
 #[tokio::test]
-async fn get_transactions_by_owner_forward_and_backward_iterations() {
+async fn get_transactions_by_owner_returns_correct_number_of_results(
+    direction: PageDirection,
+) {
     let alice = Address::from([1; 32]);
     let bob = Address::from([2; 32]);
 
@@ -400,7 +401,7 @@ async fn get_transactions_by_owner_forward_and_backward_iterations() {
     let all_transactions_forward = PaginationRequest {
         cursor: None,
         results: 10,
-        direction: PageDirection::Forward,
+        direction,
     };
     let response = client
         .transactions_by_owner(&bob, all_transactions_forward)
@@ -415,24 +416,46 @@ async fn get_transactions_by_owner_forward_and_backward_iterations() {
         })
         .collect_vec();
     assert_eq!(transactions_forward.len(), 5);
+}
 
-    let all_transactions_backward = PaginationRequest {
+#[test_case::test_case(PageDirection::Forward; "forward")]
+#[test_case::test_case(PageDirection::Backward; "backward")]
+#[tokio::test]
+async fn get_transactions_by_owner_supports_cursor(direction: PageDirection) {
+    let alice = Address::from([1; 32]);
+    let bob = Address::from([2; 32]);
+
+    let mut context = TestContext::new(100).await;
+    let _ = context.transfer(alice, bob, 1).await.unwrap();
+    let _ = context.transfer(alice, bob, 2).await.unwrap();
+    let _ = context.transfer(alice, bob, 3).await.unwrap();
+    let _ = context.transfer(alice, bob, 4).await.unwrap();
+    let _ = context.transfer(alice, bob, 5).await.unwrap();
+
+    let client = context.client;
+
+    let all_transactions_forward = PaginationRequest {
         cursor: None,
         results: 10,
-        direction: PageDirection::Backward,
+        direction,
     };
     let response = client
-        .transactions_by_owner(&bob, all_transactions_backward)
-        .await;
-    // Backward request is not supported right now.
-    assert!(response.is_err());
-
-    ///////////////// Iteration
+        .transactions_by_owner(&bob, all_transactions_forward)
+        .await
+        .unwrap();
+    let transactions_forward = response
+        .results
+        .into_iter()
+        .map(|tx| {
+            assert!(matches!(tx.status, TransactionStatus::Success { .. }));
+            tx.transaction
+        })
+        .collect_vec();
 
     let forward_iter_three = PaginationRequest {
         cursor: None,
         results: 3,
-        direction: PageDirection::Forward,
+        direction,
     };
     let response_after_iter_three = client
         .transactions_by_owner(&bob, forward_iter_three)
@@ -454,7 +477,7 @@ async fn get_transactions_by_owner_forward_and_backward_iterations() {
     let forward_iter_next_two = PaginationRequest {
         cursor: response_after_iter_three.cursor.clone(),
         results: 2,
-        direction: PageDirection::Forward,
+        direction,
     };
     let response = client
         .transactions_by_owner(&bob, forward_iter_next_two)
@@ -530,7 +553,7 @@ async fn get_transactions_from_manual_blocks() {
         )
         .unwrap();
 
-    // Query for first 4: [coinbase_tx1, 0, 1, 2]
+    // Query for first 4: [0, 1, 2, 3]
     let page_request_forwards = PaginationRequest {
         cursor: None,
         results: 4,
@@ -546,12 +569,12 @@ async fn get_transactions_from_manual_blocks() {
         .iter()
         .map(|tx| tx.transaction.id(&ChainId::default()))
         .collect_vec();
-    // coinbase_tx1
-    assert_eq!(transactions[1], txs[0].id(&ChainId::default()));
-    assert_eq!(transactions[2], txs[1].id(&ChainId::default()));
-    assert_eq!(transactions[3], txs[2].id(&ChainId::default()));
+    assert_eq!(transactions[0], txs[0].id(&ChainId::default()));
+    assert_eq!(transactions[1], txs[1].id(&ChainId::default()));
+    assert_eq!(transactions[2], txs[2].id(&ChainId::default()));
+    assert_eq!(transactions[3], txs[3].id(&ChainId::default()));
 
-    // Query forwards from last given cursor [2]: [3, 4, coinbase_tx2, 5, 6]
+    // Query forwards from last given cursor [2]: [4, coinbase_tx1, 5, 6, coinbase_tx2]
     let next_page_request_forwards = PaginationRequest {
         cursor: response.cursor,
         results: 5,
@@ -567,13 +590,13 @@ async fn get_transactions_from_manual_blocks() {
         .iter()
         .map(|tx| tx.transaction.id(&ChainId::default()))
         .collect_vec();
-    assert_eq!(transactions[0], txs[3].id(&ChainId::default()));
-    assert_eq!(transactions[1], txs[4].id(&ChainId::default()));
+    assert_eq!(transactions[0], txs[4].id(&ChainId::default()));
+    // coinbase_tx1
+    assert_eq!(transactions[2], txs[5].id(&ChainId::default()));
+    assert_eq!(transactions[3], txs[6].id(&ChainId::default()));
     // coinbase_tx2
-    assert_eq!(transactions[3], txs[5].id(&ChainId::default()));
-    assert_eq!(transactions[4], txs[6].id(&ChainId::default()));
 
-    // Query backwards from last given cursor [8]: [5, coinbase_tx2, 4, 3, 2, 1, 0, coinbase_tx1]
+    // Query backwards from last given cursor [8]: [6, 5, coinbase_tx1, 4, 3, 2, 1, 0]
     let page_request_backwards = PaginationRequest {
         cursor: response.cursor,
         results: 10,
@@ -589,14 +612,14 @@ async fn get_transactions_from_manual_blocks() {
         .iter()
         .map(|tx| tx.transaction.id(&ChainId::default()))
         .collect_vec();
-    assert_eq!(transactions[0], txs[5].id(&ChainId::default()));
-    // transactions[1] coinbase_tx2
-    assert_eq!(transactions[2], txs[4].id(&ChainId::default()));
-    assert_eq!(transactions[3], txs[3].id(&ChainId::default()));
-    assert_eq!(transactions[4], txs[2].id(&ChainId::default()));
-    assert_eq!(transactions[5], txs[1].id(&ChainId::default()));
-    assert_eq!(transactions[6], txs[0].id(&ChainId::default()));
-    // transactions[7] coinbase_tx1
+    assert_eq!(transactions[0], txs[6].id(&ChainId::default()));
+    assert_eq!(transactions[1], txs[5].id(&ChainId::default()));
+    // transactions[2] coinbase_tx1
+    assert_eq!(transactions[3], txs[4].id(&ChainId::default()));
+    assert_eq!(transactions[4], txs[3].id(&ChainId::default()));
+    assert_eq!(transactions[5], txs[2].id(&ChainId::default()));
+    assert_eq!(transactions[6], txs[1].id(&ChainId::default()));
+    assert_eq!(transactions[7], txs[0].id(&ChainId::default()));
 }
 
 #[tokio::test]
@@ -647,38 +670,6 @@ async fn get_owned_transactions() {
     assert_eq!(&alice_txs, &[tx1]);
     assert_eq!(&bob_txs, &[tx2, tx3]);
     assert_eq!(&charlie_txs, &[tx1, tx2, tx3]);
-}
-
-impl TestContext {
-    async fn transfer(
-        &mut self,
-        from: Address,
-        to: Address,
-        amount: u64,
-    ) -> io::Result<Bytes32> {
-        let script = op::ret(0x10).to_bytes().to_vec();
-        let tx = Transaction::script(
-            Default::default(),
-            1_000_000,
-            Default::default(),
-            script,
-            vec![],
-            vec![Input::coin_signed(
-                self.rng.gen(),
-                from,
-                amount,
-                Default::default(),
-                Default::default(),
-                Default::default(),
-                Default::default(),
-            )],
-            vec![Output::coin(to, amount, Default::default())],
-            vec![vec![].into()],
-        )
-        .into();
-        self.client.submit_and_await_commit(&tx).await?;
-        Ok(tx.id(&Default::default()))
-    }
 }
 
 fn get_executor_and_db() -> (Executor<MaybeRelayerAdapter>, Database) {

@@ -177,7 +177,7 @@ impl From<(Option<Address>, PaginationRequest<String>)> for OwnedMessagesConnect
                 owner: r.0,
                 after: r.1.cursor,
                 before: None,
-                first: Some(r.1.results as i32),
+                first: Some(r.1.results),
                 last: None,
             },
             PageDirection::Backward => OwnedMessagesConnectionArgs {
@@ -185,7 +185,7 @@ impl From<(Option<Address>, PaginationRequest<String>)> for OwnedMessagesConnect
                 after: None,
                 before: r.1.cursor,
                 first: None,
-                last: Some(r.1.results as i32),
+                last: Some(r.1.results),
             },
         }
     }

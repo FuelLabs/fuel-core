@@ -31,7 +31,7 @@ impl AsRef<Database> for DatabaseTransaction {
 
 impl AsMut<Database> for DatabaseTransaction {
     fn as_mut(&mut self) -> &mut Database {
-        self.deref_mut()
+        &mut self.database
     }
 }
 

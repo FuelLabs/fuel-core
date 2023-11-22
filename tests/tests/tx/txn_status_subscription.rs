@@ -53,7 +53,7 @@ async fn subscribe_txn_status() {
             .collect();
 
         let predicate = op::ret(RegId::ONE).to_bytes().to_vec();
-        let owner = Input::predicate_owner(&predicate, &ChainId::default());
+        let owner = Input::predicate_owner(&predicate);
         // The third transaction needs to have a different input.
         let utxo_id = if i == 2 { 2 } else { 1 };
         let utxo_id = UtxoId::new(Bytes32::from([utxo_id; 32]), 1);
@@ -69,11 +69,12 @@ async fn subscribe_txn_status() {
             vec![],
         );
         let mut tx: Transaction = Transaction::script(
-            gas_price + (i as u64),
             gas_limit,
-            maturity,
             script,
             vec![],
+            policies::Policies::new()
+                .with_gas_price(gas_price + (i as u64))
+                .with_maturity(maturity),
             vec![coin_input],
             vec![],
             vec![],
@@ -130,7 +131,7 @@ async fn test_regression_in_subscribe() {
     let mut config = Config::local_node();
     config.utxo_validation = true;
     let predicate = op::ret(RegId::ONE).to_bytes().to_vec();
-    let owner = Input::predicate_owner(&predicate, &ChainId::default());
+    let owner = Input::predicate_owner(&predicate);
     let node = FuelService::new_node(config).await.unwrap();
     let coin_pred = Input::coin_predicate(
         rng.gen(),
@@ -151,10 +152,9 @@ async fn test_regression_in_subscribe() {
 
     let mut empty_script =
         TransactionBuilder::script(vec![op::ret(0)].into_iter().collect(), vec![]);
-    empty_script.gas_limit(100000);
+    empty_script.script_gas_limit(100000);
 
-    let mut empty_create = TransactionBuilder::create(rng.gen(), rng.gen(), vec![]);
-    empty_create.gas_limit(100000);
+    let empty_create = TransactionBuilder::create(rng.gen(), rng.gen(), vec![]);
     let txs = [
         empty_script.clone().add_input(coin_pred).finalize().into(),
         empty_create

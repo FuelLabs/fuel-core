@@ -1,3 +1,4 @@
+#![allow(clippy::arithmetic_side_effects)]
 #![allow(missing_docs)]
 
 mod counts;
@@ -43,7 +44,8 @@ pub fn empty_header<I: Into<BlockHeight>>(i: I) -> SealedBlockHeader {
     let height = i.into();
     header.consensus.height = height;
     let transaction_tree =
-        fuel_core_types::fuel_merkle::binary::in_memory::MerkleTree::new();
+        fuel_core_types::fuel_merkle::binary::root_calculator::MerkleRootCalculator::new(
+        );
     header.application.generated.transactions_root = transaction_tree.root().into();
 
     let consensus = Consensus::default();

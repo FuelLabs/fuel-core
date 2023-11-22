@@ -8,8 +8,3 @@ keywords = ["blockchain", "fuel", "consensus", "bft"]
 license = { workspace = true }
 repository = { workspace = true }
 description = "Fuel Core BFT"
-
-[dependencies]
-anyhow = { workspace = true }
-parking_lot = { workspace = true }
-tokio = { workspace = true, features = ["full"] }

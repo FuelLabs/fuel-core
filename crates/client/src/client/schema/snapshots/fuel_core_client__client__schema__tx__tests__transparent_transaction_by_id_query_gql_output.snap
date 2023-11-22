@@ -4,13 +4,21 @@ expression: operation.query
 ---
 query($id: TransactionId!) {
   transaction(id: $id) {
-    gasLimit
-    gasPrice
+    scriptGasLimit
     id
     txPointer
     inputAssetIds
     inputContracts {
       id
+    }
+    inputContract {
+      utxoId
+      balanceRoot
+      stateRoot
+      txPointer
+      contract {
+        id
+      }
     }
     inputs {
       __typename
@@ -79,7 +87,13 @@ query($id: TransactionId!) {
         stateRoot
       }
     }
-    maturity
+    outputContract {
+      inputIndex
+      balanceRoot
+      stateRoot
+    }
+    mintAmount
+    mintAssetId
     receiptsRoot
     status {
       __typename
@@ -148,6 +162,12 @@ query($id: TransactionId!) {
     }
     script
     scriptData
+    policies {
+      gasPrice
+      maturity
+      witnessLimit
+      maxFee
+    }
     salt
     storageSlots
     bytecodeWitnessIndex

@@ -1,4 +1,9 @@
-use std::iter::successors;
+use std::{
+    iter::successors,
+    sync::Arc,
+};
+
+use crate::utils::make_receipts;
 
 use super::run_group_ref;
 
@@ -6,25 +11,31 @@ use criterion::{
     Criterion,
     Throughput,
 };
-use fuel_core::database::vm_database::VmDatabase;
+use fuel_core::{
+    database::vm_database::VmDatabase,
+    service::Config,
+    state::rocks_db::{
+        RocksDb,
+        ShallowTempDir,
+    },
+};
 use fuel_core_benches::*;
-use fuel_core_storage::ContractsAssetsStorage;
 use fuel_core_types::{
+    blockchain::header::ConsensusHeader,
     fuel_asm::{
         op,
         GTFArgs,
         RegId,
     },
     fuel_tx::{
+        ContractIdExt,
         Input,
         Output,
         Word,
     },
     fuel_types::*,
-    fuel_vm::{
-        consts::*,
-        InterpreterStorage,
-    },
+    fuel_vm::consts::*,
+    tai64::Tai64,
 };
 use rand::{
     rngs::StdRng,
@@ -32,118 +43,209 @@ use rand::{
     SeedableRng,
 };
 
+pub struct BenchDb {
+    db: Database,
+    /// Used for RAII cleanup. Contents of this directory are deleted on drop.
+    _tmp_dir: ShallowTempDir,
+}
+
+impl BenchDb {
+    fn new(contract_id: &ContractId) -> anyhow::Result<Self> {
+        use fuel_core::database::vm_database::IncreaseStorageKey;
+        let tmp_dir = ShallowTempDir::new();
+
+        let db = Arc::new(RocksDb::default_open(tmp_dir.path(), None).unwrap());
+        let mut storage_key = primitive_types::U256::zero();
+        let mut key_bytes = Bytes32::zeroed();
+
+        let state_size = crate::utils::get_state_size();
+
+        let mut database = Database::new(db);
+        database.init_contract_state(
+            contract_id,
+            (0..state_size).map(|_| {
+                storage_key.to_big_endian(key_bytes.as_mut());
+                storage_key.increase().unwrap();
+                (key_bytes, key_bytes)
+            }),
+        )?;
+
+        let mut storage_key = primitive_types::U256::zero();
+        let mut sub_id = Bytes32::zeroed();
+        database.init_contract_balances(
+            contract_id,
+            (0..state_size).map(|k| {
+                storage_key.to_big_endian(sub_id.as_mut());
+
+                let asset = if k % 2 == 0 {
+                    VmBench::CONTRACT.asset_id(&sub_id)
+                } else {
+                    let asset_id = AssetId::new(*sub_id);
+                    storage_key.increase().unwrap();
+                    asset_id
+                };
+                (asset, k / 2 + 1_000)
+            }),
+        )?;
+        // Adds a genesis block to the database.
+        fuel_core::service::genesis::maybe_initialize_state(
+            &Config::local_node(),
+            &database,
+        )
+        .expect("Should init with genesis block");
+        database.clone().flush()?;
+
+        Ok(Self {
+            _tmp_dir: tmp_dir,
+            db: database,
+        })
+    }
+
+    /// Creates a `VmDatabase` instance.
+    fn to_vm_database(&self) -> VmDatabase {
+        let header = ConsensusHeader {
+            prev_root: Default::default(),
+            height: 1.into(),
+            time: Tai64::UNIX_EPOCH,
+            generated: (),
+        };
+        VmDatabase::new(self.db.clone(), &header, ContractId::zeroed())
+    }
+}
+
 pub fn run(c: &mut Criterion) {
     let rng = &mut StdRng::seed_from_u64(2322u64);
 
+    const LAST_VALUE: u64 = 100_000;
     let mut linear: Vec<u64> = vec![1, 10, 100, 1000, 10_000];
-    let mut l = successors(Some(100_000.0f64), |n| Some(n / 1.5))
+    let mut linear_short = linear.clone();
+    linear_short.push(LAST_VALUE);
+    let mut l = successors(Some(LAST_VALUE as f64), |n| Some(n / 1.5))
         .take(5)
         .map(|f| f as u64)
         .collect::<Vec<_>>();
     l.sort_unstable();
     linear.extend(l);
-    let asset: AssetId = rng.gen();
-    let contract: ContractId = rng.gen();
+
+    let asset = AssetId::zeroed();
+    let contract: ContractId = VmBench::CONTRACT;
+
+    let db = BenchDb::new(&contract).expect("Unable to fill contract storage");
+
+    let receipts_ctx = make_receipts(rng);
 
     run_group_ref(
         &mut c.benchmark_group("bal"),
         "bal",
-        VmBench::new(op::bal(0x10, 0x10, 0x11))
+        VmBench::new(op::bal(0x13, 0x10, 0x11))
+            .with_db(db.to_vm_database())
             .with_data(asset.iter().chain(contract.iter()).copied().collect())
             .with_prepare_script(vec![
                 op::gtf_args(0x10, 0x00, GTFArgs::ScriptData),
                 op::addi(0x11, 0x10, asset.len().try_into().unwrap()),
             ])
-            .with_dummy_contract(contract)
-            .with_prepare_db(move |mut db| {
-                let mut asset_inc = AssetId::zeroed();
-
-                asset_inc.as_mut()[..8].copy_from_slice(&1_u64.to_be_bytes());
-
-                db.merkle_contract_asset_id_balance_insert(&contract, &asset_inc, 1)?;
-
-                db.merkle_contract_asset_id_balance_insert(&contract, &asset, 100)?;
-
-                Ok(db)
-            }),
+            .with_dummy_contract(contract),
     );
 
-    run_group_ref(
-        &mut c.benchmark_group("sww"),
-        "sww",
-        VmBench::contract(rng, op::sww(RegId::ZERO, 0x29, RegId::ONE))
-            .expect("failed to prepare contract")
-            .with_prepare_db(move |mut db| {
-                let mut key = Bytes32::zeroed();
-
-                key.as_mut()[..8].copy_from_slice(&1_u64.to_be_bytes());
-
-                db.merkle_contract_state_insert(&contract, &key, &key)?;
-
-                Ok(db)
-            }),
-    );
     {
-        let mut input = VmBench::contract(rng, op::srw(0x13, 0x14, 0x15))
-            .expect("failed to prepare contract")
-            .with_prepare_db(move |mut db| {
-                let key = Bytes32::zeroed();
+        let mut start_key = Bytes32::zeroed();
+        // The checkpoint was initialized with entries starting `0..STATE_SIZE`.
+        // We want to write new entry to the database, so the starting key is far.
+        start_key.as_mut()[0] = 255;
+        let data = start_key.iter().copied().collect::<Vec<_>>();
 
-                db.merkle_contract_state_insert(&ContractId::zeroed(), &key, &key)?;
+        let post_call = vec![
+            op::gtf_args(0x10, 0x00, GTFArgs::ScriptData),
+            op::addi(0x11, 0x10, ContractId::LEN.try_into().unwrap()),
+            op::addi(0x11, 0x11, WORD_SIZE.try_into().unwrap()),
+            op::addi(0x11, 0x11, WORD_SIZE.try_into().unwrap()),
+            op::addi(0x11, 0x11, AssetId::LEN.try_into().unwrap()),
+        ];
+        let mut bench = VmBench::contract_using_db(
+            rng,
+            db.to_vm_database(),
+            op::sww(0x11, 0x29, RegId::ONE),
+        )
+        .expect("failed to prepare contract")
+        .with_post_call(post_call);
+        bench.data.extend(data);
 
-                Ok(db)
-            });
-        input.prepare_script.extend(vec![op::movi(0x15, 2000)]);
+        run_group_ref(&mut c.benchmark_group("sww"), "sww", bench);
+    }
+
+    {
+        let input = VmBench::contract_using_db(
+            rng,
+            db.to_vm_database(),
+            op::srw(0x13, 0x14, 0x10),
+        )
+        .expect("failed to prepare contract");
         run_group_ref(&mut c.benchmark_group("srw"), "srw", input);
     }
 
-    {
-        let mut key = Bytes32::zeroed();
+    let mut scwq = c.benchmark_group("scwq");
 
-        key.as_mut()[..8].copy_from_slice(&1u64.to_be_bytes());
-        let data = key.iter().copied().collect::<Vec<_>>();
-
-        let post_call = vec![
-            op::gtf_args(0x10, 0x00, GTFArgs::ScriptData),
-            op::addi(0x11, 0x10, ContractId::LEN.try_into().unwrap()),
-            op::addi(0x11, 0x11, WORD_SIZE.try_into().unwrap()),
-            op::addi(0x11, 0x11, WORD_SIZE.try_into().unwrap()),
-        ];
-        let mut bench = VmBench::contract(rng, op::scwq(0x11, 0x29, RegId::ONE))
-            .expect("failed to prepare contract")
-            .with_post_call(post_call)
-            .with_prepare_db(move |mut db| {
-                db.merkle_contract_state_insert(&contract, &key, &key)?;
-
-                Ok(db)
-            });
-        bench.data.extend(data);
-        run_group_ref(&mut c.benchmark_group("scwq"), "scwq", bench);
-    }
-
-    {
-        let mut key = Bytes32::zeroed();
-
-        key.as_mut()[..8].copy_from_slice(&1u64.to_be_bytes());
-        let data = key.iter().copied().collect::<Vec<_>>();
+    for i in linear_short.clone() {
+        // We want to clear entries from the checkpoint, so the starting key is zero.
+        let start_key = Bytes32::zeroed();
+        let data = start_key.iter().copied().collect::<Vec<_>>();
 
         let post_call = vec![
             op::gtf_args(0x10, 0x00, GTFArgs::ScriptData),
             op::addi(0x11, 0x10, ContractId::LEN.try_into().unwrap()),
             op::addi(0x11, 0x11, WORD_SIZE.try_into().unwrap()),
             op::addi(0x11, 0x11, WORD_SIZE.try_into().unwrap()),
+            op::addi(0x11, 0x11, AssetId::LEN.try_into().unwrap()),
+            op::movi(0x12, i as u32),
         ];
-        let mut bench = VmBench::contract(rng, op::swwq(0x10, 0x11, 0x20, RegId::ONE))
-            .expect("failed to prepare contract")
-            .with_post_call(post_call)
-            .with_prepare_db(move |mut db| {
-                db.merkle_contract_state_insert(&contract, &key, &key)?;
-
-                Ok(db)
-            });
+        let mut bench = VmBench::contract_using_db(
+            rng,
+            db.to_vm_database(),
+            op::scwq(0x11, 0x29, 0x12),
+        )
+        .expect("failed to prepare contract")
+        .with_post_call(post_call);
         bench.data.extend(data);
-        run_group_ref(&mut c.benchmark_group("swwq"), "swwq", bench);
+
+        scwq.throughput(Throughput::Bytes(i));
+
+        run_group_ref(&mut scwq, format!("{i}"), bench);
     }
+
+    scwq.finish();
+
+    let mut swwq = c.benchmark_group("swwq");
+
+    for i in linear_short.clone() {
+        let mut start_key = Bytes32::zeroed();
+        // The checkpoint was initialized with entries starting `0..STATE_SIZE`.
+        // We want to write new entries to the database, so the starting key is far.
+        start_key.as_mut()[0] = 255;
+        let data = start_key.iter().copied().collect::<Vec<_>>();
+
+        let post_call = vec![
+            op::gtf_args(0x10, 0x00, GTFArgs::ScriptData),
+            op::addi(0x11, 0x10, ContractId::LEN.try_into().unwrap()),
+            op::addi(0x11, 0x11, WORD_SIZE.try_into().unwrap()),
+            op::addi(0x11, 0x11, WORD_SIZE.try_into().unwrap()),
+            op::addi(0x11, 0x11, AssetId::LEN.try_into().unwrap()),
+            op::movi(0x12, i as u32),
+        ];
+        let mut bench = VmBench::contract_using_db(
+            rng,
+            db.to_vm_database(),
+            op::swwq(0x11, 0x20, RegId::ZERO, 0x12),
+        )
+        .expect("failed to prepare contract")
+        .with_post_call(post_call);
+        bench.data.extend(data);
+
+        swwq.throughput(Throughput::Bytes(i));
+
+        run_group_ref(&mut swwq, format!("{i}"), bench);
+    }
+
+    swwq.finish();
 
     let mut call = c.benchmark_group("call");
 
@@ -152,10 +254,11 @@ pub fn run(c: &mut Criterion) {
 
         rng.fill_bytes(&mut code);
 
-        let code = ContractCode::from(code);
-        let id = code.id;
+        let mut code = ContractCode::from(code);
+        code.id = VmBench::CONTRACT;
 
-        let data = id
+        let data = code
+            .id
             .iter()
             .copied()
             .chain((0 as Word).to_be_bytes().iter().copied())
@@ -176,10 +279,12 @@ pub fn run(c: &mut Criterion) {
         run_group_ref(
             &mut call,
             format!("{i}"),
-            VmBench::new(op::call(0x10, RegId::ZERO, 0x11, 0x12))
+            VmBench::new(op::call(0x10, RegId::ZERO, 0x11, RegId::CGAS))
+                .with_db(db.to_vm_database())
                 .with_contract_code(code)
                 .with_data(data)
-                .with_prepare_script(prepare_script),
+                .with_prepare_script(prepare_script)
+                .with_call_receipts(receipts_ctx.clone()),
         );
     }
 
@@ -192,10 +297,11 @@ pub fn run(c: &mut Criterion) {
 
         rng.fill_bytes(&mut code);
 
-        let code = ContractCode::from(code);
-        let id = code.id;
+        let mut code = ContractCode::from(code);
+        code.id = VmBench::CONTRACT;
 
-        let data = id
+        let data = code
+            .id
             .iter()
             .copied()
             .chain((0 as Word).to_be_bytes().iter().copied())
@@ -229,14 +335,15 @@ pub fn run(c: &mut Criterion) {
     let mut ccp = c.benchmark_group("ccp");
 
     for i in linear.clone() {
-        let mut code = vec![0u8; i as usize];
+        let mut code = vec![op::noop(); i as usize].into_iter().collect::<Vec<_>>();
 
         rng.fill_bytes(&mut code);
 
-        let code = ContractCode::from(code);
-        let id = code.id;
+        let mut code = ContractCode::from(code);
+        code.id = VmBench::CONTRACT;
 
-        let data = id
+        let data = code
+            .id
             .iter()
             .copied()
             .chain((0 as Word).to_be_bytes().iter().copied())
@@ -280,10 +387,10 @@ pub fn run(c: &mut Criterion) {
 
         rng.fill_bytes(&mut code);
 
-        let code = ContractCode::from(code);
-        let id = code.id;
+        let mut code = ContractCode::from(code);
+        code.id = VmBench::CONTRACT;
 
-        let data = id.iter().copied().collect();
+        let data = code.id.iter().copied().collect();
 
         let prepare_script = vec![op::gtf_args(0x10, 0x00, GTFArgs::ScriptData)];
 
@@ -320,15 +427,26 @@ pub fn run(c: &mut Criterion) {
     run_group_ref(
         &mut c.benchmark_group("mint"),
         "mint",
-        VmBench::contract(rng, op::mint(RegId::ZERO, RegId::ZERO))
-            .expect("failed to prepare contract"),
+        VmBench::contract_using_db(
+            rng,
+            db.to_vm_database(),
+            op::mint(RegId::ONE, RegId::ZERO),
+        )
+        .expect("failed to prepare contract")
+        .with_call_receipts(receipts_ctx.clone()),
     );
 
     run_group_ref(
         &mut c.benchmark_group("burn"),
         "burn",
-        VmBench::contract(rng, op::mint(RegId::ZERO, RegId::ZERO))
-            .expect("failed to prepare contract"),
+        VmBench::contract_using_db(
+            rng,
+            db.to_vm_database(),
+            op::burn(RegId::ONE, RegId::HP),
+        )
+        .expect("failed to prepare contract")
+        .prepend_prepare_script(vec![op::movi(0x10, 32), op::aloc(0x10)])
+        .with_call_receipts(receipts_ctx.clone()),
     );
 
     run_group_ref(
@@ -341,40 +459,34 @@ pub fn run(c: &mut Criterion) {
         ]),
     );
 
+    // tr
     {
-        let mut input = VmBench::contract(rng, op::tr(0x15, 0x14, 0x15))
-            .expect("failed to prepare contract")
-            .with_prepare_db(move |mut db| {
-                db.merkle_contract_asset_id_balance_insert(
-                    &ContractId::zeroed(),
-                    &AssetId::zeroed(),
-                    200,
-                )?;
-
-                Ok(db)
-            });
+        let mut input = VmBench::contract_using_db(
+            rng,
+            db.to_vm_database(),
+            op::tr(0x15, 0x14, 0x15),
+        )
+        .expect("failed to prepare contract")
+        .with_call_receipts(receipts_ctx.clone());
         input
             .prepare_script
             .extend(vec![op::movi(0x15, 2000), op::movi(0x14, 100)]);
         run_group_ref(&mut c.benchmark_group("tr"), "tr", input);
     }
 
+    // tro
     {
-        let mut input = VmBench::contract(rng, op::tro(0x15, 0x16, 0x14, 0x15))
-            .expect("failed to prepare contract")
-            .with_prepare_db(move |mut db| {
-                db.merkle_contract_asset_id_balance_insert(
-                    &ContractId::zeroed(),
-                    &AssetId::zeroed(),
-                    200,
-                )?;
-
-                Ok(db)
-            });
+        let mut input = VmBench::contract_using_db(
+            rng,
+            db.to_vm_database(),
+            op::tro(RegId::ZERO, 0x15, 0x14, RegId::HP),
+        )
+        .expect("failed to prepare contract")
+        .with_call_receipts(receipts_ctx.clone());
         let coin_output = Output::variable(Address::zeroed(), 100, AssetId::zeroed());
         input.outputs.push(coin_output);
         let predicate = op::ret(RegId::ONE).to_bytes().to_vec();
-        let owner = Input::predicate_owner(&predicate, &ChainId::default());
+        let owner = Input::predicate_owner(&predicate);
         let coin_input = Input::coin_predicate(
             Default::default(),
             owner,
@@ -390,10 +502,16 @@ pub fn run(c: &mut Criterion) {
 
         let index = input.outputs.len() - 1;
         input.prepare_script.extend(vec![
-            op::movi(0x15, 2000),
             op::movi(0x14, 100),
-            op::movi(0x16, index.try_into().unwrap()),
+            op::movi(0x15, index.try_into().unwrap()),
+            op::movi(0x20, 32),
+            op::aloc(0x20),
         ]);
+        for (i, v) in (*AssetId::zeroed()).into_iter().enumerate() {
+            input.prepare_script.push(op::movi(0x20, v as u32));
+            input.prepare_script.push(op::sb(RegId::HP, 0x20, i as u16));
+        }
+
         run_group_ref(&mut c.benchmark_group("tro"), "tro", input);
     }
 
@@ -427,89 +545,98 @@ pub fn run(c: &mut Criterion) {
         VmBench::contract(rng, op::gm(0x10, 1)).unwrap(),
     );
 
-    let mut smo = c.benchmark_group("smo");
+    // smo
+    {
+        let mut smo = c.benchmark_group("smo");
 
-    for i in linear.clone() {
-        let mut input = VmBench::contract(rng, op::smo(0x15, 0x16, 0x17, 0x18))
-            .expect("failed to prepare contract");
-        input.prepare_db = Some(Box::new(|mut db: VmDatabase| {
-            db.merkle_contract_asset_id_balance_insert(
-                &ContractId::default(),
-                &AssetId::default(),
-                Word::MAX,
-            )?;
-            Ok(db)
-        }));
-        input.post_call.extend(vec![
-            op::gtf_args(0x15, 0x00, GTFArgs::ScriptData),
-            // Offset 32 + 8 + 8 + 32
-            op::addi(0x15, 0x15, 32 + 8 + 8 + 32), // target address pointer
-            op::addi(0x16, 0x15, 32),              // data ppinter
-            op::movi(0x17, i.try_into().unwrap()), // data length
-            op::movi(0x18, 10),                    // coins to send
-        ]);
-        input.data.extend(
-            Address::new([1u8; 32])
-                .iter()
-                .copied()
-                .chain(vec![2u8; i as usize]),
-        );
-        let predicate = op::ret(RegId::ONE).to_bytes().to_vec();
-        let owner = Input::predicate_owner(&predicate, &ChainId::default());
-        let coin_input = Input::coin_predicate(
-            Default::default(),
-            owner,
-            Word::MAX,
-            AssetId::zeroed(),
-            Default::default(),
-            Default::default(),
-            Default::default(),
-            predicate,
-            vec![],
-        );
-        input.inputs.push(coin_input);
-        smo.throughput(Throughput::Bytes(i));
-        run_group_ref(&mut smo, format!("{i}"), input);
-    }
-
-    smo.finish();
-
-    let mut srwq = c.benchmark_group("srwq");
-
-    for i in linear.clone() {
-        let mut key = Bytes32::zeroed();
-
-        key.as_mut()[..8].copy_from_slice(&i.to_be_bytes());
-        let data = key.iter().copied().collect::<Vec<_>>();
-
-        let post_call = vec![
-            op::movi(0x16, i.try_into().unwrap()),
-            op::movi(0x17, 2000),
-            op::move_(0x15, 0x16),
-            op::muli(0x15, 0x15, 32),
-            op::addi(0x15, 0x15, 1),
-            op::aloc(0x15),
-            op::move_(0x14, RegId::HP),
-        ];
-        let mut bench = VmBench::contract(rng, op::srwq(0x14, 0x11, 0x27, 0x16))
+        for i in linear.clone() {
+            let mut input = VmBench::contract_using_db(
+                rng,
+                db.to_vm_database(),
+                op::smo(0x15, 0x16, 0x17, 0x18),
+            )
             .expect("failed to prepare contract")
-            .with_post_call(post_call)
-            .with_prepare_db(move |mut db| {
-                let values = vec![key; i as usize];
-                db.merkle_contract_state_insert_range(&contract, &key, &values)?;
+            .with_call_receipts(receipts_ctx.clone());
+            input.post_call.extend(vec![
+                op::gtf_args(0x15, 0x00, GTFArgs::ScriptData),
+                // Offset 32 + 8 + 8 + 32
+                op::addi(0x15, 0x15, 32 + 8 + 8 + 32), // target address pointer
+                op::addi(0x16, 0x15, 32),              // data ppinter
+                op::movi(0x17, i.try_into().unwrap()), // data length
+                op::movi(0x18, 10),                    // coins to send
+            ]);
+            input.data.extend(
+                Address::new([1u8; 32])
+                    .iter()
+                    .copied()
+                    .chain(vec![2u8; i as usize]),
+            );
+            let predicate = op::ret(RegId::ONE).to_bytes().to_vec();
+            let owner = Input::predicate_owner(&predicate);
+            let coin_input = Input::coin_predicate(
+                Default::default(),
+                owner,
+                Word::MAX,
+                AssetId::zeroed(),
+                Default::default(),
+                Default::default(),
+                Default::default(),
+                predicate,
+                vec![],
+            );
+            input.inputs.push(coin_input);
+            smo.throughput(Throughput::Bytes(i));
+            run_group_ref(&mut smo, format!("{i}"), input);
+        }
 
-                Ok(db)
-            });
-        bench.data.extend(data);
-        srwq.throughput(Throughput::Bytes(i));
-        run_group_ref(&mut srwq, format!("{i}"), bench);
+        smo.finish();
     }
 
-    srwq.finish();
+    {
+        let mut srwq = c.benchmark_group("srwq");
 
-    run_group_ref(
-        &mut c.benchmark_group("time"),
-        "time",
-        VmBench::new(op::time(0x11, 0x10)).with_prepare_script(vec![op::movi(0x10, 0)]),
-    );
+        for i in linear_short.clone() {
+            // We want to iterate over initialized entries starting key 0.
+            let start_key = Bytes32::zeroed();
+            let data = start_key.iter().copied().collect::<Vec<_>>();
+
+            let post_call = vec![
+                op::movi(0x16, i as u32),
+                op::movi(0x17, 2000),
+                op::move_(0x15, 0x16),
+                op::muli(0x15, 0x15, 32),
+                op::addi(0x15, 0x15, 1),
+                op::aloc(0x15),
+                op::move_(0x14, RegId::HP),
+                op::gtf_args(0x27, 0x00, GTFArgs::ScriptData),
+                op::addi(0x27, 0x27, ContractId::LEN.try_into().unwrap()),
+                op::addi(0x27, 0x27, WORD_SIZE.try_into().unwrap()),
+                op::addi(0x27, 0x27, WORD_SIZE.try_into().unwrap()),
+                op::addi(0x27, 0x27, AssetId::LEN.try_into().unwrap()),
+            ];
+            let mut bench = VmBench::contract_using_db(
+                rng,
+                db.to_vm_database(),
+                op::srwq(0x14, 0x11, 0x27, 0x16),
+            )
+            .expect("failed to prepare contract")
+            .with_post_call(post_call);
+            bench.data.extend(data);
+            srwq.throughput(Throughput::Bytes(i));
+            run_group_ref(&mut srwq, format!("{i}"), bench);
+        }
+
+        srwq.finish();
+    }
+
+    // time
+    {
+        run_group_ref(
+            &mut c.benchmark_group("time"),
+            "time",
+            VmBench::new(op::time(0x11, 0x10))
+                .with_db(db.to_vm_database())
+                .with_prepare_script(vec![op::movi(0x10, 0)]),
+        );
+    }
 }

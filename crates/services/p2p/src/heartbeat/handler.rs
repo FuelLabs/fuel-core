@@ -218,7 +218,7 @@ impl ConnectionHandler for HeartbeatHandler {
                         Poll::Pending => {
                             if self.timer.poll_unpin(cx).is_ready() {
                                 // Time for successful send expired!
-                                self.failure_count += 1;
+                                self.failure_count = self.failure_count.saturating_add(1);
                                 debug!(target: "fuel-libp2p", "Sending Heartbeat timed out, this is {} time it failed with this connection", self.failure_count);
                             } else {
                                 self.outbound = Some(OutboundState::SendingBlockHeight(
@@ -235,7 +235,7 @@ impl ConnectionHandler for HeartbeatHandler {
                             self.outbound = Some(OutboundState::Idle(stream));
                         }
                         Poll::Ready(Err(_)) => {
-                            self.failure_count += 1;
+                            self.failure_count = self.failure_count.saturating_add(1);
                             debug!(target: "fuel-libp2p", "Sending Heartbeat failed, {}/{} failures for this connection", self.failure_count,  self.config.max_failures);
                         }
                     }
@@ -298,7 +298,7 @@ impl ConnectionHandler for HeartbeatHandler {
             }
             ConnectionEvent::DialUpgradeError(_) => {
                 self.outbound = None;
-                self.failure_count += 1;
+                self.failure_count = self.failure_count.saturating_add(1);
             }
             _ => {}
         }

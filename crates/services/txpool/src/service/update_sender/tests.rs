@@ -1,5 +1,7 @@
 //! Test module for validating TxUpdateStream state transitions.
 
+#![allow(clippy::arithmetic_side_effects)]
+
 use test_strategy::{
     proptest,
     Arbitrary,

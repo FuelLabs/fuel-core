@@ -43,7 +43,7 @@ hyper = { workspace = true }
 itertools = { workspace = true }
 parking_lot = { workspace = true }
 postcard = { workspace = true, features = ["use-std"] }
-primitive-types = "0.12"
+primitive-types = { workspace = true }
 rand = { workspace = true }
 rocksdb = { version = "0.21", default-features = false, features = [
     "lz4",
@@ -57,7 +57,7 @@ tempfile = { workspace = true, optional = true }
 thiserror = "1.0"
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
 tokio-stream = { workspace = true, features = ["sync"] }
-tower-http = { version = "0.3", features = ["set-header", "trace"] }
+tower-http = { version = "0.3", features = ["set-header", "trace", "timeout"] }
 tracing = { workspace = true }
 uuid = { version = "1.1", features = ["v4"] }
 
