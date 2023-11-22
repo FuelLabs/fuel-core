@@ -40,7 +40,7 @@ fn transaction<R: Rng>(
     script_data: Vec<u8>,
 ) -> Checked<Script> {
     let consensus_params = ConsensusParameters::default();
-    let inputs = (0..consensus_params.tx_params.max_inputs)
+    let inputs = (0..1)
         .map(|_| {
             Input::coin_predicate(
                 rng.gen(),
@@ -50,23 +50,13 @@ fn transaction<R: Rng>(
                 rng.gen(),
                 rng.gen(),
                 0,
-                vec![
-                    255;
-                    (consensus_params.predicate_params.max_predicate_length
-                        / consensus_params.tx_params.max_inputs as u64)
-                        as usize
-                ],
-                vec![
-                    255;
-                    (consensus_params.predicate_params.max_predicate_data_length
-                        / consensus_params.tx_params.max_inputs as u64)
-                        as usize
-                ],
+                vec![255; 1],
+                vec![255; 1],
             )
         })
         .collect();
 
-    let outputs = (0..consensus_params.tx_params.max_outputs)
+    let outputs = (0..1)
         .map(|_| {
             Output::variable(Default::default(), Default::default(), Default::default())
         })
@@ -82,7 +72,7 @@ fn transaction<R: Rng>(
             .with_max_fee(Word::MAX),
         inputs,
         outputs,
-        vec![vec![123; 100].into(); consensus_params.tx_params.max_witnesses as usize],
+        vec![vec![123; 32].into(); 1],
     )
     .into_checked_basic(Default::default(), &consensus_params)
     .expect("Should produce a valid transaction")
@@ -94,17 +84,17 @@ pub fn vm_initialization(c: &mut Criterion) {
     let mut group = c.benchmark_group("vm_initialization");
 
     // Generate N data points
-    const N: usize = 20;
-    for i in 0..N {
-        let size = 1 << i;
+    const N: usize = 18;
+    for i in 5..N {
+        let size = 8 * 1 << i;
         let script = vec![op::ret(1); size / Instruction::SIZE]
             .into_iter()
             .collect();
         let script_data = vec![255; size];
         let tx = transaction(&mut rng, script, script_data);
-        let size = tx.transaction().size();
-        let name = format!("vm_initialization_with_tx_size_{}", size);
-        group.throughput(Throughput::Bytes(size as u64));
+        let tx_size = tx.transaction().size();
+        let name = format!("vm_initialization_with_tx_size_{}", tx_size);
+        group.throughput(Throughput::Bytes(tx_size as u64));
         group.bench_function(name, |b| {
             b.iter(|| {
                 let mut vm = black_box(
