@@ -2764,7 +2764,6 @@ dependencies = [
  "mockall",
  "parking_lot 0.12.1",
  "postcard",
- "primitive-types",
  "proptest",
  "rand 0.8.5",
  "rocksdb",
@@ -2795,6 +2794,7 @@ dependencies = [
  "ed25519-dalek 2.0.0",
  "ethnum",
  "fuel-core",
+ "fuel-core-database",
  "fuel-core-services",
  "fuel-core-storage",
  "fuel-core-sync",
@@ -2908,9 +2908,12 @@ version = "0.20.8"
 dependencies = [
  "anyhow",
  "derive_more",
+ "fuel-core-executor",
  "fuel-core-storage",
  "fuel-core-trace",
  "fuel-core-types",
+ "primitive-types",
+ "serde",
 ]
 
 [[package]]

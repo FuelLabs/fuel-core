@@ -1,7 +1,7 @@
 pub mod import;
 
-use fuel_core::database::vm_database::VmDatabase;
 pub use fuel_core::database::Database;
+pub use fuel_core_database::vm_database::VmDatabase;
 use fuel_core_types::{
     fuel_asm::{
         op,

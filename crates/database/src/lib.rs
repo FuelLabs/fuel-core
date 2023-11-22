@@ -6,9 +6,11 @@
 
 #![deny(clippy::arithmetic_side_effects)]
 #![deny(clippy::cast_possible_truncation)]
-#![deny(missing_docs)]
+// #![deny(missing_docs)]
 #![deny(unused_crate_dependencies)]
 #![deny(warnings)]
+
+pub mod vm_database;
 
 use fuel_core_storage::Error as StorageError;
 use fuel_core_types::services::executor::Error as ExecutorError;

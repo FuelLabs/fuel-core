@@ -1,7 +1,4 @@
-use crate::database::{
-    Column,
-    Error as DatabaseError,
-};
+use crate::Error as DatabaseError;
 use anyhow::anyhow;
 use fuel_core_storage::{
     iter::IterDirection,
@@ -41,8 +38,17 @@ use fuel_core_types::{
 use primitive_types::U256;
 use std::borrow::Cow;
 
-use crate::database::DatabaseResult;
 use serde::de::DeserializeOwned;
+
+use fuel_core_executor::refs::{
+    ExecutorVmDatabase,
+    FuelBlockTrait,
+    FuelStateTrait,
+};
+use fuel_core_storage::tables::{
+    ContractsInfo,
+    ContractsRawCode,
+};
 
 /// Used to store metadata relevant during the execution of a transaction
 #[derive(Clone, Debug)]
@@ -177,29 +183,18 @@ impl<D> ContractsAssetsStorage for VmDatabase<D> where
 }
 
 pub trait DatabaseIteratorsTrait {
-    fn iter_all_filtered<K, V, P, S>(
+    fn iter_all_filtered_column<K, V, P, S>(
         &self,
-        column: Column,
         prefix: Option<P>,
         start: Option<S>,
         direction: Option<IterDirection>,
-    ) -> Box<dyn Iterator<Item = DatabaseResult<(K, V)>> + '_>
+    ) -> Box<dyn Iterator<Item = Result<(K, V), DatabaseError>> + '_>
     where
         K: From<Vec<u8>>,
         V: DeserializeOwned,
         P: AsRef<[u8]>,
         S: AsRef<[u8]>;
 }
-
-use fuel_core_executor::refs::{
-    ExecutorVmDatabase,
-    FuelBlockTrait,
-    FuelStateTrait,
-};
-use fuel_core_storage::tables::{
-    ContractsInfo,
-    ContractsRawCode,
-};
 
 impl<D> From<ExecutorVmDatabase<D>> for VmDatabase<D> {
     fn from(muda: ExecutorVmDatabase<D>) -> Self {
@@ -286,12 +281,13 @@ where
         range: usize,
     ) -> Result<Vec<Option<Cow<Bytes32>>>, Self::DataError> {
         // TODO: Optimization: Iterate only over `range` elements.
-        let mut iterator = self.database.iter_all_filtered::<Vec<u8>, Bytes32, _, _>(
-            Column::ContractsState,
-            Some(contract_id),
-            Some(ContractsStateKey::new(contract_id, start_key)),
-            Some(IterDirection::Forward),
-        );
+        let mut iterator = self
+            .database
+            .iter_all_filtered_column::<Vec<u8>, Bytes32, _, _>(
+                Some(contract_id),
+                Some(ContractsStateKey::new(contract_id, start_key)),
+                Some(IterDirection::Forward),
+            );
 
         let mut expected_key = U256::from_big_endian(start_key.as_ref());
         let mut results = vec![];
@@ -339,9 +335,7 @@ where
         // verify key is in range
         current_key
             .checked_add(U256::from(values.len()))
-            .ok_or_else(|| {
-                DatabaseError::Other(anyhow!("range op exceeded available keyspace"))
-            })?;
+            .ok_or_else(|| anyhow!("range op exceeded available keyspace"))?;
 
         let mut key_bytes = Bytes32::zeroed();
         let mut found_unset = false;
@@ -399,7 +393,7 @@ where
 
 #[cfg(test)]
 mod tests {
-    use crate::database::Database;
+    use fuel_core::Database;
 
     use super::*;
     use test_case::test_case;

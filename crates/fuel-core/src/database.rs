@@ -44,9 +44,9 @@ type DatabaseError = Error;
 type DatabaseResult<T> = Result<T>;
 
 // TODO: Extract `Database` and all belongs into `fuel-core-database`.
-use crate::database::vm_database::DatabaseIteratorsTrait;
 #[cfg(feature = "rocksdb")]
 use crate::state::rocks_db::RocksDb;
+use fuel_core_database::vm_database::DatabaseIteratorsTrait;
 use fuel_core_executor::refs::ExecutorDatabaseTrait;
 #[cfg(feature = "rocksdb")]
 use std::path::Path;
@@ -73,7 +73,6 @@ pub mod metadata;
 pub mod storage;
 pub mod transaction;
 pub mod transactions;
-pub mod vm_database;
 
 /// Database tables column ids to the corresponding [`fuel_core_storage::Mappable`] table.
 #[repr(u32)]
@@ -478,9 +477,8 @@ impl Default for Database {
 
 impl DatabaseIteratorsTrait for Database {
     // Todo Delete if possible Emir
-    fn iter_all_filtered<K, V, P, S>(
+    fn iter_all_filtered_column<K, V, P, S>(
         &self,
-        column: Column,
         prefix: Option<P>,
         start: Option<S>,
         direction: Option<IterDirection>,
@@ -494,7 +492,7 @@ impl DatabaseIteratorsTrait for Database {
         Box::new(
             self.data
                 .iter_all(
-                    column,
+                    Column::ContractsState,
                     prefix.as_ref().map(|p| p.as_ref()),
                     start.as_ref().map(|s| s.as_ref()),
                     direction.unwrap_or_default(),

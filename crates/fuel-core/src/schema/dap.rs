@@ -1,7 +1,6 @@
 use crate::{
     database::{
         transaction::DatabaseTransaction,
-        vm_database::VmDatabase,
         Database,
     },
     schema::scalars::U64,
@@ -12,6 +11,7 @@ use async_graphql::{
     SchemaBuilder,
     ID,
 };
+use fuel_core_database::vm_database::VmDatabase;
 use fuel_core_storage::{
     not_found,
     InterpreterStorage,
