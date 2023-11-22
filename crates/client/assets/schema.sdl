@@ -269,6 +269,7 @@ type FailureStatus {
 	time: Tai64Timestamp!
 	reason: String!
 	programState: ProgramState
+	receipts: [Receipt!]!
 }
 
 type FeeParameters {

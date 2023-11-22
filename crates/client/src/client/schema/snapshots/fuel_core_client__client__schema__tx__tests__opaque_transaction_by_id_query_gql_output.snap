@@ -53,6 +53,40 @@ query($id: TransactionId!) {
           returnType
           data
         }
+        receipts {
+          param1
+          param2
+          amount
+          assetId
+          gas
+          digest
+          contract {
+            id
+          }
+          is
+          pc
+          ptr
+          ra
+          rb
+          rc
+          rd
+          reason
+          receiptType
+          to {
+            id
+          }
+          toAddress
+          val
+          len
+          result
+          gasUsed
+          data
+          sender
+          recipient
+          nonce
+          contractId
+          subId
+        }
       }
       ... on SqueezedOutStatus {
         reason
@@ -66,6 +100,40 @@ query($id: TransactionId!) {
         programState {
           returnType
           data
+        }
+        receipts {
+          param1
+          param2
+          amount
+          assetId
+          gas
+          digest
+          contract {
+            id
+          }
+          is
+          pc
+          ptr
+          ra
+          rb
+          rc
+          rd
+          reason
+          receiptType
+          to {
+            id
+          }
+          toAddress
+          val
+          len
+          result
+          gasUsed
+          data
+          sender
+          recipient
+          nonce
+          contractId
+          subId
         }
       }
     }

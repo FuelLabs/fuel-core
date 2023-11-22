@@ -174,18 +174,22 @@ pub struct SubmittedStatus {
 #[derive(cynic::QueryFragment, Debug)]
 #[cynic(schema_path = "./assets/schema.sdl")]
 pub struct SuccessStatus {
+    // pub tx_id: TransactionIdFragment,
     pub block: BlockIdFragment,
     pub time: Tai64Timestamp,
     pub program_state: Option<ProgramState>,
+    pub receipts: Vec<Receipt>,
 }
 
 #[derive(cynic::QueryFragment, Debug)]
 #[cynic(schema_path = "./assets/schema.sdl")]
 pub struct FailureStatus {
+    // pub tx_id: TransactionIdFragment,
     pub block: BlockIdFragment,
     pub time: Tai64Timestamp,
     pub reason: String,
     pub program_state: Option<ProgramState>,
+    pub receipts: Vec<Receipt>,
 }
 
 #[derive(cynic::QueryFragment, Debug)]

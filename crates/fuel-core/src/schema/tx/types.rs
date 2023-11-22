@@ -71,6 +71,7 @@ use fuel_core_types::{
         policies::PolicyType,
         Chargeable,
         Executable,
+        TxId,
     },
     fuel_types::canonical::Serialize,
     fuel_vm::ProgramState as VmProgramState,
@@ -146,10 +147,10 @@ impl SubmittedStatus {
 
 #[derive(Debug)]
 pub struct SuccessStatus {
+    tx_id: TxId,
     block_id: primitives::BlockId,
     time: Tai64,
     result: Option<VmProgramState>,
-    receipts: Vec<fuel_tx::Receipt>,
 }
 
 #[Object]
@@ -168,13 +169,20 @@ impl SuccessStatus {
         self.result.map(Into::into)
     }
 
-    async fn receipts(&self) -> Vec<Receipt> {
-        self.receipts.iter().map(Into::into).collect()
+    async fn receipts(&self, ctx: &Context<'_>) -> async_graphql::Result<Vec<Receipt>> {
+        let db = ctx.data_unchecked::<Database>();
+        let receipts = db
+            .receipts(&self.tx_id)?
+            .into_iter()
+            .map(Into::into)
+            .collect();
+        Ok(receipts)
     }
 }
 
 #[derive(Debug)]
 pub struct FailureStatus {
+    tx_id: TxId,
     block_id: primitives::BlockId,
     time: Tai64,
     reason: String,
@@ -200,6 +208,16 @@ impl FailureStatus {
     async fn program_state(&self) -> Option<ProgramState> {
         self.state.map(Into::into)
     }
+
+    async fn receipts(&self, ctx: &Context<'_>) -> async_graphql::Result<Vec<Receipt>> {
+        let db = ctx.data_unchecked::<Database>();
+        let receipts = db
+            .receipts(&self.tx_id)?
+            .into_iter()
+            .map(Into::into)
+            .collect();
+        Ok(receipts)
+    }
 }
 
 #[derive(Debug)]
@@ -224,12 +242,11 @@ impl From<TxStatus> for TransactionStatus {
                 block_id,
                 result,
                 time,
-                receipts,
             } => TransactionStatus::Success(SuccessStatus {
+                tx_id: Default::default(),
                 block_id,
                 result,
                 time,
-                receipts,
             }),
             TxStatus::SqueezedOut { reason } => {
                 TransactionStatus::SqueezedOut(SqueezedOutStatus { reason })
@@ -240,6 +257,7 @@ impl From<TxStatus> for TransactionStatus {
                 time,
                 result,
             } => TransactionStatus::Failed(FailureStatus {
+                tx_id: Default::default(),
                 block_id,
                 reason,
                 time,
@@ -259,12 +277,11 @@ impl From<TransactionStatus> for TxStatus {
                 block_id,
                 result,
                 time,
-                receipts,
+                ..
             }) => TxStatus::Success {
                 block_id,
                 result,
                 time,
-                receipts,
             },
             TransactionStatus::SqueezedOut(SqueezedOutStatus { reason }) => {
                 TxStatus::SqueezedOut { reason }
@@ -274,6 +291,7 @@ impl From<TransactionStatus> for TxStatus {
                 reason,
                 time,
                 state: result,
+                ..
             }) => TxStatus::Failed {
                 block_id,
                 reason,
