@@ -31,6 +31,43 @@ use rand::{
     SeedableRng,
 };
 
+fn create_transaction<R: Rng>(rng: &mut R, script: Vec<Instruction>) -> Transaction {
+    let predicate = op::ret(RegId::ONE).to_bytes().to_vec();
+    let owner = Input::predicate_owner(&predicate);
+    let script = script.into_iter().collect();
+    let mut tx = TransactionBuilder::script(script, vec![])
+        .script_gas_limit(10000)
+        .gas_price(1)
+        .add_input(Input::coin_predicate(
+            rng.gen(),
+            owner,
+            1000,
+            Default::default(),
+            Default::default(),
+            Default::default(),
+            Default::default(),
+            predicate.clone(),
+            vec![],
+        ))
+        .add_input(Input::coin_predicate(
+            rng.gen(),
+            owner,
+            1000,
+            Default::default(),
+            Default::default(),
+            Default::default(),
+            Default::default(),
+            predicate,
+            vec![],
+        ))
+        .add_output(Output::coin(rng.gen(), 50, AssetId::default()))
+        .add_output(Output::change(rng.gen(), 0, AssetId::default()))
+        .finalize();
+    tx.estimate_predicates(&CheckPredicateParams::default())
+        .expect("Predicate check failed");
+    tx.into()
+}
+
 #[tokio::test]
 async fn subscribe_txn_status() {
     let mut config = Config::local_node();
@@ -227,4 +264,64 @@ fn submit_and_await_model(tx: &Transaction) -> bool {
         }
         _ => true,
     }
+}
+
+#[tokio::test]
+async fn txn_success_status_contains_receipts() {
+    use fuel_core_client::client::types::TransactionStatus;
+
+    let mut rng = StdRng::seed_from_u64(0xF00DF00D);
+    let chain_id = ChainId::default();
+    let mut config = Config::local_node();
+    config.block_production = fuel_core::service::config::Trigger::Interval {
+        block_time: Duration::from_secs(2),
+    };
+    let srv = FuelService::new_node(config).await.unwrap();
+    let client = FuelClient::from(srv.bound_address);
+
+    let transaction_success =
+        create_transaction(&mut rng, vec![op::ret(RegId::ONE)].into());
+    let id = transaction_success.id(&chain_id);
+
+    client.submit(&transaction_success).await.unwrap();
+
+    let status = client.await_transaction_commit(&id).await.unwrap();
+    assert!(matches!(
+        status,
+        TransactionStatus::Success {
+            receipts,
+            ..
+        }
+        if receipts.len() > 0
+    ))
+}
+
+#[tokio::test]
+async fn txn_failure_status_contains_receipts() {
+    use fuel_core_client::client::types::TransactionStatus;
+
+    let mut rng = StdRng::seed_from_u64(0xF00DF00D);
+    let chain_id = ChainId::default();
+    let mut config = Config::local_node();
+    config.block_production = fuel_core::service::config::Trigger::Interval {
+        block_time: Duration::from_secs(2),
+    };
+    let srv = FuelService::new_node(config).await.unwrap();
+    let client = FuelClient::from(srv.bound_address);
+
+    let transaction_failure =
+        create_transaction(&mut rng, vec![op::rvrt(RegId::ONE)].into());
+    let id = transaction_failure.id(&chain_id);
+
+    client.submit(&transaction_failure).await.unwrap();
+
+    let status = client.await_transaction_commit(&id).await.unwrap();
+    assert!(matches!(
+        status,
+        TransactionStatus::Failure {
+            receipts,
+            ..
+        }
+        if receipts.len() > 0
+    ))
 }

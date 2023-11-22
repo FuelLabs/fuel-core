@@ -434,6 +434,7 @@ impl FuelClient {
     ) -> io::Result<(TransactionStatus, Option<Vec<Receipt>>)> {
         let tx_id = self.submit(tx).await?;
         let status = self.await_transaction_commit(&tx_id).await?;
+        // TODO: Remove `receipts` now that receipts are queryable from the `Success` or `Failure` status
         let receipts = self.receipts(&tx_id).await?;
 
         Ok((status, receipts))
