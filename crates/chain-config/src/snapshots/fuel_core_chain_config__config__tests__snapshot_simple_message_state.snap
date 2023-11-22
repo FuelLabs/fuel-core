@@ -249,7 +249,12 @@ expression: json
         }
       },
       "new_storage_per_byte": 1,
-      "vm_initialization": 2000
+      "vm_initialization": {
+        "HeavyOperation": {
+          "base": 2000,
+          "gas_per_unit": 0
+        }
+      }
     },
     "base_asset_id": "0000000000000000000000000000000000000000000000000000000000000000"
   },

@@ -93,6 +93,7 @@ pub struct VmBench {
     pub prepare_call: Option<PrepareCall>,
     pub dummy_contract: Option<ContractId>,
     pub contract_code: Option<ContractCode>,
+    pub empty_contracts: Vec<ContractId>,
     pub receipts_ctx: Option<ReceiptsCtx>,
 }
 
@@ -132,6 +133,7 @@ impl VmBench {
             prepare_call: None,
             dummy_contract: None,
             contract_code: None,
+            empty_contracts: vec![],
             receipts_ctx: None,
         }
     }
@@ -294,6 +296,15 @@ impl VmBench {
         self
     }
 
+    pub fn with_empty_contracts_count(mut self, count: usize) -> Self {
+        let mut contract_ids = Vec::with_capacity(count);
+        for n in 0..count {
+            contract_ids.push(ContractId::from([n as u8; 32]));
+        }
+        self.empty_contracts = contract_ids;
+        self
+    }
+
     pub fn prepare(self) -> anyhow::Result<VmBenchPrepared> {
         self.try_into()
     }
@@ -320,6 +331,7 @@ impl TryFrom<VmBench> for VmBenchPrepared {
             prepare_call,
             dummy_contract,
             contract_code,
+            empty_contracts,
             receipts_ctx,
         } = case;
 
@@ -389,6 +401,30 @@ impl TryFrom<VmBench> for VmBenchPrepared {
             tx.add_output(output);
 
             db.deploy_contract_with_id(&salt, &slots, &contract, &root, &id)?;
+        }
+
+        for contract_id in empty_contracts {
+            let input_count = tx.inputs().len();
+            let output =
+                Output::contract(input_count as u8, Bytes32::zeroed(), Bytes32::zeroed());
+            let input = Input::contract(
+                UtxoId::default(),
+                Bytes32::zeroed(),
+                Bytes32::zeroed(),
+                TxPointer::default(),
+                contract_id,
+            );
+
+            tx.add_input(input);
+            tx.add_output(output);
+
+            db.deploy_contract_with_id(
+                &VmBench::SALT,
+                &[],
+                &Contract::default(),
+                &Bytes32::zeroed(),
+                &contract_id,
+            )?;
         }
 
         inputs.into_iter().for_each(|i| {

@@ -649,7 +649,7 @@ impl GasCosts {
         self.0.state_root.into()
     }
 
-    async fn vm_initialization(&self) -> U64 {
+    async fn vm_initialization(&self) -> DependentCost {
         self.0.vm_initialization.into()
     }
 
