@@ -2855,6 +2855,8 @@ version = "0.21.0-rc.1"
 dependencies = [
  "anyhow",
  "bech32",
+ "fuel-core",
+ "fuel-core-client",
  "fuel-core-storage",
  "fuel-core-types",
  "hex",
@@ -2865,6 +2867,7 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_with",
+ "tokio",
  "tracing",
 ]
 

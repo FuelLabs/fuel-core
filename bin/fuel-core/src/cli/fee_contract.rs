@@ -1,5 +1,5 @@
 use clap::Parser;
-use fuel_core_chain_config::generate_fee_collection_contract;
+use fuel_core_chain_config::fee_collection_contract;
 use fuel_core_types::fuel_tx::Address;
 use std::{
     fs::OpenOptions,
@@ -20,7 +20,7 @@ pub struct Command {
 }
 
 pub async fn exec(cmd: Command) -> anyhow::Result<()> {
-    let contract = generate_fee_collection_contract(cmd.withdrawal_address);
+    let contract = fee_collection_contract::generate(cmd.withdrawal_address);
 
     if let Some(output) = cmd.output.as_ref() {
         let mut open_opt = OpenOptions::new();
