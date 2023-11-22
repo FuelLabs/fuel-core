@@ -31,7 +31,7 @@ pub fn generate(address: Address) -> Vec<u8> {
         op::addi(
             output_index_register,
             asset_id_register,
-            AssetId::LEN as u16,
+            u16::try_from(AssetId::LEN).expect("The size is 32"),
         ),
         op::lw(output_index_register, output_index_register, 0),
         // Gets pointer to the contract id
@@ -67,6 +67,8 @@ pub fn generate(address: Address) -> Vec<u8> {
 }
 
 #[cfg(test)]
+#[allow(clippy::cast_possible_truncation)]
+#[allow(clippy::arithmetic_side_effects)]
 mod tests {
     use super::*;
     use crate::SecretKey;
