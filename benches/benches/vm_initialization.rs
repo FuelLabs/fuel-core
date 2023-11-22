@@ -74,7 +74,7 @@ fn transaction<R: Rng>(
         outputs,
         vec![vec![123; 32].into(); 1],
     )
-    .into_checked_basic(Default::default(), &consensus_params)
+    .into_checked_basic(Default::default(), consensus_params)
     .expect("Should produce a valid transaction")
 }
 
