@@ -22,7 +22,6 @@ use fuel_core_types::{
     fuel_vm::{
         checked_transaction::{
             Checked,
-            CheckedTransaction,
             IntoChecked,
         },
         interpreter::NotSupportedEcal,
@@ -40,7 +39,7 @@ fn transaction<R: Rng>(
     script: Vec<u8>,
     script_data: Vec<u8>,
 ) -> Checked<Script> {
-    let mut consensus_params = ConsensusParameters::default();
+    let consensus_params = ConsensusParameters::default();
     let inputs = (0..consensus_params.tx_params.max_inputs)
         .map(|_| {
             Input::coin_predicate(
