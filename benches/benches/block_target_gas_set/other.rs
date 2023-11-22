@@ -10,11 +10,8 @@ pub fn run_other(group: &mut BenchmarkGroup<WallTime>) {
     let asset_id = AssetId::zeroed();
     let script_data = script_data(&contract_id, &asset_id);
     let mut shared_runner_builder = SanityBenchmarkRunnerBuilder::new_shared(contract_id);
-    // run_group_ref(
-    //     &mut c.benchmark_group("flag"),
-    //     "flag",
-    //     VmBench::new(op::flag(0x10)),
-    // );
+
+    // flag
     run(
         "other/flag",
         group,
@@ -37,5 +34,23 @@ pub fn run_other(group: &mut BenchmarkGroup<WallTime>) {
             .run(id, group, instructions, script_data.clone());
     }
 
-    // gtf: TODO: As part of parent issue (https://github.com/FuelLabs/fuel-core/issues/1386)
+    // gtf
+    {
+        let count = 254;
+        let correct_index = count; // Have the last index be the correct one. The builder includes an extra input, so it's the 255th index (254).
+
+        let contract_ids = (0..count)
+            .map(|x| ContractId::from([x as u8; 32]))
+            .collect::<Vec<_>>();
+
+        let instructions = vec![
+            op::movi(0x11, correct_index as u32),
+            op::gtf_args(0x10, 0x11, GTFArgs::InputContractOutputIndex),
+            op::jmpb(RegId::ZERO, 0),
+        ];
+
+        SanityBenchmarkRunnerBuilder::new_with_many_contracts(contract_ids)
+            .build()
+            .run("other/gtf", group, instructions, vec![]);
+    }
 }
