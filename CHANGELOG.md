@@ -51,6 +51,7 @@ Description of the upcoming release here.
 - [#1263](https://github.com/FuelLabs/fuel-core/pull/1263): Add gas benchmarks for `ED19` and `ECR1` instructions.
 - [#1331](https://github.com/FuelLabs/fuel-core/pull/1331): Add peer reputation reporting to block import code
 - [#1405](https://github.com/FuelLabs/fuel-core/pull/1405): Use correct names for service metrics.
+- [#1501](https://github.com/FuelLabs/fuel-core/pull/1501): Add a CLI command for generating a fee collection contract.
 
 ### Changed
 

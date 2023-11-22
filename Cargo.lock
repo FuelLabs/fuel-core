@@ -2833,6 +2833,9 @@ dependencies = [
  "dirs 4.0.0",
  "dotenvy",
  "fuel-core",
+ "fuel-core-chain-config",
+ "fuel-core-types",
+ "hex",
  "humantime",
  "lazy_static",
  "pyroscope",
@@ -2852,6 +2855,8 @@ version = "0.21.0-rc.1"
 dependencies = [
  "anyhow",
  "bech32",
+ "fuel-core",
+ "fuel-core-client",
  "fuel-core-storage",
  "fuel-core-types",
  "hex",
@@ -2862,6 +2867,7 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_with",
+ "tokio",
  "tracing",
 ]
 

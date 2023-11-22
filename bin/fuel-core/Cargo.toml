@@ -22,6 +22,9 @@ const_format = { version = "0.2", optional = true }
 dirs = "4.0"
 dotenvy = { version = "0.15", optional = true }
 fuel-core = { workspace = true }
+fuel-core-chain-config = { workspace = true }
+fuel-core-types = { workspace = true }
+hex = "0.4"
 humantime = "2.1"
 lazy_static = { workspace = true }
 pyroscope = "0.5"
