@@ -386,7 +386,7 @@ type GasCosts {
 	swwq: DependentCost!
 	contractRoot: DependentCost!
 	stateRoot: DependentCost!
-	vmInitialization: U64!
+	vmInitialization: DependentCost!
 	newStoragePerByte: U64!
 }
 

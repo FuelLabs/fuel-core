@@ -6,7 +6,16 @@ use crate::{
         primitives::DaBlockHeight,
     },
     fuel_merkle::common::ProofSet,
-    fuel_tx::input::message::compute_message_id,
+    fuel_tx::{
+        input::message::{
+            compute_message_id,
+            MessageCoinPredicate,
+            MessageCoinSigned,
+            MessageDataPredicate,
+            MessageDataSigned,
+        },
+        Input,
+    },
     fuel_types::{
         Address,
         MessageId,
@@ -48,6 +57,57 @@ impl Message {
             self.amount,
             &self.data,
         )
+    }
+
+    /// Verifies the integrity of the message.
+    ///
+    /// Returns `None`, if the `input` is not a message.
+    /// Otherwise returns the result of the field comparison.
+    pub fn matches_input(&self, input: &Input) -> Option<bool> {
+        match input {
+            Input::MessageDataSigned(MessageDataSigned {
+                sender,
+                recipient,
+                nonce,
+                amount,
+                ..
+            })
+            | Input::MessageDataPredicate(MessageDataPredicate {
+                sender,
+                recipient,
+                nonce,
+                amount,
+                ..
+            })
+            | Input::MessageCoinSigned(MessageCoinSigned {
+                sender,
+                recipient,
+                nonce,
+                amount,
+                ..
+            })
+            | Input::MessageCoinPredicate(MessageCoinPredicate {
+                sender,
+                recipient,
+                nonce,
+                amount,
+                ..
+            }) => {
+                let expected_data = if self.data.is_empty() {
+                    None
+                } else {
+                    Some(self.data.as_slice())
+                };
+                Some(
+                    &self.sender == sender
+                        && &self.recipient == recipient
+                        && &self.nonce == nonce
+                        && &self.amount == amount
+                        && expected_data == input.input_data(),
+                )
+            }
+            _ => None,
+        }
     }
 }
 
