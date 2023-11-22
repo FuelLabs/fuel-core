@@ -52,16 +52,17 @@ fn submitted() -> TransactionStatus {
 /// Returns a TransactionStatus with Success status, time set to 0, and result set to None
 fn success() -> TransactionStatus {
     TransactionStatus::Success {
+        tx_id: Default::default(),
         block_id: Default::default(),
         time: Tai64(0),
         result: None,
-        receipts: Default::default(),
     }
 }
 
 /// Returns a TransactionStatus with Failed status, time set to 0, result set to None, and empty reason
 fn failed() -> TransactionStatus {
     TransactionStatus::Failed {
+        tx_id: Default::default(),
         block_id: Default::default(),
         time: Tai64(0),
         result: None,

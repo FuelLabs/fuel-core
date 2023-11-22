@@ -7,7 +7,6 @@ pub fn transaction_status_strategy() -> impl Strategy<Value = TransactionStatus>
             block_id: Default::default(),
             time: Tai64(0),
             result: None,
-            receipts: Default::default(),
         }),
         Just(TransactionStatus::Failed {
             block_id: Default::default(),
