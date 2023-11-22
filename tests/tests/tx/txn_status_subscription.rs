@@ -289,14 +289,14 @@ async fn txn_success_status_contains_receipts() {
     let status = client.await_transaction_commit(&id).await.unwrap();
 
     // Then
-    assert!(matches!(
-        status,
-        TransactionStatus::Success {
-            receipts,
-            ..
-        }
-        if receipts.len() > 0
-    ))
+    if let TransactionStatus::Success { receipts, .. } = status {
+        assert!(receipts.len() > 0);
+        assert!(
+            matches!(receipts[1], Receipt::ScriptResult { result, .. } if matches!(result, ScriptExecutionResult::Success))
+        );
+    } else {
+        assert!(false, "Expected successful transaction");
+    };
 }
 
 #[tokio::test]
@@ -322,12 +322,12 @@ async fn txn_failure_status_contains_receipts() {
     let status = client.await_transaction_commit(&id).await.unwrap();
 
     // Then
-    assert!(matches!(
-        status,
-        TransactionStatus::Failure {
-            receipts,
-            ..
-        }
-        if receipts.len() > 0
-    ))
+    if let TransactionStatus::Failure { receipts, .. } = status {
+        assert!(receipts.len() > 0);
+        assert!(
+            matches!(receipts[1], Receipt::ScriptResult { result, .. } if matches!(result, ScriptExecutionResult::Revert))
+        );
+    } else {
+        assert!(false, "Expected failed transaction");
+    };
 }
