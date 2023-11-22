@@ -8,6 +8,10 @@ use fuel_core_types::{
     fuel_vm::CallFrame,
 };
 
+/// Generates the bytecode for the fee collection contract.
+/// The contract takes two parameters:
+/// - a: pointer to the AssetId memory address
+/// - b: output index
 pub fn generate(address: Address) -> Vec<u8> {
     let start_jump = vec![
         // Jump over the embedded address, which is placed immediately after the jump
