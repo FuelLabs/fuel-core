@@ -268,16 +268,12 @@ fn submit_and_await_model(tx: &Transaction) -> bool {
 
 #[tokio::test]
 async fn txn_success_status_contains_receipts() {
-    use fuel_core::service::config::Trigger;
     use fuel_core_client::client::types::TransactionStatus;
 
     // Given
     let mut rng = StdRng::seed_from_u64(0xF00DF00D);
     let chain_id = ChainId::default();
-    let mut config = Config::local_node();
-    config.block_production = Trigger::Interval {
-        block_time: Duration::from_secs(2),
-    };
+    let config = Config::local_node();
     let srv = FuelService::new_node(config).await.unwrap();
     let client = FuelClient::from(srv.bound_address);
 
@@ -290,6 +286,7 @@ async fn txn_success_status_contains_receipts() {
     // Then
     if let TransactionStatus::Success { receipts, .. } = status {
         assert!(!receipts.is_empty());
+        assert!(matches!(receipts[0], Receipt::Return { .. }));
         assert!(
             matches!(receipts[1], Receipt::ScriptResult { result, .. } if matches!(result, ScriptExecutionResult::Success))
         );
@@ -300,16 +297,12 @@ async fn txn_success_status_contains_receipts() {
 
 #[tokio::test]
 async fn txn_failure_status_contains_receipts() {
-    use fuel_core::service::config::Trigger;
     use fuel_core_client::client::types::TransactionStatus;
 
     // Given
     let mut rng = StdRng::seed_from_u64(0xF00DF00D);
     let chain_id = ChainId::default();
-    let mut config = Config::local_node();
-    config.block_production = Trigger::Interval {
-        block_time: Duration::from_secs(2),
-    };
+    let config = Config::local_node();
     let srv = FuelService::new_node(config).await.unwrap();
     let client = FuelClient::from(srv.bound_address);
 
@@ -322,6 +315,7 @@ async fn txn_failure_status_contains_receipts() {
     // Then
     if let TransactionStatus::Failure { receipts, .. } = status {
         assert!(!receipts.is_empty());
+        assert!(matches!(receipts[0], Receipt::Revert { .. }));
         assert!(
             matches!(receipts[1], Receipt::ScriptResult { result, .. } if matches!(result, ScriptExecutionResult::Revert))
         );
