@@ -98,12 +98,14 @@ pub fn run(c: &mut Criterion) {
     );
 
     {
-        let data = vec![0u8; 32];
+        let count = 254;
+        let correct_index = count - 1; // Have the last index be the correct one. The builder includes an extra input, so it's the 255th index (254).
         run_group_ref(
             &mut c.benchmark_group("gtf"),
             "gtf",
-            VmBench::new(op::gtf_args(0x10, RegId::ZERO, GTFArgs::ScriptData))
-                .with_data(data),
+            VmBench::new(op::gtf_args(0x10, 0x11, GTFArgs::InputContractOutputIndex))
+                .with_empty_contracts_count(count)
+                .with_prepare_script(vec![op::movi(0x11, correct_index as u32)]),
         );
     }
 
