@@ -282,20 +282,19 @@ async fn txn_success_status_contains_receipts() {
     let client = FuelClient::from(srv.bound_address);
 
     // When
-    let transaction_success =
-        create_transaction(&mut rng, vec![op::ret(RegId::ONE)].into());
+    let transaction_success = create_transaction(&mut rng, vec![op::ret(RegId::ONE)]);
     client.submit(&transaction_success).await.unwrap();
     let id = transaction_success.id(&chain_id);
     let status = client.await_transaction_commit(&id).await.unwrap();
 
     // Then
     if let TransactionStatus::Success { receipts, .. } = status {
-        assert!(receipts.len() > 0);
+        assert!(!receipts.is_empty());
         assert!(
             matches!(receipts[1], Receipt::ScriptResult { result, .. } if matches!(result, ScriptExecutionResult::Success))
         );
     } else {
-        assert!(false, "Expected successful transaction");
+        panic!("Expected successful transaction");
     };
 }
 
@@ -315,19 +314,18 @@ async fn txn_failure_status_contains_receipts() {
     let client = FuelClient::from(srv.bound_address);
 
     // When
-    let transaction_failure =
-        create_transaction(&mut rng, vec![op::rvrt(RegId::ONE)].into());
+    let transaction_failure = create_transaction(&mut rng, vec![op::rvrt(RegId::ONE)]);
     client.submit(&transaction_failure).await.unwrap();
     let id = transaction_failure.id(&chain_id);
     let status = client.await_transaction_commit(&id).await.unwrap();
 
     // Then
     if let TransactionStatus::Failure { receipts, .. } = status {
-        assert!(receipts.len() > 0);
+        assert!(!receipts.is_empty());
         assert!(
             matches!(receipts[1], Receipt::ScriptResult { result, .. } if matches!(result, ScriptExecutionResult::Revert))
         );
     } else {
-        assert!(false, "Expected failed transaction");
+        panic!("Expected failed transaction");
     };
 }
