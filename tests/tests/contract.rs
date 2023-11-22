@@ -57,12 +57,7 @@ async fn test_contract_balance(
 #[rstest]
 #[tokio::test]
 async fn test_5_contract_balances(
-    #[values(PageDirection::Forward)] direction: PageDirection,
-    // #[values(PageDirection::Forward, PageDirection::Backward)] direction: PageDirection,
-    // Rocksdb doesn't support reverse seeks using a prefix, we'd need to implement a custom
-    // comparator to support this usecase.
-    // > One common bug of using prefix iterating is to use prefix mode to iterate in reverse order. But it is not yet supported.
-    // https://github.com/facebook/rocksdb/wiki/Prefix-Seek#limitation
+    #[values(PageDirection::Forward, PageDirection::Backward)] direction: PageDirection,
 ) {
     let mut test_builder = TestSetupBuilder::new(SEED);
     let (_, contract_id) = test_builder.setup_contract(

@@ -224,6 +224,63 @@ impl RocksDb {
         opts
     }
 
+    /// RocksDB prefix iteration doesn't support reverse order,
+    /// but seeking the start key and iterating in reverse order works.
+    /// So we can create a workaround. We need to find the next available
+    /// element and use it as an anchor for reverse iteration,
+    /// but skip the first element to jump on the previous prefix.
+    /// If we can't find the next element, we are at the end of the list,
+    /// so we can use `IteratorMode::End` to start reverse iteration.
+    fn reverse_prefix_iter(
+        &self,
+        prefix: &[u8],
+        column: Column,
+    ) -> impl Iterator<Item = KVItem> + '_ {
+        let maybe_next_item = next_prefix(prefix.to_vec())
+            .and_then(|next_prefix| {
+                self.iter_all(
+                    column,
+                    Some(next_prefix.as_slice()),
+                    None,
+                    IterDirection::Forward,
+                )
+                .next()
+            })
+            .and_then(|res| res.ok());
+
+        if let Some((next_start_key, _)) = maybe_next_item {
+            let iter_mode = IteratorMode::From(
+                next_start_key.as_slice(),
+                rocksdb::Direction::Reverse,
+            );
+            let prefix = prefix.to_vec();
+            self
+                ._iter_all(column, ReadOptions::default(), iter_mode)
+                // Skip the element under the `next_start_key` key.
+                .skip(1)
+                .take_while(move |item| {
+                    if let Ok((key, _)) = item {
+                        key.starts_with(prefix.as_slice())
+                    } else {
+                        true
+                    }
+                })
+                .into_boxed()
+        } else {
+            // No next item, so we can start backward iteration from the end.
+            let prefix = prefix.to_vec();
+            self._iter_all(column, ReadOptions::default(), IteratorMode::End)
+                .take_while(move |item| {
+                    if let Ok((key, _)) = item {
+                        key.starts_with(prefix.as_slice())
+                    } else {
+                        true
+                    }
+                })
+                .into_boxed()
+        }
+    }
+
     fn _iter_all(
         &self,
         column: Column,
@@ -321,13 +378,19 @@ impl KeyValueStore for RocksDb {
                     .into_boxed()
             }
             (Some(prefix), None) => {
-                // start iterating in a certain direction within the keyspace
-                let iter_mode =
-                    IteratorMode::From(prefix, convert_to_rocksdb_direction(direction));
-                let mut opts = ReadOptions::default();
-                opts.set_prefix_same_as_start(true);
+                if direction == IterDirection::Reverse {
+                    self.reverse_prefix_iter(prefix, column).into_boxed()
+                } else {
+                    // start iterating in a certain direction within the keyspace
+                    let iter_mode = IteratorMode::From(
+                        prefix,
+                        convert_to_rocksdb_direction(direction),
+                    );
+                    let mut opts = ReadOptions::default();
+                    opts.set_prefix_same_as_start(true);
 
-                self._iter_all(column, opts, iter_mode).into_boxed()
+                    self._iter_all(column, opts, iter_mode).into_boxed()
+                }
             }
             (None, Some(start)) => {
                 // start iterating in a certain direction from the start key
@@ -501,6 +564,17 @@ impl TransactableStorage for RocksDb {
             .map_err(|e| anyhow::anyhow!("Unable to flush SST files: {}", e))?;
         Ok(())
     }
+}
+
+/// The `None` means overflow, so there is not following prefix.
+fn next_prefix(mut prefix: Vec<u8>) -> Option<Vec<u8>> {
+    for byte in prefix.iter_mut().rev() {
+        if let Some(new_byte) = byte.checked_add(1) {
+            *byte = new_byte;
+            return Some(prefix)
+        }
+    }
+    None
 }
 
 #[cfg(test)]

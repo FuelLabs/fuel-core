@@ -172,9 +172,7 @@ async fn messages_by_owner_returns_messages_for_the_given_owner() {
 #[rstest]
 #[tokio::test]
 async fn messages_empty_results_for_owner_with_no_messages(
-    #[values(PageDirection::Forward)] direction: PageDirection,
-    //#[values(PageDirection::Forward, PageDirection::Backward)] direction: PageDirection,
-    // reverse iteration with prefix not supported by rocksdb
+    #[values(PageDirection::Forward, PageDirection::Backward)] direction: PageDirection,
     #[values(Address::new([16; 32]), Address::new([0; 32]))] owner: Address,
 ) {
     let srv = FuelService::new_node(Config::local_node()).await.unwrap();
