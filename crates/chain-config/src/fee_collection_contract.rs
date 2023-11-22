@@ -81,6 +81,7 @@ mod tests {
             AssetId,
             BlockHeight,
             ChainId,
+            ContractId,
             Salt,
         },
         fuel_vm::{
@@ -89,10 +90,14 @@ mod tests {
         },
     };
 
-    #[tokio::test]
-    async fn happy_path() {
-        let rng = &mut StdRng::seed_from_u64(0);
+    struct TestContext {
+        address: Address,
+        contract_id: ContractId,
+        _node: FuelService,
+        client: FuelClient,
+    }
 
+    async fn setup(rng: &mut StdRng) -> TestContext {
         // Make contract that coinbase fees are collected into
         let address: Address = rng.gen();
         let salt: Salt = rng.gen();
@@ -127,31 +132,21 @@ mod tests {
             client.contract_balance(&(contract_id), None).await.unwrap();
         assert_eq!(contract_balance, 0);
 
-        for i in 0..10 {
-            // Run a script that does nothing, but will cause fee collection
-            let tx = TransactionBuilder::script(
-                [op::ret(RegId::ONE)].into_iter().collect(),
-                vec![],
-            )
-            .add_unsigned_coin_input(
-                SecretKey::random(rng),
-                rng.gen(),
-                1000,
-                Default::default(),
-                Default::default(),
-                Default::default(),
-            )
-            .gas_price(1)
-            .script_gas_limit(1_000_000)
-            .finalize_as_transaction();
-            let tx_status = client.submit_and_await_commit(&tx).await.unwrap();
-            assert!(matches!(tx_status, TransactionStatus::Success { .. }));
-
-            // Now the coinbase fee should be reflected in the contract balance
-            let contract_balance =
-                client.contract_balance(&(contract_id), None).await.unwrap();
-            assert_eq!(contract_balance, i + 1);
+        TestContext {
+            address,
+            contract_id,
+            _node: node,
+            client,
         }
+    }
+
+    async fn collect_fees(ctx: &TestContext) {
+        let TestContext {
+            client,
+            address,
+            contract_id,
+            ..
+        } = ctx;
 
         // Now call the fee collection contract to withdraw the fees
         let (script, _) = script_with_data_offset!(
@@ -169,7 +164,7 @@ mod tests {
             script.into_iter().collect(),
             (*contract_id)
                 .into_iter()
-                .chain((VM_MAX_RAM - (AssetId::LEN as u64)).to_be_bytes())
+                .chain((VM_MAX_RAM.checked_sub(AssetId::LEN as u64)).unwrap().to_be_bytes())
                 .chain(0u64.to_be_bytes())
                 .collect(),
         )
@@ -181,7 +176,7 @@ mod tests {
             Default::default(),
             Default::default(),
             Default::default(),
-            contract_id,
+            *contract_id,
         ))
         .add_output(Output::contract(1, Default::default(), Default::default()))
         .add_output(Output::variable(
@@ -195,12 +190,61 @@ mod tests {
         assert!(matches!(tx_status, TransactionStatus::Success { .. }));
 
         // Make sure that the full balance was been withdrawn
-        let contract_balance =
-            client.contract_balance(&(contract_id), None).await.unwrap();
+        let contract_balance = client.contract_balance(contract_id, None).await.unwrap();
         assert_eq!(contract_balance, 0);
 
         // Make sure that the full balance was been withdrawn
-        let asset_balance = client.balance(&address, None).await.unwrap();
+        let asset_balance = client.balance(address, None).await.unwrap();
+        assert_eq!(asset_balance, 10);
+    }
+
+    #[tokio::test]
+    async fn happy_path() {
+        let rng = &mut StdRng::seed_from_u64(0);
+
+        let ctx = setup(rng).await;
+
+        for i in 0..10 {
+            // Run a script that does nothing, but will cause fee collection
+            let tx = TransactionBuilder::script(
+                [op::ret(RegId::ONE)].into_iter().collect(),
+                vec![],
+            )
+            .add_unsigned_coin_input(
+                SecretKey::random(rng),
+                rng.gen(),
+                1000,
+                Default::default(),
+                Default::default(),
+                Default::default(),
+            )
+            .gas_price(1)
+            .script_gas_limit(1_000_000)
+            .finalize_as_transaction();
+            let tx_status = ctx.client.submit_and_await_commit(&tx).await.unwrap();
+            assert!(matches!(tx_status, TransactionStatus::Success { .. }));
+
+            // Now the coinbase fee should be reflected in the contract balance
+            let contract_balance = ctx
+                .client
+                .contract_balance(&ctx.contract_id, None)
+                .await
+                .unwrap();
+            assert_eq!(contract_balance, i + 1);
+        }
+
+        collect_fees(&ctx).await;
+
+        // Make sure that the full balance was been withdrawn
+        let contract_balance = ctx
+            .client
+            .contract_balance(&ctx.contract_id, None)
+            .await
+            .unwrap();
+        assert_eq!(contract_balance, 0);
+
+        // Make sure that the full balance was been withdrawn
+        let asset_balance = ctx.client.balance(&ctx.address, None).await.unwrap();
         assert_eq!(asset_balance, 10);
     }
 
