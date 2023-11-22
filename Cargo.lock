@@ -2762,7 +2762,6 @@ dependencies = [
  "hyper",
  "itertools 0.10.5",
  "mockall",
- "parking_lot 0.12.1",
  "postcard",
  "proptest",
  "rand 0.8.5",
@@ -2908,7 +2907,6 @@ version = "0.20.8"
 dependencies = [
  "anyhow",
  "derive_more",
- "fuel-core-executor",
  "fuel-core-storage",
  "fuel-core-trace",
  "fuel-core-types",
@@ -2947,9 +2945,13 @@ version = "0.20.8"
 dependencies = [
  "anyhow",
  "fuel-core-chain-config",
+ "fuel-core-database",
  "fuel-core-storage",
  "fuel-core-trace",
  "fuel-core-types",
+ "hex",
+ "parking_lot 0.12.1",
+ "tracing",
 ]
 
 [[package]]

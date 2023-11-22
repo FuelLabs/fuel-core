@@ -1,4 +1,4 @@
-use fuel_core_txpool::types::TxId;
+use fuel_core_types::fuel_tx::TxId;
 use fuel_core_types::{
     blockchain::primitives::DaBlockHeight,
     entities::message::Message,

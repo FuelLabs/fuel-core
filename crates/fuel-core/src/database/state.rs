@@ -8,7 +8,7 @@ use crate::database::{
     Column,
     Database,
 };
-use fuel_core_executor::refs::FuelStateTrait;
+use fuel_core_database::vm_database::FuelStateTrait;
 use fuel_core_storage::{
     tables::ContractsState,
     ContractsStateKey,

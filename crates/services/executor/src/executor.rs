@@ -1,4 +1,4 @@
-use fuel_core_executor::{
+use crate::{
     refs::ContractRef,
     Config,
 };
@@ -120,16 +120,11 @@ use fuel_core_types::{
 
 use fuel_core_storage::Error as StorageError;
 
-use fuel_core_database::vm_database::VmDatabase;
-use fuel_core_executor::refs::{
-    ExecutorDatabaseTrait,
-    TxIdOwnerRecorder,
-};
+use fuel_core_database::vm_database::{MessageIsSpent, VmDatabase};
 use fuel_core_storage::tables::{
     ContractsAssets,
     ContractsState,
 };
-use fuel_core_txpool::types::ContractId;
 use fuel_core_types::{
     fuel_tx::{
         field::{
@@ -152,16 +147,15 @@ use std::{
     },
     sync::Arc,
 };
+use fuel_core_types::fuel_types::ContractId;
 use tracing::{
     debug,
     warn,
 };
 
-mod ports;
 
-pub use ports::{
+pub use crate::ports::{
     MaybeCheckedTransaction,
-    RelayerPort,
     TransactionsSource,
 };
 
@@ -256,7 +250,9 @@ where
         + StorageMutate<ContractsAssets>
         + StorageInspect<ContractsAssets, Error = StorageError>
         + StorageInspect<Coins, Error = StorageError>
-        + DatabaseMessages
+
+    + MessageIsSpent
+
         + StorageMutate<Coins>
         + StorageMutate<SpentMessages>
         + StorageInspect<ContractsLatestUtxo, Error = StorageError>
@@ -314,7 +310,9 @@ where
         + StorageMutate<ContractsAssets>
         + StorageInspect<ContractsAssets, Error = StorageError>
         + StorageInspect<Coins, Error = StorageError>
-        + DatabaseMessages
+
+
+    + MessageIsSpent
         + StorageMutate<Coins>
         + StorageMutate<SpentMessages>
         + StorageInspect<ContractsLatestUtxo, Error = StorageError>
@@ -429,8 +427,9 @@ mod private {
     }
 }
 
-use crate::fuel_core_graphql_api::ports::DatabaseMessages;
 use private::*;
+use crate::ports::RelayerPort;
+use crate::refs::{ExecutorDatabaseTrait, TxIdOwnerRecorder};
 
 impl<R, D> Executor<R, D>
 where
@@ -445,7 +444,7 @@ where
         + MerkleRootStorage<ContractId, ContractsAssets>
         + StorageInspect<ContractsAssets, Error = StorageError>
         + StorageInspect<Coins, Error = StorageError>
-        + DatabaseMessages
+        + MessageIsSpent
         + StorageMutate<Coins>
         + StorageMutate<SpentMessages>
         + StorageInspect<ContractsLatestUtxo, Error = StorageError>
@@ -1864,8 +1863,6 @@ impl Fee for CreateCheckedMetadata {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    use crate::database::Database;
 
     #[cfg(test)]
     impl Executor<Database, Database> {

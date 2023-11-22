@@ -41,7 +41,6 @@ futures = { workspace = true }
 hex = { version = "0.4", features = ["serde"] }
 hyper = { workspace = true }
 itertools = { workspace = true }
-parking_lot = { workspace = true }
 postcard = { workspace = true, features = ["use-std"] }
 rand = { workspace = true }
 rocksdb = { version = "0.21", default-features = false, features = [

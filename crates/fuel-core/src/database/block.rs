@@ -11,7 +11,7 @@ use crate::database::{
     Error as DatabaseError,
     Result as DatabaseResult,
 };
-use fuel_core_executor::refs::FuelBlockTrait;
+use fuel_core_database::vm_database::FuelBlockTrait;
 use fuel_core_storage::{
     iter::IterDirection,
     not_found,

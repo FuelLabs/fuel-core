@@ -1,11 +1,14 @@
 use super::MaybeRelayerAdapter;
+
+use fuel_core_executor::executor::{
+    ExecutionBlockWithSource,
+    Executor,
+    MaybeCheckedTransaction,
+};
+
 use crate::{
     database::Database,
-    executor::{
-        ExecutionBlockWithSource,
-        Executor,
-        MaybeCheckedTransaction,
-    },
+
     service::adapters::{
         ExecutorAdapter,
         TransactionsSource,
@@ -31,7 +34,7 @@ use fuel_core_types::{
     },
 };
 
-impl crate::executor::TransactionsSource for TransactionsSource {
+impl fuel_core_executor::executor::TransactionsSource for TransactionsSource {
     fn next(&self, gas_limit: u64) -> Vec<MaybeCheckedTransaction> {
         self.txpool
             .select_transactions(gas_limit)
@@ -73,7 +76,7 @@ impl ContractStorageTrait for Database {
     type InnerError = StorageError;
 }
 
-impl crate::executor::RelayerPort for MaybeRelayerAdapter {
+impl fuel_core_executor::ports::RelayerPort for MaybeRelayerAdapter {
     fn get_message(
         &self,
         id: &Nonce,

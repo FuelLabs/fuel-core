@@ -19,8 +19,9 @@ use fuel_core_storage::{
         Transactional,
     },
     Result as StorageResult,
+    Error as StorageError
 };
-use fuel_core_types::fuel_types::BlockHeight;
+use fuel_core_types::fuel_types::{BlockHeight, Nonce};
 use itertools::Itertools;
 use serde::{
     de::DeserializeOwned,
@@ -46,7 +47,7 @@ type DatabaseResult<T> = Result<T>;
 // TODO: Extract `Database` and all belongs into `fuel-core-database`.
 #[cfg(feature = "rocksdb")]
 use crate::state::rocks_db::RocksDb;
-use fuel_core_database::vm_database::DatabaseIteratorsTrait;
+use fuel_core_database::vm_database::{DatabaseIteratorsTrait, MessageIsSpent};
 use fuel_core_executor::refs::ExecutorDatabaseTrait;
 #[cfg(feature = "rocksdb")]
 use std::path::Path;
@@ -439,6 +440,14 @@ impl Transactional for Database {
     }
 }
 
+impl MessageIsSpent for Database {
+    type Error = StorageError;
+
+    fn message_is_spent(&self, nonce: &Nonce) -> StorageResult<bool> {
+        self.message_is_spent(nonce)
+    }
+}
+
 impl ExecutorDatabaseTrait<Database> for Database {
     type T = DatabaseTransaction;
 
@@ -476,7 +485,7 @@ impl Default for Database {
 }
 
 impl DatabaseIteratorsTrait for Database {
-    // Todo Delete if possible Emir
+
     fn iter_all_filtered_column<K, V, P, S>(
         &self,
         prefix: Option<P>,
@@ -507,6 +516,7 @@ impl DatabaseIteratorsTrait for Database {
                 }),
         )
     }
+
 }
 
 /// Implement `ChainConfigDb` so that `Database` can be passed to

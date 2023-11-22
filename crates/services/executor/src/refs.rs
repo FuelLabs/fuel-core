@@ -8,8 +8,5 @@ pub use contract::{
 
 pub use database::{
     ExecutorDatabaseTrait,
-    ExecutorVmDatabase,
-    FuelBlockTrait,
-    FuelStateTrait,
     TxIdOwnerRecorder,
 };

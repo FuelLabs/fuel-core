@@ -15,7 +15,6 @@ anyhow = { workspace = true }
 derive_more = { workspace = true }
 fuel-core-storage = { workspace = true }
 fuel-core-types = { workspace = true }
-fuel-core-executor = { workspace = true }
 primitive-types = "0.12"
 serde = { workspace = true, features = ["derive"] }
 

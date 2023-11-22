@@ -14,6 +14,11 @@ anyhow = { workspace = true }
 fuel-core-chain-config = { workspace = true }
 fuel-core-storage = { workspace = true }
 fuel-core-types = { workspace = true }
+fuel-core-database = { workspace = true }
+parking_lot = { workspace = true }
+tracing = { workspace = true }
+hex = { version = "0.4", features = ["serde"] }
+
 
 [dev-dependencies]
 fuel-core-trace = { path = "../../trace" }
