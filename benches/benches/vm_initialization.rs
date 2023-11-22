@@ -38,8 +38,8 @@ fn transaction<R: Rng>(
     rng: &mut R,
     script: Vec<u8>,
     script_data: Vec<u8>,
+    consensus_params: &ConsensusParameters,
 ) -> Checked<Script> {
-    let consensus_params = ConsensusParameters::default();
     let inputs = (0..1)
         .map(|_| {
             Input::coin_predicate(
@@ -83,15 +83,18 @@ pub fn vm_initialization(c: &mut Criterion) {
 
     let mut group = c.benchmark_group("vm_initialization");
 
-    // Generate N data points
-    const N: usize = 18;
-    for i in 5..N {
+    let consensus_params = ConsensusParameters::default();
+    let mut i = 5usize;
+    loop {
         let size = 8 * (1 << i);
+        if size as u64 > consensus_params.script_params.max_script_data_length {
+            break
+        }
         let script = vec![op::ret(1); size / Instruction::SIZE]
             .into_iter()
             .collect();
         let script_data = vec![255; size];
-        let tx = transaction(&mut rng, script, script_data);
+        let tx = transaction(&mut rng, script, script_data, &consensus_params);
         let tx_size = tx.transaction().size();
         let name = format!("vm_initialization_with_tx_size_{}", tx_size);
         group.throughput(Throughput::Bytes(tx_size as u64));
@@ -104,6 +107,7 @@ pub fn vm_initialization(c: &mut Criterion) {
                     .expect("Should be able to execute transaction");
             })
         });
+        i += 1;
     }
 
     group.finish();
