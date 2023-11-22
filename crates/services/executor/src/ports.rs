@@ -1,9 +1,11 @@
-use fuel_core_types::fuel_tx::TxId;
 use fuel_core_types::{
     blockchain::primitives::DaBlockHeight,
     entities::message::Message,
     fuel_tx,
-    fuel_tx::UniqueIdentifier,
+    fuel_tx::{
+        TxId,
+        UniqueIdentifier,
+    },
     fuel_types::{
         ChainId,
         Nonce,

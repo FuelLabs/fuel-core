@@ -5,7 +5,6 @@ use crate::database::{
     DatabaseError,
     Result as DatabaseResult,
 };
-use fuel_core_executor::refs::TxIdOwnerRecorder;
 use fuel_core_storage::{
     iter::IterDirection,
     tables::Transactions,
@@ -27,6 +26,7 @@ use std::{
     mem::size_of,
     ops::Deref,
 };
+use fuel_core_database::vm_database::TxIdOwnerRecorder;
 
 impl DatabaseColumn for Transactions {
     fn column() -> Column {

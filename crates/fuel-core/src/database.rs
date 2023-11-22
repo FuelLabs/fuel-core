@@ -18,10 +18,13 @@ use fuel_core_storage::{
         StorageTransaction,
         Transactional,
     },
+    Error as StorageError,
     Result as StorageResult,
-    Error as StorageError
 };
-use fuel_core_types::fuel_types::{BlockHeight, Nonce};
+use fuel_core_types::fuel_types::{
+    BlockHeight,
+    Nonce,
+};
 use itertools::Itertools;
 use serde::{
     de::DeserializeOwned,
@@ -47,8 +50,10 @@ type DatabaseResult<T> = Result<T>;
 // TODO: Extract `Database` and all belongs into `fuel-core-database`.
 #[cfg(feature = "rocksdb")]
 use crate::state::rocks_db::RocksDb;
-use fuel_core_database::vm_database::{DatabaseIteratorsTrait, MessageIsSpent};
-use fuel_core_executor::refs::ExecutorDatabaseTrait;
+use fuel_core_database::vm_database::{
+    DatabaseColumnIterator,
+    MessageIsSpent,
+};
 #[cfg(feature = "rocksdb")]
 use std::path::Path;
 use strum::EnumCount;
@@ -448,14 +453,6 @@ impl MessageIsSpent for Database {
     }
 }
 
-impl ExecutorDatabaseTrait<Database> for Database {
-    type T = DatabaseTransaction;
-
-    fn transaction(&self) -> Self::T {
-        self.transaction()
-    }
-}
-
 impl AsRef<Database> for Database {
     fn as_ref(&self) -> &Database {
         self
@@ -484,8 +481,7 @@ impl Default for Database {
     }
 }
 
-impl DatabaseIteratorsTrait for Database {
-
+impl DatabaseColumnIterator for Database {
     fn iter_all_filtered_column<K, V, P, S>(
         &self,
         prefix: Option<P>,
@@ -516,7 +512,6 @@ impl DatabaseIteratorsTrait for Database {
                 }),
         )
     }
-
 }
 
 /// Implement `ChainConfigDb` so that `Database` can be passed to

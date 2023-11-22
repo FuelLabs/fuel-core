@@ -14,7 +14,6 @@ use fuel_core_storage::{
     },
     transactional::{
         StorageTransaction,
-        Transaction as StorageTransactionTrait,
     },
     InterpreterStorage,
     MerkleRootStorage,
@@ -120,7 +119,7 @@ use fuel_core_types::{
 
 use fuel_core_storage::Error as StorageError;
 
-use fuel_core_database::vm_database::{MessageIsSpent, VmDatabase};
+use fuel_core_database::vm_database::{MessageIsSpent, TxIdOwnerRecorder, VmDatabase};
 use fuel_core_storage::tables::{
     ContractsAssets,
     ContractsState,
@@ -136,6 +135,7 @@ use fuel_core_types::{
         input,
         output,
     },
+    fuel_types::ContractId,
     fuel_vm,
 };
 use parking_lot::Mutex as ParkingMutex;
@@ -147,12 +147,11 @@ use std::{
     },
     sync::Arc,
 };
-use fuel_core_types::fuel_types::ContractId;
 use tracing::{
     debug,
     warn,
 };
-
+use fuel_core_storage::transactional::Transactional;
 
 pub use crate::ports::{
     MaybeCheckedTransaction,
@@ -190,11 +189,7 @@ impl TransactionsSource for OnceTransactionsSource {
 /// In production mode, block fields like transaction commitments are set based on the executed txs.
 /// In validation mode, the processed block commitments are compared with the proposed block.
 #[derive(Clone, Debug)]
-pub struct Executor<R, D>
-// where
-// R: RelayerPort + Clone,
-// D: ExecutorDatabaseTrait<D> + Clone
-{
+pub struct Executor<R, D> {
     pub database: D,
     pub relayer: R,
     pub config: Arc<Config>,
@@ -238,34 +233,26 @@ impl<R, D> Executor<R, D>
 where
     R: RelayerPort + Clone,
     VmDatabase<D>: InterpreterStorage,
-    D: ExecutorDatabaseTrait<D>
-        + StorageMutate<FuelBlocks>
-        + StorageInspect<FuelBlocks, Error = StorageError>
-        + StorageInspect<Receipts, Error = StorageError>
-        + StorageMutate<Transactions>
-        + StorageInspect<Transactions, Error = StorageError>
+    D:
+    // ExecutorDatabaseTrait<D>
+
+            StorageMutate<FuelBlocks, Error = StorageError>
+        + StorageMutate<Receipts, Error = StorageError>
+        + StorageMutate<Transactions, Error = StorageError>
         + Clone
-        + Default
         + MerkleRootStorage<ContractId, ContractsAssets>
-        + StorageMutate<ContractsAssets>
         + StorageInspect<ContractsAssets, Error = StorageError>
-        + StorageInspect<Coins, Error = StorageError>
-
-    + MessageIsSpent
-
-        + StorageMutate<Coins>
-        + StorageMutate<SpentMessages>
-        + StorageInspect<ContractsLatestUtxo, Error = StorageError>
-        + StorageMutate<ContractsLatestUtxo>
-        + StorageMutate<Messages>
+        + MessageIsSpent<Error = StorageError>
+        + StorageMutate<Coins, Error = StorageError>
+        + StorageMutate<SpentMessages, Error = StorageError>
+        + StorageMutate<ContractsLatestUtxo, Error = StorageError>
+        + StorageMutate<Messages, Error = StorageError>
         + MerkleRootStorage<ContractId, ContractsState>
         + StorageMutate<ContractsState>
-        + StorageInspect<ContractsState, Error = StorageError>
+    + Transactional<Storage = D>
+
         + MerkleRootStorage<ContractId, ContractsState>
-        + StorageMutate<ContractsState>
-        + StorageInspect<ContractsState, Error = StorageError>
-        + StorageInspect<Receipts, Error = StorageError>
-        + StorageMutate<Receipts>
+        + StorageMutate<ContractsState, Error = StorageError>
         + TxIdOwnerRecorder<Error = fuel_core_database::Error>,
 {
     #[cfg(any(test, feature = "test-helpers"))]
@@ -298,31 +285,23 @@ impl<R, D> Executor<R, D>
 where
     R: RelayerPort + Clone,
     VmDatabase<D>: InterpreterStorage,
-    D: ExecutorDatabaseTrait<D>
-        + StorageMutate<FuelBlocks>
-        + StorageInspect<FuelBlocks, Error = StorageError>
-        + StorageInspect<Receipts, Error = StorageError>
-        + StorageMutate<Transactions>
-        + StorageInspect<Transactions, Error = StorageError>
+    D:
+    // ExecutorDatabaseTrait<D>
+        StorageMutate<FuelBlocks, Error = StorageError>
+        + StorageMutate<Receipts, Error = StorageError>
+        + StorageMutate<Transactions, Error = StorageError>
         + Clone
-        + Default
         + MerkleRootStorage<ContractId, ContractsAssets>
-        + StorageMutate<ContractsAssets>
         + StorageInspect<ContractsAssets, Error = StorageError>
-        + StorageInspect<Coins, Error = StorageError>
-
-
-    + MessageIsSpent
-        + StorageMutate<Coins>
-        + StorageMutate<SpentMessages>
-        + StorageInspect<ContractsLatestUtxo, Error = StorageError>
-        + StorageMutate<ContractsLatestUtxo>
-        + StorageMutate<Messages>
+        + MessageIsSpent<Error = StorageError>
+        + StorageMutate<Coins, Error = StorageError>
+        + StorageMutate<SpentMessages, Error = StorageError>
+        + StorageMutate<ContractsLatestUtxo, Error = StorageError>
+        + StorageMutate<Messages, Error = StorageError>
         + MerkleRootStorage<ContractId, ContractsState>
-        + StorageMutate<ContractsState>
-        + StorageInspect<ContractsState, Error = StorageError>
-        + StorageInspect<Receipts, Error = StorageError>
-        + StorageMutate<Receipts>
+        + StorageMutate<ContractsState, Error = StorageError>
+    + Transactional<Storage = D>
+
         + TxIdOwnerRecorder<Error = fuel_core_database::Error>,
 {
     pub fn execute_without_commit<TxSource>(
@@ -427,34 +406,31 @@ mod private {
     }
 }
 
+use crate::{
+    ports::RelayerPort,
+};
 use private::*;
-use crate::ports::RelayerPort;
-use crate::refs::{ExecutorDatabaseTrait, TxIdOwnerRecorder};
 
 impl<R, D> Executor<R, D>
 where
     R: RelayerPort + Clone,
     VmDatabase<D>: InterpreterStorage,
     D: Clone
-        + ExecutorDatabaseTrait<D>
-        + StorageInspect<FuelBlocks, Error = StorageError>
-        + StorageMutate<FuelBlocks>
-        + StorageInspect<Transactions, Error = StorageError>
-        + StorageMutate<Transactions>
+        // + ExecutorDatabaseTrait<D>
+        + StorageMutate<FuelBlocks, Error = StorageError>
+        + StorageMutate<Receipts, Error = StorageError>
+        + StorageMutate<Transactions, Error = StorageError>
+        + MerkleRootStorage<ContractId, ContractsState>
         + MerkleRootStorage<ContractId, ContractsAssets>
         + StorageInspect<ContractsAssets, Error = StorageError>
-        + StorageInspect<Coins, Error = StorageError>
-        + MessageIsSpent
-        + StorageMutate<Coins>
-        + StorageMutate<SpentMessages>
-        + StorageInspect<ContractsLatestUtxo, Error = StorageError>
-        + StorageMutate<ContractsLatestUtxo>
-        + StorageMutate<Messages>
-        + MerkleRootStorage<ContractId, ContractsState>
-        + StorageMutate<ContractsState>
-        + StorageInspect<ContractsState, Error = StorageError>
-        + StorageInspect<Receipts, Error = StorageError>
-        + StorageMutate<Receipts>
+        + MessageIsSpent<Error = StorageError>
+        + StorageMutate<Coins, Error = StorageError>
+        + StorageMutate<SpentMessages, Error = StorageError>
+        + StorageMutate<ContractsLatestUtxo, Error = StorageError>
+        + StorageMutate<Messages, Error = StorageError>
+        + StorageMutate<ContractsState, Error = StorageError>
+    + Transactional<Storage = D>
+
         + TxIdOwnerRecorder<Error = fuel_core_database::Error>,
 {
     #[tracing::instrument(skip_all)]
@@ -474,8 +450,8 @@ where
         // a partial header.
         let block = block.map_v(PartialFuelBlock::from);
 
-        // Create a new database transaction.
-        let mut block_db_transaction = database.transaction();
+        // Create a new storage transaction.
+        let mut block_st_transaction = database.transaction();
 
         let (block, execution_data) = match block {
             ExecutionTypes::DryRun(component) => {
@@ -488,7 +464,7 @@ where
                 );
 
                 let execution_data = self.execute_block(
-                    &mut block_db_transaction,
+                    &mut block_st_transaction.as_mut(),
                     ExecutionType::DryRun(component),
                     options,
                 )?;
@@ -504,7 +480,7 @@ where
                 );
 
                 let execution_data = self.execute_block(
-                    &mut block_db_transaction,
+                    &mut block_st_transaction.as_mut(),
                     ExecutionType::Production(component),
                     options,
                 )?;
@@ -513,7 +489,7 @@ where
             ExecutionTypes::Validation(mut block) => {
                 let component = PartialBlockComponent::from_partial_block(&mut block);
                 let execution_data = self.execute_block(
-                    &mut block_db_transaction,
+                    &mut block_st_transaction.as_mut(),
                     ExecutionType::Validation(component),
                     options,
                 )?;
@@ -560,16 +536,16 @@ where
         // ------------ GraphQL API Functionality BEGIN ------------
 
         // save the status for every transaction using the finalized block id
-        self.persist_transaction_status(&result, block_db_transaction.deref_mut())?;
+        self.persist_transaction_status(&result, block_st_transaction.as_mut())?;
 
         // save the associated owner for each transaction in the block
-        self.index_tx_owners_for_block(&result.block, &mut block_db_transaction)?;
+        self.index_tx_owners_for_block(&result.block, &mut block_st_transaction.as_mut())?;
 
         // ------------ GraphQL API Functionality   END ------------
 
         // insert block into database
-        block_db_transaction
-            .deref_mut()
+        block_st_transaction
+            .as_mut()
             .storage::<FuelBlocks>()
             .insert(
                 &finalized_block_id,
@@ -581,7 +557,7 @@ where
         // Get the complete fuel block.
         Ok(UncommittedResult::new(
             result,
-            StorageTransaction::new(block_db_transaction),
+            block_st_transaction,
         ))
     }
 
@@ -589,7 +565,7 @@ where
     /// Execute the fuel block with all transactions.
     fn execute_block<TxSource>(
         &self,
-        block_db_transaction: &mut D,
+        block_st_transaction: &mut D,
         block: ExecutionType<PartialBlockComponent<TxSource>>,
         options: ExecutionOptions,
     ) -> ExecutorResult<ExecutionData>
@@ -625,7 +601,7 @@ where
          -> ExecutorResult<()> {
             let tx_count = execution_data.tx_count;
             let tx = {
-                let mut tx_db_transaction = block_db_transaction.transaction();
+                let mut tx_st_transaction = block_st_transaction.transaction();
                 let tx_id = tx.id(&self.config.consensus_parameters.chain_id);
                 let result = self.execute_transaction(
                     tx,
@@ -633,7 +609,7 @@ where
                     &block.header,
                     execution_data,
                     execution_kind,
-                    &mut tx_db_transaction,
+                    &mut tx_st_transaction.as_mut(),
                     options,
                 );
 
@@ -657,7 +633,7 @@ where
                     Ok(tx) => tx,
                 };
 
-                if let Err(err) = tx_db_transaction.commit() {
+                if let Err(err) = tx_st_transaction.commit() {
                     return Err(err.into())
                 }
                 tx
@@ -730,7 +706,7 @@ where
         header: &PartialBlockHeader,
         execution_data: &mut ExecutionData,
         execution_kind: ExecutionKind,
-        mut tx_db_transaction: &mut D,
+        mut tx_st_transaction: &mut D,
         options: ExecutionOptions,
     ) -> ExecutorResult<Transaction> {
         if execution_data.found_mint {
@@ -738,7 +714,7 @@ where
         }
 
         // Throw a clear error if the transaction id is a duplicate
-        if tx_db_transaction
+        if tx_st_transaction
             .deref_mut()
             .storage::<Transactions>()
             .contains_key(tx_id)?
@@ -759,7 +735,7 @@ where
                 script,
                 header,
                 execution_data,
-                tx_db_transaction,
+                tx_st_transaction,
                 execution_kind,
                 options,
             ),
@@ -767,7 +743,7 @@ where
                 create,
                 header,
                 execution_data,
-                tx_db_transaction,
+                tx_st_transaction,
                 execution_kind,
                 options,
             ),
@@ -775,7 +751,7 @@ where
                 mint,
                 header,
                 execution_data,
-                tx_db_transaction,
+                tx_st_transaction,
                 execution_kind,
                 options,
             ),
@@ -948,7 +924,7 @@ where
         mut checked_tx: Checked<Tx>,
         header: &PartialBlockHeader,
         execution_data: &mut ExecutionData,
-        mut tx_db_transaction: &mut D,
+        mut tx_st_transaction: &mut D,
         execution_kind: ExecutionKind,
         options: ExecutionOptions,
     ) -> ExecutorResult<Transaction>
@@ -974,7 +950,7 @@ where
         if options.utxo_validation {
             // validate utxos exist and maturity is properly set
             self.verify_input_state(
-                tx_db_transaction.deref(),
+                tx_st_transaction.deref(),
                 checked_tx.transaction().inputs(),
                 *header.height(),
                 header.da_height,
@@ -988,7 +964,7 @@ where
 
         // execute transaction
         // setup database view that only lives for the duration of vm execution
-        let mut sub_block_db_commit = tx_db_transaction.transaction();
+        let mut sub_block_db_commit = tx_st_transaction.transaction();
         let sub_db_view = sub_block_db_commit.as_mut();
         // execution vm
 
@@ -1025,7 +1001,7 @@ where
                 ExecutionKind::Validation => ExecutionTypes::Validation(tx.inputs()),
             },
             tx_id,
-            tx_db_transaction.deref_mut(),
+            tx_st_transaction.deref_mut(),
             options,
         )?;
 
@@ -1054,14 +1030,14 @@ where
         }
 
         // change the spent status of the tx inputs
-        self.spend_input_utxos(tx.inputs(), tx_db_transaction.deref_mut(), reverted)?;
+        self.spend_input_utxos(tx.inputs(), tx_st_transaction.deref_mut(), reverted)?;
 
         // Persist utxos first and after calculate the not utxo outputs
         self.persist_output_utxos(
             *header.height(),
             execution_data.tx_count,
             &tx_id,
-            tx_db_transaction.deref_mut(),
+            tx_st_transaction.deref_mut(),
             tx.inputs(),
             tx.outputs(),
         )?;
@@ -1081,20 +1057,20 @@ where
                 }
             },
             tx_id,
-            tx_db_transaction,
+            tx_st_transaction,
         )?;
         *tx.outputs_mut() = outputs;
 
         let final_tx = tx.into();
 
         // Store tx into the block db transaction
-        tx_db_transaction
+        tx_st_transaction
             .deref_mut()
             .storage::<Transactions>()
             .insert(&tx_id, &final_tx)?;
 
         // persist receipts
-        self.persist_receipts(&tx_id, &receipts, tx_db_transaction.deref_mut())?;
+        self.persist_receipts(&tx_id, &receipts, tx_st_transaction.deref_mut())?;
 
         let status = if reverted {
             self.log_backtrace(&vm, &receipts);
@@ -1747,7 +1723,7 @@ where
                 outputs,
                 &tx_id,
                 tx_idx,
-                block_db_transaction.transaction().deref_mut(),
+                block_db_transaction.transaction().as_mut(),
             )?;
         }
         Ok(())

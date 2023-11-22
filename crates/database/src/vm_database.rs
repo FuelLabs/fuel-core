@@ -1,11 +1,29 @@
 use crate::Error as DatabaseError;
 use anyhow::anyhow;
-use fuel_core_storage::{iter::IterDirection, not_found, tables::{
-    ContractsAssets,
-    ContractsState,
-}, ContractsAssetsStorage, ContractsStateKey, Error as StorageError, Mappable, MerkleRoot, MerkleRootStorage, StorageAsMut, StorageInspect, StorageMutate, StorageRead, StorageSize};
+use fuel_core_storage::{
+    iter::IterDirection,
+    not_found,
+    tables::{
+        ContractsAssets,
+        ContractsState,
+    },
+    ContractsAssetsStorage,
+    ContractsStateKey,
+    Error as StorageError,
+    Mappable,
+    MerkleRoot,
+    MerkleRootStorage,
+    StorageAsMut,
+    StorageInspect,
+    StorageMutate,
+    StorageRead,
+    StorageSize,
+};
 use fuel_core_types::{
-    blockchain::header::ConsensusHeader,
+    blockchain::{
+        header::ConsensusHeader,
+        primitives::BlockId,
+    },
     fuel_tx::{
         Contract,
         StorageSlot,
@@ -22,15 +40,17 @@ use fuel_core_types::{
 };
 use primitive_types::U256;
 use std::borrow::Cow;
-use fuel_core_types::blockchain::primitives::BlockId;
 
 use serde::de::DeserializeOwned;
 
 use fuel_core_storage::tables::{
     ContractsInfo,
     ContractsRawCode,
+    Messages,
+    SpentMessages,
 };
-use fuel_core_types::fuel_types::Nonce;
+use fuel_core_types::fuel_types::{Address, Nonce};
+use fuel_core_types::services::txpool::TransactionStatus;
 
 /// Used to store metadata relevant during the execution of a transaction
 #[derive(Clone, Debug)]
@@ -164,7 +184,6 @@ impl<D> ContractsAssetsStorage for VmDatabase<D> where
 {
 }
 
-
 pub trait FuelBlockTrait {
     type Error;
 
@@ -183,18 +202,34 @@ pub trait FuelStateTrait {
     ) -> Result<(), Self::Error>;
 }
 
-use fuel_core_storage::tables::SpentMessages;
-use fuel_core_storage::tables::Messages;
-
 pub trait MessageIsSpent:
     StorageInspect<SpentMessages, Error = StorageError>
-+   StorageInspect<Messages, Error = StorageError> {
+    + StorageInspect<Messages, Error = StorageError>
+{
     type Error;
 
     fn message_is_spent(&self, nonce: &Nonce) -> Result<bool, StorageError>;
 }
 
-pub trait DatabaseIteratorsTrait {
+pub trait TxIdOwnerRecorder {
+    type Error;
+
+    fn record_tx_id_owner(
+        &self,
+        owner: &Address,
+        block_height: BlockHeight,
+        tx_idx: u16,
+        tx_id: &Bytes32,
+    ) -> Result<Option<Bytes32>, Self::Error>;
+
+    fn update_tx_status(
+        &self,
+        id: &Bytes32,
+        status: TransactionStatus,
+    ) -> Result<Option<TransactionStatus>, Self::Error>;
+}
+
+pub trait DatabaseColumnIterator {
     fn iter_all_filtered_column<K, V, P, S>(
         &self,
         prefix: Option<P>,
@@ -208,19 +243,16 @@ pub trait DatabaseIteratorsTrait {
         S: AsRef<[u8]>;
 }
 
-
 impl<D> InterpreterStorage for VmDatabase<D>
 where
-    D: StorageInspect<ContractsInfo, Error = StorageError>
-        + StorageMutate<ContractsInfo, Error = StorageError>
-        + StorageInspect<ContractsState, Error = StorageError>
+    D: StorageMutate<ContractsInfo, Error = StorageError>
         + MerkleRootStorage<ContractId, ContractsState, Error = StorageError>
         + StorageMutate<ContractsRawCode, Error = StorageError>
         + StorageRead<ContractsRawCode, Error = StorageError>
         + MerkleRootStorage<ContractId, ContractsAssets, Error = StorageError>
         + FuelBlockTrait<Error = StorageError>
         + FuelStateTrait<Error = StorageError>
-        + DatabaseIteratorsTrait,
+        + DatabaseColumnIterator,
 {
     type DataError = StorageError;
 
@@ -391,7 +423,6 @@ where
             Ok(Some(()))
         }
     }
-
 }
 
 #[cfg(test)]

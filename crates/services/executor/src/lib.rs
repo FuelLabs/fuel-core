@@ -5,9 +5,9 @@
 
 mod config;
 
-pub mod refs;
-pub mod ports;
 pub mod executor;
+pub mod ports;
+pub mod refs;
 
 pub struct BlockExecutor {}
 

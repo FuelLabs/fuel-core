@@ -8,7 +8,6 @@ use fuel_core_executor::executor::{
 
 use crate::{
     database::Database,
-
     service::adapters::{
         ExecutorAdapter,
         TransactionsSource,

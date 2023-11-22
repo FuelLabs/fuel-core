@@ -5,8 +5,3 @@ pub use contract::{
     ContractRef,
     ContractStorageTrait,
 };
-
-pub use database::{
-    ExecutorDatabaseTrait,
-    TxIdOwnerRecorder,
-};
