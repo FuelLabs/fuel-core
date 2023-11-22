@@ -77,7 +77,7 @@ pub fn set_full_word(r: RegisterId, v: Word) -> Vec<Instruction> {
     ops
 }
 
-const BENCH_RECEIPTS: usize = (u16::MAX - 1) as usize;
+const BENCH_RECEIPTS: usize = (u16::MAX - 4) as usize;
 
 /// Testing receipt context
 #[allow(dead_code)] // Unsure why this is needed, as the code is used

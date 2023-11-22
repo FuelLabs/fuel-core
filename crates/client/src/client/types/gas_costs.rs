@@ -143,7 +143,7 @@ include_from_impls! {
         // Non-opcode prices
         pub contract_root: DependentCost,
         pub state_root: DependentCost,
-        pub vm_initialization: u64,
+        pub vm_initialization: DependentCost,
         pub new_storage_per_byte: u64,
     }
 }
