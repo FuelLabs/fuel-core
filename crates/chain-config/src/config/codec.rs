@@ -1,9 +1,11 @@
 pub mod in_memory;
-pub mod json;
-pub mod parquet;
+mod json;
+mod parquet;
 
 use std::{
     fmt::Debug,
+    fs::File,
+    io::Read,
     path::{
         Path,
         PathBuf,
@@ -14,6 +16,7 @@ use ::parquet::basic::{
     Compression,
     GzipLevel,
 };
+use itertools::Itertools;
 
 use crate::{
     CoinConfig,
@@ -34,7 +37,30 @@ pub struct Group<T> {
 }
 
 type GroupResult<T> = anyhow::Result<Group<T>>;
-pub type DynGroupDecoder<T> = Box<dyn GroupDecoder<T>>;
+
+pub enum IntoIter<T> {
+    InMemory {
+        groups: std::vec::IntoIter<GroupResult<T>>,
+    },
+    Parquet {
+        decoder: parquet::Decoder<File, T>,
+    },
+}
+
+impl<T> Iterator for IntoIter<T>
+where
+    parquet::Decoder<File, T>: Iterator<Item = GroupResult<T>>,
+{
+    type Item = GroupResult<T>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        match self {
+            IntoIter::InMemory { groups } => groups.next(),
+            IntoIter::Parquet { decoder } => decoder.next(),
+        }
+    }
+}
+
 pub trait GroupDecoder<T>: Iterator<Item = GroupResult<T>> {}
 pub type DynStateEncoder = Box<dyn StateEncoder>;
 
@@ -86,51 +112,76 @@ impl StateDecoder {
         }
     }
 
-    pub fn coins(&self) -> anyhow::Result<DynGroupDecoder<CoinConfig>> {
-        self.decoder("coins")
+    fn in_memory_iter<T>(items: Vec<T>, group_size: usize) -> IntoIter<T> {
+        let groups = items
+            .into_iter()
+            .chunks(group_size)
+            .into_iter()
+            .map(Itertools::collect_vec)
+            .enumerate()
+            .map(|(index, vec_chunk)| {
+                Ok(Group {
+                    data: vec_chunk,
+                    index,
+                })
+            })
+            .collect_vec()
+            .into_iter();
+
+        IntoIter::InMemory { groups }
     }
 
-    pub fn messages(&self) -> anyhow::Result<DynGroupDecoder<MessageConfig>> {
-        self.decoder("messages")
+    pub fn coins(&self) -> anyhow::Result<IntoIter<CoinConfig>> {
+        self.create_iterator(|state| state.coins, "coins")
     }
 
-    pub fn contracts(&self) -> anyhow::Result<DynGroupDecoder<ContractConfig>> {
-        self.decoder("contracts")
+    pub fn messages(&self) -> anyhow::Result<IntoIter<MessageConfig>> {
+        self.create_iterator(|state| state.messages, "messages")
     }
 
-    pub fn contract_state(&self) -> anyhow::Result<DynGroupDecoder<ContractState>> {
-        self.decoder("contract_state")
+    pub fn contracts(&self) -> anyhow::Result<IntoIter<ContractConfig>> {
+        self.create_iterator(|state| state.contracts, "contracts")
     }
 
-    pub fn contract_balance(&self) -> anyhow::Result<DynGroupDecoder<ContractBalance>> {
-        self.decoder("contract_balance")
+    pub fn contract_state(&self) -> anyhow::Result<IntoIter<ContractState>> {
+        self.create_iterator(|state| state.contract_state, "contract_state")
     }
 
-    fn decoder<T>(&self, parquet_filename: &str) -> anyhow::Result<DynGroupDecoder<T>>
-    where
-        T: 'static,
-        json::Decoder<T>: GroupDecoder<T>,
-        parquet::Decoder<std::fs::File, T>: GroupDecoder<T>,
-        in_memory::Decoder<StateConfig, T>: GroupDecoder<T>,
-    {
-        let reader = match &self {
+    pub fn contract_balance(&self) -> anyhow::Result<IntoIter<ContractBalance>> {
+        self.create_iterator(|state| state.contract_balance, "contract_balance")
+    }
+
+    fn create_iterator<T: Clone>(
+        &self,
+        extractor: impl FnOnce(StateConfig) -> Vec<T>,
+        parquet_filename: &'static str,
+    ) -> anyhow::Result<IntoIter<T>> {
+        match self {
             StateDecoder::Json { path, group_size } => {
-                let file = std::fs::File::open(path.join("state.json"))?;
-                let reader = json::Decoder::<T>::new(file, *group_size)?;
-                Box::new(reader)
+                // This is a workaround until the Deserialize implementation is fixed to not require a
+                // borrowed string over in fuel-vm.
+                let path = path.join("state.json");
+
+                let mut contents = String::new();
+                let mut reader = std::fs::File::open(path)?;
+                reader.read_to_string(&mut contents)?;
+
+                let state = serde_json::from_str(&contents)?;
+                let groups = extractor(state);
+                Ok(Self::in_memory_iter(groups, *group_size))
+            }
+            StateDecoder::InMemory { state, group_size } => {
+                let groups = extractor(state.clone());
+                Ok(Self::in_memory_iter(groups, *group_size))
             }
             StateDecoder::Parquet { path } => {
                 let path = path.join(format!("{parquet_filename}.parquet"));
                 let file = std::fs::File::open(path)?;
-                Box::new(parquet::Decoder::new(file)?) as DynGroupDecoder<T>
+                Ok(IntoIter::Parquet {
+                    decoder: parquet::Decoder::new(file)?,
+                })
             }
-            StateDecoder::InMemory { state, group_size } => {
-                let reader = in_memory::Decoder::new(state.clone(), *group_size);
-                Box::new(reader)
-            }
-        };
-
-        Ok(reader)
+        }
     }
 }
 

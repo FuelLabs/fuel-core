@@ -6,8 +6,8 @@ use anyhow::anyhow;
 use fuel_core_chain_config::{
     CoinConfig,
     ContractConfig,
-    DynGroupDecoder,
     GenesisCommitment,
+    IntoIter,
     MessageConfig,
 };
 
@@ -203,7 +203,7 @@ fn commit_genesis_block(
 
 fn import_coin_configs(
     database: &Database,
-    coin_batches: DynGroupDecoder<CoinConfig>,
+    coin_batches: IntoIter<CoinConfig>,
     block_height: BlockHeight,
 ) -> anyhow::Result<Vec<Bytes32>> {
     // let (cursor, root_calculator) =
