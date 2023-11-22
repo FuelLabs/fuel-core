@@ -182,7 +182,7 @@ mod tests {
         let (script, _) = script_with_data_offset!(
             data_offset,
             vec![
-                // Allocate space for the AssetId
+                // Allocate all-zeros AssetId
                 op::movi(0x10, AssetId::LEN.try_into().unwrap()),
                 op::aloc(0x10),
                 // Point to the call structure
@@ -281,7 +281,7 @@ mod tests {
         let (script, _) = script_with_data_offset!(
             data_offset,
             vec![
-                // Allocate space for the AssetId
+                // Allocate all-zeros AssetId
                 op::movi(0x10, AssetId::LEN.try_into().unwrap()),
                 op::aloc(0x10),
                 // Point to the call structure
