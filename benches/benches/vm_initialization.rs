@@ -86,7 +86,7 @@ pub fn vm_initialization(c: &mut Criterion) {
     // Generate N data points
     const N: usize = 18;
     for i in 5..N {
-        let size = 8 * 1 << i;
+        let size = 8 * (1 << i);
         let script = vec![op::ret(1); size / Instruction::SIZE]
             .into_iter()
             .collect();
