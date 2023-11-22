@@ -329,36 +329,32 @@ impl From<ValidityError> for Error {
 #[derive(thiserror::Error, Debug)]
 #[non_exhaustive]
 pub enum TransactionValidityError {
-    #[error("Coin input was already spent")]
+    #[error("Coin({0:#x}) input was already spent")]
     CoinAlreadySpent(UtxoId),
-    #[error("Coin has not yet reached maturity")]
+    #[error("Coin({0:#x}) has not yet reached maturity")]
     CoinHasNotMatured(UtxoId),
-    #[error("The specified coin doesn't exist")]
+    #[error("The input coin({0:#x}) doesn't match the coin from database")]
+    CoinMismatch(UtxoId),
+    #[error("The specified coin({0:#x}) doesn't exist")]
     CoinDoesNotExist(UtxoId),
-    #[error("The specified message was already spent")]
+    #[error("The specified message({0:#x}) was already spent")]
     MessageAlreadySpent(Nonce),
     #[error(
-        "Message is not yet spendable, as it's DA height is newer than this block allows"
+        "Message({0:#x}) is not yet spendable, as it's DA height is newer than this block allows"
     )]
     MessageSpendTooEarly(Nonce),
-    #[error("The specified message doesn't exist")]
+    #[error("The specified message({0:#x}) doesn't exist")]
     MessageDoesNotExist(Nonce),
-    #[error("The input message sender doesn't match the relayer message sender")]
-    MessageSenderMismatch(Nonce),
-    #[error("The input message recipient doesn't match the relayer message recipient")]
-    MessageRecipientMismatch(Nonce),
-    #[error("The input message amount doesn't match the relayer message amount")]
-    MessageAmountMismatch(Nonce),
-    #[error("The input message nonce doesn't match the relayer message nonce")]
-    MessageNonceMismatch(Nonce),
-    #[error("The input message data doesn't match the relayer message data")]
-    MessageDataMismatch(Nonce),
+    #[error("The input message({0:#x}) doesn't match the relayer message")]
+    MessageMismatch(Nonce),
+    #[error("The specified contract({0:#x}) doesn't exist")]
+    ContractDoesNotExist(ContractId),
     #[error("Contract output index isn't valid: {0:#x}")]
     InvalidContractInputIndex(UtxoId),
     #[error("The transaction contains predicate inputs which aren't enabled: {0:#x}")]
     PredicateExecutionDisabled(TxId),
     #[error(
-    "The transaction contains a predicate which failed to validate: TransactionId({0:#x})"
+        "The transaction contains a predicate which failed to validate: TransactionId({0:#x})"
     )]
     InvalidPredicate(TxId),
     #[error("Transaction validity: {0:#?}")]

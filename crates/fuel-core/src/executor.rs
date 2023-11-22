@@ -11,6 +11,7 @@ use fuel_core_executor::{
 use fuel_core_storage::{
     tables::{
         Coins,
+        ContractsInfo,
         ContractsLatestUtxo,
         FuelBlocks,
         Messages,
@@ -26,6 +27,7 @@ use fuel_core_storage::{
     StorageAsRef,
     StorageInspect,
 };
+use fuel_core_txpool::types::ContractId;
 #[allow(unused_imports)]
 use fuel_core_types::{
     blockchain::{
@@ -123,8 +125,6 @@ use fuel_core_types::{
         txpool::TransactionStatus,
     },
 };
-
-use fuel_core_txpool::types::ContractId;
 use fuel_core_types::{
     fuel_tx::{
         field::{
@@ -1077,8 +1077,6 @@ where
             match input {
                 Input::CoinSigned(CoinSigned { utxo_id, .. })
                 | Input::CoinPredicate(CoinPredicate { utxo_id, .. }) => {
-                    // TODO: Check that fields are equal. We already do that check
-                    //  in the `fuel-core-txpool`, so we need to reuse the code here.
                     if let Some(coin) = db.storage::<Coins>().get(utxo_id)? {
                         let coin_mature_height = coin
                             .tx_pointer
@@ -1091,43 +1089,36 @@ where
                             )
                             .into())
                         }
+
+                        if !coin
+                            .matches_input(input)
+                            .expect("The input is a coin above")
+                        {
+                            return Err(
+                                TransactionValidityError::CoinMismatch(*utxo_id).into()
+                            )
+                        }
                     } else {
                         return Err(
                             TransactionValidityError::CoinDoesNotExist(*utxo_id).into()
                         )
                     }
                 }
-                Input::Contract(_) => {
-                    // TODO: Check that contract exists
+                Input::Contract(contract) => {
+                    if !db
+                        .storage::<ContractsInfo>()
+                        .contains_key(&contract.contract_id)?
+                    {
+                        return Err(TransactionValidityError::ContractDoesNotExist(
+                            contract.contract_id,
+                        )
+                        .into())
+                    }
                 }
-                Input::MessageCoinSigned(MessageCoinSigned {
-                    sender,
-                    recipient,
-                    amount,
-                    nonce,
-                    ..
-                })
-                | Input::MessageCoinPredicate(MessageCoinPredicate {
-                    sender,
-                    recipient,
-                    amount,
-                    nonce,
-                    ..
-                })
-                | Input::MessageDataSigned(MessageDataSigned {
-                    sender,
-                    recipient,
-                    amount,
-                    nonce,
-                    ..
-                })
-                | Input::MessageDataPredicate(MessageDataPredicate {
-                    sender,
-                    recipient,
-                    amount,
-                    nonce,
-                    ..
-                }) => {
+                Input::MessageCoinSigned(MessageCoinSigned { nonce, .. })
+                | Input::MessageCoinPredicate(MessageCoinPredicate { nonce, .. })
+                | Input::MessageDataSigned(MessageDataSigned { nonce, .. })
+                | Input::MessageDataPredicate(MessageDataPredicate { nonce, .. }) => {
                     // Eagerly return already spent if status is known.
                     if db.message_is_spent(nonce)? {
                         return Err(
@@ -1145,42 +1136,14 @@ where
                             )
                             .into())
                         }
-                        if message.sender != *sender {
-                            return Err(TransactionValidityError::MessageSenderMismatch(
-                                *nonce,
-                            )
-                            .into())
-                        }
-                        if message.recipient != *recipient {
+
+                        if !message
+                            .matches_input(input)
+                            .expect("The input is message above")
+                        {
                             return Err(
-                                TransactionValidityError::MessageRecipientMismatch(
-                                    *nonce,
-                                )
-                                .into(),
+                                TransactionValidityError::MessageMismatch(*nonce).into()
                             )
-                        }
-                        if message.amount != *amount {
-                            return Err(TransactionValidityError::MessageAmountMismatch(
-                                *nonce,
-                            )
-                            .into())
-                        }
-                        if message.nonce != *nonce {
-                            return Err(TransactionValidityError::MessageNonceMismatch(
-                                *nonce,
-                            )
-                            .into())
-                        }
-                        let expected_data = if message.data.is_empty() {
-                            None
-                        } else {
-                            Some(message.data.as_slice())
-                        };
-                        if expected_data != input.input_data() {
-                            return Err(TransactionValidityError::MessageDataMismatch(
-                                *nonce,
-                            )
-                            .into())
                         }
                     } else {
                         return Err(
@@ -3041,6 +3004,130 @@ mod tests {
     }
 
     #[test]
+    fn coin_input_fails_when_mismatches_database() {
+        const AMOUNT: u64 = 100;
+
+        let tx = TxBuilder::new(2322u64)
+            .coin_input(AssetId::default(), AMOUNT)
+            .change_output(AssetId::default())
+            .build()
+            .transaction()
+            .clone();
+
+        let input = tx.inputs()[0].clone();
+        let db = &mut Database::default();
+
+        // Inserting a coin with `AMOUNT - 1` should cause a mismatching error during production.
+        db.storage::<Coins>()
+            .insert(
+                &input.utxo_id().unwrap().clone(),
+                &CompressedCoin {
+                    owner: *input.input_owner().unwrap(),
+                    amount: AMOUNT - 1,
+                    asset_id: AssetId::default(),
+                    maturity: Default::default(),
+                    tx_pointer: Default::default(),
+                },
+            )
+            .unwrap();
+        let executor = Executor::test(
+            db.clone(),
+            Config {
+                utxo_validation_default: true,
+                ..Default::default()
+            },
+        );
+
+        let block = PartialFuelBlock {
+            header: Default::default(),
+            transactions: vec![tx.into()],
+        };
+
+        let ExecutionResult {
+            skipped_transactions,
+            ..
+        } = executor
+            .execute_and_commit(
+                ExecutionBlock::Production(block),
+                ExecutionOptions {
+                    utxo_validation: true,
+                },
+            )
+            .unwrap();
+        // `tx` should be skipped.
+        assert_eq!(skipped_transactions.len(), 1);
+        let err = &skipped_transactions[0].1;
+        assert!(matches!(
+            err,
+            &ExecutorError::TransactionValidity(TransactionValidityError::CoinMismatch(
+                _
+            ))
+        ));
+    }
+
+    #[test]
+    fn contract_input_fails_when_doesnt_exist_in_database() {
+        let contract_id: ContractId = [1; 32].into();
+        let tx = TxBuilder::new(2322u64)
+            .contract_input(contract_id)
+            .coin_input(AssetId::default(), 100)
+            .change_output(AssetId::default())
+            .contract_output(&contract_id)
+            .build()
+            .transaction()
+            .clone();
+
+        let input = tx.inputs()[1].clone();
+        let db = &mut Database::default();
+
+        db.storage::<Coins>()
+            .insert(
+                &input.utxo_id().unwrap().clone(),
+                &CompressedCoin {
+                    owner: *input.input_owner().unwrap(),
+                    amount: 100,
+                    asset_id: AssetId::default(),
+                    maturity: Default::default(),
+                    tx_pointer: Default::default(),
+                },
+            )
+            .unwrap();
+        let executor = Executor::test(
+            db.clone(),
+            Config {
+                utxo_validation_default: true,
+                ..Default::default()
+            },
+        );
+
+        let block = PartialFuelBlock {
+            header: Default::default(),
+            transactions: vec![tx.into()],
+        };
+
+        let ExecutionResult {
+            skipped_transactions,
+            ..
+        } = executor
+            .execute_and_commit(
+                ExecutionBlock::Production(block),
+                ExecutionOptions {
+                    utxo_validation: true,
+                },
+            )
+            .unwrap();
+        // `tx` should be skipped.
+        assert_eq!(skipped_transactions.len(), 1);
+        let err = &skipped_transactions[0].1;
+        assert!(matches!(
+            err,
+            &ExecutorError::TransactionValidity(
+                TransactionValidityError::ContractDoesNotExist(_)
+            )
+        ));
+    }
+
+    #[test]
     fn skipped_txs_not_affect_order() {
         // `tx1` is invalid because it doesn't have inputs for gas.
         // `tx2` is a `Create` transaction with some code inside.
@@ -4193,6 +4280,38 @@ mod tests {
             Err(ExecutorError::TransactionValidity(
                 TransactionValidityError::MessageSpendTooEarly(_)
             ))
+        ));
+    }
+
+    #[test]
+    fn message_input_fails_when_mismatches_database() {
+        let mut rng = StdRng::seed_from_u64(2322);
+
+        let (tx, mut message) = make_tx_and_message(&mut rng, 0);
+
+        // Modifying the message to make it mismatch
+        message.amount = 123;
+
+        let mut block = Block::default();
+        *block.transactions_mut() = vec![tx.clone()];
+
+        let ExecutionResult {
+            skipped_transactions,
+            ..
+        } = make_executor(&[&message])
+            .execute_and_commit(
+                ExecutionBlock::Production(block.clone().into()),
+                ExecutionOptions {
+                    utxo_validation: true,
+                },
+            )
+            .unwrap();
+        let err = &skipped_transactions[0].1;
+        assert!(matches!(
+            err,
+            &ExecutorError::TransactionValidity(
+                TransactionValidityError::MessageMismatch(_)
+            )
         ));
     }
 
