@@ -1,39 +1,59 @@
 use fuel_core_types::{
     fuel_asm::{
         op,
+        GTFArgs,
         Instruction,
         RegId,
     },
-    fuel_tx::Address,
-    fuel_vm::CallFrame,
+    fuel_tx::{
+        Address,
+        AssetId,
+    },
 };
 
 /// Generates the bytecode for the fee collection contract.
-/// The contract takes two parameters:
-/// - a: pointer to the AssetId memory address
-/// - b: output index
+/// The contract expects `AssetId` and `output_index` as a first elements in `script_data`.
 pub fn generate(address: Address) -> Vec<u8> {
     let start_jump = vec![
         // Jump over the embedded address, which is placed immediately after the jump
         op::ji((1 + (Address::LEN / Instruction::SIZE)).try_into().unwrap()),
     ];
 
+    let asset_id_register = 0x10;
+    let balance_register = 0x11;
+    let contract_id_register = 0x12;
+    let output_index_register = 0x13;
+    let recipient_id_register = 0x14;
     let body = vec![
-        // Load pointer to AssetId memory address in call frame param a
-        op::addi(0x10, RegId::FP, CallFrame::a_offset().try_into().unwrap()),
-        op::lw(0x10, 0x10, 0),
-        // Load output index from call frame param b
-        op::addi(0x13, RegId::FP, CallFrame::b_offset().try_into().unwrap()),
-        op::lw(0x13, 0x13, 0),
+        // Load pointer to AssetId
+        op::gtf_args(asset_id_register, 0x00, GTFArgs::ScriptData),
+        // Load output index
+        op::addi(
+            output_index_register,
+            asset_id_register,
+            AssetId::LEN as u16,
+        ),
+        op::lw(output_index_register, output_index_register, 0),
+        // Gets pointer to the contract id
+        op::move_(contract_id_register, RegId::FP),
         // Get the balance of asset ID in the contract
-        op::bal(0x11, 0x10, RegId::FP),
+        op::bal(balance_register, asset_id_register, contract_id_register),
         // If balance == 0, return early
-        op::jnzf(0x11, RegId::ZERO, 1),
+        op::jnzf(balance_register, RegId::ZERO, 1),
         op::ret(RegId::ONE),
-        // Pointer to the embedded address
-        op::addi(0x12, RegId::IS, Instruction::SIZE.try_into().unwrap()),
+        // Pointer to the recipient address
+        op::addi(
+            recipient_id_register,
+            RegId::IS,
+            Instruction::SIZE.try_into().unwrap(),
+        ),
         // Perform the transfer
-        op::tro(0x12, 0x13, 0x11, 0x10),
+        op::tro(
+            recipient_id_register,
+            output_index_register,
+            balance_register,
+            asset_id_register,
+        ),
         // Return
         op::ret(RegId::ONE),
     ];
@@ -76,13 +96,13 @@ mod tests {
             Witness,
         },
         fuel_types::{
+            canonical::Serialize,
             AssetId,
             BlockHeight,
             ChainId,
             ContractId,
             Salt,
         },
-        fuel_vm::consts::VM_MAX_RAM,
     };
 
     struct TestContext {
@@ -179,22 +199,29 @@ mod tests {
             ..
         } = ctx;
 
+        let asset_id = AssetId::BASE;
+        let output_index = 1u64;
+        let call_struct_register = 0x10;
         // Now call the fee collection contract to withdraw the fees
         let script = vec![
-            // Allocate all-zeros AssetId
-            op::movi(0x10, AssetId::LEN.try_into().unwrap()),
-            op::aloc(0x10),
             // Point to the call structure
-            op::gtf_args(0x10, 0x00, GTFArgs::ScriptData),
-            op::call(0x10, RegId::ZERO, RegId::ZERO, RegId::CGAS),
+            op::gtf_args(call_struct_register, 0x00, GTFArgs::ScriptData),
+            op::addi(
+                call_struct_register,
+                call_struct_register,
+                (asset_id.size() + output_index.size()) as u16,
+            ),
+            op::call(call_struct_register, RegId::ZERO, RegId::ZERO, RegId::CGAS),
             op::ret(RegId::ONE),
         ];
+
         let tx = TransactionBuilder::script(
-            script.into_iter().collect(),
-            (*contract_id)
-                .into_iter()
-                .chain((VM_MAX_RAM.checked_sub(AssetId::LEN as u64)).unwrap().to_be_bytes())
-                .chain(1u64.to_be_bytes()) // Output index
+            script.into_iter().collect(),asset_id.to_bytes().into_iter()
+                .chain(output_index.to_bytes().into_iter())
+                .chain(contract_id
+                    .to_bytes().into_iter())
+                .chain(0u64.to_bytes().into_iter())
+                .chain(0u64.to_bytes().into_iter())
                 .collect(),
         )
         .add_random_fee_input() // No coinbase fee for this block
@@ -216,8 +243,10 @@ mod tests {
         .finalize_as_transaction();
 
         let tx_status = client.submit_and_await_commit(&tx).await.unwrap();
-        dbg!(&tx_status);
-        assert!(matches!(tx_status, TransactionStatus::Success { .. }));
+        assert!(
+            matches!(tx_status, TransactionStatus::Success { .. }),
+            "{tx_status:?}"
+        );
     }
 
     #[tokio::test]
@@ -230,19 +259,35 @@ mod tests {
             make_block_with_fee(rng, &ctx).await;
         }
 
-        collect_fees(&ctx).await;
-
-        // Make sure that the full balance was been withdrawn
-        let contract_balance = ctx
+        // When
+        // Before withdrawal, the recipient's balance should be zero,
+        // and the contract balance should be non-zero.
+        let contract_balance_before_collect = ctx
             .client
             .contract_balance(&ctx.contract_id, None)
             .await
             .unwrap();
-        assert_eq!(contract_balance, 0);
+        assert_ne!(contract_balance_before_collect, 0);
+        assert_eq!(ctx.client.balance(&ctx.address, None).await.unwrap(), 0);
+
+        // When
+        collect_fees(&ctx).await;
+
+        // Then
 
         // Make sure that the full balance was been withdrawn
-        let asset_balance = ctx.client.balance(&ctx.address, None).await.unwrap();
-        assert_eq!(asset_balance, 10);
+        let contract_balance_after_collect = ctx
+            .client
+            .contract_balance(&ctx.contract_id, None)
+            .await
+            .unwrap();
+        assert_eq!(contract_balance_after_collect, 0);
+
+        // Make sure that the full balance was been withdrawn
+        assert_eq!(
+            ctx.client.balance(&ctx.address, None).await.unwrap(),
+            contract_balance_before_collect
+        );
     }
 
     /// Attempts fee collection when no balance has accumulated yet
@@ -251,7 +296,20 @@ mod tests {
         let rng = &mut StdRng::seed_from_u64(0);
 
         let ctx = setup(rng).await;
+
+        // Given
+        let contract_balance_before_collect = ctx
+            .client
+            .contract_balance(&ctx.contract_id, None)
+            .await
+            .unwrap();
+        assert_eq!(contract_balance_before_collect, 0);
+        assert_eq!(ctx.client.balance(&ctx.address, None).await.unwrap(), 0);
+
+        // When
         collect_fees(&ctx).await;
+
+        // Then
 
         // Make sure that the balance is still zero
         let contract_balance = ctx
@@ -262,8 +320,7 @@ mod tests {
         assert_eq!(contract_balance, 0);
 
         // There were no coins to withdraw
-        let asset_balance = ctx.client.balance(&ctx.address, None).await.unwrap();
-        assert_eq!(asset_balance, 0);
+        assert_eq!(ctx.client.balance(&ctx.address, None).await.unwrap(), 0);
     }
 
     #[tokio::test]
@@ -273,23 +330,31 @@ mod tests {
         let ctx = setup(rng).await;
         make_block_with_fee(rng, &ctx).await;
 
+        let asset_id = AssetId::BASE;
+        let output_index = 1u64;
+        let call_struct_register = 0x10;
+
         // Now call the fee collection contract to withdraw the fees,
-        // but unlike in the happy path, we don't add the variable output
+        // but unlike in the happy path, we don't add the variable output to the transaction.
         let script = vec![
-            // Allocate all-zeros AssetId
-            op::movi(0x10, AssetId::LEN.try_into().unwrap()),
-            op::aloc(0x10),
             // Point to the call structure
-            op::gtf_args(0x10, 0x00, GTFArgs::ScriptData),
-            op::call(0x10, RegId::ZERO, RegId::ZERO, RegId::CGAS),
+            op::gtf_args(call_struct_register, 0x00, GTFArgs::ScriptData),
+            op::addi(
+                call_struct_register,
+                call_struct_register,
+                (asset_id.size() + output_index.size()) as u16,
+            ),
+            op::call(call_struct_register, RegId::ZERO, RegId::ZERO, RegId::CGAS),
             op::ret(RegId::ONE),
         ];
         let tx = TransactionBuilder::script(
             script.into_iter().collect(),
-            (*ctx.contract_id)
-                .into_iter()
-                .chain((VM_MAX_RAM.checked_sub(AssetId::LEN as u64)).unwrap().to_be_bytes())
-                .chain(1u64.to_be_bytes()) // Output index
+            asset_id.to_bytes().into_iter()
+                .chain(output_index.to_bytes().into_iter())
+                .chain(ctx.contract_id
+                    .to_bytes().into_iter())
+                .chain(0u64.to_bytes().into_iter())
+                .chain(0u64.to_bytes().into_iter())
                 .collect(),
         )
         .add_random_fee_input() // No coinbase fee for this block
