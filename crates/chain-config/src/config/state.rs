@@ -155,13 +155,17 @@ impl StateConfig {
     }
 
     #[cfg(feature = "std")]
-    pub fn create_config_file(&self, path: impl AsRef<Path>) -> anyhow::Result<()> {
-        use anyhow::Context;
+    pub fn create_config_file(self, path: impl AsRef<Path>) -> anyhow::Result<()> {
+        use crate::json_writer;
 
-        let state_writer = File::create(path.as_ref().join(CHAIN_STATE_FILENAME))?;
-
-        serde_json::to_writer_pretty(state_writer, self)
-            .context("failed to dump chain parameters snapshot to JSON")?;
+        // TODO add parquet wrtter once fully implemented
+        let mut writer = json_writer(path)?;
+        writer.write_coins(self.coins)?;
+        writer.write_messages(self.messages)?;
+        writer.write_contracts(self.contracts)?;
+        writer.write_contract_state(self.contract_state)?;
+        writer.write_contract_balance(self.contract_balance)?;
+        writer.close()?;
 
         Ok(())
     }
@@ -293,7 +297,7 @@ mod tests {
         let tmp_file = temp_dir();
         let disk_config = StateConfig::local_testnet();
 
-        disk_config.create_config_file(&tmp_file).unwrap();
+        disk_config.clone().create_config_file(&tmp_file).unwrap();
 
         let load_config = StateConfig::load_from_directory(&tmp_file).unwrap();
 
