@@ -4,11 +4,13 @@ pub fn transaction_status_strategy() -> impl Strategy<Value = TransactionStatus>
     prop_oneof![
         Just(TransactionStatus::Submitted { time: Tai64(0) }),
         Just(TransactionStatus::Success {
+            tx_id: Default::default(),
             block_id: Default::default(),
             time: Tai64(0),
             result: None,
         }),
         Just(TransactionStatus::Failed {
+            tx_id: Default::default(),
             block_id: Default::default(),
             time: Tai64(0),
             result: None,
