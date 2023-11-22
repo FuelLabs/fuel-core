@@ -12,9 +12,7 @@ use fuel_core_storage::{
         SpentMessages,
         Transactions,
     },
-    transactional::{
-        StorageTransaction,
-    },
+    transactional::StorageTransaction,
     InterpreterStorage,
     MerkleRootStorage,
     StorageAsMut,
@@ -119,10 +117,17 @@ use fuel_core_types::{
 
 use fuel_core_storage::Error as StorageError;
 
-use fuel_core_database::vm_database::{MessageIsSpent, TxIdOwnerRecorder, VmDatabase};
-use fuel_core_storage::tables::{
-    ContractsAssets,
-    ContractsState,
+use fuel_core_database::vm_database::{
+    MessageIsSpent,
+    TxIdOwnerRecorder,
+    VmDatabase,
+};
+use fuel_core_storage::{
+    tables::{
+        ContractsAssets,
+        ContractsState,
+    },
+    transactional::Transactional,
 };
 use fuel_core_types::{
     fuel_tx::{
@@ -151,7 +156,6 @@ use tracing::{
     debug,
     warn,
 };
-use fuel_core_storage::transactional::Transactional;
 
 pub use crate::ports::{
     MaybeCheckedTransaction,
@@ -233,10 +237,7 @@ impl<R, D> Executor<R, D>
 where
     R: RelayerPort + Clone,
     VmDatabase<D>: InterpreterStorage,
-    D:
-    // ExecutorDatabaseTrait<D>
-
-            StorageMutate<FuelBlocks, Error = StorageError>
+    D: StorageMutate<FuelBlocks, Error = StorageError>
         + StorageMutate<Receipts, Error = StorageError>
         + StorageMutate<Transactions, Error = StorageError>
         + Clone
@@ -249,8 +250,7 @@ where
         + StorageMutate<Messages, Error = StorageError>
         + MerkleRootStorage<ContractId, ContractsState>
         + StorageMutate<ContractsState>
-    + Transactional<Storage = D>
-
+        + Transactional<Storage = D>
         + MerkleRootStorage<ContractId, ContractsState>
         + StorageMutate<ContractsState, Error = StorageError>
         + TxIdOwnerRecorder<Error = fuel_core_database::Error>,
@@ -285,9 +285,7 @@ impl<R, D> Executor<R, D>
 where
     R: RelayerPort + Clone,
     VmDatabase<D>: InterpreterStorage,
-    D:
-    // ExecutorDatabaseTrait<D>
-        StorageMutate<FuelBlocks, Error = StorageError>
+    D: StorageMutate<FuelBlocks, Error = StorageError>
         + StorageMutate<Receipts, Error = StorageError>
         + StorageMutate<Transactions, Error = StorageError>
         + Clone
@@ -300,8 +298,7 @@ where
         + StorageMutate<Messages, Error = StorageError>
         + MerkleRootStorage<ContractId, ContractsState>
         + StorageMutate<ContractsState, Error = StorageError>
-    + Transactional<Storage = D>
-
+        + Transactional<Storage = D>
         + TxIdOwnerRecorder<Error = fuel_core_database::Error>,
 {
     pub fn execute_without_commit<TxSource>(
@@ -406,9 +403,7 @@ mod private {
     }
 }
 
-use crate::{
-    ports::RelayerPort,
-};
+use crate::ports::RelayerPort;
 use private::*;
 
 impl<R, D> Executor<R, D>
@@ -429,8 +424,7 @@ where
         + StorageMutate<ContractsLatestUtxo, Error = StorageError>
         + StorageMutate<Messages, Error = StorageError>
         + StorageMutate<ContractsState, Error = StorageError>
-    + Transactional<Storage = D>
-
+        + Transactional<Storage = D>
         + TxIdOwnerRecorder<Error = fuel_core_database::Error>,
 {
     #[tracing::instrument(skip_all)]
@@ -539,7 +533,10 @@ where
         self.persist_transaction_status(&result, block_st_transaction.as_mut())?;
 
         // save the associated owner for each transaction in the block
-        self.index_tx_owners_for_block(&result.block, &mut block_st_transaction.as_mut())?;
+        self.index_tx_owners_for_block(
+            &result.block,
+            &mut block_st_transaction.as_mut(),
+        )?;
 
         // ------------ GraphQL API Functionality   END ------------
 
@@ -555,10 +552,7 @@ where
             )?;
 
         // Get the complete fuel block.
-        Ok(UncommittedResult::new(
-            result,
-            block_st_transaction,
-        ))
+        Ok(UncommittedResult::new(result, block_st_transaction))
     }
 
     #[tracing::instrument(skip_all)]

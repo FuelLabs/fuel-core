@@ -49,8 +49,13 @@ use fuel_core_storage::tables::{
     Messages,
     SpentMessages,
 };
-use fuel_core_types::fuel_types::{Address, Nonce};
-use fuel_core_types::services::txpool::TransactionStatus;
+use fuel_core_types::{
+    fuel_types::{
+        Address,
+        Nonce,
+    },
+    services::txpool::TransactionStatus,
+};
 
 /// Used to store metadata relevant during the execution of a transaction
 #[derive(Clone, Debug)]
