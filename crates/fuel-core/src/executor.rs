@@ -1705,7 +1705,7 @@ where
                         },
                     )?;
                 }
-                TransactionExecutionResult::Failed { result, reason, .. } => {
+                TransactionExecutionResult::Failed { result, reason } => {
                     db.update_tx_status(
                         id,
                         TransactionStatus::Failed {
