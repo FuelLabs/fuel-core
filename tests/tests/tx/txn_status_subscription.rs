@@ -268,24 +268,27 @@ fn submit_and_await_model(tx: &Transaction) -> bool {
 
 #[tokio::test]
 async fn txn_success_status_contains_receipts() {
+    use fuel_core::service::config::Trigger;
     use fuel_core_client::client::types::TransactionStatus;
 
+    // Given
     let mut rng = StdRng::seed_from_u64(0xF00DF00D);
     let chain_id = ChainId::default();
     let mut config = Config::local_node();
-    config.block_production = fuel_core::service::config::Trigger::Interval {
+    config.block_production = Trigger::Interval {
         block_time: Duration::from_secs(2),
     };
     let srv = FuelService::new_node(config).await.unwrap();
     let client = FuelClient::from(srv.bound_address);
 
+    // When
     let transaction_success =
         create_transaction(&mut rng, vec![op::ret(RegId::ONE)].into());
-    let id = transaction_success.id(&chain_id);
-
     client.submit(&transaction_success).await.unwrap();
-
+    let id = transaction_success.id(&chain_id);
     let status = client.await_transaction_commit(&id).await.unwrap();
+
+    // Then
     assert!(matches!(
         status,
         TransactionStatus::Success {
@@ -298,24 +301,27 @@ async fn txn_success_status_contains_receipts() {
 
 #[tokio::test]
 async fn txn_failure_status_contains_receipts() {
+    use fuel_core::service::config::Trigger;
     use fuel_core_client::client::types::TransactionStatus;
 
+    // Given
     let mut rng = StdRng::seed_from_u64(0xF00DF00D);
     let chain_id = ChainId::default();
     let mut config = Config::local_node();
-    config.block_production = fuel_core::service::config::Trigger::Interval {
+    config.block_production = Trigger::Interval {
         block_time: Duration::from_secs(2),
     };
     let srv = FuelService::new_node(config).await.unwrap();
     let client = FuelClient::from(srv.bound_address);
 
+    // When
     let transaction_failure =
         create_transaction(&mut rng, vec![op::rvrt(RegId::ONE)].into());
-    let id = transaction_failure.id(&chain_id);
-
     client.submit(&transaction_failure).await.unwrap();
-
+    let id = transaction_failure.id(&chain_id);
     let status = client.await_transaction_commit(&id).await.unwrap();
+
+    // Then
     assert!(matches!(
         status,
         TransactionStatus::Failure {
