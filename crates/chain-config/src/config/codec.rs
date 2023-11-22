@@ -34,7 +34,9 @@ pub struct Group<T> {
 }
 
 type GroupResult<T> = anyhow::Result<Group<T>>;
+pub type DynGroupDecoder<T> = Box<dyn GroupDecoder<T>>;
 pub trait GroupDecoder<T>: Iterator<Item = GroupResult<T>> {}
+pub type DynStateEncoder = Box<dyn StateEncoder>;
 
 pub trait StateEncoder {
     fn write_coins(&mut self, elements: Vec<CoinConfig>) -> anyhow::Result<()>;
@@ -50,8 +52,6 @@ pub trait StateEncoder {
     ) -> anyhow::Result<()>;
     fn close(self: Box<Self>) -> anyhow::Result<()>;
 }
-
-pub type DynGroupDecoder<T> = Box<dyn GroupDecoder<T>>;
 
 #[derive(Clone, Debug)]
 pub enum StateDecoder {
@@ -134,9 +134,7 @@ impl StateDecoder {
     }
 }
 
-pub fn parquet_writer(
-    snapshot_dir: impl AsRef<Path>,
-) -> anyhow::Result<Box<dyn StateEncoder>> {
+pub fn parquet_writer(snapshot_dir: impl AsRef<Path>) -> anyhow::Result<DynStateEncoder> {
     let snapshot_location = snapshot_dir.as_ref();
     let open_file = |name| {
         std::fs::File::create(snapshot_location.join(format!("{name}.parquet"))).unwrap()
@@ -154,9 +152,7 @@ pub fn parquet_writer(
     Ok(Box::new(writer))
 }
 
-pub fn json_writer(
-    snapshot_dir: impl AsRef<Path>,
-) -> anyhow::Result<Box<dyn StateEncoder>> {
+pub fn json_writer(snapshot_dir: impl AsRef<Path>) -> anyhow::Result<DynStateEncoder> {
     let state = std::fs::File::create(snapshot_dir.as_ref().join("state.json"))?;
     let writer = json::Encoder::new(state);
     Ok(Box::new(writer))
@@ -164,99 +160,152 @@ pub fn json_writer(
 
 #[cfg(test)]
 mod tests {
+    use std::{
+        cell::RefCell,
+        ops::Range,
+        rc::Rc,
+    };
+
     use itertools::Itertools;
 
     use super::*;
 
+    #[test]
+    fn writes_then_reads_written() {
+        let group_size = 100;
+        let num_groups = 10;
+        let starting_group_index = 3;
+        {
+            // In memory
+            let state_config = Rc::new(RefCell::new(StateConfig::default()));
+            let state_encoder =
+                Box::new(in_memory::Encoder::new(Rc::clone(&state_config)));
+
+            let init_decoder = || {
+                let state_config: &StateConfig = &state_config.borrow();
+                StateDecoder::InMemory {
+                    state: state_config.clone(),
+                    group_size,
+                }
+            };
+
+            test_write_read(
+                state_encoder,
+                init_decoder,
+                group_size,
+                starting_group_index..num_groups,
+            );
+        }
+        {
+            // Json
+            let temp_dir = tempfile::tempdir().unwrap();
+            let state_encoder = json_writer(temp_dir.path()).unwrap();
+
+            let init_decoder = || StateDecoder::Json {
+                path: temp_dir.path().to_owned(),
+                group_size,
+            };
+
+            test_write_read(
+                state_encoder,
+                init_decoder,
+                group_size,
+                starting_group_index..num_groups,
+            )
+        }
+        {
+            // Parquet
+            let temp_dir = tempfile::tempdir().unwrap();
+            let state_encoder = parquet_writer(temp_dir.path()).unwrap();
+
+            let init_decoder = || StateDecoder::Parquet {
+                path: temp_dir.path().to_owned(),
+            };
+
+            test_write_read(
+                state_encoder,
+                init_decoder,
+                group_size,
+                starting_group_index..num_groups,
+            )
+        }
+    }
+
+    fn test_write_read(
+        mut encoder: DynStateEncoder,
+        init_decoder: impl FnOnce() -> StateDecoder,
+        group_size: usize,
+        group_range: Range<usize>,
+    ) {
+        let num_groups = group_range.end;
+        let mut rng = rand::thread_rng();
+        macro_rules! write_batches {
+            ($data_type: ty, $write_method:ident) => {{
+                let batches = ::std::iter::repeat_with(|| <$data_type>::random(&mut rng))
+                    .chunks(group_size)
+                    .into_iter()
+                    .map(|chunk| chunk.collect_vec())
+                    .enumerate()
+                    .map(|(index, data)| Group { index, data })
+                    .take(num_groups)
+                    .collect_vec();
+
+                for batch in &batches {
+                    encoder.$write_method(batch.data.clone()).unwrap();
+                }
+                batches
+            }};
+        }
+
+        let coin_batches = write_batches!(CoinConfig, write_coins);
+        let message_batches = write_batches!(MessageConfig, write_messages);
+        let contract_batches = write_batches!(ContractConfig, write_contracts);
+        let contract_state_batches = write_batches!(ContractState, write_contract_state);
+        let contract_balance_batches =
+            write_batches!(ContractBalance, write_contract_balance);
+        encoder.close().unwrap();
+
+        let state_reader = init_decoder();
+
+        let skip_first = group_range.start;
+        assert_batches_identical(
+            &coin_batches,
+            state_reader.coins().unwrap(),
+            skip_first,
+        );
+        assert_batches_identical(
+            &message_batches,
+            state_reader.messages().unwrap(),
+            skip_first,
+        );
+        assert_batches_identical(
+            &contract_batches,
+            state_reader.contracts().unwrap(),
+            skip_first,
+        );
+        assert_batches_identical(
+            &contract_state_batches,
+            state_reader.contract_state().unwrap(),
+            skip_first,
+        );
+        assert_batches_identical(
+            &contract_balance_batches,
+            state_reader.contract_balance().unwrap(),
+            skip_first,
+        );
+    }
+
     fn assert_batches_identical<T>(
         original: &[Group<T>],
         read: impl Iterator<Item = Result<Group<T>, anyhow::Error>>,
+        skip: usize,
     ) where
         Vec<T>: PartialEq,
         T: PartialEq + std::fmt::Debug,
     {
         pretty_assertions::assert_eq!(
-            original,
-            read.collect::<Result<Vec<_>, _>>().unwrap()
+            original[skip..],
+            read.skip(skip).collect::<Result<Vec<_>, _>>().unwrap()
         );
-    }
-
-    #[test]
-    fn writes_and_then_reads_written() {
-        enum Format {
-            Json,
-            Parquet,
-            InMemory,
-        }
-        let test = |format: Format| {
-            let temp_dir = tempfile::tempdir().unwrap();
-
-            let path = temp_dir.path();
-            let mut state_config = StateConfig::default();
-            let mut writer = match format {
-                Format::Parquet => parquet_writer(path).unwrap(),
-                Format::Json => json_writer(path).unwrap(),
-                Format::InMemory => Box::new(in_memory::Encoder::new(&mut state_config)),
-            };
-
-            let mut rng = rand::thread_rng();
-            let group_size = 100;
-            let num_groups = 10;
-            macro_rules! write_batches {
-                ($data_type: ty, $write_method:ident) => {{
-                    let batches =
-                        ::std::iter::repeat_with(|| <$data_type>::random(&mut rng))
-                            .chunks(group_size)
-                            .into_iter()
-                            .map(|chunk| chunk.collect_vec())
-                            .enumerate()
-                            .map(|(index, data)| Group { index, data })
-                            .take(num_groups)
-                            .collect_vec();
-
-                    for batch in &batches {
-                        writer.$write_method(batch.data.clone()).unwrap();
-                    }
-                    batches
-                }};
-            }
-
-            let coin_batches = write_batches!(CoinConfig, write_coins);
-            let message_batches = write_batches!(MessageConfig, write_messages);
-            let contract_batches = write_batches!(ContractConfig, write_contracts);
-            let contract_state_batches =
-                write_batches!(ContractState, write_contract_state);
-            let contract_balance_batches =
-                write_batches!(ContractBalance, write_contract_balance);
-            writer.close().unwrap();
-
-            let path = temp_dir.path().into();
-            let state_reader = match format {
-                Format::Json => StateDecoder::Json { path, group_size },
-                Format::Parquet => StateDecoder::Parquet { path },
-                Format::InMemory => StateDecoder::InMemory {
-                    state: state_config.clone(),
-                    group_size,
-                },
-            };
-            assert_batches_identical(&coin_batches, state_reader.coins().unwrap());
-            assert_batches_identical(&message_batches, state_reader.messages().unwrap());
-            assert_batches_identical(
-                &contract_batches,
-                state_reader.contracts().unwrap(),
-            );
-            assert_batches_identical(
-                &contract_state_batches,
-                state_reader.contract_state().unwrap(),
-            );
-            assert_batches_identical(
-                &contract_balance_batches,
-                state_reader.contract_balance().unwrap(),
-            );
-        };
-
-        test(Format::Json);
-        test(Format::Parquet);
-        test(Format::InMemory);
     }
 }

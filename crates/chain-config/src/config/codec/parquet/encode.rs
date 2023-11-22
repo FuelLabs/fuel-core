@@ -35,7 +35,7 @@ use crate::{
 
 use super::schema::Schema;
 
-pub struct Encoder<W: Write> {
+pub struct Encoder<W: Write + Send> {
     coins: SerializedFileWriter<W>,
     messages: SerializedFileWriter<W>,
     contracts: SerializedFileWriter<W>,

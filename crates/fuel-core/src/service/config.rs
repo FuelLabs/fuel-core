@@ -14,7 +14,6 @@ use std::{
         Ipv4Addr,
         SocketAddr,
     },
-    sync::Arc,
     time::Duration,
 };
 use strum_macros::{

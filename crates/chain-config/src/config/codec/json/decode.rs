@@ -37,6 +37,10 @@ where
     fn next(&mut self) -> Option<Self::Item> {
         self.in_mem.next()
     }
+
+    fn nth(&mut self, n: usize) -> Option<Self::Item> {
+        self.in_mem.nth(n)
+    }
 }
 
 impl<T> GroupDecoder<T> for Decoder<T> where

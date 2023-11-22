@@ -113,7 +113,6 @@ impl StateConfig {
     pub fn load_from_directory(path: impl AsRef<Path>) -> Result<Self, anyhow::Error> {
         use crate::StateDecoder;
 
-        let path = path.as_ref().join(CHAIN_STATE_FILENAME);
         let decoder = StateDecoder::detect_state_encoding(path, 1);
 
         let coins = decoder
@@ -153,14 +152,6 @@ impl StateConfig {
             contract_state,
             contract_balance,
         })
-
-        // let contents = std::fs::read(&path)?;
-        // serde_json::from_slice(&contents).map_err(|e| {
-        //     anyhow::Error::new(e).context(format!(
-        //         "an error occurred while loading the chain state file: {:?}",
-        //         path.to_str()
-        //     ))
-        // })
     }
 
     #[cfg(feature = "std")]

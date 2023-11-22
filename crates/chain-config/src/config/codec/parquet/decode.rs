@@ -100,7 +100,7 @@ where
     }
 
     fn nth(&mut self, n: usize) -> Option<Self::Item> {
-        self.group_index = n;
+        self.group_index += n;
         self.next()
     }
 }

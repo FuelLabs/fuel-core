@@ -67,7 +67,7 @@ impl<R: Borrow<StateConfig>> Iterator for Decoder<R, CoinConfig> {
     }
 
     fn nth(&mut self, n: usize) -> Option<Self::Item> {
-        self.next_group = n;
+        self.next_group += n;
         self.next()
     }
 }
