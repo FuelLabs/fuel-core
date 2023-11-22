@@ -3,6 +3,11 @@
 use crate::{
     fuel_asm::Word,
     fuel_tx::{
+        input::coin::{
+            CoinPredicate,
+            CoinSigned,
+        },
+        Input,
         TxPointer,
         UtxoId,
     },
@@ -73,6 +78,32 @@ impl CompressedCoin {
             asset_id: self.asset_id,
             maturity: self.maturity,
             tx_pointer: self.tx_pointer,
+        }
+    }
+
+    /// Verifies the integrity of the coin.
+    ///
+    /// Returns `None`, if the `input` is not a coin.
+    /// Otherwise returns the result of the field comparison.
+    pub fn matches_input(&self, input: &Input) -> Option<bool> {
+        match input {
+            Input::CoinSigned(CoinSigned {
+                owner,
+                amount,
+                asset_id,
+                ..
+            })
+            | Input::CoinPredicate(CoinPredicate {
+                owner,
+                amount,
+                asset_id,
+                ..
+            }) => Some(
+                owner == &self.owner
+                    && amount == &self.amount
+                    && asset_id == &self.asset_id,
+            ),
+            _ => None,
         }
     }
 }

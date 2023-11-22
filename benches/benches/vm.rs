@@ -1,5 +1,6 @@
 mod contract;
 mod utils;
+mod vm_initialization;
 mod vm_set;
 
 use criterion::{
@@ -11,6 +12,7 @@ use criterion::{
     Criterion,
 };
 
+use crate::vm_initialization::vm_initialization;
 use contract::*;
 use fuel_core_benches::*;
 use fuel_core_types::fuel_asm::Instruction;
@@ -71,9 +73,10 @@ fn vm(c: &mut Criterion) {
     crypto::run(c);
     flow::run(c);
     mem::run(c);
+    blockchain::run(c);
     contract_root(c);
     state_root(c);
-    blockchain::run(c);
+    vm_initialization(c);
 }
 
 criterion_group!(benches, vm);

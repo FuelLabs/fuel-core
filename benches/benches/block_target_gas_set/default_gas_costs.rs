@@ -43,7 +43,10 @@ pub fn default_gas_costs() -> GasCostsValues {
         lw: 2,
         mint: 25515,
         mlog: 2,
-        vm_initialization: 1,
+        vm_initialization: DependentCost::HeavyOperation {
+            base: 2000,
+            gas_per_unit: 0,
+        },
         modi: 2,
         mod_op: 2,
         movi: 2,
