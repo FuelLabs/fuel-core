@@ -66,13 +66,13 @@ mod tests {
         FuelClient,
     };
     use fuel_core_types::{
+        fuel_asm::GTFArgs,
         fuel_tx::{
             Cacheable,
             Finalizable,
             Input,
             Output,
             TransactionBuilder,
-            TxParameters,
             Witness,
         },
         fuel_types::{
@@ -82,10 +82,7 @@ mod tests {
             ContractId,
             Salt,
         },
-        fuel_vm::{
-            consts::VM_MAX_RAM,
-            script_with_data_offset,
-        },
+        fuel_vm::consts::VM_MAX_RAM,
     };
 
     struct TestContext {
@@ -183,19 +180,15 @@ mod tests {
         } = ctx;
 
         // Now call the fee collection contract to withdraw the fees
-        let (script, _) = script_with_data_offset!(
-            data_offset,
-            vec![
-                // Allocate all-zeros AssetId
-                op::movi(0x10, AssetId::LEN.try_into().unwrap()),
-                op::aloc(0x10),
-                // Point to the call structure
-                op::movi(0x10, data_offset),
-                op::call(0x10, RegId::ZERO, RegId::ZERO, RegId::CGAS),
-                op::ret(RegId::ONE),
-            ],
-            TxParameters::DEFAULT.tx_offset()
-        );
+        let script = vec![
+            // Allocate all-zeros AssetId
+            op::movi(0x10, AssetId::LEN.try_into().unwrap()),
+            op::aloc(0x10),
+            // Point to the call structure
+            op::gtf_args(0x10, 0x00, GTFArgs::ScriptData),
+            op::call(0x10, RegId::ZERO, RegId::ZERO, RegId::CGAS),
+            op::ret(RegId::ONE),
+        ];
         let tx = TransactionBuilder::script(
             script.into_iter().collect(),
             (*contract_id)
@@ -282,19 +275,15 @@ mod tests {
 
         // Now call the fee collection contract to withdraw the fees,
         // but unlike in the happy path, we don't add the variable output
-        let (script, _) = script_with_data_offset!(
-            data_offset,
-            vec![
-                // Allocate all-zeros AssetId
-                op::movi(0x10, AssetId::LEN.try_into().unwrap()),
-                op::aloc(0x10),
-                // Point to the call structure
-                op::movi(0x10, data_offset),
-                op::call(0x10, RegId::ZERO, RegId::ZERO, RegId::CGAS),
-                op::ret(RegId::ONE),
-            ],
-            TxParameters::DEFAULT.tx_offset()
-        );
+        let script = vec![
+            // Allocate all-zeros AssetId
+            op::movi(0x10, AssetId::LEN.try_into().unwrap()),
+            op::aloc(0x10),
+            // Point to the call structure
+            op::gtf_args(0x10, 0x00, GTFArgs::ScriptData),
+            op::call(0x10, RegId::ZERO, RegId::ZERO, RegId::CGAS),
+            op::ret(RegId::ONE),
+        ];
         let tx = TransactionBuilder::script(
             script.into_iter().collect(),
             (*ctx.contract_id)
