@@ -239,11 +239,12 @@ impl From<TxStatus> for TransactionStatus {
                 TransactionStatus::Submitted(SubmittedStatus(time))
             }
             TxStatus::Success {
+                tx_id,
                 block_id,
                 result,
                 time,
             } => TransactionStatus::Success(SuccessStatus {
-                tx_id: Default::default(),
+                tx_id,
                 block_id,
                 result,
                 time,
@@ -252,12 +253,13 @@ impl From<TxStatus> for TransactionStatus {
                 TransactionStatus::SqueezedOut(SqueezedOutStatus { reason })
             }
             TxStatus::Failed {
+                tx_id,
                 block_id,
                 reason,
                 time,
                 result,
             } => TransactionStatus::Failed(FailureStatus {
-                tx_id: Default::default(),
+                tx_id,
                 block_id,
                 reason,
                 time,
@@ -274,11 +276,12 @@ impl From<TransactionStatus> for TxStatus {
                 TxStatus::Submitted { time }
             }
             TransactionStatus::Success(SuccessStatus {
+                tx_id,
                 block_id,
                 result,
                 time,
-                ..
             }) => TxStatus::Success {
+                tx_id,
                 block_id,
                 result,
                 time,
@@ -287,12 +290,13 @@ impl From<TransactionStatus> for TxStatus {
                 TxStatus::SqueezedOut { reason }
             }
             TransactionStatus::Failed(FailureStatus {
+                tx_id,
                 block_id,
                 reason,
                 time,
                 state: result,
-                ..
             }) => TxStatus::Failed {
+                tx_id,
                 block_id,
                 reason,
                 time,
