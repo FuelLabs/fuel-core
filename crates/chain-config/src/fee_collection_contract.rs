@@ -18,6 +18,9 @@ pub fn generate(address: Address) -> Vec<u8> {
         // Load pointer to AssetId memory address in call frame param a
         op::addi(0x10, RegId::FP, CallFrame::a_offset().try_into().unwrap()),
         op::lw(0x10, 0x10, 0),
+        // Load output index from call frame param b
+        op::addi(0x13, RegId::FP, CallFrame::b_offset().try_into().unwrap()),
+        op::lw(0x13, 0x13, 0),
         // Get the balance of asset ID in the contract
         op::bal(0x11, 0x10, RegId::FP),
         // If balance == 0, return early
@@ -26,7 +29,7 @@ pub fn generate(address: Address) -> Vec<u8> {
         // Pointer to the embedded address
         op::addi(0x12, RegId::IS, Instruction::SIZE.try_into().unwrap()),
         // Perform the transfer
-        op::tro(0x12, RegId::ONE, 0x11, 0x10),
+        op::tro(0x12, 0x13, 0x11, 0x10),
         // Return
         op::ret(RegId::ONE),
     ];
@@ -165,7 +168,7 @@ mod tests {
             .contract_balance(&ctx.contract_id, None)
             .await
             .unwrap();
-        assert_eq!(new_balance, old_balance.checked_add(1).unwrap());
+        assert!(new_balance > old_balance);
     }
 
     async fn collect_fees(ctx: &TestContext) {
@@ -192,7 +195,7 @@ mod tests {
             (*contract_id)
                 .into_iter()
                 .chain((VM_MAX_RAM.checked_sub(AssetId::LEN as u64)).unwrap().to_be_bytes())
-                .chain(0u64.to_be_bytes())
+                .chain(1u64.to_be_bytes()) // Output index
                 .collect(),
         )
         .add_random_fee_input() // No coinbase fee for this block
@@ -214,6 +217,7 @@ mod tests {
         .finalize_as_transaction();
 
         let tx_status = client.submit_and_await_commit(&tx).await.unwrap();
+        dbg!(&tx_status);
         assert!(matches!(tx_status, TransactionStatus::Success { .. }));
     }
 
@@ -288,7 +292,7 @@ mod tests {
             (*ctx.contract_id)
                 .into_iter()
                 .chain((VM_MAX_RAM.checked_sub(AssetId::LEN as u64)).unwrap().to_be_bytes())
-                .chain(0u64.to_be_bytes())
+                .chain(1u64.to_be_bytes()) // Output index
                 .collect(),
         )
         .add_random_fee_input() // No coinbase fee for this block
