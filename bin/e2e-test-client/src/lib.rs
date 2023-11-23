@@ -53,6 +53,15 @@ pub fn main_body(config: SuiteConfig, mut args: Arguments) {
             }),
         ),
         Trial::test(
+            "can collect fee from alice",
+            with_cloned(&config, |config| {
+                async_execute(async {
+                    let ctx = TestContext::new(config).await;
+                    tests::collect_fee::collect_fee(&ctx).await
+                })
+            }),
+        ),
+        Trial::test(
             "can execute script and get receipts",
             with_cloned(&config, |config| {
                 async_execute(async {
