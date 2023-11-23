@@ -151,8 +151,8 @@ pub fn default_gas_costs() -> GasCostsValues {
             units_per_gas: 1,
         },
         srwq: DependentCost::HeavyOperation {
-            base: 579,
-            gas_per_unit: 24,
+            base: 262,
+            gas_per_unit: 249,
         },
         swwq: DependentCost::HeavyOperation {
             base: 28484,

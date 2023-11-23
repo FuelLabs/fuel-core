@@ -256,8 +256,8 @@
       },
       "srwq": {
         "HeavyOperation": {
-          "base": 579,
-          "gas_per_unit": 24
+          "base": 262,
+          "gas_per_unit": 249
         }
       },
       "swwq": {
