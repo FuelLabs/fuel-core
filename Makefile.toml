@@ -22,6 +22,7 @@ skip_crate_env_info = true
 
 [env]
 CARGO_MAKE_EXTEND_WORKSPACE_MAKEFILE = true
+RUSTFLAGS = "-D warnings"
 
 [tasks.check]
 description = "Compile code without linking. Faster than build to detect problems."
