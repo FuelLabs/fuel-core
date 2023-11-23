@@ -10,7 +10,7 @@ Description of the upcoming release here.
 
 ### Added
 
-- [#1503](https://github.com/FuelLabs/fuel-core/pull/1503): Add `gtf` opcode sanity check
+- [#1503](https://github.com/FuelLabs/fuel-core/pull/1503): Add `gtf` opcode sanity check.
 - [#1502](https://github.com/FuelLabs/fuel-core/pull/1502): Added price benchmark for `vm_initialization`.
 - [#1492](https://github.com/FuelLabs/fuel-core/pull/1492): Support backward iteration in the RocksDB. It allows backward queries that were not allowed before.
 - [#1490](https://github.com/FuelLabs/fuel-core/pull/1490): Add push and pop benchmarks.
@@ -55,6 +55,7 @@ Description of the upcoming release here.
 
 ### Changed
 
+- [#1507](https://github.com/FuelLabs/fuel-core/pull/1507): Updated chain configuration to be ready for beta 5 network. It includes opcode prices from the latest benchmark and contract for the block producer.
 - [#1477](https://github.com/FuelLabs/fuel-core/pull/1477): Upgraded the Rust version used in CI and containers to 1.73.0. Also includes associated Clippy changes.
 - [#1469](https://github.com/FuelLabs/fuel-core/pull/1469): Replaced usage of `MemoryTransactionView` by `Checkpoint` database in the benchmarks.
 - [#1466](https://github.com/FuelLabs/fuel-core/pull/1466): Handling overflows during arithmetic operations.
