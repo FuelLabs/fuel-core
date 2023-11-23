@@ -1,11 +1,9 @@
 use crate::database::{
-    Column,
     Database,
     Error as DatabaseError,
 };
 use anyhow::anyhow;
 use fuel_core_storage::{
-    iter::IterDirection,
     not_found,
     tables::ContractsState,
     ContractsAssetsStorage,
@@ -227,14 +225,16 @@ impl InterpreterStorage for VmDatabase {
         start_key: &Bytes32,
         range: usize,
     ) -> Result<Vec<Option<Cow<Bytes32>>>, Self::DataError> {
-        let mut multikey = [0u8; 64];
-        multikey[..32].copy_from_slice(contract_id.as_ref());
+        use fuel_core_storage::StorageAsRef;
+
         let mut key = U256::from_big_endian(start_key.as_ref());
+        let mut state_key = Bytes32::zeroed();
 
         let mut results = Vec::new();
         for _ in 0..range {
-            key.to_big_endian(&mut multikey[32..]);
-            results.push(self.database.get(&multikey, Column::ContractsState)?);
+            key.to_big_endian(state_key.as_mut());
+            let multikey = ContractsStateKey::new(contract_id, &state_key);
+            results.push(self.database.storage::<ContractsState>().get(&multikey)?);
             key.increase()?;
         }
         Ok(results)
