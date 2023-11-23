@@ -1,6 +1,8 @@
 use crate::SYNC_TIMEOUT;
-use fuel_core::txpool::types::ContractId;
-use fuel_core_types::fuel_vm::SecretKey;
+use fuel_core_types::{
+    fuel_tx::ContractId,
+    fuel_vm::SecretKey,
+};
 use serde::{
     Deserialize,
     Serialize,
