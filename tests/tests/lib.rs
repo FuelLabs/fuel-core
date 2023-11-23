@@ -12,7 +12,6 @@ mod debugger;
 mod deployment;
 mod fee_collection_contract;
 mod health;
-
 mod helpers;
 mod messages;
 mod metrics;
