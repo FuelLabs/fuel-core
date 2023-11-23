@@ -26,7 +26,7 @@ pub async fn collect_fee(ctx: &TestContext) -> Result<(), Failed> {
 
     let receipts = receipts.ok_or("collect fee transaction doesn't have receipts")?;
 
-    if receipts
+    if !receipts
         .iter()
         .any(|receipt| matches!(receipt, Receipt::TransferOut { .. }))
     {
