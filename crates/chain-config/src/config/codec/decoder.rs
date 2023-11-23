@@ -79,9 +79,7 @@ impl Decoder {
 
         let state = serde_json::from_str(&contents)?;
 
-        Ok(Self {
-            data_source: DataSource::InMemory { state, group_size },
-        })
+        Ok(Self::in_memory(state, group_size))
     }
 
     pub fn in_memory(state: StateConfig, group_size: usize) -> Self {
@@ -109,25 +107,6 @@ impl Decoder {
         } else {
             Ok(Self::parquet(snapshot_dir.to_owned()))
         }
-    }
-
-    fn in_memory_iter<T>(items: Vec<T>, group_size: usize) -> IntoIter<T> {
-        let groups = items
-            .into_iter()
-            .chunks(group_size)
-            .into_iter()
-            .map(Itertools::collect_vec)
-            .enumerate()
-            .map(|(index, vec_chunk)| {
-                Ok(Group {
-                    data: vec_chunk,
-                    index,
-                })
-            })
-            .collect_vec()
-            .into_iter();
-
-        IntoIter::InMemory { groups }
     }
 
     pub fn coins(&self) -> anyhow::Result<IntoIter<CoinConfig>> {
@@ -168,5 +147,24 @@ impl Decoder {
                 })
             }
         }
+    }
+
+    fn in_memory_iter<T>(items: Vec<T>, group_size: usize) -> IntoIter<T> {
+        let groups = items
+            .into_iter()
+            .chunks(group_size)
+            .into_iter()
+            .map(Itertools::collect_vec)
+            .enumerate()
+            .map(|(index, vec_chunk)| {
+                Ok(Group {
+                    data: vec_chunk,
+                    index,
+                })
+            })
+            .collect_vec()
+            .into_iter();
+
+        IntoIter::InMemory { groups }
     }
 }
