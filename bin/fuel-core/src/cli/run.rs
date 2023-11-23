@@ -15,8 +15,8 @@ use fuel_core::{
     chain_config::{
         default_consensus_dev_key,
         ChainConfig,
+        Decoder,
         StateConfig,
-        StateDecoder,
         LOCAL_TESTNET,
     },
     database::DatabaseConfig,
@@ -265,10 +265,7 @@ impl Command {
             }
         };
 
-        let state_decoder = StateDecoder::InMemory {
-            state: chain_state.clone(),
-            group_size: 1,
-        };
+        let state_decoder = Decoder::in_memory(chain_state.clone(), 1);
 
         #[cfg(feature = "relayer")]
         let relayer_cfg = relayer_args.into_config();

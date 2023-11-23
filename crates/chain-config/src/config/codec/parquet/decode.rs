@@ -35,7 +35,6 @@ use crate::{
     config::{
         codec::{
             Group,
-            GroupDecoder,
             GroupResult,
         },
         contract_balance::ContractBalance,
@@ -71,12 +70,6 @@ where
 
         Ok(Group { index, data })
     }
-}
-impl<R, T> GroupDecoder<T> for Decoder<R, T>
-where
-    R: ChunkReader + 'static,
-    T: TryFrom<Row, Error = anyhow::Error>,
-{
 }
 
 impl<R, T> Iterator for Decoder<R, T>

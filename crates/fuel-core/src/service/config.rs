@@ -2,8 +2,8 @@ use clap::ValueEnum;
 use fuel_core_chain_config::{
     default_consensus_dev_key,
     ChainConfig,
+    Decoder,
     StateConfig,
-    StateDecoder,
 };
 use fuel_core_types::{
     blockchain::primitives::SecretKeyWrapper,
@@ -42,7 +42,7 @@ pub struct Config {
     pub db_config: DatabaseConfig,
     pub chain_config: ChainConfig,
     pub chain_state: StateConfig,
-    pub snapshot_decoder: StateDecoder,
+    pub snapshot_decoder: Decoder,
     /// When `true`:
     /// - Enables manual block production.
     /// - Enables debugger endpoint.
@@ -77,10 +77,7 @@ impl Config {
     pub fn local_node() -> Self {
         let chain_config = ChainConfig::local_testnet();
         let chain_state = StateConfig::local_testnet();
-        let state_decoder = StateDecoder::InMemory {
-            state: chain_state.clone(),
-            group_size: 1,
-        };
+        let state_decoder = Decoder::in_memory(chain_state.clone(), 1);
 
         let utxo_validation = false;
         let min_gas_price = 0;

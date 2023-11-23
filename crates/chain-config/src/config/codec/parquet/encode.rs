@@ -1,6 +1,7 @@
 use anyhow::anyhow;
 use std::{
     io::Write,
+    marker::PhantomData,
     sync::Arc,
 };
 
@@ -24,7 +25,6 @@ use parquet::{
 
 use crate::{
     config::{
-        codec::StateEncoder,
         contract_balance::ContractBalance,
         contract_state::ContractState,
     },
@@ -35,43 +35,14 @@ use crate::{
 
 use super::schema::Schema;
 
-pub struct Encoder<W: Write + Send> {
-    coins: SerializedFileWriter<W>,
-    messages: SerializedFileWriter<W>,
-    contracts: SerializedFileWriter<W>,
-    contract_state: SerializedFileWriter<W>,
-    contract_balance: SerializedFileWriter<W>,
+pub struct Encoder<W: Write + Send, T> {
+    writer: SerializedFileWriter<W>,
+    _type: PhantomData<T>,
 }
 
-impl<W: Write + Send> Encoder<W> {
-    pub fn new(
-        coins: W,
-        messages: W,
-        contracts: W,
-        contract_state: W,
-        contract_balance: W,
-        compression: Compression,
-    ) -> anyhow::Result<Self> {
-        Ok(Self {
-            coins: Self::get_writer::<CoinConfig>(coins, compression)?,
-            messages: Self::get_writer::<MessageConfig>(messages, compression)?,
-            contracts: Self::get_writer::<ContractConfig>(contracts, compression)?,
-            contract_state: Self::get_writer::<ContractState>(
-                contract_state,
-                compression,
-            )?,
-            contract_balance: Self::get_writer::<ContractBalance>(
-                contract_balance,
-                compression,
-            )?,
-        })
-    }
-
-    fn get_writer<T: Schema>(
-        writer: W,
-        compression: Compression,
-    ) -> anyhow::Result<SerializedFileWriter<W>> {
-        Ok(SerializedFileWriter::new(
+impl<W: Write + Send, T: Schema> Encoder<W, T> {
+    pub fn new(writer: W, compression: Compression) -> anyhow::Result<Self> {
+        let writer = SerializedFileWriter::new(
             writer,
             Arc::new(T::schema()),
             Arc::new(
@@ -79,48 +50,27 @@ impl<W: Write + Send> Encoder<W> {
                     .set_compression(compression)
                     .build(),
             ),
-        )?)
+        )?;
+
+        Ok(Self {
+            writer,
+            _type: PhantomData,
+        })
     }
 }
 
-impl<W> StateEncoder for Encoder<W>
+impl<W, T> Encoder<W, T>
 where
     W: Write + Send,
+    Vec<T>: ColumnEncoder,
 {
-    fn close(self: Box<Self>) -> anyhow::Result<()> {
-        self.coins.close()?;
-        self.contracts.close()?;
-        self.messages.close()?;
-        self.contract_state.close()?;
-        self.contract_balance.close()?;
+    pub fn write(&mut self, elements: Vec<T>) -> anyhow::Result<()> {
+        elements.encode_columns(&mut self.writer)
+    }
 
+    pub fn close(self) -> anyhow::Result<()> {
+        self.writer.close()?;
         Ok(())
-    }
-
-    fn write_coins(&mut self, elements: Vec<CoinConfig>) -> anyhow::Result<()> {
-        elements.encode_columns(&mut self.coins)
-    }
-
-    fn write_contracts(&mut self, elements: Vec<ContractConfig>) -> anyhow::Result<()> {
-        elements.encode_columns(&mut self.contracts)
-    }
-
-    fn write_messages(&mut self, elements: Vec<MessageConfig>) -> anyhow::Result<()> {
-        elements.encode_columns(&mut self.messages)
-    }
-
-    fn write_contract_state(
-        &mut self,
-        elements: Vec<ContractState>,
-    ) -> anyhow::Result<()> {
-        elements.encode_columns(&mut self.contract_state)
-    }
-
-    fn write_contract_balance(
-        &mut self,
-        elements: Vec<ContractBalance>,
-    ) -> anyhow::Result<()> {
-        elements.encode_columns(&mut self.contract_balance)
     }
 }
 

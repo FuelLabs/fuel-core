@@ -24,8 +24,6 @@ use serde::{
     Serialize,
 };
 #[cfg(feature = "std")]
-use std::fs::File;
-#[cfg(feature = "std")]
 use std::path::Path;
 
 use super::{
@@ -111,9 +109,9 @@ impl StateConfig {
 
     #[cfg(feature = "std")]
     pub fn load_from_directory(path: impl AsRef<Path>) -> Result<Self, anyhow::Error> {
-        use crate::StateDecoder;
+        use crate::Decoder;
 
-        let decoder = StateDecoder::detect_state_encoding(path, 1);
+        let decoder = Decoder::detect_encoding(path, 1)?;
 
         let coins = decoder
             .coins()?
@@ -156,10 +154,9 @@ impl StateConfig {
 
     #[cfg(feature = "std")]
     pub fn create_config_file(self, path: impl AsRef<Path>) -> anyhow::Result<()> {
-        use crate::json_writer;
-
         // TODO add parquet wrtter once fully implemented
-        let mut writer = json_writer(path)?;
+        let mut writer = crate::Encoder::json(path);
+
         writer.write_coins(self.coins)?;
         writer.write_messages(self.messages)?;
         writer.write_contracts(self.contracts)?;
