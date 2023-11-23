@@ -3177,6 +3177,7 @@ dependencies = [
  "cynic",
  "ethers",
  "fuel-core",
+ "fuel-core-benches",
  "fuel-core-client",
  "fuel-core-p2p",
  "fuel-core-poa",
