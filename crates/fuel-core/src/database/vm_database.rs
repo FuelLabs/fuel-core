@@ -1,11 +1,9 @@
 use crate::database::{
-    Column,
     Database,
     Error as DatabaseError,
 };
 use anyhow::anyhow;
 use fuel_core_storage::{
-    iter::IterDirection,
     not_found,
     tables::ContractsState,
     ContractsAssetsStorage,
@@ -227,47 +225,18 @@ impl InterpreterStorage for VmDatabase {
         start_key: &Bytes32,
         range: usize,
     ) -> Result<Vec<Option<Cow<Bytes32>>>, Self::DataError> {
-        // TODO: Optimization: Iterate only over `range` elements.
-        let mut iterator = self.database.iter_all_filtered::<Vec<u8>, Bytes32, _, _>(
-            Column::ContractsState,
-            Some(contract_id),
-            Some(ContractsStateKey::new(contract_id, start_key)),
-            Some(IterDirection::Forward),
-        );
+        use fuel_core_storage::StorageAsRef;
 
-        let mut expected_key = U256::from_big_endian(start_key.as_ref());
-        let mut results = vec![];
+        let mut key = U256::from_big_endian(start_key.as_ref());
+        let mut state_key = Bytes32::zeroed();
 
-        while results.len() < range {
-            let entry = iterator.next().transpose()?;
-
-            if entry.is_none() {
-                // We out of `contract_id` prefix
-                break
-            }
-
-            let (multikey, value) =
-                entry.expect("We did a check before, so the entry should be `Some`");
-            let actual_key = U256::from_big_endian(&multikey[32..]);
-
-            while (expected_key <= actual_key) && results.len() < range {
-                if expected_key == actual_key {
-                    // We found expected key, put value into results
-                    results.push(Some(Cow::Owned(value)));
-                } else {
-                    // Iterator moved beyond next expected key, push none until we find the key
-                    results.push(None);
-                }
-                expected_key.increase()?;
-            }
+        let mut results = Vec::new();
+        for _ in 0..range {
+            key.to_big_endian(state_key.as_mut());
+            let multikey = ContractsStateKey::new(contract_id, &state_key);
+            results.push(self.database.storage::<ContractsState>().get(&multikey)?);
+            key.increase()?;
         }
-
-        // Fill not initialized slots with `None`.
-        while results.len() < range {
-            results.push(None);
-            expected_key.increase()?;
-        }
-
         Ok(results)
     }
 
