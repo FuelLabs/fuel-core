@@ -22,7 +22,7 @@ fuel-core-types = { workspace = true, features = [
 ] }
 futures = { workspace = true }
 ip_network = "0.4"
-libp2p = { version = "=0.52.3", default-features = false, features = [
+libp2p = { version = "=0.53.1", default-features = false, features = [
     "dns",
     "gossipsub",
     "identify",
@@ -37,22 +37,24 @@ libp2p = { version = "=0.52.3", default-features = false, features = [
     "yamux",
     "websocket",
 ] }
-libp2p-allow-block-list = "0.2"
-libp2p-core = "=0.40.1"
-libp2p-dns = "=0.40.0"
-libp2p-gossipsub = "=0.45.1"
-libp2p-identify = "=0.43.0"
-libp2p-kad = "=0.44.5"
-libp2p-mdns = "=0.44.0"
-libp2p-mplex = "=0.40.0"
-libp2p-noise = "=0.43.1"
-libp2p-request-response = "=0.25.1"
-libp2p-swarm = "=0.43.4"
-libp2p-tcp = "=0.40.0"
-libp2p-websocket = "=0.42.1"
-libp2p-yamux = "=0.44.1"
+libp2p-allow-block-list = "=0.3.0"
+libp2p-core = "=0.41.1"
+libp2p-dns = "=0.41.0"
+libp2p-gossipsub = "=0.46.0"
+libp2p-identify = "=0.44.0"
+libp2p-kad = "=0.45.1"
+libp2p-mdns = "=0.45.1"
+libp2p-mplex = "=0.41.0"
+libp2p-noise = "=0.44.0"
+libp2p-request-response = "=0.26.0"
+libp2p-swarm = "=0.44.0"
+libp2p-tcp = "=0.41.0"
+libp2p-websocket = "=0.43.0"
+libp2p-yamux = "=0.45.0"
 postcard = { workspace = true, features = ["use-std"] }
 prometheus-client = { workspace = true }
+quick-protobuf-codec = "0.3.0"
+asynchronous-codec = "0.7.0"
 rand = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_with = "1.11"

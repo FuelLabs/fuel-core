@@ -1,20 +1,19 @@
+use asynchronous_codec::{
+    FramedRead,
+    FramedWrite,
+};
 use futures::{
     AsyncRead,
     AsyncWrite,
     Future,
     FutureExt,
+    SinkExt,
 };
 use libp2p::{
     InboundUpgrade,
     OutboundUpgrade,
 };
-use libp2p_core::{
-    upgrade::{
-        read_length_prefixed,
-        write_length_prefixed,
-    },
-    UpgradeInfo,
-};
+use libp2p_core::UpgradeInfo;
 use std::{
     error::Error,
     fmt,
@@ -98,7 +97,10 @@ where
         async move {
             // Inbound node receives the checksum and compares it to its own checksum.
             // If they do not match the connection is rejected.
-            let res = read_length_prefixed(&mut socket, self.checksum.0.len()).await?;
+            let res = FramedRead::new(&mut socket, self.checksum.0.len())
+                .next()
+                .await?;
+
             if res != self.checksum.0 {
                 return Err(FuelUpgradeError::IncorrectChecksum)
             }
@@ -120,7 +122,9 @@ where
     fn upgrade_outbound(self, mut socket: C, _: Self::Info) -> Self::Future {
         async move {
             // Outbound node sends their own checksum for comparison with the inbound node.
-            write_length_prefixed(&mut socket, &self.checksum.0).await?;
+            let mut framed = FramedWrite::new(&mut socket, self.checksum.0.len());
+            framed.send(&self.checksum.0).await?;
+            framed.close().await?;
 
             // Note: outbound node does not need to receive the checksum from the inbound node,
             // since inbound node will reject the connection if the two don't match on its side.

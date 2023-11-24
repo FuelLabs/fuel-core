@@ -19,17 +19,16 @@ use crate::{
     },
 };
 use async_trait::async_trait;
+use asynchronous_codec::{
+    FramedRead,
+    FramedWrite,
+};
 use futures::{
     AsyncRead,
     AsyncWriteExt,
+    SinkExt,
 };
-use libp2p::{
-    core::upgrade::{
-        read_length_prefixed,
-        write_length_prefixed,
-    },
-    request_response::Codec as RequestResponseCodec,
-};
+use libp2p::request_response::Codec as RequestResponseCodec;
 use serde::{
     Deserialize,
     Serialize,
@@ -88,7 +87,9 @@ impl RequestResponseCodec for PostcardCodec {
     where
         T: AsyncRead + Unpin + Send,
     {
-        let encoded_data = read_length_prefixed(socket, MAX_REQUEST_SIZE).await?;
+        // let encoded_data = read_length_prefixed(socket, MAX_REQUEST_SIZE).await?;
+
+        let encoded_data = FramedRead::new(socket, MAX_REQUEST_SIZE).next().await?;
 
         self.deserialize(&encoded_data)
     }
@@ -101,7 +102,11 @@ impl RequestResponseCodec for PostcardCodec {
     where
         T: futures::AsyncRead + Unpin + Send,
     {
-        let encoded_data = read_length_prefixed(socket, self.max_response_size).await?;
+        // let encoded_data = read_length_prefixed(socket, self.max_response_size).await?;
+
+        let encoded_data = FramedRead::new(socket, self.max_response_size)
+            .next()
+            .await?;
 
         self.deserialize(&encoded_data)
     }
@@ -117,8 +122,11 @@ impl RequestResponseCodec for PostcardCodec {
     {
         match postcard::to_stdvec(&req) {
             Ok(encoded_data) => {
-                write_length_prefixed(socket, encoded_data).await?;
-                socket.close().await?;
+                // write_length_prefixed(socket, encoded_data).await?;
+
+                let mut framed = FramedWrite::new(socket, self.max_response_size);
+                framed.send(encoded_data).await?;
+                framed.close().await?;
 
                 Ok(())
             }
@@ -137,8 +145,11 @@ impl RequestResponseCodec for PostcardCodec {
     {
         match postcard::to_stdvec(&res) {
             Ok(encoded_data) => {
-                write_length_prefixed(socket, encoded_data).await?;
-                socket.close().await?;
+                // write_length_prefixed(socket, encoded_data).await?;
+
+                let mut framed = FramedWrite::new(socket, self.max_response_size);
+                framed.send(&encoded_data).await?;
+                framed.close().await?;
 
                 Ok(())
             }

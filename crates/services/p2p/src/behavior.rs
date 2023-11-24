@@ -32,7 +32,6 @@ use libp2p::{
         Config as RequestResponseConfig,
         Event as RequestResponseEvent,
         ProtocolSupport,
-        RequestId,
         ResponseChannel,
     },
     swarm::NetworkBehaviour,
@@ -40,11 +39,11 @@ use libp2p::{
     PeerId,
 };
 use libp2p_allow_block_list as allow_block_list;
-use libp2p_kad::KademliaEvent;
+use libp2p_kad::Event;
 
 #[derive(Debug)]
 pub enum FuelBehaviourEvent {
-    Discovery(KademliaEvent),
+    Discovery(Event),
     PeerReport(PeerReportEvent),
     Gossipsub(GossipsubEvent),
     RequestResponse(RequestResponseEvent<RequestMessage, NetworkResponse>),
@@ -199,8 +198,8 @@ impl<Codec: NetworkCodec> FuelBehaviour<Codec> {
     }
 }
 
-impl From<KademliaEvent> for FuelBehaviourEvent {
-    fn from(event: KademliaEvent) -> Self {
+impl From<Event> for FuelBehaviourEvent {
+    fn from(event: Event) -> Self {
         FuelBehaviourEvent::Discovery(event)
     }
 }
