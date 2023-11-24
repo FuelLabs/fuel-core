@@ -14,7 +14,6 @@ use libp2p_swarm::{
     FromSwarm,
     NetworkBehaviour,
     NotifyHandler,
-    PollParameters,
     THandler,
     THandlerInEvent,
     THandlerOutEvent,
@@ -140,7 +139,6 @@ impl NetworkBehaviour for Heartbeat {
     fn poll(
         &mut self,
         _: &mut std::task::Context<'_>,
-        _: &mut impl PollParameters,
     ) -> Poll<ToSwarm<Self::ToSwarm, THandlerInEvent<Self>>> {
         if let Some(action) = self.pending_events.pop_front() {
             return Poll::Ready(action.build())

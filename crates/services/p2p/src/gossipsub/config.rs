@@ -7,7 +7,6 @@ use libp2p::gossipsub::{
     Behaviour as Gossipsub,
     Config as GossipsubConfig,
     ConfigBuilder as GossipsubConfigBuilder,
-    FastMessageId,
     Message as GossipsubMessage,
     MessageAuthenticity,
     MessageId,
@@ -63,16 +62,11 @@ pub fn default_gossipsub_builder() -> GossipsubConfigBuilder {
         MessageId::from(&Sha256::digest(&message.data)[..])
     };
 
-    let fast_gossip_message_id = move |message: &RawGossipsubMessage| {
-        FastMessageId::from(&Sha256::digest(&message.data)[..])
-    };
-
     let mut builder = GossipsubConfigBuilder::default();
 
     builder
         .protocol_id_prefix("/meshsub/1.0.0")
         .message_id_fn(gossip_message_id)
-        .fast_message_id_fn(fast_gossip_message_id)
         .validate_messages();
 
     builder

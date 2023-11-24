@@ -4,8 +4,8 @@ use libp2p::{
     core::Endpoint,
     kad::{
         store::MemoryStore,
-        Kademlia,
-        KademliaEvent,
+        Behaviour as KademliaBehavior,
+        Event,
     },
     mdns::Event as MdnsEvent,
     swarm::{
@@ -17,7 +17,6 @@ use libp2p::{
         ConnectionDenied,
         ConnectionId,
         NetworkBehaviour,
-        PollParameters,
         THandler,
     },
     Multiaddr,
@@ -60,7 +59,7 @@ pub struct DiscoveryBehaviour {
     mdns: MdnsWrapper,
 
     /// Kademlia with MemoryStore
-    kademlia: Kademlia<MemoryStore>,
+    kademlia: KademliaBehavior<MemoryStore>,
 
     /// If enabled, the Stream that will fire after the delay expires,
     /// starting new random walk
@@ -86,8 +85,8 @@ impl DiscoveryBehaviour {
 
 impl NetworkBehaviour for DiscoveryBehaviour {
     type ConnectionHandler =
-        <Kademlia<MemoryStore> as NetworkBehaviour>::ConnectionHandler;
-    type ToSwarm = KademliaEvent;
+        <KademliaBehavior<MemoryStore> as NetworkBehaviour>::ConnectionHandler;
+    type ToSwarm = Event;
 
     // receive events from KademliaHandler and pass it down to kademlia
     fn on_connection_handler_event(
@@ -132,7 +131,6 @@ impl NetworkBehaviour for DiscoveryBehaviour {
     fn poll(
         &mut self,
         cx: &mut Context<'_>,
-        params: &mut impl PollParameters,
     ) -> Poll<ToSwarm<Self::ToSwarm, THandlerInEvent<Self>>> {
         // if random walk is enabled poll the stream that will fire when random walk is scheduled
         if let Some(next_kad_random_query) = self.next_kad_random_walk.as_mut() {

@@ -6,7 +6,6 @@ use libp2p::{
     },
     swarm::{
         NetworkBehaviour,
-        PollParameters,
         ToSwarm,
     },
     PeerId,
@@ -42,7 +41,6 @@ impl MdnsWrapper {
     pub fn poll(
         &mut self,
         cx: &mut Context<'_>,
-        params: &mut impl PollParameters,
     ) -> Poll<ToSwarm<MdnsEvent, THandlerInEvent<TokioMdns>>> {
         match self {
             Self::Ready(mdns) => mdns.poll(cx, params),

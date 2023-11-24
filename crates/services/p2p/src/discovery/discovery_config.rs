@@ -8,8 +8,8 @@ use crate::{
 use libp2p::{
     kad::{
         store::MemoryStore,
-        Kademlia,
-        KademliaConfig,
+        Behaviour as KademliaBehaviour,
+        Config as KademliaConfig,
     },
     Multiaddr,
     PeerId,
@@ -128,7 +128,7 @@ impl DiscoveryConfig {
         kademlia_config.set_connection_idle_timeout(connection_idle_timeout);
 
         let mut kademlia =
-            Kademlia::with_config(local_peer_id, memory_store, kademlia_config);
+            KademliaBehavior::with_config(local_peer_id, memory_store, kademlia_config);
 
         // bootstrap nodes need to have their peer_id defined in the Multiaddr
         let bootstrap_nodes = bootstrap_nodes
