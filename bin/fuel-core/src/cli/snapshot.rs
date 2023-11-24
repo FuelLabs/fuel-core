@@ -40,7 +40,7 @@ pub struct Command {
 }
 
 #[derive(ValueEnum, Debug, Clone, Copy)]
-pub enum StateEncodingFormat {
+enum StateEncodingFormat {
     Json,
     Parquet,
 }

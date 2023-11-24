@@ -64,10 +64,7 @@ pub struct StateConfig {
 }
 
 impl StateConfig {
-    pub fn generate_state_config<T>(db: T) -> StorageResult<Self>
-    where
-        T: ChainStateDb,
-    {
+    pub fn generate_state_config(db: impl ChainStateDb) -> StorageResult<Self> {
         let coins = db.iter_coin_configs().try_collect()?;
         let messages = db.iter_message_configs().try_collect()?;
         let contracts = db.iter_contract_configs().try_collect()?;
