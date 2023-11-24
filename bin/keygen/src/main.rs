@@ -17,7 +17,6 @@ use termion::screen::IntoAlternateScreen;
 
 /// Parse a secret key to view the associated public key
 #[derive(Debug, clap::Args)]
-#[clap(author, version, about)]
 pub struct ParseSecret {
     /// A private key in hex format
     secret: String,
@@ -36,7 +35,6 @@ pub struct ParseSecret {
 
 /// Generate a random new secret & public key in the format expected by fuel-core
 #[derive(Debug, clap::Args)]
-#[clap(author, version, about)]
 pub struct NewKey {
     /// Print the JSON in pretty format
     #[clap(long = "pretty", short = 'p')]
@@ -53,6 +51,7 @@ pub struct NewKey {
 
 /// Key management utilities for configuring fuel-core
 #[derive(Debug, Parser)]
+#[clap(name = "fuel-core-keygen", author, version, about)]
 pub(crate) enum Command {
     New(NewKey),
     Parse(ParseSecret),
