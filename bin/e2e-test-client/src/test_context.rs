@@ -17,10 +17,16 @@ use fuel_core_client::client::{
     FuelClient,
 };
 use fuel_core_types::{
+    fuel_asm::{
+        op,
+        GTFArgs,
+        RegId,
+    },
     fuel_crypto::PublicKey,
     fuel_tx::{
         ConsensusParameters,
         Contract,
+        ContractId,
         Finalizable,
         Input,
         Output,
@@ -45,7 +51,7 @@ use crate::config::{
 };
 
 // The base amount needed to cover the cost of a simple transaction
-pub const BASE_AMOUNT: u64 = 10_000;
+pub const BASE_AMOUNT: u64 = 1_000_000;
 
 pub struct TestContext {
     pub alice: Wallet,
@@ -157,7 +163,7 @@ impl Wallet {
         // build transaction
         let mut tx = TransactionBuilder::script(Default::default(), Default::default());
         tx.gas_price(1);
-        tx.script_gas_limit(BASE_AMOUNT);
+        tx.script_gas_limit(0);
 
         for coin in coins {
             if let CoinType::Coin(coin) = coin {
@@ -180,6 +186,87 @@ impl Wallet {
             to: self.address,
             amount: 0,
             asset_id,
+        });
+        tx.with_params(self.consensus_params.clone());
+
+        Ok(tx.finalize_as_transaction())
+    }
+
+    /// Creates the script transaction that collects fee.
+    pub async fn collect_fee_tx(
+        &self,
+        coinbase_contract: ContractId,
+        asset_id: AssetId,
+    ) -> anyhow::Result<Transaction> {
+        // select coins
+        let coins = &self
+            .client
+            .coins_to_spend(
+                &self.address,
+                vec![(AssetId::BASE, BASE_AMOUNT, None)],
+                None,
+            )
+            .await?[0];
+
+        let output_index = 2u64;
+        let call_struct_register = 0x10;
+        // Now call the fee collection contract to withdraw the fees
+        let script = vec![
+            // Point to the call structure
+            op::gtf_args(call_struct_register, 0x00, GTFArgs::ScriptData),
+            op::addi(
+                call_struct_register,
+                call_struct_register,
+                (asset_id.size() + output_index.size()) as u16,
+            ),
+            op::call(call_struct_register, RegId::ZERO, RegId::ZERO, RegId::CGAS),
+            op::ret(RegId::ONE),
+        ];
+
+        // build transaction
+        let mut tx = TransactionBuilder::script(
+            script.into_iter().collect(),
+            asset_id
+                .to_bytes()
+                .into_iter()
+                .chain(output_index.to_bytes().into_iter())
+                .chain(coinbase_contract.to_bytes().into_iter())
+                .chain(0u64.to_bytes().into_iter())
+                .chain(0u64.to_bytes().into_iter())
+                .collect(),
+        );
+        tx.gas_price(1);
+        tx.script_gas_limit(BASE_AMOUNT);
+
+        tx.add_input(Input::contract(
+            Default::default(),
+            Default::default(),
+            Default::default(),
+            Default::default(),
+            coinbase_contract,
+        ));
+        for coin in coins {
+            if let CoinType::Coin(coin) = coin {
+                tx.add_unsigned_coin_input(
+                    self.secret,
+                    coin.utxo_id,
+                    coin.amount,
+                    coin.asset_id,
+                    Default::default(),
+                    coin.maturity.into(),
+                );
+            }
+        }
+        tx.add_output(Output::contract(0, Default::default(), Default::default()));
+        tx.add_output(Output::Change {
+            to: self.address,
+            amount: 0,
+            asset_id,
+        });
+        tx.add_output(Output::Variable {
+            to: Default::default(),
+            amount: Default::default(),
+            asset_id: Default::default(),
         });
         tx.with_params(self.consensus_params.clone());
 

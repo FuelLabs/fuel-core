@@ -1,3 +1,4 @@
+pub mod default_gas_costs;
 pub mod import;
 
 use fuel_core::database::vm_database::VmDatabase;

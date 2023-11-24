@@ -282,9 +282,7 @@ impl PartialBlockHeader {
 }
 
 fn generate_txns_root(transactions: &[Transaction]) -> Bytes32 {
-    // TODO: The `to_bytes` requires mutability(but it is problem of the API).
-    //  Remove `clone` when we can use `to_bytes` without mutability.
-    let transaction_ids = transactions.iter().map(|tx| tx.clone().to_bytes());
+    let transaction_ids = transactions.iter().map(|tx| tx.to_bytes());
     // Generate the transaction merkle root.
     let mut transaction_tree =
         fuel_merkle::binary::root_calculator::MerkleRootCalculator::new();

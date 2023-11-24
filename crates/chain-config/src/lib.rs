@@ -4,6 +4,7 @@
 #![deny(warnings)]
 
 pub mod config;
+pub mod fee_collection_contract;
 mod genesis;
 mod serialization;
 
