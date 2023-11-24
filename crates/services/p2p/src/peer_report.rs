@@ -130,7 +130,7 @@ impl NetworkBehaviour for PeerReportBehaviour {
     >;
     type ToSwarm = PeerReportEvent;
 
-    fn on_swarm_event(&mut self, event: FromSwarm<Self::ConnectionHandler>) {
+    fn on_swarm_event(&mut self, event: FromSwarm) {
         match event {
             FromSwarm::ConnectionEstablished(connection_established) => {
                 let ConnectionEstablished {
@@ -243,7 +243,7 @@ impl NetworkBehaviour for PeerReportBehaviour {
             return Poll::Ready(ToSwarm::GenerateEvent(event))
         }
 
-        match self.heartbeat.poll(cx, params) {
+        match self.heartbeat.poll(cx) {
             Poll::Pending => {}
             Poll::Ready(action) => {
                 let action =
@@ -258,7 +258,7 @@ impl NetworkBehaviour for PeerReportBehaviour {
 
         loop {
             // poll until we've either exhausted the events or found one of interest
-            match self.identify.poll(cx, params) {
+            match self.identify.poll(cx) {
                 Poll::Pending => break,
                 Poll::Ready(action) => {
                     if let Some(action) =
@@ -441,10 +441,7 @@ impl FromSwarmEvent for Heartbeat {}
 impl FromSwarmEvent for Identify {}
 
 trait FromSwarmEvent: NetworkBehaviour {
-    fn handle_swarm_event(
-        &mut self,
-        event: &FromSwarm<<PeerReportBehaviour as NetworkBehaviour>::ConnectionHandler>,
-    ) {
+    fn handle_swarm_event(&mut self, event: &FromSwarm) {
         match event {
             FromSwarm::NewListener(e) => {
                 self.on_swarm_event(FromSwarm::NewListener(*e));

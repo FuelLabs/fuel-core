@@ -224,7 +224,7 @@ impl TaskP2PService for FuelP2PService<PostcardCodec> {
 
     fn send_response_msg(
         &mut self,
-        request_id: RequestId,
+        request_id: InboundRequestId,
         message: OutboundResponse,
     ) -> anyhow::Result<()> {
         self.send_response_msg(request_id, message)?;

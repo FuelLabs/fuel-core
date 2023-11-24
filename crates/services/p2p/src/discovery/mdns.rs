@@ -43,7 +43,7 @@ impl MdnsWrapper {
         cx: &mut Context<'_>,
     ) -> Poll<ToSwarm<MdnsEvent, THandlerInEvent<TokioMdns>>> {
         match self {
-            Self::Ready(mdns) => mdns.poll(cx, params),
+            Self::Ready(mdns) => mdns.poll(cx),
             Self::Disabled => Poll::Pending,
         }
     }

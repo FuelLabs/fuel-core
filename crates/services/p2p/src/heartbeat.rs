@@ -106,7 +106,7 @@ impl NetworkBehaviour for Heartbeat {
         todo!()
     }
 
-    fn on_swarm_event(&mut self, event: FromSwarm<Self::ConnectionHandler>) {
+    fn on_swarm_event(&mut self, event: FromSwarm) {
         todo!()
     }
 

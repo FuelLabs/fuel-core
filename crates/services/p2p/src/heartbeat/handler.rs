@@ -165,7 +165,6 @@ impl ConnectionHandler for HeartbeatHandler {
             Self::OutboundProtocol,
             Self::OutboundOpenInfo,
             Self::ToBehaviour,
-            Self::Error,
         >,
     > {
         if let Some(inbound_stream_and_block_height) = self.inbound.as_mut() {

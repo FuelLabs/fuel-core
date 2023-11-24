@@ -141,8 +141,8 @@ pub enum FuelP2PEvent {
         topic_hash: TopicHash,
         message: FuelGossipsubMessage,
     },
-    RequestMessage {
-        request_id: RequestId,
+    InboundRequestMessage {
+        request_id: InboundRequestId,
         request_message: RequestMessage,
     },
     PeerConnected(PeerId),
@@ -579,7 +579,7 @@ impl<Codec: NetworkCodec> FuelP2PService<Codec> {
                     } => {
                         self.inbound_requests_table.insert(request_id, channel);
 
-                        return Some(FuelP2PEvent::RequestMessage {
+                        return Some(FuelP2PEvent::InboundRequestMessage {
                             request_id,
                             request_message: request,
                         })

@@ -1,6 +1,9 @@
-use crate::config::{
-    Config,
-    MAX_RESPONSE_SIZE,
+use crate::{
+    config::{
+        Config,
+        MAX_RESPONSE_SIZE,
+    },
+    TryPeerId,
 };
 use fuel_core_metrics::p2p_metrics::p2p_metrics;
 use libp2p::gossipsub::{
@@ -209,7 +212,11 @@ pub(crate) fn build_gossipsub_behaviour(p2p_config: &Config) -> Gossipsub {
 
         gossipsub
     };
-    for peer_id in crate::config::peer_ids_set_from(&p2p_config.reserved_nodes) {
+    let explicit_peers = &p2p_config
+        .reserved_nodes
+        .iter()
+        .flat_map(|address| address.try_to_peer_id().ok());
+    for peer_id in explicit_peers {
         gossipsub.add_explicit_peer(&peer_id);
     }
 

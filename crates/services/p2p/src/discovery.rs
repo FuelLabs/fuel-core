@@ -99,7 +99,7 @@ impl NetworkBehaviour for DiscoveryBehaviour {
             .on_connection_handler_event(peer_id, connection, event);
     }
 
-    fn on_swarm_event(&mut self, event: FromSwarm<Self::ConnectionHandler>) {
+    fn on_swarm_event(&mut self, event: FromSwarm) {
         match &event {
             FromSwarm::ConnectionEstablished(ConnectionEstablished {
                 peer_id,
@@ -152,10 +152,10 @@ impl NetworkBehaviour for DiscoveryBehaviour {
         }
 
         // poll sub-behaviors
-        if let Poll::Ready(kad_action) = self.kademlia.poll(cx, params) {
+        if let Poll::Ready(kad_action) = self.kademlia.poll(cx) {
             return Poll::Ready(kad_action)
         };
-        while let Poll::Ready(mdns_event) = self.mdns.poll(cx, params) {
+        while let Poll::Ready(mdns_event) = self.mdns.poll(cx) {
             match mdns_event {
                 ToSwarm::GenerateEvent(MdnsEvent::Discovered(list)) => {
                     for (peer_id, multiaddr) in list {
