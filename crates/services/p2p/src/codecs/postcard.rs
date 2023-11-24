@@ -88,8 +88,10 @@ impl RequestResponseCodec for PostcardCodec {
         T: AsyncRead + Unpin + Send,
     {
         // let encoded_data = read_length_prefixed(socket, MAX_REQUEST_SIZE).await?;
+        let decoder =
+            quick_protobuf_codec::Codec::<proto::Message>::new(MAX_REQUEST_SIZE);
 
-        let encoded_data = FramedRead::new(socket, MAX_REQUEST_SIZE).next().await?;
+        let encoded_data: Vec<_> = FramedRead::new(socket, decoder).next().await?;
 
         self.deserialize(&encoded_data)
     }
@@ -104,9 +106,10 @@ impl RequestResponseCodec for PostcardCodec {
     {
         // let encoded_data = read_length_prefixed(socket, self.max_response_size).await?;
 
-        let encoded_data = FramedRead::new(socket, self.max_response_size)
-            .next()
-            .await?;
+        let decoder =
+            quick_protobuf_codec::Codec::<proto::Message>::new(self.max_response_size);
+
+        let encoded_data: Vec<_> = FramedRead::new(socket, decoder).next().await?;
 
         self.deserialize(&encoded_data)
     }
@@ -124,7 +127,11 @@ impl RequestResponseCodec for PostcardCodec {
             Ok(encoded_data) => {
                 // write_length_prefixed(socket, encoded_data).await?;
 
-                let mut framed = FramedWrite::new(socket, self.max_response_size);
+                let encoder = quick_protobuf_codec::Codec::<proto::Message>::new(
+                    self.max_response_size,
+                );
+
+                let mut framed = FramedWrite::new(socket, encoder);
                 framed.send(encoded_data).await?;
                 framed.close().await?;
 
@@ -147,7 +154,11 @@ impl RequestResponseCodec for PostcardCodec {
             Ok(encoded_data) => {
                 // write_length_prefixed(socket, encoded_data).await?;
 
-                let mut framed = FramedWrite::new(socket, self.max_response_size);
+                let encoder = quick_protobuf_codec::Codec::<proto::Message>::new(
+                    self.max_response_size,
+                );
+
+                let mut framed = FramedWrite::new(socket, encoder);
                 framed.send(&encoded_data).await?;
                 framed.close().await?;
 

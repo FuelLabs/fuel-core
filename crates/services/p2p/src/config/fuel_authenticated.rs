@@ -16,6 +16,10 @@ use libp2p::{
     OutboundUpgrade,
     PeerId,
 };
+use libp2p_core::upgrade::{
+    InboundConnectionUpgrade,
+    OutboundConnectionUpgrade,
+};
 use std::pin::Pin;
 
 pub(crate) trait Approver {
