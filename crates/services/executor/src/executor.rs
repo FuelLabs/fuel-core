@@ -116,12 +116,10 @@ use fuel_core_types::{
 };
 
 use fuel_core_storage::Error as StorageError;
-
 use fuel_core_database::vm_database::{
-    MessageIsSpent,
-    TxIdOwnerRecorder,
     VmDatabase,
 };
+
 use fuel_core_storage::{
     tables::{
         ContractsAssets,
@@ -156,6 +154,7 @@ use tracing::{
     debug,
     warn,
 };
+use fuel_core_storage::database::{MessageIsSpent, TxIdOwnerRecorder};
 
 pub use crate::ports::{
     MaybeCheckedTransaction,

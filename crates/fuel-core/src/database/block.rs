@@ -11,7 +11,6 @@ use crate::database::{
     Error as DatabaseError,
     Result as DatabaseResult,
 };
-use fuel_core_database::vm_database::FuelBlockTrait;
 use fuel_core_storage::{
     iter::IterDirection,
     not_found,
@@ -51,7 +50,7 @@ use std::{
         TryInto,
     },
 };
-
+use fuel_core_storage::database::FuelBlockTrait;
 impl StorageInspect<FuelBlocks> for Database {
     type Error = StorageError;
 

@@ -2911,7 +2911,6 @@ dependencies = [
  "fuel-core-trace",
  "fuel-core-types",
  "primitive-types",
- "serde",
 ]
 
 [[package]]
@@ -3138,6 +3137,7 @@ dependencies = [
  "fuel-core-types",
  "fuel-vm",
  "mockall",
+ "serde",
 ]
 
 [[package]]

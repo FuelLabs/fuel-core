@@ -16,7 +16,6 @@ derive_more = { workspace = true }
 fuel-core-storage = { workspace = true }
 fuel-core-types = { workspace = true }
 primitive-types = "0.12"
-serde = { workspace = true, features = ["derive"] }
 
 [dev-dependencies]
 fuel-core-trace = { path = "../trace" }

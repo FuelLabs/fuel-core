@@ -50,15 +50,12 @@ type DatabaseResult<T> = Result<T>;
 // TODO: Extract `Database` and all belongs into `fuel-core-database`.
 #[cfg(feature = "rocksdb")]
 use crate::state::rocks_db::RocksDb;
-use fuel_core_database::vm_database::{
-    DatabaseColumnIterator,
-    MessageIsSpent,
-};
 #[cfg(feature = "rocksdb")]
 use std::path::Path;
 use strum::EnumCount;
 #[cfg(feature = "rocksdb")]
 use tempfile::TempDir;
+use fuel_core_storage::database::{DatabaseColumnIterator, MessageIsSpent};
 
 // Storages implementation
 // TODO: Move to separate `database/storage` folder, because it is only implementation of storages traits.
@@ -482,12 +479,14 @@ impl Default for Database {
 }
 
 impl DatabaseColumnIterator for Database {
+    type Error = fuel_core_storage::Error;
+
     fn iter_all_filtered_column<K, V, P, S>(
         &self,
         prefix: Option<P>,
         start: Option<S>,
         direction: Option<IterDirection>,
-    ) -> Box<dyn Iterator<Item = DatabaseResult<(K, V)>> + '_>
+    ) -> Box<dyn Iterator<Item = std::result::Result<(K, V), StorageError>> + '_>
     where
         K: From<Vec<u8>>,
         V: DeserializeOwned,
@@ -503,12 +502,14 @@ impl DatabaseColumnIterator for Database {
                     direction.unwrap_or_default(),
                 )
                 .map(|val| {
-                    val.and_then(|(key, value)| {
-                        let key = K::from(key);
-                        let value: V = postcard::from_bytes(&value)
-                            .map_err(|_| DatabaseError::Codec)?;
-                        Ok((key, value))
-                    })
+                    match val {
+                        Ok((key, value)) => {
+                            let key = K::from(key);
+                            let value: V = postcard::from_bytes(&value).map_err(|_| fuel_core_storage::Error::Codec)?;
+                            Ok((key, value))
+                        }
+                        Err(err) => Err(fuel_core_storage::Error::from(err)),
+                    }
                 }),
         )
     }

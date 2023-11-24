@@ -24,7 +24,9 @@ pub mod iter;
 pub mod tables;
 #[cfg(feature = "test-helpers")]
 pub mod test_helpers;
-pub mod transactional;
+pub mod transactional;#
+[allow(missing_docs)]
+pub mod database;
 
 pub use fuel_vm_private::storage::{
     ContractsAssetKey,

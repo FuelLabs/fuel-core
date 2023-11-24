@@ -1,61 +1,27 @@
-use crate::Error as DatabaseError;
 use anyhow::anyhow;
 use fuel_core_storage::{
     iter::IterDirection,
     not_found,
-    tables::{
-        ContractsAssets,
-        ContractsState,
-    },
-    ContractsAssetsStorage,
-    ContractsStateKey,
-    Error as StorageError,
-    Mappable,
-    MerkleRoot,
-    MerkleRootStorage,
-    StorageAsMut,
-    StorageInspect,
-    StorageMutate,
-    StorageRead,
-    StorageSize,
+    tables::{ContractsAssets, ContractsState},
+    ContractsAssetsStorage, ContractsStateKey, Error as StorageError, Mappable,
+    MerkleRoot, MerkleRootStorage, StorageAsMut, StorageInspect, StorageMutate,
+    StorageRead, StorageSize,
 };
 use fuel_core_types::{
-    blockchain::{
-        header::ConsensusHeader,
-        primitives::BlockId,
-    },
-    fuel_tx::{
-        Contract,
-        StorageSlot,
-    },
-    fuel_types::{
-        BlockHeight,
-        Bytes32,
-        ContractId,
-        Salt,
-        Word,
-    },
+    blockchain::header::ConsensusHeader,
+    fuel_tx::{Contract, StorageSlot},
+    fuel_types::{BlockHeight, Bytes32, ContractId, Salt, Word},
     fuel_vm::InterpreterStorage,
     tai64::Tai64,
 };
 use primitive_types::U256;
 use std::borrow::Cow;
 
-use serde::de::DeserializeOwned;
+use fuel_core_storage::database::DatabaseColumnIterator;
+use fuel_core_storage::database::FuelBlockTrait;
+use fuel_core_storage::database::FuelStateTrait;
 
-use fuel_core_storage::tables::{
-    ContractsInfo,
-    ContractsRawCode,
-    Messages,
-    SpentMessages,
-};
-use fuel_core_types::{
-    fuel_types::{
-        Address,
-        Nonce,
-    },
-    services::txpool::TransactionStatus,
-};
+use fuel_core_storage::tables::{ContractsInfo, ContractsRawCode};
 
 /// Used to store metadata relevant during the execution of a transaction
 #[derive(Clone, Debug)]
@@ -189,65 +155,6 @@ impl<D> ContractsAssetsStorage for VmDatabase<D> where
 {
 }
 
-pub trait FuelBlockTrait {
-    type Error;
-
-    fn latest_height(&self) -> Result<BlockHeight, Self::Error>;
-    fn block_time(&self, height: &BlockHeight) -> Result<Tai64, Self::Error>;
-    fn get_block_id(&self, height: &BlockHeight) -> Result<Option<BlockId>, Self::Error>;
-}
-
-pub trait FuelStateTrait {
-    type Error;
-
-    fn init_contract_state<S: Iterator<Item = (Bytes32, Bytes32)>>(
-        &mut self,
-        contract_id: &ContractId,
-        slots: S,
-    ) -> Result<(), Self::Error>;
-}
-
-pub trait MessageIsSpent:
-    StorageInspect<SpentMessages, Error = StorageError>
-    + StorageInspect<Messages, Error = StorageError>
-{
-    type Error;
-
-    fn message_is_spent(&self, nonce: &Nonce) -> Result<bool, StorageError>;
-}
-
-pub trait TxIdOwnerRecorder {
-    type Error;
-
-    fn record_tx_id_owner(
-        &self,
-        owner: &Address,
-        block_height: BlockHeight,
-        tx_idx: u16,
-        tx_id: &Bytes32,
-    ) -> Result<Option<Bytes32>, Self::Error>;
-
-    fn update_tx_status(
-        &self,
-        id: &Bytes32,
-        status: TransactionStatus,
-    ) -> Result<Option<TransactionStatus>, Self::Error>;
-}
-
-pub trait DatabaseColumnIterator {
-    fn iter_all_filtered_column<K, V, P, S>(
-        &self,
-        prefix: Option<P>,
-        start: Option<S>,
-        direction: Option<IterDirection>,
-    ) -> Box<dyn Iterator<Item = Result<(K, V), DatabaseError>> + '_>
-    where
-        K: From<Vec<u8>>,
-        V: DeserializeOwned,
-        P: AsRef<[u8]>,
-        S: AsRef<[u8]>;
-}
-
 impl<D> InterpreterStorage for VmDatabase<D>
 where
     D: StorageMutate<ContractsInfo, Error = StorageError>
@@ -257,7 +164,7 @@ where
         + MerkleRootStorage<ContractId, ContractsAssets, Error = StorageError>
         + FuelBlockTrait<Error = StorageError>
         + FuelStateTrait<Error = StorageError>
-        + DatabaseColumnIterator,
+        + DatabaseColumnIterator<Error = StorageError>,
 {
     type DataError = StorageError;
 
@@ -336,7 +243,7 @@ where
 
             if entry.is_none() {
                 // We out of `contract_id` prefix
-                break
+                break;
             }
 
             let (multikey, value) =
@@ -707,7 +614,7 @@ mod tests {
                     U256::from_big_endian(&start_key).overflowing_add(i.into());
 
                 if overflow {
-                    return None
+                    return None;
                 }
 
                 let current_key = u256_to_bytes32(current_key);
