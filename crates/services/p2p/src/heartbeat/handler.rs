@@ -187,12 +187,13 @@ impl ConnectionHandler for HeartbeatHandler {
         }
 
         loop {
-            if self.failure_count >= self.config.max_failures.into() {
-                // Request from `Swarm` to close the faulty connection
-                return Poll::Ready(ConnectionHandlerEvent::Close(
-                    HeartbeatFailure::Timeout,
-                ))
-            }
+            // TODO: Close connection properly: https://github.com/libp2p/rust-libp2p/pull/4755
+            // if self.failure_count >= self.config.max_failures.into() {
+            //     // Request from `Swarm` to close the faulty connection
+            //     return Poll::Ready(ConnectionHandlerEvent::Close(
+            //         HeartbeatFailure::Timeout,
+            //     ))
+            // }
 
             match self.outbound.take() {
                 Some(OutboundState::RequestingBlockHeight { requested, stream }) => {

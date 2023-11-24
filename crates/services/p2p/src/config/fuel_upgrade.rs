@@ -13,7 +13,13 @@ use libp2p::{
     InboundUpgrade,
     OutboundUpgrade,
 };
-use libp2p_core::UpgradeInfo;
+use libp2p_core::{
+    upgrade::{
+        InboundConnectionUpgrade,
+        OutboundConnectionUpgrade,
+    },
+    UpgradeInfo,
+};
 use std::{
     error::Error,
     fmt,
@@ -134,5 +140,33 @@ where
             Ok(socket)
         }
         .boxed()
+    }
+}
+
+// TODO
+impl<C> InboundConnectionUpgrade<C> for FuelUpgrade
+where
+    C: AsyncRead + AsyncWrite + Unpin + Send + 'static,
+{
+    type Output = C;
+    type Error = FuelUpgradeError;
+    type Future = Pin<Box<dyn Future<Output = Result<Self::Output, Self::Error>> + Send>>;
+
+    fn upgrade_inbound(self, mut socket: C, _: Self::Info) -> Self::Future {
+        todo!()
+    }
+}
+
+// TODO
+impl<C> OutboundConnectionUpgrade<C> for FuelUpgrade
+where
+    C: AsyncRead + AsyncWrite + Unpin + Send + 'static,
+{
+    type Output = C;
+    type Error = FuelUpgradeError;
+    type Future = Pin<Box<dyn Future<Output = Result<Self::Output, Self::Error>> + Send>>;
+
+    fn upgrade_outbound(self, mut socket: C, _: Self::Info) -> Self::Future {
+        todo!()
     }
 }

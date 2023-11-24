@@ -20,7 +20,6 @@ use libp2p::gossipsub::{
     TopicScoreParams,
 };
 use libp2p_gossipsub::MetricsConfig;
-use prometheus_client::registry::Registry;
 use sha2::{
     Digest,
     Sha256,
@@ -180,7 +179,7 @@ fn initialize_peer_score_thresholds() -> PeerScoreThresholds {
 pub(crate) fn build_gossipsub_behaviour(p2p_config: &Config) -> Gossipsub {
     let mut gossipsub = if p2p_config.metrics {
         // Move to Metrics related feature flag
-        let mut p2p_registry = Registry::default();
+        let mut p2p_registry = prometheus_client::registry::Registry::default();
 
         let metrics_config = MetricsConfig::default();
 
@@ -212,10 +211,10 @@ pub(crate) fn build_gossipsub_behaviour(p2p_config: &Config) -> Gossipsub {
 
         gossipsub
     };
-    let explicit_peers = &p2p_config
+    let explicit_peers = p2p_config
         .reserved_nodes
         .iter()
-        .flat_map(|address| address.try_to_peer_id().ok());
+        .filter_map(|address| address.try_to_peer_id());
     for peer_id in explicit_peers {
         gossipsub.add_explicit_peer(&peer_id);
     }

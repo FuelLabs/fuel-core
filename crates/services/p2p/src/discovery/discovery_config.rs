@@ -125,7 +125,8 @@ impl DiscoveryConfig {
         kademlia_config.set_protocol_names(vec![
             StreamProtocol::try_from_owned(network).expect("Invalid kad protocol")
         ]);
-        kademlia_config.set_connection_idle_timeout(connection_idle_timeout);
+        // TODO: Use `SwarmBuilder::idle_connection_timeout` someplace? https://github.com/libp2p/rust-libp2p/pull/4659
+        // kademlia_config.set_connection_idle_timeout(connection_idle_timeout);
 
         let mut kademlia =
             KademliaBehaviour::with_config(local_peer_id, memory_store, kademlia_config);

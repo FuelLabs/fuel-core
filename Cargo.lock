@@ -2653,7 +2653,7 @@ dependencies = [
  "axum",
  "once_cell",
  "pin-project-lite",
- "prometheus-client 0.21.2",
+ "prometheus-client",
  "regex",
  "tokio",
  "tracing",
@@ -2692,7 +2692,7 @@ dependencies = [
  "libp2p-websocket",
  "libp2p-yamux",
  "postcard",
- "prometheus-client 0.21.2",
+ "prometheus-client",
  "quick-protobuf-codec 0.3.0",
  "rand",
  "serde",
@@ -4130,7 +4130,7 @@ dependencies = [
  "libp2p-core",
  "libp2p-identity",
  "libp2p-swarm",
- "prometheus-client 0.22.0",
+ "prometheus-client",
  "quick-protobuf",
  "quick-protobuf-codec 0.2.0",
  "rand",
@@ -4250,7 +4250,7 @@ dependencies = [
  "libp2p-kad",
  "libp2p-swarm",
  "pin-project",
- "prometheus-client 0.22.0",
+ "prometheus-client",
 ]
 
 [[package]]
@@ -5655,18 +5655,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "134c189feb4956b20f6f547d2cf727d4c0fe06722b20a0eec87ed445a97f92da"
 dependencies = [
  "unicode-ident",
-]
-
-[[package]]
-name = "prometheus-client"
-version = "0.21.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3c99afa9a01501019ac3a14d71d9f94050346f55ca471ce90c799a15c58f61e2"
-dependencies = [
- "dtoa",
- "itoa",
- "parking_lot",
- "prometheus-client-derive-encode",
 ]
 
 [[package]]
