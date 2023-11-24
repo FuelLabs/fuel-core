@@ -47,17 +47,16 @@ use libp2p::{
     multiaddr::Protocol,
     request_response::{
         Event as RequestResponseEvent,
+        InboundRequestId,
         Message as RequestResponseMessage,
-        RequestId,
+        OutboundRequestId,
         ResponseChannel,
     },
-    swarm::{
-        SwarmBuilder,
-        SwarmEvent,
-    },
+    swarm::SwarmEvent,
     Multiaddr,
     PeerId,
     Swarm,
+    SwarmBuilder,
 };
 use libp2p_gossipsub::PublishError;
 
@@ -96,12 +95,12 @@ pub struct FuelP2PService<Codec: NetworkCodec> {
     /// Holds the Sender(s) part of the Oneshot Channel from the NetworkOrchestrator
     /// Once the ResponseMessage is received from the p2p Network
     /// It will send it to the NetworkOrchestrator via its unique Sender    
-    outbound_requests_table: HashMap<RequestId, ResponseChannelItem>,
+    outbound_requests_table: HashMap<OutboundRequestId, ResponseChannelItem>,
 
     /// Holds the ResponseChannel(s) for the inbound requests from the p2p Network
     /// Once the Response is prepared by the NetworkOrchestrator
     /// It will send it to the specified Peer via its unique ResponseChannel    
-    inbound_requests_table: HashMap<RequestId, ResponseChannel<NetworkResponse>>,
+    inbound_requests_table: HashMap<InboundRequestId, ResponseChannel<NetworkResponse>>,
 
     /// NetworkCodec used as <GossipsubCodec> for encoding and decoding of Gossipsub messages    
     network_codec: Codec,
@@ -309,7 +308,7 @@ impl<Codec: NetworkCodec> FuelP2PService<Codec> {
         peer_id: Option<PeerId>,
         message_request: RequestMessage,
         channel_item: ResponseChannelItem,
-    ) -> Result<RequestId, RequestError> {
+    ) -> Result<OutboundRequestId, RequestError> {
         let peer_id = match peer_id {
             Some(peer_id) => peer_id,
             _ => {
@@ -339,7 +338,7 @@ impl<Codec: NetworkCodec> FuelP2PService<Codec> {
     /// Sends ResponseMessage to a peer that requested the data
     pub fn send_response_msg(
         &mut self,
-        request_id: RequestId,
+        request_id: InboundRequestId,
         message: OutboundResponse,
     ) -> Result<(), ResponseError> {
         match (

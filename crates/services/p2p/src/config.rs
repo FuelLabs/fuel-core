@@ -269,7 +269,7 @@ pub(crate) fn build_transport(
         let ws_tcp =
             libp2p::websocket::WsConfig::new(generate_tcp_transport()).or_transport(tcp);
 
-        libp2p::dns::TokioDnsConfig::system(ws_tcp).unwrap()
+        libp2p::dns::tokio::Transport::system(ws_tcp).unwrap()
     }
     .upgrade(libp2p::core::upgrade::Version::V1);
 

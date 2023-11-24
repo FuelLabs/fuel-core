@@ -66,7 +66,7 @@ use libp2p::{
     gossipsub::MessageAcceptance,
     PeerId,
 };
-use libp2p_request_response::RequestId;
+use libp2p_request_response::InboundRequestId;
 use std::{
     fmt::Debug,
     ops::Range,
@@ -168,7 +168,7 @@ pub trait TaskP2PService: Send {
 
     fn send_response_msg(
         &mut self,
-        request_id: RequestId,
+        request_id: InboundRequestId,
         message: OutboundResponse,
     ) -> anyhow::Result<()>;
     fn report_message(

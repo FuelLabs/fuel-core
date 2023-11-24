@@ -14,15 +14,12 @@ use libp2p::{
         Event as IdentifyEvent,
         Info as IdentifyInfo,
     },
-    swarm::{
-        derive_prelude::{
-            ConnectionClosed,
-            ConnectionEstablished,
-            DialFailure,
-            FromSwarm,
-            ListenFailure,
-        },
-        PollParameters,
+    swarm::derive_prelude::{
+        ConnectionClosed,
+        ConnectionEstablished,
+        DialFailure,
+        FromSwarm,
+        ListenFailure,
     },
     Multiaddr,
     PeerId,
@@ -241,7 +238,6 @@ impl NetworkBehaviour for PeerReportBehaviour {
     fn poll(
         &mut self,
         cx: &mut Context<'_>,
-        params: &mut impl PollParameters,
     ) -> Poll<ToSwarm<Self::ToSwarm, THandlerInEvent<Self>>> {
         if let Some(event) = self.pending_events.pop_front() {
             return Poll::Ready(ToSwarm::GenerateEvent(event))

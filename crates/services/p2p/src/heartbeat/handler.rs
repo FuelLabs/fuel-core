@@ -17,7 +17,6 @@ use libp2p_swarm::{
     },
     ConnectionHandler,
     ConnectionHandlerEvent,
-    KeepAlive,
     Stream,
     SubstreamProtocol,
 };
@@ -125,8 +124,6 @@ impl HeartbeatHandler {
 impl ConnectionHandler for HeartbeatHandler {
     type FromBehaviour = HeartbeatInEvent;
     type ToBehaviour = HeartbeatOutEvent;
-    type Error = HeartbeatFailure;
-
     type InboundProtocol = ReadyUpgrade<&'static str>;
     type OutboundProtocol = ReadyUpgrade<&'static str>;
     type OutboundOpenInfo = ();
@@ -136,9 +133,9 @@ impl ConnectionHandler for HeartbeatHandler {
         SubstreamProtocol::new(ReadyUpgrade::new(HEARTBEAT_PROTOCOL), ())
     }
 
-    fn connection_keep_alive(&self) -> KeepAlive {
+    fn connection_keep_alive(&self) -> bool {
         // Heartbeat protocol wants to keep the connection alive
-        KeepAlive::Yes
+        true
     }
 
     fn on_behaviour_event(&mut self, event: Self::FromBehaviour) {

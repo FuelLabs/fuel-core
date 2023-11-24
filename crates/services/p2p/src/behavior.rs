@@ -40,6 +40,7 @@ use libp2p::{
 };
 use libp2p_allow_block_list as allow_block_list;
 use libp2p_kad::Event;
+use libp2p_request_response::OutboundRequestId;
 
 #[derive(Debug)]
 pub enum FuelBehaviourEvent {
@@ -142,7 +143,7 @@ impl<Codec: NetworkCodec> FuelBehaviour<Codec> {
         &mut self,
         message_request: RequestMessage,
         peer_id: &PeerId,
-    ) -> RequestId {
+    ) -> OutboundRequestId {
         self.request_response.send_request(peer_id, message_request)
     }
 
