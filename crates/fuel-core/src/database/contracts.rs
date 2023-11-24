@@ -5,7 +5,11 @@ use crate::database::{
     Error as DatabaseError,
     Result as DatabaseResult,
 };
-use fuel_core_chain_config::ContractConfig;
+use fuel_core_chain_config::{
+    ContractBalance,
+    ContractConfig,
+    ContractStateConfig,
+};
 use fuel_core_storage::{
     iter::IterDirection,
     tables::{
@@ -149,6 +153,42 @@ impl StorageWrite<ContractsRawCode> for Database {
 }
 
 impl Database {
+    pub fn iter_contract_state_configs(
+        &self,
+    ) -> impl Iterator<Item = StorageResult<ContractStateConfig>> + '_ {
+        self.iter_all::<Vec<u8>, Bytes32>(Column::ContractsState, None)
+            .map(|res| {
+                let res = res?;
+                let contract_id = Bytes32::new(res.0[0..32].try_into()?);
+                let key = Bytes32::new(res.0[32..].try_into()?);
+                let value = res.1;
+
+                Ok(ContractStateConfig {
+                    contract_id,
+                    key,
+                    value,
+                })
+            })
+    }
+    pub fn iter_contract_balance_configs(
+        &self,
+    ) -> impl Iterator<Item = StorageResult<ContractBalance>> + '_ {
+        self.iter_all::<Vec<u8>, u64>(Column::ContractsAssets, None)
+            .map(|res| {
+                let res = res?;
+
+                let contract_id = Bytes32::new(res.0[0..32].try_into()?);
+                let asset_id = AssetId::new(res.0[32..].try_into()?);
+                let amount = res.1;
+
+                Ok(ContractBalance {
+                    contract_id,
+                    asset_id,
+                    amount,
+                })
+            })
+    }
+
     pub fn get_contract_config_by_id(
         &self,
         contract_id: ContractId,
@@ -245,20 +285,15 @@ impl Database {
         })
     }
 
-    pub fn get_contract_config(&self) -> StorageResult<Option<Vec<ContractConfig>>> {
-        let configs = self
-            .iter_all::<Vec<u8>, Word>(Column::ContractsRawCode, None)
-            .map(|raw_contract_id| -> StorageResult<ContractConfig> {
-                let contract_id = ContractId::new(
-                    raw_contract_id.unwrap().0[..32]
-                        .try_into()
-                        .map_err(DatabaseError::from)?,
-                );
+    pub fn iter_contract_configs(
+        &self,
+    ) -> impl Iterator<Item = StorageResult<ContractConfig>> + '_ {
+        self.iter_all::<Vec<u8>, Word>(Column::ContractsRawCode, None)
+            .map(|raw_contract_id| {
+                let raw_contract_id = raw_contract_id?;
+                let contract_id = ContractId::new(raw_contract_id.0[..32].try_into()?);
                 self.get_contract_config_by_id(contract_id)
             })
-            .collect::<StorageResult<Vec<ContractConfig>>>()?;
-
-        Ok(Some(configs))
     }
 }
 

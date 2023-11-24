@@ -8,7 +8,7 @@ use crate::{
     },
 };
 use fuel_core_chain_config::{
-    ChainConfigDb,
+    ChainStateDb,
     CoinConfig,
     ContractConfig,
     MessageConfig,
@@ -489,17 +489,40 @@ impl Default for Database {
 
 /// Implement `ChainConfigDb` so that `Database` can be passed to
 /// `StateConfig's` `generate_state_config()` method
-impl ChainConfigDb for Database {
-    fn get_coin_config(&self) -> StorageResult<Option<Vec<CoinConfig>>> {
-        Self::get_coin_config(self).map_err(Into::into)
+impl ChainStateDb for Database {
+    fn get_contract_config_by_id(
+        &self,
+        contract_id: fuel_core_types::fuel_types::ContractId,
+    ) -> StorageResult<ContractConfig> {
+        Self::get_contract_config_by_id(self, contract_id)
     }
 
-    fn get_contract_config(&self) -> StorageResult<Option<Vec<ContractConfig>>> {
-        Self::get_contract_config(self)
+    fn iter_coin_configs(&self) -> impl Iterator<Item = StorageResult<CoinConfig>> {
+        Self::iter_coin_configs(self)
     }
 
-    fn get_message_config(&self) -> StorageResult<Option<Vec<MessageConfig>>> {
-        Self::get_message_config(self).map_err(Into::into)
+    fn iter_contract_configs(
+        &self,
+    ) -> impl Iterator<Item = StorageResult<ContractConfig>> {
+        Self::iter_contract_configs(self)
+    }
+
+    fn iter_contract_state_configs(
+        &self,
+    ) -> impl Iterator<Item = StorageResult<fuel_core_chain_config::ContractStateConfig>>
+    {
+        Self::iter_contract_state_configs(self)
+    }
+
+    fn iter_contract_balance_configs(
+        &self,
+    ) -> impl Iterator<Item = StorageResult<fuel_core_chain_config::ContractBalance>>
+    {
+        Self::iter_contract_balance_configs(self)
+    }
+
+    fn iter_message_configs(&self) -> impl Iterator<Item = StorageResult<MessageConfig>> {
+        Self::iter_message_configs(self)
     }
 
     fn get_block_height(&self) -> StorageResult<BlockHeight> {

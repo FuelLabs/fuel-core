@@ -1,6 +1,6 @@
 mod decoder;
 mod encoder;
-pub(crate) mod parquet;
+mod parquet;
 
 pub use decoder::{
     Decoder,
@@ -21,15 +21,10 @@ type GroupResult<T> = anyhow::Result<Group<T>>;
 mod tests {
     use std::ops::Range;
 
-    use ::parquet::basic::{
-        Compression,
-        GzipLevel,
-    };
-
     use crate::{
         config::{
             contract_balance::ContractBalance,
-            contract_state::ContractState,
+            contract_state::ContractStateConfig,
         },
         CoinConfig,
         ContractConfig,
@@ -57,13 +52,12 @@ mod tests {
                 init_decoder,
                 group_size,
                 starting_group_index..num_groups,
-            )
+            );
         }
         {
             // Parquet
             let temp_dir = tempfile::tempdir().unwrap();
-            let compression = Compression::GZIP(GzipLevel::try_new(1).unwrap());
-            let state_encoder = Encoder::parquet(temp_dir.path(), compression).unwrap();
+            let state_encoder = Encoder::parquet(temp_dir.path(), 1).unwrap();
 
             let init_decoder = || Decoder::parquet(temp_dir.path());
 
@@ -72,7 +66,7 @@ mod tests {
                 init_decoder,
                 group_size,
                 starting_group_index..num_groups,
-            )
+            );
         }
     }
 
@@ -105,7 +99,8 @@ mod tests {
         let coin_batches = write_batches!(CoinConfig, write_coins);
         let message_batches = write_batches!(MessageConfig, write_messages);
         let contract_batches = write_batches!(ContractConfig, write_contracts);
-        let contract_state_batches = write_batches!(ContractState, write_contract_state);
+        let contract_state_batches =
+            write_batches!(ContractStateConfig, write_contract_state);
         let contract_balance_batches =
             write_batches!(ContractBalance, write_contract_balance);
         encoder.close().unwrap();

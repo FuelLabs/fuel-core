@@ -18,5 +18,7 @@ pub use codec::*;
 pub use coin::*;
 pub use consensus::*;
 pub use contract::*;
+pub use contract_balance::*;
+pub use contract_state::*;
 pub use message::*;
 pub use state::*;
