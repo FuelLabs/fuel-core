@@ -20,11 +20,11 @@ anyhow = { workspace = true }
 clap = { workspace = true, features = ["derive", "env"] }
 const_format = { version = "0.2", optional = true }
 dirs = "4.0"
-itertools = { version = "0.12" }
 dotenvy = { version = "0.15", optional = true }
 fuel-core = { workspace = true }
 fuel-core-storage = { workspace = true }
 humantime = "2.1"
+itertools = { version = "0.12" }
 lazy_static = { workspace = true }
 pyroscope = "0.5"
 pyroscope_pprofrs = "0.2"
