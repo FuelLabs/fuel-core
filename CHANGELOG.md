@@ -10,30 +10,30 @@ Description of the upcoming release here.
 
 ## [Version 0.21.0]
 
-This release focused on preparing the `fuel-core` for the mainnet environment:
+This release focuses on preparing `fuel-core` for the mainnet environment:
 - Most of the changes improved the security and stability of the node.
-- The gas model was reworked to cover all aspects of the execution.
-- The benchmarking system was significantly enhanced, covering worse scenarios.
+- The gas model was reworked to cover all aspects of execution.
+- The benchmarking system was significantly enhanced, covering worst scenarios.
 - A new set of benchmarks was added to track the accuracy of gas prices.
-- Optimized heavy operations and removed/replaced exploitable functionality by deterministic.
+- Optimized heavy operations and removed/replaced exploitable functionality.
 
-Besides that, there are more the valuable changes:
-- Unified naming for all CLI arguments. Added dependency between related fields to avoid misconfiguration in case of missing arguments. Added `--debug` flag that enables additional functionality like a debugger.
-- Improved telemetry to cover the internal work of services and added support for the pyroscope, allowing it to generate real-time flamegraph to track performance.
-- Improved stability of the P2P layer and adjusted updating of reputation. The speed of block synchronization was significantly improved.
+Besides that, there are more concrete changes:
+- Unified naming conventions for all CLI arguments. Added dependencies between related fields to avoid misconfiguration in case of missing arguments. Added `--debug` flag that enables additional functionality like a debugger.
+- Improved telemetry to cover the internal work of services and added support for the Pyroscope, allowing it to generate real-time flamegraphs to track performance.
+- Improved stability of the P2P layer and adjusted the updating of reputation. The speed of block synchronization was significantly increased.
 - The node is more stable and resilient. Improved DoS resistance and resource management. Fixed critical bugs during state transition.
 - Reworked the `Mint` transaction to accumulate the fee from block production inside the contract defined by the block producer.
 
-FuelVM received a lot of safety/stability improvements:
-- The audit helped identify some bugs/errors that have been successfully fixed.
+FuelVM received a lot of safety and stability improvements:
+- The audit helped identify some bugs and errors that have been successfully fixed.
 - Updated the gas price model to charge for resources used during the transaction lifecycle.
-- The `no_std` and 32bit system support. It opens doors for fraud-proofing in the future.
-- Removed the `ChainId` from the `PredicateId` calculation allowing the use of predicates cross-chain.
+- Added `no_std` and 32 bit system support. This opens doors for fraud proving in the future.
+- Removed the `ChainId` from the `PredicateId` calculation, allowing the use of predicates cross-chain.
 - Improvements in the performance of some storage-related opcodes.
 - Support the `ECAL` instruction that allows adding custom functionality to the VM. It can be used to create unique rollups or advanced indexers in the future.
 - Support of [transaction policies](https://github.com/FuelLabs/fuel-vm/blob/master/CHANGELOG.md#version-0420) provides additional safety for the user. 
-    It also allows implementation of a multi-dimension price model in the future, making the transaction execution cheaper and allowing more transactions that don't affect storage.
-- Refactored the system of errors, allowing the return of more detailed errors to the user, simplifying debugging.
+    It also allows the implementation of a multi-dimensional price model in the future, making the transaction execution cheaper and allowing more transactions that don't affect storage.
+- Refactored errors, returning more detailed errors to the user, simplifying debugging.
 
 ### Added
 
