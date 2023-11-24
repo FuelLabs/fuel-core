@@ -174,8 +174,6 @@ pub enum TransactionStatus {
     },
     /// Transaction was successfully included in a block
     Success {
-        /// The TxId of this transaction
-        tx_id: TxId,
         /// Included in this block
         block_id: BlockId,
         /// Time when the block was generated
@@ -190,8 +188,6 @@ pub enum TransactionStatus {
     },
     /// Transaction was included in a block, but the exection was reverted
     Failed {
-        /// The TxId of this transaction
-        tx_id: TxId,
         /// Included in this block
         block_id: BlockId,
         /// Time when the block was generated

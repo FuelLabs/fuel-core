@@ -1699,7 +1699,6 @@ where
                     db.update_tx_status(
                         id,
                         TransactionStatus::Success {
-                            tx_id: *id,
                             block_id,
                             time,
                             result: *result,
@@ -1710,7 +1709,6 @@ where
                     db.update_tx_status(
                         id,
                         TransactionStatus::Failed {
-                            tx_id: *id,
                             block_id,
                             time,
                             result: *result,

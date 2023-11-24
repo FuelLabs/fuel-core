@@ -234,14 +234,13 @@ impl SqueezedOutStatus {
     }
 }
 
-impl From<TxStatus> for TransactionStatus {
-    fn from(s: TxStatus) -> Self {
+impl From<(TxId, TxStatus)> for TransactionStatus {
+    fn from((tx_id, s): (TxId, TxStatus)) -> Self {
         match s {
             TxStatus::Submitted { time } => {
                 TransactionStatus::Submitted(SubmittedStatus(time))
             }
             TxStatus::Success {
-                tx_id,
                 block_id,
                 result,
                 time,
@@ -255,7 +254,6 @@ impl From<TxStatus> for TransactionStatus {
                 TransactionStatus::SqueezedOut(SqueezedOutStatus { reason })
             }
             TxStatus::Failed {
-                tx_id,
                 block_id,
                 reason,
                 time,
@@ -278,12 +276,11 @@ impl From<TransactionStatus> for TxStatus {
                 TxStatus::Submitted { time }
             }
             TransactionStatus::Success(SuccessStatus {
-                tx_id,
                 block_id,
                 result,
                 time,
+                ..
             }) => TxStatus::Success {
-                tx_id,
                 block_id,
                 result,
                 time,
@@ -292,13 +289,12 @@ impl From<TransactionStatus> for TxStatus {
                 TxStatus::SqueezedOut { reason }
             }
             TransactionStatus::Failed(FailureStatus {
-                tx_id,
                 block_id,
                 reason,
                 time,
                 state: result,
+                ..
             }) => TxStatus::Failed {
-                tx_id,
                 block_id,
                 reason,
                 time,
@@ -625,7 +621,11 @@ pub(crate) fn get_tx_status(
         .status(&id)
         .into_api_result::<txpool::TransactionStatus, StorageError>()?
     {
-        Some(status) => Ok(Some(status.into())),
+        Some(status) => {
+            let tx_id: TxId = id.into();
+            let status = (tx_id, status).into();
+            Ok(Some(status))
+        }
         None => match txpool.submission_time(id) {
             Some(submitted_time) => Ok(Some(TransactionStatus::Submitted(
                 SubmittedStatus(submitted_time),

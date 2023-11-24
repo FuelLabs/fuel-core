@@ -44,6 +44,7 @@ use fuel_core_types::{
     fuel_tx::{
         Cacheable,
         Transaction as FuelTx,
+        TxId,
         UniqueIdentifier,
     },
     fuel_types,
@@ -346,8 +347,12 @@ impl TxStatusSubscription {
                     TxStatusMessage::Status(txpool::TransactionStatus::Submitted { .. })
                 )
             })
-            .map(|event| match event {
-                TxStatusMessage::Status(status) => Ok(status.into()),
+            .map(move |event| match event {
+                TxStatusMessage::Status(status) => {
+                    let tx_id: TxId = tx_id.into();
+                    let status = (tx_id, status).into();
+                    Ok(status)
+                }
                 TxStatusMessage::FailedStatus => {
                     Err(anyhow::anyhow!("Failed to get transaction status").into())
                 }
