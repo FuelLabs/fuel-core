@@ -25,13 +25,10 @@ serde_with = "1.11"
 tracing = "0.1"
 
 [dev-dependencies]
-fuel-core = { workspace = true }
-fuel-core-client = { workspace = true }
 fuel-core-types = { workspace = true, default-features = false, features = ["random", "serde"] }
 insta = { workspace = true }
 rand = { workspace = true }
 serde_json = { version = "1.0", features = ["raw_value"] }
-tokio = { workspace = true, features = ["full"] }
 
 [features]
 default = ["std"]

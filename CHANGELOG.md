@@ -8,40 +8,69 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Description of the upcoming release here.
 
+## [Version 0.21.0]
+
+This release focuses on preparing `fuel-core` for the mainnet environment:
+- Most of the changes improved the security and stability of the node.
+- The gas model was reworked to cover all aspects of execution.
+- The benchmarking system was significantly enhanced, covering worst scenarios.
+- A new set of benchmarks was added to track the accuracy of gas prices.
+- Optimized heavy operations and removed/replaced exploitable functionality.
+
+Besides that, there are more concrete changes:
+- Unified naming conventions for all CLI arguments. Added dependencies between related fields to avoid misconfiguration in case of missing arguments. Added `--debug` flag that enables additional functionality like a debugger.
+- Improved telemetry to cover the internal work of services and added support for the Pyroscope, allowing it to generate real-time flamegraphs to track performance.
+- Improved stability of the P2P layer and adjusted the updating of reputation. The speed of block synchronization was significantly increased.
+- The node is more stable and resilient. Improved DoS resistance and resource management. Fixed critical bugs during state transition.
+- Reworked the `Mint` transaction to accumulate the fee from block production inside the contract defined by the block producer.
+
+FuelVM received a lot of safety and stability improvements:
+- The audit helped identify some bugs and errors that have been successfully fixed.
+- Updated the gas price model to charge for resources used during the transaction lifecycle.
+- Added `no_std` and 32 bit system support. This opens doors for fraud proving in the future.
+- Removed the `ChainId` from the `PredicateId` calculation, allowing the use of predicates cross-chain.
+- Improvements in the performance of some storage-related opcodes.
+- Support the `ECAL` instruction that allows adding custom functionality to the VM. It can be used to create unique rollups or advanced indexers in the future.
+- Support of [transaction policies](https://github.com/FuelLabs/fuel-vm/blob/master/CHANGELOG.md#version-0420) provides additional safety for the user. 
+    It also allows the implementation of a multi-dimensional price model in the future, making the transaction execution cheaper and allowing more transactions that don't affect storage.
+- Refactored errors, returning more detailed errors to the user, simplifying debugging.
+
 ### Added
 
 - [#1503](https://github.com/FuelLabs/fuel-core/pull/1503): Add `gtf` opcode sanity check.
 - [#1502](https://github.com/FuelLabs/fuel-core/pull/1502): Added price benchmark for `vm_initialization`.
+- [#1501](https://github.com/FuelLabs/fuel-core/pull/1501): Add a CLI command for generating a fee collection contract.
 - [#1492](https://github.com/FuelLabs/fuel-core/pull/1492): Support backward iteration in the RocksDB. It allows backward queries that were not allowed before.
 - [#1490](https://github.com/FuelLabs/fuel-core/pull/1490): Add push and pop benchmarks.
 - [#1485](https://github.com/FuelLabs/fuel-core/pull/1485): Prepare rc release of fuel core v0.21
 - [#1476](https://github.com/FuelLabs/fuel-core/pull/1453): Add the majority of the "other" benchmarks for contract opcodes.
-- [#1453](https://github.com/FuelLabs/fuel-core/pull/1453): Add the majority of the "sanity" benchmarks for contract opcodes.
 - [#1473](https://github.com/FuelLabs/fuel-core/pull/1473): Expose fuel-core version as a constant
 - [#1469](https://github.com/FuelLabs/fuel-core/pull/1469): Added support of bloom filter for RocksDB tables and increased the block cache.
-- [#1642](https://github.com/FuelLabs/fuel-core/pull/1462): Added benchmark to measure the performance of contract state and contract ID calculation; use for gas costing.
 - [#1465](https://github.com/FuelLabs/fuel-core/pull/1465): Improvements for keygen cli and crates
+- [#1642](https://github.com/FuelLabs/fuel-core/pull/1462): Added benchmark to measure the performance of contract state and contract ID calculation; use for gas costing.
 - [#1457](https://github.com/FuelLabs/fuel-core/pull/1457): Fixing incorrect measurement for fast(µs) opcodes.
 - [#1456](https://github.com/FuelLabs/fuel-core/pull/1456): Added flushing of the RocksDB during a graceful shutdown.
 - [#1456](https://github.com/FuelLabs/fuel-core/pull/1456): Added more logs to track the service lifecycle.
+- [#1453](https://github.com/FuelLabs/fuel-core/pull/1453): Add the majority of the "sanity" benchmarks for contract opcodes.
+- [#1452](https://github.com/FuelLabs/fuel-core/pull/1452): Added benchmark to measure the performance of contract root calculation when utilizing the maximum contract size; used for gas costing of contract root during predicate owner validation.
 - [#1449](https://github.com/FuelLabs/fuel-core/pull/1449): Fix coin pagination in e2e test client.
-- [#1452](https://github.com/FuelLabs/fuel-core/pull/1452): Added benchmark to measure the performance of contract root calculation when utilizing the maximum contract size; used for gas costing of contract root during predicate owner validation.   
 - [#1447](https://github.com/FuelLabs/fuel-core/pull/1447): Add timeout for continuous e2e tests
 - [#1444](https://github.com/FuelLabs/fuel-core/pull/1444): Add "sanity" benchmarks for memory opcodes.
 - [#1437](https://github.com/FuelLabs/fuel-core/pull/1437): Add some transaction throughput tests for basic transfers.
 - [#1436](https://github.com/FuelLabs/fuel-core/pull/1436): Add a github action to continuously test beta-4.
 - [#1433](https://github.com/FuelLabs/fuel-core/pull/1433): Add "sanity" benchmarks for flow opcodes.
-- [#1430](https://github.com/FuelLabs/fuel-core/pull/1430): Add "sanity" benchmarks for crypto opcodes.
 - [#1432](https://github.com/FuelLabs/fuel-core/pull/1432): Add a new `--api-request-timeout` argument to control TTL for GraphQL requests.
-- [#1426](https://github.com/FuelLabs/fuel-core/pull/1426) Split keygen into a create and a binary
+- [#1430](https://github.com/FuelLabs/fuel-core/pull/1430): Add "sanity" benchmarks for crypto opcodes.
+- [#1426](https://github.com/FuelLabs/fuel-core/pull/1426) Split keygen into a create and a binary.
 - [#1419](https://github.com/FuelLabs/fuel-core/pull/1419): Add additional "sanity" benchmarks for arithmetic op code instructions.
 - [#1411](https://github.com/FuelLabs/fuel-core/pull/1411): Added WASM and `no_std` compatibility.
+- [#1405](https://github.com/FuelLabs/fuel-core/pull/1405): Use correct names for service metrics.
 - [#1400](https://github.com/FuelLabs/fuel-core/pull/1400): Add releasy beta to fuel-core so that new commits to fuel-core master triggers fuels-rs.
-- [#1371](https://github.com/FuelLabs/fuel-core/pull/1371): Add new client function for querying the `MessageStatus` for a specific message (by `Nonce`)
-- [#1356](https://github.com/FuelLabs/fuel-core/pull/1356): Add peer reputation reporting to heartbeat code
-- [#1355](https://github.com/FuelLabs/fuel-core/pull/1355): Added new metrics related to block importing, such as tps, sync delays etc
+- [#1371](https://github.com/FuelLabs/fuel-core/pull/1371): Add new client function for querying the `MessageStatus` for a specific message (by `Nonce`).
+- [#1356](https://github.com/FuelLabs/fuel-core/pull/1356): Add peer reputation reporting to heartbeat code.
+- [#1355](https://github.com/FuelLabs/fuel-core/pull/1355): Added new metrics related to block importing, such as tps, sync delays etc.
 - [#1339](https://github.com/FuelLabs/fuel-core/pull/1339): Adds `baseAssetId` to `FeeParameters` in the GraphQL API.
-- [#1331](https://github.com/FuelLabs/fuel-core/pull/1331): Add peer reputation reporting to block import code
+- [#1331](https://github.com/FuelLabs/fuel-core/pull/1331): Add peer reputation reporting to block import code.
 - [#1324](https://github.com/FuelLabs/fuel-core/pull/1324): Added pyroscope profiling to fuel-core, intended to be used by a secondary docker image that has debug symbols enabled.
 - [#1309](https://github.com/FuelLabs/fuel-core/pull/1309): Add documentation for running debug builds with CLion and Visual Studio Code.  
 - [#1308](https://github.com/FuelLabs/fuel-core/pull/1308): Add support for loading .env files when compiling with the `env` feature. This allows users to conveniently supply CLI arguments in a secure and IDE-agnostic way. 
@@ -49,43 +78,40 @@ Description of the upcoming release here.
 - [#1286](https://github.com/FuelLabs/fuel-core/pull/1286): Include readable names for test cases where missing.
 - [#1274](https://github.com/FuelLabs/fuel-core/pull/1274): Added tests to benchmark block synchronization.
 - [#1263](https://github.com/FuelLabs/fuel-core/pull/1263): Add gas benchmarks for `ED19` and `ECR1` instructions.
-- [#1331](https://github.com/FuelLabs/fuel-core/pull/1331): Add peer reputation reporting to block import code
-- [#1405](https://github.com/FuelLabs/fuel-core/pull/1405): Use correct names for service metrics.
-- [#1501](https://github.com/FuelLabs/fuel-core/pull/1501): Add a CLI command for generating a fee collection contract.
 
 ### Changed
 
+- [#1512](https://github.com/FuelLabs/fuel-core/pull/1512): Internally simplify merkle_contract_state_range.
 - [#1507](https://github.com/FuelLabs/fuel-core/pull/1507): Updated chain configuration to be ready for beta 5 network. It includes opcode prices from the latest benchmark and contract for the block producer.
 - [#1477](https://github.com/FuelLabs/fuel-core/pull/1477): Upgraded the Rust version used in CI and containers to 1.73.0. Also includes associated Clippy changes.
 - [#1469](https://github.com/FuelLabs/fuel-core/pull/1469): Replaced usage of `MemoryTransactionView` by `Checkpoint` database in the benchmarks.
-- [#1466](https://github.com/FuelLabs/fuel-core/pull/1466): Handling overflows during arithmetic operations.
 - [#1468](https://github.com/FuelLabs/fuel-core/pull/1468): Bumped version of the `fuel-vm` to `v0.40.0`. It brings some breaking changes into consensus parameters API because of changes in the underlying types.
+- [#1466](https://github.com/FuelLabs/fuel-core/pull/1466): Handling overflows during arithmetic operations.
 - [#1460](https://github.com/FuelLabs/fuel-core/pull/1460): Change tracking branch from main to master for releasy tests.
+- [#1454](https://github.com/FuelLabs/fuel-core/pull/1454): Update gas benchmarks for opcodes that append receipts.
 - [#1440](https://github.com/FuelLabs/fuel-core/pull/1440): Don't report reserved nodes that send invalid transactions.
 - [#1439](https://github.com/FuelLabs/fuel-core/pull/1439): Reduced memory BMT consumption during creation of the header.
 - [#1434](https://github.com/FuelLabs/fuel-core/pull/1434): Continue gossiping transactions to reserved peers regardless of gossiping reputation score.
+- [#1408](https://github.com/FuelLabs/fuel-core/pull/1408): Update gas benchmarks for storage opcodes to use a pre-populated database to get more accurate worst-case costs.
 - [#1399](https://github.com/FuelLabs/fuel-core/pull/1399): The Relayer now queries Ethereum for its latest finalized block instead of using a configurable "finalization period" to presume finality.
 - [#1397](https://github.com/FuelLabs/fuel-core/pull/1397): Improved keygen. Created a crate to be included from forc plugins and upgraded internal library to drop requirement of protoc to build
-- [#1349](https://github.com/FuelLabs/fuel-core/pull/1349): Updated peer-to-peer transactions API to support multiple blocks in a single request, and updated block synchronization to request multiple blocks based on the configured range of headers.
+- [#1395](https://github.com/FuelLabs/fuel-core/pull/1395): Add DependentCost benchmarks for `k256`, `s256` and `mcpi` instructions.
+- [#1393](https://github.com/FuelLabs/fuel-core/pull/1393): Increase heartbeat timeout from `2` to `60` seconds, as suggested in [this issue](https://github.com/FuelLabs/fuel-core/issues/1330).
+- [#1392](https://github.com/FuelLabs/fuel-core/pull/1392): Fixed an overflow in `message_proof`.
+- [#1390](https://github.com/FuelLabs/fuel-core/pull/1390): Up the `ethers` version to `2` to fix an issue with `tungstenite`.
+- [#1383](https://github.com/FuelLabs/fuel-core/pull/1383): Disallow usage of `log` crate internally in favor of `tracing` crate.
 - [#1380](https://github.com/FuelLabs/fuel-core/pull/1380): Add preliminary, hard-coded config values for heartbeat peer reputation, removing `todo`.
 - [#1377](https://github.com/FuelLabs/fuel-core/pull/1377): Remove `DiscoveryEvent` and use `KademliaEvent` directly in `DiscoveryBehavior`.
 - [#1366](https://github.com/FuelLabs/fuel-core/pull/1366): Improve caching during docker builds in CI by replacing gha
 - [#1358](https://github.com/FuelLabs/fuel-core/pull/1358): Upgraded the Rust version used in CI to 1.72.0. Also includes associated Clippy changes.
+- [#1349](https://github.com/FuelLabs/fuel-core/pull/1349): Updated peer-to-peer transactions API to support multiple blocks in a single request, and updated block synchronization to request multiple blocks based on the configured range of headers.
+- [#1342](https://github.com/FuelLabs/fuel-core/pull/1342): Add error handling for P2P requests to return `None` to requester and log error.
 - [#1318](https://github.com/FuelLabs/fuel-core/pull/1318): Modified block synchronization to use asynchronous task execution when retrieving block headers.
 - [#1314](https://github.com/FuelLabs/fuel-core/pull/1314): Removed `types::ConsensusParameters` in favour of `fuel_tx:ConsensusParameters`.
 - [#1302](https://github.com/FuelLabs/fuel-core/pull/1302): Removed the usage of flake and building of the bridge contract ABI.
     It simplifies the maintenance and updating of the events, requiring only putting the event definition into the codebase of the relayer.
 - [#1293](https://github.com/FuelLabs/fuel-core/issues/1293): Parallelized the `estimate_predicates` endpoint to utilize all available threads.
 - [#1270](https://github.com/FuelLabs/fuel-core/pull/1270): Modify the way block headers are retrieved from peers to be done in batches.
-- [#1342](https://github.com/FuelLabs/fuel-core/pull/1342): Add error handling for P2P requests to return `None` to requester and log error.
-- [#1383](https://github.com/FuelLabs/fuel-core/pull/1383): Disallow usage of `log` crate internally in favor of `tracing` crate.
-- [#1390](https://github.com/FuelLabs/fuel-core/pull/1390): Up the `ethers` version to `2` to fix an issue with `tungstenite`.
-- [#1392](https://github.com/FuelLabs/fuel-core/pull/1392): Fixed an overflow in `message_proof`.
-- [#1393](https://github.com/FuelLabs/fuel-core/pull/1393): Increase heartbeat timeout from `2` to `60` seconds, as suggested in [this issue](https://github.com/FuelLabs/fuel-core/issues/1330).
-- [#1395](https://github.com/FuelLabs/fuel-core/pull/1395): Add DependentCost benchmarks for `k256`, `s256` and `mcpi` instructions.
-- [#1408](https://github.com/FuelLabs/fuel-core/pull/1408): Update gas benchmarks for storage opcodes to use a pre-populated database to get more accurate worst-case costs.
-- [#1454](https://github.com/FuelLabs/fuel-core/pull/1454): Update gas benchmarks for opcodes that append receipts.
-- [#1512](https://github.com/FuelLabs/fuel-core/pull/1512): Internally simplify merkle_contract_state_range.
 
 #### Breaking
 - [#1506](https://github.com/FuelLabs/fuel-core/pull/1506): Added validation of the coin's fields during block production and validation. Before, it was possible to submit a transaction that didn't match the coin's values in the database, allowing printing/using unavailable assets.
@@ -98,9 +124,10 @@ Description of the upcoming release here.
 - [#1407](https://github.com/FuelLabs/fuel-core/pull/1407): The `Mint` transaction is reworked with new fields to support the account-base model. It affects serialization and deserialization of the transaction and also affects GraphQL schema.
 - [#1407](https://github.com/FuelLabs/fuel-core/pull/1407): The `Mint` transaction is the last transaction in the block instead of the first.
 - [#1374](https://github.com/FuelLabs/fuel-core/pull/1374): Renamed `base_chain_height` to `da_height` and return current relayer height instead of latest Fuel block height.
+- [#1367](https://github.com/FuelLabs/fuel-core/pull/1367): Update to the latest version of fuel-vm.
 - [#1363](https://github.com/FuelLabs/fuel-core/pull/1363): Change message_proof api to take `nonce` instead of `message_id`
-- [#1339](https://github.com/FuelLabs/fuel-core/pull/1339): Added a new required field called `base_asset_id` to the `FeeParameters` definition in `ConsensusParameters`, as well as default values for `base_asset_id` in the `beta` and `dev` chainspecs.
 - [#1355](https://github.com/FuelLabs/fuel-core/pull/1355): Removed the `metrics` feature flag from the fuel-core crate, and metrics are now included by default.
+- [#1339](https://github.com/FuelLabs/fuel-core/pull/1339): Added a new required field called `base_asset_id` to the `FeeParameters` definition in `ConsensusParameters`, as well as default values for `base_asset_id` in the `beta` and `dev` chain specifications.
 - [#1322](https://github.com/FuelLabs/fuel-core/pull/1322):
   The `debug` flag is added to the CLI. The flag should be used for local development only. Enabling debug mode:
       - Allows GraphQL Endpoints to arbitrarily advance blocks.
@@ -110,7 +137,6 @@ Description of the upcoming release here.
 - [#1290](https://github.com/FuelLabs/fuel-core/pull/1290): Standardize CLI args to use `-` instead of `_`.
 - [#1279](https://github.com/FuelLabs/fuel-core/pull/1279): Added a new CLI flag to enable the Relayer service `--enable-relayer`, and disabled the Relayer service by default. When supplying the `--enable-relayer` flag, the `--relayer` argument becomes mandatory, and omitting it is an error. Similarly, providing a `--relayer` argument without the `--enable-relayer` flag is an error. Lastly, providing the `--keypair` or `--network` arguments will also produce an error if the `--enable-p2p` flag is not set.
 - [#1262](https://github.com/FuelLabs/fuel-core/pull/1262): The `ConsensusParameters` aggregates all configuration data related to the consensus. It contains many fields that are segregated by the usage. The API of some functions was affected to use lesser types instead the whole `ConsensusParameters`. It is a huge breaking change requiring repetitively monotonically updating all places that use the `ConsensusParameters`. But during updating, consider that maybe you can use lesser types. Usage of them may simplify signatures of methods and make them more user-friendly and transparent.
-- [#1367](https://github.com/FuelLabs/fuel-core/pull/1367): Update to the latest version of fuel-vm.
 
 ### Removed
 
