@@ -172,7 +172,8 @@ impl SuccessStatus {
     async fn receipts(&self, ctx: &Context<'_>) -> async_graphql::Result<Vec<Receipt>> {
         let db = ctx.data_unchecked::<Database>();
         let receipts = db
-            .receipts(&self.tx_id)?
+            .receipts(&self.tx_id)
+            .unwrap_or_default()
             .into_iter()
             .map(Into::into)
             .collect();
@@ -212,7 +213,8 @@ impl FailureStatus {
     async fn receipts(&self, ctx: &Context<'_>) -> async_graphql::Result<Vec<Receipt>> {
         let db = ctx.data_unchecked::<Database>();
         let receipts = db
-            .receipts(&self.tx_id)?
+            .receipts(&self.tx_id)
+            .unwrap_or_default()
             .into_iter()
             .map(Into::into)
             .collect();
