@@ -23,6 +23,7 @@ use fuel_core_storage::{
 };
 use fuel_core_types::fuel_types::{
     BlockHeight,
+    ContractId,
     Nonce,
 };
 use itertools::Itertools;
@@ -50,12 +51,25 @@ type DatabaseResult<T> = Result<T>;
 // TODO: Extract `Database` and all belongs into `fuel-core-database`.
 #[cfg(feature = "rocksdb")]
 use crate::state::rocks_db::RocksDb;
+use fuel_core_database::vm_database::VmDatabase;
+use fuel_core_executor::ports::RelayerPort;
+use fuel_core_storage::database::{
+    DatabaseColumnIterator,
+    MessageIsSpent,
+    VmDatabaseTrait,
+};
+use fuel_core_types::{
+    blockchain::{
+        header::ConsensusHeader,
+        primitives::DaBlockHeight,
+    },
+    entities::message::Message,
+};
 #[cfg(feature = "rocksdb")]
 use std::path::Path;
 use strum::EnumCount;
 #[cfg(feature = "rocksdb")]
 use tempfile::TempDir;
-use fuel_core_storage::database::{DatabaseColumnIterator, MessageIsSpent};
 
 // Storages implementation
 // TODO: Move to separate `database/storage` folder, because it is only implementation of storages traits.
@@ -501,17 +515,41 @@ impl DatabaseColumnIterator for Database {
                     start.as_ref().map(|s| s.as_ref()),
                     direction.unwrap_or_default(),
                 )
-                .map(|val| {
-                    match val {
-                        Ok((key, value)) => {
-                            let key = K::from(key);
-                            let value: V = postcard::from_bytes(&value).map_err(|_| fuel_core_storage::Error::Codec)?;
-                            Ok((key, value))
-                        }
-                        Err(err) => Err(fuel_core_storage::Error::from(err)),
+                .map(|val| match val {
+                    Ok((key, value)) => {
+                        let key = K::from(key);
+                        let value: V = postcard::from_bytes(&value)
+                            .map_err(|_| fuel_core_storage::Error::Codec)?;
+                        Ok((key, value))
                     }
+                    Err(err) => Err(fuel_core_storage::Error::from(err)),
                 }),
         )
+    }
+}
+
+// Todo Emir
+impl RelayerPort for Database {
+    fn get_message(
+        &self,
+        id: &Nonce,
+        _da_height: &DaBlockHeight,
+    ) -> anyhow::Result<Option<Message>> {
+        use fuel_core_storage::{
+            tables::Messages,
+            StorageAsRef,
+        };
+        use std::borrow::Cow;
+        Ok(self.storage::<Messages>().get(id)?.map(Cow::into_owned))
+    }
+}
+
+impl VmDatabaseTrait for Database {
+    type Data = VmDatabase<Database>;
+
+    fn new<T>(&self, header: &ConsensusHeader<T>, coinbase: ContractId) -> Self::Data {
+        let cloned_database = self.clone();
+        Self::Data::new(cloned_database, header, coinbase)
     }
 }
 

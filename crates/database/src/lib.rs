@@ -9,8 +9,10 @@
 // #![deny(missing_docs)]
 #![deny(unused_crate_dependencies)]
 #![deny(warnings)]
+#![allow(unused_variables)]
 
 pub mod vm_database;
+pub mod test_helpers;
 
 use fuel_core_storage::Error as StorageError;
 use fuel_core_types::services::executor::Error as ExecutorError;

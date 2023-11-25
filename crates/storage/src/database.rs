@@ -1,12 +1,31 @@
-use fuel_vm_private::fuel_types::ContractId;
+use crate::{
+    iter::IterDirection,
+    tables::{
+        Messages,
+        SpentMessages,
+    },
+    Error as StorageError,
+    StorageInspect,
+};
+use fuel_core_types::{
+    blockchain::{
+        header::ConsensusHeader,
+        primitives::BlockId,
+    },
+    fuel_types::{
+        Address,
+        BlockHeight,
+        Bytes32,
+        Nonce,
+    },
+    services::txpool::TransactionStatus,
+    tai64::Tai64,
+};
+use fuel_vm_private::{
+    fuel_types::ContractId,
+    prelude::InterpreterStorage,
+};
 use serde::de::DeserializeOwned;
-use fuel_core_types::blockchain::primitives::BlockId;
-use fuel_core_types::fuel_types::{Address, BlockHeight, Bytes32, Nonce};
-use fuel_core_types::services::txpool::TransactionStatus;
-use fuel_core_types::tai64::Tai64;
-use crate::iter::IterDirection;
-use crate::tables::{Messages, SpentMessages};
-use crate::{Error as StorageError, StorageInspect};
 
 pub trait FuelBlockTrait {
     type Error;
@@ -27,8 +46,8 @@ pub trait FuelStateTrait {
 }
 
 pub trait MessageIsSpent:
-StorageInspect<SpentMessages, Error = StorageError>
-+ StorageInspect<Messages, Error = StorageError>
+    StorageInspect<SpentMessages, Error = StorageError>
+    + StorageInspect<Messages, Error = StorageError>
 {
     type Error;
 
@@ -54,7 +73,6 @@ pub trait TxIdOwnerRecorder {
 }
 
 pub trait DatabaseColumnIterator {
-
     type Error;
 
     fn iter_all_filtered_column<K, V, P, S>(
@@ -63,9 +81,15 @@ pub trait DatabaseColumnIterator {
         start: Option<S>,
         direction: Option<IterDirection>,
     ) -> Box<dyn Iterator<Item = Result<(K, V), Self::Error>> + '_>
-        where
-            K: From<Vec<u8>>,
-            V: DeserializeOwned,
-            P: AsRef<[u8]>,
-            S: AsRef<[u8]>;
+    where
+        K: From<Vec<u8>>,
+        V: DeserializeOwned,
+        P: AsRef<[u8]>,
+        S: AsRef<[u8]>;
+}
+
+pub trait VmDatabaseTrait {
+    type Data: InterpreterStorage;
+
+    fn new<T>(&self, header: &ConsensusHeader<T>, coinbase: ContractId) -> Self::Data;
 }

@@ -2910,7 +2910,9 @@ dependencies = [
  "fuel-core-storage",
  "fuel-core-trace",
  "fuel-core-types",
+ "mockall",
  "primitive-types",
+ "serde",
 ]
 
 [[package]]
@@ -2949,7 +2951,10 @@ dependencies = [
  "fuel-core-trace",
  "fuel-core-types",
  "hex",
+ "itertools 0.10.5",
+ "mockall",
  "parking_lot 0.12.1",
+ "rand 0.8.5",
  "tracing",
 ]
 

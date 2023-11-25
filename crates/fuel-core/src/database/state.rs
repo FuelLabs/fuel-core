@@ -1,25 +1,45 @@
 use crate::database::{
     storage::{
-        ContractsStateMerkleData, ContractsStateMerkleMetadata, DatabaseColumn,
+        ContractsStateMerkleData,
+        ContractsStateMerkleMetadata,
+        DatabaseColumn,
         SparseMerkleMetadata,
     },
-    Column, Database,
+    Column,
+    Database,
 };
 use fuel_core_storage::{
-    tables::ContractsState, ContractsStateKey, Error as StorageError, Mappable,
-    MerkleRoot, MerkleRootStorage, StorageAsMut, StorageAsRef, StorageInspect,
+    tables::ContractsState,
+    ContractsStateKey,
+    Error as StorageError,
+    Mappable,
+    MerkleRoot,
+    MerkleRootStorage,
+    StorageAsMut,
+    StorageAsRef,
+    StorageInspect,
     StorageMutate,
 };
 use fuel_core_types::{
     fuel_merkle::{
         sparse,
-        sparse::{in_memory, MerkleTree, MerkleTreeKey},
+        sparse::{
+            in_memory,
+            MerkleTree,
+            MerkleTreeKey,
+        },
     },
-    fuel_types::{Bytes32, ContractId},
+    fuel_types::{
+        Bytes32,
+        ContractId,
+    },
 };
 use itertools::Itertools;
 use std::{
-    borrow::{BorrowMut, Cow},
+    borrow::{
+        BorrowMut,
+        Cow,
+    },
     ops::Deref,
 };
 
@@ -162,9 +182,7 @@ impl Database {
             .storage::<ContractsStateMerkleMetadata>()
             .contains_key(contract_id)?
         {
-            return Err(
-                anyhow::anyhow!("The contract state is already initialized").into()
-            );
+            return Err(anyhow::anyhow!("The contract state is already initialized").into())
         }
 
         let slots = slots.collect_vec();
@@ -198,7 +216,10 @@ impl Database {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use fuel_core_storage::{StorageAsMut, StorageAsRef};
+    use fuel_core_storage::{
+        StorageAsMut,
+        StorageAsRef,
+    };
     use fuel_core_types::fuel_types::Bytes32;
     use rand::Rng;
 
@@ -424,7 +445,10 @@ mod tests {
 
     #[test]
     fn init_contract_state_works() {
-        use rand::{rngs::StdRng, SeedableRng};
+        use rand::{
+            rngs::StdRng,
+            SeedableRng,
+        };
 
         let rng = &mut StdRng::seed_from_u64(1234);
         let gen = || Some((random_bytes32(rng), random_bytes32(rng)));

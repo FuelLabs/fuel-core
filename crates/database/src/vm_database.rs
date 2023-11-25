@@ -2,26 +2,51 @@ use anyhow::anyhow;
 use fuel_core_storage::{
     iter::IterDirection,
     not_found,
-    tables::{ContractsAssets, ContractsState},
-    ContractsAssetsStorage, ContractsStateKey, Error as StorageError, Mappable,
-    MerkleRoot, MerkleRootStorage, StorageAsMut, StorageInspect, StorageMutate,
-    StorageRead, StorageSize,
+    tables::{
+        ContractsAssets,
+        ContractsState,
+    },
+    ContractsAssetsStorage,
+    ContractsStateKey,
+    Error as StorageError,
+    Mappable,
+    MerkleRoot,
+    MerkleRootStorage,
+    StorageAsMut,
+    StorageInspect,
+    StorageMutate,
+    StorageRead,
+    StorageSize,
 };
 use fuel_core_types::{
     blockchain::header::ConsensusHeader,
-    fuel_tx::{Contract, StorageSlot},
-    fuel_types::{BlockHeight, Bytes32, ContractId, Salt, Word},
+    fuel_tx::{
+        Contract,
+        StorageSlot,
+    },
+    fuel_types::{
+        BlockHeight,
+        Bytes32,
+        ContractId,
+        Salt,
+        Word,
+    },
     fuel_vm::InterpreterStorage,
     tai64::Tai64,
 };
 use primitive_types::U256;
 use std::borrow::Cow;
 
-use fuel_core_storage::database::DatabaseColumnIterator;
-use fuel_core_storage::database::FuelBlockTrait;
-use fuel_core_storage::database::FuelStateTrait;
+use fuel_core_storage::database::{
+    DatabaseColumnIterator,
+    FuelBlockTrait,
+    FuelStateTrait,
+};
 
-use fuel_core_storage::tables::{ContractsInfo, ContractsRawCode};
+use fuel_core_storage::tables::{
+    ContractsInfo,
+    ContractsRawCode,
+};
 
 /// Used to store metadata relevant during the execution of a transaction
 #[derive(Clone, Debug)]
@@ -243,7 +268,7 @@ where
 
             if entry.is_none() {
                 // We out of `contract_id` prefix
-                break;
+                break
             }
 
             let (multikey, value) =
@@ -614,7 +639,7 @@ mod tests {
                     U256::from_big_endian(&start_key).overflowing_add(i.into());
 
                 if overflow {
-                    return None;
+                    return None
                 }
 
                 let current_key = u256_to_bytes32(current_key);

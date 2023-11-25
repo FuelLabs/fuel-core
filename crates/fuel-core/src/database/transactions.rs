@@ -2,12 +2,13 @@ use crate::database::{
     storage::DatabaseColumn,
     Column,
     Database,
-    DatabaseError,
     Result as DatabaseResult,
 };
 use fuel_core_storage::{
+    database::TxIdOwnerRecorder,
     iter::IterDirection,
     tables::Transactions,
+    Error as StorageError,
 };
 use fuel_core_types::{
     self,
@@ -26,7 +27,6 @@ use std::{
     mem::size_of,
     ops::Deref,
 };
-use fuel_core_storage::database::TxIdOwnerRecorder;
 
 impl DatabaseColumn for Transactions {
     fn column() -> Column {
@@ -35,7 +35,7 @@ impl DatabaseColumn for Transactions {
 }
 
 impl TxIdOwnerRecorder for Database {
-    type Error = DatabaseError;
+    type Error = StorageError;
 
     fn record_tx_id_owner(
         &self,
@@ -44,7 +44,7 @@ impl TxIdOwnerRecorder for Database {
         tx_idx: u16,
         tx_id: &Bytes32,
     ) -> Result<Option<Bytes32>, Self::Error> {
-        self.record_tx_id_owner(owner, block_height, tx_idx, tx_id)
+        Ok(self.record_tx_id_owner(owner, block_height, tx_idx, tx_id)?)
     }
 
     fn update_tx_status(
@@ -52,7 +52,7 @@ impl TxIdOwnerRecorder for Database {
         id: &Bytes32,
         status: TransactionStatus,
     ) -> Result<Option<TransactionStatus>, Self::Error> {
-        self.update_tx_status(id, status)
+        Ok(self.update_tx_status(id, status)?)
     }
 }
 
