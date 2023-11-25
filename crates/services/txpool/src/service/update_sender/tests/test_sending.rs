@@ -60,7 +60,6 @@ fn test_send_reg() {
     let update = TxUpdate {
         tx_id: Bytes32::from([2; 32]),
         message: TxStatusMessage::Status(TransactionStatus::Success {
-            tx_id: Default::default(),
             block_id: BlockId::from([0; 32]),
             time: Tai64(0),
             result: None,

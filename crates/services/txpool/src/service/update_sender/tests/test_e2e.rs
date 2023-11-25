@@ -44,7 +44,6 @@ fn test_update_sender_reg() {
         Send(
             0,
             Status(Success {
-                tx_id: Default::default(),
                 block_id: BlockId::from([0; 32]),
                 time: Tai64(0),
                 result: None,
