@@ -542,7 +542,7 @@ where
                             },
                         }
                     },
-                    Some(FuelP2PEvent::RequestMessage { request_message, request_id }) => {
+                    Some(FuelP2PEvent::InboundRequestMessage { request_message, request_id }) => {
                         match request_message {
                             RequestMessage::Block(block_height) => {
                                 match self.db.get_sealed_block(&block_height) {

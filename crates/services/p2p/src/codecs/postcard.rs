@@ -25,15 +25,31 @@ use asynchronous_codec::{
 };
 use futures::{
     AsyncRead,
-    AsyncWriteExt,
     SinkExt,
 };
 use libp2p::request_response::Codec as RequestResponseCodec;
+use quick_protobuf::BytesReader;
 use serde::{
     Deserialize,
     Serialize,
 };
-use std::io;
+use std::{
+    io,
+    marker::PhantomData,
+};
+
+// TODO: IDK if this is even close to correct. Just introducing it to appease compiler
+struct Message<'a> {
+    _lifetime: PhantomData<&'a ()>,
+}
+
+impl quick_protobuf::MessageWrite for Message<'_> {}
+
+impl<'a> quick_protobuf::MessageRead<'a> for Message<'a> {
+    fn from_reader(r: &mut BytesReader, bytes: &'a [u8]) -> quick_protobuf::Result<Self> {
+        todo!()
+    }
+}
 
 #[derive(Default, Debug, Clone)]
 pub struct PostcardCodec {
@@ -88,12 +104,12 @@ impl RequestResponseCodec for PostcardCodec {
         T: AsyncRead + Unpin + Send,
     {
         // let encoded_data = read_length_prefixed(socket, MAX_REQUEST_SIZE).await?;
-        let decoder =
-            quick_protobuf_codec::Codec::<proto::Message>::new(MAX_REQUEST_SIZE);
-
-        let encoded_data: Vec<_> = FramedRead::new(socket, decoder).next().await?;
-
-        self.deserialize(&encoded_data)
+        todo!()
+        // let decoder = quick_protobuf_codec::Codec::<Message>::new(MAX_REQUEST_SIZE);
+        //
+        // let encoded_data = FramedRead::new(socket, decoder).next().await?;
+        //
+        // self.deserialize(encoded_data)
     }
 
     async fn read_response<T>(
@@ -106,12 +122,12 @@ impl RequestResponseCodec for PostcardCodec {
     {
         // let encoded_data = read_length_prefixed(socket, self.max_response_size).await?;
 
-        let decoder =
-            quick_protobuf_codec::Codec::<proto::Message>::new(self.max_response_size);
-
-        let encoded_data: Vec<_> = FramedRead::new(socket, decoder).next().await?;
-
-        self.deserialize(&encoded_data)
+        todo!()
+        // let decoder = quick_protobuf_codec::Codec::<Message>::new(self.max_response_size);
+        //
+        // let encoded_data = FramedRead::new(socket, decoder).next().await?;
+        //
+        // self.deserialize(encoded_data)
     }
 
     async fn write_request<T>(
@@ -127,15 +143,15 @@ impl RequestResponseCodec for PostcardCodec {
             Ok(encoded_data) => {
                 // write_length_prefixed(socket, encoded_data).await?;
 
-                let encoder = quick_protobuf_codec::Codec::<proto::Message>::new(
-                    self.max_response_size,
-                );
-
-                let mut framed = FramedWrite::new(socket, encoder);
-                framed.send(encoded_data).await?;
-                framed.close().await?;
-
-                Ok(())
+                todo!()
+                // let encoder =
+                //     quick_protobuf_codec::Codec::<Message>::new(self.max_response_size);
+                //
+                // let mut framed = FramedWrite::new(socket, encoder);
+                // framed.send(encoded_data).await?;
+                // framed.close().await?;
+                //
+                // Ok(())
             }
             Err(e) => Err(io::Error::new(io::ErrorKind::Other, e.to_string())),
         }
@@ -154,15 +170,15 @@ impl RequestResponseCodec for PostcardCodec {
             Ok(encoded_data) => {
                 // write_length_prefixed(socket, encoded_data).await?;
 
-                let encoder = quick_protobuf_codec::Codec::<proto::Message>::new(
-                    self.max_response_size,
-                );
-
-                let mut framed = FramedWrite::new(socket, encoder);
-                framed.send(&encoded_data).await?;
-                framed.close().await?;
-
-                Ok(())
+                todo!()
+                // let encoder =
+                //     quick_protobuf_codec::Codec::<Message>::new(self.max_response_size);
+                //
+                // let mut framed = FramedWrite::new(socket, encoder);
+                // framed.send(&encoded_data).await?;
+                // framed.close().await?;
+                //
+                // Ok(())
             }
             Err(e) => Err(io::Error::new(io::ErrorKind::Other, e.to_string())),
         }

@@ -25,6 +25,7 @@ use libp2p::{
     PeerId,
 };
 use libp2p_core::Endpoint;
+use libp2p_identify::Event;
 use libp2p_swarm::{
     derive_prelude::Either,
     ConnectionDenied,
@@ -345,6 +346,7 @@ impl FromAction<Heartbeat> for PeerReportBehaviour {
                 peer_id,
                 connection,
             }),
+            _ => None,
         }
     }
 }
@@ -409,6 +411,7 @@ impl FromAction<Identify> for PeerReportBehaviour {
                 peer_id,
                 connection,
             }),
+            _ => None,
         }
     }
 }

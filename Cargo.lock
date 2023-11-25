@@ -2693,6 +2693,7 @@ dependencies = [
  "libp2p-yamux",
  "postcard",
  "prometheus-client",
+ "quick-protobuf",
  "quick-protobuf-codec 0.3.0",
  "rand",
  "serde",

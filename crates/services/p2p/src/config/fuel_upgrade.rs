@@ -103,15 +103,16 @@ where
         async move {
             // Inbound node receives the checksum and compares it to its own checksum.
             // If they do not match the connection is rejected.
-            let decoder =
-                quick_protobuf_codec::Codec::<proto::Message>::new(self.checksum.0.len());
-            let res = FramedRead::new(&mut socket, decoder).next().await?;
-
-            if res != self.checksum.0 {
-                return Err(FuelUpgradeError::IncorrectChecksum)
-            }
-
-            Ok(socket)
+            todo!()
+            // let decoder =
+            //     quick_protobuf_codec::Codec::<Message>::new(self.checksum.0.len());
+            // let res = FramedRead::new(&mut socket, decoder).next().await?;
+            //
+            // if res != self.checksum.0 {
+            //     return Err(FuelUpgradeError::IncorrectChecksum)
+            // }
+            //
+            // Ok(socket)
         }
         .boxed()
     }
@@ -128,16 +129,17 @@ where
     fn upgrade_outbound(self, mut socket: C, _: Self::Info) -> Self::Future {
         async move {
             // Outbound node sends their own checksum for comparison with the inbound node.
-            let encoder =
-                quick_protobuf_codec::Codec::<proto::Message>::new(self.checksum.0.len());
-            let mut framed = FramedWrite::new(&mut socket, encoder);
-            framed.send(&self.checksum.0).await?;
-            framed.close().await?;
-
-            // Note: outbound node does not need to receive the checksum from the inbound node,
-            // since inbound node will reject the connection if the two don't match on its side.
-
-            Ok(socket)
+            todo!()
+            // let encoder =
+            //     quick_protobuf_codec::Codec::<Message>::new(self.checksum.0.len());
+            // let mut framed = FramedWrite::new(&mut socket, encoder);
+            // framed.send(&self.checksum.0).await?;
+            // framed.close().await?;
+            //
+            // // Note: outbound node does not need to receive the checksum from the inbound node,
+            // // since inbound node will reject the connection if the two don't match on its side.
+            //
+            // Ok(socket)
         }
         .boxed()
     }

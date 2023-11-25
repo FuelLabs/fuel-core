@@ -107,7 +107,9 @@ impl<Codec: NetworkCodec> FuelBehaviour<Codec> {
             core::iter::once((codec.get_req_res_protocol(), ProtocolSupport::Full));
 
         let mut req_res_config = RequestResponseConfig::default();
-        req_res_config.with_request_timeout(p2p_config.set_request_timeout);
+        req_res_config
+            .clone()
+            .with_request_timeout(p2p_config.set_request_timeout);
 
         // TODO: Do we need to set this via the `SwarmBuilder` somewhere? https://github.com/libp2p/rust-libp2p/pull/4679
         // req_res_config.set_connection_keep_alive(p2p_config.set_connection_keep_alive);

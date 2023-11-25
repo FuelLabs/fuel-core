@@ -53,6 +53,7 @@ libp2p-websocket = "=0.43.0"
 libp2p-yamux = "=0.45.0"
 postcard = { workspace = true, features = ["use-std"] }
 prometheus-client = { workspace = true }
+quick-protobuf = "0.8.1"
 quick-protobuf-codec = "0.3.0"
 asynchronous-codec = "0.7.0"
 rand = { workspace = true }
