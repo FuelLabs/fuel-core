@@ -196,10 +196,17 @@ impl<Codec: NetworkCodec> FuelP2PService<Codec> {
             // and disconnect any surplus peers
             .with_max_established(Some(total_connections));
 
-        let mut swarm =
-            SwarmBuilder::with_tokio_executor(transport, behaviour, local_peer_id)
-                .connection_limits(connection_limits)
-                .build();
+        // let mut swarm =
+        //     SwarmBuilder::with_tokio_executor(transport, behaviour, local_peer_id)
+        //         .connection_limits(connection_limits)
+        //         .build();
+
+        let mut swarm = Swarm::new(
+            transport,
+            behaviour,
+            local_peer_id,
+            libp2p_swarm::Config::with_tokio_executor(),
+        );
 
         let metrics = config.metrics;
 
