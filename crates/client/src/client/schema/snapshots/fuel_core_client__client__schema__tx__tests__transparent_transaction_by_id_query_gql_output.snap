@@ -101,6 +101,7 @@ query($id: TransactionId!) {
         time
       }
       ... on SuccessStatus {
+        transactionId
         block {
           id
         }
@@ -148,6 +149,7 @@ query($id: TransactionId!) {
         reason
       }
       ... on FailureStatus {
+        transactionId
         block {
           id
         }

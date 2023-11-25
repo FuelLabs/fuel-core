@@ -48,6 +48,7 @@ query($after: String, $before: String, $first: Int, $last: Int) {
             time
           }
           ... on SuccessStatus {
+            transactionId
             block {
               id
             }
@@ -95,6 +96,7 @@ query($after: String, $before: String, $first: Int, $last: Int) {
             reason
           }
           ... on FailureStatus {
+            transactionId
             block {
               id
             }
