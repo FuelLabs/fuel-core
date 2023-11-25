@@ -12,6 +12,11 @@ Description of the upcoming release here.
 
 - [#1515](https://github.com/FuelLabs/fuel-core/pull/1515): Added support of `--version` command for `fuel-core-keygen` binary.
 
+### Changed
+
+- [#1517](https://github.com/FuelLabs/fuel-core/pull/1517): Changed default gossip heartbeat interval to 500ms. 
+
+
 ## [Version 0.21.0]
 
 This release focuses on preparing `fuel-core` for the mainnet environment:
