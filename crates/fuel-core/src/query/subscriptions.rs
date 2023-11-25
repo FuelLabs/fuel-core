@@ -2,7 +2,6 @@ use crate::schema::tx::types::TransactionStatus as ApiTxStatus;
 use fuel_core_storage::Result as StorageResult;
 use fuel_core_txpool::service::TxStatusMessage;
 use fuel_core_types::{
-    fuel_tx::TxId,
     fuel_types::Bytes32,
     services::txpool::TransactionStatus as TxPoolTxStatus,
 };
@@ -70,8 +69,7 @@ where
 
             match status {
                 TxStatusMessage::Status(status) => {
-                    let tx_id: TxId = transaction_id.into();
-                    let status = (tx_id, status).into();
+                    let status = (transaction_id, status).into();
                     Ok(status)
                 },
                 // Map a failed status to an error for the api.

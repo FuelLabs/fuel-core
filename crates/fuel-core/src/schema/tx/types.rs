@@ -155,6 +155,10 @@ pub struct SuccessStatus {
 
 #[Object]
 impl SuccessStatus {
+    async fn transaction_id(&self) -> TransactionId {
+        self.tx_id.into()
+    }
+
     async fn block(&self, ctx: &Context<'_>) -> async_graphql::Result<Block> {
         let query: &Database = ctx.data_unchecked();
         let block = query.block(&self.block_id)?;
@@ -192,6 +196,10 @@ pub struct FailureStatus {
 
 #[Object]
 impl FailureStatus {
+    async fn transaction_id(&self) -> TransactionId {
+        self.tx_id.into()
+    }
+
     async fn block(&self, ctx: &Context<'_>) -> async_graphql::Result<Block> {
         let query: &Database = ctx.data_unchecked();
         let block = query.block(&self.block_id)?;
@@ -622,8 +630,7 @@ pub(crate) fn get_tx_status(
         .into_api_result::<txpool::TransactionStatus, StorageError>()?
     {
         Some(status) => {
-            let tx_id: TxId = id.into();
-            let status = (tx_id, status).into();
+            let status = (id, status).into();
             Ok(Some(status))
         }
         None => match txpool.submission_time(id) {
