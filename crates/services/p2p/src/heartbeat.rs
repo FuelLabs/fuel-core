@@ -93,7 +93,7 @@ impl NetworkBehaviour for Heartbeat {
         local_addr: &Multiaddr,
         remote_addr: &Multiaddr,
     ) -> Result<THandler<Self>, ConnectionDenied> {
-        todo!()
+        Ok(HeartbeatHandler::new(self.config.clone()))
     }
 
     fn handle_established_outbound_connection(
@@ -103,11 +103,26 @@ impl NetworkBehaviour for Heartbeat {
         addr: &Multiaddr,
         role_override: Endpoint,
     ) -> Result<THandler<Self>, ConnectionDenied> {
-        todo!()
+        Ok(HeartbeatHandler::new(self.config.clone()))
     }
 
     fn on_swarm_event(&mut self, event: FromSwarm) {
-        todo!()
+        match event {
+            FromSwarm::ConnectionEstablished(_) => {}
+            FromSwarm::ConnectionClosed(_) => {}
+            FromSwarm::AddressChange(_) => {}
+            FromSwarm::DialFailure(_) => {}
+            FromSwarm::ListenFailure(_) => {}
+            FromSwarm::NewListener(_) => {}
+            FromSwarm::NewListenAddr(_) => {}
+            FromSwarm::ExpiredListenAddr(_) => {}
+            FromSwarm::ListenerError(_) => {}
+            FromSwarm::ListenerClosed(_) => {}
+            FromSwarm::NewExternalAddrCandidate(_) => {}
+            FromSwarm::ExternalAddrConfirmed(_) => {}
+            FromSwarm::ExternalAddrExpired(_) => {}
+            _ => {}
+        }
     }
 
     fn on_connection_handler_event(
