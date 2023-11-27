@@ -442,7 +442,7 @@ impl FuelClient {
             TransactionStatus::Success { receipts, .. } => receipts.clone(),
             TransactionStatus::SqueezedOut { .. } => {
                 // Note: Returns an error when the transaction has been squeezed
-                // out instead of  returning the `SqueezedOut` status. This is
+                // out instead of returning the `SqueezedOut` status. This is
                 // done to maintain existing behavior where retrieving receipts
                 // via `self.receipts(..)` returns an error when the transaction
                 // cannot be found, such as in the case of a squeeze-out.
