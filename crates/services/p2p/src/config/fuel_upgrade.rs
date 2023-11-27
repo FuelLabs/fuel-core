@@ -1,4 +1,5 @@
 use asynchronous_codec::{
+    BytesCodec,
     FramedRead,
     FramedWrite,
 };
@@ -8,6 +9,7 @@ use futures::{
     Future,
     FutureExt,
     SinkExt,
+    TryStreamExt,
 };
 use libp2p::{
     InboundUpgrade,
@@ -91,6 +93,13 @@ impl UpgradeInfo for FuelUpgrade {
     }
 }
 
+fn invalid_data_err() -> io::Error {
+    io::Error::new(
+        io::ErrorKind::InvalidData,
+        "Invalid data in Fuel Upgrade code",
+    )
+}
+
 impl<C> InboundUpgrade<C> for FuelUpgrade
 where
     C: AsyncRead + AsyncWrite + Unpin + Send + 'static,
@@ -103,16 +112,16 @@ where
         async move {
             // Inbound node receives the checksum and compares it to its own checksum.
             // If they do not match the connection is rejected.
-            todo!()
-            // let decoder =
-            //     quick_protobuf_codec::Codec::<Message>::new(self.checksum.0.len());
-            // let res = FramedRead::new(&mut socket, decoder).next().await?;
-            //
-            // if res != self.checksum.0 {
-            //     return Err(FuelUpgradeError::IncorrectChecksum)
-            // }
-            //
-            // Ok(socket)
+            let res = FramedRead::new(&mut socket, BytesCodec)
+                .try_next()
+                .await?
+                .ok_or(invalid_data_err())?;
+
+            if res.as_ref() != self.checksum.0.as_ref() {
+                return Err(FuelUpgradeError::IncorrectChecksum)
+            }
+
+            Ok(socket)
         }
         .boxed()
     }
@@ -128,18 +137,14 @@ where
 
     fn upgrade_outbound(self, mut socket: C, _: Self::Info) -> Self::Future {
         async move {
-            // Outbound node sends their own checksum for comparison with the inbound node.
-            todo!()
-            // let encoder =
-            //     quick_protobuf_codec::Codec::<Message>::new(self.checksum.0.len());
-            // let mut framed = FramedWrite::new(&mut socket, encoder);
-            // framed.send(&self.checksum.0).await?;
-            // framed.close().await?;
-            //
+            let mut framed = FramedWrite::new(&mut socket, BytesCodec);
+            let bytes = self.checksum.0.to_vec().into();
+            framed.send(bytes).await?;
+            framed.close().await?;
             // // Note: outbound node does not need to receive the checksum from the inbound node,
             // // since inbound node will reject the connection if the two don't match on its side.
             //
-            // Ok(socket)
+            Ok(socket)
         }
         .boxed()
     }

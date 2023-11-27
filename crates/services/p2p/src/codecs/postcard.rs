@@ -14,55 +14,41 @@ use crate::{
         OutboundResponse,
         RequestMessage,
         ResponseMessage,
-        MAX_REQUEST_SIZE,
+        // MAX_REQUEST_SIZE,
         REQUEST_RESPONSE_PROTOCOL_ID,
     },
 };
 use async_trait::async_trait;
 use asynchronous_codec::{
+    BytesCodec,
     FramedRead,
     FramedWrite,
 };
 use futures::{
     AsyncRead,
     SinkExt,
+    TryStreamExt,
 };
 use libp2p::request_response::Codec as RequestResponseCodec;
-use quick_protobuf::BytesReader;
 use serde::{
     Deserialize,
     Serialize,
 };
-use std::{
-    io,
-    marker::PhantomData,
-};
-
-// TODO: IDK if this is even close to correct. Just introducing it to appease compiler
-struct Message<'a> {
-    _lifetime: PhantomData<&'a ()>,
-}
-
-impl quick_protobuf::MessageWrite for Message<'_> {}
-
-impl<'a> quick_protobuf::MessageRead<'a> for Message<'a> {
-    fn from_reader(r: &mut BytesReader, bytes: &'a [u8]) -> quick_protobuf::Result<Self> {
-        todo!()
-    }
-}
+use std::io;
 
 #[derive(Default, Debug, Clone)]
 pub struct PostcardCodec {
+    // TODO: Do we still need this? The `BytesCodec` doesn't take a max size. Maybe we should use a different codec
     /// Used for `max_size` parameter when reading Response Message
     /// Necessary in order to avoid DoS attacks
     /// Currently the size mostly depends on the max size of the Block
-    max_response_size: usize,
+    _max_response_size: usize,
 }
 
 impl PostcardCodec {
     pub fn new(max_block_size: usize) -> Self {
         Self {
-            max_response_size: max_block_size,
+            _max_response_size: max_block_size,
         }
     }
 
@@ -80,6 +66,13 @@ impl PostcardCodec {
         postcard::to_stdvec(&data)
             .map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))
     }
+}
+
+fn invalid_data_err() -> io::Error {
+    io::Error::new(
+        io::ErrorKind::InvalidData,
+        "Invalid data in `postcard` codec",
+    )
 }
 
 /// Since Postcard does not support async reads or writes out of the box
@@ -103,13 +96,11 @@ impl RequestResponseCodec for PostcardCodec {
     where
         T: AsyncRead + Unpin + Send,
     {
-        // let encoded_data = read_length_prefixed(socket, MAX_REQUEST_SIZE).await?;
-        todo!()
-        // let decoder = quick_protobuf_codec::Codec::<Message>::new(MAX_REQUEST_SIZE);
-        //
-        // let encoded_data = FramedRead::new(socket, decoder).next().await?;
-        //
-        // self.deserialize(encoded_data)
+        let encoded_data = FramedRead::new(socket, BytesCodec)
+            .try_next()
+            .await?
+            .ok_or(invalid_data_err())?;
+        self.deserialize(&encoded_data)
     }
 
     async fn read_response<T>(
@@ -118,16 +109,14 @@ impl RequestResponseCodec for PostcardCodec {
         socket: &mut T,
     ) -> io::Result<Self::Response>
     where
-        T: futures::AsyncRead + Unpin + Send,
+        T: AsyncRead + Unpin + Send,
     {
-        // let encoded_data = read_length_prefixed(socket, self.max_response_size).await?;
+        let encoded_data = FramedRead::new(socket, BytesCodec)
+            .try_next()
+            .await?
+            .ok_or(invalid_data_err())?;
 
-        todo!()
-        // let decoder = quick_protobuf_codec::Codec::<Message>::new(self.max_response_size);
-        //
-        // let encoded_data = FramedRead::new(socket, decoder).next().await?;
-        //
-        // self.deserialize(encoded_data)
+        self.deserialize(&encoded_data)
     }
 
     async fn write_request<T>(
@@ -141,17 +130,11 @@ impl RequestResponseCodec for PostcardCodec {
     {
         match postcard::to_stdvec(&req) {
             Ok(encoded_data) => {
-                // write_length_prefixed(socket, encoded_data).await?;
+                let mut framed = FramedWrite::new(socket, BytesCodec);
+                framed.send(encoded_data.into()).await?;
+                framed.close().await?;
 
-                todo!()
-                // let encoder =
-                //     quick_protobuf_codec::Codec::<Message>::new(self.max_response_size);
-                //
-                // let mut framed = FramedWrite::new(socket, encoder);
-                // framed.send(encoded_data).await?;
-                // framed.close().await?;
-                //
-                // Ok(())
+                Ok(())
             }
             Err(e) => Err(io::Error::new(io::ErrorKind::Other, e.to_string())),
         }
@@ -168,17 +151,11 @@ impl RequestResponseCodec for PostcardCodec {
     {
         match postcard::to_stdvec(&res) {
             Ok(encoded_data) => {
-                // write_length_prefixed(socket, encoded_data).await?;
+                let mut framed = FramedWrite::new(socket, BytesCodec);
+                framed.send(encoded_data.into()).await?;
+                framed.close().await?;
 
-                todo!()
-                // let encoder =
-                //     quick_protobuf_codec::Codec::<Message>::new(self.max_response_size);
-                //
-                // let mut framed = FramedWrite::new(socket, encoder);
-                // framed.send(&encoded_data).await?;
-                // framed.close().await?;
-                //
-                // Ok(())
+                Ok(())
             }
             Err(e) => Err(io::Error::new(io::ErrorKind::Other, e.to_string())),
         }
