@@ -11,10 +11,6 @@ use futures::{
     SinkExt,
     TryStreamExt,
 };
-use libp2p::{
-    InboundUpgrade,
-    OutboundUpgrade,
-};
 use libp2p_core::{
     upgrade::{
         InboundConnectionUpgrade,

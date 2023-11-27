@@ -12,8 +12,6 @@ use libp2p::{
         Error as NoiseError,
         Output as NoiseOutput,
     },
-    InboundUpgrade,
-    OutboundUpgrade,
     PeerId,
 };
 use libp2p_core::upgrade::{
@@ -51,7 +49,7 @@ impl<A: Approver> UpgradeInfo for FuelAuthenticated<A> {
     }
 }
 
-impl<A, T> InboundUpgrade<T> for FuelAuthenticated<A>
+impl<A, T> InboundConnectionUpgrade<T> for FuelAuthenticated<A>
 where
     T: AsyncRead + AsyncWrite + Unpin + Send + 'static,
     A: Approver + Send + 'static,
@@ -75,22 +73,7 @@ where
     }
 }
 
-// TODO
-impl<A, T> InboundConnectionUpgrade<T> for FuelAuthenticated<A>
-where
-    T: AsyncRead + AsyncWrite + Unpin + Send + 'static,
-    A: Approver + Send + 'static,
-{
-    type Output = (PeerId, NoiseOutput<T>);
-    type Error = NoiseError;
-    type Future = Pin<Box<dyn Future<Output = Result<Self::Output, Self::Error>> + Send>>;
-
-    fn upgrade_inbound(self, socket: T, info: Self::Info) -> Self::Future {
-        todo!()
-    }
-}
-
-impl<A, T> OutboundUpgrade<T> for FuelAuthenticated<A>
+impl<A, T> OutboundConnectionUpgrade<T> for FuelAuthenticated<A>
 where
     T: AsyncRead + AsyncWrite + Unpin + Send + 'static,
     A: Approver + Send + 'static,
@@ -111,20 +94,5 @@ where
                     }
                 }),
         )
-    }
-}
-
-// TODO
-impl<A, T> OutboundConnectionUpgrade<T> for FuelAuthenticated<A>
-where
-    T: AsyncRead + AsyncWrite + Unpin + Send + 'static,
-    A: Approver + Send + 'static,
-{
-    type Output = (PeerId, NoiseOutput<T>);
-    type Error = NoiseError;
-    type Future = Pin<Box<dyn Future<Output = Result<Self::Output, Self::Error>> + Send>>;
-
-    fn upgrade_outbound(self, socket: T, info: Self::Info) -> Self::Future {
-        todo!()
     }
 }
