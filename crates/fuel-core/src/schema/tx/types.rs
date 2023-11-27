@@ -242,9 +242,9 @@ impl SqueezedOutStatus {
     }
 }
 
-impl From<(TxId, TxStatus)> for TransactionStatus {
-    fn from((tx_id, s): (TxId, TxStatus)) -> Self {
-        match s {
+impl TransactionStatus {
+    pub fn new(tx_id: TxId, tx_status: TxStatus) -> Self {
+        match tx_status {
             TxStatus::Submitted { time } => {
                 TransactionStatus::Submitted(SubmittedStatus(time))
             }
@@ -630,7 +630,7 @@ pub(crate) fn get_tx_status(
         .into_api_result::<txpool::TransactionStatus, StorageError>()?
     {
         Some(status) => {
-            let status = (id, status).into();
+            let status = TransactionStatus::new(id, status);
             Ok(Some(status))
         }
         None => match txpool.submission_time(id) {

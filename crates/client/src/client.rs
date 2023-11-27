@@ -426,6 +426,9 @@ impl FuelClient {
         Ok(status)
     }
 
+    // TODO: Remove this function after the Beta 5 release when we can introduce breaking changes.
+    // This function is now redundant since `submit_and_await_commit` returns
+    // receipts for all successful and failed transactions.
     #[cfg(feature = "subscriptions")]
     /// Submits transaction, await confirmation and return receipts.
     pub async fn submit_and_await_commit_with_receipts(
@@ -434,8 +437,22 @@ impl FuelClient {
     ) -> io::Result<(TransactionStatus, Option<Vec<Receipt>>)> {
         let tx_id = self.submit(tx).await?;
         let status = self.await_transaction_commit(&tx_id).await?;
-        // TODO: Remove `receipts` now that receipts are queryable from the `Success` or `Failure` status
-        let receipts = self.receipts(&tx_id).await?;
+        let receipts = match &status {
+            TransactionStatus::Submitted { .. } => None,
+            TransactionStatus::Success { receipts, .. } => receipts.clone(),
+            TransactionStatus::SqueezedOut { .. } => {
+                // Note: Returns an error when the transaction has been squeezed
+                // out instead of  returning the `SqueezedOut` status. This is
+                // done to maintain existing behavior where retrieving receipts
+                // via `self.receipts(..)` returns an error when the transaction
+                // cannot be found, such as in the case of a squeeze-out.
+                io::Error::new(
+                    ErrorKind::NotFound,
+                    format!("transaction {id} not found"),
+                )?
+            }
+            TransactionStatus::Failure { receipts, .. } => receipts.clone(),
+        };
 
         Ok((status, receipts))
     }

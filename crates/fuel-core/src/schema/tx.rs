@@ -304,13 +304,9 @@ impl TxStatusSubscription {
         Ok(transaction_status_change(
             move |id| match db.tx_status(&id) {
                 Ok(status) => Ok(Some(status)),
-                Err(StorageError::NotFound(_, _)) => {
-                    Ok(txpool.submission_time(id).map(|time| {
-                        fuel_core_types::services::txpool::TransactionStatus::Submitted {
-                            time,
-                        }
-                    }))
-                }
+                Err(StorageError::NotFound(_, _)) => Ok(txpool
+                    .submission_time(id)
+                    .map(|time| txpool::TransactionStatus::Submitted { time })),
                 Err(err) => Err(err),
             },
             rx,
@@ -348,7 +344,7 @@ impl TxStatusSubscription {
             })
             .map(move |event| match event {
                 TxStatusMessage::Status(status) => {
-                    let status = (tx_id, status).into();
+                    let status = TransactionStatus::new(tx_id, status);
                     Ok(status)
                 }
                 TxStatusMessage::FailedStatus => {

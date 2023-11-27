@@ -69,7 +69,7 @@ where
 
             match status {
                 TxStatusMessage::Status(status) => {
-                    let status = (transaction_id, status).into();
+                    let status = ApiTxStatus::new(transaction_id, status);
                     Ok(status)
                 },
                 // Map a failed status to an error for the api.
