@@ -296,7 +296,14 @@ impl NetworkBehaviour for PeerReportBehaviour {
         local_addr: &Multiaddr,
         remote_addr: &Multiaddr,
     ) -> Result<THandler<Self>, ConnectionDenied> {
-        todo!()
+        self.identify
+            .handle_established_inbound_connection(
+                _connection_id,
+                peer,
+                local_addr,
+                remote_addr,
+            )
+            .map(Either::Right)
     }
 
     fn handle_established_outbound_connection(
@@ -306,7 +313,14 @@ impl NetworkBehaviour for PeerReportBehaviour {
         addr: &Multiaddr,
         role_override: Endpoint,
     ) -> Result<THandler<Self>, ConnectionDenied> {
-        todo!()
+        self.identify
+            .handle_established_outbound_connection(
+                _connection_id,
+                peer,
+                addr,
+                role_override,
+            )
+            .map(Either::Right)
     }
 }
 
