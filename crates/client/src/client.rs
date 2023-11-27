@@ -439,19 +439,19 @@ impl FuelClient {
         let status = self.await_transaction_commit(&tx_id).await?;
         let receipts = match &status {
             TransactionStatus::Submitted { .. } => None,
-            TransactionStatus::Success { receipts, .. } => receipts.clone(),
+            TransactionStatus::Success { receipts, .. } => Some(receipts.clone()),
             TransactionStatus::SqueezedOut { .. } => {
                 // Note: Returns an error when the transaction has been squeezed
                 // out instead of returning the `SqueezedOut` status. This is
                 // done to maintain existing behavior where retrieving receipts
                 // via `self.receipts(..)` returns an error when the transaction
                 // cannot be found, such as in the case of a squeeze-out.
-                io::Error::new(
+                Err(io::Error::new(
                     ErrorKind::NotFound,
-                    format!("transaction {id} not found"),
-                )?
+                    format!("transaction {tx_id} not found"),
+                ))?
             }
-            TransactionStatus::Failure { receipts, .. } => receipts.clone(),
+            TransactionStatus::Failure { receipts, .. } => Some(receipts.clone()),
         };
 
         Ok((status, receipts))
