@@ -199,7 +199,12 @@ impl NetworkBehaviour for DiscoveryBehaviour {
         addr: &Multiaddr,
         role_override: Endpoint,
     ) -> Result<THandler<Self>, ConnectionDenied> {
-        todo!()
+        self.kademlia.handle_established_outbound_connection(
+            _connection_id,
+            peer,
+            addr,
+            role_override,
+        )
     }
 }
 
