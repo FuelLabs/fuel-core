@@ -32,12 +32,15 @@ async fn can_submit_genesis_message() {
         )
         .finalize_as_transaction();
 
-    let mut node_config = Config::local_node();
-    node_config.chain_state = StateConfig {
+    let state = StateConfig {
         messages: vec![msg1],
         ..Default::default()
     };
-    node_config.utxo_validation = true;
+    let node_config = Config {
+        state_streamer: StateStreamer::in_memory(state, 1),
+        utxo_validation: true,
+        ..Config::local_node()
+    };
 
     let srv = FuelService::new_node(node_config.clone()).await.unwrap();
     let client = FuelClient::from(srv.bound_address);

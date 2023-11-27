@@ -36,6 +36,8 @@
       "asset_id": "0x0000000000000000000000000000000000000000000000000000000000000000"
     }
   ],
+  "messages": [],
   "contracts": [],
-  "messages": []
+  "contract_state": [],
+  "contract_balance": []
 }

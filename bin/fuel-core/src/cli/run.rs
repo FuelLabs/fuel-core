@@ -15,8 +15,8 @@ use fuel_core::{
     chain_config::{
         default_consensus_dev_key,
         ChainConfig,
-        Decoder,
         StateConfig,
+        StateStreamer,
         LOCAL_TESTNET,
     },
     database::DatabaseConfig,
@@ -255,6 +255,9 @@ impl Command {
 
         let addr = net::SocketAddr::new(ip, port);
 
+        let snapshot_dir = PathBuf::from_str(chain_config.as_str())?;
+        let state_streamer = StateStreamer::detect_encoding(&chain_config, 1)?;
+
         let (chain_config, chain_state) = match chain_config.as_str() {
             LOCAL_TESTNET => (ChainConfig::local_testnet(), StateConfig::local_testnet()),
             _ => {
@@ -264,8 +267,6 @@ impl Command {
                 (chain_conf, chain_state)
             }
         };
-
-        let state_decoder = Decoder::in_memory(chain_state.clone(), 1);
 
         #[cfg(feature = "relayer")]
         let relayer_cfg = relayer_args.into_config();
@@ -326,8 +327,7 @@ impl Command {
             api_request_timeout: api_request_timeout.into(),
             db_config,
             chain_config: chain_config.clone(),
-            chain_state: chain_state.clone(),
-            snapshot_decoder: state_decoder,
+            state_streamer,
             debug,
             utxo_validation,
             block_production: trigger,

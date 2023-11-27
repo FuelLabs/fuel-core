@@ -1,9 +1,12 @@
 use fuel_core::{
     chain_config::{
         CoinConfig,
+        ContractBalance,
         ContractConfig,
+        ContractState,
         MessageConfig,
         StateConfig,
+        StateStreamer,
     },
     database::Database,
     service::{
@@ -33,13 +36,13 @@ async fn snapshot_state_config() {
     let owner = Address::default();
 
     // setup config
-    let mut config = Config::local_node();
-    config.chain_config.height = Some(BlockHeight::from(10));
+    let contract_id: Bytes32 = [11; 32].into();
     let starting_state = StateConfig {
-        contracts: Some(vec![ContractConfig {
-            contract_id: [11; 32].into(),
+        contracts: vec![ContractConfig {
+            contract_id: ContractId::from(*contract_id),
             code: vec![8; 32],
             salt: Salt::new([9; 32]),
+            // TODO remove
             state: Some(vec![
                 (Bytes32::new([5u8; 32]), Bytes32::new([8u8; 32])),
                 (Bytes32::new([7u8; 32]), Bytes32::new([9u8; 32])),
@@ -52,37 +55,62 @@ async fn snapshot_state_config() {
             output_index: Some(rng.gen()),
             tx_pointer_block_height: Some(BlockHeight::from(10)),
             tx_pointer_tx_idx: Some(rng.gen()),
-        }]),
-        coins: Some(
-            vec![
-                (owner, 50, AssetId::new([8u8; 32])),
-                (owner, 100, AssetId::new([3u8; 32])),
-                (owner, 150, AssetId::new([5u8; 32])),
-            ]
-            .into_iter()
-            .map(|(owner, amount, asset_id)| CoinConfig {
-                tx_id: None,
-                output_index: None,
-                tx_pointer_block_height: Some(Default::default()),
-                tx_pointer_tx_idx: Some(0),
-                maturity: Some(Default::default()),
-                owner,
-                amount,
-                asset_id,
-            })
-            .collect(),
-        ),
-        messages: Some(vec![MessageConfig {
+        }],
+        contract_balance: vec![
+            ContractBalance {
+                contract_id,
+                amount: 100,
+                asset_id: AssetId::new([3u8; 32]),
+            },
+            ContractBalance {
+                contract_id,
+                amount: 10000,
+                asset_id: AssetId::new([10u8; 32]),
+            },
+        ],
+        contract_state: vec![
+            ContractState {
+                contract_id,
+                key: Bytes32::new([5u8; 32]),
+                value: Bytes32::new([8u8; 32]),
+            },
+            ContractState {
+                contract_id,
+                key: Bytes32::new([7u8; 32]),
+                value: Bytes32::new([9u8; 32]),
+            },
+        ],
+        coins: vec![
+            (owner, 50, AssetId::new([8u8; 32])),
+            (owner, 100, AssetId::new([3u8; 32])),
+            (owner, 150, AssetId::new([5u8; 32])),
+        ]
+        .into_iter()
+        .map(|(owner, amount, asset_id)| CoinConfig {
+            tx_id: None,
+            output_index: None,
+            tx_pointer_block_height: Some(Default::default()),
+            tx_pointer_tx_idx: Some(0),
+            maturity: Some(Default::default()),
+            owner,
+            amount,
+            asset_id,
+        })
+        .collect(),
+        messages: vec![MessageConfig {
             sender: rng.gen(),
             recipient: rng.gen(),
             nonce: Nonce::from(rng.gen_range(0..1000)),
             amount: rng.gen_range(0..1000),
             data: vec![],
             da_height: DaBlockHeight(rng.gen_range(0..1000)),
-        }]),
+        }],
     };
-
-    config.chain_state = starting_state.clone();
+    let mut config = Config {
+        state_streamer: StateStreamer::in_memory(starting_state.clone(), 1),
+        ..Config::local_node()
+    };
+    config.chain_config.height = Some(BlockHeight::from(10));
 
     // setup server & client
     let _ = FuelService::from_database(db.clone(), config)
@@ -94,7 +122,6 @@ async fn snapshot_state_config() {
     // initial state
 
     let starting_coin = starting_state.clone().coins;
-
     let state_coin = state_conf.clone().coins;
 
     for i in 0..starting_coin.len() {

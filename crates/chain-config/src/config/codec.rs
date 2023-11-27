@@ -3,8 +3,8 @@ mod encoder;
 mod parquet;
 
 pub use decoder::{
-    Decoder,
     IntoIter,
+    StateStreamer,
 };
 pub use encoder::Encoder;
 
@@ -45,7 +45,8 @@ mod tests {
             let temp_dir = tempfile::tempdir().unwrap();
             let state_encoder = Encoder::json(temp_dir.path());
 
-            let init_decoder = || Decoder::json(temp_dir.path(), group_size).unwrap();
+            let init_decoder =
+                || StateStreamer::json(temp_dir.path(), group_size).unwrap();
 
             test_write_read(
                 state_encoder,
@@ -59,7 +60,7 @@ mod tests {
             let temp_dir = tempfile::tempdir().unwrap();
             let state_encoder = Encoder::parquet(temp_dir.path(), 1).unwrap();
 
-            let init_decoder = || Decoder::parquet(temp_dir.path());
+            let init_decoder = || StateStreamer::parquet(temp_dir.path());
 
             test_write_read(
                 state_encoder,
@@ -72,7 +73,7 @@ mod tests {
 
     fn test_write_read(
         mut encoder: Encoder,
-        init_decoder: impl FnOnce() -> Decoder,
+        init_decoder: impl FnOnce() -> StateStreamer,
         group_size: usize,
         group_range: Range<usize>,
     ) {

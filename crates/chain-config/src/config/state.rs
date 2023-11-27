@@ -82,9 +82,9 @@ impl StateConfig {
 
     #[cfg(feature = "std")]
     pub fn load_from_directory(path: impl AsRef<Path>) -> Result<Self, anyhow::Error> {
-        use crate::Decoder;
+        use crate::StateStreamer;
 
-        let decoder = Decoder::detect_encoding(path, 1)?;
+        let decoder = StateStreamer::detect_encoding(path, 1)?;
 
         let coins = decoder
             .coins()?

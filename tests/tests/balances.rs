@@ -3,6 +3,7 @@ use fuel_core::{
         CoinConfig,
         MessageConfig,
         StateConfig,
+        StateStreamer,
     },
     service::{
         Config,
@@ -38,43 +39,42 @@ async fn balance() {
     let asset_id = AssetId::BASE;
 
     // setup config
-    let mut config = Config::local_node();
-    config.chain_state = StateConfig {
-        contracts: None,
-        coins: Some(
-            vec![
-                (owner, 50, asset_id),
-                (owner, 100, asset_id),
-                (owner, 150, asset_id),
-            ]
+    let chain_state = StateConfig {
+        contracts: vec![],
+        coins: vec![
+            (owner, 50, asset_id),
+            (owner, 100, asset_id),
+            (owner, 150, asset_id),
+        ]
+        .into_iter()
+        .map(|(owner, amount, asset_id)| CoinConfig {
+            tx_id: None,
+            output_index: None,
+            tx_pointer_block_height: None,
+            tx_pointer_tx_idx: None,
+            maturity: None,
+            owner,
+            amount,
+            asset_id,
+        })
+        .collect(),
+        messages: vec![(owner, 60), (owner, 90)]
             .into_iter()
-            .map(|(owner, amount, asset_id)| CoinConfig {
-                tx_id: None,
-                output_index: None,
-                tx_pointer_block_height: None,
-                tx_pointer_tx_idx: None,
-                maturity: None,
-                owner,
+            .enumerate()
+            .map(|(nonce, (owner, amount))| MessageConfig {
+                sender: owner,
+                recipient: owner,
+                nonce: (nonce as u64).into(),
                 amount,
-                asset_id,
+                data: vec![],
+                da_height: DaBlockHeight::from(1usize),
             })
             .collect(),
-        ),
-        messages: Some(
-            vec![(owner, 60), (owner, 90)]
-                .into_iter()
-                .enumerate()
-                .map(|(nonce, (owner, amount))| MessageConfig {
-                    sender: owner,
-                    recipient: owner,
-                    nonce: (nonce as u64).into(),
-                    amount,
-                    data: vec![],
-                    da_height: DaBlockHeight::from(1usize),
-                })
-                .collect(),
-        ),
         ..Default::default()
+    };
+    let config = Config {
+        state_streamer: StateStreamer::in_memory(chain_state, 1),
+        ..Config::local_node()
     };
 
     // setup server & client
@@ -201,12 +201,15 @@ async fn first_5_balances() {
     };
 
     // setup config
-    let mut config = Config::local_node();
-    config.chain_state = StateConfig {
-        contracts: None,
-        coins: Some(coins),
-        messages: Some(messages),
+    let chain_state = StateConfig {
+        contracts: vec![],
+        coins,
+        messages,
         ..Default::default()
+    };
+    let config = Config {
+        state_streamer: StateStreamer::in_memory(chain_state, 1),
+        ..Config::local_node()
     };
 
     // setup server & client

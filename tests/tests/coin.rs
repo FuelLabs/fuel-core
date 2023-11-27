@@ -1,4 +1,9 @@
 use fuel_core::{
+    chain_config::{
+        CoinConfig,
+        StateConfig,
+        StateStreamer,
+    },
     database::Database,
     service::{
         Config,
@@ -30,15 +35,28 @@ use rstest::rstest;
 #[tokio::test]
 async fn coin() {
     // setup test data in the node
-    let utxo_id = UtxoId::new(Default::default(), 5);
+    let output_index = 5;
+    let coin = CoinConfig {
+        output_index: Some(output_index),
+        ..Default::default()
+    };
+    let state = StateConfig {
+        coins: vec![coin],
+        ..Default::default()
+    };
+    let config = Config {
+        state_streamer: StateStreamer::in_memory(state, 1),
+        ..Config::local_node()
+    };
 
     // setup server & client
-    let srv = FuelService::from_database(Database::default(), Config::local_node())
+    let srv = FuelService::from_database(Database::default(), config)
         .await
         .unwrap();
     let client = FuelClient::from(srv.bound_address);
 
     // run test
+    let utxo_id = UtxoId::new(Default::default(), output_index);
     let coin = client.coin(&utxo_id).await.unwrap();
     assert!(coin.is_some());
 }

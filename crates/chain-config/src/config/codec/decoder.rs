@@ -60,11 +60,11 @@ enum DataSource {
 }
 
 #[derive(Clone, Debug)]
-pub struct Decoder {
+pub struct StateStreamer {
     data_source: DataSource,
 }
 
-impl Decoder {
+impl StateStreamer {
     pub fn json(
         snapshot_dir: impl AsRef<Path>,
         group_size: usize,

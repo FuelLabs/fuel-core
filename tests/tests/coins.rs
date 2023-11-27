@@ -4,6 +4,7 @@ use fuel_core::{
         CoinConfig,
         MessageConfig,
         StateConfig,
+        StateStreamer,
     },
     coins_query::CoinsQueryError,
     service::{
@@ -23,6 +24,7 @@ use rand::{
 
 mod coin {
     use super::*;
+    use fuel_core::chain_config::StateStreamer;
     use fuel_core_client::client::types::CoinType;
     use fuel_core_types::fuel_crypto::SecretKey;
     use rand::Rng;
@@ -33,33 +35,34 @@ mod coin {
         asset_id_b: AssetId,
     ) -> TestContext {
         // setup config
-        let mut config = Config::local_node();
-        config.chain_state = StateConfig {
-            contracts: None,
-            coins: Some(
-                vec![
-                    (owner, 50, asset_id_a),
-                    (owner, 100, asset_id_a),
-                    (owner, 150, asset_id_a),
-                    (owner, 50, asset_id_b),
-                    (owner, 100, asset_id_b),
-                    (owner, 150, asset_id_b),
-                ]
-                .into_iter()
-                .map(|(owner, amount, asset_id)| CoinConfig {
-                    tx_id: None,
-                    output_index: None,
-                    tx_pointer_block_height: None,
-                    tx_pointer_tx_idx: None,
-                    maturity: None,
-                    owner,
-                    amount,
-                    asset_id,
-                })
-                .collect(),
-            ),
-            messages: None,
+        let state = StateConfig {
+            contracts: vec![],
+            coins: vec![
+                (owner, 50, asset_id_a),
+                (owner, 100, asset_id_a),
+                (owner, 150, asset_id_a),
+                (owner, 50, asset_id_b),
+                (owner, 100, asset_id_b),
+                (owner, 150, asset_id_b),
+            ]
+            .into_iter()
+            .map(|(owner, amount, asset_id)| CoinConfig {
+                tx_id: None,
+                output_index: None,
+                tx_pointer_block_height: None,
+                tx_pointer_tx_idx: None,
+                maturity: None,
+                owner,
+                amount,
+                asset_id,
+            })
+            .collect(),
+            messages: vec![],
             ..Default::default()
+        };
+        let config = Config {
+            state_streamer: StateStreamer::in_memory(state, 1),
+            ..Config::local_node()
         };
 
         // setup server & client
@@ -281,6 +284,7 @@ mod coin {
 }
 
 mod message_coin {
+    use fuel_core::chain_config::StateStreamer;
     use fuel_core_client::client::types::CoinType;
     use fuel_core_types::{
         blockchain::primitives::DaBlockHeight,
@@ -294,25 +298,26 @@ mod message_coin {
         let base_asset_id = AssetId::BASE;
 
         // setup config
-        let mut config = Config::local_node();
-        config.chain_state = StateConfig {
-            contracts: None,
-            coins: None,
-            messages: Some(
-                vec![(owner, 50), (owner, 100), (owner, 150)]
-                    .into_iter()
-                    .enumerate()
-                    .map(|(nonce, (owner, amount))| MessageConfig {
-                        sender: owner,
-                        recipient: owner,
-                        nonce: (nonce as u64).into(),
-                        amount,
-                        data: vec![],
-                        da_height: DaBlockHeight::from(1u64),
-                    })
-                    .collect(),
-            ),
+        let state = StateConfig {
+            contracts: vec![],
+            coins: vec![],
+            messages: vec![(owner, 50), (owner, 100), (owner, 150)]
+                .into_iter()
+                .enumerate()
+                .map(|(nonce, (owner, amount))| MessageConfig {
+                    sender: owner,
+                    recipient: owner,
+                    nonce: (nonce as u64).into(),
+                    amount,
+                    data: vec![],
+                    da_height: DaBlockHeight::from(1u64),
+                })
+                .collect(),
             ..Default::default()
+        };
+        let config = Config {
+            state_streamer: StateStreamer::in_memory(state, 1),
+            ..Config::local_node()
         };
 
         // setup server & client
@@ -486,6 +491,7 @@ mod message_coin {
 
 // It is combination of coins and deposit coins test cases.
 mod all_coins {
+    use fuel_core::chain_config::StateStreamer;
     use fuel_core_client::client::types::CoinType;
     use fuel_core_types::blockchain::primitives::DaBlockHeight;
 
@@ -495,44 +501,43 @@ mod all_coins {
         let asset_id_a = AssetId::BASE;
 
         // setup config
-        let mut config = Config::local_node();
-        config.chain_state = StateConfig {
-            contracts: None,
-            coins: Some(
-                vec![
-                    (owner, 100, asset_id_a),
-                    (owner, 50, asset_id_b),
-                    (owner, 100, asset_id_b),
-                    (owner, 150, asset_id_b),
-                ]
+        let state = StateConfig {
+            contracts: vec![],
+            coins: vec![
+                (owner, 100, asset_id_a),
+                (owner, 50, asset_id_b),
+                (owner, 100, asset_id_b),
+                (owner, 150, asset_id_b),
+            ]
+            .into_iter()
+            .map(|(owner, amount, asset_id)| CoinConfig {
+                tx_id: None,
+                output_index: None,
+                tx_pointer_block_height: None,
+                tx_pointer_tx_idx: None,
+                maturity: None,
+                owner,
+                amount,
+                asset_id,
+            })
+            .collect(),
+            messages: vec![(owner, 50), (owner, 150)]
                 .into_iter()
-                .map(|(owner, amount, asset_id)| CoinConfig {
-                    tx_id: None,
-                    output_index: None,
-                    tx_pointer_block_height: None,
-                    tx_pointer_tx_idx: None,
-                    maturity: None,
-                    owner,
+                .enumerate()
+                .map(|(nonce, (owner, amount))| MessageConfig {
+                    sender: owner,
+                    recipient: owner,
+                    nonce: (nonce as u64).into(),
                     amount,
-                    asset_id,
+                    data: vec![],
+                    da_height: DaBlockHeight::from(1u64),
                 })
                 .collect(),
-            ),
-            messages: Some(
-                vec![(owner, 50), (owner, 150)]
-                    .into_iter()
-                    .enumerate()
-                    .map(|(nonce, (owner, amount))| MessageConfig {
-                        sender: owner,
-                        recipient: owner,
-                        nonce: (nonce as u64).into(),
-                        amount,
-                        data: vec![],
-                        da_height: DaBlockHeight::from(1u64),
-                    })
-                    .collect(),
-            ),
             ..Default::default()
+        };
+        let config = Config {
+            state_streamer: StateStreamer::in_memory(state, 1),
+            ..Config::local_node()
         };
 
         // setup server & client
@@ -705,8 +710,10 @@ mod all_coins {
 
 async fn empty_setup() -> TestContext {
     // setup config
-    let mut config = Config::local_node();
-    config.chain_state = StateConfig::default();
+    let config = Config {
+        state_streamer: StateStreamer::in_memory(StateConfig::default(), 1),
+        ..Config::local_node()
+    };
 
     // setup server & client
     let srv = FuelService::new_node(config).await.unwrap();
