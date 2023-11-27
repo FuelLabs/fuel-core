@@ -213,7 +213,7 @@ mod tests {
     use super::{
         DiscoveryBehaviour,
         DiscoveryConfig,
-        KademliaEvent,
+        Event as KademliaEvent,
     };
     use futures::{
         future::poll_fn,
@@ -224,14 +224,12 @@ mod tests {
         identity::Keypair,
         multiaddr::Protocol,
         noise,
-        swarm::{
-            SwarmBuilder,
-            SwarmEvent,
-        },
+        swarm::SwarmEvent,
         yamux,
         Multiaddr,
         PeerId,
         Swarm,
+        SwarmBuilder,
         Transport,
     };
     use std::{
@@ -251,14 +249,13 @@ mod tests {
         let keypair = Keypair::generate_secp256k1();
         let public_key = keypair.public();
 
-        let noise_keys = noise::Keypair::<noise::X25519Spec>::new()
-            .into_authentic(&keypair)
-            .unwrap();
+        let noise_keys =
+            noise::Config::new(&keypair).expect("should be able to build noise keys");
 
         let transport = core::transport::MemoryTransport::new()
             .upgrade(core::upgrade::Version::V1)
-            .authenticate(noise::NoiseConfig::xx(noise_keys).into_authenticated())
-            .multiplex(yamux::YamuxConfig::default())
+            .authenticate(noise::Config::xx(noise_keys).into_authenticated())
+            .multiplex(yamux::Config::default())
             .boxed();
 
         let behaviour = {

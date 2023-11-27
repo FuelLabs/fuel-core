@@ -3,6 +3,7 @@ use super::{
     NetworkCodec,
     RequestResponseConverter,
 };
+use crate::request_response::messages::MAX_REQUEST_SIZE;
 use crate::{
     gossipsub::messages::{
         GossipTopicTag,

@@ -943,7 +943,7 @@ pub mod tests {
 
         fn send_response_msg(
             &mut self,
-            _request_id: RequestId,
+            _request_id: InboundRequestId,
             _message: OutboundResponse,
         ) -> anyhow::Result<()> {
             todo!()

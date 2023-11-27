@@ -672,7 +672,10 @@ impl<Codec: NetworkCodec> FuelP2PService<Codec> {
 #[allow(clippy::cast_possible_truncation)]
 #[cfg(test)]
 mod tests {
-    use super::FuelP2PService;
+    use super::{
+        FuelP2PService,
+        PublishError,
+    };
     use crate::{
         codecs::postcard::PostcardCodec,
         config::Config,
@@ -729,7 +732,6 @@ mod tests {
         Multiaddr,
         PeerId,
     };
-    use libp2p_swarm::PendingInboundConnectionError;
     use rand::Rng;
     use std::{
         collections::HashSet,
