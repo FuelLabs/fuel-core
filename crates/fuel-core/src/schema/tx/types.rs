@@ -71,6 +71,7 @@ use fuel_core_types::{
         policies::PolicyType,
         Chargeable,
         Executable,
+        TxId,
     },
     fuel_types::canonical::Serialize,
     fuel_vm::ProgramState as VmProgramState,
@@ -146,6 +147,7 @@ impl SubmittedStatus {
 
 #[derive(Debug)]
 pub struct SuccessStatus {
+    tx_id: TxId,
     block_id: primitives::BlockId,
     time: Tai64,
     result: Option<VmProgramState>,
@@ -153,6 +155,10 @@ pub struct SuccessStatus {
 
 #[Object]
 impl SuccessStatus {
+    async fn transaction_id(&self) -> TransactionId {
+        self.tx_id.into()
+    }
+
     async fn block(&self, ctx: &Context<'_>) -> async_graphql::Result<Block> {
         let query: &Database = ctx.data_unchecked();
         let block = query.block(&self.block_id)?;
@@ -166,10 +172,22 @@ impl SuccessStatus {
     async fn program_state(&self) -> Option<ProgramState> {
         self.result.map(Into::into)
     }
+
+    async fn receipts(&self, ctx: &Context<'_>) -> async_graphql::Result<Vec<Receipt>> {
+        let db = ctx.data_unchecked::<Database>();
+        let receipts = db
+            .receipts(&self.tx_id)
+            .unwrap_or_default()
+            .into_iter()
+            .map(Into::into)
+            .collect();
+        Ok(receipts)
+    }
 }
 
 #[derive(Debug)]
 pub struct FailureStatus {
+    tx_id: TxId,
     block_id: primitives::BlockId,
     time: Tai64,
     reason: String,
@@ -178,6 +196,10 @@ pub struct FailureStatus {
 
 #[Object]
 impl FailureStatus {
+    async fn transaction_id(&self) -> TransactionId {
+        self.tx_id.into()
+    }
+
     async fn block(&self, ctx: &Context<'_>) -> async_graphql::Result<Block> {
         let query: &Database = ctx.data_unchecked();
         let block = query.block(&self.block_id)?;
@@ -195,6 +217,17 @@ impl FailureStatus {
     async fn program_state(&self) -> Option<ProgramState> {
         self.state.map(Into::into)
     }
+
+    async fn receipts(&self, ctx: &Context<'_>) -> async_graphql::Result<Vec<Receipt>> {
+        let db = ctx.data_unchecked::<Database>();
+        let receipts = db
+            .receipts(&self.tx_id)
+            .unwrap_or_default()
+            .into_iter()
+            .map(Into::into)
+            .collect();
+        Ok(receipts)
+    }
 }
 
 #[derive(Debug)]
@@ -209,9 +242,9 @@ impl SqueezedOutStatus {
     }
 }
 
-impl From<TxStatus> for TransactionStatus {
-    fn from(s: TxStatus) -> Self {
-        match s {
+impl TransactionStatus {
+    pub fn new(tx_id: TxId, tx_status: TxStatus) -> Self {
+        match tx_status {
             TxStatus::Submitted { time } => {
                 TransactionStatus::Submitted(SubmittedStatus(time))
             }
@@ -220,6 +253,7 @@ impl From<TxStatus> for TransactionStatus {
                 result,
                 time,
             } => TransactionStatus::Success(SuccessStatus {
+                tx_id,
                 block_id,
                 result,
                 time,
@@ -233,6 +267,7 @@ impl From<TxStatus> for TransactionStatus {
                 time,
                 result,
             } => TransactionStatus::Failed(FailureStatus {
+                tx_id,
                 block_id,
                 reason,
                 time,
@@ -252,6 +287,7 @@ impl From<TransactionStatus> for TxStatus {
                 block_id,
                 result,
                 time,
+                ..
             }) => TxStatus::Success {
                 block_id,
                 result,
@@ -265,6 +301,7 @@ impl From<TransactionStatus> for TxStatus {
                 reason,
                 time,
                 state: result,
+                ..
             }) => TxStatus::Failed {
                 block_id,
                 reason,
@@ -592,7 +629,10 @@ pub(crate) fn get_tx_status(
         .status(&id)
         .into_api_result::<txpool::TransactionStatus, StorageError>()?
     {
-        Some(status) => Ok(Some(status.into())),
+        Some(status) => {
+            let status = TransactionStatus::new(id, status);
+            Ok(Some(status))
+        }
         None => match txpool.submission_time(id) {
             Some(submitted_time) => Ok(Some(TransactionStatus::Submitted(
                 SubmittedStatus(submitted_time),
