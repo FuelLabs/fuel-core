@@ -410,7 +410,7 @@ mod tests {
 
         // try connecting all the random peers
         for peer_id in &random_peers {
-            peer_manager.handle_initial_connection(peer_id, vec![]);
+            peer_manager.handle_initial_connection(peer_id);
         }
 
         assert_eq!(peer_manager.total_peers_connected(), max_non_reserved_peers);
@@ -425,7 +425,7 @@ mod tests {
 
         // try connecting all the reserved peers
         for peer_id in &reserved_peers {
-            peer_manager.handle_initial_connection(peer_id, vec![]);
+            peer_manager.handle_initial_connection(peer_id);
         }
 
         assert_eq!(peer_manager.total_peers_connected(), reserved_peers.len());
@@ -433,7 +433,7 @@ mod tests {
         // try connecting random peers
         let random_peers = get_random_peers(10);
         for peer_id in &random_peers {
-            peer_manager.handle_initial_connection(peer_id, vec![]);
+            peer_manager.handle_initial_connection(peer_id);
         }
 
         // the number should stay the same
@@ -449,7 +449,7 @@ mod tests {
 
         // try connecting all the reserved peers
         for peer_id in &reserved_peers {
-            peer_manager.handle_initial_connection(peer_id, vec![]);
+            peer_manager.handle_initial_connection(peer_id);
         }
 
         // disconnect a single reserved peer
@@ -458,7 +458,7 @@ mod tests {
         // try connecting random peers
         let random_peers = get_random_peers(max_non_reserved_peers * 2);
         for peer_id in &random_peers {
-            peer_manager.handle_initial_connection(peer_id, vec![]);
+            peer_manager.handle_initial_connection(peer_id);
         }
 
         // there should be an available slot for a reserved peer
@@ -468,7 +468,7 @@ mod tests {
         );
 
         // reconnect the disconnected reserved peer
-        peer_manager.handle_initial_connection(reserved_peers.first().unwrap(), vec![]);
+        peer_manager.handle_initial_connection(reserved_peers.first().unwrap());
 
         // all the slots should be taken now
         assert_eq!(

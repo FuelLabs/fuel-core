@@ -732,6 +732,7 @@ mod tests {
         Multiaddr,
         PeerId,
     };
+    use libp2p_swarm::ListenError;
     use rand::Rng;
     use std::{
         collections::HashSet,
@@ -1105,7 +1106,7 @@ mod tests {
             tokio::select! {
                 node_a_event = node_a.swarm.select_next_some() => {
                     tracing::info!("Node A Event: {:?}", node_a_event);
-                    if let SwarmEvent::IncomingConnectionError { error: PendingInboundConnectionError::Transport(TransportError::Other(_)), .. } = node_a_event {
+                    if let SwarmEvent::IncomingConnectionError { error: ListenError::Transport(TransportError::Other(_)), .. } = node_a_event {
                         break
                     }
                 },
@@ -1181,12 +1182,12 @@ mod tests {
             tokio::select! {
                 node_a_event = node_a.next_event() => {
                     if let Some(FuelP2PEvent::PeerInfoUpdated { peer_id, block_height: _ }) = node_a_event {
-                        if let Some(PeerInfo { peer_addresses, heartbeat_data, client_version, .. }) = node_a.peer_manager.get_peer_info(&peer_id) {
+                        if let Some(PeerInfo {  heartbeat_data, client_version, .. }) = node_a.peer_manager.get_peer_info(&peer_id) {
                             // Exits after it verifies that:
                             // 1. Peer Addresses are known
                             // 2. Client Version is known
                             // 3. Node has responded with their latest BlockHeight
-                            if !peer_addresses.is_empty() && client_version.is_some() && heartbeat_data.block_height == Some(latest_block_height) {
+                            if client_version.is_some() && heartbeat_data.block_height == Some(latest_block_height) {
                                 break;
                             }
                         }
@@ -1376,7 +1377,10 @@ mod tests {
 
         // Node C does not connecto to Node A
         // it should receive the propagated message from Node B if `GossipsubMessageAcceptance` is `Accept`
-        node_c.swarm.ban_peer_id(node_a.local_peer_id);
+        node_c
+            .swarm
+            .behaviour_mut()
+            .block_peer(node_a.local_peer_id);
 
         loop {
             tokio::select! {
@@ -1565,7 +1569,7 @@ mod tests {
                 },
                 node_b_event = node_b.next_event() => {
                     // 2. Node B receives the RequestMessage from Node A initiated by the NetworkOrchestrator
-                    if let Some(FuelP2PEvent::RequestMessage{ request_id, request_message: received_request_message }) = &node_b_event {
+                    if let Some(FuelP2PEvent::InboundRequestMessage{ request_id, request_message: received_request_message }) = &node_b_event {
                         match received_request_message {
                             RequestMessage::Block(_) => {
                                 let block = Block::new(PartialBlockHeader::default(), (0..5).map(|_| Transaction::default_test_tx()).collect(), &[]);

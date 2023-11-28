@@ -254,7 +254,7 @@ mod tests {
 
         let transport = core::transport::MemoryTransport::new()
             .upgrade(core::upgrade::Version::V1)
-            .authenticate(noise::Config::xx(noise_keys).into_authenticated())
+            .authenticate(noise_keys)
             .multiplex(yamux::Config::default())
             .boxed();
 
@@ -273,14 +273,20 @@ mod tests {
         };
 
         let listen_addr: Multiaddr = Protocol::Memory(rand::random::<u64>()).into();
-        let swarm_builder = SwarmBuilder::without_executor(
-            transport,
-            behaviour,
-            keypair.public().to_peer_id(),
-        )
-        .dial_concurrency_factor(NonZeroU8::new(1).expect("1 > 0"));
+        // let swarm_builder = SwarmBuilder::without_executor(
+        //     transport,
+        //     behaviour,
+        //     keypair.public().to_peer_id(),
+        // )
+        // .dial_concurrency_factor(NonZeroU8::new(1).expect("1 > 0"));
 
-        let mut swarm = swarm_builder.build();
+        // let mut swarm = swarm_builder.build();
+
+        let config = libp2p_swarm::Config::with_tokio_executor()
+            .with_dial_concurrency_factor(NonZeroU8::new(1).expect("1 > 0"));
+
+        let mut swarm =
+            Swarm::new(transport, behaviour, keypair.public().to_peer_id(), config);
 
         swarm
             .listen_on(listen_addr.clone())

@@ -1053,7 +1053,6 @@ pub mod tests {
             durations,
         };
         let peer_info = PeerInfo {
-            peer_addresses: Default::default(),
             client_version: None,
             heartbeat_data,
             score: 100.0,
@@ -1132,7 +1131,6 @@ pub mod tests {
             durations,
         };
         let peer_info = PeerInfo {
-            peer_addresses: Default::default(),
             client_version: None,
             heartbeat_data,
             score: 100.0,
