@@ -681,8 +681,6 @@ mod tests {
             },
             topics::{
                 GossipTopic,
-                CON_VOTE_GOSSIP_TOPIC,
-                NEW_BLOCK_GOSSIP_TOPIC,
                 NEW_TX_GOSSIP_TOPIC,
             },
         },
@@ -701,7 +699,6 @@ mod tests {
             consensus::{
                 poa::PoAConsensus,
                 Consensus,
-                ConsensusVote,
             },
             header::{
                 BlockHeader,
@@ -1230,50 +1227,10 @@ mod tests {
 
     #[tokio::test]
     #[instrument]
-    async fn gossipsub_broadcast_vote_with_accept() {
-        gossipsub_broadcast(
-            GossipsubBroadcastRequest::ConsensusVote(Arc::new(ConsensusVote::default())),
-            GossipsubMessageAcceptance::Accept,
-        )
-        .await;
-    }
-
-    #[tokio::test]
-    #[instrument]
-    async fn gossipsub_broadcast_vote_with_reject() {
-        gossipsub_broadcast(
-            GossipsubBroadcastRequest::ConsensusVote(Arc::new(ConsensusVote::default())),
-            GossipsubMessageAcceptance::Reject,
-        )
-        .await;
-    }
-
-    #[tokio::test]
-    #[instrument]
-    async fn gossipsub_broadcast_block_with_accept() {
-        gossipsub_broadcast(
-            GossipsubBroadcastRequest::NewBlock(Arc::new(Block::default())),
-            GossipsubMessageAcceptance::Accept,
-        )
-        .await;
-    }
-
-    #[tokio::test]
-    #[instrument]
-    async fn gossipsub_broadcast_block_with_ignore() {
-        gossipsub_broadcast(
-            GossipsubBroadcastRequest::NewBlock(Arc::new(Block::default())),
-            GossipsubMessageAcceptance::Ignore,
-        )
-        .await;
-    }
-
-    #[tokio::test]
-    #[instrument]
     #[ignore]
-    async fn gossipsub_scoring_with_accapted_messages() {
+    async fn gossipsub_scoring_with_accepted_messages() {
         gossipsub_scoring_tester(
-            "gossipsub_scoring_with_accapted_messages",
+            "gossipsub_scoring_with_accepted_messages",
             100,
             GossipsubMessageAcceptance::Accept,
         )
@@ -1365,28 +1322,6 @@ mod tests {
                         }
                     }
 
-                    let mut new_block = Block::default();
-                    *new_block.transactions_mut() = transactions;
-                    let new_block = GossipsubBroadcastRequest::NewBlock(Arc::new(new_block));
-
-                    match rand::thread_rng().gen_range(1..=3) {
-                        1 => {
-                            // Node A sends a Block
-                            let _ = node_a.publish_message(new_block);
-
-                        },
-                        2 => {
-                            // Node B sends a Block
-                            let _ = node_b.publish_message(new_block);
-
-                        },
-                        3 => {
-                            // Node C sends a Block
-                            let _ = node_c.publish_message(new_block);
-                        },
-                        _ => unreachable!("Random number generator is broken")
-                    }
-
                     eprintln!("Node A WORLD VIEW");
                     eprintln!("B score: {:?}", node_a.get_peer_score(&node_b.local_peer_id).unwrap());
                     eprintln!("C score: {:?}", node_a.get_peer_score(&node_c.local_peer_id).unwrap());
@@ -1419,8 +1354,6 @@ mod tests {
 
         let selected_topic: GossipTopic = {
             let topic = match broadcast_request {
-                GossipsubBroadcastRequest::ConsensusVote(_) => CON_VOTE_GOSSIP_TOPIC,
-                GossipsubBroadcastRequest::NewBlock(_) => NEW_BLOCK_GOSSIP_TOPIC,
                 GossipsubBroadcastRequest::NewTx(_) => NEW_TX_GOSSIP_TOPIC,
             };
 
@@ -1476,18 +1409,6 @@ mod tests {
                         match &message {
                             GossipsubMessage::NewTx(tx) => {
                                 if tx != &Transaction::default_test_tx() {
-                                    tracing::error!("Wrong p2p message {:?}", message);
-                                    panic!("Wrong GossipsubMessage")
-                                }
-                            }
-                            GossipsubMessage::NewBlock(block) => {
-                                if block.header().height() != Block::<Transaction>::default().header().height() {
-                                    tracing::error!("Wrong p2p message {:?}", message);
-                                    panic!("Wrong GossipsubMessage")
-                                }
-                            }
-                            GossipsubMessage::ConsensusVote(vote) => {
-                                if vote != &ConsensusVote::default() {
                                     tracing::error!("Wrong p2p message {:?}", message);
                                     panic!("Wrong GossipsubMessage")
                                 }

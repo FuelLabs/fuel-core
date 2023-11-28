@@ -46,12 +46,6 @@ pub struct P2PArgs {
     #[arg(requires_if(IsPresent, "enable_p2p"))]
     pub keypair: Option<KeypairArg>,
 
-    /// The name of the p2p Network
-    #[clap(long = "network", env)]
-    #[arg(required_if_eq("enable_p2p", "true"))]
-    #[arg(requires_if(IsPresent, "enable_p2p"))]
-    pub network: Option<String>,
-
     /// p2p network's IP Address
     #[clap(long = "address", env)]
     pub address: Option<IpAddr>,
@@ -146,9 +140,9 @@ pub struct P2PArgs {
     #[clap(long = "history-gossip", default_value = "3", env)]
     pub history_gossip: usize,
 
-    /// Time between each gossipsub heartbeat
-    #[clap(long = "gossip-heartbeat-interval", default_value = "1", env)]
-    pub gossip_heartbeat_interval: u64,
+    /// Time between each gossipsub heartbeat, in milliseconds
+    #[clap(long = "gossip-heartbeat-interval", default_value = "500ms", env)]
+    pub gossip_heartbeat_interval: humantime::Duration,
 
     /// The maximum byte size for each gossip (default is 18 MiB)
     #[clap(long = "max-transmit-size", default_value = MAX_RESPONSE_SIZE_STR, env)]
@@ -236,6 +230,7 @@ impl From<SyncArgs> for fuel_core::sync::Config {
 impl P2PArgs {
     pub fn into_config(
         self,
+        network_name: String,
         metrics: bool,
     ) -> anyhow::Result<Option<Config<NotInitialized>>> {
         if !self.enable_p2p {
@@ -267,7 +262,7 @@ impl P2PArgs {
             .mesh_n_high(self.max_mesh_size)
             .history_length(self.history_length)
             .history_gossip(self.history_gossip)
-            .heartbeat_interval(Duration::from_secs(self.gossip_heartbeat_interval))
+            .heartbeat_interval(self.gossip_heartbeat_interval.into())
             .max_transmit_size(self.max_transmit_size)
             .build()
             .expect("valid gossipsub configuration");
@@ -290,7 +285,7 @@ impl P2PArgs {
 
         let config = Config {
             keypair: local_keypair,
-            network_name: self.network.expect("mandatory value"),
+            network_name,
             checksum: Default::default(),
             address: self
                 .address

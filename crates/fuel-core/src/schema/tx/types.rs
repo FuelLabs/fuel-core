@@ -58,16 +58,20 @@ use fuel_core_types::{
             MintAssetId,
             OutputContract,
             Outputs,
+            Policies as PoliciesField,
             ReceiptsRoot,
             Salt as SaltField,
             Script as ScriptField,
             ScriptData,
+            ScriptGasLimit,
             StorageSlots,
             TxPointer as TxPointerField,
             Witnesses,
         },
+        policies::PolicyType,
         Chargeable,
         Executable,
+        TxId,
     },
     fuel_types::canonical::Serialize,
     fuel_vm::ProgramState as VmProgramState,
@@ -143,6 +147,7 @@ impl SubmittedStatus {
 
 #[derive(Debug)]
 pub struct SuccessStatus {
+    tx_id: TxId,
     block_id: primitives::BlockId,
     time: Tai64,
     result: Option<VmProgramState>,
@@ -150,6 +155,10 @@ pub struct SuccessStatus {
 
 #[Object]
 impl SuccessStatus {
+    async fn transaction_id(&self) -> TransactionId {
+        self.tx_id.into()
+    }
+
     async fn block(&self, ctx: &Context<'_>) -> async_graphql::Result<Block> {
         let query: &Database = ctx.data_unchecked();
         let block = query.block(&self.block_id)?;
@@ -163,10 +172,22 @@ impl SuccessStatus {
     async fn program_state(&self) -> Option<ProgramState> {
         self.result.map(Into::into)
     }
+
+    async fn receipts(&self, ctx: &Context<'_>) -> async_graphql::Result<Vec<Receipt>> {
+        let db = ctx.data_unchecked::<Database>();
+        let receipts = db
+            .receipts(&self.tx_id)
+            .unwrap_or_default()
+            .into_iter()
+            .map(Into::into)
+            .collect();
+        Ok(receipts)
+    }
 }
 
 #[derive(Debug)]
 pub struct FailureStatus {
+    tx_id: TxId,
     block_id: primitives::BlockId,
     time: Tai64,
     reason: String,
@@ -175,6 +196,10 @@ pub struct FailureStatus {
 
 #[Object]
 impl FailureStatus {
+    async fn transaction_id(&self) -> TransactionId {
+        self.tx_id.into()
+    }
+
     async fn block(&self, ctx: &Context<'_>) -> async_graphql::Result<Block> {
         let query: &Database = ctx.data_unchecked();
         let block = query.block(&self.block_id)?;
@@ -192,6 +217,17 @@ impl FailureStatus {
     async fn program_state(&self) -> Option<ProgramState> {
         self.state.map(Into::into)
     }
+
+    async fn receipts(&self, ctx: &Context<'_>) -> async_graphql::Result<Vec<Receipt>> {
+        let db = ctx.data_unchecked::<Database>();
+        let receipts = db
+            .receipts(&self.tx_id)
+            .unwrap_or_default()
+            .into_iter()
+            .map(Into::into)
+            .collect();
+        Ok(receipts)
+    }
 }
 
 #[derive(Debug)]
@@ -206,9 +242,9 @@ impl SqueezedOutStatus {
     }
 }
 
-impl From<TxStatus> for TransactionStatus {
-    fn from(s: TxStatus) -> Self {
-        match s {
+impl TransactionStatus {
+    pub fn new(tx_id: TxId, tx_status: TxStatus) -> Self {
+        match tx_status {
             TxStatus::Submitted { time } => {
                 TransactionStatus::Submitted(SubmittedStatus(time))
             }
@@ -217,6 +253,7 @@ impl From<TxStatus> for TransactionStatus {
                 result,
                 time,
             } => TransactionStatus::Success(SuccessStatus {
+                tx_id,
                 block_id,
                 result,
                 time,
@@ -230,6 +267,7 @@ impl From<TxStatus> for TransactionStatus {
                 time,
                 result,
             } => TransactionStatus::Failed(FailureStatus {
+                tx_id,
                 block_id,
                 reason,
                 time,
@@ -249,6 +287,7 @@ impl From<TransactionStatus> for TxStatus {
                 block_id,
                 result,
                 time,
+                ..
             }) => TxStatus::Success {
                 block_id,
                 result,
@@ -262,6 +301,7 @@ impl From<TransactionStatus> for TxStatus {
                 reason,
                 time,
                 state: result,
+                ..
             }) => TxStatus::Failed {
                 block_id,
                 reason,
@@ -271,6 +311,31 @@ impl From<TransactionStatus> for TxStatus {
         }
     }
 }
+
+pub struct Policies(fuel_tx::policies::Policies);
+
+#[Object]
+impl Policies {
+    async fn gas_price(&self) -> Option<U64> {
+        self.0.get(PolicyType::GasPrice).map(Into::into)
+    }
+
+    async fn witness_limit(&self) -> Option<U64> {
+        self.0.get(PolicyType::WitnessLimit).map(Into::into)
+    }
+
+    async fn maturity(&self) -> Option<U32> {
+        self.0
+            .get(PolicyType::Maturity)
+            .and_then(|value| u32::try_from(value).ok())
+            .map(Into::into)
+    }
+
+    async fn max_fee(&self) -> Option<U64> {
+        self.0.get(PolicyType::MaxFee).map(Into::into)
+    }
+}
+
 pub struct Transaction(pub(crate) fuel_tx::Transaction, pub(crate) fuel_tx::TxId);
 
 impl Transaction {
@@ -326,6 +391,14 @@ impl Transaction {
         }
     }
 
+    async fn policies(&self) -> Option<Policies> {
+        match &self.0 {
+            fuel_tx::Transaction::Script(script) => Some((*script.policies()).into()),
+            fuel_tx::Transaction::Create(create) => Some((*create.policies()).into()),
+            fuel_tx::Transaction::Mint(_) => None,
+        }
+    }
+
     async fn gas_price(&self) -> Option<U64> {
         match &self.0 {
             fuel_tx::Transaction::Script(script) => Some(script.price().into()),
@@ -334,18 +407,20 @@ impl Transaction {
         }
     }
 
-    async fn gas_limit(&self) -> Option<U64> {
+    async fn script_gas_limit(&self) -> Option<U64> {
         match &self.0 {
-            fuel_tx::Transaction::Script(script) => Some(script.limit().into()),
-            fuel_tx::Transaction::Create(create) => Some(create.limit().into()),
+            fuel_tx::Transaction::Script(script) => {
+                Some((*script.script_gas_limit()).into())
+            }
+            fuel_tx::Transaction::Create(_) => Some(0.into()),
             fuel_tx::Transaction::Mint(_) => None,
         }
     }
 
     async fn maturity(&self) -> Option<U32> {
         match &self.0 {
-            fuel_tx::Transaction::Script(script) => Some((*script.maturity()).into()),
-            fuel_tx::Transaction::Create(create) => Some((*create.maturity()).into()),
+            fuel_tx::Transaction::Script(script) => Some(script.maturity().into()),
+            fuel_tx::Transaction::Create(create) => Some(create.maturity().into()),
             fuel_tx::Transaction::Mint(_) => None,
         }
     }
@@ -554,12 +629,21 @@ pub(crate) fn get_tx_status(
         .status(&id)
         .into_api_result::<txpool::TransactionStatus, StorageError>()?
     {
-        Some(status) => Ok(Some(status.into())),
+        Some(status) => {
+            let status = TransactionStatus::new(id, status);
+            Ok(Some(status))
+        }
         None => match txpool.submission_time(id) {
             Some(submitted_time) => Ok(Some(TransactionStatus::Submitted(
                 SubmittedStatus(submitted_time),
             ))),
             _ => Ok(None),
         },
+    }
+}
+
+impl From<fuel_tx::policies::Policies> for Policies {
+    fn from(value: fuel_tx::policies::Policies) -> Self {
+        Policies(value)
     }
 }

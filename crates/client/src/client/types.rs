@@ -42,7 +42,10 @@ use crate::client::schema::{
     ConversionError,
 };
 use fuel_core_types::{
-    fuel_tx::Transaction,
+    fuel_tx::{
+        Receipt,
+        Transaction,
+    },
     fuel_types::canonical::Deserialize,
     fuel_vm::ProgramState,
 };
@@ -90,6 +93,7 @@ pub enum TransactionStatus {
         block_id: String,
         time: Tai64,
         program_state: Option<ProgramState>,
+        receipts: Vec<Receipt>,
     },
     SqueezedOut {
         reason: String,
@@ -99,6 +103,7 @@ pub enum TransactionStatus {
         time: Tai64,
         reason: String,
         program_state: Option<ProgramState>,
+        receipts: Vec<Receipt>,
     },
 }
 
@@ -114,12 +119,22 @@ impl TryFrom<SchemaTxStatus> for TransactionStatus {
                 block_id: s.block.id.0.to_string(),
                 time: s.time.0,
                 program_state: s.program_state.map(TryInto::try_into).transpose()?,
+                receipts: s
+                    .receipts
+                    .into_iter()
+                    .map(TryInto::try_into)
+                    .collect::<Result<Vec<_>, _>>()?,
             },
             SchemaTxStatus::FailureStatus(s) => TransactionStatus::Failure {
                 block_id: s.block.id.0.to_string(),
                 time: s.time.0,
                 reason: s.reason,
                 program_state: s.program_state.map(TryInto::try_into).transpose()?,
+                receipts: s
+                    .receipts
+                    .into_iter()
+                    .map(TryInto::try_into)
+                    .collect::<Result<Vec<_>, _>>()?,
             },
             SchemaTxStatus::SqueezedOutStatus(s) => {
                 TransactionStatus::SqueezedOut { reason: s.reason }

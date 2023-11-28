@@ -22,6 +22,7 @@ async-trait = { workspace = true }
 cynic = { workspace = true }
 ethers = "2"
 fuel-core = { path = "../crates/fuel-core", default-features = false, features = ["test-helpers"] }
+fuel-core-benches = { path = "../benches" }
 fuel-core-client = { path = "../crates/client", features = ["test-helpers"] }
 fuel-core-p2p = { path = "../crates/services/p2p", features = ["test-helpers"], optional = true }
 fuel-core-poa = { path = "../crates/services/consensus_module/poa" }

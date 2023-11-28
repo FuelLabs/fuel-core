@@ -11,6 +11,7 @@ use fuel_core_executor::{
 use fuel_core_storage::{
     tables::{
         Coins,
+        ContractsInfo,
         ContractsLatestUtxo,
         FuelBlocks,
         Messages,
@@ -26,6 +27,7 @@ use fuel_core_storage::{
     StorageAsRef,
     StorageInspect,
 };
+use fuel_core_txpool::types::ContractId;
 #[allow(unused_imports)]
 use fuel_core_types::{
     blockchain::{
@@ -77,6 +79,7 @@ use fuel_core_types::{
         TxPointer,
         UniqueIdentifier,
         UtxoId,
+        ValidityError,
     },
     fuel_types::{
         canonical::Serialize,
@@ -85,6 +88,7 @@ use fuel_core_types::{
     },
     fuel_vm::{
         checked_transaction::{
+            CheckError,
             CheckPredicateParams,
             CheckPredicates,
             Checked,
@@ -121,8 +125,6 @@ use fuel_core_types::{
         txpool::TransactionStatus,
     },
 };
-
-use fuel_core_txpool::types::ContractId;
 use fuel_core_types::{
     fuel_tx::{
         field::{
@@ -133,6 +135,7 @@ use fuel_core_types::{
         },
         input,
         output,
+        Chargeable,
     },
     fuel_vm,
 };
@@ -884,21 +887,20 @@ where
         <Tx as IntoChecked>::Metadata: Fee + CheckedMetadata + Clone + Send + Sync,
     {
         let tx_id = checked_tx.id();
-        let min_fee = checked_tx.metadata().min_fee();
         let max_fee = checked_tx.metadata().max_fee();
 
-        checked_tx = checked_tx
-            .check_predicates(&CheckPredicateParams::from(
-                &self.config.consensus_parameters,
-            ))
-            .map_err(|_| {
-                ExecutorError::TransactionValidity(
-                    TransactionValidityError::InvalidPredicate(tx_id),
-                )
-            })?;
-        debug_assert!(checked_tx.checks().contains(Checks::Predicates));
-
         if options.utxo_validation {
+            checked_tx = checked_tx
+                .check_predicates(&CheckPredicateParams::from(
+                    &self.config.consensus_parameters,
+                ))
+                .map_err(|_| {
+                    ExecutorError::TransactionValidity(
+                        TransactionValidityError::InvalidPredicate(tx_id),
+                    )
+                })?;
+            debug_assert!(checked_tx.checks().contains(Checks::Predicates));
+
             // validate utxos exist and maturity is properly set
             self.verify_input_state(
                 tx_db_transaction.deref(),
@@ -961,8 +963,7 @@ where
         }
 
         // update block commitment
-        let (used_gas, tx_fee) =
-            self.total_fee_paid(min_fee, max_fee, tx.price(), &receipts)?;
+        let (used_gas, tx_fee) = self.total_fee_paid(&tx, max_fee, &receipts)?;
 
         // Check or set the executed transaction.
         match execution_kind {
@@ -1076,8 +1077,6 @@ where
             match input {
                 Input::CoinSigned(CoinSigned { utxo_id, .. })
                 | Input::CoinPredicate(CoinPredicate { utxo_id, .. }) => {
-                    // TODO: Check that fields are equal. We already do that check
-                    //  in the `fuel-core-txpool`, so we need to reuse the code here.
                     if let Some(coin) = db.storage::<Coins>().get(utxo_id)? {
                         let coin_mature_height = coin
                             .tx_pointer
@@ -1090,43 +1089,36 @@ where
                             )
                             .into())
                         }
+
+                        if !coin
+                            .matches_input(input)
+                            .expect("The input is a coin above")
+                        {
+                            return Err(
+                                TransactionValidityError::CoinMismatch(*utxo_id).into()
+                            )
+                        }
                     } else {
                         return Err(
                             TransactionValidityError::CoinDoesNotExist(*utxo_id).into()
                         )
                     }
                 }
-                Input::Contract(_) => {
-                    // TODO: Check that contract exists
+                Input::Contract(contract) => {
+                    if !db
+                        .storage::<ContractsInfo>()
+                        .contains_key(&contract.contract_id)?
+                    {
+                        return Err(TransactionValidityError::ContractDoesNotExist(
+                            contract.contract_id,
+                        )
+                        .into())
+                    }
                 }
-                Input::MessageCoinSigned(MessageCoinSigned {
-                    sender,
-                    recipient,
-                    amount,
-                    nonce,
-                    ..
-                })
-                | Input::MessageCoinPredicate(MessageCoinPredicate {
-                    sender,
-                    recipient,
-                    amount,
-                    nonce,
-                    ..
-                })
-                | Input::MessageDataSigned(MessageDataSigned {
-                    sender,
-                    recipient,
-                    amount,
-                    nonce,
-                    ..
-                })
-                | Input::MessageDataPredicate(MessageDataPredicate {
-                    sender,
-                    recipient,
-                    amount,
-                    nonce,
-                    ..
-                }) => {
+                Input::MessageCoinSigned(MessageCoinSigned { nonce, .. })
+                | Input::MessageCoinPredicate(MessageCoinPredicate { nonce, .. })
+                | Input::MessageDataSigned(MessageDataSigned { nonce, .. })
+                | Input::MessageDataPredicate(MessageDataPredicate { nonce, .. }) => {
                     // Eagerly return already spent if status is known.
                     if db.message_is_spent(nonce)? {
                         return Err(
@@ -1144,42 +1136,14 @@ where
                             )
                             .into())
                         }
-                        if message.sender != *sender {
-                            return Err(TransactionValidityError::MessageSenderMismatch(
-                                *nonce,
-                            )
-                            .into())
-                        }
-                        if message.recipient != *recipient {
+
+                        if !message
+                            .matches_input(input)
+                            .expect("The input is message above")
+                        {
                             return Err(
-                                TransactionValidityError::MessageRecipientMismatch(
-                                    *nonce,
-                                )
-                                .into(),
+                                TransactionValidityError::MessageMismatch(*nonce).into()
                             )
-                        }
-                        if message.amount != *amount {
-                            return Err(TransactionValidityError::MessageAmountMismatch(
-                                *nonce,
-                            )
-                            .into())
-                        }
-                        if message.nonce != *nonce {
-                            return Err(TransactionValidityError::MessageNonceMismatch(
-                                *nonce,
-                            )
-                            .into())
-                        }
-                        let expected_data = if message.data.is_empty() {
-                            None
-                        } else {
-                            Some(message.data.as_slice())
-                        };
-                        if expected_data != input.input_data() {
-                            return Err(TransactionValidityError::MessageDataMismatch(
-                                *nonce,
-                            )
-                            .into())
                         }
                     } else {
                         return Err(
@@ -1234,30 +1198,34 @@ where
         Ok(())
     }
 
-    fn total_fee_paid(
+    fn total_fee_paid<Tx: Chargeable>(
         &self,
-        min_fee: u64,
-        max_fee: u64,
-        gas_price: u64,
+        tx: &Tx,
+        max_fee: Word,
         receipts: &[Receipt],
     ) -> ExecutorResult<(Word, Word)> {
         let mut used_gas = 0;
         for r in receipts {
             if let Receipt::ScriptResult { gas_used, .. } = r {
                 used_gas = *gas_used;
-                let fee = TransactionFee::gas_refund_value(
-                    self.config.consensus_parameters.fee_params(),
-                    used_gas,
-                    gas_price,
-                )
-                .and_then(|refund| max_fee.checked_sub(refund))
-                .ok_or(ExecutorError::FeeOverflow)?;
-
-                return Ok((used_gas, fee))
+                break;
             }
         }
+
+        let fee = tx
+            .refund_fee(
+                self.config.consensus_parameters.gas_costs(),
+                self.config.consensus_parameters.fee_params(),
+                used_gas,
+            )
+            .ok_or(ExecutorError::FeeOverflow)?;
         // if there's no script result (i.e. create) then fee == base amount
-        Ok((used_gas, min_fee))
+        Ok((
+            used_gas,
+            max_fee
+                .checked_sub(fee)
+                .expect("Refunded fee can't be more than `max_fee`."),
+        ))
     }
 
     /// Computes all zeroed or variable inputs.
@@ -1799,7 +1767,6 @@ mod tests {
                 Outputs,
                 Script as ScriptField,
             },
-            CheckError,
             ConsensusParameters,
             Create,
             Finalizable,
@@ -1888,7 +1855,7 @@ mod tests {
         .collect();
 
         let script = TxBuilder::new(2322)
-            .gas_limit(fuel_tx::TxParameters::DEFAULT.max_gas_per_tx)
+            .script_gas_limit(fuel_tx::TxParameters::DEFAULT.max_gas_per_tx >> 1)
             .start_script(script, script_data)
             .contract_input(contract_id)
             .coin_input(asset_id, input_amount)
@@ -1907,7 +1874,7 @@ mod tests {
         let transactions = (1..num_txs + 1)
             .map(|i| {
                 TxBuilder::new(2322u64)
-                    .gas_limit(10)
+                    .script_gas_limit(10)
                     .coin_input(AssetId::default(), (i as Word) * 100)
                     .coin_output(AssetId::default(), (i as Word) * 50)
                     .change_output(AssetId::default())
@@ -2034,7 +2001,7 @@ mod tests {
             let limit = 0;
             let gas_price_factor = 1;
             let script = TxBuilder::new(1u64)
-                .gas_limit(limit)
+                .script_gas_limit(limit)
                 // Set a price for the test
                 .gas_price(price)
                 .coin_input(AssetId::BASE, 10000)
@@ -2126,7 +2093,7 @@ mod tests {
             assert_eq!(amount, expected_fee_amount_1);
 
             let script = TxBuilder::new(2u64)
-                .gas_limit(limit)
+                .script_gas_limit(limit)
                 // Set a price for the test
                 .gas_price(price)
                 .coin_input(AssetId::BASE, 10000)
@@ -2211,7 +2178,7 @@ mod tests {
             let limit = 0;
             let gas_price_factor = 1;
             let script = TxBuilder::new(2322u64)
-                .gas_limit(limit)
+                .script_gas_limit(limit)
                 // Set a price for the test
                 .gas_price(price)
                 .coin_input(AssetId::BASE, 10000)
@@ -2251,7 +2218,7 @@ mod tests {
             let limit = 0;
             let gas_price_factor = 1;
             let script = TxBuilder::new(2322u64)
-                .gas_limit(limit)
+                .script_gas_limit(limit)
                 // Set a price for the test
                 .gas_price(price)
                 .coin_input(AssetId::BASE, 10000)
@@ -2329,7 +2296,7 @@ mod tests {
                 expected_in_tx_coinbase: ContractId,
             ) -> bool {
                 let script = TxBuilder::new(2322u64)
-                    .gas_limit(100000)
+                    .script_gas_limit(100000)
                     // Set a price for the test
                     .gas_price(0)
                     .start_script(vec![
@@ -2494,9 +2461,9 @@ mod tests {
                 .expect_err("Expected error because coinbase if invalid");
             assert!(matches!(
                 validation_err,
-                ExecutorError::InvalidTransaction(
-                    CheckError::TransactionMintIncorrectBlockHeight
-                )
+                ExecutorError::InvalidTransaction(CheckError::Validity(
+                    ValidityError::TransactionMintIncorrectBlockHeight
+                ))
             ));
         }
 
@@ -2522,9 +2489,9 @@ mod tests {
                 .expect_err("Expected error because coinbase if invalid");
             assert!(matches!(
                 validation_err,
-                ExecutorError::InvalidTransaction(
-                    CheckError::TransactionMintNonBaseAsset
-                )
+                ExecutorError::InvalidTransaction(CheckError::Validity(
+                    ValidityError::TransactionMintNonBaseAsset
+                ))
             ));
         }
 
@@ -2558,17 +2525,13 @@ mod tests {
     fn executor_invalidates_missing_gas_input() {
         let mut rng = StdRng::seed_from_u64(2322u64);
         let producer = Executor::test(Default::default(), Default::default());
-        let factor = producer
-            .config
-            .consensus_parameters
-            .fee_params()
-            .gas_price_factor as f64;
+        let consensus_parameters = &producer.config.consensus_parameters;
 
         let verifier = Executor::test(Default::default(), Default::default());
 
         let gas_limit = 100;
         let gas_price = 1;
-        let tx = TransactionBuilder::script(vec![], vec![])
+        let script = TransactionBuilder::script(vec![], vec![])
             .add_unsigned_coin_input(
                 SecretKey::random(&mut rng),
                 rng.gen(),
@@ -2577,9 +2540,17 @@ mod tests {
                 Default::default(),
                 Default::default(),
             )
-            .gas_limit(gas_limit)
+            .script_gas_limit(gas_limit)
             .gas_price(gas_price)
-            .finalize_as_transaction();
+            .finalize();
+        let max_fee: u64 = script
+            .max_fee(
+                consensus_parameters.gas_costs(),
+                consensus_parameters.fee_params(),
+            )
+            .try_into()
+            .unwrap();
+        let tx: Transaction = script.into();
 
         let mut block = PartialFuelBlock {
             header: Default::default(),
@@ -2602,7 +2573,11 @@ mod tests {
         let produce_result = &skipped_transactions[0].1;
         assert!(matches!(
             produce_result,
-            &ExecutorError::InvalidTransaction(CheckError::InsufficientFeeAmount { expected, .. }) if expected == (gas_limit as f64 / factor).ceil() as u64
+            &ExecutorError::InvalidTransaction(
+                CheckError::Validity(
+                    ValidityError::InsufficientFeeAmount { expected, .. }
+                )
+            ) if expected == max_fee
         ));
 
         // Produced block is valid
@@ -2629,7 +2604,11 @@ mod tests {
         );
         assert!(matches!(
             verify_result,
-            Err(ExecutorError::InvalidTransaction(CheckError::InsufficientFeeAmount { expected, ..})) if expected == (gas_limit as f64 / factor).ceil() as u64
+            Err(ExecutorError::InvalidTransaction(
+                CheckError::Validity(
+                    ValidityError::InsufficientFeeAmount { expected, .. }
+                )
+            )) if expected == max_fee
         ))
     }
 
@@ -2800,7 +2779,7 @@ mod tests {
         let fake_output_amount = 100;
 
         let tx: Transaction = TxBuilder::new(2322u64)
-            .gas_limit(1)
+            .script_gas_limit(1)
             .coin_input(Default::default(), input_amount)
             .change_output(Default::default())
             .build()
@@ -2845,7 +2824,7 @@ mod tests {
     fn executor_invalidates_blocks_with_diverging_tx_commitment() {
         let mut rng = StdRng::seed_from_u64(2322u64);
         let tx: Transaction = TxBuilder::new(2322u64)
-            .gas_limit(1)
+            .script_gas_limit(1)
             .coin_input(Default::default(), 10)
             .change_output(Default::default())
             .build()
@@ -2911,7 +2890,9 @@ mod tests {
         // assert block failed to validate when transaction didn't contain any coin inputs
         assert!(matches!(
             err,
-            &ExecutorError::InvalidTransaction(CheckError::NoSpendableInput)
+            &ExecutorError::InvalidTransaction(CheckError::Validity(
+                ValidityError::NoSpendableInput
+            ))
         ));
     }
 
@@ -3023,6 +3004,130 @@ mod tests {
     }
 
     #[test]
+    fn coin_input_fails_when_mismatches_database() {
+        const AMOUNT: u64 = 100;
+
+        let tx = TxBuilder::new(2322u64)
+            .coin_input(AssetId::default(), AMOUNT)
+            .change_output(AssetId::default())
+            .build()
+            .transaction()
+            .clone();
+
+        let input = tx.inputs()[0].clone();
+        let db = &mut Database::default();
+
+        // Inserting a coin with `AMOUNT - 1` should cause a mismatching error during production.
+        db.storage::<Coins>()
+            .insert(
+                &input.utxo_id().unwrap().clone(),
+                &CompressedCoin {
+                    owner: *input.input_owner().unwrap(),
+                    amount: AMOUNT - 1,
+                    asset_id: AssetId::default(),
+                    maturity: Default::default(),
+                    tx_pointer: Default::default(),
+                },
+            )
+            .unwrap();
+        let executor = Executor::test(
+            db.clone(),
+            Config {
+                utxo_validation_default: true,
+                ..Default::default()
+            },
+        );
+
+        let block = PartialFuelBlock {
+            header: Default::default(),
+            transactions: vec![tx.into()],
+        };
+
+        let ExecutionResult {
+            skipped_transactions,
+            ..
+        } = executor
+            .execute_and_commit(
+                ExecutionBlock::Production(block),
+                ExecutionOptions {
+                    utxo_validation: true,
+                },
+            )
+            .unwrap();
+        // `tx` should be skipped.
+        assert_eq!(skipped_transactions.len(), 1);
+        let err = &skipped_transactions[0].1;
+        assert!(matches!(
+            err,
+            &ExecutorError::TransactionValidity(TransactionValidityError::CoinMismatch(
+                _
+            ))
+        ));
+    }
+
+    #[test]
+    fn contract_input_fails_when_doesnt_exist_in_database() {
+        let contract_id: ContractId = [1; 32].into();
+        let tx = TxBuilder::new(2322u64)
+            .contract_input(contract_id)
+            .coin_input(AssetId::default(), 100)
+            .change_output(AssetId::default())
+            .contract_output(&contract_id)
+            .build()
+            .transaction()
+            .clone();
+
+        let input = tx.inputs()[1].clone();
+        let db = &mut Database::default();
+
+        db.storage::<Coins>()
+            .insert(
+                &input.utxo_id().unwrap().clone(),
+                &CompressedCoin {
+                    owner: *input.input_owner().unwrap(),
+                    amount: 100,
+                    asset_id: AssetId::default(),
+                    maturity: Default::default(),
+                    tx_pointer: Default::default(),
+                },
+            )
+            .unwrap();
+        let executor = Executor::test(
+            db.clone(),
+            Config {
+                utxo_validation_default: true,
+                ..Default::default()
+            },
+        );
+
+        let block = PartialFuelBlock {
+            header: Default::default(),
+            transactions: vec![tx.into()],
+        };
+
+        let ExecutionResult {
+            skipped_transactions,
+            ..
+        } = executor
+            .execute_and_commit(
+                ExecutionBlock::Production(block),
+                ExecutionOptions {
+                    utxo_validation: true,
+                },
+            )
+            .unwrap();
+        // `tx` should be skipped.
+        assert_eq!(skipped_transactions.len(), 1);
+        let err = &skipped_transactions[0].1;
+        assert!(matches!(
+            err,
+            &ExecutorError::TransactionValidity(
+                TransactionValidityError::ContractDoesNotExist(_)
+            )
+        ));
+    }
+
+    #[test]
     fn skipped_txs_not_affect_order() {
         // `tx1` is invalid because it doesn't have inputs for gas.
         // `tx2` is a `Create` transaction with some code inside.
@@ -3033,7 +3138,7 @@ mod tests {
         // transaction `tx1` and produce a block [tx2, tx3] with the expected order.
         let tx1 = TransactionBuilder::script(vec![], vec![])
             .add_random_fee_input()
-            .gas_limit(1000000)
+            .script_gas_limit(1000000)
             .gas_price(1000000)
             .finalize_as_transaction();
         let (tx2, tx3) = setup_executable_script();
@@ -3120,7 +3225,7 @@ mod tests {
 
         let (create, contract_id) = create_contract(vec![], &mut rng);
         let non_modify_state_tx: Transaction = TxBuilder::new(2322)
-            .gas_limit(10000)
+            .script_gas_limit(10000)
             .coin_input(AssetId::zeroed(), 10000)
             .start_script(vec![op::ret(1)], vec![])
             .contract_input(contract_id)
@@ -3300,7 +3405,7 @@ mod tests {
         .collect();
 
         let modify_balance_and_state_tx = TxBuilder::new(2322)
-            .gas_limit(10000)
+            .script_gas_limit(10000)
             .coin_input(AssetId::zeroed(), 10000)
             .start_script(script, script_data)
             .contract_input(contract_id)
@@ -3416,7 +3521,7 @@ mod tests {
         .collect();
 
         let modify_balance_and_state_tx = TxBuilder::new(2322)
-            .gas_limit(10000)
+            .script_gas_limit(10000)
             .coin_input(AssetId::zeroed(), 10000)
             .start_script(script, script_data)
             .contract_input(contract_id)
@@ -3496,7 +3601,7 @@ mod tests {
         let transfer_amount = 100 as Word;
         let asset_id = AssetId::from([2; 32]);
         let mut foreign_transfer = TxBuilder::new(2322)
-            .gas_limit(10000)
+            .script_gas_limit(10000)
             .coin_input(AssetId::zeroed(), 10000)
             .start_script(vec![op::ret(1)], vec![])
             .coin_input(asset_id, transfer_amount)
@@ -4179,6 +4284,38 @@ mod tests {
     }
 
     #[test]
+    fn message_input_fails_when_mismatches_database() {
+        let mut rng = StdRng::seed_from_u64(2322);
+
+        let (tx, mut message) = make_tx_and_message(&mut rng, 0);
+
+        // Modifying the message to make it mismatch
+        message.amount = 123;
+
+        let mut block = Block::default();
+        *block.transactions_mut() = vec![tx.clone()];
+
+        let ExecutionResult {
+            skipped_transactions,
+            ..
+        } = make_executor(&[&message])
+            .execute_and_commit(
+                ExecutionBlock::Production(block.clone().into()),
+                ExecutionOptions {
+                    utxo_validation: true,
+                },
+            )
+            .unwrap();
+        let err = &skipped_transactions[0].1;
+        assert!(matches!(
+            err,
+            &ExecutorError::TransactionValidity(
+                TransactionValidityError::MessageMismatch(_)
+            )
+        ));
+    }
+
+    #[test]
     fn message_fails_when_spending_already_spent_message_id() {
         let mut rng = StdRng::seed_from_u64(2322);
 
@@ -4263,7 +4400,7 @@ mod tests {
         // return current block height
         let script = vec![op::bhei(0x10), op::ret(0x10)];
         let tx = TransactionBuilder::script(script.into_iter().collect(), vec![])
-            .gas_limit(10000)
+            .script_gas_limit(10000)
             .add_unsigned_coin_input(
                 SecretKey::random(&mut rng),
                 rng.gen(),
@@ -4341,7 +4478,7 @@ mod tests {
         // return current block height
         let script = vec![op::bhei(0x10), op::time(0x11, 0x10), op::ret(0x11)];
         let tx = TransactionBuilder::script(script.into_iter().collect(), vec![])
-            .gas_limit(10000)
+            .script_gas_limit(10000)
             .add_unsigned_coin_input(
                 SecretKey::random(&mut rng),
                 rng.gen(),

@@ -21,6 +21,7 @@ use crate::{
 use async_graphql::{
     Context,
     Object,
+    Union,
 };
 use fuel_core_types::{
     fuel_tx,
@@ -28,7 +29,6 @@ use fuel_core_types::{
 };
 
 pub struct ChainInfo;
-
 pub struct ConsensusParameters(fuel_tx::ConsensusParameters);
 pub struct TxParameters(fuel_tx::TxParameters);
 pub struct PredicateParameters(fuel_tx::PredicateParameters);
@@ -38,11 +38,36 @@ pub struct FeeParameters(fuel_tx::FeeParameters);
 
 pub struct GasCosts(fuel_tx::GasCosts);
 
-pub struct DependentCost(fuel_tx::DependentCost);
+#[derive(Union)]
+pub enum DependentCost {
+    LightOperation(LightOperation),
+    HeavyOperation(HeavyOperation),
+}
+
+pub struct LightOperation {
+    base: u64,
+    units_per_gas: u64,
+}
+
+pub struct HeavyOperation {
+    base: u64,
+    gas_per_unit: u64,
+}
 
 impl From<fuel_tx::DependentCost> for DependentCost {
     fn from(value: fuel_tx::DependentCost) -> Self {
-        Self(value)
+        match value {
+            fuel_tx::DependentCost::LightOperation {
+                base,
+                units_per_gas,
+            } => DependentCost::LightOperation(LightOperation {
+                base,
+                units_per_gas,
+            }),
+            fuel_tx::DependentCost::HeavyOperation { base, gas_per_unit } => {
+                DependentCost::HeavyOperation(HeavyOperation { base, gas_per_unit })
+            }
+        }
     }
 }
 
@@ -627,6 +652,14 @@ impl GasCosts {
     async fn state_root(&self) -> DependentCost {
         self.0.state_root.into()
     }
+
+    async fn vm_initialization(&self) -> DependentCost {
+        self.0.vm_initialization.into()
+    }
+
+    async fn new_storage_per_byte(&self) -> U64 {
+        self.0.new_storage_per_byte.into()
+    }
 }
 
 struct PeerInfo(PeerId, fuel_core_types::services::p2p::PeerInfo);
@@ -664,13 +697,24 @@ impl PeerInfo {
 }
 
 #[Object]
-impl DependentCost {
+impl LightOperation {
     async fn base(&self) -> U64 {
-        self.0.base.into()
+        self.base.into()
     }
 
-    async fn dep_per_unit(&self) -> U64 {
-        self.0.dep_per_unit.into()
+    async fn units_per_gas(&self) -> U64 {
+        self.units_per_gas.into()
+    }
+}
+
+#[Object]
+impl HeavyOperation {
+    async fn base(&self) -> U64 {
+        self.base.into()
+    }
+
+    async fn gas_per_unit(&self) -> U64 {
+        self.gas_per_unit.into()
     }
 }
 

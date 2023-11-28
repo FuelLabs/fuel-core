@@ -18,7 +18,6 @@ use fuel_core_types::{
     },
     fuel_asm::Word,
     fuel_tx::{
-        field::GasLimit,
         Receipt,
         Transaction,
     },
@@ -147,15 +146,10 @@ where
         // It is deterministic from the result perspective, plus it is more performant
         // because we don't need to wait for the relayer to sync.
         let header = self._new_header(height, Tai64::now())?;
-        let gas_limit = match &transaction {
-            Transaction::Script(script) => *script.gas_limit(),
-            Transaction::Create(create) => *create.gas_limit(),
-            Transaction::Mint(_) => 0,
-        };
         let component = Components {
             header_to_produce: header,
             transactions_source: transaction,
-            gas_limit,
+            gas_limit: u64::MAX,
         };
 
         let executor = self.executor.clone();

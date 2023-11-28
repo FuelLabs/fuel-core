@@ -447,6 +447,21 @@ jobs:
         if: matrix.job.cross_image
         uses: docker/setup-buildx-action@v1
 
+      - name: Log in to the ghcr.io registry
+        if: matrix.job.os == 'buildjet-4vcpu-ubuntu-2204'
+        uses: docker/login-action@v1
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Log in to the docker.io registry
+        if: matrix.job.os == 'buildjet-4vcpu-ubuntu-2204'
+        uses: docker/login-action@v2
+        with:
+          username: fuellabs
+          password: ${{ secrets.DOCKER_IO_READ_ONLY_TOKEN }}
+
       - name: Setup custom cross env ${{ matrix.job.cross_image }}
         if: matrix.job.cross_image
         uses: docker/build-push-action@v2
@@ -484,7 +499,7 @@ jobs:
         if: matrix.job.platform == 'linux'
         run: |
           strip "target/${{ matrix.job.target }}/release/fuel-core"
-          strip "target/${{ matrix.job.target }}/release/fuel-core-keygen-bin"
+          strip "target/${{ matrix.job.target }}/release/fuel-core-keygen"
 
       - name: Strip release binary aarch64-linux-gnu
         if: matrix.job.target == 'aarch64-unknown-linux-gnu'
@@ -498,13 +513,13 @@ jobs:
           "$PWD/target:/target:Z" \
           aarch64-linux-gnu:latest \
           aarch64-linux-gnu-strip \
-          /target/aarch64-unknown-linux-gnu/release/fuel-core-keygen-bin
+          /target/aarch64-unknown-linux-gnu/release/fuel-core-keygen
 
       - name: Strip release binary mac
         if: matrix.job.os == 'macos-latest'
         run: |
           strip -x "target/${{ matrix.job.target }}/release/fuel-core"
-          strip -x "target/${{ matrix.job.target }}/release/fuel-core-keygen-bin"
+          strip -x "target/${{ matrix.job.target }}/release/fuel-core-keygen"
 
       - name: Prepare Binary Artifact
         env:
@@ -523,7 +538,7 @@ jobs:
           # create zip file
           mkdir -pv "$ARTIFACT"
           cp "target/${{ matrix.job.target }}/release/fuel-core" "$ARTIFACT"
-          cp "target/${{ matrix.job.target }}/release/fuel-core-keygen-bin" "$ARTIFACT"
+          cp "target/${{ matrix.job.target }}/release/fuel-core-keygen" "$ARTIFACT"
           tar -czvf "$ZIP_FILE_NAME" "$ARTIFACT"
 
       - name: Upload Binary Artifact
