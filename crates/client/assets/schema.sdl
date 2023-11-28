@@ -265,10 +265,12 @@ input ExcludeInput {
 }
 
 type FailureStatus {
+	transactionId: TransactionId!
 	block: Block!
 	time: Tai64Timestamp!
 	reason: String!
 	programState: ProgramState
+	receipts: [Receipt!]!
 }
 
 type FeeParameters {
@@ -847,9 +849,11 @@ type Subscription {
 }
 
 type SuccessStatus {
+	transactionId: TransactionId!
 	block: Block!
 	time: Tai64Timestamp!
 	programState: ProgramState
+	receipts: [Receipt!]!
 }
 
 scalar Tai64Timestamp

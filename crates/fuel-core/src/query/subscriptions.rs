@@ -68,7 +68,10 @@ where
             }
 
             match status {
-                TxStatusMessage::Status(status) => Ok(status.into()),
+                TxStatusMessage::Status(status) => {
+                    let status = ApiTxStatus::new(transaction_id, status);
+                    Ok(status)
+                },
                 // Map a failed status to an error for the api.
                 TxStatusMessage::FailedStatus => {
                     Err(anyhow::anyhow!("Failed to get transaction status"))
