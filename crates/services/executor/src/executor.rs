@@ -211,7 +211,7 @@ pub struct ExecutionData {
     found_mint: bool,
     message_ids: Vec<MessageId>,
     tx_status: Vec<TransactionExecutionStatus>,
-    skipped_transactions: Vec<(TxId, ExecutorError)>,
+    pub skipped_transactions: Vec<(TxId, ExecutorError)>,
 }
 
 /// Per-block execution options
@@ -361,7 +361,7 @@ where
     }
 }
 
-mod private {
+pub mod private {
     use super::*;
 
     pub struct PartialBlockComponent<'a, TxSource> {
@@ -554,7 +554,7 @@ where
 
     #[tracing::instrument(skip_all)]
     /// Execute the fuel block with all transactions.
-    fn execute_block<TxSource>(
+    pub fn execute_block<TxSource>(
         &self,
         block_st_transaction: &mut D,
         block: ExecutionType<PartialBlockComponent<TxSource>>,
