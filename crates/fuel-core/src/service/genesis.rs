@@ -137,6 +137,7 @@ fn commit_genesis_block(
 
     // TODO: load roots from storage
     let chain_config_hash = config.chain_config.root()?.into();
+
     let genesis = Genesis {
         chain_config_hash,
         coins_root: roots[0].root().into(),
