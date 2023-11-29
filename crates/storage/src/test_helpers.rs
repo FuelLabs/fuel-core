@@ -78,7 +78,7 @@ pub trait MockStorageMethods {
 
     fn size_of_value<M: Mappable + 'static>(
         &self,
-        key: &M::Key
+        key: &M::Key,
     ) -> StorageResult<Option<usize>>;
 }
 

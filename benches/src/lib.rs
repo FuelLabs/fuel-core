@@ -94,9 +94,6 @@ pub struct VmBench {
     pub prepare_call: Option<PrepareCall>,
     pub dummy_contract: Option<ContractId>,
     pub contract_code: Option<ContractCode>,
-    pub prepare_db: Option<
-        Box<dyn FnMut(VmDatabase<Database>) -> anyhow::Result<VmDatabase<Database>>>,
-    >,
     pub empty_contracts: Vec<ContractId>,
     pub receipts_ctx: Option<ReceiptsCtx>,
 }
@@ -299,12 +296,6 @@ impl VmBench {
         self.contract_code.replace(contract_code);
         self
     }
-
-    pub fn with_prepare_db<F>(mut self, prepare_db: F) -> Self
-    where
-        F: FnMut(VmDatabase<Database>) -> anyhow::Result<VmDatabase<Database>> + 'static,
-    {
-        self.prepare_db.replace(Box::new(prepare_db));
 
     pub fn with_empty_contracts_count(mut self, count: usize) -> Self {
         let mut contract_ids = Vec::with_capacity(count);

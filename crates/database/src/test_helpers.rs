@@ -1,21 +1,45 @@
-use fuel_core_storage::test_helpers::MockStorageMethods;
-use fuel_core_storage::transactional::StorageTransaction;
-use fuel_core_storage::{Mappable, MerkleRoot, Result as StorageResult, StorageInspect, StorageMutate, StorageRead, StorageSize};
-use fuel_core_storage::database::{DatabaseColumnIterator, FuelBlockTrait, FuelStateTrait, TxIdOwnerRecorder, VmDatabaseTrait};
-use fuel_core_storage::Error as StorageError;
-use fuel_core_types::blockchain::header::ConsensusHeader;
-use fuel_core_types::fuel_tx::ContractId;
-use fuel_core_types::fuel_types::{Address, BlockHeight, Bytes32, Nonce};
-use fuel_core_types::services::txpool::TransactionStatus;
 use crate::vm_database::VmDatabase;
-use fuel_core_storage::MerkleRootStorage;
-use fuel_core_storage::database::MessageIsSpent;
-use fuel_core_storage::iter::IterDirection;
-use fuel_core_storage::transactional::Transactional;
-use fuel_core_storage::transactional::Transaction;
-use fuel_core_types::blockchain::primitives::BlockId;
-use fuel_core_types::tai64::Tai64;
-
+use fuel_core_storage::{
+    database::{
+        DatabaseColumnIterator,
+        FuelBlockTrait,
+        FuelStateTrait,
+        MessageIsSpent,
+        TxIdOwnerRecorder,
+        VmDatabaseTrait,
+    },
+    iter::IterDirection,
+    test_helpers::MockStorageMethods,
+    transactional::{
+        StorageTransaction,
+        Transaction,
+        Transactional,
+    },
+    Error as StorageError,
+    Mappable,
+    MerkleRoot,
+    MerkleRootStorage,
+    Result as StorageResult,
+    StorageInspect,
+    StorageMutate,
+    StorageRead,
+    StorageSize,
+};
+use fuel_core_types::{
+    blockchain::{
+        header::ConsensusHeader,
+        primitives::BlockId,
+    },
+    fuel_tx::ContractId,
+    fuel_types::{
+        Address,
+        BlockHeight,
+        Bytes32,
+        Nonce,
+    },
+    services::txpool::TransactionStatus,
+    tai64::Tai64,
+};
 
 mockall::mock! {
     /// The mocked storage is useful to test functionality build on top of the `StorageInspect`,
@@ -61,7 +85,6 @@ mockall::mock! {
     }
 }
 
-
 impl MockStorage {
     /// Packs `self` into one more `MockStorage` and implements `Transactional` trait by this move.
     pub fn into_transactional(self) -> MockStorage {
@@ -85,8 +108,8 @@ impl AsMut<MockStorage> for MockStorage {
 }
 
 impl<M> StorageSize<M> for MockStorage
-    where
-        M: Mappable + 'static
+where
+    M: Mappable + 'static,
 {
     fn size_of_value(&self, key: &M::Key) -> Result<Option<usize>, Self::Error> {
         MockStorageMethods::size_of_value::<M>(self, key)
@@ -94,8 +117,8 @@ impl<M> StorageSize<M> for MockStorage
 }
 
 impl<M> StorageRead<M> for MockStorage
-    where
-        M: Mappable + 'static
+where
+    M: Mappable + 'static,
 {
     fn read(&self, key: &M::Key, buf: &mut [u8]) -> Result<Option<usize>, Self::Error> {
         todo!()
@@ -208,7 +231,11 @@ impl FuelBlockTrait for MockStorage {
 impl FuelStateTrait for MockStorage {
     type Error = StorageError;
 
-    fn init_contract_state<S: Iterator<Item=(Bytes32, Bytes32)>>(&mut self, contract_id: &ContractId, slots: S) -> Result<(), Self::Error> {
+    fn init_contract_state<S: Iterator<Item = (Bytes32, Bytes32)>>(
+        &mut self,
+        contract_id: &ContractId,
+        slots: S,
+    ) -> Result<(), Self::Error> {
         todo!()
     }
 }
@@ -216,7 +243,18 @@ impl FuelStateTrait for MockStorage {
 impl DatabaseColumnIterator for MockStorage {
     type Error = StorageError;
 
-    fn iter_all_filtered_column<K, V, P, S>(&self, prefix: Option<P>, start: Option<S>, direction: Option<IterDirection>) -> Box<dyn Iterator<Item=Result<(K, V), Self::Error>> + '_> where K: From<Vec<u8>>, V: serde::de::DeserializeOwned, P: AsRef<[u8]>, S: AsRef<[u8]> {
+    fn iter_all_filtered_column<K, V, P, S>(
+        &self,
+        prefix: Option<P>,
+        start: Option<S>,
+        direction: Option<IterDirection>,
+    ) -> Box<dyn Iterator<Item = Result<(K, V), Self::Error>> + '_>
+    where
+        K: From<Vec<u8>>,
+        V: serde::de::DeserializeOwned,
+        P: AsRef<[u8]>,
+        S: AsRef<[u8]>,
+    {
         todo!()
     }
 }
