@@ -39,12 +39,12 @@ use libp2p::{
     PeerId,
 };
 use libp2p_allow_block_list as allow_block_list;
-use libp2p_kad::Event;
+use libp2p_kad::Event as KademliaEvent;
 use libp2p_request_response::OutboundRequestId;
 
 #[derive(Debug)]
 pub enum FuelBehaviourEvent {
-    Discovery(Event),
+    Discovery(KademliaEvent),
     PeerReport(PeerReportEvent),
     Gossipsub(GossipsubEvent),
     RequestResponse(RequestResponseEvent<RequestMessage, NetworkResponse>),
@@ -203,8 +203,8 @@ impl<Codec: NetworkCodec> FuelBehaviour<Codec> {
     }
 }
 
-impl From<Event> for FuelBehaviourEvent {
-    fn from(event: Event) -> Self {
+impl From<KademliaEvent> for FuelBehaviourEvent {
+    fn from(event: KademliaEvent) -> Self {
         FuelBehaviourEvent::Discovery(event)
     }
 }

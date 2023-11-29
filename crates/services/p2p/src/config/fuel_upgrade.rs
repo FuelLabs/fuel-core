@@ -106,12 +106,15 @@ where
 
     fn upgrade_inbound(self, mut socket: C, _: Self::Info) -> Self::Future {
         async move {
+            tracing::error!("upgrade inbound!");
             // Inbound node receives the checksum and compares it to its own checksum.
             // If they do not match the connection is rejected.
             let res = FramedRead::new(&mut socket, BytesCodec)
                 .try_next()
                 .await?
                 .ok_or(invalid_data_err())?;
+
+            tracing::error!("Received checksum: {:?}", res.as_ref());
 
             if res.as_ref() != self.checksum.0.as_ref() {
                 return Err(FuelUpgradeError::IncorrectChecksum)
@@ -133,6 +136,7 @@ where
 
     fn upgrade_outbound(self, mut socket: C, _: Self::Info) -> Self::Future {
         async move {
+            tracing::error!("upgrade outbound!");
             let mut framed = FramedWrite::new(&mut socket, BytesCodec);
             let bytes = self.checksum.0.to_vec().into();
             framed.send(bytes).await?;

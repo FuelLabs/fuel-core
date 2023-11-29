@@ -1088,8 +1088,13 @@ mod tests {
     // (different chain id or chain config)
     // So they are not able to connect
     #[tokio::test]
-    #[instrument]
+    // #[instrument]
+    #[instrument(level = tracing::Level::INFO)]
     async fn nodes_cannot_connect_due_to_different_checksum() {
+        let _ = tracing_subscriber::fmt()
+            .with_max_level(tracing::Level::INFO)
+            .try_init();
+
         use libp2p::TransportError;
         // Node A
         let mut p2p_config =

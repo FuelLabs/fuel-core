@@ -95,11 +95,13 @@ impl NetworkBehaviour for DiscoveryBehaviour {
         connection: ConnectionId,
         event: THandlerOutEvent<Self>,
     ) {
+        tracing::error!("discovery handler event: {:?}", &event);
         self.kademlia
             .on_connection_handler_event(peer_id, connection, event);
     }
 
     fn on_swarm_event(&mut self, event: FromSwarm) {
+        tracing::error!("discovery swarm event: {:?}", &event);
         match &event {
             FromSwarm::ConnectionEstablished(ConnectionEstablished {
                 peer_id,
@@ -153,6 +155,7 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 
         // poll sub-behaviors
         if let Poll::Ready(kad_action) = self.kademlia.poll(cx) {
+            tracing::error!("kad action: {:?}", &kad_action);
             return Poll::Ready(kad_action)
         };
         while let Poll::Ready(mdns_event) = self.mdns.poll(cx) {
@@ -184,6 +187,7 @@ impl NetworkBehaviour for DiscoveryBehaviour {
         local_addr: &Multiaddr,
         remote_addr: &Multiaddr,
     ) -> Result<THandler<Self>, ConnectionDenied> {
+        tracing::error!("discovery established inbound connection: {:?}", &peer);
         self.kademlia.handle_established_inbound_connection(
             _connection_id,
             peer,
@@ -199,6 +203,7 @@ impl NetworkBehaviour for DiscoveryBehaviour {
         addr: &Multiaddr,
         role_override: Endpoint,
     ) -> Result<THandler<Self>, ConnectionDenied> {
+        tracing::error!("discovery established outbound connection: {:?}", &peer);
         self.kademlia.handle_established_outbound_connection(
             _connection_id,
             peer,
