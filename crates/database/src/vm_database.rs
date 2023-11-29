@@ -186,7 +186,7 @@ where
         + StorageRead<ContractsRawCode, Error = StorageError>
         + MerkleRootStorage<ContractId, ContractsAssets, Error = StorageError>
         + FuelBlockTrait<Error = StorageError>
-        + FuelStateTrait<Error = StorageError>
+        + FuelStateTrait<Error = StorageError>,
 {
     type DataError = StorageError;
 

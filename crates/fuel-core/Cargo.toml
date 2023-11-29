@@ -23,7 +23,6 @@ enum-iterator = "1.2"
 fuel-core-chain-config = { workspace = true }
 fuel-core-consensus-module = { workspace = true }
 fuel-core-database = { workspace = true }
-fuel-core-executor = { workspace = true }
 fuel-core-importer = { workspace = true }
 fuel-core-metrics = { workspace = true }
 fuel-core-p2p = { workspace = true, optional = true }
@@ -69,6 +68,7 @@ mockall = { workspace = true }
 proptest = { workspace = true }
 test-case = { workspace = true }
 test-strategy = { workspace = true }
+fuel-core-executor = { workspace = true, features = ["test-helpers"] }
 
 [features]
 default = ["rocksdb"]

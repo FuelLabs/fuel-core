@@ -1,5 +1,4 @@
 use crate::{
-    iter::IterDirection,
     tables::{
         Messages,
         SpentMessages,
@@ -25,7 +24,6 @@ use fuel_vm_private::{
     fuel_types::ContractId,
     prelude::InterpreterStorage,
 };
-use serde::de::DeserializeOwned;
 
 pub trait FuelBlockTrait {
     type Error;
@@ -70,22 +68,6 @@ pub trait TxIdOwnerRecorder {
         id: &Bytes32,
         status: TransactionStatus,
     ) -> Result<Option<TransactionStatus>, Self::Error>;
-}
-
-pub trait DatabaseColumnIterator {
-    type Error;
-
-    fn iter_all_filtered_column<K, V, P, S>(
-        &self,
-        prefix: Option<P>,
-        start: Option<S>,
-        direction: Option<IterDirection>,
-    ) -> Box<dyn Iterator<Item = Result<(K, V), Self::Error>> + '_>
-    where
-        K: From<Vec<u8>>,
-        V: DeserializeOwned,
-        P: AsRef<[u8]>,
-        S: AsRef<[u8]>;
 }
 
 pub trait VmDatabaseTrait {

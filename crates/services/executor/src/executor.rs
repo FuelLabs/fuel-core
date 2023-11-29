@@ -204,7 +204,7 @@ pub struct Executor<R, D> {
 }
 
 /// Data that is generated after executing all transactions.
-struct ExecutionData {
+pub struct ExecutionData {
     coinbase: u64,
     used_gas: u64,
     tx_count: u16,
@@ -221,14 +221,6 @@ pub struct ExecutionOptions {
     pub utxo_validation: bool,
 }
 
-// impl From<&crate::service::Config> for ExecutionOptions {
-//     fn from(value: &crate::service::Config) -> Self {
-//         Self {
-//             utxo_validation: value.utxo_validation,
-//         }
-//     }
-// }
-
 impl From<&Config> for ExecutionOptions {
     fn from(value: &Config) -> Self {
         Self {
@@ -240,7 +232,6 @@ impl From<&Config> for ExecutionOptions {
 impl<R, D> Executor<R, D>
 where
     R: RelayerPort + Clone,
-    // VmDatabase<D>: InterpreterStorage,
     D: VmDatabaseTrait,
     D: StorageMutate<FuelBlocks, Error = StorageError>
         + StorageMutate<Receipts, Error = StorageError>
@@ -290,7 +281,6 @@ where
 impl<R, D> Executor<R, D>
 where
     R: RelayerPort + Clone,
-    // VmDatabase<D>: InterpreterStorage,
     D: VmDatabaseTrait,
     D: StorageMutate<FuelBlocks, Error = StorageError>
         + StorageMutate<Receipts, Error = StorageError>
@@ -416,7 +406,6 @@ use private::*;
 impl<R, D> Executor<R, D>
 where
     R: RelayerPort + Clone,
-    // VmDatabase<D>: InterpreterStorage,
     D: VmDatabaseTrait,
     D: Clone
         + StorageMutate<FuelBlocks, Error = StorageError>
@@ -1796,6 +1785,17 @@ impl Fee for CreateCheckedMetadata {
 
     fn min_fee(&self) -> Word {
         self.fee.min_fee()
+    }
+}
+
+#[cfg(feature = "test-helpers")]
+impl<D: Clone> Executor<D, D> {
+    pub fn test(database: D, config: Config) -> Self {
+        Self {
+            relayer: database.clone(),
+            database,
+            config: Arc::new(config),
+        }
     }
 }
 
