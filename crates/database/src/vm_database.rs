@@ -37,7 +37,6 @@ use primitive_types::U256;
 use std::borrow::Cow;
 
 use fuel_core_storage::database::{
-    DatabaseColumnIterator,
     FuelBlockTrait,
     FuelStateTrait,
 };
@@ -188,7 +187,6 @@ where
         + MerkleRootStorage<ContractId, ContractsAssets, Error = StorageError>
         + FuelBlockTrait<Error = StorageError>
         + FuelStateTrait<Error = StorageError>
-        + DatabaseColumnIterator<Error = StorageError>,
 {
     type DataError = StorageError;
 

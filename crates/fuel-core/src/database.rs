@@ -54,7 +54,6 @@ use crate::state::rocks_db::RocksDb;
 use fuel_core_database::vm_database::VmDatabase;
 use fuel_core_executor::ports::RelayerPort;
 use fuel_core_storage::database::{
-    DatabaseColumnIterator,
     MessageIsSpent,
     VmDatabaseTrait,
 };
@@ -489,42 +488,6 @@ impl Default for Database {
         {
             Self::rocksdb()
         }
-    }
-}
-
-impl DatabaseColumnIterator for Database {
-    type Error = fuel_core_storage::Error;
-
-    fn iter_all_filtered_column<K, V, P, S>(
-        &self,
-        prefix: Option<P>,
-        start: Option<S>,
-        direction: Option<IterDirection>,
-    ) -> Box<dyn Iterator<Item = std::result::Result<(K, V), StorageError>> + '_>
-    where
-        K: From<Vec<u8>>,
-        V: DeserializeOwned,
-        P: AsRef<[u8]>,
-        S: AsRef<[u8]>,
-    {
-        Box::new(
-            self.data
-                .iter_all(
-                    Column::ContractsState,
-                    prefix.as_ref().map(|p| p.as_ref()),
-                    start.as_ref().map(|s| s.as_ref()),
-                    direction.unwrap_or_default(),
-                )
-                .map(|val| match val {
-                    Ok((key, value)) => {
-                        let key = K::from(key);
-                        let value: V = postcard::from_bytes(&value)
-                            .map_err(|_| fuel_core_storage::Error::Codec)?;
-                        Ok((key, value))
-                    }
-                    Err(err) => Err(fuel_core_storage::Error::from(err)),
-                }),
-        )
     }
 }
 

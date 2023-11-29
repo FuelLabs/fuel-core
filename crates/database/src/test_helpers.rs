@@ -1,14 +1,12 @@
 use crate::vm_database::VmDatabase;
 use fuel_core_storage::{
     database::{
-        DatabaseColumnIterator,
         FuelBlockTrait,
         FuelStateTrait,
         MessageIsSpent,
         TxIdOwnerRecorder,
         VmDatabaseTrait,
     },
-    iter::IterDirection,
     test_helpers::MockStorageMethods,
     transactional::{
         StorageTransaction,
@@ -236,25 +234,6 @@ impl FuelStateTrait for MockStorage {
         contract_id: &ContractId,
         slots: S,
     ) -> Result<(), Self::Error> {
-        todo!()
-    }
-}
-
-impl DatabaseColumnIterator for MockStorage {
-    type Error = StorageError;
-
-    fn iter_all_filtered_column<K, V, P, S>(
-        &self,
-        prefix: Option<P>,
-        start: Option<S>,
-        direction: Option<IterDirection>,
-    ) -> Box<dyn Iterator<Item = Result<(K, V), Self::Error>> + '_>
-    where
-        K: From<Vec<u8>>,
-        V: serde::de::DeserializeOwned,
-        P: AsRef<[u8]>,
-        S: AsRef<[u8]>,
-    {
         todo!()
     }
 }

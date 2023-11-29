@@ -15,7 +15,6 @@ anyhow = { workspace = true }
 derive_more = { workspace = true }
 fuel-core-storage = { workspace = true }
 fuel-core-types = { workspace = true }
-serde = { workspace = true }
 primitive-types = "0.12"
 mockall = { workspace = true }
 

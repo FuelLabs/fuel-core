@@ -32,6 +32,7 @@ pub mod query;
 pub mod schema;
 pub mod service;
 pub mod state;
+pub mod executor;
 
 // In the future this module will be a separate crate for `fuel-core-graphql-api`.
 mod graphql_api;
