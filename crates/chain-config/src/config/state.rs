@@ -1,4 +1,7 @@
-use fuel_core_storage::Result as StorageResult;
+use fuel_core_storage::{
+    iter::BoxedIter,
+    Result as StorageResult,
+};
 use fuel_core_types::{
     fuel_tx::UtxoId,
     fuel_types::{
@@ -217,6 +220,7 @@ impl StateConfig {
     }
 }
 
+// TODO: BoxedIter to be used until RPITIT lands in stable rust.
 pub trait ChainStateDb {
     /// Returns the contract config with the given contract id.
     fn get_contract_config_by_id(
@@ -224,22 +228,18 @@ pub trait ChainStateDb {
         contract_id: ContractId,
     ) -> StorageResult<ContractConfig>;
     /// Returns *all* unspent coin configs available in the database.
-    fn iter_coin_configs(&self) -> impl Iterator<Item = StorageResult<CoinConfig>>;
+    fn iter_coin_configs(&self) -> BoxedIter<StorageResult<CoinConfig>>;
     /// Returns *alive* contract configs available in the database.
-    fn iter_contract_configs(
-        &self,
-    ) -> impl Iterator<Item = StorageResult<ContractConfig>>;
+    fn iter_contract_configs(&self) -> BoxedIter<StorageResult<ContractConfig>>;
 
     /// Returns the state of all contracts
     fn iter_contract_state_configs(
         &self,
-    ) -> impl Iterator<Item = StorageResult<ContractStateConfig>>;
+    ) -> BoxedIter<StorageResult<ContractStateConfig>>;
     /// Returns the balances of all contracts
-    fn iter_contract_balance_configs(
-        &self,
-    ) -> impl Iterator<Item = StorageResult<ContractBalance>>;
+    fn iter_contract_balance_configs(&self) -> BoxedIter<StorageResult<ContractBalance>>;
     /// Returns *all* unspent message configs available in the database.
-    fn iter_message_configs(&self) -> impl Iterator<Item = StorageResult<MessageConfig>>;
+    fn iter_message_configs(&self) -> BoxedIter<StorageResult<MessageConfig>>;
     /// Returns the last available block height.
     fn get_block_height(&self) -> StorageResult<BlockHeight>;
 }
@@ -255,29 +255,25 @@ where
         (*self).get_contract_config_by_id(contract_id)
     }
 
-    fn iter_coin_configs(&self) -> impl Iterator<Item = StorageResult<CoinConfig>> {
+    fn iter_coin_configs(&self) -> BoxedIter<StorageResult<CoinConfig>> {
         (*self).iter_coin_configs()
     }
 
-    fn iter_contract_configs(
-        &self,
-    ) -> impl Iterator<Item = StorageResult<ContractConfig>> {
+    fn iter_contract_configs(&self) -> BoxedIter<StorageResult<ContractConfig>> {
         (*self).iter_contract_configs()
     }
 
     fn iter_contract_state_configs(
         &self,
-    ) -> impl Iterator<Item = StorageResult<ContractStateConfig>> {
+    ) -> BoxedIter<StorageResult<ContractStateConfig>> {
         (*self).iter_contract_state_configs()
     }
 
-    fn iter_contract_balance_configs(
-        &self,
-    ) -> impl Iterator<Item = StorageResult<ContractBalance>> {
+    fn iter_contract_balance_configs(&self) -> BoxedIter<StorageResult<ContractBalance>> {
         (*self).iter_contract_balance_configs()
     }
 
-    fn iter_message_configs(&self) -> impl Iterator<Item = StorageResult<MessageConfig>> {
+    fn iter_message_configs(&self) -> BoxedIter<StorageResult<MessageConfig>> {
         (*self).iter_message_configs()
     }
 
@@ -472,11 +468,11 @@ mod tests {
         let mut rng = StdRng::seed_from_u64(1);
 
         StateConfig {
-            contracts: Some(vec![ContractConfig {
+            contracts: vec![ContractConfig {
                 tx_id: rng.gen(),
                 output_index: rng.gen(),
                 ..base_contract_config()
-            }]),
+            }],
             ..Default::default()
         }
     }
@@ -488,19 +484,17 @@ mod tests {
         let balances = Some(vec![(test_asset_id, test_balance)]);
 
         StateConfig {
-            contracts: Some(vec![ContractConfig {
+            contracts: vec![ContractConfig {
                 balances,
                 ..base_contract_config()
-            }]),
+            }],
             ..Default::default()
         }
     }
 
     fn config_contract() -> StateConfig {
         StateConfig {
-            contracts: Some(vec![ContractConfig {
-                ..base_contract_config()
-            }]),
+            contracts: vec![base_contract_config()],
             ..Default::default()
         }
     }
