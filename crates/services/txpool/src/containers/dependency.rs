@@ -6,10 +6,6 @@ use crate::{
 };
 use anyhow::anyhow;
 use fuel_core_types::{
-    entities::{
-        coins::coin::CompressedCoin,
-        message::Message,
-    },
     fuel_tx::{
         input::{
             coin::{
@@ -166,38 +162,6 @@ impl Dependency {
         }
     }
 
-    fn check_if_coin_input_can_spend_db_coin(
-        coin: &CompressedCoin,
-        input: &Input,
-    ) -> anyhow::Result<()> {
-        match input {
-            Input::CoinSigned(CoinSigned {
-                owner,
-                amount,
-                asset_id,
-                ..
-            })
-            | Input::CoinPredicate(CoinPredicate {
-                owner,
-                amount,
-                asset_id,
-                ..
-            }) => {
-                if *owner != coin.owner {
-                    return Err(Error::NotInsertedIoWrongOwner.into())
-                }
-                if *amount != coin.amount {
-                    return Err(Error::NotInsertedIoWrongAmount.into())
-                }
-                if *asset_id != coin.asset_id {
-                    return Err(Error::NotInsertedIoWrongAssetId.into())
-                }
-                Ok(())
-            }
-            _ => Err(anyhow!("Use it only for coin output check")),
-        }
-    }
-
     fn check_if_coin_input_can_spend_output(
         output: &Output,
         input: &Input,
@@ -281,60 +245,6 @@ impl Dependency {
         Ok(())
     }
 
-    /// Verifies the integrity of the message
-    fn check_if_message_input_matches_database(
-        input: &Input,
-        db_message: &Message,
-    ) -> anyhow::Result<()> {
-        match input {
-            Input::MessageDataSigned(MessageDataSigned {
-                sender,
-                recipient,
-                nonce,
-                amount,
-                ..
-            })
-            | Input::MessageDataPredicate(MessageDataPredicate {
-                sender,
-                recipient,
-                nonce,
-                amount,
-                ..
-            })
-            | Input::MessageCoinSigned(MessageCoinSigned {
-                sender,
-                recipient,
-                nonce,
-                amount,
-                ..
-            })
-            | Input::MessageCoinPredicate(MessageCoinPredicate {
-                sender,
-                recipient,
-                nonce,
-                amount,
-                ..
-            }) => {
-                let expected_data = if db_message.data.is_empty() {
-                    None
-                } else {
-                    Some(db_message.data.as_slice())
-                };
-                if &db_message.sender != sender
-                    || &db_message.recipient != recipient
-                    || &db_message.nonce != nonce
-                    || &db_message.amount != amount
-                    || expected_data != input.input_data()
-                {
-                    return Err(Error::NotInsertedIoMessageMismatch.into())
-                }
-            }
-            _ => {}
-        }
-
-        Ok(())
-    }
-
     /// Check for collision. Used only inside insert function.
     /// Id doesn't change any dependency it just checks if it has possibility to be included.
     /// Returns: (max_depth, db_coins, db_contracts, collided_transactions);
@@ -391,9 +301,14 @@ impl Dependency {
                                                 *utxo_id,
                                             ),
                                         )?;
-                                        Self::check_if_coin_input_can_spend_db_coin(
-                                            &coin, input,
-                                        )?;
+                                        if !coin
+                                            .matches_input(input)
+                                            .expect("The input is coin above")
+                                        {
+                                            return Err(
+                                                Error::NotInsertedIoCoinMismatch.into()
+                                            )
+                                        }
                                     }
                                 } else {
                                     // tx output is in pool
@@ -416,7 +331,12 @@ impl Dependency {
                                 Error::NotInsertedInputUtxoIdNotExisting(*utxo_id),
                             )?;
 
-                            Self::check_if_coin_input_can_spend_db_coin(&coin, input)?;
+                            if !coin
+                                .matches_input(input)
+                                .expect("The input is coin above")
+                            {
+                                return Err(Error::NotInsertedIoCoinMismatch.into())
+                            }
                         }
                         max_depth = core::cmp::max(1, max_depth);
                     }
@@ -440,10 +360,12 @@ impl Dependency {
                     if self.utxo_validation {
                         if let Some(db_message) = db.message(nonce)? {
                             // verify message id integrity
-                            Self::check_if_message_input_matches_database(
-                                input,
-                                &db_message,
-                            )?;
+                            if !db_message
+                                .matches_input(input)
+                                .expect("Input is a message above")
+                            {
+                                return Err(Error::NotInsertedIoMessageMismatch.into())
+                            }
                             // return an error if spent block is set
                             if db.is_message_spent(nonce)? {
                                 return Err(

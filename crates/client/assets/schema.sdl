@@ -251,10 +251,7 @@ type ContractParameters {
 	maxStorageSlots: U64!
 }
 
-type DependentCost {
-	base: U64!
-	depPerUnit: U64!
-}
+union DependentCost = LightOperation | HeavyOperation
 
 input ExcludeInput {
 	"""
@@ -268,10 +265,12 @@ input ExcludeInput {
 }
 
 type FailureStatus {
+	transactionId: TransactionId!
 	block: Block!
 	time: Tai64Timestamp!
 	reason: String!
 	programState: ProgramState
+	receipts: [Receipt!]!
 }
 
 type FeeParameters {
@@ -389,6 +388,8 @@ type GasCosts {
 	swwq: DependentCost!
 	contractRoot: DependentCost!
 	stateRoot: DependentCost!
+	vmInitialization: DependentCost!
+	newStoragePerByte: U64!
 }
 
 type Genesis {
@@ -454,6 +455,11 @@ type Header {
 	applicationHash: Bytes32!
 }
 
+type HeavyOperation {
+	base: U64!
+	gasPerUnit: U64!
+}
+
 scalar HexString
 
 
@@ -492,6 +498,11 @@ type InputMessage {
 	predicateData: HexString!
 }
 
+
+type LightOperation {
+	base: U64!
+	unitsPerGas: U64!
+}
 
 type MerkleProof {
 	proofSet: [Bytes32!]!
@@ -644,6 +655,13 @@ type PoAConsensus {
 	Gets the signature of the block produced by `PoA` consensus.
 	"""
 	signature: Signature!
+}
+
+type Policies {
+	gasPrice: U64
+	witnessLimit: U64
+	maturity: U32
+	maxFee: U64
 }
 
 type PredicateParameters {
@@ -831,9 +849,11 @@ type Subscription {
 }
 
 type SuccessStatus {
+	transactionId: TransactionId!
 	block: Block!
 	time: Tai64Timestamp!
 	programState: ProgramState
+	receipts: [Receipt!]!
 }
 
 scalar Tai64Timestamp
@@ -843,8 +863,9 @@ type Transaction {
 	inputAssetIds: [AssetId!]
 	inputContracts: [Contract!]
 	inputContract: InputContract
+	policies: Policies
 	gasPrice: U64
-	gasLimit: U64
+	scriptGasLimit: U64
 	maturity: U32
 	mintAmount: U64
 	mintAssetId: AssetId

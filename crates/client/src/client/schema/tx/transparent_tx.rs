@@ -31,6 +31,7 @@ use fuel_core_types::{
         field::ReceiptsRoot,
         input,
         output,
+        policies::PolicyType,
         StorageSlot,
     },
     fuel_types,
@@ -80,10 +81,8 @@ pub struct TransactionEdge {
 #[derive(cynic::QueryFragment, Debug)]
 #[cynic(schema_path = "./assets/schema.sdl")]
 pub struct Transaction {
-    /// The field of the `Transaction` type.
-    pub gas_limit: Option<U64>,
-    /// The field of the `Transaction` type.
-    pub gas_price: Option<U64>,
+    /// The field of the `Transaction::Script` type.
+    pub script_gas_limit: Option<U64>,
     /// The field of the `Transaction` type.
     pub id: TransactionId,
     /// The field of the `Transaction::Mint`.
@@ -121,8 +120,6 @@ pub struct Transaction {
     pub outputs: Vec<Output>,
     /// The field of the `Transaction::Mint`.
     pub output_contract: Option<ContractOutput>,
-    /// The field of the `Transaction::Script` and `Transaction::Create`.
-    pub maturity: Option<U32>,
     /// The field of the `Transaction::Mint`.
     pub mint_amount: Option<U64>,
     /// The field of the `Transaction::Mint`.
@@ -139,6 +136,8 @@ pub struct Transaction {
     pub script: Option<HexString>,
     /// The field of the `Transaction::Script`.
     pub script_data: Option<HexString>,
+    /// The field of the `Transaction::Script` and `Transaction::Create`.
+    pub policies: Option<Policies>,
     /// The field of the `Transaction::Create`.
     pub salt: Option<Salt>,
     /// The field of the `Transaction::Create`.
@@ -158,18 +157,10 @@ impl TryFrom<Transaction> for fuel_tx::Transaction {
     fn try_from(tx: Transaction) -> Result<Self, Self::Error> {
         let tx = if tx.is_script {
             let mut script = fuel_tx::Transaction::script(
-                tx.gas_price
+                tx.script_gas_limit
                     .ok_or_else(|| {
-                        ConversionError::MissingField("gas_price".to_string())
+                        ConversionError::MissingField("script_gas_limit".to_string())
                     })?
-                    .into(),
-                tx.gas_limit
-                    .ok_or_else(|| {
-                        ConversionError::MissingField("gas_limit".to_string())
-                    })?
-                    .into(),
-                tx.maturity
-                    .ok_or_else(|| ConversionError::MissingField("maturity".to_string()))?
                     .into(),
                 tx.script
                     .ok_or_else(|| ConversionError::MissingField("script".to_string()))?
@@ -178,6 +169,9 @@ impl TryFrom<Transaction> for fuel_tx::Transaction {
                     .ok_or_else(|| {
                         ConversionError::MissingField("script_data".to_string())
                     })?
+                    .into(),
+                tx.policies
+                    .ok_or_else(|| ConversionError::MissingField("policies".to_string()))?
                     .into(),
                 tx.inputs
                     .ok_or_else(|| ConversionError::MissingField("inputs".to_string()))?
@@ -205,19 +199,6 @@ impl TryFrom<Transaction> for fuel_tx::Transaction {
             script.into()
         } else if tx.is_create {
             let create = fuel_tx::Transaction::create(
-                tx.gas_price
-                    .ok_or_else(|| {
-                        ConversionError::MissingField("gas_price".to_string())
-                    })?
-                    .into(),
-                tx.gas_limit
-                    .ok_or_else(|| {
-                        ConversionError::MissingField("gas_limit".to_string())
-                    })?
-                    .into(),
-                tx.maturity
-                    .ok_or_else(|| ConversionError::MissingField("maturity".to_string()))?
-                    .into(),
                 tx.bytecode_witness_index
                     .ok_or_else(|| {
                         ConversionError::MissingField(
@@ -225,6 +206,9 @@ impl TryFrom<Transaction> for fuel_tx::Transaction {
                         )
                     })?
                     .try_into()?,
+                tx.policies
+                    .ok_or_else(|| ConversionError::MissingField("policies".to_string()))?
+                    .into(),
                 tx.salt
                     .ok_or_else(|| ConversionError::MissingField("salt".to_string()))?
                     .into(),
@@ -539,5 +523,31 @@ impl TryFrom<ContractOutput> for output::contract::Contract {
             balance_root: contract.balance_root.into(),
             state_root: contract.state_root.into(),
         })
+    }
+}
+
+#[derive(cynic::QueryFragment, Debug)]
+#[cynic(schema_path = "./assets/schema.sdl")]
+pub struct Policies {
+    pub gas_price: Option<U64>,
+    pub maturity: Option<U32>,
+    pub witness_limit: Option<U64>,
+    pub max_fee: Option<U64>,
+}
+
+impl From<Policies> for fuel_tx::policies::Policies {
+    fn from(value: Policies) -> Self {
+        let mut policies = fuel_tx::policies::Policies::new();
+        policies.set(PolicyType::GasPrice, value.gas_price.map(Into::into));
+        policies.set(
+            PolicyType::Maturity,
+            value.maturity.map(|maturity| maturity.0 as u64),
+        );
+        policies.set(
+            PolicyType::WitnessLimit,
+            value.witness_limit.map(Into::into),
+        );
+        policies.set(PolicyType::MaxFee, value.max_fee.map(Into::into));
+        policies
     }
 }

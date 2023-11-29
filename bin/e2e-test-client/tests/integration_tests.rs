@@ -4,8 +4,13 @@ use fuel_core::service::{
 };
 
 // Add methods on commands
+use fuel_core::txpool::types::ContractId;
+use fuel_core_chain_config::ChainConfig;
 use fuel_core_e2e_client::config::SuiteConfig;
-use std::fs;
+use std::{
+    fs,
+    str::FromStr,
+};
 use tempfile::TempDir; // Used for writing assertions // Run programs
 
 // Use Jemalloc
@@ -15,7 +20,7 @@ static GLOBAL: tikv_jemallocator::Jemalloc = tikv_jemallocator::Jemalloc;
 #[tokio::test(flavor = "multi_thread")]
 async fn works_in_local_env() {
     // setup a local node
-    let srv = setup_local_node().await;
+    let srv = setup_dev_node().await;
     // generate a config file
     let config = generate_config_file(srv.bound_address.to_string());
     // execute suite
@@ -38,6 +43,7 @@ async fn works_in_multinode_local_env() {
         fuel_tx::Input,
     };
 
+    let config = dev_config();
     let mut rng = StdRng::seed_from_u64(line!() as u64);
     let secret = SecretKey::random(&mut rng);
     let pub_key = Input::owner(&secret.public_key());
@@ -51,6 +57,7 @@ async fn works_in_multinode_local_env() {
             ProducerSetup::new(secret).with_txs(1).with_name("Alice"),
         )],
         [Some(ValidatorSetup::new(pub_key).with_name("Bob"))],
+        Some(config),
     )
     .await;
 
@@ -84,15 +91,34 @@ async fn execute_suite(config_path: String) {
     .await;
 }
 
-async fn setup_local_node() -> FuelService {
+fn dev_config() -> Config {
     let mut config = Config::local_node();
+    let dev_config_bytes =
+        include_str!("../../../deployment/scripts/chainspec/dev_chainspec.json");
+    let chain_config: ChainConfig = serde_json::from_str(dev_config_bytes)
+        .expect("Should be able to decode chain config");
+
     // The `run_contract_large_state` test creates a contract with a huge state
+    assert!(
+        chain_config
+            .consensus_parameters
+            .contract_params
+            .max_storage_slots
+            >= 1 << 17 // 131072
+    );
+
+    config.chain_conf = chain_config;
+    config.block_producer.coinbase_recipient = Some(
+        ContractId::from_str(
+            "0x7777777777777777777777777777777777777777777777777777777777777777",
+        )
+        .unwrap(),
+    );
     config
-        .chain_conf
-        .consensus_parameters
-        .contract_params
-        .max_storage_slots = 1 << 17; // 131072
-    FuelService::new_node(config).await.unwrap()
+}
+
+async fn setup_dev_node() -> FuelService {
+    FuelService::new_node(dev_config()).await.unwrap()
 }
 
 fn generate_config_file(endpoint: String) -> TestConfig {

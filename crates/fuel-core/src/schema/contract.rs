@@ -12,7 +12,6 @@ use crate::{
         U64,
     },
 };
-use anyhow::anyhow;
 use async_graphql::{
     connection::{
         Connection,
@@ -137,13 +136,6 @@ impl ContractBalanceQuery {
         Connection<AssetId, ContractBalance, EmptyFields, EmptyFields>,
     > {
         let query: &Database = ctx.data_unchecked();
-
-        // Rocksdb doesn't support reverse iteration over a prefix
-        if matches!(last, Some(last) if last > 0) {
-            return Err(
-                anyhow!("reverse pagination isn't supported for this resource").into(),
-            )
-        }
 
         crate::schema::query_pagination(after, before, first, last, |start, direction| {
             let balances = query

@@ -1,6 +1,9 @@
 use super::run_group_ref;
 
-use crate::utils::arb_dependent_cost_values;
+use crate::utils::{
+    arb_dependent_cost_values,
+    make_receipts,
+};
 use criterion::{
     Criterion,
     Throughput,
@@ -16,6 +19,7 @@ pub fn run(c: &mut Criterion) {
     let rng = &mut StdRng::seed_from_u64(2322u64);
 
     let linear = arb_dependent_cost_values();
+    let receipts_ctx = make_receipts(rng);
 
     run_group_ref(
         &mut c.benchmark_group("jmp"),
@@ -47,13 +51,15 @@ pub fn run(c: &mut Criterion) {
     run_group_ref(
         &mut c.benchmark_group("ret_script"),
         "ret_script",
-        VmBench::new(op::ret(RegId::ONE)),
+        VmBench::new(op::ret(RegId::ONE)).with_call_receipts(receipts_ctx.clone()),
     );
 
     run_group_ref(
         &mut c.benchmark_group("ret_contract"),
         "ret_contract",
-        VmBench::contract(rng, op::ret(RegId::ONE)).unwrap(),
+        VmBench::contract(rng, op::ret(RegId::ONE))
+            .unwrap()
+            .with_call_receipts(receipts_ctx.clone()),
     );
 
     let mut retd_contract = c.benchmark_group("retd_contract");
@@ -64,7 +70,8 @@ pub fn run(c: &mut Criterion) {
             format!("{i}"),
             VmBench::contract(rng, op::retd(RegId::ONE, 0x10))
                 .unwrap()
-                .with_post_call(vec![op::movi(0x10, *i)]),
+                .with_post_call(vec![op::movi(0x10, *i)])
+                .with_call_receipts(receipts_ctx.clone()),
         );
     }
     retd_contract.finish();
@@ -77,7 +84,8 @@ pub fn run(c: &mut Criterion) {
             format!("{i}"),
             VmBench::contract(rng, op::retd(RegId::ONE, 0x10))
                 .unwrap()
-                .with_post_call(vec![op::movi(0x10, *i)]),
+                .with_post_call(vec![op::movi(0x10, *i)])
+                .with_call_receipts(receipts_ctx.clone()),
         );
     }
     retd_script.finish();
@@ -85,19 +93,22 @@ pub fn run(c: &mut Criterion) {
     run_group_ref(
         &mut c.benchmark_group("rvrt_script"),
         "rvrt_script",
-        VmBench::new(op::rvrt(RegId::ONE)),
+        VmBench::new(op::rvrt(RegId::ONE)).with_call_receipts(receipts_ctx.clone()),
     );
 
     run_group_ref(
         &mut c.benchmark_group("rvrt_contract"),
         "rvrt_contract",
-        VmBench::contract(rng, op::ret(RegId::ONE)).unwrap(),
+        VmBench::contract(rng, op::ret(RegId::ONE))
+            .unwrap()
+            .with_call_receipts(receipts_ctx.clone()),
     );
 
     run_group_ref(
         &mut c.benchmark_group("log"),
         "log",
-        VmBench::new(op::log(0x10, 0x11, 0x12, 0x13)),
+        VmBench::new(op::log(0x10, 0x11, 0x12, 0x13))
+            .with_call_receipts(receipts_ctx.clone()),
     );
 
     let mut logd = c.benchmark_group("logd");
@@ -107,7 +118,8 @@ pub fn run(c: &mut Criterion) {
             &mut logd,
             format!("{i}"),
             VmBench::new(op::logd(0x10, 0x11, RegId::ZERO, 0x13))
-                .with_prepare_script(vec![op::movi(0x13, *i)]),
+                .with_prepare_script(vec![op::movi(0x13, *i)])
+                .with_call_receipts(receipts_ctx.clone()),
         );
     }
     logd.finish();

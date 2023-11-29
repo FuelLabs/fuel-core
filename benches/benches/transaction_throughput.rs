@@ -156,7 +156,7 @@ where
 fn signed_transfers(c: &mut Criterion) {
     let generator = |rng: &mut StdRng| {
         TransactionBuilder::script(vec![], vec![])
-            .gas_limit(10000)
+            .script_gas_limit(10000)
             .gas_price(1)
             .add_unsigned_coin_input(
                 SecretKey::random(rng),
@@ -187,7 +187,7 @@ fn predicate_transfers(c: &mut Criterion) {
         let owner = Input::predicate_owner(&predicate);
 
         let mut tx = TransactionBuilder::script(vec![], vec![])
-            .gas_limit(10000)
+            .script_gas_limit(10000)
             .gas_price(1)
             .add_input(Input::coin_predicate(
                 rng.gen(),
@@ -256,7 +256,7 @@ fn predicate_transfers_eck1(c: &mut Criterion) {
             .collect();
 
         let mut tx = TransactionBuilder::script(vec![], vec![])
-            .gas_limit(10000)
+            .script_gas_limit(10000)
             .gas_price(1)
             .add_input(Input::coin_predicate(
                 rng.gen(),
