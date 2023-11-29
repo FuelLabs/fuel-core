@@ -88,6 +88,53 @@ impl NetworkBehaviour for DiscoveryBehaviour {
         <KademliaBehavior<MemoryStore> as NetworkBehaviour>::ConnectionHandler;
     type ToSwarm = Event;
 
+    fn handle_established_inbound_connection(
+        &mut self,
+        connection_id: ConnectionId,
+        peer: PeerId,
+        local_addr: &Multiaddr,
+        remote_addr: &Multiaddr,
+    ) -> Result<THandler<Self>, ConnectionDenied> {
+        self.kademlia.handle_established_inbound_connection(
+            connection_id,
+            peer,
+            local_addr,
+            remote_addr,
+        )
+    }
+
+    fn handle_established_outbound_connection(
+        &mut self,
+        _connection_id: ConnectionId,
+        peer: PeerId,
+        addr: &Multiaddr,
+        role_override: Endpoint,
+    ) -> Result<THandler<Self>, ConnectionDenied> {
+        tracing::error!("discovery established outbound connection: {:?}", &peer);
+        self.kademlia.handle_established_outbound_connection(
+            _connection_id,
+            peer,
+            addr,
+            role_override,
+        )
+    }
+
+    // receive events from KademliaHandler and pass it down to kademlia
+    fn handle_pending_outbound_connection(
+        &mut self,
+        connection_id: ConnectionId,
+        maybe_peer: Option<PeerId>,
+        addresses: &[Multiaddr],
+        effective_role: Endpoint,
+    ) -> Result<Vec<Multiaddr>, ConnectionDenied> {
+        self.kademlia.handle_pending_outbound_connection(
+            connection_id,
+            maybe_peer,
+            addresses,
+            effective_role,
+        )
+    }
+
     // receive events from KademliaHandler and pass it down to kademlia
     fn on_connection_handler_event(
         &mut self,
@@ -98,35 +145,6 @@ impl NetworkBehaviour for DiscoveryBehaviour {
         tracing::error!("discovery handler event: {:?}", &event);
         self.kademlia
             .on_connection_handler_event(peer_id, connection, event);
-    }
-
-    fn on_swarm_event(&mut self, event: FromSwarm) {
-        tracing::error!("discovery swarm event: {:?}", &event);
-        match &event {
-            FromSwarm::ConnectionEstablished(ConnectionEstablished {
-                peer_id,
-                other_established,
-                ..
-            }) => {
-                if *other_established == 0 {
-                    self.connected_peers.insert(*peer_id);
-
-                    trace!("Connected to a peer {:?}", peer_id);
-                }
-            }
-            FromSwarm::ConnectionClosed(ConnectionClosed {
-                peer_id,
-                remaining_established,
-                ..
-            }) => {
-                if *remaining_established == 0 {
-                    self.connected_peers.remove(peer_id);
-                    trace!("Disconnected from {:?}", peer_id);
-                }
-            }
-            _ => (),
-        }
-        self.kademlia.on_swarm_event(event)
     }
 
     // gets polled by the swarm
@@ -180,36 +198,33 @@ impl NetworkBehaviour for DiscoveryBehaviour {
         Poll::Pending
     }
 
-    fn handle_established_inbound_connection(
-        &mut self,
-        _connection_id: ConnectionId,
-        peer: PeerId,
-        local_addr: &Multiaddr,
-        remote_addr: &Multiaddr,
-    ) -> Result<THandler<Self>, ConnectionDenied> {
-        tracing::error!("discovery established inbound connection: {:?}", &peer);
-        self.kademlia.handle_established_inbound_connection(
-            _connection_id,
-            peer,
-            local_addr,
-            remote_addr,
-        )
-    }
+    fn on_swarm_event(&mut self, event: FromSwarm) {
+        tracing::error!("discovery swarm event: {:?}", &event);
+        match &event {
+            FromSwarm::ConnectionEstablished(ConnectionEstablished {
+                peer_id,
+                other_established,
+                ..
+            }) => {
+                if *other_established == 0 {
+                    self.connected_peers.insert(*peer_id);
 
-    fn handle_established_outbound_connection(
-        &mut self,
-        _connection_id: ConnectionId,
-        peer: PeerId,
-        addr: &Multiaddr,
-        role_override: Endpoint,
-    ) -> Result<THandler<Self>, ConnectionDenied> {
-        tracing::error!("discovery established outbound connection: {:?}", &peer);
-        self.kademlia.handle_established_outbound_connection(
-            _connection_id,
-            peer,
-            addr,
-            role_override,
-        )
+                    trace!("Connected to a peer {:?}", peer_id);
+                }
+            }
+            FromSwarm::ConnectionClosed(ConnectionClosed {
+                peer_id,
+                remaining_established,
+                ..
+            }) => {
+                if *remaining_established == 0 {
+                    self.connected_peers.remove(peer_id);
+                    trace!("Disconnected from {:?}", peer_id);
+                }
+            }
+            _ => (),
+        }
+        self.kademlia.on_swarm_event(event)
     }
 }
 
