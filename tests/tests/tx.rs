@@ -1,7 +1,6 @@
 use crate::helpers::TestContext;
 use fuel_core::{
     database::Database,
-    executor::Executor,
     schema::tx::receipt::all_receipts,
     service::{
         adapters::MaybeRelayerAdapter,
@@ -9,6 +8,7 @@ use fuel_core::{
         FuelService,
     },
 };
+use fuel_core_executor::executor::Executor;
 use fuel_core_client::client::{
     pagination::{
         PageDirection,

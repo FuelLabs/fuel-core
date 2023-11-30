@@ -35,6 +35,7 @@ fuel-core-txpool = { path = "../crates/services/txpool", features = ["test-helpe
 fuel-core-types = { path = "../crates/types", features = ["test-helpers"] }
 futures = "0.3"
 hyper = { workspace = true, features = ["server"] }
+fuel-core-executor = { workspace = true, features = ["test-helpers"] }
 insta = { workspace = true }
 itertools = { workspace = true }
 rand = { workspace = true }

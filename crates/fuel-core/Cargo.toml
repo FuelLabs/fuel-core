@@ -41,7 +41,6 @@ hex = { version = "0.4", features = ["serde"] }
 hyper = { workspace = true }
 itertools = { workspace = true }
 postcard = { workspace = true, features = ["use-std"] }
-primitive-types = "0.12"
 rand = { workspace = true }
 rocksdb = { version = "0.21", default-features = false, features = [
     "lz4",
@@ -58,10 +57,10 @@ tokio-stream = { workspace = true, features = ["sync"] }
 tower-http = { version = "0.3", features = ["set-header", "trace", "timeout"] }
 tracing = { workspace = true }
 uuid = { version = "1.1", features = ["v4"] }
+fuel-core-executor = { workspace = true, features = ["test-helpers"] }
 
 [dev-dependencies]
 assert_matches = "1.5"
-fuel-core-executor = { workspace = true, features = ["test-helpers"] }
 fuel-core-services = { path = "./../services", features = ["test-helpers"] }
 fuel-core-storage = { path = "./../storage", features = ["test-helpers"] }
 fuel-core-trace = { path = "./../trace" }
@@ -70,6 +69,7 @@ mockall = { workspace = true }
 proptest = { workspace = true }
 test-case = { workspace = true }
 test-strategy = { workspace = true }
+primitive-types = "0.12"
 
 [features]
 default = ["rocksdb"]

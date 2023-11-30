@@ -3192,6 +3192,7 @@ dependencies = [
  "fuel-core",
  "fuel-core-benches",
  "fuel-core-client",
+ "fuel-core-executor",
  "fuel-core-p2p",
  "fuel-core-poa",
  "fuel-core-relayer",
