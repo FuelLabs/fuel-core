@@ -34,7 +34,7 @@ mod coin {
     ) -> TestContext {
         // setup config
         let mut config = Config::local_node();
-        config.chain_state = StateConfig {
+        config.state_config = StateConfig {
             contracts: None,
             coins: Some(
                 vec![
@@ -294,7 +294,7 @@ mod message_coin {
 
         // setup config
         let mut config = Config::local_node();
-        config.chain_state = StateConfig {
+        config.state_config = StateConfig {
             contracts: None,
             coins: None,
             messages: Some(
@@ -494,7 +494,7 @@ mod all_coins {
 
         // setup config
         let mut config = Config::local_node();
-        config.chain_state = StateConfig {
+        config.state_config = StateConfig {
             contracts: None,
             coins: Some(
                 vec![
@@ -703,7 +703,7 @@ mod all_coins {
 async fn empty_setup() -> TestContext {
     // setup config
     let mut config = Config::local_node();
-    config.chain_state = StateConfig {
+    config.state_config = StateConfig {
         contracts: None,
         coins: None,
         messages: None,

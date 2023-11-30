@@ -124,18 +124,18 @@ mod p2p {
         chain_config.consensus = ConsensusConfig::PoA {
             signing_key: pub_key,
         };
-        let chain_state = StateConfig::local_testnet();
+        let state_config = StateConfig::local_testnet();
 
         let bootstrap_config = make_config(
             "Bootstrap".to_string(),
             chain_config.clone(),
-            chain_state.clone(),
+            state_config.clone(),
         );
         let bootstrap = Bootstrap::new(&bootstrap_config).await;
 
         let make_node_config = |name: &str| {
             let mut config =
-                make_config(name.to_string(), chain_config.clone(), chain_state.clone());
+                make_config(name.to_string(), chain_config.clone(), state_config.clone());
             config.block_production = Trigger::Interval {
                 block_time: Duration::from_secs(INTERVAL),
             };

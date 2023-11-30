@@ -189,7 +189,7 @@ impl TestSetupBuilder {
         chain_conf.consensus_parameters.tx_params.max_gas_per_tx = self.gas_limit;
         chain_conf.block_gas_limit = self.gas_limit;
 
-        let chain_state = StateConfig {
+        let state_config = StateConfig {
             coins: Some(self.initial_coins.clone()),
             contracts: Some(self.contracts.values().cloned().collect_vec()),
             ..StateConfig::default()
@@ -203,7 +203,7 @@ impl TestSetupBuilder {
                 ..fuel_core_txpool::Config::default()
             },
             chain_config: chain_conf,
-            chain_state,
+            state_config,
             block_production: self.trigger,
             ..Config::local_node()
         };

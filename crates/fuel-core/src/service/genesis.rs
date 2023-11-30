@@ -87,9 +87,9 @@ fn import_genesis_block(
 
     let height = config.chain_config.height;
     let chain_config_hash = config.chain_config.root()?.into();
-    let coins_root = init_coin_state(database, &config.chain_state, height)?.into();
-    let contracts_root = init_contracts(database, &config.chain_state, height)?.into();
-    let messages_root = init_da_messages(database, &config.chain_state)?.into();
+    let coins_root = init_coin_state(database, &config.state_config, height)?.into();
+    let contracts_root = init_contracts(database, &config.state_config, height)?.into();
+    let messages_root = init_da_messages(database, &config.state_config)?.into();
 
     let genesis = Genesis {
         chain_config_hash,
@@ -416,7 +416,7 @@ mod tests {
                 height: Some(height),
                 ..ChainConfig::local_testnet()
             },
-            chain_state: Default::default(),
+            state_config: Default::default(),
             ..Config::local_node()
         };
 
@@ -463,7 +463,7 @@ mod tests {
                 height: starting_height,
                 ..ChainConfig::local_testnet()
             },
-            chain_state: StateConfig {
+            state_config: StateConfig {
                 coins: Some(vec![
                     CoinConfig {
                         tx_id: Some(alice_tx_id),
@@ -543,7 +543,7 @@ mod tests {
 
         let service_config = Config {
             chain_config: ChainConfig::local_testnet(),
-            chain_state: StateConfig {
+            state_config: StateConfig {
                 contracts: Some(vec![ContractConfig {
                     contract_id,
                     code: contract.into(),
@@ -589,7 +589,7 @@ mod tests {
             da_height: DaBlockHeight(0),
         };
 
-        config.chain_state = StateConfig {
+        config.state_config = StateConfig {
             messages: Some(vec![msg.clone()]),
             ..Default::default()
         };
@@ -624,7 +624,7 @@ mod tests {
 
         let service_config = Config {
             chain_config: ChainConfig::local_testnet(),
-            chain_state: StateConfig {
+            state_config: StateConfig {
                 contracts: Some(vec![ContractConfig {
                     contract_id,
                     code: contract.into(),
@@ -663,7 +663,7 @@ mod tests {
                 height: Some(BlockHeight::from(10u32)),
                 ..ChainConfig::local_testnet()
             },
-            chain_state: StateConfig {
+            state_config: StateConfig {
                 coins: Some(vec![CoinConfig {
                     tx_id: None,
                     output_index: None,
@@ -701,7 +701,7 @@ mod tests {
                 height: Some(BlockHeight::from(10u32)),
                 ..ChainConfig::local_testnet()
             },
-            chain_state: StateConfig {
+            state_config: StateConfig {
                 contracts: Some(vec![ContractConfig {
                     contract_id: Default::default(),
                     code: contract.into(),

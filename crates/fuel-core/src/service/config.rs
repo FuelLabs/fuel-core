@@ -41,7 +41,7 @@ pub struct Config {
     pub database_path: PathBuf,
     pub database_type: DbType,
     pub chain_config: ChainConfig,
-    pub chain_state: StateConfig,
+    pub state_config: StateConfig,
     /// When `true`:
     /// - Enables manual block production.
     /// - Enables debugger endpoint.
@@ -74,8 +74,8 @@ pub struct Config {
 
 impl Config {
     pub fn local_node() -> Self {
-        let chain_params = ChainConfig::local_testnet();
-        let chain_state = StateConfig::local_testnet();
+        let chain_conf = ChainConfig::local_testnet();
+        let state_config = StateConfig::local_testnet();
         let utxo_validation = false;
         let min_gas_price = 0;
 
@@ -90,13 +90,13 @@ impl Config {
             #[cfg(not(feature = "rocksdb"))]
             database_type: DbType::InMemory,
             debug: true,
-            chain_config: chain_params.clone(),
-            chain_state: chain_state.clone(),
+            chain_config: chain_conf.clone(),
+            state_config: state_config.clone(),
             block_production: Trigger::Instant,
             vm: Default::default(),
             utxo_validation,
             txpool: fuel_core_txpool::Config {
-                chain_config: chain_params,
+                chain_config: chain_conf,
                 min_gas_price,
                 utxo_validation,
                 transaction_ttl: Duration::from_secs(60 * 100000000),

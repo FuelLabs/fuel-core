@@ -82,7 +82,7 @@ async fn snapshot_state_config() {
         }]),
     };
 
-    config.chain_state = starting_state.clone();
+    config.state_config = starting_state.clone();
 
     // setup server & client
     let _ = FuelService::from_database(db.clone(), config)

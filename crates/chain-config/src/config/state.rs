@@ -50,7 +50,7 @@ pub const TESTNET_WALLET_SECRETS: [&str; 5] = [
     "0x7f8a325504e7315eda997db7861c9447f5c3eff26333b20180475d94443a10c6",
 ];
 
-pub const CHAIN_STATE_FILENAME: &str = "chain_state.json";
+pub const STATE_CONFIG_FILENAME: &str = "state_config.json";
 
 // TODO: do streaming deserialization to handle large state configs
 #[serde_as]
@@ -78,8 +78,8 @@ impl StateConfig {
     }
 
     #[cfg(feature = "std")]
-    pub fn load_from_directory(path: impl AsRef<Path>) -> Result<Self, anyhow::Error> {
-        let path = path.as_ref().join(CHAIN_STATE_FILENAME);
+    pub fn load_from_directory(path: impl AsRef<Path>) -> anyhow::Result<Self> {
+        let path = path.as_ref().join(STATE_CONFIG_FILENAME);
 
         let contents = std::fs::read(&path)?;
         serde_json::from_slice(&contents).map_err(|e| {
@@ -94,7 +94,7 @@ impl StateConfig {
     pub fn create_config_file(&self, path: impl AsRef<Path>) -> anyhow::Result<()> {
         use anyhow::Context;
 
-        let state_writer = File::create(path.as_ref().join(CHAIN_STATE_FILENAME))?;
+        let state_writer = File::create(path.as_ref().join(STATE_CONFIG_FILENAME))?;
 
         serde_json::to_writer_pretty(state_writer, self)
             .context("failed to dump chain parameters snapshot to JSON")?;
