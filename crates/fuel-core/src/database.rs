@@ -52,7 +52,10 @@ type DatabaseResult<T> = Result<T>;
 #[cfg(feature = "rocksdb")]
 use crate::state::rocks_db::RocksDb;
 use fuel_core_database::vm_database::VmDatabase;
-use fuel_core_executor::ports::RelayerPort;
+use fuel_core_executor::{
+    ports::RelayerPort,
+    refs::ExecutorDatabaseTrait,
+};
 use fuel_core_storage::database::{
     MessageIsSpent,
     VmDatabaseTrait,
@@ -491,6 +494,8 @@ impl Default for Database {
     }
 }
 
+impl ExecutorDatabaseTrait<Database> for Database {}
+
 // Todo Emir
 impl RelayerPort for Database {
     fn get_message(
@@ -510,7 +515,7 @@ impl RelayerPort for Database {
 impl VmDatabaseTrait for Database {
     type Data = VmDatabase<Database>;
 
-    fn new<T>(&self, header: &ConsensusHeader<T>, coinbase: ContractId) -> Self::Data {
+    fn new_vm_database<T>(&self, header: &ConsensusHeader<T>, coinbase: ContractId) -> Self::Data {
         let cloned_database = self.clone();
         Self::Data::new(cloned_database, header, coinbase)
     }

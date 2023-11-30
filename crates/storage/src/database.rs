@@ -73,5 +73,5 @@ pub trait TxIdOwnerRecorder {
 pub trait VmDatabaseTrait {
     type Data: InterpreterStorage;
 
-    fn new<T>(&self, header: &ConsensusHeader<T>, coinbase: ContractId) -> Self::Data;
+    fn new_vm_database<T>(&self, header: &ConsensusHeader<T>, coinbase: ContractId) -> Self::Data;
 }
