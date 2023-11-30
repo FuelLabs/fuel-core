@@ -2776,6 +2776,7 @@ dependencies = [
  "itertools 0.10.5",
  "mockall",
  "postcard",
+ "primitive-types",
  "proptest",
  "rand 0.8.5",
  "rocksdb",

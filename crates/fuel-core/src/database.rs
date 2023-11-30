@@ -515,7 +515,11 @@ impl RelayerPort for Database {
 impl VmDatabaseTrait for Database {
     type Data = VmDatabase<Database>;
 
-    fn new_vm_database<T>(&self, header: &ConsensusHeader<T>, coinbase: ContractId) -> Self::Data {
+    fn new_vm_database<T>(
+        &self,
+        header: &ConsensusHeader<T>,
+        coinbase: ContractId,
+    ) -> Self::Data {
         let cloned_database = self.clone();
         Self::Data::new(cloned_database, header, coinbase)
     }

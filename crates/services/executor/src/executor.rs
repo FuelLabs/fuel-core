@@ -771,8 +771,8 @@ where
             let mut sub_block_db_commit = block_db_transaction.transaction();
             let sub_db_view = sub_block_db_commit.as_mut();
 
-            let mut vm_db =
-                sub_db_view.new_vm_database(&header.consensus, self.config.coinbase_recipient);
+            let mut vm_db = sub_db_view
+                .new_vm_database(&header.consensus, self.config.coinbase_recipient);
 
             fuel_vm::interpreter::contract::balance_increase(
                 &mut vm_db,
@@ -894,7 +894,8 @@ where
         let sub_db_view = sub_block_db_commit.as_mut();
         // execution vm
 
-        let vm_db = sub_db_view.new_vm_database(&header.consensus, self.config.coinbase_recipient);
+        let vm_db = sub_db_view
+            .new_vm_database(&header.consensus, self.config.coinbase_recipient);
 
         let mut vm = Interpreter::with_storage(
             vm_db,
