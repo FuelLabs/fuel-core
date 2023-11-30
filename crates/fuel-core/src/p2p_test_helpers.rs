@@ -327,14 +327,14 @@ pub async fn make_nodes(
     let mut validators = vec![];
     for (i, s) in validators_setup.into_iter().enumerate() {
         let chain_config = chain_config.clone();
-        let chain_state = chain_state.clone();
+        let state_config = state_config.clone();
         let name = s.as_ref().map_or(String::new(), |s| s.name.clone());
         let mut node_config = make_config(
             (!name.is_empty())
                 .then_some(name)
                 .unwrap_or_else(|| format!("v:{i}")),
             chain_config.clone(),
-            chain_state,
+            state_config,
         );
         node_config.block_production = Trigger::Never;
 
@@ -374,11 +374,11 @@ pub async fn make_nodes(
 pub fn make_config(
     name: String,
     chain_config: ChainConfig,
-    chain_state: StateConfig,
+    state_config: StateConfig,
 ) -> Config {
     let mut node_config = Config::local_node();
     node_config.chain_config = chain_config;
-    node_config.chain_state = chain_state;
+    node_config.state_config = state_config;
     node_config.utxo_validation = true;
     node_config.name = name;
     node_config
