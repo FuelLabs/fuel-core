@@ -845,9 +845,12 @@ mod tests {
             spawn(&stop_sender, node);
         });
 
+        tracing::error!("lolz");
+
         loop {
             tokio::select! {
                 sentry_node_event = sentry_node.next_event() => {
+                    tracing::error!("Event from the sentry node: {:?}", sentry_node_event);
                     // we've connected to all other peers
                     if sentry_node.peer_manager.total_peers_connected() > max_peers_allowed {
                         // if the `reserved_node` is not included,

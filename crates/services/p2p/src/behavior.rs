@@ -55,6 +55,9 @@ pub enum FuelBehaviourEvent {
 #[derive(NetworkBehaviour)]
 #[behaviour(to_swarm = "FuelBehaviourEvent")]
 pub struct FuelBehaviour<Codec: NetworkCodec> {
+    /// The Behaviour to manage connections to blocked peers.
+    blocked_peer: allow_block_list::Behaviour<allow_block_list::BlockedPeers>,
+
     /// Node discovery
     discovery: DiscoveryBehaviour,
 
@@ -66,9 +69,6 @@ pub struct FuelBehaviour<Codec: NetworkCodec> {
 
     /// RequestResponse protocol
     request_response: RequestResponse<Codec>,
-
-    /// The Behaviour to manage connections to blocked peers.
-    blocked_peer: allow_block_list::Behaviour<allow_block_list::BlockedPeers>,
 }
 
 impl<Codec: NetworkCodec> FuelBehaviour<Codec> {

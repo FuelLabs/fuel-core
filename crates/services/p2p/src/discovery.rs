@@ -173,7 +173,7 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 
         // poll sub-behaviors
         if let Poll::Ready(kad_action) = self.kademlia.poll(cx) {
-            tracing::error!("kad action: {:?}", &kad_action);
+            // tracing::error!("kad action: {:?}", &kad_action);
             return Poll::Ready(kad_action)
         };
         while let Poll::Ready(mdns_event) = self.mdns.poll(cx) {
@@ -199,7 +199,7 @@ impl NetworkBehaviour for DiscoveryBehaviour {
     }
 
     fn on_swarm_event(&mut self, event: FromSwarm) {
-        tracing::error!("discovery swarm event: {:?}", &event);
+        // tracing::error!("discovery swarm event: {:?}", &event);
         match &event {
             FromSwarm::ConnectionEstablished(ConnectionEstablished {
                 peer_id,
