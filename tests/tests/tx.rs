@@ -8,7 +8,6 @@ use fuel_core::{
         FuelService,
     },
 };
-use fuel_core_executor::executor::Executor;
 use fuel_core_client::client::{
     pagination::{
         PageDirection,
@@ -17,6 +16,7 @@ use fuel_core_client::client::{
     types::TransactionStatus,
     FuelClient,
 };
+use fuel_core_executor::executor::Executor;
 use fuel_core_types::{
     blockchain::{
         block::PartialFuelBlock,

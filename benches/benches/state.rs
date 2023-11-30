@@ -5,15 +5,13 @@ use criterion::{
     BenchmarkGroup,
     Criterion,
 };
-use fuel_core::database::{
-    vm_database::VmDatabase,
-    Database,
-};
-use fuel_core_storage::InterpreterStorage;
+use fuel_core::database::Database;
+use fuel_core_database::vm_database::VmDatabase;
 use fuel_core_types::{
     blockchain::header::GeneratedConsensusFields,
     fuel_tx::Bytes32,
     fuel_types::ContractId,
+    fuel_vm::InterpreterStorage,
 };
 use rand::{
     rngs::StdRng,
@@ -114,7 +112,7 @@ fn insert_state_single_contract_transaction(c: &mut Criterion) {
 
     let mut bench_state = |group: &mut BenchmarkGroup<WallTime>, name: &str, n: usize| {
         group.bench_function(name, |b| {
-            let mut db = VmDatabase::default();
+            let mut db = VmDatabase::<Database>::default();
             let contract: ContractId = rng.gen();
             let mut outer = db.database_mut().transaction();
             setup(outer.as_mut(), &contract, n);
@@ -175,7 +173,7 @@ fn insert_state_multiple_contracts_database(c: &mut Criterion) {
 
     let mut bench_state = |group: &mut BenchmarkGroup<WallTime>, name: &str, n: usize| {
         group.bench_function(name, |b| {
-            let mut db = VmDatabase::default();
+            let mut db = VmDatabase::<Database>::default();
             for _ in 0..n {
                 let contract: ContractId = rng.gen();
                 setup(db.database_mut(), &contract, 1);
@@ -239,7 +237,7 @@ fn insert_state_multiple_contracts_transaction(c: &mut Criterion) {
 
     let mut bench_state = |group: &mut BenchmarkGroup<WallTime>, name: &str, n: usize| {
         group.bench_function(name, |b| {
-            let mut db = VmDatabase::default();
+            let mut db = VmDatabase::<Database>::default();
             let mut outer = db.database_mut().transaction();
             for _ in 0..n {
                 let contract: ContractId = rng.gen();

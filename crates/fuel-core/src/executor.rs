@@ -123,7 +123,7 @@ mod tests {
         query::SimpleTransactionData,
     };
 
-    use fuel_core_executor::executor::private::PartialBlockComponent;
+    use fuel_core_executor::executor::block_component::PartialBlockComponent;
     use fuel_core_types::fuel_tx::Chargeable;
     use itertools::Itertools;
     use rand::{

@@ -25,8 +25,7 @@ use fuel_core_storage::{
 use fuel_core_types::fuel_tx::ContractId;
 
 pub trait ExecutorDatabaseTrait<D>:
-    Clone
-    + VmDatabaseTrait
+    VmDatabaseTrait
     + StorageMutate<FuelBlocks, Error = StorageError>
     + StorageMutate<Receipts, Error = StorageError>
     + StorageMutate<Transactions, Error = StorageError>

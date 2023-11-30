@@ -13,10 +13,13 @@ use fuel_core_storage::{
         SpentMessages,
         Transactions,
     },
-    transactional::StorageTransaction,
+    transactional::{
+        StorageTransaction,
+        Transactional,
+    },
     StorageAsMut,
+    StorageAsRef,
     StorageInspect,
-    StorageMutate,
 };
 #[allow(unused_imports)]
 use fuel_core_types::{
@@ -135,10 +138,6 @@ use fuel_core_types::{
 use parking_lot::Mutex as ParkingMutex;
 use std::{
     borrow::Cow,
-    ops::{
-        Deref,
-        DerefMut,
-    },
     sync::Arc,
 };
 use tracing::{
@@ -313,7 +312,8 @@ where
     }
 }
 
-pub mod private {
+// TODO: Make this module private after moving unit tests from `fuel-core` here.
+pub mod block_component {
     use super::*;
 
     pub struct PartialBlockComponent<'a, TxSource> {
@@ -354,7 +354,7 @@ pub mod private {
 }
 
 use crate::refs::ExecutorDatabaseTrait;
-use private::*;
+use block_component::*;
 
 impl<R, D> Executor<R, D>
 where
@@ -392,7 +392,7 @@ where
                 );
 
                 let execution_data = self.execute_block(
-                    &mut block_st_transaction.as_mut(),
+                    block_st_transaction.as_mut(),
                     ExecutionType::DryRun(component),
                     options,
                 )?;
@@ -408,7 +408,7 @@ where
                 );
 
                 let execution_data = self.execute_block(
-                    &mut block_st_transaction.as_mut(),
+                    block_st_transaction.as_mut(),
                     ExecutionType::Production(component),
                     options,
                 )?;
@@ -417,7 +417,7 @@ where
             ExecutionTypes::Validation(mut block) => {
                 let component = PartialBlockComponent::from_partial_block(&mut block);
                 let execution_data = self.execute_block(
-                    &mut block_st_transaction.as_mut(),
+                    block_st_transaction.as_mut(),
                     ExecutionType::Validation(component),
                     options,
                 )?;
@@ -467,10 +467,7 @@ where
         self.persist_transaction_status(&result, block_st_transaction.as_mut())?;
 
         // save the associated owner for each transaction in the block
-        self.index_tx_owners_for_block(
-            &result.block,
-            &mut block_st_transaction.as_mut(),
-        )?;
+        self.index_tx_owners_for_block(&result.block, block_st_transaction.as_mut())?;
 
         // ------------ GraphQL API Functionality   END ------------
 
@@ -491,6 +488,7 @@ where
 
     #[tracing::instrument(skip_all)]
     /// Execute the fuel block with all transactions.
+    // TODO: Make this function private after moving tests form `fuel-core` here.
     pub fn execute_block<TxSource>(
         &self,
         block_st_transaction: &mut D,
@@ -537,7 +535,7 @@ where
                     &block.header,
                     execution_data,
                     execution_kind,
-                    &mut tx_st_transaction.as_mut(),
+                    &mut tx_st_transaction,
                     options,
                 );
 
@@ -634,7 +632,7 @@ where
         header: &PartialBlockHeader,
         execution_data: &mut ExecutionData,
         execution_kind: ExecutionKind,
-        mut tx_st_transaction: &mut D,
+        tx_st_transaction: &mut StorageTransaction<D>,
         options: ExecutionOptions,
     ) -> ExecutorResult<Transaction> {
         if execution_data.found_mint {
@@ -643,7 +641,7 @@ where
 
         // Throw a clear error if the transaction id is a duplicate
         if tx_st_transaction
-            .deref_mut()
+            .as_ref()
             .storage::<Transactions>()
             .contains_key(tx_id)?
         {
@@ -691,7 +689,7 @@ where
         checked_mint: Checked<Mint>,
         header: &PartialBlockHeader,
         execution_data: &mut ExecutionData,
-        mut block_db_transaction: &mut D,
+        block_st_transaction: &mut StorageTransaction<D>,
         execution_kind: ExecutionKind,
         options: ExecutionOptions,
     ) -> ExecutorResult<Transaction> {
@@ -744,7 +742,7 @@ where
             if options.utxo_validation {
                 // validate utxos exist
                 self.verify_input_state(
-                    block_db_transaction.deref(),
+                    block_st_transaction.as_ref(),
                     inputs.as_mut_slice(),
                     block_height,
                     header.da_height,
@@ -764,11 +762,11 @@ where
                     }
                 },
                 coinbase_id,
-                block_db_transaction.deref_mut(),
+                block_st_transaction.as_mut(),
                 options,
             )?;
 
-            let mut sub_block_db_commit = block_db_transaction.transaction();
+            let mut sub_block_db_commit = block_st_transaction.transaction();
             let sub_db_view = sub_block_db_commit.as_mut();
 
             let mut vm_db = sub_db_view
@@ -788,7 +786,7 @@ where
                 block_height,
                 execution_data.tx_count,
                 &coinbase_id,
-                block_db_transaction,
+                block_st_transaction.as_mut(),
                 inputs.as_slice(),
                 outputs.as_slice(),
             )?;
@@ -808,7 +806,7 @@ where
                     )),
                 },
                 coinbase_id,
-                block_db_transaction.deref_mut(),
+                block_st_transaction.as_mut(),
             )?;
             let Input::Contract(input) = core::mem::take(&mut inputs[0]) else {
                 unreachable!()
@@ -834,8 +832,8 @@ where
             result: TransactionExecutionResult::Success { result: None },
         });
 
-        if block_db_transaction
-            .deref_mut()
+        if block_st_transaction
+            .as_mut()
             .storage::<Transactions>()
             .insert(&coinbase_id, &tx)?
             .is_some()
@@ -851,7 +849,7 @@ where
         mut checked_tx: Checked<Tx>,
         header: &PartialBlockHeader,
         execution_data: &mut ExecutionData,
-        mut tx_st_transaction: &mut D,
+        tx_st_transaction: &mut StorageTransaction<D>,
         execution_kind: ExecutionKind,
         options: ExecutionOptions,
     ) -> ExecutorResult<Transaction>
@@ -876,7 +874,7 @@ where
 
             // validate utxos exist and maturity is properly set
             self.verify_input_state(
-                tx_st_transaction.deref(),
+                tx_st_transaction.as_ref(),
                 checked_tx.transaction().inputs(),
                 *header.height(),
                 header.da_height,
@@ -925,7 +923,7 @@ where
                 ExecutionKind::Validation => ExecutionTypes::Validation(tx.inputs()),
             },
             tx_id,
-            tx_st_transaction.deref_mut(),
+            tx_st_transaction.as_mut(),
             options,
         )?;
 
@@ -953,14 +951,14 @@ where
         }
 
         // change the spent status of the tx inputs
-        self.spend_input_utxos(tx.inputs(), tx_st_transaction.deref_mut(), reverted)?;
+        self.spend_input_utxos(tx.inputs(), tx_st_transaction.as_mut(), reverted)?;
 
         // Persist utxos first and after calculate the not utxo outputs
         self.persist_output_utxos(
             *header.height(),
             execution_data.tx_count,
             &tx_id,
-            tx_st_transaction.deref_mut(),
+            tx_st_transaction.as_mut(),
             tx.inputs(),
             tx.outputs(),
         )?;
@@ -980,7 +978,7 @@ where
                 }
             },
             tx_id,
-            tx_st_transaction,
+            tx_st_transaction.as_mut(),
         )?;
         *tx.outputs_mut() = outputs;
 
@@ -988,12 +986,12 @@ where
 
         // Store tx into the block db transaction
         tx_st_transaction
-            .deref_mut()
+            .as_mut()
             .storage::<Transactions>()
             .insert(&tx_id, &final_tx)?;
 
         // persist receipts
-        self.persist_receipts(&tx_id, &receipts, tx_st_transaction.deref_mut())?;
+        self.persist_receipts(&tx_id, &receipts, tx_st_transaction.as_mut())?;
 
         let status = if reverted {
             self.log_backtrace(&vm, &receipts);
@@ -1049,9 +1047,7 @@ where
             match input {
                 Input::CoinSigned(CoinSigned { utxo_id, .. })
                 | Input::CoinPredicate(CoinPredicate { utxo_id, .. }) => {
-                    // TODO: Check that fields are equal. We already do that check
-                    //  in the `fuel-core-txpool`, so we need to reuse the code here.
-                    if let Some(coin) = <D as StorageInspect<Coins>>::get(db, utxo_id)? {
+                    if let Some(coin) = db.storage::<Coins>().get(utxo_id)? {
                         let coin_mature_height = coin
                             .tx_pointer
                             .block_height()
@@ -1079,10 +1075,10 @@ where
                     }
                 }
                 Input::Contract(contract) => {
-                    if !<D as StorageInspect<ContractsInfo>>::contains_key(
-                        db,
-                        &contract.contract_id,
-                    )? {
+                    if !db
+                        .storage::<ContractsInfo>()
+                        .contains_key(&contract.contract_id)?
+                    {
                         return Err(TransactionValidityError::ContractDoesNotExist(
                             contract.contract_id,
                         )
@@ -1142,14 +1138,12 @@ where
             match input {
                 Input::CoinSigned(CoinSigned { utxo_id, .. })
                 | Input::CoinPredicate(CoinPredicate { utxo_id, .. }) => {
-                    <D as StorageMutate<Coins>>::remove(
-                        db,
-                        utxo_id
-                    )?;
+                    // prune utxo from db
+                    db.storage::<Coins>().remove(utxo_id)?;
                 }
                 Input::MessageDataSigned(_)
                 | Input::MessageDataPredicate(_)
-                    if reverted => {
+                if reverted => {
                     // Don't spend the retryable messages if transaction is reverted
                     continue
                 }
@@ -1157,7 +1151,7 @@ where
                 | Input::MessageCoinPredicate(MessageCoinPredicate { nonce, .. })
                 | Input::MessageDataSigned(MessageDataSigned { nonce, .. }) // Spend only if tx is not reverted
                 | Input::MessageDataPredicate(MessageDataPredicate { nonce, .. }) // Spend only if tx is not reverted
-                 => {
+                => {
                     // mark message id as spent
                     let was_already_spent =
                         db.storage::<SpentMessages>().insert(nonce, &())?;
@@ -1184,7 +1178,7 @@ where
         for r in receipts {
             if let Receipt::ScriptResult { gas_used, .. } = r {
                 used_gas = *gas_used;
-                break
+                break;
             }
         }
 
@@ -1492,10 +1486,9 @@ where
                     if let Some(Input::Contract(Contract { contract_id, .. })) =
                         inputs.get(contract.input_index as usize)
                     {
-                        <D as StorageMutate<ContractsLatestUtxo>>::insert(
-                            db,
+                        db.storage::<ContractsLatestUtxo>().insert(
                             contract_id,
-                            &&ContractUtxoInfo {
+                            &ContractUtxoInfo {
                                 utxo_id,
                                 tx_pointer: TxPointer::new(block_height, tx_idx),
                             },
@@ -1591,7 +1584,7 @@ where
     fn index_tx_owners_for_block(
         &self,
         block: &Block,
-        block_db_transaction: &mut D,
+        block_st_transaction: &mut D,
     ) -> ExecutorResult<()> {
         for (tx_idx, tx) in block.transactions().iter().enumerate() {
             let block_height = *block.header().height();
@@ -1617,7 +1610,7 @@ where
                 outputs,
                 &tx_id,
                 tx_idx,
-                block_db_transaction.transaction().as_mut(),
+                block_st_transaction,
             )?;
         }
         Ok(())
