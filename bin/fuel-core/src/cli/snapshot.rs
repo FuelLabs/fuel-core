@@ -29,7 +29,7 @@ pub enum SubCommands {
     #[command(arg_required_else_help = true)]
     Everything {
         /// Specify either an alias to a built-in configuration or filepath to a JSON file.
-        #[clap(name = "CHAIN_CONFIG", long = "chain", default_value = "local_testnet")]
+        #[clap(name = "CHAIN_CONFIG", long = "chain")]
         chain_config: Option<String>,
         /// Specify a path to an output directory for the chain config files.
         #[clap(name = "OUTPUT_DIR", long = "output directory")]
@@ -59,7 +59,6 @@ pub async fn exec(command: Command) -> anyhow::Result<()> {
         chain_config::{
             ChainConfig,
             StateConfig,
-            LOCAL_TESTNET,
         },
         database::Database,
     };
@@ -78,7 +77,7 @@ pub async fn exec(command: Command) -> anyhow::Result<()> {
             output_dir,
         } => {
             let chain_conf = match chain_config.as_deref() {
-                None | Some(LOCAL_TESTNET) => ChainConfig::local_testnet(),
+                None => ChainConfig::local_testnet(),
                 Some(path) => ChainConfig::load_from_directory(path)?,
             };
             let state_conf = StateConfig::generate_state_config(db)?;

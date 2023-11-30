@@ -16,7 +16,6 @@ use fuel_core::{
         default_consensus_dev_key,
         ChainConfig,
         StateConfig,
-        LOCAL_TESTNET,
     },
     producer::Config as ProducerConfig,
     service::{
@@ -108,12 +107,7 @@ pub struct Command {
 
     /// Specify either an alias to a built-in configuration or filepath to a directory
     /// that contains the chain parameters and chain state config JSON files.
-    #[arg(
-        name = "GENESIS_CONFIG",
-        long = "genesis-config",
-        default_value = "local_testnet",
-        env
-    )]
+    #[arg(name = "GENESIS_CONFIG", long = "genesis-config", env)]
     pub genesis_config: Option<String>,
 
     /// Should be used for local development only. Enabling debug mode:
@@ -254,9 +248,7 @@ impl Command {
         let addr = net::SocketAddr::new(ip, port);
 
         let (chain_conf, state_config) = match genesis_config.as_deref() {
-            None | Some(LOCAL_TESTNET) => {
-                (ChainConfig::local_testnet(), StateConfig::local_testnet())
-            }
+            None => (ChainConfig::local_testnet(), StateConfig::local_testnet()),
             Some(path) => {
                 let chain_conf = ChainConfig::load_from_directory(path)?;
                 let state_config = StateConfig::load_from_directory(path)?;
