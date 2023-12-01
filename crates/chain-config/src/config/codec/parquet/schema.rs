@@ -8,7 +8,7 @@ use parquet::{
 use crate::{
     config::{
         contract_balance::ContractBalance,
-        contract_state::ContractState,
+        contract_state::ContractStateConfig,
     },
     CoinConfig,
     ContractConfig,
@@ -210,7 +210,7 @@ impl Schema for CoinConfig {
     }
 }
 
-impl Schema for ContractState {
+impl Schema for ContractStateConfig {
     fn schema() -> Type {
         use parquet::basic::Type as PhysicalType;
         let contract_id = Type::primitive_type_builder(
@@ -233,7 +233,7 @@ impl Schema for ContractState {
                 .build()
                 .unwrap();
 
-        parquet::schema::types::Type::group_type_builder("ContractState")
+        parquet::schema::types::Type::group_type_builder("ContractStateConfig")
             .with_fields([contract_id, key, value].map(Arc::new).to_vec())
             .build()
             .unwrap()

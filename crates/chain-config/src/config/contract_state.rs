@@ -5,14 +5,14 @@ use serde::{
 };
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct ContractState {
+pub struct ContractStateConfig {
     pub contract_id: Bytes32,
     pub key: Bytes32,
     pub value: Bytes32,
 }
 
 #[cfg(all(test, feature = "random"))]
-impl ContractState {
+impl ContractStateConfig {
     pub fn random(rng: &mut impl ::rand::Rng) -> Self {
         Self {
             contract_id: super::random_bytes_32(rng).into(),

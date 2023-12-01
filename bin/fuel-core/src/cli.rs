@@ -53,7 +53,7 @@ fn init_environment() -> Option<PathBuf> {
     None
 }
 
-pub async fn init_logging() -> anyhow::Result<()> {
+pub fn init_logging() {
     let filter = match env::var_os(LOG_FILTER) {
         Some(_) => {
             EnvFilter::try_from_default_env().expect("Invalid `RUST_LOG` provided")
@@ -95,11 +95,10 @@ pub async fn init_logging() -> anyhow::Result<()> {
 
     tracing::subscriber::set_global_default(subscriber)
         .expect("setting global default failed");
-    Ok(())
 }
 
 pub async fn run_cli() -> anyhow::Result<()> {
-    init_logging().await?;
+    init_logging();
     if let Some(path) = init_environment() {
         let path = path.display();
         tracing::info!("Loading environment variables from {path}");
@@ -116,7 +115,7 @@ pub async fn run_cli() -> anyhow::Result<()> {
     match opt {
         Ok(opt) => match opt.command {
             Fuel::Run(command) => run::exec(command).await,
-            Fuel::Snapshot(command) => snapshot::exec(command).await,
+            Fuel::Snapshot(command) => snapshot::exec(command),
         },
         Err(e) => {
             // Prints the error and exits.

@@ -138,10 +138,11 @@ impl Database {
         Ok(coin)
     }
 
-    pub fn get_coin_config(&self) -> DatabaseResult<Option<Vec<CoinConfig>>> {
-        let configs = self
-            .iter_all::<Vec<u8>, CompressedCoin>(Column::Coins, None)
-            .map(|raw_coin| -> DatabaseResult<CoinConfig> {
+    pub fn iter_coin_configs(
+        &self,
+    ) -> impl Iterator<Item = StorageResult<CoinConfig>> + '_ {
+        self.iter_all::<Vec<u8>, CompressedCoin>(Column::Coins, None)
+            .map(|raw_coin| {
                 let coin = raw_coin?;
 
                 let byte_id =
@@ -159,8 +160,5 @@ impl Database {
                     asset_id: coin.1.asset_id,
                 })
             })
-            .collect::<DatabaseResult<Vec<CoinConfig>>>()?;
-
-        Ok(Some(configs))
     }
 }

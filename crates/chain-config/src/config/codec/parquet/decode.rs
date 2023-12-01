@@ -38,7 +38,7 @@ use crate::{
             GroupResult,
         },
         contract_balance::ContractBalance,
-        contract_state::ContractState,
+        contract_state::ContractStateConfig,
     },
     CoinConfig,
     ContractConfig,
@@ -295,7 +295,7 @@ impl TryFrom<Row> for MessageConfig {
     }
 }
 
-impl TryFrom<Row> for ContractState {
+impl TryFrom<Row> for ContractStateConfig {
     type Error = anyhow::Error;
     fn try_from(row: Row) -> Result<Self, Self::Error> {
         let mut iter = row.get_column_iter();

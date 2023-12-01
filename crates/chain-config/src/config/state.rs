@@ -1,9 +1,13 @@
-use fuel_core_storage::Result as StorageResult;
+use fuel_core_storage::{
+    iter::BoxedIter,
+    Result as StorageResult,
+};
 use fuel_core_types::{
     fuel_tx::UtxoId,
     fuel_types::{
         Address,
         BlockHeight,
+        ContractId,
     },
     fuel_vm::SecretKey,
 };
@@ -30,7 +34,7 @@ use super::{
     coin::CoinConfig,
     contract::ContractConfig,
     contract_balance::ContractBalance,
-    contract_state::ContractState,
+    contract_state::ContractStateConfig,
     message::MessageConfig,
 };
 
@@ -57,48 +61,20 @@ pub struct StateConfig {
     /// Contract state
     pub contracts: Vec<ContractConfig>,
     /// State entries of all contracts
-    pub contract_state: Vec<ContractState>,
+    pub contract_state: Vec<ContractStateConfig>,
     /// Balance entries of all contracts
     pub contract_balance: Vec<ContractBalance>,
 }
 
 impl StateConfig {
-    pub fn generate_state_config<T>(db: T) -> StorageResult<Self>
-    where
-        T: ChainConfigDb,
-    {
-        let coins = db.get_coin_config()?.unwrap_or_default();
-        let messages = db.get_message_config()?.unwrap_or_default();
-        let contracts = db.get_contract_config()?.unwrap_or_default();
+    pub fn generate_state_config(db: impl ChainStateDb) -> StorageResult<Self> {
+        let coins = db.iter_coin_configs().try_collect()?;
+        let messages = db.iter_message_configs().try_collect()?;
+        let contracts = db.iter_contract_configs().try_collect()?;
+        let contract_state = db.iter_contract_state_configs().try_collect()?;
+        let contract_balance = db.iter_contract_balance_configs().try_collect()?;
 
-        let contract_state = contracts
-            .iter()
-            .flat_map(|contract_config| {
-                let contract_id: Bytes32 = (*contract_config.contract_id).into();
-                contract_config.state.as_ref().into_iter().flatten().map(
-                    move |(key, value)| ContractState {
-                        contract_id,
-                        key: *key,
-                        value: *value,
-                    },
-                )
-            })
-            .collect();
-        let contract_balance = contracts
-            .iter()
-            .flat_map(|contract_config| {
-                let contract_id: Bytes32 = (*contract_config.contract_id).into();
-                contract_config.balances.as_ref().into_iter().flatten().map(
-                    move |(asset_id, amount)| ContractBalance {
-                        contract_id,
-                        asset_id: *asset_id,
-                        amount: *amount,
-                    },
-                )
-            })
-            .collect();
-
-        Ok(StateConfig {
+        Ok(Self {
             coins,
             messages,
             contracts,
@@ -244,15 +220,66 @@ impl StateConfig {
     }
 }
 
-pub trait ChainConfigDb {
+// TODO: BoxedIter to be used until RPITIT lands in stable rust.
+pub trait ChainStateDb {
+    /// Returns the contract config with the given contract id.
+    fn get_contract_config_by_id(
+        &self,
+        contract_id: ContractId,
+    ) -> StorageResult<ContractConfig>;
     /// Returns *all* unspent coin configs available in the database.
-    fn get_coin_config(&self) -> StorageResult<Option<Vec<CoinConfig>>>;
+    fn iter_coin_configs(&self) -> BoxedIter<StorageResult<CoinConfig>>;
     /// Returns *alive* contract configs available in the database.
-    fn get_contract_config(&self) -> StorageResult<Option<Vec<ContractConfig>>>;
+    fn iter_contract_configs(&self) -> BoxedIter<StorageResult<ContractConfig>>;
+
+    /// Returns the state of all contracts
+    fn iter_contract_state_configs(
+        &self,
+    ) -> BoxedIter<StorageResult<ContractStateConfig>>;
+    /// Returns the balances of all contracts
+    fn iter_contract_balance_configs(&self) -> BoxedIter<StorageResult<ContractBalance>>;
     /// Returns *all* unspent message configs available in the database.
-    fn get_message_config(&self) -> StorageResult<Option<Vec<MessageConfig>>>;
+    fn iter_message_configs(&self) -> BoxedIter<StorageResult<MessageConfig>>;
     /// Returns the last available block height.
     fn get_block_height(&self) -> StorageResult<BlockHeight>;
+}
+
+impl<T> ChainStateDb for &T
+where
+    T: ChainStateDb,
+{
+    fn get_contract_config_by_id(
+        &self,
+        contract_id: ContractId,
+    ) -> StorageResult<ContractConfig> {
+        (*self).get_contract_config_by_id(contract_id)
+    }
+
+    fn iter_coin_configs(&self) -> BoxedIter<StorageResult<CoinConfig>> {
+        (*self).iter_coin_configs()
+    }
+
+    fn iter_contract_configs(&self) -> BoxedIter<StorageResult<ContractConfig>> {
+        (*self).iter_contract_configs()
+    }
+
+    fn iter_contract_state_configs(
+        &self,
+    ) -> BoxedIter<StorageResult<ContractStateConfig>> {
+        (*self).iter_contract_state_configs()
+    }
+
+    fn iter_contract_balance_configs(&self) -> BoxedIter<StorageResult<ContractBalance>> {
+        (*self).iter_contract_balance_configs()
+    }
+
+    fn iter_message_configs(&self) -> BoxedIter<StorageResult<MessageConfig>> {
+        (*self).iter_message_configs()
+    }
+
+    fn get_block_height(&self) -> StorageResult<BlockHeight> {
+        (*self).get_block_height()
+    }
 }
 
 #[cfg(test)]
@@ -467,9 +494,7 @@ mod tests {
 
     fn config_contract() -> StateConfig {
         StateConfig {
-            contracts: vec![ContractConfig {
-                ..base_contract_config()
-            }],
+            contracts: vec![base_contract_config()],
             ..Default::default()
         }
     }

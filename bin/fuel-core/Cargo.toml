@@ -22,7 +22,9 @@ const_format = { version = "0.2", optional = true }
 dirs = "4.0"
 dotenvy = { version = "0.15", optional = true }
 fuel-core = { workspace = true }
+fuel-core-storage = { workspace = true }
 humantime = "2.1"
+itertools = { version = "0.12" }
 lazy_static = { workspace = true }
 pyroscope = "0.5"
 pyroscope_pprofrs = "0.2"
@@ -31,9 +33,9 @@ tikv-jemallocator = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true, features = [
-    "ansi",
-    "env-filter",
-    "json",
+  "ansi",
+  "env-filter",
+  "json",
 ] }
 url = { version = "2.2", optional = true }
 

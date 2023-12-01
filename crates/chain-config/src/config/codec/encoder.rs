@@ -6,13 +6,16 @@ use std::{
     },
 };
 
-use ::parquet::basic::Compression;
+use ::parquet::basic::{
+    Compression,
+    GzipLevel,
+};
 
 use crate::{
     config::{
         codec::parquet::Schema,
         contract_balance::ContractBalance,
-        contract_state::ContractState,
+        contract_state::ContractStateConfig,
     },
     CoinConfig,
     ContractConfig,
@@ -31,7 +34,7 @@ enum EncoderType {
         coins: parquet::Encoder<File, CoinConfig>,
         messages: parquet::Encoder<File, MessageConfig>,
         contracts: parquet::Encoder<File, ContractConfig>,
-        contract_state: parquet::Encoder<File, ContractState>,
+        contract_state: parquet::Encoder<File, ContractStateConfig>,
         contract_balance: parquet::Encoder<File, ContractBalance>,
     },
 }
@@ -52,10 +55,8 @@ impl Encoder {
 
     pub fn parquet(
         snapshot_dir: impl AsRef<Path>,
-        compression: Compression,
+        compression_level: u8,
     ) -> anyhow::Result<Self> {
-        let path = snapshot_dir.as_ref();
-
         fn create_encoder<T>(
             path: &Path,
             name: &str,
@@ -69,6 +70,9 @@ impl Encoder {
             parquet::Encoder::new(file, compression)
         }
 
+        let path = snapshot_dir.as_ref();
+        let compression =
+            Compression::GZIP(GzipLevel::try_new(u32::from(compression_level))?);
         Ok(Self {
             encoder: EncoderType::Parquet {
                 coins: create_encoder(path, "coins", compression)?,
@@ -115,7 +119,7 @@ impl Encoder {
 
     pub fn write_contract_state(
         &mut self,
-        elements: Vec<ContractState>,
+        elements: Vec<ContractStateConfig>,
     ) -> anyhow::Result<()> {
         match &mut self.encoder {
             EncoderType::Json { buffer: state, .. } => {

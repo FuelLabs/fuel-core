@@ -14,7 +14,7 @@ use itertools::Itertools;
 use crate::{
     config::{
         contract_balance::ContractBalance,
-        contract_state::ContractState,
+        contract_state::ContractStateConfig,
     },
     CoinConfig,
     ContractConfig,
@@ -121,7 +121,7 @@ impl Decoder {
         self.create_iterator(|state| &state.contracts, "contracts")
     }
 
-    pub fn contract_state(&self) -> anyhow::Result<IntoIter<ContractState>> {
+    pub fn contract_state(&self) -> anyhow::Result<IntoIter<ContractStateConfig>> {
         self.create_iterator(|state| &state.contract_state, "contract_state")
     }
 
