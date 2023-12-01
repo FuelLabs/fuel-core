@@ -49,6 +49,7 @@ libp2p-noise = "=0.44.0"
 libp2p-request-response = "=0.26.0"
 libp2p-swarm = "=0.44.0"
 libp2p-tcp = "=0.41.0"
+libp2p-tls = "0.3.0"
 libp2p-websocket = "=0.43.0"
 libp2p-yamux = "=0.45.0"
 postcard = { workspace = true, features = ["use-std"] }

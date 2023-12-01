@@ -322,7 +322,7 @@ pub struct HeartbeatPeerReputationConfig {
 }
 
 impl<D> Task<FuelP2PService<PostcardCodec>, D, SharedState> {
-    pub fn new<B: BlockHeightImporter>(
+    pub async fn new<B: BlockHeightImporter>(
         chain_id: ChainId,
         config: Config,
         db: Arc<D>,
@@ -348,7 +348,8 @@ impl<D> Task<FuelP2PService<PostcardCodec>, D, SharedState> {
         };
 
         let next_block_height = block_importer.next_block_height();
-        let p2p_service = FuelP2PService::new(config, PostcardCodec::new(max_block_size));
+        let p2p_service =
+            FuelP2PService::new(config, PostcardCodec::new(max_block_size)).await;
 
         let reserved_peers_broadcast =
             p2p_service.peer_manager().reserved_peers_updates();
@@ -781,7 +782,7 @@ impl SharedState {
     }
 }
 
-pub fn new_service<D, B>(
+pub async fn new_service<D, B>(
     chain_id: ChainId,
     p2p_config: Config,
     db: D,
@@ -791,12 +792,9 @@ where
     D: P2pDb + 'static,
     B: BlockHeightImporter,
 {
-    Service::new(Task::new(
-        chain_id,
-        p2p_config,
-        Arc::new(db),
-        Arc::new(block_importer),
-    ))
+    let task =
+        Task::new(chain_id, p2p_config, Arc::new(db), Arc::new(block_importer)).await;
+    Service::new(task)
 }
 
 pub fn to_message_acceptance(
@@ -893,7 +891,7 @@ pub mod tests {
     async fn start_and_stop_awaits_works() {
         let p2p_config = Config::default_initialized("start_stop_works");
         let service =
-            new_service(ChainId::default(), p2p_config, FakeDb, FakeBlockImporter);
+            new_service(ChainId::default(), p2p_config, FakeDb, FakeBlockImporter).await;
 
         // Node with p2p service started
         assert!(service.start_and_await().await.unwrap().started());

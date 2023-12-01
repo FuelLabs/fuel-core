@@ -45,6 +45,7 @@ use libp2p::{
         TopicHash,
     },
     multiaddr::Protocol,
+    noise,
     request_response::{
         Event as RequestResponseEvent,
         InboundRequestId,
@@ -53,6 +54,8 @@ use libp2p::{
         ResponseChannel,
     },
     swarm::SwarmEvent,
+    tcp,
+    yamux,
     Multiaddr,
     PeerId,
     Swarm,
@@ -60,7 +63,9 @@ use libp2p::{
 };
 use libp2p_gossipsub::PublishError;
 
+use crate::config::MAX_RESPONSE_SIZE;
 use libp2p::connection_limits::ConnectionLimits;
+use libp2p_mplex::MplexConfig;
 use rand::seq::IteratorRandom;
 use std::{
     collections::HashMap,
@@ -154,7 +159,7 @@ pub enum FuelP2PEvent {
 }
 
 impl<Codec: NetworkCodec> FuelP2PService<Codec> {
-    pub fn new(config: Config, codec: Codec) -> Self {
+    pub async fn new(config: Config, codec: Codec) -> Self {
         let local_peer_id = PeerId::from(config.keypair.public());
 
         let gossipsub_data =
@@ -201,12 +206,42 @@ impl<Codec: NetworkCodec> FuelP2PService<Codec> {
         //         .connection_limits(connection_limits)
         //         .build();
 
-        let mut swarm = Swarm::new(
-            transport,
-            behaviour,
-            local_peer_id,
-            libp2p_swarm::Config::with_tokio_executor(),
-        );
+        let swarm_config = libp2p_swarm::Config::with_tokio_executor()
+            .with_idle_connection_timeout(Duration::from_secs(10));
+
+        // let mut swarm = Swarm::new(transport, behaviour, local_peer_id, swarm_config);
+
+        let tcp_config = tcp::Config::new().port_reuse(true).nodelay(true);
+        let multiplex_config = {
+            let mplex_config = MplexConfig::default();
+
+            let mut yamux_config = yamux::Config::default();
+            yamux_config.set_max_buffer_size(MAX_RESPONSE_SIZE);
+            libp2p::core::upgrade::SelectUpgrade::new(yamux_config, mplex_config)
+        };
+        let noise_authenticated =
+            noise::Config::new(&config.keypair).expect("Noise key generation failed");
+
+        let mut swarm = SwarmBuilder::with_new_identity()
+                .with_tokio()
+                .with_tcp(
+                    tcp_config,
+                    (libp2p_tls::Config::new, libp2p_noise::Config::new),
+                    libp2p_yamux::Config::default,
+                )
+                .unwrap()
+                // .with_quic()
+                .with_dns()
+                .unwrap()
+                .with_websocket(
+                    (libp2p_tls::Config::new, libp2p_noise::Config::new),
+                    libp2p_yamux::Config::default,
+                )
+                .await
+                .unwrap()
+                .with_behaviour(|_| behaviour).unwrap()
+                .with_swarm_config(|cfg| cfg.with_idle_connection_timeout(Duration::from_secs(10)))
+                .build();
 
         let metrics = config.metrics;
 
@@ -755,7 +790,7 @@ mod tests {
         let max_block_size = p2p_config.max_block_size;
 
         let mut service =
-            FuelP2PService::new(p2p_config, PostcardCodec::new(max_block_size));
+            FuelP2PService::new(p2p_config, PostcardCodec::new(max_block_size)).await;
         service.start().await.unwrap();
         service
     }
