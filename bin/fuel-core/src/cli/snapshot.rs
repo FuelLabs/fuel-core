@@ -54,10 +54,10 @@ pub enum SubCommands {
         #[clap(name = "CHAIN_CONFIG", long = "chain", default_value = "local_testnet")]
         chain_config: String,
         /// Specify a path to an output directory for the chain config files.
-        #[clap(name = "OUTPUT_DIR", long = "output_directory")]
+        #[clap(name = "OUTPUT_DIR", long = "output-directory")]
         output_dir: PathBuf,
         /// State encoding format
-        #[clap(name = "STATE_ENCODING_FORMAT", long = "state_encoding_format")]
+        #[clap(name = "STATE_ENCODING_FORMAT", long = "state-encoding-format")]
         state_encoding_format: StateEncodingFormat,
     },
     /// Creates a config for the contract.
