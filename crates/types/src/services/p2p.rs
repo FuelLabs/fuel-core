@@ -11,8 +11,10 @@ use std::{
         Display,
         Formatter,
     },
+    str::FromStr,
     time::Instant,
 };
+
 /// Contains types and logic for Peer Reputation
 pub mod peer_reputation;
 
@@ -147,6 +149,15 @@ impl Display for PeerId {
     }
 }
 
+impl FromStr for PeerId {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let bytes = bs58::decode(s).into_vec().map_err(|e| e.to_string())?;
+        Ok(Self(bytes))
+    }
+}
+
 impl PeerId {
     /// Bind the PeerId and given data of type T together to generate a
     /// SourcePeer<T>
@@ -160,6 +171,8 @@ impl PeerId {
 
 /// Contains metadata about a connected peer
 pub struct PeerInfo {
+    /// The libp2p peer id
+    pub id: PeerId,
     /// all known multi-addresses of the peer
     pub peer_addresses: HashSet<String>,
     /// the version of fuel-core reported by the peer

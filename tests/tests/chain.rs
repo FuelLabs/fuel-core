@@ -60,6 +60,7 @@ async fn test_peer_info() {
             ProducerSetup::new(secret).with_txs(1).with_name("Alice"),
         )],
         [Some(ValidatorSetup::new(pub_key).with_name("Bob"))],
+        None,
     )
     .await;
 
@@ -74,17 +75,26 @@ async fn test_peer_info() {
     // This indicates we have a successful P2P connection.
     validator.consistency_10s(&expected).await;
 
-    let validator_peer_id = validator.node.shared.config.p2p.unwrap().keypair.public().to_peer_id();
+    let validator_peer_id = validator
+        .node
+        .shared
+        .config
+        .p2p
+        .unwrap()
+        .keypair
+        .public()
+        .to_peer_id();
 
     // TODO: this needs to fetch peers from the GQL API, not the service directly.
     // This is just a mock of what we should be able to do with GQL API.
-    let peers = producer.node.shared.network.unwrap().get_all_peers().await.unwrap();
-
+    let client = producer.node.bound_address;
+    let client = FuelClient::from(client);
+    let peers = client.chain_info().await.unwrap().peers;
     assert_eq!(peers.len(), 2);
-    let (_, validator_info) = peers.iter().find(|(peer_id, _)| {
-        peer_id.clone() == validator_peer_id
-    }).expect("Should be connected to validator");
-    
-    assert!(validator_info.heartbeat_data.last_heartbeat.elapsed() < Duration::from_secs(10));
+    let info = peers
+        .iter()
+        .find(|info| info.id.to_string() == validator_peer_id.to_base58())
+        .expect("Should be connected to validator");
 
+    assert!(info.heartbeat_data.last_heartbeat.elapsed() < Duration::from_secs(10));
 }

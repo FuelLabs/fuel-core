@@ -295,7 +295,7 @@ impl P2pPort for P2PAdapter {
         }
     }
 
-    async fn all_peer_info(&self) -> anyhow::Result<Vec<(PeerId, PeerInfo)>> {
+    async fn all_peer_info(&self) -> anyhow::Result<Vec<PeerInfo>> {
         #[cfg(feature = "p2p")]
         {
             use fuel_core_types::services::p2p::HeartbeatData;
@@ -303,26 +303,22 @@ impl P2pPort for P2PAdapter {
                 let peers = service.get_all_peers().await?;
                 Ok(peers
                     .into_iter()
-                    .map(|(peer_id, peer_info)| {
-                        (
-                            PeerId::from(peer_id.to_bytes()),
-                            PeerInfo {
-                                peer_addresses: peer_info
-                                    .peer_addresses
-                                    .iter()
-                                    .map(|addr| addr.to_string())
-                                    .collect(),
-                                client_version: None,
-                                heartbeat_data: HeartbeatData {
-                                    block_height: peer_info.heartbeat_data.block_height,
-                                    last_heartbeat: peer_info
-                                        .heartbeat_data
-                                        .last_heartbeat
-                                        .into(),
-                                },
-                                app_score: peer_info.score,
-                            },
-                        )
+                    .map(|(peer_id, peer_info)| PeerInfo {
+                        id: PeerId::from(peer_id.to_bytes()),
+                        peer_addresses: peer_info
+                            .peer_addresses
+                            .iter()
+                            .map(|addr| addr.to_string())
+                            .collect(),
+                        client_version: None,
+                        heartbeat_data: HeartbeatData {
+                            block_height: peer_info.heartbeat_data.block_height,
+                            last_heartbeat: peer_info
+                                .heartbeat_data
+                                .last_heartbeat
+                                .into(),
+                        },
+                        app_score: peer_info.score,
                     })
                     .collect())
             } else {

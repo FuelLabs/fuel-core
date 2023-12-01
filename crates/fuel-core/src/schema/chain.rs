@@ -23,10 +23,7 @@ use async_graphql::{
     Object,
     Union,
 };
-use fuel_core_types::{
-    fuel_tx,
-    services::p2p::PeerId,
-};
+use fuel_core_types::fuel_tx;
 
 pub struct ChainInfo;
 pub struct ConsensusParameters(fuel_tx::ConsensusParameters);
@@ -662,37 +659,37 @@ impl GasCosts {
     }
 }
 
-struct PeerInfo(PeerId, fuel_core_types::services::p2p::PeerInfo);
+struct PeerInfo(fuel_core_types::services::p2p::PeerInfo);
 
 #[Object]
 impl PeerInfo {
     async fn id(&self) -> String {
-        self.0.to_string()
+        self.0.id.to_string()
     }
 
     async fn addresses(&self) -> Vec<String> {
-        self.1.peer_addresses.iter().cloned().collect()
+        self.0.peer_addresses.iter().cloned().collect()
     }
 
     async fn client_version(&self) -> Option<String> {
-        self.1.client_version.clone()
+        self.0.client_version.clone()
     }
 
     async fn block_height(&self) -> Option<U32> {
-        self.1
+        self.0
             .heartbeat_data
             .block_height
             .map(|height| (*height).into())
     }
 
-    async fn time_since_last_heartbeat(&self) -> u32 {
-        let time = self.1.heartbeat_data.last_heartbeat;
+    async fn time_since_last_heartbeat(&self) -> U64 {
+        let time = self.0.heartbeat_data.last_heartbeat;
         let time_since = time.elapsed().as_millis();
-        time_since as u32
+        U64(time_since as u64)
     }
 
     async fn app_score(&self) -> f64 {
-        self.1.app_score
+        self.0.app_score
     }
 }
 
@@ -747,7 +744,7 @@ impl ChainInfo {
         let peer_info = p2p.all_peer_info().await?;
         let peers = peer_info
             .into_iter()
-            .map(|(peer_id, peer_info)| PeerInfo(peer_id, peer_info))
+            .map(|peer_info| PeerInfo(peer_info))
             .collect();
         Ok(peers)
     }

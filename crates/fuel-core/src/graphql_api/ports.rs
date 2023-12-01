@@ -211,5 +211,5 @@ pub trait DatabaseMessageProof: Send + Sync {
 #[async_trait::async_trait]
 pub trait P2pPort: Send + Sync {
     async fn connected_peers(&self) -> anyhow::Result<Vec<PeerId>>;
-    async fn all_peer_info(&self) -> anyhow::Result<Vec<(PeerId, PeerInfo)>>;
+    async fn all_peer_info(&self) -> anyhow::Result<Vec<PeerInfo>>;
 }
