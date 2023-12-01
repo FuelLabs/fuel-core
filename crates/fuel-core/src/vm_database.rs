@@ -2,9 +2,9 @@
 mod tests {
     use crate::database::Database;
 
-    use fuel_core_database::vm_database::VmDatabase;
-    use fuel_core_storage::{
+    use fuel_core_storage   ::{
         tables::ContractsState,
+        vm_storage::VmStorage,
         InterpreterStorage,
         StorageMutate,
     };
@@ -87,7 +87,7 @@ mod tests {
         start_key: [u8; 32],
         range: usize,
     ) -> Result<Vec<Option<[u8; 32]>>, ()> {
-        let mut db = VmDatabase::<Database>::default();
+        let mut db = VmStorage::<Database>::default();
 
         let contract_id = ContractId::new([0u8; 32]);
 
@@ -163,7 +163,7 @@ mod tests {
         start_key: [u8; 32],
         insertion_range: &[[u8; 32]],
     ) -> Result<bool, ()> {
-        let mut db = VmDatabase::<Database>::default();
+        let mut db = VmStorage::<Database>::default();
 
         let contract_id = ContractId::new([0u8; 32]);
 
@@ -259,7 +259,7 @@ mod tests {
         start_key: [u8; 32],
         remove_count: usize,
     ) -> (Vec<[u8; 32]>, bool) {
-        let mut db = VmDatabase::<Database>::default();
+        let mut db = VmStorage::<Database>::default();
 
         let contract_id = ContractId::new([0u8; 32]);
 

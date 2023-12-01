@@ -75,11 +75,6 @@ pub trait MockStorageMethods {
         &self,
         key: &Key,
     ) -> StorageResult<MerkleRoot>;
-
-    fn size_of_value<M: Mappable + 'static>(
-        &self,
-        key: &M::Key,
-    ) -> StorageResult<Option<usize>>;
 }
 
 mockall::mock! {
@@ -107,8 +102,6 @@ mockall::mock! {
         ) -> StorageResult<Option<M::OwnedValue>>;
 
         fn root<Key: 'static, M: Mappable + 'static>(&self, key: &Key) -> StorageResult<MerkleRoot>;
-
-        fn size_of_value<M: Mappable + 'static>(&self, key: &M::Key) -> StorageResult<Option<usize>>;
 
     }
 

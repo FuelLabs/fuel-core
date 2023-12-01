@@ -23,7 +23,6 @@ use fuel_core_storage::{
 };
 use fuel_core_types::fuel_types::{
     BlockHeight,
-    ContractId,
     Nonce,
 };
 use itertools::Itertools;
@@ -51,20 +50,13 @@ type DatabaseResult<T> = Result<T>;
 // TODO: Extract `Database` and all belongs into `fuel-core-database`.
 #[cfg(feature = "rocksdb")]
 use crate::state::rocks_db::RocksDb;
-use fuel_core_database::vm_database::VmDatabase;
-use fuel_core_executor::{
-    ports::RelayerPort,
-    refs::ExecutorDatabaseTrait,
-};
-use fuel_core_storage::database::{
+use fuel_core_executor::ports::{
+    ExecutorDatabaseTrait,
     MessageIsSpent,
-    VmDatabaseTrait,
+    RelayerPort,
 };
 use fuel_core_types::{
-    blockchain::{
-        header::ConsensusHeader,
-        primitives::DaBlockHeight,
-    },
+    blockchain::primitives::DaBlockHeight,
     entities::message::Message,
 };
 #[cfg(feature = "rocksdb")]
@@ -509,19 +501,6 @@ impl RelayerPort for Database {
         };
         use std::borrow::Cow;
         Ok(self.storage::<Messages>().get(id)?.map(Cow::into_owned))
-    }
-}
-
-impl VmDatabaseTrait for Database {
-    type Data = VmDatabase<Database>;
-
-    fn new_vm_database<T>(
-        &self,
-        header: &ConsensusHeader<T>,
-        coinbase: ContractId,
-    ) -> Self::Data {
-        let cloned_database = self.clone();
-        Self::Data::new(cloned_database, header, coinbase)
     }
 }
 

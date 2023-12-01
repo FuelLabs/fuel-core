@@ -4,8 +4,8 @@ use crate::database::{
     Database,
     Result as DatabaseResult,
 };
+use fuel_core_executor::ports::TxIdOwnerRecorder;
 use fuel_core_storage::{
-    database::TxIdOwnerRecorder,
     iter::IterDirection,
     tables::Transactions,
     Error as StorageError,

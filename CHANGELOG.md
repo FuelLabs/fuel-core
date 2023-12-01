@@ -16,6 +16,7 @@ Description of the upcoming release here.
 ### Changed
 
 - [#1517](https://github.com/FuelLabs/fuel-core/pull/1517): Changed default gossip heartbeat interval to 500ms. 
+- [#1520](https://github.com/FuelLabs/fuel-core/pull/1520): Extract `executor` into `fuel-core-executor` crate. 
 
 
 ## [Version 0.21.0]

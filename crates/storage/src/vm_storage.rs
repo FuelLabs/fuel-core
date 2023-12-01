@@ -1,5 +1,6 @@
-use anyhow::anyhow;
-use fuel_core_storage::{
+#![allow(missing_docs)]
+
+use crate::{
     not_found,
     tables::{
         ContractsAssets,
@@ -17,8 +18,12 @@ use fuel_core_storage::{
     StorageRead,
     StorageSize,
 };
+use anyhow::anyhow;
 use fuel_core_types::{
-    blockchain::header::ConsensusHeader,
+    blockchain::{
+        header::ConsensusHeader,
+        primitives::BlockId,
+    },
     fuel_tx::{
         Contract,
         StorageSlot,
@@ -36,26 +41,21 @@ use fuel_core_types::{
 use primitive_types::U256;
 use std::borrow::Cow;
 
-use fuel_core_storage::database::{
-    FuelBlockTrait,
-    FuelStateTrait,
-};
-
-use fuel_core_storage::tables::{
+use crate::tables::{
     ContractsInfo,
     ContractsRawCode,
 };
 
 /// Used to store metadata relevant during the execution of a transaction
 #[derive(Clone, Debug)]
-pub struct VmDatabase<D> {
+pub struct VmStorage<D> {
     current_block_height: BlockHeight,
     current_timestamp: Tai64,
     coinbase: ContractId,
     database: D,
 }
 
-impl<D> VmDatabase<D> {
+impl<D> VmStorage<D> {
     pub fn database(&self) -> &D {
         &self.database
     }
@@ -74,7 +74,7 @@ impl IncreaseStorageKey for U256 {
     }
 }
 
-impl<D: Default> Default for VmDatabase<D> {
+impl<D: Default> Default for VmStorage<D> {
     fn default() -> Self {
         Self {
             current_block_height: Default::default(),
@@ -85,7 +85,7 @@ impl<D: Default> Default for VmDatabase<D> {
     }
 }
 
-impl<D> VmDatabase<D> {
+impl<D> VmStorage<D> {
     pub fn new<T>(
         database: D,
         header: &ConsensusHeader<T>,
@@ -104,7 +104,7 @@ impl<D> VmDatabase<D> {
     }
 }
 
-impl<D: Default> VmDatabase<D> {
+impl<D: Default> VmStorage<D> {
     pub fn default_from_database(database: D) -> Self {
         Self {
             database,
@@ -113,7 +113,7 @@ impl<D: Default> VmDatabase<D> {
     }
 }
 
-impl<D, M: Mappable> StorageInspect<M> for VmDatabase<D>
+impl<D, M: Mappable> StorageInspect<M> for VmStorage<D>
 where
     D: StorageInspect<M, Error = StorageError>,
 {
@@ -128,7 +128,7 @@ where
     }
 }
 
-impl<D, M: Mappable> StorageMutate<M> for VmDatabase<D>
+impl<D, M: Mappable> StorageMutate<M> for VmStorage<D>
 where
     D: StorageMutate<M, Error = StorageError>,
 {
@@ -145,7 +145,7 @@ where
     }
 }
 
-impl<D, M: Mappable> StorageSize<M> for VmDatabase<D>
+impl<D, M: Mappable> StorageSize<M> for VmStorage<D>
 where
     D: StorageSize<M, Error = StorageError>,
 {
@@ -154,7 +154,7 @@ where
     }
 }
 
-impl<D, M: Mappable> StorageRead<M> for VmDatabase<D>
+impl<D, M: Mappable> StorageRead<M> for VmStorage<D>
 where
     D: StorageRead<M, Error = StorageError>,
 {
@@ -170,7 +170,7 @@ where
     }
 }
 
-impl<D, K, M: Mappable> MerkleRootStorage<K, M> for VmDatabase<D>
+impl<D, K, M: Mappable> MerkleRootStorage<K, M> for VmStorage<D>
 where
     D: MerkleRootStorage<K, M, Error = StorageError>,
 {
@@ -179,20 +179,19 @@ where
     }
 }
 
-impl<D> ContractsAssetsStorage for VmDatabase<D> where
+impl<D> ContractsAssetsStorage for VmStorage<D> where
     D: MerkleRootStorage<ContractId, ContractsAssets, Error = StorageError>
 {
 }
 
-impl<D> InterpreterStorage for VmDatabase<D>
+impl<D> InterpreterStorage for VmStorage<D>
 where
     D: StorageMutate<ContractsInfo, Error = StorageError>
         + MerkleRootStorage<ContractId, ContractsState, Error = StorageError>
         + StorageMutate<ContractsRawCode, Error = StorageError>
         + StorageRead<ContractsRawCode, Error = StorageError>
         + MerkleRootStorage<ContractId, ContractsAssets, Error = StorageError>
-        + FuelBlockTrait<Error = StorageError>
-        + FuelStateTrait<Error = StorageError>,
+        + VmStorageRequirements<Error = StorageError>,
 {
     type DataError = StorageError;
 
@@ -254,7 +253,7 @@ where
         start_key: &Bytes32,
         range: usize,
     ) -> Result<Vec<Option<Cow<Bytes32>>>, Self::DataError> {
-        use fuel_core_storage::StorageAsRef;
+        use crate::StorageAsRef;
 
         let mut key = U256::from_big_endian(start_key.as_ref());
         let mut state_key = Bytes32::zeroed();
@@ -333,4 +332,17 @@ where
             Ok(Some(()))
         }
     }
+}
+
+pub trait VmStorageRequirements {
+    type Error;
+
+    fn block_time(&self, height: &BlockHeight) -> Result<Tai64, Self::Error>;
+    fn get_block_id(&self, height: &BlockHeight) -> Result<Option<BlockId>, Self::Error>;
+
+    fn init_contract_state<S: Iterator<Item = (Bytes32, Bytes32)>>(
+        &mut self,
+        contract_id: &ContractId,
+        slots: S,
+    ) -> Result<(), Self::Error>;
 }

@@ -1,7 +1,0 @@
-# Seeds for failure cases proptest has generated in the past. It is
-# automatically read and these particular cases re-run before any
-# novel cases are generated.
-#
-# It is recommended to check this file in to source control so that
-# everyone who runs the test benefits from these saved cases.
-cc 2c41d43b4c4feb537d389aeacf2e09eb8baf08f0bc8744d5d7ffb452d4f33656 # shrinks to input = _TestTscArgs { state: Err(Error), stream: [] }

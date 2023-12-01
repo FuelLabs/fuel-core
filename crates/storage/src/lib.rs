@@ -6,8 +6,8 @@
 
 #![deny(clippy::arithmetic_side_effects)]
 #![deny(clippy::cast_possible_truncation)]
-// #![deny(unused_crate_dependencies)]
-// #![deny(missing_docs)]
+#![deny(unused_crate_dependencies)]
+#![deny(missing_docs)]
 #![deny(warnings)]
 
 use fuel_core_types::services::executor::Error as ExecutorError;
@@ -20,13 +20,12 @@ pub use fuel_vm_private::{
     },
 };
 
-#[allow(missing_docs)]
-pub mod database;
 pub mod iter;
 pub mod tables;
 #[cfg(feature = "test-helpers")]
 pub mod test_helpers;
 pub mod transactional;
+pub mod vm_storage;
 
 pub use fuel_vm_private::storage::{
     ContractsAssetKey,

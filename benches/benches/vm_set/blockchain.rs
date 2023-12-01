@@ -19,7 +19,7 @@ use fuel_core::{
     },
 };
 use fuel_core_benches::*;
-use fuel_core_database::vm_database::VmDatabase;
+use fuel_core_storage::vm_storage::VmStorage;
 use fuel_core_types::{
     blockchain::header::ConsensusHeader,
     fuel_asm::{
@@ -51,7 +51,7 @@ pub struct BenchDb {
 
 impl BenchDb {
     fn new(contract_id: &ContractId) -> anyhow::Result<Self> {
-        use fuel_core_database::vm_database::IncreaseStorageKey;
+        use fuel_core_database::vm_storage::IncreaseStorageKey;
         let tmp_dir = ShallowTempDir::new();
 
         let db = Arc::new(RocksDb::default_open(tmp_dir.path(), None).unwrap());
@@ -102,14 +102,14 @@ impl BenchDb {
     }
 
     /// Creates a `VmDatabase` instance.
-    fn to_vm_database(&self) -> VmDatabase<Database> {
+    fn to_vm_database(&self) -> VmStorage<Database> {
         let header = ConsensusHeader {
             prev_root: Default::default(),
             height: 1.into(),
             time: Tai64::UNIX_EPOCH,
             generated: (),
         };
-        VmDatabase::new(self.db.clone(), &header, ContractId::zeroed())
+        VmStorage::new(self.db.clone(), &header, ContractId::zeroed())
     }
 }
 

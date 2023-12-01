@@ -119,7 +119,6 @@ use fuel_core_types::{
     },
 };
 
-use fuel_core_storage::database::VmDatabaseTrait;
 use fuel_core_types::{
     fuel_tx::{
         field::{
@@ -353,8 +352,9 @@ pub mod block_component {
     }
 }
 
-use crate::refs::ExecutorDatabaseTrait;
+use crate::ports::ExecutorDatabaseTrait;
 use block_component::*;
+use fuel_core_storage::vm_storage::VmStorage;
 
 impl<R, D> Executor<R, D>
 where
@@ -767,10 +767,13 @@ where
             )?;
 
             let mut sub_block_db_commit = block_st_transaction.transaction();
-            let sub_db_view = sub_block_db_commit.as_mut();
+            // let sub_db_view = sub_block_db_commit.as_mut();
 
-            let mut vm_db = sub_db_view
-                .new_vm_database(&header.consensus, self.config.coinbase_recipient);
+            let mut vm_db = VmStorage::new(
+                sub_block_db_commit.as_mut(),
+                &header.consensus,
+                self.config.coinbase_recipient,
+            );
 
             fuel_vm::interpreter::contract::balance_increase(
                 &mut vm_db,
@@ -892,8 +895,11 @@ where
         let sub_db_view = sub_block_db_commit.as_mut();
         // execution vm
 
-        let vm_db = sub_db_view
-            .new_vm_database(&header.consensus, self.config.coinbase_recipient);
+        let vm_db = VmStorage::new(
+            sub_db_view.clone(),
+            &header.consensus,
+            self.config.coinbase_recipient,
+        );
 
         let mut vm = Interpreter::with_storage(
             vm_db,
@@ -1178,7 +1184,7 @@ where
         for r in receipts {
             if let Receipt::ScriptResult { gas_used, .. } = r {
                 used_gas = *gas_used;
-                break;
+                break
             }
         }
 
@@ -1426,11 +1432,9 @@ where
     /// Log a VM backtrace if configured to do so
     fn log_backtrace<Tx>(
         &self,
-        vm: &Interpreter<<D as VmDatabaseTrait>::Data, Tx>,
+        vm: &Interpreter<VmStorage<D>, Tx>,
         receipts: &[Receipt],
-    ) where
-        D: VmDatabaseTrait,
-    {
+    ) {
         if self.config.backtrace {
             if let Some(backtrace) = receipts
                 .iter()

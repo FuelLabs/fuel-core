@@ -22,7 +22,7 @@ derive_more = { workspace = true }
 fuel-core-types = { workspace = true, default-features = false }
 fuel-vm-private = { workspace = true, default-features = false }
 mockall = { workspace = true, optional = true }
-serde = { workspace = true, features = ["derive"] }
+primitive-types = { workspace = true }
 
 [features]
 test-helpers = ["dep:mockall"]
