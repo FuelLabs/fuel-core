@@ -2,7 +2,7 @@
 mod tests {
     use crate::database::Database;
 
-    use fuel_core_storage   ::{
+    use fuel_core_storage::{
         tables::ContractsState,
         vm_storage::VmStorage,
         InterpreterStorage,
