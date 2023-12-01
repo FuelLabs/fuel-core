@@ -121,7 +121,7 @@ fn key(i: u8) -> Bytes32 {
 async fn can_get_message_proof() {
     let config = Config::local_node();
     let coin = config
-        .chain_state
+        .state_config
         .coins
         .as_ref()
         .unwrap()

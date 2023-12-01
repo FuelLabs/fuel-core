@@ -29,8 +29,8 @@ pub enum SubCommands {
     #[command(arg_required_else_help = true)]
     Everything {
         /// Specify either an alias to a built-in configuration or filepath to a JSON file.
-        #[clap(name = "CHAIN_CONFIG", long = "chain", default_value = "local_testnet")]
-        chain_config: String,
+        #[clap(name = "CHAIN_CONFIG", long = "chain")]
+        chain_config: Option<String>,
         /// Specify a path to an output directory for the chain config files.
         #[clap(name = "OUTPUT_DIR", long = "output directory")]
         output_dir: PathBuf,
@@ -59,7 +59,6 @@ pub async fn exec(command: Command) -> anyhow::Result<()> {
         chain_config::{
             ChainConfig,
             StateConfig,
-            LOCAL_TESTNET,
         },
         database::Database,
     };
@@ -77,15 +76,15 @@ pub async fn exec(command: Command) -> anyhow::Result<()> {
             chain_config,
             output_dir,
         } => {
-            let chain_config = match chain_config.as_str() {
-                LOCAL_TESTNET => ChainConfig::local_testnet(),
-                _ => ChainConfig::load_from_directory(&chain_config)?,
+            let chain_conf = match chain_config.as_deref() {
+                None => ChainConfig::local_testnet(),
+                Some(path) => ChainConfig::load_from_directory(path)?,
             };
-            let chain_state = StateConfig::generate_state_config(db)?;
+            let state_conf = StateConfig::generate_state_config(db)?;
 
             std::fs::create_dir_all(&output_dir)?;
-            chain_config.create_config_file(&output_dir)?;
-            chain_state.create_config_file(&output_dir)?;
+            chain_conf.create_config_file(&output_dir)?;
+            state_conf.create_config_file(&output_dir)?;
         }
         SubCommands::Contract { contract_id } => {
             let config = db.get_contract_config_by_id(contract_id)?;

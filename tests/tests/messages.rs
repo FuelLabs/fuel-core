@@ -69,7 +69,7 @@ async fn messages_returns_messages_for_all_owners() {
 
     // configure the messages
     let mut config = Config::local_node();
-    config.chain_state = StateConfig {
+    config.state_config = StateConfig {
         messages: Some(vec![first_msg, second_msg, third_msg]),
         ..Default::default()
     };
@@ -118,7 +118,7 @@ async fn messages_by_owner_returns_messages_for_the_given_owner() {
 
     // configure the messages
     let mut config = Config::local_node();
-    config.chain_state = StateConfig {
+    config.state_config = StateConfig {
         messages: Some(vec![first_msg, second_msg, third_msg]),
         ..Default::default()
     };
@@ -206,7 +206,7 @@ async fn message_status__can_get_unspent() {
     };
 
     let mut config = Config::local_node();
-    config.chain_state = StateConfig {
+    config.state_config = StateConfig {
         messages: Some(vec![msg]),
         ..Default::default()
     };
@@ -240,7 +240,7 @@ async fn message_status__can_get_spent() {
     };
 
     let mut config = Config::local_node();
-    config.chain_state = StateConfig {
+    config.state_config = StateConfig {
         messages: Some(vec![msg]),
         ..Default::default()
     };
@@ -301,7 +301,7 @@ async fn can_get_message_proof() {
         let config = Config::local_node();
 
         let coin = config
-            .chain_state
+            .state_config
             .coins
             .as_ref()
             .unwrap()

@@ -33,7 +33,7 @@ async fn can_submit_genesis_message() {
         .finalize_as_transaction();
 
     let mut node_config = Config::local_node();
-    node_config.chain_state = StateConfig {
+    node_config.state_config = StateConfig {
         messages: vec![msg1],
         ..Default::default()
     };

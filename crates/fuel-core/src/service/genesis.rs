@@ -488,7 +488,7 @@ mod tests {
                 height: Some(height),
                 ..ChainConfig::local_testnet()
             },
-            chain_state: Default::default(),
+            state_config: Default::default(),
             ..Config::local_node()
         };
 
@@ -535,7 +535,7 @@ mod tests {
                 height: starting_height,
                 ..ChainConfig::local_testnet()
             },
-            chain_state: StateConfig {
+            state_config: StateConfig {
                 coins: vec![
                     CoinConfig {
                         tx_id: Some(alice_tx_id),
@@ -615,7 +615,7 @@ mod tests {
 
         let service_config = Config {
             chain_config: ChainConfig::local_testnet(),
-            chain_state: StateConfig {
+            state_config: StateConfig {
                 contracts: vec![ContractConfig {
                     contract_id,
                     code: contract.into(),
@@ -661,7 +661,7 @@ mod tests {
             da_height: DaBlockHeight(0),
         };
 
-        config.chain_state = StateConfig {
+        config.state_config = StateConfig {
             messages: vec![msg.clone()],
             ..Default::default()
         };
@@ -696,7 +696,7 @@ mod tests {
 
         let service_config = Config {
             chain_config: ChainConfig::local_testnet(),
-            chain_state: StateConfig {
+            state_config: StateConfig {
                 contracts: vec![ContractConfig {
                     contract_id,
                     code: contract.into(),
@@ -735,7 +735,7 @@ mod tests {
                 height: Some(BlockHeight::from(10u32)),
                 ..ChainConfig::local_testnet()
             },
-            chain_state: StateConfig {
+            state_config: StateConfig {
                 coins: vec![CoinConfig {
                     tx_id: None,
                     output_index: None,
@@ -773,7 +773,7 @@ mod tests {
                 height: Some(BlockHeight::from(10u32)),
                 ..ChainConfig::local_testnet()
             },
-            chain_state: StateConfig {
+            state_config: StateConfig {
                 contracts: vec![ContractConfig {
                     contract_id: Default::default(),
                     code: contract.into(),

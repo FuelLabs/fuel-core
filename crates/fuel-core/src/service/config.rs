@@ -41,7 +41,7 @@ pub struct Config {
     pub api_request_timeout: Duration,
     pub db_config: DatabaseConfig,
     pub chain_config: ChainConfig,
-    pub chain_state: StateConfig,
+    pub state_config: StateConfig,
     pub snapshot_decoder: Decoder,
     /// When `true`:
     /// - Enables manual block production.
@@ -75,9 +75,9 @@ pub struct Config {
 
 impl Config {
     pub fn local_node() -> Self {
-        let chain_config = ChainConfig::local_testnet();
-        let chain_state = StateConfig::local_testnet();
-        let state_decoder = Decoder::in_memory(chain_state.clone(), 1);
+        let chain_conf = ChainConfig::local_testnet();
+        let state_config = StateConfig::local_testnet();
+        let state_decoder = Decoder::in_memory(state_config.clone(), 1);
 
         let utxo_validation = false;
         let min_gas_price = 0;
@@ -97,14 +97,14 @@ impl Config {
             api_request_timeout: Duration::from_secs(60),
             db_config,
             debug: true,
-            chain_config: chain_config.clone(),
-            chain_state: chain_state.clone(),
+            chain_config: chain_conf.clone(),
+            state_config: state_config.clone(),
             snapshot_decoder: state_decoder,
             block_production: Trigger::Instant,
             vm: Default::default(),
             utxo_validation,
             txpool: fuel_core_txpool::Config {
-                chain_config,
+                chain_config: chain_conf,
                 min_gas_price,
                 utxo_validation,
                 transaction_ttl: Duration::from_secs(60 * 100000000),

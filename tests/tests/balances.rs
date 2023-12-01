@@ -39,7 +39,7 @@ async fn balance() {
 
     // setup config
     let mut config = Config::local_node();
-    config.chain_state = StateConfig {
+    config.state_config = StateConfig {
         contracts: None,
         coins: Some(
             vec![
@@ -202,7 +202,7 @@ async fn first_5_balances() {
 
     // setup config
     let mut config = Config::local_node();
-    config.chain_state = StateConfig {
+    config.state_config = StateConfig {
         contracts: None,
         coins: Some(coins),
         messages: Some(messages),

@@ -46,7 +46,7 @@ pub const TESTNET_WALLET_SECRETS: [&str; 5] = [
     "0x7f8a325504e7315eda997db7861c9447f5c3eff26333b20180475d94443a10c6",
 ];
 
-pub const CHAIN_STATE_FILENAME: &str = "chain_state.json";
+pub const STATE_CONFIG_FILENAME: &str = "state_config.json";
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize, Eq, PartialEq)]
 pub struct StateConfig {
@@ -108,7 +108,7 @@ impl StateConfig {
     }
 
     #[cfg(feature = "std")]
-    pub fn load_from_directory(path: impl AsRef<Path>) -> Result<Self, anyhow::Error> {
+    pub fn load_from_directory(path: impl AsRef<Path>) -> anyhow::Result<Self> {
         use crate::Decoder;
 
         let decoder = Decoder::detect_encoding(path, 1)?;
@@ -441,11 +441,11 @@ mod tests {
         let mut rng = StdRng::seed_from_u64(1);
 
         StateConfig {
-            contracts: Some(vec![ContractConfig {
+            contracts: vec![ContractConfig {
                 tx_id: rng.gen(),
                 output_index: rng.gen(),
                 ..base_contract_config()
-            }]),
+            }],
             ..Default::default()
         }
     }
@@ -457,19 +457,19 @@ mod tests {
         let balances = Some(vec![(test_asset_id, test_balance)]);
 
         StateConfig {
-            contracts: Some(vec![ContractConfig {
+            contracts: vec![ContractConfig {
                 balances,
                 ..base_contract_config()
-            }]),
+            }],
             ..Default::default()
         }
     }
 
     fn config_contract() -> StateConfig {
         StateConfig {
-            contracts: Some(vec![ContractConfig {
+            contracts: vec![ContractConfig {
                 ..base_contract_config()
-            }]),
+            }],
             ..Default::default()
         }
     }
