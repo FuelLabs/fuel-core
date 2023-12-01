@@ -23,6 +23,8 @@ fuel-core-types = { workspace = true, default-features = false }
 fuel-vm-private = { workspace = true, default-features = false }
 mockall = { workspace = true, optional = true }
 primitive-types = { workspace = true }
+getrandom = { version = "0.2", features = ["js"] }
+
 
 [features]
 test-helpers = ["dep:mockall"]
