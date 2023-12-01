@@ -22,7 +22,9 @@ use fuel_core_storage::{
 use fuel_core_types::{
     blockchain::{
         block::CompressedBlock,
-        primitives::{self,},
+        primitives::{
+            self,
+        },
     },
     fuel_tx,
     fuel_tx::Receipt,
