@@ -13,7 +13,7 @@ version = { workspace = true }
 [dependencies]
 anyhow = { workspace = true }
 async-graphql = { version = "4.0", features = [
-    "tracing",
+  "tracing",
 ], default-features = false }
 async-trait = { workspace = true }
 axum = { workspace = true }
@@ -34,9 +34,7 @@ fuel-core-services = { workspace = true }
 fuel-core-storage = { workspace = true }
 fuel-core-sync = { workspace = true, optional = true }
 fuel-core-txpool = { workspace = true }
-fuel-core-types = { workspace = true, features = [
-    "serde",
-] }
+fuel-core-types = { workspace = true, features = ["serde"] }
 futures = { workspace = true }
 hex = { version = "0.4", features = ["serde"] }
 hyper = { workspace = true }
@@ -46,8 +44,8 @@ postcard = { workspace = true, features = ["use-std"] }
 primitive-types = "0.12"
 rand = { workspace = true }
 rocksdb = { version = "0.21", default-features = false, features = [
-    "lz4",
-    "multi-threaded-cf",
+  "lz4",
+  "multi-threaded-cf",
 ], optional = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true, features = ["raw_value"] }
@@ -73,7 +71,8 @@ test-case = { workspace = true }
 test-strategy = { workspace = true }
 
 [features]
-default = ["rocksdb"]
+# TODO: makni p2p
+default = ["rocksdb", "p2p"]
 p2p = ["dep:fuel-core-p2p", "dep:fuel-core-sync"]
 relayer = ["dep:fuel-core-relayer"]
 rocksdb = ["dep:rocksdb", "dep:tempfile"]

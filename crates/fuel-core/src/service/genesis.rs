@@ -7,7 +7,7 @@ use fuel_core_chain_config::{
     CoinConfig,
     ContractBalance,
     ContractConfig,
-    ContractState,
+    ContractStateConfig,
     GenesisCommitment,
     IntoIter,
     MessageConfig,
@@ -316,7 +316,7 @@ fn import_contract_configs(
 
 fn import_contract_state(
     database: &Database,
-    contract_states: IntoIter<ContractState>,
+    contract_states: IntoIter<ContractStateConfig>,
 ) -> anyhow::Result<()> {
     // let (cursor, root_calculator) =
     // resume_import(database, StateImportProgressKey::Coins)?;
@@ -503,7 +503,10 @@ fn init_contract(
     Ok(())
 }
 
-fn init_contract_state(db: &mut Database, state: &ContractState) -> anyhow::Result<()> {
+fn init_contract_state(
+    db: &mut Database,
+    state: &ContractStateConfig,
+) -> anyhow::Result<()> {
     let key = (&ContractId::from(*state.contract_id), &state.key).into();
     StorageMutate::<TableContractsState>::insert(db, &key, &state.value)?;
 
@@ -740,7 +743,7 @@ mod tests {
 
         let test_key = rng.gen();
         let test_value = rng.gen();
-        let contract_state = ContractState {
+        let contract_state = ContractStateConfig {
             contract_id: Bytes32::from(*contract_id),
             key: test_key,
             value: test_value,

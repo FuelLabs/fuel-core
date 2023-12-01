@@ -10,7 +10,6 @@ use fuel_core::{
         ChainConfig,
         ChainStateDb,
         Encoder,
-        LOCAL_TESTNET,
     },
     database::Database,
     types::fuel_types::ContractId,
@@ -50,14 +49,15 @@ pub enum SubCommands {
     /// Creates a snapshot of the entire database and produces a chain config.
     #[command(arg_required_else_help = true)]
     Everything {
-        /// Specify either an alias to a built-in configuration or filepath to a JSON file.
-        #[clap(name = "CHAIN_CONFIG", long = "chain", default_value = "local_testnet")]
-        chain_config: String,
+        /// Specify a a path to the directory containing the chain config. Defaults used if no path
+        /// is provided.
+        #[clap(name = "CHAIN_CONFIG", long = "chain")]
+        chain_config: Option<PathBuf>,
         /// Specify a path to an output directory for the chain config files.
-        #[clap(name = "OUTPUT_DIR", long = "output_directory")]
+        #[clap(name = "OUTPUT_DIR", long = "output-directory")]
         output_dir: PathBuf,
         /// State encoding format
-        #[clap(name = "STATE_ENCODING_FORMAT", long = "state_encoding_format")]
+        #[clap(name = "STATE_ENCODING_FORMAT", long = "state-encoding-format")]
         state_encoding_format: StateEncodingFormat,
     },
     /// Creates a config for the contract.
@@ -103,7 +103,7 @@ fn contract_snapshot(
 }
 
 fn full_snapshot(
-    chain_config: String,
+    chain_config: Option<PathBuf>,
     output_dir: &Path,
     state_encoding_format: StateEncodingFormat,
     db: impl ChainStateDb,
@@ -168,17 +168,19 @@ fn initialize_encoder(
     Ok(encoder)
 }
 
-fn load_chain_config(chain_config: String) -> Result<ChainConfig, anyhow::Error> {
-    let chain_config = if chain_config == LOCAL_TESTNET {
-        ChainConfig::local_testnet()
-    } else {
-        ChainConfig::load_from_directory(&chain_config)?
+fn load_chain_config(
+    chain_config: Option<PathBuf>,
+) -> Result<ChainConfig, anyhow::Error> {
+    let chain_config = match chain_config {
+        Some(dir) => ChainConfig::load_from_directory(dir)?,
+        None => ChainConfig::local_testnet(),
     };
+
     Ok(chain_config)
 }
 
 fn open_db(path: &Path) -> anyhow::Result<impl ChainStateDb> {
-    let data_source = fuel_core::state::rocks_db::RocksDb::default_open(&path, None)
+    let data_source = fuel_core::state::rocks_db::RocksDb::default_open(path, None)
         .map_err(Into::<anyhow::Error>::into)
         .context(format!("failed to open database at path {path:?}",))?;
     Ok(Database::new(std::sync::Arc::new(data_source)))

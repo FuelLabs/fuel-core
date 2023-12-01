@@ -76,7 +76,7 @@ impl Config {
     pub fn local_node() -> Self {
         let chain_config = ChainConfig::local_testnet();
         let chain_state = StateConfig::local_testnet();
-        let state_decoder = StateStreamer::in_memory(chain_state.clone(), 1);
+        let state_streamer = StateStreamer::in_memory(chain_state.clone(), 1);
 
         let utxo_validation = false;
         let min_gas_price = 0;
@@ -97,7 +97,7 @@ impl Config {
             db_config,
             debug: true,
             chain_config: chain_config.clone(),
-            state_streamer: state_decoder,
+            state_streamer,
             block_production: Trigger::Instant,
             vm: Default::default(),
             utxo_validation,

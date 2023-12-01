@@ -17,7 +17,6 @@ use fuel_core::{
         ChainConfig,
         StateConfig,
         StateStreamer,
-        LOCAL_TESTNET,
     },
     database::DatabaseConfig,
     producer::Config as ProducerConfig,
@@ -110,13 +109,8 @@ pub struct Command {
 
     /// Specify either an alias to a built-in configuration or filepath to a directory
     /// that contains the chain parameters and chain state config JSON files.
-    #[arg(
-        name = "CHAIN_CONFIG",
-        long = "chain",
-        default_value = "local_testnet",
-        env
-    )]
-    pub chain_config: String,
+    #[arg(name = "GENESIS_CONFIG", long = "genesis-config", env)]
+    pub genesis_config: Option<String>,
 
     /// Should be used for local development only. Enabling debug mode:
     /// - Allows GraphQL Endpoints to arbitrarily advance blocks.
@@ -224,7 +218,7 @@ impl Command {
             max_database_cache_size,
             database_path,
             database_type,
-            chain_config,
+            genesis_config,
             vm_backtrace,
             debug,
             utxo_validation,
@@ -255,18 +249,16 @@ impl Command {
 
         let addr = net::SocketAddr::new(ip, port);
 
-        let snapshot_dir = PathBuf::from_str(chain_config.as_str())?;
-        let state_streamer = StateStreamer::detect_encoding(&chain_config, 1)?;
-
-        let (chain_config, chain_state) = match chain_config.as_str() {
-            LOCAL_TESTNET => (ChainConfig::local_testnet(), StateConfig::local_testnet()),
-            _ => {
-                let chain_conf = ChainConfig::load_from_directory(&chain_config)?;
-                let chain_state = StateConfig::load_from_directory(&chain_config)?;
-
-                (chain_conf, chain_state)
+        let (chain_conf, state_config) = match genesis_config.as_deref() {
+            None => (ChainConfig::local_testnet(), StateConfig::local_testnet()),
+            Some(path) => {
+                let chain_conf = ChainConfig::load_from_directory(path)?;
+                let state_config = StateConfig::load_from_directory(path)?;
+                (chain_conf, state_config)
             }
         };
+
+        let state_streamer = StateStreamer::in_memory(state_config.clone(), 1);
 
         #[cfg(feature = "relayer")]
         let relayer_cfg = relayer_args.into_config();
@@ -326,7 +318,7 @@ impl Command {
             addr,
             api_request_timeout: api_request_timeout.into(),
             db_config,
-            chain_config: chain_config.clone(),
+            chain_config: chain_conf.clone(),
             state_streamer,
             debug,
             utxo_validation,
@@ -337,7 +329,7 @@ impl Command {
             txpool: TxPoolConfig::new(
                 tx_max_number,
                 tx_max_depth,
-                chain_config,
+                chain_conf,
                 min_gas_price,
                 utxo_validation,
                 metrics,

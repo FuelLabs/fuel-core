@@ -39,7 +39,7 @@ async fn balance() {
     let asset_id = AssetId::BASE;
 
     // setup config
-    let chain_state = StateConfig {
+    let state_config = StateConfig {
         contracts: vec![],
         coins: vec![
             (owner, 50, asset_id),
@@ -73,7 +73,7 @@ async fn balance() {
         ..Default::default()
     };
     let config = Config {
-        state_streamer: StateStreamer::in_memory(chain_state, 1),
+        state_streamer: StateStreamer::in_memory(state_config, 1),
         ..Config::local_node()
     };
 
@@ -201,14 +201,14 @@ async fn first_5_balances() {
     };
 
     // setup config
-    let chain_state = StateConfig {
+    let state_config = StateConfig {
         contracts: vec![],
         coins,
         messages,
         ..Default::default()
     };
     let config = Config {
-        state_streamer: StateStreamer::in_memory(chain_state, 1),
+        state_streamer: StateStreamer::in_memory(state_config, 1),
         ..Config::local_node()
     };
 

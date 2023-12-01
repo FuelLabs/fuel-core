@@ -9,6 +9,7 @@ use std::{
 };
 
 use super::parquet;
+use anyhow::Context;
 use itertools::Itertools;
 
 use crate::{
@@ -69,7 +70,7 @@ impl StateStreamer {
         snapshot_dir: impl AsRef<Path>,
         group_size: usize,
     ) -> anyhow::Result<Self> {
-        let path = snapshot_dir.as_ref().join("state.json");
+        let path = snapshot_dir.as_ref().join("state_config.json");
 
         // This is a workaround until the Deserialize implementation is fixed to not require a
         // borrowed string over in fuel-vm.
@@ -102,7 +103,7 @@ impl StateStreamer {
     ) -> anyhow::Result<Self> {
         let snapshot_dir = snapshot_dir.as_ref();
 
-        if snapshot_dir.join("state.json").exists() {
+        if snapshot_dir.join("state_config.json").exists() {
             Ok(Self::json(snapshot_dir, default_group_size)?)
         } else {
             Ok(Self::parquet(snapshot_dir.to_owned()))

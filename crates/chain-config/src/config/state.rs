@@ -50,7 +50,7 @@ pub const TESTNET_WALLET_SECRETS: [&str; 5] = [
     "0x7f8a325504e7315eda997db7861c9447f5c3eff26333b20180475d94443a10c6",
 ];
 
-pub const CHAIN_STATE_FILENAME: &str = "chain_state.json";
+pub const STATE_CONFIG_FILENAME: &str = "state_config.json";
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize, Eq, PartialEq)]
 pub struct StateConfig {

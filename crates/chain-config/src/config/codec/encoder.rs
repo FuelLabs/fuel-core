@@ -47,7 +47,7 @@ impl Encoder {
     pub fn json(snapshot_dir: impl AsRef<Path>) -> Self {
         Self {
             encoder: EncoderType::Json {
-                state_file_path: snapshot_dir.as_ref().join("state.json"),
+                state_file_path: snapshot_dir.as_ref().join("state_config.json"),
                 buffer: StateConfig::default(),
             },
         }

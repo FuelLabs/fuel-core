@@ -64,7 +64,7 @@ impl ChainConfig {
     pub const BASE_ASSET: AssetId = AssetId::zeroed();
 
     #[cfg(feature = "std")]
-    pub fn load_from_directory(path: impl AsRef<Path>) -> Result<Self, anyhow::Error> {
+    pub fn load_from_directory(path: impl AsRef<Path>) -> anyhow::Result<Self> {
         let path = path.as_ref().join(CHAIN_CONFIG_FILENAME);
 
         let contents = std::fs::read(&path)?;

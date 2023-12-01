@@ -3,7 +3,7 @@ use fuel_core::{
         CoinConfig,
         ContractBalance,
         ContractConfig,
-        ContractState,
+        ContractStateConfig,
         MessageConfig,
         StateConfig,
         StateStreamer,
@@ -69,12 +69,12 @@ async fn snapshot_state_config() {
             },
         ],
         contract_state: vec![
-            ContractState {
+            ContractStateConfig {
                 contract_id,
                 key: Bytes32::new([5u8; 32]),
                 value: Bytes32::new([8u8; 32]),
             },
-            ContractState {
+            ContractStateConfig {
                 contract_id,
                 key: Bytes32::new([7u8; 32]),
                 value: Bytes32::new([9u8; 32]),
