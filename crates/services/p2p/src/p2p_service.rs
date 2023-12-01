@@ -160,7 +160,7 @@ pub enum FuelP2PEvent {
 
 impl<Codec: NetworkCodec> FuelP2PService<Codec> {
     pub async fn new(config: Config, codec: Codec) -> Self {
-        let local_peer_id = PeerId::from(config.keypair.public());
+        // let local_peer_id = PeerId::from(config.keypair.public());
 
         let gossipsub_data =
             GossipsubData::with_topics(GossipsubTopics::new(&config.network_name));
@@ -242,6 +242,8 @@ impl<Codec: NetworkCodec> FuelP2PService<Codec> {
                 .with_behaviour(|_| behaviour).unwrap()
                 .with_swarm_config(|cfg| cfg.with_idle_connection_timeout(Duration::from_secs(10)))
                 .build();
+
+        let local_peer_id = swarm.local_peer_id().to_owned();
 
         let metrics = config.metrics;
 
