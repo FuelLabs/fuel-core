@@ -685,7 +685,7 @@ impl PeerInfo {
     async fn time_since_last_heartbeat(&self) -> U64 {
         let time = self.0.heartbeat_data.last_heartbeat;
         let time_since = time.elapsed().as_millis();
-        U64(time_since as u64)
+        U64(time_since.try_into().unwrap_or_default())
     }
 
     async fn app_score(&self) -> f64 {
@@ -742,10 +742,7 @@ impl ChainInfo {
     async fn peers(&self, ctx: &Context<'_>) -> anyhow::Result<Vec<PeerInfo>> {
         let p2p: &P2pService = ctx.data_unchecked();
         let peer_info = p2p.all_peer_info().await?;
-        let peers = peer_info
-            .into_iter()
-            .map(|peer_info| PeerInfo(peer_info))
-            .collect();
+        let peers = peer_info.into_iter().map(PeerInfo).collect();
         Ok(peers)
     }
 

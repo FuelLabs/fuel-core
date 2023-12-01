@@ -525,7 +525,7 @@ where
                     Some(TaskRequest::GetAllPeerInfo { channel }) => {
                         let peers = self.p2p_service.get_all_peer_info()
                             .into_iter()
-                            .map(|(id, info)| (id.clone(), info.clone()))
+                            .map(|(id, info)| (*id, info.clone()))
                             .collect::<Vec<_>>();
                         let _ = channel.send(peers);
                     }

@@ -53,7 +53,7 @@ impl From<schema::chain::PeerInfo> for PeerInfo {
                     .checked_sub(Duration::from_millis(
                         info.time_since_last_heartbeat.into(),
                     ))
-                    .unwrap_or_else(|| Instant::now()),
+                    .unwrap_or_else(Instant::now),
             },
             app_score: info.app_score,
         }
