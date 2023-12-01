@@ -1,12 +1,20 @@
 ---
 source: crates/client/src/client/schema/chain.rs
+assertion_line: 348
 expression: operation.query
 ---
 query {
   chain {
     daHeight
     name
-    peerCount
+    peers {
+      id
+      addresses
+      clientVersion
+      blockHeight
+      timeSinceLastHeartbeat
+      appScore
+    }
     latestBlock {
       id
       header {
