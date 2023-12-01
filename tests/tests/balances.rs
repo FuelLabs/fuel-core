@@ -3,7 +3,7 @@ use fuel_core::{
         CoinConfig,
         MessageConfig,
         StateConfig,
-        StateStreamer,
+        StateReader,
     },
     service::{
         Config,
@@ -73,7 +73,7 @@ async fn balance() {
         ..Default::default()
     };
     let config = Config {
-        state_streamer: StateStreamer::in_memory(state_config, 1),
+        state_streamer: StateReader::in_memory(state_config, 1),
         ..Config::local_node()
     };
 
@@ -208,7 +208,7 @@ async fn first_5_balances() {
         ..Default::default()
     };
     let config = Config {
-        state_streamer: StateStreamer::in_memory(state_config, 1),
+        state_streamer: StateReader::in_memory(state_config, 1),
         ..Config::local_node()
     };
 

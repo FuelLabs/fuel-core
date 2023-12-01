@@ -4,7 +4,7 @@ use fuel_core::{
         CoinConfig,
         MessageConfig,
         StateConfig,
-        StateStreamer,
+        StateReader,
     },
     coins_query::CoinsQueryError,
     service::{
@@ -24,7 +24,7 @@ use rand::{
 
 mod coin {
     use super::*;
-    use fuel_core::chain_config::StateStreamer;
+    use fuel_core::chain_config::StateReader;
     use fuel_core_client::client::types::CoinType;
     use fuel_core_types::fuel_crypto::SecretKey;
     use rand::Rng;
@@ -61,7 +61,7 @@ mod coin {
             ..Default::default()
         };
         let config = Config {
-            state_streamer: StateStreamer::in_memory(state, 1),
+            state_streamer: StateReader::in_memory(state, 1),
             ..Config::local_node()
         };
 
@@ -284,7 +284,7 @@ mod coin {
 }
 
 mod message_coin {
-    use fuel_core::chain_config::StateStreamer;
+    use fuel_core::chain_config::StateReader;
     use fuel_core_client::client::types::CoinType;
     use fuel_core_types::{
         blockchain::primitives::DaBlockHeight,
@@ -316,7 +316,7 @@ mod message_coin {
             ..Default::default()
         };
         let config = Config {
-            state_streamer: StateStreamer::in_memory(state, 1),
+            state_streamer: StateReader::in_memory(state, 1),
             ..Config::local_node()
         };
 
@@ -491,7 +491,7 @@ mod message_coin {
 
 // It is combination of coins and deposit coins test cases.
 mod all_coins {
-    use fuel_core::chain_config::StateStreamer;
+    use fuel_core::chain_config::StateReader;
     use fuel_core_client::client::types::CoinType;
     use fuel_core_types::blockchain::primitives::DaBlockHeight;
 
@@ -536,7 +536,7 @@ mod all_coins {
             ..Default::default()
         };
         let config = Config {
-            state_streamer: StateStreamer::in_memory(state, 1),
+            state_streamer: StateReader::in_memory(state, 1),
             ..Config::local_node()
         };
 
@@ -711,7 +711,7 @@ mod all_coins {
 async fn empty_setup() -> TestContext {
     // setup config
     let config = Config {
-        state_streamer: StateStreamer::in_memory(StateConfig::default(), 1),
+        state_streamer: StateReader::in_memory(StateConfig::default(), 1),
         ..Config::local_node()
     };
 

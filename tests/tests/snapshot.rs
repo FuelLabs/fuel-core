@@ -6,7 +6,7 @@ use fuel_core::{
         ContractStateConfig,
         MessageConfig,
         StateConfig,
-        StateStreamer,
+        StateReader,
     },
     database::Database,
     service::{
@@ -107,7 +107,7 @@ async fn snapshot_state_config() {
         }],
     };
     let mut config = Config {
-        state_streamer: StateStreamer::in_memory(starting_state.clone(), 1),
+        state_streamer: StateReader::in_memory(starting_state.clone(), 1),
         ..Config::local_node()
     };
     config.chain_config.height = Some(BlockHeight::from(10));

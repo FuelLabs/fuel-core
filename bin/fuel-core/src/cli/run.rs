@@ -16,7 +16,7 @@ use fuel_core::{
         default_consensus_dev_key,
         ChainConfig,
         StateConfig,
-        StateStreamer,
+        StateReader,
     },
     database::DatabaseConfig,
     producer::Config as ProducerConfig,
@@ -258,7 +258,7 @@ impl Command {
             }
         };
 
-        let state_streamer = StateStreamer::in_memory(state_config.clone(), 1);
+        let state_streamer = StateReader::in_memory(state_config.clone(), 1);
 
         #[cfg(feature = "relayer")]
         let relayer_cfg = relayer_args.into_config();

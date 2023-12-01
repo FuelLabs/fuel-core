@@ -4,7 +4,7 @@ use fuel_core::{
     chain_config::{
         MessageConfig,
         StateConfig,
-        StateStreamer,
+        StateReader,
     },
     service::{
         Config,
@@ -50,7 +50,7 @@ fn setup_config(messages: impl IntoIterator<Item = MessageConfig>) -> Config {
         ..Default::default()
     };
     let config = Config {
-        state_streamer: StateStreamer::in_memory(state, 1),
+        state_streamer: StateReader::in_memory(state, 1),
         ..Config::local_node()
     };
 

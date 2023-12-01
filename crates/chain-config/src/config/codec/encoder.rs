@@ -10,6 +10,7 @@ use ::parquet::basic::{
     Compression,
     GzipLevel,
 };
+use anyhow::Context;
 
 use crate::{
     config::{
@@ -39,11 +40,11 @@ enum EncoderType {
     },
 }
 
-pub struct Encoder {
+pub struct StateWriter {
     encoder: EncoderType,
 }
 
-impl Encoder {
+impl StateWriter {
     pub fn json(snapshot_dir: impl AsRef<Path>) -> Self {
         Self {
             encoder: EncoderType::Json {
@@ -66,7 +67,8 @@ impl Encoder {
             T: Schema,
         {
             let path = path.join(format!("{name}.parquet"));
-            let file = std::fs::File::create(path)?;
+            let file = std::fs::File::create(&path)
+                .with_context(|| format!("Cannot open file ({path:?}) for writing"))?;
             parquet::Encoder::new(file, compression)
         }
 

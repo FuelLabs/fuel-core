@@ -85,9 +85,9 @@ impl StateConfig {
 
     #[cfg(feature = "std")]
     pub fn load_from_directory(path: impl AsRef<Path>) -> Result<Self, anyhow::Error> {
-        use crate::StateStreamer;
+        use crate::StateReader;
 
-        let decoder = StateStreamer::detect_encoding(path, 1)?;
+        let decoder = StateReader::detect_encoding(path, 1)?;
 
         let coins = decoder
             .coins()?
@@ -131,7 +131,7 @@ impl StateConfig {
     #[cfg(feature = "std")]
     pub fn create_config_file(self, path: impl AsRef<Path>) -> anyhow::Result<()> {
         // TODO add parquet wrtter once fully implemented
-        let mut writer = crate::Encoder::json(path);
+        let mut writer = crate::StateWriter::json(path);
 
         writer.write_coins(self.coins)?;
         writer.write_messages(self.messages)?;

@@ -557,7 +557,7 @@ mod tests {
         CoinConfig,
         MessageConfig,
         StateConfig,
-        StateStreamer,
+        StateReader,
     };
     use fuel_core_storage::{
         tables::{
@@ -678,7 +678,7 @@ mod tests {
             ],
             ..Default::default()
         };
-        let state_streamer = StateStreamer::in_memory(state, 1);
+        let state_streamer = StateReader::in_memory(state, 1);
 
         let starting_height = {
             let mut h: u32 = alice_block_created.into();
@@ -764,7 +764,7 @@ mod tests {
             contract_state: vec![contract_state],
             ..Default::default()
         };
-        let state_streamer = StateStreamer::in_memory(state, 1);
+        let state_streamer = StateReader::in_memory(state, 1);
 
         let service_config = Config {
             chain_config: ChainConfig::local_testnet(),
@@ -804,7 +804,7 @@ mod tests {
             messages: vec![msg.clone()],
             ..Default::default()
         };
-        let state_streamer = StateStreamer::in_memory(state, 1);
+        let state_streamer = StateReader::in_memory(state, 1);
 
         let config = Config {
             state_streamer,
@@ -859,7 +859,7 @@ mod tests {
             contract_balance: vec![contract_balance],
             ..Default::default()
         };
-        let state_streamer = StateStreamer::in_memory(state, 1);
+        let state_streamer = StateReader::in_memory(state, 1);
 
         let service_config = Config {
             chain_config: ChainConfig::local_testnet(),
@@ -898,7 +898,7 @@ mod tests {
             }],
             ..Default::default()
         };
-        let state_streamer = StateStreamer::in_memory(state, 1);
+        let state_streamer = StateReader::in_memory(state, 1);
 
         let service_config = Config {
             chain_config: ChainConfig {
@@ -940,7 +940,7 @@ mod tests {
             }],
             ..Default::default()
         };
-        let state_streamer = StateStreamer::in_memory(state, 1);
+        let state_streamer = StateReader::in_memory(state, 1);
 
         let service_config = Config {
             chain_config: ChainConfig {

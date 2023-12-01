@@ -4,9 +4,9 @@ mod parquet;
 
 pub use decoder::{
     IntoIter,
-    StateStreamer,
+    StateReader,
 };
-pub use encoder::Encoder;
+pub use encoder::StateWriter;
 
 use std::fmt::Debug;
 
@@ -43,10 +43,9 @@ mod tests {
         {
             // Json
             let temp_dir = tempfile::tempdir().unwrap();
-            let state_encoder = Encoder::json(temp_dir.path());
+            let state_encoder = StateWriter::json(temp_dir.path());
 
-            let init_decoder =
-                || StateStreamer::json(temp_dir.path(), group_size).unwrap();
+            let init_decoder = || StateReader::json(temp_dir.path(), group_size).unwrap();
 
             test_write_read(
                 state_encoder,
@@ -58,9 +57,8 @@ mod tests {
         {
             // Parquet
             let temp_dir = tempfile::tempdir().unwrap();
-            let state_encoder = Encoder::parquet(temp_dir.path(), 1).unwrap();
-
-            let init_decoder = || StateStreamer::parquet(temp_dir.path());
+            let state_encoder = StateWriter::parquet(temp_dir.path(), 1).unwrap();
+            let init_decoder = || StateReader::parquet(temp_dir.path());
 
             test_write_read(
                 state_encoder,
@@ -72,8 +70,8 @@ mod tests {
     }
 
     fn test_write_read(
-        mut encoder: Encoder,
-        init_decoder: impl FnOnce() -> StateStreamer,
+        mut encoder: StateWriter,
+        init_decoder: impl FnOnce() -> StateReader,
         group_size: usize,
         group_range: Range<usize>,
     ) {

@@ -14,7 +14,7 @@ use crate::{
         ServiceTrait,
     },
 };
-use fuel_core_chain_config::StateStreamer;
+use fuel_core_chain_config::StateReader;
 use fuel_core_p2p::{
     codecs::postcard::PostcardCodec,
     network_service::FuelP2PService,
@@ -379,7 +379,7 @@ pub fn make_config(
 ) -> Config {
     let mut node_config = Config::local_node();
     node_config.chain_config = chain_config;
-    node_config.state_streamer = StateStreamer::in_memory(state_config, 1);
+    node_config.state_streamer = StateReader::in_memory(state_config, 1);
     node_config.utxo_validation = true;
     node_config.name = name;
     node_config

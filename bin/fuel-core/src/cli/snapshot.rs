@@ -9,7 +9,7 @@ use fuel_core::{
     chain_config::{
         ChainConfig,
         ChainStateDb,
-        Encoder,
+        StateWriter,
     },
     database::Database,
     types::fuel_types::ContractId,
@@ -117,7 +117,10 @@ fn full_snapshot(
     Ok(())
 }
 
-fn write_chain_state(db: impl ChainStateDb, mut encoder: Encoder) -> anyhow::Result<()> {
+fn write_chain_state(
+    db: impl ChainStateDb,
+    mut encoder: StateWriter,
+) -> anyhow::Result<()> {
     fn write<T>(
         data: impl Iterator<Item = StorageResult<T>>,
         group_size: usize,
@@ -159,11 +162,11 @@ fn write_chain_state(db: impl ChainStateDb, mut encoder: Encoder) -> anyhow::Res
 fn initialize_encoder(
     output_dir: &Path,
     state_encoding_format: StateEncodingFormat,
-) -> Result<Encoder, anyhow::Error> {
+) -> Result<StateWriter, anyhow::Error> {
     std::fs::create_dir_all(output_dir)?;
     let encoder = match state_encoding_format {
-        StateEncodingFormat::Json => Encoder::json(output_dir),
-        StateEncodingFormat::Parquet => Encoder::parquet(output_dir, 1)?,
+        StateEncodingFormat::Json => StateWriter::json(output_dir),
+        StateEncodingFormat::Parquet => StateWriter::parquet(output_dir, 1)?,
     };
     Ok(encoder)
 }
