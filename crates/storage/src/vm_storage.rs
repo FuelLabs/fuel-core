@@ -38,7 +38,6 @@ use fuel_core_types::{
     fuel_vm::InterpreterStorage,
     tai64::Tai64,
 };
-use getrandom as _;
 use primitive_types::U256;
 use std::borrow::Cow;
 

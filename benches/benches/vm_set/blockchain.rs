@@ -19,7 +19,10 @@ use fuel_core::{
     },
 };
 use fuel_core_benches::*;
-use fuel_core_storage::vm_storage::VmStorage;
+use fuel_core_storage::vm_storage::{
+    IncreaseStorageKey,
+    VmStorage,
+};
 use fuel_core_types::{
     blockchain::header::ConsensusHeader,
     fuel_asm::{
@@ -51,7 +54,6 @@ pub struct BenchDb {
 
 impl BenchDb {
     fn new(contract_id: &ContractId) -> anyhow::Result<Self> {
-        use fuel_core_database::vm_storage::IncreaseStorageKey;
         let tmp_dir = ShallowTempDir::new();
 
         let db = Arc::new(RocksDb::default_open(tmp_dir.path(), None).unwrap());

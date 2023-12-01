@@ -13,6 +13,10 @@ source .github/workflows/scripts/verify_openssl.sh &&
 cargo clippy --all-targets --all-features &&
 cargo make check --locked &&
 cargo make check --all-features --locked &&
+cargo check -p fuel-core-types --target wasm32-unknown-unknown --no-default-features &&
+cargo check -p fuel-core-storage --target wasm32-unknown-unknown --no-default-features &&
+cargo check -p fuel-core-client --target wasm32-unknown-unknown --no-default-features &&
+cargo check -p fuel-core-chain-config --target wasm32-unknown-unknown --no-default-features &&
 cargo test --all-features --workspace &&
 cargo test -p fuel-core --no-default-features &&
 cargo test -p fuel-core-client --no-default-features &&

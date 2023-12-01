@@ -21,9 +21,8 @@ anyhow = { workspace = true }
 derive_more = { workspace = true }
 fuel-core-types = { workspace = true, default-features = false }
 fuel-vm-private = { workspace = true, default-features = false }
-getrandom = { version = "0.2", features = ["js"] }
 mockall = { workspace = true, optional = true }
-primitive-types = { workspace = true }
+primitive-types = { workspace = true, default-features = false }
 
 [features]
 test-helpers = ["dep:mockall"]
