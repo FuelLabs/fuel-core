@@ -79,5 +79,8 @@ tokio = { workspace = true, features = ["full", "test-util"] }
 tracing-attributes = { workspace = true }
 tracing-subscriber = { workspace = true, features = ["env-filter"] }
 
+[dev-dependencies.libp2p-swarm-test]
+version = "0.3.0"
+
 [features]
 test-helpers = ["fuel-core-types/test-helpers"]

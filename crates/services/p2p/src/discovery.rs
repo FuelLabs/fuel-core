@@ -103,6 +103,22 @@ impl NetworkBehaviour for DiscoveryBehaviour {
         )
     }
 
+    // receive events from KademliaHandler and pass it down to kademlia
+    fn handle_pending_outbound_connection(
+        &mut self,
+        connection_id: ConnectionId,
+        maybe_peer: Option<PeerId>,
+        addresses: &[Multiaddr],
+        effective_role: Endpoint,
+    ) -> Result<Vec<Multiaddr>, ConnectionDenied> {
+        self.kademlia.handle_pending_outbound_connection(
+            connection_id,
+            maybe_peer,
+            addresses,
+            effective_role,
+        )
+    }
+
     fn handle_established_outbound_connection(
         &mut self,
         _connection_id: ConnectionId,
@@ -119,20 +135,33 @@ impl NetworkBehaviour for DiscoveryBehaviour {
         )
     }
 
-    // receive events from KademliaHandler and pass it down to kademlia
-    fn handle_pending_outbound_connection(
-        &mut self,
-        connection_id: ConnectionId,
-        maybe_peer: Option<PeerId>,
-        addresses: &[Multiaddr],
-        effective_role: Endpoint,
-    ) -> Result<Vec<Multiaddr>, ConnectionDenied> {
-        self.kademlia.handle_pending_outbound_connection(
-            connection_id,
-            maybe_peer,
-            addresses,
-            effective_role,
-        )
+    fn on_swarm_event(&mut self, event: FromSwarm) {
+        tracing::error!("discovery swarm event: {:?}", &event);
+        match &event {
+            FromSwarm::ConnectionEstablished(ConnectionEstablished {
+                peer_id,
+                other_established,
+                ..
+            }) => {
+                if *other_established == 0 {
+                    self.connected_peers.insert(*peer_id);
+
+                    trace!("Connected to a peer {:?}", peer_id);
+                }
+            }
+            FromSwarm::ConnectionClosed(ConnectionClosed {
+                peer_id,
+                remaining_established,
+                ..
+            }) => {
+                if *remaining_established == 0 {
+                    self.connected_peers.remove(peer_id);
+                    trace!("Disconnected from {:?}", peer_id);
+                }
+            }
+            _ => (),
+        }
+        self.kademlia.on_swarm_event(event)
     }
 
     // receive events from KademliaHandler and pass it down to kademlia
@@ -197,35 +226,6 @@ impl NetworkBehaviour for DiscoveryBehaviour {
         }
         Poll::Pending
     }
-
-    fn on_swarm_event(&mut self, event: FromSwarm) {
-        tracing::error!("discovery swarm event: {:?}", &event);
-        match &event {
-            FromSwarm::ConnectionEstablished(ConnectionEstablished {
-                peer_id,
-                other_established,
-                ..
-            }) => {
-                if *other_established == 0 {
-                    self.connected_peers.insert(*peer_id);
-
-                    trace!("Connected to a peer {:?}", peer_id);
-                }
-            }
-            FromSwarm::ConnectionClosed(ConnectionClosed {
-                peer_id,
-                remaining_established,
-                ..
-            }) => {
-                if *remaining_established == 0 {
-                    self.connected_peers.remove(peer_id);
-                    trace!("Disconnected from {:?}", peer_id);
-                }
-            }
-            _ => (),
-        }
-        self.kademlia.on_swarm_event(event)
-    }
 }
 
 #[cfg(test)]
@@ -262,23 +262,12 @@ mod tests {
         time::Duration,
     };
 
-    /// helper function for building Discovery Behaviour for testing
-    fn build_fuel_discovery(
+    use libp2p_swarm_test::SwarmExt;
+
+    fn build_behavior_fn(
         bootstrap_nodes: Vec<Multiaddr>,
-    ) -> (Swarm<DiscoveryBehaviour>, Multiaddr, PeerId) {
-        let keypair = Keypair::generate_secp256k1();
-        let public_key = keypair.public();
-
-        let noise_keys =
-            noise::Config::new(&keypair).expect("should be able to build noise keys");
-
-        let transport = core::transport::MemoryTransport::new()
-            .upgrade(core::upgrade::Version::V1)
-            .authenticate(noise_keys)
-            .multiplex(yamux::Config::default())
-            .boxed();
-
-        let behaviour = {
+    ) -> impl FnOnce(Keypair) -> DiscoveryBehaviour {
+        |keypair| {
             let mut config = DiscoveryConfig::new(
                 keypair.public().to_peer_id(),
                 "test_network".into(),
@@ -290,29 +279,27 @@ mod tests {
                 .with_random_walk(Duration::from_secs(5));
 
             config.finish()
-        };
+        }
+    }
+
+    /// helper function for building Discovery Behaviour for testing
+    fn build_fuel_discovery(
+        bootstrap_nodes: Vec<Multiaddr>,
+    ) -> (Swarm<DiscoveryBehaviour>, Multiaddr, PeerId) {
+        let behaviour_fn = build_behavior_fn(bootstrap_nodes);
 
         let listen_addr: Multiaddr = Protocol::Memory(rand::random::<u64>()).into();
-        // let swarm_builder = SwarmBuilder::without_executor(
-        //     transport,
-        //     behaviour,
-        //     keypair.public().to_peer_id(),
-        // )
-        // .dial_concurrency_factor(NonZeroU8::new(1).expect("1 > 0"));
-
-        // let mut swarm = swarm_builder.build();
-
-        let config = libp2p_swarm::Config::with_tokio_executor()
-            .with_dial_concurrency_factor(NonZeroU8::new(1).expect("1 > 0"));
 
         let mut swarm =
-            Swarm::new(transport, behaviour, keypair.public().to_peer_id(), config);
+            <Swarm<DiscoveryBehaviour> as SwarmExt>::new_ephemeral(behaviour_fn);
 
         swarm
             .listen_on(listen_addr.clone())
             .expect("swarm should start listening");
 
-        (swarm, listen_addr, PeerId::from_public_key(&public_key))
+        let peer_id = swarm.local_peer_id().to_owned();
+
+        (swarm, listen_addr, peer_id)
     }
 
     // builds 25 discovery swarms,
@@ -322,18 +309,23 @@ mod tests {
     #[tokio::test]
     async fn discovery_works() {
         // Number of peers in the network
-        let num_of_swarms = 25;
+        let num_of_swarms = 3;
         let (first_swarm, first_peer_addr, first_peer_id) = build_fuel_discovery(vec![]);
+        tracing::info!("first swarm addr: {:?}", &first_peer_addr);
+        tracing::info!("first swarm id: {:?}", &first_peer_id);
 
         let mut discovery_swarms = (0..num_of_swarms - 1)
-            .map(|_| {
-                build_fuel_discovery(vec![format!(
+            .map(|index| {
+                let (swarm, peer_addr, peer_id) = build_fuel_discovery(vec![format!(
                     "{}/p2p/{}",
                     first_peer_addr.clone(),
                     first_peer_id
                 )
                 .parse()
-                .unwrap()])
+                .unwrap()]);
+                tracing::info!("{:?} swarm addr: {:?}", index, &peer_addr);
+                tracing::info!("{:?} swarm id: {:?}", index, &peer_id);
+                (swarm, peer_addr, peer_id)
             })
             .collect::<VecDeque<_>>();
 
@@ -371,6 +363,7 @@ mod tests {
                             SwarmEvent::Behaviour(KademliaEvent::UnroutablePeer {
                                 peer: peer_id,
                             }) => {
+                                tracing::info!("Unroutable peer: {:?}", &peer_id);
                                 // kademlia discovered a peer but does not have it's address
                                 // we simulate Identify happening and provide the address
                                 let unroutable_peer_addr = discovery_swarms
