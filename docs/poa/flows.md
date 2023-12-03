@@ -1,7 +1,7 @@
 # Flows
 
 ## PoA Primary Production Flow
-When the node is configured with a POA key, produce blocks and notify network.
+When the node is configured with a POA key, produces blocks and notifies the network.
 
 ```mermaid
 sequenceDiagram
@@ -99,7 +99,7 @@ sequenceDiagram
     S->>+POA: verify signed block header
     POA->>+R: await new block da height
     R-->>-POA: 
-        note right of POA: verify signature against current authority key
+        note right of POA: verify the signature against current authority key
     POA->>-S: 
     S->>+BI: commit sealed block
     BI->>+R: check_da_height for message inclusion
