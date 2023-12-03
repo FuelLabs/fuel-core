@@ -105,7 +105,7 @@ This is a rough outline of what a contributor's workflow looks like:
 -   If the PR contains any breaking changes, add the breaking label to your PR.
 -   If you are part of the FuelLabs Github org, please open a PR from the repository itself.
 -   Otherwise, push your changes to a branch in your fork of the repository and submit a pull request.
-    -   Make sure mention the issue, which is created at step 1, in the commit message.
+    -   Make sure to mention the issue, which is created at step 1, in the commit message.
 -   Your PR will be reviewed and some changes may be requested.
     -   Once you've made changes, your PR must be re-reviewed and approved.
     -   If the PR becomes out of date, you can use GitHub's 'update branch' button.
@@ -120,7 +120,7 @@ Thanks for your contributions!
 
 For beginners, we have prepared many suitable tasks for you. Checkout our [Help Wanted issues](https://github.com/FuelLabs/fuel-core/issues?q=is%3Aopen+is%3Aissue+label%3A%22help+wanted%22) for a list.
 
-If you are planning something big, for example, relates to multiple components or changes current behaviors, make sure to open an issue to discuss with us before going on.
+If you are planning something big, for example, relates to multiple components or changes in current behaviors, make sure to open an issue to discuss with us before going on.
 
 The Client team actively develops and maintains several dependencies used in Fuel Core, which you may be also interested in:
 
