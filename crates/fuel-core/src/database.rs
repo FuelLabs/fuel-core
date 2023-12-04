@@ -21,10 +21,14 @@ use fuel_core_storage::{
     Error as StorageError,
     Result as StorageResult,
 };
-use fuel_core_types::fuel_types::{
-    BlockHeight,
-    Bytes32,
-    ContractId,
+use fuel_core_types::{
+    blockchain::primitives::BlockId,
+    fuel_types::{
+        BlockHeight,
+        Bytes32,
+        ContractId,
+    },
+    tai64::Tai64,
 };
 use itertools::Itertools;
 use serde::{
@@ -52,10 +56,6 @@ type DatabaseResult<T> = Result<T>;
 // TODO: Extract `Database` and all belongs into `fuel-core-database`.
 #[cfg(feature = "rocksdb")]
 use crate::state::rocks_db::RocksDb;
-use fuel_core_types::{
-    blockchain::primitives::BlockId,
-    tai64::Tai64,
-};
 #[cfg(feature = "rocksdb")]
 use std::path::Path;
 #[cfg(feature = "rocksdb")]
