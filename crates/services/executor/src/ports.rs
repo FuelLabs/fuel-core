@@ -107,6 +107,7 @@ pub trait TxIdOwnerRecorder {
     ) -> Result<Option<TransactionStatus>, Self::Error>;
 }
 
+// TODO: Remove `Clone` bound
 pub trait ExecutorDatabaseTrait<D>:
     StorageMutate<FuelBlocks, Error = StorageError>
     + StorageMutate<Receipts, Error = StorageError>

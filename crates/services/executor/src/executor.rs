@@ -754,7 +754,6 @@ where
             )?;
 
             let mut sub_block_db_commit = block_st_transaction.transaction();
-            // let sub_db_view = sub_block_db_commit.as_mut();
 
             let mut vm_db = VmStorage::new(
                 sub_block_db_commit.as_mut(),
@@ -880,8 +879,8 @@ where
         // setup database view that only lives for the duration of vm execution
         let mut sub_block_db_commit = tx_st_transaction.transaction();
         let sub_db_view = sub_block_db_commit.as_mut();
-        // execution vm
 
+        // execution vm
         let vm_db = VmStorage::new(
             sub_db_view.clone(),
             &header.consensus,
