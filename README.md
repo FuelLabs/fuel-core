@@ -138,7 +138,7 @@ ulimit -n 10240
 
 #### Log level
 
-The service relies on the environment variable `RUST_LOG`. For more information, check the [EnvFilter examples](https://docs.rs/tracing-subscriber/latest/tracing_subscriber/struct.EnvFilter.html#examples) crate.
+The service relies on the environment variable `RUST_LOG`. For more information, check the [EnvFilter examples](https://docs.rs/tracing-subscriber/latest/tracing_subscriber/filter/struct.EnvFilter.html#examples) crate.
 
 Human logging can be disabled with the environment variable `HUMAN_LOGGING=false`
 

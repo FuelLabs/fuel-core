@@ -42,7 +42,7 @@ The following is intended to be a living document to convey how P&A can and shou
 many of these components remain in flux as our needs change, these ports and flows should be considered as a foundation 
 and structure for future design RFC refinements to build upon, rather than reflect a finalized view dictating how the 
 system should forever be. When applying this design, it's encouraged to take practical and experimental steps to evolve our 
-codebase using the Ports and Adapters (P&A) principals previously summarized to help guide our decision-making based on 
+codebase using the Ports and Adapters (P&A) principles previously summarized to help guide our decision-making based on 
 evidence discovered in the process of implementation and testing.
 
 ## Domains:
