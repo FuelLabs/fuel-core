@@ -14,6 +14,7 @@ use libp2p::{
     Multiaddr,
     PeerId,
 };
+use libp2p_kad::Mode;
 use libp2p_swarm::StreamProtocol;
 use std::{
     collections::HashSet,
@@ -51,8 +52,8 @@ impl DiscoveryConfig {
         }
     }
 
-    /// limit the number of connected nodes
-    pub fn discovery_limit(&mut self, limit: usize) -> &mut Self {
+    /// limit the max number of connected nodes
+    pub fn max_peers_connected(&mut self, limit: usize) -> &mut Self {
         self.max_peers_connected = limit;
         self
     }
@@ -130,6 +131,7 @@ impl DiscoveryConfig {
 
         let mut kademlia =
             KademliaBehaviour::with_config(local_peer_id, memory_store, kademlia_config);
+        kademlia.set_mode(Some(Mode::Server));
 
         // bootstrap nodes need to have their peer_id defined in the Multiaddr
         let bootstrap_nodes = bootstrap_nodes
