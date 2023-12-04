@@ -43,13 +43,6 @@ use std::{
     ops::Deref,
 };
 
-use fuel_core_storage::vm_storage::VmStorageRequirements;
-use fuel_core_types::{
-    blockchain::primitives::BlockId,
-    fuel_types::BlockHeight,
-    tai64::Tai64,
-};
-
 impl StorageInspect<ContractsState> for Database {
     type Error = StorageError;
 
@@ -157,26 +150,6 @@ impl MerkleRootStorage<ContractId, ContractsState> for Database {
             .map(|metadata| metadata.root)
             .unwrap_or_else(|| in_memory::MerkleTree::new().root());
         Ok(root)
-    }
-}
-
-impl VmStorageRequirements for Database {
-    type Error = StorageError;
-
-    fn block_time(&self, height: &BlockHeight) -> Result<Tai64, Self::Error> {
-        self.block_time(height)
-    }
-
-    fn get_block_id(&self, height: &BlockHeight) -> Result<Option<BlockId>, Self::Error> {
-        self.get_block_id(height)
-    }
-
-    fn init_contract_state<S: Iterator<Item = (Bytes32, Bytes32)>>(
-        &mut self,
-        contract_id: &ContractId,
-        slots: S,
-    ) -> Result<(), Self::Error> {
-        self.init_contract_state(contract_id, slots)
     }
 }
 

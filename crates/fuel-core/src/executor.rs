@@ -1,10 +1,11 @@
-#[allow(warnings)]
 #[allow(clippy::arithmetic_side_effects)]
 #[allow(clippy::cast_possible_truncation)]
 #[cfg(test)]
 mod tests {
+    use crate::database::Database;
     use fuel_core_executor::{
         executor::{
+            block_component::PartialBlockComponent,
             ExecutionData,
             ExecutionOptions,
             Executor,
@@ -13,7 +14,6 @@ mod tests {
         refs::ContractRef,
         Config,
     };
-
     use fuel_core_storage::{
         tables::{
             Coins,
@@ -24,7 +24,6 @@ mod tests {
         },
         StorageAsMut,
     };
-
     use fuel_core_types::{
         blockchain::{
             block::{
@@ -60,14 +59,13 @@ mod tests {
                 TxPointer as TxPointerTraitTrait,
             },
             input::{
-                coin::{
-                    CoinPredicate,
-                    CoinSigned,
-                },
+                coin::CoinSigned,
+                contract,
                 Input,
             },
             Bytes32,
             Cacheable,
+            Chargeable,
             ConsensusParameters,
             Create,
             FeeParameters,
@@ -117,22 +115,12 @@ mod tests {
         },
         tai64::Tai64,
     };
-
-    use crate::{
-        database::Database,
-        query::SimpleTransactionData,
-    };
-
-    use fuel_core_executor::executor::block_component::PartialBlockComponent;
-    use fuel_core_types::fuel_tx::Chargeable;
     use itertools::Itertools;
     use rand::{
         prelude::StdRng,
         Rng,
         SeedableRng,
     };
-
-    use fuel_core_types::fuel_tx::input::contract;
     use std::ops::DerefMut;
 
     fn create_executor(
@@ -343,14 +331,14 @@ mod tests {
             let limit = 0;
             let gas_price_factor = 1;
             let script = TxBuilder::new(1u64)
-                                .script_gas_limit(limit)
-                                // Set a price for the test
-                                .gas_price(price)
-                                .coin_input(AssetId::BASE, 10000)
-                                .change_output(AssetId::BASE)
-                                .build()
-                                .transaction()
-                                .clone();
+                .script_gas_limit(limit)
+                // Set a price for the test
+                .gas_price(price)
+                .coin_input(AssetId::BASE, 10000)
+                .change_output(AssetId::BASE)
+                .build()
+                .transaction()
+                .clone();
 
             let recipient = Contract::EMPTY_CONTRACT_ID;
 
@@ -435,14 +423,14 @@ mod tests {
             assert_eq!(amount, expected_fee_amount_1);
 
             let script = TxBuilder::new(2u64)
-                                .script_gas_limit(limit)
-                                // Set a price for the test
-                                .gas_price(price)
-                                .coin_input(AssetId::BASE, 10000)
-                                .change_output(AssetId::BASE)
-                                .build()
-                                .transaction()
-                                .clone();
+                .script_gas_limit(limit)
+                // Set a price for the test
+                .gas_price(price)
+                .coin_input(AssetId::BASE, 10000)
+                .change_output(AssetId::BASE)
+                .build()
+                .transaction()
+                .clone();
 
             let expected_fee_amount_2 = TransactionFee::checked_from_tx(
                 producer.config.consensus_parameters.gas_costs(),
@@ -520,14 +508,14 @@ mod tests {
             let limit = 0;
             let gas_price_factor = 1;
             let script = TxBuilder::new(2322u64)
-                                .script_gas_limit(limit)
-                                // Set a price for the test
-                                .gas_price(price)
-                                .coin_input(AssetId::BASE, 10000)
-                                .change_output(AssetId::BASE)
-                                .build()
-                                .transaction()
-                                .clone();
+                .script_gas_limit(limit)
+                // Set a price for the test
+                .gas_price(price)
+                .coin_input(AssetId::BASE, 10000)
+                .change_output(AssetId::BASE)
+                .build()
+                .transaction()
+                .clone();
 
             let mut config = Config::default();
             let recipient = [1u8; 32].into();
@@ -560,14 +548,14 @@ mod tests {
             let limit = 0;
             let gas_price_factor = 1;
             let script = TxBuilder::new(2322u64)
-                                .script_gas_limit(limit)
-                                // Set a price for the test
-                                .gas_price(price)
-                                .coin_input(AssetId::BASE, 10000)
-                                .change_output(AssetId::BASE)
-                                .build()
-                                .transaction()
-                                .clone();
+                .script_gas_limit(limit)
+                // Set a price for the test
+                .gas_price(price)
+                .coin_input(AssetId::BASE, 10000)
+                .change_output(AssetId::BASE)
+                .build()
+                .transaction()
+                .clone();
             let recipient = Contract::EMPTY_CONTRACT_ID;
 
             let fee_params = FeeParameters {
@@ -639,37 +627,37 @@ mod tests {
                 expected_in_tx_coinbase: ContractId,
             ) -> bool {
                 let script = TxBuilder::new(2322u64)
-                                    .script_gas_limit(100000)
-                                    // Set a price for the test
-                                    .gas_price(0)
-                                    .start_script(vec![
-                                        // Store the size of the `Address`(32 bytes) into register `0x11`.
-                                        op::movi(0x11, Address::LEN.try_into().unwrap()),
-                                        // Allocate 32 bytes on the heap.
-                                        op::aloc(0x11),
-                                        // Store the pointer to the beginning of the free memory into
-                                        // register `0x10`.
-                                        op::move_(0x10, RegId::HP),
-                                        // Store `config_coinbase` `Address` into MEM[$0x10; 32].
-                                        op::cb(0x10),
-                                        // Store the pointer on the beginning of script data into register `0x12`.
-                                        // Script data contains `expected_in_tx_coinbase` - 32 bytes of data.
-                                        op::gtf_args(0x12, 0x00, GTFArgs::ScriptData),
-                                        // Compare retrieved `config_coinbase`(register `0x10`) with
-                                        // passed `expected_in_tx_coinbase`(register `0x12`) where the length
-                                        // of memory comparison is 32 bytes(register `0x11`) and store result into
-                                        // register `0x13`(1 - true, 0 - false).
-                                        op::meq(0x13, 0x10, 0x12, 0x11),
-                                        // Return the result of the comparison as a receipt.
-                                        op::ret(0x13)
-                                    ], expected_in_tx_coinbase.to_vec() /* pass expected address as script data */)
-                                    .coin_input(AssetId::BASE, 1000)
-                                    .variable_output(Default::default())
-                                    .coin_output(AssetId::BASE, 1000)
-                                    .change_output(AssetId::BASE)
-                                    .build()
-                                    .transaction()
-                                    .clone();
+                    .script_gas_limit(100000)
+                    // Set a price for the test
+                    .gas_price(0)
+                    .start_script(vec![
+                        // Store the size of the `Address`(32 bytes) into register `0x11`.
+                        op::movi(0x11, Address::LEN.try_into().unwrap()),
+                        // Allocate 32 bytes on the heap.
+                        op::aloc(0x11),
+                        // Store the pointer to the beginning of the free memory into
+                        // register `0x10`.
+                        op::move_(0x10, RegId::HP),
+                        // Store `config_coinbase` `Address` into MEM[$0x10; 32].
+                        op::cb(0x10),
+                        // Store the pointer on the beginning of script data into register `0x12`.
+                        // Script data contains `expected_in_tx_coinbase` - 32 bytes of data.
+                        op::gtf_args(0x12, 0x00, GTFArgs::ScriptData),
+                        // Compare retrieved `config_coinbase`(register `0x10`) with
+                        // passed `expected_in_tx_coinbase`(register `0x12`) where the length
+                        // of memory comparison is 32 bytes(register `0x11`) and store result into
+                        // register `0x13`(1 - true, 0 - false).
+                        op::meq(0x13, 0x10, 0x12, 0x11),
+                        // Return the result of the comparison as a receipt.
+                        op::ret(0x13)
+                    ], expected_in_tx_coinbase.to_vec() /* pass expected address as script data */)
+                    .coin_input(AssetId::BASE, 1000)
+                    .variable_output(Default::default())
+                    .coin_output(AssetId::BASE, 1000)
+                    .change_output(AssetId::BASE)
+                    .build()
+                    .transaction()
+                    .clone();
 
                 let config = Config {
                     coinbase_recipient: config_coinbase,
@@ -912,8 +900,7 @@ mod tests {
                 &mut block_db_transaction,
                 ExecutionType::Production(PartialBlockComponent::from_partial_block(
                     &mut block,
-                ))
-                .into(),
+                )),
                 Default::default(),
             )
             .unwrap();
@@ -1258,14 +1245,14 @@ mod tests {
             .clone();
 
         let tx2 = TxBuilder::new(2322u64)
-                    // The same input as `tx1`
-                    .coin_input(AssetId::default(), 100)
-                    // Additional unique for `tx2` input
-                    .coin_input(AssetId::default(), 100)
-                    .change_output(AssetId::default())
-                    .build()
-                    .transaction()
-                    .clone();
+            // The same input as `tx1`
+            .coin_input(AssetId::default(), 100)
+            // Additional unique for `tx2` input
+            .coin_input(AssetId::default(), 100)
+            .change_output(AssetId::default())
+            .build()
+            .transaction()
+            .clone();
 
         let first_input = tx2.inputs()[0].clone();
         let second_input = tx2.inputs()[1].clone();
@@ -2244,7 +2231,7 @@ mod tests {
         let script_id = script.id(&ChainId::default());
 
         let mut database = &Database::default();
-        let mut executor = create_executor(database.clone(), Default::default());
+        let executor = create_executor(database.clone(), Default::default());
 
         let block = PartialFuelBlock {
             header: Default::default(),
@@ -2295,7 +2282,7 @@ mod tests {
         let tx_id = tx.id(&ChainId::default());
 
         let mut database = &Database::default();
-        let mut executor = create_executor(database.clone(), Default::default());
+        let executor = create_executor(database.clone(), Default::default());
 
         let block = PartialFuelBlock {
             header: Default::default(),
@@ -2401,12 +2388,12 @@ mod tests {
         let amount = 500;
 
         let tx = TransactionBuilder::script(vec![], vec![])
-                    // Add `Input::MessageCoin`
-                    .add_unsigned_message_input(SecretKey::random(&mut rng), rng.gen(), rng.gen(), amount, vec![])
-                    // Add `Input::MessageData`
-                    .add_unsigned_message_input(SecretKey::random(&mut rng), rng.gen(), rng.gen(), amount, vec![0xff; 10])
-                    .add_output(Output::change(to, amount + amount, AssetId::BASE))
-                    .finalize();
+            // Add `Input::MessageCoin`
+            .add_unsigned_message_input(SecretKey::random(&mut rng), rng.gen(), rng.gen(), amount, vec![])
+            // Add `Input::MessageData`
+            .add_unsigned_message_input(SecretKey::random(&mut rng), rng.gen(), rng.gen(), amount, vec![0xff; 10])
+            .add_output(Output::change(to, amount + amount, AssetId::BASE))
+            .finalize();
         let tx_id = tx.id(&ChainId::default());
 
         let message_coin = message_from_input(&tx.inputs()[0], 0);
@@ -2464,12 +2451,12 @@ mod tests {
         // Script that return `1` - failed script -> execution result will be reverted.
         let script = vec![op::ret(1)].into_iter().collect();
         let tx = TransactionBuilder::script(script, vec![])
-                    // Add `Input::MessageCoin`
-                    .add_unsigned_message_input(SecretKey::random(&mut rng), rng.gen(), rng.gen(), amount, vec![])
-                    // Add `Input::MessageData`
-                    .add_unsigned_message_input(SecretKey::random(&mut rng), rng.gen(), rng.gen(), amount, vec![0xff; 10])
-                    .add_output(Output::change(to, amount + amount, AssetId::BASE))
-                    .finalize();
+            // Add `Input::MessageCoin`
+            .add_unsigned_message_input(SecretKey::random(&mut rng), rng.gen(), rng.gen(), amount, vec![])
+            // Add `Input::MessageData`
+            .add_unsigned_message_input(SecretKey::random(&mut rng), rng.gen(), rng.gen(), amount, vec![0xff; 10])
+            .add_output(Output::change(to, amount + amount, AssetId::BASE))
+            .finalize();
         let tx_id = tx.id(&ChainId::default());
 
         let message_coin = message_from_input(&tx.inputs()[0], 0);

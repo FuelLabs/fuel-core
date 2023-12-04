@@ -50,6 +50,7 @@ use std::{
         TryInto,
     },
 };
+
 impl StorageInspect<FuelBlocks> for Database {
     type Error = StorageError;
 

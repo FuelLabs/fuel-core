@@ -118,7 +118,6 @@ pub trait ExecutorDatabaseTrait<D>:
     + StorageMutate<SpentMessages, Error = StorageError>
     + StorageMutate<ContractsLatestUtxo, Error = StorageError>
     + StorageMutate<Messages, Error = StorageError>
-    + StorageMutate<ContractsState, Error = StorageError>
     + StorageMutate<ContractsRawCode, Error = StorageError>
     + StorageRead<ContractsRawCode, Error = StorageError>
     + StorageMutate<ContractsInfo, Error = StorageError>

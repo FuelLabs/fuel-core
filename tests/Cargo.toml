@@ -38,6 +38,7 @@ futures = "0.3"
 hyper = { workspace = true, features = ["server"] }
 insta = { workspace = true }
 itertools = { workspace = true }
+primitive-types = { workspace = true, default-features = false }
 rand = { workspace = true }
 reqwest = { workspace = true }
 rstest = "0.15"

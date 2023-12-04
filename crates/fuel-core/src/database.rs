@@ -23,7 +23,8 @@ use fuel_core_storage::{
 };
 use fuel_core_types::fuel_types::{
     BlockHeight,
-    Nonce,
+    Bytes32,
+    ContractId,
 };
 use itertools::Itertools;
 use serde::{
@@ -40,6 +41,7 @@ use std::{
     ops::Deref,
     sync::Arc,
 };
+use strum::EnumCount;
 
 pub use fuel_core_database::Error;
 pub type Result<T> = core::result::Result<T, Error>;
@@ -50,18 +52,12 @@ type DatabaseResult<T> = Result<T>;
 // TODO: Extract `Database` and all belongs into `fuel-core-database`.
 #[cfg(feature = "rocksdb")]
 use crate::state::rocks_db::RocksDb;
-use fuel_core_executor::ports::{
-    ExecutorDatabaseTrait,
-    MessageIsSpent,
-    RelayerPort,
-};
 use fuel_core_types::{
-    blockchain::primitives::DaBlockHeight,
-    entities::message::Message,
+    blockchain::primitives::BlockId,
+    tai64::Tai64,
 };
 #[cfg(feature = "rocksdb")]
 use std::path::Path;
-use strum::EnumCount;
 #[cfg(feature = "rocksdb")]
 use tempfile::TempDir;
 
@@ -450,14 +446,6 @@ impl Transactional for Database {
     }
 }
 
-impl MessageIsSpent for Database {
-    type Error = StorageError;
-
-    fn message_is_spent(&self, nonce: &Nonce) -> StorageResult<bool> {
-        self.message_is_spent(nonce)
-    }
-}
-
 impl AsRef<Database> for Database {
     fn as_ref(&self) -> &Database {
         self
@@ -486,24 +474,6 @@ impl Default for Database {
     }
 }
 
-impl ExecutorDatabaseTrait<Database> for Database {}
-
-// Todo Emir
-impl RelayerPort for Database {
-    fn get_message(
-        &self,
-        id: &Nonce,
-        _da_height: &DaBlockHeight,
-    ) -> anyhow::Result<Option<Message>> {
-        use fuel_core_storage::{
-            tables::Messages,
-            StorageAsRef,
-        };
-        use std::borrow::Cow;
-        Ok(self.storage::<Messages>().get(id)?.map(Cow::into_owned))
-    }
-}
-
 /// Implement `ChainConfigDb` so that `Database` can be passed to
 /// `StateConfig's` `generate_state_config()` method
 impl ChainConfigDb for Database {
@@ -521,6 +491,26 @@ impl ChainConfigDb for Database {
 
     fn get_block_height(&self) -> StorageResult<BlockHeight> {
         Self::latest_height(self)
+    }
+}
+
+impl fuel_core_storage::vm_storage::VmStorageRequirements for Database {
+    type Error = StorageError;
+
+    fn block_time(&self, height: &BlockHeight) -> StorageResult<Tai64> {
+        self.block_time(height)
+    }
+
+    fn get_block_id(&self, height: &BlockHeight) -> StorageResult<Option<BlockId>> {
+        self.get_block_id(height)
+    }
+
+    fn init_contract_state<S: Iterator<Item = (Bytes32, Bytes32)>>(
+        &mut self,
+        contract_id: &ContractId,
+        slots: S,
+    ) -> StorageResult<()> {
+        self.init_contract_state(contract_id, slots)
     }
 }
 

@@ -1,4 +1,9 @@
 use crate::{
+    ports::{
+        MaybeCheckedTransaction,
+        RelayerPort,
+        TransactionsSource,
+    },
     refs::ContractRef,
     Config,
 };
@@ -21,7 +26,6 @@ use fuel_core_storage::{
     StorageAsRef,
     StorageInspect,
 };
-#[allow(unused_imports)]
 use fuel_core_types::{
     blockchain::{
         block::{
@@ -41,10 +45,15 @@ use fuel_core_types::{
     },
     fuel_tx::{
         field::{
+            InputContract,
             Inputs,
+            MintAmount,
+            MintAssetId,
+            OutputContract,
             Outputs,
             TxPointer as TxPointerField,
         },
+        input,
         input::{
             coin::{
                 CoinPredicate,
@@ -58,30 +67,30 @@ use fuel_core_types::{
                 MessageDataSigned,
             },
         },
+        output,
         Address,
         AssetId,
         Bytes32,
         Cacheable,
+        Chargeable,
         Input,
         Mint,
         Output,
         Receipt,
         Transaction,
-        TransactionFee,
         TxId,
         TxPointer,
         UniqueIdentifier,
         UtxoId,
-        ValidityError,
     },
     fuel_types::{
-        canonical::Serialize,
         BlockHeight,
+        ContractId,
         MessageId,
     },
+    fuel_vm,
     fuel_vm::{
         checked_transaction::{
-            CheckError,
             CheckPredicateParams,
             CheckPredicates,
             Checked,
@@ -118,22 +127,6 @@ use fuel_core_types::{
         txpool::TransactionStatus,
     },
 };
-
-use fuel_core_types::{
-    fuel_tx::{
-        field::{
-            InputContract,
-            MintAmount,
-            MintAssetId,
-            OutputContract,
-        },
-        input,
-        output,
-        Chargeable,
-    },
-    fuel_types::ContractId,
-    fuel_vm,
-};
 use parking_lot::Mutex as ParkingMutex;
 use std::{
     borrow::Cow,
@@ -142,12 +135,6 @@ use std::{
 use tracing::{
     debug,
     warn,
-};
-
-pub use crate::ports::{
-    MaybeCheckedTransaction,
-    RelayerPort,
-    TransactionsSource,
 };
 
 pub type ExecutionBlockWithSource<TxSource> = ExecutionTypes<Components<TxSource>, Block>;

@@ -1,9 +1,11 @@
-#![allow(missing_docs)]
+//! The wrapper around the storage for VM implements non-storage getters.
 
 use crate::{
     not_found,
     tables::{
         ContractsAssets,
+        ContractsInfo,
+        ContractsRawCode,
         ContractsState,
     },
     ContractsAssetsStorage,
@@ -41,12 +43,7 @@ use fuel_core_types::{
 use primitive_types::U256;
 use std::borrow::Cow;
 
-use crate::tables::{
-    ContractsInfo,
-    ContractsRawCode,
-};
-
-/// Used to store metadata relevant during the execution of a transaction
+/// Used to store metadata relevant during the execution of a transaction.
 #[derive(Clone, Debug)]
 pub struct VmStorage<D> {
     current_block_height: BlockHeight,
@@ -55,13 +52,11 @@ pub struct VmStorage<D> {
     database: D,
 }
 
-impl<D> VmStorage<D> {
-    pub fn database(&self) -> &D {
-        &self.database
-    }
-}
-
+/// The trait around the `U256` type allows increasing the key by one.
 pub trait IncreaseStorageKey {
+    /// Increases the key by one.
+    ///
+    /// Returns a `Result::Err` in the case of overflow.
     fn increase(&mut self) -> anyhow::Result<()>;
 }
 
@@ -86,6 +81,7 @@ impl<D: Default> Default for VmStorage<D> {
 }
 
 impl<D> VmStorage<D> {
+    /// Create and instance of the VM storage around the `header` and `coinbase` contract id.
     pub fn new<T>(
         database: D,
         header: &ConsensusHeader<T>,
@@ -99,17 +95,10 @@ impl<D> VmStorage<D> {
         }
     }
 
+    /// The helper function allows modification of the underlying storage.
+    #[cfg(feature = "test-helpers")]
     pub fn database_mut(&mut self) -> &mut D {
         &mut self.database
-    }
-}
-
-impl<D: Default> VmStorage<D> {
-    pub fn default_from_database(database: D) -> Self {
-        Self {
-            database,
-            ..Default::default()
-        }
     }
 }
 
@@ -334,12 +323,18 @@ where
     }
 }
 
+/// The requirements for the storage for optimal work of the [`VmStorage`].
 pub trait VmStorageRequirements {
+    /// The error used by the storage.
     type Error;
 
+    /// Returns a block time based on the block `height`.
     fn block_time(&self, height: &BlockHeight) -> Result<Tai64, Self::Error>;
+
+    /// Returns the `BlockId` for the block at `height`.
     fn get_block_id(&self, height: &BlockHeight) -> Result<Option<BlockId>, Self::Error>;
 
+    /// Initialize the contract state with a batch of the key/value pairs.
     fn init_contract_state<S: Iterator<Item = (Bytes32, Bytes32)>>(
         &mut self,
         contract_id: &ContractId,

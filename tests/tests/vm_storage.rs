@@ -1,6 +1,6 @@
 #[cfg(test)]
 mod tests {
-    use crate::database::Database;
+    use fuel_core::database::Database;
 
     use fuel_core_storage::{
         tables::ContractsState,

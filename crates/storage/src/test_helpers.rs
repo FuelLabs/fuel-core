@@ -102,7 +102,6 @@ mockall::mock! {
         ) -> StorageResult<Option<M::OwnedValue>>;
 
         fn root<Key: 'static, M: Mappable + 'static>(&self, key: &Key) -> StorageResult<MerkleRoot>;
-
     }
 
     impl Transactional for Storage {
