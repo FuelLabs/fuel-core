@@ -25,6 +25,7 @@ pub mod tables;
 #[cfg(feature = "test-helpers")]
 pub mod test_helpers;
 pub mod transactional;
+pub mod vm_storage;
 
 pub use fuel_vm_private::storage::{
     ContractsAssetKey,

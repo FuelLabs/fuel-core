@@ -5,15 +5,13 @@ use criterion::{
     BenchmarkGroup,
     Criterion,
 };
-use fuel_core::database::{
-    vm_database::VmDatabase,
-    Database,
-};
-use fuel_core_storage::InterpreterStorage;
+use fuel_core::database::Database;
+use fuel_core_storage::vm_storage::VmStorage;
 use fuel_core_types::{
     blockchain::header::GeneratedConsensusFields,
     fuel_tx::Bytes32,
     fuel_types::ContractId,
+    fuel_vm::InterpreterStorage,
 };
 use rand::{
     rngs::StdRng,
@@ -53,7 +51,7 @@ fn insert_state_single_contract_database(c: &mut Criterion) {
 
     let mut bench_state = |group: &mut BenchmarkGroup<WallTime>, name: &str, n: usize| {
         group.bench_function(name, |b| {
-            let mut db = VmDatabase::default();
+            let mut db = VmStorage::default();
             let contract: ContractId = rng.gen();
             setup(db.database_mut(), &contract, n);
             let outer = db.database_mut().transaction();
@@ -61,7 +59,7 @@ fn insert_state_single_contract_database(c: &mut Criterion) {
                 let mut elapsed_time = Duration::default();
                 for _ in 0..iters {
                     let mut inner = outer.transaction();
-                    let mut inner_db = VmDatabase::new::<GeneratedConsensusFields>(
+                    let mut inner_db = VmStorage::new::<GeneratedConsensusFields>(
                         inner.as_mut().clone(),
                         &Default::default(),
                         Default::default(),
@@ -114,7 +112,7 @@ fn insert_state_single_contract_transaction(c: &mut Criterion) {
 
     let mut bench_state = |group: &mut BenchmarkGroup<WallTime>, name: &str, n: usize| {
         group.bench_function(name, |b| {
-            let mut db = VmDatabase::default();
+            let mut db = VmStorage::<Database>::default();
             let contract: ContractId = rng.gen();
             let mut outer = db.database_mut().transaction();
             setup(outer.as_mut(), &contract, n);
@@ -122,7 +120,7 @@ fn insert_state_single_contract_transaction(c: &mut Criterion) {
                 let mut elapsed_time = Duration::default();
                 for _ in 0..iters {
                     let mut inner = outer.transaction();
-                    let mut inner_db = VmDatabase::new::<GeneratedConsensusFields>(
+                    let mut inner_db = VmStorage::new::<GeneratedConsensusFields>(
                         inner.as_mut().clone(),
                         &Default::default(),
                         Default::default(),
@@ -175,7 +173,7 @@ fn insert_state_multiple_contracts_database(c: &mut Criterion) {
 
     let mut bench_state = |group: &mut BenchmarkGroup<WallTime>, name: &str, n: usize| {
         group.bench_function(name, |b| {
-            let mut db = VmDatabase::default();
+            let mut db = VmStorage::<Database>::default();
             for _ in 0..n {
                 let contract: ContractId = rng.gen();
                 setup(db.database_mut(), &contract, 1);
@@ -186,7 +184,7 @@ fn insert_state_multiple_contracts_database(c: &mut Criterion) {
                 let contract: ContractId = rng.gen();
                 for _ in 0..iters {
                     let mut inner = outer.transaction();
-                    let mut inner_db = VmDatabase::new::<GeneratedConsensusFields>(
+                    let mut inner_db = VmStorage::new::<GeneratedConsensusFields>(
                         inner.as_mut().clone(),
                         &Default::default(),
                         Default::default(),
@@ -239,7 +237,7 @@ fn insert_state_multiple_contracts_transaction(c: &mut Criterion) {
 
     let mut bench_state = |group: &mut BenchmarkGroup<WallTime>, name: &str, n: usize| {
         group.bench_function(name, |b| {
-            let mut db = VmDatabase::default();
+            let mut db = VmStorage::<Database>::default();
             let mut outer = db.database_mut().transaction();
             for _ in 0..n {
                 let contract: ContractId = rng.gen();
@@ -250,7 +248,7 @@ fn insert_state_multiple_contracts_transaction(c: &mut Criterion) {
                 let contract: ContractId = rng.gen();
                 for _ in 0..iters {
                     let mut inner = outer.transaction();
-                    let mut inner_db = VmDatabase::new::<GeneratedConsensusFields>(
+                    let mut inner_db = VmStorage::new::<GeneratedConsensusFields>(
                         inner.as_mut().clone(),
                         &Default::default(),
                         Default::default(),

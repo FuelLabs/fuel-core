@@ -12,8 +12,17 @@ description = "Fuel Block Executor"
 [dependencies]
 anyhow = { workspace = true }
 fuel-core-chain-config = { workspace = true }
-fuel-core-storage = { workspace = true }
-fuel-core-types = { workspace = true }
+fuel-core-storage = { workspace = true, features = ["test-helpers"] }
+fuel-core-types = { workspace = true, features = ["test-helpers"] }
+hex = { version = "0.4", features = ["serde"] }
+parking_lot = { workspace = true }
+tracing = { workspace = true }
 
 [dev-dependencies]
 fuel-core-trace = { path = "../../trace" }
+
+[features]
+test-helpers = [
+    "fuel-core-types/test-helpers",
+    "fuel-core-storage/test-helpers"
+]

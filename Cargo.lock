@@ -2775,9 +2775,7 @@ dependencies = [
  "hyper",
  "itertools 0.10.5",
  "mockall",
- "parking_lot 0.12.1",
  "postcard",
- "primitive-types",
  "proptest",
  "rand 0.8.5",
  "rocksdb",
@@ -2809,6 +2807,7 @@ dependencies = [
  "ethnum",
  "fuel-core",
  "fuel-core-chain-config",
+ "fuel-core-database",
  "fuel-core-services",
  "fuel-core-storage",
  "fuel-core-sync",
@@ -2966,6 +2965,9 @@ dependencies = [
  "fuel-core-storage",
  "fuel-core-trace",
  "fuel-core-types",
+ "hex",
+ "parking_lot 0.12.1",
+ "tracing",
 ]
 
 [[package]]
@@ -3152,6 +3154,7 @@ dependencies = [
  "fuel-core-types",
  "fuel-vm",
  "mockall",
+ "primitive-types",
 ]
 
 [[package]]
@@ -3183,6 +3186,7 @@ dependencies = [
  "fuel-core",
  "fuel-core-benches",
  "fuel-core-client",
+ "fuel-core-executor",
  "fuel-core-p2p",
  "fuel-core-poa",
  "fuel-core-relayer",
@@ -3194,6 +3198,7 @@ dependencies = [
  "hyper",
  "insta",
  "itertools 0.10.5",
+ "primitive-types",
  "rand 0.8.5",
  "reqwest",
  "rstest",
