@@ -2,7 +2,9 @@ use crate::client::schema::{
     block::Block,
     schema,
     AssetId,
+    U32,
     U64,
+    U8,
 };
 
 #[derive(cynic::QueryFragment, Debug)]
@@ -21,10 +23,11 @@ pub struct ConsensusParameters {
 #[derive(cynic::QueryFragment, Debug)]
 #[cynic(schema_path = "./assets/schema.sdl")]
 pub struct TxParameters {
-    pub max_inputs: U64,
-    pub max_outputs: U64,
-    pub max_witnesses: U64,
+    pub max_inputs: U8,
+    pub max_outputs: U8,
+    pub max_witnesses: U32,
     pub max_gas_per_tx: U64,
+    pub max_size: U64,
 }
 
 impl From<TxParameters> for fuel_core_types::fuel_tx::TxParameters {
@@ -34,6 +37,7 @@ impl From<TxParameters> for fuel_core_types::fuel_tx::TxParameters {
             max_outputs: params.max_outputs.into(),
             max_witnesses: params.max_witnesses.into(),
             max_gas_per_tx: params.max_gas_per_tx.into(),
+            max_size: params.max_size.into(),
         }
     }
 }
@@ -236,21 +240,58 @@ include_from_impls_and_cynic! {
         pub smo: DependentCost,
         pub srwq: DependentCost,
         pub swwq: DependentCost,
+
+        // Non-opcodes prices
+        pub contract_root: DependentCost,
+        pub state_root: DependentCost,
+        pub vm_initialization: DependentCost,
+        pub new_storage_per_byte: U64,
     }
 }
 
 #[derive(cynic::QueryFragment, Debug)]
 #[cynic(schema_path = "./assets/schema.sdl")]
-pub struct DependentCost {
+pub struct LightOperation {
     pub base: U64,
-    pub dep_per_unit: U64,
+    pub units_per_gas: U64,
+}
+
+#[derive(cynic::QueryFragment, Debug)]
+#[cynic(schema_path = "./assets/schema.sdl")]
+pub struct HeavyOperation {
+    pub base: U64,
+    pub gas_per_unit: U64,
+}
+
+#[derive(cynic::InlineFragments, Debug)]
+#[cynic(schema_path = "./assets/schema.sdl")]
+pub enum DependentCost {
+    LightOperation(LightOperation),
+    HeavyOperation(HeavyOperation),
+    #[cynic(fallback)]
+    Unknown,
 }
 
 impl From<DependentCost> for fuel_core_types::fuel_tx::DependentCost {
     fn from(value: DependentCost) -> Self {
-        Self {
-            base: value.base.into(),
-            dep_per_unit: value.dep_per_unit.into(),
+        match value {
+            DependentCost::LightOperation(LightOperation {
+                base,
+                units_per_gas,
+            }) => fuel_core_types::fuel_tx::DependentCost::LightOperation {
+                base: base.into(),
+                units_per_gas: units_per_gas.into(),
+            },
+            DependentCost::HeavyOperation(HeavyOperation { base, gas_per_unit }) => {
+                fuel_core_types::fuel_tx::DependentCost::HeavyOperation {
+                    base: base.into(),
+                    gas_per_unit: gas_per_unit.into(),
+                }
+            }
+            _ => fuel_core_types::fuel_tx::DependentCost::HeavyOperation {
+                base: 0u64,
+                gas_per_unit: 0u64,
+            },
         }
     }
 }

@@ -20,6 +20,7 @@ use fuel_core_types::{
             CoinPredicate,
             CoinSigned,
         },
+        policies::Policies,
         *,
     },
     fuel_types::BlockHeight,
@@ -58,11 +59,10 @@ impl TestContext {
     ) -> io::Result<Bytes32> {
         let script = op::ret(0x10).to_bytes().to_vec();
         let tx = Transaction::script(
-            Default::default(),
             1_000_000,
-            Default::default(),
             script,
             vec![],
+            Policies::new().with_gas_price(0),
             vec![Input::coin_signed(
                 self.rng.gen(),
                 from,

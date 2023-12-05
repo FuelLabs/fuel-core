@@ -76,8 +76,9 @@ impl PeerManager {
         connection_state: Arc<RwLock<ConnectionState>>,
         max_non_reserved_peers: usize,
     ) -> Self {
-        let (reserved_peers_updates, _) =
-            tokio::sync::broadcast::channel(1 + reserved_peers.len() * 2);
+        let (reserved_peers_updates, _) = tokio::sync::broadcast::channel(
+            reserved_peers.len().saturating_mul(2).saturating_add(1),
+        );
 
         Self {
             score_config: ScoreConfig::default(),
@@ -183,7 +184,9 @@ impl PeerManager {
     }
 
     pub fn total_peers_connected(&self) -> usize {
-        self.reserved_connected_peers.len() + self.non_reserved_connected_peers.len()
+        self.reserved_connected_peers
+            .len()
+            .saturating_add(self.non_reserved_connected_peers.len())
     }
 
     pub fn get_peers_ids(&self) -> impl Iterator<Item = &PeerId> {
@@ -220,7 +223,7 @@ impl PeerManager {
         if !is_reserved {
             // check were all the slots taken prior to this disconnect
             let all_slots_taken = self.max_non_reserved_peers
-                == self.non_reserved_connected_peers.len() + 1;
+                == self.non_reserved_connected_peers.len().saturating_add(1);
 
             if self.non_reserved_connected_peers.remove(&peer_id).is_some()
                 && all_slots_taken
@@ -274,7 +277,9 @@ impl PeerManager {
                 return true
             }
 
-            if non_reserved_peers_connected + 1 == self.max_non_reserved_peers {
+            if non_reserved_peers_connected.saturating_add(1)
+                == self.max_non_reserved_peers
+            {
                 // this is the last non-reserved peer allowed
                 if let Ok(mut connection_state) = self.connection_state.write() {
                     connection_state.deny_new_peers();

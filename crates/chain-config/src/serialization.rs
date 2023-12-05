@@ -140,21 +140,17 @@ macro_rules! impl_hex_number {
             {
                 const SIZE: usize = core::mem::size_of::<$i>();
                 let mut bytes: Vec<u8> = serde_hex::deserialize(deserializer)?;
-                match bytes.len() {
-                    len if len > SIZE => {
-                        return Err(D::Error::custom(format!(
+                let pad =
+                    SIZE.checked_sub(bytes.len())
+                        .ok_or(D::Error::custom(format!(
                             "value cant exceed {WORD_SIZE} bytes"
-                        )))
-                    }
-                    len if len < SIZE => {
-                        // pad if length < word size
-                        bytes = (0..SIZE - len)
-                            .map(|_| 0u8)
-                            .chain(bytes.into_iter())
-                            .collect();
-                    }
-                    _ => {}
+                        )))?;
+
+                if pad != 0 {
+                    // pad if length < word size
+                    bytes = (0..pad).map(|_| 0u8).chain(bytes.into_iter()).collect();
                 }
+
                 // We've already verified the bytes.len == WORD_SIZE, force the conversion here.
                 Ok($i::from_be_bytes(
                     bytes.try_into().expect("byte lengths checked"),

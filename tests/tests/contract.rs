@@ -57,12 +57,7 @@ async fn test_contract_balance(
 #[rstest]
 #[tokio::test]
 async fn test_5_contract_balances(
-    #[values(PageDirection::Forward)] direction: PageDirection,
-    // #[values(PageDirection::Forward, PageDirection::Backward)] direction: PageDirection,
-    // Rocksdb doesn't support reverse seeks using a prefix, we'd need to implement a custom
-    // comparator to support this usecase.
-    // > One common bug of using prefix iterating is to use prefix mode to iterate in reverse order. But it is not yet supported.
-    // https://github.com/facebook/rocksdb/wiki/Prefix-Seek#limitation
+    #[values(PageDirection::Forward, PageDirection::Backward)] direction: PageDirection,
 ) {
     let mut test_builder = TestSetupBuilder::new(SEED);
     let (_, contract_id) = test_builder.setup_contract(
@@ -129,6 +124,8 @@ async fn can_get_message_proof() {
         .unwrap()
         .clone();
 
+    let slots_to_read = 2;
+
     let contract = vec![
         // Save the ptr to the script data to register 16.
         // Start db key
@@ -137,7 +134,7 @@ async fn can_get_message_proof() {
         op::movi(0x11, 100),
         op::aloc(0x11),
         op::move_(0x11, RegId::HP),
-        op::movi(0x13, 2),
+        op::movi(0x13, slots_to_read),
         // Write read to 0x11.
         // Write status to 0x30.
         // Get the db key the memory location in 0x10.
@@ -238,11 +235,10 @@ async fn can_get_message_proof() {
 
     // Create the contract calling script.
     let script = Transaction::script(
-        Default::default(),
         1_000_000,
-        Default::default(),
         script,
         script_data,
+        policies::Policies::new().with_gas_price(0),
         inputs,
         outputs,
         vec![],
@@ -288,10 +284,10 @@ async fn can_get_message_proof() {
         .collect::<Vec<_>>();
     assert_eq!(log[0].ra().unwrap(), 0);
     assert_eq!(log[0].rb().unwrap(), 0);
-    assert_eq!(log[0].rc().unwrap(), 0);
+    assert_eq!(log[0].rc().unwrap(), slots_to_read as u64);
     assert_eq!(log[0].rd().unwrap(), 1);
 
-    assert_eq!(log[1].ra().unwrap(), 1);
+    assert_eq!(log[1].ra().unwrap(), 0);
     assert_eq!(log[1].rb().unwrap(), 1);
     assert_eq!(logd.data().unwrap(), db_data);
 }

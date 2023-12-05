@@ -34,6 +34,7 @@ use fuel_core_types::{
     },
 };
 use std::{
+    ops::Deref,
     sync::Arc,
     time::{
         Instant,
@@ -251,7 +252,7 @@ where
         importer_metrics().total_txs_count.set(total_txs as i64);
         importer_metrics()
             .block_height
-            .set(actual_height.as_usize() as i64);
+            .set(*actual_height.deref() as i64);
         let current_time = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap()
@@ -281,7 +282,7 @@ where
             .set(total_tx_count as i64);
         importer_metrics()
             .block_height
-            .set(current_block_height.as_usize() as i64);
+            .set(*current_block_height.deref() as i64);
         // on init just set to current time since it's not worth tracking in the db
         let current_time = SystemTime::now()
             .duration_since(UNIX_EPOCH)

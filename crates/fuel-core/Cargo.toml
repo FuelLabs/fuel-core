@@ -43,7 +43,7 @@ hyper = { workspace = true }
 itertools = { workspace = true }
 parking_lot = { workspace = true }
 postcard = { workspace = true, features = ["use-std"] }
-primitive-types = "0.12"
+primitive-types = { workspace = true }
 rand = { workspace = true }
 rocksdb = { version = "0.21", default-features = false, features = [
     "lz4",

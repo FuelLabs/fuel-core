@@ -1,11 +1,9 @@
 use crate::database::{
-    Column,
     Database,
     Error as DatabaseError,
 };
 use anyhow::anyhow;
 use fuel_core_storage::{
-    iter::IterDirection,
     not_found,
     tables::ContractsState,
     ContractsAssetsStorage,
@@ -48,7 +46,7 @@ pub struct VmDatabase {
     database: Database,
 }
 
-trait IncreaseStorageKey {
+pub trait IncreaseStorageKey {
     fn increase(&mut self) -> anyhow::Result<()>;
 }
 
@@ -225,50 +223,20 @@ impl InterpreterStorage for VmDatabase {
         &self,
         contract_id: &ContractId,
         start_key: &Bytes32,
-        range: Word,
+        range: usize,
     ) -> Result<Vec<Option<Cow<Bytes32>>>, Self::DataError> {
-        // TODO: Optimization: Iterate only over `range` elements.
-        let mut iterator = self.database.iter_all_filtered::<Vec<u8>, Bytes32, _, _>(
-            Column::ContractsState,
-            Some(contract_id),
-            Some(ContractsStateKey::new(contract_id, start_key)),
-            Some(IterDirection::Forward),
-        );
-        let range = range as usize;
+        use fuel_core_storage::StorageAsRef;
 
-        let mut expected_key = U256::from_big_endian(start_key.as_ref());
-        let mut results = vec![];
+        let mut key = U256::from_big_endian(start_key.as_ref());
+        let mut state_key = Bytes32::zeroed();
 
-        while results.len() < range {
-            let entry = iterator.next().transpose()?;
-
-            if entry.is_none() {
-                // We out of `contract_id` prefix
-                break
-            }
-
-            let (multikey, value) =
-                entry.expect("We did a check before, so the entry should be `Some`");
-            let actual_key = U256::from_big_endian(&multikey[32..]);
-
-            while (expected_key <= actual_key) && results.len() < range {
-                if expected_key == actual_key {
-                    // We found expected key, put value into results
-                    results.push(Some(Cow::Owned(value)));
-                } else {
-                    // Iterator moved beyond next expected key, push none until we find the key
-                    results.push(None);
-                }
-                expected_key.increase()?;
-            }
+        let mut results = Vec::new();
+        for _ in 0..range {
+            key.to_big_endian(state_key.as_mut());
+            let multikey = ContractsStateKey::new(contract_id, &state_key);
+            results.push(self.database.storage::<ContractsState>().get(&multikey)?);
+            key.increase()?;
         }
-
-        // Fill not initialized slots with `None`.
-        while results.len() < range {
-            results.push(None);
-            expected_key.increase()?;
-        }
-
         Ok(results)
     }
 
@@ -277,7 +245,7 @@ impl InterpreterStorage for VmDatabase {
         contract_id: &ContractId,
         start_key: &Bytes32,
         values: &[Bytes32],
-    ) -> Result<Option<()>, Self::DataError> {
+    ) -> Result<usize, Self::DataError> {
         let mut current_key = U256::from_big_endian(start_key.as_ref());
         // verify key is in range
         current_key
@@ -287,7 +255,7 @@ impl InterpreterStorage for VmDatabase {
             })?;
 
         let mut key_bytes = Bytes32::zeroed();
-        let mut found_unset = false;
+        let mut found_unset = 0u32;
         for value in values {
             current_key.to_big_endian(key_bytes.as_mut());
 
@@ -296,23 +264,23 @@ impl InterpreterStorage for VmDatabase {
                 .storage::<ContractsState>()
                 .insert(&(contract_id, &key_bytes).into(), value)?;
 
-            found_unset |= option.is_none();
+            if option.is_none() {
+                found_unset = found_unset
+                    .checked_add(1)
+                    .expect("We've checked it above via `values.len()`");
+            }
 
             current_key.increase()?;
         }
 
-        if found_unset {
-            Ok(None)
-        } else {
-            Ok(Some(()))
-        }
+        Ok(found_unset as usize)
     }
 
     fn merkle_contract_state_remove_range(
         &mut self,
         contract_id: &ContractId,
         start_key: &Bytes32,
-        range: Word,
+        range: usize,
     ) -> Result<Option<()>, Self::DataError> {
         let mut found_unset = false;
 
@@ -416,7 +384,7 @@ mod tests {
     fn read_sequential_range(
         prefilled_slots: &[([u8; 32], [u8; 32])],
         start_key: [u8; 32],
-        range: u64,
+        range: usize,
     ) -> Result<Vec<Option<[u8; 32]>>, ()> {
         let mut db = VmDatabase::default();
 
@@ -516,7 +484,7 @@ mod tests {
                     .collect::<Vec<_>>(),
             )
             .map_err(|_| ())
-            .map(|v| v.is_some());
+            .map(|v| v == 0);
 
         // check stored data
         let results: Vec<_> = (0..insertion_range.len())
@@ -582,7 +550,7 @@ mod tests {
     fn remove_range(
         prefilled_slots: &[([u8; 32], [u8; 32])],
         start_key: [u8; 32],
-        remove_count: Word,
+        remove_count: usize,
     ) -> (Vec<[u8; 32]>, bool) {
         let mut db = VmDatabase::default();
 
@@ -609,9 +577,15 @@ mod tests {
             .is_some();
 
         // check stored data
-        let results: Vec<_> = (0..(remove_count as usize))
+        let results: Vec<_> = (0..remove_count)
             .filter_map(|i| {
-                let current_key = U256::from_big_endian(&start_key) + i;
+                let (current_key, overflow) =
+                    U256::from_big_endian(&start_key).overflowing_add(i.into());
+
+                if overflow {
+                    return None
+                }
+
                 let current_key = u256_to_bytes32(current_key);
                 let result = db
                     .merkle_contract_state(&contract_id, &current_key)

@@ -95,7 +95,7 @@ pub struct Execute {
 #[derive(cynic::QueryVariables)]
 pub struct RegisterArgs {
     pub id: cynic::Id,
-    pub register: U64,
+    pub register: U32,
 }
 
 #[derive(cynic::QueryFragment, Debug)]
@@ -112,8 +112,8 @@ pub struct Register {
 #[derive(cynic::QueryVariables)]
 pub struct MemoryArgs {
     pub id: cynic::Id,
-    pub start: U64,
-    pub size: U64,
+    pub start: U32,
+    pub size: U32,
 }
 
 #[derive(cynic::QueryFragment, Debug)]
@@ -263,14 +263,14 @@ impl<T: Into<String>> From<PaginationRequest<T>> for ConnectionArgs {
             PageDirection::Forward => Self {
                 after: req.cursor.map(Into::into),
                 before: None,
-                first: Some(req.results as i32),
+                first: Some(req.results),
                 last: None,
             },
             PageDirection::Backward => Self {
                 after: None,
                 before: req.cursor.map(Into::into),
                 first: None,
-                last: Some(req.results as i32),
+                last: Some(req.results),
             },
         }
     }

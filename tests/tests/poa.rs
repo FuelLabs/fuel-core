@@ -120,8 +120,8 @@ mod p2p {
         let secret = SecretKey::random(&mut rng);
         let pub_key = Input::owner(&secret.public_key());
 
-        let mut chain_config = ChainConfig::local_testnet();
-        chain_config.consensus = ConsensusConfig::PoA {
+        let mut config = Config::local_node();
+        config.chain_conf.consensus = ConsensusConfig::PoA {
             signing_key: pub_key,
         };
         let state_config = StateConfig::local_testnet();
