@@ -20,7 +20,7 @@ version = { workspace = true }
 anyhow = { workspace = true }
 bs58 = "0.5"
 derive_more = { version = "0.99" }
-fuel-vm-private = { workspace = true, default-features = false, features = ["alloc"] }
+fuel-vm-private = { workspace = true, default-features = false, features = ["alloc", "serde"] }
 secrecy = "0.8"
 serde = { workspace = true, features = ["derive"], optional = true }
 tai64 = { version = "4.0", features = ["serde"] }
@@ -28,7 +28,7 @@ thiserror = "1.0"
 zeroize = "1.5"
 
 [features]
-default = ["std"]
+default = []
 serde = ["dep:serde", "fuel-vm-private/serde"]
 std = ["fuel-vm-private/std"]
 random = ["fuel-vm-private/random"]
