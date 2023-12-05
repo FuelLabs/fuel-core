@@ -50,7 +50,7 @@ fn setup_config(messages: impl IntoIterator<Item = MessageConfig>) -> Config {
         ..Default::default()
     };
     let config = Config {
-        state_streamer: StateReader::in_memory(state, 1),
+        state_reader: StateReader::in_memory(state, 1),
         ..Config::local_node()
     };
 
@@ -178,9 +178,7 @@ async fn messages_by_owner_returns_messages_for_the_given_owner() {
 #[rstest]
 #[tokio::test]
 async fn messages_empty_results_for_owner_with_no_messages(
-    #[values(PageDirection::Forward)] direction: PageDirection,
-    //#[values(PageDirection::Forward, PageDirection::Backward)] direction: PageDirection,
-    // reverse iteration with prefix not supported by rocksdb
+    #[values(PageDirection::Forward, PageDirection::Backward)] direction: PageDirection,
     #[values(Address::new([16; 32]), Address::new([0; 32]))] owner: Address,
 ) {
     let srv = FuelService::new_node(Config::local_node()).await.unwrap();
@@ -257,11 +255,10 @@ async fn message_status__can_get_spent() {
     let output = Output::coin(output_recipient, amount, Default::default());
 
     let tx = Transaction::script(
-        Default::default(),
         1_000_000,
-        Default::default(),
         vec![],
         vec![],
+        policies::Policies::new().with_gas_price(0),
         vec![input],
         vec![output],
         vec![Vec::new().into()],
@@ -299,7 +296,7 @@ async fn can_get_message_proof() {
         let config = Config::local_node();
 
         let coin = config
-            .state_streamer
+            .state_reader
             .coins()
             .unwrap()
             .next()
@@ -434,11 +431,10 @@ async fn can_get_message_proof() {
 
         // Create the contract calling script.
         let script = Transaction::script(
-            Default::default(),
             1_000_000,
-            Default::default(),
             script,
             script_data,
+            policies::Policies::new().with_gas_price(0),
             inputs,
             outputs,
             vec![],

@@ -61,7 +61,7 @@ mod coin {
             ..Default::default()
         };
         let config = Config {
-            state_streamer: StateReader::in_memory(state, 1),
+            state_reader: StateReader::in_memory(state, 1),
             ..Config::local_node()
         };
 
@@ -316,7 +316,7 @@ mod message_coin {
             ..Default::default()
         };
         let config = Config {
-            state_streamer: StateReader::in_memory(state, 1),
+            state_reader: StateReader::in_memory(state, 1),
             ..Config::local_node()
         };
 
@@ -536,7 +536,7 @@ mod all_coins {
             ..Default::default()
         };
         let config = Config {
-            state_streamer: StateReader::in_memory(state, 1),
+            state_reader: StateReader::in_memory(state, 1),
             ..Config::local_node()
         };
 
@@ -711,7 +711,7 @@ mod all_coins {
 async fn empty_setup() -> TestContext {
     // setup config
     let config = Config {
-        state_streamer: StateReader::in_memory(StateConfig::default(), 1),
+        state_reader: StateReader::in_memory(StateConfig::default(), 1),
         ..Config::local_node()
     };
 

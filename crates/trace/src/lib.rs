@@ -1,3 +1,6 @@
+#![deny(clippy::arithmetic_side_effects)]
+#![deny(clippy::cast_possible_truncation)]
+
 use ctor::ctor;
 use std::env::var;
 use tracing_subscriber::{

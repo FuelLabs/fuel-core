@@ -90,7 +90,7 @@ fn import_chain_state(
 ) -> anyhow::Result<[binary::in_memory::MerkleTree; 3]> {
     let block_height = config.chain_config.height.unwrap_or_default();
 
-    let coins = config.state_streamer.coins()?;
+    let coins = config.state_reader.coins()?;
     let mut coin_roots = import_coin_configs(&original_database, coins, block_height)?;
     coin_roots.sort();
     let mut coins_tree = binary::in_memory::MerkleTree::new();
@@ -98,7 +98,7 @@ fn import_chain_state(
         coins_tree.push(&*root);
     }
 
-    let messages = config.state_streamer.messages()?;
+    let messages = config.state_reader.messages()?;
     let mut message_roots = import_message_configs(&original_database, messages)?;
     message_roots.sort();
     let mut messages_tree = binary::in_memory::MerkleTree::new();
@@ -106,15 +106,15 @@ fn import_chain_state(
         messages_tree.push(&*root);
     }
 
-    let contracts = config.state_streamer.contracts()?;
+    let contracts = config.state_reader.contracts()?;
     let mut contract_ids =
         import_contract_configs(&original_database, contracts, block_height)?;
     contract_ids.sort();
 
-    let contract_states = config.state_streamer.contract_state()?;
+    let contract_states = config.state_reader.contract_state()?;
     import_contract_state(&original_database, contract_states)?;
 
-    let contract_balances = config.state_streamer.contract_balance()?;
+    let contract_balances = config.state_reader.contract_balance()?;
     import_contract_balance(&original_database, contract_balances)?;
 
     let mut contracts_tree = binary::in_memory::MerkleTree::new();
@@ -679,7 +679,7 @@ mod tests {
             ],
             ..Default::default()
         };
-        let state_streamer = StateReader::in_memory(state, 1);
+        let state_reader = StateReader::in_memory(state, 1);
 
         let starting_height = {
             let mut h: u32 = alice_block_created.into();
@@ -691,7 +691,7 @@ mod tests {
                 height: starting_height,
                 ..ChainConfig::local_testnet()
             },
-            state_streamer,
+            state_reader,
             ..Config::local_node()
         };
 
@@ -765,11 +765,11 @@ mod tests {
             contract_state: vec![contract_state],
             ..Default::default()
         };
-        let state_streamer = StateReader::in_memory(state, 1);
+        let state_reader = StateReader::in_memory(state, 1);
 
         let service_config = Config {
             chain_config: ChainConfig::local_testnet(),
-            state_streamer,
+            state_reader,
             ..Config::local_node()
         };
 
@@ -805,10 +805,10 @@ mod tests {
             messages: vec![msg.clone()],
             ..Default::default()
         };
-        let state_streamer = StateReader::in_memory(state, 1);
+        let state_reader = StateReader::in_memory(state, 1);
 
         let config = Config {
-            state_streamer,
+            state_reader,
             ..Config::local_node()
         };
 
@@ -860,11 +860,11 @@ mod tests {
             contract_balance: vec![contract_balance],
             ..Default::default()
         };
-        let state_streamer = StateReader::in_memory(state, 1);
+        let state_reader = StateReader::in_memory(state, 1);
 
         let service_config = Config {
             chain_config: ChainConfig::local_testnet(),
-            state_streamer,
+            state_reader,
             ..Config::local_node()
         };
 
@@ -899,14 +899,14 @@ mod tests {
             }],
             ..Default::default()
         };
-        let state_streamer = StateReader::in_memory(state, 1);
+        let state_reader = StateReader::in_memory(state, 1);
 
         let service_config = Config {
             chain_config: ChainConfig {
                 height: Some(BlockHeight::from(10u32)),
                 ..ChainConfig::local_testnet()
             },
-            state_streamer,
+            state_reader,
             ..Config::local_node()
         };
 
@@ -941,14 +941,14 @@ mod tests {
             }],
             ..Default::default()
         };
-        let state_streamer = StateReader::in_memory(state, 1);
+        let state_reader = StateReader::in_memory(state, 1);
 
         let service_config = Config {
             chain_config: ChainConfig {
                 height: Some(BlockHeight::from(10u32)),
                 ..ChainConfig::local_testnet()
             },
-            state_streamer,
+            state_reader,
             ..Config::local_node()
         };
 

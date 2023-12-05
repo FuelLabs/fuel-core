@@ -22,7 +22,6 @@ use crate::{
         TxPointer,
     },
 };
-use anyhow::anyhow;
 use async_graphql::{
     connection::{
         Connection,
@@ -168,13 +167,6 @@ impl TxQuery {
         before: Option<String>,
     ) -> async_graphql::Result<Connection<TxPointer, Transaction, EmptyFields, EmptyFields>>
     {
-        // Rocksdb doesn't support reverse iteration over a prefix
-        if matches!(last, Some(last) if last > 0) {
-            return Err(
-                anyhow!("reverse pagination isn't supported for this resource").into(),
-            )
-        }
-
         let query: &Database = ctx.data_unchecked();
         let config = ctx.data_unchecked::<Config>();
         let owner = fuel_types::Address::from(owner);
@@ -214,7 +206,8 @@ impl TxQuery {
         tx.estimate_predicates_async::<TokioWithRayon>(&CheckPredicateParams::from(
             &config.consensus_parameters,
         ))
-        .await?;
+        .await
+        .map_err(|err| anyhow::anyhow!("{:?}", err))?;
 
         Ok(Transaction::from_tx(
             tx.id(&config.consensus_parameters.chain_id),

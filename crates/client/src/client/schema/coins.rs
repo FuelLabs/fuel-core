@@ -63,7 +63,7 @@ impl From<(Address, AssetId, PaginationRequest<String>)> for CoinsConnectionArgs
                 },
                 after: r.2.cursor,
                 before: None,
-                first: Some(r.2.results as i32),
+                first: Some(r.2.results),
                 last: None,
             },
             PageDirection::Backward => CoinsConnectionArgs {
@@ -74,7 +74,7 @@ impl From<(Address, AssetId, PaginationRequest<String>)> for CoinsConnectionArgs
                 after: None,
                 before: r.2.cursor,
                 first: None,
-                last: Some(r.2.results as i32),
+                last: Some(r.2.results),
             },
         }
     }
@@ -146,7 +146,7 @@ pub struct SpendQueryElementInput {
     /// address of the owner
     pub amount: U64,
     /// the maximum number of coins per asset from the owner to return.
-    pub max: Option<U64>,
+    pub max: Option<U32>,
 }
 
 #[derive(cynic::QueryFragment, Debug, Clone)]

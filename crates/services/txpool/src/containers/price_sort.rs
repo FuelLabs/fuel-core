@@ -46,11 +46,7 @@ impl Eq for PriceSortKey {}
 
 impl PartialOrd for PriceSortKey {
     fn partial_cmp(&self, other: &Self) -> Option<cmp::Ordering> {
-        match self.price.partial_cmp(&other.price) {
-            Some(core::cmp::Ordering::Equal) => {}
-            ord => return ord,
-        }
-        self.tx_id.partial_cmp(&other.tx_id)
+        Some(self.cmp(other))
     }
 }
 

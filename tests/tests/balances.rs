@@ -73,7 +73,7 @@ async fn balance() {
         ..Default::default()
     };
     let config = Config {
-        state_streamer: StateReader::in_memory(state_config, 1),
+        state_reader: StateReader::in_memory(state_config, 1),
         ..Config::local_node()
     };
 
@@ -92,7 +92,7 @@ async fn balance() {
         .unwrap();
 
     let mut tx = TransactionBuilder::script(vec![], vec![])
-        .gas_limit(1_000_000)
+        .script_gas_limit(1_000_000)
         .to_owned();
     for coins in coins_per_asset {
         for coin in coins {
@@ -208,7 +208,7 @@ async fn first_5_balances() {
         ..Default::default()
     };
     let config = Config {
-        state_streamer: StateReader::in_memory(state_config, 1),
+        state_reader: StateReader::in_memory(state_config, 1),
         ..Config::local_node()
     };
 

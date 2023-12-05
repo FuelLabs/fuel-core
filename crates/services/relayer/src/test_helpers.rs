@@ -1,3 +1,4 @@
+#![allow(clippy::arithmetic_side_effects)]
 #![allow(missing_docs)]
 
 use std::convert::TryFrom;

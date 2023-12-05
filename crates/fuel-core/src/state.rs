@@ -1,5 +1,7 @@
 use crate::database::{
     Column,
+    Database,
+    Error as DatabaseError,
     Result as DatabaseResult,
 };
 use fuel_core_storage::iter::{
@@ -87,6 +89,12 @@ pub enum WriteOperation {
 }
 
 pub trait TransactableStorage: BatchOperations + Debug + Send + Sync {
+    fn checkpoint(&self) -> DatabaseResult<Database> {
+        Err(DatabaseError::Other(anyhow::anyhow!(
+            "Checkpoint is not supported"
+        )))
+    }
+
     fn flush(&self) -> DatabaseResult<()>;
 }
 

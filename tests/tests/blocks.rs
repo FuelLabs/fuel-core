@@ -317,7 +317,7 @@ mod full_block {
             schema,
             tx::OpaqueTransaction,
             BlockId,
-            U64,
+            U32,
         },
         FuelClient,
     };
@@ -349,7 +349,7 @@ mod full_block {
     pub trait ClientExt {
         async fn full_block_by_height(
             &self,
-            height: u64,
+            height: u32,
         ) -> std::io::Result<Option<FullBlock>>;
     }
 
@@ -357,10 +357,10 @@ mod full_block {
     impl ClientExt for FuelClient {
         async fn full_block_by_height(
             &self,
-            height: u64,
+            height: u32,
         ) -> std::io::Result<Option<FullBlock>> {
             let query = FullBlockByHeightQuery::build(BlockByHeightArgs {
-                height: Some(U64(height)),
+                height: Some(U32(height)),
             });
 
             let block = self.query(query).await?.block;

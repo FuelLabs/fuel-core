@@ -107,7 +107,7 @@ async fn snapshot_state_config() {
         }],
     };
     let mut config = Config {
-        state_streamer: StateReader::in_memory(starting_state.clone(), 1),
+        state_reader: StateReader::in_memory(starting_state.clone(), 1),
         ..Config::local_node()
     };
     config.chain_config.height = Some(BlockHeight::from(10));

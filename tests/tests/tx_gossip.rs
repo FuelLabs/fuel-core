@@ -70,6 +70,7 @@ async fn test_tx_gossiping() {
                 Some(ValidatorSetup::new(*pub_key).with_name(format!("{pub_key}:{i}")))
             })
         }),
+        None,
     )
     .await;
 
@@ -147,6 +148,7 @@ async fn test_tx_gossiping_invalid_txs(
                 )
             })
         }),
+        None,
     )
     .await;
 

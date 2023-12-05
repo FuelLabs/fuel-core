@@ -251,10 +251,7 @@ type ContractParameters {
 	maxStorageSlots: U64!
 }
 
-type DependentCost {
-	base: U64!
-	depPerUnit: U64!
-}
+union DependentCost = LightOperation | HeavyOperation
 
 input ExcludeInput {
 	"""
@@ -387,6 +384,10 @@ type GasCosts {
 	smo: DependentCost!
 	srwq: DependentCost!
 	swwq: DependentCost!
+	contractRoot: DependentCost!
+	stateRoot: DependentCost!
+	vmInitialization: DependentCost!
+	newStoragePerByte: U64!
 }
 
 type Genesis {
@@ -452,6 +453,11 @@ type Header {
 	applicationHash: Bytes32!
 }
 
+type HeavyOperation {
+	base: U64!
+	gasPerUnit: U64!
+}
+
 scalar HexString
 
 
@@ -490,6 +496,11 @@ type InputMessage {
 	predicateData: HexString!
 }
 
+
+type LightOperation {
+	base: U64!
+	unitsPerGas: U64!
+}
 
 type MerkleProof {
 	proofSet: [Bytes32!]!
@@ -590,7 +601,7 @@ type Mutation {
 	`Trigger::Interval { block_time }`, produces blocks with `block_time ` intervals between
 	them. The `start_timestamp` is the timestamp in seconds.
 	"""
-	produceBlocks(startTimestamp: Tai64Timestamp, blocksToProduce: U64!): U32!
+	produceBlocks(startTimestamp: Tai64Timestamp, blocksToProduce: U32!): U32!
 }
 
 type NodeInfo {
@@ -644,6 +655,13 @@ type PoAConsensus {
 	signature: Signature!
 }
 
+type Policies {
+	gasPrice: U64
+	witnessLimit: U64
+	maturity: U32
+	maxFee: U64
+}
+
 type PredicateParameters {
 	maxPredicateLength: U64!
 	maxPredicateDataLength: U64!
@@ -657,11 +675,11 @@ type ProgramState {
 }
 
 type Query {
-	register(id: ID!, register: U64!): U64!
-	memory(id: ID!, start: U64!, size: U64!): String!
+	register(id: ID!, register: U32!): U64!
+	memory(id: ID!, start: U32!, size: U32!): String!
 	balance(owner: Address!, assetId: AssetId!): Balance!
 	balances(filter: BalanceFilterInput!, first: Int, after: String, last: Int, before: String): BalanceConnection!
-	block(id: BlockId, height: U64): Block
+	block(id: BlockId, height: U32): Block
 	blocks(first: Int, after: String, last: Int, before: String): BlockConnection!
 	chain: ChainInfo!
 	transaction(id: TransactionId!): Transaction
@@ -794,7 +812,7 @@ input SpendQueryElementInput {
 	"""
 	The maximum number of currencies for selection.
 	"""
-	max: U64
+	max: U32
 }
 
 type SqueezedOutStatus {
@@ -841,8 +859,9 @@ type Transaction {
 	inputAssetIds: [AssetId!]
 	inputContracts: [Contract!]
 	inputContract: InputContract
+	policies: Policies
 	gasPrice: U64
-	gasLimit: U64
+	scriptGasLimit: U64
 	maturity: U32
 	mintAmount: U64
 	mintAssetId: AssetId
@@ -903,10 +922,11 @@ scalar TransactionId
 union TransactionStatus = SubmittedStatus | SuccessStatus | SqueezedOutStatus | FailureStatus
 
 type TxParameters {
-	maxInputs: U64!
-	maxOutputs: U64!
-	maxWitnesses: U64!
+	maxInputs: U8!
+	maxOutputs: U8!
+	maxWitnesses: U32!
 	maxGasPerTx: U64!
+	maxSize: U64!
 }
 
 scalar TxPointer
@@ -914,6 +934,8 @@ scalar TxPointer
 scalar U32
 
 scalar U64
+
+scalar U8
 
 scalar UtxoId
 

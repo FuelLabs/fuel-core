@@ -230,7 +230,7 @@ fn script_tx(
     change_owner: Address,
 ) -> Script {
     TransactionBuilder::script(vec![], vec![])
-        .gas_limit(10000)
+        .script_gas_limit(10000)
         .gas_price(1)
         .add_unsigned_coin_input(
             secret_key,

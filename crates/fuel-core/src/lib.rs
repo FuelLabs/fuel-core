@@ -1,5 +1,9 @@
+#![deny(clippy::arithmetic_side_effects)]
+#![deny(clippy::cast_possible_truncation)]
 #![deny(unused_crate_dependencies)]
 //#![deny(warnings)]
+
+pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
 #[doc(no_inline)]
 pub use fuel_core_chain_config as chain_config;

@@ -36,7 +36,6 @@ use cynic::{
 use fuel_core_types::{
     fuel_asm::{
         Instruction,
-        RegisterId,
         Word,
     },
     fuel_tx::{
@@ -83,6 +82,7 @@ use schema::{
     SetSingleSteppingArgs,
     StartTx,
     StartTxArgs,
+    U32,
     U64,
 };
 #[cfg(feature = "subscriptions")]
@@ -114,6 +114,8 @@ use self::schema::{
 pub mod pagination;
 pub mod schema;
 pub mod types;
+
+type RegisterId = u32;
 
 #[derive(Debug, Clone)]
 pub struct FuelClient {
@@ -473,12 +475,7 @@ impl FuelClient {
         Ok(self.query(query).await?.register.0 as Word)
     }
 
-    pub async fn memory(
-        &self,
-        id: &str,
-        start: usize,
-        size: usize,
-    ) -> io::Result<Vec<u8>> {
+    pub async fn memory(&self, id: &str, start: u32, size: u32) -> io::Result<Vec<u8>> {
         let query = schema::Memory::build(MemoryArgs {
             id: id.into(),
             start: start.into(),
@@ -689,7 +686,7 @@ impl FuelClient {
 
     pub async fn produce_blocks(
         &self,
-        blocks_to_produce: u64,
+        blocks_to_produce: u32,
         start_timestamp: Option<u64>,
     ) -> io::Result<BlockHeight> {
         let query = schema::block::BlockMutation::build(ProduceBlockArgs {
@@ -713,9 +710,9 @@ impl FuelClient {
         Ok(block)
     }
 
-    pub async fn block_by_height(&self, height: u64) -> io::Result<Option<types::Block>> {
+    pub async fn block_by_height(&self, height: u32) -> io::Result<Option<types::Block>> {
         let query = schema::block::BlockByHeightQuery::build(BlockByHeightArgs {
-            height: Some(U64(height)),
+            height: Some(U32(height)),
         });
 
         let block = self.query(query).await?.block.map(Into::into);
@@ -765,7 +762,7 @@ impl FuelClient {
     pub async fn coins_to_spend(
         &self,
         owner: &Address,
-        spend_query: Vec<(AssetId, u64, Option<u64>)>,
+        spend_query: Vec<(AssetId, u64, Option<u32>)>,
         // (Utxos, Messages Nonce)
         excluded_ids: Option<(Vec<UtxoId>, Vec<Nonce>)>,
     ) -> io::Result<Vec<Vec<types::CoinType>>> {
