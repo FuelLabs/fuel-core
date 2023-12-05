@@ -280,7 +280,8 @@ fn service_with_many_contracts(
         .predicate_params
         .max_gas_per_predicate = TARGET_BLOCK_GAS_LIMIT;
     config.chain_config.block_gas_limit = TARGET_BLOCK_GAS_LIMIT;
-    config.chain_config.consensus_parameters.gas_costs = GasCosts::new(default_gas_costs());
+    config.chain_config.consensus_parameters.gas_costs =
+        GasCosts::new(default_gas_costs());
     config
         .chain_config
         .consensus_parameters

@@ -19,7 +19,10 @@ fn test_deployment_chainconfig(path: &str) {
         GasCosts::new(fuel_core_benches::default_gas_costs::default_gas_costs());
 
     // Deployment configuration should use gas costs from benchmarks.
-    assert_eq!(chain_config.consensus_parameters.gas_costs, benchmark_gas_costs);
+    assert_eq!(
+        chain_config.consensus_parameters.gas_costs,
+        benchmark_gas_costs
+    );
 }
 
 /// This dummy test allows to run tests from IDE in this file.
