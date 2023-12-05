@@ -25,7 +25,7 @@ use parquet::{
 
 use crate::{
     config::{
-        contract_balance::ContractBalance,
+        contract_balance::ContractBalanceConfig,
         contract_state::ContractStateConfig,
     },
     CoinConfig,
@@ -423,8 +423,8 @@ impl ColumnEncoder for Vec<ContractStateConfig> {
     }
 }
 
-impl ColumnEncoder for Vec<ContractBalance> {
-    type ElementT = ContractBalance;
+impl ColumnEncoder for Vec<ContractBalanceConfig> {
+    type ElementT = ContractBalanceConfig;
 
     fn encode_column(
         &self,

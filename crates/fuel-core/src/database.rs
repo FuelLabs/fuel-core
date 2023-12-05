@@ -517,7 +517,7 @@ impl ChainStateDb for Database {
 
     fn iter_contract_balance_configs(
         &self,
-    ) -> BoxedIter<StorageResult<fuel_core_chain_config::ContractBalance>> {
+    ) -> BoxedIter<StorageResult<fuel_core_chain_config::ContractBalanceConfig>> {
         Self::iter_contract_balance_configs(self).into_boxed()
     }
 

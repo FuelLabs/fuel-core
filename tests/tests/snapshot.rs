@@ -1,7 +1,7 @@
 use fuel_core::{
     chain_config::{
         CoinConfig,
-        ContractBalance,
+        ContractBalanceConfig,
         ContractConfig,
         ContractStateConfig,
         MessageConfig,
@@ -57,12 +57,12 @@ async fn snapshot_state_config() {
             tx_pointer_tx_idx: Some(rng.gen()),
         }],
         contract_balance: vec![
-            ContractBalance {
+            ContractBalanceConfig {
                 contract_id,
                 amount: 100,
                 asset_id: AssetId::new([3u8; 32]),
             },
-            ContractBalance {
+            ContractBalanceConfig {
                 contract_id,
                 amount: 10000,
                 asset_id: AssetId::new([10u8; 32]),

@@ -5,7 +5,7 @@ use crate::{
 use anyhow::anyhow;
 use fuel_core_chain_config::{
     CoinConfig,
-    ContractBalance,
+    ContractBalanceConfig,
     ContractConfig,
     ContractStateConfig,
     GenesisCommitment,
@@ -349,7 +349,7 @@ fn import_contract_state(
 
 fn import_contract_balance(
     database: &Database,
-    contract_states: IntoIter<ContractBalance>,
+    contract_states: IntoIter<ContractBalanceConfig>,
 ) -> anyhow::Result<()> {
     // let (cursor, root_calculator) =
     // resume_import(database, StateImportProgressKey::Coins)?;
@@ -515,7 +515,7 @@ fn init_contract_state(
 
 fn init_contract_balance(
     db: &mut Database,
-    balance: &ContractBalance,
+    balance: &ContractBalanceConfig,
 ) -> anyhow::Result<()> {
     let key = (&ContractId::from(*balance.contract_id), &balance.asset_id).into();
     StorageMutate::<ContractsAssets>::insert(db, &key, &balance.amount).unwrap();
@@ -838,7 +838,7 @@ mod tests {
 
         let test_asset_id = rng.gen();
         let test_balance = rng.next_u64();
-        let contract_balance = ContractBalance {
+        let contract_balance = ContractBalanceConfig {
             contract_id: Bytes32::from(*contract_id),
             asset_id: test_asset_id,
             amount: test_balance,

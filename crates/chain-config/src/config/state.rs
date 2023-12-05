@@ -33,10 +33,29 @@ use std::path::Path;
 use super::{
     coin::CoinConfig,
     contract::ContractConfig,
-    contract_balance::ContractBalance,
+    contract_balance::ContractBalanceConfig,
     contract_state::ContractStateConfig,
     message::MessageConfig,
 };
+
+mod parquet;
+mod reader;
+mod writer;
+
+pub use reader::{
+    IntoIter,
+    StateReader,
+};
+pub use writer::StateWriter;
+
+use std::fmt::Debug;
+
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub struct Group<T> {
+    pub index: usize,
+    pub data: Vec<T>,
+}
+type GroupResult<T> = anyhow::Result<Group<T>>;
 
 // Fuel Network human-readable part for bech32 encoding
 pub const FUEL_BECH32_HRP: &str = "fuel";
@@ -63,7 +82,7 @@ pub struct StateConfig {
     /// State entries of all contracts
     pub contract_state: Vec<ContractStateConfig>,
     /// Balance entries of all contracts
-    pub contract_balance: Vec<ContractBalance>,
+    pub contract_balance: Vec<ContractBalanceConfig>,
 }
 
 impl StateConfig {
@@ -85,8 +104,6 @@ impl StateConfig {
 
     #[cfg(feature = "std")]
     pub fn load_from_directory(path: impl AsRef<Path>) -> Result<Self, anyhow::Error> {
-        use crate::StateReader;
-
         let decoder = StateReader::detect_encoding(path, 1)?;
 
         let coins = decoder
@@ -126,21 +143,6 @@ impl StateConfig {
             contract_state,
             contract_balance,
         })
-    }
-
-    #[cfg(feature = "std")]
-    pub fn create_config_file(self, path: impl AsRef<Path>) -> anyhow::Result<()> {
-        // TODO add parquet wrtter once fully implemented
-        let mut writer = crate::StateWriter::json(path);
-
-        writer.write_coins(self.coins)?;
-        writer.write_messages(self.messages)?;
-        writer.write_contracts(self.contracts)?;
-        writer.write_contract_state(self.contract_state)?;
-        writer.write_contract_balance(self.contract_balance)?;
-        writer.close()?;
-
-        Ok(())
     }
 
     #[cfg(feature = "std")]
@@ -237,7 +239,9 @@ pub trait ChainStateDb {
         &self,
     ) -> BoxedIter<StorageResult<ContractStateConfig>>;
     /// Returns the balances of all contracts
-    fn iter_contract_balance_configs(&self) -> BoxedIter<StorageResult<ContractBalance>>;
+    fn iter_contract_balance_configs(
+        &self,
+    ) -> BoxedIter<StorageResult<ContractBalanceConfig>>;
     /// Returns *all* unspent message configs available in the database.
     fn iter_message_configs(&self) -> BoxedIter<StorageResult<MessageConfig>>;
     /// Returns the last available block height.
@@ -269,7 +273,9 @@ where
         (*self).iter_contract_state_configs()
     }
 
-    fn iter_contract_balance_configs(&self) -> BoxedIter<StorageResult<ContractBalance>> {
+    fn iter_contract_balance_configs(
+        &self,
+    ) -> BoxedIter<StorageResult<ContractBalanceConfig>> {
         (*self).iter_contract_balance_configs()
     }
 
@@ -300,30 +306,130 @@ mod tests {
         SeedableRng,
     };
 
+    use super::StateConfig;
+
+    use std::ops::Range;
+
     use crate::{
+        config::{
+            contract_balance::ContractBalanceConfig,
+            contract_state::ContractStateConfig,
+        },
         CoinConfig,
         ContractConfig,
         MessageConfig,
     };
 
-    #[cfg(feature = "std")]
-    use std::env::temp_dir;
+    use itertools::Itertools;
 
-    use super::StateConfig;
+    use super::*;
 
-    #[cfg(feature = "std")]
     #[test]
-    fn can_roundrip_write_read() {
-        let tmp_file = temp_dir();
-        let disk_config = StateConfig::local_testnet();
+    fn writes_then_reads_written() {
+        let group_size = 100;
+        let num_groups = 10;
+        let starting_group_index = 3;
+        {
+            // Json
+            let temp_dir = tempfile::tempdir().unwrap();
+            let state_encoder = StateWriter::json(temp_dir.path());
 
-        disk_config.clone().create_config_file(&tmp_file).unwrap();
+            let init_decoder = || StateReader::json(temp_dir.path(), group_size).unwrap();
 
-        let load_config = StateConfig::load_from_directory(&tmp_file).unwrap();
+            test_write_read(
+                state_encoder,
+                init_decoder,
+                group_size,
+                starting_group_index..num_groups,
+            );
+        }
+        {
+            // Parquet
+            let temp_dir = tempfile::tempdir().unwrap();
+            let state_encoder = StateWriter::parquet(temp_dir.path(), 1).unwrap();
+            let init_decoder = || StateReader::parquet(temp_dir.path());
 
-        assert_eq!(disk_config, load_config);
+            test_write_read(
+                state_encoder,
+                init_decoder,
+                group_size,
+                starting_group_index..num_groups,
+            );
+        }
     }
 
+    fn test_write_read(
+        mut encoder: StateWriter,
+        init_decoder: impl FnOnce() -> StateReader,
+        group_size: usize,
+        group_range: Range<usize>,
+    ) {
+        let num_groups = group_range.end;
+        let mut rng = rand::thread_rng();
+        macro_rules! write_groups {
+            ($data_type: ty, $write_method:ident) => {{
+                let groups = ::std::iter::repeat_with(|| <$data_type>::random(&mut rng))
+                    .chunks(group_size)
+                    .into_iter()
+                    .map(|chunk| chunk.collect_vec())
+                    .enumerate()
+                    .map(|(index, data)| Group { index, data })
+                    .take(num_groups)
+                    .collect_vec();
+
+                for group in &groups {
+                    encoder.$write_method(group.data.clone()).unwrap();
+                }
+                groups
+            }};
+        }
+
+        let coins = write_groups!(CoinConfig, write_coins);
+        let messages = write_groups!(MessageConfig, write_messages);
+        let contracts = write_groups!(ContractConfig, write_contracts);
+        let contract_states = write_groups!(ContractStateConfig, write_contract_state);
+        let contract_balances =
+            write_groups!(ContractBalanceConfig, write_contract_balance);
+        encoder.close().unwrap();
+
+        let state_reader = init_decoder();
+
+        let skip_first = group_range.start;
+        assert_groups_identical(&coins, state_reader.coins().unwrap(), skip_first);
+        assert_groups_identical(&messages, state_reader.messages().unwrap(), skip_first);
+        assert_groups_identical(
+            &contracts,
+            state_reader.contracts().unwrap(),
+            skip_first,
+        );
+        assert_groups_identical(
+            &contract_states,
+            state_reader.contract_state().unwrap(),
+            skip_first,
+        );
+        assert_groups_identical(
+            &contract_balances,
+            state_reader.contract_balance().unwrap(),
+            skip_first,
+        );
+    }
+
+    fn assert_groups_identical<T>(
+        original: &[Group<T>],
+        read: impl Iterator<Item = Result<Group<T>, anyhow::Error>>,
+        skip: usize,
+    ) where
+        Vec<T>: PartialEq,
+        T: PartialEq + std::fmt::Debug,
+    {
+        pretty_assertions::assert_eq!(
+            original[skip..],
+            read.skip(skip).collect::<Result<Vec<_>, _>>().unwrap()
+        );
+    }
+
+    // TODO: Adapt all these tests to work with the StateWriter/StateReader for all available
+    // formats (in memory, json and parquet)
     #[test]
     fn snapshot_simple_contract() {
         let config = config_contract();
@@ -375,6 +481,7 @@ mod tests {
     #[test]
     fn snapshot_contract_with_utxo_id() {
         let config = config_contract_with_utxoid();
+
         let json = serde_json::to_string_pretty(&config).unwrap();
         insta::assert_snapshot!(json);
     }

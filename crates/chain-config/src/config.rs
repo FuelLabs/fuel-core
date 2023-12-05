@@ -1,5 +1,4 @@
 mod chain;
-mod codec;
 mod coin;
 mod consensus;
 mod contract;
@@ -14,7 +13,6 @@ pub(crate) fn random_bytes_32(rng: &mut impl rand::Rng) -> [u8; 32] {
 }
 
 pub use chain::*;
-pub use codec::*;
 pub use coin::*;
 pub use consensus::*;
 pub use contract::*;

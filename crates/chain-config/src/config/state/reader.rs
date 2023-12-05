@@ -9,12 +9,11 @@ use std::{
 };
 
 use super::parquet;
-use anyhow::Context;
 use itertools::Itertools;
 
 use crate::{
     config::{
-        contract_balance::ContractBalance,
+        contract_balance::ContractBalanceConfig,
         contract_state::ContractStateConfig,
     },
     CoinConfig,
@@ -126,7 +125,7 @@ impl StateReader {
         self.create_iterator(|state| &state.contract_state, "contract_state")
     }
 
-    pub fn contract_balance(&self) -> anyhow::Result<IntoIter<ContractBalance>> {
+    pub fn contract_balance(&self) -> anyhow::Result<IntoIter<ContractBalanceConfig>> {
         self.create_iterator(|state| &state.contract_balance, "contract_balance")
     }
 

@@ -2,7 +2,7 @@ use fuel_core::{
     chain_config::{
         ChainConfig,
         CoinConfig,
-        ContractBalance,
+        ContractBalanceConfig,
         ContractConfig,
         StateConfig,
         StateReader,
@@ -88,7 +88,7 @@ impl TestContext {
 pub struct TestSetupBuilder {
     pub rng: StdRng,
     pub contracts: HashMap<ContractId, ContractConfig>,
-    pub balances: Vec<ContractBalance>,
+    pub balances: Vec<ContractBalanceConfig>,
     pub initial_coins: Vec<CoinConfig>,
     pub min_gas_price: u64,
     pub gas_limit: u64,
@@ -133,13 +133,14 @@ impl TestSetupBuilder {
                 tx_pointer_tx_idx: tx_pointer.map(|pointer| pointer.tx_index()),
             },
         );
-        let balances = balances
-            .into_iter()
-            .map(|(asset_id, amount)| ContractBalance {
-                contract_id: Bytes32::from(*contract_id),
-                asset_id,
-                amount,
-            });
+        let balances =
+            balances
+                .into_iter()
+                .map(|(asset_id, amount)| ContractBalanceConfig {
+                    contract_id: Bytes32::from(*contract_id),
+                    asset_id,
+                    amount,
+                });
         self.balances.extend(balances);
 
         (salt, contract_id)

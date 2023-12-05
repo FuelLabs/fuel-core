@@ -33,12 +33,12 @@ use parquet::{
 
 use crate::{
     config::{
-        codec::{
+        contract_balance::ContractBalanceConfig,
+        contract_state::ContractStateConfig,
+        state::{
             Group,
             GroupResult,
         },
-        contract_balance::ContractBalance,
-        contract_state::ContractStateConfig,
     },
     CoinConfig,
     ContractConfig,
@@ -325,7 +325,7 @@ impl TryFrom<Row> for ContractStateConfig {
     }
 }
 
-impl TryFrom<Row> for ContractBalance {
+impl TryFrom<Row> for ContractBalanceConfig {
     type Error = anyhow::Error;
     fn try_from(row: Row) -> Result<Self, Self::Error> {
         let mut iter = row.get_column_iter();

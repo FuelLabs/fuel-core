@@ -14,9 +14,9 @@ use anyhow::Context;
 
 use crate::{
     config::{
-        codec::parquet::Schema,
-        contract_balance::ContractBalance,
+        contract_balance::ContractBalanceConfig,
         contract_state::ContractStateConfig,
+        state::parquet::Schema,
     },
     CoinConfig,
     ContractConfig,
@@ -36,7 +36,7 @@ enum EncoderType {
         messages: parquet::Encoder<File, MessageConfig>,
         contracts: parquet::Encoder<File, ContractConfig>,
         contract_state: parquet::Encoder<File, ContractStateConfig>,
-        contract_balance: parquet::Encoder<File, ContractBalance>,
+        contract_balance: parquet::Encoder<File, ContractBalanceConfig>,
     },
 }
 
@@ -134,7 +134,7 @@ impl StateWriter {
 
     pub fn write_contract_balance(
         &mut self,
-        elements: Vec<ContractBalance>,
+        elements: Vec<ContractBalanceConfig>,
     ) -> anyhow::Result<()> {
         match &mut self.encoder {
             EncoderType::Json { buffer: state, .. } => {

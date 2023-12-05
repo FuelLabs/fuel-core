@@ -8,14 +8,14 @@ use serde::{
 };
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct ContractBalance {
+pub struct ContractBalanceConfig {
     pub contract_id: Bytes32,
     pub asset_id: AssetId,
     pub amount: u64,
 }
 
 #[cfg(all(test, feature = "random"))]
-impl ContractBalance {
+impl ContractBalanceConfig {
     pub fn random(rng: &mut impl ::rand::Rng) -> Self {
         Self {
             contract_id: super::random_bytes_32(rng).into(),

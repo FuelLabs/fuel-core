@@ -6,7 +6,7 @@ use crate::database::{
     Result as DatabaseResult,
 };
 use fuel_core_chain_config::{
-    ContractBalance,
+    ContractBalanceConfig,
     ContractConfig,
     ContractStateConfig,
 };
@@ -172,7 +172,7 @@ impl Database {
     }
     pub fn iter_contract_balance_configs(
         &self,
-    ) -> impl Iterator<Item = StorageResult<ContractBalance>> + '_ {
+    ) -> impl Iterator<Item = StorageResult<ContractBalanceConfig>> + '_ {
         self.iter_all::<Vec<u8>, u64>(Column::ContractsAssets, None)
             .map(|res| {
                 let res = res?;
@@ -181,7 +181,7 @@ impl Database {
                 let asset_id = AssetId::new(res.0[32..].try_into()?);
                 let amount = res.1;
 
-                Ok(ContractBalance {
+                Ok(ContractBalanceConfig {
                     contract_id,
                     asset_id,
                     amount,

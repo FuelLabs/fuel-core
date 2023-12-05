@@ -7,7 +7,7 @@ use parquet::{
 
 use crate::{
     config::{
-        contract_balance::ContractBalance,
+        contract_balance::ContractBalanceConfig,
         contract_state::ContractStateConfig,
     },
     CoinConfig,
@@ -240,7 +240,7 @@ impl Schema for ContractStateConfig {
     }
 }
 
-impl Schema for ContractBalance {
+impl Schema for ContractBalanceConfig {
     fn schema() -> Type {
         use parquet::basic::Type as PhysicalType;
         let contract_id = Type::primitive_type_builder(
