@@ -181,6 +181,7 @@ pub async fn make_nodes(
     bootstrap_setup: impl IntoIterator<Item = Option<BootstrapSetup>>,
     producers_setup: impl IntoIterator<Item = Option<ProducerSetup>>,
     validators_setup: impl IntoIterator<Item = Option<ValidatorSetup>>,
+    config: Option<Config>,
 ) -> Nodes {
     let producers: Vec<_> = producers_setup.into_iter().collect();
 
@@ -200,7 +201,7 @@ pub async fn make_nodes(
                         vec![op::ret(RegId::ONE)].into_iter().collect(),
                         vec![],
                     )
-                    .gas_limit(100000)
+                    .script_gas_limit(100000)
                     .add_unsigned_coin_input(
                         secret,
                         utxo_id,
@@ -225,7 +226,6 @@ pub async fn make_nodes(
         .contract_params
         .max_storage_slots = 1 << 17; // 131072
 
-    let mut state_config = StateConfig::local_testnet();
     for (all, producer) in txs_coins.into_iter().zip(producers.into_iter()) {
         match all {
             Some(all) => {
@@ -242,20 +242,20 @@ pub async fn make_nodes(
         }
     }
 
+    let config = config;
+
     let bootstrap_nodes: Vec<Bootstrap> =
         futures::stream::iter(bootstrap_setup.into_iter().enumerate())
             .then(|(i, boot)| {
-                let chain_config = chain_config.clone();
-                let state_config = state_config.clone();
+                let config = config.clone();
                 async move {
-                    let chain_config = chain_config.clone();
+                    let config = config.clone();
                     let name = boot.as_ref().map_or(String::new(), |s| s.name.clone());
                     let mut node_config = make_config(
                         (!name.is_empty())
                             .then_some(name)
                             .unwrap_or_else(|| format!("b:{i}")),
-                        chain_config.clone(),
-                        state_config,
+                        config.clone(),
                     );
                     if let Some(BootstrapSetup { pub_key, .. }) = boot {
                         match &mut node_config.chain_config.consensus {
@@ -274,15 +274,13 @@ pub async fn make_nodes(
 
     let mut producers = Vec::with_capacity(producers_with_txs.len());
     for (i, s) in producers_with_txs.into_iter().enumerate() {
-        let chain_config = chain_config.clone();
-        let state_config = state_config.clone();
+        let config = config.clone();
         let name = s.as_ref().map_or(String::new(), |s| s.0.name.clone());
         let mut node_config = make_config(
             (!name.is_empty())
                 .then_some(name)
                 .unwrap_or_else(|| format!("p:{i}")),
-            chain_config.clone(),
-            state_config,
+            config.clone(),
         );
 
         let mut test_txs = Vec::with_capacity(0);
@@ -326,15 +324,13 @@ pub async fn make_nodes(
 
     let mut validators = vec![];
     for (i, s) in validators_setup.into_iter().enumerate() {
-        let chain_config = chain_config.clone();
-        let state_config = state_config.clone();
+        let config = config.clone();
         let name = s.as_ref().map_or(String::new(), |s| s.name.clone());
         let mut node_config = make_config(
             (!name.is_empty())
                 .then_some(name)
                 .unwrap_or_else(|| format!("v:{i}")),
-            chain_config.clone(),
-            state_config,
+            config.clone(),
         );
         node_config.block_production = Trigger::Never;
 
@@ -371,14 +367,8 @@ pub async fn make_nodes(
     }
 }
 
-pub fn make_config(
-    name: String,
-    chain_config: ChainConfig,
-    state_config: StateConfig,
-) -> Config {
-    let mut node_config = Config::local_node();
-    node_config.chain_config = chain_config;
-    node_config.state_config = state_config;
+pub fn make_config(name: String, mut node_config: Config) -> Config {
+    node_config.p2p = Config::local_node().p2p;
     node_config.utxo_validation = true;
     node_config.name = name;
     node_config

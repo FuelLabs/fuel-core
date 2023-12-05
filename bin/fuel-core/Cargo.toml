@@ -23,6 +23,9 @@ dirs = "4.0"
 dotenvy = { version = "0.15", optional = true }
 fuel-core = { workspace = true }
 fuel-core-storage = { workspace = true }
+fuel-core-chain-config = { workspace = true }
+fuel-core-types = { workspace = true }
+hex = "0.4"
 humantime = "2.1"
 itertools = { version = "0.12" }
 lazy_static = { workspace = true }

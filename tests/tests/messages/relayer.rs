@@ -22,7 +22,7 @@ async fn can_submit_genesis_message() {
         da_height: DaBlockHeight(0),
     };
     let tx1 = TransactionBuilder::script(vec![op::ret(0)].into_iter().collect(), vec![])
-        .gas_limit(100000)
+        .script_gas_limit(100000)
         .add_unsigned_message_input(
             secret_key,
             msg1.sender,

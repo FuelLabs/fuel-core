@@ -89,14 +89,6 @@ impl MessageQuery {
                 };
 
                 let messages = if let Some(owner) = owner {
-                    // Rocksdb doesn't support reverse iteration over a prefix
-                    if matches!(last, Some(last) if last > 0) {
-                        return Err(anyhow!(
-                            "reverse pagination isn't supported for this resource"
-                        )
-                        .into())
-                    }
-
                     query.owned_messages(&owner.0, start, direction)
                 } else {
                     query.all_messages(start, direction)

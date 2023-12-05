@@ -27,8 +27,6 @@ use std::time::Duration;
 
 use super::topics::{
     GossipTopic,
-    CON_VOTE_GOSSIP_TOPIC,
-    NEW_BLOCK_GOSSIP_TOPIC,
     NEW_TX_GOSSIP_TOPIC,
 };
 
@@ -52,12 +50,6 @@ const MESH_SIZE: usize = 8;
 
 // The weight applied to the score for delivering new transactions.
 const NEW_TX_GOSSIP_WEIGHT: f64 = 0.05;
-
-// The weight applied to the score for delivering new blocks.
-const NEW_BLOCK_GOSSIP_WEIGHT: f64 = 0.05;
-
-// The weight applied to the score for delivering consensus votes.
-const CON_VOTE_GOSSIP_WEIGHT: f64 = 0.05;
 
 // The threshold for a peer's score to be considered for greylisting.
 // If a peer's score falls below this value, they will be greylisted.
@@ -116,7 +108,11 @@ fn initialize_topic_score_params(topic_weight: f64) -> TopicScoreParams {
 
     // The decay time for the first message delivered score, set to 100 times the epoch duration.
     // This means that the score given for first message deliveries will decay over this time period.
-    params.first_message_deliveries_decay = score_parameter_decay(EPOCH * 100);
+    params.first_message_deliveries_decay = score_parameter_decay(
+        EPOCH
+            .checked_mul(100)
+            .expect("`EPOCH` is usually not more than a year"),
+    );
     params.first_message_deliveries_cap = 1000.0;
     params.first_message_deliveries_weight = 0.5;
 
@@ -130,7 +126,11 @@ fn initialize_topic_score_params(topic_weight: f64) -> TopicScoreParams {
     params.mesh_failure_penalty_weight = 0.0;
 
     params.invalid_message_deliveries_weight = -10.0 / params.topic_weight; // -200 per invalid message
-    params.invalid_message_deliveries_decay = score_parameter_decay(EPOCH * 50);
+    params.invalid_message_deliveries_decay = score_parameter_decay(
+        EPOCH
+            .checked_mul(50)
+            .expect("`EPOCH` is usually not more than a year"),
+    );
 
     params
 }
@@ -144,11 +144,17 @@ fn initialize_peer_score_params(thresholds: &PeerScoreThresholds) -> PeerScorePa
     let mut params = PeerScoreParams {
         decay_interval: DECAY_INTERVAL,
         decay_to_zero: DECAY_TO_ZERO,
-        retain_score: EPOCH * 100,
+        retain_score: EPOCH
+            .checked_mul(100)
+            .expect("`EPOCH` is usually not more than a year"),
         app_specific_weight: 0.0,
         ip_colocation_factor_threshold: 8.0, // Allow up to 8 nodes per IP
         behaviour_penalty_threshold: 6.0,
-        behaviour_penalty_decay: score_parameter_decay(EPOCH * 10),
+        behaviour_penalty_decay: score_parameter_decay(
+            EPOCH
+                .checked_mul(10)
+                .expect("`EPOCH` is usually not more than a year"),
+        ),
         ..Default::default()
     };
 
@@ -224,11 +230,7 @@ fn initialize_gossipsub(gossipsub: &mut Gossipsub, p2p_config: &Config) {
         .with_peer_score(peer_score_params, peer_score_thresholds)
         .expect("gossipsub initialized with peer score");
 
-    let topics = vec![
-        (NEW_TX_GOSSIP_TOPIC, NEW_TX_GOSSIP_WEIGHT),
-        (NEW_BLOCK_GOSSIP_TOPIC, NEW_BLOCK_GOSSIP_WEIGHT),
-        (CON_VOTE_GOSSIP_TOPIC, CON_VOTE_GOSSIP_WEIGHT),
-    ];
+    let topics = vec![(NEW_TX_GOSSIP_TOPIC, NEW_TX_GOSSIP_WEIGHT)];
 
     // subscribe to gossipsub topics with the network name suffix
     for (topic, weight) in topics {

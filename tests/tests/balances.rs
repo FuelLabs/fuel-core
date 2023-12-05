@@ -92,7 +92,7 @@ async fn balance() {
         .unwrap();
 
     let mut tx = TransactionBuilder::script(vec![], vec![])
-        .gas_limit(1_000_000)
+        .script_gas_limit(1_000_000)
         .to_owned();
     for coins in coins_per_asset {
         for coin in coins {

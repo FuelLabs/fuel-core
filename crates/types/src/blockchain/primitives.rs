@@ -111,28 +111,10 @@ impl From<usize> for DaBlockHeight {
     }
 }
 
-impl core::ops::Add<u64> for DaBlockHeight {
-    type Output = Self;
-
-    fn add(self, other: u64) -> Self::Output {
-        Self::from(self.0 + other)
-    }
-}
-
 impl DaBlockHeight {
     /// Convert to array of big endian bytes
     pub fn to_bytes(self) -> [u8; 8] {
         self.0.to_be_bytes()
-    }
-
-    /// Convert to usize
-    pub fn to_usize(self) -> usize {
-        self.0 as usize
-    }
-
-    /// Convert to usize
-    pub fn as_usize(&self) -> usize {
-        self.0 as usize
     }
 
     /// Convert to u64

@@ -216,7 +216,7 @@ impl From<(Address, PaginationRequest<String>)> for TransactionsByOwnerConnectio
                 owner: r.0,
                 after: r.1.cursor,
                 before: None,
-                first: Some(r.1.results as i32),
+                first: Some(r.1.results),
                 last: None,
             },
             PageDirection::Backward => TransactionsByOwnerConnectionArgs {
@@ -224,7 +224,7 @@ impl From<(Address, PaginationRequest<String>)> for TransactionsByOwnerConnectio
                 after: None,
                 before: r.1.cursor,
                 first: None,
-                last: Some(r.1.results as i32),
+                last: Some(r.1.results),
             },
         }
     }

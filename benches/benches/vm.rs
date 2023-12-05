@@ -1,4 +1,6 @@
+mod contract;
 mod utils;
+mod vm_initialization;
 mod vm_set;
 
 use criterion::{
@@ -10,8 +12,9 @@ use criterion::{
     Criterion,
 };
 
+use crate::vm_initialization::vm_initialization;
+use contract::*;
 use fuel_core_benches::*;
-use fuel_core_storage::transactional::Transaction;
 use fuel_core_types::fuel_asm::Instruction;
 use vm_set::*;
 
@@ -31,66 +34,49 @@ where
                 instruction,
                 diff,
             } = &mut i;
-            let original_db = vm.as_mut().database_mut().clone();
-            let mut db_txn = {
-                let db = vm.as_mut().database_mut();
-                let db_txn = db.transaction();
-                // update vm database in-place to use transaction
-                *db = db_txn.as_ref().clone();
-                db_txn
-            };
 
-            let final_time;
-            loop {
-                // Measure the total time to revert the VM to the initial state.
-                // It should always do the same things regardless of the number of
-                // iterations because we use a `diff` from the `VmBenchPrepared` initialization.
-                let start = std::time::Instant::now();
-                for _ in 0..iters {
-                    vm.reset_vm_state(diff);
-                }
-                let time_to_reset = start.elapsed();
+            let clock = quanta::Clock::new();
 
-                let start = std::time::Instant::now();
-                for _ in 0..iters {
-                    match instruction {
-                        Instruction::CALL(call) => {
-                            let (ra, rb, rc, rd) = call.unpack();
-                            vm.prepare_call(ra, rb, rc, rd).unwrap();
-                        }
-                        _ => {
-                            black_box(vm.instruction(*instruction).unwrap());
-                        }
+            let mut total = core::time::Duration::ZERO;
+            for _ in 0..iters {
+                let original_db = vm.as_mut().database_mut().clone();
+                // Simulates the block production/validation with three levels of database transaction.
+                let block_database_tx = original_db.transaction().as_ref().clone();
+                let tx_database_tx = block_database_tx.transaction().as_ref().clone();
+                let vm_tx_database_tx = tx_database_tx.transaction().as_ref().clone();
+                *vm.as_mut().database_mut() = vm_tx_database_tx;
+
+                let start = black_box(clock.raw());
+                match instruction {
+                    Instruction::CALL(call) => {
+                        let (ra, rb, rc, rd) = call.unpack();
+                        black_box(vm.prepare_call(ra, rb, rc, rd)).unwrap();
                     }
-                    vm.reset_vm_state(diff);
+                    _ => {
+                        black_box(vm.instruction(*instruction).unwrap());
+                    }
                 }
-                let only_instruction = start.elapsed().checked_sub(time_to_reset);
-
-                // It may overflow when the benchmarks run in an unstable environment.
-                // If the hardware is busy during the measuring time to reset the VM,
-                // it will produce `time_to_reset` more than the actual time
-                // to run the instruction and reset the VM.
-                if let Some(result) = only_instruction {
-                    final_time = result;
-                    break
-                } else {
-                    println!("The environment is unstable. Rerunning the benchmark.");
-                }
+                black_box(&vm);
+                let end = black_box(clock.raw());
+                total += clock.delta(start, end);
+                vm.reset_vm_state(diff);
+                // restore original db
+                *vm.as_mut().database_mut() = original_db;
             }
-
-            db_txn.commit().unwrap();
-            // restore original db
-            *vm.as_mut().database_mut() = original_db;
-            final_time
+            total
         })
     });
 }
+
 fn vm(c: &mut Criterion) {
     alu::run(c);
-    blockchain::run(c);
     crypto::run(c);
     flow::run(c);
     mem::run(c);
+    blockchain::run(c);
+    contract_root(c);
+    state_root(c);
+    vm_initialization(c);
 }
 
 criterion_group!(benches, vm);

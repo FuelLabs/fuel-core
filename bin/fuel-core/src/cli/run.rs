@@ -264,7 +264,7 @@ impl Command {
         let relayer_cfg = relayer_args.into_config();
 
         #[cfg(feature = "p2p")]
-        let p2p_cfg = p2p_args.into_config(metrics)?;
+        let p2p_cfg = p2p_args.into_config(chain_conf.chain_name.clone(), metrics)?;
 
         let trigger: Trigger = poa_trigger.into();
 
@@ -362,25 +362,11 @@ impl Command {
 }
 
 pub async fn exec(command: Command) -> anyhow::Result<()> {
-    let network_name = {
-        #[cfg(feature = "p2p")]
-        {
-            command
-                .p2p_args
-                .network
-                .clone()
-                .unwrap_or_else(|| "default_network".to_string())
-        }
-        #[cfg(not(feature = "p2p"))]
-        "default_network"
-    }
-    .to_string();
-
     let profiling = command.profiling.clone();
     let config = command.get_config()?;
 
     // start profiling agent if url is configured
-    let _profiling_agent = start_pyroscope_agent(profiling, &config, network_name)?;
+    let _profiling_agent = start_pyroscope_agent(profiling, &config)?;
 
     // log fuel-core version
     info!("Fuel Core version v{}", env!("CARGO_PKG_VERSION"));
@@ -423,7 +409,6 @@ fn load_consensus_key(
 fn start_pyroscope_agent(
     profiling_args: profiling::ProfilingArgs,
     config: &Config,
-    network_name: String,
 ) -> anyhow::Result<Option<PyroscopeAgent<PyroscopeAgentRunning>>> {
     profiling_args
         .pyroscope_url
@@ -433,7 +418,7 @@ fn start_pyroscope_agent(
             let agent = PyroscopeAgent::builder(url, &"fuel-core".to_string())
                 .tags(vec![
                     ("service", config.name.as_str()),
-                    ("network", network_name.as_str()),
+                    ("network", config.chain_config.chain_name.as_str()),
                 ])
                 .backend(pprof_backend(
                     PprofConfig::new().sample_rate(profiling_args.pprof_sample_rate),
