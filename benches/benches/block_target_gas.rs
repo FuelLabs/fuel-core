@@ -253,7 +253,7 @@ fn service_with_many_contracts(
     let mut database = Database::rocksdb();
     let mut config = Config::local_node();
     config
-        .chain_conf
+        .chain_config
         .consensus_parameters
         .tx_params
         .max_gas_per_tx = TARGET_BLOCK_GAS_LIMIT;
@@ -272,17 +272,17 @@ fn service_with_many_contracts(
             tx_pointer_tx_idx: None,
         })
         .collect::<Vec<_>>();
-    config.chain_conf.initial_state.as_mut().unwrap().contracts = Some(contract_configs);
+    config.state_config.contracts = Some(contract_configs);
 
     config
-        .chain_conf
+        .chain_config
         .consensus_parameters
         .predicate_params
         .max_gas_per_predicate = TARGET_BLOCK_GAS_LIMIT;
-    config.chain_conf.block_gas_limit = TARGET_BLOCK_GAS_LIMIT;
-    config.chain_conf.consensus_parameters.gas_costs = GasCosts::new(default_gas_costs());
+    config.chain_config.block_gas_limit = TARGET_BLOCK_GAS_LIMIT;
+    config.chain_config.consensus_parameters.gas_costs = GasCosts::new(default_gas_costs());
     config
-        .chain_conf
+        .chain_config
         .consensus_parameters
         .fee_params
         .gas_per_byte = 0;
@@ -393,7 +393,7 @@ fn run_with_service_with_extra_inputs(
                 tx_builder.add_output(*output);
             }
             let mut tx = tx_builder.finalize_as_transaction();
-            tx.estimate_predicates(&shared.config.chain_conf.consensus_parameters.clone().into()).unwrap();
+            tx.estimate_predicates(&shared.config.chain_config.consensus_parameters.clone().into()).unwrap();
             async move {
                 let tx_id = tx.id(&shared.config.chain_config.consensus_parameters.chain_id);
 
