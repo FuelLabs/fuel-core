@@ -107,8 +107,9 @@ fn import_chain_state(
     }
 
     let contracts = config.state_streamer.contracts()?;
-    let contract_ids =
+    let mut contract_ids =
         import_contract_configs(&original_database, contracts, block_height)?;
+    contract_ids.sort();
 
     let contract_states = config.state_streamer.contract_state()?;
     import_contract_state(&original_database, contract_states)?;
