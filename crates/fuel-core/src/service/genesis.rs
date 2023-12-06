@@ -51,7 +51,13 @@ use fuel_core_types::{
         contract::ContractUtxoInfo,
         message::Message,
     },
-    fuel_merkle::binary,
+    fuel_merkle::{
+        binary,
+        sparse::{
+            in_memory::MerkleTree,
+            MerkleTreeKey,
+        },
+    },
     fuel_tx::{
         Contract,
         TxPointer,
@@ -84,27 +90,39 @@ pub fn maybe_initialize_state(
     Ok(())
 }
 
+struct StateRoots {
+    messages: Bytes32,
+    coins: Bytes32,
+    contracts: Bytes32,
+}
+
 fn import_chain_state(
     config: &Config,
     original_database: &Database,
-) -> anyhow::Result<[binary::in_memory::MerkleTree; 3]> {
+) -> anyhow::Result<StateRoots> {
     let block_height = config.chain_config.height.unwrap_or_default();
 
-    let coins = config.state_reader.coins()?;
-    let mut coin_roots = import_coin_configs(&original_database, coins, block_height)?;
-    coin_roots.sort();
-    let mut coins_tree = binary::in_memory::MerkleTree::new();
-    for root in coin_roots {
-        coins_tree.push(&*root);
-    }
+    let coins_root = {
+        let coins = config.state_reader.coins()?;
+        let roots = import_coin_configs(&original_database, coins, block_height)?
+            .into_iter()
+            .sorted()
+            .enumerate()
+            .map(|(index, coin)| (MerkleTreeKey::new(index.to_be_bytes()), coin));
+        let (root, _) = MerkleTree::nodes_from_set(roots);
+        root
+    };
 
-    let messages = config.state_reader.messages()?;
-    let mut message_roots = import_message_configs(&original_database, messages)?;
-    message_roots.sort();
-    let mut messages_tree = binary::in_memory::MerkleTree::new();
-    for root in message_roots {
-        messages_tree.push(&*root);
-    }
+    let messages_root = {
+        let messages = config.state_reader.messages()?;
+        let roots = import_message_configs(&original_database, messages)?
+            .into_iter()
+            .sorted()
+            .enumerate()
+            .map(|(index, message)| (MerkleTreeKey::new(index.to_be_bytes()), message));
+        let (root, _) = MerkleTree::nodes_from_set(roots);
+        root
+    };
 
     let contracts = config.state_reader.contracts()?;
     let mut contract_ids =
@@ -125,13 +143,19 @@ fn import_chain_state(
         contracts_tree.push(ContractRef::new(database, contract_id).root()?.as_slice());
     }
 
-    Ok([coins_tree, messages_tree, contracts_tree])
+    let contracts_root = contracts_tree.root();
+
+    Ok(StateRoots {
+        messages: messages_root.into(),
+        coins: coins_root.into(),
+        contracts: contracts_root.into(),
+    })
 }
 
 fn commit_genesis_block(
     config: &Config,
     original_database: &Database,
-    roots: [binary::in_memory::MerkleTree; 3],
+    roots: StateRoots,
 ) -> anyhow::Result<()> {
     let mut database_transaction = Transactional::transaction(original_database);
     let database = database_transaction.as_mut();
@@ -141,9 +165,9 @@ fn commit_genesis_block(
 
     let genesis = Genesis {
         chain_config_hash,
-        coins_root: roots[0].root().into(),
-        contracts_root: roots[1].root().into(),
-        messages_root: roots[2].root().into(),
+        coins_root: roots.coins,
+        contracts_root: roots.contracts,
+        messages_root: roots.messages,
     };
 
     let block = Block::new(
