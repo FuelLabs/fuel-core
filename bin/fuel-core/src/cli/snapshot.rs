@@ -109,9 +109,13 @@ fn full_snapshot(
     db: impl ChainStateDb,
 ) -> Result<(), anyhow::Error> {
     let encoder = initialize_encoder(output_dir, state_encoding_format)?;
-    write_chain_state(db, encoder)?;
+    write_chain_state(&db, encoder)?;
 
-    let chain_config = load_chain_config(chain_config)?;
+    let height = db.get_block_height()?;
+    let chain_config = ChainConfig {
+        height: Some(height),
+        ..load_chain_config(chain_config)?
+    };
     chain_config.create_config_file(output_dir)?;
 
     Ok(())
