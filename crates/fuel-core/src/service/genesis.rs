@@ -416,9 +416,10 @@ fn init_coin(
     };
 
     // ensure coin can't point to blocks in the future
-    if coin.tx_pointer.block_height() > height {
+    let coin_height = coin.tx_pointer.block_height();
+    if coin_height > height {
         return Err(anyhow!(
-            "coin tx_pointer height cannot be greater than genesis block"
+            "coin tx_pointer height ({coin_height}) cannot be greater than genesis block ({height})"
         ));
     }
 
