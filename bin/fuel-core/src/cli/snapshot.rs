@@ -135,7 +135,7 @@ fn write_chain_state(
             .try_for_each(|chunk| write(chunk.try_collect()?))
     }
 
-    let group_size = 1000;
+    let group_size = 1;
 
     let coins = db.iter_coin_configs();
     write(coins, group_size, |chunk| encoder.write_coins(chunk))?;

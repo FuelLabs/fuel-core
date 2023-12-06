@@ -154,6 +154,51 @@ impl MerkleRootStorage<ContractId, ContractsState> for Database {
 }
 
 impl Database {
+    // Insert a batch of contract state slots into the database and update the merkle root
+    pub fn batch_insert_contract_state(
+        &mut self,
+        contract_id: &ContractId,
+        slots: Vec<(Bytes32, Bytes32)>,
+    ) -> Result<(), StorageError> {
+        if slots.is_empty() {
+            return Ok(())
+        }
+
+        let state_entries = slots
+            .iter()
+            .map(|(key, value)| (ContractsStateKey::new(contract_id, &key), value));
+        self.batch_insert(Column::ContractsState, state_entries)
+            .unwrap();
+
+        let slots = slots
+            .into_iter()
+            .map(|(key, value)| (MerkleTreeKey::new(key), value));
+
+        // fetch the current merkle tree and update it with the batch of slots
+        let root = self
+            .storage::<ContractsStateMerkleMetadata>()
+            .get(contract_id)?
+            .map(|metadata| metadata.root)
+            .unwrap_or_else(|| in_memory::MerkleTree::new().root());
+        let storage = self.borrow_mut();
+        let mut tree: MerkleTree<ContractsStateMerkleData, _> =
+            MerkleTree::load(storage, &root)
+                .map_err(|err| StorageError::Other(anyhow::anyhow!("{err:?}")))?;
+
+        for (key, value) in slots {
+            tree.update(key, value.as_slice())
+                .map_err(|err| StorageError::Other(anyhow::anyhow!("{err:?}")))?;
+        }
+
+        // Generate new metadata for the updated tree
+        let root = tree.root();
+        let metadata = SparseMerkleMetadata { root };
+        self.storage::<ContractsStateMerkleMetadata>()
+            .insert(contract_id, &metadata)?;
+
+        Ok(())
+    }
+
     /// Initialize the state of the contract from all leaves.
     /// This method is more performant than inserting state one by one.
     pub fn init_contract_state<S>(

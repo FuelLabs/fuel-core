@@ -22,7 +22,6 @@ use fuel_core_storage::{
         ContractsInfo,
         ContractsLatestUtxo,
         ContractsRawCode,
-        ContractsState as TableContractsState,
         FuelBlocks,
         Messages,
     },
@@ -354,18 +353,7 @@ fn import_contract_state(
         // TODO
         let batch = batch.unwrap();
 
-        // TODO: set output_index
-        batch.data.iter().try_for_each(|state| {
-            init_contract_state(database, state)?;
-            // save_import_progress(
-            // database,
-            // StateImportProgressKey::Coins,
-            // cursor + 1, // TODO: advance by # bytes read
-            // root_calculator,
-            // )
-            Ok::<(), anyhow::Error>(())
-        })?;
-
+        init_contract_state(database, batch.data)?;
         database_transaction.commit()?;
     }
 
@@ -531,10 +519,14 @@ fn init_contract(
 
 fn init_contract_state(
     db: &mut Database,
-    state: &ContractStateConfig,
+    state: Vec<ContractStateConfig>,
 ) -> anyhow::Result<()> {
-    let key = (&ContractId::from(*state.contract_id), &state.key).into();
-    StorageMutate::<TableContractsState>::insert(db, &key, &state.value)?;
+    let contract_id = state
+        .first()
+        .map(|s| ContractId::from(*s.contract_id))
+        .unwrap();
+    let entries = state.into_iter().map(|s| (s.key, s.value)).collect_vec();
+    db.batch_insert_contract_state(&contract_id, entries)?;
 
     Ok(())
 }
