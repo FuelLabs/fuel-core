@@ -167,7 +167,7 @@ mod tests {
 
     #[cfg(feature = "std")]
     #[test]
-    fn can_roundrip_write_and_read() {
+    fn can_roundtrip_write_and_read() {
         let tmp_file = temp_dir();
         let disk_config = ChainConfig::local_testnet();
         disk_config.create_config_file(&tmp_file).unwrap();
