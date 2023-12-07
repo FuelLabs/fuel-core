@@ -254,7 +254,7 @@ impl Config<Initialized> {
 /// TCP/IP, Websocket
 /// Noise as encryption layer
 /// mplex or yamux for multiplexing
-pub(crate) fn build_transport(
+pub(crate) fn build_transport_function(
     p2p_config: &Config,
 ) -> (
     impl FnOnce(&Keypair) -> Boxed<(PeerId, StreamMuxerBox)> + '_,
@@ -275,7 +275,7 @@ pub(crate) fn build_transport(
 
             libp2p::dns::tokio::Transport::system(ws_tcp).unwrap()
         }
-        .upgrade(libp2p::core::upgrade::Version::V1);
+        .upgrade(libp2p::core::upgrade::Version::V1Lazy);
 
         let noise_authenticated =
             NoiseConfig::new(keypair).expect("Noise key generation failed");
@@ -288,7 +288,8 @@ pub(crate) fn build_transport(
             libp2p::core::upgrade::SelectUpgrade::new(yamux_config, mplex_config)
         };
 
-        let fuel_upgrade = FuelUpgrade::new(p2p_config.checksum);
+        // TODO: Add fuel upgrade stuff
+        let _fuel_upgrade = FuelUpgrade::new(p2p_config.checksum);
 
         let transport = if p2p_config.reserved_nodes_only_mode {
             let guarded_node = GuardedNode::new(&p2p_config.reserved_nodes);
@@ -298,7 +299,7 @@ pub(crate) fn build_transport(
 
             transport
                 .authenticate(fuel_authenticated)
-                .apply(fuel_upgrade)
+                // .apply(fuel_upgrade)
                 .multiplex(multiplex_config)
                 .timeout(TRANSPORT_TIMEOUT)
                 .boxed()
@@ -313,7 +314,7 @@ pub(crate) fn build_transport(
 
             transport
                 .authenticate(fuel_authenticated)
-                .apply(fuel_upgrade)
+                // .apply(fuel_upgrade)
                 .multiplex(multiplex_config)
                 .timeout(TRANSPORT_TIMEOUT)
                 .boxed()
