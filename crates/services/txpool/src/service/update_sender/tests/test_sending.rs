@@ -132,7 +132,7 @@ fn test_send_inner(
 
                 // If the new state is closed, skip validation
                 if matches!(new_state, State::Closed) {
-                    continue
+                    continue;
                 }
 
                 // Verify the new state of the sender

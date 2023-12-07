@@ -190,13 +190,13 @@ impl Dependency {
                     asset_id,
                 } => {
                     if to != i_owner {
-                        return Err(Error::NotInsertedIoWrongOwner.into())
+                        return Err(Error::NotInsertedIoWrongOwner.into());
                     }
                     if amount != i_amount {
-                        return Err(Error::NotInsertedIoWrongAmount.into())
+                        return Err(Error::NotInsertedIoWrongAmount.into());
                     }
                     if asset_id != i_asset_id {
-                        return Err(Error::NotInsertedIoWrongAssetId.into())
+                        return Err(Error::NotInsertedIoWrongAssetId.into());
                     }
                 }
                 Output::Contract(_) => {
@@ -208,13 +208,13 @@ impl Dependency {
                     amount,
                 } => {
                     if to != i_owner {
-                        return Err(Error::NotInsertedIoWrongOwner.into())
+                        return Err(Error::NotInsertedIoWrongOwner.into());
                     }
                     if asset_id != i_asset_id {
-                        return Err(Error::NotInsertedIoWrongAssetId.into())
+                        return Err(Error::NotInsertedIoWrongAssetId.into());
                     }
                     if is_output_filled && amount != i_amount {
-                        return Err(Error::NotInsertedIoWrongAmount.into())
+                        return Err(Error::NotInsertedIoWrongAmount.into());
                     }
                 }
                 Output::Variable {
@@ -224,13 +224,13 @@ impl Dependency {
                 } => {
                     if is_output_filled {
                         if to != i_owner {
-                            return Err(Error::NotInsertedIoWrongOwner.into())
+                            return Err(Error::NotInsertedIoWrongOwner.into());
                         }
                         if amount != i_amount {
-                            return Err(Error::NotInsertedIoWrongAmount.into())
+                            return Err(Error::NotInsertedIoWrongAmount.into());
                         }
                         if asset_id != i_asset_id {
-                            return Err(Error::NotInsertedIoWrongAssetId.into())
+                            return Err(Error::NotInsertedIoWrongAssetId.into());
                         }
                     }
                     // else do nothing, everything is variable and can be only check on execution
@@ -240,7 +240,7 @@ impl Dependency {
                 }
             };
         } else {
-            return Err(anyhow!("Use it only for coin output check"))
+            return Err(anyhow!("Use it only for coin output check"));
         }
         Ok(())
     }
@@ -278,7 +278,7 @@ impl Dependency {
                         max_depth =
                             core::cmp::max(state.depth.saturating_add(1), max_depth);
                         if max_depth > self.max_depth {
-                            return Err(Error::NotInsertedMaxDepth.into())
+                            return Err(Error::NotInsertedMaxDepth.into());
                         }
                         // output is present but is it spend by other tx?
                         if let Some(ref spend_by) = state.is_spend_by {
@@ -291,7 +291,7 @@ impl Dependency {
                                 return Err(Error::NotInsertedCollision(
                                     *spend_by, *utxo_id,
                                 )
-                                .into())
+                                .into());
                             } else {
                                 if state.is_in_database() {
                                     // this means it is loaded from db. Get tx to compare output.
@@ -307,7 +307,7 @@ impl Dependency {
                                         {
                                             return Err(
                                                 Error::NotInsertedIoCoinMismatch.into()
-                                            )
+                                            );
                                         }
                                     }
                                 } else {
@@ -335,7 +335,7 @@ impl Dependency {
                                 .matches_input(input)
                                 .expect("The input is coin above")
                             {
-                                return Err(Error::NotInsertedIoCoinMismatch.into())
+                                return Err(Error::NotInsertedIoCoinMismatch.into());
                             }
                         }
                         max_depth = core::cmp::max(1, max_depth);
@@ -364,18 +364,18 @@ impl Dependency {
                                 .matches_input(input)
                                 .expect("Input is a message above")
                             {
-                                return Err(Error::NotInsertedIoMessageMismatch.into())
+                                return Err(Error::NotInsertedIoMessageMismatch.into());
                             }
                             // return an error if spent block is set
                             if db.is_message_spent(nonce)? {
                                 return Err(
                                     Error::NotInsertedInputMessageSpent(*nonce).into()
-                                )
+                                );
                             }
                         } else {
                             return Err(
                                 Error::NotInsertedInputMessageUnknown(*nonce).into()
-                            )
+                            );
                         }
                     }
 
@@ -386,7 +386,7 @@ impl Dependency {
                                 state.spent_by,
                                 *nonce,
                             )
-                            .into())
+                            .into());
                         } else {
                             collided.push(state.spent_by);
                         }
@@ -407,19 +407,19 @@ impl Dependency {
                             return Err(Error::NotInsertedContractPricedLower(
                                 *contract_id,
                             )
-                            .into())
+                            .into());
                         }
                         // check depth.
                         max_depth = core::cmp::max(state.depth, max_depth);
                         if max_depth > self.max_depth {
-                            return Err(Error::NotInsertedMaxDepth.into())
+                            return Err(Error::NotInsertedMaxDepth.into());
                         }
                     } else {
                         if !db.contract_exist(contract_id)? {
                             return Err(Error::NotInsertedInputContractNotExisting(
                                 *contract_id,
                             )
-                            .into())
+                            .into());
                         }
                         // add depth
                         max_depth = core::cmp::max(1, max_depth);
@@ -447,16 +447,17 @@ impl Dependency {
                 if let Some(contract) = self.contracts.get(contract_id) {
                     // we have a collision :(
                     if contract.is_in_database() {
-                        return Err(
-                            Error::NotInsertedContractIdAlreadyTaken(*contract_id).into()
+                        return Err(Error::NotInsertedContractIdAlreadyTaken(
+                            *contract_id,
                         )
+                        .into());
                     }
                     // check who is priced more
                     if contract.gas_price > tx.price() {
                         // new tx is priced less then current tx
                         return Err(
                             Error::NotInsertedCollisionContractId(*contract_id).into()
-                        )
+                        );
                     }
                     // if we are prices more, mark current contract origin for removal.
                     let origin = contract.origin.expect(
