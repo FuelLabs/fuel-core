@@ -1,10 +1,7 @@
 //! # Helpers for creating networks of nodes
 
 use crate::{
-    chain_config::{
-        ChainConfig,
-        StateConfig,
-    },
+    chain_config::StateConfig,
     database::Database,
     p2p::Multiaddr,
     service::{
@@ -220,11 +217,7 @@ pub async fn make_nodes(
         .collect();
 
     let mut producers_with_txs = Vec::with_capacity(producers.len());
-    let mut chain_config = ChainConfig::local_testnet();
-    chain_config
-        .consensus_parameters
-        .contract_params
-        .max_storage_slots = 1 << 17; // 131072
+    let mut config = config.unwrap_or(Config::local_node());
 
     for (all, producer) in txs_coins.into_iter().zip(producers.into_iter()) {
         match all {
@@ -233,10 +226,7 @@ pub async fn make_nodes(
                 for (tx, initial_coin) in all {
                     txs.push(tx);
                     config
-                        .chain_conf
-                        .initial_state
-                        .as_mut()
-                        .unwrap()
+                        .state_config
                         .coins
                         .as_mut()
                         .unwrap()
