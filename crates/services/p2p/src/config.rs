@@ -51,7 +51,7 @@ use self::{
 };
 mod connection_tracker;
 mod fuel_authenticated;
-mod fuel_upgrade;
+pub(crate) mod fuel_upgrade;
 mod guarded_node;
 
 const REQ_RES_TIMEOUT: Duration = Duration::from_secs(20);
@@ -257,64 +257,71 @@ impl Config<Initialized> {
 pub(crate) fn build_transport(
     p2p_config: &Config,
 ) -> (
-    Boxed<(PeerId, StreamMuxerBox)>,
+    impl FnOnce(&Keypair) -> Boxed<(PeerId, StreamMuxerBox)> + '_,
     Arc<RwLock<ConnectionState>>,
 ) {
-    let transport = {
-        let generate_tcp_transport =
-            || TokioTcpTransport::new(TcpConfig::new().port_reuse(true).nodelay(true));
-
-        let tcp = generate_tcp_transport();
-
-        let ws_tcp =
-            libp2p::websocket::WsConfig::new(generate_tcp_transport()).or_transport(tcp);
-
-        libp2p::dns::tokio::Transport::system(ws_tcp).unwrap()
-    }
-    .upgrade(libp2p::core::upgrade::Version::V1);
-
-    let noise_authenticated =
-        NoiseConfig::new(&p2p_config.keypair).expect("Noise key generation failed");
-
-    let multiplex_config = {
-        let mplex_config = MplexConfig::default();
-
-        let mut yamux_config = YamuxConfig::default();
-        yamux_config.set_max_buffer_size(MAX_RESPONSE_SIZE);
-        libp2p::core::upgrade::SelectUpgrade::new(yamux_config, mplex_config)
-    };
-
-    let fuel_upgrade = FuelUpgrade::new(p2p_config.checksum);
     let connection_state = ConnectionState::new();
+    let kept_connection_state = connection_state.clone();
+    let transport_function = move |keypair: &Keypair| {
+        let transport = {
+            let generate_tcp_transport = || {
+                TokioTcpTransport::new(TcpConfig::new().port_reuse(true).nodelay(true))
+            };
 
-    let transport = if p2p_config.reserved_nodes_only_mode {
-        let guarded_node = GuardedNode::new(&p2p_config.reserved_nodes);
+            let tcp = generate_tcp_transport();
 
-        let fuel_authenticated =
-            FuelAuthenticated::new(noise_authenticated, guarded_node);
+            let ws_tcp = libp2p::websocket::WsConfig::new(generate_tcp_transport())
+                .or_transport(tcp);
 
+            libp2p::dns::tokio::Transport::system(ws_tcp).unwrap()
+        }
+        .upgrade(libp2p::core::upgrade::Version::V1);
+
+        let noise_authenticated =
+            NoiseConfig::new(keypair).expect("Noise key generation failed");
+
+        let multiplex_config = {
+            let mplex_config = MplexConfig::default();
+
+            let mut yamux_config = YamuxConfig::default();
+            yamux_config.set_max_buffer_size(MAX_RESPONSE_SIZE);
+            libp2p::core::upgrade::SelectUpgrade::new(yamux_config, mplex_config)
+        };
+
+        let fuel_upgrade = FuelUpgrade::new(p2p_config.checksum);
+
+        let transport = if p2p_config.reserved_nodes_only_mode {
+            let guarded_node = GuardedNode::new(&p2p_config.reserved_nodes);
+
+            let fuel_authenticated =
+                FuelAuthenticated::new(noise_authenticated, guarded_node);
+
+            transport
+                .authenticate(fuel_authenticated)
+                .apply(fuel_upgrade)
+                .multiplex(multiplex_config)
+                .timeout(TRANSPORT_TIMEOUT)
+                .boxed()
+        } else {
+            let connection_tracker = ConnectionTracker::new(
+                &p2p_config.reserved_nodes,
+                connection_state.clone(),
+            );
+
+            let fuel_authenticated =
+                FuelAuthenticated::new(noise_authenticated, connection_tracker);
+
+            transport
+                .authenticate(fuel_authenticated)
+                .apply(fuel_upgrade)
+                .multiplex(multiplex_config)
+                .timeout(TRANSPORT_TIMEOUT)
+                .boxed()
+        };
         transport
-            .authenticate(fuel_authenticated)
-            .apply(fuel_upgrade)
-            .multiplex(multiplex_config)
-            .timeout(TRANSPORT_TIMEOUT)
-            .boxed()
-    } else {
-        let connection_tracker =
-            ConnectionTracker::new(&p2p_config.reserved_nodes, connection_state.clone());
-
-        let fuel_authenticated =
-            FuelAuthenticated::new(noise_authenticated, connection_tracker);
-
-        transport
-            .authenticate(fuel_authenticated)
-            .apply(fuel_upgrade)
-            .multiplex(multiplex_config)
-            .timeout(TRANSPORT_TIMEOUT)
-            .boxed()
     };
 
-    (transport, connection_state)
+    (transport_function, kept_connection_state)
 }
 
 fn peer_ids_set_from(multiaddr: &[Multiaddr]) -> HashSet<PeerId> {

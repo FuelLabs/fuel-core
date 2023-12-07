@@ -424,7 +424,7 @@ mod tests {
             }
         });
 
-        test_future.await;
+        let a: () = test_future.await;
         tracing::info!(
             "Passed with {:?} connection closures",
             counter_copy.load(Ordering::SeqCst)

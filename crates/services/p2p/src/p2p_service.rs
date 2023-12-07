@@ -6,6 +6,7 @@ use crate::{
     codecs::NetworkCodec,
     config::{
         build_transport,
+        fuel_upgrade::FuelUpgrade,
         Config,
     },
     gossipsub::{
@@ -167,7 +168,7 @@ impl<Codec: NetworkCodec> FuelP2PService<Codec> {
         let network_metadata = NetworkMetadata { gossipsub_data };
 
         // configure and build P2P Service
-        let (transport, connection_state) = build_transport(&config);
+        let (transport_function, connection_state) = build_transport(&config);
         let behaviour = FuelBehaviour::new(&config, codec.clone());
 
         let total_connections = {
@@ -192,56 +193,60 @@ impl<Codec: NetworkCodec> FuelP2PService<Codec> {
             }
         };
 
-        let connection_limits = ConnectionLimits::default()
-            .with_max_established_incoming(Some(max_established_incoming))
-            .with_max_established_per_peer(Some(config.max_connections_per_peer))
-            // libp2p does not manage how many different peers we're connected to
-            // it only takes care that there are 'N' amount of connections established.
-            // Our `PeerManagerBehaviour` will keep track of different peers connected
-            // and disconnect any surplus peers
-            .with_max_established(Some(total_connections));
+        // let connection_limits = ConnectionLimits::default()
+        //     .with_max_established_incoming(Some(max_established_incoming))
+        //     .with_max_established_per_peer(Some(config.max_connections_per_peer))
+        //     // libp2p does not manage how many different peers we're connected to
+        //     // it only takes care that there are 'N' amount of connections established.
+        //     // Our `PeerManagerBehaviour` will keep track of different peers connected
+        //     // and disconnect any surplus peers
+        //     .with_max_established(Some(total_connections));
 
         // let mut swarm =
         //     SwarmBuilder::with_tokio_executor(transport, behaviour, local_peer_id)
         //         .connection_limits(connection_limits)
         //         .build();
 
-        let swarm_config = libp2p_swarm::Config::with_tokio_executor()
-            .with_idle_connection_timeout(Duration::from_secs(10));
+        // let swarm_config = libp2p_swarm::Config::with_tokio_executor()
+        //     .with_idle_connection_timeout(Duration::from_secs(10));
 
         // let mut swarm = Swarm::new(transport, behaviour, local_peer_id, swarm_config);
 
         let tcp_config = tcp::Config::new().port_reuse(true).nodelay(true);
-        let multiplex_config = {
-            let mplex_config = MplexConfig::default();
+        // let multiplex_config = {
+        //     let mplex_config = MplexConfig::default();
+        //
+        //     let mut yamux_config = yamux::Config::default();
+        //     yamux_config.set_max_buffer_size(MAX_RESPONSE_SIZE);
+        //     libp2p::core::upgrade::SelectUpgrade::new(yamux_config, mplex_config)
+        // };
+        // let noise_authenticated =
+        //     noise::Config::new(&config.keypair).expect("Noise key generation failed");
 
-            let mut yamux_config = yamux::Config::default();
-            yamux_config.set_max_buffer_size(MAX_RESPONSE_SIZE);
-            libp2p::core::upgrade::SelectUpgrade::new(yamux_config, mplex_config)
-        };
-        let noise_authenticated =
-            noise::Config::new(&config.keypair).expect("Noise key generation failed");
-
-        let mut swarm = SwarmBuilder::with_new_identity()
-                .with_tokio()
-                .with_tcp(
-                    tcp_config,
-                    (libp2p_tls::Config::new, libp2p_noise::Config::new),
-                    libp2p_yamux::Config::default,
-                )
-                .unwrap()
-                // .with_quic()
-                .with_dns()
-                .unwrap()
-                .with_websocket(
-                    (libp2p_tls::Config::new, libp2p_noise::Config::new),
-                    libp2p_yamux::Config::default,
-                )
-                .await
-                .unwrap()
-                .with_behaviour(|_| behaviour).unwrap()
-                .with_swarm_config(|cfg| cfg.with_idle_connection_timeout(Duration::from_secs(10)))
-                .build();
+        let mut swarm = SwarmBuilder::with_existing_identity(config.keypair.clone())
+            .with_tokio()
+            // .with_tcp(
+            //     tcp_config,
+            //     (libp2p_tls::Config::new, libp2p_noise::Config::new),
+            //     libp2p_yamux::Config::default,
+            // )
+            // .unwrap()
+            .with_other_transport(transport_function)
+            .unwrap()
+            // .with_dns()
+            // .unwrap()
+            // .with_websocket(
+            //     (libp2p_tls::Config::new, libp2p_noise::Config::new),
+            //     libp2p_yamux::Config::default,
+            // )
+            // .await
+            // .unwrap()
+            .with_behaviour(|_| behaviour)
+            .unwrap()
+            .with_swarm_config(|cfg| {
+                cfg.with_idle_connection_timeout(Duration::from_secs(10))
+            })
+            .build();
 
         let local_peer_id = swarm.local_peer_id().to_owned();
 
@@ -882,8 +887,6 @@ mod tests {
             spawn(&stop_sender, node);
         });
 
-        tracing::error!("lolz");
-
         loop {
             tokio::select! {
                 sentry_node_event = sentry_node.next_event() => {
@@ -1077,6 +1080,7 @@ mod tests {
                 },
                 // Poll one of the reserved, sentry nodes
                 sentry_node_event = single_sentry_node.next_event() => {
+                    tracing::info!("AAAA ASDFA SDF ASDF Event from the sentry node: {:?}", sentry_node_event);
                     if let Some(FuelP2PEvent::PeerConnected(peer_id)) = sentry_node_event {
                         sentry_node_connections.insert(peer_id);
                     }
