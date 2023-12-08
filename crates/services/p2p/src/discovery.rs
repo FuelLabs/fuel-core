@@ -103,6 +103,22 @@ impl NetworkBehaviour for DiscoveryBehaviour {
         )
     }
 
+    // receive events from KademliaHandler and pass it down to kademlia
+    fn handle_pending_outbound_connection(
+        &mut self,
+        connection_id: ConnectionId,
+        maybe_peer: Option<PeerId>,
+        addresses: &[Multiaddr],
+        effective_role: Endpoint,
+    ) -> Result<Vec<Multiaddr>, ConnectionDenied> {
+        self.kademlia.handle_pending_outbound_connection(
+            connection_id,
+            maybe_peer,
+            addresses,
+            effective_role,
+        )
+    }
+
     fn handle_established_outbound_connection(
         &mut self,
         connection_id: ConnectionId,
@@ -119,20 +135,33 @@ impl NetworkBehaviour for DiscoveryBehaviour {
         )
     }
 
-    // receive events from KademliaHandler and pass it down to kademlia
-    fn handle_pending_outbound_connection(
-        &mut self,
-        connection_id: ConnectionId,
-        maybe_peer: Option<PeerId>,
-        addresses: &[Multiaddr],
-        effective_role: Endpoint,
-    ) -> Result<Vec<Multiaddr>, ConnectionDenied> {
-        self.kademlia.handle_pending_outbound_connection(
-            connection_id,
-            maybe_peer,
-            addresses,
-            effective_role,
-        )
+    fn on_swarm_event(&mut self, event: FromSwarm) {
+        tracing::info!("discovery swarm event: {:?}", &event);
+        match &event {
+            FromSwarm::ConnectionEstablished(ConnectionEstablished {
+                peer_id,
+                other_established,
+                ..
+            }) => {
+                if *other_established == 0 {
+                    self.connected_peers.insert(*peer_id);
+
+                    trace!("Connected to a peer {:?}", peer_id);
+                }
+            }
+            FromSwarm::ConnectionClosed(ConnectionClosed {
+                peer_id,
+                remaining_established,
+                ..
+            }) => {
+                if *remaining_established == 0 {
+                    self.connected_peers.remove(peer_id);
+                    trace!("Disconnected from {:?}", peer_id);
+                }
+            }
+            _ => (),
+        }
+        self.kademlia.on_swarm_event(event)
     }
 
     // receive events from KademliaHandler and pass it down to kademlia
@@ -202,35 +231,6 @@ impl NetworkBehaviour for DiscoveryBehaviour {
             }
         }
         Poll::Pending
-    }
-
-    fn on_swarm_event(&mut self, event: FromSwarm) {
-        tracing::info!("discovery swarm event: {:?}", &event);
-        match &event {
-            FromSwarm::ConnectionEstablished(ConnectionEstablished {
-                peer_id,
-                other_established,
-                ..
-            }) => {
-                if *other_established == 0 {
-                    self.connected_peers.insert(*peer_id);
-
-                    trace!("Connected to a peer {:?}", peer_id);
-                }
-            }
-            FromSwarm::ConnectionClosed(ConnectionClosed {
-                peer_id,
-                remaining_established,
-                ..
-            }) => {
-                if *remaining_established == 0 {
-                    self.connected_peers.remove(peer_id);
-                    trace!("Disconnected from {:?}", peer_id);
-                }
-            }
-            _ => (),
-        }
-        self.kademlia.on_swarm_event(event)
     }
 }
 

@@ -134,6 +134,56 @@ impl NetworkBehaviour for PeerReportBehaviour {
     >;
     type ToSwarm = PeerReportEvent;
 
+    fn handle_established_inbound_connection(
+        &mut self,
+        _connection_id: ConnectionId,
+        peer: PeerId,
+        local_addr: &Multiaddr,
+        remote_addr: &Multiaddr,
+    ) -> Result<THandler<Self>, ConnectionDenied> {
+        self.heartbeat
+            .handle_established_inbound_connection(
+                _connection_id,
+                peer,
+                local_addr,
+                remote_addr,
+            )
+            .map(Either::Left)
+        // self.identify
+        //     .handle_established_inbound_connection(
+        //         _connection_id,
+        //         peer,
+        //         local_addr,
+        //         remote_addr,
+        //     )
+        //     .map(Either::Right)
+    }
+
+    fn handle_established_outbound_connection(
+        &mut self,
+        _connection_id: ConnectionId,
+        peer: PeerId,
+        addr: &Multiaddr,
+        role_override: Endpoint,
+    ) -> Result<THandler<Self>, ConnectionDenied> {
+        // self.heartbeat
+        //     .handle_established_outbound_connection(
+        //         _connection_id,
+        //         peer,
+        //         addr,
+        //         role_override,
+        //     )
+        //     .map(Either::Left)
+        self.identify
+            .handle_established_outbound_connection(
+                _connection_id,
+                peer,
+                addr,
+                role_override,
+            )
+            .map(Either::Right)
+    }
+
     fn on_swarm_event(&mut self, event: FromSwarm) {
         match event {
             FromSwarm::ConnectionEstablished(connection_established) => {
@@ -219,6 +269,26 @@ impl NetworkBehaviour for PeerReportBehaviour {
         }
     }
 
+    fn on_connection_handler_event(
+        &mut self,
+        peer_id: PeerId,
+        connection_id: ConnectionId,
+        event: THandlerOutEvent<Self>,
+    ) {
+        match event {
+            Either::Left(heartbeat_event) => self.heartbeat.on_connection_handler_event(
+                peer_id,
+                connection_id,
+                heartbeat_event,
+            ),
+            Either::Right(identify_event) => self.identify.on_connection_handler_event(
+                peer_id,
+                connection_id,
+                identify_event,
+            ),
+        }
+    }
+
     fn poll(
         &mut self,
         cx: &mut Context<'_>,
@@ -267,60 +337,6 @@ impl NetworkBehaviour for PeerReportBehaviour {
         }
 
         Poll::Pending
-    }
-
-    fn on_connection_handler_event(
-        &mut self,
-        peer_id: PeerId,
-        connection_id: ConnectionId,
-        event: THandlerOutEvent<Self>,
-    ) {
-        match event {
-            Either::Left(heartbeat_event) => self.heartbeat.on_connection_handler_event(
-                peer_id,
-                connection_id,
-                heartbeat_event,
-            ),
-            Either::Right(identify_event) => self.identify.on_connection_handler_event(
-                peer_id,
-                connection_id,
-                identify_event,
-            ),
-        }
-    }
-
-    fn handle_established_inbound_connection(
-        &mut self,
-        _connection_id: ConnectionId,
-        peer: PeerId,
-        local_addr: &Multiaddr,
-        remote_addr: &Multiaddr,
-    ) -> Result<THandler<Self>, ConnectionDenied> {
-        self.identify
-            .handle_established_inbound_connection(
-                _connection_id,
-                peer,
-                local_addr,
-                remote_addr,
-            )
-            .map(Either::Right)
-    }
-
-    fn handle_established_outbound_connection(
-        &mut self,
-        _connection_id: ConnectionId,
-        peer: PeerId,
-        addr: &Multiaddr,
-        role_override: Endpoint,
-    ) -> Result<THandler<Self>, ConnectionDenied> {
-        self.identify
-            .handle_established_outbound_connection(
-                _connection_id,
-                peer,
-                addr,
-                role_override,
-            )
-            .map(Either::Right)
     }
 }
 

@@ -1159,7 +1159,7 @@ mod tests {
     }
 
     // Simulates 2 p2p nodes that connect to each other and consequently exchange Peer Info
-    // On sucessful connection, node B updates its latest BlockHeight
+    // On successful connection, node B updates its latest BlockHeight
     // and shares it with Peer A via Heartbeat protocol
     #[tokio::test]
     #[instrument]

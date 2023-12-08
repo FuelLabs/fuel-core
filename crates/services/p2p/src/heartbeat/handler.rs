@@ -126,8 +126,8 @@ impl ConnectionHandler for HeartbeatHandler {
     type ToBehaviour = HeartbeatOutEvent;
     type InboundProtocol = ReadyUpgrade<&'static str>;
     type OutboundProtocol = ReadyUpgrade<&'static str>;
-    type OutboundOpenInfo = ();
     type InboundOpenInfo = ();
+    type OutboundOpenInfo = ();
 
     fn listen_protocol(&self) -> SubstreamProtocol<ReadyUpgrade<&'static str>, ()> {
         SubstreamProtocol::new(ReadyUpgrade::new(HEARTBEAT_PROTOCOL), ())
@@ -136,25 +136,6 @@ impl ConnectionHandler for HeartbeatHandler {
     fn connection_keep_alive(&self) -> bool {
         // Heartbeat protocol wants to keep the connection alive
         true
-    }
-
-    fn on_behaviour_event(&mut self, event: Self::FromBehaviour) {
-        let HeartbeatInEvent::LatestBlock(block_height) = event;
-
-        match self.outbound.take() {
-            Some(OutboundState::RequestingBlockHeight {
-                requested: true,
-                stream,
-            }) => {
-                // start new send timeout
-                self.timer = Box::pin(sleep(self.config.send_timeout));
-                // send latest `BlockHeight`
-                self.outbound = Some(OutboundState::SendingBlockHeight(
-                    send_block_height(stream, block_height).boxed(),
-                ))
-            }
-            other_state => self.outbound = other_state,
-        }
     }
 
     fn poll(
@@ -266,6 +247,25 @@ impl ConnectionHandler for HeartbeatHandler {
             }
         }
         Poll::Pending
+    }
+
+    fn on_behaviour_event(&mut self, event: Self::FromBehaviour) {
+        let HeartbeatInEvent::LatestBlock(block_height) = event;
+
+        match self.outbound.take() {
+            Some(OutboundState::RequestingBlockHeight {
+                requested: true,
+                stream,
+            }) => {
+                // start new send timeout
+                self.timer = Box::pin(sleep(self.config.send_timeout));
+                // send latest `BlockHeight`
+                self.outbound = Some(OutboundState::SendingBlockHeight(
+                    send_block_height(stream, block_height).boxed(),
+                ))
+            }
+            other_state => self.outbound = other_state,
+        }
     }
 
     fn on_connection_event(
