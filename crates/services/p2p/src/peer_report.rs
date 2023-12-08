@@ -29,6 +29,8 @@ use libp2p_identify::Event;
 use libp2p_swarm::{
     derive_prelude::Either,
     ConnectionDenied,
+    ConnectionHandler,
+    ConnectionHandlerSelect,
     ConnectionId,
     NetworkBehaviour,
     THandler,
@@ -128,7 +130,7 @@ impl PeerReportBehaviour {
 }
 
 impl NetworkBehaviour for PeerReportBehaviour {
-    type ConnectionHandler = Either<
+    type ConnectionHandler = ConnectionHandlerSelect<
         <Heartbeat as NetworkBehaviour>::ConnectionHandler,
         <Identify as NetworkBehaviour>::ConnectionHandler,
     >;
@@ -141,22 +143,20 @@ impl NetworkBehaviour for PeerReportBehaviour {
         local_addr: &Multiaddr,
         remote_addr: &Multiaddr,
     ) -> Result<THandler<Self>, ConnectionDenied> {
-        self.heartbeat
-            .handle_established_inbound_connection(
-                _connection_id,
-                peer,
-                local_addr,
-                remote_addr,
-            )
-            .map(Either::Left)
-        // self.identify
-        //     .handle_established_inbound_connection(
-        //         _connection_id,
-        //         peer,
-        //         local_addr,
-        //         remote_addr,
-        //     )
-        //     .map(Either::Right)
+        let heartbeat_handler = self.heartbeat.handle_established_inbound_connection(
+            _connection_id,
+            peer,
+            local_addr,
+            remote_addr,
+        )?;
+        let identity_handler = self.identify.handle_established_inbound_connection(
+            _connection_id,
+            peer,
+            local_addr,
+            remote_addr,
+        )?;
+        let handler = ConnectionHandler::select(heartbeat_handler, identity_handler);
+        Ok(handler)
     }
 
     fn handle_established_outbound_connection(
@@ -166,22 +166,20 @@ impl NetworkBehaviour for PeerReportBehaviour {
         addr: &Multiaddr,
         role_override: Endpoint,
     ) -> Result<THandler<Self>, ConnectionDenied> {
-        // self.heartbeat
-        //     .handle_established_outbound_connection(
-        //         _connection_id,
-        //         peer,
-        //         addr,
-        //         role_override,
-        //     )
-        //     .map(Either::Left)
-        self.identify
-            .handle_established_outbound_connection(
-                _connection_id,
-                peer,
-                addr,
-                role_override,
-            )
-            .map(Either::Right)
+        let heartbeat_handler = self.heartbeat.handle_established_outbound_connection(
+            _connection_id,
+            peer,
+            addr,
+            role_override,
+        )?;
+        let identity_handler = self.identify.handle_established_outbound_connection(
+            _connection_id,
+            peer,
+            addr,
+            role_override,
+        )?;
+        let handler = ConnectionHandler::select(heartbeat_handler, identity_handler);
+        Ok(handler)
     }
 
     fn on_swarm_event(&mut self, event: FromSwarm) {
