@@ -86,7 +86,7 @@ cynic = { version = "2.2.1", features = ["http-reqwest"] }
 clap = "4.1"
 derive_more = { version = "0.99" }
 hyper = { version = "0.14.26" }
-primitive-types = "0.12"
+primitive-types = { version = "0.12", default-features = false }
 rand = "0.8"
 parking_lot = "0.12"
 tokio = { version = "1.27", default-features = false }

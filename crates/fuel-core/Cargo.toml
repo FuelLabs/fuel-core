@@ -41,9 +41,7 @@ futures = { workspace = true }
 hex = { version = "0.4", features = ["serde"] }
 hyper = { workspace = true }
 itertools = { workspace = true }
-parking_lot = { workspace = true }
 postcard = { workspace = true, features = ["use-std"] }
-primitive-types = { workspace = true }
 rand = { workspace = true }
 rocksdb = { version = "0.21", default-features = false, features = [
     "lz4",
@@ -63,6 +61,7 @@ uuid = { version = "1.1", features = ["v4"] }
 
 [dev-dependencies]
 assert_matches = "1.5"
+fuel-core-executor = { workspace = true, features = ["test-helpers"] }
 fuel-core-services = { path = "./../services", features = ["test-helpers"] }
 fuel-core-storage = { path = "./../storage", features = ["test-helpers"] }
 fuel-core-trace = { path = "./../trace" }
