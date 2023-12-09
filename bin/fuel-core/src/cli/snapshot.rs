@@ -49,7 +49,7 @@ pub enum SubCommands {
     /// Creates a snapshot of the entire database and produces a chain config.
     #[command(arg_required_else_help = true)]
     Everything {
-        /// Specify a a path to the directory containing the chain config. Defaults used if no path
+        /// Specify a path to the directory containing the chain config. Defaults used if no path
         /// is provided.
         #[clap(name = "CHAIN_CONFIG", long = "chain")]
         chain_config: Option<PathBuf>,
