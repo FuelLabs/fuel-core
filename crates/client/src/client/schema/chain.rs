@@ -333,7 +333,7 @@ pub struct PeerInfo {
     pub addresses: Vec<String>,
     pub client_version: Option<String>,
     pub block_height: Option<U32>,
-    pub time_since_last_heartbeat: U64,
+    pub last_heartbeat_ms: U64,
     pub app_score: f64,
 }
 

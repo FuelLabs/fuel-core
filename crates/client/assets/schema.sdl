@@ -655,7 +655,10 @@ type PeerInfo {
 	addresses: [String!]!
 	clientVersion: String
 	blockHeight: U32
-	timeSinceLastHeartbeat: U64!
+	"""
+	The last heartbeat from this peer in unix epoch time ms
+	"""
+	lastHeartbeatMs: U64!
 	appScore: Float!
 }
 

@@ -12,7 +12,7 @@ use std::{
         Formatter,
     },
     str::FromStr,
-    time::Instant,
+    time::SystemTime,
 };
 
 /// Contains types and logic for Peer Reputation
@@ -188,5 +188,5 @@ pub struct HeartbeatData {
     /// The currently reported block height of the peer
     pub block_height: Option<BlockHeight>,
     /// The instant representing when the latest heartbeat was received.
-    pub last_heartbeat: Instant,
+    pub last_heartbeat: SystemTime,
 }

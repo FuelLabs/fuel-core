@@ -313,10 +313,7 @@ impl P2pPort for P2PAdapter {
                         client_version: None,
                         heartbeat_data: HeartbeatData {
                             block_height: peer_info.heartbeat_data.block_height,
-                            last_heartbeat: peer_info
-                                .heartbeat_data
-                                .last_heartbeat
-                                .into(),
+                            last_heartbeat: peer_info.heartbeat_data.last_heartbeat_sys,
                         },
                         app_score: peer_info.score,
                     })

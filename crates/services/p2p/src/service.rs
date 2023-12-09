@@ -869,7 +869,10 @@ pub mod tests {
     use fuel_core_storage::Result as StorageResult;
     use fuel_core_types::fuel_types::BlockHeight;
     use futures::FutureExt;
-    use std::collections::VecDeque;
+    use std::{
+        collections::VecDeque,
+        time::SystemTime,
+    };
 
     #[derive(Clone, Debug)]
     struct FakeDb;
@@ -1073,6 +1076,7 @@ pub mod tests {
         let heartbeat_data = HeartbeatData {
             block_height: None,
             last_heartbeat: Instant::now(),
+            last_heartbeat_sys: SystemTime::now(),
             window: 0,
             durations,
         };
@@ -1146,12 +1150,14 @@ pub mod tests {
         // under the limit
         let last_duration = Duration::from_secs(5);
         let last_heartbeat = Instant::now() - Duration::from_secs(50);
+        let last_heartbeat_sys = SystemTime::now() - Duration::from_secs(50);
         let mut durations = VecDeque::new();
         durations.push_front(last_duration);
 
         let heartbeat_data = HeartbeatData {
             block_height: None,
             last_heartbeat,
+            last_heartbeat_sys,
             window: 0,
             durations,
         };

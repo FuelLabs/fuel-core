@@ -14,7 +14,7 @@ use std::{
     str::FromStr,
     time::{
         Duration,
-        Instant,
+        UNIX_EPOCH,
     },
 };
 
@@ -48,12 +48,9 @@ impl From<schema::chain::PeerInfo> for PeerInfo {
             client_version: info.client_version,
             heartbeat_data: HeartbeatData {
                 block_height: info.block_height.map(|h| h.0.into()),
-                // this may be slightly off since we dont return the actual time via the api
-                last_heartbeat: Instant::now()
-                    .checked_sub(Duration::from_millis(
-                        info.time_since_last_heartbeat.into(),
-                    ))
-                    .unwrap_or_else(Instant::now),
+                last_heartbeat: UNIX_EPOCH
+                    .checked_add(Duration::from_millis(info.last_heartbeat_ms.0))
+                    .unwrap_or(UNIX_EPOCH),
             },
             app_score: info.app_score,
         }
