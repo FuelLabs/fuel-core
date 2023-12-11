@@ -58,14 +58,14 @@ pub struct FuelBehaviour<Codec: NetworkCodec> {
     /// The Behaviour to manage connections to blocked peers.
     blocked_peer: allow_block_list::Behaviour<allow_block_list::BlockedPeers>,
 
+    /// Message propagation for p2p
+    pub(crate) gossipsub: Gossipsub,
+
     /// Node discovery
     discovery: DiscoveryBehaviour,
 
     /// Identifies and periodically requests `BlockHeight` from connected nodes
     peer_report: PeerReportBehaviour,
-
-    /// Message propagation for p2p
-    gossipsub: Gossipsub,
 
     /// RequestResponse protocol
     request_response: RequestResponse<Codec>,
