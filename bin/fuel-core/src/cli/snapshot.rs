@@ -14,8 +14,6 @@ use fuel_core::{
     database::Database,
     types::fuel_types::ContractId,
 };
-use fuel_core_storage::Result as StorageResult;
-use itertools::Itertools;
 use std::path::{
     Path,
     PathBuf,
@@ -109,7 +107,7 @@ fn full_snapshot(
     db: impl ChainStateDb,
 ) -> Result<(), anyhow::Error> {
     let encoder = initialize_encoder(output_dir, state_encoding_format)?;
-    write_chain_state(db, encoder)?;
+    encoding::write_chain_state(db, encoder)?;
 
     let chain_config = load_chain_config(chain_config)?;
     chain_config.create_config_file(output_dir)?;
@@ -117,8 +115,52 @@ fn full_snapshot(
     Ok(())
 }
 
-fn write_chain_state(db: impl ChainStateDb, mut encoder: Encoder) -> anyhow::Result<()> {
-    fn write<T>(
+mod encoding {
+    use fuel_core::chain_config::{
+        ChainStateDb,
+        Encoder,
+        Group,
+        WithId,
+    };
+
+    use fuel_core_storage::Result as StorageResult;
+    use itertools::Itertools;
+
+    pub(crate) fn write_chain_state(
+        db: impl ChainStateDb,
+        mut encoder: Encoder,
+    ) -> anyhow::Result<()> {
+        let group_size = 1000;
+
+        let coins = db.iter_coin_configs();
+        group_and_write(coins, group_size, |chunk| encoder.write_coins(chunk))?;
+
+        let messages = db.iter_message_configs();
+        group_and_write(messages, group_size, |chunk| encoder.write_messages(chunk))?;
+
+        let contracts = db.iter_contract_configs();
+        group_and_write(contracts, group_size, |chunk| {
+            encoder.write_contracts(chunk)
+        })?;
+
+        group_by_contract_and_write(
+            db.iter_contract_state_configs(),
+            |state_group| encoder.write_contract_state(state_group),
+            group_size,
+        )?;
+
+        group_by_contract_and_write(
+            db.iter_contract_balance_configs(),
+            |balance_group| encoder.write_contract_balance(balance_group),
+            group_size,
+        )?;
+
+        encoder.close()?;
+
+        Ok(())
+    }
+
+    fn group_and_write<T>(
         data: impl Iterator<Item = StorageResult<T>>,
         group_size: usize,
         mut write: impl FnMut(Vec<T>) -> anyhow::Result<()>,
@@ -128,32 +170,27 @@ fn write_chain_state(db: impl ChainStateDb, mut encoder: Encoder) -> anyhow::Res
             .try_for_each(|chunk| write(chunk.try_collect()?))
     }
 
-    let group_size = 1000;
-
-    let coins = db.iter_coin_configs();
-    write(coins, group_size, |chunk| encoder.write_coins(chunk))?;
-
-    let messages = db.iter_message_configs();
-    write(messages, group_size, |chunk| encoder.write_messages(chunk))?;
-
-    let contracts = db.iter_contract_configs();
-    write(contracts, group_size, |chunk| {
-        encoder.write_contracts(chunk)
-    })?;
-
-    let contract_states = db.iter_contract_state_configs();
-    write(contract_states, group_size, |chunk| {
-        encoder.write_contract_state(chunk)
-    })?;
-
-    let contract_balances = db.iter_contract_balance_configs();
-    write(contract_balances, group_size, |chunk| {
-        encoder.write_contract_balance(chunk)
-    })?;
-
-    encoder.close()?;
-
-    Ok(())
+    fn group_by_contract_and_write<T>(
+        iter: impl Iterator<Item = StorageResult<WithId<T>>>,
+        mut writer: impl FnMut(WithId<Group<T>>) -> anyhow::Result<()>,
+        group_size: usize,
+    ) -> anyhow::Result<()> {
+        iter.process_results(move |iter| {
+            iter.group_by(|e| e.id)
+                .into_iter()
+                .try_for_each(move |(key, group)| {
+                    group
+                        .map(|e| e.data)
+                        .chunks(group_size)
+                        .into_iter()
+                        .map(move |chunk| WithId {
+                            id: key,
+                            data: chunk.collect_vec(),
+                        })
+                        .try_for_each(|el| writer(el))
+                })
+        })?
+    }
 }
 
 fn initialize_encoder(

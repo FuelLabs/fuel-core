@@ -2,7 +2,7 @@
 #![deny(clippy::cast_possible_truncation)]
 #![deny(unused_crate_dependencies)]
 #![deny(unused_must_use)]
-//#![deny(warnings)]
+////#![deny(warnings)]
 
 pub mod block_producer;
 pub mod config;

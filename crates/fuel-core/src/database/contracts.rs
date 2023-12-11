@@ -9,6 +9,7 @@ use fuel_core_chain_config::{
     ContractBalance,
     ContractConfig,
     ContractStateConfig,
+    WithId,
 };
 use fuel_core_storage::{
     iter::IterDirection,
@@ -155,7 +156,7 @@ impl StorageWrite<ContractsRawCode> for Database {
 impl Database {
     pub fn iter_contract_state_configs(
         &self,
-    ) -> impl Iterator<Item = StorageResult<ContractStateConfig>> + '_ {
+    ) -> impl Iterator<Item = StorageResult<WithId<ContractStateConfig>>> + '_ {
         self.iter_all::<Vec<u8>, Bytes32>(Column::ContractsState, None)
             .map(|res| {
                 let res = res?;
@@ -163,16 +164,15 @@ impl Database {
                 let key = Bytes32::new(res.0[32..].try_into()?);
                 let value = res.1;
 
-                Ok(ContractStateConfig {
-                    contract_id,
-                    key,
-                    value,
+                Ok(WithId {
+                    id: contract_id,
+                    data: ContractStateConfig { key, value },
                 })
             })
     }
     pub fn iter_contract_balance_configs(
         &self,
-    ) -> impl Iterator<Item = StorageResult<ContractBalance>> + '_ {
+    ) -> impl Iterator<Item = StorageResult<WithId<ContractBalance>>> + '_ {
         self.iter_all::<Vec<u8>, u64>(Column::ContractsAssets, None)
             .map(|res| {
                 let res = res?;
@@ -181,10 +181,9 @@ impl Database {
                 let asset_id = AssetId::new(res.0[32..].try_into()?);
                 let amount = res.1;
 
-                Ok(ContractBalance {
-                    contract_id,
-                    asset_id,
-                    amount,
+                Ok(WithId {
+                    id: contract_id,
+                    data: ContractBalance { asset_id, amount },
                 })
             })
     }

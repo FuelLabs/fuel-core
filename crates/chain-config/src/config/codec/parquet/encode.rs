@@ -30,14 +30,16 @@ use crate::{
     },
     CoinConfig,
     ContractConfig,
+    Group,
     MessageConfig,
+    WithId,
 };
 
 use super::schema::Schema;
 
 pub struct Encoder<W: Write + Send, T> {
     writer: SerializedFileWriter<W>,
-    _type: PhantomData<T>,
+    _group_type: PhantomData<T>,
 }
 
 impl<W: Write + Send, T: Schema> Encoder<W, T> {
@@ -54,7 +56,7 @@ impl<W: Write + Send, T: Schema> Encoder<W, T> {
 
         Ok(Self {
             writer,
-            _type: PhantomData,
+            _group_type: PhantomData,
         })
     }
 }
@@ -62,9 +64,9 @@ impl<W: Write + Send, T: Schema> Encoder<W, T> {
 impl<W, T> Encoder<W, T>
 where
     W: Write + Send,
-    Vec<T>: ColumnEncoder,
+    T: ColumnEncoder,
 {
-    pub fn write(&mut self, elements: Vec<T>) -> anyhow::Result<()> {
+    pub fn write(&mut self, elements: T) -> anyhow::Result<()> {
         elements.encode_columns(&mut self.writer)
     }
 
@@ -382,7 +384,7 @@ impl ColumnEncoder for Vec<MessageConfig> {
     }
 }
 
-impl ColumnEncoder for Vec<ContractStateConfig> {
+impl ColumnEncoder for WithId<Group<ContractStateConfig>> {
     type ElementT = ContractStateConfig;
 
     fn encode_column(
@@ -392,22 +394,29 @@ impl ColumnEncoder for Vec<ContractStateConfig> {
     ) -> anyhow::Result<()> {
         match index {
             0 => {
-                let data = self
-                    .iter()
-                    .map(|el| el.contract_id.to_vec().into())
+                let data = std::iter::repeat_with(|| self.id.to_vec().into())
+                    .take(self.data.len())
                     .collect_vec();
                 column
                     .typed::<FixedLenByteArrayType>()
                     .write_batch(&data, None, None)?;
             }
             1 => {
-                let data = self.iter().map(|el| el.key.to_vec().into()).collect_vec();
+                let data = self
+                    .data
+                    .iter()
+                    .map(|el| el.key.to_vec().into())
+                    .collect_vec();
                 column
                     .typed::<FixedLenByteArrayType>()
                     .write_batch(&data, None, None)?;
             }
             2 => {
-                let data = self.iter().map(|el| el.value.to_vec().into()).collect_vec();
+                let data = self
+                    .data
+                    .iter()
+                    .map(|el| el.value.to_vec().into())
+                    .collect_vec();
                 column
                     .typed::<FixedLenByteArrayType>()
                     .write_batch(&data, None, None)?;
@@ -423,7 +432,7 @@ impl ColumnEncoder for Vec<ContractStateConfig> {
     }
 }
 
-impl ColumnEncoder for Vec<ContractBalance> {
+impl ColumnEncoder for WithId<Group<ContractBalance>> {
     type ElementT = ContractBalance;
 
     fn encode_column(
@@ -433,9 +442,8 @@ impl ColumnEncoder for Vec<ContractBalance> {
     ) -> anyhow::Result<()> {
         match index {
             0 => {
-                let data = self
-                    .iter()
-                    .map(|el| el.contract_id.to_vec().into())
+                let data = std::iter::repeat_with(|| self.id.to_vec().into())
+                    .take(self.data.len())
                     .collect_vec();
                 column
                     .typed::<FixedLenByteArrayType>()
@@ -443,6 +451,7 @@ impl ColumnEncoder for Vec<ContractBalance> {
             }
             1 => {
                 let data = self
+                    .data
                     .iter()
                     .map(|el| el.asset_id.to_vec().into())
                     .collect_vec();
@@ -451,7 +460,7 @@ impl ColumnEncoder for Vec<ContractBalance> {
                     .write_batch(&data, None, None)?;
             }
             2 => {
-                let data = self.iter().map(|el| el.amount as i64).collect_vec();
+                let data = self.data.iter().map(|el| el.amount as i64).collect_vec();
                 column.typed::<Int64Type>().write_batch(&data, None, None)?;
             }
             unknown_column => {
