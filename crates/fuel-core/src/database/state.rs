@@ -432,7 +432,7 @@ mod tests {
     }
 
     #[test]
-    fn updating_foreign_contract_doesnt_affect_the_given_contract_insertion() {
+    fn updating_foreign_contract_does_not_affect_the_given_contract_insertion() {
         let given_contract_id = ContractId::from([1u8; 32]);
         let foreign_contract_id = ContractId::from([2u8; 32]);
         let database = &mut Database::default();
