@@ -3,7 +3,6 @@ use crate::{
         service::Database,
         Config as GraphQLConfig,
     },
-    graphql_api::service::P2pService,
     query::{
         BlockQueryData,
         ChainQueryData,
@@ -749,17 +748,18 @@ impl ChainInfo {
         height.0.into()
     }
 
-    async fn peers(&self, ctx: &Context<'_>) -> anyhow::Result<Vec<PeerInfo>> {
+    async fn peers(&self, _ctx: &Context<'_>) -> anyhow::Result<Vec<PeerInfo>> {
         #[cfg(feature = "p2p")]
         {
-            let p2p: &P2pService = ctx.data_unchecked();
+            let p2p: &crate::fuel_core_graphql_api::service::P2pService =
+                _ctx.data_unchecked();
             let peer_info = p2p.all_peer_info().await?;
             let peers = peer_info.into_iter().map(PeerInfo).collect();
             Ok(peers)
         }
         #[cfg(not(feature = "p2p"))]
         {
-            Err(anyhow!(
+            Err(anyhow::anyhow!(
                 "Peering is disabled in this build, try using the `p2p` feature flag."
             ))
         }

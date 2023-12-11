@@ -65,10 +65,7 @@ use fuel_core_types::{
     },
     services::{
         graphql_api::ContractBalance,
-        p2p::{
-            PeerId,
-            PeerInfo,
-        },
+        p2p::PeerInfo,
         txpool::{
             InsertionResult,
             TransactionStatus,
@@ -275,26 +272,6 @@ impl BlockProducerPort for BlockProducerAdapter {}
 
 #[async_trait::async_trait]
 impl P2pPort for P2PAdapter {
-    async fn connected_peers(&self) -> anyhow::Result<Vec<PeerId>> {
-        #[cfg(feature = "p2p")]
-        {
-            if let Some(service) = &self.service {
-                service.get_peer_ids().await.map(|peers| {
-                    peers
-                        .iter()
-                        .map(|peer_id| peer_id.to_bytes().into())
-                        .collect()
-                })
-            } else {
-                Ok(vec![])
-            }
-        }
-        #[cfg(not(feature = "p2p"))]
-        {
-            Ok(vec![])
-        }
-    }
-
     async fn all_peer_info(&self) -> anyhow::Result<Vec<PeerInfo>> {
         #[cfg(feature = "p2p")]
         {
@@ -304,7 +281,9 @@ impl P2pPort for P2PAdapter {
                 Ok(peers
                     .into_iter()
                     .map(|(peer_id, peer_info)| PeerInfo {
-                        id: PeerId::from(peer_id.to_bytes()),
+                        id: fuel_core_types::services::p2p::PeerId::from(
+                            peer_id.to_bytes(),
+                        ),
                         peer_addresses: peer_info
                             .peer_addresses
                             .iter()

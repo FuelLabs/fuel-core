@@ -326,6 +326,7 @@ pub struct ChainInfo {
     pub latest_block: Block,
     pub consensus_parameters: ConsensusParameters,
 }
+
 #[derive(cynic::QueryFragment, Debug)]
 #[cynic(schema_path = "./assets/schema.sdl", graphql_type = "PeerInfo")]
 pub struct PeerInfo {
