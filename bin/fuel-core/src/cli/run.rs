@@ -425,7 +425,6 @@ async fn shutdown_signal() -> anyhow::Result<()> {
 
         let mut sigint =
             tokio::signal::unix::signal(tokio::signal::unix::SignalKind::interrupt())?;
-        #[allow(clippy::never_loop)]
         loop {
             tokio::select! {
                 _ = sigterm.recv() => {
