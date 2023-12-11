@@ -31,6 +31,6 @@ rand = { workspace = true }
 serde_json = { version = "1.0", features = ["raw_value"] }
 
 [features]
-default = ["std"]
+default = ["std", "fuel-core-types/std"]
 random = ["dep:rand", "fuel-core-types/random"]
 std = ["dep:serde_json", "fuel-core-types/std", "anyhow/std"]
