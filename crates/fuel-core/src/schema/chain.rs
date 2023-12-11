@@ -23,6 +23,7 @@ use async_graphql::{
     Union,
 };
 use fuel_core_types::fuel_tx;
+use std::time::UNIX_EPOCH;
 
 pub struct ChainInfo;
 pub struct ConsensusParameters(fuel_tx::ConsensusParameters);
@@ -658,6 +659,49 @@ impl GasCosts {
     }
 }
 
+struct PeerInfo(fuel_core_types::services::p2p::PeerInfo);
+
+#[Object]
+impl PeerInfo {
+    /// The libp2p peer id
+    async fn id(&self) -> String {
+        self.0.id.to_string()
+    }
+
+    /// The advertised multi-addrs that can be used to connect to this peer
+    async fn addresses(&self) -> Vec<String> {
+        self.0.peer_addresses.iter().cloned().collect()
+    }
+
+    /// The self-reported version of the client the peer is using
+    async fn client_version(&self) -> Option<String> {
+        self.0.client_version.clone()
+    }
+
+    /// The last reported height of the peer
+    async fn block_height(&self) -> Option<U32> {
+        self.0
+            .heartbeat_data
+            .block_height
+            .map(|height| (*height).into())
+    }
+
+    /// The last heartbeat from this peer in unix epoch time ms
+    async fn last_heartbeat_ms(&self) -> U64 {
+        let time = self.0.heartbeat_data.last_heartbeat;
+        let time = time
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_millis();
+        U64(time.try_into().unwrap_or_default())
+    }
+
+    /// The internal fuel p2p reputation of this peer
+    async fn app_score(&self) -> f64 {
+        self.0.app_score
+    }
+}
+
 #[Object]
 impl LightOperation {
     async fn base(&self) -> U64 {
@@ -704,8 +748,21 @@ impl ChainInfo {
         height.0.into()
     }
 
-    async fn peer_count(&self) -> u16 {
-        0
+    async fn peers(&self, _ctx: &Context<'_>) -> anyhow::Result<Vec<PeerInfo>> {
+        #[cfg(feature = "p2p")]
+        {
+            let p2p: &crate::fuel_core_graphql_api::service::P2pService =
+                _ctx.data_unchecked();
+            let peer_info = p2p.all_peer_info().await?;
+            let peers = peer_info.into_iter().map(PeerInfo).collect();
+            Ok(peers)
+        }
+        #[cfg(not(feature = "p2p"))]
+        {
+            Err(anyhow::anyhow!(
+                "Peering is disabled in this build, try using the `p2p` feature flag."
+            ))
+        }
     }
 
     async fn consensus_parameters(

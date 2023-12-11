@@ -94,7 +94,7 @@ type ChainInfo {
 	name: String!
 	latestBlock: Block!
 	daHeight: U64!
-	peerCount: Int!
+	peers: [PeerInfo!]!
 	consensusParameters: ConsensusParameters!
 	gasCosts: GasCosts!
 }
@@ -648,6 +648,18 @@ type PageInfo {
 	When paginating forwards, the cursor to continue.
 	"""
 	endCursor: String
+}
+
+type PeerInfo {
+	id: String!
+	addresses: [String!]!
+	clientVersion: String
+	blockHeight: U32
+	"""
+	The last heartbeat from this peer in unix epoch time ms
+	"""
+	lastHeartbeatMs: U64!
+	appScore: Float!
 }
 
 type PoAConsensus {
