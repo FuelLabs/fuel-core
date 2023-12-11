@@ -1,6 +1,5 @@
 ---
 source: crates/client/src/client/schema/chain.rs
-assertion_line: 348
 expression: operation.query
 ---
 query {
@@ -12,7 +11,7 @@ query {
       addresses
       clientVersion
       blockHeight
-      timeSinceLastHeartbeat
+      lastHeartbeatMs
       appScore
     }
     latestBlock {
