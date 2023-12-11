@@ -651,14 +651,29 @@ type PageInfo {
 }
 
 type PeerInfo {
+	"""
+	The libp2p peer id
+	"""
 	id: String!
+	"""
+	The advertised multi-addrs that can be used to connect to this peer
+	"""
 	addresses: [String!]!
+	"""
+	The self-reported version of the client the peer is using
+	"""
 	clientVersion: String
+	"""
+	The last reported height of the peer
+	"""
 	blockHeight: U32
 	"""
 	The last heartbeat from this peer in unix epoch time ms
 	"""
 	lastHeartbeatMs: U64!
+	"""
+	The internal fuel p2p reputation of this peer
+	"""
 	appScore: Float!
 }
 
