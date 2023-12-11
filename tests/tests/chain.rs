@@ -3,7 +3,6 @@ use fuel_core::service::{
     FuelService,
 };
 use fuel_core_client::client::FuelClient;
-use std::time::SystemTime;
 
 #[tokio::test]
 async fn chain_info() {
@@ -97,7 +96,7 @@ async fn test_peer_info() {
         .find(|info| info.id.to_string() == validator_peer_id.to_base58())
         .expect("Should be connected to validator");
 
-    let time_since_heartbeat = SystemTime::now()
+    let time_since_heartbeat = std::time::SystemTime::now()
         .duration_since(info.heartbeat_data.last_heartbeat)
         .unwrap();
     assert!(time_since_heartbeat < Duration::from_secs(10));
