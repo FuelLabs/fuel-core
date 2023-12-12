@@ -272,9 +272,6 @@ mod tests {
 
     #[test]
     fn can_update_merkle_tree_in_batches() {
-        // test that we can use batch_insert_contract_state to update the merkle tree
-        // in batches and that the merkle root is updated correctly after each batch update
-
         let mut rng = rand::thread_rng();
         let contract_id = ContractId::from([1u8; 32]);
         let mut database = Database::default();
@@ -301,6 +298,7 @@ mod tests {
             MerkleTree::load(storage, &root)
                 .map_err(|err| StorageError::Other(anyhow::anyhow!("{err:?}")))
                 .unwrap();
+
         assert_eq!(
             tree.root(),
             in_memory::MerkleTree::nodes_from_set(

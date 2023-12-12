@@ -340,10 +340,6 @@ fn import_contract_state(
     database: &Database,
     contract_states: IntoIter<ContractStateConfig>,
 ) -> anyhow::Result<()> {
-    // let (cursor, root_calculator) =
-    // resume_import(database, StateImportProgressKey::Coins)?;
-    // let mut state_reader = JsonBatchReader::new(coins_reader, cursor)?;
-
     for batch in contract_states {
         let mut database_transaction = Transactional::transaction(database);
         let database = database_transaction.as_mut();
@@ -351,7 +347,14 @@ fn import_contract_state(
         // TODO
         let batch = batch.unwrap();
 
-        init_contract_state(database, batch.data)?;
+        for (contract_id, state_entries) in batch
+            .data
+            .into_iter()
+            .group_by(|s| s.contract_id)
+            .into_iter()
+        {
+            init_contract_state(database, contract_id, state_entries.collect())?;
+        }
         database_transaction.commit()?;
     }
 
@@ -372,7 +375,14 @@ fn import_contract_balance(
 
         let batch = batch.unwrap();
 
-        init_contract_balance(database, batch.data)?;
+        for (contract_id, balance_entries) in batch
+            .data
+            .into_iter()
+            .group_by(|s| s.contract_id)
+            .into_iter()
+        {
+            init_contract_balance(database, contract_id, balance_entries.collect())?;
+        }
         database_transaction.commit()?;
     }
 
@@ -505,12 +515,10 @@ fn init_contract(
 
 fn init_contract_state(
     db: &mut Database,
+    contract_id: Bytes32,
     state: Vec<ContractStateConfig>,
 ) -> anyhow::Result<()> {
-    let contract_id = state
-        .first()
-        .map(|s| ContractId::from(*s.contract_id))
-        .unwrap();
+    let contract_id = ContractId::from(*contract_id);
     let entries = state.into_iter().map(|s| (s.key, s.value)).collect_vec();
     db.batch_insert_contract_state(&contract_id, entries)?;
 
@@ -519,12 +527,10 @@ fn init_contract_state(
 
 fn init_contract_balance(
     db: &mut Database,
+    contract_id: Bytes32,
     balance: Vec<ContractBalanceConfig>,
 ) -> anyhow::Result<()> {
-    let contract_id = balance
-        .first()
-        .map(|s| ContractId::from(*s.contract_id))
-        .unwrap();
+    let contract_id = ContractId::from(*contract_id);
     let entries = balance
         .into_iter()
         .map(|s| (s.asset_id, s.amount))
