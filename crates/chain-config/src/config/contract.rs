@@ -63,16 +63,20 @@ pub struct ContractConfig {
 }
 
 #[cfg(all(test, feature = "random"))]
-impl ContractConfig {
-    pub fn random(rng: &mut impl ::rand::Rng) -> Self {
+impl crate::Randomize for ContractConfig {
+    fn randomize(mut rng: impl ::rand::Rng) -> Self {
         Self {
-            contract_id: ContractId::new(super::random_bytes_32(rng)),
-            code: (super::random_bytes_32(rng)).to_vec(),
-            salt: Salt::new(super::random_bytes_32(rng)),
-            tx_id: Some(super::random_bytes_32(rng).into()),
-            output_index: Some(rng.gen()),
-            tx_pointer_block_height: Some(BlockHeight::from(rng.gen::<u32>())),
-            tx_pointer_tx_idx: Some(rng.gen()),
+            contract_id: ContractId::new(super::random_bytes_32(&mut rng)),
+            code: (super::random_bytes_32(&mut rng)).to_vec(),
+            salt: Salt::new(super::random_bytes_32(&mut rng)),
+            tx_id: rng
+                .gen::<bool>()
+                .then(|| super::random_bytes_32(&mut rng).into()),
+            output_index: rng.gen::<bool>().then(|| rng.gen()),
+            tx_pointer_block_height: rng
+                .gen::<bool>()
+                .then(|| BlockHeight::from(rng.gen::<u32>())),
+            tx_pointer_tx_idx: rng.gen::<bool>().then(|| rng.gen()),
             // not populated since they have to be removed from the ContractConfig
             balances: None,
             state: None,

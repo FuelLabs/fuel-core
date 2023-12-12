@@ -19,123 +19,160 @@ type GroupResult<T> = anyhow::Result<Group<T>>;
 
 #[cfg(test)]
 mod tests {
-    use std::ops::Range;
-
-    use crate::{
-        config::{
-            contract_balance::ContractBalance,
-            contract_state::ContractStateConfig,
-        },
-        CoinConfig,
-        ContractConfig,
-        MessageConfig,
-    };
 
     use itertools::Itertools;
+
+    use crate::Randomize;
 
     use super::*;
 
     #[test]
-    fn writes_then_reads_written() {
-        let group_size = 100;
-        let num_groups = 10;
-        let starting_group_index = 3;
-        {
-            // Json
-            let temp_dir = tempfile::tempdir().unwrap();
-            let state_encoder = Encoder::json(temp_dir.path());
+    fn roundtrip_parquet() {
+        let skip_n_groups = 3;
 
-            let init_decoder = || Decoder::json(temp_dir.path(), group_size).unwrap();
+        let temp_dir = tempfile::tempdir().unwrap();
+        let mut encoder = Encoder::parquet(temp_dir.path(), 1).unwrap();
 
-            test_write_read(
-                state_encoder,
-                init_decoder,
-                group_size,
-                starting_group_index..num_groups,
-            );
-        }
-        {
-            // Parquet
-            let temp_dir = tempfile::tempdir().unwrap();
-            let state_encoder = Encoder::parquet(temp_dir.path(), 1).unwrap();
+        let mut group_generator = GroupGenerator::new(rand::thread_rng(), 100, 10);
 
-            let init_decoder = || Decoder::parquet(temp_dir.path());
+        let coin_groups =
+            group_generator.for_each_group(|group| encoder.write_coins(group));
+        let message_groups =
+            group_generator.for_each_group(|group| encoder.write_messages(group));
+        let contract_groups =
+            group_generator.for_each_group(|group| encoder.write_contracts(group));
+        let contract_state_groups =
+            group_generator.for_each_group(|group| encoder.write_contract_state(group));
+        let contract_balance_groups =
+            group_generator.for_each_group(|group| encoder.write_contract_balance(group));
 
-            test_write_read(
-                state_encoder,
-                init_decoder,
-                group_size,
-                starting_group_index..num_groups,
-            );
-        }
-    }
-
-    fn test_write_read(
-        mut encoder: Encoder,
-        init_decoder: impl FnOnce() -> Decoder,
-        group_size: usize,
-        group_range: Range<usize>,
-    ) {
-        let num_groups = group_range.end;
-        let mut rng = rand::thread_rng();
-        macro_rules! write_batches {
-            ($data_type: ty, $write_method:ident) => {{
-                let batches = ::std::iter::repeat_with(|| <$data_type>::random(&mut rng))
-                    .chunks(group_size)
-                    .into_iter()
-                    .map(|chunk| chunk.collect_vec())
-                    .enumerate()
-                    .map(|(index, data)| Group { index, data })
-                    .take(num_groups)
-                    .collect_vec();
-
-                for batch in &batches {
-                    encoder.$write_method(batch.data.clone()).unwrap();
-                }
-                batches
-            }};
-        }
-
-        let coin_batches = write_batches!(CoinConfig, write_coins);
-        let message_batches = write_batches!(MessageConfig, write_messages);
-        let contract_batches = write_batches!(ContractConfig, write_contracts);
-        let contract_state_batches =
-            write_batches!(ContractStateConfig, write_contract_state);
-        let contract_balance_batches =
-            write_batches!(ContractBalance, write_contract_balance);
         encoder.close().unwrap();
 
-        let state_reader = init_decoder();
-
-        let skip_first = group_range.start;
-        assert_batches_identical(
-            &coin_batches,
+        let state_reader = Decoder::parquet(temp_dir.path());
+        assert_groups_identical(
+            &coin_groups,
             state_reader.coins().unwrap(),
-            skip_first,
+            skip_n_groups,
         );
-        assert_batches_identical(
-            &message_batches,
+        assert_groups_identical(
+            &message_groups,
             state_reader.messages().unwrap(),
-            skip_first,
+            skip_n_groups,
         );
-        assert_batches_identical(
-            &contract_batches,
+        assert_groups_identical(
+            &contract_groups,
             state_reader.contracts().unwrap(),
-            skip_first,
+            skip_n_groups,
         );
-        assert_batches_identical(
-            &contract_state_batches,
+        assert_groups_identical(
+            &contract_state_groups,
             state_reader.contract_state().unwrap(),
-            skip_first,
+            skip_n_groups,
         );
-        assert_batches_identical(
-            &contract_balance_batches,
+        assert_groups_identical(
+            &contract_balance_groups,
             state_reader.contract_balance().unwrap(),
-            skip_first,
+            skip_n_groups,
         );
     }
 
-    fn assert_batches_identical<T>(
+    #[test]
+    fn roundtrip_json() {
+        let skip_n_groups = 3;
+        let group_size = 100;
+
+        let temp_dir = tempfile::tempdir().unwrap();
+        let mut encoder = Encoder::json(temp_dir.path());
+
+        let mut group_generator = GroupGenerator::new(rand::thread_rng(), group_size, 10);
+
+        let coin_groups =
+            group_generator.for_each_group(|group| encoder.write_coins(group));
+
+        let message_groups =
+            group_generator.for_each_group(|group| encoder.write_messages(group));
+
+        let contract_groups =
+            group_generator.for_each_group(|group| encoder.write_contracts(group));
+
+        let contract_state_groups =
+            group_generator.for_each_group(|group| encoder.write_contract_state(group));
+
+        let contract_balance_groups =
+            group_generator.for_each_group(|group| encoder.write_contract_balance(group));
+
+        encoder.close().unwrap();
+
+        let state_reader = Decoder::json(temp_dir.path(), group_size).unwrap();
+
+        assert_groups_identical(
+            &coin_groups,
+            state_reader.coins().unwrap(),
+            skip_n_groups,
+        );
+
+        assert_groups_identical(
+            &message_groups,
+            state_reader.messages().unwrap(),
+            skip_n_groups,
+        );
+
+        assert_groups_identical(
+            &contract_groups,
+            state_reader.contracts().unwrap(),
+            skip_n_groups,
+        );
+
+        assert_groups_identical(
+            &contract_state_groups,
+            state_reader.contract_state().unwrap(),
+            skip_n_groups,
+        );
+
+        assert_groups_identical(
+            &contract_balance_groups,
+            state_reader.contract_balance().unwrap(),
+            skip_n_groups,
+        );
+    }
+
+    struct GroupGenerator<R> {
+        rand: R,
+        group_size: usize,
+        num_groups: usize,
+    }
+
+    impl<R: ::rand::RngCore> GroupGenerator<R> {
+        fn new(rand: R, group_size: usize, num_groups: usize) -> Self {
+            Self {
+                rand,
+                group_size,
+                num_groups,
+            }
+        }
+        fn for_each_group<T: Randomize + Clone>(
+            &mut self,
+            mut f: impl FnMut(Vec<T>) -> anyhow::Result<()>,
+        ) -> Vec<Group<T>> {
+            let groups = self.generate_groups();
+            for group in &groups {
+                f(group.data.clone()).unwrap();
+            }
+            groups
+        }
+        fn generate_groups<T: Randomize>(&mut self) -> Vec<Group<T>> {
+            ::std::iter::repeat_with(|| T::randomize(&mut self.rand))
+                .chunks(self.group_size)
+                .into_iter()
+                .map(|chunk| chunk.collect_vec())
+                .enumerate()
+                .map(|(index, data)| Group { index, data })
+                .take(self.num_groups)
+                .collect()
+        }
+    }
+
+    fn assert_groups_identical<T>(
         original: &[Group<T>],
         read: impl Iterator<Item = Result<Group<T>, anyhow::Error>>,
         skip: usize,
