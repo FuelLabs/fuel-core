@@ -28,7 +28,11 @@ use fuel_core_benches::{
     default_gas_costs::default_gas_costs,
     *,
 };
-use fuel_core_chain_config::ContractConfig;
+use fuel_core_chain_config::{
+    ContractConfig,
+    StateConfig,
+    StateReader,
+};
 use fuel_core_storage::{
     tables::ContractsRawCode,
     StorageAsMut,
@@ -272,7 +276,11 @@ fn service_with_many_contracts(
             tx_pointer_tx_idx: None,
         })
         .collect::<Vec<_>>();
-    config.state_config.contracts = Some(contract_configs);
+    let state_config = StateConfig {
+        contracts: contract_configs,
+        ..Default::default()
+    };
+    config.state_reader = StateReader::in_memory(state_config, 1);
 
     config
         .chain_config

@@ -18,7 +18,6 @@ use fuel_core_importer::Importer;
 use fuel_core_storage::{
     tables::{
         Coins,
-        ContractsAssets,
         ContractsInfo,
         ContractsLatestUtxo,
         ContractsRawCode,
@@ -28,7 +27,6 @@ use fuel_core_storage::{
     transactional::Transactional,
     MerkleRoot,
     StorageAsMut,
-    StorageMutate,
 };
 use fuel_core_types::{
     blockchain::{
@@ -372,21 +370,9 @@ fn import_contract_balance(
         let mut database_transaction = Transactional::transaction(database);
         let database = database_transaction.as_mut();
 
-        // TODO
         let batch = batch.unwrap();
 
-        // TODO: set output_index
-        batch.data.iter().try_for_each(|balance| {
-            init_contract_balance(database, balance)?;
-            // save_import_progress(
-            // database,
-            // StateImportProgressKey::Coins,
-            // cursor + 1, // TODO: advance by # bytes read
-            // root_calculator,
-            // )
-            Ok::<(), anyhow::Error>(())
-        })?;
-
+        init_contract_balance(database, batch.data)?;
         database_transaction.commit()?;
     }
 
@@ -533,10 +519,17 @@ fn init_contract_state(
 
 fn init_contract_balance(
     db: &mut Database,
-    balance: &ContractBalanceConfig,
+    balance: Vec<ContractBalanceConfig>,
 ) -> anyhow::Result<()> {
-    let key = (&ContractId::from(*balance.contract_id), &balance.asset_id).into();
-    StorageMutate::<ContractsAssets>::insert(db, &key, &balance.amount).unwrap();
+    let contract_id = balance
+        .first()
+        .map(|s| ContractId::from(*s.contract_id))
+        .unwrap();
+    let entries = balance
+        .into_iter()
+        .map(|s| (s.asset_id, s.amount))
+        .collect_vec();
+    db.batch_insert_contract_balance(&contract_id, entries)?;
 
     Ok(())
 }

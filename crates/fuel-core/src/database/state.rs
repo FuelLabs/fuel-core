@@ -181,9 +181,12 @@ impl Database {
             .map(|metadata| metadata.root)
             .unwrap_or_else(|| in_memory::MerkleTree::new().root());
         let storage = self.borrow_mut();
-        let mut tree: MerkleTree<ContractsStateMerkleData, _> =
-            MerkleTree::load(storage, &root)
-                .map_err(|err| StorageError::Other(anyhow::anyhow!("{err:?}")))?;
+        let mut tree: MerkleTree<ContractsStateMerkleData, _> = MerkleTree::load(
+            storage, &root,
+        )
+        .map_err(|err: sparse::MerkleTreeError<StorageError>| {
+            StorageError::Other(anyhow::anyhow!("{err:?}"))
+        })?;
 
         for (key, value) in slots {
             tree.update(key, value.as_slice())
@@ -265,6 +268,48 @@ mod tests {
         let mut bytes = [0u8; 32];
         rng.fill(bytes.as_mut());
         bytes.into()
+    }
+
+    #[test]
+    fn can_update_merkle_tree_in_batches() {
+        // test that we can use batch_insert_contract_state to update the merkle tree
+        // in batches and that the merkle root is updated correctly after each batch update
+
+        let mut rng = rand::thread_rng();
+        let contract_id = ContractId::from([1u8; 32]);
+        let mut database = Database::default();
+
+        // generate a random set of state slots
+        let slots = (0..1000)
+            .map(|_| (random_bytes32(&mut rng), random_bytes32(&mut rng)))
+            .collect::<Vec<_>>();
+
+        // insert the slots in batches of 100
+        for batch in slots.chunks(100) {
+            database
+                .batch_insert_contract_state(&contract_id, batch.to_vec())
+                .unwrap();
+        }
+
+        // check that the merkle root is correct
+        let root = database
+            .storage::<ContractsState>()
+            .root(&contract_id)
+            .unwrap();
+        let storage = database.borrow_mut();
+        let tree: MerkleTree<ContractsStateMerkleData, _> =
+            MerkleTree::load(storage, &root)
+                .map_err(|err| StorageError::Other(anyhow::anyhow!("{err:?}")))
+                .unwrap();
+        assert_eq!(
+            tree.root(),
+            in_memory::MerkleTree::nodes_from_set(
+                slots
+                    .into_iter()
+                    .map(|(key, value)| (MerkleTreeKey::new(key), value))
+            )
+            .0
+        );
     }
 
     #[test]

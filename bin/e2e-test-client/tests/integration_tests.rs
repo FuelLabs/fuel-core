@@ -8,6 +8,7 @@ use fuel_core::txpool::types::ContractId;
 use fuel_core_chain_config::{
     ChainConfig,
     StateConfig,
+    StateReader,
 };
 use fuel_core_e2e_client::config::SuiteConfig;
 use std::{
@@ -117,7 +118,7 @@ fn dev_config() -> Config {
     );
 
     config.chain_config = chain_config;
-    config.state_config = state_config;
+    config.state_reader = StateReader::in_memory(state_config, 1);
 
     config.block_producer.coinbase_recipient = Some(
         ContractId::from_str(
