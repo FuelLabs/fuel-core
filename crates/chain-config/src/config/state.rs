@@ -27,14 +27,8 @@ use serde::{
     Deserialize,
     Serialize,
 };
-use std::collections::HashMap;
 #[cfg(feature = "std")]
 use std::path::Path;
-
-use crate::{
-    Group,
-    WithId,
-};
 
 use super::{
     coin::CoinConfig,
@@ -67,9 +61,9 @@ pub struct StateConfig {
     /// Contract state
     pub contracts: Vec<ContractConfig>,
     /// State entries of all contracts
-    pub contract_state: HashMap<Bytes32, Vec<ContractStateConfig>>,
+    pub contract_state: Vec<ContractStateConfig>,
     /// Balance entries of all contracts
-    pub contract_balance: HashMap<Bytes32, Vec<ContractBalance>>,
+    pub contract_balance: Vec<ContractBalance>,
 }
 
 impl StateConfig {
@@ -77,21 +71,8 @@ impl StateConfig {
         let coins = db.iter_coin_configs().try_collect()?;
         let messages = db.iter_message_configs().try_collect()?;
         let contracts = db.iter_contract_configs().try_collect()?;
-        let contract_state = {
-            let states: Vec<_> = db.iter_contract_state_configs().try_collect()?;
-            states
-                .into_iter()
-                .map(|state| (state.id, state.data))
-                .into_group_map()
-        };
-
-        let contract_balance = {
-            let balances: Vec<_> = db.iter_contract_balance_configs().try_collect()?;
-            balances
-                .into_iter()
-                .map(|balance| (balance.id, balance.data))
-                .into_group_map()
-        };
+        let contract_state = db.iter_contract_state_configs().try_collect()?;
+        let contract_balance = db.iter_contract_balance_configs().try_collect()?;
 
         Ok(Self {
             coins,
@@ -104,10 +85,7 @@ impl StateConfig {
 
     #[cfg(feature = "std")]
     pub fn load_from_directory(path: impl AsRef<Path>) -> anyhow::Result<Self> {
-        use crate::{
-            Decoder,
-            WithIndex,
-        };
+        use crate::Decoder;
 
         let decoder = Decoder::detect_encoding(path, 1)?;
 
@@ -129,31 +107,17 @@ impl StateConfig {
             .flatten_ok()
             .try_collect()?;
 
-        let contract_state = {
-            let states: Vec<_> = decoder.contract_state()?.try_collect()?;
-            states
-                .into_iter()
-                .flat_map(|state| {
-                    let contract_id = state.data.id;
-                    let states = state.data.data;
-                    states.into_iter().map(move |state| (contract_id, state))
-                })
-                .into_group_map()
-        };
+        let contract_state = decoder
+            .contract_state()?
+            .map_ok(|group| group.data)
+            .flatten_ok()
+            .try_collect()?;
 
-        let contract_balance = {
-            let balances: Vec<_> = decoder.contract_balance()?.try_collect()?;
-            balances
-                .into_iter()
-                .flat_map(|balance| {
-                    let contract_id = balance.data.id;
-                    let balances = balance.data.data;
-                    balances
-                        .into_iter()
-                        .map(move |balance| (contract_id, balance))
-                })
-                .into_group_map()
-        };
+        let contract_balance = decoder
+            .contract_balance()?
+            .map_ok(|group| group.data)
+            .flatten_ok()
+            .try_collect()?;
 
         Ok(Self {
             coins,
@@ -172,20 +136,8 @@ impl StateConfig {
         writer.write_coins(self.coins)?;
         writer.write_messages(self.messages)?;
         writer.write_contracts(self.contracts)?;
-        for (contract_id, states) in self.contract_state {
-            writer.write_contract_state(WithId {
-                id: contract_id,
-                data: states,
-            })?;
-        }
-
-        for (contract_id, balances) in self.contract_balance {
-            writer.write_contract_balance(WithId {
-                id: contract_id,
-                data: balances,
-            })?;
-        }
-
+        writer.write_contract_state(self.contract_state)?;
+        writer.write_contract_balance(self.contract_balance)?;
         writer.close()?;
 
         Ok(())
@@ -283,11 +235,9 @@ pub trait ChainStateDb {
     /// Returns the state of all contracts
     fn iter_contract_state_configs(
         &self,
-    ) -> BoxedIter<StorageResult<WithId<ContractStateConfig>>>;
+    ) -> BoxedIter<StorageResult<ContractStateConfig>>;
     /// Returns the balances of all contracts
-    fn iter_contract_balance_configs(
-        &self,
-    ) -> BoxedIter<StorageResult<WithId<ContractBalance>>>;
+    fn iter_contract_balance_configs(&self) -> BoxedIter<StorageResult<ContractBalance>>;
     /// Returns *all* unspent message configs available in the database.
     fn iter_message_configs(&self) -> BoxedIter<StorageResult<MessageConfig>>;
     /// Returns the last available block height.
@@ -315,13 +265,11 @@ where
 
     fn iter_contract_state_configs(
         &self,
-    ) -> BoxedIter<StorageResult<WithId<ContractStateConfig>>> {
+    ) -> BoxedIter<StorageResult<ContractStateConfig>> {
         (*self).iter_contract_state_configs()
     }
 
-    fn iter_contract_balance_configs(
-        &self,
-    ) -> BoxedIter<StorageResult<WithId<ContractBalance>>> {
+    fn iter_contract_balance_configs(&self) -> BoxedIter<StorageResult<ContractBalance>> {
         (*self).iter_contract_balance_configs()
     }
 

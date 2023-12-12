@@ -12,33 +12,13 @@ use crate::{
     },
     CoinConfig,
     ContractConfig,
-    Group,
     MessageConfig,
-    WithId,
 };
 
 pub trait Schema {
     fn schema() -> Type;
     fn num_of_columns() -> usize {
         Self::schema().get_fields().len()
-    }
-}
-
-impl<T> Schema for Group<T>
-where
-    T: Schema,
-{
-    fn schema() -> Type {
-        T::schema()
-    }
-}
-
-impl<T> Schema for WithId<Group<T>>
-where
-    T: Schema,
-{
-    fn schema() -> Type {
-        T::schema()
     }
 }
 

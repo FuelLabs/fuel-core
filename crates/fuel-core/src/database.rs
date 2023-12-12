@@ -10,11 +10,8 @@ use crate::{
 use fuel_core_chain_config::{
     ChainStateDb,
     CoinConfig,
-    ContractBalance,
     ContractConfig,
-    ContractStateConfig,
     MessageConfig,
-    WithId,
 };
 use fuel_core_storage::{
     iter::{
@@ -519,13 +516,13 @@ impl ChainStateDb for Database {
 
     fn iter_contract_state_configs(
         &self,
-    ) -> BoxedIter<StorageResult<WithId<ContractStateConfig>>> {
+    ) -> BoxedIter<StorageResult<fuel_core_chain_config::ContractStateConfig>> {
         Self::iter_contract_state_configs(self).into_boxed()
     }
 
     fn iter_contract_balance_configs(
         &self,
-    ) -> BoxedIter<StorageResult<WithId<ContractBalance>>> {
+    ) -> BoxedIter<StorageResult<fuel_core_chain_config::ContractBalance>> {
         Self::iter_contract_balance_configs(self).into_boxed()
     }
 

@@ -21,31 +21,29 @@ use crate::{
     Group,
     MessageConfig,
     StateConfig,
-    WithId,
-    WithIndex,
 };
 
-use super::WithIndexResult;
+use super::GroupResult;
 
-pub enum Iter<T> {
+pub enum IntoIter<T> {
     InMemory {
-        groups: std::vec::IntoIter<WithIndexResult<T>>,
+        groups: std::vec::IntoIter<GroupResult<T>>,
     },
     Parquet {
         decoder: parquet::Decoder<File, T>,
     },
 }
 
-impl<T> Iterator for Iter<T>
+impl<T> Iterator for IntoIter<T>
 where
-    parquet::Decoder<File, T>: Iterator<Item = WithIndexResult<T>>,
+    parquet::Decoder<File, T>: Iterator<Item = GroupResult<T>>,
 {
-    type Item = WithIndexResult<T>;
+    type Item = GroupResult<T>;
 
     fn next(&mut self) -> Option<Self::Item> {
         match self {
-            Iter::InMemory { groups } => groups.next(),
-            Iter::Parquet { decoder } => decoder.next(),
+            IntoIter::InMemory { groups } => groups.next(),
+            IntoIter::Parquet { decoder } => decoder.next(),
         }
     }
 }
@@ -111,46 +109,31 @@ impl Decoder {
         }
     }
 
-    pub fn coins(&self) -> anyhow::Result<Iter<Group<CoinConfig>>> {
+    pub fn coins(&self) -> anyhow::Result<IntoIter<CoinConfig>> {
         self.create_iterator(|state| &state.coins, "coins")
     }
 
-    pub fn messages(&self) -> anyhow::Result<Iter<Group<MessageConfig>>> {
+    pub fn messages(&self) -> anyhow::Result<IntoIter<MessageConfig>> {
         self.create_iterator(|state| &state.messages, "messages")
     }
 
-    pub fn contracts(&self) -> anyhow::Result<Iter<Group<ContractConfig>>> {
+    pub fn contracts(&self) -> anyhow::Result<IntoIter<ContractConfig>> {
         self.create_iterator(|state| &state.contracts, "contracts")
     }
 
-    pub fn contract_state(
-        &self,
-    ) -> anyhow::Result<Iter<WithId<Group<ContractStateConfig>>>> {
-        todo!()
-        // self.create_iterator(
-        //     |state| {
-        //         state
-        //             .contract_state
-        //             .iter()
-        //             .map(|(id, state)| WithId { id, data: state })
-        //             .collect()
-        //     },
-        //     "contract_state",
-        // )
+    pub fn contract_state(&self) -> anyhow::Result<IntoIter<ContractStateConfig>> {
+        self.create_iterator(|state| &state.contract_state, "contract_state")
     }
 
-    pub fn contract_balance(
-        &self,
-    ) -> anyhow::Result<Iter<WithId<Group<ContractBalance>>>> {
-        todo!()
-        // self.create_iterator(|state| &state.contract_balance, "contract_balance")
+    pub fn contract_balance(&self) -> anyhow::Result<IntoIter<ContractBalance>> {
+        self.create_iterator(|state| &state.contract_balance, "contract_balance")
     }
 
     fn create_iterator<T: Clone>(
         &self,
         extractor: impl FnOnce(&StateConfig) -> &Vec<T>,
         parquet_filename: &'static str,
-    ) -> anyhow::Result<Iter<Group<T>>> {
+    ) -> anyhow::Result<IntoIter<T>> {
         match &self.data_source {
             DataSource::InMemory { state, group_size } => {
                 let groups = extractor(state).clone();
@@ -159,14 +142,14 @@ impl Decoder {
             DataSource::Parquet { snapshot_dir } => {
                 let path = snapshot_dir.join(format!("{parquet_filename}.parquet"));
                 let file = std::fs::File::open(path)?;
-                Ok(Iter::Parquet {
+                Ok(IntoIter::Parquet {
                     decoder: parquet::Decoder::new(file)?,
                 })
             }
         }
     }
 
-    fn in_memory_iter<T>(items: Vec<T>, group_size: usize) -> Iter<Group<T>> {
+    fn in_memory_iter<T>(items: Vec<T>, group_size: usize) -> IntoIter<T> {
         let groups = items
             .into_iter()
             .chunks(group_size)
@@ -174,7 +157,7 @@ impl Decoder {
             .map(Itertools::collect_vec)
             .enumerate()
             .map(|(index, vec_chunk)| {
-                Ok(WithIndex {
+                Ok(Group {
                     data: vec_chunk,
                     index,
                 })
@@ -182,6 +165,6 @@ impl Decoder {
             .collect_vec()
             .into_iter();
 
-        Iter::InMemory { groups }
+        IntoIter::InMemory { groups }
     }
 }

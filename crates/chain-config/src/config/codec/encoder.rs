@@ -19,10 +19,8 @@ use crate::{
     },
     CoinConfig,
     ContractConfig,
-    Group,
     MessageConfig,
     StateConfig,
-    WithId,
 };
 
 use super::parquet;
@@ -33,11 +31,11 @@ enum EncoderType {
         state_file_path: PathBuf,
     },
     Parquet {
-        coins: parquet::Encoder<File, Group<CoinConfig>>,
-        messages: parquet::Encoder<File, Group<MessageConfig>>,
-        contracts: parquet::Encoder<File, Group<ContractConfig>>,
-        contract_state: parquet::Encoder<File, WithId<Group<ContractStateConfig>>>,
-        contract_balance: parquet::Encoder<File, WithId<Group<ContractBalance>>>,
+        coins: parquet::Encoder<File, CoinConfig>,
+        messages: parquet::Encoder<File, MessageConfig>,
+        contracts: parquet::Encoder<File, ContractConfig>,
+        contract_state: parquet::Encoder<File, ContractStateConfig>,
+        contract_balance: parquet::Encoder<File, ContractBalance>,
     },
 }
 
@@ -59,11 +57,14 @@ impl Encoder {
         snapshot_dir: impl AsRef<Path>,
         compression_level: u8,
     ) -> anyhow::Result<Self> {
-        fn create_encoder<T: Schema>(
+        fn create_encoder<T>(
             path: &Path,
             name: &str,
             compression: Compression,
-        ) -> anyhow::Result<parquet::Encoder<File, T>> {
+        ) -> anyhow::Result<parquet::Encoder<File, T>>
+        where
+            T: Schema,
+        {
             let path = path.join(format!("{name}.parquet"));
             let file = std::fs::File::create(path)?;
             parquet::Encoder::new(file, compression)
@@ -118,37 +119,29 @@ impl Encoder {
 
     pub fn write_contract_state(
         &mut self,
-        states: WithId<Group<ContractStateConfig>>,
+        elements: Vec<ContractStateConfig>,
     ) -> anyhow::Result<()> {
         match &mut self.encoder {
             EncoderType::Json { buffer: state, .. } => {
-                state
-                    .contract_state
-                    .entry(states.id)
-                    .or_default()
-                    .extend(states.data);
+                state.contract_state.extend(elements);
                 Ok(())
             }
-            EncoderType::Parquet { contract_state, .. } => contract_state.write(states),
+            EncoderType::Parquet { contract_state, .. } => contract_state.write(elements),
         }
     }
 
     pub fn write_contract_balance(
         &mut self,
-        balances: WithId<Group<ContractBalance>>,
+        elements: Vec<ContractBalance>,
     ) -> anyhow::Result<()> {
         match &mut self.encoder {
             EncoderType::Json { buffer: state, .. } => {
-                state
-                    .contract_balance
-                    .entry(balances.id)
-                    .or_default()
-                    .extend(balances.data);
+                state.contract_balance.extend(elements);
                 Ok(())
             }
             EncoderType::Parquet {
                 contract_balance, ..
-            } => contract_balance.write(balances),
+            } => contract_balance.write(elements),
         }
     }
 

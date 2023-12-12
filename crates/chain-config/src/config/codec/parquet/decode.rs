@@ -1,8 +1,4 @@
-use itertools::Itertools;
-use std::{
-    collections::HashSet,
-    marker::PhantomData,
-};
+use std::marker::PhantomData;
 
 use anyhow::{
     anyhow,
@@ -38,17 +34,15 @@ use parquet::{
 use crate::{
     config::{
         codec::{
-            WithIndex,
-            WithIndexResult,
+            Group,
+            GroupResult,
         },
         contract_balance::ContractBalance,
         contract_state::ContractStateConfig,
     },
     CoinConfig,
     ContractConfig,
-    Group,
     MessageConfig,
-    WithId,
 };
 
 pub struct Decoder<R: ChunkReader, T> {
@@ -60,28 +54,30 @@ pub struct Decoder<R: ChunkReader, T> {
 impl<R, T> Decoder<R, T>
 where
     R: ChunkReader + 'static,
-    T: DecodeRowGroup,
+    T: TryFrom<Row, Error = anyhow::Error>,
 {
-    fn get_group(&self, index: usize) -> anyhow::Result<WithIndex<T>> {
-        let row_group: Vec<Row> = self
+    fn get_group(&self, index: usize) -> anyhow::Result<Group<T>> {
+        let data = self
             .data_source
             .get_row_group(self.group_index)?
             .get_row_iter(None)?
-            .map(|result| result.map_err(|e| anyhow!(e)))
-            .try_collect()?;
+            .map(|result| {
+                result
+                    .map_err(|e| anyhow!(e))
+                    .and_then(|row| T::try_from(row))
+            })
+            .collect::<Result<Vec<_>, _>>()?;
 
-        let data = T::decode(row_group)?;
-
-        Ok(WithIndex { index, data })
+        Ok(Group { index, data })
     }
 }
 
 impl<R, T> Iterator for Decoder<R, T>
 where
     R: ChunkReader + 'static,
-    T: DecodeRowGroup,
+    T: TryFrom<Row, Error = anyhow::Error>,
 {
-    type Item = WithIndexResult<T>;
+    type Item = GroupResult<T>;
 
     fn next(&mut self) -> Option<Self::Item> {
         if self.group_index >= self.data_source.metadata().num_row_groups() {
@@ -91,13 +87,13 @@ where
         let group_index = self.group_index;
 
         let group = self.get_group(group_index);
-        self.group_index = self.group_index.saturating_add(1);
+        self.group_index += 1;
 
         Some(group)
     }
 
     fn nth(&mut self, n: usize) -> Option<Self::Item> {
-        self.group_index = self.group_index.saturating_add(n);
+        self.group_index += n;
         self.next()
     }
 }
@@ -112,285 +108,59 @@ impl<R: ChunkReader + 'static, T> Decoder<R, T> {
     }
 }
 
-trait DecodeRowGroup {
-    fn decode(group: Vec<Row>) -> anyhow::Result<Self>
-    where
-        Self: Sized;
-}
+impl TryFrom<Row> for CoinConfig {
+    type Error = anyhow::Error;
 
-impl DecodeRowGroup for Group<CoinConfig> {
-    fn decode(group: Vec<Row>) -> anyhow::Result<Self>
-    where
-        Self: Sized,
-    {
-        let mut data = vec![];
-        for row in group {
-            let mut iter = row.get_column_iter();
-            let mut next_field = || {
-                iter.next().map(|el| el.1).ok_or_else(|| {
-                    anyhow!("Expected at least one more field. Row: {row:?}")
-                })
-            };
-
-            let tx_id = next_field()
-                .and_then(decode_as_optional_bytes_32)
-                .context("While decoding `tx_id`")?;
-
-            let output_index = next_field()
-                .and_then(decode_as_optional_u8)
-                .context("While decoding `output_index`")?;
-
-            let tx_pointer_block_height = next_field()
-                .and_then(decode_as_optional_block_height)
-                .context("While decoding `tx_pointer_block_height`")?;
-
-            let tx_pointer_tx_idx = next_field()
-                .and_then(decode_as_optional_u16)
-                .context("While decoding `tx_pointer_tx_idx`")?;
-
-            let maturity = next_field()
-                .and_then(decode_as_optional_block_height)
-                .context("While decoding `maturiy`")?;
-
-            let owner = next_field()
-                .and_then(decode_as_address)
-                .context("While decoding `owner`")?;
-
-            let amount = next_field()
-                .and_then(decode_as_u64)
-                .context("While decoding `amount`")?;
-
-            let asset_id = next_field()
-                .and_then(decode_as_asset_id)
-                .context("While decoding `assert_id`")?;
-
-            data.push(CoinConfig {
-                tx_id,
-                output_index,
-                tx_pointer_block_height,
-                tx_pointer_tx_idx,
-                maturity,
-                owner,
-                amount,
-                asset_id,
-            });
-        }
-
-        Ok(data)
-    }
-}
-
-impl DecodeRowGroup for Group<ContractConfig> {
-    fn decode(rows: Vec<Row>) -> anyhow::Result<Self>
-    where
-        Self: Sized,
-    {
-        let mut data = vec![];
-
-        for row in rows {
-            let mut iter = row.get_column_iter();
-            let mut next_field = || {
-                iter.next().map(|el| el.1).ok_or_else(|| {
-                    anyhow!("Expected at least one more field. Row: {row:?}")
-                })
-            };
-
-            let contract_id = next_field()
-                .and_then(decode_as_bytes_32)
-                .map(|bytes_32| ContractId::new(*bytes_32))
-                .context("While decoding `contract_id`")?;
-
-            let code = next_field()
-                .and_then(decode_as_bytes)
-                .context("While decoding `code`")?
-                .to_vec();
-
-            let salt = next_field()
-                .and_then(decode_as_bytes_32)
-                .map(|bytes_32| Salt::new(*bytes_32))
-                .context("While decoding `salt`")?;
-
-            let tx_id = next_field()
-                .and_then(decode_as_optional_bytes_32)
-                .context("While decoding `tx_id`")?;
-
-            let output_index = next_field()
-                .and_then(decode_as_optional_u8)
-                .context("While decoding `output_index`")?;
-
-            let tx_pointer_block_height = next_field()
-                .and_then(decode_as_optional_block_height)
-                .context("While decoding `tx_pointer_block_height`")?;
-
-            let tx_pointer_tx_idx = next_field()
-                .and_then(decode_as_optional_u16)
-                .context("While decoding `tx_pointer_tx_idx`")?;
-
-            data.push(ContractConfig {
-                contract_id,
-                code,
-                salt,
-                tx_id,
-                output_index,
-                tx_pointer_block_height,
-                tx_pointer_tx_idx,
-                state: None,
-                balances: None,
-            })
-        }
-
-        Ok(data)
-    }
-}
-
-impl DecodeRowGroup for Group<MessageConfig> {
-    fn decode(rows: Vec<Row>) -> anyhow::Result<Self>
-    where
-        Self: Sized,
-    {
-        let mut decoded = vec![];
-        for row in rows {
-            let mut iter = row.get_column_iter();
-            let mut next_field = || {
-                iter.next().map(|el| el.1).ok_or_else(|| {
-                    anyhow!("Expected at least one more field. Row: {row:?}")
-                })
-            };
-
-            let sender = next_field()
-                .and_then(decode_as_address)
-                .context("While decoding `sender`")?;
-
-            let recipient = next_field()
-                .and_then(decode_as_address)
-                .context("While decoding `recipient`")?;
-
-            let nonce = next_field()
-                .and_then(decode_as_bytes_32)
-                .map(|bytes_32| Nonce::new(*bytes_32))
-                .context("While decoding 'nonce'")?;
-
-            let amount = next_field()
-                .and_then(decode_as_u64)
-                .context("While decoding `amount`")?;
-
-            let data = next_field()
-                .and_then(decode_as_bytes)
-                .context("While decoding `data`")?
-                .to_vec();
-
-            let da_height = next_field()
-                .and_then(decode_as_u64)
-                .map(DaBlockHeight)
-                .context("While decoding `amount`")?;
-
-            decoded.push(MessageConfig {
-                sender,
-                recipient,
-                nonce,
-                amount,
-                data,
-                da_height,
-            })
-        }
-
-        Ok(decoded)
-    }
-}
-
-impl DecodeRowGroup for WithId<Group<ContractStateConfig>> {
-    fn decode(group: Vec<Row>) -> anyhow::Result<Self>
-    where
-        Self: Sized,
-    {
-        let (id, decoded) = group
-            .into_iter()
-            .map(|row| -> anyhow::Result<_> {
-                let mut iter = row.get_column_iter();
-                let mut next_field = || {
-                    iter.next().map(|el| el.1).ok_or_else(|| {
-                        anyhow!("Expected at least one more field. Row: {row:?}")
-                    })
-                };
-
-                let contract_id = next_field()
-                    .and_then(decode_as_bytes_32)
-                    .context("While decoding `contract_id`")?;
-
-                let key = next_field()
-                    .and_then(decode_as_bytes_32)
-                    .context("While decoding `key`")?;
-
-                let value = next_field()
-                    .and_then(decode_as_bytes_32)
-                    .context("While decoding `value`")?;
-
-                Ok((contract_id, ContractStateConfig { key, value }))
-            })
-            .process_results(|val| {
-                let (ids, decoded): (HashSet<_>, Vec<_>) = val.into_iter().unzip();
-                let id = if ids.len() > 1 {
-                    bail!("A group of state entries should all belong to a single contract. Found states belonging to {} different contracts.", ids.len())
-                } else if ids.is_empty() {
-                    bail!("A group must not be empty")
-                } else {
-                    ids.into_iter().next().expect("Just checked that there is at least one element")
-                };
-
-                Ok((id, decoded))
-            })??;
-
-        Ok(WithId { id, data: decoded })
-    }
-}
-
-impl DecodeRowGroup for WithId<Group<ContractBalance>> {
-    fn decode(group: Vec<Row>) -> anyhow::Result<Self>
-    where
-        Self: Sized,
-    {
-        let (id, decoded) = group
-            .into_iter()
-            .map(|row| -> anyhow::Result<_> {
-                let mut iter = row.get_column_iter();
+    fn try_from(row: Row) -> Result<Self, Self::Error> {
+        let mut iter = row.get_column_iter();
         let mut next_field = || {
             iter.next()
                 .map(|el| el.1)
                 .ok_or_else(|| anyhow!("Expected at least one more field. Row: {row:?}"))
         };
 
-        let contract_id = next_field()
-            .and_then(decode_as_bytes_32)
-            .context("While decoding `contract_id`")?;
+        let tx_id = next_field()
+            .and_then(decode_as_optional_bytes_32)
+            .context("While decoding `tx_id`")?;
 
-        let asset_id = next_field()
-            .and_then(decode_as_bytes_32)
-            .map(|bytes_32| AssetId::new(*bytes_32))
-            .context("While decoding `contract_id`")?;
+        let output_index = next_field()
+            .and_then(decode_as_optional_u8)
+            .context("While decoding `output_index`")?;
+
+        let tx_pointer_block_height = next_field()
+            .and_then(decode_as_optional_block_height)
+            .context("While decoding `tx_pointer_block_height`")?;
+
+        let tx_pointer_tx_idx = next_field()
+            .and_then(decode_as_optional_u16)
+            .context("While decoding `tx_pointer_tx_idx`")?;
+
+        let maturity = next_field()
+            .and_then(decode_as_optional_block_height)
+            .context("While decoding `maturiy`")?;
+
+        let owner = next_field()
+            .and_then(decode_as_address)
+            .context("While decoding `owner`")?;
 
         let amount = next_field()
             .and_then(decode_as_u64)
             .context("While decoding `amount`")?;
 
-        Ok((contract_id, ContractBalance {
-            asset_id,
+        let asset_id = next_field()
+            .and_then(decode_as_asset_id)
+            .context("While decoding `assert_id`")?;
+
+        Ok(Self {
+            tx_id,
+            output_index,
+            tx_pointer_block_height,
+            tx_pointer_tx_idx,
+            maturity,
+            owner,
             amount,
-        }))
-            })
-            .process_results(|val| {
-                let (ids, decoded): (HashSet<_>, Vec<_>) = val.unzip();
-                let id = if ids.len() > 1 {
-                    bail!("A group of state entries should all belong to a single contract. Found states belonging to {} different contracts.", ids.len())
-                } else if ids.is_empty() {
-                    bail!("A group must not be empty")
-                } else {
-                    ids.into_iter().next().expect("Just checked that there is at least one element")
-                };
-
-                Ok((id, decoded))
-            })??;
-
-        Ok(WithId { id, data: decoded })
+            asset_id,
+        })
     }
 }
 
@@ -475,4 +245,168 @@ fn decode_as_optional_address(field: &Field) -> anyhow::Result<Option<Address>> 
 
 fn decode_as_address(field: &Field) -> anyhow::Result<Address> {
     decode_as_optional_address(field)?.ok_or_else(|| anyhow!("Cannot be NULL"))
+}
+
+impl TryFrom<Row> for MessageConfig {
+    type Error = anyhow::Error;
+    fn try_from(row: Row) -> Result<Self, Self::Error> {
+        let mut iter = row.get_column_iter();
+        let mut next_field = || {
+            iter.next()
+                .map(|el| el.1)
+                .ok_or_else(|| anyhow!("Expected at least one more field. Row: {row:?}"))
+        };
+
+        let sender = next_field()
+            .and_then(decode_as_address)
+            .context("While decoding `sender`")?;
+
+        let recipient = next_field()
+            .and_then(decode_as_address)
+            .context("While decoding `recipient`")?;
+
+        let nonce = next_field()
+            .and_then(decode_as_bytes_32)
+            .map(|bytes_32| Nonce::new(*bytes_32))
+            .context("While decoding 'nonce'")?;
+
+        let amount = next_field()
+            .and_then(decode_as_u64)
+            .context("While decoding `amount`")?;
+
+        let data = next_field()
+            .and_then(decode_as_bytes)
+            .context("While decoding `data`")?
+            .to_vec();
+
+        let da_height = next_field()
+            .and_then(decode_as_u64)
+            .map(DaBlockHeight)
+            .context("While decoding `amount`")?;
+
+        Ok(Self {
+            sender,
+            recipient,
+            nonce,
+            amount,
+            data,
+            da_height,
+        })
+    }
+}
+
+impl TryFrom<Row> for ContractStateConfig {
+    type Error = anyhow::Error;
+    fn try_from(row: Row) -> Result<Self, Self::Error> {
+        let mut iter = row.get_column_iter();
+        let mut next_field = || {
+            iter.next()
+                .map(|el| el.1)
+                .ok_or_else(|| anyhow!("Expected at least one more field. Row: {row:?}"))
+        };
+
+        let contract_id = next_field()
+            .and_then(decode_as_bytes_32)
+            .context("While decoding `contract_id`")?;
+
+        let key = next_field()
+            .and_then(decode_as_bytes_32)
+            .context("While decoding `key`")?;
+
+        let value = next_field()
+            .and_then(decode_as_bytes_32)
+            .context("While decoding `value`")?;
+
+        Ok(Self {
+            contract_id,
+            key,
+            value,
+        })
+    }
+}
+
+impl TryFrom<Row> for ContractBalance {
+    type Error = anyhow::Error;
+    fn try_from(row: Row) -> Result<Self, Self::Error> {
+        let mut iter = row.get_column_iter();
+        let mut next_field = || {
+            iter.next()
+                .map(|el| el.1)
+                .ok_or_else(|| anyhow!("Expected at least one more field. Row: {row:?}"))
+        };
+
+        let contract_id = next_field()
+            .and_then(decode_as_bytes_32)
+            .context("While decoding `contract_id`")?;
+
+        let asset_id = next_field()
+            .and_then(decode_as_bytes_32)
+            .map(|bytes_32| AssetId::new(*bytes_32))
+            .context("While decoding `contract_id`")?;
+
+        let amount = next_field()
+            .and_then(decode_as_u64)
+            .context("While decoding `amount`")?;
+
+        Ok(Self {
+            contract_id,
+            asset_id,
+            amount,
+        })
+    }
+}
+
+impl TryFrom<Row> for ContractConfig {
+    type Error = anyhow::Error;
+    fn try_from(row: Row) -> Result<Self, Self::Error> {
+        let mut iter = row.get_column_iter();
+        let mut next_field = || {
+            iter.next()
+                .map(|el| el.1)
+                .ok_or_else(|| anyhow!("Expected at least one more field. Row: {row:?}"))
+        };
+
+        let contract_id = next_field()
+            .and_then(decode_as_bytes_32)
+            .map(|bytes_32| ContractId::new(*bytes_32))
+            .context("While decoding `contract_id`")?;
+
+        let code = next_field()
+            .and_then(decode_as_bytes)
+            .context("While decoding `code`")?
+            .to_vec();
+
+        let salt = next_field()
+            .and_then(decode_as_bytes_32)
+            .map(|bytes_32| Salt::new(*bytes_32))
+            .context("While decoding `salt`")?;
+
+        let tx_id = next_field()
+            .and_then(decode_as_optional_bytes_32)
+            .context("While decoding `tx_id`")?;
+
+        let output_index = next_field()
+            .and_then(decode_as_optional_u8)
+            .context("While decoding `output_index`")?;
+
+        let tx_pointer_block_height = next_field()
+            .and_then(decode_as_optional_block_height)
+            .context("While decoding `tx_pointer_block_height`")?;
+
+        let tx_pointer_tx_idx = next_field()
+            .and_then(decode_as_optional_u16)
+            .context("While decoding `tx_pointer_tx_idx`")?;
+
+        Ok(Self {
+            contract_id,
+            code,
+            salt,
+            tx_id,
+            output_index,
+            tx_pointer_block_height,
+            tx_pointer_tx_idx,
+            state: None,
+            balances: None,
+        })
+    }
 }
