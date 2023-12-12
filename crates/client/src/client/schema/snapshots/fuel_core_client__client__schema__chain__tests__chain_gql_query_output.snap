@@ -6,14 +6,6 @@ query {
   chain {
     daHeight
     name
-    peers {
-      id
-      addresses
-      clientVersion
-      blockHeight
-      lastHeartbeatMs
-      appScore
-    }
     latestBlock {
       id
       header {

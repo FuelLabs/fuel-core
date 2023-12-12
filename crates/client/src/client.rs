@@ -49,6 +49,7 @@ use fuel_core_types::{
         BlockHeight,
         Nonce,
     },
+    services::p2p::PeerInfo,
 };
 #[cfg(feature = "subscriptions")]
 use futures::StreamExt;
@@ -339,6 +340,13 @@ impl FuelClient {
     pub async fn node_info(&self) -> io::Result<types::NodeInfo> {
         let query = schema::node_info::QueryNodeInfo::build(());
         self.query(query).await.map(|r| r.node_info.into())
+    }
+
+    pub async fn connected_peers_info(&self) -> io::Result<Vec<PeerInfo>> {
+        let query = schema::node_info::QueryPeersInfo::build(());
+        self.query(query)
+            .await
+            .map(|r| r.node_info.peers.into_iter().map(Into::into).collect())
     }
 
     pub async fn chain_info(&self) -> io::Result<types::ChainInfo> {
