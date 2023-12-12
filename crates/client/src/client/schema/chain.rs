@@ -322,20 +322,8 @@ pub struct ChainQuery {
 pub struct ChainInfo {
     pub da_height: U64,
     pub name: String,
-    pub peers: Vec<PeerInfo>,
     pub latest_block: Block,
     pub consensus_parameters: ConsensusParameters,
-}
-
-#[derive(cynic::QueryFragment, Debug)]
-#[cynic(schema_path = "./assets/schema.sdl", graphql_type = "PeerInfo")]
-pub struct PeerInfo {
-    pub id: String,
-    pub addresses: Vec<String>,
-    pub client_version: Option<String>,
-    pub block_height: Option<U32>,
-    pub last_heartbeat_ms: U64,
-    pub app_score: f64,
 }
 
 #[cfg(test)]

@@ -94,7 +94,6 @@ type ChainInfo {
 	name: String!
 	latestBlock: Block!
 	daHeight: U64!
-	peers: [PeerInfo!]!
 	consensusParameters: ConsensusParameters!
 	gasCosts: GasCosts!
 }
@@ -613,6 +612,7 @@ type NodeInfo {
 	maxTx: U64!
 	maxDepth: U64!
 	nodeVersion: String!
+	peers: [PeerInfo!]!
 }
 
 scalar Nonce
