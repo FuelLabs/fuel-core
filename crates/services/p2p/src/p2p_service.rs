@@ -160,7 +160,7 @@ pub enum FuelP2PEvent {
 }
 
 impl<Codec: NetworkCodec> FuelP2PService<Codec> {
-    pub async fn new(config: Config, codec: Codec) -> Self {
+    pub fn new(config: Config, codec: Codec) -> Self {
         // let local_peer_id = PeerId::from(config.keypair.public());
 
         let gossipsub_data =
@@ -742,7 +742,7 @@ mod tests {
         let max_block_size = p2p_config.max_block_size;
 
         let mut service =
-            FuelP2PService::new(p2p_config, PostcardCodec::new(max_block_size)).await;
+            FuelP2PService::new(p2p_config, PostcardCodec::new(max_block_size));
         service.start().await.unwrap();
         service
     }
