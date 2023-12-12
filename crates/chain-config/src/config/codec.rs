@@ -21,6 +21,10 @@ type GroupResult<T> = anyhow::Result<Group<T>>;
 mod tests {
 
     use itertools::Itertools;
+    use rand::{
+        rngs::StdRng,
+        SeedableRng,
+    };
 
     use crate::Randomize;
 
@@ -33,7 +37,8 @@ mod tests {
         let temp_dir = tempfile::tempdir().unwrap();
         let mut encoder = Encoder::parquet(temp_dir.path(), 1).unwrap();
 
-        let mut group_generator = GroupGenerator::new(rand::thread_rng(), 100, 10);
+        let rng = StdRng::seed_from_u64(0);
+        let mut group_generator = GroupGenerator::new(rng, 100, 10);
 
         let coin_groups =
             group_generator.for_each_group(|group| encoder.write_coins(group));
@@ -84,7 +89,8 @@ mod tests {
         let temp_dir = tempfile::tempdir().unwrap();
         let mut encoder = Encoder::json(temp_dir.path());
 
-        let mut group_generator = GroupGenerator::new(rand::thread_rng(), group_size, 10);
+        let rng = StdRng::seed_from_u64(0);
+        let mut group_generator = GroupGenerator::new(rng, group_size, 10);
 
         let coin_groups =
             group_generator.for_each_group(|group| encoder.write_coins(group));
