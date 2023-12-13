@@ -180,7 +180,7 @@ impl<Codec: NetworkCodec> FuelP2PService<Codec> {
         let metrics = config.metrics;
 
         if let Some(public_address) = config.public_address.clone() {
-            let _ = swarm.add_external_address(public_address);
+            swarm.add_external_address(public_address);
         }
 
         let reserved_peers = config
@@ -1366,7 +1366,7 @@ mod tests {
             tokio::select! {
                 node_a_event = node_a.next_event() => {
                     if let Some(FuelP2PEvent::PeerInfoUpdated { peer_id, block_height: _ }) = node_a_event {
-                        if let Some(_) = node_a.peer_manager.get_peer_info(&peer_id) {
+                        if node_a.peer_manager.get_peer_info(&peer_id).is_some() {
                             // verifies that we've got at least a single peer address to send message to
                             if !message_sent  {
                                 message_sent = true;
@@ -1481,7 +1481,7 @@ mod tests {
                 }
                 node_a_event = node_a.next_event() => {
                     if let Some(FuelP2PEvent::PeerInfoUpdated { peer_id, block_height: _ }) = node_a_event {
-                        if let Some(_) = node_a.peer_manager.get_peer_info(&peer_id) {
+                        if node_a.peer_manager.get_peer_info(&peer_id).is_some() {
                             // 0. verifies that we've got at least a single peer address to request message from
                             if !request_sent {
                                 request_sent = true;
@@ -1625,7 +1625,7 @@ mod tests {
             tokio::select! {
                 node_a_event = node_a.next_event() => {
                     if let Some(FuelP2PEvent::PeerInfoUpdated { peer_id, block_height: _ }) = node_a_event {
-                        if let Some(_) = node_a.peer_manager.get_peer_info(&peer_id) {
+                        if node_a.peer_manager.get_peer_info(&peer_id).is_some() {
                             // 0. verifies that we've got at least a single peer address to request message from
                             if !request_sent {
                                 request_sent = true;

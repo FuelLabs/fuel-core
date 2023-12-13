@@ -351,11 +351,11 @@ mod tests {
             })
             .collect::<Vec<_>>();
 
-        let mut connection_closed_counter = Arc::new(AtomicUsize::new(0));
+        let connection_closed_counter = Arc::new(AtomicUsize::new(0));
         let counter_copy = connection_closed_counter.clone();
         const MAX_CONNECTION_CLOSED: usize = 1000;
 
-        let test_future = poll_fn(move |cx| {
+        poll_fn(move |cx| {
             'polling: loop {
                 for swarm_index in 0..discovery_swarms.len() {
                     if let Poll::Ready(Some(event)) =
@@ -421,9 +421,8 @@ mod tests {
                 // keep polling Discovery Behaviour
                 Poll::Pending
             }
-        });
-
-        let a: () = test_future.await;
+        })
+        .await;
         tracing::info!(
             "Passed with {:?} connection closures",
             counter_copy.load(Ordering::SeqCst)

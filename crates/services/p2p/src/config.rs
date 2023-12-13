@@ -291,7 +291,7 @@ pub(crate) fn build_transport_function(
         // TODO: Add fuel upgrade stuff
         let _fuel_upgrade = FuelUpgrade::new(p2p_config.checksum);
 
-        let transport = if p2p_config.reserved_nodes_only_mode {
+        if p2p_config.reserved_nodes_only_mode {
             let guarded_node = GuardedNode::new(&p2p_config.reserved_nodes);
 
             let fuel_authenticated =
@@ -318,8 +318,7 @@ pub(crate) fn build_transport_function(
                 .multiplex(multiplex_config)
                 .timeout(TRANSPORT_TIMEOUT)
                 .boxed()
-        };
-        transport
+        }
     };
 
     (transport_function, kept_connection_state)
