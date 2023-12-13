@@ -31,49 +31,118 @@ mod tests {
     use super::*;
 
     #[test]
-    fn roundtrip_parquet() {
+    fn roundtrip_parquet_coins() {
+        // given
         let skip_n_groups = 3;
-
         let temp_dir = tempfile::tempdir().unwrap();
-        let mut encoder = Encoder::parquet(temp_dir.path(), 1).unwrap();
 
-        let rng = StdRng::seed_from_u64(0);
-        let mut group_generator = GroupGenerator::new(rng, 100, 10);
+        let mut group_generator = GroupGenerator::new(StdRng::seed_from_u64(0), 100, 10);
+        let mut encoder = Encoder::parquet(temp_dir.path(), 1).unwrap();
 
         let coin_groups =
             group_generator.for_each_group(|group| encoder.write_coins(group));
-        let message_groups =
-            group_generator.for_each_group(|group| encoder.write_messages(group));
-        let contract_groups =
-            group_generator.for_each_group(|group| encoder.write_contracts(group));
-        let contract_state_groups =
-            group_generator.for_each_group(|group| encoder.write_contract_state(group));
-        let contract_balance_groups =
-            group_generator.for_each_group(|group| encoder.write_contract_balance(group));
-
         encoder.close().unwrap();
 
+        // when
         let state_reader = Decoder::parquet(temp_dir.path());
+
+        // then
         assert_groups_identical(
             &coin_groups,
             state_reader.coins().unwrap(),
             skip_n_groups,
         );
+    }
+
+    #[test]
+    fn roundtrip_parquet_messages() {
+        // given
+        let skip_n_groups = 3;
+        let temp_dir = tempfile::tempdir().unwrap();
+
+        let mut group_generator = GroupGenerator::new(StdRng::seed_from_u64(0), 100, 10);
+        let mut encoder = Encoder::parquet(temp_dir.path(), 1).unwrap();
+
+        let message_groups =
+            group_generator.for_each_group(|group| encoder.write_messages(group));
+        encoder.close().unwrap();
+
+        // when
+        let state_reader = Decoder::parquet(temp_dir.path());
+
+        // then
         assert_groups_identical(
             &message_groups,
             state_reader.messages().unwrap(),
             skip_n_groups,
         );
+    }
+
+    #[test]
+    fn roundtrip_parquet_contracts() {
+        // given
+        let skip_n_groups = 3;
+        let temp_dir = tempfile::tempdir().unwrap();
+
+        let mut group_generator = GroupGenerator::new(StdRng::seed_from_u64(0), 100, 10);
+        let mut encoder = Encoder::parquet(temp_dir.path(), 1).unwrap();
+
+        let contract_groups =
+            group_generator.for_each_group(|group| encoder.write_contracts(group));
+        encoder.close().unwrap();
+
+        // when
+        let state_reader = Decoder::parquet(temp_dir.path());
+
+        // then
         assert_groups_identical(
             &contract_groups,
             state_reader.contracts().unwrap(),
             skip_n_groups,
         );
+    }
+
+    #[test]
+    fn roundtrip_parquet_contract_state() {
+        // given
+        let skip_n_groups = 3;
+        let temp_dir = tempfile::tempdir().unwrap();
+
+        let mut group_generator = GroupGenerator::new(StdRng::seed_from_u64(0), 100, 10);
+        let mut encoder = Encoder::parquet(temp_dir.path(), 1).unwrap();
+
+        let contract_state_groups =
+            group_generator.for_each_group(|group| encoder.write_contract_state(group));
+        encoder.close().unwrap();
+
+        // when
+        let state_reader = Decoder::parquet(temp_dir.path());
+
+        // then
         assert_groups_identical(
             &contract_state_groups,
             state_reader.contract_state().unwrap(),
             skip_n_groups,
         );
+    }
+
+    #[test]
+    fn roundtrip_parquet_contract_balance() {
+        // given
+        let skip_n_groups = 3;
+        let temp_dir = tempfile::tempdir().unwrap();
+
+        let mut group_generator = GroupGenerator::new(StdRng::seed_from_u64(0), 100, 10);
+        let mut encoder = Encoder::parquet(temp_dir.path(), 1).unwrap();
+
+        let contract_balance_groups =
+            group_generator.for_each_group(|group| encoder.write_contract_balance(group));
+        encoder.close().unwrap();
+
+        // when
+        let state_reader = Decoder::parquet(temp_dir.path());
+
+        // then
         assert_groups_identical(
             &contract_balance_groups,
             state_reader.contract_balance().unwrap(),
@@ -82,59 +151,128 @@ mod tests {
     }
 
     #[test]
-    fn roundtrip_json() {
+    fn roundtrip_json_coins() {
+        // given
         let skip_n_groups = 3;
         let group_size = 100;
-
         let temp_dir = tempfile::tempdir().unwrap();
-        let mut encoder = Encoder::json(temp_dir.path());
 
-        let rng = StdRng::seed_from_u64(0);
-        let mut group_generator = GroupGenerator::new(rng, group_size, 10);
+        let mut encoder = Encoder::json(temp_dir.path());
+        let mut group_generator =
+            GroupGenerator::new(StdRng::seed_from_u64(0), group_size, 10);
 
         let coin_groups =
             group_generator.for_each_group(|group| encoder.write_coins(group));
-
-        let message_groups =
-            group_generator.for_each_group(|group| encoder.write_messages(group));
-
-        let contract_groups =
-            group_generator.for_each_group(|group| encoder.write_contracts(group));
-
-        let contract_state_groups =
-            group_generator.for_each_group(|group| encoder.write_contract_state(group));
-
-        let contract_balance_groups =
-            group_generator.for_each_group(|group| encoder.write_contract_balance(group));
-
         encoder.close().unwrap();
 
+        // when
         let state_reader = Decoder::json(temp_dir.path(), group_size).unwrap();
 
+        // then
         assert_groups_identical(
             &coin_groups,
             state_reader.coins().unwrap(),
             skip_n_groups,
         );
+    }
 
+    #[test]
+    fn roundtrip_json_messages() {
+        // given
+        let skip_n_groups = 3;
+        let group_size = 100;
+        let temp_dir = tempfile::tempdir().unwrap();
+
+        let mut encoder = Encoder::json(temp_dir.path());
+        let mut group_generator =
+            GroupGenerator::new(StdRng::seed_from_u64(0), group_size, 10);
+
+        let message_groups =
+            group_generator.for_each_group(|group| encoder.write_messages(group));
+        encoder.close().unwrap();
+
+        // when
+        let state_reader = Decoder::json(temp_dir.path(), group_size).unwrap();
+
+        // then
         assert_groups_identical(
             &message_groups,
             state_reader.messages().unwrap(),
             skip_n_groups,
         );
+    }
 
+    #[test]
+    fn roundtrip_json_contracts() {
+        // given
+        let skip_n_groups = 3;
+        let group_size = 100;
+        let temp_dir = tempfile::tempdir().unwrap();
+
+        let mut encoder = Encoder::json(temp_dir.path());
+        let mut group_generator =
+            GroupGenerator::new(StdRng::seed_from_u64(0), group_size, 10);
+
+        let contract_groups =
+            group_generator.for_each_group(|group| encoder.write_contracts(group));
+        encoder.close().unwrap();
+
+        // when
+        let state_reader = Decoder::json(temp_dir.path(), group_size).unwrap();
+
+        // then
         assert_groups_identical(
             &contract_groups,
             state_reader.contracts().unwrap(),
             skip_n_groups,
         );
+    }
 
+    #[test]
+    fn roundtrip_json_contract_state() {
+        // given
+        let skip_n_groups = 3;
+        let group_size = 100;
+        let temp_dir = tempfile::tempdir().unwrap();
+
+        let mut encoder = Encoder::json(temp_dir.path());
+        let mut group_generator =
+            GroupGenerator::new(StdRng::seed_from_u64(0), group_size, 10);
+
+        let contract_state_groups =
+            group_generator.for_each_group(|group| encoder.write_contract_state(group));
+        encoder.close().unwrap();
+
+        // when
+        let state_reader = Decoder::json(temp_dir.path(), group_size).unwrap();
+
+        // then
         assert_groups_identical(
             &contract_state_groups,
             state_reader.contract_state().unwrap(),
             skip_n_groups,
         );
+    }
 
+    #[test]
+    fn roundtrip_json_contract_balance() {
+        // given
+        let skip_n_groups = 3;
+        let group_size = 100;
+        let temp_dir = tempfile::tempdir().unwrap();
+
+        let mut encoder = Encoder::json(temp_dir.path());
+        let mut group_generator =
+            GroupGenerator::new(StdRng::seed_from_u64(0), group_size, 10);
+
+        let contract_balance_groups =
+            group_generator.for_each_group(|group| encoder.write_contract_balance(group));
+        encoder.close().unwrap();
+
+        // when
+        let state_reader = Decoder::json(temp_dir.path(), group_size).unwrap();
+
+        // then
         assert_groups_identical(
             &contract_balance_groups,
             state_reader.contract_balance().unwrap(),
