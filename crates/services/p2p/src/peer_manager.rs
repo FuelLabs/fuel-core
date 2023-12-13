@@ -277,8 +277,6 @@ impl PeerManager {
             self.send_reserved_peers_update();
         }
 
-        let peers = self.get_assigned_peer_table_mut(peer_id);
-
         false
     }
 

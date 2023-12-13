@@ -6,7 +6,6 @@ use crate::{
     codecs::NetworkCodec,
     config::{
         build_transport_function,
-        fuel_upgrade::FuelUpgrade,
         Config,
     },
     gossipsub::{
@@ -46,7 +45,6 @@ use libp2p::{
         TopicHash,
     },
     multiaddr::Protocol,
-    noise,
     request_response::{
         Event as RequestResponseEvent,
         InboundRequestId,
@@ -55,8 +53,6 @@ use libp2p::{
         ResponseChannel,
     },
     swarm::SwarmEvent,
-    tcp,
-    yamux,
     Multiaddr,
     PeerId,
     Swarm,
@@ -64,9 +60,6 @@ use libp2p::{
 };
 use libp2p_gossipsub::PublishError;
 
-use crate::config::MAX_RESPONSE_SIZE;
-use libp2p::connection_limits::ConnectionLimits;
-use libp2p_mplex::MplexConfig;
 use rand::seq::IteratorRandom;
 use std::{
     collections::HashMap,
@@ -170,17 +163,6 @@ impl<Codec: NetworkCodec> FuelP2PService<Codec> {
         // configure and build P2P Service
         let (transport_function, connection_state) = build_transport_function(&config);
         let behaviour = FuelBehaviour::new(&config, codec.clone());
-
-        let total_connections = {
-            let reserved_nodes_count = u32::try_from(config.reserved_nodes.len())
-                .expect("The number of reserved nodes should be less than `u32::max`");
-            // Reserved nodes do not count against the configured peer input/output limits.
-            let total_peers = config
-                .max_peers_connected
-                .saturating_add(reserved_nodes_count);
-
-            total_peers.saturating_mul(config.max_connections_per_peer)
-        };
 
         let mut swarm = SwarmBuilder::with_existing_identity(config.keypair.clone())
             .with_tokio()

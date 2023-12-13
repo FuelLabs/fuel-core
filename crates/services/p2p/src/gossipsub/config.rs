@@ -15,7 +15,6 @@ use libp2p::gossipsub::{
     MessageId,
     PeerScoreParams,
     PeerScoreThresholds,
-    RawMessage as RawGossipsubMessage,
     Topic,
     TopicScoreParams,
 };

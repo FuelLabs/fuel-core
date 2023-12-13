@@ -106,7 +106,7 @@ impl<Codec: NetworkCodec> FuelBehaviour<Codec> {
         let req_res_protocol =
             core::iter::once((codec.get_req_res_protocol(), ProtocolSupport::Full));
 
-        let mut req_res_config = RequestResponseConfig::default();
+        let req_res_config = RequestResponseConfig::default();
         req_res_config
             .clone()
             .with_request_timeout(p2p_config.set_request_timeout);

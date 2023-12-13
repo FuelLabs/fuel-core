@@ -113,7 +113,6 @@ impl DiscoveryConfig {
             network_name,
             max_peers_connected,
             allow_private_addresses,
-            connection_idle_timeout,
             reserved_nodes,
             reserved_nodes_only_mode,
             ..
@@ -181,15 +180,15 @@ impl DiscoveryConfig {
         };
 
         DiscoveryBehaviour {
-            bootstrap_nodes,
-            reserved_nodes,
+            _bootstrap_nodes: bootstrap_nodes,
+            _reserved_nodes: reserved_nodes,
             connected_peers: HashSet::new(),
             kademlia,
             next_kad_random_walk,
             duration_to_next_kad: Duration::from_secs(1),
             max_peers_connected,
             mdns,
-            allow_private_addresses,
+            _allow_private_addresses: allow_private_addresses,
         }
     }
 }

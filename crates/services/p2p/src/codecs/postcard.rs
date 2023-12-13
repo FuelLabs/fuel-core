@@ -3,7 +3,6 @@ use super::{
     NetworkCodec,
     RequestResponseConverter,
 };
-use crate::request_response::messages::MAX_REQUEST_SIZE;
 use crate::{
     gossipsub::messages::{
         GossipTopicTag,
@@ -280,6 +279,7 @@ impl AsRef<str> for MessageExchangePostcardProtocol {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::request_response::messages::MAX_REQUEST_SIZE;
 
     #[test]
     fn test_request_size_fits() {

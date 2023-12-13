@@ -19,13 +19,11 @@ use libp2p::{
         ConnectionEstablished,
         DialFailure,
         FromSwarm,
-        ListenFailure,
     },
     Multiaddr,
     PeerId,
 };
 use libp2p_core::Endpoint;
-use libp2p_identify::Event;
 use libp2p_swarm::{
     derive_prelude::Either,
     ConnectionDenied,
@@ -51,10 +49,7 @@ use tokio::time::{
     Interval,
 };
 
-use tracing::{
-    debug,
-    Id,
-};
+use tracing::debug;
 
 /// Maximum amount of peer's addresses that we are ready to store per peer
 const MAX_IDENTIFY_ADDRESSES: usize = 10;

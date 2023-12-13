@@ -98,9 +98,9 @@ impl NetworkBehaviour for Heartbeat {
     fn handle_established_inbound_connection(
         &mut self,
         _connection_id: ConnectionId,
-        peer: PeerId,
-        local_addr: &Multiaddr,
-        remote_addr: &Multiaddr,
+        _peer: PeerId,
+        _local_addr: &Multiaddr,
+        _remote_addr: &Multiaddr,
     ) -> Result<THandler<Self>, ConnectionDenied> {
         Ok(HeartbeatHandler::new(self.config.clone()))
     }
@@ -108,9 +108,9 @@ impl NetworkBehaviour for Heartbeat {
     fn handle_established_outbound_connection(
         &mut self,
         _connection_id: ConnectionId,
-        peer: PeerId,
-        addr: &Multiaddr,
-        role_override: Endpoint,
+        _peer: PeerId,
+        _addr: &Multiaddr,
+        _role_override: Endpoint,
     ) -> Result<THandler<Self>, ConnectionDenied> {
         Ok(HeartbeatHandler::new(self.config.clone()))
     }

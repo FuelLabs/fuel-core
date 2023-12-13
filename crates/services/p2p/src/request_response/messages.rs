@@ -22,6 +22,7 @@ use tokio::sync::oneshot;
 pub(crate) const REQUEST_RESPONSE_PROTOCOL_ID: &str = "/fuel/req_res/0.0.1";
 
 /// Max Size in Bytes of the Request Message
+#[cfg(test)]
 pub(crate) const MAX_REQUEST_SIZE: usize = core::mem::size_of::<RequestMessage>();
 
 // Peer receives a `RequestMessage`.

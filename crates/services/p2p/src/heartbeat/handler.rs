@@ -21,7 +21,6 @@ use libp2p_swarm::{
     SubstreamProtocol,
 };
 use std::{
-    fmt::Display,
     num::NonZeroU32,
     pin::Pin,
     task::Poll,
@@ -76,25 +75,6 @@ impl Default for HeartbeatConfig {
             Duration::from_secs(1),
             NonZeroU32::new(5).expect("5 != 0"),
         )
-    }
-}
-
-#[derive(Debug)]
-pub enum HeartbeatFailure {
-    Timeout,
-}
-impl Display for HeartbeatFailure {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            HeartbeatFailure::Timeout => f.write_str("Heartbeat timeout"),
-        }
-    }
-}
-impl std::error::Error for HeartbeatFailure {
-    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        match self {
-            HeartbeatFailure::Timeout => None,
-        }
     }
 }
 
