@@ -6,7 +6,6 @@ query {
   chain {
     daHeight
     name
-    peerCount
     latestBlock {
       id
       header {

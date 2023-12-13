@@ -1,4 +1,3 @@
-use crate::block_target_gas_set::default_gas_costs::default_gas_costs;
 use block_target_gas_set::{
     alu::run_alu,
     contract::run_contract,
@@ -25,10 +24,14 @@ use fuel_core::{
     },
     txpool::types::Word,
 };
-use fuel_core_benches::*;
+use fuel_core_benches::{
+    default_gas_costs::default_gas_costs,
+    *,
+};
 use fuel_core_chain_config::ContractConfig;
 use fuel_core_storage::{
     tables::ContractsRawCode,
+    vm_storage::IncreaseStorageKey,
     StorageAsMut,
 };
 use fuel_core_types::{
@@ -242,7 +245,6 @@ fn service_with_many_contracts(
     state_size: u64,
     contract_ids: Vec<ContractId>,
 ) -> (FuelService, tokio::runtime::Runtime) {
-    use fuel_core::database::vm_database::IncreaseStorageKey;
     let rt = tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build()

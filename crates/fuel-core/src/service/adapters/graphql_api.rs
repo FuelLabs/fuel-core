@@ -1,3 +1,4 @@
+use super::BlockProducerAdapter;
 use crate::{
     database::{
         transactions::OwnedTransactionIndexCursor,
@@ -14,9 +15,13 @@ use crate::{
         DatabasePort,
         DatabaseTransactions,
         DryRunExecution,
+        P2pPort,
         TxPoolPort,
     },
-    service::adapters::TxPoolAdapter,
+    service::adapters::{
+        P2PAdapter,
+        TxPoolAdapter,
+    },
 };
 use async_trait::async_trait;
 use fuel_core_services::stream::BoxStream;
@@ -60,6 +65,7 @@ use fuel_core_types::{
     },
     services::{
         graphql_api::ContractBalance,
+        p2p::PeerInfo,
         txpool::{
             InsertionResult,
             TransactionStatus,
@@ -264,4 +270,40 @@ impl DryRunExecution for BlockProducerAdapter {
 
 impl BlockProducerPort for BlockProducerAdapter {}
 
-use super::BlockProducerAdapter;
+#[async_trait::async_trait]
+impl P2pPort for P2PAdapter {
+    async fn all_peer_info(&self) -> anyhow::Result<Vec<PeerInfo>> {
+        #[cfg(feature = "p2p")]
+        {
+            use fuel_core_types::services::p2p::HeartbeatData;
+            if let Some(service) = &self.service {
+                let peers = service.get_all_peers().await?;
+                Ok(peers
+                    .into_iter()
+                    .map(|(peer_id, peer_info)| PeerInfo {
+                        id: fuel_core_types::services::p2p::PeerId::from(
+                            peer_id.to_bytes(),
+                        ),
+                        peer_addresses: peer_info
+                            .peer_addresses
+                            .iter()
+                            .map(|addr| addr.to_string())
+                            .collect(),
+                        client_version: None,
+                        heartbeat_data: HeartbeatData {
+                            block_height: peer_info.heartbeat_data.block_height,
+                            last_heartbeat: peer_info.heartbeat_data.last_heartbeat_sys,
+                        },
+                        app_score: peer_info.score,
+                    })
+                    .collect())
+            } else {
+                Ok(vec![])
+            }
+        }
+        #[cfg(not(feature = "p2p"))]
+        {
+            Ok(vec![])
+        }
+    }
+}

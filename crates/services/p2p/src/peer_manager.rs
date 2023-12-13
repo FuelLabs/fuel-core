@@ -8,7 +8,10 @@ use fuel_core_types::{
         MIN_APP_SCORE,
     },
 };
-use libp2p::PeerId;
+use libp2p::{
+    Multiaddr,
+    PeerId,
+};
 use rand::seq::IteratorRandom;
 use std::{
     collections::{
@@ -38,6 +41,7 @@ const MIN_GOSSIPSUB_SCORE_BEFORE_BAN: AppScore = GRAYLIST_THRESHOLD;
 // Info about a single Peer that we're connected to
 #[derive(Debug, Clone)]
 pub struct PeerInfo {
+    pub peer_addresses: HashSet<Multiaddr>,
     pub client_version: Option<String>,
     pub heartbeat_data: HeartbeatData,
     pub score: AppScore,
@@ -46,6 +50,7 @@ pub struct PeerInfo {
 impl PeerInfo {
     pub fn new(heartbeat_avg_window: u32) -> Self {
         Self {
+            peer_addresses: HashSet::new(),
             client_version: None,
             heartbeat_data: HeartbeatData::new(heartbeat_avg_window),
             score: DEFAULT_APP_SCORE,

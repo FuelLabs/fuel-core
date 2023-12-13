@@ -18,6 +18,7 @@ version = { workspace = true }
 
 [dependencies]
 anyhow = { workspace = true }
+bs58 = "0.5"
 derive_more = { version = "0.99" }
 fuel-vm-private = { workspace = true, default-features = false, features = ["alloc"] }
 secrecy = "0.8"

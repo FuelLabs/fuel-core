@@ -128,7 +128,7 @@ The Client team actively develops and maintains several dependencies used in Fue
 -   [fuel-merkle](https://github.com/FuelLabs/fuel-vm/tree/master/fuel-merkle)
 -   [fuel-tx](https://github.com/FuelLabs/fuel-vm/tree/master/fuel-tx)
 -   [fuel-asm](https://github.com/FuelLabs/fuel-vm/tree/master/fuel-asm)
--   [fuel-vm](https://github.com/FuelLabs/fuel-vm/master/fuel-vm)
+-   [fuel-vm](https://github.com/FuelLabs/fuel-vm/tree/master/fuel-vm)
 
 ### Linking issues
 

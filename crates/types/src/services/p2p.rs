@@ -4,7 +4,16 @@ use crate::{
     fuel_tx::Transaction,
     fuel_types::BlockHeight,
 };
-use std::fmt::Debug;
+use std::{
+    collections::HashSet,
+    fmt::{
+        Debug,
+        Display,
+        Formatter,
+    },
+    str::FromStr,
+    time::SystemTime,
+};
 
 /// Contains types and logic for Peer Reputation
 pub mod peer_reputation;
@@ -134,6 +143,21 @@ impl From<PeerId> for Vec<u8> {
     }
 }
 
+impl Display for PeerId {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&bs58::encode(&self.0).into_string())
+    }
+}
+
+impl FromStr for PeerId {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let bytes = bs58::decode(s).into_vec().map_err(|e| e.to_string())?;
+        Ok(Self(bytes))
+    }
+}
+
 impl PeerId {
     /// Bind the PeerId and given data of type T together to generate a
     /// SourcePeer<T>
@@ -143,4 +167,26 @@ impl PeerId {
             data,
         }
     }
+}
+
+/// Contains metadata about a connected peer
+pub struct PeerInfo {
+    /// The libp2p peer id
+    pub id: PeerId,
+    /// all known multi-addresses of the peer
+    pub peer_addresses: HashSet<String>,
+    /// the version of fuel-core reported by the peer
+    pub client_version: Option<String>,
+    /// recent heartbeat from the peer
+    pub heartbeat_data: HeartbeatData,
+    /// the current application reputation score of the peer
+    pub app_score: f64,
+}
+
+/// Contains information from the most recent heartbeat received by the peer
+pub struct HeartbeatData {
+    /// The currently reported block height of the peer
+    pub block_height: Option<BlockHeight>,
+    /// The instant representing when the latest heartbeat was received.
+    pub last_heartbeat: SystemTime,
 }

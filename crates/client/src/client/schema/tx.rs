@@ -94,6 +94,7 @@ pub struct TransactionEdge {
 #[cynic(graphql_type = "Transaction", schema_path = "./assets/schema.sdl")]
 pub struct OpaqueTransaction {
     pub raw_payload: HexString,
+    // TODO: Remove now that Success and Failure status includes receipts
     pub receipts: Option<Vec<Receipt>>,
     pub status: Option<TransactionStatus>,
 }
@@ -174,18 +175,22 @@ pub struct SubmittedStatus {
 #[derive(cynic::QueryFragment, Debug)]
 #[cynic(schema_path = "./assets/schema.sdl")]
 pub struct SuccessStatus {
+    pub transaction_id: TransactionId,
     pub block: BlockIdFragment,
     pub time: Tai64Timestamp,
     pub program_state: Option<ProgramState>,
+    pub receipts: Vec<Receipt>,
 }
 
 #[derive(cynic::QueryFragment, Debug)]
 #[cynic(schema_path = "./assets/schema.sdl")]
 pub struct FailureStatus {
+    pub transaction_id: TransactionId,
     pub block: BlockIdFragment,
     pub time: Tai64Timestamp,
     pub reason: String,
     pub program_state: Option<ProgramState>,
+    pub receipts: Vec<Receipt>,
 }
 
 #[derive(cynic::QueryFragment, Debug)]

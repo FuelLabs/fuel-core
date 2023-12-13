@@ -18,10 +18,18 @@ use fuel_core_storage::{
         StorageTransaction,
         Transactional,
     },
+    Error as StorageError,
     Result as StorageResult,
 };
-use fuel_core_types::fuel_types::BlockHeight;
-
+use fuel_core_types::{
+    blockchain::primitives::BlockId,
+    fuel_types::{
+        BlockHeight,
+        Bytes32,
+        ContractId,
+    },
+    tai64::Tai64,
+};
 use itertools::Itertools;
 use serde::{
     de::DeserializeOwned,
@@ -37,6 +45,7 @@ use std::{
     ops::Deref,
     sync::Arc,
 };
+use strum::EnumCount;
 
 pub use fuel_core_database::Error;
 pub type Result<T> = core::result::Result<T, Error>;
@@ -49,7 +58,6 @@ type DatabaseResult<T> = Result<T>;
 use crate::state::rocks_db::RocksDb;
 #[cfg(feature = "rocksdb")]
 use std::path::Path;
-use strum::EnumCount;
 #[cfg(feature = "rocksdb")]
 use tempfile::TempDir;
 
@@ -72,7 +80,6 @@ pub mod metadata;
 pub mod storage;
 pub mod transaction;
 pub mod transactions;
-pub mod vm_database;
 
 /// Database tables column ids to the corresponding [`fuel_core_storage::Mappable`] table.
 #[repr(u32)]
@@ -445,6 +452,12 @@ impl AsRef<Database> for Database {
     }
 }
 
+impl AsMut<Database> for Database {
+    fn as_mut(&mut self) -> &mut Database {
+        self
+    }
+}
+
 /// Construct an ephemeral database
 /// uses rocksdb when rocksdb features are enabled
 /// uses in-memory when rocksdb features are disabled
@@ -478,6 +491,26 @@ impl ChainConfigDb for Database {
 
     fn get_block_height(&self) -> StorageResult<BlockHeight> {
         Self::latest_height(self)
+    }
+}
+
+impl fuel_core_storage::vm_storage::VmStorageRequirements for Database {
+    type Error = StorageError;
+
+    fn block_time(&self, height: &BlockHeight) -> StorageResult<Tai64> {
+        self.block_time(height)
+    }
+
+    fn get_block_id(&self, height: &BlockHeight) -> StorageResult<Option<BlockId>> {
+        self.get_block_id(height)
+    }
+
+    fn init_contract_state<S: Iterator<Item = (Bytes32, Bytes32)>>(
+        &mut self,
+        contract_id: &ContractId,
+        slots: S,
+    ) -> StorageResult<()> {
+        self.init_contract_state(contract_id, slots)
     }
 }
 
