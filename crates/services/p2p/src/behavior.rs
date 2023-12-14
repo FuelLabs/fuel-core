@@ -9,6 +9,7 @@ use crate::{
         config::build_gossipsub_behaviour,
         topics::GossipTopic,
     },
+    heartbeat,
     peer_report::{
         PeerReportBehaviour,
         PeerReportEvent,
@@ -27,6 +28,7 @@ use libp2p::{
         MessageId,
         PublishError,
     },
+    identify,
     request_response::{
         Behaviour as RequestResponse,
         Config as RequestResponseConfig,
@@ -49,17 +51,26 @@ pub enum FuelBehaviourEvent {
     Gossipsub(GossipsubEvent),
     RequestResponse(RequestResponseEvent<RequestMessage, NetworkResponse>),
     BlockedPeers(void::Void),
+    Identify(identify::Event),
+    Heartbeat(heartbeat::HeartbeatEvent),
 }
 
 /// Handles all p2p protocols needed for Fuel.
 #[derive(NetworkBehaviour)]
 #[behaviour(to_swarm = "FuelBehaviourEvent")]
 pub struct FuelBehaviour<Codec: NetworkCodec> {
+    /// **WARNING**: The order of the behaviours is important and fragile, at least for the tests.
+
     /// The Behaviour to manage connections to blocked peers.
     blocked_peer: allow_block_list::Behaviour<allow_block_list::BlockedPeers>,
 
+    /// The Behaviour to identify peers.
+    identify: identify::Behaviour,
+
+    heartbeat: heartbeat::Heartbeat,
+
     /// Message propagation for p2p
-    pub(crate) gossipsub: Gossipsub,
+    gossipsub: Gossipsub,
 
     /// Node discovery
     discovery: DiscoveryBehaviour,
@@ -103,6 +114,23 @@ impl<Codec: NetworkCodec> FuelBehaviour<Codec> {
 
         let peer_report = PeerReportBehaviour::new(p2p_config);
 
+        let identify = {
+            let identify_config = identify::Config::new(
+                "/fuel/1.0".to_string(),
+                p2p_config.keypair.public(),
+            );
+            if let Some(interval) = p2p_config.identify_interval {
+                identify::Behaviour::new(identify_config.with_interval(interval))
+            } else {
+                identify::Behaviour::new(identify_config)
+            }
+        };
+
+        let heartbeat = heartbeat::Heartbeat::new(
+            p2p_config.heartbeat_config.clone(),
+            BlockHeight::default(),
+        );
+
         let req_res_protocol =
             core::iter::once((codec.get_req_res_protocol(), ProtocolSupport::Full));
 
@@ -122,6 +150,8 @@ impl<Codec: NetworkCodec> FuelBehaviour<Codec> {
             peer_report,
             request_response,
             blocked_peer: Default::default(),
+            identify,
+            heartbeat,
         }
     }
 
@@ -224,6 +254,18 @@ impl From<GossipsubEvent> for FuelBehaviourEvent {
 impl From<RequestResponseEvent<RequestMessage, NetworkResponse>> for FuelBehaviourEvent {
     fn from(event: RequestResponseEvent<RequestMessage, NetworkResponse>) -> Self {
         FuelBehaviourEvent::RequestResponse(event)
+    }
+}
+
+impl From<identify::Event> for FuelBehaviourEvent {
+    fn from(event: identify::Event) -> Self {
+        FuelBehaviourEvent::Identify(event)
+    }
+}
+
+impl From<heartbeat::HeartbeatEvent> for FuelBehaviourEvent {
+    fn from(event: heartbeat::HeartbeatEvent) -> Self {
+        FuelBehaviourEvent::Heartbeat(event)
     }
 }
 

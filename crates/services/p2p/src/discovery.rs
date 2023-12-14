@@ -126,7 +126,6 @@ impl NetworkBehaviour for DiscoveryBehaviour {
         addr: &Multiaddr,
         role_override: Endpoint,
     ) -> Result<THandler<Self>, ConnectionDenied> {
-        tracing::error!("discovery established outbound connection: {:?}", &peer);
         self.kademlia.handle_established_outbound_connection(
             connection_id,
             peer,

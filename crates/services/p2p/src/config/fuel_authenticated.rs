@@ -59,7 +59,6 @@ where
     type Future = Pin<Box<dyn Future<Output = Result<Self::Output, Self::Error>> + Send>>;
 
     fn upgrade_inbound(self, socket: T, info: Self::Info) -> Self::Future {
-        tracing::error!("auth inbound!");
         Box::pin(
             self.noise_authenticated
                 .upgrade_inbound(socket, info)
@@ -84,7 +83,6 @@ where
     type Future = Pin<Box<dyn Future<Output = Result<Self::Output, Self::Error>> + Send>>;
 
     fn upgrade_outbound(self, socket: T, info: Self::Info) -> Self::Future {
-        tracing::error!("auth outbound!");
         Box::pin(
             self.noise_authenticated
                 .upgrade_outbound(socket, info)

@@ -141,9 +141,15 @@ impl PeerManager {
         }
     }
 
-    pub fn handle_peer_identified(&mut self, peer_id: &PeerId, agent_version: String) {
+    pub fn handle_peer_identified(
+        &mut self,
+        peer_id: &PeerId,
+        addresses: Vec<Multiaddr>,
+        agent_version: String,
+    ) {
         let peers = self.get_assigned_peer_table_mut(peer_id);
         insert_client_version(peers, peer_id, agent_version);
+        insert_peer_addresses(peers, peer_id, addresses);
     }
 
     pub fn batch_update_score_with_decay(&mut self) {
@@ -300,6 +306,20 @@ impl PeerManager {
         } else {
             &mut self.non_reserved_connected_peers
         }
+    }
+}
+
+fn insert_peer_addresses(
+    peers: &mut HashMap<PeerId, PeerInfo>,
+    peer_id: &PeerId,
+    addresses: Vec<Multiaddr>,
+) {
+    if let Some(peer) = peers.get_mut(peer_id) {
+        for address in addresses {
+            peer.peer_addresses.insert(address);
+        }
+    } else {
+        log_missing_peer(peer_id);
     }
 }
 

@@ -66,15 +66,6 @@ pub enum PeerReportEvent {
     PeerDisconnected {
         peer_id: PeerId,
     },
-    PeerIdentified {
-        peer_id: PeerId,
-        agent_version: String,
-        addresses: Vec<Multiaddr>,
-    },
-    PeerInfoUpdated {
-        peer_id: PeerId,
-        block_height: BlockHeight,
-    },
     /// Informs p2p service / PeerManager to check health of reserved nodes' connections
     CheckReservedNodesHealth,
     /// Informs p2p service / PeerManager to perform reputation decay of connected nodes
@@ -342,16 +333,6 @@ impl FromAction<Heartbeat> for PeerReportBehaviour {
         >,
     ) -> Option<ToSwarm<Self::ToSwarm, THandlerInEvent<Self>>> {
         match action {
-            ToSwarm::GenerateEvent(HeartbeatEvent {
-                peer_id,
-                latest_block_height,
-            }) => {
-                let event = PeerReportEvent::PeerInfoUpdated {
-                    peer_id,
-                    block_height: latest_block_height,
-                };
-                Some(ToSwarm::GenerateEvent(event))
-            }
             ToSwarm::Dial { opts } => Some(ToSwarm::Dial { opts }),
             ToSwarm::NotifyHandler {
                 peer_id,
@@ -383,40 +364,6 @@ impl FromAction<Identify> for PeerReportBehaviour {
         >,
     ) -> Option<ToSwarm<Self::ToSwarm, THandlerInEvent<Self>>> {
         match action {
-            ToSwarm::GenerateEvent(event) => match event {
-                IdentifyEvent::Received {
-                    peer_id,
-                    info:
-                        IdentifyInfo {
-                            protocol_version,
-                            agent_version,
-                            mut listen_addrs,
-                            ..
-                        },
-                } => {
-                    if listen_addrs.len() > MAX_IDENTIFY_ADDRESSES {
-                        debug!(
-                            target: "fuel-p2p",
-                            "Node {:?} has reported more than {} addresses; it is identified by {:?} and {:?}",
-                            peer_id, MAX_IDENTIFY_ADDRESSES, protocol_version, agent_version
-                        );
-                        listen_addrs.truncate(MAX_IDENTIFY_ADDRESSES);
-                    }
-
-                    let event = PeerReportEvent::PeerIdentified {
-                        peer_id,
-                        agent_version,
-                        addresses: listen_addrs,
-                    };
-
-                    Some(ToSwarm::GenerateEvent(event))
-                }
-                IdentifyEvent::Error { peer_id, error } => {
-                    debug!(target: "fuel-p2p", "Identification with peer {:?} failed => {}", peer_id, error);
-                    None
-                }
-                _ => None,
-            },
             ToSwarm::Dial { opts } => Some(ToSwarm::Dial { opts }),
             ToSwarm::NotifyHandler {
                 peer_id,

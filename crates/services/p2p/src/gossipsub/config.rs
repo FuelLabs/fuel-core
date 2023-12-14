@@ -211,11 +211,9 @@ pub(crate) fn build_gossipsub_behaviour(p2p_config: &Config) -> Gossipsub {
         gossipsub
     };
     let reserved_nodes = p2p_config.reserved_nodes.clone();
-    tracing::error!("reserved_nodes: {:?}", &reserved_nodes);
     let explicit_peers = reserved_nodes
         .iter()
         .filter_map(|address| address.try_to_peer_id());
-    tracing::error!("explicit_peers: {:?}", &explicit_peers);
     for peer_id in explicit_peers {
         gossipsub.add_explicit_peer(&peer_id);
     }

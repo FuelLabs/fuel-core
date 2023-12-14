@@ -60,6 +60,8 @@ use libp2p::{
 };
 use libp2p_gossipsub::PublishError;
 
+use crate::heartbeat::HeartbeatEvent;
+use libp2p_identify::Event;
 use rand::seq::IteratorRandom;
 use std::{
     collections::HashMap,
@@ -481,22 +483,6 @@ impl<Codec: NetworkCodec> FuelP2PService<Codec> {
 
             FuelBehaviourEvent::PeerReport(peer_report_event) => {
                 match peer_report_event {
-                    PeerReportEvent::PeerIdentified {
-                        peer_id,
-                        addresses,
-                        agent_version,
-                    } => {
-                        if self.metrics {
-                            p2p_metrics().unique_peers.inc();
-                        }
-
-                        self.peer_manager
-                            .handle_peer_identified(&peer_id, agent_version);
-
-                        self.swarm
-                            .behaviour_mut()
-                            .add_addresses_to_discovery(&peer_id, addresses);
-                    }
                     PeerReportEvent::PerformDecay => {
                         self.peer_manager.batch_update_score_with_decay()
                     }
@@ -512,18 +498,6 @@ impl<Codec: NetworkCodec> FuelP2PService<Codec> {
 
                             let _ = self.swarm.dial(peer_id);
                         }
-                    }
-                    PeerReportEvent::PeerInfoUpdated {
-                        peer_id,
-                        block_height,
-                    } => {
-                        self.peer_manager
-                            .handle_peer_info_updated(&peer_id, block_height);
-
-                        return Some(FuelP2PEvent::PeerInfoUpdated {
-                            peer_id,
-                            block_height,
-                        })
                     }
                     PeerReportEvent::PeerConnected {
                         peer_id,
@@ -629,6 +603,46 @@ impl<Codec: NetworkCodec> FuelP2PService<Codec> {
                     let _ = self.outbound_requests_table.remove(&request_id);
                 }
                 _ => {}
+            },
+            // TODO: Collapse the logic for these events into separate helpers for clarity.
+            FuelBehaviourEvent::Identify(event) => match event {
+                Event::Received { peer_id, info } => {
+                    if self.metrics {
+                        p2p_metrics().unique_peers.inc();
+                    }
+
+                    let addresses = info.listen_addrs;
+                    let agent_version = info.agent_version;
+                    self.peer_manager.handle_peer_identified(
+                        &peer_id,
+                        addresses.clone(),
+                        agent_version,
+                    );
+
+                    self.swarm
+                        .behaviour_mut()
+                        .add_addresses_to_discovery(&peer_id, addresses);
+                }
+                Event::Sent { .. } => {}
+                Event::Pushed { .. } => {}
+                Event::Error { peer_id, error } => {
+                    debug!(target: "fuel-p2p", "Identification with peer {:?} failed => {}", peer_id, error);
+                }
+            },
+
+            FuelBehaviourEvent::Heartbeat(event) => match event {
+                HeartbeatEvent {
+                    peer_id,
+                    latest_block_height,
+                } => {
+                    self.peer_manager
+                        .handle_peer_info_updated(&peer_id, latest_block_height);
+
+                    return Some(FuelP2PEvent::PeerInfoUpdated {
+                        peer_id,
+                        block_height: latest_block_height,
+                    })
+                }
             },
 
             _ => {}

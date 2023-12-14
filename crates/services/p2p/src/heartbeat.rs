@@ -86,15 +86,6 @@ impl NetworkBehaviour for Heartbeat {
     type ConnectionHandler = HeartbeatHandler;
     type ToSwarm = HeartbeatEvent;
 
-    fn handle_pending_inbound_connection(
-        &mut self,
-        _connection_id: ConnectionId,
-        _local_addr: &Multiaddr,
-        _remote_addr: &Multiaddr,
-    ) -> Result<(), ConnectionDenied> {
-        unimplemented!("Doesn't seem to be used");
-    }
-
     fn handle_established_inbound_connection(
         &mut self,
         _connection_id: ConnectionId,
