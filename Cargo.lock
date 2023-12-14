@@ -2953,6 +2953,7 @@ dependencies = [
  "mockall",
  "parking_lot 0.12.1",
  "postcard",
+ "pretty_assertions",
  "primitive-types",
  "proptest",
  "rand 0.8.5",
