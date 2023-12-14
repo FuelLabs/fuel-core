@@ -348,6 +348,10 @@ mod tests {
     use pretty_assertions::assert_eq;
     use rand::{
         rngs::StdRng,
+        seq::{
+            IteratorRandom,
+            SliceRandom,
+        },
         Rng,
         SeedableRng,
     };
@@ -752,8 +756,9 @@ mod tests {
 
         assert_eq!(metadata.root, expected_root);
     }
+
     #[test]
-    fn updating_contract_state_will_update_metadata_multiple_contracts_sorted() {
+    fn updating_contract_state_will_update_metadata_multiple_contracts() {
         // given
         let mut rng = StdRng::seed_from_u64(0);
 
@@ -799,6 +804,69 @@ mod tests {
             (contract_ids[2], merkalize(&state_per_contract[2])),
         ]);
 
+        assert_eq!(all_metadata, expected);
+    }
+
+    #[test]
+    fn updating_contract_state_will_update_metadata_multiple_contracts_shuffled() {
+        // given
+        let mut rng = StdRng::seed_from_u64(0);
+
+        let contract_ids =
+            [[1; 32], [2; 32], [3; 32]].map(|bytes| ContractId::from(bytes));
+        let random_state = |contract_id| ContractStateConfig {
+            contract_id: Bytes32::from(**id),
+            key: random_bytes32(&mut rng),
+            value: random_bytes32(&mut rng),
+        };
+        let states = [
+            (
+                contract_ids[0],
+                ContractStateConfig {
+                    contract_id: Bytes32::from(*contract_ids[0]),
+                    key: Bytes32::from([1; 32]),
+                    value: Bytes32::from([1; 32]),
+                },
+            ),
+            (
+                contract_ids[0],
+                ContractStateConfig {
+                    contract_id: Bytes32::from(*contract_ids[0]),
+                    key: Bytes32::from([2; 32]),
+                    value: Bytes32::from([2; 32]),
+                },
+            ),
+        ];
+
+        let database = &mut Database::default();
+
+        // when
+        let mut states = state_per_contract
+            .clone()
+            .into_iter()
+            .flatten()
+            .collect_vec();
+        database.update_contract_states(states).unwrap();
+
+        // then
+        let all_metadata = contract_ids
+            .into_iter()
+            .map(|contract_id| {
+                let root = database
+                    .storage::<ContractsStateMerkleMetadata>()
+                    .get(&contract_id)
+                    .unwrap()
+                    .unwrap()
+                    .root;
+                (contract_id, root)
+            })
+            .collect::<Vec<_>>();
+
+        let expected = [
+            (contract_ids[0], merkalize(&state_per_contract[0])),
+            (contract_ids[1], merkalize(&state_per_contract[1])),
+            (contract_ids[2], merkalize(&state_per_contract[2])),
+        ];
         assert_eq!(all_metadata, expected);
     }
 
