@@ -64,19 +64,20 @@ pub struct FuelBehaviour<Codec: NetworkCodec> {
     /// The Behaviour to manage connections to blocked peers.
     blocked_peer: allow_block_list::Behaviour<allow_block_list::BlockedPeers>,
 
-    /// The Behaviour to identify peers.
-    identify: identify::Behaviour,
-
-    heartbeat: heartbeat::Heartbeat,
-
     /// Message propagation for p2p
     gossipsub: Gossipsub,
 
-    /// Node discovery
-    discovery: DiscoveryBehaviour,
+    /// Handles regular heartbeats from peers
+    heartbeat: heartbeat::Heartbeat,
+
+    /// The Behaviour to identify peers.
+    identify: identify::Behaviour,
 
     /// Identifies and periodically requests `BlockHeight` from connected nodes
     peer_report: PeerReportBehaviour,
+
+    /// Node discovery
+    discovery: DiscoveryBehaviour,
 
     /// RequestResponse protocol
     request_response: RequestResponse<Codec>,
@@ -220,7 +221,7 @@ impl<Codec: NetworkCodec> FuelBehaviour<Codec> {
     }
 
     pub fn update_block_height(&mut self, block_height: BlockHeight) {
-        self.peer_report.update_block_height(block_height);
+        self.heartbeat.update_block_height(block_height);
     }
 
     #[cfg(test)]
