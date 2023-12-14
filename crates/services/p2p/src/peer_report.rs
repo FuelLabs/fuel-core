@@ -1,23 +1,13 @@
 use crate::{
     config::Config,
-    heartbeat::{
-        Heartbeat,
-        HeartbeatEvent,
-    },
+    heartbeat::Heartbeat,
 };
-use fuel_core_types::fuel_types::BlockHeight;
 use libp2p::{
     self,
-    identify::{
-        Behaviour as Identify,
-        Config as IdentifyConfig,
-        Event as IdentifyEvent,
-        Info as IdentifyInfo,
-    },
+    identify::Behaviour as Identify,
     swarm::derive_prelude::{
         ConnectionClosed,
         ConnectionEstablished,
-        DialFailure,
         FromSwarm,
     },
     Multiaddr,
@@ -25,16 +15,10 @@ use libp2p::{
 };
 use libp2p_core::Endpoint;
 use libp2p_swarm::{
-    derive_prelude::Either,
     dummy::ConnectionHandler as DummyConnectionHandler,
-    handler::ConnectionEvent,
     ConnectionDenied,
-    ConnectionHandler,
-    ConnectionHandlerEvent,
-    ConnectionHandlerSelect,
     ConnectionId,
     NetworkBehaviour,
-    SubstreamProtocol,
     THandler,
     THandlerInEvent,
     THandlerOutEvent,
@@ -53,10 +37,6 @@ use tokio::time::{
     Interval,
 };
 
-use tracing::debug;
-
-/// Maximum amount of peer's addresses that we are ready to store per peer
-const MAX_IDENTIFY_ADDRESSES: usize = 10;
 const HEALTH_CHECK_INTERVAL_IN_SECONDS: u64 = 10;
 const REPUTATION_DECAY_INTERVAL_IN_SECONDS: u64 = 1;
 
@@ -149,8 +129,8 @@ impl NetworkBehaviour for PeerReportBehaviour {
                         .push_back(PeerReportEvent::PeerDisconnected { peer_id })
                 }
             }
-            FromSwarm::DialFailure(e) => {}
-            FromSwarm::ListenFailure(e) => {}
+            FromSwarm::DialFailure(_) => {}
+            FromSwarm::ListenFailure(_) => {}
             _ => {}
         }
     }

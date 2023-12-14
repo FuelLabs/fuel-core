@@ -72,6 +72,9 @@ use tracing::{
     warn,
 };
 
+/// Maximum amount of peer's addresses that we are ready to store per peer
+const MAX_IDENTIFY_ADDRESSES: usize = 10;
+
 impl<Codec: NetworkCodec> Punisher for Swarm<FuelBehaviour<Codec>> {
     fn ban_peer(&mut self, peer_id: PeerId) {
         self.behaviour_mut().block_peer(peer_id)
@@ -611,8 +614,19 @@ impl<Codec: NetworkCodec> FuelP2PService<Codec> {
                         p2p_metrics().unique_peers.inc();
                     }
 
-                    let addresses = info.listen_addrs;
+                    let mut addresses = info.listen_addrs;
                     let agent_version = info.agent_version;
+
+                    if addresses.len() > MAX_IDENTIFY_ADDRESSES {
+                        let protocol_version = info.protocol_version;
+                        debug!(
+                            target: "fuel-p2p",
+                            "Node {:?} has reported more than {} addresses; it is identified by {:?} and {:?}",
+                            peer_id, MAX_IDENTIFY_ADDRESSES, protocol_version, agent_version
+                        );
+                        addresses.truncate(MAX_IDENTIFY_ADDRESSES);
+                    }
+
                     self.peer_manager.handle_peer_identified(
                         &peer_id,
                         addresses.clone(),
@@ -630,20 +644,19 @@ impl<Codec: NetworkCodec> FuelP2PService<Codec> {
                 }
             },
 
-            FuelBehaviourEvent::Heartbeat(event) => match event {
-                HeartbeatEvent {
+            FuelBehaviourEvent::Heartbeat(event) => {
+                let HeartbeatEvent {
                     peer_id,
                     latest_block_height,
-                } => {
-                    self.peer_manager
-                        .handle_peer_info_updated(&peer_id, latest_block_height);
+                } = event;
+                self.peer_manager
+                    .handle_peer_info_updated(&peer_id, latest_block_height);
 
-                    return Some(FuelP2PEvent::PeerInfoUpdated {
-                        peer_id,
-                        block_height: latest_block_height,
-                    })
-                }
-            },
+                return Some(FuelP2PEvent::PeerInfoUpdated {
+                    peer_id,
+                    block_height: latest_block_height,
+                })
+            }
 
             _ => {}
         }
