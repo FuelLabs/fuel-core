@@ -172,3 +172,90 @@ impl Encoder {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use std::collections::HashSet;
+
+    use crate::Randomize;
+
+    use super::*;
+    use itertools::Itertools;
+    use rand::{
+        rngs::StdRng,
+        SeedableRng,
+    };
+
+    #[test]
+    fn json_encoder_generates_single_file_with_expected_name() {
+        // given
+        let dir = tempfile::tempdir().unwrap();
+        let encoder = Encoder::json(dir.path());
+
+        // when
+        encoder.close().unwrap();
+
+        // then
+        let entries: Vec<_> = dir.path().read_dir().unwrap().try_collect().unwrap();
+
+        match entries.as_slice() {
+            [entry] => assert_eq!(entry.path(), dir.path().join("state.json")),
+            _ => panic!("Expected single file \"state.json\""),
+        }
+    }
+
+    #[test]
+    fn parquet_encoder_generates_expected_filenames() {
+        // given
+        let dir = tempfile::tempdir().unwrap();
+        let encoder = Encoder::parquet(dir.path(), 0).unwrap();
+
+        // when
+        encoder.close().unwrap();
+
+        // then
+        let entries: HashSet<_> = dir
+            .path()
+            .read_dir()
+            .unwrap()
+            .map_ok(|entry| entry.path())
+            .try_collect()
+            .unwrap();
+        let expected_files = HashSet::from(
+            [
+                "coins.parquet",
+                "messages.parquet",
+                "contracts.parquet",
+                "contract_state.parquet",
+                "contract_balance.parquet",
+            ]
+            .map(|name| dir.path().join(name)),
+        );
+
+        assert_eq!(entries, expected_files);
+    }
+
+    #[test]
+    fn parquet_encoder_encodes_coins_in_expected_file() {
+        // given
+        let dir = tempfile::tempdir().unwrap();
+        let mut encoder = Encoder::parquet(dir.path(), 0).unwrap();
+
+        let seeded_rng = StdRng::seed_from_u64(0);
+
+        // when
+        let coins = vec![CoinConfig::randomize(seeded_rng)];
+        encoder.write_coins(coins.clone()).unwrap();
+        encoder.close().unwrap();
+
+        // then
+        let coins = parquet::Decoder::<File, CoinConfig>::new(
+            dir.path().join("coins.parquet"),
+            Compression::GZIP(GzipLevel::try_new(0).unwrap()),
+        )
+        .unwrap()
+        .collect::<Result<Vec<_>, _>>()
+        .unwrap();
+        assert_eq!(coins, coins);
+    }
+}
