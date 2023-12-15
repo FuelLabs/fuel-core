@@ -1085,7 +1085,6 @@ mod tests {
     // Simulates 2 p2p nodes that are on the same network and should connect via mDNS
     // without any additional bootstrapping
     #[tokio::test]
-    #[ignore] // TODO: Investigate why this test fails
     #[instrument]
     async fn nodes_connected_via_mdns() {
         // Node A
@@ -1105,9 +1104,7 @@ mod tests {
                     }
                     tracing::info!("Node B Event: {:?}", node_b_event);
                 },
-                node_a_event = node_a.swarm.select_next_some() => {
-                    tracing::info!("Node A Event: {:?}", node_a_event);
-                }
+                _ = node_a.swarm.select_next_some() => {},
             };
         }
     }

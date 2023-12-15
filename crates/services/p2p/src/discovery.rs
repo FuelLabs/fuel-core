@@ -111,12 +111,20 @@ impl NetworkBehaviour for DiscoveryBehaviour {
         addresses: &[Multiaddr],
         effective_role: Endpoint,
     ) -> Result<Vec<Multiaddr>, ConnectionDenied> {
-        self.kademlia.handle_pending_outbound_connection(
+        let mut kademlia_addrs = self.kademlia.handle_pending_outbound_connection(
             connection_id,
             maybe_peer,
             addresses,
             effective_role,
-        )
+        )?;
+        let mdns_addrs = self.mdns.handle_pending_outbound_connection(
+            connection_id,
+            maybe_peer,
+            addresses,
+            effective_role,
+        )?;
+        kademlia_addrs.extend(mdns_addrs);
+        Ok(kademlia_addrs)
     }
 
     fn handle_established_outbound_connection(
@@ -160,7 +168,8 @@ impl NetworkBehaviour for DiscoveryBehaviour {
             }
             _ => (),
         }
-        self.kademlia.on_swarm_event(event)
+        self.mdns.on_swarm_event(&event);
+        self.kademlia.on_swarm_event(event);
     }
 
     // receive events from KademliaHandler and pass it down to kademlia
@@ -170,7 +179,6 @@ impl NetworkBehaviour for DiscoveryBehaviour {
         connection: ConnectionId,
         event: THandlerOutEvent<Self>,
     ) {
-        tracing::info!("discovery handler event: {:?}", &event);
         self.kademlia
             .on_connection_handler_event(peer_id, connection, event);
     }
@@ -201,15 +209,9 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 
         // poll sub-behaviors
         if let Poll::Ready(kad_action) = self.kademlia.poll(cx) {
-            // match &kad_action {
-            //     Event::OutboundQueryProgressed { result: QueryResult::GetClosestPeers(Ok(closest)), ..} => {
-            //         self.kademlia.add_address()
-            //
-            //     }
-            // }
-            tracing::info!("kad action: {:?}", &kad_action);
             return Poll::Ready(kad_action)
         };
+
         while let Poll::Ready(mdns_event) = self.mdns.poll(cx) {
             match mdns_event {
                 ToSwarm::GenerateEvent(MdnsEvent::Discovered(list)) => {
