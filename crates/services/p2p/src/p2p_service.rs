@@ -460,45 +460,6 @@ impl<Codec: NetworkCodec> FuelP2PService<Codec> {
         }
     }
 
-    fn handle_identify_event(&mut self, event: identify::Event) -> Option<FuelP2PEvent> {
-        match event {
-            identify::Event::Received { peer_id, info } => {
-                if self.metrics {
-                    p2p_metrics().unique_peers.inc();
-                }
-
-                let mut addresses = info.listen_addrs;
-                let agent_version = info.agent_version;
-
-                if addresses.len() > MAX_IDENTIFY_ADDRESSES {
-                    let protocol_version = info.protocol_version;
-                    debug!(
-                        target: "fuel-p2p",
-                        "Node {:?} has reported more than {} addresses; it is identified by {:?} and {:?}",
-                        peer_id, MAX_IDENTIFY_ADDRESSES, protocol_version, agent_version
-                    );
-                    addresses.truncate(MAX_IDENTIFY_ADDRESSES);
-                }
-
-                self.peer_manager.handle_peer_identified(
-                    &peer_id,
-                    addresses.clone(),
-                    agent_version,
-                );
-
-                self.swarm
-                    .behaviour_mut()
-                    .add_addresses_to_discovery(&peer_id, addresses);
-            }
-            identify::Event::Sent { .. } => {}
-            identify::Event::Pushed { .. } => {}
-            identify::Event::Error { peer_id, error } => {
-                debug!(target: "fuel-p2p", "Identification with peer {:?} failed => {}", peer_id, error);
-            }
-        }
-        None
-    }
-
     fn handle_gossipsub_event(&mut self, event: GossipsubEvent) -> Option<FuelP2PEvent> {
         if let GossipsubEvent::Message {
             propagation_source,
@@ -580,20 +541,6 @@ impl<Codec: NetworkCodec> FuelP2PService<Codec> {
             }
         }
         None
-    }
-
-    fn handle_heartbeat_event(&mut self, event: HeartbeatEvent) -> Option<FuelP2PEvent> {
-        let HeartbeatEvent {
-            peer_id,
-            latest_block_height,
-        } = event;
-        self.peer_manager
-            .handle_peer_info_updated(&peer_id, latest_block_height);
-
-        Some(FuelP2PEvent::PeerInfoUpdated {
-            peer_id,
-            block_height: latest_block_height,
-        })
     }
 
     fn handle_request_response_event(
@@ -688,6 +635,59 @@ impl<Codec: NetworkCodec> FuelP2PService<Codec> {
             _ => {}
         }
         None
+    }
+
+    fn handle_identify_event(&mut self, event: identify::Event) -> Option<FuelP2PEvent> {
+        match event {
+            identify::Event::Received { peer_id, info } => {
+                if self.metrics {
+                    p2p_metrics().unique_peers.inc();
+                }
+
+                let mut addresses = info.listen_addrs;
+                let agent_version = info.agent_version;
+
+                if addresses.len() > MAX_IDENTIFY_ADDRESSES {
+                    let protocol_version = info.protocol_version;
+                    debug!(
+                        target: "fuel-p2p",
+                        "Node {:?} has reported more than {} addresses; it is identified by {:?} and {:?}",
+                        peer_id, MAX_IDENTIFY_ADDRESSES, protocol_version, agent_version
+                    );
+                    addresses.truncate(MAX_IDENTIFY_ADDRESSES);
+                }
+
+                self.peer_manager.handle_peer_identified(
+                    &peer_id,
+                    addresses.clone(),
+                    agent_version,
+                );
+
+                self.swarm
+                    .behaviour_mut()
+                    .add_addresses_to_discovery(&peer_id, addresses);
+            }
+            identify::Event::Sent { .. } => {}
+            identify::Event::Pushed { .. } => {}
+            identify::Event::Error { peer_id, error } => {
+                debug!(target: "fuel-p2p", "Identification with peer {:?} failed => {}", peer_id, error);
+            }
+        }
+        None
+    }
+
+    fn handle_heartbeat_event(&mut self, event: HeartbeatEvent) -> Option<FuelP2PEvent> {
+        let HeartbeatEvent {
+            peer_id,
+            latest_block_height,
+        } = event;
+        self.peer_manager
+            .handle_peer_info_updated(&peer_id, latest_block_height);
+
+        Some(FuelP2PEvent::PeerInfoUpdated {
+            peer_id,
+            block_height: latest_block_height,
+        })
     }
 }
 
