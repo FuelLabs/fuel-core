@@ -1,0 +1,28 @@
+name: Spell Check
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+      - master
+
+jobs:
+  spellcheck:
+    name: Run codespell
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v2
+
+    - name: Set up Python
+      uses: actions/setup-python@v2
+      with:
+        python-version: '3.x'
+
+    - name: Install codespell
+      run: pip install codespell
+
+    - name: Run codespell
+      run: codespell
