@@ -21,6 +21,7 @@ fuel-core-storage = { workspace = true }
 fuel-core-types = { workspace = true, features = [
     "serde",
 ] }
+hex = "0.4"
 futures = { workspace = true }
 ip_network = "0.4"
 libp2p = { version = "=0.53.1", default-features = false, features = [

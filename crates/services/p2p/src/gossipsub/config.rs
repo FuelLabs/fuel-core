@@ -143,7 +143,7 @@ fn initialize_peer_score_params(thresholds: &PeerScoreThresholds) -> PeerScorePa
             .checked_mul(100)
             .expect("`EPOCH` is usually not more than a year"),
         app_specific_weight: 0.0,
-        ip_colocation_factor_threshold: 8.0, // Allow up to 8 nodes per IP
+        ip_colocation_factor_threshold: 50.0, // Allow up to 50 nodes per IP
         behaviour_penalty_threshold: 6.0,
         behaviour_penalty_decay: score_parameter_decay(
             EPOCH

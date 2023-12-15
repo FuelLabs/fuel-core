@@ -43,10 +43,7 @@ use std::{
 use self::{
     connection_tracker::ConnectionTracker,
     fuel_authenticated::FuelAuthenticated,
-    fuel_upgrade::{
-        Checksum,
-        FuelUpgrade,
-    },
+    fuel_upgrade::Checksum,
     guarded_node::GuardedNode,
 };
 mod connection_tracker;
@@ -288,18 +285,17 @@ pub(crate) fn build_transport_function(
             libp2p::core::upgrade::SelectUpgrade::new(yamux_config, mplex_config)
         };
 
-        // TODO: Add fuel upgrade stuff
-        let _fuel_upgrade = FuelUpgrade::new(p2p_config.checksum);
-
         if p2p_config.reserved_nodes_only_mode {
             let guarded_node = GuardedNode::new(&p2p_config.reserved_nodes);
 
-            let fuel_authenticated =
-                FuelAuthenticated::new(noise_authenticated, guarded_node);
+            let fuel_authenticated = FuelAuthenticated::new(
+                noise_authenticated,
+                guarded_node,
+                p2p_config.checksum,
+            );
 
             transport
                 .authenticate(fuel_authenticated)
-                // .apply(fuel_upgrade)
                 .multiplex(multiplex_config)
                 .timeout(TRANSPORT_TIMEOUT)
                 .boxed()
@@ -309,12 +305,14 @@ pub(crate) fn build_transport_function(
                 connection_state.clone(),
             );
 
-            let fuel_authenticated =
-                FuelAuthenticated::new(noise_authenticated, connection_tracker);
+            let fuel_authenticated = FuelAuthenticated::new(
+                noise_authenticated,
+                connection_tracker,
+                p2p_config.checksum,
+            );
 
             transport
                 .authenticate(fuel_authenticated)
-                // .apply(fuel_upgrade)
                 .multiplex(multiplex_config)
                 .timeout(TRANSPORT_TIMEOUT)
                 .boxed()

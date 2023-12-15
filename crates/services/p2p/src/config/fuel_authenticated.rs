@@ -1,3 +1,4 @@
+use crate::config::fuel_upgrade::Checksum;
 use futures::{
     future,
     AsyncRead,
@@ -29,23 +30,35 @@ pub(crate) trait Approver {
 pub(crate) struct FuelAuthenticated<A: Approver> {
     noise_authenticated: NoiseConfig,
     approver: A,
+    checksum: Checksum,
 }
 
 impl<A: Approver> FuelAuthenticated<A> {
-    pub(crate) fn new(noise_authenticated: NoiseConfig, approver: A) -> Self {
+    pub(crate) fn new(
+        noise_authenticated: NoiseConfig,
+        approver: A,
+        checksum: Checksum,
+    ) -> Self {
         Self {
             noise_authenticated,
             approver,
+            checksum,
         }
     }
 }
 
 impl<A: Approver> UpgradeInfo for FuelAuthenticated<A> {
-    type Info = <NoiseConfig as UpgradeInfo>::Info;
-    type InfoIter = <NoiseConfig as UpgradeInfo>::InfoIter;
+    type Info = String;
+    type InfoIter = std::iter::Once<String>;
 
     fn protocol_info(&self) -> Self::InfoIter {
-        self.noise_authenticated.protocol_info()
+        let noise = self
+            .noise_authenticated
+            .protocol_info()
+            .next()
+            .expect("Noise always has a protocol info");
+
+        std::iter::once(format!("{}/{}", noise, hex::encode(self.checksum.as_ref())))
     }
 }
 
@@ -58,10 +71,10 @@ where
     type Error = NoiseError;
     type Future = Pin<Box<dyn Future<Output = Result<Self::Output, Self::Error>> + Send>>;
 
-    fn upgrade_inbound(self, socket: T, info: Self::Info) -> Self::Future {
+    fn upgrade_inbound(self, socket: T, _: Self::Info) -> Self::Future {
         Box::pin(
             self.noise_authenticated
-                .upgrade_inbound(socket, info)
+                .upgrade_inbound(socket, "")
                 .and_then(move |(remote_peer_id, io)| {
                     if self.approver.allow_peer(&remote_peer_id) {
                         future::ok((remote_peer_id, io))
@@ -82,10 +95,10 @@ where
     type Error = NoiseError;
     type Future = Pin<Box<dyn Future<Output = Result<Self::Output, Self::Error>> + Send>>;
 
-    fn upgrade_outbound(self, socket: T, info: Self::Info) -> Self::Future {
+    fn upgrade_outbound(self, socket: T, _: Self::Info) -> Self::Future {
         Box::pin(
             self.noise_authenticated
-                .upgrade_outbound(socket, info)
+                .upgrade_outbound(socket, "")
                 .and_then(move |(remote_peer_id, io)| {
                     if self.approver.allow_peer(&remote_peer_id) {
                         future::ok((remote_peer_id, io))

@@ -2907,6 +2907,7 @@ dependencies = [
  "fuel-core-trace",
  "fuel-core-types",
  "futures",
+ "hex",
  "ip_network",
  "libp2p",
  "libp2p-allow-block-list",
