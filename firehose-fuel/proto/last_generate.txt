@@ -1,0 +1,2 @@
+generate.sh - Mon Dec 11 09:40:08 EET 2023 - hannes
+FuelLabs/firehose-fuel/proto revision: 1e24bd4

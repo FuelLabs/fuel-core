@@ -1,0 +1,15 @@
+            _____         __
+           / __(_)______ / /  ___  ___ ___
+          / _// / __/ -_) _ \/ _ \(_-</ -_)
+         /_/ /_/_/  \__/_//_/\___/___/\__/
+
+Welcome to this Firehose chain reader pod, common commands:
+ - Show version                       firefuel --version
+
+Node manager commands (fuel-... <tab> to show all):
+ - Check if running                   reader-is-running
+
+ - Start or restart instance          reader-resume
+ - Stop instance                      reader-maintenance
+ - Show final start command used      reader-start-command
+ - Debug Firehose logs for 30s        reader-debug-firehose-logs-30s

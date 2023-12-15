@@ -1,0 +1,5 @@
+#!/bin/bash
+
+port=${MANAGER_API_PORT:-8080}
+
+curl -sS -XGET localhost:$port/v1/start_command

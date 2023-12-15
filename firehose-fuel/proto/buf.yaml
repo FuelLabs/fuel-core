@@ -1,0 +1,10 @@
+version: v1
+name: buf.build/Fuellabs/firehose-fuel
+
+lint:
+  use:
+    - DEFAULT
+
+breaking:
+  use:
+    - FILE

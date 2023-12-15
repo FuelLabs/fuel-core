@@ -1,0 +1,147 @@
+syntax = "proto3";
+
+package sf.fuel.type.v1;
+
+option go_package = "github.com/FuelLabs/firehose-fuel/pb/sf/fuel/type/v1;pbfuel";
+
+message Block {
+  bytes id = 1;
+  uint32 height = 2;
+  uint64 da_height = 3;
+  uint64 msg_receipt_count = 4;
+  bytes tx_root = 5;
+  bytes msg_receipt_root = 6;
+  bytes prev_root = 7;
+  fixed64 timestamp = 8;
+  bytes application_hash = 9;
+  repeated Transaction transactions = 10;
+}
+
+message Transaction {
+  oneof kind {
+    Script script = 1;
+    Create create = 2;
+    Mint mint = 3;
+  }
+}
+
+message Script {
+    uint64 script_gas_limit = 1;
+    bytes script = 2;
+    bytes script_data = 3;
+    Policies policies = 4;
+    repeated Input inputs = 5;
+    repeated Output outputs = 6;
+    repeated bytes witnesses = 7;
+    bytes receipts_root = 8;
+}
+
+message Create {
+    uint64 bytecode_length = 1;
+    uint32 bytecode_witness_index = 2;
+    Policies policies = 3;
+    repeated StorageSlot storage_slots = 4;
+    repeated Input inputs = 5;
+    repeated Output outputs = 6;
+    repeated bytes witnesses = 7;
+    bytes salt = 8;
+}
+
+message Mint {
+    TxPointer tx_pointer = 1;
+    InputContract input_contract = 2;
+    OutputContract output_contract = 3;
+    uint64 mint_amount = 4;
+    bytes mint_asset_id = 5;
+}
+
+message Input {
+  oneof kind {
+    Coin coin_signed = 1;
+    Coin coin_predicate = 2;
+    InputContract contract = 3;
+    Message message_coin_signed = 4;
+    Message message_coin_predicate = 5;
+    Message message_data_signed = 6;
+    Message message_data_predicate = 7;
+  }
+}
+
+message Coin {
+  UtxoId utxo_id = 1;
+  bytes owner = 2;
+  uint64 amount = 3;
+  bytes asset_id = 4;
+  TxPointer tx_pointer = 5;
+  uint32 witness_index = 6;
+  uint32 maturity = 7;
+  uint64 predicate_gas_used = 8;
+  bytes predicate = 9;
+  bytes predicate_data = 10;
+}
+
+message Message {
+  bytes sender = 1;
+  bytes recipient = 2;
+  uint64 amount = 3;
+  bytes nonce = 4;
+  uint32 witness_index = 5;
+  uint64 predicate_gas_used = 6;
+  bytes data = 7;
+  bytes predicate = 8;
+  bytes predicate_data = 9;
+}
+
+message Output {
+  oneof kind {
+    OutputCoin coin = 1;
+    OutputContract contract = 2;
+    OutputCoin change = 3;
+    OutputCoin variable = 4;
+    OutputContractCreated contract_created = 5;
+  }
+}
+
+message OutputCoin {
+    bytes to = 1;
+    uint64 amount = 2;
+    bytes asset_id = 3;
+}
+
+message OutputContractCreated {
+  bytes contract_id = 1;
+  bytes state_root = 2;
+}
+
+message InputContract {
+  UtxoId utxo_id = 1;
+  bytes balance_root = 2;
+  bytes state_root = 3;
+  TxPointer tx_pointer = 4;
+  bytes contract_id = 5;
+}
+
+message OutputContract {
+  uint32 input_index = 1;
+  bytes balance_root = 2;
+  bytes state_root = 3;
+}
+
+message StorageSlot {
+  bytes key = 1;
+  bytes value = 2;
+}
+
+message UtxoId {
+  bytes tx_id = 1;
+  uint32 output_index = 2;
+}
+
+message TxPointer {
+  uint32 block_height = 1;
+  uint32 tx_index = 2;
+}
+
+message Policies {
+  repeated uint64 values = 1;
+}

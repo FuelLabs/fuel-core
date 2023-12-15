@@ -1,0 +1,26 @@
+.idea/
+.DS_Store
+
+# To facilitate development, you can use [direnv](https://direnv.net/) to auto-load
+# some environment variables. We have in `devel` a shim script called directly `firefuel`
+# (that should have been renamed to your specific chain like `fireeth`). This small shim
+# compiles the project and then invoke resulting binary. This means that when using this
+# .envrc file:
+#
+# ```
+# export PATH="`pwd`/devel:$PATH"
+# ```
+#
+# Each time you enter the project in your terminal (e.g. `cd ~/work/firehose-fuel`) and then
+# do `firehose start --help`, then it first compiles all the Go source code and then invoke the
+# resulting just compiled binary, meaning you are "always" freshly compiled, it's more or less
+# equivalent to doing directly `go run ./cmd/firefuel start --help` (which is totally fine).
+.envrc*
+*.spkg
+
+/firefuel
+/build
+/dist
+/build
+
+firehose-data
