@@ -16,7 +16,7 @@ RUN cargo chef prepare --recipe-path recipe.json
 FROM chef as builder
 ENV CARGO_NET_GIT_FETCH_WITH_CLI=true
 COPY --from=planner /build/recipe.json recipe.json
-# Build our project dependecies, not our application!
+# Build our project dependencies, not our application!
 RUN cargo chef cook --release -p fuel-core-e2e-client --features p2p --recipe-path recipe.json
 # Up to this point, if our dependency tree stays the same,
 # all layers should be cached.
