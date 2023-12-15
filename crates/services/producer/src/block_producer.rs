@@ -31,10 +31,7 @@ use fuel_core_types::{
     },
     tai64::Tai64,
 };
-use std::{
-    io::Write,
-    sync::Arc,
-};
+use std::sync::Arc;
 use tokio::sync::Mutex;
 use tracing::debug;
 
@@ -104,8 +101,6 @@ where
 
         let header = self.new_header(height, block_time).await?;
 
-        println!("FIRE TESTING {:?}", serde_json::to_string(&header).unwrap());
-
         let component = Components {
             header_to_produce: header,
             transactions_source: source,
@@ -123,14 +118,14 @@ where
 
         debug!("Produced block with result: {:?}", result.result());
 
-        let fire_block = fuel_core_firehose_types::Block::from(&result.result().block);
+        // Firehose block logging
         {
+            // TODO: hide this behind a feature-gate and make it configurable
             use fuel_core_firehose_types::prost::Message;
-            let out_msg = fire_block.encode_to_vec();
-            let mut out = std::io::stdout().lock();
-            let _ = out.write_all(b"FIRE PROTO ");
-            let _ = out.write_all(&out_msg);
-            let _ = out.write_all(b"\n");
+            let fire_block =
+                fuel_core_firehose_types::Block::from(&result.result().block);
+            let out_msg = hex::encode(fire_block.encode_to_vec());
+            println!("FIRE PROTO {}", out_msg);
         }
 
         Ok(result)

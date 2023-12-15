@@ -2,6 +2,7 @@ package codec
 
 import (
 	"bufio"
+	"encoding/hex"
 	"fmt"
 	"io"
 	"strings"
@@ -77,18 +78,23 @@ func (r *ConsoleReader) next() (out *pbfuel.Block, err error) {
 			continue
 		}
 
-		operation, arg, found := strings.Cut(line[len(LogPrefix)+1:], " ")
-		if !found {
+		args := strings.Split(line[len(LogPrefix):], " ")
+		if len(args) < 2 {
 			return nil, fmt.Errorf("invalid log line %q", line)
 		}
 
 		// Order the case from most occurring line prefix to least occurring
-		switch operation {
+		switch args[0] {
 		case LogProto:
 			block := &pbfuel.Block{}
-			if err := proto.Unmarshal([]byte(arg), block); err != nil {
+			bytes, err := hex.DecodeString(args[1])
+			if err != nil {
+				return nil, fmt.Errorf("invalid encoded block: %w", err)
+			}
+			if err := proto.Unmarshal(bytes, block); err != nil {
 				return nil, fmt.Errorf("Failed to parse block: %s", err)
 			}
+			fmt.Printf("block %v\n", block)
 			return block, nil
 		default:
 			if r.logger.Core().Enabled(zap.DebugLevel) {

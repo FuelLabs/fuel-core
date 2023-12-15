@@ -13,10 +13,10 @@ version = { workspace = true }
 anyhow = { workspace = true }
 async-trait = { workspace = true }
 derive_more = { workspace = true }
+fuel-core-firehose-types = { workspace = true }
 fuel-core-storage = { workspace = true }
 fuel-core-types = { workspace = true }
-fuel-core-firehose-types = { workspace = true }
-serde_json = "1.0"
+hex = "0.4"
 tokio = { workspace = true, features = ["full"] }
 tokio-rayon = { workspace = true }
 tracing = { workspace = true }

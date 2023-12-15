@@ -266,7 +266,9 @@ impl From<&FuelOutput> for Output {
 impl From<&FuelPolicies> for Policies {
     fn from(value: &FuelPolicies) -> Self {
         Self {
-            values: PolicyType::iter().map(|t| value.get(t).unwrap()).collect(),
+            values: PolicyType::iter()
+                .map(|t| value.get(t).unwrap_or_default())
+                .collect(),
         }
     }
 }
