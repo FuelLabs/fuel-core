@@ -1,0 +1,31 @@
+[package]
+name = "graph-chain-substreams"
+version.workspace = true
+edition.workspace = true
+
+[build-dependencies]
+tonic-build = { workspace = true }
+
+[dependencies]
+async-stream = "0.3"
+envconfig = "0.10.0"
+futures = "0.1.21"
+http = "0.2.4"
+jsonrpc-core = "18.0.0"
+graph = { path = "../../graph" }
+graph-runtime-wasm = { path = "../../runtime/wasm" }
+lazy_static = "1.2.0"
+serde = "1.0"
+prost = { workspace = true }
+prost-types = { workspace = true }
+dirs-next = "2.0"
+anyhow = "1.0"
+tiny-keccak = "1.5.0"
+hex = "0.4.3"
+semver = "1.0.20"
+base64 = "0.20.0"
+
+itertools = "0.12.0"
+
+[dev-dependencies]
+tokio = { version = "1", features = ["full"] }

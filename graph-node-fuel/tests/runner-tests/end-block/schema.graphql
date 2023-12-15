@@ -1,0 +1,12 @@
+type Block @entity {
+  id: ID!
+  hash: String!
+  number: BigInt!
+}
+
+type TestEventEntity @entity {
+  id: ID!
+  blockHash: String!
+  blockNumber: BigInt!
+  command: String!
+}

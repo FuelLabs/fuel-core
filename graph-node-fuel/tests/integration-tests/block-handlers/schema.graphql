@@ -1,0 +1,27 @@
+type Foo @entity {
+  id: ID!
+  value: Int8!
+}
+
+type Initialize @entity {
+  id: ID!
+  block: BigInt!
+}
+
+type Block @entity {
+  id: ID!
+  number: BigInt!
+  hash: Bytes!
+}
+
+type BlockFromPollingHandler @entity {
+  id: ID!
+  number: BigInt!
+  hash: Bytes!
+}
+
+type BlockFromOtherPollingHandler @entity {
+  id: ID!
+  number: BigInt!
+  hash: Bytes!
+}

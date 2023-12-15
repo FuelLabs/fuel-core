@@ -1,0 +1,23 @@
+[package]
+name = "graph-server-index-node"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+blake3 = "1.5"
+either = "1.9.0"
+futures = "0.3.4"
+graph = { path = "../../graph" }
+graph-graphql = { path = "../../graphql" }
+graph-chain-arweave = { path = "../../chain/arweave" }
+graph-chain-ethereum = { path = "../../chain/ethereum" }
+graph-chain-near = { path = "../../chain/near" }
+graph-chain-cosmos = { path = "../../chain/cosmos" }
+graph-chain-starknet = { path = "../../chain/starknet" }
+graph-chain-substreams = { path = "../../chain/substreams" }
+graphql-parser = "0.4.0"
+http = "0.2"
+hyper = "0.14"
+lazy_static = "1.2.0"
+serde = "1.0"
+git-testament = "0.2.5"

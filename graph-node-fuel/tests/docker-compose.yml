@@ -1,0 +1,32 @@
+version: '3'
+services:
+  ipfs:
+    image: docker.io/ipfs/kubo:v0.17.0
+    ports:
+      - '127.0.0.1:3001:5001'
+  postgres:
+    image: postgres:14
+    ports:
+      - '127.0.0.1:3011:5432'
+    command:
+      [
+        "postgres",
+        "-cshared_preload_libraries=pg_stat_statements",
+        "-clog_statement=all"
+      ]
+    environment:
+      POSTGRES_USER: graph-node
+      POSTGRES_PASSWORD: let-me-in
+      POSTGRES_DB: graph-node
+      POSTGRES_INITDB_ARGS: "-E UTF8 --locale=C"
+  anvil:
+    image: ghcr.io/foundry-rs/foundry:latest
+    ports:
+      - '3021:8545'
+    command: "'anvil --host 0.0.0.0 --gas-limit 100000000000 --base-fee 1 --block-time 5'"
+
+# graph-node ports:
+#   json-rpc: 8020
+#   http:     8000
+#   index:    8030
+#   metrics:  8040

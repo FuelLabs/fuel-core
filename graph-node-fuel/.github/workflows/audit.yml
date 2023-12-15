@@ -1,0 +1,18 @@
+# See https://github.com/actions-rs/audit-check
+name: Security audit
+on:
+  # push:
+  #  paths:
+  #    - '**/Cargo.toml'
+  #    - '**/Cargo.lock'
+  schedule:
+    - cron: '0 0 */7 * *'
+jobs:
+  security_audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions-rs/audit-check@v1
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}

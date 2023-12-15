@@ -1,0 +1,35 @@
+name: Stale PR handler
+
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+
+on:
+  workflow_dispatch:
+  schedule:
+    # Run it once a day.
+    - cron: "0 0 * * *"
+
+jobs:
+  stale:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/stale@main
+        id: stale
+        with:
+          # PRs
+          days-before-pr-stale: 90
+          days-before-pr-close: 14
+          stale-pr-message: >
+            This pull request hasn't had any activity for the last 90 days. If
+            there's no more activity over the course of the next 14 days, it will
+            automatically be closed.
+          # Issues
+          days-before-issue-stale: 180
+          # Never close stale issues, only mark them as such.
+          days-before-issue-close: -1
+          stale-issue-message: >
+            Looks like this issue has been open for 6 months with no activity.
+            Is it still relevant? If not, please remember to close it.

@@ -1,0 +1,34 @@
+[package]
+name = "graph-tests"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+anyhow = "1.0"
+assert-json-diff = "2.0.2"
+async-stream = "0.3.5"
+futures = { version = "0.3", features = ["compat"] }
+graph = { path = "../graph" }
+graph-chain-ethereum = { path = "../chain/ethereum" }
+graph-chain-substreams= {path = "../chain/substreams"}
+graph-node = { path = "../node" }
+graph-core = { path = "../core" }
+graph-graphql = { path = "../graphql" }
+graph-store-postgres = { path = "../store/postgres" }
+graph-runtime-wasm = { path = "../runtime/wasm" }
+graph-server-index-node = { path = "../server/index-node" }
+graphql-parser = "0.4.0"
+hyper = "0.14"
+serde = "1.0"
+serde_yaml = "0.9.21"
+slog = { version = "2.7.0", features = ["release_max_level_trace", "max_level_trace"] }
+tokio = { version = "1.34.0", features = ["rt", "macros", "process"] }
+# Once graph upgrades to web3 0.19, we don't need this anymore. The version
+# here needs to be kept in sync with the web3 version that the graph crate
+# uses until then
+secp256k1 = { version = "0.21", features = ["recovery"] }
+termcolor = "1.4.0"
+
+[dev-dependencies]
+anyhow = "1.0.75"
+tokio-stream = "0.1"

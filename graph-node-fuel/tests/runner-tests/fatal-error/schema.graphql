@@ -1,0 +1,4 @@
+type Call @entity {
+  id: ID!
+  value: String!
+}

@@ -1,0 +1,8 @@
+[package]
+name = "graph-server-metrics"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+graph = { path = "../../graph" }
+hyper = { version = "0.14", features = ["server"] }

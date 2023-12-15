@@ -1,0 +1,30 @@
+# A simple store configuration: we use one database for everything
+# This is equivalent to the old way of configuring the store for tests
+# by just setting the environment variable THEGRAPH_STORE_POSTGRES_DIESEL_URL
+
+[store]
+[store.primary]
+connection = "postgresql://graph:graph@127.0.0.1:5432/graph-test"
+pool_size = 10
+
+[deployment]
+[[deployment.rule]]
+store = "primary"
+indexers = [ "default" ]
+
+[chains]
+ingestor = "default"
+
+# The tests do not talk to ethereum clients; we use valid free client
+# endpoints as an example
+[chains.fake_network]
+shard = "primary"
+provider = [
+  { label = "penguin", url="https://main-light.eth.linkpool.io/", features = [] }
+]
+
+[chains.fake_network_shared]
+shard = "primary"
+provider = [
+  { label = "owl", url="https://rinkeby-light.eth.linkpool.io/", features = [] }
+]

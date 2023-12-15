@@ -1,0 +1,72 @@
+specVersion: 0.0.8
+schema:
+  file: ./schema.graphql
+dataSources:
+  - kind: ethereum/contract
+    name: Contract
+    network: test
+    source:
+      address: "@SimpleContract@"
+      abi: Contract
+      startBlock: 1
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.7
+      language: wasm/assemblyscript
+      abis:
+        - name: Contract
+          file: ./abis/Contract.abi
+      entities:
+        - Call
+      eventHandlers:
+        - event: Trigger(uint16)
+          handler: handleTrigger
+      blockHandlers:
+        - handler: handleBlockPolling
+          filter:
+            kind: polling
+            every: 3
+        - handler: initialize
+          filter:
+            kind: once
+      file: ./src/mapping.ts
+  - kind: ethereum/contract
+    name: BlockHandlerTest
+    network: test
+    source:
+      address: "@SimpleContract@"
+      abi: Contract
+      startBlock: 1
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.7
+      language: wasm/assemblyscript
+      abis:
+        - name: Contract
+          file: ./abis/Contract.abi
+      entities:
+        - Call
+      blockHandlers:
+        - handler: handleBlock
+      file: ./src/mapping.ts
+templates:
+  - kind: ethereum/contract
+    name: ContractTemplate
+    network: test
+    source:
+      abi: Contract
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.7
+      language: wasm/assemblyscript
+      entities:
+        - Gravatar
+      abis:
+        - name: Contract
+          file: ./abis/Contract.abi
+      blockHandlers:
+        - handler: handleBlockPollingFromTemplate
+          filter:
+            kind: polling
+            every: 2
+      file: ./src/mapping.ts

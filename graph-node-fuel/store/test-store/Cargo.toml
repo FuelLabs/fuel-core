@@ -1,0 +1,24 @@
+[package]
+name = "test-store"
+version.workspace = true
+edition.workspace = true
+authors = ["Leonardo Yvens <leoyvens@gmail.com>"]
+description = "Provides static store instance for tests."
+
+[dependencies]
+graph-graphql = { path = "../../graphql" }
+graphql-parser = "0.4.0"
+graph-core = { path = "../../core" }
+graph-node = { path = "../../node" }
+graph = { path = "../../graph" }
+graph-store-postgres = { path = "../postgres" }
+graph-chain-ethereum = { path = "../../chain/ethereum" }
+lazy_static = "1.1"
+hex-literal = "0.4"
+diesel = { version = "1.4.8", features = ["postgres", "serde_json", "numeric", "r2d2"] }
+serde = "1.0"
+prost-types = { workspace = true }
+
+[dev-dependencies]
+hex = "0.4.3"
+pretty_assertions = "1.4.0"

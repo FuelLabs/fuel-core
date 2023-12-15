@@ -1,0 +1,67 @@
+specVersion: 0.0.4
+features:
+  - grafting
+schema:
+  file: ./schema.graphql
+graft:
+  # This can be overwritten by `updateAndDeploy.js`.
+  # Please commit this file when this happens.
+  base: QmcAL39QSKZvRssr2ToCJrav7XK9ggajxvBR7M1NNUCqdh
+  block: 3
+dataSources:
+  - kind: ethereum/contract
+    name: Contract
+    network: test
+    source:
+      address: "0xCfEB869F69431e42cdB54A4F4f105C19C080A601"
+      abi: Contract
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.6
+      language: wasm/assemblyscript
+      entities:
+        - Gravatar
+      abis:
+        - name: Contract
+          file: ./abis/Contract.abi
+      blockHandlers:
+        - handler: handleBlock
+      file: ./src/mapping.ts
+  # Tests that adding a data source is possible in a graft
+  - kind: ethereum/contract
+    name: Contract2
+    network: test
+    source:
+      address: "0xCfEB869F69431e42cdB54A4F4f105C19C080A601"
+      abi: Contract
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.6
+      language: wasm/assemblyscript
+      entities:
+        - Gravatar
+      abis:
+        - name: Contract
+          file: ./abis/Contract.abi
+      callHandlers:
+        - handler: handleBlock
+          function: emitTrigger(uint16)
+      file: ./src/mapping.ts
+templates:
+  - kind: ethereum/contract
+    name: Template
+    network: test
+    source:
+      abi: Contract
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.6
+      language: wasm/assemblyscript
+      entities:
+        - Gravatar
+      abis:
+        - name: Contract
+          file: ./abis/Contract.abi
+      blockHandlers:
+        - handler: handleBlockTemplate
+      file: ./src/mapping.ts

@@ -1,0 +1,1 @@
+-- up only deletes indexes, no need to recreate them

@@ -1,0 +1,521 @@
+syntax = "proto3";
+
+package sf.near.codec.v1;
+
+option go_package = "github.com/streamingfast/sf-near/pb/sf/near/codec/v1;pbcodec";
+
+message Block {
+  string author = 1;
+  BlockHeader header = 2;
+  repeated ChunkHeader chunk_headers = 3;
+  repeated IndexerShard shards = 4;
+  repeated StateChangeWithCause state_changes = 5;
+}
+
+// HeaderOnlyBlock is a standard [Block] structure where all other fields are
+// removed so that hydrating that object from a [Block] bytes payload will
+// drastically reduced allocated memory required to hold the full block.
+//
+// This can be used to unpack a [Block] when only the [BlockHeader] information
+// is required and greatly reduced required memory.
+message HeaderOnlyBlock {
+  BlockHeader header = 2;
+}
+
+message StateChangeWithCause {
+  StateChangeValue value = 1;
+  StateChangeCause cause = 2;
+}
+
+message StateChangeCause {
+  oneof cause {
+    NotWritableToDisk not_writable_to_disk = 1;
+    InitialState initial_state = 2;
+    TransactionProcessing  transaction_processing = 3;
+    ActionReceiptProcessingStarted action_receipt_processing_started = 4;
+    ActionReceiptGasReward action_receipt_gas_reward = 5;
+    ReceiptProcessing receipt_processing = 6;
+    PostponedReceipt postponed_receipt = 7;
+    UpdatedDelayedReceipts updated_delayed_receipts = 8;
+    ValidatorAccountsUpdate validator_accounts_update = 9;
+    Migration migration = 10;
+  }
+
+  message NotWritableToDisk {}
+  message InitialState {}
+  message TransactionProcessing {CryptoHash tx_hash = 1;}
+  message ActionReceiptProcessingStarted {CryptoHash receipt_hash = 1;}
+  message ActionReceiptGasReward {CryptoHash tx_hash = 1;}
+  message ReceiptProcessing {CryptoHash tx_hash = 1;}
+  message PostponedReceipt {CryptoHash tx_hash = 1;}
+  message UpdatedDelayedReceipts {}
+  message ValidatorAccountsUpdate {}
+  message Migration {}
+}
+
+message StateChangeValue {
+  oneof value {
+    AccountUpdate account_update = 1;
+    AccountDeletion account_deletion = 2;
+    AccessKeyUpdate access_key_update = 3;
+    AccessKeyDeletion access_key_deletion = 4;
+    DataUpdate data_update = 5;
+    DataDeletion data_deletion = 6;
+    ContractCodeUpdate contract_code_update = 7;
+    ContractCodeDeletion contract_deletion = 8;
+  }
+
+  message AccountUpdate {string account_id = 1; Account account = 2;}
+  message AccountDeletion {string account_id = 1;}
+  message AccessKeyUpdate {
+    string account_id = 1;
+    PublicKey public_key = 2;
+    AccessKey access_key = 3;
+  }
+  message AccessKeyDeletion {
+    string account_id = 1;
+    PublicKey public_key = 2;
+  }
+  message DataUpdate {
+    string account_id = 1;
+    bytes key = 2;
+    bytes value = 3;
+  }
+  message DataDeletion {
+    string account_id = 1;
+    bytes key = 2;
+  }
+  message ContractCodeUpdate {
+    string account_id = 1;
+    bytes code = 2;
+  }
+  message ContractCodeDeletion {
+    string account_id = 1;
+  }
+}
+
+message Account {
+  BigInt amount = 1;
+  BigInt locked = 2;
+  CryptoHash code_hash = 3;
+  uint64 storage_usage = 4;
+}
+
+message BlockHeader {
+  uint64 height = 1;
+  uint64 prev_height = 2;
+  CryptoHash epoch_id = 3;
+  CryptoHash next_epoch_id = 4;
+  CryptoHash hash = 5;
+  CryptoHash prev_hash = 6;
+  CryptoHash prev_state_root = 7;
+  CryptoHash chunk_receipts_root = 8;
+  CryptoHash chunk_headers_root = 9;
+  CryptoHash chunk_tx_root = 10;
+  CryptoHash outcome_root = 11;
+  uint64 chunks_included = 12;
+  CryptoHash challenges_root = 13;
+  uint64 timestamp = 14;
+  uint64 timestamp_nanosec = 15;
+  CryptoHash random_value = 16;
+  repeated ValidatorStake validator_proposals = 17;
+  repeated bool chunk_mask = 18;
+  BigInt gas_price = 19;
+  uint64 block_ordinal = 20;
+  BigInt total_supply = 21;
+  repeated SlashedValidator challenges_result = 22;
+  uint64 last_final_block_height = 23;
+  CryptoHash last_final_block = 24;
+  uint64 last_ds_final_block_height = 25;
+  CryptoHash last_ds_final_block = 26;
+  CryptoHash next_bp_hash = 27;
+  CryptoHash block_merkle_root = 28;
+  bytes epoch_sync_data_hash = 29;
+  repeated Signature approvals = 30;
+  Signature signature = 31;
+  uint32 latest_protocol_version = 32;
+}
+
+message BigInt {
+  bytes bytes = 1;
+}
+message CryptoHash {
+  bytes bytes = 1;
+}
+
+enum CurveKind {
+  ED25519 = 0;
+  SECP256K1 = 1;
+}
+
+message Signature {
+  CurveKind type = 1;
+  bytes bytes = 2;
+}
+
+message PublicKey {
+  CurveKind type = 1;
+  bytes bytes = 2;
+}
+
+message ValidatorStake {
+  string account_id = 1;
+  PublicKey public_key = 2;
+  BigInt stake = 3;
+}
+
+message SlashedValidator {
+  string account_id = 1;
+  bool is_double_sign = 2;
+}
+
+message ChunkHeader {
+  bytes chunk_hash = 1;
+  bytes prev_block_hash = 2;
+  bytes outcome_root = 3;
+  bytes prev_state_root = 4;
+  bytes encoded_merkle_root = 5;
+  uint64 encoded_length = 6;
+  uint64 height_created = 7;
+  uint64 height_included = 8;
+  uint64 shard_id = 9;
+  uint64 gas_used = 10;
+  uint64 gas_limit = 11;
+  BigInt validator_reward = 12;
+  BigInt balance_burnt = 13;
+  bytes outgoing_receipts_root = 14;
+  bytes tx_root = 15;
+  repeated ValidatorStake validator_proposals = 16;
+  Signature signature = 17;
+}
+
+message IndexerShard {
+  uint64 shard_id = 1;
+  IndexerChunk chunk = 2;
+  repeated IndexerExecutionOutcomeWithReceipt receipt_execution_outcomes = 3;
+}
+
+message IndexerExecutionOutcomeWithReceipt {
+  ExecutionOutcomeWithId execution_outcome = 1;
+  Receipt receipt = 2;
+}
+
+message IndexerChunk {
+  string author = 1;
+  ChunkHeader header = 2;
+  repeated IndexerTransactionWithOutcome transactions = 3;
+  repeated Receipt receipts = 4;
+}
+
+message IndexerTransactionWithOutcome {
+  SignedTransaction transaction = 1;
+  IndexerExecutionOutcomeWithOptionalReceipt outcome = 2;
+}
+
+message SignedTransaction {
+  string signer_id = 1;
+  PublicKey public_key = 2;
+  uint64 nonce = 3;
+  string receiver_id = 4;
+  repeated Action actions = 5;
+  Signature signature = 6;
+  CryptoHash hash = 7;
+}
+
+message IndexerExecutionOutcomeWithOptionalReceipt {
+  ExecutionOutcomeWithId execution_outcome = 1;
+  Receipt receipt = 2;
+}
+
+message Receipt {
+  string predecessor_id = 1;
+  string receiver_id = 2;
+  CryptoHash receipt_id = 3;
+
+  oneof receipt {
+    ReceiptAction action = 10;
+    ReceiptData data = 11;
+  }
+}
+
+message ReceiptData {
+  CryptoHash data_id = 1;
+  bytes data = 2;
+}
+
+message ReceiptAction {
+  string signer_id = 1;
+  PublicKey signer_public_key = 2;
+  BigInt gas_price = 3;
+  repeated DataReceiver output_data_receivers = 4;
+  repeated CryptoHash input_data_ids = 5;
+  repeated Action actions = 6;
+}
+
+message DataReceiver {
+  CryptoHash data_id = 1;
+  string receiver_id = 2;
+}
+
+message ExecutionOutcomeWithId {
+  MerklePath proof = 1;
+  CryptoHash block_hash = 2;
+  CryptoHash id = 3;
+  ExecutionOutcome outcome = 4;
+}
+
+message ExecutionOutcome {
+  repeated string logs = 1;
+  repeated CryptoHash receipt_ids = 2;
+  uint64 gas_burnt = 3;
+  BigInt tokens_burnt = 4;
+  string executor_id = 5;
+  oneof status {
+    UnknownExecutionStatus unknown = 20;
+    FailureExecutionStatus failure = 21;
+    SuccessValueExecutionStatus success_value = 22;
+    SuccessReceiptIdExecutionStatus success_receipt_id = 23;
+  }
+  ExecutionMetadata metadata = 6;
+}
+
+enum ExecutionMetadata {
+  ExecutionMetadataV1 = 0;
+}
+
+message SuccessValueExecutionStatus {
+  bytes value = 1;
+}
+
+message SuccessReceiptIdExecutionStatus {
+  CryptoHash id = 1;
+}
+
+message UnknownExecutionStatus {}
+message FailureExecutionStatus {
+  oneof failure {
+    ActionError action_error = 1;
+    InvalidTxError invalid_tx_error = 2;
+  }
+}
+
+message ActionError {
+  uint64 index = 1;
+  oneof kind {
+    AccountAlreadyExistsErrorKind account_already_exist = 21;
+    AccountDoesNotExistErrorKind account_does_not_exist = 22;
+    CreateAccountOnlyByRegistrarErrorKind create_account_only_by_registrar = 23;
+    CreateAccountNotAllowedErrorKind create_account_not_allowed = 24;
+    ActorNoPermissionErrorKind actor_no_permission =25;
+    DeleteKeyDoesNotExistErrorKind  delete_key_does_not_exist = 26;
+    AddKeyAlreadyExistsErrorKind  add_key_already_exists = 27;
+    DeleteAccountStakingErrorKind delete_account_staking = 28;
+    LackBalanceForStateErrorKind lack_balance_for_state = 29;
+    TriesToUnstakeErrorKind tries_to_unstake = 30;
+    TriesToStakeErrorKind tries_to_stake = 31;
+    InsufficientStakeErrorKind insufficient_stake = 32;
+    FunctionCallErrorKind function_call = 33;
+    NewReceiptValidationErrorKind new_receipt_validation = 34;
+    OnlyImplicitAccountCreationAllowedErrorKind only_implicit_account_creation_allowed = 35;
+    DeleteAccountWithLargeStateErrorKind delete_account_with_large_state = 36;
+  }
+}
+
+message AccountAlreadyExistsErrorKind {
+  string account_id = 1;
+}
+
+message AccountDoesNotExistErrorKind {
+  string account_id = 1;
+}
+
+/// A top-level account ID can only be created by registrar.
+message CreateAccountOnlyByRegistrarErrorKind{
+  string account_id = 1;
+  string  registrar_account_id = 2;
+  string predecessor_id = 3;
+}
+
+message CreateAccountNotAllowedErrorKind{
+  string account_id = 1;
+  string  predecessor_id = 2;
+}
+
+message ActorNoPermissionErrorKind{
+  string account_id = 1;
+  string actor_id = 2;
+}
+
+message DeleteKeyDoesNotExistErrorKind{
+  string account_id = 1;
+  PublicKey public_key = 2;
+}
+
+message AddKeyAlreadyExistsErrorKind{
+  string account_id = 1;
+  PublicKey public_key = 2;
+}
+
+message DeleteAccountStakingErrorKind{
+  string account_id = 1;
+}
+
+message LackBalanceForStateErrorKind{
+  string account_id = 1;
+  BigInt balance = 2;
+}
+
+message TriesToUnstakeErrorKind{
+  string account_id = 1;
+}
+
+message TriesToStakeErrorKind{
+  string account_id = 1;
+  BigInt stake = 2;
+  BigInt locked = 3;
+  BigInt balance = 4;
+}
+
+message InsufficientStakeErrorKind{
+  string account_id = 1;
+  BigInt stake = 2;
+  BigInt minimum_stake = 3;
+}
+
+message FunctionCallErrorKind {
+  FunctionCallErrorSer error = 1;
+}
+
+enum FunctionCallErrorSer { //todo: add more detail?
+  CompilationError = 0;
+  LinkError = 1;
+  MethodResolveError = 2;
+  WasmTrap = 3;
+  WasmUnknownError = 4;
+  HostError = 5;
+  _EVMError = 6;
+  ExecutionError = 7;
+}
+
+message NewReceiptValidationErrorKind {
+  ReceiptValidationError error = 1;
+}
+
+enum ReceiptValidationError { //todo: add more detail?
+  InvalidPredecessorId = 0;
+  InvalidReceiverAccountId = 1;
+  InvalidSignerAccountId = 2;
+  InvalidDataReceiverId = 3;
+  ReturnedValueLengthExceeded = 4;
+  NumberInputDataDependenciesExceeded = 5;
+  ActionsValidationError = 6;
+}
+
+message OnlyImplicitAccountCreationAllowedErrorKind{
+  string account_id = 1;
+}
+
+message DeleteAccountWithLargeStateErrorKind{
+  string account_id = 1;
+}
+
+enum InvalidTxError { //todo: add more detail?
+  InvalidAccessKeyError = 0;
+  InvalidSignerId = 1;
+  SignerDoesNotExist = 2;
+  InvalidNonce = 3;
+  NonceTooLarge = 4;
+  InvalidReceiverId = 5;
+  InvalidSignature = 6;
+  NotEnoughBalance = 7;
+  LackBalanceForState = 8;
+  CostOverflow = 9;
+  InvalidChain = 10;
+  Expired = 11;
+  ActionsValidation = 12;
+  TransactionSizeExceeded = 13;
+}
+
+message MerklePath {
+  repeated MerklePathItem path = 1;
+}
+
+message MerklePathItem {
+  CryptoHash hash = 1;
+  Direction direction = 2;
+}
+
+enum Direction {
+  left = 0;
+  right = 1;
+}
+
+message Action {
+  oneof action {
+    CreateAccountAction create_account = 1;
+    DeployContractAction deploy_contract = 2;
+    FunctionCallAction function_call = 3;
+    TransferAction transfer = 4;
+    StakeAction stake = 5;
+    AddKeyAction add_key = 6;
+    DeleteKeyAction delete_key = 7;
+    DeleteAccountAction delete_account = 8;
+  }
+}
+
+message CreateAccountAction {
+}
+
+message DeployContractAction {
+  bytes code = 1;
+}
+
+message FunctionCallAction {
+  string method_name = 1;
+  bytes args = 2;
+  uint64 gas = 3;
+  BigInt deposit = 4;
+}
+
+message TransferAction {
+  BigInt deposit = 1;
+}
+
+message StakeAction {
+  BigInt stake = 1;
+  PublicKey public_key = 2;
+}
+
+message AddKeyAction {
+  PublicKey public_key = 1;
+  AccessKey access_key = 2;
+}
+
+message DeleteKeyAction {
+  PublicKey public_key = 1;
+}
+
+message DeleteAccountAction {
+  string beneficiary_id = 1;
+}
+
+message AccessKey {
+  uint64 nonce = 1;
+  AccessKeyPermission permission = 2;
+}
+
+message AccessKeyPermission {
+  oneof permission {
+    FunctionCallPermission function_call = 1;
+    FullAccessPermission full_access = 2;
+  }
+}
+
+message FunctionCallPermission {
+  BigInt allowance = 1;
+  string receiver_id = 2;
+  repeated  string method_names = 3;
+}
+
+message FullAccessPermission {
+}

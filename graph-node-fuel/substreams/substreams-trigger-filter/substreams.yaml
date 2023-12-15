@@ -1,0 +1,37 @@
+specVersion: v0.1.0
+package:
+  name: substreams_trigger_filter
+  version: v0.1.0
+
+imports:
+  near: https://github.com/streamingfast/firehose-near/releases/download/v1.1.0/substreams-near-v1.1.0.spkg
+
+protobuf:
+  files:
+    - receipts.proto
+    - near.proto
+  importPaths:
+    - ./proto
+
+binaries:
+  default:
+    type: wasm/rust-v1
+    file: ../../target/wasm32-unknown-unknown/release/substreams.wasm
+
+modules:
+  - name: near_filter
+    kind: map
+    initialBlock: 9820214
+    inputs:
+      - params: string
+      - source: sf.near.type.v1.Block
+    output:
+      type: proto:receipts.v1.Receipts
+  - name: graph_out
+    kind: map
+    initialBlock: 9820214
+    inputs:
+      - source: sf.near.type.v1.Block
+    output:
+      type: proto:sf.substreams.entity.v1.EntityChanges
+

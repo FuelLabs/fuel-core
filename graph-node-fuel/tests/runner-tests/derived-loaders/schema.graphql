@@ -1,0 +1,45 @@
+type BFoo @entity {
+  id: Bytes!
+  value: Int8!
+  bar: [BBar!]! @derivedFrom(field: "fooValue")
+}
+
+type BBar @entity {
+  id: Bytes!
+  value: Int8!
+  value2: Int8!
+  fooValue: BFoo!
+}
+
+type BBarTestResult @entity {
+  id: Bytes!
+  value: Int8!
+  value2: Int8!
+  fooValue: BFoo!
+}
+
+type Foo @entity {
+  id: ID!
+  value: Int8!
+  bar: [Bar!]! @derivedFrom(field: "fooValue")
+}
+
+type Bar @entity {
+  id: ID!
+  value: Int8!
+  value2: Int8!
+  fooValue: Foo!
+}
+
+type BarTestResult @entity {
+  id: ID!
+  value: Int8!
+  value2: Int8!
+  fooValue: Foo!
+}
+
+type TestResult @entity {
+  id: ID!
+  barDerived: [BarTestResult!]
+  bBarDerived: [BBarTestResult!]
+}

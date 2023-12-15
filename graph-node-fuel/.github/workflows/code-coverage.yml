@@ -1,0 +1,74 @@
+name: Code coverage
+
+on:
+  workflow_dispatch:
+  schedule:
+    # Run it every 3 days.
+    - cron: "0 3 * * *"
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: full
+  THEGRAPH_STORE_POSTGRES_DIESEL_URL: "postgresql://postgres:postgres@localhost:5432/graph_node_test"
+  RUSTFLAGS: "-C link-arg=-fuse-ld=lld -D warnings"
+  N_CONCURRENT_TESTS: "4"
+  TESTS_GANACHE_HARD_WAIT_SECONDS: "30"
+
+jobs:
+  # Heavily inspired from <https://github.com/taiki-e/cargo-llvm-cov#continuous-integration>.
+  coverage:
+    name: Code coverage of integration tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    services:
+      ipfs:
+        image: ipfs/go-ipfs:v0.10.0
+        ports:
+          - 5001:5001
+      postgres:
+        image: postgres
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: graph_node_test
+          POSTGRES_INITDB_ARGS: "-E UTF8 --locale=C"
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+    steps:
+      - uses: actions/checkout@v3
+      - uses: Swatinem/rust-cache@v2
+      - name: Install Node 14
+        uses: actions/setup-node@v3
+        with:
+          node-version: "14"
+          cache: yarn
+          cache-dependency-path: "tests/integration-tests/yarn.lock"
+      - name: Install lld
+        run: sudo apt-get install -y lld jq protobuf-compiler
+      - uses: actions-rs/cargo@v1
+        with:
+          command: install
+          args: cargo-llvm-cov
+
+      - name: Build graph-node
+        uses: actions-rs/cargo@v1
+        with:
+          command: build
+          args: --bin graph-node
+
+      - name: Generate code coverage
+        run: cargo llvm-cov --package graph-tests --lcov --output-path lcov.info -- --nocapture
+      - uses: actions/upload-artifact@v3
+        with:
+          name: code-coverage-info
+          path: lcov.info
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v3
+        with:
+          # No token needed, because the repo is public.
+          files: lcov.info
+          fail_ci_if_error: true

@@ -1,0 +1,200 @@
+scalar BigInt
+scalar Boolean
+scalar Bytes
+scalar ID
+scalar Int
+scalar String
+
+# An opaque object type. Note that this is equivalent to a JSON object, rather
+# than a generic JSON value; as such it cannot be e.g. a string or an integer.
+scalar JSONObject
+# A string in the format of `YYYY-MM-DD`. This is the standard adopted by
+# RFC3339, which is equivalent to the "ISO 8601 extended format".
+# See also:
+# - https://datatracker.ietf.org/doc/html/rfc3339#section-5.6
+# - https://en.wikipedia.org/wiki/ISO_8601#Calendar_dates
+scalar Date
+
+type Query {
+  indexingStatusForCurrentVersion(subgraphName: String!): SubgraphIndexingStatus
+  indexingStatusForPendingVersion(subgraphName: String!): SubgraphIndexingStatus
+  indexingStatusesForSubgraphName(
+    subgraphName: String!
+  ): [SubgraphIndexingStatus!]!
+  indexingStatuses(subgraphs: [String!]): [SubgraphIndexingStatus!]!
+  proofOfIndexing(
+    subgraph: String!
+    blockNumber: Int!
+    blockHash: Bytes!
+    indexer: Bytes
+  ): Bytes
+  """
+  Proofs of indexing for several deployments and blocks that can be shared and
+  compared in public without revealing the _actual_ proof of indexing that every
+  indexer has in their database
+  """
+  publicProofsOfIndexing(
+    requests: [PublicProofOfIndexingRequest!]!
+  ): [PublicProofOfIndexingResult!]!
+  subgraphFeatures(subgraphId: String!): SubgraphFeatures!
+  entityChangesInBlock(subgraphId: String!, blockNumber: Int!): EntityChanges!
+  blockData(network: String!, blockHash: Bytes!): JSONObject
+  blockHashFromNumber(network: String!, blockNumber: Int!): Bytes
+  version: Version!
+  cachedEthereumCalls(
+    network: String!
+    blockHash: Bytes!
+  ): [CachedEthereumCall!]
+  apiVersions(subgraphId: String!): [ApiVersion!]!
+}
+
+type Version {
+  version: String!
+  commit: String!
+}
+
+type SubgraphIndexingStatus {
+  subgraph: String!
+  synced: Boolean!
+
+  # Note that the health can be implied from fatalError and nonFatalErrors:
+  # - If fatalError is non-null, then health is 'failed'.
+  # - Else if nonFatalErrors is non-empty, then health is 'unhealthy'.
+  # - Else health is 'healthy'.
+  health: Health!
+
+  "If the subgraph has failed, this is the error caused it"
+  fatalError: SubgraphError
+
+  "Sorted from first to last, limited to first 1000"
+  nonFatalErrors: [SubgraphError!]!
+  chains: [ChainIndexingStatus!]!
+  entityCount: BigInt!
+  node: String
+  paused: Boolean!
+  historyBlocks: Int!
+}
+
+interface ChainIndexingStatus {
+  network: String!
+  chainHeadBlock: Block
+  earliestBlock: EarliestBlock
+  latestBlock: Block
+  lastHealthyBlock: Block
+}
+
+type EthereumIndexingStatus implements ChainIndexingStatus {
+  network: String!
+  chainHeadBlock: Block
+  earliestBlock: EarliestBlock
+  latestBlock: Block
+  lastHealthyBlock: Block
+}
+
+type EntityChanges {
+  updates: [EntityTypeUpdates!]!
+  deletions: [EntityTypeDeletions!]!
+}
+
+type EntityTypeUpdates {
+  type: String!
+  entities: [JSONObject!]!
+}
+
+type EntityTypeDeletions {
+  type: String!
+  entities: [ID!]!
+}
+
+type Block {
+  hash: Bytes!
+  number: BigInt!
+}
+
+type EarliestBlock {
+  hash: Bytes! @deprecated(reason: "hash will always be reported as 0x0.")
+  number: BigInt!
+}
+
+type SubgraphError {
+  message: String!
+
+  # Context for the error.
+  block: Block
+  handler: String
+
+  # `true` means we have certainty that the error is deterministic.
+  deterministic: Boolean!
+}
+
+enum Health {
+  "Subgraph syncing normally"
+  healthy
+  "Subgraph syncing but with errors"
+  unhealthy
+  "Subgraph halted due to errors"
+  failed
+}
+
+type CachedEthereumCall {
+  idHash: Bytes!
+  block: Block!
+  contractAddress: Bytes!
+  returnValue: Bytes!
+}
+
+type SubgraphFeatures {
+  apiVersion: String
+  specVersion: String!
+  features: [Feature!]!
+  dataSources: [String!]!
+  handlers: [String!]!
+  network: String
+}
+
+enum Feature {
+  nonFatalErrors
+  grafting
+  fullTextSearch
+  ipfsOnEthereumContracts
+}
+
+input BlockInput {
+  hash: Bytes!
+  number: BigInt!
+}
+
+input ProofOfIndexingRequest {
+  deployment: String!
+  block: BlockInput!
+}
+
+input PublicProofOfIndexingRequest {
+  deployment: String!
+  blockNumber: BigInt!
+}
+
+type PartialBlock {
+  hash: Bytes
+  number: BigInt!
+}
+
+type PublicProofOfIndexingResult {
+  deployment: String!
+  block: PartialBlock!
+  proofOfIndexing: Bytes!
+}
+
+type ProofOfIndexingResult {
+  deployment: String!
+  block: Block!
+  "There may not be a proof of indexing available for the deployment and block"
+  proofOfIndexing: Bytes
+}
+
+type ApiVersion {
+  """
+  Version number in SemVer format
+  """
+  version: String!
+}

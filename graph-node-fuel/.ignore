@@ -1,0 +1,4 @@
+# Make `cargo watch` ignore changes in integration tests
+tests/integration-tests/**/build
+tests/integration-tests/**/generated
+tests/integration-tests/**/node_modules

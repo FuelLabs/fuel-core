@@ -1,0 +1,3 @@
+# For an unknown reason, the build script generates this file but it should not.
+# See https://github.com/hyperium/tonic/issues/757
+google.protobuf.rs

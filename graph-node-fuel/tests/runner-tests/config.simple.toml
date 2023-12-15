@@ -1,0 +1,23 @@
+# A simple store configuration: we use one database for everything
+# This is equivalent to the old way of configuring the store for tests
+# by just setting the environment variable THEGRAPH_STORE_POSTGRES_DIESEL_URL
+
+[store]
+[store.primary]
+connection = "$THEGRAPH_STORE_POSTGRES_DIESEL_URL"
+pool_size = 10
+
+[deployment]
+[[deployment.rule]]
+store = "primary"
+indexers = [ "default" ]
+
+[chains]
+ingestor = "default"
+
+# The tests do not talk to ethereum clients
+[chains.test]
+shard = "primary"
+provider = [
+  { label = "penguin", url="http://localhost:1/", features = [] }
+]

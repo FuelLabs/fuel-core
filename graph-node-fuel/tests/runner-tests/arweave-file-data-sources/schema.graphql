@@ -1,0 +1,5 @@
+type File @entity {
+  id: ID!
+  content: String!
+}
+

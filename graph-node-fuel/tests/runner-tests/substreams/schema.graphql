@@ -1,0 +1,9 @@
+type Contract @entity {
+  id: ID!
+
+  "The timestamp when the contract was deployed"
+  timestamp: String!
+
+  "The block number of the contract deployment"
+  blockNumber: BigInt!
+}

@@ -1,0 +1,368 @@
+syntax = "proto3";
+
+package sf.cosmos.type.v1;
+
+option go_package = "github.com/figment-networks/proto-cosmos/pb/sf/cosmos/type/v1;pbcosmos";
+
+import "google/protobuf/descriptor.proto";
+import "google/protobuf/any.proto";
+import "gogoproto/gogo.proto";
+import "cosmos_proto/cosmos.proto";
+import "firehose/annotations.proto";
+
+message Block {
+  Header header = 1 [(firehose.required) = true, (gogoproto.nullable) = false];
+  EvidenceList evidence = 2 [(gogoproto.nullable) = false];
+  Commit last_commit = 3;
+  ResponseBeginBlock result_begin_block = 4 [(firehose.required) = true];
+  ResponseEndBlock result_end_block = 5 [(firehose.required) = true];
+  repeated TxResult transactions = 7;
+  repeated Validator validator_updates = 8;
+}
+
+// HeaderOnlyBlock is a standard [Block] structure where all other fields are
+// removed so that hydrating that object from a [Block] bytes payload will
+// drastically reduce allocated memory required to hold the full block.
+//
+// This can be used to unpack a [Block] when only the [Header] information
+// is required and greatly reduce required memory.
+message HeaderOnlyBlock {
+  Header header = 1 [(firehose.required) = true, (gogoproto.nullable) = false];
+}
+
+message EventData {
+  Event event = 1 [(firehose.required) = true];
+  HeaderOnlyBlock block = 2 [(firehose.required) = true];
+  TransactionContext tx = 3;
+}
+
+message TransactionData {
+  TxResult tx = 1 [(firehose.required) = true];
+  HeaderOnlyBlock block = 2 [(firehose.required) = true];
+}
+
+message MessageData {
+  google.protobuf.Any message = 1 [(firehose.required) = true];
+  HeaderOnlyBlock block = 2 [(firehose.required) = true];
+  TransactionContext tx = 3 [(firehose.required) = true];
+}
+
+message TransactionContext {
+  bytes hash = 1;
+  uint32 index = 2;
+  uint32 code = 3;
+  int64 gas_wanted = 4;
+  int64 gas_used = 5;
+}
+
+message Header {
+  Consensus version = 1 [(gogoproto.nullable) = false];
+  string chain_id = 2 [(gogoproto.customname) = "ChainID"];
+  uint64 height = 3;
+  Timestamp time = 4 [(gogoproto.nullable) = false, (gogoproto.stdtime) = true];
+  BlockID last_block_id = 5 [(firehose.required) = true, (gogoproto.nullable) = false];
+  bytes last_commit_hash = 6;
+  bytes data_hash = 7;
+  bytes validators_hash = 8;
+  bytes next_validators_hash = 9;
+  bytes consensus_hash = 10;
+  bytes app_hash = 11;
+  bytes last_results_hash = 12;
+  bytes evidence_hash = 13;
+  bytes proposer_address = 14;
+  bytes hash = 15;
+}
+
+message Consensus {
+  option (gogoproto.equal) = true;
+
+  uint64 block = 1;
+  uint64 app = 2;
+}
+
+message Timestamp {
+  int64 seconds = 1;
+  int32 nanos = 2;
+}
+
+message BlockID {
+  bytes hash = 1;
+  PartSetHeader part_set_header = 2 [(gogoproto.nullable) = false];
+}
+
+message PartSetHeader {
+  uint32 total = 1;
+  bytes hash = 2;
+}
+
+message EvidenceList {
+  repeated Evidence evidence = 1 [(gogoproto.nullable) = false];
+}
+
+message Evidence {
+  oneof sum {
+    DuplicateVoteEvidence duplicate_vote_evidence = 1;
+    LightClientAttackEvidence light_client_attack_evidence = 2;
+  }
+}
+
+message DuplicateVoteEvidence {
+  EventVote vote_a = 1;
+  EventVote vote_b = 2;
+  int64 total_voting_power = 3;
+  int64 validator_power = 4;
+  Timestamp timestamp = 5 [(gogoproto.nullable) = false, (gogoproto.stdtime) = true];
+}
+
+message EventVote {
+  SignedMsgType event_vote_type = 1 [json_name = "type"];
+  uint64 height = 2;
+  int32 round = 3;
+  BlockID block_id = 4 [(gogoproto.nullable) = false, (gogoproto.customname) = "BlockID"];
+  Timestamp timestamp = 5 [(gogoproto.nullable) = false, (gogoproto.stdtime) = true];
+  bytes validator_address = 6;
+  int32 validator_index = 7;
+  bytes signature = 8;
+}
+
+enum SignedMsgType {
+  option (gogoproto.goproto_enum_stringer) = true;
+  option (gogoproto.goproto_enum_prefix) = false;
+
+  SIGNED_MSG_TYPE_UNKNOWN = 0 [(gogoproto.enumvalue_customname) = "UnknownType"];
+  SIGNED_MSG_TYPE_PREVOTE = 1 [(gogoproto.enumvalue_customname) = "PrevoteType"];
+  SIGNED_MSG_TYPE_PRECOMMIT = 2 [(gogoproto.enumvalue_customname) = "PrecommitType"];
+  SIGNED_MSG_TYPE_PROPOSAL = 32 [(gogoproto.enumvalue_customname) = "ProposalType"];
+}
+
+message LightClientAttackEvidence {
+  LightBlock conflicting_block = 1;
+  int64 common_height = 2;
+  repeated Validator byzantine_validators = 3;
+  int64 total_voting_power = 4;
+  Timestamp timestamp = 5 [(gogoproto.nullable) = false, (gogoproto.stdtime) = true];
+}
+
+message LightBlock {
+  SignedHeader signed_header = 1;
+  ValidatorSet validator_set = 2;
+}
+
+message SignedHeader {
+  Header header = 1;
+  Commit commit = 2;
+}
+
+message Commit {
+  int64 height = 1;
+  int32 round = 2;
+  BlockID block_id = 3 [(gogoproto.nullable) = false, (gogoproto.customname) = "BlockID"];
+  repeated CommitSig signatures = 4 [(gogoproto.nullable) = false];
+}
+
+message CommitSig {
+  BlockIDFlag block_id_flag = 1;
+  bytes validator_address = 2;
+  Timestamp timestamp = 3 [(gogoproto.nullable) = false, (gogoproto.stdtime) = true];
+  bytes signature = 4;
+}
+
+enum BlockIDFlag {
+  option (gogoproto.goproto_enum_stringer) = true;
+  option (gogoproto.goproto_enum_prefix) = false;
+
+  BLOCK_ID_FLAG_UNKNOWN = 0 [(gogoproto.enumvalue_customname) = "BlockIDFlagUnknown"];
+  BLOCK_ID_FLAG_ABSENT = 1 [(gogoproto.enumvalue_customname) = "BlockIDFlagAbsent"];
+  BLOCK_ID_FLAG_COMMIT = 2 [(gogoproto.enumvalue_customname) = "BlockIDFlagCommit"];
+  BLOCK_ID_FLAG_NIL = 3 [(gogoproto.enumvalue_customname) = "BlockIDFlagNil"];
+}
+
+message ValidatorSet {
+  repeated Validator validators = 1;
+  Validator proposer = 2;
+  int64 total_voting_power = 3;
+}
+
+message Validator {
+  bytes address = 1;
+  PublicKey pub_key = 2 [(gogoproto.nullable) = false];
+  int64 voting_power = 3;
+  int64 proposer_priority = 4;
+}
+
+message PublicKey {
+  option (gogoproto.compare) = true;
+  option (gogoproto.equal) = true;
+
+  oneof sum {
+    bytes ed25519 = 1;
+    bytes secp256k1 = 2;
+  }
+}
+
+message ResponseBeginBlock {
+  repeated Event events = 1 [(gogoproto.nullable) = false, (gogoproto.jsontag) = "events,omitempty"];
+}
+
+message Event {
+  string event_type = 1 [json_name = "type"];
+  repeated EventAttribute attributes = 2 [(gogoproto.nullable) = false, (gogoproto.jsontag) = "attributes,omitempty"];
+}
+
+message EventAttribute {
+  string key = 1;
+  string value = 2;
+  bool index = 3;
+}
+
+message ResponseEndBlock {
+  repeated ValidatorUpdate validator_updates = 1;
+  ConsensusParams consensus_param_updates = 2;
+  repeated Event events = 3;
+}
+
+message ValidatorUpdate {
+  bytes address = 1;
+  PublicKey pub_key = 2 [(gogoproto.nullable) = false];
+  int64 power = 3;
+}
+
+message ConsensusParams {
+  BlockParams block = 1 [(gogoproto.nullable) = false];
+  EvidenceParams evidence = 2 [(gogoproto.nullable) = false];
+  ValidatorParams validator = 3 [(gogoproto.nullable) = false];
+  VersionParams version = 4 [(gogoproto.nullable) = false];
+}
+
+message BlockParams {
+  int64 max_bytes = 1;
+  int64 max_gas = 2;
+}
+
+message EvidenceParams {
+  int64 max_age_num_blocks = 1;
+  Duration max_age_duration = 2 [(gogoproto.nullable) = false, (gogoproto.stdduration) = true];
+  int64 max_bytes = 3;
+}
+
+message Duration {
+  int64 seconds = 1;
+  int32 nanos = 2;
+}
+
+message ValidatorParams {
+  option (gogoproto.populate) = true;
+  option (gogoproto.equal) = true;
+
+  repeated string pub_key_types = 1;
+}
+
+message VersionParams {
+  option (gogoproto.populate) = true;
+  option (gogoproto.equal) = true;
+
+  uint64 app_version = 1;
+}
+
+message TxResult {
+  uint64 height = 1;
+  uint32 index = 2;
+  Tx tx = 3 [(firehose.required) = true];
+  ResponseDeliverTx result = 4 [(firehose.required) = true];
+  bytes hash = 5;
+}
+
+message Tx {
+  TxBody body = 1 [(firehose.required) = true];
+  AuthInfo auth_info = 2;
+  repeated bytes signatures = 3;
+}
+
+message TxBody {
+  repeated google.protobuf.Any messages = 1;
+  string memo = 2;
+  uint64 timeout_height = 3;
+  repeated google.protobuf.Any extension_options = 1023;
+  repeated google.protobuf.Any non_critical_extension_options = 2047;
+}
+
+message Any {
+  string type_url = 1;
+  bytes value = 2;
+}
+
+message AuthInfo {
+  repeated SignerInfo signer_infos = 1;
+  Fee fee = 2;
+  Tip tip = 3;
+}
+
+message SignerInfo {
+  google.protobuf.Any public_key = 1;
+  ModeInfo mode_info = 2;
+  uint64 sequence = 3;
+}
+
+message ModeInfo {
+  oneof sum {
+    ModeInfoSingle single = 1;
+    ModeInfoMulti multi = 2;
+  }
+}
+
+message ModeInfoSingle {
+  SignMode mode = 1;
+}
+
+enum SignMode {
+  SIGN_MODE_UNSPECIFIED = 0;
+  SIGN_MODE_DIRECT = 1;
+  SIGN_MODE_TEXTUAL = 2;
+  SIGN_MODE_LEGACY_AMINO_JSON = 127;
+}
+
+message ModeInfoMulti {
+  CompactBitArray bitarray = 1;
+  repeated ModeInfo mode_infos = 2;
+}
+
+message CompactBitArray {
+  option (gogoproto.goproto_stringer) = false;
+
+  uint32 extra_bits_stored = 1;
+  bytes elems = 2;
+}
+
+message Fee {
+  repeated Coin amount = 1 [(gogoproto.nullable) = false, (gogoproto.castrepeated) = "github.com/cosmos/cosmos-sdk/types.Coins"];
+  uint64 gas_limit = 2;
+  string payer = 3 [(cosmos_proto.scalar) = "cosmos.AddressString"];
+  string granter = 4 [(cosmos_proto.scalar) = "cosmos.AddressString"];
+}
+
+message Coin {
+  option (gogoproto.equal) = true;
+
+  string denom = 1;
+  string amount = 2 [(gogoproto.customtype) = "Int", (gogoproto.nullable) = false];
+}
+
+message Tip {
+  repeated Coin amount = 1 [(gogoproto.nullable) = false, (gogoproto.castrepeated) = "github.com/cosmos/cosmos-sdk/types.Coins"];
+  string tipper = 2 [(cosmos_proto.scalar) = "cosmos.AddressString"];
+}
+
+message ResponseDeliverTx {
+  uint32 code = 1;
+  bytes data = 2;
+  string log = 3;
+  string info = 4;
+  int64 gas_wanted = 5;
+  int64 gas_used = 6;
+  repeated Event events = 7 [(gogoproto.nullable) = false, (gogoproto.jsontag) = "events,omitempty"];
+  string codespace = 8;
+}
+
+message ValidatorSetUpdates {
+  repeated Validator validator_updates = 1;
+}

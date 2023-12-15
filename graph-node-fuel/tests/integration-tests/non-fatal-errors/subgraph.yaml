@@ -1,0 +1,60 @@
+specVersion: 0.0.4
+schema:
+  file: ./schema.graphql
+features:
+  - nonFatalErrors
+dataSources:
+  - kind: ethereum/contract
+    name: Success
+    network: test
+    source:
+      address: "@SimpleContract@"
+      abi: Contract
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.6
+      language: wasm/assemblyscript
+      abis:
+        - name: Contract
+          file: ./abis/Contract.abi
+      entities:
+        - Call
+      blockHandlers:
+        - handler: handleBlockSuccess
+      file: ./src/mapping.ts
+  - kind: ethereum/contract
+    name: Error
+    network: test
+    source:
+      address: "@SimpleContract@"
+      abi: Contract
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.6
+      language: wasm/assemblyscript
+      abis:
+        - name: Contract
+          file: ./abis/Contract.abi
+      entities:
+        - Call
+      blockHandlers:
+        - handler: handleBlockError
+      file: ./src/mapping.ts
+templates:
+  - kind: ethereum/contract
+    name: Dynamic
+    network: test
+    source:
+      abi: Contract
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.6
+      language: wasm/assemblyscript
+      abis:
+        - name: Contract
+          file: ./abis/Contract.abi
+      entities:
+        - Call
+      blockHandlers:
+        - handler: handleBlockTemplate
+      file: ./src/mapping.ts

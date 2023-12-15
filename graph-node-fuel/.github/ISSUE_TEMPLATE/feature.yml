@@ -1,0 +1,24 @@
+name: Feature request
+description: To request or discuss new features.
+title: "[Feature] "
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: feature-description
+    attributes:
+      label: Description
+      description: Please provide a detailed overview of the desired feature or improvement, along with any examples or useful information. You can use Markdown.
+  - type: textarea
+    id: blockers
+    attributes:
+      label: Are you aware of any blockers that must be resolved before implementing this feature? If so, which? Link to any relevant GitHub issues.
+    validations:
+      required: false
+  - type: checkboxes
+    id: checkboxes
+    attributes:
+      label: Some information to help us out
+      options:
+        - label: Tick this box if you plan on implementing this feature yourself.
+        - label: I have searched the issue tracker to make sure this issue is not a duplicate.
+          required: true

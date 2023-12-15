@@ -1,0 +1,19 @@
+[package]
+name = "graph-graphql"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+crossbeam = "0.8"
+graph = { path = "../graph" }
+graphql-parser = "0.4.0"
+graphql-tools = "0.2.1"
+indexmap = "2.1"
+Inflector = "0.11.3"
+lazy_static = "1.2.0"
+stable-hash = { git = "https://github.com/graphprotocol/stable-hash", branch = "main"}
+stable-hash_legacy = { git = "https://github.com/graphprotocol/stable-hash", branch = "old", package = "stable-hash" }
+defer = "0.1"
+parking_lot = "0.12"
+anyhow = "1.0"
+async-recursion = "1.0.5"

@@ -1,0 +1,21 @@
+[package]
+name = "graph-chain-arweave"
+version.workspace = true
+edition.workspace = true
+
+[build-dependencies]
+tonic-build = { workspace = true }
+
+[dependencies]
+base64-url = "2.0.1"
+graph = { path = "../../graph" }
+prost = { workspace = true }
+prost-types = { workspace = true }
+serde = "1.0"
+sha2 = "0.10.8"
+
+graph-runtime-wasm = { path = "../../runtime/wasm" }
+graph-runtime-derive = { path = "../../runtime/derive" }
+
+[dev-dependencies]
+diesel = { version = "1.4.7", features = ["postgres", "serde_json", "numeric", "r2d2"] }

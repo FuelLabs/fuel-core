@@ -1,0 +1,110 @@
+syntax = "proto3";
+
+package sf.firehose.v2;
+
+import "google/protobuf/any.proto";
+
+option go_package = "github.com/streamingfast/pbgo/sf/firehose/v2;pbfirehose";
+
+service Stream {
+  rpc Blocks(Request) returns (stream Response);
+}
+
+service Fetch {
+  rpc Block(SingleBlockRequest) returns (SingleBlockResponse);
+}
+
+message SingleBlockRequest {
+
+  // Get the current known canonical version of a block at with this number
+  message BlockNumber{
+    uint64 num=1;
+  }
+
+  // Get the current block with specific hash and number
+  message BlockHashAndNumber{
+    uint64 num=1;
+    string hash=2;
+  }
+
+  // Get the block that generated a specific cursor
+  message Cursor{
+    string cursor=1;
+  }
+
+  oneof reference{
+    BlockNumber block_number=3;
+    BlockHashAndNumber block_hash_and_number=4;
+    Cursor cursor=5;
+  }
+
+  repeated google.protobuf.Any transforms = 6;
+}
+
+message SingleBlockResponse {
+  google.protobuf.Any block = 1;
+}
+
+message Request {
+
+  // Controls where the stream of blocks will start.
+  //
+  // The stream will start **inclusively** at the requested block num.
+  //
+  // When not provided, starts at first streamable block of the chain. Not all
+  // chain starts at the same block number, so you might get an higher block than
+  // requested when using default value of 0.
+  //
+  // Can be negative, will be resolved relative to the chain head block, assuming
+  // a chain at head block #100, then using `-50` as the value will start at block
+  // #50. If it resolves before first streamable block of chain, we assume start
+  // of chain.
+  //
+  // If `start_cursor` is given, this value is ignored and the stream instead starts
+  // immediately after the Block pointed by the opaque `start_cursor` value.
+  int64 start_block_num = 1;
+
+  // Controls where the stream of blocks will start which will be immediately after
+  // the Block pointed by this opaque cursor.
+  //
+  // Obtain this value from a previously received `Response.cursor`.
+  //
+  // This value takes precedence over `start_block_num`.
+  string cursor = 2;
+
+  // When non-zero, controls where the stream of blocks will stop.
+  //
+  // The stream will close **after** that block has passed so the boundary is
+  // **inclusive**.
+  uint64 stop_block_num = 3;
+
+  // With final_block_only, you only receive blocks with STEP_FINAL
+  // Default behavior will send blocks as STEP_NEW, with occasional STEP_UNDO
+  bool final_blocks_only = 4;
+
+  repeated google.protobuf.Any transforms = 10;
+}
+
+message Response {
+  // Chain specific block payload, ex:
+  //   - sf.eosio.type.v1.Block
+  //   - sf.ethereum.type.v1.Block
+  //   - sf.near.type.v1.Block
+  google.protobuf.Any block = 1;
+  ForkStep step = 6;
+  string cursor = 10;
+}
+
+enum ForkStep {
+  STEP_UNSET = 0;
+
+  // Incoming block
+  STEP_NEW = 1;
+
+  // A reorg caused this specific block to be excluded from the chain
+  STEP_UNDO = 2;
+
+  // Block is now final and can be committed (finality is chain specific,
+  // see chain documentation for more details)
+  STEP_FINAL = 3;
+}

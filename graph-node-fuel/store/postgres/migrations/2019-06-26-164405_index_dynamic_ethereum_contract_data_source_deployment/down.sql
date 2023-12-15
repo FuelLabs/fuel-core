@@ -1,0 +1,2 @@
+drop index if exists
+  subgraphs.manual_dynamic_ethereum_contract_data_source_deployment;

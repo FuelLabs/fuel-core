@@ -1,0 +1,430 @@
+{
+  "abi": [
+    {
+      "inputs": [],
+      "stateMutability": "nonpayable",
+      "type": "constructor"
+    },
+    {
+      "anonymous": false,
+      "inputs": [
+        {
+          "indexed": false,
+          "internalType": "uint16",
+          "name": "x",
+          "type": "uint16"
+        }
+      ],
+      "name": "Trigger",
+      "type": "event"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "uint16",
+          "name": "x",
+          "type": "uint16"
+        }
+      ],
+      "name": "emitTrigger",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    }
+  ],
+  "bytecode": {
+    "object": "0x608060405234801561001057600080fd5b50604051600081527f166a7d625edff952ff346d1bca4edef10254353f72916b7fb072d55d0f97b5449060200160405180910390a160d7806100536000396000f3fe6080604052348015600f57600080fd5b506004361060285760003560e01c806316d04e0d14602d575b600080fd5b603c60383660046078565b603e565b005b60405161ffff821681527f166a7d625edff952ff346d1bca4edef10254353f72916b7fb072d55d0f97b5449060200160405180910390a150565b600060208284031215608957600080fd5b813561ffff81168114609a57600080fd5b939250505056fea2646970667358221220c2b4462405693955a38a8477cab1c40e3e03ce26bb5bdf71e0c13e051d80872164736f6c63430008160033",
+    "sourceMap": "57:184:2:-:0;;;117:46;;;;;;;;;-1:-1:-1;146:10:2;;154:1;167:38:3;;146:10:2;;155:2:3;140:18;146:10:2;;;;;;;57:184;;;;;;",
+    "linkReferences": {}
+  },
+  "deployedBytecode": {
+    "object": "0x6080604052348015600f57600080fd5b506004361060285760003560e01c806316d04e0d14602d575b600080fd5b603c60383660046078565b603e565b005b60405161ffff821681527f166a7d625edff952ff346d1bca4edef10254353f72916b7fb072d55d0f97b5449060200160405180910390a150565b600060208284031215608957600080fd5b813561ffff81168114609a57600080fd5b939250505056fea2646970667358221220c2b4462405693955a38a8477cab1c40e3e03ce26bb5bdf71e0c13e051d80872164736f6c63430008160033",
+    "sourceMap": "57:184:2:-:0;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;169:70;;;;;;:::i;:::-;;:::i;:::-;;;222:10;;465:6:3;453:19;;435:38;;222:10:2;;423:2:3;408:18;222:10:2;;;;;;;169:70;:::o;14:272:3:-;72:6;125:2;113:9;104:7;100:23;96:32;93:52;;;141:1;138;131:12;93:52;180:9;167:23;230:6;223:5;219:18;212:5;209:29;199:57;;252:1;249;242:12;199:57;275:5;14:272;-1:-1:-1;;;14:272:3:o",
+    "linkReferences": {}
+  },
+  "methodIdentifiers": {
+    "emitTrigger(uint16)": "16d04e0d"
+  },
+  "rawMetadata": "{\"compiler\":{\"version\":\"0.8.22+commit.4fc1097e\"},\"language\":\"Solidity\",\"output\":{\"abi\":[{\"inputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"constructor\"},{\"anonymous\":false,\"inputs\":[{\"indexed\":false,\"internalType\":\"uint16\",\"name\":\"x\",\"type\":\"uint16\"}],\"name\":\"Trigger\",\"type\":\"event\"},{\"inputs\":[{\"internalType\":\"uint16\",\"name\":\"x\",\"type\":\"uint16\"}],\"name\":\"emitTrigger\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"}],\"devdoc\":{\"kind\":\"dev\",\"methods\":{},\"version\":1},\"userdoc\":{\"kind\":\"user\",\"methods\":{},\"version\":1}},\"settings\":{\"compilationTarget\":{\"src/SimpleContract.sol\":\"SimpleContract\"},\"evmVersion\":\"paris\",\"libraries\":{},\"metadata\":{\"bytecodeHash\":\"ipfs\"},\"optimizer\":{\"enabled\":true,\"runs\":200},\"remappings\":[]},\"sources\":{\"src/SimpleContract.sol\":{\"keccak256\":\"0xa7c8b39d348362b0e5391dbf3151c976f1a962d8d8ac6a0e033bc8b8809cf298\",\"license\":\"MIT\",\"urls\":[\"bzz-raw://2a347eab9c0e8675a91c559e42894506c2a751bf65692549f6867f61e5063d72\",\"dweb:/ipfs/QmWC6R3ThMW7NDVNWXprdLfNQNfnESwpffXZqxPoXtAcUB\"]}},\"version\":1}",
+  "metadata": {
+    "compiler": {
+      "version": "0.8.22+commit.4fc1097e"
+    },
+    "language": "Solidity",
+    "output": {
+      "abi": [
+        {
+          "inputs": [],
+          "stateMutability": "nonpayable",
+          "type": "constructor"
+        },
+        {
+          "inputs": [
+            {
+              "internalType": "uint16",
+              "name": "x",
+              "type": "uint16",
+              "indexed": false
+            }
+          ],
+          "type": "event",
+          "name": "Trigger",
+          "anonymous": false
+        },
+        {
+          "inputs": [
+            {
+              "internalType": "uint16",
+              "name": "x",
+              "type": "uint16"
+            }
+          ],
+          "stateMutability": "nonpayable",
+          "type": "function",
+          "name": "emitTrigger"
+        }
+      ],
+      "devdoc": {
+        "kind": "dev",
+        "methods": {},
+        "version": 1
+      },
+      "userdoc": {
+        "kind": "user",
+        "methods": {},
+        "version": 1
+      }
+    },
+    "settings": {
+      "remappings": [],
+      "optimizer": {
+        "enabled": true,
+        "runs": 200
+      },
+      "metadata": {
+        "bytecodeHash": "ipfs"
+      },
+      "compilationTarget": {
+        "src/SimpleContract.sol": "SimpleContract"
+      },
+      "libraries": {}
+    },
+    "sources": {
+      "src/SimpleContract.sol": {
+        "keccak256": "0xa7c8b39d348362b0e5391dbf3151c976f1a962d8d8ac6a0e033bc8b8809cf298",
+        "urls": [
+          "bzz-raw://2a347eab9c0e8675a91c559e42894506c2a751bf65692549f6867f61e5063d72",
+          "dweb:/ipfs/QmWC6R3ThMW7NDVNWXprdLfNQNfnESwpffXZqxPoXtAcUB"
+        ],
+        "license": "MIT"
+      }
+    },
+    "version": 1
+  },
+  "ast": {
+    "absolutePath": "src/SimpleContract.sol",
+    "id": 87,
+    "exportedSymbols": {
+      "SimpleContract": [
+        86
+      ]
+    },
+    "nodeType": "SourceUnit",
+    "src": "32:210:2",
+    "nodes": [
+      {
+        "id": 63,
+        "nodeType": "PragmaDirective",
+        "src": "32:23:2",
+        "nodes": [],
+        "literals": [
+          "solidity",
+          "^",
+          "0.8",
+          ".0"
+        ]
+      },
+      {
+        "id": 86,
+        "nodeType": "ContractDefinition",
+        "src": "57:184:2",
+        "nodes": [
+          {
+            "id": 67,
+            "nodeType": "EventDefinition",
+            "src": "87:24:2",
+            "nodes": [],
+            "anonymous": false,
+            "eventSelector": "166a7d625edff952ff346d1bca4edef10254353f72916b7fb072d55d0f97b544",
+            "name": "Trigger",
+            "nameLocation": "93:7:2",
+            "parameters": {
+              "id": 66,
+              "nodeType": "ParameterList",
+              "parameters": [
+                {
+                  "constant": false,
+                  "id": 65,
+                  "indexed": false,
+                  "mutability": "mutable",
+                  "name": "x",
+                  "nameLocation": "108:1:2",
+                  "nodeType": "VariableDeclaration",
+                  "scope": 67,
+                  "src": "101:8:2",
+                  "stateVariable": false,
+                  "storageLocation": "default",
+                  "typeDescriptions": {
+                    "typeIdentifier": "t_uint16",
+                    "typeString": "uint16"
+                  },
+                  "typeName": {
+                    "id": 64,
+                    "name": "uint16",
+                    "nodeType": "ElementaryTypeName",
+                    "src": "101:6:2",
+                    "typeDescriptions": {
+                      "typeIdentifier": "t_uint16",
+                      "typeString": "uint16"
+                    }
+                  },
+                  "visibility": "internal"
+                }
+              ],
+              "src": "100:10:2"
+            }
+          },
+          {
+            "id": 75,
+            "nodeType": "FunctionDefinition",
+            "src": "117:46:2",
+            "nodes": [],
+            "body": {
+              "id": 74,
+              "nodeType": "Block",
+              "src": "131:32:2",
+              "nodes": [],
+              "statements": [
+                {
+                  "eventCall": {
+                    "arguments": [
+                      {
+                        "hexValue": "30",
+                        "id": 71,
+                        "isConstant": false,
+                        "isLValue": false,
+                        "isPure": true,
+                        "kind": "number",
+                        "lValueRequested": false,
+                        "nodeType": "Literal",
+                        "src": "154:1:2",
+                        "typeDescriptions": {
+                          "typeIdentifier": "t_rational_0_by_1",
+                          "typeString": "int_const 0"
+                        },
+                        "value": "0"
+                      }
+                    ],
+                    "expression": {
+                      "argumentTypes": [
+                        {
+                          "typeIdentifier": "t_rational_0_by_1",
+                          "typeString": "int_const 0"
+                        }
+                      ],
+                      "id": 70,
+                      "name": "Trigger",
+                      "nodeType": "Identifier",
+                      "overloadedDeclarations": [],
+                      "referencedDeclaration": 67,
+                      "src": "146:7:2",
+                      "typeDescriptions": {
+                        "typeIdentifier": "t_function_event_nonpayable$_t_uint16_$returns$__$",
+                        "typeString": "function (uint16)"
+                      }
+                    },
+                    "id": 72,
+                    "isConstant": false,
+                    "isLValue": false,
+                    "isPure": false,
+                    "kind": "functionCall",
+                    "lValueRequested": false,
+                    "nameLocations": [],
+                    "names": [],
+                    "nodeType": "FunctionCall",
+                    "src": "146:10:2",
+                    "tryCall": false,
+                    "typeDescriptions": {
+                      "typeIdentifier": "t_tuple$__$",
+                      "typeString": "tuple()"
+                    }
+                  },
+                  "id": 73,
+                  "nodeType": "EmitStatement",
+                  "src": "141:15:2"
+                }
+              ]
+            },
+            "implemented": true,
+            "kind": "constructor",
+            "modifiers": [],
+            "name": "",
+            "nameLocation": "-1:-1:-1",
+            "parameters": {
+              "id": 68,
+              "nodeType": "ParameterList",
+              "parameters": [],
+              "src": "128:2:2"
+            },
+            "returnParameters": {
+              "id": 69,
+              "nodeType": "ParameterList",
+              "parameters": [],
+              "src": "131:0:2"
+            },
+            "scope": 86,
+            "stateMutability": "nonpayable",
+            "virtual": false,
+            "visibility": "public"
+          },
+          {
+            "id": 85,
+            "nodeType": "FunctionDefinition",
+            "src": "169:70:2",
+            "nodes": [],
+            "body": {
+              "id": 84,
+              "nodeType": "Block",
+              "src": "207:32:2",
+              "nodes": [],
+              "statements": [
+                {
+                  "eventCall": {
+                    "arguments": [
+                      {
+                        "id": 81,
+                        "name": "x",
+                        "nodeType": "Identifier",
+                        "overloadedDeclarations": [],
+                        "referencedDeclaration": 77,
+                        "src": "230:1:2",
+                        "typeDescriptions": {
+                          "typeIdentifier": "t_uint16",
+                          "typeString": "uint16"
+                        }
+                      }
+                    ],
+                    "expression": {
+                      "argumentTypes": [
+                        {
+                          "typeIdentifier": "t_uint16",
+                          "typeString": "uint16"
+                        }
+                      ],
+                      "id": 80,
+                      "name": "Trigger",
+                      "nodeType": "Identifier",
+                      "overloadedDeclarations": [],
+                      "referencedDeclaration": 67,
+                      "src": "222:7:2",
+                      "typeDescriptions": {
+                        "typeIdentifier": "t_function_event_nonpayable$_t_uint16_$returns$__$",
+                        "typeString": "function (uint16)"
+                      }
+                    },
+                    "id": 82,
+                    "isConstant": false,
+                    "isLValue": false,
+                    "isPure": false,
+                    "kind": "functionCall",
+                    "lValueRequested": false,
+                    "nameLocations": [],
+                    "names": [],
+                    "nodeType": "FunctionCall",
+                    "src": "222:10:2",
+                    "tryCall": false,
+                    "typeDescriptions": {
+                      "typeIdentifier": "t_tuple$__$",
+                      "typeString": "tuple()"
+                    }
+                  },
+                  "id": 83,
+                  "nodeType": "EmitStatement",
+                  "src": "217:15:2"
+                }
+              ]
+            },
+            "functionSelector": "16d04e0d",
+            "implemented": true,
+            "kind": "function",
+            "modifiers": [],
+            "name": "emitTrigger",
+            "nameLocation": "178:11:2",
+            "parameters": {
+              "id": 78,
+              "nodeType": "ParameterList",
+              "parameters": [
+                {
+                  "constant": false,
+                  "id": 77,
+                  "mutability": "mutable",
+                  "name": "x",
+                  "nameLocation": "197:1:2",
+                  "nodeType": "VariableDeclaration",
+                  "scope": 85,
+                  "src": "190:8:2",
+                  "stateVariable": false,
+                  "storageLocation": "default",
+                  "typeDescriptions": {
+                    "typeIdentifier": "t_uint16",
+                    "typeString": "uint16"
+                  },
+                  "typeName": {
+                    "id": 76,
+                    "name": "uint16",
+                    "nodeType": "ElementaryTypeName",
+                    "src": "190:6:2",
+                    "typeDescriptions": {
+                      "typeIdentifier": "t_uint16",
+                      "typeString": "uint16"
+                    }
+                  },
+                  "visibility": "internal"
+                }
+              ],
+              "src": "189:10:2"
+            },
+            "returnParameters": {
+              "id": 79,
+              "nodeType": "ParameterList",
+              "parameters": [],
+              "src": "207:0:2"
+            },
+            "scope": 86,
+            "stateMutability": "nonpayable",
+            "virtual": false,
+            "visibility": "public"
+          }
+        ],
+        "abstract": false,
+        "baseContracts": [],
+        "canonicalName": "SimpleContract",
+        "contractDependencies": [],
+        "contractKind": "contract",
+        "fullyImplemented": true,
+        "linearizedBaseContracts": [
+          86
+        ],
+        "name": "SimpleContract",
+        "nameLocation": "66:14:2",
+        "scope": 87,
+        "usedErrors": [],
+        "usedEvents": [
+          67
+        ]
+      }
+    ],
+    "license": "MIT"
+  },
+  "id": 2
+}

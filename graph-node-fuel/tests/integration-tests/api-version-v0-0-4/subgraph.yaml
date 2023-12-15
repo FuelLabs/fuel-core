@@ -1,0 +1,43 @@
+specVersion: 0.0.2
+repository: https://github.com/graphprotocol/example-subgraph
+schema:
+  file: ./schema.graphql
+features:
+  - nonFatalErrors
+dataSources:
+  - kind: ethereum/contract
+    name: Contract
+    network: test
+    source:
+      address: "@SimpleContract@"
+      abi: Contract
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.4
+      language: wasm/assemblyscript
+      entities:
+        - Gravatar
+      abis:
+        - name: Contract
+          file: ./abis/Contract.abi
+      blockHandlers:
+        - handler: handleBlock
+      file: ./src/mapping.ts
+templates:
+  - kind: ethereum/contract
+    name: Template
+    network: test
+    source:
+      abi: Contract
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.4
+      language: wasm/assemblyscript
+      entities:
+        - Gravatar
+      abis:
+        - name: Contract
+          file: ./abis/Contract.abi
+      blockHandlers:
+        - handler: handleBlockTemplate
+      file: ./src/mapping.ts

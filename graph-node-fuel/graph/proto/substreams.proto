@@ -1,0 +1,144 @@
+syntax = "proto3";
+
+package sf.substreams.v1;
+
+import "google/protobuf/timestamp.proto";
+import "google/protobuf/descriptor.proto";
+import "google/protobuf/any.proto";
+
+message Package {
+  // Needs to be one so this file can be used _directly_ as a
+  // buf `Image` andor a ProtoSet for grpcurl and other tools
+  repeated google.protobuf.FileDescriptorProto proto_files = 1;
+  reserved 2 to 4; // Reserved for future: in case protosets adds fields
+
+  uint64 version = 5;
+  sf.substreams.v1.Modules modules = 6;
+  repeated ModuleMetadata module_meta = 7;
+  repeated PackageMetadata package_meta = 8;
+
+  // Source network for Substreams to fetch its data from.
+  string network = 9;
+
+  google.protobuf.Any sink_config = 10;
+  string sink_module = 11;
+}
+
+message PackageMetadata {
+  string version = 1;
+  string url = 2;
+  string name = 3;
+  string doc = 4;
+}
+
+message ModuleMetadata {
+  // Corresponds to the index in `Package.metadata.package_meta`
+  uint64 package_index = 1;
+  string doc = 2;
+}
+
+message Modules {
+  repeated Module modules = 1;
+  repeated Binary binaries = 2;
+}
+
+// Binary represents some code compiled to its binary form.
+message Binary {
+  string type = 1;
+  bytes content = 2;
+}
+
+message Module {
+  string name = 1;
+  oneof kind {
+    KindMap kind_map = 2;
+    KindStore kind_store = 3;
+  };
+
+  uint32 binary_index = 4;
+  string binary_entrypoint = 5;
+
+  repeated Input inputs = 6;
+  Output output = 7;
+
+  uint64 initial_block = 8;
+
+  message KindMap {
+    string output_type = 1;
+  }
+
+  message KindStore {
+    // The `update_policy` determines the functions available to mutate the store
+    // (like `set()`, `set_if_not_exists()` or `sum()`, etc..) in
+    // order to ensure that parallel operations are possible and deterministic
+    //
+    // Say a store cumulates keys from block 0 to 1M, and a second store
+    // cumulates keys from block 1M to 2M. When we want to use this
+    // store as a dependency for a downstream module, we will merge the
+    // two stores according to this policy.
+    UpdatePolicy update_policy = 1;
+    string value_type = 2;
+
+    enum UpdatePolicy {
+      UPDATE_POLICY_UNSET = 0;
+      // Provides a store where you can `set()` keys, and the latest key wins
+      UPDATE_POLICY_SET = 1;
+      // Provides a store where you can `set_if_not_exists()` keys, and the first key wins
+      UPDATE_POLICY_SET_IF_NOT_EXISTS = 2;
+      // Provides a store where you can `add_*()` keys, where two stores merge by summing its values.
+      UPDATE_POLICY_ADD = 3;
+      // Provides a store where you can `min_*()` keys, where two stores merge by leaving the minimum value.
+      UPDATE_POLICY_MIN = 4;
+      // Provides a store where you can `max_*()` keys, where two stores merge by leaving the maximum value.
+      UPDATE_POLICY_MAX = 5;
+      // Provides a store where you can `append()` keys, where two stores merge by concatenating the bytes in order.
+      UPDATE_POLICY_APPEND = 6;
+    }
+  }
+
+  message Input {
+    oneof input {
+      Source source = 1;
+      Map map = 2;
+      Store store = 3;
+      Params params = 4;
+    }
+
+    message Source {
+      string type = 1; // ex: "sf.ethereum.type.v1.Block"
+    }
+    message Map {
+      string module_name = 1; // ex: "block_to_pairs"
+    }
+    message Store {
+      string module_name = 1;
+      Mode mode = 2;
+
+      enum Mode {
+	UNSET = 0;
+	GET = 1;
+	DELTAS = 2;
+      }
+    }
+    message Params {
+      string value = 1;
+    }
+  }
+
+  message Output {
+    string type = 1;
+  }
+}
+
+// Clock is a pointer to a block with added timestamp
+message Clock {
+  string id = 1;
+  uint64 number = 2;
+  google.protobuf.Timestamp timestamp = 3;
+}
+
+// BlockRef is a pointer to a block to which we don't know the timestamp
+message BlockRef {
+  string id = 1;
+  uint64 number = 2;
+}

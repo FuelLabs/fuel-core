@@ -1,0 +1,12 @@
+syntax = "proto3";
+
+import "near.proto";
+
+package receipts.v1;
+
+message BlockAndReceipts {
+    sf.near.codec.v1.Block block = 1;
+    repeated sf.near.codec.v1.ExecutionOutcomeWithId outcome = 2;
+    repeated sf.near.codec.v1.Receipt receipt = 3;
+}
+

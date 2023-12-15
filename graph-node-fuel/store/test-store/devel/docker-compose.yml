@@ -1,0 +1,21 @@
+version: '3'
+services:
+  ipfs:
+    image: ipfs/go-ipfs:v0.10.0
+    ports:
+      - '5001:5001'
+    volumes:
+      - ./data/ipfs:/data/ipfs
+  postgres:
+    image: postgres
+    ports:
+      - '5432:5432'
+    command: ["postgres", "-cshared_preload_libraries=pg_stat_statements", "-clog_statement=all"]
+    environment:
+      POSTGRES_USER: graph-node
+      POSTGRES_PASSWORD: let-me-in
+      POSTGRES_DB: graph-node
+      POSTGRES_INITDB_ARGS: "-E UTF8 --locale=C"
+    volumes:
+      - ./data/postgres:/var/lib/postgresql/data
+      - ./initdb.d:/docker-entrypoint-initdb.d

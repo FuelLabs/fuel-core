@@ -1,0 +1,225 @@
+name: Continuous Integration
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: full
+  THEGRAPH_STORE_POSTGRES_DIESEL_URL: "postgresql://postgres:postgres@localhost:5432/graph_node_test"
+
+jobs:
+  unit-tests:
+    name: Run unit tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    services:
+      ipfs:
+        image: ipfs/go-ipfs:v0.10.0
+        ports:
+          - 5001:5001
+      postgres:
+        image: postgres
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: graph_node_test
+          POSTGRES_INITDB_ARGS: "-E UTF8 --locale=C"
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+    env:
+      RUSTFLAGS: "-C link-arg=-fuse-ld=lld -D warnings"
+    steps:
+      - name: Tune GitHub hosted runner to reduce flakiness
+        # https://github.com/smorimoto/tune-github-hosted-runner-network/blob/main/action.yml
+        run: sudo ethtool -K eth0 tx off rx off
+      - name: Checkout sources
+        uses: actions/checkout@v2
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Install lld
+        run: sudo apt-get install -y lld protobuf-compiler
+
+      - name: Run unit tests
+        uses: actions-rs/cargo@v1
+        with:
+          command: test
+          args: --verbose --workspace --exclude graph-tests -- --nocapture
+
+  runner-tests:
+    name: Subgraph Runner integration tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    services:
+      ipfs:
+        image: ipfs/go-ipfs:v0.10.0
+        ports:
+          - 5001:5001
+      postgres:
+        image: bitnami/postgresql
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: graph_node_test
+          POSTGRES_INITDB_ARGS: "-E UTF8 --locale=C"
+          POSTGRESQL_EXTRA_FLAGS: "-c max_connections=1000"
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+        ports:
+          - 5432:5432
+    env:
+      RUSTFLAGS: "-C link-arg=-fuse-ld=lld -D warnings"
+      RUNNER_TESTS_WAIT_FOR_SYNC_SECS: "600"
+    steps:
+      - name: Tune GitHub hosted runner to reduce flakiness
+        # https://github.com/smorimoto/tune-github-hosted-runner-network/blob/main/action.yml
+        run: sudo ethtool -K eth0 tx off rx off
+      - name: Checkout sources
+        uses: actions/checkout@v2
+
+      - name: Install Node 20
+        uses: actions/setup-node@v3
+        with:
+          node-version: "20"
+          cache: yarn
+          cache-dependency-path: "tests/runner-tests/yarn.lock"
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Install lld
+        run: sudo apt-get install -y lld protobuf-compiler
+
+      - name: Run runner tests
+        id: runner-tests-1
+        uses: actions-rs/cargo@v1
+        with:
+          command: test
+          args: --package graph-tests --test runner_tests
+
+  integration-tests:
+    name: Run integration tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    services:
+      ipfs:
+        image: ipfs/go-ipfs:v0.10.0
+        ports:
+          - 3001:5001
+      postgres:
+        image: postgres
+        env:
+          POSTGRES_USER: graph-node
+          POSTGRES_PASSWORD: let-me-in
+          POSTGRES_DB: graph-node
+          POSTGRES_INITDB_ARGS: "-E UTF8 --locale=C"
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 3011:5432
+    env:
+      RUSTFLAGS: "-C link-arg=-fuse-ld=lld -D warnings"
+    steps:
+      - name: Tune GitHub hosted runner to reduce flakiness
+        # https://github.com/smorimoto/tune-github-hosted-runner-network/blob/main/action.yml
+        run: sudo ethtool -K eth0 tx off rx off
+      - name: Checkout sources
+        uses: actions/checkout@v2
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Install Node 20
+        uses: actions/setup-node@v3
+        with:
+          node-version: "20"
+          cache: yarn
+          cache-dependency-path: "tests/integration-tests/yarn.lock"
+
+      - name: Install lld and jq
+        run: sudo apt-get install -y lld jq protobuf-compiler
+
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@v1
+      - name: Start anvil
+        run: anvil --gas-limit 100000000000 --base-fee 1 --block-time 2 --port 3021 &
+
+      - name: Install graph CLI
+        run: curl -sSL http://cli.thegraph.com/install.sh | sudo bash
+
+      - name: Build graph-node
+        uses: actions-rs/cargo@v1
+        with:
+          command: build
+          args: --bin graph-node --test integration_tests
+
+      - name: Run integration tests
+        id: integration-tests-1
+        uses: actions-rs/cargo@v1
+        env:
+          # Basically, unlimted concurrency
+          N_CONCURRENT_TESTS: "1000"
+        with:
+          command: test
+          args: --test integration_tests -- --nocapture
+      - name: Cat graph-node.log
+        if: always()
+        run: cat tests/integration-tests/graph-node.log || echo "No graph-node.log"
+  rustfmt:
+    name: Check rustfmt style
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      RUSTFLAGS: "-D warnings"
+    steps:
+      - uses: actions/checkout@v2
+
+      - name: Check formatting
+        uses: actions-rs/cargo@v1
+        with:
+          command: fmt
+          args: --all -- --check
+
+  clippy:
+    name: Clippy linting
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v2
+      # Unlike rustfmt, Clippy actually compiles stuff so it benefits from
+      # caching.
+      - uses: Swatinem/rust-cache@v2
+      - name: Install deps
+        run: sudo apt-get install -y protobuf-compiler
+      - name: Run Clippy
+        uses: actions-rs/cargo@v1
+        with:
+          command: check-clippy
+
+  release-check:
+    name: Build in release mode
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      RUSTFLAGS: "-D warnings"
+    steps:
+      - uses: actions/checkout@v2
+      - uses: Swatinem/rust-cache@v2
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get -y install libpq-dev protobuf-compiler
+      - name: Cargo check (release)
+        uses: actions-rs/cargo@v1
+        with:
+          command: check
+          args: --release

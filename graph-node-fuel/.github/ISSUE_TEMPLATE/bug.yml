@@ -1,0 +1,54 @@
+name: Bug report
+description: Use this issue template if something is not working the way it should be.
+title: "[Bug] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to fill out this bug report!
+  - type: textarea
+    id: bug-report
+    attributes:
+      label: Bug report
+      description: Please provide a detailed overview of the expected behavior, and what happens instead. The more details, the better. You can use Markdown.
+  - type: textarea
+    id: graph-node-logs
+    attributes:
+      label: Relevant log output
+      description: Please copy and paste any relevant log output (either graph-node or hosted service logs). This will be automatically formatted into code, so no need for backticks. Leave blank if it doesn't apply.
+      render: Shell
+  - type: markdown
+    attributes:
+      value: Does this bug affect a specific subgraph deployment? If not, leave the following blank.
+  - type: input
+    attributes:
+      label: IPFS hash
+      placeholder: e.g. QmST8VZnjHrwhrW5gTyaiWJDhVcx6TooRv85B49zG7ziLH
+    validations:
+      required: false
+  - type: input
+    attributes:
+      label: Subgraph name or link to explorer
+      placeholder: e.g. https://thegraph.com/explorer/subgraphs/3nXfK3RbFrj6mhkGdoKRowEEti2WvmUdxmz73tben6Mb?view=Overview&chain=mainnet
+    validations:
+      required: false
+  - type: checkboxes
+    id: checkboxes
+    attributes:
+      label: Some information to help us out
+      options:
+        - label: Tick this box if this bug is caused by a regression found in the latest release.
+        - label: Tick this box if this bug is specific to the hosted service.
+        - label: I have searched the issue tracker to make sure this issue is not a duplicate.
+          required: true
+  - type: dropdown
+    id: operating-system
+    attributes:
+      label: OS information
+      description: What OS are you running? Leave blank if it doesn't apply.
+      options:
+        - Windows
+        - macOS
+        - Linux
+        - Other (please specify in your bug report)

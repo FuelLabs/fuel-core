@@ -1,0 +1,22 @@
+[package]
+name = "graph-chain-near"
+version.workspace = true
+edition.workspace = true
+
+[build-dependencies]
+tonic-build = { workspace = true }
+
+[dependencies]
+base64 = "0.20"
+graph = { path = "../../graph" }
+prost = { workspace = true }
+prost-types = { workspace = true }
+serde = "1.0"
+anyhow = "1"
+
+graph-runtime-wasm = { path = "../../runtime/wasm" }
+graph-runtime-derive = { path = "../../runtime/derive" }
+
+[dev-dependencies]
+diesel = { version = "1.4.7", features = ["postgres", "serde_json", "numeric", "r2d2"] }
+trigger-filters.path = "../../substreams/trigger-filters" 

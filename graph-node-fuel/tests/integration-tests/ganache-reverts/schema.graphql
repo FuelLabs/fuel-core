@@ -1,0 +1,5 @@
+type Call @entity {
+  id: ID!
+  reverted: Boolean!
+  returnValue: BigInt
+}

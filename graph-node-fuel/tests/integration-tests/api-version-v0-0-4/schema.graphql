@@ -1,0 +1,5 @@
+# The `id` is the block number and `count` the handler invocations at that block.
+type DataSourceCount @entity {
+  id: ID!
+  count: Int!
+}

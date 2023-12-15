@@ -1,0 +1,9 @@
+[alias]
+# Warnings create a lot of noise, we only print errors.
+check-clippy = "clippy --no-deps -- --allow warnings"
+
+# Can be safely removed once Cargo's sparse protocol (see
+# https://blog.rust-lang.org/2023/03/09/Rust-1.68.0.html#cargos-sparse-protocol)
+# becomes the default.
+[registries.crates-io]
+protocol = "sparse"

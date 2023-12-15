@@ -1,0 +1,25 @@
+# Schema used for unit tests.
+
+type _Schema_
+  @fulltext(
+    name: "bandSearch"
+    language: en
+    algorithm: rank
+    include: [
+      {
+        entity: "Band"
+        fields: [{ name: "name" }, { name: "description" }, { name: "bio" }]
+      }
+    ]
+  )
+
+type Band @entity {
+  id: ID!
+  name: String!
+  description: String!
+  bio: String
+  wallet: String
+  labels: [String!]!
+  discography: [String!]!
+  members: [String!]!
+}

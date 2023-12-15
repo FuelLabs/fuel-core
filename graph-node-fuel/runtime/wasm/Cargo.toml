@@ -1,0 +1,29 @@
+[package]
+name = "graph-runtime-wasm"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+async-trait = "0.1.50"
+atomic_refcell = "0.1.13"
+ethabi = "17.2"
+futures = "0.1.21"
+hex = "0.4.3"
+graph = { path = "../../graph" }
+bs58 = "0.4.0"
+graph-runtime-derive = { path = "../derive" }
+semver = "1.0.20"
+lazy_static = "1.4"
+uuid = { version = "1.6.1", features = ["v4"] }
+strum = "0.21.0"
+strum_macros = "0.25.3"
+bytes = "1.0"
+anyhow = "1.0"
+wasmtime = "0.27.0"
+defer = "0.1"
+never = "0.1"
+
+wasm-instrument = { version = "0.2.0", features = ["std", "sign_ext"] }
+
+# AssemblyScript uses sign extensions
+parity-wasm = { version = "0.45", features = ["std", "sign_ext"] }

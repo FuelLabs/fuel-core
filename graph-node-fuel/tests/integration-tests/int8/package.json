@@ -1,0 +1,25 @@
+{
+  "name": "int8",
+  "version": "0.1.0",
+  "scripts": {
+    "build-contracts": "../../common/build-contracts.sh",
+    "codegen": "graph codegen --skip-migrations",
+    "test": "yarn build-contracts && truffle test --compile-none --network test",
+    "create:test": "graph create test/int8 --node $GRAPH_NODE_ADMIN_URI",
+    "deploy:test": "graph deploy test/int8 --version-label v0.0.1 --ipfs $IPFS_URI --node $GRAPH_NODE_ADMIN_URI"
+  },
+  "devDependencies": {
+    "@graphprotocol/graph-cli": "0.62.0",
+    "@graphprotocol/graph-ts": "0.31.0",
+    "solc": "^0.8.2"
+  },
+  "dependencies": {
+    "@truffle/contract": "^4.3",
+    "@truffle/hdwallet-provider": "^1.2",
+    "apollo-fetch": "^0.7.0",
+    "babel-polyfill": "^6.26.0",
+    "babel-register": "^6.26.0",
+    "gluegun": "^4.6.1",
+    "truffle": "^5.2"
+  }
+}

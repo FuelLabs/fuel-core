@@ -1,0 +1,18 @@
+[package]
+name = "graph-runtime-test"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+semver = "1.0"
+wasmtime = "0.27.0"
+graph = { path = "../../graph" }
+graph-chain-ethereum = { path = "../../chain/ethereum" }
+graph-runtime-wasm = { path = "../wasm" }
+graph-core = { path = "../../core" }
+graph-runtime-derive = { path = "../derive" }
+rand = "0.8.5"
+
+
+[dev-dependencies]
+test-store = { path = "../../store/test-store" }

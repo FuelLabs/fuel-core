@@ -1,0 +1,108 @@
+syntax = "proto3";
+
+package sf.arweave.type.v1;
+
+option go_package = "github.com/ChainSafe/firehose-arweave/pb/sf/arweave/type/v1;pbcodec";
+
+message BigInt {
+  bytes bytes = 1;
+}
+
+message Block {
+  // Firehose block version (unrelated to Arweave block version)
+  uint32 ver = 1;
+  // The block identifier
+  bytes indep_hash = 2;
+  // The nonce chosen to solve the mining problem
+  bytes nonce = 3;
+  // `indep_hash` of the previous block in the weave
+  bytes previous_block = 4;
+  // POSIX time of block discovery
+  uint64 timestamp = 5;
+  // POSIX time of the last difficulty retarget
+  uint64 last_retarget = 6;
+  // Mining difficulty; the number `hash` must be greater than.
+  BigInt diff = 7;
+  // How many blocks have passed since the genesis block
+  uint64 height = 8;
+  // Mining solution hash of the block; must satisfy the mining difficulty
+  bytes hash = 9;
+  // Merkle root of the tree of Merkle roots of block's transactions' data.
+  bytes tx_root = 10;
+  // Transactions contained within this block
+  repeated Transaction txs = 11;
+  // The root hash of the Merkle Patricia Tree containing
+  // all wallet (account) balances and the identifiers
+  // of the last transactions posted by them; if any.
+  bytes wallet_list = 12;
+  // (string or) Address of the account to receive the block rewards. Can also be unclaimed which is encoded as a null byte
+  bytes reward_addr = 13;
+  // Tags that a block producer can add to a block
+  repeated Tag tags = 14;
+  // Size of reward pool
+  BigInt reward_pool = 15;
+  // Size of the weave in bytes
+  BigInt weave_size = 16;
+  // Size of this block in bytes
+  BigInt block_size = 17;
+  // Required after the version 1.8 fork. Zero otherwise.
+  // The sum of the average number of hashes computed
+  // by the network to produce the past blocks including this one.
+  BigInt cumulative_diff = 18;
+  // Required after the version 1.8 fork. Null byte otherwise.
+  // The Merkle root of the block index - the list of {`indep_hash`; `weave_size`; `tx_root`} triplets
+  bytes hash_list_merkle = 20;
+  // The proof of access; Used after v2.4 only; set as defaults otherwise
+  ProofOfAccess poa = 21;
+}
+
+// A succinct proof of access to a recall byte found in a TX
+message ProofOfAccess {
+  // The recall byte option chosen; global offset of index byte
+  string option = 1;
+  // The path through the Merkle tree of transactions' `data_root`s;
+  // from the `data_root` being proven to the corresponding `tx_root`
+  bytes tx_path = 2;
+  // The path through the Merkle tree of identifiers of chunks of the
+  // corresponding transaction; from the chunk being proven to the
+  // corresponding `data_root`.
+  bytes data_path = 3;
+  // The data chunk.
+  bytes chunk = 4;
+}
+
+message Transaction {
+  // 1 or 2 for v1 or v2 transactions. More allowable in the future
+  uint32 format = 1;
+  // The transaction identifier.
+  bytes id = 2; 	 
+  // Either the identifier of the previous transaction from the same
+  // wallet or the identifier of one of the last ?MAX_TX_ANCHOR_DEPTH blocks.
+  bytes last_tx = 3;   
+  // The public key the transaction is signed with.
+  bytes owner = 4;   
+  // A list of arbitrary key-value pairs
+  repeated Tag tags = 5; 	 
+  // The address of the recipient; if any. The SHA2-256 hash of the public key.
+  bytes target = 6;    
+  // The amount of Winstons to send to the recipient; if any.
+  BigInt quantity = 7;   
+  // The data to upload; if any. For v2 transactions; the field is optional
+  // - a fee is charged based on the `data_size` field;
+  //   data may be uploaded any time later in chunks.
+  bytes data = 8;       	 
+  // Size in bytes of the transaction data.
+  BigInt data_size = 9;
+  // The Merkle root of the Merkle tree of data chunks.
+  bytes data_root = 10;
+  // The signature.
+  bytes signature = 11;
+  // The fee in Winstons.
+  BigInt reward = 12;
+}
+
+
+message Tag {
+  bytes name = 1;
+  bytes value = 2;
+}

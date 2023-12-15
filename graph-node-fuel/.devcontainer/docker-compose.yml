@@ -1,0 +1,32 @@
+version: '3'
+
+services:
+  devcontainer:
+    image: mcr.microsoft.com/vscode/devcontainers/rust:bullseye
+    volumes:
+      - ../..:/workspaces:cached
+    network_mode: service:database
+    command: sleep infinity
+  ipfs:
+    image: ipfs/kubo:v0.18.1
+    restart: unless-stopped
+    network_mode: service:database
+  database:
+    image: postgres:latest
+    restart: unless-stopped
+    command:
+      [
+        "postgres",
+        "-cshared_preload_libraries=pg_stat_statements"
+      ]
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    environment:
+      POSTGRES_USER: graph-node
+      POSTGRES_PASSWORD: let-me-in
+      POSTGRES_DB: graph-node
+      
+      POSTGRES_INITDB_ARGS: "-E UTF8 --locale=C"
+
+volumes:
+  postgres-data:

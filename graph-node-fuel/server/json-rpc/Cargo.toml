@@ -1,0 +1,9 @@
+[package]
+name = "graph-server-json-rpc"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+graph = { path = "../../graph" }
+jsonrpsee = { version = "0.15.1", features = ["http-server"] }
+serde = "1.0"

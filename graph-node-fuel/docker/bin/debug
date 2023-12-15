@@ -1,0 +1,9 @@
+#! /bin/bash
+
+if [ -f "$1" ]
+then
+    exec rust-gdb -c "$1" /usr/local/cargo/bin/graph-node
+else
+    echo "usage: debug <core-file>"
+    exit 1
+fi

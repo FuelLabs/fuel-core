@@ -1,0 +1,4 @@
+type Foo @entity {
+  id: ID!
+  value: Int8!
+}

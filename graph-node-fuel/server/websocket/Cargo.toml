@@ -1,0 +1,16 @@
+[package]
+name = "graph-server-websocket"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+futures = "0.1.23"
+graph = { path = "../../graph" }
+graphql-parser = "0.4.0"
+http = "0.2"
+lazy_static = "1.2.0"
+serde = "1.0"
+serde_derive = "1.0"
+tokio-tungstenite = "0.17"
+uuid = { version = "1.6.1", features = ["v4"] }
+anyhow = "1.0"

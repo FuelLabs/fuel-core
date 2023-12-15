@@ -1,0 +1,16 @@
+[package]
+name = "graph-server-http"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+futures = "0.1.21"
+graphql-parser = "0.4.0"
+http = "0.2"
+hyper = "0.14"
+serde = "1.0"
+graph = { path = "../../graph" }
+graph-graphql = { path = "../../graphql" }
+
+[dev-dependencies]
+graph-core = { path = "../../core" }

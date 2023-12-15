@@ -1,0 +1,13 @@
+{
+  "name": "typename",
+  "version": "0.1.0",
+  "scripts": {
+    "codegen": "graph codegen --skip-migrations",
+    "create:test": "graph create test/typename --node $GRAPH_NODE_ADMIN_URI",
+    "deploy:test": "graph deploy test/typename --version-label v0.0.1 --ipfs $IPFS_URI --node $GRAPH_NODE_ADMIN_URI"
+  },
+  "devDependencies": {
+    "@graphprotocol/graph-cli": "0.50.0",
+    "@graphprotocol/graph-ts": "0.30.0"
+  }
+}

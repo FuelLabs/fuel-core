@@ -1,0 +1,7 @@
+[package]
+name = "trigger-filters"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+anyhow = "1"

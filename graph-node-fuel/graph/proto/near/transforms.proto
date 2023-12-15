@@ -1,0 +1,21 @@
+syntax = "proto3";
+
+package sf.near.transform.v1;
+option go_package = "github.com/streamingfast/sf-near/pb/sf/near/transform/v1;pbtransform";
+
+message BasicReceiptFilter {
+  repeated string accounts = 1;
+  repeated PrefixSuffixPair prefix_and_suffix_pairs = 2;
+}
+
+// PrefixSuffixPair applies a logical AND to prefix and suffix when both fields are non-empty.
+// * {prefix="hello",suffix="world"} will match "hello.world" but not "hello.friend"
+// * {prefix="hello",suffix=""}      will match both "hello.world" and "hello.friend"
+// * {prefix="",suffix="world"}      will match both "hello.world" and "good.day.world"
+// * {prefix="",suffix=""}           is invalid
+//
+// Note that the suffix will usually have a TLD, ex: "mydomain.near" or "mydomain.testnet"
+message PrefixSuffixPair {
+  string prefix = 1;
+  string suffix = 2;
+}

@@ -1,0 +1,126 @@
+version: 2
+updates:
+
+- package-ecosystem: npm
+  directory: tests/integration-tests
+  schedule:
+    interval: weekly
+  open-pull-requests-limit: 10
+  allow:
+    # We always want to test against the latest Graph CLI tooling: `graph-cli`,
+    # `graph-ts`.
+    - dependency-name: "@graphprotocol/graph-*"
+  versioning-strategy: lockfile-only
+
+- package-ecosystem: cargo
+  directory: "/"
+  schedule:
+    interval: weekly
+  open-pull-requests-limit: 10
+  ignore:
+  - dependency-name: hyper
+    versions:
+    - ">= 0.14.a, < 0.15"
+  - dependency-name: jsonrpc-core
+    versions:
+    - ">= 12.a, < 13"
+  - dependency-name: postgres
+    versions:
+    - ">= 0.17.a, < 0.18"
+  - dependency-name: rand
+    versions:
+    - ">= 0.7.a, < 0.8"
+  - dependency-name: reqwest
+    versions:
+    - ">= 0.11.a, < 0.12"
+  - dependency-name: futures
+    versions:
+    - 0.3.14
+  - dependency-name: wasmparser
+    versions:
+    - 0.77.0
+  - dependency-name: serde
+    versions:
+    - 1.0.123
+    - 1.0.124
+    - 1.0.125
+  - dependency-name: priority-queue
+    versions:
+    - 1.0.5
+    - 1.1.1
+  - dependency-name: rand
+    versions:
+    - 0.8.3
+  - dependency-name: wasmtime
+    versions:
+    - 0.24.0
+    - 0.25.0
+  - dependency-name: syn
+    versions:
+    - 1.0.48
+    - 1.0.62
+  - dependency-name: num-bigint
+    versions:
+    - 0.4.0
+  - dependency-name: postgres
+    versions:
+    - 0.19.0
+  - dependency-name: ipfs-api
+    versions:
+    - 0.10.0
+    - 0.11.0
+  - dependency-name: backtrace
+    versions:
+    - 0.3.56
+  - dependency-name: lru_time_cache
+    versions:
+    - 0.11.6
+    - 0.11.7
+    - 0.11.8
+  - dependency-name: mockall
+    versions:
+    - 0.9.1
+  - dependency-name: serde_json
+    versions:
+    - 1.0.62
+    - 1.0.64
+  - dependency-name: shellexpand
+    versions:
+    - 2.1.0
+  - dependency-name: async-trait
+    versions:
+    - 0.1.42
+  - dependency-name: toml
+    versions:
+    - 0.5.8
+  - dependency-name: regex
+    versions:
+    - 1.4.3
+  - dependency-name: uuid
+    versions:
+    - 0.8.2
+  - dependency-name: thiserror
+    versions:
+    - 1.0.23
+    - 1.0.24
+  - dependency-name: http
+    versions:
+    - 0.2.3
+  - dependency-name: env_logger
+    versions:
+    - 0.8.3
+  - dependency-name: slog-term
+    versions:
+    - 2.8.0
+  - dependency-name: jsonrpc-http-server
+    versions:
+    - 17.0.0
+  - dependency-name: bytes
+    versions:
+    - 1.0.1
+  - dependency-name: slog-async
+    versions:
+    - 2.6.0
+  - dependency-name: jsonrpc-core
+    versions:
+    - 17.0.0

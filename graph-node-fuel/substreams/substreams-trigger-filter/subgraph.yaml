@@ -1,0 +1,16 @@
+specVersion: 0.0.5
+description: NEAR Blocks Indexing
+repository: git@github.com:streamingfast/graph-node-dev.git
+schema:
+  file: ./schema.graphql
+dataSources:
+  - kind: substreams
+    name: hello-world
+    network: near-mainnet
+    source:
+      package:
+        moduleName: graph_out
+        file: substreams-near-hello-world-v0.1.0.spkg
+    mapping:
+      kind: substreams/graph-entities
+      apiVersion: 0.0.7

@@ -1,0 +1,53 @@
+options:
+  machineType: "E2_HIGHCPU_32"
+timeout: 1800s
+steps:
+- name: 'gcr.io/cloud-builders/docker'
+  args: ['build', '--target', 'graph-node-build',
+         '--build-arg', 'COMMIT_SHA=$COMMIT_SHA',
+         '--build-arg', 'REPO_NAME=$REPO_NAME',
+         '--build-arg', 'BRANCH_NAME=$BRANCH_NAME',
+         '--build-arg', 'TAG_NAME=$TAG_NAME',
+         '-t', 'gcr.io/$PROJECT_ID/graph-node-build:$SHORT_SHA',
+         '-f', 'docker/Dockerfile', '.']
+- name: 'gcr.io/cloud-builders/docker'
+  args: ['build', '--target', 'graph-node',
+         '--build-arg', 'COMMIT_SHA=$COMMIT_SHA',
+         '--build-arg', 'REPO_NAME=$REPO_NAME',
+         '--build-arg', 'BRANCH_NAME=$BRANCH_NAME',
+         '--build-arg', 'TAG_NAME=$TAG_NAME',
+         '-t', 'gcr.io/$PROJECT_ID/graph-node:$SHORT_SHA',
+         '-f', 'docker/Dockerfile', '.']
+- name: 'gcr.io/cloud-builders/docker'
+  args: ['build', '--target', 'graph-node-debug',
+         '--build-arg', 'COMMIT_SHA=$COMMIT_SHA',
+         '--build-arg', 'REPO_NAME=$REPO_NAME',
+         '--build-arg', 'BRANCH_NAME=$BRANCH_NAME',
+         '--build-arg', 'TAG_NAME=$TAG_NAME',
+         '-t', 'gcr.io/$PROJECT_ID/graph-node-debug:$SHORT_SHA',
+         '-f', 'docker/Dockerfile', '.']
+- name: 'gcr.io/cloud-builders/docker'
+  args: ['tag',
+         'gcr.io/$PROJECT_ID/graph-node:$SHORT_SHA',
+         'lutter/graph-node:$SHORT_SHA']
+- name: 'gcr.io/cloud-builders/docker'
+  entrypoint: 'bash'
+  args: ['docker/tag.sh']
+  secretEnv: ['PASSWORD']
+  env:
+    - 'SHORT_SHA=$SHORT_SHA'
+    - 'TAG_NAME=$TAG_NAME'
+    - 'PROJECT_ID=$PROJECT_ID'
+    - 'DOCKER_HUB_USER=$_DOCKER_HUB_USER'
+    - 'BRANCH_NAME=$BRANCH_NAME'
+images:
+  - 'gcr.io/$PROJECT_ID/graph-node-build:$SHORT_SHA'
+  - 'gcr.io/$PROJECT_ID/graph-node:$SHORT_SHA'
+  - 'gcr.io/$PROJECT_ID/graph-node-debug:$SHORT_SHA'
+substitutions:
+  # The owner of the access token whose encrypted value is in PASSWORD
+  _DOCKER_HUB_USER: "lutter"
+secrets:
+ - kmsKeyName: projects/the-graph-staging/locations/global/keyRings/docker/cryptoKeys/docker-hub-push
+   secretEnv:
+     PASSWORD: 'CiQAdfFldbmUiHgGP1lPq6bAOfd+VQ/dFwyohB1IQwiwQg03ZE8STQDvWKpv6eJHVUN1YoFC5FcooJrH+Stvx9oMD7jBjgxEH5ngIiAysWP3E4Pgxt/73xnaanbM1EQ94eVFKCiY0GaEKFNu0BJx22vCYmU4'

@@ -1,0 +1,93 @@
+# GraphQL core functionality
+scalar Boolean
+scalar ID
+""" 4 bytes signed integer """
+scalar Int
+scalar Float
+scalar String
+
+directive @skip(if: Boolean!) on FIELD | FRAGMENT_SPREAD | INLINE_FRAGMENT
+directive @include(if: Boolean!) on FIELD | FRAGMENT_SPREAD | INLINE_FRAGMENT
+
+# The Graph extensions
+
+"Marks the GraphQL type as indexable entity.  Each type that should be an entity is required to be annotated with this directive."
+directive @entity on OBJECT
+
+"Defined a Subgraph ID for an object type"
+directive @subgraphId(id: String!) on OBJECT
+
+"creates a virtual field on the entity that may be queried but cannot be set manually through the mappings API."
+directive @derivedFrom(field: String!) on FIELD_DEFINITION
+
+# Additional scalar types
+scalar BigDecimal
+scalar Bytes
+scalar BigInt
+""" 8 bytes signed integer """
+scalar Int8
+
+# The type names are purposely awkward to minimize the risk of them
+# colliding with user-supplied types
+"The type for the top-level _meta field"
+type _Meta_ {
+  """
+  Information about a specific subgraph block. The hash of the block
+  will be null if the _meta field has a block constraint that asks for
+  a block number. It will be filled if the _meta field has no block constraint
+  and therefore asks for the latest  block
+  """
+  block: _Block_!
+  "The deployment ID"
+  deployment: String!
+  "If `true`, the subgraph encountered indexing errors at some past block"
+  hasIndexingErrors: Boolean!
+}
+
+input BlockChangedFilter {
+  number_gte: Int!
+}
+
+input Block_height {
+  hash: Bytes
+  number: Int
+  number_gte: Int
+}
+
+type _Block_ {
+  "The hash of the block"
+  hash: Bytes
+  "The block number"
+  number: Int!
+  "Integer representation of the timestamp stored in blocks for the chain" 
+  timestamp: Int
+}
+
+enum _SubgraphErrorPolicy_ {
+  "Data will be returned even if the subgraph has indexing errors"
+  allow,
+
+  "If the subgraph has indexing errors, data will be omitted. The default."
+  deny
+}
+
+"The block at which the query should be executed."
+input Block_height {
+  "Value containing a block hash"
+  hash: Bytes
+  "Value containing a block number"
+  number: Int
+  """
+  Value containing the minimum block number. 
+  In the case of `number_gte`, the query will be executed on the latest block only if
+  the subgraph has progressed to or past the minimum block number.
+  Defaults to the latest block when omitted.
+  """
+  number_gte: Int
+}
+
+"Defines the order direction, either ascending or descending"
+enum OrderDirection {
+  asc
+  desc
+}

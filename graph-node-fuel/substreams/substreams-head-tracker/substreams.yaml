@@ -1,0 +1,17 @@
+specVersion: v0.1.0
+package:
+  name: substreams_head_tracker
+  version: v1.0.0
+
+binaries:
+  default:
+    type: wasm/rust-v1
+    file: ./target/wasm32-unknown-unknown/release/substreams.wasm
+
+modules:
+  - name: map_blocks
+    kind: map
+    inputs:
+      - params: string
+    output:
+      type: proto:sf.substreams.entity.v1.EntityChanges

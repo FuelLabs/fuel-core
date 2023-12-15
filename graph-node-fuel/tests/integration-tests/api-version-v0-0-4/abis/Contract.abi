@@ -1,0 +1,33 @@
+[
+  {
+    "inputs": [],
+    "stateMutability": "nonpayable",
+    "type": "constructor"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": false,
+        "internalType": "uint16",
+        "name": "x",
+        "type": "uint16"
+      }
+    ],
+    "name": "Trigger",
+    "type": "event"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint16",
+        "name": "x",
+        "type": "uint16"
+      }
+    ],
+    "name": "emitTrigger",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  }
+]

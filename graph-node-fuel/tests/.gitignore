@@ -1,0 +1,3 @@
+contracts/cache/
+integration-tests/graph-node.log
+integration-tests/*/subgraph.yaml.patched

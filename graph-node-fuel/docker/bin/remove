@@ -1,0 +1,11 @@
+#! /bin/bash
+
+if [ $# != 1 ]; then
+    echo "usage: remove <name>"
+    exit 1
+fi
+
+api="http://index-node.default/"
+
+data=$(printf '{"jsonrpc": "2.0", "method": "subgraph_remove", "params": {"name":"%s"}, "id":"1"}' "$1")
+curl -s -H "content-type: application/json" --data "$data" "$api"

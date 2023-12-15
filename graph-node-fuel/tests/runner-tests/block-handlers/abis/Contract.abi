@@ -1,0 +1,15 @@
+[
+    {
+        "anonymous": false,
+        "inputs": [
+            {
+                "indexed": false,
+                "internalType": "string",
+                "name": "testCommand",
+                "type": "string"
+            }
+        ],
+        "name": "TestEvent",
+        "type": "event"
+    }
+]

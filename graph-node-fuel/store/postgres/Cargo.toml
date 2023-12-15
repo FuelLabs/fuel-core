@@ -1,0 +1,44 @@
+[package]
+name = "graph-store-postgres"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+async-trait = "0.1.50"
+blake3 = "1.5"
+derive_more = { version = "0.99.17" }
+diesel = { version = "1.4.8", features = [
+    "postgres",
+    "serde_json",
+    "numeric",
+    "r2d2",
+] }
+# We use diesel-dynamic-schema straight from git as the project has not
+# made a release as a crate yet
+diesel-dynamic-schema = { git = "https://github.com/diesel-rs/diesel-dynamic-schema", rev = "a8ec4fb1" }
+diesel-derive-enum = { version = "1.1", features = ["postgres"] }
+diesel_migrations = "1.3.0"
+fallible-iterator = "0.3.0"
+graph = { path = "../../graph" }
+Inflector = "0.11.3"
+lazy_static = "1.1"
+lru_time_cache = "0.11"
+maybe-owned = "0.3.4"
+postgres = "0.19.1"
+openssl = "0.10.60"
+postgres-openssl = "0.5.0"
+rand = "0.8.4"
+serde = "1.0"
+uuid = { version = "1.6.1", features = ["v4"] }
+stable-hash_legacy = { git = "https://github.com/graphprotocol/stable-hash", branch = "old", package = "stable-hash" }
+diesel_derives = "1.4.1"
+anyhow = "1.0.75"
+git-testament = "0.2.5"
+itertools = "0.12.0"
+pin-utils = "0.1"
+hex = "0.4.3"
+pretty_assertions = "1.4.0"
+
+[dev-dependencies]
+clap = "3.2.25"
+graphql-parser = "0.4.0"

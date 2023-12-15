@@ -1,0 +1,11 @@
+syntax = "proto3";
+
+package firehose;
+
+option go_package = "github.com/streamingfast/pbgo/sf/firehose/v1;pbfirehose";
+
+import "google/protobuf/descriptor.proto";
+
+extend google.protobuf.FieldOptions {
+  optional bool required = 77001;
+}

@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>The GraphiQL</title>
+    <link
+      rel="stylesheet"
+      href="https://cdn.jsdelivr.net/npm/@graphql-yoga/graphiql@4.2.0/dist/style.css"
+      crossorigin
+    />
+    <link
+      rel="icon"
+      type="image/png"
+      href="https://storage.googleapis.com/graph-web/favicon.png"
+      crossorigin="anonymous"
+    />
+  </head>
+  <body id="body" class="no-focus-outline">
+    <noscript>You need to enable JavaScript to run this app.</noscript>
+    <div id="root"></div>
+    <script type="module" crossorigin>
+      import { renderYogaGraphiQL } from "https://cdn.jsdelivr.net/npm/@graphql-yoga/graphiql@4.2.0/+esm";
+
+      const endpoint = window.location.pathname.substring(
+        0,
+        window.location.pathname.length - "/graphql".length
+      );
+
+      renderYogaGraphiQL(root, {
+        endpoint,
+        title: "The GraphiQL",
+        logo: React.createElement("img", {
+          src: "https://storage.googleapis.com/graph-web/favicon.png",
+          crossOrigin: "anonymous",
+          style: {
+            height: "42px",
+          },
+        }),
+      });
+    </script>
+  </body>
+</html>

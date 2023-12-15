@@ -1,0 +1,18 @@
+#! /bin/bash
+
+resetdb() {
+    host=$(hostname -s)
+    db=$1
+    echo "Reset $db"
+    dropdb $db && createdb -O graph $db
+    psql -q -X $db <<EOF
+create extension pg_trgm;
+create extension pg_stat_statements;
+create extension btree_gist;
+create extension postgres_fdw;
+grant usage on foreign data wrapper postgres_fdw to graph;
+EOF
+}
+
+resetdb graph-test
+resetdb graph-sgd

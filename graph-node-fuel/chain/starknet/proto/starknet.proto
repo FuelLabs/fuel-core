@@ -1,0 +1,37 @@
+syntax = "proto3";
+
+package zklend.starknet.type.v1;
+
+option go_package = "github.com/starknet-graph/firehose-starknet/types/pb/zklend/starknet/type/v1;pbacme";
+
+// This file only contains the bare minimum types for the POC. It's far from a complete
+// representation of a StarkNet network's history as required by the Firehose protocol. As a result,
+// any future changes to this schema would require a full re-sync of the StarkNet node.
+
+message Block {
+  uint64 height = 1;
+  bytes hash = 2;
+  bytes prevHash = 3;
+  uint64 timestamp = 4;
+  repeated Transaction transactions = 5;
+}
+
+message Transaction {
+  TransactionType type = 1;
+  bytes hash = 2;
+  repeated Event events = 3;
+}
+
+enum TransactionType {
+  DEPLOY = 0;
+  INVOKE_FUNCTION = 1;
+  DECLARE = 2;
+  L1_HANDLER = 3;
+  DEPLOY_ACCOUNT = 4;
+}
+
+message Event {
+  bytes fromAddr = 1;
+  repeated bytes keys = 2;
+  repeated bytes data = 3;
+}

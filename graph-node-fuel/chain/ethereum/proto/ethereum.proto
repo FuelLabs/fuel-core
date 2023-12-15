@@ -1,0 +1,508 @@
+syntax = "proto3";
+
+package sf.ethereum.type.v2;
+
+option go_package = "github.com/streamingfast/sf-ethereum/types/pb/sf/ethereum/type/v2;pbeth";
+
+import "google/protobuf/timestamp.proto";
+
+message Block {
+  int32 ver = 1;
+  bytes hash = 2;
+  uint64 number = 3;
+  uint64 size = 4;
+  BlockHeader header = 5;
+
+  // Uncles represents block produced with a valid solution but were not actually choosen
+  // as the canonical block for the given height so they are mostly "forked" blocks.
+  //
+  // If the Block has been produced using the Proof of Stake consensus algorithm, this
+  // field will actually be always empty.
+  repeated BlockHeader uncles = 6;
+
+  repeated TransactionTrace transaction_traces = 10;
+  repeated BalanceChange balance_changes = 11;
+  repeated CodeChange code_changes = 20;
+
+  reserved 40; // bool filtering_applied = 40 [deprecated = true];
+  reserved 41; // string filtering_include_filter_expr = 41 [deprecated = true];
+  reserved 42; // string filtering_exclude_filter_expr = 42 [deprecated = true];
+}
+
+// HeaderOnlyBlock is used to optimally unpack the [Block] structure (note the
+// corresponding message number for the `header` field) while consuming less
+// memory, when only the `header` is desired.
+//
+// WARN: this is a client-side optimization pattern and should be moved in the
+// consuming code.
+message HeaderOnlyBlock {
+  BlockHeader header = 5;
+}
+
+// BlockWithRefs is a lightweight block, with traces and transactions
+// purged from the `block` within, and only.  It is used in transports
+// to pass block data around.
+message BlockWithRefs {
+  string id = 1;
+  Block block = 2;
+  TransactionRefs transaction_trace_refs = 3;
+  bool irreversible = 4;
+}
+
+message TransactionRefs {
+  repeated bytes hashes = 1;
+}
+
+message UnclesHeaders {
+  repeated BlockHeader uncles = 1;
+}
+
+message BlockRef {
+  bytes hash = 1;
+  uint64 number = 2;
+}
+
+message BlockHeader {
+  bytes parent_hash = 1;
+
+  // Uncle hash of the block, some reference it as `sha3Uncles`, but `sha3`` is badly worded, so we prefer `uncle_hash`, also
+  // referred as `ommers` in EIP specification.
+  //
+  // If the Block containing this `BlockHeader` has been produced using the Proof of Stake
+  // consensus algorithm, this field will actually be constant and set to `0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347`.
+  bytes uncle_hash = 2;
+
+  bytes coinbase = 3;
+  bytes state_root = 4;
+  bytes transactions_root = 5;
+  bytes receipt_root = 6;
+  bytes logs_bloom = 7;
+
+  // Difficulty is the difficulty of the Proof of Work algorithm that was required to compute a solution.
+  //
+  // If the Block containing this `BlockHeader` has been produced using the Proof of Stake
+  // consensus algorithm, this field will actually be constant and set to `0x00`.
+  BigInt difficulty = 8;
+
+  // TotalDifficulty is the sum of all previous blocks difficulty including this block difficulty.
+  //
+  // If the Block containing this `BlockHeader` has been produced using the Proof of Stake
+  // consensus algorithm, this field will actually be constant and set to the terminal total difficulty
+  // that was required to transition to Proof of Stake algorithm, which varies per network. It is set to
+  // 58 750 000 000 000 000 000 000 on Ethereum Mainnet and to 10 790 000 on Ethereum Testnet Goerli.
+  BigInt total_difficulty = 17;
+
+  uint64 number = 9;
+  uint64 gas_limit = 10;
+  uint64 gas_used = 11;
+  google.protobuf.Timestamp timestamp = 12;
+
+  // ExtraData is free-form bytes included in the block by the "miner". While on Yellow paper of
+  // Ethereum this value is maxed to 32 bytes, other consensus algorithm like Clique and some other
+  // forks are using bigger values to carry special consensus data.
+  //
+  // If the Block containing this `BlockHeader` has been produced using the Proof of Stake
+  // consensus algorithm, this field is strictly enforced to be <= 32 bytes.
+  bytes extra_data = 13;
+
+  // MixHash is used to prove, when combined with the `nonce` that sufficient amount of computation has been
+  // achieved and that the solution found is valid.
+  bytes mix_hash = 14;
+
+  // Nonce is used to prove, when combined with the `mix_hash` that sufficient amount of computation has been
+  // achieved and that the solution found is valid.
+  //
+  // If the Block containing this `BlockHeader` has been produced using the Proof of Stake
+  // consensus algorithm, this field will actually be constant and set to `0`.
+  uint64 nonce = 15;
+
+  // Hash is the hash of the block which is actually the computation:
+  //
+  //  Keccak256(rlp([
+  //    parent_hash,
+  //    uncle_hash,
+  //    coinbase,
+  //    state_root,
+  //    transactions_root,
+  //    receipt_root,
+  //    logs_bloom,
+  //    difficulty,
+  //    number,
+  //    gas_limit,
+  //    gas_used,
+  //    timestamp,
+  //    extra_data,
+  //    mix_hash,
+  //    nonce,
+  //    base_fee_per_gas
+  //  ]))
+  //
+  bytes hash = 16;
+
+  // Base fee per gas according to EIP-1559 (e.g. London Fork) rules, only set if London is present/active on the chain.
+  BigInt base_fee_per_gas = 18;
+}
+
+message BigInt {
+  bytes bytes = 1;
+}
+
+message TransactionTrace {
+  // consensus
+  bytes to = 1;
+  uint64 nonce = 2;
+  // GasPrice represents the effective price that has been paid for each gas unit of this transaction. Over time, the
+  // Ethereum rules changes regarding GasPrice field here. Before London fork, the GasPrice was always set to the
+  // fixed gas price. After London fork, this value has different meaning depending on the transaction type (see `Type` field).
+  //
+  // In cases where `TransactionTrace.Type == TRX_TYPE_LEGACY || TRX_TYPE_ACCESS_LIST`, then GasPrice has the same meaning
+  // as before the London fork.
+  //
+  // In cases where `TransactionTrace.Type == TRX_TYPE_DYNAMIC_FEE`, then GasPrice is the effective gas price paid
+  // for the transaction which is equals to `BlockHeader.BaseFeePerGas + TransactionTrace.`
+  BigInt gas_price = 3;
+
+  // GasLimit is the maximum of gas unit the sender of the transaction is willing to consume when perform the EVM
+  // execution of the whole transaction
+  uint64 gas_limit = 4;
+
+  // Value is the amount of Ether transferred as part of this transaction.
+  BigInt value = 5;
+
+  // Input data the transaction will receive for execution of EVM.
+  bytes input = 6;
+
+  // V is the recovery ID value for the signature Y point.
+  bytes v = 7;
+
+  // R is the signature's X point on the elliptic curve (32 bytes).
+  bytes r = 8;
+
+  // S is the signature's Y point on the elliptic curve (32 bytes).
+  bytes s = 9;
+
+  // GasUsed is the total amount of gas unit used for the whole execution of the transaction.
+  uint64 gas_used = 10;
+
+  // Type represents the Ethereum transaction type, available only since EIP-2718 & EIP-2930 activation which happened on Berlin fork.
+  // The value is always set even for transaction before Berlin fork because those before the fork are still legacy transactions.
+  Type type = 12;
+
+  enum Type {
+    // All transactions that ever existed prior Berlin fork before EIP-2718 was implemented.
+    TRX_TYPE_LEGACY = 0;
+
+    // Field that specifies an access list of contract/storage_keys that is going to be used
+    // in this transaction.
+    //
+    // Added in Berlin fork (EIP-2930).
+    TRX_TYPE_ACCESS_LIST = 1;
+
+    // Transaction that specifies an access list just like TRX_TYPE_ACCESS_LIST but in addition defines the
+    // max base gas gee and max priority gas fee to pay for this transaction. Transaction's of those type are
+    // executed against EIP-1559 rules which dictates a dynamic gas cost based on the congestion of the network.
+    TRX_TYPE_DYNAMIC_FEE = 2;
+  }
+
+  // AcccessList represents the storage access this transaction has agreed to do in which case those storage
+  // access cost less gas unit per access.
+  //
+  // This will is populated only if `TransactionTrace.Type == TRX_TYPE_ACCESS_LIST || TRX_TYPE_DYNAMIC_FEE` which
+  // is possible only if Berlin (TRX_TYPE_ACCESS_LIST) nor London (TRX_TYPE_DYNAMIC_FEE) fork are active on the chain.
+  repeated AccessTuple access_list = 14;
+
+  // MaxFeePerGas is the maximum fee per gas the user is willing to pay for the transaction gas used.
+  //
+  // This will is populated only if `TransactionTrace.Type == TRX_TYPE_DYNAMIC_FEE` which is possible only
+  // if London fork is active on the chain.
+  BigInt max_fee_per_gas = 11;
+
+  // MaxPriorityFeePerGas is priority fee per gas the user to pay in extra to the miner on top of the block's
+  // base fee.
+  //
+  // This will is populated only if `TransactionTrace.Type == TRX_TYPE_DYNAMIC_FEE` which is possible only
+  // if London fork is active on the chain.
+  BigInt max_priority_fee_per_gas = 13;
+
+  // meta
+  uint32 index = 20;
+  bytes hash = 21;
+  bytes from = 22;
+  bytes return_data = 23;
+  bytes public_key = 24;
+  uint64 begin_ordinal = 25;
+  uint64 end_ordinal = 26;
+
+  TransactionTraceStatus status = 30;
+  TransactionReceipt receipt = 31;
+  repeated Call calls = 32;
+}
+
+
+// AccessTuple represents a list of storage keys for a given contract's address and is used
+// for AccessList construction.
+message AccessTuple {
+  bytes address = 1;
+  repeated bytes storage_keys = 2;
+}
+
+// TransactionTraceWithBlockRef
+message TransactionTraceWithBlockRef {
+  TransactionTrace trace = 1;
+  BlockRef block_ref = 2;
+}
+
+enum TransactionTraceStatus {
+  UNKNOWN = 0;
+  SUCCEEDED = 1;
+  FAILED = 2;
+  REVERTED = 3;
+}
+
+message TransactionReceipt {
+  // State root is an intermediate state_root hash, computed in-between transactions to make
+  // **sure** you could build a proof and point to state in the middle of a block. Geth client
+  // uses `PostState + root + PostStateOrStatus`` while Parity used `status_code, root...`` this piles
+  // hardforks, see (read the EIPs first):
+  // - https://github.com/eoscanada/go-ethereum-private/blob/deep-mind/core/types/receipt.go#L147
+  // - https://github.com/eoscanada/go-ethereum-private/blob/deep-mind/core/types/receipt.go#L50-L86
+  // - https://github.com/ethereum/EIPs/blob/master/EIPS/eip-658.md
+  //
+  // Moreover, the notion of `Outcome`` in parity, which segregates the two concepts, which are
+  // stored in the same field `status_code`` can be computed based on such a hack of the `state_root`
+  // field, following `EIP-658`.
+  //
+  // Before Byzantinium hard fork, this field is always empty.
+  bytes state_root = 1;
+  uint64 cumulative_gas_used = 2;
+  bytes logs_bloom = 3;
+  repeated Log logs = 4;
+}
+
+message Log {
+  bytes address = 1;
+  repeated bytes topics = 2;
+  bytes data = 3;
+
+  // Index is the index of the log relative to the transaction. This index
+  // is always populated regardless of the state revertion of the the call
+  // that emitted this log.
+  uint32 index = 4;
+
+  // BlockIndex represents the index of the log relative to the Block.
+  //
+  // An **important** notice is that this field will be 0 when the call
+  // that emitted the log has been reverted by the chain.
+  //
+  // Currently, there is two locations where a Log can be obtained:
+  // - block.transaction_traces[].receipt.logs[]
+  // - block.transaction_traces[].calls[].logs[]
+  //
+  // In the `receipt` case, the logs will be populated only when the call
+  // that emitted them has not been reverted by the chain and when in this
+  // position, the `blockIndex` is always populated correctly.
+  //
+  // In the case of `calls` case, for `call` where `stateReverted == true`,
+  // the `blockIndex` value will always be 0.
+  uint32 blockIndex = 6;
+
+  uint64 ordinal = 7;
+}
+
+message Call {
+  uint32 index = 1;
+  uint32 parent_index = 2;
+  uint32 depth = 3;
+  CallType call_type = 4;
+  bytes caller = 5;
+  bytes address = 6;
+  BigInt value = 7;
+  uint64 gas_limit = 8;
+  uint64 gas_consumed = 9;
+  bytes return_data = 13;
+  bytes input = 14;
+  bool executed_code = 15;
+  bool suicide = 16;
+
+  /* hex representation of the hash -> preimage */
+  map<string, string> keccak_preimages = 20;
+  repeated StorageChange storage_changes = 21;
+  repeated BalanceChange balance_changes = 22;
+  repeated NonceChange nonce_changes = 24;
+  repeated Log logs = 25;
+  repeated CodeChange code_changes = 26;
+
+  // Deprecated: repeated bytes created_accounts
+  reserved 27;
+
+  repeated GasChange gas_changes = 28;
+
+  // Deprecated: repeated GasEvent gas_events
+  reserved 29;
+
+  // In Ethereum, a call can be either:
+  // - Successfull, execution passes without any problem encountered
+  // - Failed, execution failed, and remaining gas should be consumed
+  // - Reverted, execution failed, but only gas consumed so far is billed, remaining gas is refunded
+  //
+  // When a call is either `failed` or `reverted`, the `status_failed` field
+  // below is set to `true`. If the status is `reverted`, then both `status_failed`
+  // and `status_reverted` are going to be set to `true`.
+  bool status_failed = 10;
+  bool status_reverted = 12;
+
+  // Populated when a call either failed or reverted, so when `status_failed == true`,
+  // see above for details about those flags.
+  string failure_reason = 11;
+
+  // This field represents wheter or not the state changes performed
+  // by this call were correctly recorded by the blockchain.
+  //
+  // On Ethereum, a transaction can record state changes even if some
+  // of its inner nested calls failed. This is problematic however since
+  // a call will invalidate all its state changes as well as all state
+  // changes performed by its child call. This means that even if a call
+  // has a status of `SUCCESS`, the chain might have reverted all the state
+  // changes it performed.
+  //
+  // ```text
+  //   Trx 1
+  //    Call #1 <Failed>
+  //      Call #2 <Execution Success>
+  //      Call #3 <Execution Success>
+  //      |--- Failure here
+  //    Call #4
+  // ```
+  //
+  // In the transaction above, while Call #2 and Call #3 would have the
+  // status `EXECUTED`
+  bool state_reverted = 30;
+
+  uint64 begin_ordinal = 31;
+  uint64 end_ordinal = 32;
+
+  repeated AccountCreation account_creations = 33;
+
+  reserved 50; // repeated ERC20BalanceChange erc20_balance_changes = 50 [deprecated = true];
+  reserved 51; // repeated ERC20TransferEvent erc20_transfer_events = 51 [deprecated = true];
+  reserved 60; // bool filtering_matched = 60 [deprecated = true];
+}
+
+enum CallType {
+  UNSPECIFIED = 0;
+  CALL = 1; // direct? what's the name for `Call` alone?
+  CALLCODE = 2;
+  DELEGATE = 3;
+  STATIC = 4;
+  CREATE = 5; // create2 ? any other form of calls?
+}
+
+message StorageChange {
+  bytes address = 1;
+  bytes key = 2;
+  bytes old_value = 3;
+  bytes new_value = 4;
+
+  uint64 ordinal = 5;
+}
+
+message BalanceChange {
+  bytes address = 1;
+  BigInt old_value = 2;
+  BigInt new_value = 3;
+  Reason reason = 4;
+
+  // Obtain all balanche change reasons under deep mind repository:
+  //
+  // ```shell
+  // ack -ho 'BalanceChangeReason\(".*"\)' | grep -Eo '".*"' | sort | uniq
+  // ```
+  enum Reason {
+    REASON_UNKNOWN = 0;
+    REASON_REWARD_MINE_UNCLE = 1;
+    REASON_REWARD_MINE_BLOCK = 2;
+    REASON_DAO_REFUND_CONTRACT = 3;
+    REASON_DAO_ADJUST_BALANCE = 4;
+    REASON_TRANSFER = 5;
+    REASON_GENESIS_BALANCE = 6;
+    REASON_GAS_BUY = 7;
+    REASON_REWARD_TRANSACTION_FEE = 8;
+    REASON_REWARD_FEE_RESET = 14;
+    REASON_GAS_REFUND = 9;
+    REASON_TOUCH_ACCOUNT = 10;
+    REASON_SUICIDE_REFUND = 11;
+    REASON_SUICIDE_WITHDRAW = 13;
+    REASON_CALL_BALANCE_OVERRIDE = 12;
+    // Used on chain(s) where some Ether burning happens
+    REASON_BURN = 15;
+  }
+
+  uint64 ordinal = 5;
+}
+
+message NonceChange {
+  bytes address = 1;
+  uint64 old_value = 2;
+  uint64 new_value = 3;
+  uint64 ordinal = 4;
+}
+
+message AccountCreation {
+  bytes account = 1;
+  uint64 ordinal = 2;
+}
+
+message CodeChange {
+  bytes address = 1;
+  bytes old_hash = 2;
+  bytes old_code = 3;
+  bytes new_hash = 4;
+  bytes new_code = 5;
+
+  uint64 ordinal = 6;
+}
+
+// The gas change model represents the reason why some gas cost has occurred.
+// The gas is computed per actual op codes. Doing them completely might prove
+// overwhelming in most cases.
+//
+// Hence, we only index some of them, those that are costy like all the calls
+// one, log events, return data, etc.
+message GasChange {
+  uint64 old_value = 1;
+  uint64 new_value = 2;
+  Reason reason = 3;
+
+  // Obtain all gas change reasons under deep mind repository:
+  //
+  // ```shell
+  // ack -ho 'GasChangeReason\(".*"\)' | grep -Eo '".*"' | sort | uniq
+  // ```
+  enum Reason {
+    REASON_UNKNOWN = 0;
+    REASON_CALL = 1;
+    REASON_CALL_CODE = 2;
+    REASON_CALL_DATA_COPY = 3;
+    REASON_CODE_COPY = 4;
+    REASON_CODE_STORAGE = 5;
+    REASON_CONTRACT_CREATION = 6;
+    REASON_CONTRACT_CREATION2 = 7;
+    REASON_DELEGATE_CALL = 8;
+    REASON_EVENT_LOG = 9;
+    REASON_EXT_CODE_COPY = 10;
+    REASON_FAILED_EXECUTION = 11;
+    REASON_INTRINSIC_GAS = 12;
+    REASON_PRECOMPILED_CONTRACT = 13;
+    REASON_REFUND_AFTER_EXECUTION = 14;
+    REASON_RETURN = 15;
+    REASON_RETURN_DATA_COPY = 16;
+    REASON_REVERT = 17;
+    REASON_SELF_DESTRUCT = 18;
+    REASON_STATIC_CALL = 19;
+
+    // Added in Berlin fork (Geth 1.10+)
+    REASON_STATE_COLD_ACCESS = 20;
+  }
+
+  uint64 ordinal = 4;
+}

@@ -1,0 +1,42 @@
+// For format details, see https://aka.ms/devcontainer.json. For config options, see the
+// README at: https://github.com/devcontainers/templates/tree/main/src/rust
+{
+	"name": "Rust",
+	"dockerComposeFile": "docker-compose.yml",
+	"service": "devcontainer",
+	"workspaceFolder": "/workspaces/${localWorkspaceFolderBasename}",
+	"features": {
+		"ghcr.io/devcontainers/features/rust:1": {
+			"version": "1.66.0"
+		}
+	},
+	"customizations": {
+		"vscode": {
+		  "extensions": [
+			"rust-lang.rust-analyzer@prerelease", // rust analyser, pre-release has less bugs 
+			"cschleiden.vscode-github-actions", // github actions
+			"serayuzgur.crates", // crates
+			"vadimcn.vscode-lldb" //debug
+		  ],
+		  "settings": {
+			"editor.formatOnSave": true,
+			"terminal.integrated.defaultProfile.linux": "zsh"
+		  }
+		}
+	  },
+
+	// Use 'mounts' to make the cargo cache persistent in a Docker Volume.
+	// "mounts": [
+	// 	{
+	// 		"source": "devcontainer-cargo-cache-${devcontainerId}",
+	// 		"target": "/usr/local/cargo",
+	// 		"type": "volume"
+	// 	}
+	// ]
+	"forwardPorts": [
+		8000, // GraphiQL on node-port
+		8020, // create and deploy subgraphs
+		5001 //ipfs
+	]
+
+}

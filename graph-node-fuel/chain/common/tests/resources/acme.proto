@@ -1,0 +1,56 @@
+syntax = "proto3";
+
+package sf.acme.type.v1;
+
+option go_package = "github.com/streamingfast/firehose-acme/pb/sf/acme/type/v1;pbacme";
+
+import "firehose/annotations.proto";
+
+message Block {
+  uint64 height = 1;
+  string hash = 2;
+  string prevHash = 3;
+  uint64 timestamp = 4;
+  repeated Transaction transactions = 5;
+}
+
+message Transaction {
+  string type = 1 [(firehose.required) = true];
+  string hash = 2;
+  string sender = 3;
+  string receiver = 4;
+  BigInt amount = 5;
+  BigInt fee = 6;
+  bool success = 7;
+  repeated Event events = 8;
+}
+
+message Event {
+  string type = 1;
+  repeated Attribute attributes = 2;
+}
+
+message Attribute {
+  string key = 1;
+  string value = 2;
+}
+
+message BigInt {
+  bytes bytes = 1;
+}
+
+message EnumTest {
+  oneof sum {
+    Attribute attribute = 1;
+    BigInt big_int = 2;
+  }
+}
+
+message MixedEnumTest {
+  string key = 1;
+
+  oneof sum {
+    Attribute attribute = 2;
+    BigInt big_int = 3;
+  }
+}

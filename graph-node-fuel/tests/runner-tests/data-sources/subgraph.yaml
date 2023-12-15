@@ -1,0 +1,32 @@
+specVersion: 0.0.8
+schema:
+  file: ./schema.graphql
+dataSources:
+  - kind: ethereum/contract
+    name: Contract
+    network: test
+    context:
+      foo:
+        type: String
+        data: test
+      bar:
+        type: Int
+        data: 1
+      isTest:
+        type: Bool
+        data: true
+    source:
+      address: "0x0000000000000000000000000000000000000000"
+      abi: Contract
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.7
+      language: wasm/assemblyscript
+      entities:
+        - Gravatar
+      abis:
+        - name: Contract
+          file: ./abis/Contract.abi
+      blockHandlers:
+        - handler: handleBlock
+      file: ./src/mapping.ts

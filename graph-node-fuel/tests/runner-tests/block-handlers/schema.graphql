@@ -1,0 +1,11 @@
+type BlockFromPollingHandler @entity {
+  id: ID!
+  number: BigInt!
+  hash: Bytes!
+}
+
+type BlockFromOtherPollingHandler @entity {
+  id: ID!
+  number: BigInt!
+  hash: Bytes!
+}

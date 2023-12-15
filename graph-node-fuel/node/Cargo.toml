@@ -1,0 +1,45 @@
+[package]
+name = "graph-node"
+version.workspace = true
+edition.workspace = true
+default-run = "graph-node"
+
+[[bin]]
+name = "graph-node"
+path = "src/main.rs"
+
+[[bin]]
+name = "graphman"
+path = "src/bin/manager.rs"
+
+[dependencies]
+clap = { version = "3.2.25", features = ["derive", "env"] }
+env_logger = "0.10.1"
+git-testament = "0.2"
+graphql-parser = "0.4.0"
+futures = { version = "0.3.1", features = ["compat"] }
+lazy_static = "1.2.0"
+url = "2.5.0"
+graph = { path = "../graph" }
+graph-core = { path = "../core" }
+graph-chain-arweave = { path = "../chain/arweave" }
+graph-chain-ethereum = { path = "../chain/ethereum" }
+graph-chain-near = { path = "../chain/near" }
+graph-chain-cosmos = { path = "../chain/cosmos" }
+graph-chain-substreams = { path = "../chain/substreams" }
+graph-chain-starknet = { path = "../chain/starknet" }
+graph-graphql = { path = "../graphql" }
+graph-runtime-wasm = { path = "../runtime/wasm" }
+graph-server-http = { path = "../server/http" }
+graph-server-index-node = { path = "../server/index-node" }
+graph-server-json-rpc = { path = "../server/json-rpc" }
+graph-server-websocket = { path = "../server/websocket" }
+graph-server-metrics = { path = "../server/metrics" }
+graph-store-postgres = { path = "../store/postgres" }
+serde = { version = "1.0.126", features = ["derive", "rc"] }
+shellexpand = "3.1.0"
+termcolor = "1.4.0"
+diesel = "1.4.8"
+http = "0.2.5" # must be compatible with the version rust-web3 uses
+prometheus = { version = "0.13.3", features = ["push"] }
+json-structural-diff = { version = "0.1", features = ["colorize"] }

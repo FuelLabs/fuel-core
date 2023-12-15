@@ -1,0 +1,2 @@
+ALTER TABLE subgraphs.subgraph_error DROP COLUMN last_healthy_ethereum_block_hash;
+ALTER TABLE subgraphs.subgraph_error DROP COLUMN last_healthy_ethereum_block_number;

@@ -1,0 +1,12 @@
+[package]
+name = "graph-chain-common"
+version.workspace = true
+edition.workspace = true
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+protobuf = "3.0.2"
+protobuf-parse = "3.3.0"
+anyhow = "1"
+heck = "0.4"

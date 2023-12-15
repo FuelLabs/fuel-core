@@ -1,0 +1,3 @@
+-- no work necessary on a down migration; we can live happily
+-- with either version of the pk index, but the up one provides
+-- better performance

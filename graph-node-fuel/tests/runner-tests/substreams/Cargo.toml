@@ -1,0 +1,21 @@
+[package]
+name = "substreams-ethereum-quickstart"
+version = "1.0.0"
+edition = "2021"
+
+[lib]
+name = "substreams"
+crate-type = ["cdylib"]
+
+[dependencies]
+substreams = "0.5"
+substreams-ethereum = "0.9"
+substreams-entity-change = "1.3"
+prost = "0.11"
+prost-types = "0.11"
+base64 = "0.13"
+
+[profile.release]
+lto = true
+opt-level = 's'
+strip = "debuginfo"

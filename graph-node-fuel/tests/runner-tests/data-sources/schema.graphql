@@ -1,0 +1,6 @@
+type Data @entity {
+  id: ID!
+  foo: String
+  bar: Int
+  isTest: Boolean
+}

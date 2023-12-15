@@ -1,0 +1,41 @@
+[workspace]
+members = [
+    "core",
+    "chain/*",
+    "graphql",
+    "node",
+    "runtime/*",
+    "server/*",
+    "store/*",
+    "substreams/*",
+    "graph",
+    "tests",
+]
+
+[workspace.package]
+version = "0.33.0"
+edition = "2021"
+authors = ["The Graph core developers & contributors"]
+readme = "README.md"
+homepage = "https://thegraph.com"
+repository = "https://github.com/graphprotocol/graph-node"
+license = "MIT OR Apache-2.0"
+
+[workspace.dependencies]
+prost = "0.11.9"
+prost-types = "0.11.9"
+tonic = { version = "0.8.3", features = ["tls-roots", "gzip"] }
+tonic-build = { version = "0.8.4", features = ["prost"] }
+
+# Incremental compilation on Rust 1.58 causes an ICE on build. As soon as graph node builds again, these can be removed.
+[profile.test]
+incremental = false
+
+[profile.dev]
+incremental = false
+
+[profile.release]
+lto = true
+opt-level = 's'
+strip = "debuginfo"
+
