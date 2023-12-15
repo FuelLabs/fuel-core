@@ -19,15 +19,9 @@ use crate::{
     },
 };
 use async_trait::async_trait;
-use asynchronous_codec::{
-    BytesCodec,
-    FramedRead,
-    FramedWrite,
-};
 use futures::{
     AsyncRead,
-    SinkExt,
-    TryStreamExt,
+    AsyncReadExt,
 };
 use libp2p::request_response::Codec as RequestResponseCodec;
 use serde::{
@@ -36,19 +30,23 @@ use serde::{
 };
 use std::io;
 
-#[derive(Default, Debug, Clone)]
+#[derive(Debug, Clone)]
 pub struct PostcardCodec {
-    // TODO: Do we still need this? The `BytesCodec` doesn't take a max size. Maybe we should use a different codec
     /// Used for `max_size` parameter when reading Response Message
     /// Necessary in order to avoid DoS attacks
     /// Currently the size mostly depends on the max size of the Block
-    _max_response_size: usize,
+    max_response_size: usize,
 }
 
 impl PostcardCodec {
     pub fn new(max_block_size: usize) -> Self {
+        assert_ne!(
+            max_block_size, 0,
+            "PostcardCodec does not support zero block size"
+        );
+
         Self {
-            _max_response_size: max_block_size,
+            max_response_size: max_block_size,
         }
     }
 
@@ -68,13 +66,6 @@ impl PostcardCodec {
     }
 }
 
-fn invalid_data_err() -> io::Error {
-    io::Error::new(
-        io::ErrorKind::InvalidData,
-        "Invalid data in `postcard` codec",
-    )
-}
-
 /// Since Postcard does not support async reads or writes out of the box
 /// We prefix Request & Response Messages with the length of the data in bytes
 /// We expect the substream to be properly closed when response channel is dropped.
@@ -90,33 +81,36 @@ impl RequestResponseCodec for PostcardCodec {
 
     async fn read_request<T>(
         &mut self,
-        _protocol: &Self::Protocol,
+        _: &Self::Protocol,
         socket: &mut T,
     ) -> io::Result<Self::Request>
     where
         T: AsyncRead + Unpin + Send,
     {
-        let encoded_data = FramedRead::new(socket, BytesCodec)
-            .try_next()
-            .await?
-            .ok_or(invalid_data_err())?;
-        self.deserialize(&encoded_data)
+        let mut response = Vec::new();
+        socket
+            .take(self.max_response_size as u64)
+            .read_to_end(&mut response)
+            .await?;
+
+        self.deserialize(&response)
     }
 
     async fn read_response<T>(
         &mut self,
-        _protocol: &Self::Protocol,
+        _: &Self::Protocol,
         socket: &mut T,
     ) -> io::Result<Self::Response>
     where
         T: AsyncRead + Unpin + Send,
     {
-        let encoded_data = FramedRead::new(socket, BytesCodec)
-            .try_next()
-            .await?
-            .ok_or(invalid_data_err())?;
+        let mut response = Vec::new();
+        socket
+            .take(self.max_response_size as u64)
+            .read_to_end(&mut response)
+            .await?;
 
-        self.deserialize(&encoded_data)
+        self.deserialize(&response)
     }
 
     async fn write_request<T>(
@@ -128,11 +122,10 @@ impl RequestResponseCodec for PostcardCodec {
     where
         T: futures::AsyncWrite + Unpin + Send,
     {
+        use futures::AsyncWriteExt;
         match postcard::to_stdvec(&req) {
             Ok(encoded_data) => {
-                let mut framed = FramedWrite::new(socket, BytesCodec);
-                framed.send(encoded_data.into()).await?;
-                framed.close().await?;
+                socket.write_all(&encoded_data).await?;
 
                 Ok(())
             }
@@ -149,11 +142,10 @@ impl RequestResponseCodec for PostcardCodec {
     where
         T: futures::AsyncWrite + Unpin + Send,
     {
+        use futures::AsyncWriteExt;
         match postcard::to_stdvec(&res) {
             Ok(encoded_data) => {
-                let mut framed = FramedWrite::new(socket, BytesCodec);
-                framed.send(encoded_data.into()).await?;
-                framed.close().await?;
+                socket.write_all(&encoded_data).await?;
 
                 Ok(())
             }

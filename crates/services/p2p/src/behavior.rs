@@ -143,7 +143,8 @@ impl<Codec: NetworkCodec> FuelBehaviour<Codec> {
         // TODO: Do we need to set this via the `SwarmBuilder` somewhere? https://github.com/libp2p/rust-libp2p/pull/4679
         // req_res_config.set_connection_keep_alive(p2p_config.set_connection_keep_alive);
 
-        let request_response = RequestResponse::new(req_res_protocol, req_res_config);
+        let request_response =
+            RequestResponse::with_codec(codec, req_res_protocol, req_res_config);
 
         Self {
             discovery: discovery_config.finish(),

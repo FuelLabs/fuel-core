@@ -550,7 +550,7 @@ impl<Codec: NetworkCodec> FuelP2PService<Codec> {
                                 Ok(ResponseMessage::SealedBlock(block)),
                             ) => {
                                 if channel.send(*block).is_err() {
-                                    debug!(
+                                    tracing::error!(
                                         "Failed to send through the channel for {:?}",
                                         request_id
                                     );
@@ -561,7 +561,7 @@ impl<Codec: NetworkCodec> FuelP2PService<Codec> {
                                 Ok(ResponseMessage::Transactions(transactions)),
                             ) => {
                                 if channel.send(transactions).is_err() {
-                                    debug!(
+                                    tracing::error!(
                                         "Failed to send through the channel for {:?}",
                                         request_id
                                     );
@@ -572,7 +572,7 @@ impl<Codec: NetworkCodec> FuelP2PService<Codec> {
                                 Ok(ResponseMessage::SealedHeaders(headers)),
                             ) => {
                                 if channel.send((peer, headers)).is_err() {
-                                    debug!(
+                                    tracing::error!(
                                         "Failed to send through the channel for {:?}",
                                         request_id
                                     );
@@ -580,10 +580,13 @@ impl<Codec: NetworkCodec> FuelP2PService<Codec> {
                             }
 
                             (Some(_), Err(e)) => {
-                                debug!("Failed to convert IntermediateResponse into a ResponseMessage {:?} with {:?}", response, e);
+                                tracing::error!("Failed to convert IntermediateResponse into a ResponseMessage {:?} with {:?}", response, e);
                             }
                             (None, Ok(_)) => {
-                                debug!("Send channel not found for {:?}", request_id);
+                                tracing::error!(
+                                    "Send channel not found for {:?}",
+                                    request_id
+                                );
                             }
                             _ => {}
                         }
@@ -594,14 +597,14 @@ impl<Codec: NetworkCodec> FuelP2PService<Codec> {
                     error,
                     request_id,
                 } => {
-                    debug!("RequestResponse inbound error for peer: {:?} with id: {:?} and error: {:?}", peer, request_id, error);
+                    tracing::error!("RequestResponse inbound error for peer: {:?} with id: {:?} and error: {:?}", peer, request_id, error);
                 }
                 RequestResponseEvent::OutboundFailure {
                     peer,
                     error,
                     request_id,
                 } => {
-                    debug!("RequestResponse outbound error for peer: {:?} with id: {:?} and error: {:?}", peer, request_id, error);
+                    tracing::error!("RequestResponse outbound error for peer: {:?} with id: {:?} and error: {:?}", peer, request_id, error);
 
                     let _ = self.outbound_requests_table.remove(&request_id);
                 }
