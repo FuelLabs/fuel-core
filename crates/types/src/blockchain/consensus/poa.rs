@@ -7,7 +7,7 @@ use crate::fuel_crypto::Signature;
 /// The consensus related data that doesn't live on the
 /// header.
 pub struct PoAConsensus {
-    /// The signature of the [`FuelBlockHeader`].
+    /// The signature of the `FuelBlockHeader`.
     pub signature: Signature,
 }
 

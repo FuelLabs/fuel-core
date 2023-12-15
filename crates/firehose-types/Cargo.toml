@@ -1,0 +1,20 @@
+[package]
+name = "fuel-core-firehose-types"
+version = { workspace = true }
+authors = { workspace = true }
+categories = ["cryptography::cryptocurrencies"]
+edition = { workspace = true }
+homepage = { workspace = true }
+keywords = ["blockchain", "cryptocurrencies", "fuel-core", "fuel-client", "firehose"]
+license = { workspace = true }
+repository = { workspace = true }
+description = "Firehose (graph-node) protobuf types used by Fuel core."
+
+[dependencies]
+anyhow = { workspace = true }
+fuel-core-types = { workspace = true }
+prost = "0.12"
+strum = "0.24"
+
+[build-dependencies]
+prost-build = { version = "0.12" }

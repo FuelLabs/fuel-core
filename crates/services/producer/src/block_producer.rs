@@ -31,7 +31,10 @@ use fuel_core_types::{
     },
     tai64::Tai64,
 };
-use std::sync::Arc;
+use std::{
+    io::Write,
+    sync::Arc,
+};
 use tokio::sync::Mutex;
 use tracing::debug;
 
@@ -101,6 +104,8 @@ where
 
         let header = self.new_header(height, block_time).await?;
 
+        println!("FIRE TESTING {:?}", serde_json::to_string(&header).unwrap());
+
         let component = Components {
             header_to_produce: header,
             transactions_source: source,
@@ -117,6 +122,17 @@ where
             .context(context_string)?;
 
         debug!("Produced block with result: {:?}", result.result());
+
+        let fire_block = fuel_core_firehose_types::Block::from(&result.result().block);
+        {
+            use fuel_core_firehose_types::prost::Message;
+            let out_msg = fire_block.encode_to_vec();
+            let mut out = std::io::stdout().lock();
+            let _ = out.write_all(b"FIRE PROTO ");
+            let _ = out.write_all(&out_msg);
+            let _ = out.write_all(b"\n");
+        }
+
         Ok(result)
     }
 
