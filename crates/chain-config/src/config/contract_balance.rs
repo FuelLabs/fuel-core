@@ -7,7 +7,7 @@ use serde::{
     Serialize,
 };
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, PartialOrd, Ord)]
 pub struct ContractBalanceConfig {
     pub contract_id: Bytes32,
     pub asset_id: AssetId,

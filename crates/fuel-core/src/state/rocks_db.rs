@@ -403,7 +403,7 @@ impl KeyValueStore for RocksDb {
                 // TODO: Maybe we want to allow the `start` to be without a `prefix` in the future.
                 // If the `start` doesn't have the same `prefix`, return nothing.
                 if !start.starts_with(prefix) {
-                    return iter::empty().into_boxed()
+                    return iter::empty().into_boxed();
                 }
 
                 // start iterating in a certain direction from the start key
@@ -571,7 +571,7 @@ fn next_prefix(mut prefix: Vec<u8>) -> Option<Vec<u8>> {
     for byte in prefix.iter_mut().rev() {
         if let Some(new_byte) = byte.checked_add(1) {
             *byte = new_byte;
-            return Some(prefix)
+            return Some(prefix);
         }
     }
     None

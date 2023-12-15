@@ -110,7 +110,7 @@ pub async fn run_cli() -> anyhow::Result<()> {
         let command = run::Command::try_parse();
         if let Ok(command) = command {
             tracing::warn!("This cli format for running `fuel-core` is deprecated and will be removed. Please use `fuel-core run` or use `--help` for more information");
-            return run::exec(command).await
+            return run::exec(command).await;
         }
     }
 

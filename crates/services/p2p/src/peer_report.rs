@@ -254,7 +254,7 @@ impl NetworkBehaviour for PeerReportBehaviour {
         params: &mut impl PollParameters,
     ) -> Poll<NetworkBehaviourAction<Self::OutEvent, Self::ConnectionHandler>> {
         if let Some(event) = self.pending_events.pop_front() {
-            return Poll::Ready(NetworkBehaviourAction::GenerateEvent(event))
+            return Poll::Ready(NetworkBehaviourAction::GenerateEvent(event));
         }
 
         match self.heartbeat.poll(cx, params) {
@@ -265,7 +265,7 @@ impl NetworkBehaviour for PeerReportBehaviour {
                         self, action,
                     );
                 if let Some(action) = action {
-                    return Poll::Ready(action)
+                    return Poll::Ready(action);
                 }
             }
         }
@@ -280,7 +280,7 @@ impl NetworkBehaviour for PeerReportBehaviour {
                             self, action,
                         )
                     {
-                        return Poll::Ready(action)
+                        return Poll::Ready(action);
                     }
                 }
             }
@@ -289,13 +289,13 @@ impl NetworkBehaviour for PeerReportBehaviour {
         if self.decay_interval.poll_tick(cx).is_ready() {
             return Poll::Ready(NetworkBehaviourAction::GenerateEvent(
                 PeerReportEvent::PerformDecay,
-            ))
+            ));
         }
 
         if self.health_check.poll_tick(cx).is_ready() {
             return Poll::Ready(NetworkBehaviourAction::GenerateEvent(
                 PeerReportEvent::CheckReservedNodesHealth,
-            ))
+            ));
         }
 
         Poll::Pending

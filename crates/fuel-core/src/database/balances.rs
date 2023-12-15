@@ -8,6 +8,7 @@ use crate::database::{
     Column,
     Database,
 };
+use fuel_core_chain_config::ContractBalanceConfig;
 use fuel_core_storage::{
     tables::ContractsAssets,
     ContractsAssetKey,
@@ -164,7 +165,7 @@ impl Database {
         balances: Vec<(AssetId, u64)>,
     ) -> Result<(), StorageError> {
         if balances.is_empty() {
-            return Ok(())
+            return Ok(());
         }
 
         let balance_entries = balances
@@ -218,7 +219,7 @@ impl Database {
         {
             return Err(
                 anyhow::anyhow!("The contract balances is already initialized").into(),
-            )
+            );
         }
 
         let balances = balances.collect_vec();
@@ -246,10 +247,82 @@ impl Database {
 
         Ok(())
     }
+
+    pub fn update_contract_balances(
+        &mut self,
+        balances: impl IntoIterator<Item = ContractBalanceConfig>,
+    ) -> Result<(), StorageError> {
+        let balances = balances.into_iter().collect_vec();
+
+        let balance_entries = balances.iter().map(|entry| {
+            (
+                ContractsAssetKey::new(
+                    &ContractId::from(*entry.contract_id),
+                    &entry.asset_id,
+                ),
+                entry.amount,
+            )
+        });
+        self.batch_insert(Column::ContractsAssets, balance_entries)?;
+
+        balances
+            .into_iter()
+            .group_by(|entry| entry.contract_id)
+            .into_iter()
+            .try_for_each(|(contract_id, balances)| -> Result<(), StorageError> {
+                let balances = balances.map(|entry| {
+                    (
+                        MerkleTreeKey::new(entry.asset_id),
+                        entry.amount.to_be_bytes(),
+                    )
+                });
+
+                let storage = self.borrow_mut();
+                // load metadata for the contract id
+                let metadata = storage
+                    .storage::<ContractsAssetsMerkleMetadata>()
+                    .get(&ContractId::from(*contract_id))?
+                    .map(|c| c.into_owned());
+
+                let root = if let Some(metadata) = metadata {
+                    let mut tree = MerkleTree::<ContractsAssetsMerkleData, _>::load(
+                        storage,
+                        &metadata.root,
+                    )
+                    .map_err(|err| StorageError::Other(anyhow::anyhow!("{err:?}")))?;
+
+                    for (key, value) in balances {
+                        tree.update(key, &value).map_err(|err| {
+                            StorageError::Other(anyhow::anyhow!("{err:?}"))
+                        })?;
+                    }
+
+                    tree.root()
+                } else {
+                    MerkleTree::<ContractsAssetsMerkleData, _>::from_set(
+                        storage, balances,
+                    )
+                    .map_err(|err| StorageError::Other(anyhow::anyhow!("{err:?}")))?
+                    .root()
+                };
+                let metadata = SparseMerkleMetadata { root };
+
+                self.storage::<ContractsAssetsMerkleMetadata>()
+                    .insert(&ContractId::from(*contract_id), &metadata)?;
+                Ok(())
+            })?;
+
+        Ok(())
+    }
 }
 
 #[cfg(test)]
 mod tests {
+    use std::{
+        collections::HashSet,
+        iter::repeat_with,
+    };
+
     use super::*;
     use fuel_core_storage::{
         StorageAsMut,
@@ -257,9 +330,14 @@ mod tests {
     };
     use fuel_core_types::fuel_types::{
         AssetId,
+        Bytes32,
         Word,
     };
-    use rand::Rng;
+    use rand::{
+        rngs::StdRng,
+        Rng,
+        SeedableRng,
+    };
 
     fn random_asset_id<R>(rng: &mut R) -> AssetId
     where
@@ -569,5 +647,234 @@ mod tests {
             .unwrap();
 
         assert!(metadata.is_none());
+    }
+
+    fn random_bytes<R>(rng: &mut R) -> [u8; 32]
+    where
+        R: Rng + ?Sized,
+    {
+        let mut bytes = [0u8; 32];
+        rng.fill(bytes.as_mut());
+        bytes
+    }
+
+    mod contract_state {
+        use fuel_core_types::fuel_types::canonical::Deserialize;
+
+        use super::*;
+
+        #[test]
+        fn balances_inserted_into_db() {
+            // given
+            let mut rng = StdRng::seed_from_u64(0);
+            let balance_groups = repeat_with(|| ContractBalanceConfig {
+                contract_id: Bytes32::from(random_bytes(&mut rng)),
+                asset_id: AssetId::from(random_bytes(&mut rng)),
+                amount: rng.gen(),
+            })
+            .chunks(100)
+            .into_iter()
+            .map(|chunk| chunk.collect_vec())
+            .take(10)
+            .collect_vec();
+
+            let database = &mut Database::default();
+
+            // when
+            for group in &balance_groups {
+                database
+                    .update_contract_balances(group.clone())
+                    .expect("Should insert contract balances");
+            }
+
+            // then
+            let balances_in_db: Vec<_> = database
+                .iter_all(Column::ContractsAssets, None)
+                .collect::<Result<Vec<_>, _>>()
+                .unwrap()
+                .into_iter()
+                .map(|(key, amount): (Vec<u8>, Vec<u8>)| {
+                    let contract_id = Bytes32::from_bytes(&key[..32]).unwrap();
+                    let asset_id = AssetId::from_bytes(&key[32..]).unwrap();
+                    let amount = u64::from_be_bytes(amount.try_into().unwrap());
+
+                    ContractBalanceConfig {
+                        contract_id,
+                        asset_id,
+                        amount,
+                    }
+                })
+                .collect();
+
+            let original_balances = balance_groups
+                .into_iter()
+                .flatten()
+                .sorted()
+                .collect::<Vec<_>>();
+
+            assert_eq!(balances_in_db, original_balances);
+        }
+
+        fn merkalize(balance: &[ContractBalanceConfig]) -> [u8; 32] {
+            let balance = balance
+                .iter()
+                .map(|b| (MerkleTreeKey::new(b.asset_id), b.amount.to_be_bytes()));
+            sparse::in_memory::MerkleTree::nodes_from_set(balance.into_iter()).0
+        }
+
+        #[test]
+        fn metadata_updated_single_contract() {
+            // given
+            let mut rng = StdRng::seed_from_u64(0);
+            let contract_id = ContractId::from(random_bytes(&mut rng));
+            let balances = repeat_with(|| ContractBalanceConfig {
+                contract_id: Bytes32::from(*contract_id),
+                asset_id: AssetId::from(random_bytes(&mut rng)),
+                amount: rng.gen(),
+            })
+            .take(100)
+            .collect_vec();
+
+            let database = &mut Database::default();
+
+            // when
+            database.update_contract_balances(balances.clone()).unwrap();
+
+            // then
+            let expected_root = merkalize(&balances);
+            let metadata = database
+                .storage::<ContractsAssetsMerkleMetadata>()
+                .get(&contract_id)
+                .unwrap()
+                .unwrap();
+
+            assert_eq!(metadata.root, expected_root);
+        }
+
+        #[test]
+        fn metadata_updated_multiple_contracts() {
+            // given
+            let mut rng = StdRng::seed_from_u64(0);
+
+            let contract_ids =
+                [[1; 32], [2; 32], [3; 32]].map(|bytes| ContractId::from(bytes));
+
+            let balance_per_contract = contract_ids
+                .iter()
+                .map(|id| {
+                    repeat_with(|| ContractBalanceConfig {
+                        contract_id: Bytes32::from(**id),
+                        asset_id: AssetId::from(random_bytes(&mut rng)),
+                        amount: rng.gen(),
+                    })
+                    .take(10)
+                    .collect_vec()
+                })
+                .collect_vec();
+
+            let database = &mut Database::default();
+
+            // when
+            let balances = balance_per_contract.clone().into_iter().flatten();
+            database.update_contract_balances(balances).unwrap();
+
+            // then
+            let all_metadata = contract_ids
+                .into_iter()
+                .map(|contract_id| {
+                    let root = database
+                        .storage::<ContractsAssetsMerkleMetadata>()
+                        .get(&contract_id)
+                        .unwrap()
+                        .unwrap()
+                        .root;
+                    (contract_id, root)
+                })
+                .collect::<HashSet<_>>();
+
+            let expected = HashSet::from([
+                (contract_ids[0], merkalize(&balance_per_contract[0])),
+                (contract_ids[1], merkalize(&balance_per_contract[1])),
+                (contract_ids[2], merkalize(&balance_per_contract[2])),
+            ]);
+
+            assert_eq!(all_metadata, expected);
+        }
+
+        #[test]
+        fn metadata_updated_multiple_contracts_shuffled() {
+            // given
+            let mut rng = StdRng::seed_from_u64(0);
+
+            let contract_ids =
+                [[1; 32], [2; 32], [3; 32]].map(|bytes| ContractId::from(bytes));
+
+            let balance_per_contract = contract_ids
+                .iter()
+                .map(|id| {
+                    repeat_with(|| ContractBalanceConfig {
+                        contract_id: Bytes32::from(**id),
+                        asset_id: AssetId::from(random_bytes(&mut rng)),
+                        amount: rng.gen(),
+                    })
+                    .take(10)
+                    .collect_vec()
+                })
+                .collect_vec();
+
+            let database = &mut Database::default();
+
+            // when
+            use itertools::Itertools;
+            let contract_0_balance = balance_per_contract[0]
+                .iter()
+                .chunks(2)
+                .into_iter()
+                .map(|chunk| chunk.collect_vec())
+                .collect_vec();
+            let contract_1_balance = balance_per_contract[1]
+                .iter()
+                .chunks(2)
+                .into_iter()
+                .map(|chunk| chunk.collect_vec())
+                .collect_vec();
+            let contract_2_balance = balance_per_contract[2]
+                .iter()
+                .chunks(2)
+                .into_iter()
+                .map(|chunk| chunk.collect_vec())
+                .collect_vec();
+
+            let shuffled_balance = contract_0_balance
+                .into_iter()
+                .interleave(contract_1_balance.into_iter())
+                .interleave(contract_2_balance.into_iter())
+                .flatten()
+                .cloned()
+                .into_iter()
+                .collect_vec();
+            database.update_contract_balances(shuffled_balance).unwrap();
+
+            // then
+            let all_metadata = contract_ids
+                .into_iter()
+                .map(|contract_id| {
+                    let root = database
+                        .storage::<ContractsAssetsMerkleMetadata>()
+                        .get(&contract_id)
+                        .unwrap()
+                        .unwrap()
+                        .root;
+                    (contract_id, root)
+                })
+                .collect::<Vec<_>>();
+
+            let expected = [
+                (contract_ids[0], merkalize(&balance_per_contract[0])),
+                (contract_ids[1], merkalize(&balance_per_contract[1])),
+                (contract_ids[2], merkalize(&balance_per_contract[2])),
+            ];
+            assert_eq!(all_metadata, expected);
+        }
     }
 }

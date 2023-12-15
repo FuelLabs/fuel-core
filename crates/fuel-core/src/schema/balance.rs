@@ -80,7 +80,7 @@ impl BalanceQuery {
     ) -> async_graphql::Result<Connection<AssetId, Balance, EmptyFields, EmptyFields>>
     {
         if before.is_some() || after.is_some() {
-            return Err(anyhow!("pagination is not yet supported").into())
+            return Err(anyhow!("pagination is not yet supported").into());
         }
         let query: &Database = ctx.data_unchecked();
         crate::schema::query_pagination(after, before, first, last, |_, direction| {
