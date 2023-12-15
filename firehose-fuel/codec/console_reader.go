@@ -94,7 +94,6 @@ func (r *ConsoleReader) next() (out *pbfuel.Block, err error) {
 			if err := proto.Unmarshal(bytes, block); err != nil {
 				return nil, fmt.Errorf("Failed to parse block: %s", err)
 			}
-			fmt.Printf("block %v\n", block)
 			return block, nil
 		default:
 			if r.logger.Core().Enabled(zap.DebugLevel) {
