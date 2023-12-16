@@ -176,7 +176,11 @@ impl<Codec: NetworkCodec> FuelP2PService<Codec> {
             .with_behaviour(|_| behaviour)
             .unwrap()
             .with_swarm_config(|cfg| {
-                cfg.with_idle_connection_timeout(Duration::from_secs(10))
+                if let Some(timeout) = config.connection_idle_timeout {
+                    cfg.with_idle_connection_timeout(timeout)
+                } else {
+                    cfg
+                }
             })
             .build();
 
