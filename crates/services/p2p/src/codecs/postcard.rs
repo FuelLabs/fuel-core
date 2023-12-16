@@ -22,6 +22,7 @@ use async_trait::async_trait;
 use futures::{
     AsyncRead,
     AsyncReadExt,
+    AsyncWriteExt,
 };
 use libp2p::request_response::Codec as RequestResponseCodec;
 use serde::{
@@ -122,7 +123,6 @@ impl RequestResponseCodec for PostcardCodec {
     where
         T: futures::AsyncWrite + Unpin + Send,
     {
-        use futures::AsyncWriteExt;
         match postcard::to_stdvec(&req) {
             Ok(encoded_data) => {
                 socket.write_all(&encoded_data).await?;
@@ -142,7 +142,6 @@ impl RequestResponseCodec for PostcardCodec {
     where
         T: futures::AsyncWrite + Unpin + Send,
     {
-        use futures::AsyncWriteExt;
         match postcard::to_stdvec(&res) {
             Ok(encoded_data) => {
                 socket.write_all(&encoded_data).await?;
@@ -182,42 +181,9 @@ impl GossipsubCodec for PostcardCodec {
 }
 
 impl RequestResponseConverter for PostcardCodec {
-    type NetworkResponse = NetworkResponse;
     type OutboundResponse = OutboundResponse;
+    type NetworkResponse = NetworkResponse;
     type ResponseMessage = ResponseMessage;
-
-    fn convert_to_response(
-        &self,
-        inter_msg: &Self::NetworkResponse,
-    ) -> Result<Self::ResponseMessage, io::Error> {
-        match inter_msg {
-            NetworkResponse::Block(block_bytes) => {
-                let response = if let Some(block_bytes) = block_bytes {
-                    Some(self.deserialize(block_bytes)?)
-                } else {
-                    None
-                };
-
-                Ok(ResponseMessage::SealedBlock(Box::new(response)))
-            }
-            NetworkResponse::Transactions(tx_bytes) => {
-                let response = if let Some(tx_bytes) = tx_bytes {
-                    Some(self.deserialize(tx_bytes)?)
-                } else {
-                    None
-                };
-
-                Ok(ResponseMessage::Transactions(response))
-            }
-            NetworkResponse::Headers(headers_bytes) => {
-                let response = headers_bytes
-                    .as_ref()
-                    .map(|bytes| self.deserialize(bytes))
-                    .transpose()?;
-                Ok(ResponseMessage::SealedHeaders(response))
-            }
-        }
-    }
 
     fn convert_to_network_response(
         &self,
@@ -248,6 +214,39 @@ impl RequestResponseConverter for PostcardCodec {
                     .map(|headers| self.serialize(&headers))
                     .transpose()?;
                 Ok(NetworkResponse::Headers(response))
+            }
+        }
+    }
+
+    fn convert_to_response(
+        &self,
+        inter_msg: &Self::NetworkResponse,
+    ) -> Result<Self::ResponseMessage, io::Error> {
+        match inter_msg {
+            NetworkResponse::Block(block_bytes) => {
+                let response = if let Some(block_bytes) = block_bytes {
+                    Some(self.deserialize(block_bytes)?)
+                } else {
+                    None
+                };
+
+                Ok(ResponseMessage::SealedBlock(Box::new(response)))
+            }
+            NetworkResponse::Transactions(tx_bytes) => {
+                let response = if let Some(tx_bytes) = tx_bytes {
+                    Some(self.deserialize(tx_bytes)?)
+                } else {
+                    None
+                };
+
+                Ok(ResponseMessage::Transactions(response))
+            }
+            NetworkResponse::Headers(headers_bytes) => {
+                let response = headers_bytes
+                    .as_ref()
+                    .map(|bytes| self.deserialize(bytes))
+                    .transpose()?;
+                Ok(ResponseMessage::SealedHeaders(response))
             }
         }
     }

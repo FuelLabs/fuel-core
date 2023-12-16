@@ -159,8 +159,6 @@ pub enum FuelP2PEvent {
 
 impl<Codec: NetworkCodec> FuelP2PService<Codec> {
     pub fn new(config: Config, codec: Codec) -> Self {
-        // let local_peer_id = PeerId::from(config.keypair.public());
-
         let gossipsub_data =
             GossipsubData::with_topics(GossipsubTopics::new(&config.network_name));
         let network_metadata = NetworkMetadata { gossipsub_data };
@@ -874,9 +872,6 @@ mod tests {
         loop {
             tokio::select! {
                 sentry_node_event = sentry_node.next_event() => {
-                    tracing::error!("Event from the sentry node: {:?}", sentry_node_event);
-
-                    tracing::info!("Total connected peers: {:?}, max_peers_allowed: {:?}", sentry_node.peer_manager.total_peers_connected(), max_peers_allowed);
                     // we've connected to all other peers
                     if sentry_node.peer_manager.total_peers_connected() > max_peers_allowed {
                         // if the `reserved_node` is not included,
@@ -884,7 +879,6 @@ mod tests {
                         if !all_nodes_ids
                         .iter()
                         .any(|local_peer_id| local_peer_id == &reserved_node_peer_id) {
-                            tracing::info!("AAAAAAAAAAAAAAAAAAAa Inserting the reserved node into the list of all nodes");
                             if let Some(node) = reserved_node {
                                 all_nodes_ids.push(node.local_peer_id);
                                 spawn(&stop_sender, node);
@@ -1067,7 +1061,6 @@ mod tests {
                 },
                 // Poll one of the reserved, sentry nodes
                 sentry_node_event = single_sentry_node.next_event() => {
-                    tracing::info!("AAAA ASDFA SDF ASDF Event from the sentry node: {:?}", sentry_node_event);
                     if let Some(FuelP2PEvent::PeerConnected(peer_id)) = sentry_node_event {
                         sentry_node_connections.insert(peer_id);
                     }
@@ -1119,10 +1112,6 @@ mod tests {
     #[tokio::test]
     #[instrument]
     async fn nodes_cannot_connect_due_to_different_checksum() {
-        let _ = tracing_subscriber::fmt()
-            .with_max_level(tracing::Level::INFO)
-            .try_init();
-
         use libp2p::TransportError;
         // Node A
         let mut p2p_config =

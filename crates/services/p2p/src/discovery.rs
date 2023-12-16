@@ -307,7 +307,7 @@ mod tests {
     // initially, only connects first_swarm to the rest of the swarms
     // after that each swarm uses kademlia to discover other swarms
     // test completes after all swarms have connected to each other
-    // TODO: This used to fail with any connection closures, but that was causing a lot of failed
+    // TODO: This used to fail with any connection closures, but that was causing a lot of failed tests.
     //   Now it allows for many connection closures before failing. We don't know what caused the
     //   connections to start failing, but had something to do with upgrading `libp2p`.
     #[tokio::test]
@@ -319,18 +319,14 @@ mod tests {
             format!("{}/p2p/{}", first_peer_addr.clone(), first_peer_id)
                 .parse()
                 .unwrap();
-        tracing::info!("first swarm addr: {:?}", &first_peer_addr);
-        tracing::info!("first swarm id: {:?}", &first_peer_id);
 
         let mut discovery_swarms = Vec::new();
         discovery_swarms.push((first_swarm, first_peer_addr, first_peer_id));
 
-        for index in 1..num_of_swarms {
+        for _ in 1..num_of_swarms {
             let (swarm, peer_addr, peer_id) =
                 build_fuel_discovery(vec![bootstrap_addr.clone()]);
 
-            tracing::info!("{:?} swarm addr: {:?}", index, &peer_addr);
-            tracing::info!("{:?} swarm id: {:?}", index, &peer_id);
             discovery_swarms.push((swarm, peer_addr, peer_id));
         }
 
@@ -353,7 +349,6 @@ mod tests {
             .collect::<Vec<_>>();
 
         let connection_closed_counter = Arc::new(AtomicUsize::new(0));
-        let counter_copy = connection_closed_counter.clone();
         const MAX_CONNECTION_CLOSED: usize = 1000;
 
         poll_fn(move |cx| {
@@ -370,7 +365,6 @@ mod tests {
                             SwarmEvent::Behaviour(KademliaEvent::UnroutablePeer {
                                 peer: peer_id,
                             }) => {
-                                tracing::info!("Unroutable peer: {:?}", &peer_id);
                                 // kademlia discovered a peer but does not have it's address
                                 // we simulate Identify happening and provide the address
                                 let unroutable_peer_addr = discovery_swarms
@@ -424,9 +418,5 @@ mod tests {
             }
         })
         .await;
-        tracing::info!(
-            "Passed with {:?} connection closures",
-            counter_copy.load(Ordering::SeqCst)
-        );
     }
 }
