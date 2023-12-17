@@ -27,6 +27,7 @@ use fuel_core_types::{
         sparse::{
             in_memory,
             MerkleTree,
+            MerkleTreeError,
             MerkleTreeKey,
         },
     },
@@ -36,7 +37,10 @@ use fuel_core_types::{
         ContractId,
     },
 };
-use itertools::Itertools;
+use itertools::{
+    GroupBy,
+    Itertools,
+};
 use std::{
     borrow::{
         BorrowMut,
@@ -265,7 +269,7 @@ impl Database {
     ///      first sorted before the state root is calculated. This is a consequence of the
     ///      batch-insertion logic of MerkleTree::from_set.
     ///    - For contracts with an existing state, the function updates their state merkle tree
-    ///      calling MerkleTree::update for each state entry in the group.
+    ///      calling MerkleTree::update for each state entry in the group in-order.
     ///
     /// # Errors
     /// On any error while accessing the database.
@@ -275,64 +279,108 @@ impl Database {
     ) -> Result<(), StorageError> {
         let slots = slots.into_iter().collect_vec();
 
-        // Keys and values should be original without any modifications.
-        // Key is `ContractId` ++ `StorageKey`
-        self.batch_insert(
-            Column::ContractsState,
-            slots.iter().map(|entry| {
-                (
-                    ContractsStateKey::new(
-                        &ContractId::from(*entry.contract_id),
-                        &entry.key,
-                    ),
-                    entry.value,
-                )
-            }),
-        )?;
+        self.db_insert_contract_states(&slots)?;
 
+        self.update_state_merkle(slots)?;
+
+        Ok(())
+    }
+
+    fn update_state_merkle(
+        &mut self,
+        slots: Vec<ContractStateConfig>,
+    ) -> Result<(), StorageError> {
         slots
             .into_iter()
-            .group_by(|slot| slot.contract_id)
+            .group_by(|s| s.contract_id)
             .into_iter()
-            .try_for_each(|(contract_id, slots)| -> Result<(), StorageError> {
-                let slots = slots.into_iter().map(|state_entry| {
-                    (MerkleTreeKey::new(state_entry.key), state_entry.value)
-                });
-
-                let storage = self.borrow_mut();
-                // load metadata for the contract id
-                let metadata = storage
-                    .storage::<ContractsStateMerkleMetadata>()
-                    .get(&ContractId::from(*contract_id))?
-                    .map(|c| c.into_owned());
-
-                let root = if let Some(metadata) = metadata {
-                    let mut tree = MerkleTree::<ContractsStateMerkleData, _>::load(
-                        storage,
-                        &metadata.root,
-                    )
-                    .map_err(|err| StorageError::Other(anyhow::anyhow!("{err:?}")))?;
-
-                    for (key, value) in slots {
-                        tree.update(key, value.as_slice()).map_err(|err| {
-                            StorageError::Other(anyhow::anyhow!("{err:?}"))
-                        })?
-                    }
-
-                    tree.root()
-                } else {
-                    MerkleTree::<ContractsStateMerkleData, _>::from_set(storage, slots)
-                        .map_err(|err| StorageError::Other(anyhow::anyhow!("{err:?}")))?
-                        .root()
-                };
-                let metadata = SparseMerkleMetadata { root };
-
-                self.storage::<ContractsStateMerkleMetadata>()
-                    .insert(&ContractId::from(*contract_id), &metadata)?;
-
-                Ok(())
+            .map(|(contract_id, slots)| (contract_id, slots.map(|s| (s.key, s.value))))
+            .try_for_each(|(contract_id, slots)| {
+                self.update_state_merkle_single(contract_id, slots)
             })?;
+        Ok(())
+    }
 
+    fn update_state_merkle_single(
+        &mut self,
+        contract_id: Bytes32,
+        slots: impl Iterator<Item = (Bytes32, Bytes32)>,
+    ) -> Result<(), StorageError> {
+        let new_root = if let Some(root) = self.contract_state_root(contract_id)? {
+            self.update_existing_state_merkle_tree(root, slots)
+                .map_err(|e| StorageError::Other(anyhow::anyhow!("{e:?}")))?
+        } else {
+            self.create_new_state_merkle_tree(slots)?
+        };
+
+        self.update_cached_state_root(new_root, contract_id)?;
+
+        Ok(())
+    }
+
+    fn update_cached_state_root(
+        &mut self,
+        new_root: [u8; 32],
+        contract_id: Bytes32,
+    ) -> Result<(), StorageError> {
+        let metadata = SparseMerkleMetadata { root: new_root };
+        self.storage::<ContractsStateMerkleMetadata>()
+            .insert(&ContractId::from(*contract_id), &metadata)?;
+        Ok(())
+    }
+
+    fn create_new_state_merkle_tree(
+        &mut self,
+        slots: impl Iterator<Item = (Bytes32, Bytes32)>,
+    ) -> Result<[u8; 32], StorageError> {
+        let slots = slots.map(|(key, value)| (MerkleTreeKey::new(key), value));
+        let (root, nodes) = in_memory::MerkleTree::nodes_from_set(slots);
+        let storage = self.borrow_mut();
+        storage.batch_insert(ContractsStateMerkleData::column(), nodes.into_iter())?;
+        Ok(root)
+    }
+
+    fn update_existing_state_merkle_tree(
+        &mut self,
+        root: [u8; 32],
+        slots: impl Iterator<Item = (Bytes32, Bytes32)>,
+    ) -> Result<[u8; 32], MerkleTreeError<StorageError>> {
+        let storage = self.borrow_mut();
+
+        let mut tree = MerkleTree::<ContractsStateMerkleData, _>::load(storage, &root)?;
+        for (key, value) in slots {
+            let key = MerkleTreeKey::new(key);
+            let value = value.as_slice();
+            tree.update(key, value)?;
+        }
+
+        Ok(tree.root())
+    }
+
+    fn contract_state_root(
+        &mut self,
+        contract_id: Bytes32,
+    ) -> Result<Option<[u8; 32]>, StorageError> {
+        let root = self
+            .storage::<ContractsStateMerkleMetadata>()
+            .get(&ContractId::from(*contract_id))?
+            .map(|c| c.into_owned().root);
+        Ok(root)
+    }
+
+    fn db_insert_contract_states(
+        &mut self,
+        slots: &[ContractStateConfig],
+    ) -> Result<(), StorageError> {
+        self.batch_insert(
+            Column::ContractsState,
+            slots.iter().map(|state_entry| {
+                let contract_id = ContractId::from(*state_entry.contract_id);
+
+                let db_key = ContractsStateKey::new(&contract_id, &state_entry.key);
+                (db_key, state_entry.value)
+            }),
+        )?;
         Ok(())
     }
 }
@@ -826,6 +874,7 @@ mod tests {
                 .cloned()
                 .into_iter()
                 .collect_vec();
+
             database.update_contract_states(shuffled_state).unwrap();
 
             // then
