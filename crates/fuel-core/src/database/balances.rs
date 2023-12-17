@@ -45,6 +45,8 @@ use std::{
     ops::Deref,
 };
 
+use super::utils::MerkleTreeDbUtils;
+
 impl StorageInspect<ContractsAssets> for Database {
     type Error = StorageError;
 
@@ -254,63 +256,49 @@ impl Database {
     ) -> Result<(), StorageError> {
         let balances = balances.into_iter().collect_vec();
 
-        let balance_entries = balances.iter().map(|entry| {
-            (
-                ContractsAssetKey::new(
-                    &ContractId::from(*entry.contract_id),
-                    &entry.asset_id,
-                ),
-                entry.amount,
-            )
-        });
-        self.batch_insert(Column::ContractsAssets, balance_entries)?;
+        self.db_insert_contract_balances(&balances)?;
 
+        self.update_balance_merkle_tree(balances)?;
+
+        Ok(())
+    }
+
+    fn update_balance_merkle_tree(
+        &mut self,
+        balances: Vec<ContractBalanceConfig>,
+    ) -> Result<(), StorageError> {
         balances
             .into_iter()
-            .group_by(|entry| entry.contract_id)
+            .group_by(|s| s.contract_id)
             .into_iter()
-            .try_for_each(|(contract_id, balances)| -> Result<(), StorageError> {
-                let balances = balances.map(|entry| {
-                    (
-                        MerkleTreeKey::new(entry.asset_id),
-                        entry.amount.to_be_bytes(),
-                    )
-                });
-
-                let storage = self.borrow_mut();
-                // load metadata for the contract id
-                let metadata = storage
-                    .storage::<ContractsAssetsMerkleMetadata>()
-                    .get(&ContractId::from(*contract_id))?
-                    .map(|c| c.into_owned());
-
-                let root = if let Some(metadata) = metadata {
-                    let mut tree = MerkleTree::<ContractsAssetsMerkleData, _>::load(
-                        storage,
-                        &metadata.root,
-                    )
-                    .map_err(|err| StorageError::Other(anyhow::anyhow!("{err:?}")))?;
-
-                    for (key, value) in balances {
-                        tree.update(key, &value).map_err(|err| {
-                            StorageError::Other(anyhow::anyhow!("{err:?}"))
-                        })?;
-                    }
-
-                    tree.root()
-                } else {
-                    MerkleTree::<ContractsAssetsMerkleData, _>::from_set(
-                        storage, balances,
-                    )
-                    .map_err(|err| StorageError::Other(anyhow::anyhow!("{err:?}")))?
-                    .root()
-                };
-                let metadata = SparseMerkleMetadata { root };
-
-                self.storage::<ContractsAssetsMerkleMetadata>()
-                    .insert(&ContractId::from(*contract_id), &metadata)?;
-                Ok(())
+            .map(|(contract_id, entries)| {
+                (
+                    contract_id,
+                    entries.map(|e| (e.asset_id, e.amount.to_be_bytes())),
+                )
+            })
+            .try_for_each(|(contract_id, entries)| {
+                let contract_id = ContractId::from(*contract_id);
+                MerkleTreeDbUtils::<
+                    ContractsAssetsMerkleMetadata,
+                    ContractsAssetsMerkleData,
+                >::update(self.borrow_mut(), &contract_id, entries)
             })?;
+        Ok(())
+    }
+
+    fn db_insert_contract_balances(
+        &self,
+        balances: &[ContractBalanceConfig],
+    ) -> Result<(), StorageError> {
+        let balance_entries = balances.iter().map(|balance_entry| {
+            let contract_id = ContractId::from(*balance_entry.contract_id);
+
+            let db_key = ContractsAssetKey::new(&contract_id, &balance_entry.asset_id);
+            (db_key, balance_entry.amount)
+        });
+
+        self.batch_insert(Column::ContractsAssets, balance_entries)?;
 
         Ok(())
     }
@@ -658,7 +646,7 @@ mod tests {
         bytes
     }
 
-    mod contract_state {
+    mod update_contract_balance {
         use fuel_core_types::fuel_types::canonical::Deserialize;
 
         use super::*;
@@ -693,10 +681,9 @@ mod tests {
                 .collect::<Result<Vec<_>, _>>()
                 .unwrap()
                 .into_iter()
-                .map(|(key, amount): (Vec<u8>, Vec<u8>)| {
+                .map(|(key, amount): (Vec<u8>, u64)| {
                     let contract_id = Bytes32::from_bytes(&key[..32]).unwrap();
                     let asset_id = AssetId::from_bytes(&key[32..]).unwrap();
-                    let amount = u64::from_be_bytes(amount.try_into().unwrap());
 
                     ContractBalanceConfig {
                         contract_id,
