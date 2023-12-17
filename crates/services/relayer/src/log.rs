@@ -54,13 +54,13 @@ impl TryFrom<&Log> for EthEventLog {
 
     fn try_from(log: &Log) -> Result<Self, Self::Error> {
         if log.topics.is_empty() {
-            return Err(anyhow!("Topic list is empty"))
+            return Err(anyhow!("Topic list is empty"));
         }
 
         let log = match log.topics[0] {
             n if n == *config::ETH_LOG_MESSAGE => {
                 if log.topics.len() != 4 {
-                    return Err(anyhow!("Malformed topics for Message"))
+                    return Err(anyhow!("Malformed topics for Message"));
                 }
 
                 let raw_log = RawLog {

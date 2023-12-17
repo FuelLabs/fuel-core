@@ -23,7 +23,7 @@ impl TryFrom<Message> for MessageCoin {
         if !data.is_empty() {
             return Err(anyhow::anyhow!(
                 "The data is not empty, impossible to convert into the `MessageCoin`"
-            ))
+            ));
         }
 
         let coin = MessageCoin {

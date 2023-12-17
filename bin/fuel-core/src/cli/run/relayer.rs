@@ -61,7 +61,7 @@ impl RelayerArgs {
     pub fn into_config(self) -> Option<Config> {
         if !self.enable_relayer {
             tracing::info!("Relayer service disabled");
-            return None
+            return None;
         }
 
         let config = Config {

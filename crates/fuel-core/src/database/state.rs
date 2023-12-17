@@ -167,7 +167,7 @@ impl Database {
         slots: Vec<(Bytes32, Bytes32)>,
     ) -> Result<(), StorageError> {
         if slots.is_empty() {
-            return Ok(())
+            return Ok(());
         }
 
         let state_entries = slots
@@ -221,14 +221,16 @@ impl Database {
         let slots = slots.collect_vec();
 
         if slots.is_empty() {
-            return Ok(())
+            return Ok(());
         }
 
         if self
             .storage::<ContractsStateMerkleMetadata>()
             .contains_key(contract_id)?
         {
-            return Err(anyhow::anyhow!("The contract state is already initialized").into())
+            return Err(
+                anyhow::anyhow!("The contract state is already initialized").into()
+            );
         }
 
         // Keys and values should be original without any modifications.

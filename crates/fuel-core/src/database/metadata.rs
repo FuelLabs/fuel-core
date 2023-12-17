@@ -36,7 +36,7 @@ impl Database {
                 return Err(DatabaseError::InvalidDatabaseVersion {
                     found: version,
                     expected: DB_VERSION,
-                })?
+                })?;
             }
         } else {
             let _: Option<u32> =
