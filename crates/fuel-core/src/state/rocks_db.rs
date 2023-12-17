@@ -71,7 +71,7 @@ impl ShallowTempDir {
         Self { path }
     }
 
-    /// Returns the path of teh directory.
+    /// Returns the path of the directory.
     pub fn path(&self) -> &PathBuf {
         &self.path
     }

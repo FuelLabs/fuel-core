@@ -9,7 +9,7 @@ to include an additional cost to op codes that write new data to storage or to
 transactions that add new contracts to the chain.
 
 There are a number of ways we might calculate this value; we have decided to go 
-with a simple calculatoin based on our target storage growth and working
+with a simple calculation based on our target storage growth and working
 backward from there.
 
 #### Pessimistic Estimate
@@ -23,7 +23,7 @@ This gives us this graph:
 | 500,000,000,000 |      10,000,000 |        31536000 |      **15,855** |    **630.72** |
 
 This is a harsh estimate that isn't taking into account the additional base cost of tx
-execution and the cost of any additional op codes. It is also assuming that 
+execution and the cost of any additional op codes. It is also assumed that 
 all blocks would be maxing out the storage.
 
 #### Generous Estimate

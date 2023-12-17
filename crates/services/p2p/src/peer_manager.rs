@@ -260,7 +260,7 @@ impl PeerManager {
             .choose(&mut range)
     }
 
-    /// Handles the first connnection established with a Peer    
+    /// Handles the first connection established with a Peer    
     fn handle_initial_connection(
         &mut self,
         peer_id: &PeerId,

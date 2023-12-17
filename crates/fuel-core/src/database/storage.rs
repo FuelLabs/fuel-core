@@ -244,7 +244,7 @@ pub trait ToDatabaseKey {
     where
         Self: 'a;
 
-    /// Coverts the key into database key that supports byte presentation.
+    /// Converts the key into database key that supports byte presentation.
     fn database_key(&self) -> Self::Type<'_>;
 }
 

@@ -107,7 +107,7 @@ where
             gas_limit: max_gas,
         };
 
-        // Store the context string incase we error.
+        // Store the context string in case we error.
         let context_string =
             format!("Failed to produce block {height:?} due to execution failure");
         let result = self
@@ -121,7 +121,7 @@ where
     }
 
     // TODO: Support custom `block_time` for `dry_run`.
-    /// Simulate a transaction without altering any state. Does not aquire the production lock
+    /// Simulate a transaction without altering any state. Does not acquire the production lock
     /// since it is basically a "read only" operation and shouldn't get in the way of normal
     /// production.
     pub async fn dry_run(

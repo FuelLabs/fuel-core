@@ -1,4 +1,3 @@
 [codespell]
-skip = *.rs,*.json,*.js,*.html
 quiet-level = 2
 ignore-words = .github/workflows/ignore-words.txt
