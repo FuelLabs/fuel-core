@@ -2,7 +2,7 @@
 #![deny(clippy::cast_possible_truncation)]
 #![deny(unused_crate_dependencies)]
 #![deny(missing_docs)]
-//#![deny(warnings)]
+#![deny(warnings)]
 //! # Sync Service
 //! Responsible for syncing the blockchain from the network.
 

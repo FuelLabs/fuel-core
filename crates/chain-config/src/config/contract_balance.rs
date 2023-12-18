@@ -15,11 +15,11 @@ pub struct ContractBalanceConfig {
 }
 
 #[cfg(all(test, feature = "random"))]
-impl ContractBalanceConfig {
-    pub fn random(rng: &mut impl ::rand::Rng) -> Self {
+impl crate::Randomize for ContractBalanceConfig {
+    fn randomize(mut rng: impl rand::Rng) -> Self {
         Self {
-            contract_id: super::random_bytes_32(rng).into(),
-            asset_id: super::random_bytes_32(rng).into(),
+            contract_id: super::random_bytes_32(&mut rng).into(),
+            asset_id: super::random_bytes_32(&mut rng).into(),
             amount: rng.gen(),
         }
     }

@@ -41,14 +41,14 @@ pub struct MessageConfig {
 }
 
 #[cfg(all(test, feature = "random"))]
-impl MessageConfig {
-    pub fn random(rng: &mut impl rand::Rng) -> Self {
-        MessageConfig {
-            sender: Address::new(super::random_bytes_32(rng)),
-            recipient: Address::new(super::random_bytes_32(rng)),
-            nonce: Nonce::new(super::random_bytes_32(rng)),
+impl crate::Randomize for MessageConfig {
+    fn randomize(mut rng: impl rand::Rng) -> Self {
+        Self {
+            sender: Address::new(super::random_bytes_32(&mut rng)),
+            recipient: Address::new(super::random_bytes_32(&mut rng)),
+            nonce: Nonce::new(super::random_bytes_32(&mut rng)),
             amount: rng.gen(),
-            data: (super::random_bytes_32(rng)).to_vec(),
+            data: (super::random_bytes_32(&mut rng)).to_vec(),
             da_height: DaBlockHeight(rng.gen()),
         }
     }

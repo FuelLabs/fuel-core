@@ -8,8 +8,13 @@ mod message;
 mod state;
 
 #[cfg(all(test, feature = "random"))]
-pub(crate) fn random_bytes_32(rng: &mut impl rand::Rng) -> [u8; 32] {
+pub(crate) fn random_bytes_32(mut rng: impl rand::Rng) -> [u8; 32] {
     rng.gen()
+}
+
+#[cfg(all(test, feature = "random"))]
+pub(crate) trait Randomize {
+    fn randomize(rng: impl rand::Rng) -> Self;
 }
 
 pub use chain::*;

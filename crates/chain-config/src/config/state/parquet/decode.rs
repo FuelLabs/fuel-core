@@ -56,7 +56,7 @@ where
     R: ChunkReader + 'static,
     T: TryFrom<Row, Error = anyhow::Error>,
 {
-    fn get_group(&self, index: usize) -> anyhow::Result<Group<T>> {
+    fn current_group(&self) -> anyhow::Result<Group<T>> {
         let data = self
             .data_source
             .get_row_group(self.group_index)?
@@ -68,7 +68,10 @@ where
             })
             .collect::<Result<Vec<_>, _>>()?;
 
-        Ok(Group { index, data })
+        Ok(Group {
+            index: self.group_index,
+            data,
+        })
     }
 }
 
@@ -84,16 +87,14 @@ where
             return None;
         }
 
-        let group_index = self.group_index;
-
-        let group = self.get_group(group_index);
-        self.group_index += 1;
+        let group = self.current_group();
+        self.group_index = self.group_index.saturating_add(1);
 
         Some(group)
     }
 
     fn nth(&mut self, n: usize) -> Option<Self::Item> {
-        self.group_index += n;
+        self.group_index = self.group_index.saturating_add(n);
         self.next()
     }
 }

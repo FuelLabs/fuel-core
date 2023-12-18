@@ -5,7 +5,7 @@
 #![deny(unused_crate_dependencies)]
 #![forbid(unsafe_code)]
 #![deny(missing_docs)]
-//#![deny(warnings)]
+#![deny(warnings)]
 
 pub(crate) mod abi;
 pub(crate) mod config;

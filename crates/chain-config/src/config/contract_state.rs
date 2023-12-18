@@ -12,12 +12,12 @@ pub struct ContractStateConfig {
 }
 
 #[cfg(all(test, feature = "random"))]
-impl ContractStateConfig {
-    pub fn random(rng: &mut impl ::rand::Rng) -> Self {
+impl crate::Randomize for ContractStateConfig {
+    fn randomize(mut rng: impl rand::Rng) -> Self {
         Self {
-            contract_id: super::random_bytes_32(rng).into(),
-            key: super::random_bytes_32(rng).into(),
-            value: super::random_bytes_32(rng).into(),
+            contract_id: super::random_bytes_32(&mut rng).into(),
+            key: super::random_bytes_32(&mut rng).into(),
+            value: super::random_bytes_32(&mut rng).into(),
         }
     }
 }

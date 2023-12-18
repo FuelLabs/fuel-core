@@ -459,9 +459,8 @@ impl Database {
             .map(|val| {
                 val.and_then(|(key, value)| {
                     let key = K::from(key);
-                    let value: V = postcard::from_bytes(&value).unwrap();
-                    // let value: V =
-                    //     postcard::from_bytes(&value).map_err(|_| DatabaseError::Codec)?;
+                    let value: V =
+                        postcard::from_bytes(&value).map_err(|_| DatabaseError::Codec)?;
                     Ok((key, value))
                 })
             })

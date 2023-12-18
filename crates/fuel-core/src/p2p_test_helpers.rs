@@ -1,10 +1,7 @@
 //! # Helpers for creating networks of nodes
 
 use crate::{
-    chain_config::{
-        ChainConfig,
-        StateConfig,
-    },
+    chain_config::StateConfig,
     database::Database,
     p2p::Multiaddr,
     service::{

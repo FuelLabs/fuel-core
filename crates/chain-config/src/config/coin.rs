@@ -57,15 +57,19 @@ pub struct CoinConfig {
 }
 
 #[cfg(all(test, feature = "random"))]
-impl CoinConfig {
-    pub fn random(rng: &mut impl ::rand::Rng) -> Self {
+impl crate::Randomize for CoinConfig {
+    fn randomize(mut rng: impl ::rand::Rng) -> Self {
         Self {
-            tx_id: Some(super::random_bytes_32(rng).into()),
-            output_index: Some(rng.gen()),
-            tx_pointer_block_height: Some(BlockHeight::new(rng.gen())),
-            tx_pointer_tx_idx: Some(rng.gen()),
-            maturity: Some(BlockHeight::new(rng.gen())),
-            owner: Address::new(super::random_bytes_32(rng)),
+            tx_id: rng
+                .gen::<bool>()
+                .then(|| super::random_bytes_32(&mut rng).into()),
+            output_index: rng.gen::<bool>().then(|| rng.gen()),
+            tx_pointer_block_height: rng
+                .gen::<bool>()
+                .then(|| BlockHeight::new(rng.gen())),
+            tx_pointer_tx_idx: rng.gen::<bool>().then(|| rng.gen()),
+            maturity: rng.gen::<bool>().then(|| BlockHeight::new(rng.gen())),
+            owner: Address::new(super::random_bytes_32(&mut rng)),
             amount: rng.gen(),
             asset_id: AssetId::new(super::random_bytes_32(rng)),
         }
