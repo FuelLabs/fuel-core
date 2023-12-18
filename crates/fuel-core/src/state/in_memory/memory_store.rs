@@ -1,7 +1,6 @@
 use crate::{
     database::{
         Column,
-        Error as DatabaseError,
         Result as DatabaseResult,
     },
     state::{
@@ -100,7 +99,9 @@ impl MemoryStore {
 }
 
 impl KeyValueStore for MemoryStore {
-    fn put(
+    type Column = Column;
+
+    fn replace(
         &self,
         key: &[u8],
         column: Column,
@@ -129,26 +130,7 @@ impl KeyValueStore for MemoryStore {
     }
 
     fn delete(&self, key: &[u8], column: Column) -> DatabaseResult<()> {
-        self.inner[column.as_usize()]
-            .lock()
-            .expect("poisoned")
-            .remove(&key.to_vec());
-        Ok(())
-    }
-
-    fn exists(&self, key: &[u8], column: Column) -> DatabaseResult<bool> {
-        Ok(self.inner[column.as_usize()]
-            .lock()
-            .expect("poisoned")
-            .contains_key(&key.to_vec()))
-    }
-
-    fn size_of_value(&self, key: &[u8], column: Column) -> DatabaseResult<Option<usize>> {
-        Ok(self.inner[column.as_usize()]
-            .lock()
-            .expect("poisoned")
-            .get(&key.to_vec())
-            .map(|v| v.len()))
+        self.take(key, column).map(|_| ())
     }
 
     fn get(&self, key: &[u8], column: Column) -> DatabaseResult<Option<Value>> {
@@ -157,25 +139,6 @@ impl KeyValueStore for MemoryStore {
             .expect("poisoned")
             .get(&key.to_vec())
             .cloned())
-    }
-
-    fn read(
-        &self,
-        key: &[u8],
-        column: Column,
-        mut buf: &mut [u8],
-    ) -> DatabaseResult<Option<usize>> {
-        self.inner[column.as_usize()]
-            .lock()
-            .expect("poisoned")
-            .get(&key.to_vec())
-            .map(|value| {
-                let read = value.len();
-                std::io::Write::write_all(&mut buf, value.as_ref())
-                    .map_err(|e| DatabaseError::Other(anyhow::anyhow!(e)))?;
-                Ok(read)
-            })
-            .transpose()
     }
 
     fn iter_all(

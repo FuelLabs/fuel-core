@@ -307,60 +307,24 @@ impl RocksDb {
 }
 
 impl KeyValueStore for RocksDb {
-    fn put(
-        &self,
-        key: &[u8],
-        column: Column,
-        value: Value,
-    ) -> DatabaseResult<Option<Value>> {
-        database_metrics().write_meter.inc();
-        database_metrics().bytes_written.observe(value.len() as f64);
-
-        // FIXME: This is a race condition. We should use a transaction.
-        let prev = self.get(key, column)?;
-        // FIXME: This is a race condition. We should use a transaction.
-        self.db
-            .put_cf(&self.cf(column), key, value.as_ref())
-            .map_err(|e| DatabaseError::Other(e.into()))
-            .map(|_| prev)
-    }
+    type Column = Column;
 
     fn write(&self, key: &[u8], column: Column, buf: &[u8]) -> DatabaseResult<usize> {
-        database_metrics().write_meter.inc();
-
         let r = buf.len();
         self.db
             .put_cf(&self.cf(column), key, buf)
             .map_err(|e| DatabaseError::Other(e.into()))?;
 
+        database_metrics().write_meter.inc();
         database_metrics().bytes_written.observe(r as f64);
 
         Ok(r)
-    }
-
-    fn take(&self, key: &[u8], column: Column) -> DatabaseResult<Option<Value>> {
-        // FIXME: This is a race condition. We should use a transaction.
-        let prev = self.get(key, column)?;
-        // FIXME: This is a race condition. We should use a transaction.
-        self.db
-            .delete_cf(&self.cf(column), key)
-            .map_err(|e| DatabaseError::Other(e.into()))
-            .map(|_| prev)
     }
 
     fn delete(&self, key: &[u8], column: Column) -> DatabaseResult<()> {
         self.db
             .delete_cf(&self.cf(column), key)
             .map_err(|e| DatabaseError::Other(e.into()))
-    }
-
-    fn exists(&self, key: &[u8], column: Column) -> DatabaseResult<bool> {
-        // use pinnable mem ref to avoid memcpy of values associated with the key
-        // since we're just checking for the existence of the key
-        self.db
-            .get_pinned_cf(&self.cf(column), key)
-            .map_err(|e| DatabaseError::Other(e.into()))
-            .map(|v| v.is_some())
     }
 
     fn size_of_value(&self, key: &[u8], column: Column) -> DatabaseResult<Option<usize>> {
@@ -577,7 +541,7 @@ mod tests {
         let expected = Arc::new(vec![1, 2, 3]);
         db.put(&key, Column::Metadata, expected.clone()).unwrap();
         let prev = db
-            .put(&key, Column::Metadata, Arc::new(vec![2, 4, 6]))
+            .replace(&key, Column::Metadata, Arc::new(vec![2, 4, 6]))
             .unwrap();
 
         assert_eq!(prev, Some(expected));

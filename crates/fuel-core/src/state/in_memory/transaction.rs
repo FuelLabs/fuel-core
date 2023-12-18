@@ -69,7 +69,9 @@ impl MemoryTransactionView {
 }
 
 impl KeyValueStore for MemoryTransactionView {
-    fn put(
+    type Column = Column;
+
+    fn replace(
         &self,
         key: &[u8],
         column: Column,
@@ -81,7 +83,7 @@ impl KeyValueStore for MemoryTransactionView {
             .expect("poisoned lock")
             .insert(key_vec, WriteOperation::Insert(value.clone()))
             .is_some();
-        let res = self.view_layer.put(key, column, value);
+        let res = self.view_layer.replace(key, column, value);
         if contained_key {
             res
         } else {
@@ -123,19 +125,6 @@ impl KeyValueStore for MemoryTransactionView {
         self.view_layer.delete(key, column)
     }
 
-    fn exists(&self, key: &[u8], column: Column) -> DatabaseResult<bool> {
-        let k = key.to_vec();
-        if self.changes[column.as_usize()]
-            .lock()
-            .expect("poisoned lock")
-            .contains_key(&k)
-        {
-            self.view_layer.exists(key, column)
-        } else {
-            self.data_source.exists(key, column)
-        }
-    }
-
     fn size_of_value(&self, key: &[u8], column: Column) -> DatabaseResult<Option<usize>> {
         // try to fetch data from View layer if any changes to the key
         if self.changes[column.as_usize()]
@@ -146,6 +135,7 @@ impl KeyValueStore for MemoryTransactionView {
             self.view_layer.size_of_value(key, column)
         } else {
             // fall-through to original data source
+            // Note: The getting size from original database may be more performant than from `get`
             self.data_source.size_of_value(key, column)
         }
     }
@@ -179,6 +169,7 @@ impl KeyValueStore for MemoryTransactionView {
             self.view_layer.read(key, column, buf)
         } else {
             // fall-through to original data source
+            // Note: The read from original database may be more performant than from `get`
             self.data_source.read(key, column, buf)
         }
     }
@@ -310,10 +301,11 @@ mod tests {
         let store = Arc::new(MemoryStore::default());
         let view = MemoryTransactionView::new(store);
         let expected = Arc::new(vec![1, 2, 3]);
-        let _ = view.put(&[0xA, 0xB, 0xC], Column::Metadata, expected.clone());
+        view.put(&[0xA, 0xB, 0xC], Column::Metadata, expected.clone())
+            .unwrap();
         // test
         let ret = view
-            .put(&[0xA, 0xB, 0xC], Column::Metadata, Arc::new(vec![2, 4, 6]))
+            .replace(&[0xA, 0xB, 0xC], Column::Metadata, Arc::new(vec![2, 4, 6]))
             .unwrap();
         // verify
         assert_eq!(ret, Some(expected))

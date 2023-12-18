@@ -85,7 +85,14 @@ pub mod transactions;
 /// Database tables column ids to the corresponding [`fuel_core_storage::Mappable`] table.
 #[repr(u32)]
 #[derive(
-    Copy, Clone, Debug, strum_macros::EnumCount, PartialEq, Eq, enum_iterator::Sequence,
+    Copy,
+    Clone,
+    Debug,
+    strum_macros::EnumCount,
+    strum_macros::IntoStaticStr,
+    PartialEq,
+    Eq,
+    enum_iterator::Sequence,
 )]
 pub enum Column {
     /// The column id of metadata about the blockchain
@@ -150,6 +157,16 @@ impl Column {
     /// Returns the `usize` representation of the `Column`.
     pub fn as_usize(&self) -> usize {
         *self as usize
+    }
+}
+
+impl crate::state::StorageColumn for Column {
+    fn name(&self) -> &'static str {
+        self.into()
+    }
+
+    fn id(&self) -> u32 {
+        *self as u32
     }
 }
 
@@ -260,7 +277,7 @@ impl Database {
         column: Column,
         value: &V,
     ) -> DatabaseResult<Option<R>> {
-        let result = self.data.put(
+        let result = self.data.replace(
             key.as_ref(),
             column,
             Arc::new(postcard::to_stdvec(value).map_err(|_| DatabaseError::Codec)?),
@@ -281,7 +298,7 @@ impl Database {
         value: V,
     ) -> DatabaseResult<Option<Value>> {
         self.data
-            .put(key.as_ref(), column, Arc::new(value.as_ref().to_vec()))
+            .replace(key.as_ref(), column, Arc::new(value.as_ref().to_vec()))
     }
 
     fn batch_insert<K: AsRef<[u8]>, V: Serialize, S>(
