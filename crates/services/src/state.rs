@@ -88,7 +88,7 @@ impl StateWatcher {
         loop {
             let state = self.borrow().clone();
             if !state.started() {
-                return Ok(state)
+                return Ok(state);
             }
 
             self.changed().await?;

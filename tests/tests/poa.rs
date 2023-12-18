@@ -89,11 +89,7 @@ async fn can_get_sealed_block_from_poa_produced_block() {
 mod p2p {
     use super::*;
     use fuel_core::{
-        chain_config::{
-            ChainConfig,
-            ConsensusConfig,
-            StateConfig,
-        },
+        chain_config::ConsensusConfig,
         p2p_test_helpers::{
             make_config,
             make_node,
@@ -121,21 +117,15 @@ mod p2p {
         let pub_key = Input::owner(&secret.public_key());
 
         let mut config = Config::local_node();
-        config.chain_conf.consensus = ConsensusConfig::PoA {
+        config.chain_config.consensus = ConsensusConfig::PoA {
             signing_key: pub_key,
         };
-        let state_config = StateConfig::local_testnet();
 
-        let bootstrap_config = make_config(
-            "Bootstrap".to_string(),
-            chain_config.clone(),
-            state_config.clone(),
-        );
+        let bootstrap_config = make_config("Bootstrap".to_string(), config.clone());
         let bootstrap = Bootstrap::new(&bootstrap_config).await;
 
         let make_node_config = |name: &str| {
-            let mut config =
-                make_config(name.to_string(), chain_config.clone(), state_config.clone());
+            let mut config = make_config(name.to_string(), config.clone());
             config.block_production = Trigger::Interval {
                 block_time: Duration::from_secs(INTERVAL),
             };

@@ -102,7 +102,7 @@ where
         });
 
         if !tx.is_computed() {
-            return Err(Error::NoMetadata.into())
+            return Err(Error::NoMetadata.into());
         }
 
         // verify max gas is less than block limit
@@ -111,11 +111,11 @@ where
                 tx_gas: tx.max_gas(),
                 block_limit: self.config.chain_config.block_gas_limit,
             }
-            .into())
+            .into());
         }
 
         if self.by_hash.contains_key(&tx.id()) {
-            return Err(Error::NotInsertedTxKnown.into())
+            return Err(Error::NotInsertedTxKnown.into());
         }
 
         let mut max_limit_hit = false;
@@ -125,7 +125,7 @@ where
             // limit is hit, check if we can push out lowest priced tx
             let lowest_price = self.by_gas_price.lowest_value().unwrap_or_default();
             if lowest_price >= tx.price() {
-                return Err(Error::NotInsertedLimitHit.into())
+                return Err(Error::NotInsertedLimitHit.into());
             }
         }
         if self.config.metrics {
@@ -196,7 +196,7 @@ where
             for remove in removed.iter() {
                 self.remove_tx(&remove.id());
             }
-            return removed
+            return removed;
         }
         Vec::new()
     }
@@ -353,7 +353,7 @@ where
             tokio::time::Instant::now().checked_sub(self.config.transaction_ttl)
         else {
             // TTL is so big that we don't need to prune any transactions
-            return vec![]
+            return vec![];
         };
 
         let mut result = vec![];
@@ -364,7 +364,7 @@ where
                 let removed = self.remove_inner(&oldest_tx);
                 result.extend(removed.into_iter());
             } else {
-                break
+                break;
             }
         }
 
@@ -393,7 +393,7 @@ pub async fn check_single_tx(
     config: &Config,
 ) -> anyhow::Result<Checked<Transaction>> {
     if tx.is_mint() {
-        return Err(Error::NotSupportedTransactionType.into())
+        return Err(Error::NotSupportedTransactionType.into());
     }
 
     verify_tx_min_gas_price(&tx, config)?;
@@ -438,7 +438,7 @@ fn verify_tx_min_gas_price(tx: &Transaction, config: &Config) -> Result<(), Erro
         txpool_metrics().gas_price_histogram.observe(price as f64);
     }
     if price < config.min_gas_price {
-        return Err(Error::NotInsertedGasPriceTooLow)
+        return Err(Error::NotInsertedGasPriceTooLow);
     }
     Ok(())
 }

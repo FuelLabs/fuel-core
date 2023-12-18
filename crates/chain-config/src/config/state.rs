@@ -313,7 +313,7 @@ mod tests {
 
     #[cfg(feature = "std")]
     #[test]
-    fn can_roundrip_write_read() {
+    fn can_roundtrip_write_read() {
         let tmp_file = temp_dir();
         let disk_config = StateConfig::local_testnet();
 

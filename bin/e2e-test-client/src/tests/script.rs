@@ -29,7 +29,7 @@ pub async fn receipts(ctx: &TestContext) -> Result<(), Failed> {
     .await??;
     let status = result.status;
     if !result.success {
-        return Err(format!("transfer failed with status {status:?}").into())
+        return Err(format!("transfer failed with status {status:?}").into());
     }
     println!("The tx id of the script: {}", result.tx_id);
 
@@ -46,7 +46,7 @@ pub async fn receipts(ctx: &TestContext) -> Result<(), Failed> {
         if receipts.is_none() {
             return Err(
                 format!("Receipts are empty for query_number {query_number}").into(),
-            )
+            );
         }
     }
 
@@ -151,7 +151,7 @@ async fn _dry_runs(
         if receipts.is_empty() {
             return Err(
                 format!("Receipts are empty for query_number {query_number}").into(),
-            )
+            );
         }
 
         if expect == DryRunResult::Successful {
