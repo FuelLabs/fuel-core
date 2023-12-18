@@ -209,8 +209,8 @@ mod tests {
         let entries: Vec<_> = dir.path().read_dir().unwrap().try_collect().unwrap();
 
         match entries.as_slice() {
-            [entry] => assert_eq!(entry.path(), dir.path().join("state.json")),
-            _ => panic!("Expected single file \"state.json\""),
+            [entry] => assert_eq!(entry.path(), dir.path().join("state_config.json")),
+            _ => panic!("Expected single file \"state_config.json\""),
         }
     }
 
