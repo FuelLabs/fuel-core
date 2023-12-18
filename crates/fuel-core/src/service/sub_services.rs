@@ -175,7 +175,7 @@ pub fn init_sub_services(
     #[cfg(feature = "p2p")]
     let sync = fuel_core_sync::service::new_service(
         *last_block.header().height(),
-        p2p_adapter,
+        p2p_adapter.clone(),
         importer_adapter.clone(),
         verifier,
         config.sync,
@@ -206,6 +206,7 @@ pub fn init_sub_services(
         Box::new(tx_pool_adapter),
         Box::new(producer_adapter),
         Box::new(poa_adapter),
+        Box::new(p2p_adapter),
         config.query_log_threshold_time,
         config.api_request_timeout,
     )?;

@@ -101,6 +101,7 @@ query($id: TransactionId!) {
         time
       }
       ... on SuccessStatus {
+        transactionId
         block {
           id
         }
@@ -108,12 +109,47 @@ query($id: TransactionId!) {
         programState {
           returnType
           data
+        }
+        receipts {
+          param1
+          param2
+          amount
+          assetId
+          gas
+          digest
+          contract {
+            id
+          }
+          is
+          pc
+          ptr
+          ra
+          rb
+          rc
+          rd
+          reason
+          receiptType
+          to {
+            id
+          }
+          toAddress
+          val
+          len
+          result
+          gasUsed
+          data
+          sender
+          recipient
+          nonce
+          contractId
+          subId
         }
       }
       ... on SqueezedOutStatus {
         reason
       }
       ... on FailureStatus {
+        transactionId
         block {
           id
         }
@@ -122,6 +158,40 @@ query($id: TransactionId!) {
         programState {
           returnType
           data
+        }
+        receipts {
+          param1
+          param2
+          amount
+          assetId
+          gas
+          digest
+          contract {
+            id
+          }
+          is
+          pc
+          ptr
+          ra
+          rb
+          rc
+          rd
+          reason
+          receiptType
+          to {
+            id
+          }
+          toAddress
+          val
+          len
+          result
+          gasUsed
+          data
+          sender
+          recipient
+          nonce
+          contractId
+          subId
         }
       }
     }

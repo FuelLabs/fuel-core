@@ -140,9 +140,9 @@ pub struct P2PArgs {
     #[clap(long = "history-gossip", default_value = "3", env)]
     pub history_gossip: usize,
 
-    /// Time between each gossipsub heartbeat
-    #[clap(long = "gossip-heartbeat-interval", default_value = "1", env)]
-    pub gossip_heartbeat_interval: u64,
+    /// Time between each gossipsub heartbeat, in milliseconds
+    #[clap(long = "gossip-heartbeat-interval", default_value = "500ms", env)]
+    pub gossip_heartbeat_interval: humantime::Duration,
 
     /// The maximum byte size for each gossip (default is 18 MiB)
     #[clap(long = "max-transmit-size", default_value = MAX_RESPONSE_SIZE_STR, env)]
@@ -262,7 +262,7 @@ impl P2PArgs {
             .mesh_n_high(self.max_mesh_size)
             .history_length(self.history_length)
             .history_gossip(self.history_gossip)
-            .heartbeat_interval(Duration::from_secs(self.gossip_heartbeat_interval))
+            .heartbeat_interval(self.gossip_heartbeat_interval.into())
             .max_transmit_size(self.max_transmit_size)
             .build()
             .expect("valid gossipsub configuration");

@@ -1,7 +1,10 @@
 use fuel_core_types::fuel_types::BlockHeight;
 use std::{
     collections::VecDeque,
-    time::Duration,
+    time::{
+        Duration,
+        SystemTime,
+    },
 };
 use tokio::time::Instant;
 
@@ -9,6 +12,7 @@ use tokio::time::Instant;
 pub struct HeartbeatData {
     pub block_height: Option<BlockHeight>,
     pub last_heartbeat: Instant,
+    pub last_heartbeat_sys: SystemTime,
     // Size of moving average window
     pub window: u32,
     pub durations: VecDeque<Duration>,
@@ -19,6 +23,7 @@ impl HeartbeatData {
         Self {
             block_height: None,
             last_heartbeat: Instant::now(),
+            last_heartbeat_sys: SystemTime::now(),
             window,
             durations: VecDeque::with_capacity(window as usize),
         }
@@ -53,6 +58,7 @@ impl HeartbeatData {
         self.block_height = Some(block_height);
         let old_hearbeat = self.last_heartbeat;
         self.last_heartbeat = Instant::now();
+        self.last_heartbeat_sys = SystemTime::now();
         let new_duration = self.last_heartbeat.saturating_duration_since(old_hearbeat);
         self.add_new_duration(new_duration);
     }
