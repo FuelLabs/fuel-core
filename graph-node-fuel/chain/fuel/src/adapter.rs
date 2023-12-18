@@ -1,6 +1,7 @@
 use crate::capabilities::NodeCapabilities;
-use crate::{data_source::DataSource, Chain};
+use crate::Chain;
 use graph::blockchain as bc;
+use graph::blockchain::DataSource;
 use graph::prelude::*;
 
 #[derive(Clone, Debug, Default)]
