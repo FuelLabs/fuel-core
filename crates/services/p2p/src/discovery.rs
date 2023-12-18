@@ -133,7 +133,6 @@ impl NetworkBehaviour for DiscoveryBehaviour {
     }
 
     fn on_swarm_event(&mut self, event: FromSwarm) {
-        tracing::info!("discovery swarm event: {:?}", &event);
         match &event {
             FromSwarm::ConnectionEstablished(ConnectionEstablished {
                 peer_id,
