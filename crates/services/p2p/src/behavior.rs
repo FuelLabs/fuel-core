@@ -95,7 +95,6 @@ impl<Codec: NetworkCodec> FuelBehaviour<Codec> {
             discovery_config
                 .enable_mdns(p2p_config.enable_mdns)
                 .max_peers_connected(p2p_config.max_peers_connected as usize)
-                .allow_private_addresses(p2p_config.allow_private_addresses)
                 .with_bootstrap_nodes(p2p_config.bootstrap_nodes.clone())
                 .with_reserved_nodes(p2p_config.reserved_nodes.clone())
                 .enable_reserved_nodes_only_mode(p2p_config.reserved_nodes_only_mode);

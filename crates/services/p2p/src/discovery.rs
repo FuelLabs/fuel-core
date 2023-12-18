@@ -46,12 +46,6 @@ const SIXTY_SECONDS: Duration = Duration::from_secs(60);
 
 /// NetworkBehavior for discovery of nodes
 pub struct DiscoveryBehaviour {
-    /// List of bootstrap nodes and their addresses
-    _bootstrap_nodes: Vec<(PeerId, Multiaddr)>,
-
-    /// List of reserved nodes and their addresses
-    _reserved_nodes: Vec<(PeerId, Multiaddr)>,
-
     /// Track the connected peers
     connected_peers: HashSet<PeerId>,
 
@@ -70,10 +64,6 @@ pub struct DiscoveryBehaviour {
 
     /// Maximum amount of allowed peers
     max_peers_connected: usize,
-
-    /// If false, `addresses_of_peer` won't return any private IPv4/IPv6 address,
-    /// except for the ones stored in `bootstrap_nodes` and `reserved_peers`.
-    _allow_private_addresses: bool,
 }
 
 impl DiscoveryBehaviour {

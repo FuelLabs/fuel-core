@@ -30,7 +30,6 @@ pub struct DiscoveryConfig {
     reserved_nodes_only_mode: bool,
     random_walk: Option<Duration>,
     with_mdns: bool,
-    allow_private_addresses: bool,
     network_name: String,
     max_peers_connected: usize,
     connection_idle_timeout: Duration,
@@ -45,7 +44,6 @@ impl DiscoveryConfig {
             reserved_nodes_only_mode: false,
             random_walk: None,
             max_peers_connected: std::usize::MAX,
-            allow_private_addresses: false,
             with_mdns: false,
             network_name,
             connection_idle_timeout: Duration::from_secs(10),
@@ -55,12 +53,6 @@ impl DiscoveryConfig {
     /// limit the max number of connected nodes
     pub fn max_peers_connected(&mut self, limit: usize) -> &mut Self {
         self.max_peers_connected = limit;
-        self
-    }
-
-    /// Enable reporting of private addresses
-    pub fn allow_private_addresses(&mut self, value: bool) -> &mut Self {
-        self.allow_private_addresses = value;
         self
     }
 
@@ -112,7 +104,6 @@ impl DiscoveryConfig {
             bootstrap_nodes,
             network_name,
             max_peers_connected,
-            allow_private_addresses,
             reserved_nodes,
             reserved_nodes_only_mode,
             ..
@@ -178,15 +169,12 @@ impl DiscoveryConfig {
         };
 
         DiscoveryBehaviour {
-            _bootstrap_nodes: bootstrap_nodes,
-            _reserved_nodes: reserved_nodes,
             connected_peers: HashSet::new(),
             kademlia,
             next_kad_random_walk,
             duration_to_next_kad: Duration::from_secs(1),
             max_peers_connected,
             mdns,
-            _allow_private_addresses: allow_private_addresses,
         }
     }
 }

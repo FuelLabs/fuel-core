@@ -2897,7 +2897,6 @@ version = "0.22.0"
 dependencies = [
  "anyhow",
  "async-trait",
- "asynchronous-codec 0.7.0",
  "ctor",
  "fuel-core-chain-config",
  "fuel-core-metrics",
