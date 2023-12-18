@@ -175,9 +175,15 @@ impl Encoder {
 
 #[cfg(test)]
 mod tests {
-    use std::collections::HashSet;
+    use std::{
+        collections::HashSet,
+        fmt::Debug,
+    };
 
-    use crate::Randomize;
+    use crate::{
+        Group,
+        Randomize,
+    };
 
     use super::*;
     use itertools::Itertools;
@@ -236,26 +242,63 @@ mod tests {
     }
 
     #[test]
-    fn parquet_encoder_encodes_coins_in_expected_file() {
+    fn parquet_encoder_encodes_types_in_expected_files() {
+        let mut rng = StdRng::seed_from_u64(0);
+
+        test_data_written_in_expected_file::<CoinConfig>(
+            &mut rng,
+            "coins.parquet",
+            |coins, encoder| encoder.write_coins(coins),
+        );
+
+        test_data_written_in_expected_file::<MessageConfig>(
+            &mut rng,
+            "messages.parquet",
+            |coins, encoder| encoder.write_messages(coins),
+        );
+
+        test_data_written_in_expected_file::<ContractConfig>(
+            &mut rng,
+            "contracts.parquet",
+            |coins, encoder| encoder.write_contracts(coins),
+        );
+
+        test_data_written_in_expected_file::<ContractStateConfig>(
+            &mut rng,
+            "contract_state.parquet",
+            |coins, encoder| encoder.write_contract_state(coins),
+        );
+
+        test_data_written_in_expected_file::<ContractBalance>(
+            &mut rng,
+            "contract_balance.parquet",
+            |coins, encoder| encoder.write_contract_balance(coins),
+        );
+    }
+
+    fn test_data_written_in_expected_file<T>(
+        rng: impl rand::Rng,
+        expected_filename: &str,
+        write: impl FnOnce(Vec<T>, &mut Encoder) -> anyhow::Result<()>,
+    ) where
+        parquet::Decoder<File, T>: Iterator<Item = anyhow::Result<Group<T>>>,
+        T: Randomize + PartialEq + Debug + Clone,
+    {
         // given
         let dir = tempfile::tempdir().unwrap();
         let mut encoder = Encoder::parquet(dir.path(), 0).unwrap();
-
-        let seeded_rng = StdRng::seed_from_u64(0);
+        let original_data = vec![T::randomize(rng)];
 
         // when
-        let coins = vec![CoinConfig::randomize(seeded_rng)];
-        encoder.write_coins(coins.clone()).unwrap();
+        write(original_data.clone(), &mut encoder).unwrap();
         encoder.close().unwrap();
 
         // then
-        let coins = parquet::Decoder::<File, CoinConfig>::new(
-            dir.path().join("coins.parquet"),
-            Compression::GZIP(GzipLevel::try_new(0).unwrap()),
-        )
-        .unwrap()
-        .collect::<Result<Vec<_>, _>>()
-        .unwrap();
-        assert_eq!(coins, coins);
+        let file = std::fs::File::open(dir.path().join(expected_filename)).unwrap();
+        let decoded = parquet::Decoder::<File, T>::new(file)
+            .unwrap()
+            .collect::<Result<Vec<_>, _>>()
+            .unwrap();
+        assert_eq!(original_data, decoded.first().unwrap().data);
     }
 }
