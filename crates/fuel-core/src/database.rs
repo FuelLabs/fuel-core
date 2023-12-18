@@ -56,6 +56,7 @@ type DatabaseResult<T> = Result<T>;
 // TODO: Extract `Database` and all belongs into `fuel-core-database`.
 #[cfg(feature = "rocksdb")]
 use crate::state::rocks_db::RocksDb;
+use crate::state::Value;
 #[cfg(feature = "rocksdb")]
 use std::path::Path;
 #[cfg(feature = "rocksdb")]
@@ -253,7 +254,7 @@ impl Database {
 /// Mutable methods.
 // TODO: Add `&mut self` to them.
 impl Database {
-    fn insert<K: AsRef<[u8]>, V: Serialize, R: DeserializeOwned>(
+    fn insert<K: AsRef<[u8]>, V: Serialize + ?Sized, R: DeserializeOwned>(
         &self,
         key: K,
         column: Column,
@@ -271,6 +272,16 @@ impl Database {
         } else {
             Ok(None)
         }
+    }
+
+    fn insert_raw<K: AsRef<[u8]>, V: AsRef<[u8]>>(
+        &self,
+        key: K,
+        column: Column,
+        value: V,
+    ) -> DatabaseResult<Option<Value>> {
+        self.data
+            .put(key.as_ref(), column, Arc::new(value.as_ref().to_vec()))
     }
 
     fn batch_insert<K: AsRef<[u8]>, V: Serialize, S>(
@@ -299,36 +310,15 @@ impl Database {
         self.data.batch_write(&mut set.into_iter())
     }
 
-    fn remove<V: DeserializeOwned>(
+    fn take<V: DeserializeOwned>(
         &self,
         key: &[u8],
         column: Column,
     ) -> DatabaseResult<Option<V>> {
         self.data
-            .delete(key, column)?
+            .take(key, column)?
             .map(|val| postcard::from_bytes(&val).map_err(|_| DatabaseError::Codec))
             .transpose()
-    }
-
-    fn write(&self, key: &[u8], column: Column, buf: &[u8]) -> DatabaseResult<usize> {
-        self.data.write(key, column, buf)
-    }
-
-    fn replace(
-        &self,
-        key: &[u8],
-        column: Column,
-        buf: &[u8],
-    ) -> DatabaseResult<(usize, Option<Vec<u8>>)> {
-        self.data
-            .replace(key, column, buf)
-            .map(|(size, value)| (size, value.map(|value| value.deref().clone())))
-    }
-
-    fn take(&self, key: &[u8], column: Column) -> DatabaseResult<Option<Vec<u8>>> {
-        self.data
-            .take(key, column)
-            .map(|value| value.map(|value| value.deref().clone()))
     }
 }
 
@@ -353,7 +343,7 @@ impl Database {
 
     fn read_alloc(&self, key: &[u8], column: Column) -> DatabaseResult<Option<Vec<u8>>> {
         self.data
-            .read_alloc(key, column)
+            .get(key, column)
             .map(|value| value.map(|value| value.deref().clone()))
     }
 

@@ -27,16 +27,9 @@ pub trait KeyValueStore {
 
     fn write(&self, key: &[u8], column: Column, buf: &[u8]) -> DatabaseResult<usize>;
 
-    fn replace(
-        &self,
-        key: &[u8],
-        column: Column,
-        buf: &[u8],
-    ) -> DatabaseResult<(usize, Option<Value>)>;
-
     fn take(&self, key: &[u8], column: Column) -> DatabaseResult<Option<Value>>;
 
-    fn delete(&self, key: &[u8], column: Column) -> DatabaseResult<Option<Value>>;
+    fn delete(&self, key: &[u8], column: Column) -> DatabaseResult<()>;
 
     fn exists(&self, key: &[u8], column: Column) -> DatabaseResult<bool>;
 
@@ -50,8 +43,6 @@ pub trait KeyValueStore {
         column: Column,
         buf: &mut [u8],
     ) -> DatabaseResult<Option<usize>>;
-
-    fn read_alloc(&self, key: &[u8], column: Column) -> DatabaseResult<Option<Value>>;
 
     fn iter_all(
         &self,
