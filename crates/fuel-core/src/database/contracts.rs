@@ -82,7 +82,9 @@ impl StorageMutate<ContractsRawCode> for Database {
         &mut self,
         key: &<ContractsRawCode as Mappable>::Key,
     ) -> Result<Option<<ContractsRawCode as Mappable>::OwnedValue>, Self::Error> {
-        Database::take(self, key.as_ref(), Column::ContractsRawCode).map_err(Into::into)
+        let result = Database::take_raw(self, key.as_ref(), Column::ContractsRawCode)?;
+
+        Ok(result.map(|v| Contract::from(v.as_ref().clone())))
     }
 }
 

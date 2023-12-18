@@ -320,6 +320,10 @@ impl Database {
             .map(|val| postcard::from_bytes(&val).map_err(|_| DatabaseError::Codec))
             .transpose()
     }
+
+    fn take_raw(&self, key: &[u8], column: Column) -> DatabaseResult<Option<Value>> {
+        self.data.take(key, column)
+    }
 }
 
 /// Read-only methods.
