@@ -24,6 +24,7 @@ ethers = "2"
 fuel-core = { path = "../crates/fuel-core", default-features = false, features = ["test-helpers"] }
 fuel-core-benches = { path = "../benches" }
 fuel-core-client = { path = "../crates/client", features = ["test-helpers"] }
+fuel-core-executor = { workspace = true, features = ["test-helpers"] }
 fuel-core-p2p = { path = "../crates/services/p2p", features = ["test-helpers"], optional = true }
 fuel-core-poa = { path = "../crates/services/consensus_module/poa" }
 fuel-core-relayer = { path = "../crates/services/relayer", features = [
@@ -37,6 +38,7 @@ futures = "0.3"
 hyper = { workspace = true, features = ["server"] }
 insta = { workspace = true }
 itertools = { workspace = true }
+primitive-types = { workspace = true, default-features = false }
 rand = { workspace = true }
 reqwest = { workspace = true }
 rstest = "0.15"

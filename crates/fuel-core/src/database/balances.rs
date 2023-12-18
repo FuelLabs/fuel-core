@@ -37,12 +37,9 @@ use fuel_core_types::{
     },
 };
 use itertools::Itertools;
-use std::{
-    borrow::{
-        BorrowMut,
-        Cow,
-    },
-    ops::Deref,
+use std::borrow::{
+    BorrowMut,
+    Cow,
 };
 
 use super::utils::MerkleTreeDbUtils;
@@ -88,10 +85,9 @@ impl StorageMutate<ContractsAssets> for Database {
             MerkleTree::load(storage, &root)
                 .map_err(|err| StorageError::Other(anyhow::anyhow!("{err:?}")))?;
 
-        let asset_id = *key.asset_id().deref();
         // Update the contact's key-value dataset. The key is the asset id and the
         // value the Word
-        tree.update(MerkleTreeKey::new(asset_id), value.to_be_bytes().as_slice())
+        tree.update(MerkleTreeKey::new(key), value.to_be_bytes().as_slice())
             .map_err(|err| StorageError::Other(anyhow::anyhow!("{err:?}")))?;
 
         // Generate new metadata for the updated tree
@@ -124,10 +120,9 @@ impl StorageMutate<ContractsAssets> for Database {
                 MerkleTree::load(storage, &root)
                     .map_err(|err| StorageError::Other(anyhow::anyhow!("{err:?}")))?;
 
-            let asset_id = *key.asset_id().deref();
             // Update the contract's key-value dataset. The key is the asset id and
             // the value is the Word
-            tree.delete(MerkleTreeKey::new(asset_id))
+            tree.delete(MerkleTreeKey::new(key))
                 .map_err(|err| StorageError::Other(anyhow::anyhow!("{err:?}")))?;
 
             let root = tree.root();
@@ -172,7 +167,7 @@ impl Database {
 
         let balance_entries = balances
             .iter()
-            .map(|(key, value)| (ContractsAssetKey::new(contract_id, &key), value));
+            .map(|(key, value)| (ContractsAssetKey::new(contract_id, key), value));
         self.batch_insert(Column::ContractsAssets, balance_entries)
             .unwrap();
 
@@ -238,9 +233,12 @@ impl Database {
         // Merkle data:
         // - Asset key should be converted into `MerkleTreeKey` by `new` function that hashes them.
         // - The balance value are original.
-        let balances = balances
-            .into_iter()
-            .map(|(asset, value)| (MerkleTreeKey::new(asset), value.to_be_bytes()));
+        let balances = balances.into_iter().map(|(asset, value)| {
+            (
+                MerkleTreeKey::new(ContractsAssetKey::new(contract_id, &asset)),
+                value.to_be_bytes(),
+            )
+        });
         let (root, nodes) = in_memory::MerkleTree::nodes_from_set(balances);
         self.batch_insert(ContractsAssetsMerkleData::column(), nodes.into_iter())?;
         let metadata = SparseMerkleMetadata { root };
@@ -547,6 +545,42 @@ mod tests {
 
         assert_ne!(root_1, root_2);
         assert_eq!(root_0, root_2);
+    }
+
+    #[test]
+    fn updating_foreign_contract_does_not_affect_the_given_contract_insertion() {
+        let given_contract_id = ContractId::from([1u8; 32]);
+        let foreign_contract_id = ContractId::from([2u8; 32]);
+        let database = &mut Database::default();
+
+        let asset_id = AssetId::new([0u8; 32]);
+        let balance: Word = 100;
+
+        // Given
+        let given_contract_key = (&given_contract_id, &asset_id).into();
+        let foreign_contract_key = (&foreign_contract_id, &asset_id).into();
+        database
+            .storage::<ContractsAssets>()
+            .insert(&given_contract_key, &balance)
+            .unwrap();
+
+        // When
+        database
+            .storage::<ContractsAssets>()
+            .insert(&foreign_contract_key, &balance)
+            .unwrap();
+        database
+            .storage::<ContractsAssets>()
+            .remove(&foreign_contract_key)
+            .unwrap();
+
+        // Then
+        let result = database
+            .storage::<ContractsAssets>()
+            .insert(&given_contract_key, &balance)
+            .unwrap();
+
+        assert!(result.is_some());
     }
 
     #[test]

@@ -47,6 +47,7 @@ use fuel_core_types::{
     },
     services::{
         graphql_api::ContractBalance,
+        p2p::PeerInfo,
         txpool::{
             InsertionResult,
             TransactionStatus,
@@ -202,4 +203,9 @@ pub trait DatabaseMessageProof: Send + Sync {
         message_block_height: &BlockHeight,
         commit_block_height: &BlockHeight,
     ) -> StorageResult<MerkleProof>;
+}
+
+#[async_trait::async_trait]
+pub trait P2pPort: Send + Sync {
+    async fn all_peer_info(&self) -> anyhow::Result<Vec<PeerInfo>>;
 }

@@ -9,6 +9,10 @@ repository = { workspace = true }
 description = "Command line utilities for fuel-core key management"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
+[[bin]]
+name = "fuel-core-keygen"
+path = "src/main.rs"
+
 [dependencies]
 anyhow = { workspace = true }
 atty = "0.2.14"

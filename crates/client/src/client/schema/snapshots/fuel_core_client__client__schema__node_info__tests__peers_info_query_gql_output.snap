@@ -1,0 +1,18 @@
+---
+source: crates/client/src/client/schema/node_info.rs
+expression: operation.query
+---
+query {
+  nodeInfo {
+    peers {
+      id
+      addresses
+      clientVersion
+      blockHeight
+      lastHeartbeatMs
+      appScore
+    }
+  }
+}
+
+

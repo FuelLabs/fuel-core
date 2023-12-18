@@ -1,7 +1,6 @@
 use crate::{
     database::{
         transaction::DatabaseTransaction,
-        vm_database::VmDatabase,
         Database,
     },
     schema::scalars::U64,
@@ -14,6 +13,7 @@ use async_graphql::{
 };
 use fuel_core_storage::{
     not_found,
+    vm_storage::VmStorage,
     InterpreterStorage,
 };
 use fuel_core_types::{
@@ -61,7 +61,7 @@ pub struct Config {
 
 #[derive(Debug, Clone, Default)]
 pub struct ConcreteStorage {
-    vm: HashMap<ID, Interpreter<VmDatabase, Script>>,
+    vm: HashMap<ID, Interpreter<VmStorage<Database>, Script>>,
     tx: HashMap<ID, Vec<Script>>,
     db: HashMap<ID, DatabaseTransaction>,
     params: ConsensusParameters,
@@ -156,13 +156,13 @@ impl ConcreteStorage {
             .ok_or_else(|| anyhow::anyhow!("The VM instance was not found"))
     }
 
-    fn vm_database(storage: &DatabaseTransaction) -> anyhow::Result<VmDatabase> {
+    fn vm_database(storage: &DatabaseTransaction) -> anyhow::Result<VmStorage<Database>> {
         let block = storage
             .get_current_block()?
             .ok_or(not_found!("Block for VMDatabase"))?
             .into_owned();
 
-        let vm_database = VmDatabase::new(
+        let vm_database = VmStorage::new(
             storage.as_ref().clone(),
             &block.header().consensus,
             // TODO: Use a real coinbase address

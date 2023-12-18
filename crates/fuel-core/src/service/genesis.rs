@@ -101,7 +101,7 @@ fn import_chain_state(
 
     let coins_root = {
         let coins = config.state_reader.coins()?;
-        let roots = import_coin_configs(&original_database, coins, block_height)?
+        let roots = import_coin_configs(original_database, coins, block_height)?
             .into_iter()
             .sorted()
             .enumerate()
@@ -112,7 +112,7 @@ fn import_chain_state(
 
     let messages_root = {
         let messages = config.state_reader.messages()?;
-        let roots = import_message_configs(&original_database, messages)?
+        let roots = import_message_configs(original_database, messages)?
             .into_iter()
             .sorted()
             .enumerate()
@@ -123,14 +123,14 @@ fn import_chain_state(
 
     let contracts = config.state_reader.contracts()?;
     let mut contract_ids =
-        import_contract_configs(&original_database, contracts, block_height)?;
+        import_contract_configs(original_database, contracts, block_height)?;
     contract_ids.sort();
 
     let contract_states = config.state_reader.contract_state()?;
-    import_contract_state(&original_database, contract_states)?;
+    import_contract_state(original_database, contract_states)?;
 
     let contract_balances = config.state_reader.contract_balance()?;
-    import_contract_balance(&original_database, contract_balances)?;
+    import_contract_balance(original_database, contract_balances)?;
 
     let mut contracts_tree = binary::in_memory::MerkleTree::new();
     for contract_id in contract_ids {
@@ -402,14 +402,14 @@ fn init_coin(
             Bytes32::try_from(
                 (0..(Bytes32::LEN - WORD_SIZE))
                     .map(|_| 0u8)
-                    .chain((output_index / 255).to_be_bytes().into_iter())
+                    .chain((output_index / 255).to_be_bytes())
                     .collect_vec()
                     .as_slice(),
             )
             .expect("Incorrect genesis transaction id byte length")
         }),
         coin.output_index
-            .unwrap_or_else(|| (output_index % 255) as u8),
+            .unwrap_or((output_index % 255) as u8),
     );
 
     let coin = CompressedCoin {
@@ -447,6 +447,7 @@ fn init_contract(
     let salt = contract_config.salt;
     let root = contract.root();
     let contract_id = contract_config.contract_id;
+    #[allow(clippy::cast_possible_truncation)]
     let utxo_id = if let (Some(tx_id), Some(output_idx)) =
         (contract_config.tx_id, contract_config.output_index)
     {
@@ -457,7 +458,7 @@ fn init_contract(
             Bytes32::try_from(
                 (0..(Bytes32::LEN - WORD_SIZE))
                     .map(|_| 0u8)
-                    .chain((output_index as u64 / 255).to_be_bytes().into_iter())
+                    .chain((output_index / 255).to_be_bytes())
                     .collect_vec()
                     .as_slice(),
             )

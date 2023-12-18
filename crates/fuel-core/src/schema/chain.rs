@@ -704,10 +704,6 @@ impl ChainInfo {
         height.0.into()
     }
 
-    async fn peer_count(&self) -> u16 {
-        0
-    }
-
     async fn consensus_parameters(
         &self,
         ctx: &Context<'_>,
