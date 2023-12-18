@@ -1,4 +1,4 @@
-#[rustfmt::skip]
+  #[rustfmt::skip]
 #[path = "protobuf/zklend.starknet.r#type.v1.rs"]
 mod pbcodec;
 

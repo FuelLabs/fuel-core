@@ -1,4 +1,4 @@
-use graph::{
+ use graph::{
     blockchain::{MappingTriggerTrait, TriggerData},
     runtime::{asc_new, gas::GasCounter, AscPtr, HostExportError},
 };

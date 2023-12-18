@@ -1,0 +1,26 @@
+[package]
+name = "graph-chain-fuel"
+version.workspace = true
+edition.workspace = true
+
+[build-dependencies]
+tonic-build = { workspace = true }
+
+
+
+[dependencies]
+prost = { workspace = true }
+tonic = { workspace = true }
+prost-types = { workspace = true }
+graph = { path = "../../graph" }
+hex = { version = "0.4.3", features = ["serde"] }
+serde = "1.0"
+sha3 = "0.10.8"
+starknet-ff = "0.3.5"
+anyhow = "1.0"
+
+graph-runtime-wasm = { path = "../../runtime/wasm" }
+graph-runtime-derive = { path = "../../runtime/derive" }
+
+[dev-dependencies]
+fuel-vm = "0.43.1"

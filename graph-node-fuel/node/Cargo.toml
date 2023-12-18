@@ -26,6 +26,7 @@ graph-chain-arweave = { path = "../chain/arweave" }
 graph-chain-ethereum = { path = "../chain/ethereum" }
 graph-chain-near = { path = "../chain/near" }
 graph-chain-cosmos = { path = "../chain/cosmos" }
+graph-chain-fuel = { path = "../chain/fuel" }
 graph-chain-substreams = { path = "../chain/substreams" }
 graph-chain-starknet = { path = "../chain/starknet" }
 graph-graphql = { path = "../graphql" }
