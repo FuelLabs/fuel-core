@@ -14,7 +14,6 @@ use crate::{
         OutboundResponse,
         RequestMessage,
         ResponseMessage,
-        // MAX_REQUEST_SIZE,
         REQUEST_RESPONSE_PROTOCOL_ID,
     },
 };

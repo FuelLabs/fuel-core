@@ -257,6 +257,8 @@ mod tests {
     use libp2p_swarm_test::SwarmExt;
     use std::sync::Arc;
 
+    const MAX_PEERS: usize = 50;
+
     fn build_behavior_fn(
         bootstrap_nodes: Vec<Multiaddr>,
     ) -> impl FnOnce(Keypair) -> DiscoveryBehaviour {
@@ -266,7 +268,7 @@ mod tests {
                 "test_network".into(),
             );
             config
-                .max_peers_connected(50)
+                .max_peers_connected(MAX_PEERS)
                 .with_bootstrap_nodes(bootstrap_nodes)
                 .with_random_walk(Duration::from_millis(500));
 
@@ -300,6 +302,7 @@ mod tests {
     // TODO: This used to fail with any connection closures, but that was causing a lot of failed tests.
     //   Now it allows for many connection closures before failing. We don't know what caused the
     //   connections to start failing, but had something to do with upgrading `libp2p`.
+    //   https://github.com/FuelLabs/fuel-core/issues/1562
     #[tokio::test]
     async fn discovery_works() {
         // Number of peers in the network

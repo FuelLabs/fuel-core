@@ -129,8 +129,6 @@ impl NetworkBehaviour for PeerReportBehaviour {
                         .push_back(PeerReportEvent::PeerDisconnected { peer_id })
                 }
             }
-            FromSwarm::DialFailure(_) => {}
-            FromSwarm::ListenFailure(_) => {}
             _ => {}
         }
     }
