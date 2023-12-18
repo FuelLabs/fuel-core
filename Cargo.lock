@@ -3198,7 +3198,6 @@ dependencies = [
  "hyper",
  "insta",
  "itertools 0.10.5",
- "pretty_assertions",
  "primitive-types",
  "rand 0.8.5",
  "reqwest",
@@ -6089,16 +6088,6 @@ checksum = "368ba315fb8c5052ab692e68a0eefec6ec57b23a36959c14496f0b0df2c0cecf"
 dependencies = [
  "predicates-core",
  "termtree",
-]
-
-[[package]]
-name = "pretty_assertions"
-version = "1.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "af7cee1a6c8a5b9208b3cb1061f10c0cb689087b3d8ce85fb9d2dd7a29b6ba66"
-dependencies = [
- "diff",
- "yansi",
 ]
 
 [[package]]

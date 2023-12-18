@@ -17,7 +17,6 @@ name = "integration_tests"
 path = "tests/lib.rs"
 
 [dependencies]
-pretty_assertions = { version= "1.4.0", default-features = false, features = ["alloc"] }
 anyhow = { workspace = true }
 async-trait = { workspace = true }
 cynic = { workspace = true }

@@ -3,7 +3,6 @@ use fuel_core::chain_config::{
     StateConfig,
 };
 use fuel_core_types::fuel_tx::GasCosts;
-use pretty_assertions::assert_eq;
 
 #[test_case::test_case(
     "./../deployment/scripts/chainspec/beta",
