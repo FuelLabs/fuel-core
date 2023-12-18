@@ -322,7 +322,6 @@ pub struct ChainQuery {
 pub struct ChainInfo {
     pub da_height: U64,
     pub name: String,
-    pub peer_count: i32,
     pub latest_block: Block,
     pub consensus_parameters: ConsensusParameters,
 }

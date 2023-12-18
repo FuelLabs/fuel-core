@@ -1,8 +1,8 @@
 pub mod default_gas_costs;
 pub mod import;
 
-use fuel_core::database::vm_database::VmDatabase;
 pub use fuel_core::database::Database;
+pub use fuel_core_storage::vm_storage::VmStorage;
 use fuel_core_types::{
     fuel_asm::{
         op,
@@ -36,9 +36,9 @@ use std::iter;
 
 const LARGE_GAS_LIMIT: u64 = u64::MAX - 1001;
 
-fn new_db() -> VmDatabase {
+fn new_db() -> VmStorage<Database> {
     // when rocksdb is enabled, this creates a new db instance with a temporary path
-    VmDatabase::default()
+    VmStorage::default()
 }
 
 pub struct ContractCode {
@@ -89,7 +89,7 @@ pub struct VmBench {
     pub inputs: Vec<Input>,
     pub outputs: Vec<Output>,
     pub witnesses: Vec<Witness>,
-    pub db: Option<VmDatabase>,
+    pub db: Option<VmStorage<Database>>,
     pub instruction: Instruction,
     pub prepare_call: Option<PrepareCall>,
     pub dummy_contract: Option<ContractId>,
@@ -100,7 +100,7 @@ pub struct VmBench {
 
 #[derive(Debug, Clone)]
 pub struct VmBenchPrepared {
-    pub vm: Interpreter<VmDatabase, Script>,
+    pub vm: Interpreter<VmStorage<Database>, Script>,
     pub instruction: Instruction,
     pub diff: diff::Diff<diff::InitialVmState>,
 }
@@ -148,7 +148,7 @@ impl VmBench {
 
     pub fn contract_using_db<R>(
         rng: &mut R,
-        mut db: VmDatabase,
+        mut db: VmStorage<Database>,
         instruction: Instruction,
     ) -> anyhow::Result<Self>
     where
@@ -209,7 +209,7 @@ impl VmBench {
             .with_prepare_call(prepare_call))
     }
 
-    pub fn with_db(mut self, db: VmDatabase) -> Self {
+    pub fn with_db(mut self, db: VmStorage<Database>) -> Self {
         self.db.replace(db);
         self
     }

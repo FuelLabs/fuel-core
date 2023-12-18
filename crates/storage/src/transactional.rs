@@ -33,6 +33,14 @@ impl<Storage> StorageTransaction<Storage> {
     }
 }
 
+impl<Storage: Transactional + ?Sized> Transactional for StorageTransaction<Storage> {
+    type Storage = Storage::Storage;
+
+    fn transaction(&self) -> StorageTransaction<Self::Storage> {
+        self.as_ref().transaction()
+    }
+}
+
 impl<Storage: ?Sized> Transaction<Storage> for StorageTransaction<Storage> {
     fn commit(&mut self) -> StorageResult<()> {
         self.transaction.commit()

@@ -2,7 +2,7 @@ name: E2E Test Beta-4
 
 on:
   schedule:
-    - cron: '* * * * *'
+    - cron: '*/30 * * * *'
 
 jobs:
   e2e_test:
