@@ -230,7 +230,7 @@ impl Dependency {
                             return Err(Error::NotInsertedIoWrongAmount.into())
                         }
                         if asset_id != i_asset_id {
-                            return Err(Error::NotInsertedIoWrongAssetId.into());
+                            return Err(Error::NotInsertedIoWrongAssetId.into())
                         }
                     }
                     // else do nothing, everything is variable and can be only check on execution
@@ -278,7 +278,7 @@ impl Dependency {
                         max_depth =
                             core::cmp::max(state.depth.saturating_add(1), max_depth);
                         if max_depth > self.max_depth {
-                            return Err(Error::NotInsertedMaxDepth.into());
+                            return Err(Error::NotInsertedMaxDepth.into())
                         }
                         // output is present but is it spend by other tx?
                         if let Some(ref spend_by) = state.is_spend_by {
