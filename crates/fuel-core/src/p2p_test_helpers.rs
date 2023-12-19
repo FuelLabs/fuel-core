@@ -382,7 +382,7 @@ pub async fn make_node(node_config: Config, test_txs: Vec<Transaction>) -> Node 
         FuelService::from_database(db.clone(), node_config),
     )
     .await
-    .expect("All services should start in less than 2 second")
+    .expect("All services should start in less than 2 seconds")
     .expect("The `FuelService should start without error");
 
     let config = node.shared.config.clone();
