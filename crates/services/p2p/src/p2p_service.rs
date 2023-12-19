@@ -392,7 +392,7 @@ impl<Codec: NetworkCodec> FuelP2PService<Codec> {
 
     /// Report application score
     /// If application peer score is below allowed threshold
-    /// the peer is banend
+    /// the peer is banned
     pub fn report_peer(
         &mut self,
         peer_id: PeerId,

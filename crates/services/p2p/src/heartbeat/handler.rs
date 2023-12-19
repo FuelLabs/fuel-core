@@ -148,7 +148,7 @@ impl ConnectionHandler for HeartbeatHandler {
         }
 
         loop {
-            // TODO: Close connection properly: https://github.com/libp2p/rust-libp2p/pull/4755
+            // TODO: Close connection properly: https://github.com/FuelLabs/fuel-core/pull/1379
             // if self.failure_count >= self.config.max_failures.into() {
             //     // Request from `Swarm` to close the faulty connection
             //     return Poll::Ready(ConnectionHandlerEvent::Close(
