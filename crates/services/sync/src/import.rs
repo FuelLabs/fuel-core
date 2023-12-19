@@ -523,7 +523,7 @@ where
     } = headers;
     let Some(transaction_data) = get_transactions(peer.clone(), range.clone(), p2p).await
     else {
-        return Batch::new(peer, range, vec![]);
+        return Batch::new(peer, range, vec![])
     };
 
     let iter = headers.into_iter().zip(transaction_data.into_iter());
@@ -542,7 +542,7 @@ where
             blocks.push(block);
         } else {
             report_peer(p2p, peer.clone(), PeerReportReason::InvalidTransactions);
-            break;
+            break
         }
     }
     Batch::new(peer, range, blocks)

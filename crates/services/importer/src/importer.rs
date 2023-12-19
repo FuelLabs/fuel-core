@@ -201,13 +201,13 @@ where
                 // Because the genesis block is not committed, it should return non found error.
                 // If we find the latest height, something is wrong with the state of the database.
                 if found {
-                    return Err(Error::InvalidUnderlyingDatabaseGenesisState);
+                    return Err(Error::InvalidUnderlyingDatabaseGenesisState)
                 }
                 actual_next_height
             }
             Consensus::PoA(_) => {
                 if actual_next_height == BlockHeight::from(0u32) {
-                    return Err(Error::ZeroNonGenericHeight);
+                    return Err(Error::ZeroNonGenericHeight)
                 }
 
                 let last_db_height = self.database.latest_block_height()?;
@@ -222,7 +222,7 @@ where
             return Err(Error::IncorrectBlockHeight(
                 expected_next_height,
                 actual_next_height,
-            ));
+            ))
         }
 
         let db_after_execution = db_tx.as_mut();
@@ -234,7 +234,7 @@ where
             return Err(Error::InvalidDatabaseStateAfterExecution(
                 expected_next_height,
                 actual_height,
-            ));
+            ))
         }
 
         db_after_execution
@@ -321,14 +321,14 @@ where
         let result_of_verification =
             self.verifier.verify_block_fields(&consensus, &block);
         if let Err(err) = result_of_verification {
-            return Err(Error::FailedVerification(err));
+            return Err(Error::FailedVerification(err))
         }
 
         // The current code has a separate function X to process `StateConfig`.
         // It is not possible to execute it via `Executor`.
         // Maybe we need consider to move the function X here, if that possible.
         if let Consensus::Genesis(_) = consensus {
-            return Err(Error::ExecuteGenesis);
+            return Err(Error::ExecuteGenesis)
         }
 
         // TODO: Pass `block` into `ExecutionBlock::Validation` by ref
@@ -347,14 +347,14 @@ where
 
         // If we skipped transaction, it means that the block is invalid.
         if !skipped_transactions.is_empty() {
-            return Err(Error::SkippedTransactionsNotEmpty);
+            return Err(Error::SkippedTransactionsNotEmpty)
         }
 
         let actual_block_id = block.id();
         if actual_block_id != sealed_block_id {
             // It should not be possible because, during validation, we don't touch the block.
             // But while we pass it by value, let's check it.
-            return Err(Error::BlockIdMismatch(sealed_block_id, actual_block_id));
+            return Err(Error::BlockIdMismatch(sealed_block_id, actual_block_id))
         }
 
         let sealed_block = Sealed {

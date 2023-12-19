@@ -289,11 +289,11 @@ where
         let last_block_created = Instant::now();
         // verify signing key is set
         if self.signing_key.is_none() {
-            return Err(anyhow!("unable to produce blocks without a consensus key"));
+            return Err(anyhow!("unable to produce blocks without a consensus key"))
         }
 
         if self.last_timestamp > block_time {
-            return Err(anyhow!("The block timestamp should monotonically increase"));
+            return Err(anyhow!("The block timestamp should monotonically increase"))
         }
 
         // Ask the block producer to create the block

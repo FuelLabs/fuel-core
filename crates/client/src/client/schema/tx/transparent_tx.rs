@@ -219,7 +219,7 @@ impl TryFrom<Transaction> for fuel_tx::Transaction {
                     .into_iter()
                     .map(|slot| {
                         if slot.0 .0.len() != 64 {
-                            return Err(ConversionError::BytesLength);
+                            return Err(ConversionError::BytesLength)
                         }
                         let key = &slot.0 .0[0..32];
                         let value = &slot.0 .0[32..];

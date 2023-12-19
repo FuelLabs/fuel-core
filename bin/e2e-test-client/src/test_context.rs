@@ -132,13 +132,13 @@ impl Wallet {
             results = response.results;
             // check if page has the utxos we're looking for
             if results.iter().any(|coin| coin.utxo_id == utxo_id) {
-                return Ok(true);
+                return Ok(true)
             }
             // otherwise update the cursor to check the next page
             if response.has_next_page {
                 cursor = response.cursor;
             } else {
-                break;
+                break
             }
         }
 
@@ -358,7 +358,7 @@ impl Wallet {
         if let TransactionStatus::Failure { .. } | TransactionStatus::SqueezedOut { .. } =
             &status
         {
-            return Err(anyhow!(format!("unexpected transaction status {status:?}")));
+            return Err(anyhow!(format!("unexpected transaction status {status:?}")))
         }
 
         Ok(())
