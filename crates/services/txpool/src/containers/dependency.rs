@@ -190,13 +190,13 @@ impl Dependency {
                     asset_id,
                 } => {
                     if to != i_owner {
-                        return Err(Error::NotInsertedIoWrongOwner.into());
+                        return Err(Error::NotInsertedIoWrongOwner.into())
                     }
                     if amount != i_amount {
-                        return Err(Error::NotInsertedIoWrongAmount.into());
+                        return Err(Error::NotInsertedIoWrongAmount.into())
                     }
                     if asset_id != i_asset_id {
-                        return Err(Error::NotInsertedIoWrongAssetId.into());
+                        return Err(Error::NotInsertedIoWrongAssetId.into())
                     }
                 }
                 Output::Contract(_) => {

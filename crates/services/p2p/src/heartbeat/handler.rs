@@ -263,9 +263,9 @@ impl ConnectionHandler for HeartbeatHandler {
                     let protocol =
                         SubstreamProtocol::new(ReadyUpgrade::new(HEARTBEAT_PROTOCOL), ())
                             .with_timeout(self.config.send_timeout);
-                    return Poll::Ready(
-                        ConnectionHandlerEvent::OutboundSubstreamRequest { protocol },
-                    )
+                    return Poll::Ready(ConnectionHandlerEvent::OutboundSubstreamRequest {
+                        protocol,
+                    })
                 }
             }
         }
