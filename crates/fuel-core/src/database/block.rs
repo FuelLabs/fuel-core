@@ -106,7 +106,7 @@ impl StorageMutate<FuelBlocks> for Database {
 
     fn remove(&mut self, key: &BlockId) -> Result<Option<CompressedBlock>, Self::Error> {
         let prev: Option<CompressedBlock> =
-            Database::remove(self, key.as_slice(), Column::FuelBlocks)?;
+            Database::take(self, key.as_slice(), Column::FuelBlocks)?;
 
         if let Some(block) = &prev {
             let height = block.header().height();
