@@ -9,17 +9,23 @@ use crate::{
     state::{
         BatchOperations,
         IterDirection,
-        KVItem,
-        KeyValueStore,
         TransactableStorage,
-        Value,
-        WriteOperation,
     },
 };
 use fuel_core_metrics::core_metrics::database_metrics;
-use fuel_core_storage::iter::{
-    BoxedIter,
-    IntoBoxedIter,
+use fuel_core_storage::{
+    iter::{
+        BoxedIter,
+        IntoBoxedIter,
+        IteratorableStore,
+    },
+    kv_store::{
+        KVItem,
+        KeyValueStore,
+        Value,
+        WriteOperation,
+    },
+    Result as StorageResult,
 };
 use rand::RngCore;
 use rocksdb::{
@@ -301,7 +307,7 @@ impl RocksDb {
 
                     (key_as_vec, Arc::new(value_as_vec))
                 })
-                .map_err(|e| DatabaseError::Other(e.into()))
+                .map_err(|e| DatabaseError::Other(e.into()).into())
             })
     }
 }
@@ -309,7 +315,7 @@ impl RocksDb {
 impl KeyValueStore for RocksDb {
     type Column = Column;
 
-    fn write(&self, key: &[u8], column: Column, buf: &[u8]) -> DatabaseResult<usize> {
+    fn write(&self, key: &[u8], column: Column, buf: &[u8]) -> StorageResult<usize> {
         let r = buf.len();
         self.db
             .put_cf(&self.cf(column), key, buf)
@@ -321,13 +327,13 @@ impl KeyValueStore for RocksDb {
         Ok(r)
     }
 
-    fn delete(&self, key: &[u8], column: Column) -> DatabaseResult<()> {
+    fn delete(&self, key: &[u8], column: Column) -> StorageResult<()> {
         self.db
             .delete_cf(&self.cf(column), key)
-            .map_err(|e| DatabaseError::Other(e.into()))
+            .map_err(|e| DatabaseError::Other(e.into()).into())
     }
 
-    fn size_of_value(&self, key: &[u8], column: Column) -> DatabaseResult<Option<usize>> {
+    fn size_of_value(&self, key: &[u8], column: Column) -> StorageResult<Option<usize>> {
         database_metrics().read_meter.inc();
 
         Ok(self
@@ -337,7 +343,7 @@ impl KeyValueStore for RocksDb {
             .map(|value| value.len()))
     }
 
-    fn get(&self, key: &[u8], column: Column) -> DatabaseResult<Option<Value>> {
+    fn get(&self, key: &[u8], column: Column) -> StorageResult<Option<Value>> {
         database_metrics().read_meter.inc();
 
         let value = self
@@ -357,7 +363,7 @@ impl KeyValueStore for RocksDb {
         key: &[u8],
         column: Column,
         mut buf: &mut [u8],
-    ) -> DatabaseResult<Option<usize>> {
+    ) -> StorageResult<Option<usize>> {
         database_metrics().read_meter.inc();
 
         let r = self
@@ -368,7 +374,7 @@ impl KeyValueStore for RocksDb {
                 let read = value.len();
                 std::io::Write::write_all(&mut buf, value.as_ref())
                     .map_err(|e| DatabaseError::Other(anyhow::anyhow!(e)))?;
-                DatabaseResult::Ok(read)
+                StorageResult::Ok(read)
             })
             .transpose()?;
 
@@ -378,7 +384,9 @@ impl KeyValueStore for RocksDb {
 
         Ok(r)
     }
+}
 
+impl IteratorableStore for RocksDb {
     fn iter_all(
         &self,
         column: Column,
@@ -450,7 +458,7 @@ impl BatchOperations for RocksDb {
     fn batch_write(
         &self,
         entries: &mut dyn Iterator<Item = (Vec<u8>, Column, WriteOperation)>,
-    ) -> DatabaseResult<()> {
+    ) -> StorageResult<()> {
         let mut batch = WriteBatch::default();
 
         for (key, column, op) in entries {
@@ -471,7 +479,7 @@ impl BatchOperations for RocksDb {
 
         self.db
             .write(batch)
-            .map_err(|e| DatabaseError::Other(e.into()))
+            .map_err(|e| DatabaseError::Other(e.into()).into())
     }
 }
 
