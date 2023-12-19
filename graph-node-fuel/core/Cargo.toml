@@ -19,6 +19,7 @@ graph-chain-near = { path = "../chain/near" }
 graph-chain-cosmos = { path = "../chain/cosmos" }
 graph-chain-substreams = { path = "../chain/substreams" }
 graph-chain-starknet = { path = "../chain/starknet" }
+graph-chain-fuel = { path = "../chain/fuel" }
 lazy_static = "1.2.0"
 lru_time_cache = "0.11"
 semver = "1.0.20"

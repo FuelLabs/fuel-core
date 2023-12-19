@@ -2116,6 +2116,7 @@ dependencies = [
  "graph-chain-arweave",
  "graph-chain-cosmos",
  "graph-chain-ethereum",
+ "graph-chain-fuel",
  "graph-chain-near",
  "graph-chain-starknet",
  "graph-chain-substreams",

@@ -15,10 +15,6 @@ pub use pbcodec::*;
 
 impl Block {
 
-    fn number(&self) -> i32 {
-        BlockNumber::try_from(self.height).unwrap()
-    }
-
     pub fn parent_ptr(&self) -> Option<BlockPtr> {
         match self.height {
             0 => None,
@@ -27,6 +23,15 @@ impl Block {
                 number: self.number().saturating_sub(1),
             }),
         }
+    }
+}
+
+impl<'a> From<&'a Block> for BlockPtr {
+    fn from(b: &'a Block) -> BlockPtr {
+        BlockPtr::new(
+            b.id.clone().into(),
+             b.number()
+        )
     }
 }
 
@@ -41,11 +46,5 @@ impl BlockchainBlock for Block {
 
     fn number(&self) -> i32 {
         BlockNumber::try_from(self.height).unwrap()
-    }
-}
-
-impl From<Block> for BlockPtr {
-    fn from(b: Block) -> BlockPtr {
-        (&b).into()
     }
 }

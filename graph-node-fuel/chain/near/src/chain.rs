@@ -52,6 +52,43 @@ pub struct NearStreamBuilder {}
 
 #[async_trait]
 impl BlockStreamBuilder<Chain> for NearStreamBuilder {
+    async fn build_firehose(
+        &self,
+        chain: &Chain,
+        deployment: DeploymentLocator,
+        block_cursor: FirehoseCursor,
+        start_blocks: Vec<BlockNumber>,
+        subgraph_current_block: Option<BlockPtr>,
+        filter: Arc<<Chain as Blockchain>::TriggerFilter>,
+        unified_api_version: UnifiedMappingApiVersion,
+    ) -> Result<Box<dyn BlockStream<Chain>>> {
+        let adapter = chain
+            .triggers_adapter(
+                &deployment,
+                &EmptyNodeCapabilities::default(),
+                unified_api_version,
+            )
+            .unwrap_or_else(|_| panic!("no adapter for network {}", chain.name));
+
+        let logger = chain
+            .logger_factory
+            .subgraph_logger(&deployment)
+            .new(o!("component" => "FirehoseBlockStream"));
+
+        let firehose_mapper = Arc::new(FirehoseMapper { adapter, filter });
+
+        Ok(Box::new(FirehoseBlockStream::new(
+            deployment.hash,
+            chain.chain_client(),
+            subgraph_current_block,
+            block_cursor,
+            firehose_mapper,
+            start_blocks,
+            logger,
+            chain.metrics_registry.clone(),
+        )))
+    }
+
     async fn build_substreams(
         &self,
         chain: &Chain,
@@ -101,43 +138,6 @@ impl BlockStreamBuilder<Chain> for NearStreamBuilder {
             NEAR_FILTER_MODULE_NAME.to_string(),
             vec![start_block],
             vec![],
-            logger,
-            chain.metrics_registry.clone(),
-        )))
-    }
-
-    async fn build_firehose(
-        &self,
-        chain: &Chain,
-        deployment: DeploymentLocator,
-        block_cursor: FirehoseCursor,
-        start_blocks: Vec<BlockNumber>,
-        subgraph_current_block: Option<BlockPtr>,
-        filter: Arc<<Chain as Blockchain>::TriggerFilter>,
-        unified_api_version: UnifiedMappingApiVersion,
-    ) -> Result<Box<dyn BlockStream<Chain>>> {
-        let adapter = chain
-            .triggers_adapter(
-                &deployment,
-                &EmptyNodeCapabilities::default(),
-                unified_api_version,
-            )
-            .unwrap_or_else(|_| panic!("no adapter for network {}", chain.name));
-
-        let logger = chain
-            .logger_factory
-            .subgraph_logger(&deployment)
-            .new(o!("component" => "FirehoseBlockStream"));
-
-        let firehose_mapper = Arc::new(FirehoseMapper { adapter, filter });
-
-        Ok(Box::new(FirehoseBlockStream::new(
-            deployment.hash,
-            chain.chain_client(),
-            subgraph_current_block,
-            block_cursor,
-            firehose_mapper,
-            start_blocks,
             logger,
             chain.metrics_registry.clone(),
         )))

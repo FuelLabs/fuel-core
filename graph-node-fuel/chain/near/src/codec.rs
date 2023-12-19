@@ -64,16 +64,16 @@ impl<'a> From<&'a Block> for BlockPtr {
 }
 
 impl BlockchainBlock for Block {
-    fn number(&self) -> i32 {
-        BlockNumber::try_from(self.header().height).unwrap()
-    }
-
     fn ptr(&self) -> BlockPtr {
         self.into()
     }
 
     fn parent_ptr(&self) -> Option<BlockPtr> {
         self.parent_ptr()
+    }
+
+    fn number(&self) -> i32 {
+        BlockNumber::try_from(self.header().height).unwrap()
     }
 }
 
@@ -90,16 +90,16 @@ impl<'a> From<&'a HeaderOnlyBlock> for BlockPtr {
 }
 
 impl BlockchainBlock for HeaderOnlyBlock {
-    fn number(&self) -> i32 {
-        BlockNumber::try_from(self.header().height).unwrap()
-    }
-
     fn ptr(&self) -> BlockPtr {
         self.into()
     }
 
     fn parent_ptr(&self) -> Option<BlockPtr> {
         self.header().parent_ptr()
+    }
+
+    fn number(&self) -> i32 {
+        BlockNumber::try_from(self.header().height).unwrap()
     }
 }
 
