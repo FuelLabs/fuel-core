@@ -240,13 +240,6 @@ fn import_coin_configs(
                 .checked_add(1)
                 .expect("The maximum number of UTXOs supported in the genesis configuration has been exceeded.");
 
-            /*
-            save_import_progress(
-                database,
-                StateImportProgressKey::Coins,
-                cursor + 1, // TODO: advance by # bytes read
-                root_calculator,
-            ) */
             Ok::<(), anyhow::Error>(())
         })?;
 
@@ -346,15 +339,7 @@ fn import_contract_state(
 
         // TODO
         let batch = batch.unwrap();
-
-        for (contract_id, state_entries) in batch
-            .data
-            .into_iter()
-            .group_by(|s| s.contract_id)
-            .into_iter()
-        {
-            init_contract_state(database, contract_id, state_entries.collect())?;
-        }
+        database.update_contract_states(batch.data)?;
         database_transaction.commit()?;
     }
 
@@ -374,15 +359,7 @@ fn import_contract_balance(
         let database = database_transaction.as_mut();
 
         let batch = batch.unwrap();
-
-        for (contract_id, balance_entries) in batch
-            .data
-            .into_iter()
-            .group_by(|s| s.contract_id)
-            .into_iter()
-        {
-            init_contract_balance(database, contract_id, balance_entries.collect())?;
-        }
+        database.update_contract_balances(batch.data)?;
         database_transaction.commit()?;
     }
 
@@ -408,8 +385,7 @@ fn init_coin(
             )
             .expect("Incorrect genesis transaction id byte length")
         }),
-        coin.output_index
-            .unwrap_or((output_index % 255) as u8),
+        coin.output_index.unwrap_or((output_index % 255) as u8),
     );
 
     let coin = CompressedCoin {
@@ -511,33 +487,6 @@ fn init_contract(
     {
         return Err(anyhow!("Contract utxo should not exist"));
     }
-    Ok(())
-}
-
-fn init_contract_state(
-    db: &mut Database,
-    contract_id: Bytes32,
-    state: Vec<ContractStateConfig>,
-) -> anyhow::Result<()> {
-    let contract_id = ContractId::from(*contract_id);
-    let entries = state.into_iter().map(|s| (s.key, s.value)).collect_vec();
-    db.batch_insert_contract_state(&contract_id, entries)?;
-
-    Ok(())
-}
-
-fn init_contract_balance(
-    db: &mut Database,
-    contract_id: Bytes32,
-    balance: Vec<ContractBalanceConfig>,
-) -> anyhow::Result<()> {
-    let contract_id = ContractId::from(*contract_id);
-    let entries = balance
-        .into_iter()
-        .map(|s| (s.asset_id, s.amount))
-        .collect_vec();
-    db.batch_insert_contract_balance(&contract_id, entries)?;
-
     Ok(())
 }
 
