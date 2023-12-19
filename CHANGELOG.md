@@ -58,7 +58,7 @@ FuelVM received a lot of safety and stability improvements:
 - Refactored errors, returning more detailed errors to the user, simplifying debugging.
 
 ### Added
-- [#1474](https://github.com/FuelLabs/fuel-core/pull/1459): Stream chain state from file.
+- [#1474](https://github.com/FuelLabs/fuel-core/pull/1474): Chain state encoding for streaming support.
 - [#1459](https://github.com/FuelLabs/fuel-core/pull/1459): Split initial state from chain config.
 - [#1503](https://github.com/FuelLabs/fuel-core/pull/1503): Add `gtf` opcode sanity check.
 - [#1502](https://github.com/FuelLabs/fuel-core/pull/1502): Added price benchmark for `vm_initialization`.
