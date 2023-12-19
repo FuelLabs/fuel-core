@@ -100,7 +100,7 @@ where
             // If they do not match the connection is rejected.
             let res = read_length_prefixed(&mut socket, self.checksum.0.len()).await?;
             if res != self.checksum.0 {
-                return Err(FuelUpgradeError::IncorrectChecksum);
+                return Err(FuelUpgradeError::IncorrectChecksum)
             }
 
             Ok(socket)

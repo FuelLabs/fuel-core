@@ -260,7 +260,7 @@ impl<Codec: NetworkCodec> FuelP2PService<Codec> {
         loop {
             if let SwarmEvent::NewListenAddr { .. } = self.swarm.select_next_some().await
             {
-                break;
+                break
             }
         }
     }
@@ -316,7 +316,7 @@ impl<Codec: NetworkCodec> FuelP2PService<Codec> {
                 let peers_count = self.peer_manager.total_peers_connected();
 
                 if peers_count == 0 {
-                    return Err(RequestError::NoPeersConnected);
+                    return Err(RequestError::NoPeersConnected)
                 }
 
                 let mut range = rand::thread_rng();
@@ -353,16 +353,16 @@ impl<Codec: NetworkCodec> FuelP2PService<Codec> {
                     .is_err()
                 {
                     debug!("Failed to send ResponseMessage for {:?}", request_id);
-                    return Err(ResponseError::SendingResponseFailed);
+                    return Err(ResponseError::SendingResponseFailed)
                 }
             }
             (Ok(_), None) => {
                 debug!("ResponseChannel for {:?} does not exist!", request_id);
-                return Err(ResponseError::ResponseChannelDoesNotExist);
+                return Err(ResponseError::ResponseChannelDoesNotExist)
             }
             (Err(e), _) => {
                 debug!("Failed to convert to IntermediateResponse with {:?}", e);
-                return Err(ResponseError::ConversionToIntermediateFailed);
+                return Err(ResponseError::ConversionToIntermediateFailed)
             }
         }
 
@@ -550,7 +550,7 @@ impl<Codec: NetworkCodec> FuelP2PService<Codec> {
                         return Some(FuelP2PEvent::PeerInfoUpdated {
                             peer_id,
                             block_height,
-                        });
+                        })
                     }
                     PeerReportEvent::PeerConnected {
                         peer_id,
@@ -564,14 +564,14 @@ impl<Codec: NetworkCodec> FuelP2PService<Codec> {
                         ) {
                             let _ = self.swarm.disconnect_peer_id(peer_id);
                         } else if initial_connection {
-                            return Some(FuelP2PEvent::PeerConnected(peer_id));
+                            return Some(FuelP2PEvent::PeerConnected(peer_id))
                         }
                     }
                     PeerReportEvent::PeerDisconnected { peer_id } => {
                         if self.peer_manager.handle_peer_disconnect(peer_id) {
                             let _ = self.swarm.dial(peer_id);
                         }
-                        return Some(FuelP2PEvent::PeerDisconnected(peer_id));
+                        return Some(FuelP2PEvent::PeerDisconnected(peer_id))
                     }
                 }
             }
@@ -587,7 +587,7 @@ impl<Codec: NetworkCodec> FuelP2PService<Codec> {
                         return Some(FuelP2PEvent::RequestMessage {
                             request_id,
                             request_message: request,
-                        });
+                        })
                     }
                     RequestResponseMessage::Response {
                         request_id,

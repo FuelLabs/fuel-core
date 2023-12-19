@@ -118,7 +118,7 @@ impl NetworkBehaviour for Heartbeat {
         _: &mut impl PollParameters,
     ) -> Poll<NetworkBehaviourAction<Self::OutEvent, Self::ConnectionHandler>> {
         if let Some(action) = self.pending_events.pop_front() {
-            return Poll::Ready(action.build());
+            return Poll::Ready(action.build())
         }
 
         Poll::Pending

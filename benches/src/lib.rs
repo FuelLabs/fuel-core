@@ -344,7 +344,7 @@ impl TryFrom<VmBench> for VmBenchPrepared {
         {
             return Err(anyhow::anyhow!(
                 "a prepare script should not call/return into different contexts.",
-            ));
+            ))
         }
 
         let prepare_script = prepare_script
