@@ -133,8 +133,8 @@ fn import_chain_state(
     import_contract_balance(original_database, contract_balances)?;
 
     let mut contracts_tree = binary::in_memory::MerkleTree::new();
+    // TODO: do this in batches
     for contract_id in contract_ids {
-        // TODO
         let mut database_transaction = Transactional::transaction(original_database);
         let database = database_transaction.as_mut();
         contracts_tree.push(ContractRef::new(database, contract_id).root()?.as_slice());
@@ -157,11 +157,8 @@ fn commit_genesis_block(
     let mut database_transaction = Transactional::transaction(original_database);
     let database = database_transaction.as_mut();
 
-    // TODO: load roots from storage
-    let chain_config_hash = config.chain_config.root()?.into();
-
     let genesis = Genesis {
-        chain_config_hash,
+        chain_config_hash: config.chain_config.root()?.into(),
         coins_root: roots.coins,
         contracts_root: roots.contracts,
         messages_root: roots.messages,
@@ -218,9 +215,6 @@ fn import_coin_configs(
     coins: IntoIter<CoinConfig>,
     block_height: BlockHeight,
 ) -> anyhow::Result<Vec<Bytes32>> {
-    // let (cursor, root_calculator) =
-    // resume_import(database, StateImportProgressKey::Coins)?;
-    // let mut state_reader = JsonBatchReader::new(coins_reader, cursor)?;
     let mut roots = vec![];
     let mut generated_output_idx = 0;
 
@@ -228,8 +222,7 @@ fn import_coin_configs(
         let mut database_transaction = Transactional::transaction(database);
         let database = database_transaction.as_mut();
 
-        // TODO
-        let batch = batch.unwrap();
+        let batch = batch.expect("Encountered an error while decoding coin configs");
 
         // TODO: set output_index
         batch.data.iter().try_for_each(|coin| {
@@ -262,20 +255,13 @@ fn import_message_configs(
         let mut database_transaction = Transactional::transaction(database);
         let database = database_transaction.as_mut();
 
-        // TODO
-        let batch = batch.unwrap();
+        let batch = batch.expect("Encountered an error while decoding message configs");
 
         // TODO: set output_index
         batch.data.iter().try_for_each(|message| {
             let root = init_da_message(database, message)?;
             roots.push(root.into());
 
-            // save_import_progress(
-            // database,
-            // StateImportProgressKey::Coins,
-            // cursor + 1, // TODO: advance by # bytes read
-            // root_calculator,
-            // )
             Ok::<(), anyhow::Error>(())
         })?;
 
@@ -290,9 +276,6 @@ fn import_contract_configs(
     contracts: IntoIter<ContractConfig>,
     block_height: BlockHeight,
 ) -> anyhow::Result<Vec<ContractId>> {
-    // let (cursor, root_calculator) =
-    // resume_import(database, StateImportProgressKey::Coins)?;
-    // let mut state_reader = JsonBatchReader::new(coins_reader, cursor)?;
     let mut generated_output_idx = 0;
 
     let mut contract_ids = vec![];
@@ -301,9 +284,7 @@ fn import_contract_configs(
         let mut database_transaction = Transactional::transaction(database);
         let database = database_transaction.as_mut();
 
-        // TODO
-        let batch = batch.unwrap();
-
+        let batch = batch.expect("Encountered an error while decoding contract configs");
         // TODO: set output_index
         batch.data.iter().try_for_each(|contract| {
             contract_ids.push(contract.contract_id);
@@ -313,13 +294,6 @@ fn import_contract_configs(
                 .checked_add(1)
                 .expect("The maximum number of UTXOs supported in the genesis configuration has been exceeded.");
 
-            /*
-            save_import_progress(
-                database,
-                StateImportProgressKey::Coins,
-                cursor + 1, // TODO: advance by # bytes read
-                root_calculator,
-            ) */
             Ok::<(), anyhow::Error>(())
         })?;
 
@@ -337,8 +311,8 @@ fn import_contract_state(
         let mut database_transaction = Transactional::transaction(database);
         let database = database_transaction.as_mut();
 
-        // TODO
-        let batch = batch.unwrap();
+        let batch =
+            batch.expect("Encountered an error while decoding contract state configs");
         database.update_contract_states(batch.data)?;
         database_transaction.commit()?;
     }
@@ -358,7 +332,8 @@ fn import_contract_balance(
         let mut database_transaction = Transactional::transaction(database);
         let database = database_transaction.as_mut();
 
-        let batch = batch.unwrap();
+        let batch =
+            batch.expect("Encountered an error while decoding contract balance configs");
         database.update_contract_balances(batch.data)?;
         database_transaction.commit()?;
     }
