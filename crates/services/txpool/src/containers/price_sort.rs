@@ -54,7 +54,7 @@ impl Ord for PriceSortKey {
     fn cmp(&self, other: &Self) -> cmp::Ordering {
         let cmp = self.price.cmp(&other.price);
         if cmp == cmp::Ordering::Equal {
-            return self.tx_id.cmp(&other.tx_id);
+            return self.tx_id.cmp(&other.tx_id)
         }
         cmp
     }

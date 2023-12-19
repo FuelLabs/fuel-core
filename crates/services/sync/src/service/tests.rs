@@ -77,7 +77,7 @@ async fn test_new_service() {
     while let Some(h) = rx.recv().await {
         last_value = h;
         if h == 16 {
-            break;
+            break
         }
     }
 

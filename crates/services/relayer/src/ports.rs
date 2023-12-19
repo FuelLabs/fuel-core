@@ -70,7 +70,7 @@ where
         }
         if let Some(height) = max_height {
             if **da_height < height {
-                return Err(anyhow::anyhow!("Invalid da height").into());
+                return Err(anyhow::anyhow!("Invalid da height").into())
             }
         }
         grow_monotonically(db, da_height)?;
