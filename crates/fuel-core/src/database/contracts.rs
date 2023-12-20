@@ -22,7 +22,6 @@ use fuel_core_storage::{
     StorageMutate,
     StorageRead,
     StorageSize,
-    StorageWrite,
 };
 use fuel_core_types::{
     entities::contract::ContractUtxoInfo,
@@ -74,19 +73,18 @@ impl StorageMutate<ContractsRawCode> for Database {
         key: &<ContractsRawCode as Mappable>::Key,
         value: &<ContractsRawCode as Mappable>::Value,
     ) -> Result<Option<<ContractsRawCode as Mappable>::OwnedValue>, Self::Error> {
-        let existing =
-            Database::replace(self, key.as_ref(), Column::ContractsRawCode, value)?;
-        Ok(existing.1.map(Contract::from))
+        let result = Database::insert_raw(self, key, Column::ContractsRawCode, value)?;
+
+        Ok(result.map(|v| Contract::from(v.as_ref().clone())))
     }
 
     fn remove(
         &mut self,
         key: &<ContractsRawCode as Mappable>::Key,
     ) -> Result<Option<<ContractsRawCode as Mappable>::OwnedValue>, Self::Error> {
-        Ok(
-            <Self as StorageWrite<ContractsRawCode>>::take(self, key)?
-                .map(Contract::from),
-        )
+        let result = Database::take_raw(self, key.as_ref(), Column::ContractsRawCode)?;
+
+        Ok(result.map(|v| Contract::from(v.as_ref().clone())))
     }
 }
 
@@ -107,44 +105,6 @@ impl StorageRead<ContractsRawCode> for Database {
 
     fn read_alloc(&self, key: &ContractId) -> Result<Option<Vec<u8>>, Self::Error> {
         Ok(self.read_alloc(key.as_ref(), Column::ContractsRawCode)?)
-    }
-}
-
-impl StorageWrite<ContractsRawCode> for Database {
-    fn write(&mut self, key: &ContractId, buf: Vec<u8>) -> Result<usize, Self::Error> {
-        Ok(Database::write(
-            self,
-            key.as_ref(),
-            Column::ContractsRawCode,
-            &buf,
-        )?)
-    }
-
-    fn replace(
-        &mut self,
-        key: &<ContractsRawCode as Mappable>::Key,
-        buf: Vec<u8>,
-    ) -> Result<(usize, Option<Vec<u8>>), <Self as StorageInspect<ContractsRawCode>>::Error>
-    where
-        Self: StorageSize<ContractsRawCode>,
-    {
-        Ok(Database::replace(
-            self,
-            key.as_ref(),
-            Column::ContractsRawCode,
-            &buf,
-        )?)
-    }
-
-    fn take(
-        &mut self,
-        key: &<ContractsRawCode as Mappable>::Key,
-    ) -> Result<Option<Vec<u8>>, Self::Error> {
-        Ok(Database::take(
-            self,
-            key.as_ref(),
-            Column::ContractsRawCode,
-        )?)
     }
 }
 
