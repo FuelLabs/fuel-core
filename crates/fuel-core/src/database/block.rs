@@ -9,7 +9,6 @@ use crate::database::{
     Column,
     Database,
     Error as DatabaseError,
-    Result as DatabaseResult,
 };
 use fuel_core_storage::{
     iter::IterDirection,
@@ -161,7 +160,7 @@ impl Database {
         &self,
         start: Option<BlockHeight>,
         direction: IterDirection,
-    ) -> impl Iterator<Item = DatabaseResult<(BlockHeight, BlockId)>> + '_ {
+    ) -> impl Iterator<Item = StorageResult<(BlockHeight, BlockId)>> + '_ {
         let start = start.map(|b| b.to_bytes());
         self.iter_all_by_start::<Vec<u8>, BlockId, _>(
             Column::FuelBlockSecondaryKeyBlockHeights,
@@ -178,7 +177,7 @@ impl Database {
         })
     }
 
-    pub fn ids_of_genesis_block(&self) -> DatabaseResult<(BlockHeight, BlockId)> {
+    pub fn ids_of_genesis_block(&self) -> StorageResult<(BlockHeight, BlockId)> {
         self.iter_all(
             Column::FuelBlockSecondaryKeyBlockHeights,
             Some(IterDirection::Forward),
@@ -192,7 +191,7 @@ impl Database {
         })
     }
 
-    pub fn ids_of_latest_block(&self) -> DatabaseResult<Option<(BlockHeight, BlockId)>> {
+    pub fn ids_of_latest_block(&self) -> StorageResult<Option<(BlockHeight, BlockId)>> {
         let ids = self
             .iter_all::<Vec<u8>, BlockId>(
                 Column::FuelBlockSecondaryKeyBlockHeights,

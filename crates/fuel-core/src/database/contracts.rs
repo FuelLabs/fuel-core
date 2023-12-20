@@ -2,8 +2,6 @@ use crate::database::{
     storage::DatabaseColumn,
     Column,
     Database,
-    Error as DatabaseError,
-    Result as DatabaseResult,
 };
 use fuel_core_chain_config::ContractConfig;
 use fuel_core_storage::{
@@ -90,7 +88,7 @@ impl StorageMutate<ContractsRawCode> for Database {
 
 impl StorageSize<ContractsRawCode> for Database {
     fn size_of_value(&self, key: &ContractId) -> Result<Option<usize>, Self::Error> {
-        Ok(self.size_of_value(key.as_ref(), Column::ContractsRawCode)?)
+        self.size_of_value(key.as_ref(), Column::ContractsRawCode)
     }
 }
 
@@ -100,11 +98,11 @@ impl StorageRead<ContractsRawCode> for Database {
         key: &ContractId,
         buf: &mut [u8],
     ) -> Result<Option<usize>, Self::Error> {
-        Ok(self.read(key.as_ref(), Column::ContractsRawCode, buf)?)
+        self.read(key.as_ref(), Column::ContractsRawCode, buf)
     }
 
     fn read_alloc(&self, key: &ContractId) -> Result<Option<Vec<u8>>, Self::Error> {
-        Ok(self.read_alloc(key.as_ref(), Column::ContractsRawCode)?)
+        self.read_alloc(key.as_ref(), Column::ContractsRawCode)
     }
 }
 
@@ -142,7 +140,7 @@ impl Database {
                 Column::ContractsState,
                 Some(contract_id.as_ref()),
             )
-            .map(|res| -> DatabaseResult<(Bytes32, Bytes32)> {
+            .map(|res| -> StorageResult<(Bytes32, Bytes32)> {
                 let safe_res = res?;
 
                 // We don't need to store ContractId which is the first 32 bytes of this
@@ -152,7 +150,7 @@ impl Database {
                 Ok((state_key, safe_res.1))
             })
             .filter(|val| val.is_ok())
-            .collect::<DatabaseResult<Vec<(Bytes32, Bytes32)>>>()?,
+            .collect::<StorageResult<Vec<(Bytes32, Bytes32)>>>()?,
         );
 
         let balances = Some(
@@ -163,9 +161,7 @@ impl Database {
             .map(|res| {
                 let safe_res = res?;
 
-                let asset_id = AssetId::new(
-                    safe_res.0[32..].try_into().map_err(DatabaseError::from)?,
-                );
+                let asset_id = AssetId::new(safe_res.0[32..].try_into()?);
 
                 Ok((asset_id, safe_res.1))
             })
@@ -191,7 +187,7 @@ impl Database {
         contract: ContractId,
         start_asset: Option<AssetId>,
         direction: Option<IterDirection>,
-    ) -> impl Iterator<Item = DatabaseResult<(AssetId, Word)>> + '_ {
+    ) -> impl Iterator<Item = StorageResult<(AssetId, Word)>> + '_ {
         self.iter_all_filtered::<Vec<u8>, Word, _, _>(
             Column::ContractsAssets,
             Some(contract),
@@ -209,11 +205,8 @@ impl Database {
         let configs = self
             .iter_all::<Vec<u8>, Word>(Column::ContractsRawCode, None)
             .map(|raw_contract_id| -> StorageResult<ContractConfig> {
-                let contract_id = ContractId::new(
-                    raw_contract_id.unwrap().0[..32]
-                        .try_into()
-                        .map_err(DatabaseError::from)?,
-                );
+                let contract_id =
+                    ContractId::new(raw_contract_id.unwrap().0[..32].try_into()?);
                 self.get_contract_config_by_id(contract_id)
             })
             .collect::<StorageResult<Vec<ContractConfig>>>()?;

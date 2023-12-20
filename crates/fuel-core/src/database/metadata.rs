@@ -2,9 +2,9 @@ use crate::database::{
     Column,
     Database,
     Error as DatabaseError,
-    Result as DatabaseResult,
 };
 use fuel_core_chain_config::ChainConfig;
+use fuel_core_storage::Result as StorageResult;
 
 pub(crate) const DB_VERSION_KEY: &[u8] = b"version";
 pub(crate) const CHAIN_NAME_KEY: &[u8] = b"chain_name";
@@ -17,13 +17,13 @@ pub(crate) const DB_VERSION: u32 = 0x00;
 
 impl Database {
     /// Ensures the database is initialized and that the database version is correct
-    pub fn init(&self, config: &ChainConfig) -> DatabaseResult<()> {
+    pub fn init(&self, config: &ChainConfig) -> StorageResult<()> {
         // initialize chain name if not set
         if self.get_chain_name()?.is_none() {
             self.insert(CHAIN_NAME_KEY, Column::Metadata, &config.chain_name)
                 .and_then(|v: Option<String>| {
                     if v.is_some() {
-                        Err(DatabaseError::ChainAlreadyInitialized)
+                        Err(DatabaseError::ChainAlreadyInitialized.into())
                     } else {
                         Ok(())
                     }
@@ -45,11 +45,11 @@ impl Database {
         Ok(())
     }
 
-    pub fn get_chain_name(&self) -> DatabaseResult<Option<String>> {
+    pub fn get_chain_name(&self) -> StorageResult<Option<String>> {
         self.get(CHAIN_NAME_KEY, Column::Metadata)
     }
 
-    pub fn increase_tx_count(&self, new_txs: u64) -> DatabaseResult<u64> {
+    pub fn increase_tx_count(&self, new_txs: u64) -> StorageResult<u64> {
         // TODO: how should tx count be initialized after regenesis?
         let current_tx_count: u64 =
             self.get(TX_COUNT, Column::Metadata)?.unwrap_or_default();
@@ -59,7 +59,7 @@ impl Database {
         Ok(new_tx_count)
     }
 
-    pub fn get_tx_count(&self) -> DatabaseResult<u64> {
+    pub fn get_tx_count(&self) -> StorageResult<u64> {
         self.get(TX_COUNT, Column::Metadata)
             .map(|v| v.unwrap_or_default())
     }

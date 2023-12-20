@@ -3,7 +3,6 @@ use crate::{
     state::{
         in_memory::memory_store::MemoryStore,
         DataSource,
-        WriteOperation,
     },
 };
 use fuel_core_chain_config::{
@@ -14,6 +13,11 @@ use fuel_core_chain_config::{
 };
 use fuel_core_storage::{
     iter::IterDirection,
+    kv_store::{
+        StorageColumn,
+        Value,
+        WriteOperation,
+    },
     transactional::{
         StorageTransaction,
         Transactional,
@@ -50,13 +54,11 @@ use strum::EnumCount;
 pub use fuel_core_database::Error;
 pub type Result<T> = core::result::Result<T, Error>;
 
-type DatabaseError = Error;
 type DatabaseResult<T> = Result<T>;
 
 // TODO: Extract `Database` and all belongs into `fuel-core-database`.
 #[cfg(feature = "rocksdb")]
 use crate::state::rocks_db::RocksDb;
-use crate::state::Value;
 #[cfg(feature = "rocksdb")]
 use std::path::Path;
 #[cfg(feature = "rocksdb")]
@@ -160,7 +162,7 @@ impl Column {
     }
 }
 
-impl crate::state::StorageColumn for Column {
+impl StorageColumn for Column {
     fn name(&self) -> &'static str {
         self.into()
     }
@@ -276,15 +278,15 @@ impl Database {
         key: K,
         column: Column,
         value: &V,
-    ) -> DatabaseResult<Option<R>> {
+    ) -> StorageResult<Option<R>> {
         let result = self.data.replace(
             key.as_ref(),
             column,
-            Arc::new(postcard::to_stdvec(value).map_err(|_| DatabaseError::Codec)?),
+            Arc::new(postcard::to_stdvec(value).map_err(|_| StorageError::Codec)?),
         )?;
         if let Some(previous) = result {
             Ok(Some(
-                postcard::from_bytes(&previous).map_err(|_| DatabaseError::Codec)?,
+                postcard::from_bytes(&previous).map_err(|_| StorageError::Codec)?,
             ))
         } else {
             Ok(None)
@@ -296,7 +298,7 @@ impl Database {
         key: K,
         column: Column,
         value: V,
-    ) -> DatabaseResult<Option<Value>> {
+    ) -> StorageResult<Option<Value>> {
         self.data
             .replace(key.as_ref(), column, Arc::new(value.as_ref().to_vec()))
     }
@@ -305,14 +307,14 @@ impl Database {
         &self,
         column: Column,
         set: S,
-    ) -> DatabaseResult<()>
+    ) -> StorageResult<()>
     where
         S: Iterator<Item = (K, V)>,
     {
         let set: Vec<_> = set
             .map(|(key, value)| {
                 let value =
-                    postcard::to_stdvec(&value).map_err(|_| DatabaseError::Codec)?;
+                    postcard::to_stdvec(&value).map_err(|_| StorageError::Codec)?;
 
                 let tuple = (
                     key.as_ref().to_vec(),
@@ -320,7 +322,7 @@ impl Database {
                     WriteOperation::Insert(Arc::new(value)),
                 );
 
-                Ok::<_, DatabaseError>(tuple)
+                Ok::<_, StorageError>(tuple)
             })
             .try_collect()?;
 
@@ -331,25 +333,25 @@ impl Database {
         &self,
         key: &[u8],
         column: Column,
-    ) -> DatabaseResult<Option<V>> {
+    ) -> StorageResult<Option<V>> {
         self.data
             .take(key, column)?
-            .map(|val| postcard::from_bytes(&val).map_err(|_| DatabaseError::Codec))
+            .map(|val| postcard::from_bytes(&val).map_err(|_| StorageError::Codec))
             .transpose()
     }
 
-    fn take_raw(&self, key: &[u8], column: Column) -> DatabaseResult<Option<Value>> {
+    fn take_raw(&self, key: &[u8], column: Column) -> StorageResult<Option<Value>> {
         self.data.take(key, column)
     }
 }
 
 /// Read-only methods.
 impl Database {
-    fn contains_key(&self, key: &[u8], column: Column) -> DatabaseResult<bool> {
+    fn contains_key(&self, key: &[u8], column: Column) -> StorageResult<bool> {
         self.data.exists(key, column)
     }
 
-    fn size_of_value(&self, key: &[u8], column: Column) -> DatabaseResult<Option<usize>> {
+    fn size_of_value(&self, key: &[u8], column: Column) -> StorageResult<Option<usize>> {
         self.data.size_of_value(key, column)
     }
 
@@ -358,11 +360,11 @@ impl Database {
         key: &[u8],
         column: Column,
         buf: &mut [u8],
-    ) -> DatabaseResult<Option<usize>> {
+    ) -> StorageResult<Option<usize>> {
         self.data.read(key, column, buf)
     }
 
-    fn read_alloc(&self, key: &[u8], column: Column) -> DatabaseResult<Option<Vec<u8>>> {
+    fn read_alloc(&self, key: &[u8], column: Column) -> StorageResult<Option<Vec<u8>>> {
         self.data
             .get(key, column)
             .map(|value| value.map(|value| value.deref().clone()))
@@ -372,10 +374,10 @@ impl Database {
         &self,
         key: &[u8],
         column: Column,
-    ) -> DatabaseResult<Option<V>> {
+    ) -> StorageResult<Option<V>> {
         self.data
             .get(key, column)?
-            .map(|val| postcard::from_bytes(&val).map_err(|_| DatabaseError::Codec))
+            .map(|val| postcard::from_bytes(&val).map_err(|_| StorageError::Codec))
             .transpose()
     }
 
@@ -383,7 +385,7 @@ impl Database {
         &self,
         column: Column,
         direction: Option<IterDirection>,
-    ) -> impl Iterator<Item = DatabaseResult<(K, V)>> + '_
+    ) -> impl Iterator<Item = StorageResult<(K, V)>> + '_
     where
         K: From<Vec<u8>>,
         V: DeserializeOwned,
@@ -395,7 +397,7 @@ impl Database {
         &self,
         column: Column,
         prefix: Option<P>,
-    ) -> impl Iterator<Item = DatabaseResult<(K, V)>> + '_
+    ) -> impl Iterator<Item = StorageResult<(K, V)>> + '_
     where
         K: From<Vec<u8>>,
         V: DeserializeOwned,
@@ -409,7 +411,7 @@ impl Database {
         column: Column,
         start: Option<S>,
         direction: Option<IterDirection>,
-    ) -> impl Iterator<Item = DatabaseResult<(K, V)>> + '_
+    ) -> impl Iterator<Item = StorageResult<(K, V)>> + '_
     where
         K: From<Vec<u8>>,
         V: DeserializeOwned,
@@ -424,7 +426,7 @@ impl Database {
         prefix: Option<P>,
         start: Option<S>,
         direction: Option<IterDirection>,
-    ) -> impl Iterator<Item = DatabaseResult<(K, V)>> + '_
+    ) -> impl Iterator<Item = StorageResult<(K, V)>> + '_
     where
         K: From<Vec<u8>>,
         V: DeserializeOwned,
@@ -442,7 +444,7 @@ impl Database {
                 val.and_then(|(key, value)| {
                     let key = K::from(key);
                     let value: V =
-                        postcard::from_bytes(&value).map_err(|_| DatabaseError::Codec)?;
+                        postcard::from_bytes(&value).map_err(|_| StorageError::Codec)?;
                     Ok((key, value))
                 })
             })

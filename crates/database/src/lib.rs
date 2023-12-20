@@ -13,7 +13,6 @@
 
 use fuel_core_storage::Error as StorageError;
 use fuel_core_types::services::executor::Error as ExecutorError;
-use std::array::TryFromSliceError;
 
 /// The error occurred during work with any of databases.
 #[derive(Debug, derive_more::Display, derive_more::From)]
@@ -53,12 +52,6 @@ impl From<Error> for anyhow::Error {
 impl From<Error> for StorageError {
     fn from(e: Error) -> Self {
         StorageError::DatabaseError(Box::new(e))
-    }
-}
-
-impl From<TryFromSliceError> for Error {
-    fn from(e: TryFromSliceError) -> Self {
-        Self::Other(anyhow::anyhow!(e))
     }
 }
 
