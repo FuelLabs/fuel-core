@@ -11,10 +11,11 @@ message Block {
   uint64 msg_receipt_count = 4;
   bytes tx_root = 5;
   bytes msg_receipt_root = 6;
-  bytes prev_root = 7;
-  fixed64 timestamp = 8;
-  bytes application_hash = 9;
-  repeated Transaction transactions = 10;
+  bytes prev_id = 7;
+  bytes prev_root = 8;
+  fixed64 timestamp = 9;
+  bytes application_hash = 10;
+  repeated Transaction transactions = 11;
 }
 
 message Transaction {

@@ -14,7 +14,10 @@ use fuel_core_types::{
             ConsensusHeader,
             PartialBlockHeader,
         },
-        primitives::DaBlockHeight,
+        primitives::{
+            BlockId,
+            DaBlockHeight,
+        },
     },
     fuel_asm::Word,
     fuel_tx::{
@@ -122,8 +125,14 @@ where
         {
             // TODO: hide this behind a feature-gate and make it configurable
             use fuel_core_firehose_types::prost::Message;
+
+            let prev_id: BlockId = match height.pred() {
+                Some(h) => self.db.get_block(&h)?.id(),
+                None => BlockId::default(),
+            };
+
             let fire_block =
-                fuel_core_firehose_types::Block::from(&result.result().block);
+                fuel_core_firehose_types::Block::from((&result.result().block, prev_id));
             let out_msg = hex::encode(fire_block.encode_to_vec());
             println!("FIRE PROTO {}", out_msg);
         }

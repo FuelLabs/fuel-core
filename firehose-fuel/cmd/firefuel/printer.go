@@ -14,7 +14,7 @@ func printBlock(blk *bstream.Block, alsoPrintTransactions bool, out io.Writer) e
 	if _, err := fmt.Fprintf(out, "Block #%d (%s) (prev: %s): %d transactions\n",
 		block.Height,
 		block.Id,
-		block.PrevRoot[0:7],
+		block.PrevId[0:7],
 		len(block.Transactions),
 	); err != nil {
 		return err

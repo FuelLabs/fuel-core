@@ -19,7 +19,7 @@ func (b *Block) GetFirehoseBlockParentNumber() uint64 {
 }
 
 func (b *Block) GetFirehoseBlockParentID() string {
-	return hex.EncodeToString(b.PrevRoot)
+	return hex.EncodeToString(b.PrevId)
 }
 
 func (b *Block) GetFirehoseBlockTime() time.Time {

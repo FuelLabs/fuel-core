@@ -35,7 +35,10 @@ use fuel_core_types::{
             ConsensusHeader,
             PartialBlockHeader,
         },
-        primitives::Empty,
+        primitives::{
+            BlockId,
+            Empty,
+        },
         SealedBlock,
     },
     entities::{
@@ -124,6 +127,16 @@ fn import_genesis_block(
         vec![],
         &[],
     );
+
+    // Export the genesis block to firehose as well
+    {
+        // TODO: hide this behind a feature-gate and make it configurable
+        use fuel_core_firehose_types::prost::Message;
+        let fire_block =
+            fuel_core_firehose_types::Block::from((&block, BlockId::default()));
+        let out_msg = hex::encode(fire_block.encode_to_vec());
+        println!("FIRE PROTO {}", out_msg);
+    }
 
     let block_id = block.id();
     database.storage::<FuelBlocks>().insert(

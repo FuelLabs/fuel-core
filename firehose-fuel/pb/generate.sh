@@ -26,7 +26,8 @@ function main() {
   generate "sf/fuel/type/v1/type.proto"
 
   echo "generate.sh - `date` - `whoami`" > ./last_generate.txt
-  echo "FuelLabs/firehose-fuel/proto revision: `GIT_DIR=$ROOT/.git git log -n 1 --pretty=format:%h -- proto`" >> ./last_generate.txt
+  # echo "FuelLabs/firehose-fuel/proto revision: `GIT_DIR=$ROOT/.git git log -n 1 --pretty=format:%h -- proto`" >> ./last_generate.txt
+  echo "FuelLabs/firehose-fuel/proto revision: `git log -n 1 --pretty=format:%h -- proto`" >> ./last_generate.txt
 }
 
 # usage:

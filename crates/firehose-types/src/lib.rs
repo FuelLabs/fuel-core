@@ -6,7 +6,10 @@ pub use prost;
 
 // Type conversions
 use fuel_core_types::{
-    blockchain::block::Block as FuelBlock,
+    blockchain::{
+        block::Block as FuelBlock,
+        primitives::BlockId,
+    },
     fuel_tx::{
         field::{
             BytecodeLength as _,
@@ -50,8 +53,8 @@ use fuel_core_types::{
 };
 use strum::IntoEnumIterator;
 
-impl From<&FuelBlock> for Block {
-    fn from(block: &FuelBlock) -> Self {
+impl From<(&FuelBlock, BlockId)> for Block {
+    fn from((block, prev_id): (&FuelBlock, BlockId)) -> Self {
         Self {
             id: block.id().as_slice().to_owned(),
             height: **block.header().height(),
@@ -69,6 +72,7 @@ impl From<&FuelBlock> for Block {
                 .message_receipt_root
                 .as_slice()
                 .to_owned(),
+            prev_id: prev_id.as_slice().to_owned(),
             prev_root: block.header().consensus.prev_root.as_slice().to_owned(),
             timestamp: block.header().consensus.time.0,
             application_hash: block.header().application_hash().to_vec(),

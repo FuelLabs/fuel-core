@@ -2758,6 +2758,7 @@ dependencies = [
  "fuel-core-consensus-module",
  "fuel-core-database",
  "fuel-core-executor",
+ "fuel-core-firehose-types",
  "fuel-core-importer",
  "fuel-core-metrics",
  "fuel-core-p2p",
