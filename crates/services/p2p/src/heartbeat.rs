@@ -106,9 +106,7 @@ impl NetworkBehaviour for Heartbeat {
         Ok(HeartbeatHandler::new(self.config.clone()))
     }
 
-    fn on_swarm_event(&mut self, _event: FromSwarm) {
-        ()
-    }
+    fn on_swarm_event(&mut self, _event: FromSwarm) {}
 
     fn on_connection_handler_event(
         &mut self,
