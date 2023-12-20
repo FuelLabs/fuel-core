@@ -32,6 +32,8 @@ use std::{
     ops::Deref,
 };
 
+use super::genesis_progress::GenesisProgress;
+
 /// Metadata for dense Merkle trees
 #[derive(Clone, serde::Serialize, serde::Deserialize)]
 pub struct DenseMerkleMetadata {
@@ -142,6 +144,14 @@ impl Mappable for ContractsStateMerkleMetadata {
     type OwnedValue = Self::Value;
 }
 
+pub struct GenesisMetadata;
+impl Mappable for GenesisMetadata {
+    type Key = Self::OwnedKey;
+    type OwnedKey = ();
+    type Value = Self::OwnedValue;
+    type OwnedValue = GenesisProgress;
+}
+
 /// The table has a corresponding column in the database.
 ///
 /// Using this trait allows the configured mappable type to have its'
@@ -193,6 +203,12 @@ impl DatabaseColumn for ContractsStateMerkleData {
 impl DatabaseColumn for ContractsStateMerkleMetadata {
     fn column() -> Column {
         Column::ContractsStateMerkleMetadata
+    }
+}
+
+impl DatabaseColumn for GenesisMetadata {
+    fn column() -> Column {
+        Column::GenesisMetadata
     }
 }
 

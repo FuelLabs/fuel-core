@@ -1,5 +1,9 @@
 use crate::{
-    database::Database,
+    database::{
+        genesis_progress::GenesisProgress,
+        storage::GenesisMetadata,
+        Database,
+    },
     service::config::Config,
 };
 use anyhow::anyhow;
@@ -27,6 +31,7 @@ use fuel_core_storage::{
     transactional::Transactional,
     MerkleRoot,
     StorageAsMut,
+    StorageInspect,
 };
 use fuel_core_types::{
     blockchain::{
@@ -73,6 +78,12 @@ use fuel_core_types::{
 };
 use itertools::Itertools;
 
+struct StateRoots {
+    messages: Bytes32,
+    coins: Bytes32,
+    contracts: Bytes32,
+}
+
 /// Loads state from the chain config into database
 pub fn maybe_initialize_state(
     config: &Config,
@@ -87,50 +98,62 @@ pub fn maybe_initialize_state(
     Ok(())
 }
 
-struct StateRoots {
-    messages: Bytes32,
-    coins: Bytes32,
-    contracts: Bytes32,
-}
-
 fn import_chain_state(
     config: &Config,
     original_database: &Database,
 ) -> anyhow::Result<StateRoots> {
     let block_height = config.chain_config.height.unwrap_or_default();
 
+    let mut genesis_progress =
+        StorageInspect::<GenesisMetadata>::get(original_database, &())
+            .unwrap()
+            .unwrap_or_default()
+            .into_owned();
+
     let coins_root = {
         let coins = config.state_reader.coins()?;
-        let roots = import_coin_configs(original_database, coins, block_height)?
-            .into_iter()
-            .sorted()
-            .enumerate()
-            .map(|(index, coin)| (MerkleTreeKey::new(index.to_be_bytes()), coin));
+        let roots = import_coin_configs(
+            original_database,
+            coins,
+            block_height,
+            &mut genesis_progress,
+        )?
+        .into_iter()
+        .sorted()
+        .enumerate()
+        .map(|(index, coin)| (MerkleTreeKey::new(index.to_be_bytes()), coin));
         let (root, _) = MerkleTree::nodes_from_set(roots);
         root
     };
 
     let messages_root = {
         let messages = config.state_reader.messages()?;
-        let roots = import_message_configs(original_database, messages)?
-            .into_iter()
-            .sorted()
-            .enumerate()
-            .map(|(index, message)| (MerkleTreeKey::new(index.to_be_bytes()), message));
+        let roots =
+            import_message_configs(original_database, messages, &mut genesis_progress)?
+                .into_iter()
+                .sorted()
+                .enumerate()
+                .map(|(index, message)| {
+                    (MerkleTreeKey::new(index.to_be_bytes()), message)
+                });
         let (root, _) = MerkleTree::nodes_from_set(roots);
         root
     };
 
     let contracts = config.state_reader.contracts()?;
-    let mut contract_ids =
-        import_contract_configs(original_database, contracts, block_height)?;
+    let mut contract_ids = import_contract_configs(
+        original_database,
+        contracts,
+        block_height,
+        &mut genesis_progress,
+    )?;
     contract_ids.sort();
 
     let contract_states = config.state_reader.contract_state()?;
-    import_contract_state(original_database, contract_states)?;
+    import_contract_state(original_database, contract_states, &mut genesis_progress)?;
 
     let contract_balances = config.state_reader.contract_balance()?;
-    import_contract_balance(original_database, contract_balances)?;
+    import_contract_balance(original_database, contract_balances, &mut genesis_progress)?;
 
     let mut contracts_tree = binary::in_memory::MerkleTree::new();
     // TODO: do this in batches
@@ -214,7 +237,10 @@ fn import_coin_configs(
     database: &Database,
     coins: IntoIter<CoinConfig>,
     block_height: BlockHeight,
+    genesis_progress: &mut GenesisProgress,
 ) -> anyhow::Result<Vec<Bytes32>> {
+    let coins = coins.skip(genesis_progress.coins());
+
     let mut roots = vec![];
     let mut generated_output_idx = 0;
 
@@ -233,9 +259,13 @@ fn import_coin_configs(
                 .checked_add(1)
                 .expect("The maximum number of UTXOs supported in the genesis configuration has been exceeded.");
 
+            genesis_progress.add_coin();
             Ok::<(), anyhow::Error>(())
         })?;
 
+        database
+            .storage::<GenesisMetadata>()
+            .insert(&(), genesis_progress)?;
         database_transaction.commit()?;
     }
 
@@ -245,10 +275,10 @@ fn import_coin_configs(
 fn import_message_configs(
     database: &Database,
     messages: IntoIter<MessageConfig>,
+    genesis_progress: &mut GenesisProgress,
 ) -> anyhow::Result<Vec<Bytes32>> {
-    // let (cursor, root_calculator) =
-    // resume_import(database, StateImportProgressKey::Coins)?;
-    // let mut state_reader = JsonBatchReader::new(coins_reader, cursor)?;
+    let messages = messages.skip(genesis_progress.messages());
+
     let mut roots = vec![];
 
     for batch in messages {
@@ -262,9 +292,14 @@ fn import_message_configs(
             let root = init_da_message(database, message)?;
             roots.push(root.into());
 
+            genesis_progress.add_message();
+
             Ok::<(), anyhow::Error>(())
         })?;
 
+        database
+            .storage::<GenesisMetadata>()
+            .insert(&(), genesis_progress)?;
         database_transaction.commit()?;
     }
 
@@ -275,9 +310,11 @@ fn import_contract_configs(
     database: &Database,
     contracts: IntoIter<ContractConfig>,
     block_height: BlockHeight,
+    genesis_progress: &mut GenesisProgress,
 ) -> anyhow::Result<Vec<ContractId>> {
-    let mut generated_output_idx = 0;
+    let contracts = contracts.skip(genesis_progress.contracts());
 
+    let mut generated_output_idx = 0;
     let mut contract_ids = vec![];
 
     for batch in contracts {
@@ -294,9 +331,13 @@ fn import_contract_configs(
                 .checked_add(1)
                 .expect("The maximum number of UTXOs supported in the genesis configuration has been exceeded.");
 
+            genesis_progress.add_contract();
             Ok::<(), anyhow::Error>(())
         })?;
 
+        database
+            .storage::<GenesisMetadata>()
+            .insert(&(), genesis_progress)?;
         database_transaction.commit()?;
     }
 
@@ -306,14 +347,20 @@ fn import_contract_configs(
 fn import_contract_state(
     database: &Database,
     contract_states: IntoIter<ContractStateConfig>,
+    genesis_progress: &mut GenesisProgress,
 ) -> anyhow::Result<()> {
+    let contract_states = contract_states.skip(genesis_progress.contract_states());
+
     for batch in contract_states {
         let mut database_transaction = Transactional::transaction(database);
         let database = database_transaction.as_mut();
 
         let batch =
             batch.expect("Encountered an error while decoding contract state configs");
+        let batch_size = batch.data.len();
         database.update_contract_states(batch.data)?;
+
+        genesis_progress.add_contract_state(batch_size);
         database_transaction.commit()?;
     }
 
@@ -322,19 +369,21 @@ fn import_contract_state(
 
 fn import_contract_balance(
     database: &Database,
-    contract_states: IntoIter<ContractBalanceConfig>,
+    contract_balances: IntoIter<ContractBalanceConfig>,
+    genesis_progress: &mut GenesisProgress,
 ) -> anyhow::Result<()> {
-    // let (cursor, root_calculator) =
-    // resume_import(database, StateImportProgressKey::Coins)?;
-    // let mut state_reader = JsonBatchReader::new(coins_reader, cursor)?;
+    let contract_balances = contract_balances.skip(genesis_progress.contract_balances());
 
-    for batch in contract_states {
+    for batch in contract_balances {
         let mut database_transaction = Transactional::transaction(database);
         let database = database_transaction.as_mut();
 
         let batch =
             batch.expect("Encountered an error while decoding contract balance configs");
+        let batch_size = batch.data.len();
         database.update_contract_balances(batch.data)?;
+
+        genesis_progress.add_contract_state(batch_size);
         database_transaction.commit()?;
     }
 

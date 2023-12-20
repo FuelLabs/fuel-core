@@ -85,6 +85,7 @@ mod utils;
 pub(crate) mod coin;
 
 pub mod balances;
+pub mod genesis_progress;
 pub mod metadata;
 pub mod storage;
 pub mod transaction;
@@ -149,6 +150,8 @@ pub enum Column {
     ContractsStateMerkleData = 23,
     /// See [`ContractsStateMerkleMetadata`](storage::ContractsStateMerkleMetadata)
     ContractsStateMerkleMetadata = 24,
+    /// See [`GenesisMetadata`](storage::GenesisMetadata)
+    GenesisMetadata = 25,
 }
 
 impl Column {
