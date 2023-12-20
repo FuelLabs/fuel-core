@@ -10,6 +10,7 @@
 #![deny(missing_docs)]
 #![deny(warnings)]
 
+use core::array::TryFromSliceError;
 use fuel_core_types::services::executor::Error as ExecutorError;
 
 pub use fuel_vm_private::{
@@ -21,6 +22,7 @@ pub use fuel_vm_private::{
 };
 
 pub mod iter;
+pub mod kv_store;
 pub mod tables;
 #[cfg(feature = "test-helpers")]
 pub mod test_helpers;
@@ -75,6 +77,12 @@ impl From<Error> for fuel_vm_private::prelude::InterpreterError<Error> {
 impl From<Error> for fuel_vm_private::prelude::RuntimeError<Error> {
     fn from(e: Error) -> Self {
         fuel_vm_private::prelude::RuntimeError::Storage(e)
+    }
+}
+
+impl From<TryFromSliceError> for Error {
+    fn from(e: TryFromSliceError) -> Self {
+        Self::Other(anyhow::anyhow!(e))
     }
 }
 
