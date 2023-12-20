@@ -92,7 +92,7 @@ impl StorageMutate<Coins> for Database {
 
     fn remove(&mut self, key: &UtxoId) -> Result<Option<CompressedCoin>, Self::Error> {
         let coin: Option<CompressedCoin> =
-            Database::remove(self, &utxo_id_to_bytes(key), Column::Coins)?;
+            Database::take(self, &utxo_id_to_bytes(key), Column::Coins)?;
 
         // cleanup secondary index
         if let Some(coin) = &coin {

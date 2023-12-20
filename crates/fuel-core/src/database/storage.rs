@@ -232,8 +232,7 @@ where
     }
 
     fn remove(&mut self, key: &T::Key) -> StorageResult<Option<T::OwnedValue>> {
-        Database::remove(self, key.database_key().as_ref(), T::column())
-            .map_err(Into::into)
+        Database::take(self, key.database_key().as_ref(), T::column()).map_err(Into::into)
     }
 }
 
