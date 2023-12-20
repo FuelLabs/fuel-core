@@ -89,12 +89,32 @@ jobs:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           slack_webhook: ${{ secrets.SLACK_WEBHOOK_NOTIFY_BUILD }}
 
+  spellcheck:
+    name: Run codespell
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v2
+
+    - name: Set up Python
+      uses: actions/setup-python@v2
+      with:
+        python-version: '3.x'
+
+    - name: Install codespell
+      run: pip install codespell
+
+    - name: Run codespell
+      run: codespell
+
   cargo-verifications:
     needs:
       - lint-toml-files
       - prevent-openssl
       - rustfmt
       - check-changelog
+      - spellcheck
     runs-on: buildjet-4vcpu-ubuntu-2204
     env:
       RUSTFLAGS: -D warnings
