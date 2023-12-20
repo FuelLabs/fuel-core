@@ -34,8 +34,7 @@ mod coin {
     ) -> TestContext {
         // setup config
         let mut config = Config::local_node();
-        config.chain_conf.initial_state = Some(StateConfig {
-            height: None,
+        config.state_config = StateConfig {
             contracts: None,
             coins: Some(
                 vec![
@@ -60,7 +59,7 @@ mod coin {
                 .collect(),
             ),
             messages: None,
-        });
+        };
 
         // setup server & client
         let srv = FuelService::new_node(config).await.unwrap();
@@ -295,8 +294,7 @@ mod message_coin {
 
         // setup config
         let mut config = Config::local_node();
-        config.chain_conf.initial_state = Some(StateConfig {
-            height: None,
+        config.state_config = StateConfig {
             contracts: None,
             coins: None,
             messages: Some(
@@ -313,7 +311,7 @@ mod message_coin {
                     })
                     .collect(),
             ),
-        });
+        };
 
         // setup server & client
         let srv = FuelService::new_node(config).await.unwrap();
@@ -496,8 +494,7 @@ mod all_coins {
 
         // setup config
         let mut config = Config::local_node();
-        config.chain_conf.initial_state = Some(StateConfig {
-            height: None,
+        config.state_config = StateConfig {
             contracts: None,
             coins: Some(
                 vec![
@@ -533,7 +530,7 @@ mod all_coins {
                     })
                     .collect(),
             ),
-        });
+        };
 
         // setup server & client
         let srv = FuelService::new_node(config).await.unwrap();
@@ -706,12 +703,11 @@ mod all_coins {
 async fn empty_setup() -> TestContext {
     // setup config
     let mut config = Config::local_node();
-    config.chain_conf.initial_state = Some(StateConfig {
-        height: None,
+    config.state_config = StateConfig {
         contracts: None,
         coins: None,
         messages: None,
-    });
+    };
 
     // setup server & client
     let srv = FuelService::new_node(config).await.unwrap();

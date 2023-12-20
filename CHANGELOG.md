@@ -58,7 +58,7 @@ FuelVM received a lot of safety and stability improvements:
 - Refactored errors, returning more detailed errors to the user, simplifying debugging.
 
 ### Added
-
+- [#1459](https://github.com/FuelLabs/fuel-core/pull/1459): Split initial state from chain config.
 - [#1503](https://github.com/FuelLabs/fuel-core/pull/1503): Add `gtf` opcode sanity check.
 - [#1502](https://github.com/FuelLabs/fuel-core/pull/1502): Added price benchmark for `vm_initialization`.
 - [#1501](https://github.com/FuelLabs/fuel-core/pull/1501): Add a CLI command for generating a fee collection contract.

@@ -34,8 +34,8 @@ async fn snapshot_state_config() {
 
     // setup config
     let mut config = Config::local_node();
+    config.chain_config.height = Some(BlockHeight::from(10));
     let starting_state = StateConfig {
-        height: Some(BlockHeight::from(10)),
         contracts: Some(vec![ContractConfig {
             contract_id: [11; 32].into(),
             code: vec![8; 32],
@@ -82,7 +82,7 @@ async fn snapshot_state_config() {
         }]),
     };
 
-    config.chain_conf.initial_state = Some(starting_state.clone());
+    config.state_config = starting_state.clone();
 
     // setup server & client
     let _ = FuelService::from_database(db.clone(), config)
@@ -109,8 +109,6 @@ async fn snapshot_state_config() {
         );
         assert_eq!(state_coin[i].maturity, starting_coin[i].maturity);
     }
-
-    assert_eq!(state_conf.height, starting_state.height);
 
     assert_eq!(state_conf.contracts, starting_state.contracts);
 

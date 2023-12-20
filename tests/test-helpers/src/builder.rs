@@ -89,7 +89,7 @@ pub struct TestSetupBuilder {
     pub initial_coins: Vec<CoinConfig>,
     pub min_gas_price: u64,
     pub gas_limit: u64,
-    pub starting_block: Option<BlockHeight>,
+    pub starting_block: BlockHeight,
     pub utxo_validation: bool,
     pub trigger: Trigger,
 }
@@ -182,25 +182,28 @@ impl TestSetupBuilder {
 
     // setup chainspec and spin up a fuel-node
     pub async fn finalize(&mut self) -> TestContext {
-        let mut chain_config = ChainConfig {
-            initial_state: Some(StateConfig {
-                coins: Some(self.initial_coins.clone()),
-                contracts: Some(self.contracts.values().cloned().collect_vec()),
-                height: self.starting_block,
-                ..StateConfig::default()
-            }),
+        let mut chain_conf = ChainConfig {
+            height: Some(self.starting_block),
             ..ChainConfig::local_testnet()
         };
-        chain_config.consensus_parameters.tx_params.max_gas_per_tx = self.gas_limit;
-        chain_config.block_gas_limit = self.gas_limit;
+        chain_conf.consensus_parameters.tx_params.max_gas_per_tx = self.gas_limit;
+        chain_conf.block_gas_limit = self.gas_limit;
+
+        let state_config = StateConfig {
+            coins: Some(self.initial_coins.clone()),
+            contracts: Some(self.contracts.values().cloned().collect_vec()),
+            ..StateConfig::default()
+        };
+
         let config = Config {
             utxo_validation: self.utxo_validation,
             txpool: fuel_core_txpool::Config {
-                chain_config: chain_config.clone(),
+                chain_config: chain_conf.clone(),
                 min_gas_price: self.min_gas_price,
                 ..fuel_core_txpool::Config::default()
             },
-            chain_conf: chain_config,
+            chain_config: chain_conf,
+            state_config,
             block_production: self.trigger,
             ..Config::local_node()
         };
@@ -224,7 +227,7 @@ impl Default for TestSetupBuilder {
             initial_coins: vec![],
             min_gas_price: 0,
             gas_limit: u64::MAX,
-            starting_block: None,
+            starting_block: Default::default(),
             utxo_validation: true,
             trigger: Trigger::Instant,
         }

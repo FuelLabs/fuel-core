@@ -1,5 +1,5 @@
 ---
-source: crates/chain-config/src/config.rs
+source: crates/chain-config/src/config/chain.rs
 expression: json
 ---
 {
@@ -250,5 +250,6 @@ expression: json
     "PoA": {
       "signing_key": "22ec92c3105c942a6640bdc4e4907286ec4728e8cfc0d8ac59aad4d8e1ccaefb"
     }
-  }
+  },
+  "height": "0x14c8be1f"
 }

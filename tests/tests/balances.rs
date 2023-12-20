@@ -39,8 +39,7 @@ async fn balance() {
 
     // setup config
     let mut config = Config::local_node();
-    config.chain_conf.initial_state = Some(StateConfig {
-        height: None,
+    config.state_config = StateConfig {
         contracts: None,
         coins: Some(
             vec![
@@ -75,7 +74,7 @@ async fn balance() {
                 })
                 .collect(),
         ),
-    });
+    };
 
     // setup server & client
     let srv = FuelService::new_node(config).await.unwrap();
@@ -202,12 +201,11 @@ async fn first_5_balances() {
 
     // setup config
     let mut config = Config::local_node();
-    config.chain_conf.initial_state = Some(StateConfig {
-        height: None,
+    config.state_config = StateConfig {
         contracts: None,
         coins: Some(coins),
         messages: Some(messages),
-    });
+    };
 
     // setup server & client
     let srv = FuelService::new_node(config).await.unwrap();

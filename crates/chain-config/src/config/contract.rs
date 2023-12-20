@@ -26,7 +26,7 @@ use serde_with::{
 
 #[skip_serializing_none]
 #[serde_as]
-#[derive(Clone, Debug, Deserialize, Serialize, Eq, PartialEq)]
+#[derive(Clone, Debug, Deserialize, Serialize, Eq, PartialEq, Default)]
 pub struct ContractConfig {
     #[serde_as(as = "HexType")]
     pub contract_id: ContractId,

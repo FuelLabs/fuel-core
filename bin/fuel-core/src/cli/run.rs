@@ -15,6 +15,7 @@ use fuel_core::{
     chain_config::{
         default_consensus_dev_key,
         ChainConfig,
+        StateConfig,
     },
     producer::Config as ProducerConfig,
     service::{
@@ -104,14 +105,10 @@ pub struct Command {
     )]
     pub database_type: DbType,
 
-    /// Specify either an alias to a built-in configuration or filepath to a JSON file.
-    #[arg(
-        name = "CHAIN_CONFIG",
-        long = "chain",
-        default_value = "local_testnet",
-        env
-    )]
-    pub chain_config: String,
+    /// Specify either an alias to a built-in configuration or filepath to a directory
+    /// that contains the chain parameters and chain state config JSON files.
+    #[arg(name = "GENESIS_CONFIG", long = "genesis-config", env)]
+    pub genesis_config: Option<String>,
 
     /// Should be used for local development only. Enabling debug mode:
     /// - Allows GraphQL Endpoints to arbitrarily advance blocks.
@@ -219,7 +216,7 @@ impl Command {
             max_database_cache_size,
             database_path,
             database_type,
-            chain_config,
+            genesis_config,
             vm_backtrace,
             debug,
             utxo_validation,
@@ -250,7 +247,14 @@ impl Command {
 
         let addr = net::SocketAddr::new(ip, port);
 
-        let chain_conf: ChainConfig = chain_config.as_str().parse()?;
+        let (chain_conf, state_config) = match genesis_config.as_deref() {
+            None => (ChainConfig::local_testnet(), StateConfig::local_testnet()),
+            Some(path) => {
+                let chain_conf = ChainConfig::load_from_directory(path)?;
+                let state_config = StateConfig::load_from_directory(path)?;
+                (chain_conf, state_config)
+            }
+        };
 
         #[cfg(feature = "relayer")]
         let relayer_cfg = relayer_args.into_config();
@@ -306,7 +310,8 @@ impl Command {
             max_database_cache_size,
             database_path,
             database_type,
-            chain_conf: chain_conf.clone(),
+            chain_config: chain_conf.clone(),
+            state_config,
             debug,
             utxo_validation,
             block_production: trigger,
@@ -404,7 +409,7 @@ fn start_pyroscope_agent(
             let agent = PyroscopeAgent::builder(url, &"fuel-core".to_string())
                 .tags(vec![
                     ("service", config.name.as_str()),
-                    ("network", config.chain_conf.chain_name.as_str()),
+                    ("network", config.chain_config.chain_name.as_str()),
                 ])
                 .backend(pprof_backend(
                     PprofConfig::new().sample_rate(profiling_args.pprof_sample_rate),

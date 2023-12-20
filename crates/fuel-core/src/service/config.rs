@@ -2,6 +2,7 @@ use clap::ValueEnum;
 use fuel_core_chain_config::{
     default_consensus_dev_key,
     ChainConfig,
+    StateConfig,
 };
 use fuel_core_types::{
     blockchain::primitives::SecretKeyWrapper,
@@ -39,7 +40,8 @@ pub struct Config {
     pub max_database_cache_size: usize,
     pub database_path: PathBuf,
     pub database_type: DbType,
-    pub chain_conf: ChainConfig,
+    pub chain_config: ChainConfig,
+    pub state_config: StateConfig,
     /// When `true`:
     /// - Enables manual block production.
     /// - Enables debugger endpoint.
@@ -73,6 +75,7 @@ pub struct Config {
 impl Config {
     pub fn local_node() -> Self {
         let chain_conf = ChainConfig::local_testnet();
+        let state_config = StateConfig::local_testnet();
         let utxo_validation = false;
         let min_gas_price = 0;
 
@@ -87,7 +90,8 @@ impl Config {
             #[cfg(not(feature = "rocksdb"))]
             database_type: DbType::InMemory,
             debug: true,
-            chain_conf: chain_conf.clone(),
+            chain_config: chain_conf.clone(),
+            state_config: state_config.clone(),
             block_production: Trigger::Instant,
             vm: Default::default(),
             utxo_validation,
@@ -125,9 +129,9 @@ impl Config {
             self.utxo_validation = true;
         }
 
-        if self.txpool.chain_config != self.chain_conf {
+        if self.txpool.chain_config != self.chain_config {
             tracing::warn!("The `ChainConfig` of `TxPool` was inconsistent");
-            self.txpool.chain_config = self.chain_conf.clone();
+            self.txpool.chain_config = self.chain_config.clone();
         }
         if self.txpool.utxo_validation != self.utxo_validation {
             tracing::warn!("The `utxo_validation` of `TxPool` was inconsistent");
@@ -146,10 +150,10 @@ impl From<&Config> for fuel_core_poa::Config {
     fn from(config: &Config) -> Self {
         fuel_core_poa::Config {
             trigger: config.block_production,
-            block_gas_limit: config.chain_conf.block_gas_limit,
+            block_gas_limit: config.chain_config.block_gas_limit,
             signing_key: config.consensus_key.clone(),
             metrics: false,
-            consensus_params: config.chain_conf.consensus_parameters.clone(),
+            consensus_params: config.chain_config.consensus_parameters.clone(),
             min_connected_reserved_peers: config.min_connected_reserved_peers,
             time_until_synced: config.time_until_synced,
         }

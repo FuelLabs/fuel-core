@@ -5,7 +5,10 @@ use fuel_core::service::{
 
 // Add methods on commands
 use fuel_core::txpool::types::ContractId;
-use fuel_core_chain_config::ChainConfig;
+use fuel_core_chain_config::{
+    ChainConfig,
+    StateConfig,
+};
 use fuel_core_e2e_client::config::SuiteConfig;
 use std::{
     fs,
@@ -93,10 +96,16 @@ async fn execute_suite(config_path: String) {
 
 fn dev_config() -> Config {
     let mut config = Config::local_node();
-    let dev_config_bytes =
-        include_str!("../../../deployment/scripts/chainspec/dev_chainspec.json");
-    let chain_config: ChainConfig = serde_json::from_str(dev_config_bytes)
-        .expect("Should be able to decode chain config");
+
+    let chain_config =
+        ChainConfig::load_from_directory("../../deployment/scripts/chainspec/dev")
+            .expect("Should be able to load chain config");
+    // TODO: don't use serde here
+    let state_config =
+        fs::read_to_string("../../deployment/scripts/chainspec/dev/state_config.json")
+            .expect("Should be able to read state config");
+    let state_config: StateConfig = serde_json::from_str(&state_config)
+        .expect("Should be able to decode state config");
 
     // The `run_contract_large_state` test creates a contract with a huge state
     assert!(
@@ -107,7 +116,9 @@ fn dev_config() -> Config {
             >= 1 << 17 // 131072
     );
 
-    config.chain_conf = chain_config;
+    config.chain_config = chain_config;
+    config.state_config = state_config;
+
     config.block_producer.coinbase_recipient = Some(
         ContractId::from_str(
             "0x7777777777777777777777777777777777777777777777777777777777777777",

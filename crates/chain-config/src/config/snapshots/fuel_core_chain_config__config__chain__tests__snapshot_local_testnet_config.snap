@@ -1,5 +1,5 @@
 ---
-source: crates/chain-config/src/config.rs
+source: crates/chain-config/src/config/chain.rs
 expression: json
 ---
 {

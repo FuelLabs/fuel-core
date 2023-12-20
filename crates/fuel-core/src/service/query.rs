@@ -42,7 +42,12 @@ impl FuelService {
         &self,
         tx: Transaction,
     ) -> anyhow::Result<impl Stream<Item = anyhow::Result<TransactionStatus>>> {
-        let id = tx.id(&self.shared.config.chain_conf.consensus_parameters.chain_id);
+        let id = tx.id(&self
+            .shared
+            .config
+            .chain_config
+            .consensus_parameters
+            .chain_id);
         let stream = self.transaction_status_change(id)?;
         self.submit(tx).await?;
         Ok(stream)
@@ -53,7 +58,12 @@ impl FuelService {
         &self,
         tx: Transaction,
     ) -> anyhow::Result<TransactionStatus> {
-        let id = tx.id(&self.shared.config.chain_conf.consensus_parameters.chain_id);
+        let id = tx.id(&self
+            .shared
+            .config
+            .chain_config
+            .consensus_parameters
+            .chain_id);
         let stream = self.transaction_status_change(id)?.filter(|status| {
             futures::future::ready(!matches!(status, Ok(TransactionStatus::Submitted(_))))
         });

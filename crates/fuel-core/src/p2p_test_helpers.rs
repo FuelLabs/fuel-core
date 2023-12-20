@@ -1,7 +1,7 @@
 //! # Helpers for creating networks of nodes
 
 use crate::{
-    chain_config::ChainConfig,
+    chain_config::StateConfig,
     database::Database,
     p2p::Multiaddr,
     service::{
@@ -193,7 +193,7 @@ pub async fn make_nodes(
                     let secret = SecretKey::random(&mut rng);
                     let utxo_id: UtxoId = rng.gen();
                     let initial_coin =
-                        ChainConfig::initial_coin(secret, 10000, Some(utxo_id));
+                        StateConfig::initial_coin(secret, 10000, Some(utxo_id));
                     let tx = TransactionBuilder::script(
                         vec![op::ret(RegId::ONE)].into_iter().collect(),
                         vec![],
@@ -226,10 +226,7 @@ pub async fn make_nodes(
                 for (tx, initial_coin) in all {
                     txs.push(tx);
                     config
-                        .chain_conf
-                        .initial_state
-                        .as_mut()
-                        .unwrap()
+                        .state_config
                         .coins
                         .as_mut()
                         .unwrap()
@@ -259,7 +256,7 @@ pub async fn make_nodes(
                         config.clone(),
                     );
                     if let Some(BootstrapSetup { pub_key, .. }) = boot {
-                        match &mut node_config.chain_conf.consensus {
+                        match &mut node_config.chain_config.consensus {
                             crate::chain_config::ConsensusConfig::PoA { signing_key } => {
                                 *signing_key = pub_key;
                             }
@@ -308,7 +305,7 @@ pub async fn make_nodes(
 
             node_config.utxo_validation = utxo_validation;
             let pub_key = secret.public_key();
-            match &mut node_config.chain_conf.consensus {
+            match &mut node_config.chain_config.consensus {
                 crate::chain_config::ConsensusConfig::PoA { signing_key } => {
                     *signing_key = Input::owner(&pub_key);
                 }
@@ -352,7 +349,7 @@ pub async fn make_nodes(
                     node_config.p2p.as_mut().unwrap().reserved_nodes = boots.clone();
                 }
             }
-            match &mut node_config.chain_conf.consensus {
+            match &mut node_config.chain_config.consensus {
                 crate::chain_config::ConsensusConfig::PoA { signing_key } => {
                     *signing_key = pub_key;
                 }
