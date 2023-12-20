@@ -6,15 +6,21 @@ use crate::{
     state::{
         BatchOperations,
         IterDirection,
-        KVItem,
-        KeyValueStore,
         TransactableStorage,
-        Value,
     },
 };
-use fuel_core_storage::iter::{
-    BoxedIter,
-    IntoBoxedIter,
+use fuel_core_storage::{
+    iter::{
+        BoxedIter,
+        IntoBoxedIter,
+        IteratorableStore,
+    },
+    kv_store::{
+        KVItem,
+        KeyValueStore,
+        Value,
+    },
+    Result as StorageResult,
 };
 use std::{
     collections::BTreeMap,
@@ -106,14 +112,14 @@ impl KeyValueStore for MemoryStore {
         key: &[u8],
         column: Column,
         value: Value,
-    ) -> DatabaseResult<Option<Value>> {
+    ) -> StorageResult<Option<Value>> {
         Ok(self.inner[column.as_usize()]
             .lock()
             .expect("poisoned")
             .insert(key.to_vec(), value))
     }
 
-    fn write(&self, key: &[u8], column: Column, buf: &[u8]) -> DatabaseResult<usize> {
+    fn write(&self, key: &[u8], column: Column, buf: &[u8]) -> StorageResult<usize> {
         let len = buf.len();
         self.inner[column.as_usize()]
             .lock()
@@ -122,25 +128,27 @@ impl KeyValueStore for MemoryStore {
         Ok(len)
     }
 
-    fn take(&self, key: &[u8], column: Column) -> DatabaseResult<Option<Value>> {
+    fn take(&self, key: &[u8], column: Column) -> StorageResult<Option<Value>> {
         Ok(self.inner[column.as_usize()]
             .lock()
             .expect("poisoned")
             .remove(&key.to_vec()))
     }
 
-    fn delete(&self, key: &[u8], column: Column) -> DatabaseResult<()> {
+    fn delete(&self, key: &[u8], column: Column) -> StorageResult<()> {
         self.take(key, column).map(|_| ())
     }
 
-    fn get(&self, key: &[u8], column: Column) -> DatabaseResult<Option<Value>> {
+    fn get(&self, key: &[u8], column: Column) -> StorageResult<Option<Value>> {
         Ok(self.inner[column.as_usize()]
             .lock()
             .expect("poisoned")
             .get(&key.to_vec())
             .cloned())
     }
+}
 
+impl IteratorableStore for MemoryStore {
     fn iter_all(
         &self,
         column: Column,

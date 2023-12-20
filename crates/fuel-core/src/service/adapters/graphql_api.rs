@@ -95,19 +95,17 @@ impl DatabaseBlocks for Database {
     }
 
     fn ids_of_latest_block(&self) -> StorageResult<(BlockHeight, BlockId)> {
-        Ok(self
-            .ids_of_latest_block()
+        self.ids_of_latest_block()
             .transpose()
-            .ok_or(not_found!("BlockId"))??)
+            .ok_or(not_found!("BlockId"))?
     }
 }
 
 impl DatabaseTransactions for Database {
     fn tx_status(&self, tx_id: &TxId) -> StorageResult<TransactionStatus> {
-        Ok(self
-            .get_tx_status(tx_id)
+        self.get_tx_status(tx_id)
             .transpose()
-            .ok_or(not_found!("TransactionId"))??)
+            .ok_or(not_found!("TransactionId"))?
     }
 
     fn owned_transactions_ids(

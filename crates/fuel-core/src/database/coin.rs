@@ -2,8 +2,6 @@ use crate::database::{
     storage::DatabaseColumn,
     Column,
     Database,
-    Error as DatabaseError,
-    Result as DatabaseResult,
 };
 use fuel_core_chain_config::CoinConfig;
 use fuel_core_storage::{
@@ -110,7 +108,7 @@ impl Database {
         owner: &Address,
         start_coin: Option<UtxoId>,
         direction: Option<IterDirection>,
-    ) -> impl Iterator<Item = DatabaseResult<UtxoId>> + '_ {
+    ) -> impl Iterator<Item = StorageResult<UtxoId>> + '_ {
         self.iter_all_filtered::<Vec<u8>, bool, _, _>(
             Column::OwnedCoins,
             Some(*owner),
@@ -138,14 +136,13 @@ impl Database {
         Ok(coin)
     }
 
-    pub fn get_coin_config(&self) -> DatabaseResult<Option<Vec<CoinConfig>>> {
+    pub fn get_coin_config(&self) -> StorageResult<Option<Vec<CoinConfig>>> {
         let configs = self
             .iter_all::<Vec<u8>, CompressedCoin>(Column::Coins, None)
-            .map(|raw_coin| -> DatabaseResult<CoinConfig> {
+            .map(|raw_coin| -> StorageResult<CoinConfig> {
                 let coin = raw_coin?;
 
-                let byte_id =
-                    Bytes32::new(coin.0[..32].try_into().map_err(DatabaseError::from)?);
+                let byte_id = Bytes32::new(coin.0[..32].try_into()?);
                 let output_index = coin.0[32];
 
                 Ok(CoinConfig {
@@ -159,7 +156,7 @@ impl Database {
                     asset_id: coin.1.asset_id,
                 })
             })
-            .collect::<DatabaseResult<Vec<CoinConfig>>>()?;
+            .collect::<StorageResult<Vec<CoinConfig>>>()?;
 
         Ok(Some(configs))
     }
