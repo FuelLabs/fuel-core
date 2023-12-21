@@ -45,7 +45,7 @@ async fn coin() {
         ..Default::default()
     };
     let config = Config {
-        state_reader: StateReader::in_memory(state, 1),
+        state_reader: StateReader::in_memory(state, StateReader::MAX_GROUP_SIZE),
         ..Config::local_node()
     };
 

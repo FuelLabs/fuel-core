@@ -118,7 +118,7 @@ fn dev_config() -> Config {
     );
 
     config.chain_config = chain_config;
-    config.state_reader = StateReader::in_memory(state_config, 1);
+    config.state_reader = StateReader::in_memory(state_config, StateReader::MAX_GROUP_SIZE);
 
     config.block_producer.coinbase_recipient = Some(
         ContractId::from_str(
