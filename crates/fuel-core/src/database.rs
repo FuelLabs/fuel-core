@@ -56,6 +56,7 @@ type DatabaseResult<T> = Result<T>;
 // TODO: Extract `Database` and all belongs into `fuel-core-database`.
 #[cfg(feature = "rocksdb")]
 use crate::state::rocks_db::RocksDb;
+use crate::state::Value;
 #[cfg(feature = "rocksdb")]
 use std::path::Path;
 #[cfg(feature = "rocksdb")]
@@ -84,7 +85,14 @@ pub mod transactions;
 /// Database tables column ids to the corresponding [`fuel_core_storage::Mappable`] table.
 #[repr(u32)]
 #[derive(
-    Copy, Clone, Debug, strum_macros::EnumCount, PartialEq, Eq, enum_iterator::Sequence,
+    Copy,
+    Clone,
+    Debug,
+    strum_macros::EnumCount,
+    strum_macros::IntoStaticStr,
+    PartialEq,
+    Eq,
+    enum_iterator::Sequence,
 )]
 pub enum Column {
     /// The column id of metadata about the blockchain
@@ -149,6 +157,16 @@ impl Column {
     /// Returns the `usize` representation of the `Column`.
     pub fn as_usize(&self) -> usize {
         *self as usize
+    }
+}
+
+impl crate::state::StorageColumn for Column {
+    fn name(&self) -> &'static str {
+        self.into()
+    }
+
+    fn id(&self) -> u32 {
+        *self as u32
     }
 }
 
@@ -253,13 +271,13 @@ impl Database {
 /// Mutable methods.
 // TODO: Add `&mut self` to them.
 impl Database {
-    fn insert<K: AsRef<[u8]>, V: Serialize, R: DeserializeOwned>(
+    fn insert<K: AsRef<[u8]>, V: Serialize + ?Sized, R: DeserializeOwned>(
         &self,
         key: K,
         column: Column,
         value: &V,
     ) -> DatabaseResult<Option<R>> {
-        let result = self.data.put(
+        let result = self.data.replace(
             key.as_ref(),
             column,
             Arc::new(postcard::to_stdvec(value).map_err(|_| DatabaseError::Codec)?),
@@ -271,6 +289,16 @@ impl Database {
         } else {
             Ok(None)
         }
+    }
+
+    fn insert_raw<K: AsRef<[u8]>, V: AsRef<[u8]>>(
+        &self,
+        key: K,
+        column: Column,
+        value: V,
+    ) -> DatabaseResult<Option<Value>> {
+        self.data
+            .replace(key.as_ref(), column, Arc::new(value.as_ref().to_vec()))
     }
 
     fn batch_insert<K: AsRef<[u8]>, V: Serialize, S>(
@@ -299,36 +327,19 @@ impl Database {
         self.data.batch_write(&mut set.into_iter())
     }
 
-    fn remove<V: DeserializeOwned>(
+    fn take<V: DeserializeOwned>(
         &self,
         key: &[u8],
         column: Column,
     ) -> DatabaseResult<Option<V>> {
         self.data
-            .delete(key, column)?
+            .take(key, column)?
             .map(|val| postcard::from_bytes(&val).map_err(|_| DatabaseError::Codec))
             .transpose()
     }
 
-    fn write(&self, key: &[u8], column: Column, buf: &[u8]) -> DatabaseResult<usize> {
-        self.data.write(key, column, buf)
-    }
-
-    fn replace(
-        &self,
-        key: &[u8],
-        column: Column,
-        buf: &[u8],
-    ) -> DatabaseResult<(usize, Option<Vec<u8>>)> {
-        self.data
-            .replace(key, column, buf)
-            .map(|(size, value)| (size, value.map(|value| value.deref().clone())))
-    }
-
-    fn take(&self, key: &[u8], column: Column) -> DatabaseResult<Option<Vec<u8>>> {
-        self.data
-            .take(key, column)
-            .map(|value| value.map(|value| value.deref().clone()))
+    fn take_raw(&self, key: &[u8], column: Column) -> DatabaseResult<Option<Value>> {
+        self.data.take(key, column)
     }
 }
 
@@ -353,7 +364,7 @@ impl Database {
 
     fn read_alloc(&self, key: &[u8], column: Column) -> DatabaseResult<Option<Vec<u8>>> {
         self.data
-            .read_alloc(key, column)
+            .get(key, column)
             .map(|value| value.map(|value| value.deref().clone()))
     }
 

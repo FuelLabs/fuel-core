@@ -67,10 +67,10 @@ impl StorageMutate<Messages> for Database {
 
     fn remove(&mut self, key: &Nonce) -> Result<Option<Message>, Self::Error> {
         let result: Option<Message> =
-            Database::remove(self, key.database_key().as_ref(), Column::Messages)?;
+            Database::take(self, key.database_key().as_ref(), Column::Messages)?;
 
         if let Some(message) = &result {
-            Database::remove::<bool>(
+            Database::take::<bool>(
                 self,
                 &owner_msg_id_key(&message.recipient, key),
                 Column::OwnedMessageIds,
