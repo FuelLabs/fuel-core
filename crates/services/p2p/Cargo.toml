@@ -21,16 +21,16 @@ fuel-core-types = { workspace = true, features = [
     "serde",
 ] }
 futures = { workspace = true }
+hex = "0.4"
 ip_network = "0.4"
-libp2p = { version = "=0.50.0", default-features = false, features = [
+libp2p = { version = "=0.53.1", default-features = false, features = [
     "dns",
     "gossipsub",
     "identify",
     "kad",
     "macros",
     "mdns",
-    "mplex",
-    "noise",    
+    "noise",
     "request-response",
     "secp256k1",
     "tcp",
@@ -38,22 +38,25 @@ libp2p = { version = "=0.50.0", default-features = false, features = [
     "yamux",
     "websocket",
 ] }
-libp2p-core = "=0.38.0"
-libp2p-dns = "=0.38.0"
-libp2p-gossipsub = "=0.43.0"
-libp2p-identify = "=0.41.0"
-libp2p-kad = "=0.42.0"
-libp2p-mdns = "=0.42.0"
-libp2p-mplex = "=0.38.0"
-libp2p-noise = "=0.41.0"
-libp2p-prom-client = { workspace = true }
-libp2p-request-response = "=0.23.0"
-libp2p-swarm = "=0.41.1"
-libp2p-tcp = "=0.38.0"
-libp2p-websocket = "=0.40.0"
-libp2p-yamux = "=0.42.0"
+libp2p-allow-block-list = "=0.3.0"
+libp2p-core = "=0.41.1"
+libp2p-dns = "=0.41.0"
+libp2p-gossipsub = "=0.46.0"
+libp2p-identify = "=0.44.0"
+libp2p-kad = "=0.45.1"
+libp2p-mdns = "=0.45.1"
+libp2p-mplex = "=0.41.0"
+libp2p-noise = "=0.44.0"
+libp2p-request-response = "=0.26.0"
+libp2p-swarm = "=0.44.0"
+libp2p-tcp = "=0.41.0"
+libp2p-tls = "0.3.0"
+libp2p-websocket = "=0.43.0"
+libp2p-yamux = "=0.45.0"
 postcard = { workspace = true, features = ["use-std"] }
 prometheus-client = { workspace = true }
+quick-protobuf = "0.8.1"
+quick-protobuf-codec = "0.3.0"
 rand = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_with = "1.11"
@@ -61,6 +64,7 @@ sha2 = "0.10"
 thiserror = "1.0.47"
 tokio = { workspace = true, features = ["sync"] }
 tracing = { workspace = true }
+void = "1"
 
 [dev-dependencies]
 ctor = "0.1"
@@ -74,6 +78,9 @@ rand = { workspace = true }
 tokio = { workspace = true, features = ["full", "test-util"] }
 tracing-attributes = { workspace = true }
 tracing-subscriber = { workspace = true, features = ["env-filter"] }
+
+[dev-dependencies.libp2p-swarm-test]
+version = "0.3.0"
 
 [features]
 test-helpers = ["fuel-core-types/test-helpers"]

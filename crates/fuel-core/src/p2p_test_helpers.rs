@@ -378,11 +378,11 @@ pub fn make_config(name: String, mut node_config: Config) -> Config {
 pub async fn make_node(node_config: Config, test_txs: Vec<Transaction>) -> Node {
     let db = Database::in_memory();
     let node = tokio::time::timeout(
-        Duration::from_secs(1),
+        Duration::from_secs(2),
         FuelService::from_database(db.clone(), node_config),
     )
     .await
-    .expect("All services should start in less than 1 second")
+    .expect("All services should start in less than 2 seconds")
     .expect("The `FuelService should start without error");
 
     let config = node.shared.config.clone();

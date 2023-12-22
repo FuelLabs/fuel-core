@@ -1,8 +1,8 @@
-use libp2p_prom_client::{
+use once_cell::race::OnceBox;
+use prometheus_client::{
     metrics::counter::Counter,
     registry::Registry,
 };
-use once_cell::race::OnceBox;
 use std::sync::OnceLock;
 
 pub struct P2PMetrics {
@@ -27,7 +27,7 @@ impl P2PMetrics {
         metrics.peer_metrics.register(
             "Peer_Counter",
             "A Counter which keeps track of each unique peer the p2p service has connected to",
-            Box::new(metrics.unique_peers.clone()),
+            metrics.unique_peers.clone(),
         );
 
         metrics

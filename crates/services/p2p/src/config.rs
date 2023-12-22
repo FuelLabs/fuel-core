@@ -2,6 +2,7 @@ use crate::{
     gossipsub::config::default_gossipsub_config,
     heartbeat::HeartbeatConfig,
     peer_manager::ConnectionState,
+    TryPeerId,
 };
 use fuel_core_types::blockchain::consensus::Genesis;
 
@@ -10,24 +11,22 @@ use libp2p::{
         muxing::StreamMuxerBox,
         transport::Boxed,
     },
-    gossipsub::GossipsubConfig,
+    gossipsub::Config as GossipsubConfig,
     identity::{
-        secp256k1::SecretKey,
+        secp256k1,
         Keypair,
     },
-    mplex,
-    noise::{
-        self,
-    },
+    noise::Config as NoiseConfig,
     tcp::{
         tokio::Transport as TokioTcpTransport,
         Config as TcpConfig,
     },
-    yamux,
     Multiaddr,
     PeerId,
     Transport,
 };
+use libp2p_mplex::MplexConfig;
+use libp2p_yamux::Config as YamuxConfig;
 use std::{
     collections::HashSet,
     net::{
@@ -44,15 +43,12 @@ use std::{
 use self::{
     connection_tracker::ConnectionTracker,
     fuel_authenticated::FuelAuthenticated,
-    fuel_upgrade::{
-        Checksum,
-        FuelUpgrade,
-    },
+    fuel_upgrade::Checksum,
     guarded_node::GuardedNode,
 };
 mod connection_tracker;
 mod fuel_authenticated;
-mod fuel_upgrade;
+pub(crate) mod fuel_upgrade;
 mod guarded_node;
 
 const REQ_RES_TIMEOUT: Duration = Duration::from_secs(20);
@@ -199,9 +195,10 @@ impl Config<NotInitialized> {
 pub fn convert_to_libp2p_keypair(
     secret_key_bytes: impl AsMut<[u8]>,
 ) -> anyhow::Result<Keypair> {
-    let secret_key = SecretKey::from_bytes(secret_key_bytes)?;
+    let secret_key = secp256k1::SecretKey::try_from_bytes(secret_key_bytes)?;
+    let keypair: secp256k1::Keypair = secret_key.into();
 
-    Ok(Keypair::Secp256k1(secret_key.into()))
+    Ok(keypair.into())
 }
 
 impl Config<NotInitialized> {
@@ -254,79 +251,82 @@ impl Config<Initialized> {
 /// TCP/IP, Websocket
 /// Noise as encryption layer
 /// mplex or yamux for multiplexing
-pub(crate) fn build_transport(
+pub(crate) fn build_transport_function(
     p2p_config: &Config,
 ) -> (
-    Boxed<(PeerId, StreamMuxerBox)>,
+    impl FnOnce(&Keypair) -> Boxed<(PeerId, StreamMuxerBox)> + '_,
     Arc<RwLock<ConnectionState>>,
 ) {
-    let transport = {
-        let generate_tcp_transport =
-            || TokioTcpTransport::new(TcpConfig::new().port_reuse(true).nodelay(true));
-
-        let tcp = generate_tcp_transport();
-
-        let ws_tcp =
-            libp2p::websocket::WsConfig::new(generate_tcp_transport()).or_transport(tcp);
-
-        libp2p::dns::TokioDnsConfig::system(ws_tcp).unwrap()
-    }
-    .upgrade(libp2p::core::upgrade::Version::V1);
-
-    let noise_authenticated = {
-        let dh_keys = noise::Keypair::<noise::X25519Spec>::new()
-            .into_authentic(&p2p_config.keypair)
-            .expect("Noise key generation failed");
-
-        noise::NoiseConfig::xx(dh_keys).into_authenticated()
-    };
-
-    let multiplex_config = {
-        let mplex_config = mplex::MplexConfig::default();
-
-        let mut yamux_config = yamux::YamuxConfig::default();
-        yamux_config.set_max_buffer_size(MAX_RESPONSE_SIZE);
-        libp2p::core::upgrade::SelectUpgrade::new(yamux_config, mplex_config)
-    };
-
-    let fuel_upgrade = FuelUpgrade::new(p2p_config.checksum);
     let connection_state = ConnectionState::new();
+    let kept_connection_state = connection_state.clone();
+    let transport_function = move |keypair: &Keypair| {
+        let transport = {
+            let generate_tcp_transport = || {
+                TokioTcpTransport::new(TcpConfig::new().port_reuse(true).nodelay(true))
+            };
 
-    let transport = if p2p_config.reserved_nodes_only_mode {
-        let guarded_node = GuardedNode::new(&p2p_config.reserved_nodes);
+            let tcp = generate_tcp_transport();
 
-        let fuel_authenticated =
-            FuelAuthenticated::new(noise_authenticated, guarded_node);
+            let ws_tcp = libp2p::websocket::WsConfig::new(generate_tcp_transport())
+                .or_transport(tcp);
 
-        transport
-            .authenticate(fuel_authenticated)
-            .apply(fuel_upgrade)
-            .multiplex(multiplex_config)
-            .timeout(TRANSPORT_TIMEOUT)
-            .boxed()
-    } else {
-        let connection_tracker =
-            ConnectionTracker::new(&p2p_config.reserved_nodes, connection_state.clone());
+            libp2p::dns::tokio::Transport::system(ws_tcp).unwrap()
+        }
+        .upgrade(libp2p::core::upgrade::Version::V1Lazy);
 
-        let fuel_authenticated =
-            FuelAuthenticated::new(noise_authenticated, connection_tracker);
+        let noise_authenticated =
+            NoiseConfig::new(keypair).expect("Noise key generation failed");
 
-        transport
-            .authenticate(fuel_authenticated)
-            .apply(fuel_upgrade)
-            .multiplex(multiplex_config)
-            .timeout(TRANSPORT_TIMEOUT)
-            .boxed()
+        let multiplex_config = {
+            let mplex_config = MplexConfig::default();
+
+            let mut yamux_config = YamuxConfig::default();
+            yamux_config.set_max_buffer_size(MAX_RESPONSE_SIZE);
+            libp2p::core::upgrade::SelectUpgrade::new(yamux_config, mplex_config)
+        };
+
+        if p2p_config.reserved_nodes_only_mode {
+            let guarded_node = GuardedNode::new(&p2p_config.reserved_nodes);
+
+            let fuel_authenticated = FuelAuthenticated::new(
+                noise_authenticated,
+                guarded_node,
+                p2p_config.checksum,
+            );
+
+            transport
+                .authenticate(fuel_authenticated)
+                .multiplex(multiplex_config)
+                .timeout(TRANSPORT_TIMEOUT)
+                .boxed()
+        } else {
+            let connection_tracker = ConnectionTracker::new(
+                &p2p_config.reserved_nodes,
+                connection_state.clone(),
+            );
+
+            let fuel_authenticated = FuelAuthenticated::new(
+                noise_authenticated,
+                connection_tracker,
+                p2p_config.checksum,
+            );
+
+            transport
+                .authenticate(fuel_authenticated)
+                .multiplex(multiplex_config)
+                .timeout(TRANSPORT_TIMEOUT)
+                .boxed()
+        }
     };
 
-    (transport, connection_state)
+    (transport_function, kept_connection_state)
 }
 
-pub fn peer_ids_set_from(multiaddr: &[Multiaddr]) -> HashSet<PeerId> {
+fn peer_ids_set_from(multiaddr: &[Multiaddr]) -> HashSet<PeerId> {
     multiaddr
         .iter()
         // Safety: as is the case with `bootstrap_nodes` it is assumed that `reserved_nodes` [`Multiadr`]
         // come with PeerId included, in case they are not the `unwrap()` will only panic when the node is started.
-        .map(|address| PeerId::try_from_multiaddr(address).unwrap())
+        .map(|address| address.try_to_peer_id().unwrap())
         .collect()
 }

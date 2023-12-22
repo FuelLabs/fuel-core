@@ -11,7 +11,7 @@ use crate::{
         ResponseMessage,
     },
 };
-use libp2p::request_response::RequestResponseCodec;
+use libp2p::request_response::Codec as RequestResponseCodec;
 use std::io;
 
 /// Implement this in order to handle serialization & deserialization of Gossipsub messages
