@@ -179,6 +179,7 @@ pub trait TaskP2PService: Send {
         request_id: InboundRequestId,
         message: ResponseMessage,
     ) -> anyhow::Result<()>;
+
     fn report_message(
         &mut self,
         message: GossipsubMessageInfo,
