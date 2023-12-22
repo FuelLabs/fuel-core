@@ -58,7 +58,7 @@ impl Default for DatabaseTransaction {
 impl Transaction<Database> for DatabaseTransaction {
     fn commit(&mut self) -> StorageResult<()> {
         // TODO: should commit be fallible if this api is meant to be atomic?
-        Ok(self.changes.commit()?)
+        self.changes.commit()
     }
 }
 

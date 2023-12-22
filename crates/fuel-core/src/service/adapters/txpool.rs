@@ -149,9 +149,8 @@ impl fuel_core_txpool::ports::TxPoolDb for Database {
         &self,
         tx_id: &fuel_core_types::fuel_types::Bytes32,
     ) -> StorageResult<fuel_core_types::services::txpool::TransactionStatus> {
-        Ok(self
-            .get_tx_status(tx_id)
+        self.get_tx_status(tx_id)
             .transpose()
-            .ok_or(not_found!("TransactionId"))??)
+            .ok_or(not_found!("TransactionId"))?
     }
 }

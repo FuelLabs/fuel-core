@@ -9,6 +9,7 @@ use crate::{
         config::build_gossipsub_behaviour,
         topics::GossipTopic,
     },
+    heartbeat,
     peer_report::{
         PeerReportBehaviour,
         PeerReportEvent,
@@ -21,25 +22,27 @@ use crate::{
 use fuel_core_types::fuel_types::BlockHeight;
 use libp2p::{
     gossipsub::{
-        error::PublishError,
-        Gossipsub,
-        GossipsubEvent,
+        Behaviour as Gossipsub,
+        Event as GossipsubEvent,
         MessageAcceptance,
         MessageId,
+        PublishError,
     },
+    identify,
     request_response::{
+        Behaviour as RequestResponse,
+        Config as RequestResponseConfig,
+        Event as RequestResponseEvent,
         ProtocolSupport,
-        RequestId,
-        RequestResponse,
-        RequestResponseConfig,
-        RequestResponseEvent,
         ResponseChannel,
     },
     swarm::NetworkBehaviour,
     Multiaddr,
     PeerId,
 };
-use libp2p_kad::KademliaEvent;
+use libp2p_allow_block_list as allow_block_list;
+use libp2p_kad::Event as KademliaEvent;
+use libp2p_request_response::OutboundRequestId;
 
 #[derive(Debug)]
 pub enum FuelBehaviourEvent {
@@ -47,20 +50,34 @@ pub enum FuelBehaviourEvent {
     PeerReport(PeerReportEvent),
     Gossipsub(GossipsubEvent),
     RequestResponse(RequestResponseEvent<RequestMessage, NetworkResponse>),
+    BlockedPeers(void::Void),
+    Identify(identify::Event),
+    Heartbeat(heartbeat::HeartbeatEvent),
 }
 
 /// Handles all p2p protocols needed for Fuel.
 #[derive(NetworkBehaviour)]
-#[behaviour(out_event = "FuelBehaviourEvent")]
+#[behaviour(to_swarm = "FuelBehaviourEvent")]
 pub struct FuelBehaviour<Codec: NetworkCodec> {
-    /// Node discovery
-    discovery: DiscoveryBehaviour,
+    /// **WARNING**: The order of the behaviours is important and fragile, at least for the tests.
+
+    /// The Behaviour to manage connections to blocked peers.
+    blocked_peer: allow_block_list::Behaviour<allow_block_list::BlockedPeers>,
+
+    /// Message propagation for p2p
+    gossipsub: Gossipsub,
+
+    /// Handles regular heartbeats from peers
+    heartbeat: heartbeat::Heartbeat,
+
+    /// The Behaviour to identify peers.
+    identify: identify::Behaviour,
 
     /// Identifies and periodically requests `BlockHeight` from connected nodes
     peer_report: PeerReportBehaviour,
 
-    /// Message propagation for p2p
-    gossipsub: Gossipsub,
+    /// Node discovery
+    discovery: DiscoveryBehaviour,
 
     /// RequestResponse protocol
     request_response: RequestResponse<Codec>,
@@ -77,8 +94,7 @@ impl<Codec: NetworkCodec> FuelBehaviour<Codec> {
 
             discovery_config
                 .enable_mdns(p2p_config.enable_mdns)
-                .discovery_limit(p2p_config.max_peers_connected as usize)
-                .allow_private_addresses(p2p_config.allow_private_addresses)
+                .max_peers_connected(p2p_config.max_peers_connected as usize)
                 .with_bootstrap_nodes(p2p_config.bootstrap_nodes.clone())
                 .with_reserved_nodes(p2p_config.reserved_nodes.clone())
                 .enable_reserved_nodes_only_mode(p2p_config.reserved_nodes_only_mode);
@@ -98,21 +114,42 @@ impl<Codec: NetworkCodec> FuelBehaviour<Codec> {
 
         let peer_report = PeerReportBehaviour::new(p2p_config);
 
-        let req_res_protocol =
-            std::iter::once((codec.get_req_res_protocol(), ProtocolSupport::Full));
+        let identify = {
+            let identify_config = identify::Config::new(
+                "/fuel/1.0".to_string(),
+                p2p_config.keypair.public(),
+            );
+            if let Some(interval) = p2p_config.identify_interval {
+                identify::Behaviour::new(identify_config.with_interval(interval))
+            } else {
+                identify::Behaviour::new(identify_config)
+            }
+        };
 
-        let mut req_res_config = RequestResponseConfig::default();
-        req_res_config.set_request_timeout(p2p_config.set_request_timeout);
-        req_res_config.set_connection_keep_alive(p2p_config.set_connection_keep_alive);
+        let heartbeat = heartbeat::Heartbeat::new(
+            p2p_config.heartbeat_config.clone(),
+            BlockHeight::default(),
+        );
+
+        let req_res_protocol =
+            core::iter::once((codec.get_req_res_protocol(), ProtocolSupport::Full));
+
+        let req_res_config = RequestResponseConfig::default();
+        req_res_config
+            .clone()
+            .with_request_timeout(p2p_config.set_request_timeout);
 
         let request_response =
-            RequestResponse::new(codec, req_res_protocol, req_res_config);
+            RequestResponse::with_codec(codec, req_res_protocol, req_res_config);
 
         Self {
             discovery: discovery_config.finish(),
             gossipsub,
             peer_report,
             request_response,
+            blocked_peer: Default::default(),
+            identify,
+            heartbeat,
         }
     }
 
@@ -138,7 +175,7 @@ impl<Codec: NetworkCodec> FuelBehaviour<Codec> {
         &mut self,
         message_request: RequestMessage,
         peer_id: &PeerId,
-    ) -> RequestId {
+    ) -> OutboundRequestId {
         self.request_response.send_request(peer_id, message_request)
     }
 
@@ -181,12 +218,16 @@ impl<Codec: NetworkCodec> FuelBehaviour<Codec> {
     }
 
     pub fn update_block_height(&mut self, block_height: BlockHeight) {
-        self.peer_report.update_block_height(block_height);
+        self.heartbeat.update_block_height(block_height);
     }
 
     #[cfg(test)]
     pub fn get_peer_score(&self, peer_id: &PeerId) -> Option<f64> {
         self.gossipsub.peer_score(peer_id)
+    }
+
+    pub fn block_peer(&mut self, peer_id: PeerId) {
+        self.blocked_peer.block_peer(peer_id)
     }
 }
 
@@ -211,5 +252,23 @@ impl From<GossipsubEvent> for FuelBehaviourEvent {
 impl From<RequestResponseEvent<RequestMessage, NetworkResponse>> for FuelBehaviourEvent {
     fn from(event: RequestResponseEvent<RequestMessage, NetworkResponse>) -> Self {
         FuelBehaviourEvent::RequestResponse(event)
+    }
+}
+
+impl From<identify::Event> for FuelBehaviourEvent {
+    fn from(event: identify::Event) -> Self {
+        FuelBehaviourEvent::Identify(event)
+    }
+}
+
+impl From<heartbeat::HeartbeatEvent> for FuelBehaviourEvent {
+    fn from(event: heartbeat::HeartbeatEvent) -> Self {
+        FuelBehaviourEvent::Heartbeat(event)
+    }
+}
+
+impl From<void::Void> for FuelBehaviourEvent {
+    fn from(event: void::Void) -> Self {
+        FuelBehaviourEvent::BlockedPeers(event)
     }
 }

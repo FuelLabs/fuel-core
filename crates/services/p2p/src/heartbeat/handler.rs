@@ -17,12 +17,10 @@ use libp2p_swarm::{
     },
     ConnectionHandler,
     ConnectionHandlerEvent,
-    KeepAlive,
-    NegotiatedSubstream,
+    Stream,
     SubstreamProtocol,
 };
 use std::{
-    fmt::Display,
     num::NonZeroU32,
     pin::Pin,
     task::Poll,
@@ -80,28 +78,8 @@ impl Default for HeartbeatConfig {
     }
 }
 
-#[derive(Debug)]
-pub enum HeartbeatFailure {
-    Timeout,
-}
-impl Display for HeartbeatFailure {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            HeartbeatFailure::Timeout => f.write_str("Heartbeat timeout"),
-        }
-    }
-}
-impl std::error::Error for HeartbeatFailure {
-    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        match self {
-            HeartbeatFailure::Timeout => None,
-        }
-    }
-}
-
-type InboundData =
-    BoxFuture<'static, Result<(NegotiatedSubstream, BlockHeight), std::io::Error>>;
-type OutboundData = BoxFuture<'static, Result<NegotiatedSubstream, std::io::Error>>;
+type InboundData = BoxFuture<'static, Result<(Stream, BlockHeight), std::io::Error>>;
+type OutboundData = BoxFuture<'static, Result<Stream, std::io::Error>>;
 
 pub struct HeartbeatHandler {
     config: HeartbeatConfig,
@@ -124,41 +102,20 @@ impl HeartbeatHandler {
 }
 
 impl ConnectionHandler for HeartbeatHandler {
-    type InEvent = HeartbeatInEvent;
-    type OutEvent = HeartbeatOutEvent;
-    type Error = HeartbeatFailure;
-
-    type InboundProtocol = ReadyUpgrade<&'static [u8]>;
-    type OutboundProtocol = ReadyUpgrade<&'static [u8]>;
-    type OutboundOpenInfo = ();
+    type FromBehaviour = HeartbeatInEvent;
+    type ToBehaviour = HeartbeatOutEvent;
+    type InboundProtocol = ReadyUpgrade<&'static str>;
+    type OutboundProtocol = ReadyUpgrade<&'static str>;
     type InboundOpenInfo = ();
+    type OutboundOpenInfo = ();
 
-    fn listen_protocol(&self) -> SubstreamProtocol<ReadyUpgrade<&'static [u8]>, ()> {
+    fn listen_protocol(&self) -> SubstreamProtocol<ReadyUpgrade<&'static str>, ()> {
         SubstreamProtocol::new(ReadyUpgrade::new(HEARTBEAT_PROTOCOL), ())
     }
 
-    fn connection_keep_alive(&self) -> KeepAlive {
+    fn connection_keep_alive(&self) -> bool {
         // Heartbeat protocol wants to keep the connection alive
-        KeepAlive::Yes
-    }
-
-    fn on_behaviour_event(&mut self, event: Self::InEvent) {
-        let HeartbeatInEvent::LatestBlock(block_height) = event;
-
-        match self.outbound.take() {
-            Some(OutboundState::RequestingBlockHeight {
-                requested: true,
-                stream,
-            }) => {
-                // start new send timeout
-                self.timer = Box::pin(sleep(self.config.send_timeout));
-                // send latest `BlockHeight`
-                self.outbound = Some(OutboundState::SendingBlockHeight(
-                    send_block_height(stream, block_height).boxed(),
-                ))
-            }
-            other_state => self.outbound = other_state,
-        }
+        true
     }
 
     fn poll(
@@ -168,8 +125,7 @@ impl ConnectionHandler for HeartbeatHandler {
         ConnectionHandlerEvent<
             Self::OutboundProtocol,
             Self::OutboundOpenInfo,
-            Self::OutEvent,
-            Self::Error,
+            Self::ToBehaviour,
         >,
     > {
         if let Some(inbound_stream_and_block_height) = self.inbound.as_mut() {
@@ -183,7 +139,7 @@ impl ConnectionHandler for HeartbeatHandler {
                     self.inbound = Some(receive_block_height(stream).boxed());
 
                     // report newly received `BlockHeight` to the Behaviour
-                    return Poll::Ready(ConnectionHandlerEvent::Custom(
+                    return Poll::Ready(ConnectionHandlerEvent::NotifyBehaviour(
                         HeartbeatOutEvent::BlockHeight(block_height),
                     ))
                 }
@@ -192,12 +148,13 @@ impl ConnectionHandler for HeartbeatHandler {
         }
 
         loop {
-            if self.failure_count >= self.config.max_failures.into() {
-                // Request from `Swarm` to close the faulty connection
-                return Poll::Ready(ConnectionHandlerEvent::Close(
-                    HeartbeatFailure::Timeout,
-                ))
-            }
+            // TODO: Close connection properly: https://github.com/FuelLabs/fuel-core/pull/1379
+            // if self.failure_count >= self.config.max_failures.into() {
+            //     // Request from `Swarm` to close the faulty connection
+            //     return Poll::Ready(ConnectionHandlerEvent::Close(
+            //         HeartbeatFailure::Timeout,
+            //     ))
+            // }
 
             match self.outbound.take() {
                 Some(OutboundState::RequestingBlockHeight { requested, stream }) => {
@@ -207,7 +164,7 @@ impl ConnectionHandler for HeartbeatHandler {
                     });
 
                     if !requested {
-                        return Poll::Ready(ConnectionHandlerEvent::Custom(
+                        return Poll::Ready(ConnectionHandlerEvent::NotifyBehaviour(
                             HeartbeatOutEvent::RequestBlockHeight,
                         ))
                     }
@@ -272,6 +229,25 @@ impl ConnectionHandler for HeartbeatHandler {
         Poll::Pending
     }
 
+    fn on_behaviour_event(&mut self, event: Self::FromBehaviour) {
+        let HeartbeatInEvent::LatestBlock(block_height) = event;
+
+        match self.outbound.take() {
+            Some(OutboundState::RequestingBlockHeight {
+                requested: true,
+                stream,
+            }) => {
+                // start new send timeout
+                self.timer = Box::pin(sleep(self.config.send_timeout));
+                // send latest `BlockHeight`
+                self.outbound = Some(OutboundState::SendingBlockHeight(
+                    send_block_height(stream, block_height).boxed(),
+                ))
+            }
+            other_state => self.outbound = other_state,
+        }
+    }
+
     fn on_connection_event(
         &mut self,
         event: ConnectionEvent<
@@ -309,9 +285,9 @@ impl ConnectionHandler for HeartbeatHandler {
 /// Represents state of the Oubound stream
 enum OutboundState {
     NegotiatingStream,
-    Idle(NegotiatedSubstream),
+    Idle(Stream),
     RequestingBlockHeight {
-        stream: NegotiatedSubstream,
+        stream: Stream,
         /// `false` if the BlockHeight has not been requested yet.
         /// `true` if the BlockHeight has been requested in the current `Heartbeat` cycle.
         requested: bool,

@@ -8,16 +8,22 @@ use crate::{
         BatchOperations,
         DataSource,
         IterDirection,
+        TransactableStorage,
+    },
+};
+use fuel_core_storage::{
+    iter::{
+        BoxedIter,
+        IntoBoxedIter,
+        IteratorableStore,
+    },
+    kv_store::{
         KVItem,
         KeyValueStore,
-        TransactableStorage,
         Value,
         WriteOperation,
     },
-};
-use fuel_core_storage::iter::{
-    BoxedIter,
-    IntoBoxedIter,
+    Result as StorageResult,
 };
 use itertools::{
     EitherOrBoth,
@@ -52,7 +58,7 @@ impl MemoryTransactionView {
         }
     }
 
-    pub fn commit(&self) -> DatabaseResult<()> {
+    pub fn commit(&self) -> StorageResult<()> {
         let mut iter = self
             .changes
             .iter()
@@ -76,7 +82,7 @@ impl KeyValueStore for MemoryTransactionView {
         key: &[u8],
         column: Column,
         value: Value,
-    ) -> DatabaseResult<Option<Value>> {
+    ) -> StorageResult<Option<Value>> {
         let key_vec = key.to_vec();
         let contained_key = self.changes[column.as_usize()]
             .lock()
@@ -91,7 +97,7 @@ impl KeyValueStore for MemoryTransactionView {
         }
     }
 
-    fn write(&self, key: &[u8], column: Column, buf: &[u8]) -> DatabaseResult<usize> {
+    fn write(&self, key: &[u8], column: Column, buf: &[u8]) -> StorageResult<usize> {
         let k = key.to_vec();
         self.changes[column.as_usize()]
             .lock()
@@ -100,7 +106,7 @@ impl KeyValueStore for MemoryTransactionView {
         self.view_layer.write(key, column, buf)
     }
 
-    fn take(&self, key: &[u8], column: Column) -> DatabaseResult<Option<Value>> {
+    fn take(&self, key: &[u8], column: Column) -> StorageResult<Option<Value>> {
         let k = key.to_vec();
         let contained_key = {
             let mut lock = self.changes[column.as_usize()]
@@ -116,7 +122,7 @@ impl KeyValueStore for MemoryTransactionView {
         }
     }
 
-    fn delete(&self, key: &[u8], column: Column) -> DatabaseResult<()> {
+    fn delete(&self, key: &[u8], column: Column) -> StorageResult<()> {
         let k = key.to_vec();
         self.changes[column.as_usize()]
             .lock()
@@ -125,7 +131,7 @@ impl KeyValueStore for MemoryTransactionView {
         self.view_layer.delete(key, column)
     }
 
-    fn size_of_value(&self, key: &[u8], column: Column) -> DatabaseResult<Option<usize>> {
+    fn size_of_value(&self, key: &[u8], column: Column) -> StorageResult<Option<usize>> {
         // try to fetch data from View layer if any changes to the key
         if self.changes[column.as_usize()]
             .lock()
@@ -140,7 +146,7 @@ impl KeyValueStore for MemoryTransactionView {
         }
     }
 
-    fn get(&self, key: &[u8], column: Column) -> DatabaseResult<Option<Value>> {
+    fn get(&self, key: &[u8], column: Column) -> StorageResult<Option<Value>> {
         // try to fetch data from View layer if any changes to the key
         if self.changes[column.as_usize()]
             .lock()
@@ -159,7 +165,7 @@ impl KeyValueStore for MemoryTransactionView {
         key: &[u8],
         column: Column,
         buf: &mut [u8],
-    ) -> DatabaseResult<Option<usize>> {
+    ) -> StorageResult<Option<usize>> {
         // try to fetch data from View layer if any changes to the key
         if self.changes[column.as_usize()]
             .lock()
@@ -173,7 +179,9 @@ impl KeyValueStore for MemoryTransactionView {
             self.data_source.read(key, column, buf)
         }
     }
+}
 
+impl IteratorableStore for MemoryTransactionView {
     fn iter_all(
         &self,
         column: Column,
