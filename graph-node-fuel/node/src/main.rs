@@ -565,7 +565,8 @@ async fn main() {
                 near_chains,
                 cosmos_chains,
                 substreams_chains,
-                starknet_chains
+                starknet_chains,
+                fuel_chains
             );
 
             ingestors.into_iter().for_each(|ingestor| {

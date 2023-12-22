@@ -368,7 +368,40 @@ pub enum IndexForAscTypeId {
     // ...
     // LastStarknetType = 4499,
 
-    // Reserved discriminant space for a future blockchain type IDs: [4,500, 5,499]
+    // Reserved discriminant space for Fuel type IDs: [4,500, 5,499]
+    FuelBlock = 4500,
+    FuelScript = 4501,
+    FuelCreate = 4502,
+    FuelMint = 4503,
+    FuelInput = 4504,
+    FuelCoin = 4505,
+    FuelMessage = 4506,
+    FuelOutput = 4507,
+    FuelOutputCoin = 4508,
+    FuelOutputContractCreated = 4509,
+    FuelInputContract = 4510,
+    FuelOutputContract = 4511,
+    FuelStorageSlot = 4512,
+    FuelUtxoId = 4513,
+    FuelTxPointer = 4514,
+    FuelPolicies = 4515,
+    FuelTransaction = 4516,
+    FuelTransactionArray = 5417,
+    FuelInputArray = 5418,
+    FuelOutputArray = 5419,
+    FuelStorageSlotArray = 5420,
+    FuelBytesArray = 5421,
+    FuelU64Array = 5422,
+    // Continue to add more Fuel type IDs here.
+    // e.g.:
+    // NextFuelType = 4501,
+    // AnotherFuelType = 4502,
+    // ...
+    // LastFuelType = 5499,
+
+
+
+    // Reserved discriminant space for a future blockchain type IDs: [5,500, 6,499]
     //
     // Generated with the following shell script:
     //
