@@ -1,3 +1,6 @@
+#[graph_runtime_derive::generate_asc_type()]
+#[graph_runtime_derive::generate_network_type_id(Fuel)]
+#[graph_runtime_derive::generate_from_rust_type()]
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct Block {
@@ -14,14 +17,23 @@ pub struct Block {
     #[prost(bytes = "vec", tag = "6")]
     pub msg_receipt_root: ::prost::alloc::vec::Vec<u8>,
     #[prost(bytes = "vec", tag = "7")]
+    pub prev_id: ::prost::alloc::vec::Vec<u8>,
+    #[prost(bytes = "vec", tag = "8")]
     pub prev_root: ::prost::alloc::vec::Vec<u8>,
-    #[prost(fixed64, tag = "8")]
+    #[prost(fixed64, tag = "9")]
     pub timestamp: u64,
-    #[prost(bytes = "vec", tag = "9")]
+    #[prost(bytes = "vec", tag = "10")]
     pub application_hash: ::prost::alloc::vec::Vec<u8>,
-    #[prost(message, repeated, tag = "10")]
+    #[prost(message, repeated, tag = "11")]
     pub transactions: ::prost::alloc::vec::Vec<Transaction>,
 }
+#[graph_runtime_derive::generate_asc_type(kind{script:Script, create:Create, mint:Mint})]
+#[graph_runtime_derive::generate_network_type_id(Fuel)]
+#[graph_runtime_derive::generate_from_rust_type(
+    kind{script:Script,
+    create:Create,
+    mint:Mint}
+)]
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct Transaction {
@@ -41,6 +53,9 @@ pub mod transaction {
         Mint(super::Mint),
     }
 }
+#[graph_runtime_derive::generate_asc_type()]
+#[graph_runtime_derive::generate_network_type_id(Fuel)]
+#[graph_runtime_derive::generate_from_rust_type()]
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct Script {
@@ -61,6 +76,9 @@ pub struct Script {
     #[prost(bytes = "vec", tag = "8")]
     pub receipts_root: ::prost::alloc::vec::Vec<u8>,
 }
+#[graph_runtime_derive::generate_asc_type()]
+#[graph_runtime_derive::generate_network_type_id(Fuel)]
+#[graph_runtime_derive::generate_from_rust_type()]
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct Create {
@@ -81,6 +99,9 @@ pub struct Create {
     #[prost(bytes = "vec", tag = "8")]
     pub salt: ::prost::alloc::vec::Vec<u8>,
 }
+#[graph_runtime_derive::generate_asc_type()]
+#[graph_runtime_derive::generate_network_type_id(Fuel)]
+#[graph_runtime_derive::generate_from_rust_type()]
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct Mint {
@@ -95,6 +116,25 @@ pub struct Mint {
     #[prost(bytes = "vec", tag = "5")]
     pub mint_asset_id: ::prost::alloc::vec::Vec<u8>,
 }
+#[graph_runtime_derive::generate_asc_type(
+    kind{coin_signed:Coin,
+    coin_predicate:Coin,
+    contract:InputContract,
+    message_coin_signed:Message,
+    message_coin_predicate:Message,
+    message_data_signed:Message,
+    message_data_predicate:Message}
+)]
+#[graph_runtime_derive::generate_network_type_id(Fuel)]
+#[graph_runtime_derive::generate_from_rust_type(
+    kind{coin_signed:Coin,
+    coin_predicate:Coin,
+    contract:InputContract,
+    message_coin_signed:Message,
+    message_coin_predicate:Message,
+    message_data_signed:Message,
+    message_data_predicate:Message}
+)]
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct Input {
@@ -122,6 +162,9 @@ pub mod input {
         MessageDataPredicate(super::Message),
     }
 }
+#[graph_runtime_derive::generate_asc_type()]
+#[graph_runtime_derive::generate_network_type_id(Fuel)]
+#[graph_runtime_derive::generate_from_rust_type()]
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct Coin {
@@ -146,6 +189,9 @@ pub struct Coin {
     #[prost(bytes = "vec", tag = "10")]
     pub predicate_data: ::prost::alloc::vec::Vec<u8>,
 }
+#[graph_runtime_derive::generate_asc_type()]
+#[graph_runtime_derive::generate_network_type_id(Fuel)]
+#[graph_runtime_derive::generate_from_rust_type()]
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct Message {
@@ -168,6 +214,21 @@ pub struct Message {
     #[prost(bytes = "vec", tag = "9")]
     pub predicate_data: ::prost::alloc::vec::Vec<u8>,
 }
+#[graph_runtime_derive::generate_asc_type(
+    kind{coin:OutputCoin,
+    contract:OutputContract,
+    change:OutputCoin,
+    variable:OutputCoin,
+    contract_created:OutputContractCreated}
+)]
+#[graph_runtime_derive::generate_network_type_id(Fuel)]
+#[graph_runtime_derive::generate_from_rust_type(
+    kind{coin:OutputCoin,
+    contract:OutputContract,
+    change:OutputCoin,
+    variable:OutputCoin,
+    contract_created:OutputContractCreated}
+)]
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct Output {
@@ -191,6 +252,9 @@ pub mod output {
         ContractCreated(super::OutputContractCreated),
     }
 }
+#[graph_runtime_derive::generate_asc_type()]
+#[graph_runtime_derive::generate_network_type_id(Fuel)]
+#[graph_runtime_derive::generate_from_rust_type()]
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct OutputCoin {
@@ -201,6 +265,9 @@ pub struct OutputCoin {
     #[prost(bytes = "vec", tag = "3")]
     pub asset_id: ::prost::alloc::vec::Vec<u8>,
 }
+#[graph_runtime_derive::generate_asc_type()]
+#[graph_runtime_derive::generate_network_type_id(Fuel)]
+#[graph_runtime_derive::generate_from_rust_type()]
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct OutputContractCreated {
@@ -209,6 +276,9 @@ pub struct OutputContractCreated {
     #[prost(bytes = "vec", tag = "2")]
     pub state_root: ::prost::alloc::vec::Vec<u8>,
 }
+#[graph_runtime_derive::generate_asc_type()]
+#[graph_runtime_derive::generate_network_type_id(Fuel)]
+#[graph_runtime_derive::generate_from_rust_type()]
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct InputContract {
@@ -223,6 +293,9 @@ pub struct InputContract {
     #[prost(bytes = "vec", tag = "5")]
     pub contract_id: ::prost::alloc::vec::Vec<u8>,
 }
+#[graph_runtime_derive::generate_asc_type()]
+#[graph_runtime_derive::generate_network_type_id(Fuel)]
+#[graph_runtime_derive::generate_from_rust_type()]
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct OutputContract {
@@ -233,6 +306,9 @@ pub struct OutputContract {
     #[prost(bytes = "vec", tag = "3")]
     pub state_root: ::prost::alloc::vec::Vec<u8>,
 }
+#[graph_runtime_derive::generate_asc_type()]
+#[graph_runtime_derive::generate_network_type_id(Fuel)]
+#[graph_runtime_derive::generate_from_rust_type()]
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct StorageSlot {
@@ -241,6 +317,9 @@ pub struct StorageSlot {
     #[prost(bytes = "vec", tag = "2")]
     pub value: ::prost::alloc::vec::Vec<u8>,
 }
+#[graph_runtime_derive::generate_asc_type()]
+#[graph_runtime_derive::generate_network_type_id(Fuel)]
+#[graph_runtime_derive::generate_from_rust_type()]
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct UtxoId {
@@ -249,6 +328,9 @@ pub struct UtxoId {
     #[prost(uint32, tag = "2")]
     pub output_index: u32,
 }
+#[graph_runtime_derive::generate_asc_type()]
+#[graph_runtime_derive::generate_network_type_id(Fuel)]
+#[graph_runtime_derive::generate_from_rust_type()]
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct TxPointer {
@@ -257,6 +339,9 @@ pub struct TxPointer {
     #[prost(uint32, tag = "2")]
     pub tx_index: u32,
 }
+#[graph_runtime_derive::generate_asc_type()]
+#[graph_runtime_derive::generate_network_type_id(Fuel)]
+#[graph_runtime_derive::generate_from_rust_type()]
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct Policies {

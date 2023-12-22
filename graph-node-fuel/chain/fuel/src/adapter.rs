@@ -1,4 +1,3 @@
-use crate::capabilities::NodeCapabilities;
 use crate::Chain;
 use graph::blockchain as bc;
 use graph::prelude::*;

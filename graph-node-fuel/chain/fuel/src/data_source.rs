@@ -11,14 +11,11 @@ use graph::{
 use std::collections::HashSet;
 use std::sync::Arc;
 use anyhow::{anyhow, Context, Error};
-use graph::blockchain::BlockchainKind::Fuel;
 use graph::components::store::StoredDynamicDataSource;
 use graph::prelude::SubgraphManifestValidationError;
-use graph::semver::Version;
 
 use crate::chain::Chain;
 use crate::codec;
-use crate::trigger::FuelTrigger;
 
 pub const FUEL_KIND: &str = "fuel";
 const BLOCK_HANDLER_KIND: &str = "block";

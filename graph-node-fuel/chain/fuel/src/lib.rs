@@ -1,11 +1,15 @@
 mod adapter;
-mod runtime;
 pub mod codec;
-mod chain;
+pub mod chain;
 mod data_source;
 mod capabilities;
 mod trigger;
+pub mod runtime;
+mod protobuf;
 
-pub use crate::chain::{Chain};
+pub use crate::adapter::TriggerFilter;
+pub use crate::chain::Chain;
 
-pub use codec::Block;
+pub use protobuf::pbcodec;
+pub use protobuf::pbcodec::Block;
+

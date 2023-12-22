@@ -1,7 +1,7 @@
 use graph::env::EnvVars;
 use graph::prelude::{MetricsRegistry, TryFutureExt};
 use graph::schema::InputSchema;
-use graph::substreams::{Clock, Package};
+use graph::substreams::{Clock};
 use graph::{
     anyhow::Result,
     blockchain::{
@@ -19,7 +19,6 @@ use graph::{
 };
 use prost::Message;
 use std::sync::Arc;
-use anyhow::anyhow;
 use graph::blockchain::{BasicBlockchainBuilder, Block, BlockchainBuilder, BlockchainKind, BlockIngestor, NoopRuntimeAdapter};
 
 use graph::blockchain::block_stream::{
@@ -27,16 +26,13 @@ use graph::blockchain::block_stream::{
 };
 use graph::blockchain::client::ChainClient;
 use graph::blockchain::firehose_block_ingestor::FirehoseBlockIngestor;
-use graph::blockchain::substreams_block_stream::SubstreamsBlockStream;
 use graph::cheap_clone::CheapClone;
 use graph::components::store::DeploymentCursorTracker;
 use graph::data::subgraph::UnifiedMappingApiVersion;
 use graph::firehose::FirehoseEndpoint;
-use graph::itertools::chain;
 use crate::adapter::TriggerFilter;
 use crate::codec;
 use crate::data_source::{DataSource, DataSourceTemplate, UnresolvedDataSource, UnresolvedDataSourceTemplate};
-use crate::trigger::FuelTrigger;
 
 pub struct FuelStreamBuilder {}
 
