@@ -14,8 +14,8 @@ use crate::{
         PeerReportEvent,
     },
     request_response::messages::{
-        NetworkResponse,
         RequestMessage,
+        ResponseMessage,
     },
 };
 use fuel_core_types::fuel_types::BlockHeight;
@@ -46,7 +46,7 @@ pub enum FuelBehaviourEvent {
     Discovery(KademliaEvent),
     PeerReport(PeerReportEvent),
     Gossipsub(GossipsubEvent),
-    RequestResponse(RequestResponseEvent<RequestMessage, NetworkResponse>),
+    RequestResponse(RequestResponseEvent<RequestMessage, ResponseMessage>),
 }
 
 /// Handles all p2p protocols needed for Fuel.
@@ -144,9 +144,9 @@ impl<Codec: NetworkCodec> FuelBehaviour<Codec> {
 
     pub fn send_response_msg(
         &mut self,
-        channel: ResponseChannel<NetworkResponse>,
-        message: NetworkResponse,
-    ) -> Result<(), NetworkResponse> {
+        channel: ResponseChannel<ResponseMessage>,
+        message: ResponseMessage,
+    ) -> Result<(), ResponseMessage> {
         self.request_response.send_response(channel, message)
     }
 
@@ -208,8 +208,8 @@ impl From<GossipsubEvent> for FuelBehaviourEvent {
     }
 }
 
-impl From<RequestResponseEvent<RequestMessage, NetworkResponse>> for FuelBehaviourEvent {
-    fn from(event: RequestResponseEvent<RequestMessage, NetworkResponse>) -> Self {
+impl From<RequestResponseEvent<RequestMessage, ResponseMessage>> for FuelBehaviourEvent {
+    fn from(event: RequestResponseEvent<RequestMessage, ResponseMessage>) -> Self {
         FuelBehaviourEvent::RequestResponse(event)
     }
 }
