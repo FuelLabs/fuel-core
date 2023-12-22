@@ -1,7 +1,11 @@
-use crate::Chain;
-use graph::blockchain as bc;
-use graph::prelude::*;
-use crate::data_source::DataSource;
+use crate::{
+    data_source::DataSource,
+    Chain,
+};
+use graph::{
+    blockchain as bc,
+    prelude::*,
+};
 
 #[derive(Clone, Debug, Default)]
 pub(crate) struct FuelBlockFilter {
@@ -27,12 +31,9 @@ pub struct TriggerFilter {
     pub(crate) block_filter: FuelBlockFilter,
 }
 
-
 impl bc::TriggerFilter<Chain> for TriggerFilter {
     fn extend<'a>(&mut self, data_sources: impl Iterator<Item = &'a DataSource> + Clone) {
-        let TriggerFilter {
-            block_filter,
-        } = self;
+        let TriggerFilter { block_filter } = self;
 
         block_filter.extend(FuelBlockFilter::from_data_sources(data_sources.clone()));
     }

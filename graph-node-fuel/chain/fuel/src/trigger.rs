@@ -1,9 +1,20 @@
-use std::cmp::Ordering;
-use std::sync::Arc;
-use graph::blockchain::{Block, MappingTriggerTrait, TriggerData};
-use graph::prelude::{BlockNumber, CheapClone};
-use graph::prelude::web3::types::H256;
 use crate::codec;
+use graph::{
+    blockchain::{
+        Block,
+        MappingTriggerTrait,
+        TriggerData,
+    },
+    prelude::{
+        web3::types::H256,
+        BlockNumber,
+        CheapClone,
+    },
+};
+use std::{
+    cmp::Ordering,
+    sync::Arc,
+};
 
 #[derive(Debug, Clone)]
 pub enum FuelTrigger {
@@ -33,7 +44,7 @@ impl FuelTrigger {
     }
 }
 
-//Todo Emir
+// Todo Emir
 impl CheapClone for FuelTrigger {
     fn cheap_clone(&self) -> FuelTrigger {
         match self {
@@ -77,7 +88,6 @@ impl Ord for FuelTrigger {
             // Block triggers always come last
             (Self::Block(..), _) => Ordering::Greater,
             (_, Self::Block(..)) => Ordering::Less,
-
         }
     }
 }

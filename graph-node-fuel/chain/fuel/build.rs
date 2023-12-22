@@ -8,9 +8,8 @@ fn main() {
     //     .compile(&["proto/fuel.proto"], &["proto"])
     //     .expect("Failed to compile Firehose Fuel proto(s)");
 
-
-    let types =
-        graph_chain_common::parse_proto_file(PROTO_FILE).expect("Unable to parse proto file!");
+    let types = graph_chain_common::parse_proto_file(PROTO_FILE)
+        .expect("Unable to parse proto file!");
 
     let array_types = types
         .iter()
@@ -22,7 +21,6 @@ fn main() {
     let mut builder = tonic_build::configure().out_dir("src/protobuf");
 
     // println!("{:?}", array_types);
-
 
     for (name, ptype) in types {
         // generate Asc<Type>
@@ -57,10 +55,8 @@ fn main() {
         // }
     }
 
-
     builder
         // out_dir("src/protobuf")
         .compile(&[PROTO_FILE], &["proto"])
         .expect("Failed to compile Firehose Fuel proto(s)");
-
 }

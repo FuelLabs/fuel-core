@@ -1,15 +1,20 @@
 pub(crate) use crate::protobuf::pbcodec::*;
 
-use graph::blockchain::Block as BlockchainBlock;
 use graph::{
-    blockchain::BlockPtr,
-    prelude::{anyhow::anyhow, BlockNumber, Error},
+    blockchain::{
+        Block as BlockchainBlock,
+        BlockPtr,
+    },
+    prelude::{
+        anyhow::anyhow,
+        BlockNumber,
+        Error,
+    },
 };
 
 use std::convert::TryFrom;
 
 impl Block {
-
     pub fn parent_ptr(&self) -> Option<BlockPtr> {
         match self.height {
             0 => None,
@@ -23,10 +28,7 @@ impl Block {
 
 impl<'a> From<&'a Block> for BlockPtr {
     fn from(b: &'a Block) -> BlockPtr {
-        BlockPtr::new(
-            b.id.clone().into(),
-             b.number()
-        )
+        BlockPtr::new(b.id.clone().into(), b.number())
     }
 }
 

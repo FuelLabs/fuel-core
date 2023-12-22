@@ -1,11 +1,12 @@
-use std::cmp::PartialOrd;
-use std::fmt;
-use std::str::FromStr;
+use std::{
+    cmp::PartialOrd,
+    fmt,
+    str::FromStr,
+};
 
 use anyhow::Error;
 use graph::impl_slog_value;
 // use crate::data_source::DataSource;
-
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd)]
 pub struct NodeCapabilities {}

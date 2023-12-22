@@ -1,21 +1,39 @@
-use graph::blockchain::{Block, TriggerWithHandler};
-use graph::data::subgraph::DataSourceContext;
+use anyhow::{
+    anyhow,
+    Context,
+    Error,
+};
 use graph::{
-    blockchain::{self, Blockchain},
+    blockchain::{
+        self,
+        Block,
+        Blockchain,
+        TriggerWithHandler,
+    },
+    components::store::StoredDynamicDataSource,
+    data::subgraph::DataSourceContext,
     prelude::{
-        async_trait, BlockNumber, CheapClone, DataSourceTemplateInfo, Deserialize, Link,
-        LinkResolver, Logger,
+        async_trait,
+        BlockNumber,
+        CheapClone,
+        DataSourceTemplateInfo,
+        Deserialize,
+        Link,
+        LinkResolver,
+        Logger,
+        SubgraphManifestValidationError,
     },
     semver,
 };
-use std::collections::HashSet;
-use std::sync::Arc;
-use anyhow::{anyhow, Context, Error};
-use graph::components::store::StoredDynamicDataSource;
-use graph::prelude::SubgraphManifestValidationError;
+use std::{
+    collections::HashSet,
+    sync::Arc,
+};
 
-use crate::chain::Chain;
-use crate::codec;
+use crate::{
+    chain::Chain,
+    codec,
+};
 
 pub const FUEL_KIND: &str = "fuel";
 const BLOCK_HANDLER_KIND: &str = "block";
@@ -92,8 +110,10 @@ impl UnresolvedMapping {
         let UnresolvedMapping {
             api_version,
             language,
-            entities, block_handlers,
-            receipt_handlers, file: link,
+            entities,
+            block_handlers,
+            receipt_handlers,
+            file: link,
         } = self;
 
         let api_version = semver::Version::parse(&api_version)?;
@@ -152,7 +172,6 @@ impl blockchain::UnresolvedDataSource<Chain> for UnresolvedDataSource {
     }
 }
 
-
 #[derive(Clone, Debug, Default, Hash, Eq, PartialEq, Deserialize)]
 pub struct BaseDataSourceTemplate<M> {
     pub kind: String,
@@ -163,7 +182,6 @@ pub struct BaseDataSourceTemplate<M> {
 
 pub type UnresolvedDataSourceTemplate = BaseDataSourceTemplate<UnresolvedMapping>;
 pub type DataSourceTemplate = BaseDataSourceTemplate<Mapping>;
-
 
 #[async_trait]
 impl blockchain::UnresolvedDataSourceTemplate<Chain> for UnresolvedDataSourceTemplate {
@@ -180,10 +198,9 @@ impl blockchain::UnresolvedDataSourceTemplate<Chain> for UnresolvedDataSourceTem
             mapping,
         } = self;
 
-        let mapping = mapping
-            .resolve(resolver, logger)
-            .await
-            .with_context(|| format!("failed to resolve data source template {}", name))?;
+        let mapping = mapping.resolve(resolver, logger).await.with_context(|| {
+            format!("failed to resolve data source template {}", name)
+        })?;
 
         Ok(DataSourceTemplate {
             kind,
@@ -215,7 +232,6 @@ impl blockchain::DataSourceTemplate<Chain> for DataSourceTemplate {
         &self.kind
     }
 }
-
 
 #[derive(Clone, Debug, Hash, Eq, PartialEq, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -252,7 +268,10 @@ impl blockchain::DataSource<Chain> for DataSource {
         Err(anyhow!("Fuel subgraphs do not support templates"))
     }
 
-    fn from_stored_dynamic_data_source(template: &DataSourceTemplate, stored: StoredDynamicDataSource) -> Result<Self, Error> {
+    fn from_stored_dynamic_data_source(
+        template: &DataSourceTemplate,
+        stored: StoredDynamicDataSource,
+    ) -> Result<Self, Error> {
         todo!()
     }
 
@@ -260,13 +279,9 @@ impl blockchain::DataSource<Chain> for DataSource {
         self.source.owner.as_ref().map(String::as_bytes)
     }
 
-
-
     fn start_block(&self) -> BlockNumber {
         self.source.start_block
     }
-
-
 
     fn end_block(&self) -> Option<BlockNumber> {
         self.source.end_block
@@ -313,7 +328,7 @@ impl blockchain::DataSource<Chain> for DataSource {
 
         kinds
     }
-        // Todo Emir
+    // Todo Emir
     fn match_and_decode(
         &self,
         trigger: &<Chain as Blockchain>::TriggerData,
@@ -325,9 +340,9 @@ impl blockchain::DataSource<Chain> for DataSource {
         }
 
         let handler = match self.handler_for_block() {
-                Some(handler) => &handler.handler,
-                None => return Ok(None),
-            };
+            Some(handler) => &handler.handler,
+            None => return Ok(None),
+        };
 
         Ok(Some(TriggerWithHandler::<Chain>::new(
             trigger.cheap_clone(),
@@ -335,7 +350,6 @@ impl blockchain::DataSource<Chain> for DataSource {
             block.ptr(),
         )))
     }
-
 
     fn is_duplicate_of(&self, other: &Self) -> bool {
         let DataSource {

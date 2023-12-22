@@ -1,38 +1,76 @@
-use graph::env::EnvVars;
-use graph::prelude::{MetricsRegistry, TryFutureExt};
-use graph::schema::InputSchema;
-use graph::substreams::{Clock};
 use graph::{
     anyhow::Result,
     blockchain::{
         block_stream::{
-            BlockStreamEvent, BlockWithTriggers, FirehoseError,
-            FirehoseMapper as FirehoseMapperTrait, TriggersAdapter as TriggersAdapterTrait,
+            BlockStreamEvent,
+            BlockWithTriggers,
+            FirehoseError,
+            FirehoseMapper as FirehoseMapperTrait,
+            TriggersAdapter as TriggersAdapterTrait,
         },
         firehose_block_stream::FirehoseBlockStream,
-        BlockHash, BlockPtr, Blockchain, EmptyNodeCapabilities, IngestorError,
+        BasicBlockchainBuilder,
+        Block,
+        BlockHash,
+        BlockIngestor,
+        BlockPtr,
+        Blockchain,
+        BlockchainBuilder,
+        BlockchainKind,
+        EmptyNodeCapabilities,
+        IngestorError,
+        NoopRuntimeAdapter,
         RuntimeAdapter as RuntimeAdapterTrait,
     },
     components::store::DeploymentLocator,
-    firehose::{self as firehose, ForkStep},
-    prelude::{async_trait, o, BlockNumber, ChainStore, Error, Logger, LoggerFactory},
+    env::EnvVars,
+    firehose::{
+        self as firehose,
+        ForkStep,
+    },
+    prelude::{
+        async_trait,
+        o,
+        BlockNumber,
+        ChainStore,
+        Error,
+        Logger,
+        LoggerFactory,
+        MetricsRegistry,
+        TryFutureExt,
+    },
+    schema::InputSchema,
+    substreams::Clock,
 };
 use prost::Message;
 use std::sync::Arc;
-use graph::blockchain::{BasicBlockchainBuilder, Block, BlockchainBuilder, BlockchainKind, BlockIngestor, NoopRuntimeAdapter};
 
-use graph::blockchain::block_stream::{
-    BlockStream, BlockStreamBuilder, BlockStreamMapper, FirehoseCursor,
+use crate::{
+    adapter::TriggerFilter,
+    codec,
+    data_source::{
+        DataSource,
+        DataSourceTemplate,
+        UnresolvedDataSource,
+        UnresolvedDataSourceTemplate,
+    },
 };
-use graph::blockchain::client::ChainClient;
-use graph::blockchain::firehose_block_ingestor::FirehoseBlockIngestor;
-use graph::cheap_clone::CheapClone;
-use graph::components::store::DeploymentCursorTracker;
-use graph::data::subgraph::UnifiedMappingApiVersion;
-use graph::firehose::FirehoseEndpoint;
-use crate::adapter::TriggerFilter;
-use crate::codec;
-use crate::data_source::{DataSource, DataSourceTemplate, UnresolvedDataSource, UnresolvedDataSourceTemplate};
+use graph::{
+    blockchain::{
+        block_stream::{
+            BlockStream,
+            BlockStreamBuilder,
+            BlockStreamMapper,
+            FirehoseCursor,
+        },
+        client::ChainClient,
+        firehose_block_ingestor::FirehoseBlockIngestor,
+    },
+    cheap_clone::CheapClone,
+    components::store::DeploymentCursorTracker,
+    data::subgraph::UnifiedMappingApiVersion,
+    firehose::FirehoseEndpoint,
+};
 
 pub struct FuelStreamBuilder {}
 
@@ -40,7 +78,6 @@ pub struct FirehoseMapper {
     adapter: Arc<dyn TriggersAdapterTrait<Chain>>,
     filter: Arc<TriggerFilter>,
 }
-
 
 #[async_trait]
 impl BlockStreamMapper<Chain> for FirehoseMapper {
@@ -70,7 +107,7 @@ impl BlockStreamMapper<Chain> for FirehoseMapper {
         cursor: FirehoseCursor,
         message: Vec<u8>,
     ) -> Result<BlockStreamEvent<Chain>, Error> {
-       todo!()
+        todo!()
     }
 }
 
@@ -162,18 +199,12 @@ impl FirehoseMapperTrait<Chain> for FirehoseMapper {
     }
 }
 
-
-
-
-
 pub struct TriggersAdapter {}
 
 const FUEL_FILTER_MODULE_NAME: &str = "fuel_filter";
 const SUBSTREAMS_TRIGGER_FILTER_BYTES: &[u8; 510162] = include_bytes!(
     "../../../substreams/substreams-trigger-filter/substreams-trigger-filter-v0.1.0.spkg"
 );
-
-
 
 // Todo Emir
 #[async_trait]
@@ -384,7 +415,6 @@ impl Blockchain for Chain {
         Ok(Box::new(ingestor))
     }
 }
-
 
 #[async_trait]
 impl TriggersAdapterTrait<Chain> for TriggersAdapter {
