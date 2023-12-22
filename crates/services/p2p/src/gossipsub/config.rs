@@ -1,24 +1,24 @@
-use crate::config::{
-    Config,
-    MAX_RESPONSE_SIZE,
+use crate::{
+    config::{
+        Config,
+        MAX_RESPONSE_SIZE,
+    },
+    TryPeerId,
 };
 use fuel_core_metrics::p2p_metrics::p2p_metrics;
 use libp2p::gossipsub::{
-    metrics::Config as MetricsConfig,
-    FastMessageId,
-    Gossipsub,
-    GossipsubConfig,
-    GossipsubConfigBuilder,
-    GossipsubMessage,
+    Behaviour as Gossipsub,
+    Config as GossipsubConfig,
+    ConfigBuilder as GossipsubConfigBuilder,
+    Message as GossipsubMessage,
     MessageAuthenticity,
     MessageId,
     PeerScoreParams,
     PeerScoreThresholds,
-    RawGossipsubMessage,
     Topic,
     TopicScoreParams,
 };
-use libp2p_prom_client::registry::Registry;
+use libp2p_gossipsub::MetricsConfig;
 use sha2::{
     Digest,
     Sha256,
@@ -63,16 +63,11 @@ pub fn default_gossipsub_builder() -> GossipsubConfigBuilder {
         MessageId::from(&Sha256::digest(&message.data)[..])
     };
 
-    let fast_gossip_message_id = move |message: &RawGossipsubMessage| {
-        FastMessageId::from(&Sha256::digest(&message.data)[..])
-    };
-
     let mut builder = GossipsubConfigBuilder::default();
 
     builder
         .protocol_id_prefix("/meshsub/1.0.0")
         .message_id_fn(gossip_message_id)
-        .fast_message_id_fn(fast_gossip_message_id)
         .validate_messages();
 
     builder
@@ -148,7 +143,7 @@ fn initialize_peer_score_params(thresholds: &PeerScoreThresholds) -> PeerScorePa
             .checked_mul(100)
             .expect("`EPOCH` is usually not more than a year"),
         app_specific_weight: 0.0,
-        ip_colocation_factor_threshold: 8.0, // Allow up to 8 nodes per IP
+        ip_colocation_factor_threshold: 50.0, // Allow up to 50 nodes per IP
         behaviour_penalty_threshold: 6.0,
         behaviour_penalty_decay: score_parameter_decay(
             EPOCH
@@ -183,7 +178,7 @@ fn initialize_peer_score_thresholds() -> PeerScoreThresholds {
 pub(crate) fn build_gossipsub_behaviour(p2p_config: &Config) -> Gossipsub {
     let mut gossipsub = if p2p_config.metrics {
         // Move to Metrics related feature flag
-        let mut p2p_registry = Registry::default();
+        let mut p2p_registry = prometheus_client::registry::Registry::default();
 
         let metrics_config = MetricsConfig::default();
 
@@ -215,7 +210,11 @@ pub(crate) fn build_gossipsub_behaviour(p2p_config: &Config) -> Gossipsub {
 
         gossipsub
     };
-    for peer_id in crate::config::peer_ids_set_from(&p2p_config.reserved_nodes) {
+    let reserved_nodes = p2p_config.reserved_nodes.clone();
+    let explicit_peers = reserved_nodes
+        .iter()
+        .filter_map(|address| address.try_to_peer_id());
+    for peer_id in explicit_peers {
         gossipsub.add_explicit_peer(&peer_id);
     }
 

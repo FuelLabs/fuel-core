@@ -1,3 +1,4 @@
+use crate::Multiaddr;
 use libp2p::{
     mdns::{
         tokio::Behaviour as TokioMdns,
@@ -6,11 +7,19 @@ use libp2p::{
     },
     swarm::{
         NetworkBehaviour,
-        NetworkBehaviourAction,
-        PollParameters,
+        ToSwarm,
     },
-    Multiaddr,
     PeerId,
+};
+use libp2p_core::Endpoint;
+use libp2p_swarm::{
+    dummy,
+    ConnectionDenied,
+    ConnectionId,
+    FromSwarm,
+    THandler,
+    THandlerInEvent,
+    THandlerOutEvent,
 };
 use std::task::{
     Context,
@@ -24,9 +33,9 @@ pub enum MdnsWrapper {
     Disabled,
 }
 
-impl Default for MdnsWrapper {
-    fn default() -> Self {
-        match TokioMdns::new(Config::default()) {
+impl MdnsWrapper {
+    pub fn new(peer_id: PeerId) -> Self {
+        match TokioMdns::new(Config::default(), peer_id) {
             Ok(mdns) => Self::Ready(mdns),
             Err(err) => {
                 warn!("Failed to initialize mDNS: {:?}", err);
@@ -34,33 +43,110 @@ impl Default for MdnsWrapper {
             }
         }
     }
-}
 
-impl MdnsWrapper {
     pub fn disabled() -> Self {
         MdnsWrapper::Disabled
     }
 
-    pub fn addresses_of_peer(&mut self, peer_id: &PeerId) -> Vec<Multiaddr> {
+    pub fn on_swarm_event(&mut self, event: &FromSwarm) {
         match self {
-            Self::Ready(mdns) => mdns.addresses_of_peer(peer_id),
-            _ => Vec::new(),
+            MdnsWrapper::Ready(mdns) => match event {
+                FromSwarm::NewListenAddr(event) => {
+                    mdns.on_swarm_event(FromSwarm::NewListenAddr(*event))
+                }
+                FromSwarm::ExpiredListenAddr(event) => {
+                    mdns.on_swarm_event(FromSwarm::ExpiredListenAddr(*event))
+                }
+                _ => {}
+            },
+            MdnsWrapper::Disabled => {}
+        }
+    }
+}
+
+impl NetworkBehaviour for MdnsWrapper {
+    type ConnectionHandler = dummy::ConnectionHandler;
+    type ToSwarm = MdnsEvent;
+
+    fn handle_established_inbound_connection(
+        &mut self,
+        connection_id: ConnectionId,
+        peer: PeerId,
+        local_addr: &Multiaddr,
+        remote_addr: &Multiaddr,
+    ) -> Result<THandler<Self>, ConnectionDenied> {
+        match self {
+            MdnsWrapper::Ready(mdns) => mdns.handle_established_inbound_connection(
+                connection_id,
+                peer,
+                local_addr,
+                remote_addr,
+            ),
+            MdnsWrapper::Disabled => Ok(dummy::ConnectionHandler),
         }
     }
 
-    pub fn poll(
+    fn handle_pending_outbound_connection(
+        &mut self,
+        connection_id: ConnectionId,
+        maybe_peer: Option<PeerId>,
+        addresses: &[Multiaddr],
+        effective_role: Endpoint,
+    ) -> Result<Vec<Multiaddr>, ConnectionDenied> {
+        match self {
+            MdnsWrapper::Ready(mdns) => mdns.handle_pending_outbound_connection(
+                connection_id,
+                maybe_peer,
+                addresses,
+                effective_role,
+            ),
+            MdnsWrapper::Disabled => Ok(vec![]),
+        }
+    }
+
+    fn handle_established_outbound_connection(
+        &mut self,
+        connection_id: ConnectionId,
+        peer: PeerId,
+        addr: &Multiaddr,
+        role_override: Endpoint,
+    ) -> Result<THandler<Self>, ConnectionDenied> {
+        match self {
+            MdnsWrapper::Ready(mdns) => mdns.handle_established_outbound_connection(
+                connection_id,
+                peer,
+                addr,
+                role_override,
+            ),
+            MdnsWrapper::Disabled => Ok(dummy::ConnectionHandler),
+        }
+    }
+
+    fn on_swarm_event(&mut self, event: FromSwarm) {
+        self.on_swarm_event(&event)
+    }
+
+    fn on_connection_handler_event(
+        &mut self,
+        peer_id: PeerId,
+        connection: ConnectionId,
+        event: THandlerOutEvent<Self>,
+    ) {
+        match self {
+            MdnsWrapper::Ready(mdns) => {
+                mdns.on_connection_handler_event(peer_id, connection, event)
+            }
+            MdnsWrapper::Disabled => {}
+        }
+    }
+
+    fn poll(
         &mut self,
         cx: &mut Context<'_>,
-        params: &mut impl PollParameters,
-    ) -> Poll<
-        NetworkBehaviourAction<
-            MdnsEvent,
-            <TokioMdns as NetworkBehaviour>::ConnectionHandler,
-        >,
-    > {
+    ) -> Poll<ToSwarm<Self::ToSwarm, THandlerInEvent<Self>>> {
         match self {
-            Self::Ready(mdns) => mdns.poll(cx, params),
-            Self::Disabled => Poll::Pending,
+            MdnsWrapper::Ready(mdns) => mdns.poll(cx),
+            MdnsWrapper::Disabled => Poll::Pending,
         }
     }
 }

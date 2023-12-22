@@ -14,25 +14,16 @@ use crate::{
         OutboundResponse,
         RequestMessage,
         ResponseMessage,
-        MAX_REQUEST_SIZE,
         REQUEST_RESPONSE_PROTOCOL_ID,
     },
 };
 use async_trait::async_trait;
 use futures::{
     AsyncRead,
+    AsyncReadExt,
     AsyncWriteExt,
 };
-use libp2p::{
-    core::{
-        upgrade::{
-            read_length_prefixed,
-            write_length_prefixed,
-        },
-        ProtocolName,
-    },
-    request_response::RequestResponseCodec,
-};
+use libp2p::request_response::Codec as RequestResponseCodec;
 use serde::{
     Deserialize,
     Serialize,
@@ -49,6 +40,11 @@ pub struct PostcardCodec {
 
 impl PostcardCodec {
     pub fn new(max_block_size: usize) -> Self {
+        assert_ne!(
+            max_block_size, 0,
+            "PostcardCodec does not support zero block size"
+        );
+
         Self {
             max_response_size: max_block_size,
         }
@@ -85,28 +81,36 @@ impl RequestResponseCodec for PostcardCodec {
 
     async fn read_request<T>(
         &mut self,
-        _protocol: &Self::Protocol,
+        _: &Self::Protocol,
         socket: &mut T,
     ) -> io::Result<Self::Request>
     where
         T: AsyncRead + Unpin + Send,
     {
-        let encoded_data = read_length_prefixed(socket, MAX_REQUEST_SIZE).await?;
+        let mut response = Vec::new();
+        socket
+            .take(self.max_response_size as u64)
+            .read_to_end(&mut response)
+            .await?;
 
-        self.deserialize(&encoded_data)
+        self.deserialize(&response)
     }
 
     async fn read_response<T>(
         &mut self,
-        _protocol: &Self::Protocol,
+        _: &Self::Protocol,
         socket: &mut T,
     ) -> io::Result<Self::Response>
     where
-        T: futures::AsyncRead + Unpin + Send,
+        T: AsyncRead + Unpin + Send,
     {
-        let encoded_data = read_length_prefixed(socket, self.max_response_size).await?;
+        let mut response = Vec::new();
+        socket
+            .take(self.max_response_size as u64)
+            .read_to_end(&mut response)
+            .await?;
 
-        self.deserialize(&encoded_data)
+        self.deserialize(&response)
     }
 
     async fn write_request<T>(
@@ -120,8 +124,7 @@ impl RequestResponseCodec for PostcardCodec {
     {
         match postcard::to_stdvec(&req) {
             Ok(encoded_data) => {
-                write_length_prefixed(socket, encoded_data).await?;
-                socket.close().await?;
+                socket.write_all(&encoded_data).await?;
 
                 Ok(())
             }
@@ -140,8 +143,7 @@ impl RequestResponseCodec for PostcardCodec {
     {
         match postcard::to_stdvec(&res) {
             Ok(encoded_data) => {
-                write_length_prefixed(socket, encoded_data).await?;
-                socket.close().await?;
+                socket.write_all(&encoded_data).await?;
 
                 Ok(())
             }
@@ -178,42 +180,9 @@ impl GossipsubCodec for PostcardCodec {
 }
 
 impl RequestResponseConverter for PostcardCodec {
-    type NetworkResponse = NetworkResponse;
     type OutboundResponse = OutboundResponse;
+    type NetworkResponse = NetworkResponse;
     type ResponseMessage = ResponseMessage;
-
-    fn convert_to_response(
-        &self,
-        inter_msg: &Self::NetworkResponse,
-    ) -> Result<Self::ResponseMessage, io::Error> {
-        match inter_msg {
-            NetworkResponse::Block(block_bytes) => {
-                let response = if let Some(block_bytes) = block_bytes {
-                    Some(self.deserialize(block_bytes)?)
-                } else {
-                    None
-                };
-
-                Ok(ResponseMessage::SealedBlock(Box::new(response)))
-            }
-            NetworkResponse::Transactions(tx_bytes) => {
-                let response = if let Some(tx_bytes) = tx_bytes {
-                    Some(self.deserialize(tx_bytes)?)
-                } else {
-                    None
-                };
-
-                Ok(ResponseMessage::Transactions(response))
-            }
-            NetworkResponse::Headers(headers_bytes) => {
-                let response = headers_bytes
-                    .as_ref()
-                    .map(|bytes| self.deserialize(bytes))
-                    .transpose()?;
-                Ok(ResponseMessage::SealedHeaders(response))
-            }
-        }
-    }
 
     fn convert_to_network_response(
         &self,
@@ -247,6 +216,39 @@ impl RequestResponseConverter for PostcardCodec {
             }
         }
     }
+
+    fn convert_to_response(
+        &self,
+        inter_msg: &Self::NetworkResponse,
+    ) -> Result<Self::ResponseMessage, io::Error> {
+        match inter_msg {
+            NetworkResponse::Block(block_bytes) => {
+                let response = if let Some(block_bytes) = block_bytes {
+                    Some(self.deserialize(block_bytes)?)
+                } else {
+                    None
+                };
+
+                Ok(ResponseMessage::SealedBlock(Box::new(response)))
+            }
+            NetworkResponse::Transactions(tx_bytes) => {
+                let response = if let Some(tx_bytes) = tx_bytes {
+                    Some(self.deserialize(tx_bytes)?)
+                } else {
+                    None
+                };
+
+                Ok(ResponseMessage::Transactions(response))
+            }
+            NetworkResponse::Headers(headers_bytes) => {
+                let response = headers_bytes
+                    .as_ref()
+                    .map(|bytes| self.deserialize(bytes))
+                    .transpose()?;
+                Ok(ResponseMessage::SealedHeaders(response))
+            }
+        }
+    }
 }
 
 impl NetworkCodec for PostcardCodec {
@@ -255,11 +257,11 @@ impl NetworkCodec for PostcardCodec {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Default, Debug, Clone)]
 pub struct MessageExchangePostcardProtocol;
 
-impl ProtocolName for MessageExchangePostcardProtocol {
-    fn protocol_name(&self) -> &[u8] {
+impl AsRef<str> for MessageExchangePostcardProtocol {
+    fn as_ref(&self) -> &str {
         REQUEST_RESPONSE_PROTOCOL_ID
     }
 }
@@ -267,6 +269,7 @@ impl ProtocolName for MessageExchangePostcardProtocol {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::request_response::messages::MAX_REQUEST_SIZE;
 
     #[test]
     fn test_request_size_fits() {
