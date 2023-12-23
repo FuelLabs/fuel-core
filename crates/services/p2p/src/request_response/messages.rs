@@ -12,6 +12,7 @@ use fuel_core_types::{
     services::p2p::Transactions,
 };
 use libp2p::PeerId;
+use libp2p_request_response::OutboundFailure;
 use serde::{
     Deserialize,
     Serialize,
@@ -32,14 +33,6 @@ pub enum RequestMessage {
     Transactions(Range<u32>),
 }
 
-/// Holds oneshot channels for specific responses
-#[derive(Debug)]
-pub enum ResponseChannelItem {
-    Block(oneshot::Sender<Option<SealedBlock>>),
-    SealedHeaders(oneshot::Sender<(PeerId, Option<Vec<SealedBlockHeader>>)>),
-    Transactions(oneshot::Sender<Option<Vec<Transactions>>>),
-}
-
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum ResponseMessage {
     Block(Option<Arc<SealedBlock>>),
@@ -47,10 +40,34 @@ pub enum ResponseMessage {
     Transactions(Option<Arc<Vec<Transactions>>>),
 }
 
+pub type OnResponse<T> = oneshot::Sender<Result<T, ResponseError>>;
+
+#[derive(Debug)]
+pub enum TypedResponseChannel {
+    Block(OnResponse<Option<Arc<SealedBlock>>>),
+    SealedHeaders(OnResponse<(PeerId, Option<Vec<SealedBlockHeader>>)>),
+    Transactions(OnResponse<Option<Arc<Vec<Transactions>>>>),
+}
+
 #[derive(Debug, Error)]
 pub enum RequestError {
     #[error("Not currently connected to any peers")]
     NoPeersConnected,
+}
+
+#[derive(Debug)]
+pub struct ResponseError {
+    /// This is the peer that the request was sent to
+    pub peer: PeerId,
+    pub kind: ResponseErrorKind,
+}
+
+#[derive(Debug)]
+pub enum ResponseErrorKind {
+    /// This is the raw error from [`libp2p-request-response`]
+    P2P(OutboundFailure),
+    /// The peer responded with an invalid response type
+    TypeMismatch,
 }
 
 /// Errors than can occur when attempting to send a response

@@ -23,9 +23,11 @@ use crate::{
     request_response::messages::{
         RequestError,
         RequestMessage,
-        ResponseChannelItem,
+        ResponseError,
+        ResponseErrorKind,
         ResponseMessage,
         ResponseSendError,
+        TypedResponseChannel,
     },
     TryPeerId,
 };
@@ -63,7 +65,6 @@ use crate::heartbeat::HeartbeatEvent;
 use rand::seq::IteratorRandom;
 use std::{
     collections::HashMap,
-    sync::Arc,
     time::Duration,
 };
 use tracing::{
@@ -95,15 +96,19 @@ pub struct FuelP2PService<Codec: NetworkCodec> {
     /// Swarm handler for FuelBehaviour
     swarm: Swarm<FuelBehaviour<Codec>>,
 
-    /// Holds the Sender(s) part of the Oneshot Channel from the NetworkOrchestrator
-    /// Once the ResponseMessage is received from the p2p Network
-    /// It will send it to the NetworkOrchestrator via its unique Sender    
-    outbound_requests_table: HashMap<OutboundRequestId, ResponseChannelItem>,
+    /// Holds active outbound requests and associated oneshot channels.
+    /// When we send a request to the p2p network, we add it here. The sender
+    /// must provide a channel to receive the response.
+    /// Whenever a response (or an error) is received from the p2p network,
+    /// the request is removed from this table, and the channel is used to
+    /// send the result to the caller.
+    outbound_requests_pending: HashMap<OutboundRequestId, TypedResponseChannel>,
 
-    /// Holds the ResponseChannel(s) for the inbound requests from the p2p Network
-    /// Once the Response is prepared by the NetworkOrchestrator
-    /// It will send it to the specified Peer via its unique ResponseChannel    
-    inbound_requests_table: HashMap<InboundRequestId, ResponseChannel<ResponseMessage>>,
+    /// Holds active inbound requests and associated oneshot channels.
+    /// Whenever we're done processing the request, it's removed from this table,
+    /// and the channel is used to send the result to libp2p, which will forward it
+    /// to the peer that requested it.
+    inbound_requests_pending: HashMap<InboundRequestId, ResponseChannel<ResponseMessage>>,
 
     /// NetworkCodec used as <GossipsubCodec> for encoding and decoding of Gossipsub messages    
     network_codec: Codec,
@@ -201,8 +206,8 @@ impl<Codec: NetworkCodec> FuelP2PService<Codec> {
             tcp_port: config.tcp_port,
             swarm,
             network_codec: codec,
-            outbound_requests_table: HashMap::default(),
-            inbound_requests_table: HashMap::default(),
+            outbound_requests_pending: HashMap::default(),
+            inbound_requests_pending: HashMap::default(),
             network_metadata,
             metrics,
             peer_manager: PeerManager::new(
@@ -290,7 +295,7 @@ impl<Codec: NetworkCodec> FuelP2PService<Codec> {
         &mut self,
         peer_id: Option<PeerId>,
         message_request: RequestMessage,
-        channel_item: ResponseChannelItem,
+        on_response: TypedResponseChannel,
     ) -> Result<OutboundRequestId, RequestError> {
         let peer_id = match peer_id {
             Some(peer_id) => peer_id,
@@ -312,8 +317,8 @@ impl<Codec: NetworkCodec> FuelP2PService<Codec> {
             .behaviour_mut()
             .send_request_msg(message_request, &peer_id);
 
-        self.outbound_requests_table
-            .insert(request_id, channel_item);
+        self.outbound_requests_pending
+            .insert(request_id, on_response);
 
         Ok(request_id)
     }
@@ -324,7 +329,7 @@ impl<Codec: NetworkCodec> FuelP2PService<Codec> {
         request_id: InboundRequestId,
         message: ResponseMessage,
     ) -> Result<(), ResponseSendError> {
-        let Some(channel) = self.inbound_requests_table.remove(&request_id) else {
+        let Some(channel) = self.inbound_requests_pending.remove(&request_id) else {
             debug!("ResponseChannel for {:?} does not exist!", request_id);
             return Err(ResponseSendError::ResponseChannelDoesNotExist)
         };
@@ -546,7 +551,7 @@ impl<Codec: NetworkCodec> FuelP2PService<Codec> {
                     channel,
                     request_id,
                 } => {
-                    self.inbound_requests_table.insert(request_id, channel);
+                    self.inbound_requests_pending.insert(request_id, channel);
 
                     return Some(FuelP2PEvent::InboundRequestMessage {
                         request_id,
@@ -557,32 +562,29 @@ impl<Codec: NetworkCodec> FuelP2PService<Codec> {
                     request_id,
                     response,
                 } => {
-                    let Some(channel) = self.outbound_requests_table.remove(&request_id)
+                    let Some(channel) =
+                        self.outbound_requests_pending.remove(&request_id)
                     else {
                         debug!("Send channel not found for {:?}", request_id);
                         return None;
                     };
 
-                    let send_ok = match (channel, response) {
-                        (
-                            ResponseChannelItem::Block(channel),
-                            ResponseMessage::Block(block),
-                        ) => channel.send(block.map(|b| Arc::into_inner(b).expect("There are not other references, we just received this from the network"))).is_ok(),
-                        (
-                            ResponseChannelItem::Transactions(channel),
-                            ResponseMessage::Transactions(transactions),
-                        ) => channel.send(transactions.map(|b| Arc::into_inner(b).expect("There are not other references, we just received this from the network"))).is_ok(),
-                        (
-                            ResponseChannelItem::SealedHeaders(channel),
-                            ResponseMessage::SealedHeaders(headers),
-                        ) => channel.send((peer, headers)).is_ok(),
-
-                        (_, _) => {
-                            tracing::error!(
-                                "Mismatching request and response channel types"
-                            );
-                            return None;
-                        }
+                    let kind = ResponseErrorKind::TypeMismatch; // shorthand for error
+                    let send_ok = match channel {
+                        TypedResponseChannel::Block(c) => match response {
+                            ResponseMessage::Block(v) => c.send(Ok(v)).is_ok(),
+                            _ => c.send(Err(ResponseError { peer, kind })).is_ok(),
+                        },
+                        TypedResponseChannel::SealedHeaders(c) => match response {
+                            ResponseMessage::SealedHeaders(v) => {
+                                c.send(Ok((peer, v))).is_ok()
+                            }
+                            _ => c.send(Err(ResponseError { peer, kind })).is_ok(),
+                        },
+                        TypedResponseChannel::Transactions(c) => match response {
+                            ResponseMessage::Transactions(v) => c.send(Ok(v)).is_ok(),
+                            _ => c.send(Err(ResponseError { peer, kind })).is_ok(),
+                        },
                     };
 
                     if !send_ok {
@@ -604,7 +606,29 @@ impl<Codec: NetworkCodec> FuelP2PService<Codec> {
             } => {
                 tracing::error!("RequestResponse outbound error for peer: {:?} with id: {:?} and error: {:?}", peer, request_id, error);
 
-                let _ = self.outbound_requests_table.remove(&request_id);
+                if let Some(channel) = self.outbound_requests_pending.remove(&request_id)
+                {
+                    match channel {
+                        TypedResponseChannel::Block(c) => {
+                            let _ = c.send(Err(ResponseError {
+                                peer,
+                                kind: ResponseErrorKind::P2P(error),
+                            }));
+                        }
+                        TypedResponseChannel::SealedHeaders(c) => {
+                            let _ = c.send(Err(ResponseError {
+                                peer,
+                                kind: ResponseErrorKind::P2P(error),
+                            }));
+                        }
+                        TypedResponseChannel::Transactions(c) => {
+                            let _ = c.send(Err(ResponseError {
+                                peer,
+                                kind: ResponseErrorKind::P2P(error),
+                            }));
+                        }
+                    };
+                }
             }
             _ => {}
         }
@@ -689,8 +713,8 @@ mod tests {
         peer_manager::PeerInfo,
         request_response::messages::{
             RequestMessage,
-            ResponseChannelItem,
             ResponseMessage,
+            TypedResponseChannel,
         },
         service::to_message_acceptance,
     };
@@ -1503,13 +1527,13 @@ mod tests {
                                 match request_msg.clone() {
                                     RequestMessage::Block(_) => {
                                         let (tx_orchestrator, rx_orchestrator) = oneshot::channel();
-                                        assert!(node_a.send_request_msg(None, request_msg.clone(), ResponseChannelItem::Block(tx_orchestrator)).is_ok());
+                                        assert!(node_a.send_request_msg(None, request_msg.clone(), TypedResponseChannel::Block(tx_orchestrator)).is_ok());
                                         let tx_test_end = tx_test_end.clone();
 
                                         tokio::spawn(async move {
                                             let response_message = rx_orchestrator.await;
 
-                                            if let Ok(Some(sealed_block)) = response_message {
+                                            if let Ok(Ok(Some(sealed_block))) = response_message {
                                                 let _ = tx_test_end.send(*sealed_block.entity.header().height() == 0.into()).await;
                                             } else {
                                                 tracing::error!("Orchestrator failed to receive a message: {:?}", response_message);
@@ -1520,7 +1544,7 @@ mod tests {
                                     }
                                     RequestMessage::SealedHeaders(range) => {
                                         let (tx_orchestrator, rx_orchestrator) = oneshot::channel();
-                                        assert!(node_a.send_request_msg(None, request_msg.clone(), ResponseChannelItem::SealedHeaders(tx_orchestrator)).is_ok());
+                                        assert!(node_a.send_request_msg(None, request_msg.clone(), TypedResponseChannel::SealedHeaders(tx_orchestrator)).is_ok());
                                         let tx_test_end = tx_test_end.clone();
 
                                         tokio::spawn(async move {
@@ -1528,7 +1552,7 @@ mod tests {
 
                                             let expected = arbitrary_headers_for_range(range.clone());
 
-                                            if let Ok((_, sealed_headers)) = response_message {
+                                            if let Ok(Ok((_, sealed_headers))) = response_message {
                                                 let check = expected.iter().zip(sealed_headers.unwrap().iter()).all(|(a, b)| eq_except_metadata(a, b));
                                                 let _ = tx_test_end.send(check).await;
                                             } else {
@@ -1539,13 +1563,13 @@ mod tests {
                                     }
                                     RequestMessage::Transactions(_range) => {
                                         let (tx_orchestrator, rx_orchestrator) = oneshot::channel();
-                                        assert!(node_a.send_request_msg(None, request_msg.clone(), ResponseChannelItem::Transactions(tx_orchestrator)).is_ok());
+                                        assert!(node_a.send_request_msg(None, request_msg.clone(), TypedResponseChannel::Transactions(tx_orchestrator)).is_ok());
                                         let tx_test_end = tx_test_end.clone();
 
                                         tokio::spawn(async move {
                                             let response_message = rx_orchestrator.await;
 
-                                            if let Ok(Some(transactions)) = response_message {
+                                            if let Ok(Ok(Some(transactions))) = response_message {
                                                 let check = transactions.len() == 1 && transactions[0].0.len() == 5;
                                                 let _ = tx_test_end.send(check).await;
                                             } else {
@@ -1648,14 +1672,14 @@ mod tests {
                                 let (tx_orchestrator, rx_orchestrator) = oneshot::channel();
 
                                 // 2a. there should be ZERO pending outbound requests in the table
-                                assert_eq!(node_a.outbound_requests_table.len(), 0);
+                                assert_eq!(node_a.outbound_requests_pending.len(), 0);
 
                                 // Request successfully sent
                                 let requested_block_height = RequestMessage::Block(0.into());
-                                assert!(node_a.send_request_msg(None, requested_block_height, ResponseChannelItem::Block(tx_orchestrator)).is_ok());
+                                assert!(node_a.send_request_msg(None, requested_block_height, TypedResponseChannel::Block(tx_orchestrator)).is_ok());
 
                                 // 2b. there should be ONE pending outbound requests in the table
-                                assert_eq!(node_a.outbound_requests_table.len(), 1);
+                                assert_eq!(node_a.outbound_requests_pending.len(), 1);
 
                                 let tx_test_end = tx_test_end.clone();
 
@@ -1675,7 +1699,7 @@ mod tests {
                     // we received a signal to end the test
                     // 4. there should be ZERO pending outbound requests in the table
                     // after the Outbound Request Failed with Timeout
-                    assert_eq!(node_a.outbound_requests_table.len(), 0);
+                    assert_eq!(node_a.outbound_requests_pending.len(), 0);
                     break;
                 },
                 // will not receive the request at all

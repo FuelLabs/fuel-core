@@ -18,9 +18,10 @@ use crate::{
         P2pDb,
     },
     request_response::messages::{
+        OnResponse,
         RequestMessage,
-        ResponseChannelItem,
         ResponseMessage,
+        TypedResponseChannel,
     },
 };
 use anyhow::anyhow;
@@ -48,6 +49,7 @@ use fuel_core_types::{
         peer_reputation::{
             AppScore,
             PeerReport,
+            RESPONSE_ERROR_APP_SCORE,
         },
         BlockHeightHeartbeatData,
         GossipData,
@@ -98,16 +100,16 @@ enum TaskRequest {
     },
     GetBlock {
         height: BlockHeight,
-        channel: oneshot::Sender<Option<SealedBlock>>,
+        channel: OnResponse<Option<Arc<SealedBlock>>>,
     },
     GetSealedHeaders {
         block_height_range: Range<u32>,
-        channel: oneshot::Sender<(PeerId, Option<Vec<SealedBlockHeader>>)>,
+        channel: OnResponse<(PeerId, Option<Vec<SealedBlockHeader>>)>,
     },
     GetTransactions {
         block_height_range: Range<u32>,
         from_peer: PeerId,
-        channel: oneshot::Sender<Option<Vec<Transactions>>>,
+        channel: OnResponse<Option<Arc<Vec<Transactions>>>>,
     },
     // Responds back to the p2p network
     RespondWithGossipsubMessageReport((GossipsubMessageInfo, GossipsubMessageAcceptance)),
@@ -171,7 +173,7 @@ pub trait TaskP2PService: Send {
         &mut self,
         peer_id: Option<PeerId>,
         request_msg: RequestMessage,
-        channel_item: ResponseChannelItem,
+        on_response: TypedResponseChannel,
     ) -> anyhow::Result<()>;
 
     fn send_response_msg(
@@ -225,9 +227,9 @@ impl TaskP2PService for FuelP2PService<PostcardCodec> {
         &mut self,
         peer_id: Option<PeerId>,
         request_msg: RequestMessage,
-        channel_item: ResponseChannelItem,
+        on_response: TypedResponseChannel,
     ) -> anyhow::Result<()> {
-        self.send_request_msg(peer_id, request_msg, channel_item)?;
+        self.send_request_msg(peer_id, request_msg, on_response)?;
         Ok(())
     }
 
@@ -496,33 +498,58 @@ where
                         let _ = channel.send(peer_ids);
                     }
                     Some(TaskRequest::GetBlock { height, channel }) => {
+                        let (sender, receiver) = oneshot::channel();
+                        let on_response = TypedResponseChannel::Block(sender);
+
                         let request_msg = RequestMessage::Block(height);
-                        let channel_item = ResponseChannelItem::Block(channel);
                         let peer = self.p2p_service.get_peer_id_with_height(&height);
-                        let found_peers = self.p2p_service.send_request_msg(peer, request_msg, channel_item).is_ok();
-                        if !found_peers {
+                        if self.p2p_service.send_request_msg(peer, request_msg, on_response).is_ok() {
+                            if let Ok(result) = receiver.await {
+                                if let Err(err) = &result {
+                                    let _ = self.p2p_service.report_peer(err.peer, RESPONSE_ERROR_APP_SCORE, "Request");
+                                }
+                                let _ = channel.send(result);
+                            }
+                            // If the channel was dropped instead, then we just propagate the drop
+                        } else {
                             tracing::debug!("No peers found for block at height {:?}", height);
                         }
                     }
-                    Some(TaskRequest::GetSealedHeaders { block_height_range, channel: response}) => {
+                    Some(TaskRequest::GetSealedHeaders { block_height_range, channel }) => {
+                        let (sender, receiver) = oneshot::channel();
+                        let on_response = TypedResponseChannel::SealedHeaders(sender);
+
                         let request_msg = RequestMessage::SealedHeaders(block_height_range.clone());
-                        let channel_item = ResponseChannelItem::SealedHeaders(response);
 
                         // Note: this range has already been checked for
                         // validity in `SharedState::get_sealed_block_headers`.
-                        let block_height = BlockHeight::from(block_height_range.end.saturating_sub(1));
-                        let peer = self.p2p_service
-                             .get_peer_id_with_height(&block_height);
-                        let found_peers = self.p2p_service.send_request_msg(peer, request_msg, channel_item).is_ok();
-                        if !found_peers {
-                            tracing::debug!("No peers found for block at height {:?}", block_height);
+                        let height = BlockHeight::from(block_height_range.end.saturating_sub(1));
+                        let peer = self.p2p_service.get_peer_id_with_height(&height);
+                        if self.p2p_service.send_request_msg(peer, request_msg, on_response).is_ok() {
+                            if let Ok(result) = receiver.await {
+                                if let Err(err) = &result {
+                                    let _ = self.p2p_service.report_peer(err.peer, RESPONSE_ERROR_APP_SCORE, "Request");
+                                }
+                                let _ = channel.send(result);
+                            }
+                            // If the channel was dropped instead, then we just propagate the drop
+                        } else {
+                            tracing::debug!("No peers found for block at height {:?}", height);
                         }
                     }
                     Some(TaskRequest::GetTransactions { block_height_range, from_peer, channel }) => {
+                        let (sender, receiver) = oneshot::channel();
+                        let on_response = TypedResponseChannel::Transactions(sender);
+
                         let request_msg = RequestMessage::Transactions(block_height_range);
-                        let channel_item = ResponseChannelItem::Transactions(channel);
-                        self.p2p_service.send_request_msg(Some(from_peer), request_msg, channel_item)
-                            .expect("We always a peer here, so send has a target");
+                        self.p2p_service.send_request_msg(Some(from_peer), request_msg, on_response).expect("We always a peer here, so send has a target");
+                        if let Ok(result) = receiver.await {
+                            if let Err(err) = &result {
+                                let _ = self.p2p_service.report_peer(err.peer, RESPONSE_ERROR_APP_SCORE, "Request");
+                            }
+                            let _ = channel.send(result);
+                        }
+                        // If the channel was dropped instead, then we just propagate the drop
                     }
                     Some(TaskRequest::RespondWithGossipsubMessageReport((message, acceptance))) => {
                         // report_message(&mut self.p2p_service, message, acceptance);
@@ -698,7 +725,11 @@ impl SharedState {
             })
             .await?;
 
-        receiver.await.map_err(|e| anyhow!("{}", e))
+        receiver
+            .await
+            .map_err(|e| anyhow!("{e}"))?
+            .map_err(|e| anyhow!("{e:?}"))
+            .map(|opt| opt.map(|a| Arc::into_inner(a).expect("There are not other references, we just received this from the network")))
     }
 
     pub async fn get_sealed_block_headers(
@@ -722,8 +753,9 @@ impl SharedState {
 
         receiver
             .await
+            .map_err(|e| anyhow!("{e}"))?
+            .map_err(|e| anyhow!("{e:?}"))
             .map(|(peer_id, headers)| (peer_id.to_bytes(), headers))
-            .map_err(|e| anyhow!("{}", e))
     }
 
     pub async fn get_transactions_from_peer(
@@ -741,7 +773,11 @@ impl SharedState {
         };
         self.request_sender.send(request).await?;
 
-        receiver.await.map_err(|e| anyhow!("{}", e))
+        receiver
+            .await
+            .map_err(|e| anyhow!("{e}"))?
+            .map_err(|e| anyhow!("{e:?}"))
+            .map(|opt| opt.map(|a| Arc::into_inner(a).expect("There are not other references, we just received this from the network")))
     }
 
     pub fn broadcast_transaction(
@@ -968,7 +1004,7 @@ pub mod tests {
             &mut self,
             _peer_id: Option<PeerId>,
             _request_msg: RequestMessage,
-            _channel_item: ResponseChannelItem,
+            _on_response: TypedResponseChannel,
         ) -> anyhow::Result<()> {
             todo!()
         }
