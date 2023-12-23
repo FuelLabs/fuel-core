@@ -66,7 +66,7 @@ use libp2p::{
     gossipsub::MessageAcceptance,
     PeerId,
 };
-use libp2p_request_response::RequestId;
+use libp2p_request_response::InboundRequestId;
 use std::{
     fmt::Debug,
     ops::Range,
@@ -175,7 +175,7 @@ pub trait TaskP2PService: Send {
 
     fn send_response_msg(
         &mut self,
-        request_id: RequestId,
+        request_id: InboundRequestId,
         message: OutboundResponse,
     ) -> anyhow::Result<()>;
     fn report_message(
@@ -231,7 +231,7 @@ impl TaskP2PService for FuelP2PService<PostcardCodec> {
 
     fn send_response_msg(
         &mut self,
-        request_id: RequestId,
+        request_id: InboundRequestId,
         message: OutboundResponse,
     ) -> anyhow::Result<()> {
         self.send_response_msg(request_id, message)?;
@@ -556,7 +556,7 @@ where
                             },
                         }
                     },
-                    Some(FuelP2PEvent::RequestMessage { request_message, request_id }) => {
+                    Some(FuelP2PEvent::InboundRequestMessage { request_message, request_id }) => {
                         match request_message {
                             RequestMessage::Block(block_height) => {
                                 match self.db.get_sealed_block(&block_height) {
@@ -815,12 +815,8 @@ where
     D: P2pDb + 'static,
     B: BlockHeightImporter,
 {
-    Service::new(Task::new(
-        chain_id,
-        p2p_config,
-        Arc::new(db),
-        Arc::new(block_importer),
-    ))
+    let task = Task::new(chain_id, p2p_config, Arc::new(db), Arc::new(block_importer));
+    Service::new(task)
 }
 
 pub fn to_message_acceptance(
@@ -970,7 +966,7 @@ pub mod tests {
 
         fn send_response_msg(
             &mut self,
-            _request_id: RequestId,
+            _request_id: InboundRequestId,
             _message: OutboundResponse,
         ) -> anyhow::Result<()> {
             todo!()
