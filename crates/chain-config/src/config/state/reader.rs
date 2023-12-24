@@ -65,7 +65,6 @@ pub struct StateReader {
 }
 
 impl StateReader {
-    pub const MAX_GROUP_SIZE: usize = usize::MAX;
     pub fn json(
         snapshot_dir: impl AsRef<Path>,
         group_size: usize,

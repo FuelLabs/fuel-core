@@ -258,7 +258,7 @@ impl Command {
             }
         };
 
-        let state_reader = StateReader::in_memory(state_config.clone(), StateReader::MAX_GROUP_SIZE);
+        let state_reader = StateReader::in_memory(state_config.clone(), 1);
 
         #[cfg(feature = "relayer")]
         let relayer_cfg = relayer_args.into_config();

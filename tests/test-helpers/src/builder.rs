@@ -216,7 +216,7 @@ impl TestSetupBuilder {
                 ..fuel_core_txpool::Config::default()
             },
             chain_config: chain_conf,
-            state_reader: StateReader::in_memory(state, StateReader::MAX_GROUP_SIZE),
+            state_reader: StateReader::in_memory(state, 1),
             block_production: self.trigger,
             ..Config::local_node()
         };

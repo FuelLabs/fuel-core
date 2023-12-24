@@ -280,7 +280,7 @@ fn service_with_many_contracts(
         contracts: contract_configs,
         ..Default::default()
     };
-    config.state_reader = StateReader::in_memory(state_config, StateReader::MAX_GROUP_SIZE);
+    config.state_reader = StateReader::in_memory(state_config, 1);
 
     config
         .chain_config

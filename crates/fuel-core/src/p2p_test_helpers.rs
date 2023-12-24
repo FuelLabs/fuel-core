@@ -238,7 +238,7 @@ pub async fn make_nodes(
         }
     }
 
-    config.state_reader = StateReader::in_memory(state_config, StateReader::MAX_GROUP_SIZE);
+    config.state_reader = StateReader::in_memory(state_config, 1);
 
     let bootstrap_nodes: Vec<Bootstrap> =
         futures::stream::iter(bootstrap_setup.into_iter().enumerate())

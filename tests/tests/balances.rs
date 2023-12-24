@@ -73,7 +73,7 @@ async fn balance() {
         ..Default::default()
     };
     let config = Config {
-        state_reader: StateReader::in_memory(state_config, StateReader::MAX_GROUP_SIZE),
+        state_reader: StateReader::in_memory(state_config, 1),
         ..Config::local_node()
     };
 
@@ -208,7 +208,7 @@ async fn first_5_balances() {
         ..Default::default()
     };
     let config = Config {
-        state_reader: StateReader::in_memory(state_config, StateReader::MAX_GROUP_SIZE),
+        state_reader: StateReader::in_memory(state_config, 1),
         ..Config::local_node()
     };
 
