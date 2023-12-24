@@ -272,7 +272,7 @@ mod tests {
         }
 
         #[test]
-        fn format_specifier_is_optional() {
+        fn encoding_is_optional() {
             // given
             let line = "./core snapshot everything --output-directory ./some/path";
             // when
@@ -290,6 +290,7 @@ mod tests {
         fn can_choose_json_encoding() {
             // given
             let line = "./core snapshot everything --output-directory dir encoding json";
+
             // when
             let command = parse_cli(line, "")
                 .expect("should parse the snapshot command")
@@ -312,6 +313,7 @@ mod tests {
             // given
             let line =
                 "./core snapshot everything --output-directory dir encoding parquet";
+
             // when
             let command = parse_cli(line, "")
                 .expect("should parse the snapshot command")
@@ -334,6 +336,7 @@ mod tests {
             // given
             let line =
                 "./core snapshot everything --output-directory dir encoding parquet --group-size 101";
+
             // when
             let command = parse_cli(line, "")
                 .expect("should parse the snapshot command")
@@ -358,6 +361,7 @@ mod tests {
             // given
             let line =
                 "./core snapshot everything --output-directory dir encoding parquet";
+
             // when
             let command = parse_cli(line, "")
                 .expect("should parse the snapshot command")
@@ -382,6 +386,7 @@ mod tests {
             // given
             let line =
                 "./core snapshot everything --output-directory dir encoding parquet --compression-level 7";
+
             // when
             let command = parse_cli(line, "")
                 .expect("should parse the snapshot command")
@@ -404,6 +409,7 @@ mod tests {
             // given
             let line =
                 "./core snapshot everything --output-directory dir encoding parquet";
+
             // when
             let command = parse_cli(line, "")
                 .expect("should parse the snapshot command")
@@ -427,6 +433,7 @@ mod tests {
             // given
             let line =
                 "./core snapshot everything --output-directory dir encoding json --group-size 101";
+
             // when
             let result = parse_cli(line, "");
 
@@ -464,6 +471,7 @@ mod tests {
         fn snapshot_contract_id_required() {
             // given
             let line = "./core snapshot contract";
+
             // when
             let result = parse_cli(line, "");
 
@@ -475,6 +483,7 @@ mod tests {
         fn snapshot_contract_id_given() {
             // given
             let line = "./core snapshot contract --id 0x1111111111111111111111111111111111111111111111111111111111111111";
+
             // when
             let command = parse_cli(line, "")
                 .expect("should parse the snapshot command")
