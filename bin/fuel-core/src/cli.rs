@@ -126,3 +126,392 @@ pub async fn run_cli() -> anyhow::Result<()> {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use anyhow::anyhow;
+    use clap::Parser;
+    use fuel_core_types::fuel_types::ContractId;
+    use std::path::PathBuf;
+
+    use crate::cli::{
+        snapshot,
+        Fuel,
+    };
+
+    use super::Opt;
+
+    fn parse_cli(line: &str, concatenate: &str) -> anyhow::Result<Opt> {
+        let words = line
+            .split_ascii_whitespace()
+            .chain(concatenate.split_ascii_whitespace());
+        Opt::try_parse_from(words).map_err(|e| anyhow!(e.to_string()))
+    }
+
+    mod snapshot_tests {
+        use crate::cli::DEFAULT_DB_PATH;
+
+        use super::*;
+
+        #[test]
+        fn can_snapshot() {
+            // given
+            let line = "./core snapshot";
+            let irrelevant_remainder = "everything --output-directory dir encoding json";
+
+            // when
+            let command = parse_cli(line, irrelevant_remainder)
+                .expect("should parse the snapshot command")
+                .command;
+
+            // then
+            assert!(matches!(command, Fuel::Snapshot(_)));
+        }
+
+        #[test]
+        fn db_is_default_if_not_given() {
+            // given
+            let line = "./core snapshot";
+            let irrelevant_remainder = "everything --output-directory dir encoding json";
+
+            // when
+            let command = parse_cli(line, irrelevant_remainder)
+                .expect("should parse the snapshot command")
+                .command;
+
+            // then
+            let Fuel::Snapshot(snapshot::Command { database_path, .. }) = command else {
+                panic!("Expected a snapshot command")
+            };
+            assert_eq!(database_path, DEFAULT_DB_PATH.as_path());
+        }
+
+        #[test]
+        fn db_is_as_given() {
+            // given
+            let line = "./core snapshot --db-path ./some/path";
+            let irrelevant_remainder = "everything --output-directory dir encoding json";
+
+            // when
+            let command = parse_cli(line, irrelevant_remainder)
+                .expect("should parse the snapshot command")
+                .command;
+
+            // then
+            let Fuel::Snapshot(snapshot::Command { database_path, .. }) = command else {
+                panic!("Expected a snapshot command")
+            };
+            assert_eq!(database_path, PathBuf::from("./some/path"));
+        }
+    }
+
+    mod snapshot_everything_tests {
+
+        use anyhow::bail;
+
+        use super::*;
+
+        fn extract_everything_command(
+            command: Fuel,
+        ) -> anyhow::Result<(Option<PathBuf>, PathBuf, Option<snapshot::EncodingCommand>)>
+        {
+            match command {
+                Fuel::Snapshot(snapshot::Command {
+                    subcommand:
+                        snapshot::SubCommands::Everything {
+                            chain_config,
+                            output_dir,
+                            encoding_command,
+                        },
+                    ..
+                }) => Ok((chain_config, output_dir, encoding_command)),
+                _ => bail!("Expected a snapshot everything command"),
+            }
+        }
+
+        #[test]
+        fn snapshot_everything() {
+            // given
+            let line = "./core snapshot everything";
+            let irrelevant_remainder = "--output-directory dir encoding json";
+
+            // when
+            let command = parse_cli(line, irrelevant_remainder)
+                .expect("should parse the snapshot command")
+                .command;
+
+            // then
+            extract_everything_command(command).expect("Can extract command");
+        }
+
+        #[test]
+        fn output_dir_required() {
+            // given
+            let line = "./core snapshot everything";
+            let irrelevant_remainder = "encoding json";
+
+            // when
+            let result = parse_cli(line, irrelevant_remainder);
+
+            // then
+            assert!(result.is_err());
+        }
+
+        #[test]
+        fn output_dir_is_as_given() {
+            // given
+            let line = "./core snapshot everything --output-directory ./some/path";
+            let irrelevant_remainder = "encoding json";
+
+            // when
+            let command = parse_cli(line, irrelevant_remainder)
+                .expect("should parse the snapshot command")
+                .command;
+
+            // then
+            let (_, output_dir, _) =
+                extract_everything_command(command).expect("Can extract command");
+            assert_eq!(output_dir, PathBuf::from("./some/path"));
+        }
+
+        #[test]
+        fn format_specifier_is_optional() {
+            // given
+            let line = "./core snapshot everything --output-directory ./some/path";
+            let irrelevant_remainder = "";
+
+            // when
+            let command = parse_cli(line, irrelevant_remainder)
+                .expect("should parse the snapshot command")
+                .command;
+
+            // then
+            let (_, _, encoding_command) =
+                extract_everything_command(command).expect("Can extract command");
+            assert!(encoding_command.is_none());
+        }
+
+        #[test]
+        fn can_choose_json_encoding() {
+            // given
+            let line = "./core snapshot everything --output-directory dir encoding json";
+            let irrelevant_remainder = "";
+
+            // when
+            let command = parse_cli(line, irrelevant_remainder)
+                .expect("should parse the snapshot command")
+                .command;
+
+            // then
+            let (_, _, encoding_command) =
+                extract_everything_command(command).expect("Can extract command");
+
+            let Some(snapshot::EncodingCommand::Encoding {
+                encoding: snapshot::Encoding::Json,
+            }) = encoding_command
+            else {
+                panic!("Expected a snapshot everything command with json encoding");
+            };
+        }
+
+        #[test]
+        fn can_choose_parquet_encoding() {
+            // given
+            let line =
+                "./core snapshot everything --output-directory dir encoding parquet";
+            let irrelevant_remainder = "";
+
+            // when
+            let command = parse_cli(line, irrelevant_remainder)
+                .expect("should parse the snapshot command")
+                .command;
+
+            // then
+            let (_, _, encoding_command) =
+                extract_everything_command(command).expect("Can extract command");
+
+            let Some(snapshot::EncodingCommand::Encoding {
+                encoding: snapshot::Encoding::Parquet { .. },
+            }) = encoding_command
+            else {
+                panic!("Expected a snapshot everything command with parquet encoding");
+            };
+        }
+
+        #[test]
+        fn group_size_is_configurable() {
+            // given
+            let line =
+                "./core snapshot everything --output-directory dir encoding parquet --group-size 101";
+            let irrelevant_remainder = "";
+
+            // when
+            let command = parse_cli(line, irrelevant_remainder)
+                .expect("should parse the snapshot command")
+                .command;
+
+            // then
+            let (_, _, encoding_command) =
+                extract_everything_command(command).expect("Can extract command");
+
+            let Some(snapshot::EncodingCommand::Encoding {
+                encoding: snapshot::Encoding::Parquet { group_size, .. },
+            }) = encoding_command
+            else {
+                panic!("Expected a snapshot everything command with parquet encoding");
+            };
+
+            assert_eq!(group_size, 101);
+        }
+
+        #[test]
+        fn group_size_has_a_default() {
+            // given
+            let line =
+                "./core snapshot everything --output-directory dir encoding parquet";
+            let irrelevant_remainder = "";
+
+            // when
+            let command = parse_cli(line, irrelevant_remainder)
+                .expect("should parse the snapshot command")
+                .command;
+
+            // then
+            let (_, _, encoding_command) =
+                extract_everything_command(command).expect("Can extract command");
+
+            let Some(snapshot::EncodingCommand::Encoding {
+                encoding: snapshot::Encoding::Parquet { group_size, .. },
+            }) = encoding_command
+            else {
+                panic!("Expected a snapshot everything command with parquet encoding");
+            };
+
+            assert_eq!(group_size, 10000);
+        }
+
+        #[test]
+        fn can_configure_compression() {
+            // given
+            let line =
+                "./core snapshot everything --output-directory dir encoding parquet --compression-level 7";
+            let irrelevant_remainder = "";
+
+            // when
+            let command = parse_cli(line, irrelevant_remainder)
+                .expect("should parse the snapshot command")
+                .command;
+
+            // then
+            let (_, _, encoding_command) =
+                extract_everything_command(command).expect("Can extract command");
+            let Some(snapshot::EncodingCommand::Encoding {
+                encoding: snapshot::Encoding::Parquet { compression, .. },
+            }) = encoding_command
+            else {
+                panic!("Expected a snapshot everything command with parquet encoding");
+            };
+            assert_eq!(compression, 7);
+        }
+
+        #[test]
+        fn compression_has_a_default() {
+            // given
+            let line =
+                "./core snapshot everything --output-directory dir encoding parquet";
+            let irrelevant_remainder = "";
+
+            // when
+            let command = parse_cli(line, irrelevant_remainder)
+                .expect("should parse the snapshot command")
+                .command;
+
+            // then
+            let (_, _, encoding_command) =
+                extract_everything_command(command).expect("Can extract command");
+            let Some(snapshot::EncodingCommand::Encoding {
+                encoding: snapshot::Encoding::Parquet { compression, .. },
+            }) = encoding_command
+            else {
+                panic!("Expected a snapshot everything command with parquet encoding");
+            };
+
+            assert_eq!(compression, 1);
+        }
+
+        #[test]
+        fn json_encoding_doesnt_allow_for_group_size() {
+            // given
+            let line =
+                "./core snapshot everything --output-directory dir encoding json --group-size 101";
+            let irrelevant_remainder = "";
+
+            // when
+            let result = parse_cli(line, irrelevant_remainder);
+
+            // then
+            assert!(result.is_err());
+        }
+    }
+
+    mod snapshot_contract_tests {
+        use super::*;
+
+        #[test]
+        fn snapshot_contract() {
+            // given
+            let line = "./core snapshot contract";
+            let irrelevant_remainder =
+                "--id 0x0000000000000000000000000000000000000000000000000000000000000000";
+
+            // when
+            let command = parse_cli(line, irrelevant_remainder)
+                .expect("should parse the snapshot command")
+                .command;
+
+            // then
+            let Fuel::Snapshot(snapshot::Command {
+                subcommand: snapshot::SubCommands::Contract { .. },
+                ..
+            }) = command
+            else {
+                panic!("Expected a snapshot contract command");
+            };
+        }
+
+        #[test]
+        fn snapshot_contract_id_required() {
+            // given
+            let line = "./core snapshot contract";
+            let irrelevant_remainder = "";
+
+            // when
+            let result = parse_cli(line, irrelevant_remainder);
+
+            // then
+            assert!(result.is_err());
+        }
+
+        #[test]
+        fn snapshot_contract_id_given() {
+            // given
+            let line = "./core snapshot contract --id 0x1111111111111111111111111111111111111111111111111111111111111111";
+            let irrelevant_remainder = "";
+
+            // when
+            let command = parse_cli(line, irrelevant_remainder)
+                .expect("should parse the snapshot command")
+                .command;
+
+            // then
+            let Fuel::Snapshot(snapshot::Command {
+                subcommand: snapshot::SubCommands::Contract { contract_id },
+                ..
+            }) = command
+            else {
+                panic!("Expected a snapshot contract command");
+            };
+            assert_eq!(contract_id, ContractId::from([0x11u8; 32]));
+        }
+    }
+}

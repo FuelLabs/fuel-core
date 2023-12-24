@@ -10,6 +10,7 @@ use ::parquet::basic::{
     Compression,
     GzipLevel,
 };
+use anyhow::bail;
 
 use crate::{
     config::{
@@ -43,7 +44,76 @@ pub struct Encoder {
     encoder: EncoderType,
 }
 
+#[allow(dead_code)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum CompressionLevel {
+    Uncompressed,
+    Level1,
+    Level2,
+    Level3,
+    Level4,
+    Level5,
+    Level6,
+    Level7,
+    Level8,
+    Level9,
+    Level10,
+    Level11,
+    Max,
+}
+
+impl TryFrom<u8> for CompressionLevel {
+    type Error = anyhow::Error;
+    fn try_from(value: u8) -> Result<Self, Self::Error> {
+        match value {
+            0 => Ok(Self::Uncompressed),
+            1 => Ok(Self::Level1),
+            2 => Ok(Self::Level2),
+            3 => Ok(Self::Level3),
+            4 => Ok(Self::Level4),
+            5 => Ok(Self::Level5),
+            6 => Ok(Self::Level6),
+            7 => Ok(Self::Level7),
+            8 => Ok(Self::Level8),
+            9 => Ok(Self::Level9),
+            10 => Ok(Self::Level10),
+            11 => Ok(Self::Level11),
+            12 => Ok(Self::Max),
+            _ => bail!("Compression level {value} outside of allowed range 0..12"),
+        }
+    }
+}
+
+impl From<CompressionLevel> for u8 {
+    fn from(value: CompressionLevel) -> Self {
+        match value {
+            CompressionLevel::Uncompressed => 0,
+            CompressionLevel::Level1 => 1,
+            CompressionLevel::Level2 => 2,
+            CompressionLevel::Level3 => 3,
+            CompressionLevel::Level4 => 4,
+            CompressionLevel::Level5 => 5,
+            CompressionLevel::Level6 => 6,
+            CompressionLevel::Level7 => 7,
+            CompressionLevel::Level8 => 8,
+            CompressionLevel::Level9 => 9,
+            CompressionLevel::Level10 => 10,
+            CompressionLevel::Level11 => 11,
+            CompressionLevel::Max => 12,
+        }
+    }
+}
+
+impl From<CompressionLevel> for GzipLevel {
+    fn from(value: CompressionLevel) -> Self {
+        GzipLevel::try_new(u8::from(value) as u32)
+            .expect("The range [0, 12] is valid for Gzip compression")
+    }
+}
+
 impl Encoder {
+    pub const MAX_GROUP_SIZE: usize = usize::MAX;
+
     pub fn json(snapshot_dir: impl AsRef<Path>) -> Self {
         Self {
             encoder: EncoderType::Json {
@@ -55,7 +125,7 @@ impl Encoder {
 
     pub fn parquet(
         snapshot_dir: impl AsRef<Path>,
-        compression_level: u8,
+        compression_level: CompressionLevel,
     ) -> anyhow::Result<Self> {
         fn create_encoder<T>(
             path: &Path,
@@ -71,8 +141,7 @@ impl Encoder {
         }
 
         let path = snapshot_dir.as_ref();
-        let compression =
-            Compression::GZIP(GzipLevel::try_new(u32::from(compression_level))?);
+        let compression = Compression::GZIP(GzipLevel::from(compression_level));
         Ok(Self {
             encoder: EncoderType::Parquet {
                 coins: create_encoder(path, "coins", compression)?,
@@ -214,7 +283,8 @@ mod tests {
     fn parquet_encoder_generates_expected_filenames() {
         // given
         let dir = tempfile::tempdir().unwrap();
-        let encoder = Encoder::parquet(dir.path(), 0).unwrap();
+        let encoder =
+            Encoder::parquet(dir.path(), CompressionLevel::Uncompressed).unwrap();
 
         // when
         encoder.close().unwrap();
@@ -286,7 +356,8 @@ mod tests {
     {
         // given
         let dir = tempfile::tempdir().unwrap();
-        let mut encoder = Encoder::parquet(dir.path(), 0).unwrap();
+        let mut encoder =
+            Encoder::parquet(dir.path(), CompressionLevel::Uncompressed).unwrap();
         let original_data = vec![T::randomize(rng)];
 
         // when

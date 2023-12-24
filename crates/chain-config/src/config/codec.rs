@@ -6,7 +6,10 @@ pub use decoder::{
     Decoder,
     IntoIter,
 };
-pub use encoder::Encoder;
+pub use encoder::{
+    CompressionLevel,
+    Encoder,
+};
 
 use std::fmt::Debug;
 
@@ -37,7 +40,9 @@ mod tests {
         let temp_dir = tempfile::tempdir().unwrap();
 
         let mut group_generator = GroupGenerator::new(StdRng::seed_from_u64(0), 100, 10);
-        let mut encoder = Encoder::parquet(temp_dir.path(), 1).unwrap();
+        let mut encoder =
+            Encoder::parquet(temp_dir.path(), encoder::CompressionLevel::Uncompressed)
+                .unwrap();
 
         // when
         let coin_groups =
@@ -60,7 +65,8 @@ mod tests {
         let temp_dir = tempfile::tempdir().unwrap();
 
         let mut group_generator = GroupGenerator::new(StdRng::seed_from_u64(0), 100, 10);
-        let mut encoder = Encoder::parquet(temp_dir.path(), 1).unwrap();
+        let mut encoder =
+            Encoder::parquet(temp_dir.path(), encoder::CompressionLevel::Level1).unwrap();
 
         // when
         let message_groups =
@@ -82,7 +88,8 @@ mod tests {
         let temp_dir = tempfile::tempdir().unwrap();
 
         let mut group_generator = GroupGenerator::new(StdRng::seed_from_u64(0), 100, 10);
-        let mut encoder = Encoder::parquet(temp_dir.path(), 1).unwrap();
+        let mut encoder =
+            Encoder::parquet(temp_dir.path(), encoder::CompressionLevel::Level1).unwrap();
 
         // when
         let contract_groups =
@@ -104,7 +111,8 @@ mod tests {
         let temp_dir = tempfile::tempdir().unwrap();
 
         let mut group_generator = GroupGenerator::new(StdRng::seed_from_u64(0), 100, 10);
-        let mut encoder = Encoder::parquet(temp_dir.path(), 1).unwrap();
+        let mut encoder =
+            Encoder::parquet(temp_dir.path(), encoder::CompressionLevel::Level1).unwrap();
 
         // when
         let contract_state_groups =
@@ -130,7 +138,8 @@ mod tests {
         let temp_dir = tempfile::tempdir().unwrap();
 
         let mut group_generator = GroupGenerator::new(StdRng::seed_from_u64(0), 100, 10);
-        let mut encoder = Encoder::parquet(temp_dir.path(), 1).unwrap();
+        let mut encoder =
+            Encoder::parquet(temp_dir.path(), encoder::CompressionLevel::Level1).unwrap();
 
         // when
         let contract_balance_groups =
