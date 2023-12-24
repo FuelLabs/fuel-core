@@ -598,7 +598,7 @@ mod tests {
             ],
             ..Default::default()
         };
-        let state_reader = StateReader::in_memory(state, 1);
+        let state_reader = StateReader::in_memory(state, StateReader::MAX_GROUP_SIZE);
 
         let starting_height = {
             let mut h: u32 = alice_block_created.into();
@@ -684,7 +684,7 @@ mod tests {
             contract_state: vec![contract_state],
             ..Default::default()
         };
-        let state_reader = StateReader::in_memory(state, 1);
+        let state_reader = StateReader::in_memory(state, StateReader::MAX_GROUP_SIZE);
 
         let service_config = Config {
             chain_config: ChainConfig::local_testnet(),
@@ -724,7 +724,7 @@ mod tests {
             messages: vec![msg.clone()],
             ..Default::default()
         };
-        let state_reader = StateReader::in_memory(state, 1);
+        let state_reader = StateReader::in_memory(state, StateReader::MAX_GROUP_SIZE);
 
         let config = Config {
             state_reader,
@@ -779,7 +779,7 @@ mod tests {
             contract_balance: vec![contract_balance],
             ..Default::default()
         };
-        let state_reader = StateReader::in_memory(state, 1);
+        let state_reader = StateReader::in_memory(state, StateReader::MAX_GROUP_SIZE);
 
         let service_config = Config {
             chain_config: ChainConfig::local_testnet(),
@@ -818,7 +818,7 @@ mod tests {
             }],
             ..Default::default()
         };
-        let state_reader = StateReader::in_memory(state, 1);
+        let state_reader = StateReader::in_memory(state, StateReader::MAX_GROUP_SIZE);
 
         let service_config = Config {
             chain_config: ChainConfig {
@@ -860,7 +860,7 @@ mod tests {
             }],
             ..Default::default()
         };
-        let state_reader = StateReader::in_memory(state, 1);
+        let state_reader = StateReader::in_memory(state, StateReader::MAX_GROUP_SIZE);
 
         let service_config = Config {
             chain_config: ChainConfig {

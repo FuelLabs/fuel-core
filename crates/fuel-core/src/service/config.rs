@@ -76,7 +76,7 @@ impl Config {
     pub fn local_node() -> Self {
         let chain_config = ChainConfig::local_testnet();
         let chain_state = StateConfig::local_testnet();
-        let state_reader = StateReader::in_memory(chain_state.clone(), 1);
+        let state_reader = StateReader::in_memory(chain_state.clone(), StateReader::MAX_GROUP_SIZE);
 
         let utxo_validation = false;
         let min_gas_price = 0;

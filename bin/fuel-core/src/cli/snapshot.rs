@@ -39,7 +39,7 @@ pub struct Command {
 }
 
 #[derive(ValueEnum, Debug, Clone, Copy)]
-pub enum StateEncodingFormat {
+pub enum EncodingFormat {
     Json,
     Parquet,
 }
@@ -56,9 +56,9 @@ pub enum SubCommands {
         /// Specify a path to an output directory for the chain config files.
         #[clap(name = "OUTPUT_DIR", long = "output-directory")]
         output_dir: PathBuf,
-        /// State encoding format
-        #[clap(name = "STATE_ENCODING_FORMAT", long = "state-encoding-format")]
-        state_encoding_format: StateEncodingFormat,
+        /// Encoding format for the chain state files.
+        #[clap(name = "ENCODING_FORMAT", long = "encoding-format")]
+        encoding_format: EncodingFormat,
     },
     /// Creates a config for the contract.
     #[command(arg_required_else_help = true)]
@@ -85,7 +85,7 @@ pub fn exec(command: Command) -> anyhow::Result<()> {
         SubCommands::Everything {
             chain_config,
             output_dir,
-            state_encoding_format,
+            encoding_format: state_encoding_format,
         } => full_snapshot(chain_config, &output_dir, state_encoding_format, &db),
         SubCommands::Contract { contract_id } => contract_snapshot(&db, contract_id),
     }
@@ -105,7 +105,7 @@ fn contract_snapshot(
 fn full_snapshot(
     chain_config: Option<PathBuf>,
     output_dir: &Path,
-    state_encoding_format: StateEncodingFormat,
+    state_encoding_format: EncodingFormat,
     db: impl ChainStateDb,
 ) -> Result<(), anyhow::Error> {
     let encoder = initialize_encoder(output_dir, state_encoding_format)?;
@@ -165,12 +165,12 @@ fn write_chain_state(
 
 fn initialize_encoder(
     output_dir: &Path,
-    state_encoding_format: StateEncodingFormat,
+    state_encoding_format: EncodingFormat,
 ) -> Result<StateWriter, anyhow::Error> {
     std::fs::create_dir_all(output_dir)?;
     let encoder = match state_encoding_format {
-        StateEncodingFormat::Json => StateWriter::json(output_dir),
-        StateEncodingFormat::Parquet => StateWriter::parquet(output_dir, 1)?,
+        EncodingFormat::Json => StateWriter::json(output_dir),
+        EncodingFormat::Parquet => StateWriter::parquet(output_dir, 1)?,
     };
     Ok(encoder)
 }
