@@ -112,8 +112,6 @@ impl From<CompressionLevel> for GzipLevel {
 }
 
 impl Encoder {
-    pub const MAX_GROUP_SIZE: usize = usize::MAX;
-
     pub fn json(snapshot_dir: impl AsRef<Path>) -> Self {
         Self {
             encoder: EncoderType::Json {

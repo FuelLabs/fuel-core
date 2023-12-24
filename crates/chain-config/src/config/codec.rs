@@ -10,6 +10,7 @@ pub use encoder::{
     CompressionLevel,
     Encoder,
 };
+pub const MAX_GROUP_SIZE: usize = usize::MAX;
 
 use std::fmt::Debug;
 

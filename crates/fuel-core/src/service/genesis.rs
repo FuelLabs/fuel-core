@@ -84,7 +84,7 @@ fn import_chain_state(
 ) -> anyhow::Result<()> {
     let block_height = config.chain_config.height.unwrap_or_default();
 
-    let coins_reader = config.snapshot_decoder.coins()?;
+    let coins_reader = config.state_decoder.coins()?;
     let mut _coin_roots =
         import_coin_configs(&original_database, coins_reader, block_height)?;
 

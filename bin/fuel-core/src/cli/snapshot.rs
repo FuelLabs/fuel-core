@@ -14,6 +14,7 @@ use fuel_core::{
     database::Database,
     types::fuel_types::ContractId,
 };
+use fuel_core_chain_config::MAX_GROUP_SIZE;
 use fuel_core_storage::Result as StorageResult;
 use itertools::Itertools;
 use std::path::{
@@ -58,7 +59,7 @@ pub enum Encoding {
 impl Encoding {
     fn group_size(self) -> usize {
         match self {
-            Encoding::Json => Encoder::MAX_GROUP_SIZE,
+            Encoding::Json => MAX_GROUP_SIZE,
             Encoding::Parquet { group_size, .. } => group_size,
         }
     }

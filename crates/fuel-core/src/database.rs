@@ -212,6 +212,7 @@ impl Database {
     }
 
     pub fn from_config(config: &DatabaseConfig) -> DatabaseResult<Self> {
+        // initialize database
         match config.database_type {
             #[cfg(feature = "rocksdb")]
             DbType::RocksDb => {
@@ -220,14 +221,19 @@ impl Database {
                     warn!(
                         "No RocksDB path configured, initializing database with a tmp directory"
                     );
-                    Ok(Database::default())
+                    Ok(Self::default())
                 } else {
-                    Database::open(&config.database_path, config.max_database_cache_size)
+                    tracing::info!(
+                        "Opening database {:?} with cache size \"{}\"",
+                        config.database_path,
+                        config.max_database_cache_size
+                    );
+                    Self::open(&config.database_path, config.max_database_cache_size)
                 }
             }
             DbType::InMemory => Ok(Database::in_memory()),
             #[cfg(not(feature = "rocksdb"))]
-            _ => Ok(Database::in_memory()),
+            _ => Database::in_memory(),
         }
     }
 

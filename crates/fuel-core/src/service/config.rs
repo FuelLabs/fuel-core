@@ -42,7 +42,7 @@ pub struct Config {
     pub db_config: DatabaseConfig,
     pub chain_config: ChainConfig,
     pub state_config: StateConfig,
-    pub snapshot_decoder: Decoder,
+    pub state_decoder: Decoder,
     /// When `true`:
     /// - Enables manual block production.
     /// - Enables debugger endpoint.
@@ -99,7 +99,7 @@ impl Config {
             debug: true,
             chain_config: chain_conf.clone(),
             state_config: state_config.clone(),
-            snapshot_decoder: state_decoder,
+            state_decoder,
             block_production: Trigger::Instant,
             vm: Default::default(),
             utxo_validation,
