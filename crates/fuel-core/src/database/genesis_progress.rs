@@ -1,70 +1,146 @@
-#[derive(Default, Debug, Clone, serde::Serialize, serde::Deserialize)]
-pub struct GenesisProgress {
-    coins: usize,
-    messages: usize,
-    contracts: usize,
-    contract_states: usize,
-    contract_balances: usize,
-    contract_roots: usize,
+use fuel_core_storage::{
+    MerkleRoot,
+    Result,
+    StorageInspect,
+    StorageMutate,
+};
+use fuel_core_types::{
+    fuel_merkle::sparse::{
+        in_memory::MerkleTree,
+        MerkleTreeKey,
+    },
+    fuel_types::ContractId,
+};
+use itertools::process_results;
+
+use super::{
+    storage::{
+        GenesisContractIds,
+        GenesisContractRoots,
+        GenesisMetadata,
+        ToDatabaseKey,
+    },
+    Column,
+    Database,
+};
+
+#[derive(Debug, Clone, Copy)]
+pub enum GenesisProgress {
+    Coins,
+    Messages,
+    Contracts,
+    ContractStates,
+    ContractBalances,
 }
 
-impl GenesisProgress {
-    pub fn new() -> Self {
-        Self {
-            coins: 0,
-            messages: 0,
-            contracts: 0,
-            contract_states: 0,
-            contract_balances: 0,
-            contract_roots: 0,
-        }
+impl ToDatabaseKey for GenesisProgress {
+    type Type<'a> = [u8; 1];
+
+    fn database_key(&self) -> Self::Type<'_> {
+        [*self as u8]
+    }
+}
+
+impl Database {
+    pub fn genesis_progress(&self, key: &GenesisProgress) -> usize {
+        StorageInspect::<GenesisMetadata>::get(self, key)
+            .unwrap()
+            .unwrap_or_default()
+            .into_owned()
     }
 
-    pub fn coins(&self) -> usize {
-        self.coins
+    pub fn increment(&mut self, key: GenesisProgress) -> Result<()> {
+        let progress = self
+            .genesis_progress(&key)
+            .checked_add(1)
+            .expect("Maximum number of batches was exceeded during genesis.");
+        StorageMutate::<GenesisMetadata>::insert(self, &key, &progress)?;
+
+        Ok(())
     }
 
-    pub fn messages(&self) -> usize {
-        self.messages
+    pub fn add_coin_root(&mut self, root: MerkleRoot) -> Result<()> {
+        StorageMutate::<GenesisContractRoots>::insert(self, &root, &())?;
+        Ok(())
     }
 
-    pub fn contracts(&self) -> usize {
-        self.contracts
+    pub fn add_message_root(&mut self, root: MerkleRoot) -> Result<()> {
+        StorageMutate::<GenesisContractRoots>::insert(self, &root, &())?;
+        Ok(())
     }
 
-    pub fn contract_states(&self) -> usize {
-        self.contract_states
+    pub fn add_contract_root(&mut self, root: MerkleRoot) -> Result<()> {
+        StorageMutate::<GenesisContractRoots>::insert(self, &root, &())?;
+        Ok(())
     }
 
-    pub fn contract_balances(&self) -> usize {
-        self.contract_balances
+    pub fn add_state_root(&mut self, root: MerkleRoot) -> Result<()> {
+        StorageMutate::<GenesisContractRoots>::insert(self, &root, &())?;
+        Ok(())
     }
 
-    pub fn contract_roots(&self) -> usize {
-        self.contract_roots
+    pub fn add_balance_root(&mut self, root: MerkleRoot) -> Result<()> {
+        StorageMutate::<GenesisContractRoots>::insert(self, &root, &())?;
+        Ok(())
     }
 
-    pub fn add_coin(&mut self) {
-        self.coins.checked_add(1).expect("Maximum number of coins exceeded");
+    pub fn add_contract_id(&mut self, contract_id: ContractId) -> Result<()> {
+        StorageMutate::<GenesisContractIds>::insert(self, &contract_id, &())?;
+        Ok(())
     }
 
-    pub fn add_message(&mut self) {
-        self.messages.checked_add(1).expect("Maximum number of messages exceeded");
+    fn genesis_roots(&self, column: Column) -> Result<MerkleRoot> {
+        let roots_iter = self.iter_all::<Vec<u8>, ()>(column, None);
+
+        let roots = process_results(roots_iter, |roots| {
+            roots
+                .map(|(root, _)| MerkleRoot::try_from(root).unwrap())
+                .collect::<Vec<MerkleRoot>>()
+        })?
+        .into_iter()
+        .enumerate()
+        .map(|(idx, root)| (MerkleTreeKey::new(idx.to_be_bytes()), root));
+
+        Ok(MerkleTree::root_from_set(roots.into_iter()))
     }
 
-    pub fn add_contract(&mut self) {
-        self.contracts.checked_add(1).expect("Maximum number of contracts exceeded");
+    pub fn genesis_coin_root(&self) -> Result<MerkleRoot> {
+        self.genesis_roots(Column::CoinRoots)
     }
 
-    pub fn add_contract_state(&mut self, batch_size: usize) {
-        self.contract_states.checked_add(batch_size).expect("Maximum number of contract states exceeded");
+    pub fn genesis_messages_root(&self) -> Result<MerkleRoot> {
+        self.genesis_roots(Column::MessageRoots)
     }
 
-    pub fn add_balance(&mut self, batch_size: usize) {
-        self.contract_balances.checked_add(batch_size).expect("Maximum number of contract balances exceeded");
+    pub fn genesis_contracts_root(&self) -> Result<MerkleRoot> {
+        self.genesis_roots(Column::ContractRoots)
     }
 
-    pub fn add_contract_root(&mut self, batch_size: usize) {
-        self.contract_roots.checked_add(batch_size).expect("Maximum number of contract roots exceeded");
+    pub fn genesis_states_root(&self) -> Result<MerkleRoot> {
+        self.genesis_roots(Column::ContractStateRoots)
+    }
+
+    pub fn genesis_balances_root(&self) -> Result<MerkleRoot> {
+        self.genesis_roots(Column::ContractBalanceRoots)
+    }
+
+    pub fn genesis_contract_ids(&self) -> Result<Vec<ContractId>> {
+        let contract_ids_iter =
+            self.iter_all::<Vec<u8>, ()>(Column::GenesisContractIds, None);
+
+        let contract_ids = process_results(contract_ids_iter, |contract_ids| {
+            contract_ids
+                .map(|(contract_id, _)| {
+                    let bytes32: [u8; 32] = contract_id.try_into().unwrap();
+                    ContractId::try_from(bytes32).unwrap()
+                })
+                .collect::<Vec<ContractId>>()
+        })?;
+
+        Ok(contract_ids)
+    }
+
+    pub fn remove_genesis_progress(&mut self) -> Result<()> {
+        todo!("remove columns related to genesis progress tracking");
     }
 }

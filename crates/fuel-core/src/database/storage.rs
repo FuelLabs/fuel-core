@@ -147,9 +147,57 @@ impl Mappable for ContractsStateMerkleMetadata {
 pub struct GenesisMetadata;
 impl Mappable for GenesisMetadata {
     type Key = Self::OwnedKey;
-    type OwnedKey = ();
+    type OwnedKey = GenesisProgress;
     type Value = Self::OwnedValue;
-    type OwnedValue = GenesisProgress;
+    type OwnedValue = usize;
+}
+
+pub struct GenesisCoinRoots;
+impl Mappable for GenesisCoinRoots {
+    type Key = Self::OwnedKey;
+    type OwnedKey = MerkleRoot;
+    type Value = Self::OwnedValue;
+    type OwnedValue = ();
+}
+
+pub struct GenesisMessageRoots;
+impl Mappable for GenesisMessageRoots {
+    type Key = Self::OwnedKey;
+    type OwnedKey = MerkleRoot;
+    type Value = Self::OwnedValue;
+    type OwnedValue = ();
+}
+
+pub struct GenesisContractStateRoots;
+impl Mappable for GenesisContractStateRoots {
+    type Key = Self::OwnedKey;
+    type OwnedKey = MerkleRoot;
+    type Value = Self::OwnedValue;
+    type OwnedValue = ();
+}
+
+pub struct GenesisContractBalanceRoots;
+impl Mappable for GenesisContractBalanceRoots {
+    type Key = Self::OwnedKey;
+    type OwnedKey = MerkleRoot;
+    type Value = Self::OwnedValue;
+    type OwnedValue = ();
+}
+
+pub struct GenesisContractRoots;
+impl Mappable for GenesisContractRoots {
+    type Key = Self::OwnedKey;
+    type OwnedKey = MerkleRoot;
+    type Value = Self::OwnedValue;
+    type OwnedValue = ();
+}
+
+pub struct GenesisContractIds;
+impl Mappable for GenesisContractIds {
+    type Key = Self::OwnedKey;
+    type OwnedKey = ContractId;
+    type Value = Self::OwnedValue;
+    type OwnedValue = ();
 }
 
 /// The table has a corresponding column in the database.
@@ -209,6 +257,42 @@ impl DatabaseColumn for ContractsStateMerkleMetadata {
 impl DatabaseColumn for GenesisMetadata {
     fn column() -> Column {
         Column::GenesisMetadata
+    }
+}
+
+impl DatabaseColumn for GenesisCoinRoots {
+    fn column() -> Column {
+        Column::CoinRoots
+    }
+}
+
+impl DatabaseColumn for GenesisMessageRoots {
+    fn column() -> Column {
+        Column::MessageRoots
+    }
+}
+
+impl DatabaseColumn for GenesisContractStateRoots {
+    fn column() -> Column {
+        Column::ContractStateRoots
+    }
+}
+
+impl DatabaseColumn for GenesisContractBalanceRoots {
+    fn column() -> Column {
+        Column::ContractBalanceRoots
+    }
+}
+
+impl DatabaseColumn for GenesisContractRoots {
+    fn column() -> Column {
+        Column::ContractRoots
+    }
+}
+
+impl DatabaseColumn for GenesisContractIds {
+    fn column() -> Column {
+        Column::GenesisContractIds
     }
 }
 
