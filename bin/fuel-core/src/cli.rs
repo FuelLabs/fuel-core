@@ -206,7 +206,6 @@ mod tests {
     }
 
     mod snapshot_everything_tests {
-
         use anyhow::bail;
 
         use super::*;
@@ -248,10 +247,9 @@ mod tests {
         fn output_dir_required() {
             // given
             let line = "./core snapshot everything";
-            let irrelevant_remainder = "encoding json";
 
             // when
-            let result = parse_cli(line, irrelevant_remainder);
+            let result = parse_cli(line, "");
 
             // then
             assert!(result.is_err());
@@ -261,10 +259,9 @@ mod tests {
         fn output_dir_is_as_given() {
             // given
             let line = "./core snapshot everything --output-directory ./some/path";
-            let irrelevant_remainder = "encoding json";
 
             // when
-            let command = parse_cli(line, irrelevant_remainder)
+            let command = parse_cli(line, "")
                 .expect("should parse the snapshot command")
                 .command;
 
