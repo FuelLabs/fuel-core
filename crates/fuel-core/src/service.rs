@@ -184,7 +184,7 @@ pub struct Task {
 
 impl Task {
     /// Private inner method for initializing the fuel service task
-    pub fn new(database: Database, config: Config) -> anyhow::Result<Task> {
+    pub fn new(mut database: Database, config: Config) -> anyhow::Result<Task> {
         // initialize state
         tracing::info!("Initializing database");
         database.init(&config.chain_conf)?;

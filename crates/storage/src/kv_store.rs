@@ -20,6 +20,8 @@ pub trait StorageColumn: Clone {
     fn id(&self) -> u32;
 }
 
+// TODO: Use `&mut self` for all mutable methods.
+//  It requires refactoring of all services because right now, most of them work with `&self` storage.
 /// The definition of the key-value store.
 pub trait KeyValueStore {
     /// The type of the column.
@@ -113,6 +115,7 @@ pub trait BatchOperations: KeyValueStore {
         &self,
         entries: &mut dyn Iterator<Item = (Vec<u8>, Self::Column, WriteOperation)>,
     ) -> StorageResult<()> {
+        // TODO: Optimize implementation for in-memory storages.
         for (key, column, op) in entries {
             match op {
                 WriteOperation::Insert(value) => {
@@ -124,5 +127,153 @@ pub trait BatchOperations: KeyValueStore {
             }
         }
         Ok(())
+    }
+}
+
+impl<T> KeyValueStore for &T
+where
+    T: KeyValueStore,
+{
+    type Column = T::Column;
+
+    fn put(&self, key: &[u8], column: Self::Column, value: Value) -> StorageResult<()> {
+        (**self).put(key, column, value)
+    }
+
+    fn replace(
+        &self,
+        key: &[u8],
+        column: Self::Column,
+        value: Value,
+    ) -> StorageResult<Option<Value>> {
+        (**self).replace(key, column, value)
+    }
+
+    fn write(
+        &self,
+        key: &[u8],
+        column: Self::Column,
+        buf: &[u8],
+    ) -> StorageResult<usize> {
+        (**self).write(key, column, buf)
+    }
+
+    fn take(&self, key: &[u8], column: Self::Column) -> StorageResult<Option<Value>> {
+        (**self).take(key, column)
+    }
+
+    fn delete(&self, key: &[u8], column: Self::Column) -> StorageResult<()> {
+        (**self).delete(key, column)
+    }
+
+    fn exists(&self, key: &[u8], column: Self::Column) -> StorageResult<bool> {
+        (**self).exists(key, column)
+    }
+
+    fn size_of_value(
+        &self,
+        key: &[u8],
+        column: Self::Column,
+    ) -> StorageResult<Option<usize>> {
+        (**self).size_of_value(key, column)
+    }
+
+    fn get(&self, key: &[u8], column: Self::Column) -> StorageResult<Option<Value>> {
+        (**self).get(key, column)
+    }
+
+    fn read(
+        &self,
+        key: &[u8],
+        column: Self::Column,
+        buf: &mut [u8],
+    ) -> StorageResult<Option<usize>> {
+        (**self).read(key, column, buf)
+    }
+}
+
+impl<T> KeyValueStore for &mut T
+where
+    T: KeyValueStore,
+{
+    type Column = T::Column;
+
+    fn put(&self, key: &[u8], column: Self::Column, value: Value) -> StorageResult<()> {
+        (**self).put(key, column, value)
+    }
+
+    fn replace(
+        &self,
+        key: &[u8],
+        column: Self::Column,
+        value: Value,
+    ) -> StorageResult<Option<Value>> {
+        (**self).replace(key, column, value)
+    }
+
+    fn write(
+        &self,
+        key: &[u8],
+        column: Self::Column,
+        buf: &[u8],
+    ) -> StorageResult<usize> {
+        (**self).write(key, column, buf)
+    }
+
+    fn take(&self, key: &[u8], column: Self::Column) -> StorageResult<Option<Value>> {
+        (**self).take(key, column)
+    }
+
+    fn delete(&self, key: &[u8], column: Self::Column) -> StorageResult<()> {
+        (**self).delete(key, column)
+    }
+
+    fn exists(&self, key: &[u8], column: Self::Column) -> StorageResult<bool> {
+        (**self).exists(key, column)
+    }
+
+    fn size_of_value(
+        &self,
+        key: &[u8],
+        column: Self::Column,
+    ) -> StorageResult<Option<usize>> {
+        (**self).size_of_value(key, column)
+    }
+
+    fn get(&self, key: &[u8], column: Self::Column) -> StorageResult<Option<Value>> {
+        (**self).get(key, column)
+    }
+
+    fn read(
+        &self,
+        key: &[u8],
+        column: Self::Column,
+        buf: &mut [u8],
+    ) -> StorageResult<Option<usize>> {
+        (**self).read(key, column, buf)
+    }
+}
+
+impl<T> BatchOperations for &T
+where
+    T: BatchOperations,
+{
+    fn batch_write(
+        &self,
+        entries: &mut dyn Iterator<Item = (Vec<u8>, Self::Column, WriteOperation)>,
+    ) -> StorageResult<()> {
+        (**self).batch_write(entries)
+    }
+}
+
+impl<T> BatchOperations for &mut T
+where
+    T: BatchOperations,
+{
+    fn batch_write(
+        &self,
+        entries: &mut dyn Iterator<Item = (Vec<u8>, Self::Column, WriteOperation)>,
+    ) -> StorageResult<()> {
+        (**self).batch_write(entries)
     }
 }
