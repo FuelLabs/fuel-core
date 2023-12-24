@@ -141,10 +141,10 @@ mod tests {
 
     use super::Opt;
 
-    fn parse_cli(line: &str, concatenate: &str) -> anyhow::Result<Opt> {
+    fn parse_cli(line: &str, suffix: &str) -> anyhow::Result<Opt> {
         let words = line
             .split_ascii_whitespace()
-            .chain(concatenate.split_ascii_whitespace());
+            .chain(suffix.split_ascii_whitespace());
         Opt::try_parse_from(words).map_err(|e| anyhow!(e.to_string()))
     }
 
@@ -278,10 +278,8 @@ mod tests {
         fn format_specifier_is_optional() {
             // given
             let line = "./core snapshot everything --output-directory ./some/path";
-            let irrelevant_remainder = "";
-
             // when
-            let command = parse_cli(line, irrelevant_remainder)
+            let command = parse_cli(line, "")
                 .expect("should parse the snapshot command")
                 .command;
 
@@ -295,10 +293,8 @@ mod tests {
         fn can_choose_json_encoding() {
             // given
             let line = "./core snapshot everything --output-directory dir encoding json";
-            let irrelevant_remainder = "";
-
             // when
-            let command = parse_cli(line, irrelevant_remainder)
+            let command = parse_cli(line, "")
                 .expect("should parse the snapshot command")
                 .command;
 
@@ -319,10 +315,8 @@ mod tests {
             // given
             let line =
                 "./core snapshot everything --output-directory dir encoding parquet";
-            let irrelevant_remainder = "";
-
             // when
-            let command = parse_cli(line, irrelevant_remainder)
+            let command = parse_cli(line, "")
                 .expect("should parse the snapshot command")
                 .command;
 
@@ -343,10 +337,8 @@ mod tests {
             // given
             let line =
                 "./core snapshot everything --output-directory dir encoding parquet --group-size 101";
-            let irrelevant_remainder = "";
-
             // when
-            let command = parse_cli(line, irrelevant_remainder)
+            let command = parse_cli(line, "")
                 .expect("should parse the snapshot command")
                 .command;
 
@@ -369,10 +361,8 @@ mod tests {
             // given
             let line =
                 "./core snapshot everything --output-directory dir encoding parquet";
-            let irrelevant_remainder = "";
-
             // when
-            let command = parse_cli(line, irrelevant_remainder)
+            let command = parse_cli(line, "")
                 .expect("should parse the snapshot command")
                 .command;
 
@@ -395,10 +385,8 @@ mod tests {
             // given
             let line =
                 "./core snapshot everything --output-directory dir encoding parquet --compression-level 7";
-            let irrelevant_remainder = "";
-
             // when
-            let command = parse_cli(line, irrelevant_remainder)
+            let command = parse_cli(line, "")
                 .expect("should parse the snapshot command")
                 .command;
 
@@ -419,10 +407,8 @@ mod tests {
             // given
             let line =
                 "./core snapshot everything --output-directory dir encoding parquet";
-            let irrelevant_remainder = "";
-
             // when
-            let command = parse_cli(line, irrelevant_remainder)
+            let command = parse_cli(line, "")
                 .expect("should parse the snapshot command")
                 .command;
 
@@ -444,10 +430,8 @@ mod tests {
             // given
             let line =
                 "./core snapshot everything --output-directory dir encoding json --group-size 101";
-            let irrelevant_remainder = "";
-
             // when
-            let result = parse_cli(line, irrelevant_remainder);
+            let result = parse_cli(line, "");
 
             // then
             assert!(result.is_err());
@@ -483,10 +467,8 @@ mod tests {
         fn snapshot_contract_id_required() {
             // given
             let line = "./core snapshot contract";
-            let irrelevant_remainder = "";
-
             // when
-            let result = parse_cli(line, irrelevant_remainder);
+            let result = parse_cli(line, "");
 
             // then
             assert!(result.is_err());
@@ -496,10 +478,8 @@ mod tests {
         fn snapshot_contract_id_given() {
             // given
             let line = "./core snapshot contract --id 0x1111111111111111111111111111111111111111111111111111111111111111";
-            let irrelevant_remainder = "";
-
             // when
-            let command = parse_cli(line, irrelevant_remainder)
+            let command = parse_cli(line, "")
                 .expect("should parse the snapshot command")
                 .command;
 
