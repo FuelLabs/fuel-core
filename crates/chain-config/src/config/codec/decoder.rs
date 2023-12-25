@@ -72,17 +72,11 @@ impl Decoder {
         snapshot_dir: impl AsRef<std::path::Path>,
         group_size: usize,
     ) -> anyhow::Result<Self> {
-        use std::io::Read;
-
         let path = snapshot_dir.as_ref().join("state.json");
 
-        // This is a workaround until the Deserialize implementation is fixed to not require a
-        // borrowed string over in fuel-vm.
-        let mut contents = String::new();
         let mut file = std::fs::File::open(path)?;
-        file.read_to_string(&mut contents)?;
 
-        let state = serde_json::from_str(&contents)?;
+        let state = serde_json::from_reader(&mut file)?;
 
         Ok(Self::in_memory(state, group_size))
     }
