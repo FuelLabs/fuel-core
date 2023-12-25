@@ -1,3 +1,8 @@
+use bech32::{
+    ToBase32,
+    Variant::Bech32m,
+};
+use core::str::FromStr;
 use fuel_core_storage::{
     iter::BoxedIter,
     Result as StorageResult,
@@ -11,18 +16,9 @@ use fuel_core_types::{
     },
     fuel_vm::SecretKey,
 };
-
-#[cfg(feature = "std")]
-use bech32::{
-    ToBase32,
-    Variant::Bech32m,
-};
-#[cfg(feature = "std")]
-use core::str::FromStr;
-#[cfg(feature = "std")]
-use fuel_core_types::fuel_types::Bytes32;
-#[cfg(feature = "std")]
 use itertools::Itertools;
+
+use fuel_core_types::fuel_types::Bytes32;
 use serde::{
     Deserialize,
     Serialize,
@@ -143,7 +139,6 @@ impl StateConfig {
         Ok(())
     }
 
-    #[cfg(feature = "std")]
     pub fn local_testnet() -> Self {
         // endow some preset accounts with an initial balance
         tracing::info!("Initial Accounts");

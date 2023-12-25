@@ -8,7 +8,6 @@ use fuel_core::{
     chain_config::{
         ChainConfig,
         ChainStateDb,
-        CompressionLevel,
         Encoder,
     },
     database::Database,
@@ -42,6 +41,7 @@ pub struct Command {
 #[derive(Subcommand, Debug, Clone, Copy)]
 pub enum Encoding {
     Json,
+    #[cfg(feature = "parquet")]
     Parquet {
         /// The number of entries to write per parquet group.
         #[clap(name = "GROUP_SIZE", long = "group-size", default_value = "10000")]
@@ -60,6 +60,7 @@ impl Encoding {
     fn group_size(self) -> usize {
         match self {
             Encoding::Json => MAX_GROUP_SIZE,
+            #[cfg(feature = "parquet")]
             Encoding::Parquet { group_size, .. } => group_size,
         }
     }
@@ -209,9 +210,11 @@ fn initialize_encoder(
     std::fs::create_dir_all(output_dir)?;
     let encoder = match encoding {
         Encoding::Json => Encoder::json(output_dir),
-        Encoding::Parquet { compression, .. } => {
-            Encoder::parquet(output_dir, CompressionLevel::try_from(compression)?)?
-        }
+        #[cfg(feature = "parquet")]
+        Encoding::Parquet { compression, .. } => Encoder::parquet(
+            output_dir,
+            fuel_core_chain_config::CompressionLevel::try_from(compression)?,
+        )?,
     };
     Ok(encoder)
 }

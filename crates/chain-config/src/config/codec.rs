@@ -1,15 +1,17 @@
 mod decoder;
+#[cfg(feature = "std")]
 mod encoder;
+#[cfg(feature = "parquet")]
 mod parquet;
 
 pub use decoder::{
     Decoder,
     IntoIter,
 };
-pub use encoder::{
-    CompressionLevel,
-    Encoder,
-};
+#[cfg(feature = "parquet")]
+pub use encoder::CompressionLevel;
+#[cfg(feature = "std")]
+pub use encoder::Encoder;
 pub const MAX_GROUP_SIZE: usize = usize::MAX;
 
 use std::fmt::Debug;
@@ -21,9 +23,9 @@ pub struct Group<T> {
 }
 type GroupResult<T> = anyhow::Result<Group<T>>;
 
+#[cfg(all(feature = "std", feature = "random"))]
 #[cfg(test)]
 mod tests {
-
     use itertools::Itertools;
     use rand::{
         rngs::StdRng,
@@ -34,6 +36,7 @@ mod tests {
 
     use super::*;
 
+    #[cfg(feature = "parquet")]
     #[test]
     fn roundtrip_parquet_coins() {
         // given
@@ -59,6 +62,7 @@ mod tests {
         assert_groups_identical(&coin_groups, decoded_coin_groups, skip_n_groups);
     }
 
+    #[cfg(feature = "parquet")]
     #[test]
     fn roundtrip_parquet_messages() {
         // given
@@ -82,6 +86,7 @@ mod tests {
         assert_groups_identical(&message_groups, messages_decoded, skip_n_groups);
     }
 
+    #[cfg(feature = "parquet")]
     #[test]
     fn roundtrip_parquet_contracts() {
         // given
@@ -105,6 +110,7 @@ mod tests {
         assert_groups_identical(&contract_groups, contract_decoded, skip_n_groups);
     }
 
+    #[cfg(feature = "parquet")]
     #[test]
     fn roundtrip_parquet_contract_state() {
         // given
@@ -132,6 +138,7 @@ mod tests {
         );
     }
 
+    #[cfg(feature = "parquet")]
     #[test]
     fn roundtrip_parquet_contract_balance() {
         // given

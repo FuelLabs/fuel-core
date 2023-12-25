@@ -272,6 +272,39 @@ mod tests {
         }
 
         #[test]
+        fn chain_config_dir_is_optional() {
+            // given
+            let line = "./core snapshot everything --output-directory ./some/path";
+
+            // when
+            let command = parse_cli(line, "")
+                .expect("should parse the snapshot command")
+                .command;
+
+            // then
+            let (chain_config, _, _) =
+                extract_everything_command(command).expect("Can extract command");
+            assert!(chain_config.is_none());
+        }
+
+        #[test]
+        fn chain_config_is_as_given() {
+            // given
+            let line =
+                "./core snapshot everything --output-directory ./some/path --chain ./some/chain/config";
+
+            // when
+            let command = parse_cli(line, "")
+                .expect("should parse the snapshot command")
+                .command;
+
+            // then
+            let (chain_config, _, _) =
+                extract_everything_command(command).expect("Can extract command");
+            assert_eq!(chain_config, Some(PathBuf::from("./some/chain/config")));
+        }
+
+        #[test]
         fn encoding_is_optional() {
             // given
             let line = "./core snapshot everything --output-directory ./some/path";

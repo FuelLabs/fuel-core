@@ -1,20 +1,10 @@
-use std::{
-    fs::File,
-    path::{
-        Path,
-        PathBuf,
-    },
+use std::path::{
+    Path,
+    PathBuf,
 };
-
-use ::parquet::basic::{
-    Compression,
-    GzipLevel,
-};
-use anyhow::bail;
 
 use crate::{
     config::{
-        codec::parquet::Schema,
         contract_balance::ContractBalance,
         contract_state::ContractStateConfig,
     },
@@ -24,6 +14,10 @@ use crate::{
     StateConfig,
 };
 
+#[cfg(feature = "parquet")]
+use crate::config::codec::parquet::Schema;
+
+#[cfg(feature = "parquet")]
 use super::parquet;
 
 enum EncoderType {
@@ -31,12 +25,13 @@ enum EncoderType {
         buffer: StateConfig,
         state_file_path: PathBuf,
     },
+    #[cfg(feature = "parquet")]
     Parquet {
-        coins: parquet::Encoder<File, CoinConfig>,
-        messages: parquet::Encoder<File, MessageConfig>,
-        contracts: parquet::Encoder<File, ContractConfig>,
-        contract_state: parquet::Encoder<File, ContractStateConfig>,
-        contract_balance: parquet::Encoder<File, ContractBalance>,
+        coins: parquet::Encoder<std::fs::File, CoinConfig>,
+        messages: parquet::Encoder<std::fs::File, MessageConfig>,
+        contracts: parquet::Encoder<std::fs::File, ContractConfig>,
+        contract_state: parquet::Encoder<std::fs::File, ContractStateConfig>,
+        contract_balance: parquet::Encoder<std::fs::File, ContractBalance>,
     },
 }
 
@@ -46,6 +41,7 @@ pub struct Encoder {
 
 #[allow(dead_code)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[cfg(feature = "parquet")]
 pub enum CompressionLevel {
     Uncompressed,
     Level1,
@@ -62,6 +58,7 @@ pub enum CompressionLevel {
     Max,
 }
 
+#[cfg(feature = "parquet")]
 impl TryFrom<u8> for CompressionLevel {
     type Error = anyhow::Error;
     fn try_from(value: u8) -> Result<Self, Self::Error> {
@@ -79,11 +76,14 @@ impl TryFrom<u8> for CompressionLevel {
             10 => Ok(Self::Level10),
             11 => Ok(Self::Level11),
             12 => Ok(Self::Max),
-            _ => bail!("Compression level {value} outside of allowed range 0..12"),
+            _ => {
+                anyhow::bail!("Compression level {value} outside of allowed range 0..12")
+            }
         }
     }
 }
 
+#[cfg(feature = "parquet")]
 impl From<CompressionLevel> for u8 {
     fn from(value: CompressionLevel) -> Self {
         match value {
@@ -104,9 +104,10 @@ impl From<CompressionLevel> for u8 {
     }
 }
 
-impl From<CompressionLevel> for GzipLevel {
+#[cfg(feature = "parquet")]
+impl From<CompressionLevel> for ::parquet::basic::GzipLevel {
     fn from(value: CompressionLevel) -> Self {
-        GzipLevel::try_new(u8::from(value) as u32)
+        Self::try_new(u8::from(value) as u32)
             .expect("The range [0, 12] is valid for Gzip compression")
     }
 }
@@ -121,10 +122,17 @@ impl Encoder {
         }
     }
 
+    #[cfg(feature = "parquet")]
     pub fn parquet(
         snapshot_dir: impl AsRef<Path>,
         compression_level: CompressionLevel,
     ) -> anyhow::Result<Self> {
+        use ::parquet::basic::{
+            Compression,
+            GzipLevel,
+        };
+        use std::fs::File;
+
         fn create_encoder<T>(
             path: &Path,
             name: &str,
@@ -157,6 +165,7 @@ impl Encoder {
                 state.coins.extend(elements);
                 Ok(())
             }
+            #[cfg(feature = "parquet")]
             EncoderType::Parquet { coins, .. } => coins.write(elements),
         }
     }
@@ -170,6 +179,7 @@ impl Encoder {
                 state.contracts.extend(elements);
                 Ok(())
             }
+            #[cfg(feature = "parquet")]
             EncoderType::Parquet { contracts, .. } => contracts.write(elements),
         }
     }
@@ -180,6 +190,7 @@ impl Encoder {
                 state.messages.extend(elements);
                 Ok(())
             }
+            #[cfg(feature = "parquet")]
             EncoderType::Parquet { messages, .. } => messages.write(elements),
         }
     }
@@ -193,6 +204,7 @@ impl Encoder {
                 state.contract_state.extend(elements);
                 Ok(())
             }
+            #[cfg(feature = "parquet")]
             EncoderType::Parquet { contract_state, .. } => contract_state.write(elements),
         }
     }
@@ -206,6 +218,7 @@ impl Encoder {
                 state.contract_balance.extend(elements);
                 Ok(())
             }
+            #[cfg(feature = "parquet")]
             EncoderType::Parquet {
                 contract_balance, ..
             } => contract_balance.write(elements),
@@ -222,6 +235,7 @@ impl Encoder {
                 serde_json::to_writer(file, &buffer)?;
                 Ok(())
             }
+            #[cfg(feature = "parquet")]
             EncoderType::Parquet {
                 coins,
                 messages,
@@ -240,24 +254,11 @@ impl Encoder {
     }
 }
 
+#[cfg(feature = "random")]
 #[cfg(test)]
 mod tests {
-    use std::{
-        collections::HashSet,
-        fmt::Debug,
-    };
-
-    use crate::{
-        Group,
-        Randomize,
-    };
-
     use super::*;
     use itertools::Itertools;
-    use rand::{
-        rngs::StdRng,
-        SeedableRng,
-    };
 
     #[test]
     fn json_encoder_generates_single_file_with_expected_name() {
@@ -277,6 +278,7 @@ mod tests {
         }
     }
 
+    #[cfg(feature = "parquet")]
     #[test]
     fn parquet_encoder_generates_expected_filenames() {
         // given
@@ -288,14 +290,14 @@ mod tests {
         encoder.close().unwrap();
 
         // then
-        let entries: HashSet<_> = dir
+        let entries: std::collections::HashSet<_> = dir
             .path()
             .read_dir()
             .unwrap()
             .map_ok(|entry| entry.path())
             .try_collect()
             .unwrap();
-        let expected_files = HashSet::from(
+        let expected_files = std::collections::HashSet::from(
             [
                 "coins.parquet",
                 "messages.parquet",
@@ -309,9 +311,11 @@ mod tests {
         assert_eq!(entries, expected_files);
     }
 
+    #[cfg(feature = "parquet")]
     #[test]
     fn parquet_encoder_encodes_types_in_expected_files() {
-        let mut rng = StdRng::seed_from_u64(0);
+        use rand::SeedableRng;
+        let mut rng = rand::rngs::StdRng::seed_from_u64(0);
 
         test_data_written_in_expected_file::<CoinConfig>(
             &mut rng,
@@ -344,14 +348,17 @@ mod tests {
         );
     }
 
+    #[cfg(feature = "parquet")]
     fn test_data_written_in_expected_file<T>(
         rng: impl rand::Rng,
         expected_filename: &str,
         write: impl FnOnce(Vec<T>, &mut Encoder) -> anyhow::Result<()>,
     ) where
-        parquet::Decoder<File, T>: Iterator<Item = anyhow::Result<Group<T>>>,
-        T: Randomize + PartialEq + Debug + Clone,
+        parquet::Decoder<std::fs::File, T>:
+            Iterator<Item = anyhow::Result<crate::Group<T>>>,
+        T: crate::Randomize + PartialEq + ::core::fmt::Debug + Clone,
     {
+        use std::fs::File;
         // given
         let dir = tempfile::tempdir().unwrap();
         let mut encoder =
