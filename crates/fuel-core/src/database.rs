@@ -233,7 +233,7 @@ impl Database {
             }
             DbType::InMemory => Ok(Database::in_memory()),
             #[cfg(not(feature = "rocksdb"))]
-            _ => Database::in_memory(),
+            _ => Ok(Database::in_memory()),
         }
     }
 

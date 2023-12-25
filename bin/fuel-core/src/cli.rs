@@ -20,6 +20,7 @@ lazy_static::lazy_static! {
 
 pub mod fee_contract;
 pub mod run;
+#[cfg(any(feature = "rocksdb", feature = "rocksdb-production"))]
 pub mod snapshot;
 
 #[derive(Parser, Debug)]
@@ -38,6 +39,7 @@ pub struct Opt {
 #[derive(Debug, Parser)]
 pub enum Fuel {
     Run(run::Command),
+    #[cfg(any(feature = "rocksdb", feature = "rocksdb-production"))]
     Snapshot(snapshot::Command),
     GenerateFeeContract(fee_contract::Command),
 }
@@ -117,6 +119,7 @@ pub async fn run_cli() -> anyhow::Result<()> {
     match opt {
         Ok(opt) => match opt.command {
             Fuel::Run(command) => run::exec(command).await,
+            #[cfg(any(feature = "rocksdb", feature = "rocksdb-production"))]
             Fuel::Snapshot(command) => snapshot::exec(command),
             Fuel::GenerateFeeContract(command) => fee_contract::exec(command).await,
         },
@@ -127,6 +130,7 @@ pub async fn run_cli() -> anyhow::Result<()> {
     }
 }
 
+#[cfg(any(feature = "rocksdb", feature = "rocksdb-production"))]
 #[cfg(test)]
 mod tests {
     use anyhow::anyhow;
@@ -341,6 +345,7 @@ mod tests {
             };
         }
 
+        #[cfg(feature = "parquet")]
         #[test]
         fn can_choose_parquet_encoding() {
             // given
@@ -364,6 +369,7 @@ mod tests {
             };
         }
 
+        #[cfg(feature = "parquet")]
         #[test]
         fn group_size_is_configurable() {
             // given
@@ -389,6 +395,7 @@ mod tests {
             assert_eq!(group_size, 101);
         }
 
+        #[cfg(feature = "parquet")]
         #[test]
         fn group_size_has_a_default() {
             // given
@@ -414,6 +421,7 @@ mod tests {
             assert_eq!(group_size, 10000);
         }
 
+        #[cfg(feature = "parquet")]
         #[test]
         fn can_configure_compression() {
             // given
@@ -437,6 +445,7 @@ mod tests {
             assert_eq!(compression, 7);
         }
 
+        #[cfg(feature = "parquet")]
         #[test]
         fn compression_has_a_default() {
             // given

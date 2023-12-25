@@ -118,7 +118,7 @@ lazy_static = "1.4"
 libp2p-prom-client = { package = "prometheus-client", version = "0.18" }
 once_cell = "1.16"
 prometheus-client = "0.20"
-itertools = "0.10"
+itertools = { version = "0.12", default-features = false }
 insta = "1.8"
 tempfile = "3.4"
 tikv-jemallocator = "0.5"

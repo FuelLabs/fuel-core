@@ -11,7 +11,7 @@ repository = { workspace = true }
 description = "Fuel Chain config types"
 
 [dependencies]
-parquet = { workspace = true, optional = true }
+parquet = { workspace = true, features = ["flate2"], optional = true }
 anyhow = { workspace = true }
 bech32 = { version = "0.9.0", default-features = false }
 fuel-core-storage = { workspace = true }

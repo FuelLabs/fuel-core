@@ -108,14 +108,6 @@ pub enum SubCommands {
     },
 }
 
-#[cfg(not(any(feature = "rocksdb", feature = "rocksdb-production")))]
-pub async fn exec(command: Command) -> anyhow::Result<()> {
-    Err(anyhow::anyhow!(
-        "Rocksdb must be enabled to use the database at {}",
-        command.database_path.display()
-    ))
-}
-
 #[cfg(any(feature = "rocksdb", feature = "rocksdb-production"))]
 pub fn exec(command: Command) -> anyhow::Result<()> {
     let db = open_db(&command.database_path)?;
