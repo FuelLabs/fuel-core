@@ -124,21 +124,6 @@ impl StateConfig {
         })
     }
 
-    #[cfg(all(test, feature = "std"))]
-    pub fn create_config_file(self, path: impl AsRef<Path>) -> anyhow::Result<()> {
-        // TODO add parquet wrtter once fully implemented
-        let mut writer = crate::Encoder::json(path);
-
-        writer.write_coins(self.coins)?;
-        writer.write_messages(self.messages)?;
-        writer.write_contracts(self.contracts)?;
-        writer.write_contract_state(self.contract_state)?;
-        writer.write_contract_balance(self.contract_balance)?;
-        writer.close()?;
-
-        Ok(())
-    }
-
     pub fn local_testnet() -> Self {
         // endow some preset accounts with an initial balance
         tracing::info!("Initial Accounts");
