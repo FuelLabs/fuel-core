@@ -53,22 +53,6 @@ impl TableWithStructure for OwnedTransactions {
     }
 }
 
-#[cfg(test)]
-fn generate_key(rng: &mut impl rand::Rng) -> <OwnedTransactions as Mappable>::Key {
-    let mut bytes = [0u8; INDEX_SIZE];
-    rng.fill(bytes.as_mut());
-    bytes.into()
-}
-
-#[cfg(test)]
-fuel_core_storage::basic_storage_tests!(
-    OwnedTransactions,
-    [1u8; INDEX_SIZE].into(),
-    <OwnedTransactions as Mappable>::Value::default(),
-    <OwnedTransactions as Mappable>::Value::default(),
-    generate_key
-);
-
 /// The table stores the status of each transaction.
 pub struct TransactionStatuses;
 
@@ -88,13 +72,31 @@ impl TableWithStructure for TransactionStatuses {
 }
 
 #[cfg(test)]
-fuel_core_storage::basic_storage_tests!(
-    TransactionStatuses,
-    <TransactionStatuses as Mappable>::Key::default(),
-    TransactionStatus::Submitted {
-        time: fuel_core_types::tai64::Tai64::UNIX_EPOCH,
+mod test {
+    use super::*;
+
+    fn generate_key(rng: &mut impl rand::Rng) -> <OwnedTransactions as Mappable>::Key {
+        let mut bytes = [0u8; INDEX_SIZE];
+        rng.fill(bytes.as_mut());
+        bytes.into()
     }
-);
+
+    fuel_core_storage::basic_storage_tests!(
+        OwnedTransactions,
+        [1u8; INDEX_SIZE].into(),
+        <OwnedTransactions as Mappable>::Value::default(),
+        <OwnedTransactions as Mappable>::Value::default(),
+        generate_key
+    );
+
+    fuel_core_storage::basic_storage_tests!(
+        TransactionStatuses,
+        <TransactionStatuses as Mappable>::Key::default(),
+        TransactionStatus::Submitted {
+            time: fuel_core_types::tai64::Tai64::UNIX_EPOCH,
+        }
+    );
+}
 
 impl Database {
     pub fn all_transactions(
