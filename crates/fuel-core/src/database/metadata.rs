@@ -20,6 +20,8 @@ use fuel_core_storage::{
     StorageMutate,
 };
 
+/// The table that stores all metadata. Each key is a string, while the value depends on the context.
+/// The tables mostly used to store metadata for correct work of the `fuel-core`.
 pub struct MetadataTable<V>(core::marker::PhantomData<V>);
 
 impl<V> Mappable for MetadataTable<V>

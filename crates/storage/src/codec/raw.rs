@@ -1,9 +1,14 @@
+//! The module contains the implementation of the `Raw` codec.
+//! The codec is used for types that are already represented by bytes
+//! and can be deserialized into bytes-based objects.
+
 use crate::codec::{
     Decode,
     Encode,
 };
 use std::borrow::Cow;
 
+/// The codec is used for types that are already represented by bytes.
 pub struct Raw;
 
 impl<K> Encode<K> for Raw

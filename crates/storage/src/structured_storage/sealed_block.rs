@@ -1,3 +1,5 @@
+//! The module contains implementations and tests for the `SealedBlockConsensus` table.
+
 use crate::{
     codec::{
         postcard::Postcard,
@@ -17,6 +19,7 @@ impl TableWithStructure for SealedBlockConsensus {
     }
 }
 
+#[cfg(test)]
 crate::basic_storage_tests!(
     SealedBlockConsensus,
     <SealedBlockConsensus as crate::Mappable>::Key::from([1u8; 32]),

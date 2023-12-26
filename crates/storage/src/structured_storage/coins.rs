@@ -1,3 +1,5 @@
+//! The module contains implementations and tests for the `Coins` table.
+
 use crate::{
     codec::{
         postcard::Postcard,
@@ -17,6 +19,7 @@ impl TableWithStructure for Coins {
     }
 }
 
+#[cfg(test)]
 crate::basic_storage_tests!(
     Coins,
     <Coins as crate::Mappable>::Key::default(),

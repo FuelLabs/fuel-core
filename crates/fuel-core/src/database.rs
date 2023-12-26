@@ -12,6 +12,7 @@ use fuel_core_chain_config::{
     MessageConfig,
 };
 use fuel_core_storage::{
+    codec::Decode,
     iter::IterDirection,
     kv_store::{
         BatchOperations,
@@ -19,7 +20,11 @@ use fuel_core_storage::{
         Value,
         WriteOperation,
     },
-    structured_storage::StructuredStorage,
+    structure::Structure,
+    structured_storage::{
+        StructuredStorage,
+        TableWithStructure,
+    },
     transactional::{
         StorageTransaction,
         Transactional,
@@ -55,11 +60,6 @@ type DatabaseResult<T> = Result<T>;
 // TODO: Extract `Database` and all belongs into `fuel-core-database`.
 #[cfg(feature = "rocksdb")]
 use crate::state::rocks_db::RocksDb;
-use fuel_core_storage::{
-    codec::Decode,
-    structure::Structure,
-    structured_storage::TableWithStructure,
-};
 #[cfg(feature = "rocksdb")]
 use std::path::Path;
 #[cfg(feature = "rocksdb")]

@@ -46,12 +46,18 @@ use fuel_core_storage::{
 };
 use std::borrow::Cow;
 
+/// The trait allows selectively inheriting the implementation of storage traits from `StructuredStorage`
+/// for the `Database`. Not all default implementations of the `StructuredStorage` are suitable
+/// for the `Database`. Sometimes we want to override some of them and add a custom implementation
+/// with additional logic. For example, we want to override the `StorageMutate` trait for the `Messages`
+/// table to also track the owner of messages.
 pub trait UseStructuredImplementation<M>
 where
     M: Mappable,
 {
 }
 
+/// The trait allows to implementation of `UseStructuredImplementation` for the `StructuredStorage` for multiple tables.
 macro_rules! use_structured_implementation {
     ($($m:ty),*) => {
         $(

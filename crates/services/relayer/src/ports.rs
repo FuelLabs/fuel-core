@@ -2,7 +2,6 @@
 
 use async_trait::async_trait;
 use fuel_core_storage::{
-    basic_storage_tests,
     codec::{
         postcard::Postcard,
         primitive::Primitive,
@@ -155,7 +154,8 @@ impl TableWithStructure for RelayerMetadata {
     }
 }
 
-basic_storage_tests!(
+#[cfg(test)]
+fuel_core_storage::basic_storage_tests!(
     RelayerMetadata,
     <RelayerMetadata as Mappable>::Key::default(),
     <RelayerMetadata as Mappable>::Value::default()

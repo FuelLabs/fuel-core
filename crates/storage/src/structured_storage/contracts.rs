@@ -1,3 +1,5 @@
+//! The module contains implementations and tests for the contracts tables.
+
 use crate::{
     codec::{
         postcard::Postcard,
@@ -68,21 +70,26 @@ impl TableWithStructure for ContractsLatestUtxo {
     }
 }
 
-crate::basic_storage_tests!(
-    ContractsRawCode,
-    <ContractsRawCode as crate::Mappable>::Key::from([1u8; 32]),
-    vec![32u8],
-    <ContractsRawCode as crate::Mappable>::OwnedValue::from(vec![32u8])
-);
+#[cfg(test)]
+mod test {
+    use super::*;
 
-crate::basic_storage_tests!(
-    ContractsInfo,
-    <ContractsInfo as crate::Mappable>::Key::from([1u8; 32]),
-    ([2u8; 32].into(), [3u8; 32].into())
-);
+    crate::basic_storage_tests!(
+        ContractsRawCode,
+        <ContractsRawCode as crate::Mappable>::Key::from([1u8; 32]),
+        vec![32u8],
+        <ContractsRawCode as crate::Mappable>::OwnedValue::from(vec![32u8])
+    );
 
-crate::basic_storage_tests!(
-    ContractsLatestUtxo,
-    <ContractsLatestUtxo as crate::Mappable>::Key::from([1u8; 32]),
-    <ContractsLatestUtxo as crate::Mappable>::Value::default()
-);
+    crate::basic_storage_tests!(
+        ContractsInfo,
+        <ContractsInfo as crate::Mappable>::Key::from([1u8; 32]),
+        ([2u8; 32].into(), [3u8; 32].into())
+    );
+
+    crate::basic_storage_tests!(
+        ContractsLatestUtxo,
+        <ContractsLatestUtxo as crate::Mappable>::Key::from([1u8; 32]),
+        <ContractsLatestUtxo as crate::Mappable>::Value::default()
+    );
+}

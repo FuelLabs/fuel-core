@@ -1,7 +1,11 @@
+//! The module contains the implementation of the `Postcard` codec.
+//! The codec is used for types that can be represented by an array.
+//! It includes all primitive types and types that are arrays inside
+//! or could be represented by arrays.
+
 use crate::codec::{
     Decode,
     Encode,
-    Encoder,
 };
 use fuel_core_types::{
     blockchain::primitives::DaBlockHeight,
@@ -11,26 +15,19 @@ use fuel_core_types::{
     },
     fuel_types::BlockHeight,
 };
-use std::borrow::Cow;
 
+/// The codec is used for types that can be represented by an array.
+/// The `SIZE` const specifies the size of the array used to represent the type.
 pub struct Primitive<const SIZE: usize>;
-
-pub struct PrimitiveEncoder<const SIZE: usize>([u8; SIZE]);
-
-impl<const SIZE: usize> Encoder for PrimitiveEncoder<SIZE> {
-    fn as_bytes(&self) -> Cow<[u8]> {
-        Cow::Borrowed(&self.0[..])
-    }
-}
 
 macro_rules! impl_encode {
     ($($ty:ty, $size:expr),*) => {
         $(
             impl Encode<$ty> for Primitive<{ $size }> {
-                type Encoder<'a> = PrimitiveEncoder<{ $size }>;
+                type Encoder<'a> = [u8; { $size }];
 
                 fn encode(t: &$ty) -> Self::Encoder<'_> {
-                    PrimitiveEncoder(t.to_be_bytes())
+                    t.to_be_bytes()
                 }
             }
         )*
@@ -78,6 +75,7 @@ impl Decode<DaBlockHeight> for Primitive<8> {
     }
 }
 
+/// Converts the `UtxoId` into an array of bytes.
 pub fn utxo_id_to_bytes(utxo_id: &UtxoId) -> [u8; TxId::LEN + 1] {
     let mut default = [0; TxId::LEN + 1];
     default[0..TxId::LEN].copy_from_slice(utxo_id.tx_id().as_ref());
@@ -86,10 +84,10 @@ pub fn utxo_id_to_bytes(utxo_id: &UtxoId) -> [u8; TxId::LEN + 1] {
 }
 
 impl Encode<UtxoId> for Primitive<{ TxId::LEN + 1 }> {
-    type Encoder<'a> = PrimitiveEncoder<{ TxId::LEN + 1 }>;
+    type Encoder<'a> = [u8; TxId::LEN + 1];
 
     fn encode(t: &UtxoId) -> Self::Encoder<'_> {
-        PrimitiveEncoder(utxo_id_to_bytes(t))
+        utxo_id_to_bytes(t)
     }
 }
 

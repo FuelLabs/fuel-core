@@ -4,7 +4,6 @@ use crate::database::{
     Error as DatabaseError,
 };
 use fuel_core_storage::{
-    basic_storage_tests,
     codec::{
         primitive::Primitive,
         raw::Raw,
@@ -71,7 +70,8 @@ impl TableWithStructure for FuelBlockSecondaryKeyBlockHeights {
     }
 }
 
-basic_storage_tests!(
+#[cfg(test)]
+fuel_core_storage::basic_storage_tests!(
     FuelBlockSecondaryKeyBlockHeights,
     <FuelBlockSecondaryKeyBlockHeights as Mappable>::Key::default(),
     <FuelBlockSecondaryKeyBlockHeights as Mappable>::Value::default()

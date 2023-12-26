@@ -60,7 +60,7 @@ impl Database {
                     Ok((*key.state_key(), value))
                 })
                 .filter(|val| val.is_ok())
-                .collect::<StorageResult<Vec<(Bytes32, Bytes32)>>>()?,
+                .collect::<StorageResult<Vec<_>>>()?,
         );
 
         let balances = Some(
@@ -71,7 +71,7 @@ impl Database {
                     Ok((*key.asset_id(), value))
                 })
                 .filter(|val| val.is_ok())
-                .collect::<StorageResult<Vec<(AssetId, u64)>>>()?,
+                .collect::<StorageResult<Vec<_>>>()?,
         );
 
         Ok(ContractConfig {

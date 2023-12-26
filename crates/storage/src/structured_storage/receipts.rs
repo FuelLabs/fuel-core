@@ -1,3 +1,5 @@
+//! The module contains implementations and tests for the `Receipts` table.
+
 use crate::{
     codec::{
         postcard::Postcard,
@@ -17,6 +19,7 @@ impl TableWithStructure for Receipts {
     }
 }
 
+#[cfg(test)]
 crate::basic_storage_tests!(
     Receipts,
     <Receipts as crate::Mappable>::Key::from([1u8; 32]),

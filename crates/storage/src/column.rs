@@ -1,5 +1,10 @@
+//! The module defines the `Column` and default tables used by the current `fuel-core` codebase.
+//! In the future, the `Column` enum should contain only the required tables for the execution.
+//! All other tables should live in the downstream creates in the place where they are really used.
+
 use crate::kv_store::StorageColumn;
 
+/// Helper macro to generate the `Column` enum and its implementation for `as_u32` method.
 macro_rules! column_definition {
     ($(#[$meta:meta])* $vis:vis enum $name:ident {
         $(#[$complex_meta:meta])* $complex_variants:ident($body:ident),
@@ -132,6 +137,8 @@ impl StorageColumn for Column {
     }
 }
 
+/// The foreign column is not related to the required tables.
+/// It can be used to extend the database with additional tables.
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub struct ForeignColumn {
     id: u32,
@@ -158,6 +165,9 @@ impl ForeignColumn {
     }
 }
 
+/// It is required to implement iteration over the variants of the enum.
+/// The `ForeignColumn` is not iterable, so we implement the `Sequence` trait
+/// to do nothing.
 impl enum_iterator::Sequence for ForeignColumn {
     const CARDINALITY: usize = 0;
 

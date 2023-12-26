@@ -1,3 +1,8 @@
+//! This module implements the plain structure for the storage.
+//! The plain structure is the simplest one. It doesn't maintain any additional data structures
+//! and doesn't provide any additional functionality. It is just a key-value store that encodes/decodes
+//! the key and value and puts/takes them into/from the storage.
+
 use crate::{
     codec::{
         Decode,
@@ -11,8 +16,8 @@ use crate::{
         WriteOperation,
     },
     structure::{
-        BatchStructure,
         Structure,
+        SupportsBatching,
     },
     structured_storage::TableWithStructure,
     Error as StorageError,
@@ -20,6 +25,8 @@ use crate::{
     Result as StorageResult,
 };
 
+/// The type that represents the plain structure.
+/// The `KeyCodec` and `ValueCodec` are used to encode/decode the key and value.
 pub struct Plain<KeyCodec, ValueCodec> {
     _marker: core::marker::PhantomData<(KeyCodec, ValueCodec)>,
 }
@@ -85,7 +92,7 @@ where
     }
 }
 
-impl<M, S, KeyCodec, ValueCodec> BatchStructure<M, S> for Plain<KeyCodec, ValueCodec>
+impl<M, S, KeyCodec, ValueCodec> SupportsBatching<M, S> for Plain<KeyCodec, ValueCodec>
 where
     S: BatchOperations<Column = Column>,
     M: Mappable + TableWithStructure<Structure = Plain<KeyCodec, ValueCodec>>,

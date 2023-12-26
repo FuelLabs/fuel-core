@@ -7,7 +7,7 @@
 #![deny(clippy::arithmetic_side_effects)]
 #![deny(clippy::cast_possible_truncation)]
 #![deny(unused_crate_dependencies)]
-// #![deny(missing_docs)]
+#![deny(missing_docs)]
 #![deny(warnings)]
 
 use core::array::TryFromSliceError;
@@ -37,7 +37,11 @@ pub use fuel_vm_private::storage::{
     ContractsAssetKey,
     ContractsStateKey,
 };
+#[doc(hidden)]
 pub use paste;
+#[cfg(feature = "test-helpers")]
+#[doc(hidden)]
+pub use rand;
 
 /// The storage result alias.
 pub type Result<T> = core::result::Result<T, Error>;
@@ -112,6 +116,8 @@ impl<T> IsNotFound for Result<T> {
     }
 }
 
+/// The traits allow work with the storage in batches.
+/// Some implementations can perform batch operations faster than one by one.
 pub trait StorageBatchMutate<Type: Mappable>: StorageMutate<Type> {
     /// Initialize the storage with batch insertion. This method is more performant than
     /// [`Self::insert_batch`] in some case.

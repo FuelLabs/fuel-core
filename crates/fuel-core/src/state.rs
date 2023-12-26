@@ -22,7 +22,12 @@ use std::{
     sync::Arc,
 };
 
+pub mod in_memory;
+#[cfg(feature = "rocksdb")]
+pub mod rocks_db;
+
 type DataSourceInner = Arc<dyn TransactableStorage<Column = Column>>;
+
 #[derive(Clone, Debug)]
 pub struct DataSource(DataSourceInner);
 
@@ -70,7 +75,3 @@ pub trait TransactableStorage:
 
     fn flush(&self) -> DatabaseResult<()>;
 }
-
-pub mod in_memory;
-#[cfg(feature = "rocksdb")]
-pub mod rocks_db;

@@ -1,3 +1,8 @@
+//! The module defines the `Sparse` structure for the storage.
+//! The `Sparse` structure implements the sparse merkle tree on top of the storage.
+//! It is like a [`Plain`](super::plain::Plain) structure that builds the sparse
+//! merkle tree parallel to the normal storage and maintains it.
+
 use crate::{
     codec::{
         Decode,
@@ -12,8 +17,8 @@ use crate::{
         WriteOperation,
     },
     structure::{
-        BatchStructure,
         Structure,
+        SupportsBatching,
     },
     structured_storage::{
         StructuredStorage,
@@ -40,13 +45,30 @@ use fuel_core_types::fuel_merkle::{
 use itertools::Itertools;
 use std::borrow::Cow;
 
-pub trait MetadataKey {
+/// The trait that allows to convert the key of the table into the key of the metadata table.
+/// If the key comprises several entities, it is possible to build a Merkle tree over different primary keys.
+/// The trait defines the key over which to build an SMT.
+pub trait PrimaryKey {
+    /// The storage key of the table.
     type InputKey: ?Sized;
+    /// The extracted primary key.
     type OutputKey: ?Sized;
 
-    fn metadata_key(key: &Self::InputKey) -> &Self::OutputKey;
+    /// Converts the key of the table into the primary key of the metadata table.
+    fn primary_key(key: &Self::InputKey) -> &Self::OutputKey;
 }
 
+/// The `Sparse` structure builds the storage as a [`Plain`](super::plain::Plain)
+/// structure and maintains the sparse merkle tree by the `Metadata` and `Nodes` tables.
+///
+/// It uses the `KeyCodec` and `ValueCodec` to encode/decode the key and value in the
+/// same way as a plain structure.
+///
+/// The `Metadata` table stores the metadata of the tree(like a root of the tree),
+/// and the `Nodes` table stores the tree's nodes. The SMT is built over the encoded
+/// keys and values using the same encoding as for main key-value pairs.
+///
+/// The `KeyConvertor` is used to convert the key of the table into the primary key of the metadata table.
 pub struct Sparse<KeyCodec, ValueCodec, Metadata, Nodes, KeyConvertor> {
     _marker:
         core::marker::PhantomData<(KeyCodec, ValueCodec, Metadata, Nodes, KeyConvertor)>,
@@ -72,14 +94,14 @@ where
         K: ?Sized,
         for<'a> StructuredStorage<&'a mut S>: StorageMutate<Metadata, Error = StorageError>
             + StorageMutate<Nodes, Error = StorageError>,
-        KeyConvertor: MetadataKey<InputKey = K, OutputKey = Metadata::Key>,
+        KeyConvertor: PrimaryKey<InputKey = K, OutputKey = Metadata::Key>,
     {
         let mut storage = StructuredStorage::new(storage);
-        let metadata_key = KeyConvertor::metadata_key(key);
-        // Get latest metadata entry for this `metadata_key`
+        let primary_key = KeyConvertor::primary_key(key);
+        // Get latest metadata entry for this `primary_key`
         let prev_metadata: Cow<SparseMerkleMetadata> = storage
             .storage::<Metadata>()
-            .get(metadata_key)?
+            .get(primary_key)?
             .unwrap_or_default();
 
         let root = prev_metadata.root;
@@ -94,7 +116,7 @@ where
         let metadata = SparseMerkleMetadata { root };
         storage
             .storage::<Metadata>()
-            .insert(metadata_key, &metadata)?;
+            .insert(primary_key, &metadata)?;
         Ok(())
     }
 
@@ -107,13 +129,13 @@ where
         K: ?Sized,
         for<'a> StructuredStorage<&'a mut S>: StorageMutate<Metadata, Error = StorageError>
             + StorageMutate<Nodes, Error = StorageError>,
-        KeyConvertor: MetadataKey<InputKey = K, OutputKey = Metadata::Key>,
+        KeyConvertor: PrimaryKey<InputKey = K, OutputKey = Metadata::Key>,
     {
         let mut storage = StructuredStorage::new(storage);
-        let metadata_key = KeyConvertor::metadata_key(key);
-        // Get latest metadata entry for this `metadata_key`
+        let primary_key = KeyConvertor::primary_key(key);
+        // Get latest metadata entry for this `primary_key`
         let prev_metadata: Option<Cow<SparseMerkleMetadata>> =
-            storage.storage::<Metadata>().get(metadata_key)?;
+            storage.storage::<Metadata>().get(primary_key)?;
 
         if let Some(prev_metadata) = prev_metadata {
             let root = prev_metadata.root;
@@ -127,13 +149,13 @@ where
             let root = tree.root();
             if &root == MerkleTree::<Nodes, S>::empty_root() {
                 // The tree is now empty; remove the metadata
-                storage.storage::<Metadata>().remove(metadata_key)?;
+                storage.storage::<Metadata>().remove(primary_key)?;
             } else {
                 // Generate new metadata for the updated tree
                 let metadata = SparseMerkleMetadata { root };
                 storage
                     .storage::<Metadata>()
-                    .insert(metadata_key, &metadata)?;
+                    .insert(primary_key, &metadata)?;
             }
         }
 
@@ -154,7 +176,7 @@ where
         Value = sparse::Primitive,
         OwnedValue = sparse::Primitive,
     >,
-    KeyConvertor: MetadataKey<InputKey = M::Key, OutputKey = Metadata::Key>,
+    KeyConvertor: PrimaryKey<InputKey = M::Key, OutputKey = Metadata::Key>,
     for<'a> StructuredStorage<&'a mut S>: StorageMutate<Metadata, Error = StorageError>
         + StorageMutate<Nodes, Error = StorageError>,
 {
@@ -248,7 +270,7 @@ type NodeKeyCodec<S, Nodes> =
 type NodeValueCodec<S, Nodes> =
     <<Nodes as TableWithStructure>::Structure as Structure<Nodes, S>>::ValueCodec;
 
-impl<M, S, KeyCodec, ValueCodec, Metadata, Nodes, KeyConvertor> BatchStructure<M, S>
+impl<M, S, KeyCodec, ValueCodec, Metadata, Nodes, KeyConvertor> SupportsBatching<M, S>
     for Sparse<KeyCodec, ValueCodec, Metadata, Nodes, KeyConvertor>
 where
     S: BatchOperations<Column = Column>,
@@ -264,7 +286,7 @@ where
             Value = sparse::Primitive,
             OwnedValue = sparse::Primitive,
         > + TableWithStructure,
-    KeyConvertor: MetadataKey<InputKey = M::Key, OutputKey = Metadata::Key>,
+    KeyConvertor: PrimaryKey<InputKey = M::Key, OutputKey = Metadata::Key>,
     Nodes::Structure: Structure<Nodes, S>,
     for<'a> StructuredStorage<&'a mut S>: StorageMutate<M, Error = StorageError>
         + StorageMutate<Metadata, Error = StorageError>
@@ -277,16 +299,16 @@ where
     ) -> StorageResult<()> {
         let mut set = set.peekable();
 
-        let metadata_key;
+        let primary_key;
         if let Some((key, _)) = set.peek() {
-            metadata_key = KeyConvertor::metadata_key(*key);
+            primary_key = KeyConvertor::primary_key(*key);
         } else {
             return Ok(())
         }
 
         let mut storage = StructuredStorage::new(storage);
 
-        if storage.storage::<Metadata>().contains_key(metadata_key)? {
+        if storage.storage::<Metadata>().contains_key(primary_key)? {
             return Err(anyhow::anyhow!(
                 "The {} is already initialized",
                 M::column().name()
@@ -326,7 +348,7 @@ where
         let metadata = SparseMerkleMetadata { root };
         storage
             .storage::<Metadata>()
-            .insert(metadata_key, &metadata)?;
+            .insert(primary_key, &metadata)?;
 
         Ok(())
     }
@@ -338,9 +360,9 @@ where
     ) -> StorageResult<()> {
         let mut set = set.peekable();
 
-        let metadata_key;
+        let primary_key;
         if let Some((key, _)) = set.peek() {
-            metadata_key = KeyConvertor::metadata_key(*key);
+            primary_key = KeyConvertor::primary_key(*key);
         } else {
             return Ok(())
         }
@@ -348,7 +370,7 @@ where
         let mut storage = StructuredStorage::new(storage);
         let prev_metadata: Cow<SparseMerkleMetadata> = storage
             .storage::<Metadata>()
-            .get(metadata_key)?
+            .get(primary_key)?
             .unwrap_or_default();
 
         let root = prev_metadata.root;
@@ -379,7 +401,7 @@ where
         let metadata = SparseMerkleMetadata { root };
         storage
             .storage::<Metadata>()
-            .insert(metadata_key, &metadata)?;
+            .insert(primary_key, &metadata)?;
 
         Ok(())
     }
@@ -391,9 +413,9 @@ where
     ) -> StorageResult<()> {
         let mut set = set.peekable();
 
-        let metadata_key;
+        let primary_key;
         if let Some(key) = set.peek() {
-            metadata_key = KeyConvertor::metadata_key(*key);
+            primary_key = KeyConvertor::primary_key(*key);
         } else {
             return Ok(())
         }
@@ -401,7 +423,7 @@ where
         let mut storage = StructuredStorage::new(storage);
         let prev_metadata: Cow<SparseMerkleMetadata> = storage
             .storage::<Metadata>()
-            .get(metadata_key)?
+            .get(primary_key)?
             .unwrap_or_default();
 
         let root = prev_metadata.root;
@@ -426,13 +448,13 @@ where
 
         if &root == MerkleTree::<Nodes, S>::empty_root() {
             // The tree is now empty; remove the metadata
-            storage.storage::<Metadata>().remove(metadata_key)?;
+            storage.storage::<Metadata>().remove(primary_key)?;
         } else {
             // Generate new metadata for the updated tree
             let metadata = SparseMerkleMetadata { root };
             storage
                 .storage::<Metadata>()
-                .insert(metadata_key, &metadata)?;
+                .insert(primary_key, &metadata)?;
         }
 
         Ok(())

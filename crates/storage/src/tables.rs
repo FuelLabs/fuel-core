@@ -122,6 +122,7 @@ impl Mappable for Transactions {
     type OwnedValue = Transaction;
 }
 
+/// The module contains definition of merkle-related tables.
 pub mod merkle {
     use crate::{
         Mappable,

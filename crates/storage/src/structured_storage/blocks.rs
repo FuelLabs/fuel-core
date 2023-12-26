@@ -1,3 +1,5 @@
+//! The module contains implementations and tests for the `FuelBlocks` table.
+
 use crate::{
     codec::{
         postcard::Postcard,
@@ -17,6 +19,7 @@ impl TableWithStructure for FuelBlocks {
     }
 }
 
+#[cfg(test)]
 crate::basic_storage_tests!(
     FuelBlocks,
     <FuelBlocks as crate::Mappable>::Key::default(),

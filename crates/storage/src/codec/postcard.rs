@@ -1,9 +1,16 @@
+//! The module contains the implementation of the `Postcard` codec.
+//! Any type that implements `serde::Serialize` and `serde::Deserialize`
+//! can use the `Postcard` codec to be encoded/decoded into/from bytes.
+//! The `serde` serialization and deserialization add their own overhead,
+//! so this codec shouldn't be used for simple types.
+
 use crate::codec::{
     Decode,
     Encode,
 };
 use std::borrow::Cow;
 
+/// The codec is used to serialized/deserialized types that supports `serde::Serialize` and `serde::Deserialize`.
 pub struct Postcard;
 
 impl<K> Encode<K> for Postcard

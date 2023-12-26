@@ -1,3 +1,5 @@
+//! The module contains implementations and tests for the `Transactions` table.
+
 use crate::{
     codec::{
         postcard::Postcard,
@@ -17,6 +19,7 @@ impl TableWithStructure for Transactions {
     }
 }
 
+#[cfg(test)]
 crate::basic_storage_tests!(
     Transactions,
     <Transactions as crate::Mappable>::Key::from([1u8; 32]),

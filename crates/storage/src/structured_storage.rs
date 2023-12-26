@@ -1,3 +1,6 @@
+//! The module contains the [`StructuredStorage`] wrapper around the key-value storage
+//! that implements the storage traits for the tables with structure.
+
 use crate::{
     column::Column,
     kv_store::{
@@ -5,8 +8,8 @@ use crate::{
         KeyValueStore,
     },
     structure::{
-        BatchStructure,
         Structure,
+        SupportsBatching,
     },
     Error as StorageError,
     Mappable,
@@ -28,18 +31,26 @@ pub mod sealed_block;
 pub mod state;
 pub mod transactions;
 
+/// The table can implement this trait to indicate that it has a structure.
+/// It inherits the default implementation of the storage traits through the [`StructuredStorage`]
+/// for the table.
 pub trait TableWithStructure: Mappable + Sized {
+    /// The type of the structure used by the table.
     type Structure;
 
+    /// The column occupied by the table.
     fn column() -> Column;
 }
 
+/// The wrapper around the key-value storage that implements the storage traits for the tables
+/// with structure.
 #[derive(Clone, Debug)]
 pub struct StructuredStorage<S> {
     pub(crate) storage: S,
 }
 
 impl<S> StructuredStorage<S> {
+    /// Creates a new instance of the structured storage.
     pub fn new(storage: S) -> Self {
         Self { storage }
     }
@@ -118,7 +129,7 @@ impl<S, M> StorageBatchMutate<M> for StructuredStorage<S>
 where
     S: BatchOperations<Column = Column>,
     M: Mappable + TableWithStructure,
-    M::Structure: BatchStructure<M, S>,
+    M::Structure: SupportsBatching<M, S>,
 {
     fn init_storage(
         &mut self,
@@ -142,8 +153,11 @@ where
     }
 }
 
+/// The module that provides helper macros for testing the structured storage.
+#[cfg(feature = "test-helpers")]
 pub mod test {
-    use crate::{
+    use crate as fuel_core_storage;
+    use fuel_core_storage::{
         column::Column,
         kv_store::{
             BatchOperations,
@@ -159,6 +173,7 @@ pub mod test {
 
     type Storage = RefCell<HashMap<(Column, Vec<u8>), Vec<u8>>>;
 
+    /// The in-memory storage for testing purposes.
     #[derive(Default, Debug, PartialEq, Eq)]
     pub struct InMemoryStorage {
         storage: Storage,
@@ -196,6 +211,7 @@ pub mod test {
 
     impl BatchOperations for InMemoryStorage {}
 
+    /// The macro that generates basic storage tests for the table with [`InMemoryStorage`].
     #[macro_export]
     macro_rules! basic_storage_tests {
         ($table:ident, $key:expr, $value_insert:expr, $value_return:expr, $random_key:expr) => {
@@ -213,6 +229,7 @@ pub mod test {
                 };
                 use $crate::StorageInspect;
                 use $crate::StorageMutate;
+                use $crate::rand;
 
                 #[allow(dead_code)]
                 fn random<T, R>(rng: &mut R) -> T
@@ -304,7 +321,7 @@ pub mod test {
 
                 #[test]
                 fn batch_mutate_works() {
-                    use rand::{
+                    use $crate::rand::{
                         Rng,
                         rngs::StdRng,
                         RngCore,
@@ -370,6 +387,7 @@ pub mod test {
         };
     }
 
+    /// The macro that generates SMT storage tests for the table with [`InMemoryStorage`].
     #[macro_export]
     macro_rules! root_storage_tests {
         ($table:ident, $metadata_table:ident, $current_key:expr, $foreign_key:expr, $generate_key:ident, $generate_value:ident) => {
@@ -384,7 +402,7 @@ pub mod test {
                     },
                     StorageAsMut,
                 };
-                use rand::{
+                use $crate::rand::{
                     rngs::StdRng,
                     SeedableRng,
                 };
@@ -503,8 +521,8 @@ pub mod test {
 
                 #[test]
                 fn updating_foreign_metadata_does_not_affect_the_given_metadata_insertion() {
-                    let given_metadata_key = $current_key;
-                    let foreign_metadata_key = $foreign_key;
+                    let given_primary_key = $current_key;
+                    let foreign_primary_key = $foreign_key;
 
                     let mut storage = InMemoryStorage::default();
                     let mut structured_storage = StructuredStorage::new(&mut storage);
@@ -514,8 +532,8 @@ pub mod test {
                     let state_value = $generate_value(rng);
 
                     // Given
-                    let given_key = $generate_key(&given_metadata_key, rng);
-                    let foreign_key = $generate_key(&foreign_metadata_key, rng);
+                    let given_key = $generate_key(&given_primary_key, rng);
+                    let foreign_key = $generate_key(&foreign_primary_key, rng);
                     structured_storage
                         .storage_as_mut::<$table>()
                         .insert(&given_key, &state_value)

@@ -1,3 +1,5 @@
+//! The module contains implementations and tests for the messages tables.
+
 use crate::{
     codec::{
         postcard::Postcard,
@@ -28,14 +30,19 @@ impl TableWithStructure for SpentMessages {
     }
 }
 
-crate::basic_storage_tests!(
-    Messages,
-    <Messages as crate::Mappable>::Key::default(),
-    <Messages as crate::Mappable>::Value::default()
-);
+#[cfg(test)]
+mod test {
+    use super::*;
 
-crate::basic_storage_tests!(
-    SpentMessages,
-    <SpentMessages as crate::Mappable>::Key::default(),
-    <SpentMessages as crate::Mappable>::Value::default()
-);
+    crate::basic_storage_tests!(
+        Messages,
+        <Messages as crate::Mappable>::Key::default(),
+        <Messages as crate::Mappable>::Value::default()
+    );
+
+    crate::basic_storage_tests!(
+        SpentMessages,
+        <SpentMessages as crate::Mappable>::Key::default(),
+        <SpentMessages as crate::Mappable>::Value::default()
+    );
+}

@@ -1,3 +1,5 @@
+//! The module contains implementations and tests for the `ContractsState` table.
+
 use crate::{
     codec::{
         manual::Manual,
@@ -5,7 +7,7 @@ use crate::{
     },
     column::Column,
     structure::sparse::{
-        MetadataKey,
+        PrimaryKey,
         Sparse,
     },
     structured_storage::TableWithStructure,
@@ -20,13 +22,15 @@ use crate::{
 };
 use fuel_core_types::fuel_vm::ContractsStateKey;
 
+/// The key convertor used to convert the key from the `ContractsState` table
+/// to the key of the `ContractsStateMerkleMetadata` table.
 pub struct KeyConvertor;
 
-impl MetadataKey for KeyConvertor {
+impl PrimaryKey for KeyConvertor {
     type InputKey = <ContractsState as Mappable>::Key;
     type OutputKey = <ContractsStateMerkleMetadata as Mappable>::Key;
 
-    fn metadata_key(key: &Self::InputKey) -> &Self::OutputKey {
+    fn primary_key(key: &Self::InputKey) -> &Self::OutputKey {
         key.contract_id()
     }
 }
@@ -46,42 +50,44 @@ impl TableWithStructure for ContractsState {
 }
 
 #[cfg(test)]
-fn generate_key(
-    metadata_key: &<ContractsStateMerkleMetadata as Mappable>::Key,
-    rng: &mut impl rand::Rng,
-) -> <ContractsState as Mappable>::Key {
-    let mut bytes = [0u8; 32];
-    rng.fill(bytes.as_mut());
-    <ContractsState as Mappable>::Key::new(metadata_key, &bytes.into())
+mod test {
+    use super::*;
+
+    fn generate_key(
+        primary_key: &<ContractsStateMerkleMetadata as Mappable>::Key,
+        rng: &mut impl rand::Rng,
+    ) -> <ContractsState as Mappable>::Key {
+        let mut bytes = [0u8; 32];
+        rng.fill(bytes.as_mut());
+        <ContractsState as Mappable>::Key::new(primary_key, &bytes.into())
+    }
+
+    fn generate_key_for_same_contract(
+        rng: &mut impl rand::Rng,
+    ) -> <ContractsState as Mappable>::Key {
+        generate_key(&fuel_core_types::fuel_tx::ContractId::zeroed(), rng)
+    }
+
+    crate::basic_storage_tests!(
+        ContractsState,
+        <ContractsState as Mappable>::Key::default(),
+        <ContractsState as Mappable>::Value::zeroed(),
+        <ContractsState as Mappable>::Value::zeroed(),
+        generate_key_for_same_contract
+    );
+
+    fn generate_value(rng: &mut impl rand::Rng) -> <ContractsState as Mappable>::Value {
+        let mut bytes = [0u8; 32];
+        rng.fill(bytes.as_mut());
+        bytes.into()
+    }
+
+    crate::root_storage_tests!(
+        ContractsState,
+        ContractsStateMerkleMetadata,
+        <ContractsStateMerkleMetadata as Mappable>::Key::from([1u8; 32]),
+        <ContractsStateMerkleMetadata as Mappable>::Key::from([2u8; 32]),
+        generate_key,
+        generate_value
+    );
 }
-
-#[cfg(test)]
-fn generate_key_for_same_contract(
-    rng: &mut impl rand::Rng,
-) -> <ContractsState as Mappable>::Key {
-    generate_key(&fuel_core_types::fuel_tx::ContractId::zeroed(), rng)
-}
-
-crate::basic_storage_tests!(
-    ContractsState,
-    <ContractsState as Mappable>::Key::default(),
-    <ContractsState as Mappable>::Value::zeroed(),
-    <ContractsState as Mappable>::Value::zeroed(),
-    generate_key_for_same_contract
-);
-
-#[cfg(test)]
-fn generate_value(rng: &mut impl rand::Rng) -> <ContractsState as Mappable>::Value {
-    let mut bytes = [0u8; 32];
-    rng.fill(bytes.as_mut());
-    bytes.into()
-}
-
-crate::root_storage_tests!(
-    ContractsState,
-    ContractsStateMerkleMetadata,
-    <ContractsStateMerkleMetadata as Mappable>::Key::from([1u8; 32]),
-    <ContractsStateMerkleMetadata as Mappable>::Key::from([2u8; 32]),
-    generate_key,
-    generate_value
-);

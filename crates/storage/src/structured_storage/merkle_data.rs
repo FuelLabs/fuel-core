@@ -1,3 +1,5 @@
+//! The module contains implementations and tests for merkle related tables.
+
 use crate::{
     codec::{
         postcard::Postcard,
@@ -30,7 +32,8 @@ macro_rules! merkle_table {
             }
         }
 
-        crate::basic_storage_tests!(
+        #[cfg(test)]
+        $crate::basic_storage_tests!(
             $table,
             <$table as $crate::Mappable>::Key::default(),
             <$table as $crate::Mappable>::Value::default()

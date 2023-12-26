@@ -4,7 +4,6 @@ use crate::database::{
 };
 use fuel_core_chain_config::CoinConfig;
 use fuel_core_storage::{
-    basic_storage_tests,
     codec::{
         postcard::Postcard,
         primitive::utxo_id_to_bytes,
@@ -68,7 +67,8 @@ fn generate_key(rng: &mut impl rand::Rng) -> <OwnedCoins as Mappable>::Key {
     bytes
 }
 
-basic_storage_tests!(
+#[cfg(test)]
+fuel_core_storage::basic_storage_tests!(
     OwnedCoins,
     [0u8; 65],
     <OwnedCoins as Mappable>::Value::default(),

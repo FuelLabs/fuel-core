@@ -2,7 +2,10 @@ use crate::database::{
     Column,
     Database,
 };
-use core::mem::size_of;
+use core::{
+    array::TryFromSliceError,
+    mem::size_of,
+};
 use fuel_core_storage::{
     codec::{
         manual::Manual,
@@ -31,8 +34,8 @@ use fuel_core_types::{
     },
     services::txpool::TransactionStatus,
 };
-use std::array::TryFromSliceError;
 
+/// Teh tables allows to iterate over all transactions owned by an address.
 pub struct OwnedTransactions;
 
 impl Mappable for OwnedTransactions {
@@ -57,6 +60,7 @@ fn generate_key(rng: &mut impl rand::Rng) -> <OwnedTransactions as Mappable>::Ke
     bytes.into()
 }
 
+#[cfg(test)]
 fuel_core_storage::basic_storage_tests!(
     OwnedTransactions,
     [1u8; INDEX_SIZE].into(),
@@ -65,6 +69,7 @@ fuel_core_storage::basic_storage_tests!(
     generate_key
 );
 
+/// The table stores the status of each transaction.
 pub struct TransactionStatuses;
 
 impl Mappable for TransactionStatuses {
@@ -82,6 +87,7 @@ impl TableWithStructure for TransactionStatuses {
     }
 }
 
+#[cfg(test)]
 fuel_core_storage::basic_storage_tests!(
     TransactionStatuses,
     <TransactionStatuses as Mappable>::Key::default(),
