@@ -10,7 +10,7 @@
 #![deny(missing_docs)]
 #![deny(warnings)]
 
-use std::array::TryFromSliceError;
+use core::array::TryFromSliceError;
 
 use fuel_core_types::services::executor::Error as ExecutorError;
 

@@ -36,6 +36,7 @@ use fuel_core::{
         secrecy::Secret,
     },
 };
+use fuel_core_chain_config::MAX_GROUP_SIZE;
 use pyroscope::{
     pyroscope::PyroscopeAgentRunning,
     PyroscopeAgent,
@@ -257,8 +258,7 @@ impl Command {
                 (chain_conf, state_config)
             }
         };
-
-        let state_reader = StateReader::in_memory(state_config.clone(), 1);
+        let state_reader = StateReader::in_memory(state_config.clone(), MAX_GROUP_SIZE);
 
         #[cfg(feature = "relayer")]
         let relayer_cfg = relayer_args.into_config();

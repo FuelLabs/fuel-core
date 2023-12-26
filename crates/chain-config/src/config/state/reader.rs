@@ -1,14 +1,5 @@
-use std::{
-    fmt::Debug,
-    fs::File,
-    io::Read,
-    path::{
-        Path,
-        PathBuf,
-    },
-};
+use std::fmt::Debug;
 
-use super::parquet;
 use itertools::Itertools;
 
 use crate::{
@@ -29,16 +20,18 @@ pub enum IntoIter<T> {
     InMemory {
         groups: std::vec::IntoIter<GroupResult<T>>,
     },
+    #[cfg(feature = "parquet")]
     Parquet {
-        decoder: parquet::Decoder<File, T>,
+        decoder: super::parquet::Decoder<std::fs::File, T>,
     },
 }
 
+#[cfg(feature = "parquet")]
 impl<T> Iterator for IntoIter<T>
 where
-    parquet::Decoder<File, T>: Iterator<Item = GroupResult<T>>,
+    super::parquet::Decoder<std::fs::File, T>: Iterator<Item = GroupResult<T>>,
 {
-    type Item = GroupResult<T>;
+    type Item = super::GroupResult<T>;
 
     fn next(&mut self) -> Option<Self::Item> {
         match self {
@@ -47,12 +40,21 @@ where
         }
     }
 }
+#[cfg(not(feature = "parquet"))]
+impl<T> Iterator for IntoIter<T> {
+    type Item = GroupResult<T>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        match self {
+            IntoIter::InMemory { groups } => groups.next(),
+        }
+    }
+}
 
 #[derive(Clone, Debug)]
 enum DataSource {
-    Parquet {
-        snapshot_dir: PathBuf,
-    },
+    #[cfg(feature = "parquet")]
+    Parquet { snapshot_dir: std::path::PathBuf },
     InMemory {
         state: StateConfig,
         group_size: usize,
@@ -65,19 +67,16 @@ pub struct StateReader {
 }
 
 impl StateReader {
+    #[cfg(feature = "std")]
     pub fn json(
-        snapshot_dir: impl AsRef<Path>,
+        snapshot_dir: impl AsRef<std::path::Path>,
         group_size: usize,
     ) -> anyhow::Result<Self> {
         let path = snapshot_dir.as_ref().join("state_config.json");
 
-        // This is a workaround until the Deserialize implementation is fixed to not require a
-        // borrowed string over in fuel-vm.
-        let mut contents = String::new();
         let mut file = std::fs::File::open(path)?;
-        file.read_to_string(&mut contents)?;
 
-        let state = serde_json::from_str(&contents)?;
+        let state = serde_json::from_reader(&mut file)?;
 
         Ok(Self::in_memory(state, group_size))
     }
@@ -88,7 +87,8 @@ impl StateReader {
         }
     }
 
-    pub fn parquet(snapshot_dir: impl Into<PathBuf>) -> Self {
+    #[cfg(feature = "parquet")]
+    pub fn parquet(snapshot_dir: impl Into<std::path::PathBuf>) -> Self {
         Self {
             data_source: DataSource::Parquet {
                 snapshot_dir: snapshot_dir.into(),
@@ -96,54 +96,80 @@ impl StateReader {
         }
     }
 
+    #[cfg(feature = "std")]
     pub fn detect_encoding(
-        snapshot_dir: impl AsRef<Path>,
+        snapshot_dir: impl AsRef<std::path::Path>,
         default_group_size: usize,
     ) -> anyhow::Result<Self> {
         let snapshot_dir = snapshot_dir.as_ref();
 
-        if snapshot_dir.join("state_config.json").exists() {
-            Ok(Self::json(snapshot_dir, default_group_size)?)
-        } else {
-            Ok(Self::parquet(snapshot_dir.to_owned()))
+        if snapshot_dir.join("state.json").exists() {
+            return Self::json(snapshot_dir, default_group_size)
         }
+
+        #[cfg(feature = "parquet")]
+        return Ok(Self::parquet(snapshot_dir.to_owned()));
+
+        #[cfg(not(feature = "parquet"))]
+        anyhow::bail!("Could not detect encoding used in snapshot {snapshot_dir:?}");
     }
 
     pub fn coins(&self) -> anyhow::Result<IntoIter<CoinConfig>> {
-        self.create_iterator(|state| &state.coins, "coins")
+        self.create_iterator(
+            |state| &state.coins,
+            #[cfg(feature = "parquet")]
+            "coins",
+        )
     }
 
     pub fn messages(&self) -> anyhow::Result<IntoIter<MessageConfig>> {
-        self.create_iterator(|state| &state.messages, "messages")
+        self.create_iterator(
+            |state| &state.messages,
+            #[cfg(feature = "parquet")]
+            "messages",
+        )
     }
 
     pub fn contracts(&self) -> anyhow::Result<IntoIter<ContractConfig>> {
-        self.create_iterator(|state| &state.contracts, "contracts")
+        self.create_iterator(
+            |state| &state.contracts,
+            #[cfg(feature = "parquet")]
+            "contracts",
+        )
     }
 
     pub fn contract_state(&self) -> anyhow::Result<IntoIter<ContractStateConfig>> {
-        self.create_iterator(|state| &state.contract_state, "contract_state")
+        self.create_iterator(
+            |state| &state.contract_state,
+            #[cfg(feature = "parquet")]
+            "contract_state",
+        )
     }
 
     pub fn contract_balance(&self) -> anyhow::Result<IntoIter<ContractBalanceConfig>> {
-        self.create_iterator(|state| &state.contract_balance, "contract_balance")
+        self.create_iterator(
+            |state| &state.contract_balance,
+            #[cfg(feature = "parquet")]
+            "contract_balance",
+        )
     }
 
     fn create_iterator<T: Clone>(
         &self,
         extractor: impl FnOnce(&StateConfig) -> &Vec<T>,
-        parquet_filename: &'static str,
+        #[cfg(feature = "parquet")] parquet_filename: &'static str,
     ) -> anyhow::Result<IntoIter<T>> {
         match &self.data_source {
             DataSource::InMemory { state, group_size } => {
                 let groups = extractor(state).clone();
                 Ok(Self::in_memory_iter(groups, *group_size))
             }
+            #[cfg(feature = "parquet")]
             DataSource::Parquet { snapshot_dir } => {
                 let path = snapshot_dir.join(format!("{parquet_filename}.parquet"));
                 let file = std::fs::File::open(path)?;
                 Ok(IntoIter::Parquet {
-                    decoder: parquet::Decoder::new(file)?,
+                    decoder: super::parquet::Decoder::new(file)?,
                 })
             }
         }

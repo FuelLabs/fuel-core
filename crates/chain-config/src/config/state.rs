@@ -1,3 +1,8 @@
+use bech32::{
+    ToBase32,
+    Variant::Bech32m,
+};
+use core::str::FromStr;
 use fuel_core_storage::{
     iter::BoxedIter,
     Result as StorageResult,
@@ -11,18 +16,9 @@ use fuel_core_types::{
     },
     fuel_vm::SecretKey,
 };
-
-#[cfg(feature = "std")]
-use bech32::{
-    ToBase32,
-    Variant::Bech32m,
-};
-#[cfg(feature = "std")]
-use core::str::FromStr;
-#[cfg(feature = "std")]
-use fuel_core_types::fuel_types::Bytes32;
-#[cfg(feature = "std")]
 use itertools::Itertools;
+
+use fuel_core_types::fuel_types::Bytes32;
 use serde::{
     Deserialize,
     Serialize,
@@ -38,15 +34,17 @@ use super::{
     message::MessageConfig,
 };
 
+#[cfg(feature = "parquet")]
 mod parquet;
 mod reader;
+#[cfg(feature = "std")]
 mod writer;
 
-pub use reader::{
-    IntoIter,
-    StateReader,
-};
+#[cfg(feature = "parquet")]
+pub use writer::CompressionLevel;
+#[cfg(feature = "std")]
 pub use writer::StateWriter;
+pub const MAX_GROUP_SIZE: usize = usize::MAX;
 
 use std::fmt::Debug;
 
@@ -56,6 +54,11 @@ pub struct Group<T> {
     pub data: Vec<T>,
 }
 type GroupResult<T> = anyhow::Result<Group<T>>;
+
+pub use reader::{
+    IntoIter,
+    StateReader,
+};
 
 // Fuel Network human-readable part for bech32 encoding
 pub const FUEL_BECH32_HRP: &str = "fuel";
@@ -145,7 +148,6 @@ impl StateConfig {
         })
     }
 
-    #[cfg(feature = "std")]
     pub fn local_testnet() -> Self {
         // endow some preset accounts with an initial balance
         tracing::info!("Initial Accounts");
@@ -288,8 +290,15 @@ where
     }
 }
 
+#[cfg(all(feature = "std", feature = "random"))]
 #[cfg(test)]
 mod tests {
+    use itertools::Itertools;
+
+    use super::*;
+
+    use crate::Randomize;
+
     use fuel_core_types::{
         blockchain::primitives::DaBlockHeight,
         fuel_asm::op,
@@ -316,12 +325,7 @@ mod tests {
         StateWriter,
     };
 
-    use itertools::Itertools;
-
-    use super::*;
-
-    use crate::Randomize;
-
+    #[cfg(feature = "parquet")]
     #[test]
     fn roundtrip_parquet_coins() {
         // given
@@ -329,7 +333,9 @@ mod tests {
         let temp_dir = tempfile::tempdir().unwrap();
 
         let mut group_generator = GroupGenerator::new(StdRng::seed_from_u64(0), 100, 10);
-        let mut encoder = StateWriter::parquet(temp_dir.path(), 1).unwrap();
+        let mut encoder =
+            StateWriter::parquet(temp_dir.path(), CompressionLevel::Uncompressed)
+                .unwrap();
 
         // when
         let coin_groups =
@@ -345,6 +351,7 @@ mod tests {
         assert_groups_identical(&coin_groups, decoded_coin_groups, skip_n_groups);
     }
 
+    #[cfg(feature = "parquet")]
     #[test]
     fn roundtrip_parquet_messages() {
         // given
@@ -352,7 +359,8 @@ mod tests {
         let temp_dir = tempfile::tempdir().unwrap();
 
         let mut group_generator = GroupGenerator::new(StdRng::seed_from_u64(0), 100, 10);
-        let mut encoder = StateWriter::parquet(temp_dir.path(), 1).unwrap();
+        let mut encoder =
+            StateWriter::parquet(temp_dir.path(), CompressionLevel::Level1).unwrap();
 
         // when
         let message_groups =
@@ -367,6 +375,7 @@ mod tests {
         assert_groups_identical(&message_groups, messages_decoded, skip_n_groups);
     }
 
+    #[cfg(feature = "parquet")]
     #[test]
     fn roundtrip_parquet_contracts() {
         // given
@@ -374,7 +383,8 @@ mod tests {
         let temp_dir = tempfile::tempdir().unwrap();
 
         let mut group_generator = GroupGenerator::new(StdRng::seed_from_u64(0), 100, 10);
-        let mut encoder = StateWriter::parquet(temp_dir.path(), 1).unwrap();
+        let mut encoder =
+            StateWriter::parquet(temp_dir.path(), CompressionLevel::Level1).unwrap();
 
         // when
         let contract_groups =
@@ -389,6 +399,7 @@ mod tests {
         assert_groups_identical(&contract_groups, contract_decoded, skip_n_groups);
     }
 
+    #[cfg(feature = "parquet")]
     #[test]
     fn roundtrip_parquet_contract_state() {
         // given
@@ -396,7 +407,8 @@ mod tests {
         let temp_dir = tempfile::tempdir().unwrap();
 
         let mut group_generator = GroupGenerator::new(StdRng::seed_from_u64(0), 100, 10);
-        let mut encoder = StateWriter::parquet(temp_dir.path(), 1).unwrap();
+        let mut encoder =
+            StateWriter::parquet(temp_dir.path(), CompressionLevel::Level1).unwrap();
 
         // when
         let contract_state_groups =
@@ -415,6 +427,7 @@ mod tests {
         );
     }
 
+    #[cfg(feature = "parquet")]
     #[test]
     fn roundtrip_parquet_contract_balance() {
         // given
@@ -422,7 +435,8 @@ mod tests {
         let temp_dir = tempfile::tempdir().unwrap();
 
         let mut group_generator = GroupGenerator::new(StdRng::seed_from_u64(0), 100, 10);
-        let mut encoder = StateWriter::parquet(temp_dir.path(), 1).unwrap();
+        let mut encoder =
+            StateWriter::parquet(temp_dir.path(), CompressionLevel::Level1).unwrap();
 
         // when
         let contract_balance_groups =

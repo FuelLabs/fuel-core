@@ -6,8 +6,10 @@ pub use decode::*;
 pub use encode::*;
 pub use schema::*;
 
+#[cfg(feature = "random")]
 #[cfg(test)]
 mod tests {
+    use crate::Randomize;
     use std::{
         io::{
             Cursor,
@@ -40,7 +42,6 @@ mod tests {
     use crate::{
         CoinConfig,
         Group,
-        Randomize,
     };
 
     use super::*;

@@ -170,6 +170,7 @@ impl Database {
                 })
             })
     }
+
     pub fn iter_contract_balance_configs(
         &self,
     ) -> impl Iterator<Item = StorageResult<ContractBalanceConfig>> + '_ {

@@ -77,7 +77,7 @@ pub fn maybe_initialize_state(
     if database.ids_of_latest_block()?.is_none() {
         import_chain_state(config, database)?;
         commit_genesis_block(config, database)?;
-        //database.remove_genesis_progress()?;
+        // database.remove_genesis_progress()?;
     }
 
     Ok(())

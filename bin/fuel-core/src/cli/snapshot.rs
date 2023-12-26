@@ -3,7 +3,6 @@ use anyhow::Context;
 use clap::{
     Parser,
     Subcommand,
-    ValueEnum,
 };
 use fuel_core::{
     chain_config::{
@@ -14,6 +13,7 @@ use fuel_core::{
     database::Database,
     types::fuel_types::ContractId,
 };
+use fuel_core_chain_config::MAX_GROUP_SIZE;
 use fuel_core_storage::Result as StorageResult;
 use itertools::Itertools;
 use std::path::{
@@ -31,17 +31,56 @@ pub struct Command {
         value_parser,
         default_value = (*DEFAULT_DB_PATH).to_str().unwrap()
     )]
-    database_path: PathBuf,
+    pub(crate) database_path: PathBuf,
 
     /// The sub-command of the snapshot operation.
     #[command(subcommand)]
-    subcommand: SubCommands,
+    pub(crate) subcommand: SubCommands,
 }
 
-#[derive(ValueEnum, Debug, Clone, Copy)]
-pub enum StateEncodingFormat {
+#[derive(Subcommand, Debug, Clone, Copy)]
+pub enum Encoding {
     Json,
-    Parquet,
+    #[cfg(feature = "parquet")]
+    Parquet {
+        /// The number of entries to write per parquet group.
+        #[clap(name = "GROUP_SIZE", long = "group-size", default_value = "10000")]
+        group_size: usize,
+        /// Level of compression. Valid values are 0..=12.
+        #[clap(
+            name = "COMPRESSION_LEVEL",
+            long = "compression-level",
+            default_value = "1"
+        )]
+        compression: u8,
+    },
+}
+
+impl Encoding {
+    fn group_size(self) -> usize {
+        match self {
+            Encoding::Json => MAX_GROUP_SIZE,
+            #[cfg(feature = "parquet")]
+            Encoding::Parquet { group_size, .. } => group_size,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Subcommand)]
+pub enum EncodingCommand {
+    /// The encoding format for the chain state files.
+    Encoding {
+        #[clap(subcommand)]
+        encoding: Encoding,
+    },
+}
+
+impl EncodingCommand {
+    fn encoding(self) -> Encoding {
+        match self {
+            EncodingCommand::Encoding { encoding } => encoding,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Subcommand)]
@@ -56,9 +95,9 @@ pub enum SubCommands {
         /// Specify a path to an output directory for the chain config files.
         #[clap(name = "OUTPUT_DIR", long = "output-directory")]
         output_dir: PathBuf,
-        /// State encoding format
-        #[clap(name = "STATE_ENCODING_FORMAT", long = "state-encoding-format")]
-        state_encoding_format: StateEncodingFormat,
+        /// Encoding format for the chain state files.
+        #[clap(subcommand)]
+        encoding_command: Option<EncodingCommand>,
     },
     /// Creates a config for the contract.
     #[command(arg_required_else_help = true)]
@@ -69,14 +108,6 @@ pub enum SubCommands {
     },
 }
 
-#[cfg(not(any(feature = "rocksdb", feature = "rocksdb-production")))]
-pub async fn exec(command: Command) -> anyhow::Result<()> {
-    Err(anyhow::anyhow!(
-        "Rocksdb must be enabled to use the database at {}",
-        command.database_path.display()
-    ))
-}
-
 #[cfg(any(feature = "rocksdb", feature = "rocksdb-production"))]
 pub fn exec(command: Command) -> anyhow::Result<()> {
     let db = open_db(&command.database_path)?;
@@ -85,8 +116,14 @@ pub fn exec(command: Command) -> anyhow::Result<()> {
         SubCommands::Everything {
             chain_config,
             output_dir,
-            state_encoding_format,
-        } => full_snapshot(chain_config, &output_dir, state_encoding_format, &db),
+            encoding_command,
+            ..
+        } => {
+            let encoding = encoding_command
+                .map(|f| f.encoding())
+                .unwrap_or_else(|| Encoding::Json);
+            full_snapshot(chain_config, &output_dir, encoding, &db)
+        }
         SubCommands::Contract { contract_id } => contract_snapshot(&db, contract_id),
     }
 }
@@ -105,11 +142,12 @@ fn contract_snapshot(
 fn full_snapshot(
     chain_config: Option<PathBuf>,
     output_dir: &Path,
-    state_encoding_format: StateEncodingFormat,
+    encoding: Encoding,
     db: impl ChainStateDb,
 ) -> Result<(), anyhow::Error> {
-    let encoder = initialize_encoder(output_dir, state_encoding_format)?;
-    write_chain_state(&db, encoder)?;
+    // TODO: segfault rename this to state writer
+    let encoder = initialize_encoder(output_dir, encoding)?;
+    write_chain_state(db, encoder, encoding.group_size())?;
 
     let height = db.get_block_height()?;
     let chain_config = ChainConfig {
@@ -121,9 +159,11 @@ fn full_snapshot(
     Ok(())
 }
 
+// TODO: segfault rename this to state writer
 fn write_chain_state(
     db: impl ChainStateDb,
     mut encoder: StateWriter,
+    group_size: usize,
 ) -> anyhow::Result<()> {
     fn write<T>(
         data: impl Iterator<Item = StorageResult<T>>,
@@ -134,8 +174,6 @@ fn write_chain_state(
             .into_iter()
             .try_for_each(|chunk| write(chunk.try_collect()?))
     }
-
-    let group_size = 1;
 
     let coins = db.iter_coin_configs();
     write(coins, group_size, |chunk| encoder.write_coins(chunk))?;
@@ -165,12 +203,16 @@ fn write_chain_state(
 
 fn initialize_encoder(
     output_dir: &Path,
-    state_encoding_format: StateEncodingFormat,
-) -> Result<StateWriter, anyhow::Error> {
+    encoding: Encoding,
+) -> Result<Encoder, anyhow::Error> {
     std::fs::create_dir_all(output_dir)?;
-    let encoder = match state_encoding_format {
-        StateEncodingFormat::Json => StateWriter::json(output_dir),
-        StateEncodingFormat::Parquet => StateWriter::parquet(output_dir, 1)?,
+    let encoder = match encoding {
+        Encoding::Json => Encoder::json(output_dir),
+        #[cfg(feature = "parquet")]
+        Encoding::Parquet { compression, .. } => Encoder::parquet(
+            output_dir,
+            fuel_core_chain_config::CompressionLevel::try_from(compression)?,
+        )?,
     };
     Ok(encoder)
 }
