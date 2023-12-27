@@ -3,6 +3,8 @@ use std::path::{
     PathBuf,
 };
 
+use ::parquet::basic::ZstdLevel;
+
 use crate::{
     config::{
         contract_balance::ContractBalance,
@@ -43,7 +45,7 @@ pub struct Encoder {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 #[cfg(feature = "parquet")]
 #[cfg_attr(test, derive(strum::EnumIter))]
-pub enum CompressionLevel {
+pub enum ZstdCompressionLevel {
     Uncompressed,
     Level1,
     Level2,
@@ -54,11 +56,23 @@ pub enum CompressionLevel {
     Level7,
     Level8,
     Level9,
+    Level10,
+    Level11,
+    Level12,
+    Level13,
+    Level14,
+    Level15,
+    Level16,
+    Level17,
+    Level18,
+    Level19,
+    Level20,
+    Level21,
     Max,
 }
 
 #[cfg(feature = "parquet")]
-impl TryFrom<u8> for CompressionLevel {
+impl TryFrom<u8> for ZstdCompressionLevel {
     type Error = anyhow::Error;
     fn try_from(value: u8) -> Result<Self, Self::Error> {
         match value {
@@ -72,38 +86,67 @@ impl TryFrom<u8> for CompressionLevel {
             7 => Ok(Self::Level7),
             8 => Ok(Self::Level8),
             9 => Ok(Self::Level9),
-            10 => Ok(Self::Max),
+            10 => Ok(Self::Level10),
+            11 => Ok(Self::Level11),
+            12 => Ok(Self::Level12),
+            13 => Ok(Self::Level13),
+            14 => Ok(Self::Level14),
+            15 => Ok(Self::Level15),
+            16 => Ok(Self::Level16),
+            17 => Ok(Self::Level17),
+            18 => Ok(Self::Level18),
+            19 => Ok(Self::Level19),
+            20 => Ok(Self::Level20),
+            21 => Ok(Self::Level21),
+            22 => Ok(Self::Max),
             _ => {
-                anyhow::bail!("Compression level {value} outside of allowed range 0..=10")
+                anyhow::bail!("Compression level {value} outside of allowed range 0..=22")
             }
         }
     }
 }
 
 #[cfg(feature = "parquet")]
-impl From<CompressionLevel> for u8 {
-    fn from(value: CompressionLevel) -> Self {
+impl From<ZstdCompressionLevel> for u8 {
+    fn from(value: ZstdCompressionLevel) -> Self {
         match value {
-            CompressionLevel::Uncompressed => 0,
-            CompressionLevel::Level1 => 1,
-            CompressionLevel::Level2 => 2,
-            CompressionLevel::Level3 => 3,
-            CompressionLevel::Level4 => 4,
-            CompressionLevel::Level5 => 5,
-            CompressionLevel::Level6 => 6,
-            CompressionLevel::Level7 => 7,
-            CompressionLevel::Level8 => 8,
-            CompressionLevel::Level9 => 9,
-            CompressionLevel::Max => 10,
+            ZstdCompressionLevel::Uncompressed => 0,
+            ZstdCompressionLevel::Level1 => 1,
+            ZstdCompressionLevel::Level2 => 2,
+            ZstdCompressionLevel::Level3 => 3,
+            ZstdCompressionLevel::Level4 => 4,
+            ZstdCompressionLevel::Level5 => 5,
+            ZstdCompressionLevel::Level6 => 6,
+            ZstdCompressionLevel::Level7 => 7,
+            ZstdCompressionLevel::Level8 => 8,
+            ZstdCompressionLevel::Level9 => 9,
+            ZstdCompressionLevel::Level10 => 10,
+            ZstdCompressionLevel::Level11 => 11,
+            ZstdCompressionLevel::Level12 => 12,
+            ZstdCompressionLevel::Level13 => 13,
+            ZstdCompressionLevel::Level14 => 14,
+            ZstdCompressionLevel::Level15 => 15,
+            ZstdCompressionLevel::Level16 => 16,
+            ZstdCompressionLevel::Level17 => 17,
+            ZstdCompressionLevel::Level18 => 18,
+            ZstdCompressionLevel::Level19 => 19,
+            ZstdCompressionLevel::Level20 => 20,
+            ZstdCompressionLevel::Level21 => 21,
+            ZstdCompressionLevel::Max => 22,
         }
     }
 }
 
 #[cfg(feature = "parquet")]
-impl From<CompressionLevel> for ::parquet::basic::GzipLevel {
-    fn from(value: CompressionLevel) -> Self {
-        Self::try_new(u8::from(value) as u32)
-            .expect("The range [0, 12] is valid for Gzip compression")
+impl From<ZstdCompressionLevel> for ::parquet::basic::Compression {
+    fn from(value: ZstdCompressionLevel) -> Self {
+        if let ZstdCompressionLevel::Uncompressed = value {
+            Self::UNCOMPRESSED
+        } else {
+            let level = ZstdLevel::try_new(u8::from(value) as i32)
+                .expect("our range to mimic the parquet zstd range");
+            Self::ZSTD(level)
+        }
     }
 }
 
@@ -120,12 +163,9 @@ impl Encoder {
     #[cfg(feature = "parquet")]
     pub fn parquet(
         snapshot_dir: impl AsRef<Path>,
-        compression_level: CompressionLevel,
+        compression_level: ZstdCompressionLevel,
     ) -> anyhow::Result<Self> {
-        use ::parquet::basic::{
-            Compression,
-            GzipLevel,
-        };
+        use ::parquet::basic::Compression;
         use std::fs::File;
 
         fn create_encoder<T>(
@@ -142,7 +182,8 @@ impl Encoder {
         }
 
         let path = snapshot_dir.as_ref();
-        let compression = Compression::GZIP(GzipLevel::from(compression_level));
+        let compression = compression_level.into();
+
         Ok(Self {
             encoder: EncoderType::Parquet {
                 coins: create_encoder(path, "coins", compression)?,
@@ -279,7 +320,7 @@ mod tests {
         // given
         let dir = tempfile::tempdir().unwrap();
         let encoder =
-            Encoder::parquet(dir.path(), CompressionLevel::Uncompressed).unwrap();
+            Encoder::parquet(dir.path(), ZstdCompressionLevel::Uncompressed).unwrap();
 
         // when
         encoder.close().unwrap();
@@ -357,7 +398,7 @@ mod tests {
         // given
         let dir = tempfile::tempdir().unwrap();
         let mut encoder =
-            Encoder::parquet(dir.path(), CompressionLevel::Uncompressed).unwrap();
+            Encoder::parquet(dir.path(), ZstdCompressionLevel::Uncompressed).unwrap();
         let original_data = vec![T::randomize(rng)];
 
         // when
@@ -376,10 +417,10 @@ mod tests {
     #[cfg(feature = "parquet")]
     #[test]
     fn all_compressions_are_valid() {
-        use ::parquet::basic::GzipLevel;
+        use ::parquet::basic::Compression;
         use strum::IntoEnumIterator;
-        for level in CompressionLevel::iter() {
-            let _ = GzipLevel::from(level);
+        for level in ZstdCompressionLevel::iter() {
+            let _ = Compression::from(level);
         }
     }
 }

@@ -205,7 +205,7 @@ fn initialize_encoder(
         #[cfg(feature = "parquet")]
         Encoding::Parquet { compression, .. } => Encoder::parquet(
             output_dir,
-            fuel_core_chain_config::CompressionLevel::try_from(compression)?,
+            fuel_core_chain_config::ZstdCompressionLevel::try_from(compression)?,
         )?,
     };
     Ok(encoder)

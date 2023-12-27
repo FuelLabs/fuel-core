@@ -8,10 +8,10 @@ pub use decoder::{
     Decoder,
     IntoIter,
 };
-#[cfg(feature = "parquet")]
-pub use encoder::CompressionLevel;
 #[cfg(feature = "std")]
 pub use encoder::Encoder;
+#[cfg(feature = "parquet")]
+pub use encoder::ZstdCompressionLevel;
 pub const MAX_GROUP_SIZE: usize = usize::MAX;
 
 use std::fmt::Debug;
@@ -44,9 +44,11 @@ mod tests {
         let temp_dir = tempfile::tempdir().unwrap();
 
         let mut group_generator = GroupGenerator::new(StdRng::seed_from_u64(0), 100, 10);
-        let mut encoder =
-            Encoder::parquet(temp_dir.path(), encoder::CompressionLevel::Uncompressed)
-                .unwrap();
+        let mut encoder = Encoder::parquet(
+            temp_dir.path(),
+            encoder::ZstdCompressionLevel::Uncompressed,
+        )
+        .unwrap();
 
         // when
         let coin_groups =
@@ -71,7 +73,8 @@ mod tests {
 
         let mut group_generator = GroupGenerator::new(StdRng::seed_from_u64(0), 100, 10);
         let mut encoder =
-            Encoder::parquet(temp_dir.path(), encoder::CompressionLevel::Level1).unwrap();
+            Encoder::parquet(temp_dir.path(), encoder::ZstdCompressionLevel::Level1)
+                .unwrap();
 
         // when
         let message_groups =
@@ -95,7 +98,8 @@ mod tests {
 
         let mut group_generator = GroupGenerator::new(StdRng::seed_from_u64(0), 100, 10);
         let mut encoder =
-            Encoder::parquet(temp_dir.path(), encoder::CompressionLevel::Level1).unwrap();
+            Encoder::parquet(temp_dir.path(), encoder::ZstdCompressionLevel::Level1)
+                .unwrap();
 
         // when
         let contract_groups =
@@ -119,7 +123,8 @@ mod tests {
 
         let mut group_generator = GroupGenerator::new(StdRng::seed_from_u64(0), 100, 10);
         let mut encoder =
-            Encoder::parquet(temp_dir.path(), encoder::CompressionLevel::Level1).unwrap();
+            Encoder::parquet(temp_dir.path(), encoder::ZstdCompressionLevel::Level1)
+                .unwrap();
 
         // when
         let contract_state_groups =
@@ -147,7 +152,8 @@ mod tests {
 
         let mut group_generator = GroupGenerator::new(StdRng::seed_from_u64(0), 100, 10);
         let mut encoder =
-            Encoder::parquet(temp_dir.path(), encoder::CompressionLevel::Level1).unwrap();
+            Encoder::parquet(temp_dir.path(), encoder::ZstdCompressionLevel::Level1)
+                .unwrap();
 
         // when
         let contract_balance_groups =
