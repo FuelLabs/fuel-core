@@ -116,7 +116,7 @@ impl StateWriter {
     pub fn json(snapshot_dir: impl AsRef<Path>) -> Self {
         Self {
             encoder: StateWriterType::Json {
-                state_file_path: snapshot_dir.as_ref().join("state_config.json"),
+                state_file_path: snapshot_dir.as_ref().join(crate::STATE_CONFIG_FILENAME),
                 buffer: StateConfig::default(),
             },
         }
