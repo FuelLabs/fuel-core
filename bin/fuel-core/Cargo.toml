@@ -46,7 +46,7 @@ url = { version = "2.2", optional = true }
 test-case = { workspace = true }
 
 [features]
-default = ["env", "relayer", "rocksdb", "parquet"] # todo: remove parquet
+default = ["env", "relayer", "rocksdb"]
 env = ["dep:dotenvy"]
 p2p = ["fuel-core/p2p", "const_format"]
 relayer = ["fuel-core/relayer", "dep:url"]

@@ -228,24 +228,3 @@ fn open_db(path: &Path) -> anyhow::Result<impl ChainStateDb> {
         .context(format!("failed to open database at path {path:?}",))?;
     Ok(Database::new(std::sync::Arc::new(data_source)))
 }
-
-#[cfg(feature = "parquet")]
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn recreate() {
-        let db = open_db(&Path::new(
-            "/home/segfault_magnet/fuel/regenesis_testing/fuel_db",
-        ))
-        .unwrap();
-
-        let encoding = Encoding::Parquet {
-            group_size: 1000,
-            compression: 10,
-        };
-
-        full_snapshot(None, &Path::new("./snapshot"), encoding, &db).unwrap();
-    }
-}
