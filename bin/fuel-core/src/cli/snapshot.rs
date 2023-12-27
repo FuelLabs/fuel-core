@@ -146,7 +146,7 @@ fn full_snapshot(
     db: impl ChainStateDb,
 ) -> Result<(), anyhow::Error> {
     // TODO: segfault rename this to state writer
-    let encoder = initialize_encoder(output_dir, encoding)?;
+    let encoder = initialize_state_writer(output_dir, encoding)?;
     write_chain_state(&db, encoder, encoding.group_size())?;
 
     let height = db.get_block_height()?;
@@ -201,7 +201,7 @@ fn write_chain_state(
     Ok(())
 }
 
-fn initialize_encoder(
+fn initialize_state_writer(
     output_dir: &Path,
     encoding: Encoding,
 ) -> Result<StateWriter, anyhow::Error> {
@@ -209,7 +209,7 @@ fn initialize_encoder(
     let encoder = match encoding {
         Encoding::Json => StateWriter::json(output_dir),
         #[cfg(feature = "parquet")]
-        Encoding::Parquet { compression, .. } => Encoder::parquet(
+        Encoding::Parquet { compression, .. } => StateWriter::parquet(
             output_dir,
             fuel_core_chain_config::CompressionLevel::try_from(compression)?,
         )?,
