@@ -299,28 +299,12 @@ mod tests {
 
     use crate::Randomize;
 
-    use fuel_core_types::{
-        blockchain::primitives::DaBlockHeight,
-        fuel_asm::op,
-        fuel_types::{
-            AssetId,
-            Bytes32,
-        },
-        fuel_vm::Contract,
-    };
     use rand::{
         rngs::StdRng,
-        Rng,
-        RngCore,
         SeedableRng,
     };
 
-    use super::StateConfig;
-
     use crate::{
-        CoinConfig,
-        ContractConfig,
-        MessageConfig,
         StateReader,
         StateWriter,
     };

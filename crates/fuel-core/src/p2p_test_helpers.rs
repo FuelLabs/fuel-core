@@ -11,7 +11,10 @@ use crate::{
         ServiceTrait,
     },
 };
-use fuel_core_chain_config::StateReader;
+use fuel_core_chain_config::{
+    StateReader,
+    MAX_GROUP_SIZE,
+};
 use fuel_core_p2p::{
     codecs::postcard::PostcardCodec,
     network_service::FuelP2PService,
@@ -130,7 +133,7 @@ pub struct NamedNodes(pub HashMap<String, Node>);
 impl Bootstrap {
     /// Spawn a bootstrap node.
     pub async fn new(node_config: &Config) -> Self {
-        let bootstrap_config = extract_p2p_config(node_config);
+        let bootstrap_config = extract_p2p_config(node_config).await;
         let codec = PostcardCodec::new(bootstrap_config.max_block_size);
         let mut bootstrap = FuelP2PService::new(bootstrap_config, codec);
         bootstrap.start().await.unwrap();
@@ -228,7 +231,7 @@ pub async fn make_nodes(
                 let mut txs = Vec::with_capacity(all.len());
                 for (tx, initial_coin) in all {
                     txs.push(tx);
-                    config.state_config.coins.push(initial_coin);
+                    state_config.coins.push(initial_coin);
                 }
                 producers_with_txs.push(Some((producer.unwrap(), txs)));
             }
@@ -238,7 +241,7 @@ pub async fn make_nodes(
         }
     }
 
-    config.state_reader = StateReader::in_memory(state_config, 1);
+    config.state_reader = StateReader::in_memory(state_config, MAX_GROUP_SIZE);
 
     let bootstrap_nodes: Vec<Bootstrap> =
         futures::stream::iter(bootstrap_setup.into_iter().enumerate())
@@ -389,10 +392,10 @@ pub async fn make_node(node_config: Config, test_txs: Vec<Transaction>) -> Node 
     }
 }
 
-fn extract_p2p_config(node_config: &Config) -> fuel_core_p2p::config::Config {
+async fn extract_p2p_config(node_config: &Config) -> fuel_core_p2p::config::Config {
     let bootstrap_config = node_config.p2p.clone();
     let db = Database::in_memory();
-    maybe_initialize_state(node_config, &db).unwrap();
+    maybe_initialize_state(node_config, &db).await.unwrap();
     bootstrap_config
         .unwrap()
         .init(db.get_genesis().unwrap())

@@ -103,7 +103,7 @@ impl From<CompressionLevel> for u8 {
 impl From<CompressionLevel> for ::parquet::basic::GzipLevel {
     fn from(value: CompressionLevel) -> Self {
         Self::try_new(u8::from(value) as u32)
-            .expect("The range [0, 12] is valid for Gzip compression")
+            .expect("The range 0..=10 is valid for Gzip compression")
     }
 }
 
