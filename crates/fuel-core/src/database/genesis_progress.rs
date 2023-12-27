@@ -15,8 +15,12 @@ use itertools::process_results;
 
 use super::{
     storage::{
+        GenesisCoinRoots,
+        GenesisContractBalanceRoots,
         GenesisContractIds,
         GenesisContractRoots,
+        GenesisContractStateRoots,
+        GenesisMessageRoots,
         GenesisMetadata,
         ToDatabaseKey,
     },
@@ -60,12 +64,12 @@ impl Database {
     }
 
     pub fn add_coin_root(&mut self, root: MerkleRoot) -> Result<()> {
-        StorageMutate::<GenesisContractRoots>::insert(self, &root, &())?;
+        StorageMutate::<GenesisCoinRoots>::insert(self, &root, &())?;
         Ok(())
     }
 
     pub fn add_message_root(&mut self, root: MerkleRoot) -> Result<()> {
-        StorageMutate::<GenesisContractRoots>::insert(self, &root, &())?;
+        StorageMutate::<GenesisMessageRoots>::insert(self, &root, &())?;
         Ok(())
     }
 
@@ -75,12 +79,12 @@ impl Database {
     }
 
     pub fn add_state_root(&mut self, root: MerkleRoot) -> Result<()> {
-        StorageMutate::<GenesisContractRoots>::insert(self, &root, &())?;
+        StorageMutate::<GenesisContractStateRoots>::insert(self, &root, &())?;
         Ok(())
     }
 
     pub fn add_balance_root(&mut self, root: MerkleRoot) -> Result<()> {
-        StorageMutate::<GenesisContractRoots>::insert(self, &root, &())?;
+        StorageMutate::<GenesisContractBalanceRoots>::insert(self, &root, &())?;
         Ok(())
     }
 
@@ -132,7 +136,7 @@ impl Database {
             contract_ids
                 .map(|(contract_id, _)| {
                     let bytes32: [u8; 32] = contract_id.try_into().unwrap();
-                    ContractId::try_from(bytes32).unwrap()
+                    ContractId::from(bytes32)
                 })
                 .collect::<Vec<ContractId>>()
         })?;

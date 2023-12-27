@@ -147,7 +147,7 @@ fn full_snapshot(
 ) -> Result<(), anyhow::Error> {
     // TODO: segfault rename this to state writer
     let encoder = initialize_encoder(output_dir, encoding)?;
-    write_chain_state(db, encoder, encoding.group_size())?;
+    write_chain_state(&db, encoder, encoding.group_size())?;
 
     let height = db.get_block_height()?;
     let chain_config = ChainConfig {
@@ -204,10 +204,10 @@ fn write_chain_state(
 fn initialize_encoder(
     output_dir: &Path,
     encoding: Encoding,
-) -> Result<Encoder, anyhow::Error> {
+) -> Result<StateWriter, anyhow::Error> {
     std::fs::create_dir_all(output_dir)?;
     let encoder = match encoding {
-        Encoding::Json => Encoder::json(output_dir),
+        Encoding::Json => StateWriter::json(output_dir),
         #[cfg(feature = "parquet")]
         Encoding::Parquet { compression, .. } => Encoder::parquet(
             output_dir,

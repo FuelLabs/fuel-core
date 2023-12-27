@@ -8,6 +8,7 @@ use crate::utils::make_receipts;
 use super::run_group_ref;
 
 use criterion::{
+    async_executor::AsyncExecutor,
     Criterion,
     Throughput,
 };
@@ -90,10 +91,10 @@ impl BenchDb {
             }),
         )?;
         // Adds a genesis block to the database.
-        fuel_core::service::genesis::maybe_initialize_state(
+        block_on(fuel_core::service::genesis::maybe_initialize_state(
             &Config::local_node(),
             &database,
-        )
+        ))
         .expect("Should init with genesis block");
         database.clone().flush()?;
 

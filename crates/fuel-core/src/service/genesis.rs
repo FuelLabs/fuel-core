@@ -69,13 +69,13 @@ use fuel_core_types::{
 use itertools::Itertools;
 
 /// Loads state from the chain config into database
-pub fn maybe_initialize_state(
+pub async fn maybe_initialize_state(
     config: &Config,
     database: &Database,
 ) -> anyhow::Result<()> {
     // check if chain is initialized
     if database.ids_of_latest_block()?.is_none() {
-        import_chain_state(config, database)?;
+        import_chain_state(config, database).await?;
         commit_genesis_block(config, database)?;
         // database.remove_genesis_progress()?;
     }
@@ -83,26 +83,46 @@ pub fn maybe_initialize_state(
     Ok(())
 }
 
-fn import_chain_state(
+async fn import_chain_state(
     config: &Config,
     original_database: &Database,
 ) -> anyhow::Result<()> {
     let block_height = config.chain_config.height.unwrap_or_default();
 
     let coins = config.state_reader.coins()?;
-    import_coin_configs(original_database, coins, block_height)?;
+    let db = original_database.clone();
+    let coins_handle =
+        tokio::spawn(async move { import_coin_configs(&db, coins, block_height) });
 
     let messages = config.state_reader.messages()?;
-    import_message_configs(original_database, messages)?;
+    let db = original_database.clone();
+    let messages_handle =
+        tokio::spawn(async move { import_message_configs(&db, messages) });
 
     let contracts = config.state_reader.contracts()?;
-    import_contract_configs(original_database, contracts, block_height)?;
+    let db = original_database.clone();
+    let contracts_handle =
+        tokio::spawn(
+            async move { import_contract_configs(&db, contracts, block_height) },
+        );
 
     let contract_states = config.state_reader.contract_state()?;
-    import_contract_state(original_database, contract_states)?;
+    let db = original_database.clone();
+    let contract_state_handle =
+        tokio::spawn(async move { import_contract_state(&db, contract_states) });
 
     let contract_balances = config.state_reader.contract_balance()?;
-    import_contract_balance(original_database, contract_balances)?;
+    let db = original_database.clone();
+    let contract_balance_handle =
+        tokio::spawn(async move { import_contract_balance(&db, contract_balances) });
+
+    let _ = tokio::join!(
+        coins_handle,
+        messages_handle,
+        contracts_handle,
+        contract_state_handle,
+        contract_balance_handle,
+    );
 
     let mut database_transaction = Transactional::transaction(original_database);
     // TODO: do this in batches

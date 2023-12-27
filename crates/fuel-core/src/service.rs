@@ -10,7 +10,6 @@ use fuel_core_services::{
     StateWatcher,
 };
 use std::net::SocketAddr;
-use tracing::warn;
 
 pub use config::{
     Config,
@@ -66,9 +65,9 @@ pub struct FuelService {
 impl FuelService {
     /// Creates a `FuelService` instance from service config
     #[tracing::instrument(skip_all, fields(name = %config.name))]
-    pub fn new(database: Database, config: Config) -> anyhow::Result<Self> {
+    pub async fn new(database: Database, config: Config) -> anyhow::Result<Self> {
         let config = config.make_config_consistent();
-        let task = Task::new(database, config)?;
+        let task = Task::new(database, config).await?;
         let runner = ServiceRunner::new(task);
         let shared = runner.shared.clone();
         let bound_address = runner.shared.graph_ql.bound_address;
@@ -92,7 +91,7 @@ impl FuelService {
         database: Database,
         config: Config,
     ) -> anyhow::Result<Self> {
-        let service = Self::new(database, config)?;
+        let service = Self::new(database, config).await?;
         service.runner.start_and_await().await?;
         Ok(service)
     }
@@ -163,11 +162,11 @@ pub struct Task {
 
 impl Task {
     /// Private inner method for initializing the fuel service task
-    pub fn new(database: Database, config: Config) -> anyhow::Result<Task> {
+    pub async fn new(database: Database, config: Config) -> anyhow::Result<Task> {
         // initialize state
         tracing::info!("Initializing database");
         database.init(&config.chain_config)?;
-        genesis::maybe_initialize_state(&config, &database)?;
+        genesis::maybe_initialize_state(&config, &database).await?;
 
         // initialize sub services
         tracing::info!("Initializing sub services");
@@ -263,7 +262,9 @@ mod tests {
         // The test verify that if we stop any of sub-services
         let mut i = 0;
         loop {
-            let task = Task::new(Default::default(), Config::local_node()).unwrap();
+            let task = Task::new(Default::default(), Config::local_node())
+                .await
+                .unwrap();
             let (_, receiver) = tokio::sync::watch::channel(State::NotStarted);
             let mut watcher = receiver.into();
             let mut task = task.into_task(&watcher, ()).await.unwrap();
@@ -302,7 +303,9 @@ mod tests {
 
     #[tokio::test]
     async fn shutdown_stops_all_services() {
-        let task = Task::new(Default::default(), Config::local_node()).unwrap();
+        let task = Task::new(Default::default(), Config::local_node())
+            .await
+            .unwrap();
         let mut task = task.into_task(&Default::default(), ()).await.unwrap();
         let sub_services_watchers: Vec<_> = task
             .sub_services()
