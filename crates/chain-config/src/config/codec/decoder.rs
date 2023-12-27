@@ -72,7 +72,7 @@ impl Decoder {
         snapshot_dir: impl AsRef<std::path::Path>,
         group_size: usize,
     ) -> anyhow::Result<Self> {
-        let path = snapshot_dir.as_ref().join("state.json");
+        let path = snapshot_dir.as_ref().join("chain_state.json");
 
         let mut file = std::fs::File::open(path)?;
 
