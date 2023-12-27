@@ -42,6 +42,7 @@ pub struct StateWriter {
 #[allow(dead_code)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 #[cfg(feature = "parquet")]
+#[cfg_attr(test, derive(strum::EnumIter))]
 pub enum CompressionLevel {
     Uncompressed,
     Level1,
@@ -53,8 +54,6 @@ pub enum CompressionLevel {
     Level7,
     Level8,
     Level9,
-    Level10,
-    Level11,
     Max,
 }
 
@@ -73,11 +72,9 @@ impl TryFrom<u8> for CompressionLevel {
             7 => Ok(Self::Level7),
             8 => Ok(Self::Level8),
             9 => Ok(Self::Level9),
-            10 => Ok(Self::Level10),
-            11 => Ok(Self::Level11),
-            12 => Ok(Self::Max),
+            10 => Ok(Self::Max),
             _ => {
-                anyhow::bail!("Compression level {value} outside of allowed range 0..12")
+                anyhow::bail!("Compression level {value} outside of allowed range 0..=10")
             }
         }
     }
@@ -97,9 +94,7 @@ impl From<CompressionLevel> for u8 {
             CompressionLevel::Level7 => 7,
             CompressionLevel::Level8 => 8,
             CompressionLevel::Level9 => 9,
-            CompressionLevel::Level10 => 10,
-            CompressionLevel::Level11 => 11,
-            CompressionLevel::Max => 12,
+            CompressionLevel::Max => 10,
         }
     }
 }
@@ -380,5 +375,15 @@ mod tests {
             .collect::<Result<Vec<_>, _>>()
             .unwrap();
         assert_eq!(original_data, decoded.first().unwrap().data);
+    }
+
+    #[cfg(feature = "parquet")]
+    #[test]
+    fn all_compressions_are_valid() {
+        use ::parquet::basic::GzipLevel;
+        use strum::IntoEnumIterator;
+        for level in CompressionLevel::iter() {
+            let _ = GzipLevel::from(level);
+        }
     }
 }

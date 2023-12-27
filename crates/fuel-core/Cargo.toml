@@ -47,7 +47,7 @@ rocksdb = { version = "0.21", default-features = false, features = [
 ], optional = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true, features = ["raw_value"] }
-strum = "0.24"
+strum = { workspace = true }
 strum_macros = "0.24"
 tempfile = { workspace = true, optional = true }
 thiserror = "1.0"
