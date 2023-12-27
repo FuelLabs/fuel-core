@@ -33,5 +33,6 @@ mod tests {
     // dependencies are still not stable in cargo.
     use bytes as _;
     use pretty_assertions as _;
+    use strum as _;
     use tempfile as _;
 }

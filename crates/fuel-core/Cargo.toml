@@ -13,7 +13,7 @@ version = { workspace = true }
 [dependencies]
 anyhow = { workspace = true }
 async-graphql = { version = "4.0", features = [
-    "tracing",
+  "tracing",
 ], default-features = false }
 async-trait = { workspace = true }
 axum = { workspace = true }
@@ -34,9 +34,7 @@ fuel-core-services = { workspace = true }
 fuel-core-storage = { workspace = true }
 fuel-core-sync = { workspace = true, optional = true }
 fuel-core-txpool = { workspace = true }
-fuel-core-types = { workspace = true, features = [
-    "serde",
-] }
+fuel-core-types = { workspace = true, features = ["serde"] }
 futures = { workspace = true }
 hex = { version = "0.4", features = ["serde"] }
 hyper = { workspace = true }
@@ -44,12 +42,12 @@ itertools = { workspace = true }
 postcard = { workspace = true, features = ["use-std"] }
 rand = { workspace = true }
 rocksdb = { version = "0.21", default-features = false, features = [
-    "lz4",
-    "multi-threaded-cf",
+  "lz4",
+  "multi-threaded-cf",
 ], optional = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true, features = ["raw_value"] }
-strum = "0.24"
+strum = { workspace = true }
 strum_macros = "0.24"
 tempfile = { workspace = true, optional = true }
 thiserror = "1.0"
