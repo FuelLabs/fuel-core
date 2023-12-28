@@ -3,8 +3,6 @@ use std::path::{
     PathBuf,
 };
 
-use ::parquet::basic::ZstdLevel;
-
 use crate::{
     config::{
         contract_balance::ContractBalance,
@@ -143,7 +141,8 @@ impl From<ZstdCompressionLevel> for ::parquet::basic::Compression {
         if let ZstdCompressionLevel::Uncompressed = value {
             Self::UNCOMPRESSED
         } else {
-            let level = ZstdLevel::try_new(u8::from(value) as i32)
+            let level = i32::from(u8::from(value));
+            let level = ::parquet::basic::ZstdLevel::try_new(level)
                 .expect("our range to mimic the parquet zstd range");
             Self::ZSTD(level)
         }
