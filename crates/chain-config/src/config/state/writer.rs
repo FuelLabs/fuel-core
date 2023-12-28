@@ -175,6 +175,7 @@ impl StateWriter {
         where
             T: Schema,
         {
+            use anyhow::Context;
             let path = path.join(format!("{name}.parquet"));
             let file = std::fs::File::create(&path)
                 .with_context(|| format!("Cannot open file ({path:?}) for writing"))?;
