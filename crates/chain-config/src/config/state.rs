@@ -40,10 +40,10 @@ mod reader;
 #[cfg(feature = "std")]
 mod writer;
 
-#[cfg(feature = "parquet")]
-pub use writer::CompressionLevel;
 #[cfg(feature = "std")]
 pub use writer::StateWriter;
+#[cfg(feature = "parquet")]
+pub use writer::ZstdCompressionLevel;
 pub const MAX_GROUP_SIZE: usize = usize::MAX;
 
 use std::fmt::Debug;
@@ -318,7 +318,7 @@ mod tests {
 
         let mut group_generator = GroupGenerator::new(StdRng::seed_from_u64(0), 100, 10);
         let mut encoder =
-            StateWriter::parquet(temp_dir.path(), CompressionLevel::Uncompressed)
+            StateWriter::parquet(temp_dir.path(), ZstdCompressionLevel::Uncompressed)
                 .unwrap();
 
         // when
@@ -344,7 +344,7 @@ mod tests {
 
         let mut group_generator = GroupGenerator::new(StdRng::seed_from_u64(0), 100, 10);
         let mut encoder =
-            StateWriter::parquet(temp_dir.path(), CompressionLevel::Level1).unwrap();
+            StateWriter::parquet(temp_dir.path(), ZstdCompressionLevel::Level1).unwrap();
 
         // when
         let message_groups =
@@ -368,7 +368,7 @@ mod tests {
 
         let mut group_generator = GroupGenerator::new(StdRng::seed_from_u64(0), 100, 10);
         let mut encoder =
-            StateWriter::parquet(temp_dir.path(), CompressionLevel::Level1).unwrap();
+            StateWriter::parquet(temp_dir.path(), ZstdCompressionLevel::Level1).unwrap();
 
         // when
         let contract_groups =
@@ -392,7 +392,7 @@ mod tests {
 
         let mut group_generator = GroupGenerator::new(StdRng::seed_from_u64(0), 100, 10);
         let mut encoder =
-            StateWriter::parquet(temp_dir.path(), CompressionLevel::Level1).unwrap();
+            StateWriter::parquet(temp_dir.path(), ZstdCompressionLevel::Level1).unwrap();
 
         // when
         let contract_state_groups =
@@ -420,7 +420,7 @@ mod tests {
 
         let mut group_generator = GroupGenerator::new(StdRng::seed_from_u64(0), 100, 10);
         let mut encoder =
-            StateWriter::parquet(temp_dir.path(), CompressionLevel::Level1).unwrap();
+            StateWriter::parquet(temp_dir.path(), ZstdCompressionLevel::Level1).unwrap();
 
         // when
         let contract_balance_groups =

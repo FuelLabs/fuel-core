@@ -145,7 +145,6 @@ fn full_snapshot(
     encoding: Encoding,
     db: impl ChainStateDb,
 ) -> Result<(), anyhow::Error> {
-    // TODO: segfault rename this to state writer
     let encoder = initialize_state_writer(output_dir, encoding)?;
     write_chain_state(&db, encoder, encoding.group_size())?;
 
@@ -211,7 +210,7 @@ fn initialize_state_writer(
         #[cfg(feature = "parquet")]
         Encoding::Parquet { compression, .. } => StateWriter::parquet(
             output_dir,
-            fuel_core_chain_config::CompressionLevel::try_from(compression)?,
+            fuel_core_chain_config::ZstdCompressionLevel::try_from(compression)?,
         )?,
     };
     Ok(encoder)

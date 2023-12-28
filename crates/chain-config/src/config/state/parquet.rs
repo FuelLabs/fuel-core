@@ -28,7 +28,7 @@ mod tests {
     use bytes::Bytes;
     use itertools::Itertools;
     use parquet::{
-        basic::GzipLevel,
+        basic::ZstdLevel,
         file::reader::{
             ChunkReader,
             Length,
@@ -52,7 +52,7 @@ mod tests {
         let mut buffer = vec![];
         let mut encoder = Encoder::new(
             &mut buffer,
-            parquet::basic::Compression::GZIP(GzipLevel::try_new(1).unwrap()),
+            parquet::basic::Compression::ZSTD(ZstdLevel::try_new(1).unwrap()),
         )
         .unwrap();
         let mut rng = StdRng::seed_from_u64(0);
@@ -78,8 +78,8 @@ mod tests {
         // then
         let actually_read = bytes_read.load(std::sync::atomic::Ordering::SeqCst);
 
-        assert_eq!(total_size, 103966);
-        assert_eq!(actually_read, 2434);
+        assert_eq!(total_size, 103542);
+        assert_eq!(actually_read, 2287);
     }
 
     #[derive(Clone)]
