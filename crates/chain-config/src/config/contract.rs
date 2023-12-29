@@ -9,7 +9,6 @@ use fuel_core_types::{
         StorageSlot,
     },
     fuel_types::{
-        AssetId,
         BlockHeight,
         Bytes32,
         Salt,
@@ -34,12 +33,6 @@ pub struct ContractConfig {
     pub code: Vec<u8>,
     #[serde_as(as = "HexType")]
     pub salt: Salt,
-    #[serde_as(as = "Option<Vec<(HexType, HexType)>>")]
-    #[serde(default)]
-    pub state: Option<Vec<(Bytes32, Bytes32)>>,
-    #[serde_as(as = "Option<Vec<(HexType, HexNumber)>>")]
-    #[serde(default)]
-    pub balances: Option<Vec<(AssetId, u64)>>,
     /// UtxoId: auto-generated if None
     #[serde_as(as = "Option<HexType>")]
     #[serde(default)]
@@ -77,31 +70,20 @@ impl crate::Randomize for ContractConfig {
                 .gen::<bool>()
                 .then(|| BlockHeight::from(rng.gen::<u32>())),
             tx_pointer_tx_idx: rng.gen::<bool>().then(|| rng.gen()),
-            // not populated since they have to be removed from the ContractConfig
-            balances: None,
-            state: None,
         }
     }
 }
 
 impl ContractConfig {
-    pub fn calculate_contract_id(&mut self) {
-        let bytes = &self.code;
-        let salt = self.salt;
-        let slots = self.state.clone().map(|slots| {
-            slots
-                .into_iter()
-                .map(|(key, value)| StorageSlot::new(key, value))
-                .collect::<Vec<_>>()
-        });
-        let state_root = slots
-            .as_ref()
-            .map(|slots| Contract::initial_state_root(slots.iter()))
-            .unwrap_or(Contract::default_state_root());
+    pub fn update_contract_id<'a>(
+        &mut self,
+        storage_slots: impl IntoIterator<Item = &'a StorageSlot>,
+    ) {
+        let state_root = Contract::initial_state_root(storage_slots.into_iter());
 
-        let contract = Contract::from(bytes.clone());
+        let contract = Contract::from(self.code.clone());
         let root = contract.root();
-        let contract_id = contract.id(&salt, &root, &state_root);
+        let contract_id = contract.id(&self.salt, &root, &state_root);
         self.contract_id = contract_id;
     }
 }

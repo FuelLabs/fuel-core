@@ -10,7 +10,9 @@ use crate::{
 use fuel_core_chain_config::{
     ChainStateDb,
     CoinConfig,
+    ContractBalanceConfig,
     ContractConfig,
+    ContractStateConfig,
     MessageConfig,
 };
 use fuel_core_storage::{
@@ -534,11 +536,34 @@ impl Default for Database {
 /// Implement `ChainConfigDb` so that `Database` can be passed to
 /// `StateConfig's` `generate_state_config()` method
 impl ChainStateDb for Database {
-    fn get_contract_config_by_id(
+    fn get_contract_by_id(
         &self,
         contract_id: fuel_core_types::fuel_types::ContractId,
-    ) -> StorageResult<ContractConfig> {
-        Self::get_contract_config_by_id(self, contract_id)
+    ) -> StorageResult<(
+        ContractConfig,
+        Vec<ContractStateConfig>,
+        Vec<ContractBalanceConfig>,
+    )> {
+        let contract = self.get_contract_config(contract_id)?;
+        let state = self
+            .contract_states(contract_id)
+            .map_ok(move |(key, value)| ContractStateConfig {
+                contract_id: Bytes32::from(*contract_id),
+                key,
+                value,
+            })
+            .try_collect()?;
+
+        let balances = self
+            .contract_balances(contract_id, None, None)
+            .map_ok(move |(asset_id, amount)| ContractBalanceConfig {
+                contract_id: Bytes32::from(*contract_id),
+                asset_id,
+                amount,
+            })
+            .try_collect()?;
+
+        Ok((contract, state, balances))
     }
 
     fn iter_coin_configs(&self) -> BoxedIter<StorageResult<CoinConfig>> {

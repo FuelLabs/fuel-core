@@ -4,7 +4,10 @@ use anyhow::{
     anyhow,
     Context,
 };
-use fuel_core_chain_config::ContractConfig;
+use fuel_core_chain_config::{
+    ContractConfig,
+    ContractStateConfig,
+};
 use fuel_core_client::client::{
     pagination::{
         PageDirection,
@@ -41,6 +44,7 @@ use fuel_core_types::{
         canonical::Serialize,
         Address,
         AssetId,
+        Bytes32,
     },
     fuel_vm::SecretKey,
 };
@@ -132,13 +136,13 @@ impl Wallet {
             results = response.results;
             // check if page has the utxos we're looking for
             if results.iter().any(|coin| coin.utxo_id == utxo_id) {
-                return Ok(true)
+                return Ok(true);
             }
             // otherwise update the cursor to check the next page
             if response.has_next_page {
                 cursor = response.cursor;
             } else {
-                break
+                break;
             }
         }
 
@@ -299,7 +303,11 @@ impl Wallet {
         })
     }
 
-    pub async fn deploy_contract(&self, config: ContractConfig) -> anyhow::Result<()> {
+    pub async fn deploy_contract(
+        &self,
+        config: ContractConfig,
+        slots: Vec<StorageSlot>,
+    ) -> anyhow::Result<()> {
         let asset_id = AssetId::zeroed();
         let total_amount = BASE_AMOUNT;
         // select coins
@@ -312,14 +320,9 @@ impl Wallet {
             contract_id,
             code: bytes,
             salt,
-            state,
             ..
         } = config;
-        let slots = state
-            .unwrap_or_default()
-            .into_iter()
-            .map(|(key, value)| StorageSlot::new(key, value))
-            .collect::<Vec<_>>();
+
         let state_root = Contract::initial_state_root(slots.iter());
         let mut tx = TransactionBuilder::create(bytes.into(), salt, slots);
         tx.gas_price(1);
@@ -358,7 +361,7 @@ impl Wallet {
         if let TransactionStatus::Failure { .. } | TransactionStatus::SqueezedOut { .. } =
             &status
         {
-            return Err(anyhow!(format!("unexpected transaction status {status:?}")))
+            return Err(anyhow!(format!("unexpected transaction status {status:?}")));
         }
 
         Ok(())

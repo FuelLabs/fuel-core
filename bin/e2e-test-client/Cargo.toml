@@ -15,7 +15,7 @@ publish = true
 [dependencies]
 anyhow = { workspace = true }
 fuel-core = { workspace = true, default-features = false, optional = true }
-fuel-core-chain-config = { workspace = true }
+fuel-core-chain-config = { workspace = true, features = ["default"] }
 fuel-core-client = { workspace = true }
 fuel-core-types = { workspace = true, features = ["test-helpers"] }
 futures = "0.3"
@@ -27,10 +27,13 @@ serde_json = { workspace = true }
 tikv-jemallocator = { workspace = true }
 tokio = { workspace = true }
 toml = { version = "0.5" }
+itertools = { workspace = true }
 
 [dev-dependencies]
 assert_cmd = "2.0"
-e2e_client = { path = ".", features = ["dev-deps"], package = "fuel-core-e2e-client", default-features = false }
+e2e_client = { path = ".", features = [
+  "dev-deps",
+], package = "fuel-core-e2e-client", default-features = false }
 fuel-core-trace = { path = "../../crates/trace" }
 insta = { workspace = true }
 tempfile = { workspace = true }

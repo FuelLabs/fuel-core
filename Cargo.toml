@@ -83,7 +83,7 @@ fuel-vm-private = { version = "0.43.0", package = "fuel-vm", default-features = 
 anyhow = "1.0"
 async-trait = "0.1"
 cynic = { version = "2.2.1", features = ["http-reqwest"] }
-clap = "4.1"
+clap = "4.4"
 derive_more = { version = "0.99" }
 hyper = { version = "0.14.26" }
 primitive-types = { version = "0.12", default-features = false }

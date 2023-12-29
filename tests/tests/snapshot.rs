@@ -29,7 +29,7 @@ use rand::{
 };
 
 #[tokio::test]
-async fn snapshot_state_config() {
+async fn loads_snapshot() {
     let mut rng = StdRng::seed_from_u64(1234);
     let db = Database::default();
 
@@ -42,15 +42,15 @@ async fn snapshot_state_config() {
             contract_id: ContractId::from(*contract_id),
             code: vec![8; 32],
             salt: Salt::new([9; 32]),
-            // TODO remove
-            state: Some(vec![
-                (Bytes32::new([5u8; 32]), Bytes32::new([8u8; 32])),
-                (Bytes32::new([7u8; 32]), Bytes32::new([9u8; 32])),
-            ]),
-            balances: Some(vec![
-                (AssetId::new([3u8; 32]), 100),
-                (AssetId::new([10u8; 32]), 10000),
-            ]),
+            // // TODO remove
+            // state: Some(vec![
+            //     (Bytes32::new([5u8; 32]), Bytes32::new([8u8; 32])),
+            //     (Bytes32::new([7u8; 32]), Bytes32::new([9u8; 32])),
+            // ]),
+            // balances: Some(vec![
+            //     (AssetId::new([3u8; 32]), 100),
+            //     (AssetId::new([10u8; 32]), 10000),
+            // ]),
             tx_id: Some(rng.gen()),
             output_index: Some(rng.gen()),
             tx_pointer_block_height: Some(BlockHeight::from(10)),
@@ -117,7 +117,8 @@ async fn snapshot_state_config() {
         .await
         .unwrap();
 
-    let state_conf = StateConfig::generate_state_config(db).unwrap();
+    // let state_conf = StateConfig::generate_state_config(db).unwrap();
+    let state_conf: StateConfig = todo!();
 
     // initial state
 

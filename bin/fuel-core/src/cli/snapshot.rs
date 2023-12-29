@@ -33,6 +33,10 @@ pub struct Command {
     )]
     pub(crate) database_path: PathBuf,
 
+    /// Where to save the snapshot
+    #[arg(name = "OUTPUT_DIR", long = "output-directory")]
+    pub(crate) output_dir: PathBuf,
+
     /// The sub-command of the snapshot operation.
     #[command(subcommand)]
     pub(crate) subcommand: SubCommands,
@@ -86,21 +90,16 @@ impl EncodingCommand {
 #[derive(Debug, Clone, Subcommand)]
 pub enum SubCommands {
     /// Creates a snapshot of the entire database and produces a chain config.
-    #[command(arg_required_else_help = true)]
     Everything {
         /// Specify a path to the directory containing the chain config. Defaults used if no path
         /// is provided.
-        #[clap(name = "CHAIN_CONFIG", long = "chain")]
+        #[arg(name = "CHAIN_CONFIG", long = "chain")]
         chain_config: Option<PathBuf>,
-        /// Specify a path to an output directory for the chain config files.
-        #[clap(name = "OUTPUT_DIR", long = "output-directory")]
-        output_dir: PathBuf,
         /// Encoding format for the chain state files.
         #[clap(subcommand)]
         encoding_command: Option<EncodingCommand>,
     },
     /// Creates a config for the contract.
-    #[command(arg_required_else_help = true)]
     Contract {
         /// The id of the contract to snapshot.
         #[clap(long = "id")]
@@ -111,11 +110,11 @@ pub enum SubCommands {
 #[cfg(any(feature = "rocksdb", feature = "rocksdb-production"))]
 pub fn exec(command: Command) -> anyhow::Result<()> {
     let db = open_db(&command.database_path)?;
+    let output_dir = command.output_dir;
 
     match command.subcommand {
         SubCommands::Everything {
             chain_config,
-            output_dir,
             encoding_command,
             ..
         } => {
@@ -124,18 +123,25 @@ pub fn exec(command: Command) -> anyhow::Result<()> {
                 .unwrap_or_else(|| Encoding::Json);
             full_snapshot(chain_config, &output_dir, encoding, &db)
         }
-        SubCommands::Contract { contract_id } => contract_snapshot(&db, contract_id),
+        SubCommands::Contract { contract_id } => {
+            contract_snapshot(&db, contract_id, &output_dir)
+        }
     }
 }
 
 fn contract_snapshot(
     db: impl ChainStateDb,
     contract_id: ContractId,
+    output_dir: &Path,
 ) -> Result<(), anyhow::Error> {
-    let config = db.get_contract_config_by_id(contract_id)?;
-    let stdout = std::io::stdout().lock();
-    serde_json::to_writer_pretty(stdout, &config)
-        .context("failed to dump contract snapshot to JSON")?;
+    let (contract, state, balance) = db.get_contract_by_id(contract_id)?;
+    let mut writer = initialize_state_writer(output_dir, Encoding::Json)?;
+
+    writer.write_contracts(vec![contract])?;
+    writer.write_contract_state(state)?;
+    writer.write_contract_balance(balance)?;
+    writer.close()?;
+
     Ok(())
 }
 

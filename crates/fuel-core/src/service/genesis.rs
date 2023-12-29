@@ -515,6 +515,7 @@ mod tests {
             Address,
             AssetId,
             BlockHeight,
+            ContractId,
             Salt,
         },
     };
@@ -695,8 +696,6 @@ mod tests {
                 contract_id,
                 code: contract.into(),
                 salt,
-                state: None,
-                balances: None,
                 tx_id: Some(rng.gen()),
                 output_index: Some(rng.gen()),
                 tx_pointer_block_height: Some(0u32.into()),
@@ -790,8 +789,6 @@ mod tests {
                 contract_id,
                 code: contract.into(),
                 salt,
-                state: None,
-                balances: None,
                 tx_id: None,
                 output_index: None,
                 tx_pointer_block_height: None,
@@ -862,23 +859,27 @@ mod tests {
 
         let test_asset_id: AssetId = rng.gen();
         let test_balance: u64 = rng.next_u64();
-        let balances = vec![(test_asset_id, test_balance)];
+        let contract_id = Default::default();
+        let balances = vec![ContractBalanceConfig {
+            contract_id,
+            asset_id: test_asset_id,
+            amount: test_balance,
+        }];
         let salt: Salt = rng.gen();
         let contract = Contract::from(op::ret(0x10).to_bytes().to_vec());
 
         let state = StateConfig {
             contracts: vec![ContractConfig {
-                contract_id: Default::default(),
+                contract_id: ContractId::from(*contract_id),
                 code: contract.into(),
                 salt,
-                state: None,
-                balances: Some(balances),
                 tx_id: None,
                 output_index: None,
                 // set txpointer height > genesis height
                 tx_pointer_block_height: Some(BlockHeight::from(11u32)),
                 tx_pointer_tx_idx: Some(0),
             }],
+            contract_balance: balances,
             ..Default::default()
         };
         let state_reader = StateReader::in_memory(state, MAX_GROUP_SIZE);

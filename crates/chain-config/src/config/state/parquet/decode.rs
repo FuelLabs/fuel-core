@@ -406,8 +406,6 @@ impl TryFrom<Row> for ContractConfig {
             output_index,
             tx_pointer_block_height,
             tx_pointer_tx_idx,
-            state: None,
-            balances: None,
         })
     }
 }

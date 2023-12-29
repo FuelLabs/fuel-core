@@ -12,7 +12,6 @@ use fuel_core_types::{
     fuel_types::{
         Address,
         BlockHeight,
-        ContractId,
     },
     fuel_vm::SecretKey,
 };
@@ -89,22 +88,6 @@ pub struct StateConfig {
 }
 
 impl StateConfig {
-    pub fn generate_state_config(db: impl ChainStateDb) -> StorageResult<Self> {
-        let coins = db.iter_coin_configs().try_collect()?;
-        let messages = db.iter_message_configs().try_collect()?;
-        let contracts = db.iter_contract_configs().try_collect()?;
-        let contract_state = db.iter_contract_state_configs().try_collect()?;
-        let contract_balance = db.iter_contract_balance_configs().try_collect()?;
-
-        Ok(Self {
-            coins,
-            messages,
-            contracts,
-            contract_state,
-            contract_balance,
-        })
-    }
-
     #[cfg(feature = "std")]
     pub fn load_from_directory(path: impl AsRef<Path>) -> Result<Self, anyhow::Error> {
         let decoder = StateReader::detect_encoding(path, 1)?;
@@ -226,11 +209,15 @@ impl StateConfig {
 
 // TODO: BoxedIter to be used until RPITIT lands in stable rust.
 pub trait ChainStateDb {
-    /// Returns the contract config with the given contract id.
-    fn get_contract_config_by_id(
+    /// Returns the contract config along with its state and balance
+    fn get_contract_by_id(
         &self,
-        contract_id: ContractId,
-    ) -> StorageResult<ContractConfig>;
+        contract_id: fuel_core_types::fuel_types::ContractId,
+    ) -> StorageResult<(
+        ContractConfig,
+        Vec<ContractStateConfig>,
+        Vec<ContractBalanceConfig>,
+    )>;
     /// Returns *all* unspent coin configs available in the database.
     fn iter_coin_configs(&self) -> BoxedIter<StorageResult<CoinConfig>>;
     /// Returns *alive* contract configs available in the database.
@@ -254,11 +241,15 @@ impl<T> ChainStateDb for &T
 where
     T: ChainStateDb,
 {
-    fn get_contract_config_by_id(
+    fn get_contract_by_id(
         &self,
-        contract_id: ContractId,
-    ) -> StorageResult<ContractConfig> {
-        (*self).get_contract_config_by_id(contract_id)
+        contract_id: fuel_core_types::fuel_types::ContractId,
+    ) -> StorageResult<(
+        ContractConfig,
+        Vec<ContractStateConfig>,
+        Vec<ContractBalanceConfig>,
+    )> {
+        (*self).get_contract_by_id(contract_id)
     }
 
     fn iter_coin_configs(&self) -> BoxedIter<StorageResult<CoinConfig>> {

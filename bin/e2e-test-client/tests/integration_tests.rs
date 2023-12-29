@@ -9,6 +9,7 @@ use fuel_core_chain_config::{
     ChainConfig,
     StateConfig,
     StateReader,
+    MAX_GROUP_SIZE,
 };
 use fuel_core_e2e_client::config::SuiteConfig;
 use std::{

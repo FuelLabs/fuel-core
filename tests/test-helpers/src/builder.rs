@@ -125,8 +125,6 @@ impl TestSetupBuilder {
                 contract_id,
                 code,
                 salt,
-                state: None,
-                balances: None,
                 tx_id: utxo_id.map(|utxo_id| *utxo_id.tx_id()),
                 output_index: utxo_id.map(|utxo_id| utxo_id.output_index()),
                 tx_pointer_block_height: tx_pointer.map(|pointer| pointer.block_height()),

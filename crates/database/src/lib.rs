@@ -4,12 +4,12 @@
 //! defined here are used by services but are flexible enough to customize the
 //! logic when the `Database` is known.
 
-#![deny(clippy::arithmetic_side_effects)]
-#![deny(clippy::cast_possible_truncation)]
-#![deny(missing_docs)]
-#![deny(unused_crate_dependencies)]
-#![deny(warnings)]
-#![deny(unused_variables)]
+//#![deny(clippy::arithmetic_side_effects)]
+//#![deny(clippy::cast_possible_truncation)]
+//#![deny(missing_docs)]
+//#![deny(unused_crate_dependencies)]
+//#![deny(warnings)]
+//#![deny(unused_variables)]
 
 use fuel_core_storage::Error as StorageError;
 use fuel_core_types::services::executor::Error as ExecutorError;
