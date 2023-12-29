@@ -9,7 +9,10 @@ use fuel_core_types::{
         primitives::DaBlockHeight,
     },
     fuel_asm::Word,
-    fuel_tx::TxId,
+    fuel_tx::{
+        Transaction,
+        TxId,
+    },
     fuel_types::{
         BlockHeight,
         Bytes32,
@@ -49,6 +52,7 @@ pub trait BlockProducer: Send + Sync {
         &self,
         height: BlockHeight,
         block_time: Tai64,
+        txs: Option<Vec<Transaction>>,
         max_gas: Word,
     ) -> anyhow::Result<UncommittedExecutionResult<StorageTransaction<Self::Database>>>;
 }

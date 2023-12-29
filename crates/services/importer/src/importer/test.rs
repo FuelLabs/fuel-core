@@ -10,7 +10,6 @@ use crate::{
 };
 use anyhow::anyhow;
 use fuel_core_storage::{
-    not_found,
     transactional::{
         StorageTransaction,
         Transaction as TransactionTrait,
@@ -20,7 +19,10 @@ use fuel_core_storage::{
 };
 use fuel_core_types::{
     blockchain::{
-        block::Block,
+        block::{
+            Block,
+            CompressedBlock,
+        },
         consensus::Consensus,
         primitives::BlockId,
         SealedBlock,
@@ -50,7 +52,7 @@ mockall::mock! {
     pub Database {}
 
     impl ImporterDatabase for Database {
-        fn latest_block_height(&self) -> StorageResult<BlockHeight>;
+        fn latest_block_height(&self) -> StorageResult<Option<BlockHeight>>;
         fn increase_tx_count(&self, new_txs_count: u64) -> StorageResult<u64>;
     }
 
@@ -59,7 +61,10 @@ mockall::mock! {
             &mut self,
             block_id: &BlockId,
             consensus: &Consensus,
-        ) -> StorageResult<Option<Consensus>>;
+        ) -> StorageResult<Option<()>>;
+
+        fn block(&mut self, block_id: &BlockId, block: &CompressedBlock)
+            -> StorageResult<Option<()>>;
     }
 
     impl TransactionTrait<MockDatabase> for Database {
@@ -109,30 +114,38 @@ fn poa_block(height: u32) -> SealedBlock {
 
 fn underlying_db<R>(result: R) -> impl Fn() -> MockDatabase
 where
-    R: Fn() -> StorageResult<u32> + Send + Clone + 'static,
+    R: Fn() -> StorageResult<Option<u32>> + Send + Clone + 'static,
 {
     move || {
         let result = result.clone();
         let mut db = MockDatabase::default();
         db.expect_latest_block_height()
-            .returning(move || result().map(Into::into));
+            .returning(move || result().map(|v| v.map(Into::into)));
         db.expect_increase_tx_count().returning(Ok);
         db
     }
 }
 
-fn executor_db<H, S>(height: H, seal: S, commits: usize) -> impl Fn() -> MockDatabase
+fn executor_db<H, S, B>(
+    height: H,
+    seal: S,
+    block: B,
+    commits: usize,
+) -> impl Fn() -> MockDatabase
 where
-    H: Fn() -> StorageResult<u32> + Send + Clone + 'static,
-    S: Fn() -> StorageResult<Option<Consensus>> + Send + Clone + 'static,
+    H: Fn() -> StorageResult<Option<u32>> + Send + Clone + 'static,
+    S: Fn() -> StorageResult<Option<()>> + Send + Clone + 'static,
+    B: Fn() -> StorageResult<Option<()>> + Send + Clone + 'static,
 {
     move || {
         let height = height.clone();
         let seal = seal.clone();
+        let block = block.clone();
         let mut db = MockDatabase::default();
         db.expect_latest_block_height()
-            .returning(move || height().map(Into::into));
+            .returning(move || height().map(|v| v.map(Into::into)));
         db.expect_seal_block().returning(move |_, _| seal());
+        db.expect_block().returning(move |_, _| block());
         db.expect_commit().times(commits).returning(|| Ok(()));
         db.expect_increase_tx_count().returning(Ok);
         db
@@ -143,16 +156,12 @@ fn ok<T: Clone, Err>(entity: T) -> impl Fn() -> Result<T, Err> + Clone {
     move || Ok(entity.clone())
 }
 
-fn not_found<T>() -> StorageResult<T> {
-    Err(not_found!("Not found"))
-}
-
 fn storage_failure<T>() -> StorageResult<T> {
     Err(StorageError::Other(anyhow!("Some failure")))
 }
 
 fn storage_failure_error() -> Error {
-    Error::StorageError(StorageError::Other(anyhow!("Some failure")))
+    storage_failure::<()>().unwrap_err().into()
 }
 
 fn ex_result(height: u32, skipped_transactions: usize) -> MockExecutionResult {
@@ -200,7 +209,7 @@ fn verification_failure<T>() -> anyhow::Result<T> {
 }
 
 fn verification_failure_error() -> Error {
-    Error::FailedVerification(anyhow!("Not verified"))
+    Error::FailedVerification(verification_failure::<()>().unwrap_err())
 }
 
 fn verifier<R>(result: R) -> MockBlockVerifier
@@ -219,45 +228,52 @@ where
 //////////////// //////////// Genesis Block /////////// ////////////////
 #[test_case(
     genesis(0),
-    underlying_db(not_found),
-    executor_db(ok(0), ok(None), 1)
+    underlying_db(ok(None)),
+    executor_db(ok(None), ok(None), ok(None), 1)
     => Ok(());
     "successfully imports genesis block when latest block not found"
 )]
 #[test_case(
     genesis(113),
-    underlying_db(not_found),
-    executor_db(ok(113), ok(None), 1)
+    underlying_db(ok(None)),
+    executor_db(ok(None), ok(None), ok(None), 1)
     => Ok(());
     "successfully imports block at arbitrary height when executor db expects it and last block not found" 
 )]
 #[test_case(
     genesis(0),
     underlying_db(storage_failure),
-    executor_db(ok(0), ok(None), 0)
-    => Err(Error::InvalidUnderlyingDatabaseGenesisState);
+    executor_db(ok(Some(0)), ok(None), ok(None), 0)
+    => Err(storage_failure_error());
     "fails to import genesis when underlying database fails"
 )]
 #[test_case(
     genesis(0),
-    underlying_db(ok(0)),
-    executor_db(ok(0), ok(None), 0)
+    underlying_db(ok(Some(0))),
+    executor_db(ok(Some(0)), ok(None), ok(None), 0)
     => Err(Error::InvalidUnderlyingDatabaseGenesisState);
     "fails to import genesis block when already exists"
 )]
 #[test_case(
     genesis(1),
-    underlying_db(not_found),
-    executor_db(ok(0), ok(None), 0)
-    => Err(Error::InvalidDatabaseStateAfterExecution(1u32.into(), 0u32.into()));
+    underlying_db(ok(None)),
+    executor_db(ok(Some(0)), ok(None), ok(None), 0)
+    => Err(Error::InvalidDatabaseStateAfterExecution(None, Some(0u32.into())));
     "fails to import genesis block when next height is not 0"
 )]
 #[test_case(
     genesis(0),
-    underlying_db(not_found),
-    executor_db(ok(0), ok(Some(Consensus::Genesis(Default::default()))), 0)
+    underlying_db(ok(None)),
+    executor_db(ok(None), ok(Some(())), ok(None), 0)
     => Err(Error::NotUnique(0u32.into()));
     "fails to import genesis block when consensus exists for height 0"
+)]
+#[test_case(
+    genesis(0),
+    underlying_db(ok(None)),
+    executor_db(ok(None), ok(None), ok(Some(())), 0)
+    => Err(Error::NotUnique(0u32.into()));
+    "fails to import genesis block when block exists for height 0"
 )]
 fn commit_result_genesis(
     sealed_block: SealedBlock,
@@ -270,66 +286,80 @@ fn commit_result_genesis(
 //////////////////////////// PoA Block ////////////////////////////
 #[test_case(
     poa_block(1),
-    underlying_db(ok(0)),
-    executor_db(ok(1), ok(None), 1)
+    underlying_db(ok(Some(0))),
+    executor_db(ok(Some(0)), ok(None), ok(None), 1)
     => Ok(());
     "successfully imports block at height 1 when latest block is genesis"
 )]
 #[test_case(
     poa_block(113),
-    underlying_db(ok(112)),
-    executor_db(ok(113), ok(None), 1)
+    underlying_db(ok(Some(112))),
+    executor_db(ok(Some(112)), ok(None), ok(None), 1)
     => Ok(());
     "successfully imports block at arbitrary height when latest block height is one fewer and executor db expects it"
 )]
 #[test_case(
     poa_block(0),
-    underlying_db(ok(0)),
-    executor_db(ok(1), ok(None), 0)
+    underlying_db(ok(Some(0))),
+    executor_db(ok(Some(1)), ok(None), ok(None), 0)
     => Err(Error::ZeroNonGenericHeight);
     "fails to import PoA block with height 0"
 )]
 #[test_case(
     poa_block(113),
-    underlying_db(ok(111)),
-    executor_db(ok(113), ok(None), 0)
+    underlying_db(ok(Some(111))),
+    executor_db(ok(Some(113)), ok(None), ok(None), 0)
     => Err(Error::IncorrectBlockHeight(112u32.into(), 113u32.into()));
     "fails to import block at height 113 when latest block height is 111"
 )]
 #[test_case(
     poa_block(113),
-    underlying_db(ok(114)),
-    executor_db(ok(113), ok(None), 0)
+    underlying_db(ok(Some(114))),
+    executor_db(ok(Some(113)), ok(None), ok(None), 0)
     => Err(Error::IncorrectBlockHeight(115u32.into(), 113u32.into()));
     "fails to import block at height 113 when latest block height is 114"
 )]
 #[test_case(
     poa_block(113),
-    underlying_db(ok(112)),
-    executor_db(ok(114), ok(None), 0)
-    => Err(Error::InvalidDatabaseStateAfterExecution(113u32.into(), 114u32.into()));
+    underlying_db(ok(Some(112))),
+    executor_db(ok(Some(114)), ok(None), ok(None), 0)
+    => Err(Error::InvalidDatabaseStateAfterExecution(Some(112u32.into()), Some(114u32.into())));
     "fails to import block 113 when executor db expects height 114"
 )]
 #[test_case(
     poa_block(113),
-    underlying_db(ok(112)),
-    executor_db(storage_failure, ok(None), 0)
+    underlying_db(ok(Some(112))),
+    executor_db(storage_failure, ok(None), ok(None), 0)
     => Err(storage_failure_error());
     "fails to import block when executor db fails to find latest block"
 )]
 #[test_case(
     poa_block(113),
-    underlying_db(ok(112)),
-    executor_db(ok(113), ok(Some(Consensus::PoA(Default::default()))), 0)
+    underlying_db(ok(Some(112))),
+    executor_db(ok(Some(112)), ok(Some(())), ok(None), 0)
     => Err(Error::NotUnique(113u32.into()));
     "fails to import block when consensus exists for block"
 )]
 #[test_case(
     poa_block(113),
-    underlying_db(ok(112)),
-    executor_db(ok(113), storage_failure, 0)
+    underlying_db(ok(Some(112))),
+    executor_db(ok(Some(112)), storage_failure, ok(None), 0)
     => Err(storage_failure_error());
     "fails to import block when executor db fails to find consensus"
+)]
+#[test_case(
+    poa_block(113),
+    underlying_db(ok(Some(112))),
+    executor_db(ok(Some(112)), ok(None), ok(Some(())), 0)
+    => Err(Error::NotUnique(113u32.into()));
+    "fails to import block when block exists"
+)]
+#[test_case(
+    poa_block(113),
+    underlying_db(ok(Some(112))),
+    executor_db(ok(Some(112)), ok(None), storage_failure, 0)
+    => Err(storage_failure_error());
+    "fails to import block when executor db fails to find block"
 )]
 fn commit_result_and_execute_and_commit_poa(
     sealed_block: SealedBlock,
@@ -357,7 +387,13 @@ fn commit_result_assert(
     executor_db: MockDatabase,
 ) -> Result<(), Error> {
     let expected_to_broadcast = sealed_block.clone();
-    let importer = Importer::new(Default::default(), underlying_db, (), ());
+    let importer = Importer::new(
+        Default::default(),
+        &Default::default(),
+        underlying_db,
+        (),
+        (),
+    );
     let uncommitted_result = UncommittedResult::new(
         ImportResult::new_from_local(sealed_block, vec![]),
         StorageTransaction::new(executor_db),
@@ -387,7 +423,13 @@ fn execute_and_commit_assert(
     verifier: MockBlockVerifier,
 ) -> Result<(), Error> {
     let expected_to_broadcast = sealed_block.clone();
-    let importer = Importer::new(Default::default(), underlying_db, executor, verifier);
+    let importer = Importer::new(
+        Default::default(),
+        &Default::default(),
+        underlying_db,
+        executor,
+        verifier,
+    );
 
     let mut imported_blocks = importer.subscribe();
     let result = importer.execute_and_commit(sealed_block);
@@ -408,7 +450,13 @@ fn execute_and_commit_assert(
 
 #[test]
 fn commit_result_fail_when_locked() {
-    let importer = Importer::new(Default::default(), MockDatabase::default(), (), ());
+    let importer = Importer::new(
+        Default::default(),
+        &Default::default(),
+        MockDatabase::default(),
+        (),
+        (),
+    );
     let uncommitted_result = UncommittedResult::new(
         ImportResult::default(),
         StorageTransaction::new(MockDatabase::default()),
@@ -425,6 +473,7 @@ fn commit_result_fail_when_locked() {
 fn execute_and_commit_fail_when_locked() {
     let importer = Importer::new(
         Default::default(),
+        &Default::default(),
         MockDatabase::default(),
         MockExecutor::default(),
         MockBlockVerifier::default(),
@@ -441,6 +490,7 @@ fn execute_and_commit_fail_when_locked() {
 fn one_lock_at_the_same_time() {
     let importer = Importer::new(
         Default::default(),
+        &Default::default(),
         MockDatabase::default(),
         MockExecutor::default(),
         MockBlockVerifier::default(),
@@ -513,10 +563,10 @@ where
     let previous_height = expected_height.checked_sub(1).unwrap_or_default();
     let execute_and_commit_result = execute_and_commit_assert(
         sealed_block,
-        underlying_db(ok(previous_height))(),
+        underlying_db(ok(Some(previous_height)))(),
         executor(
             block_after_execution,
-            executor_db(ok(expected_height), ok(None), commits)(),
+            executor_db(ok(Some(previous_height)), ok(None), ok(None), commits)(),
         ),
         verifier(verifier_result),
     );
@@ -535,6 +585,7 @@ where
 {
     let importer = Importer::new(
         Default::default(),
+        &Default::default(),
         MockDatabase::default(),
         executor(block_after_execution, MockDatabase::default()),
         verifier(verifier_result),
@@ -547,6 +598,7 @@ where
 fn verify_and_execute_allowed_when_locked() {
     let importer = Importer::new(
         Default::default(),
+        &Default::default(),
         MockDatabase::default(),
         executor(ok(ex_result(13, 0)), MockDatabase::default()),
         verifier(ok(())),

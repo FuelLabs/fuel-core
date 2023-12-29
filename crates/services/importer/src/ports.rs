@@ -4,7 +4,10 @@ use fuel_core_storage::{
 };
 use fuel_core_types::{
     blockchain::{
-        block::Block,
+        block::{
+            Block,
+            CompressedBlock,
+        },
         consensus::Consensus,
         primitives::BlockId,
     },
@@ -32,7 +35,7 @@ pub trait Executor: Send + Sync {
 /// The database port used by the block importer.
 pub trait ImporterDatabase {
     /// Returns the latest block height.
-    fn latest_block_height(&self) -> StorageResult<BlockHeight>;
+    fn latest_block_height(&self) -> StorageResult<Option<BlockHeight>>;
     /// Update metadata about the total number of transactions on the chain.
     /// Returns the total count after the update.
     fn increase_tx_count(&self, new_txs_count: u64) -> StorageResult<u64>;
@@ -46,7 +49,14 @@ pub trait ExecutorDatabase: ImporterDatabase {
         &mut self,
         block_id: &BlockId,
         consensus: &Consensus,
-    ) -> StorageResult<Option<Consensus>>;
+    ) -> StorageResult<Option<()>>;
+
+    /// Inserts the `CompressedBlock` under the `block_id`.
+    fn block(
+        &mut self,
+        block_id: &BlockId,
+        block: &CompressedBlock,
+    ) -> StorageResult<Option<()>>;
 }
 
 #[cfg_attr(test, mockall::automock)]

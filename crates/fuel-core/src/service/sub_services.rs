@@ -89,6 +89,7 @@ pub fn init_sub_services(
 
     let importer_adapter = BlockImporterAdapter::new(
         config.block_importer.clone(),
+        &config.chain_conf,
         database.clone(),
         executor.clone(),
         verifier.clone(),
@@ -205,13 +206,14 @@ pub fn init_sub_services(
         Box::new(database.clone()),
         Box::new(tx_pool_adapter),
         Box::new(producer_adapter),
-        Box::new(poa_adapter),
+        Box::new(poa_adapter.clone()),
         Box::new(p2p_adapter),
         config.query_log_threshold_time,
         config.api_request_timeout,
     )?;
 
     let shared = SharedState {
+        poa_adapter,
         txpool: txpool.shared.clone(),
         #[cfg(feature = "p2p")]
         network: network.as_ref().map(|n| n.shared.clone()),

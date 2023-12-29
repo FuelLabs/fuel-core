@@ -11,6 +11,7 @@ use crate::{
         sub_services::BlockProducerService,
     },
 };
+use fuel_core_executor::executor::OnceTransactionsSource;
 use fuel_core_producer::ports::TxPool;
 use fuel_core_storage::{
     not_found,
@@ -25,7 +26,10 @@ use fuel_core_types::{
         primitives,
     },
     fuel_tx,
-    fuel_tx::Receipt,
+    fuel_tx::{
+        Receipt,
+        Transaction,
+    },
     fuel_types::{
         BlockHeight,
         Bytes32,
@@ -61,18 +65,38 @@ impl TxPool for TxPoolAdapter {
     }
 }
 
-#[async_trait::async_trait]
-impl fuel_core_producer::ports::Executor for ExecutorAdapter {
+impl fuel_core_producer::ports::Executor<TransactionsSource> for ExecutorAdapter {
     type Database = Database;
-    type TxSource = TransactionsSource;
 
     fn execute_without_commit(
         &self,
-        component: Components<Self::TxSource>,
+        component: Components<TransactionsSource>,
     ) -> ExecutorResult<UncommittedResult<StorageTransaction<Database>>> {
         self._execute_without_commit(ExecutionTypes::Production(component))
     }
+}
 
+impl fuel_core_producer::ports::Executor<Vec<Transaction>> for ExecutorAdapter {
+    type Database = Database;
+
+    fn execute_without_commit(
+        &self,
+        component: Components<Vec<Transaction>>,
+    ) -> ExecutorResult<UncommittedResult<StorageTransaction<Database>>> {
+        let Components {
+            header_to_produce,
+            transactions_source,
+            gas_limit,
+        } = component;
+        self._execute_without_commit(ExecutionTypes::Production(Components {
+            header_to_produce,
+            transactions_source: OnceTransactionsSource::new(transactions_source),
+            gas_limit,
+        }))
+    }
+}
+
+impl fuel_core_producer::ports::DryRunner for ExecutorAdapter {
     fn dry_run(
         &self,
         block: Components<fuel_tx::Transaction>,

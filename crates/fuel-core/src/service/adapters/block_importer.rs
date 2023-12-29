@@ -6,6 +6,7 @@ use crate::{
         VerifierAdapter,
     },
 };
+use fuel_core_chain_config::ChainConfig;
 use fuel_core_importer::{
     ports::{
         BlockVerifier,
@@ -18,14 +19,20 @@ use fuel_core_importer::{
 };
 use fuel_core_poa::ports::RelayerPort;
 use fuel_core_storage::{
-    tables::SealedBlockConsensus,
+    tables::{
+        FuelBlocks,
+        SealedBlockConsensus,
+    },
     transactional::StorageTransaction,
     Result as StorageResult,
     StorageAsMut,
 };
 use fuel_core_types::{
     blockchain::{
-        block::Block,
+        block::{
+            Block,
+            CompressedBlock,
+        },
         consensus::Consensus,
         primitives::{
             BlockId,
@@ -42,16 +49,20 @@ use fuel_core_types::{
 };
 use std::sync::Arc;
 
-use super::MaybeRelayerAdapter;
+use super::{
+    MaybeRelayerAdapter,
+    TransactionsSource,
+};
 
 impl BlockImporterAdapter {
     pub fn new(
         config: Config,
+        chain_config: &ChainConfig,
         database: Database,
         executor: ExecutorAdapter,
         verifier: VerifierAdapter,
     ) -> Self {
-        let importer = Importer::new(config, database, executor, verifier);
+        let importer = Importer::new(config, chain_config, database, executor, verifier);
         importer.init_metrics();
         Self {
             block_importer: Arc::new(importer),
@@ -112,8 +123,8 @@ impl RelayerPort for MaybeRelayerAdapter {
 }
 
 impl ImporterDatabase for Database {
-    fn latest_block_height(&self) -> StorageResult<BlockHeight> {
-        self.latest_height()
+    fn latest_block_height(&self) -> StorageResult<Option<BlockHeight>> {
+        Ok(self.ids_of_latest_block()?.map(|(height, _)| height))
     }
 
     fn increase_tx_count(&self, new_txs_count: u64) -> StorageResult<u64> {
@@ -126,10 +137,21 @@ impl ExecutorDatabase for Database {
         &mut self,
         block_id: &BlockId,
         consensus: &Consensus,
-    ) -> StorageResult<Option<Consensus>> {
-        self.storage::<SealedBlockConsensus>()
-            .insert(block_id, consensus)
-            .map_err(Into::into)
+    ) -> StorageResult<Option<()>> {
+        Ok(self
+            .storage::<SealedBlockConsensus>()
+            .insert(block_id, consensus)?
+            .map(|_| ()))
+    }
+    fn block(
+        &mut self,
+        block_id: &BlockId,
+        block: &CompressedBlock,
+    ) -> StorageResult<Option<()>> {
+        Ok(self
+            .storage::<FuelBlocks>()
+            .insert(block_id, block)?
+            .map(|_| ()))
     }
 }
 
@@ -141,6 +163,8 @@ impl Executor for ExecutorAdapter {
         block: Block,
     ) -> ExecutorResult<UncommittedExecutionResult<StorageTransaction<Self::Database>>>
     {
-        self._execute_without_commit(ExecutionTypes::Validation(block))
+        self._execute_without_commit::<TransactionsSource>(ExecutionTypes::Validation(
+            block,
+        ))
     }
 }

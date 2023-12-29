@@ -7,11 +7,12 @@ use crate::{
     },
     Config,
 };
+use fuel_core_chain_config::ChainConfig;
 use fuel_core_metrics::importer::importer_metrics;
 use fuel_core_storage::{
+    not_found,
     transactional::StorageTransaction,
     Error as StorageError,
-    IsNotFound,
 };
 use fuel_core_types::{
     blockchain::{
@@ -22,7 +23,10 @@ use fuel_core_types::{
         primitives::BlockId,
         SealedBlock,
     },
-    fuel_types::BlockHeight,
+    fuel_types::{
+        BlockHeight,
+        ChainId,
+    },
     services::{
         block_importer::{
             ImportResult,
@@ -59,8 +63,8 @@ pub enum Error {
     )]
     InvalidUnderlyingDatabaseGenesisState,
     #[display(fmt = "The wrong state of database after execution of the block.\
-        The actual height is {_1}, when the next expected height is {_0}.")]
-    InvalidDatabaseStateAfterExecution(BlockHeight, BlockHeight),
+        The actual height is {_1:?}, when the next expected height is {_0:?}.")]
+    InvalidDatabaseStateAfterExecution(Option<BlockHeight>, Option<BlockHeight>),
     #[display(fmt = "Got overflow during increasing the height.")]
     Overflow,
     #[display(fmt = "The non-generic block can't have zero height.")]
@@ -96,7 +100,7 @@ impl From<Error> for anyhow::Error {
 #[cfg(test)]
 impl PartialEq for Error {
     fn eq(&self, other: &Self) -> bool {
-        format!("{self:?}") == format!("{other:?}")
+        format!("{self}") == format!("{other}")
     }
 }
 
@@ -104,18 +108,26 @@ pub struct Importer<D, E, V> {
     database: D,
     executor: E,
     verifier: V,
+    chain_id: ChainId,
     broadcast: broadcast::Sender<Arc<ImportResult>>,
     guard: tokio::sync::Semaphore,
 }
 
 impl<D, E, V> Importer<D, E, V> {
-    pub fn new(config: Config, database: D, executor: E, verifier: V) -> Self {
+    pub fn new(
+        config: Config,
+        chain_config: &ChainConfig,
+        database: D,
+        executor: E,
+        verifier: V,
+    ) -> Self {
         let (broadcast, _) = broadcast::channel(config.max_block_notify_buffer);
 
         Self {
             database,
             executor,
             verifier,
+            chain_id: chain_config.consensus_parameters.chain_id,
             broadcast,
             guard: tokio::sync::Semaphore::new(1),
         }
@@ -196,9 +208,9 @@ where
         // database height + 1.
         let expected_next_height = match consensus {
             Consensus::Genesis(_) => {
-                let result = self.database.latest_block_height();
-                let found = !result.is_not_found();
-                // Because the genesis block is not committed, it should return non found error.
+                let result = self.database.latest_block_height()?;
+                let found = result.is_some();
+                // Because the genesis block is not committed, it should return `None`.
                 // If we find the latest height, something is wrong with the state of the database.
                 if found {
                     return Err(Error::InvalidUnderlyingDatabaseGenesisState)
@@ -210,7 +222,10 @@ where
                     return Err(Error::ZeroNonGenericHeight)
                 }
 
-                let last_db_height = self.database.latest_block_height()?;
+                let last_db_height = self
+                    .database
+                    .latest_block_height()?
+                    .ok_or(not_found!("Latest block height"))?;
                 last_db_height
                     .checked_add(1u32)
                     .ok_or(Error::Overflow)?
@@ -228,15 +243,19 @@ where
         let db_after_execution = db_tx.as_mut();
 
         // Importer expects that `UncommittedResult` contains the result of block
-        // execution(It includes the block itself).
+        // execution without block itself.
+        let expected_height = self.database.latest_block_height()?;
         let actual_height = db_after_execution.latest_block_height()?;
-        if expected_next_height != actual_height {
+        if expected_height != actual_height {
             return Err(Error::InvalidDatabaseStateAfterExecution(
-                expected_next_height,
+                expected_height,
                 actual_height,
             ))
         }
 
+        db_after_execution
+            .block(&block_id, &block.compress(&self.chain_id))?
+            .should_be_unique(&expected_next_height)?;
         db_after_execution
             .seal_block(&block_id, &result.sealed_block.consensus)?
             .should_be_unique(&expected_next_height)?;
@@ -252,7 +271,7 @@ where
         importer_metrics().total_txs_count.set(total_txs as i64);
         importer_metrics()
             .block_height
-            .set(*actual_height.deref() as i64);
+            .set(*actual_next_height.deref() as i64);
         let current_time = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap()
@@ -273,8 +292,11 @@ where
         // Errors are optimistically handled via fallback to default values since the metrics
         // should get updated regularly anyways and these errors will be discovered and handled
         // correctly in more mission critical areas (such as _commit_result)
-        let current_block_height =
-            self.database.latest_block_height().unwrap_or_default();
+        let current_block_height = self
+            .database
+            .latest_block_height()
+            .unwrap_or_default()
+            .unwrap_or_default();
         let total_tx_count = self.database.increase_tx_count(0).unwrap_or_default();
 
         importer_metrics()

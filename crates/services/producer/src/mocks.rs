@@ -20,8 +20,6 @@ use fuel_core_types::{
         },
         primitives::DaBlockHeight,
     },
-    fuel_tx,
-    fuel_tx::Receipt,
     fuel_types::{
         Address,
         BlockHeight,
@@ -133,14 +131,12 @@ fn to_block(component: Components<Vec<ArcPoolTx>>) -> Block {
     Block::new(component.header_to_produce, transactions, &[])
 }
 
-impl Executor for MockExecutor {
+impl Executor<Vec<ArcPoolTx>> for MockExecutor {
     type Database = MockDb;
-    /// The source of transaction used by the executor.
-    type TxSource = Vec<ArcPoolTx>;
 
     fn execute_without_commit(
         &self,
-        component: Components<Self::TxSource>,
+        component: Components<Vec<ArcPoolTx>>,
     ) -> ExecutorResult<UncommittedResult<StorageTransaction<MockDb>>> {
         let block = to_block(component);
         // simulate executor inserting a block
@@ -158,26 +154,16 @@ impl Executor for MockExecutor {
             StorageTransaction::new(self.0.clone()),
         ))
     }
-
-    fn dry_run(
-        &self,
-        _block: Components<fuel_tx::Transaction>,
-        _utxo_validation: Option<bool>,
-    ) -> ExecutorResult<Vec<Vec<Receipt>>> {
-        Ok(Default::default())
-    }
 }
 
 pub struct FailingMockExecutor(pub Mutex<Option<ExecutorError>>);
 
-impl Executor for FailingMockExecutor {
+impl Executor<Vec<ArcPoolTx>> for FailingMockExecutor {
     type Database = MockDb;
-    /// The source of transaction used by the executor.
-    type TxSource = Vec<ArcPoolTx>;
 
     fn execute_without_commit(
         &self,
-        component: Components<Self::TxSource>,
+        component: Components<Vec<ArcPoolTx>>,
     ) -> ExecutorResult<UncommittedResult<StorageTransaction<MockDb>>> {
         // simulate an execution failure
         let mut err = self.0.lock().unwrap();
@@ -193,19 +179,6 @@ impl Executor for FailingMockExecutor {
                 },
                 StorageTransaction::new(MockDb::default()),
             ))
-        }
-    }
-
-    fn dry_run(
-        &self,
-        _block: Components<fuel_tx::Transaction>,
-        _utxo_validation: Option<bool>,
-    ) -> ExecutorResult<Vec<Vec<Receipt>>> {
-        let mut err = self.0.lock().unwrap();
-        if let Some(err) = err.take() {
-            Err(err)
-        } else {
-            Ok(Default::default())
         }
     }
 }

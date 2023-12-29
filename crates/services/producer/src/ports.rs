@@ -58,19 +58,19 @@ pub trait Relayer: Send + Sync {
     ) -> anyhow::Result<DaBlockHeight>;
 }
 
-pub trait Executor: Send + Sync {
+pub trait Executor<TxSource>: Send + Sync {
     /// The database used by the executor.
     type Database;
-    /// The source of transaction used by the executor.
-    type TxSource;
 
     /// Executes the block and returns the result of execution with uncommitted database
     /// transaction.
     fn execute_without_commit(
         &self,
-        component: Components<Self::TxSource>,
+        component: Components<TxSource>,
     ) -> ExecutorResult<UncommittedResult<StorageTransaction<Self::Database>>>;
+}
 
+pub trait DryRunner: Send + Sync {
     /// Executes the block without committing it to the database. During execution collects the
     /// receipts to return them. The `utxo_validation` field can be used to disable the validation
     /// of utxos during execution.

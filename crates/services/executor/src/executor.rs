@@ -12,7 +12,6 @@ use fuel_core_storage::{
         Coins,
         ContractsInfo,
         ContractsLatestUtxo,
-        FuelBlocks,
         Messages,
         Receipts,
         SpentMessages,
@@ -457,17 +456,6 @@ where
         self.index_tx_owners_for_block(&result.block, block_st_transaction.as_mut())?;
 
         // ------------ GraphQL API Functionality   END ------------
-
-        // insert block into database
-        block_st_transaction
-            .as_mut()
-            .storage::<FuelBlocks>()
-            .insert(
-                &finalized_block_id,
-                &result
-                    .block
-                    .compress(&self.config.consensus_parameters.chain_id),
-            )?;
 
         // Get the complete fuel block.
         Ok(UncommittedResult::new(result, block_st_transaction))
