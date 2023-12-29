@@ -7,9 +7,9 @@ use fuel_core_storage::{
         ContractsRawCode,
         ContractsState,
         Messages,
+        ProcessedTransactions,
         Receipts,
         SpentMessages,
-        Transactions,
     },
     transactional::Transactional,
     vm_storage::VmStorageRequirements,
@@ -109,7 +109,7 @@ pub trait TxIdOwnerRecorder {
 // TODO: Remove `Clone` bound
 pub trait ExecutorDatabaseTrait<D>:
     StorageMutate<Receipts, Error = StorageError>
-    + StorageMutate<Transactions, Error = StorageError>
+    + StorageMutate<ProcessedTransactions, Error = StorageError>
     + MerkleRootStorage<ContractId, ContractsAssets, Error = StorageError>
     + MessageIsSpent<Error = StorageError>
     + StorageMutate<Coins, Error = StorageError>

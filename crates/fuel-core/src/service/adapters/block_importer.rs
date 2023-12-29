@@ -22,6 +22,7 @@ use fuel_core_storage::{
     tables::{
         FuelBlocks,
         SealedBlockConsensus,
+        Transactions,
     },
     transactional::StorageTransaction,
     Result as StorageResult,
@@ -29,18 +30,16 @@ use fuel_core_storage::{
 };
 use fuel_core_types::{
     blockchain::{
-        block::{
-            Block,
-            CompressedBlock,
-        },
+        block::Block,
         consensus::Consensus,
-        primitives::{
-            BlockId,
-            DaBlockHeight,
-        },
+        primitives::DaBlockHeight,
         SealedBlock,
     },
-    fuel_types::BlockHeight,
+    fuel_tx::UniqueIdentifier,
+    fuel_types::{
+        BlockHeight,
+        ChainId,
+    },
     services::executor::{
         ExecutionTypes,
         Result as ExecutorResult,
@@ -133,25 +132,29 @@ impl ImporterDatabase for Database {
 }
 
 impl ExecutorDatabase for Database {
-    fn seal_block(
-        &mut self,
-        block_id: &BlockId,
-        consensus: &Consensus,
-    ) -> StorageResult<Option<()>> {
-        Ok(self
-            .storage::<SealedBlockConsensus>()
-            .insert(block_id, consensus)?
-            .map(|_| ()))
-    }
     fn block(
         &mut self,
-        block_id: &BlockId,
-        block: &CompressedBlock,
+        chain_id: &ChainId,
+        block: &SealedBlock,
     ) -> StorageResult<Option<()>> {
-        Ok(self
+        let block_id = block.entity.id();
+        let mut found = self
             .storage::<FuelBlocks>()
-            .insert(block_id, block)?
-            .map(|_| ()))
+            .insert(&block_id, &block.entity.compress(chain_id))?
+            .is_some();
+        found |= self
+            .storage::<SealedBlockConsensus>()
+            .insert(&block_id, &block.consensus)?
+            .is_some();
+
+        // TODO: Use `batch_insert` from https://github.com/FuelLabs/fuel-core/pull/1576
+        for tx in block.entity.transactions() {
+            found |= self
+                .storage::<Transactions>()
+                .insert(&tx.id(chain_id), tx)?
+                .is_some();
+        }
+        Ok(found.then_some(()))
     }
 }
 

@@ -13,9 +13,9 @@ use fuel_core_storage::{
         ContractsInfo,
         ContractsLatestUtxo,
         Messages,
+        ProcessedTransactions,
         Receipts,
         SpentMessages,
-        Transactions,
     },
     transactional::{
         StorageTransaction,
@@ -617,7 +617,7 @@ where
         // Throw a clear error if the transaction id is a duplicate
         if tx_st_transaction
             .as_ref()
-            .storage::<Transactions>()
+            .storage::<ProcessedTransactions>()
             .contains_key(tx_id)?
         {
             return Err(ExecutorError::TransactionIdCollision(*tx_id))
@@ -811,8 +811,8 @@ where
 
         if block_st_transaction
             .as_mut()
-            .storage::<Transactions>()
-            .insert(&coinbase_id, &tx)?
+            .storage::<ProcessedTransactions>()
+            .insert(&coinbase_id, &())?
             .is_some()
         {
             return Err(ExecutorError::TransactionIdCollision(coinbase_id))
@@ -967,8 +967,8 @@ where
         // Store tx into the block db transaction
         tx_st_transaction
             .as_mut()
-            .storage::<Transactions>()
-            .insert(&tx_id, &final_tx)?;
+            .storage::<ProcessedTransactions>()
+            .insert(&tx_id, &())?;
 
         // persist receipts
         self.persist_receipts(&tx_id, &receipts, tx_st_transaction.as_mut())?;

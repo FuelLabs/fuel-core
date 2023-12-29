@@ -199,7 +199,6 @@ where
         let (result, mut db_tx) = result.into();
         let block = &result.sealed_block.entity;
         let consensus = &result.sealed_block.consensus;
-        let block_id = block.id();
         let actual_next_height = *block.header().height();
 
         // During importing of the genesis block, the database should not be initialized
@@ -254,10 +253,7 @@ where
         }
 
         db_after_execution
-            .block(&block_id, &block.compress(&self.chain_id))?
-            .should_be_unique(&expected_next_height)?;
-        db_after_execution
-            .seal_block(&block_id, &result.sealed_block.consensus)?
+            .block(&self.chain_id, &result.sealed_block)?
             .should_be_unique(&expected_next_height)?;
 
         // Update the total tx count in chain metadata

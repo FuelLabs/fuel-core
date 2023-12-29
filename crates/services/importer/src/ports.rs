@@ -4,14 +4,14 @@ use fuel_core_storage::{
 };
 use fuel_core_types::{
     blockchain::{
-        block::{
-            Block,
-            CompressedBlock,
-        },
+        block::Block,
         consensus::Consensus,
-        primitives::BlockId,
+        SealedBlock,
     },
-    fuel_types::BlockHeight,
+    fuel_types::{
+        BlockHeight,
+        ChainId,
+    },
     services::executor::{
         Result as ExecutorResult,
         UncommittedResult,
@@ -43,19 +43,13 @@ pub trait ImporterDatabase {
 
 /// The port for returned database from the executor.
 pub trait ExecutorDatabase: ImporterDatabase {
-    /// Assigns the `Consensus` data to the block under the `block_id`.
-    /// Return the previous value at the `height`, if any.
-    fn seal_block(
-        &mut self,
-        block_id: &BlockId,
-        consensus: &Consensus,
-    ) -> StorageResult<Option<()>>;
-
-    /// Inserts the `CompressedBlock` under the `block_id`.
+    /// Inserts the `SealedBlock` under the `block_id`.
+    // TODO: Remove `chain_id` from the signature, but for that transactions inside
+    //  the block should have `cached_id`. We need to guarantee that from the Rust-type system.
     fn block(
         &mut self,
-        block_id: &BlockId,
-        block: &CompressedBlock,
+        chain_id: &ChainId,
+        block: &SealedBlock,
     ) -> StorageResult<Option<()>>;
 }
 

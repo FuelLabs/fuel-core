@@ -3,6 +3,7 @@ use crate::database::{
     Database,
 };
 use fuel_core_storage::{
+    tables::ProcessedTransactions,
     Error as StorageError,
     Mappable,
     MerkleRoot,
@@ -157,6 +158,12 @@ pub trait DatabaseColumn {
 impl DatabaseColumn for FuelBlockSecondaryKeyBlockHeights {
     fn column() -> Column {
         Column::FuelBlockSecondaryKeyBlockHeights
+    }
+}
+
+impl DatabaseColumn for ProcessedTransactions {
+    fn column() -> Column {
+        Column::ProcessedTransactions
     }
 }
 

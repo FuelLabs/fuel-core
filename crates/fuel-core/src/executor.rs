@@ -20,7 +20,6 @@ mod tests {
             ContractsRawCode,
             Messages,
             Receipts,
-            Transactions,
         },
         StorageAsMut,
     };
@@ -1571,7 +1570,7 @@ mod tests {
             .into();
         let db = &mut Database::default();
 
-        let mut executor = create_executor(
+        let executor = create_executor(
             db.clone(),
             Config {
                 utxo_validation_default: false,
@@ -1607,16 +1606,6 @@ mod tests {
         assert_eq!(executed_tx.inputs()[0].balance_root(), Some(&empty_state));
         assert_eq!(executed_tx.outputs()[0].state_root(), Some(&empty_state));
         assert_eq!(executed_tx.outputs()[0].balance_root(), Some(&empty_state));
-
-        let expected_tx = block.transactions()[1].clone();
-        let storage_tx = executor
-            .database
-            .storage::<Transactions>()
-            .get(&executed_tx.id(&ChainId::default()))
-            .unwrap()
-            .unwrap()
-            .into_owned();
-        assert_eq!(storage_tx, expected_tx);
     }
 
     #[test]
@@ -1638,7 +1627,7 @@ mod tests {
             .into();
         let db = &mut Database::default();
 
-        let mut executor = create_executor(
+        let executor = create_executor(
             db.clone(),
             Config {
                 utxo_validation_default: false,
@@ -1680,16 +1669,6 @@ mod tests {
         );
         assert_eq!(executed_tx.inputs()[0].state_root(), Some(&empty_state));
         assert_eq!(executed_tx.inputs()[0].balance_root(), Some(&empty_state));
-
-        let expected_tx = block.transactions()[1].clone();
-        let storage_tx = executor
-            .database
-            .storage::<Transactions>()
-            .get(&expected_tx.id(&ChainId::default()))
-            .unwrap()
-            .unwrap()
-            .into_owned();
-        assert_eq!(storage_tx, expected_tx);
     }
 
     #[test]
@@ -1751,7 +1730,7 @@ mod tests {
             .clone();
         let db = &mut Database::default();
 
-        let mut executor = create_executor(
+        let executor = create_executor(
             db.clone(),
             Config {
                 utxo_validation_default: false,
@@ -1793,16 +1772,6 @@ mod tests {
             executed_tx.inputs()[0].balance_root(),
             executed_tx.outputs()[0].balance_root()
         );
-
-        let expected_tx = block.transactions()[1].clone();
-        let storage_tx = executor
-            .database
-            .storage::<Transactions>()
-            .get(&expected_tx.id(&ChainId::default()))
-            .unwrap()
-            .unwrap()
-            .into_owned();
-        assert_eq!(storage_tx, expected_tx);
     }
 
     #[test]

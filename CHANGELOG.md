@@ -11,7 +11,7 @@ Description of the upcoming release here.
 
 ### Changed
 
-- [#1577](https://github.com/FuelLabs/fuel-core/pull/1577): Moved insertion of the blocks into the `BlockImporter` instead of the executor.
+- [#1577](https://github.com/FuelLabs/fuel-core/pull/1577): Moved insertion of sealed blocks into the `BlockImporter` instead of the executor.
 
 ## [Version 0.22.0]
 
