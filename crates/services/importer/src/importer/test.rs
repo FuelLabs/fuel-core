@@ -56,7 +56,7 @@ mockall::mock! {
     }
 
     impl ExecutorDatabase for Database {
-        fn block(
+        fn store_block(
             &mut self,
             chain_id: &ChainId,
             block: &SealedBlock,
@@ -122,18 +122,22 @@ where
     }
 }
 
-fn executor_db<H, B>(height: H, block: B, commits: usize) -> impl Fn() -> MockDatabase
+fn executor_db<H, B>(
+    height: H,
+    store_block: B,
+    commits: usize,
+) -> impl Fn() -> MockDatabase
 where
     H: Fn() -> StorageResult<Option<u32>> + Send + Clone + 'static,
     B: Fn() -> StorageResult<Option<()>> + Send + Clone + 'static,
 {
     move || {
         let height = height.clone();
-        let block = block.clone();
+        let store_block = store_block.clone();
         let mut db = MockDatabase::default();
         db.expect_latest_block_height()
             .returning(move || height().map(|v| v.map(Into::into)));
-        db.expect_block().returning(move |_, _| block());
+        db.expect_store_block().returning(move |_, _| store_block());
         db.expect_commit().times(commits).returning(|| Ok(()));
         db.expect_increase_tx_count().returning(Ok);
         db

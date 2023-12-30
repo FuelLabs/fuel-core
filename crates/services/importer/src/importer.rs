@@ -253,7 +253,7 @@ where
         }
 
         db_after_execution
-            .block(&self.chain_id, &result.sealed_block)?
+            .store_block(&self.chain_id, &result.sealed_block)?
             .should_be_unique(&expected_next_height)?;
 
         // Update the total tx count in chain metadata

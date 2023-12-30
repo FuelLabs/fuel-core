@@ -132,7 +132,7 @@ impl ImporterDatabase for Database {
 }
 
 impl ExecutorDatabase for Database {
-    fn block(
+    fn store_block(
         &mut self,
         chain_id: &ChainId,
         block: &SealedBlock,

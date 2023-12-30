@@ -46,7 +46,7 @@ pub trait ExecutorDatabase: ImporterDatabase {
     /// Inserts the `SealedBlock` under the `block_id`.
     // TODO: Remove `chain_id` from the signature, but for that transactions inside
     //  the block should have `cached_id`. We need to guarantee that from the Rust-type system.
-    fn block(
+    fn store_block(
         &mut self,
         chain_id: &ChainId,
         block: &SealedBlock,
