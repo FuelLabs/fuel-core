@@ -630,9 +630,7 @@ mod tests {
     where
         R: Rng + ?Sized,
     {
-        let mut bytes = [0u8; 32];
-        rng.fill(bytes.as_mut());
-        bytes
+        rng.gen()
     }
 
     mod update_contract_balance {
@@ -645,7 +643,7 @@ mod tests {
             // given
             let mut rng = StdRng::seed_from_u64(0);
             let balance_groups = repeat_with(|| ContractBalanceConfig {
-                contract_id: Bytes32::from(random_bytes(&mut rng)),
+                contract_id: ContractId::from_bytes(&random_bytes(&mut rng)).unwrap(),
                 asset_id: AssetId::from(random_bytes(&mut rng)),
                 amount: rng.gen(),
             })
@@ -671,7 +669,7 @@ mod tests {
                 .unwrap()
                 .into_iter()
                 .map(|(key, amount): (Vec<u8>, u64)| {
-                    let contract_id = Bytes32::from_bytes(&key[..32]).unwrap();
+                    let contract_id = ContractId::from_bytes(&key[..32]).unwrap();
                     let asset_id = AssetId::from_bytes(&key[32..]).unwrap();
 
                     ContractBalanceConfig {
@@ -704,7 +702,7 @@ mod tests {
             let mut rng = StdRng::seed_from_u64(0);
             let contract_id = ContractId::from(random_bytes(&mut rng));
             let balances = repeat_with(|| ContractBalanceConfig {
-                contract_id: Bytes32::from(*contract_id),
+                contract_id,
                 asset_id: AssetId::from(random_bytes(&mut rng)),
                 amount: rng.gen(),
             })
@@ -737,9 +735,9 @@ mod tests {
 
             let balance_per_contract = contract_ids
                 .iter()
-                .map(|id| {
+                .map(|contract_id| {
                     repeat_with(|| ContractBalanceConfig {
-                        contract_id: Bytes32::from(**id),
+                        contract_id: *contract_id,
                         asset_id: AssetId::from(random_bytes(&mut rng)),
                         amount: rng.gen(),
                     })
@@ -787,9 +785,9 @@ mod tests {
 
             let balance_per_contract = contract_ids
                 .iter()
-                .map(|id| {
+                .map(|contract_id| {
                     repeat_with(|| ContractBalanceConfig {
-                        contract_id: Bytes32::from(**id),
+                        contract_id: *contract_id,
                         asset_id: AssetId::from(random_bytes(&mut rng)),
                         amount: rng.gen(),
                     })

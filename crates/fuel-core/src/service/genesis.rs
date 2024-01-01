@@ -88,41 +88,48 @@ async fn import_chain_state(
     original_database: &Database,
 ) -> anyhow::Result<()> {
     let block_height = config.chain_config.height.unwrap_or_default();
+    eprintln!("Read block height: {}", block_height);
 
     let coins = config.state_reader.coins()?;
     let db = original_database.clone();
-    let coins_handle =
-        tokio::spawn(async move { import_coin_configs(&db, coins, block_height) });
+    let coins_handle = tokio::task::spawn_blocking(move || {
+        import_coin_configs(&db, coins, block_height)
+    });
 
     let messages = config.state_reader.messages()?;
     let db = original_database.clone();
     let messages_handle =
-        tokio::spawn(async move { import_message_configs(&db, messages) });
+        tokio::task::spawn_blocking(move || import_message_configs(&db, messages));
 
     let contracts = config.state_reader.contracts()?;
     let db = original_database.clone();
-    let contracts_handle =
-        tokio::spawn(
-            async move { import_contract_configs(&db, contracts, block_height) },
-        );
+    let contracts_handle = tokio::task::spawn_blocking(move || {
+        import_contract_configs(&db, contracts, block_height)
+    });
 
     let contract_states = config.state_reader.contract_state()?;
     let db = original_database.clone();
     let contract_state_handle =
-        tokio::spawn(async move { import_contract_state(&db, contract_states) });
+        tokio::task::spawn_blocking(move || import_contract_state(&db, contract_states));
 
     let contract_balances = config.state_reader.contract_balance()?;
     let db = original_database.clone();
-    let contract_balance_handle =
-        tokio::spawn(async move { import_contract_balance(&db, contract_balances) });
+    let contract_balance_handle = tokio::task::spawn_blocking(move || {
+        import_contract_balance(&db, contract_balances)
+    });
 
-    let _ = tokio::join!(
+    let (a, b, c, d, e) = tokio::try_join!(
         coins_handle,
         messages_handle,
         contracts_handle,
         contract_state_handle,
         contract_balance_handle,
-    );
+    )?;
+    a?;
+    b?;
+    c?;
+    d?;
+    e?;
 
     let mut database_transaction = Transactional::transaction(original_database);
     // TODO: do this in batches
@@ -686,7 +693,7 @@ mod tests {
         let test_key = rng.gen();
         let test_value = rng.gen();
         let contract_state = ContractStateConfig {
-            contract_id: Bytes32::from(*contract_id),
+            contract_id,
             key: test_key,
             value: test_value,
         };
@@ -779,7 +786,7 @@ mod tests {
         let test_asset_id = rng.gen();
         let test_balance = rng.next_u64();
         let contract_balance = ContractBalanceConfig {
-            contract_id: Bytes32::from(*contract_id),
+            contract_id,
             asset_id: test_asset_id,
             amount: test_balance,
         };

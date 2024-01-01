@@ -159,7 +159,7 @@ impl Database {
         self.iter_all::<Vec<u8>, Bytes32>(Column::ContractsState, None)
             .map(|res| {
                 let res = res?;
-                let contract_id = Bytes32::new(res.0[0..32].try_into()?);
+                let contract_id = ContractId::new(res.0[0..32].try_into()?);
                 let key = Bytes32::new(res.0[32..].try_into()?);
                 let value = res.1;
 
@@ -178,7 +178,7 @@ impl Database {
             .map(|res| {
                 let res = res?;
 
-                let contract_id = Bytes32::new(res.0[0..32].try_into()?);
+                let contract_id = ContractId::new(res.0[0..32].try_into()?);
                 let asset_id = AssetId::new(res.0[32..].try_into()?);
                 let amount = res.1;
 

@@ -302,6 +302,10 @@ mod tests {
         bytes.into()
     }
 
+    fn random_contract_id(rng: &mut impl Rng) -> ContractId {
+        ContractId::new(rng.gen())
+    }
+
     #[test]
     fn get() {
         let key = (&ContractId::from([1u8; 32]), &Bytes32::from([1u8; 32])).into();
@@ -610,7 +614,7 @@ mod tests {
             // given
             let mut rng = StdRng::seed_from_u64(0);
             let state_groups = repeat_with(|| ContractStateConfig {
-                contract_id: random_bytes32(&mut rng),
+                contract_id: random_contract_id(&mut rng),
                 key: random_bytes32(&mut rng),
                 value: random_bytes32(&mut rng),
             })
@@ -642,7 +646,7 @@ mod tests {
                     let key = Bytes32::from_bytes(state_id).unwrap();
                     let value = Bytes32::from_bytes(&value).unwrap();
                     ContractStateConfig {
-                        contract_id: Bytes32::from_bytes(contract_id).unwrap(),
+                        contract_id: ContractId::from_bytes(contract_id).unwrap(),
                         key,
                         value,
                     }
@@ -667,9 +671,9 @@ mod tests {
         fn metadata_updated_single_contract() {
             // given
             let mut rng = StdRng::seed_from_u64(0);
-            let contract_id = ContractId::from(*random_bytes32(&mut rng));
+            let contract_id = random_contract_id(&mut rng);
             let state = repeat_with(|| ContractStateConfig {
-                contract_id: Bytes32::from(*contract_id),
+                contract_id,
                 key: random_bytes32(&mut rng),
                 value: random_bytes32(&mut rng),
             })
@@ -704,7 +708,7 @@ mod tests {
                 .iter()
                 .map(|id| {
                     repeat_with(|| ContractStateConfig {
-                        contract_id: Bytes32::from(**id),
+                        contract_id: *id,
                         key: random_bytes32(&mut rng),
                         value: random_bytes32(&mut rng),
                     })
@@ -750,7 +754,7 @@ mod tests {
             let contract_ids =
                 [[1; 32], [2; 32], [3; 32]].map(|bytes| ContractId::from(bytes));
             let mut random_state = |contract_id: ContractId| ContractStateConfig {
-                contract_id: Bytes32::from(*contract_id),
+                contract_id,
                 key: random_bytes32(&mut rng),
                 value: random_bytes32(&mut rng),
             };

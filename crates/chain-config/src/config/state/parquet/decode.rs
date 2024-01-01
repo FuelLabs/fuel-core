@@ -309,6 +309,7 @@ impl TryFrom<Row> for ContractStateConfig {
         let contract_id = next_field()
             .and_then(decode_as_bytes_32)
             .context("While decoding `contract_id`")?;
+        let contract_id = ContractId::new(*contract_id);
 
         let key = next_field()
             .and_then(decode_as_bytes_32)
@@ -339,6 +340,7 @@ impl TryFrom<Row> for ContractBalanceConfig {
         let contract_id = next_field()
             .and_then(decode_as_bytes_32)
             .context("While decoding `contract_id`")?;
+        let contract_id = ContractId::new(*contract_id);
 
         let asset_id = next_field()
             .and_then(decode_as_bytes_32)

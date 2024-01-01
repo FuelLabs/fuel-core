@@ -17,9 +17,9 @@ use fuel_core_types::fuel_tx::GasCosts;
     "Dev chainconfig" 
 )]
 fn test_deployment_chainconfig(path: &str, chain_bytes: &str, state_bytes: &str) {
-    let mut chain_config = ChainConfig::load_from_directory(path)
+    let mut chain_config = ChainConfig::load_from_snapshot(path)
         .expect("Should be able to load chain config");
-    let state_config = StateConfig::load_from_directory(path)
+    let state_config = StateConfig::load_from_snapshot(path)
         .expect("Should be able to load state config");
 
     // Deployment configuration should use gas costs from benchmarks.

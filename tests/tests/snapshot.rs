@@ -36,10 +36,10 @@ async fn loads_snapshot() {
     let owner = Address::default();
 
     // setup config
-    let contract_id: Bytes32 = [11; 32].into();
+    let contract_id = ContractId::new([11; 32]);
     let starting_state = StateConfig {
         contracts: vec![ContractConfig {
-            contract_id: ContractId::from(*contract_id),
+            contract_id,
             code: vec![8; 32],
             salt: Salt::new([9; 32]),
             // // TODO remove
@@ -117,8 +117,7 @@ async fn loads_snapshot() {
         .await
         .unwrap();
 
-    // let state_conf = StateConfig::generate_state_config(db).unwrap();
-    let state_conf: StateConfig = todo!();
+    let state_conf = StateConfig::from_db(db).unwrap();
 
     // initial state
 

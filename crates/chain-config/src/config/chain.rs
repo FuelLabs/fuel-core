@@ -64,7 +64,7 @@ impl ChainConfig {
     pub const BASE_ASSET: AssetId = AssetId::zeroed();
 
     #[cfg(feature = "std")]
-    pub fn load_from_directory(path: impl AsRef<Path>) -> anyhow::Result<Self> {
+    pub fn load_from_snapshot(path: impl AsRef<Path>) -> anyhow::Result<Self> {
         let path = path.as_ref().join(CHAIN_CONFIG_FILENAME);
 
         let contents = std::fs::read(&path)?;
@@ -172,7 +172,7 @@ mod tests {
         let disk_config = ChainConfig::local_testnet();
         disk_config.create_config_file(&tmp_file).unwrap();
 
-        let load_config = ChainConfig::load_from_directory(&tmp_file).unwrap();
+        let load_config = ChainConfig::load_from_snapshot(&tmp_file).unwrap();
 
         assert_eq!(disk_config, load_config);
     }

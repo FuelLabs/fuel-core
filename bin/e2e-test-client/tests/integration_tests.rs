@@ -100,14 +100,12 @@ fn dev_config() -> Config {
     let mut config = Config::local_node();
 
     let chain_config =
-        ChainConfig::load_from_directory("../../deployment/scripts/chainspec/dev")
+        ChainConfig::load_from_snapshot("../../deployment/scripts/chainspec/dev")
             .expect("Should be able to load chain config");
-    // TODO: don't use serde here
+
     let state_config =
-        fs::read_to_string("../../deployment/scripts/chainspec/dev/state_config.json")
-            .expect("Should be able to read state config");
-    let state_config: StateConfig = serde_json::from_str(&state_config)
-        .expect("Should be able to decode state config");
+        StateConfig::load_from_snapshot("../../deployment/scripts/chainspec/dev")
+            .expect("Should be able to load and decode state config");
 
     // The `run_contract_large_state` test creates a contract with a huge state
     assert!(

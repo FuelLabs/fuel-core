@@ -1,6 +1,7 @@
 use fuel_core_types::fuel_types::{
     AssetId,
     Bytes32,
+    ContractId,
 };
 use serde::{
     Deserialize,
@@ -9,7 +10,7 @@ use serde::{
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, PartialOrd, Ord)]
 pub struct ContractBalanceConfig {
-    pub contract_id: Bytes32,
+    pub contract_id: ContractId,
     pub asset_id: AssetId,
     pub amount: u64,
 }

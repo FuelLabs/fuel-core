@@ -88,35 +88,53 @@ pub struct StateConfig {
 }
 
 impl StateConfig {
-    #[cfg(feature = "std")]
-    pub fn load_from_directory(path: impl AsRef<Path>) -> Result<Self, anyhow::Error> {
-        let decoder = StateReader::detect_encoding(path, 1)?;
+    pub fn load_from_snapshot(path: impl AsRef<Path>) -> anyhow::Result<Self> {
+        let reader = StateReader::detect_encoding(path, 1)?;
+        Self::from_reader(reader)
+    }
 
-        let coins = decoder
+    pub fn from_db(db: impl ChainStateDb) -> anyhow::Result<Self> {
+        let coins = db.iter_coin_configs().try_collect()?;
+        let messages = db.iter_message_configs().try_collect()?;
+        let contracts = db.iter_contract_configs().try_collect()?;
+        let contract_state = db.iter_contract_state_configs().try_collect()?;
+        let contract_balance = db.iter_contract_balance_configs().try_collect()?;
+
+        Ok(Self {
+            coins,
+            messages,
+            contracts,
+            contract_state,
+            contract_balance,
+        })
+    }
+
+    pub fn from_reader(reader: StateReader) -> anyhow::Result<Self> {
+        let coins = reader
             .coins()?
             .map_ok(|group| group.data)
             .flatten_ok()
             .try_collect()?;
 
-        let messages = decoder
+        let messages = reader
             .messages()?
             .map_ok(|group| group.data)
             .flatten_ok()
             .try_collect()?;
 
-        let contracts = decoder
+        let contracts = reader
             .contracts()?
             .map_ok(|group| group.data)
             .flatten_ok()
             .try_collect()?;
 
-        let contract_state = decoder
+        let contract_state = reader
             .contract_state()?
             .map_ok(|group| group.data)
             .flatten_ok()
             .try_collect()?;
 
-        let contract_balance = decoder
+        let contract_balance = reader
             .contract_balance()?
             .map_ok(|group| group.data)
             .flatten_ok()

@@ -261,7 +261,7 @@ impl Command {
                 StateReader::in_memory(StateConfig::local_testnet(), MAX_GROUP_SIZE),
             ),
             Some(path) => {
-                let chain_conf = ChainConfig::load_from_directory(path)?;
+                let chain_conf = ChainConfig::load_from_snapshot(path)?;
                 let state_reader = StateReader::detect_encoding(path, MAX_GROUP_SIZE)?;
                 (chain_conf, state_reader)
             }

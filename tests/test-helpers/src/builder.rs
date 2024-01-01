@@ -135,7 +135,7 @@ impl TestSetupBuilder {
             balances
                 .into_iter()
                 .map(|(asset_id, amount)| ContractBalanceConfig {
-                    contract_id: Bytes32::from(*contract_id),
+                    contract_id,
                     asset_id,
                     amount,
                 });

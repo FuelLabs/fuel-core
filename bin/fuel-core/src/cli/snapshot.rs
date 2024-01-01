@@ -226,16 +226,459 @@ fn load_chain_config(
     chain_config: Option<PathBuf>,
 ) -> Result<ChainConfig, anyhow::Error> {
     let chain_config = match chain_config {
-        Some(dir) => ChainConfig::load_from_directory(dir)?,
+        Some(dir) => ChainConfig::load_from_snapshot(dir)?,
         None => ChainConfig::local_testnet(),
     };
 
     Ok(chain_config)
 }
 
-fn open_db(path: &Path) -> anyhow::Result<impl ChainStateDb> {
+fn open_db(path: &Path) -> anyhow::Result<Database> {
     let data_source = fuel_core::state::rocks_db::RocksDb::default_open(path, None)
         .map_err(Into::<anyhow::Error>::into)
         .context(format!("failed to open database at path {path:?}",))?;
     Ok(Database::new(std::sync::Arc::new(data_source)))
+}
+
+#[cfg(test)]
+mod tests {
+
+    use std::iter::repeat_with;
+
+    use fuel_core::database::storage::FuelBlockSecondaryKeyBlockHeights;
+    use fuel_core_chain_config::{
+        CoinConfig,
+        ContractBalanceConfig,
+        ContractConfig,
+        ContractStateConfig,
+        Group,
+        MessageConfig,
+        StateConfig,
+        StateReader,
+    };
+    use fuel_core_storage::{
+        tables::{
+            Coins,
+            ContractsAssets,
+            ContractsInfo,
+            ContractsLatestUtxo,
+            ContractsRawCode,
+            ContractsState,
+            Messages,
+        },
+        ContractsAssetKey,
+        ContractsStateKey,
+        StorageAsMut,
+    };
+    use fuel_core_types::{
+        blockchain::primitives::{
+            BlockId,
+            DaBlockHeight,
+        },
+        entities::{
+            coins::coin::CompressedCoin,
+            contract::ContractUtxoInfo,
+            message::Message,
+        },
+        fuel_tx::{
+            Contract,
+            TxPointer,
+            UtxoId,
+        },
+        fuel_types::BlockHeight,
+    };
+    use rand::{
+        rngs::StdRng,
+        seq::SliceRandom,
+        Rng,
+        SeedableRng,
+    };
+    use test_case::test_case;
+
+    use super::*;
+
+    struct DbPopulator {
+        db: Database,
+        rng: StdRng,
+    }
+
+    impl DbPopulator {
+        fn new(db: Database, rng: StdRng) -> Self {
+            Self { db, rng }
+        }
+
+        fn given_persisted_state(
+            &mut self,
+            coins: usize,
+            messages: usize,
+            contracts: usize,
+            states_per_contract: usize,
+            balances_per_contract: usize,
+        ) -> StateConfig {
+            let coins = repeat_with(|| self.given_coin()).take(coins).collect();
+
+            let messages = repeat_with(|| self.given_message())
+                .take(messages)
+                .collect();
+
+            let contracts: Vec<ContractConfig> = repeat_with(|| self.given_contract())
+                .take(contracts)
+                .collect();
+
+            let contract_state = {
+                let ids = contracts.iter().map(|contract| contract.contract_id);
+                (0..states_per_contract)
+                    .cartesian_product(ids)
+                    .map(|(_, id)| self.given_contract_state(id))
+                    .collect()
+            };
+
+            let contract_balance = {
+                let ids = contracts.iter().map(|contract| contract.contract_id);
+                (0..balances_per_contract)
+                    .cartesian_product(ids)
+                    .map(|(_, id)| self.given_contract_balance(id))
+                    .collect()
+            };
+
+            StateConfig {
+                coins,
+                messages,
+                contracts,
+                contract_state,
+                contract_balance,
+            }
+        }
+
+        fn given_block_height(&mut self) -> BlockHeight {
+            let height = BlockHeight::from(10);
+            let block_id = BlockId::from([0; 32]);
+            self.db
+                .storage_as_mut::<FuelBlockSecondaryKeyBlockHeights>()
+                .insert(&height, &block_id)
+                .unwrap();
+            height
+        }
+
+        fn given_coin(&mut self) -> CoinConfig {
+            let tx_id = self.rng.gen();
+            let output_index = self.rng.gen();
+            let coin = CompressedCoin {
+                owner: self.rng.gen(),
+                amount: self.rng.gen(),
+                asset_id: self.rng.gen(),
+                maturity: self.rng.gen(),
+                tx_pointer: self.rng.gen(),
+            };
+            self.db
+                .storage_as_mut::<Coins>()
+                .insert(&UtxoId::new(tx_id, output_index), &coin)
+                .unwrap();
+
+            CoinConfig {
+                tx_id: Some(tx_id),
+                output_index: Some(output_index),
+                tx_pointer_block_height: Some(coin.tx_pointer.block_height()),
+                tx_pointer_tx_idx: Some(coin.tx_pointer.tx_index()),
+                maturity: Some(coin.maturity),
+                owner: coin.owner,
+                amount: coin.amount,
+                asset_id: coin.asset_id,
+            }
+        }
+
+        fn given_message(&mut self) -> MessageConfig {
+            let message = Message {
+                sender: self.rng.gen(),
+                recipient: self.rng.gen(),
+                amount: self.rng.gen(),
+                nonce: self.rng.gen(),
+                data: self.generate_data(100),
+                da_height: DaBlockHeight(self.rng.gen()),
+            };
+
+            self.db
+                .storage_as_mut::<Messages>()
+                .insert(&message.nonce, &message)
+                .unwrap();
+
+            MessageConfig {
+                sender: message.sender,
+                recipient: message.recipient,
+                nonce: message.nonce,
+                amount: message.amount,
+                data: message.data,
+                da_height: message.da_height,
+            }
+        }
+
+        fn given_contract(&mut self) -> ContractConfig {
+            let contract_id = self.rng.gen();
+
+            let code = self.generate_data(1000);
+            self.db
+                .storage_as_mut::<ContractsRawCode>()
+                .insert(&contract_id, code.as_ref())
+                .unwrap();
+
+            let root = Contract::from(code.clone()).root();
+            let salt = self.rng.gen();
+            self.db
+                .storage_as_mut::<ContractsInfo>()
+                .insert(&contract_id, &(salt, root))
+                .unwrap();
+
+            let utxo_id = UtxoId::new(self.rng.gen(), self.rng.gen());
+            let tx_pointer = TxPointer::new(self.rng.gen(), self.rng.gen());
+
+            self.db
+                .storage_as_mut::<ContractsLatestUtxo>()
+                .insert(
+                    &contract_id,
+                    &ContractUtxoInfo {
+                        utxo_id,
+                        tx_pointer,
+                    },
+                )
+                .unwrap();
+
+            ContractConfig {
+                contract_id,
+                code,
+                salt,
+                tx_id: Some(*utxo_id.tx_id()),
+                output_index: Some(utxo_id.output_index()),
+                tx_pointer_block_height: Some(tx_pointer.block_height()),
+                tx_pointer_tx_idx: Some(tx_pointer.tx_index()),
+            }
+        }
+
+        fn generate_data(&mut self, max_amount: usize) -> Vec<u8> {
+            let mut data = vec![0u8; self.rng.gen_range(0..=max_amount)];
+            self.rng.fill(data.as_mut_slice());
+            data
+        }
+
+        fn given_contract_state(
+            &mut self,
+            contract_id: ContractId,
+        ) -> ContractStateConfig {
+            let state_key = self.rng.gen();
+            let key = ContractsStateKey::new(&contract_id, &state_key);
+            let value = self.rng.gen();
+            self.db
+                .storage_as_mut::<ContractsState>()
+                .insert(&key, &value)
+                .unwrap();
+
+            ContractStateConfig {
+                contract_id,
+                key: state_key,
+                value,
+            }
+        }
+
+        fn given_contract_balance(
+            &mut self,
+            contract_id: ContractId,
+        ) -> ContractBalanceConfig {
+            let asset_id = self.rng.gen();
+            let key = ContractsAssetKey::new(&contract_id, &asset_id);
+            let amount = self.rng.gen();
+
+            self.db
+                .storage_as_mut::<ContractsAssets>()
+                .insert(&key, &amount)
+                .unwrap();
+
+            ContractBalanceConfig {
+                contract_id,
+                asset_id,
+                amount,
+            }
+        }
+    }
+
+    #[cfg_attr(feature = "parquet", test_case(Encoding::Parquet { group_size: 2, compression: 1 }; "parquet"))]
+    #[test_case(Encoding::Json; "json")]
+    fn everything_snapshot_correct_and_sorted(encoding: Encoding) -> anyhow::Result<()> {
+        // given
+        let temp_dir = tempfile::tempdir()?;
+
+        let snapshot_dir = temp_dir.path().join("snapshot");
+        let db_path = temp_dir.path().join("db");
+        let mut db = DbPopulator::new(open_db(&db_path)?, StdRng::seed_from_u64(2));
+
+        let height = db.given_block_height();
+        let state = db.given_persisted_state(10, 10, 10, 10, 10);
+        drop(db);
+
+        // when
+        exec(Command {
+            database_path: db_path,
+            output_dir: snapshot_dir.clone(),
+            subcommand: SubCommands::Everything {
+                chain_config: None,
+                encoding_command: Some(EncodingCommand::Encoding { encoding }),
+            },
+        })?;
+
+        // then
+        let chain_state = ChainConfig::load_from_snapshot(&snapshot_dir)?;
+        assert_eq!(chain_state.height, Some(height));
+
+        let snapshot = StateConfig::load_from_snapshot(&snapshot_dir)?;
+
+        assert_ne!(snapshot, state);
+        assert_eq!(snapshot, sorted_state(state));
+
+        Ok(())
+    }
+
+    #[cfg(feature = "parquet")]
+    #[test_case(2; "parquet group_size=2")]
+    #[test_case(5; "parquet group_size=5")]
+    fn everything_snapshot_respects_group_size(group_size: usize) -> anyhow::Result<()> {
+        // given
+        let temp_dir = tempfile::tempdir()?;
+
+        let snapshot_dir = temp_dir.path().join("snapshot");
+        let db_path = temp_dir.path().join("db");
+        let mut db = DbPopulator::new(open_db(&db_path)?, StdRng::seed_from_u64(2));
+
+        db.given_block_height();
+        let state = db.given_persisted_state(10, 10, 10, 10, 10);
+        drop(db);
+
+        // when
+        exec(Command {
+            database_path: db_path,
+            output_dir: snapshot_dir.clone(),
+            subcommand: SubCommands::Everything {
+                chain_config: None,
+                encoding_command: Some(EncodingCommand::Encoding {
+                    encoding: Encoding::Parquet {
+                        group_size,
+                        compression: 1,
+                    },
+                }),
+            },
+        })?;
+
+        // then
+        let reader = StateReader::parquet(&snapshot_dir);
+
+        let expected_state = sorted_state(state);
+
+        assert_groups_as_expected(group_size, expected_state.coins, || {
+            reader.coins().unwrap()
+        });
+        assert_groups_as_expected(group_size, expected_state.messages, || {
+            reader.messages().unwrap()
+        });
+
+        assert_groups_as_expected(group_size, expected_state.contracts, || {
+            reader.contracts().unwrap()
+        });
+
+        assert_groups_as_expected(group_size, expected_state.contract_state, || {
+            reader.contract_state().unwrap()
+        });
+
+        assert_groups_as_expected(group_size, expected_state.contract_balance, || {
+            reader.contract_balance().unwrap()
+        });
+
+        Ok(())
+    }
+
+    #[test]
+    fn contract_snapshot_isolates_contract_correctly() -> anyhow::Result<()> {
+        // given
+        let temp_dir = tempfile::tempdir()?;
+        let snapshot_dir = temp_dir.path().join("snapshot");
+
+        let db_path = temp_dir.path().join("db");
+        let mut db = DbPopulator::new(open_db(&db_path)?, StdRng::seed_from_u64(2));
+
+        let state = sorted_state(db.given_persisted_state(10, 10, 10, 10, 10));
+        let random_contract = state.contracts.choose(&mut db.rng).unwrap().clone();
+        let contract_id = random_contract.contract_id;
+        drop(db);
+
+        // when
+        exec(Command {
+            database_path: db_path,
+            output_dir: snapshot_dir.clone(),
+            subcommand: SubCommands::Contract { contract_id },
+        })?;
+
+        // then
+        let snapshot_state = StateConfig::load_from_snapshot(&snapshot_dir)?;
+
+        let expected_contract_state = state
+            .contract_state
+            .iter()
+            .filter(|state| state.contract_id == contract_id)
+            .cloned()
+            .collect_vec();
+
+        let expected_contract_balance = state
+            .contract_balance
+            .iter()
+            .filter(|balance| balance.contract_id == contract_id)
+            .cloned()
+            .collect_vec();
+
+        assert_eq!(
+            snapshot_state,
+            StateConfig {
+                coins: vec![],
+                messages: vec![],
+                contract_state: expected_contract_state,
+                contract_balance: expected_contract_balance,
+                contracts: vec![random_contract]
+            }
+        );
+
+        Ok(())
+    }
+
+    fn assert_groups_as_expected<T, I>(
+        group_size: usize,
+        expected_data: Vec<T>,
+        actual_data: impl FnOnce() -> I,
+    ) where
+        T: PartialEq + std::fmt::Debug,
+        I: Iterator<Item = anyhow::Result<Group<T>>>,
+    {
+        let expected = expected_data
+            .into_iter()
+            .chunks(group_size)
+            .into_iter()
+            .map(|chunk| chunk.collect_vec())
+            .collect_vec();
+
+        let actual = actual_data().map(|group| group.unwrap().data).collect_vec();
+
+        assert_eq!(actual, expected);
+    }
+
+    fn sorted_state(mut state: StateConfig) -> StateConfig {
+        state.coins.sort_by_key(|coin| {
+            UtxoId::new(
+                coin.tx_id.unwrap_or_default(),
+                coin.output_index.unwrap_or_default(),
+            )
+        });
+        state.messages.sort_by_key(|msg| msg.nonce);
+        state.contracts.sort_by_key(|contract| contract.contract_id);
+        state
+            .contract_state
+            .sort_by_key(|state| (state.contract_id, state.key));
+        state
+            .contract_balance
+            .sort_by_key(|balance| (balance.contract_id, balance.asset_id));
+        state
+    }
 }

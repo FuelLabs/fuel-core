@@ -548,7 +548,7 @@ impl ChainStateDb for Database {
         let state = self
             .contract_states(contract_id)
             .map_ok(move |(key, value)| ContractStateConfig {
-                contract_id: Bytes32::from(*contract_id),
+                contract_id,
                 key,
                 value,
             })
@@ -557,7 +557,7 @@ impl ChainStateDb for Database {
         let balances = self
             .contract_balances(contract_id, None, None)
             .map_ok(move |(asset_id, amount)| ContractBalanceConfig {
-                contract_id: Bytes32::from(*contract_id),
+                contract_id,
                 asset_id,
                 amount,
             })

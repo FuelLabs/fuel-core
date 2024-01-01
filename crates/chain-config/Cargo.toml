@@ -50,5 +50,5 @@ std = [
   "bech32/std",
 ]
 parquet = ["std", "dep:parquet"]
-default = ["std", "random"]
+default = ["std", "random", "parquet"] # todo remove
 random = ["dep:rand", "fuel-core-types/random"]
