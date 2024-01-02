@@ -88,6 +88,14 @@ pub struct StateConfig {
 }
 
 impl StateConfig {
+    pub fn extend(&mut self, other: Self) {
+        self.coins.extend(other.coins);
+        self.messages.extend(other.messages);
+        self.contracts.extend(other.contracts);
+        self.contract_state.extend(other.contract_state);
+        self.contract_balance.extend(other.contract_balance);
+    }
+
     pub fn load_from_snapshot(path: impl AsRef<Path>) -> anyhow::Result<Self> {
         let reader = StateReader::detect_encoding(path, 1)?;
         Self::from_reader(reader)

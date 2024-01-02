@@ -124,14 +124,14 @@ fn load_contract(
 
 // Maybe deploy a contract with large state and execute the script
 pub async fn run_contract_large_state(ctx: &TestContext) -> Result<(), Failed> {
-    let (contract_config, state) = load_contract(Path::new("./test_data/large_state"))?;
+    let (contract_config, state) = load_contract("./src/tests/test_data/large_state")?;
     let dry_run = include_bytes!("test_data/large_state/tx.json");
     let dry_run: Transaction = serde_json::from_slice(dry_run.as_ref())
         .expect("Should be able do decode the Transaction");
 
     // If the contract changed, you need to update the
     // `f4292fe50d21668e140636ab69c7d4b3d069f66eb9ef3da4b0a324409cc36b8c` in the
-    // `test_data/large_state/contract.json` together with:
+    // `test_data/large_state/state_config.json` together with:
     // 244, 41, 47, 229, 13, 33, 102, 142, 20, 6, 54, 171, 105, 199, 212, 179, 208, 105, 246, 110, 185, 239, 61, 164, 176, 163, 36, 64, 156, 195, 107, 140,
     let contract_id = contract_config.contract_id;
     println!("\nThe `contract_id` of the contract with large state: {contract_id}");

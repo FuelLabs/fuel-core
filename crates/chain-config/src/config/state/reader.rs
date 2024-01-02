@@ -72,9 +72,12 @@ impl StateReader {
         snapshot_dir: impl AsRef<std::path::Path>,
         group_size: usize,
     ) -> anyhow::Result<Self> {
-        let path = snapshot_dir.as_ref().join("state_config.json");
+        use anyhow::Context;
 
-        let mut file = std::fs::File::open(path)?;
+        let path = snapshot_dir.as_ref().join(crate::STATE_CONFIG_FILENAME);
+
+        let mut file = std::fs::File::open(&path)
+            .with_context(|| format!("Cannot read state from {path:?}"))?;
 
         let state = serde_json::from_reader(&mut file)?;
 
@@ -161,8 +164,8 @@ impl StateReader {
     ) -> anyhow::Result<IntoIter<T>> {
         match &self.data_source {
             DataSource::InMemory { state, group_size } => {
-                let groups = extractor(state).clone();
-                Ok(Self::in_memory_iter(groups, *group_size))
+                let data = extractor(state).clone();
+                Ok(Self::in_memory_iter(data, *group_size))
             }
             #[cfg(feature = "parquet")]
             DataSource::Parquet { snapshot_dir } => {
