@@ -22,8 +22,6 @@ use serde::{
     Deserialize,
     Serialize,
 };
-#[cfg(feature = "std")]
-use std::path::Path;
 
 use super::{
     coin::CoinConfig,
@@ -96,7 +94,8 @@ impl StateConfig {
         self.contract_balance.extend(other.contract_balance);
     }
 
-    pub fn load_from_snapshot(path: impl AsRef<Path>) -> anyhow::Result<Self> {
+    #[cfg(feature = "std")]
+    pub fn load_from_snapshot(path: impl AsRef<std::path::Path>) -> anyhow::Result<Self> {
         let reader = StateReader::detect_encoding(path, 1)?;
         Self::from_reader(reader)
     }

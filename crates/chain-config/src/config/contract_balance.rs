@@ -1,6 +1,5 @@
 use fuel_core_types::fuel_types::{
     AssetId,
-    Bytes32,
     ContractId,
 };
 use serde::{
