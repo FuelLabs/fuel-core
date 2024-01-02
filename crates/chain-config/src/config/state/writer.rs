@@ -150,6 +150,16 @@ impl From<ZstdCompressionLevel> for ::parquet::basic::Compression {
 }
 
 impl StateWriter {
+    pub fn write(mut self, state_config: StateConfig) -> anyhow::Result<()> {
+        self.write_coins(state_config.coins)?;
+        self.write_contracts(state_config.contracts)?;
+        self.write_messages(state_config.messages)?;
+        self.write_contract_state(state_config.contract_state)?;
+        self.write_contract_balance(state_config.contract_balance)?;
+        self.close()?;
+        Ok(())
+    }
+
     pub fn json(snapshot_dir: impl AsRef<Path>) -> Self {
         Self {
             encoder: StateWriterType::Json {
@@ -271,7 +281,7 @@ impl StateWriter {
                 state_file_path,
             } => {
                 let file = std::fs::File::create(state_file_path)?;
-                serde_json::to_writer(file, &buffer)?;
+                serde_json::to_writer_pretty(file, &buffer)?;
                 Ok(())
             }
             #[cfg(feature = "parquet")]
