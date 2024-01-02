@@ -32,7 +32,7 @@ use std::{
     ops::Deref,
 };
 
-use super::genesis_progress::GenesisProgress;
+use super::genesis_progress::GenesisResource;
 
 /// Metadata for dense Merkle trees
 #[derive(Clone, serde::Serialize, serde::Deserialize)]
@@ -147,7 +147,7 @@ impl Mappable for ContractsStateMerkleMetadata {
 pub struct GenesisMetadata;
 impl Mappable for GenesisMetadata {
     type Key = Self::OwnedKey;
-    type OwnedKey = GenesisProgress;
+    type OwnedKey = GenesisResource;
     type Value = Self::OwnedValue;
     type OwnedValue = usize;
 }

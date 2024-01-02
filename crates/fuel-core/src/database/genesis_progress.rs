@@ -1,6 +1,7 @@
 use fuel_core_storage::{
     MerkleRoot,
     Result,
+    StorageAsMut,
     StorageInspect,
     StorageMutate,
 };
@@ -29,7 +30,7 @@ use super::{
 };
 
 #[derive(Debug, Clone, Copy)]
-pub enum GenesisProgress {
+pub enum GenesisResource {
     Coins,
     Messages,
     Contracts,
@@ -37,7 +38,7 @@ pub enum GenesisProgress {
     ContractBalances,
 }
 
-impl ToDatabaseKey for GenesisProgress {
+impl ToDatabaseKey for GenesisResource {
     type Type<'a> = [u8; 1];
 
     fn database_key(&self) -> Self::Type<'_> {
@@ -46,19 +47,20 @@ impl ToDatabaseKey for GenesisProgress {
 }
 
 impl Database {
-    pub fn genesis_progress(&self, key: &GenesisProgress) -> usize {
+    pub fn genesis_progress(&self, key: &GenesisResource) -> usize {
         StorageInspect::<GenesisMetadata>::get(self, key)
             .unwrap()
             .unwrap_or_default()
             .into_owned()
     }
 
-    pub fn increment(&mut self, key: GenesisProgress) -> Result<()> {
+    pub fn increment_genesis_progress(&mut self, key: GenesisResource) -> Result<()> {
         let progress = self
             .genesis_progress(&key)
             .checked_add(1)
             .expect("Maximum number of batches was exceeded during genesis.");
-        StorageMutate::<GenesisMetadata>::insert(self, &key, &progress)?;
+        self.storage_as_mut::<GenesisMetadata>()
+            .insert(&key, &progress)?;
 
         Ok(())
     }
