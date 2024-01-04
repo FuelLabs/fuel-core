@@ -1,7 +1,4 @@
-use fuel_core_chain_config::{
-    self,
-    Group,
-};
+use fuel_core_chain_config::Group;
 use fuel_core_storage::transactional::Transaction;
 use std::{
     iter::Skip,
@@ -43,19 +40,41 @@ pub struct GenesisRunner<Handler, Groups, TxOpener> {
     stop_signal: Arc<AtomicBool>,
 }
 
-impl<Handler, Groups, GroupItem, TxOpener> GenesisRunner<Handler, Groups, TxOpener>
+pub trait ProcessState<T> {
+    fn process(&mut self, item: T, tx: &mut Database) -> anyhow::Result<()>;
+}
+
+pub trait ProcessStateGroup<T> {
+    fn process_group(&mut self, group: Vec<T>, tx: &mut Database) -> anyhow::Result<()>;
+}
+
+impl<T, K> ProcessStateGroup<K> for T
 where
-    Handler: FnMut(Vec<GroupItem>, &mut Database) -> anyhow::Result<()>,
-    Groups: Iterator<Item = anyhow::Result<Group<GroupItem>>>,
+    T: ProcessState<K>,
+{
+    fn process_group(&mut self, item: Vec<K>, tx: &mut Database) -> anyhow::Result<()> {
+        item.into_iter().try_for_each(|item| self.process(item, tx))
+    }
+}
+
+pub trait HandlesGenesisResource {
+    fn genesis_resource() -> GenesisResource;
+}
+
+impl<Logic, GroupIter, TxOpener, Item> GenesisRunner<Logic, GroupIter, TxOpener>
+where
+    Logic: ProcessStateGroup<Item>,
+    Item: HandlesGenesisResource,
+    GroupIter: Iterator<Item = anyhow::Result<Group<Item>>>,
     TxOpener: TransactionOpener,
 {
     pub fn new(
         stop_signal: Arc<AtomicBool>,
-        resource: GenesisResource,
-        handler: Handler,
-        groups: impl IntoIterator<IntoIter = Groups>,
+        handler: Logic,
+        groups: impl IntoIterator<IntoIter = GroupIter>,
         tx_opener: TxOpener,
     ) -> Self {
+        let resource = Item::genesis_resource();
         let skip = tx_opener
             .view_only()
             .genesis_progress(&resource)
@@ -78,7 +97,7 @@ where
                 let mut tx = self.tx_opener.transaction();
                 let group = group?;
                 let group_num = group.index;
-                (self.handler)(group.data, tx.as_mut())?;
+                self.handler.process_group(group.data, tx.as_mut())?;
                 tx.update_genesis_progress(self.resource, group_num)?;
                 tx.commit()?;
                 Ok(())
@@ -115,11 +134,11 @@ mod tests {
         database::{
             genesis_progress::GenesisResource,
             transaction::DatabaseTransaction,
-            Column,
             Database,
         },
         service::genesis::runner::{
             GenesisRunner,
+            HandlesGenesisResource,
             TransactionOpener,
         },
         state::{
@@ -129,6 +148,17 @@ mod tests {
             TransactableStorage,
         },
     };
+
+    use super::ProcessState;
+
+    impl<T, K> ProcessState<K> for T
+    where
+        T: FnMut(K, &mut Database) -> anyhow::Result<()>,
+    {
+        fn process(&mut self, item: K, tx: &mut Database) -> anyhow::Result<()> {
+            self(item, tx)
+        }
+    }
 
     fn given_ok_groups(amount: usize) -> Vec<anyhow::Result<Group<usize>>> {
         given_groups(amount).into_iter().map(Ok).collect()
@@ -142,21 +172,30 @@ mod tests {
             })
             .collect()
     }
+    impl HandlesGenesisResource for usize {
+        fn genesis_resource() -> GenesisResource {
+            GenesisResource::Coins
+        }
+    }
+    impl HandlesGenesisResource for () {
+        fn genesis_resource() -> GenesisResource {
+            GenesisResource::Coins
+        }
+    }
 
     #[test]
     fn will_skip_groups() {
         // given
-        let groups = given_ok_groups(2);
-        let mut called_with_groups = vec![];
+        let groups: Vec<Result<Group<usize>, anyhow::Error>> = given_ok_groups(2);
+        let mut called_with = vec![];
         let mut db = Database::default();
-        let genesis_subtype = GenesisResource::Coins;
-        db.update_genesis_progress(genesis_subtype, 0).unwrap();
+        db.update_genesis_progress(GenesisResource::Coins, 0)
+            .unwrap();
 
         let runner = GenesisRunner::new(
             Arc::new(AtomicBool::new(false)),
-            genesis_subtype,
-            |group, _| {
-                called_with_groups.push(group);
+            |element: usize, _: &mut Database| {
+                called_with.push(element);
                 Ok(())
             },
             groups,
@@ -167,7 +206,7 @@ mod tests {
         runner.run().unwrap();
 
         // then
-        assert_eq!(called_with_groups, vec![vec![1]]);
+        assert_eq!(called_with, vec![1]);
     }
 
     #[test]
@@ -177,8 +216,7 @@ mod tests {
         let mut called_with_groups = vec![];
         let runner = GenesisRunner::new(
             Arc::new(AtomicBool::new(false)),
-            GenesisResource::Coins,
-            |group, _| {
+            |group, _: &mut Database| {
                 called_with_groups.push(group);
                 Ok(())
             },
@@ -190,7 +228,7 @@ mod tests {
         runner.run().unwrap();
 
         // then
-        assert_eq!(called_with_groups, vec![vec![0], vec![1], vec![2]]);
+        assert_eq!(called_with_groups, vec![0, 1, 2]);
     }
 
     #[test]
@@ -208,8 +246,7 @@ mod tests {
 
         let runner = GenesisRunner::new(
             Arc::new(AtomicBool::new(false)),
-            GenesisResource::Coins,
-            |_, tx| {
+            |_, tx: &mut Database| {
                 insert_a_coin(tx, &utxo_id);
 
                 assert!(
@@ -261,8 +298,7 @@ mod tests {
         };
         let runner = GenesisRunner::new(
             Arc::new(AtomicBool::new(false)),
-            GenesisResource::Coins,
-            |_, tx| {
+            |_, tx: &mut Database| {
                 insert_a_coin(tx, &utxo_id);
                 bail!("Some error")
             },
@@ -283,8 +319,7 @@ mod tests {
         let groups = given_ok_groups(1);
         let runner = GenesisRunner::new(
             Arc::new(AtomicBool::new(false)),
-            GenesisResource::Coins,
-            |_, _| bail!("Some error"),
+            |_, _: &mut Database| bail!("Some error"),
             groups,
             Database::default(),
         );
@@ -434,8 +469,7 @@ mod tests {
         let groups = given_ok_groups(1);
         let runner = GenesisRunner::new(
             Arc::new(AtomicBool::new(false)),
-            GenesisResource::Coins,
-            |_, _| Ok(()),
+            |_, _: &mut Database| Ok(()),
             groups,
             Database::new(Arc::new(BrokenTransactions::new())),
         );
@@ -452,8 +486,7 @@ mod tests {
         let groups = [Err(anyhow!("Some error"))];
         let runner = GenesisRunner::new(
             Arc::new(AtomicBool::new(false)),
-            GenesisResource::Coins,
-            |_: Vec<()>, _| Ok(()),
+            |_: (), _: &mut Database| Ok(()),
             groups,
             Database::default(),
         );
@@ -472,8 +505,7 @@ mod tests {
         let db = Database::default();
         let runner = GenesisRunner::new(
             Arc::new(AtomicBool::new(false)),
-            GenesisResource::Messages,
-            |_, _| Ok(()),
+            |_, _: &mut Database| Ok(()),
             groups,
             db.clone(),
         );
@@ -482,7 +514,7 @@ mod tests {
         runner.run().unwrap();
 
         // then
-        assert_eq!(db.genesis_progress(&GenesisResource::Messages), Some(1));
+        assert_eq!(db.genesis_progress(&GenesisResource::Coins), Some(1));
     }
 
     #[test]
@@ -523,8 +555,7 @@ mod tests {
 
         let runner = GenesisRunner::new(
             Arc::new(AtomicBool::new(false)),
-            GenesisResource::Coins,
-            |_, tx| {
+            |_, tx: &mut Database| {
                 insert_a_coin(tx, &utxo_id);
                 Ok(())
             },
@@ -552,8 +583,7 @@ mod tests {
             let read_groups = Arc::clone(&read_groups);
             GenesisRunner::new(
                 Arc::clone(&stop_signal),
-                GenesisResource::Coins,
-                move |el: Vec<usize>, _| {
+                move |el, _: &mut Database| {
                     read_groups.lock().unwrap().push(el);
                     Ok(())
                 },
@@ -596,6 +626,6 @@ mod tests {
 
         // group after signal is not read
         let read_groups = read_groups.lock().unwrap().clone();
-        assert_eq!(read_groups, vec![vec![0], vec![1], vec![2]]);
+        assert_eq!(read_groups, vec![0, 1, 2]);
     }
 }

@@ -17,8 +17,9 @@ use fuel_core_chain_config::{
     ContractConfig,
     ContractStateConfig,
     GenesisCommitment,
-    IntoIter,
+    Group,
     MessageConfig,
+    StateReader,
 };
 
 use fuel_core_executor::refs::ContractRef;
@@ -79,6 +80,14 @@ pub use runner::{
     TransactionOpener,
 };
 
+use self::{
+    runner::{
+        HandlesGenesisResource,
+        ProcessStateGroup,
+    },
+    workers::GenesisWorkers,
+};
+
 /// Loads state from the chain config into database
 pub async fn maybe_initialize_state(
     config: &Config,
@@ -99,35 +108,29 @@ async fn import_chain_state(
     original_database: &Database,
 ) -> anyhow::Result<()> {
     let block_height = config.chain_config.height.unwrap_or_default();
-    eprintln!("Read block height: {}", block_height);
 
-    let coins = config.state_reader.coins()?;
-    let db = original_database.clone();
-    let coins_handle = tokio::task::spawn_blocking(move || {
-        import_coin_configs(&db, coins, block_height)
-    });
+    let signal = Arc::new(AtomicBool::new(false));
+    let workers = GenesisWorkers::new(
+        original_database.clone(),
+        signal,
+        block_height,
+        &config.state_reader,
+    );
 
-    let messages = config.state_reader.messages()?;
-    let db = original_database.clone();
-    let messages_handle =
-        tokio::task::spawn_blocking(move || import_message_configs(&db, messages));
+    let worker = workers.coins();
+    let coins_handle = tokio::task::spawn_blocking(move || worker.run());
 
-    let contracts = config.state_reader.contracts()?;
-    let db = original_database.clone();
-    let contracts_handle = tokio::task::spawn_blocking(move || {
-        import_contract_configs(&db, contracts, block_height)
-    });
+    let worker = workers.messages();
+    let messages_handle = tokio::task::spawn_blocking(move || worker.run());
 
-    let contract_states = config.state_reader.contract_state()?;
-    let db = original_database.clone();
-    let contract_state_handle =
-        tokio::task::spawn_blocking(move || import_contract_state(&db, contract_states));
+    let worker = workers.contracts();
+    let contracts_handle = tokio::task::spawn_blocking(move || worker.run());
 
-    let contract_balances = config.state_reader.contract_balance()?;
-    let db = original_database.clone();
-    let contract_balance_handle = tokio::task::spawn_blocking(move || {
-        import_contract_balance(&db, contract_balances)
-    });
+    let worker = workers.contract_state();
+    let contract_state_handle = tokio::task::spawn_blocking(move || worker.run());
+
+    let worker = workers.contract_balance();
+    let contract_balance_handle = tokio::task::spawn_blocking(move || worker.run());
 
     let (a, b, c, d, e) = tokio::try_join!(
         coins_handle,
@@ -214,127 +217,7 @@ fn commit_genesis_block(
     Ok(())
 }
 
-fn import_coin_configs(
-    database: &Database,
-    coins: IntoIter<CoinConfig>,
-    block_height: BlockHeight,
-) -> anyhow::Result<()> {
-    let mut generated_output_idx = 0;
-    // TODO: segfault propagate stop signal to here
-    let stop_signal = Arc::new(AtomicBool::new(false));
-    GenesisRunner::new(
-        stop_signal,
-        GenesisResource::Coins,
-        |batch, database| {
-        // TODO: set output_index
-        batch.into_iter().try_for_each(|coin| {
-            let root  = init_coin(database, &coin, generated_output_idx, block_height)?;
-            database.add_coin_root(root)?;
-
-            generated_output_idx = generated_output_idx
-                .checked_add(1)
-                .expect("The maximum number of UTXOs supported in the genesis configuration has been exceeded.");
-
-            Ok(())
-        })
-        },
-        coins,
-        database.clone(),
-    )
-    .run()
-}
-
-fn import_message_configs(
-    database: &Database,
-    messages: IntoIter<MessageConfig>,
-) -> anyhow::Result<()> {
-    // TODO: segfault propagate stop signal to here
-    let stop_signal = Arc::new(AtomicBool::new(false));
-    GenesisRunner::new(
-        stop_signal,
-        GenesisResource::Messages,
-        |batch, database| {
-            // TODO: set output_index
-            batch.iter().try_for_each(|message| {
-                let root = init_da_message(database, message)?;
-                database.add_message_root(root)?;
-
-                Ok(())
-            })
-        },
-        messages,
-        database.clone(),
-    )
-    .run()
-}
-
-fn import_contract_configs(
-    database: &Database,
-    contracts: IntoIter<ContractConfig>,
-    block_height: BlockHeight,
-) -> anyhow::Result<()> {
-    let mut generated_output_idx = 0;
-    // TODO: segfault propagate stop signal to here
-    let stop_signal = Arc::new(AtomicBool::new(false));
-    GenesisRunner::new(
-        stop_signal,
-        GenesisResource::Contracts,
-        |batch, database| {
-        // TODO: set output_index
-        batch.iter().try_for_each(|contract| {
-            init_contract(database, contract, generated_output_idx, block_height)?;
-            database.add_contract_id(contract.contract_id)?;
-
-            generated_output_idx = generated_output_idx
-                .checked_add(1)
-                .expect("The maximum number of UTXOs supported in the genesis configuration has been exceeded.");
-
-            Ok::<(), anyhow::Error>(())
-        })
-        },
-        contracts,
-        database.clone(),
-    )
-    .run()
-}
-
-fn import_contract_state(
-    database: &Database,
-    contract_states: IntoIter<ContractStateConfig>,
-) -> anyhow::Result<()> {
-    // TODO: segfault propagate stop signal to here
-    let stop_signal = Arc::new(AtomicBool::new(false));
-    GenesisRunner::new(
-        stop_signal,
-        GenesisResource::ContractStates,
-        |batch, database| {
-            database.update_contract_states(batch)?;
-            Ok(())
-        },
-        contract_states,
-        database.clone(),
-    )
-    .run()
-}
-
-fn import_contract_balance(
-    database: &Database,
-    contract_balances: IntoIter<ContractBalanceConfig>,
-) -> anyhow::Result<()> {
-    // TODO: segfault propagate stop signal to here
-    let stop_signal = Arc::new(AtomicBool::new(false));
-    GenesisRunner::new(
-        stop_signal,
-        GenesisResource::ContractBalances,
-        |batch, database| {
-            database.update_contract_balances(batch)?;
-            Ok(())
-        },
-        contract_balances,
-        database.clone(),
-    )
-    .run()
-}
+mod workers;
 
 fn init_coin(
     db: &mut Database,
