@@ -1,3 +1,8 @@
+use std::sync::{
+    atomic::AtomicBool,
+    Arc,
+};
+
 use crate::{
     database::{
         genesis_progress::GenesisResource,
@@ -27,10 +32,7 @@ use fuel_core_storage::{
         FuelBlocks,
         Messages,
     },
-    transactional::{
-        Transaction,
-        Transactional,
-    },
+    transactional::Transactional,
     MerkleRoot,
     StorageAsMut,
 };
@@ -217,61 +219,53 @@ fn import_coin_configs(
     coins: IntoIter<CoinConfig>,
     block_height: BlockHeight,
 ) -> anyhow::Result<()> {
-    let processed_coin_batches = database.genesis_progress(&GenesisResource::Coins);
-    let coins = coins.skip(processed_coin_batches);
-
     let mut generated_output_idx = 0;
-    for batch in coins {
-        let mut database_transaction = database.transaction();
-        let database = database_transaction.as_mut();
-
-        let batch = batch.expect("Encountered an error while decoding coin configs");
-
+    // TODO: segfault propagate stop signal to here
+    let stop_signal = Arc::new(AtomicBool::new(false));
+    GenesisRunner::new(
+        stop_signal,
+        GenesisResource::Coins,
+        |batch, database| {
         // TODO: set output_index
-        batch.data.iter().try_for_each(|coin| {
-            let root  = init_coin(database, coin, generated_output_idx, block_height)?;
+        batch.into_iter().try_for_each(|coin| {
+            let root  = init_coin(database, &coin, generated_output_idx, block_height)?;
             database.add_coin_root(root)?;
 
             generated_output_idx = generated_output_idx
                 .checked_add(1)
                 .expect("The maximum number of UTXOs supported in the genesis configuration has been exceeded.");
 
-            Ok::<(), anyhow::Error>(())
-        })?;
-
-        database.increment_genesis_progress(GenesisResource::Coins)?;
-        database_transaction.commit()?;
-    }
-
-    Ok(())
+            Ok(())
+        })
+        },
+        coins,
+        database.clone(),
+    )
+    .run()
 }
 
 fn import_message_configs(
     database: &Database,
     messages: IntoIter<MessageConfig>,
 ) -> anyhow::Result<()> {
-    let processed_message_batches = database.genesis_progress(&GenesisResource::Messages);
-    let messages = messages.skip(processed_message_batches);
+    // TODO: segfault propagate stop signal to here
+    let stop_signal = Arc::new(AtomicBool::new(false));
+    GenesisRunner::new(
+        stop_signal,
+        GenesisResource::Messages,
+        |batch, database| {
+            // TODO: set output_index
+            batch.iter().try_for_each(|message| {
+                let root = init_da_message(database, message)?;
+                database.add_message_root(root)?;
 
-    for batch in messages {
-        let mut database_transaction = Transactional::transaction(database);
-        let database = database_transaction.as_mut();
-
-        let batch = batch.expect("Encountered an error while decoding message configs");
-
-        // TODO: set output_index
-        batch.data.iter().try_for_each(|message| {
-            let root = init_da_message(database, message)?;
-            database.add_message_root(root)?;
-
-            Ok::<(), anyhow::Error>(())
-        })?;
-
-        database.increment_genesis_progress(GenesisResource::Messages)?;
-        database_transaction.commit()?;
-    }
-
-    Ok(())
+                Ok(())
+            })
+        },
+        messages,
+        database.clone(),
+    )
+    .run()
 }
 
 fn import_contract_configs(
@@ -279,19 +273,15 @@ fn import_contract_configs(
     contracts: IntoIter<ContractConfig>,
     block_height: BlockHeight,
 ) -> anyhow::Result<()> {
-    let processed_contract_batches =
-        database.genesis_progress(&GenesisResource::Contracts);
-    let contracts = contracts.skip(processed_contract_batches);
-
     let mut generated_output_idx = 0;
-
-    for batch in contracts {
-        let mut database_transaction = Transactional::transaction(database);
-        let database = database_transaction.as_mut();
-
-        let batch = batch.expect("Encountered an error while decoding contract configs");
+    // TODO: segfault propagate stop signal to here
+    let stop_signal = Arc::new(AtomicBool::new(false));
+    GenesisRunner::new(
+        stop_signal,
+        GenesisResource::Contracts,
+        |batch, database| {
         // TODO: set output_index
-        batch.data.iter().try_for_each(|contract| {
+        batch.iter().try_for_each(|contract| {
             init_contract(database, contract, generated_output_idx, block_height)?;
             database.add_contract_id(contract.contract_id)?;
 
@@ -300,59 +290,50 @@ fn import_contract_configs(
                 .expect("The maximum number of UTXOs supported in the genesis configuration has been exceeded.");
 
             Ok::<(), anyhow::Error>(())
-        })?;
-
-        database.increment_genesis_progress(GenesisResource::Contracts)?;
-        database_transaction.commit()?;
-    }
-
-    Ok(())
+        })
+        },
+        contracts,
+        database.clone(),
+    )
+    .run()
 }
 
 fn import_contract_state(
     database: &Database,
     contract_states: IntoIter<ContractStateConfig>,
 ) -> anyhow::Result<()> {
-    let processed_state_batches =
-        database.genesis_progress(&GenesisResource::ContractStates);
-    let contract_states = contract_states.skip(processed_state_batches);
-
-    for batch in contract_states {
-        let mut database_transaction = Transactional::transaction(database);
-        let database = database_transaction.as_mut();
-
-        let batch =
-            batch.expect("Encountered an error while decoding contract state configs");
-        database.update_contract_states(batch.data)?;
-
-        database.increment_genesis_progress(GenesisResource::ContractStates)?;
-        database_transaction.commit()?;
-    }
-
-    Ok(())
+    // TODO: segfault propagate stop signal to here
+    let stop_signal = Arc::new(AtomicBool::new(false));
+    GenesisRunner::new(
+        stop_signal,
+        GenesisResource::ContractStates,
+        |batch, database| {
+            database.update_contract_states(batch)?;
+            Ok(())
+        },
+        contract_states,
+        database.clone(),
+    )
+    .run()
 }
 
 fn import_contract_balance(
     database: &Database,
     contract_balances: IntoIter<ContractBalanceConfig>,
 ) -> anyhow::Result<()> {
-    let processed_balance_batches =
-        database.genesis_progress(&GenesisResource::ContractBalances);
-    let contract_balances = contract_balances.skip(processed_balance_batches);
-
-    for batch in contract_balances {
-        let mut database_transaction = Transactional::transaction(database);
-        let database = database_transaction.as_mut();
-
-        let batch =
-            batch.expect("Encountered an error while decoding contract balance configs");
-        database.update_contract_balances(batch.data)?;
-
-        database.increment_genesis_progress(GenesisResource::ContractBalances)?;
-        database_transaction.commit()?;
-    }
-
-    Ok(())
+    // TODO: segfault propagate stop signal to here
+    let stop_signal = Arc::new(AtomicBool::new(false));
+    GenesisRunner::new(
+        stop_signal,
+        GenesisResource::ContractBalances,
+        |batch, database| {
+            database.update_contract_balances(batch)?;
+            Ok(())
+        },
+        contract_balances,
+        database.clone(),
+    )
+    .run()
 }
 
 fn init_coin(

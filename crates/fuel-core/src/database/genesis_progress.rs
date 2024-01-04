@@ -47,20 +47,21 @@ impl ToDatabaseKey for GenesisResource {
 }
 
 impl Database {
-    pub fn genesis_progress(&self, key: &GenesisResource) -> usize {
-        StorageInspect::<GenesisMetadata>::get(self, key)
-            .unwrap()
-            .unwrap_or_default()
-            .into_owned()
+    pub fn genesis_progress(&self, key: &GenesisResource) -> Option<usize> {
+        Some(
+            StorageInspect::<GenesisMetadata>::get(self, key)
+                .unwrap()?
+                .into_owned(),
+        )
     }
 
-    pub fn increment_genesis_progress(&mut self, key: GenesisResource) -> Result<()> {
-        let progress = self
-            .genesis_progress(&key)
-            .checked_add(1)
-            .expect("Maximum number of batches was exceeded during genesis.");
+    pub fn update_genesis_progress(
+        &mut self,
+        key: GenesisResource,
+        processed_group: usize,
+    ) -> Result<()> {
         self.storage_as_mut::<GenesisMetadata>()
-            .insert(&key, &progress)?;
+            .insert(&key, &processed_group)?;
 
         Ok(())
     }

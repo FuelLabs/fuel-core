@@ -36,30 +36,31 @@ impl TransactionOpener for Database {
 }
 
 pub struct GenesisRunner<Handler, Groups, TxOpener> {
-    pub(crate) resource: GenesisResource,
-    pub(crate) handler: Handler,
-    pub(crate) tx_opener: TxOpener,
-    pub(crate) groups: Skip<Groups>,
-    pub(crate) stop_signal: Arc<AtomicBool>,
+    resource: GenesisResource,
+    handler: Handler,
+    tx_opener: TxOpener,
+    groups: Skip<Groups>,
+    stop_signal: Arc<AtomicBool>,
 }
 
 impl<Handler, Groups, GroupItem, TxOpener> GenesisRunner<Handler, Groups, TxOpener>
 where
-    Handler: FnMut(
-        fuel_core_chain_config::Group<GroupItem>,
-        &mut Database,
-    ) -> anyhow::Result<()>,
+    Handler: FnMut(Vec<GroupItem>, &mut Database) -> anyhow::Result<()>,
     Groups: Iterator<Item = anyhow::Result<Group<GroupItem>>>,
     TxOpener: TransactionOpener,
 {
-    pub(crate) fn new(
+    pub fn new(
         stop_signal: Arc<AtomicBool>,
         resource: GenesisResource,
         handler: Handler,
         groups: impl IntoIterator<IntoIter = Groups>,
         tx_opener: TxOpener,
     ) -> Self {
-        let skip = tx_opener.view_only().genesis_progress(&resource);
+        let skip = tx_opener
+            .view_only()
+            .genesis_progress(&resource)
+            .map(|idx_last_handled| idx_last_handled.saturating_add(1))
+            .unwrap_or_default();
         let groups = groups.into_iter().skip(skip);
         Self {
             handler,
@@ -70,13 +71,15 @@ where
         }
     }
 
-    pub(crate) fn run(mut self) -> anyhow::Result<()> {
+    pub fn run(mut self) -> anyhow::Result<()> {
         self.groups
             .take_while(|_| !self.stop_signal.load(Ordering::Relaxed))
             .try_for_each(|group| {
                 let mut tx = self.tx_opener.transaction();
-                (self.handler)(group?, tx.as_mut())?;
-                tx.increment_genesis_progress(self.resource)?;
+                let group = group?;
+                let group_num = group.index;
+                (self.handler)(group.data, tx.as_mut())?;
+                tx.update_genesis_progress(self.resource, group_num)?;
                 tx.commit()?;
                 Ok(())
             })
@@ -97,12 +100,22 @@ mod tests {
     };
     use fuel_core_chain_config::Group;
     use fuel_core_database::Error;
-    use fuel_core_storage::iter::IntoBoxedIter;
+    use fuel_core_storage::{
+        iter::IntoBoxedIter,
+        tables::Coins,
+        StorageAsMut,
+        StorageInspect,
+    };
+    use fuel_core_types::{
+        entities::coins::coin::CompressedCoin,
+        fuel_tx::UtxoId,
+    };
 
     use crate::{
         database::{
             genesis_progress::GenesisResource,
             transaction::DatabaseTransaction,
+            Column,
             Database,
         },
         service::genesis::runner::{
@@ -137,7 +150,7 @@ mod tests {
         let mut called_with_groups = vec![];
         let mut db = Database::default();
         let genesis_subtype = GenesisResource::Coins;
-        db.increment_genesis_progress(genesis_subtype).unwrap();
+        db.update_genesis_progress(genesis_subtype, 0).unwrap();
 
         let runner = GenesisRunner::new(
             Arc::new(AtomicBool::new(false)),
@@ -154,13 +167,7 @@ mod tests {
         runner.run().unwrap();
 
         // then
-        assert_eq!(
-            called_with_groups,
-            vec![Group {
-                index: 1,
-                data: vec![1]
-            }]
-        );
+        assert_eq!(called_with_groups, vec![vec![1]]);
     }
 
     #[test]
@@ -183,23 +190,7 @@ mod tests {
         runner.run().unwrap();
 
         // then
-        assert_eq!(
-            called_with_groups,
-            vec![
-                Group {
-                    index: 0,
-                    data: vec![0]
-                },
-                Group {
-                    index: 1,
-                    data: vec![1]
-                },
-                Group {
-                    index: 2,
-                    data: vec![2]
-                },
-            ]
-        );
+        assert_eq!(called_with_groups, vec![vec![0], vec![1], vec![2]]);
     }
 
     #[test]
@@ -207,16 +198,30 @@ mod tests {
         // given
         let groups = given_ok_groups(1);
         let outer_db = Database::default();
+        let utxo_id = UtxoId::new(Default::default(), 0);
+
+        let is_coin_present = |db: &Database| {
+            StorageInspect::<Coins>::get(&db, &utxo_id)
+                .unwrap()
+                .is_some()
+        };
 
         let runner = GenesisRunner::new(
             Arc::new(AtomicBool::new(false)),
             GenesisResource::Coins,
             |_, tx| {
-                tx.increment_genesis_progress(GenesisResource::Messages)
-                    .unwrap();
+                insert_a_coin(tx, &utxo_id);
 
-                assert_eq!(tx.genesis_progress(&GenesisResource::Messages), 1);
-                assert_eq!(outer_db.genesis_progress(&GenesisResource::Messages), 0);
+                assert!(
+                    is_coin_present(tx),
+                    "Coin should be present in the tx db view"
+                );
+
+                assert!(
+                    !is_coin_present(&outer_db),
+                    "Coin should not be present in the outer db "
+                );
+
                 Ok(())
             },
             groups,
@@ -227,7 +232,19 @@ mod tests {
         runner.run().unwrap();
 
         // then
-        assert_eq!(outer_db.genesis_progress(&GenesisResource::Messages), 1);
+        assert!(is_coin_present(&outer_db));
+    }
+
+    fn insert_a_coin(tx: &mut Database, utxo_id: &UtxoId) {
+        let coin = CompressedCoin {
+            owner: Default::default(),
+            amount: Default::default(),
+            asset_id: Default::default(),
+            maturity: Default::default(),
+            tx_pointer: Default::default(),
+        };
+
+        tx.storage_as_mut::<Coins>().insert(utxo_id, &coin).unwrap();
     }
 
     #[test]
@@ -235,12 +252,18 @@ mod tests {
         // given
         let groups = given_ok_groups(1);
         let db = Database::default();
+        let utxo_id = UtxoId::new(Default::default(), 0);
+
+        let is_coin_present = || {
+            StorageInspect::<Coins>::get(&db, &utxo_id)
+                .unwrap()
+                .is_some()
+        };
         let runner = GenesisRunner::new(
             Arc::new(AtomicBool::new(false)),
             GenesisResource::Coins,
             |_, tx| {
-                tx.increment_genesis_progress(GenesisResource::Coins)
-                    .unwrap();
+                insert_a_coin(tx, &utxo_id);
                 bail!("Some error")
             },
             groups,
@@ -251,7 +274,7 @@ mod tests {
         let _ = runner.run();
 
         // then
-        assert_eq!(db.genesis_progress(&GenesisResource::Coins), 0);
+        assert!(!is_coin_present());
     }
 
     #[test]
@@ -430,7 +453,7 @@ mod tests {
         let runner = GenesisRunner::new(
             Arc::new(AtomicBool::new(false)),
             GenesisResource::Coins,
-            |_: Group<()>, _| Ok(()),
+            |_: Vec<()>, _| Ok(()),
             groups,
             Database::default(),
         );
@@ -443,9 +466,9 @@ mod tests {
     }
 
     #[test]
-    fn succesfully_processed_batch_increases_the_genesis_progress() {
+    fn succesfully_processed_batch_updates_the_genesis_progress() {
         // given
-        let groups = given_ok_groups(1);
+        let groups = given_ok_groups(2);
         let db = Database::default();
         let runner = GenesisRunner::new(
             Arc::new(AtomicBool::new(false)),
@@ -459,7 +482,7 @@ mod tests {
         runner.run().unwrap();
 
         // then
-        assert_eq!(db.genesis_progress(&GenesisResource::Messages), 1);
+        assert_eq!(db.genesis_progress(&GenesisResource::Messages), Some(1));
     }
 
     #[test]
@@ -490,13 +513,19 @@ mod tests {
             db: db.clone(),
             counter: 0,
         };
+        let utxo_id = UtxoId::new(Default::default(), 0);
+
+        let is_coin_present = || {
+            StorageInspect::<Coins>::get(&db, &utxo_id)
+                .unwrap()
+                .is_some()
+        };
 
         let runner = GenesisRunner::new(
             Arc::new(AtomicBool::new(false)),
             GenesisResource::Coins,
             |_, tx| {
-                tx.increment_genesis_progress(GenesisResource::Messages)
-                    .unwrap();
+                insert_a_coin(tx, &utxo_id);
                 Ok(())
             },
             groups,
@@ -507,7 +536,8 @@ mod tests {
         runner.run().unwrap();
 
         // then
-        assert_eq!(db.genesis_progress(&GenesisResource::Messages), 1);
+        assert_eq!(db.genesis_progress(&GenesisResource::Coins), Some(0));
+        assert!(is_coin_present());
     }
 
     #[test]
@@ -523,7 +553,7 @@ mod tests {
             GenesisRunner::new(
                 Arc::clone(&stop_signal),
                 GenesisResource::Coins,
-                move |el: Group<usize>, _| {
+                move |el: Vec<usize>, _| {
                     read_groups.lock().unwrap().push(el);
                     Ok(())
                 },
@@ -534,9 +564,12 @@ mod tests {
 
         let runner_handle = std::thread::spawn(move || runner.run());
 
-        let groups_that_should_be_read = given_groups(3);
-        for group in groups_that_should_be_read.clone() {
-            tx.send(Ok(group)).unwrap();
+        for group_no in 0..3 {
+            tx.send(Ok(Group {
+                index: group_no,
+                data: vec![group_no],
+            }))
+            .unwrap();
         }
         while read_groups.lock().unwrap().len() < 3 {
             std::thread::sleep(std::time::Duration::from_millis(1));
@@ -563,6 +596,6 @@ mod tests {
 
         // group after signal is not read
         let read_groups = read_groups.lock().unwrap().clone();
-        assert_eq!(read_groups, groups_that_should_be_read);
+        assert_eq!(read_groups, vec![vec![0], vec![1], vec![2]]);
     }
 }
