@@ -137,6 +137,7 @@ impl BlockImporterPort for BlockImporterAdapter {
                 }),
         )
     }
+
     async fn execute_and_commit(&self, block: SealedBlock) -> anyhow::Result<()> {
         self.execute_and_commit(block).await
     }

@@ -44,7 +44,7 @@ pub struct SharedState {
     /// The Relayer shared state.
     pub relayer: Option<fuel_core_relayer::SharedState<Database>>,
     /// The GraphQL shared state.
-    pub graph_ql: crate::fuel_core_graphql_api::service::SharedState,
+    pub graph_ql: crate::fuel_core_graphql_api::api_service::SharedState,
     /// The underlying database.
     pub database: Database,
     /// Subscribe to new block production.
@@ -305,9 +305,9 @@ mod tests {
             i += 1;
         }
 
-        // current services: graphql, txpool, PoA
+        // current services: graphql, graphql worker, txpool, PoA
         #[allow(unused_mut)]
-        let mut expected_services = 3;
+        let mut expected_services = 4;
 
         // Relayer service is disabled with `Config::local_node`.
         // #[cfg(feature = "relayer")]

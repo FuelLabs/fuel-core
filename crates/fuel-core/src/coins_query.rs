@@ -1,5 +1,5 @@
 use crate::{
-    fuel_core_graphql_api::service::Database,
+    fuel_core_graphql_api::database::ReadView,
     query::asset_query::{
         AssetQuery,
         AssetSpendTarget,
@@ -95,7 +95,7 @@ impl SpendQuery {
     }
 
     /// Return [`AssetQuery`]s.
-    pub fn asset_queries<'a>(&'a self, db: &'a Database) -> Vec<AssetQuery<'a>> {
+    pub fn asset_queries<'a>(&'a self, db: &'a ReadView) -> Vec<AssetQuery<'a>> {
         self.query_per_asset
             .iter()
             .map(|asset| {
@@ -159,7 +159,7 @@ pub fn largest_first(query: &AssetQuery) -> Result<Vec<CoinType>, CoinsQueryErro
 
 // An implementation of the method described on: https://iohk.io/en/blog/posts/2018/07/03/self-organisation-in-coin-selection/
 pub fn random_improve(
-    db: &Database,
+    db: &ReadView,
     spend_query: &SpendQuery,
 ) -> Result<Vec<Vec<CoinType>>, CoinsQueryError> {
     let mut coins_per_asset = vec![];
@@ -229,7 +229,7 @@ mod tests {
             SpendQuery,
         },
         database::Database,
-        fuel_core_graphql_api::service::Database as ServiceDatabase,
+        fuel_core_graphql_api::api_service::ReadDatabase as ServiceDatabase,
         query::asset_query::{
             AssetQuery,
             AssetSpendTarget,
@@ -323,15 +323,19 @@ mod tests {
             let result: Vec<_> = spend_query
                 .iter()
                 .map(|asset| {
-                    largest_first(&AssetQuery::new(owner, asset, base_asset_id, None, db))
-                        .map(|coins| {
-                            coins
-                                .iter()
-                                .map(|coin| {
-                                    (*coin.asset_id(base_asset_id), coin.amount())
-                                })
-                                .collect()
-                        })
+                    largest_first(&AssetQuery::new(
+                        owner,
+                        asset,
+                        base_asset_id,
+                        None,
+                        &db.view(),
+                    ))
+                    .map(|coins| {
+                        coins
+                            .iter()
+                            .map(|coin| (*coin.asset_id(base_asset_id), coin.amount()))
+                            .collect()
+                    })
                 })
                 .try_collect()?;
             Ok(result)
@@ -484,7 +488,7 @@ mod tests {
             db: &ServiceDatabase,
         ) -> Result<Vec<(AssetId, u64)>, CoinsQueryError> {
             let coins = random_improve(
-                db,
+                &db.view(),
                 &SpendQuery::new(owner, &query_per_asset, None, base_asset_id)?,
             );
 
@@ -682,7 +686,7 @@ mod tests {
                     Some(excluded_ids),
                     base_asset_id,
                 )?;
-                let coins = random_improve(&db.service_database(), &spend_query);
+                let coins = random_improve(&db.service_database().view(), &spend_query);
 
                 // Transform result for convenience
                 coins.map(|coins| {
@@ -840,7 +844,7 @@ mod tests {
         }
 
         let coins = random_improve(
-            &db.service_database(),
+            &db.service_database().view(),
             &SpendQuery::new(
                 owner,
                 &[AssetSpendTarget {
@@ -930,7 +934,8 @@ mod tests {
         }
 
         fn service_database(&self) -> ServiceDatabase {
-            Box::new(self.database.clone())
+            let database = self.database.clone();
+            ServiceDatabase::new(database.clone(), database)
         }
     }
 
@@ -980,18 +985,22 @@ mod tests {
 
         pub fn owned_coins(&self, owner: &Address) -> Vec<Coin> {
             use crate::query::CoinQueryData;
-            let db = self.service_database();
-            db.owned_coins_ids(owner, None, IterDirection::Forward)
-                .map(|res| res.map(|id| db.coin(id).unwrap()))
+            let query = self.service_database();
+            let query = query.view();
+            query
+                .owned_coins_ids(owner, None, IterDirection::Forward)
+                .map(|res| res.map(|id| query.coin(id).unwrap()))
                 .try_collect()
                 .unwrap()
         }
 
         pub fn owned_messages(&self, owner: &Address) -> Vec<Message> {
             use crate::query::MessageQueryData;
-            let db = self.service_database();
-            db.owned_message_ids(owner, None, IterDirection::Forward)
-                .map(|res| res.map(|id| db.message(&id).unwrap()))
+            let query = self.service_database();
+            let query = query.view();
+            query
+                .owned_message_ids(owner, None, IterDirection::Forward)
+                .map(|res| res.map(|id| query.message(&id).unwrap()))
                 .try_collect()
                 .unwrap()
         }

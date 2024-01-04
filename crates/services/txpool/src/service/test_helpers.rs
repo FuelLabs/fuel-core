@@ -21,7 +21,10 @@ use fuel_core_types::{
         TransactionBuilder,
         Word,
     },
-    services::p2p::GossipsubMessageAcceptance,
+    services::{
+        block_importer::ImportResult,
+        p2p::GossipsubMessageAcceptance,
+    },
 };
 use std::cell::RefCell;
 
@@ -103,7 +106,7 @@ mockall::mock! {
     pub Importer {}
 
     impl BlockImporter for Importer {
-        fn block_events(&self) -> BoxStream<Arc<ImportResult>>;
+        fn block_events(&self) -> BoxStream<SharedImportResult>;
     }
 }
 
@@ -115,7 +118,7 @@ impl MockImporter {
             let stream = fuel_core_services::stream::unfold(blocks, |mut blocks| async {
                 let block = blocks.pop();
                 if let Some(sealed_block) = block {
-                    let result =
+                    let result: SharedImportResult =
                         Arc::new(ImportResult::new_from_local(sealed_block, vec![]));
 
                     Some((result, blocks))
