@@ -427,7 +427,7 @@ impl<P: TaskP2PService, D, B: Broadcast> Task<P, D, B> {
 }
 
 fn convert_peer_id(peer_id: &PeerId) -> anyhow::Result<FuelPeerId> {
-    let inner = Vec::try_from(*peer_id)?;
+    let inner = Vec::from(*peer_id);
     Ok(FuelPeerId::from(inner))
 }
 
