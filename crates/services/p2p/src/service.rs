@@ -85,7 +85,7 @@ use tokio::{
 };
 use tracing::warn;
 
-pub type Service<D> = ServiceRunner<Task<FuelP2PService<PostcardCodec>, D, SharedState>>;
+pub type Service<D> = ServiceRunner<Task<FuelP2PService, D, SharedState>>;
 
 enum TaskRequest {
     // Broadcast requests to p2p network
@@ -194,7 +194,7 @@ pub trait TaskP2PService: Send {
     fn update_block_height(&mut self, height: BlockHeight) -> anyhow::Result<()>;
 }
 
-impl TaskP2PService for FuelP2PService<PostcardCodec> {
+impl TaskP2PService for FuelP2PService {
     fn get_peer_ids(&self) -> Vec<PeerId> {
         self.get_peers_ids_iter().copied().collect()
     }
@@ -328,7 +328,7 @@ pub struct HeartbeatPeerReputationConfig {
     low_heartbeat_frequency_penalty: AppScore,
 }
 
-impl<D> Task<FuelP2PService<PostcardCodec>, D, SharedState> {
+impl<D> Task<FuelP2PService, D, SharedState> {
     pub fn new<B: BlockHeightImporter>(
         chain_id: ChainId,
         config: Config,
@@ -435,14 +435,14 @@ fn convert_peer_id(peer_id: &PeerId) -> anyhow::Result<FuelPeerId> {
 }
 
 #[async_trait::async_trait]
-impl<D> RunnableService for Task<FuelP2PService<PostcardCodec>, D, SharedState>
+impl<D> RunnableService for Task<FuelP2PService, D, SharedState>
 where
     Self: RunnableTask,
 {
     const NAME: &'static str = "P2P";
 
     type SharedData = SharedState;
-    type Task = Task<FuelP2PService<PostcardCodec>, D, SharedState>;
+    type Task = Task<FuelP2PService, D, SharedState>;
     type TaskParams = ();
 
     fn shared_data(&self) -> Self::SharedData {
@@ -829,8 +829,8 @@ pub fn to_message_acceptance(
     }
 }
 
-fn report_message<T: NetworkCodec>(
-    p2p_service: &mut FuelP2PService<T>,
+fn report_message(
+    p2p_service: &mut FuelP2PService,
     message: GossipsubMessageInfo,
     acceptance: GossipsubMessageAcceptance,
 ) {
