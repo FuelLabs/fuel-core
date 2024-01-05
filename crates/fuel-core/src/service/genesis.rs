@@ -132,7 +132,6 @@ fn import_genesis_block(
 
     let importer = Importer::new(
         config.block_importer.clone(),
-        &config.chain_conf,
         original_database.clone(),
         (),
         (),

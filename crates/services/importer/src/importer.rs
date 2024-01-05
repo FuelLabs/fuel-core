@@ -7,7 +7,6 @@ use crate::{
     },
     Config,
 };
-use fuel_core_chain_config::ChainConfig;
 use fuel_core_metrics::importer::importer_metrics;
 use fuel_core_storage::{
     not_found,
@@ -114,20 +113,14 @@ pub struct Importer<D, E, V> {
 }
 
 impl<D, E, V> Importer<D, E, V> {
-    pub fn new(
-        config: Config,
-        chain_config: &ChainConfig,
-        database: D,
-        executor: E,
-        verifier: V,
-    ) -> Self {
+    pub fn new(config: Config, database: D, executor: E, verifier: V) -> Self {
         let (broadcast, _) = broadcast::channel(config.max_block_notify_buffer);
 
         Self {
             database,
             executor,
             verifier,
-            chain_id: chain_config.consensus_parameters.chain_id,
+            chain_id: config.chain_id,
             broadcast,
             guard: tokio::sync::Semaphore::new(1),
         }

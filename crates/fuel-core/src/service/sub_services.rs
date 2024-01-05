@@ -89,7 +89,6 @@ pub fn init_sub_services(
 
     let importer_adapter = BlockImporterAdapter::new(
         config.block_importer.clone(),
-        &config.chain_conf,
         database.clone(),
         executor.clone(),
         verifier.clone(),

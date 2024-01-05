@@ -358,13 +358,7 @@ fn commit_result_assert(
     executor_db: MockDatabase,
 ) -> Result<(), Error> {
     let expected_to_broadcast = sealed_block.clone();
-    let importer = Importer::new(
-        Default::default(),
-        &Default::default(),
-        underlying_db,
-        (),
-        (),
-    );
+    let importer = Importer::new(Default::default(), underlying_db, (), ());
     let uncommitted_result = UncommittedResult::new(
         ImportResult::new_from_local(sealed_block, vec![]),
         StorageTransaction::new(executor_db),
@@ -394,13 +388,7 @@ fn execute_and_commit_assert(
     verifier: MockBlockVerifier,
 ) -> Result<(), Error> {
     let expected_to_broadcast = sealed_block.clone();
-    let importer = Importer::new(
-        Default::default(),
-        &Default::default(),
-        underlying_db,
-        executor,
-        verifier,
-    );
+    let importer = Importer::new(Default::default(), underlying_db, executor, verifier);
 
     let mut imported_blocks = importer.subscribe();
     let result = importer.execute_and_commit(sealed_block);
@@ -421,13 +409,7 @@ fn execute_and_commit_assert(
 
 #[test]
 fn commit_result_fail_when_locked() {
-    let importer = Importer::new(
-        Default::default(),
-        &Default::default(),
-        MockDatabase::default(),
-        (),
-        (),
-    );
+    let importer = Importer::new(Default::default(), MockDatabase::default(), (), ());
     let uncommitted_result = UncommittedResult::new(
         ImportResult::default(),
         StorageTransaction::new(MockDatabase::default()),
@@ -444,7 +426,6 @@ fn commit_result_fail_when_locked() {
 fn execute_and_commit_fail_when_locked() {
     let importer = Importer::new(
         Default::default(),
-        &Default::default(),
         MockDatabase::default(),
         MockExecutor::default(),
         MockBlockVerifier::default(),
@@ -461,7 +442,6 @@ fn execute_and_commit_fail_when_locked() {
 fn one_lock_at_the_same_time() {
     let importer = Importer::new(
         Default::default(),
-        &Default::default(),
         MockDatabase::default(),
         MockExecutor::default(),
         MockBlockVerifier::default(),
@@ -556,7 +536,6 @@ where
 {
     let importer = Importer::new(
         Default::default(),
-        &Default::default(),
         MockDatabase::default(),
         executor(block_after_execution, MockDatabase::default()),
         verifier(verifier_result),
@@ -569,7 +548,6 @@ where
 fn verify_and_execute_allowed_when_locked() {
     let importer = Importer::new(
         Default::default(),
-        &Default::default(),
         MockDatabase::default(),
         executor(ok(ex_result(13, 0)), MockDatabase::default()),
         verifier(ok(())),

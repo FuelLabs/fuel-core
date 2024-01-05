@@ -6,7 +6,6 @@ use crate::{
         VerifierAdapter,
     },
 };
-use fuel_core_chain_config::ChainConfig;
 use fuel_core_importer::{
     ports::{
         BlockVerifier,
@@ -56,12 +55,11 @@ use super::{
 impl BlockImporterAdapter {
     pub fn new(
         config: Config,
-        chain_config: &ChainConfig,
         database: Database,
         executor: ExecutorAdapter,
         verifier: VerifierAdapter,
     ) -> Self {
-        let importer = Importer::new(config, chain_config, database, executor, verifier);
+        let importer = Importer::new(config, database, executor, verifier);
         importer.init_metrics();
         Self {
             block_importer: Arc::new(importer),
