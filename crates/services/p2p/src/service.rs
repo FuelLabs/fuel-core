@@ -1,8 +1,5 @@
 use crate::{
-    codecs::{
-        postcard::PostcardCodec,
-        NetworkCodec,
-    },
+    codecs::postcard::PostcardCodec,
     config::Config,
     gossipsub::messages::{
         GossipsubBroadcastRequest,

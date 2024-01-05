@@ -3,7 +3,6 @@ use crate::{
         FuelBehaviour,
         FuelBehaviourEvent,
     },
-    codecs::NetworkCodec,
     config::{
         build_transport_function,
         Config,
