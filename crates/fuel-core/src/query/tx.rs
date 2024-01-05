@@ -37,7 +37,7 @@ pub trait SimpleTransactionData: Send + Sync {
 
 impl<D> SimpleTransactionData for D
 where
-    D: OffChainDatabase + OnChainDatabase + ?Sized,
+    D: OnChainDatabase + OffChainDatabase + ?Sized,
 {
     fn transaction(&self, tx_id: &TxId) -> StorageResult<Transaction> {
         self.storage::<Transactions>()

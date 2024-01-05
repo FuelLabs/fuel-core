@@ -40,6 +40,7 @@ impl Mappable for FuelBlocks {
     /// Unique identifier of the fuel block.
     type Key = Self::OwnedKey;
     // TODO: Seems it would be faster to use `BlockHeight` as primary key.
+    //  https://github.com/FuelLabs/fuel-core/issues/1580.
     type OwnedKey = BlockId;
     type Value = Self::OwnedValue;
     type OwnedValue = CompressedBlock;

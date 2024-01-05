@@ -37,7 +37,7 @@ pub trait CoinQueryData: Send + Sync {
     ) -> BoxedIter<StorageResult<Coin>>;
 }
 
-impl<D: OffChainDatabase + OnChainDatabase + ?Sized> CoinQueryData for D {
+impl<D: OnChainDatabase + OffChainDatabase + ?Sized> CoinQueryData for D {
     fn coin(&self, utxo_id: UtxoId) -> StorageResult<Coin> {
         let coin = self
             .storage::<Coins>()

@@ -91,6 +91,7 @@ impl AtomicView<OffChainView> for Database {
     }
 
     fn latest_view(&self) -> OffChainView {
+        // TODO: https://github.com/FuelLabs/fuel-core/issues/1581
         Arc::new(self.clone())
     }
 }

@@ -134,6 +134,7 @@ impl AtomicView<OnChainView> for Database {
     }
 
     fn latest_view(&self) -> OnChainView {
+        // TODO: https://github.com/FuelLabs/fuel-core/issues/1581
         Arc::new(self.clone())
     }
 }

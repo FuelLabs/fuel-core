@@ -48,6 +48,8 @@ use futures::{
     StreamExt,
 };
 
+/// The off-chain GraphQL API worker task processes the imported blocks
+/// and actualize the information used by the GraphQL service.
 pub struct Task<D> {
     block_importer: BoxStream<SharedImportResult>,
     database: D,
@@ -58,6 +60,9 @@ where
     D: ports::worker::OffChainDatabase,
 {
     fn process_block(&mut self, result: SharedImportResult) -> anyhow::Result<()> {
+        // TODO: Implement the creation of indexes for the messages and coins.
+        //  Implement table `BlockId -> BlockHeight` to get the block height by block id.
+        //  https://github.com/FuelLabs/fuel-core/issues/1583
         let mut transaction = self.database.transaction();
         // save the status for every transaction using the finalized block id
         self.persist_transaction_status(&result, transaction.as_mut())?;
@@ -219,6 +224,7 @@ where
         //  to actualize the database without executing the block at the previous state
         //  of the blockchain. When `AtomicView<Storage>::view_at` is implemented, we can
         //  process all missed blocks and actualize the database here.
+        //  https://github.com/FuelLabs/fuel-core/issues/1584
         Ok(self)
     }
 }
@@ -251,6 +257,7 @@ where
     }
 
     async fn shutdown(mut self) -> anyhow::Result<()> {
+        // Process all remaining blocks before shutdown to not lose any data.
         loop {
             let result = self.block_importer.next().now_or_never();
 

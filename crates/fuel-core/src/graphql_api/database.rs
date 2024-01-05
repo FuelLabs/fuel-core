@@ -52,15 +52,22 @@ use std::{
     sync::Arc,
 };
 
+/// The on-chain view of the database used by the [`ReadView`] to fetch on-chain data.
 pub type OnChainView = Arc<dyn OnChainDatabase>;
+/// The off-chain view of the database used by the [`ReadView`] to fetch off-chain data.
 pub type OffChainView = Arc<dyn OffChainDatabase>;
 
+/// The container of the on-chain and off-chain database view provides.
+/// It is used only by [`ViewExtension`](super::view_extension::ViewExtension) to create a [`ReadView`].
 pub struct ReadDatabase {
+    /// The on-chain database view provider.
     on_chain: Box<dyn AtomicView<OnChainView>>,
+    /// The off-chain database view provider.
     off_chain: Box<dyn AtomicView<OffChainView>>,
 }
 
 impl ReadDatabase {
+    /// Creates a new [`ReadDatabase`] with the given on-chain and off-chain database view providers.
     pub fn new<OnChain, OffChain>(on_chain: OnChain, off_chain: OffChain) -> Self
     where
         OnChain: AtomicView<OnChainView> + 'static,
@@ -72,7 +79,11 @@ impl ReadDatabase {
         }
     }
 
+    /// Creates a consistent view of the database.
     pub fn view(&self) -> ReadView {
+        // TODO: Use the same height for both views to guarantee consistency.
+        //  It is not possible to implement until `view_at` is implemented for the `AtomicView`.
+        //  https://github.com/FuelLabs/fuel-core/issues/1582
         ReadView {
             on_chain: self.on_chain.latest_view(),
             off_chain: self.off_chain.latest_view(),
