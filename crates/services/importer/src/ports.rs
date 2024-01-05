@@ -43,14 +43,16 @@ pub trait ImporterDatabase {
 
 /// The port for returned database from the executor.
 pub trait ExecutorDatabase: ImporterDatabase {
-    /// Inserts the `SealedBlock` under the `block_id`.
+    /// Inserts the `SealedBlock`.
+    ///
+    /// The method returns `true` if the block is a new, otherwise `false`.
     // TODO: Remove `chain_id` from the signature, but for that transactions inside
     //  the block should have `cached_id`. We need to guarantee that from the Rust-type system.
-    fn store_block(
+    fn store_new_block(
         &mut self,
         chain_id: &ChainId,
         block: &SealedBlock,
-    ) -> StorageResult<Option<()>>;
+    ) -> StorageResult<bool>;
 }
 
 #[cfg_attr(test, mockall::automock)]

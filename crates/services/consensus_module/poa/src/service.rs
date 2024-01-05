@@ -8,6 +8,7 @@ use crate::{
         BlockProducer,
         P2pPort,
         TransactionPool,
+        TransactionsSource,
     },
     sync::{
         SyncState,
@@ -255,10 +256,10 @@ where
         &self,
         height: BlockHeight,
         block_time: Tai64,
-        txs: Option<Vec<Transaction>>,
+        source: TransactionsSource,
     ) -> anyhow::Result<UncommittedExecutionResult<StorageTransaction<D>>> {
         self.block_producer
-            .produce_and_execute_block(height, block_time, txs, self.block_gas_limit)
+            .produce_and_execute_block(height, block_time, source, self.block_gas_limit)
             .await
     }
 
@@ -266,7 +267,7 @@ where
         self.produce_block(
             self.next_height(),
             self.next_time(RequestType::Trigger)?,
-            None,
+            TransactionsSource::TxPool,
             RequestType::Trigger,
         )
         .await
@@ -287,7 +288,7 @@ where
                     self.produce_block(
                         self.next_height(),
                         block_time,
-                        None,
+                        TransactionsSource::TxPool,
                         RequestType::Manual,
                     )
                     .await?;
@@ -298,7 +299,7 @@ where
                 self.produce_block(
                     self.next_height(),
                     block_time,
-                    Some(txs),
+                    TransactionsSource::SpecificTransactions(txs),
                     RequestType::Manual,
                 )
                 .await?;
@@ -311,7 +312,7 @@ where
         &mut self,
         height: BlockHeight,
         block_time: Tai64,
-        txs: Option<Vec<Transaction>>,
+        source: TransactionsSource,
         request_type: RequestType,
     ) -> anyhow::Result<()> {
         let last_block_created = Instant::now();
@@ -333,7 +334,7 @@ where
             },
             db_transaction,
         ) = self
-            .signal_produce_block(height, block_time, txs)
+            .signal_produce_block(height, block_time, source)
             .await?
             .into();
 

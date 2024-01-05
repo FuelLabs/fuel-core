@@ -56,11 +56,11 @@ mockall::mock! {
     }
 
     impl ExecutorDatabase for Database {
-        fn store_block(
+        fn store_new_block(
             &mut self,
             chain_id: &ChainId,
             block: &SealedBlock,
-        ) -> StorageResult<Option<()>>;
+        ) -> StorageResult<bool>;
     }
 
     impl TransactionTrait<MockDatabase> for Database {
@@ -129,7 +129,7 @@ fn executor_db<H, B>(
 ) -> impl Fn() -> MockDatabase
 where
     H: Fn() -> StorageResult<Option<u32>> + Send + Clone + 'static,
-    B: Fn() -> StorageResult<Option<()>> + Send + Clone + 'static,
+    B: Fn() -> StorageResult<bool> + Send + Clone + 'static,
 {
     move || {
         let height = height.clone();
@@ -137,7 +137,8 @@ where
         let mut db = MockDatabase::default();
         db.expect_latest_block_height()
             .returning(move || height().map(|v| v.map(Into::into)));
-        db.expect_store_block().returning(move |_, _| store_block());
+        db.expect_store_new_block()
+            .returning(move |_, _| store_block());
         db.expect_commit().times(commits).returning(|| Ok(()));
         db.expect_increase_tx_count().returning(Ok);
         db
@@ -221,42 +222,42 @@ where
 #[test_case(
     genesis(0),
     underlying_db(ok(None)),
-    executor_db(ok(None), ok(None), 1)
+    executor_db(ok(None), ok(true), 1)
     => Ok(());
     "successfully imports genesis block when latest block not found"
 )]
 #[test_case(
     genesis(113),
     underlying_db(ok(None)),
-    executor_db(ok(None), ok(None), 1)
+    executor_db(ok(None), ok(true), 1)
     => Ok(());
     "successfully imports block at arbitrary height when executor db expects it and last block not found" 
 )]
 #[test_case(
     genesis(0),
     underlying_db(storage_failure),
-    executor_db(ok(Some(0)), ok(None), 0)
+    executor_db(ok(Some(0)), ok(true), 0)
     => Err(storage_failure_error());
     "fails to import genesis when underlying database fails"
 )]
 #[test_case(
     genesis(0),
     underlying_db(ok(Some(0))),
-    executor_db(ok(Some(0)), ok(None), 0)
+    executor_db(ok(Some(0)), ok(true), 0)
     => Err(Error::InvalidUnderlyingDatabaseGenesisState);
     "fails to import genesis block when already exists"
 )]
 #[test_case(
     genesis(1),
     underlying_db(ok(None)),
-    executor_db(ok(Some(0)), ok(None), 0)
+    executor_db(ok(Some(0)), ok(true), 0)
     => Err(Error::InvalidDatabaseStateAfterExecution(None, Some(0u32.into())));
     "fails to import genesis block when next height is not 0"
 )]
 #[test_case(
     genesis(0),
     underlying_db(ok(None)),
-    executor_db(ok(None), ok(Some(())), 0)
+    executor_db(ok(None), ok(false), 0)
     => Err(Error::NotUnique(0u32.into()));
     "fails to import genesis block when block exists for height 0"
 )]
@@ -272,56 +273,56 @@ fn commit_result_genesis(
 #[test_case(
     poa_block(1),
     underlying_db(ok(Some(0))),
-    executor_db(ok(Some(0)), ok(None), 1)
+    executor_db(ok(Some(0)), ok(true), 1)
     => Ok(());
     "successfully imports block at height 1 when latest block is genesis"
 )]
 #[test_case(
     poa_block(113),
     underlying_db(ok(Some(112))),
-    executor_db(ok(Some(112)), ok(None), 1)
+    executor_db(ok(Some(112)), ok(true), 1)
     => Ok(());
     "successfully imports block at arbitrary height when latest block height is one fewer and executor db expects it"
 )]
 #[test_case(
     poa_block(0),
     underlying_db(ok(Some(0))),
-    executor_db(ok(Some(1)), ok(None), 0)
+    executor_db(ok(Some(1)), ok(true), 0)
     => Err(Error::ZeroNonGenericHeight);
     "fails to import PoA block with height 0"
 )]
 #[test_case(
     poa_block(113),
     underlying_db(ok(Some(111))),
-    executor_db(ok(Some(113)), ok(None), 0)
+    executor_db(ok(Some(113)), ok(true), 0)
     => Err(Error::IncorrectBlockHeight(112u32.into(), 113u32.into()));
     "fails to import block at height 113 when latest block height is 111"
 )]
 #[test_case(
     poa_block(113),
     underlying_db(ok(Some(114))),
-    executor_db(ok(Some(113)), ok(None), 0)
+    executor_db(ok(Some(113)), ok(true), 0)
     => Err(Error::IncorrectBlockHeight(115u32.into(), 113u32.into()));
     "fails to import block at height 113 when latest block height is 114"
 )]
 #[test_case(
     poa_block(113),
     underlying_db(ok(Some(112))),
-    executor_db(ok(Some(114)), ok(None), 0)
+    executor_db(ok(Some(114)), ok(true), 0)
     => Err(Error::InvalidDatabaseStateAfterExecution(Some(112u32.into()), Some(114u32.into())));
     "fails to import block 113 when executor db expects height 114"
 )]
 #[test_case(
     poa_block(113),
     underlying_db(ok(Some(112))),
-    executor_db(storage_failure, ok(None), 0)
+    executor_db(storage_failure, ok(true), 0)
     => Err(storage_failure_error());
     "fails to import block when executor db fails to find latest block"
 )]
 #[test_case(
     poa_block(113),
     underlying_db(ok(Some(112))),
-    executor_db(ok(Some(112)), ok(Some(())), 0)
+    executor_db(ok(Some(112)), ok(false), 0)
     => Err(Error::NotUnique(113u32.into()));
     "fails to import block when block exists"
 )]
@@ -517,7 +518,7 @@ where
         underlying_db(ok(Some(previous_height)))(),
         executor(
             block_after_execution,
-            executor_db(ok(Some(previous_height)), ok(None), commits)(),
+            executor_db(ok(Some(previous_height)), ok(true), commits)(),
         ),
         verifier(verifier_result),
     );

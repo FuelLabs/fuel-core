@@ -17,6 +17,7 @@ use fuel_core_poa::{
         BlockImporter,
         P2pPort,
         TransactionPool,
+        TransactionsSource,
     },
     service::{
         Mode,
@@ -27,10 +28,7 @@ use fuel_core_services::stream::BoxStream;
 use fuel_core_storage::transactional::StorageTransaction;
 use fuel_core_types::{
     fuel_asm::Word,
-    fuel_tx::{
-        Transaction,
-        TxId,
-    },
+    fuel_tx::TxId,
     fuel_types::BlockHeight,
     services::{
         block_importer::{
@@ -106,17 +104,22 @@ impl fuel_core_poa::ports::BlockProducer for BlockProducerAdapter {
         &self,
         height: BlockHeight,
         block_time: Tai64,
-        txs: Option<Vec<Transaction>>,
+        source: TransactionsSource,
         max_gas: Word,
     ) -> anyhow::Result<UncommittedResult<StorageTransaction<Database>>> {
-        if let Some(txs) = txs {
-            self.block_producer
-                .produce_and_execute_block_transactions(height, block_time, txs, max_gas)
-                .await
-        } else {
-            self.block_producer
-                .produce_and_execute_block_txpool(height, block_time, max_gas)
-                .await
+        match source {
+            TransactionsSource::TxPool => {
+                self.block_producer
+                    .produce_and_execute_block_txpool(height, block_time, max_gas)
+                    .await
+            }
+            TransactionsSource::SpecificTransactions(txs) => {
+                self.block_producer
+                    .produce_and_execute_block_transactions(
+                        height, block_time, txs, max_gas,
+                    )
+                    .await
+            }
         }
     }
 }

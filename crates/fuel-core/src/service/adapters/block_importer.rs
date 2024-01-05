@@ -130,11 +130,11 @@ impl ImporterDatabase for Database {
 }
 
 impl ExecutorDatabase for Database {
-    fn store_block(
+    fn store_new_block(
         &mut self,
         chain_id: &ChainId,
         block: &SealedBlock,
-    ) -> StorageResult<Option<()>> {
+    ) -> StorageResult<bool> {
         let block_id = block.entity.id();
         let mut found = self
             .storage::<FuelBlocks>()
@@ -152,7 +152,7 @@ impl ExecutorDatabase for Database {
                 .insert(&tx.id(chain_id), tx)?
                 .is_some();
         }
-        Ok(found.then_some(()))
+        Ok(!found)
     }
 }
 

@@ -245,9 +245,9 @@ where
             ))
         }
 
-        db_after_execution
-            .store_block(&self.chain_id, &result.sealed_block)?
-            .should_be_unique(&expected_next_height)?;
+        if !db_after_execution.store_new_block(&self.chain_id, &result.sealed_block)? {
+            return Err(Error::NotUnique(expected_next_height))
+        }
 
         // Update the total tx count in chain metadata
         let total_txs = db_after_execution
