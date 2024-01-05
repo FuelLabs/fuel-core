@@ -8,6 +8,7 @@ use crate::{
         BlockProducer,
         P2pPort,
         TransactionPool,
+        TransactionsSource,
     },
     sync::{
         SyncState,
@@ -42,7 +43,10 @@ use fuel_core_types::{
     },
     fuel_asm::Word,
     fuel_crypto::Signature,
-    fuel_tx::TxId,
+    fuel_tx::{
+        Transaction,
+        TxId,
+    },
     fuel_types::BlockHeight,
     secrecy::{
         ExposeSecret,
@@ -81,16 +85,13 @@ impl SharedState {
     pub async fn manually_produce_block(
         &self,
         start_time: Option<Tai64>,
-        number_of_blocks: u32,
+        mode: Mode,
     ) -> anyhow::Result<()> {
         let (sender, receiver) = oneshot::channel();
 
         self.request_sender
             .send(Request::ManualBlocks((
-                ManualProduction {
-                    start_time,
-                    number_of_blocks,
-                },
+                ManualProduction { start_time, mode },
                 sender,
             )))
             .await?;
@@ -98,9 +99,16 @@ impl SharedState {
     }
 }
 
+pub enum Mode {
+    /// Produces `number_of_blocks` blocks using `TxPool` as a source of transactions.
+    Blocks { number_of_blocks: u32 },
+    /// Produces one block with the given transactions.
+    BlockWithTransactions(Vec<Transaction>),
+}
+
 struct ManualProduction {
     pub start_time: Option<Tai64>,
-    pub number_of_blocks: u32,
+    pub mode: Mode,
 }
 
 /// Requests accepted by the task.
@@ -248,9 +256,10 @@ where
         &self,
         height: BlockHeight,
         block_time: Tai64,
+        source: TransactionsSource,
     ) -> anyhow::Result<UncommittedExecutionResult<StorageTransaction<D>>> {
         self.block_producer
-            .produce_and_execute_block(height, block_time, self.block_gas_limit)
+            .produce_and_execute_block(height, block_time, source, self.block_gas_limit)
             .await
     }
 
@@ -258,6 +267,7 @@ where
         self.produce_block(
             self.next_height(),
             self.next_time(RequestType::Trigger)?,
+            TransactionsSource::TxPool,
             RequestType::Trigger,
         )
         .await
@@ -272,10 +282,28 @@ where
         } else {
             self.next_time(RequestType::Manual)?
         };
-        for _ in 0..block_production.number_of_blocks {
-            self.produce_block(self.next_height(), block_time, RequestType::Manual)
+        match block_production.mode {
+            Mode::Blocks { number_of_blocks } => {
+                for _ in 0..number_of_blocks {
+                    self.produce_block(
+                        self.next_height(),
+                        block_time,
+                        TransactionsSource::TxPool,
+                        RequestType::Manual,
+                    )
+                    .await?;
+                    block_time = self.next_time(RequestType::Manual)?;
+                }
+            }
+            Mode::BlockWithTransactions(txs) => {
+                self.produce_block(
+                    self.next_height(),
+                    block_time,
+                    TransactionsSource::SpecificTransactions(txs),
+                    RequestType::Manual,
+                )
                 .await?;
-            block_time = self.next_time(RequestType::Manual)?;
+            }
         }
         Ok(())
     }
@@ -284,6 +312,7 @@ where
         &mut self,
         height: BlockHeight,
         block_time: Tai64,
+        source: TransactionsSource,
         request_type: RequestType,
     ) -> anyhow::Result<()> {
         let last_block_created = Instant::now();
@@ -304,7 +333,10 @@ where
                 tx_status,
             },
             db_transaction,
-        ) = self.signal_produce_block(height, block_time).await?.into();
+        ) = self
+            .signal_produce_block(height, block_time, source)
+            .await?
+            .into();
 
         let mut tx_ids_to_remove = Vec::with_capacity(skipped_transactions.len());
         for (tx_id, err) in skipped_transactions {

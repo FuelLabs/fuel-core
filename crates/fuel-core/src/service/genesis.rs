@@ -16,7 +16,6 @@ use fuel_core_storage::{
         ContractsInfo,
         ContractsLatestUtxo,
         ContractsRawCode,
-        FuelBlocks,
         Messages,
     },
     transactional::Transactional,
@@ -125,11 +124,6 @@ fn import_genesis_block(
         &[],
     );
 
-    let block_id = block.id();
-    database.storage::<FuelBlocks>().insert(
-        &block_id,
-        &block.compress(&config.chain_conf.consensus_parameters.chain_id),
-    )?;
     let consensus = Consensus::Genesis(genesis);
     let block = SealedBlock {
         entity: block,

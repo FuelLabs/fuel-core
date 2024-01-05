@@ -123,7 +123,7 @@ impl TestContextBuilder {
             let mut producer = MockBlockProducer::default();
             producer
                 .expect_produce_and_execute_block()
-                .returning(|_, _, _| {
+                .returning(|_, _, _, _| {
                     Ok(UncommittedResult::new(
                         ExecutionResult {
                             block: Default::default(),
@@ -272,7 +272,7 @@ async fn remove_skipped_transactions() {
     block_producer
         .expect_produce_and_execute_block()
         .times(1)
-        .returning(move |_, _, _| {
+        .returning(move |_, _, _, _| {
             Ok(UncommittedResult::new(
                 ExecutionResult {
                     block: Default::default(),
@@ -357,7 +357,7 @@ async fn does_not_produce_when_txpool_empty_in_instant_mode() {
 
     block_producer
         .expect_produce_and_execute_block()
-        .returning(|_, _, _| panic!("Block production should not be called"));
+        .returning(|_, _, _, _| panic!("Block production should not be called"));
 
     let mut block_importer = MockBlockImporter::default();
 

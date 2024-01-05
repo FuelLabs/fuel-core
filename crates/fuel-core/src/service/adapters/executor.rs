@@ -50,10 +50,13 @@ impl fuel_core_executor::ports::TransactionsSource for TransactionsSource {
 }
 
 impl ExecutorAdapter {
-    pub(crate) fn _execute_without_commit(
+    pub(crate) fn _execute_without_commit<TxSource>(
         &self,
-        block: ExecutionBlockWithSource<TransactionsSource>,
-    ) -> ExecutorResult<UncommittedResult<StorageTransaction<Database>>> {
+        block: ExecutionBlockWithSource<TxSource>,
+    ) -> ExecutorResult<UncommittedResult<StorageTransaction<Database>>>
+    where
+        TxSource: fuel_core_executor::ports::TransactionsSource,
+    {
         let executor = Executor {
             database: self.relayer.database.clone(),
             relayer: self.relayer.clone(),

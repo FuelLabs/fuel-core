@@ -18,7 +18,11 @@ use fuel_core_importer::{
 };
 use fuel_core_poa::ports::RelayerPort;
 use fuel_core_storage::{
-    tables::SealedBlockConsensus,
+    tables::{
+        FuelBlocks,
+        SealedBlockConsensus,
+        Transactions,
+    },
     transactional::StorageTransaction,
     Result as StorageResult,
     StorageAsMut,
@@ -27,13 +31,14 @@ use fuel_core_types::{
     blockchain::{
         block::Block,
         consensus::Consensus,
-        primitives::{
-            BlockId,
-            DaBlockHeight,
-        },
+        primitives::DaBlockHeight,
         SealedBlock,
     },
-    fuel_types::BlockHeight,
+    fuel_tx::UniqueIdentifier,
+    fuel_types::{
+        BlockHeight,
+        ChainId,
+    },
     services::executor::{
         ExecutionTypes,
         Result as ExecutorResult,
@@ -42,7 +47,10 @@ use fuel_core_types::{
 };
 use std::sync::Arc;
 
-use super::MaybeRelayerAdapter;
+use super::{
+    MaybeRelayerAdapter,
+    TransactionsSource,
+};
 
 impl BlockImporterAdapter {
     pub fn new(
@@ -112,8 +120,8 @@ impl RelayerPort for MaybeRelayerAdapter {
 }
 
 impl ImporterDatabase for Database {
-    fn latest_block_height(&self) -> StorageResult<BlockHeight> {
-        self.latest_height()
+    fn latest_block_height(&self) -> StorageResult<Option<BlockHeight>> {
+        Ok(self.ids_of_latest_block()?.map(|(height, _)| height))
     }
 
     fn increase_tx_count(&self, new_txs_count: u64) -> StorageResult<u64> {
@@ -122,14 +130,29 @@ impl ImporterDatabase for Database {
 }
 
 impl ExecutorDatabase for Database {
-    fn seal_block(
+    fn store_new_block(
         &mut self,
-        block_id: &BlockId,
-        consensus: &Consensus,
-    ) -> StorageResult<Option<Consensus>> {
-        self.storage::<SealedBlockConsensus>()
-            .insert(block_id, consensus)
-            .map_err(Into::into)
+        chain_id: &ChainId,
+        block: &SealedBlock,
+    ) -> StorageResult<bool> {
+        let block_id = block.entity.id();
+        let mut found = self
+            .storage::<FuelBlocks>()
+            .insert(&block_id, &block.entity.compress(chain_id))?
+            .is_some();
+        found |= self
+            .storage::<SealedBlockConsensus>()
+            .insert(&block_id, &block.consensus)?
+            .is_some();
+
+        // TODO: Use `batch_insert` from https://github.com/FuelLabs/fuel-core/pull/1576
+        for tx in block.entity.transactions() {
+            found |= self
+                .storage::<Transactions>()
+                .insert(&tx.id(chain_id), tx)?
+                .is_some();
+        }
+        Ok(!found)
     }
 }
 
@@ -141,6 +164,8 @@ impl Executor for ExecutorAdapter {
         block: Block,
     ) -> ExecutorResult<UncommittedExecutionResult<StorageTransaction<Self::Database>>>
     {
-        self._execute_without_commit(ExecutionTypes::Validation(block))
+        self._execute_without_commit::<TransactionsSource>(ExecutionTypes::Validation(
+            block,
+        ))
     }
 }

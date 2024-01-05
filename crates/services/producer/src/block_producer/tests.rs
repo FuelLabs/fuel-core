@@ -42,7 +42,7 @@ async fn cant_produce_at_genesis_height() {
     let producer = ctx.producer();
 
     let err = producer
-        .produce_and_execute_block(0u32.into(), Tai64::now(), 1_000_000_000)
+        .produce_and_execute_block_txpool(0u32.into(), Tai64::now(), 1_000_000_000)
         .await
         .expect_err("expected failure");
 
@@ -58,7 +58,7 @@ async fn can_produce_initial_block() {
     let producer = ctx.producer();
 
     let result = producer
-        .produce_and_execute_block(1u32.into(), Tai64::now(), 1_000_000_000)
+        .produce_and_execute_block_txpool(1u32.into(), Tai64::now(), 1_000_000_000)
         .await;
 
     assert!(result.is_ok());
@@ -93,7 +93,7 @@ async fn can_produce_next_block() {
     let ctx = TestContext::default_from_db(db);
     let producer = ctx.producer();
     let result = producer
-        .produce_and_execute_block(
+        .produce_and_execute_block_txpool(
             prev_height
                 .succ()
                 .expect("The block height should be valid"),
@@ -112,7 +112,7 @@ async fn cant_produce_if_no_previous_block() {
     let producer = ctx.producer();
 
     let err = producer
-        .produce_and_execute_block(100u32.into(), Tai64::now(), 1_000_000_000)
+        .produce_and_execute_block_txpool(100u32.into(), Tai64::now(), 1_000_000_000)
         .await
         .expect_err("expected failure");
 
@@ -156,7 +156,7 @@ async fn cant_produce_if_previous_block_da_height_too_high() {
     let producer = ctx.producer();
 
     let err = producer
-        .produce_and_execute_block(
+        .produce_and_execute_block_txpool(
             prev_height
                 .succ()
                 .expect("The block height should be valid"),
@@ -187,7 +187,7 @@ async fn production_fails_on_execution_error() {
     let producer = ctx.producer();
 
     let err = producer
-        .produce_and_execute_block(1u32.into(), Tai64::now(), 1_000_000_000)
+        .produce_and_execute_block_txpool(1u32.into(), Tai64::now(), 1_000_000_000)
         .await
         .expect_err("expected failure");
 
