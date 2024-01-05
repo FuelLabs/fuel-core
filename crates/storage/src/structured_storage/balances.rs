@@ -24,9 +24,9 @@ use fuel_core_types::fuel_vm::ContractsAssetKey;
 
 /// The key convertor used to convert the key from the `ContractsAssets` table
 /// to the key of the `ContractsAssetsMerkleMetadata` table.
-pub struct KeyConvertor;
+pub struct KeyConverter;
 
-impl PrimaryKey for KeyConvertor {
+impl PrimaryKey for KeyConverter {
     type InputKey = <ContractsAssets as Mappable>::Key;
     type OutputKey = <ContractsAssetsMerkleMetadata as Mappable>::Key;
 
@@ -41,7 +41,7 @@ impl TableWithStructure for ContractsAssets {
         Primitive<8>,
         ContractsAssetsMerkleMetadata,
         ContractsAssetsMerkleData,
-        KeyConvertor,
+        KeyConverter,
     >;
 
     fn column() -> Column {

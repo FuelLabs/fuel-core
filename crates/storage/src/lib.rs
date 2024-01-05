@@ -120,7 +120,7 @@ impl<T> IsNotFound for Result<T> {
 /// Some implementations can perform batch operations faster than one by one.
 pub trait StorageBatchMutate<Type: Mappable>: StorageMutate<Type> {
     /// Initialize the storage with batch insertion. This method is more performant than
-    /// [`Self::insert_batch`] in some case.
+    /// [`Self::insert_batch`] in some cases.
     ///
     /// # Errors
     ///

@@ -68,14 +68,14 @@ pub trait PrimaryKey {
 /// and the `Nodes` table stores the tree's nodes. The SMT is built over the encoded
 /// keys and values using the same encoding as for main key-value pairs.
 ///
-/// The `KeyConvertor` is used to convert the key of the table into the primary key of the metadata table.
-pub struct Sparse<KeyCodec, ValueCodec, Metadata, Nodes, KeyConvertor> {
+/// The `KeyConverter` is used to convert the key of the table into the primary key of the metadata table.
+pub struct Sparse<KeyCodec, ValueCodec, Metadata, Nodes, KeyConverter> {
     _marker:
-        core::marker::PhantomData<(KeyCodec, ValueCodec, Metadata, Nodes, KeyConvertor)>,
+        core::marker::PhantomData<(KeyCodec, ValueCodec, Metadata, Nodes, KeyConverter)>,
 }
 
-impl<KeyCodec, ValueCodec, Metadata, Nodes, KeyConvertor>
-    Sparse<KeyCodec, ValueCodec, Metadata, Nodes, KeyConvertor>
+impl<KeyCodec, ValueCodec, Metadata, Nodes, KeyConverter>
+    Sparse<KeyCodec, ValueCodec, Metadata, Nodes, KeyConverter>
 where
     Metadata: Mappable<Value = SparseMerkleMetadata, OwnedValue = SparseMerkleMetadata>,
     Nodes: Mappable<
@@ -94,10 +94,10 @@ where
         K: ?Sized,
         for<'a> StructuredStorage<&'a mut S>: StorageMutate<Metadata, Error = StorageError>
             + StorageMutate<Nodes, Error = StorageError>,
-        KeyConvertor: PrimaryKey<InputKey = K, OutputKey = Metadata::Key>,
+        KeyConverter: PrimaryKey<InputKey = K, OutputKey = Metadata::Key>,
     {
         let mut storage = StructuredStorage::new(storage);
-        let primary_key = KeyConvertor::primary_key(key);
+        let primary_key = KeyConverter::primary_key(key);
         // Get latest metadata entry for this `primary_key`
         let prev_metadata: Cow<SparseMerkleMetadata> = storage
             .storage::<Metadata>()
@@ -129,10 +129,10 @@ where
         K: ?Sized,
         for<'a> StructuredStorage<&'a mut S>: StorageMutate<Metadata, Error = StorageError>
             + StorageMutate<Nodes, Error = StorageError>,
-        KeyConvertor: PrimaryKey<InputKey = K, OutputKey = Metadata::Key>,
+        KeyConverter: PrimaryKey<InputKey = K, OutputKey = Metadata::Key>,
     {
         let mut storage = StructuredStorage::new(storage);
-        let primary_key = KeyConvertor::primary_key(key);
+        let primary_key = KeyConverter::primary_key(key);
         // Get latest metadata entry for this `primary_key`
         let prev_metadata: Option<Cow<SparseMerkleMetadata>> =
             storage.storage::<Metadata>().get(primary_key)?;
@@ -163,8 +163,8 @@ where
     }
 }
 
-impl<M, S, KeyCodec, ValueCodec, Metadata, Nodes, KeyConvertor> Structure<M, S>
-    for Sparse<KeyCodec, ValueCodec, Metadata, Nodes, KeyConvertor>
+impl<M, S, KeyCodec, ValueCodec, Metadata, Nodes, KeyConverter> Structure<M, S>
+    for Sparse<KeyCodec, ValueCodec, Metadata, Nodes, KeyConverter>
 where
     M: Mappable,
     S: KeyValueStore,
@@ -176,7 +176,7 @@ where
         Value = sparse::Primitive,
         OwnedValue = sparse::Primitive,
     >,
-    KeyConvertor: PrimaryKey<InputKey = M::Key, OutputKey = Metadata::Key>,
+    KeyConverter: PrimaryKey<InputKey = M::Key, OutputKey = Metadata::Key>,
     for<'a> StructuredStorage<&'a mut S>: StorageMutate<Metadata, Error = StorageError>
         + StorageMutate<Nodes, Error = StorageError>,
 {
@@ -241,13 +241,13 @@ where
     }
 }
 
-impl<M, S, KeyCodec, ValueCodec, Metadata, Nodes, KeyConvertor>
+impl<M, S, KeyCodec, ValueCodec, Metadata, Nodes, KeyConverter>
     MerkleRootStorage<Metadata::Key, M> for StructuredStorage<S>
 where
     S: KeyValueStore<Column = Column>,
     M: Mappable
         + TableWithStructure<
-            Structure = Sparse<KeyCodec, ValueCodec, Metadata, Nodes, KeyConvertor>,
+            Structure = Sparse<KeyCodec, ValueCodec, Metadata, Nodes, KeyConverter>,
         >,
     Self: StorageMutate<M, Error = StorageError>
         + StorageInspect<Metadata, Error = StorageError>,
@@ -270,13 +270,13 @@ type NodeKeyCodec<S, Nodes> =
 type NodeValueCodec<S, Nodes> =
     <<Nodes as TableWithStructure>::Structure as Structure<Nodes, S>>::ValueCodec;
 
-impl<M, S, KeyCodec, ValueCodec, Metadata, Nodes, KeyConvertor> SupportsBatching<M, S>
-    for Sparse<KeyCodec, ValueCodec, Metadata, Nodes, KeyConvertor>
+impl<M, S, KeyCodec, ValueCodec, Metadata, Nodes, KeyConverter> SupportsBatching<M, S>
+    for Sparse<KeyCodec, ValueCodec, Metadata, Nodes, KeyConverter>
 where
     S: BatchOperations<Column = Column>,
     M: Mappable
         + TableWithStructure<
-            Structure = Sparse<KeyCodec, ValueCodec, Metadata, Nodes, KeyConvertor>,
+            Structure = Sparse<KeyCodec, ValueCodec, Metadata, Nodes, KeyConverter>,
         >,
     KeyCodec: Encode<M::Key> + Decode<M::OwnedKey>,
     ValueCodec: Encode<M::Value> + Decode<M::OwnedValue>,
@@ -286,7 +286,7 @@ where
             Value = sparse::Primitive,
             OwnedValue = sparse::Primitive,
         > + TableWithStructure,
-    KeyConvertor: PrimaryKey<InputKey = M::Key, OutputKey = Metadata::Key>,
+    KeyConverter: PrimaryKey<InputKey = M::Key, OutputKey = Metadata::Key>,
     Nodes::Structure: Structure<Nodes, S>,
     for<'a> StructuredStorage<&'a mut S>: StorageMutate<M, Error = StorageError>
         + StorageMutate<Metadata, Error = StorageError>
@@ -301,7 +301,7 @@ where
 
         let primary_key;
         if let Some((key, _)) = set.peek() {
-            primary_key = KeyConvertor::primary_key(*key);
+            primary_key = KeyConverter::primary_key(*key);
         } else {
             return Ok(())
         }
@@ -362,7 +362,7 @@ where
 
         let primary_key;
         if let Some((key, _)) = set.peek() {
-            primary_key = KeyConvertor::primary_key(*key);
+            primary_key = KeyConverter::primary_key(*key);
         } else {
             return Ok(())
         }
@@ -415,7 +415,7 @@ where
 
         let primary_key;
         if let Some(key) = set.peek() {
-            primary_key = KeyConvertor::primary_key(*key);
+            primary_key = KeyConverter::primary_key(*key);
         } else {
             return Ok(())
         }
