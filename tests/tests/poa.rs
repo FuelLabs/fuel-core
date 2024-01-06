@@ -10,7 +10,6 @@ use fuel_core_client::client::{
     types::TransactionStatus,
     FuelClient,
 };
-use fuel_core_p2p::ports::P2pDb;
 use fuel_core_types::{
     blockchain::{
         consensus::Consensus,
@@ -74,7 +73,7 @@ async fn can_get_sealed_block_from_poa_produced_block() {
     let block_height = db.block_height(&block_id).unwrap();
     // check sealed block is correct
     let sealed_block = db
-        .get_sealed_block(&block_height)
+        .get_sealed_block_by_height(&block_height)
         .unwrap()
         .expect("expected sealed header to be available");
 
