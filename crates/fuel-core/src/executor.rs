@@ -680,7 +680,7 @@ mod tests {
                     .unwrap()
                     .unwrap();
 
-                if let Some(Receipt::Return { val, .. }) = receipts.get(0) {
+                if let Some(Receipt::Return { val, .. }) = receipts.first() {
                     *val == 1
                 } else {
                     panic!("Execution of the `CB` script failed failed")
