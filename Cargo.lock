@@ -2840,6 +2840,7 @@ version = "0.22.0"
 dependencies = [
  "anyhow",
  "derive_more",
+ "fuel-core-chain-config",
  "fuel-core-metrics",
  "fuel-core-storage",
  "fuel-core-trace",

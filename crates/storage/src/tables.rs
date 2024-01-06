@@ -122,6 +122,17 @@ impl Mappable for Transactions {
     type OwnedValue = Transaction;
 }
 
+/// The storage table of processed transactions that were executed in the past.
+/// The table helps to drop duplicated transactions.
+pub struct ProcessedTransactions;
+
+impl Mappable for ProcessedTransactions {
+    type Key = Self::OwnedKey;
+    type OwnedKey = TxId;
+    type Value = Self::OwnedValue;
+    type OwnedValue = ();
+}
+
 /// The module contains definition of merkle-related tables.
 pub mod merkle {
     use crate::{

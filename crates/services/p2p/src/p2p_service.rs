@@ -3,7 +3,6 @@ use crate::{
         FuelBehaviour,
         FuelBehaviourEvent,
     },
-    codecs::NetworkCodec,
     config::{
         build_transport_function,
         Config,
@@ -61,7 +60,14 @@ use libp2p::{
 };
 use libp2p_gossipsub::PublishError;
 
-use crate::heartbeat::HeartbeatEvent;
+use crate::{
+    codecs::{
+        postcard::PostcardCodec,
+        GossipsubCodec,
+        RequestResponseConverter,
+    },
+    heartbeat::HeartbeatEvent,
+};
 use rand::seq::IteratorRandom;
 use std::{
     collections::HashMap,
@@ -75,7 +81,7 @@ use tracing::{
 /// Maximum amount of peer's addresses that we are ready to store per peer
 const MAX_IDENTIFY_ADDRESSES: usize = 10;
 
-impl<Codec: NetworkCodec> Punisher for Swarm<FuelBehaviour<Codec>> {
+impl Punisher for Swarm<FuelBehaviour> {
     fn ban_peer(&mut self, peer_id: PeerId) {
         self.behaviour_mut().block_peer(peer_id)
     }
@@ -83,7 +89,7 @@ impl<Codec: NetworkCodec> Punisher for Swarm<FuelBehaviour<Codec>> {
 
 /// Listens to the events on the p2p network
 /// And forwards them to the Orchestrator
-pub struct FuelP2PService<Codec: NetworkCodec> {
+pub struct FuelP2PService {
     /// Store the local peer id
     pub local_peer_id: PeerId,
 
@@ -94,7 +100,7 @@ pub struct FuelP2PService<Codec: NetworkCodec> {
     tcp_port: u16,
 
     /// Swarm handler for FuelBehaviour
-    swarm: Swarm<FuelBehaviour<Codec>>,
+    swarm: Swarm<FuelBehaviour>,
 
     /// Holds the Sender(s) part of the Oneshot Channel from the NetworkOrchestrator
     /// Once the ResponseMessage is received from the p2p Network
@@ -107,7 +113,7 @@ pub struct FuelP2PService<Codec: NetworkCodec> {
     inbound_requests_table: HashMap<InboundRequestId, ResponseChannel<NetworkResponse>>,
 
     /// NetworkCodec used as <GossipsubCodec> for encoding and decoding of Gossipsub messages    
-    network_codec: Codec,
+    network_codec: PostcardCodec,
 
     /// Stores additional p2p network info    
     network_metadata: NetworkMetadata,
@@ -157,8 +163,8 @@ pub enum FuelP2PEvent {
     },
 }
 
-impl<Codec: NetworkCodec> FuelP2PService<Codec> {
-    pub fn new(config: Config, codec: Codec) -> Self {
+impl FuelP2PService {
+    pub fn new(config: Config, codec: PostcardCodec) -> Self {
         let gossipsub_data =
             GossipsubData::with_topics(GossipsubTopics::new(&config.network_name));
         let network_metadata = NetworkMetadata { gossipsub_data };
@@ -771,7 +777,7 @@ mod tests {
     };
     use tracing_attributes::instrument;
 
-    type P2PService = FuelP2PService<PostcardCodec>;
+    type P2PService = FuelP2PService;
 
     /// helper function for building FuelP2PService
     async fn build_service_from_config(mut p2p_config: Config) -> P2PService {

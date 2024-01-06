@@ -300,6 +300,9 @@ impl Command {
             max_wait_time: max_wait_time.into(),
         };
 
+        let block_importer =
+            fuel_core::service::config::fuel_core_importer::Config::new(&chain_conf);
+
         let config = Config {
             addr,
             api_request_timeout: api_request_timeout.into(),
@@ -328,8 +331,7 @@ impl Command {
                 coinbase_recipient,
                 metrics,
             },
-            block_executor: Default::default(),
-            block_importer: Default::default(),
+            block_importer,
             #[cfg(feature = "relayer")]
             relayer: relayer_cfg,
             #[cfg(feature = "p2p")]

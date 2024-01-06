@@ -30,6 +30,7 @@ use fuel_core_p2p::config::{
 #[cfg(feature = "relayer")]
 use fuel_core_relayer::Config as RelayerConfig;
 
+pub use fuel_core_importer;
 pub use fuel_core_poa::Trigger;
 
 #[derive(Clone, Debug)]
@@ -51,7 +52,6 @@ pub struct Config {
     pub vm: VMConfig,
     pub txpool: fuel_core_txpool::Config,
     pub block_producer: fuel_core_producer::Config,
-    pub block_executor: fuel_core_executor::Config,
     pub block_importer: fuel_core_importer::Config,
     #[cfg(feature = "relayer")]
     pub relayer: Option<RelayerConfig>,
@@ -73,6 +73,7 @@ pub struct Config {
 impl Config {
     pub fn local_node() -> Self {
         let chain_conf = ChainConfig::local_testnet();
+        let block_importer = fuel_core_importer::Config::new(&chain_conf);
         let utxo_validation = false;
         let min_gas_price = 0;
 
@@ -99,8 +100,7 @@ impl Config {
                 ..fuel_core_txpool::Config::default()
             },
             block_producer: Default::default(),
-            block_executor: Default::default(),
-            block_importer: Default::default(),
+            block_importer,
             #[cfg(feature = "relayer")]
             relayer: None,
             #[cfg(feature = "p2p")]
