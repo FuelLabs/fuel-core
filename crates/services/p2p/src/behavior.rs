@@ -15,8 +15,8 @@ use crate::{
     heartbeat,
     peer_report::PeerReportBehaviour,
     request_response::messages::{
-        NetworkResponse,
         RequestMessage,
+        ResponseMessage,
     },
 };
 use fuel_core_types::fuel_types::BlockHeight;
@@ -166,9 +166,9 @@ impl FuelBehaviour {
 
     pub fn send_response_msg(
         &mut self,
-        channel: ResponseChannel<NetworkResponse>,
-        message: NetworkResponse,
-    ) -> Result<(), NetworkResponse> {
+        channel: ResponseChannel<ResponseMessage>,
+        message: ResponseMessage,
+    ) -> Result<(), ResponseMessage> {
         self.request_response.send_response(channel, message)
     }
 

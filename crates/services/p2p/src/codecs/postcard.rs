@@ -1,7 +1,6 @@
 use super::{
     GossipsubCodec,
     NetworkCodec,
-    RequestResponseConverter,
 };
 use crate::{
     gossipsub::messages::{
@@ -10,8 +9,6 @@ use crate::{
         GossipsubMessage,
     },
     request_response::messages::{
-        NetworkResponse,
-        OutboundResponse,
         RequestMessage,
         ResponseMessage,
         REQUEST_RESPONSE_PROTOCOL_ID,
@@ -29,6 +26,18 @@ use serde::{
     Serialize,
 };
 use std::io;
+
+/// Helper method for decoding data
+/// Reusable across `RequestResponseCodec` and `GossipsubCodec`
+fn deserialize<'a, R: Deserialize<'a>>(encoded_data: &'a [u8]) -> Result<R, io::Error> {
+    postcard::from_bytes(encoded_data)
+        .map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))
+}
+
+fn serialize<D: Serialize>(data: &D) -> Result<Vec<u8>, io::Error> {
+    postcard::to_stdvec(&data)
+        .map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))
+}
 
 #[derive(Debug, Clone)]
 pub struct PostcardCodec {
@@ -49,21 +58,6 @@ impl PostcardCodec {
             max_response_size: max_block_size,
         }
     }
-
-    /// Helper method for decoding data
-    /// Reusable across `RequestResponseCodec` and `GossipsubCodec`
-    fn deserialize<'a, R: Deserialize<'a>>(
-        &self,
-        encoded_data: &'a [u8],
-    ) -> Result<R, io::Error> {
-        postcard::from_bytes(encoded_data)
-            .map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))
-    }
-
-    fn serialize<D: Serialize>(&self, data: &D) -> Result<Vec<u8>, io::Error> {
-        postcard::to_stdvec(&data)
-            .map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))
-    }
 }
 
 /// Since Postcard does not support async reads or writes out of the box
@@ -77,7 +71,7 @@ impl PostcardCodec {
 impl RequestResponseCodec for PostcardCodec {
     type Protocol = MessageExchangePostcardProtocol;
     type Request = RequestMessage;
-    type Response = NetworkResponse;
+    type Response = ResponseMessage;
 
     async fn read_request<T>(
         &mut self,
@@ -92,8 +86,7 @@ impl RequestResponseCodec for PostcardCodec {
             .take(self.max_response_size as u64)
             .read_to_end(&mut response)
             .await?;
-
-        self.deserialize(&response)
+        deserialize(&response)
     }
 
     async fn read_response<T>(
@@ -110,7 +103,7 @@ impl RequestResponseCodec for PostcardCodec {
             .read_to_end(&mut response)
             .await?;
 
-        self.deserialize(&response)
+        deserialize(&response)
     }
 
     async fn write_request<T>(
@@ -122,14 +115,9 @@ impl RequestResponseCodec for PostcardCodec {
     where
         T: futures::AsyncWrite + Unpin + Send,
     {
-        match postcard::to_stdvec(&req) {
-            Ok(encoded_data) => {
-                socket.write_all(&encoded_data).await?;
-
-                Ok(())
-            }
-            Err(e) => Err(io::Error::new(io::ErrorKind::Other, e.to_string())),
-        }
+        let encoded_data = serialize(&req)?;
+        socket.write_all(&encoded_data).await?;
+        Ok(())
     }
 
     async fn write_response<T>(
@@ -141,14 +129,9 @@ impl RequestResponseCodec for PostcardCodec {
     where
         T: futures::AsyncWrite + Unpin + Send,
     {
-        match postcard::to_stdvec(&res) {
-            Ok(encoded_data) => {
-                socket.write_all(&encoded_data).await?;
-
-                Ok(())
-            }
-            Err(e) => Err(io::Error::new(io::ErrorKind::Other, e.to_string())),
-        }
+        let encoded_data = serialize(&res)?;
+        socket.write_all(&encoded_data).await?;
+        Ok(())
     }
 }
 
@@ -170,84 +153,10 @@ impl GossipsubCodec for PostcardCodec {
         gossipsub_tag: GossipTopicTag,
     ) -> Result<Self::ResponseMessage, io::Error> {
         let decoded_response = match gossipsub_tag {
-            GossipTopicTag::NewTx => {
-                GossipsubMessage::NewTx(self.deserialize(encoded_data)?)
-            }
+            GossipTopicTag::NewTx => GossipsubMessage::NewTx(deserialize(encoded_data)?),
         };
 
         Ok(decoded_response)
-    }
-}
-
-impl RequestResponseConverter for PostcardCodec {
-    type OutboundResponse = OutboundResponse;
-    type NetworkResponse = NetworkResponse;
-    type ResponseMessage = ResponseMessage;
-
-    fn convert_to_network_response(
-        &self,
-        res_msg: &Self::OutboundResponse,
-    ) -> Result<Self::NetworkResponse, io::Error> {
-        match res_msg {
-            OutboundResponse::Block(sealed_block) => {
-                let response = if let Some(sealed_block) = sealed_block {
-                    Some(self.serialize(sealed_block.as_ref())?)
-                } else {
-                    None
-                };
-
-                Ok(NetworkResponse::Block(response))
-            }
-            OutboundResponse::Transactions(transactions) => {
-                let response = if let Some(transactions) = transactions {
-                    Some(self.serialize(transactions.as_ref())?)
-                } else {
-                    None
-                };
-
-                Ok(NetworkResponse::Transactions(response))
-            }
-            OutboundResponse::SealedHeaders(maybe_headers) => {
-                let response = maybe_headers
-                    .as_ref()
-                    .map(|headers| self.serialize(&headers))
-                    .transpose()?;
-                Ok(NetworkResponse::Headers(response))
-            }
-        }
-    }
-
-    fn convert_to_response(
-        &self,
-        inter_msg: &Self::NetworkResponse,
-    ) -> Result<Self::ResponseMessage, io::Error> {
-        match inter_msg {
-            NetworkResponse::Block(block_bytes) => {
-                let response = if let Some(block_bytes) = block_bytes {
-                    Some(self.deserialize(block_bytes)?)
-                } else {
-                    None
-                };
-
-                Ok(ResponseMessage::SealedBlock(Box::new(response)))
-            }
-            NetworkResponse::Transactions(tx_bytes) => {
-                let response = if let Some(tx_bytes) = tx_bytes {
-                    Some(self.deserialize(tx_bytes)?)
-                } else {
-                    None
-                };
-
-                Ok(ResponseMessage::Transactions(response))
-            }
-            NetworkResponse::Headers(headers_bytes) => {
-                let response = headers_bytes
-                    .as_ref()
-                    .map(|bytes| self.deserialize(bytes))
-                    .transpose()?;
-                Ok(ResponseMessage::SealedHeaders(response))
-            }
-        }
     }
 }
 

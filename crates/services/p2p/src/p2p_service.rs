@@ -3,6 +3,10 @@ use crate::{
         FuelBehaviour,
         FuelBehaviourEvent,
     },
+    codecs::{
+        postcard::PostcardCodec,
+        GossipsubCodec,
+    },
     config::{
         build_transport_function,
         Config,
@@ -14,19 +18,18 @@ use crate::{
         },
         topics::GossipsubTopics,
     },
+    heartbeat::HeartbeatEvent,
     peer_manager::{
         PeerManager,
         Punisher,
     },
     peer_report::PeerReportEvent,
     request_response::messages::{
-        NetworkResponse,
-        OutboundResponse,
         RequestError,
         RequestMessage,
         ResponseChannelItem,
-        ResponseError,
         ResponseMessage,
+        ResponseSendError,
     },
     TryPeerId,
 };
@@ -59,15 +62,6 @@ use libp2p::{
     SwarmBuilder,
 };
 use libp2p_gossipsub::PublishError;
-
-use crate::{
-    codecs::{
-        postcard::PostcardCodec,
-        GossipsubCodec,
-        RequestResponseConverter,
-    },
-    heartbeat::HeartbeatEvent,
-};
 use rand::seq::IteratorRandom;
 use std::{
     collections::HashMap,
@@ -110,7 +104,7 @@ pub struct FuelP2PService {
     /// Holds the ResponseChannel(s) for the inbound requests from the p2p Network
     /// Once the Response is prepared by the NetworkOrchestrator
     /// It will send it to the specified Peer via its unique ResponseChannel    
-    inbound_requests_table: HashMap<InboundRequestId, ResponseChannel<NetworkResponse>>,
+    inbound_requests_table: HashMap<InboundRequestId, ResponseChannel<ResponseMessage>>,
 
     /// NetworkCodec used as <GossipsubCodec> for encoding and decoding of Gossipsub messages    
     network_codec: PostcardCodec,
@@ -292,6 +286,7 @@ impl FuelP2PService {
 
     /// Sends RequestMessage to a peer
     /// If the peer is not defined it will pick one at random
+    /// Only returns error if no peers are connected
     pub fn send_request_msg(
         &mut self,
         peer_id: Option<PeerId>,
@@ -328,31 +323,21 @@ impl FuelP2PService {
     pub fn send_response_msg(
         &mut self,
         request_id: InboundRequestId,
-        message: OutboundResponse,
-    ) -> Result<(), ResponseError> {
-        match (
-            self.network_codec.convert_to_network_response(&message),
-            self.inbound_requests_table.remove(&request_id),
-        ) {
-            (Ok(message), Some(channel)) => {
-                if self
-                    .swarm
-                    .behaviour_mut()
-                    .send_response_msg(channel, message)
-                    .is_err()
-                {
-                    debug!("Failed to send ResponseMessage for {:?}", request_id);
-                    return Err(ResponseError::SendingResponseFailed)
-                }
-            }
-            (Ok(_), None) => {
-                debug!("ResponseChannel for {:?} does not exist!", request_id);
-                return Err(ResponseError::ResponseChannelDoesNotExist)
-            }
-            (Err(e), _) => {
-                debug!("Failed to convert to IntermediateResponse with {:?}", e);
-                return Err(ResponseError::ConversionToIntermediateFailed)
-            }
+        message: ResponseMessage,
+    ) -> Result<(), ResponseSendError> {
+        let Some(channel) = self.inbound_requests_table.remove(&request_id) else {
+            debug!("ResponseChannel for {:?} does not exist!", request_id);
+            return Err(ResponseSendError::ResponseChannelDoesNotExist)
+        };
+
+        if self
+            .swarm
+            .behaviour_mut()
+            .send_response_msg(channel, message)
+            .is_err()
+        {
+            debug!("Failed to send ResponseMessage for {:?}", request_id);
+            return Err(ResponseSendError::SendingResponseFailed)
         }
 
         Ok(())
@@ -553,7 +538,7 @@ impl FuelP2PService {
 
     fn handle_request_response_event(
         &mut self,
-        event: RequestResponseEvent<RequestMessage, NetworkResponse>,
+        event: RequestResponseEvent<RequestMessage, ResponseMessage>,
     ) -> Option<FuelP2PEvent> {
         match event {
             RequestResponseEvent::Message { peer, message } => match message {
@@ -573,54 +558,36 @@ impl FuelP2PService {
                     request_id,
                     response,
                 } => {
-                    match (
-                        self.outbound_requests_table.remove(&request_id),
-                        self.network_codec.convert_to_response(&response),
-                    ) {
-                        (
-                            Some(ResponseChannelItem::Block(channel)),
-                            Ok(ResponseMessage::SealedBlock(block)),
-                        ) => {
-                            if channel.send(*block).is_err() {
-                                tracing::error!(
-                                    "Failed to send through the channel for {:?}",
-                                    request_id
-                                );
-                            }
-                        }
-                        (
-                            Some(ResponseChannelItem::Transactions(channel)),
-                            Ok(ResponseMessage::Transactions(transactions)),
-                        ) => {
-                            if channel.send(transactions).is_err() {
-                                tracing::error!(
-                                    "Failed to send through the channel for {:?}",
-                                    request_id
-                                );
-                            }
-                        }
-                        (
-                            Some(ResponseChannelItem::SealedHeaders(channel)),
-                            Ok(ResponseMessage::SealedHeaders(headers)),
-                        ) => {
-                            if channel.send((peer, headers)).is_err() {
-                                tracing::error!(
-                                    "Failed to send through the channel for {:?}",
-                                    request_id
-                                );
-                            }
-                        }
+                    let Some(channel) = self.outbound_requests_table.remove(&request_id)
+                    else {
+                        debug!("Send channel not found for {:?}", request_id);
+                        return None;
+                    };
 
-                        (Some(_), Err(e)) => {
-                            tracing::error!("Failed to convert IntermediateResponse into a ResponseMessage {:?} with {:?}", response, e);
-                        }
-                        (None, Ok(_)) => {
+                    let send_ok = match (channel, response) {
+                        (
+                            ResponseChannelItem::Block(channel),
+                            ResponseMessage::Block(block),
+                        ) => channel.send(block).is_ok(),
+                        (
+                            ResponseChannelItem::Transactions(channel),
+                            ResponseMessage::Transactions(transactions),
+                        ) => channel.send(transactions).is_ok(),
+                        (
+                            ResponseChannelItem::SealedHeaders(channel),
+                            ResponseMessage::SealedHeaders(headers),
+                        ) => channel.send((peer, headers)).is_ok(),
+
+                        (_, _) => {
                             tracing::error!(
-                                "Send channel not found for {:?}",
-                                request_id
+                                "Mismatching request and response channel types"
                             );
+                            return None;
                         }
-                        _ => {}
+                    };
+
+                    if !send_ok {
+                        debug!("Failed to send through the channel for {:?}", request_id);
                     }
                 }
             },
@@ -722,9 +689,9 @@ mod tests {
         p2p_service::FuelP2PEvent,
         peer_manager::PeerInfo,
         request_response::messages::{
-            OutboundResponse,
             RequestMessage,
             ResponseChannelItem,
+            ResponseMessage,
         },
         service::to_message_acceptance,
     };
@@ -1607,17 +1574,17 @@ mod tests {
                                     consensus: Consensus::PoA(PoAConsensus::new(Default::default())),
                                 };
 
-                                let _ = node_b.send_response_msg(*request_id, OutboundResponse::Block(Some(Arc::new(sealed_block))));
+                                let _ = node_b.send_response_msg(*request_id, ResponseMessage::Block(Some(sealed_block)));
                             }
                             RequestMessage::SealedHeaders(range) => {
                                 let sealed_headers: Vec<_> = arbitrary_headers_for_range(range.clone());
 
-                                let _ = node_b.send_response_msg(*request_id, OutboundResponse::SealedHeaders(Some(sealed_headers)));
+                                let _ = node_b.send_response_msg(*request_id, ResponseMessage::SealedHeaders(Some(sealed_headers)));
                             }
                             RequestMessage::Transactions(_) => {
                                 let txs = (0..5).map(|_| Transaction::default_test_tx()).collect();
                                 let transactions = vec![Transactions(txs)];
-                                let _ = node_b.send_response_msg(*request_id, OutboundResponse::Transactions(Some(Arc::new(transactions))));
+                                let _ = node_b.send_response_msg(*request_id, ResponseMessage::Transactions(Some(transactions)));
                             }
                         }
                     }
