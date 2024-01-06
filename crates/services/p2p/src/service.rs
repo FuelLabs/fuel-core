@@ -566,8 +566,7 @@ where
                         match request_message {
                             RequestMessage::Block(block_height) => {
                                 match self.db.get_sealed_block(&block_height) {
-                                    Ok(maybe_block) => {
-                                        let response = maybe_block.map(Arc::new);
+                                    Ok(response) => {
                                         let _ = self.p2p_service.send_response_msg(request_id, ResponseMessage::Block(response));
                                     },
                                     Err(e) => {
@@ -580,8 +579,7 @@ where
                             }
                             RequestMessage::Transactions(range) => {
                                 match self.db.get_transactions(range.clone()) {
-                                    Ok(maybe_transactions) => {
-                                        let response = maybe_transactions.map(Arc::new);
+                                    Ok(response) => {
                                         let _ = self.p2p_service.send_response_msg(request_id, ResponseMessage::Transactions(response));
                                     },
                                     Err(e) => {

@@ -3,6 +3,10 @@ use crate::{
         FuelBehaviour,
         FuelBehaviourEvent,
     },
+    codecs::{
+        postcard::PostcardCodec,
+        GossipsubCodec,
+    },
     config::{
         build_transport_function,
         Config,
@@ -14,6 +18,7 @@ use crate::{
         },
         topics::GossipsubTopics,
     },
+    heartbeat::HeartbeatEvent,
     peer_manager::{
         PeerManager,
         Punisher,
@@ -57,19 +62,9 @@ use libp2p::{
     SwarmBuilder,
 };
 use libp2p_gossipsub::PublishError;
-
-use crate::{
-    codecs::{
-        postcard::PostcardCodec,
-        GossipsubCodec,
-        RequestResponseConverter,
-    },
-    heartbeat::HeartbeatEvent,
-};
 use rand::seq::IteratorRandom;
 use std::{
     collections::HashMap,
-    sync::Arc,
     time::Duration,
 };
 use tracing::{
@@ -573,11 +568,11 @@ impl FuelP2PService {
                         (
                             ResponseChannelItem::Block(channel),
                             ResponseMessage::Block(block),
-                        ) => channel.send(block.map(|b| Arc::into_inner(b).expect("There are not other references, we just received this from the network"))).is_ok(),
+                        ) => channel.send(block).is_ok(),
                         (
                             ResponseChannelItem::Transactions(channel),
                             ResponseMessage::Transactions(transactions),
-                        ) => channel.send(transactions.map(|b| Arc::into_inner(b).expect("There are not other references, we just received this from the network"))).is_ok(),
+                        ) => channel.send(transactions).is_ok(),
                         (
                             ResponseChannelItem::SealedHeaders(channel),
                             ResponseMessage::SealedHeaders(headers),
@@ -1579,7 +1574,7 @@ mod tests {
                                     consensus: Consensus::PoA(PoAConsensus::new(Default::default())),
                                 };
 
-                                let _ = node_b.send_response_msg(*request_id, ResponseMessage::Block(Some(Arc::new(sealed_block))));
+                                let _ = node_b.send_response_msg(*request_id, ResponseMessage::Block(Some(sealed_block)));
                             }
                             RequestMessage::SealedHeaders(range) => {
                                 let sealed_headers: Vec<_> = arbitrary_headers_for_range(range.clone());
@@ -1589,7 +1584,7 @@ mod tests {
                             RequestMessage::Transactions(_) => {
                                 let txs = (0..5).map(|_| Transaction::default_test_tx()).collect();
                                 let transactions = vec![Transactions(txs)];
-                                let _ = node_b.send_response_msg(*request_id, ResponseMessage::Transactions(Some(Arc::new(transactions))));
+                                let _ = node_b.send_response_msg(*request_id, ResponseMessage::Transactions(Some(transactions)));
                             }
                         }
                     }

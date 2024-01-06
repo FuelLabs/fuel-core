@@ -1,8 +1,3 @@
-use std::{
-    ops::Range,
-    sync::Arc,
-};
-
 use fuel_core_types::{
     blockchain::{
         SealedBlock,
@@ -16,6 +11,7 @@ use serde::{
     Deserialize,
     Serialize,
 };
+use std::ops::Range;
 use thiserror::Error;
 use tokio::sync::oneshot;
 
@@ -40,11 +36,11 @@ pub enum ResponseChannelItem {
     Transactions(oneshot::Sender<Option<Vec<Transactions>>>),
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub enum ResponseMessage {
-    Block(Option<Arc<SealedBlock>>),
+    Block(Option<SealedBlock>),
     SealedHeaders(Option<Vec<SealedBlockHeader>>),
-    Transactions(Option<Arc<Vec<Transactions>>>),
+    Transactions(Option<Vec<Transactions>>),
 }
 
 #[derive(Debug, Error)]
