@@ -278,8 +278,7 @@ impl TryFrom<U64> for PanicInstruction {
     type Error = ConversionError;
 
     fn try_from(s: U64) -> Result<Self, Self::Error> {
-        s.0.try_into()
-            .map_err(|_| ConversionError::IntegerConversion)
+        Ok(s.0.into())
     }
 }
 
