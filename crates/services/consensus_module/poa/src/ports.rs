@@ -9,7 +9,10 @@ use fuel_core_types::{
         primitives::DaBlockHeight,
     },
     fuel_asm::Word,
-    fuel_tx::TxId,
+    fuel_tx::{
+        Transaction,
+        TxId,
+    },
     fuel_types::{
         BlockHeight,
         Bytes32,
@@ -40,6 +43,14 @@ pub trait TransactionPool: Send + Sync {
 #[cfg(test)]
 use fuel_core_storage::test_helpers::EmptyStorage;
 
+/// The source of transactions for the block.
+pub enum TransactionsSource {
+    /// The source of transactions for the block is the `TxPool`.
+    TxPool,
+    /// Use specific transactions for the block.
+    SpecificTransactions(Vec<Transaction>),
+}
+
 #[cfg_attr(test, mockall::automock(type Database=EmptyStorage;))]
 #[async_trait::async_trait]
 pub trait BlockProducer: Send + Sync {
@@ -49,6 +60,7 @@ pub trait BlockProducer: Send + Sync {
         &self,
         height: BlockHeight,
         block_time: Tai64,
+        source: TransactionsSource,
         max_gas: Word,
     ) -> anyhow::Result<UncommittedExecutionResult<StorageTransaction<Self::Database>>>;
 }

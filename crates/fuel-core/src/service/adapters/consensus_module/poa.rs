@@ -17,8 +17,12 @@ use fuel_core_poa::{
         BlockImporter,
         P2pPort,
         TransactionPool,
+        TransactionsSource,
     },
-    service::SharedState,
+    service::{
+        Mode,
+        SharedState,
+    },
 };
 use fuel_core_services::stream::BoxStream;
 use fuel_core_storage::transactional::StorageTransaction;
@@ -45,6 +49,18 @@ impl PoAAdapter {
     pub fn new(shared_state: Option<SharedState>) -> Self {
         Self { shared_state }
     }
+
+    pub async fn manually_produce_blocks(
+        &self,
+        start_time: Option<Tai64>,
+        mode: Mode,
+    ) -> anyhow::Result<()> {
+        self.shared_state
+            .as_ref()
+            .ok_or(anyhow!("The block production is disabled"))?
+            .manually_produce_block(start_time, mode)
+            .await
+    }
 }
 
 #[async_trait::async_trait]
@@ -54,10 +70,7 @@ impl ConsensusModulePort for PoAAdapter {
         start_time: Option<Tai64>,
         number_of_blocks: u32,
     ) -> anyhow::Result<()> {
-        self.shared_state
-            .as_ref()
-            .ok_or(anyhow!("The block production is disabled"))?
-            .manually_produce_block(start_time, number_of_blocks)
+        self.manually_produce_blocks(start_time, Mode::Blocks { number_of_blocks })
             .await
     }
 }
@@ -91,11 +104,23 @@ impl fuel_core_poa::ports::BlockProducer for BlockProducerAdapter {
         &self,
         height: BlockHeight,
         block_time: Tai64,
+        source: TransactionsSource,
         max_gas: Word,
     ) -> anyhow::Result<UncommittedResult<StorageTransaction<Database>>> {
-        self.block_producer
-            .produce_and_execute_block(height, block_time, max_gas)
-            .await
+        match source {
+            TransactionsSource::TxPool => {
+                self.block_producer
+                    .produce_and_execute_block_txpool(height, block_time, max_gas)
+                    .await
+            }
+            TransactionsSource::SpecificTransactions(txs) => {
+                self.block_producer
+                    .produce_and_execute_block_transactions(
+                        height, block_time, txs, max_gas,
+                    )
+                    .await
+            }
+        }
     }
 }
 
