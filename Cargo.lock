@@ -2732,7 +2732,7 @@ dependencies = [
 [[package]]
 name = "fuel-asm"
 version = "0.43.1"
-source = "git+https://github.com/DefiCake/fuel-vm?rev=bf8196df278cf03cd15b453e5837f88914c10ec4#bf8196df278cf03cd15b453e5837f88914c10ec4"
+source = "git+https://github.com/DefiCake/fuel-vm?rev=cf048f7f3165fd807daec4d4ff60f69dd031bb8b#cf048f7f3165fd807daec4d4ff60f69dd031bb8b"
 dependencies = [
  "bitflags 2.4.1",
  "fuel-types",
@@ -3261,7 +3261,7 @@ dependencies = [
 [[package]]
 name = "fuel-crypto"
 version = "0.43.1"
-source = "git+https://github.com/DefiCake/fuel-vm?rev=bf8196df278cf03cd15b453e5837f88914c10ec4#bf8196df278cf03cd15b453e5837f88914c10ec4"
+source = "git+https://github.com/DefiCake/fuel-vm?rev=cf048f7f3165fd807daec4d4ff60f69dd031bb8b#cf048f7f3165fd807daec4d4ff60f69dd031bb8b"
 dependencies = [
  "coins-bip32",
  "coins-bip39",
@@ -3281,7 +3281,7 @@ dependencies = [
 [[package]]
 name = "fuel-derive"
 version = "0.43.1"
-source = "git+https://github.com/DefiCake/fuel-vm?rev=bf8196df278cf03cd15b453e5837f88914c10ec4#bf8196df278cf03cd15b453e5837f88914c10ec4"
+source = "git+https://github.com/DefiCake/fuel-vm?rev=cf048f7f3165fd807daec4d4ff60f69dd031bb8b#cf048f7f3165fd807daec4d4ff60f69dd031bb8b"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -3292,7 +3292,7 @@ dependencies = [
 [[package]]
 name = "fuel-merkle"
 version = "0.43.1"
-source = "git+https://github.com/DefiCake/fuel-vm?rev=bf8196df278cf03cd15b453e5837f88914c10ec4#bf8196df278cf03cd15b453e5837f88914c10ec4"
+source = "git+https://github.com/DefiCake/fuel-vm?rev=cf048f7f3165fd807daec4d4ff60f69dd031bb8b#cf048f7f3165fd807daec4d4ff60f69dd031bb8b"
 dependencies = [
  "derive_more",
  "digest 0.10.7",
@@ -3306,12 +3306,12 @@ dependencies = [
 [[package]]
 name = "fuel-storage"
 version = "0.43.1"
-source = "git+https://github.com/DefiCake/fuel-vm?rev=bf8196df278cf03cd15b453e5837f88914c10ec4#bf8196df278cf03cd15b453e5837f88914c10ec4"
+source = "git+https://github.com/DefiCake/fuel-vm?rev=cf048f7f3165fd807daec4d4ff60f69dd031bb8b#cf048f7f3165fd807daec4d4ff60f69dd031bb8b"
 
 [[package]]
 name = "fuel-tx"
 version = "0.43.1"
-source = "git+https://github.com/DefiCake/fuel-vm?rev=bf8196df278cf03cd15b453e5837f88914c10ec4#bf8196df278cf03cd15b453e5837f88914c10ec4"
+source = "git+https://github.com/DefiCake/fuel-vm?rev=cf048f7f3165fd807daec4d4ff60f69dd031bb8b#cf048f7f3165fd807daec4d4ff60f69dd031bb8b"
 dependencies = [
  "bitflags 2.4.1",
  "derivative",
@@ -3332,7 +3332,7 @@ dependencies = [
 [[package]]
 name = "fuel-types"
 version = "0.43.1"
-source = "git+https://github.com/DefiCake/fuel-vm?rev=bf8196df278cf03cd15b453e5837f88914c10ec4#bf8196df278cf03cd15b453e5837f88914c10ec4"
+source = "git+https://github.com/DefiCake/fuel-vm?rev=cf048f7f3165fd807daec4d4ff60f69dd031bb8b#cf048f7f3165fd807daec4d4ff60f69dd031bb8b"
 dependencies = [
  "fuel-derive",
  "hex",
@@ -3343,7 +3343,7 @@ dependencies = [
 [[package]]
 name = "fuel-vm"
 version = "0.43.1"
-source = "git+https://github.com/DefiCake/fuel-vm?rev=bf8196df278cf03cd15b453e5837f88914c10ec4#bf8196df278cf03cd15b453e5837f88914c10ec4"
+source = "git+https://github.com/DefiCake/fuel-vm?rev=cf048f7f3165fd807daec4d4ff60f69dd031bb8b#cf048f7f3165fd807daec4d4ff60f69dd031bb8b"
 dependencies = [
  "anyhow",
  "async-trait",
