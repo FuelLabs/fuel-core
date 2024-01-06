@@ -28,7 +28,7 @@ impl P2pDb for Database {
         &self,
         height: &BlockHeight,
     ) -> StorageResult<Option<SealedBlockHeader>> {
-        self.get_sealed_block_header_by_height(height)
+        self.get_sealed_block_header(height)
     }
 
     fn get_sealed_headers(

@@ -32,10 +32,7 @@ use fuel_core_types::{
         Nonce,
     },
 };
-use std::{
-    borrow::Cow,
-    ops::Deref,
-};
+use std::borrow::Cow;
 
 fuel_core_types::fuel_vm::double_key!(OwnedMessageKey, Address, address, Nonce, nonce);
 
@@ -120,9 +117,11 @@ impl Database {
         start_message_id: Option<Nonce>,
         direction: Option<IterDirection>,
     ) -> impl Iterator<Item = StorageResult<Nonce>> + '_ {
-        self.iter_all_filtered::<OwnedMessageIds, _, _>(
+        let start_message_id =
+            start_message_id.map(|msg_id| OwnedMessageKey::new(owner, &msg_id));
+        self.iter_all_filtered::<OwnedMessageIds, _>(
             Some(*owner),
-            start_message_id.map(|msg_id| OwnedMessageKey::new(owner, &msg_id)),
+            start_message_id.as_ref(),
             direction,
         )
         .map(|res| res.map(|(key, _)| *key.nonce()))
@@ -133,8 +132,7 @@ impl Database {
         start: Option<Nonce>,
         direction: Option<IterDirection>,
     ) -> impl Iterator<Item = StorageResult<Message>> + '_ {
-        let start = start.map(|v| v.deref().to_vec());
-        self.iter_all_by_start::<Messages, _>(start, direction)
+        self.iter_all_by_start::<Messages>(start.as_ref(), direction)
             .map(|res| res.map(|(_, message)| message))
     }
 

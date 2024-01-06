@@ -115,11 +115,12 @@ impl MessageQuery {
         commit_block_height: Option<U32>,
     ) -> async_graphql::Result<Option<MessageProof>> {
         let data: &Database = ctx.data_unchecked();
-        let block_id = match (commit_block_id, commit_block_height) {
-            (Some(commit_block_id), None) => commit_block_id.0.into(),
+        let height = match (commit_block_id, commit_block_height) {
+            (Some(commit_block_id), None) => {
+                data.block_height(&commit_block_id.0.into())?
+            },
             (None, Some(commit_block_height)) => {
-                let block_height = commit_block_height.0.into();
-                data.block_id(&block_height)?
+                commit_block_height.0.into()
             }
             _ => Err(anyhow::anyhow!(
                 "Either `commit_block_id` or `commit_block_height` must be provided exclusively"
@@ -130,7 +131,7 @@ impl MessageQuery {
             data.deref(),
             transaction_id.into(),
             nonce.into(),
-            block_id,
+            height,
         )?
         .map(MessageProof))
     }

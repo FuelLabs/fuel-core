@@ -3,7 +3,7 @@
 use crate::{
     codec::{
         postcard::Postcard,
-        raw::Raw,
+        primitive::Primitive,
     },
     column::Column,
     structure::plain::Plain,
@@ -12,7 +12,7 @@ use crate::{
 };
 
 impl TableWithStructure for SealedBlockConsensus {
-    type Structure = Plain<Raw, Postcard>;
+    type Structure = Plain<Primitive<4>, Postcard>;
 
     fn column() -> Column {
         Column::FuelBlockConsensus
@@ -22,6 +22,6 @@ impl TableWithStructure for SealedBlockConsensus {
 #[cfg(test)]
 crate::basic_storage_tests!(
     SealedBlockConsensus,
-    <SealedBlockConsensus as crate::Mappable>::Key::from([1u8; 32]),
+    <SealedBlockConsensus as crate::Mappable>::Key::default(),
     <SealedBlockConsensus as crate::Mappable>::Value::default()
 );

@@ -161,7 +161,8 @@ impl SuccessStatus {
 
     async fn block(&self, ctx: &Context<'_>) -> async_graphql::Result<Block> {
         let query: &Database = ctx.data_unchecked();
-        let block = query.block(&self.block_id)?;
+        let height = query.block_height(&self.block_id)?;
+        let block = query.block(&height)?;
         Ok(block.into())
     }
 
@@ -202,7 +203,8 @@ impl FailureStatus {
 
     async fn block(&self, ctx: &Context<'_>) -> async_graphql::Result<Block> {
         let query: &Database = ctx.data_unchecked();
-        let block = query.block(&self.block_id)?;
+        let height = query.block_height(&self.block_id)?;
+        let block = query.block(&height)?;
         Ok(block.into())
     }
 

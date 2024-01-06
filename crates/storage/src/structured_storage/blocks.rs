@@ -3,7 +3,7 @@
 use crate::{
     codec::{
         postcard::Postcard,
-        raw::Raw,
+        primitive::Primitive,
     },
     column::Column,
     structure::plain::Plain,
@@ -12,7 +12,7 @@ use crate::{
 };
 
 impl TableWithStructure for FuelBlocks {
-    type Structure = Plain<Raw, Postcard>;
+    type Structure = Plain<Primitive<4>, Postcard>;
 
     fn column() -> Column {
         Column::FuelBlocks

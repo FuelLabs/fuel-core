@@ -26,10 +26,7 @@ use fuel_core_storage::{
     StorageAsRef,
 };
 use fuel_core_types::{
-    blockchain::{
-        block::CompressedBlock,
-        primitives::BlockId,
-    },
+    blockchain::block::CompressedBlock,
     entities::message::{
         MerkleProof,
         Message,
@@ -44,6 +41,7 @@ use fuel_core_types::{
     },
     fuel_types::{
         Address,
+        BlockHeight,
         Bytes32,
         MessageId,
         Nonce,
@@ -143,7 +141,7 @@ pub fn message_proof<T: MessageProofData + ?Sized>(
     database: &T,
     transaction_id: Bytes32,
     desired_nonce: Nonce,
-    commit_block_id: BlockId,
+    commit_block_height: BlockHeight,
 ) -> StorageResult<Option<MessageProof>> {
     // Check if the receipts for this transaction actually contain this message id or exit.
     let receipt = database
@@ -181,7 +179,7 @@ pub fn message_proof<T: MessageProofData + ?Sized>(
 
     // Get the message fuel block header.
     let (message_block_header, message_block_txs) = match database
-        .block(&message_block_id)
+        .block_by_id(&message_block_id)
         .into_api_result::<CompressedBlock, StorageError>()?
     {
         Some(t) => t.into_inner(),
@@ -198,7 +196,7 @@ pub fn message_proof<T: MessageProofData + ?Sized>(
 
     // Get the commit fuel block header.
     let commit_block_header = match database
-        .block(&commit_block_id)
+        .block(&commit_block_height)
         .into_api_result::<CompressedBlock, StorageError>()?
     {
         Some(t) => t.into_inner().0,

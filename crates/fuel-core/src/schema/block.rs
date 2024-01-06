@@ -97,8 +97,8 @@ impl Block {
 
     async fn consensus(&self, ctx: &Context<'_>) -> async_graphql::Result<Consensus> {
         let query: &Database = ctx.data_unchecked();
-        let id = self.0.header().id();
-        let consensus = query.consensus(&id)?;
+        let height = self.0.header().height();
+        let consensus = query.consensus(height)?;
 
         Ok(consensus.into())
     }
@@ -193,23 +193,25 @@ impl BlockQuery {
         #[graphql(desc = "Height of the block")] height: Option<U32>,
     ) -> async_graphql::Result<Option<Block>> {
         let data: &Database = ctx.data_unchecked();
-        let id = match (id, height) {
+        let height = match (id, height) {
             (Some(_), Some(_)) => {
                 return Err(async_graphql::Error::new(
                     "Can't provide both an id and a height",
                 ))
             }
-            (Some(id), None) => Ok(id.0.into()),
+            (Some(id), None) => data.block_height(&id.0.into()),
             (None, Some(height)) => {
                 let height: u32 = height.into();
-                data.block_id(&height.into())
+                Ok(height.into())
             }
             (None, None) => {
                 return Err(async_graphql::Error::new("Missing either id or height"))
             }
         };
 
-        id.and_then(|id| data.block(&id)).into_api_result()
+        height
+            .and_then(|height| data.block(&height))
+            .into_api_result()
     }
 
     async fn blocks(

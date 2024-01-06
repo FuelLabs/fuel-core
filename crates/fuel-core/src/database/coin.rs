@@ -126,9 +126,9 @@ impl Database {
         start_coin: Option<UtxoId>,
         direction: Option<IterDirection>,
     ) -> impl Iterator<Item = StorageResult<UtxoId>> + '_ {
-        self.iter_all_filtered::<OwnedCoins, _, _>(
-            Some(*owner),
-            start_coin.map(|b| owner_coin_id_key(owner, &b)),
+        let start_coin = start_coin.map(|b| owner_coin_id_key(owner, &b));
+        self.iter_all_filtered::<OwnedCoins, _>(
+            Some(*owner), start_coin.as_ref(),
             direction,
         )
         // Safety: key is always 64 bytes
