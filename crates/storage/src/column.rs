@@ -82,6 +82,8 @@ column_definition! {
         ContractsStateMerkleMetadata = 14,
         /// See [`Messages`](crate::tables::Messages)
         Messages = 15,
+        /// See [`ProcessedTransactions`](storage::ProcessedTransactions)
+        ProcessedTransactions = 16,
 
         // TODO: Extract the columns below into a separate enum to not mix
         //  required columns and non-required columns. It will break `MemoryStore`
@@ -90,27 +92,27 @@ column_definition! {
         // Below are the tables used for p2p, block production, starting the node.
 
         /// The column id of metadata about the blockchain
-        Metadata = 16,
+        Metadata = 17,
         /// See [`Receipts`](crate::tables::Receipts)
-        Receipts = 17,
+        Receipts = 18,
         /// See [`FuelBlockSecondaryKeyBlockHeights`](storage::FuelBlockSecondaryKeyBlockHeights)
-        FuelBlockSecondaryKeyBlockHeights = 18,
+        FuelBlockSecondaryKeyBlockHeights = 19,
         /// See [`SealedBlockConsensus`](crate::tables::SealedBlockConsensus)
-        FuelBlockConsensus = 19,
+        FuelBlockConsensus = 20,
         /// Metadata for the relayer
         /// See [`RelayerMetadata`](fuel_core_relayer::ports::RelayerMetadata)
-        RelayerMetadata = 20,
+        RelayerMetadata = 21,
 
         // Below are not required tables. They are used for API and may be removed or moved to another place in the future.
 
         /// The column of the table that stores `true` if `owner` owns `Coin` with `coin_id`
-        OwnedCoins = 21,
+        OwnedCoins = 22,
         /// Transaction id to current status
-        TransactionStatus = 22,
+        TransactionStatus = 23,
         /// The column of the table of all `owner`'s transactions
-        TransactionsByOwnerBlockIdx = 23,
+        TransactionsByOwnerBlockIdx = 24,
         /// The column of the table that stores `true` if `owner` owns `Message` with `message_id`
-        OwnedMessageIds = 24,
+        OwnedMessageIds = 25,
     }
 }
 
