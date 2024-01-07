@@ -2826,6 +2826,7 @@ dependencies = [
  "test-strategy",
  "thiserror",
  "tokio",
+ "tokio-rayon",
  "tokio-stream",
  "tower-http",
  "tracing",

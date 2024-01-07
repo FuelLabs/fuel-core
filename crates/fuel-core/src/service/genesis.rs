@@ -4,25 +4,17 @@ use std::sync::{
 };
 
 use crate::{
-    database::{
-        genesis_progress::GenesisResource,
-        Database,
-    },
+    database::Database,
     service::config::Config,
 };
 use anyhow::anyhow;
 use fuel_core_chain_config::{
     CoinConfig,
-    ContractBalanceConfig,
     ContractConfig,
-    ContractStateConfig,
     GenesisCommitment,
-    Group,
     MessageConfig,
-    StateReader,
 };
 
-use fuel_core_executor::refs::ContractRef;
 use fuel_core_importer::Importer;
 use fuel_core_storage::{
     tables::{
@@ -80,13 +72,7 @@ pub use runner::{
     TransactionOpener,
 };
 
-use self::{
-    runner::{
-        HandlesGenesisResource,
-        ProcessStateGroup,
-    },
-    workers::GenesisWorkers,
-};
+use self::workers::GenesisWorkers;
 
 /// Loads state from the chain config into database
 pub async fn maybe_initialize_state(
@@ -109,50 +95,25 @@ async fn import_chain_state(
 ) -> anyhow::Result<()> {
     let block_height = config.chain_config.height.unwrap_or_default();
 
-    let signal = Arc::new(AtomicBool::new(false));
+    // TODO: segfault propagate this
+    let stop_signal = Arc::new(AtomicBool::new(false));
     let workers = GenesisWorkers::new(
         original_database.clone(),
-        signal,
+        stop_signal,
         block_height,
-        &config.state_reader,
+        config.state_reader.clone(),
     );
 
-    let worker = workers.coins();
-    let coins_handle = tokio::task::spawn_blocking(move || worker.run());
-
-    let worker = workers.messages();
-    let messages_handle = tokio::task::spawn_blocking(move || worker.run());
-
-    let worker = workers.contracts();
-    let contracts_handle = tokio::task::spawn_blocking(move || worker.run());
-
-    let worker = workers.contract_state();
-    let contract_state_handle = tokio::task::spawn_blocking(move || worker.run());
-
-    let worker = workers.contract_balance();
-    let contract_balance_handle = tokio::task::spawn_blocking(move || worker.run());
-
-    let (a, b, c, d, e) = tokio::try_join!(
-        coins_handle,
-        messages_handle,
-        contracts_handle,
-        contract_state_handle,
-        contract_balance_handle,
+    // TODO: will a task stop executing if its future is cancelled? How does rayon-tokio work?
+    tokio::try_join!(
+        workers.spawn_coins_worker(),
+        workers.spawn_messages_worker(),
+        workers.spawn_contracts_worker(),
+        workers.spawn_contract_state_worker(),
+        workers.spawn_contract_balance_worker()
     )?;
-    a?;
-    b?;
-    c?;
-    d?;
-    e?;
 
-    let mut database_transaction = Transactional::transaction(original_database);
-    // TODO: do this in batches
-    for contract_id in original_database.genesis_contract_ids()? {
-        let database = database_transaction.as_mut();
-        let root = ContractRef::new(database, contract_id).root()?;
-        database_transaction.as_mut().add_contract_root(root)?;
-    }
-    database_transaction.commit()?;
+    workers.spawn_contracts_root_worker().await?;
 
     Ok(())
 }
@@ -366,15 +327,20 @@ fn init_da_message(db: &mut Database, msg: &MessageConfig) -> anyhow::Result<Mer
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-
-    use crate::service::{
-        config::Config,
-        FuelService,
+    use crate::{
+        database::Database,
+        service::{
+            config::Config,
+            genesis::maybe_initialize_state,
+            FuelService,
+        },
     };
     use fuel_core_chain_config::{
         ChainConfig,
         CoinConfig,
+        ContractBalanceConfig,
+        ContractConfig,
+        ContractStateConfig,
         MessageConfig,
         StateConfig,
         StateReader,
@@ -382,15 +348,21 @@ mod tests {
     };
     use fuel_core_storage::{
         tables::{
+            Coins,
             ContractsAssets,
             ContractsState,
+            Messages,
         },
         StorageAsRef,
     };
     use fuel_core_types::{
         blockchain::primitives::DaBlockHeight,
-        entities::coins::coin::Coin,
+        entities::{
+            coins::coin::Coin,
+            message::Message,
+        },
         fuel_asm::op,
+        fuel_tx::UtxoId,
         fuel_types::{
             Address,
             AssetId,
@@ -398,6 +370,7 @@ mod tests {
             ContractId,
             Salt,
         },
+        fuel_vm::Contract,
     };
     use rand::{
         rngs::StdRng,
