@@ -24,25 +24,30 @@ use fuel_core_chain_config::{
     ContractBalanceConfig,
     ContractConfig,
     ContractStateConfig,
+    GenesisCommitment,
     Group,
     MessageConfig,
     StateReader,
 };
-use fuel_core_types::fuel_types::BlockHeight;
+use fuel_core_executor::refs::ContractRef;
+use fuel_core_types::fuel_types::{
+    BlockHeight,
+    ContractId,
+};
 
-pub struct GenesisWorkers<'a> {
+pub struct GenesisWorkers {
     db: Database,
     stop_signal: Arc<AtomicBool>,
     block_height: BlockHeight,
-    state_reader: &'a StateReader,
+    state_reader: StateReader,
 }
 
-impl<'a> GenesisWorkers<'a> {
+impl GenesisWorkers {
     pub fn new(
         db: Database,
         stop_signal: Arc<AtomicBool>,
         block_height: BlockHeight,
-        state_reader: &'a StateReader,
+        state_reader: StateReader,
     ) -> Self {
         Self {
             db,
@@ -52,66 +57,65 @@ impl<'a> GenesisWorkers<'a> {
         }
     }
 
-    pub fn coins(
-        &self,
-    ) -> GenesisRunner<
-        impl ProcessStateGroup<CoinConfig>,
-        impl Iterator<Item = anyhow::Result<Group<CoinConfig>>>,
-        Database,
-    > {
+    pub async fn spawn_coins_worker(&self) -> anyhow::Result<()> {
         let coins = self.state_reader.coins().unwrap();
-        self.worker(coins)
+        self.spawn_worker(coins).await
     }
 
-    pub fn messages(
-        &self,
-    ) -> GenesisRunner<
-        impl ProcessStateGroup<MessageConfig>,
-        impl Iterator<Item = anyhow::Result<Group<MessageConfig>>>,
-        Database,
-    > {
+    pub async fn spawn_messages_worker(&self) -> anyhow::Result<()> {
         let messages = self.state_reader.messages().unwrap();
-        self.worker(messages)
+        self.spawn_worker(messages).await
     }
 
-    pub fn contracts(
-        &self,
-    ) -> GenesisRunner<
-        impl ProcessStateGroup<ContractConfig>,
-        impl Iterator<Item = anyhow::Result<Group<ContractConfig>>>,
-        Database,
-    > {
+    pub async fn spawn_contracts_worker(&self) -> anyhow::Result<()> {
         let contracts = self.state_reader.contracts().unwrap();
-        self.worker(contracts)
+        self.spawn_worker(contracts).await
     }
 
-    pub fn contract_state(
-        &self,
-    ) -> GenesisRunner<
-        impl ProcessStateGroup<ContractStateConfig>,
-        impl Iterator<Item = anyhow::Result<Group<ContractStateConfig>>>,
-        Database,
-    > {
+    pub async fn spawn_contract_state_worker(&self) -> anyhow::Result<()> {
         let contract_state = self.state_reader.contract_state().unwrap();
-        self.worker(contract_state)
+        self.spawn_worker(contract_state).await
     }
 
-    pub fn contract_balance(
-        &self,
-    ) -> GenesisRunner<
-        impl ProcessStateGroup<ContractBalanceConfig>,
-        impl Iterator<Item = anyhow::Result<Group<ContractBalanceConfig>>>,
-        Database,
-    > {
+    pub async fn spawn_contract_balance_worker(&self) -> anyhow::Result<()> {
         let contract_balance = self.state_reader.contract_balance().unwrap();
-        self.worker(contract_balance)
+        self.spawn_worker(contract_balance).await
     }
 
-    fn worker<T, I>(&self, data: I) -> GenesisRunner<Handler, I, Database>
+    pub async fn spawn_contracts_root_worker(self) -> anyhow::Result<()> {
+        tokio_rayon::spawn(move || {
+            let chunks = self.db.genesis_contract_ids_iter();
+
+            let contract_ids = chunks.into_iter().enumerate().map(
+                |(index, chunk)| -> anyhow::Result<_> {
+                    let data = vec![chunk?];
+                    Ok(Group { index, data })
+                },
+            );
+
+            self.create_runner(contract_ids).run()
+        })
+        .await
+    }
+
+    fn spawn_worker<T, I>(
+        &self,
+        data: I,
+    ) -> tokio_rayon::AsyncRayonHandle<Result<(), anyhow::Error>>
     where
         Handler: ProcessStateGroup<T>,
         T: HandlesGenesisResource,
-        I: Iterator<Item = anyhow::Result<Group<T>>>,
+        I: IntoIterator<Item = anyhow::Result<Group<T>>> + Send + 'static,
+    {
+        let runner = self.create_runner(data);
+        tokio_rayon::spawn(move || runner.run())
+    }
+
+    fn create_runner<T, I>(&self, data: I) -> GenesisRunner<Handler, I, Database>
+    where
+        Handler: ProcessStateGroup<T>,
+        T: HandlesGenesisResource,
+        I: IntoIterator<Item = anyhow::Result<Group<T>>>,
     {
         let handler = Handler::new(self.block_height);
         let database = self.db.clone();
@@ -162,6 +166,12 @@ impl HandlesGenesisResource for ContractStateConfig {
 impl HandlesGenesisResource for ContractBalanceConfig {
     fn genesis_resource() -> GenesisResource {
         GenesisResource::ContractBalances
+    }
+}
+
+impl HandlesGenesisResource for ContractId {
+    fn genesis_resource() -> GenesisResource {
+        GenesisResource::ContractsRoot
     }
 }
 
@@ -225,6 +235,16 @@ impl ProcessStateGroup<ContractBalanceConfig> for Handler {
         tx: &mut Database,
     ) -> anyhow::Result<()> {
         tx.update_contract_balances(group)?;
+        Ok(())
+    }
+}
+
+impl ProcessState<ContractId> for Handler {
+    fn process(&mut self, item: ContractId, tx: &mut Database) -> anyhow::Result<()> {
+        let mut contract_ref = ContractRef::new(tx, item);
+        let root = contract_ref.root()?;
+        let db = contract_ref.database_mut();
+        db.add_contract_root(root)?;
         Ok(())
     }
 }

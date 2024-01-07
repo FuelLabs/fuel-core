@@ -12,7 +12,10 @@ use fuel_core_types::{
     },
     fuel_types::ContractId,
 };
-use itertools::process_results;
+use itertools::{
+    process_results,
+    Itertools,
+};
 
 use super::{
     storage::{
@@ -36,6 +39,7 @@ pub enum GenesisResource {
     Contracts,
     ContractStates,
     ContractBalances,
+    ContractsRoot,
 }
 
 impl ToDatabaseKey for GenesisResource {
@@ -131,20 +135,15 @@ impl Database {
         self.genesis_roots(Column::ContractBalanceRoots)
     }
 
-    pub fn genesis_contract_ids(&self) -> Result<Vec<ContractId>> {
-        let contract_ids_iter =
-            self.iter_all::<Vec<u8>, ()>(Column::GenesisContractIds, None);
-
-        let contract_ids = process_results(contract_ids_iter, |contract_ids| {
-            contract_ids
-                .map(|(contract_id, _)| {
-                    let bytes32: [u8; 32] = contract_id.try_into().unwrap();
-                    ContractId::from(bytes32)
-                })
-                .collect::<Vec<ContractId>>()
-        })?;
-
-        Ok(contract_ids)
+    pub fn genesis_contract_ids_iter(
+        &self,
+    ) -> impl Iterator<Item = Result<ContractId>> + '_ {
+        self.iter_all::<Vec<u8>, ()>(Column::GenesisContractIds, None)
+            .map_ok(|(contract_id, _)| {
+                let bytes32: [u8; 32] = contract_id.try_into().unwrap();
+                ContractId::from(bytes32)
+            })
+            .map(|res| res.map_err(Into::into))
     }
 
     pub fn remove_genesis_progress(&mut self) -> Result<()> {

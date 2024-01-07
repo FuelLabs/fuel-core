@@ -1,14 +1,11 @@
 use fuel_core_chain_config::Group;
 use fuel_core_storage::transactional::Transaction;
-use std::{
-    iter::Skip,
-    sync::{
-        atomic::{
-            AtomicBool,
-            Ordering,
-        },
-        Arc,
+use std::sync::{
+    atomic::{
+        AtomicBool,
+        Ordering,
     },
+    Arc,
 };
 
 use crate::database::{
@@ -36,7 +33,8 @@ pub struct GenesisRunner<Handler, Groups, TxOpener> {
     resource: GenesisResource,
     handler: Handler,
     tx_opener: TxOpener,
-    groups: Skip<Groups>,
+    skip: usize,
+    groups: Groups,
     stop_signal: Arc<AtomicBool>,
 }
 
@@ -61,17 +59,17 @@ pub trait HandlesGenesisResource {
     fn genesis_resource() -> GenesisResource;
 }
 
-impl<Logic, GroupIter, TxOpener, Item> GenesisRunner<Logic, GroupIter, TxOpener>
+impl<Logic, GroupGenerator, TxOpener, Item> GenesisRunner<Logic, GroupGenerator, TxOpener>
 where
     Logic: ProcessStateGroup<Item>,
     Item: HandlesGenesisResource,
-    GroupIter: Iterator<Item = anyhow::Result<Group<Item>>>,
+    GroupGenerator: IntoIterator<Item = anyhow::Result<Group<Item>>>,
     TxOpener: TransactionOpener,
 {
     pub fn new(
         stop_signal: Arc<AtomicBool>,
         handler: Logic,
-        groups: impl IntoIterator<IntoIter = GroupIter>,
+        groups: GroupGenerator,
         tx_opener: TxOpener,
     ) -> Self {
         let resource = Item::genesis_resource();
@@ -80,9 +78,9 @@ where
             .genesis_progress(&resource)
             .map(|idx_last_handled| idx_last_handled.saturating_add(1))
             .unwrap_or_default();
-        let groups = groups.into_iter().skip(skip);
         Self {
             handler,
+            skip,
             groups,
             resource,
             tx_opener,
@@ -92,6 +90,8 @@ where
 
     pub fn run(mut self) -> anyhow::Result<()> {
         self.groups
+            .into_iter()
+            .skip(self.skip)
             .take_while(|_| !self.stop_signal.load(Ordering::Relaxed))
             .try_for_each(|group| {
                 let mut tx = self.tx_opener.transaction();
