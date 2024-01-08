@@ -201,6 +201,7 @@ impl StateConfig {
 }
 
 // TODO: BoxedIter to be used until RPITIT lands in stable rust.
+#[impl_tools::autoimpl(for<T: trait> &T, &mut T)]
 pub trait ChainStateDb {
     /// Returns the contract config with the given contract id.
     fn get_contract_config_by_id(
@@ -222,42 +223,4 @@ pub trait ChainStateDb {
     fn iter_message_configs(&self) -> BoxedIter<StorageResult<MessageConfig>>;
     /// Returns the last available block height.
     fn get_block_height(&self) -> StorageResult<BlockHeight>;
-}
-
-impl<T> ChainStateDb for &T
-where
-    T: ChainStateDb,
-{
-    fn get_contract_config_by_id(
-        &self,
-        contract_id: ContractId,
-    ) -> StorageResult<ContractConfig> {
-        (*self).get_contract_config_by_id(contract_id)
-    }
-
-    fn iter_coin_configs(&self) -> BoxedIter<StorageResult<CoinConfig>> {
-        (*self).iter_coin_configs()
-    }
-
-    fn iter_contract_configs(&self) -> BoxedIter<StorageResult<ContractConfig>> {
-        (*self).iter_contract_configs()
-    }
-
-    fn iter_contract_state_configs(
-        &self,
-    ) -> BoxedIter<StorageResult<ContractStateConfig>> {
-        (*self).iter_contract_state_configs()
-    }
-
-    fn iter_contract_balance_configs(&self) -> BoxedIter<StorageResult<ContractBalance>> {
-        (*self).iter_contract_balance_configs()
-    }
-
-    fn iter_message_configs(&self) -> BoxedIter<StorageResult<MessageConfig>> {
-        (*self).iter_message_configs()
-    }
-
-    fn get_block_height(&self) -> StorageResult<BlockHeight> {
-        (*self).get_block_height()
-    }
 }
