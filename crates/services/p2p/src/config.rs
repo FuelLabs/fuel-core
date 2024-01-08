@@ -281,6 +281,8 @@ pub(crate) fn build_transport_function(
             let mplex_config = MplexConfig::default();
 
             let mut yamux_config = YamuxConfig::default();
+            // TODO: remove deprecated method call https://github.com/FuelLabs/fuel-core/issues/1592
+            #[allow(deprecated)]
             yamux_config.set_max_buffer_size(MAX_RESPONSE_SIZE);
             libp2p::core::upgrade::SelectUpgrade::new(yamux_config, mplex_config)
         };
