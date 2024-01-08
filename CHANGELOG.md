@@ -16,6 +16,7 @@ Description of the upcoming release here.
 - [#1577](https://github.com/FuelLabs/fuel-core/pull/1577): Moved insertion of sealed blocks into the `BlockImporter` instead of the executor.
 
 #### Breaking
+- [#1593](https://github.com/FuelLabs/fuel-core/pull/1593) Make `Block` type a version-able enum
 - [#1573](https://github.com/FuelLabs/fuel-core/pull/1573): Remove nested p2p request/response encoding. Only breaks p2p networking compatibility with older fuel-core versions, but is otherwise fully internal.
 
 ## [Version 0.22.0]
