@@ -1,5 +1,6 @@
 use super::*;
 use crate::{
+    mock_db::MockDBProvider,
     ports::BlockImporter,
     MockDb,
 };
@@ -31,7 +32,7 @@ use std::cell::RefCell;
 type GossipedTransaction = GossipData<Transaction>;
 
 pub struct TestContext {
-    pub(crate) service: Service<MockP2P, MockDb>,
+    pub(crate) service: Service<MockP2P, MockDBProvider>,
     mock_db: MockDb,
     rng: RefCell<StdRng>,
 }
@@ -41,7 +42,7 @@ impl TestContext {
         TestContextBuilder::new().build_and_start().await
     }
 
-    pub fn service(&self) -> &Service<MockP2P, MockDb> {
+    pub fn service(&self) -> &Service<MockP2P, MockDBProvider> {
         &self.service
     }
 
@@ -193,7 +194,13 @@ impl TestContextBuilder {
             .importer
             .unwrap_or_else(|| MockImporter::with_blocks(vec![]));
 
-        let service = new_service(config, mock_db.clone(), importer, p2p);
+        let service = new_service(
+            config,
+            MockDBProvider(mock_db.clone()),
+            importer,
+            p2p,
+            Default::default(),
+        );
 
         TestContext {
             service,

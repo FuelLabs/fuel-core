@@ -51,6 +51,7 @@ use fuel_core_types::{
 };
 
 use anyhow::anyhow;
+use fuel_core_storage::transactional::AtomicView;
 use fuel_core_types::services::block_importer::SharedImportResult;
 use parking_lot::Mutex as ParkingMutex;
 use std::{
@@ -119,45 +120,46 @@ impl TxStatusChange {
     }
 }
 
-pub struct SharedState<P2P, DB> {
+pub struct SharedState<P2P, ViewProvider> {
     tx_status_sender: TxStatusChange,
-    txpool: Arc<ParkingMutex<TxPool<DB>>>,
+    txpool: Arc<ParkingMutex<TxPool<ViewProvider>>>,
     p2p: Arc<P2P>,
     consensus_params: ConsensusParameters,
-    db: DB,
+    current_height: Arc<ParkingMutex<BlockHeight>>,
     config: Config,
 }
 
-impl<P2P, DB: Clone> Clone for SharedState<P2P, DB> {
+impl<P2P, ViewProvider> Clone for SharedState<P2P, ViewProvider> {
     fn clone(&self) -> Self {
         Self {
             tx_status_sender: self.tx_status_sender.clone(),
             txpool: self.txpool.clone(),
             p2p: self.p2p.clone(),
             consensus_params: self.consensus_params.clone(),
-            db: self.db.clone(),
+            current_height: self.current_height.clone(),
             config: self.config.clone(),
         }
     }
 }
 
-pub struct Task<P2P, DB> {
+pub struct Task<P2P, ViewProvider> {
     gossiped_tx_stream: BoxStream<TransactionGossipData>,
     committed_block_stream: BoxStream<SharedImportResult>,
-    shared: SharedState<P2P, DB>,
+    shared: SharedState<P2P, ViewProvider>,
     ttl_timer: tokio::time::Interval,
 }
 
 #[async_trait::async_trait]
-impl<P2P, DB> RunnableService for Task<P2P, DB>
+impl<P2P, ViewProvider, View> RunnableService for Task<P2P, ViewProvider>
 where
-    P2P: PeerToPeer<GossipedTransaction = TransactionGossipData> + Send + Sync,
-    DB: TxPoolDb + Clone,
+    P2P: PeerToPeer<GossipedTransaction = TransactionGossipData>,
+    ViewProvider: AtomicView<View = View>,
+    View: TxPoolDb,
 {
     const NAME: &'static str = "TxPool";
 
-    type SharedData = SharedState<P2P, DB>;
-    type Task = Task<P2P, DB>;
+    type SharedData = SharedState<P2P, ViewProvider>;
+    type Task = Task<P2P, ViewProvider>;
     type TaskParams = ();
 
     fn shared_data(&self) -> Self::SharedData {
@@ -175,10 +177,11 @@ where
 }
 
 #[async_trait::async_trait]
-impl<P2P, DB> RunnableTask for Task<P2P, DB>
+impl<P2P, ViewProvider, View> RunnableTask for Task<P2P, ViewProvider>
 where
-    P2P: PeerToPeer<GossipedTransaction = TransactionGossipData> + Send + Sync,
-    DB: TxPoolDb,
+    P2P: PeerToPeer<GossipedTransaction = TransactionGossipData>,
+    ViewProvider: AtomicView<View = View>,
+    View: TxPoolDb,
 {
     async fn run(&mut self, watcher: &mut StateWatcher) -> anyhow::Result<bool> {
         let should_continue;
@@ -201,14 +204,22 @@ where
 
             result = self.committed_block_stream.next() => {
                 if let Some(result) = result {
+                    let new_height = *result
+                        .sealed_block
+                        .entity.header().height();
+
                     let block = &result
                         .sealed_block
                         .entity;
-                    self.shared.txpool.lock().block_update(
-                        &self.shared.tx_status_sender,
-                        block,
-                        &result.tx_status,
-                    );
+                    {
+                        let mut lock = self.shared.txpool.lock();
+                        lock.block_update(
+                            &self.shared.tx_status_sender,
+                            block,
+                            &result.tx_status,
+                        );
+                        *self.shared.current_height.lock() = new_height;
+                    }
                     should_continue = true;
                 } else {
                     should_continue = false;
@@ -218,7 +229,7 @@ where
             new_transaction = self.gossiped_tx_stream.next() => {
                 if let Some(GossipData { data: Some(tx), message_id, peer_id }) = new_transaction {
                     let id = tx.id(&self.shared.consensus_params.chain_id);
-                    let current_height = self.shared.db.current_block_height()?;
+                    let current_height = *self.shared.current_height.lock();
 
                     // verify tx
                     let checked_tx = check_single_tx(tx, current_height, &self.shared.config).await;
@@ -282,10 +293,7 @@ where
 //  Instead, `fuel-core` can create a `DatabaseWithTxPool` that aggregates `TxPool` and
 //  storage `Database` together. GraphQL will retrieve data from this `DatabaseWithTxPool` via
 //  `StorageInspect` trait.
-impl<P2P, DB> SharedState<P2P, DB>
-where
-    DB: TxPoolDb,
-{
+impl<P2P, ViewProvider> SharedState<P2P, ViewProvider> {
     pub fn pending_number(&self) -> usize {
         self.txpool.lock().pending_number()
     }
@@ -337,10 +345,11 @@ where
     }
 }
 
-impl<P2P, DB> SharedState<P2P, DB>
+impl<P2P, ViewProvider, View> SharedState<P2P, ViewProvider>
 where
     P2P: PeerToPeer<GossipedTransaction = TransactionGossipData>,
-    DB: TxPoolDb,
+    ViewProvider: AtomicView<View = View>,
+    View: TxPoolDb,
 {
     #[tracing::instrument(name = "insert_submitted_txn", skip_all)]
     pub async fn insert(
@@ -348,11 +357,7 @@ where
         txs: Vec<Arc<Transaction>>,
     ) -> Vec<anyhow::Result<InsertionResult>> {
         // verify txs
-        let block_height = self.db.current_block_height();
-        let current_height = match block_height {
-            Ok(val) => val,
-            Err(e) => return vec![Err(e.into())],
-        };
+        let current_height = *self.current_height.lock();
 
         let checked_txs = check_transactions(&txs, current_height, &self.config).await;
 
@@ -430,16 +435,18 @@ pub enum TxStatusMessage {
     FailedStatus,
 }
 
-pub fn new_service<P2P, Importer, DB>(
+pub fn new_service<P2P, Importer, ViewProvider>(
     config: Config,
-    db: DB,
+    provider: ViewProvider,
     importer: Importer,
     p2p: P2P,
-) -> Service<P2P, DB>
+    current_height: BlockHeight,
+) -> Service<P2P, ViewProvider>
 where
     Importer: BlockImporter,
     P2P: PeerToPeer<GossipedTransaction = TransactionGossipData> + 'static,
-    DB: TxPoolDb + Clone + 'static,
+    ViewProvider: AtomicView,
+    ViewProvider::View: TxPoolDb,
 {
     let p2p = Arc::new(p2p);
     let gossiped_tx_stream = p2p.gossiped_transaction_events();
@@ -448,7 +455,7 @@ where
     ttl_timer.set_missed_tick_behavior(MissedTickBehavior::Skip);
     let consensus_params = config.chain_config.consensus_parameters.clone();
     let number_of_active_subscription = config.number_of_active_subscription;
-    let txpool = Arc::new(ParkingMutex::new(TxPool::new(config.clone(), db.clone())));
+    let txpool = Arc::new(ParkingMutex::new(TxPool::new(config.clone(), provider)));
     let task = Task {
         gossiped_tx_stream,
         committed_block_stream,
@@ -464,7 +471,7 @@ where
             txpool,
             p2p,
             consensus_params,
-            db,
+            current_height: Arc::new(ParkingMutex::new(current_height)),
             config,
         },
         ttl_timer,

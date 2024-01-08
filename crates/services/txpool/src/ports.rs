@@ -10,7 +10,6 @@ use fuel_core_types::{
         UtxoId,
     },
     fuel_types::{
-        BlockHeight,
         ContractId,
         Nonce,
     },
@@ -55,6 +54,4 @@ pub trait TxPoolDb: Send + Sync {
     fn message(&self, message_id: &Nonce) -> StorageResult<Option<Message>>;
 
     fn is_message_spent(&self, message_id: &Nonce) -> StorageResult<bool>;
-
-    fn current_block_height(&self) -> StorageResult<BlockHeight>;
 }

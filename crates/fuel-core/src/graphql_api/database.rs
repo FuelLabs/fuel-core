@@ -57,25 +57,77 @@ pub type OnChainView = Arc<dyn OnChainDatabase>;
 /// The off-chain view of the database used by the [`ReadView`] to fetch off-chain data.
 pub type OffChainView = Arc<dyn OffChainDatabase>;
 
+/// The GraphQL can't work with the generics in [`async_graphql::Context::data_unchecked`] and requires a known type.
+/// It is an `Arc` wrapper around the generic for on-chain and off-chain databases.
+struct ArcWrapper<Provider, ArcView> {
+    inner: Provider,
+    _marker: core::marker::PhantomData<ArcView>,
+}
+
+impl<Provider, ArcView> ArcWrapper<Provider, ArcView> {
+    fn new(inner: Provider) -> Self {
+        Self {
+            inner,
+            _marker: core::marker::PhantomData,
+        }
+    }
+}
+
+impl<Provider, View> AtomicView for ArcWrapper<Provider, OnChainView>
+where
+    Provider: AtomicView<View = View>,
+    View: OnChainDatabase + 'static,
+{
+    type View = OnChainView;
+
+    fn view_at(&self, height: BlockHeight) -> StorageResult<Self::View> {
+        let view = self.inner.view_at(height)?;
+        Ok(Arc::new(view))
+    }
+
+    fn latest_view(&self) -> Self::View {
+        Arc::new(self.inner.latest_view())
+    }
+}
+
+impl<Provider, View> AtomicView for ArcWrapper<Provider, OffChainView>
+where
+    Provider: AtomicView<View = View>,
+    View: OffChainDatabase + 'static,
+{
+    type View = OffChainView;
+
+    fn view_at(&self, height: BlockHeight) -> StorageResult<Self::View> {
+        let view = self.inner.view_at(height)?;
+        Ok(Arc::new(view))
+    }
+
+    fn latest_view(&self) -> Self::View {
+        Arc::new(self.inner.latest_view())
+    }
+}
+
 /// The container of the on-chain and off-chain database view provides.
 /// It is used only by [`ViewExtension`](super::view_extension::ViewExtension) to create a [`ReadView`].
 pub struct ReadDatabase {
     /// The on-chain database view provider.
-    on_chain: Box<dyn AtomicView<OnChainView>>,
+    on_chain: Box<dyn AtomicView<View = OnChainView>>,
     /// The off-chain database view provider.
-    off_chain: Box<dyn AtomicView<OffChainView>>,
+    off_chain: Box<dyn AtomicView<View = OffChainView>>,
 }
 
 impl ReadDatabase {
     /// Creates a new [`ReadDatabase`] with the given on-chain and off-chain database view providers.
     pub fn new<OnChain, OffChain>(on_chain: OnChain, off_chain: OffChain) -> Self
     where
-        OnChain: AtomicView<OnChainView> + 'static,
-        OffChain: AtomicView<OffChainView> + 'static,
+        OnChain: AtomicView + 'static,
+        OffChain: AtomicView + 'static,
+        OnChain::View: OnChainDatabase,
+        OffChain::View: OffChainDatabase,
     {
         Self {
-            on_chain: Box::new(on_chain),
-            off_chain: Box::new(off_chain),
+            on_chain: Box::new(ArcWrapper::new(on_chain)),
+            off_chain: Box::new(ArcWrapper::new(off_chain)),
         }
     }
 
