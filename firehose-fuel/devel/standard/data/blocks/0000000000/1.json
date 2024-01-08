@@ -1,0 +1,18 @@
+{
+  "height": 1,
+  "hash": "6b86b273ff34fce19d6b804eff5a3f5747ada4eaa22f1d49c01e52ddb7875b4b",
+  "prev_hash": "5feceb66ffc86f38d952786c6d696c79c2dbc239dd4e91b46729d73a27fb57e9",
+  "timestamp": "2024-01-08T12:51:33.396198Z",
+  "transactions": [
+    {
+      "type": "transfer",
+      "hash": "a302da3294ef556ab933c9b09a7fdebf7ca7bb51868dee1cc24b35dc4e68cf97",
+      "sender": "0xDEADBEEF",
+      "receiver": "0xBAAAAAAD",
+      "amount": 0,
+      "fee": 10000,
+      "success": true,
+      "events": []
+    }
+  ]
+}
