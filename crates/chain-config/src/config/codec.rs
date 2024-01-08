@@ -26,13 +26,14 @@ type GroupResult<T> = anyhow::Result<Group<T>>;
 #[cfg(all(feature = "std", feature = "random"))]
 #[cfg(test)]
 mod tests {
+    use crate as fuel_core_chain_config;
     use itertools::Itertools;
     use rand::{
         rngs::StdRng,
         SeedableRng,
     };
 
-    use crate::Randomize;
+    use fuel_core_chain_config::Randomize;
 
     use super::*;
 

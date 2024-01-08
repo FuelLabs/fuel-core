@@ -28,6 +28,7 @@ serde_with = "1.11"
 tracing = { version = "0.1", default-features = false }
 
 [dev-dependencies]
+fuel-core-chain-config = { path = ".", features = ["parquet"] }
 strum = { workspace = true, features = ["derive"] }
 bytes = { workspace = true }
 fuel-core-types = { workspace = true, default-features = false, features = [

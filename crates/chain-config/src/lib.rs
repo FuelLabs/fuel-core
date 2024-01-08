@@ -26,13 +26,3 @@ pub fn default_consensus_dev_key() -> SecretKey {
     ];
     SecretKey::try_from(bytes.as_slice()).expect("valid key")
 }
-
-#[cfg(test)]
-mod tests {
-    // These imports are needed to silence unused_crate_dependencies since optional dev
-    // dependencies are still not stable in cargo.
-    use bytes as _;
-    use pretty_assertions as _;
-    use strum as _;
-    use tempfile as _;
-}
