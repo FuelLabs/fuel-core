@@ -1,25 +1,23 @@
 use crate::Multiaddr;
 use libp2p::{
+    core::Endpoint,
     mdns::{
         tokio::Behaviour as TokioMdns,
         Config,
         Event as MdnsEvent,
     },
     swarm::{
+        dummy,
+        ConnectionDenied,
+        ConnectionId,
+        FromSwarm,
         NetworkBehaviour,
+        THandler,
+        THandlerInEvent,
+        THandlerOutEvent,
         ToSwarm,
     },
     PeerId,
-};
-use libp2p_core::Endpoint;
-use libp2p_swarm::{
-    dummy,
-    ConnectionDenied,
-    ConnectionId,
-    FromSwarm,
-    THandler,
-    THandlerInEvent,
-    THandlerOutEvent,
 };
 use std::task::{
     Context,

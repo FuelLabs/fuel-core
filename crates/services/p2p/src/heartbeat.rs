@@ -6,18 +6,20 @@ use handler::{
     HeartbeatInEvent,
     HeartbeatOutEvent,
 };
-use libp2p::PeerId;
-use libp2p_core::Endpoint;
-use libp2p_swarm::{
-    derive_prelude::ConnectionId,
-    ConnectionDenied,
-    FromSwarm,
-    NetworkBehaviour,
-    NotifyHandler,
-    THandler,
-    THandlerInEvent,
-    THandlerOutEvent,
-    ToSwarm,
+use libp2p::{
+    core::Endpoint,
+    swarm::{
+        derive_prelude::ConnectionId,
+        ConnectionDenied,
+        FromSwarm,
+        NetworkBehaviour,
+        NotifyHandler,
+        THandler,
+        THandlerInEvent,
+        THandlerOutEvent,
+        ToSwarm,
+    },
+    PeerId,
 };
 use std::{
     collections::VecDeque,

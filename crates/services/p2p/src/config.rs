@@ -21,12 +21,12 @@ use libp2p::{
         tokio::Transport as TokioTcpTransport,
         Config as TcpConfig,
     },
+    yamux::Config as YamuxConfig,
     Multiaddr,
     PeerId,
     Transport,
 };
 use libp2p_mplex::MplexConfig;
-use libp2p_yamux::Config as YamuxConfig;
 use std::{
     collections::HashSet,
     net::{
