@@ -72,7 +72,7 @@ impl Decoder {
         snapshot_dir: impl AsRef<std::path::Path>,
         group_size: usize,
     ) -> anyhow::Result<Self> {
-        let path = snapshot_dir.as_ref().join("state.json");
+        let path = snapshot_dir.as_ref().join(crate::STATE_CONFIG_FILENAME);
 
         let mut file = std::fs::File::open(path)?;
 
@@ -103,7 +103,7 @@ impl Decoder {
     ) -> anyhow::Result<Self> {
         let snapshot_dir = snapshot_dir.as_ref();
 
-        if snapshot_dir.join("state.json").exists() {
+        if snapshot_dir.join(crate::STATE_CONFIG_FILENAME).exists() {
             return Self::json(snapshot_dir, default_group_size)
         }
 

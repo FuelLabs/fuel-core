@@ -12,6 +12,7 @@ use crate::{
     ContractConfig,
     MessageConfig,
     StateConfig,
+    STATE_CONFIG_FILENAME,
 };
 
 #[cfg(feature = "parquet")]
@@ -153,7 +154,7 @@ impl Encoder {
     pub fn json(snapshot_dir: impl AsRef<Path>) -> Self {
         Self {
             encoder: EncoderType::Json {
-                state_file_path: snapshot_dir.as_ref().join("state.json"),
+                state_file_path: snapshot_dir.as_ref().join(STATE_CONFIG_FILENAME),
                 buffer: StateConfig::default(),
             },
         }
@@ -308,8 +309,8 @@ mod tests {
         let entries: Vec<_> = dir.path().read_dir().unwrap().try_collect().unwrap();
 
         match entries.as_slice() {
-            [entry] => assert_eq!(entry.path(), dir.path().join("state.json")),
-            _ => panic!("Expected single file \"state.json\""),
+            [entry] => assert_eq!(entry.path(), dir.path().join("state_config.json")),
+            _ => panic!("Expected single file \"state_config.json\""),
         }
     }
 
