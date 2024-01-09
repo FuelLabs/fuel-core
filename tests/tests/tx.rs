@@ -1,9 +1,7 @@
 use crate::helpers::TestContext;
 use fuel_core::{
-    database::Database,
     schema::tx::receipt::all_receipts,
     service::{
-        adapters::MaybeRelayerAdapter,
         Config,
         FuelService,
     },
@@ -16,20 +14,12 @@ use fuel_core_client::client::{
     types::TransactionStatus,
     FuelClient,
 };
-use fuel_core_executor::executor::Executor;
+use fuel_core_poa::service::Mode;
 use fuel_core_types::{
-    blockchain::{
-        block::PartialFuelBlock,
-        header::{
-            ConsensusHeader,
-            PartialBlockHeader,
-        },
-    },
     fuel_asm::*,
+    fuel_crypto::SecretKey,
     fuel_tx::*,
     fuel_types::ChainId,
-    services::executor::ExecutionBlock,
-    tai64::Tai64,
 };
 use itertools::Itertools;
 use rand::{
@@ -503,55 +493,30 @@ async fn get_transactions_by_owner_supports_cursor(direction: PageDirection) {
 
 #[tokio::test]
 async fn get_transactions_from_manual_blocks() {
-    let (executor, db) = get_executor_and_db();
-    // get access to a client
-    let context = initialize_client(db).await;
+    let context = TestContext::new(100).await;
 
     // create 10 txs
-    let txs: Vec<Transaction> = (0..10).map(create_mock_tx).collect();
+    let txs: Vec<_> = (0..10).map(create_mock_tx).collect();
 
     // make 1st test block
-    let first_test_block = PartialFuelBlock {
-        header: PartialBlockHeader {
-            consensus: ConsensusHeader {
-                height: 1u32.into(),
-                time: Tai64::now(),
-                ..Default::default()
-            },
-            ..Default::default()
-        },
-
-        // set the first 5 ids of the manually saved txs
-        transactions: txs.iter().take(5).cloned().collect(),
-    };
+    let first_batch = txs.iter().take(5).cloned().collect();
+    context
+        .srv
+        .shared
+        .poa_adapter
+        .manually_produce_blocks(None, Mode::BlockWithTransactions(first_batch))
+        .await
+        .expect("Should produce first block with first 5 transactions.");
 
     // make 2nd test block
-    let second_test_block = PartialFuelBlock {
-        header: PartialBlockHeader {
-            consensus: ConsensusHeader {
-                height: 2u32.into(),
-                time: Tai64::now(),
-                ..Default::default()
-            },
-            ..Default::default()
-        },
-        // set the last 5 ids of the manually saved txs
-        transactions: txs.iter().skip(5).take(5).cloned().collect(),
-    };
-
-    // process blocks and save block height
-    executor
-        .execute_and_commit(
-            ExecutionBlock::Production(first_test_block),
-            Default::default(),
-        )
-        .unwrap();
-    executor
-        .execute_and_commit(
-            ExecutionBlock::Production(second_test_block),
-            Default::default(),
-        )
-        .unwrap();
+    let second_batch = txs.iter().skip(5).take(5).cloned().collect();
+    context
+        .srv
+        .shared
+        .poa_adapter
+        .manually_produce_blocks(None, Mode::BlockWithTransactions(second_batch))
+        .await
+        .expect("Should produce block with last 5 transactions.");
 
     // Query for first 4: [0, 1, 2, 3]
     let page_request_forwards = PaginationRequest {
@@ -672,38 +637,18 @@ async fn get_owned_transactions() {
     assert_eq!(&charlie_txs, &[tx1, tx2, tx3]);
 }
 
-fn get_executor_and_db() -> (Executor<MaybeRelayerAdapter, Database>, Database) {
-    let db = Database::default();
-    let relayer = MaybeRelayerAdapter {
-        database: db.clone(),
-        #[cfg(feature = "relayer")]
-        relayer_synced: None,
-        #[cfg(feature = "relayer")]
-        da_deploy_height: 0u64.into(),
-    };
-    let executor = Executor {
-        relayer,
-        database: db.clone(),
-        config: Default::default(),
-    };
-
-    (executor, db)
-}
-
-async fn initialize_client(db: Database) -> TestContext {
-    let config = Config::local_node();
-    let srv = FuelService::from_database(db, config).await.unwrap();
-    let client = FuelClient::from(srv.bound_address);
-    TestContext {
-        srv,
-        rng: StdRng::seed_from_u64(0x123),
-        client,
-    }
-}
-
 // add random val for unique tx
 fn create_mock_tx(val: u64) -> Transaction {
+    let mut rng = StdRng::seed_from_u64(val);
+
     TransactionBuilder::script(val.to_be_bytes().to_vec(), Default::default())
-        .add_random_fee_input()
+        .add_unsigned_coin_input(
+            SecretKey::random(&mut rng),
+            rng.gen(),
+            1_000_000,
+            Default::default(),
+            Default::default(),
+            Default::default(),
+        )
         .finalize_as_transaction()
 }

@@ -1,8 +1,3 @@
-use std::{
-    ops::Range,
-    sync::Arc,
-};
-
 use fuel_core_types::{
     blockchain::{
         SealedBlock,
@@ -11,11 +6,17 @@ use fuel_core_types::{
     fuel_types::BlockHeight,
     services::p2p::Transactions,
 };
-use libp2p::PeerId;
-use libp2p_request_response::OutboundFailure;
+use libp2p::{
+    request_response::OutboundFailure,
+    PeerId,
+};
 use serde::{
     Deserialize,
     Serialize,
+};
+use std::{
+    ops::Range,
+    sync::Arc,
 };
 use thiserror::Error;
 use tokio::sync::oneshot;
@@ -37,7 +38,7 @@ pub enum RequestMessage {
 pub enum ResponseMessage {
     Block(Option<Arc<SealedBlock>>),
     SealedHeaders(Option<Vec<SealedBlockHeader>>),
-    Transactions(Option<Arc<Vec<Transactions>>>),
+    Transactions(Option<Vec<Transactions>>),
 }
 
 pub type OnResponse<T> = oneshot::Sender<Result<T, ResponseError>>;

@@ -1,3 +1,4 @@
+use crate::service::Mode;
 use fuel_core_types::{
     blockchain::block::Block,
     tai64::Tai64,
@@ -82,7 +83,7 @@ async fn can_manually_produce_block(
     let mut producer = MockBlockProducer::default();
     producer
         .expect_produce_and_execute_block()
-        .returning(|_, time, _| {
+        .returning(|_, time, _, _| {
             let mut block = Block::default();
             block.header_mut().consensus.time = time;
             block.header_mut().recalculate_metadata();
@@ -101,7 +102,7 @@ async fn can_manually_produce_block(
 
     ctx.service
         .shared
-        .manually_produce_block(Some(start_time), number_of_blocks)
+        .manually_produce_block(Some(start_time), Mode::Blocks { number_of_blocks })
         .await
         .unwrap();
     for tx in txs {

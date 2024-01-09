@@ -8,17 +8,19 @@ use futures::{
     AsyncWriteExt,
     FutureExt,
 };
-use libp2p_core::upgrade::ReadyUpgrade;
-use libp2p_swarm::{
-    handler::{
-        ConnectionEvent,
-        FullyNegotiatedInbound,
-        FullyNegotiatedOutbound,
+use libp2p::{
+    core::upgrade::ReadyUpgrade,
+    swarm::{
+        handler::{
+            ConnectionEvent,
+            FullyNegotiatedInbound,
+            FullyNegotiatedOutbound,
+        },
+        ConnectionHandler,
+        ConnectionHandlerEvent,
+        Stream,
+        SubstreamProtocol,
     },
-    ConnectionHandler,
-    ConnectionHandlerEvent,
-    Stream,
-    SubstreamProtocol,
 };
 use std::{
     num::NonZeroU32,

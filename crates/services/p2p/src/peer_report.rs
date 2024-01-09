@@ -4,25 +4,25 @@ use crate::{
 };
 use libp2p::{
     self,
+    core::Endpoint,
     identify::Behaviour as Identify,
-    swarm::derive_prelude::{
-        ConnectionClosed,
-        ConnectionEstablished,
-        FromSwarm,
+    swarm::{
+        derive_prelude::{
+            ConnectionClosed,
+            ConnectionEstablished,
+            FromSwarm,
+        },
+        dummy::ConnectionHandler as DummyConnectionHandler,
+        ConnectionDenied,
+        ConnectionId,
+        NetworkBehaviour,
+        THandler,
+        THandlerInEvent,
+        THandlerOutEvent,
+        ToSwarm,
     },
     Multiaddr,
     PeerId,
-};
-use libp2p_core::Endpoint;
-use libp2p_swarm::{
-    dummy::ConnectionHandler as DummyConnectionHandler,
-    ConnectionDenied,
-    ConnectionId,
-    NetworkBehaviour,
-    THandler,
-    THandlerInEvent,
-    THandlerOutEvent,
-    ToSwarm,
 };
 use std::{
     collections::VecDeque,

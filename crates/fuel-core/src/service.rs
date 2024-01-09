@@ -19,6 +19,7 @@ pub use config::{
 };
 pub use fuel_core_services::Service as ServiceTrait;
 
+use crate::service::adapters::PoAAdapter;
 pub use fuel_core_consensus_module::RelayerVerifierConfig;
 
 use self::adapters::BlockImporterAdapter;
@@ -32,6 +33,8 @@ pub mod sub_services;
 
 #[derive(Clone)]
 pub struct SharedState {
+    /// The PoA adaptor around the shared state of the consensus module.
+    pub poa_adapter: PoAAdapter,
     /// The transaction pool shared state.
     pub txpool: fuel_core_txpool::service::SharedState<P2PAdapter, Database>,
     /// The P2P network shared state.
