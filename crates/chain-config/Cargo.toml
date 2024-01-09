@@ -51,6 +51,6 @@ std = [
   "tracing/std",
   "bech32/std",
 ]
-parquet = ["std", "dep:parquet"]
+parquet = ["std", "dep:parquet", "postcard/use-std"]
 default = ["std", "random"]
 random = ["dep:rand", "fuel-core-types/random"]

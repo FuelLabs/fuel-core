@@ -16,9 +16,6 @@ use crate::{
 };
 
 #[cfg(feature = "parquet")]
-use crate::config::codec::parquet::Schema;
-
-#[cfg(feature = "parquet")]
 use super::parquet;
 
 enum EncoderType {
@@ -28,11 +25,11 @@ enum EncoderType {
     },
     #[cfg(feature = "parquet")]
     Parquet {
-        coins: parquet::Encoder<std::fs::File, CoinConfig>,
-        messages: parquet::Encoder<std::fs::File, MessageConfig>,
-        contracts: parquet::Encoder<std::fs::File, ContractConfig>,
-        contract_state: parquet::Encoder<std::fs::File, ContractStateConfig>,
-        contract_balance: parquet::Encoder<std::fs::File, ContractBalance>,
+        coins: parquet::PostcardEncoder<CoinConfig>,
+        messages: parquet::PostcardEncoder<MessageConfig>,
+        contracts: parquet::PostcardEncoder<ContractConfig>,
+        contract_state: parquet::PostcardEncoder<ContractStateConfig>,
+        contract_balance: parquet::PostcardEncoder<ContractBalance>,
     },
 }
 
@@ -166,15 +163,14 @@ impl Encoder {
         compression_level: ZstdCompressionLevel,
     ) -> anyhow::Result<Self> {
         use ::parquet::basic::Compression;
-        use std::fs::File;
 
         fn create_encoder<T>(
             path: &Path,
             name: &str,
             compression: Compression,
-        ) -> anyhow::Result<parquet::Encoder<File, T>>
+        ) -> anyhow::Result<parquet::PostcardEncoder<T>>
         where
-            T: Schema,
+            parquet::PostcardEncode: parquet::Encode<T>,
         {
             let path = path.join(format!("{name}.parquet"));
             let file = std::fs::File::create(path)?;
@@ -390,11 +386,9 @@ mod tests {
         expected_filename: &str,
         write: impl FnOnce(Vec<T>, &mut Encoder) -> anyhow::Result<()>,
     ) where
-        parquet::Decoder<std::fs::File, T>:
-            Iterator<Item = anyhow::Result<crate::Group<T>>>,
+        parquet::PostcardDecoder<T>: Iterator<Item = anyhow::Result<crate::Group<T>>>,
         T: crate::Randomize + PartialEq + ::core::fmt::Debug + Clone,
     {
-        use std::fs::File;
         // given
         let dir = tempfile::tempdir().unwrap();
         let mut encoder =
@@ -407,7 +401,7 @@ mod tests {
 
         // then
         let file = std::fs::File::open(dir.path().join(expected_filename)).unwrap();
-        let decoded = parquet::Decoder::<File, T>::new(file)
+        let decoded = parquet::PostcardDecoder::<T>::new(file)
             .unwrap()
             .collect::<Result<Vec<_>, _>>()
             .unwrap();

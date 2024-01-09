@@ -22,14 +22,14 @@ pub enum IntoIter<T> {
     },
     #[cfg(feature = "parquet")]
     Parquet {
-        decoder: super::parquet::Decoder<std::fs::File, T>,
+        decoder: super::parquet::PostcardDecoder<T>,
     },
 }
 
 #[cfg(feature = "parquet")]
 impl<T> Iterator for IntoIter<T>
 where
-    super::parquet::Decoder<std::fs::File, T>: Iterator<Item = GroupResult<T>>,
+    super::parquet::PostcardDecoder<T>: Iterator<Item = GroupResult<T>>,
 {
     type Item = super::GroupResult<T>;
 
