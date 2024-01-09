@@ -2920,6 +2920,7 @@ dependencies = [
  "serde_with",
  "strum 0.25.0",
  "tempfile",
+ "test-case",
  "tracing",
 ]
 
