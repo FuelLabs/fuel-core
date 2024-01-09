@@ -23,7 +23,7 @@ use libp2p::{
     PeerId,
 };
 
-use libp2p_swarm::{
+use libp2p::swarm::{
     THandlerInEvent,
     THandlerOutEvent,
     ToSwarm,

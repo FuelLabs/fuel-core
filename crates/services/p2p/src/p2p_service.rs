@@ -44,6 +44,7 @@ use libp2p::{
         Event as GossipsubEvent,
         MessageAcceptance,
         MessageId,
+        PublishError,
         TopicHash,
     },
     identify,
@@ -61,7 +62,6 @@ use libp2p::{
     Swarm,
     SwarmBuilder,
 };
-use libp2p_gossipsub::PublishError;
 use rand::seq::IteratorRandom;
 use std::{
     collections::HashMap,
@@ -725,11 +725,13 @@ mod tests {
     use libp2p::{
         gossipsub::Topic,
         identity::Keypair,
-        swarm::SwarmEvent,
+        swarm::{
+            ListenError,
+            SwarmEvent,
+        },
         Multiaddr,
         PeerId,
     };
-    use libp2p_swarm::ListenError;
     use rand::Rng;
     use std::{
         collections::HashSet,

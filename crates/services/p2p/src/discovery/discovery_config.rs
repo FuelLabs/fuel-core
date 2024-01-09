@@ -10,12 +10,12 @@ use libp2p::{
         store::MemoryStore,
         Behaviour as KademliaBehaviour,
         Config as KademliaConfig,
+        Mode,
     },
+    swarm::StreamProtocol,
     Multiaddr,
     PeerId,
 };
-use libp2p_kad::Mode;
-use libp2p_swarm::StreamProtocol;
 use std::{
     collections::HashSet,
     time::Duration,
