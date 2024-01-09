@@ -721,6 +721,7 @@ mod tests {
         peer_manager::PeerInfo,
         request_response::messages::{
             RequestMessage,
+            ResponseErrorKind,
             ResponseMessage,
             TypedResponseChannel,
         },
@@ -756,6 +757,7 @@ mod tests {
     use libp2p::{
         gossipsub::Topic,
         identity::Keypair,
+        request_response::OutboundFailure,
         swarm::{
             ListenError,
             SwarmEvent,
@@ -1651,6 +1653,11 @@ mod tests {
     #[tokio::test]
     #[instrument]
     async fn req_res_outbound_timeout_works() {
+        tracing_subscriber::fmt()
+            .with_max_level(tracing::Level::WARN)
+            .with_target(false)
+            .init();
+
         let mut p2p_config =
             Config::default_initialized("req_res_outbound_timeout_works");
 
@@ -1695,8 +1702,17 @@ mod tests {
 
                                 tokio::spawn(async move {
                                     // 3. Simulating NetworkOrchestrator receiving a Timeout Error Message!
-                                    if (rx_orchestrator.await).is_err() {
-                                        let _ = tx_test_end.send(()).await;
+                                    match rx_orchestrator.await {
+                                        Ok(Ok(_)) => panic!("Request succeeded unexpectedly"),
+                                        Ok(Err(err)) => {
+                                            if let ResponseErrorKind::P2P(OutboundFailure::Timeout) = err.kind {
+                                                // Got timeout as expected, so end test
+                                                let _ = tx_test_end.send(()).await;
+                                            } else {
+                                                panic!("Unexpected error: {:?}", err);
+                                            }
+                                        },
+                                        Err(e) => panic!("Unexpected error: {:?}", e),
                                     }
                                 });
                             }
