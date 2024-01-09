@@ -1653,11 +1653,6 @@ mod tests {
     #[tokio::test]
     #[instrument]
     async fn req_res_outbound_timeout_works() {
-        tracing_subscriber::fmt()
-            .with_max_level(tracing::Level::WARN)
-            .with_target(false)
-            .init();
-
         let mut p2p_config =
             Config::default_initialized("req_res_outbound_timeout_works");
 
