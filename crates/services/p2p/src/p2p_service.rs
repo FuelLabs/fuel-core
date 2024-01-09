@@ -1783,16 +1783,22 @@ mod tests {
                                 tokio::spawn(async move {
                                     // 3. Simulating NetworkOrchestrator receiving a Timeout Error Message!
                                     match rx_orchestrator.await {
-                                        Ok(Ok(_)) => panic!("Request succeeded unexpectedly"),
+                                        Ok(Ok(_)) => {
+                                                let _ = tx_test_end.send(false).await;
+
+                                            panic!("Request succeeded unexpectedly")},
                                         Ok(Err(err)) => {
                                             if let ResponseErrorKind::P2P(OutboundFailure::Timeout) = err.kind {
                                                 // Got timeout as expected, so end test
-                                                let _ = tx_test_end.send(()).await;
+                                                let _ = tx_test_end.send(true).await;
                                             } else {
+                                                let _ = tx_test_end.send(false).await;
                                                 panic!("Unexpected error: {:?}", err);
                                             }
                                         },
-                                        Err(e) => panic!("Unexpected error: {:?}", e),
+                                        Err(e) => {
+                                            let _ = tx_test_end.send(false).await;
+                                            panic!("Unexpected error: {:?}", e)},
                                     }
                                 });
                             }
@@ -1801,7 +1807,8 @@ mod tests {
 
                     tracing::info!("Node A Event: {:?}", node_a_event);
                 },
-                _ = rx_test_end.recv() => {
+                recv = rx_test_end.recv() => {
+                    assert_eq!(recv, Some(true), "Test failed");
                     // we received a signal to end the test
                     // 4. there should be ZERO pending outbound requests in the table
                     // after the Outbound Request Failed with Timeout
