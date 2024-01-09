@@ -1,3 +1,4 @@
+use crate::serialization::HexType;
 use fuel_core_types::{
     fuel_tx::{
         Contract,
@@ -15,17 +16,21 @@ use serde::{
     Deserialize,
     Serialize,
 };
+use serde_with::serde_as;
 
+#[serde_as]
 #[derive(Clone, Debug, Deserialize, Serialize, Eq, PartialEq, Default)]
 pub struct ContractConfig {
+    #[serde_as(as = "HexType")]
     pub contract_id: ContractId,
+    #[serde_as(as = "HexType")]
     pub code: Vec<u8>,
+    #[serde_as(as = "HexType")]
     pub salt: Salt,
     pub state: Option<Vec<(Bytes32, Bytes32)>>,
     pub balances: Option<Vec<(AssetId, u64)>>,
-    /// UtxoId: auto-generated if None
+    #[serde_as(as = "Option<HexType>")]
     pub tx_id: Option<Bytes32>,
-    /// UtxoId: auto-generated if None
     pub output_index: Option<u8>,
     /// TxPointer: auto-generated if None
     /// used if contract is forked from another chain to preserve id & tx_pointer

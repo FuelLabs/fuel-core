@@ -264,7 +264,7 @@ impl Encoder {
                 state_file_path,
             } => {
                 let file = std::fs::File::create(state_file_path)?;
-                serde_json::to_writer(file, &buffer)?;
+                serde_json::to_writer_pretty(file, &buffer)?;
                 Ok(())
             }
             #[cfg(feature = "parquet")]
@@ -289,6 +289,14 @@ impl Encoder {
 #[cfg(feature = "random")]
 #[cfg(test)]
 mod tests {
+    use fuel_core_types::{
+        blockchain::primitives::DaBlockHeight,
+        fuel_types::{
+            BlockHeight,
+            Nonce,
+        },
+    };
+
     use super::*;
     use itertools::Itertools;
 
@@ -416,5 +424,84 @@ mod tests {
         for level in ZstdCompressionLevel::iter() {
             let _ = Compression::from(level);
         }
+    }
+
+    #[test]
+    fn json_coins_are_human_readable() {
+        // given
+        let dir = tempfile::tempdir().unwrap();
+        let mut encoder = Encoder::json(dir.path());
+        let coin = CoinConfig {
+            tx_id: Some([1u8; 32].into()),
+            output_index: Some(2),
+            tx_pointer_block_height: Some(BlockHeight::new(3)),
+            tx_pointer_tx_idx: Some(4),
+            maturity: Some(BlockHeight::new(5)),
+            owner: [6u8; 32].into(),
+            amount: 7,
+            asset_id: [8u8; 32].into(),
+        };
+
+        // when
+        encoder.write_coins(vec![coin.clone()]).unwrap();
+        encoder.close().unwrap();
+
+        // then
+        let encoded_json =
+            std::fs::read_to_string(dir.path().join(STATE_CONFIG_FILENAME)).unwrap();
+
+        insta::assert_snapshot!(encoded_json);
+    }
+
+    #[test]
+    fn json_messages_are_human_readable() {
+        // given
+        let dir = tempfile::tempdir().unwrap();
+        let mut encoder = Encoder::json(dir.path());
+        let message = MessageConfig {
+            sender: [1u8; 32].into(),
+            recipient: [2u8; 32].into(),
+            nonce: Nonce::new([3u8; 32]),
+            amount: 4,
+            data: [5u8; 32].into(),
+            da_height: DaBlockHeight(6),
+        };
+
+        // when
+        encoder.write_messages(vec![message.clone()]).unwrap();
+        encoder.close().unwrap();
+
+        // then
+        let encoded_json =
+            std::fs::read_to_string(dir.path().join(STATE_CONFIG_FILENAME)).unwrap();
+
+        insta::assert_snapshot!(encoded_json);
+    }
+
+    #[test]
+    fn json_contracts_are_human_readable() {
+        // given
+        let dir = tempfile::tempdir().unwrap();
+        let mut encoder = Encoder::json(dir.path());
+        let contract = ContractConfig {
+            contract_id: [1u8; 32].into(),
+            code: [2u8; 32].into(),
+            salt: [3u8; 32].into(),
+            state: None,
+            balances: None,
+            tx_id: Some([4u8; 32].into()),
+            output_index: Some(5),
+            tx_pointer_block_height: Some(BlockHeight::new(6)),
+            tx_pointer_tx_idx: Some(7),
+        };
+
+        // when
+        encoder.write_contracts(vec![contract.clone()]).unwrap();
+        encoder.close().unwrap();
+
+        // then
+        let encoded_json =
+            std::fs::read_to_string(dir.path().join(STATE_CONFIG_FILENAME)).unwrap();
+        insta::assert_snapshot!(encoded_json);
     }
 }

@@ -1,10 +1,7 @@
 use core::fmt;
 use fuel_core_types::{
     blockchain::primitives::DaBlockHeight,
-    fuel_types::{
-        bytes::WORD_SIZE,
-        BlockHeight,
-    },
+    fuel_types::BlockHeight,
 };
 use serde::{
     de::Error,
@@ -67,7 +64,11 @@ impl<T: AsRef<[u8]>> SerializeAs<T> for HexType {
     where
         S: Serializer,
     {
-        serde_hex::serialize(value, serializer)
+        if serializer.is_human_readable() {
+            serde_hex::serialize(value, serializer)
+        } else {
+            Ok(serde::Serialize::serialize(value.as_ref(), serializer)?)
+        }
     }
 }
 
@@ -80,7 +81,12 @@ where
     where
         D: Deserializer<'de>,
     {
-        serde_hex::deserialize(deserializer)
+        if deserializer.is_human_readable() {
+            serde_hex::deserialize(deserializer)
+        } else {
+            let bytes: &[u8] = serde::Deserialize::deserialize(deserializer)?;
+            Ok(bytes.try_into().map_err(D::Error::custom)?)
+        }
     }
 }
 
@@ -128,8 +134,12 @@ macro_rules! impl_hex_number {
             where
                 S: Serializer,
             {
-                let bytes = value.to_be_bytes();
-                serde_hex::serialize(bytes, serializer)
+                if serializer.is_human_readable() {
+                    let bytes = value.to_be_bytes();
+                    serde_hex::serialize(bytes, serializer)
+                } else {
+                    Ok(serde::Serialize::serialize(value, serializer)?)
+                }
             }
         }
 
@@ -139,22 +149,25 @@ macro_rules! impl_hex_number {
                 D: Deserializer<'de>,
             {
                 const SIZE: usize = core::mem::size_of::<$i>();
-                let mut bytes: Vec<u8> = serde_hex::deserialize(deserializer)?;
-                let pad =
-                    SIZE.checked_sub(bytes.len())
-                        .ok_or(D::Error::custom(format!(
-                            "value cant exceed {WORD_SIZE} bytes"
-                        )))?;
+                if deserializer.is_human_readable() {
+                    let mut bytes: Vec<u8> = serde_hex::deserialize(deserializer)?;
+                    let pad = SIZE.checked_sub(bytes.len()).ok_or(D::Error::custom(
+                        format!("value cant exceed {SIZE} bytes"),
+                    ))?;
 
-                if pad != 0 {
-                    // pad if length < word size
-                    bytes = (0..pad).map(|_| 0u8).chain(bytes.into_iter()).collect();
+                    if pad != 0 {
+                        // pad if length < word size
+                        bytes = (0..pad).map(|_| 0u8).chain(bytes.into_iter()).collect();
+                    }
+
+                    // We've already verified the bytes.len == WORD_SIZE, force the conversion here.
+                    Ok($i::from_be_bytes(
+                        bytes.try_into().expect("byte lengths checked"),
+                    ))
+                } else {
+                    let val: $i = serde::Deserialize::deserialize(deserializer)?;
+                    Ok(val)
                 }
-
-                // We've already verified the bytes.len == WORD_SIZE, force the conversion here.
-                Ok($i::from_be_bytes(
-                    bytes.try_into().expect("byte lengths checked"),
-                ))
             }
         }
     };
