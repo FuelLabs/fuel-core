@@ -1650,6 +1650,91 @@ mod tests {
         request_response_works_with(RequestMessage::SealedHeaders(arbitrary_range)).await
     }
 
+    /// We send a request for a block, but it's responded by only headers
+    #[tokio::test]
+    #[instrument]
+    async fn invalid_response_type_is_detected() {
+        let mut p2p_config =
+            Config::default_initialized("invalid_response_type_is_detected");
+
+        // Node A
+        let mut node_a = build_service_from_config(p2p_config.clone()).await;
+
+        // Node B
+        p2p_config.bootstrap_nodes = node_a.multiaddrs();
+        let mut node_b = build_service_from_config(p2p_config.clone()).await;
+
+        let (tx_test_end, mut rx_test_end) = mpsc::channel::<bool>(1);
+
+        let mut request_sent = false;
+
+        loop {
+            tokio::select! {
+                message_sent = rx_test_end.recv() => {
+                    // we received a signal to end the test
+                    assert!(message_sent.unwrap(), "Received incorrect or missing message");
+                    break;
+                }
+                node_a_event = node_a.next_event() => {
+                    if let Some(FuelP2PEvent::PeerInfoUpdated { peer_id, block_height: _ }) = node_a_event {
+                        if node_a.peer_manager.get_peer_info(&peer_id).is_some() {
+                            // 0. verifies that we've got at least a single peer address to request message from
+                            if !request_sent {
+                                request_sent = true;
+
+                                let (tx_orchestrator, rx_orchestrator) = oneshot::channel();
+                                assert!(node_a.send_request_msg(None, RequestMessage::Block(0.into()), TypedResponseChannel::Block(tx_orchestrator)).is_ok());
+                                let tx_test_end = tx_test_end.clone();
+
+                                tokio::spawn(async move {
+                                    let response_message = rx_orchestrator.await;
+
+                                    match response_message {
+                                        Ok(Ok(_)) => {
+                                            let _ = tx_test_end.send(false).await;
+                                            panic!("Request succeeded unexpectedly");
+                                        },
+                                        Ok(Err(ref err)) => {
+                                            if let ResponseErrorKind::TypeMismatch = err.kind {
+                                                // Got Invalid Response Type as expected, so end test
+                                                let _ = tx_test_end.send(true).await;
+                                            } else {
+                                                let _ = tx_test_end.send(false).await;
+                                                panic!("Unexpected error: {:?}", err);
+                                            }
+                                        },
+                                        Err(_) => {
+                                            let _ = tx_test_end.send(false).await;
+                                            panic!("Channel closed unexpectedly");
+                                        },
+                                    }
+
+                                    if let Ok(Ok(Some(sealed_block))) = response_message {
+                                        let _ = tx_test_end.send(*sealed_block.entity.header().height() == 0.into()).await;
+                                    } else {
+                                        tracing::error!("Orchestrator failed to receive a message: {:?}", response_message);
+                                        let _ = tx_test_end.send(false).await;
+                                    }
+                                });
+                            }
+                        }
+                    }
+
+                    tracing::info!("Node A Event: {:?}", node_a_event);
+                },
+                node_b_event = node_b.next_event() => {
+                    // 2. Node B receives the RequestMessage from Node A initiated by the NetworkOrchestrator
+                    if let Some(FuelP2PEvent::InboundRequestMessage{ request_id, request_message: _ }) = &node_b_event {
+                            let sealed_headers: Vec<_> = arbitrary_headers_for_range(1..3);
+                            let _ = node_b.send_response_msg(*request_id, ResponseMessage::SealedHeaders(Some(sealed_headers)));
+                    }
+
+                    tracing::info!("Node B Event: {:?}", node_b_event);
+                }
+            };
+        }
+    }
+
     #[tokio::test]
     #[instrument]
     async fn req_res_outbound_timeout_works() {
