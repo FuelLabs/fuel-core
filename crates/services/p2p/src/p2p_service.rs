@@ -603,6 +603,9 @@ impl FuelP2PService {
                 request_id,
             } => {
                 tracing::error!("RequestResponse inbound error for peer: {:?} with id: {:?} and error: {:?}", peer, request_id, error);
+
+                // Drop the channel, as we can't send a response
+                let _ = self.inbound_requests_pending.remove(&request_id);
             }
             RequestResponseEvent::OutboundFailure {
                 peer,
