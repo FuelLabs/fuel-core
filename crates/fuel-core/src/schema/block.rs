@@ -110,13 +110,11 @@ impl Block {
     async fn consensus(&self, ctx: &Context<'_>) -> Result<Consensus, BlockError> {
         let query: &Database = ctx.data_unchecked();
         let id = self.0.header().id();
-        let core_consensus = query
-            .consensus(&id)
-            .map_err(|e| BlockError::FuelCoreStorage(e))?;
+        let core_consensus = query.consensus(&id).map_err(BlockError::FuelCoreStorage)?;
 
         let my_consensus = core_consensus
             .try_into()
-            .map_err(|e| BlockError::UnsupportedConsensusVariant(e))?;
+            .map_err(BlockError::UnsupportedConsensusVariant)?;
         Ok(my_consensus)
     }
 
