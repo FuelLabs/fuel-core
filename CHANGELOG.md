@@ -16,6 +16,7 @@ Description of the upcoming release here.
 - [#1574](https://github.com/FuelLabs/fuel-core/pull/1574): Penalizes peers for sending invalid responses or for not replying at all.
 
 #### Breaking
+- [#1593](https://github.com/FuelLabs/fuel-core/pull/1593) Make `Block` type a version-able enum
 - [#1573](https://github.com/FuelLabs/fuel-core/pull/1573): Remove nested p2p request/response encoding. Only breaks p2p networking compatibility with older fuel-core versions, but is otherwise fully internal.
 
 ## [Version 0.22.0]
