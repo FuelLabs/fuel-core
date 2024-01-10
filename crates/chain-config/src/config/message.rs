@@ -1,8 +1,5 @@
 use crate::{
-    serialization::{
-        HexNumber,
-        HexType,
-    },
+    serialization::HexType,
     GenesisCommitment,
 };
 use fuel_core_storage::MerkleRoot;
@@ -31,12 +28,10 @@ pub struct MessageConfig {
     pub recipient: Address,
     #[serde_as(as = "HexType")]
     pub nonce: Nonce,
-    #[serde_as(as = "HexNumber")]
     pub amount: Word,
     #[serde_as(as = "HexType")]
     pub data: Vec<u8>,
     /// The block height from the parent da layer that originated this message
-    #[serde_as(as = "HexNumber")]
     pub da_height: DaBlockHeight,
 }
 

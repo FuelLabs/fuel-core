@@ -108,6 +108,7 @@ reqwest = { version = "0.11.16", default-features = false, features = [
 ] }
 mockall = "0.11"
 test-case = "3.3"
+impl-tools = "0.10"
 test-strategy = "0.3"
 parquet = { version = "49.0", default-features = false }
 bytes = "1.5.0"

@@ -277,7 +277,7 @@ mod tests {
                 task.sub_services()[i].stop_and_await().await.unwrap();
                 assert!(!task.run(&mut watcher).await.unwrap());
             } else {
-                break;
+                break
             }
             i += 1;
         }

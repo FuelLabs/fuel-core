@@ -1,10 +1,8 @@
 mod decode;
 mod encode;
-mod schema;
 
 pub use decode::*;
 pub use encode::*;
-pub use schema::*;
 
 #[cfg(feature = "random")]
 #[cfg(test)]
@@ -50,7 +48,7 @@ mod tests {
     fn can_skip_groups_without_reading_whole_file() {
         // given
         let mut buffer = vec![];
-        let mut encoder = Encoder::new(
+        let mut encoder = Encoder::<_, _, PostcardEncode>::new(
             &mut buffer,
             parquet::basic::Compression::ZSTD(ZstdLevel::try_new(1).unwrap()),
         )
@@ -70,7 +68,7 @@ mod tests {
         let bytes = TrackingReader::new(buffer);
         let bytes_read = bytes.read_bytes.clone();
 
-        let mut decoder = Decoder::new(bytes).unwrap();
+        let mut decoder = Decoder::<_, _, PostcardDecode>::new(bytes).unwrap();
 
         // when
         let _: Group<CoinConfig> = decoder.nth(1).unwrap().unwrap();
@@ -78,8 +76,8 @@ mod tests {
         // then
         let actually_read = bytes_read.load(std::sync::atomic::Ordering::SeqCst);
 
-        assert_eq!(total_size, 103542);
-        assert_eq!(actually_read, 2287);
+        assert_eq!(total_size, 108803);
+        assert_eq!(actually_read, 942);
     }
 
     #[derive(Clone)]
