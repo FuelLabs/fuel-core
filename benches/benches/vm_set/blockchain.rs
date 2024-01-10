@@ -8,7 +8,6 @@ use crate::utils::make_receipts;
 use super::run_group_ref;
 
 use criterion::{
-    async_executor::AsyncExecutor,
     Criterion,
     Throughput,
 };
@@ -41,6 +40,7 @@ use fuel_core_types::{
     fuel_vm::consts::*,
     tai64::Tai64,
 };
+use futures::executor::block_on;
 use rand::{
     rngs::StdRng,
     RngCore,

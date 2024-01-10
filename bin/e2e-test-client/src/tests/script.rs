@@ -4,7 +4,6 @@ use crate::test_context::{
 };
 use fuel_core_chain_config::{
     ContractConfig,
-    StateConfig,
     StateReader,
     MAX_GROUP_SIZE,
 };
@@ -19,10 +18,7 @@ use fuel_core_types::{
         StorageSlot,
         Transaction,
     },
-    fuel_types::{
-        canonical::Deserialize,
-        Bytes32,
-    },
+    fuel_types::canonical::Deserialize,
 };
 use itertools::Itertools;
 use libtest_mimic::Failed;

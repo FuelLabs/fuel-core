@@ -20,7 +20,6 @@ use fuel_core::{
         config::Trigger,
         Config,
         FuelService,
-        ServiceTrait,
     },
     txpool::types::Word,
 };
@@ -32,7 +31,9 @@ use fuel_core_chain_config::{
     ContractConfig,
     StateConfig,
     StateReader,
+    MAX_GROUP_SIZE,
 };
+use fuel_core_services::Service;
 use fuel_core_storage::{
     tables::ContractsRawCode,
     vm_storage::IncreaseStorageKey,
@@ -76,6 +77,7 @@ use fuel_core_types::{
         consts::WORD_SIZE,
     },
 };
+use futures::executor::block_on;
 use rand::SeedableRng;
 use utils::{
     make_u128,
@@ -268,8 +270,6 @@ fn service_with_many_contracts(
             contract_id: *contract_id,
             code: vec![],
             salt: Default::default(),
-            state: None,
-            balances: None,
             tx_id: None,
             output_index: None,
             tx_pointer_block_height: None,
@@ -334,8 +334,11 @@ fn service_with_many_contracts(
             .unwrap();
     }
 
-    let service = fuel_core::service::FuelService::new(database, config.clone())
-        .expect("Unable to start a FuelService");
+    let service = block_on(fuel_core::service::FuelService::new(
+        database,
+        config.clone(),
+    ))
+    .expect("Unable to start a FuelService");
     service.start().expect("Unable to start the service");
     (service, rt)
 }

@@ -4,10 +4,7 @@ use anyhow::{
     anyhow,
     Context,
 };
-use fuel_core_chain_config::{
-    ContractConfig,
-    ContractStateConfig,
-};
+use fuel_core_chain_config::ContractConfig;
 use fuel_core_client::client::{
     pagination::{
         PageDirection,
@@ -44,7 +41,6 @@ use fuel_core_types::{
         canonical::Serialize,
         Address,
         AssetId,
-        Bytes32,
     },
     fuel_vm::SecretKey,
 };
