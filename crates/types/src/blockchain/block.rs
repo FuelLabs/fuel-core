@@ -25,11 +25,27 @@ use crate::{
     },
 };
 
+/// Version-able block type
+#[derive(Clone, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[non_exhaustive]
+pub enum Block<TransactionRepresentation = Transaction> {
+    /// V1 Block
+    V1(BlockV1<TransactionRepresentation>),
+}
+
+#[cfg(any(test, feature = "test-helpers"))]
+impl<T: Default> Default for Block<T> {
+    fn default() -> Self {
+        Block::V1(BlockV1::default())
+    }
+}
+
 /// Fuel block with all transaction data included
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(any(test, feature = "test-helpers"), derive(Default))]
-pub struct Block<TransactionRepresentation = Transaction> {
+pub struct BlockV1<TransactionRepresentation = Transaction> {
     /// Generated complete header.
     header: BlockHeader,
     /// Executed transactions.
@@ -70,10 +86,11 @@ impl Block<Transaction> {
         transactions: Vec<Transaction>,
         message_ids: &[MessageId],
     ) -> Self {
-        Self {
+        let inner = BlockV1 {
             header: header.generate(&transactions, message_ids),
             transactions,
-        }
+        };
+        Block::V1(inner)
     }
 
     /// Try creating a new full fuel block from a [`BlockHeader`] and
@@ -83,17 +100,29 @@ impl Block<Transaction> {
         header: BlockHeader,
         transactions: Vec<Transaction>,
     ) -> Option<Self> {
-        header.validate_transactions(&transactions).then_some(Self {
-            header,
-            transactions,
-        })
+        header
+            .validate_transactions(&transactions)
+            .then_some(Block::V1(BlockV1 {
+                header,
+                transactions,
+            }))
     }
 
     /// Compresses the fuel block and replaces transactions with hashes.
     pub fn compress(&self, chain_id: &ChainId) -> CompressedBlock {
-        Block {
-            header: self.header.clone(),
-            transactions: self.transactions.iter().map(|tx| tx.id(chain_id)).collect(),
+        match self {
+            Block::V1(inner) => {
+                let transactions = inner
+                    .transactions
+                    .iter()
+                    .map(|tx| tx.id(chain_id))
+                    .collect();
+                let new_inner = BlockV1 {
+                    header: inner.header.clone(),
+                    transactions,
+                };
+                Block::V1(new_inner)
+            }
         }
     }
 }
@@ -101,7 +130,12 @@ impl Block<Transaction> {
 impl<T> Block<T> {
     /// Destructure into the inner types.
     pub fn into_inner(self) -> (BlockHeader, Vec<T>) {
-        (self.header, self.transactions)
+        match self {
+            Block::V1(BlockV1 {
+                header,
+                transactions,
+            }) => (header, transactions),
+        }
     }
 }
 
@@ -110,9 +144,11 @@ impl CompressedBlock {
     pub fn uncompress(self, transactions: Vec<Transaction>) -> Block<Transaction> {
         // TODO: should we perform an extra validation step to ensure the provided
         //  txs match the expected ones in the block?
-        Block {
-            header: self.header,
-            transactions,
+        match self {
+            Block::V1(inner) => Block::V1(BlockV1 {
+                header: inner.header,
+                transactions,
+            }),
         }
     }
 }
@@ -125,35 +161,43 @@ impl<TransactionRepresentation> Block<TransactionRepresentation> {
         // identifier on the fly.
         //
         // This assertion is a double-checks that this behavior is not changed.
-        debug_assert_eq!(self.header.id(), self.header.hash());
-        self.header.id()
+        debug_assert_eq!(self.header().id(), self.header().hash());
+        self.header().id()
     }
 
     /// Get the executed transactions.
     pub fn transactions(&self) -> &[TransactionRepresentation] {
-        &self.transactions[..]
+        match self {
+            Block::V1(inner) => &inner.transactions,
+        }
     }
 
     /// Get the complete header.
     pub fn header(&self) -> &BlockHeader {
-        &self.header
+        match self {
+            Block::V1(inner) => &inner.header,
+        }
     }
 
     /// The type of consensus this header is using.
     pub fn consensus_type(&self) -> ConsensusType {
-        self.header.consensus_type()
+        self.header().consensus_type()
     }
 
     /// Get mutable access to transactions for testing purposes
     #[cfg(any(test, feature = "test-helpers"))]
     pub fn transactions_mut(&mut self) -> &mut Vec<TransactionRepresentation> {
-        &mut self.transactions
+        match self {
+            Block::V1(inner) => &mut inner.transactions,
+        }
     }
 
     /// Get mutable access to header for testing purposes
     #[cfg(any(test, feature = "test-helpers"))]
     pub fn header_mut(&mut self) -> &mut BlockHeader {
-        &mut self.header
+        match self {
+            Block::V1(inner) => &mut inner.header,
+        }
     }
 }
 
@@ -180,35 +224,36 @@ impl PartialFuelBlock {
 
 impl From<Block> for PartialFuelBlock {
     fn from(block: Block) -> Self {
-        let Block {
-            header:
-                BlockHeader {
-                    application: ApplicationHeader { da_height, .. },
-                    consensus:
-                        ConsensusHeader {
-                            prev_root,
-                            height,
-                            time,
-                            ..
-                        },
-                    ..
+        match block {
+            Block::V1(BlockV1 {
+                header:
+                    BlockHeader {
+                        application: ApplicationHeader { da_height, .. },
+                        consensus:
+                            ConsensusHeader {
+                                prev_root,
+                                height,
+                                time,
+                                ..
+                            },
+                        ..
+                    },
+                transactions,
+            }) => Self {
+                header: PartialBlockHeader {
+                    application: ApplicationHeader {
+                        da_height,
+                        generated: Empty {},
+                    },
+                    consensus: ConsensusHeader {
+                        prev_root,
+                        height,
+                        time,
+                        generated: Empty {},
+                    },
                 },
-            transactions,
-        } = block;
-        Self {
-            header: PartialBlockHeader {
-                application: ApplicationHeader {
-                    da_height,
-                    generated: Empty {},
-                },
-                consensus: ConsensusHeader {
-                    prev_root,
-                    height,
-                    time,
-                    generated: Empty {},
-                },
+                transactions,
             },
-            transactions,
         }
     }
 }
@@ -217,9 +262,10 @@ impl From<Block> for PartialFuelBlock {
 impl CompressedBlock {
     /// Create a compressed header for testing. This does not generate fields.
     pub fn test(header: BlockHeader, transactions: Vec<TxId>) -> Self {
-        Self {
+        let inner = BlockV1 {
             header,
             transactions,
-        }
+        };
+        Self::V1(inner)
     }
 }
