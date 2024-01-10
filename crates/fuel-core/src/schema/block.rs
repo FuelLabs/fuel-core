@@ -53,12 +53,14 @@ use fuel_core_types::{
     fuel_types,
     fuel_types::BlockHeight,
 };
+use thiserror::Error as ThisError;
 
 pub struct Block(pub(crate) CompressedBlock);
 
 pub struct Header(pub(crate) BlockHeader);
 
 #[derive(Union)]
+#[non_exhaustive]
 pub enum Consensus {
     Genesis(Genesis),
     PoA(PoAConsensus),
@@ -84,6 +86,16 @@ pub struct PoAConsensus {
     signature: Signature,
 }
 
+#[derive(ThisError, Debug)]
+pub enum BlockError {
+    #[error("Error from `async_graphql`")]
+    AsyncGraphQl(async_graphql::Error),
+    #[error("Error from `fuel_core_storage`")]
+    FuelCoreStorage(fuel_core_storage::Error),
+    #[error("Found unsupported consensus variant: {0}")]
+    UnsupportedConsensusVariant(String),
+}
+
 #[Object]
 impl Block {
     async fn id(&self) -> BlockId {
@@ -95,12 +107,17 @@ impl Block {
         self.0.header().clone().into()
     }
 
-    async fn consensus(&self, ctx: &Context<'_>) -> async_graphql::Result<Consensus> {
+    async fn consensus(&self, ctx: &Context<'_>) -> Result<Consensus, BlockError> {
         let query: &Database = ctx.data_unchecked();
         let id = self.0.header().id();
-        let consensus = query.consensus(&id)?;
+        let core_consensus = query
+            .consensus(&id)
+            .map_err(|e| BlockError::FuelCoreStorage(e))?;
 
-        Ok(consensus.into())
+        let my_consensus = core_consensus
+            .try_into()
+            .map_err(|e| BlockError::UnsupportedConsensusVariant(e))?;
+        Ok(my_consensus)
     }
 
     async fn transactions(
@@ -342,13 +359,16 @@ impl From<CoreGenesis> for Genesis {
     }
 }
 
-impl From<CoreConsensus> for Consensus {
-    fn from(consensus: CoreConsensus) -> Self {
+impl TryFrom<CoreConsensus> for Consensus {
+    type Error = String;
+
+    fn try_from(consensus: CoreConsensus) -> Result<Self, Self::Error> {
         match consensus {
-            CoreConsensus::Genesis(genesis) => Consensus::Genesis(genesis.into()),
-            CoreConsensus::PoA(poa) => Consensus::PoA(PoAConsensus {
+            CoreConsensus::Genesis(genesis) => Ok(Consensus::Genesis(genesis.into())),
+            CoreConsensus::PoA(poa) => Ok(Consensus::PoA(PoAConsensus {
                 signature: poa.signature.into(),
-            }),
+            })),
+            _ => Err(format!("Unknown consensus type: {:?}", consensus)),
         }
     }
 }
