@@ -121,10 +121,11 @@ impl GenesisWorkers {
         T: HandlesGenesisResource,
         I: IntoIterator<Item = anyhow::Result<Group<T>>>,
     {
+        let stop_signal = Arc::clone(&self.stop_signal);
         let handler = Handler::new(self.block_height);
         let database = self.db.clone();
         GenesisRunner::new(
-            self.stop_signal.clone(),
+            stop_signal,
             self.cancel_token.clone(),
             handler,
             data,

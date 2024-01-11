@@ -96,11 +96,7 @@ where
         self.groups
             .into_iter()
             .skip(self.skip)
-            .take_while(|_| {
-                let is_cancelled = !self.cancel_token.is_cancelled();
-                self.stop_signal.fetch_add(1, Ordering::Relaxed);
-                is_cancelled
-            })
+            .take_while(|_| !self.cancel_token.is_cancelled())
             .try_for_each(|group| {
                 let mut tx = self.tx_opener.transaction();
                 let group = group?;
@@ -110,17 +106,23 @@ where
                 tx.commit()?;
                 Ok(())
             })
-            .map_err(|e| {
+            .map_err(|e: anyhow::Error| {
                 self.stop_signal.fetch_sub(1, Ordering::Relaxed);
                 e
-            })
+            })?;
+
+        self.stop_signal.fetch_add(1, Ordering::Relaxed);
+        Ok(())
     }
 }
 
 #[cfg(test)]
 mod tests {
     use std::sync::{
-        atomic::AtomicBool,
+        atomic::{
+            AtomicU8,
+            Ordering,
+        },
         Arc,
         Mutex,
     };
@@ -141,6 +143,7 @@ mod tests {
         entities::coins::coin::CompressedCoin,
         fuel_tx::UtxoId,
     };
+    use tokio_util::sync::CancellationToken;
 
     use crate::{
         database::{
@@ -205,8 +208,9 @@ mod tests {
             .unwrap();
 
         let runner = GenesisRunner::new(
-            Arc::new(AtomicBool::new(false)),
-            |element: usize, _: &mut Database| {
+            Arc::new(AtomicU8::new(0)),
+            CancellationToken::new(),
+            |element, _: &mut Database| {
                 called_with.push(element);
                 Ok(())
             },
@@ -227,7 +231,8 @@ mod tests {
         let groups = given_ok_groups(3);
         let mut called_with_groups = vec![];
         let runner = GenesisRunner::new(
-            Arc::new(AtomicBool::new(false)),
+            Arc::new(AtomicU8::new(0)),
+            CancellationToken::new(),
             |group, _: &mut Database| {
                 called_with_groups.push(group);
                 Ok(())
@@ -257,7 +262,8 @@ mod tests {
         };
 
         let runner = GenesisRunner::new(
-            Arc::new(AtomicBool::new(false)),
+            Arc::new(AtomicU8::new(0)),
+            CancellationToken::new(),
             |_, tx: &mut Database| {
                 insert_a_coin(tx, &utxo_id);
 
@@ -309,7 +315,8 @@ mod tests {
                 .is_some()
         };
         let runner = GenesisRunner::new(
-            Arc::new(AtomicBool::new(false)),
+            Arc::new(AtomicU8::new(0)),
+            CancellationToken::new(),
             |_, tx: &mut Database| {
                 insert_a_coin(tx, &utxo_id);
                 bail!("Some error")
@@ -330,7 +337,8 @@ mod tests {
         // given
         let groups = given_ok_groups(1);
         let runner = GenesisRunner::new(
-            Arc::new(AtomicBool::new(false)),
+            Arc::new(AtomicU8::new(0)),
+            CancellationToken::new(),
             |_, _: &mut Database| bail!("Some error"),
             groups,
             Database::default(),
@@ -480,7 +488,8 @@ mod tests {
         // given
         let groups = given_ok_groups(1);
         let runner = GenesisRunner::new(
-            Arc::new(AtomicBool::new(false)),
+            Arc::new(AtomicU8::new(0)),
+            CancellationToken::new(),
             |_, _: &mut Database| Ok(()),
             groups,
             Database::new(Arc::new(BrokenTransactions::new())),
@@ -497,7 +506,8 @@ mod tests {
         // given
         let groups = [Err(anyhow!("Some error"))];
         let runner = GenesisRunner::new(
-            Arc::new(AtomicBool::new(false)),
+            Arc::new(AtomicU8::new(0)),
+            CancellationToken::new(),
             |_: (), _: &mut Database| Ok(()),
             groups,
             Database::default(),
@@ -516,7 +526,8 @@ mod tests {
         let groups = given_ok_groups(2);
         let db = Database::default();
         let runner = GenesisRunner::new(
-            Arc::new(AtomicBool::new(false)),
+            Arc::new(AtomicU8::new(0)),
+            CancellationToken::new(),
             |_, _: &mut Database| Ok(()),
             groups,
             db.clone(),
@@ -566,7 +577,8 @@ mod tests {
         };
 
         let runner = GenesisRunner::new(
-            Arc::new(AtomicBool::new(false)),
+            Arc::new(AtomicU8::new(0)),
+            CancellationToken::new(),
             |_, tx: &mut Database| {
                 insert_a_coin(tx, &utxo_id);
                 Ok(())
@@ -584,9 +596,10 @@ mod tests {
     }
 
     #[test]
-    fn processing_stops_when_stop_signal_is_given() {
+    fn processing_stops_when_cancelled() {
         // given
-        let stop_signal = Arc::new(AtomicBool::new(false));
+        let stop_signal = Arc::new(AtomicU8::new(0));
+        let cancel_token = CancellationToken::new();
 
         let (tx, rx) = std::sync::mpsc::channel();
 
@@ -595,6 +608,7 @@ mod tests {
             let read_groups = Arc::clone(&read_groups);
             GenesisRunner::new(
                 Arc::clone(&stop_signal),
+                cancel_token.clone(),
                 move |el, _: &mut Database| {
                     read_groups.lock().unwrap().push(el);
                     Ok(())
@@ -617,7 +631,7 @@ mod tests {
             std::thread::sleep(std::time::Duration::from_millis(1));
         }
 
-        stop_signal.store(true, std::sync::atomic::Ordering::Relaxed);
+        cancel_token.cancel();
 
         // when
         tx.send(Ok(Group {
@@ -639,5 +653,8 @@ mod tests {
         // group after signal is not read
         let read_groups = read_groups.lock().unwrap().clone();
         assert_eq!(read_groups, vec![0, 1, 2]);
+
+        // stop signal is incremented
+        assert_eq!(stop_signal.load(Ordering::Relaxed), 1);
     }
 }
