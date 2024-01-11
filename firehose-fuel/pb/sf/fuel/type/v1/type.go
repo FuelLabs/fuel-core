@@ -28,7 +28,7 @@ func (b *Block) GetFirehoseBlockTime() time.Time {
 
 func (b *Block) GetFirehoseBlockVersion() int32 {
 	// TODO: This needs to be adapted for your own version used in pbbstream
-	return 0
+	return 1
 }
 
 func (b *Block) GetFirehoseBlockLIBNum() uint64 {

@@ -63,9 +63,9 @@ func (r *ConsoleReader) ReadBlock() (out *bstream.Block, err error) {
 	if err != nil {
 		return nil, err
 	}
-
-	//return r.blockEncoder.Encode(block)
-	return BlockFromProto(block)
+	fmt.Printf("ReadBlock Block: %+v\n", block)
+	return r.blockEncoder.Encode(block)
+	//return BlockFromProto(block)
 }
 
 const (
@@ -98,7 +98,8 @@ func (r *ConsoleReader) next() (out *pbfuel.Block, err error) {
 
 		case LogBlockEnd:
 			//This end the execution of the reading loop as we have a full block here
-			block, err := r.readBlockEnd(args[1:])
+			//block, err := r.readBlockEnd(args[1:])
+			block, err := r.readBlockEnd(args)
 			if err != nil {
 				return nil, lineError(line, err)
 			}
@@ -134,7 +135,6 @@ func (r *ConsoleReader) readBlockBegin(params []string) error {
 		)
 	}
 
-	//r.activeBlockStartTime = time.Now()
 	r.activeBlock = &pbfuel.Block{
 		Height: uint32(height),
 	}
@@ -168,9 +168,12 @@ func (r *ConsoleReader) readTransaction(params []string) error {
 	return nil
 }
 
+// func (r *ConsoleReader) readBlockEnd(params []string) (*pbfuel.Block, error) {
 func (r *ConsoleReader) readBlockEnd(params []string) (*pbfuel.Block, error) {
-	// Todo: Validations
-	height, err := strconv.ParseUint(params[0], 10, 64)
+	// Todo: Validations - check height again
+
+	height, err := strconv.ParseUint(params[1:][0], 10, 64)
+
 	if err != nil {
 		return nil, fmt.Errorf(`invalid BLOCK_END "height" param: %w`, err)
 	}
@@ -182,6 +185,11 @@ func (r *ConsoleReader) readBlockEnd(params []string) (*pbfuel.Block, error) {
 	if r.activeBlock.GetFirehoseBlockNumber() != height {
 		return nil, fmt.Errorf("active block's height %d does not match BLOCK_END received height %d", r.activeBlock.Height, height)
 	}
+
+	// Todo Change when fuel node comes
+	r.activeBlock.Id = []byte(params[2:][0])
+	r.activeBlock.PrevId = []byte(params[3:][0])
+	//r.activeBlock.Timestamp =
 
 	r.logger.Debug("console reader node block",
 		zap.String("id", r.activeBlock.GetFirehoseBlockID()),
@@ -248,6 +256,8 @@ func BlockFromProto(b *pbfuel.Block) (*bstream.Block, error) {
 		PayloadKind:    pbbstream.Protocol_UNKNOWN,
 		PayloadVersion: 1,
 	}
+
+	println(block.Id)
 
 	return bstream.GetBlockPayloadSetter(block, content)
 }
