@@ -2828,6 +2828,7 @@ dependencies = [
  "tokio",
  "tokio-rayon",
  "tokio-stream",
+ "tokio-util",
  "tower-http",
  "tracing",
  "uuid 1.6.1",

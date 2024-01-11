@@ -2,11 +2,12 @@ use fuel_core_chain_config::Group;
 use fuel_core_storage::transactional::Transaction;
 use std::sync::{
     atomic::{
-        AtomicBool,
+        AtomicU8,
         Ordering,
     },
     Arc,
 };
+use tokio_util::sync::CancellationToken;
 
 use crate::database::{
     genesis_progress::GenesisResource,
@@ -35,7 +36,8 @@ pub struct GenesisRunner<Handler, Groups, TxOpener> {
     tx_opener: TxOpener,
     skip: usize,
     groups: Groups,
-    stop_signal: Arc<AtomicBool>,
+    stop_signal: Arc<AtomicU8>,
+    cancel_token: CancellationToken,
 }
 
 pub trait ProcessState<T> {
@@ -67,7 +69,8 @@ where
     TxOpener: TransactionOpener,
 {
     pub fn new(
-        stop_signal: Arc<AtomicBool>,
+        stop_signal: Arc<AtomicU8>,
+        cancel_token: CancellationToken,
         handler: Logic,
         groups: GroupGenerator,
         tx_opener: TxOpener,
@@ -85,6 +88,7 @@ where
             resource,
             tx_opener,
             stop_signal,
+            cancel_token,
         }
     }
 
@@ -92,7 +96,11 @@ where
         self.groups
             .into_iter()
             .skip(self.skip)
-            .take_while(|_| !self.stop_signal.load(Ordering::Relaxed))
+            .take_while(|_| {
+                let is_cancelled = !self.cancel_token.is_cancelled();
+                self.stop_signal.fetch_add(1, Ordering::Relaxed);
+                is_cancelled
+            })
             .try_for_each(|group| {
                 let mut tx = self.tx_opener.transaction();
                 let group = group?;
@@ -101,6 +109,10 @@ where
                 tx.update_genesis_progress(self.resource, group_num)?;
                 tx.commit()?;
                 Ok(())
+            })
+            .map_err(|e| {
+                self.stop_signal.fetch_sub(1, Ordering::Relaxed);
+                e
             })
     }
 }

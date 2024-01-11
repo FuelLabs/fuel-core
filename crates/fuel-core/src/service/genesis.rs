@@ -1,5 +1,8 @@
 use std::sync::{
-    atomic::AtomicBool,
+    atomic::{
+        AtomicU8,
+        Ordering,
+    },
     Arc,
 };
 
@@ -71,6 +74,7 @@ pub use runner::{
     GenesisRunner,
     TransactionOpener,
 };
+use tokio_util::sync::CancellationToken;
 
 use self::workers::GenesisWorkers;
 
@@ -96,22 +100,34 @@ async fn import_chain_state(
     let block_height = config.chain_config.height.unwrap_or_default();
 
     // TODO: segfault propagate this
-    let stop_signal = Arc::new(AtomicBool::new(false));
+    let stop_signal = Arc::new(AtomicU8::new(0));
+    let token = CancellationToken::new();
     let workers = GenesisWorkers::new(
         original_database.clone(),
-        stop_signal,
+        stop_signal.clone(),
+        token.clone(),
         block_height,
         config.state_reader.clone(),
     );
 
-    // TODO: will a task stop executing if its future is cancelled? How does rayon-tokio work?
-    tokio::try_join!(
+    let res = tokio::try_join!(
         workers.spawn_coins_worker(),
         workers.spawn_messages_worker(),
         workers.spawn_contracts_worker(),
         workers.spawn_contract_state_worker(),
         workers.spawn_contract_balance_worker()
-    )?;
+    );
+
+    match res {
+        Err(_) => {
+            token.cancel();
+            // wait until stop signal has value 5
+            while stop_signal.load(Ordering::Relaxed) != 5 {
+                tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+            }
+        }
+        _ => {}
+    }
 
     workers.spawn_contracts_root_worker().await?;
 

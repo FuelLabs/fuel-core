@@ -1,5 +1,5 @@
 use std::sync::{
-    atomic::AtomicBool,
+    atomic::AtomicU8,
     Arc,
 };
 
@@ -34,10 +34,12 @@ use fuel_core_types::fuel_types::{
     BlockHeight,
     ContractId,
 };
+use tokio_util::sync::CancellationToken;
 
 pub struct GenesisWorkers {
     db: Database,
-    stop_signal: Arc<AtomicBool>,
+    stop_signal: Arc<AtomicU8>,
+    cancel_token: CancellationToken,
     block_height: BlockHeight,
     state_reader: StateReader,
 }
@@ -45,13 +47,15 @@ pub struct GenesisWorkers {
 impl GenesisWorkers {
     pub fn new(
         db: Database,
-        stop_signal: Arc<AtomicBool>,
+        stop_signal: Arc<AtomicU8>,
+        cancel_token: CancellationToken,
         block_height: BlockHeight,
         state_reader: StateReader,
     ) -> Self {
         Self {
             db,
             stop_signal,
+            cancel_token,
             block_height,
             state_reader,
         }
@@ -119,8 +123,13 @@ impl GenesisWorkers {
     {
         let handler = Handler::new(self.block_height);
         let database = self.db.clone();
-        let signal = Arc::clone(&self.stop_signal);
-        GenesisRunner::new(signal, handler, data, database)
+        GenesisRunner::new(
+            self.stop_signal.clone(),
+            self.cancel_token.clone(),
+            handler,
+            data,
+            database,
+        )
     }
 }
 
