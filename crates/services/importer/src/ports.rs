@@ -6,9 +6,12 @@ use fuel_core_types::{
     blockchain::{
         block::Block,
         consensus::Consensus,
-        primitives::BlockId,
+        SealedBlock,
     },
-    fuel_types::BlockHeight,
+    fuel_types::{
+        BlockHeight,
+        ChainId,
+    },
     services::executor::{
         Result as ExecutorResult,
         UncommittedResult,
@@ -32,7 +35,7 @@ pub trait Executor: Send + Sync {
 /// The database port used by the block importer.
 pub trait ImporterDatabase {
     /// Returns the latest block height.
-    fn latest_block_height(&self) -> StorageResult<BlockHeight>;
+    fn latest_block_height(&self) -> StorageResult<Option<BlockHeight>>;
     /// Update metadata about the total number of transactions on the chain.
     /// Returns the total count after the update.
     fn increase_tx_count(&self, new_txs_count: u64) -> StorageResult<u64>;
@@ -40,13 +43,16 @@ pub trait ImporterDatabase {
 
 /// The port for returned database from the executor.
 pub trait ExecutorDatabase: ImporterDatabase {
-    /// Assigns the `Consensus` data to the block under the `block_id`.
-    /// Return the previous value at the `height`, if any.
-    fn seal_block(
+    /// Inserts the `SealedBlock`.
+    ///
+    /// The method returns `true` if the block is a new, otherwise `false`.
+    // TODO: Remove `chain_id` from the signature, but for that transactions inside
+    //  the block should have `cached_id`. We need to guarantee that from the Rust-type system.
+    fn store_new_block(
         &mut self,
-        block_id: &BlockId,
-        consensus: &Consensus,
-    ) -> StorageResult<Option<Consensus>>;
+        chain_id: &ChainId,
+        block: &SealedBlock,
+    ) -> StorageResult<bool>;
 }
 
 #[cfg_attr(test, mockall::automock)]

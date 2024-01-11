@@ -50,10 +50,13 @@ impl fuel_core_executor::ports::TransactionsSource for TransactionsSource {
 }
 
 impl ExecutorAdapter {
-    pub(crate) fn _execute_without_commit(
+    pub(crate) fn _execute_without_commit<TxSource>(
         &self,
-        block: ExecutionBlockWithSource<TransactionsSource>,
-    ) -> ExecutorResult<UncommittedResult<StorageTransaction<Database>>> {
+        block: ExecutionBlockWithSource<TxSource>,
+    ) -> ExecutorResult<UncommittedResult<StorageTransaction<Database>>>
+    where
+        TxSource: fuel_core_executor::ports::TransactionsSource,
+    {
         let executor = Executor {
             database: self.relayer.database.clone(),
             relayer: self.relayer.clone(),
@@ -99,7 +102,7 @@ impl fuel_core_executor::ports::TxIdOwnerRecorder for Database {
         tx_idx: u16,
         tx_id: &Bytes32,
     ) -> Result<Option<Bytes32>, Self::Error> {
-        Ok(self.record_tx_id_owner(owner, block_height, tx_idx, tx_id)?)
+        self.record_tx_id_owner(owner, block_height, tx_idx, tx_id)
     }
 
     fn update_tx_status(
@@ -107,7 +110,7 @@ impl fuel_core_executor::ports::TxIdOwnerRecorder for Database {
         id: &Bytes32,
         status: TransactionStatus,
     ) -> Result<Option<TransactionStatus>, Self::Error> {
-        Ok(self.update_tx_status(id, status)?)
+        self.update_tx_status(id, status)
     }
 }
 

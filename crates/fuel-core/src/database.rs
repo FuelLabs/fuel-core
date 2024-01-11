@@ -3,7 +3,6 @@ use crate::{
     state::{
         in_memory::memory_store::MemoryStore,
         DataSource,
-        WriteOperation,
     },
 };
 use fuel_core_chain_config::{
@@ -14,6 +13,11 @@ use fuel_core_chain_config::{
 };
 use fuel_core_storage::{
     iter::IterDirection,
+    kv_store::{
+        StorageColumn,
+        Value,
+        WriteOperation,
+    },
     transactional::{
         StorageTransaction,
         Transactional,
@@ -50,7 +54,6 @@ use strum::EnumCount;
 pub use fuel_core_database::Error;
 pub type Result<T> = core::result::Result<T, Error>;
 
-type DatabaseError = Error;
 type DatabaseResult<T> = Result<T>;
 
 // TODO: Extract `Database` and all belongs into `fuel-core-database`.
@@ -84,7 +87,14 @@ pub mod transactions;
 /// Database tables column ids to the corresponding [`fuel_core_storage::Mappable`] table.
 #[repr(u32)]
 #[derive(
-    Copy, Clone, Debug, strum_macros::EnumCount, PartialEq, Eq, enum_iterator::Sequence,
+    Copy,
+    Clone,
+    Debug,
+    strum_macros::EnumCount,
+    strum_macros::IntoStaticStr,
+    PartialEq,
+    Eq,
+    enum_iterator::Sequence,
 )]
 pub enum Column {
     /// The column id of metadata about the blockchain
@@ -140,6 +150,8 @@ pub enum Column {
     ContractsStateMerkleData = 23,
     /// See [`ContractsStateMerkleMetadata`](storage::ContractsStateMerkleMetadata)
     ContractsStateMerkleMetadata = 24,
+    /// See [`ProcessedTransactions`](storage::ProcessedTransactions)
+    ProcessedTransactions = 25,
 }
 
 impl Column {
@@ -149,6 +161,16 @@ impl Column {
     /// Returns the `usize` representation of the `Column`.
     pub fn as_usize(&self) -> usize {
         *self as usize
+    }
+}
+
+impl StorageColumn for Column {
+    fn name(&self) -> &'static str {
+        self.into()
+    }
+
+    fn id(&self) -> u32 {
+        *self as u32
     }
 }
 
@@ -253,38 +275,48 @@ impl Database {
 /// Mutable methods.
 // TODO: Add `&mut self` to them.
 impl Database {
-    fn insert<K: AsRef<[u8]>, V: Serialize, R: DeserializeOwned>(
+    fn insert<K: AsRef<[u8]>, V: Serialize + ?Sized, R: DeserializeOwned>(
         &self,
         key: K,
         column: Column,
         value: &V,
-    ) -> DatabaseResult<Option<R>> {
-        let result = self.data.put(
+    ) -> StorageResult<Option<R>> {
+        let result = self.data.replace(
             key.as_ref(),
             column,
-            Arc::new(postcard::to_stdvec(value).map_err(|_| DatabaseError::Codec)?),
+            Arc::new(postcard::to_stdvec(value).map_err(|_| StorageError::Codec)?),
         )?;
         if let Some(previous) = result {
             Ok(Some(
-                postcard::from_bytes(&previous).map_err(|_| DatabaseError::Codec)?,
+                postcard::from_bytes(&previous).map_err(|_| StorageError::Codec)?,
             ))
         } else {
             Ok(None)
         }
     }
 
+    fn insert_raw<K: AsRef<[u8]>, V: AsRef<[u8]>>(
+        &self,
+        key: K,
+        column: Column,
+        value: V,
+    ) -> StorageResult<Option<Value>> {
+        self.data
+            .replace(key.as_ref(), column, Arc::new(value.as_ref().to_vec()))
+    }
+
     fn batch_insert<K: AsRef<[u8]>, V: Serialize, S>(
         &self,
         column: Column,
         set: S,
-    ) -> DatabaseResult<()>
+    ) -> StorageResult<()>
     where
         S: Iterator<Item = (K, V)>,
     {
         let set: Vec<_> = set
             .map(|(key, value)| {
                 let value =
-                    postcard::to_stdvec(&value).map_err(|_| DatabaseError::Codec)?;
+                    postcard::to_stdvec(&value).map_err(|_| StorageError::Codec)?;
 
                 let tuple = (
                     key.as_ref().to_vec(),
@@ -292,53 +324,36 @@ impl Database {
                     WriteOperation::Insert(Arc::new(value)),
                 );
 
-                Ok::<_, DatabaseError>(tuple)
+                Ok::<_, StorageError>(tuple)
             })
             .try_collect()?;
 
         self.data.batch_write(&mut set.into_iter())
     }
 
-    fn remove<V: DeserializeOwned>(
+    fn take<V: DeserializeOwned>(
         &self,
         key: &[u8],
         column: Column,
-    ) -> DatabaseResult<Option<V>> {
+    ) -> StorageResult<Option<V>> {
         self.data
-            .delete(key, column)?
-            .map(|val| postcard::from_bytes(&val).map_err(|_| DatabaseError::Codec))
+            .take(key, column)?
+            .map(|val| postcard::from_bytes(&val).map_err(|_| StorageError::Codec))
             .transpose()
     }
 
-    fn write(&self, key: &[u8], column: Column, buf: &[u8]) -> DatabaseResult<usize> {
-        self.data.write(key, column, buf)
-    }
-
-    fn replace(
-        &self,
-        key: &[u8],
-        column: Column,
-        buf: &[u8],
-    ) -> DatabaseResult<(usize, Option<Vec<u8>>)> {
-        self.data
-            .replace(key, column, buf)
-            .map(|(size, value)| (size, value.map(|value| value.deref().clone())))
-    }
-
-    fn take(&self, key: &[u8], column: Column) -> DatabaseResult<Option<Vec<u8>>> {
-        self.data
-            .take(key, column)
-            .map(|value| value.map(|value| value.deref().clone()))
+    fn take_raw(&self, key: &[u8], column: Column) -> StorageResult<Option<Value>> {
+        self.data.take(key, column)
     }
 }
 
 /// Read-only methods.
 impl Database {
-    fn contains_key(&self, key: &[u8], column: Column) -> DatabaseResult<bool> {
+    fn contains_key(&self, key: &[u8], column: Column) -> StorageResult<bool> {
         self.data.exists(key, column)
     }
 
-    fn size_of_value(&self, key: &[u8], column: Column) -> DatabaseResult<Option<usize>> {
+    fn size_of_value(&self, key: &[u8], column: Column) -> StorageResult<Option<usize>> {
         self.data.size_of_value(key, column)
     }
 
@@ -347,13 +362,13 @@ impl Database {
         key: &[u8],
         column: Column,
         buf: &mut [u8],
-    ) -> DatabaseResult<Option<usize>> {
+    ) -> StorageResult<Option<usize>> {
         self.data.read(key, column, buf)
     }
 
-    fn read_alloc(&self, key: &[u8], column: Column) -> DatabaseResult<Option<Vec<u8>>> {
+    fn read_alloc(&self, key: &[u8], column: Column) -> StorageResult<Option<Vec<u8>>> {
         self.data
-            .read_alloc(key, column)
+            .get(key, column)
             .map(|value| value.map(|value| value.deref().clone()))
     }
 
@@ -361,10 +376,10 @@ impl Database {
         &self,
         key: &[u8],
         column: Column,
-    ) -> DatabaseResult<Option<V>> {
+    ) -> StorageResult<Option<V>> {
         self.data
             .get(key, column)?
-            .map(|val| postcard::from_bytes(&val).map_err(|_| DatabaseError::Codec))
+            .map(|val| postcard::from_bytes(&val).map_err(|_| StorageError::Codec))
             .transpose()
     }
 
@@ -372,7 +387,7 @@ impl Database {
         &self,
         column: Column,
         direction: Option<IterDirection>,
-    ) -> impl Iterator<Item = DatabaseResult<(K, V)>> + '_
+    ) -> impl Iterator<Item = StorageResult<(K, V)>> + '_
     where
         K: From<Vec<u8>>,
         V: DeserializeOwned,
@@ -384,7 +399,7 @@ impl Database {
         &self,
         column: Column,
         prefix: Option<P>,
-    ) -> impl Iterator<Item = DatabaseResult<(K, V)>> + '_
+    ) -> impl Iterator<Item = StorageResult<(K, V)>> + '_
     where
         K: From<Vec<u8>>,
         V: DeserializeOwned,
@@ -398,7 +413,7 @@ impl Database {
         column: Column,
         start: Option<S>,
         direction: Option<IterDirection>,
-    ) -> impl Iterator<Item = DatabaseResult<(K, V)>> + '_
+    ) -> impl Iterator<Item = StorageResult<(K, V)>> + '_
     where
         K: From<Vec<u8>>,
         V: DeserializeOwned,
@@ -413,7 +428,7 @@ impl Database {
         prefix: Option<P>,
         start: Option<S>,
         direction: Option<IterDirection>,
-    ) -> impl Iterator<Item = DatabaseResult<(K, V)>> + '_
+    ) -> impl Iterator<Item = StorageResult<(K, V)>> + '_
     where
         K: From<Vec<u8>>,
         V: DeserializeOwned,
@@ -431,7 +446,7 @@ impl Database {
                 val.and_then(|(key, value)| {
                     let key = K::from(key);
                     let value: V =
-                        postcard::from_bytes(&value).map_err(|_| DatabaseError::Codec)?;
+                        postcard::from_bytes(&value).map_err(|_| StorageError::Codec)?;
                     Ok((key, value))
                 })
             })

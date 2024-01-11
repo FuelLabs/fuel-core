@@ -2,11 +2,11 @@ use crate::database::{
     storage::DatabaseColumn,
     Column,
     Database,
-    Result as DatabaseResult,
 };
 use fuel_core_storage::{
     iter::IterDirection,
     tables::Transactions,
+    Result as StorageResult,
 };
 use fuel_core_types::{
     self,
@@ -37,7 +37,7 @@ impl Database {
         &self,
         start: Option<&Bytes32>,
         direction: Option<IterDirection>,
-    ) -> impl Iterator<Item = DatabaseResult<Transaction>> + '_ {
+    ) -> impl Iterator<Item = StorageResult<Transaction>> + '_ {
         let start = start.map(|b| b.as_ref().to_vec());
         self.iter_all_by_start::<Vec<u8>, Transaction, _>(
             Column::Transactions,
@@ -56,7 +56,7 @@ impl Database {
         owner: Address,
         start: Option<OwnedTransactionIndexCursor>,
         direction: Option<IterDirection>,
-    ) -> impl Iterator<Item = DatabaseResult<(TxPointer, Bytes32)>> + '_ {
+    ) -> impl Iterator<Item = StorageResult<(TxPointer, Bytes32)>> + '_ {
         let start = start
             .map(|cursor| owned_tx_index_key(&owner, cursor.block_height, cursor.tx_idx));
         self.iter_all_filtered::<OwnedTransactionIndexKey, Bytes32, _, _>(
@@ -76,7 +76,7 @@ impl Database {
         block_height: BlockHeight,
         tx_idx: TransactionIndex,
         tx_id: &Bytes32,
-    ) -> DatabaseResult<Option<Bytes32>> {
+    ) -> StorageResult<Option<Bytes32>> {
         self.insert(
             owned_tx_index_key(owner, block_height, tx_idx),
             Column::TransactionsByOwnerBlockIdx,
@@ -88,14 +88,14 @@ impl Database {
         &self,
         id: &Bytes32,
         status: TransactionStatus,
-    ) -> DatabaseResult<Option<TransactionStatus>> {
+    ) -> StorageResult<Option<TransactionStatus>> {
         self.insert(id, Column::TransactionStatus, &status)
     }
 
     pub fn get_tx_status(
         &self,
         id: &Bytes32,
-    ) -> DatabaseResult<Option<TransactionStatus>> {
+    ) -> StorageResult<Option<TransactionStatus>> {
         self.get(&id.deref()[..], Column::TransactionStatus)
     }
 }

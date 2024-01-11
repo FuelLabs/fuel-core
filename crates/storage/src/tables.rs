@@ -121,5 +121,16 @@ impl Mappable for Transactions {
     type OwnedValue = Transaction;
 }
 
+/// The storage table of processed transactions that were executed in the past.
+/// The table helps to drop duplicated transactions.
+pub struct ProcessedTransactions;
+
+impl Mappable for ProcessedTransactions {
+    type Key = Self::OwnedKey;
+    type OwnedKey = TxId;
+    type Value = Self::OwnedValue;
+    type OwnedValue = ();
+}
+
 // TODO: Add macro to define all common tables to avoid copy/paste of the code.
 // TODO: Add macro to define common unit tests.

@@ -9,17 +9,23 @@ use crate::{
     state::{
         BatchOperations,
         IterDirection,
-        KVItem,
-        KeyValueStore,
         TransactableStorage,
-        Value,
-        WriteOperation,
     },
 };
 use fuel_core_metrics::core_metrics::database_metrics;
-use fuel_core_storage::iter::{
-    BoxedIter,
-    IntoBoxedIter,
+use fuel_core_storage::{
+    iter::{
+        BoxedIter,
+        IntoBoxedIter,
+        IteratorableStore,
+    },
+    kv_store::{
+        KVItem,
+        KeyValueStore,
+        Value,
+        WriteOperation,
+    },
+    Result as StorageResult,
 };
 use rand::RngCore;
 use rocksdb::{
@@ -301,63 +307,86 @@ impl RocksDb {
 
                     (key_as_vec, Arc::new(value_as_vec))
                 })
-                .map_err(|e| DatabaseError::Other(e.into()))
+                .map_err(|e| DatabaseError::Other(e.into()).into())
             })
     }
 }
 
 impl KeyValueStore for RocksDb {
-    fn get(&self, key: &[u8], column: Column) -> DatabaseResult<Option<Value>> {
+    type Column = Column;
+
+    fn write(&self, key: &[u8], column: Column, buf: &[u8]) -> StorageResult<usize> {
+        let r = buf.len();
+        self.db
+            .put_cf(&self.cf(column), key, buf)
+            .map_err(|e| DatabaseError::Other(e.into()))?;
+
+        database_metrics().write_meter.inc();
+        database_metrics().bytes_written.observe(r as f64);
+
+        Ok(r)
+    }
+
+    fn delete(&self, key: &[u8], column: Column) -> StorageResult<()> {
+        self.db
+            .delete_cf(&self.cf(column), key)
+            .map_err(|e| DatabaseError::Other(e.into()).into())
+    }
+
+    fn size_of_value(&self, key: &[u8], column: Column) -> StorageResult<Option<usize>> {
         database_metrics().read_meter.inc();
+
+        Ok(self
+            .db
+            .get_pinned_cf(&self.cf(column), key)
+            .map_err(|e| DatabaseError::Other(e.into()))?
+            .map(|value| value.len()))
+    }
+
+    fn get(&self, key: &[u8], column: Column) -> StorageResult<Option<Value>> {
+        database_metrics().read_meter.inc();
+
         let value = self
             .db
             .get_cf(&self.cf(column), key)
-            .map_err(|e| DatabaseError::Other(e.into()));
+            .map_err(|e| DatabaseError::Other(e.into()))?;
 
-        if let Ok(Some(value)) = &value {
+        if let Some(value) = &value {
             database_metrics().bytes_read.observe(value.len() as f64);
         }
 
-        value.map(|value| value.map(Arc::new))
+        Ok(value.map(Arc::new))
     }
 
-    fn put(
+    fn read(
         &self,
         key: &[u8],
         column: Column,
-        value: Value,
-    ) -> DatabaseResult<Option<Value>> {
-        database_metrics().write_meter.inc();
-        database_metrics().bytes_written.observe(value.len() as f64);
+        mut buf: &mut [u8],
+    ) -> StorageResult<Option<usize>> {
+        database_metrics().read_meter.inc();
 
-        // FIXME: This is a race condition. We should use a transaction.
-        let prev = self.get(key, column)?;
-        // FIXME: This is a race condition. We should use a transaction.
-        self.db
-            .put_cf(&self.cf(column), key, value.as_ref())
-            .map_err(|e| DatabaseError::Other(e.into()))
-            .map(|_| prev)
-    }
-
-    fn delete(&self, key: &[u8], column: Column) -> DatabaseResult<Option<Value>> {
-        // FIXME: This is a race condition. We should use a transaction.
-        let prev = self.get(key, column)?;
-        // FIXME: This is a race condition. We should use a transaction.
-        self.db
-            .delete_cf(&self.cf(column), key)
-            .map_err(|e| DatabaseError::Other(e.into()))
-            .map(|_| prev)
-    }
-
-    fn exists(&self, key: &[u8], column: Column) -> DatabaseResult<bool> {
-        // use pinnable mem ref to avoid memcpy of values associated with the key
-        // since we're just checking for the existence of the key
-        self.db
+        let r = self
+            .db
             .get_pinned_cf(&self.cf(column), key)
-            .map_err(|e| DatabaseError::Other(e.into()))
-            .map(|v| v.is_some())
-    }
+            .map_err(|e| DatabaseError::Other(e.into()))?
+            .map(|value| {
+                let read = value.len();
+                std::io::Write::write_all(&mut buf, value.as_ref())
+                    .map_err(|e| DatabaseError::Other(anyhow::anyhow!(e)))?;
+                StorageResult::Ok(read)
+            })
+            .transpose()?;
 
+        if let Some(r) = &r {
+            database_metrics().bytes_read.observe(*r as f64);
+        }
+
+        Ok(r)
+    }
+}
+
+impl IteratorableStore for RocksDb {
     fn iter_all(
         &self,
         column: Column,
@@ -423,102 +452,13 @@ impl KeyValueStore for RocksDb {
             }
         }
     }
-
-    fn size_of_value(&self, key: &[u8], column: Column) -> DatabaseResult<Option<usize>> {
-        database_metrics().read_meter.inc();
-
-        Ok(self
-            .db
-            .get_pinned_cf(&self.cf(column), key)
-            .map_err(|e| DatabaseError::Other(e.into()))?
-            .map(|value| value.len()))
-    }
-
-    fn read(
-        &self,
-        key: &[u8],
-        column: Column,
-        mut buf: &mut [u8],
-    ) -> DatabaseResult<Option<usize>> {
-        database_metrics().read_meter.inc();
-
-        let r = self
-            .db
-            .get_pinned_cf(&self.cf(column), key)
-            .map_err(|e| DatabaseError::Other(e.into()))?
-            .map(|value| {
-                let read = value.len();
-                std::io::Write::write_all(&mut buf, value.as_ref())
-                    .map_err(|e| DatabaseError::Other(anyhow::anyhow!(e)))?;
-                DatabaseResult::Ok(read)
-            })
-            .transpose()?;
-
-        if let Some(r) = &r {
-            database_metrics().bytes_read.observe(*r as f64);
-        }
-
-        Ok(r)
-    }
-
-    fn write(&self, key: &[u8], column: Column, buf: &[u8]) -> DatabaseResult<usize> {
-        database_metrics().write_meter.inc();
-        database_metrics().bytes_written.observe(buf.len() as f64);
-
-        let r = buf.len();
-        self.db
-            .put_cf(&self.cf(column), key, buf)
-            .map_err(|e| DatabaseError::Other(e.into()))?;
-
-        Ok(r)
-    }
-
-    fn read_alloc(&self, key: &[u8], column: Column) -> DatabaseResult<Option<Value>> {
-        database_metrics().read_meter.inc();
-
-        let r = self
-            .db
-            .get_pinned_cf(&self.cf(column), key)
-            .map_err(|e| DatabaseError::Other(e.into()))?
-            .map(|value| value.to_vec());
-
-        if let Some(r) = &r {
-            database_metrics().bytes_read.observe(r.len() as f64);
-        }
-
-        Ok(r.map(Arc::new))
-    }
-
-    fn replace(
-        &self,
-        key: &[u8],
-        column: Column,
-        buf: &[u8],
-    ) -> DatabaseResult<(usize, Option<Value>)> {
-        // FIXME: This is a race condition. We should use a transaction.
-        let existing = self.read_alloc(key, column)?;
-        // FIXME: This is a race condition. We should use a transaction.
-        let r = self.write(key, column, buf)?;
-
-        Ok((r, existing))
-    }
-
-    fn take(&self, key: &[u8], column: Column) -> DatabaseResult<Option<Value>> {
-        // FIXME: This is a race condition. We should use a transaction.
-        let prev = self.read_alloc(key, column)?;
-        // FIXME: This is a race condition. We should use a transaction.
-        self.db
-            .delete_cf(&self.cf(column), key)
-            .map_err(|e| DatabaseError::Other(e.into()))
-            .map(|_| prev)
-    }
 }
 
 impl BatchOperations for RocksDb {
     fn batch_write(
         &self,
         entries: &mut dyn Iterator<Item = (Vec<u8>, Column, WriteOperation)>,
-    ) -> DatabaseResult<()> {
+    ) -> StorageResult<()> {
         let mut batch = WriteBatch::default();
 
         for (key, column, op) in entries {
@@ -539,7 +479,7 @@ impl BatchOperations for RocksDb {
 
         self.db
             .write(batch)
-            .map_err(|e| DatabaseError::Other(e.into()))
+            .map_err(|e| DatabaseError::Other(e.into()).into())
     }
 }
 
@@ -609,7 +549,7 @@ mod tests {
         let expected = Arc::new(vec![1, 2, 3]);
         db.put(&key, Column::Metadata, expected.clone()).unwrap();
         let prev = db
-            .put(&key, Column::Metadata, Arc::new(vec![2, 4, 6]))
+            .replace(&key, Column::Metadata, Arc::new(vec![2, 4, 6]))
             .unwrap();
 
         assert_eq!(prev, Some(expected));
@@ -687,10 +627,7 @@ mod tests {
             (key.clone(), expected.clone())
         );
 
-        assert_eq!(
-            db.delete(&key, Column::Metadata).unwrap().unwrap(),
-            expected
-        );
+        assert_eq!(db.take(&key, Column::Metadata).unwrap().unwrap(), expected);
 
         assert!(!db.exists(&key, Column::Metadata).unwrap());
     }
@@ -714,10 +651,7 @@ mod tests {
             (key.clone(), expected.clone())
         );
 
-        assert_eq!(
-            db.delete(&key, Column::Metadata).unwrap().unwrap(),
-            expected
-        );
+        assert_eq!(db.take(&key, Column::Metadata).unwrap().unwrap(), expected);
 
         assert!(!db.exists(&key, Column::Metadata).unwrap());
     }
@@ -741,10 +675,7 @@ mod tests {
             (key.clone(), expected.clone())
         );
 
-        assert_eq!(
-            db.delete(&key, Column::Metadata).unwrap().unwrap(),
-            expected
-        );
+        assert_eq!(db.take(&key, Column::Metadata).unwrap().unwrap(), expected);
 
         assert!(!db.exists(&key, Column::Metadata).unwrap());
     }

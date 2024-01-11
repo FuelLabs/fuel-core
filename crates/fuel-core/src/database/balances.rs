@@ -100,7 +100,7 @@ impl StorageMutate<ContractsAssets> for Database {
         &mut self,
         key: &<ContractsAssets as Mappable>::Key,
     ) -> Result<Option<<ContractsAssets as Mappable>::OwnedValue>, Self::Error> {
-        let prev = Database::remove(self, key.as_ref(), Column::ContractsAssets)
+        let prev = Database::take(self, key.as_ref(), Column::ContractsAssets)
             .map_err(Into::into);
 
         // Get latest metadata entry for this contract id

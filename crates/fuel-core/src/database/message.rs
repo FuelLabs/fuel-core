@@ -2,7 +2,6 @@ use crate::database::{
     storage::ToDatabaseKey,
     Column,
     Database,
-    Result as DatabaseResult,
 };
 use fuel_core_chain_config::MessageConfig;
 use fuel_core_storage::{
@@ -67,10 +66,10 @@ impl StorageMutate<Messages> for Database {
 
     fn remove(&mut self, key: &Nonce) -> Result<Option<Message>, Self::Error> {
         let result: Option<Message> =
-            Database::remove(self, key.database_key().as_ref(), Column::Messages)?;
+            Database::take(self, key.database_key().as_ref(), Column::Messages)?;
 
         if let Some(message) = &result {
-            Database::remove::<bool>(
+            Database::take::<bool>(
                 self,
                 &owner_msg_id_key(&message.recipient, key),
                 Column::OwnedMessageIds,
@@ -93,7 +92,7 @@ impl Database {
         owner: &Address,
         start_message_id: Option<Nonce>,
         direction: Option<IterDirection>,
-    ) -> impl Iterator<Item = DatabaseResult<Nonce>> + '_ {
+    ) -> impl Iterator<Item = StorageResult<Nonce>> + '_ {
         self.iter_all_filtered::<Vec<u8>, bool, _, _>(
             Column::OwnedMessageIds,
             Some(*owner),
@@ -112,7 +111,7 @@ impl Database {
         &self,
         start: Option<Nonce>,
         direction: Option<IterDirection>,
-    ) -> impl Iterator<Item = DatabaseResult<Message>> + '_ {
+    ) -> impl Iterator<Item = StorageResult<Message>> + '_ {
         let start = start.map(|v| v.deref().to_vec());
         self.iter_all_by_start::<Vec<u8>, Message, _>(Column::Messages, start, direction)
             .map(|res| res.map(|(_, message)| message))

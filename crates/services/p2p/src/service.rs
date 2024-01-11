@@ -1,8 +1,5 @@
 use crate::{
-    codecs::{
-        postcard::PostcardCodec,
-        NetworkCodec,
-    },
+    codecs::postcard::PostcardCodec,
     config::Config,
     gossipsub::messages::{
         GossipsubBroadcastRequest,
@@ -18,9 +15,9 @@ use crate::{
         P2pDb,
     },
     request_response::messages::{
-        OutboundResponse,
         RequestMessage,
         ResponseChannelItem,
+        ResponseMessage,
     },
 };
 use anyhow::anyhow;
@@ -64,9 +61,9 @@ use futures::{
 };
 use libp2p::{
     gossipsub::MessageAcceptance,
+    request_response::InboundRequestId,
     PeerId,
 };
-use libp2p_request_response::RequestId;
 use std::{
     fmt::Debug,
     ops::Range,
@@ -85,7 +82,7 @@ use tokio::{
 };
 use tracing::warn;
 
-pub type Service<D> = ServiceRunner<Task<FuelP2PService<PostcardCodec>, D, SharedState>>;
+pub type Service<D> = ServiceRunner<Task<FuelP2PService, D, SharedState>>;
 
 enum TaskRequest {
     // Broadcast requests to p2p network
@@ -166,6 +163,7 @@ pub trait TaskP2PService: Send {
         &mut self,
         message: GossipsubBroadcastRequest,
     ) -> anyhow::Result<()>;
+
     fn send_request_msg(
         &mut self,
         peer_id: Option<PeerId>,
@@ -175,9 +173,10 @@ pub trait TaskP2PService: Send {
 
     fn send_response_msg(
         &mut self,
-        request_id: RequestId,
-        message: OutboundResponse,
+        request_id: InboundRequestId,
+        message: ResponseMessage,
     ) -> anyhow::Result<()>;
+
     fn report_message(
         &mut self,
         message: GossipsubMessageInfo,
@@ -194,7 +193,7 @@ pub trait TaskP2PService: Send {
     fn update_block_height(&mut self, height: BlockHeight) -> anyhow::Result<()>;
 }
 
-impl TaskP2PService for FuelP2PService<PostcardCodec> {
+impl TaskP2PService for FuelP2PService {
     fn get_peer_ids(&self) -> Vec<PeerId> {
         self.get_peers_ids_iter().copied().collect()
     }
@@ -231,8 +230,8 @@ impl TaskP2PService for FuelP2PService<PostcardCodec> {
 
     fn send_response_msg(
         &mut self,
-        request_id: RequestId,
-        message: OutboundResponse,
+        request_id: InboundRequestId,
+        message: ResponseMessage,
     ) -> anyhow::Result<()> {
         self.send_response_msg(request_id, message)?;
         Ok(())
@@ -328,7 +327,7 @@ pub struct HeartbeatPeerReputationConfig {
     low_heartbeat_frequency_penalty: AppScore,
 }
 
-impl<D> Task<FuelP2PService<PostcardCodec>, D, SharedState> {
+impl<D> Task<FuelP2PService, D, SharedState> {
     pub fn new<B: BlockHeightImporter>(
         chain_id: ChainId,
         config: Config,
@@ -430,19 +429,19 @@ impl<P: TaskP2PService, D, B: Broadcast> Task<P, D, B> {
 }
 
 fn convert_peer_id(peer_id: &PeerId) -> anyhow::Result<FuelPeerId> {
-    let inner = Vec::try_from(*peer_id)?;
+    let inner = Vec::from(*peer_id);
     Ok(FuelPeerId::from(inner))
 }
 
 #[async_trait::async_trait]
-impl<D> RunnableService for Task<FuelP2PService<PostcardCodec>, D, SharedState>
+impl<D> RunnableService for Task<FuelP2PService, D, SharedState>
 where
     Self: RunnableTask,
 {
     const NAME: &'static str = "P2P";
 
     type SharedData = SharedState;
-    type Task = Task<FuelP2PService<PostcardCodec>, D, SharedState>;
+    type Task = Task<FuelP2PService, D, SharedState>;
     type TaskParams = ();
 
     fn shared_data(&self) -> Self::SharedData {
@@ -497,7 +496,10 @@ where
                         let request_msg = RequestMessage::Block(height);
                         let channel_item = ResponseChannelItem::Block(channel);
                         let peer = self.p2p_service.get_peer_id_with_height(&height);
-                        let _ = self.p2p_service.send_request_msg(peer, request_msg, channel_item);
+                        let found_peers = self.p2p_service.send_request_msg(peer, request_msg, channel_item).is_ok();
+                        if !found_peers {
+                            tracing::debug!("No peers found for block at height {:?}", height);
+                        }
                     }
                     Some(TaskRequest::GetSealedHeaders { block_height_range, channel: response}) => {
                         let request_msg = RequestMessage::SealedHeaders(block_height_range.clone());
@@ -508,12 +510,16 @@ where
                         let block_height = BlockHeight::from(block_height_range.end.saturating_sub(1));
                         let peer = self.p2p_service
                              .get_peer_id_with_height(&block_height);
-                        let _ = self.p2p_service.send_request_msg(peer, request_msg, channel_item);
+                        let found_peers = self.p2p_service.send_request_msg(peer, request_msg, channel_item).is_ok();
+                        if !found_peers {
+                            tracing::debug!("No peers found for block at height {:?}", block_height);
+                        }
                     }
                     Some(TaskRequest::GetTransactions { block_height_range, from_peer, channel }) => {
                         let request_msg = RequestMessage::Transactions(block_height_range);
                         let channel_item = ResponseChannelItem::Transactions(channel);
-                        let _ = self.p2p_service.send_request_msg(Some(from_peer), request_msg, channel_item);
+                        self.p2p_service.send_request_msg(Some(from_peer), request_msg, channel_item)
+                            .expect("We always a peer here, so send has a target");
                     }
                     Some(TaskRequest::RespondWithGossipsubMessageReport((message, acceptance))) => {
                         // report_message(&mut self.p2p_service, message, acceptance);
@@ -556,32 +562,30 @@ where
                             },
                         }
                     },
-                    Some(FuelP2PEvent::RequestMessage { request_message, request_id }) => {
+                    Some(FuelP2PEvent::InboundRequestMessage { request_message, request_id }) => {
                         match request_message {
                             RequestMessage::Block(block_height) => {
                                 match self.db.get_sealed_block(&block_height) {
-                                    Ok(maybe_block) => {
-                                        let response = maybe_block.map(Arc::new);
-                                        let _ = self.p2p_service.send_response_msg(request_id, OutboundResponse::Block(response));
+                                    Ok(response) => {
+                                        let _ = self.p2p_service.send_response_msg(request_id, ResponseMessage::Block(response));
                                     },
                                     Err(e) => {
                                         tracing::error!("Failed to get block at height {:?}: {:?}", block_height, e);
                                         let response = None;
-                                        let _ = self.p2p_service.send_response_msg(request_id, OutboundResponse::Block(response));
+                                        let _ = self.p2p_service.send_response_msg(request_id, ResponseMessage::Block(response));
                                         return Err(e.into())
                                     }
                                 }
                             }
                             RequestMessage::Transactions(range) => {
                                 match self.db.get_transactions(range.clone()) {
-                                    Ok(maybe_transactions) => {
-                                        let response = maybe_transactions.map(Arc::new);
-                                        let _ = self.p2p_service.send_response_msg(request_id, OutboundResponse::Transactions(response));
+                                    Ok(response) => {
+                                        let _ = self.p2p_service.send_response_msg(request_id, ResponseMessage::Transactions(response));
                                     },
                                     Err(e) => {
                                         tracing::error!("Failed to get transactions for range {:?}: {:?}", range, e);
                                         let response = None;
-                                        let _ = self.p2p_service.send_response_msg(request_id, OutboundResponse::Transactions(response));
+                                        let _ = self.p2p_service.send_response_msg(request_id, ResponseMessage::Transactions(response));
                                         return Err(e.into())
                                     }
                                 }
@@ -592,17 +596,17 @@ where
                                     tracing::error!("Requested range of sealed headers is too big. Requested length: {:?}, Max length: {:?}", range.len(), max_len);
                                     // TODO: Return helpful error message to requester. https://github.com/FuelLabs/fuel-core/issues/1311
                                     let response = None;
-                                    let _ = self.p2p_service.send_response_msg(request_id, OutboundResponse::SealedHeaders(response));
+                                    let _ = self.p2p_service.send_response_msg(request_id, ResponseMessage::SealedHeaders(response));
                                 } else {
                                     match self.db.get_sealed_headers(range.clone()) {
                                         Ok(headers) => {
                                             let response = Some(headers);
-                                            let _ = self.p2p_service.send_response_msg(request_id, OutboundResponse::SealedHeaders(response));
+                                            let _ = self.p2p_service.send_response_msg(request_id, ResponseMessage::SealedHeaders(response));
                                         },
                                         Err(e) => {
                                             tracing::error!("Failed to get sealed headers for range {:?}: {:?}", range, &e);
                                             let response = None;
-                                            let _ = self.p2p_service.send_response_msg(request_id, OutboundResponse::SealedHeaders(response));
+                                            let _ = self.p2p_service.send_response_msg(request_id, ResponseMessage::SealedHeaders(response));
                                             return Err(e.into())
                                         }
                                     }
@@ -815,12 +819,8 @@ where
     D: P2pDb + 'static,
     B: BlockHeightImporter,
 {
-    Service::new(Task::new(
-        chain_id,
-        p2p_config,
-        Arc::new(db),
-        Arc::new(block_importer),
-    ))
+    let task = Task::new(chain_id, p2p_config, Arc::new(db), Arc::new(block_importer));
+    Service::new(task)
 }
 
 pub fn to_message_acceptance(
@@ -833,8 +833,8 @@ pub fn to_message_acceptance(
     }
 }
 
-fn report_message<T: NetworkCodec>(
-    p2p_service: &mut FuelP2PService<T>,
+fn report_message(
+    p2p_service: &mut FuelP2PService,
     message: GossipsubMessageInfo,
     acceptance: GossipsubMessageAcceptance,
 ) {
@@ -970,8 +970,8 @@ pub mod tests {
 
         fn send_response_msg(
             &mut self,
-            _request_id: RequestId,
-            _message: OutboundResponse,
+            _request_id: InboundRequestId,
+            _message: ResponseMessage,
         ) -> anyhow::Result<()> {
             todo!()
         }
