@@ -11,7 +11,6 @@ repository = { workspace = true }
 version = { workspace = true }
 
 [dependencies]
-tokio-rayon = { workspace = true }
 anyhow = { workspace = true }
 async-graphql = { version = "4.0", features = [
   "tracing",
@@ -53,6 +52,7 @@ strum_macros = "0.24"
 tempfile = { workspace = true, optional = true }
 thiserror = "1.0"
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
+tokio-rayon = { workspace = true }
 tokio-stream = { workspace = true, features = ["sync"] }
 tokio-util = "0.7.1"
 tower-http = { version = "0.3", features = ["set-header", "trace", "timeout"] }

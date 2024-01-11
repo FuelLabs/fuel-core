@@ -11,7 +11,6 @@ repository = { workspace = true }
 description = "Fuel Chain config types"
 
 [dependencies]
-impl-tools = { workspace = true }
 anyhow = { workspace = true }
 bech32 = { version = "0.9.0", default-features = false }
 fuel-core-storage = { workspace = true }
@@ -19,6 +18,7 @@ fuel-core-types = { workspace = true, default-features = false, features = [
   "serde",
 ] }
 hex = { version = "0.4", features = ["serde"] }
+impl-tools = { workspace = true }
 itertools = { workspace = true, features = ["use_alloc"] }
 parquet = { workspace = true, features = ["zstd"], optional = true }
 postcard = { version = "1.0", features = ["alloc"] }
@@ -29,22 +29,21 @@ serde_with = "1.11"
 tracing = { version = "0.1", default-features = false }
 
 [dev-dependencies]
-test-case = { workspace = true }
-insta = { workspace = true }
-fuel-core-chain-config = { path = ".", features = ["parquet"] }
-strum = { workspace = true, features = ["derive"] }
 bytes = { workspace = true }
+fuel-core-chain-config = { path = ".", features = ["parquet"] }
 fuel-core-types = { workspace = true, default-features = false, features = [
   "random",
   "serde",
 ] }
+insta = { workspace = true }
 pretty_assertions = { workspace = true }
 rand = { workspace = true }
 serde_json = { version = "1.0", features = ["raw_value"] }
+strum = { workspace = true, features = ["derive"] }
 tempfile = { workspace = true }
+test-case = { workspace = true }
 
 [features]
-
 
 std = [
   "itertools/use_std",
