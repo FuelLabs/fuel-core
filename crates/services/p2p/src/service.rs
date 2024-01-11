@@ -509,7 +509,7 @@ where
                             }
                             // If the channel was dropped instead, then we just propagate the drop
                         } else {
-                            tracing::debug!("No peers found for block at height {:?}", height);
+                            tracing::warn!("No peers found for block at height {:?}", height);
                         }
                     }
                     Some(TaskRequest::GetSealedHeaders { block_height_range, channel }) => {
@@ -531,7 +531,7 @@ where
                             }
                             // If the channel was dropped instead, then we just propagate the drop
                         } else {
-                            tracing::debug!("No peers found for block at height {:?}", height);
+                            tracing::warn!("No peers found for block at height {:?}", height);
                         }
                     }
                     Some(TaskRequest::GetTransactions { block_height_range, from_peer, channel }) => {
