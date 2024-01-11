@@ -20,7 +20,7 @@ use futures::{
     AsyncReadExt,
     AsyncWriteExt,
 };
-use libp2p::request_response::Codec as RequestResponseCodec;
+use libp2p::request_response;
 use serde::{
     Deserialize,
     Serialize,
@@ -68,7 +68,7 @@ impl PostcardCodec {
 /// If the substream was not properly closed when dropped, the sender would instead
 /// run into a timeout waiting for the response.
 #[async_trait]
-impl RequestResponseCodec for PostcardCodec {
+impl request_response::Codec for PostcardCodec {
     type Protocol = MessageExchangePostcardProtocol;
     type Request = RequestMessage;
     type Response = ResponseMessage;
@@ -161,7 +161,7 @@ impl GossipsubCodec for PostcardCodec {
 }
 
 impl NetworkCodec for PostcardCodec {
-    fn get_req_res_protocol(&self) -> <Self as RequestResponseCodec>::Protocol {
+    fn get_req_res_protocol(&self) -> <Self as request_response::Codec>::Protocol {
         MessageExchangePostcardProtocol {}
     }
 }
