@@ -12,7 +12,7 @@ use fuel_core::{
             MAX_RESPONSE_SIZE,
         },
         gossipsub_config::default_gossipsub_builder,
-        Config,
+        heartbeat,
         Multiaddr,
     },
     types::{
@@ -276,7 +276,11 @@ impl P2PArgs {
         let heartbeat_config = {
             let send_duration = Duration::from_secs(self.heartbeat_send_duration);
             let idle_duration = Duration::from_secs(self.heartbeat_idle_duration);
-            Config::new(send_duration, idle_duration, self.heartbeat_max_failures)
+            heartbeat::Config::new(
+                send_duration,
+                idle_duration,
+                self.heartbeat_max_failures,
+            )
         };
 
         let config = Config {
