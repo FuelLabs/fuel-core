@@ -572,28 +572,57 @@ impl FuelP2PService {
                         return None;
                     };
 
-                    let kind = ResponseErrorKind::TypeMismatch; // shorthand for error
                     let send_ok = match channel {
                         TypedResponseChannel::Block(c) => match response {
                             ResponseMessage::Block(v) => c.send(Ok(v)).is_ok(),
-                            _ => c.send(Err(ResponseError { peer, kind })).is_ok(),
+                            _ => {
+                                warn!(
+                                    "Invalid response type received for request {:?}",
+                                    request_id
+                                );
+                                c.send(Err(ResponseError {
+                                    peer,
+                                    kind: ResponseErrorKind::TypeMismatch,
+                                }))
+                                .is_ok()
+                            }
                         },
                         TypedResponseChannel::SealedHeaders(c) => match response {
                             ResponseMessage::SealedHeaders(v) => {
                                 c.send(Ok((peer, v))).is_ok()
                             }
-                            _ => c.send(Err(ResponseError { peer, kind })).is_ok(),
+                            _ => {
+                                warn!(
+                                    "Invalid response type received for request {:?}",
+                                    request_id
+                                );
+                                c.send(Err(ResponseError {
+                                    peer,
+                                    kind: ResponseErrorKind::TypeMismatch,
+                                }))
+                                .is_ok()
+                            }
                         },
                         TypedResponseChannel::Transactions(c) => match response {
                             ResponseMessage::Transactions(v) => {
                                 c.send(Ok(v.map(Arc::new))).is_ok()
                             }
-                            _ => c.send(Err(ResponseError { peer, kind })).is_ok(),
+                            _ => {
+                                warn!(
+                                    "Invalid response type received for request {:?}",
+                                    request_id
+                                );
+                                c.send(Err(ResponseError {
+                                    peer,
+                                    kind: ResponseErrorKind::TypeMismatch,
+                                }))
+                                .is_ok()
+                            }
                         },
                     };
 
                     if !send_ok {
-                        debug!("Failed to send through the channel for {:?}", request_id);
+                        warn!("Failed to send through the channel for {:?}", request_id);
                     }
                 }
             },
@@ -1231,6 +1260,7 @@ mod tests {
                         // let's update our BlockHeight
                         node_b.update_block_height(latest_block_height);
                     }
+
                     tracing::info!("Node B Event: {:?}", node_b_event);
                 }
             }
