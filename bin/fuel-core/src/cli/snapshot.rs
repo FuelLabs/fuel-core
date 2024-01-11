@@ -13,7 +13,10 @@ use fuel_core::{
     database::Database,
     types::fuel_types::ContractId,
 };
-use fuel_core_chain_config::MAX_GROUP_SIZE;
+use fuel_core_chain_config::{
+    SnapshotMetadata,
+    MAX_GROUP_SIZE,
+};
 use fuel_core_storage::Result as StorageResult;
 use itertools::Itertools;
 use std::path::{
@@ -56,16 +59,6 @@ pub enum Encoding {
     },
 }
 
-impl Encoding {
-    fn group_size(self) -> usize {
-        match self {
-            Encoding::Json => MAX_GROUP_SIZE,
-            #[cfg(feature = "parquet")]
-            Encoding::Parquet { group_size, .. } => group_size,
-        }
-    }
-}
-
 #[derive(Debug, Clone, Subcommand)]
 pub enum EncodingCommand {
     /// The encoding format for the chain state files.
@@ -88,7 +81,7 @@ pub enum SubCommands {
     /// Creates a snapshot of the entire database and produces a chain config.
     #[command(arg_required_else_help = true)]
     Everything {
-        /// Specify a path to the directory containing the chain config. Defaults used if no path
+        /// Specify a path to the the chain config. Defaults used if no path
         /// is provided.
         #[clap(name = "CHAIN_CONFIG", long = "chain")]
         chain_config: Option<PathBuf>,
@@ -140,29 +133,54 @@ fn contract_snapshot(
 }
 
 fn full_snapshot(
-    chain_config: Option<PathBuf>,
+    prev_chain_config: Option<PathBuf>,
     output_dir: &Path,
     encoding: Encoding,
     db: impl ChainStateDb,
 ) -> Result<(), anyhow::Error> {
-    let encoder = initialize_encoder(output_dir, encoding)?;
-    write_chain_state(&db, encoder, encoding.group_size())?;
+    std::fs::create_dir_all(output_dir)?;
 
+    let metadata = generate_metadata(output_dir, encoding)?;
+
+    write_chain_state(&db, &metadata)?;
+    write_chain_config(db, prev_chain_config, &metadata.chain_config)?;
+
+    metadata.write_to_dir(output_dir)?;
+    Ok(())
+}
+
+fn write_chain_config(
+    db: impl ChainStateDb,
+    chain_config: Option<PathBuf>,
+    file: &Path,
+) -> Result<(), anyhow::Error> {
     let height = db.get_block_height()?;
     let chain_config = ChainConfig {
         height: Some(height),
         ..load_chain_config(chain_config)?
     };
-    chain_config.create_config_file(output_dir)?;
 
-    Ok(())
+    chain_config.create_config_file(file)
+}
+
+fn generate_metadata(dir: &Path, encoding: Encoding) -> anyhow::Result<SnapshotMetadata> {
+    let meta = match encoding {
+        Encoding::Json => SnapshotMetadata::json(dir),
+        #[cfg(feature = "parquet")]
+        Encoding::Parquet {
+            compression,
+            group_size,
+            ..
+        } => SnapshotMetadata::parquet(dir, compression.try_into()?, group_size),
+    };
+    Ok(meta)
 }
 
 fn write_chain_state(
     db: impl ChainStateDb,
-    mut encoder: Encoder,
-    group_size: usize,
+    metadata: &SnapshotMetadata,
 ) -> anyhow::Result<()> {
+    let mut encoder = Encoder::for_snapshot(&metadata)?;
     fn write<T>(
         data: impl Iterator<Item = StorageResult<T>>,
         group_size: usize,
@@ -172,6 +190,7 @@ fn write_chain_state(
             .into_iter()
             .try_for_each(|chunk| write(chunk.try_collect()?))
     }
+    let group_size = metadata.encoding.group_size().unwrap_or(MAX_GROUP_SIZE);
 
     let coins = db.iter_coin_configs();
     write(coins, group_size, |chunk| encoder.write_coins(chunk))?;
@@ -199,27 +218,11 @@ fn write_chain_state(
     Ok(())
 }
 
-fn initialize_encoder(
-    output_dir: &Path,
-    encoding: Encoding,
-) -> Result<Encoder, anyhow::Error> {
-    std::fs::create_dir_all(output_dir)?;
-    let encoder = match encoding {
-        Encoding::Json => Encoder::json(output_dir),
-        #[cfg(feature = "parquet")]
-        Encoding::Parquet { compression, .. } => Encoder::parquet(
-            output_dir,
-            fuel_core_chain_config::ZstdCompressionLevel::try_from(compression)?,
-        )?,
-    };
-    Ok(encoder)
-}
-
 fn load_chain_config(
     chain_config: Option<PathBuf>,
 ) -> Result<ChainConfig, anyhow::Error> {
     let chain_config = match chain_config {
-        Some(dir) => ChainConfig::load_from_directory(dir)?,
+        Some(file) => ChainConfig::load(file)?,
         None => ChainConfig::local_testnet(),
     };
 

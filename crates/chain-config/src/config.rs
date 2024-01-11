@@ -6,6 +6,8 @@ mod contract;
 mod contract_balance;
 mod contract_state;
 mod message;
+#[cfg(feature = "std")]
+mod snapshot_metadata;
 mod state;
 
 #[cfg(all(test, feature = "random"))]
@@ -26,4 +28,6 @@ pub use contract::*;
 pub use contract_balance::*;
 pub use contract_state::*;
 pub use message::*;
+#[cfg(feature = "std")]
+pub use snapshot_metadata::*;
 pub use state::*;

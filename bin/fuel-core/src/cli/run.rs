@@ -36,7 +36,10 @@ use fuel_core::{
         secrecy::Secret,
     },
 };
-use fuel_core_chain_config::MAX_GROUP_SIZE;
+use fuel_core_chain_config::{
+    SnapshotMetadata,
+    MAX_GROUP_SIZE,
+};
 use pyroscope::{
     pyroscope::PyroscopeAgentRunning,
     PyroscopeAgent,
@@ -253,8 +256,9 @@ impl Command {
         let (chain_conf, state_config) = match genesis_config.as_deref() {
             None => (ChainConfig::local_testnet(), StateConfig::local_testnet()),
             Some(path) => {
-                let chain_conf = ChainConfig::load_from_directory(path)?;
-                let state_config = StateConfig::load_from_directory(path)?;
+                let metadata = SnapshotMetadata::read_from_dir(path)?;
+                let chain_conf = ChainConfig::from_snapshot(&metadata)?;
+                let state_config = StateConfig::from_snapshot(metadata)?;
                 (chain_conf, state_config)
             }
         };

@@ -23,8 +23,8 @@ use serde::{
     Deserialize,
     Serialize,
 };
-#[cfg(feature = "std")]
-use std::path::Path;
+
+use crate::SnapshotMetadata;
 
 use super::{
     coin::CoinConfig,
@@ -80,10 +80,9 @@ impl StateConfig {
     }
 
     #[cfg(feature = "std")]
-    pub fn load_from_directory(path: impl AsRef<Path>) -> anyhow::Result<Self> {
-        use crate::Decoder;
-
-        let decoder = Decoder::detect_encoding(path, 1)?;
+    pub fn from_snapshot(snapshot_metadata: SnapshotMetadata) -> anyhow::Result<Self> {
+        let decoder =
+            crate::Decoder::for_snapshot(snapshot_metadata, crate::MAX_GROUP_SIZE)?;
 
         let coins = decoder
             .coins()?

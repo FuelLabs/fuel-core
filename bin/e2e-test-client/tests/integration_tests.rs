@@ -7,6 +7,7 @@ use fuel_core::service::{
 use fuel_core::txpool::types::ContractId;
 use fuel_core_chain_config::{
     ChainConfig,
+    SnapshotMetadata,
     StateConfig,
 };
 use fuel_core_e2e_client::config::SuiteConfig;
@@ -97,9 +98,11 @@ async fn execute_suite(config_path: String) {
 fn dev_config() -> Config {
     let mut config = Config::local_node();
 
-    let chain_config =
-        ChainConfig::load_from_directory("../../deployment/scripts/chainspec/dev")
-            .expect("Should be able to load chain config");
+    let snapshot =
+        SnapshotMetadata::read_from_dir("../../deployment/scripts/chainspec/dev")
+            .unwrap();
+    let chain_config = ChainConfig::from_snapshot(&snapshot)
+        .expect("Should be able to load chain config");
     // TODO: don't use serde here
     let state_config =
         fs::read_to_string("../../deployment/scripts/chainspec/dev/state_config.json")
