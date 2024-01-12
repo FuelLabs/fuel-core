@@ -4,6 +4,8 @@ use fuel_core_types::{
         Contract,
         ContractId,
         StorageSlot,
+        TxPointer,
+        UtxoId,
     },
     fuel_types::{
         BlockHeight,
@@ -37,6 +39,22 @@ pub struct ContractConfig {
     /// used if contract is forked from another chain to preserve id & tx_pointer
     /// The index of the originating tx within `tx_pointer_block_height`
     pub tx_pointer_tx_idx: Option<u16>,
+}
+
+impl ContractConfig {
+    pub fn utxo_id(&self) -> Option<UtxoId> {
+        match (self.tx_id, self.output_index) {
+            (Some(tx_id), Some(output_index)) => Some(UtxoId::new(tx_id, output_index)),
+            _ => None,
+        }
+    }
+
+    pub fn tx_pointer(&self) -> TxPointer {
+        match (self.tx_pointer_block_height, self.tx_pointer_tx_idx) {
+            (Some(block_height), Some(tx_idx)) => TxPointer::new(block_height, tx_idx),
+            _ => TxPointer::default(),
+        }
+    }
 }
 
 #[cfg(all(test, feature = "random"))]

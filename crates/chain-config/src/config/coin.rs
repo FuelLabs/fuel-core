@@ -6,6 +6,10 @@ use fuel_core_storage::MerkleRoot;
 use fuel_core_types::{
     entities::coins::coin::CompressedCoin,
     fuel_crypto::Hasher,
+    fuel_tx::{
+        TxPointer,
+        UtxoId,
+    },
     fuel_types::{
         Address,
         AssetId,
@@ -37,6 +41,22 @@ pub struct CoinConfig {
     pub amount: u64,
     #[serde_as(as = "HexType")]
     pub asset_id: AssetId,
+}
+
+impl CoinConfig {
+    pub fn utxo_id(&self) -> Option<UtxoId> {
+        match (self.tx_id, self.output_index) {
+            (Some(tx_id), Some(output_index)) => Some(UtxoId::new(tx_id, output_index)),
+            _ => None,
+        }
+    }
+
+    pub fn tx_pointer(&self) -> TxPointer {
+        match (self.tx_pointer_block_height, self.tx_pointer_tx_idx) {
+            (Some(block_height), Some(tx_idx)) => TxPointer::new(block_height, tx_idx),
+            _ => TxPointer::default(),
+        }
+    }
 }
 
 #[cfg(all(test, feature = "random"))]

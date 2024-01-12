@@ -1,7 +1,4 @@
-use std::sync::{
-    atomic::AtomicU8,
-    Arc,
-};
+use std::sync::Arc;
 
 use super::{
     init_coin,
@@ -34,11 +31,35 @@ use fuel_core_types::fuel_types::{
     BlockHeight,
     ContractId,
 };
+use tokio::sync::Notify;
 use tokio_util::sync::CancellationToken;
+
+pub struct StopSignals {
+    signals: Vec<Arc<Notify>>,
+}
+
+impl StopSignals {
+    pub fn new() -> Self {
+        Self { signals: vec![] }
+    }
+
+    pub fn add(&mut self) -> Arc<Notify> {
+        let signal = Arc::new(Notify::new());
+        self.signals.push(signal.clone());
+        signal
+    }
+}
+
+impl Iterator for StopSignals {
+    type Item = Arc<Notify>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.signals.pop()
+    }
+}
 
 pub struct GenesisWorkers {
     db: Database,
-    stop_signal: Arc<AtomicU8>,
     cancel_token: CancellationToken,
     block_height: BlockHeight,
     state_reader: StateReader,
@@ -47,43 +68,56 @@ pub struct GenesisWorkers {
 impl GenesisWorkers {
     pub fn new(
         db: Database,
-        stop_signal: Arc<AtomicU8>,
         cancel_token: CancellationToken,
         block_height: BlockHeight,
         state_reader: StateReader,
     ) -> Self {
         Self {
             db,
-            stop_signal,
             cancel_token,
             block_height,
             state_reader,
         }
     }
 
-    pub async fn spawn_coins_worker(&self) -> anyhow::Result<()> {
+    pub async fn spawn_coins_worker(
+        &self,
+        stop_signal: Arc<Notify>,
+    ) -> anyhow::Result<()> {
         let coins = self.state_reader.coins().unwrap();
-        self.spawn_worker(coins).await
+        self.spawn_worker(coins, stop_signal).await
     }
 
-    pub async fn spawn_messages_worker(&self) -> anyhow::Result<()> {
+    pub async fn spawn_messages_worker(
+        &self,
+        stop_signal: Arc<Notify>,
+    ) -> anyhow::Result<()> {
         let messages = self.state_reader.messages().unwrap();
-        self.spawn_worker(messages).await
+        self.spawn_worker(messages, stop_signal).await
     }
 
-    pub async fn spawn_contracts_worker(&self) -> anyhow::Result<()> {
+    pub async fn spawn_contracts_worker(
+        &self,
+        stop_signal: Arc<Notify>,
+    ) -> anyhow::Result<()> {
         let contracts = self.state_reader.contracts().unwrap();
-        self.spawn_worker(contracts).await
+        self.spawn_worker(contracts, stop_signal).await
     }
 
-    pub async fn spawn_contract_state_worker(&self) -> anyhow::Result<()> {
+    pub async fn spawn_contract_state_worker(
+        &self,
+        stop_signal: Arc<Notify>,
+    ) -> anyhow::Result<()> {
         let contract_state = self.state_reader.contract_state().unwrap();
-        self.spawn_worker(contract_state).await
+        self.spawn_worker(contract_state, stop_signal).await
     }
 
-    pub async fn spawn_contract_balance_worker(&self) -> anyhow::Result<()> {
+    pub async fn spawn_contract_balance_worker(
+        &self,
+        stop_signal: Arc<Notify>,
+    ) -> anyhow::Result<()> {
         let contract_balance = self.state_reader.contract_balance().unwrap();
-        self.spawn_worker(contract_balance).await
+        self.spawn_worker(contract_balance, stop_signal).await
     }
 
     pub async fn spawn_contracts_root_worker(self) -> anyhow::Result<()> {
@@ -97,7 +131,7 @@ impl GenesisWorkers {
                 },
             );
 
-            self.create_runner(contract_ids).run()
+            self.create_runner(contract_ids, None).run()
         })
         .await
     }
@@ -105,23 +139,27 @@ impl GenesisWorkers {
     fn spawn_worker<T, I>(
         &self,
         data: I,
+        stop_signal: Arc<Notify>,
     ) -> tokio_rayon::AsyncRayonHandle<Result<(), anyhow::Error>>
     where
         Handler: ProcessStateGroup<T>,
         T: HandlesGenesisResource,
         I: IntoIterator<Item = anyhow::Result<Group<T>>> + Send + 'static,
     {
-        let runner = self.create_runner(data);
+        let runner = self.create_runner(data, Some(stop_signal));
         tokio_rayon::spawn(move || runner.run())
     }
 
-    fn create_runner<T, I>(&self, data: I) -> GenesisRunner<Handler, I, Database>
+    fn create_runner<T, I>(
+        &self,
+        data: I,
+        stop_signal: Option<Arc<Notify>>,
+    ) -> GenesisRunner<Handler, I, Database>
     where
         Handler: ProcessStateGroup<T>,
         T: HandlesGenesisResource,
         I: IntoIterator<Item = anyhow::Result<Group<T>>>,
     {
-        let stop_signal = Arc::clone(&self.stop_signal);
         let handler = Handler::new(self.block_height);
         let database = self.db.clone();
         GenesisRunner::new(

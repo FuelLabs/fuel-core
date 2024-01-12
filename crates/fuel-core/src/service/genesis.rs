@@ -1,11 +1,3 @@
-use std::sync::{
-    atomic::{
-        AtomicU8,
-        Ordering,
-    },
-    Arc,
-};
-
 use crate::{
     database::Database,
     service::config::Config,
@@ -54,7 +46,6 @@ use fuel_core_types::{
     },
     fuel_tx::{
         Contract,
-        TxPointer,
         UtxoId,
     },
     fuel_types::{
@@ -76,7 +67,10 @@ pub use runner::{
 };
 use tokio_util::sync::CancellationToken;
 
-use self::workers::GenesisWorkers;
+use self::workers::{
+    GenesisWorkers,
+    StopSignals,
+};
 
 /// Loads state from the chain config into database
 pub async fn maybe_initialize_state(
@@ -99,34 +93,38 @@ async fn import_chain_state(
 ) -> anyhow::Result<()> {
     let block_height = config.chain_config.height.unwrap_or_default();
 
-    // TODO: segfault propagate this
-    let stop_signal = Arc::new(AtomicU8::new(0));
+    let mut stop_signals = StopSignals::new();
     let token = CancellationToken::new();
     let workers = GenesisWorkers::new(
         original_database.clone(),
-        stop_signal.clone(),
         token.clone(),
         block_height,
         config.state_reader.clone(),
     );
 
     let res = tokio::try_join!(
-        workers.spawn_coins_worker(),
-        workers.spawn_messages_worker(),
-        workers.spawn_contracts_worker(),
-        workers.spawn_contract_state_worker(),
-        workers.spawn_contract_balance_worker()
+        workers.spawn_coins_worker(stop_signals.add()),
+        workers.spawn_messages_worker(stop_signals.add()),
+        workers.spawn_contracts_worker(stop_signals.add()),
+        workers.spawn_contract_state_worker(stop_signals.add()),
+        workers.spawn_contract_balance_worker(stop_signals.add())
     );
 
-    match res {
-        Err(_) => {
-            token.cancel();
-            // wait until stop signal has value 5
-            while stop_signal.load(Ordering::Relaxed) != 5 {
-                tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+    // if one of the workers failed, cancel all of them and wait for them to stop
+    if let Err(e) = res {
+        token.cancel();
+        tokio::select! {
+            _ = async {
+                for signal in stop_signals {
+                    signal.notified().await;
+                }
+            } => {}
+            _ = tokio::time::sleep(tokio::time::Duration::from_secs(10)) => {
+                return Err(anyhow!("Timeout while importing genesis state"));
             }
-        }
-        _ => {}
+        };
+
+        return Err(e.into());
     }
 
     workers.spawn_contracts_root_worker().await?;
@@ -196,6 +194,21 @@ fn commit_genesis_block(
 
 mod workers;
 
+fn generated_utxo_id(output_index: u64) -> UtxoId {
+    UtxoId::new(
+        // generated transaction id([0..[out_index/255]])
+        Bytes32::try_from(
+            (0..(Bytes32::LEN - WORD_SIZE))
+                .map(|_| 0u8)
+                .chain((output_index / 255).to_be_bytes())
+                .collect_vec()
+                .as_slice(),
+        )
+        .expect("Incorrect genesis transaction id byte length"),
+        (output_index % 255) as u8,
+    )
+}
+
 fn init_coin(
     db: &mut Database,
     coin: &CoinConfig,
@@ -203,30 +216,14 @@ fn init_coin(
     height: BlockHeight,
 ) -> anyhow::Result<MerkleRoot> {
     // TODO: Store merkle sum tree root over coins with unspecified utxo ids.
-    let utxo_id = UtxoId::new(
-        // generated transaction id([0..[out_index/255]])
-        coin.tx_id.unwrap_or_else(|| {
-            Bytes32::try_from(
-                (0..(Bytes32::LEN - WORD_SIZE))
-                    .map(|_| 0u8)
-                    .chain((output_index / 255).to_be_bytes())
-                    .collect_vec()
-                    .as_slice(),
-            )
-            .expect("Incorrect genesis transaction id byte length")
-        }),
-        coin.output_index.unwrap_or((output_index % 255) as u8),
-    );
+    let utxo_id = coin.utxo_id().unwrap_or(generated_utxo_id(output_index));
 
     let coin = CompressedCoin {
         owner: coin.owner,
         amount: coin.amount,
         asset_id: coin.asset_id,
         maturity: coin.maturity.unwrap_or_default(),
-        tx_pointer: TxPointer::new(
-            coin.tx_pointer_block_height.unwrap_or_default(),
-            coin.tx_pointer_tx_idx.unwrap_or_default(),
-        ),
+        tx_pointer: coin.tx_pointer(),
     };
 
     // ensure coin can't point to blocks in the future
@@ -254,33 +251,11 @@ fn init_contract(
     let root = contract.root();
     let contract_id = contract_config.contract_id;
     #[allow(clippy::cast_possible_truncation)]
-    let utxo_id = if let (Some(tx_id), Some(output_idx)) =
-        (contract_config.tx_id, contract_config.output_index)
-    {
-        UtxoId::new(tx_id, output_idx)
-    } else {
-        UtxoId::new(
-            // generated transaction id([0..[out_index/255]])
-            Bytes32::try_from(
-                (0..(Bytes32::LEN - WORD_SIZE))
-                    .map(|_| 0u8)
-                    .chain((output_index / 255).to_be_bytes())
-                    .collect_vec()
-                    .as_slice(),
-            )
-            .expect("Incorrect genesis transaction id byte length"),
-            output_index as u8,
-        )
-    };
-    let tx_pointer = if let (Some(block_height), Some(tx_idx)) = (
-        contract_config.tx_pointer_block_height,
-        contract_config.tx_pointer_tx_idx,
-    ) {
-        TxPointer::new(block_height, tx_idx)
-    } else {
-        TxPointer::default()
-    };
+    let utxo_id = contract_config
+        .utxo_id()
+        .unwrap_or(generated_utxo_id(output_index));
 
+    let tx_pointer = contract_config.tx_pointer();
     if tx_pointer.block_height() > height {
         return Err(anyhow!(
             "contract tx_pointer cannot be greater than genesis block"
@@ -347,7 +322,10 @@ mod tests {
         database::Database,
         service::{
             config::Config,
-            genesis::maybe_initialize_state,
+            genesis::{
+                generated_utxo_id,
+                maybe_initialize_state,
+            },
             FuelService,
         },
     };
@@ -388,6 +366,7 @@ mod tests {
         },
         fuel_vm::Contract,
     };
+    use itertools::Itertools;
     use rand::{
         rngs::StdRng,
         Rng,
@@ -777,5 +756,138 @@ mod tests {
                     .unwrap()
             })
             .collect()
+    }
+
+    fn given_contract_config(rng: &mut StdRng) -> ContractConfig {
+        let contract = Contract::from(op::ret(0x10).to_bytes().to_vec());
+        let salt = rng.gen();
+        let root = contract.root();
+        let contract_id = contract.id(&salt, &root, &Contract::default_state_root());
+
+        ContractConfig {
+            contract_id,
+            code: contract.into(),
+            salt,
+            tx_id: None,
+            output_index: None,
+            tx_pointer_block_height: None,
+            tx_pointer_tx_idx: None,
+        }
+    }
+
+    fn given_contract_config_with_tx(rng: &mut StdRng) -> ContractConfig {
+        let mut config = given_contract_config(rng);
+        config.tx_id = Some(rng.gen());
+        config.output_index = Some(rng.gen());
+        config.tx_pointer_block_height = Some(0.into());
+        config.tx_pointer_tx_idx = Some(rng.gen());
+
+        config
+    }
+
+    #[tokio::test]
+    async fn config_state_initializes_contract() {
+        let mut rng = StdRng::seed_from_u64(10);
+        let config = given_contract_config_with_tx(&mut rng);
+        let contract_id = config.contract_id;
+
+        let state = StateConfig {
+            contracts: vec![config.clone()],
+            ..Default::default()
+        };
+        let state_reader = StateReader::in_memory(state, MAX_GROUP_SIZE);
+
+        let service_config = Config {
+            state_reader,
+            ..Config::local_node()
+        };
+
+        let db = Database::default();
+        FuelService::from_database(db.clone(), service_config)
+            .await
+            .unwrap();
+
+        let initialized_contract = db.get_contract_config(contract_id).unwrap();
+
+        assert_eq!(initialized_contract, config);
+    }
+
+    #[tokio::test]
+    async fn initializes_contracts_with_generated_tx_and_output_idx() {
+        let mut rng = StdRng::seed_from_u64(10);
+
+        let contracts = (0..1000)
+            .map(|_| given_contract_config(&mut rng))
+            .collect_vec();
+
+        let state = StateConfig {
+            contracts: contracts.clone(),
+            ..Default::default()
+        };
+        let state_reader = StateReader::in_memory(state, MAX_GROUP_SIZE);
+
+        let service_config = Config {
+            state_reader,
+            ..Config::local_node()
+        };
+
+        let db = Database::default();
+        FuelService::from_database(db.clone(), service_config)
+            .await
+            .unwrap();
+
+        for (idx, contract) in contracts.iter().enumerate() {
+            let initialized_contract =
+                db.get_contract_config(contract.contract_id).unwrap();
+
+            let expected_utxo_id = generated_utxo_id(idx as u64);
+
+            assert_eq!(
+                initialized_contract.tx_id.unwrap(),
+                *expected_utxo_id.tx_id()
+            );
+            assert_eq!(
+                initialized_contract.output_index.unwrap(),
+                expected_utxo_id.output_index()
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn initializes_coins_with_generated_tx_and_output_idx() {
+        let coins = (0..1000)
+            .map(|_| CoinConfig {
+                tx_id: None,
+                output_index: None,
+                tx_pointer_block_height: None,
+                tx_pointer_tx_idx: None,
+                maturity: None,
+                owner: Default::default(),
+                amount: 10,
+                asset_id: Default::default(),
+            })
+            .collect_vec();
+
+        let state = StateConfig {
+            coins: coins.clone(),
+            ..Default::default()
+        };
+        let state_reader = StateReader::in_memory(state, MAX_GROUP_SIZE);
+
+        let service_config = Config {
+            state_reader,
+            ..Config::local_node()
+        };
+
+        let db = Database::default();
+        FuelService::from_database(db.clone(), service_config)
+            .await
+            .unwrap();
+
+        for (idx, _) in coins.iter().enumerate() {
+            let expected_utxo_id = generated_utxo_id(idx as u64);
+            db.coin(&expected_utxo_id)
+                .expect("Coin with expected utxo id should exist");
+        }
     }
 }
