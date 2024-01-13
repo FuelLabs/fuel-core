@@ -41,12 +41,12 @@ pub enum ResponseMessage {
     Transactions(Option<Vec<Transactions>>),
 }
 
-pub type OnResponse<T> = oneshot::Sender<Result<T, ResponseError>>;
+pub type OnResponse<T> = oneshot::Sender<(PeerId, Result<T, ResponseError>)>;
 
 #[derive(Debug)]
 pub enum TypedResponseChannel {
     Block(OnResponse<Option<Arc<SealedBlock>>>),
-    SealedHeaders(OnResponse<(PeerId, Option<Vec<SealedBlockHeader>>)>),
+    SealedHeaders(OnResponse<Option<Vec<SealedBlockHeader>>>),
     Transactions(OnResponse<Option<Arc<Vec<Transactions>>>>),
 }
 
@@ -56,18 +56,13 @@ pub enum RequestError {
     NoPeersConnected,
 }
 
-#[derive(Debug)]
-pub struct ResponseError {
-    /// This is the peer that the request was sent to
-    pub peer: PeerId,
-    pub kind: ResponseErrorKind,
-}
-
-#[derive(Debug)]
-pub enum ResponseErrorKind {
+#[derive(Debug, Error)]
+pub enum ResponseError {
     /// This is the raw error from [`libp2p-request-response`]
+    #[error("P2P outbound error {0}")]
     P2P(OutboundFailure),
     /// The peer responded with an invalid response type
+    #[error("Peer response message was of incorrect type")]
     TypeMismatch,
 }
 
