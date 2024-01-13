@@ -1,7 +1,4 @@
-use crate::{
-    serialization::HexType,
-    GenesisCommitment,
-};
+use crate::GenesisCommitment;
 use fuel_core_storage::MerkleRoot;
 use fuel_core_types::{
     entities::coins::coin::CompressedCoin,
@@ -23,7 +20,6 @@ use serde_with::serde_as;
 #[derive(Clone, Debug, Deserialize, Serialize, Eq, PartialEq)]
 pub struct CoinConfig {
     /// auto-generated if None
-    #[serde_as(as = "Option<HexType>")]
     pub tx_id: Option<Bytes32>,
     pub output_index: Option<u8>,
     /// used if coin is forked from another chain to preserve id & tx_pointer
@@ -32,10 +28,8 @@ pub struct CoinConfig {
     /// The index of the originating tx within `tx_pointer_block_height`
     pub tx_pointer_tx_idx: Option<u16>,
     pub maturity: Option<BlockHeight>,
-    #[serde_as(as = "HexType")]
     pub owner: Address,
     pub amount: u64,
-    #[serde_as(as = "HexType")]
     pub asset_id: AssetId,
 }
 

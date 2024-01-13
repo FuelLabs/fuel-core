@@ -26,7 +26,6 @@ use std::path::Path;
 
 use crate::{
     genesis::GenesisCommitment,
-    serialization::HexNumber,
     ConsensusConfig,
     SnapshotMetadata,
 };
@@ -44,8 +43,6 @@ pub struct ChainConfig {
     pub block_gas_limit: u64,
     pub consensus_parameters: ConsensusParameters,
     pub consensus: ConsensusConfig,
-    #[serde_as(as = "Option<HexNumber>")]
-    #[serde(default)]
     pub height: Option<BlockHeight>,
 }
 

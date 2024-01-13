@@ -11,6 +11,7 @@ repository = { workspace = true }
 description = "Fuel Chain config types"
 
 [dependencies]
+serde_with = { workspace = true, features = ["macros", "hex"] }
 impl-tools = { workspace = true }
 parquet = { workspace = true, features = ["zstd"], optional = true }
 anyhow = { workspace = true }
@@ -19,17 +20,14 @@ fuel-core-storage = { workspace = true }
 fuel-core-types = { workspace = true, default-features = false, features = [
   "serde",
 ] }
-hex = { version = "0.4", features = ["serde"] }
 itertools = { workspace = true, features = ["use_alloc"] }
 postcard = { version = "1.0", features = ["alloc"] }
 rand = { workspace = true, optional = true }
 serde = { workspace = true, features = ["derive", "rc"] }
 serde_json = { version = "1.0", features = ["raw_value"], optional = true }
-serde_with = "1.11"
 tracing = { version = "0.1", default-features = false }
 
 [dev-dependencies]
-test-case = { workspace = true }
 insta = { workspace = true }
 fuel-core-chain-config = { path = ".", features = ["parquet"] }
 strum = { workspace = true, features = ["derive"] }
