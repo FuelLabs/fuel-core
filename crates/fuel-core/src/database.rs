@@ -150,7 +150,7 @@ pub enum Column {
     ContractsStateMerkleData = 23,
     /// See [`ContractsStateMerkleMetadata`](storage::ContractsStateMerkleMetadata)
     ContractsStateMerkleMetadata = 24,
-    /// See [`ProcessedTransactions`](storage::ProcessedTransactions)
+    /// See [`ProcessedTransactions`](fuel_core_storage::tables::ProcessedTransactions)
     ProcessedTransactions = 25,
 }
 
