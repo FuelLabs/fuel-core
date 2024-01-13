@@ -1715,13 +1715,6 @@ mod tests {
                                             panic!("Channel closed unexpectedly");
                                         },
                                     }
-
-                                    if let Ok((_, Ok(Some(sealed_block)))) = response_message {
-                                        let _ = tx_test_end.send(*sealed_block.entity.header().height() == 0.into()).await;
-                                    } else {
-                                        tracing::error!("Orchestrator failed to receive a message: {:?}", response_message);
-                                        let _ = tx_test_end.send(false).await;
-                                    }
                                 });
                             }
                         }
@@ -1732,8 +1725,8 @@ mod tests {
                 node_b_event = node_b.next_event() => {
                     // 2. Node B receives the RequestMessage from Node A initiated by the NetworkOrchestrator
                     if let Some(FuelP2PEvent::InboundRequestMessage{ request_id, request_message: _ }) = &node_b_event {
-                            let sealed_headers: Vec<_> = arbitrary_headers_for_range(1..3);
-                            let _ = node_b.send_response_msg(*request_id, ResponseMessage::SealedHeaders(Some(sealed_headers)));
+                        let sealed_headers: Vec<_> = arbitrary_headers_for_range(1..3);
+                        let _ = node_b.send_response_msg(*request_id, ResponseMessage::SealedHeaders(Some(sealed_headers)));
                     }
 
                     tracing::info!("Node B Event: {:?}", node_b_event);
