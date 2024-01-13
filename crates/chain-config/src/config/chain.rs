@@ -26,8 +26,8 @@ use std::path::Path;
 
 use crate::{
     genesis::GenesisCommitment,
-    serialization::HexNumber,
     ConsensusConfig,
+    SnapshotMetadata,
 };
 
 pub const LOCAL_TESTNET: &str = "local_testnet";
@@ -43,8 +43,6 @@ pub struct ChainConfig {
     pub block_gas_limit: u64,
     pub consensus_parameters: ConsensusParameters,
     pub consensus: ConsensusConfig,
-    #[serde_as(as = "Option<HexNumber>")]
-    #[serde(default)]
     pub height: Option<BlockHeight>,
 }
 
@@ -64,11 +62,10 @@ impl ChainConfig {
     pub const BASE_ASSET: AssetId = AssetId::zeroed();
 
     #[cfg(feature = "std")]
-    pub fn load_from_snapshot(path: impl AsRef<Path>) -> anyhow::Result<Self> {
-        let path = path.as_ref().join(CHAIN_CONFIG_FILENAME);
-
-        let contents = std::fs::read(&path)?;
-        serde_json::from_slice(&contents).map_err(|e| {
+    pub fn load(path: impl AsRef<Path>) -> anyhow::Result<Self> {
+        let path = path.as_ref();
+        let file = std::fs::File::open(path)?;
+        serde_json::from_reader(&file).map_err(|e| {
             anyhow::Error::new(e).context(format!(
                 "an error occurred while loading the chain state file: {:?}",
                 path.to_str()
@@ -76,11 +73,15 @@ impl ChainConfig {
         })
     }
 
+    pub fn from_snapshot(snapshot_metadata: &SnapshotMetadata) -> anyhow::Result<Self> {
+        Self::load(&snapshot_metadata.chain_config)
+    }
+
     #[cfg(feature = "std")]
     pub fn create_config_file(&self, path: impl AsRef<Path>) -> anyhow::Result<()> {
         use anyhow::Context;
 
-        let state_writer = File::create(path.as_ref().join(CHAIN_CONFIG_FILENAME))?;
+        let state_writer = File::create(path)?;
 
         serde_json::to_writer_pretty(state_writer, self)
             .context("failed to dump chain parameters snapshot to JSON")?;
@@ -168,11 +169,13 @@ mod tests {
     #[cfg(feature = "std")]
     #[test]
     fn can_roundtrip_write_and_read() {
-        let tmp_file = temp_dir();
-        let disk_config = ChainConfig::local_testnet();
-        disk_config.create_config_file(&tmp_file).unwrap();
+        let tmp_dir = temp_dir();
+        let file = tmp_dir.join("config.json");
 
-        let load_config = ChainConfig::load_from_snapshot(&tmp_file).unwrap();
+        let disk_config = ChainConfig::local_testnet();
+        disk_config.create_config_file(&file).unwrap();
+
+        let load_config = ChainConfig::load(&file).unwrap();
 
         assert_eq!(disk_config, load_config);
     }

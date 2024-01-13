@@ -11,6 +11,7 @@ use crate::{
     CoinConfig,
     ContractConfig,
     MessageConfig,
+    SnapshotMetadata,
     StateConfig,
 };
 
@@ -37,7 +38,17 @@ pub struct StateWriter {
 }
 
 #[allow(dead_code)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    serde::Serialize,
+    serde::Deserialize,
+)]
 #[cfg(feature = "parquet")]
 #[cfg_attr(test, derive(strum::EnumIter))]
 pub enum ZstdCompressionLevel {
@@ -157,10 +168,23 @@ impl StateWriter {
         Ok(())
     }
 
-    pub fn json(snapshot_dir: impl AsRef<Path>) -> Self {
+    pub fn for_snapshot(snapshot_metadata: &SnapshotMetadata) -> anyhow::Result<Self> {
+        let encoder = match &snapshot_metadata.encoding {
+            crate::EncodingMeta::Json { filepath } => Self::json(filepath),
+            #[cfg(feature = "parquet")]
+            crate::EncodingMeta::Parquet {
+                filepaths,
+                compression,
+                ..
+            } => Self::parquet(filepaths, *compression)?,
+        };
+        Ok(encoder)
+    }
+
+    pub fn json(path: impl Into<PathBuf>) -> Self {
         Self {
             encoder: StateWriterType::Json {
-                state_file_path: snapshot_dir.as_ref().join(crate::STATE_CONFIG_FILENAME),
+                state_file_path: path.into(),
                 buffer: StateConfig::default(),
             },
         }
@@ -168,36 +192,39 @@ impl StateWriter {
 
     #[cfg(feature = "parquet")]
     pub fn parquet(
-        snapshot_dir: impl AsRef<Path>,
+        files: &crate::ParquetFiles,
         compression_level: ZstdCompressionLevel,
     ) -> anyhow::Result<Self> {
         use ::parquet::basic::Compression;
 
         fn create_encoder<T>(
             path: &Path,
-            name: &str,
             compression: Compression,
         ) -> anyhow::Result<parquet::PostcardEncoder<T>>
         where
             parquet::PostcardEncode: parquet::Encode<T>,
         {
-            use anyhow::Context;
-            let path = path.join(format!("{name}.parquet"));
-            let file = std::fs::File::create(&path)
-                .with_context(|| format!("Cannot open file ({path:?}) for writing"))?;
+            let file = std::fs::File::create(path)?;
             parquet::Encoder::new(file, compression)
         }
 
-        let path = snapshot_dir.as_ref();
         let compression = compression_level.into();
+
+        let crate::ParquetFiles {
+            coins,
+            messages,
+            contracts,
+            contract_state,
+            contract_balance,
+        } = files;
 
         Ok(Self {
             encoder: StateWriterType::Parquet {
-                coins: create_encoder(path, "coins", compression)?,
-                messages: create_encoder(path, "messages", compression)?,
-                contracts: create_encoder(path, "contracts", compression)?,
-                contract_state: create_encoder(path, "contract_state", compression)?,
-                contract_balance: create_encoder(path, "contract_balance", compression)?,
+                coins: create_encoder(coins, compression)?,
+                messages: create_encoder(messages, compression)?,
+                contracts: create_encoder(contracts, compression)?,
+                contract_state: create_encoder(contract_state, compression)?,
+                contract_balance: create_encoder(contract_balance, compression)?,
             },
         })
     }
@@ -310,8 +337,6 @@ mod tests {
         },
     };
 
-    use crate::STATE_CONFIG_FILENAME;
-
     use super::*;
     use itertools::Itertools;
 
@@ -319,7 +344,8 @@ mod tests {
     fn state_writer_json_generates_single_file_with_expected_name() {
         // given
         let dir = tempfile::tempdir().unwrap();
-        let encoder = StateWriter::json(dir.path());
+        let file = dir.path().join("state_config.json");
+        let encoder = StateWriter::json(&file);
 
         // when
         encoder.close().unwrap();
@@ -328,7 +354,7 @@ mod tests {
         let entries: Vec<_> = dir.path().read_dir().unwrap().try_collect().unwrap();
 
         match entries.as_slice() {
-            [entry] => assert_eq!(entry.path(), dir.path().join("state_config.json")),
+            [entry] => assert_eq!(entry.path(), file),
             _ => panic!("Expected single file \"state_config.json\""),
         }
     }
@@ -338,8 +364,9 @@ mod tests {
     fn parquet_encoder_generates_expected_filenames() {
         // given
         let dir = tempfile::tempdir().unwrap();
+        let files = crate::ParquetFiles::snapshot_default(dir.path());
         let encoder =
-            StateWriter::parquet(dir.path(), ZstdCompressionLevel::Uncompressed).unwrap();
+            StateWriter::parquet(&files, ZstdCompressionLevel::Uncompressed).unwrap();
 
         // when
         encoder.close().unwrap();
@@ -414,8 +441,9 @@ mod tests {
     {
         // given
         let dir = tempfile::tempdir().unwrap();
+        let files = crate::ParquetFiles::snapshot_default(dir.path());
         let mut encoder =
-            StateWriter::parquet(dir.path(), ZstdCompressionLevel::Uncompressed).unwrap();
+            StateWriter::parquet(&files, ZstdCompressionLevel::Uncompressed).unwrap();
         let original_data = vec![T::randomize(rng)];
 
         // when
@@ -445,7 +473,8 @@ mod tests {
     fn json_coins_are_human_readable() {
         // given
         let dir = tempfile::tempdir().unwrap();
-        let mut encoder = StateWriter::json(dir.path());
+        let filepath = dir.path().join("some_file.json");
+        let mut encoder = StateWriter::json(&filepath);
         let coin = CoinConfig {
             tx_id: Some([1u8; 32].into()),
             output_index: Some(2),
@@ -462,8 +491,7 @@ mod tests {
         encoder.close().unwrap();
 
         // then
-        let encoded_json =
-            std::fs::read_to_string(dir.path().join(STATE_CONFIG_FILENAME)).unwrap();
+        let encoded_json = std::fs::read_to_string(&filepath).unwrap();
 
         insta::assert_snapshot!(encoded_json);
     }
@@ -472,7 +500,8 @@ mod tests {
     fn json_messages_are_human_readable() {
         // given
         let dir = tempfile::tempdir().unwrap();
-        let mut encoder = StateWriter::json(dir.path());
+        let filepath = dir.path().join("some_file.json");
+        let mut encoder = StateWriter::json(&filepath);
         let message = MessageConfig {
             sender: [1u8; 32].into(),
             recipient: [2u8; 32].into(),
@@ -487,8 +516,7 @@ mod tests {
         encoder.close().unwrap();
 
         // then
-        let encoded_json =
-            std::fs::read_to_string(dir.path().join(STATE_CONFIG_FILENAME)).unwrap();
+        let encoded_json = std::fs::read_to_string(filepath).unwrap();
 
         insta::assert_snapshot!(encoded_json);
     }
@@ -497,7 +525,8 @@ mod tests {
     fn json_contracts_are_human_readable() {
         // given
         let dir = tempfile::tempdir().unwrap();
-        let mut encoder = StateWriter::json(dir.path());
+        let filepath = dir.path().join("some_file.json");
+        let mut encoder = StateWriter::json(&filepath);
         let contract = ContractConfig {
             contract_id: [1u8; 32].into(),
             code: [2u8; 32].into(),
@@ -513,8 +542,7 @@ mod tests {
         encoder.close().unwrap();
 
         // then
-        let encoded_json =
-            std::fs::read_to_string(dir.path().join(STATE_CONFIG_FILENAME)).unwrap();
+        let encoded_json = std::fs::read_to_string(filepath).unwrap();
         insta::assert_snapshot!(encoded_json);
     }
 }

@@ -100,6 +100,7 @@ tracing-attributes = "0.1"
 tracing-subscriber = "0.3"
 serde = "1.0"
 serde_json = "1.0"
+serde_with = { version = "3.4", default-features = false }
 strum = { version = "0.25", default-features = false }
 # enable cookie store to support L7 sticky sessions
 reqwest = { version = "0.11.16", default-features = false, features = [

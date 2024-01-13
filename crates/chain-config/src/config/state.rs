@@ -23,6 +23,8 @@ use serde::{
     Serialize,
 };
 
+use crate::SnapshotMetadata;
+
 use super::{
     coin::CoinConfig,
     contract::ContractConfig,
@@ -95,18 +97,37 @@ impl StateConfig {
     }
 
     #[cfg(feature = "std")]
-    pub fn load_from_snapshot(path: impl AsRef<std::path::Path>) -> anyhow::Result<Self> {
-        let reader = StateReader::detect_encoding(path, 1)?;
+    pub fn from_snapshot(snapshot: SnapshotMetadata) -> anyhow::Result<Self> {
+        let reader = StateReader::for_snapshot(snapshot, MAX_GROUP_SIZE)?;
         Self::from_reader(reader)
     }
 
-    pub fn from_db(db: impl ChainStateDb) -> anyhow::Result<Self> {
-        let coins = db.iter_coin_configs().try_collect()?;
-        let messages = db.iter_message_configs().try_collect()?;
-        let contracts = db.iter_contract_configs().try_collect()?;
-        let contract_state = db.iter_contract_state_configs().try_collect()?;
-        let contract_balance = db.iter_contract_balance_configs().try_collect()?;
-
+    pub fn from_reader(reader: StateReader) -> anyhow::Result<Self> {
+        let coins = reader
+            .coins()?
+            .map_ok(|group| group.data)
+            .flatten_ok()
+            .try_collect()?;
+        let messages = reader
+            .messages()?
+            .map_ok(|group| group.data)
+            .flatten_ok()
+            .try_collect()?;
+        let contracts = reader
+            .contracts()?
+            .map_ok(|group| group.data)
+            .flatten_ok()
+            .try_collect()?;
+        let contract_state = reader
+            .contract_state()?
+            .map_ok(|group| group.data)
+            .flatten_ok()
+            .try_collect()?;
+        let contract_balance = reader
+            .contract_balance()?
+            .map_ok(|group| group.data)
+            .flatten_ok()
+            .try_collect()?;
         Ok(Self {
             coins,
             messages,
@@ -116,36 +137,12 @@ impl StateConfig {
         })
     }
 
-    pub fn from_reader(reader: StateReader) -> anyhow::Result<Self> {
-        let coins = reader
-            .coins()?
-            .map_ok(|group| group.data)
-            .flatten_ok()
-            .try_collect()?;
-
-        let messages = reader
-            .messages()?
-            .map_ok(|group| group.data)
-            .flatten_ok()
-            .try_collect()?;
-
-        let contracts = reader
-            .contracts()?
-            .map_ok(|group| group.data)
-            .flatten_ok()
-            .try_collect()?;
-
-        let contract_state = reader
-            .contract_state()?
-            .map_ok(|group| group.data)
-            .flatten_ok()
-            .try_collect()?;
-
-        let contract_balance = reader
-            .contract_balance()?
-            .map_ok(|group| group.data)
-            .flatten_ok()
-            .try_collect()?;
+    pub fn from_db(db: impl ChainStateDb) -> anyhow::Result<Self> {
+        let coins = db.iter_coin_configs().try_collect()?;
+        let messages = db.iter_message_configs().try_collect()?;
+        let contracts = db.iter_contract_configs().try_collect()?;
+        let contract_state = db.iter_contract_state_configs().try_collect()?;
+        let contract_balance = db.iter_contract_balance_configs().try_collect()?;
 
         Ok(Self {
             coins,

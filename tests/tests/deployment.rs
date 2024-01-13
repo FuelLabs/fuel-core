@@ -2,6 +2,7 @@ use std::path::Path;
 
 use fuel_core::chain_config::{
     ChainConfig,
+    SnapshotMetadata,
     StateConfig,
     StateWriter,
     CHAIN_CONFIG_FILENAME,
@@ -13,8 +14,9 @@ use fuel_core_types::fuel_tx::GasCosts;
 #[test_case::test_case( "./../deployment/scripts/chainspec/dev" ; "Dev chainconfig"  )]
 fn test_deployment_chainconfig(path: impl AsRef<Path>) -> anyhow::Result<()> {
     let path = path.as_ref();
-    let mut chain_config = ChainConfig::load_from_snapshot(path)?;
-    let state_config = StateConfig::load_from_snapshot(path)?;
+    let snapshot = SnapshotMetadata::read_from_dir(path).unwrap();
+    let mut chain_config = ChainConfig::from_snapshot(&snapshot)?;
+    let state_config = StateConfig::from_snapshot(snapshot)?;
 
     // Deployment configuration should use gas costs from benchmarks.
     let benchmark_gas_costs =

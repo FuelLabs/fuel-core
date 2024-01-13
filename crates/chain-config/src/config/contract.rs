@@ -1,4 +1,4 @@
-use crate::serialization::HexType;
+use crate::serialization::HexIfHumanReadable;
 use fuel_core_types::{
     fuel_tx::{
         Contract,
@@ -22,13 +22,10 @@ use serde_with::serde_as;
 #[serde_as]
 #[derive(Clone, Debug, Deserialize, Serialize, Eq, PartialEq, Default)]
 pub struct ContractConfig {
-    #[serde_as(as = "HexType")]
     pub contract_id: ContractId,
-    #[serde_as(as = "HexType")]
+    #[serde_as(as = "HexIfHumanReadable")]
     pub code: Vec<u8>,
-    #[serde_as(as = "HexType")]
     pub salt: Salt,
-    #[serde_as(as = "Option<HexType>")]
     pub tx_id: Option<Bytes32>,
     pub output_index: Option<u8>,
     /// TxPointer: auto-generated if None

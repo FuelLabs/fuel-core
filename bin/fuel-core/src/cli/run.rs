@@ -36,7 +36,10 @@ use fuel_core::{
         secrecy::Secret,
     },
 };
-use fuel_core_chain_config::MAX_GROUP_SIZE;
+use fuel_core_chain_config::{
+    SnapshotMetadata,
+    MAX_GROUP_SIZE,
+};
 use pyroscope::{
     pyroscope::PyroscopeAgentRunning,
     PyroscopeAgent,
@@ -261,9 +264,10 @@ impl Command {
                 StateReader::in_memory(StateConfig::local_testnet(), MAX_GROUP_SIZE),
             ),
             Some(path) => {
-                let chain_conf = ChainConfig::load_from_snapshot(path)?;
-                let state_reader = StateReader::detect_encoding(path, MAX_GROUP_SIZE)?;
-                (chain_conf, state_reader)
+                let metadata = SnapshotMetadata::read_from_dir(path)?;
+                let chain_conf = ChainConfig::from_snapshot(&metadata)?;
+                let state_config = StateReader::for_snapshot(metadata, MAX_GROUP_SIZE)?;
+                (chain_conf, state_config)
             }
         };
 

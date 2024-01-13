@@ -54,7 +54,7 @@ impl<T> Iterator for IntoIter<T> {
 #[derive(Clone, Debug)]
 enum DataSource {
     #[cfg(feature = "parquet")]
-    Parquet { snapshot_dir: std::path::PathBuf },
+    Parquet { files: crate::ParquetFiles },
     InMemory {
         state: StateConfig,
         group_size: usize,
@@ -69,14 +69,12 @@ pub struct StateReader {
 impl StateReader {
     #[cfg(feature = "std")]
     pub fn json(
-        snapshot_dir: impl AsRef<std::path::Path>,
+        path: impl AsRef<std::path::Path>,
         group_size: usize,
     ) -> anyhow::Result<Self> {
         use anyhow::Context;
-
-        let path = snapshot_dir.as_ref().join(crate::STATE_CONFIG_FILENAME);
-
-        let mut file = std::fs::File::open(&path)
+        let path = path.as_ref();
+        let mut file = std::fs::File::open(path)
             .with_context(|| format!("Cannot read state from {path:?}"))?;
 
         let state = serde_json::from_reader(&mut file)?;
@@ -91,37 +89,32 @@ impl StateReader {
     }
 
     #[cfg(feature = "parquet")]
-    pub fn parquet(snapshot_dir: impl Into<std::path::PathBuf>) -> Self {
+    pub fn parquet(files: crate::ParquetFiles) -> Self {
         Self {
-            data_source: DataSource::Parquet {
-                snapshot_dir: snapshot_dir.into(),
-            },
+            data_source: DataSource::Parquet { files },
         }
     }
 
     #[cfg(feature = "std")]
-    pub fn detect_encoding(
-        snapshot_dir: impl AsRef<std::path::Path>,
+    pub fn for_snapshot(
+        snapshot_metadata: crate::config::SnapshotMetadata,
         default_group_size: usize,
     ) -> anyhow::Result<Self> {
-        let snapshot_dir = snapshot_dir.as_ref();
+        use crate::EncodingMeta;
 
-        if snapshot_dir.join(crate::STATE_CONFIG_FILENAME).exists() {
-            return Self::json(snapshot_dir, default_group_size)
-        }
-
-        #[cfg(feature = "parquet")]
-        return Ok(Self::parquet(snapshot_dir.to_owned()));
-
-        #[cfg(not(feature = "parquet"))]
-        anyhow::bail!("Could not detect encoding used in snapshot {snapshot_dir:?}");
+        let decoder = match snapshot_metadata.encoding {
+            EncodingMeta::Json { filepath } => Self::json(filepath, default_group_size)?,
+            #[cfg(feature = "parquet")]
+            EncodingMeta::Parquet { filepaths, .. } => Self::parquet(filepaths),
+        };
+        Ok(decoder)
     }
 
     pub fn coins(&self) -> anyhow::Result<IntoIter<CoinConfig>> {
         self.create_iterator(
             |state| &state.coins,
             #[cfg(feature = "parquet")]
-            "coins",
+            |files| &files.coins,
         )
     }
 
@@ -129,7 +122,7 @@ impl StateReader {
         self.create_iterator(
             |state| &state.messages,
             #[cfg(feature = "parquet")]
-            "messages",
+            |files| &files.messages,
         )
     }
 
@@ -137,7 +130,7 @@ impl StateReader {
         self.create_iterator(
             |state| &state.contracts,
             #[cfg(feature = "parquet")]
-            "contracts",
+            |files| &files.contracts,
         )
     }
 
@@ -145,7 +138,7 @@ impl StateReader {
         self.create_iterator(
             |state| &state.contract_state,
             #[cfg(feature = "parquet")]
-            "contract_state",
+            |files| &files.contract_state,
         )
     }
 
@@ -153,14 +146,16 @@ impl StateReader {
         self.create_iterator(
             |state| &state.contract_balance,
             #[cfg(feature = "parquet")]
-            "contract_balance",
+            |files| &files.contract_balance,
         )
     }
 
     fn create_iterator<T: Clone>(
         &self,
         extractor: impl FnOnce(&StateConfig) -> &Vec<T>,
-        #[cfg(feature = "parquet")] parquet_filename: &'static str,
+        #[cfg(feature = "parquet")] file_picker: impl FnOnce(
+            &crate::ParquetFiles,
+        ) -> &std::path::Path,
     ) -> anyhow::Result<IntoIter<T>> {
         match &self.data_source {
             DataSource::InMemory { state, group_size } => {
@@ -168,8 +163,8 @@ impl StateReader {
                 Ok(Self::in_memory_iter(data, *group_size))
             }
             #[cfg(feature = "parquet")]
-            DataSource::Parquet { snapshot_dir } => {
-                let path = snapshot_dir.join(format!("{parquet_filename}.parquet"));
+            DataSource::Parquet { files } => {
+                let path = file_picker(files);
                 let file = std::fs::File::open(path)?;
                 Ok(IntoIter::Parquet {
                     decoder: super::parquet::Decoder::new(file)?,

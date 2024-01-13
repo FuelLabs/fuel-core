@@ -13,7 +13,10 @@ use fuel_core::{
     database::Database,
     types::fuel_types::ContractId,
 };
-use fuel_core_chain_config::MAX_GROUP_SIZE;
+use fuel_core_chain_config::{
+    SnapshotMetadata,
+    MAX_GROUP_SIZE,
+};
 use fuel_core_storage::Result as StorageResult;
 use itertools::Itertools;
 use std::path::{
@@ -60,16 +63,6 @@ pub enum Encoding {
     },
 }
 
-impl Encoding {
-    fn group_size(self) -> usize {
-        match self {
-            Encoding::Json => MAX_GROUP_SIZE,
-            #[cfg(feature = "parquet")]
-            Encoding::Parquet { group_size, .. } => group_size,
-        }
-    }
-}
-
 #[derive(Debug, Clone, Subcommand)]
 pub enum EncodingCommand {
     /// The encoding format for the chain state files.
@@ -91,7 +84,7 @@ impl EncodingCommand {
 pub enum SubCommands {
     /// Creates a snapshot of the entire database and produces a chain config.
     Everything {
-        /// Specify a path to the directory containing the chain config. Defaults used if no path
+        /// Specify a path to the the chain config. Defaults used if no path
         /// is provided.
         #[arg(name = "CHAIN_CONFIG", long = "chain")]
         chain_config: Option<PathBuf>,
@@ -134,42 +127,71 @@ fn contract_snapshot(
     contract_id: ContractId,
     output_dir: &Path,
 ) -> Result<(), anyhow::Error> {
+    std::fs::create_dir_all(output_dir)?;
+
     let (contract, state, balance) = db.get_contract_by_id(contract_id)?;
-    let mut writer = initialize_state_writer(output_dir, Encoding::Json)?;
+
+    let metadata = generate_metadata(output_dir, Encoding::Json)?;
+    let mut writer = StateWriter::for_snapshot(&metadata)?;
 
     writer.write_contracts(vec![contract])?;
     writer.write_contract_state(state)?;
     writer.write_contract_balance(balance)?;
     writer.close()?;
 
+    metadata.write_to_dir(output_dir)?;
     Ok(())
 }
 
 fn full_snapshot(
-    chain_config: Option<PathBuf>,
+    prev_chain_config: Option<PathBuf>,
     output_dir: &Path,
     encoding: Encoding,
     db: impl ChainStateDb,
 ) -> Result<(), anyhow::Error> {
-    let encoder = initialize_state_writer(output_dir, encoding)?;
-    write_chain_state(&db, encoder, encoding.group_size())?;
+    std::fs::create_dir_all(output_dir)?;
 
+    let metadata = generate_metadata(output_dir, encoding)?;
+
+    write_chain_state(&db, &metadata)?;
+    write_chain_config(db, prev_chain_config, &metadata.chain_config)?;
+
+    metadata.write_to_dir(output_dir)?;
+    Ok(())
+}
+
+fn write_chain_config(
+    db: impl ChainStateDb,
+    chain_config: Option<PathBuf>,
+    file: &Path,
+) -> Result<(), anyhow::Error> {
     let height = db.get_block_height()?;
     let chain_config = ChainConfig {
         height: Some(height),
         ..load_chain_config(chain_config)?
     };
-    chain_config.create_config_file(output_dir)?;
 
-    Ok(())
+    chain_config.create_config_file(file)
 }
 
-// TODO: segfault rename this to state writer
+fn generate_metadata(dir: &Path, encoding: Encoding) -> anyhow::Result<SnapshotMetadata> {
+    let meta = match encoding {
+        Encoding::Json => SnapshotMetadata::json(dir),
+        #[cfg(feature = "parquet")]
+        Encoding::Parquet {
+            compression,
+            group_size,
+            ..
+        } => SnapshotMetadata::parquet(dir, compression.try_into()?, group_size),
+    };
+    Ok(meta)
+}
+
 fn write_chain_state(
     db: impl ChainStateDb,
-    mut encoder: StateWriter,
-    group_size: usize,
+    metadata: &SnapshotMetadata,
 ) -> anyhow::Result<()> {
+    let mut writer = StateWriter::for_snapshot(&metadata)?;
     fn write<T>(
         data: impl Iterator<Item = StorageResult<T>>,
         group_size: usize,
@@ -179,54 +201,37 @@ fn write_chain_state(
             .into_iter()
             .try_for_each(|chunk| write(chunk.try_collect()?))
     }
+    let group_size = metadata.encoding.group_size().unwrap_or(MAX_GROUP_SIZE);
 
     let coins = db.iter_coin_configs();
-    write(coins, group_size, |chunk| encoder.write_coins(chunk))?;
+    write(coins, group_size, |chunk| writer.write_coins(chunk))?;
 
     let messages = db.iter_message_configs();
-    write(messages, group_size, |chunk| encoder.write_messages(chunk))?;
+    write(messages, group_size, |chunk| writer.write_messages(chunk))?;
 
     let contracts = db.iter_contract_configs();
-    write(contracts, group_size, |chunk| {
-        encoder.write_contracts(chunk)
-    })?;
+    write(contracts, group_size, |chunk| writer.write_contracts(chunk))?;
 
     let contract_states = db.iter_contract_state_configs();
     write(contract_states, group_size, |chunk| {
-        encoder.write_contract_state(chunk)
+        writer.write_contract_state(chunk)
     })?;
 
     let contract_balances = db.iter_contract_balance_configs();
     write(contract_balances, group_size, |chunk| {
-        encoder.write_contract_balance(chunk)
+        writer.write_contract_balance(chunk)
     })?;
 
-    encoder.close()?;
+    writer.close()?;
 
     Ok(())
-}
-
-fn initialize_state_writer(
-    output_dir: &Path,
-    encoding: Encoding,
-) -> Result<StateWriter, anyhow::Error> {
-    std::fs::create_dir_all(output_dir)?;
-    let encoder = match encoding {
-        Encoding::Json => StateWriter::json(output_dir),
-        #[cfg(feature = "parquet")]
-        Encoding::Parquet { compression, .. } => StateWriter::parquet(
-            output_dir,
-            fuel_core_chain_config::ZstdCompressionLevel::try_from(compression)?,
-        )?,
-    };
-    Ok(encoder)
 }
 
 fn load_chain_config(
     chain_config: Option<PathBuf>,
 ) -> Result<ChainConfig, anyhow::Error> {
     let chain_config = match chain_config {
-        Some(dir) => ChainConfig::load_from_snapshot(dir)?,
+        Some(file) => ChainConfig::load(file)?,
         None => ChainConfig::local_testnet(),
     };
 
@@ -524,10 +529,11 @@ mod tests {
         })?;
 
         // then
-        let chain_state = ChainConfig::load_from_snapshot(&snapshot_dir)?;
+        let snapshot = SnapshotMetadata::read_from_dir(&snapshot_dir)?;
+        let chain_state = ChainConfig::from_snapshot(&snapshot)?;
         assert_eq!(chain_state.height, Some(height));
 
-        let snapshot = StateConfig::load_from_snapshot(&snapshot_dir)?;
+        let snapshot = StateConfig::from_snapshot(snapshot)?;
 
         assert_ne!(snapshot, state);
         assert_eq!(snapshot, sorted_state(state));
@@ -540,6 +546,8 @@ mod tests {
     #[test_case(5; "parquet group_size=5")]
     fn everything_snapshot_respects_group_size(group_size: usize) -> anyhow::Result<()> {
         // given
+
+        use fuel_core_chain_config::ParquetFiles;
         let temp_dir = tempfile::tempdir()?;
 
         let snapshot_dir = temp_dir.path().join("snapshot");
@@ -566,7 +574,8 @@ mod tests {
         })?;
 
         // then
-        let reader = StateReader::parquet(&snapshot_dir);
+        let files = ParquetFiles::snapshot_default(&snapshot_dir);
+        let reader = StateReader::parquet(files);
 
         let expected_state = sorted_state(state);
 
@@ -614,7 +623,8 @@ mod tests {
         })?;
 
         // then
-        let snapshot_state = StateConfig::load_from_snapshot(&snapshot_dir)?;
+        let snapshot = SnapshotMetadata::read_from_dir(&snapshot_dir)?;
+        let snapshot_state = StateConfig::from_snapshot(snapshot)?;
 
         let expected_contract_state = state
             .contract_state
