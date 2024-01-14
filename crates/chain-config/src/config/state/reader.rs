@@ -100,12 +100,12 @@ impl StateReader {
         snapshot_metadata: crate::config::SnapshotMetadata,
         default_group_size: usize,
     ) -> anyhow::Result<Self> {
-        use crate::EncodingMeta;
+        use crate::StateEncoding;
 
-        let decoder = match snapshot_metadata.encoding {
-            EncodingMeta::Json { filepath } => Self::json(filepath, default_group_size)?,
+        let decoder = match snapshot_metadata.take_state_encoding() {
+            StateEncoding::Json { filepath } => Self::json(filepath, default_group_size)?,
             #[cfg(feature = "parquet")]
-            EncodingMeta::Parquet { filepaths, .. } => Self::parquet(filepaths),
+            StateEncoding::Parquet { filepaths, .. } => Self::parquet(filepaths),
         };
         Ok(decoder)
     }

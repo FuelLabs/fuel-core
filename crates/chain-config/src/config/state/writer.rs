@@ -169,10 +169,10 @@ impl StateWriter {
     }
 
     pub fn for_snapshot(snapshot_metadata: &SnapshotMetadata) -> anyhow::Result<Self> {
-        let encoder = match &snapshot_metadata.encoding {
-            crate::EncodingMeta::Json { filepath } => Self::json(filepath),
+        let encoder = match snapshot_metadata.state_encoding() {
+            crate::StateEncoding::Json { filepath } => Self::json(filepath),
             #[cfg(feature = "parquet")]
-            crate::EncodingMeta::Parquet {
+            crate::StateEncoding::Parquet {
                 filepaths,
                 compression,
                 ..

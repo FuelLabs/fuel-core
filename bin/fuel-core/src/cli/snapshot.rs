@@ -131,15 +131,13 @@ fn contract_snapshot(
 
     let (contract, state, balance) = db.get_contract_by_id(contract_id)?;
 
-    let metadata = generate_metadata(output_dir, Encoding::Json)?;
+    let metadata = write_metadata(output_dir, Encoding::Json)?;
     let mut writer = StateWriter::for_snapshot(&metadata)?;
 
     writer.write_contracts(vec![contract])?;
     writer.write_contract_state(state)?;
     writer.write_contract_balance(balance)?;
     writer.close()?;
-
-    metadata.write_to_dir(output_dir)?;
     Ok(())
 }
 
@@ -151,12 +149,10 @@ fn full_snapshot(
 ) -> Result<(), anyhow::Error> {
     std::fs::create_dir_all(output_dir)?;
 
-    let metadata = generate_metadata(output_dir, encoding)?;
+    let metadata = write_metadata(output_dir, encoding)?;
 
     write_chain_state(&db, &metadata)?;
-    write_chain_config(db, prev_chain_config, &metadata.chain_config)?;
-
-    metadata.write_to_dir(output_dir)?;
+    write_chain_config(db, prev_chain_config, metadata.chain_config())?;
     Ok(())
 }
 
@@ -174,24 +170,23 @@ fn write_chain_config(
     chain_config.create_config_file(file)
 }
 
-fn generate_metadata(dir: &Path, encoding: Encoding) -> anyhow::Result<SnapshotMetadata> {
-    let meta = match encoding {
-        Encoding::Json => SnapshotMetadata::json(dir),
+fn write_metadata(dir: &Path, encoding: Encoding) -> anyhow::Result<SnapshotMetadata> {
+    match encoding {
+        Encoding::Json => SnapshotMetadata::write_json(dir),
         #[cfg(feature = "parquet")]
         Encoding::Parquet {
             compression,
             group_size,
             ..
-        } => SnapshotMetadata::parquet(dir, compression.try_into()?, group_size),
-    };
-    Ok(meta)
+        } => SnapshotMetadata::write_parquet(dir, compression.try_into()?, group_size),
+    }
 }
 
 fn write_chain_state(
     db: impl ChainStateDb,
     metadata: &SnapshotMetadata,
 ) -> anyhow::Result<()> {
-    let mut writer = StateWriter::for_snapshot(&metadata)?;
+    let mut writer = StateWriter::for_snapshot(metadata)?;
     fn write<T>(
         data: impl Iterator<Item = StorageResult<T>>,
         group_size: usize,
@@ -201,7 +196,10 @@ fn write_chain_state(
             .into_iter()
             .try_for_each(|chunk| write(chunk.try_collect()?))
     }
-    let group_size = metadata.encoding.group_size().unwrap_or(MAX_GROUP_SIZE);
+    let group_size = metadata
+        .state_encoding()
+        .group_size()
+        .unwrap_or(MAX_GROUP_SIZE);
 
     let coins = db.iter_coin_configs();
     write(coins, group_size, |chunk| writer.write_coins(chunk))?;
@@ -529,7 +527,7 @@ mod tests {
         })?;
 
         // then
-        let snapshot = SnapshotMetadata::read_from_dir(&snapshot_dir)?;
+        let snapshot = SnapshotMetadata::read(&snapshot_dir)?;
         let chain_state = ChainConfig::from_snapshot(&snapshot)?;
         assert_eq!(chain_state.height, Some(height));
 
@@ -623,7 +621,7 @@ mod tests {
         })?;
 
         // then
-        let snapshot = SnapshotMetadata::read_from_dir(&snapshot_dir)?;
+        let snapshot = SnapshotMetadata::read(&snapshot_dir)?;
         let snapshot_state = StateConfig::from_snapshot(snapshot)?;
 
         let expected_contract_state = state

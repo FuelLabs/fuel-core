@@ -264,7 +264,7 @@ impl Command {
                 StateReader::in_memory(StateConfig::local_testnet(), MAX_GROUP_SIZE),
             ),
             Some(path) => {
-                let metadata = SnapshotMetadata::read_from_dir(path)?;
+                let metadata = SnapshotMetadata::read(path)?;
                 let chain_conf = ChainConfig::from_snapshot(&metadata)?;
                 let state_config = StateReader::for_snapshot(metadata, MAX_GROUP_SIZE)?;
                 (chain_conf, state_config)
