@@ -1,3 +1,17 @@
+use super::{
+    storage::{
+        GenesisCoinRoots,
+        GenesisContractBalanceRoots,
+        GenesisContractIds,
+        GenesisContractRoots,
+        GenesisContractStateRoots,
+        GenesisMessageRoots,
+        GenesisMetadata,
+        ToDatabaseKey,
+    },
+    Column,
+    Database,
+};
 use fuel_core_storage::{
     MerkleRoot,
     Result,
@@ -17,22 +31,7 @@ use itertools::{
     Itertools,
 };
 
-use super::{
-    storage::{
-        GenesisCoinRoots,
-        GenesisContractBalanceRoots,
-        GenesisContractIds,
-        GenesisContractRoots,
-        GenesisContractStateRoots,
-        GenesisMessageRoots,
-        GenesisMetadata,
-        ToDatabaseKey,
-    },
-    Column,
-    Database,
-};
-
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, strum::EnumIter)]
 pub enum GenesisResource {
     Coins,
     Messages,
@@ -116,23 +115,23 @@ impl Database {
     }
 
     pub fn genesis_coin_root(&self) -> Result<MerkleRoot> {
-        self.genesis_roots(Column::CoinRoots)
+        self.genesis_roots(Column::GenesisCoinRoots)
     }
 
     pub fn genesis_messages_root(&self) -> Result<MerkleRoot> {
-        self.genesis_roots(Column::MessageRoots)
+        self.genesis_roots(Column::GenesisMessageRoots)
     }
 
     pub fn genesis_contracts_root(&self) -> Result<MerkleRoot> {
-        self.genesis_roots(Column::ContractRoots)
+        self.genesis_roots(Column::GenesisContractRoots)
     }
 
     pub fn genesis_states_root(&self) -> Result<MerkleRoot> {
-        self.genesis_roots(Column::ContractStateRoots)
+        self.genesis_roots(Column::GenesisContractStateRoots)
     }
 
     pub fn genesis_balances_root(&self) -> Result<MerkleRoot> {
-        self.genesis_roots(Column::ContractBalanceRoots)
+        self.genesis_roots(Column::GenesisContractBalanceRoots)
     }
 
     pub fn genesis_contract_ids_iter(
@@ -144,9 +143,5 @@ impl Database {
                 ContractId::from(bytes32)
             })
             .map(|res| res.map_err(Into::into))
-    }
-
-    pub fn remove_genesis_progress(&mut self) -> Result<()> {
-        todo!("remove columns related to genesis progress tracking");
     }
 }

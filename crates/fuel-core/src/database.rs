@@ -154,16 +154,16 @@ pub enum Column {
     ContractsStateMerkleMetadata = 24,
     /// See [`GenesisMetadata`](storage::GenesisMetadata)
     GenesisMetadata = 25,
-    /// See [`CoinRoots`](storage::CoinRoots)
-    CoinRoots = 26,
-    /// See [`CoinRoots`](storage::CoinRoots)
-    MessageRoots = 27,
-    /// See [`ContractStateRoots`](storage::ContractStateRoots)
-    ContractStateRoots = 28,
-    /// See [`ContractBalanceRoots`](storage::ContractBalanceRoots)
-    ContractBalanceRoots = 29,
-    /// See [`ContractRoots`](storage::ContractRoots)
-    ContractRoots = 30,
+    /// See [`GenesisCoinRoots`](storage::GenesisCoinRoots)
+    GenesisCoinRoots = 26,
+    /// See [`GenesisCoinRoots`](storage::GenesisCoinRoots)
+    GenesisMessageRoots = 27,
+    /// See [`GenesisContractStateRoots`](storage::GenesisContractStateRoots)
+    GenesisContractStateRoots = 28,
+    /// See [`GenesisContractBalanceRoots`](storage::GenesisContractBalanceRoots)
+    GenesisContractBalanceRoots = 29,
+    /// See [`GenesisContractRoots`](storage::GenesisContractRoots)
+    GenesisContractRoots = 30,
     /// See [`GenesisContractIds`](storage::GenesisContractIds)
     GenesisContractIds = 31,
 }

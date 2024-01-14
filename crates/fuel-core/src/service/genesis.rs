@@ -1,5 +1,9 @@
 use crate::{
-    database::Database,
+    database::{
+        genesis_progress::GenesisResource,
+        storage::GenesisMetadata,
+        Database,
+    },
     service::config::Config,
 };
 use anyhow::anyhow;
@@ -65,12 +69,9 @@ pub use runner::{
     GenesisRunner,
     TransactionOpener,
 };
-use tokio_util::sync::CancellationToken;
 
-use self::workers::{
-    GenesisWorkers,
-    StopSignals,
-};
+mod workers;
+use self::workers::GenesisWorkers;
 
 /// Loads state from the chain config into database
 pub async fn maybe_initialize_state(
@@ -79,46 +80,25 @@ pub async fn maybe_initialize_state(
 ) -> anyhow::Result<()> {
     // check if chain is initialized
     if database.ids_of_latest_block()?.is_none() {
-        import_chain_state(config, database).await?;
+        let workers = GenesisWorkers::new(
+            database.clone(),
+            config.chain_config.height.unwrap_or_default(),
+            config.state_reader.clone(),
+        );
+
+        import_chain_state(workers).await?;
         commit_genesis_block(config, database)?;
-        // database.remove_genesis_progress()?;
+        cleanup_genesis_progress(database)?;
     }
 
     Ok(())
 }
 
-async fn import_chain_state(
-    config: &Config,
-    original_database: &Database,
-) -> anyhow::Result<()> {
-    let block_height = config.chain_config.height.unwrap_or_default();
-
-    let mut stop_signals = StopSignals::new();
-    let token = CancellationToken::new();
-    let workers = GenesisWorkers::new(
-        original_database.clone(),
-        token.clone(),
-        block_height,
-        config.state_reader.clone(),
-    );
-
-    let res = tokio::try_join!(
-        workers.spawn_coins_worker(stop_signals.add()),
-        workers.spawn_messages_worker(stop_signals.add()),
-        workers.spawn_contracts_worker(stop_signals.add()),
-        workers.spawn_contract_state_worker(stop_signals.add()),
-        workers.spawn_contract_balance_worker(stop_signals.add())
-    );
-
-    // if one of the workers failed, cancel all of them and wait for them to stop
-    if let Err(e) = res {
-        token.cancel();
+async fn import_chain_state(workers: GenesisWorkers) -> anyhow::Result<()> {
+    if let Err(e) = workers.run().await {
+        workers.shutdown();
         tokio::select! {
-            _ = async {
-                for signal in stop_signals {
-                    signal.notified().await;
-                }
-            } => {}
+            _ = workers.stopped() => {}
             _ = tokio::time::sleep(tokio::time::Duration::from_secs(10)) => {
                 return Err(anyhow!("Timeout while importing genesis state"));
             }
@@ -192,7 +172,21 @@ fn commit_genesis_block(
     Ok(())
 }
 
-mod workers;
+fn cleanup_genesis_progress(database: &Database) -> anyhow::Result<()> {
+    let mut database_transaction = Transactional::transaction(database);
+    let database = database_transaction.as_mut();
+
+    use strum::IntoEnumIterator;
+    for key in GenesisResource::iter() {
+        database.storage_as_mut::<GenesisMetadata>().remove(&key)?;
+    }
+
+    // how to drop roots and contract ids?
+
+    database_transaction.commit()?;
+
+    Ok(())
+}
 
 fn generated_utxo_id(output_index: u64) -> UtxoId {
     UtxoId::new(
