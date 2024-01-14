@@ -18,7 +18,7 @@ use crate::{
         OnResponse,
         RequestMessage,
         ResponseMessage,
-        TypedResponseChannel,
+        ResponseSender,
     },
 };
 use anyhow::anyhow;
@@ -170,7 +170,7 @@ pub trait TaskP2PService: Send {
         &mut self,
         peer_id: Option<PeerId>,
         request_msg: RequestMessage,
-        on_response: TypedResponseChannel,
+        on_response: ResponseSender,
     ) -> anyhow::Result<()>;
 
     fn send_response_msg(
@@ -224,7 +224,7 @@ impl TaskP2PService for FuelP2PService {
         &mut self,
         peer_id: Option<PeerId>,
         request_msg: RequestMessage,
-        on_response: TypedResponseChannel,
+        on_response: ResponseSender,
     ) -> anyhow::Result<()> {
         self.send_request_msg(peer_id, request_msg, on_response)?;
         Ok(())
@@ -495,7 +495,7 @@ where
                         let _ = channel.send(peer_ids);
                     }
                     Some(TaskRequest::GetBlock { height, channel }) => {
-                        let channel = TypedResponseChannel::Block(channel);
+                        let channel = ResponseSender::Block(channel);
                         let request_msg = RequestMessage::Block(height);
                         let peer = self.p2p_service.get_peer_id_with_height(&height);
                         if self.p2p_service.send_request_msg(peer, request_msg, channel).is_err() {
@@ -503,7 +503,7 @@ where
                         }
                     }
                     Some(TaskRequest::GetSealedHeaders { block_height_range, channel }) => {
-                        let channel = TypedResponseChannel::SealedHeaders(channel);
+                        let channel = ResponseSender::SealedHeaders(channel);
                         let request_msg = RequestMessage::SealedHeaders(block_height_range.clone());
 
                         // Note: this range has already been checked for
@@ -515,7 +515,7 @@ where
                         }
                     }
                     Some(TaskRequest::GetTransactions { block_height_range, from_peer, channel }) => {
-                        let channel = TypedResponseChannel::Transactions(channel);
+                        let channel = ResponseSender::Transactions(channel);
                         let request_msg = RequestMessage::Transactions(block_height_range);
                         self.p2p_service.send_request_msg(Some(from_peer), request_msg, channel).expect("We always a peer here, so send has a target");
                     }
@@ -1003,7 +1003,7 @@ pub mod tests {
             &mut self,
             _peer_id: Option<PeerId>,
             _request_msg: RequestMessage,
-            _on_response: TypedResponseChannel,
+            _on_response: ResponseSender,
         ) -> anyhow::Result<()> {
             todo!()
         }

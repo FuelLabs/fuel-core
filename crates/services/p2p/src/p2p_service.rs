@@ -30,7 +30,7 @@ use crate::{
         ResponseError,
         ResponseMessage,
         ResponseSendError,
-        TypedResponseChannel,
+        ResponseSender,
     },
     TryPeerId,
 };
@@ -104,7 +104,7 @@ pub struct FuelP2PService {
     /// Whenever a response (or an error) is received from the p2p network,
     /// the request is removed from this table, and the channel is used to
     /// send the result to the caller.
-    outbound_requests_table: HashMap<OutboundRequestId, TypedResponseChannel>,
+    outbound_requests_table: HashMap<OutboundRequestId, ResponseSender>,
 
     /// Holds active inbound requests and associated oneshot channels.
     /// Whenever we're done processing the request, it's removed from this table,
@@ -297,7 +297,7 @@ impl FuelP2PService {
         &mut self,
         peer_id: Option<PeerId>,
         message_request: RequestMessage,
-        on_response: TypedResponseChannel,
+        on_response: ResponseSender,
     ) -> Result<OutboundRequestId, RequestError> {
         let peer_id = match peer_id {
             Some(peer_id) => peer_id,
@@ -570,7 +570,7 @@ impl FuelP2PService {
                     };
 
                     let send_ok = match channel {
-                        TypedResponseChannel::Block(c) => match response {
+                        ResponseSender::Block(c) => match response {
                             ResponseMessage::Block(v) => c.send((peer, Ok(v))).is_ok(),
                             _ => {
                                 warn!(
@@ -580,7 +580,7 @@ impl FuelP2PService {
                                 c.send((peer, Err(ResponseError::TypeMismatch))).is_ok()
                             }
                         },
-                        TypedResponseChannel::SealedHeaders(c) => match response {
+                        ResponseSender::SealedHeaders(c) => match response {
                             ResponseMessage::SealedHeaders(v) => {
                                 c.send((peer, Ok(v))).is_ok()
                             }
@@ -592,7 +592,7 @@ impl FuelP2PService {
                                 c.send((peer, Err(ResponseError::TypeMismatch))).is_ok()
                             }
                         },
-                        TypedResponseChannel::Transactions(c) => match response {
+                        ResponseSender::Transactions(c) => match response {
                             ResponseMessage::Transactions(v) => {
                                 c.send((peer, Ok(v.map(Arc::new)))).is_ok()
                             }
@@ -630,13 +630,13 @@ impl FuelP2PService {
 
                 if let Some(channel) = self.outbound_requests_table.remove(&request_id) {
                     match channel {
-                        TypedResponseChannel::Block(c) => {
+                        ResponseSender::Block(c) => {
                             let _ = c.send((peer, Err(ResponseError::P2P(error))));
                         }
-                        TypedResponseChannel::SealedHeaders(c) => {
+                        ResponseSender::SealedHeaders(c) => {
                             let _ = c.send((peer, Err(ResponseError::P2P(error))));
                         }
-                        TypedResponseChannel::Transactions(c) => {
+                        ResponseSender::Transactions(c) => {
                             let _ = c.send((peer, Err(ResponseError::P2P(error))));
                         }
                     };
@@ -727,7 +727,7 @@ mod tests {
             RequestMessage,
             ResponseError,
             ResponseMessage,
-            TypedResponseChannel,
+            ResponseSender,
         },
         service::to_message_acceptance,
     };
@@ -1544,7 +1544,7 @@ mod tests {
                                 match request_msg.clone() {
                                     RequestMessage::Block(_) => {
                                         let (tx_orchestrator, rx_orchestrator) = oneshot::channel();
-                                        assert!(node_a.send_request_msg(None, request_msg.clone(), TypedResponseChannel::Block(tx_orchestrator)).is_ok());
+                                        assert!(node_a.send_request_msg(None, request_msg.clone(), ResponseSender::Block(tx_orchestrator)).is_ok());
                                         let tx_test_end = tx_test_end.clone();
 
                                         tokio::spawn(async move {
@@ -1561,7 +1561,7 @@ mod tests {
                                     }
                                     RequestMessage::SealedHeaders(range) => {
                                         let (tx_orchestrator, rx_orchestrator) = oneshot::channel();
-                                        assert!(node_a.send_request_msg(None, request_msg.clone(), TypedResponseChannel::SealedHeaders(tx_orchestrator)).is_ok());
+                                        assert!(node_a.send_request_msg(None, request_msg.clone(), ResponseSender::SealedHeaders(tx_orchestrator)).is_ok());
                                         let tx_test_end = tx_test_end.clone();
 
                                         tokio::spawn(async move {
@@ -1580,7 +1580,7 @@ mod tests {
                                     }
                                     RequestMessage::Transactions(_range) => {
                                         let (tx_orchestrator, rx_orchestrator) = oneshot::channel();
-                                        assert!(node_a.send_request_msg(None, request_msg.clone(), TypedResponseChannel::Transactions(tx_orchestrator)).is_ok());
+                                        assert!(node_a.send_request_msg(None, request_msg.clone(), ResponseSender::Transactions(tx_orchestrator)).is_ok());
                                         let tx_test_end = tx_test_end.clone();
 
                                         tokio::spawn(async move {
@@ -1688,7 +1688,7 @@ mod tests {
                                 request_sent = true;
 
                                 let (tx_orchestrator, rx_orchestrator) = oneshot::channel();
-                                assert!(node_a.send_request_msg(None, RequestMessage::Block(0.into()), TypedResponseChannel::Block(tx_orchestrator)).is_ok());
+                                assert!(node_a.send_request_msg(None, RequestMessage::Block(0.into()), ResponseSender::Block(tx_orchestrator)).is_ok());
                                 let tx_test_end = tx_test_end.clone();
 
                                 tokio::spawn(async move {
@@ -1770,7 +1770,7 @@ mod tests {
 
                                 // Request successfully sent
                                 let requested_block_height = RequestMessage::Block(0.into());
-                                assert!(node_a.send_request_msg(None, requested_block_height, TypedResponseChannel::Block(tx_orchestrator)).is_ok());
+                                assert!(node_a.send_request_msg(None, requested_block_height, ResponseSender::Block(tx_orchestrator)).is_ok());
 
                                 // 2b. there should be ONE pending outbound requests in the table
                                 assert_eq!(node_a.outbound_requests_table.len(), 1);

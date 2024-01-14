@@ -44,7 +44,7 @@ pub enum ResponseMessage {
 pub type OnResponse<T> = oneshot::Sender<(PeerId, Result<T, ResponseError>)>;
 
 #[derive(Debug)]
-pub enum TypedResponseChannel {
+pub enum ResponseSender {
     Block(OnResponse<Option<Arc<SealedBlock>>>),
     SealedHeaders(OnResponse<Option<Vec<SealedBlockHeader>>>),
     Transactions(OnResponse<Option<Arc<Vec<Transactions>>>>),
