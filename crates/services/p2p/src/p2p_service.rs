@@ -104,13 +104,13 @@ pub struct FuelP2PService {
     /// Whenever a response (or an error) is received from the p2p network,
     /// the request is removed from this table, and the channel is used to
     /// send the result to the caller.
-    outbound_requests_pending: HashMap<OutboundRequestId, TypedResponseChannel>,
+    outbound_requests_table: HashMap<OutboundRequestId, TypedResponseChannel>,
 
     /// Holds active inbound requests and associated oneshot channels.
     /// Whenever we're done processing the request, it's removed from this table,
     /// and the channel is used to send the result to libp2p, which will forward it
     /// to the peer that requested it.
-    inbound_requests_pending: HashMap<InboundRequestId, ResponseChannel<ResponseMessage>>,
+    inbound_requests_table: HashMap<InboundRequestId, ResponseChannel<ResponseMessage>>,
 
     /// NetworkCodec used as <GossipsubCodec> for encoding and decoding of Gossipsub messages    
     network_codec: PostcardCodec,
@@ -208,8 +208,8 @@ impl FuelP2PService {
             tcp_port: config.tcp_port,
             swarm,
             network_codec: codec,
-            outbound_requests_pending: HashMap::default(),
-            inbound_requests_pending: HashMap::default(),
+            outbound_requests_table: HashMap::default(),
+            inbound_requests_table: HashMap::default(),
             network_metadata,
             metrics,
             peer_manager: PeerManager::new(
@@ -319,8 +319,7 @@ impl FuelP2PService {
             .behaviour_mut()
             .send_request_msg(message_request, &peer_id);
 
-        self.outbound_requests_pending
-            .insert(request_id, on_response);
+        self.outbound_requests_table.insert(request_id, on_response);
 
         Ok(request_id)
     }
@@ -331,7 +330,7 @@ impl FuelP2PService {
         request_id: InboundRequestId,
         message: ResponseMessage,
     ) -> Result<(), ResponseSendError> {
-        let Some(channel) = self.inbound_requests_pending.remove(&request_id) else {
+        let Some(channel) = self.inbound_requests_table.remove(&request_id) else {
             debug!("ResponseChannel for {:?} does not exist!", request_id);
             return Err(ResponseSendError::ResponseChannelDoesNotExist);
         };
@@ -553,7 +552,7 @@ impl FuelP2PService {
                     channel,
                     request_id,
                 } => {
-                    self.inbound_requests_pending.insert(request_id, channel);
+                    self.inbound_requests_table.insert(request_id, channel);
 
                     return Some(FuelP2PEvent::InboundRequestMessage {
                         request_id,
@@ -564,8 +563,7 @@ impl FuelP2PService {
                     request_id,
                     response,
                 } => {
-                    let Some(channel) =
-                        self.outbound_requests_pending.remove(&request_id)
+                    let Some(channel) = self.outbound_requests_table.remove(&request_id)
                     else {
                         debug!("Send channel not found for {:?}", request_id);
                         return None;
@@ -621,7 +619,7 @@ impl FuelP2PService {
                 tracing::error!("RequestResponse inbound error for peer: {:?} with id: {:?} and error: {:?}", peer, request_id, error);
 
                 // Drop the channel, as we can't send a response
-                let _ = self.inbound_requests_pending.remove(&request_id);
+                let _ = self.inbound_requests_table.remove(&request_id);
             }
             RequestResponseEvent::OutboundFailure {
                 peer,
@@ -630,8 +628,7 @@ impl FuelP2PService {
             } => {
                 tracing::error!("RequestResponse outbound error for peer: {:?} with id: {:?} and error: {:?}", peer, request_id, error);
 
-                if let Some(channel) = self.outbound_requests_pending.remove(&request_id)
-                {
+                if let Some(channel) = self.outbound_requests_table.remove(&request_id) {
                     match channel {
                         TypedResponseChannel::Block(c) => {
                             let _ = c.send((peer, Err(ResponseError::P2P(error))));
@@ -1769,14 +1766,14 @@ mod tests {
                                 let (tx_orchestrator, rx_orchestrator) = oneshot::channel();
 
                                 // 2a. there should be ZERO pending outbound requests in the table
-                                assert_eq!(node_a.outbound_requests_pending.len(), 0);
+                                assert_eq!(node_a.outbound_requests_table.len(), 0);
 
                                 // Request successfully sent
                                 let requested_block_height = RequestMessage::Block(0.into());
                                 assert!(node_a.send_request_msg(None, requested_block_height, TypedResponseChannel::Block(tx_orchestrator)).is_ok());
 
                                 // 2b. there should be ONE pending outbound requests in the table
-                                assert_eq!(node_a.outbound_requests_pending.len(), 1);
+                                assert_eq!(node_a.outbound_requests_table.len(), 1);
 
                                 let tx_test_end = tx_test_end.clone();
 
@@ -1811,7 +1808,7 @@ mod tests {
                     // we received a signal to end the test
                     // 4. there should be ZERO pending outbound requests in the table
                     // after the Outbound Request Failed with Timeout
-                    assert_eq!(node_a.outbound_requests_pending.len(), 0);
+                    assert_eq!(node_a.outbound_requests_table.len(), 0);
                     break;
                 },
                 // will not receive the request at all
