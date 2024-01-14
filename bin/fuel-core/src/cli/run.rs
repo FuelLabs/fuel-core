@@ -256,7 +256,7 @@ impl Command {
         let (chain_conf, state_config) = match genesis_config.as_deref() {
             None => (ChainConfig::local_testnet(), StateConfig::local_testnet()),
             Some(path) => {
-                let metadata = SnapshotMetadata::read_from_dir(path)?;
+                let metadata = SnapshotMetadata::read(path)?;
                 let chain_conf = ChainConfig::from_snapshot(&metadata)?;
                 let state_config = StateConfig::from_snapshot(metadata)?;
                 (chain_conf, state_config)

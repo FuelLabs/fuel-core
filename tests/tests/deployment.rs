@@ -21,7 +21,7 @@ use fuel_core_types::fuel_tx::GasCosts;
 fn test_deployment_chainconfig(path: &str, chain_bytes: &str, state_bytes: &str) {
     let mut chain_config =
         ChainConfig::load(path).expect("Should be able to load chain config");
-    let snapshot = SnapshotMetadata::read_from_dir(path).unwrap();
+    let snapshot = SnapshotMetadata::open(path).unwrap();
     let state_config = StateConfig::from_snapshot(snapshot)
         .expect("Should be able to load state config");
 

@@ -140,12 +140,10 @@ fn full_snapshot(
 ) -> Result<(), anyhow::Error> {
     std::fs::create_dir_all(output_dir)?;
 
-    let metadata = generate_metadata(output_dir, encoding)?;
+    let metadata = write_metadata(output_dir, encoding)?;
 
     write_chain_state(&db, &metadata)?;
-    write_chain_config(db, prev_chain_config, &metadata.chain_config)?;
-
-    metadata.write_to_dir(output_dir)?;
+    write_chain_config(db, prev_chain_config, &metadata.chain_config())?;
     Ok(())
 }
 
@@ -163,17 +161,16 @@ fn write_chain_config(
     chain_config.create_config_file(file)
 }
 
-fn generate_metadata(dir: &Path, encoding: Encoding) -> anyhow::Result<SnapshotMetadata> {
-    let meta = match encoding {
-        Encoding::Json => SnapshotMetadata::json(dir),
+fn write_metadata(dir: &Path, encoding: Encoding) -> anyhow::Result<SnapshotMetadata> {
+    match encoding {
+        Encoding::Json => SnapshotMetadata::write_json(dir),
         #[cfg(feature = "parquet")]
         Encoding::Parquet {
             compression,
             group_size,
             ..
-        } => SnapshotMetadata::parquet(dir, compression.try_into()?, group_size),
-    };
-    Ok(meta)
+        } => SnapshotMetadata::write_parquet(dir, compression.try_into()?, group_size),
+    }
 }
 
 fn write_chain_state(
@@ -190,7 +187,10 @@ fn write_chain_state(
             .into_iter()
             .try_for_each(|chunk| write(chunk.try_collect()?))
     }
-    let group_size = metadata.encoding.group_size().unwrap_or(MAX_GROUP_SIZE);
+    let group_size = metadata
+        .state_encoding()
+        .group_size()
+        .unwrap_or(MAX_GROUP_SIZE);
 
     let coins = db.iter_coin_configs();
     write(coins, group_size, |chunk| encoder.write_coins(chunk))?;

@@ -99,8 +99,7 @@ fn dev_config() -> Config {
     let mut config = Config::local_node();
 
     let snapshot =
-        SnapshotMetadata::read_from_dir("../../deployment/scripts/chainspec/dev")
-            .unwrap();
+        SnapshotMetadata::open("../../deployment/scripts/chainspec/dev").unwrap();
     let chain_config = ChainConfig::from_snapshot(&snapshot)
         .expect("Should be able to load chain config");
     // TODO: don't use serde here
