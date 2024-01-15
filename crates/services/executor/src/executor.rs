@@ -1101,6 +1101,7 @@ where
                         )
                     }
                 }
+                _ => return Err(ExecutorError::UnknownTransactionType("Output")),
             }
         }
 
@@ -1511,7 +1512,8 @@ where
                             tx_pointer: TxPointer::new(block_height, tx_idx),
                         },
                     )?;
-                }
+                },
+                _ => return Err(ExecutorError::UnknownTransactionType("Output")),
             }
         }
         Ok(())
@@ -1581,6 +1583,7 @@ where
                     outputs = tx.outputs().as_slice();
                 }
                 Transaction::Mint(_) => continue,
+                _ => return Err(ExecutorError::UnknownTransactionType("Transaction")),
             }
             self.persist_owners_index(
                 block_height,
@@ -1620,7 +1623,8 @@ where
                 | Output::Variable { to, .. } => {
                     owners.push(to);
                 }
-                Output::Contract(_) | Output::ContractCreated { .. } => {}
+                Output::Contract(_) | Output::ContractCreated { .. } => {},
+                _ => return Err(ExecutorError::UnknownTransactionType("Output")),
             }
         }
 
