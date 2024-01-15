@@ -18,9 +18,7 @@ use serde::{
     Deserialize,
     Serialize,
 };
-use serde_with::serde_as;
 
-#[serde_as]
 #[derive(Clone, Debug, Deserialize, Serialize, Eq, PartialEq, Default)]
 pub struct CoinConfig {
     /// auto-generated if None

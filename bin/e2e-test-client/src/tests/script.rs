@@ -4,6 +4,7 @@ use crate::test_context::{
 };
 use fuel_core_chain_config::{
     ContractConfig,
+    SnapshotMetadata,
     StateReader,
     MAX_GROUP_SIZE,
 };
@@ -82,7 +83,8 @@ pub async fn dry_run(ctx: &TestContext) -> Result<(), Failed> {
 fn load_contract(
     path: impl AsRef<Path>,
 ) -> Result<(ContractConfig, Vec<StorageSlot>), Failed> {
-    let reader = StateReader::json(path, MAX_GROUP_SIZE)?;
+    let snapshot = SnapshotMetadata::read(path)?;
+    let reader = StateReader::for_snapshot(snapshot, MAX_GROUP_SIZE)?;
 
     let state = reader
         .contract_state()?

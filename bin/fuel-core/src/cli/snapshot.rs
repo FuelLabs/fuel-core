@@ -167,7 +167,7 @@ fn write_chain_config(
         ..load_chain_config(chain_config)?
     };
 
-    chain_config.create_config_file(file)
+    chain_config.write(file)
 }
 
 fn write_metadata(dir: &Path, encoding: Encoding) -> anyhow::Result<SnapshotMetadata> {

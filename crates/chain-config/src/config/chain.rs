@@ -74,11 +74,11 @@ impl ChainConfig {
     }
 
     pub fn from_snapshot(snapshot_metadata: &SnapshotMetadata) -> anyhow::Result<Self> {
-        Self::load(&snapshot_metadata.chain_config())
+        Self::load(snapshot_metadata.chain_config())
     }
 
     #[cfg(feature = "std")]
-    pub fn create_config_file(&self, path: impl AsRef<Path>) -> anyhow::Result<()> {
+    pub fn write(&self, path: impl AsRef<Path>) -> anyhow::Result<()> {
         use anyhow::Context;
 
         let state_writer = File::create(path)?;
@@ -173,7 +173,7 @@ mod tests {
         let file = tmp_dir.join("config.json");
 
         let disk_config = ChainConfig::local_testnet();
-        disk_config.create_config_file(&file).unwrap();
+        disk_config.write(&file).unwrap();
 
         let load_config = ChainConfig::load(&file).unwrap();
 
