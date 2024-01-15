@@ -262,31 +262,31 @@ impl DatabaseColumn for GenesisMetadata {
 
 impl DatabaseColumn for GenesisCoinRoots {
     fn column() -> Column {
-        Column::CoinRoots
+        Column::GenesisCoinRoots
     }
 }
 
 impl DatabaseColumn for GenesisMessageRoots {
     fn column() -> Column {
-        Column::MessageRoots
+        Column::GenesisMessageRoots
     }
 }
 
 impl DatabaseColumn for GenesisContractStateRoots {
     fn column() -> Column {
-        Column::ContractStateRoots
+        Column::GenesisContractStateRoots
     }
 }
 
 impl DatabaseColumn for GenesisContractBalanceRoots {
     fn column() -> Column {
-        Column::ContractBalanceRoots
+        Column::GenesisContractBalanceRoots
     }
 }
 
 impl DatabaseColumn for GenesisContractRoots {
     fn column() -> Column {
-        Column::ContractRoots
+        Column::GenesisContractRoots
     }
 }
 
