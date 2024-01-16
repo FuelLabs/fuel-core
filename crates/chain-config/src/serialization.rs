@@ -8,6 +8,19 @@ use serde_with::{
     SerializeAs,
 };
 
+pub(crate) trait NonSkippingSerialize
+where
+    Self: serde::Serialize,
+{
+    /// The default to be used only when the Serialize impl doesn't skip fields
+    fn non_skipping_serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        self.serialize(serializer)
+    }
+}
+
 /// Encode/decode a byte vector as a hex string if the serializer is human readable. Otherwise, use the default encoding.
 pub(crate) struct HexIfHumanReadable;
 

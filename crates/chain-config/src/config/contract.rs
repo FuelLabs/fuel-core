@@ -1,4 +1,7 @@
-use crate::serialization::HexIfHumanReadable;
+use crate::serialization::{
+    HexIfHumanReadable,
+    NonSkippingSerialize,
+};
 use fuel_core_types::{
     fuel_tx::{
         Contract,
@@ -14,13 +17,16 @@ use fuel_core_types::{
     },
 };
 use serde::{
+    ser::SerializeStruct,
     Deserialize,
     Serialize,
 };
 use serde_with::serde_as;
 
+#[serde_with::skip_serializing_none]
 #[serde_as]
 #[derive(Clone, Debug, Deserialize, Serialize, Eq, PartialEq, Default)]
+// If any fields are added make sure to update the `NonSkippingSerialize` impl
 pub struct ContractConfig {
     pub contract_id: ContractId,
     #[serde_as(as = "HexIfHumanReadable")]
@@ -36,6 +42,23 @@ pub struct ContractConfig {
     /// used if contract is forked from another chain to preserve id & tx_pointer
     /// The index of the originating tx within `tx_pointer_block_height`
     pub tx_pointer_tx_idx: Option<u16>,
+}
+
+impl NonSkippingSerialize for ContractConfig {
+    fn non_skipping_serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        let mut s = serializer.serialize_struct("ContractConfig", 7)?;
+        s.serialize_field("contract_id", &self.contract_id)?;
+        s.serialize_field("code", &self.code)?;
+        s.serialize_field("salt", &self.salt)?;
+        s.serialize_field("tx_id", &self.tx_id)?;
+        s.serialize_field("output_index", &self.output_index)?;
+        s.serialize_field("tx_pointer_block_height", &self.tx_pointer_block_height)?;
+        s.serialize_field("tx_pointer_tx_idx", &self.tx_pointer_tx_idx)?;
+        s.end()
+    }
 }
 
 impl ContractConfig {

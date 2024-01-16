@@ -1,4 +1,7 @@
-use crate::GenesisCommitment;
+use crate::{
+    serialization::NonSkippingSerialize,
+    GenesisCommitment,
+};
 use fuel_core_storage::MerkleRoot;
 use fuel_core_types::{
     entities::coins::coin::CompressedCoin,
@@ -15,11 +18,15 @@ use fuel_core_types::{
     },
 };
 use serde::{
+    ser::SerializeStruct,
     Deserialize,
     Serialize,
+    Serializer,
 };
 
+#[serde_with::skip_serializing_none]
 #[derive(Clone, Debug, Deserialize, Serialize, Eq, PartialEq, Default)]
+// If any fields are added make sure to update the `NonSkippingSerialize` impl
 pub struct CoinConfig {
     /// auto-generated if None
     pub tx_id: Option<Bytes32>,
@@ -33,6 +40,24 @@ pub struct CoinConfig {
     pub owner: Address,
     pub amount: u64,
     pub asset_id: AssetId,
+}
+
+impl NonSkippingSerialize for CoinConfig {
+    fn non_skipping_serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let mut s = serializer.serialize_struct("CoinConfig", 8)?;
+        s.serialize_field("tx_id", &self.tx_id)?;
+        s.serialize_field("output_index", &self.output_index)?;
+        s.serialize_field("tx_pointer_block_height", &self.tx_pointer_block_height)?;
+        s.serialize_field("tx_pointer_tx_idx", &self.tx_pointer_tx_idx)?;
+        s.serialize_field("maturity", &self.maturity)?;
+        s.serialize_field("owner", &self.owner)?;
+        s.serialize_field("amount", &self.amount)?;
+        s.serialize_field("asset_id", &self.asset_id)?;
+        s.end()
+    }
 }
 
 impl CoinConfig {

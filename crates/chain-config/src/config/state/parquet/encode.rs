@@ -21,6 +21,12 @@ use parquet::{
     data_type::ByteArrayType,
     schema::types::Type,
 };
+use postcard::ser_flavors::{
+    AllocVec,
+    Flavor,
+};
+
+use crate::serialization::NonSkippingSerialize;
 
 pub struct Encoder<W: Write + Send, T, E> {
     writer: SerializedFileWriter<W>,
@@ -104,10 +110,14 @@ pub trait Encode<T> {
 pub struct PostcardEncode;
 impl<T> Encode<T> for PostcardEncode
 where
-    T: serde::Serialize,
+    T: NonSkippingSerialize,
 {
     fn encode(data: &T) -> anyhow::Result<Vec<u8>> {
-        Ok(postcard::to_stdvec(data)?)
+        let mut serializer = postcard::Serializer {
+            output: AllocVec::new(),
+        };
+        data.non_skipping_serialize(&mut serializer)?;
+        Ok(serializer.output.finalize()?)
     }
 }
 
