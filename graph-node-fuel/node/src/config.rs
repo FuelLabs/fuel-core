@@ -208,6 +208,11 @@ impl Config {
     }
 
     pub fn query_only(&self, node: &NodeId) -> bool {
+
+
+        dbg!(self.general.as_ref());
+
+
         self.general
             .as_ref()
             .map(|g| match g.query.find(node.as_str()) {

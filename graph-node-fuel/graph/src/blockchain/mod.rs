@@ -439,6 +439,7 @@ impl FromStr for BlockchainKind {
             "cosmos" => Ok(BlockchainKind::Cosmos),
             "substreams" => Ok(BlockchainKind::Substreams),
             "starknet" => Ok(BlockchainKind::Starknet),
+            "fuelnet" => Ok(BlockchainKind::Fuel),
             _ => Err(anyhow!("unknown blockchain kind {}", s)),
         }
     }

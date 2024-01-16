@@ -212,16 +212,16 @@ impl blockchain::UnresolvedDataSourceTemplate<Chain> for UnresolvedDataSourceTem
 }
 
 impl blockchain::DataSourceTemplate<Chain> for DataSourceTemplate {
-    fn name(&self) -> &str {
-        &self.name
-    }
-
     fn api_version(&self) -> semver::Version {
         self.mapping.api_version.clone()
     }
 
     fn runtime(&self) -> Option<Arc<Vec<u8>>> {
         Some(self.mapping.runtime.cheap_clone())
+    }
+
+    fn name(&self) -> &str {
+        &self.name
     }
 
     fn manifest_idx(&self) -> u32 {

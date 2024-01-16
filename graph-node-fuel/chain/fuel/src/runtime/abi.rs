@@ -12,14 +12,9 @@ use graph::runtime::{
     ToAscObj,
 };
 pub use graph::semver::Version;
-use graph_runtime_wasm::asc_abi::class::TypedArray;
 
 pub struct AscBytesArray(pub Array<AscPtr<Uint8Array>>);
 pub struct Ascu64Array(pub Array<AscPtr<u64>>);
-pub struct AscInputArray(pub Array<AscPtr<Input>>);
-pub struct AscOutputArray(pub Array<AscPtr<Output>>);
-pub struct AscStorageSlotArray(pub Array<AscPtr<StorageSlot>>);
-pub struct AscTransactionArray(pub Array<AscPtr<Transaction>>);
 
 impl AscIndexId for Block {
     const INDEX_ASC_TYPE_ID: IndexForAscTypeId = IndexForAscTypeId::FuelBlock;
@@ -86,121 +81,13 @@ impl AscType for Ascu64Array {
         asc_obj: &[u8],
         api_version: &Version,
     ) -> Result<Self, DeterministicHostError> {
-        Ok(Self(Ascu64Array(Array::from_asc_bytes(asc_obj, api_version)?)))
+        // Ok(Self(Ascu64Array(Array::from_asc_bytes(asc_obj, api_version)?)))
+        todo!()
     }
 }
 
 impl AscIndexId for Ascu64Array {
     const INDEX_ASC_TYPE_ID: IndexForAscTypeId = IndexForAscTypeId::FuelU64Array;
-}
-
-impl AscType for AscTransactionArray {
-    fn to_asc_bytes(&self) -> Result<Vec<u8>, DeterministicHostError> {
-        self.0.to_asc_bytes()
-    }
-
-    fn from_asc_bytes(
-        asc_obj: &[u8],
-        api_version: &Version,
-    ) -> Result<Self, DeterministicHostError> {
-        Ok(Self(Array::from_asc_bytes(asc_obj, api_version)?))
-    }
-}
-
-impl AscIndexId for AscTransactionArray {
-    const INDEX_ASC_TYPE_ID: IndexForAscTypeId = IndexForAscTypeId::FuelTransactionArray;
-}
-
-impl AscType for AscInputArray {
-    fn to_asc_bytes(&self) -> Result<Vec<u8>, DeterministicHostError> {
-        self.0.to_asc_bytes()
-    }
-
-    fn from_asc_bytes(
-        asc_obj: &[u8],
-        api_version: &Version,
-    ) -> Result<Self, DeterministicHostError> {
-        Ok(Self(Array::from_asc_bytes(asc_obj, api_version)?))
-    }
-}
-
-impl AscIndexId for AscInputArray {
-    const INDEX_ASC_TYPE_ID: IndexForAscTypeId = IndexForAscTypeId::FuelInputArray;
-}
-
-impl AscType for AscOutputArray {
-    fn to_asc_bytes(&self) -> Result<Vec<u8>, DeterministicHostError> {
-        self.0.to_asc_bytes()
-    }
-
-    fn from_asc_bytes(
-        asc_obj: &[u8],
-        api_version: &Version,
-    ) -> Result<Self, DeterministicHostError> {
-        Ok(Self(Array::from_asc_bytes(asc_obj, api_version)?))
-    }
-}
-
-impl AscIndexId for AscOutputArray {
-    const INDEX_ASC_TYPE_ID: IndexForAscTypeId = IndexForAscTypeId::FuelOutputArray;
-}
-
-impl AscType for AscStorageSlotArray {
-    fn to_asc_bytes(&self) -> Result<Vec<u8>, DeterministicHostError> {
-        self.0.to_asc_bytes()
-    }
-
-    fn from_asc_bytes(
-        asc_obj: &[u8],
-        api_version: &Version,
-    ) -> Result<Self, DeterministicHostError> {
-        Ok(Self(Array::from_asc_bytes(asc_obj, api_version)?))
-    }
-}
-
-impl AscIndexId for AscStorageSlotArray {
-    const INDEX_ASC_TYPE_ID: IndexForAscTypeId = IndexForAscTypeId::FuelStorageSlotArray;
-}
-
-// Todo Emir
-impl ToAscObj<AscTransactionArray> for Vec<Transaction> {
-    fn to_asc_obj<H: AscHeap + ?Sized>(
-        &self,
-        heap: &mut H,
-        gas: &GasCounter,
-    ) -> Result<AscTransactionArray, HostExportError> {
-        todo!()
-    }
-}
-
-impl ToAscObj<AscInputArray> for Vec<Input> {
-    fn to_asc_obj<H: AscHeap + ?Sized>(
-        &self,
-        heap: &mut H,
-        gas: &GasCounter,
-    ) -> Result<AscInputArray, HostExportError> {
-        todo!()
-    }
-}
-
-impl ToAscObj<AscOutputArray> for Vec<Output> {
-    fn to_asc_obj<H: AscHeap + ?Sized>(
-        &self,
-        heap: &mut H,
-        gas: &GasCounter,
-    ) -> Result<AscOutputArray, HostExportError> {
-        todo!()
-    }
-}
-
-impl ToAscObj<AscStorageSlotArray> for Vec<StorageSlot> {
-    fn to_asc_obj<H: AscHeap + ?Sized>(
-        &self,
-        heap: &mut H,
-        gas: &GasCounter,
-    ) -> Result<AscStorageSlotArray, HostExportError> {
-        todo!()
-    }
 }
 
 #[cfg(test)]

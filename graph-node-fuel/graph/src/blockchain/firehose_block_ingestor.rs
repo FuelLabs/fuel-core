@@ -12,7 +12,7 @@ use async_trait::async_trait;
 use futures03::StreamExt;
 use prost::Message;
 use prost_types::Any;
-use slog::{o, trace};
+use slog::{o, trace, warn};
 use tonic::Streaming;
 
 use super::{client::ChainClient, BlockIngestor, Blockchain};
@@ -201,6 +201,8 @@ where
                     ..Default::default()
                 })
                 .await;
+
+            warn!(logger, "{:?}", result);
 
             match result {
                 Ok(stream) => {

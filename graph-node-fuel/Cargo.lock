@@ -1673,6 +1673,7 @@ dependencies = [
  "graph-chain-common",
  "graph-runtime-derive",
  "graph-runtime-wasm",
+ "hex",
  "prost",
  "prost-types",
  "semver",

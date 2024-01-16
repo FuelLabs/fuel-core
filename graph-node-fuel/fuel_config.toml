@@ -1,0 +1,21 @@
+[deployment]
+[[deployment.rule]]
+shard = "primary"
+indexers = [ "default" ]
+
+[store]
+[store.primary]
+connection="postgresql://salka1988:arst@localhost:5432/graph-node"
+pool_size = 3
+
+[chains]
+ingestor = "block_ingestor_node"
+#ingestor = "default"
+
+[chains.fuel]
+shard = "primary"
+protocol = "fuel"
+provider = [
+    { label = "fuel-firehose", details = { type = "firehose", url = "http://localhost:10015" }},
+    { label = "fuel-substream", details = { type = "substreams", url = "http://localhost:10015", features = [] }},
+]

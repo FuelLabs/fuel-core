@@ -333,18 +333,6 @@ impl Blockchain for Chain {
         Ok(Arc::new(adapter))
     }
 
-    fn is_refetch_block_required(&self) -> bool {
-        false
-    }
-
-    async fn refetch_firehose_block(
-        &self,
-        _logger: &Logger,
-        _cursor: FirehoseCursor,
-    ) -> Result<codec::Block, Error> {
-        unimplemented!("This chain does not support Dynamic Data Sources. is_refetch_block_required always returns false, this shouldn't be called.")
-    }
-
     async fn new_block_stream(
         &self,
         deployment: DeploymentLocator,
@@ -394,6 +382,18 @@ impl Blockchain for Chain {
             .block_ptr_for_number::<codec::Block>(logger, number)
             .await
             .map_err(Into::into)
+    }
+
+    async fn refetch_firehose_block(
+        &self,
+        _logger: &Logger,
+        _cursor: FirehoseCursor,
+    ) -> Result<codec::Block, Error> {
+        unimplemented!("This chain does not support Dynamic Data Sources. is_refetch_block_required always returns false, this shouldn't be called.")
+    }
+
+    fn is_refetch_block_required(&self) -> bool {
+        false
     }
 
     fn runtime_adapter(&self) -> Arc<dyn RuntimeAdapterTrait<Self>> {

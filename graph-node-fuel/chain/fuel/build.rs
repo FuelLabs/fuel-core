@@ -3,13 +3,8 @@ const PROTO_FILE: &str = "proto/fuel.proto";
 fn main() {
     println!("cargo:rerun-if-changed=proto");
 
-    // tonic_build::configure()
-    //     .out_dir("src/protobuf")
-    //     .compile(&["proto/fuel.proto"], &["proto"])
-    //     .expect("Failed to compile Firehose Fuel proto(s)");
-
-    let types = graph_chain_common::parse_proto_file(PROTO_FILE)
-        .expect("Unable to parse proto file!");
+    let types =
+        graph_chain_common::parse_proto_file(PROTO_FILE).expect("Unable to parse proto file!");
 
     let array_types = types
         .iter()
@@ -19,8 +14,6 @@ fn main() {
         .collect::<std::collections::HashSet<_>>();
 
     let mut builder = tonic_build::configure().out_dir("src/protobuf");
-
-    // println!("{:?}", array_types);
 
     for (name, ptype) in types {
         // generate Asc<Type>
@@ -47,16 +40,15 @@ fn main() {
             ),
         );
 
-        // if array_types.contains(&ptype.name) {
-        //     builder = builder.type_attribute(
-        //         name.clone(),
-        //         "#[graph_runtime_derive::generate_array_type(Fuel)]",
-        //     );
-        // }
+        if array_types.contains(&ptype.name) {
+            builder = builder.type_attribute(
+                name.clone(),
+                "#[graph_runtime_derive::generate_array_type(Fuel)]",
+            );
+        }
     }
 
     builder
-        // out_dir("src/protobuf")
         .compile(&[PROTO_FILE], &["proto"])
         .expect("Failed to compile Firehose Fuel proto(s)");
 }

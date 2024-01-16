@@ -24,7 +24,7 @@ async fn main() -> Result<(), Error> {
 
     let endpoint = env_var(
         "SUBSTREAMS_ENDPOINT",
-        "https://api.streamingfast.io".to_string(),
+        "https://localhost:10015".to_string(),
     );
 
     let package_file = env_var("SUBSTREAMS_PACKAGE", "".to_string());

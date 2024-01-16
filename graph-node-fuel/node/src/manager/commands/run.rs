@@ -127,13 +127,6 @@ pub async fn run(
     let eth_adapters2 = eth_adapters.clone();
 
     let (_, ethereum_idents) = connect_ethereum_networks(&logger, eth_networks).await?;
-    // let (near_networks, near_idents) = connect_firehose_networks::<NearFirehoseHeaderOnlyBlock>(
-    //     &logger,
-    //     firehose_networks_by_kind
-    //         .remove(&BlockchainKind::Near)
-    //         .unwrap_or_else(|| FirehoseNetworks::new()),
-    // )
-    // .await;
 
     let chain_head_update_listener = store_builder.chain_head_update_listener();
     let network_identifiers = ethereum_idents.into_iter().collect();

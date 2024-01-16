@@ -121,6 +121,17 @@ async fn main() {
     // Set up logger
     let logger = logger(opt.debug);
 
+    info!(
+        logger,
+        "Graph Node version: {}",
+        render_testament!(TESTAMENT)
+    );
+
+    // Todo: Emir
+    warn!(logger, "{:?}",
+      opt.clone()
+    );
+
     // Log version information
     info!(
         logger,
@@ -371,9 +382,11 @@ async fn main() {
         .await
         .unwrap();
 
+
         let substreams_networks = substreams_networks_by_kind
             .remove(&BlockchainKind::Substreams)
             .unwrap_or_else(FirehoseNetworks::new);
+
 
         let (starknet_networks, starknet_idents) = connect_firehose_networks::<StarknetBlock>(
             &logger,

@@ -34,6 +34,7 @@ pub struct Block {
     create:Create,
     mint:Mint}
 )]
+#[graph_runtime_derive::generate_array_type(Fuel)]
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct Transaction {
@@ -135,6 +136,7 @@ pub struct Mint {
     message_data_signed:Message,
     message_data_predicate:Message}
 )]
+#[graph_runtime_derive::generate_array_type(Fuel)]
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct Input {
@@ -229,6 +231,7 @@ pub struct Message {
     variable:OutputCoin,
     contract_created:OutputContractCreated}
 )]
+#[graph_runtime_derive::generate_array_type(Fuel)]
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct Output {
@@ -309,6 +312,7 @@ pub struct OutputContract {
 #[graph_runtime_derive::generate_asc_type()]
 #[graph_runtime_derive::generate_network_type_id(Fuel)]
 #[graph_runtime_derive::generate_from_rust_type()]
+#[graph_runtime_derive::generate_array_type(Fuel)]
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct StorageSlot {

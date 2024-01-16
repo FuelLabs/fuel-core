@@ -10,7 +10,7 @@ use graph::firehose::{FirehoseEndpoint, FirehoseNetworks, SubgraphLimit};
 use graph::ipfs_client::IpfsClient;
 use graph::prelude::{anyhow, tokio};
 use graph::prelude::{prost, MetricsRegistry};
-use graph::slog::{debug, error, info, o, Logger};
+use graph::slog::{debug, error, info, o, Logger, warn};
 use graph::url::Url;
 use graph::util::futures::retry;
 use graph::util::security::SafeDisplay;
@@ -246,6 +246,7 @@ pub async fn connect_ethereum_networks(
                     Ok(Err(e)) | Err(e) => {
                         error!(logger, "Connection to provider failed. Not using this provider";
                                        "error" =>  e.to_string());
+
                         ProviderNetworkStatus::Broken {
                             chain_id: network,
                             provider: eth_adapter.provider().to_string(),
@@ -317,6 +318,7 @@ pub async fn connect_firehose_networks<M>(
 where
     M: prost::Message + BlockchainBlock + Default + 'static,
 {
+
     // This has one entry for each provider, and therefore multiple entries
     // for each network
     let statuses = join_all(
@@ -325,6 +327,7 @@ where
             .into_iter()
             .map(|(chain_id, endpoint)| (chain_id, endpoint, logger.clone()))
             .map(|((chain_id, _), endpoint, logger)| async move {
+
                 let logger = logger.new(o!("provider" => endpoint.provider.to_string()));
                 info!(
                     logger, "Connecting to Firehose to get chain identifier";
@@ -332,6 +335,7 @@ where
                 );
 
                 let retry_endpoint = endpoint.clone();
+
                 let retry_logger = logger.clone();
                 let req = retry("firehose startup connection test", &logger)
                     .no_limit()
