@@ -179,7 +179,7 @@ jobs:
         with:
           toolchain: ${{ env.RUST_VERSION }}
       - name: Publish crate check
-        uses: katyo/publish-crates@v2
+        uses: xgreenx/publish-crates@v1
         with:
           dry-run: true
           check-repo: false
@@ -237,7 +237,7 @@ jobs:
           sudo apt-get install protobuf-compiler
 
       - name: Publish crate
-        uses: katyo/publish-crates@v2
+        uses: xgreenx/publish-crates@v1
         with:
           publish-delay: 60000
           registry-token: ${{ secrets.CARGO_REGISTRY_TOKEN }}
