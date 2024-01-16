@@ -1,7 +1,6 @@
 use crate::{
     database::{
-        genesis_progress::GenesisResource,
-        storage::GenesisMetadata,
+        Column,
         Database,
     },
     service::config::Config,
@@ -95,7 +94,7 @@ pub async fn maybe_initialize_state(
 }
 
 async fn import_chain_state(workers: GenesisWorkers) -> anyhow::Result<()> {
-    if let Err(e) = workers.run().await {
+    if let Err(e) = workers.run_imports().await {
         workers.shutdown();
         tokio::select! {
             _ = workers.stopped() => {}
@@ -104,10 +103,10 @@ async fn import_chain_state(workers: GenesisWorkers) -> anyhow::Result<()> {
             }
         };
 
-        return Err(e.into());
+        return Err(e);
     }
 
-    workers.spawn_contracts_root_worker().await?;
+    workers.compute_contracts_root().await?;
 
     Ok(())
 }
@@ -176,12 +175,13 @@ fn cleanup_genesis_progress(database: &Database) -> anyhow::Result<()> {
     let mut database_transaction = Transactional::transaction(database);
     let database = database_transaction.as_mut();
 
-    use strum::IntoEnumIterator;
-    for key in GenesisResource::iter() {
-        database.storage_as_mut::<GenesisMetadata>().remove(&key)?;
-    }
-
-    // how to drop roots and contract ids?
+    database.delete_all(Column::GenesisMetadata)?;
+    database.delete_all(Column::GenesisCoinRoots)?;
+    database.delete_all(Column::GenesisMessageRoots)?;
+    database.delete_all(Column::GenesisContractBalanceRoots)?;
+    database.delete_all(Column::GenesisContractStateRoots)?;
+    database.delete_all(Column::GenesisContractRoots)?;
+    database.delete_all(Column::GenesisContractIds)?;
 
     database_transaction.commit()?;
 
@@ -313,7 +313,11 @@ fn init_da_message(db: &mut Database, msg: &MessageConfig) -> anyhow::Result<Mer
 #[cfg(test)]
 mod tests {
     use crate::{
-        database::Database,
+        database::{
+            genesis_progress::GenesisResource,
+            Column,
+            Database,
+        },
         service::{
             config::Config,
             genesis::{
@@ -413,6 +417,106 @@ mod tests {
             db.latest_height()
                 .expect("Expected a block height to be set")
         )
+    }
+
+    #[tokio::test]
+    async fn genesis_columns_are_cleared_after_import() {
+        let mut rng = StdRng::seed_from_u64(10);
+
+        let coins = (0..1000)
+            .map(|_| CoinConfig {
+                tx_id: None,
+                output_index: None,
+                tx_pointer_block_height: None,
+                tx_pointer_tx_idx: None,
+                maturity: None,
+                owner: Default::default(),
+                amount: 10,
+                asset_id: Default::default(),
+            })
+            .collect_vec();
+
+        let messages = (0..1000)
+            .map(|_| MessageConfig {
+                sender: rng.gen(),
+                recipient: rng.gen(),
+                nonce: rng.gen(),
+                amount: rng.gen(),
+                data: vec![rng.gen()],
+                da_height: DaBlockHeight(0),
+            })
+            .collect_vec();
+
+        let contracts = (0..1000)
+            .map(|_| given_contract_config(&mut rng))
+            .collect_vec();
+
+        let contract_state = (0..1000)
+            .map(|_| ContractStateConfig {
+                contract_id: rng.gen(),
+                key: rng.gen(),
+                value: rng.gen(),
+            })
+            .collect_vec();
+
+        let contract_balance = (0..1000)
+            .map(|_| ContractBalanceConfig {
+                contract_id: rng.gen(),
+                asset_id: rng.gen(),
+                amount: rng.next_u64(),
+            })
+            .collect_vec();
+
+        let state = StateConfig {
+            coins,
+            messages,
+            contracts,
+            contract_state,
+            contract_balance,
+            ..Default::default()
+        };
+        let state_reader = StateReader::in_memory(state, MAX_GROUP_SIZE);
+
+        let service_config = Config {
+            state_reader,
+            ..Config::local_node()
+        };
+
+        let db = Database::default();
+        FuelService::from_database(db.clone(), service_config)
+            .await
+            .unwrap();
+
+        use strum::IntoEnumIterator;
+        for key in GenesisResource::iter() {
+            assert!(db.genesis_progress(&key).is_none());
+        }
+        assert!(db
+            .genesis_roots(Column::GenesisCoinRoots)
+            .unwrap()
+            .next()
+            .is_none());
+        assert!(db
+            .genesis_roots(Column::GenesisMessageRoots)
+            .unwrap()
+            .next()
+            .is_none());
+        assert!(db
+            .genesis_roots(Column::GenesisContractRoots)
+            .unwrap()
+            .next()
+            .is_none());
+        assert!(db
+            .genesis_roots(Column::GenesisContractStateRoots)
+            .unwrap()
+            .next()
+            .is_none());
+        assert!(db
+            .genesis_roots(Column::GenesisContractBalanceRoots)
+            .unwrap()
+            .next()
+            .is_none());
+        assert!(db.genesis_contract_ids_iter().next().is_none());
     }
 
     #[tokio::test]

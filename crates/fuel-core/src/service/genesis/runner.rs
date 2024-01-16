@@ -476,6 +476,13 @@ mod tests {
         ) -> crate::database::Result<()> {
             Err(Error::Other(anyhow!("I refuse to work!")))
         }
+
+        fn delete_all(
+            &self,
+            _column: crate::database::Column,
+        ) -> crate::database::Result<()> {
+            Err(Error::Other(anyhow!("I refuse to work!")))
+        }
     }
 
     impl TransactableStorage for BrokenTransactions {

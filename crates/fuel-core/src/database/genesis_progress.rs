@@ -99,7 +99,10 @@ impl Database {
         Ok(())
     }
 
-    fn genesis_roots(&self, column: Column) -> Result<MerkleRoot> {
+    pub(crate) fn genesis_roots(
+        &self,
+        column: Column,
+    ) -> Result<impl Iterator<Item = (MerkleTreeKey, [u8; 32])>> {
         let roots_iter = self.iter_all::<Vec<u8>, ()>(column, None);
 
         let roots = process_results(roots_iter, |roots| {
@@ -111,27 +114,32 @@ impl Database {
         .enumerate()
         .map(|(idx, root)| (MerkleTreeKey::new(idx.to_be_bytes()), root));
 
+        Ok(roots)
+    }
+
+    fn compute_genesis_root(&self, column: Column) -> Result<MerkleRoot> {
+        let roots = self.genesis_roots(column)?;
         Ok(MerkleTree::root_from_set(roots.into_iter()))
     }
 
     pub fn genesis_coin_root(&self) -> Result<MerkleRoot> {
-        self.genesis_roots(Column::GenesisCoinRoots)
+        self.compute_genesis_root(Column::GenesisCoinRoots)
     }
 
     pub fn genesis_messages_root(&self) -> Result<MerkleRoot> {
-        self.genesis_roots(Column::GenesisMessageRoots)
+        self.compute_genesis_root(Column::GenesisMessageRoots)
     }
 
     pub fn genesis_contracts_root(&self) -> Result<MerkleRoot> {
-        self.genesis_roots(Column::GenesisContractRoots)
+        self.compute_genesis_root(Column::GenesisContractRoots)
     }
 
     pub fn genesis_states_root(&self) -> Result<MerkleRoot> {
-        self.genesis_roots(Column::GenesisContractStateRoots)
+        self.compute_genesis_root(Column::GenesisContractStateRoots)
     }
 
     pub fn genesis_balances_root(&self) -> Result<MerkleRoot> {
-        self.genesis_roots(Column::GenesisContractBalanceRoots)
+        self.compute_genesis_root(Column::GenesisContractBalanceRoots)
     }
 
     pub fn genesis_contract_ids_iter(
