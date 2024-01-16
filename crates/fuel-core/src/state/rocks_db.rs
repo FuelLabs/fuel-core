@@ -541,6 +541,21 @@ impl BatchOperations for RocksDb {
             .write(batch)
             .map_err(|e| DatabaseError::Other(e.into()))
     }
+
+    // use delete_range to delete all keys in a column
+    fn delete_all(&self, column: Column) -> DatabaseResult<()> {
+        let mut batch = WriteBatch::default();
+        batch.delete_range_cf(&self.cf(column), [0u8; 32], [255u8; 32]);
+
+        database_metrics().write_meter.inc();
+        database_metrics()
+            .bytes_written
+            .observe(batch.size_in_bytes() as f64);
+
+        self.db
+            .write(batch)
+            .map_err(|e| DatabaseError::Other(e.into()))
+    }
 }
 
 impl TransactableStorage for RocksDb {

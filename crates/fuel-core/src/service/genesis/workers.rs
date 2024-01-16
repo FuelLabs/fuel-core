@@ -57,7 +57,7 @@ impl GenesisWorkers {
         }
     }
 
-    pub async fn run(&self) -> anyhow::Result<()> {
+    pub async fn run_imports(&self) -> anyhow::Result<()> {
         tokio::try_join!(
             self.spawn_coins_worker(),
             self.spawn_messages_worker(),
@@ -108,7 +108,7 @@ impl GenesisWorkers {
         self.spawn_worker(contract_balance, stop_signal).await
     }
 
-    pub async fn spawn_contracts_root_worker(self) -> anyhow::Result<()> {
+    pub async fn compute_contracts_root(self) -> anyhow::Result<()> {
         tokio_rayon::spawn(move || {
             let chunks = self.db.genesis_contract_ids_iter();
 

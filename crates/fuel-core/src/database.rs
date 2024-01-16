@@ -358,6 +358,10 @@ impl Database {
         self.data.batch_write(&mut set.into_iter())
     }
 
+    pub fn delete_all(&mut self, column: Column) -> DatabaseResult<()> {
+        self.data.delete_all(column)
+    }
+
     fn remove<V: DeserializeOwned>(
         &self,
         key: &[u8],

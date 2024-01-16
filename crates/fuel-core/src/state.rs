@@ -80,6 +80,18 @@ pub trait BatchOperations: KeyValueStore {
         }
         Ok(())
     }
+
+    fn delete_all(&self, column: Column) -> DatabaseResult<()> {
+        let mut entries = Vec::new();
+        self.iter_all(column, None, None, IterDirection::Forward)
+            .try_for_each(|item| {
+                let (key, _) = item?;
+                entries.push((key, column, WriteOperation::Remove));
+                Ok::<_, DatabaseError>(())
+            })?;
+
+        self.batch_write(&mut entries.into_iter())
+    }
 }
 
 #[derive(Debug)]
