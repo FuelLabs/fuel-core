@@ -89,7 +89,7 @@ pub enum ExecutionTypes<P, V> {
 pub type ExecutionBlock = ExecutionTypes<PartialFuelBlock, Block>;
 
 impl<P> ExecutionTypes<P, Block> {
-    /// Get the hash of the full Fuel block if validating.
+    /// Get the hash of the full `FuelBlock` if validating.
     pub fn id(&self) -> Option<BlockId> {
         match self {
             ExecutionTypes::DryRun(_) => None,
