@@ -143,7 +143,7 @@ macro_rules! impl_hex_number {
                 let pad =
                     SIZE.checked_sub(bytes.len())
                         .ok_or(D::Error::custom(format!(
-                            "value cant exceed {WORD_SIZE} bytes"
+                            "value can't exceed {WORD_SIZE} bytes"
                         )))?;
 
                 if pad != 0 {

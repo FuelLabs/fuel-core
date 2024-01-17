@@ -59,7 +59,7 @@ pub enum PeerReportEvent {
 // `Behaviour` that reports events about peers
 pub struct PeerReportBehaviour {
     pending_events: VecDeque<PeerReportEvent>,
-    // regulary checks if reserved nodes are connected
+    // regularly checks if reserved nodes are connected
     health_check: Interval,
     decay_interval: Interval,
 }

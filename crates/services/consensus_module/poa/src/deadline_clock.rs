@@ -141,7 +141,7 @@ impl DeadlineClock {
     }
 
     /// Clears the timeout, so that now event is produced when it expires.
-    /// If the event has alread occurred, it will not be removed.
+    /// If the event has already occurred, it will not be removed.
     pub async fn clear(&self) {
         self.control
             .send(ControlMessage::Clear)

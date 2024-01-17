@@ -42,7 +42,7 @@ impl GossipsubTopics {
         }
     }
 
-    /// Given a `GossipsubBroadcastRequest` retruns a `GossipTopic`
+    /// Given a `GossipsubBroadcastRequest` returns a `GossipTopic`
     /// which is broadcast over the network with the serialized inner value of `GossipsubBroadcastRequest`
     pub fn get_gossipsub_topic(
         &self,
