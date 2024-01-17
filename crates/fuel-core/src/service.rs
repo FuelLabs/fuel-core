@@ -122,7 +122,7 @@ impl FuelService {
     }
 
     #[cfg(feature = "relayer")]
-    /// Wait for the [`Relayer`] to be in sync with
+    /// Wait for the Relayer to be in sync with
     /// the data availability layer.
     ///
     /// Yields until the relayer reaches a point where it

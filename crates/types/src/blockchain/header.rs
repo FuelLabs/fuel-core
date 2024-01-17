@@ -57,7 +57,7 @@ pub struct ApplicationHeader<Generated> {
     /// to have some rules in place to ensure the block number was chosen in a reasonable way. For
     /// example, they should verify that the block number satisfies the finality requirements of the
     /// layer 1 chain. They should also verify that the block number isn't too stale and is increasing.
-    /// Some similar concerns are noted in this issue: https://github.com/FuelLabs/fuel-specs/issues/220
+    /// Some similar concerns are noted in this issue: <https://github.com/FuelLabs/fuel-specs/issues/220>
     pub da_height: DaBlockHeight,
     /// Generated application fields.
     pub generated: Generated,
