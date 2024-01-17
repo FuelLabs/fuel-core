@@ -39,7 +39,7 @@ pub struct GenesisWorkers {
     cancel_token: CancellationToken,
     block_height: BlockHeight,
     state_reader: StateReader,
-    stop_signals: [Arc<Notify>; 5],
+    finished_signals: [Arc<Notify>; 5],
 }
 
 impl GenesisWorkers {
@@ -53,7 +53,7 @@ impl GenesisWorkers {
             cancel_token: CancellationToken::new(),
             block_height,
             state_reader,
-            stop_signals: Default::default(), // does this create 5 independent signals?
+            finished_signals: Default::default(), /* does this create 5 independent signals? */
         }
     }
 
@@ -68,8 +68,8 @@ impl GenesisWorkers {
         .map(|_| ())
     }
 
-    pub async fn stopped(&self) {
-        for signal in &self.stop_signals {
+    pub async fn finished(&self) {
+        for signal in &self.finished_signals {
             signal.notified().await;
         }
     }
@@ -80,32 +80,32 @@ impl GenesisWorkers {
 
     async fn spawn_coins_worker(&self) -> anyhow::Result<()> {
         let coins = self.state_reader.coins().unwrap();
-        let stop_signal = Arc::clone(&self.stop_signals[0]);
-        self.spawn_worker(coins, stop_signal).await
+        let finished_signal = Arc::clone(&self.finished_signals[0]);
+        self.spawn_worker(coins, finished_signal).await
     }
 
     async fn spawn_messages_worker(&self) -> anyhow::Result<()> {
         let messages = self.state_reader.messages().unwrap();
-        let stop_signal = Arc::clone(&self.stop_signals[1]);
-        self.spawn_worker(messages, stop_signal).await
+        let finished_signal = Arc::clone(&self.finished_signals[1]);
+        self.spawn_worker(messages, finished_signal).await
     }
 
     async fn spawn_contracts_worker(&self) -> anyhow::Result<()> {
         let contracts = self.state_reader.contracts().unwrap();
-        let stop_signal = Arc::clone(&self.stop_signals[2]);
-        self.spawn_worker(contracts, stop_signal).await
+        let finished_signal = Arc::clone(&self.finished_signals[2]);
+        self.spawn_worker(contracts, finished_signal).await
     }
 
     async fn spawn_contract_state_worker(&self) -> anyhow::Result<()> {
         let contract_state = self.state_reader.contract_state().unwrap();
-        let stop_signal = Arc::clone(&self.stop_signals[3]);
-        self.spawn_worker(contract_state, stop_signal).await
+        let finished_signal = Arc::clone(&self.finished_signals[3]);
+        self.spawn_worker(contract_state, finished_signal).await
     }
 
     async fn spawn_contract_balance_worker(&self) -> anyhow::Result<()> {
         let contract_balance = self.state_reader.contract_balance().unwrap();
-        let stop_signal = Arc::clone(&self.stop_signals[4]);
-        self.spawn_worker(contract_balance, stop_signal).await
+        let finished_signal = Arc::clone(&self.finished_signals[4]);
+        self.spawn_worker(contract_balance, finished_signal).await
     }
 
     pub async fn compute_contracts_root(self) -> anyhow::Result<()> {
@@ -127,21 +127,21 @@ impl GenesisWorkers {
     fn spawn_worker<T, I>(
         &self,
         data: I,
-        stop_signal: Arc<Notify>,
+        finished_signal: Arc<Notify>,
     ) -> tokio_rayon::AsyncRayonHandle<Result<(), anyhow::Error>>
     where
         Handler: ProcessStateGroup<T>,
         T: HandlesGenesisResource,
         I: IntoIterator<Item = anyhow::Result<Group<T>>> + Send + 'static,
     {
-        let runner = self.create_runner(data, Some(stop_signal));
+        let runner = self.create_runner(data, Some(finished_signal));
         tokio_rayon::spawn(move || runner.run())
     }
 
     fn create_runner<T, I>(
         &self,
         data: I,
-        stop_signal: Option<Arc<Notify>>,
+        finished_signal: Option<Arc<Notify>>,
     ) -> GenesisRunner<Handler, I, Database>
     where
         Handler: ProcessStateGroup<T>,
@@ -151,7 +151,7 @@ impl GenesisWorkers {
         let handler = Handler::new(self.block_height);
         let database = self.db.clone();
         GenesisRunner::new(
-            stop_signal,
+            finished_signal,
             self.cancel_token.clone(),
             handler,
             data,

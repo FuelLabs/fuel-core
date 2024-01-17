@@ -31,7 +31,7 @@ pub struct GenesisRunner<Handler, Groups, TxOpener> {
     tx_opener: TxOpener,
     skip: usize,
     groups: Groups,
-    stop_signal: Option<Arc<Notify>>,
+    finished_signal: Option<Arc<Notify>>,
     cancel_token: CancellationToken,
 }
 
@@ -64,7 +64,7 @@ where
     TxOpener: TransactionOpener,
 {
     pub fn new(
-        stop_signal: Option<Arc<Notify>>,
+        finished_signal: Option<Arc<Notify>>,
         cancel_token: CancellationToken,
         handler: Logic,
         groups: GroupGenerator,
@@ -82,19 +82,14 @@ where
             groups,
             resource,
             tx_opener,
-            stop_signal,
+            finished_signal,
             cancel_token,
         }
     }
 
     pub fn run(mut self) -> anyhow::Result<()> {
-        let notify_stop = || {
-            if let Some(stop_signal) = &self.stop_signal {
-                stop_signal.notify_one();
-            }
-        };
-
-        self.groups
+        let result = self
+            .groups
             .into_iter()
             .skip(self.skip)
             .take_while(|_| !self.cancel_token.is_cancelled())
@@ -106,14 +101,13 @@ where
                 tx.update_genesis_progress(self.resource, group_num)?;
                 tx.commit()?;
                 Ok(())
-            })
-            .map_err(|e: anyhow::Error| {
-                notify_stop();
-                e
-            })?;
+            });
 
-        notify_stop();
-        Ok(())
+        if let Some(finished_signal) = &self.finished_signal {
+            finished_signal.notify_one();
+        }
+
+        result
     }
 }
 
@@ -606,7 +600,7 @@ mod tests {
     #[tokio::test]
     async fn processing_stops_when_cancelled() {
         // given
-        let stop_signal = Arc::new(Notify::new());
+        let finished_signal = Arc::new(Notify::new());
         let cancel_token = CancellationToken::new();
 
         let (tx, rx) = std::sync::mpsc::channel();
@@ -615,7 +609,7 @@ mod tests {
         let runner = {
             let read_groups = Arc::clone(&read_groups);
             GenesisRunner::new(
-                Some(Arc::clone(&stop_signal)),
+                Some(Arc::clone(&finished_signal)),
                 cancel_token.clone(),
                 move |el, _: &mut Database| {
                     read_groups.lock().unwrap().push(el);
@@ -662,19 +656,19 @@ mod tests {
         let read_groups = read_groups.lock().unwrap().clone();
         assert_eq!(read_groups, vec![0, 1, 2]);
 
-        // stop signal is emitted
-        tokio::time::timeout(Duration::from_millis(10), stop_signal.notified())
+        // finished signal is emitted
+        tokio::time::timeout(Duration::from_millis(10), finished_signal.notified())
             .await
             .unwrap();
     }
 
     #[tokio::test]
-    async fn emits_stop_signal_on_error() {
+    async fn emits_finished_signal_on_error() {
         // given
-        let stop_signal = Arc::new(Notify::new());
+        let finished_signal = Arc::new(Notify::new());
         let groups = [Err(anyhow!("Some error"))];
         let runner = GenesisRunner::new(
-            Some(Arc::clone(&stop_signal)),
+            Some(Arc::clone(&finished_signal)),
             CancellationToken::new(),
             |_: (), _: &mut Database| Ok(()),
             groups,
@@ -686,7 +680,7 @@ mod tests {
 
         // then
         assert!(result.is_err());
-        tokio::time::timeout(Duration::from_millis(10), stop_signal.notified())
+        tokio::time::timeout(Duration::from_millis(10), finished_signal.notified())
             .await
             .unwrap();
     }
