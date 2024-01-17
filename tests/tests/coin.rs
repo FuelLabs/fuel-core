@@ -29,6 +29,7 @@ use fuel_core_storage::{
 use fuel_core_types::{
     entities::coins::coin::Coin,
     fuel_asm::*,
+    fuel_tx::TxId,
 };
 use rstest::rstest;
 
@@ -36,8 +37,10 @@ use rstest::rstest;
 async fn coin() {
     // setup test data in the node
     let output_index = 5;
+    let tx_id = TxId::new([1u8; 32]);
     let coin = CoinConfig {
         output_index: Some(output_index),
+        tx_id: Some(tx_id),
         ..Default::default()
     };
     let state = StateConfig {
@@ -56,7 +59,7 @@ async fn coin() {
     let client = FuelClient::from(srv.bound_address);
 
     // run test
-    let utxo_id = UtxoId::new(Default::default(), output_index);
+    let utxo_id = UtxoId::new(tx_id, output_index);
     let coin = client.coin(&utxo_id).await.unwrap();
     assert!(coin.is_some());
 }
