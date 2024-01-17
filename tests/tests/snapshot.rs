@@ -42,15 +42,6 @@ async fn loads_snapshot() {
             contract_id,
             code: vec![8; 32],
             salt: Salt::new([9; 32]),
-            // // TODO remove
-            // state: Some(vec![
-            //     (Bytes32::new([5u8; 32]), Bytes32::new([8u8; 32])),
-            //     (Bytes32::new([7u8; 32]), Bytes32::new([9u8; 32])),
-            // ]),
-            // balances: Some(vec![
-            //     (AssetId::new([3u8; 32]), 100),
-            //     (AssetId::new([10u8; 32]), 10000),
-            // ]),
             tx_id: Some(rng.gen()),
             output_index: Some(rng.gen()),
             tx_pointer_block_height: Some(BlockHeight::from(10)),

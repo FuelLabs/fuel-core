@@ -1,5 +1,5 @@
-//#![deny(unused_must_use)]
-//#![deny(warnings)]
+#![deny(unused_must_use)]
+#![deny(warnings)]
 
 mod balances;
 mod blocks;

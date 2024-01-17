@@ -2942,7 +2942,6 @@ dependencies = [
  "anyhow",
  "bech32",
  "bytes",
- "fuel-core-chain-config",
  "fuel-core-storage",
  "fuel-core-types",
  "impl-tools",
@@ -2957,7 +2956,6 @@ dependencies = [
  "serde_with 3.4.0",
  "strum 0.25.0",
  "tempfile",
- "test-case",
  "tracing",
 ]
 

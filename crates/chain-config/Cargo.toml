@@ -29,7 +29,6 @@ tracing = { version = "0.1", default-features = false }
 
 [dev-dependencies]
 bytes = { workspace = true }
-fuel-core-chain-config = { path = ".", features = ["parquet"] }
 fuel-core-types = { workspace = true, default-features = false, features = [
   "random",
   "serde",
@@ -40,7 +39,6 @@ rand = { workspace = true }
 serde_json = { version = "1.0", features = ["raw_value"] }
 strum = { workspace = true, features = ["derive"] }
 tempfile = { workspace = true }
-test-case = { workspace = true }
 
 [features]
 

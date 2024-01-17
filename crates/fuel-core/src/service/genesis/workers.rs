@@ -53,7 +53,13 @@ impl GenesisWorkers {
             cancel_token: CancellationToken::new(),
             block_height,
             state_reader,
-            finished_signals: Default::default(), /* does this create 5 independent signals? */
+            finished_signals: [
+                Arc::new(Notify::new()),
+                Arc::new(Notify::new()),
+                Arc::new(Notify::new()),
+                Arc::new(Notify::new()),
+                Arc::new(Notify::new()),
+            ],
         }
     }
 
