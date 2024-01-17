@@ -85,7 +85,7 @@ pub enum ExecutionTypes<P, V> {
 }
 
 /// Starting point for executing a block. Production starts with a [`PartialFuelBlock`].
-/// Validation starts with a full Fuel block.
+/// Validation starts with a full `FuelBlock`.
 pub type ExecutionBlock = ExecutionTypes<PartialFuelBlock, Block>;
 
 impl<P> ExecutionTypes<P, Block> {
