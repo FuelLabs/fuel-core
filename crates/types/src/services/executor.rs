@@ -85,11 +85,11 @@ pub enum ExecutionTypes<P, V> {
 }
 
 /// Starting point for executing a block. Production starts with a [`PartialFuelBlock`].
-/// Validation starts with a full [`FuelBlock`].
+/// Validation starts with a full `FuelBlock`.
 pub type ExecutionBlock = ExecutionTypes<PartialFuelBlock, Block>;
 
 impl<P> ExecutionTypes<P, Block> {
-    /// Get the hash of the full [`FuelBlock`] if validating.
+    /// Get the hash of the full `FuelBlock` if validating.
     pub fn id(&self) -> Option<BlockId> {
         match self {
             ExecutionTypes::DryRun(_) => None,

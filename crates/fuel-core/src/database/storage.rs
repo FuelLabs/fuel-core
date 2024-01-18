@@ -93,7 +93,7 @@ impl Mappable for FuelBlockMerkleData {
     type OwnedValue = Self::Value;
 }
 
-/// The metadata table for [`FuelBlockMerkleData`](FuelBlockMerkleData) table.
+/// The metadata table for [`FuelBlockMerkleData`] table.
 pub struct FuelBlockMerkleMetadata;
 
 impl Mappable for FuelBlockMerkleMetadata {
@@ -113,7 +113,7 @@ impl Mappable for ContractsAssetsMerkleData {
     type OwnedValue = Self::Value;
 }
 
-/// The metadata table for [`ContractsAssetsMerkleData`](ContractsAssetsMerkleData) table
+/// The metadata table for [`ContractsAssetsMerkleData`] table
 pub struct ContractsAssetsMerkleMetadata;
 
 impl Mappable for ContractsAssetsMerkleMetadata {
@@ -133,7 +133,7 @@ impl Mappable for ContractsStateMerkleData {
     type OwnedValue = Self::Value;
 }
 
-/// The metadata table for [`ContractsStateMerkleData`](ContractsStateMerkleData) table
+/// The metadata table for [`ContractsStateMerkleData`] table
 pub struct ContractsStateMerkleMetadata;
 
 impl Mappable for ContractsStateMerkleMetadata {
