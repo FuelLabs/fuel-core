@@ -8,6 +8,7 @@ members = [
   "bin/keygen",
   "crates/chain-config",
   "crates/client",
+  "crates/compression",
   "crates/database",
   "crates/fuel-core",
   "crates/keygen",

@@ -748,6 +748,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d86b93f97252c47b41663388e6d155714a9d0c398b99f1005cbc5f978b29f445"
 
 [[package]]
+name = "bincode"
+version = "1.3.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b1f45e9417d87227c7a56d22e471c6206462cba514c7590c09aff4cf6d1ddcad"
+dependencies = [
+ "serde",
+]
+
+[[package]]
 name = "bindgen"
 version = "0.65.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2772,6 +2781,16 @@ dependencies = [
  "fuel-core-types",
  "serde_json",
  "tokio",
+]
+
+[[package]]
+name = "fuel-core-compression"
+version = "0.22.0"
+dependencies = [
+ "bincode",
+ "fuel-core-types",
+ "postcard",
+ "serde",
 ]
 
 [[package]]
