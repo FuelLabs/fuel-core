@@ -18,6 +18,7 @@ use fuel_core_importer::{
 };
 use fuel_core_poa::ports::RelayerPort;
 use fuel_core_storage::{
+    iter::IterDirection,
     tables::{
         FuelBlocks,
         SealedBlockConsensus,
@@ -117,7 +118,11 @@ impl RelayerPort for MaybeRelayerAdapter {
 
 impl ImporterDatabase for Database {
     fn latest_block_height(&self) -> StorageResult<Option<BlockHeight>> {
-        Ok(self.ids_of_latest_block()?.map(|(height, _)| height))
+        Ok(self
+            .iter_all::<FuelBlocks>(Some(IterDirection::Reverse))
+            .next()
+            .transpose()?
+            .map(|(height, _)| height))
     }
 
     fn increase_tx_count(&self, new_txs_count: u64) -> StorageResult<u64> {
@@ -131,14 +136,14 @@ impl ExecutorDatabase for Database {
         chain_id: &ChainId,
         block: &SealedBlock,
     ) -> StorageResult<bool> {
-        let block_id = block.entity.id();
+        let height = block.entity.header().height();
         let mut found = self
             .storage::<FuelBlocks>()
-            .insert(&block_id, &block.entity.compress(chain_id))?
+            .insert(height, &block.entity.compress(chain_id))?
             .is_some();
         found |= self
             .storage::<SealedBlockConsensus>()
-            .insert(&block_id, &block.consensus)?
+            .insert(height, &block.consensus)?
             .is_some();
 
         // TODO: Use `batch_insert` from https://github.com/FuelLabs/fuel-core/pull/1576

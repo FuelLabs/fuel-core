@@ -6,6 +6,7 @@ use crate::{
     fuel_core_graphql_api::{
         api_service::ConsensusModule,
         database::ReadView,
+        ports::DatabaseBlocks,
         Config as GraphQLConfig,
         IntoApiResult,
     },
@@ -95,8 +96,8 @@ impl Block {
 
     async fn consensus(&self, ctx: &Context<'_>) -> async_graphql::Result<Consensus> {
         let query: &ReadView = ctx.data_unchecked();
-        let id = self.0.header().id();
-        let consensus = query.consensus(&id)?;
+        let height = self.0.header().height();
+        let consensus = query.consensus(height)?;
 
         Ok(consensus.into())
     }
@@ -191,23 +192,25 @@ impl BlockQuery {
         #[graphql(desc = "Height of the block")] height: Option<U32>,
     ) -> async_graphql::Result<Option<Block>> {
         let query: &ReadView = ctx.data_unchecked();
-        let id = match (id, height) {
+        let height = match (id, height) {
             (Some(_), Some(_)) => {
                 return Err(async_graphql::Error::new(
                     "Can't provide both an id and a height",
                 ))
             }
-            (Some(id), None) => Ok(id.0.into()),
+            (Some(id), None) => query.block_height(&id.0.into()),
             (None, Some(height)) => {
                 let height: u32 = height.into();
-                query.block_id(&height.into())
+                Ok(height.into())
             }
             (None, None) => {
                 return Err(async_graphql::Error::new("Missing either id or height"))
             }
         };
 
-        id.and_then(|id| query.block(&id)).into_api_result()
+        height
+            .and_then(|height| query.block(&height))
+            .into_api_result()
     }
 
     async fn blocks(
@@ -261,14 +264,14 @@ impl HeaderQuery {
 
 fn blocks_query<T>(
     query: &ReadView,
-    start: Option<BlockHeight>,
+    height: Option<BlockHeight>,
     direction: IterDirection,
 ) -> BoxedIter<StorageResult<(U32, T)>>
 where
     T: async_graphql::OutputType,
     T: From<CompressedBlock>,
 {
-    let blocks = query.compressed_blocks(start, direction).map(|result| {
+    let blocks = query.compressed_blocks(height, direction).map(|result| {
         result.map(|block| ((*block.header().height()).into(), block.into()))
     });
 

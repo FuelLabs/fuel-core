@@ -19,6 +19,7 @@ use fuel_core_storage::{
         Messages,
     },
     transactional::Transactional,
+    IsNotFound,
     MerkleRoot,
     StorageAsMut,
 };
@@ -66,8 +67,10 @@ pub fn maybe_initialize_state(
     database: &Database,
 ) -> anyhow::Result<()> {
     // check if chain is initialized
-    if database.ids_of_latest_block()?.is_none() {
-        import_genesis_block(config, database)?;
+    if let Err(err) = database.get_genesis() {
+        if err.is_not_found() {
+            import_genesis_block(config, database)?;
+        }
     }
 
     Ok(())
