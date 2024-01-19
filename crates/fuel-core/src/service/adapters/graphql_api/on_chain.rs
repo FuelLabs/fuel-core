@@ -16,6 +16,7 @@ use fuel_core_storage::{
         IterDirection,
     },
     not_found,
+    tables::FuelBlocks,
     Error as StorageError,
     Result as StorageResult,
 };
