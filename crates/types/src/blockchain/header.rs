@@ -22,7 +22,8 @@ use tai64::Tai64;
 
 /// A fuel block header that has all the fields generated because it
 /// has been executed.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, derivative::Derivative)]
+#[derivative(PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct BlockHeader {
     /// The application header.
@@ -32,6 +33,7 @@ pub struct BlockHeader {
     /// The header metadata calculated during creation.
     /// The field is private to enforce the use of the [`PartialBlockHeader::generate`] method.
     #[cfg_attr(feature = "serde", serde(skip))]
+    #[derivative(PartialEq = "ignore")]
     metadata: Option<BlockHeaderMetadata>,
 }
 

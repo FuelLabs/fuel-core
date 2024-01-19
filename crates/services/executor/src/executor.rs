@@ -1638,7 +1638,7 @@ where
     fn persist_transaction_status(
         &self,
         result: &ExecutionResult,
-        db: &D,
+        db: &mut D,
     ) -> ExecutorResult<()> {
         let time = result.block.header().time();
         let block_id = result.block.id();
