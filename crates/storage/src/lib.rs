@@ -125,19 +125,24 @@ pub trait StorageBatchMutate<Type: Mappable>: StorageMutate<Type> {
     /// # Errors
     ///
     /// Returns an error if the storage is already initialized.
-    fn init_storage(
-        &mut self,
-        set: &mut dyn Iterator<Item = (&Type::Key, &Type::Value)>,
-    ) -> Result<()>;
+    fn init_storage<'a, Iter>(&mut self, set: Iter) -> Result<()>
+    where
+        Iter: 'a + Iterator<Item = (&'a Type::Key, &'a Type::Value)>,
+        Type::Key: 'a,
+        Type::Value: 'a;
 
     /// Inserts the key-value pair into the storage in batch.
-    fn insert_batch(
-        &mut self,
-        set: &mut dyn Iterator<Item = (&Type::Key, &Type::Value)>,
-    ) -> Result<()>;
+    fn insert_batch<'a, Iter>(&mut self, set: Iter) -> Result<()>
+    where
+        Iter: 'a + Iterator<Item = (&'a Type::Key, &'a Type::Value)>,
+        Type::Key: 'a,
+        Type::Value: 'a;
 
     /// Removes the key-value pairs from the storage in batch.
-    fn remove_batch(&mut self, set: &mut dyn Iterator<Item = &Type::Key>) -> Result<()>;
+    fn remove_batch<'a, Iter>(&mut self, set: Iter) -> Result<()>
+    where
+        Iter: 'a + Iterator<Item = &'a Type::Key>,
+        Type::Key: 'a;
 }
 
 /// Creates `StorageError::NotFound` error with file and line information inside.

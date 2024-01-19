@@ -11,22 +11,22 @@ use std::borrow::Cow;
 /// The codec is used for types that are already represented by bytes.
 pub struct Raw;
 
-impl<K> Encode<K> for Raw
+impl<T> Encode<T> for Raw
 where
-    K: ?Sized + AsRef<[u8]>,
+    T: ?Sized + AsRef<[u8]>,
 {
-    type Encoder<'a> = Cow<'a, [u8]> where K: 'a;
+    type Encoder<'a> = Cow<'a, [u8]> where T: 'a;
 
-    fn encode(t: &K) -> Self::Encoder<'_> {
+    fn encode(t: &T) -> Self::Encoder<'_> {
         Cow::Borrowed(t.as_ref())
     }
 }
 
-impl<V> Decode<V> for Raw
+impl<T> Decode<T> for Raw
 where
-    for<'a> V: TryFrom<&'a [u8]>,
+    for<'a> T: TryFrom<&'a [u8]>,
 {
-    fn decode(bytes: &[u8]) -> anyhow::Result<V> {
-        V::try_from(bytes).map_err(|_| anyhow::anyhow!("Unable to decode bytes"))
+    fn decode(bytes: &[u8]) -> anyhow::Result<T> {
+        T::try_from(bytes).map_err(|_| anyhow::anyhow!("Unable to decode bytes"))
     }
 }
