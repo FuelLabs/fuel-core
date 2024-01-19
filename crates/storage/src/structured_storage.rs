@@ -308,12 +308,45 @@ pub mod test {
                     let mut structured_storage = StructuredStorage::new(&mut storage);
                     let key = $key;
 
+                    // Given
+                    assert!(!structured_storage
+                        .storage_as_mut::<$table>()
+                        .contains_key(&key)
+                        .unwrap());
+
+                    // When
                     structured_storage
                         .storage_as_mut::<$table>()
                         .insert(&key, &$value_insert)
                         .unwrap();
 
+                    // Then
                     assert!(structured_storage
+                        .storage_as_mut::<$table>()
+                        .contains_key(&key)
+                        .unwrap());
+                }
+
+                #[test]
+                fn exists_false_after_removing() {
+                    let mut storage = InMemoryStorage::default();
+                    let mut structured_storage = StructuredStorage::new(&mut storage);
+                    let key = $key;
+
+                    // Given
+                    structured_storage
+                        .storage_as_mut::<$table>()
+                        .insert(&key, &$value_insert)
+                        .unwrap();
+
+                    // When
+                    structured_storage
+                        .storage_as_mut::<$table>()
+                        .remove(&key)
+                        .unwrap();
+
+                    // Then
+                    assert!(!structured_storage
                         .storage_as_mut::<$table>()
                         .contains_key(&key)
                         .unwrap());
