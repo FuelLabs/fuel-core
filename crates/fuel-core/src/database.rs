@@ -303,38 +303,35 @@ impl Database {
         M::Blueprint: Blueprint<M, DataSource>,
         P: AsRef<[u8]>,
     {
-        let iter = if let Some(start) = start {
-            let encoder =
-                <M::Blueprint as Blueprint<M, DataSource>>::KeyCodec::encode(start);
+        let encoder = start.map(|start| {
+            <M::Blueprint as Blueprint<M, DataSource>>::KeyCodec::encode(start)
+        });
 
-            self.data.as_ref().iter_all(
+        let start = encoder.as_ref().map(|encoder| encoder.as_bytes());
+
+        self.data
+            .as_ref()
+            .iter_all(
                 M::column(),
                 prefix.as_ref().map(|p| p.as_ref()),
-                Some(encoder.as_bytes().as_ref()),
+                start.as_ref().map(|cow| cow.as_ref()),
                 direction.unwrap_or_default(),
             )
-        } else {
-            self.data.as_ref().iter_all(
-                M::column(),
-                prefix.as_ref().map(|p| p.as_ref()),
-                None,
-                direction.unwrap_or_default(),
-            )
-        };
-        iter.map(|val| {
-            val.and_then(|(key, value)| {
-                let key = <M::Blueprint as Blueprint<M, DataSource>>::KeyCodec::decode(
-                    key.as_slice(),
-                )
-                .map_err(|e| StorageError::Codec(anyhow::anyhow!(e)))?;
-                let value =
-                    <M::Blueprint as Blueprint<M, DataSource>>::ValueCodec::decode(
-                        value.as_slice(),
-                    )
-                    .map_err(|e| StorageError::Codec(anyhow::anyhow!(e)))?;
-                Ok((key, value))
+            .map(|val| {
+                val.and_then(|(key, value)| {
+                    let key =
+                        <M::Blueprint as Blueprint<M, DataSource>>::KeyCodec::decode(
+                            key.as_slice(),
+                        )
+                        .map_err(|e| StorageError::Codec(anyhow::anyhow!(e)))?;
+                    let value =
+                        <M::Blueprint as Blueprint<M, DataSource>>::ValueCodec::decode(
+                            value.as_slice(),
+                        )
+                        .map_err(|e| StorageError::Codec(anyhow::anyhow!(e)))?;
+                    Ok((key, value))
+                })
             })
-        })
     }
 }
 

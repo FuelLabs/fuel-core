@@ -264,14 +264,14 @@ impl HeaderQuery {
 
 fn blocks_query<T>(
     query: &ReadView,
-    start: Option<BlockHeight>,
+    height: Option<BlockHeight>,
     direction: IterDirection,
 ) -> BoxedIter<StorageResult<(U32, T)>>
 where
     T: async_graphql::OutputType,
     T: From<CompressedBlock>,
 {
-    let blocks = query.compressed_blocks(start, direction).map(|result| {
+    let blocks = query.compressed_blocks(height, direction).map(|result| {
         result.map(|block| ((*block.header().height()).into(), block.into()))
     });
 

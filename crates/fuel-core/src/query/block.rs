@@ -51,7 +51,7 @@ pub trait BlockQueryData: Send + Sync + SimpleBlockData {
 
     fn compressed_blocks(
         &self,
-        start: Option<BlockHeight>,
+        height: Option<BlockHeight>,
         direction: IterDirection,
     ) -> BoxedIter<StorageResult<CompressedBlock>>;
 
@@ -69,10 +69,10 @@ impl<D: OnChainDatabase + ?Sized> BlockQueryData for D {
 
     fn compressed_blocks(
         &self,
-        start: Option<BlockHeight>,
+        height: Option<BlockHeight>,
         direction: IterDirection,
     ) -> BoxedIter<StorageResult<CompressedBlock>> {
-        self.blocks(start, direction)
+        self.blocks(height, direction)
     }
 
     fn consensus(&self, id: &BlockHeight) -> StorageResult<Consensus> {
