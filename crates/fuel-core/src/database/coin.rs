@@ -4,6 +4,7 @@ use crate::database::{
 };
 use fuel_core_chain_config::CoinConfig;
 use fuel_core_storage::{
+    blueprint::plain::Plain,
     codec::{
         postcard::Postcard,
         primitive::utxo_id_to_bytes,
@@ -11,8 +12,7 @@ use fuel_core_storage::{
     },
     iter::IterDirection,
     not_found,
-    structure::plain::Plain,
-    structured_storage::TableWithStructure,
+    structured_storage::TableWithBlueprint,
     tables::Coins,
     Error as StorageError,
     Mappable,
@@ -52,8 +52,8 @@ impl Mappable for OwnedCoins {
     type OwnedValue = ();
 }
 
-impl TableWithStructure for OwnedCoins {
-    type Structure = Plain<Raw, Postcard>;
+impl TableWithBlueprint for OwnedCoins {
+    type Blueprint = Plain<Raw, Postcard>;
 
     fn column() -> Column {
         Column::OwnedCoins

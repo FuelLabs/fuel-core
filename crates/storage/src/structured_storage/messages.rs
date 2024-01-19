@@ -1,29 +1,29 @@
 //! The module contains implementations and tests for the messages tables.
 
 use crate::{
+    blueprint::plain::Plain,
     codec::{
         postcard::Postcard,
         raw::Raw,
     },
     column::Column,
-    structure::plain::Plain,
-    structured_storage::TableWithStructure,
+    structured_storage::TableWithBlueprint,
     tables::{
         Messages,
         SpentMessages,
     },
 };
 
-impl TableWithStructure for Messages {
-    type Structure = Plain<Raw, Postcard>;
+impl TableWithBlueprint for Messages {
+    type Blueprint = Plain<Raw, Postcard>;
 
     fn column() -> Column {
         Column::Messages
     }
 }
 
-impl TableWithStructure for SpentMessages {
-    type Structure = Plain<Raw, Postcard>;
+impl TableWithBlueprint for SpentMessages {
+    type Blueprint = Plain<Raw, Postcard>;
 
     fn column() -> Column {
         Column::SpentMessages

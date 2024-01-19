@@ -1,9 +1,13 @@
-//! This module implements the plain structure for the storage.
-//! The plain structure is the simplest one. It doesn't maintain any additional data structures
+//! This module implements the plain blueprint for the storage.
+//! The plain blueprint is the simplest one. It doesn't maintain any additional data structures
 //! and doesn't provide any additional functionality. It is just a key-value store that encodes/decodes
 //! the key and value and puts/takes them into/from the storage.
 
 use crate::{
+    blueprint::{
+        Blueprint,
+        SupportsBatching,
+    },
     codec::{
         Decode,
         Encode,
@@ -15,23 +19,19 @@ use crate::{
         KeyValueStore,
         WriteOperation,
     },
-    structure::{
-        Structure,
-        SupportsBatching,
-    },
-    structured_storage::TableWithStructure,
+    structured_storage::TableWithBlueprint,
     Error as StorageError,
     Mappable,
     Result as StorageResult,
 };
 
-/// The type that represents the plain structure.
+/// The type that represents the plain blueprint.
 /// The `KeyCodec` and `ValueCodec` are used to encode/decode the key and value.
 pub struct Plain<KeyCodec, ValueCodec> {
     _marker: core::marker::PhantomData<(KeyCodec, ValueCodec)>,
 }
 
-impl<M, S, KeyCodec, ValueCodec> Structure<M, S> for Plain<KeyCodec, ValueCodec>
+impl<M, S, KeyCodec, ValueCodec> Blueprint<M, S> for Plain<KeyCodec, ValueCodec>
 where
     M: Mappable,
     S: KeyValueStore,
@@ -95,8 +95,8 @@ where
 impl<M, S, KeyCodec, ValueCodec> SupportsBatching<M, S> for Plain<KeyCodec, ValueCodec>
 where
     S: BatchOperations<Column = Column>,
-    M: Mappable + TableWithStructure<Structure = Plain<KeyCodec, ValueCodec>>,
-    M::Structure: Structure<M, S>,
+    M: Mappable + TableWithBlueprint<Blueprint = Plain<KeyCodec, ValueCodec>>,
+    M::Blueprint: Blueprint<M, S>,
 {
     fn init(
         storage: &mut S,
@@ -112,10 +112,10 @@ where
         set: &mut dyn Iterator<Item = (&M::Key, &M::Value)>,
     ) -> StorageResult<()> {
         storage.batch_write(&mut set.map(|(key, value)| {
-            let key_encoder = <M::Structure as Structure<M, S>>::KeyCodec::encode(key);
+            let key_encoder = <M::Blueprint as Blueprint<M, S>>::KeyCodec::encode(key);
             let key_bytes = key_encoder.as_bytes().to_vec();
             let value =
-                <M::Structure as Structure<M, S>>::ValueCodec::encode_as_value(value);
+                <M::Blueprint as Blueprint<M, S>>::ValueCodec::encode_as_value(value);
             (key_bytes, column, WriteOperation::Insert(value))
         }))
     }
@@ -126,7 +126,7 @@ where
         set: &mut dyn Iterator<Item = &M::Key>,
     ) -> StorageResult<()> {
         storage.batch_write(&mut set.map(|key| {
-            let key_encoder = <M::Structure as Structure<M, S>>::KeyCodec::encode(key);
+            let key_encoder = <M::Blueprint as Blueprint<M, S>>::KeyCodec::encode(key);
             let key_bytes = key_encoder.as_bytes().to_vec();
             (key_bytes, column, WriteOperation::Remove)
         }))

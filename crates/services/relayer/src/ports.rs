@@ -2,13 +2,13 @@
 
 use async_trait::async_trait;
 use fuel_core_storage::{
+    blueprint::plain::Plain,
     codec::{
         postcard::Postcard,
         primitive::Primitive,
     },
     column::Column,
-    structure::plain::Plain,
-    structured_storage::TableWithStructure,
+    structured_storage::TableWithBlueprint,
     tables::Messages,
     transactional::Transactional,
     Error as StorageError,
@@ -146,8 +146,8 @@ impl Mappable for RelayerMetadata {
 /// changed from a unit value.
 const METADATA_KEY: () = ();
 
-impl TableWithStructure for RelayerMetadata {
-    type Structure = Plain<Postcard, Primitive<8>>;
+impl TableWithBlueprint for RelayerMetadata {
+    type Blueprint = Plain<Postcard, Primitive<8>>;
 
     fn column() -> Column {
         Column::RelayerMetadata

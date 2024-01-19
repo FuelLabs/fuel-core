@@ -1,16 +1,16 @@
 //! The module contains implementations and tests for the contracts tables.
 
 use crate::{
+    blueprint::plain::Plain,
     codec::{
         postcard::Postcard,
         raw::Raw,
     },
     column::Column,
     kv_store::KeyValueStore,
-    structure::plain::Plain,
     structured_storage::{
         StructuredStorage,
-        TableWithStructure,
+        TableWithBlueprint,
     },
     tables::{
         ContractsInfo,
@@ -26,8 +26,8 @@ use fuel_core_types::fuel_tx::ContractId;
 // and deserialization and uses `Raw` codec. Because the value is a contract byte code represented
 // by bytes, we don't use `serde::Deserialization` and `serde::Serialization` for `Vec`,
 // because we don't need to store the size of the contract. We store/load raw bytes.
-impl TableWithStructure for ContractsRawCode {
-    type Structure = Plain<Raw, Raw>;
+impl TableWithBlueprint for ContractsRawCode {
+    type Blueprint = Plain<Raw, Raw>;
 
     fn column() -> Column {
         Column::ContractsRawCode
@@ -54,16 +54,16 @@ where
     }
 }
 
-impl TableWithStructure for ContractsInfo {
-    type Structure = Plain<Raw, Postcard>;
+impl TableWithBlueprint for ContractsInfo {
+    type Blueprint = Plain<Raw, Postcard>;
 
     fn column() -> Column {
         Column::ContractsInfo
     }
 }
 
-impl TableWithStructure for ContractsLatestUtxo {
-    type Structure = Plain<Raw, Postcard>;
+impl TableWithBlueprint for ContractsLatestUtxo {
+    type Blueprint = Plain<Raw, Postcard>;
 
     fn column() -> Column {
         Column::ContractsLatestUtxo

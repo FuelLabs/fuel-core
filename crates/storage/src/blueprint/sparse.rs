@@ -1,9 +1,13 @@
-//! The module defines the `Sparse` structure for the storage.
-//! The `Sparse` structure implements the sparse merkle tree on top of the storage.
-//! It is like a [`Plain`](super::plain::Plain) structure that builds the sparse
+//! The module defines the `Sparse` blueprint for the storage.
+//! The `Sparse` blueprint implements the sparse merkle tree on top of the storage.
+//! It is like a [`Plain`](super::plain::Plain) blueprint that builds the sparse
 //! merkle tree parallel to the normal storage and maintains it.
 
 use crate::{
+    blueprint::{
+        Blueprint,
+        SupportsBatching,
+    },
     codec::{
         Decode,
         Encode,
@@ -16,13 +20,9 @@ use crate::{
         StorageColumn,
         WriteOperation,
     },
-    structure::{
-        Structure,
-        SupportsBatching,
-    },
     structured_storage::{
         StructuredStorage,
-        TableWithStructure,
+        TableWithBlueprint,
     },
     tables::merkle::SparseMerkleMetadata,
     Error as StorageError,
@@ -58,11 +58,11 @@ pub trait PrimaryKey {
     fn primary_key(key: &Self::InputKey) -> &Self::OutputKey;
 }
 
-/// The `Sparse` structure builds the storage as a [`Plain`](super::plain::Plain)
-/// structure and maintains the sparse merkle tree by the `Metadata` and `Nodes` tables.
+/// The `Sparse` blueprint builds the storage as a [`Plain`](super::plain::Plain)
+/// blueprint and maintains the sparse merkle tree by the `Metadata` and `Nodes` tables.
 ///
 /// It uses the `KeyCodec` and `ValueCodec` to encode/decode the key and value in the
-/// same way as a plain structure.
+/// same way as a plain blueprint.
 ///
 /// The `Metadata` table stores the metadata of the tree(like a root of the tree),
 /// and the `Nodes` table stores the tree's nodes. The SMT is built over the encoded
@@ -163,7 +163,7 @@ where
     }
 }
 
-impl<M, S, KeyCodec, ValueCodec, Metadata, Nodes, KeyConverter> Structure<M, S>
+impl<M, S, KeyCodec, ValueCodec, Metadata, Nodes, KeyConverter> Blueprint<M, S>
     for Sparse<KeyCodec, ValueCodec, Metadata, Nodes, KeyConverter>
 where
     M: Mappable,
@@ -246,8 +246,8 @@ impl<M, S, KeyCodec, ValueCodec, Metadata, Nodes, KeyConverter>
 where
     S: KeyValueStore<Column = Column>,
     M: Mappable
-        + TableWithStructure<
-            Structure = Sparse<KeyCodec, ValueCodec, Metadata, Nodes, KeyConverter>,
+        + TableWithBlueprint<
+            Blueprint = Sparse<KeyCodec, ValueCodec, Metadata, Nodes, KeyConverter>,
         >,
     Self: StorageMutate<M, Error = StorageError>
         + StorageInspect<Metadata, Error = StorageError>,
@@ -266,17 +266,17 @@ where
 }
 
 type NodeKeyCodec<S, Nodes> =
-    <<Nodes as TableWithStructure>::Structure as Structure<Nodes, S>>::KeyCodec;
+    <<Nodes as TableWithBlueprint>::Blueprint as Blueprint<Nodes, S>>::KeyCodec;
 type NodeValueCodec<S, Nodes> =
-    <<Nodes as TableWithStructure>::Structure as Structure<Nodes, S>>::ValueCodec;
+    <<Nodes as TableWithBlueprint>::Blueprint as Blueprint<Nodes, S>>::ValueCodec;
 
 impl<M, S, KeyCodec, ValueCodec, Metadata, Nodes, KeyConverter> SupportsBatching<M, S>
     for Sparse<KeyCodec, ValueCodec, Metadata, Nodes, KeyConverter>
 where
     S: BatchOperations<Column = Column>,
     M: Mappable
-        + TableWithStructure<
-            Structure = Sparse<KeyCodec, ValueCodec, Metadata, Nodes, KeyConverter>,
+        + TableWithBlueprint<
+            Blueprint = Sparse<KeyCodec, ValueCodec, Metadata, Nodes, KeyConverter>,
         >,
     KeyCodec: Encode<M::Key> + Decode<M::OwnedKey>,
     ValueCodec: Encode<M::Value> + Decode<M::OwnedValue>,
@@ -285,9 +285,9 @@ where
             Key = MerkleRoot,
             Value = sparse::Primitive,
             OwnedValue = sparse::Primitive,
-        > + TableWithStructure,
+        > + TableWithBlueprint,
     KeyConverter: PrimaryKey<InputKey = M::Key, OutputKey = Metadata::Key>,
-    Nodes::Structure: Structure<Nodes, S>,
+    Nodes::Blueprint: Blueprint<Nodes, S>,
     for<'a> StructuredStorage<&'a mut S>: StorageMutate<M, Error = StorageError>
         + StorageMutate<Metadata, Error = StorageError>
         + StorageMutate<Nodes, Error = StorageError>,

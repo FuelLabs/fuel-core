@@ -1,16 +1,16 @@
 //! The module contains implementations and tests for the `ContractsState` table.
 
 use crate::{
+    blueprint::sparse::{
+        PrimaryKey,
+        Sparse,
+    },
     codec::{
         manual::Manual,
         raw::Raw,
     },
     column::Column,
-    structure::sparse::{
-        PrimaryKey,
-        Sparse,
-    },
-    structured_storage::TableWithStructure,
+    structured_storage::TableWithBlueprint,
     tables::{
         merkle::{
             ContractsStateMerkleData,
@@ -35,8 +35,8 @@ impl PrimaryKey for KeyConverter {
     }
 }
 
-impl TableWithStructure for ContractsState {
-    type Structure = Sparse<
+impl TableWithBlueprint for ContractsState {
+    type Blueprint = Sparse<
         Manual<ContractsStateKey>,
         Raw,
         ContractsStateMerkleMetadata,

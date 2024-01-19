@@ -1,18 +1,18 @@
 //! The module contains implementations and tests for the `Coins` table.
 
 use crate::{
+    blueprint::plain::Plain,
     codec::{
         postcard::Postcard,
         primitive::Primitive,
     },
     column::Column,
-    structure::plain::Plain,
-    structured_storage::TableWithStructure,
+    structured_storage::TableWithBlueprint,
     tables::Coins,
 };
 
-impl TableWithStructure for Coins {
-    type Structure = Plain<Primitive<33>, Postcard>;
+impl TableWithBlueprint for Coins {
+    type Blueprint = Plain<Primitive<33>, Postcard>;
 
     fn column() -> Column {
         Column::Coins

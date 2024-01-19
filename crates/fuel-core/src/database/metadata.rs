@@ -9,11 +9,11 @@ use crate::{
 };
 use fuel_core_chain_config::ChainConfig;
 use fuel_core_storage::{
+    blueprint::plain::Plain,
     codec::postcard::Postcard,
-    structure::plain::Plain,
     structured_storage::{
         StructuredStorage,
-        TableWithStructure,
+        TableWithBlueprint,
     },
     Mappable,
     Result as StorageResult,
@@ -34,11 +34,11 @@ where
     type OwnedValue = V;
 }
 
-impl<V> TableWithStructure for MetadataTable<V>
+impl<V> TableWithBlueprint for MetadataTable<V>
 where
     V: Clone,
 {
-    type Structure = Plain<Postcard, Postcard>;
+    type Blueprint = Plain<Postcard, Postcard>;
 
     fn column() -> Column {
         Column::Metadata

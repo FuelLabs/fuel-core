@@ -1,16 +1,16 @@
 //! The module contains implementations and tests for the `ContractsAssets` table.
 
 use crate::{
+    blueprint::sparse::{
+        PrimaryKey,
+        Sparse,
+    },
     codec::{
         manual::Manual,
         primitive::Primitive,
     },
     column::Column,
-    structure::sparse::{
-        PrimaryKey,
-        Sparse,
-    },
-    structured_storage::TableWithStructure,
+    structured_storage::TableWithBlueprint,
     tables::{
         merkle::{
             ContractsAssetsMerkleData,
@@ -35,8 +35,8 @@ impl PrimaryKey for KeyConverter {
     }
 }
 
-impl TableWithStructure for ContractsAssets {
-    type Structure = Sparse<
+impl TableWithBlueprint for ContractsAssets {
+    type Blueprint = Sparse<
         Manual<ContractsAssetKey>,
         Primitive<8>,
         ContractsAssetsMerkleMetadata,

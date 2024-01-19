@@ -18,17 +18,17 @@ Description of the upcoming release here.
 #### Breaking
 
 - [#1593](https://github.com/FuelLabs/fuel-core/pull/1593) Make `Block` type a version-able enum
-- [#1576](https://github.com/FuelLabs/fuel-core/pull/1576): The change moves the implementation of the storage traits for required tables from `fuel-core` to `fuel-core-storage` crate. The change also adds a more flexible configuration of the encoding/decoding per the table and allows the implementation of specific behaviors for the table in a much easier way. It unifies the encoding between database, SMTs, and iteration, preventing mismatching bytes representation on the Rust type system level. Plus, it increases the re-usage of the code by applying the same structure to other tables.
+- [#1576](https://github.com/FuelLabs/fuel-core/pull/1576): The change moves the implementation of the storage traits for required tables from `fuel-core` to `fuel-core-storage` crate. The change also adds a more flexible configuration of the encoding/decoding per the table and allows the implementation of specific behaviors for the table in a much easier way. It unifies the encoding between database, SMTs, and iteration, preventing mismatching bytes representation on the Rust type system level. Plus, it increases the re-usage of the code by applying the same blueprint to other tables.
     
     It is a breaking PR because it changes database encoding/decoding for some tables.
     
     ### StructuredStorage
     
-    The change adds a new type `StructuredStorage`. It is a wrapper around the key-value storage that implements the storage traits(`StorageInspect`, `StorageMutate`, `StorageRead`, etc) for the tables with structure. This structure works in tandem with the `TableWithStructure` trait. The table may implement `TableWithStructure` specifying the structure, as an example:
+    The change adds a new type `StructuredStorage`. It is a wrapper around the key-value storage that implements the storage traits(`StorageInspect`, `StorageMutate`, `StorageRead`, etc) for the tables with blueprint. This blueprint works in tandem with the `TableWithBlueprint` trait. The table may implement `TableWithBlueprint` specifying the blueprint, as an example:
     
     ```rust
-    impl TableWithStructure for ContractsRawCode {
-        type Structure = Plain<Raw, Raw>;
+    impl TableWithBlueprint for ContractsRawCode {
+        type Blueprint = Plain<Raw, Raw>;
     
         fn column() -> Column {
             Column::ContractsRawCode
@@ -36,13 +36,13 @@ Description of the upcoming release here.
     }
     ```
     
-    It is a definition of the structure for the `ContractsRawCode` table. It has a plain structure meaning it simply encodes/decodes bytes and stores/loads them into/from the storage. As a key codec and value codec, it uses a `Raw` encoding/decoding that simplifies writing bytes and loads them back into the memory without applying any serialization or deserialization algorithm.
+    It is a definition of the blueprint for the `ContractsRawCode` table. It has a plain blueprint meaning it simply encodes/decodes bytes and stores/loads them into/from the storage. As a key codec and value codec, it uses a `Raw` encoding/decoding that simplifies writing bytes and loads them back into the memory without applying any serialization or deserialization algorithm.
     
-    If the table implements `TableWithStructure` and the selected codec satisfies all structure requirements, the corresponding storage traits for that table are implemented on the `StructuredStorage` type.
+    If the table implements `TableWithBlueprint` and the selected codec satisfies all blueprint requirements, the corresponding storage traits for that table are implemented on the `StructuredStorage` type.
     
     ### Codecs
     
-    Each structure allows customizing the key and value codecs. It allows the use of different codecs for different tables, taking into account the complexity and weight of the data and providing a way of more optimal implementation.
+    Each blueprint allows customizing the key and value codecs. It allows the use of different codecs for different tables, taking into account the complexity and weight of the data and providing a way of more optimal implementation.
     
     That property may be very useful to perform migration in a more easier way. Plus, it also can be a `no_std` migration potentially allowing its fraud proving.
     
@@ -50,8 +50,8 @@ Description of the upcoming release here.
     
     ```rust
     /// Define the table for V1 value encoding/decoding.
-    impl TableWithStructure for ContractsRawCodeV1 {
-        type Structure = Plain<Raw, Raw>;
+    impl TableWithBlueprint for ContractsRawCodeV1 {
+        type Blueprint = Plain<Raw, Raw>;
     
         fn column() -> Column {
             Column::ContractsRawCode
@@ -62,8 +62,8 @@ Description of the upcoming release here.
     /// It uses `Postcard` codec for the value instead of `Raw` codec.
     ///
     /// # Dev-note: The columns is the same.
-    impl TableWithStructure for ContractsRawCodeV2 {
-        type Structure = Plain<Raw, Postcard>;
+    impl TableWithBlueprint for ContractsRawCodeV2 {
+        type Blueprint = Plain<Raw, Postcard>;
     
         fn column() -> Column {
             Column::ContractsRawCode
@@ -81,15 +81,15 @@ Description of the upcoming release here.
     
     ### Structures
     
-    The structure of the table defines its behavior. As an example, a `Plain` structure simply encodes/decodes bytes and stores/loads them into/from the storage. The `SMT` structure builds a sparse merkle tree on top of the key-value pairs.
+    The blueprint of the table defines its behavior. As an example, a `Plain` blueprint simply encodes/decodes bytes and stores/loads them into/from the storage. The `SMT` blueprint builds a sparse merkle tree on top of the key-value pairs.
     
-    Implementing a structure one time, we can apply it to any table satisfying the requirements of this structure. It increases the re-usage of the code and minimizes duplication.
+    Implementing a blueprint one time, we can apply it to any table satisfying the requirements of this blueprint. It increases the re-usage of the code and minimizes duplication.
     
     It can be useful if we decide to create global roots for all required tables that are used in fraud proving.
     
     ```rust
-    impl TableWithStructure for SpentMessages {
-        type Structure = Plain<Raw, Postcard>;
+    impl TableWithBlueprint for SpentMessages {
+        type Blueprint = Plain<Raw, Postcard>;
     
         fn column() -> Column {
             Column::SpentMessages
@@ -99,8 +99,8 @@ Description of the upcoming release here.
                      |
                     \|/
     
-    impl TableWithStructure for SpentMessages {
-        type Structure =
+    impl TableWithBlueprint for SpentMessages {
+        type Blueprint =
             Sparse<Raw, Postcard, SpentMessagesMerkleMetadata, SpentMessagesMerkleNodes>;
     
         fn column() -> Column {
