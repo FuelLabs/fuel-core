@@ -21,6 +21,7 @@ use crate::{
 };
 use fuel_core_types::fuel_types::BlockHeight;
 use libp2p::{
+    allow_block_list,
     gossipsub::{
         Behaviour as Gossipsub,
         MessageAcceptance,
@@ -31,6 +32,7 @@ use libp2p::{
     request_response::{
         Behaviour as RequestResponse,
         Config as RequestResponseConfig,
+        OutboundRequestId,
         ProtocolSupport,
         ResponseChannel,
     },
@@ -38,8 +40,6 @@ use libp2p::{
     Multiaddr,
     PeerId,
 };
-use libp2p_allow_block_list as allow_block_list;
-use libp2p_request_response::OutboundRequestId;
 
 /// Handles all p2p protocols needed for Fuel.
 #[derive(NetworkBehaviour)]

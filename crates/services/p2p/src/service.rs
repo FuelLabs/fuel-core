@@ -61,9 +61,9 @@ use futures::{
 };
 use libp2p::{
     gossipsub::MessageAcceptance,
+    request_response::InboundRequestId,
     PeerId,
 };
-use libp2p_request_response::InboundRequestId;
 use std::{
     fmt::Debug,
     ops::Range,

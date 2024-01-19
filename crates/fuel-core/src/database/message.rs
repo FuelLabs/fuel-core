@@ -1,17 +1,27 @@
 use crate::database::{
-    storage::ToDatabaseKey,
     Column,
     Database,
 };
 use fuel_core_chain_config::MessageConfig;
 use fuel_core_storage::{
+    blueprint::plain::Plain,
+    codec::{
+        manual::Manual,
+        postcard::Postcard,
+        Decode,
+        Encode,
+    },
     iter::IterDirection,
+    structured_storage::TableWithBlueprint,
     tables::{
         Messages,
         SpentMessages,
     },
     Error as StorageError,
+    Mappable,
     Result as StorageResult,
+    StorageAsMut,
+    StorageAsRef,
     StorageInspect,
     StorageMutate,
 };
@@ -27,19 +37,50 @@ use std::{
     ops::Deref,
 };
 
-use super::storage::DatabaseColumn;
+fuel_core_types::fuel_vm::double_key!(OwnedMessageKey, Address, address, Nonce, nonce);
+
+/// The table that stores all messages per owner.
+pub struct OwnedMessageIds;
+
+impl Mappable for OwnedMessageIds {
+    type Key = OwnedMessageKey;
+    type OwnedKey = Self::Key;
+    type Value = ();
+    type OwnedValue = Self::Value;
+}
+
+impl Encode<OwnedMessageKey> for Manual<OwnedMessageKey> {
+    type Encoder<'a> = Cow<'a, [u8]>;
+
+    fn encode(t: &OwnedMessageKey) -> Self::Encoder<'_> {
+        Cow::Borrowed(t.as_ref())
+    }
+}
+
+impl Decode<OwnedMessageKey> for Manual<OwnedMessageKey> {
+    fn decode(bytes: &[u8]) -> anyhow::Result<OwnedMessageKey> {
+        OwnedMessageKey::from_slice(bytes)
+            .map_err(|_| anyhow::anyhow!("Unable to decode bytes"))
+    }
+}
+
+impl TableWithBlueprint for OwnedMessageIds {
+    type Blueprint = Plain<Manual<OwnedMessageKey>, Postcard>;
+
+    fn column() -> fuel_core_storage::column::Column {
+        Column::OwnedMessageIds
+    }
+}
 
 impl StorageInspect<Messages> for Database {
     type Error = StorageError;
 
     fn get(&self, key: &Nonce) -> Result<Option<Cow<Message>>, Self::Error> {
-        let key = key.database_key();
-        Database::get(self, key.as_ref(), Column::Messages).map_err(Into::into)
+        self.data.storage::<Messages>().get(key)
     }
 
     fn contains_key(&self, key: &Nonce) -> Result<bool, Self::Error> {
-        let key = key.database_key();
-        Database::contains_key(self, key.as_ref(), Column::Messages).map_err(Into::into)
+        self.data.storage::<Messages>().contains_key(key)
     }
 }
 
@@ -50,39 +91,25 @@ impl StorageMutate<Messages> for Database {
         value: &Message,
     ) -> Result<Option<Message>, Self::Error> {
         // insert primary record
-        let result =
-            Database::insert(self, key.database_key().as_ref(), Column::Messages, value)?;
+        let result = self.data.storage_as_mut::<Messages>().insert(key, value)?;
 
         // insert secondary record by owner
-        let _: Option<bool> = Database::insert(
-            self,
-            owner_msg_id_key(&value.recipient, key),
-            Column::OwnedMessageIds,
-            &true,
-        )?;
+        self.storage_as_mut::<OwnedMessageIds>()
+            .insert(&OwnedMessageKey::new(&value.recipient, key), &())?;
 
         Ok(result)
     }
 
     fn remove(&mut self, key: &Nonce) -> Result<Option<Message>, Self::Error> {
         let result: Option<Message> =
-            Database::take(self, key.database_key().as_ref(), Column::Messages)?;
+            self.data.storage_as_mut::<Messages>().remove(key)?;
 
         if let Some(message) = &result {
-            Database::take::<bool>(
-                self,
-                &owner_msg_id_key(&message.recipient, key),
-                Column::OwnedMessageIds,
-            )?;
+            self.storage_as_mut::<OwnedMessageIds>()
+                .remove(&OwnedMessageKey::new(&message.recipient, key))?;
         }
 
         Ok(result)
-    }
-}
-
-impl DatabaseColumn for SpentMessages {
-    fn column() -> Column {
-        Column::SpentMessages
     }
 }
 
@@ -93,18 +120,12 @@ impl Database {
         start_message_id: Option<Nonce>,
         direction: Option<IterDirection>,
     ) -> impl Iterator<Item = StorageResult<Nonce>> + '_ {
-        self.iter_all_filtered::<Vec<u8>, bool, _, _>(
-            Column::OwnedMessageIds,
+        self.iter_all_filtered::<OwnedMessageIds, _, _>(
             Some(*owner),
-            start_message_id.map(|msg_id| owner_msg_id_key(owner, &msg_id)),
+            start_message_id.map(|msg_id| OwnedMessageKey::new(owner, &msg_id)),
             direction,
         )
-        .map(|res| {
-            res.map(|(key, _)| {
-                Nonce::try_from(&key[Address::LEN..Address::LEN + Nonce::LEN])
-                    .expect("key is always {Nonce::LEN} bytes")
-            })
-        })
+        .map(|res| res.map(|(key, _)| *key.nonce()))
     }
 
     pub fn all_messages(
@@ -113,7 +134,7 @@ impl Database {
         direction: Option<IterDirection>,
     ) -> impl Iterator<Item = StorageResult<Message>> + '_ {
         let start = start.map(|v| v.deref().to_vec());
-        self.iter_all_by_start::<Vec<u8>, Message, _>(Column::Messages, start, direction)
+        self.iter_all_by_start::<Messages, _>(start, direction)
             .map(|res| res.map(|(_, message)| message))
     }
 
@@ -158,19 +179,9 @@ impl Database {
     }
 }
 
-// TODO: Reuse `fuel_vm::storage::double_key` macro.
-/// Get a Key by chaining Owner + Nonce
-fn owner_msg_id_key(owner: &Address, nonce: &Nonce) -> [u8; Address::LEN + Nonce::LEN] {
-    let mut default = [0u8; Address::LEN + Nonce::LEN];
-    default[0..Address::LEN].copy_from_slice(owner.as_ref());
-    default[Address::LEN..].copy_from_slice(nonce.as_ref());
-    default
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-    use fuel_core_storage::StorageAsMut;
 
     #[test]
     fn owned_message_ids() {
@@ -180,14 +191,14 @@ mod tests {
         // insert a message with the first id
         let first_id = 1.into();
         let _ = db
-            .storage::<Messages>()
+            .storage_as_mut::<Messages>()
             .insert(&first_id, &message)
             .unwrap();
 
         // insert a message with the second id with the same Owner
         let second_id = 2.into();
         let _ = db
-            .storage::<Messages>()
+            .storage_as_mut::<Messages>()
             .insert(&second_id, &message)
             .unwrap();
 
@@ -196,7 +207,7 @@ mod tests {
         assert_eq!(owned_msg_ids.count(), 2);
 
         // remove the first message with its given id
-        let _ = db.storage::<Messages>().remove(&first_id).unwrap();
+        let _ = db.storage_as_mut::<Messages>().remove(&first_id).unwrap();
 
         // verify that only second ID is left
         let owned_msg_ids: Vec<_> = db
@@ -206,7 +217,7 @@ mod tests {
         assert_eq!(owned_msg_ids.len(), 1);
 
         // remove the second message with its given id
-        let _ = db.storage::<Messages>().remove(&second_id).unwrap();
+        let _ = db.storage_as_mut::<Messages>().remove(&second_id).unwrap();
         let owned_msg_ids = db.owned_message_ids(&message.recipient, None, None);
         assert_eq!(owned_msg_ids.count(), 0);
     }
