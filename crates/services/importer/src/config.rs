@@ -22,7 +22,7 @@ impl Config {
 impl Default for Config {
     fn default() -> Self {
         Self {
-            max_block_notify_buffer: 1 << 10,
+            max_block_notify_buffer: 1,
             metrics: false,
             chain_id: ChainId::default(),
         }

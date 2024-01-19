@@ -261,12 +261,13 @@ where
     => Err(Error::NotUnique(0u32.into()));
     "fails to import genesis block when block exists for height 0"
 )]
-fn commit_result_genesis(
+#[tokio::test]
+async fn commit_result_genesis(
     sealed_block: SealedBlock,
     underlying_db: impl Fn() -> MockDatabase,
     executor_db: impl Fn() -> MockDatabase,
 ) -> Result<(), Error> {
-    commit_result_assert(sealed_block, underlying_db(), executor_db())
+    commit_result_assert(sealed_block, underlying_db(), executor_db()).await
 }
 
 //////////////////////////// PoA Block ////////////////////////////
@@ -333,7 +334,8 @@ fn commit_result_genesis(
     => Err(storage_failure_error());
     "fails to import block when executor db fails to find block"
 )]
-fn commit_result_and_execute_and_commit_poa(
+#[tokio::test]
+async fn commit_result_and_execute_and_commit_poa(
     sealed_block: SealedBlock,
     underlying_db: impl Fn() -> MockDatabase,
     executor_db: impl Fn() -> MockDatabase,
@@ -342,18 +344,19 @@ fn commit_result_and_execute_and_commit_poa(
     // validation rules(-> test cases) during committing the result.
     let height = *sealed_block.entity.header().height();
     let commit_result =
-        commit_result_assert(sealed_block.clone(), underlying_db(), executor_db());
+        commit_result_assert(sealed_block.clone(), underlying_db(), executor_db()).await;
     let execute_and_commit_result = execute_and_commit_assert(
         sealed_block,
         underlying_db(),
         executor(ok(ex_result(height.into(), 0)), executor_db()),
         verifier(ok(())),
-    );
+    )
+    .await;
     assert_eq!(commit_result, execute_and_commit_result);
     commit_result
 }
 
-fn commit_result_assert(
+async fn commit_result_assert(
     sealed_block: SealedBlock,
     underlying_db: MockDatabase,
     executor_db: MockDatabase,
@@ -366,23 +369,22 @@ fn commit_result_assert(
     );
 
     let mut imported_blocks = importer.subscribe();
-    let result = importer.commit_result(uncommitted_result);
+    let result = importer.commit_result(uncommitted_result).await;
 
     if result.is_ok() {
         let actual_sealed_block = imported_blocks.try_recv().unwrap();
         assert_eq!(actual_sealed_block.sealed_block, expected_to_broadcast);
-        assert_eq!(
-            imported_blocks
-                .try_recv()
-                .expect_err("We should broadcast only one block"),
-            TryRecvError::Empty
-        )
+        if let Err(err) = imported_blocks.try_recv() {
+            assert_eq!(err, TryRecvError::Empty);
+        } else {
+            panic!("We should broadcast only one block");
+        }
     }
 
     result
 }
 
-fn execute_and_commit_assert(
+async fn execute_and_commit_assert(
     sealed_block: SealedBlock,
     underlying_db: MockDatabase,
     executor: MockExecutor,
@@ -392,24 +394,24 @@ fn execute_and_commit_assert(
     let importer = Importer::new(Default::default(), underlying_db, executor, verifier);
 
     let mut imported_blocks = importer.subscribe();
-    let result = importer.execute_and_commit(sealed_block);
+    let result = importer.execute_and_commit(sealed_block).await;
 
     if result.is_ok() {
         let actual_sealed_block = imported_blocks.try_recv().unwrap();
         assert_eq!(actual_sealed_block.sealed_block, expected_to_broadcast);
-        assert_eq!(
-            imported_blocks
-                .try_recv()
-                .expect_err("We should broadcast only one block"),
-            TryRecvError::Empty
-        )
+
+        if let Err(err) = imported_blocks.try_recv() {
+            assert_eq!(err, TryRecvError::Empty);
+        } else {
+            panic!("We should broadcast only one block");
+        }
     }
 
     result
 }
 
-#[test]
-fn commit_result_fail_when_locked() {
+#[tokio::test]
+async fn commit_result_fail_when_locked() {
     let importer = Importer::new(Default::default(), MockDatabase::default(), (), ());
     let uncommitted_result = UncommittedResult::new(
         ImportResult::default(),
@@ -418,13 +420,13 @@ fn commit_result_fail_when_locked() {
 
     let _guard = importer.lock();
     assert_eq!(
-        importer.commit_result(uncommitted_result),
+        importer.commit_result(uncommitted_result).await,
         Err(Error::SemaphoreError(TryAcquireError::NoPermits))
     );
 }
 
-#[test]
-fn execute_and_commit_fail_when_locked() {
+#[tokio::test]
+async fn execute_and_commit_fail_when_locked() {
     let importer = Importer::new(
         Default::default(),
         MockDatabase::default(),
@@ -434,7 +436,7 @@ fn execute_and_commit_fail_when_locked() {
 
     let _guard = importer.lock();
     assert_eq!(
-        importer.execute_and_commit(Default::default()),
+        importer.execute_and_commit(Default::default()).await,
         Err(Error::SemaphoreError(TryAcquireError::NoPermits))
     );
 }
@@ -491,7 +493,8 @@ fn one_lock_at_the_same_time() {
     => Err(verification_failure_error());
     "commit fails if verification fails"
 )]
-fn execute_and_commit_and_verify_and_execute_block_poa<V, P>(
+#[tokio::test]
+async fn execute_and_commit_and_verify_and_execute_block_poa<V, P>(
     sealed_block: SealedBlock,
     block_after_execution: P,
     verifier_result: V,
@@ -521,7 +524,8 @@ where
             executor_db(ok(Some(previous_height)), ok(true), commits)(),
         ),
         verifier(verifier_result),
-    );
+    )
+    .await;
     assert_eq!(verify_and_execute_result, execute_and_commit_result);
     execute_and_commit_result
 }

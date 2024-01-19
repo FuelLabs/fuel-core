@@ -7,7 +7,6 @@ use crate::{
 };
 use fuel_core_services::stream::BoxStream;
 use fuel_core_storage::{
-    not_found,
     tables::{
         Coins,
         ContractsRawCode,
@@ -33,7 +32,7 @@ use fuel_core_types::{
         Nonce,
     },
     services::{
-        block_importer::ImportResult,
+        block_importer::SharedImportResult,
         p2p::{
             GossipsubMessageAcceptance,
             GossipsubMessageInfo,
@@ -44,7 +43,7 @@ use fuel_core_types::{
 use std::sync::Arc;
 
 impl BlockImporter for BlockImporterAdapter {
-    fn block_events(&self) -> BoxStream<Arc<ImportResult>> {
+    fn block_events(&self) -> BoxStream<SharedImportResult> {
         use tokio_stream::{
             wrappers::BroadcastStream,
             StreamExt,
@@ -143,14 +142,5 @@ impl fuel_core_txpool::ports::TxPoolDb for Database {
 
     fn current_block_height(&self) -> StorageResult<BlockHeight> {
         self.latest_height()
-    }
-
-    fn transaction_status(
-        &self,
-        tx_id: &fuel_core_types::fuel_types::Bytes32,
-    ) -> StorageResult<fuel_core_types::services::txpool::TransactionStatus> {
-        self.get_tx_status(tx_id)
-            .transpose()
-            .ok_or(not_found!("TransactionId"))?
     }
 }

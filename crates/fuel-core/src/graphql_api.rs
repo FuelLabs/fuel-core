@@ -9,9 +9,12 @@ use fuel_core_types::{
 };
 use std::net::SocketAddr;
 
+pub mod api_service;
+pub mod database;
 pub(crate) mod metrics_extension;
 pub mod ports;
-pub mod service;
+pub(crate) mod view_extension;
+pub mod worker_service;
 
 #[derive(Clone, Debug)]
 pub struct Config {

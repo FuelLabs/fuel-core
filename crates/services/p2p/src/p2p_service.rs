@@ -106,7 +106,7 @@ pub struct FuelP2PService {
     /// It will send it to the specified Peer via its unique ResponseChannel    
     inbound_requests_table: HashMap<InboundRequestId, ResponseChannel<ResponseMessage>>,
 
-    /// NetworkCodec used as <GossipsubCodec> for encoding and decoding of Gossipsub messages    
+    /// NetworkCodec used as `<GossipsubCodec>` for encoding and decoding of Gossipsub messages    
     network_codec: PostcardCodec,
 
     /// Stores additional p2p network info    

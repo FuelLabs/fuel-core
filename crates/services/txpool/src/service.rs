@@ -34,7 +34,6 @@ use fuel_core_types::{
         Bytes32,
     },
     services::{
-        block_importer::ImportResult,
         p2p::{
             GossipData,
             GossipsubMessageAcceptance,
@@ -52,6 +51,7 @@ use fuel_core_types::{
 };
 
 use anyhow::anyhow;
+use fuel_core_types::services::block_importer::SharedImportResult;
 use parking_lot::Mutex as ParkingMutex;
 use std::{
     sync::Arc,
@@ -143,7 +143,7 @@ impl<P2P, DB: Clone> Clone for SharedState<P2P, DB> {
 
 pub struct Task<P2P, DB> {
     gossiped_tx_stream: BoxStream<TransactionGossipData>,
-    committed_block_stream: BoxStream<Arc<ImportResult>>,
+    committed_block_stream: BoxStream<SharedImportResult>,
     shared: SharedState<P2P, DB>,
     ttl_timer: tokio::time::Interval,
 }
@@ -201,14 +201,13 @@ where
 
             result = self.committed_block_stream.next() => {
                 if let Some(result) = result {
-                    let block = result
+                    let block = &result
                         .sealed_block
-                        .entity
-                        .compress(&self.shared.consensus_params.chain_id);
+                        .entity;
                     self.shared.txpool.lock().block_update(
                         &self.shared.tx_status_sender,
-                        block.header().height(),
-                        block.transactions()
+                        block,
+                        &result.tx_status,
                     );
                     should_continue = true;
                 } else {

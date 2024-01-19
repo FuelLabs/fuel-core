@@ -1,13 +1,17 @@
 use crate::{
-    fuel_core_graphql_api::ports::{
-        BlockProducerPort,
-        ConsensusModulePort,
-        DatabasePort,
-        P2pPort,
-        TxPoolPort,
-    },
-    graphql_api::{
+    fuel_core_graphql_api::{
+        database::{
+            OffChainView,
+            OnChainView,
+        },
         metrics_extension::MetricsExtension,
+        ports::{
+            BlockProducerPort,
+            ConsensusModulePort,
+            P2pPort,
+            TxPoolPort,
+        },
+        view_extension::ViewExtension,
         Config,
     },
     schema::{
@@ -55,6 +59,7 @@ use fuel_core_services::{
     RunnableTask,
     StateWatcher,
 };
+use fuel_core_storage::transactional::AtomicView;
 use futures::Stream;
 use serde_json::json;
 use std::{
@@ -75,7 +80,7 @@ use tower_http::{
 
 pub type Service = fuel_core_services::ServiceRunner<GraphqlService>;
 
-pub type Database = Box<dyn DatabasePort>;
+pub use super::database::ReadDatabase;
 
 pub type BlockProducer = Box<dyn BlockProducerPort>;
 // In the future GraphQL should not be aware of `TxPool`. It should
@@ -160,28 +165,35 @@ impl RunnableTask for Task {
 
 // Need a seperate Data Object for each Query endpoint, cannot be avoided
 #[allow(clippy::too_many_arguments)]
-pub fn new_service(
+pub fn new_service<OnChain, OffChain>(
     config: Config,
     schema: CoreSchemaBuilder,
-    database: Database,
+    on_database: OnChain,
+    off_database: OffChain,
     txpool: TxPool,
     producer: BlockProducer,
     consensus_module: ConsensusModule,
     p2p_service: P2pService,
     log_threshold_ms: Duration,
     request_timeout: Duration,
-) -> anyhow::Result<Service> {
+) -> anyhow::Result<Service>
+where
+    OnChain: AtomicView<OnChainView> + 'static,
+    OffChain: AtomicView<OffChainView> + 'static,
+{
     let network_addr = config.addr;
+    let combined_read_database = ReadDatabase::new(on_database, off_database);
 
     let schema = schema
         .data(config)
-        .data(database)
+        .data(combined_read_database)
         .data(txpool)
         .data(producer)
         .data(consensus_module)
         .data(p2p_service)
         .extension(async_graphql::extensions::Tracing)
         .extension(MetricsExtension::new(log_threshold_ms))
+        .extension(ViewExtension::new())
         .finish();
 
     let router = Router::new()

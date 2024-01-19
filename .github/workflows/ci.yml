@@ -105,6 +105,8 @@ jobs:
             args: --all-targets --all-features
           - command: check
             args: --all-targets
+          - command: doc
+            args: --all-features --workspace
           - command: make
             args: check --locked
           - command: test
