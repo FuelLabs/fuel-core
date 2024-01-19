@@ -110,23 +110,30 @@ where
 {
     /// Initializes the storage with a bunch of key-value pairs.
     /// In some cases, this method may be more performant than [`Self::insert`].
-    fn init(
-        storage: &mut S,
-        column: S::Column,
-        set: &mut dyn Iterator<Item = (&M::Key, &M::Value)>,
-    ) -> StorageResult<()>;
+    fn init<'a, Iter>(storage: &mut S, column: S::Column, set: Iter) -> StorageResult<()>
+    where
+        Iter: 'a + Iterator<Item = (&'a M::Key, &'a M::Value)>,
+        M::Key: 'a,
+        M::Value: 'a;
 
     /// Inserts the batch of key-value pairs into the storage.
-    fn insert(
+    fn insert<'a, Iter>(
         storage: &mut S,
         column: S::Column,
-        set: &mut dyn Iterator<Item = (&M::Key, &M::Value)>,
-    ) -> StorageResult<()>;
+        set: Iter,
+    ) -> StorageResult<()>
+    where
+        Iter: 'a + Iterator<Item = (&'a M::Key, &'a M::Value)>,
+        M::Key: 'a,
+        M::Value: 'a;
 
     /// Removes the batch of key-value pairs from the storage.
-    fn remove(
+    fn remove<'a, Iter>(
         storage: &mut S,
         column: S::Column,
-        set: &mut dyn Iterator<Item = &M::Key>,
-    ) -> StorageResult<()>;
+        set: Iter,
+    ) -> StorageResult<()>
+    where
+        Iter: 'a + Iterator<Item = &'a M::Key>,
+        M::Key: 'a;
 }

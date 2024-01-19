@@ -113,6 +113,7 @@ pub enum WriteOperation {
 #[impl_tools::autoimpl(for<T: trait> &T, &mut T, Box<T>, Arc<T>)]
 pub trait BatchOperations: KeyValueStore {
     /// Writes the batch of the entries into the storage.
+    // TODO: Replace `dyn Iterator` with a generic iterator when `Database` will not use `dyn BatchOperations`.
     fn batch_write(
         &self,
         entries: &mut dyn Iterator<Item = (Vec<u8>, Self::Column, WriteOperation)>,

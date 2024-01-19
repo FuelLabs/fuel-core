@@ -98,19 +98,25 @@ where
     M: Mappable + TableWithBlueprint<Blueprint = Plain<KeyCodec, ValueCodec>>,
     M::Blueprint: Blueprint<M, S>,
 {
-    fn init(
-        storage: &mut S,
-        column: S::Column,
-        set: &mut dyn Iterator<Item = (&M::Key, &M::Value)>,
-    ) -> StorageResult<()> {
+    fn init<'a, Iter>(storage: &mut S, column: S::Column, set: Iter) -> StorageResult<()>
+    where
+        Iter: 'a + Iterator<Item = (&'a M::Key, &'a M::Value)>,
+        M::Key: 'a,
+        M::Value: 'a,
+    {
         Self::insert(storage, column, set)
     }
 
-    fn insert(
+    fn insert<'a, Iter>(
         storage: &mut S,
         column: S::Column,
-        set: &mut dyn Iterator<Item = (&M::Key, &M::Value)>,
-    ) -> StorageResult<()> {
+        set: Iter,
+    ) -> StorageResult<()>
+    where
+        Iter: 'a + Iterator<Item = (&'a M::Key, &'a M::Value)>,
+        M::Key: 'a,
+        M::Value: 'a,
+    {
         storage.batch_write(&mut set.map(|(key, value)| {
             let key_encoder = <M::Blueprint as Blueprint<M, S>>::KeyCodec::encode(key);
             let key_bytes = key_encoder.as_bytes().to_vec();
@@ -120,11 +126,15 @@ where
         }))
     }
 
-    fn remove(
+    fn remove<'a, Iter>(
         storage: &mut S,
         column: S::Column,
-        set: &mut dyn Iterator<Item = &M::Key>,
-    ) -> StorageResult<()> {
+        set: Iter,
+    ) -> StorageResult<()>
+    where
+        Iter: 'a + Iterator<Item = &'a M::Key>,
+        M::Key: 'a,
+    {
         storage.batch_write(&mut set.map(|key| {
             let key_encoder = <M::Blueprint as Blueprint<M, S>>::KeyCodec::encode(key);
             let key_bytes = key_encoder.as_bytes().to_vec();

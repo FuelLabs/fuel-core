@@ -131,24 +131,29 @@ where
     M: Mappable + TableWithBlueprint,
     M::Blueprint: SupportsBatching<M, S>,
 {
-    fn init_storage(
-        &mut self,
-        set: &mut dyn Iterator<Item = (&M::Key, &M::Value)>,
-    ) -> Result<(), Self::Error> {
+    fn init_storage<'a, Iter>(&mut self, set: Iter) -> Result<(), Self::Error>
+    where
+        Iter: 'a + Iterator<Item = (&'a M::Key, &'a M::Value)>,
+        M::Key: 'a,
+        M::Value: 'a,
+    {
         <M as TableWithBlueprint>::Blueprint::init(&mut self.storage, M::column(), set)
     }
 
-    fn insert_batch(
-        &mut self,
-        set: &mut dyn Iterator<Item = (&M::Key, &M::Value)>,
-    ) -> Result<(), Self::Error> {
+    fn insert_batch<'a, Iter>(&mut self, set: Iter) -> Result<(), Self::Error>
+    where
+        Iter: 'a + Iterator<Item = (&'a M::Key, &'a M::Value)>,
+        M::Key: 'a,
+        M::Value: 'a,
+    {
         <M as TableWithBlueprint>::Blueprint::insert(&mut self.storage, M::column(), set)
     }
 
-    fn remove_batch(
-        &mut self,
-        set: &mut dyn Iterator<Item = &M::Key>,
-    ) -> Result<(), Self::Error> {
+    fn remove_batch<'a, Iter>(&mut self, set: Iter) -> Result<(), Self::Error>
+    where
+        Iter: 'a + Iterator<Item = &'a M::Key>,
+        M::Key: 'a,
+    {
         <M as TableWithBlueprint>::Blueprint::remove(&mut self.storage, M::column(), set)
     }
 }

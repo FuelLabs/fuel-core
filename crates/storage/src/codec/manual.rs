@@ -7,8 +7,10 @@ use crate::codec::{
     Decode,
     Encode,
 };
-use fuel_core_types::fuel_vm::ContractsAssetKey;
-use fuel_vm_private::storage::ContractsStateKey;
+use fuel_core_types::fuel_vm::{
+    ContractsAssetKey,
+    ContractsStateKey,
+};
 use std::borrow::Cow;
 
 /// The codec allows the definition of manual implementation for specific type `T`.
