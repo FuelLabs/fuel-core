@@ -12,6 +12,7 @@ use fuel_core_chain_config::{
     MessageConfig,
 };
 use fuel_core_storage::{
+    blueprint::Blueprint,
     codec::{
         Decode,
         Encode,
@@ -24,7 +25,6 @@ use fuel_core_storage::{
         Value,
         WriteOperation,
     },
-    structure::Blueprint,
     structured_storage::{
         StructuredStorage,
         TableWithBlueprint,
@@ -305,7 +305,7 @@ impl Database {
     {
         let iter = if let Some(start) = start {
             let encoder =
-                <M::Structure as Structure<M, DataSource>>::KeyCodec::encode(start);
+                <M::Blueprint as Blueprint<M, DataSource>>::KeyCodec::encode(start);
 
             self.data.as_ref().iter_all(
                 M::column(),
