@@ -7,17 +7,19 @@ use futures::{
     TryFutureExt,
 };
 use libp2p::{
-    core::UpgradeInfo,
+    core::{
+        upgrade::{
+            InboundConnectionUpgrade,
+            OutboundConnectionUpgrade,
+        },
+        UpgradeInfo,
+    },
     noise::{
         Config as NoiseConfig,
         Error as NoiseError,
         Output as NoiseOutput,
     },
     PeerId,
-};
-use libp2p_core::upgrade::{
-    InboundConnectionUpgrade,
-    OutboundConnectionUpgrade,
 };
 use std::pin::Pin;
 

@@ -7,6 +7,7 @@ use core::{
     mem::size_of,
 };
 use fuel_core_storage::{
+    blueprint::plain::Plain,
     codec::{
         manual::Manual,
         postcard::Postcard,
@@ -15,8 +16,7 @@ use fuel_core_storage::{
         Encode,
     },
     iter::IterDirection,
-    structure::plain::Plain,
-    structured_storage::TableWithStructure,
+    structured_storage::TableWithBlueprint,
     tables::Transactions,
     Mappable,
     Result as StorageResult,
@@ -45,8 +45,8 @@ impl Mappable for OwnedTransactions {
     type OwnedValue = Self::Value;
 }
 
-impl TableWithStructure for OwnedTransactions {
-    type Structure = Plain<Manual<OwnedTransactionIndexKey>, Raw>;
+impl TableWithBlueprint for OwnedTransactions {
+    type Blueprint = Plain<Manual<OwnedTransactionIndexKey>, Raw>;
 
     fn column() -> Column {
         Column::TransactionsByOwnerBlockIdx
@@ -63,8 +63,8 @@ impl Mappable for TransactionStatuses {
     type OwnedValue = Self::Value;
 }
 
-impl TableWithStructure for TransactionStatuses {
-    type Structure = Plain<Raw, Postcard>;
+impl TableWithBlueprint for TransactionStatuses {
+    type Blueprint = Plain<Raw, Postcard>;
 
     fn column() -> Column {
         Column::TransactionStatus

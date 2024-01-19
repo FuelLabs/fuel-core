@@ -79,8 +79,7 @@ impl Mappable for SealedBlockConsensus {
     type OwnedValue = Consensus;
 }
 
-/// The storage table of coins. Each
-/// [`CompressedCoin`](fuel_core_types::entities::coins::coin::CompressedCoin)
+/// The storage table of coins. Each [`CompressedCoin`]
 /// is represented by unique `UtxoId`.
 pub struct Coins;
 
@@ -91,7 +90,7 @@ impl Mappable for Coins {
     type OwnedValue = CompressedCoin;
 }
 
-/// The storage table of bridged Ethereum [`Message`](crate::model::Message)s.
+/// The storage table of bridged Ethereum message.
 pub struct Messages;
 
 impl Mappable for Messages {
@@ -101,7 +100,7 @@ impl Mappable for Messages {
     type OwnedValue = Message;
 }
 
-/// The storage table that indicates if the [`Message`](crate::model::Message) is spent or not.
+/// The storage table that indicates if the message is spent or not.
 pub struct SpentMessages;
 
 impl Mappable for SpentMessages {

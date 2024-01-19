@@ -1,18 +1,18 @@
 //! The module contains implementations and tests for the `FuelBlocks` table.
 
 use crate::{
+    blueprint::plain::Plain,
     codec::{
         postcard::Postcard,
         primitive::Primitive,
     },
     column::Column,
-    structure::plain::Plain,
-    structured_storage::TableWithStructure,
+    structured_storage::TableWithBlueprint,
     tables::FuelBlocks,
 };
 
-impl TableWithStructure for FuelBlocks {
-    type Structure = Plain<Primitive<4>, Postcard>;
+impl TableWithBlueprint for FuelBlocks {
+    type Blueprint = Plain<Primitive<4>, Postcard>;
 
     fn column() -> Column {
         Column::FuelBlocks

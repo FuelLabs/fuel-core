@@ -1,7 +1,7 @@
 //! The module defines structures for the [`Mappable`] tables.
-//! Each table may have its structure that defines how it works with the storage.
-//! The table may have a plain structure that simply works in CRUD mode, or it may be an SMT-based
-//! structure that maintains a valid Merkle tree over the storage entries.
+//! Each table may have its blueprint that defines how it works with the storage.
+//! The table may have a plain blueprint that simply works in CRUD mode, or it may be an SMT-based
+//! blueprint that maintains a valid Merkle tree over the storage entries.
 
 use crate::{
     codec::{
@@ -22,14 +22,14 @@ pub mod sparse;
 
 /// This trait allows defining the agnostic implementation for all storage
 /// traits(`StorageInspect,` `StorageMutate,` etc) while the main logic is
-/// hidden inside the structure. It allows quickly adding support for new
+/// hidden inside the blueprint. It allows quickly adding support for new
 /// structures only by implementing the trait and reusing the existing
-/// infrastructure in other places. It allows changing the structure on the
+/// infrastructure in other places. It allows changing the blueprint on the
 /// fly in the definition of the table without affecting other areas of the codebase.
 ///
-/// The structure is responsible for encoding/decoding(usually it is done via `KeyCodec` and `ValueCodec`)
+/// The blueprint is responsible for encoding/decoding(usually it is done via `KeyCodec` and `ValueCodec`)
 /// the key and value and putting/extracting it to/from the storage.
-pub trait Structure<M, S>
+pub trait Blueprint<M, S>
 where
     M: Mappable,
     S: KeyValueStore,
@@ -101,9 +101,9 @@ where
     }
 }
 
-/// It is an extension of the structure that allows supporting batch operations.
+/// It is an extension of the blueprint that allows supporting batch operations.
 /// Usually, they are more performant than initializing/inserting/removing values one by one.
-pub trait SupportsBatching<M, S>: Structure<M, S>
+pub trait SupportsBatching<M, S>: Blueprint<M, S>
 where
     M: Mappable,
     S: BatchOperations,

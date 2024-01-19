@@ -21,11 +21,11 @@ pub use fuel_vm_private::{
     },
 };
 
+pub mod blueprint;
 pub mod codec;
 pub mod column;
 pub mod iter;
 pub mod kv_store;
-pub mod structure;
 pub mod structured_storage;
 pub mod tables;
 #[cfg(feature = "test-helpers")]

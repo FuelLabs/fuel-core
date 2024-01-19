@@ -1,14 +1,14 @@
 //! The module contains implementations and tests for merkle related tables.
 
 use crate::{
+    blueprint::plain::Plain,
     codec::{
         postcard::Postcard,
         primitive::Primitive,
         raw::Raw,
     },
     column::Column,
-    structure::plain::Plain,
-    structured_storage::TableWithStructure,
+    structured_storage::TableWithBlueprint,
     tables::merkle::{
         ContractsAssetsMerkleData,
         ContractsAssetsMerkleMetadata,
@@ -24,8 +24,8 @@ macro_rules! merkle_table {
         merkle_table!($table, Raw);
     };
     ($table:ident, $key_codec:ident) => {
-        impl TableWithStructure for $table {
-            type Structure = Plain<$key_codec, Postcard>;
+        impl TableWithBlueprint for $table {
+            type Blueprint = Plain<$key_codec, Postcard>;
 
             fn column() -> Column {
                 Column::$table

@@ -24,10 +24,10 @@ use fuel_core_storage::{
         Value,
         WriteOperation,
     },
-    structure::Structure,
+    structure::Blueprint,
     structured_storage::{
         StructuredStorage,
-        TableWithStructure,
+        TableWithBlueprint,
     },
     transactional::{
         StorageTransaction,
@@ -262,8 +262,8 @@ impl Database {
         direction: Option<IterDirection>,
     ) -> impl Iterator<Item = StorageResult<(M::OwnedKey, M::OwnedValue)>> + '_
     where
-        M: Mappable + TableWithStructure,
-        M::Structure: Structure<M, DataSource>,
+        M: Mappable + TableWithBlueprint,
+        M::Blueprint: Blueprint<M, DataSource>,
     {
         self.iter_all_filtered::<M, [u8; 0]>(None, None, direction)
     }
@@ -273,8 +273,8 @@ impl Database {
         prefix: Option<P>,
     ) -> impl Iterator<Item = StorageResult<(M::OwnedKey, M::OwnedValue)>> + '_
     where
-        M: Mappable + TableWithStructure,
-        M::Structure: Structure<M, DataSource>,
+        M: Mappable + TableWithBlueprint,
+        M::Blueprint: Blueprint<M, DataSource>,
         P: AsRef<[u8]>,
     {
         self.iter_all_filtered::<M, P>(prefix, None, None)
@@ -286,8 +286,8 @@ impl Database {
         direction: Option<IterDirection>,
     ) -> impl Iterator<Item = StorageResult<(M::OwnedKey, M::OwnedValue)>> + '_
     where
-        M: Mappable + TableWithStructure,
-        M::Structure: Structure<M, DataSource>,
+        M: Mappable + TableWithBlueprint,
+        M::Blueprint: Blueprint<M, DataSource>,
     {
         self.iter_all_filtered::<M, [u8; 0]>(None, start, direction)
     }
@@ -299,8 +299,8 @@ impl Database {
         direction: Option<IterDirection>,
     ) -> impl Iterator<Item = StorageResult<(M::OwnedKey, M::OwnedValue)>> + '_
     where
-        M: Mappable + TableWithStructure,
-        M::Structure: Structure<M, DataSource>,
+        M: Mappable + TableWithBlueprint,
+        M::Blueprint: Blueprint<M, DataSource>,
         P: AsRef<[u8]>,
     {
         let iter = if let Some(start) = start {
@@ -323,12 +323,12 @@ impl Database {
         };
         iter.map(|val| {
             val.and_then(|(key, value)| {
-                let key = <M::Structure as Structure<M, DataSource>>::KeyCodec::decode(
+                let key = <M::Blueprint as Blueprint<M, DataSource>>::KeyCodec::decode(
                     key.as_slice(),
                 )
                 .map_err(|e| StorageError::Codec(anyhow::anyhow!(e)))?;
                 let value =
-                    <M::Structure as Structure<M, DataSource>>::ValueCodec::decode(
+                    <M::Blueprint as Blueprint<M, DataSource>>::ValueCodec::decode(
                         value.as_slice(),
                     )
                     .map_err(|e| StorageError::Codec(anyhow::anyhow!(e)))?;

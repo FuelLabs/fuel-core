@@ -4,6 +4,7 @@ use crate::database::{
 };
 use fuel_core_chain_config::MessageConfig;
 use fuel_core_storage::{
+    blueprint::plain::Plain,
     codec::{
         manual::Manual,
         postcard::Postcard,
@@ -11,8 +12,7 @@ use fuel_core_storage::{
         Encode,
     },
     iter::IterDirection,
-    structure::plain::Plain,
-    structured_storage::TableWithStructure,
+    structured_storage::TableWithBlueprint,
     tables::{
         Messages,
         SpentMessages,
@@ -61,8 +61,8 @@ impl Decode<OwnedMessageKey> for Manual<OwnedMessageKey> {
     }
 }
 
-impl TableWithStructure for OwnedMessageIds {
-    type Structure = Plain<Manual<OwnedMessageKey>, Postcard>;
+impl TableWithBlueprint for OwnedMessageIds {
+    type Blueprint = Plain<Manual<OwnedMessageKey>, Postcard>;
 
     fn column() -> fuel_core_storage::column::Column {
         Column::OwnedMessageIds

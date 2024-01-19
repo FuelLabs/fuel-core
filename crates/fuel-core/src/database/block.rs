@@ -3,14 +3,14 @@ use crate::database::{
     Database,
 };
 use fuel_core_storage::{
+    blueprint::plain::Plain,
     codec::{
         primitive::Primitive,
         raw::Raw,
     },
     iter::IterDirection,
     not_found,
-    structure::plain::Plain,
-    structured_storage::TableWithStructure,
+    structured_storage::TableWithBlueprint,
     tables::{
         merkle::{
             DenseMerkleMetadata,
@@ -61,8 +61,8 @@ impl Mappable for FuelBlockSecondaryKeyBlockHeights {
     type OwnedValue = Self::Value;
 }
 
-impl TableWithStructure for FuelBlockSecondaryKeyBlockHeights {
-    type Structure = Plain<Raw, Primitive<4>>;
+impl TableWithBlueprint for FuelBlockSecondaryKeyBlockHeights {
+    type Blueprint = Plain<Raw, Primitive<4>>;
 
     fn column() -> Column {
         Column::FuelBlockSecondaryKeyBlockHeights

@@ -64,25 +64,25 @@ column_definition! {
         Transactions = 6,
         /// See [`FuelBlocks`](crate::tables::FuelBlocks)
         FuelBlocks = 7,
-        /// See [`FuelBlockMerkleData`](storage::FuelBlockMerkleData)
+        /// See [`FuelBlockMerkleData`](crate::tables::merkle::FuelBlockMerkleData)
         FuelBlockMerkleData = 8,
-        /// See [`FuelBlockMerkleMetadata`](storage::FuelBlockMerkleMetadata)
+        /// See [`FuelBlockMerkleMetadata`](crate::tables::merkle::FuelBlockMerkleMetadata)
         FuelBlockMerkleMetadata = 9,
         /// Messages that have been spent.
         /// Existence of a key in this column means that the message has been spent.
         /// See [`SpentMessages`](crate::tables::SpentMessages)
         SpentMessages = 10,
-        /// See [`ContractsAssetsMerkleData`](storage::ContractsAssetsMerkleData)
+        /// See [`ContractsAssetsMerkleData`](crate::tables::merkle::ContractsAssetsMerkleData)
         ContractsAssetsMerkleData = 11,
-        /// See [`ContractsAssetsMerkleMetadata`](storage::ContractsAssetsMerkleMetadata)
+        /// See [`ContractsAssetsMerkleMetadata`](crate::tables::merkle::ContractsAssetsMerkleMetadata)
         ContractsAssetsMerkleMetadata = 12,
-        /// See [`ContractsStateMerkleData`](storage::ContractsStateMerkleData)
+        /// See [`ContractsStateMerkleData`](crate::tables::merkle::ContractsStateMerkleData)
         ContractsStateMerkleData = 13,
-        /// See [`ContractsStateMerkleMetadata`](storage::ContractsStateMerkleMetadata)
+        /// See [`ContractsStateMerkleMetadata`](crate::tables::merkle::ContractsStateMerkleMetadata)
         ContractsStateMerkleMetadata = 14,
         /// See [`Messages`](crate::tables::Messages)
         Messages = 15,
-        /// See [`ProcessedTransactions`](storage::ProcessedTransactions)
+        /// See [`ProcessedTransactions`](crate::tables::ProcessedTransactions)
         ProcessedTransactions = 16,
 
         // TODO: Extract the columns below into a separate enum to not mix
@@ -95,12 +95,12 @@ column_definition! {
         Metadata = 17,
         /// See [`Receipts`](crate::tables::Receipts)
         Receipts = 18,
-        /// See [`FuelBlockSecondaryKeyBlockHeights`](storage::FuelBlockSecondaryKeyBlockHeights)
+        /// See `FuelBlockSecondaryKeyBlockHeights`
         FuelBlockSecondaryKeyBlockHeights = 19,
         /// See [`SealedBlockConsensus`](crate::tables::SealedBlockConsensus)
         FuelBlockConsensus = 20,
         /// Metadata for the relayer
-        /// See [`RelayerMetadata`](fuel_core_relayer::ports::RelayerMetadata)
+        /// See `RelayerMetadata`
         RelayerMetadata = 21,
 
         // Below are not required tables. They are used for API and may be removed or moved to another place in the future.

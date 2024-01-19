@@ -1,15 +1,15 @@
 //! The module contains the [`StructuredStorage`] wrapper around the key-value storage
-//! that implements the storage traits for the tables with structure.
+//! that implements the storage traits for the tables with blueprint.
 
 use crate::{
+    blueprint::{
+        Blueprint,
+        SupportsBatching,
+    },
     column::Column,
     kv_store::{
         BatchOperations,
         KeyValueStore,
-    },
-    structure::{
-        Structure,
-        SupportsBatching,
     },
     Error as StorageError,
     Mappable,
@@ -31,19 +31,19 @@ pub mod sealed_block;
 pub mod state;
 pub mod transactions;
 
-/// The table can implement this trait to indicate that it has a structure.
+/// The table can implement this trait to indicate that it has a blueprint.
 /// It inherits the default implementation of the storage traits through the [`StructuredStorage`]
 /// for the table.
-pub trait TableWithStructure: Mappable + Sized {
-    /// The type of the structure used by the table.
-    type Structure;
+pub trait TableWithBlueprint: Mappable + Sized {
+    /// The type of the blueprint used by the table.
+    type Blueprint;
 
     /// The column occupied by the table.
     fn column() -> Column;
 }
 
 /// The wrapper around the key-value storage that implements the storage traits for the tables
-/// with structure.
+/// with blueprint.
 #[derive(Clone, Debug)]
 pub struct StructuredStorage<S> {
     pub(crate) storage: S,
@@ -71,33 +71,33 @@ impl<S> AsMut<S> for StructuredStorage<S> {
 impl<S, M> StorageInspect<M> for StructuredStorage<S>
 where
     S: KeyValueStore<Column = Column>,
-    M: Mappable + TableWithStructure,
-    M::Structure: Structure<M, S>,
+    M: Mappable + TableWithBlueprint,
+    M::Blueprint: Blueprint<M, S>,
 {
     type Error = StorageError;
 
     fn get(&self, key: &M::Key) -> Result<Option<Cow<M::OwnedValue>>, Self::Error> {
-        <M as TableWithStructure>::Structure::get(&self.storage, key, M::column())
+        <M as TableWithBlueprint>::Blueprint::get(&self.storage, key, M::column())
             .map(|value| value.map(Cow::Owned))
     }
 
     fn contains_key(&self, key: &M::Key) -> Result<bool, Self::Error> {
-        <M as TableWithStructure>::Structure::exists(&self.storage, key, M::column())
+        <M as TableWithBlueprint>::Blueprint::exists(&self.storage, key, M::column())
     }
 }
 
 impl<S, M> StorageMutate<M> for StructuredStorage<S>
 where
     S: KeyValueStore<Column = Column>,
-    M: Mappable + TableWithStructure,
-    M::Structure: Structure<M, S>,
+    M: Mappable + TableWithBlueprint,
+    M::Blueprint: Blueprint<M, S>,
 {
     fn insert(
         &mut self,
         key: &M::Key,
         value: &M::Value,
     ) -> Result<Option<M::OwnedValue>, Self::Error> {
-        <M as TableWithStructure>::Structure::replace(
+        <M as TableWithBlueprint>::Blueprint::replace(
             &mut self.storage,
             key,
             M::column(),
@@ -106,18 +106,18 @@ where
     }
 
     fn remove(&mut self, key: &M::Key) -> Result<Option<M::OwnedValue>, Self::Error> {
-        <M as TableWithStructure>::Structure::take(&mut self.storage, key, M::column())
+        <M as TableWithBlueprint>::Blueprint::take(&mut self.storage, key, M::column())
     }
 }
 
 impl<S, M> StorageSize<M> for StructuredStorage<S>
 where
     S: KeyValueStore<Column = Column>,
-    M: Mappable + TableWithStructure,
-    M::Structure: Structure<M, S>,
+    M: Mappable + TableWithBlueprint,
+    M::Blueprint: Blueprint<M, S>,
 {
     fn size_of_value(&self, key: &M::Key) -> Result<Option<usize>, Self::Error> {
-        <M as TableWithStructure>::Structure::size_of_value(
+        <M as TableWithBlueprint>::Blueprint::size_of_value(
             &self.storage,
             key,
             M::column(),
@@ -128,28 +128,28 @@ where
 impl<S, M> StorageBatchMutate<M> for StructuredStorage<S>
 where
     S: BatchOperations<Column = Column>,
-    M: Mappable + TableWithStructure,
-    M::Structure: SupportsBatching<M, S>,
+    M: Mappable + TableWithBlueprint,
+    M::Blueprint: SupportsBatching<M, S>,
 {
     fn init_storage(
         &mut self,
         set: &mut dyn Iterator<Item = (&M::Key, &M::Value)>,
     ) -> Result<(), Self::Error> {
-        <M as TableWithStructure>::Structure::init(&mut self.storage, M::column(), set)
+        <M as TableWithBlueprint>::Blueprint::init(&mut self.storage, M::column(), set)
     }
 
     fn insert_batch(
         &mut self,
         set: &mut dyn Iterator<Item = (&M::Key, &M::Value)>,
     ) -> Result<(), Self::Error> {
-        <M as TableWithStructure>::Structure::insert(&mut self.storage, M::column(), set)
+        <M as TableWithBlueprint>::Blueprint::insert(&mut self.storage, M::column(), set)
     }
 
     fn remove_batch(
         &mut self,
         set: &mut dyn Iterator<Item = &M::Key>,
     ) -> Result<(), Self::Error> {
-        <M as TableWithStructure>::Structure::remove(&mut self.storage, M::column(), set)
+        <M as TableWithBlueprint>::Blueprint::remove(&mut self.storage, M::column(), set)
     }
 }
 
