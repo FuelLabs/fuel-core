@@ -1,14 +1,11 @@
 use crate::{
     database::Database,
-    fuel_core_graphql_api::{
-        database::OnChainView,
-        ports::{
-            DatabaseBlocks,
-            DatabaseChain,
-            DatabaseContracts,
-            DatabaseMessages,
-            OnChainDatabase,
-        },
+    fuel_core_graphql_api::ports::{
+        DatabaseBlocks,
+        DatabaseChain,
+        DatabaseContracts,
+        DatabaseMessages,
+        OnChainDatabase,
     },
 };
 use fuel_core_importer::ports::ImporterDatabase;
@@ -20,7 +17,6 @@ use fuel_core_storage::{
     },
     not_found,
     tables::FuelBlocks,
-    transactional::AtomicView,
     Error as StorageError,
     Result as StorageResult,
 };
@@ -41,7 +37,6 @@ use fuel_core_types::{
     },
     services::graphql_api::ContractBalance,
 };
-use std::sync::Arc;
 
 impl DatabaseBlocks for Database {
     fn block_height(&self, id: &BlockId) -> StorageResult<BlockHeight> {
@@ -130,16 +125,3 @@ impl DatabaseChain for Database {
 }
 
 impl OnChainDatabase for Database {}
-
-impl AtomicView<OnChainView> for Database {
-    fn view_at(&self, _: BlockHeight) -> StorageResult<OnChainView> {
-        unimplemented!(
-            "Unimplemented until of the https://github.com/FuelLabs/fuel-core/issues/451"
-        )
-    }
-
-    fn latest_view(&self) -> OnChainView {
-        // TODO: https://github.com/FuelLabs/fuel-core/issues/1581
-        Arc::new(self.clone())
-    }
-}

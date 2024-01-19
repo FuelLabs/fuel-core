@@ -1,11 +1,16 @@
-use crate::fuel_core_graphql_api::ports::{
-    DatabaseBlocks,
-    DatabaseChain,
-    DatabaseContracts,
-    DatabaseMessageProof,
-    DatabaseMessages,
-    OffChainDatabase,
-    OnChainDatabase,
+mod arc_wrapper;
+
+use crate::fuel_core_graphql_api::{
+    database::arc_wrapper::ArcWrapper,
+    ports::{
+        DatabaseBlocks,
+        DatabaseChain,
+        DatabaseContracts,
+        DatabaseMessageProof,
+        DatabaseMessages,
+        OffChainDatabase,
+        OnChainDatabase,
+    },
 };
 use fuel_core_storage::{
     iter::{
@@ -64,21 +69,23 @@ pub type OffChainView = Arc<dyn OffChainDatabase>;
 /// It is used only by `ViewExtension` to create a [`ReadView`].
 pub struct ReadDatabase {
     /// The on-chain database view provider.
-    on_chain: Box<dyn AtomicView<OnChainView>>,
+    on_chain: Box<dyn AtomicView<View = OnChainView>>,
     /// The off-chain database view provider.
-    off_chain: Box<dyn AtomicView<OffChainView>>,
+    off_chain: Box<dyn AtomicView<View = OffChainView>>,
 }
 
 impl ReadDatabase {
     /// Creates a new [`ReadDatabase`] with the given on-chain and off-chain database view providers.
     pub fn new<OnChain, OffChain>(on_chain: OnChain, off_chain: OffChain) -> Self
     where
-        OnChain: AtomicView<OnChainView> + 'static,
-        OffChain: AtomicView<OffChainView> + 'static,
+        OnChain: AtomicView + 'static,
+        OffChain: AtomicView + 'static,
+        OnChain::View: OnChainDatabase,
+        OffChain::View: OffChainDatabase,
     {
         Self {
-            on_chain: Box::new(on_chain),
-            off_chain: Box::new(off_chain),
+            on_chain: Box::new(ArcWrapper::new(on_chain)),
+            off_chain: Box::new(ArcWrapper::new(off_chain)),
         }
     }
 

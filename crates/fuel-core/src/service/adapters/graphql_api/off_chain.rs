@@ -3,12 +3,9 @@ use crate::{
         transactions::OwnedTransactionIndexCursor,
         Database,
     },
-    fuel_core_graphql_api::{
-        database::OffChainView,
-        ports::{
-            worker,
-            OffChainDatabase,
-        },
+    fuel_core_graphql_api::ports::{
+        worker,
+        OffChainDatabase,
     },
 };
 use fuel_core_storage::{
@@ -18,7 +15,6 @@ use fuel_core_storage::{
         IterDirection,
     },
     not_found,
-    transactional::AtomicView,
     Error as StorageError,
     Result as StorageResult,
 };
@@ -36,7 +32,6 @@ use fuel_core_types::{
     },
     services::txpool::TransactionStatus,
 };
-use std::sync::Arc;
 
 impl OffChainDatabase for Database {
     fn owned_message_ids(
@@ -80,19 +75,6 @@ impl OffChainDatabase for Database {
         self.owned_transactions(owner, start, Some(direction))
             .map(|result| result.map_err(StorageError::from))
             .into_boxed()
-    }
-}
-
-impl AtomicView<OffChainView> for Database {
-    fn view_at(&self, _: BlockHeight) -> StorageResult<OffChainView> {
-        unimplemented!(
-            "Unimplemented until of the https://github.com/FuelLabs/fuel-core/issues/451"
-        )
-    }
-
-    fn latest_view(&self) -> OffChainView {
-        // TODO: https://github.com/FuelLabs/fuel-core/issues/1581
-        Arc::new(self.clone())
     }
 }
 
