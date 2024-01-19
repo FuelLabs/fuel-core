@@ -92,7 +92,7 @@ pub trait TxIdOwnerRecorder {
     type Error;
 
     fn record_tx_id_owner(
-        &self,
+        &mut self,
         owner: &Address,
         block_height: BlockHeight,
         tx_idx: u16,
@@ -100,7 +100,7 @@ pub trait TxIdOwnerRecorder {
     ) -> Result<Option<Bytes32>, Self::Error>;
 
     fn update_tx_status(
-        &self,
+        &mut self,
         id: &Bytes32,
         status: TransactionStatus,
     ) -> Result<Option<TransactionStatus>, Self::Error>;

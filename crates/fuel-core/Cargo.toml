@@ -19,7 +19,7 @@ async-trait = { workspace = true }
 axum = { workspace = true }
 clap = { workspace = true, features = ["derive"] }
 derive_more = { version = "0.99" }
-enum-iterator = "1.2"
+enum-iterator = { workspace = true }
 fuel-core-chain-config = { workspace = true }
 fuel-core-consensus-module = { workspace = true }
 fuel-core-database = { workspace = true }
@@ -41,16 +41,14 @@ futures = { workspace = true }
 hex = { version = "0.4", features = ["serde"] }
 hyper = { workspace = true }
 itertools = { workspace = true }
-postcard = { workspace = true, features = ["use-std"] }
 rand = { workspace = true }
 rocksdb = { version = "0.21", default-features = false, features = [
     "lz4",
     "multi-threaded-cf",
 ], optional = true }
-serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true, features = ["raw_value"] }
-strum = "0.24"
-strum_macros = "0.24"
+strum = { workspace = true }
+strum_macros = { workspace = true }
 tempfile = { workspace = true, optional = true }
 thiserror = "1.0"
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }

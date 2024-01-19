@@ -96,7 +96,7 @@ impl fuel_core_executor::ports::TxIdOwnerRecorder for Database {
     type Error = StorageError;
 
     fn record_tx_id_owner(
-        &self,
+        &mut self,
         owner: &Address,
         block_height: BlockHeight,
         tx_idx: u16,
@@ -106,7 +106,7 @@ impl fuel_core_executor::ports::TxIdOwnerRecorder for Database {
     }
 
     fn update_tx_status(
-        &self,
+        &mut self,
         id: &Bytes32,
         status: TransactionStatus,
     ) -> Result<Option<TransactionStatus>, Self::Error> {

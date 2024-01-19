@@ -12,17 +12,25 @@ use fuel_core_chain_config::{
     MessageConfig,
 };
 use fuel_core_storage::{
+    blueprint::Blueprint,
+    codec::Decode,
     iter::IterDirection,
     kv_store::{
-        StorageColumn,
+        BatchOperations,
+        KeyValueStore,
         Value,
         WriteOperation,
+    },
+    structured_storage::{
+        StructuredStorage,
+        TableWithBlueprint,
     },
     transactional::{
         StorageTransaction,
         Transactional,
     },
     Error as StorageError,
+    Mappable,
     Result as StorageResult,
 };
 use fuel_core_types::{
@@ -34,11 +42,6 @@ use fuel_core_types::{
     },
     tai64::Tai64,
 };
-use itertools::Itertools;
-use serde::{
-    de::DeserializeOwned,
-    Serialize,
-};
 use std::{
     fmt::{
         self,
@@ -46,10 +49,8 @@ use std::{
         Formatter,
     },
     marker::Send,
-    ops::Deref,
     sync::Arc,
 };
-use strum::EnumCount;
 
 pub use fuel_core_database::Error;
 pub type Result<T> = core::result::Result<T, Error>;
@@ -65,14 +66,9 @@ use std::path::Path;
 use tempfile::TempDir;
 
 // Storages implementation
-// TODO: Move to separate `database/storage` folder, because it is only implementation of storages traits.
 mod block;
-mod code_root;
 mod contracts;
 mod message;
-mod receipts;
-#[cfg(feature = "relayer")]
-mod relayer;
 mod sealed_block;
 mod state;
 
@@ -84,99 +80,11 @@ pub mod storage;
 pub mod transaction;
 pub mod transactions;
 
-/// Database tables column ids to the corresponding [`fuel_core_storage::Mappable`] table.
-#[repr(u32)]
-#[derive(
-    Copy,
-    Clone,
-    Debug,
-    strum_macros::EnumCount,
-    strum_macros::IntoStaticStr,
-    PartialEq,
-    Eq,
-    enum_iterator::Sequence,
-)]
-pub enum Column {
-    /// The column id of metadata about the blockchain
-    Metadata = 0,
-    /// See [`ContractsRawCode`](fuel_core_storage::tables::ContractsRawCode)
-    ContractsRawCode = 1,
-    /// See [`ContractsInfo`](fuel_core_storage::tables::ContractsInfo)
-    ContractsInfo = 2,
-    /// See [`ContractsState`](fuel_core_storage::tables::ContractsState)
-    ContractsState = 3,
-    /// See [`ContractsLatestUtxo`](fuel_core_storage::tables::ContractsLatestUtxo)
-    ContractsLatestUtxo = 4,
-    /// See [`ContractsAssets`](fuel_core_storage::tables::ContractsAssets)
-    ContractsAssets = 5,
-    /// See [`Coins`](fuel_core_storage::tables::Coins)
-    Coins = 6,
-    /// The column of the table that stores `true` if `owner` owns `Coin` with `coin_id`
-    OwnedCoins = 7,
-    /// See [`Transactions`](fuel_core_storage::tables::Transactions)
-    Transactions = 8,
-    /// Transaction id to current status
-    TransactionStatus = 9,
-    /// The column of the table of all `owner`'s transactions
-    TransactionsByOwnerBlockIdx = 10,
-    /// See [`Receipts`](fuel_core_storage::tables::Receipts)
-    Receipts = 11,
-    /// See [`FuelBlocks`](fuel_core_storage::tables::FuelBlocks)
-    FuelBlocks = 12,
-    /// See [`FuelBlockSecondaryKeyBlockHeights`](storage::FuelBlockSecondaryKeyBlockHeights)
-    FuelBlockSecondaryKeyBlockHeights = 13,
-    /// See [`Messages`](fuel_core_storage::tables::Messages)
-    Messages = 14,
-    /// The column of the table that stores `true` if `owner` owns `Message` with `message_id`
-    OwnedMessageIds = 15,
-    /// See [`SealedBlockConsensus`](fuel_core_storage::tables::SealedBlockConsensus)
-    FuelBlockConsensus = 16,
-    /// See [`FuelBlockMerkleData`](storage::FuelBlockMerkleData)
-    FuelBlockMerkleData = 17,
-    /// See [`FuelBlockMerkleMetadata`](storage::FuelBlockMerkleMetadata)
-    FuelBlockMerkleMetadata = 18,
-    /// Messages that have been spent.
-    /// Existence of a key in this column means that the message has been spent.
-    /// See [`SpentMessages`](fuel_core_storage::tables::SpentMessages)
-    SpentMessages = 19,
-    /// Metadata for the relayer
-    /// See [`RelayerMetadata`](fuel_core_relayer::ports::RelayerMetadata)
-    RelayerMetadata = 20,
-    /// See [`ContractsAssetsMerkleData`](storage::ContractsAssetsMerkleData)
-    ContractsAssetsMerkleData = 21,
-    /// See [`ContractsAssetsMerkleMetadata`](storage::ContractsAssetsMerkleMetadata)
-    ContractsAssetsMerkleMetadata = 22,
-    /// See [`ContractsStateMerkleData`](storage::ContractsStateMerkleData)
-    ContractsStateMerkleData = 23,
-    /// See [`ContractsStateMerkleMetadata`](storage::ContractsStateMerkleMetadata)
-    ContractsStateMerkleMetadata = 24,
-    /// See [`ProcessedTransactions`](fuel_core_storage::tables::ProcessedTransactions)
-    ProcessedTransactions = 25,
-}
-
-impl Column {
-    /// The total count of variants in the enum.
-    pub const COUNT: usize = <Self as EnumCount>::COUNT;
-
-    /// Returns the `usize` representation of the `Column`.
-    pub fn as_usize(&self) -> usize {
-        *self as usize
-    }
-}
-
-impl StorageColumn for Column {
-    fn name(&self) -> &'static str {
-        self.into()
-    }
-
-    fn id(&self) -> u32 {
-        *self as u32
-    }
-}
+pub type Column = fuel_core_storage::column::Column;
 
 #[derive(Clone, Debug)]
 pub struct Database {
-    data: DataSource,
+    data: StructuredStorage<DataSource>,
     // used for RAII
     _drop: Arc<DropResources>,
 }
@@ -211,9 +119,12 @@ impl Drop for DropResources {
 }
 
 impl Database {
-    pub fn new(data_source: DataSource) -> Self {
+    pub fn new<D>(data_source: D) -> Self
+    where
+        D: Into<DataSource>,
+    {
         Self {
-            data: data_source,
+            data: StructuredStorage::new(data_source.into()),
             _drop: Default::default(),
         }
     }
@@ -229,14 +140,14 @@ impl Database {
         let db = RocksDb::default_open(path, capacity.into()).map_err(Into::<anyhow::Error>::into).context("Failed to open rocksdb, you may need to wipe a pre-existing incompatible db `rm -rf ~/.fuel/db`")?;
 
         Ok(Database {
-            data: Arc::new(db),
+            data: StructuredStorage::new(Arc::new(db).into()),
             _drop: Default::default(),
         })
     }
 
     pub fn in_memory() -> Self {
         Self {
-            data: Arc::new(MemoryStore::default()),
+            data: StructuredStorage::new(Arc::new(MemoryStore::default()).into()),
             _drop: Default::default(),
         }
     }
@@ -246,7 +157,7 @@ impl Database {
         let tmp_dir = TempDir::new().unwrap();
         let db = RocksDb::default_open(tmp_dir.path(), None).unwrap();
         Self {
-            data: Arc::new(db),
+            data: StructuredStorage::new(Arc::new(db).into()),
             _drop: Arc::new(
                 {
                     move || {
@@ -264,189 +175,152 @@ impl Database {
     }
 
     pub fn checkpoint(&self) -> DatabaseResult<Self> {
-        self.data.checkpoint()
+        self.data.as_ref().checkpoint()
     }
 
     pub fn flush(self) -> DatabaseResult<()> {
-        self.data.flush()
+        self.data.as_ref().flush()
     }
 }
 
-/// Mutable methods.
-// TODO: Add `&mut self` to them.
-impl Database {
-    fn insert<K: AsRef<[u8]>, V: Serialize + ?Sized, R: DeserializeOwned>(
-        &self,
-        key: K,
-        column: Column,
-        value: &V,
-    ) -> StorageResult<Option<R>> {
-        let result = self.data.replace(
-            key.as_ref(),
-            column,
-            Arc::new(postcard::to_stdvec(value).map_err(|_| StorageError::Codec)?),
-        )?;
-        if let Some(previous) = result {
-            Ok(Some(
-                postcard::from_bytes(&previous).map_err(|_| StorageError::Codec)?,
-            ))
-        } else {
-            Ok(None)
-        }
+impl KeyValueStore for DataSource {
+    type Column = Column;
+
+    fn put(&self, key: &[u8], column: Self::Column, value: Value) -> StorageResult<()> {
+        self.as_ref().put(key, column, value)
     }
 
-    fn insert_raw<K: AsRef<[u8]>, V: AsRef<[u8]>>(
-        &self,
-        key: K,
-        column: Column,
-        value: V,
-    ) -> StorageResult<Option<Value>> {
-        self.data
-            .replace(key.as_ref(), column, Arc::new(value.as_ref().to_vec()))
-    }
-
-    fn batch_insert<K: AsRef<[u8]>, V: Serialize, S>(
-        &self,
-        column: Column,
-        set: S,
-    ) -> StorageResult<()>
-    where
-        S: Iterator<Item = (K, V)>,
-    {
-        let set: Vec<_> = set
-            .map(|(key, value)| {
-                let value =
-                    postcard::to_stdvec(&value).map_err(|_| StorageError::Codec)?;
-
-                let tuple = (
-                    key.as_ref().to_vec(),
-                    column,
-                    WriteOperation::Insert(Arc::new(value)),
-                );
-
-                Ok::<_, StorageError>(tuple)
-            })
-            .try_collect()?;
-
-        self.data.batch_write(&mut set.into_iter())
-    }
-
-    fn take<V: DeserializeOwned>(
+    fn replace(
         &self,
         key: &[u8],
-        column: Column,
-    ) -> StorageResult<Option<V>> {
-        self.data
-            .take(key, column)?
-            .map(|val| postcard::from_bytes(&val).map_err(|_| StorageError::Codec))
-            .transpose()
+        column: Self::Column,
+        value: Value,
+    ) -> StorageResult<Option<Value>> {
+        self.as_ref().replace(key, column, value)
     }
 
-    fn take_raw(&self, key: &[u8], column: Column) -> StorageResult<Option<Value>> {
-        self.data.take(key, column)
-    }
-}
-
-/// Read-only methods.
-impl Database {
-    fn contains_key(&self, key: &[u8], column: Column) -> StorageResult<bool> {
-        self.data.exists(key, column)
+    fn write(
+        &self,
+        key: &[u8],
+        column: Self::Column,
+        buf: &[u8],
+    ) -> StorageResult<usize> {
+        self.as_ref().write(key, column, buf)
     }
 
-    fn size_of_value(&self, key: &[u8], column: Column) -> StorageResult<Option<usize>> {
-        self.data.size_of_value(key, column)
+    fn take(&self, key: &[u8], column: Self::Column) -> StorageResult<Option<Value>> {
+        self.as_ref().take(key, column)
+    }
+
+    fn delete(&self, key: &[u8], column: Self::Column) -> StorageResult<()> {
+        self.as_ref().delete(key, column)
+    }
+
+    fn exists(&self, key: &[u8], column: Self::Column) -> StorageResult<bool> {
+        self.as_ref().exists(key, column)
+    }
+
+    fn size_of_value(
+        &self,
+        key: &[u8],
+        column: Self::Column,
+    ) -> StorageResult<Option<usize>> {
+        self.as_ref().size_of_value(key, column)
+    }
+
+    fn get(&self, key: &[u8], column: Self::Column) -> StorageResult<Option<Value>> {
+        self.as_ref().get(key, column)
     }
 
     fn read(
         &self,
         key: &[u8],
-        column: Column,
+        column: Self::Column,
         buf: &mut [u8],
     ) -> StorageResult<Option<usize>> {
-        self.data.read(key, column, buf)
+        self.as_ref().read(key, column, buf)
     }
+}
 
-    fn read_alloc(&self, key: &[u8], column: Column) -> StorageResult<Option<Vec<u8>>> {
-        self.data
-            .get(key, column)
-            .map(|value| value.map(|value| value.deref().clone()))
-    }
-
-    fn get<V: DeserializeOwned>(
+impl BatchOperations for DataSource {
+    fn batch_write(
         &self,
-        key: &[u8],
-        column: Column,
-    ) -> StorageResult<Option<V>> {
-        self.data
-            .get(key, column)?
-            .map(|val| postcard::from_bytes(&val).map_err(|_| StorageError::Codec))
-            .transpose()
+        entries: &mut dyn Iterator<Item = (Vec<u8>, Self::Column, WriteOperation)>,
+    ) -> StorageResult<()> {
+        self.as_ref().batch_write(entries)
     }
+}
 
-    fn iter_all<K, V>(
+/// Read-only methods.
+impl Database {
+    fn iter_all<M>(
         &self,
-        column: Column,
         direction: Option<IterDirection>,
-    ) -> impl Iterator<Item = StorageResult<(K, V)>> + '_
+    ) -> impl Iterator<Item = StorageResult<(M::OwnedKey, M::OwnedValue)>> + '_
     where
-        K: From<Vec<u8>>,
-        V: DeserializeOwned,
+        M: Mappable + TableWithBlueprint,
+        M::Blueprint: Blueprint<M, DataSource>,
     {
-        self.iter_all_filtered::<K, V, Vec<u8>, Vec<u8>>(column, None, None, direction)
+        self.iter_all_filtered::<M, Vec<u8>, Vec<u8>>(None, None, direction)
     }
 
-    fn iter_all_by_prefix<K, V, P>(
+    fn iter_all_by_prefix<M, P>(
         &self,
-        column: Column,
         prefix: Option<P>,
-    ) -> impl Iterator<Item = StorageResult<(K, V)>> + '_
+    ) -> impl Iterator<Item = StorageResult<(M::OwnedKey, M::OwnedValue)>> + '_
     where
-        K: From<Vec<u8>>,
-        V: DeserializeOwned,
+        M: Mappable + TableWithBlueprint,
+        M::Blueprint: Blueprint<M, DataSource>,
         P: AsRef<[u8]>,
     {
-        self.iter_all_filtered::<K, V, P, [u8; 0]>(column, prefix, None, None)
+        self.iter_all_filtered::<M, P, [u8; 0]>(prefix, None, None)
     }
 
-    fn iter_all_by_start<K, V, S>(
+    fn iter_all_by_start<M, S>(
         &self,
-        column: Column,
         start: Option<S>,
         direction: Option<IterDirection>,
-    ) -> impl Iterator<Item = StorageResult<(K, V)>> + '_
+    ) -> impl Iterator<Item = StorageResult<(M::OwnedKey, M::OwnedValue)>> + '_
     where
-        K: From<Vec<u8>>,
-        V: DeserializeOwned,
+        M: Mappable + TableWithBlueprint,
+        M::Blueprint: Blueprint<M, DataSource>,
         S: AsRef<[u8]>,
     {
-        self.iter_all_filtered::<K, V, [u8; 0], S>(column, None, start, direction)
+        self.iter_all_filtered::<M, [u8; 0], S>(None, start, direction)
     }
 
-    fn iter_all_filtered<K, V, P, S>(
+    fn iter_all_filtered<M, P, S>(
         &self,
-        column: Column,
         prefix: Option<P>,
         start: Option<S>,
         direction: Option<IterDirection>,
-    ) -> impl Iterator<Item = StorageResult<(K, V)>> + '_
+    ) -> impl Iterator<Item = StorageResult<(M::OwnedKey, M::OwnedValue)>> + '_
     where
-        K: From<Vec<u8>>,
-        V: DeserializeOwned,
+        M: Mappable + TableWithBlueprint,
+        M::Blueprint: Blueprint<M, DataSource>,
         P: AsRef<[u8]>,
         S: AsRef<[u8]>,
     {
         self.data
+            .as_ref()
             .iter_all(
-                column,
+                M::column(),
                 prefix.as_ref().map(|p| p.as_ref()),
                 start.as_ref().map(|s| s.as_ref()),
                 direction.unwrap_or_default(),
             )
             .map(|val| {
                 val.and_then(|(key, value)| {
-                    let key = K::from(key);
-                    let value: V =
-                        postcard::from_bytes(&value).map_err(|_| StorageError::Codec)?;
+                    let key =
+                        <M::Blueprint as Blueprint<M, DataSource>>::KeyCodec::decode(
+                            key.as_slice(),
+                        )
+                        .map_err(|e| StorageError::Codec(anyhow::anyhow!(e)))?;
+                    let value =
+                        <M::Blueprint as Blueprint<M, DataSource>>::ValueCodec::decode(
+                            value.as_slice(),
+                        )
+                        .map_err(|e| StorageError::Codec(anyhow::anyhow!(e)))?;
                     Ok((key, value))
                 })
             })

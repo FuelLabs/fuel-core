@@ -1,23 +1,28 @@
 use crate::database::{
-    storage::{
-        DenseMerkleMetadata,
-        FuelBlockMerkleData,
-        FuelBlockMerkleMetadata,
-        FuelBlockSecondaryKeyBlockHeights,
-        ToDatabaseKey,
-    },
     Column,
     Database,
     Error as DatabaseError,
 };
 use fuel_core_storage::{
+    blueprint::plain::Plain,
+    codec::{
+        primitive::Primitive,
+        raw::Raw,
+    },
     iter::IterDirection,
     not_found,
+    structured_storage::TableWithBlueprint,
     tables::{
+        merkle::{
+            DenseMerkleMetadata,
+            FuelBlockMerkleData,
+            FuelBlockMerkleMetadata,
+        },
         FuelBlocks,
         Transactions,
     },
     Error as StorageError,
+    Mappable,
     MerkleRootStorage,
     Result as StorageResult,
     StorageAsMut,
@@ -39,27 +44,48 @@ use fuel_core_types::{
     tai64::Tai64,
 };
 use itertools::Itertools;
-use std::{
-    borrow::{
-        BorrowMut,
-        Cow,
-    },
-    convert::{
-        TryFrom,
-        TryInto,
-    },
+use std::borrow::{
+    BorrowMut,
+    Cow,
 };
+
+/// The table of fuel block's secondary key - `BlockHeight`.
+/// It links the `BlockHeight` to corresponding `BlockId`.
+pub struct FuelBlockSecondaryKeyBlockHeights;
+
+impl Mappable for FuelBlockSecondaryKeyBlockHeights {
+    /// Secondary key - `BlockHeight`.
+    type Key = BlockHeight;
+    type OwnedKey = Self::Key;
+    /// Primary key - `BlockId`.
+    type Value = BlockId;
+    type OwnedValue = Self::Value;
+}
+
+impl TableWithBlueprint for FuelBlockSecondaryKeyBlockHeights {
+    type Blueprint = Plain<Primitive<4>, Raw>;
+
+    fn column() -> Column {
+        Column::FuelBlockSecondaryKeyBlockHeights
+    }
+}
+
+#[cfg(test)]
+fuel_core_storage::basic_storage_tests!(
+    FuelBlockSecondaryKeyBlockHeights,
+    <FuelBlockSecondaryKeyBlockHeights as Mappable>::Key::default(),
+    <FuelBlockSecondaryKeyBlockHeights as Mappable>::Value::default()
+);
 
 impl StorageInspect<FuelBlocks> for Database {
     type Error = StorageError;
 
     fn get(&self, key: &BlockId) -> Result<Option<Cow<CompressedBlock>>, Self::Error> {
-        Database::get(self, key.as_slice(), Column::FuelBlocks).map_err(Into::into)
+        self.data.storage::<FuelBlocks>().get(key)
     }
 
     fn contains_key(&self, key: &BlockId) -> Result<bool, Self::Error> {
-        Database::contains_key(self, key.as_slice(), Column::FuelBlocks)
-            .map_err(Into::into)
+        self.data.storage::<FuelBlocks>().contains_key(key)
     }
 }
 
@@ -69,7 +95,10 @@ impl StorageMutate<FuelBlocks> for Database {
         key: &BlockId,
         value: &CompressedBlock,
     ) -> Result<Option<CompressedBlock>, Self::Error> {
-        let prev = Database::insert(self, key.as_slice(), Column::FuelBlocks, value)?;
+        let prev = self
+            .data
+            .storage_as_mut::<FuelBlocks>()
+            .insert(key, value)?;
 
         let height = value.header().height();
         self.storage::<FuelBlockSecondaryKeyBlockHeights>()
@@ -77,10 +106,7 @@ impl StorageMutate<FuelBlocks> for Database {
 
         // Get latest metadata entry
         let prev_metadata = self
-            .iter_all::<Vec<u8>, DenseMerkleMetadata>(
-                Column::FuelBlockMerkleMetadata,
-                Some(IterDirection::Reverse),
-            )
+            .iter_all::<FuelBlockMerkleMetadata>(Some(IterDirection::Reverse))
             .next()
             .transpose()?
             .map(|(_, metadata)| metadata)
@@ -105,7 +131,7 @@ impl StorageMutate<FuelBlocks> for Database {
 
     fn remove(&mut self, key: &BlockId) -> Result<Option<CompressedBlock>, Self::Error> {
         let prev: Option<CompressedBlock> =
-            Database::take(self, key.as_slice(), Column::FuelBlocks)?;
+            self.data.storage_as_mut::<FuelBlocks>().remove(key)?;
 
         if let Some(block) = &prev {
             let height = block.header().height();
@@ -148,12 +174,9 @@ impl Database {
     }
 
     pub fn get_block_id(&self, height: &BlockHeight) -> StorageResult<Option<BlockId>> {
-        Database::get(
-            self,
-            height.database_key().as_ref(),
-            Column::FuelBlockSecondaryKeyBlockHeights,
-        )
-        .map_err(Into::into)
+        self.storage::<FuelBlockSecondaryKeyBlockHeights>()
+            .get(height)
+            .map(|v| v.map(|v| v.into_owned()))
     }
 
     pub fn all_block_ids(
@@ -162,48 +185,23 @@ impl Database {
         direction: IterDirection,
     ) -> impl Iterator<Item = StorageResult<(BlockHeight, BlockId)>> + '_ {
         let start = start.map(|b| b.to_bytes());
-        self.iter_all_by_start::<Vec<u8>, BlockId, _>(
-            Column::FuelBlockSecondaryKeyBlockHeights,
+        self.iter_all_by_start::<FuelBlockSecondaryKeyBlockHeights, _>(
             start,
             Some(direction),
         )
-        .map(|res| {
-            let (height, id) = res?;
-            let block_height_bytes: [u8; 4] = height
-                .as_slice()
-                .try_into()
-                .expect("block height always has correct number of bytes");
-            Ok((block_height_bytes.into(), id))
-        })
     }
 
     pub fn ids_of_genesis_block(&self) -> StorageResult<(BlockHeight, BlockId)> {
-        self.iter_all(
-            Column::FuelBlockSecondaryKeyBlockHeights,
-            Some(IterDirection::Forward),
-        )
-        .next()
-        .ok_or(DatabaseError::ChainUninitialized)?
-        .map(|(height, id): (Vec<u8>, BlockId)| {
-            let bytes = <[u8; 4]>::try_from(height.as_slice())
-                .expect("all block heights are stored with the correct amount of bytes");
-            (u32::from_be_bytes(bytes).into(), id)
-        })
+        self.iter_all::<FuelBlockSecondaryKeyBlockHeights>(Some(IterDirection::Forward))
+            .next()
+            .ok_or(DatabaseError::ChainUninitialized)?
     }
 
     pub fn ids_of_latest_block(&self) -> StorageResult<Option<(BlockHeight, BlockId)>> {
         let ids = self
-            .iter_all::<Vec<u8>, BlockId>(
-                Column::FuelBlockSecondaryKeyBlockHeights,
-                Some(IterDirection::Reverse),
-            )
+            .iter_all::<FuelBlockSecondaryKeyBlockHeights>(Some(IterDirection::Reverse))
             .next()
-            .transpose()?
-            .map(|(height, block)| {
-                // safety: we know that all block heights are stored with the correct amount of bytes
-                let bytes = <[u8; 4]>::try_from(height.as_slice()).unwrap();
-                (u32::from_be_bytes(bytes).into(), block)
-            });
+            .transpose()?;
 
         Ok(ids)
     }

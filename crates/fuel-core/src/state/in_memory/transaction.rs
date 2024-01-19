@@ -50,11 +50,14 @@ pub struct MemoryTransactionView {
 }
 
 impl MemoryTransactionView {
-    pub fn new(source: DataSource) -> Self {
+    pub fn new<D>(source: D) -> Self
+    where
+        D: Into<DataSource>,
+    {
         Self {
             view_layer: MemoryStore::default(),
             changes: Default::default(),
-            data_source: source,
+            data_source: source.into(),
         }
     }
 

@@ -58,6 +58,7 @@ impl Mappable for ContractsLatestUtxo {
     type OwnedValue = ContractUtxoInfo;
 }
 
+// TODO: Move definition to the service that is responsible for its usage.
 /// Receipts of different hidden internal operations.
 pub struct Receipts;
 
@@ -131,5 +132,115 @@ impl Mappable for ProcessedTransactions {
     type OwnedValue = ();
 }
 
-// TODO: Add macro to define all common tables to avoid copy/paste of the code.
-// TODO: Add macro to define common unit tests.
+/// The module contains definition of merkle-related tables.
+pub mod merkle {
+    use crate::{
+        Mappable,
+        MerkleRoot,
+    };
+    use fuel_core_types::{
+        fuel_merkle::{
+            binary,
+            sparse,
+        },
+        fuel_tx::ContractId,
+        fuel_types::BlockHeight,
+    };
+
+    /// Metadata for dense Merkle trees
+    #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
+    pub struct DenseMerkleMetadata {
+        /// The root hash of the dense Merkle tree structure
+        pub root: MerkleRoot,
+        /// The version of the dense Merkle tree structure is equal to the number of
+        /// leaves. Every time we append a new leaf to the Merkle tree data set, we
+        /// increment the version number.
+        pub version: u64,
+    }
+
+    impl Default for DenseMerkleMetadata {
+        fn default() -> Self {
+            let empty_merkle_tree = binary::root_calculator::MerkleRootCalculator::new();
+            Self {
+                root: empty_merkle_tree.root(),
+                version: 0,
+            }
+        }
+    }
+
+    /// Metadata for sparse Merkle trees
+    #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
+    pub struct SparseMerkleMetadata {
+        /// The root hash of the sparse Merkle tree structure
+        pub root: MerkleRoot,
+    }
+
+    impl Default for SparseMerkleMetadata {
+        fn default() -> Self {
+            let empty_merkle_tree = sparse::in_memory::MerkleTree::new();
+            Self {
+                root: empty_merkle_tree.root(),
+            }
+        }
+    }
+
+    /// The table of BMT data for Fuel blocks.
+    pub struct FuelBlockMerkleData;
+
+    impl Mappable for FuelBlockMerkleData {
+        type Key = u64;
+        type OwnedKey = Self::Key;
+        type Value = binary::Primitive;
+        type OwnedValue = Self::Value;
+    }
+
+    /// The metadata table for [`FuelBlockMerkleData`] table.
+    pub struct FuelBlockMerkleMetadata;
+
+    impl Mappable for FuelBlockMerkleMetadata {
+        type Key = BlockHeight;
+        type OwnedKey = Self::Key;
+        type Value = DenseMerkleMetadata;
+        type OwnedValue = Self::Value;
+    }
+
+    /// The table of SMT data for Contract assets.
+    pub struct ContractsAssetsMerkleData;
+
+    impl Mappable for ContractsAssetsMerkleData {
+        type Key = [u8; 32];
+        type OwnedKey = Self::Key;
+        type Value = sparse::Primitive;
+        type OwnedValue = Self::Value;
+    }
+
+    /// The metadata table for [`ContractsAssetsMerkleData`] table
+    pub struct ContractsAssetsMerkleMetadata;
+
+    impl Mappable for ContractsAssetsMerkleMetadata {
+        type Key = ContractId;
+        type OwnedKey = Self::Key;
+        type Value = SparseMerkleMetadata;
+        type OwnedValue = Self::Value;
+    }
+
+    /// The table of SMT data for Contract state.
+    pub struct ContractsStateMerkleData;
+
+    impl Mappable for ContractsStateMerkleData {
+        type Key = [u8; 32];
+        type OwnedKey = Self::Key;
+        type Value = sparse::Primitive;
+        type OwnedValue = Self::Value;
+    }
+
+    /// The metadata table for [`ContractsStateMerkleData`] table
+    pub struct ContractsStateMerkleMetadata;
+
+    impl Mappable for ContractsStateMerkleMetadata {
+        type Key = ContractId;
+        type OwnedKey = Self::Key;
+        type Value = SparseMerkleMetadata;
+        type OwnedValue = Self::Value;
+    }
+}

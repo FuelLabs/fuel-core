@@ -1,11 +1,24 @@
 use crate::database::{
-    storage::DatabaseColumn,
     Column,
     Database,
 };
+use core::{
+    array::TryFromSliceError,
+    mem::size_of,
+};
 use fuel_core_storage::{
+    blueprint::plain::Plain,
+    codec::{
+        manual::Manual,
+        postcard::Postcard,
+        raw::Raw,
+        Decode,
+        Encode,
+    },
     iter::IterDirection,
+    structured_storage::TableWithBlueprint,
     tables::Transactions,
+    Mappable,
     Result as StorageResult,
 };
 use fuel_core_types::{
@@ -21,15 +34,68 @@ use fuel_core_types::{
     },
     services::txpool::TransactionStatus,
 };
-use std::{
-    mem::size_of,
-    ops::Deref,
-};
 
-impl DatabaseColumn for Transactions {
+/// Teh tables allows to iterate over all transactions owned by an address.
+pub struct OwnedTransactions;
+
+impl Mappable for OwnedTransactions {
+    type Key = OwnedTransactionIndexKey;
+    type OwnedKey = Self::Key;
+    type Value = Bytes32;
+    type OwnedValue = Self::Value;
+}
+
+impl TableWithBlueprint for OwnedTransactions {
+    type Blueprint = Plain<Manual<OwnedTransactionIndexKey>, Raw>;
+
     fn column() -> Column {
-        Column::Transactions
+        Column::TransactionsByOwnerBlockIdx
     }
+}
+
+/// The table stores the status of each transaction.
+pub struct TransactionStatuses;
+
+impl Mappable for TransactionStatuses {
+    type Key = Bytes32;
+    type OwnedKey = Self::Key;
+    type Value = TransactionStatus;
+    type OwnedValue = Self::Value;
+}
+
+impl TableWithBlueprint for TransactionStatuses {
+    type Blueprint = Plain<Raw, Postcard>;
+
+    fn column() -> Column {
+        Column::TransactionStatus
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    fn generate_key(rng: &mut impl rand::Rng) -> <OwnedTransactions as Mappable>::Key {
+        let mut bytes = [0u8; INDEX_SIZE];
+        rng.fill(bytes.as_mut());
+        bytes.into()
+    }
+
+    fuel_core_storage::basic_storage_tests!(
+        OwnedTransactions,
+        [1u8; INDEX_SIZE].into(),
+        <OwnedTransactions as Mappable>::Value::default(),
+        <OwnedTransactions as Mappable>::Value::default(),
+        generate_key
+    );
+
+    fuel_core_storage::basic_storage_tests!(
+        TransactionStatuses,
+        <TransactionStatuses as Mappable>::Key::default(),
+        TransactionStatus::Submitted {
+            time: fuel_core_types::tai64::Tai64::UNIX_EPOCH,
+        }
+    );
 }
 
 impl Database {
@@ -39,12 +105,8 @@ impl Database {
         direction: Option<IterDirection>,
     ) -> impl Iterator<Item = StorageResult<Transaction>> + '_ {
         let start = start.map(|b| b.as_ref().to_vec());
-        self.iter_all_by_start::<Vec<u8>, Transaction, _>(
-            Column::Transactions,
-            start,
-            direction,
-        )
-        .map(|res| res.map(|(_, tx)| tx))
+        self.iter_all_by_start::<Transactions, _>(start, direction)
+            .map(|res| res.map(|(_, tx)| tx))
     }
 
     /// Iterates over a KV mapping of `[address + block height + tx idx] => transaction id`. This
@@ -59,44 +121,45 @@ impl Database {
     ) -> impl Iterator<Item = StorageResult<(TxPointer, Bytes32)>> + '_ {
         let start = start
             .map(|cursor| owned_tx_index_key(&owner, cursor.block_height, cursor.tx_idx));
-        self.iter_all_filtered::<OwnedTransactionIndexKey, Bytes32, _, _>(
-            Column::TransactionsByOwnerBlockIdx,
-            Some(owner),
-            start,
-            direction,
-        )
-        .map(|res| {
-            res.map(|(key, tx_id)| (TxPointer::new(key.block_height, key.tx_idx), tx_id))
-        })
+        self.iter_all_filtered::<OwnedTransactions, _, _>(Some(owner), start, direction)
+            .map(|res| {
+                res.map(|(key, tx_id)| {
+                    (TxPointer::new(key.block_height, key.tx_idx), tx_id)
+                })
+            })
     }
 
     pub fn record_tx_id_owner(
-        &self,
+        &mut self,
         owner: &Address,
         block_height: BlockHeight,
         tx_idx: TransactionIndex,
         tx_id: &Bytes32,
     ) -> StorageResult<Option<Bytes32>> {
-        self.insert(
-            owned_tx_index_key(owner, block_height, tx_idx),
-            Column::TransactionsByOwnerBlockIdx,
+        use fuel_core_storage::StorageAsMut;
+        self.storage::<OwnedTransactions>().insert(
+            &OwnedTransactionIndexKey::new(owner, block_height, tx_idx),
             tx_id,
         )
     }
 
     pub fn update_tx_status(
-        &self,
+        &mut self,
         id: &Bytes32,
         status: TransactionStatus,
     ) -> StorageResult<Option<TransactionStatus>> {
-        self.insert(id, Column::TransactionStatus, &status)
+        use fuel_core_storage::StorageAsMut;
+        self.storage::<TransactionStatuses>().insert(id, &status)
     }
 
     pub fn get_tx_status(
         &self,
         id: &Bytes32,
     ) -> StorageResult<Option<TransactionStatus>> {
-        self.get(&id.deref()[..], Column::TransactionStatus)
+        use fuel_core_storage::StorageAsRef;
+        self.storage::<TransactionStatuses>()
+            .get(id)
+            .map(|v| v.map(|v| v.into_owned()))
     }
 }
 
@@ -123,27 +186,65 @@ fn owned_tx_index_key(
 
 pub type TransactionIndex = u16;
 
+#[derive(Clone)]
 pub struct OwnedTransactionIndexKey {
+    owner: Address,
     block_height: BlockHeight,
     tx_idx: TransactionIndex,
 }
 
-impl<T> From<T> for OwnedTransactionIndexKey
-where
-    T: AsRef<[u8]>,
-{
-    fn from(bytes: T) -> Self {
+impl OwnedTransactionIndexKey {
+    pub fn new(
+        owner: &Address,
+        block_height: BlockHeight,
+        tx_idx: TransactionIndex,
+    ) -> Self {
+        Self {
+            owner: *owner,
+            block_height,
+            tx_idx,
+        }
+    }
+}
+
+impl From<[u8; INDEX_SIZE]> for OwnedTransactionIndexKey {
+    fn from(bytes: [u8; INDEX_SIZE]) -> Self {
+        let owner: [u8; 32] = bytes[..32].try_into().expect("It's an array of 32 bytes");
         // the first 32 bytes are the owner, which is already known when querying
         let mut block_height_bytes: [u8; 4] = Default::default();
-        block_height_bytes.copy_from_slice(&bytes.as_ref()[32..36]);
+        block_height_bytes.copy_from_slice(&bytes[32..36]);
         let mut tx_idx_bytes: [u8; 2] = Default::default();
         tx_idx_bytes.copy_from_slice(&bytes.as_ref()[36..38]);
 
         Self {
-            // owner: Address::from(owner_bytes),
+            owner: Address::from(owner),
             block_height: u32::from_be_bytes(block_height_bytes).into(),
             tx_idx: u16::from_be_bytes(tx_idx_bytes),
         }
+    }
+}
+
+impl TryFrom<&[u8]> for OwnedTransactionIndexKey {
+    type Error = TryFromSliceError;
+
+    fn try_from(bytes: &[u8]) -> Result<Self, Self::Error> {
+        let bytes: [u8; INDEX_SIZE] = bytes.try_into()?;
+        Ok(Self::from(bytes))
+    }
+}
+
+impl Encode<OwnedTransactionIndexKey> for Manual<OwnedTransactionIndexKey> {
+    type Encoder<'a> = [u8; INDEX_SIZE];
+
+    fn encode(t: &OwnedTransactionIndexKey) -> Self::Encoder<'_> {
+        owned_tx_index_key(&t.owner, t.block_height, t.tx_idx)
+    }
+}
+
+impl Decode<OwnedTransactionIndexKey> for Manual<OwnedTransactionIndexKey> {
+    fn decode(bytes: &[u8]) -> anyhow::Result<OwnedTransactionIndexKey> {
+        OwnedTransactionIndexKey::try_from(bytes)
+            .map_err(|_| anyhow::anyhow!("Unable to decode bytes"))
     }
 }
 
