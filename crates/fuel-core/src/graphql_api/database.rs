@@ -58,7 +58,7 @@ pub type OnChainView = Arc<dyn OnChainDatabase>;
 pub type OffChainView = Arc<dyn OffChainDatabase>;
 
 /// The container of the on-chain and off-chain database view provides.
-/// It is used only by [`ViewExtension`](super::view_extension::ViewExtension) to create a [`ReadView`].
+/// It is used only by `ViewExtension` to create a [`ReadView`].
 pub struct ReadDatabase {
     /// The on-chain database view provider.
     on_chain: Box<dyn AtomicView<OnChainView>>,
