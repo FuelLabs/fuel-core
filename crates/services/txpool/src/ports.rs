@@ -11,18 +11,16 @@ use fuel_core_types::{
     },
     fuel_types::{
         BlockHeight,
-        Bytes32,
         ContractId,
         Nonce,
     },
     services::{
-        block_importer::ImportResult,
+        block_importer::SharedImportResult,
         p2p::{
             GossipsubMessageAcceptance,
             GossipsubMessageInfo,
             NetworkData,
         },
-        txpool::TransactionStatus,
     },
 };
 use std::sync::Arc;
@@ -46,7 +44,7 @@ pub trait PeerToPeer: Send + Sync {
 
 pub trait BlockImporter: Send + Sync {
     /// Wait until the next block is available
-    fn block_events(&self) -> BoxStream<Arc<ImportResult>>;
+    fn block_events(&self) -> BoxStream<SharedImportResult>;
 }
 
 pub trait TxPoolDb: Send + Sync {
@@ -59,6 +57,4 @@ pub trait TxPoolDb: Send + Sync {
     fn is_message_spent(&self, message_id: &Nonce) -> StorageResult<bool>;
 
     fn current_block_height(&self) -> StorageResult<BlockHeight>;
-
-    fn transaction_status(&self, tx_id: &Bytes32) -> StorageResult<TransactionStatus>;
 }

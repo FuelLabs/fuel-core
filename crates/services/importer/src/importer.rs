@@ -29,6 +29,7 @@ use fuel_core_types::{
     services::{
         block_importer::{
             ImportResult,
+            SharedImportResult,
             UncommittedResult,
         },
         executor,
@@ -38,7 +39,10 @@ use fuel_core_types::{
 };
 use std::{
     ops::Deref,
-    sync::Arc,
+    sync::{
+        Arc,
+        Mutex,
+    },
     time::{
         Instant,
         SystemTime,
@@ -47,6 +51,7 @@ use std::{
 };
 use tokio::sync::{
     broadcast,
+    oneshot,
     TryAcquireError,
 };
 
@@ -105,10 +110,14 @@ impl PartialEq for Error {
 
 pub struct Importer<D, E, V> {
     database: D,
-    executor: E,
-    verifier: V,
+    executor: Arc<E>,
+    verifier: Arc<V>,
     chain_id: ChainId,
-    broadcast: broadcast::Sender<Arc<ImportResult>>,
+    broadcast: broadcast::Sender<SharedImportResult>,
+    /// The channel to notify about the end of the processing of the previous block by all listeners.
+    /// It is used to await until all receivers of the notification process the `SharedImportResult`
+    /// before starting committing a new block.
+    prev_block_process_result: Mutex<Option<oneshot::Receiver<()>>>,
     guard: tokio::sync::Semaphore,
 }
 
@@ -118,15 +127,16 @@ impl<D, E, V> Importer<D, E, V> {
 
         Self {
             database,
-            executor,
-            verifier,
+            executor: Arc::new(executor),
+            verifier: Arc::new(verifier),
             chain_id: config.chain_id,
             broadcast,
+            prev_block_process_result: Default::default(),
             guard: tokio::sync::Semaphore::new(1),
         }
     }
 
-    pub fn subscribe(&self) -> broadcast::Receiver<Arc<ImportResult>> {
+    pub fn subscribe(&self) -> broadcast::Receiver<SharedImportResult> {
         self.broadcast.subscribe()
     }
 
@@ -162,7 +172,7 @@ where
     ///
     /// Only one commit may be in progress at the time. All other calls will fail.
     /// Returns an error if called while another call is in progress.
-    pub fn commit_result<ExecutorDatabase>(
+    pub async fn commit_result<ExecutorDatabase>(
         &self,
         result: UncommittedResult<StorageTransaction<ExecutorDatabase>>,
     ) -> Result<(), Error>
@@ -170,9 +180,36 @@ where
         ExecutorDatabase: ports::ExecutorDatabase,
     {
         let _guard = self.lock()?;
+        // It is safe to unwrap the channel because we have the `_guard`.
+        let previous_block_result = self
+            .prev_block_process_result
+            .lock()
+            .expect("poisoned")
+            .take();
+
+        // Await until all receivers of the notification process the result.
+        if let Some(channel) = previous_block_result {
+            let _ = channel.await;
+        }
+
         self._commit_result(result)
     }
 
+    /// The method works in the same way as [`Importer::commit_result`], but it doesn't
+    /// wait for listeners to process the result.
+    pub fn commit_result_without_awaiting_listeners<ExecutorDatabase>(
+        &self,
+        result: UncommittedResult<StorageTransaction<ExecutorDatabase>>,
+    ) -> Result<(), Error>
+    where
+        ExecutorDatabase: ports::ExecutorDatabase,
+    {
+        let _guard = self.lock()?;
+        self._commit_result(result)?;
+        Ok(())
+    }
+
+    /// The method commits the result of the block execution and notifies about a new imported block.
     #[tracing::instrument(
         skip_all,
         fields(
@@ -270,7 +307,13 @@ where
             .set(current_time);
 
         tracing::info!("Committed block {:#x}", result.sealed_block.entity.id());
-        let _ = self.broadcast.send(Arc::new(result));
+
+        // The `tokio::sync::oneshot::Sender` is used to notify about the end
+        // of the processing of a new block by all listeners.
+        let (sender, receiver) = oneshot::channel();
+        let _ = self.broadcast.send(Arc::new(Awaiter::new(result, sender)));
+        *self.prev_block_process_result.lock().expect("poisoned") = Some(receiver);
+
         Ok(())
     }
 
@@ -325,12 +368,23 @@ where
         &self,
         sealed_block: SealedBlock,
     ) -> Result<UncommittedResult<StorageTransaction<E::Database>>, Error> {
+        Self::verify_and_execute_block_inner(
+            self.executor.clone(),
+            self.verifier.clone(),
+            sealed_block,
+        )
+    }
+
+    fn verify_and_execute_block_inner(
+        executor: Arc<E>,
+        verifier: Arc<V>,
+        sealed_block: SealedBlock,
+    ) -> Result<UncommittedResult<StorageTransaction<E::Database>>, Error> {
         let consensus = sealed_block.consensus;
         let block = sealed_block.entity;
         let sealed_block_id = block.id();
 
-        let result_of_verification =
-            self.verifier.verify_block_fields(&consensus, &block);
+        let result_of_verification = verifier.verify_block_fields(&consensus, &block);
         if let Err(err) = result_of_verification {
             return Err(Error::FailedVerification(err))
         }
@@ -350,8 +404,7 @@ where
                 tx_status,
             },
             db_tx,
-        ) = self
-            .executor
+        ) = executor
             .execute_without_commit(block)
             .map_err(Error::FailedExecution)?
             .into();
@@ -380,19 +433,47 @@ where
 
 impl<IDatabase, E, V> Importer<IDatabase, E, V>
 where
-    IDatabase: ImporterDatabase,
-    E: Executor,
-    V: BlockVerifier,
+    IDatabase: ImporterDatabase + 'static,
+    E: Executor + 'static,
+    V: BlockVerifier + 'static,
 {
     /// The method validates the `Block` fields and commits the `SealedBlock`.
     /// It is a combination of the [`Importer::verify_and_execute_block`] and [`Importer::commit_result`].
-    pub fn execute_and_commit(&self, sealed_block: SealedBlock) -> Result<(), Error> {
+    pub async fn execute_and_commit(
+        &self,
+        sealed_block: SealedBlock,
+    ) -> Result<(), Error> {
         let _guard = self.lock()?;
+
+        let executor = self.executor.clone();
+        let verifier = self.verifier.clone();
+        let (result, execute_time) = tokio_rayon::spawn_fifo(|| {
+            let start = Instant::now();
+            let result =
+                Self::verify_and_execute_block_inner(executor, verifier, sealed_block);
+            let execute_time = start.elapsed().as_secs_f64();
+            (result, execute_time)
+        })
+        .await;
+
+        let result = result?;
+
+        // It is safe to unwrap the channel because we have the `_guard`.
+        let previous_block_result = self
+            .prev_block_process_result
+            .lock()
+            .expect("poisoned")
+            .take();
+
+        // Await until all receivers of the notification process the result.
+        if let Some(channel) = previous_block_result {
+            let _ = channel.await;
+        }
+
         let start = Instant::now();
-        let result = self.verify_and_execute_block(sealed_block)?;
         let commit_result = self._commit_result(result);
-        // record the execution time to prometheus
-        let time = start.elapsed().as_secs_f64();
+        let commit_time = start.elapsed().as_secs_f64();
+        let time = execute_time + commit_time;
         importer_metrics().execute_and_commit_duration.observe(time);
         // return execution result
         commit_result
@@ -409,6 +490,37 @@ impl<T> ShouldBeUnique for Option<T> {
             Err(Error::NotUnique(*height))
         } else {
             Ok(())
+        }
+    }
+}
+
+/// The wrapper around `ImportResult` to notify about the end of the processing of a new block.
+struct Awaiter {
+    result: ImportResult,
+    release_channel: Option<oneshot::Sender<()>>,
+}
+
+impl Drop for Awaiter {
+    fn drop(&mut self) {
+        if let Some(release_channel) = core::mem::take(&mut self.release_channel) {
+            let _ = release_channel.send(());
+        }
+    }
+}
+
+impl Deref for Awaiter {
+    type Target = ImportResult;
+
+    fn deref(&self) -> &Self::Target {
+        &self.result
+    }
+}
+
+impl Awaiter {
+    fn new(result: ImportResult, channel: oneshot::Sender<()>) -> Self {
+        Self {
+            result,
+            release_channel: Some(channel),
         }
     }
 }
