@@ -15,13 +15,36 @@ impl RawKey {
     pub const MIN: Self = Self([0; Self::SIZE]);
     pub const MAX: Self = Self([u8::MAX; Self::SIZE]);
 
-    /// Returns incremented key, wrapping around at limit
-    pub fn next(self) -> Self {
-        let v = u32::from_be_bytes([0, self.0[0], self.0[1], self.0[2]]) + 1;
+    pub fn as_u32(self) -> u32 {
+        u32::from_be_bytes([0, self.0[0], self.0[1], self.0[2]])
+    }
 
+    /// Wraps around at limit
+    pub fn add_u32(self, rhs: u32) -> Self {
+        let lhs = self.as_u32();
+        let v = lhs.wrapping_add(rhs);
         let mut bytes = [0u8; 3];
         bytes.copy_from_slice(&v.to_be_bytes()[1..]);
         RawKey(bytes)
+    }
+
+    /// Wraps around at limit
+    pub fn next(self) -> Self {
+        self.add_u32(1)
+    }
+
+    /// Is `self` between `start` and `end`? i.e. in the half-open logical range `start`..`end`,
+    /// so that wrap-around cases are handled correctly.
+    pub fn is_between(self, start: Self, end: Self) -> bool {
+        let low = start.as_u32();
+        let high = end.as_u32();
+        let v = self.as_u32();
+
+        if high >= low {
+            low <= v && v < high
+        } else {
+            v < high || v >= low
+        }
     }
 }
 impl TryFrom<u32> for RawKey {
@@ -58,10 +81,21 @@ impl<T: Table> Key<T> {
         Self(raw, PhantomData)
     }
 
+    /// Wraps around at limit
+    pub fn add_u32(self, rhs: u32) -> Self {
+        Self(self.0.add_u32(rhs), PhantomData)
+    }
+
+    /// Wraps around at limit
     pub fn next(self) -> Self {
         Self(self.0.next(), PhantomData)
     }
 
+    /// Is `self` between `start` and `end`? i.e. in the half-open logical range `start`..`end`,
+    /// so that wrap-around cases are handled correctly.
+    pub fn is_between(self, start: Self, end: Self) -> bool {
+        self.0.is_between(start.0, end.0)
+    }
     /// Increments the key by one, and returns the previous value.
     pub fn take_next(&mut self) -> Self {
         let result = *self;

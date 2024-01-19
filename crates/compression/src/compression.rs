@@ -1,5 +1,11 @@
 use crate::{
     registry::{
+        access::{
+            self,
+            *,
+        },
+        add_keys,
+        block_section::WriteTo,
         db,
         next_keys,
         ChangesPerTable,
@@ -12,25 +18,42 @@ use crate::{
 
 #[must_use]
 pub struct CompactionContext<'a, R> {
+    /// The registry
     reg: &'a mut R,
+    /// These are the keys where writing started
+    start_keys: KeyPerTable,
+    /// The next keys to use for each table
     next_keys: KeyPerTable,
-    key_limits: CountPerTable,
+    /// Keys in range next_keys..safe_keys_start
+    /// could be overwritten by the compaction,
+    /// and cannot be used for new values.
+    safe_keys_start: KeyPerTable,
     changes: ChangesPerTable,
 }
 impl<'a, R> CompactionContext<'a, R>
 where
-    R: db::RegistrySelectNextKey,
+    R: db::RegistrySelectNextKey
+        + db::RegistryRead
+        + db::RegistryIndex
+        + db::RegistryWrite,
 {
-    pub fn new<C: Compactable>(reg: &'a mut R, target: &C) -> Self {
-        let next_keys = next_keys(reg);
+    pub fn run<C: Compactable>(reg: &'a mut R, target: C) -> C::Compact {
+        let start_keys = next_keys(reg);
+        let next_keys = start_keys;
         let key_limits = target.count();
+        let safe_keys_start = add_keys(next_keys, key_limits);
 
-        Self {
+        let mut ctx = Self {
             reg,
+            start_keys,
             next_keys,
-            key_limits,
+            safe_keys_start,
             changes: Default::default(),
-        }
+        };
+
+        let compacted = target.compact(&mut ctx);
+        ctx.changes.apply_to_registry(ctx.reg);
+        compacted
     }
 }
 
@@ -38,30 +61,30 @@ impl<'a, R> CompactionContext<'a, R>
 where
     R: db::RegistryRead + db::RegistryIndex,
 {
-    pub fn compact<T: Table>(&mut self, value: T::Type) -> Key<T> {
+    /// Convert a value to a key
+    /// If necessary, store the value in the changeset and allocate a new key.
+    pub fn to_key<T: Table>(&mut self, value: T::Type) -> Key<T>
+    where
+        KeyPerTable: access::AccessCopy<T, Key<T>>,
+        KeyPerTable: access::AccessMut<T, Key<T>>,
+        ChangesPerTable: access::AccessMut<T, WriteTo<T>>,
+    {
         // Check if the registry contains this value already
         if let Some(key) = self.reg.index_lookup::<T>(&value) {
-            let limit = self.key_limits.by_table::<T>();
+            let start: Key<T> = self.start_keys.value();
+            let end: Key<T> = self.safe_keys_start.value();
             // Check if the value is in the possibly-overwritable range
-            if false {
-                // TODO
+            if !key.is_between(start, end) {
                 return key;
             }
         }
         // Allocate a new key for this
-        let key = self.next_keys.mut_by_table::<T>().take_next();
-        self.changes.push::<T>(value);
+        let key = <KeyPerTable as AccessMut<T, Key<T>>>::get_mut(&mut self.next_keys)
+            .take_next();
+        <ChangesPerTable as access::AccessMut<T, WriteTo<T>>>::get_mut(&mut self.changes)
+            .values
+            .push(value);
         key
-    }
-}
-
-impl<'a, R> CompactionContext<'a, R>
-where
-    R: db::RegistryWrite,
-{
-    /// Apply all changes to the registry
-    pub fn apply(self) {
-        self.changes.apply(self.reg);
     }
 }
 
@@ -114,7 +137,7 @@ mod tests {
         where
             R: db::RegistryRead + db::RegistryWrite + db::RegistryIndex,
         {
-            ctx.compact::<tables::Address>(**self)
+            ctx.to_key::<tables::Address>(**self)
         }
 
         fn decompact<R>(compact: Self::Compact, reg: &R) -> Self
@@ -125,7 +148,7 @@ mod tests {
         }
     }
 
-    #[derive(Debug, PartialEq)]
+    #[derive(Debug, Clone, PartialEq)]
     struct ManualExample {
         a: Address,
         b: Address,
@@ -153,8 +176,8 @@ mod tests {
         where
             R: db::RegistryRead + db::RegistryWrite + db::RegistryIndex,
         {
-            let a = ctx.compact::<tables::Address>(*self.a);
-            let b = ctx.compact::<tables::Address>(*self.b);
+            let a = ctx.to_key::<tables::Address>(*self.a);
+            let b = ctx.to_key::<tables::Address>(*self.b);
             ManualExampleCompact { a, b, c: self.c }
         }
 
@@ -168,17 +191,13 @@ mod tests {
         }
     }
 
-    fn check<C: Compactable + PartialEq + std::fmt::Debug>(target: C)
+    fn check<C: Clone + Compactable + PartialEq + std::fmt::Debug>(target: C)
     where
         C::Compact: std::fmt::Debug,
     {
         let mut registry = InMemoryRegistry::default();
 
-        let key_counts = target.count();
-        let mut ctx = CompactionContext::new(&mut registry, &target);
-        let compacted = target.compact(&mut ctx);
-        dbg!(&registry);
-        dbg!(&compacted);
+        let compacted = CompactionContext::run(&mut registry, target.clone());
         let decompacted = C::decompact(compacted, &registry);
         assert_eq!(target, decompacted);
     }

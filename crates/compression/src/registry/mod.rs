@@ -3,7 +3,7 @@ use serde::{
     Serialize,
 };
 
-mod block_section;
+pub(crate) mod block_section;
 pub(crate) mod db;
 pub(crate) mod in_memory;
 mod key;
@@ -22,9 +22,23 @@ pub trait Table: _private::Seal {
     type Type: Default + Serialize + for<'de> Deserialize<'de>;
 }
 
+pub mod access {
+    pub trait AccessCopy<T, V: Copy> {
+        fn value(&self) -> V;
+    }
+
+    pub trait AccessRef<T, V> {
+        fn get(&self) -> &V;
+    }
+
+    pub trait AccessMut<T, V> {
+        fn get_mut(&mut self) -> &mut V;
+    }
+}
+
 macro_rules! tables {
     // $index muse use increasing numbers starting from zero
-    ($($name:ident: $ty:ty),*$(,)?) => { paste::paste!{
+    ($($name:ident: $ty:ty),*$(,)?) => {
         pub mod tables {
             $(
                 /// Specifies the table to use for a given key.
@@ -37,10 +51,6 @@ macro_rules! tables {
                     const NAME: &'static str = stringify!($name);
                     type Type = $ty;
                 }
-
-                // Type level magic
-                pub trait [<TypeLevel $name>]: super::_private::Seal {}
-                impl [<TypeLevel $name>] for $name {}
             )*
         }
 
@@ -51,16 +61,13 @@ macro_rules! tables {
             $(pub $name: usize),*
         }
 
-        impl CountPerTable {
-            pub fn by_table<T: Table>(&self) -> usize {
-                match T::NAME {
-                    $(
-                        stringify!($name) => self.$name,
-                    )*
-                    _ => unreachable!(),
+        $(
+            impl access::AccessCopy<tables::$name, usize> for CountPerTable {
+                fn value(&self) -> usize {
+                    self.$name
                 }
             }
-        }
+        )*
 
         /// One key value per table
         #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, serde::Serialize, serde::Deserialize)]
@@ -69,29 +76,38 @@ macro_rules! tables {
             $(pub $name: Key<tables::$name>),*
         }
 
-        impl KeyPerTable {
-            pub fn by_table<T: Table>(&self) -> Key<T> {
-                match T::NAME {
-                    $(
-                        stringify!($name) => Key::<T>::from_raw(self.$name.raw()),
-                    )*
-                    _ => unreachable!(),
+        $(
+            impl access::AccessCopy<tables::$name, Key<tables::$name>> for KeyPerTable {
+                fn value(&self) -> Key<tables::$name> {
+                    self.$name
                 }
             }
-
-            pub fn mut_by_table<T: Table>(&self) -> Key<T> {
-                match T::NAME {
-                    $(
-                        stringify!($name) => Key::<T>::from_raw(self.$name.raw()),
-                    )*
-                    _ => unreachable!(),
+            impl access::AccessRef<tables::$name, Key<tables::$name>> for KeyPerTable {
+                fn get(&self) -> &Key<tables::$name> {
+                    &self.$name
                 }
             }
-        }
+            impl access::AccessMut<tables::$name, Key<tables::$name>> for KeyPerTable {
+                fn get_mut(&mut self) -> &mut Key<tables::$name> {
+                    &mut self.$name
+                }
+            }
+        )*
 
         pub fn next_keys<R: db::RegistrySelectNextKey>(reg: &mut R) -> KeyPerTable {
             KeyPerTable {
                 $( $name: reg.next_key(), )*
+            }
+        }
+
+        /// Used to add together keys and counts to deterimine possible overwrite range
+        pub fn add_keys(keys: KeyPerTable, counts: CountPerTable) -> KeyPerTable {
+            KeyPerTable {
+                $(
+                    $name: keys.$name.add_u32(counts.$name.try_into()
+                        .expect("Count too large. Shoudn't happen as we control inputs here.")
+                    ),
+                )*
             }
         }
 
@@ -103,22 +119,31 @@ macro_rules! tables {
         }
 
         impl ChangesPerTable {
-            pub fn push<T: Table>(&self, value: T::Type) -> &mut WriteTo<T> {
-                match T::NAME {
-                    $(
-                        stringify!($name) => self.$name.values.push(value),
-                    )*
-                    _ => unreachable!(),
-                }
+            pub fn is_empty(&self) -> bool {
+                true $(&& self.$name.values.is_empty())*
             }
 
-            pub fn apply(&self, reg: &mut impl db::RegistryWrite) {
+            /// Apply changes to the registry db
+            pub fn apply_to_registry<R: db::RegistryWrite>(self, reg: &mut R) {
                 $(
                     reg.batch_write(self.$name.start_key, self.$name.values.clone());
                 )*
             }
         }
-    }};
+
+        $(
+            impl access::AccessRef<tables::$name, WriteTo<tables::$name>> for ChangesPerTable {
+                fn get(&self) -> &WriteTo<tables::$name> {
+                    &self.$name
+                }
+            }
+            impl access::AccessMut<tables::$name, WriteTo<tables::$name>> for ChangesPerTable {
+                fn get_mut(&mut self) -> &mut WriteTo<tables::$name> {
+                    &mut self.$name
+                }
+            }
+        )*
+    };
 }
 
 tables!(
