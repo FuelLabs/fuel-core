@@ -13,12 +13,12 @@ use libp2p::gossipsub::{
     Message as GossipsubMessage,
     MessageAuthenticity,
     MessageId,
+    MetricsConfig,
     PeerScoreParams,
     PeerScoreThresholds,
     Topic,
     TopicScoreParams,
 };
-use libp2p_gossipsub::MetricsConfig;
 use sha2::{
     Digest,
     Sha256,

@@ -44,6 +44,7 @@ use libp2p::{
         Event as GossipsubEvent,
         MessageAcceptance,
         MessageId,
+        PublishError,
         TopicHash,
     },
     identify,
@@ -61,7 +62,6 @@ use libp2p::{
     Swarm,
     SwarmBuilder,
 };
-use libp2p_gossipsub::PublishError;
 use rand::seq::IteratorRandom;
 use std::{
     collections::HashMap,
@@ -106,7 +106,7 @@ pub struct FuelP2PService {
     /// It will send it to the specified Peer via its unique ResponseChannel    
     inbound_requests_table: HashMap<InboundRequestId, ResponseChannel<ResponseMessage>>,
 
-    /// NetworkCodec used as <GossipsubCodec> for encoding and decoding of Gossipsub messages    
+    /// NetworkCodec used as `<GossipsubCodec>` for encoding and decoding of Gossipsub messages    
     network_codec: PostcardCodec,
 
     /// Stores additional p2p network info    
@@ -725,11 +725,13 @@ mod tests {
     use libp2p::{
         gossipsub::Topic,
         identity::Keypair,
-        swarm::SwarmEvent,
+        swarm::{
+            ListenError,
+            SwarmEvent,
+        },
         Multiaddr,
         PeerId,
     };
-    use libp2p_swarm::ListenError;
     use rand::Rng;
     use std::{
         collections::HashSet,
