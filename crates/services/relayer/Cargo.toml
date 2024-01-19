@@ -40,6 +40,7 @@ fuel-core-services = { path = "../../services", features = ["test-helpers"] }
 fuel-core-storage = { path = "../../storage", features = ["test-helpers"] }
 fuel-core-trace = { path = "../../trace" }
 mockall = { workspace = true }
+rand = { workspace = true }
 test-case = { workspace = true }
 tokio = { workspace = true, features = ["macros", "test-util"] }
 

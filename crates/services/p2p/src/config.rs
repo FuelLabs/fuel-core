@@ -21,12 +21,12 @@ use libp2p::{
         tokio::Transport as TokioTcpTransport,
         Config as TcpConfig,
     },
+    yamux::Config as YamuxConfig,
     Multiaddr,
     PeerId,
     Transport,
 };
 use libp2p_mplex::MplexConfig;
-use libp2p_yamux::Config as YamuxConfig;
 use std::{
     collections::HashSet,
     net::{
@@ -74,7 +74,7 @@ pub struct Config<State = Initialized> {
     /// Name of the Network
     pub network_name: String,
 
-    /// Checksum is a hash(sha256) of [`Genesis`](fuel_core_types::blockchain::consensus::Genesis) - chain id.
+    /// Checksum is a hash(sha256) of [`Genesis`] - chain id.
     pub checksum: Checksum,
 
     /// IP address for Swarm to listen on
@@ -281,6 +281,8 @@ pub(crate) fn build_transport_function(
             let mplex_config = MplexConfig::default();
 
             let mut yamux_config = YamuxConfig::default();
+            // TODO: remove deprecated method call https://github.com/FuelLabs/fuel-core/issues/1592
+            #[allow(deprecated)]
             yamux_config.set_max_buffer_size(MAX_RESPONSE_SIZE);
             libp2p::core::upgrade::SelectUpgrade::new(yamux_config, mplex_config)
         };

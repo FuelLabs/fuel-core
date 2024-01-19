@@ -20,7 +20,10 @@ pub trait StorageColumn: Clone {
     fn id(&self) -> u32;
 }
 
+// TODO: Use `&mut self` for all mutable methods.
+//  It requires refactoring of all services because right now, most of them work with `&self` storage.
 /// The definition of the key-value store.
+#[impl_tools::autoimpl(for<T: trait> &T, &mut T, Box<T>, Arc<T>)]
 pub trait KeyValueStore {
     /// The type of the column.
     type Column: StorageColumn;
@@ -107,12 +110,14 @@ pub enum WriteOperation {
 }
 
 /// The definition of the key-value store with batch operations.
+#[impl_tools::autoimpl(for<T: trait> &T, &mut T, Box<T>, Arc<T>)]
 pub trait BatchOperations: KeyValueStore {
     /// Writes the batch of the entries into the storage.
     fn batch_write(
         &self,
         entries: &mut dyn Iterator<Item = (Vec<u8>, Self::Column, WriteOperation)>,
     ) -> StorageResult<()> {
+        // TODO: Optimize implementation for in-memory storages.
         for (key, column, op) in entries {
             match op {
                 WriteOperation::Insert(value) => {

@@ -19,10 +19,23 @@ version = { workspace = true }
 [dependencies]
 anyhow = { workspace = true }
 derive_more = { workspace = true }
-fuel-core-types = { workspace = true, default-features = false }
+enum-iterator = { workspace = true }
+fuel-core-types = { workspace = true, default-features = false, features = ["serde"] }
 fuel-vm-private = { workspace = true, default-features = false }
+impl-tools = "0.10"
+itertools = { workspace = true }
 mockall = { workspace = true, optional = true }
+paste = "1"
+postcard = { workspace = true, features = ["alloc"] }
 primitive-types = { workspace = true, default-features = false }
+rand = { workspace = true, optional = true }
+serde = { workspace = true }
+strum = { workspace = true }
+strum_macros = { workspace = true }
+
+[dev-dependencies]
+fuel-core-storage = { path = ".", features = ["test-helpers"] }
+fuel-core-types = { workspace = true, default-features = false, features = ["serde", "random", "test-helpers"] }
 
 [features]
-test-helpers = ["dep:mockall"]
+test-helpers = ["dep:mockall", "dep:rand"]
