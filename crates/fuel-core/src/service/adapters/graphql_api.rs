@@ -1,20 +1,13 @@
-use super::BlockProducerAdapter;
+use super::{
+    BlockImporterAdapter,
+    BlockProducerAdapter,
+};
 use crate::{
-    database::{
-        transactions::OwnedTransactionIndexCursor,
-        Database,
-    },
+    database::Database,
     fuel_core_graphql_api::ports::{
+        worker,
         BlockProducerPort,
-        DatabaseBlocks,
-        DatabaseChain,
-        DatabaseCoins,
-        DatabaseContracts,
         DatabaseMessageProof,
-        DatabaseMessages,
-        DatabasePort,
-        DatabaseTransactions,
-        DryRunExecution,
         P2pPort,
         TxPoolPort,
     },
@@ -25,51 +18,22 @@ use crate::{
 };
 use async_trait::async_trait;
 use fuel_core_services::stream::BoxStream;
-use fuel_core_storage::{
-    iter::{
-        BoxedIter,
-        IntoBoxedIter,
-        IterDirection,
-    },
-    not_found,
-    Error as StorageError,
-    Result as StorageResult,
-};
+use fuel_core_storage::Result as StorageResult;
 use fuel_core_txpool::{
     service::TxStatusMessage,
-    types::{
-        ContractId,
-        TxId,
-    },
+    types::TxId,
 };
 use fuel_core_types::{
-    blockchain::primitives::{
-        BlockId,
-        DaBlockHeight,
-    },
-    entities::message::{
-        MerkleProof,
-        Message,
-    },
+    entities::message::MerkleProof,
     fuel_tx::{
-        Address,
-        AssetId,
         Receipt as TxReceipt,
         Transaction,
-        TxPointer,
-        UtxoId,
     },
-    fuel_types::{
-        BlockHeight,
-        Nonce,
-    },
+    fuel_types::BlockHeight,
     services::{
-        graphql_api::ContractBalance,
+        block_importer::SharedImportResult,
         p2p::PeerInfo,
-        txpool::{
-            InsertionResult,
-            TransactionStatus,
-        },
+        txpool::InsertionResult,
     },
     tai64::Tai64,
 };
@@ -78,140 +42,8 @@ use std::{
     sync::Arc,
 };
 
-impl DatabaseBlocks for Database {
-    fn block_id(&self, height: &BlockHeight) -> StorageResult<BlockId> {
-        self.get_block_id(height)
-            .and_then(|height| height.ok_or(not_found!("BlockId")))
-    }
-
-    fn blocks_ids(
-        &self,
-        start: Option<BlockHeight>,
-        direction: IterDirection,
-    ) -> BoxedIter<'_, StorageResult<(BlockHeight, BlockId)>> {
-        self.all_block_ids(start, direction)
-            .map(|result| result.map_err(StorageError::from))
-            .into_boxed()
-    }
-
-    fn ids_of_latest_block(&self) -> StorageResult<(BlockHeight, BlockId)> {
-        self.ids_of_latest_block()
-            .transpose()
-            .ok_or(not_found!("BlockId"))?
-    }
-}
-
-impl DatabaseTransactions for Database {
-    fn tx_status(&self, tx_id: &TxId) -> StorageResult<TransactionStatus> {
-        self.get_tx_status(tx_id)
-            .transpose()
-            .ok_or(not_found!("TransactionId"))?
-    }
-
-    fn owned_transactions_ids(
-        &self,
-        owner: Address,
-        start: Option<TxPointer>,
-        direction: IterDirection,
-    ) -> BoxedIter<StorageResult<(TxPointer, TxId)>> {
-        let start = start.map(|tx_pointer| OwnedTransactionIndexCursor {
-            block_height: tx_pointer.block_height(),
-            tx_idx: tx_pointer.tx_index(),
-        });
-        self.owned_transactions(owner, start, Some(direction))
-            .map(|result| result.map_err(StorageError::from))
-            .into_boxed()
-    }
-}
-
-impl DatabaseMessages for Database {
-    fn owned_message_ids(
-        &self,
-        owner: &Address,
-        start_message_id: Option<Nonce>,
-        direction: IterDirection,
-    ) -> BoxedIter<'_, StorageResult<Nonce>> {
-        self.owned_message_ids(owner, start_message_id, Some(direction))
-            .map(|result| result.map_err(StorageError::from))
-            .into_boxed()
-    }
-
-    fn all_messages(
-        &self,
-        start_message_id: Option<Nonce>,
-        direction: IterDirection,
-    ) -> BoxedIter<'_, StorageResult<Message>> {
-        self.all_messages(start_message_id, Some(direction))
-            .map(|result| result.map_err(StorageError::from))
-            .into_boxed()
-    }
-
-    fn message_is_spent(&self, nonce: &Nonce) -> StorageResult<bool> {
-        self.message_is_spent(nonce)
-    }
-
-    fn message_exists(&self, nonce: &Nonce) -> StorageResult<bool> {
-        self.message_exists(nonce)
-    }
-}
-
-impl DatabaseCoins for Database {
-    fn owned_coins_ids(
-        &self,
-        owner: &Address,
-        start_coin: Option<UtxoId>,
-        direction: IterDirection,
-    ) -> BoxedIter<'_, StorageResult<UtxoId>> {
-        self.owned_coins_ids(owner, start_coin, Some(direction))
-            .map(|res| res.map_err(StorageError::from))
-            .into_boxed()
-    }
-}
-
-impl DatabaseContracts for Database {
-    fn contract_balances(
-        &self,
-        contract: ContractId,
-        start_asset: Option<AssetId>,
-        direction: IterDirection,
-    ) -> BoxedIter<StorageResult<ContractBalance>> {
-        self.contract_balances(contract, start_asset, Some(direction))
-            .map(move |result| {
-                result
-                    .map_err(StorageError::from)
-                    .map(|(asset_id, amount)| ContractBalance {
-                        owner: contract,
-                        amount,
-                        asset_id,
-                    })
-            })
-            .into_boxed()
-    }
-}
-
-impl DatabaseChain for Database {
-    fn chain_name(&self) -> StorageResult<String> {
-        pub const DEFAULT_NAME: &str = "Fuel.testnet";
-
-        Ok(self
-            .get_chain_name()?
-            .unwrap_or_else(|| DEFAULT_NAME.to_string()))
-    }
-
-    fn da_height(&self) -> StorageResult<DaBlockHeight> {
-        #[cfg(feature = "relayer")]
-        {
-            use fuel_core_relayer::ports::RelayerDb;
-            self.get_finalized_da_height()
-        }
-        #[cfg(not(feature = "relayer"))]
-        {
-            Ok(0u64.into())
-        }
-    }
-}
-
-impl DatabasePort for Database {}
+mod off_chain;
+mod on_chain;
 
 #[async_trait]
 impl TxPoolPort for TxPoolAdapter {
@@ -253,7 +85,7 @@ impl DatabaseMessageProof for Database {
 }
 
 #[async_trait]
-impl DryRunExecution for BlockProducerAdapter {
+impl BlockProducerPort for BlockProducerAdapter {
     async fn dry_run_tx(
         &self,
         transaction: Transaction,
@@ -265,8 +97,6 @@ impl DryRunExecution for BlockProducerAdapter {
             .await
     }
 }
-
-impl BlockProducerPort for BlockProducerAdapter {}
 
 #[async_trait::async_trait]
 impl P2pPort for P2PAdapter {
@@ -303,5 +133,15 @@ impl P2pPort for P2PAdapter {
         {
             Ok(vec![])
         }
+    }
+}
+
+impl worker::BlockImporter for BlockImporterAdapter {
+    fn block_events(&self) -> BoxStream<SharedImportResult> {
+        use futures::StreamExt;
+        fuel_core_services::stream::IntoBoxStream::into_boxed(
+            tokio_stream::wrappers::BroadcastStream::new(self.block_importer.subscribe())
+                .filter_map(|r| futures::future::ready(r.ok())),
+        )
     }
 }

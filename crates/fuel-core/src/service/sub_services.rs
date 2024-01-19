@@ -3,6 +3,7 @@ use super::adapters::P2PAdapter;
 
 use crate::{
     database::Database,
+    fuel_core_graphql_api,
     fuel_core_graphql_api::Config as GraphQLConfig,
     schema::build_schema,
     service::{
@@ -41,7 +42,7 @@ pub type BlockProducerService = fuel_core_producer::block_producer::Producer<
     TxPoolAdapter,
     ExecutorAdapter,
 >;
-pub type GraphQL = crate::fuel_core_graphql_api::service::Service;
+pub type GraphQL = crate::fuel_core_graphql_api::api_service::Service;
 
 pub fn init_sub_services(
     config: &Config,
@@ -189,20 +190,28 @@ pub fn init_sub_services(
     )
     .data(database.clone());
 
-    let graph_ql = crate::fuel_core_graphql_api::service::new_service(
-        GraphQLConfig {
-            addr: config.addr,
-            utxo_validation: config.utxo_validation,
-            debug: config.debug,
-            vm_backtrace: config.vm.backtrace,
-            min_gas_price: config.txpool.min_gas_price,
-            max_tx: config.txpool.max_tx,
-            max_depth: config.txpool.max_depth,
-            consensus_parameters: config.chain_conf.consensus_parameters.clone(),
-            consensus_key: config.consensus_key.clone(),
-        },
+    let graphql_worker = fuel_core_graphql_api::worker_service::new_service(
+        importer_adapter.clone(),
+        database.clone(),
+    );
+
+    let graphql_config = GraphQLConfig {
+        addr: config.addr,
+        utxo_validation: config.utxo_validation,
+        debug: config.debug,
+        vm_backtrace: config.vm.backtrace,
+        min_gas_price: config.txpool.min_gas_price,
+        max_tx: config.txpool.max_tx,
+        max_depth: config.txpool.max_depth,
+        consensus_parameters: config.chain_conf.consensus_parameters.clone(),
+        consensus_key: config.consensus_key.clone(),
+    };
+
+    let graph_ql = fuel_core_graphql_api::api_service::new_service(
+        graphql_config,
         schema,
-        Box::new(database.clone()),
+        database.clone(),
+        database.clone(),
         Box::new(tx_pool_adapter),
         Box::new(producer_adapter),
         Box::new(poa_adapter.clone()),
@@ -248,6 +257,8 @@ pub fn init_sub_services(
             services.push(Box::new(sync));
         }
     }
+
+    services.push(Box::new(graphql_worker));
 
     Ok((services, shared))
 }

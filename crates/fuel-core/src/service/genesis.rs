@@ -136,7 +136,8 @@ fn import_genesis_block(
         (),
         (),
     );
-    importer.commit_result(UncommittedImportResult::new(
+    // We commit Genesis block before start of any service, so there is no listeners.
+    importer.commit_result_without_awaiting_listeners(UncommittedImportResult::new(
         ImportResult::new_from_local(block, vec![]),
         database_transaction,
     ))?;

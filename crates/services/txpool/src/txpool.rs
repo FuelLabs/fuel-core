@@ -35,8 +35,16 @@ use fuel_core_types::{
     tai64::Tai64,
 };
 
+use crate::service::TxStatusMessage;
 use fuel_core_metrics::txpool_metrics::txpool_metrics;
-use fuel_core_types::fuel_vm::checked_transaction::CheckPredicateParams;
+use fuel_core_types::{
+    blockchain::block::Block,
+    fuel_vm::checked_transaction::CheckPredicateParams,
+    services::{
+        executor::TransactionExecutionStatus,
+        txpool::from_executor_to_status,
+    },
+};
 use std::{
     cmp::Reverse,
     collections::HashMap,
@@ -315,14 +323,19 @@ where
     pub fn block_update(
         &mut self,
         tx_status_sender: &TxStatusChange,
-        height: &BlockHeight,
-        transactions: &[TxId],
+        block: &Block,
+        tx_status: &[TransactionExecutionStatus],
         // spend_outputs: [Input], added_outputs: [AddedOutputs]
     ) {
-        for tx_id in transactions {
-            let tx_id = *tx_id;
-            let result = self.database.transaction_status(&tx_id);
-            tx_status_sender.send_complete(tx_id, height, result);
+        let height = block.header().height();
+        for status in tx_status {
+            let tx_id = status.id;
+            let status = from_executor_to_status(block, status.result.clone());
+            tx_status_sender.send_complete(
+                tx_id,
+                height,
+                TxStatusMessage::Status(status),
+            );
             self.remove_committed_tx(&tx_id);
         }
     }

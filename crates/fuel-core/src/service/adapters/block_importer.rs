@@ -70,11 +70,7 @@ impl BlockImporterAdapter {
         &self,
         sealed_block: SealedBlock,
     ) -> anyhow::Result<()> {
-        tokio::task::spawn_blocking({
-            let importer = self.block_importer.clone();
-            move || importer.execute_and_commit(sealed_block)
-        })
-        .await??;
+        self.block_importer.execute_and_commit(sealed_block).await?;
         Ok(())
     }
 }

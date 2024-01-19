@@ -1,4 +1,4 @@
-use crate::graphql_api::ports::DatabasePort;
+use crate::fuel_core_graphql_api::ports::OnChainDatabase;
 use fuel_core_storage::{
     iter::{
         BoxedIter,
@@ -26,7 +26,7 @@ pub trait SimpleBlockData: Send + Sync {
     fn block(&self, id: &BlockId) -> StorageResult<CompressedBlock>;
 }
 
-impl<D: DatabasePort + ?Sized> SimpleBlockData for D {
+impl<D: OnChainDatabase + ?Sized> SimpleBlockData for D {
     fn block(&self, id: &BlockId) -> StorageResult<CompressedBlock> {
         let block = self
             .storage::<FuelBlocks>()
@@ -56,7 +56,7 @@ pub trait BlockQueryData: Send + Sync + SimpleBlockData {
     fn consensus(&self, id: &BlockId) -> StorageResult<Consensus>;
 }
 
-impl<D: DatabasePort + ?Sized> BlockQueryData for D {
+impl<D: OnChainDatabase + ?Sized> BlockQueryData for D {
     fn block_id(&self, height: &BlockHeight) -> StorageResult<BlockId> {
         self.block_id(height)
     }

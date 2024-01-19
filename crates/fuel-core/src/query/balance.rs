@@ -1,4 +1,4 @@
-use crate::fuel_core_graphql_api::service::Database;
+use crate::fuel_core_graphql_api::database::ReadView;
 use asset_query::{
     AssetQuery,
     AssetSpendTarget,
@@ -43,7 +43,7 @@ pub trait BalanceQueryData: Send + Sync {
     ) -> BoxedIter<StorageResult<AddressBalance>>;
 }
 
-impl BalanceQueryData for Database {
+impl BalanceQueryData for ReadView {
     fn balance(
         &self,
         owner: Address,

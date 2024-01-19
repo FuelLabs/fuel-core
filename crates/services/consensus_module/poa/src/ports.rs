@@ -66,10 +66,11 @@ pub trait BlockProducer: Send + Sync {
 }
 
 #[cfg_attr(test, mockall::automock(type Database=EmptyStorage;))]
+#[async_trait::async_trait]
 pub trait BlockImporter: Send + Sync {
     type Database;
 
-    fn commit_result(
+    async fn commit_result(
         &self,
         result: UncommittedImportResult<StorageTransaction<Self::Database>>,
     ) -> anyhow::Result<()>;

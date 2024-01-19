@@ -14,7 +14,6 @@ use fuel_core_storage::{
         ContractsLatestUtxo,
         Messages,
         ProcessedTransactions,
-        Receipts,
         SpentMessages,
     },
     transactional::{
@@ -23,7 +22,6 @@ use fuel_core_storage::{
     },
     StorageAsMut,
     StorageAsRef,
-    StorageInspect,
 };
 use fuel_core_types::{
     blockchain::{
@@ -45,11 +43,9 @@ use fuel_core_types::{
     fuel_tx::{
         field::{
             InputContract,
-            Inputs,
             MintAmount,
             MintAssetId,
             OutputContract,
-            Outputs,
             TxPointer as TxPointerField,
         },
         input,
@@ -79,7 +75,6 @@ use fuel_core_types::{
         Transaction,
         TxId,
         TxPointer,
-        UniqueIdentifier,
         UtxoId,
     },
     fuel_types::{
@@ -123,7 +118,6 @@ use fuel_core_types::{
             TransactionValidityError,
             UncommittedResult,
         },
-        txpool::TransactionStatus,
     },
 };
 use parking_lot::Mutex as ParkingMutex;
@@ -267,11 +261,11 @@ where
 
         let (
             ExecutionResult {
-                block,
                 skipped_transactions,
+                tx_status,
                 ..
             },
-            temporary_db,
+            _temporary_db,
         ) = self
             .execute_without_commit(ExecutionTypes::DryRun(component), options)?
             .into();
@@ -281,19 +275,11 @@ where
             return Err(err)
         }
 
-        block
-            .transactions()
-            .iter()
-            .map(|tx| {
-                let id = tx.id(&self.config.consensus_parameters.chain_id);
-                StorageInspect::<Receipts>::get(temporary_db.as_ref(), &id)
-                    .transpose()
-                    .unwrap_or_else(|| Ok(Default::default()))
-                    .map(|v| v.into_owned())
-            })
-            .collect::<Result<Vec<Vec<Receipt>>, _>>()
-            .map_err(Into::into)
-        // drop `temporary_db` without committing to avoid altering state.
+        Ok(tx_status
+            .into_iter()
+            .map(|tx| tx.receipts)
+            .collect::<Vec<Vec<Receipt>>>())
+        // drop `_temporary_db` without committing to avoid altering state.
     }
 }
 
@@ -446,16 +432,6 @@ where
             skipped_transactions,
             tx_status,
         };
-
-        // ------------ GraphQL API Functionality BEGIN ------------
-
-        // save the status for every transaction using the finalized block id
-        self.persist_transaction_status(&result, block_st_transaction.as_mut())?;
-
-        // save the associated owner for each transaction in the block
-        self.index_tx_owners_for_block(&result.block, block_st_transaction.as_mut())?;
-
-        // ------------ GraphQL API Functionality   END ------------
 
         // Get the complete fuel block.
         Ok(UncommittedResult::new(result, block_st_transaction))
@@ -807,6 +783,7 @@ where
         execution_data.tx_status.push(TransactionExecutionStatus {
             id: coinbase_id,
             result: TransactionExecutionResult::Success { result: None },
+            receipts: vec![],
         });
 
         if block_st_transaction
@@ -895,7 +872,10 @@ where
             debug_assert_eq!(tx.id(&self.config.consensus_parameters.chain_id), tx_id);
         }
 
-        // Wrap inputs in the execution kind.
+        // TODO: We need to call this function before `vm.transact` but we can't do that because of
+        //  `Checked<Transaction>` immutability requirements. So we do it here after its execution for now.
+        //  But it should be fixed in the future.
+        //  https://github.com/FuelLabs/fuel-vm/issues/651
         self.compute_inputs(
             match execution_kind {
                 ExecutionKind::DryRun => ExecutionTypes::DryRun(tx.inputs_mut()),
@@ -970,9 +950,6 @@ where
             .storage::<ProcessedTransactions>()
             .insert(&tx_id, &())?;
 
-        // persist receipts
-        self.persist_receipts(&tx_id, &receipts, tx_st_transaction.as_mut())?;
-
         let status = if reverted {
             self.log_backtrace(&vm, &receipts);
             // get reason for revert
@@ -1004,14 +981,15 @@ where
             .checked_add(tx_fee)
             .ok_or(ExecutorError::FeeOverflow)?;
         execution_data.used_gas = execution_data.used_gas.saturating_add(used_gas);
+        execution_data
+            .message_ids
+            .extend(receipts.iter().filter_map(|r| r.message_id()));
         // queue up status for this tx to be stored once block id is finalized.
         execution_data.tx_status.push(TransactionExecutionStatus {
             id: tx_id,
             result: status,
+            receipts,
         });
-        execution_data
-            .message_ids
-            .extend(receipts.iter().filter_map(|r| r.message_id()));
 
         Ok(final_tx)
     }
@@ -1070,7 +1048,7 @@ where
                 | Input::MessageDataSigned(MessageDataSigned { nonce, .. })
                 | Input::MessageDataPredicate(MessageDataPredicate { nonce, .. }) => {
                     // Eagerly return already spent if status is known.
-                    if db.message_is_spent(nonce)? {
+                    if db.storage::<SpentMessages>().contains_key(nonce)? {
                         return Err(
                             TransactionValidityError::MessageAlreadySpent(*nonce).into()
                         )
@@ -1543,130 +1521,6 @@ where
             }
         }
 
-        Ok(())
-    }
-
-    fn persist_receipts(
-        &self,
-        tx_id: &TxId,
-        receipts: &[Receipt],
-        db: &mut D,
-    ) -> ExecutorResult<()> {
-        if db.storage::<Receipts>().insert(tx_id, receipts)?.is_some() {
-            return Err(ExecutorError::OutputAlreadyExists)
-        }
-        Ok(())
-    }
-
-    /// Associate all transactions within a block to their respective UTXO owners
-    fn index_tx_owners_for_block(
-        &self,
-        block: &Block,
-        block_st_transaction: &mut D,
-    ) -> ExecutorResult<()> {
-        for (tx_idx, tx) in block.transactions().iter().enumerate() {
-            let block_height = *block.header().height();
-            let inputs;
-            let outputs;
-            let tx_idx =
-                u16::try_from(tx_idx).map_err(|_| ExecutorError::TooManyTransactions)?;
-            let tx_id = tx.id(&self.config.consensus_parameters.chain_id);
-            match tx {
-                Transaction::Script(tx) => {
-                    inputs = tx.inputs().as_slice();
-                    outputs = tx.outputs().as_slice();
-                }
-                Transaction::Create(tx) => {
-                    inputs = tx.inputs().as_slice();
-                    outputs = tx.outputs().as_slice();
-                }
-                Transaction::Mint(_) => continue,
-            }
-            self.persist_owners_index(
-                block_height,
-                inputs,
-                outputs,
-                &tx_id,
-                tx_idx,
-                block_st_transaction,
-            )?;
-        }
-        Ok(())
-    }
-
-    /// Index the tx id by owner for all of the inputs and outputs
-    fn persist_owners_index(
-        &self,
-        block_height: BlockHeight,
-        inputs: &[Input],
-        outputs: &[Output],
-        tx_id: &Bytes32,
-        tx_idx: u16,
-        db: &mut D,
-    ) -> ExecutorResult<()> {
-        let mut owners = vec![];
-        for input in inputs {
-            if let Input::CoinSigned(CoinSigned { owner, .. })
-            | Input::CoinPredicate(CoinPredicate { owner, .. }) = input
-            {
-                owners.push(owner);
-            }
-        }
-
-        for output in outputs {
-            match output {
-                Output::Coin { to, .. }
-                | Output::Change { to, .. }
-                | Output::Variable { to, .. } => {
-                    owners.push(to);
-                }
-                Output::Contract(_) | Output::ContractCreated { .. } => {}
-            }
-        }
-
-        // dedupe owners from inputs and outputs prior to indexing
-        owners.sort();
-        owners.dedup();
-
-        for owner in owners {
-            db.record_tx_id_owner(owner, block_height, tx_idx, tx_id)?;
-        }
-
-        Ok(())
-    }
-
-    fn persist_transaction_status(
-        &self,
-        result: &ExecutionResult,
-        db: &mut D,
-    ) -> ExecutorResult<()> {
-        let time = result.block.header().time();
-        let block_id = result.block.id();
-        for TransactionExecutionStatus { id, result } in result.tx_status.iter() {
-            match result {
-                TransactionExecutionResult::Success { result } => {
-                    db.update_tx_status(
-                        id,
-                        TransactionStatus::Success {
-                            block_id,
-                            time,
-                            result: *result,
-                        },
-                    )?;
-                }
-                TransactionExecutionResult::Failed { result, reason } => {
-                    db.update_tx_status(
-                        id,
-                        TransactionStatus::Failed {
-                            block_id,
-                            time,
-                            result: *result,
-                            reason: reason.clone(),
-                        },
-                    )?;
-                }
-            }
-        }
         Ok(())
     }
 }

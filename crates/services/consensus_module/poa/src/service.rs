@@ -356,10 +356,12 @@ where
             consensus: seal,
         };
         // Import the sealed block
-        self.block_importer.commit_result(Uncommitted::new(
-            ImportResult::new_from_local(block, tx_status),
-            db_transaction,
-        ))?;
+        self.block_importer
+            .commit_result(Uncommitted::new(
+                ImportResult::new_from_local(block, tx_status),
+                db_transaction,
+            ))
+            .await?;
 
         // Update last block time
         self.last_height = height;

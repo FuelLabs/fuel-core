@@ -2841,6 +2841,7 @@ dependencies = [
  "mockall",
  "test-case",
  "tokio",
+ "tokio-rayon",
  "tracing",
 ]
 
