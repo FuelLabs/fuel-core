@@ -6,7 +6,6 @@ use fuel_core_types::{
     blockchain::{
         block::CompressedBlock,
         consensus::Consensus,
-        primitives::BlockId,
     },
     entities::{
         coins::coin::CompressedCoin,
@@ -20,6 +19,7 @@ use fuel_core_types::{
         UtxoId,
     },
     fuel_types::{
+        BlockHeight,
         Bytes32,
         ContractId,
         Nonce,
@@ -39,9 +39,7 @@ pub struct FuelBlocks;
 impl Mappable for FuelBlocks {
     /// Unique identifier of the fuel block.
     type Key = Self::OwnedKey;
-    // TODO: Seems it would be faster to use `BlockHeight` as primary key.
-    //  https://github.com/FuelLabs/fuel-core/issues/1580.
-    type OwnedKey = BlockId;
+    type OwnedKey = BlockHeight;
     type Value = Self::OwnedValue;
     type OwnedValue = CompressedBlock;
 }
@@ -76,7 +74,7 @@ pub struct SealedBlockConsensus;
 
 impl Mappable for SealedBlockConsensus {
     type Key = Self::OwnedKey;
-    type OwnedKey = BlockId;
+    type OwnedKey = BlockHeight;
     type Value = Self::OwnedValue;
     type OwnedValue = Consensus;
 }

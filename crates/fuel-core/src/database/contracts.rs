@@ -93,9 +93,11 @@ impl Database {
         start_asset: Option<AssetId>,
         direction: Option<IterDirection>,
     ) -> impl Iterator<Item = StorageResult<(AssetId, Word)>> + '_ {
-        self.iter_all_filtered::<ContractsAssets, _, _>(
+        let start_asset =
+            start_asset.map(|asset| ContractsAssetKey::new(&contract, &asset));
+        self.iter_all_filtered::<ContractsAssets, _>(
             Some(contract),
-            start_asset.map(|asset_id| ContractsAssetKey::new(&contract, &asset_id)),
+            start_asset.as_ref(),
             direction,
         )
         .map(|res| res.map(|(key, balance)| (*key.asset_id(), balance)))

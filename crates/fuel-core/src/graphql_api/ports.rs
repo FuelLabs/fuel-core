@@ -22,9 +22,12 @@ use fuel_core_storage::{
 };
 use fuel_core_txpool::service::TxStatusMessage;
 use fuel_core_types::{
-    blockchain::primitives::{
-        BlockId,
-        DaBlockHeight,
+    blockchain::{
+        block::CompressedBlock,
+        primitives::{
+            BlockId,
+            DaBlockHeight,
+        },
     },
     entities::message::{
         MerkleProof,
@@ -102,15 +105,15 @@ pub trait DatabaseBlocks:
     StorageInspect<FuelBlocks, Error = StorageError>
     + StorageInspect<SealedBlockConsensus, Error = StorageError>
 {
-    fn block_id(&self, height: &BlockHeight) -> StorageResult<BlockId>;
+    fn block_height(&self, block_id: &BlockId) -> StorageResult<BlockHeight>;
 
-    fn blocks_ids(
+    fn blocks(
         &self,
-        start: Option<BlockHeight>,
+        height: Option<BlockHeight>,
         direction: IterDirection,
-    ) -> BoxedIter<'_, StorageResult<(BlockHeight, BlockId)>>;
+    ) -> BoxedIter<'_, StorageResult<CompressedBlock>>;
 
-    fn ids_of_latest_block(&self) -> StorageResult<(BlockHeight, BlockId)>;
+    fn latest_height(&self) -> StorageResult<BlockHeight>;
 }
 
 /// Trait that specifies all the getters required for messages.

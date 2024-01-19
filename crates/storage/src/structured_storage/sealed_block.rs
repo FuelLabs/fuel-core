@@ -4,7 +4,7 @@ use crate::{
     blueprint::plain::Plain,
     codec::{
         postcard::Postcard,
-        raw::Raw,
+        primitive::Primitive,
     },
     column::Column,
     structured_storage::TableWithBlueprint,
@@ -12,7 +12,7 @@ use crate::{
 };
 
 impl TableWithBlueprint for SealedBlockConsensus {
-    type Blueprint = Plain<Raw, Postcard>;
+    type Blueprint = Plain<Primitive<4>, Postcard>;
 
     fn column() -> Column {
         Column::FuelBlockConsensus
@@ -22,6 +22,6 @@ impl TableWithBlueprint for SealedBlockConsensus {
 #[cfg(test)]
 crate::basic_storage_tests!(
     SealedBlockConsensus,
-    <SealedBlockConsensus as crate::Mappable>::Key::from([1u8; 32]),
+    <SealedBlockConsensus as crate::Mappable>::Key::default(),
     <SealedBlockConsensus as crate::Mappable>::Value::default()
 );
