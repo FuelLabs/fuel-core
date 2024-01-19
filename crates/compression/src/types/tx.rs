@@ -64,7 +64,6 @@ pub(crate) enum Input {
         asset_id: Key<tables::AssetId>,
         tx_pointer: TxPointer,
         maturity: BlockHeight,
-        predicate_gas_used: Word,
         predicate: Vec<u8>,
         predicate_data: Vec<u8>,
     },
@@ -88,7 +87,6 @@ pub(crate) enum Input {
         recipient: Key<tables::Address>,
         amount: Word,
         nonce: fuel_types::Nonce,
-        predicate_gas_used: Word,
         predicate: Vec<u8>,
         predicate_data: Vec<u8>,
     },
@@ -106,7 +104,6 @@ pub(crate) enum Input {
         amount: Word,
         nonce: fuel_types::Nonce,
         data: Vec<u8>,
-        predicate_gas_used: Word,
         predicate: Vec<u8>,
         predicate_data: Vec<u8>,
     },
@@ -122,21 +119,11 @@ pub(crate) enum Output {
 
     Contract {
         input_index: u8,
-        balance_root: Bytes32,
-        state_root: Bytes32,
     },
 
-    Change {
-        to: Key<tables::Address>,
-        amount: Word,
-        asset_id: Key<tables::AssetId>,
-    },
+    Change,
 
-    Variable {
-        to: Key<tables::Address>,
-        amount: Word,
-        asset_id: Key<tables::AssetId>,
-    },
+    Variable,
 
     ContractCreated {
         contract_id: TxPointer,
@@ -159,24 +146,13 @@ pub struct Create {
 #[derive(Default, Debug, Clone, Serialize, Deserialize)]
 pub struct Mint {
     tx_pointer: TxPointer,
-    input_contract: InputContract,
+    input_contract: TxPointer,
     output_contract: OutputContract,
     mint_amount: Word,
     mint_asset_id: Key<tables::AssetId>,
 }
 
 #[derive(Default, Debug, Clone, Serialize, Deserialize)]
-pub struct InputContract {
-    utxo_id: TxPointer,
-    balance_root: Bytes32,
-    state_root: Bytes32,
-    tx_pointer: TxPointer,
-    contract_id: TxPointer,
-}
-
-#[derive(Default, Debug, Clone, Serialize, Deserialize)]
 pub struct OutputContract {
     input_index: u8,
-    balance_root: Bytes32,
-    state_root: Bytes32,
 }
