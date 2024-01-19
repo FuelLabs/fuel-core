@@ -37,6 +37,7 @@ use fuel_core_types::{
 
 use crate::service::TxStatusMessage;
 use fuel_core_metrics::txpool_metrics::txpool_metrics;
+use fuel_core_storage::transactional::AtomicView;
 use fuel_core_types::{
     blockchain::block::Block,
     fuel_vm::checked_transaction::CheckPredicateParams,
@@ -54,20 +55,17 @@ use std::{
 use tokio_rayon::AsyncRayonHandle;
 
 #[derive(Debug, Clone)]
-pub struct TxPool<DB> {
+pub struct TxPool<ViewProvider> {
     by_hash: HashMap<TxId, TxInfo>,
     by_gas_price: PriceSort,
     by_time: TimeSort,
     by_dependency: Dependency,
     config: Config,
-    database: DB,
+    database: ViewProvider,
 }
 
-impl<DB> TxPool<DB>
-where
-    DB: TxPoolDb,
-{
-    pub fn new(config: Config, database: DB) -> Self {
+impl<ViewProvider> TxPool<ViewProvider> {
+    pub fn new(config: Config, database: ViewProvider) -> Self {
         let max_depth = config.max_depth;
 
         Self {
@@ -91,94 +89,6 @@ where
 
     pub fn dependency(&self) -> &Dependency {
         &self.by_dependency
-    }
-
-    #[tracing::instrument(level = "info", skip_all, fields(tx_id = %tx.id()), ret, err)]
-    // this is atomic operation. Return removed(pushed out/replaced) transactions
-    fn insert_inner(
-        &mut self,
-        tx: Checked<Transaction>,
-    ) -> anyhow::Result<InsertionResult> {
-        let tx: CheckedTransaction = tx.into();
-
-        let tx = Arc::new(match tx {
-            CheckedTransaction::Script(script) => PoolTransaction::Script(script),
-            CheckedTransaction::Create(create) => PoolTransaction::Create(create),
-            CheckedTransaction::Mint(_) => {
-                return Err(anyhow::anyhow!("Mint transactions is not supported"))
-            }
-        });
-
-        if !tx.is_computed() {
-            return Err(Error::NoMetadata.into())
-        }
-
-        // verify max gas is less than block limit
-        if tx.max_gas() > self.config.chain_config.block_gas_limit {
-            return Err(Error::NotInsertedMaxGasLimit {
-                tx_gas: tx.max_gas(),
-                block_limit: self.config.chain_config.block_gas_limit,
-            }
-            .into())
-        }
-
-        if self.by_hash.contains_key(&tx.id()) {
-            return Err(Error::NotInsertedTxKnown.into())
-        }
-
-        let mut max_limit_hit = false;
-        // check if we are hitting limit of pool
-        if self.by_hash.len() >= self.config.max_tx {
-            max_limit_hit = true;
-            // limit is hit, check if we can push out lowest priced tx
-            let lowest_price = self.by_gas_price.lowest_value().unwrap_or_default();
-            if lowest_price >= tx.price() {
-                return Err(Error::NotInsertedLimitHit.into())
-            }
-        }
-        if self.config.metrics {
-            txpool_metrics()
-                .gas_price_histogram
-                .observe(tx.price() as f64);
-
-            txpool_metrics()
-                .tx_size_histogram
-                .observe(tx.metered_bytes_size() as f64);
-        }
-        // check and insert dependency
-        let rem = self
-            .by_dependency
-            .insert(&self.by_hash, &self.database, &tx)?;
-        let info = TxInfo::new(tx.clone());
-        let submitted_time = info.submitted_time();
-        self.by_gas_price.insert(&info);
-        self.by_time.insert(&info);
-        self.by_hash.insert(tx.id(), info);
-
-        // if some transaction were removed so we don't need to check limit
-        let removed = if rem.is_empty() {
-            if max_limit_hit {
-                // remove last tx from sort
-                let rem_tx = self.by_gas_price.lowest_tx().unwrap(); // safe to unwrap limit is hit
-                self.remove_inner(&rem_tx);
-                vec![rem_tx]
-            } else {
-                Vec::new()
-            }
-        } else {
-            // remove ret from by_hash and from by_price
-            for rem in rem.iter() {
-                self.remove_tx(&rem.id());
-            }
-
-            rem
-        };
-
-        Ok(InsertionResult {
-            inserted: tx,
-            submitted_time,
-            removed,
-        })
     }
 
     /// Return all sorted transactions that are includable in next block.
@@ -226,47 +136,6 @@ where
     //  when transaction was skipped during block execution(`ExecutionResult.skipped_transaction`).
     pub fn remove_committed_tx(&mut self, tx_id: &TxId) -> Vec<ArcPoolTx> {
         self.remove_by_tx_id(tx_id)
-    }
-
-    #[tracing::instrument(level = "info", skip_all)]
-    /// Import a set of transactions from network gossip or GraphQL endpoints.
-    pub fn insert(
-        &mut self,
-        tx_status_sender: &TxStatusChange,
-        txs: Vec<Checked<Transaction>>,
-    ) -> Vec<anyhow::Result<InsertionResult>> {
-        // Check if that data is okay (witness match input/output, and if recovered signatures ara valid).
-        // should be done before transaction comes to txpool, or before it enters RwLocked region.
-        let mut res = Vec::new();
-
-        for tx in txs.into_iter() {
-            res.push(self.insert_inner(tx));
-        }
-
-        // announce to subscribers
-        for ret in res.iter() {
-            match ret {
-                Ok(InsertionResult {
-                    removed,
-                    inserted,
-                    submitted_time,
-                }) => {
-                    for removed in removed {
-                        // small todo there is possibility to have removal reason (ReplacedByHigherGas, DependencyRemoved)
-                        // but for now it is okay to just use Error::Removed.
-                        tx_status_sender.send_squeezed_out(removed.id(), Error::Removed);
-                    }
-                    tx_status_sender.send_submitted(
-                        inserted.id(),
-                        Tai64::from_unix(submitted_time.as_secs() as i64),
-                    );
-                }
-                Err(_) => {
-                    // @dev should not broadcast tx if error occurred
-                }
-            }
-        }
-        res
     }
 
     /// find all tx by its hash
@@ -382,6 +251,150 @@ where
         }
 
         result
+    }
+}
+
+impl<ViewProvider, View> TxPool<ViewProvider>
+where
+    ViewProvider: AtomicView<View = View>,
+    View: TxPoolDb,
+{
+    #[cfg(test)]
+    fn insert_single(
+        &mut self,
+        tx: Checked<Transaction>,
+    ) -> anyhow::Result<InsertionResult> {
+        let view = self.database.latest_view();
+        self.insert_inner(tx, &view)
+    }
+
+    #[tracing::instrument(level = "info", skip_all, fields(tx_id = %tx.id()), ret, err)]
+    // this is atomic operation. Return removed(pushed out/replaced) transactions
+    fn insert_inner(
+        &mut self,
+        tx: Checked<Transaction>,
+        view: &View,
+    ) -> anyhow::Result<InsertionResult> {
+        let tx: CheckedTransaction = tx.into();
+
+        let tx = Arc::new(match tx {
+            CheckedTransaction::Script(script) => PoolTransaction::Script(script),
+            CheckedTransaction::Create(create) => PoolTransaction::Create(create),
+            CheckedTransaction::Mint(_) => {
+                return Err(anyhow::anyhow!("Mint transactions is not supported"))
+            }
+        });
+
+        if !tx.is_computed() {
+            return Err(Error::NoMetadata.into())
+        }
+
+        // verify max gas is less than block limit
+        if tx.max_gas() > self.config.chain_config.block_gas_limit {
+            return Err(Error::NotInsertedMaxGasLimit {
+                tx_gas: tx.max_gas(),
+                block_limit: self.config.chain_config.block_gas_limit,
+            }
+            .into())
+        }
+
+        if self.by_hash.contains_key(&tx.id()) {
+            return Err(Error::NotInsertedTxKnown.into())
+        }
+
+        let mut max_limit_hit = false;
+        // check if we are hitting limit of pool
+        if self.by_hash.len() >= self.config.max_tx {
+            max_limit_hit = true;
+            // limit is hit, check if we can push out lowest priced tx
+            let lowest_price = self.by_gas_price.lowest_value().unwrap_or_default();
+            if lowest_price >= tx.price() {
+                return Err(Error::NotInsertedLimitHit.into())
+            }
+        }
+        if self.config.metrics {
+            txpool_metrics()
+                .gas_price_histogram
+                .observe(tx.price() as f64);
+
+            txpool_metrics()
+                .tx_size_histogram
+                .observe(tx.metered_bytes_size() as f64);
+        }
+        // check and insert dependency
+        let rem = self.by_dependency.insert(&self.by_hash, view, &tx)?;
+        let info = TxInfo::new(tx.clone());
+        let submitted_time = info.submitted_time();
+        self.by_gas_price.insert(&info);
+        self.by_time.insert(&info);
+        self.by_hash.insert(tx.id(), info);
+
+        // if some transaction were removed so we don't need to check limit
+        let removed = if rem.is_empty() {
+            if max_limit_hit {
+                // remove last tx from sort
+                let rem_tx = self.by_gas_price.lowest_tx().unwrap(); // safe to unwrap limit is hit
+                self.remove_inner(&rem_tx);
+                vec![rem_tx]
+            } else {
+                Vec::new()
+            }
+        } else {
+            // remove ret from by_hash and from by_price
+            for rem in rem.iter() {
+                self.remove_tx(&rem.id());
+            }
+
+            rem
+        };
+
+        Ok(InsertionResult {
+            inserted: tx,
+            submitted_time,
+            removed,
+        })
+    }
+
+    #[tracing::instrument(level = "info", skip_all)]
+    /// Import a set of transactions from network gossip or GraphQL endpoints.
+    pub fn insert(
+        &mut self,
+        tx_status_sender: &TxStatusChange,
+        txs: Vec<Checked<Transaction>>,
+    ) -> Vec<anyhow::Result<InsertionResult>> {
+        // Check if that data is okay (witness match input/output, and if recovered signatures ara valid).
+        // should be done before transaction comes to txpool, or before it enters RwLocked region.
+        let mut res = Vec::new();
+        let view = self.database.latest_view();
+
+        for tx in txs.into_iter() {
+            res.push(self.insert_inner(tx, &view));
+        }
+
+        // announce to subscribers
+        for ret in res.iter() {
+            match ret {
+                Ok(InsertionResult {
+                    removed,
+                    inserted,
+                    submitted_time,
+                }) => {
+                    for removed in removed {
+                        // small todo there is possibility to have removal reason (ReplacedByHigherGas, DependencyRemoved)
+                        // but for now it is okay to just use Error::Removed.
+                        tx_status_sender.send_squeezed_out(removed.id(), Error::Removed);
+                    }
+                    tx_status_sender.send_submitted(
+                        inserted.id(),
+                        Tai64::from_unix(submitted_time.as_secs() as i64),
+                    );
+                }
+                Err(_) => {
+                    // @dev should not broadcast tx if error occurred
+                }
+            }
+        }
+        res
     }
 }
 

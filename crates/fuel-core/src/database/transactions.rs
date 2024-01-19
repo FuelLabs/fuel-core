@@ -104,8 +104,7 @@ impl Database {
         start: Option<&Bytes32>,
         direction: Option<IterDirection>,
     ) -> impl Iterator<Item = StorageResult<Transaction>> + '_ {
-        let start = start.map(|b| b.as_ref().to_vec());
-        self.iter_all_by_start::<Transactions, _>(start, direction)
+        self.iter_all_by_start::<Transactions>(start, direction)
             .map(|res| res.map(|(_, tx)| tx))
     }
 
@@ -119,14 +118,17 @@ impl Database {
         start: Option<OwnedTransactionIndexCursor>,
         direction: Option<IterDirection>,
     ) -> impl Iterator<Item = StorageResult<(TxPointer, Bytes32)>> + '_ {
-        let start = start
-            .map(|cursor| owned_tx_index_key(&owner, cursor.block_height, cursor.tx_idx));
-        self.iter_all_filtered::<OwnedTransactions, _, _>(Some(owner), start, direction)
-            .map(|res| {
-                res.map(|(key, tx_id)| {
-                    (TxPointer::new(key.block_height, key.tx_idx), tx_id)
-                })
-            })
+        let start = start.map(|cursor| {
+            OwnedTransactionIndexKey::new(&owner, cursor.block_height, cursor.tx_idx)
+        });
+        self.iter_all_filtered::<OwnedTransactions, _>(
+            Some(owner),
+            start.as_ref(),
+            direction,
+        )
+        .map(|res| {
+            res.map(|(key, tx_id)| (TxPointer::new(key.block_height, key.tx_idx), tx_id))
+        })
     }
 
     pub fn record_tx_id_owner(

@@ -1,7 +1,12 @@
 // Rust isn't smart enough to detect cross module test deps
 #![allow(dead_code)]
 
-use crate::MockDb;
+use crate::{
+    mock_db::MockDBProvider,
+    Config,
+    MockDb,
+    TxPool,
+};
 use fuel_core_types::{
     entities::coins::coin::{
         Coin,
@@ -11,6 +16,7 @@ use fuel_core_types::{
     fuel_crypto::rand::{
         rngs::StdRng,
         Rng,
+        SeedableRng,
     },
     fuel_tx::{
         field::Inputs,
@@ -39,6 +45,85 @@ use fuel_core_types::{
 // the byte and gas price fees.
 pub const TEST_COIN_AMOUNT: u64 = 100_000_000u64;
 
+pub(crate) struct TextContext {
+    mock_db: MockDb,
+    rng: StdRng,
+    config: Option<Config>,
+}
+
+impl Default for TextContext {
+    fn default() -> Self {
+        Self {
+            mock_db: MockDb::default(),
+            rng: StdRng::seed_from_u64(0),
+            config: None,
+        }
+    }
+}
+
+impl TextContext {
+    pub(crate) fn database_mut(&mut self) -> &mut MockDb {
+        &mut self.mock_db
+    }
+
+    pub(crate) fn config(self, config: Config) -> Self {
+        Self {
+            config: Some(config),
+            ..self
+        }
+    }
+
+    pub(crate) fn build(self) -> TxPool<MockDBProvider> {
+        TxPool::new(
+            self.config.unwrap_or_default(),
+            MockDBProvider(self.mock_db),
+        )
+    }
+
+    pub(crate) fn setup_coin(&mut self) -> (Coin, Input) {
+        setup_coin(&mut self.rng, Some(&self.mock_db))
+    }
+
+    pub(crate) fn create_output_and_input(
+        &mut self,
+        amount: Word,
+    ) -> (Output, UnsetInput) {
+        let input = self.random_predicate(AssetId::BASE, amount, None);
+        let output = Output::coin(*input.input_owner().unwrap(), amount, AssetId::BASE);
+        (output, UnsetInput(input))
+    }
+
+    pub(crate) fn random_predicate(
+        &mut self,
+        asset_id: AssetId,
+        amount: Word,
+        utxo_id: Option<UtxoId>,
+    ) -> Input {
+        random_predicate(&mut self.rng, asset_id, amount, utxo_id)
+    }
+
+    pub(crate) fn custom_predicate(
+        &mut self,
+        asset_id: AssetId,
+        amount: Word,
+        code: Vec<u8>,
+        utxo_id: Option<UtxoId>,
+    ) -> Input {
+        let owner = Input::predicate_owner(&code);
+        Input::coin_predicate(
+            utxo_id.unwrap_or_else(|| self.rng.gen()),
+            owner,
+            amount,
+            asset_id,
+            Default::default(),
+            Default::default(),
+            Default::default(),
+            code,
+            vec![],
+        )
+    }
+}
+
 pub(crate) fn setup_coin(rng: &mut StdRng, mock_db: Option<&MockDb>) -> (Coin, Input) {
     let input = random_predicate(rng, AssetId::BASE, TEST_COIN_AMOUNT, None);
     add_coin_to_state(input, mock_db)
@@ -62,32 +147,6 @@ pub(crate) fn add_coin_to_state(input: Input, mock_db: Option<&MockDb>) -> (Coin
             .insert(utxo_id, coin.clone());
     }
     (coin.uncompress(utxo_id), input)
-}
-
-pub(crate) fn create_output_and_input(
-    rng: &mut StdRng,
-    amount: Word,
-) -> (Output, UnsetInput) {
-    let input = random_predicate(rng, AssetId::BASE, amount, None);
-    let output = Output::coin(*input.input_owner().unwrap(), amount, AssetId::BASE);
-    (output, UnsetInput(input))
-}
-
-pub struct UnsetInput(Input);
-
-impl UnsetInput {
-    pub fn into_input(self, new_utxo_id: UtxoId) -> Input {
-        let mut input = self.0;
-        match &mut input {
-            Input::CoinSigned(CoinSigned { utxo_id, .. })
-            | Input::CoinPredicate(CoinPredicate { utxo_id, .. })
-            | Input::Contract(Contract { utxo_id, .. }) => {
-                *utxo_id = new_utxo_id;
-            }
-            _ => {}
-        }
-        input
-    }
 }
 
 pub(crate) fn random_predicate(
@@ -115,25 +174,21 @@ pub(crate) fn random_predicate(
     .into_default_estimated()
 }
 
-pub(crate) fn custom_predicate(
-    rng: &mut StdRng,
-    asset_id: AssetId,
-    amount: Word,
-    code: Vec<u8>,
-    utxo_id: Option<UtxoId>,
-) -> Input {
-    let owner = Input::predicate_owner(&code);
-    Input::coin_predicate(
-        utxo_id.unwrap_or_else(|| rng.gen()),
-        owner,
-        amount,
-        asset_id,
-        Default::default(),
-        Default::default(),
-        Default::default(),
-        code,
-        vec![],
-    )
+pub struct UnsetInput(Input);
+
+impl UnsetInput {
+    pub fn into_input(self, new_utxo_id: UtxoId) -> Input {
+        let mut input = self.0;
+        match &mut input {
+            Input::CoinSigned(CoinSigned { utxo_id, .. })
+            | Input::CoinPredicate(CoinPredicate { utxo_id, .. })
+            | Input::Contract(Contract { utxo_id, .. }) => {
+                *utxo_id = new_utxo_id;
+            }
+            _ => {}
+        }
+        input
+    }
 }
 
 pub trait IntoEstimated {

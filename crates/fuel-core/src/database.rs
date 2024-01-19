@@ -13,7 +13,11 @@ use fuel_core_chain_config::{
 };
 use fuel_core_storage::{
     blueprint::Blueprint,
-    codec::Decode,
+    codec::{
+        Decode,
+        Encode,
+        Encoder,
+    },
     iter::IterDirection,
     kv_store::{
         BatchOperations,
@@ -253,7 +257,7 @@ impl BatchOperations for DataSource {
 
 /// Read-only methods.
 impl Database {
-    fn iter_all<M>(
+    pub(crate) fn iter_all<M>(
         &self,
         direction: Option<IterDirection>,
     ) -> impl Iterator<Item = StorageResult<(M::OwnedKey, M::OwnedValue)>> + '_
@@ -261,10 +265,10 @@ impl Database {
         M: Mappable + TableWithBlueprint,
         M::Blueprint: Blueprint<M, DataSource>,
     {
-        self.iter_all_filtered::<M, Vec<u8>, Vec<u8>>(None, None, direction)
+        self.iter_all_filtered::<M, [u8; 0]>(None, None, direction)
     }
 
-    fn iter_all_by_prefix<M, P>(
+    pub(crate) fn iter_all_by_prefix<M, P>(
         &self,
         prefix: Option<P>,
     ) -> impl Iterator<Item = StorageResult<(M::OwnedKey, M::OwnedValue)>> + '_
@@ -273,40 +277,44 @@ impl Database {
         M::Blueprint: Blueprint<M, DataSource>,
         P: AsRef<[u8]>,
     {
-        self.iter_all_filtered::<M, P, [u8; 0]>(prefix, None, None)
+        self.iter_all_filtered::<M, P>(prefix, None, None)
     }
 
-    fn iter_all_by_start<M, S>(
+    pub(crate) fn iter_all_by_start<M>(
         &self,
-        start: Option<S>,
+        start: Option<&M::Key>,
         direction: Option<IterDirection>,
     ) -> impl Iterator<Item = StorageResult<(M::OwnedKey, M::OwnedValue)>> + '_
     where
         M: Mappable + TableWithBlueprint,
         M::Blueprint: Blueprint<M, DataSource>,
-        S: AsRef<[u8]>,
     {
-        self.iter_all_filtered::<M, [u8; 0], S>(None, start, direction)
+        self.iter_all_filtered::<M, [u8; 0]>(None, start, direction)
     }
 
-    fn iter_all_filtered<M, P, S>(
+    pub(crate) fn iter_all_filtered<M, P>(
         &self,
         prefix: Option<P>,
-        start: Option<S>,
+        start: Option<&M::Key>,
         direction: Option<IterDirection>,
     ) -> impl Iterator<Item = StorageResult<(M::OwnedKey, M::OwnedValue)>> + '_
     where
         M: Mappable + TableWithBlueprint,
         M::Blueprint: Blueprint<M, DataSource>,
         P: AsRef<[u8]>,
-        S: AsRef<[u8]>,
     {
+        let encoder = start.map(|start| {
+            <M::Blueprint as Blueprint<M, DataSource>>::KeyCodec::encode(start)
+        });
+
+        let start = encoder.as_ref().map(|encoder| encoder.as_bytes());
+
         self.data
             .as_ref()
             .iter_all(
                 M::column(),
                 prefix.as_ref().map(|p| p.as_ref()),
-                start.as_ref().map(|s| s.as_ref()),
+                start.as_ref().map(|cow| cow.as_ref()),
                 direction.unwrap_or_default(),
             )
             .map(|val| {
@@ -379,7 +387,7 @@ impl ChainConfigDb for Database {
     }
 
     fn get_block_height(&self) -> StorageResult<BlockHeight> {
-        Self::latest_height(self)
+        self.latest_height()
     }
 }
 

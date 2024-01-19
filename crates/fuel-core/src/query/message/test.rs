@@ -1,10 +1,13 @@
 use std::ops::Deref;
 
 use fuel_core_types::{
-    blockchain::header::{
-        ApplicationHeader,
-        ConsensusHeader,
-        PartialBlockHeader,
+    blockchain::{
+        header::{
+            ApplicationHeader,
+            ConsensusHeader,
+            PartialBlockHeader,
+        },
+        primitives::BlockId,
     },
     entities::message::MerkleProof,
     fuel_tx::{
@@ -59,7 +62,8 @@ fn receipt(i: Option<u8>) -> Receipt {
 mockall::mock! {
     pub ProofDataStorage {}
     impl SimpleBlockData for ProofDataStorage {
-        fn block(&self, block_id: &BlockId) -> StorageResult<CompressedBlock>;
+        fn block(&self, height: &BlockHeight) -> StorageResult<CompressedBlock>;
+        fn block_by_id(&self, id: &BlockId) -> StorageResult<CompressedBlock>;
     }
 
     impl DatabaseMessageProof for ProofDataStorage {
@@ -182,16 +186,25 @@ async fn can_build_message_proof() {
             })
         });
 
-    data.expect_block().times(2).returning({
+    data.expect_block().times(1).returning({
         let commit_block = commit_block.clone();
+        move |block_height| {
+            let block = if commit_block.header().height() == block_height {
+                commit_block.clone()
+            } else {
+                panic!("Shouldn't request any other block")
+            };
+            Ok(block)
+        }
+    });
+
+    data.expect_block_by_id().times(1).returning({
         let message_block = message_block.clone();
         move |block_id| {
-            let block = if &commit_block.id() == block_id {
-                commit_block.clone()
-            } else if &message_block.id() == block_id {
+            let block = if &message_block.id() == block_id {
                 message_block.clone()
             } else {
-                panic!("Should request any other block")
+                panic!("Shouldn't request any other block")
             };
             Ok(block)
         }
@@ -203,7 +216,7 @@ async fn can_build_message_proof() {
         data.deref(),
         transaction_id,
         nonce.to_owned(),
-        commit_block.id(),
+        *commit_block.header().height(),
     )
     .unwrap()
     .unwrap();

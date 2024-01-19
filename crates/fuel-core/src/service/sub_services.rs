@@ -51,6 +51,7 @@ pub fn init_sub_services(
     let last_block = database.get_current_block()?.ok_or(anyhow::anyhow!(
         "The blockchain is not initialized with any block"
     ))?;
+    let last_height = *last_block.header().height();
     #[cfg(feature = "relayer")]
     let relayer_service = if let Some(config) = &config.relayer {
         Some(fuel_core_relayer::new_service(
@@ -140,6 +141,7 @@ pub fn init_sub_services(
         database.clone(),
         importer_adapter.clone(),
         p2p_adapter.clone(),
+        last_height,
     );
     let tx_pool_adapter = TxPoolAdapter::new(txpool.shared.clone());
 

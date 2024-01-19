@@ -45,7 +45,7 @@ use std::{
 async fn block() {
     // setup test data in the node
     let block = CompressedBlock::default();
-    let id = block.id();
+    let height = block.header().height();
     let mut db = Database::default();
     // setup server & client
     let srv = FuelService::from_database(db.clone(), Config::local_node())
@@ -53,13 +53,13 @@ async fn block() {
         .unwrap();
     let client = FuelClient::from(srv.bound_address);
 
-    db.storage::<FuelBlocks>().insert(&id, &block).unwrap();
+    db.storage::<FuelBlocks>().insert(height, &block).unwrap();
     db.storage::<SealedBlockConsensus>()
-        .insert(&id, &Consensus::PoA(Default::default()))
+        .insert(height, &Consensus::PoA(Default::default()))
         .unwrap();
 
     // run test
-    let block = client.block(&id.into()).await.unwrap();
+    let block = client.block_by_height(**height).await.unwrap();
     assert!(block.is_some());
 }
 

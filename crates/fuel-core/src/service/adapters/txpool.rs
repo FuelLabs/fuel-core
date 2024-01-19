@@ -27,7 +27,6 @@ use fuel_core_types::{
         UtxoId,
     },
     fuel_types::{
-        BlockHeight,
         ContractId,
         Nonce,
     },
@@ -138,9 +137,5 @@ impl fuel_core_txpool::ports::TxPoolDb for Database {
 
     fn is_message_spent(&self, id: &Nonce) -> StorageResult<bool> {
         self.storage::<SpentMessages>().contains_key(id)
-    }
-
-    fn current_block_height(&self) -> StorageResult<BlockHeight> {
-        self.latest_height()
     }
 }

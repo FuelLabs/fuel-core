@@ -79,10 +79,13 @@ impl<Storage: ?Sized> StorageTransaction<Storage> {
 
 /// Provides a view of the storage at the given height.
 /// It guarantees to be atomic, meaning the view is immutable to outside modifications.
-pub trait AtomicView<View>: Send + Sync {
+pub trait AtomicView: Send + Sync {
+    /// The type of the storage view.
+    type View;
+
     /// Returns the view of the storage at the given `height`.
-    fn view_at(&self, height: BlockHeight) -> StorageResult<View>;
+    fn view_at(&self, height: BlockHeight) -> StorageResult<Self::View>;
 
     /// Returns the view of the storage for the latest block height.
-    fn latest_view(&self) -> View;
+    fn latest_view(&self) -> Self::View;
 }

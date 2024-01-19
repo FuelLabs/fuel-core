@@ -1,16 +1,14 @@
 use crate::{
     database::Database,
-    fuel_core_graphql_api::{
-        database::OnChainView,
-        ports::{
-            DatabaseBlocks,
-            DatabaseChain,
-            DatabaseContracts,
-            DatabaseMessages,
-            OnChainDatabase,
-        },
+    fuel_core_graphql_api::ports::{
+        DatabaseBlocks,
+        DatabaseChain,
+        DatabaseContracts,
+        DatabaseMessages,
+        OnChainDatabase,
     },
 };
+use fuel_core_importer::ports::ImporterDatabase;
 use fuel_core_storage::{
     iter::{
         BoxedIter,
@@ -18,15 +16,18 @@ use fuel_core_storage::{
         IterDirection,
     },
     not_found,
-    transactional::AtomicView,
+    tables::FuelBlocks,
     Error as StorageError,
     Result as StorageResult,
 };
 use fuel_core_txpool::types::ContractId;
 use fuel_core_types::{
-    blockchain::primitives::{
-        BlockId,
-        DaBlockHeight,
+    blockchain::{
+        block::CompressedBlock,
+        primitives::{
+            BlockId,
+            DaBlockHeight,
+        },
     },
     entities::message::Message,
     fuel_tx::AssetId,
@@ -36,28 +37,27 @@ use fuel_core_types::{
     },
     services::graphql_api::ContractBalance,
 };
-use std::sync::Arc;
 
 impl DatabaseBlocks for Database {
-    fn block_id(&self, height: &BlockHeight) -> StorageResult<BlockId> {
-        self.get_block_id(height)
-            .and_then(|height| height.ok_or(not_found!("BlockId")))
+    fn block_height(&self, id: &BlockId) -> StorageResult<BlockHeight> {
+        self.get_block_height(id)
+            .and_then(|height| height.ok_or(not_found!("BlockHeight")))
     }
 
-    fn blocks_ids(
+    fn blocks(
         &self,
-        start: Option<BlockHeight>,
+        height: Option<BlockHeight>,
         direction: IterDirection,
-    ) -> BoxedIter<'_, StorageResult<(BlockHeight, BlockId)>> {
-        self.all_block_ids(start, direction)
-            .map(|result| result.map_err(StorageError::from))
+    ) -> BoxedIter<'_, StorageResult<CompressedBlock>> {
+        self.iter_all_by_start::<FuelBlocks>(height.as_ref(), Some(direction))
+            .map(|result| result.map(|(_, block)| block))
             .into_boxed()
     }
 
-    fn ids_of_latest_block(&self) -> StorageResult<(BlockHeight, BlockId)> {
-        self.ids_of_latest_block()
+    fn latest_height(&self) -> StorageResult<BlockHeight> {
+        self.latest_block_height()
             .transpose()
-            .ok_or(not_found!("BlockId"))?
+            .ok_or(not_found!("BlockHeight"))?
     }
 }
 
@@ -125,16 +125,3 @@ impl DatabaseChain for Database {
 }
 
 impl OnChainDatabase for Database {}
-
-impl AtomicView<OnChainView> for Database {
-    fn view_at(&self, _: BlockHeight) -> StorageResult<OnChainView> {
-        unimplemented!(
-            "Unimplemented until of the https://github.com/FuelLabs/fuel-core/issues/451"
-        )
-    }
-
-    fn latest_view(&self) -> OnChainView {
-        // TODO: https://github.com/FuelLabs/fuel-core/issues/1581
-        Arc::new(self.clone())
-    }
-}

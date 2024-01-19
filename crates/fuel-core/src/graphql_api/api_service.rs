@@ -1,13 +1,11 @@
 use crate::{
     fuel_core_graphql_api::{
-        database::{
-            OffChainView,
-            OnChainView,
-        },
         metrics_extension::MetricsExtension,
         ports::{
             BlockProducerPort,
             ConsensusModulePort,
+            OffChainDatabase,
+            OnChainDatabase,
             P2pPort,
             TxPoolPort,
         },
@@ -178,8 +176,10 @@ pub fn new_service<OnChain, OffChain>(
     request_timeout: Duration,
 ) -> anyhow::Result<Service>
 where
-    OnChain: AtomicView<OnChainView> + 'static,
-    OffChain: AtomicView<OffChainView> + 'static,
+    OnChain: AtomicView + 'static,
+    OffChain: AtomicView + 'static,
+    OnChain::View: OnChainDatabase,
+    OffChain::View: OffChainDatabase,
 {
     let network_addr = config.addr;
     let combined_read_database = ReadDatabase::new(on_database, off_database);

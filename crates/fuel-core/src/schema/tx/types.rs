@@ -7,6 +7,7 @@ use crate::{
     fuel_core_graphql_api::{
         api_service::TxPool,
         database::ReadView,
+        ports::DatabaseBlocks,
         Config,
         IntoApiResult,
     },
@@ -159,7 +160,8 @@ impl SuccessStatus {
 
     async fn block(&self, ctx: &Context<'_>) -> async_graphql::Result<Block> {
         let query: &ReadView = ctx.data_unchecked();
-        let block = query.block(&self.block_id)?;
+        let height = query.block_height(&self.block_id)?;
+        let block = query.block(&height)?;
         Ok(block.into())
     }
 
@@ -200,7 +202,8 @@ impl FailureStatus {
 
     async fn block(&self, ctx: &Context<'_>) -> async_graphql::Result<Block> {
         let query: &ReadView = ctx.data_unchecked();
-        let block = query.block(&self.block_id)?;
+        let height = query.block_height(&self.block_id)?;
+        let block = query.block(&height)?;
         Ok(block.into())
     }
 
