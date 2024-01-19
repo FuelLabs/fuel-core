@@ -8,14 +8,12 @@ use fuel_core_storage::{
         ContractsState,
         Messages,
         ProcessedTransactions,
-        Receipts,
         SpentMessages,
     },
     transactional::Transactional,
     vm_storage::VmStorageRequirements,
     Error as StorageError,
     MerkleRootStorage,
-    StorageInspect,
     StorageMutate,
     StorageRead,
 };
@@ -25,18 +23,14 @@ use fuel_core_types::{
     entities::message::Message,
     fuel_tx,
     fuel_tx::{
-        Address,
-        Bytes32,
         TxId,
         UniqueIdentifier,
     },
     fuel_types::{
-        BlockHeight,
         ChainId,
         Nonce,
     },
     fuel_vm::checked_transaction::CheckedTransaction,
-    services::txpool::TransactionStatus,
 };
 
 use fuel_core_types::fuel_tx::ContractId;
@@ -79,50 +73,20 @@ pub trait RelayerPort {
     ) -> anyhow::Result<Option<Message>>;
 }
 
-pub trait MessageIsSpent:
-    StorageInspect<SpentMessages, Error = StorageError>
-    + StorageInspect<Messages, Error = StorageError>
-{
-    type Error;
-
-    fn message_is_spent(&self, nonce: &Nonce) -> Result<bool, StorageError>;
-}
-
-pub trait TxIdOwnerRecorder {
-    type Error;
-
-    fn record_tx_id_owner(
-        &mut self,
-        owner: &Address,
-        block_height: BlockHeight,
-        tx_idx: u16,
-        tx_id: &Bytes32,
-    ) -> Result<Option<Bytes32>, Self::Error>;
-
-    fn update_tx_status(
-        &mut self,
-        id: &Bytes32,
-        status: TransactionStatus,
-    ) -> Result<Option<TransactionStatus>, Self::Error>;
-}
-
 // TODO: Remove `Clone` bound
 pub trait ExecutorDatabaseTrait<D>:
-    StorageMutate<Receipts, Error = StorageError>
+    StorageMutate<Messages, Error = StorageError>
     + StorageMutate<ProcessedTransactions, Error = StorageError>
     + MerkleRootStorage<ContractId, ContractsAssets, Error = StorageError>
-    + MessageIsSpent<Error = StorageError>
     + StorageMutate<Coins, Error = StorageError>
     + StorageMutate<SpentMessages, Error = StorageError>
     + StorageMutate<ContractsLatestUtxo, Error = StorageError>
-    + StorageMutate<Messages, Error = StorageError>
     + StorageMutate<ContractsRawCode, Error = StorageError>
-    + StorageRead<ContractsRawCode, Error = StorageError>
+    + StorageRead<ContractsRawCode>
     + StorageMutate<ContractsInfo, Error = StorageError>
     + MerkleRootStorage<ContractId, ContractsState, Error = StorageError>
     + VmStorageRequirements<Error = StorageError>
     + Transactional<Storage = D>
-    + TxIdOwnerRecorder<Error = StorageError>
     + Clone
 {
 }

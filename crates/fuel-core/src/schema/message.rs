@@ -1,5 +1,3 @@
-use std::ops::Deref;
-
 use super::{
     block::Header,
     scalars::{
@@ -12,7 +10,10 @@ use super::{
     },
 };
 use crate::{
-    fuel_core_graphql_api::service::Database,
+    fuel_core_graphql_api::{
+        database::ReadView,
+        ports::DatabaseBlocks,
+    },
     query::MessageQueryData,
     schema::scalars::{
         BlockId,
@@ -75,7 +76,7 @@ impl MessageQuery {
         before: Option<String>,
     ) -> async_graphql::Result<Connection<HexString, Message, EmptyFields, EmptyFields>>
     {
-        let query: &Database = ctx.data_unchecked();
+        let query: &ReadView = ctx.data_unchecked();
         crate::schema::query_pagination(
             after,
             before,
@@ -114,10 +115,10 @@ impl MessageQuery {
         commit_block_id: Option<BlockId>,
         commit_block_height: Option<U32>,
     ) -> async_graphql::Result<Option<MessageProof>> {
-        let data: &Database = ctx.data_unchecked();
+        let query: &ReadView = ctx.data_unchecked();
         let height = match (commit_block_id, commit_block_height) {
             (Some(commit_block_id), None) => {
-                data.block_height(&commit_block_id.0.into())?
+                query.block_height(&commit_block_id.0.into())?
             },
             (None, Some(commit_block_height)) => {
                 commit_block_height.0.into()
@@ -128,7 +129,7 @@ impl MessageQuery {
         };
 
         Ok(crate::query::message_proof(
-            data.deref(),
+            query,
             transaction_id.into(),
             nonce.into(),
             height,
@@ -141,8 +142,8 @@ impl MessageQuery {
         ctx: &Context<'_>,
         nonce: Nonce,
     ) -> async_graphql::Result<MessageStatus> {
-        let data: &Database = ctx.data_unchecked();
-        let status = crate::query::message_status(data.deref(), nonce.into())?;
+        let query: &ReadView = ctx.data_unchecked();
+        let status = crate::query::message_status(query, nonce.into())?;
         Ok(status.into())
     }
 }

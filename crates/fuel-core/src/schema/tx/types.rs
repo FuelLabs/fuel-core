@@ -5,10 +5,8 @@ use super::{
 };
 use crate::{
     fuel_core_graphql_api::{
-        service::{
-            Database,
-            TxPool,
-        },
+        api_service::TxPool,
+        database::ReadView,
         Config,
         IntoApiResult,
     },
@@ -160,7 +158,7 @@ impl SuccessStatus {
     }
 
     async fn block(&self, ctx: &Context<'_>) -> async_graphql::Result<Block> {
-        let query: &Database = ctx.data_unchecked();
+        let query: &ReadView = ctx.data_unchecked();
         let height = query.block_height(&self.block_id)?;
         let block = query.block(&height)?;
         Ok(block.into())
@@ -175,8 +173,8 @@ impl SuccessStatus {
     }
 
     async fn receipts(&self, ctx: &Context<'_>) -> async_graphql::Result<Vec<Receipt>> {
-        let db = ctx.data_unchecked::<Database>();
-        let receipts = db
+        let query: &ReadView = ctx.data_unchecked();
+        let receipts = query
             .receipts(&self.tx_id)
             .unwrap_or_default()
             .into_iter()
@@ -202,7 +200,7 @@ impl FailureStatus {
     }
 
     async fn block(&self, ctx: &Context<'_>) -> async_graphql::Result<Block> {
-        let query: &Database = ctx.data_unchecked();
+        let query: &ReadView = ctx.data_unchecked();
         let height = query.block_height(&self.block_id)?;
         let block = query.block(&height)?;
         Ok(block.into())
@@ -221,8 +219,8 @@ impl FailureStatus {
     }
 
     async fn receipts(&self, ctx: &Context<'_>) -> async_graphql::Result<Vec<Receipt>> {
-        let db = ctx.data_unchecked::<Database>();
-        let receipts = db
+        let query: &ReadView = ctx.data_unchecked();
+        let receipts = query
             .receipts(&self.tx_id)
             .unwrap_or_default()
             .into_iter()
@@ -528,7 +526,7 @@ impl Transaction {
         ctx: &Context<'_>,
     ) -> async_graphql::Result<Option<TransactionStatus>> {
         let id = self.1;
-        let query: &Database = ctx.data_unchecked();
+        let query: &ReadView = ctx.data_unchecked();
         let txpool = ctx.data_unchecked::<TxPool>();
         get_tx_status(id, query, txpool).map_err(Into::into)
     }
@@ -537,7 +535,7 @@ impl Transaction {
         &self,
         ctx: &Context<'_>,
     ) -> async_graphql::Result<Option<Vec<Receipt>>> {
-        let query: &Database = ctx.data_unchecked();
+        let query: &ReadView = ctx.data_unchecked();
         let receipts = query
             .receipts(&self.1)
             .into_api_result::<Vec<_>, async_graphql::Error>()?;
@@ -624,7 +622,7 @@ impl Transaction {
 #[tracing::instrument(level = "debug", skip(query, txpool), ret, err)]
 pub(crate) fn get_tx_status(
     id: fuel_core_types::fuel_types::Bytes32,
-    query: &Database,
+    query: &ReadView,
     txpool: &TxPool,
 ) -> Result<Option<TransactionStatus>, StorageError> {
     match query

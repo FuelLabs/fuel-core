@@ -3,7 +3,8 @@ use crate::{
         ports::{
             DatabaseMessageProof,
             DatabaseMessages,
-            DatabasePort,
+            OffChainDatabase,
+            OnChainDatabase,
         },
         IntoApiResult,
     },
@@ -78,7 +79,7 @@ pub trait MessageQueryData: Send + Sync {
     ) -> BoxedIter<StorageResult<Message>>;
 }
 
-impl<D: DatabasePort + ?Sized> MessageQueryData for D {
+impl<D: OnChainDatabase + OffChainDatabase + ?Sized> MessageQueryData for D {
     fn message(&self, id: &Nonce) -> StorageResult<Message> {
         self.storage::<Messages>()
             .get(id)?
@@ -126,7 +127,10 @@ pub trait MessageProofData:
     ) -> StorageResult<TransactionStatus>;
 }
 
-impl<D: DatabasePort + ?Sized> MessageProofData for D {
+impl<D> MessageProofData for D
+where
+    D: OnChainDatabase + OffChainDatabase + ?Sized,
+{
     fn transaction_status(
         &self,
         transaction_id: &TxId,

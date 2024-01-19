@@ -1,0 +1,234 @@
+use crate::fuel_core_graphql_api::ports::{
+    DatabaseBlocks,
+    DatabaseChain,
+    DatabaseContracts,
+    DatabaseMessageProof,
+    DatabaseMessages,
+    OffChainDatabase,
+    OnChainDatabase,
+};
+use fuel_core_storage::{
+    iter::{
+        BoxedIter,
+        IterDirection,
+    },
+    tables::Receipts,
+    transactional::AtomicView,
+    Error as StorageError,
+    Mappable,
+    Result as StorageResult,
+    StorageInspect,
+};
+use fuel_core_txpool::types::{
+    ContractId,
+    TxId,
+};
+use fuel_core_types::{
+    blockchain::primitives::{
+        BlockId,
+        DaBlockHeight,
+    },
+    entities::message::{
+        MerkleProof,
+        Message,
+    },
+    fuel_tx::{
+        Address,
+        AssetId,
+        TxPointer,
+        UtxoId,
+    },
+    fuel_types::{
+        BlockHeight,
+        Nonce,
+    },
+    services::{
+        graphql_api::ContractBalance,
+        txpool::TransactionStatus,
+    },
+};
+use std::{
+    borrow::Cow,
+    sync::Arc,
+};
+
+/// The on-chain view of the database used by the [`ReadView`] to fetch on-chain data.
+pub type OnChainView = Arc<dyn OnChainDatabase>;
+/// The off-chain view of the database used by the [`ReadView`] to fetch off-chain data.
+pub type OffChainView = Arc<dyn OffChainDatabase>;
+
+/// The container of the on-chain and off-chain database view provides.
+/// It is used only by `ViewExtension` to create a [`ReadView`].
+pub struct ReadDatabase {
+    /// The on-chain database view provider.
+    on_chain: Box<dyn AtomicView<OnChainView>>,
+    /// The off-chain database view provider.
+    off_chain: Box<dyn AtomicView<OffChainView>>,
+}
+
+impl ReadDatabase {
+    /// Creates a new [`ReadDatabase`] with the given on-chain and off-chain database view providers.
+    pub fn new<OnChain, OffChain>(on_chain: OnChain, off_chain: OffChain) -> Self
+    where
+        OnChain: AtomicView<OnChainView> + 'static,
+        OffChain: AtomicView<OffChainView> + 'static,
+    {
+        Self {
+            on_chain: Box::new(on_chain),
+            off_chain: Box::new(off_chain),
+        }
+    }
+
+    /// Creates a consistent view of the database.
+    pub fn view(&self) -> ReadView {
+        // TODO: Use the same height for both views to guarantee consistency.
+        //  It is not possible to implement until `view_at` is implemented for the `AtomicView`.
+        //  https://github.com/FuelLabs/fuel-core/issues/1582
+        ReadView {
+            on_chain: self.on_chain.latest_view(),
+            off_chain: self.off_chain.latest_view(),
+        }
+    }
+}
+
+pub struct ReadView {
+    on_chain: OnChainView,
+    off_chain: OffChainView,
+}
+
+impl DatabaseBlocks for ReadView {
+    fn block_id(&self, height: &BlockHeight) -> StorageResult<BlockId> {
+        self.on_chain.block_id(height)
+    }
+
+    fn blocks_ids(
+        &self,
+        start: Option<BlockHeight>,
+        direction: IterDirection,
+    ) -> BoxedIter<'_, StorageResult<(BlockHeight, BlockId)>> {
+        self.on_chain.blocks_ids(start, direction)
+    }
+
+    fn ids_of_latest_block(&self) -> StorageResult<(BlockHeight, BlockId)> {
+        self.on_chain.ids_of_latest_block()
+    }
+}
+
+impl<M> StorageInspect<M> for ReadView
+where
+    M: Mappable,
+    dyn OnChainDatabase: StorageInspect<M, Error = StorageError>,
+{
+    type Error = StorageError;
+
+    fn get(&self, key: &M::Key) -> StorageResult<Option<Cow<M::OwnedValue>>> {
+        self.on_chain.get(key)
+    }
+
+    fn contains_key(&self, key: &M::Key) -> StorageResult<bool> {
+        self.on_chain.contains_key(key)
+    }
+}
+
+impl DatabaseMessages for ReadView {
+    fn all_messages(
+        &self,
+        start_message_id: Option<Nonce>,
+        direction: IterDirection,
+    ) -> BoxedIter<'_, StorageResult<Message>> {
+        self.on_chain.all_messages(start_message_id, direction)
+    }
+
+    fn message_is_spent(&self, nonce: &Nonce) -> StorageResult<bool> {
+        self.on_chain.message_is_spent(nonce)
+    }
+
+    fn message_exists(&self, nonce: &Nonce) -> StorageResult<bool> {
+        self.on_chain.message_exists(nonce)
+    }
+}
+
+impl DatabaseContracts for ReadView {
+    fn contract_balances(
+        &self,
+        contract: ContractId,
+        start_asset: Option<AssetId>,
+        direction: IterDirection,
+    ) -> BoxedIter<StorageResult<ContractBalance>> {
+        self.on_chain
+            .contract_balances(contract, start_asset, direction)
+    }
+}
+
+impl DatabaseChain for ReadView {
+    fn chain_name(&self) -> StorageResult<String> {
+        self.on_chain.chain_name()
+    }
+
+    fn da_height(&self) -> StorageResult<DaBlockHeight> {
+        self.on_chain.da_height()
+    }
+}
+
+impl DatabaseMessageProof for ReadView {
+    fn block_history_proof(
+        &self,
+        message_block_height: &BlockHeight,
+        commit_block_height: &BlockHeight,
+    ) -> StorageResult<MerkleProof> {
+        self.on_chain
+            .block_history_proof(message_block_height, commit_block_height)
+    }
+}
+
+impl OnChainDatabase for ReadView {}
+
+impl StorageInspect<Receipts> for ReadView {
+    type Error = StorageError;
+
+    fn get(
+        &self,
+        key: &<Receipts as Mappable>::Key,
+    ) -> StorageResult<Option<Cow<<Receipts as Mappable>::OwnedValue>>> {
+        self.off_chain.get(key)
+    }
+
+    fn contains_key(&self, key: &<Receipts as Mappable>::Key) -> StorageResult<bool> {
+        self.off_chain.contains_key(key)
+    }
+}
+
+impl OffChainDatabase for ReadView {
+    fn owned_message_ids(
+        &self,
+        owner: &Address,
+        start_message_id: Option<Nonce>,
+        direction: IterDirection,
+    ) -> BoxedIter<'_, StorageResult<Nonce>> {
+        self.off_chain
+            .owned_message_ids(owner, start_message_id, direction)
+    }
+
+    fn owned_coins_ids(
+        &self,
+        owner: &Address,
+        start_coin: Option<UtxoId>,
+        direction: IterDirection,
+    ) -> BoxedIter<'_, StorageResult<UtxoId>> {
+        self.off_chain.owned_coins_ids(owner, start_coin, direction)
+    }
+
+    fn tx_status(&self, tx_id: &TxId) -> StorageResult<TransactionStatus> {
+        self.off_chain.tx_status(tx_id)
+    }
+
+    fn owned_transactions_ids(
+        &self,
+        owner: Address,
+        start: Option<TxPointer>,
+        direction: IterDirection,
+    ) -> BoxedIter<StorageResult<(TxPointer, TxId)>> {
+        self.off_chain
+            .owned_transactions_ids(owner, start, direction)
+    }
+}

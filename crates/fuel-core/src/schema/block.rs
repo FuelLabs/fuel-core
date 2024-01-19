@@ -4,13 +4,11 @@ use super::scalars::{
 };
 use crate::{
     fuel_core_graphql_api::{
-        service::{
-            ConsensusModule,
-            Database,
-        },
+        api_service::ConsensusModule,
+        database::ReadView,
         Config as GraphQLConfig,
+        IntoApiResult,
     },
-    graphql_api::IntoApiResult,
     query::{
         BlockQueryData,
         SimpleBlockData,
@@ -96,7 +94,7 @@ impl Block {
     }
 
     async fn consensus(&self, ctx: &Context<'_>) -> async_graphql::Result<Consensus> {
-        let query: &Database = ctx.data_unchecked();
+        let query: &ReadView = ctx.data_unchecked();
         let height = self.0.header().height();
         let consensus = query.consensus(height)?;
 
@@ -107,7 +105,7 @@ impl Block {
         &self,
         ctx: &Context<'_>,
     ) -> async_graphql::Result<Vec<Transaction>> {
-        let query: &Database = ctx.data_unchecked();
+        let query: &ReadView = ctx.data_unchecked();
         self.0
             .transactions()
             .iter()
@@ -192,14 +190,14 @@ impl BlockQuery {
         #[graphql(desc = "ID of the block")] id: Option<BlockId>,
         #[graphql(desc = "Height of the block")] height: Option<U32>,
     ) -> async_graphql::Result<Option<Block>> {
-        let data: &Database = ctx.data_unchecked();
+        let query: &ReadView = ctx.data_unchecked();
         let height = match (id, height) {
             (Some(_), Some(_)) => {
                 return Err(async_graphql::Error::new(
                     "Can't provide both an id and a height",
                 ))
             }
-            (Some(id), None) => data.block_height(&id.0.into()),
+            (Some(id), None) => query.block_height(&id.0.into()),
             (None, Some(height)) => {
                 let height: u32 = height.into();
                 Ok(height.into())
@@ -210,7 +208,7 @@ impl BlockQuery {
         };
 
         height
-            .and_then(|height| data.block(&height))
+            .and_then(|height| query.block(&height))
             .into_api_result()
     }
 
@@ -222,9 +220,9 @@ impl BlockQuery {
         last: Option<i32>,
         before: Option<String>,
     ) -> async_graphql::Result<Connection<U32, Block, EmptyFields, EmptyFields>> {
-        let db: &Database = ctx.data_unchecked();
+        let query: &ReadView = ctx.data_unchecked();
         crate::schema::query_pagination(after, before, first, last, |start, direction| {
-            Ok(blocks_query(db, start.map(Into::into), direction))
+            Ok(blocks_query(query, start.map(Into::into), direction))
         })
         .await
     }
@@ -255,16 +253,16 @@ impl HeaderQuery {
         last: Option<i32>,
         before: Option<String>,
     ) -> async_graphql::Result<Connection<U32, Header, EmptyFields, EmptyFields>> {
-        let db: &Database = ctx.data_unchecked();
+        let query: &ReadView = ctx.data_unchecked();
         crate::schema::query_pagination(after, before, first, last, |start, direction| {
-            Ok(blocks_query(db, start.map(Into::into), direction))
+            Ok(blocks_query(query, start.map(Into::into), direction))
         })
         .await
     }
 }
 
 fn blocks_query<T>(
-    query: &Database,
+    query: &ReadView,
     start: Option<BlockHeight>,
     direction: IterDirection,
 ) -> BoxedIter<StorageResult<(U32, T)>>
@@ -294,7 +292,7 @@ impl BlockMutation {
         start_timestamp: Option<Tai64Timestamp>,
         blocks_to_produce: U32,
     ) -> async_graphql::Result<U32> {
-        let query: &Database = ctx.data_unchecked();
+        let query: &ReadView = ctx.data_unchecked();
         let consensus_module = ctx.data_unchecked::<ConsensusModule>();
         let config = ctx.data_unchecked::<GraphQLConfig>().clone();
 
