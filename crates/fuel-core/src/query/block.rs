@@ -59,14 +59,6 @@ pub trait BlockQueryData: Send + Sync + SimpleBlockData {
 }
 
 impl<D: OnChainDatabase + ?Sized> BlockQueryData for D {
-    fn block_id(&self, height: &BlockHeight) -> StorageResult<BlockId> {
-        self.block_id(height)
-    }
-
-    fn latest_block_id(&self) -> StorageResult<BlockId> {
-        self.ids_of_latest_block().map(|(_, id)| id)
-    }
-
     fn latest_block_height(&self) -> StorageResult<BlockHeight> {
         self.latest_height()
     }

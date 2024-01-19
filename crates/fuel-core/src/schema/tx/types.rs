@@ -7,6 +7,7 @@ use crate::{
     fuel_core_graphql_api::{
         api_service::TxPool,
         database::ReadView,
+        ports::DatabaseBlocks,
         Config,
         IntoApiResult,
     },

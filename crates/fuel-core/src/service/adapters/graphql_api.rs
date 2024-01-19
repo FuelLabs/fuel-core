@@ -17,7 +17,6 @@ use crate::{
     },
 };
 use async_trait::async_trait;
-use fuel_core_importer::ports::ImporterDatabase;
 use fuel_core_services::stream::BoxStream;
 use fuel_core_storage::Result as StorageResult;
 use fuel_core_txpool::{

@@ -6,6 +6,7 @@ use crate::{
     fuel_core_graphql_api::{
         api_service::ConsensusModule,
         database::ReadView,
+        ports::DatabaseBlocks,
         Config as GraphQLConfig,
         IntoApiResult,
     },
