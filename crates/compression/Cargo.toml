@@ -16,3 +16,5 @@ serde = { version = "1.0", features = ["derive"] }
 
 postcard = { version = "1.0", features = ["use-std"] }
 bincode = "1.3"
+
+paste = "1.0"

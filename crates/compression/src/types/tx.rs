@@ -19,7 +19,10 @@ use serde::{
     Serialize,
 };
 
-use crate::registry::Key;
+use crate::registry::{
+    tables,
+    Key,
+};
 
 use super::MaybeCompressed;
 
@@ -34,12 +37,12 @@ pub(crate) enum Transaction {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub(crate) struct Script {
     script_gas_limit: Word,
-    script: MaybeCompressed<Vec<u8>>,
+    script: MaybeCompressed<tables::ScriptCode>,
     script_data: Vec<u8>,
     policies: fuel_tx::policies::Policies,
     inputs: Vec<Input>,
     outputs: Vec<Output>,
-    witnesses: Vec<Key>,
+    witnesses: Vec<Key<tables::Witness>>,
     receipts_root: Bytes32,
 }
 
@@ -47,18 +50,18 @@ pub(crate) struct Script {
 pub(crate) enum Input {
     CoinSigned {
         utxo_id: TxPointer,
-        owner: Key,
+        owner: Key<tables::Address>,
         amount: Word,
-        asset_id: Key,
+        asset_id: Key<tables::AssetId>,
         tx_pointer: TxPointer,
         witness_index: u8,
         maturity: BlockHeight,
     },
     CoinPredicate {
         utxo_id: TxPointer,
-        owner: Key,
+        owner: Key<tables::Address>,
         amount: Word,
-        asset_id: Key,
+        asset_id: Key<tables::AssetId>,
         tx_pointer: TxPointer,
         maturity: BlockHeight,
         predicate_gas_used: Word,
@@ -70,19 +73,19 @@ pub(crate) enum Input {
         balance_root: Bytes32,
         state_root: Bytes32,
         tx_pointer: TxPointer,
-        contract_id: Key,
+        asset_id: Key<tables::AssetId>,
     },
     MessageCoinSigned {
-        sender: Key,
-        recipient: Key,
+        sender: Key<tables::Address>,
+        recipient: Key<tables::Address>,
         amount: Word,
         nonce: fuel_types::Nonce,
         witness_index: u8,
         data: Vec<u8>,
     },
     MessageCoinPredicate {
-        sender: Key,
-        recipient: Key,
+        sender: Key<tables::Address>,
+        recipient: Key<tables::Address>,
         amount: Word,
         nonce: fuel_types::Nonce,
         predicate_gas_used: Word,
@@ -90,16 +93,16 @@ pub(crate) enum Input {
         predicate_data: Vec<u8>,
     },
     MessageDataSigned {
-        sender: Key,
-        recipient: Key,
+        sender: Key<tables::Address>,
+        recipient: Key<tables::Address>,
         amount: Word,
         nonce: fuel_types::Nonce,
         witness_index: u8,
         data: Vec<u8>,
     },
     MessageDataPredicate {
-        sender: Key,
-        recipient: Key,
+        sender: Key<tables::Address>,
+        recipient: Key<tables::Address>,
         amount: Word,
         nonce: fuel_types::Nonce,
         data: Vec<u8>,
@@ -112,9 +115,9 @@ pub(crate) enum Input {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub(crate) enum Output {
     Coin {
-        to: Key,
+        to: Key<tables::Address>,
         amount: Word,
-        asset_id: Key,
+        asset_id: Key<tables::AssetId>,
     },
 
     Contract {
@@ -124,19 +127,19 @@ pub(crate) enum Output {
     },
 
     Change {
-        to: Key,
+        to: Key<tables::Address>,
         amount: Word,
-        asset_id: Key,
+        asset_id: Key<tables::AssetId>,
     },
 
     Variable {
-        to: Key,
+        to: Key<tables::Address>,
         amount: Word,
-        asset_id: Key,
+        asset_id: Key<tables::AssetId>,
     },
 
     ContractCreated {
-        contract_id: Key,
+        contract_id: TxPointer,
         state_root: Bytes32,
     },
 }
@@ -159,7 +162,7 @@ pub struct Mint {
     input_contract: InputContract,
     output_contract: OutputContract,
     mint_amount: Word,
-    mint_asset_id: Key,
+    mint_asset_id: Key<tables::AssetId>,
 }
 
 #[derive(Default, Debug, Clone, Serialize, Deserialize)]
@@ -168,7 +171,7 @@ pub struct InputContract {
     balance_root: Bytes32,
     state_root: Bytes32,
     tx_pointer: TxPointer,
-    contract_id: Key,
+    contract_id: TxPointer,
 }
 
 #[derive(Default, Debug, Clone, Serialize, Deserialize)]

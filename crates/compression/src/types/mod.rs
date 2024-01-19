@@ -3,7 +3,10 @@ use serde::{
     Serialize,
 };
 
-use crate::registry::Key;
+use crate::registry::{
+    Key,
+    Table,
+};
 
 pub(crate) mod header;
 pub(crate) mod tx;
@@ -12,7 +15,7 @@ pub(crate) mod tx;
 /// references to the registry instead of raw values,
 /// this enum can be used.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub enum MaybeCompressed<T> {
-    Compressed(Key),
+pub enum MaybeCompressed<T: Table> {
+    Compressed(Key<T>),
     Uncompressed(T),
 }

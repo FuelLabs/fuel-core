@@ -7,39 +7,26 @@ use serde::{
     Serialize,
 };
 
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
-pub struct Key([u8; Self::SIZE]);
-impl Key {
-    pub const SIZE: usize = 3;
-}
-impl TryFrom<u32> for Key {
-    type Error = &'static str;
-    fn try_from(value: u32) -> Result<Self, Self::Error> {
-        let v = value.to_be_bytes();
-        if v[0] != 0 {
-            return Err("Key must be less than 2^24");
-        }
-
-        let mut bytes = [0u8; 3];
-        bytes.copy_from_slice(&v[1..]);
-        Ok(Self(bytes))
-    }
-}
+use super::{
+    key::Key,
+    ChangesPerTable,
+    Table,
+};
 
 /// New registrations written to a specific table.
 /// Default value is an empty write.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
-pub struct WriteTo<T> {
+pub struct WriteTo<T: Table> {
     /// The values are inserted starting from this key
-    pub start_key: Key,
+    pub start_key: Key<T>,
     /// Values. inserted using incrementing ids starting from `start_key`
-    pub values: Vec<T>,
+    pub values: Vec<T::Type>,
 }
 
 /// Custom serialization is used to omit the start_key when the sequence is empty
 impl<T> Serialize for WriteTo<T>
 where
-    T: Serialize,
+    T: Table + Serialize,
 {
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         let mut tup = serializer.serialize_tuple(2)?;
@@ -53,7 +40,7 @@ where
     }
 }
 
-impl<'de, T> Deserialize<'de> for WriteTo<T>
+impl<'de, T: Table> Deserialize<'de> for WriteTo<T>
 where
     T: Deserialize<'de>,
 {
@@ -71,7 +58,7 @@ where
     }
 }
 
-impl<'de, T: Deserialize<'de>> serde::de::Visitor<'de> for WriteTo<T> {
+impl<'de, T: Table + Deserialize<'de>> serde::de::Visitor<'de> for WriteTo<T> {
     type Value = WriteTo<T>;
 
     fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
@@ -82,7 +69,7 @@ impl<'de, T: Deserialize<'de>> serde::de::Visitor<'de> for WriteTo<T> {
     where
         A: serde::de::SeqAccess<'de>,
     {
-        let values: Vec<T> = seq.next_element()?.ok_or(
+        let values: Vec<T::Type> = seq.next_element()?.ok_or(
             serde::de::Error::invalid_length(0, &"WriteTo<_> with 2 elements"),
         )?;
 
@@ -96,40 +83,13 @@ impl<'de, T: Deserialize<'de>> serde::de::Visitor<'de> for WriteTo<T> {
                 values,
             })
         } else {
-            let start_key: Key = seq.next_element()?.ok_or(
+            let start_key: Key<T> = seq.next_element()?.ok_or(
                 serde::de::Error::invalid_length(1, &"WriteTo<_> with 2 elements"),
             )?;
             Ok(WriteTo { start_key, values })
         }
     }
 }
-
-macro_rules! tables {
-    // $index muse use increasing numbers starting from zero
-    ($($name:ident: $ty:ty = $index:literal),*$(,)?) => {
-        /// Specifies the table to use for a given key.
-        /// The data is separated to tables based on the data type being stored.
-        #[allow(non_camel_case_types)] // These are going to match field names exactly
-        #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-        #[non_exhaustive]
-        #[repr(u8)]
-        pub enum TableId {
-            $($name = $index),*
-        }
-
-        /// Registeration changes per table
-        #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
-        pub struct ChangesPerTable {
-            $(pub $name: WriteTo<$ty>),*
-        }
-    };
-}
-
-tables!(
-    asset_id: [u8; 32] = 0,
-    contract_id: [u8; 32] = 1,
-    script_code: Vec<u8> = 2,
-);
 
 /// Registeration section of the compressed block
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -146,11 +106,11 @@ mod tests {
     use bincode::Options;
     use fuel_core_types::{
         fuel_asm::op,
-        fuel_tx::{
-            AssetId,
-            ContractId,
+        fuel_tx::AssetId,
+        fuel_types::{
+            Address,
+            Bytes32,
         },
-        fuel_types::Bytes32,
     };
 
     #[test]
@@ -158,18 +118,15 @@ mod tests {
         let original = Registrations {
             tables_root: Bytes32::default(),
             changes: ChangesPerTable {
-                asset_id: WriteTo {
+                AssetId: WriteTo {
                     start_key: Key::try_from(100).unwrap(),
                     values: vec![*AssetId::from([0xa0; 32]), *AssetId::from([0xa1; 32])],
                 },
-                contract_id: WriteTo {
+                Address: WriteTo {
                     start_key: Key::default(),
-                    values: vec![
-                        *ContractId::from([0xc0; 32]),
-                        // *ContractId::from([0xc1; 32]),
-                    ],
+                    values: vec![*Address::from([0xc0; 32])],
                 },
-                script_code: WriteTo {
+                ScriptCode: WriteTo {
                     start_key: Key::default(),
                     values: vec![
                         vec![op::addi(0x20, 0x20, 1), op::ret(0)]
@@ -180,6 +137,7 @@ mod tests {
                             .collect(),
                     ],
                 },
+                Witness: WriteTo::default(),
             },
         };
 
