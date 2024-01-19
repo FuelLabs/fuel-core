@@ -22,7 +22,8 @@ use tai64::Tai64;
 
 /// A fuel block header that has all the fields generated because it
 /// has been executed.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, derivative::Derivative)]
+#[derivative(PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct BlockHeader {
     /// The application header.
@@ -32,6 +33,7 @@ pub struct BlockHeader {
     /// The header metadata calculated during creation.
     /// The field is private to enforce the use of the [`PartialBlockHeader::generate`] method.
     #[cfg_attr(feature = "serde", serde(skip))]
+    #[derivative(PartialEq = "ignore")]
     metadata: Option<BlockHeaderMetadata>,
 }
 
@@ -57,7 +59,7 @@ pub struct ApplicationHeader<Generated> {
     /// to have some rules in place to ensure the block number was chosen in a reasonable way. For
     /// example, they should verify that the block number satisfies the finality requirements of the
     /// layer 1 chain. They should also verify that the block number isn't too stale and is increasing.
-    /// Some similar concerns are noted in this issue: https://github.com/FuelLabs/fuel-specs/issues/220
+    /// Some similar concerns are noted in this issue: <https://github.com/FuelLabs/fuel-specs/issues/220>
     pub da_height: DaBlockHeight,
     /// Generated application fields.
     pub generated: Generated,

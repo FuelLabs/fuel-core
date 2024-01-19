@@ -1,8 +1,4 @@
-use crate::database::{
-    storage::DatabaseColumn,
-    Column,
-    Database,
-};
+use crate::database::Database;
 use fuel_core_storage::{
     not_found,
     tables::{
@@ -27,12 +23,6 @@ use fuel_core_types::{
     services::p2p::Transactions,
 };
 use std::ops::Range;
-
-impl DatabaseColumn for SealedBlockConsensus {
-    fn column() -> Column {
-        Column::FuelBlockConsensus
-    }
-}
 
 impl Database {
     pub fn get_sealed_block_by_id(

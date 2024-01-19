@@ -14,7 +14,7 @@ pub enum GossipTopicTag {
     NewTx,
 }
 
-/// Takes Arc<T> and wraps it in a matching GossipsubBroadcastRequest
+/// Takes `Arc<T>` and wraps it in a matching GossipsubBroadcastRequest
 /// The inner referenced value is serialized and broadcast to the network
 /// It is deserialized as `GossipsubMessage`
 #[derive(Debug, Clone)]

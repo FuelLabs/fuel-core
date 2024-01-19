@@ -21,8 +21,12 @@ pub use fuel_vm_private::{
     },
 };
 
+pub mod blueprint;
+pub mod codec;
+pub mod column;
 pub mod iter;
 pub mod kv_store;
+pub mod structured_storage;
 pub mod tables;
 #[cfg(feature = "test-helpers")]
 pub mod test_helpers;
@@ -33,6 +37,11 @@ pub use fuel_vm_private::storage::{
     ContractsAssetKey,
     ContractsStateKey,
 };
+#[doc(hidden)]
+pub use paste;
+#[cfg(feature = "test-helpers")]
+#[doc(hidden)]
+pub use rand;
 
 /// The storage result alias.
 pub type Result<T> = core::result::Result<T, Error>;
@@ -42,8 +51,8 @@ pub type Result<T> = core::result::Result<T, Error>;
 /// Error occurring during interaction with storage
 pub enum Error {
     /// Error occurred during serialization or deserialization of the entity.
-    #[display(fmt = "error performing serialization or deserialization")]
-    Codec,
+    #[display(fmt = "error performing serialization or deserialization `{_0}`")]
+    Codec(anyhow::Error),
     /// Error occurred during interaction with database.
     #[display(fmt = "error occurred in the underlying datastore `{_0:?}`")]
     DatabaseError(Box<dyn core::fmt::Debug + Send + Sync>),
@@ -105,6 +114,30 @@ impl<T> IsNotFound for Result<T> {
             _ => false,
         }
     }
+}
+
+/// The traits allow work with the storage in batches.
+/// Some implementations can perform batch operations faster than one by one.
+pub trait StorageBatchMutate<Type: Mappable>: StorageMutate<Type> {
+    /// Initialize the storage with batch insertion. This method is more performant than
+    /// [`Self::insert_batch`] in some cases.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the storage is already initialized.
+    fn init_storage(
+        &mut self,
+        set: &mut dyn Iterator<Item = (&Type::Key, &Type::Value)>,
+    ) -> Result<()>;
+
+    /// Inserts the key-value pair into the storage in batch.
+    fn insert_batch(
+        &mut self,
+        set: &mut dyn Iterator<Item = (&Type::Key, &Type::Value)>,
+    ) -> Result<()>;
+
+    /// Removes the key-value pairs from the storage in batch.
+    fn remove_batch(&mut self, set: &mut dyn Iterator<Item = &Type::Key>) -> Result<()>;
 }
 
 /// Creates `StorageError::NotFound` error with file and line information inside.

@@ -14,7 +14,7 @@ use futures::FutureExt;
 use tokio::sync::watch;
 use tracing::Instrument;
 
-/// Alias for Arc<T>
+/// Alias for `Arc<T>`
 pub type Shared<T> = std::sync::Arc<T>;
 
 /// A mutex that can safely be in async contexts and avoids deadlocks.

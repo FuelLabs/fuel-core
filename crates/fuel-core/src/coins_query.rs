@@ -89,7 +89,7 @@ impl SpendQuery {
         })
     }
 
-    /// Return [`Asset`]s.
+    /// Return `Asset`s.
     pub fn assets(&self) -> &Vec<AssetSpendTarget> {
         &self.query_per_asset
     }
