@@ -35,7 +35,7 @@ use fuel_core_types::{
     services::txpool::TransactionStatus,
 };
 
-/// Teh tables allows to iterate over all transactions owned by an address.
+/// These tables allow iteration over all transactions owned by an address.
 pub struct OwnedTransactions;
 
 impl Mappable for OwnedTransactions {

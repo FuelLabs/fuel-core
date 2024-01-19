@@ -292,11 +292,12 @@ where
         + StorageMutate<Metadata, Error = StorageError>
         + StorageMutate<Nodes, Error = StorageError>,
 {
-    fn init(
-        storage: &mut S,
-        column: S::Column,
-        set: &mut dyn Iterator<Item = (&M::Key, &M::Value)>,
-    ) -> StorageResult<()> {
+    fn init<'a, Iter>(storage: &mut S, column: S::Column, set: Iter) -> StorageResult<()>
+    where
+        Iter: 'a + Iterator<Item = (&'a M::Key, &'a M::Value)>,
+        M::Key: 'a,
+        M::Value: 'a,
+    {
         let mut set = set.peekable();
 
         let primary_key;
@@ -353,11 +354,16 @@ where
         Ok(())
     }
 
-    fn insert(
+    fn insert<'a, Iter>(
         storage: &mut S,
         column: S::Column,
-        set: &mut dyn Iterator<Item = (&M::Key, &M::Value)>,
-    ) -> StorageResult<()> {
+        set: Iter,
+    ) -> StorageResult<()>
+    where
+        Iter: 'a + Iterator<Item = (&'a M::Key, &'a M::Value)>,
+        M::Key: 'a,
+        M::Value: 'a,
+    {
         let mut set = set.peekable();
 
         let primary_key;
@@ -406,11 +412,15 @@ where
         Ok(())
     }
 
-    fn remove(
+    fn remove<'a, Iter>(
         storage: &mut S,
         column: S::Column,
-        set: &mut dyn Iterator<Item = &M::Key>,
-    ) -> StorageResult<()> {
+        set: Iter,
+    ) -> StorageResult<()>
+    where
+        Iter: 'a + Iterator<Item = &'a M::Key>,
+        M::Key: 'a,
+    {
         let mut set = set.peekable();
 
         let primary_key;

@@ -13,24 +13,24 @@ use std::borrow::Cow;
 /// The codec is used to serialized/deserialized types that supports `serde::Serialize` and `serde::Deserialize`.
 pub struct Postcard;
 
-impl<K> Encode<K> for Postcard
+impl<T> Encode<T> for Postcard
 where
-    K: ?Sized + serde::Serialize,
+    T: ?Sized + serde::Serialize,
 {
-    type Encoder<'a> = Cow<'a, [u8]> where K: 'a;
+    type Encoder<'a> = Cow<'a, [u8]> where T: 'a;
 
-    fn encode(value: &K) -> Self::Encoder<'_> {
+    fn encode(value: &T) -> Self::Encoder<'_> {
         Cow::Owned(postcard::to_allocvec(value).expect(
             "It should be impossible to fail unless serialization is not implemented, which is not true for our types.",
         ))
     }
 }
 
-impl<V> Decode<V> for Postcard
+impl<T> Decode<T> for Postcard
 where
-    V: serde::de::DeserializeOwned,
+    T: serde::de::DeserializeOwned,
 {
-    fn decode(bytes: &[u8]) -> anyhow::Result<V> {
+    fn decode(bytes: &[u8]) -> anyhow::Result<T> {
         Ok(postcard::from_bytes(bytes)?)
     }
 }
