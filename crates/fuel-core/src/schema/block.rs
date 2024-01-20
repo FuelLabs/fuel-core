@@ -111,7 +111,7 @@ impl Block {
         let query: &Database = ctx.data_unchecked();
         let height = self.0.header().height();
         let core_consensus = query
-            .consensus(&height)
+            .consensus(height)
             .map_err(BlockError::FuelCoreStorage)?;
 
         let my_consensus = core_consensus
