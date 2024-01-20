@@ -109,8 +109,10 @@ impl Block {
 
     async fn consensus(&self, ctx: &Context<'_>) -> Result<Consensus, BlockError> {
         let query: &Database = ctx.data_unchecked();
-        let id = self.0.header().id();
-        let core_consensus = query.consensus(&id).map_err(BlockError::FuelCoreStorage)?;
+        let height = self.0.header().height();
+        let core_consensus = query
+            .consensus(&height)
+            .map_err(BlockError::FuelCoreStorage)?;
 
         let my_consensus = core_consensus
             .try_into()
