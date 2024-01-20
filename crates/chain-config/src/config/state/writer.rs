@@ -1,7 +1,7 @@
-use std::path::{
-    Path,
-    PathBuf,
-};
+use std::path::PathBuf;
+
+#[cfg(feature = "parquet")]
+use std::path::Path;
 
 use crate::{
     config::{

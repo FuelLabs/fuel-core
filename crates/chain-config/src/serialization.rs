@@ -107,7 +107,8 @@ mod tests {
     #[test]
     fn encodes_hex_type_as_machine_readable() {
         // given
-        let expected_bytes = postcard::to_stdvec(&BYTES.as_slice()).unwrap();
+        let mut buf = [0u8; 33];
+        let expected_bytes = postcard::to_slice(&BYTES.as_slice(), &mut buf).unwrap();
         let mut serializer = postcard::Serializer {
             output: AllocVec::default(),
         };
@@ -121,13 +122,14 @@ mod tests {
 
         // then
         let bytes = serializer.output.finalize().unwrap();
-        assert_eq!(bytes, expected_bytes);
+        assert_eq!(bytes.as_slice(), expected_bytes);
     }
 
     #[test]
     fn decodes_hex_type_as_machine_readable() {
         // given
-        let expected_bytes = postcard::to_stdvec(&BYTES.as_slice()).unwrap();
+        let mut buf = [0u8; 33];
+        let expected_bytes = postcard::to_slice(&BYTES.as_slice(), &mut buf).unwrap();
         let mut serializer = postcard::Deserializer::from_bytes(&expected_bytes);
 
         // when
