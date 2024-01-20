@@ -24,6 +24,7 @@ use serde::{
     Serialize,
 };
 
+#[cfg(feature = "std")]
 use crate::SnapshotMetadata;
 
 use super::{

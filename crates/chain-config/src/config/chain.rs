@@ -27,8 +27,10 @@ use std::path::Path;
 use crate::{
     genesis::GenesisCommitment,
     ConsensusConfig,
-    SnapshotMetadata,
 };
+
+#[cfg(feature = "std")]
+use crate::SnapshotMetadata;
 
 pub const LOCAL_TESTNET: &str = "local_testnet";
 pub const CHAIN_CONFIG_FILENAME: &str = "chain_config.json";
@@ -73,6 +75,7 @@ impl ChainConfig {
         })
     }
 
+    #[cfg(feature = "std")]
     pub fn from_snapshot(snapshot_metadata: &SnapshotMetadata) -> anyhow::Result<Self> {
         Self::load(&snapshot_metadata.chain_config())
     }
