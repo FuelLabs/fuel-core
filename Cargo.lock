@@ -2772,9 +2772,9 @@ dependencies = [
  "anyhow",
  "fuel-core-chain-config",
  "fuel-core-poa",
+ "fuel-core-storage",
  "fuel-core-types",
  "test-case",
- "tokio",
 ]
 
 [[package]]

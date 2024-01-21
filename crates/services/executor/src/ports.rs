@@ -17,12 +17,12 @@ use fuel_core_storage::{
     StorageMutate,
     StorageRead,
 };
-
 use fuel_core_types::{
     blockchain::primitives::DaBlockHeight,
     entities::message::Message,
     fuel_tx,
     fuel_tx::{
+        ContractId,
         TxId,
         UniqueIdentifier,
     },
@@ -32,8 +32,6 @@ use fuel_core_types::{
     },
     fuel_vm::checked_transaction::CheckedTransaction,
 };
-
-use fuel_core_types::fuel_tx::ContractId;
 
 /// The wrapper around either `Transaction` or `CheckedTransaction`.
 pub enum MaybeCheckedTransaction {

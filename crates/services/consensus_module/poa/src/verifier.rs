@@ -66,12 +66,10 @@ pub fn verify_block_fields<D: Database>(
         "The application hash mismatch."
     );
 
-    // TODO: We can check the root of the transactions and the root of the messages here.
-    //  But we do the same in the executor right now during validation mode. I will not check
-    //  it for now. But after merge of the https://github.com/FuelLabs/fuel-core/pull/889 it
-    //  is should be easy to do with the `validate_transactions` method. And maybe we want
-    //  to remove this check from the executor and replace it with check that transaction
-    //  id is not modified during the execution.
+    ensure!(
+        header.validate_transactions(block.transactions()),
+        "The transactions don't match header."
+    );
 
     Ok(())
 }

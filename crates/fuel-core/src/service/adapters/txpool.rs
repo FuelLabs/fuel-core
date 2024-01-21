@@ -43,14 +43,7 @@ use std::sync::Arc;
 
 impl BlockImporter for BlockImporterAdapter {
     fn block_events(&self) -> BoxStream<SharedImportResult> {
-        use tokio_stream::{
-            wrappers::BroadcastStream,
-            StreamExt,
-        };
-        Box::pin(
-            BroadcastStream::new(self.block_importer.subscribe())
-                .filter_map(|result| result.ok()),
-        )
+        self.events()
     }
 }
 

@@ -7,30 +7,13 @@ use fuel_core_p2p::ports::{
 use fuel_core_services::stream::BoxStream;
 use fuel_core_storage::Result as StorageResult;
 use fuel_core_types::{
-    blockchain::{
-        SealedBlock,
-        SealedBlockHeader,
-    },
+    blockchain::SealedBlockHeader,
     fuel_types::BlockHeight,
     services::p2p::Transactions,
 };
 use std::ops::Range;
 
 impl P2pDb for Database {
-    fn get_sealed_block(
-        &self,
-        height: &BlockHeight,
-    ) -> StorageResult<Option<SealedBlock>> {
-        self.get_sealed_block_by_height(height)
-    }
-
-    fn get_sealed_header(
-        &self,
-        height: &BlockHeight,
-    ) -> StorageResult<Option<SealedBlockHeader>> {
-        self.get_sealed_block_header(height)
-    }
-
     fn get_sealed_headers(
         &self,
         block_height_range: Range<u32>,

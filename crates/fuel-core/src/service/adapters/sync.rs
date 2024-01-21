@@ -1,8 +1,9 @@
 use super::{
     BlockImporterAdapter,
+    ConsensusAdapter,
     P2PAdapter,
-    VerifierAdapter,
 };
+use fuel_core_poa::ports::RelayerPort;
 use fuel_core_services::stream::BoxStream;
 use fuel_core_sync::ports::{
     BlockImporterPort,
@@ -143,11 +144,16 @@ impl BlockImporterPort for BlockImporterAdapter {
 }
 
 #[async_trait::async_trait]
-impl ConsensusPort for VerifierAdapter {
+impl ConsensusPort for ConsensusAdapter {
     fn check_sealed_header(&self, header: &SealedBlockHeader) -> anyhow::Result<bool> {
         Ok(self.block_verifier.verify_consensus(header))
     }
     async fn await_da_height(&self, da_height: &DaBlockHeight) -> anyhow::Result<()> {
-        self.block_verifier.await_da_height(da_height).await
+        tokio::time::timeout(
+            self.config.max_wait_time,
+            self.maybe_relayer
+                .await_until_if_in_range(da_height, &self.config.max_da_lag),
+        )
+        .await?
     }
 }

@@ -221,6 +221,7 @@ impl BlockHeader {
         let transactions_root = generate_txns_root(transactions);
 
         transactions_root == self.application.transactions_root
+            && transactions.len() as u64 == self.application.transactions_count
     }
 }
 
