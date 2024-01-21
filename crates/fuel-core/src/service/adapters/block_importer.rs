@@ -1,3 +1,4 @@
+use super::TransactionsSource;
 use crate::{
     database::Database,
     service::adapters::{
@@ -45,8 +46,6 @@ use fuel_core_types::{
     },
 };
 use std::sync::Arc;
-
-use super::TransactionsSource;
 
 impl BlockImporterAdapter {
     pub fn new(
