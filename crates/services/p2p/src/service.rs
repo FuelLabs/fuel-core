@@ -938,10 +938,7 @@ pub mod tests {
         }
 
         fn get_all_peer_info(&self) -> Vec<(&PeerId, &PeerInfo)> {
-            self.peer_info
-                .iter()
-                .map(|(peer_id, peer_info)| (peer_id, peer_info))
-                .collect()
+            self.peer_info.iter().map(|tup| (&tup.0, &tup.1)).collect()
         }
 
         fn get_peer_id_with_height(&self, _height: &BlockHeight) -> Option<PeerId> {
