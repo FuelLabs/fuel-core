@@ -96,19 +96,19 @@ impl Block {
         self.0.header().clone().into()
     }
 
-    async fn consensus(&self, ctx: &Context<'_>) -> Result<Consensus, anyhow::Error> {
+    async fn consensus(&self, ctx: &Context<'_>) -> async_graphql::Result<Consensus> {
         let query: &Database = ctx.data_unchecked();
         let height = self.0.header().height();
         let core_consensus = query.consensus(height)?;
 
-        let my_consensus = core_consensus.try_into().map_err(|e| anyhow!("{}", e))?;
+        let my_consensus = core_consensus.try_into()?;
         Ok(my_consensus)
     }
 
     async fn transactions(
         &self,
         ctx: &Context<'_>,
-    ) -> Result<Vec<Transaction>, anyhow::Error> {
+    ) -> async_graphql::Result<Vec<Transaction>> {
         let query: &ReadView = ctx.data_unchecked();
         self.0
             .transactions()
