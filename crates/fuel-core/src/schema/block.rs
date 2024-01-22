@@ -34,7 +34,6 @@ use async_graphql::{
     },
     Context,
     Object,
-    Result,
     SimpleObject,
     Union,
 };
@@ -109,7 +108,7 @@ impl Block {
     async fn transactions(
         &self,
         ctx: &Context<'_>,
-    ) -> async_graphql::Result<Vec<Transaction>> {
+    ) -> Result<Vec<Transaction>, anyhow::Error> {
         let query: &ReadView = ctx.data_unchecked();
         self.0
             .transactions()
