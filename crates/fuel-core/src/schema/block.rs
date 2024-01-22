@@ -34,6 +34,7 @@ use async_graphql::{
     },
     Context,
     Object,
+    Result,
     SimpleObject,
     Union,
 };
@@ -53,7 +54,6 @@ use fuel_core_types::{
     fuel_types,
     fuel_types::BlockHeight,
 };
-use thiserror::Error as ThisError;
 
 pub struct Block(pub(crate) CompressedBlock);
 
@@ -86,16 +86,6 @@ pub struct PoAConsensus {
     signature: Signature,
 }
 
-#[derive(ThisError, Debug)]
-pub enum BlockError {
-    #[error("Error from `async_graphql`")]
-    AsyncGraphQl(async_graphql::Error),
-    #[error("Error from `fuel_core_storage`")]
-    FuelCoreStorage(fuel_core_storage::Error),
-    #[error("Found unsupported consensus variant: {0}")]
-    UnsupportedConsensusVariant(String),
-}
-
 #[Object]
 impl Block {
     async fn id(&self) -> BlockId {
@@ -107,16 +97,12 @@ impl Block {
         self.0.header().clone().into()
     }
 
-    async fn consensus(&self, ctx: &Context<'_>) -> Result<Consensus, BlockError> {
+    async fn consensus(&self, ctx: &Context<'_>) -> Result<Consensus, anyhow::Error> {
         let query: &Database = ctx.data_unchecked();
         let height = self.0.header().height();
-        let core_consensus = query
-            .consensus(height)
-            .map_err(BlockError::FuelCoreStorage)?;
+        let core_consensus = query.consensus(height)?;
 
-        let my_consensus = core_consensus
-            .try_into()
-            .map_err(BlockError::UnsupportedConsensusVariant)?;
+        let my_consensus = core_consensus.try_into().map_err(|e| anyhow!("{}", e))?;
         Ok(my_consensus)
     }
 
