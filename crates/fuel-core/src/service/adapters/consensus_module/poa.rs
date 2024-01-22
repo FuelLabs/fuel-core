@@ -1,5 +1,3 @@
-use std::ops::Deref;
-
 use crate::{
     database::Database,
     fuel_core_graphql_api::ports::ConsensusModulePort,
@@ -124,15 +122,17 @@ impl fuel_core_poa::ports::BlockProducer for BlockProducerAdapter {
     }
 }
 
+#[async_trait::async_trait]
 impl BlockImporter for BlockImporterAdapter {
     type Database = Database;
 
-    fn commit_result(
+    async fn commit_result(
         &self,
         result: UncommittedImporterResult<StorageTransaction<Self::Database>>,
     ) -> anyhow::Result<()> {
         self.block_importer
             .commit_result(result)
+            .await
             .map_err(Into::into)
     }
 
@@ -140,7 +140,7 @@ impl BlockImporter for BlockImporterAdapter {
         Box::pin(
             BroadcastStream::new(self.block_importer.subscribe())
                 .filter_map(|result| result.ok())
-                .map(|r| r.deref().into()),
+                .map(BlockImportInfo::from),
         )
     }
 }

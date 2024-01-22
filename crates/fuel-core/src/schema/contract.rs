@@ -1,6 +1,6 @@
 use crate::{
     fuel_core_graphql_api::{
-        service::Database,
+        database::ReadView,
         IntoApiResult,
     },
     query::ContractQueryData,
@@ -41,16 +41,16 @@ impl Contract {
     }
 
     async fn bytecode(&self, ctx: &Context<'_>) -> async_graphql::Result<HexString> {
-        let context: &Database = ctx.data_unchecked();
-        context
+        let query: &ReadView = ctx.data_unchecked();
+        query
             .contract_bytecode(self.0)
             .map(HexString)
             .map_err(Into::into)
     }
 
     async fn salt(&self, ctx: &Context<'_>) -> async_graphql::Result<Salt> {
-        let context: &Database = ctx.data_unchecked();
-        context
+        let query: &ReadView = ctx.data_unchecked();
+        query
             .contract_salt(self.0)
             .map(Into::into)
             .map_err(Into::into)
@@ -67,8 +67,8 @@ impl ContractQuery {
         ctx: &Context<'_>,
         #[graphql(desc = "ID of the Contract")] id: ContractId,
     ) -> async_graphql::Result<Option<Contract>> {
-        let data: &Database = ctx.data_unchecked();
-        data.contract_id(id.0).into_api_result()
+        let query: &ReadView = ctx.data_unchecked();
+        query.contract_id(id.0).into_api_result()
     }
 }
 
@@ -108,8 +108,8 @@ impl ContractBalanceQuery {
     ) -> async_graphql::Result<ContractBalance> {
         let contract_id = contract.into();
         let asset_id = asset.into();
-        let context: &Database = ctx.data_unchecked();
-        context
+        let query: &ReadView = ctx.data_unchecked();
+        query
             .contract_balance(contract_id, asset_id)
             .into_api_result()
             .map(|result| {
@@ -135,7 +135,7 @@ impl ContractBalanceQuery {
     ) -> async_graphql::Result<
         Connection<AssetId, ContractBalance, EmptyFields, EmptyFields>,
     > {
-        let query: &Database = ctx.data_unchecked();
+        let query: &ReadView = ctx.data_unchecked();
 
         crate::schema::query_pagination(after, before, first, last, |start, direction| {
             let balances = query

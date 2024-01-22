@@ -19,7 +19,6 @@ mod tests {
             Coins,
             ContractsRawCode,
             Messages,
-            Receipts,
         },
         StorageAsMut,
     };
@@ -662,23 +661,18 @@ mod tests {
                     coinbase_recipient: config_coinbase,
                     ..Default::default()
                 };
-                let mut producer = create_executor(Default::default(), config);
+                let producer = create_executor(Default::default(), config);
 
                 let mut block = Block::default();
                 *block.transactions_mut() = vec![script.clone().into()];
 
-                assert!(producer
+                let ExecutionResult { tx_status, .. } = producer
                     .execute_and_commit(
                         ExecutionBlock::Production(block.into()),
-                        Default::default()
+                        Default::default(),
                     )
-                    .is_ok());
-                let receipts = producer
-                    .database
-                    .storage::<Receipts>()
-                    .get(&script.id(&producer.config.consensus_parameters.chain_id))
-                    .unwrap()
-                    .unwrap();
+                    .expect("Should execute the block");
+                let receipts = &tx_status[0].receipts;
 
                 if let Some(Receipt::Return { val, .. }) = receipts.first() {
                     *val == 1
@@ -2756,20 +2750,16 @@ mod tests {
             },
         );
 
-        executor
+        let ExecutionResult { tx_status, .. } = executor
             .execute_and_commit(
                 ExecutionBlock::Production(block),
                 ExecutionOptions {
                     utxo_validation: true,
                 },
             )
-            .unwrap();
+            .expect("Should execute the block");
 
-        let receipts = database
-            .storage::<Receipts>()
-            .get(&tx.id(&ChainId::default()))
-            .unwrap()
-            .unwrap();
+        let receipts = &tx_status[0].receipts;
         assert_eq!(block_height as u64, receipts[0].val().unwrap());
     }
 
@@ -2835,21 +2825,16 @@ mod tests {
             },
         );
 
-        executor
+        let ExecutionResult { tx_status, .. } = executor
             .execute_and_commit(
                 ExecutionBlock::Production(block),
                 ExecutionOptions {
                     utxo_validation: true,
                 },
             )
-            .unwrap();
+            .expect("Should execute the block");
 
-        let receipts = database
-            .storage::<Receipts>()
-            .get(&tx.id(&ChainId::default()))
-            .unwrap()
-            .unwrap();
-
+        let receipts = &tx_status[0].receipts;
         assert_eq!(time.0, receipts[0].val().unwrap());
     }
 }

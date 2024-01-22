@@ -14,7 +14,6 @@ use fuel_core_storage::{
         Messages,
         Receipts,
         SealedBlockConsensus,
-        SpentMessages,
         Transactions,
     },
     Error as StorageError,
@@ -23,9 +22,12 @@ use fuel_core_storage::{
 };
 use fuel_core_txpool::service::TxStatusMessage;
 use fuel_core_types::{
-    blockchain::primitives::{
-        BlockId,
-        DaBlockHeight,
+    blockchain::{
+        block::CompressedBlock,
+        primitives::{
+            BlockId,
+            DaBlockHeight,
+        },
     },
     entities::message::{
         MerkleProof,
@@ -57,14 +59,41 @@ use fuel_core_types::{
 };
 use std::sync::Arc;
 
-/// The database port expected by GraphQL API service.
-pub trait DatabasePort:
+pub trait OffChainDatabase:
+    Send + Sync + StorageInspect<Receipts, Error = StorageError>
+{
+    fn owned_message_ids(
+        &self,
+        owner: &Address,
+        start_message_id: Option<Nonce>,
+        direction: IterDirection,
+    ) -> BoxedIter<'_, StorageResult<Nonce>>;
+
+    fn owned_coins_ids(
+        &self,
+        owner: &Address,
+        start_coin: Option<UtxoId>,
+        direction: IterDirection,
+    ) -> BoxedIter<'_, StorageResult<UtxoId>>;
+
+    fn tx_status(&self, tx_id: &TxId) -> StorageResult<TransactionStatus>;
+
+    fn owned_transactions_ids(
+        &self,
+        owner: Address,
+        start: Option<TxPointer>,
+        direction: IterDirection,
+    ) -> BoxedIter<StorageResult<(TxPointer, TxId)>>;
+}
+
+/// The on chain database port expected by GraphQL API service.
+pub trait OnChainDatabase:
     Send
     + Sync
     + DatabaseBlocks
-    + DatabaseTransactions
+    + StorageInspect<Transactions, Error = StorageError>
     + DatabaseMessages
-    + DatabaseCoins
+    + StorageInspect<Coins, Error = StorageError>
     + DatabaseContracts
     + DatabaseChain
     + DatabaseMessageProof
@@ -76,44 +105,19 @@ pub trait DatabaseBlocks:
     StorageInspect<FuelBlocks, Error = StorageError>
     + StorageInspect<SealedBlockConsensus, Error = StorageError>
 {
-    fn block_id(&self, height: &BlockHeight) -> StorageResult<BlockId>;
+    fn block_height(&self, block_id: &BlockId) -> StorageResult<BlockHeight>;
 
-    fn blocks_ids(
+    fn blocks(
         &self,
-        start: Option<BlockHeight>,
+        height: Option<BlockHeight>,
         direction: IterDirection,
-    ) -> BoxedIter<'_, StorageResult<(BlockHeight, BlockId)>>;
+    ) -> BoxedIter<'_, StorageResult<CompressedBlock>>;
 
-    fn ids_of_latest_block(&self) -> StorageResult<(BlockHeight, BlockId)>;
-}
-
-/// Trait that specifies all the getters required for transactions.
-pub trait DatabaseTransactions:
-    StorageInspect<Transactions, Error = StorageError>
-    + StorageInspect<Receipts, Error = StorageError>
-{
-    fn tx_status(&self, tx_id: &TxId) -> StorageResult<TransactionStatus>;
-
-    fn owned_transactions_ids(
-        &self,
-        owner: Address,
-        start: Option<TxPointer>,
-        direction: IterDirection,
-    ) -> BoxedIter<StorageResult<(TxPointer, TxId)>>;
+    fn latest_height(&self) -> StorageResult<BlockHeight>;
 }
 
 /// Trait that specifies all the getters required for messages.
-pub trait DatabaseMessages:
-    StorageInspect<Messages, Error = StorageError>
-    + StorageInspect<SpentMessages, Error = StorageError>
-{
-    fn owned_message_ids(
-        &self,
-        owner: &Address,
-        start_message_id: Option<Nonce>,
-        direction: IterDirection,
-    ) -> BoxedIter<'_, StorageResult<Nonce>>;
-
+pub trait DatabaseMessages: StorageInspect<Messages, Error = StorageError> {
     fn all_messages(
         &self,
         start_message_id: Option<Nonce>,
@@ -123,16 +127,6 @@ pub trait DatabaseMessages:
     fn message_is_spent(&self, nonce: &Nonce) -> StorageResult<bool>;
 
     fn message_exists(&self, nonce: &Nonce) -> StorageResult<bool>;
-}
-
-/// Trait that specifies all the getters required for coins.
-pub trait DatabaseCoins: StorageInspect<Coins, Error = StorageError> {
-    fn owned_coins_ids(
-        &self,
-        owner: &Address,
-        start_coin: Option<UtxoId>,
-        direction: IterDirection,
-    ) -> BoxedIter<'_, StorageResult<UtxoId>>;
 }
 
 /// Trait that specifies all the getters required for contract.
@@ -174,7 +168,7 @@ pub trait TxPoolPort: Send + Sync {
 }
 
 #[async_trait]
-pub trait DryRunExecution {
+pub trait BlockProducerPort: Send + Sync {
     async fn dry_run_tx(
         &self,
         transaction: Transaction,
@@ -182,8 +176,6 @@ pub trait DryRunExecution {
         utxo_validation: Option<bool>,
     ) -> anyhow::Result<Vec<Receipt>>;
 }
-
-pub trait BlockProducerPort: Send + Sync + DryRunExecution {}
 
 #[async_trait::async_trait]
 pub trait ConsensusModulePort: Send + Sync {
@@ -208,4 +200,52 @@ pub trait DatabaseMessageProof: Send + Sync {
 #[async_trait::async_trait]
 pub trait P2pPort: Send + Sync {
     async fn all_peer_info(&self) -> anyhow::Result<Vec<PeerInfo>>;
+}
+
+pub mod worker {
+    use fuel_core_services::stream::BoxStream;
+    use fuel_core_storage::{
+        tables::Receipts,
+        transactional::Transactional,
+        Error as StorageError,
+        Result as StorageResult,
+        StorageMutate,
+    };
+    use fuel_core_types::{
+        fuel_tx::{
+            Address,
+            Bytes32,
+        },
+        fuel_types::BlockHeight,
+        services::{
+            block_importer::SharedImportResult,
+            txpool::TransactionStatus,
+        },
+    };
+
+    pub trait OffChainDatabase:
+        Send
+        + Sync
+        + StorageMutate<Receipts, Error = StorageError>
+        + Transactional<Storage = Self>
+    {
+        fn record_tx_id_owner(
+            &mut self,
+            owner: &Address,
+            block_height: BlockHeight,
+            tx_idx: u16,
+            tx_id: &Bytes32,
+        ) -> StorageResult<Option<Bytes32>>;
+
+        fn update_tx_status(
+            &mut self,
+            id: &Bytes32,
+            status: TransactionStatus,
+        ) -> StorageResult<Option<TransactionStatus>>;
+    }
+
+    pub trait BlockImporter {
+        /// Returns a stream of imported block.
+        fn block_events(&self) -> BoxStream<SharedImportResult>;
+    }
 }

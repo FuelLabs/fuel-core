@@ -33,7 +33,7 @@ pub trait Executor: Send + Sync {
 }
 
 /// The database port used by the block importer.
-pub trait ImporterDatabase {
+pub trait ImporterDatabase: Send + Sync {
     /// Returns the latest block height.
     fn latest_block_height(&self) -> StorageResult<Option<BlockHeight>>;
     /// Update metadata about the total number of transactions on the chain.
@@ -57,7 +57,7 @@ pub trait ExecutorDatabase: ImporterDatabase {
 
 #[cfg_attr(test, mockall::automock)]
 /// The verifier of the block.
-pub trait BlockVerifier {
+pub trait BlockVerifier: Send + Sync {
     /// Verifies the consistency of the block fields for the block's height.
     /// It includes the verification of **all** fields, it includes the consensus rules for
     /// the corresponding height.

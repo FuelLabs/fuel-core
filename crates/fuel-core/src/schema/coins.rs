@@ -4,10 +4,10 @@ use crate::{
         SpendQuery,
     },
     fuel_core_graphql_api::{
+        database::ReadView,
         Config as GraphQLConfig,
         IntoApiResult,
     },
-    graphql_api::service::Database,
     query::{
         asset_query::AssetSpendTarget,
         CoinQueryData,
@@ -152,8 +152,8 @@ impl CoinQuery {
         ctx: &Context<'_>,
         #[graphql(desc = "The ID of the coin")] utxo_id: UtxoId,
     ) -> async_graphql::Result<Option<Coin>> {
-        let data: &Database = ctx.data_unchecked();
-        data.coin(utxo_id.0).into_api_result()
+        let query: &ReadView = ctx.data_unchecked();
+        query.coin(utxo_id.0).into_api_result()
     }
 
     /// Gets all unspent coins of some `owner` maybe filtered with by `asset_id` per page.
@@ -166,7 +166,7 @@ impl CoinQuery {
         last: Option<i32>,
         before: Option<String>,
     ) -> async_graphql::Result<Connection<UtxoId, Coin, EmptyFields, EmptyFields>> {
-        let query: &Database = ctx.data_unchecked();
+        let query: &ReadView = ctx.data_unchecked();
         crate::schema::query_pagination(after, before, first, last, |start, direction| {
             let owner: fuel_tx::Address = filter.owner.into();
             let coins = query
@@ -240,9 +240,9 @@ impl CoinQuery {
         let spend_query =
             SpendQuery::new(owner, &query_per_asset, excluded_ids, *base_asset_id)?;
 
-        let db = ctx.data_unchecked::<Database>();
+        let query: &ReadView = ctx.data_unchecked();
 
-        let coins = random_improve(db, &spend_query)?
+        let coins = random_improve(query, &spend_query)?
             .into_iter()
             .map(|coins| {
                 coins

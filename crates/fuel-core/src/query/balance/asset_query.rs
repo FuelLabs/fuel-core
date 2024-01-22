@@ -1,5 +1,5 @@
 use crate::{
-    graphql_api::service::Database,
+    graphql_api::database::ReadView,
     query::{
         CoinQueryData,
         MessageQueryData,
@@ -58,7 +58,7 @@ pub struct AssetsQuery<'a> {
     pub owner: &'a Address,
     pub assets: Option<HashSet<&'a AssetId>>,
     pub exclude: Option<&'a Exclude>,
-    pub database: &'a Database,
+    pub database: &'a ReadView,
     pub base_asset_id: &'a AssetId,
 }
 
@@ -67,7 +67,7 @@ impl<'a> AssetsQuery<'a> {
         owner: &'a Address,
         assets: Option<HashSet<&'a AssetId>>,
         exclude: Option<&'a Exclude>,
-        database: &'a Database,
+        database: &'a ReadView,
         base_asset_id: &'a AssetId,
     ) -> Self {
         Self {
@@ -171,7 +171,7 @@ pub struct AssetQuery<'a> {
     pub owner: &'a Address,
     pub asset: &'a AssetSpendTarget,
     pub exclude: Option<&'a Exclude>,
-    pub database: &'a Database,
+    pub database: &'a ReadView,
     query: AssetsQuery<'a>,
 }
 
@@ -181,7 +181,7 @@ impl<'a> AssetQuery<'a> {
         asset: &'a AssetSpendTarget,
         base_asset_id: &'a AssetId,
         exclude: Option<&'a Exclude>,
-        database: &'a Database,
+        database: &'a ReadView,
     ) -> Self {
         let mut allowed = HashSet::new();
         allowed.insert(&asset.id);

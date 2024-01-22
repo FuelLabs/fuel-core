@@ -1,5 +1,8 @@
 use crate::ports::TxPoolDb;
-use fuel_core_storage::Result as StorageResult;
+use fuel_core_storage::{
+    transactional::AtomicView,
+    Result as StorageResult,
+};
 use fuel_core_types::{
     entities::{
         coins::coin::{
@@ -91,15 +94,18 @@ impl TxPoolDb for MockDb {
     fn is_message_spent(&self, id: &Nonce) -> StorageResult<bool> {
         Ok(self.data.lock().unwrap().spent_messages.contains(id))
     }
+}
 
-    fn current_block_height(&self) -> StorageResult<BlockHeight> {
-        Ok(Default::default())
+pub struct MockDBProvider(pub MockDb);
+
+impl AtomicView for MockDBProvider {
+    type View = MockDb;
+
+    fn view_at(&self, _: BlockHeight) -> StorageResult<Self::View> {
+        Ok(self.latest_view())
     }
 
-    fn transaction_status(
-        &self,
-        _tx_id: &fuel_core_types::fuel_types::Bytes32,
-    ) -> StorageResult<fuel_core_types::services::txpool::TransactionStatus> {
-        unimplemented!()
+    fn latest_view(&self) -> Self::View {
+        self.0.clone()
     }
 }

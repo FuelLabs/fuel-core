@@ -64,13 +64,10 @@ impl Transaction<Database> for DatabaseTransaction {
 
 impl From<&Database> for DatabaseTransaction {
     fn from(source: &Database) -> Self {
-        let data = Arc::new(MemoryTransactionView::new(source.data.clone()));
+        let data = Arc::new(MemoryTransactionView::new(source.data.as_ref().clone()));
         Self {
             changes: data.clone(),
-            database: Database {
-                data,
-                _drop: Default::default(),
-            },
+            database: Database::new(data),
         }
     }
 }
