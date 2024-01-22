@@ -1,15 +1,14 @@
 use crate::{
     discovery::{
-        mdns::MdnsWrapper,
-        DiscoveryBehaviour,
+        mdns_wrapper::MdnsWrapper,
+        Behaviour,
     },
     TryPeerId,
 };
 use libp2p::{
     kad::{
+        self,
         store::MemoryStore,
-        Behaviour as KademliaBehaviour,
-        Config as KademliaConfig,
         Mode,
     },
     swarm::StreamProtocol,
@@ -23,7 +22,7 @@ use std::{
 use tracing::warn;
 
 #[derive(Clone, Debug)]
-pub struct DiscoveryConfig {
+pub struct Config {
     local_peer_id: PeerId,
     bootstrap_nodes: Vec<Multiaddr>,
     reserved_nodes: Vec<Multiaddr>,
@@ -35,7 +34,7 @@ pub struct DiscoveryConfig {
     connection_idle_timeout: Duration,
 }
 
-impl DiscoveryConfig {
+impl Config {
     pub fn new(local_peer_id: PeerId, network_name: String) -> Self {
         Self {
             local_peer_id,
@@ -98,8 +97,8 @@ impl DiscoveryConfig {
         self
     }
 
-    pub fn finish(self) -> DiscoveryBehaviour {
-        let DiscoveryConfig {
+    pub fn finish(self) -> Behaviour {
+        let Config {
             local_peer_id,
             bootstrap_nodes,
             network_name,
@@ -111,14 +110,14 @@ impl DiscoveryConfig {
 
         // kademlia setup
         let memory_store = MemoryStore::new(local_peer_id.to_owned());
-        let mut kademlia_config = KademliaConfig::default();
+        let mut kademlia_config = kad::Config::default();
         let network = format!("/fuel/kad/{network_name}/kad/1.0.0");
         kademlia_config.set_protocol_names(vec![
             StreamProtocol::try_from_owned(network).expect("Invalid kad protocol")
         ]);
 
         let mut kademlia =
-            KademliaBehaviour::with_config(local_peer_id, memory_store, kademlia_config);
+            kad::Behaviour::with_config(local_peer_id, memory_store, kademlia_config);
         kademlia.set_mode(Some(Mode::Server));
 
         // bootstrap nodes need to have their peer_id defined in the Multiaddr
@@ -168,7 +167,7 @@ impl DiscoveryConfig {
             MdnsWrapper::disabled()
         };
 
-        DiscoveryBehaviour {
+        Behaviour {
             connected_peers: HashSet::new(),
             kademlia,
             next_kad_random_walk,
