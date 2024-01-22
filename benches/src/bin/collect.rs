@@ -292,7 +292,7 @@ fn decode_input(line: &str) -> Option<Output> {
                 },
                 _ => return None,
             };
-            let throughput = if let Some(t) = val.get("throughput")?.as_array()?.get(0) {
+            let throughput = if let Some(t) = val.get("throughput")?.as_array()?.first() {
                 Some(t.as_object()?.get("per_iteration")?.as_u64()?)
             } else {
                 None
