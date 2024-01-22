@@ -1,4 +1,5 @@
 # Change Log
+
 All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
@@ -10,6 +11,7 @@ Description of the upcoming release here.
 
 ### Changed
 
+- [#1613](https://github.com/FuelLabs/fuel-core/pull/1613): Add api endpoint to retrieve messages by nonce
 - [#1597](https://github.com/FuelLabs/fuel-core/pull/1597): Unify namespacing for `libp2p` modules
 - [#1591](https://github.com/FuelLabs/fuel-core/pull/1591): Simplify libp2p dependencies and not depend on all sub modules directly.
 - [#1590](https://github.com/FuelLabs/fuel-core/pull/1590): Use `AtomicView` in the `TxPool` to read the state of the database during insertion of the transactions.
@@ -23,111 +25,111 @@ Description of the upcoming release here.
 
 - [#1593](https://github.com/FuelLabs/fuel-core/pull/1593) Make `Block` type a version-able enum
 - [#1576](https://github.com/FuelLabs/fuel-core/pull/1576): The change moves the implementation of the storage traits for required tables from `fuel-core` to `fuel-core-storage` crate. The change also adds a more flexible configuration of the encoding/decoding per the table and allows the implementation of specific behaviors for the table in a much easier way. It unifies the encoding between database, SMTs, and iteration, preventing mismatching bytes representation on the Rust type system level. Plus, it increases the re-usage of the code by applying the same blueprint to other tables.
-    
-    It is a breaking PR because it changes database encoding/decoding for some tables.
-    
-    ### StructuredStorage
-    
-    The change adds a new type `StructuredStorage`. It is a wrapper around the key-value storage that implements the storage traits(`StorageInspect`, `StorageMutate`, `StorageRead`, etc) for the tables with blueprint. This blueprint works in tandem with the `TableWithBlueprint` trait. The table may implement `TableWithBlueprint` specifying the blueprint, as an example:
-    
-    ```rust
-    impl TableWithBlueprint for ContractsRawCode {
-        type Blueprint = Plain<Raw, Raw>;
-    
-        fn column() -> Column {
-            Column::ContractsRawCode
-        }
-    }
-    ```
-    
-    It is a definition of the blueprint for the `ContractsRawCode` table. It has a plain blueprint meaning it simply encodes/decodes bytes and stores/loads them into/from the storage. As a key codec and value codec, it uses a `Raw` encoding/decoding that simplifies writing bytes and loads them back into the memory without applying any serialization or deserialization algorithm.
-    
-    If the table implements `TableWithBlueprint` and the selected codec satisfies all blueprint requirements, the corresponding storage traits for that table are implemented on the `StructuredStorage` type.
-    
-    ### Codecs
-    
-    Each blueprint allows customizing the key and value codecs. It allows the use of different codecs for different tables, taking into account the complexity and weight of the data and providing a way of more optimal implementation.
-    
-    That property may be very useful to perform migration in a more easier way. Plus, it also can be a `no_std` migration potentially allowing its fraud proving.
-    
-    An example of migration:
-    
-    ```rust
-    /// Define the table for V1 value encoding/decoding.
-    impl TableWithBlueprint for ContractsRawCodeV1 {
-        type Blueprint = Plain<Raw, Raw>;
-    
-        fn column() -> Column {
-            Column::ContractsRawCode
-        }
-    }
-    
-    /// Define the table for V2 value encoding/decoding.
-    /// It uses `Postcard` codec for the value instead of `Raw` codec.
-    ///
-    /// # Dev-note: The columns is the same.
-    impl TableWithBlueprint for ContractsRawCodeV2 {
-        type Blueprint = Plain<Raw, Postcard>;
-    
-        fn column() -> Column {
-            Column::ContractsRawCode
-        }
-    }
-    
-    fn migration(storage: &mut Database) {
-        let mut iter = storage.iter_all::<ContractsRawCodeV1>(None);
-        while let Ok((key, value)) = iter.next() {
-            // Insert into the same table but with another codec.
-            storage.storage::<ContractsRawCodeV2>().insert(key, value);
-        }
-    }
-    ```
-    
-    ### Structures
-    
-    The blueprint of the table defines its behavior. As an example, a `Plain` blueprint simply encodes/decodes bytes and stores/loads them into/from the storage. The `SMT` blueprint builds a sparse merkle tree on top of the key-value pairs.
-    
-    Implementing a blueprint one time, we can apply it to any table satisfying the requirements of this blueprint. It increases the re-usage of the code and minimizes duplication.
-    
-    It can be useful if we decide to create global roots for all required tables that are used in fraud proving.
-    
-    ```rust
-    impl TableWithBlueprint for SpentMessages {
-        type Blueprint = Plain<Raw, Postcard>;
-    
-        fn column() -> Column {
-            Column::SpentMessages
-        }
-    }
-                     |
-                     |
-                    \|/
-    
-    impl TableWithBlueprint for SpentMessages {
-        type Blueprint =
-            Sparse<Raw, Postcard, SpentMessagesMerkleMetadata, SpentMessagesMerkleNodes>;
-    
-        fn column() -> Column {
-            Column::SpentMessages
-        }
-    }
-    ```
-    
-    ### Side changes
-    
-    #### `iter_all`
-    The `iter_all` functionality now accepts the table instead of `K` and `V` generics. It is done to use the correct codec during deserialization. Also, the table definition provides the column.
-    
-    #### Duplicated unit tests
-    
-    The `fuel-core-storage` crate provides macros that generate unit tests. Almost all tables had the same test like `get`, `insert`, `remove`, `exist`. All duplicated tests were moved to macros. The unique one still stays at the same place where it was before.
-    
-    #### `StorageBatchMutate`
-    
-    Added a new `StorageBatchMutate` trait that we can move to `fuel-storage` crate later. It allows batch operations on the storage. It may be more performant in some cases.
+
+  It is a breaking PR because it changes database encoding/decoding for some tables.
+
+  ### StructuredStorage
+
+  The change adds a new type `StructuredStorage`. It is a wrapper around the key-value storage that implements the storage traits(`StorageInspect`, `StorageMutate`, `StorageRead`, etc) for the tables with blueprint. This blueprint works in tandem with the `TableWithBlueprint` trait. The table may implement `TableWithBlueprint` specifying the blueprint, as an example:
+
+  ```rust
+  impl TableWithBlueprint for ContractsRawCode {
+      type Blueprint = Plain<Raw, Raw>;
+
+      fn column() -> Column {
+          Column::ContractsRawCode
+      }
+  }
+  ```
+
+  It is a definition of the blueprint for the `ContractsRawCode` table. It has a plain blueprint meaning it simply encodes/decodes bytes and stores/loads them into/from the storage. As a key codec and value codec, it uses a `Raw` encoding/decoding that simplifies writing bytes and loads them back into the memory without applying any serialization or deserialization algorithm.
+
+  If the table implements `TableWithBlueprint` and the selected codec satisfies all blueprint requirements, the corresponding storage traits for that table are implemented on the `StructuredStorage` type.
+
+  ### Codecs
+
+  Each blueprint allows customizing the key and value codecs. It allows the use of different codecs for different tables, taking into account the complexity and weight of the data and providing a way of more optimal implementation.
+
+  That property may be very useful to perform migration in a more easier way. Plus, it also can be a `no_std` migration potentially allowing its fraud proving.
+
+  An example of migration:
+
+  ```rust
+  /// Define the table for V1 value encoding/decoding.
+  impl TableWithBlueprint for ContractsRawCodeV1 {
+      type Blueprint = Plain<Raw, Raw>;
+
+      fn column() -> Column {
+          Column::ContractsRawCode
+      }
+  }
+
+  /// Define the table for V2 value encoding/decoding.
+  /// It uses `Postcard` codec for the value instead of `Raw` codec.
+  ///
+  /// # Dev-note: The columns is the same.
+  impl TableWithBlueprint for ContractsRawCodeV2 {
+      type Blueprint = Plain<Raw, Postcard>;
+
+      fn column() -> Column {
+          Column::ContractsRawCode
+      }
+  }
+
+  fn migration(storage: &mut Database) {
+      let mut iter = storage.iter_all::<ContractsRawCodeV1>(None);
+      while let Ok((key, value)) = iter.next() {
+          // Insert into the same table but with another codec.
+          storage.storage::<ContractsRawCodeV2>().insert(key, value);
+      }
+  }
+  ```
+
+  ### Structures
+
+  The blueprint of the table defines its behavior. As an example, a `Plain` blueprint simply encodes/decodes bytes and stores/loads them into/from the storage. The `SMT` blueprint builds a sparse merkle tree on top of the key-value pairs.
+
+  Implementing a blueprint one time, we can apply it to any table satisfying the requirements of this blueprint. It increases the re-usage of the code and minimizes duplication.
+
+  It can be useful if we decide to create global roots for all required tables that are used in fraud proving.
+
+  ```rust
+  impl TableWithBlueprint for SpentMessages {
+      type Blueprint = Plain<Raw, Postcard>;
+
+      fn column() -> Column {
+          Column::SpentMessages
+      }
+  }
+                   |
+                   |
+                  \|/
+
+  impl TableWithBlueprint for SpentMessages {
+      type Blueprint =
+          Sparse<Raw, Postcard, SpentMessagesMerkleMetadata, SpentMessagesMerkleNodes>;
+
+      fn column() -> Column {
+          Column::SpentMessages
+      }
+  }
+  ```
+
+  ### Side changes
+
+  #### `iter_all`
+
+  The `iter_all` functionality now accepts the table instead of `K` and `V` generics. It is done to use the correct codec during deserialization. Also, the table definition provides the column.
+
+  #### Duplicated unit tests
+
+  The `fuel-core-storage` crate provides macros that generate unit tests. Almost all tables had the same test like `get`, `insert`, `remove`, `exist`. All duplicated tests were moved to macros. The unique one still stays at the same place where it was before.
+
+  #### `StorageBatchMutate`
+
+  Added a new `StorageBatchMutate` trait that we can move to `fuel-storage` crate later. It allows batch operations on the storage. It may be more performant in some cases.
 
 - [#1573](https://github.com/FuelLabs/fuel-core/pull/1573): Remove nested p2p request/response encoding. Only breaks p2p networking compatibility with older fuel-core versions, but is otherwise fully internal.
-
 
 ## [Version 0.22.0]
 
@@ -137,23 +139,26 @@ Description of the upcoming release here.
 - [#1504](https://github.com/FuelLabs/fuel-core/pull/1504): A `Success` or `Failure` variant of `TransactionStatus` returned by a query now contains the associated receipts generated by transaction execution.
 
 #### Breaking
+
 - [#1531](https://github.com/FuelLabs/fuel-core/pull/1531): Make `fuel-core-executor` `no_std` compatible. It affects the `fuel-core` crate because it uses the `fuel-core-executor` crate. The change is breaking because of moved types.
 - [#1524](https://github.com/FuelLabs/fuel-core/pull/1524): Adds information about connected peers to the GQL API.
 
 ### Changed
 
-- [#1517](https://github.com/FuelLabs/fuel-core/pull/1517): Changed default gossip heartbeat interval to 500ms. 
+- [#1517](https://github.com/FuelLabs/fuel-core/pull/1517): Changed default gossip heartbeat interval to 500ms.
 - [#1520](https://github.com/FuelLabs/fuel-core/pull/1520): Extract `executor` into `fuel-core-executor` crate.
 
 ### Fixed
 
 #### Breaking
-- [#1536](https://github.com/FuelLabs/fuel-core/pull/1536): The change fixes the contracts tables to not touch SMT nodes of foreign contracts. Before, it was possible to invalidate the SMT from another contract. It is a breaking change and requires re-calculating the whole state from the beginning with new SMT roots. 
+
+- [#1536](https://github.com/FuelLabs/fuel-core/pull/1536): The change fixes the contracts tables to not touch SMT nodes of foreign contracts. Before, it was possible to invalidate the SMT from another contract. It is a breaking change and requires re-calculating the whole state from the beginning with new SMT roots.
 - [#1542](https://github.com/FuelLabs/fuel-core/pull/1542): Migrates information about peers to NodeInfo instead of ChainInfo. It also elides information about peers in the default node_info query.
 
 ## [Version 0.21.0]
 
 This release focuses on preparing `fuel-core` for the mainnet environment:
+
 - Most of the changes improved the security and stability of the node.
 - The gas model was reworked to cover all aspects of execution.
 - The benchmarking system was significantly enhanced, covering worst scenarios.
@@ -161,6 +166,7 @@ This release focuses on preparing `fuel-core` for the mainnet environment:
 - Optimized heavy operations and removed/replaced exploitable functionality.
 
 Besides that, there are more concrete changes:
+
 - Unified naming conventions for all CLI arguments. Added dependencies between related fields to avoid misconfiguration in case of missing arguments. Added `--debug` flag that enables additional functionality like a debugger.
 - Improved telemetry to cover the internal work of services and added support for the Pyroscope, allowing it to generate real-time flamegraphs to track performance.
 - Improved stability of the P2P layer and adjusted the updating of reputation. The speed of block synchronization was significantly increased.
@@ -168,14 +174,15 @@ Besides that, there are more concrete changes:
 - Reworked the `Mint` transaction to accumulate the fee from block production inside the contract defined by the block producer.
 
 FuelVM received a lot of safety and stability improvements:
+
 - The audit helped identify some bugs and errors that have been successfully fixed.
 - Updated the gas price model to charge for resources used during the transaction lifecycle.
 - Added `no_std` and 32 bit system support. This opens doors for fraud proving in the future.
 - Removed the `ChainId` from the `PredicateId` calculation, allowing the use of predicates cross-chain.
 - Improvements in the performance of some storage-related opcodes.
 - Support the `ECAL` instruction that allows adding custom functionality to the VM. It can be used to create unique rollups or advanced indexers in the future.
-- Support of [transaction policies](https://github.com/FuelLabs/fuel-vm/blob/master/CHANGELOG.md#version-0420) provides additional safety for the user. 
-    It also allows the implementation of a multi-dimensional price model in the future, making the transaction execution cheaper and allowing more transactions that don't affect storage.
+- Support of [transaction policies](https://github.com/FuelLabs/fuel-vm/blob/master/CHANGELOG.md#version-0420) provides additional safety for the user.
+  It also allows the implementation of a multi-dimensional price model in the future, making the transaction execution cheaper and allowing more transactions that don't affect storage.
 - Refactored errors, returning more detailed errors to the user, simplifying debugging.
 
 ### Added
@@ -215,8 +222,8 @@ FuelVM received a lot of safety and stability improvements:
 - [#1339](https://github.com/FuelLabs/fuel-core/pull/1339): Adds `baseAssetId` to `FeeParameters` in the GraphQL API.
 - [#1331](https://github.com/FuelLabs/fuel-core/pull/1331): Add peer reputation reporting to block import code.
 - [#1324](https://github.com/FuelLabs/fuel-core/pull/1324): Added pyroscope profiling to fuel-core, intended to be used by a secondary docker image that has debug symbols enabled.
-- [#1309](https://github.com/FuelLabs/fuel-core/pull/1309): Add documentation for running debug builds with CLion and Visual Studio Code.  
-- [#1308](https://github.com/FuelLabs/fuel-core/pull/1308): Add support for loading .env files when compiling with the `env` feature. This allows users to conveniently supply CLI arguments in a secure and IDE-agnostic way. 
+- [#1309](https://github.com/FuelLabs/fuel-core/pull/1309): Add documentation for running debug builds with CLion and Visual Studio Code.
+- [#1308](https://github.com/FuelLabs/fuel-core/pull/1308): Add support for loading .env files when compiling with the `env` feature. This allows users to conveniently supply CLI arguments in a secure and IDE-agnostic way.
 - [#1304](https://github.com/FuelLabs/fuel-core/pull/1304): Implemented `submit_and_await_commit_with_receipts` method for `FuelClient`.
 - [#1286](https://github.com/FuelLabs/fuel-core/pull/1286): Include readable names for test cases where missing.
 - [#1274](https://github.com/FuelLabs/fuel-core/pull/1274): Added tests to benchmark block synchronization.
@@ -252,11 +259,12 @@ FuelVM received a lot of safety and stability improvements:
 - [#1318](https://github.com/FuelLabs/fuel-core/pull/1318): Modified block synchronization to use asynchronous task execution when retrieving block headers.
 - [#1314](https://github.com/FuelLabs/fuel-core/pull/1314): Removed `types::ConsensusParameters` in favour of `fuel_tx:ConsensusParameters`.
 - [#1302](https://github.com/FuelLabs/fuel-core/pull/1302): Removed the usage of flake and building of the bridge contract ABI.
-    It simplifies the maintenance and updating of the events, requiring only putting the event definition into the codebase of the relayer.
+  It simplifies the maintenance and updating of the events, requiring only putting the event definition into the codebase of the relayer.
 - [#1293](https://github.com/FuelLabs/fuel-core/issues/1293): Parallelized the `estimate_predicates` endpoint to utilize all available threads.
 - [#1270](https://github.com/FuelLabs/fuel-core/pull/1270): Modify the way block headers are retrieved from peers to be done in batches.
 
 #### Breaking
+
 - [#1506](https://github.com/FuelLabs/fuel-core/pull/1506): Added validation of the coin's fields during block production and validation. Before, it was possible to submit a transaction that didn't match the coin's values in the database, allowing printing/using unavailable assets.
 - [#1491](https://github.com/FuelLabs/fuel-core/pull/1491): Removed unused request and response variants from the Gossipsub implementation, as well as related definitions and tests. Specifically, this removes gossiping of `ConsensusVote` and `NewBlock` events.
 - [#1472](https://github.com/FuelLabs/fuel-core/pull/1472): Upgraded `fuel-vm` to `v0.42.0`. It introduces transaction policies that changes layout of the transaction. FOr more information check the [v0.42.0](https://github.com/FuelLabs/fuel-vm/pull/635) release.
@@ -272,10 +280,7 @@ FuelVM received a lot of safety and stability improvements:
 - [#1355](https://github.com/FuelLabs/fuel-core/pull/1355): Removed the `metrics` feature flag from the fuel-core crate, and metrics are now included by default.
 - [#1339](https://github.com/FuelLabs/fuel-core/pull/1339): Added a new required field called `base_asset_id` to the `FeeParameters` definition in `ConsensusParameters`, as well as default values for `base_asset_id` in the `beta` and `dev` chain specifications.
 - [#1322](https://github.com/FuelLabs/fuel-core/pull/1322):
-  The `debug` flag is added to the CLI. The flag should be used for local development only. Enabling debug mode:
-      - Allows GraphQL Endpoints to arbitrarily advance blocks.
-      - Enables debugger GraphQL Endpoints.
-      - Allows setting `utxo_validation` to `false`.
+  The `debug` flag is added to the CLI. The flag should be used for local development only. Enabling debug mode: - Allows GraphQL Endpoints to arbitrarily advance blocks. - Enables debugger GraphQL Endpoints. - Allows setting `utxo_validation` to `false`.
 - [#1318](https://github.com/FuelLabs/fuel-core/pull/1318): Removed the `--sync-max-header-batch-requests` CLI argument, and renamed `--sync-max-get-txns` to `--sync-block-stream-buffer-size` to better represent the current behavior in the import.
 - [#1290](https://github.com/FuelLabs/fuel-core/pull/1290): Standardize CLI args to use `-` instead of `_`.
 - [#1279](https://github.com/FuelLabs/fuel-core/pull/1279): Added a new CLI flag to enable the Relayer service `--enable-relayer`, and disabled the Relayer service by default. When supplying the `--enable-relayer` flag, the `--relayer` argument becomes mandatory, and omitting it is an error. Similarly, providing a `--relayer` argument without the `--enable-relayer` flag is an error. Lastly, providing the `--keypair` or `--network` arguments will also produce an error if the `--enable-p2p` flag is not set.
@@ -284,6 +289,7 @@ FuelVM received a lot of safety and stability improvements:
 ### Removed
 
 #### Breaking
+
 - [#1484](https://github.com/FuelLabs/fuel-core/pull/1484): Removed `--network` CLI argument. Now the name of the network is fetched form chain configuration.
 - [#1399](https://github.com/FuelLabs/fuel-core/pull/1399): Removed `relayer-da-finalization` parameter from the relayer CLI.
 - [#1338](https://github.com/FuelLabs/fuel-core/pull/1338): Updated GraphQL client to use `DependentCost` for `k256`, `mcpi`, `s256`, `scwq`, `swwq` opcodes.
