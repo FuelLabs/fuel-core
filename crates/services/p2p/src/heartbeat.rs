@@ -1,6 +1,6 @@
 use crate::Multiaddr;
 use fuel_core_types::fuel_types::BlockHeight;
-pub use handler::HeartbeatConfig;
+pub use handler::Config;
 use handler::{
     HeartbeatHandler,
     HeartbeatInEvent,
@@ -32,7 +32,7 @@ pub const HEARTBEAT_PROTOCOL: &str = "/fuel/heartbeat/0.0.1";
 
 #[derive(Debug, Clone)]
 enum HeartbeatAction {
-    HeartbeatEvent(HeartbeatEvent),
+    HeartbeatEvent(Event),
     BlockHeightRequest {
         peer_id: PeerId,
         connection_id: ConnectionId,
@@ -41,7 +41,7 @@ enum HeartbeatAction {
 }
 
 impl HeartbeatAction {
-    fn build(self) -> ToSwarm<HeartbeatEvent, HeartbeatInEvent> {
+    fn build(self) -> ToSwarm<Event, HeartbeatInEvent> {
         match self {
             Self::HeartbeatEvent(event) => ToSwarm::GenerateEvent(event),
             Self::BlockHeightRequest {
@@ -58,20 +58,20 @@ impl HeartbeatAction {
 }
 
 #[derive(Debug, Clone, Copy)]
-pub struct HeartbeatEvent {
+pub struct Event {
     pub peer_id: PeerId,
     pub latest_block_height: BlockHeight,
 }
 
 #[derive(Debug, Clone)]
-pub struct Heartbeat {
-    config: HeartbeatConfig,
+pub struct Behaviour {
+    config: Config,
     pending_events: VecDeque<HeartbeatAction>,
     current_block_height: BlockHeight,
 }
 
-impl Heartbeat {
-    pub fn new(config: HeartbeatConfig, block_height: BlockHeight) -> Self {
+impl Behaviour {
+    pub fn new(config: Config, block_height: BlockHeight) -> Self {
         Self {
             config,
             pending_events: VecDeque::default(),
@@ -84,9 +84,9 @@ impl Heartbeat {
     }
 }
 
-impl NetworkBehaviour for Heartbeat {
+impl NetworkBehaviour for Behaviour {
     type ConnectionHandler = HeartbeatHandler;
-    type ToSwarm = HeartbeatEvent;
+    type ToSwarm = Event;
 
     fn handle_established_inbound_connection(
         &mut self,
@@ -119,7 +119,7 @@ impl NetworkBehaviour for Heartbeat {
         match event {
             HeartbeatOutEvent::BlockHeight(latest_block_height) => self
                 .pending_events
-                .push_back(HeartbeatAction::HeartbeatEvent(HeartbeatEvent {
+                .push_back(HeartbeatAction::HeartbeatEvent(Event {
                     peer_id,
                     latest_block_height,
                 })),

@@ -7,6 +7,7 @@ use futures::{
     TryFutureExt,
 };
 use libp2p::{
+    self,
     core::{
         upgrade::{
             InboundConnectionUpgrade,
@@ -14,11 +15,7 @@ use libp2p::{
         },
         UpgradeInfo,
     },
-    noise::{
-        Config as NoiseConfig,
-        Error as NoiseError,
-        Output as NoiseOutput,
-    },
+    noise,
     PeerId,
 };
 use std::pin::Pin;
@@ -30,14 +27,14 @@ pub(crate) trait Approver {
 
 #[derive(Clone)]
 pub(crate) struct FuelAuthenticated<A: Approver> {
-    noise_authenticated: NoiseConfig,
+    noise_authenticated: noise::Config,
     approver: A,
     checksum: Checksum,
 }
 
 impl<A: Approver> FuelAuthenticated<A> {
     pub(crate) fn new(
-        noise_authenticated: NoiseConfig,
+        noise_authenticated: noise::Config,
         approver: A,
         checksum: Checksum,
     ) -> Self {
@@ -69,8 +66,8 @@ where
     T: AsyncRead + AsyncWrite + Unpin + Send + 'static,
     A: Approver + Send + 'static,
 {
-    type Output = (PeerId, NoiseOutput<T>);
-    type Error = NoiseError;
+    type Output = (PeerId, noise::Output<T>);
+    type Error = noise::Error;
     type Future = Pin<Box<dyn Future<Output = Result<Self::Output, Self::Error>> + Send>>;
 
     fn upgrade_inbound(self, socket: T, _: Self::Info) -> Self::Future {
@@ -81,7 +78,7 @@ where
                     if self.approver.allow_peer(&remote_peer_id) {
                         future::ok((remote_peer_id, io))
                     } else {
-                        future::err(NoiseError::AuthenticationFailed)
+                        future::err(noise::Error::AuthenticationFailed)
                     }
                 }),
         )
@@ -93,8 +90,8 @@ where
     T: AsyncRead + AsyncWrite + Unpin + Send + 'static,
     A: Approver + Send + 'static,
 {
-    type Output = (PeerId, NoiseOutput<T>);
-    type Error = NoiseError;
+    type Output = (PeerId, noise::Output<T>);
+    type Error = noise::Error;
     type Future = Pin<Box<dyn Future<Output = Result<Self::Output, Self::Error>> + Send>>;
 
     fn upgrade_outbound(self, socket: T, _: Self::Info) -> Self::Future {
@@ -105,7 +102,7 @@ where
                     if self.approver.allow_peer(&remote_peer_id) {
                         future::ok((remote_peer_id, io))
                     } else {
-                        future::err(NoiseError::AuthenticationFailed)
+                        future::err(noise::Error::AuthenticationFailed)
                     }
                 }),
         )

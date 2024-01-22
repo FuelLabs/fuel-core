@@ -1,13 +1,12 @@
-use self::mdns::MdnsWrapper;
+use self::mdns_wrapper::MdnsWrapper;
 use futures::FutureExt;
 use libp2p::{
     core::Endpoint,
     kad::{
+        self,
         store::MemoryStore,
-        Behaviour as KademliaBehavior,
-        Event,
     },
-    mdns::Event as MdnsEvent,
+    mdns,
     swarm::{
         derive_prelude::{
             ConnectionClosed,
@@ -39,13 +38,15 @@ use std::{
 };
 use tracing::trace;
 mod discovery_config;
-mod mdns;
-pub use discovery_config::DiscoveryConfig;
+mod mdns_wrapper;
+pub use discovery_config::Config;
 
 const SIXTY_SECONDS: Duration = Duration::from_secs(60);
 
+pub type Event = kad::Event;
+
 /// NetworkBehavior for discovery of nodes
-pub struct DiscoveryBehaviour {
+pub struct Behaviour {
     /// Track the connected peers
     connected_peers: HashSet<PeerId>,
 
@@ -53,7 +54,7 @@ pub struct DiscoveryBehaviour {
     mdns: MdnsWrapper,
 
     /// Kademlia with MemoryStore
-    kademlia: KademliaBehavior<MemoryStore>,
+    kademlia: kad::Behaviour<MemoryStore>,
 
     /// If enabled, the Stream that will fire after the delay expires,
     /// starting new random walk
@@ -66,17 +67,17 @@ pub struct DiscoveryBehaviour {
     max_peers_connected: usize,
 }
 
-impl DiscoveryBehaviour {
+impl Behaviour {
     /// Adds a known listen address of a peer participating in the DHT to the routing table.
     pub fn add_address(&mut self, peer_id: &PeerId, address: Multiaddr) {
         self.kademlia.add_address(peer_id, address);
     }
 }
 
-impl NetworkBehaviour for DiscoveryBehaviour {
+impl NetworkBehaviour for Behaviour {
     type ConnectionHandler =
-        <KademliaBehavior<MemoryStore> as NetworkBehaviour>::ConnectionHandler;
-    type ToSwarm = Event;
+        <kad::Behaviour<MemoryStore> as NetworkBehaviour>::ConnectionHandler;
+    type ToSwarm = kad::Event;
 
     fn handle_established_inbound_connection(
         &mut self,
@@ -203,7 +204,7 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 
         while let Poll::Ready(mdns_event) = self.mdns.poll(cx) {
             match mdns_event {
-                ToSwarm::GenerateEvent(MdnsEvent::Discovered(list)) => {
+                ToSwarm::GenerateEvent(mdns::Event::Discovered(list)) => {
                     for (peer_id, multiaddr) in list {
                         self.kademlia.add_address(&peer_id, multiaddr);
                     }
@@ -227,9 +228,9 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 #[cfg(test)]
 mod tests {
     use super::{
-        DiscoveryBehaviour,
-        DiscoveryConfig,
-        Event as KademliaEvent,
+        Behaviour,
+        Config,
+        Event,
     };
     use futures::{
         future::poll_fn,
@@ -260,12 +261,10 @@ mod tests {
 
     fn build_behavior_fn(
         bootstrap_nodes: Vec<Multiaddr>,
-    ) -> impl FnOnce(Keypair) -> DiscoveryBehaviour {
+    ) -> impl FnOnce(Keypair) -> Behaviour {
         |keypair| {
-            let mut config = DiscoveryConfig::new(
-                keypair.public().to_peer_id(),
-                "test_network".into(),
-            );
+            let mut config =
+                Config::new(keypair.public().to_peer_id(), "test_network".into());
             config
                 .max_peers_connected(MAX_PEERS)
                 .with_bootstrap_nodes(bootstrap_nodes)
@@ -278,7 +277,7 @@ mod tests {
     /// helper function for building Discovery Behaviour for testing
     fn build_fuel_discovery(
         bootstrap_nodes: Vec<Multiaddr>,
-    ) -> (Swarm<DiscoveryBehaviour>, Multiaddr, PeerId) {
+    ) -> (Swarm<Behaviour>, Multiaddr, PeerId) {
         let behaviour_fn = build_behavior_fn(bootstrap_nodes);
 
         let listen_addr: Multiaddr = Protocol::Memory(rand::random::<u64>()).into();
@@ -354,7 +353,7 @@ mod tests {
                                 // if peer has connected - remove it from the set
                                 left_to_discover[swarm_index].remove(&peer_id);
                             }
-                            SwarmEvent::Behaviour(KademliaEvent::UnroutablePeer {
+                            SwarmEvent::Behaviour(Event::UnroutablePeer {
                                 peer: peer_id,
                             }) => {
                                 // kademlia discovered a peer but does not have it's address

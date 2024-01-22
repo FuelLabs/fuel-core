@@ -18,7 +18,7 @@ use crate::{
         },
         topics::GossipsubTopics,
     },
-    heartbeat::HeartbeatEvent,
+    heartbeat,
     peer_manager::{
         PeerManager,
         Punisher,
@@ -41,7 +41,7 @@ use fuel_core_types::{
 use futures::prelude::*;
 use libp2p::{
     gossipsub::{
-        Event as GossipsubEvent,
+        self,
         MessageAcceptance,
         MessageId,
         PublishError,
@@ -50,9 +50,8 @@ use libp2p::{
     identify,
     multiaddr::Protocol,
     request_response::{
-        Event as RequestResponseEvent,
+        self,
         InboundRequestId,
-        Message as RequestResponseMessage,
         OutboundRequestId,
         ResponseChannel,
     },
@@ -453,8 +452,11 @@ impl FuelP2PService {
         }
     }
 
-    fn handle_gossipsub_event(&mut self, event: GossipsubEvent) -> Option<FuelP2PEvent> {
-        if let GossipsubEvent::Message {
+    fn handle_gossipsub_event(
+        &mut self,
+        event: gossipsub::Event,
+    ) -> Option<FuelP2PEvent> {
+        if let gossipsub::Event::Message {
             propagation_source,
             message,
             message_id,
@@ -538,11 +540,11 @@ impl FuelP2PService {
 
     fn handle_request_response_event(
         &mut self,
-        event: RequestResponseEvent<RequestMessage, ResponseMessage>,
+        event: request_response::Event<RequestMessage, ResponseMessage>,
     ) -> Option<FuelP2PEvent> {
         match event {
-            RequestResponseEvent::Message { peer, message } => match message {
-                RequestResponseMessage::Request {
+            request_response::Event::Message { peer, message } => match message {
+                request_response::Message::Request {
                     request,
                     channel,
                     request_id,
@@ -554,7 +556,7 @@ impl FuelP2PService {
                         request_message: request,
                     })
                 }
-                RequestResponseMessage::Response {
+                request_response::Message::Response {
                     request_id,
                     response,
                 } => {
@@ -591,14 +593,14 @@ impl FuelP2PService {
                     }
                 }
             },
-            RequestResponseEvent::InboundFailure {
+            request_response::Event::InboundFailure {
                 peer,
                 error,
                 request_id,
             } => {
                 tracing::error!("RequestResponse inbound error for peer: {:?} with id: {:?} and error: {:?}", peer, request_id, error);
             }
-            RequestResponseEvent::OutboundFailure {
+            request_response::Event::OutboundFailure {
                 peer,
                 error,
                 request_id,
@@ -651,8 +653,11 @@ impl FuelP2PService {
         None
     }
 
-    fn handle_heartbeat_event(&mut self, event: HeartbeatEvent) -> Option<FuelP2PEvent> {
-        let HeartbeatEvent {
+    fn handle_heartbeat_event(
+        &mut self,
+        event: heartbeat::Event,
+    ) -> Option<FuelP2PEvent> {
+        let heartbeat::Event {
             peer_id,
             latest_block_height,
         } = event;
