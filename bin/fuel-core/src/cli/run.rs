@@ -268,15 +268,15 @@ impl Command {
                     "Fuel Core is using an insecure test key for consensus. Public key: {}",
                     key.public_key()
                 );
+                if trigger == Trigger::Never {
+                    warn!("Consensus key configured but block production is disabled!")
+                }
+
                 Some(Secret::new(key.into()))
             } else {
                 None
             }
         });
-
-        if consensus_key.is_some() && trigger == Trigger::Never {
-            warn!("Consensus key configured but block production is disabled!")
-        }
 
         let coinbase_recipient = if let Some(coinbase_recipient) = coinbase_recipient {
             Some(
