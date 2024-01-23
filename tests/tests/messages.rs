@@ -581,3 +581,48 @@ fn verify_merkle<D: AsRef<[u8]>>(
     let set: Vec<_> = set.iter().map(|bytes| *bytes.deref()).collect();
     fuel_merkle::binary::verify(root.deref(), data, &set, index, leaf_count)
 }
+
+#[tokio::test]
+async fn can_get_message() {
+    // create an owner
+    let owner = Address::new([1; 32]);
+
+    // create some messages for the owner
+    let first_msg = MessageConfig {
+        recipient: owner,
+        nonce: 1.into(),
+        ..Default::default()
+    };
+
+    // configure the messges
+    let mut config = Config::local_node();
+    config.chain_conf.initial_state = Some(StateConfig {
+        messages: Some(vec![first_msg.clone()]),
+        ..Default::default()
+    });
+
+    // setup service and client
+    let service = FuelService::new_node(config).await.unwrap();
+    let client = FuelClient::from(service.bound_address);
+
+    // run test
+    let message_response = client.message(&first_msg.nonce).await.unwrap();
+    assert!(message_response.is_some());
+    if let Some(message_response) = message_response {
+        assert_eq!(message_response.nonce, first_msg.nonce);
+    }
+}
+
+#[tokio::test]
+async fn can_get_empty_message() {
+    let mut config = Config::local_node();
+    config.chain_conf.initial_state = Some(StateConfig {
+        ..Default::default()
+    });
+
+    let service = FuelService::new_node(config).await.unwrap();
+    let client = FuelClient::from(service.bound_address);
+
+    let message_response = client.message(&1.into()).await.unwrap();
+    assert!(message_response.is_none());
+}
