@@ -3,6 +3,7 @@ use super::scalars::{
     Tai64Timestamp,
 };
 use crate::{
+    database::Database,
     fuel_core_graphql_api::{
         api_service::ConsensusModule,
         database::ReadView,
@@ -58,6 +59,7 @@ pub struct Block(pub(crate) CompressedBlock);
 pub struct Header(pub(crate) BlockHeader);
 
 #[derive(Union)]
+#[non_exhaustive]
 pub enum Consensus {
     Genesis(Genesis),
     PoA(PoAConsensus),
@@ -95,11 +97,12 @@ impl Block {
     }
 
     async fn consensus(&self, ctx: &Context<'_>) -> async_graphql::Result<Consensus> {
-        let query: &ReadView = ctx.data_unchecked();
+        let query: &Database = ctx.data_unchecked();
         let height = self.0.header().height();
-        let consensus = query.consensus(height)?;
+        let core_consensus = query.consensus(height)?;
 
-        Ok(consensus.into())
+        let my_consensus = core_consensus.try_into()?;
+        Ok(my_consensus)
     }
 
     async fn transactions(
@@ -343,13 +346,16 @@ impl From<CoreGenesis> for Genesis {
     }
 }
 
-impl From<CoreConsensus> for Consensus {
-    fn from(consensus: CoreConsensus) -> Self {
+impl TryFrom<CoreConsensus> for Consensus {
+    type Error = String;
+
+    fn try_from(consensus: CoreConsensus) -> Result<Self, Self::Error> {
         match consensus {
-            CoreConsensus::Genesis(genesis) => Consensus::Genesis(genesis.into()),
-            CoreConsensus::PoA(poa) => Consensus::PoA(PoAConsensus {
+            CoreConsensus::Genesis(genesis) => Ok(Consensus::Genesis(genesis.into())),
+            CoreConsensus::PoA(poa) => Ok(Consensus::PoA(PoAConsensus {
                 signature: poa.signature.into(),
-            }),
+            })),
+            _ => Err(format!("Unknown consensus type: {:?}", consensus)),
         }
     }
 }
