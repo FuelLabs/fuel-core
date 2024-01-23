@@ -93,6 +93,7 @@ pub enum Error {
     NotUnique(BlockHeight),
     #[from]
     StorageError(StorageError),
+    UnsupportedConsensusVariant(String),
 }
 
 impl From<Error> for anyhow::Error {
@@ -259,6 +260,12 @@ where
                     .checked_add(1u32)
                     .ok_or(Error::Overflow)?
                     .into()
+            }
+            _ => {
+                return Err(Error::UnsupportedConsensusVariant(format!(
+                    "{:?}",
+                    consensus
+                )))
             }
         };
 

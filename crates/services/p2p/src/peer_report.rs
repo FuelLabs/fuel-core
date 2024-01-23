@@ -1,18 +1,15 @@
-use crate::{
-    config::Config,
-    heartbeat::Heartbeat,
-};
+use crate::config::Config;
 use libp2p::{
     self,
     core::Endpoint,
-    identify::Behaviour as Identify,
+    identify,
     swarm::{
         derive_prelude::{
             ConnectionClosed,
             ConnectionEstablished,
             FromSwarm,
         },
-        dummy::ConnectionHandler as DummyConnectionHandler,
+        dummy,
         ConnectionDenied,
         ConnectionId,
         NetworkBehaviour,
@@ -57,14 +54,14 @@ pub enum PeerReportEvent {
 }
 
 // `Behaviour` that reports events about peers
-pub struct PeerReportBehaviour {
+pub struct Behaviour {
     pending_events: VecDeque<PeerReportEvent>,
     // regulary checks if reserved nodes are connected
     health_check: Interval,
     decay_interval: Interval,
 }
 
-impl PeerReportBehaviour {
+impl Behaviour {
     pub(crate) fn new(_config: &Config) -> Self {
         Self {
             pending_events: VecDeque::default(),
@@ -78,8 +75,8 @@ impl PeerReportBehaviour {
     }
 }
 
-impl NetworkBehaviour for PeerReportBehaviour {
-    type ConnectionHandler = DummyConnectionHandler;
+impl NetworkBehaviour for Behaviour {
+    type ConnectionHandler = dummy::ConnectionHandler;
     type ToSwarm = PeerReportEvent;
 
     fn handle_established_inbound_connection(
@@ -89,7 +86,7 @@ impl NetworkBehaviour for PeerReportBehaviour {
         _local_addr: &Multiaddr,
         _remote_addr: &Multiaddr,
     ) -> Result<THandler<Self>, ConnectionDenied> {
-        Ok(DummyConnectionHandler)
+        Ok(dummy::ConnectionHandler)
     }
 
     fn handle_established_outbound_connection(
@@ -99,7 +96,7 @@ impl NetworkBehaviour for PeerReportBehaviour {
         _addr: &Multiaddr,
         _role_override: Endpoint,
     ) -> Result<THandler<Self>, ConnectionDenied> {
-        Ok(DummyConnectionHandler)
+        Ok(dummy::ConnectionHandler)
     }
 
     fn on_swarm_event(&mut self, event: FromSwarm) {
@@ -170,8 +167,8 @@ trait FromAction<T: NetworkBehaviour>: NetworkBehaviour {
     ) -> Option<ToSwarm<Self::ToSwarm, THandlerInEvent<Self>>>;
 }
 
-impl FromSwarmEvent for Heartbeat {}
-impl FromSwarmEvent for Identify {}
+impl FromSwarmEvent for Behaviour {}
+impl FromSwarmEvent for identify::Behaviour {}
 
 trait FromSwarmEvent: NetworkBehaviour {
     fn handle_swarm_event(&mut self, event: &FromSwarm) {

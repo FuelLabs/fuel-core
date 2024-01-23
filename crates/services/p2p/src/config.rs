@@ -1,6 +1,6 @@
 use crate::{
     gossipsub::config::default_gossipsub_config,
-    heartbeat::HeartbeatConfig,
+    heartbeat,
     peer_manager::ConnectionState,
     TryPeerId,
 };
@@ -11,17 +11,17 @@ use libp2p::{
         muxing::StreamMuxerBox,
         transport::Boxed,
     },
-    gossipsub::Config as GossipsubConfig,
+    gossipsub,
     identity::{
         secp256k1,
         Keypair,
     },
-    noise::Config as NoiseConfig,
+    noise,
     tcp::{
-        tokio::Transport as TokioTcpTransport,
-        Config as TcpConfig,
+        self,
+        tokio,
     },
-    yamux::Config as YamuxConfig,
+    yamux,
     Multiaddr,
     PeerId,
     Transport,
@@ -119,9 +119,9 @@ pub struct Config<State = Initialized> {
     pub info_interval: Option<Duration>,
 
     // `Gossipsub` config
-    pub gossipsub_config: GossipsubConfig,
+    pub gossipsub_config: gossipsub::Config,
 
-    pub heartbeat_config: HeartbeatConfig,
+    pub heartbeat_config: heartbeat::Config,
 
     // RequestResponse related fields
     /// Sets the timeout for inbound and outbound requests.
@@ -224,7 +224,7 @@ impl Config<NotInitialized> {
             reserved_nodes: vec![],
             reserved_nodes_only_mode: false,
             gossipsub_config: default_gossipsub_config(),
-            heartbeat_config: HeartbeatConfig::default(),
+            heartbeat_config: heartbeat::Config::default(),
             set_request_timeout: REQ_RES_TIMEOUT,
             set_connection_keep_alive: REQ_RES_TIMEOUT,
             heartbeat_check_interval: Duration::from_secs(10),
@@ -262,7 +262,7 @@ pub(crate) fn build_transport_function(
     let transport_function = move |keypair: &Keypair| {
         let transport = {
             let generate_tcp_transport = || {
-                TokioTcpTransport::new(TcpConfig::new().port_reuse(true).nodelay(true))
+                tokio::Transport::new(tcp::Config::new().port_reuse(true).nodelay(true))
             };
 
             let tcp = generate_tcp_transport();
@@ -275,12 +275,12 @@ pub(crate) fn build_transport_function(
         .upgrade(libp2p::core::upgrade::Version::V1Lazy);
 
         let noise_authenticated =
-            NoiseConfig::new(keypair).expect("Noise key generation failed");
+            noise::Config::new(keypair).expect("Noise key generation failed");
 
         let multiplex_config = {
             let mplex_config = MplexConfig::default();
 
-            let mut yamux_config = YamuxConfig::default();
+            let mut yamux_config = yamux::Config::default();
             // TODO: remove deprecated method call https://github.com/FuelLabs/fuel-core/issues/1592
             #[allow(deprecated)]
             yamux_config.set_max_buffer_size(MAX_RESPONSE_SIZE);
