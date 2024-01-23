@@ -25,6 +25,7 @@ impl Database {
         let slots = slots
             .map(|(key, value)| (ContractsStateKey::new(contract_id, &key), value))
             .collect_vec();
+        #[allow(clippy::map_identity)]
         <_ as StorageBatchMutate<ContractsState>>::init_storage(
             &mut self.data,
             &mut slots.iter().map(|(key, value)| (key, value)),
