@@ -77,7 +77,6 @@ use fuel_core_types::{
         consts::WORD_SIZE,
     },
 };
-use futures::executor::block_on;
 use rand::SeedableRng;
 use utils::{
     make_u128,
@@ -334,11 +333,12 @@ fn service_with_many_contracts(
             .unwrap();
     }
 
-    let service = block_on(fuel_core::service::FuelService::new(
-        database,
-        config.clone(),
-    ))
-    .expect("Unable to start a FuelService");
+    let service = rt
+        .block_on(fuel_core::service::FuelService::new(
+            database,
+            config.clone(),
+        ))
+        .expect("Unable to start a FuelService");
     service.start().expect("Unable to start the service");
     (service, rt)
 }

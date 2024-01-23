@@ -122,7 +122,8 @@ fn load_contract(
 
 // Maybe deploy a contract with large state and execute the script
 pub async fn run_contract_large_state(ctx: &TestContext) -> Result<(), Failed> {
-    let (contract_config, state) = load_contract("./src/tests/test_data/large_state")?;
+    let (mut contract_config, state) =
+        load_contract("./src/tests/test_data/large_state")?;
     let dry_run = include_bytes!("test_data/large_state/tx.json");
     let dry_run: Transaction = serde_json::from_slice(dry_run.as_ref())
         .expect("Should be able do decode the Transaction");
