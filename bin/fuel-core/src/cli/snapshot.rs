@@ -23,6 +23,7 @@ use std::path::{
     Path,
     PathBuf,
 };
+use tracing::warn;
 
 /// Print a snapshot of blockchain state to stdout.
 #[derive(Debug, Clone, Parser)]
@@ -153,9 +154,18 @@ fn write_chain_config(
     file: &Path,
 ) -> Result<(), anyhow::Error> {
     let height = db.get_block_height()?;
+
+    let chain_config = match chain_config {
+        Some(file) => ChainConfig::load(file)?,
+        None => {
+            warn!("No chain config provided, using local testnet config");
+            ChainConfig::local_testnet()
+        }
+    };
+
     let chain_config = ChainConfig {
         height: Some(height),
-        ..load_chain_config(chain_config)?
+        ..chain_config
     };
 
     chain_config.create_config_file(file)
@@ -216,17 +226,6 @@ fn write_chain_state(
     encoder.close()?;
 
     Ok(())
-}
-
-fn load_chain_config(
-    chain_config: Option<PathBuf>,
-) -> Result<ChainConfig, anyhow::Error> {
-    let chain_config = match chain_config {
-        Some(file) => ChainConfig::load(file)?,
-        None => ChainConfig::local_testnet(),
-    };
-
-    Ok(chain_config)
 }
 
 fn open_db(path: &Path) -> anyhow::Result<impl ChainStateDb> {
