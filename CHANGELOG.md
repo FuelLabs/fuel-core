@@ -10,6 +10,7 @@ Description of the upcoming release here.
 
 ### Changed
 
+- [#1614](https://github.com/FuelLabs/fuel-core/pull/#1614): Use default consensus key regardless of trigger mode.
 - [#1591](https://github.com/FuelLabs/fuel-core/pull/1591): Simplify libp2p dependencies and not depend on all sub modules directly.
 - [#1590](https://github.com/FuelLabs/fuel-core/pull/1590): Use `AtomicView` in the `TxPool` to read the state of the database during insertion of the transactions.
 - [#1587](https://github.com/FuelLabs/fuel-core/pull/1587): Use `BlockHeight` as a primary key for the `FuelsBlock` table.
