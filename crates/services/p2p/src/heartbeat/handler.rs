@@ -46,7 +46,7 @@ pub enum HeartbeatOutEvent {
 }
 
 #[derive(Debug, Clone)]
-pub struct HeartbeatConfig {
+pub struct Config {
     /// Sending of `BlockHeight` should not take longer than this
     send_timeout: Duration,
     /// Idle time before sending next `BlockHeight`
@@ -56,7 +56,7 @@ pub struct HeartbeatConfig {
     max_failures: NonZeroU32,
 }
 
-impl HeartbeatConfig {
+impl Config {
     pub fn new(
         send_timeout: Duration,
         idle_timeout: Duration,
@@ -70,7 +70,7 @@ impl HeartbeatConfig {
     }
 }
 
-impl Default for HeartbeatConfig {
+impl Default for Config {
     fn default() -> Self {
         Self::new(
             Duration::from_secs(60),
@@ -84,7 +84,7 @@ type InboundData = BoxFuture<'static, Result<(Stream, BlockHeight), std::io::Err
 type OutboundData = BoxFuture<'static, Result<Stream, std::io::Error>>;
 
 pub struct HeartbeatHandler {
-    config: HeartbeatConfig,
+    config: Config,
     inbound: Option<InboundData>,
     outbound: Option<OutboundState>,
     timer: Pin<Box<Sleep>>,
@@ -92,7 +92,7 @@ pub struct HeartbeatHandler {
 }
 
 impl HeartbeatHandler {
-    pub fn new(config: HeartbeatConfig) -> Self {
+    pub fn new(config: Config) -> Self {
         Self {
             config,
             inbound: None,

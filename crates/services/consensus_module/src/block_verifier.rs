@@ -72,6 +72,7 @@ where
             Consensus::PoA(_) => {
                 fuel_core_poa::verifier::verify_block_fields(&self.database, block)
             }
+            _ => Err(anyhow::anyhow!("Unsupported consensus: {:?}", consensus)),
         }
     }
 
@@ -88,6 +89,7 @@ where
                 header,
                 consensus,
             ),
+            _ => false,
         }
     }
 
