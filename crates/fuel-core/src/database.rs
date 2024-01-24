@@ -515,7 +515,7 @@ impl Default for Database {
     }
 }
 
-/// Implement `ChainConfigDb` so that `Database` can be passed to
+/// Implement `ChainStateDb` so that `Database` can be passed to
 /// `StateConfig's` `generate_state_config()` method
 impl ChainStateDb for Database {
     fn get_contract_config_by_id(

@@ -44,42 +44,6 @@ mod tests {
 
     use super::*;
 
-    #[test]
-    fn can_skip_groups_without_reading_whole_file() {
-        // given
-        let mut buffer = vec![];
-        let mut encoder = Encoder::<_, _, PostcardEncode>::new(
-            &mut buffer,
-            parquet::basic::Compression::ZSTD(ZstdLevel::try_new(1).unwrap()),
-        )
-        .unwrap();
-        let mut rng = StdRng::seed_from_u64(0);
-
-        let big_group = repeat_with(|| CoinConfig::randomize(&mut rng))
-            .take(1000)
-            .collect_vec();
-        encoder.write(big_group).unwrap();
-
-        let small_group = vec![CoinConfig::randomize(&mut rng)];
-        encoder.write(small_group).unwrap();
-        encoder.close().unwrap();
-        let total_size = buffer.len();
-
-        let bytes = TrackingReader::new(buffer);
-        let bytes_read = bytes.read_bytes.clone();
-
-        let mut decoder = Decoder::<_, _, PostcardDecode>::new(bytes).unwrap();
-
-        // when
-        let _: Group<CoinConfig> = decoder.nth(1).unwrap().unwrap();
-
-        // then
-        let actually_read = bytes_read.load(std::sync::atomic::Ordering::SeqCst);
-
-        assert_eq!(total_size, 108803);
-        assert_eq!(actually_read, 942);
-    }
-
     #[derive(Clone)]
     struct TrackingReader {
         source: Arc<Mutex<Cursor<Vec<u8>>>>,
@@ -141,5 +105,41 @@ mod tests {
 
             Ok(Bytes::from(buf))
         }
+    }
+
+    #[test]
+    fn can_skip_groups_without_reading_whole_file() {
+        // given
+        let mut buffer = vec![];
+        let mut encoder = Encoder::<_, _, PostcardEncode>::new(
+            &mut buffer,
+            parquet::basic::Compression::ZSTD(ZstdLevel::try_new(1).unwrap()),
+        )
+        .unwrap();
+        let mut rng = StdRng::seed_from_u64(0);
+
+        let big_group = repeat_with(|| CoinConfig::randomize(&mut rng))
+            .take(1000)
+            .collect_vec();
+        encoder.write(big_group).unwrap();
+
+        let small_group = vec![CoinConfig::randomize(&mut rng)];
+        encoder.write(small_group).unwrap();
+        encoder.close().unwrap();
+        let total_size = buffer.len();
+
+        let bytes = TrackingReader::new(buffer);
+        let bytes_read = bytes.read_bytes.clone();
+
+        let mut decoder = Decoder::<_, _, PostcardDecode>::new(bytes).unwrap();
+
+        // when
+        let _: Group<CoinConfig> = decoder.nth(1).unwrap().unwrap();
+
+        // then
+        let actually_read = bytes_read.load(std::sync::atomic::Ordering::SeqCst);
+
+        assert_eq!(total_size, 108803);
+        assert_eq!(actually_read, 942);
     }
 }

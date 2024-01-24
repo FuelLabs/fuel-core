@@ -98,11 +98,11 @@ async fn execute_suite(config_path: String) {
 fn dev_config() -> Config {
     let mut config = Config::local_node();
 
-    let snapshot =
-        SnapshotMetadata::open("../../deployment/scripts/chainspec/dev").unwrap();
-    let chain_config = ChainConfig::from_snapshot(&snapshot)
+    let snapshot = SnapshotMetadata::read("../../deployment/scripts/chainspec/dev")
+        .expect("Should be able to open snapshot metadata");
+    let chain_config = ChainConfig::from_snapshot_metadata(&snapshot)
         .expect("Should be able to load chain config");
-    let state_config = StateConfig::from_snapshot(&snapshot)
+    let state_config = StateConfig::from_snapshot_metadata(snapshot)
         .expect("Should be able to read state config");
 
     // The `run_contract_large_state` test creates a contract with a huge state

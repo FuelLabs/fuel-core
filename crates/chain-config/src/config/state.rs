@@ -81,7 +81,9 @@ impl StateConfig {
     }
 
     #[cfg(feature = "std")]
-    pub fn from_snapshot(snapshot_metadata: SnapshotMetadata) -> anyhow::Result<Self> {
+    pub fn from_snapshot_metadata(
+        snapshot_metadata: SnapshotMetadata,
+    ) -> anyhow::Result<Self> {
         let decoder =
             crate::Decoder::for_snapshot(snapshot_metadata, crate::MAX_GROUP_SIZE)?;
 

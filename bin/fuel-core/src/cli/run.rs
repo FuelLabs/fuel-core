@@ -257,7 +257,7 @@ impl Command {
             None => (ChainConfig::local_testnet(), StateConfig::local_testnet()),
             Some(path) => {
                 let metadata = SnapshotMetadata::read(path)?;
-                let chain_conf = ChainConfig::from_snapshot(&metadata)?;
+                let chain_conf = ChainConfig::from_snapshot_metadata(&metadata)?;
                 let state_config = StateConfig::from_snapshot_metadata(metadata)?;
                 (chain_conf, state_config)
             }

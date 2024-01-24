@@ -328,6 +328,17 @@ mod tests {
     use itertools::Itertools;
 
     #[test]
+    fn can_roundtrip_compression_level() {
+        use strum::IntoEnumIterator;
+
+        for level in ZstdCompressionLevel::iter() {
+            let u8_level = u8::from(level);
+            let roundtrip = ZstdCompressionLevel::try_from(u8_level).unwrap();
+            assert_eq!(level, roundtrip);
+        }
+    }
+
+    #[test]
     fn json_encoder_generates_single_file_with_expected_name() {
         // given
         let dir = tempfile::tempdir().unwrap();

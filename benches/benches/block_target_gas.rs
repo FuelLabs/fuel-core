@@ -272,7 +272,7 @@ fn service_with_many_contracts(
             tx_pointer_tx_idx: None,
         })
         .collect::<Vec<_>>();
-    config.state_config.contracts = Some(contract_configs);
+    config.state_config.contracts = contract_configs;
 
     config
         .chain_config
