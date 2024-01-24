@@ -97,12 +97,12 @@ fn test_verify_genesis_block_fields(input: Input) -> anyhow::Result<()> {
         .returning(move |_| Ok(block_header_merkle_root.into()));
     d.expect_block_header().returning(move |_| {
         let mut h = BlockHeader::default();
-        h.consensus.time = prev_header_time;
-        h.application.da_height = prev_header_da_height.into();
+        h.consensus_mut().time = prev_header_time;
+        h.application_mut().da_height = prev_header_da_height.into();
         Ok(h)
     });
     let mut b = Block::default();
-    b.header_mut().consensus = ch;
-    b.header_mut().application = ah;
+    *b.header_mut().consensus_mut() = ch;
+    *b.header_mut().application_mut() = ah;
     verify_block_fields(&d, &b)
 }

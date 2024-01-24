@@ -371,7 +371,7 @@ mod tests {
             let invalid_duplicate_tx = script.clone().into();
 
             let mut block = Block::default();
-            block.header_mut().consensus.height = 1.into();
+            block.header_mut().consensus_mut().height = 1.into();
             *block.transactions_mut() = vec![script.into(), invalid_duplicate_tx];
             block.header_mut().recalculate_metadata();
 
@@ -439,7 +439,7 @@ mod tests {
             .max_fee();
 
             let mut block = Block::default();
-            block.header_mut().consensus.height = 2.into();
+            block.header_mut().consensus_mut().height = 2.into();
             *block.transactions_mut() = vec![script.into()];
             block.header_mut().recalculate_metadata();
 
@@ -1174,7 +1174,11 @@ mod tests {
             .unwrap();
 
         // randomize transaction commitment
-        block.header_mut().application.generated.transactions_root = rng.gen();
+        block
+            .header_mut()
+            .application_mut()
+            .generated
+            .transactions_root = rng.gen();
         block.header_mut().recalculate_metadata();
 
         let verify_result = verifier

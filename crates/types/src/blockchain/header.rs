@@ -404,7 +404,7 @@ impl core::ops::Deref for BlockHeader {
     type Target = ApplicationHeader<GeneratedApplicationFields>;
 
     fn deref(&self) -> &Self::Target {
-        &self.application()
+        self.application()
     }
 }
 
@@ -434,7 +434,7 @@ impl core::ops::Deref for ConsensusHeader<GeneratedConsensusFields> {
 
 impl core::convert::AsRef<ConsensusHeader<GeneratedConsensusFields>> for BlockHeader {
     fn as_ref(&self) -> &ConsensusHeader<GeneratedConsensusFields> {
-        &self.consensus()
+        self.consensus()
     }
 }
 
