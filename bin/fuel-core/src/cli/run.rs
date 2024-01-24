@@ -260,18 +260,19 @@ impl Command {
             info!("Block production disabled");
         }
 
+        let consensus_key = load_consensus_key(consensus_key)?;
+        if consensus_key.is_some() && trigger == Trigger::Never {
+            warn!("Consensus key configured but block production is disabled!");
+        }
+
         // if consensus key is not configured, fallback to dev consensus key
-        let consensus_key = load_consensus_key(consensus_key)?.or_else(|| {
+        let consensus_key = consensus_key.or_else(|| {
             if debug {
                 let key = default_consensus_dev_key();
                 warn!(
                     "Fuel Core is using an insecure test key for consensus. Public key: {}",
                     key.public_key()
                 );
-                if trigger == Trigger::Never {
-                    warn!("Consensus key configured but block production is disabled!")
-                }
-
                 Some(Secret::new(key.into()))
             } else {
                 None
