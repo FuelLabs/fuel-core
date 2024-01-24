@@ -1,20 +1,25 @@
-use std::borrow::Cow;
-
+use crate::{
+    ports::RelayerDb,
+    storage::{
+        History,
+        RelayerMetadata,
+    },
+};
 use fuel_core_storage::test_helpers::MockStorage;
 use fuel_core_types::entities::message::Message;
+use std::borrow::Cow;
 use test_case::test_case;
 
-use super::*;
-
 #[test]
-fn test_insert_messages() {
+fn test_insert_events() {
+    let same_height = 12;
     let mut db = MockStorage::default();
-    db.expect_insert::<Messages>()
-        .times(2)
+    db.expect_insert::<History>()
+        .times(1)
         .returning(|_, _| Ok(None));
     db.expect_insert::<RelayerMetadata>()
         .times(1)
-        .withf(|_, v| **v == 12)
+        .withf(move |_, v| **v == same_height)
         .returning(|_, _| Ok(None));
     db.expect_commit().returning(|| Ok(()));
     db.expect_get::<RelayerMetadata>()
@@ -24,49 +29,100 @@ fn test_insert_messages() {
 
     let m = Message {
         amount: 10,
-        da_height: 12u64.into(),
+        da_height: same_height.into(),
         ..Default::default()
     };
     let mut m2 = m.clone();
     m2.nonce = 1.into();
     assert_ne!(m.id(), m2.id());
-    let messages = [m, m2];
-    db.insert_messages(&12u64.into(), &messages[..]).unwrap();
+    let messages = [m.into(), m2.into()];
+    db.insert_events(&same_height.into(), &messages[..])
+        .unwrap();
 }
 
 #[test]
-fn insert_always_raises_da_height_monotonically() {
-    let messages: Vec<_> = (0..10)
-        .map(|i| Message {
-            amount: i,
-            da_height: i.into(),
-            ..Default::default()
+fn insert_works_for_messages_with_same_height() {
+    // Given
+    let same_height = 12u64.into();
+    let events: Vec<_> = (0..10)
+        .map(|i| {
+            Message {
+                amount: i,
+                da_height: same_height,
+                ..Default::default()
+            }
+            .into()
         })
         .collect();
 
     let mut db = MockStorage::default();
-    db.expect_insert::<Messages>().returning(|_, _| Ok(None));
+    db.expect_insert::<History>().returning(|_, _| Ok(None));
     db.expect_insert::<RelayerMetadata>()
         .once()
-        .withf(|_, v| **v == 9)
+        .withf(move |_, v| *v == same_height)
         .returning(|_, _| Ok(None));
     db.expect_commit().returning(|| Ok(()));
     db.expect_get::<RelayerMetadata>()
         .once()
         .returning(|_| Ok(None));
 
+    // When
     let mut db = db.into_transactional();
-    db.insert_messages(&9u64.into(), &messages[5..]).unwrap();
+    let result = db.insert_events(&same_height, &events);
 
-    let mut db = MockStorage::default();
-    db.expect_insert::<Messages>().returning(|_, _| Ok(None));
-    db.expect_commit().returning(|| Ok(()));
-    db.expect_get::<RelayerMetadata>()
-        .once()
-        .returning(|_| Ok(Some(std::borrow::Cow::Owned(9u64.into()))));
+    // Then
+    assert!(result.is_ok());
+}
 
+#[test]
+fn insert_fails_for_messages_with_different_height() {
+    // Given
+    let last_height = 1u64;
+    let events: Vec<_> = (0..=last_height)
+        .map(|i| {
+            Message {
+                amount: i,
+                da_height: i.into(),
+                ..Default::default()
+            }
+            .into()
+        })
+        .collect();
+
+    let db = MockStorage::default();
+
+    // When
     let mut db = db.into_transactional();
-    db.insert_messages(&5u64.into(), &messages[..5]).unwrap();
+    let result = db.insert_events(&last_height.into(), &events);
+
+    // Then
+    assert!(result.is_err());
+}
+
+#[test]
+fn insert_fails_for_messages_same_height_but_on_different_height() {
+    // Given
+    let last_height = 1u64;
+    let events: Vec<_> = (0..=last_height)
+        .map(|i| {
+            Message {
+                amount: i,
+                da_height: last_height.into(),
+                ..Default::default()
+            }
+            .into()
+        })
+        .collect();
+
+    let db = MockStorage::default();
+
+    // When
+    let mut db = db.into_transactional();
+    let next_height = last_height + 1;
+    let result = db.insert_events(&next_height.into(), &events);
+
+    // Then
+    assert!(result.is_err());
 }
 
 #[test_case(None, 0, 0; "can set DA height to 0 when there is none available")]

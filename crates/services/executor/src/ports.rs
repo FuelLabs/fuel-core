@@ -6,31 +6,30 @@ use fuel_core_storage::{
         ContractsLatestUtxo,
         ContractsRawCode,
         ContractsState,
+        FuelBlocks,
         Messages,
         ProcessedTransactions,
         SpentMessages,
     },
     transactional::Transactional,
-    vm_storage::VmStorageRequirements,
     Error as StorageError,
     MerkleRootStorage,
+    StorageBatchMutate,
     StorageMutate,
     StorageRead,
 };
 use fuel_core_types::{
     blockchain::primitives::DaBlockHeight,
-    entities::message::Message,
+    fuel_merkle::storage::StorageInspect,
     fuel_tx,
     fuel_tx::{
         ContractId,
         TxId,
         UniqueIdentifier,
     },
-    fuel_types::{
-        ChainId,
-        Nonce,
-    },
+    fuel_types::ChainId,
     fuel_vm::checked_transaction::CheckedTransaction,
+    services::relayer::Event,
 };
 
 /// The wrapper around either `Transaction` or `CheckedTransaction`.
@@ -62,18 +61,17 @@ pub trait TransactionsSource {
 }
 
 pub trait RelayerPort {
-    /// Get a message from the relayer if it has been
-    /// synced and is <= the given da height.
-    fn get_message(
-        &self,
-        id: &Nonce,
-        da_height: &DaBlockHeight,
-    ) -> anyhow::Result<Option<Message>>;
+    /// Returns `true` if the relayer is enabled.
+    fn enabled(&self) -> bool;
+
+    /// Get events from the relayer at a given da height.
+    fn get_events(&self, da_height: &DaBlockHeight) -> anyhow::Result<Vec<Event>>;
 }
 
 // TODO: Remove `Clone` bound
 pub trait ExecutorDatabaseTrait<D>:
-    StorageMutate<Messages, Error = StorageError>
+    StorageInspect<FuelBlocks, Error = StorageError>
+    + StorageMutate<Messages, Error = StorageError>
     + StorageMutate<ProcessedTransactions, Error = StorageError>
     + MerkleRootStorage<ContractId, ContractsAssets, Error = StorageError>
     + StorageMutate<Coins, Error = StorageError>
@@ -83,7 +81,7 @@ pub trait ExecutorDatabaseTrait<D>:
     + StorageRead<ContractsRawCode>
     + StorageMutate<ContractsInfo, Error = StorageError>
     + MerkleRootStorage<ContractId, ContractsState, Error = StorageError>
-    + VmStorageRequirements<Error = StorageError>
+    + StorageBatchMutate<ContractsState, Error = StorageError>
     + Transactional<Storage = D>
     + Clone
 {

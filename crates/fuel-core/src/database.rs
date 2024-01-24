@@ -39,16 +39,8 @@ use fuel_core_storage::{
     Result as StorageResult,
 };
 use fuel_core_types::{
-    blockchain::primitives::{
-        BlockId,
-        DaBlockHeight,
-    },
-    fuel_types::{
-        BlockHeight,
-        Bytes32,
-        ContractId,
-    },
-    tai64::Tai64,
+    blockchain::primitives::DaBlockHeight,
+    fuel_types::BlockHeight,
 };
 use std::{
     fmt::{
@@ -392,26 +384,6 @@ impl ChainConfigDb for Database {
 
     fn get_block_height(&self) -> StorageResult<BlockHeight> {
         self.latest_height()
-    }
-}
-
-impl fuel_core_storage::vm_storage::VmStorageRequirements for Database {
-    type Error = StorageError;
-
-    fn block_time(&self, height: &BlockHeight) -> StorageResult<Tai64> {
-        self.block_time(height)
-    }
-
-    fn get_block_id(&self, height: &BlockHeight) -> StorageResult<Option<BlockId>> {
-        self.get_block_id(height)
-    }
-
-    fn init_contract_state<S: Iterator<Item = (Bytes32, Bytes32)>>(
-        &mut self,
-        contract_id: &ContractId,
-        slots: S,
-    ) -> StorageResult<()> {
-        self.init_contract_state(contract_id, slots)
     }
 }
 
