@@ -70,7 +70,7 @@ impl SpendQuery {
 
         for query in query_per_asset {
             if duplicate_checker.contains(&query.id) {
-                return Err(CoinsQueryError::DuplicateAssets(query.id));
+                return Err(CoinsQueryError::DuplicateAssets(query.id))
             }
             duplicate_checker.insert(query.id);
         }
@@ -134,12 +134,12 @@ pub fn largest_first(query: &AssetQuery) -> Result<Vec<CoinType>, CoinsQueryErro
     for coin in inputs {
         // Break if we don't need any more coins
         if collected_amount >= query.asset.target {
-            break;
+            break
         }
 
         // Error if we can't fit more coins
         if coins.len() >= query.asset.max {
-            return Err(CoinsQueryError::MaxCoinsReached);
+            return Err(CoinsQueryError::MaxCoinsReached)
         }
 
         // Add to list
@@ -151,7 +151,7 @@ pub fn largest_first(query: &AssetQuery) -> Result<Vec<CoinType>, CoinsQueryErro
         return Err(CoinsQueryError::InsufficientCoins {
             asset_id: query.asset.id,
             collected_amount,
-        });
+        })
     }
 
     Ok(coins)
@@ -181,7 +181,7 @@ pub fn random_improve(
             if collected_amount >= target {
                 // Break if found coin exceeds max `u64` or the upper limit
                 if collected_amount == u64::MAX || coin.amount() > upper_target {
-                    break;
+                    break
                 }
 
                 // Break if adding doesn't improve the distance
@@ -192,7 +192,7 @@ pub fn random_improve(
                 let next_distance =
                     target.abs_diff(change_amount.saturating_add(coin.amount()));
                 if next_distance >= distance {
-                    break;
+                    break
                 }
             }
 

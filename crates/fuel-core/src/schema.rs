@@ -147,7 +147,7 @@ where
                         // Skip until start + 1
                         if key == start {
                             has_previous_page = true;
-                            return true;
+                            return true
                         }
                     }
                 }
@@ -161,7 +161,7 @@ where
                         // take until we've reached the end
                         if key == end {
                             has_next_page = true;
-                            return false;
+                            return false
                         }
                     }
                     count = count.saturating_sub(1);

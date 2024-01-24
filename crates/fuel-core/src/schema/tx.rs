@@ -138,7 +138,7 @@ impl TxQuery {
                     .skip_while(move |result| {
                         if let Ok(sorted) = result {
                             if let Some(start) = start {
-                                return sorted != &start;
+                                return sorted != &start
                             }
                         }
                         false

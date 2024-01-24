@@ -103,7 +103,7 @@ async fn import_chain_state(workers: GenesisWorkers) -> anyhow::Result<()> {
             }
         };
 
-        return Err(e);
+        return Err(e)
     }
 
     workers.compute_contracts_root().await?;
@@ -225,7 +225,7 @@ fn init_coin(
     if coin_height > height {
         return Err(anyhow!(
             "coin tx_pointer height ({coin_height}) cannot be greater than genesis block ({height})"
-        ));
+        ))
     }
 
     if db.storage::<Coins>().insert(&utxo_id, &coin)?.is_some() {

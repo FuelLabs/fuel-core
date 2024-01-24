@@ -165,7 +165,7 @@ impl Database {
         let slots = slots.collect_vec();
 
         if slots.is_empty() {
-            return Ok(());
+            return Ok(())
         }
 
         if self
@@ -174,7 +174,7 @@ impl Database {
         {
             return Err(
                 anyhow::anyhow!("The contract state is already initialized").into()
-            );
+            )
         }
 
         // Keys and values should be original without any modifications.

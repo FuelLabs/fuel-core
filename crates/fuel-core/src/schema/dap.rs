@@ -84,7 +84,7 @@ impl ConcreteStorage {
     pub fn memory(&self, id: &ID, start: usize, size: usize) -> Option<&[u8]> {
         let (end, overflow) = start.overflowing_add(size);
         if overflow || end as u64 > consts::VM_MAX_RAM {
-            return None;
+            return None
         }
 
         self.vm.get(id).map(|vm| &vm.memory()[start..end])

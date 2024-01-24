@@ -41,7 +41,6 @@ strum = { workspace = true, features = ["derive"] }
 tempfile = { workspace = true }
 
 [features]
-
 std = [
   "itertools/use_std",
   "serde_json/std",

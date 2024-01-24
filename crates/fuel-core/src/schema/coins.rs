@@ -175,7 +175,7 @@ impl CoinQuery {
                     if let (Ok(coin), Some(filter_asset_id)) = (&result, &filter.asset_id)
                     {
                         if coin.asset_id != filter_asset_id.0 {
-                            return None;
+                            return None
                         }
                     }
 
