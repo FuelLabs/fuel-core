@@ -30,6 +30,7 @@ impl Database {
                 (ContractsAssetKey::new(contract_id, &asset), balance)
             })
             .collect_vec();
+        #[allow(clippy::map_identity)]
         <_ as StorageBatchMutate<ContractsAssets>>::init_storage(
             &mut self.data,
             &mut balances.iter().map(|(key, value)| (key, value)),

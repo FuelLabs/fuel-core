@@ -68,6 +68,7 @@ where
                 let view = self.view_provider.latest_view();
                 fuel_core_poa::verifier::verify_block_fields(&view, block)
             }
+            _ => Err(anyhow::anyhow!("Unsupported consensus: {:?}", consensus)),
         }
     }
 
@@ -84,6 +85,7 @@ where
                 header,
                 consensus,
             ),
+            _ => false,
         }
     }
 }

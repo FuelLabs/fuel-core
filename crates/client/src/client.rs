@@ -109,7 +109,10 @@ use types::{
 
 use self::schema::{
     block::ProduceBlockArgs,
-    message::MessageProofArgs,
+    message::{
+        MessageProofArgs,
+        NonceArgs,
+    },
 };
 
 pub mod pagination;
@@ -896,6 +899,15 @@ impl FuelClient {
         let balances = self.query(query).await?.contract_balances.into();
 
         Ok(balances)
+    }
+
+    // Retrieve a message by its nonce
+    pub async fn message(&self, nonce: &Nonce) -> io::Result<Option<types::Message>> {
+        let query = schema::message::MessageQuery::build(NonceArgs {
+            nonce: (*nonce).into(),
+        });
+        let message = self.query(query).await?.message.map(Into::into);
+        Ok(message)
     }
 
     pub async fn messages(

@@ -60,25 +60,6 @@ impl TableWithBlueprint for OwnedCoins {
     }
 }
 
-#[cfg(test)]
-mod test {
-    use super::*;
-
-    fn generate_key(rng: &mut impl rand::Rng) -> <OwnedCoins as Mappable>::Key {
-        let mut bytes = [0u8; 65];
-        rng.fill(bytes.as_mut());
-        bytes
-    }
-
-    fuel_core_storage::basic_storage_tests!(
-        OwnedCoins,
-        [0u8; 65],
-        <OwnedCoins as Mappable>::Value::default(),
-        <OwnedCoins as Mappable>::Value::default(),
-        generate_key
-    );
-}
-
 impl StorageInspect<Coins> for Database {
     type Error = StorageError;
 
@@ -173,4 +154,23 @@ impl Database {
 
         Ok(Some(configs))
     }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    fn generate_key(rng: &mut impl rand::Rng) -> <OwnedCoins as Mappable>::Key {
+        let mut bytes = [0u8; 65];
+        rng.fill(bytes.as_mut());
+        bytes
+    }
+
+    fuel_core_storage::basic_storage_tests!(
+        OwnedCoins,
+        [0u8; 65],
+        <OwnedCoins as Mappable>::Value::default(),
+        <OwnedCoins as Mappable>::Value::default(),
+        generate_key
+    );
 }

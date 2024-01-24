@@ -14,6 +14,7 @@ use crate::{
         database::ReadView,
         ports::DatabaseBlocks,
     },
+    graphql_api::IntoApiResult,
     query::MessageQueryData,
     schema::scalars::{
         BlockId,
@@ -66,6 +67,16 @@ pub struct MessageQuery {}
 
 #[Object]
 impl MessageQuery {
+    async fn message(
+        &self,
+        ctx: &Context<'_>,
+        #[graphql(desc = "The Nonce of the message")] nonce: Nonce,
+    ) -> async_graphql::Result<Option<Message>> {
+        let query: &ReadView = ctx.data_unchecked();
+        let nonce = nonce.0;
+        query.message(&nonce).into_api_result()
+    }
+
     async fn messages(
         &self,
         ctx: &Context<'_>,
