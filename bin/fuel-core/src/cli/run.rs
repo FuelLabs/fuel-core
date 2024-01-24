@@ -142,11 +142,6 @@ pub struct Command {
     #[clap(flatten)]
     pub poa_trigger: PoATriggerArgs,
 
-    /// Use a default insecure consensus key for testing purposes.
-    /// This will not be enabled by default in the future.
-    #[arg(long = "dev-keys", default_value = "true", env)]
-    pub consensus_dev_key: bool,
-
     /// The block's fee recipient public key.
     ///
     /// If not set, `consensus_key` is used as the provider of the `Address`.
@@ -226,7 +221,6 @@ impl Command {
             min_gas_price,
             consensus_key,
             poa_trigger,
-            consensus_dev_key,
             coinbase_recipient,
             #[cfg(feature = "relayer")]
             relayer_args,
@@ -266,9 +260,14 @@ impl Command {
             info!("Block production disabled");
         }
 
+        let consensus_key = load_consensus_key(consensus_key)?;
+        if consensus_key.is_some() && trigger == Trigger::Never {
+            warn!("Consensus key configured but block production is disabled!");
+        }
+
         // if consensus key is not configured, fallback to dev consensus key
-        let consensus_key = load_consensus_key(consensus_key)?.or_else(|| {
-            if consensus_dev_key && trigger != Trigger::Never {
+        let consensus_key = consensus_key.or_else(|| {
+            if debug {
                 let key = default_consensus_dev_key();
                 warn!(
                     "Fuel Core is using an insecure test key for consensus. Public key: {}",
@@ -276,14 +275,9 @@ impl Command {
                 );
                 Some(Secret::new(key.into()))
             } else {
-                // if consensus dev key is disabled, use no key
                 None
             }
         });
-
-        if consensus_key.is_some() && trigger == Trigger::Never {
-            warn!("Consensus key configured but block production is disabled!")
-        }
 
         let coinbase_recipient = if let Some(coinbase_recipient) = coinbase_recipient {
             Some(
