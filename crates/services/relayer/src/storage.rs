@@ -97,6 +97,7 @@ where
         // TODO: Think later about how to clean up the history of the relayer.
         //  Since we don't have too much information on the relayer and it can be useful
         //  at any time, maybe we want to consider keeping it all the time instead of creating snapshots.
+        //  https://github.com/FuelLabs/fuel-core/issues/1627
         Ok(())
     }
 
