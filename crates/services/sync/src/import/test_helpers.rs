@@ -42,11 +42,11 @@ pub fn random_peer() -> PeerId {
 pub fn empty_header<I: Into<BlockHeight>>(i: I) -> SealedBlockHeader {
     let mut header = BlockHeader::default();
     let height = i.into();
-    header.consensus.height = height;
+    header.consensus_mut().height = height;
     let transaction_tree =
         fuel_core_types::fuel_merkle::binary::root_calculator::MerkleRootCalculator::new(
         );
-    header.application.generated.transactions_root = transaction_tree.root().into();
+    header.application_mut().generated.transactions_root = transaction_tree.root().into();
 
     let consensus = Consensus::default();
     Sealed {
