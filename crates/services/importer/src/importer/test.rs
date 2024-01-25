@@ -88,7 +88,7 @@ struct MockExecutionResult {
 
 fn genesis(height: u32) -> SealedBlock {
     let mut block = Block::default();
-    block.header_mut().consensus_mut().height = height.into();
+    block.header_mut().set_block_height(height.into());
     block.header_mut().recalculate_metadata();
 
     SealedBlock {
@@ -99,7 +99,7 @@ fn genesis(height: u32) -> SealedBlock {
 
 fn poa_block(height: u32) -> SealedBlock {
     let mut block = Block::default();
-    block.header_mut().consensus_mut().height = height.into();
+    block.header_mut().set_block_height(height.into());
     block.header_mut().recalculate_metadata();
 
     SealedBlock {

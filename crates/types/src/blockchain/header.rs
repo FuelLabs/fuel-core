@@ -69,33 +69,69 @@ impl BlockHeader {
     }
 
     /// Getter for metadata portion of header
-    pub fn metadata(&self) -> &Option<BlockHeaderMetadata> {
+    fn metadata(&self) -> &Option<BlockHeaderMetadata> {
         match self {
             BlockHeader::V1(v1) => &v1.metadata,
         }
     }
 
     /// Mutable getter for consensus portion of header
-    pub fn consensus_mut(&mut self) -> &mut ConsensusHeader<GeneratedConsensusFields> {
+    fn consensus_mut(&mut self) -> &mut ConsensusHeader<GeneratedConsensusFields> {
         match self {
             BlockHeader::V1(v1) => &mut v1.consensus,
         }
     }
 
-    /// Mutable getter for application portion of header
-    pub fn application_mut(
+    /// Set the entire consensus header
+    pub fn set_consensus_header(
         &mut self,
-    ) -> &mut ApplicationHeader<GeneratedApplicationFields> {
+        consensus: ConsensusHeader<GeneratedConsensusFields>,
+    ) {
+        match self {
+            BlockHeader::V1(v1) => v1.consensus = consensus,
+        }
+    }
+
+    /// Mutable getter for application portion of header
+    fn application_mut(&mut self) -> &mut ApplicationHeader<GeneratedApplicationFields> {
         match self {
             BlockHeader::V1(v1) => &mut v1.application,
         }
     }
 
-    /// Mutable getter for metadata portion of header
-    pub fn metadata_mut(&mut self) -> &mut Option<BlockHeaderMetadata> {
+    /// Set the entire application header
+    pub fn set_application_header(
+        &mut self,
+        application: ApplicationHeader<GeneratedApplicationFields>,
+    ) {
         match self {
-            BlockHeader::V1(v1) => &mut v1.metadata,
+            BlockHeader::V1(v1) => v1.application = application,
         }
+    }
+
+    /// Set the block height for the header
+    pub fn set_block_height(&mut self, height: BlockHeight) {
+        self.consensus_mut().height = height;
+    }
+
+    /// Set the previous root for the header
+    pub fn set_previous_root(&mut self, root: Bytes32) {
+        self.consensus_mut().prev_root = root;
+    }
+
+    /// Set the time for the header
+    pub fn set_time(&mut self, time: Tai64) {
+        self.consensus_mut().time = time;
+    }
+
+    /// Set the transaction root for the header
+    pub fn set_transaction_root(&mut self, root: Bytes32) {
+        self.application_mut().generated.transactions_root = root;
+    }
+
+    /// Set the DA height for the header
+    pub fn set_da_height(&mut self, da_height: DaBlockHeight) {
+        self.application_mut().da_height = da_height;
     }
 }
 
@@ -254,7 +290,12 @@ impl BlockHeader {
     pub fn recalculate_metadata(&mut self) {
         let application_hash = self.application().hash();
         self.consensus_mut().generated.application_hash = application_hash;
-        *self.metadata_mut() = Some(BlockHeaderMetadata { id: self.hash() });
+        let id = self.hash();
+        match self {
+            BlockHeader::V1(v1) => {
+                v1.metadata = Some(BlockHeaderMetadata { id });
+            }
+        }
     }
 
     /// Get the hash of the fuel header.

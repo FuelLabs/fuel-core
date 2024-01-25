@@ -1463,7 +1463,7 @@ mod tests {
         let mut blocks = Vec::new();
         for i in range {
             let mut header: BlockHeader = Default::default();
-            header.consensus_mut().height = i.into();
+            header.set_block_height(i.into());
 
             let sealed_block = SealedBlockHeader {
                 entity: header,
