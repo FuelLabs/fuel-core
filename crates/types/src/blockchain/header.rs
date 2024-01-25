@@ -305,7 +305,7 @@ impl BlockHeader {
         // and can't change its final hash on the fly.
         //
         // This assertion is a double-checks that this behavior is not changed.
-        debug_assert_eq!(self.consensus().application_hash, self.application().hash());
+        debug_assert_eq!(self.application_hash(), &self.application().hash());
         // This internally hashes the hash of the application header.
         self.consensus().hash()
     }
