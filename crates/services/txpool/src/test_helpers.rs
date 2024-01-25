@@ -130,13 +130,10 @@ pub(crate) fn setup_coin(rng: &mut StdRng, mock_db: Option<&MockDb>) -> (Coin, I
 }
 
 pub(crate) fn add_coin_to_state(input: Input, mock_db: Option<&MockDb>) -> (Coin, Input) {
-    let coin = CompressedCoin {
-        owner: *input.input_owner().unwrap(),
-        amount: TEST_COIN_AMOUNT,
-        asset_id: *input.asset_id(&AssetId::BASE).unwrap(),
-        maturity: Default::default(),
-        tx_pointer: Default::default(),
-    };
+    let mut coin = CompressedCoin::default();
+    coin.set_owner(*input.input_owner().unwrap());
+    coin.set_amount(TEST_COIN_AMOUNT);
+    coin.set_asset_id(*input.asset_id(&AssetId::BASE).unwrap());
     let utxo_id = *input.utxo_id().unwrap();
     if let Some(mock_db) = mock_db {
         mock_db

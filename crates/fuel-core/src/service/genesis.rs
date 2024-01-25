@@ -181,28 +181,33 @@ fn init_coin_state(
                     }),
                 );
 
-                let coin = CompressedCoin {
-                    owner: coin.owner,
-                    amount: coin.amount,
-                    asset_id: coin.asset_id,
-                    maturity: coin.maturity.unwrap_or_default(),
-                    tx_pointer: TxPointer::new(
-                        coin.tx_pointer_block_height.unwrap_or_default(),
-                        coin.tx_pointer_tx_idx.unwrap_or_default(),
-                    ),
-                };
+                let mut compressed_coin = CompressedCoin::default();
+                compressed_coin.set_owner(coin.owner);
+                compressed_coin.set_amount(coin.amount);
+                compressed_coin.set_asset_id(coin.asset_id);
+                compressed_coin.set_maturity(coin.maturity.unwrap_or_default());
+                compressed_coin.set_tx_pointer(TxPointer::new(
+                    coin.tx_pointer_block_height.unwrap_or_default(),
+                    coin.tx_pointer_tx_idx.unwrap_or_default(),
+                ));
 
                 // ensure coin can't point to blocks in the future
-                if coin.tx_pointer.block_height() > state.height.unwrap_or_default() {
+                if compressed_coin.tx_pointer().block_height()
+                    > state.height.unwrap_or_default()
+                {
                     return Err(anyhow!(
                         "coin tx_pointer height cannot be greater than genesis block"
                     ))
                 }
 
-                if db.storage::<Coins>().insert(&utxo_id, &coin)?.is_some() {
+                if db
+                    .storage::<Coins>()
+                    .insert(&utxo_id, &compressed_coin)?
+                    .is_some()
+                {
                     return Err(anyhow!("Coin should not exist"))
                 }
-                coins_tree.push(coin.root()?.as_slice())
+                coins_tree.push(compressed_coin.root()?.as_slice())
             }
         }
     }

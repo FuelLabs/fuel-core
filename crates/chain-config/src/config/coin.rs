@@ -58,13 +58,11 @@ pub struct CoinConfig {
 
 impl GenesisCommitment for CompressedCoin {
     fn root(&self) -> anyhow::Result<MerkleRoot> {
-        let Self {
-            owner,
-            amount,
-            asset_id,
-            maturity,
-            tx_pointer,
-        } = self;
+        let owner = self.owner();
+        let amount = self.amount();
+        let asset_id = self.asset_id();
+        let maturity = self.maturity();
+        let tx_pointer = self.tx_pointer();
 
         let coin_hash = *Hasher::default()
             .chain(owner)

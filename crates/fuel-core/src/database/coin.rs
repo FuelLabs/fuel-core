@@ -78,7 +78,7 @@ impl StorageMutate<Coins> for Database {
         key: &UtxoId,
         value: &CompressedCoin,
     ) -> Result<Option<CompressedCoin>, Self::Error> {
-        let coin_by_owner = owner_coin_id_key(&value.owner, key);
+        let coin_by_owner = owner_coin_id_key(value.owner(), key);
         // insert primary record
         let insert = self.data.storage_as_mut::<Coins>().insert(key, value)?;
         // insert secondary index by owner
@@ -92,7 +92,7 @@ impl StorageMutate<Coins> for Database {
 
         // cleanup secondary index
         if let Some(coin) = &coin {
-            let key = owner_coin_id_key(&coin.owner, key);
+            let key = owner_coin_id_key(coin.owner(), key);
             self.storage_as_mut::<OwnedCoins>().remove(&key)?;
         }
 
@@ -142,12 +142,12 @@ impl Database {
                 Ok(CoinConfig {
                     tx_id: Some(*utxo_id.tx_id()),
                     output_index: Some(utxo_id.output_index()),
-                    tx_pointer_block_height: Some(coin.tx_pointer.block_height()),
-                    tx_pointer_tx_idx: Some(coin.tx_pointer.tx_index()),
-                    maturity: Some(coin.maturity),
-                    owner: coin.owner,
-                    amount: coin.amount,
-                    asset_id: coin.asset_id,
+                    tx_pointer_block_height: Some(coin.tx_pointer().block_height()),
+                    tx_pointer_tx_idx: Some(coin.tx_pointer().tx_index()),
+                    maturity: Some(*coin.maturity()),
+                    owner: *coin.owner(),
+                    amount: *coin.amount(),
+                    asset_id: *coin.asset_id(),
                 })
             })
             .collect::<StorageResult<Vec<CoinConfig>>>()?;
