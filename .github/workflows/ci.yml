@@ -272,6 +272,7 @@ jobs:
             type=ref,event=branch
             type=ref,event=tag
             type=semver,pattern={{raw}}
+            type=raw,value=sha-{{sha}}-{{date 'YYYYMMDDhhmmss'}}
           flavor: |
             latest=${{ github.ref == 'refs/heads/master' }}
 
@@ -327,6 +328,7 @@ jobs:
             type=ref,event=branch
             type=ref,event=tag
             type=semver,pattern={{raw}}
+            type=raw,value=sha-{{sha}}-{{date 'YYYYMMDDhhmmss'}}
           flavor: |
             latest=${{ github.ref == 'refs/heads/master' }}
 
@@ -380,6 +382,7 @@ jobs:
             type=ref,event=branch
             type=ref,event=tag
             type=semver,pattern={{raw}}
+            type=raw,value=sha-{{sha}}-{{date 'YYYYMMDDhhmmss'}}
           flavor: |
             latest=${{ github.ref == 'refs/heads/master' }}
 
@@ -590,6 +593,7 @@ jobs:
           DELETE_INFRA: true
 
   # Deploy Latest Fuel-Core Release
+  # TODO: remove deploy steps after the old cluster is decommissioned
   deploy:
     if: github.ref == 'refs/heads/master'
     needs:
