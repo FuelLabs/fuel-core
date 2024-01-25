@@ -68,7 +68,7 @@ impl ExecutorAdapter {
             relayer: self.relayer.clone(),
             config: self.config.clone(),
         };
-        executor.dry_run(block, utxo_validation)
+        Ok(executor.dry_run(vec![block], utxo_validation)?.pop().expect("Nonempty response"))
     }
 }
 

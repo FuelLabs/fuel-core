@@ -14,7 +14,6 @@ use fuel_core_storage::{
         ContractsLatestUtxo,
         Messages,
         ProcessedTransactions,
-        Receipts,
         SpentMessages,
     },
     transactional::{
@@ -23,7 +22,6 @@ use fuel_core_storage::{
     },
     StorageAsMut,
     StorageAsRef,
-    StorageInspect,
 };
 use fuel_core_types::{
     blockchain::{
@@ -77,7 +75,6 @@ use fuel_core_types::{
         Transaction,
         TxId,
         TxPointer,
-        UniqueIdentifier,
         UtxoId,
     },
     fuel_types::{
@@ -266,11 +263,11 @@ where
 
             let (
                 ExecutionResult {
-                    block,
+                    tx_status,
                     skipped_transactions,
                     ..
                 },
-                temporary_db,
+                _temporary_db,
             ) = self
                 .execute_without_commit(ExecutionTypes::DryRun(component), options)?
                 .into();
@@ -280,22 +277,12 @@ where
                 return Err(err)
             }
 
-            let receipts = block
-                .transactions()
-                .iter()
-                .map(|tx| {
-                    let id = tx.id(&self.config.consensus_parameters.chain_id);
-                    StorageInspect::<Receipts>::get(temporary_db.as_ref(), &id)
-                        .transpose()
-                        .unwrap_or_else(|| Ok(Default::default()))
-                        .map(|v| v.into_owned())
-                })
-                .collect::<Result<Vec<Vec<Receipt>>, _>>()?;
+            let receipts = tx_status.into_iter().map(|tx| tx.receipts).collect::<Vec<Vec<Receipt>>>();
 
             receipts_per_block.push(receipts);
+            // drop `_temporary_db` without committing to avoid altering state.
         }
         Ok(receipts_per_block)
-        // drop `_temporary_db` without committing to avoid altering state.
     }
 }
 
