@@ -14,6 +14,7 @@ use fuel_core_storage::{
         ContractsLatestUtxo,
         Messages,
         ProcessedTransactions,
+        Receipts,
         SpentMessages,
     },
     transactional::{
@@ -22,6 +23,7 @@ use fuel_core_storage::{
     },
     StorageAsMut,
     StorageAsRef,
+    StorageInspect,
 };
 use fuel_core_types::{
     blockchain::{
@@ -75,6 +77,7 @@ use fuel_core_types::{
         Transaction,
         TxId,
         TxPointer,
+        UniqueIdentifier,
         UtxoId,
     },
     fuel_types::{
@@ -242,43 +245,56 @@ where
 
     pub fn dry_run(
         &self,
-        component: Components<Transaction>,
+        blocks: Vec<Components<Transaction>>,
         utxo_validation: Option<bool>,
-    ) -> ExecutorResult<Vec<Vec<Receipt>>> {
+    ) -> ExecutorResult<Vec<Vec<Vec<Receipt>>>> {
         // fallback to service config value if no utxo_validation override is provided
         let utxo_validation =
             utxo_validation.unwrap_or(self.config.utxo_validation_default);
 
         let options = ExecutionOptions { utxo_validation };
 
-        let component = Components {
-            header_to_produce: component.header_to_produce,
-            transactions_source: OnceTransactionsSource::new(vec![
-                component.transactions_source,
-            ]),
-            gas_limit: component.gas_limit,
-        };
+        let mut receipts_per_block = Vec::new();
+        for component in blocks {
+            let component = Components {
+                header_to_produce: component.header_to_produce,
+                transactions_source: OnceTransactionsSource::new(vec![
+                    component.transactions_source,
+                ]),
+                gas_limit: component.gas_limit,
+            };
 
-        let (
-            ExecutionResult {
-                skipped_transactions,
-                tx_status,
-                ..
-            },
-            _temporary_db,
-        ) = self
-            .execute_without_commit(ExecutionTypes::DryRun(component), options)?
-            .into();
+            let (
+                ExecutionResult {
+                    block,
+                    skipped_transactions,
+                    ..
+                },
+                temporary_db,
+            ) = self
+                .execute_without_commit(ExecutionTypes::DryRun(component), options)?
+                .into();
 
-        // If one of the transactions fails, return an error.
-        if let Some((_, err)) = skipped_transactions.into_iter().next() {
-            return Err(err)
+            // If one of the transactions failes, return an error
+            if let Some((_, err)) = skipped_transactions.into_iter().next() {
+                return Err(err)
+            }
+
+            let receipts = block
+                .transactions()
+                .iter()
+                .map(|tx| {
+                    let id = tx.id(&self.config.consensus_parameters.chain_id);
+                    StorageInspect::<Receipts>::get(temporary_db.as_ref(), &id)
+                        .transpose()
+                        .unwrap_or_else(|| Ok(Default::default()))
+                        .map(|v| v.into_owned())
+                })
+                .collect::<Result<Vec<Vec<Receipt>>, _>>()?;
+
+            receipts_per_block.push(receipts);
         }
-
-        Ok(tx_status
-            .into_iter()
-            .map(|tx| tx.receipts)
-            .collect::<Vec<Vec<Receipt>>>())
+        Ok(receipts_per_block)
         // drop `_temporary_db` without committing to avoid altering state.
     }
 }

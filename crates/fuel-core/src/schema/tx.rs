@@ -261,21 +261,27 @@ impl TxMutation {
         // If set to false, disable input utxo validation, overriding the configuration of the node.
         // This allows for non-existent inputs to be used without signature validation
         // for read-only calls.
-        utxo_validation: Option<bool>
+        utxo_validation: Option<bool>,
     ) -> async_graphql::Result<Vec<Vec<Vec<receipt::Receipt>>>> {
         let block_producer = ctx.data_unchecked::<BlockProducer>();
         let config = ctx.data_unchecked::<Config>();
 
-        let blocks = blocks.into_iter().map(|txs| {
-            txs.into_iter().map(|h| FuelTx::from_bytes(&h.0)).collect::<Result<Vec<FuelTx>, _>>()
-        }).collect::<Result<Vec<Vec<FuelTx>>, _>>()?;
+        let blocks = blocks
+            .into_iter()
+            .map(|txs| {
+                txs.into_iter()
+                    .map(|h| FuelTx::from_bytes(&h.0))
+                    .collect::<Result<Vec<FuelTx>, _>>()
+            })
+            .collect::<Result<Vec<Vec<FuelTx>>, _>>()?;
 
         let mut multi_block_receipts: Vec<Vec<Vec<receipt::Receipt>>> = vec![];
         for block in blocks {
             let mut block_receipts: Vec<Vec<receipt::Receipt>> = vec![];
             for mut tx in block {
                 tx.precompute(&config.consensus_parameters.chain_id)?;
-                let receipts = block_producer.dry_run_tx(tx, None, utxo_validation).await?;
+                let receipts =
+                    block_producer.dry_run_tx(tx, None, utxo_validation).await?;
                 block_receipts.push(receipts.iter().map(Into::into).collect());
             }
             multi_block_receipts.push(block_receipts);
