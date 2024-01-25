@@ -30,7 +30,11 @@ use fuel_core_types::{
         },
     },
     entities::message::Message,
-    fuel_tx::AssetId,
+    fuel_tx::{
+        Address,
+        AssetId,
+        UtxoId,
+    },
     fuel_types::{
         BlockHeight,
         Nonce,
@@ -103,25 +107,33 @@ impl DatabaseContracts for Database {
 }
 
 impl DatabaseChain for Database {
-    fn chain_name(&self) -> StorageResult<String> {
-        pub const DEFAULT_NAME: &str = "Fuel.testnet";
-
-        Ok(self
-            .get_chain_name()?
-            .unwrap_or_else(|| DEFAULT_NAME.to_string()))
-    }
-
     fn da_height(&self) -> StorageResult<DaBlockHeight> {
-        #[cfg(feature = "relayer")]
-        {
-            use fuel_core_relayer::ports::RelayerDb;
-            self.get_finalized_da_height()
-        }
-        #[cfg(not(feature = "relayer"))]
-        {
-            Ok(0u64.into())
-        }
+        self.latest_compressed_block()?
+            .map(|block| block.header().da_height)
+            .ok_or(not_found!("DaBlockHeight"))
     }
 }
 
-impl OnChainDatabase for Database {}
+impl OnChainDatabase for Database {
+    fn owned_message_ids(
+        &self,
+        owner: &Address,
+        start_message_id: Option<Nonce>,
+        direction: IterDirection,
+    ) -> BoxedIter<'_, StorageResult<Nonce>> {
+        self.owned_message_ids(owner, start_message_id, Some(direction))
+            .map(|result| result.map_err(StorageError::from))
+            .into_boxed()
+    }
+
+    fn owned_coins_ids(
+        &self,
+        owner: &Address,
+        start_coin: Option<UtxoId>,
+        direction: IterDirection,
+    ) -> BoxedIter<'_, StorageResult<UtxoId>> {
+        self.owned_coins_ids(owner, start_coin, Some(direction))
+            .map(|res| res.map_err(StorageError::from))
+            .into_boxed()
+    }
+}

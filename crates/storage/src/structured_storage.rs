@@ -6,10 +6,10 @@ use crate::{
         Blueprint,
         SupportsBatching,
     },
-    column::Column,
     kv_store::{
         BatchOperations,
         KeyValueStore,
+        StorageColumn,
     },
     Error as StorageError,
     Mappable,
@@ -26,7 +26,6 @@ pub mod coins;
 pub mod contracts;
 pub mod merkle_data;
 pub mod messages;
-pub mod receipts;
 pub mod sealed_block;
 pub mod state;
 pub mod transactions;
@@ -37,9 +36,11 @@ pub mod transactions;
 pub trait TableWithBlueprint: Mappable + Sized {
     /// The type of the blueprint used by the table.
     type Blueprint;
+    /// The column type used by the table.
+    type Column: StorageColumn;
 
     /// The column occupied by the table.
-    fn column() -> Column;
+    fn column() -> Self::Column;
 }
 
 /// The wrapper around the key-value storage that implements the storage traits for the tables
@@ -68,10 +69,10 @@ impl<S> AsMut<S> for StructuredStorage<S> {
     }
 }
 
-impl<S, M> StorageInspect<M> for StructuredStorage<S>
+impl<Column, S, M> StorageInspect<M> for StructuredStorage<S>
 where
     S: KeyValueStore<Column = Column>,
-    M: Mappable + TableWithBlueprint,
+    M: Mappable + TableWithBlueprint<Column = Column>,
     M::Blueprint: Blueprint<M, S>,
 {
     type Error = StorageError;
@@ -86,10 +87,10 @@ where
     }
 }
 
-impl<S, M> StorageMutate<M> for StructuredStorage<S>
+impl<Column, S, M> StorageMutate<M> for StructuredStorage<S>
 where
     S: KeyValueStore<Column = Column>,
-    M: Mappable + TableWithBlueprint,
+    M: Mappable + TableWithBlueprint<Column = Column>,
     M::Blueprint: Blueprint<M, S>,
 {
     fn insert(
@@ -110,10 +111,10 @@ where
     }
 }
 
-impl<S, M> StorageSize<M> for StructuredStorage<S>
+impl<Column, S, M> StorageSize<M> for StructuredStorage<S>
 where
     S: KeyValueStore<Column = Column>,
-    M: Mappable + TableWithBlueprint,
+    M: Mappable + TableWithBlueprint<Column = Column>,
     M::Blueprint: Blueprint<M, S>,
 {
     fn size_of_value(&self, key: &M::Key) -> Result<Option<usize>, Self::Error> {
@@ -125,10 +126,10 @@ where
     }
 }
 
-impl<S, M> StorageBatchMutate<M> for StructuredStorage<S>
+impl<Column, S, M> StorageBatchMutate<M> for StructuredStorage<S>
 where
     S: BatchOperations<Column = Column>,
-    M: Mappable + TableWithBlueprint,
+    M: Mappable + TableWithBlueprint<Column = Column>,
     M::Blueprint: SupportsBatching<M, S>,
 {
     fn init_storage<'a, Iter>(&mut self, set: Iter) -> Result<(), Self::Error>
@@ -162,8 +163,8 @@ where
 #[cfg(feature = "test-helpers")]
 pub mod test {
     use crate as fuel_core_storage;
+    use crate::kv_store::StorageColumn;
     use fuel_core_storage::{
-        column::Column,
         kv_store::{
             BatchOperations,
             KeyValueStore,
@@ -176,15 +177,28 @@ pub mod test {
         collections::HashMap,
     };
 
-    type Storage = RefCell<HashMap<(Column, Vec<u8>), Vec<u8>>>;
+    type Storage = RefCell<HashMap<(u32, Vec<u8>), Vec<u8>>>;
 
     /// The in-memory storage for testing purposes.
-    #[derive(Default, Debug, PartialEq, Eq)]
-    pub struct InMemoryStorage {
+    #[derive(Debug, PartialEq, Eq)]
+    pub struct InMemoryStorage<Column> {
         storage: Storage,
+        _marker: core::marker::PhantomData<Column>,
     }
 
-    impl KeyValueStore for InMemoryStorage {
+    impl<Column> Default for InMemoryStorage<Column> {
+        fn default() -> Self {
+            Self {
+                storage: Storage::default(),
+                _marker: Default::default(),
+            }
+        }
+    }
+
+    impl<Column> KeyValueStore for InMemoryStorage<Column>
+    where
+        Column: StorageColumn,
+    {
         type Column = Column;
 
         fn write(
@@ -196,12 +210,14 @@ pub mod test {
             let write = buf.len();
             self.storage
                 .borrow_mut()
-                .insert((column, key.to_vec()), buf.to_vec());
+                .insert((column.id(), key.to_vec()), buf.to_vec());
             Ok(write)
         }
 
         fn delete(&self, key: &[u8], column: Self::Column) -> StorageResult<()> {
-            self.storage.borrow_mut().remove(&(column, key.to_vec()));
+            self.storage
+                .borrow_mut()
+                .remove(&(column.id(), key.to_vec()));
             Ok(())
         }
 
@@ -209,12 +225,12 @@ pub mod test {
             Ok(self
                 .storage
                 .borrow_mut()
-                .get(&(column, key.to_vec()))
+                .get(&(column.id(), key.to_vec()))
                 .map(|v| v.clone().into()))
         }
     }
 
-    impl BatchOperations for InMemoryStorage {}
+    impl<Column> BatchOperations for InMemoryStorage<Column> where Column: StorageColumn {}
 
     /// The macro that generates basic storage tests for the table with [`InMemoryStorage`].
     #[macro_export]
@@ -229,6 +245,7 @@ pub mod test {
                     structured_storage::{
                         test::InMemoryStorage,
                         StructuredStorage,
+                        TableWithBlueprint,
                     },
                     StorageAsMut,
                 };
@@ -248,7 +265,7 @@ pub mod test {
 
                 #[test]
                 fn get() {
-                    let mut storage = InMemoryStorage::default();
+                    let mut storage = InMemoryStorage::<<$table as TableWithBlueprint>::Column>::default();
                     let mut structured_storage = StructuredStorage::new(&mut storage);
                     let key = $key;
 
@@ -270,7 +287,7 @@ pub mod test {
 
                 #[test]
                 fn insert() {
-                    let mut storage = InMemoryStorage::default();
+                    let mut storage = InMemoryStorage::<<$table as TableWithBlueprint>::Column>::default();
                     let mut structured_storage = StructuredStorage::new(&mut storage);
                     let key = $key;
 
@@ -290,7 +307,7 @@ pub mod test {
 
                 #[test]
                 fn remove() {
-                    let mut storage = InMemoryStorage::default();
+                    let mut storage = InMemoryStorage::<<$table as TableWithBlueprint>::Column>::default();
                     let mut structured_storage = StructuredStorage::new(&mut storage);
                     let key = $key;
 
@@ -309,7 +326,7 @@ pub mod test {
 
                 #[test]
                 fn exists() {
-                    let mut storage = InMemoryStorage::default();
+                    let mut storage = InMemoryStorage::<<$table as TableWithBlueprint>::Column>::default();
                     let mut structured_storage = StructuredStorage::new(&mut storage);
                     let key = $key;
 
@@ -334,7 +351,7 @@ pub mod test {
 
                 #[test]
                 fn exists_false_after_removing() {
-                    let mut storage = InMemoryStorage::default();
+                    let mut storage = InMemoryStorage::<<$table as TableWithBlueprint>::Column>::default();
                     let mut structured_storage = StructuredStorage::new(&mut storage);
                     let key = $key;
 
@@ -366,9 +383,9 @@ pub mod test {
                         SeedableRng,
                     };
 
-                    let empty_storage = InMemoryStorage::default();
+                    let empty_storage = InMemoryStorage::<<$table as TableWithBlueprint>::Column>::default();
 
-                    let mut init_storage = InMemoryStorage::default();
+                    let mut init_storage = InMemoryStorage::<<$table as TableWithBlueprint>::Column>::default();
                     let mut init_structured_storage = StructuredStorage::new(&mut init_storage);
 
                     let mut rng = &mut StdRng::seed_from_u64(1234);
@@ -384,7 +401,7 @@ pub mod test {
                         })
                     ).expect("Should initialize the storage successfully");
 
-                    let mut insert_storage = InMemoryStorage::default();
+                    let mut insert_storage = InMemoryStorage::<<$table as TableWithBlueprint>::Column>::default();
                     let mut insert_structured_storage = StructuredStorage::new(&mut insert_storage);
 
                     <_ as $crate::StorageBatchMutate<$table>>::insert_batch(
@@ -447,7 +464,7 @@ pub mod test {
 
                 #[test]
                 fn root() {
-                    let mut storage = InMemoryStorage::default();
+                    let mut storage = InMemoryStorage::<<$table as TableWithBlueprint>::Column>::default();
                     let mut structured_storage = StructuredStorage::new(&mut storage);
 
                     let rng = &mut StdRng::seed_from_u64(1234);
@@ -462,7 +479,7 @@ pub mod test {
 
                 #[test]
                 fn root_returns_empty_root_for_empty_metadata() {
-                    let mut storage = InMemoryStorage::default();
+                    let mut storage = InMemoryStorage::<<$table as TableWithBlueprint>::Column>::default();
                     let mut structured_storage = StructuredStorage::new(&mut storage);
 
                     let empty_root = fuel_core_types::fuel_merkle::sparse::in_memory::MerkleTree::new().root();
@@ -475,7 +492,7 @@ pub mod test {
 
                 #[test]
                 fn put_updates_the_state_merkle_root_for_the_given_metadata() {
-                    let mut storage = InMemoryStorage::default();
+                    let mut storage = InMemoryStorage::<<$table as TableWithBlueprint>::Column>::default();
                     let mut structured_storage = StructuredStorage::new(&mut storage);
 
                     let rng = &mut StdRng::seed_from_u64(1234);
@@ -513,7 +530,7 @@ pub mod test {
 
                 #[test]
                 fn remove_updates_the_state_merkle_root_for_the_given_metadata() {
-                    let mut storage = InMemoryStorage::default();
+                    let mut storage = InMemoryStorage::<<$table as TableWithBlueprint>::Column>::default();
                     let mut structured_storage = StructuredStorage::new(&mut storage);
 
                     let rng = &mut StdRng::seed_from_u64(1234);
@@ -562,7 +579,7 @@ pub mod test {
                     let given_primary_key = $current_key;
                     let foreign_primary_key = $foreign_key;
 
-                    let mut storage = InMemoryStorage::default();
+                    let mut storage = InMemoryStorage::<<$table as TableWithBlueprint>::Column>::default();
                     let mut structured_storage = StructuredStorage::new(&mut storage);
 
                     let rng = &mut StdRng::seed_from_u64(1234);
@@ -598,7 +615,7 @@ pub mod test {
 
                 #[test]
                 fn put_creates_merkle_metadata_when_empty() {
-                    let mut storage = InMemoryStorage::default();
+                    let mut storage = InMemoryStorage::<<$table as TableWithBlueprint>::Column>::default();
                     let mut structured_storage = StructuredStorage::new(&mut storage);
 
                     let rng = &mut StdRng::seed_from_u64(1234);
@@ -624,7 +641,7 @@ pub mod test {
 
                 #[test]
                 fn remove_deletes_merkle_metadata_when_empty() {
-                    let mut storage = InMemoryStorage::default();
+                    let mut storage = InMemoryStorage::<<$table as TableWithBlueprint>::Column>::default();
                     let mut structured_storage = StructuredStorage::new(&mut storage);
 
                     let rng = &mut StdRng::seed_from_u64(1234);

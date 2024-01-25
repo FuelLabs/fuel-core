@@ -16,6 +16,7 @@ use crate::{
 
 impl TableWithBlueprint for Transactions {
     type Blueprint = Plain<Raw, Postcard>;
+    type Column = Column;
 
     fn column() -> Column {
         Column::Transactions
@@ -31,6 +32,7 @@ crate::basic_storage_tests!(
 
 impl TableWithBlueprint for ProcessedTransactions {
     type Blueprint = Plain<Raw, Postcard>;
+    type Column = Column;
 
     fn column() -> Column {
         Column::ProcessedTransactions

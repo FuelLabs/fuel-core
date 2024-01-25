@@ -3,6 +3,7 @@ use crate::{
         database::ReadView,
         Config as GraphQLConfig,
     },
+    graphql_api::Config,
     query::{
         BlockQueryData,
         ChainQueryData,
@@ -683,8 +684,8 @@ impl HeavyOperation {
 #[Object]
 impl ChainInfo {
     async fn name(&self, ctx: &Context<'_>) -> async_graphql::Result<String> {
-        let query: &ReadView = ctx.data_unchecked();
-        Ok(query.name()?)
+        let config: &Config = ctx.data_unchecked();
+        Ok(config.chain_name.clone())
     }
 
     async fn latest_block(&self, ctx: &Context<'_>) -> async_graphql::Result<Block> {

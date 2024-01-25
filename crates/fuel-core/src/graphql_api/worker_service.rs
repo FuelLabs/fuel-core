@@ -1,4 +1,18 @@
-use crate::fuel_core_graphql_api::ports;
+use crate::{
+    database::{
+        database_description::{
+            off_chain::OffChain,
+            DatabaseDescription,
+            DatabaseMetadata,
+        },
+        metadata::MetadataTable,
+    },
+    fuel_core_graphql_api::{
+        ports,
+        storage::receipts::Receipts,
+    },
+};
+use fuel_core_metrics::graphql_metrics::graphql_metrics;
 use fuel_core_services::{
     stream::BoxStream,
     EmptyShared,
@@ -8,7 +22,6 @@ use fuel_core_services::{
     StateWatcher,
 };
 use fuel_core_storage::{
-    tables::Receipts,
     Result as StorageResult,
     StorageAsMut,
 };
@@ -63,16 +76,36 @@ where
         // TODO: Implement the creation of indexes for the messages and coins.
         //  Implement table `BlockId -> BlockHeight` to get the block height by block id.
         //  https://github.com/FuelLabs/fuel-core/issues/1583
+        let block = &result.sealed_block.entity;
         let mut transaction = self.database.transaction();
         // save the status for every transaction using the finalized block id
         self.persist_transaction_status(&result, transaction.as_mut())?;
 
         // save the associated owner for each transaction in the block
-        self.index_tx_owners_for_block(
-            &result.sealed_block.entity,
-            transaction.as_mut(),
-        )?;
+        self.index_tx_owners_for_block(block, transaction.as_mut())?;
+        let total_tx_count = transaction
+            .as_mut()
+            .increase_tx_count(block.transactions().len() as u64)
+            .unwrap_or_default();
+
+        // TODO: Temporary solution to store the block height in the database manually here.
+        //  Later it will be controlled by the `commit_changes` function on the `Database` side.
+        //  https://github.com/FuelLabs/fuel-core/issues/1589
+        transaction
+            .as_mut()
+            .storage::<MetadataTable<OffChain>>()
+            .insert(
+                &(),
+                &DatabaseMetadata::V1 {
+                    version: OffChain::version(),
+                    height: *block.header().height(),
+                },
+            )?;
+
         transaction.commit()?;
+
+        // update the importer metrics after the block is successfully committed
+        graphql_metrics().total_txs_count.set(total_tx_count as i64);
 
         Ok(())
     }
@@ -214,10 +247,13 @@ where
     }
 
     async fn into_task(
-        self,
+        mut self,
         _: &StateWatcher,
         _: Self::TaskParams,
     ) -> anyhow::Result<Self::Task> {
+        let total_tx_count = self.database.increase_tx_count(0).unwrap_or_default();
+        graphql_metrics().total_txs_count.set(total_tx_count as i64);
+
         // TODO: It is possible that the node was shut down before we processed all imported blocks.
         //  It could lead to some missed blocks and the database's inconsistent state.
         //  Because the result of block execution is not stored on the chain, it is impossible

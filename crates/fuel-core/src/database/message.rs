@@ -1,5 +1,5 @@
 use crate::database::{
-    Column,
+    database_description::on_chain::OnChain,
     Database,
 };
 use fuel_core_chain_config::MessageConfig;
@@ -63,9 +63,10 @@ impl Decode<OwnedMessageKey> for Manual<OwnedMessageKey> {
 
 impl TableWithBlueprint for OwnedMessageIds {
     type Blueprint = Plain<Manual<OwnedMessageKey>, Postcard>;
+    type Column = fuel_core_storage::column::Column;
 
-    fn column() -> fuel_core_storage::column::Column {
-        Column::OwnedMessageIds
+    fn column() -> Self::Column {
+        Self::Column::OwnedMessageIds
     }
 }
 
@@ -110,7 +111,7 @@ impl StorageMutate<Messages> for Database {
     }
 }
 
-impl Database {
+impl Database<OnChain> {
     pub fn owned_message_ids(
         &self,
         owner: &Address,
@@ -126,7 +127,9 @@ impl Database {
         )
         .map(|res| res.map(|(key, _)| *key.nonce()))
     }
+}
 
+impl Database {
     pub fn all_messages(
         &self,
         start: Option<Nonce>,
@@ -183,7 +186,7 @@ mod tests {
 
     #[test]
     fn owned_message_ids() {
-        let mut db = Database::default();
+        let mut db = Database::<OnChain>::default();
         let message = Message::default();
 
         // insert a message with the first id

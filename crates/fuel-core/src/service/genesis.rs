@@ -397,30 +397,6 @@ mod tests {
     use std::vec;
 
     #[tokio::test]
-    async fn config_initializes_chain_name() {
-        let test_name = "test_net_123".to_string();
-        let service_config = Config {
-            chain_conf: ChainConfig {
-                chain_name: test_name.clone(),
-                ..ChainConfig::local_testnet()
-            },
-            ..Config::local_node()
-        };
-
-        let db = Database::default();
-        FuelService::from_database(db.clone(), service_config)
-            .await
-            .unwrap();
-
-        assert_eq!(
-            test_name,
-            db.get_chain_name()
-                .unwrap()
-                .expect("Expected a chain name to be set")
-        )
-    }
-
-    #[tokio::test]
     async fn config_initializes_block_height() {
         let test_height = BlockHeight::from(99u32);
         let service_config = Config {

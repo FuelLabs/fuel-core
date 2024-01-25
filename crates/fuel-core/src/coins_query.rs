@@ -228,7 +228,7 @@ mod tests {
             CoinsQueryError,
             SpendQuery,
         },
-        database::Database,
+        combined_database::CombinedDatabase,
         fuel_core_graphql_api::api_service::ReadDatabase as ServiceDatabase,
         query::asset_query::{
             AssetQuery,
@@ -919,7 +919,7 @@ mod tests {
     }
 
     pub struct TestDatabase {
-        database: Database,
+        database: CombinedDatabase,
         last_coin_index: u64,
         last_message_index: u64,
     }
@@ -934,8 +934,9 @@ mod tests {
         }
 
         fn service_database(&self) -> ServiceDatabase {
-            let database = self.database.clone();
-            ServiceDatabase::new(database.clone(), database)
+            let on_chain = self.database.on_chain().clone();
+            let off_chain = self.database.off_chain().clone();
+            ServiceDatabase::new(on_chain, off_chain)
         }
     }
 
@@ -958,7 +959,7 @@ mod tests {
                 tx_pointer: Default::default(),
             };
 
-            let db = &mut self.database;
+            let db = self.database.on_chain_mut();
             StorageMutate::<Coins>::insert(db, &id, &coin).unwrap();
 
             coin.uncompress(id)
@@ -977,7 +978,7 @@ mod tests {
                 da_height: DaBlockHeight::from(1u64),
             };
 
-            let db = &mut self.database;
+            let db = self.database.on_chain_mut();
             StorageMutate::<Messages>::insert(db, message.id(), &message).unwrap();
 
             message

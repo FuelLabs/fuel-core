@@ -1,5 +1,3 @@
-mod arc_wrapper;
-
 use crate::fuel_core_graphql_api::{
     database::arc_wrapper::ArcWrapper,
     ports::{
@@ -11,13 +9,13 @@ use crate::fuel_core_graphql_api::{
         OffChainDatabase,
         OnChainDatabase,
     },
+    storage::receipts::Receipts,
 };
 use fuel_core_storage::{
     iter::{
         BoxedIter,
         IterDirection,
     },
-    tables::Receipts,
     transactional::AtomicView,
     Error as StorageError,
     Mappable,
@@ -59,6 +57,8 @@ use std::{
     borrow::Cow,
     sync::Arc,
 };
+
+mod arc_wrapper;
 
 /// The on-chain view of the database used by the [`ReadView`] to fetch on-chain data.
 pub type OnChainView = Arc<dyn OnChainDatabase>;
@@ -171,10 +171,6 @@ impl DatabaseContracts for ReadView {
 }
 
 impl DatabaseChain for ReadView {
-    fn chain_name(&self) -> StorageResult<String> {
-        self.on_chain.chain_name()
-    }
-
     fn da_height(&self) -> StorageResult<DaBlockHeight> {
         self.on_chain.da_height()
     }
@@ -191,7 +187,26 @@ impl DatabaseMessageProof for ReadView {
     }
 }
 
-impl OnChainDatabase for ReadView {}
+impl OnChainDatabase for ReadView {
+    fn owned_message_ids(
+        &self,
+        owner: &Address,
+        start_message_id: Option<Nonce>,
+        direction: IterDirection,
+    ) -> BoxedIter<'_, StorageResult<Nonce>> {
+        self.on_chain
+            .owned_message_ids(owner, start_message_id, direction)
+    }
+
+    fn owned_coins_ids(
+        &self,
+        owner: &Address,
+        start_coin: Option<UtxoId>,
+        direction: IterDirection,
+    ) -> BoxedIter<'_, StorageResult<UtxoId>> {
+        self.on_chain.owned_coins_ids(owner, start_coin, direction)
+    }
+}
 
 impl StorageInspect<Receipts> for ReadView {
     type Error = StorageError;
@@ -209,25 +224,6 @@ impl StorageInspect<Receipts> for ReadView {
 }
 
 impl OffChainDatabase for ReadView {
-    fn owned_message_ids(
-        &self,
-        owner: &Address,
-        start_message_id: Option<Nonce>,
-        direction: IterDirection,
-    ) -> BoxedIter<'_, StorageResult<Nonce>> {
-        self.off_chain
-            .owned_message_ids(owner, start_message_id, direction)
-    }
-
-    fn owned_coins_ids(
-        &self,
-        owner: &Address,
-        start_coin: Option<UtxoId>,
-        direction: IterDirection,
-    ) -> BoxedIter<'_, StorageResult<UtxoId>> {
-        self.off_chain.owned_coins_ids(owner, start_coin, direction)
-    }
-
     fn tx_status(&self, tx_id: &TxId) -> StorageResult<TransactionStatus> {
         self.off_chain.tx_status(tx_id)
     }

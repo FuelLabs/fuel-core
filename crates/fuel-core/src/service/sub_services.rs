@@ -1,10 +1,8 @@
 #![allow(clippy::let_unit_value)]
 use super::adapters::P2PAdapter;
 use crate::{
-    database::{
-        Database,
-        RelayerReadDatabase,
-    },
+    combined_database::CombinedDatabase,
+    database::Database,
     fuel_core_graphql_api,
     fuel_core_graphql_api::Config as GraphQLConfig,
     schema::build_schema,
@@ -34,8 +32,6 @@ use fuel_core_types::blockchain::primitives::DaBlockHeight;
 
 pub type PoAService =
     fuel_core_poa::Service<TxPoolAdapter, BlockProducerAdapter, BlockImporterAdapter>;
-#[cfg(feature = "relayer")]
-pub type RelayerService = fuel_core_relayer::Service<Database>;
 #[cfg(feature = "p2p")]
 pub type P2PService = fuel_core_p2p::service::Service<Database>;
 pub type TxPoolService = fuel_core_txpool::Service<P2PAdapter, Database>;
@@ -44,20 +40,23 @@ pub type BlockProducerService = fuel_core_producer::block_producer::Producer<
     TxPoolAdapter,
     ExecutorAdapter,
 >;
-pub type GraphQL = crate::fuel_core_graphql_api::api_service::Service;
+pub type GraphQL = fuel_core_graphql_api::api_service::Service;
 
 pub fn init_sub_services(
     config: &Config,
-    database: &Database,
+    database: CombinedDatabase,
 ) -> anyhow::Result<(SubServices, SharedState)> {
-    let last_block = database.get_current_block()?.ok_or(anyhow::anyhow!(
-        "The blockchain is not initialized with any block"
-    ))?;
+    let last_block = database
+        .on_chain()
+        .get_current_block()?
+        .ok_or(anyhow::anyhow!(
+            "The blockchain is not initialized with any block"
+        ))?;
     let last_height = *last_block.header().height();
 
     let executor = ExecutorAdapter::new(
-        database.clone(),
-        RelayerReadDatabase::new(database.clone()),
+        database.on_chain().clone(),
+        database.relayer().clone(),
         fuel_core_executor::Config {
             consensus_parameters: config.chain_conf.consensus_parameters.clone(),
             coinbase_recipient: config
@@ -69,11 +68,11 @@ pub fn init_sub_services(
         },
     );
 
-    let verifier = VerifierAdapter::new(config, database.clone());
+    let verifier = VerifierAdapter::new(config, database.on_chain().clone());
 
     let importer_adapter = BlockImporterAdapter::new(
         config.block_importer.clone(),
-        database.clone(),
+        database.on_chain().clone(),
         executor.clone(),
         verifier.clone(),
     );
@@ -81,7 +80,7 @@ pub fn init_sub_services(
     #[cfg(feature = "relayer")]
     let relayer_service = if let Some(config) = &config.relayer {
         Some(fuel_core_relayer::new_service(
-            database.clone(),
+            database.relayer().clone(),
             config.clone(),
         )?)
     } else {
@@ -89,7 +88,6 @@ pub fn init_sub_services(
     };
 
     let relayer_adapter = MaybeRelayerAdapter {
-        database: database.clone(),
         #[cfg(feature = "relayer")]
         relayer_synced: relayer_service.as_ref().map(|r| r.shared.clone()),
         #[cfg(feature = "relayer")]
@@ -102,7 +100,7 @@ pub fn init_sub_services(
     #[cfg(feature = "p2p")]
     let mut network = {
         if let Some(p2p_config) = config.p2p.clone() {
-            let p2p_db = database.clone();
+            let p2p_db = database.on_chain().clone();
             let genesis = p2p_db.get_genesis()?;
             let p2p_config = p2p_config.init(genesis)?;
 
@@ -141,7 +139,7 @@ pub fn init_sub_services(
 
     let txpool = fuel_core_txpool::new_service(
         config.txpool.clone(),
-        database.clone(),
+        database.on_chain().clone(),
         importer_adapter.clone(),
         p2p_adapter.clone(),
         last_height,
@@ -150,7 +148,7 @@ pub fn init_sub_services(
 
     let block_producer = fuel_core_producer::Producer {
         config: config.block_producer.clone(),
-        view_provider: database.clone(),
+        view_provider: database.on_chain().clone(),
         txpool: tx_pool_adapter.clone(),
         executor: Arc::new(executor),
         relayer: Box::new(relayer_adapter.clone()),
@@ -197,11 +195,11 @@ pub fn init_sub_services(
         config.chain_conf.consensus_parameters.clone(),
         config.debug,
     )
-    .data(database.clone());
+    .data(database.on_chain().clone());
 
     let graphql_worker = fuel_core_graphql_api::worker_service::new_service(
         importer_adapter.clone(),
-        database.clone(),
+        database.off_chain().clone(),
     );
 
     let graphql_config = GraphQLConfig {
@@ -212,6 +210,7 @@ pub fn init_sub_services(
         min_gas_price: config.txpool.min_gas_price,
         max_tx: config.txpool.max_tx,
         max_depth: config.txpool.max_depth,
+        chain_name: config.chain_conf.chain_name.clone(),
         consensus_parameters: config.chain_conf.consensus_parameters.clone(),
         consensus_key: config.consensus_key.clone(),
     };
@@ -219,8 +218,8 @@ pub fn init_sub_services(
     let graph_ql = fuel_core_graphql_api::api_service::new_service(
         graphql_config,
         schema,
-        database.clone(),
-        database.clone(),
+        database.on_chain().clone(),
+        database.off_chain().clone(),
         Box::new(tx_pool_adapter),
         Box::new(producer_adapter),
         Box::new(poa_adapter.clone()),
@@ -237,7 +236,7 @@ pub fn init_sub_services(
         #[cfg(feature = "relayer")]
         relayer: relayer_service.as_ref().map(|r| r.shared.clone()),
         graph_ql: graph_ql.shared.clone(),
-        database: database.clone(),
+        database,
         block_importer: importer_adapter,
         config: config.clone(),
     };

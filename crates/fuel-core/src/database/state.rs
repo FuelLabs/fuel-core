@@ -36,6 +36,7 @@ impl Database {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::database::database_description::on_chain::OnChain;
     use fuel_core_storage::StorageAsMut;
     use fuel_core_types::fuel_types::Bytes32;
     use rand::Rng;
@@ -71,7 +72,7 @@ mod tests {
             .root(&contract_id)
             .expect("Should get root");
 
-        let seq_database = &mut Database::default();
+        let seq_database = &mut Database::<OnChain>::default();
         for (key, value) in data.iter() {
             seq_database
                 .storage::<ContractsState>()

@@ -52,7 +52,6 @@ mockall::mock! {
 
     impl ImporterDatabase for Database {
         fn latest_block_height(&self) -> StorageResult<Option<BlockHeight>>;
-        fn increase_tx_count(&self, new_txs_count: u64) -> StorageResult<u64>;
     }
 
     impl ExecutorDatabase for Database {
@@ -117,7 +116,6 @@ where
         let mut db = MockDatabase::default();
         db.expect_latest_block_height()
             .returning(move || result().map(|v| v.map(Into::into)));
-        db.expect_increase_tx_count().returning(Ok);
         db
     }
 }
@@ -140,7 +138,6 @@ where
         db.expect_store_new_block()
             .returning(move |_, _| store_block());
         db.expect_commit().times(commits).returning(|| Ok(()));
-        db.expect_increase_tx_count().returning(Ok);
         db
     }
 }

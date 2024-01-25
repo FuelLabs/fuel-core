@@ -1,8 +1,8 @@
 use crate::{
     ports::RelayerDb,
     storage::{
+        DaHeightTable,
         History,
-        RelayerMetadata,
     },
 };
 use fuel_core_storage::test_helpers::MockStorage;
@@ -17,12 +17,12 @@ fn test_insert_events() {
     db.expect_insert::<History>()
         .times(1)
         .returning(|_, _| Ok(None));
-    db.expect_insert::<RelayerMetadata>()
+    db.expect_insert::<DaHeightTable>()
         .times(1)
         .withf(move |_, v| **v == same_height)
         .returning(|_, _| Ok(None));
     db.expect_commit().returning(|| Ok(()));
-    db.expect_get::<RelayerMetadata>()
+    db.expect_get::<DaHeightTable>()
         .once()
         .returning(|_| Ok(Some(std::borrow::Cow::Owned(9u64.into()))));
     let mut db = db.into_transactional();
@@ -57,12 +57,12 @@ fn insert_works_for_messages_with_same_height() {
 
     let mut db = MockStorage::default();
     db.expect_insert::<History>().returning(|_, _| Ok(None));
-    db.expect_insert::<RelayerMetadata>()
+    db.expect_insert::<DaHeightTable>()
         .once()
         .withf(move |_, v| *v == same_height)
         .returning(|_, _| Ok(None));
     db.expect_commit().returning(|| Ok(()));
-    db.expect_get::<RelayerMetadata>()
+    db.expect_get::<DaHeightTable>()
         .once()
         .returning(|_| Ok(None));
 
@@ -139,13 +139,13 @@ fn set_raises_da_height_monotonically(
 ) {
     let mut db = MockStorage::default();
     if let Some(h) = inserts.into() {
-        db.expect_insert::<RelayerMetadata>()
+        db.expect_insert::<DaHeightTable>()
             .once()
             .withf(move |_, v| **v == h)
             .returning(|_, _| Ok(None));
     }
     let get = get.into().map(|g| Cow::Owned(g.into()));
-    db.expect_get::<RelayerMetadata>()
+    db.expect_get::<DaHeightTable>()
         .once()
         .returning(move |_| Ok(get.clone()));
     db.expect_commit().returning(|| Ok(()));

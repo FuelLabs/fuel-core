@@ -16,6 +16,7 @@ use crate::{
 
 impl TableWithBlueprint for Messages {
     type Blueprint = Plain<Raw, Postcard>;
+    type Column = Column;
 
     fn column() -> Column {
         Column::Messages
@@ -24,6 +25,7 @@ impl TableWithBlueprint for Messages {
 
 impl TableWithBlueprint for SpentMessages {
     type Blueprint = Plain<Raw, Postcard>;
+    type Column = Column;
 
     fn column() -> Column {
         Column::SpentMessages

@@ -13,7 +13,6 @@ use crate::{
         Encode,
         Encoder,
     },
-    column::Column,
     kv_store::{
         BatchOperations,
         KeyValueStore,
@@ -241,13 +240,14 @@ where
     }
 }
 
-impl<M, S, KeyCodec, ValueCodec, Metadata, Nodes, KeyConverter>
+impl<Column, M, S, KeyCodec, ValueCodec, Metadata, Nodes, KeyConverter>
     MerkleRootStorage<Metadata::Key, M> for StructuredStorage<S>
 where
     S: KeyValueStore<Column = Column>,
     M: Mappable
         + TableWithBlueprint<
             Blueprint = Sparse<KeyCodec, ValueCodec, Metadata, Nodes, KeyConverter>,
+            Column = Column,
         >,
     Self: StorageMutate<M, Error = StorageError>
         + StorageInspect<Metadata, Error = StorageError>,
@@ -270,13 +270,15 @@ type NodeKeyCodec<S, Nodes> =
 type NodeValueCodec<S, Nodes> =
     <<Nodes as TableWithBlueprint>::Blueprint as Blueprint<Nodes, S>>::ValueCodec;
 
-impl<M, S, KeyCodec, ValueCodec, Metadata, Nodes, KeyConverter> SupportsBatching<M, S>
-    for Sparse<KeyCodec, ValueCodec, Metadata, Nodes, KeyConverter>
+impl<Column, M, S, KeyCodec, ValueCodec, Metadata, Nodes, KeyConverter>
+    SupportsBatching<M, S> for Sparse<KeyCodec, ValueCodec, Metadata, Nodes, KeyConverter>
 where
+    Column: StorageColumn,
     S: BatchOperations<Column = Column>,
     M: Mappable
         + TableWithBlueprint<
             Blueprint = Sparse<KeyCodec, ValueCodec, Metadata, Nodes, KeyConverter>,
+            Column = Column,
         >,
     KeyCodec: Encode<M::Key> + Decode<M::OwnedKey>,
     ValueCodec: Encode<M::Value> + Decode<M::OwnedValue>,
@@ -285,7 +287,7 @@ where
             Key = MerkleRoot,
             Value = sparse::Primitive,
             OwnedValue = sparse::Primitive,
-        > + TableWithBlueprint,
+        > + TableWithBlueprint<Column = Column>,
     KeyConverter: PrimaryKey<InputKey = M::Key, OutputKey = Metadata::Key>,
     Nodes::Blueprint: Blueprint<Nodes, S>,
     for<'a> StructuredStorage<&'a mut S>: StorageMutate<M, Error = StorageError>
