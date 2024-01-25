@@ -1463,7 +1463,7 @@ mod tests {
         let mut blocks = Vec::new();
         for i in range {
             let mut header: BlockHeader = Default::default();
-            header.consensus.height = i.into();
+            header.set_block_height(i.into());
 
             let sealed_block = SealedBlockHeader {
                 entity: header,
@@ -1476,8 +1476,8 @@ mod tests {
 
     // Metadata gets skipped during serialization, so this is the fuzzy way to compare blocks
     fn eq_except_metadata(a: &SealedBlockHeader, b: &SealedBlockHeader) -> bool {
-        a.entity.application == b.entity.application
-            && a.entity.consensus == b.entity.consensus
+        a.entity.application() == b.entity.application()
+            && a.entity.consensus() == b.entity.consensus()
     }
 
     async fn request_response_works_with(request_msg: RequestMessage) {

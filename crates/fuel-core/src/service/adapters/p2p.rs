@@ -55,7 +55,7 @@ impl BlockHeightImporter for BlockImporterAdapter {
         Box::pin(
             BroadcastStream::new(self.block_importer.subscribe())
                 .filter_map(|result| result.ok())
-                .map(|result| result.sealed_block.entity.header().consensus.height),
+                .map(|result| *result.sealed_block.entity.header().height()),
         )
     }
 }
