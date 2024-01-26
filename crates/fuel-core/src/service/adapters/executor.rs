@@ -60,15 +60,15 @@ impl ExecutorAdapter {
 
     pub(crate) fn _dry_run(
         &self,
-        blocks: Vec<Components<Vec<fuel_tx::Transaction>>>,
+        block: Components<Vec<fuel_tx::Transaction>>,
         utxo_validation: Option<bool>,
-    ) -> ExecutorResult<Vec<Vec<Vec<Receipt>>>> {
+    ) -> ExecutorResult<Vec<Vec<Receipt>>> {
         let executor = Executor {
             database: self.relayer.database.clone(),
             relayer: self.relayer.clone(),
             config: self.config.clone(),
         };
-        executor.dry_run(blocks, utxo_validation)
+        executor.dry_run(block, utxo_validation)
     }
 }
 

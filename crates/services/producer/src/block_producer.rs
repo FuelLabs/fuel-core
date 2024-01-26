@@ -170,74 +170,50 @@ where
     Executor: ports::DryRunner + 'static,
 {
     // TODO: Support custom `block_time` for `dry_run`.
-    /// Simulates transactions in multiple blocks without altering any state. Does not aquire the production lock
+    /// Simulates mutliple transactions without altering any state. Does not aquire the production lock
     /// since it is basically a "read only" operation and shouldn't get in the way of normal
     /// production.
     pub async fn dry_run(
         &self,
-        blocks: Vec<Vec<Transaction>>,
-        heights: Option<Vec<BlockHeight>>,
+        transactions: Vec<Transaction>,
+        height: Option<BlockHeight>,
         utxo_validation: Option<bool>,
-    ) -> anyhow::Result<Vec<Vec<Vec<Receipt>>>> {
-        let heights = match heights {
-            None => {
-                assert!(
-                    blocks.len() == 1,
-                    "Must pass in block heights if you pass in multiple blocks"
-                );
-                vec![self
-                    .db
-                    .current_block_height()?
-                    .succ()
-                    .expect("It is impossible to overflow the current block height")]
-            }
-            Some(heights) => heights,
+    ) -> anyhow::Result<Vec<Vec<Receipt>>> {
+        let height = match height {
+            None => self
+                .db
+                .current_block_height()?
+                .succ()
+                .expect("It is impossible to overflow the current block height"),
+            Some(height) => height,
         };
 
-        assert!(
-            blocks.len() == heights.len(),
-            "The number of blocks must match the number of block heights"
-        );
-
-        let mut components = vec![];
-        for (transactions, block_height) in blocks.iter().zip(heights.iter()) {
-            // The dry run execution should use the state of the blockchain based on the
-            // last available block, not on the upcoming one. It means that we need to
-            // use the same configuration as the last block -> the same DA height.
-            // It is deterministic from the result perspective, plus it is more performant
-            // because we don't need to wait for the relayer to sync.
-            // TODO: block time should be adjusted for future blocks
-            // future_block_time = last_block_time + 1
-            let header = self._new_header(*block_height, Tai64::now())?;
-            let component = Components {
-                header_to_produce: header,
-                transactions_source: transactions.clone(),
-                gas_limit: u64::MAX,
-            };
-
-            components.push(component);
-        }
+        // The dry run execution should use the state of the blockchain based on the
+        // last available block, not on the upcoming one. It means that we need to
+        // use the same configuration as the last block -> the same DA height.
+        // It is deterministic from the result perspective, plus it is more performant
+        // because we don't need to wait for the relayer to sync.
+        let header = self._new_header(height, Tai64::now())?;
+        let component = Components {
+            header_to_produce: header,
+            transactions_source: transactions.clone(),
+            gas_limit: u64::MAX,
+        };
 
         let executor = self.executor.clone();
 
-        // use the blocking threadpool for dry_run to avoid clogging up the main async runtime
         let receipts =
-            tokio_rayon::spawn_fifo(move || -> anyhow::Result<Vec<Vec<Vec<Receipt>>>> {
-                Ok(executor
-                    .dry_run(components, utxo_validation)
-                    .into_iter()
-                    .flatten()
-                    .collect())
+            tokio_rayon::spawn_fifo(move || -> anyhow::Result<Vec<Vec<Receipt>>> {
+                Ok(executor.dry_run(component, utxo_validation)?)
             })
             .await?;
 
-        // Check script receipts
-        for (transactions, block_receipts) in blocks.iter().zip(receipts.iter()) {
-            for transaction in transactions {
-                let is_script = transaction.is_script();
-                if is_script && block_receipts.is_empty() {
-                    return Err(anyhow!("Expected at least one set of receipts"))
-                }
+        for (transaction, transaction_receipts) in
+            transactions.iter().zip(receipts.iter())
+        {
+            let is_script = transaction.is_script();
+            if is_script && transaction_receipts.is_empty() {
+                return Err(anyhow!("Expected at least one set of receipts"))
             }
         }
 

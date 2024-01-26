@@ -99,10 +99,10 @@ impl fuel_core_producer::ports::Executor<Vec<Transaction>> for ExecutorAdapter {
 impl fuel_core_producer::ports::DryRunner for ExecutorAdapter {
     fn dry_run(
         &self,
-        blocks: Vec<Components<Vec<fuel_tx::Transaction>>>,
+        block: Components<Vec<fuel_tx::Transaction>>,
         utxo_validation: Option<bool>,
-    ) -> ExecutorResult<Vec<Vec<Vec<Receipt>>>> {
-        self._dry_run(blocks, utxo_validation)
+    ) -> ExecutorResult<Vec<Vec<Receipt>>> {
+        self._dry_run(block, utxo_validation)
     }
 }
 

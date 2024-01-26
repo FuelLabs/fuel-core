@@ -245,50 +245,44 @@ where
 
     pub fn dry_run(
         &self,
-        blocks: Vec<Components<Vec<Transaction>>>,
+        component: Components<Vec<Transaction>>,
         utxo_validation: Option<bool>,
-    ) -> ExecutorResult<Vec<Vec<Vec<Receipt>>>> {
+    ) -> ExecutorResult<Vec<Vec<Receipt>>> {
         // fallback to service config value if no utxo_validation override is provided
         let utxo_validation =
             utxo_validation.unwrap_or(self.config.utxo_validation_default);
 
         let options = ExecutionOptions { utxo_validation };
 
-        let mut receipts_per_block = Vec::new();
-        for component in blocks {
-            let component = Components {
-                header_to_produce: component.header_to_produce,
-                transactions_source: OnceTransactionsSource::new(
-                    component.transactions_source,
-                ),
-                gas_limit: component.gas_limit,
-            };
+        let component = Components {
+            header_to_produce: component.header_to_produce,
+            transactions_source: OnceTransactionsSource::new(
+                component.transactions_source,
+            ),
+            gas_limit: component.gas_limit,
+        };
 
-            let (
-                ExecutionResult {
-                    tx_status,
-                    skipped_transactions,
-                    ..
-                },
-                _temporary_db,
-            ) = self
-                .execute_without_commit(ExecutionTypes::DryRun(component), options)?
-                .into();
+        let (
+            ExecutionResult {
+                skipped_transactions,
+                tx_status,
+                ..
+            },
+            _temporary_db,
+        ) = self
+            .execute_without_commit(ExecutionTypes::DryRun(component), options)?
+            .into();
 
-            // If one of the transactions failes, return an error
-            if let Some((_, err)) = skipped_transactions.into_iter().next() {
-                return Err(err)
-            }
-
-            let receipts = tx_status
-                .into_iter()
-                .map(|tx| tx.receipts)
-                .collect::<Vec<Vec<Receipt>>>();
-
-            receipts_per_block.push(receipts);
-            // drop `_temporary_db` without committing to avoid altering state.
+        // If one of the transactions fails, return an error.
+        if let Some((_, err)) = skipped_transactions.into_iter().next() {
+            return Err(err)
         }
-        Ok(receipts_per_block)
+
+        Ok(tx_status
+            .into_iter()
+            .map(|tx| tx.receipts)
+            .collect::<Vec<Vec<Receipt>>>())
+        // drop `_temporary_db` without committing to avoid altering state.
     }
 }
 
