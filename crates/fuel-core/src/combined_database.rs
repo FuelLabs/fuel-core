@@ -12,7 +12,6 @@ use fuel_core_types::{
     blockchain::primitives::DaBlockHeight,
     fuel_types::BlockHeight,
 };
-use std::path::Path;
 
 /// A database that combines the on-chain, off-chain and relayer databases into one entity.
 #[derive(Default, Clone)]
@@ -36,7 +35,7 @@ impl CombinedDatabase {
     }
 
     #[cfg(feature = "rocksdb")]
-    pub fn open(path: &Path, capacity: usize) -> DatabaseResult<Self> {
+    pub fn open(path: &std::path::Path, capacity: usize) -> DatabaseResult<Self> {
         // TODO: Use different cache sizes for different databases
         let on_chain = Database::open(path, capacity)?;
         let off_chain = Database::open(path, capacity)?;
