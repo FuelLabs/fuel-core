@@ -105,21 +105,10 @@ impl FuelService {
                         config.database_path,
                         config.max_database_cache_size
                     );
-                    // TODO: Use different cache sizes for different databases
-                    CombinedDatabase::new(
-                        Database::open(
-                            &config.database_path,
-                            config.max_database_cache_size,
-                        )?,
-                        Database::open(
-                            &config.database_path,
-                            config.max_database_cache_size,
-                        )?,
-                        Database::open(
-                            &config.database_path,
-                            config.max_database_cache_size,
-                        )?,
-                    )
+                    CombinedDatabase::open(
+                        &config.database_path,
+                        config.max_database_cache_size,
+                    )?
                 }
             }
             DbType::InMemory => CombinedDatabase::in_memory(),
