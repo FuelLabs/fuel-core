@@ -128,7 +128,7 @@ async fn _dry_runs(
     for i in 0..count {
         queries.push(async move {
             let before = tokio::time::Instant::now();
-            let query = ctx.alice.client.dry_run_opt(transaction, Some(false)).await;
+            let query = ctx.alice.client.dry_run_opt(&vec![transaction.to_owned()], Some(false)).await;
             println!(
                 "Received the response for the query number {i} for {}ms",
                 before.elapsed().as_millis()
@@ -156,7 +156,7 @@ async fn _dry_runs(
 
         if expect == DryRunResult::Successful {
             assert!(matches!(
-                receipts.last(),
+                receipts.last().expect("Nonempty response").last(),
                 Some(Receipt::ScriptResult {
                     result: ScriptExecutionResult::Success,
                     ..

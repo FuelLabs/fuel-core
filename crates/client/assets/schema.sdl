@@ -587,9 +587,9 @@ type Mutation {
 	startTx(id: ID!, txJson: String!): RunResult!
 	continueTx(id: ID!): RunResult!
 	"""
-	Execute a dry-run of the transaction using a fork of current state, no changes are committed.
+	Execute a dry-run of the transactions using a fork of current state, no changes are committed.
 	"""
-	dryRun(tx: HexString!, utxoValidation: Boolean): [Receipt!]!
+	dryRun(txs: [HexString!]!, utxoValidation: Boolean): [[Receipt!]!]!
 	"""
 	Submits transaction to the `TxPool`.
 	

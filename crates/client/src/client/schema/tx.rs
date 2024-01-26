@@ -277,7 +277,7 @@ pub struct EstimatePredicates {
 
 #[derive(cynic::QueryVariables)]
 pub struct DryRunArg {
-    pub tx: HexString,
+    pub txs: Vec<HexString>,
     pub utxo_validation: Option<bool>,
 }
 
@@ -288,8 +288,8 @@ pub struct DryRunArg {
     variables = "DryRunArg"
 )]
 pub struct DryRun {
-    #[arguments(tx: $tx, utxoValidation: $utxo_validation)]
-    pub dry_run: Vec<Receipt>,
+    #[arguments(txs: $txs, utxoValidation: $utxo_validation)]
+    pub dry_run: Vec<Vec<Receipt>>,
 }
 
 #[derive(cynic::QueryFragment, Debug)]
@@ -375,7 +375,7 @@ pub mod tests {
         use cynic::MutationBuilder;
         let tx = fuel_tx::Transaction::default_test_tx();
         let query = DryRun::build(DryRunArg {
-            tx: HexString(Bytes(tx.to_bytes())),
+            txs: vec![HexString(Bytes(tx.to_bytes()))],
             utxo_validation: None,
         });
         insta::assert_snapshot!(query.query)
