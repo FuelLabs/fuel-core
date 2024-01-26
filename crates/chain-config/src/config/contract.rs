@@ -1,7 +1,4 @@
-use crate::serialization::{
-    HexNumber,
-    HexType,
-};
+use crate::serialization::HexIfHumanReadable;
 use fuel_core_types::{
     fuel_tx::{
         Contract,
@@ -19,47 +16,49 @@ use serde::{
     Deserialize,
     Serialize,
 };
-use serde_with::{
-    serde_as,
-    skip_serializing_none,
-};
+use serde_with::serde_as;
 
-#[skip_serializing_none]
 #[serde_as]
 #[derive(Clone, Debug, Deserialize, Serialize, Eq, PartialEq, Default)]
 pub struct ContractConfig {
-    #[serde_as(as = "HexType")]
     pub contract_id: ContractId,
-    #[serde_as(as = "HexType")]
+    #[serde_as(as = "HexIfHumanReadable")]
     pub code: Vec<u8>,
-    #[serde_as(as = "HexType")]
     pub salt: Salt,
-    #[serde_as(as = "Option<Vec<(HexType, HexType)>>")]
-    #[serde(default)]
     pub state: Option<Vec<(Bytes32, Bytes32)>>,
-    #[serde_as(as = "Option<Vec<(HexType, HexNumber)>>")]
-    #[serde(default)]
     pub balances: Option<Vec<(AssetId, u64)>>,
-    /// UtxoId: auto-generated if None
-    #[serde_as(as = "Option<HexType>")]
-    #[serde(default)]
     pub tx_id: Option<Bytes32>,
-    /// UtxoId: auto-generated if None
-    #[serde_as(as = "Option<HexNumber>")]
-    #[serde(default)]
     pub output_index: Option<u8>,
     /// TxPointer: auto-generated if None
     /// used if contract is forked from another chain to preserve id & tx_pointer
     /// The block height that the contract was last used in
-    #[serde_as(as = "Option<HexNumber>")]
-    #[serde(default)]
     pub tx_pointer_block_height: Option<BlockHeight>,
     /// TxPointer: auto-generated if None
     /// used if contract is forked from another chain to preserve id & tx_pointer
     /// The index of the originating tx within `tx_pointer_block_height`
-    #[serde_as(as = "Option<HexNumber>")]
-    #[serde(default)]
     pub tx_pointer_tx_idx: Option<u16>,
+}
+
+#[cfg(all(test, feature = "random"))]
+impl crate::Randomize for ContractConfig {
+    fn randomize(mut rng: impl ::rand::Rng) -> Self {
+        Self {
+            contract_id: ContractId::new(super::random_bytes_32(&mut rng)),
+            code: (super::random_bytes_32(&mut rng)).to_vec(),
+            salt: Salt::new(super::random_bytes_32(&mut rng)),
+            tx_id: rng
+                .gen::<bool>()
+                .then(|| super::random_bytes_32(&mut rng).into()),
+            output_index: rng.gen::<bool>().then(|| rng.gen()),
+            tx_pointer_block_height: rng
+                .gen::<bool>()
+                .then(|| BlockHeight::from(rng.gen::<u32>())),
+            tx_pointer_tx_idx: rng.gen::<bool>().then(|| rng.gen()),
+            // not populated since they have to be removed from the ContractConfig
+            balances: None,
+            state: None,
+        }
+    }
 }
 
 impl ContractConfig {
@@ -76,6 +75,7 @@ impl ContractConfig {
             .as_ref()
             .map(|slots| Contract::initial_state_root(slots.iter()))
             .unwrap_or(Contract::default_state_root());
+
         let contract = Contract::from(bytes.clone());
         let root = contract.root();
         let contract_id = contract.id(&salt, &root, &state_root);

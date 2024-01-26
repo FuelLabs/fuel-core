@@ -225,12 +225,7 @@ pub async fn make_nodes(
                 let mut txs = Vec::with_capacity(all.len());
                 for (tx, initial_coin) in all {
                     txs.push(tx);
-                    config
-                        .state_config
-                        .coins
-                        .as_mut()
-                        .unwrap()
-                        .push(initial_coin);
+                    config.state_config.coins.push(initial_coin);
                 }
                 producers_with_txs.push(Some((producer.unwrap(), txs)));
             }

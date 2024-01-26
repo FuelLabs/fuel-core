@@ -93,9 +93,9 @@ async fn snapshot_state_config() {
 
     // initial state
 
-    let starting_coin = starting_state.clone().coins.unwrap();
+    let starting_coin = starting_state.clone().coins;
 
-    let state_coin = state_conf.clone().coins.unwrap();
+    let state_coin = state_conf.clone().coins;
 
     for i in 0..starting_coin.len() {
         // all values are checked except tx_id and output_index as those are generated and not

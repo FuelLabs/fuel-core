@@ -15,8 +15,10 @@ use fuel_core::{
     chain_config::{
         default_consensus_dev_key,
         ChainConfig,
+        Decoder,
         StateConfig,
     },
+    database::DatabaseConfig,
     producer::Config as ProducerConfig,
     service::{
         config::Trigger,
@@ -33,6 +35,10 @@ use fuel_core::{
         fuel_vm::SecretKey,
         secrecy::Secret,
     },
+};
+use fuel_core_chain_config::{
+    SnapshotMetadata,
+    MAX_GROUP_SIZE,
 };
 use pyroscope::{
     pyroscope::PyroscopeAgentRunning,
@@ -250,11 +256,13 @@ impl Command {
         let (chain_conf, state_config) = match genesis_config.as_deref() {
             None => (ChainConfig::local_testnet(), StateConfig::local_testnet()),
             Some(path) => {
-                let chain_conf = ChainConfig::load_from_directory(path)?;
-                let state_config = StateConfig::load_from_directory(path)?;
+                let metadata = SnapshotMetadata::read(path)?;
+                let chain_conf = ChainConfig::from_snapshot_metadata(&metadata)?;
+                let state_config = StateConfig::from_snapshot_metadata(metadata)?;
                 (chain_conf, state_config)
             }
         };
+        let state_decoder = Decoder::in_memory(state_config.clone(), MAX_GROUP_SIZE);
 
         #[cfg(feature = "relayer")]
         let relayer_cfg = relayer_args.into_config();
@@ -304,13 +312,18 @@ impl Command {
             max_wait_time: max_wait_time.into(),
         };
 
+        let db_config = DatabaseConfig {
+            database_path,
+            database_type,
+            max_database_cache_size,
+        };
+
         let config = Config {
             addr,
             api_request_timeout: api_request_timeout.into(),
-            max_database_cache_size,
-            database_path,
-            database_type,
+            db_config,
             chain_config: chain_conf.clone(),
+            state_decoder,
             state_config,
             debug,
             utxo_validation,

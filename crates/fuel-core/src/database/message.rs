@@ -118,9 +118,10 @@ impl Database {
             .map(|res| res.map(|(_, message)| message))
     }
 
-    pub fn get_message_config(&self) -> StorageResult<Option<Vec<MessageConfig>>> {
-        let configs = self
-            .all_messages(None, None)
+    pub fn iter_message_configs(
+        &self,
+    ) -> impl Iterator<Item = StorageResult<MessageConfig>> + '_ {
+        self.all_messages(None, None)
             .filter_map(|msg| {
                 // Return only unspent messages
                 if let Ok(msg) = msg {
@@ -145,9 +146,6 @@ impl Database {
                     da_height: msg.da_height,
                 })
             })
-            .collect::<StorageResult<Vec<MessageConfig>>>()?;
-
-        Ok(Some(configs))
     }
 
     pub fn message_is_spent(&self, id: &Nonce) -> StorageResult<bool> {

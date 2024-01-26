@@ -2,6 +2,7 @@ use clap::ValueEnum;
 use fuel_core_chain_config::{
     default_consensus_dev_key,
     ChainConfig,
+    Decoder,
     StateConfig,
 };
 use fuel_core_types::{
@@ -13,7 +14,6 @@ use std::{
         Ipv4Addr,
         SocketAddr,
     },
-    path::PathBuf,
     time::Duration,
 };
 use strum_macros::{
@@ -33,15 +33,16 @@ use fuel_core_relayer::Config as RelayerConfig;
 
 pub use fuel_core_poa::Trigger;
 
+use crate::database::DatabaseConfig;
+
 #[derive(Clone, Debug)]
 pub struct Config {
     pub addr: SocketAddr,
     pub api_request_timeout: Duration,
-    pub max_database_cache_size: usize,
-    pub database_path: PathBuf,
-    pub database_type: DbType,
+    pub db_config: DatabaseConfig,
     pub chain_config: ChainConfig,
     pub state_config: StateConfig,
+    pub state_decoder: Decoder,
     /// When `true`:
     /// - Enables manual block production.
     /// - Enables debugger endpoint.
@@ -76,12 +77,12 @@ impl Config {
     pub fn local_node() -> Self {
         let chain_conf = ChainConfig::local_testnet();
         let state_config = StateConfig::local_testnet();
+        let state_decoder = Decoder::in_memory(state_config.clone(), 1);
+
         let utxo_validation = false;
         let min_gas_price = 0;
 
-        Self {
-            addr: SocketAddr::new(Ipv4Addr::new(127, 0, 0, 1).into(), 0),
-            api_request_timeout: Duration::from_secs(60),
+        let db_config = DatabaseConfig {
             // Set the cache for tests = 10MB
             max_database_cache_size: 10 * 1024 * 1024,
             database_path: Default::default(),
@@ -89,9 +90,16 @@ impl Config {
             database_type: DbType::RocksDb,
             #[cfg(not(feature = "rocksdb"))]
             database_type: DbType::InMemory,
+        };
+
+        Self {
+            addr: SocketAddr::new(Ipv4Addr::new(127, 0, 0, 1).into(), 0),
+            api_request_timeout: Duration::from_secs(60),
+            db_config,
             debug: true,
             chain_config: chain_conf.clone(),
             state_config: state_config.clone(),
+            state_decoder,
             block_production: Trigger::Instant,
             vm: Default::default(),
             utxo_validation,

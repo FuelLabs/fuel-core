@@ -74,6 +74,7 @@ async fn balance() {
                 })
                 .collect(),
         ),
+        ..Default::default()
     };
 
     // setup server & client
@@ -205,6 +206,7 @@ async fn first_5_balances() {
         contracts: None,
         coins: Some(coins),
         messages: Some(messages),
+        ..Default::default()
     };
 
     // setup server & client

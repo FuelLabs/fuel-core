@@ -59,6 +59,7 @@ mod coin {
                 .collect(),
             ),
             messages: None,
+            ..Default::default()
         };
 
         // setup server & client
@@ -311,6 +312,7 @@ mod message_coin {
                     })
                     .collect(),
             ),
+            ..Default::default()
         };
 
         // setup server & client
@@ -530,6 +532,7 @@ mod all_coins {
                     })
                     .collect(),
             ),
+            ..Default::default()
         };
 
         // setup server & client
@@ -703,11 +706,7 @@ mod all_coins {
 async fn empty_setup() -> TestContext {
     // setup config
     let mut config = Config::local_node();
-    config.state_config = StateConfig {
-        contracts: None,
-        coins: None,
-        messages: None,
-    };
+    config.state_config = StateConfig::default();
 
     // setup server & client
     let srv = FuelService::new_node(config).await.unwrap();

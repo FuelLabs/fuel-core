@@ -190,8 +190,8 @@ impl TestSetupBuilder {
         chain_conf.block_gas_limit = self.gas_limit;
 
         let state_config = StateConfig {
-            coins: Some(self.initial_coins.clone()),
-            contracts: Some(self.contracts.values().cloned().collect_vec()),
+            coins: self.initial_coins.clone(),
+            contracts: self.contracts.values().cloned().collect_vec(),
             ..StateConfig::default()
         };
 

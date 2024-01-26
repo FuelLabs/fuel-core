@@ -1,40 +1,37 @@
-use fuel_core_storage::Result as StorageResult;
+use bech32::{
+    ToBase32,
+    Variant::Bech32m,
+};
+use core::str::FromStr;
+use fuel_core_storage::{
+    iter::BoxedIter,
+    Result as StorageResult,
+};
 use fuel_core_types::{
     fuel_tx::UtxoId,
     fuel_types::{
         Address,
         BlockHeight,
+        ContractId,
     },
     fuel_vm::SecretKey,
 };
-
-#[cfg(feature = "std")]
-use bech32::{
-    ToBase32,
-    Variant::Bech32m,
-};
-#[cfg(feature = "std")]
-use core::str::FromStr;
-#[cfg(feature = "std")]
-use fuel_core_types::fuel_types::Bytes32;
-#[cfg(feature = "std")]
 use itertools::Itertools;
+
+use fuel_core_types::fuel_types::Bytes32;
 use serde::{
     Deserialize,
     Serialize,
 };
-use serde_with::{
-    serde_as,
-    skip_serializing_none,
-};
+
 #[cfg(feature = "std")]
-use std::fs::File;
-#[cfg(feature = "std")]
-use std::path::Path;
+use crate::SnapshotMetadata;
 
 use super::{
     coin::CoinConfig,
     contract::ContractConfig,
+    contract_balance::ContractBalance,
+    contract_state::ContractStateConfig,
     message::MessageConfig,
 };
 
@@ -52,61 +49,87 @@ pub const TESTNET_WALLET_SECRETS: [&str; 5] = [
 
 pub const STATE_CONFIG_FILENAME: &str = "state_config.json";
 
-// TODO: do streaming deserialization to handle large state configs
-#[serde_as]
-#[skip_serializing_none]
 #[derive(Clone, Debug, Default, Deserialize, Serialize, Eq, PartialEq)]
 pub struct StateConfig {
     /// Spendable coins
-    pub coins: Option<Vec<CoinConfig>>,
-    /// Contract state
-    pub contracts: Option<Vec<ContractConfig>>,
+    pub coins: Vec<CoinConfig>,
     /// Messages from Layer 1
-    pub messages: Option<Vec<MessageConfig>>,
+    pub messages: Vec<MessageConfig>,
+    /// Contract state
+    pub contracts: Vec<ContractConfig>,
+    /// State entries of all contracts
+    pub contract_state: Vec<ContractStateConfig>,
+    /// Balance entries of all contracts
+    pub contract_balance: Vec<ContractBalance>,
 }
 
 impl StateConfig {
-    pub fn generate_state_config<T>(db: T) -> StorageResult<Self>
-    where
-        T: ChainConfigDb,
-    {
-        Ok(StateConfig {
-            coins: db.get_coin_config()?,
-            contracts: db.get_contract_config()?,
-            messages: db.get_message_config()?,
+    pub fn generate_state_config(db: impl ChainStateDb) -> StorageResult<Self> {
+        let coins = db.iter_coin_configs().try_collect()?;
+        let messages = db.iter_message_configs().try_collect()?;
+        let contracts = db.iter_contract_configs().try_collect()?;
+        let contract_state = db.iter_contract_state_configs().try_collect()?;
+        let contract_balance = db.iter_contract_balance_configs().try_collect()?;
+
+        Ok(Self {
+            coins,
+            messages,
+            contracts,
+            contract_state,
+            contract_balance,
         })
     }
 
     #[cfg(feature = "std")]
-    pub fn load_from_directory(path: impl AsRef<Path>) -> anyhow::Result<Self> {
-        let path = path.as_ref().join(STATE_CONFIG_FILENAME);
+    pub fn from_snapshot_metadata(
+        snapshot_metadata: SnapshotMetadata,
+    ) -> anyhow::Result<Self> {
+        let decoder =
+            crate::Decoder::for_snapshot(snapshot_metadata, crate::MAX_GROUP_SIZE)?;
 
-        let contents = std::fs::read(&path)?;
-        serde_json::from_slice(&contents).map_err(|e| {
-            anyhow::Error::new(e).context(format!(
-                "an error occurred while loading the chain state file: {:?}",
-                path.to_str()
-            ))
+        let coins = decoder
+            .coins()?
+            .map_ok(|group| group.data)
+            .flatten_ok()
+            .try_collect()?;
+
+        let messages = decoder
+            .messages()?
+            .map_ok(|group| group.data)
+            .flatten_ok()
+            .try_collect()?;
+
+        let contracts = decoder
+            .contracts()?
+            .map_ok(|group| group.data)
+            .flatten_ok()
+            .try_collect()?;
+
+        let contract_state = decoder
+            .contract_state()?
+            .map_ok(|group| group.data)
+            .flatten_ok()
+            .try_collect()?;
+
+        let contract_balance = decoder
+            .contract_balance()?
+            .map_ok(|group| group.data)
+            .flatten_ok()
+            .try_collect()?;
+
+        Ok(Self {
+            coins,
+            messages,
+            contracts,
+            contract_state,
+            contract_balance,
         })
     }
 
-    #[cfg(feature = "std")]
-    pub fn create_config_file(&self, path: impl AsRef<Path>) -> anyhow::Result<()> {
-        use anyhow::Context;
-
-        let state_writer = File::create(path.as_ref().join(STATE_CONFIG_FILENAME))?;
-
-        serde_json::to_writer_pretty(state_writer, self)
-            .context("failed to dump chain parameters snapshot to JSON")?;
-
-        Ok(())
-    }
-
-    #[cfg(feature = "std")]
     pub fn local_testnet() -> Self {
         // endow some preset accounts with an initial balance
         tracing::info!("Initial Accounts");
-        let initial_coins = TESTNET_WALLET_SECRETS
+        let coins = TESTNET_WALLET_SECRETS
             .into_iter()
             .map(|secret| {
                 let secret = SecretKey::from_str(secret).expect("Expected valid secret");
@@ -126,7 +149,7 @@ impl StateConfig {
             .collect_vec();
 
         Self {
-            coins: Some(initial_coins),
+            coins,
             ..StateConfig::default()
         }
     }
@@ -135,7 +158,7 @@ impl StateConfig {
     pub fn random_testnet() -> Self {
         tracing::info!("Initial Accounts");
         let mut rng = rand::thread_rng();
-        let initial_coins = (0..5)
+        let coins = (0..5)
             .map(|_| {
                 let secret = SecretKey::random(&mut rng);
                 let address = Address::from(*secret.public_key().hash());
@@ -154,7 +177,7 @@ impl StateConfig {
             .collect_vec();
 
         Self {
-            coins: Some(initial_coins),
+            coins,
             ..StateConfig::default()
         }
     }
@@ -179,282 +202,27 @@ impl StateConfig {
     }
 }
 
-pub trait ChainConfigDb {
+// TODO: BoxedIter to be used until RPITIT lands in stable rust.
+#[impl_tools::autoimpl(for<T: trait> &T, &mut T)]
+pub trait ChainStateDb {
+    /// Returns the contract config with the given contract id.
+    fn get_contract_config_by_id(
+        &self,
+        contract_id: ContractId,
+    ) -> StorageResult<ContractConfig>;
     /// Returns *all* unspent coin configs available in the database.
-    fn get_coin_config(&self) -> StorageResult<Option<Vec<CoinConfig>>>;
+    fn iter_coin_configs(&self) -> BoxedIter<StorageResult<CoinConfig>>;
     /// Returns *alive* contract configs available in the database.
-    fn get_contract_config(&self) -> StorageResult<Option<Vec<ContractConfig>>>;
+    fn iter_contract_configs(&self) -> BoxedIter<StorageResult<ContractConfig>>;
+
+    /// Returns the state of all contracts
+    fn iter_contract_state_configs(
+        &self,
+    ) -> BoxedIter<StorageResult<ContractStateConfig>>;
+    /// Returns the balances of all contracts
+    fn iter_contract_balance_configs(&self) -> BoxedIter<StorageResult<ContractBalance>>;
     /// Returns *all* unspent message configs available in the database.
-    fn get_message_config(&self) -> StorageResult<Option<Vec<MessageConfig>>>;
+    fn iter_message_configs(&self) -> BoxedIter<StorageResult<MessageConfig>>;
     /// Returns the last available block height.
     fn get_block_height(&self) -> StorageResult<BlockHeight>;
-}
-
-#[cfg(test)]
-mod tests {
-    use fuel_core_types::{
-        blockchain::primitives::DaBlockHeight,
-        fuel_asm::op,
-        fuel_types::{
-            AssetId,
-            Bytes32,
-        },
-        fuel_vm::Contract,
-    };
-    use rand::{
-        rngs::StdRng,
-        Rng,
-        RngCore,
-        SeedableRng,
-    };
-
-    use crate::{
-        CoinConfig,
-        ContractConfig,
-        MessageConfig,
-    };
-
-    #[cfg(feature = "std")]
-    use std::env::temp_dir;
-
-    use super::StateConfig;
-
-    #[cfg(feature = "std")]
-    #[test]
-    fn can_roundtrip_write_read() {
-        let tmp_file = temp_dir();
-        let disk_config = StateConfig::local_testnet();
-
-        disk_config.create_config_file(&tmp_file).unwrap();
-
-        let load_config = StateConfig::load_from_directory(&tmp_file).unwrap();
-
-        assert_eq!(disk_config, load_config);
-    }
-
-    #[test]
-    fn snapshot_simple_contract() {
-        let config = config_contract();
-        let json = serde_json::to_string_pretty(&config).unwrap();
-        insta::assert_snapshot!(json);
-    }
-
-    #[test]
-    fn can_roundtrip_simple_contract() {
-        let config = config_contract();
-        let json = serde_json::to_string(&config).unwrap();
-        let deserialized_config: StateConfig =
-            serde_json::from_str(json.as_str()).unwrap();
-        assert_eq!(config, deserialized_config);
-    }
-
-    #[test]
-    fn snapshot_contract_with_state() {
-        let config = config_contract_with_state();
-        let json = serde_json::to_string_pretty(&config).unwrap();
-        insta::assert_snapshot!(json);
-    }
-
-    #[test]
-    fn can_roundtrip_contract_with_state() {
-        let config = config_contract_with_state();
-        let json = serde_json::to_string(&config).unwrap();
-        let deserialized_config: StateConfig =
-            serde_json::from_str(json.as_str()).unwrap();
-        assert_eq!(config, deserialized_config);
-    }
-
-    #[test]
-    fn snapshot_contract_with_balances() {
-        let config = config_contract_with_balance();
-        let json = serde_json::to_string_pretty(&config).unwrap();
-        insta::assert_snapshot!(json);
-    }
-
-    #[test]
-    fn can_roundtrip_contract_with_balances() {
-        let config = config_contract_with_balance();
-        let json = serde_json::to_string(&config).unwrap();
-        let deserialized_config: StateConfig =
-            serde_json::from_str(json.as_str()).unwrap();
-        assert_eq!(config, deserialized_config);
-    }
-
-    #[test]
-    fn snapshot_contract_with_utxo_id() {
-        let config = config_contract_with_utxoid();
-        let json = serde_json::to_string_pretty(&config).unwrap();
-        insta::assert_snapshot!(json);
-    }
-
-    #[test]
-    fn can_roundtrip_contract_with_utxoid() {
-        let config = config_contract_with_utxoid();
-        let json = serde_json::to_string(&config).unwrap();
-        let deserialized_config: StateConfig =
-            serde_json::from_str(json.as_str()).unwrap();
-        assert_eq!(config, deserialized_config);
-    }
-
-    #[test]
-    fn snapshot_contract_with_tx_pointer() {
-        let config = config_contract_with_tx_pointer();
-        let json = serde_json::to_string_pretty(&config).unwrap();
-        insta::assert_snapshot!(json);
-    }
-
-    #[test]
-    fn can_roundtrip_contract_with_tx_pointer() {
-        let config = config_contract_with_tx_pointer();
-        let json = serde_json::to_string(&config).unwrap();
-        let deserialized_config: StateConfig =
-            serde_json::from_str(json.as_str()).unwrap();
-        assert_eq!(config, deserialized_config);
-    }
-
-    #[test]
-    fn snapshot_simple_coin_state() {
-        let config = test_config_coin_state();
-        let json = serde_json::to_string_pretty(&config).unwrap();
-        insta::assert_snapshot!(json);
-    }
-
-    #[test]
-    fn can_roundtrip_simple_coin_state() {
-        let config = test_config_coin_state();
-        let json = serde_json::to_string(&config).unwrap();
-        let deserialized_config: StateConfig =
-            serde_json::from_str(json.as_str()).unwrap();
-        assert_eq!(config, deserialized_config);
-    }
-
-    #[test]
-    fn snapshot_simple_message_state() {
-        let config = test_message_config();
-        let json = serde_json::to_string_pretty(&config).unwrap();
-        insta::assert_snapshot!(json);
-    }
-
-    #[test]
-    fn can_roundtrip_simple_message_state() {
-        let config = test_message_config();
-        let json = serde_json::to_string(&config).unwrap();
-        let deserialized_config: StateConfig =
-            serde_json::from_str(json.as_str()).unwrap();
-        assert_eq!(config, deserialized_config);
-    }
-
-    fn config_contract_with_state() -> StateConfig {
-        let mut rng = StdRng::seed_from_u64(1);
-        let test_key: Bytes32 = rng.gen();
-        let test_value: Bytes32 = rng.gen();
-        let state = Some(vec![(test_key, test_value)]);
-
-        StateConfig {
-            contracts: Some(vec![ContractConfig {
-                state,
-                ..base_contract_config()
-            }]),
-            ..Default::default()
-        }
-    }
-
-    fn config_contract_with_tx_pointer() -> StateConfig {
-        let mut rng = StdRng::seed_from_u64(1);
-
-        StateConfig {
-            contracts: Some(vec![ContractConfig {
-                tx_pointer_block_height: rng.gen(),
-                tx_pointer_tx_idx: rng.gen(),
-                ..base_contract_config()
-            }]),
-            ..Default::default()
-        }
-    }
-
-    fn config_contract_with_utxoid() -> StateConfig {
-        let mut rng = StdRng::seed_from_u64(1);
-
-        StateConfig {
-            contracts: Some(vec![ContractConfig {
-                tx_id: rng.gen(),
-                output_index: rng.gen(),
-                ..base_contract_config()
-            }]),
-            ..Default::default()
-        }
-    }
-
-    fn config_contract_with_balance() -> StateConfig {
-        let mut rng = StdRng::seed_from_u64(1);
-        let test_asset_id: AssetId = rng.gen();
-        let test_balance: u64 = rng.gen();
-        let balances = Some(vec![(test_asset_id, test_balance)]);
-
-        StateConfig {
-            contracts: Some(vec![ContractConfig {
-                balances,
-                ..base_contract_config()
-            }]),
-            ..Default::default()
-        }
-    }
-
-    fn config_contract() -> StateConfig {
-        StateConfig {
-            contracts: Some(vec![ContractConfig {
-                ..base_contract_config()
-            }]),
-            ..Default::default()
-        }
-    }
-
-    fn base_contract_config() -> ContractConfig {
-        ContractConfig {
-            code: Contract::from(op::ret(0x10).to_bytes().to_vec()).into(),
-            ..Default::default()
-        }
-    }
-
-    fn test_config_coin_state() -> StateConfig {
-        let mut rng = StdRng::seed_from_u64(1);
-        let tx_id: Option<Bytes32> = Some(rng.gen());
-        let output_index: Option<u8> = Some(rng.gen());
-        let block_created = Some(rng.next_u32().into());
-        let block_created_tx_idx = Some(rng.gen());
-        let maturity = Some(rng.next_u32().into());
-        let owner = rng.gen();
-        let amount = rng.gen();
-        let asset_id = rng.gen();
-
-        StateConfig {
-            coins: Some(vec![CoinConfig {
-                tx_id,
-                output_index,
-                tx_pointer_block_height: block_created,
-                tx_pointer_tx_idx: block_created_tx_idx,
-                maturity,
-                owner,
-                amount,
-                asset_id,
-            }]),
-            ..Default::default()
-        }
-    }
-
-    fn test_message_config() -> StateConfig {
-        let mut rng = StdRng::seed_from_u64(1);
-
-        StateConfig {
-            messages: Some(vec![MessageConfig {
-                sender: rng.gen(),
-                recipient: rng.gen(),
-                nonce: rng.gen(),
-                amount: rng.gen(),
-                data: vec![rng.gen()],
-                da_height: DaBlockHeight(rng.gen()),
-            }]),
-            ..Default::default()
-        }
-    }
 }

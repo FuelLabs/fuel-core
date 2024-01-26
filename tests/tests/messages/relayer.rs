@@ -34,7 +34,7 @@ async fn can_submit_genesis_message() {
 
     let mut node_config = Config::local_node();
     node_config.state_config = StateConfig {
-        messages: Some(vec![msg1]),
+        messages: vec![msg1],
         ..Default::default()
     };
     node_config.utxo_validation = true;

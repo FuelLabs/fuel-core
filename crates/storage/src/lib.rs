@@ -10,6 +10,8 @@
 #![deny(missing_docs)]
 #![deny(warnings)]
 
+use core::array::TryFromSliceError;
+
 use fuel_core_types::services::executor::Error as ExecutorError;
 
 pub use fuel_vm_private::{
@@ -57,6 +59,12 @@ pub enum Error {
 impl From<Error> for anyhow::Error {
     fn from(error: Error) -> Self {
         anyhow::Error::msg(error)
+    }
+}
+
+impl From<TryFromSliceError> for Error {
+    fn from(e: TryFromSliceError) -> Self {
+        Self::Other(anyhow::anyhow!(e))
     }
 }
 
