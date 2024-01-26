@@ -1239,32 +1239,20 @@ mod tests {
             .clone();
 
         let first_input = tx2.inputs()[0].clone();
+        let mut first_coin = CompressedCoin::default();
+        first_coin.set_owner(*first_input.input_owner().unwrap());
+        first_coin.set_amount(100);
         let second_input = tx2.inputs()[1].clone();
+        let mut second_coin = CompressedCoin::default();
+        second_coin.set_owner(*second_input.input_owner().unwrap());
+        second_coin.set_amount(100);
         let db = &mut Database::default();
         // Insert both inputs
         db.storage::<Coins>()
-            .insert(
-                &first_input.utxo_id().unwrap().clone(),
-                &CompressedCoin {
-                    owner: *first_input.input_owner().unwrap(),
-                    amount: 100,
-                    asset_id: AssetId::default(),
-                    maturity: Default::default(),
-                    tx_pointer: Default::default(),
-                },
-            )
+            .insert(&first_input.utxo_id().unwrap().clone(), &first_coin)
             .unwrap();
         db.storage::<Coins>()
-            .insert(
-                &second_input.utxo_id().unwrap().clone(),
-                &CompressedCoin {
-                    owner: *second_input.input_owner().unwrap(),
-                    amount: 100,
-                    asset_id: AssetId::default(),
-                    maturity: Default::default(),
-                    tx_pointer: Default::default(),
-                },
-            )
+            .insert(&second_input.utxo_id().unwrap().clone(), &second_coin)
             .unwrap();
         let executor = create_executor(
             db.clone(),
@@ -1333,20 +1321,14 @@ mod tests {
             .clone();
 
         let input = tx.inputs()[0].clone();
+        let mut coin = CompressedCoin::default();
+        coin.set_owner(*input.input_owner().unwrap());
+        coin.set_amount(AMOUNT - 1);
         let db = &mut Database::default();
 
         // Inserting a coin with `AMOUNT - 1` should cause a mismatching error during production.
         db.storage::<Coins>()
-            .insert(
-                &input.utxo_id().unwrap().clone(),
-                &CompressedCoin {
-                    owner: *input.input_owner().unwrap(),
-                    amount: AMOUNT - 1,
-                    asset_id: AssetId::default(),
-                    maturity: Default::default(),
-                    tx_pointer: Default::default(),
-                },
-            )
+            .insert(&input.utxo_id().unwrap().clone(), &coin)
             .unwrap();
         let executor = create_executor(
             db.clone(),
@@ -1396,19 +1378,13 @@ mod tests {
             .clone();
 
         let input = tx.inputs()[1].clone();
+        let mut coin = CompressedCoin::default();
+        coin.set_owner(*input.input_owner().unwrap());
+        coin.set_amount(100);
         let db = &mut Database::default();
 
         db.storage::<Coins>()
-            .insert(
-                &input.utxo_id().unwrap().clone(),
-                &CompressedCoin {
-                    owner: *input.input_owner().unwrap(),
-                    amount: 100,
-                    asset_id: AssetId::default(),
-                    maturity: Default::default(),
-                    tx_pointer: Default::default(),
-                },
-            )
+            .insert(&input.utxo_id().unwrap().clone(), &coin)
             .unwrap();
         let executor = create_executor(
             db.clone(),
@@ -1970,18 +1946,12 @@ mod tests {
             ..
         }) = tx.inputs()[0]
         {
-            db.storage::<Coins>()
-                .insert(
-                    &utxo_id,
-                    &CompressedCoin {
-                        owner,
-                        amount,
-                        asset_id,
-                        maturity: Default::default(),
-                        tx_pointer: TxPointer::new(starting_block, starting_block_tx_idx),
-                    },
-                )
-                .unwrap();
+            let mut coin = CompressedCoin::default();
+            coin.set_owner(owner);
+            coin.set_amount(amount);
+            coin.set_asset_id(asset_id);
+            coin.set_tx_pointer(TxPointer::new(starting_block, starting_block_tx_idx));
+            db.storage::<Coins>().insert(&utxo_id, &coin).unwrap();
         }
 
         let executor = create_executor(
@@ -2210,7 +2180,7 @@ mod tests {
                     let maybe_utxo = database.storage::<Coins>().get(&id).unwrap();
                     assert!(maybe_utxo.is_some());
                     let utxo = maybe_utxo.unwrap();
-                    assert!(utxo.amount > 0)
+                    assert!(*utxo.amount() > 0)
                 }
                 _ => (),
             }
@@ -2382,7 +2352,7 @@ mod tests {
         assert!(view.message_is_spent(&message_coin.nonce).unwrap());
         assert!(view.message_is_spent(&message_data.nonce).unwrap());
         assert_eq!(
-            view.coin(&UtxoId::new(tx_id, 0)).unwrap().amount,
+            view.coin(&UtxoId::new(tx_id, 0)).unwrap().amount(),
             amount + amount
         );
     }
@@ -2435,7 +2405,7 @@ mod tests {
         let view = exec.database_view_provider.latest_view();
         assert!(view.message_is_spent(&message_coin.nonce).unwrap());
         assert!(!view.message_is_spent(&message_data.nonce).unwrap());
-        assert_eq!(view.coin(&UtxoId::new(tx_id, 0)).unwrap().amount, amount);
+        assert_eq!(view.coin(&UtxoId::new(tx_id, 0)).unwrap().amount(), amount);
     }
 
     #[test]
@@ -2691,18 +2661,15 @@ mod tests {
         // setup db with coin to spend
         let database = &mut &mut Database::default();
         let coin_input = &tx.inputs()[0];
+        let mut coin = CompressedCoin::default();
+        coin.set_owner(*coin_input.input_owner().unwrap());
+        coin.set_amount(coin_input.amount().unwrap());
+        coin.set_asset_id(*coin_input.asset_id(&base_asset_id).unwrap());
+        coin.set_maturity(coin_input.maturity().unwrap());
+        coin.set_tx_pointer(TxPointer::new(Default::default(), block_tx_idx));
         database
             .storage::<Coins>()
-            .insert(
-                coin_input.utxo_id().unwrap(),
-                &CompressedCoin {
-                    owner: *coin_input.input_owner().unwrap(),
-                    amount: coin_input.amount().unwrap(),
-                    asset_id: *coin_input.asset_id(&base_asset_id).unwrap(),
-                    maturity: coin_input.maturity().unwrap(),
-                    tx_pointer: TxPointer::new(Default::default(), block_tx_idx),
-                },
-            )
+            .insert(coin_input.utxo_id().unwrap(), &coin)
             .unwrap();
 
         // make executor with db
@@ -2766,18 +2733,14 @@ mod tests {
         // setup db with coin to spend
         let database = &mut &mut Database::default();
         let coin_input = &tx.inputs()[0];
+        let mut coin = CompressedCoin::default();
+        coin.set_owner(*coin_input.input_owner().unwrap());
+        coin.set_amount(coin_input.amount().unwrap());
+        coin.set_asset_id(*coin_input.asset_id(&base_asset_id).unwrap());
+        coin.set_maturity(coin_input.maturity().unwrap());
         database
             .storage::<Coins>()
-            .insert(
-                coin_input.utxo_id().unwrap(),
-                &CompressedCoin {
-                    owner: *coin_input.input_owner().unwrap(),
-                    amount: coin_input.amount().unwrap(),
-                    asset_id: *coin_input.asset_id(&base_asset_id).unwrap(),
-                    maturity: coin_input.maturity().unwrap(),
-                    tx_pointer: TxPointer::default(),
-                },
-            )
+            .insert(coin_input.utxo_id().unwrap(), &coin)
             .unwrap();
 
         // make executor with db
