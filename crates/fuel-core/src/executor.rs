@@ -2352,7 +2352,7 @@ mod tests {
         assert!(view.message_is_spent(&message_coin.nonce).unwrap());
         assert!(view.message_is_spent(&message_data.nonce).unwrap());
         assert_eq!(
-            view.coin(&UtxoId::new(tx_id, 0)).unwrap().amount(),
+            *view.coin(&UtxoId::new(tx_id, 0)).unwrap().amount(),
             amount + amount
         );
     }
@@ -2405,7 +2405,7 @@ mod tests {
         let view = exec.database_view_provider.latest_view();
         assert!(view.message_is_spent(&message_coin.nonce).unwrap());
         assert!(!view.message_is_spent(&message_data.nonce).unwrap());
-        assert_eq!(view.coin(&UtxoId::new(tx_id, 0)).unwrap().amount(), amount);
+        assert_eq!(*view.coin(&UtxoId::new(tx_id, 0)).unwrap().amount(), amount);
     }
 
     #[test]
