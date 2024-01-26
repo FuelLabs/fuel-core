@@ -280,7 +280,10 @@ where
                 return Err(err)
             }
 
-            let receipts = tx_status.into_iter().map(|tx| tx.receipts).collect::<Vec<Vec<Receipt>>>();
+            let receipts = tx_status
+                .into_iter()
+                .map(|tx| tx.receipts)
+                .collect::<Vec<Vec<Receipt>>>();
 
             receipts_per_block.push(receipts);
             // drop `_temporary_db` without committing to avoid altering state.

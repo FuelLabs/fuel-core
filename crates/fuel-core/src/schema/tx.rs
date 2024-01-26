@@ -23,7 +23,7 @@ use crate::{
             TransactionId,
             TxPointer,
             // DryRunMultiBlock,
-            U32
+            U32,
         },
         tx::types::TransactionStatus,
     },
@@ -251,8 +251,14 @@ impl TxMutation {
         let mut tx = FuelTx::from_bytes(&tx.0)?;
         tx.precompute(&config.consensus_parameters.chain_id)?;
 
-        let mut receipts = block_producer.dry_run_blocks(vec![vec![tx]], None, utxo_validation).await?;
-        let receipts = receipts.pop().expect("Nonempty response").pop().expect("Nonempty response");
+        let mut receipts = block_producer
+            .dry_run_blocks(vec![vec![tx]], None, utxo_validation)
+            .await?;
+        let receipts = receipts
+            .pop()
+            .expect("Nonempty response")
+            .pop()
+            .expect("Nonempty response");
         Ok(receipts.iter().map(Into::into).collect())
     }
 
@@ -272,19 +278,40 @@ impl TxMutation {
         // TODO: tx precompute?
         let _config = ctx.data_unchecked::<Config>();
 
-        let blocks = blocks.into_iter().map(|block| {
-            block.into_iter().map(|h| FuelTx::from_bytes(&h.0)).collect::<Result<Vec<FuelTx>, _>>()
-        }).collect::<Result<Vec<Vec<FuelTx>>, _>>()?;
+        let blocks = blocks
+            .into_iter()
+            .map(|block| {
+                block
+                    .into_iter()
+                    .map(|h| FuelTx::from_bytes(&h.0))
+                    .collect::<Result<Vec<FuelTx>, _>>()
+            })
+            .collect::<Result<Vec<Vec<FuelTx>>, _>>()?;
         let heights = match heights {
             None => None,
-            Some(heights) => Some(heights.iter().map(|height| {
-                let height: u32 = (*height).into();
-                height.into()
-            }).collect())
+            Some(heights) => Some(
+                heights
+                    .iter()
+                    .map(|height| {
+                        let height: u32 = (*height).into();
+                        height.into()
+                    })
+                    .collect(),
+            ),
         };
 
-        let multi_block_receipts = block_producer.dry_run_blocks(blocks, heights, utxo_validation).await?;
-        let multi_block_receipts = multi_block_receipts.iter().map(|block_receipts| block_receipts.iter().map(|r| r.iter().map(Into::into).collect()).collect()).collect();
+        let multi_block_receipts = block_producer
+            .dry_run_blocks(blocks, heights, utxo_validation)
+            .await?;
+        let multi_block_receipts = multi_block_receipts
+            .iter()
+            .map(|block_receipts| {
+                block_receipts
+                    .iter()
+                    .map(|r| r.iter().map(Into::into).collect())
+                    .collect()
+            })
+            .collect();
 
         Ok(multi_block_receipts)
     }

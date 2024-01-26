@@ -181,43 +181,55 @@ where
     ) -> anyhow::Result<Vec<Vec<Vec<Receipt>>>> {
         let heights = match heights {
             None => {
-                assert!(blocks.len() == 1, "Must pass in block heights if you pass in multiple blocks");
+                assert!(
+                    blocks.len() == 1,
+                    "Must pass in block heights if you pass in multiple blocks"
+                );
                 vec![self
-                .db
-                .current_block_height()?
-                .succ()
-                .expect("It is impossible to overflow the current block height")]
-            },
+                    .db
+                    .current_block_height()?
+                    .succ()
+                    .expect("It is impossible to overflow the current block height")]
+            }
             Some(heights) => heights,
         };
 
-        assert!(blocks.len() == heights.len(), "The number of blocks must match the number of block heights");
+        assert!(
+            blocks.len() == heights.len(),
+            "The number of blocks must match the number of block heights"
+        );
 
         let mut components = vec![];
         for (transactions, block_height) in blocks.iter().zip(heights.iter()) {
-                // The dry run execution should use the state of the blockchain based on the
-                // last available block, not on the upcoming one. It means that we need to
-                // use the same configuration as the last block -> the same DA height.
-                // It is deterministic from the result perspective, plus it is more performant
-                // because we don't need to wait for the relayer to sync.
-                // TODO: block time should be adjusted for future blocks
-                // future_block_time = last_block_time + 1
-                let header = self._new_header(*block_height, Tai64::now())?;
-                let component = Components {
-                    header_to_produce: header,
-                    transactions_source: transactions.clone(),
-                    gas_limit: u64::MAX,
-                };
+            // The dry run execution should use the state of the blockchain based on the
+            // last available block, not on the upcoming one. It means that we need to
+            // use the same configuration as the last block -> the same DA height.
+            // It is deterministic from the result perspective, plus it is more performant
+            // because we don't need to wait for the relayer to sync.
+            // TODO: block time should be adjusted for future blocks
+            // future_block_time = last_block_time + 1
+            let header = self._new_header(*block_height, Tai64::now())?;
+            let component = Components {
+                header_to_produce: header,
+                transactions_source: transactions.clone(),
+                gas_limit: u64::MAX,
+            };
 
-                components.push(component);
+            components.push(component);
         }
 
         let executor = self.executor.clone();
 
         // use the blocking threadpool for dry_run to avoid clogging up the main async runtime
-        let receipts = tokio_rayon::spawn_fifo(move || -> anyhow::Result<Vec<Vec<Vec<Receipt>>>> {
-            Ok(executor.dry_run(components, utxo_validation).into_iter().flatten().collect())
-        }).await?;
+        let receipts =
+            tokio_rayon::spawn_fifo(move || -> anyhow::Result<Vec<Vec<Vec<Receipt>>>> {
+                Ok(executor
+                    .dry_run(components, utxo_validation)
+                    .into_iter()
+                    .flatten()
+                    .collect())
+            })
+            .await?;
 
         // Check script receipts
         for (transactions, block_receipts) in blocks.iter().zip(receipts.iter()) {
