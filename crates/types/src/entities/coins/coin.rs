@@ -60,6 +60,7 @@ pub enum CompressedCoin {
     V1(CompressedCoinV1),
 }
 
+#[cfg(any(test, feature = "test-helpers"))]
 impl Default for CompressedCoin {
     fn default() -> Self {
         Self::V1(Default::default())
