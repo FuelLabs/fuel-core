@@ -552,7 +552,7 @@ where
     skip_all,
     fields(
         height = **block.entity.header().height(),
-        id = %block.entity.header().consensus.generated.application_hash
+        id = %block.entity.header().consensus().generated.application_hash
     ),
     err
 )]

@@ -42,8 +42,8 @@ fn correct() -> Input {
         block_header_merkle_root: [2u8; 32],
         prev_header_time: Tai64(2),
         prev_header_da_height: 2,
-        ch: block_header.consensus,
-        ah: block_header.application,
+        ch: *block_header.consensus(),
+        ah: *block_header.application(),
         txs,
     }
 }
@@ -105,13 +105,13 @@ fn test_verify_genesis_block_fields(input: Input) -> anyhow::Result<()> {
         .returning(move |_| Ok(block_header_merkle_root.into()));
     d.expect_block_header().returning(move |_| {
         let mut h = BlockHeader::default();
-        h.consensus.time = prev_header_time;
-        h.application.da_height = prev_header_da_height.into();
+        h.set_time(prev_header_time);
+        h.set_da_height(prev_header_da_height.into());
         Ok(h)
     });
     let mut b = Block::default();
-    b.header_mut().consensus = ch;
-    b.header_mut().application = ah;
+    b.header_mut().set_consensus_header(ch);
+    b.header_mut().set_application_header(ah);
     *b.transactions_mut() = txs;
     verify_block_fields(&d, &b)
 }
