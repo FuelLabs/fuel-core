@@ -264,8 +264,8 @@ mod tests {
             .collect_vec();
 
         let mut block = Block::default();
-        block.header_mut().consensus.height = block_height;
-        block.header_mut().application.da_height = da_block_height;
+        block.header_mut().set_block_height(block_height);
+        block.header_mut().set_da_height(da_block_height);
         *block.transactions_mut() = transactions;
         block
     }
@@ -2855,7 +2855,7 @@ mod tests {
         fn database_with_genesis_block(da_block_height: u64) -> Database {
             let db = Database::default();
             let mut block = Block::default();
-            block.header_mut().application.da_height = da_block_height.into();
+            block.header_mut().set_da_height(da_block_height.into());
             block.header_mut().recalculate_metadata();
 
             let mut db_transaction = db.transaction();
