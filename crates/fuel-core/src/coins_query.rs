@@ -950,13 +950,10 @@ mod tests {
             self.last_coin_index += 1;
 
             let id = UtxoId::new(Bytes32::from([0u8; 32]), index.try_into().unwrap());
-            let coin = CompressedCoin {
-                owner,
-                amount,
-                asset_id,
-                maturity: Default::default(),
-                tx_pointer: Default::default(),
-            };
+            let mut coin = CompressedCoin::default();
+            coin.set_owner(owner);
+            coin.set_amount(amount);
+            coin.set_asset_id(asset_id);
 
             let db = &mut self.database;
             StorageMutate::<Coins>::insert(db, &id, &coin).unwrap();
