@@ -33,7 +33,10 @@ use fuel_core_types::{
         primitives::DaBlockHeight,
     },
     entities::{
-        coins::coin::CompressedCoin,
+        coins::coin::{
+            CompressedCoin,
+            CompressedCoinV1,
+        },
         contract::ContractUtxoInfo,
     },
     fuel_asm::{
@@ -1007,9 +1010,9 @@ where
                 | Input::CoinPredicate(CoinPredicate { utxo_id, .. }) => {
                     if let Some(coin) = db.storage::<Coins>().get(utxo_id)? {
                         let coin_mature_height = coin
-                            .tx_pointer
+                            .tx_pointer()
                             .block_height()
-                            .saturating_add(*coin.maturity)
+                            .saturating_add(**coin.maturity())
                             .into();
                         if block_height < coin_mature_height {
                             return Err(TransactionValidityError::CoinHasNotMatured(
@@ -1192,7 +1195,7 @@ where
                                 db, *utxo_id, *owner, *amount, *asset_id, *maturity,
                                 options,
                             )?;
-                            *tx_pointer = coin.tx_pointer;
+                            *tx_pointer = *coin.tx_pointer();
                         }
                         Input::Contract(Contract {
                             ref mut utxo_id,
@@ -1240,7 +1243,7 @@ where
                                 db, *utxo_id, *owner, *amount, *asset_id, *maturity,
                                 options,
                             )?;
-                            if tx_pointer != &coin.tx_pointer {
+                            if tx_pointer != coin.tx_pointer() {
                                 return Err(ExecutorError::InvalidTransactionOutcome {
                                     transaction_id: tx_id,
                                 })
@@ -1371,13 +1374,15 @@ where
                 .map(Cow::into_owned)
         } else {
             // if utxo validation is disabled, just assign this new input to the original block
-            Ok(CompressedCoin {
+            let coin = CompressedCoinV1 {
                 owner,
                 amount,
                 asset_id,
                 maturity,
                 tx_pointer: Default::default(),
-            })
+            }
+            .into();
+            Ok(coin)
         }
     }
 
@@ -1508,13 +1513,14 @@ where
         // This is because variable or transfer outputs won't have any value
         // if there's a revert or panic and shouldn't be added to the utxo set.
         if *amount > Word::MIN {
-            let coin = CompressedCoin {
+            let coin = CompressedCoinV1 {
                 owner: *to,
                 amount: *amount,
                 asset_id: *asset_id,
                 maturity: 0u32.into(),
                 tx_pointer: TxPointer::new(block_height, tx_idx),
-            };
+            }
+            .into();
 
             if db.storage::<Coins>().insert(&utxo_id, &coin)?.is_some() {
                 return Err(ExecutorError::OutputAlreadyExists)
