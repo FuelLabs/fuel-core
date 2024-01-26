@@ -60,15 +60,15 @@ impl ExecutorAdapter {
 
     pub(crate) fn _dry_run(
         &self,
-        block: Components<fuel_tx::Transaction>,
+        blocks: Vec<Components<Vec<fuel_tx::Transaction>>>,
         utxo_validation: Option<bool>,
-    ) -> ExecutorResult<Vec<Vec<Receipt>>> {
+    ) -> ExecutorResult<Vec<Vec<Vec<Receipt>>>> {
         let executor = Executor {
             database: self.relayer.database.clone(),
             relayer: self.relayer.clone(),
             config: self.config.clone(),
         };
-        Ok(executor.dry_run(vec![block], utxo_validation)?.pop().expect("Nonempty response"))
+        executor.dry_run(blocks, utxo_validation)
     }
 }
 

@@ -22,6 +22,8 @@ use crate::{
             SortedTxCursor,
             TransactionId,
             TxPointer,
+            // DryRunMultiBlock,
+            U32
         },
         tx::types::TransactionStatus,
     },
@@ -249,43 +251,40 @@ impl TxMutation {
         let mut tx = FuelTx::from_bytes(&tx.0)?;
         tx.precompute(&config.consensus_parameters.chain_id)?;
 
-        let receipts = block_producer.dry_run_tx(tx, None, utxo_validation).await?;
+        let mut receipts = block_producer.dry_run_blocks(vec![vec![tx]], None, utxo_validation).await?;
+        let receipts = receipts.pop().expect("Nonempty response").pop().expect("Nonempty response");
         Ok(receipts.iter().map(Into::into).collect())
     }
 
     /// Execute a dry-run with multiple blocks with multiple transactions in each block
+    /// using a fork of the current state, no changes are commited.
     async fn dry_run_multi(
         &self,
         ctx: &Context<'_>,
         blocks: Vec<Vec<HexString>>,
+        heights: Option<Vec<U32>>,
         // If set to false, disable input utxo validation, overriding the configuration of the node.
         // This allows for non-existent inputs to be used without signature validation
         // for read-only calls.
         utxo_validation: Option<bool>,
     ) -> async_graphql::Result<Vec<Vec<Vec<receipt::Receipt>>>> {
         let block_producer = ctx.data_unchecked::<BlockProducer>();
-        let config = ctx.data_unchecked::<Config>();
+        // TODO: tx precompute?
+        let _config = ctx.data_unchecked::<Config>();
 
-        let blocks = blocks
-            .into_iter()
-            .map(|txs| {
-                txs.into_iter()
-                    .map(|h| FuelTx::from_bytes(&h.0))
-                    .collect::<Result<Vec<FuelTx>, _>>()
-            })
-            .collect::<Result<Vec<Vec<FuelTx>>, _>>()?;
+        let blocks = blocks.into_iter().map(|block| {
+            block.into_iter().map(|h| FuelTx::from_bytes(&h.0)).collect::<Result<Vec<FuelTx>, _>>()
+        }).collect::<Result<Vec<Vec<FuelTx>>, _>>()?;
+        let heights = match heights {
+            None => None,
+            Some(heights) => Some(heights.iter().map(|height| {
+                let height: u32 = (*height).into();
+                height.into()
+            }).collect())
+        };
 
-        let mut multi_block_receipts: Vec<Vec<Vec<receipt::Receipt>>> = vec![];
-        for block in blocks {
-            let mut block_receipts: Vec<Vec<receipt::Receipt>> = vec![];
-            for mut tx in block {
-                tx.precompute(&config.consensus_parameters.chain_id)?;
-                let receipts =
-                    block_producer.dry_run_tx(tx, None, utxo_validation).await?;
-                block_receipts.push(receipts.iter().map(Into::into).collect());
-            }
-            multi_block_receipts.push(block_receipts);
-        }
+        let multi_block_receipts = block_producer.dry_run_blocks(blocks, heights, utxo_validation).await?;
+        let multi_block_receipts = multi_block_receipts.iter().map(|block_receipts| block_receipts.iter().map(|r| r.iter().map(Into::into).collect()).collect()).collect();
 
         Ok(multi_block_receipts)
     }

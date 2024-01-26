@@ -76,7 +76,7 @@ pub trait DryRunner: Send + Sync {
     /// of utxos during execution.
     fn dry_run(
         &self,
-        block: Components<Transaction>,
+        blocks: Vec<Components<Vec<Transaction>>>,
         utxo_validation: Option<bool>,
-    ) -> ExecutorResult<Vec<Vec<Receipt>>>;
+    ) -> ExecutorResult<Vec<Vec<Vec<Receipt>>>>;
 }

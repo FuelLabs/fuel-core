@@ -169,12 +169,12 @@ pub trait TxPoolPort: Send + Sync {
 
 #[async_trait]
 pub trait BlockProducerPort: Send + Sync {
-    async fn dry_run_tx(
+    async fn dry_run_blocks(
         &self,
-        transaction: Transaction,
-        height: Option<BlockHeight>,
+        blocks: Vec<Vec<Transaction>>,
+        heights: Option<Vec<BlockHeight>>,
         utxo_validation: Option<bool>,
-    ) -> anyhow::Result<Vec<Receipt>>;
+    ) -> anyhow::Result<Vec<Vec<Vec<Receipt>>>>;
 }
 
 #[async_trait::async_trait]

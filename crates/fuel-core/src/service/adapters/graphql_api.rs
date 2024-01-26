@@ -89,14 +89,14 @@ impl DatabaseMessageProof for Database {
 
 #[async_trait]
 impl BlockProducerPort for BlockProducerAdapter {
-    async fn dry_run_tx(
+    async fn dry_run_blocks(
         &self,
-        transaction: Transaction,
-        height: Option<BlockHeight>,
+        blocks: Vec<Vec<Transaction>>,
+        heights: Option<Vec<BlockHeight>>,
         utxo_validation: Option<bool>,
-    ) -> anyhow::Result<Vec<TxReceipt>> {
+    ) -> anyhow::Result<Vec<Vec<Vec<TxReceipt>>>> {
         self.block_producer
-            .dry_run(transaction, height, utxo_validation)
+            .dry_run(blocks, heights, utxo_validation)
             .await
     }
 }

@@ -242,7 +242,7 @@ where
 
     pub fn dry_run(
         &self,
-        blocks: Vec<Components<Transaction>>,
+        blocks: Vec<Components<Vec<Transaction>>>,
         utxo_validation: Option<bool>,
     ) -> ExecutorResult<Vec<Vec<Vec<Receipt>>>> {
         // fallback to service config value if no utxo_validation override is provided
@@ -255,9 +255,9 @@ where
         for component in blocks {
             let component = Components {
                 header_to_produce: component.header_to_produce,
-                transactions_source: OnceTransactionsSource::new(vec![
+                transactions_source: OnceTransactionsSource::new(
                     component.transactions_source,
-                ]),
+                ),
                 gas_limit: component.gas_limit,
             };
 

@@ -1,10 +1,5 @@
 use async_graphql::{
-    connection::CursorType,
-    InputValueError,
-    InputValueResult,
-    Scalar,
-    ScalarType,
-    Value,
+    connection::CursorType, InputValueError, InputValueResult, Scalar, ScalarType, Value
 };
 use fuel_core_types::{
     fuel_types,
