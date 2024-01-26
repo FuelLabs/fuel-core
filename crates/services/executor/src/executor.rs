@@ -163,8 +163,7 @@ impl TransactionsSource for OnceTransactionsSource {
     }
 }
 
-/// The executor is used for block production and validation.
-/// It acts like a factory creating an `ExecutionInstance` valid only for one block.
+/// The executor is used for block production and validation of the blocks.
 #[derive(Clone, Debug)]
 pub struct Executor<D, R> {
     pub database_view_provider: D,
@@ -284,7 +283,7 @@ impl From<&Config> for ExecutionOptions {
 /// In production mode, block fields like transaction commitments are set based on the executed txs.
 /// In validation mode, the processed block commitments are compared with the proposed block.
 #[derive(Clone, Debug)]
-pub struct ExecutionInstance<R, D> {
+struct ExecutionInstance<R, D> {
     pub relayer: R,
     pub database: D,
     pub config: Arc<Config>,
