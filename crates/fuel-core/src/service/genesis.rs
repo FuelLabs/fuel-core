@@ -39,7 +39,10 @@ use fuel_core_types::{
         SealedBlock,
     },
     entities::{
-        coins::coin::CompressedCoin,
+        coins::coin::{
+            CompressedCoin,
+            CompressedCoinV1,
+        },
         contract::ContractUtxoInfo,
         message::Message,
     },
@@ -181,15 +184,17 @@ fn init_coin_state(
                     }),
                 );
 
-                let mut compressed_coin = CompressedCoin::default();
-                compressed_coin.set_owner(coin.owner);
-                compressed_coin.set_amount(coin.amount);
-                compressed_coin.set_asset_id(coin.asset_id);
-                compressed_coin.set_maturity(coin.maturity.unwrap_or_default());
-                compressed_coin.set_tx_pointer(TxPointer::new(
-                    coin.tx_pointer_block_height.unwrap_or_default(),
-                    coin.tx_pointer_tx_idx.unwrap_or_default(),
-                ));
+                let compressed_coin: CompressedCoin = CompressedCoinV1 {
+                    owner: coin.owner,
+                    amount: coin.amount,
+                    asset_id: coin.asset_id,
+                    maturity: coin.maturity.unwrap_or_default(),
+                    tx_pointer: TxPointer::new(
+                        coin.tx_pointer_block_height.unwrap_or_default(),
+                        coin.tx_pointer_tx_idx.unwrap_or_default(),
+                    ),
+                }
+                .into();
 
                 // ensure coin can't point to blocks in the future
                 if compressed_coin.tx_pointer().block_height()

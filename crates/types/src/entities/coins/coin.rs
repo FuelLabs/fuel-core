@@ -84,6 +84,12 @@ pub struct CompressedCoinV1 {
     pub tx_pointer: TxPointer,
 }
 
+impl From<CompressedCoinV1> for CompressedCoin {
+    fn from(value: CompressedCoinV1) -> Self {
+        Self::V1(value)
+    }
+}
+
 impl CompressedCoin {
     /// Uncompress the coin.
     pub fn uncompress(self, utxo_id: UtxoId) -> Coin {
