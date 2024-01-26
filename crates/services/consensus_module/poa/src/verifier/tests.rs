@@ -42,8 +42,8 @@ fn correct() -> Input {
         block_header_merkle_root: [2u8; 32],
         prev_header_time: Tai64(2),
         prev_header_da_height: 2,
-        ch: block_header.consensus,
-        ah: block_header.application,
+        ch: *block_header.consensus(),
+        ah: *block_header.application(),
         txs,
     }
 }
