@@ -163,7 +163,7 @@ impl ConcreteStorage {
 
         let vm_database = VmStorage::new(
             storage.as_ref().clone(),
-            &block.header().consensus,
+            block.header().consensus(),
             // TODO: Use a real coinbase address
             Default::default(),
         );

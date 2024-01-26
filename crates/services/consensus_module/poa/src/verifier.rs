@@ -62,7 +62,7 @@ pub fn verify_block_fields<D: Database>(
     );
 
     ensure!(
-        header.consensus.application_hash == header.application.hash(),
+        header.application_hash() == &header.application().hash(),
         "The application hash mismatch."
     );
 
