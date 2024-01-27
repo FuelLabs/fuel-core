@@ -72,6 +72,7 @@ impl Message {
     }
 
     /// Set the message sender
+    #[cfg(any(test, feature = "test-helpers"))]
     pub fn set_sender(&mut self, sender: Address) {
         match self {
             Message::V1(message) => message.sender = sender,
@@ -86,6 +87,7 @@ impl Message {
     }
 
     /// Set the message recipient
+    #[cfg(any(test, feature = "test-helpers"))]
     pub fn set_recipient(&mut self, recipient: Address) {
         match self {
             Message::V1(message) => message.recipient = recipient,
@@ -100,6 +102,7 @@ impl Message {
     }
 
     /// Set the message nonce
+    #[cfg(any(test, feature = "test-helpers"))]
     pub fn set_nonce(&mut self, nonce: Nonce) {
         match self {
             Message::V1(message) => message.nonce = nonce,
@@ -114,6 +117,7 @@ impl Message {
     }
 
     /// Set the message amount
+    #[cfg(any(test, feature = "test-helpers"))]
     pub fn set_amount(&mut self, amount: Word) {
         match self {
             Message::V1(message) => message.amount = amount,
@@ -127,6 +131,14 @@ impl Message {
         }
     }
 
+    /// Set the message data
+    #[cfg(any(test, feature = "test-helpers"))]
+    pub fn set_data(&mut self, data: Vec<u8>) {
+        match self {
+            Message::V1(message) => message.data = data,
+        }
+    }
+
     /// Get the message DA height
     pub fn da_height(&self) -> DaBlockHeight {
         match self {
@@ -135,6 +147,7 @@ impl Message {
     }
 
     /// Set the message DA height
+    #[cfg(any(test, feature = "test-helpers"))]
     pub fn set_da_height(&mut self, da_height: DaBlockHeight) {
         match self {
             Message::V1(message) => message.da_height = da_height,
