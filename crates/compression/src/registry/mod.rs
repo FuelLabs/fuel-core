@@ -69,6 +69,22 @@ macro_rules! tables {
             }
         )*
 
+        impl core::ops::Add<CountPerTable> for CountPerTable {
+            type Output = Self;
+
+            fn add(self, rhs: CountPerTable) -> Self::Output {
+                Self {
+                    $($name: self.$name + rhs.$name),*
+                }
+            }
+        }
+
+        impl core::ops::AddAssign<CountPerTable> for CountPerTable {
+            fn add_assign(&mut self, rhs: CountPerTable) {
+                $(self.$name += rhs.$name);*
+            }
+        }
+
         /// One key value per table
         #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, serde::Serialize, serde::Deserialize)]
         #[allow(non_snake_case)] // The field names match table type names eactly

@@ -1,0 +1,20 @@
+[package]
+name = "fuel-core-compression-derive"
+version = { workspace = true }
+authors = { workspace = true }
+categories = ["cryptography::cryptocurrencies"]
+edition = { workspace = true }
+homepage = { workspace = true }
+keywords = ["blockchain", "cryptocurrencies", "fuel-core", "fuel-client", "fuel-compression"]
+license = { workspace = true }
+repository = { workspace = true }
+description = "Compression and decompression derive macros for DA storage types."
+
+[lib]
+proc-macro = true
+
+[dependencies]
+quote = "1"
+syn = { version = "2", features = ["full"] }
+proc-macro2 = "1"
+synstructure = "0.13"
