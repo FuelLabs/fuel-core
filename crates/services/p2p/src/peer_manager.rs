@@ -72,14 +72,11 @@ pub struct PeerManager {
 
 impl PeerManager {
     pub fn new(
+        reserved_peers_updates: tokio::sync::broadcast::Sender<usize>,
         reserved_peers: HashSet<PeerId>,
         connection_state: Arc<RwLock<ConnectionState>>,
         max_non_reserved_peers: usize,
     ) -> Self {
-        let (reserved_peers_updates, _) = tokio::sync::broadcast::channel(
-            reserved_peers.len().saturating_mul(2).saturating_add(1),
-        );
-
         Self {
             score_config: ScoreConfig::default(),
             non_reserved_connected_peers: HashMap::with_capacity(max_non_reserved_peers),
@@ -416,8 +413,11 @@ mod tests {
         max_non_reserved_peers: usize,
     ) -> PeerManager {
         let connection_state = ConnectionState::new();
+        let (sender, _) =
+            tokio::sync::broadcast::channel(reserved_peers.len().saturating_add(1));
 
         PeerManager::new(
+            sender,
             reserved_peers.into_iter().collect(),
             connection_state,
             max_non_reserved_peers,

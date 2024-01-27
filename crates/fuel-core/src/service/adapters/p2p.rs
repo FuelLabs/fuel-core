@@ -7,7 +7,10 @@ use fuel_core_p2p::ports::{
 use fuel_core_services::stream::BoxStream;
 use fuel_core_storage::Result as StorageResult;
 use fuel_core_types::{
-    blockchain::SealedBlockHeader,
+    blockchain::{
+        consensus::Genesis,
+        SealedBlockHeader,
+    },
     fuel_types::BlockHeight,
     services::p2p::Transactions,
 };
@@ -26,6 +29,10 @@ impl P2pDb for Database {
         block_height_range: Range<u32>,
     ) -> StorageResult<Option<Vec<Transactions>>> {
         self.get_transactions_on_blocks(block_height_range)
+    }
+
+    fn get_genesis(&self) -> StorageResult<Genesis> {
+        self.get_genesis()
     }
 }
 

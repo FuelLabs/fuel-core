@@ -66,6 +66,7 @@ use std::{
     collections::HashMap,
     time::Duration,
 };
+use tokio::sync::broadcast;
 use tracing::{
     debug,
     warn,
@@ -157,7 +158,11 @@ pub enum FuelP2PEvent {
 }
 
 impl FuelP2PService {
-    pub fn new(config: Config, codec: PostcardCodec) -> Self {
+    pub fn new(
+        reserved_peers_updates: broadcast::Sender<usize>,
+        config: Config,
+        codec: PostcardCodec,
+    ) -> Self {
         let gossipsub_data =
             GossipsubData::with_topics(GossipsubTopics::new(&config.network_name));
         let network_metadata = NetworkMetadata { gossipsub_data };
@@ -206,6 +211,7 @@ impl FuelP2PService {
             network_metadata,
             metrics,
             peer_manager: PeerManager::new(
+                reserved_peers_updates,
                 reserved_peers,
                 connection_state,
                 config.max_peers_connected as usize,
@@ -736,6 +742,7 @@ mod tests {
         time::Duration,
     };
     use tokio::sync::{
+        broadcast,
         mpsc,
         oneshot,
         watch,
@@ -748,9 +755,11 @@ mod tests {
     async fn build_service_from_config(mut p2p_config: Config) -> P2PService {
         p2p_config.keypair = Keypair::generate_secp256k1(); // change keypair for each Node
         let max_block_size = p2p_config.max_block_size;
+        let (sender, _) =
+            broadcast::channel(p2p_config.reserved_nodes.len().saturating_add(1));
 
         let mut service =
-            FuelP2PService::new(p2p_config, PostcardCodec::new(max_block_size));
+            FuelP2PService::new(sender, p2p_config, PostcardCodec::new(max_block_size));
         service.start().await.unwrap();
         service
     }
