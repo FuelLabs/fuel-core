@@ -27,6 +27,7 @@ use crate::{
 /// Versioned Message
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum Message {
     /// Message Version 1
     V1(MessageV1),
