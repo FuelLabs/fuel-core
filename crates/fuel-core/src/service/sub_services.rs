@@ -16,6 +16,7 @@ use crate::{
             TxPoolAdapter,
             VerifierAdapter,
         },
+        genesis::create_genesis_block,
         Config,
         SharedState,
         SubServices,
@@ -46,13 +47,14 @@ pub fn init_sub_services(
     config: &Config,
     database: CombinedDatabase,
 ) -> anyhow::Result<(SubServices, SharedState)> {
-    let last_block = database
-        .on_chain()
+    let last_block_header = database
         .get_current_block()?
-        .ok_or(anyhow::anyhow!(
-            "The blockchain is not initialized with any block"
-        ))?;
-    let last_height = *last_block.header().height();
+        .map(|block| block.header().clone())
+        .unwrap_or({
+            let block = create_genesis_block(config);
+            block.header().clone()
+        });
+    let last_height = *last_block_header.height();
 
     let executor = ExecutorAdapter::new(
         database.on_chain().clone(),
@@ -98,22 +100,14 @@ pub fn init_sub_services(
     };
 
     #[cfg(feature = "p2p")]
-    let mut network = {
-        if let Some(p2p_config) = config.p2p.clone() {
-            let p2p_db = database.on_chain().clone();
-            let genesis = p2p_db.get_genesis()?;
-            let p2p_config = p2p_config.init(genesis)?;
-
-            Some(fuel_core_p2p::service::new_service(
-                config.chain_conf.consensus_parameters.chain_id,
-                p2p_config,
-                p2p_db,
-                importer_adapter.clone(),
-            ))
-        } else {
-            None
-        }
-    };
+    let mut network = config.p2p.clone().map(|p2p_config| {
+        fuel_core_p2p::service::new_service(
+            config.chain_conf.consensus_parameters.chain_id,
+            p2p_config,
+            database.on_chain().clone(),
+            importer_adapter.clone(),
+        )
+    });
 
     #[cfg(feature = "p2p")]
     let p2p_adapter = {
@@ -166,7 +160,7 @@ pub fn init_sub_services(
 
     let poa = (production_enabled).then(|| {
         fuel_core_poa::new_service(
-            last_block.header(),
+            &last_block_header,
             poa_config,
             tx_pool_adapter.clone(),
             producer_adapter.clone(),
@@ -178,7 +172,7 @@ pub fn init_sub_services(
 
     #[cfg(feature = "p2p")]
     let sync = fuel_core_sync::service::new_service(
-        *last_block.header().height(),
+        last_height,
         p2p_adapter.clone(),
         importer_adapter.clone(),
         super::adapters::ConsensusAdapter::new(
