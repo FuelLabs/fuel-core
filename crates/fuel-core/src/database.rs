@@ -30,6 +30,7 @@ use fuel_core_storage::{
         TableWithBlueprint,
     },
     transactional::{
+        AtomicView,
         StorageTransaction,
         Transactional,
     },
@@ -38,7 +39,10 @@ use fuel_core_storage::{
     Result as StorageResult,
 };
 use fuel_core_types::{
-    blockchain::primitives::BlockId,
+    blockchain::primitives::{
+        BlockId,
+        DaBlockHeight,
+    },
     fuel_types::{
         BlockHeight,
         Bytes32,
@@ -408,6 +412,66 @@ impl fuel_core_storage::vm_storage::VmStorageRequirements for Database {
         slots: S,
     ) -> StorageResult<()> {
         self.init_contract_state(contract_id, slots)
+    }
+}
+
+impl AtomicView for Database {
+    type View = Database;
+
+    type Height = BlockHeight;
+
+    fn latest_height(&self) -> BlockHeight {
+        // TODO: The database should track the latest height inside of the database object
+        //  instead of fetching it from the `FuelBlocks` table. As a temporary solution,
+        //  fetch it from the table for now.
+        self.latest_height().unwrap_or_default()
+    }
+
+    fn view_at(&self, _: &BlockHeight) -> StorageResult<Self::View> {
+        // TODO: Unimplemented until of the https://github.com/FuelLabs/fuel-core/issues/451
+        Ok(self.latest_view())
+    }
+
+    fn latest_view(&self) -> Self::View {
+        // TODO: https://github.com/FuelLabs/fuel-core/issues/1581
+        self.clone()
+    }
+}
+
+pub struct RelayerReadDatabase(Database);
+
+impl RelayerReadDatabase {
+    pub fn new(database: Database) -> Self {
+        Self(database)
+    }
+}
+
+impl AtomicView for RelayerReadDatabase {
+    type View = Database;
+    type Height = DaBlockHeight;
+
+    fn latest_height(&self) -> Self::Height {
+        #[cfg(feature = "relayer")]
+        {
+            use fuel_core_relayer::ports::RelayerDb;
+            // TODO: The database should track the latest da height inside of the database object
+            //  instead of fetching it from the `RelayerMetadata` table. As a temporary solution,
+            //  fetch it from the table for now.
+            //  https://github.com/FuelLabs/fuel-core/issues/1589
+            self.0.get_finalized_da_height().unwrap_or_default()
+        }
+        #[cfg(not(feature = "relayer"))]
+        {
+            DaBlockHeight(0)
+        }
+    }
+
+    fn view_at(&self, _: &Self::Height) -> StorageResult<Self::View> {
+        Ok(self.latest_view())
+    }
+
+    fn latest_view(&self) -> Self::View {
+        self.0.clone()
     }
 }
 

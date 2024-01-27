@@ -146,7 +146,7 @@ pub struct PartialBlockHeader {
     pub consensus: ConsensusHeader<Empty>,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(any(test, feature = "test-helpers"), derive(Default))]
 /// The fuel block application header.
@@ -163,7 +163,7 @@ pub struct ApplicationHeader<Generated> {
     pub generated: Generated,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(any(test, feature = "test-helpers"), derive(Default))]
 /// Concrete generated application header fields.
@@ -179,7 +179,7 @@ pub struct GeneratedApplicationFields {
     pub message_receipt_root: Bytes32,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 /// The fuel block consensus header.
 /// This contains fields related to consensus plus
@@ -195,7 +195,7 @@ pub struct ConsensusHeader<Generated> {
     pub generated: Generated,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(any(test, feature = "test-helpers"), derive(Default))]
 /// Concrete generated consensus header fields.
@@ -325,6 +325,7 @@ impl BlockHeader {
         let transactions_root = generate_txns_root(transactions);
 
         transactions_root == self.application().transactions_root
+            && transactions.len() as u64 == self.application().transactions_count
     }
 }
 

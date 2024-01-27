@@ -1,5 +1,6 @@
 use crate::{
     ports::{
+        ExecutorDatabaseTrait,
         MaybeCheckedTransaction,
         RelayerPort,
         TransactionsSource,
@@ -7,6 +8,7 @@ use crate::{
     refs::ContractRef,
     Config,
 };
+use block_component::*;
 use fuel_core_storage::{
     tables::{
         Coins,
@@ -17,9 +19,11 @@ use fuel_core_storage::{
         SpentMessages,
     },
     transactional::{
+        AtomicView,
         StorageTransaction,
         Transactional,
     },
+    vm_storage::VmStorage,
     StorageAsMut,
     StorageAsRef,
 };
@@ -159,47 +163,20 @@ impl TransactionsSource for OnceTransactionsSource {
     }
 }
 
-/// ! The executor is used for block production and validation. Given a block, it will execute all
-/// the transactions contained in the block and persist changes to the underlying database as needed.
-/// In production mode, block fields like transaction commitments are set based on the executed txs.
-/// In validation mode, the processed block commitments are compared with the proposed block.
+/// The executor is used for block production and validation of the blocks.
 #[derive(Clone, Debug)]
-pub struct Executor<R, D> {
-    pub database: D,
-    pub relayer: R,
+pub struct Executor<D, R> {
+    pub database_view_provider: D,
+    pub relayer_view_provider: R,
     pub config: Arc<Config>,
 }
 
-/// Data that is generated after executing all transactions.
-pub struct ExecutionData {
-    coinbase: u64,
-    used_gas: u64,
-    tx_count: u16,
-    found_mint: bool,
-    message_ids: Vec<MessageId>,
-    tx_status: Vec<TransactionExecutionStatus>,
-    pub skipped_transactions: Vec<(TxId, ExecutorError)>,
-}
-
-/// Per-block execution options
-#[derive(Copy, Clone, Default)]
-pub struct ExecutionOptions {
-    /// UTXO Validation flag, when disabled the executor skips signature and UTXO existence checks
-    pub utxo_validation: bool,
-}
-
-impl From<&Config> for ExecutionOptions {
-    fn from(value: &Config) -> Self {
-        Self {
-            utxo_validation: value.utxo_validation_default,
-        }
-    }
-}
-
-impl<R, D> Executor<R, D>
+impl<D, R, View> Executor<D, R>
 where
-    R: RelayerPort + Clone,
-    D: ExecutorDatabaseTrait<D>,
+    R: AtomicView<Height = DaBlockHeight>,
+    R::View: RelayerPort,
+    D: AtomicView<View = View, Height = BlockHeight>,
+    D::View: ExecutorDatabaseTrait<View>,
 {
     #[cfg(any(test, feature = "test-helpers"))]
     /// Executes the block and commits the result of the execution into the inner `Database`.
@@ -208,39 +185,49 @@ where
         block: fuel_core_types::services::executor::ExecutionBlock,
         options: ExecutionOptions,
     ) -> ExecutorResult<ExecutionResult> {
-        let component = match block {
-            ExecutionTypes::DryRun(_) => {
-                panic!("It is not possible to commit the dry run result");
-            }
-            ExecutionTypes::Production(block) => ExecutionTypes::Production(Components {
-                header_to_produce: block.header,
-                transactions_source: OnceTransactionsSource::new(block.transactions),
-                gas_limit: u64::MAX,
-            }),
-            ExecutionTypes::Validation(block) => ExecutionTypes::Validation(block),
+        let executor = ExecutionInstance {
+            database: self.database_view_provider.latest_view(),
+            relayer: self.relayer_view_provider.latest_view(),
+            config: self.config.clone(),
+            options,
         };
-
-        let (result, db_transaction) =
-            self.execute_without_commit(component, options)?.into();
-        db_transaction.commit()?;
-        Ok(result)
+        executor.execute_and_commit(block)
     }
-}
 
-impl<R, D> Executor<R, D>
-where
-    R: RelayerPort + Clone,
-    D: ExecutorDatabaseTrait<D>,
-{
-    pub fn execute_without_commit<TxSource>(
+    /// Executes the partial block and returns `ExecutionData` as a result.
+    #[cfg(any(test, feature = "test-helpers"))]
+    pub fn execute_block<TxSource>(
         &self,
-        block: ExecutionBlockWithSource<TxSource>,
+        block: ExecutionType<PartialBlockComponent<TxSource>>,
         options: ExecutionOptions,
-    ) -> ExecutorResult<UncommittedResult<StorageTransaction<D>>>
+    ) -> ExecutorResult<ExecutionData>
     where
         TxSource: TransactionsSource,
     {
-        self.execute_inner(block, &self.database, options)
+        let executor = ExecutionInstance {
+            database: self.database_view_provider.latest_view(),
+            relayer: self.relayer_view_provider.latest_view(),
+            config: self.config.clone(),
+            options,
+        };
+        let mut block_transaction = executor.database.transaction();
+        executor.execute_block(block_transaction.as_mut(), block)
+    }
+
+    pub fn execute_without_commit<TxSource>(
+        &self,
+        block: ExecutionBlockWithSource<TxSource>,
+    ) -> ExecutorResult<UncommittedResult<StorageTransaction<View>>>
+    where
+        TxSource: TransactionsSource,
+    {
+        let executor = ExecutionInstance {
+            database: self.database_view_provider.latest_view(),
+            relayer: self.relayer_view_provider.latest_view(),
+            config: self.config.clone(),
+            options: self.config.as_ref().into(),
+        };
+        executor.execute_inner(block)
     }
 
     pub fn dry_run(
@@ -254,6 +241,103 @@ where
 
         let options = ExecutionOptions { utxo_validation };
 
+        let executor = ExecutionInstance {
+            database: self.database_view_provider.latest_view(),
+            relayer: self.relayer_view_provider.latest_view(),
+            config: self.config.clone(),
+            options,
+        };
+        executor.dry_run(component)
+    }
+}
+
+/// Data that is generated after executing all transactions.
+#[derive(Default)]
+pub struct ExecutionData {
+    coinbase: u64,
+    used_gas: u64,
+    tx_count: u16,
+    found_mint: bool,
+    message_ids: Vec<MessageId>,
+    tx_status: Vec<TransactionExecutionStatus>,
+    pub skipped_transactions: Vec<(TxId, ExecutorError)>,
+}
+
+/// Per-block execution options
+#[derive(Copy, Clone, Default, Debug)]
+pub struct ExecutionOptions {
+    /// UTXO Validation flag, when disabled the executor skips signature and UTXO existence checks
+    pub utxo_validation: bool,
+}
+
+impl From<&Config> for ExecutionOptions {
+    fn from(value: &Config) -> Self {
+        Self {
+            utxo_validation: value.utxo_validation_default,
+        }
+    }
+}
+
+/// The executor instance performs block production and validation. Given a block, it will execute all
+/// the transactions contained in the block and persist changes to the underlying database as needed.
+/// In production mode, block fields like transaction commitments are set based on the executed txs.
+/// In validation mode, the processed block commitments are compared with the proposed block.
+#[derive(Clone, Debug)]
+struct ExecutionInstance<R, D> {
+    pub relayer: R,
+    pub database: D,
+    pub config: Arc<Config>,
+    pub options: ExecutionOptions,
+}
+
+impl<R, D> ExecutionInstance<R, D>
+where
+    R: RelayerPort,
+    D: ExecutorDatabaseTrait<D>,
+{
+    #[cfg(any(test, feature = "test-helpers"))]
+    /// Executes the block and commits the result of the execution into the inner `Database`.
+    fn execute_and_commit(
+        self,
+        block: fuel_core_types::services::executor::ExecutionBlock,
+    ) -> ExecutorResult<ExecutionResult> {
+        let component = match block {
+            ExecutionTypes::DryRun(_) => {
+                panic!("It is not possible to commit the dry run result");
+            }
+            ExecutionTypes::Production(block) => ExecutionTypes::Production(Components {
+                header_to_produce: block.header,
+                transactions_source: OnceTransactionsSource::new(block.transactions),
+                gas_limit: u64::MAX,
+            }),
+            ExecutionTypes::Validation(block) => ExecutionTypes::Validation(block),
+        };
+
+        let (result, db_transaction) = self.execute_without_commit(component)?.into();
+        db_transaction.commit()?;
+        Ok(result)
+    }
+}
+
+impl<R, D> ExecutionInstance<R, D>
+where
+    R: RelayerPort,
+    D: ExecutorDatabaseTrait<D>,
+{
+    pub fn execute_without_commit<TxSource>(
+        self,
+        block: ExecutionBlockWithSource<TxSource>,
+    ) -> ExecutorResult<UncommittedResult<StorageTransaction<D>>>
+    where
+        TxSource: TransactionsSource,
+    {
+        self.execute_inner(block)
+    }
+
+    pub fn dry_run(
+        self,
+        component: Components<Transaction>,
+    ) -> ExecutorResult<Vec<Vec<Receipt>>> {
         let component = Components {
             header_to_produce: component.header_to_produce,
             transactions_source: OnceTransactionsSource::new(vec![
@@ -270,7 +354,7 @@ where
             },
             _temporary_db,
         ) = self
-            .execute_without_commit(ExecutionTypes::DryRun(component), options)?
+            .execute_without_commit(ExecutionTypes::DryRun(component))?
             .into();
 
         // If one of the transactions fails, return an error.
@@ -327,21 +411,15 @@ pub mod block_component {
     }
 }
 
-use crate::ports::ExecutorDatabaseTrait;
-use block_component::*;
-use fuel_core_storage::vm_storage::VmStorage;
-
-impl<R, D> Executor<R, D>
+impl<R, D> ExecutionInstance<R, D>
 where
-    R: RelayerPort + Clone,
+    R: RelayerPort,
     D: ExecutorDatabaseTrait<D>,
 {
     #[tracing::instrument(skip_all)]
     fn execute_inner<TxSource>(
-        &self,
+        self,
         block: ExecutionBlockWithSource<TxSource>,
-        database: &D,
-        options: ExecutionOptions,
     ) -> ExecutorResult<UncommittedResult<StorageTransaction<D>>>
     where
         TxSource: TransactionsSource,
@@ -354,7 +432,7 @@ where
         let block = block.map_v(PartialFuelBlock::from);
 
         // Create a new storage transaction.
-        let mut block_st_transaction = database.transaction();
+        let mut block_st_transaction = self.database.transaction();
 
         let (block, execution_data) = match block {
             ExecutionTypes::DryRun(component) => {
@@ -369,7 +447,6 @@ where
                 let execution_data = self.execute_block(
                     block_st_transaction.as_mut(),
                     ExecutionType::DryRun(component),
-                    options,
                 )?;
                 (block, execution_data)
             }
@@ -385,7 +462,6 @@ where
                 let execution_data = self.execute_block(
                     block_st_transaction.as_mut(),
                     ExecutionType::Production(component),
-                    options,
                 )?;
                 (block, execution_data)
             }
@@ -394,7 +470,6 @@ where
                 let execution_data = self.execute_block(
                     block_st_transaction.as_mut(),
                     ExecutionType::Validation(component),
-                    options,
                 )?;
                 (block, execution_data)
             }
@@ -442,12 +517,10 @@ where
 
     #[tracing::instrument(skip_all)]
     /// Execute the fuel block with all transactions.
-    // TODO: Make this function private after moving tests form `fuel-core` here.
-    pub fn execute_block<TxSource>(
+    fn execute_block<TxSource>(
         &self,
         block_st_transaction: &mut D,
         block: ExecutionType<PartialBlockComponent<TxSource>>,
-        options: ExecutionOptions,
     ) -> ExecutorResult<ExecutionData>
     where
         TxSource: TransactionsSource,
@@ -490,7 +563,6 @@ where
                     execution_data,
                     execution_kind,
                     &mut tx_st_transaction,
-                    options,
                 );
 
                 let tx = match result {
@@ -587,7 +659,6 @@ where
         execution_data: &mut ExecutionData,
         execution_kind: ExecutionKind,
         tx_st_transaction: &mut StorageTransaction<D>,
-        options: ExecutionOptions,
     ) -> ExecutorResult<Transaction> {
         if execution_data.found_mint {
             return Err(ExecutorError::MintIsNotLastTransaction)
@@ -617,7 +688,6 @@ where
                 execution_data,
                 tx_st_transaction,
                 execution_kind,
-                options,
             ),
             CheckedTransaction::Create(create) => self.execute_create_or_script(
                 create,
@@ -625,7 +695,6 @@ where
                 execution_data,
                 tx_st_transaction,
                 execution_kind,
-                options,
             ),
             CheckedTransaction::Mint(mint) => self.execute_mint(
                 mint,
@@ -633,7 +702,6 @@ where
                 execution_data,
                 tx_st_transaction,
                 execution_kind,
-                options,
             ),
         }
     }
@@ -645,7 +713,6 @@ where
         execution_data: &mut ExecutionData,
         block_st_transaction: &mut StorageTransaction<D>,
         execution_kind: ExecutionKind,
-        options: ExecutionOptions,
     ) -> ExecutorResult<Transaction> {
         execution_data.found_mint = true;
 
@@ -693,7 +760,7 @@ where
             let mut inputs = [Input::Contract(input)];
             let mut outputs = [Output::Contract(output)];
 
-            if options.utxo_validation {
+            if self.options.utxo_validation {
                 // validate utxos exist
                 self.verify_input_state(
                     block_st_transaction.as_ref(),
@@ -717,7 +784,6 @@ where
                 },
                 coinbase_id,
                 block_st_transaction.as_mut(),
-                options,
             )?;
 
             let mut sub_block_db_commit = block_st_transaction.transaction();
@@ -808,7 +874,6 @@ where
         execution_data: &mut ExecutionData,
         tx_st_transaction: &mut StorageTransaction<D>,
         execution_kind: ExecutionKind,
-        options: ExecutionOptions,
     ) -> ExecutorResult<Transaction>
     where
         Tx: ExecutableTransaction + PartialEq + Cacheable + Send + Sync + 'static,
@@ -817,7 +882,7 @@ where
         let tx_id = checked_tx.id();
         let max_fee = checked_tx.metadata().max_fee();
 
-        if options.utxo_validation {
+        if self.options.utxo_validation {
             checked_tx = checked_tx
                 .check_predicates(&CheckPredicateParams::from(
                     &self.config.consensus_parameters,
@@ -887,7 +952,6 @@ where
             },
             tx_id,
             tx_st_transaction.as_mut(),
-            options,
         )?;
 
         // only commit state changes if execution was a success
@@ -1167,7 +1231,6 @@ where
         inputs: ExecutionTypes<&mut [Input], &[Input]>,
         tx_id: TxId,
         db: &mut D,
-        options: ExecutionOptions,
     ) -> ExecutorResult<()> {
         match inputs {
             ExecutionTypes::DryRun(inputs) | ExecutionTypes::Production(inputs) => {
@@ -1193,7 +1256,6 @@ where
                         }) => {
                             let coin = self.get_coin_or_default(
                                 db, *utxo_id, *owner, *amount, *asset_id, *maturity,
-                                options,
                             )?;
                             *tx_pointer = *coin.tx_pointer();
                         }
@@ -1207,7 +1269,7 @@ where
                         }) => {
                             let mut contract = ContractRef::new(&mut *db, *contract_id);
                             let utxo_info =
-                                contract.validated_utxo(options.utxo_validation)?;
+                                contract.validated_utxo(self.options.utxo_validation)?;
                             *utxo_id = utxo_info.utxo_id;
                             *tx_pointer = utxo_info.tx_pointer;
                             *balance_root = contract.balance_root()?;
@@ -1241,7 +1303,6 @@ where
                         }) => {
                             let coin = self.get_coin_or_default(
                                 db, *utxo_id, *owner, *amount, *asset_id, *maturity,
-                                options,
                             )?;
                             if tx_pointer != coin.tx_pointer() {
                                 return Err(ExecutorError::InvalidTransactionOutcome {
@@ -1263,7 +1324,8 @@ where
                                 tx_pointer: *tx_pointer,
                             };
                             if provided_info
-                                != contract.validated_utxo(options.utxo_validation)?
+                                != contract
+                                    .validated_utxo(self.options.utxo_validation)?
                             {
                                 return Err(ExecutorError::InvalidTransactionOutcome {
                                     transaction_id: tx_id,
@@ -1363,9 +1425,8 @@ where
         amount: u64,
         asset_id: AssetId,
         maturity: BlockHeight,
-        options: ExecutionOptions,
     ) -> ExecutorResult<CompressedCoin> {
-        if options.utxo_validation {
+        if self.options.utxo_validation {
             db.storage::<Coins>()
                 .get(&utxo_id)?
                 .ok_or(ExecutorError::TransactionValidity(
@@ -1554,16 +1615,5 @@ impl Fee for CreateCheckedMetadata {
 
     fn min_fee(&self) -> Word {
         self.fee.min_fee()
-    }
-}
-
-#[cfg(feature = "test-helpers")]
-impl<D: Clone> Executor<D, D> {
-    pub fn test(database: D, config: Config) -> Self {
-        Self {
-            relayer: database.clone(),
-            database,
-            config: Arc::new(config),
-        }
     }
 }

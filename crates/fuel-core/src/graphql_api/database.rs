@@ -69,17 +69,17 @@ pub type OffChainView = Arc<dyn OffChainDatabase>;
 /// It is used only by `ViewExtension` to create a [`ReadView`].
 pub struct ReadDatabase {
     /// The on-chain database view provider.
-    on_chain: Box<dyn AtomicView<View = OnChainView>>,
+    on_chain: Box<dyn AtomicView<View = OnChainView, Height = BlockHeight>>,
     /// The off-chain database view provider.
-    off_chain: Box<dyn AtomicView<View = OffChainView>>,
+    off_chain: Box<dyn AtomicView<View = OffChainView, Height = BlockHeight>>,
 }
 
 impl ReadDatabase {
     /// Creates a new [`ReadDatabase`] with the given on-chain and off-chain database view providers.
     pub fn new<OnChain, OffChain>(on_chain: OnChain, off_chain: OffChain) -> Self
     where
-        OnChain: AtomicView + 'static,
-        OffChain: AtomicView + 'static,
+        OnChain: AtomicView<Height = BlockHeight> + 'static,
+        OffChain: AtomicView<Height = BlockHeight> + 'static,
         OnChain::View: OnChainDatabase,
         OffChain::View: OffChainDatabase,
     {

@@ -15,12 +15,12 @@ use tracing::warn;
 pub use config::{
     Config,
     DbType,
+    RelayerConsensusConfig,
     VMConfig,
 };
 pub use fuel_core_services::Service as ServiceTrait;
 
 use crate::service::adapters::PoAAdapter;
-pub use fuel_core_consensus_module::RelayerVerifierConfig;
 
 use self::adapters::BlockImporterAdapter;
 
