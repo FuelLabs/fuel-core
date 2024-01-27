@@ -2,7 +2,10 @@
 #[allow(clippy::cast_possible_truncation)]
 #[cfg(test)]
 mod tests {
-    use crate::database::Database;
+    use crate::database::{
+        Database,
+        RelayerReadDatabase,
+    };
     use fuel_core_executor::{
         executor::{
             block_component::PartialBlockComponent,
@@ -20,6 +23,7 @@ mod tests {
             ContractsRawCode,
             Messages,
         },
+        transactional::AtomicView,
         StorageAsMut,
     };
     use fuel_core_types::{
@@ -122,13 +126,20 @@ mod tests {
         Rng,
         SeedableRng,
     };
-    use std::ops::DerefMut;
+    use std::{
+        ops::DerefMut,
+        sync::Arc,
+    };
 
     fn create_executor(
         database: Database,
         config: Config,
-    ) -> Executor<Database, Database> {
-        Executor::test(database, config)
+    ) -> Executor<Database, RelayerReadDatabase> {
+        Executor {
+            database_view_provider: database.clone(),
+            relayer_view_provider: RelayerReadDatabase::new(database),
+            config: Arc::new(config),
+        }
     }
 
     pub(crate) fn setup_executable_script() -> (Create, Script) {
@@ -315,6 +326,7 @@ mod tests {
 
     mod coinbase {
         use super::*;
+        use fuel_core_storage::transactional::AtomicView;
 
         #[test]
         fn executor_commits_transactions_with_non_zero_coinbase_generation() {
@@ -415,7 +427,8 @@ mod tests {
             }
 
             let (asset_id, amount) = producer
-                .database
+                .database_view_provider
+                .latest_view()
                 .contract_balances(recipient, None, None)
                 .next()
                 .unwrap()
@@ -494,7 +507,8 @@ mod tests {
                 panic!("Invalid coinbase transaction");
             }
             let (asset_id, amount) = producer
-                .database
+                .database_view_provider
+                .latest_view()
                 .contract_balances(recipient, None, None)
                 .next()
                 .unwrap()
@@ -527,16 +541,11 @@ mod tests {
             let producer = create_executor(Default::default(), config);
 
             let result = producer
-                .execute_without_commit(
-                    ExecutionTypes::DryRun(Components {
-                        header_to_produce: Default::default(),
-                        transactions_source: OnceTransactionsSource::new(vec![
-                            script.into()
-                        ]),
-                        gas_limit: u64::MAX,
-                    }),
-                    Default::default(),
-                )
+                .execute_without_commit(ExecutionTypes::DryRun(Components {
+                    header_to_produce: Default::default(),
+                    transactions_source: OnceTransactionsSource::new(vec![script.into()]),
+                    gas_limit: u64::MAX,
+                }))
                 .unwrap();
             let ExecutionResult { block, .. } = result.into_result();
 
@@ -612,7 +621,8 @@ mod tests {
                 .unwrap();
             assert_eq!(validated_block.transactions(), produced_txs);
             let (asset_id, amount) = validator
-                .database
+                .database_view_provider
+                .latest_view()
                 .contract_balances(recipient, None, None)
                 .next()
                 .unwrap()
@@ -886,14 +896,11 @@ mod tests {
             transactions: vec![tx.clone()],
         };
 
-        let mut block_db_transaction = producer.database.transaction();
-
         let ExecutionData {
             skipped_transactions,
             ..
         } = producer
             .execute_block(
-                &mut block_db_transaction,
                 ExecutionType::Production(PartialBlockComponent::from_partial_block(
                     &mut block,
                 )),
@@ -911,10 +918,8 @@ mod tests {
         ));
 
         // Produced block is valid
-        let mut block_db_transaction = verifier.database.transaction();
         verifier
             .execute_block(
-                &mut block_db_transaction,
                 ExecutionType::Validation(PartialBlockComponent::from_partial_block(
                     &mut block,
                 )),
@@ -924,9 +929,7 @@ mod tests {
 
         // Invalidate the block with Insufficient tx
         block.transactions.insert(block.transactions.len() - 1, tx);
-        let mut block_db_transaction = verifier.database.transaction();
         let verify_result = verifier.execute_block(
-            &mut block_db_transaction,
             ExecutionType::Validation(PartialBlockComponent::from_partial_block(
                 &mut block,
             )),
@@ -956,13 +959,11 @@ mod tests {
             ],
         };
 
-        let mut block_db_transaction = producer.database.transaction();
         let ExecutionData {
             skipped_transactions,
             ..
         } = producer
             .execute_block(
-                &mut block_db_transaction,
                 ExecutionType::Production(PartialBlockComponent::from_partial_block(
                     &mut block,
                 )),
@@ -976,10 +977,8 @@ mod tests {
         ));
 
         // Produced block is valid
-        let mut block_db_transaction = verifier.database.transaction();
         verifier
             .execute_block(
-                &mut block_db_transaction,
                 ExecutionType::Validation(PartialBlockComponent::from_partial_block(
                     &mut block,
                 )),
@@ -991,9 +990,7 @@ mod tests {
         block
             .transactions
             .insert(block.transactions.len() - 1, Transaction::default_test_tx());
-        let mut block_db_transaction = verifier.database.transaction();
         let verify_result = verifier.execute_block(
-            &mut block_db_transaction,
             ExecutionType::Validation(PartialBlockComponent::from_partial_block(
                 &mut block,
             )),
@@ -1044,13 +1041,11 @@ mod tests {
             transactions: vec![tx.clone()],
         };
 
-        let mut block_db_transaction = producer.database.transaction();
         let ExecutionData {
             skipped_transactions,
             ..
         } = producer
             .execute_block(
-                &mut block_db_transaction,
                 ExecutionType::Production(PartialBlockComponent::from_partial_block(
                     &mut block,
                 )),
@@ -1068,10 +1063,8 @@ mod tests {
         ));
 
         // Produced block is valid
-        let mut block_db_transaction = verifier.database.transaction();
         verifier
             .execute_block(
-                &mut block_db_transaction,
                 ExecutionType::Validation(PartialBlockComponent::from_partial_block(
                     &mut block,
                 )),
@@ -1083,9 +1076,7 @@ mod tests {
 
         // Invalidate block by adding transaction with not existing coin
         block.transactions.insert(block.transactions.len() - 1, tx);
-        let mut block_db_transaction = verifier.database.transaction();
         let verify_result = verifier.execute_block(
-            &mut block_db_transaction,
             ExecutionType::Validation(PartialBlockComponent::from_partial_block(
                 &mut block,
             )),
@@ -2268,7 +2259,7 @@ mod tests {
     }
 
     /// Helper to build database and executor for some of the message tests
-    fn make_executor(messages: &[&Message]) -> Executor<Database, Database> {
+    fn make_executor(messages: &[&Message]) -> Executor<Database, RelayerReadDatabase> {
         let mut database = Database::default();
         let database_ref = &mut database;
 
@@ -2337,24 +2328,22 @@ mod tests {
         let message_data = message_from_input(&tx.inputs()[1], 0);
         let messages = vec![&message_coin, &message_data];
 
-        let mut block = PartialFuelBlock {
+        let block = PartialFuelBlock {
             header: Default::default(),
             transactions: vec![tx.into()],
         };
 
         let exec = make_executor(&messages);
-        let mut block_db_transaction = exec.database.transaction();
-        assert_eq!(block_db_transaction.all_messages(None, None).count(), 2);
+        let view = exec.database_view_provider.latest_view();
+        assert!(!view.message_is_spent(&message_coin.nonce).unwrap());
+        assert!(!view.message_is_spent(&message_data.nonce).unwrap());
 
-        let ExecutionData {
+        let ExecutionResult {
             skipped_transactions,
             ..
         } = exec
-            .execute_block(
-                &mut block_db_transaction,
-                ExecutionType::Production(PartialBlockComponent::from_partial_block(
-                    &mut block,
-                )),
+            .execute_and_commit(
+                ExecutionBlock::Production(block),
                 ExecutionOptions {
                     utxo_validation: true,
                 },
@@ -2363,18 +2352,11 @@ mod tests {
         assert_eq!(skipped_transactions.len(), 0);
 
         // Successful execution consumes `message_coin` and `message_data`.
-        assert_eq!(block_db_transaction.all_messages(None, None).count(), 0);
-        assert!(block_db_transaction
-            .message_is_spent(message_coin.nonce())
-            .unwrap());
-        assert!(block_db_transaction
-            .message_is_spent(message_data.nonce())
-            .unwrap());
+        let view = exec.database_view_provider.latest_view();
+        assert!(view.message_is_spent(&message_coin.nonce).unwrap());
+        assert!(view.message_is_spent(&message_data.nonce).unwrap());
         assert_eq!(
-            *block_db_transaction
-                .coin(&UtxoId::new(tx_id, 0))
-                .unwrap()
-                .amount(),
+            *view.coin(&UtxoId::new(tx_id, 0)).unwrap().amount(),
             amount + amount
         );
     }
@@ -2400,24 +2382,22 @@ mod tests {
         let message_data = message_from_input(&tx.inputs()[1], 0);
         let messages = vec![&message_coin, &message_data];
 
-        let mut block = PartialFuelBlock {
+        let block = PartialFuelBlock {
             header: Default::default(),
             transactions: vec![tx.into()],
         };
 
         let exec = make_executor(&messages);
-        let mut block_db_transaction = exec.database.transaction();
-        assert_eq!(block_db_transaction.all_messages(None, None).count(), 2);
+        let view = exec.database_view_provider.latest_view();
+        assert!(!view.message_is_spent(&message_coin.nonce).unwrap());
+        assert!(!view.message_is_spent(&message_data.nonce).unwrap());
 
-        let ExecutionData {
+        let ExecutionResult {
             skipped_transactions,
             ..
         } = exec
-            .execute_block(
-                &mut block_db_transaction,
-                ExecutionType::Production(PartialBlockComponent::from_partial_block(
-                    &mut block,
-                )),
+            .execute_and_commit(
+                ExecutionBlock::Production(block),
                 ExecutionOptions {
                     utxo_validation: true,
                 },
@@ -2426,20 +2406,10 @@ mod tests {
         assert_eq!(skipped_transactions.len(), 0);
 
         // We should spend only `message_coin`. The `message_data` should be unspent.
-        assert_eq!(block_db_transaction.all_messages(None, None).count(), 1);
-        assert!(block_db_transaction
-            .message_is_spent(message_coin.nonce())
-            .unwrap());
-        assert!(!block_db_transaction
-            .message_is_spent(message_data.nonce())
-            .unwrap());
-        assert_eq!(
-            *block_db_transaction
-                .coin(&UtxoId::new(tx_id, 0))
-                .unwrap()
-                .amount(),
-            amount
-        );
+        let view = exec.database_view_provider.latest_view();
+        assert!(view.message_is_spent(&message_coin.nonce).unwrap());
+        assert!(!view.message_is_spent(&message_data.nonce).unwrap());
+        assert_eq!(*view.coin(&UtxoId::new(tx_id, 0)).unwrap().amount(), amount);
     }
 
     #[test]
@@ -2603,13 +2573,11 @@ mod tests {
         };
 
         let exec = make_executor(&[&message]);
-        let mut block_db_transaction = exec.database.transaction();
         let ExecutionData {
             skipped_transactions,
             ..
         } = exec
             .execute_block(
-                &mut block_db_transaction,
                 ExecutionType::Production(PartialBlockComponent::from_partial_block(
                     &mut block,
                 )),
@@ -2630,9 +2598,7 @@ mod tests {
 
         // Produced block is valid
         let exec = make_executor(&[&message]);
-        let mut block_db_transaction = exec.database.transaction();
         exec.execute_block(
-            &mut block_db_transaction,
             ExecutionType::Validation(PartialBlockComponent::from_partial_block(
                 &mut block,
             )),
@@ -2645,9 +2611,7 @@ mod tests {
         // Invalidate block by return back `tx2` transaction skipped during production.
         block.transactions.insert(block.transactions.len() - 1, tx2);
         let exec = make_executor(&[&message]);
-        let mut block_db_transaction = exec.database.transaction();
         let res = exec.execute_block(
-            &mut block_db_transaction,
             ExecutionType::Validation(PartialBlockComponent::from_partial_block(
                 &mut block,
             )),

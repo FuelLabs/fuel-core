@@ -101,7 +101,13 @@ pub struct MockDBProvider(pub MockDb);
 impl AtomicView for MockDBProvider {
     type View = MockDb;
 
-    fn view_at(&self, _: BlockHeight) -> StorageResult<Self::View> {
+    type Height = BlockHeight;
+
+    fn latest_height(&self) -> Self::Height {
+        BlockHeight::default()
+    }
+
+    fn view_at(&self, _: &BlockHeight) -> StorageResult<Self::View> {
         Ok(self.latest_view())
     }
 

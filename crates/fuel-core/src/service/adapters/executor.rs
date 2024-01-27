@@ -7,10 +7,7 @@ use crate::{
     },
 };
 use fuel_core_executor::{
-    executor::{
-        ExecutionBlockWithSource,
-        Executor,
-    },
+    executor::ExecutionBlockWithSource,
     ports::MaybeCheckedTransaction,
 };
 use fuel_core_storage::{
@@ -50,12 +47,7 @@ impl ExecutorAdapter {
     where
         TxSource: fuel_core_executor::ports::TransactionsSource,
     {
-        let executor = Executor {
-            database: self.relayer.database.clone(),
-            relayer: self.relayer.clone(),
-            config: self.config.clone(),
-        };
-        executor.execute_without_commit(block, self.config.as_ref().into())
+        self.executor.execute_without_commit(block)
     }
 
     pub(crate) fn _dry_run(
@@ -63,12 +55,7 @@ impl ExecutorAdapter {
         block: Components<fuel_tx::Transaction>,
         utxo_validation: Option<bool>,
     ) -> ExecutorResult<Vec<Vec<Receipt>>> {
-        let executor = Executor {
-            database: self.relayer.database.clone(),
-            relayer: self.relayer.clone(),
-            config: self.config.clone(),
-        };
-        executor.dry_run(block, utxo_validation)
+        self.executor.dry_run(block, utxo_validation)
     }
 }
 
@@ -113,7 +100,6 @@ impl fuel_core_executor::ports::RelayerPort for MaybeRelayerAdapter {
     }
 }
 
-#[cfg(test)]
 /// For some tests we don't care about the actual implementation of
 /// the RelayerPort and using a passthrough is fine.
 impl fuel_core_executor::ports::RelayerPort for Database {

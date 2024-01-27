@@ -1,7 +1,6 @@
 //! The primitives to work with storage in transactional mode.
 
 use crate::Result as StorageResult;
-use fuel_core_types::fuel_types::BlockHeight;
 
 #[cfg_attr(feature = "test-helpers", mockall::automock(type Storage = crate::test_helpers::EmptyStorage;))]
 /// The types is transactional and may create `StorageTransaction`.
@@ -83,8 +82,14 @@ pub trait AtomicView: Send + Sync {
     /// The type of the storage view.
     type View;
 
+    /// The type used by the storage to track the commitments at a specific height.
+    type Height;
+
+    /// Returns the latest block height.
+    fn latest_height(&self) -> Self::Height;
+
     /// Returns the view of the storage at the given `height`.
-    fn view_at(&self, height: BlockHeight) -> StorageResult<Self::View>;
+    fn view_at(&self, height: &Self::Height) -> StorageResult<Self::View>;
 
     /// Returns the view of the storage for the latest block height.
     fn latest_view(&self) -> Self::View;

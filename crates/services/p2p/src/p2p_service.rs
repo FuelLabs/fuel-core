@@ -568,10 +568,6 @@ impl FuelP2PService {
 
                     let send_ok = match (channel, response) {
                         (
-                            ResponseChannelItem::Block(channel),
-                            ResponseMessage::Block(block),
-                        ) => channel.send(block).is_ok(),
-                        (
                             ResponseChannelItem::Transactions(channel),
                             ResponseMessage::Transactions(transactions),
                         ) => channel.send(transactions).is_ok(),
@@ -702,16 +698,11 @@ mod tests {
     };
     use fuel_core_types::{
         blockchain::{
-            block::Block,
             consensus::{
                 poa::PoAConsensus,
                 Consensus,
             },
-            header::{
-                BlockHeader,
-                PartialBlockHeader,
-            },
-            SealedBlock,
+            header::BlockHeader,
             SealedBlockHeader,
         },
         fuel_tx::{
@@ -1509,23 +1500,6 @@ mod tests {
                                 request_sent = true;
 
                                 match request_msg.clone() {
-                                    RequestMessage::Block(_) => {
-                                        let (tx_orchestrator, rx_orchestrator) = oneshot::channel();
-                                        assert!(node_a.send_request_msg(None, request_msg.clone(), ResponseChannelItem::Block(tx_orchestrator)).is_ok());
-                                        let tx_test_end = tx_test_end.clone();
-
-                                        tokio::spawn(async move {
-                                            let response_message = rx_orchestrator.await;
-
-                                            if let Ok(Some(sealed_block)) = response_message {
-                                                let _ = tx_test_end.send(*sealed_block.entity.header().height() == 0.into()).await;
-                                            } else {
-                                                tracing::error!("Orchestrator failed to receive a message: {:?}", response_message);
-                                                let _ = tx_test_end.send(false).await;
-                                            }
-                                        });
-
-                                    }
                                     RequestMessage::SealedHeaders(range) => {
                                         let (tx_orchestrator, rx_orchestrator) = oneshot::channel();
                                         assert!(node_a.send_request_msg(None, request_msg.clone(), ResponseChannelItem::SealedHeaders(tx_orchestrator)).is_ok());
@@ -1573,16 +1547,6 @@ mod tests {
                     // 2. Node B receives the RequestMessage from Node A initiated by the NetworkOrchestrator
                     if let Some(FuelP2PEvent::InboundRequestMessage{ request_id, request_message: received_request_message }) = &node_b_event {
                         match received_request_message {
-                            RequestMessage::Block(_) => {
-                                let block = Block::new(PartialBlockHeader::default(), (0..5).map(|_| Transaction::default_test_tx()).collect(), &[]);
-
-                                let sealed_block = SealedBlock {
-                                    entity: block,
-                                    consensus: Consensus::PoA(PoAConsensus::new(Default::default())),
-                                };
-
-                                let _ = node_b.send_response_msg(*request_id, ResponseMessage::Block(Some(sealed_block)));
-                            }
                             RequestMessage::SealedHeaders(range) => {
                                 let sealed_headers: Vec<_> = arbitrary_headers_for_range(range.clone());
 
@@ -1607,12 +1571,6 @@ mod tests {
     async fn request_response_works_with_transactions() {
         let arbitrary_range = 2..6;
         request_response_works_with(RequestMessage::Transactions(arbitrary_range)).await
-    }
-
-    #[tokio::test]
-    #[instrument]
-    async fn request_response_works_with_block() {
-        request_response_works_with(RequestMessage::Block(0.into())).await
     }
 
     #[tokio::test]
@@ -1659,8 +1617,8 @@ mod tests {
                                 assert_eq!(node_a.outbound_requests_table.len(), 0);
 
                                 // Request successfully sent
-                                let requested_block_height = RequestMessage::Block(0.into());
-                                assert!(node_a.send_request_msg(None, requested_block_height, ResponseChannelItem::Block(tx_orchestrator)).is_ok());
+                                let requested_block_height = RequestMessage::SealedHeaders(0..0);
+                                assert!(node_a.send_request_msg(None, requested_block_height, ResponseChannelItem::SealedHeaders(tx_orchestrator)).is_ok());
 
                                 // 2b. there should be ONE pending outbound requests in the table
                                 assert_eq!(node_a.outbound_requests_table.len(), 1);

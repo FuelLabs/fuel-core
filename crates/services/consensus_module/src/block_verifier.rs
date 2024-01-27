@@ -1,23 +1,15 @@
 //! The module provides the functionality that verifies the blocks and headers based
 //! on the used consensus.
 
-pub mod config;
-
-#[cfg(test)]
-mod tests;
-
 use crate::block_verifier::config::Config;
 use anyhow::ensure;
-use fuel_core_poa::ports::{
-    Database as PoAVerifierDatabase,
-    RelayerPort,
-};
+use fuel_core_poa::ports::Database as PoAVerifierDatabase;
+use fuel_core_storage::transactional::AtomicView;
 use fuel_core_types::{
     blockchain::{
         block::Block,
         consensus::Consensus,
         header::BlockHeader,
-        primitives::DaBlockHeight,
         SealedBlockHeader,
     },
     fuel_types::{
@@ -27,28 +19,31 @@ use fuel_core_types::{
     tai64::Tai64,
 };
 
+pub mod config;
+
+#[cfg(test)]
+mod tests;
+
 /// Verifier is responsible for validation of the blocks and headers.
-pub struct Verifier<D, R> {
+pub struct Verifier<V> {
     config: Config,
-    database: D,
-    relayer: R,
+    view_provider: V,
 }
 
-impl<D, R> Verifier<D, R> {
+impl<V> Verifier<V> {
     /// Creates a new instance of the verifier.
-    pub fn new(config: Config, database: D, relayer: R) -> Self {
+    pub fn new(config: Config, view_provider: V) -> Self {
         Self {
             config,
-            database,
-            relayer,
+            view_provider,
         }
     }
 }
 
-impl<D, R> Verifier<D, R>
+impl<V> Verifier<V>
 where
-    D: PoAVerifierDatabase,
-    R: RelayerPort,
+    V: AtomicView,
+    V::View: PoAVerifierDatabase,
 {
     /// Verifies **all** fields of the block based on used consensus to produce a block.
     ///
@@ -70,7 +65,8 @@ where
                 verify_genesis_block_fields(expected_genesis_height, block.header())
             }
             Consensus::PoA(_) => {
-                fuel_core_poa::verifier::verify_block_fields(&self.database, block)
+                let view = self.view_provider.latest_view();
+                fuel_core_poa::verifier::verify_block_fields(&view, block)
             }
             _ => Err(anyhow::anyhow!("Unsupported consensus: {:?}", consensus)),
         }
@@ -91,18 +87,6 @@ where
             ),
             _ => false,
         }
-    }
-
-    /// Wait for the relayer to be in sync with the given DA height
-    /// if the `da_height` is within the range of the current
-    /// relayer sync'd height - `max_da_lag`.
-    pub async fn await_da_height(&self, da_height: &DaBlockHeight) -> anyhow::Result<()> {
-        tokio::time::timeout(
-            self.config.relayer.max_wait_time,
-            self.relayer
-                .await_until_if_in_range(da_height, &self.config.relayer.max_da_lag),
-        )
-        .await?
     }
 }
 

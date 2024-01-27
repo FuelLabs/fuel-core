@@ -143,8 +143,4 @@ impl fuel_core_producer::ports::BlockProducerDatabase for Database {
     fn block_header_merkle_root(&self, height: &BlockHeight) -> StorageResult<Bytes32> {
         self.storage::<FuelBlocks>().root(height).map(Into::into)
     }
-
-    fn current_block_height(&self) -> StorageResult<BlockHeight> {
-        self.latest_height()
-    }
 }

@@ -1,3 +1,4 @@
+use super::TransactionsSource;
 use crate::{
     database::Database,
     service::adapters::{
@@ -16,7 +17,6 @@ use fuel_core_importer::{
     Config,
     Importer,
 };
-use fuel_core_poa::ports::RelayerPort;
 use fuel_core_storage::{
     iter::IterDirection,
     tables::{
@@ -32,7 +32,6 @@ use fuel_core_types::{
     blockchain::{
         block::Block,
         consensus::Consensus,
-        primitives::DaBlockHeight,
         SealedBlock,
     },
     fuel_tx::UniqueIdentifier,
@@ -47,11 +46,6 @@ use fuel_core_types::{
     },
 };
 use std::sync::Arc;
-
-use super::{
-    MaybeRelayerAdapter,
-    TransactionsSource,
-};
 
 impl BlockImporterAdapter {
     pub fn new(
@@ -83,36 +77,6 @@ impl BlockVerifier for VerifierAdapter {
         block: &Block,
     ) -> anyhow::Result<()> {
         self.block_verifier.verify_block_fields(consensus, block)
-    }
-}
-
-#[async_trait::async_trait]
-impl RelayerPort for MaybeRelayerAdapter {
-    async fn await_until_if_in_range(
-        &self,
-        da_height: &DaBlockHeight,
-        _max_da_lag: &DaBlockHeight,
-    ) -> anyhow::Result<()> {
-        #[cfg(feature = "relayer")]
-        {
-            if let Some(sync) = self.relayer_synced.as_ref() {
-                let current_height = sync.get_finalized_da_height()?;
-                anyhow::ensure!(
-                    da_height.saturating_sub(*current_height) <= **_max_da_lag,
-                    "Relayer is too far out of sync"
-                );
-                sync.await_at_least_synced(da_height).await?;
-            }
-            Ok(())
-        }
-        #[cfg(not(feature = "relayer"))]
-        {
-            anyhow::ensure!(
-                **da_height == 0,
-                "Cannot have a da height above zero without a relayer"
-            );
-            Ok(())
-        }
     }
 }
 

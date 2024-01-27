@@ -6,8 +6,9 @@ use fuel_core_types::{
         ConsensusHeader,
         GeneratedApplicationFields,
         GeneratedConsensusFields,
+        PartialBlockHeader,
     },
-    fuel_types::Bytes32,
+    fuel_tx::Transaction,
     tai64::Tai64,
 };
 use test_case::test_case;
@@ -18,33 +19,32 @@ struct Input {
     prev_header_da_height: u64,
     ch: ConsensusHeader<GeneratedConsensusFields>,
     ah: ApplicationHeader<GeneratedApplicationFields>,
-}
-
-fn app_hash(da_height: u64) -> Bytes32 {
-    ApplicationHeader {
-        da_height: da_height.into(),
-        ..Default::default()
-    }
-    .hash()
+    txs: Vec<Transaction>,
 }
 
 fn correct() -> Input {
+    let txs = vec![Transaction::default_test_tx()];
+    let partial_header = PartialBlockHeader {
+        application: ApplicationHeader {
+            da_height: 2u64.into(),
+            ..Default::default()
+        },
+        consensus: ConsensusHeader {
+            prev_root: [2u8; 32].into(),
+            height: 2u32.into(),
+            time: Tai64(2),
+            ..Default::default()
+        },
+    };
+    let block_header = partial_header.generate(&txs, &[]);
+
     Input {
         block_header_merkle_root: [2u8; 32],
         prev_header_time: Tai64(2),
         prev_header_da_height: 2,
-        ch: ConsensusHeader {
-            prev_root: [2u8; 32].into(),
-            height: 2u32.into(),
-            time: Tai64(2),
-            generated: GeneratedConsensusFields {
-                application_hash: app_hash(2),
-            },
-        },
-        ah: ApplicationHeader {
-            da_height: 2u64.into(),
-            ..Default::default()
-        },
+        ch: *block_header.consensus(),
+        ah: *block_header.application(),
+        txs,
     }
 }
 
@@ -84,6 +84,13 @@ fn correct() -> Input {
         i
     } => matches Err(_) ; "genesis verify time before prev header should error"
 )]
+#[test_case(
+    {
+        let mut i = correct();
+        i.txs = vec![];
+        i
+    } => matches Err(_) ; "genesis verify wrong transactions"
+)]
 fn test_verify_genesis_block_fields(input: Input) -> anyhow::Result<()> {
     let Input {
         block_header_merkle_root,
@@ -91,6 +98,7 @@ fn test_verify_genesis_block_fields(input: Input) -> anyhow::Result<()> {
         prev_header_da_height,
         ch,
         ah,
+        txs,
     } = input;
     let mut d = MockDatabase::default();
     d.expect_block_header_merkle_root()
@@ -104,5 +112,6 @@ fn test_verify_genesis_block_fields(input: Input) -> anyhow::Result<()> {
     let mut b = Block::default();
     b.header_mut().set_consensus_header(ch);
     b.header_mut().set_application_header(ah);
+    *b.transactions_mut() = txs;
     verify_block_fields(&d, &b)
 }
