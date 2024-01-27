@@ -2335,8 +2335,8 @@ mod tests {
 
         let exec = make_executor(&messages);
         let view = exec.database_view_provider.latest_view();
-        assert!(!view.message_is_spent(&message_coin.nonce).unwrap());
-        assert!(!view.message_is_spent(&message_data.nonce).unwrap());
+        assert!(!view.message_is_spent(message_coin.nonce()).unwrap());
+        assert!(!view.message_is_spent(message_data.nonce()).unwrap());
 
         let ExecutionResult {
             skipped_transactions,
@@ -2353,8 +2353,8 @@ mod tests {
 
         // Successful execution consumes `message_coin` and `message_data`.
         let view = exec.database_view_provider.latest_view();
-        assert!(view.message_is_spent(&message_coin.nonce).unwrap());
-        assert!(view.message_is_spent(&message_data.nonce).unwrap());
+        assert!(view.message_is_spent(message_coin.nonce()).unwrap());
+        assert!(view.message_is_spent(message_data.nonce()).unwrap());
         assert_eq!(
             *view.coin(&UtxoId::new(tx_id, 0)).unwrap().amount(),
             amount + amount
@@ -2389,8 +2389,8 @@ mod tests {
 
         let exec = make_executor(&messages);
         let view = exec.database_view_provider.latest_view();
-        assert!(!view.message_is_spent(&message_coin.nonce).unwrap());
-        assert!(!view.message_is_spent(&message_data.nonce).unwrap());
+        assert!(!view.message_is_spent(message_coin.nonce()).unwrap());
+        assert!(!view.message_is_spent(message_data.nonce()).unwrap());
 
         let ExecutionResult {
             skipped_transactions,
@@ -2407,8 +2407,8 @@ mod tests {
 
         // We should spend only `message_coin`. The `message_data` should be unspent.
         let view = exec.database_view_provider.latest_view();
-        assert!(view.message_is_spent(&message_coin.nonce).unwrap());
-        assert!(!view.message_is_spent(&message_data.nonce).unwrap());
+        assert!(view.message_is_spent(message_coin.nonce()).unwrap());
+        assert!(!view.message_is_spent(message_data.nonce()).unwrap());
         assert_eq!(*view.coin(&UtxoId::new(tx_id, 0)).unwrap().amount(), amount);
     }
 
