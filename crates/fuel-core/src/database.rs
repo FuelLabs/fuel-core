@@ -473,6 +473,7 @@ impl AtomicView for Database<Relayer> {
             // TODO: The database should track the latest da height inside of the database object
             //  instead of fetching it from the `RelayerMetadata` table. As a temporary solution,
             //  fetch it from the table for now.
+            //  https://github.com/FuelLabs/fuel-core/issues/1589
             self.get_finalized_da_height().unwrap_or_default()
         }
         #[cfg(not(feature = "relayer"))]
