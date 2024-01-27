@@ -92,7 +92,7 @@ impl StorageMutate<Messages> for Database {
 
         // insert secondary record by owner
         self.storage_as_mut::<OwnedMessageIds>()
-            .insert(&OwnedMessageKey::new(&value.recipient, key), &())?;
+            .insert(&OwnedMessageKey::new(value.recipient(), key), &())?;
 
         Ok(result)
     }
@@ -103,7 +103,7 @@ impl StorageMutate<Messages> for Database {
 
         if let Some(message) = &result {
             self.storage_as_mut::<OwnedMessageIds>()
-                .remove(&OwnedMessageKey::new(&message.recipient, key))?;
+                .remove(&OwnedMessageKey::new(message.recipient(), key))?;
         }
 
         Ok(result)
@@ -155,12 +155,12 @@ impl Database {
                 let msg = msg?;
 
                 Ok(MessageConfig {
-                    sender: msg.sender,
-                    recipient: msg.recipient,
-                    nonce: msg.nonce,
-                    amount: msg.amount,
-                    data: msg.data,
-                    da_height: msg.da_height,
+                    sender: *msg.sender(),
+                    recipient: *msg.recipient(),
+                    nonce: *msg.nonce(),
+                    amount: msg.amount(),
+                    data: msg.data().clone(),
+                    da_height: msg.da_height(),
                 })
             })
             .collect::<StorageResult<Vec<MessageConfig>>>()?;
@@ -201,7 +201,7 @@ mod tests {
             .unwrap();
 
         // verify that 2 message IDs are associated with a single Owner/Recipient
-        let owned_msg_ids = db.owned_message_ids(&message.recipient, None, None);
+        let owned_msg_ids = db.owned_message_ids(message.recipient(), None, None);
         assert_eq!(owned_msg_ids.count(), 2);
 
         // remove the first message with its given id
@@ -209,14 +209,14 @@ mod tests {
 
         // verify that only second ID is left
         let owned_msg_ids: Vec<_> = db
-            .owned_message_ids(&message.recipient, None, None)
+            .owned_message_ids(message.recipient(), None, None)
             .collect();
         assert_eq!(owned_msg_ids.first().unwrap().as_ref().unwrap(), &second_id);
         assert_eq!(owned_msg_ids.len(), 1);
 
         // remove the second message with its given id
         let _ = db.storage_as_mut::<Messages>().remove(&second_id).unwrap();
-        let owned_msg_ids = db.owned_message_ids(&message.recipient, None, None);
+        let owned_msg_ids = db.owned_message_ids(message.recipient(), None, None);
         assert_eq!(owned_msg_ids.count(), 0);
     }
 }

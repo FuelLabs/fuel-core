@@ -36,7 +36,10 @@ mod tests {
         },
         entities::{
             coins::coin::CompressedCoin,
-            message::Message,
+            message::{
+                Message,
+                MessageV1,
+            },
         },
         fuel_asm::{
             op,
@@ -2234,7 +2237,7 @@ mod tests {
     }
 
     fn message_from_input(input: &Input, da_height: u64) -> Message {
-        Message {
+        MessageV1 {
             sender: *input.sender().unwrap(),
             recipient: *input.recipient().unwrap(),
             nonce: *input.nonce().unwrap(),
@@ -2245,6 +2248,7 @@ mod tests {
                 .unwrap_or_default(),
             da_height: DaBlockHeight(da_height),
         }
+        .into()
     }
 
     /// Helper to build transactions and a message in it for some of the message tests
@@ -2361,10 +2365,10 @@ mod tests {
         // Successful execution consumes `message_coin` and `message_data`.
         assert_eq!(block_db_transaction.all_messages(None, None).count(), 0);
         assert!(block_db_transaction
-            .message_is_spent(&message_coin.nonce)
+            .message_is_spent(message_coin.nonce())
             .unwrap());
         assert!(block_db_transaction
-            .message_is_spent(&message_data.nonce)
+            .message_is_spent(message_data.nonce())
             .unwrap());
         assert_eq!(
             *block_db_transaction
@@ -2424,10 +2428,10 @@ mod tests {
         // We should spend only `message_coin`. The `message_data` should be unspent.
         assert_eq!(block_db_transaction.all_messages(None, None).count(), 1);
         assert!(block_db_transaction
-            .message_is_spent(&message_coin.nonce)
+            .message_is_spent(&message_coin.nonce())
             .unwrap());
         assert!(!block_db_transaction
-            .message_is_spent(&message_data.nonce)
+            .message_is_spent(&message_data.nonce())
             .unwrap());
         assert_eq!(
             *block_db_transaction
@@ -2558,7 +2562,7 @@ mod tests {
         let (tx, mut message) = make_tx_and_message(&mut rng, 0);
 
         // Modifying the message to make it mismatch
-        message.amount = 123;
+        message.set_amount(123);
 
         let mut block = Block::default();
         *block.transactions_mut() = vec![tx.clone()];

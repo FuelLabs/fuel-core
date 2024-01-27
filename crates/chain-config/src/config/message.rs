@@ -8,7 +8,10 @@ use crate::{
 use fuel_core_storage::MerkleRoot;
 use fuel_core_types::{
     blockchain::primitives::DaBlockHeight,
-    entities::message::Message,
+    entities::message::{
+        Message,
+        MessageV1,
+    },
     fuel_asm::Word,
     fuel_crypto::Hasher,
     fuel_types::{
@@ -42,7 +45,7 @@ pub struct MessageConfig {
 
 impl From<MessageConfig> for Message {
     fn from(msg: MessageConfig) -> Self {
-        Message {
+        MessageV1 {
             sender: msg.sender,
             recipient: msg.recipient,
             nonce: msg.nonce,
@@ -50,19 +53,18 @@ impl From<MessageConfig> for Message {
             data: msg.data,
             da_height: msg.da_height,
         }
+        .into()
     }
 }
 
 impl GenesisCommitment for Message {
     fn root(&self) -> anyhow::Result<MerkleRoot> {
-        let Self {
-            sender,
-            recipient,
-            nonce,
-            amount,
-            data,
-            da_height,
-        } = self;
+        let sender = self.sender();
+        let recipient = self.recipient();
+        let nonce = self.nonce();
+        let amount = self.amount();
+        let data = self.data();
+        let da_height = self.da_height();
 
         let message_hash = *Hasher::default()
             .chain(sender)
