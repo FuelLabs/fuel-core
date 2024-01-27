@@ -337,7 +337,7 @@ impl<V> UninitializedTask<V, SharedState> {
         chain_id: ChainId,
         config: Config<NotInitialized>,
         view_provider: V,
-        block_importer: Arc<B>,
+        block_importer: B,
     ) -> Self {
         let (request_sender, request_receiver) = mpsc::channel(1024 * 10);
         let (tx_broadcast, _) = broadcast::channel(1024 * 10);
@@ -822,12 +822,8 @@ where
     V::View: P2pDb,
     B: BlockHeightImporter,
 {
-    let task = UninitializedTask::new(
-        chain_id,
-        p2p_config,
-        view_provider,
-        Arc::new(block_importer),
-    );
+    let task =
+        UninitializedTask::new(chain_id, p2p_config, view_provider, block_importer);
     Service::new(task)
 }
 
