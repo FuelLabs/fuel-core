@@ -22,11 +22,6 @@ fn test_insert_messages() {
         .returning(|_| Ok(Some(std::borrow::Cow::Owned(9u64.into()))));
     let mut db = db.into_transactional();
 
-    // let m = Message {
-    //     amount: 10,
-    //     da_height: 12u64.into(),
-    //     ..Default::default()
-    // };
     let mut m = Message::default();
     m.set_amount(10);
     m.set_da_height(12u64.into());
