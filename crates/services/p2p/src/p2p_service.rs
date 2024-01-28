@@ -65,7 +65,6 @@ use libp2p::{
 use rand::seq::IteratorRandom;
 use std::{
     collections::HashMap,
-    sync::Arc,
     time::Duration,
 };
 use tracing::{
@@ -586,7 +585,7 @@ impl FuelP2PService {
                         },
                         ResponseSender::Transactions(c) => match response {
                             ResponseMessage::Transactions(v) => {
-                                c.send((peer, Ok(v.map(Arc::new)))).is_ok()
+                                c.send((peer, Ok(v))).is_ok()
                             }
                             _ => {
                                 warn!(

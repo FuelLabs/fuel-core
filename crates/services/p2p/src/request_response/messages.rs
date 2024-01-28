@@ -10,10 +10,7 @@ use serde::{
     Deserialize,
     Serialize,
 };
-use std::{
-    ops::Range,
-    sync::Arc,
-};
+use std::ops::Range;
 use thiserror::Error;
 use tokio::sync::oneshot;
 
@@ -40,7 +37,7 @@ pub type OnResponse<T> = oneshot::Sender<(PeerId, Result<T, ResponseError>)>;
 #[derive(Debug)]
 pub enum ResponseSender {
     SealedHeaders(OnResponse<Option<Vec<SealedBlockHeader>>>),
-    Transactions(OnResponse<Option<Arc<Vec<Transactions>>>>),
+    Transactions(OnResponse<Option<Vec<Transactions>>>),
 }
 
 #[derive(Debug, Error)]

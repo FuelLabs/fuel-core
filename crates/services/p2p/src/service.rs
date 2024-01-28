@@ -100,7 +100,7 @@ enum TaskRequest {
     GetTransactions {
         block_height_range: Range<u32>,
         from_peer: PeerId,
-        channel: OnResponse<Option<Arc<Vec<Transactions>>>>,
+        channel: OnResponse<Option<Vec<Transactions>>>,
     },
     // Responds back to the p2p network
     RespondWithGossipsubMessageReport((GossipsubMessageInfo, GossipsubMessageAcceptance)),
@@ -714,11 +714,7 @@ impl SharedState {
             );
             return Err(anyhow!("Invalid result from peer, already reported"));
         };
-        Ok(data.map(|a| {
-            Arc::into_inner(a).expect(
-                "There are not other references, we just received this from the network",
-            )
-        }))
+        Ok(data)
     }
 
     pub fn broadcast_transaction(
