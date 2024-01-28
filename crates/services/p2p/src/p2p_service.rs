@@ -1693,8 +1693,8 @@ mod tests {
             Config::default_initialized("req_res_outbound_timeout_works");
 
         // Node A
-        // setup request timeout to 0 in order for the Request to fail
-        p2p_config.set_request_timeout = Duration::from_secs(0);
+        // setup request timeout to 1ms in order for the Request to fail
+        p2p_config.set_request_timeout = Duration::from_millis(1);
 
         let mut node_a = build_service_from_config(p2p_config.clone()).await;
 
@@ -1735,8 +1735,7 @@ mod tests {
                                     // 3. Simulating NetworkOrchestrator receiving a Timeout Error Message!
                                     match rx_orchestrator.await {
                                         Ok((_, Ok(_))) => {
-                                                let _ = tx_test_end.send(false).await;
-
+                                            let _ = tx_test_end.send(false).await;
                                             panic!("Request succeeded unexpectedly")},
                                         Ok((_, Err(ResponseError::P2P(OutboundFailure::Timeout)))) => {
                                             // Got timeout as expected, so end test
