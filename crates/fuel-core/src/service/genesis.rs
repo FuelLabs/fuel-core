@@ -19,6 +19,7 @@ use fuel_core_storage::{
         Messages,
     },
     transactional::Transactional,
+    IsNotFound,
     MerkleRoot,
     StorageAsMut,
 };
@@ -38,7 +39,10 @@ use fuel_core_types::{
         SealedBlock,
     },
     entities::{
-        coins::coin::CompressedCoin,
+        coins::coin::{
+            CompressedCoin,
+            CompressedCoinV1,
+        },
         contract::ContractUtxoInfo,
         message::Message,
     },
@@ -66,8 +70,10 @@ pub fn maybe_initialize_state(
     database: &Database,
 ) -> anyhow::Result<()> {
     // check if chain is initialized
-    if database.ids_of_latest_block()?.is_none() {
-        import_genesis_block(config, database)?;
+    if let Err(err) = database.get_genesis() {
+        if err.is_not_found() {
+            import_genesis_block(config, database)?;
+        }
     }
 
     Ok(())
@@ -136,7 +142,8 @@ fn import_genesis_block(
         (),
         (),
     );
-    importer.commit_result(UncommittedImportResult::new(
+    // We commit Genesis block before start of any service, so there is no listeners.
+    importer.commit_result_without_awaiting_listeners(UncommittedImportResult::new(
         ImportResult::new_from_local(block, vec![]),
         database_transaction,
     ))?;
@@ -177,7 +184,7 @@ fn init_coin_state(
                     }),
                 );
 
-                let coin = CompressedCoin {
+                let compressed_coin: CompressedCoin = CompressedCoinV1 {
                     owner: coin.owner,
                     amount: coin.amount,
                     asset_id: coin.asset_id,
@@ -186,19 +193,26 @@ fn init_coin_state(
                         coin.tx_pointer_block_height.unwrap_or_default(),
                         coin.tx_pointer_tx_idx.unwrap_or_default(),
                     ),
-                };
+                }
+                .into();
 
                 // ensure coin can't point to blocks in the future
-                if coin.tx_pointer.block_height() > state.height.unwrap_or_default() {
+                if compressed_coin.tx_pointer().block_height()
+                    > state.height.unwrap_or_default()
+                {
                     return Err(anyhow!(
                         "coin tx_pointer height cannot be greater than genesis block"
                     ))
                 }
 
-                if db.storage::<Coins>().insert(&utxo_id, &coin)?.is_some() {
+                if db
+                    .storage::<Coins>()
+                    .insert(&utxo_id, &compressed_coin)?
+                    .is_some()
+                {
                     return Err(anyhow!("Coin should not exist"))
                 }
-                coins_tree.push(coin.root()?.as_slice())
+                coins_tree.push(compressed_coin.root()?.as_slice())
             }
         }
     }

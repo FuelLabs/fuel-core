@@ -4,16 +4,13 @@ use crate::{
         NetworkCodec,
     },
     config::Config,
-    discovery::{
-        DiscoveryBehaviour,
-        DiscoveryConfig,
-    },
+    discovery,
     gossipsub::{
         config::build_gossipsub_behaviour,
         topics::GossipTopic,
     },
     heartbeat,
-    peer_report::PeerReportBehaviour,
+    peer_report,
     request_response::messages::{
         RequestMessage,
         ResponseMessage,
@@ -23,15 +20,14 @@ use fuel_core_types::fuel_types::BlockHeight;
 use libp2p::{
     allow_block_list,
     gossipsub::{
-        Behaviour as Gossipsub,
+        self,
         MessageAcceptance,
         MessageId,
         PublishError,
     },
     identify,
     request_response::{
-        Behaviour as RequestResponse,
-        Config as RequestResponseConfig,
+        self,
         OutboundRequestId,
         ProtocolSupport,
         ResponseChannel,
@@ -50,22 +46,22 @@ pub struct FuelBehaviour {
     blocked_peer: allow_block_list::Behaviour<allow_block_list::BlockedPeers>,
 
     /// Message propagation for p2p
-    gossipsub: Gossipsub,
+    gossipsub: gossipsub::Behaviour,
 
     /// Handles regular heartbeats from peers
-    heartbeat: heartbeat::Heartbeat,
+    heartbeat: heartbeat::Behaviour,
 
     /// The Behaviour to identify peers.
     identify: identify::Behaviour,
 
     /// Identifies and periodically requests `BlockHeight` from connected nodes
-    peer_report: PeerReportBehaviour,
+    peer_report: peer_report::Behaviour,
 
     /// Node discovery
-    discovery: DiscoveryBehaviour,
+    discovery: discovery::Behaviour,
 
     /// RequestResponse protocol
-    request_response: RequestResponse<PostcardCodec>,
+    request_response: request_response::Behaviour<PostcardCodec>,
 }
 
 impl FuelBehaviour {
@@ -75,7 +71,7 @@ impl FuelBehaviour {
 
         let discovery_config = {
             let mut discovery_config =
-                DiscoveryConfig::new(local_peer_id, p2p_config.network_name.clone());
+                discovery::Config::new(local_peer_id, p2p_config.network_name.clone());
 
             discovery_config
                 .enable_mdns(p2p_config.enable_mdns)
@@ -97,7 +93,7 @@ impl FuelBehaviour {
 
         let gossipsub = build_gossipsub_behaviour(p2p_config);
 
-        let peer_report = PeerReportBehaviour::new(p2p_config);
+        let peer_report = peer_report::Behaviour::new(p2p_config);
 
         let identify = {
             let identify_config = identify::Config::new(
@@ -111,7 +107,7 @@ impl FuelBehaviour {
             }
         };
 
-        let heartbeat = heartbeat::Heartbeat::new(
+        let heartbeat = heartbeat::Behaviour::new(
             p2p_config.heartbeat_config.clone(),
             BlockHeight::default(),
         );
@@ -119,13 +115,16 @@ impl FuelBehaviour {
         let req_res_protocol =
             core::iter::once((codec.get_req_res_protocol(), ProtocolSupport::Full));
 
-        let req_res_config = RequestResponseConfig::default();
+        let req_res_config = request_response::Config::default();
         req_res_config
             .clone()
             .with_request_timeout(p2p_config.set_request_timeout);
 
-        let request_response =
-            RequestResponse::with_codec(codec, req_res_protocol, req_res_config);
+        let request_response = request_response::Behaviour::with_codec(
+            codec,
+            req_res_protocol,
+            req_res_config,
+        );
 
         Self {
             discovery: discovery_config.finish(),

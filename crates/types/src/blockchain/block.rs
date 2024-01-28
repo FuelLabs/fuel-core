@@ -14,6 +14,7 @@ use super::{
     },
 };
 use crate::{
+    blockchain::header::BlockHeaderV1,
     fuel_tx::{
         Transaction,
         TxId,
@@ -227,7 +228,7 @@ impl From<Block> for PartialFuelBlock {
         match block {
             Block::V1(BlockV1 {
                 header:
-                    BlockHeader {
+                    BlockHeader::V1(BlockHeaderV1 {
                         application: ApplicationHeader { da_height, .. },
                         consensus:
                             ConsensusHeader {
@@ -237,7 +238,7 @@ impl From<Block> for PartialFuelBlock {
                                 ..
                             },
                         ..
-                    },
+                    }),
                 transactions,
             }) => Self {
                 header: PartialBlockHeader {

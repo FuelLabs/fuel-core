@@ -18,7 +18,7 @@ use crate::{
         },
         topics::GossipsubTopics,
     },
-    heartbeat::HeartbeatEvent,
+    heartbeat,
     peer_manager::{
         PeerManager,
         Punisher,
@@ -42,7 +42,7 @@ use fuel_core_types::{
 use futures::prelude::*;
 use libp2p::{
     gossipsub::{
-        Event as GossipsubEvent,
+        self,
         MessageAcceptance,
         MessageId,
         PublishError,
@@ -51,9 +51,8 @@ use libp2p::{
     identify,
     multiaddr::Protocol,
     request_response::{
-        Event as RequestResponseEvent,
+        self,
         InboundRequestId,
-        Message as RequestResponseMessage,
         OutboundRequestId,
         ResponseChannel,
     },
@@ -112,7 +111,7 @@ pub struct FuelP2PService {
     /// to the peer that requested it.
     inbound_requests_table: HashMap<InboundRequestId, ResponseChannel<ResponseMessage>>,
 
-    /// NetworkCodec used as <GossipsubCodec> for encoding and decoding of Gossipsub messages    
+    /// NetworkCodec used as `<GossipsubCodec>` for encoding and decoding of Gossipsub messages    
     network_codec: PostcardCodec,
 
     /// Stores additional p2p network info    
@@ -458,8 +457,11 @@ impl FuelP2PService {
         }
     }
 
-    fn handle_gossipsub_event(&mut self, event: GossipsubEvent) -> Option<FuelP2PEvent> {
-        if let GossipsubEvent::Message {
+    fn handle_gossipsub_event(
+        &mut self,
+        event: gossipsub::Event,
+    ) -> Option<FuelP2PEvent> {
+        if let gossipsub::Event::Message {
             propagation_source,
             message,
             message_id,
@@ -543,11 +545,11 @@ impl FuelP2PService {
 
     fn handle_request_response_event(
         &mut self,
-        event: RequestResponseEvent<RequestMessage, ResponseMessage>,
+        event: request_response::Event<RequestMessage, ResponseMessage>,
     ) -> Option<FuelP2PEvent> {
         match event {
-            RequestResponseEvent::Message { peer, message } => match message {
-                RequestResponseMessage::Request {
+            request_response::Event::Message { peer, message } => match message {
+                request_response::Message::Request {
                     request,
                     channel,
                     request_id,
@@ -559,7 +561,7 @@ impl FuelP2PService {
                         request_message: request,
                     });
                 }
-                RequestResponseMessage::Response {
+                request_response::Message::Response {
                     request_id,
                     response,
                 } => {
@@ -570,16 +572,6 @@ impl FuelP2PService {
                     };
 
                     let send_ok = match channel {
-                        ResponseSender::Block(c) => match response {
-                            ResponseMessage::Block(v) => c.send((peer, Ok(v))).is_ok(),
-                            _ => {
-                                warn!(
-                                    "Invalid response type received for request {:?}",
-                                    request_id
-                                );
-                                c.send((peer, Err(ResponseError::TypeMismatch))).is_ok()
-                            }
-                        },
                         ResponseSender::SealedHeaders(c) => match response {
                             ResponseMessage::SealedHeaders(v) => {
                                 c.send((peer, Ok(v))).is_ok()
@@ -611,7 +603,7 @@ impl FuelP2PService {
                     }
                 }
             },
-            RequestResponseEvent::InboundFailure {
+            request_response::Event::InboundFailure {
                 peer,
                 error,
                 request_id,
@@ -621,7 +613,7 @@ impl FuelP2PService {
                 // Drop the channel, as we can't send a response
                 let _ = self.inbound_requests_table.remove(&request_id);
             }
-            RequestResponseEvent::OutboundFailure {
+            request_response::Event::OutboundFailure {
                 peer,
                 error,
                 request_id,
@@ -630,9 +622,6 @@ impl FuelP2PService {
 
                 if let Some(channel) = self.outbound_requests_table.remove(&request_id) {
                     match channel {
-                        ResponseSender::Block(c) => {
-                            let _ = c.send((peer, Err(ResponseError::P2P(error))));
-                        }
                         ResponseSender::SealedHeaders(c) => {
                             let _ = c.send((peer, Err(ResponseError::P2P(error))));
                         }
@@ -686,8 +675,11 @@ impl FuelP2PService {
         None
     }
 
-    fn handle_heartbeat_event(&mut self, event: HeartbeatEvent) -> Option<FuelP2PEvent> {
-        let HeartbeatEvent {
+    fn handle_heartbeat_event(
+        &mut self,
+        event: heartbeat::Event,
+    ) -> Option<FuelP2PEvent> {
+        let heartbeat::Event {
             peer_id,
             latest_block_height,
         } = event;
@@ -733,16 +725,11 @@ mod tests {
     };
     use fuel_core_types::{
         blockchain::{
-            block::Block,
             consensus::{
                 poa::PoAConsensus,
                 Consensus,
             },
-            header::{
-                BlockHeader,
-                PartialBlockHeader,
-            },
-            SealedBlock,
+            header::BlockHeader,
             SealedBlockHeader,
         },
         fuel_tx::{
@@ -1496,7 +1483,7 @@ mod tests {
         let mut blocks = Vec::new();
         for i in range {
             let mut header: BlockHeader = Default::default();
-            header.consensus.height = i.into();
+            header.set_block_height(i.into());
 
             let sealed_block = SealedBlockHeader {
                 entity: header,
@@ -1509,8 +1496,8 @@ mod tests {
 
     // Metadata gets skipped during serialization, so this is the fuzzy way to compare blocks
     fn eq_except_metadata(a: &SealedBlockHeader, b: &SealedBlockHeader) -> bool {
-        a.entity.application == b.entity.application
-            && a.entity.consensus == b.entity.consensus
+        a.entity.application() == b.entity.application()
+            && a.entity.consensus() == b.entity.consensus()
     }
 
     async fn request_response_works_with(request_msg: RequestMessage) {
@@ -1542,23 +1529,6 @@ mod tests {
                                 request_sent = true;
 
                                 match request_msg.clone() {
-                                    RequestMessage::Block(_) => {
-                                        let (tx_orchestrator, rx_orchestrator) = oneshot::channel();
-                                        assert!(node_a.send_request_msg(None, request_msg.clone(), ResponseSender::Block(tx_orchestrator)).is_ok());
-                                        let tx_test_end = tx_test_end.clone();
-
-                                        tokio::spawn(async move {
-                                            let response_message = rx_orchestrator.await;
-
-                                            if let Ok((_peer, Ok(Some(sealed_block)))) = response_message {
-                                                let _ = tx_test_end.send(*sealed_block.entity.header().height() == 0.into()).await;
-                                            } else {
-                                                tracing::error!("Orchestrator failed to receive a message: {:?}", response_message);
-                                                let _ = tx_test_end.send(false).await;
-                                            }
-                                        });
-
-                                    }
                                     RequestMessage::SealedHeaders(range) => {
                                         let (tx_orchestrator, rx_orchestrator) = oneshot::channel();
                                         assert!(node_a.send_request_msg(None, request_msg.clone(), ResponseSender::SealedHeaders(tx_orchestrator)).is_ok());
@@ -1606,16 +1576,6 @@ mod tests {
                     // 2. Node B receives the RequestMessage from Node A initiated by the NetworkOrchestrator
                     if let Some(FuelP2PEvent::InboundRequestMessage{ request_id, request_message: received_request_message }) = &node_b_event {
                         match received_request_message {
-                            RequestMessage::Block(_) => {
-                                let block = Block::new(PartialBlockHeader::default(), (0..5).map(|_| Transaction::default_test_tx()).collect(), &[]);
-
-                                let sealed_block = SealedBlock {
-                                    entity: block,
-                                    consensus: Consensus::PoA(PoAConsensus::new(Default::default())),
-                                };
-
-                                let _ = node_b.send_response_msg(*request_id, ResponseMessage::Block(Some(Arc::new(sealed_block))));
-                            }
                             RequestMessage::SealedHeaders(range) => {
                                 let sealed_headers: Vec<_> = arbitrary_headers_for_range(range.clone());
 
@@ -1644,18 +1604,12 @@ mod tests {
 
     #[tokio::test]
     #[instrument]
-    async fn request_response_works_with_block() {
-        request_response_works_with(RequestMessage::Block(0.into())).await
-    }
-
-    #[tokio::test]
-    #[instrument]
     async fn request_response_works_with_sealed_headers_range_inclusive() {
         let arbitrary_range = 2..6;
         request_response_works_with(RequestMessage::SealedHeaders(arbitrary_range)).await
     }
 
-    /// We send a request for a block, but it's responded by only headers
+    /// We send a request for transactions, but it's responded by only headers
     #[tokio::test]
     #[instrument]
     async fn invalid_response_type_is_detected() {
@@ -1688,7 +1642,7 @@ mod tests {
                                 request_sent = true;
 
                                 let (tx_orchestrator, rx_orchestrator) = oneshot::channel();
-                                assert!(node_a.send_request_msg(None, RequestMessage::Block(0.into()), ResponseSender::Block(tx_orchestrator)).is_ok());
+                                assert!(node_a.send_request_msg(None, RequestMessage::Transactions(0..2), ResponseSender::Transactions(tx_orchestrator)).is_ok());
                                 let tx_test_end = tx_test_end.clone();
 
                                 tokio::spawn(async move {
@@ -1769,8 +1723,8 @@ mod tests {
                                 assert_eq!(node_a.outbound_requests_table.len(), 0);
 
                                 // Request successfully sent
-                                let requested_block_height = RequestMessage::Block(0.into());
-                                assert!(node_a.send_request_msg(None, requested_block_height, ResponseSender::Block(tx_orchestrator)).is_ok());
+                                let requested_block_height = RequestMessage::SealedHeaders(0..0);
+                                assert!(node_a.send_request_msg(None, requested_block_height, ResponseSender::SealedHeaders(tx_orchestrator)).is_ok());
 
                                 // 2b. there should be ONE pending outbound requests in the table
                                 assert_eq!(node_a.outbound_requests_table.len(), 1);

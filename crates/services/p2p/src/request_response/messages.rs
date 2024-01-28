@@ -1,9 +1,5 @@
 use fuel_core_types::{
-    blockchain::{
-        SealedBlock,
-        SealedBlockHeader,
-    },
-    fuel_types::BlockHeight,
+    blockchain::SealedBlockHeader,
     services::p2p::Transactions,
 };
 use libp2p::{
@@ -29,14 +25,12 @@ pub(crate) const MAX_REQUEST_SIZE: usize = core::mem::size_of::<RequestMessage>(
 
 #[derive(Serialize, Deserialize, Eq, PartialEq, Debug, Clone)]
 pub enum RequestMessage {
-    Block(BlockHeight),
     SealedHeaders(Range<u32>),
     Transactions(Range<u32>),
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum ResponseMessage {
-    Block(Option<Arc<SealedBlock>>),
     SealedHeaders(Option<Vec<SealedBlockHeader>>),
     Transactions(Option<Vec<Transactions>>),
 }
@@ -45,7 +39,6 @@ pub type OnResponse<T> = oneshot::Sender<(PeerId, Result<T, ResponseError>)>;
 
 #[derive(Debug)]
 pub enum ResponseSender {
-    Block(OnResponse<Option<Arc<SealedBlock>>>),
     SealedHeaders(OnResponse<Option<Vec<SealedBlockHeader>>>),
     Transactions(OnResponse<Option<Arc<Vec<Transactions>>>>),
 }

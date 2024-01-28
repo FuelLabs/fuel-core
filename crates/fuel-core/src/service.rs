@@ -15,12 +15,12 @@ use tracing::warn;
 pub use config::{
     Config,
     DbType,
+    RelayerConsensusConfig,
     VMConfig,
 };
 pub use fuel_core_services::Service as ServiceTrait;
 
 use crate::service::adapters::PoAAdapter;
-pub use fuel_core_consensus_module::RelayerVerifierConfig;
 
 use self::adapters::BlockImporterAdapter;
 
@@ -44,7 +44,7 @@ pub struct SharedState {
     /// The Relayer shared state.
     pub relayer: Option<fuel_core_relayer::SharedState<Database>>,
     /// The GraphQL shared state.
-    pub graph_ql: crate::fuel_core_graphql_api::service::SharedState,
+    pub graph_ql: crate::fuel_core_graphql_api::api_service::SharedState,
     /// The underlying database.
     pub database: Database,
     /// Subscribe to new block production.
@@ -122,7 +122,7 @@ impl FuelService {
     }
 
     #[cfg(feature = "relayer")]
-    /// Wait for the [`Relayer`] to be in sync with
+    /// Wait for the Relayer to be in sync with
     /// the data availability layer.
     ///
     /// Yields until the relayer reaches a point where it
@@ -187,7 +187,7 @@ pub struct Task {
 
 impl Task {
     /// Private inner method for initializing the fuel service task
-    pub fn new(database: Database, config: Config) -> anyhow::Result<Task> {
+    pub fn new(mut database: Database, config: Config) -> anyhow::Result<Task> {
         // initialize state
         tracing::info!("Initializing database");
         database.init(&config.chain_conf)?;
@@ -305,9 +305,9 @@ mod tests {
             i += 1;
         }
 
-        // current services: graphql, txpool, PoA
+        // current services: graphql, graphql worker, txpool, PoA
         #[allow(unused_mut)]
-        let mut expected_services = 3;
+        let mut expected_services = 4;
 
         // Relayer service is disabled with `Config::local_node`.
         // #[cfg(feature = "relayer")]
