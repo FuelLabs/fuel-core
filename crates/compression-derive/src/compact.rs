@@ -18,44 +18,47 @@ impl PerField {
         let mut defs = TokenStream2::new();
         let mut count = TokenStream2::new();
 
-        for field in fields {
+        for (i, field) in fields.iter().enumerate() {
+            let fi = syn::Index::from(i);
             let attrs = FieldAttrs::parse(&field.attrs);
             defs.extend(match &attrs {
-            FieldAttrs::Skip => quote! {},
-            FieldAttrs::Normal => {
-                let ty = &field.ty;
-                let cty = quote! {
-                    <#ty as ::fuel_core_compression::Compactable>::Compact
-                };
-                if let Some(fname) = field.ident.as_ref() {
-                    quote! { #fname: #cty, }
-                } else {
-                    quote! { #cty, }
-                }
-            }
-            FieldAttrs::Registry(registry) => {
-                let reg_ident = format_ident!("{}", registry);
-                let cty = quote! {
-                    ::fuel_core_compression::Key<::fuel_core_compression::tables::#reg_ident>
-                };
-                if let Some(fname) = field.ident.as_ref() {
-                    quote! { #fname: #cty, }
-                } else {
-                    quote! { #cty, }
-                }
-            }
-        });
-            count.extend(match &attrs {
-                FieldAttrs::Skip => quote! { CountPerTable::default() + },
+                FieldAttrs::Skip => quote! {},
                 FieldAttrs::Normal => {
                     let ty = &field.ty;
-                    quote! {
-                        <#ty as ::fuel_core_compression::Compactable>::Compact::count() +
+                    let cty = quote! {
+                        <#ty as ::fuel_core_compression::Compactable>::Compact
+                    };
+                    if let Some(fname) = field.ident.as_ref() {
+                        quote! { #fname: #cty, }
+                    } else {
+                        quote! { #cty, }
                     }
                 }
                 FieldAttrs::Registry(registry) => {
+                    let reg_ident = format_ident!("{}", registry);
+                    let cty = quote! {
+                        ::fuel_core_compression::Key<::fuel_core_compression::tables::#reg_ident>
+                    };
+                    if let Some(fname) = field.ident.as_ref() {
+                        quote! { #fname: #cty, }
+                    } else {
+                        quote! { #cty, }
+                    }
+                }
+            });
+            count.extend(match &attrs {
+                FieldAttrs::Skip => quote! { CountPerTable::default() + },
+                FieldAttrs::Normal => {
+                    if let Some(fname) = &field.ident {
+                        quote! { self.#fname.count() + }
+                    } else {
+                        quote! { self.#fi.count() + }
+                    }
+                }
+                FieldAttrs::Registry(registry) => {
+                    let reg_ident = format_ident!("{}", registry);
                     quote! {
-                        CountPerTable { #registry: 1, ..CountPerTable::default() } +
+                        CountPerTable { #reg_ident: 1, ..CountPerTable::default() } +
                     }
                 }
             });
@@ -66,7 +69,7 @@ impl PerField {
             syn::Fields::Unnamed(_) => quote! {(#defs)},
             syn::Fields::Unit => quote! {},
         };
-        count.extend(quote! { 0 });
+        count.extend(quote! { CountPerTable::default() });
 
         Self { defs, count }
     }
@@ -84,12 +87,17 @@ fn serialize_struct(s: &synstructure::Structure) -> TokenStream2 {
         count: count_per_field,
     } = PerField::form(&variant.ast().fields);
 
+    let semi = match variant.ast().fields {
+        syn::Fields::Named(_) => quote! {},
+        syn::Fields::Unnamed(_) => quote! {;},
+        syn::Fields::Unit => quote! {;},
+    };
+
     let g = s.ast().generics.clone();
     let w = g.where_clause.clone();
     let compact = quote! {
-        #[derive(Debug, Clone)]
         #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-        pub struct #compact_name #g #w #defs ;
+        pub struct #compact_name #g #w #defs #semi
     };
 
     let impls = s.gen_impl(quote! {
@@ -100,8 +108,7 @@ fn serialize_struct(s: &synstructure::Structure) -> TokenStream2 {
             type Compact = #compact_name #g;
 
             fn count(&self) -> CountPerTable {
-                // #count_per_field;
-                todo!()
+                #count_per_field
             }
 
             fn compact<R>(&self, ctx: &mut CompactionContext<R>) -> Self::Compact
@@ -133,7 +140,6 @@ fn serialize_enum(s: &synstructure::Structure) -> TokenStream2 {
     let compact_name = format_ident!("Compact{}", name);
 
     let enumdef = quote! {
-        #[derive(Debug, Clone)]
         #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
         pub enum #compact_name
     };
@@ -198,8 +204,7 @@ fn serialize_transparent(s: synstructure::Structure) -> TokenStream2 {
         "transparent structures must have exactly one field"
     );
     let field_t = variant.ast().fields.iter().next().unwrap().ty.clone();
-    let field_d =
-        quote! { <#field_t as Compactable>::decompact(c, reg) };
+    let field_d = quote! { <#field_t as Compactable>::decompact(c, reg) };
     let field_name: TokenStream2 = match variant.ast().fields {
         syn::Fields::Named(n) => {
             let n = n.named[0].ident.clone().unwrap();
@@ -239,10 +244,12 @@ fn serialize_transparent(s: synstructure::Structure) -> TokenStream2 {
     })
 }
 
-/// Derives `Serialize` trait for the given `struct` or `enum`.
-pub fn serialize_derive(mut s: synstructure::Structure) -> TokenStream2 {
-    s.add_bounds(synstructure::AddBounds::Fields)
+/// Derives `Compact` trait for the given `struct` or `enum`.
+pub fn compact_derive(mut s: synstructure::Structure) -> TokenStream2 {
+    s.add_bounds(synstructure::AddBounds::Both)
         .underscore_const(true);
+
+    let name = s.ast().ident.to_string();
 
     let ts = match StructureAttrs::parse(&s.ast().attrs) {
         StructureAttrs::Normal => match s.ast().data {
@@ -252,6 +259,7 @@ pub fn serialize_derive(mut s: synstructure::Structure) -> TokenStream2 {
         },
         StructureAttrs::Transparent => serialize_transparent(s),
     };
-    println!("{}", ts);
+    // println!("{}", ts);
+    let _ = std::fs::write(format!("/tmp/derive/{name}.rs"), ts.to_string());
     ts
 }

@@ -14,7 +14,4 @@ pub use registry::{
     Key,
 };
 
-pub use fuel_core_compression_derive::{
-    Deserialize,
-    Serialize,
-};
+pub use fuel_core_compression_derive::Compact;
