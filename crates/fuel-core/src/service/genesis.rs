@@ -9,7 +9,6 @@ use fuel_core_chain_config::{
     StateConfig,
 };
 use fuel_core_executor::refs::ContractRef;
-use fuel_core_importer::Importer;
 use fuel_core_storage::{
     tables::{
         Coins,
@@ -18,8 +17,10 @@ use fuel_core_storage::{
         ContractsRawCode,
         Messages,
     },
-    transactional::Transactional,
-    IsNotFound,
+    transactional::{
+        StorageTransaction,
+        Transactional,
+    },
     MerkleRoot,
     StorageAsMut,
 };
@@ -64,25 +65,11 @@ use fuel_core_types::{
 };
 use itertools::Itertools;
 
-/// Loads state from the chain config into database
-pub fn maybe_initialize_state(
-    config: &Config,
-    database: &Database,
-) -> anyhow::Result<()> {
-    // check if chain is initialized
-    if let Err(err) = database.get_genesis() {
-        if err.is_not_found() {
-            import_genesis_block(config, database)?;
-        }
-    }
-
-    Ok(())
-}
-
-fn import_genesis_block(
+/// Performs the importing of the genesis block from the snapshot.
+pub fn execute_genesis_block(
     config: &Config,
     original_database: &Database,
-) -> anyhow::Result<()> {
+) -> anyhow::Result<UncommittedImportResult<StorageTransaction<Database>>> {
     // start a db transaction for bulk-writing
     let mut database_transaction = Transactional::transaction(original_database);
 
@@ -103,6 +90,21 @@ fn import_genesis_block(
         messages_root,
     };
 
+    let block = create_genesis_block(config);
+    let consensus = Consensus::Genesis(genesis);
+    let block = SealedBlock {
+        entity: block,
+        consensus,
+    };
+
+    let result = UncommittedImportResult::new(
+        ImportResult::new_from_local(block, vec![]),
+        database_transaction,
+    );
+    Ok(result)
+}
+
+pub fn create_genesis_block(config: &Config) -> Block {
     let block = Block::new(
         PartialBlockHeader {
             application: ApplicationHeader::<Empty> {
@@ -129,24 +131,22 @@ fn import_genesis_block(
         vec![],
         &[],
     );
+    block
+}
 
-    let consensus = Consensus::Genesis(genesis);
-    let block = SealedBlock {
-        entity: block,
-        consensus,
-    };
-
-    let importer = Importer::new(
+#[cfg(feature = "test-helpers")]
+pub async fn execute_and_commit_genesis_block(
+    config: &Config,
+    original_database: &Database,
+) -> anyhow::Result<()> {
+    let result = execute_genesis_block(config, original_database)?;
+    let importer = fuel_core_importer::Importer::new(
         config.block_importer.clone(),
         original_database.clone(),
         (),
         (),
     );
-    // We commit Genesis block before start of any service, so there is no listeners.
-    importer.commit_result_without_awaiting_listeners(UncommittedImportResult::new(
-        ImportResult::new_from_local(block, vec![]),
-        database_transaction,
-    ))?;
+    importer.commit_result(result).await?;
     Ok(())
 }
 
@@ -374,12 +374,14 @@ mod tests {
     use crate::service::{
         config::Config,
         FuelService,
+        Task,
     };
     use fuel_core_chain_config::{
         ChainConfig,
         CoinConfig,
         MessageConfig,
     };
+    use fuel_core_services::RunnableService;
     use fuel_core_storage::{
         tables::{
             ContractsAssets,
@@ -622,11 +624,14 @@ mod tests {
 
         let db = &Database::default();
 
-        maybe_initialize_state(&config, db).unwrap();
+        let db_transaction = execute_genesis_block(&config, db)
+            .unwrap()
+            .into_transaction();
 
         let expected_msg: Message = msg.into();
 
-        let ret_msg = db
+        let ret_msg = db_transaction
+            .as_ref()
             .storage::<Messages>()
             .get(expected_msg.id())
             .unwrap()
@@ -709,7 +714,8 @@ mod tests {
         };
 
         let db = Database::default();
-        let init_result = FuelService::from_database(db.clone(), service_config).await;
+        let task = Task::new(db.clone(), service_config).unwrap();
+        let init_result = task.into_task(&Default::default(), ()).await;
 
         assert!(init_result.is_err())
     }
@@ -748,7 +754,8 @@ mod tests {
         };
 
         let db = Database::default();
-        let init_result = FuelService::from_database(db.clone(), service_config).await;
+        let task = Task::new(db.clone(), service_config).unwrap();
+        let init_result = task.into_task(&Default::default(), ()).await;
 
         assert!(init_result.is_err())
     }
