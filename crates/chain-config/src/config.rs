@@ -1,4 +1,5 @@
 mod chain;
+mod codec;
 mod coin;
 mod consensus;
 mod contract;
@@ -20,6 +21,7 @@ pub(crate) trait Randomize {
 }
 
 pub use chain::*;
+pub use codec::*;
 pub use coin::*;
 pub use consensus::*;
 pub use contract::*;

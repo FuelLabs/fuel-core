@@ -247,7 +247,7 @@ mod tests {
 
         fn extract_everything_command(
             command: Fuel,
-        ) -> anyhow::Result<(Option<PathBuf>, Option<snapshot::EncodingCommand>)>
+        ) -> anyhow::Result<(Option<PathBuf>, PathBuf, Option<snapshot::EncodingCommand>)>
         {
             match command {
                 Fuel::Snapshot(snapshot::Command {
@@ -257,7 +257,7 @@ mod tests {
                             encoding_command,
                         },
                     ..
-                }) => Ok((chain_config, encoding_command)),
+                }) => Ok((chain_config, output_dir, encoding_command)),
                 _ => bail!("Expected a snapshot everything command"),
             }
         }

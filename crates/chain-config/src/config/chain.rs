@@ -76,8 +76,10 @@ impl ChainConfig {
     }
 
     #[cfg(feature = "std")]
-    pub fn from_snapshot(snapshot_metadata: &SnapshotMetadata) -> anyhow::Result<Self> {
-        Self::load(snapshot_metadata.chain_config())
+    pub fn from_snapshot_metadata(
+        snapshot_metadata: &SnapshotMetadata,
+    ) -> anyhow::Result<Self> {
+        Self::load(&snapshot_metadata.chain_config())
     }
 
     #[cfg(feature = "std")]

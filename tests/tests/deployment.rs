@@ -2,10 +2,10 @@ use std::path::Path;
 
 use fuel_core::chain_config::{
     ChainConfig,
+    Encoder,
     SnapshotMetadata,
     StateConfig,
     StateEncoding,
-    StateWriter,
 };
 use fuel_core_types::fuel_tx::GasCosts;
 
@@ -14,8 +14,8 @@ use fuel_core_types::fuel_tx::GasCosts;
 fn test_deployment_chainconfig(path: impl AsRef<Path>) -> anyhow::Result<()> {
     let path = path.as_ref();
     let stored_snapshot = SnapshotMetadata::read(path).unwrap();
-    let mut chain_config = ChainConfig::from_snapshot(&stored_snapshot)?;
-    let state_config = StateConfig::from_snapshot(stored_snapshot.clone())?;
+    let mut chain_config = ChainConfig::from_snapshot_metadata(&stored_snapshot)?;
+    let state_config = StateConfig::from_snapshot_metadata(stored_snapshot.clone())?;
 
     // Deployment configuration should use gas costs from benchmarks.
     let benchmark_gas_costs =
@@ -25,7 +25,7 @@ fn test_deployment_chainconfig(path: impl AsRef<Path>) -> anyhow::Result<()> {
     let temp_dir = tempfile::tempdir()?;
     let generated_snapshot = SnapshotMetadata::write_json(temp_dir.path())?;
     chain_config.write(generated_snapshot.chain_config())?;
-    StateWriter::for_snapshot(&generated_snapshot)?.write(state_config)?;
+    Encoder::for_snapshot(&generated_snapshot)?.write(state_config)?;
 
     let chain_config_bytes = std::fs::read_to_string(generated_snapshot.chain_config())?;
     let stored_chain_config = std::fs::read_to_string(stored_snapshot.chain_config())?;

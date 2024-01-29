@@ -1,14 +1,9 @@
 use std::path::PathBuf;
 
-#[cfg(feature = "parquet")]
-use std::path::Path;
-
 use crate::{
-    config::{
-        contract_balance::ContractBalanceConfig,
-        contract_state::ContractStateConfig,
-    },
+    config::contract_state::ContractStateConfig,
     CoinConfig,
+    ContractBalanceConfig,
     ContractConfig,
     MessageConfig,
     SnapshotMetadata,
@@ -18,7 +13,7 @@ use crate::{
 #[cfg(feature = "parquet")]
 use super::parquet;
 
-enum StateWriterType {
+enum EncoderType {
     Json {
         buffer: StateConfig,
         state_file_path: PathBuf,
@@ -33,8 +28,8 @@ enum StateWriterType {
     },
 }
 
-pub struct StateWriter {
-    encoder: StateWriterType,
+pub struct Encoder {
+    encoder: EncoderType,
 }
 
 #[allow(dead_code)]
@@ -157,17 +152,7 @@ impl From<ZstdCompressionLevel> for ::parquet::basic::Compression {
     }
 }
 
-impl StateWriter {
-    pub fn write(mut self, state_config: StateConfig) -> anyhow::Result<()> {
-        self.write_coins(state_config.coins)?;
-        self.write_contracts(state_config.contracts)?;
-        self.write_messages(state_config.messages)?;
-        self.write_contract_state(state_config.contract_state)?;
-        self.write_contract_balance(state_config.contract_balance)?;
-        self.close()?;
-        Ok(())
-    }
-
+impl Encoder {
     pub fn for_snapshot(snapshot_metadata: &SnapshotMetadata) -> anyhow::Result<Self> {
         let encoder = match snapshot_metadata.state_encoding() {
             crate::StateEncoding::Json { filepath } => Self::json(filepath),
@@ -181,10 +166,10 @@ impl StateWriter {
         Ok(encoder)
     }
 
-    pub fn json(path: impl Into<PathBuf>) -> Self {
+    pub fn json(filepath: impl Into<PathBuf>) -> Self {
         Self {
-            encoder: StateWriterType::Json {
-                state_file_path: path.into(),
+            encoder: EncoderType::Json {
+                state_file_path: filepath.into(),
                 buffer: StateConfig::default(),
             },
         }
@@ -195,6 +180,8 @@ impl StateWriter {
         files: &crate::ParquetFiles,
         compression_level: ZstdCompressionLevel,
     ) -> anyhow::Result<Self> {
+        use std::path::Path;
+
         use ::parquet::basic::Compression;
 
         fn create_encoder<T>(
@@ -219,7 +206,7 @@ impl StateWriter {
         } = files;
 
         Ok(Self {
-            encoder: StateWriterType::Parquet {
+            encoder: EncoderType::Parquet {
                 coins: create_encoder(coins, compression)?,
                 messages: create_encoder(messages, compression)?,
                 contracts: create_encoder(contracts, compression)?,
@@ -231,12 +218,12 @@ impl StateWriter {
 
     pub fn write_coins(&mut self, elements: Vec<CoinConfig>) -> anyhow::Result<()> {
         match &mut self.encoder {
-            StateWriterType::Json { buffer: state, .. } => {
+            EncoderType::Json { buffer: state, .. } => {
                 state.coins.extend(elements);
                 Ok(())
             }
             #[cfg(feature = "parquet")]
-            StateWriterType::Parquet { coins, .. } => coins.write(elements),
+            EncoderType::Parquet { coins, .. } => coins.write(elements),
         }
     }
 
@@ -245,23 +232,23 @@ impl StateWriter {
         elements: Vec<ContractConfig>,
     ) -> anyhow::Result<()> {
         match &mut self.encoder {
-            StateWriterType::Json { buffer: state, .. } => {
+            EncoderType::Json { buffer: state, .. } => {
                 state.contracts.extend(elements);
                 Ok(())
             }
             #[cfg(feature = "parquet")]
-            StateWriterType::Parquet { contracts, .. } => contracts.write(elements),
+            EncoderType::Parquet { contracts, .. } => contracts.write(elements),
         }
     }
 
     pub fn write_messages(&mut self, elements: Vec<MessageConfig>) -> anyhow::Result<()> {
         match &mut self.encoder {
-            StateWriterType::Json { buffer: state, .. } => {
+            EncoderType::Json { buffer: state, .. } => {
                 state.messages.extend(elements);
                 Ok(())
             }
             #[cfg(feature = "parquet")]
-            StateWriterType::Parquet { messages, .. } => messages.write(elements),
+            EncoderType::Parquet { messages, .. } => messages.write(elements),
         }
     }
 
@@ -270,14 +257,12 @@ impl StateWriter {
         elements: Vec<ContractStateConfig>,
     ) -> anyhow::Result<()> {
         match &mut self.encoder {
-            StateWriterType::Json { buffer: state, .. } => {
+            EncoderType::Json { buffer: state, .. } => {
                 state.contract_state.extend(elements);
                 Ok(())
             }
             #[cfg(feature = "parquet")]
-            StateWriterType::Parquet { contract_state, .. } => {
-                contract_state.write(elements)
-            }
+            EncoderType::Parquet { contract_state, .. } => contract_state.write(elements),
         }
     }
 
@@ -286,12 +271,12 @@ impl StateWriter {
         elements: Vec<ContractBalanceConfig>,
     ) -> anyhow::Result<()> {
         match &mut self.encoder {
-            StateWriterType::Json { buffer: state, .. } => {
+            EncoderType::Json { buffer: state, .. } => {
                 state.contract_balance.extend(elements);
                 Ok(())
             }
             #[cfg(feature = "parquet")]
-            StateWriterType::Parquet {
+            EncoderType::Parquet {
                 contract_balance, ..
             } => contract_balance.write(elements),
         }
@@ -299,7 +284,7 @@ impl StateWriter {
 
     pub fn close(self) -> anyhow::Result<()> {
         match self.encoder {
-            StateWriterType::Json {
+            EncoderType::Json {
                 buffer,
                 state_file_path,
             } => {
@@ -308,7 +293,7 @@ impl StateWriter {
                 Ok(())
             }
             #[cfg(feature = "parquet")]
-            StateWriterType::Parquet {
+            EncoderType::Parquet {
                 coins,
                 messages,
                 contracts,
@@ -340,12 +325,24 @@ mod tests {
     use super::*;
     use itertools::Itertools;
 
+    #[cfg(feature = "parquet")]
     #[test]
-    fn state_writer_json_generates_single_file_with_expected_name() {
+    fn can_roundtrip_compression_level() {
+        use strum::IntoEnumIterator;
+
+        for level in crate::ZstdCompressionLevel::iter() {
+            let u8_level = u8::from(level);
+            let roundtrip = ZstdCompressionLevel::try_from(u8_level).unwrap();
+            assert_eq!(level, roundtrip);
+        }
+    }
+
+    #[test]
+    fn json_encoder_generates_single_file_with_expected_name() {
         // given
         let dir = tempfile::tempdir().unwrap();
         let file = dir.path().join("state_config.json");
-        let encoder = StateWriter::json(&file);
+        let encoder = Encoder::json(&file);
 
         // when
         encoder.close().unwrap();
@@ -366,7 +363,7 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let files = crate::ParquetFiles::snapshot_default(dir.path());
         let encoder =
-            StateWriter::parquet(&files, ZstdCompressionLevel::Uncompressed).unwrap();
+            Encoder::parquet(&files, ZstdCompressionLevel::Uncompressed).unwrap();
 
         // when
         encoder.close().unwrap();
@@ -434,7 +431,7 @@ mod tests {
     fn test_data_written_in_expected_file<T>(
         rng: impl rand::Rng,
         expected_filename: &str,
-        write: impl FnOnce(Vec<T>, &mut StateWriter) -> anyhow::Result<()>,
+        write: impl FnOnce(Vec<T>, &mut Encoder) -> anyhow::Result<()>,
     ) where
         parquet::PostcardDecoder<T>: Iterator<Item = anyhow::Result<crate::Group<T>>>,
         T: crate::Randomize + PartialEq + ::core::fmt::Debug + Clone,
@@ -443,7 +440,7 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let files = crate::ParquetFiles::snapshot_default(dir.path());
         let mut encoder =
-            StateWriter::parquet(&files, ZstdCompressionLevel::Uncompressed).unwrap();
+            Encoder::parquet(&files, ZstdCompressionLevel::Uncompressed).unwrap();
         let original_data = vec![T::randomize(rng)];
 
         // when
@@ -474,7 +471,7 @@ mod tests {
         // given
         let dir = tempfile::tempdir().unwrap();
         let filepath = dir.path().join("some_file.json");
-        let mut encoder = StateWriter::json(&filepath);
+        let mut encoder = Encoder::json(&filepath);
         let coin = CoinConfig {
             tx_id: Some([1u8; 32].into()),
             output_index: Some(2),
@@ -501,7 +498,7 @@ mod tests {
         // given
         let dir = tempfile::tempdir().unwrap();
         let filepath = dir.path().join("some_file.json");
-        let mut encoder = StateWriter::json(&filepath);
+        let mut encoder = Encoder::json(&filepath);
         let message = MessageConfig {
             sender: [1u8; 32].into(),
             recipient: [2u8; 32].into(),
@@ -526,7 +523,7 @@ mod tests {
         // given
         let dir = tempfile::tempdir().unwrap();
         let filepath = dir.path().join("some_file.json");
-        let mut encoder = StateWriter::json(&filepath);
+        let mut encoder = Encoder::json(&filepath);
         let contract = ContractConfig {
             contract_id: [1u8; 32].into(),
             code: [2u8; 32].into(),

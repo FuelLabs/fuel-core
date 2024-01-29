@@ -21,10 +21,10 @@ use fuel_core_chain_config::{
     ContractBalanceConfig,
     ContractConfig,
     ContractStateConfig,
+    Decoder,
     GenesisCommitment,
     Group,
     MessageConfig,
-    StateReader,
 };
 use fuel_core_executor::refs::ContractRef;
 use fuel_core_types::fuel_types::{
@@ -38,16 +38,12 @@ pub struct GenesisWorkers {
     db: Database,
     cancel_token: CancellationToken,
     block_height: BlockHeight,
-    state_reader: StateReader,
+    state_reader: Decoder,
     finished_signals: [Arc<Notify>; 5],
 }
 
 impl GenesisWorkers {
-    pub fn new(
-        db: Database,
-        block_height: BlockHeight,
-        state_reader: StateReader,
-    ) -> Self {
+    pub fn new(db: Database, block_height: BlockHeight, state_reader: Decoder) -> Self {
         Self {
             db,
             cancel_token: CancellationToken::new(),

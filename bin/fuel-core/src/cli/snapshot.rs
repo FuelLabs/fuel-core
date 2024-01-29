@@ -8,12 +8,12 @@ use fuel_core::{
     chain_config::{
         ChainConfig,
         ChainStateDb,
-        StateWriter,
     },
     database::Database,
     types::fuel_types::ContractId,
 };
 use fuel_core_chain_config::{
+    Encoder,
     SnapshotMetadata,
     MAX_GROUP_SIZE,
 };
@@ -83,16 +83,18 @@ impl EncodingCommand {
 #[derive(Debug, Clone, Subcommand)]
 pub enum SubCommands {
     /// Creates a snapshot of the entire database and produces a chain config.
+    #[command(arg_required_else_help = true)]
     Everything {
         /// Specify a path to the the chain config. Defaults used if no path
         /// is provided.
-        #[arg(name = "CHAIN_CONFIG", long = "chain")]
+        #[clap(name = "CHAIN_CONFIG", long = "chain")]
         chain_config: Option<PathBuf>,
         /// Encoding format for the chain state files.
         #[clap(subcommand)]
         encoding_command: Option<EncodingCommand>,
     },
     /// Creates a config for the contract.
+    #[command(arg_required_else_help = true)]
     Contract {
         /// The id of the contract to snapshot.
         #[clap(long = "id")]
@@ -132,7 +134,7 @@ fn contract_snapshot(
     let (contract, state, balance) = db.get_contract_by_id(contract_id)?;
 
     let metadata = write_metadata(output_dir, Encoding::Json)?;
-    let mut writer = StateWriter::for_snapshot(&metadata)?;
+    let mut writer = Encoder::for_snapshot(&metadata)?;
 
     writer.write_contracts(vec![contract])?;
     writer.write_contract_state(state)?;
@@ -186,7 +188,7 @@ fn write_chain_state(
     db: impl ChainStateDb,
     metadata: &SnapshotMetadata,
 ) -> anyhow::Result<()> {
-    let mut writer = StateWriter::for_snapshot(metadata)?;
+    let mut writer = Encoder::for_snapshot(metadata)?;
     fn write<T>(
         data: impl Iterator<Item = StorageResult<T>>,
         group_size: usize,
@@ -257,7 +259,6 @@ mod tests {
         Group,
         MessageConfig,
         StateConfig,
-        StateReader,
     };
     use fuel_core_storage::{
         tables::{
@@ -528,10 +529,10 @@ mod tests {
 
         // then
         let snapshot = SnapshotMetadata::read(&snapshot_dir)?;
-        let chain_state = ChainConfig::from_snapshot(&snapshot)?;
+        let chain_state = ChainConfig::from_snapshot_metadata(&snapshot)?;
         assert_eq!(chain_state.height, Some(height));
 
-        let snapshot = StateConfig::from_snapshot(snapshot)?;
+        let snapshot = StateConfig::from_snapshot_metadata(snapshot)?;
 
         assert_ne!(snapshot, state);
         assert_eq!(snapshot, sorted_state(state));
@@ -545,7 +546,10 @@ mod tests {
     fn everything_snapshot_respects_group_size(group_size: usize) -> anyhow::Result<()> {
         // given
 
-        use fuel_core_chain_config::ParquetFiles;
+        use fuel_core_chain_config::{
+            Decoder,
+            ParquetFiles,
+        };
         let temp_dir = tempfile::tempdir()?;
 
         let snapshot_dir = temp_dir.path().join("snapshot");
@@ -573,7 +577,7 @@ mod tests {
 
         // then
         let files = ParquetFiles::snapshot_default(&snapshot_dir);
-        let reader = StateReader::parquet(files);
+        let reader = Decoder::parquet(files);
 
         let expected_state = sorted_state(state);
 
@@ -622,7 +626,7 @@ mod tests {
 
         // then
         let snapshot = SnapshotMetadata::read(&snapshot_dir)?;
-        let snapshot_state = StateConfig::from_snapshot(snapshot)?;
+        let snapshot_state = StateConfig::from_snapshot_metadata(snapshot)?;
 
         let expected_contract_state = state
             .contract_state

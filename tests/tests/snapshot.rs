@@ -4,9 +4,9 @@ use fuel_core::{
         ContractBalanceConfig,
         ContractConfig,
         ContractStateConfig,
+        Decoder,
         MessageConfig,
         StateConfig,
-        StateReader,
     },
     database::Database,
     service::{
@@ -98,7 +98,7 @@ async fn loads_snapshot() {
         }],
     };
     let mut config = Config {
-        state_reader: StateReader::in_memory(starting_state.clone(), 1),
+        state_reader: Decoder::in_memory(starting_state.clone(), 1),
         ..Config::local_node()
     };
     config.chain_config.height = Some(BlockHeight::from(10));

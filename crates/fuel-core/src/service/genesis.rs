@@ -333,9 +333,9 @@ mod tests {
         ContractBalanceConfig,
         ContractConfig,
         ContractStateConfig,
+        Decoder,
         MessageConfig,
         StateConfig,
-        StateReader,
         MAX_GROUP_SIZE,
     };
     use fuel_core_storage::{
@@ -475,7 +475,7 @@ mod tests {
             contract_balance,
             ..Default::default()
         };
-        let state_reader = StateReader::in_memory(state, MAX_GROUP_SIZE);
+        let state_reader = Decoder::in_memory(state, MAX_GROUP_SIZE);
 
         let service_config = Config {
             state_reader,
@@ -565,7 +565,7 @@ mod tests {
             ],
             ..Default::default()
         };
-        let state_reader = StateReader::in_memory(state, MAX_GROUP_SIZE);
+        let state_reader = Decoder::in_memory(state, MAX_GROUP_SIZE);
 
         let starting_height = {
             let mut h: u32 = alice_block_created.into();
@@ -649,7 +649,7 @@ mod tests {
             contract_state: vec![contract_state],
             ..Default::default()
         };
-        let state_reader = StateReader::in_memory(state, MAX_GROUP_SIZE);
+        let state_reader = Decoder::in_memory(state, MAX_GROUP_SIZE);
 
         let service_config = Config {
             chain_config: ChainConfig::local_testnet(),
@@ -689,7 +689,7 @@ mod tests {
             messages: vec![msg.clone()],
             ..Default::default()
         };
-        let state_reader = StateReader::in_memory(state, MAX_GROUP_SIZE);
+        let state_reader = Decoder::in_memory(state, MAX_GROUP_SIZE);
 
         let config = Config {
             state_reader,
@@ -742,7 +742,7 @@ mod tests {
             contract_balance: vec![contract_balance],
             ..Default::default()
         };
-        let state_reader = StateReader::in_memory(state, MAX_GROUP_SIZE);
+        let state_reader = Decoder::in_memory(state, MAX_GROUP_SIZE);
 
         let service_config = Config {
             chain_config: ChainConfig::local_testnet(),
@@ -781,7 +781,7 @@ mod tests {
             }],
             ..Default::default()
         };
-        let state_reader = StateReader::in_memory(state, MAX_GROUP_SIZE);
+        let state_reader = Decoder::in_memory(state, MAX_GROUP_SIZE);
 
         let service_config = Config {
             chain_config: ChainConfig {
@@ -827,7 +827,7 @@ mod tests {
             contract_balance: balances,
             ..Default::default()
         };
-        let state_reader = StateReader::in_memory(state, MAX_GROUP_SIZE);
+        let state_reader = Decoder::in_memory(state, MAX_GROUP_SIZE);
 
         let service_config = Config {
             chain_config: ChainConfig {
@@ -893,7 +893,7 @@ mod tests {
             contracts: vec![config.clone()],
             ..Default::default()
         };
-        let state_reader = StateReader::in_memory(state, MAX_GROUP_SIZE);
+        let state_reader = Decoder::in_memory(state, MAX_GROUP_SIZE);
 
         let service_config = Config {
             state_reader,
@@ -922,7 +922,7 @@ mod tests {
             contracts: contracts.clone(),
             ..Default::default()
         };
-        let state_reader = StateReader::in_memory(state, MAX_GROUP_SIZE);
+        let state_reader = Decoder::in_memory(state, MAX_GROUP_SIZE);
 
         let service_config = Config {
             state_reader,
@@ -970,7 +970,7 @@ mod tests {
             coins: coins.clone(),
             ..Default::default()
         };
-        let state_reader = StateReader::in_memory(state, MAX_GROUP_SIZE);
+        let state_reader = Decoder::in_memory(state, MAX_GROUP_SIZE);
 
         let service_config = Config {
             state_reader,

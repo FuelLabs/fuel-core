@@ -172,9 +172,7 @@ impl Database {
             .storage::<ContractsStateMerkleMetadata>()
             .contains_key(contract_id)?
         {
-            return Err(
-                anyhow::anyhow!("The contract state is already initialized").into()
-            )
+            return Err(anyhow::anyhow!("The contract state is already initialized").into())
         }
 
         // Keys and values should be original without any modifications.

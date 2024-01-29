@@ -4,8 +4,8 @@ use crate::test_context::{
 };
 use fuel_core_chain_config::{
     ContractConfig,
+    Decoder,
     SnapshotMetadata,
-    StateReader,
     MAX_GROUP_SIZE,
 };
 use fuel_core_types::{
@@ -84,7 +84,7 @@ fn load_contract(
     path: impl AsRef<Path>,
 ) -> Result<(ContractConfig, Vec<StorageSlot>), Failed> {
     let snapshot = SnapshotMetadata::read(path)?;
-    let reader = StateReader::for_snapshot(snapshot, MAX_GROUP_SIZE)?;
+    let reader = Decoder::for_snapshot(snapshot, MAX_GROUP_SIZE)?;
 
     let state = reader
         .contract_state()?
@@ -122,8 +122,7 @@ fn load_contract(
 
 // Maybe deploy a contract with large state and execute the script
 pub async fn run_contract_large_state(ctx: &TestContext) -> Result<(), Failed> {
-    let (mut contract_config, state) =
-        load_contract("./src/tests/test_data/large_state")?;
+    let (contract_config, state) = load_contract("./src/tests/test_data/large_state")?;
     let dry_run = include_bytes!("test_data/large_state/tx.json");
     let dry_run: Transaction = serde_json::from_slice(dry_run.as_ref())
         .expect("Should be able do decode the Transaction");

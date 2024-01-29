@@ -31,7 +31,7 @@ impl<T> Iterator for IntoIter<T>
 where
     super::parquet::PostcardDecoder<T>: Iterator<Item = GroupResult<T>>,
 {
-    type Item = super::GroupResult<T>;
+    type Item = GroupResult<T>;
 
     fn next(&mut self) -> Option<Self::Item> {
         match self {
@@ -62,20 +62,17 @@ enum DataSource {
 }
 
 #[derive(Clone, Debug)]
-pub struct StateReader {
+pub struct Decoder {
     data_source: DataSource,
 }
 
-impl StateReader {
+impl Decoder {
     #[cfg(feature = "std")]
     pub fn json(
         path: impl AsRef<std::path::Path>,
         group_size: usize,
     ) -> anyhow::Result<Self> {
-        use anyhow::Context;
-        let path = path.as_ref();
-        let mut file = std::fs::File::open(path)
-            .with_context(|| format!("Cannot read state from {path:?}"))?;
+        let mut file = std::fs::File::open(path)?;
 
         let state = serde_json::from_reader(&mut file)?;
 
@@ -159,8 +156,8 @@ impl StateReader {
     ) -> anyhow::Result<IntoIter<T>> {
         match &self.data_source {
             DataSource::InMemory { state, group_size } => {
-                let data = extractor(state).clone();
-                Ok(Self::in_memory_iter(data, *group_size))
+                let groups = extractor(state).clone();
+                Ok(Self::in_memory_iter(groups, *group_size))
             }
             #[cfg(feature = "parquet")]
             DataSource::Parquet { files } => {
