@@ -92,6 +92,7 @@ async fn can_manually_produce_block(
                     block,
                     skipped_transactions: Default::default(),
                     tx_status: Default::default(),
+                    events: Default::default(),
                 },
                 StorageTransaction::new(EmptyStorage),
             ))

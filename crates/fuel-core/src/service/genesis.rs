@@ -98,7 +98,7 @@ pub fn execute_genesis_block(
     };
 
     let result = UncommittedImportResult::new(
-        ImportResult::new_from_local(block, vec![]),
+        ImportResult::new_from_local(block, vec![], vec![]),
         database_transaction,
     );
     Ok(result)
