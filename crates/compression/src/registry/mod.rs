@@ -4,7 +4,7 @@ use serde::{
 };
 
 pub(crate) mod block_section;
-pub(crate) mod db;
+pub mod db;
 pub(crate) mod in_memory;
 mod key;
 

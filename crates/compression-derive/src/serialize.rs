@@ -1,177 +1,242 @@
 use proc_macro2::TokenStream as TokenStream2;
-use quote::quote;
+use quote::{
+    format_ident,
+    quote,
+};
 
 use crate::attribute::{
-    should_skip_field_binding,
-    StructAttrs,
+    FieldAttrs,
+    StructureAttrs,
 };
+
+pub struct PerField {
+    defs: TokenStream2,
+    count: TokenStream2,
+}
+impl PerField {
+    fn form(fields: &syn::Fields) -> Self {
+        let mut defs = TokenStream2::new();
+        let mut count = TokenStream2::new();
+
+        for field in fields {
+            let attrs = FieldAttrs::parse(&field.attrs);
+            defs.extend(match &attrs {
+            FieldAttrs::Skip => quote! {},
+            FieldAttrs::Normal => {
+                let ty = &field.ty;
+                let cty = quote! {
+                    <#ty as ::fuel_core_compression::Compactable>::Compact
+                };
+                if let Some(fname) = field.ident.as_ref() {
+                    quote! { #fname: #cty, }
+                } else {
+                    quote! { #cty, }
+                }
+            }
+            FieldAttrs::Registry(registry) => {
+                let reg_ident = format_ident!("{}", registry);
+                let cty = quote! {
+                    ::fuel_core_compression::Key<::fuel_core_compression::tables::#reg_ident>
+                };
+                if let Some(fname) = field.ident.as_ref() {
+                    quote! { #fname: #cty, }
+                } else {
+                    quote! { #cty, }
+                }
+            }
+        });
+            count.extend(match &attrs {
+                FieldAttrs::Skip => quote! { CountPerTable::default() + },
+                FieldAttrs::Normal => {
+                    let ty = &field.ty;
+                    quote! {
+                        <#ty as ::fuel_core_compression::Compactable>::Compact::count() +
+                    }
+                }
+                FieldAttrs::Registry(registry) => {
+                    quote! {
+                        CountPerTable { #registry: 1, ..CountPerTable::default() } +
+                    }
+                }
+            });
+        }
+
+        let defs = match fields {
+            syn::Fields::Named(_) => quote! {{ #defs }},
+            syn::Fields::Unnamed(_) => quote! {(#defs)},
+            syn::Fields::Unit => quote! {},
+        };
+        count.extend(quote! { 0 });
+
+        Self { defs, count }
+    }
+}
 
 fn serialize_struct(s: &synstructure::Structure) -> TokenStream2 {
     assert_eq!(s.variants().len(), 1, "structs must have one variant");
     let variant: &synstructure::VariantInfo = &s.variants()[0];
 
-    let name = s.ast().ident;
+    let name = &s.ast().ident;
     let compact_name = format_ident!("Compact{}", name);
 
-    let compact_fields = variant.each(|binding| {
-        
-    });
+    let PerField {
+        defs,
+        count: count_per_field,
+    } = PerField::form(&variant.ast().fields);
 
-    s.gen_impl(quote! {
-        pub struct #compact_name {
-            #compact_fields
-        }
+    let g = s.ast().generics.clone();
+    let w = g.where_clause.clone();
+    let compact = quote! {
+        #[derive(Debug, Clone)]
+        #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+        pub struct #compact_name #g #w #defs ;
+    };
+
+    let impls = s.gen_impl(quote! {
+        use ::fuel_core_compression::{db, CountPerTable, CompactionContext};
 
         gen impl ::fuel_core_compression::Compactable for @Self {
-            type Compact = #compact_name;
+
+            type Compact = #compact_name #g;
 
             fn count(&self) -> CountPerTable {
-                #count_per_field;
+                // #count_per_field;
+                todo!()
             }
 
             fn compact<R>(&self, ctx: &mut CompactionContext<R>) -> Self::Compact
             where
                 R: db::RegistryRead + db::RegistryWrite + db::RegistryIndex {
-                #compact_per_field;
+                // #compact_per_field;
+                todo!()
             }
 
             fn decompact<R>(compact: Self::Compact, reg: &R) -> Self
             where
                 R: db::RegistryRead {
-                #decompact_per_field;
-            }
-        }
-    })
-}
-
-fn serialize_enum(s: &synstructure::Structure) -> TokenStream2 {
-    assert!(!s.variants().is_empty(), "got invalid empty enum");
-    let mut next_discriminant = quote! { { 0u64 } };
-    let encode_static = s.variants().iter().map(|v| {
-        let pat = v.pat();
-        let encode_static_iter = v.bindings().iter().map(|binding| {
-            if should_skip_field_binding(binding) {
-                quote! {}
-            } else {
-                quote! {
-                    ::fuel_types::canonical::Serialize::encode_static(#binding, buffer)?;
-                }
-            }
-        });
-
-        if v.ast().discriminant.is_some() {
-            let variant_ident = v.ast().ident;
-            next_discriminant = quote! { { Self::#variant_ident as u64 } };
-        }
-
-        let encode_discriminant = quote! {
-            <::core::primitive::u64 as ::fuel_types::canonical::Serialize>::encode(&#next_discriminant, buffer)?;
-        };
-        next_discriminant = quote! { ( (#next_discriminant) + 1u64 ) };
-
-        quote! {
-            #pat => {
-                #encode_discriminant
-                #(
-                    { #encode_static_iter }
-                )*
-            }
-        }
-    });
-    let encode_dynamic = s.variants().iter().map(|v| {
-        let encode_dynamic_iter = v.each(|binding| {
-            if should_skip_field_binding(binding) {
-                quote! {}
-            } else {
-                quote! {
-                    ::fuel_types::canonical::Serialize::encode_dynamic(#binding, buffer)?;
-                }
-            }
-        });
-        quote! {
-            #encode_dynamic_iter
-        }
-    });
-
-    let match_size_static: TokenStream2 = s
-        .variants()
-        .iter()
-        .map(|variant| {
-            variant.each(|binding| {
-                if should_skip_field_binding(binding) {
-                    quote! {}
-                } else {
-                    quote! {
-                        size = ::fuel_types::canonical::add_sizes(size, #binding.size_static());
-                    }
-                }
-            })
-        })
-        .collect();
-    let match_size_static = quote! {{
-        // `repr(128)` is unstable, so because of that we can use 8 bytes.
-        let mut size = 8;
-        match self { #match_size_static } size }
-    };
-
-    let match_size_dynamic: TokenStream2 = s
-        .variants()
-        .iter()
-        .map(|variant| {
-            variant.each(|binding| {
-                if should_skip_field_binding(binding) {
-                    quote! {}
-                } else {
-                    quote! {
-                        size = ::fuel_types::canonical::add_sizes(size, #binding.size_dynamic());
-                    }
-                }
-            })
-        })
-        .collect();
-    let match_size_dynamic =
-        quote! {{ let mut size = 0; match self { #match_size_dynamic } size }};
-
-    let impl_code = s.gen_impl(quote! {
-        gen impl ::fuel_types::canonical::Serialize for @Self {
-            #[inline(always)]
-            fn size_static(&self) -> usize {
-                #match_size_static
-            }
-
-            #[inline(always)]
-            fn size_dynamic(&self) -> usize {
-                #match_size_dynamic
-            }
-
-            #[inline(always)]
-            fn encode_static<O: ::fuel_types::canonical::Output + ?Sized>(&self, buffer: &mut O) -> ::core::result::Result<(), ::fuel_types::canonical::Error> {
-                match self {
-                    #(
-                        #encode_static
-                    )*,
-                    _ => return ::core::result::Result::Err(::fuel_types::canonical::Error::UnknownDiscriminant),
-                };
-
-                ::core::result::Result::Ok(())
-            }
-
-            fn encode_dynamic<O: ::fuel_types::canonical::Output + ?Sized>(&self, buffer: &mut O) -> ::core::result::Result<(), ::fuel_types::canonical::Error> {
-                match self {
-                    #(
-                        #encode_dynamic
-                    )*,
-                    _ => return ::core::result::Result::Err(::fuel_types::canonical::Error::UnknownDiscriminant),
-                };
-
-                ::core::result::Result::Ok(())
+                // #decompact_per_field;
+                todo!()
             }
         }
     });
 
     quote! {
-        #impl_code
+        #compact
+        #impls
     }
+}
+
+fn serialize_enum(s: &synstructure::Structure) -> TokenStream2 {
+    assert!(!s.variants().is_empty(), "got invalid empty enum");
+
+    let name = &s.ast().ident;
+    let compact_name = format_ident!("Compact{}", name);
+
+    let enumdef = quote! {
+        #[derive(Debug, Clone)]
+        #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+        pub enum #compact_name
+    };
+
+    let mut variantdefs = TokenStream2::new();
+    let mut counts = Vec::new();
+
+    for variant in s.variants() {
+        let vname = variant.ast().ident.clone();
+
+        let PerField { defs, count } = PerField::form(&variant.ast().fields);
+
+        variantdefs.extend(quote! {
+            #vname #defs,
+        });
+        counts.push(count);
+    }
+
+    let impls = s.gen_impl(quote! {
+        use ::fuel_core_compression::{db, CountPerTable, CompactionContext};
+
+        gen impl ::fuel_core_compression::Compactable for @Self {
+
+            type Compact = #compact_name;
+
+            fn count(&self) -> CountPerTable {
+                // #count_per_field;
+                todo!()
+            }
+
+            fn compact<R>(&self, ctx: &mut CompactionContext<R>) -> Self::Compact
+            where
+                R: db::RegistryRead + db::RegistryWrite + db::RegistryIndex {
+                // #compact_per_field;
+                todo!()
+            }
+
+            fn decompact<R>(compact: Self::Compact, reg: &R) -> Self
+            where
+                R: db::RegistryRead {
+                // #decompact_per_field;
+                todo!()
+            }
+        }
+    });
+    quote! {
+        #enumdef { #variantdefs }
+        #impls
+    }
+}
+
+fn serialize_transparent(s: synstructure::Structure) -> TokenStream2 {
+    assert_eq!(
+        s.variants().len(),
+        1,
+        "transparent structures must have one variant"
+    );
+    let variant: &synstructure::VariantInfo = &s.variants()[0];
+    assert_eq!(
+        variant.ast().fields.len(),
+        1,
+        "transparent structures must have exactly one field"
+    );
+    let field_t = variant.ast().fields.iter().next().unwrap().ty.clone();
+    let field_d =
+        quote! { <#field_t as Compactable>::decompact(c, reg) };
+    let field_name: TokenStream2 = match variant.ast().fields {
+        syn::Fields::Named(n) => {
+            let n = n.named[0].ident.clone().unwrap();
+            quote! { #n }
+        }
+        syn::Fields::Unnamed(_) => quote! { 0 },
+        syn::Fields::Unit => unreachable!(),
+    };
+    let field_c = match variant.ast().fields {
+        syn::Fields::Named(_) => quote! { Self {#field_name: #field_d} },
+        syn::Fields::Unnamed(_) => quote! { Self(#field_d) },
+        syn::Fields::Unit => unreachable!(),
+    };
+
+    s.gen_impl(quote! {
+        use ::fuel_core_compression::{db, Compactable, CountPerTable, CompactionContext};
+
+        gen impl Compactable for @Self {
+            type Compact = #field_t;
+
+            fn count(&self) -> CountPerTable {
+                self.#field_name.count()
+            }
+
+            fn compact<R>(&self, ctx: &mut CompactionContext<R>) -> Self::Compact
+            where
+                R: db::RegistryRead + db::RegistryWrite + db::RegistryIndex {
+                self.#field_name.compact(ctx)
+            }
+
+            fn decompact<R>(c: Self::Compact, reg: &R) -> Self
+            where
+                R: db::RegistryRead {
+                #field_c
+            }
+        }
+    })
 }
 
 /// Derives `Serialize` trait for the given `struct` or `enum`.
@@ -179,9 +244,14 @@ pub fn serialize_derive(mut s: synstructure::Structure) -> TokenStream2 {
     s.add_bounds(synstructure::AddBounds::Fields)
         .underscore_const(true);
 
-    match s.ast().data {
-        syn::Data::Struct(_) => serialize_struct(&s),
-        syn::Data::Enum(_) => serialize_enum(&s),
-        _ => panic!("Can't derive `Serialize` for `union`s"),
-    }
+    let ts = match StructureAttrs::parse(&s.ast().attrs) {
+        StructureAttrs::Normal => match s.ast().data {
+            syn::Data::Struct(_) => serialize_struct(&s),
+            syn::Data::Enum(_) => serialize_enum(&s),
+            _ => panic!("Can't derive `Serialize` for `union`s"),
+        },
+        StructureAttrs::Transparent => serialize_transparent(s),
+    };
+    println!("{}", ts);
+    ts
 }

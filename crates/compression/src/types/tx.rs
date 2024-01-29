@@ -155,11 +155,14 @@ pub struct OutputContract {
     input_index: u8,
 }
 
+#[cfg(feature = "manual")]
 mod compaction {
     // This could be done using a derive macro as well. Not sure if that's worth it.
 
     use fuel_core_types::fuel_tx::field::{
         Inputs,
+        Outputs,
+        Witnesses,
         *,
     };
 
@@ -241,14 +244,14 @@ mod compaction {
             R: db::RegistryRead + db::RegistryWrite + db::RegistryIndex,
         {
             Self::Compact {
-                script_gas_limit: self.script_gas_limit,
+                script_gas_limit: *self.script_gas_limit(),
                 script: ctx.to_key::<tables::ScriptCode>(self.script().clone()),
                 script_data: self.script_data().clone(),
                 policies: self.policies().clone(),
-                inputs: self.inputs().map(|i| i.compact(ctx)).collect(),
-                outputs: self.outputs().map(|o| o.compact(ctx)).collect(),
-                witnesses: self.witnesses().map(|w| w.compact(ctx)).collect(),
-                receipts_root: self.receipts_root,
+                inputs: self.inputs().iter().map(|i| i.compact(ctx)).collect(),
+                outputs: self.outputs().iter().map(|o| o.compact(ctx)).collect(),
+                witnesses: self.witnesses().iter().map(|w| ctx.to_key(*w)).collect(),
+                receipts_root: *self.receipts_root(),
             }
         }
 
@@ -345,7 +348,7 @@ mod compaction {
             R: db::RegistryRead + db::RegistryWrite + db::RegistryIndex,
         {
             Self::Compact {
-                tx_pointer: self.tx_pointer,
+                tx_pointer: self.tx_pointer(),
                 input_contract: self.input_contract.compact(ctx),
                 output_contract: self.output_contract.compact(ctx),
                 mint_amount: self.mint_amount,
@@ -452,7 +455,7 @@ mod compaction {
         }
     }
 
-    impl Compactable for fuel_tx::input::Output {
+    impl Compactable for fuel_tx::output::Output {
         type Compact = super::Output;
 
         fn count(&self) -> CountPerTable {

@@ -1,3 +1,5 @@
+use std::marker::PhantomData;
+
 use crate::{
     registry::{
         access::{
@@ -102,6 +104,112 @@ pub trait Compactable {
     fn decompact<R>(compact: Self::Compact, reg: &R) -> Self
     where
         R: db::RegistryRead;
+}
+
+macro_rules! identity_compaction {
+    ($t:ty) => {
+        impl Compactable for $t {
+            type Compact = Self;
+
+            fn count(&self) -> CountPerTable {
+                CountPerTable::default()
+            }
+
+            fn compact<R>(&self, _ctx: &mut CompactionContext<R>) -> Self::Compact
+            where
+                R: db::RegistryRead + db::RegistryWrite + db::RegistryIndex,
+            {
+                *self
+            }
+
+            fn decompact<R>(compact: Self::Compact, _reg: &R) -> Self
+            where
+                R: db::RegistryRead,
+            {
+                compact
+            }
+        }
+    };
+}
+
+identity_compaction!(u8);
+identity_compaction!(u16);
+identity_compaction!(u32);
+identity_compaction!(u64);
+identity_compaction!(u128);
+
+impl<const S: usize, T: Compactable + Clone> Compactable for [T; S] {
+    type Compact = Self;
+
+    fn count(&self) -> CountPerTable {
+        let mut count = CountPerTable::default();
+        for item in self.iter() {
+            count += item.count();
+        }
+        count
+    }
+
+    fn compact<R>(&self, _ctx: &mut CompactionContext<R>) -> Self::Compact
+    where
+        R: db::RegistryRead + db::RegistryWrite + db::RegistryIndex,
+    {
+        self.clone()
+    }
+
+    fn decompact<R>(compact: Self::Compact, _reg: &R) -> Self
+    where
+        R: db::RegistryRead,
+    {
+        compact
+    }
+}
+
+impl<T: Compactable + Clone> Compactable for Vec<T> {
+    type Compact = Self;
+
+    fn count(&self) -> CountPerTable {
+        let mut count = CountPerTable::default();
+        for item in self.iter() {
+            count += item.count();
+        }
+        count
+    }
+
+    fn compact<R>(&self, _ctx: &mut CompactionContext<R>) -> Self::Compact
+    where
+        R: db::RegistryRead + db::RegistryWrite + db::RegistryIndex,
+    {
+        self.clone()
+    }
+
+    fn decompact<R>(compact: Self::Compact, _reg: &R) -> Self
+    where
+        R: db::RegistryRead,
+    {
+        compact
+    }
+}
+
+impl<T> Compactable for PhantomData<T> {
+    type Compact = ();
+
+    fn count(&self) -> CountPerTable {
+        CountPerTable::default()
+    }
+
+    fn compact<R>(&self, _ctx: &mut CompactionContext<R>) -> Self::Compact
+    where
+        R: db::RegistryRead + db::RegistryWrite + db::RegistryIndex,
+    {
+        ()
+    }
+
+    fn decompact<R>(_compact: Self::Compact, _reg: &R) -> Self
+    where
+        R: db::RegistryRead,
+    {
+        Self
+    }
 }
 
 #[cfg(test)]
