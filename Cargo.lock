@@ -2781,9 +2781,22 @@ name = "fuel-core-compression"
 version = "0.22.0"
 dependencies = [
  "bincode",
+ "fuel-core-compression-derive",
  "fuel-core-types",
+ "paste",
  "postcard",
  "serde",
+]
+
+[[package]]
+name = "fuel-core-compression-derive"
+version = "0.22.0"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "regex",
+ "syn 2.0.48",
+ "synstructure 0.13.0",
 ]
 
 [[package]]

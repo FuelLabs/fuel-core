@@ -9,6 +9,7 @@ members = [
   "crates/chain-config",
   "crates/client",
   "crates/compression",
+  "crates/compression-derive",
   "crates/database",
   "crates/fuel-core",
   "crates/keygen",
