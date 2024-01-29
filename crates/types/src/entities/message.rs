@@ -24,7 +24,7 @@ use crate::{
     },
 };
 
-/// Versioned Message
+/// Message sent from DA layer to fuel by relayer bridge.
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[non_exhaustive]
@@ -40,7 +40,7 @@ impl Default for Message {
     }
 }
 
-/// Message send from Da layer to fuel by bridge
+/// The V1 version of the message from the DA layer.
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
 pub struct MessageV1 {
