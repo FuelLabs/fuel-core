@@ -38,4 +38,5 @@ jobs:
 
       - name: Scan Container Image
         uses: crazy-max/ghaction-container-scan@v3
-        image: ghcr.io/fuellabs/fuel-core-build-cache:latest
+        with:
+          image: ${{ fromJSON(steps.meta.outputs.json).tags[0] }}
