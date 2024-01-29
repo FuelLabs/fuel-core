@@ -1,6 +1,9 @@
 use crate::{
     codecs::postcard::PostcardCodec,
-    config::Config,
+    config::{
+        Config,
+        NotInitialized,
+    },
     gossipsub::messages::{
         GossipsubBroadcastRequest,
         GossipsubMessage,
@@ -80,7 +83,7 @@ use tokio::{
 };
 use tracing::warn;
 
-pub type Service<V> = ServiceRunner<Task<FuelP2PService, V, SharedState>>;
+pub type Service<V> = ServiceRunner<UninitializedTask<V, SharedState>>;
 
 enum TaskRequest {
     // Broadcast requests to p2p network
@@ -293,6 +296,17 @@ impl Broadcast for SharedState {
     }
 }
 
+/// Uninitialized task for the p2p that can be upgraded later into [`Task`].
+pub struct UninitializedTask<V, B> {
+    chain_id: ChainId,
+    view_provider: V,
+    next_block_height: BoxStream<BlockHeight>,
+    /// Receive internal Task Requests
+    request_receiver: mpsc::Receiver<TaskRequest>,
+    broadcast: B,
+    config: Config<NotInitialized>,
+}
+
 /// Orchestrates various p2p-related events between the inner `P2pService`
 /// and the top level `NetworkService`.
 pub struct Task<P, V, B> {
@@ -318,64 +332,42 @@ pub struct HeartbeatPeerReputationConfig {
     low_heartbeat_frequency_penalty: AppScore,
 }
 
-impl<V> Task<FuelP2PService, V, SharedState> {
+impl<V> UninitializedTask<V, SharedState> {
     pub fn new<B: BlockHeightImporter>(
         chain_id: ChainId,
-        config: Config,
+        config: Config<NotInitialized>,
         view_provider: V,
-        block_importer: Arc<B>,
+        block_importer: B,
     ) -> Self {
-        let Config {
-            max_block_size,
-            max_headers_per_request,
-            heartbeat_check_interval,
-            heartbeat_max_avg_interval,
-            heartbeat_max_time_since_last,
-            ..
-        } = config;
         let (request_sender, request_receiver) = mpsc::channel(1024 * 10);
         let (tx_broadcast, _) = broadcast::channel(1024 * 10);
         let (block_height_broadcast, _) = broadcast::channel(1024 * 10);
 
-        // Hardcoded for now, but left here to be configurable in the future.
-        // TODO: https://github.com/FuelLabs/fuel-core/issues/1340
-        let heartbeat_peer_reputation_config = HeartbeatPeerReputationConfig {
-            old_heartbeat_penalty: -5.,
-            low_heartbeat_frequency_penalty: -5.,
-        };
-
+        let (reserved_peers_broadcast, _) = broadcast::channel::<usize>(
+            config
+                .reserved_nodes
+                .len()
+                .saturating_mul(2)
+                .saturating_add(1),
+        );
         let next_block_height = block_importer.next_block_height();
-        let p2p_service = FuelP2PService::new(config, PostcardCodec::new(max_block_size));
-
-        let reserved_peers_broadcast =
-            p2p_service.peer_manager().reserved_peers_updates();
-
-        let next_check_time =
-            Instant::now().checked_add(heartbeat_check_interval).expect(
-                "The heartbeat check interval should be small enough to do frequently",
-            );
 
         Self {
             chain_id,
-            p2p_service,
             view_provider,
-            request_receiver,
             next_block_height,
+            request_receiver,
             broadcast: SharedState {
                 request_sender,
                 tx_broadcast,
                 reserved_peers_broadcast,
                 block_height_broadcast,
             },
-            max_headers_per_request,
-            heartbeat_check_interval,
-            heartbeat_max_avg_interval,
-            heartbeat_max_time_since_last,
-            next_check_time,
-            heartbeat_peer_reputation_config,
+            config,
         }
     }
 }
+
 impl<P: TaskP2PService, V, B: Broadcast> Task<P, V, B> {
     fn peer_heartbeat_reputation_checks(&self) -> anyhow::Result<()> {
         for (peer_id, peer_info) in self.p2p_service.get_all_peer_info() {
@@ -425,9 +417,10 @@ fn convert_peer_id(peer_id: &PeerId) -> anyhow::Result<FuelPeerId> {
 }
 
 #[async_trait::async_trait]
-impl<V> RunnableService for Task<FuelP2PService, V, SharedState>
+impl<V> RunnableService for UninitializedTask<V, SharedState>
 where
-    Self: RunnableTask,
+    V: AtomicView + 'static,
+    V::View: P2pDb,
 {
     const NAME: &'static str = "P2P";
 
@@ -444,8 +437,61 @@ where
         _: &StateWatcher,
         _: Self::TaskParams,
     ) -> anyhow::Result<Self::Task> {
-        self.p2p_service.start().await?;
-        Ok(self)
+        let Self {
+            chain_id,
+            view_provider,
+            next_block_height,
+            request_receiver,
+            broadcast,
+            config,
+        } = self;
+
+        let view = view_provider.latest_view();
+        let genesis = view.get_genesis()?;
+        let config = config.init(genesis)?;
+        let Config {
+            max_block_size,
+            max_headers_per_request,
+            heartbeat_check_interval,
+            heartbeat_max_avg_interval,
+            heartbeat_max_time_since_last,
+            ..
+        } = config;
+
+        // Hardcoded for now, but left here to be configurable in the future.
+        // TODO: https://github.com/FuelLabs/fuel-core/issues/1340
+        let heartbeat_peer_reputation_config = HeartbeatPeerReputationConfig {
+            old_heartbeat_penalty: -5.,
+            low_heartbeat_frequency_penalty: -5.,
+        };
+
+        let mut p2p_service = FuelP2PService::new(
+            broadcast.reserved_peers_broadcast.clone(),
+            config,
+            PostcardCodec::new(max_block_size),
+        );
+        p2p_service.start().await?;
+
+        let next_check_time =
+            Instant::now().checked_add(heartbeat_check_interval).expect(
+                "The heartbeat check interval should be small enough to do frequently",
+            );
+
+        let task = Task {
+            chain_id,
+            p2p_service,
+            view_provider,
+            request_receiver,
+            next_block_height,
+            broadcast,
+            max_headers_per_request,
+            heartbeat_check_interval,
+            heartbeat_max_avg_interval,
+            heartbeat_max_time_since_last,
+            next_check_time,
+            heartbeat_peer_reputation_config,
+        };
+        Ok(task)
     }
 }
 
@@ -767,7 +813,7 @@ impl SharedState {
 
 pub fn new_service<V, B>(
     chain_id: ChainId,
-    p2p_config: Config,
+    p2p_config: Config<NotInitialized>,
     view_provider: V,
     block_importer: B,
 ) -> Service<V>
@@ -776,12 +822,8 @@ where
     V::View: P2pDb,
     B: BlockHeightImporter,
 {
-    let task = Task::new(
-        chain_id,
-        p2p_config,
-        view_provider,
-        Arc::new(block_importer),
-    );
+    let task =
+        UninitializedTask::new(chain_id, p2p_config, view_provider, block_importer);
     Service::new(task)
 }
 
@@ -829,7 +871,10 @@ pub mod tests {
         State,
     };
     use fuel_core_storage::Result as StorageResult;
-    use fuel_core_types::fuel_types::BlockHeight;
+    use fuel_core_types::{
+        blockchain::consensus::Genesis,
+        fuel_types::BlockHeight,
+    };
     use futures::FutureExt;
     use std::{
         collections::VecDeque,
@@ -871,6 +916,10 @@ pub mod tests {
         ) -> StorageResult<Option<Vec<Transactions>>> {
             unimplemented!()
         }
+
+        fn get_genesis(&self) -> StorageResult<Genesis> {
+            Ok(Default::default())
+        }
     }
 
     #[derive(Clone, Debug)]
@@ -884,7 +933,7 @@ pub mod tests {
 
     #[tokio::test]
     async fn start_and_stop_awaits_works() {
-        let p2p_config = Config::default_initialized("start_stop_works");
+        let p2p_config = Config::<NotInitialized>::default("start_stop_works");
         let service =
             new_service(ChainId::default(), p2p_config, FakeDb, FakeBlockImporter);
 
@@ -994,6 +1043,10 @@ pub mod tests {
             &self,
             _block_height_range: Range<u32>,
         ) -> StorageResult<Option<Vec<Transactions>>> {
+            todo!()
+        }
+
+        fn get_genesis(&self) -> StorageResult<Genesis> {
             todo!()
         }
     }
