@@ -1,5 +1,6 @@
 //! Higher level domain types
 
+use crate::entities::message::MessageV1;
 use coins::message_coin::MessageCoin;
 use message::Message;
 
@@ -11,14 +12,12 @@ impl TryFrom<Message> for MessageCoin {
     type Error = anyhow::Error;
 
     fn try_from(message: Message) -> Result<Self, Self::Error> {
-        let Message {
-            sender,
-            recipient,
-            nonce,
-            amount,
-            data,
-            da_height,
-        } = message;
+        let sender = *message.sender();
+        let recipient = *message.recipient();
+        let nonce = *message.nonce();
+        let amount = message.amount();
+        let data = message.data();
+        let da_height = message.da_height();
 
         if !data.is_empty() {
             return Err(anyhow::anyhow!(
@@ -48,7 +47,7 @@ impl From<MessageCoin> for Message {
             da_height,
         } = coin;
 
-        Message {
+        MessageV1 {
             sender,
             recipient,
             nonce,
@@ -56,5 +55,6 @@ impl From<MessageCoin> for Message {
             data: vec![],
             da_height,
         }
+        .into()
     }
 }

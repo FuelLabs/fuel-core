@@ -1125,7 +1125,7 @@ where
                         .get_message(nonce, &block_da_height)
                         .map_err(|e| ExecutorError::RelayerError(e.into()))?
                     {
-                        if message.da_height > block_da_height {
+                        if message.da_height() > block_da_height {
                             return Err(TransactionValidityError::MessageSpendTooEarly(
                                 *nonce,
                             )
