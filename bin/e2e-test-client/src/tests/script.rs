@@ -67,7 +67,23 @@ pub async fn dry_run(ctx: &TestContext) -> Result<(), Failed> {
     )
     .await??;
 
-    _dry_runs(ctx, &transaction, 1000, DryRunResult::Successful).await
+    _dry_runs(ctx, &vec![transaction], 1000, DryRunResult::Successful).await
+}
+
+// Dry run multiple transactions
+pub async fn dry_run_multiple_txs(ctx: &TestContext) -> Result<(), Failed> {
+    let transaction1 = tokio::time::timeout(
+        ctx.config.sync_timeout(),
+        ctx.alice.transfer_tx(ctx.bob.address, 0, None),
+    )
+    .await??;
+    let transaction2 = tokio::time::timeout(
+        ctx.config.sync_timeout(),
+        ctx.alice.transfer_tx(ctx.bob.address, 0, None),
+    )
+    .await??;
+
+    _dry_runs(ctx, &vec![transaction1, transaction2], 1000, DryRunResult::Successful).await
 }
 
 // Maybe deploy a contract with large state and execute the script
@@ -98,7 +114,7 @@ pub async fn run_contract_large_state(ctx: &TestContext) -> Result<(), Failed> {
         timeout(Duration::from_secs(300), deployment_request).await??;
     }
 
-    _dry_runs(ctx, &dry_run, 1000, DryRunResult::MayFail).await
+    _dry_runs(ctx, &vec![dry_run], 1000, DryRunResult::MayFail).await
 }
 
 // Send non specific transaction from `non_specific_tx.raw` file
@@ -114,12 +130,12 @@ pub async fn non_specific_transaction(ctx: &TestContext) -> Result<(), Failed> {
         script.set_gas_price(0);
     }
 
-    _dry_runs(ctx, &dry_run, 1000, DryRunResult::MayFail).await
+    _dry_runs(ctx, &vec![dry_run], 1000, DryRunResult::MayFail).await
 }
 
 async fn _dry_runs(
     ctx: &TestContext,
-    transaction: &Transaction,
+    transactions: &Vec<Transaction>,
     count: usize,
     expect: DryRunResult,
 ) -> Result<(), Failed> {
@@ -128,7 +144,7 @@ async fn _dry_runs(
     for i in 0..count {
         queries.push(async move {
             let before = tokio::time::Instant::now();
-            let query = ctx.alice.client.dry_run_opt(&vec![transaction.to_owned()], Some(false)).await;
+            let query = ctx.alice.client.dry_run_opt(transactions, Some(false)).await;
             println!(
                 "Received the response for the query number {i} for {}ms",
                 before.elapsed().as_millis()
@@ -155,13 +171,15 @@ async fn _dry_runs(
         }
 
         if expect == DryRunResult::Successful {
-            assert!(matches!(
-                receipts.last().expect("Nonempty response").last(),
-                Some(Receipt::ScriptResult {
-                    result: ScriptExecutionResult::Success,
-                    ..
-                })
-            ));
+            for transaction_receipts in receipts {
+                assert!(matches!(
+                    transaction_receipts.last(),
+                    Some(Receipt::ScriptResult {
+                        result: ScriptExecutionResult::Success,
+                        ..
+                    })
+                ));
+            }
         }
     }
     Ok(())
