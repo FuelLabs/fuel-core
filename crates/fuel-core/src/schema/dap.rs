@@ -217,6 +217,7 @@ fn require_debug(ctx: &Context<'_>) -> async_graphql::Result<()> {
 
 #[Object]
 impl DapQuery {
+    /// Read register value by index.
     async fn register(
         &self,
         ctx: &Context<'_>,
@@ -232,6 +233,7 @@ impl DapQuery {
             .map(|val| val.into())
     }
 
+    /// Read read a range of memory bytes.
     async fn memory(
         &self,
         ctx: &Context<'_>,
@@ -251,6 +253,10 @@ impl DapQuery {
 
 #[Object]
 impl DapMutation {
+    /// Initialize a new debugger session, returning its ID.
+    /// A new VM instance is spawned for each session.
+    /// The session is run in a separate database transaction,
+    /// on top of the most recent node state.
     async fn start_session(&self, ctx: &Context<'_>) -> async_graphql::Result<ID> {
         require_debug(ctx)?;
         trace!("Initializing new interpreter");
@@ -268,6 +274,7 @@ impl DapMutation {
         Ok(id)
     }
 
+    /// End debugger session.
     async fn end_session(
         &self,
         ctx: &Context<'_>,
@@ -281,6 +288,7 @@ impl DapMutation {
         Ok(existed)
     }
 
+    /// Reset the VM instance to the initial state.
     async fn reset(&self, ctx: &Context<'_>, id: ID) -> async_graphql::Result<bool> {
         require_debug(ctx)?;
         let db = ctx.data_unchecked::<Database>();
@@ -295,6 +303,7 @@ impl DapMutation {
         Ok(true)
     }
 
+    /// Execute a single fuel-asm instruction.
     async fn execute(
         &self,
         ctx: &Context<'_>,
@@ -316,6 +325,7 @@ impl DapMutation {
         Ok(result)
     }
 
+    /// Set single-stepping mode for the VM instance.
     async fn set_single_stepping(
         &self,
         ctx: &Context<'_>,
@@ -335,6 +345,7 @@ impl DapMutation {
         Ok(enable)
     }
 
+    /// Set a breakpoint for a VM instance.
     async fn set_breakpoint(
         &self,
         ctx: &Context<'_>,
@@ -342,7 +353,7 @@ impl DapMutation {
         breakpoint: gql_types::Breakpoint,
     ) -> async_graphql::Result<bool> {
         require_debug(ctx)?;
-        trace!("Continue execution of VM {:?}", id);
+        trace!("Set breakpoint for VM {:?}", id);
 
         let mut locked = ctx.data_unchecked::<GraphStorage>().lock().await;
         let vm = locked
@@ -354,6 +365,8 @@ impl DapMutation {
         Ok(true)
     }
 
+    /// Run a single transaction in given session until it
+    /// hits a breakpoint or completes.
     async fn start_tx(
         &self,
         ctx: &Context<'_>,
@@ -426,6 +439,8 @@ impl DapMutation {
         }
     }
 
+    /// Resume execution of the VM instance after a breakpoint.
+    /// Runs until the next breakpoint or until the transaction completes.
     async fn continue_tx(
         &self,
         ctx: &Context<'_>,
@@ -492,6 +507,7 @@ mod gql_types {
 
     use fuel_core_types::fuel_vm::Breakpoint as FuelBreakpoint;
 
+    /// Breakpoint, defined as a tuple of contract ID and relative PC offset inside it
     #[derive(Debug, Clone, Copy, InputObject)]
     pub struct Breakpoint {
         contract: ContractId,
