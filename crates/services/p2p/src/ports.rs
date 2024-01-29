@@ -1,7 +1,10 @@
 use fuel_core_services::stream::BoxStream;
 use fuel_core_storage::Result as StorageResult;
 use fuel_core_types::{
-    blockchain::SealedBlockHeader,
+    blockchain::{
+        consensus::Genesis,
+        SealedBlockHeader,
+    },
     fuel_types::BlockHeight,
     services::p2p::Transactions,
 };
@@ -17,6 +20,8 @@ pub trait P2pDb: Send + Sync {
         &self,
         block_height_range: Range<u32>,
     ) -> StorageResult<Option<Vec<Transactions>>>;
+
+    fn get_genesis(&self) -> StorageResult<Genesis>;
 }
 
 pub trait BlockHeightImporter: Send + Sync {
