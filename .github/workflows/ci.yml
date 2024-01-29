@@ -304,6 +304,11 @@ jobs:
           cache-from: type=registry,ref=ghcr.io/fuellabs/fuel-core-build-cache:latest
           cache-to: type=registry,ref=ghcr.io/fuellabs/fuel-core-build-cache:latest,mode=max
 
+      - name: Scan container image
+        uses: crazy-max/ghaction-container-scan@v3
+        with:
+          image: ${{ fromJSON(steps.meta.outputs.json).tags[0] }}
+
   # duplicate of publish-docker-image, but with profiling features enabled
   # this is split into a separate action since it takes longer to build
   publish-docker-image-profiling:
@@ -353,6 +358,11 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=registry,ref=ghcr.io/fuellabs/fuel-core-debug-build-cache:latest
           cache-to: type=registry,ref=ghcr.io/fuellabs/fuel-core-debug-build-cache:latest,mode=max
+
+      - name: Scan container image
+        uses: crazy-max/ghaction-container-scan@v3
+        with:
+          image: ${{ fromJSON(steps.meta.outputs.json).tags[0] }}
 
       - uses: FuelLabs/.github/.github/actions/slack-notify-template@master
         if: always() && (github.ref == 'refs/heads/master' || github.ref_type == 'tag')
@@ -412,6 +422,11 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=registry,ref=ghcr.io/fuellabs/fuel-core-e2e-build-cache:latest
           cache-to: type=registry,ref=ghcr.io/fuellabs/fuel-core-e2e-build-cache:latest,mode=max
+
+      - name: Scan container image
+        uses: crazy-max/ghaction-container-scan@v3
+        with:
+          image: ${{ fromJSON(steps.meta.outputs.json).tags[0] }}
 
       - uses: FuelLabs/.github/.github/actions/slack-notify-template@master
         if: always() && (github.ref == 'refs/heads/master' || github.ref_type == 'tag')
