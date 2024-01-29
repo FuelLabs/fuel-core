@@ -196,20 +196,6 @@ where
         self._commit_result(result)
     }
 
-    /// The method works in the same way as [`Importer::commit_result`], but it doesn't
-    /// wait for listeners to process the result.
-    pub fn commit_result_without_awaiting_listeners<ExecutorDatabase>(
-        &self,
-        result: UncommittedResult<StorageTransaction<ExecutorDatabase>>,
-    ) -> Result<(), Error>
-    where
-        ExecutorDatabase: ports::ExecutorDatabase,
-    {
-        let _guard = self.lock()?;
-        self._commit_result(result)?;
-        Ok(())
-    }
-
     /// The method commits the result of the block execution and notifies about a new imported block.
     #[tracing::instrument(
         skip_all,
