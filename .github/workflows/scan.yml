@@ -21,6 +21,24 @@ jobs:
       contents: read
       packages: write
     steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Docker meta
+        id: meta
+        uses: docker/metadata-action@v3
+        with:
+          images: |
+            ghcr.io/fuellabs/fuel-core
+          tags: |
+            type=sha
+            type=ref,event=branch
+            type=ref,event=tag
+            type=semver,pattern={{raw}}
+            type=raw,value=sha-{{sha}}-{{date 'YYYYMMDDhhmmss'}}
+          flavor: |
+            latest=${{ github.ref == 'refs/heads/master' }}
+      
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v1
 
