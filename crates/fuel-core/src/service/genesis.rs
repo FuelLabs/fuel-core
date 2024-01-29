@@ -371,10 +371,13 @@ fn init_contract_balance(
 mod tests {
     use super::*;
 
-    use crate::service::{
-        config::Config,
-        FuelService,
-        Task,
+    use crate::{
+        combined_database::CombinedDatabase,
+        service::{
+            config::Config,
+            FuelService,
+            Task,
+        },
     };
     use fuel_core_chain_config::{
         ChainConfig,
@@ -689,8 +692,8 @@ mod tests {
             ..Config::local_node()
         };
 
-        let db = Database::default();
-        let task = Task::new(db.clone(), service_config).unwrap();
+        let db = CombinedDatabase::default();
+        let task = Task::new(db, service_config).unwrap();
         let init_result = task.into_task(&Default::default(), ()).await;
 
         assert!(init_result.is_err())
@@ -729,8 +732,8 @@ mod tests {
             ..Config::local_node()
         };
 
-        let db = Database::default();
-        let task = Task::new(db.clone(), service_config).unwrap();
+        let db = CombinedDatabase::default();
+        let task = Task::new(db, service_config).unwrap();
         let init_result = task.into_task(&Default::default(), ()).await;
 
         assert!(init_result.is_err())

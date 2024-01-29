@@ -253,7 +253,7 @@ impl RunnableService for Task {
         _: &StateWatcher,
         _: Self::TaskParams,
     ) -> anyhow::Result<Self::Task> {
-        let view = self.shared.database.latest_view();
+        let view = self.shared.database.on_chain().latest_view();
         // check if chain is initialized
         if let Err(err) = view.get_genesis() {
             if err.is_not_found() {

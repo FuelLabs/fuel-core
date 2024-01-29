@@ -48,6 +48,7 @@ pub fn init_sub_services(
     database: CombinedDatabase,
 ) -> anyhow::Result<(SubServices, SharedState)> {
     let last_block_header = database
+        .on_chain()
         .get_current_block()?
         .map(|block| block.header().clone())
         .unwrap_or({
