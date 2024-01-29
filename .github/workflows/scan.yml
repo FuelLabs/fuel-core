@@ -1,0 +1,41 @@
+name: Container Scan Test
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - feature/ci-container-image-audit
+  pull_request:
+    types: [opened, synchronize, reopened, labeled, unlabeled]
+  release:
+    types: [published]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-scan-docker-image:
+    runs-on: buildjet-4vcpu-ubuntu-2204
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v1
+
+      - name: Build and push the image to ghcr.io
+        uses: docker/build-push-action@v4
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          file: deployment/Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=registry,ref=ghcr.io/fuellabs/fuel-core-build-cache:latest
+          cache-to: type=registry,ref=ghcr.io/fuellabs/fuel-core-build-cache:latest,mode=max
+
+      - name: Scan Container Image
+        uses: crazy-max/ghaction-container-scan@v3
+        image: ${{ fromJSON(steps.meta.outputs.json).tags[0] }}
