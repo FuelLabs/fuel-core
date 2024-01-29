@@ -245,7 +245,7 @@ mod tests {
         where
             R: db::RegistryRead + db::RegistryWrite + db::RegistryIndex,
         {
-            ctx.to_key::<tables::Address>(**self)
+            ctx.to_key::<tables::Address>(*self)
         }
 
         fn decompact<R>(compact: Self::Compact, reg: &R) -> Self
@@ -284,8 +284,8 @@ mod tests {
         where
             R: db::RegistryRead + db::RegistryWrite + db::RegistryIndex,
         {
-            let a = ctx.to_key::<tables::Address>(*self.a);
-            let b = ctx.to_key::<tables::Address>(*self.b);
+            let a = ctx.to_key::<tables::Address>(self.a);
+            let b = ctx.to_key::<tables::Address>(self.b);
             ManualExampleCompact { a, b, c: self.c }
         }
 

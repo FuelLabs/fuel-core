@@ -163,8 +163,8 @@ macro_rules! tables {
 }
 
 tables!(
-    AssetId: [u8; 32],
-    Address: [u8; 32],
+    AssetId: fuel_core_types::fuel_tx::AssetId,
+    Address: fuel_core_types::fuel_tx::Address,
     ScriptCode: Vec<u8>,
     Witness: Vec<u8>,
 );
@@ -189,68 +189,68 @@ mod tests {
         // Empty
         assert_eq!(
             reg.read(Key::<tables::AssetId>::try_from(100).unwrap()),
-            *AssetId::default()
+            AssetId::default()
         );
         assert_eq!(
-            reg.index_lookup(&*AssetId::from([1; 32])),
+            reg.index_lookup(&AssetId::from([1; 32])),
             None::<Key<tables::AssetId>>
         );
 
         // Write
         reg.batch_write(
             Key::<tables::AssetId>::from_raw(RawKey::try_from(100u32).unwrap()),
-            vec![*AssetId::from([1; 32]), *AssetId::from([2; 32])],
+            vec![AssetId::from([1; 32]), AssetId::from([2; 32])],
         );
         assert_eq!(
             reg.read(Key::<tables::AssetId>::try_from(100).unwrap()),
-            *AssetId::from([1; 32])
+            AssetId::from([1; 32])
         );
         assert_eq!(
             reg.read(Key::<tables::AssetId>::try_from(101).unwrap()),
-            *AssetId::from([2; 32])
+            AssetId::from([2; 32])
         );
         assert_eq!(
             reg.read(Key::<tables::AssetId>::try_from(102).unwrap()),
-            *AssetId::default()
+            AssetId::default()
         );
 
         // Overwrite
         reg.batch_write(
             Key::<tables::AssetId>::from_raw(RawKey::try_from(99u32).unwrap()),
-            vec![*AssetId::from([10; 32]), *AssetId::from([11; 32])],
+            vec![AssetId::from([10; 32]), AssetId::from([11; 32])],
         );
         assert_eq!(
             reg.read(Key::<tables::AssetId>::try_from(99).unwrap()),
-            *AssetId::from([10; 32])
+            AssetId::from([10; 32])
         );
         assert_eq!(
             reg.read(Key::<tables::AssetId>::try_from(100).unwrap()),
-            *AssetId::from([11; 32])
+            AssetId::from([11; 32])
         );
 
         // Wrapping
         reg.batch_write(
             Key::<tables::AssetId>::from_raw(RawKey::MAX),
-            vec![*AssetId::from([3; 32]), *AssetId::from([4; 32])],
+            vec![AssetId::from([3; 32]), AssetId::from([4; 32])],
         );
 
         assert_eq!(
             reg.read(Key::<tables::AssetId>::from_raw(RawKey::MAX)),
-            *AssetId::from([3; 32])
+            AssetId::from([3; 32])
         );
 
         assert_eq!(
             reg.read(Key::<tables::AssetId>::from_raw(RawKey::MIN)),
-            *AssetId::from([4; 32])
+            AssetId::from([4; 32])
         );
 
         assert_eq!(
-            reg.index_lookup(&*AssetId::from([3; 32])),
+            reg.index_lookup(&AssetId::from([3; 32])),
             Some(Key::<tables::AssetId>::from_raw(RawKey::MAX))
         );
 
         assert_eq!(
-            reg.index_lookup(&*AssetId::from([4; 32])),
+            reg.index_lookup(&AssetId::from([4; 32])),
             Some(Key::<tables::AssetId>::from_raw(RawKey::MIN))
         );
     }

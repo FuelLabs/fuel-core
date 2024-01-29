@@ -120,11 +120,11 @@ mod tests {
             changes: ChangesPerTable {
                 AssetId: WriteTo {
                     start_key: Key::try_from(100).unwrap(),
-                    values: vec![*AssetId::from([0xa0; 32]), *AssetId::from([0xa1; 32])],
+                    values: vec![AssetId::from([0xa0; 32]), AssetId::from([0xa1; 32])],
                 },
                 Address: WriteTo {
                     start_key: Key::default(),
-                    values: vec![*Address::from([0xc0; 32])],
+                    values: vec![Address::from([0xc0; 32])],
                 },
                 ScriptCode: WriteTo {
                     start_key: Key::default(),
