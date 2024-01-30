@@ -145,7 +145,7 @@ where
                     block_st_transaction
                         .storage_as_mut::<OwnedMessageIds>()
                         .insert(
-                            &OwnedMessageKey::new(&message.recipient, &message.nonce),
+                            &OwnedMessageKey::new(message.recipient(), message.nonce()),
                             &(),
                         )?;
                 }
@@ -153,8 +153,8 @@ where
                     block_st_transaction
                         .storage_as_mut::<OwnedMessageIds>()
                         .remove(&OwnedMessageKey::new(
-                            &message.recipient,
-                            &message.nonce,
+                            message.recipient(),
+                            message.nonce(),
                         ))?;
                 }
                 Event::NewCoin(coin) => {

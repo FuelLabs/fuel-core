@@ -43,10 +43,7 @@ use fuel_core_types::{
     entities::{
         coins::coin::Coin,
         contract::ContractUtxoInfo,
-        message::{
-            Message,
-            MessageV1,
-        },
+        message::Message,
     },
     fuel_merkle::binary,
     fuel_tx::{
