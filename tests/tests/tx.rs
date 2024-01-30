@@ -79,7 +79,7 @@ async fn dry_run_script() {
         .add_random_fee_input()
         .finalize_as_transaction();
 
-    let log = client.dry_run(&vec![tx]).await.unwrap();
+    let log = client.dry_run(&vec![&tx]).await.unwrap();
     let log = log.last().expect("Nonempty repsonse");
     assert_eq!(3, log.len());
 
@@ -119,9 +119,8 @@ async fn dry_run_create() {
         .add_output(Output::contract_created(contract_id, state_root))
         .finalize_as_transaction();
 
-    let receipts = client.dry_run(&vec![tx]).await.unwrap();
-    let receipts = receipts.pop().expect("Nonempty response");
-    assert_eq!(0, receipts.len());
+    let receipts = client.dry_run(&vec![&tx]).await.unwrap();
+    assert_eq!(0, receipts.last().expect("Nonempty response").len());
 
     // ensure the tx isn't available in the blockchain history
     let err = client

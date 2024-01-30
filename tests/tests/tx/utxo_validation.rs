@@ -170,7 +170,7 @@ async fn dry_run_override_utxo_validation() {
 
     let context = TestSetupBuilder::new(2322).finalize().await;
 
-    let log = context.client.dry_run_opt(&vec![tx], Some(false)).await.unwrap();
+    let log = context.client.dry_run_opt(&vec![&tx], Some(false)).await.unwrap();
     let log = log.last().expect("Nonempty reponse");
     assert_eq!(2, log.len());
 
@@ -217,7 +217,7 @@ async fn dry_run_no_utxo_validation_override() {
     let client = TestSetupBuilder::new(2322).finalize().await.client;
 
     // verify that the client validated the inputs and failed the tx
-    let res = client.dry_run_opt(&vec![tx], None).await;
+    let res = client.dry_run_opt(&vec![&tx], None).await;
     assert!(res.is_err());
 }
 

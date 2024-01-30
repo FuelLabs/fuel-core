@@ -2,8 +2,8 @@
 source: crates/client/src/client/schema/tx.rs
 expression: query.query
 ---
-mutation($tx: HexString!, $utxoValidation: Boolean) {
-  dryRun(tx: $tx, utxoValidation: $utxoValidation) {
+mutation($txs: [HexString!]!, $utxoValidation: Boolean) {
+  dryRun(txs: $txs, utxoValidation: $utxoValidation) {
     param1
     param2
     amount

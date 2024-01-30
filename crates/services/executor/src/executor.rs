@@ -336,7 +336,7 @@ where
 
     pub fn dry_run(
         self,
-        component: Components<Transaction>,
+        component: Components<Vec<Transaction>>,
     ) -> ExecutorResult<Vec<Vec<Receipt>>> {
         let component = Components {
             header_to_produce: component.header_to_produce,
