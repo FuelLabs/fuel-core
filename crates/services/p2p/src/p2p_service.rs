@@ -1708,6 +1708,7 @@ mod tests {
 
         // Node B
         p2p_config.bootstrap_nodes = node_a.multiaddrs();
+        p2p_config.set_request_timeout = Duration::from_secs(20);
         let mut node_b = build_service_from_config(p2p_config.clone()).await;
 
         let (tx_test_end, mut rx_test_end) = tokio::sync::mpsc::channel(1);
