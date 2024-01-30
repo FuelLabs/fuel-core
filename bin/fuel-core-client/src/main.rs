@@ -65,8 +65,12 @@ impl CliArgs {
                     println!("{:?}", tx);
                 }
                 TransactionCommands::DryRun { txs } => {
-                    let txs: Vec<Transaction> =
-                        txs.iter().map(|tx| serde_json::from_str(tx).expect("invalid transaction json")).collect();
+                    let txs: Vec<Transaction> = txs
+                        .iter()
+                        .map(|tx| {
+                            serde_json::from_str(tx).expect("invalid transaction json")
+                        })
+                        .collect();
                     let txs = txs.iter().collect();
 
                     let result = client.dry_run(&txs).await;

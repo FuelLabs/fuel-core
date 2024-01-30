@@ -170,7 +170,11 @@ async fn dry_run_override_utxo_validation() {
 
     let context = TestSetupBuilder::new(2322).finalize().await;
 
-    let log = context.client.dry_run_opt(&vec![&tx], Some(false)).await.unwrap();
+    let log = context
+        .client
+        .dry_run_opt(&vec![&tx], Some(false))
+        .await
+        .unwrap();
     let log = log.last().expect("Nonempty reponse");
     assert_eq!(2, log.len());
 

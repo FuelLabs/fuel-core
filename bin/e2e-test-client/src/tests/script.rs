@@ -83,7 +83,13 @@ pub async fn dry_run_multiple_txs(ctx: &TestContext) -> Result<(), Failed> {
     )
     .await??;
 
-    _dry_runs(ctx, &vec![&transaction1, &transaction2], 1000, DryRunResult::Successful).await
+    _dry_runs(
+        ctx,
+        &vec![&transaction1, &transaction2],
+        1000,
+        DryRunResult::Successful,
+    )
+    .await
 }
 
 // Maybe deploy a contract with large state and execute the script
@@ -144,7 +150,11 @@ async fn _dry_runs(
     for i in 0..count {
         queries.push(async move {
             let before = tokio::time::Instant::now();
-            let query = ctx.alice.client.dry_run_opt(transactions, Some(false)).await;
+            let query = ctx
+                .alice
+                .client
+                .dry_run_opt(transactions, Some(false))
+                .await;
             println!(
                 "Received the response for the query number {i} for {}ms",
                 before.elapsed().as_millis()
