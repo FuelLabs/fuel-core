@@ -59,7 +59,7 @@ impl RelayerDb for MockDb {
             match event {
                 Event::Message(message) => {
                     m.messages
-                        .entry(message.da_height)
+                        .entry(message.da_height())
                         .or_default()
                         .insert(*message.id(), message.clone());
                 }

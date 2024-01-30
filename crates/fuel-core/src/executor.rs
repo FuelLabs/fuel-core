@@ -39,7 +39,10 @@ mod tests {
         },
         entities::{
             coins::coin::CompressedCoin,
-            message::Message,
+            message::{
+                Message,
+                MessageV1,
+            },
         },
         fuel_asm::{
             op,
@@ -2261,7 +2264,7 @@ mod tests {
     }
 
     fn message_from_input(input: &Input, da_height: u64) -> Message {
-        Message {
+        MessageV1 {
             sender: *input.sender().unwrap(),
             recipient: *input.recipient().unwrap(),
             nonce: *input.nonce().unwrap(),
@@ -2272,6 +2275,7 @@ mod tests {
                 .unwrap_or_default(),
             da_height: DaBlockHeight(da_height),
         }
+        .into()
     }
 
     /// Helper to build transactions and a message in it for some of the message tests
@@ -2367,8 +2371,8 @@ mod tests {
 
         let exec = make_executor(&messages);
         let view = exec.database_view_provider.latest_view();
-        assert!(!view.message_is_spent(&message_coin.nonce).unwrap());
-        assert!(!view.message_is_spent(&message_data.nonce).unwrap());
+        assert!(!view.message_is_spent(message_coin.nonce()).unwrap());
+        assert!(!view.message_is_spent(message_data.nonce()).unwrap());
 
         let ExecutionResult {
             skipped_transactions,
@@ -2385,8 +2389,8 @@ mod tests {
 
         // Successful execution consumes `message_coin` and `message_data`.
         let view = exec.database_view_provider.latest_view();
-        assert!(view.message_is_spent(&message_coin.nonce).unwrap());
-        assert!(view.message_is_spent(&message_data.nonce).unwrap());
+        assert!(view.message_is_spent(message_coin.nonce()).unwrap());
+        assert!(view.message_is_spent(message_data.nonce()).unwrap());
         assert_eq!(
             *view.coin(&UtxoId::new(tx_id, 0)).unwrap().amount(),
             amount + amount
@@ -2421,8 +2425,8 @@ mod tests {
 
         let exec = make_executor(&messages);
         let view = exec.database_view_provider.latest_view();
-        assert!(!view.message_is_spent(&message_coin.nonce).unwrap());
-        assert!(!view.message_is_spent(&message_data.nonce).unwrap());
+        assert!(!view.message_is_spent(message_coin.nonce()).unwrap());
+        assert!(!view.message_is_spent(message_data.nonce()).unwrap());
 
         let ExecutionResult {
             skipped_transactions,
@@ -2439,8 +2443,8 @@ mod tests {
 
         // We should spend only `message_coin`. The `message_data` should be unspent.
         let view = exec.database_view_provider.latest_view();
-        assert!(view.message_is_spent(&message_coin.nonce).unwrap());
-        assert!(!view.message_is_spent(&message_data.nonce).unwrap());
+        assert!(view.message_is_spent(message_coin.nonce()).unwrap());
+        assert!(!view.message_is_spent(message_data.nonce()).unwrap());
         assert_eq!(*view.coin(&UtxoId::new(tx_id, 0)).unwrap().amount(), amount);
     }
 
@@ -2564,7 +2568,7 @@ mod tests {
         let (tx, mut message) = make_tx_and_message(&mut rng, 0);
 
         // Modifying the message to make it mismatch
-        message.amount = 123;
+        message.set_amount(123);
 
         let mut block = Block::default();
         *block.transactions_mut() = vec![tx.clone()];
@@ -2836,7 +2840,7 @@ mod tests {
 
         fn add_message_to_relayer(db: &mut Database<Relayer>, message: Message) {
             let mut db_transaction = db.transaction();
-            let da_height = message.da_height;
+            let da_height = message.da_height();
             db.storage::<History>()
                 .insert(&da_height, &[Event::Message(message)])
                 .expect("Should insert event");
@@ -2845,14 +2849,11 @@ mod tests {
 
         fn add_messages_to_relayer(db: &mut Database<Relayer>, relayer_da_height: u64) {
             for da_height in 0..=relayer_da_height {
-                add_message_to_relayer(
-                    db,
-                    Message {
-                        nonce: da_height.into(),
-                        da_height: DaBlockHeight(da_height),
-                        ..Default::default()
-                    },
-                );
+                let mut message = Message::default();
+                message.set_da_height(da_height.into());
+                message.set_nonce(da_height.into());
+
+                add_message_to_relayer(db, message);
             }
         }
 
@@ -2960,7 +2961,7 @@ mod tests {
                 (genesis_da_height + 1..block_da_height).zip(messages)
             {
                 let (_, message) = message.unwrap();
-                assert_eq!(message.da_height, da_height.into());
+                assert_eq!(message.da_height(), da_height.into());
             }
             Ok(())
         }
@@ -3003,14 +3004,10 @@ mod tests {
             let block_height = 1u32;
             let block_da_height = 2u64;
             let nonce = 1.into();
-            add_message_to_relayer(
-                &mut relayer_db,
-                Message {
-                    nonce,
-                    da_height: block_da_height.into(),
-                    ..Default::default()
-                },
-            );
+            let mut message = Message::default();
+            message.set_da_height(block_da_height.into());
+            message.set_nonce(nonce);
+            add_message_to_relayer(&mut relayer_db, message);
 
             // Given
             assert_eq!(on_chain_db.iter_all::<Messages>(None).count(), 0);

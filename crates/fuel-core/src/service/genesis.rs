@@ -45,7 +45,10 @@ use fuel_core_types::{
             CompressedCoinV1,
         },
         contract::ContractUtxoInfo,
-        message::Message,
+        message::{
+            Message,
+            MessageV1,
+        },
     },
     fuel_merkle::binary,
     fuel_tx::{
@@ -331,14 +334,15 @@ fn init_da_messages(
     if let Some(state) = &state {
         if let Some(message_state) = &state.messages {
             for msg in message_state {
-                let message = Message {
+                let message: Message = MessageV1 {
                     sender: msg.sender,
                     recipient: msg.recipient,
                     nonce: msg.nonce,
                     amount: msg.amount,
                     data: msg.data.clone(),
                     da_height: msg.da_height,
-                };
+                }
+                .into();
 
                 if db
                     .storage::<Messages>()
