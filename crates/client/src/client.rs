@@ -358,10 +358,7 @@ impl FuelClient {
     }
 
     /// Default dry run, matching the exact configuration as the node
-    pub async fn dry_run(
-        &self,
-        txs: &[&Transaction],
-    ) -> io::Result<Vec<Vec<Receipt>>> {
+    pub async fn dry_run(&self, txs: &[&Transaction]) -> io::Result<Vec<Vec<Receipt>>> {
         self.dry_run_opt(txs, None).await
     }
 
