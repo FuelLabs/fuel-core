@@ -2837,7 +2837,7 @@ mod tests {
 
         fn add_message_to_relayer(db: &mut Database, message: Message) {
             let mut db_transaction = db.transaction();
-            let da_height = message.da_height;
+            let da_height = message.da_height();
             db.storage::<History>()
                 .insert(&da_height, &[Event::Message(message)])
                 .expect("Should insert event");
@@ -2846,14 +2846,11 @@ mod tests {
 
         fn add_messages_to_relayer(db: &mut Database, relayer_da_height: u64) {
             for da_height in 0..=relayer_da_height {
-                add_message_to_relayer(
-                    db,
-                    Message {
-                        nonce: da_height.into(),
-                        da_height: DaBlockHeight(da_height),
-                        ..Default::default()
-                    },
-                );
+                let mut message = Message::default();
+                message.set_da_height(da_height.into());
+                message.set_nonce(da_height.into());
+
+                add_message_to_relayer(db, message);
             }
         }
 
@@ -2959,7 +2956,7 @@ mod tests {
                 (genesis_da_height + 1..block_da_height).zip(messages)
             {
                 let (_, message) = message.unwrap();
-                assert_eq!(message.da_height, da_height.into());
+                assert_eq!(message.da_height(), da_height.into());
             }
             Ok(())
         }
@@ -3000,14 +2997,10 @@ mod tests {
             let block_height = 1u32;
             let block_da_height = 2u64;
             let nonce = 1.into();
-            add_message_to_relayer(
-                &mut db,
-                Message {
-                    nonce,
-                    da_height: block_da_height.into(),
-                    ..Default::default()
-                },
-            );
+            let mut message = Message::default();
+            message.set_da_height(block_da_height.into());
+            message.set_nonce(nonce);
+            add_message_to_relayer(&mut db, message);
 
             // Given
             assert_eq!(db.iter_all::<Messages>(None).count(), 0);

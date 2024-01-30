@@ -29,7 +29,7 @@ fn test_insert_events() {
 
     let mut m = Message::default();
     m.set_amount(10);
-    m.set_da_height(same_height);
+    m.set_da_height(same_height.into());
     let mut m2 = m.clone();
     m2.set_nonce(1.into());
     assert_ne!(m.id(), m2.id());
@@ -42,7 +42,7 @@ fn test_insert_events() {
 fn insert_always_raises_da_height_monotonically() {
     // Given
     let same_height = 12u64.into();
-    let messages: Vec<_> = (0..10)
+    let events: Vec<_> = (0..10)
         .map(|i| {
             let mut message = Message::default();
             message.set_amount(i);
@@ -77,12 +77,10 @@ fn insert_fails_for_messages_with_different_height() {
     let last_height = 1u64;
     let events: Vec<_> = (0..=last_height)
         .map(|i| {
-            Message {
-                amount: i,
-                da_height: i.into(),
-                ..Default::default()
-            }
-            .into()
+            let mut message = Message::default();
+            message.set_da_height(i.into());
+            message.set_amount(i);
+            message.into()
         })
         .collect();
 
@@ -102,12 +100,10 @@ fn insert_fails_for_messages_same_height_but_on_different_height() {
     let last_height = 1u64;
     let events: Vec<_> = (0..=last_height)
         .map(|i| {
-            Message {
-                amount: i,
-                da_height: last_height.into(),
-                ..Default::default()
-            }
-            .into()
+            let mut message = Message::default();
+            message.set_da_height(last_height.into());
+            message.set_amount(i);
+            message.into()
         })
         .collect();
 
