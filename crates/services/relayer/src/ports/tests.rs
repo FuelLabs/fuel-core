@@ -1,7 +1,7 @@
 use crate::{
     ports::RelayerDb,
     storage::{
-        History,
+        EventsHistory,
         RelayerMetadata,
     },
 };
@@ -14,7 +14,7 @@ use test_case::test_case;
 fn test_insert_events() {
     let same_height = 12;
     let mut db = MockStorage::default();
-    db.expect_insert::<History>()
+    db.expect_insert::<EventsHistory>()
         .times(1)
         .returning(|_, _| Ok(None));
     db.expect_insert::<RelayerMetadata>()
@@ -53,7 +53,8 @@ fn insert_always_raises_da_height_monotonically() {
         .collect();
 
     let mut db = MockStorage::default();
-    db.expect_insert::<History>().returning(|_, _| Ok(None));
+    db.expect_insert::<EventsHistory>()
+        .returning(|_, _| Ok(None));
     db.expect_insert::<RelayerMetadata>()
         .once()
         .withf(move |_, v| *v == same_height)
@@ -91,7 +92,10 @@ fn insert_fails_for_messages_with_different_height() {
     let result = db.insert_events(&last_height.into(), &events);
 
     // Then
-    assert!(result.is_err());
+    let err = result.expect_err(
+        "Should return error since DA message heights are different between each other",
+    );
+    assert!(err.to_string().contains("Invalid da height"));
 }
 
 #[test]
@@ -115,7 +119,9 @@ fn insert_fails_for_messages_same_height_but_on_different_height() {
     let result = db.insert_events(&next_height.into(), &events);
 
     // Then
-    assert!(result.is_err());
+    let err =
+        result.expect_err("Should return error since DA message heights and commit da heights are different");
+    assert!(err.to_string().contains("Invalid da height"));
 }
 
 #[test_case(None, 0, 0; "can set DA height to 0 when there is none available")]

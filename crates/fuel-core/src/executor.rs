@@ -2809,7 +2809,7 @@ mod tests {
     mod relayer {
         use super::*;
         use crate::database::RelayerReadDatabase;
-        use fuel_core_relayer::storage::History;
+        use fuel_core_relayer::storage::EventsHistory;
         use fuel_core_storage::{
             tables::{
                 FuelBlocks,
@@ -2838,7 +2838,7 @@ mod tests {
         fn add_message_to_relayer(db: &mut Database, message: Message) {
             let mut db_transaction = db.transaction();
             let da_height = message.da_height();
-            db.storage::<History>()
+            db.storage::<EventsHistory>()
                 .insert(&da_height, &[Event::Message(message)])
                 .expect("Should insert event");
             db_transaction.commit().expect("Should commit events");

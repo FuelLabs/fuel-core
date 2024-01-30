@@ -81,7 +81,7 @@ impl fuel_core_executor::ports::RelayerPort for Database {
         {
             use fuel_core_storage::StorageAsRef;
             let events = self
-                .storage::<fuel_core_relayer::storage::History>()
+                .storage::<fuel_core_relayer::storage::EventsHistory>()
                 .get(_da_height)?
                 .map(|cow| cow.into_owned())
                 .unwrap_or_default();
