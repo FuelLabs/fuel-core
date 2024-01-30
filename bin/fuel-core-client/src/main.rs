@@ -71,7 +71,7 @@ impl CliArgs {
                             serde_json::from_str(tx).expect("invalid transaction json")
                         })
                         .collect();
-                    let txs = txs.iter().collect();
+                    let txs = txs.iter().collect::<Vec<&Transaction>>();
 
                     let result = client.dry_run(&txs).await;
                     println!("{:?}", result.unwrap());
