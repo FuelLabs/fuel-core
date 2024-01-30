@@ -22,13 +22,11 @@ fn test_insert_messages() {
         .returning(|_| Ok(Some(std::borrow::Cow::Owned(9u64.into()))));
     let mut db = db.into_transactional();
 
-    let m = Message {
-        amount: 10,
-        da_height: 12u64.into(),
-        ..Default::default()
-    };
+    let mut m = Message::default();
+    m.set_amount(10);
+    m.set_da_height(12u64.into());
     let mut m2 = m.clone();
-    m2.nonce = 1.into();
+    m2.set_nonce(1.into());
     assert_ne!(m.id(), m2.id());
     let messages = [m, m2];
     db.insert_messages(&12u64.into(), &messages[..]).unwrap();
@@ -37,11 +35,13 @@ fn test_insert_messages() {
 #[test]
 fn insert_always_raises_da_height_monotonically() {
     let messages: Vec<_> = (0..10)
-        .map(|i| Message {
-            amount: i,
-            da_height: i.into(),
-            ..Default::default()
+        .map(|i| {
+            let mut message = Message::default();
+            message.set_amount(i);
+            message.set_da_height(i.into());
+            message
         })
+        .map(Into::into)
         .collect();
 
     let mut db = MockStorage::default();

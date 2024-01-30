@@ -2,6 +2,13 @@
 
 use async_trait::async_trait;
 use fuel_core_storage::{
+    blueprint::plain::Plain,
+    codec::{
+        postcard::Postcard,
+        primitive::Primitive,
+    },
+    column::Column,
+    structured_storage::TableWithBlueprint,
     tables::Messages,
     transactional::Transactional,
     Error as StorageError,
@@ -66,7 +73,7 @@ where
         for message in messages {
             db.storage::<Messages>().insert(message.id(), message)?;
             let max = max_height.get_or_insert(0u64);
-            *max = (*max).max(message.da_height.0);
+            *max = (*max).max(message.da_height().0);
         }
         if let Some(height) = max_height {
             if **da_height < height {
@@ -138,3 +145,18 @@ impl Mappable for RelayerMetadata {
 /// If the relayer metadata ever contains more than one key, this should be
 /// changed from a unit value.
 const METADATA_KEY: () = ();
+
+impl TableWithBlueprint for RelayerMetadata {
+    type Blueprint = Plain<Postcard, Primitive<8>>;
+
+    fn column() -> Column {
+        Column::RelayerMetadata
+    }
+}
+
+#[cfg(test)]
+fuel_core_storage::basic_storage_tests!(
+    RelayerMetadata,
+    <RelayerMetadata as Mappable>::Key::default(),
+    <RelayerMetadata as Mappable>::Value::default()
+);

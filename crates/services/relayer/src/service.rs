@@ -249,7 +249,7 @@ where
 }
 
 impl<D> SharedState<D> {
-    /// Wait for the [`Task`] to be in sync with
+    /// Wait for the `Task` to be in sync with
     /// the data availability layer.
     ///
     /// Yields until the relayer reaches a point where it
@@ -295,7 +295,7 @@ impl<D> SharedState<D> {
             .storage::<Messages>()
             .get(id)?
             .map(Cow::into_owned)
-            .filter(|message| message.da_height <= *da_height))
+            .filter(|message| message.da_height() <= *da_height))
     }
 
     /// Get finalized da height that represents last block from da layer that got finalized.

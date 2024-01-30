@@ -1,25 +1,29 @@
 use crate::{
     fuel_core_graphql_api::{
-        service::{
+        api_service::{
             BlockProducer,
-            Database,
             TxPool,
         },
+        database::ReadView,
+        ports::OffChainDatabase,
+        Config,
         IntoApiResult,
     },
-    graphql_api::Config,
     query::{
         transaction_status_change,
         BlockQueryData,
         SimpleTransactionData,
         TransactionQueryData,
     },
-    schema::scalars::{
-        Address,
-        HexString,
-        SortedTxCursor,
-        TransactionId,
-        TxPointer,
+    schema::{
+        scalars::{
+            Address,
+            HexString,
+            SortedTxCursor,
+            TransactionId,
+            TxPointer,
+        },
+        tx::types::TransactionStatus,
     },
 };
 use async_graphql::{
@@ -48,7 +52,10 @@ use fuel_core_types::{
     },
     fuel_types,
     fuel_types::canonical::Deserialize,
-    fuel_vm::checked_transaction::EstimatePredicates,
+    fuel_vm::checked_transaction::{
+        CheckPredicateParams,
+        EstimatePredicates,
+    },
     services::txpool,
 };
 use futures::{
@@ -62,9 +69,6 @@ use std::{
 };
 use tokio_stream::StreamExt;
 use types::Transaction;
-
-use self::types::TransactionStatus;
-use fuel_core_types::fuel_vm::checked_transaction::CheckPredicateParams;
 
 pub mod input;
 pub mod output;
@@ -81,7 +85,7 @@ impl TxQuery {
         ctx: &Context<'_>,
         #[graphql(desc = "The ID of the transaction")] id: TransactionId,
     ) -> async_graphql::Result<Option<Transaction>> {
-        let query: &Database = ctx.data_unchecked();
+        let query: &ReadView = ctx.data_unchecked();
         let id = id.0;
         let txpool = ctx.data_unchecked::<TxPool>();
 
@@ -105,8 +109,7 @@ impl TxQuery {
     ) -> async_graphql::Result<
         Connection<SortedTxCursor, Transaction, EmptyFields, EmptyFields>,
     > {
-        let db_query: &Database = ctx.data_unchecked();
-        let tx_query: &Database = ctx.data_unchecked();
+        let query: &ReadView = ctx.data_unchecked();
         crate::schema::query_pagination(
             after,
             before,
@@ -115,7 +118,7 @@ impl TxQuery {
             |start: &Option<SortedTxCursor>, direction| {
                 let start = *start;
                 let block_id = start.map(|sorted| sorted.block_height);
-                let all_block_ids = db_query.compressed_blocks(block_id, direction);
+                let all_block_ids = query.compressed_blocks(block_id, direction);
 
                 let all_txs = all_block_ids
                     .map(move |block| {
@@ -145,7 +148,7 @@ impl TxQuery {
                     });
                 let all_txs = all_txs.map(|result: StorageResult<SortedTxCursor>| {
                     result.and_then(|sorted| {
-                        let tx = tx_query.transaction(&sorted.tx_id.0)?;
+                        let tx = query.transaction(&sorted.tx_id.0)?;
 
                         Ok((sorted, Transaction::from_tx(sorted.tx_id.0, tx)))
                     })
@@ -167,7 +170,7 @@ impl TxQuery {
         before: Option<String>,
     ) -> async_graphql::Result<Connection<TxPointer, Transaction, EmptyFields, EmptyFields>>
     {
-        let query: &Database = ctx.data_unchecked();
+        let query: &ReadView = ctx.data_unchecked();
         let config = ctx.data_unchecked::<Config>();
         let owner = fuel_types::Address::from(owner);
 
@@ -298,11 +301,11 @@ impl TxStatusSubscription {
     ) -> anyhow::Result<impl Stream<Item = async_graphql::Result<TransactionStatus>> + 'a>
     {
         let txpool = ctx.data_unchecked::<TxPool>();
-        let db = ctx.data_unchecked::<Database>();
+        let query: &ReadView = ctx.data_unchecked();
         let rx = txpool.tx_update_subscribe(id.into())?;
 
         Ok(transaction_status_change(
-            move |id| match db.tx_status(&id) {
+            move |id| match query.tx_status(&id) {
                 Ok(status) => Ok(Some(status)),
                 Err(StorageError::NotFound(_, _)) => Ok(txpool
                     .submission_time(id)

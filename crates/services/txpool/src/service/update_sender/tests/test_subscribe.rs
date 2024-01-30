@@ -23,7 +23,7 @@ fn test_subscriber(input: Input) {
     let Input { tx_id, senders } = input;
     let mut senders = box_senders(senders);
     let len_before = senders.values().map(|v| v.len()).sum::<usize>();
-    subscribe::<_, MockCreateChannel>(
+    let _ = subscribe::<_, MockCreateChannel>(
         Bytes32::from([tx_id; 32]),
         &mut senders,
         Box::new(()),

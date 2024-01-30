@@ -35,6 +35,7 @@ pub mod fuel_vm {
         checked_transaction,
         consts,
         crypto,
+        double_key,
         error::PredicateVerificationFailed,
         interpreter,
         prelude::{
@@ -54,6 +55,8 @@ pub mod fuel_vm {
         },
         script_with_data_offset,
         state,
+        storage::ContractsAssetKey,
+        storage::ContractsStateKey,
         util,
     };
 }

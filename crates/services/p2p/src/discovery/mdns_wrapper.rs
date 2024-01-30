@@ -2,9 +2,8 @@ use crate::Multiaddr;
 use libp2p::{
     core::Endpoint,
     mdns::{
+        self,
         tokio::Behaviour as TokioMdns,
-        Config,
-        Event as MdnsEvent,
     },
     swarm::{
         dummy,
@@ -33,7 +32,7 @@ pub enum MdnsWrapper {
 
 impl MdnsWrapper {
     pub fn new(peer_id: PeerId) -> Self {
-        match TokioMdns::new(Config::default(), peer_id) {
+        match TokioMdns::new(mdns::Config::default(), peer_id) {
             Ok(mdns) => Self::Ready(mdns),
             Err(err) => {
                 warn!("Failed to initialize mDNS: {:?}", err);
@@ -64,7 +63,7 @@ impl MdnsWrapper {
 
 impl NetworkBehaviour for MdnsWrapper {
     type ConnectionHandler = dummy::ConnectionHandler;
-    type ToSwarm = MdnsEvent;
+    type ToSwarm = mdns::Event;
 
     fn handle_established_inbound_connection(
         &mut self,

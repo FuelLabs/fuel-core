@@ -31,6 +31,22 @@ pub struct Message {
     pub da_height: U64,
 }
 
+#[derive(cynic::QueryVariables, Debug)]
+pub struct NonceArgs {
+    pub nonce: Nonce,
+}
+
+#[derive(cynic::QueryFragment, Debug)]
+#[cynic(
+    schema_path = "./assets/schema.sdl",
+    graphql_type = "Query",
+    variables = "NonceArgs"
+)]
+pub struct MessageQuery {
+    #[arguments(nonce: $nonce)]
+    pub message: Option<Message>,
+}
+
 #[derive(cynic::QueryFragment, Debug)]
 #[cynic(schema_path = "./assets/schema.sdl")]
 pub struct MessageStatus {
