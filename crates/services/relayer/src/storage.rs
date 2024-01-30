@@ -87,10 +87,10 @@ impl TableWithBlueprint for DaHeightTable {
     }
 }
 
-/// The table contains history of the relayer.
-pub struct History;
+/// The table contains history of events on the DA.
+pub struct EventsHistory;
 
-impl Mappable for History {
+impl Mappable for EventsHistory {
     /// The key is the height of the DA.
     type Key = Self::OwnedKey;
     type OwnedKey = DaBlockHeight;
@@ -99,7 +99,7 @@ impl Mappable for History {
     type OwnedValue = Vec<Event>;
 }
 
-impl TableWithBlueprint for History {
+impl TableWithBlueprint for EventsHistory {
     type Blueprint = Plain<Primitive<8>, Postcard>;
     type Column = Column;
 
@@ -113,7 +113,7 @@ where
     T: Send + Sync,
     T: Transactional<Storage = Storage>,
     T: StorageMutate<DaHeightTable, Error = StorageError>,
-    Storage: StorageMutate<History, Error = StorageError>
+    Storage: StorageMutate<EventsHistory, Error = StorageError>
         + StorageMutate<DaHeightTable, Error = StorageError>,
 {
     fn insert_events(
@@ -134,7 +134,7 @@ where
             }
         }
 
-        db.storage::<History>().insert(da_height, events)?;
+        db.storage::<EventsHistory>().insert(da_height, events)?;
 
         grow_monotonically(db, da_height)?;
         db_tx.commit()?;
@@ -201,8 +201,8 @@ mod tests {
     );
 
     fuel_core_storage::basic_storage_tests!(
-        History,
-        <History as Mappable>::Key::default(),
+        EventsHistory,
+        <EventsHistory as Mappable>::Key::default(),
         vec![Event::Message(Default::default())]
     );
 }

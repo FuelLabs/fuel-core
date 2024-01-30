@@ -100,7 +100,7 @@ use_structured_implementation!(
 #[cfg(feature = "relayer")]
 use_structured_implementation!(
     fuel_core_relayer::storage::DaHeightTable,
-    fuel_core_relayer::storage::History
+    fuel_core_relayer::storage::EventsHistory
 );
 
 impl<Description, M> StorageInspect<M> for Database<Description>

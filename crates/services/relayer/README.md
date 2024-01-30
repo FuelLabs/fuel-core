@@ -3,7 +3,6 @@
 
 The Relayer connects Fuel to the DA (data availability) layer contract.
 The primary functionality is to track the finality of blocks in the DA layer and download all log events for blocks that are considered final.
-Events are then made available to fuel via the database.
 
 ## Validity, finality and synchronization
 
