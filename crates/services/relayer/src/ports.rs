@@ -73,7 +73,7 @@ where
         for message in messages {
             db.storage::<Messages>().insert(message.id(), message)?;
             let max = max_height.get_or_insert(0u64);
-            *max = (*max).max(message.da_height.0);
+            *max = (*max).max(message.da_height().0);
         }
         if let Some(height) = max_height {
             if **da_height < height {

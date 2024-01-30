@@ -24,10 +24,26 @@ use crate::{
     },
 };
 
-/// Message send from Da layer to fuel by bridge
+/// Message sent from DA layer to fuel by relayer bridge.
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum Message {
+    /// Message Version 1
+    V1(MessageV1),
+}
+
+#[cfg(any(test, feature = "test-helpers"))]
+impl Default for Message {
+    fn default() -> Self {
+        Self::V1(Default::default())
+    }
+}
+
+/// The V1 version of the message from the DA layer.
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
-pub struct Message {
+pub struct MessageV1 {
     /// Account that sent the message from the da layer
     pub sender: Address,
     /// Fuel account receiving the message
@@ -42,27 +58,125 @@ pub struct Message {
     pub da_height: DaBlockHeight,
 }
 
+impl From<MessageV1> for Message {
+    fn from(value: MessageV1) -> Self {
+        Self::V1(value)
+    }
+}
+
 impl Message {
+    /// Get the message sender
+    pub fn sender(&self) -> &Address {
+        match self {
+            Message::V1(message) => &message.sender,
+        }
+    }
+
+    /// Set the message sender
+    #[cfg(any(test, feature = "test-helpers"))]
+    pub fn set_sender(&mut self, sender: Address) {
+        match self {
+            Message::V1(message) => message.sender = sender,
+        }
+    }
+
+    /// Get the message recipient
+    pub fn recipient(&self) -> &Address {
+        match self {
+            Message::V1(message) => &message.recipient,
+        }
+    }
+
+    /// Set the message recipient
+    #[cfg(any(test, feature = "test-helpers"))]
+    pub fn set_recipient(&mut self, recipient: Address) {
+        match self {
+            Message::V1(message) => message.recipient = recipient,
+        }
+    }
+
+    /// Get the message nonce
+    pub fn nonce(&self) -> &Nonce {
+        match self {
+            Message::V1(message) => &message.nonce,
+        }
+    }
+
+    /// Set the message nonce
+    #[cfg(any(test, feature = "test-helpers"))]
+    pub fn set_nonce(&mut self, nonce: Nonce) {
+        match self {
+            Message::V1(message) => message.nonce = nonce,
+        }
+    }
+
+    /// Get the message amount
+    pub fn amount(&self) -> Word {
+        match self {
+            Message::V1(message) => message.amount,
+        }
+    }
+
+    /// Set the message amount
+    #[cfg(any(test, feature = "test-helpers"))]
+    pub fn set_amount(&mut self, amount: Word) {
+        match self {
+            Message::V1(message) => message.amount = amount,
+        }
+    }
+
+    /// Get the message data
+    pub fn data(&self) -> &Vec<u8> {
+        match self {
+            Message::V1(message) => &message.data,
+        }
+    }
+
+    /// Set the message data
+    #[cfg(any(test, feature = "test-helpers"))]
+    pub fn set_data(&mut self, data: Vec<u8>) {
+        match self {
+            Message::V1(message) => message.data = data,
+        }
+    }
+
+    /// Get the message DA height
+    pub fn da_height(&self) -> DaBlockHeight {
+        match self {
+            Message::V1(message) => message.da_height,
+        }
+    }
+
+    /// Set the message DA height
+    #[cfg(any(test, feature = "test-helpers"))]
+    pub fn set_da_height(&mut self, da_height: DaBlockHeight) {
+        match self {
+            Message::V1(message) => message.da_height = da_height,
+        }
+    }
+
     /// Returns the id of the message
     pub fn id(&self) -> &Nonce {
-        &self.nonce
+        match self {
+            Message::V1(message) => &message.nonce,
+        }
     }
 
     /// Computed message id
     pub fn message_id(&self) -> MessageId {
         compute_message_id(
-            &self.sender,
-            &self.recipient,
-            &self.nonce,
-            self.amount,
-            &self.data,
+            self.sender(),
+            self.recipient(),
+            self.nonce(),
+            self.amount(),
+            self.data(),
         )
     }
 
     /// Verifies the integrity of the message.
     ///
     /// Returns `None`, if the `input` is not a message.
-    /// Otherwise returns the result of the field comparison.
+    /// Otherwise, returns the result of the field comparison.
     pub fn matches_input(&self, input: &Input) -> Option<bool> {
         match input {
             Input::MessageDataSigned(MessageDataSigned {
@@ -93,16 +207,16 @@ impl Message {
                 amount,
                 ..
             }) => {
-                let expected_data = if self.data.is_empty() {
+                let expected_data = if self.data().is_empty() {
                     None
                 } else {
-                    Some(self.data.as_slice())
+                    Some(self.data().as_slice())
                 };
                 Some(
-                    &self.sender == sender
-                        && &self.recipient == recipient
-                        && &self.nonce == nonce
-                        && &self.amount == amount
+                    self.sender() == sender
+                        && self.recipient() == recipient
+                        && self.nonce() == nonce
+                        && &self.amount() == amount
                         && expected_data == input.input_data(),
                 )
             }

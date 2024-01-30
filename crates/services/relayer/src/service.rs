@@ -295,7 +295,7 @@ impl<D> SharedState<D> {
             .storage::<Messages>()
             .get(id)?
             .map(Cow::into_owned)
-            .filter(|message| message.da_height <= *da_height))
+            .filter(|message| message.da_height() <= *da_height))
     }
 
     /// Get finalized da height that represents last block from da layer that got finalized.

@@ -56,7 +56,7 @@ impl RelayerDb for MockDb {
         let mut m = self.data.lock().unwrap();
         for message in messages {
             m.messages
-                .entry(message.da_height)
+                .entry(message.da_height())
                 .or_default()
                 .insert(*message.id(), message.clone());
         }

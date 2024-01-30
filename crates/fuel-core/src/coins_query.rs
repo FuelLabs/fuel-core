@@ -251,7 +251,10 @@ mod tests {
                 Coin,
                 CompressedCoin,
             },
-            message::Message,
+            message::{
+                Message,
+                MessageV1,
+            },
         },
         fuel_asm::Word,
         fuel_tx::*,
@@ -783,7 +786,7 @@ mod tests {
             let excluded_ids = db
                 .owned_messages(&owner)
                 .into_iter()
-                .filter(|message| message.amount == 5)
+                .filter(|message| message.amount() == 5)
                 .map(|message| CoinId::Message(*message.id()))
                 .collect_vec();
 
@@ -799,7 +802,7 @@ mod tests {
             let excluded_ids = db
                 .owned_messages(&owner)
                 .into_iter()
-                .filter(|message| message.amount == 5)
+                .filter(|message| message.amount() == 5)
                 .map(|message| CoinId::Message(*message.id()))
                 .collect_vec();
 
@@ -965,14 +968,15 @@ mod tests {
             let nonce = self.last_message_index.into();
             self.last_message_index += 1;
 
-            let message = Message {
+            let message: Message = MessageV1 {
                 sender: Default::default(),
                 recipient: owner,
                 nonce,
                 amount,
                 data: vec![],
                 da_height: DaBlockHeight::from(1u64),
-            };
+            }
+            .into();
 
             let db = &mut self.database;
             StorageMutate::<Messages>::insert(db, message.id(), &message).unwrap();
