@@ -115,7 +115,7 @@ impl StorageMutate<FuelBlocks> for Database {
             .next()
             .transpose()?
             .map(|(_, metadata)| metadata)
-            .unwrap_or_default();
+            .unwrap_or(DenseMerkleMetadataV1::default().into());
 
         let storage = self.borrow_mut();
         let mut tree: MerkleTree<FuelBlockMerkleData, _> =
