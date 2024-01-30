@@ -142,6 +142,13 @@ impl DaBlockHeight {
     }
 }
 
+#[cfg(feature = "random")]
+impl rand::distributions::Distribution<DaBlockHeight> for rand::distributions::Standard {
+    fn sample<R: rand::Rng + ?Sized>(&self, rng: &mut R) -> DaBlockHeight {
+        DaBlockHeight(rng.gen())
+    }
+}
+
 /// Wrapper around [`fuel_crypto::SecretKey`] to implement [`secrecy`] marker traits
 #[derive(
     Default, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Zeroize, Deref, From,

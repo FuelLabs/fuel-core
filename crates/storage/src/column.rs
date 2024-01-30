@@ -102,17 +102,19 @@ column_definition! {
         /// Metadata for the relayer
         /// See `RelayerMetadata`
         RelayerMetadata = 21,
+        /// The history for the relayer
+        RelayerHistory = 22,
 
         // Below are not required tables. They are used for API and may be removed or moved to another place in the future.
 
         /// The column of the table that stores `true` if `owner` owns `Coin` with `coin_id`
-        OwnedCoins = 22,
+        OwnedCoins = 23,
         /// Transaction id to current status
-        TransactionStatus = 23,
+        TransactionStatus = 24,
         /// The column of the table of all `owner`'s transactions
-        TransactionsByOwnerBlockIdx = 24,
+        TransactionsByOwnerBlockIdx = 25,
         /// The column of the table that stores `true` if `owner` owns `Message` with `message_id`
-        OwnedMessageIds = 25,
+        OwnedMessageIds = 26,
     }
 }
 
