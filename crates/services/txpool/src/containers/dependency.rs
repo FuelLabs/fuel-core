@@ -156,7 +156,7 @@ impl Dependency {
                         | Input::MessageDataPredicate(_) => {
                             // Message inputs do not depend on any other fuel transactions
                         }
-                        _ => todo!("Unsupported input type"),
+                        _ => {}
                     }
                 }
             }
@@ -521,7 +521,7 @@ impl Dependency {
                 | Input::MessageCoinPredicate(_)
                 | Input::MessageDataSigned(_)
                 | Input::MessageDataPredicate(_) => {}
-                _ => todo!("Unsupported input type")
+                _ => todo!("Unsupported input type"),
             }
         }
 
@@ -629,7 +629,7 @@ impl Dependency {
                         }
                     }
                 }
-                _ => todo!("Unsupported output type")
+                _ => todo!("Unsupported output type"),
             };
         }
 

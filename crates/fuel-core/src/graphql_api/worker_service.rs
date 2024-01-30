@@ -142,7 +142,8 @@ where
                 | Output::Variable { to, .. } => {
                     owners.push(to);
                 }
-                Output::Contract(_) | Output::ContractCreated { .. } | _ => {}
+                Output::Contract(_) | Output::ContractCreated { .. } => {}
+                _ => {}
             }
         }
 
