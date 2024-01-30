@@ -689,12 +689,12 @@ where
             for event in events {
                 match event {
                     Event::Message(message) => {
-                        if message.da_height != da_height {
+                        if message.da_height() != da_height {
                             return Err(ExecutorError::RelayerGivesIncorrectMessages)
                         }
                         block_st_transaction
                             .storage::<Messages>()
-                            .insert(&message.nonce, &message)?;
+                            .insert(message.nonce(), &message)?;
                         execution_data
                             .events
                             .push(ExecutorEvent::NewMessage(message));
@@ -1182,7 +1182,7 @@ where
                         )
                     }
                     if let Some(message) = db.storage::<Messages>().get(nonce)? {
-                        if message.da_height > block_da_height {
+                        if message.da_height() > block_da_height {
                             return Err(TransactionValidityError::MessageSpendTooEarly(
                                 *nonce,
                             )

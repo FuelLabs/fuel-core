@@ -17,7 +17,7 @@ impl Event {
     /// Returns the da height when event happened.
     pub fn da_height(&self) -> DaBlockHeight {
         match self {
-            Event::Message(message) => message.da_height,
+            Event::Message(message) => message.da_height(),
         }
     }
 }

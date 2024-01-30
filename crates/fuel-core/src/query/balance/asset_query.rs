@@ -133,7 +133,7 @@ impl<'a> AssetsQuery<'a> {
                     Ok(message)
                 })
             })
-            .filter_ok(|message| message.data.is_empty())
+            .filter_ok(|message| message.data().is_empty())
             .map(|result| {
                 result.map(|message| {
                     CoinType::MessageCoin(

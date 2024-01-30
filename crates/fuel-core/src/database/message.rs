@@ -73,12 +73,12 @@ impl Database {
                 let msg = msg?;
 
                 Ok(MessageConfig {
-                    sender: msg.sender,
-                    recipient: msg.recipient,
-                    nonce: msg.nonce,
-                    amount: msg.amount,
-                    data: msg.data,
-                    da_height: msg.da_height,
+                    sender: *msg.sender(),
+                    recipient: *msg.recipient(),
+                    nonce: *msg.nonce(),
+                    amount: msg.amount(),
+                    data: msg.data().clone(),
+                    da_height: msg.da_height(),
                 })
             })
             .collect::<StorageResult<Vec<MessageConfig>>>()?;
