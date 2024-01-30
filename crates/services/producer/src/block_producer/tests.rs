@@ -251,7 +251,7 @@ impl<Executor> TestContext<Executor> {
     pub fn producer(self) -> Producer<MockDb, MockTxPool, Executor> {
         Producer {
             config: self.config,
-            db: self.db,
+            view_provider: self.db,
             txpool: self.txpool,
             executor: self.executor,
             relayer: Box::new(self.relayer),

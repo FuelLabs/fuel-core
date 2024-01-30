@@ -1,12 +1,23 @@
 use crate::{
-    database::Database,
+    database::{
+        Database,
+        RelayerReadDatabase,
+    },
     service::sub_services::BlockProducerService,
 };
-use fuel_core_consensus_module::block_verifier::Verifier;
+use fuel_core_consensus_module::{
+    block_verifier::Verifier,
+    RelayerConsensusConfig,
+};
+use fuel_core_executor::executor::Executor;
+use fuel_core_services::stream::BoxStream;
 use fuel_core_txpool::service::SharedState as TxPoolSharedState;
-use fuel_core_types::fuel_types::BlockHeight;
 #[cfg(feature = "p2p")]
 use fuel_core_types::services::p2p::peer_reputation::AppScore;
+use fuel_core_types::{
+    fuel_types::BlockHeight,
+    services::block_importer::SharedImportResult,
+};
 use std::sync::Arc;
 
 pub mod block_importer;
@@ -56,13 +67,50 @@ impl TransactionsSource {
 
 #[derive(Clone)]
 pub struct ExecutorAdapter {
-    pub relayer: MaybeRelayerAdapter,
-    pub config: Arc<fuel_core_executor::Config>,
+    pub executor: Arc<Executor<Database, RelayerReadDatabase>>,
+}
+
+impl ExecutorAdapter {
+    pub fn new(
+        database: Database,
+        relayer_database: RelayerReadDatabase,
+        config: fuel_core_executor::Config,
+    ) -> Self {
+        let executor = Executor {
+            database_view_provider: database,
+            relayer_view_provider: relayer_database,
+            config: Arc::new(config),
+        };
+        Self {
+            executor: Arc::new(executor),
+        }
+    }
 }
 
 #[derive(Clone)]
 pub struct VerifierAdapter {
-    pub block_verifier: Arc<Verifier<Database, MaybeRelayerAdapter>>,
+    pub block_verifier: Arc<Verifier<Database>>,
+}
+
+#[derive(Clone)]
+pub struct ConsensusAdapter {
+    pub block_verifier: Arc<Verifier<Database>>,
+    pub config: RelayerConsensusConfig,
+    pub maybe_relayer: MaybeRelayerAdapter,
+}
+
+impl ConsensusAdapter {
+    pub fn new(
+        block_verifier: VerifierAdapter,
+        config: RelayerConsensusConfig,
+        maybe_relayer: MaybeRelayerAdapter,
+    ) -> Self {
+        Self {
+            block_verifier: block_verifier.block_verifier,
+            config,
+            maybe_relayer,
+        }
+    }
 }
 
 #[derive(Clone)]
@@ -83,6 +131,16 @@ pub struct BlockProducerAdapter {
 pub struct BlockImporterAdapter {
     pub block_importer:
         Arc<fuel_core_importer::Importer<Database, ExecutorAdapter, VerifierAdapter>>,
+}
+
+impl BlockImporterAdapter {
+    pub fn events(&self) -> BoxStream<SharedImportResult> {
+        use futures::StreamExt;
+        fuel_core_services::stream::IntoBoxStream::into_boxed(
+            tokio_stream::wrappers::BroadcastStream::new(self.block_importer.subscribe())
+                .filter_map(|r| futures::future::ready(r.ok())),
+        )
+    }
 }
 
 #[cfg(feature = "p2p")]

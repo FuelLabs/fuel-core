@@ -21,7 +21,7 @@ use fuel_core::{
         config::Trigger,
         Config,
         DbType,
-        RelayerVerifierConfig,
+        RelayerConsensusConfig,
         ServiceTrait,
         VMConfig,
     },
@@ -289,7 +289,7 @@ impl Command {
             None
         };
 
-        let verifier = RelayerVerifierConfig {
+        let verifier = RelayerConsensusConfig {
             max_da_lag: max_da_lag.into(),
             max_wait_time: max_wait_time.into(),
         };
@@ -334,7 +334,7 @@ impl Command {
             sync: sync_args.into(),
             consensus_key,
             name,
-            verifier,
+            relayer_consensus_config: verifier,
             min_connected_reserved_peers,
             time_until_synced: time_until_synced.into(),
             query_log_threshold_time: query_log_threshold_time.into(),

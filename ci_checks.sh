@@ -11,7 +11,7 @@ cargo +nightly fmt --all -- --check &&
 cargo sort -w --check &&
 source .github/workflows/scripts/verify_openssl.sh &&
 cargo clippy --all-targets --all-features &&
-cargo doc --all-features --workspace &&
+cargo doc --all-features --workspace --no-deps &&
 cargo make check --locked &&
 cargo make check --all-features --locked &&
 cargo check -p fuel-core-types --target wasm32-unknown-unknown --no-default-features &&

@@ -30,9 +30,6 @@ pub trait BlockProducerDatabase: Send + Sync {
 
     /// Gets the block header BMT MMR root at `height`.
     fn block_header_merkle_root(&self, height: &BlockHeight) -> StorageResult<Bytes32>;
-
-    /// Fetch the current block height.
-    fn current_block_height(&self) -> StorageResult<BlockHeight>;
 }
 
 #[async_trait]

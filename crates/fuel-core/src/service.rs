@@ -1,7 +1,15 @@
+use self::adapters::BlockImporterAdapter;
 use crate::{
     database::Database,
-    service::adapters::P2PAdapter,
+    service::{
+        adapters::{
+            P2PAdapter,
+            PoAAdapter,
+        },
+        genesis::execute_genesis_block,
+    },
 };
+use fuel_core_poa::ports::BlockImporter;
 use fuel_core_services::{
     RunnableService,
     RunnableTask,
@@ -9,20 +17,20 @@ use fuel_core_services::{
     State,
     StateWatcher,
 };
+use fuel_core_storage::{
+    transactional::AtomicView,
+    IsNotFound,
+};
 use std::net::SocketAddr;
 use tracing::warn;
 
 pub use config::{
     Config,
     DbType,
+    RelayerConsensusConfig,
     VMConfig,
 };
 pub use fuel_core_services::Service as ServiceTrait;
-
-use crate::service::adapters::PoAAdapter;
-pub use fuel_core_consensus_module::RelayerVerifierConfig;
-
-use self::adapters::BlockImporterAdapter;
 
 pub mod adapters;
 pub mod config;
@@ -191,7 +199,6 @@ impl Task {
         // initialize state
         tracing::info!("Initializing database");
         database.init(&config.chain_conf)?;
-        genesis::maybe_initialize_state(&config, &database)?;
 
         // initialize sub services
         tracing::info!("Initializing sub services");
@@ -221,6 +228,16 @@ impl RunnableService for Task {
         _: &StateWatcher,
         _: Self::TaskParams,
     ) -> anyhow::Result<Self::Task> {
+        let view = self.shared.database.latest_view();
+        // check if chain is initialized
+        if let Err(err) = view.get_genesis() {
+            if err.is_not_found() {
+                let result = execute_genesis_block(&self.shared.config, &view)?;
+
+                self.shared.block_importer.commit_result(result).await?;
+            }
+        }
+
         for service in &self.services {
             service.start_and_await().await?;
         }

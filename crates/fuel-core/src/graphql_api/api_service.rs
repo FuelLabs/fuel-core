@@ -58,6 +58,7 @@ use fuel_core_services::{
     StateWatcher,
 };
 use fuel_core_storage::transactional::AtomicView;
+use fuel_core_types::fuel_types::BlockHeight;
 use futures::Stream;
 use serde_json::json;
 use std::{
@@ -176,8 +177,8 @@ pub fn new_service<OnChain, OffChain>(
     request_timeout: Duration,
 ) -> anyhow::Result<Service>
 where
-    OnChain: AtomicView + 'static,
-    OffChain: AtomicView + 'static,
+    OnChain: AtomicView<Height = BlockHeight> + 'static,
+    OffChain: AtomicView<Height = BlockHeight> + 'static,
     OnChain::View: OnChainDatabase,
     OffChain::View: OffChainDatabase,
 {

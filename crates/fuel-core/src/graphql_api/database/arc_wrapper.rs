@@ -12,7 +12,6 @@ use fuel_core_storage::{
     transactional::AtomicView,
     Result as StorageResult,
 };
-use fuel_core_types::fuel_types::BlockHeight;
 use std::sync::Arc;
 
 /// The GraphQL can't work with the generics in [`async_graphql::Context::data_unchecked`] and requires a known type.
@@ -31,14 +30,19 @@ impl<Provider, ArcView> ArcWrapper<Provider, ArcView> {
     }
 }
 
-impl<Provider, View> AtomicView for ArcWrapper<Provider, OnChainView>
+impl<Provider, View, Height> AtomicView for ArcWrapper<Provider, OnChainView>
 where
-    Provider: AtomicView<View = View>,
+    Provider: AtomicView<View = View, Height = Height>,
     View: OnChainDatabase + 'static,
 {
     type View = OnChainView;
+    type Height = Height;
 
-    fn view_at(&self, height: BlockHeight) -> StorageResult<Self::View> {
+    fn latest_height(&self) -> Self::Height {
+        self.inner.latest_height()
+    }
+
+    fn view_at(&self, height: &Height) -> StorageResult<Self::View> {
         let view = self.inner.view_at(height)?;
         Ok(Arc::new(view))
     }
@@ -48,14 +52,19 @@ where
     }
 }
 
-impl<Provider, View> AtomicView for ArcWrapper<Provider, OffChainView>
+impl<Provider, View, Height> AtomicView for ArcWrapper<Provider, OffChainView>
 where
-    Provider: AtomicView<View = View>,
+    Provider: AtomicView<View = View, Height = Height>,
     View: OffChainDatabase + 'static,
 {
     type View = OffChainView;
+    type Height = Height;
 
-    fn view_at(&self, height: BlockHeight) -> StorageResult<Self::View> {
+    fn latest_height(&self) -> Self::Height {
+        self.inner.latest_height()
+    }
+
+    fn view_at(&self, height: &Height) -> StorageResult<Self::View> {
         let view = self.inner.view_at(height)?;
         Ok(Arc::new(view))
     }

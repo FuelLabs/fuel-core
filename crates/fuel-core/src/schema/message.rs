@@ -38,27 +38,27 @@ pub struct Message(pub(crate) entities::message::Message);
 #[Object]
 impl Message {
     async fn amount(&self) -> U64 {
-        self.0.amount.into()
+        self.0.amount().into()
     }
 
     async fn sender(&self) -> Address {
-        self.0.sender.into()
+        (*self.0.sender()).into()
     }
 
     async fn recipient(&self) -> Address {
-        self.0.recipient.into()
+        (*self.0.recipient()).into()
     }
 
     async fn nonce(&self) -> Nonce {
-        self.0.nonce.into()
+        (*self.0.nonce()).into()
     }
 
     async fn data(&self) -> HexString {
-        self.0.data.clone().into()
+        self.0.data().clone().into()
     }
 
     async fn da_height(&self) -> U64 {
-        self.0.da_height.as_u64().into()
+        self.0.da_height().as_u64().into()
     }
 }
 
@@ -108,7 +108,7 @@ impl MessageQuery {
 
                 let messages = messages.map(|result| {
                     result
-                        .map(|message| (message.nonce.into(), message.into()))
+                        .map(|message| ((*message.nonce()).into(), message.into()))
                         .map_err(Into::into)
                 });
 

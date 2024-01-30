@@ -18,10 +18,7 @@ use crate::{
 };
 use async_trait::async_trait;
 use fuel_core_services::stream::BoxStream;
-use fuel_core_storage::{
-    transactional::AtomicView,
-    Result as StorageResult,
-};
+use fuel_core_storage::Result as StorageResult;
 use fuel_core_txpool::{
     service::TxStatusMessage,
     types::TxId,
@@ -141,25 +138,6 @@ impl P2pPort for P2PAdapter {
 
 impl worker::BlockImporter for BlockImporterAdapter {
     fn block_events(&self) -> BoxStream<SharedImportResult> {
-        use futures::StreamExt;
-        fuel_core_services::stream::IntoBoxStream::into_boxed(
-            tokio_stream::wrappers::BroadcastStream::new(self.block_importer.subscribe())
-                .filter_map(|r| futures::future::ready(r.ok())),
-        )
-    }
-}
-
-impl AtomicView for Database {
-    type View = Database;
-
-    fn view_at(&self, _: BlockHeight) -> StorageResult<Self::View> {
-        unimplemented!(
-            "Unimplemented until of the https://github.com/FuelLabs/fuel-core/issues/451"
-        )
-    }
-
-    fn latest_view(&self) -> Self::View {
-        // TODO: https://github.com/FuelLabs/fuel-core/issues/1581
-        self.clone()
+        self.events()
     }
 }

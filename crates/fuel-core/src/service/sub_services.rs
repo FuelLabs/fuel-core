@@ -1,8 +1,10 @@
 #![allow(clippy::let_unit_value)]
 use super::adapters::P2PAdapter;
-
 use crate::{
-    database::Database,
+    database::{
+        Database,
+        RelayerReadDatabase,
+    },
     fuel_core_graphql_api,
     fuel_core_graphql_api::Config as GraphQLConfig,
     schema::build_schema,
@@ -16,6 +18,7 @@ use crate::{
             TxPoolAdapter,
             VerifierAdapter,
         },
+        genesis::create_genesis_block,
         Config,
         SharedState,
         SubServices,
@@ -48,10 +51,38 @@ pub fn init_sub_services(
     config: &Config,
     database: &Database,
 ) -> anyhow::Result<(SubServices, SharedState)> {
-    let last_block = database.get_current_block()?.ok_or(anyhow::anyhow!(
-        "The blockchain is not initialized with any block"
-    ))?;
-    let last_height = *last_block.header().height();
+    let last_block_header = database
+        .get_current_block()?
+        .map(|block| block.header().clone())
+        .unwrap_or({
+            let block = create_genesis_block(config);
+            block.header().clone()
+        });
+    let last_height = *last_block_header.height();
+
+    let executor = ExecutorAdapter::new(
+        database.clone(),
+        RelayerReadDatabase::new(database.clone()),
+        fuel_core_executor::Config {
+            consensus_parameters: config.chain_conf.consensus_parameters.clone(),
+            coinbase_recipient: config
+                .block_producer
+                .coinbase_recipient
+                .unwrap_or_default(),
+            backtrace: config.vm.backtrace,
+            utxo_validation_default: config.utxo_validation,
+        },
+    );
+
+    let verifier = VerifierAdapter::new(config, database.clone());
+
+    let importer_adapter = BlockImporterAdapter::new(
+        config.block_importer.clone(),
+        database.clone(),
+        executor.clone(),
+        verifier.clone(),
+    );
+
     #[cfg(feature = "relayer")]
     let relayer_service = if let Some(config) = &config.relayer {
         Some(fuel_core_relayer::new_service(
@@ -73,46 +104,15 @@ pub fn init_sub_services(
         ),
     };
 
-    let executor = ExecutorAdapter {
-        relayer: relayer_adapter.clone(),
-        config: Arc::new(fuel_core_executor::Config {
-            consensus_parameters: config.chain_conf.consensus_parameters.clone(),
-            coinbase_recipient: config
-                .block_producer
-                .coinbase_recipient
-                .unwrap_or_default(),
-            backtrace: config.vm.backtrace,
-            utxo_validation_default: config.utxo_validation,
-        }),
-    };
-
-    let verifier =
-        VerifierAdapter::new(config, database.clone(), relayer_adapter.clone());
-
-    let importer_adapter = BlockImporterAdapter::new(
-        config.block_importer.clone(),
-        database.clone(),
-        executor.clone(),
-        verifier.clone(),
-    );
-
     #[cfg(feature = "p2p")]
-    let mut network = {
-        if let Some(p2p_config) = config.p2p.clone() {
-            let p2p_db = database.clone();
-            let genesis = p2p_db.get_genesis()?;
-            let p2p_config = p2p_config.init(genesis)?;
-
-            Some(fuel_core_p2p::service::new_service(
-                config.chain_conf.consensus_parameters.chain_id,
-                p2p_config,
-                p2p_db,
-                importer_adapter.clone(),
-            ))
-        } else {
-            None
-        }
-    };
+    let mut network = config.p2p.clone().map(|p2p_config| {
+        fuel_core_p2p::service::new_service(
+            config.chain_conf.consensus_parameters.chain_id,
+            p2p_config,
+            database.clone(),
+            importer_adapter.clone(),
+        )
+    });
 
     #[cfg(feature = "p2p")]
     let p2p_adapter = {
@@ -147,10 +147,10 @@ pub fn init_sub_services(
 
     let block_producer = fuel_core_producer::Producer {
         config: config.block_producer.clone(),
-        db: database.clone(),
+        view_provider: database.clone(),
         txpool: tx_pool_adapter.clone(),
         executor: Arc::new(executor),
-        relayer: Box::new(relayer_adapter),
+        relayer: Box::new(relayer_adapter.clone()),
         lock: Mutex::new(()),
     };
     let producer_adapter = BlockProducerAdapter::new(block_producer);
@@ -165,7 +165,7 @@ pub fn init_sub_services(
 
     let poa = (production_enabled).then(|| {
         fuel_core_poa::new_service(
-            last_block.header(),
+            &last_block_header,
             poa_config,
             tx_pool_adapter.clone(),
             producer_adapter.clone(),
@@ -177,10 +177,14 @@ pub fn init_sub_services(
 
     #[cfg(feature = "p2p")]
     let sync = fuel_core_sync::service::new_service(
-        *last_block.header().height(),
+        last_height,
         p2p_adapter.clone(),
         importer_adapter.clone(),
-        verifier,
+        super::adapters::ConsensusAdapter::new(
+            verifier.clone(),
+            config.relayer_consensus_config.clone(),
+            relayer_adapter,
+        ),
         config.sync,
     )?;
 
