@@ -27,19 +27,12 @@ use fuel_core_services::{
     ServiceRunner,
     StateWatcher,
 };
-use fuel_core_storage::{
-    tables::Messages,
-    StorageAsRef,
-    StorageInspect,
-};
 use fuel_core_types::{
     blockchain::primitives::DaBlockHeight,
     entities::message::Message,
-    fuel_types::Nonce,
 };
 use futures::StreamExt;
 use std::{
-    borrow::Cow,
     convert::TryInto,
     ops::Deref,
 };
@@ -278,24 +271,6 @@ impl<D> SharedState<D> {
             rx.changed().await?;
         }
         Ok(())
-    }
-
-    /// Get a message if it has been synced
-    /// and is <= the given height.
-    pub fn get_message(
-        &self,
-        id: &Nonce,
-        da_height: &DaBlockHeight,
-    ) -> anyhow::Result<Option<Message>>
-    where
-        D: StorageInspect<Messages, Error = fuel_core_storage::Error>,
-    {
-        Ok(self
-            .database
-            .storage::<Messages>()
-            .get(id)?
-            .map(Cow::into_owned)
-            .filter(|message| message.da_height() <= *da_height))
     }
 
     /// Get finalized da height that represents last block from da layer that got finalized.

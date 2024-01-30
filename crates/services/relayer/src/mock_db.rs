@@ -9,6 +9,7 @@ use fuel_core_types::{
     blockchain::primitives::DaBlockHeight,
     entities::message::Message,
     fuel_types::Nonce,
+    services::relayer::Event,
 };
 use std::{
     collections::{
@@ -48,17 +49,21 @@ impl MockDb {
 }
 
 impl RelayerDb for MockDb {
-    fn insert_messages(
+    fn insert_events(
         &mut self,
         da_height: &DaBlockHeight,
-        messages: &[Message],
+        events: &[Event],
     ) -> StorageResult<()> {
         let mut m = self.data.lock().unwrap();
-        for message in messages {
-            m.messages
-                .entry(message.da_height())
-                .or_default()
-                .insert(*message.id(), message.clone());
+        for event in events {
+            match event {
+                Event::Message(message) => {
+                    m.messages
+                        .entry(message.da_height())
+                        .or_default()
+                        .insert(*message.id(), message.clone());
+                }
+            }
         }
         let max = m.finalized_da_height.get_or_insert(0u64.into());
         *max = (*max).max(*da_height);
