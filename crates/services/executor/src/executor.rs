@@ -1168,7 +1168,7 @@ where
                         )
                     }
                     if let Some(message) = db.storage::<Messages>().get(nonce)? {
-                        if message.da_height > block_da_height {
+                        if message.da_height() > block_da_height {
                             return Err(TransactionValidityError::MessageSpendTooEarly(
                                 *nonce,
                             )

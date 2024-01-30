@@ -27,13 +27,11 @@ fn test_insert_events() {
         .returning(|_| Ok(Some(std::borrow::Cow::Owned(9u64.into()))));
     let mut db = db.into_transactional();
 
-    let m = Message {
-        amount: 10,
-        da_height: same_height.into(),
-        ..Default::default()
-    };
+    let mut m = Message::default();
+    m.set_amount(10);
+    m.set_da_height(same_height);
     let mut m2 = m.clone();
-    m2.nonce = 1.into();
+    m2.set_nonce(1.into());
     assert_ne!(m.id(), m2.id());
     let messages = [m.into(), m2.into()];
     db.insert_events(&same_height.into(), &messages[..])
@@ -41,18 +39,17 @@ fn test_insert_events() {
 }
 
 #[test]
-fn insert_works_for_messages_with_same_height() {
+fn insert_always_raises_da_height_monotonically() {
     // Given
     let same_height = 12u64.into();
-    let events: Vec<_> = (0..10)
+    let messages: Vec<_> = (0..10)
         .map(|i| {
-            Message {
-                amount: i,
-                da_height: same_height,
-                ..Default::default()
-            }
-            .into()
+            let mut message = Message::default();
+            message.set_amount(i);
+            message.set_da_height(same_height);
+            message
         })
+        .map(Into::into)
         .collect();
 
     let mut db = MockStorage::default();
