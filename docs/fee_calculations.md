@@ -14,7 +14,7 @@ backward from there.
 
 #### Pessimistic Estimate
 
-If we arbitrarily set the target growth to 500 GB/year, we can ask, "what would 
+If we arbitrarily set the target growth to 500 GB/year, we can ask "What would 
 be the gas price if users maxed out each block gas limit with storage?" 
 This gives us this graph:
 
@@ -46,15 +46,17 @@ If we compare our numbers to what Ethereum charges for gas, we get similar numbe
 
 If we had a pessimistic estimate for Ethereum and every block on Ethereum was full of new contract creations:
 
-max_contract_size = 24,000 bytes
-gas_per_max_contract = 32,000 + max_contract_size * 200 = 4,832,000
+`max_contract_size = 24,000 bytes`
 
-gas_per_block = 30,000,000
-contracts_per_block = gas_per_block / gas_per_max_contract = ~6
+`gas_per_max_contract = 32,000 + max_contract_size * 200 = 4,832,000`
 
-blocks_per_year = 365 * 24 * 60 * ~5 = ~2628000
+`gas_per_block = 30,000,000`
 
-yearly_new_contract_bytes = blocks_per_year * contracts_per_block * max_contract_size = **378,432,000,000**
+`contracts_per_block = gas_per_block / gas_per_max_contract = ~6`
+
+`blocks_per_year = 365 * 24 * 60 * ~5 = ~2628000`
+
+`yearly_new_contract_bytes = blocks_per_year * contracts_per_block * max_contract_size = **378,432,000,000**`
 
 Which roughly lines up with our pessimistic estimate.
 
