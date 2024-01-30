@@ -1,12 +1,12 @@
 use crate::{
     database::{
         block::FuelBlockSecondaryKeyBlockHeights,
-        coin::OwnedCoins,
         database_description::DatabaseDescription,
-        message::OwnedMessageIds,
         Database,
     },
     fuel_core_graphql_api::storage::{
+        coins::OwnedCoins,
+        messages::OwnedMessageIds,
         receipts::Receipts,
         transactions::{
             OwnedTransactions,
@@ -26,11 +26,13 @@ use fuel_core_storage::{
             FuelBlockMerkleData,
             FuelBlockMerkleMetadata,
         },
+        Coins,
         ContractsAssets,
         ContractsInfo,
         ContractsLatestUtxo,
         ContractsRawCode,
         ContractsState,
+        Messages,
         ProcessedTransactions,
         SealedBlockConsensus,
         SpentMessages,
@@ -89,7 +91,9 @@ use_structured_implementation!(
     ContractsStateMerkleData,
     ContractsAssetsMerkleMetadata,
     ContractsAssetsMerkleData,
+    Coins,
     OwnedCoins,
+    Messages,
     OwnedMessageIds,
     OwnedTransactions,
     TransactionStatuses,

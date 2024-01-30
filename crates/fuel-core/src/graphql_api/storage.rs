@@ -1,5 +1,7 @@
 use fuel_core_storage::kv_store::StorageColumn;
 
+pub mod coins;
+pub mod messages;
 pub mod receipts;
 pub mod transactions;
 

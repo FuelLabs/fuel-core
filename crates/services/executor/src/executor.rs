@@ -1248,7 +1248,9 @@ where
                             )
                         })?;
 
-                    execution_data.events.push(ExecutorEvent::ConsumeCoin(coin));
+                    execution_data
+                        .events
+                        .push(ExecutorEvent::ConsumeCoin(coin.uncompress(*utxo_id)));
                 }
                 Input::MessageDataSigned(_) | Input::MessageDataPredicate(_)
                     if reverted =>
@@ -1677,7 +1679,9 @@ where
             if db.storage::<Coins>().insert(&utxo_id, &coin)?.is_some() {
                 return Err(ExecutorError::OutputAlreadyExists)
             }
-            execution_data.events.push(ExecutorEvent::NewCoin(coin));
+            execution_data
+                .events
+                .push(ExecutorEvent::NewCoin(coin.uncompress(utxo_id)));
         }
 
         Ok(())

@@ -9,7 +9,7 @@ use crate::{
         primitives::BlockId,
     },
     entities::{
-        coins::coin::CompressedCoin,
+        coins::coin::Coin,
         message::Message,
     },
     fuel_tx::{
@@ -54,16 +54,16 @@ pub struct ExecutionResult {
 }
 
 /// The event represents some internal state changes caused by the block execution.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Event {
     /// Imported a new spendable message from the relayer.
     NewMessage(Message),
     /// The message was consumed by the transaction.
     ConsumeMessage(Message),
     /// Created a new spendable coin, produced by the transaction.
-    NewCoin(CompressedCoin),
+    NewCoin(Coin),
     /// The coin was consumed by the transaction.
-    ConsumeCoin(CompressedCoin),
+    ConsumeCoin(Coin),
 }
 
 /// The status of a transaction after it is executed.
