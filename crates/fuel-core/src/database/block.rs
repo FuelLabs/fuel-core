@@ -40,7 +40,6 @@ use fuel_core_types::{
     entities::message::MerkleProof,
     fuel_merkle::binary::MerkleTree,
     fuel_types::BlockHeight,
-    tai64::Tai64,
 };
 use itertools::Itertools;
 use std::borrow::{
@@ -180,20 +179,6 @@ impl Database {
     /// Get the current block at the head of the chain.
     pub fn get_current_block(&self) -> StorageResult<Option<CompressedBlock>> {
         self.latest_compressed_block()
-    }
-
-    pub fn block_time(&self, height: &BlockHeight) -> StorageResult<Tai64> {
-        let block = self
-            .storage::<FuelBlocks>()
-            .get(height)?
-            .ok_or(not_found!(FuelBlocks))?;
-        Ok(block.header().time().to_owned())
-    }
-
-    pub fn get_block_id(&self, height: &BlockHeight) -> StorageResult<Option<BlockId>> {
-        self.storage::<FuelBlocks>()
-            .get(height)
-            .map(|v| v.map(|v| v.id()))
     }
 
     pub fn get_block_height(&self, id: &BlockId) -> StorageResult<Option<BlockHeight>> {

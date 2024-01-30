@@ -14,6 +14,7 @@ use fuel_core_storage::{
         Coins,
         ContractsInfo,
         ContractsLatestUtxo,
+        FuelBlocks,
         Messages,
         ProcessedTransactions,
         SpentMessages,
@@ -125,6 +126,7 @@ use fuel_core_types::{
             TransactionValidityError,
             UncommittedResult,
         },
+        relayer::Event,
     },
 };
 use parking_lot::Mutex as ParkingMutex;
@@ -541,8 +543,11 @@ where
         let block = component.empty_block;
         let source = component.transactions_source;
         let mut remaining_gas_limit = component.gas_limit;
-
         let block_height = *block.header.height();
+
+        if self.relayer.enabled() {
+            self.process_da(block_st_transaction, &block.header)?;
+        }
 
         // ALl transactions should be in the `TxSource`.
         // We use `block.transactions` to store executed transactions.
@@ -648,6 +653,48 @@ where
         }
 
         Ok(data)
+    }
+
+    fn process_da(
+        &self,
+        block_st_transaction: &mut D,
+        header: &PartialBlockHeader,
+    ) -> ExecutorResult<()> {
+        let block_height = *header.height();
+        let prev_block_height = block_height
+            .pred()
+            .ok_or(ExecutorError::ExecutingGenesisBlock)?;
+
+        let prev_block_header = block_st_transaction
+            .storage::<FuelBlocks>()
+            .get(&prev_block_height)?
+            .ok_or(ExecutorError::PreviousBlockIsNotFound)?;
+        let previous_da_height = prev_block_header.header().da_height;
+        let Some(next_unprocessed_da_height) = previous_da_height.0.checked_add(1) else {
+            return Err(ExecutorError::DaHeightExceededItsLimit)
+        };
+
+        for da_height in next_unprocessed_da_height..=header.da_height.0 {
+            let da_height = da_height.into();
+            let events = self
+                .relayer
+                .get_events(&da_height)
+                .map_err(|err| ExecutorError::RelayerError(err.into()))?;
+            for event in events {
+                match event {
+                    Event::Message(message) => {
+                        if message.da_height() != da_height {
+                            return Err(ExecutorError::RelayerGivesIncorrectMessages)
+                        }
+                        block_st_transaction
+                            .storage::<Messages>()
+                            .insert(message.nonce(), &message)?;
+                    }
+                }
+            }
+        }
+
+        Ok(())
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -1120,11 +1167,7 @@ where
                             TransactionValidityError::MessageAlreadySpent(*nonce).into()
                         )
                     }
-                    if let Some(message) = self
-                        .relayer
-                        .get_message(nonce, &block_da_height)
-                        .map_err(|e| ExecutorError::RelayerError(e.into()))?
-                    {
+                    if let Some(message) = db.storage::<Messages>().get(nonce)? {
                         if message.da_height() > block_da_height {
                             return Err(TransactionValidityError::MessageSpendTooEarly(
                                 *nonce,
