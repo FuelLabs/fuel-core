@@ -27,8 +27,6 @@ pub enum Output {
     ContractCreated(ContractCreated),
 }
 
-pub type OutputConversionError = String;
-
 pub struct CoinOutput {
     to: fuel_types::Address,
     amount: Word,

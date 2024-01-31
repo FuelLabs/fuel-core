@@ -367,7 +367,7 @@ impl Transaction {
                     .map(|c| AssetId(*c))
                     .collect(),
             ),
-            _ => None,
+            fuel_tx::Transaction::Mint(_) => None,
         }
     }
 
@@ -414,7 +414,7 @@ impl Transaction {
                 Some((*script.script_gas_limit()).into())
             }
             fuel_tx::Transaction::Create(_) => Some(0.into()),
-            _ => None,
+            fuel_tx::Transaction::Mint(_) => None,
         }
     }
 
@@ -428,23 +428,24 @@ impl Transaction {
 
     async fn mint_amount(&self) -> Option<U64> {
         match &self.0 {
+            fuel_tx::Transaction::Script(_) | fuel_tx::Transaction::Create(_) => None,
             fuel_tx::Transaction::Mint(mint) => Some((*mint.mint_amount()).into()),
-            _ => None,
         }
     }
 
     async fn mint_asset_id(&self) -> Option<AssetId> {
         match &self.0 {
+            fuel_tx::Transaction::Script(_) | fuel_tx::Transaction::Create(_) => None,
             fuel_tx::Transaction::Mint(mint) => Some((*mint.mint_asset_id()).into()),
-            _ => None,
         }
     }
 
     // TODO: Maybe we need to do the same `Script` and `Create`
     async fn tx_pointer(&self) -> Option<TxPointer> {
         match &self.0 {
+            fuel_tx::Transaction::Script(_) => None,
+            fuel_tx::Transaction::Create(_) => None,
             fuel_tx::Transaction::Mint(mint) => Some((*mint.tx_pointer()).into()),
-            _ => None,
         }
     }
 
@@ -468,7 +469,7 @@ impl Transaction {
             fuel_tx::Transaction::Create(create) => {
                 Some(create.inputs().iter().map(Into::into).collect())
             }
-            _ => None,
+            fuel_tx::Transaction::Mint(_) => None,
         }
     }
 
@@ -480,14 +481,14 @@ impl Transaction {
             fuel_tx::Transaction::Create(create) => {
                 create.outputs().iter().map(Into::into).collect()
             }
-            _ => vec![],
+            fuel_tx::Transaction::Mint(_) => vec![],
         }
     }
 
     async fn output_contract(&self) -> Option<output::ContractOutput> {
         match &self.0 {
+            fuel_tx::Transaction::Script(_) | fuel_tx::Transaction::Create(_) => None,
             fuel_tx::Transaction::Mint(mint) => Some(mint.output_contract().into()),
-            _ => None,
         }
     }
 
@@ -516,7 +517,8 @@ impl Transaction {
             fuel_tx::Transaction::Script(script) => {
                 Some((*script.receipts_root()).into())
             }
-            _ => None,
+            fuel_tx::Transaction::Create(_) => None,
+            fuel_tx::Transaction::Mint(_) => None,
         }
     }
 
@@ -546,7 +548,8 @@ impl Transaction {
             fuel_tx::Transaction::Script(script) => {
                 Some(HexString(script.script().clone()))
             }
-            _ => None,
+            fuel_tx::Transaction::Create(_) => None,
+            fuel_tx::Transaction::Mint(_) => None,
         }
     }
 
@@ -555,37 +558,42 @@ impl Transaction {
             fuel_tx::Transaction::Script(script) => {
                 Some(HexString(script.script_data().clone()))
             }
-            _ => None,
+            fuel_tx::Transaction::Create(_) => None,
+            fuel_tx::Transaction::Mint(_) => None,
         }
     }
 
     async fn bytecode_witness_index(&self) -> Option<u8> {
         match &self.0 {
+            fuel_tx::Transaction::Script(_) => None,
             fuel_tx::Transaction::Create(create) => {
                 Some(*create.bytecode_witness_index())
             }
-            _ => None,
+            fuel_tx::Transaction::Mint(_) => None,
         }
     }
 
     async fn bytecode_length(&self) -> Option<U64> {
         match &self.0 {
+            fuel_tx::Transaction::Script(_) => None,
             fuel_tx::Transaction::Create(create) => {
                 Some((*create.bytecode_length()).into())
             }
-            _ => None,
+            fuel_tx::Transaction::Mint(_) => None,
         }
     }
 
     async fn salt(&self) -> Option<Salt> {
         match &self.0 {
+            fuel_tx::Transaction::Script(_) => None,
             fuel_tx::Transaction::Create(create) => Some((*create.salt()).into()),
-            _ => None,
+            fuel_tx::Transaction::Mint(_) => None,
         }
     }
 
     async fn storage_slots(&self) -> Option<Vec<HexString>> {
         match &self.0 {
+            fuel_tx::Transaction::Script(_) => None,
             fuel_tx::Transaction::Create(create) => Some(
                 create
                     .storage_slots()
@@ -602,7 +610,7 @@ impl Transaction {
                     })
                     .collect(),
             ),
-            _ => None,
+            fuel_tx::Transaction::Mint(_) => None,
         }
     }
 
