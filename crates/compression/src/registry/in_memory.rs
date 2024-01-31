@@ -56,3 +56,45 @@ impl RegistryIndex for InMemoryRegistry {
         None
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{
+        tables,
+        Key,
+    };
+
+    #[test]
+    fn in_memory_registry_works() {
+        let mut reg = InMemoryRegistry::default();
+
+        let k1: Key<tables::Address> = reg.next_key();
+        let k2: Key<tables::Address> = reg.next_key();
+        assert_eq!(k1.next(), k2);
+
+        // Empty
+        assert_eq!(
+            reg.read(Key::<tables::AssetId>::try_from(100).unwrap()),
+            [0; 32]
+        );
+
+        // Write
+        reg.batch_write(
+            Key::<tables::AssetId>::from_raw(RawKey::try_from(100u32).unwrap()),
+            vec![[1; 32], [2; 32]],
+        );
+
+        // Read
+        assert_eq!(
+            reg.read(Key::<tables::AssetId>::try_from(100).unwrap()),
+            [1; 32]
+        );
+
+        // Index
+        assert_eq!(
+            reg.index_lookup(&[1; 32]),
+            Some(Key::<tables::AssetId>::try_from(100).unwrap())
+        );
+    }
+}
