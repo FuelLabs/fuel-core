@@ -378,6 +378,6 @@ where
         let slots = slots
             .map(|(key, value)| (ContractsStateKey::new(contract_id, &key), value))
             .collect_vec();
-        self.init_storage(slots.iter().map(|(key, value)| (key, value)))
+        self.init_storage(slots.iter().map(|kv| (&kv.0, &kv.1)))
     }
 }

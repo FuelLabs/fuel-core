@@ -455,7 +455,7 @@ fn verify_tx_min_gas_price(tx: &Transaction, config: &Config) -> Result<(), Erro
     let price = match tx {
         Transaction::Script(script) => script.price(),
         Transaction::Create(create) => create.price(),
-        _ => return Err(Error::NotSupportedTransactionType),
+        Transaction::Mint(_) => return Err(Error::NotSupportedTransactionType),
     };
     if config.metrics {
         // Gas Price metrics are recorded here to avoid double matching for
