@@ -156,7 +156,6 @@ impl Dependency {
                         | Input::MessageDataPredicate(_) => {
                             // Message inputs do not depend on any other fuel transactions
                         }
-                        _ => {}
                     }
                 }
             }
@@ -239,7 +238,6 @@ impl Dependency {
                 Output::ContractCreated { .. } => {
                     return Err(Error::NotInsertedIoContractOutput.into())
                 }
-                _ => todo!("Unsupported output type"),
             };
         } else {
             return Err(anyhow!("Use it only for coin output check"))
@@ -440,7 +438,6 @@ impl Dependency {
 
                     // yey we got our contract
                 }
-                _ => todo!("Unsupported input type"),
             }
         }
 
@@ -521,7 +518,6 @@ impl Dependency {
                 | Input::MessageCoinPredicate(_)
                 | Input::MessageDataSigned(_)
                 | Input::MessageDataPredicate(_) => {}
-                _ => todo!("Unsupported input type"),
             }
         }
 
@@ -569,7 +565,6 @@ impl Dependency {
                     // do nothing, this contract is already already found in dependencies.
                     // as it is tied with input and used_by is already inserted.
                 }
-                _ => todo!("Unsupported output type"),
             };
         }
 
@@ -629,7 +624,6 @@ impl Dependency {
                         }
                     }
                 }
-                _ => todo!("Unsupported output type"),
             };
         }
 
@@ -673,7 +667,6 @@ impl Dependency {
                 | Input::MessageDataPredicate(MessageDataPredicate { nonce, .. }) => {
                     self.messages.remove(nonce);
                 }
-                _ => todo!("Unsupported input type"),
             }
         }
 

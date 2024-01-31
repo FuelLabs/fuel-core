@@ -10,7 +10,7 @@ Description of the upcoming release here.
 
 ### Changed
 
-- [#1600](https://github.com/FuelLabs/fuel-core/pull/1600): Upgrade to fuel-vm 0.44.0
+- [#1600](https://github.com/FuelLabs/fuel-core/pull/1640): Upgrade to fuel-vm 0.45.0
 - [#1633](https://github.com/FuelLabs/fuel-core/pull/1633): Notify services about importing of the genesis block.
 - [#1625](https://github.com/FuelLabs/fuel-core/pull/1625): Making relayer independent from the executor and preparation for the force transaction inclusion.
 - [#1613](https://github.com/FuelLabs/fuel-core/pull/1613): Add api endpoint to retrieve a message by its nonce.
