@@ -210,7 +210,6 @@ pub mod merkle {
         V1(SparseMerkleMetadataV1),
     }
 
-    #[cfg(any(test, feature = "test-helpers"))]
     impl Default for SparseMerkleMetadata {
         fn default() -> Self {
             Self::V1(Default::default())
@@ -218,6 +217,13 @@ pub mod merkle {
     }
 
     impl SparseMerkleMetadata {
+        /// Create a new sparse Merkle metadata object from the given Merkle
+        /// root
+        pub fn new(root: MerkleRoot) -> Self {
+            let metadata = SparseMerkleMetadataV1 { root };
+            Self::V1(metadata)
+        }
+
         /// Get the Merkle root stored in the metadata
         pub fn root(&self) -> &MerkleRoot {
             match self {

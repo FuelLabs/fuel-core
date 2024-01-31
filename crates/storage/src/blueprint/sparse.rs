@@ -24,10 +24,7 @@ use crate::{
         StructuredStorage,
         TableWithBlueprint,
     },
-    tables::merkle::{
-        SparseMerkleMetadata,
-        SparseMerkleMetadataV1,
-    },
+    tables::merkle::SparseMerkleMetadata,
     Error as StorageError,
     Mappable,
     MerkleRoot,
@@ -105,7 +102,7 @@ where
         let prev_metadata: Cow<SparseMerkleMetadata> = storage
             .storage::<Metadata>()
             .get(primary_key)?
-            .unwrap_or(Cow::Owned(SparseMerkleMetadataV1::default().into()));
+            .unwrap_or_default();
 
         let root = *prev_metadata.root();
         let mut tree: MerkleTree<Nodes, _> = MerkleTree::load(&mut storage, &root)
@@ -116,7 +113,7 @@ where
 
         // Generate new metadata for the updated tree
         let root = tree.root();
-        let metadata = SparseMerkleMetadataV1 { root }.into();
+        let metadata = SparseMerkleMetadata::new(root);
         storage
             .storage::<Metadata>()
             .insert(primary_key, &metadata)?;
@@ -155,7 +152,7 @@ where
                 storage.storage::<Metadata>().remove(primary_key)?;
             } else {
                 // Generate new metadata for the updated tree
-                let metadata = SparseMerkleMetadataV1 { root }.into();
+                let metadata = SparseMerkleMetadata::new(root);
                 storage
                     .storage::<Metadata>()
                     .insert(primary_key, &metadata)?;
@@ -349,7 +346,7 @@ where
         });
         storage.as_mut().batch_write(&mut nodes)?;
 
-        let metadata = SparseMerkleMetadataV1 { root }.into();
+        let metadata = SparseMerkleMetadata::new(root);
         storage
             .storage::<Metadata>()
             .insert(primary_key, &metadata)?;
@@ -380,7 +377,7 @@ where
         let prev_metadata: Cow<SparseMerkleMetadata> = storage
             .storage::<Metadata>()
             .get(primary_key)?
-            .unwrap_or(Cow::Owned(SparseMerkleMetadataV1::default().into()));
+            .unwrap_or_default();
 
         let root = *prev_metadata.root();
         let mut tree: MerkleTree<Nodes, _> = MerkleTree::load(&mut storage, &root)
@@ -407,7 +404,7 @@ where
         )?;
 
         // Generate new metadata for the updated tree
-        let metadata = SparseMerkleMetadataV1 { root }.into();
+        let metadata = SparseMerkleMetadata::new(root);
         storage
             .storage::<Metadata>()
             .insert(primary_key, &metadata)?;
@@ -437,7 +434,7 @@ where
         let prev_metadata: Cow<SparseMerkleMetadata> = storage
             .storage::<Metadata>()
             .get(primary_key)?
-            .unwrap_or(Cow::Owned(SparseMerkleMetadataV1::default().into()));
+            .unwrap_or_default();
 
         let root = *prev_metadata.root();
         let mut tree: MerkleTree<Nodes, _> = MerkleTree::load(&mut storage, &root)
@@ -464,7 +461,7 @@ where
             storage.storage::<Metadata>().remove(primary_key)?;
         } else {
             // Generate new metadata for the updated tree
-            let metadata = SparseMerkleMetadataV1 { root }.into();
+            let metadata = SparseMerkleMetadata::new(root);
             storage
                 .storage::<Metadata>()
                 .insert(primary_key, &metadata)?;
