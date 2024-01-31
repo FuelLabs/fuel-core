@@ -2777,6 +2777,7 @@ name = "fuel-core-compression"
 version = "0.22.0"
 dependencies = [
  "bincode",
+ "fuel-core-compression",
  "fuel-core-compression-derive",
  "fuel-core-types",
  "paste",
@@ -2789,10 +2790,8 @@ dependencies = [
 name = "fuel-core-compression-alt"
 version = "0.22.0"
 dependencies = [
- "bincode",
  "fuel-core-compression",
  "fuel-core-types",
- "paste",
  "postcard",
  "serde",
 ]

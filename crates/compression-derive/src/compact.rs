@@ -69,7 +69,6 @@ fn construct_compact(
                 FieldAttrs::Skip => quote! {},
                 FieldAttrs::Normal => {
                     quote! {
-                        println!("recurse compact {}", stringify!(#ty));
                         let #cname = <#ty as Compactable>::compact(&#binding, ctx);
                     }
                 }
@@ -81,7 +80,6 @@ fn construct_compact(
                         >
                     };
                     quote! {
-                        println!("to_key {}: {}", stringify!(#cname), stringify!(#cty));
                         let #cname: #cty = ctx.to_key(
                             <tables::#reg_ident as Table>::Type::from(#binding.clone())
                         );
@@ -197,7 +195,7 @@ fn sum_counts(variant: &synstructure::VariantInfo<'_>) -> TokenStream2 {
                 FieldAttrs::Registry(registry) => {
                     let reg_ident = format_ident!("{}", registry);
                     quote! {
-                        CountPerTable { #reg_ident: 1, ..CountPerTable::default() }
+                        CountPerTable::#reg_ident(1)
                     }
                 }
             }
@@ -265,8 +263,7 @@ fn serialize_struct(s: &synstructure::Structure) -> TokenStream2 {
     let g = s.ast().generics.clone();
     let w = g.where_clause.clone();
     let compact = quote! {
-        #[derive(Clone)]
-        #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+        #[derive(Clone, serde::Serialize, serde::Deserialize)]
         #[doc = concat!("Compacted version of `", stringify!(#name), "`.")]
         pub struct #compact_name #g #w #defs #semi
     };
@@ -320,8 +317,7 @@ fn serialize_enum(s: &synstructure::Structure) -> TokenStream2 {
         })
         .collect();
     let enumdef = quote! {
-        #[derive(Clone)]
-        #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+        #[derive(Clone, serde::Serialize, serde::Deserialize)]
         #[doc = concat!("Compacted version of `", stringify!(#name), "`.")]
         pub enum #compact_name { #variant_defs }
     };
@@ -386,7 +382,7 @@ pub fn compact_derive(mut s: synstructure::Structure) -> TokenStream2 {
             _ => panic!("Can't derive `Compact` for `union`s"),
         },
     };
-    println!("{}", ts);
+    // println!("{}", ts);
     let _ = std::fs::write(format!("/tmp/derive/{name}.rs"), ts.to_string());
     ts
 }

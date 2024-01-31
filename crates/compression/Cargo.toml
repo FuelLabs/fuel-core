@@ -22,6 +22,7 @@ paste = "1.0"
 fuel-core-compression-derive = { path = "../compression-derive" }
 
 [dev-dependencies]
+fuel-core-compression = { path = "." } # Self-dependency needed by test for macros
 fuel-core-types = { workspace = true, features = ["serde"] }
 
 [features]

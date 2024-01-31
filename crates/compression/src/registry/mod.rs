@@ -17,7 +17,7 @@ mod _private {
 
 pub trait Table: _private::Seal {
     const NAME: &'static str;
-    type Type: Default + Serialize + for<'de> Deserialize<'de>;
+    type Type: PartialEq + Default + Serialize + for<'de> Deserialize<'de>;
 }
 
 pub mod access {
@@ -55,9 +55,21 @@ macro_rules! tables {
         /// One counter per table
         #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, serde::Serialize, serde::Deserialize)]
         #[allow(non_snake_case)] // The field names match table type names eactly
+        #[non_exhaustive]
         pub struct CountPerTable {
             $(pub $name: usize),*
         }
+
+        impl CountPerTable {$(
+            /// Custom constructor per table
+            #[allow(non_snake_case)] // The field names match table type names eactly
+            pub fn $name(value: usize) -> Self {
+                Self {
+                    $name: value,
+                    ..Self::default()
+                }
+            }
+        )*}
 
         $(
             impl access::AccessCopy<tables::$name, usize> for CountPerTable {
@@ -84,10 +96,19 @@ macro_rules! tables {
         }
 
         /// One key value per table
-        #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, serde::Serialize, serde::Deserialize)]
+        #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
         #[allow(non_snake_case)] // The field names match table type names eactly
+        #[non_exhaustive]
         pub struct KeyPerTable {
             $(pub $name: Key<tables::$name>),*
+        }
+
+        impl Default for KeyPerTable {
+            fn default() -> Self {
+                Self {
+                    $($name: Key::ZERO,)*
+                }
+            }
         }
 
         $(
@@ -126,8 +147,9 @@ macro_rules! tables {
         }
 
         /// Registeration changes per table
-        #[derive(Debug, Clone, PartialEq, Eq, Default, serde::Serialize, serde::Deserialize)]
+        #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
         #[allow(non_snake_case)] // The field names match table type names eactly
+        #[non_exhaustive]
         pub struct ChangesPerTable {
             $(pub $name: WriteTo<tables::$name>),*
         }
@@ -137,8 +159,17 @@ macro_rules! tables {
                 true $(&& self.$name.values.is_empty())*
             }
 
+            pub fn from_start_keys(start_keys: KeyPerTable) -> Self {
+                Self {
+                    $($name: WriteTo {
+                        start_key: start_keys.$name,
+                        values: Vec::new(),
+                    }),*
+                }
+            }
+
             /// Apply changes to the registry db
-            pub fn apply_to_registry<R: db::RegistryWrite>(self, reg: &mut R) {
+            pub fn apply_to_registry<R: db::RegistryWrite>(&self, reg: &mut R) {
                 $(
                     reg.batch_write(self.$name.start_key, self.$name.values.clone());
                 )*
@@ -228,28 +259,28 @@ mod tests {
 
         // Wrapping
         reg.batch_write(
-            Key::<tables::AssetId>::from_raw(RawKey::MAX),
+            Key::<tables::AssetId>::from_raw(RawKey::MAX_WRITABLE),
             vec![[3; 32], [4; 32]],
         );
 
         assert_eq!(
-            reg.read(Key::<tables::AssetId>::from_raw(RawKey::MAX)),
+            reg.read(Key::<tables::AssetId>::from_raw(RawKey::MAX_WRITABLE)),
             [3; 32]
         );
 
         assert_eq!(
-            reg.read(Key::<tables::AssetId>::from_raw(RawKey::MIN)),
+            reg.read(Key::<tables::AssetId>::from_raw(RawKey::ZERO)),
             [4; 32]
         );
 
         assert_eq!(
             reg.index_lookup(&*AssetId::from([3; 32])),
-            Some(Key::<tables::AssetId>::from_raw(RawKey::MAX))
+            Some(Key::<tables::AssetId>::from_raw(RawKey::MAX_WRITABLE))
         );
 
         assert_eq!(
             reg.index_lookup(&*AssetId::from([4; 32])),
-            Some(Key::<tables::AssetId>::from_raw(RawKey::MIN))
+            Some(Key::<tables::AssetId>::from_raw(RawKey::ZERO))
         );
     }
 }

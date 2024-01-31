@@ -12,19 +12,21 @@ use super::{
 pub struct InMemoryRegistry {
     next_keys: HashMap<&'static str, RawKey>,
     storage: HashMap<&'static str, HashMap<RawKey, Vec<u8>>>,
+    index: HashMap<&'static str, HashMap<Vec<u8>, RawKey>>,
 }
 
 impl RegistrySelectNextKey for InMemoryRegistry {
-    fn next_key<T: Table>(&mut self) -> Key<T> {
-        let next_key = self.next_keys.entry(T::NAME).or_default();
-        let key = Key::<T>::from_raw(*next_key);
-        *next_key = next_key.next();
-        key
+    fn next_key<T: Table>(&self) -> Key<T> {
+        Key::from_raw(self.next_keys.get(T::NAME).copied().unwrap_or(RawKey::ZERO))
     }
 }
 
 impl RegistryRead for InMemoryRegistry {
     fn read<T: Table>(&self, key: Key<T>) -> T::Type {
+        if key == Key::DEFAULT_VALUE {
+            return T::Type::default();
+        }
+
         self.storage
             .get(T::NAME)
             .and_then(|table| table.get(&key.raw()))
@@ -35,24 +37,42 @@ impl RegistryRead for InMemoryRegistry {
 
 impl RegistryWrite for InMemoryRegistry {
     fn batch_write<T: Table>(&mut self, start_key: Key<T>, values: Vec<T::Type>) {
+        let empty = values.is_empty();
+        if !empty && start_key == Key::DEFAULT_VALUE {
+            panic!("Cannot write to the default value key");
+        }
         let table = self.storage.entry(T::NAME).or_default();
         let mut key = start_key.raw();
         for value in values.into_iter() {
-            table.insert(key, postcard::to_stdvec(&value).unwrap());
+            let value = postcard::to_stdvec(&value).unwrap();
+            let mut prefix = value.clone();
+            prefix.truncate(32);
+            self.index.entry(T::NAME).or_default().insert(prefix, key);
+            table.insert(key, value);
             key = key.next();
+        }
+        if !empty {
+            self.next_keys.insert(T::NAME, key);
         }
     }
 }
 
 impl RegistryIndex for InMemoryRegistry {
     fn index_lookup<T: Table>(&self, value: &T::Type) -> Option<Key<T>> {
+        if *value == T::Type::default() {
+            return Some(Key::DEFAULT_VALUE);
+        }
+
         let needle = postcard::to_stdvec(value).unwrap();
-        let table = self.storage.get(T::NAME)?;
-        for (key, value) in table.iter() {
-            if value == &needle {
-                return Some(Key::from_raw(*key));
+        let mut prefix = needle.clone();
+        prefix.truncate(32);
+        if let Some(cand) = self.index.get(T::NAME)?.get(&prefix).copied() {
+            let cand_val = self.storage.get(T::NAME)?.get(&cand)?;
+            if *cand_val == needle {
+                return Some(Key::from_raw(cand));
             }
         }
+
         None
     }
 }
@@ -68,10 +88,6 @@ mod tests {
     #[test]
     fn in_memory_registry_works() {
         let mut reg = InMemoryRegistry::default();
-
-        let k1: Key<tables::Address> = reg.next_key();
-        let k2: Key<tables::Address> = reg.next_key();
-        assert_eq!(k1.next(), k2);
 
         // Empty
         assert_eq!(

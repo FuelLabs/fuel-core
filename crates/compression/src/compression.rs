@@ -44,7 +44,12 @@ where
         + db::RegistryIndex
         + db::RegistryWrite,
 {
-    pub fn run<C: Compactable>(reg: &'a mut R, target: C) -> C::Compact {
+    /// Run the compaction for the given target, returning the compacted data.
+    /// Changes are applied to the registry, and then returned as well.
+    pub fn run<C: Compactable>(
+        reg: &'a mut R,
+        target: C,
+    ) -> (C::Compact, ChangesPerTable) {
         let start_keys = next_keys(reg);
         let next_keys = start_keys;
         let key_limits = target.count();
@@ -55,12 +60,12 @@ where
             start_keys,
             next_keys,
             safe_keys_start,
-            changes: Default::default(),
+            changes: ChangesPerTable::from_start_keys(start_keys),
         };
 
         let compacted = target.compact(&mut ctx);
         ctx.changes.apply_to_registry(ctx.reg);
-        compacted
+        (compacted, ctx.changes)
     }
 }
 
@@ -74,8 +79,17 @@ where
     where
         KeyPerTable: access::AccessCopy<T, Key<T>>,
         KeyPerTable: access::AccessMut<T, Key<T>>,
-        ChangesPerTable: access::AccessMut<T, WriteTo<T>>,
+        ChangesPerTable:
+            access::AccessRef<T, WriteTo<T>> + access::AccessMut<T, WriteTo<T>>,
     {
+        // Check if the value is within the current changeset
+        if let Some(key) =
+            <ChangesPerTable as AccessRef<T, WriteTo<T>>>::get(&self.changes)
+                .lookup_value(&value)
+        {
+            return key;
+        }
+
         // Check if the registry contains this value already
         if let Some(key) = self.reg.index_lookup::<T>(&value) {
             let start: Key<T> = self.start_keys.value();
@@ -242,7 +256,12 @@ mod tests {
         },
         Key,
     };
-    use fuel_core_types::fuel_types::Address;
+    use fuel_core_compression::Compactable as _; // Hack for derive
+    use fuel_core_compression_derive::Compact;
+    use fuel_core_types::fuel_types::{
+        Address,
+        AssetId,
+    };
     use serde::{
         Deserialize,
         Serialize,
@@ -296,23 +315,55 @@ mod tests {
         }
     }
 
-    fn check<C: Clone + Compactable + PartialEq + std::fmt::Debug>(target: C)
-    where
-        C::Compact: std::fmt::Debug,
-    {
-        let mut registry = InMemoryRegistry::default();
+    #[derive(Debug, Clone, PartialEq, Compact)]
+    struct AutomaticExample {
+        #[da_compress(registry = "AssetId")]
+        a: AssetId,
+        #[da_compress(registry = "AssetId")]
+        b: AssetId,
+        c: u32,
+    }
 
-        let compacted = CompactionContext::run(&mut registry, target.clone());
-        let decompacted = C::decompact(compacted, &registry);
-        assert_eq!(target, decompacted);
+    #[test]
+    fn test_compaction_properties() {
+        let a = ManualExample {
+            a: Address::from([1u8; 32]),
+            b: Address::from([2u8; 32]),
+            c: 3,
+        };
+        assert_eq!(a.count().Address, 2);
+        assert_eq!(a.count().AssetId, 0);
+
+        let b = AutomaticExample {
+            a: AssetId::from([1u8; 32]),
+            b: AssetId::from([2u8; 32]),
+            c: 3,
+        };
+        assert_eq!(b.count().Address, 0);
+        assert_eq!(b.count().AssetId, 2);
     }
 
     #[test]
     fn test_compaction_roundtrip() {
-        check(ManualExample {
+        let target = ManualExample {
             a: Address::from([1u8; 32]),
             b: Address::from([2u8; 32]),
             c: 3,
-        });
+        };
+        let mut registry = InMemoryRegistry::default();
+        let (compacted, _) = CompactionContext::run(&mut registry, target.clone());
+        let decompacted = ManualExample::decompact(compacted, &registry);
+        assert_eq!(target, decompacted);
+
+        let target = AutomaticExample {
+            a: AssetId::from([1u8; 32]),
+            b: AssetId::from([2u8; 32]),
+            c: 3,
+        };
+        let mut registry = fuel_core_compression::InMemoryRegistry::default();
+        let (compacted, _) =
+            fuel_core_compression::CompactionContext::run(&mut registry, target.clone());
+        let decompacted = AutomaticExample::decompact(compacted, &registry);
+        assert_eq!(target, decompacted);
     }
 }

@@ -13,13 +13,50 @@ use super::{
 };
 
 /// New registrations written to a specific table.
-/// Default value is an empty write.
-#[derive(Debug, Clone, PartialEq, Eq, Default)]
+#[derive(Clone, PartialEq, Eq)]
 pub struct WriteTo<T: Table> {
     /// The values are inserted starting from this key
     pub start_key: Key<T>,
     /// Values. inserted using incrementing ids starting from `start_key`
     pub values: Vec<T::Type>,
+}
+
+impl<T: Table> fmt::Debug for WriteTo<T>
+where
+    T::Type: fmt::Debug,
+{
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        if self.values.is_empty() {
+            return f.write_str("WriteTo::EMPTY");
+        }
+
+        f.debug_struct("WriteTo")
+            .field("start_key", &self.start_key)
+            .field("values", &self.values)
+            .finish()
+    }
+}
+
+impl<T: Table> WriteTo<T>
+where
+    T::Type: PartialEq,
+{
+    /// Reverse lookup.
+    /// TODO: possibly add a lookup table for this, if deemed necessary
+    pub fn lookup_value(&self, needle: &T::Type) -> Option<Key<T>> {
+        if *needle == T::Type::default() {
+            return Some(Key::DEFAULT_VALUE);
+        }
+
+        let mut key = self.start_key;
+        for v in &self.values {
+            if v == needle {
+                return Some(key);
+            }
+            key = key.next();
+        }
+        None
+    }
 }
 
 /// Custom serialization is used to omit the start_key when the sequence is empty
@@ -50,7 +87,7 @@ where
         deserializer.deserialize_tuple(
             2,
             Self {
-                start_key: Key::default(),
+                start_key: Key::ZERO,
                 values: Vec::new(),
             },
         )
@@ -78,7 +115,7 @@ impl<'de, T: Table + Deserialize<'de>> serde::de::Visitor<'de> for WriteTo<T> {
                 &"WriteTo<_> with 2 elements",
             ))?;
             Ok(WriteTo {
-                start_key: Key::default(),
+                start_key: Key::ZERO,
                 values,
             })
         } else {
@@ -119,11 +156,11 @@ mod tests {
                     values: vec![*AssetId::from([0xa0; 32]), *AssetId::from([0xa1; 32])],
                 },
                 Address: WriteTo {
-                    start_key: Key::default(),
+                    start_key: Key::ZERO,
                     values: vec![*Address::from([0xc0; 32])],
                 },
                 ScriptCode: WriteTo {
-                    start_key: Key::default(),
+                    start_key: Key::ZERO,
                     values: vec![
                         vec![op::addi(0x20, 0x20, 1), op::ret(0)]
                             .into_iter()
@@ -133,7 +170,10 @@ mod tests {
                             .collect(),
                     ],
                 },
-                Witness: WriteTo::default(),
+                Witness: WriteTo {
+                    start_key: Key::ZERO,
+                    values: vec![],
+                },
             },
         };
 
