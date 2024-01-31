@@ -8,6 +8,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Description of the upcoming release here.
 
+### Added
+
+- [#1609](https://github.com/FuelLabs/fuel-core/pull/1609): Add a DA compression crate `fuel-core-compression`.
+
 ### Changed
 
 - [#1600](https://github.com/FuelLabs/fuel-core/pull/1600): Upgrade to fuel-vm 0.44.0
