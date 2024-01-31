@@ -13,7 +13,7 @@ use fuel_core_storage::{
     structured_storage::TableWithBlueprint,
     tables::{
         merkle::{
-            DenseMerkleMetadataV1,
+            DenseMerkleMetadata,
             FuelBlockMerkleData,
             FuelBlockMerkleMetadata,
         },
@@ -115,7 +115,7 @@ impl StorageMutate<FuelBlocks> for Database {
             .next()
             .transpose()?
             .map(|(_, metadata)| metadata)
-            .unwrap_or(DenseMerkleMetadataV1::default().into());
+            .unwrap_or_default();
 
         let storage = self.borrow_mut();
         let mut tree: MerkleTree<FuelBlockMerkleData, _> =
@@ -124,9 +124,9 @@ impl StorageMutate<FuelBlocks> for Database {
         tree.push(block_id.as_slice())?;
 
         // Generate new metadata for the updated tree
-        let version = tree.leaves_count();
         let root = tree.root();
-        let metadata = DenseMerkleMetadataV1 { version, root }.into();
+        let version = tree.leaves_count();
+        let metadata = DenseMerkleMetadata::new(root, version);
         self.storage::<FuelBlockMerkleMetadata>()
             .insert(height, &metadata)?;
 

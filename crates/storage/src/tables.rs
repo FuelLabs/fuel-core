@@ -153,7 +153,6 @@ pub mod merkle {
         V1(DenseMerkleMetadataV1),
     }
 
-    #[cfg(any(test, feature = "test-helpers"))]
     impl Default for DenseMerkleMetadata {
         fn default() -> Self {
             Self::V1(Default::default())
@@ -161,6 +160,13 @@ pub mod merkle {
     }
 
     impl DenseMerkleMetadata {
+        /// Create a new dense Merkle metadata object from the given Merkle
+        /// root and version
+        pub fn new(root: MerkleRoot, version: u64) -> Self {
+            let metadata = DenseMerkleMetadataV1 { root, version };
+            Self::V1(metadata)
+        }
+
         /// Get the Merkle root of the dense Metadata
         pub fn root(&self) -> &MerkleRoot {
             match self {
