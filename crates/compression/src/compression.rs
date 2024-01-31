@@ -1,5 +1,10 @@
 use std::marker::PhantomData;
 
+use serde::{
+    Deserialize,
+    Serialize,
+};
+
 use crate::{
     registry::{
         access::{
@@ -92,7 +97,7 @@ where
 
 /// Convert data to reference-based format
 pub trait Compactable {
-    type Compact;
+    type Compact: Clone + Serialize + for<'a> Deserialize<'a>;
 
     /// Count max number of each key type, for upper limit of overwritten keys
     fn count(&self) -> CountPerTable;
@@ -138,8 +143,16 @@ identity_compaction!(u32);
 identity_compaction!(u64);
 identity_compaction!(u128);
 
-impl<const S: usize, T: Compactable + Clone> Compactable for [T; S] {
-    type Compact = Self;
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ArrayWrapper<const S: usize, T: Serialize + for<'a> Deserialize<'a>>(
+    #[serde(with = "serde_big_array::BigArray")] pub [T; S],
+);
+
+impl<const S: usize, T> Compactable for [T; S]
+where
+    T: Compactable + Clone + Serialize + for<'a> Deserialize<'a>,
+{
+    type Compact = ArrayWrapper<S, T>;
 
     fn count(&self) -> CountPerTable {
         let mut count = CountPerTable::default();
@@ -153,18 +166,21 @@ impl<const S: usize, T: Compactable + Clone> Compactable for [T; S] {
     where
         R: db::RegistryRead + db::RegistryWrite + db::RegistryIndex,
     {
-        self.clone()
+        ArrayWrapper(self.clone())
     }
 
     fn decompact<R>(compact: Self::Compact, _reg: &R) -> Self
     where
         R: db::RegistryRead,
     {
-        compact
+        compact.0
     }
 }
 
-impl<T: Compactable + Clone> Compactable for Vec<T> {
+impl<T> Compactable for Vec<T>
+where
+    T: Compactable + Clone + Serialize + for<'a> Deserialize<'a>,
+{
     type Compact = Self;
 
     fn count(&self) -> CountPerTable {
@@ -214,8 +230,6 @@ impl<T> Compactable for PhantomData<T> {
 
 #[cfg(test)]
 mod tests {
-    use fuel_core_types::fuel_types::Address;
-
     use crate::{
         registry::{
             db,
@@ -225,36 +239,16 @@ mod tests {
         },
         Key,
     };
+    use fuel_core_types::fuel_types::Address;
+    use serde::{
+        Deserialize,
+        Serialize,
+    };
 
     use super::{
         Compactable,
         CompactionContext,
     };
-
-    impl Compactable for Address {
-        type Compact = Key<tables::Address>;
-
-        fn count(&self) -> crate::registry::CountPerTable {
-            CountPerTable {
-                Address: 1,
-                ..Default::default()
-            }
-        }
-
-        fn compact<R>(&self, ctx: &mut CompactionContext<R>) -> Self::Compact
-        where
-            R: db::RegistryRead + db::RegistryWrite + db::RegistryIndex,
-        {
-            ctx.to_key::<tables::Address>(*self)
-        }
-
-        fn decompact<R>(compact: Self::Compact, reg: &R) -> Self
-        where
-            R: db::RegistryRead,
-        {
-            Address::from(reg.read::<tables::Address>(compact))
-        }
-    }
 
     #[derive(Debug, Clone, PartialEq)]
     struct ManualExample {
@@ -263,7 +257,7 @@ mod tests {
         c: u64,
     }
 
-    #[derive(Debug, PartialEq)]
+    #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
     struct ManualExampleCompact {
         a: Key<tables::Address>,
         b: Key<tables::Address>,
@@ -284,8 +278,8 @@ mod tests {
         where
             R: db::RegistryRead + db::RegistryWrite + db::RegistryIndex,
         {
-            let a = ctx.to_key::<tables::Address>(self.a);
-            let b = ctx.to_key::<tables::Address>(self.b);
+            let a = ctx.to_key::<tables::Address>(*self.a);
+            let b = ctx.to_key::<tables::Address>(*self.b);
             ManualExampleCompact { a, b, c: self.c }
         }
 
@@ -312,8 +306,6 @@ mod tests {
 
     #[test]
     fn test_compaction_roundtrip() {
-        check(Address::default());
-        check(Address::from([1u8; 32]));
         check(ManualExample {
             a: Address::from([1u8; 32]),
             b: Address::from([2u8; 32]),

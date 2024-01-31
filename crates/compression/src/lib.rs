@@ -1,7 +1,5 @@
-mod block;
 mod compression;
 mod registry;
-mod types;
 
 pub use compression::{
     Compactable,
@@ -10,8 +8,13 @@ pub use compression::{
 pub use registry::{
     db,
     tables,
+    ChangesPerTable,
     CountPerTable,
     Key,
+    Table,
 };
+
+#[cfg(feature = "test-helpers")]
+pub use registry::in_memory::InMemoryRegistry;
 
 pub use fuel_core_compression_derive::Compact;

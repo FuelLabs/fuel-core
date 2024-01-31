@@ -1,6 +1,5 @@
 use core::fmt;
 
-use fuel_core_types::fuel_types::Bytes32;
 use serde::{
     ser::SerializeTuple,
     Deserialize,
@@ -95,7 +94,7 @@ impl<'de, T: Table + Deserialize<'de>> serde::de::Visitor<'de> for WriteTo<T> {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Registrations {
     /// Merkle root of the registeration table merkle roots
-    pub tables_root: Bytes32,
+    pub tables_root: [u8; 32],
     /// Changes per table
     pub changes: ChangesPerTable,
 }
@@ -107,24 +106,21 @@ mod tests {
     use fuel_core_types::{
         fuel_asm::op,
         fuel_tx::AssetId,
-        fuel_types::{
-            Address,
-            Bytes32,
-        },
+        fuel_types::Address,
     };
 
     #[test]
     fn test_tables() {
         let original = Registrations {
-            tables_root: Bytes32::default(),
+            tables_root: Default::default(),
             changes: ChangesPerTable {
                 AssetId: WriteTo {
                     start_key: Key::try_from(100).unwrap(),
-                    values: vec![AssetId::from([0xa0; 32]), AssetId::from([0xa1; 32])],
+                    values: vec![*AssetId::from([0xa0; 32]), *AssetId::from([0xa1; 32])],
                 },
                 Address: WriteTo {
                     start_key: Key::default(),
-                    values: vec![Address::from([0xc0; 32])],
+                    values: vec![*Address::from([0xc0; 32])],
                 },
                 ScriptCode: WriteTo {
                     start_key: Key::default(),

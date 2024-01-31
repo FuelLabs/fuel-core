@@ -49,9 +49,10 @@ fn field_defs(fields: &syn::Fields) -> TokenStream2 {
     }
 }
 
-/// Construct
-fn construct(
-    compact: &syn::Ident,
+/// Construct compact version of the struct from the original one
+fn construct_compact(
+    // The structure to construct, i.e. struct name or enum variant path
+    compact: &TokenStream2,
     variant: &synstructure::VariantInfo<'_>,
 ) -> TokenStream2 {
     let bound_fields: TokenStream2 = variant
@@ -72,12 +73,14 @@ fn construct(
                 FieldAttrs::Registry(registry) => {
                     let reg_ident = format_ident!("{}", registry);
                     let cty = quote! {
-                        ::fuel_core_compression::Key<
-                            ::fuel_core_compression::tables::#reg_ident
+                        Key<
+                            tables::#reg_ident
                         >
                     };
                     quote! {
-                        let #cname: #cty = ctx.to_key(*#binding);
+                        let #cname: #cty = ctx.to_key(
+                            <tables::#reg_ident as Table>::Type::from(#binding.clone())
+                        );
                     }
                 }
             }
@@ -101,9 +104,15 @@ fn construct(
         })
         .collect();
 
+    let construct_fields = match variant.ast().fields {
+        syn::Fields::Named(_) => quote! {{ #construct_fields }},
+        syn::Fields::Unnamed(_) => quote! {(#construct_fields)},
+        syn::Fields::Unit => quote! {},
+    };
+
     quote! {
         #bound_fields
-        #compact { #construct_fields }
+        #compact #construct_fields
     }
 }
 // Sum of Compactable::count() of all fields.
@@ -144,7 +153,7 @@ fn serialize_struct(s: &synstructure::Structure) -> TokenStream2 {
     let defs = field_defs(&variant.ast().fields);
     let count_per_variant = s.each_variant(|variant| sum_counts(variant));
     let construct_per_variant =
-        s.each_variant(|variant| construct(&compact_name, variant));
+        s.each_variant(|variant| construct_compact(&quote! {#compact_name}, variant));
 
     let semi = match variant.ast().fields {
         syn::Fields::Named(_) => quote! {},
@@ -155,12 +164,14 @@ fn serialize_struct(s: &synstructure::Structure) -> TokenStream2 {
     let g = s.ast().generics.clone();
     let w = g.where_clause.clone();
     let compact = quote! {
+        #[derive(Clone)]
         #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+        #[doc = concat!("Compacted version of `", stringify!(#name), "`.")]
         pub struct #compact_name #g #w #defs #semi
     };
 
     let impls = s.gen_impl(quote! {
-        use ::fuel_core_compression::{db, Compactable, CountPerTable, CompactionContext};
+        use ::fuel_core_compression::{db, tables, Table, Key, Compactable, CountPerTable, CompactionContext};
 
         gen impl Compactable for @Self {
 
@@ -180,7 +191,7 @@ fn serialize_struct(s: &synstructure::Structure) -> TokenStream2 {
             where
                 R: db::RegistryRead {
                 // #decompact_per_field;
-                todo!()
+                todo!("decompact struct")
             }
         }
     });
@@ -209,14 +220,25 @@ fn serialize_enum(s: &synstructure::Structure) -> TokenStream2 {
         })
         .collect();
     let enumdef = quote! {
+        #[derive(Clone)]
         #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+        #[doc = concat!("Compacted version of `", stringify!(#name), "`.")]
         pub enum #compact_name { #variant_defs }
     };
 
     let count_per_variant = s.each_variant(|variant| sum_counts(variant));
+    let construct_per_variant = s.each_variant(|variant| {
+        let vname = variant.ast().ident.clone();
+        construct_compact(
+            &quote! {
+                #compact_name :: #vname
+            },
+            variant,
+        )
+    });
 
     let impls = s.gen_impl(quote! {
-        use ::fuel_core_compression::{db, Compactable, CountPerTable, CompactionContext};
+        use ::fuel_core_compression::{db, tables, Table, Key, Compactable, CountPerTable, CompactionContext};
 
         gen impl Compactable for @Self {
             type Compact = #compact_name;
@@ -228,15 +250,14 @@ fn serialize_enum(s: &synstructure::Structure) -> TokenStream2 {
             fn compact<R>(&self, ctx: &mut CompactionContext<R>) -> Self::Compact
             where
                 R: db::RegistryRead + db::RegistryWrite + db::RegistryIndex {
-                // #compact_per_field;
-                todo!()
+                match self { #construct_per_variant }
             }
 
             fn decompact<R>(compact: Self::Compact, reg: &R) -> Self
             where
                 R: db::RegistryRead {
                 // #decompact_per_field;
-                todo!()
+                todo!("decompact enum")
             }
         }
     });
@@ -246,62 +267,9 @@ fn serialize_enum(s: &synstructure::Structure) -> TokenStream2 {
     }
 }
 
-fn serialize_transparent(s: synstructure::Structure) -> TokenStream2 {
-    assert_eq!(
-        s.variants().len(),
-        1,
-        "transparent structures must have one variant"
-    );
-    let variant: &synstructure::VariantInfo = &s.variants()[0];
-    assert_eq!(
-        variant.ast().fields.len(),
-        1,
-        "transparent structures must have exactly one field"
-    );
-    let field_t = variant.ast().fields.iter().next().unwrap().ty.clone();
-    let field_d = quote! { <#field_t as Compactable>::decompact(c, reg) };
-    let field_name: TokenStream2 = match variant.ast().fields {
-        syn::Fields::Named(n) => {
-            let n = n.named[0].ident.clone().unwrap();
-            quote! { #n }
-        }
-        syn::Fields::Unnamed(_) => quote! { 0 },
-        syn::Fields::Unit => unreachable!(),
-    };
-    let field_c = match variant.ast().fields {
-        syn::Fields::Named(_) => quote! { Self {#field_name: #field_d} },
-        syn::Fields::Unnamed(_) => quote! { Self(#field_d) },
-        syn::Fields::Unit => unreachable!(),
-    };
-
-    s.gen_impl(quote! {
-        use ::fuel_core_compression::{db, Compactable, CountPerTable, CompactionContext};
-
-        gen impl Compactable for @Self {
-            type Compact = #field_t;
-
-            fn count(&self) -> CountPerTable {
-                self.#field_name.count()
-            }
-
-            fn compact<R>(&self, ctx: &mut CompactionContext<R>) -> Self::Compact
-            where
-                R: db::RegistryRead + db::RegistryWrite + db::RegistryIndex {
-                self.#field_name.compact(ctx)
-            }
-
-            fn decompact<R>(c: Self::Compact, reg: &R) -> Self
-            where
-                R: db::RegistryRead {
-                #field_c
-            }
-        }
-    })
-}
-
 /// Derives `Compact` trait for the given `struct` or `enum`.
 pub fn compact_derive(mut s: synstructure::Structure) -> TokenStream2 {
-    s.add_bounds(synstructure::AddBounds::Both)
+    s.add_bounds(synstructure::AddBounds::None)
         .underscore_const(true);
 
     let name = s.ast().ident.to_string();
@@ -310,9 +278,8 @@ pub fn compact_derive(mut s: synstructure::Structure) -> TokenStream2 {
         StructureAttrs::Normal => match s.ast().data {
             syn::Data::Struct(_) => serialize_struct(&s),
             syn::Data::Enum(_) => serialize_enum(&s),
-            _ => panic!("Can't derive `Serialize` for `union`s"),
+            _ => panic!("Can't derive `Compact` for `union`s"),
         },
-        StructureAttrs::Transparent => serialize_transparent(s),
     };
     println!("{}", ts);
     let _ = std::fs::write(format!("/tmp/derive/{name}.rs"), ts.to_string());

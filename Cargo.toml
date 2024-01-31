@@ -9,6 +9,7 @@ members = [
   "crates/chain-config",
   "crates/client",
   "crates/compression",
+  "crates/compression-alt",
   "crates/compression-derive",
   "crates/database",
   "crates/fuel-core",
@@ -62,6 +63,9 @@ fuel-core-client = { version = "0.22.0", path = "./crates/client" }
 fuel-core-database = { version = "0.22.0", path = "./crates/database" }
 fuel-core-metrics = { version = "0.22.0", path = "./crates/metrics" }
 fuel-core-services = { version = "0.22.0", path = "./crates/services" }
+fuel-core-compression = { version = "0.22.0", path = "./crates/compression" }
+fuel-core-compression-alt = { version = "0.22.0", path = "./crates/compression-alt" }
+fuel-core-compression-derice = { version = "0.22.0", path = "./crates/compression-derive" }
 fuel-core-consensus-module = { version = "0.22.0", path = "./crates/services/consensus_module" }
 fuel-core-bft = { version = "0.22.0", path = "./crates/services/consensus_module/bft" }
 fuel-core-poa = { version = "0.22.0", path = "./crates/services/consensus_module/poa" }
@@ -79,7 +83,7 @@ fuel-core-tests = { version = "0.0.0", path = "./tests" }
 fuel-core-xtask = { version = "0.0.0", path = "./xtask" }
 
 # Fuel dependencies
-fuel-vm-private = { version = "0.44.0", package = "fuel-vm", default-features = false }
+fuel-vm-private = { path = "../fuel-vm/fuel-vm", version = "0.44.0", package = "fuel-vm", default-features = false }
 
 # Common dependencies
 anyhow = "1.0"

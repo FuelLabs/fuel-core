@@ -12,8 +12,8 @@ use serde::{
     Serialize,
 };
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub(crate) struct Header {
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Header {
     pub da_height: DaBlockHeight,
     pub prev_root: Bytes32,
     pub height: BlockHeight,

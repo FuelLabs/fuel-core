@@ -6,12 +6,9 @@ const ATTR: &str = "da_compress";
 pub enum StructureAttrs {
     /// Compacted recursively.
     Normal,
-    /// Transparent.
-    Transparent,
 }
 impl StructureAttrs {
     pub fn parse(attrs: &[syn::Attribute]) -> Self {
-        let mut result = Self::Normal;
         for attr in attrs {
             if attr.style != syn::AttrStyle::Outer {
                 continue;
@@ -19,21 +16,12 @@ impl StructureAttrs {
 
             if let syn::Meta::List(ml) = &attr.meta {
                 if ml.path.segments.len() == 1 && ml.path.segments[0].ident == ATTR {
-                    if !matches!(result, Self::Normal) {
-                        panic!("Duplicate attribute: {}", ml.tokens);
-                    }
-
-                    let attr_contents = ml.tokens.to_string();
-                    if attr_contents == "transparent" {
-                        result = Self::Transparent;
-                    } else {
-                        panic!("Invalid attribute: {}", ml.tokens);
-                    }
+                    panic!("Invalid attribute: {}", ml.tokens);
                 }
             }
         }
 
-        result
+        Self::Normal
     }
 }
 

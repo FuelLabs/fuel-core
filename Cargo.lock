@@ -2601,8 +2601,6 @@ dependencies = [
 [[package]]
 name = "fuel-asm"
 version = "0.44.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fe999b5964065e569092405bb58ec6a5b82c0368a0a9627ad48403583013506f"
 dependencies = [
  "bitflags 2.4.2",
  "fuel-types",
@@ -2780,6 +2778,19 @@ version = "0.22.0"
 dependencies = [
  "bincode",
  "fuel-core-compression-derive",
+ "fuel-core-types",
+ "paste",
+ "postcard",
+ "serde",
+ "serde-big-array",
+]
+
+[[package]]
+name = "fuel-core-compression-alt"
+version = "0.22.0"
+dependencies = [
+ "bincode",
+ "fuel-core-compression",
  "fuel-core-types",
  "paste",
  "postcard",
@@ -3158,8 +3169,6 @@ dependencies = [
 [[package]]
 name = "fuel-crypto"
 version = "0.44.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "607c74d6c2df713b3945ca9fc4ac5a50bec55b405d9375b7cc684b9e3960c74a"
 dependencies = [
  "coins-bip32",
  "coins-bip39",
@@ -3179,8 +3188,6 @@ dependencies = [
 [[package]]
 name = "fuel-derive"
 version = "0.44.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "92f1e5e1602c4b554b98e84a924d97621641d27ccec643c9468844329cee05e7"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -3191,8 +3198,6 @@ dependencies = [
 [[package]]
 name = "fuel-merkle"
 version = "0.44.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a1077a43ef91efcd2839ec649e595b5d89f2b130e927c3abd71f78189b376c30"
 dependencies = [
  "derive_more",
  "digest 0.10.7",
@@ -3206,19 +3211,16 @@ dependencies = [
 [[package]]
 name = "fuel-storage"
 version = "0.44.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7ee976cc2f29f4ba6d6758d6892c421a7079a654b29777d808641c64288a98b9"
 
 [[package]]
 name = "fuel-tx"
 version = "0.44.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f3ada9cb4520034ccce5f89c3b6b791fc830cc5b8c2b37ecfb2f50059e962672"
 dependencies = [
  "bitflags 2.4.2",
  "derivative",
  "derive_more",
  "fuel-asm",
+ "fuel-core-compression",
  "fuel-crypto",
  "fuel-merkle",
  "fuel-types",
@@ -3234,9 +3236,8 @@ dependencies = [
 [[package]]
 name = "fuel-types"
 version = "0.44.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d8d2dd56d12e5022ac047de40e3e461d192d28e3931ed00338150fd62993ff49"
 dependencies = [
+ "fuel-core-compression",
  "fuel-derive",
  "hex",
  "rand",
@@ -3246,8 +3247,6 @@ dependencies = [
 [[package]]
 name = "fuel-vm"
 version = "0.44.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c0615e83572095957e7e235356fa7f3e5706d17a3aff62d1d206ec480013ea99"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -6977,6 +6976,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "870026e60fa08c69f064aa766c10f10b1d62db9ccd4d0abb206472bee0ce3b32"
 dependencies = [
  "serde_derive",
+]
+
+[[package]]
+name = "serde-big-array"
+version = "0.5.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "11fc7cc2c76d73e0f27ee52abbd64eec84d46f370c88371120433196934e4b7f"
+dependencies = [
+ "serde",
 ]
 
 [[package]]
