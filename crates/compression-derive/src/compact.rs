@@ -1,15 +1,10 @@
-use core::panic;
-
 use proc_macro2::TokenStream as TokenStream2;
 use quote::{
     format_ident,
     quote,
 };
 
-use crate::attribute::{
-    FieldAttrs,
-    StructureAttrs,
-};
+use crate::attribute::FieldAttrs;
 
 /// Map field definitions to compacted field definitions.
 fn field_defs(fields: &syn::Fields) -> TokenStream2 {
@@ -269,7 +264,7 @@ fn serialize_struct(s: &synstructure::Structure) -> TokenStream2 {
     };
 
     let impls = s.gen_impl(quote! {
-        use ::fuel_core_compression::{db, tables, Table, Key, Compactable, CountPerTable, CompactionContext};
+        use ::fuel_core_compression::{RegistryDb, tables, Table, Key, Compactable, CountPerTable, CompactionContext};
 
         gen impl Compactable for @Self {
 
@@ -279,15 +274,11 @@ fn serialize_struct(s: &synstructure::Structure) -> TokenStream2 {
                 match self { #count_per_variant }
             }
 
-            fn compact<R>(&self, ctx: &mut CompactionContext<R>) -> Self::Compact
-            where
-                R: db::RegistryRead + db::RegistryWrite + db::RegistryIndex {
+            fn compact<R: RegistryDb>(&self, ctx: &mut CompactionContext<R>) -> Self::Compact {
                 match self { #compact_per_variant }
             }
 
-            fn decompact<R>(compact: Self::Compact, reg: &R) -> Self
-            where
-                R: db::RegistryRead {
+            fn decompact<R: RegistryDb>(compact: Self::Compact, reg: &R) -> Self {
                 match compact { #decompact_per_variant }
             }
         }
@@ -340,7 +331,7 @@ fn serialize_enum(s: &synstructure::Structure) -> TokenStream2 {
         });
 
     let impls = s.gen_impl(quote! {
-        use ::fuel_core_compression::{db, tables, Table, Key, Compactable, CountPerTable, CompactionContext};
+        use ::fuel_core_compression::{RegistryDb, tables, Table, Key, Compactable, CountPerTable, CompactionContext};
 
         gen impl Compactable for @Self {
             type Compact = #compact_name;
@@ -349,15 +340,11 @@ fn serialize_enum(s: &synstructure::Structure) -> TokenStream2 {
                 match self { #count_per_variant }
             }
 
-            fn compact<R>(&self, ctx: &mut CompactionContext<R>) -> Self::Compact
-            where
-                R: db::RegistryRead + db::RegistryWrite + db::RegistryIndex {
+            fn compact<R: RegistryDb>(&self, ctx: &mut CompactionContext<R>) -> Self::Compact {
                 match self { #construct_per_variant }
             }
 
-            fn decompact<R>(compact: Self::Compact, reg: &R) -> Self
-            where
-                R: db::RegistryRead {
+            fn decompact<R: RegistryDb>(compact: Self::Compact, reg: &R) -> Self {
                 match compact { #decompact_per_variant }
             }
         }
@@ -375,14 +362,9 @@ pub fn compact_derive(mut s: synstructure::Structure) -> TokenStream2 {
 
     let name = s.ast().ident.to_string();
 
-    let ts = match StructureAttrs::parse(&s.ast().attrs) {
-        StructureAttrs::Normal => match s.ast().data {
-            syn::Data::Struct(_) => serialize_struct(&s),
-            syn::Data::Enum(_) => serialize_enum(&s),
-            _ => panic!("Can't derive `Compact` for `union`s"),
-        },
-    };
-    // println!("{}", ts);
-    let _ = std::fs::write(format!("/tmp/derive/{name}.rs"), ts.to_string());
-    ts
+    match s.ast().data {
+        syn::Data::Struct(_) => serialize_struct(&s),
+        syn::Data::Enum(_) => serialize_enum(&s),
+        _ => panic!("Can't derive `Compact` for `union`s"),
+    }
 }

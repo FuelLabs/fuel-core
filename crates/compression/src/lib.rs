@@ -6,11 +6,11 @@ pub use compression::{
     CompactionContext,
 };
 pub use registry::{
-    db,
     tables,
     ChangesPerTable,
     CountPerTable,
     Key,
+    RegistryDb,
     Table,
 };
 

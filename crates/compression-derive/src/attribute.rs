@@ -2,29 +2,6 @@ use regex::Regex;
 
 const ATTR: &str = "da_compress";
 
-/// struct/enum attributes
-pub enum StructureAttrs {
-    /// Compacted recursively.
-    Normal,
-}
-impl StructureAttrs {
-    pub fn parse(attrs: &[syn::Attribute]) -> Self {
-        for attr in attrs {
-            if attr.style != syn::AttrStyle::Outer {
-                continue;
-            }
-
-            if let syn::Meta::List(ml) = &attr.meta {
-                if ml.path.segments.len() == 1 && ml.path.segments[0].ident == ATTR {
-                    panic!("Invalid attribute: {}", ml.tokens);
-                }
-            }
-        }
-
-        Self::Normal
-    }
-}
-
 /// Field attributes
 pub enum FieldAttrs {
     /// Skipped when compacting, and must be reconstructed when decompacting.

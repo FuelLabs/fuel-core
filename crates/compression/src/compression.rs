@@ -13,11 +13,11 @@ use crate::{
         },
         add_keys,
         block_section::WriteTo,
-        db,
         next_keys,
         ChangesPerTable,
         CountPerTable,
         KeyPerTable,
+        RegistryDb,
         Table,
     },
     Key,
@@ -37,13 +37,7 @@ pub struct CompactionContext<'a, R> {
     safe_keys_start: KeyPerTable,
     changes: ChangesPerTable,
 }
-impl<'a, R> CompactionContext<'a, R>
-where
-    R: db::RegistrySelectNextKey
-        + db::RegistryRead
-        + db::RegistryIndex
-        + db::RegistryWrite,
-{
+impl<'a, R: RegistryDb> CompactionContext<'a, R> {
     /// Run the compaction for the given target, returning the compacted data.
     /// Changes are applied to the registry, and then returned as well.
     pub fn run<C: Compactable>(
@@ -69,10 +63,7 @@ where
     }
 }
 
-impl<'a, R> CompactionContext<'a, R>
-where
-    R: db::RegistryRead + db::RegistryIndex,
-{
+impl<'a, R: RegistryDb> CompactionContext<'a, R> {
     /// Convert a value to a key
     /// If necessary, store the value in the changeset and allocate a new key.
     pub fn to_key<T: Table>(&mut self, value: T::Type) -> Key<T>
@@ -116,13 +107,9 @@ pub trait Compactable {
     /// Count max number of each key type, for upper limit of overwritten keys
     fn count(&self) -> CountPerTable;
 
-    fn compact<R>(&self, ctx: &mut CompactionContext<R>) -> Self::Compact
-    where
-        R: db::RegistryRead + db::RegistryWrite + db::RegistryIndex;
+    fn compact<R: RegistryDb>(&self, ctx: &mut CompactionContext<R>) -> Self::Compact;
 
-    fn decompact<R>(compact: Self::Compact, reg: &R) -> Self
-    where
-        R: db::RegistryRead;
+    fn decompact<R: RegistryDb>(compact: Self::Compact, reg: &R) -> Self;
 }
 
 macro_rules! identity_compaction {
@@ -134,17 +121,14 @@ macro_rules! identity_compaction {
                 CountPerTable::default()
             }
 
-            fn compact<R>(&self, _ctx: &mut CompactionContext<R>) -> Self::Compact
-            where
-                R: db::RegistryRead + db::RegistryWrite + db::RegistryIndex,
-            {
+            fn compact<R: RegistryDb>(
+                &self,
+                _ctx: &mut CompactionContext<R>,
+            ) -> Self::Compact {
                 *self
             }
 
-            fn decompact<R>(compact: Self::Compact, _reg: &R) -> Self
-            where
-                R: db::RegistryRead,
-            {
+            fn decompact<R: RegistryDb>(compact: Self::Compact, _reg: &R) -> Self {
                 compact
             }
         }
@@ -176,17 +160,11 @@ where
         count
     }
 
-    fn compact<R>(&self, ctx: &mut CompactionContext<R>) -> Self::Compact
-    where
-        R: db::RegistryRead + db::RegistryWrite + db::RegistryIndex,
-    {
+    fn compact<R: RegistryDb>(&self, ctx: &mut CompactionContext<R>) -> Self::Compact {
         ArrayWrapper(self.clone().map(|item| item.compact(ctx)))
     }
 
-    fn decompact<R>(compact: Self::Compact, reg: &R) -> Self
-    where
-        R: db::RegistryRead,
-    {
+    fn decompact<R: RegistryDb>(compact: Self::Compact, reg: &R) -> Self {
         compact.0.map(|item| T::decompact(item, reg))
     }
 }
@@ -205,17 +183,11 @@ where
         count
     }
 
-    fn compact<R>(&self, ctx: &mut CompactionContext<R>) -> Self::Compact
-    where
-        R: db::RegistryRead + db::RegistryWrite + db::RegistryIndex,
-    {
+    fn compact<R: RegistryDb>(&self, ctx: &mut CompactionContext<R>) -> Self::Compact {
         self.iter().map(|item| item.compact(ctx)).collect()
     }
 
-    fn decompact<R>(compact: Self::Compact, reg: &R) -> Self
-    where
-        R: db::RegistryRead,
-    {
+    fn decompact<R: RegistryDb>(compact: Self::Compact, reg: &R) -> Self {
         compact
             .into_iter()
             .map(|item| T::decompact(item, reg))
@@ -230,17 +202,11 @@ impl<T> Compactable for PhantomData<T> {
         CountPerTable::default()
     }
 
-    fn compact<R>(&self, _ctx: &mut CompactionContext<R>) -> Self::Compact
-    where
-        R: db::RegistryRead + db::RegistryWrite + db::RegistryIndex,
-    {
+    fn compact<R: RegistryDb>(&self, _ctx: &mut CompactionContext<R>) -> Self::Compact {
         ()
     }
 
-    fn decompact<R>(_compact: Self::Compact, _reg: &R) -> Self
-    where
-        R: db::RegistryRead,
-    {
+    fn decompact<R: RegistryDb>(_compact: Self::Compact, _reg: &R) -> Self {
         Self
     }
 }
@@ -249,12 +215,12 @@ impl<T> Compactable for PhantomData<T> {
 mod tests {
     use crate::{
         registry::{
-            db,
             in_memory::InMemoryRegistry,
             tables,
             CountPerTable,
         },
         Key,
+        RegistryDb,
     };
     use fuel_core_compression::Compactable as _; // Hack for derive
     use fuel_core_compression_derive::Compact;
@@ -296,19 +262,16 @@ mod tests {
             }
         }
 
-        fn compact<R>(&self, ctx: &mut CompactionContext<R>) -> Self::Compact
-        where
-            R: db::RegistryRead + db::RegistryWrite + db::RegistryIndex,
-        {
+        fn compact<R: RegistryDb>(
+            &self,
+            ctx: &mut CompactionContext<R>,
+        ) -> Self::Compact {
             let a = ctx.to_key::<tables::Address>(*self.a);
             let b = ctx.to_key::<tables::Address>(*self.b);
             ManualExampleCompact { a, b, c: self.c }
         }
 
-        fn decompact<R>(compact: Self::Compact, reg: &R) -> Self
-        where
-            R: db::RegistryRead,
-        {
+        fn decompact<R: RegistryDb>(compact: Self::Compact, reg: &R) -> Self {
             let a = Address::from(reg.read::<tables::Address>(compact.a));
             let b = Address::from(reg.read::<tables::Address>(compact.b));
             Self { a, b, c: compact.c }

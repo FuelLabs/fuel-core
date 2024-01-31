@@ -9,7 +9,10 @@ pub(crate) mod in_memory;
 mod key;
 
 use self::block_section::WriteTo;
-pub use self::key::Key;
+pub use self::{
+    db::RegistryDb,
+    key::Key,
+};
 
 mod _private {
     pub trait Seal {}
@@ -129,7 +132,7 @@ macro_rules! tables {
             }
         )*
 
-        pub fn next_keys<R: db::RegistrySelectNextKey>(reg: &mut R) -> KeyPerTable {
+        pub fn next_keys<R: RegistryDb>(reg: &mut R) -> KeyPerTable {
             KeyPerTable {
                 $( $name: reg.next_key(), )*
             }
@@ -169,7 +172,7 @@ macro_rules! tables {
             }
 
             /// Apply changes to the registry db
-            pub fn apply_to_registry<R: db::RegistryWrite>(&self, reg: &mut R) {
+            pub fn apply_to_registry<R: RegistryDb>(&self, reg: &mut R) {
                 $(
                     reg.batch_write(self.$name.start_key, self.$name.values.clone());
                 )*
@@ -204,12 +207,6 @@ mod tests {
     use tests::key::RawKey;
 
     use super::*;
-
-    use super::db::{
-        RegistryIndex as _,
-        RegistryRead as _,
-        RegistryWrite as _,
-    };
 
     #[test]
     fn test_in_memory_db() {

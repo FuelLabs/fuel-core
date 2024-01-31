@@ -15,13 +15,11 @@ pub struct InMemoryRegistry {
     index: HashMap<&'static str, HashMap<Vec<u8>, RawKey>>,
 }
 
-impl RegistrySelectNextKey for InMemoryRegistry {
+impl RegistryDb for InMemoryRegistry {
     fn next_key<T: Table>(&self) -> Key<T> {
         Key::from_raw(self.next_keys.get(T::NAME).copied().unwrap_or(RawKey::ZERO))
     }
-}
 
-impl RegistryRead for InMemoryRegistry {
     fn read<T: Table>(&self, key: Key<T>) -> T::Type {
         if key == Key::DEFAULT_VALUE {
             return T::Type::default();
@@ -33,9 +31,7 @@ impl RegistryRead for InMemoryRegistry {
             .map(|bytes| postcard::from_bytes(bytes).expect("Invalid value in registry"))
             .unwrap_or_default()
     }
-}
 
-impl RegistryWrite for InMemoryRegistry {
     fn batch_write<T: Table>(&mut self, start_key: Key<T>, values: Vec<T::Type>) {
         let empty = values.is_empty();
         if !empty && start_key == Key::DEFAULT_VALUE {
@@ -55,9 +51,7 @@ impl RegistryWrite for InMemoryRegistry {
             self.next_keys.insert(T::NAME, key);
         }
     }
-}
 
-impl RegistryIndex for InMemoryRegistry {
     fn index_lookup<T: Table>(&self, value: &T::Type) -> Option<Key<T>> {
         if *value == T::Type::default() {
             return Some(Key::DEFAULT_VALUE);
