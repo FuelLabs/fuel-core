@@ -1189,6 +1189,7 @@ where
                         )
                     }
                 }
+                _ => return Err(ExecutorError::UnknownTransactionType("Output")),
             }
         }
 
@@ -1599,6 +1600,7 @@ where
                         },
                     )?;
                 }
+                _ => return Err(ExecutorError::UnknownTransactionType("Output")),
             }
         }
         Ok(())
