@@ -178,7 +178,7 @@ where
     Executor: ports::DryRunner + 'static,
 {
     // TODO: Support custom `block_time` for `dry_run`.
-    /// Simulates mutliple transactions without altering any state. Does not aquire the production lock
+    /// Simulates multiple transactions without altering any state. Does not acquire the production lock.
     /// since it is basically a "read only" operation and shouldn't get in the way of normal
     /// production.
     pub async fn dry_run(
