@@ -152,7 +152,7 @@ impl<const S: usize, T> Compactable for [T; S]
 where
     T: Compactable + Clone + Serialize + for<'a> Deserialize<'a>,
 {
-    type Compact = ArrayWrapper<S, T>;
+    type Compact = ArrayWrapper<S, T::Compact>;
 
     fn count(&self) -> CountPerTable {
         let mut count = CountPerTable::default();
@@ -162,18 +162,18 @@ where
         count
     }
 
-    fn compact<R>(&self, _ctx: &mut CompactionContext<R>) -> Self::Compact
+    fn compact<R>(&self, ctx: &mut CompactionContext<R>) -> Self::Compact
     where
         R: db::RegistryRead + db::RegistryWrite + db::RegistryIndex,
     {
-        ArrayWrapper(self.clone())
+        ArrayWrapper(self.clone().map(|item| item.compact(ctx)))
     }
 
-    fn decompact<R>(compact: Self::Compact, _reg: &R) -> Self
+    fn decompact<R>(compact: Self::Compact, reg: &R) -> Self
     where
         R: db::RegistryRead,
     {
-        compact.0
+        compact.0.map(|item| T::decompact(item, reg))
     }
 }
 
@@ -181,7 +181,7 @@ impl<T> Compactable for Vec<T>
 where
     T: Compactable + Clone + Serialize + for<'a> Deserialize<'a>,
 {
-    type Compact = Self;
+    type Compact = Vec<T::Compact>;
 
     fn count(&self) -> CountPerTable {
         let mut count = CountPerTable::default();
@@ -191,18 +191,21 @@ where
         count
     }
 
-    fn compact<R>(&self, _ctx: &mut CompactionContext<R>) -> Self::Compact
+    fn compact<R>(&self, ctx: &mut CompactionContext<R>) -> Self::Compact
     where
         R: db::RegistryRead + db::RegistryWrite + db::RegistryIndex,
     {
-        self.clone()
+        self.iter().map(|item| item.compact(ctx)).collect()
     }
 
-    fn decompact<R>(compact: Self::Compact, _reg: &R) -> Self
+    fn decompact<R>(compact: Self::Compact, reg: &R) -> Self
     where
         R: db::RegistryRead,
     {
         compact
+            .into_iter()
+            .map(|item| T::decompact(item, reg))
+            .collect()
     }
 }
 
