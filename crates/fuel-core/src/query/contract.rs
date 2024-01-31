@@ -1,4 +1,4 @@
-use crate::graphql_api::ports::DatabasePort;
+use crate::fuel_core_graphql_api::ports::OnChainDatabase;
 use fuel_core_storage::{
     iter::{
         BoxedIter,
@@ -43,7 +43,7 @@ pub trait ContractQueryData: Send + Sync {
     ) -> BoxedIter<StorageResult<ContractBalance>>;
 }
 
-impl<D: DatabasePort + ?Sized> ContractQueryData for D {
+impl<D: OnChainDatabase + ?Sized> ContractQueryData for D {
     fn contract_id(&self, id: ContractId) -> StorageResult<ContractId> {
         let contract_exists = self.storage::<ContractsRawCode>().contains_key(&id)?;
         if contract_exists {

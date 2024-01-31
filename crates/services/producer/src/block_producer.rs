@@ -1,12 +1,16 @@
 use crate::{
     ports,
+    ports::BlockProducerDatabase,
     Config,
 };
 use anyhow::{
     anyhow,
     Context,
 };
-use fuel_core_storage::transactional::StorageTransaction;
+use fuel_core_storage::transactional::{
+    AtomicView,
+    StorageTransaction,
+};
 use fuel_core_types::{
     blockchain::{
         header::{
@@ -61,9 +65,9 @@ impl From<Error> for anyhow::Error {
     }
 }
 
-pub struct Producer<Database, TxPool, Executor> {
+pub struct Producer<ViewProvider, TxPool, Executor> {
     pub config: Config,
-    pub db: Database,
+    pub view_provider: ViewProvider,
     pub txpool: TxPool,
     pub executor: Arc<Executor>,
     pub relayer: Box<dyn ports::Relayer>,
@@ -72,9 +76,10 @@ pub struct Producer<Database, TxPool, Executor> {
     pub lock: Mutex<()>,
 }
 
-impl<Database, TxPool, Executor> Producer<Database, TxPool, Executor>
+impl<ViewProvider, TxPool, Executor> Producer<ViewProvider, TxPool, Executor>
 where
-    Database: ports::BlockProducerDatabase + 'static,
+    ViewProvider: AtomicView<Height = BlockHeight> + 'static,
+    ViewProvider::View: BlockProducerDatabase,
 {
     /// Produces and execute block for the specified height.
     async fn produce_and_execute<TxSource, ExecutorDB>(
@@ -122,10 +127,11 @@ where
     }
 }
 
-impl<Database, TxPool, Executor, ExecutorDB, TxSource>
-    Producer<Database, TxPool, Executor>
+impl<ViewProvider, TxPool, Executor, ExecutorDB, TxSource>
+    Producer<ViewProvider, TxPool, Executor>
 where
-    Database: ports::BlockProducerDatabase + 'static,
+    ViewProvider: AtomicView<Height = BlockHeight> + 'static,
+    ViewProvider::View: BlockProducerDatabase,
     TxPool: ports::TxPool<TxSource = TxSource> + 'static,
     Executor: ports::Executor<TxSource, Database = ExecutorDB> + 'static,
 {
@@ -146,9 +152,10 @@ where
     }
 }
 
-impl<Database, TxPool, Executor, ExecutorDB> Producer<Database, TxPool, Executor>
+impl<ViewProvider, TxPool, Executor, ExecutorDB> Producer<ViewProvider, TxPool, Executor>
 where
-    Database: ports::BlockProducerDatabase + 'static,
+    ViewProvider: AtomicView<Height = BlockHeight> + 'static,
+    ViewProvider::View: BlockProducerDatabase,
     Executor: ports::Executor<Vec<Transaction>, Database = ExecutorDB> + 'static,
 {
     /// Produces and execute block for the specified height with `transactions`.
@@ -164,9 +171,10 @@ where
     }
 }
 
-impl<Database, TxPool, Executor> Producer<Database, TxPool, Executor>
+impl<ViewProvider, TxPool, Executor> Producer<ViewProvider, TxPool, Executor>
 where
-    Database: ports::BlockProducerDatabase + 'static,
+    ViewProvider: AtomicView<Height = BlockHeight> + 'static,
+    ViewProvider::View: BlockProducerDatabase,
     Executor: ports::DryRunner + 'static,
 {
     // TODO: Support custom `block_time` for `dry_run`.
@@ -179,14 +187,12 @@ where
         height: Option<BlockHeight>,
         utxo_validation: Option<bool>,
     ) -> anyhow::Result<Vec<Receipt>> {
-        let height = match height {
-            None => self
-                .db
-                .current_block_height()?
+        let height = height.unwrap_or_else(|| {
+            self.view_provider
+                .latest_height()
                 .succ()
-                .expect("It is impossible to overflow the current block height"),
-            Some(height) => height,
-        };
+                .expect("It is impossible to overflow the current block height")
+        });
 
         let is_script = transaction.is_script();
         // The dry run execution should use the state of the blockchain based on the
@@ -219,9 +225,10 @@ where
     }
 }
 
-impl<Database, TxPool, Executor> Producer<Database, TxPool, Executor>
+impl<ViewProvider, TxPool, Executor> Producer<ViewProvider, TxPool, Executor>
 where
-    Database: ports::BlockProducerDatabase,
+    ViewProvider: AtomicView + 'static,
+    ViewProvider::View: BlockProducerDatabase,
 {
     /// Create the header for a new block at the provided height
     async fn new_header(
@@ -286,10 +293,11 @@ where
         if height == 0u32.into() {
             Err(Error::GenesisBlock.into())
         } else {
+            let view = self.view_provider.latest_view();
             // get info from previous block height
             let prev_height = height.pred().expect("We checked the height above");
-            let previous_block = self.db.get_block(&prev_height)?;
-            let prev_root = self.db.block_header_merkle_root(&prev_height)?;
+            let previous_block = view.get_block(&prev_height)?;
+            let prev_root = view.block_header_merkle_root(&prev_height)?;
 
             Ok(PreviousBlockInfo {
                 prev_root,

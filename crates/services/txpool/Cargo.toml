@@ -28,6 +28,7 @@ tracing = { workspace = true }
 [dev-dependencies]
 fuel-core-trace = { path = "./../../trace" }
 fuel-core-txpool = { path = "", features = ["test-helpers"] }
+fuel-core-types = { path = "../../types", features = ["test-helpers"] }
 itertools = { workspace = true }
 mockall = { workspace = true }
 proptest = { workspace = true }

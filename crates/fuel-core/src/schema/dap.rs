@@ -159,12 +159,11 @@ impl ConcreteStorage {
     fn vm_database(storage: &DatabaseTransaction) -> anyhow::Result<VmStorage<Database>> {
         let block = storage
             .get_current_block()?
-            .ok_or(not_found!("Block for VMDatabase"))?
-            .into_owned();
+            .ok_or(not_found!("Block for VMDatabase"))?;
 
         let vm_database = VmStorage::new(
             storage.as_ref().clone(),
-            &block.header().consensus,
+            block.header().consensus(),
             // TODO: Use a real coinbase address
             Default::default(),
         );

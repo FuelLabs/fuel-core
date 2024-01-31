@@ -30,6 +30,7 @@ use fuel_core_p2p::config::{
 #[cfg(feature = "relayer")]
 use fuel_core_relayer::Config as RelayerConfig;
 
+pub use fuel_core_consensus_module::RelayerConsensusConfig;
 pub use fuel_core_importer;
 pub use fuel_core_poa::Trigger;
 
@@ -61,7 +62,7 @@ pub struct Config {
     pub sync: fuel_core_sync::Config,
     pub consensus_key: Option<Secret<SecretKeyWrapper>>,
     pub name: String,
-    pub verifier: fuel_core_consensus_module::RelayerVerifierConfig,
+    pub relayer_consensus_config: fuel_core_consensus_module::RelayerConsensusConfig,
     /// The number of reserved peers to connect to before starting to sync.
     pub min_connected_reserved_peers: usize,
     /// Time to wait after receiving the latest block before considered to be Synced.
@@ -109,7 +110,7 @@ impl Config {
             sync: fuel_core_sync::Config::default(),
             consensus_key: Some(Secret::new(default_consensus_dev_key().into())),
             name: String::default(),
-            verifier: Default::default(),
+            relayer_consensus_config: Default::default(),
             min_connected_reserved_peers: 0,
             time_until_synced: Duration::ZERO,
             query_log_threshold_time: Duration::from_secs(2),

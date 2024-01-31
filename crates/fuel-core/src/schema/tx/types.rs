@@ -5,10 +5,9 @@ use super::{
 };
 use crate::{
     fuel_core_graphql_api::{
-        service::{
-            Database,
-            TxPool,
-        },
+        api_service::TxPool,
+        database::ReadView,
+        ports::DatabaseBlocks,
         Config,
         IntoApiResult,
     },
@@ -160,8 +159,9 @@ impl SuccessStatus {
     }
 
     async fn block(&self, ctx: &Context<'_>) -> async_graphql::Result<Block> {
-        let query: &Database = ctx.data_unchecked();
-        let block = query.block(&self.block_id)?;
+        let query: &ReadView = ctx.data_unchecked();
+        let height = query.block_height(&self.block_id)?;
+        let block = query.block(&height)?;
         Ok(block.into())
     }
 
@@ -174,8 +174,8 @@ impl SuccessStatus {
     }
 
     async fn receipts(&self, ctx: &Context<'_>) -> async_graphql::Result<Vec<Receipt>> {
-        let db = ctx.data_unchecked::<Database>();
-        let receipts = db
+        let query: &ReadView = ctx.data_unchecked();
+        let receipts = query
             .receipts(&self.tx_id)
             .unwrap_or_default()
             .into_iter()
@@ -201,8 +201,9 @@ impl FailureStatus {
     }
 
     async fn block(&self, ctx: &Context<'_>) -> async_graphql::Result<Block> {
-        let query: &Database = ctx.data_unchecked();
-        let block = query.block(&self.block_id)?;
+        let query: &ReadView = ctx.data_unchecked();
+        let height = query.block_height(&self.block_id)?;
+        let block = query.block(&height)?;
         Ok(block.into())
     }
 
@@ -219,8 +220,8 @@ impl FailureStatus {
     }
 
     async fn receipts(&self, ctx: &Context<'_>) -> async_graphql::Result<Vec<Receipt>> {
-        let db = ctx.data_unchecked::<Database>();
-        let receipts = db
+        let query: &ReadView = ctx.data_unchecked();
+        let receipts = query
             .receipts(&self.tx_id)
             .unwrap_or_default()
             .into_iter()
@@ -366,7 +367,7 @@ impl Transaction {
                     .map(|c| AssetId(*c))
                     .collect(),
             ),
-            fuel_tx::Transaction::Mint(_) => None,
+            _ => None,
         }
     }
 
@@ -381,6 +382,7 @@ impl Transaction {
             fuel_tx::Transaction::Mint(mint) => {
                 Some(vec![Contract(mint.input_contract().contract_id)])
             }
+            _ => None,
         }
     }
 
@@ -388,6 +390,7 @@ impl Transaction {
         match &self.0 {
             fuel_tx::Transaction::Script(_) | fuel_tx::Transaction::Create(_) => None,
             fuel_tx::Transaction::Mint(mint) => Some(mint.input_contract().into()),
+            _ => None,
         }
     }
 
@@ -396,6 +399,7 @@ impl Transaction {
             fuel_tx::Transaction::Script(script) => Some((*script.policies()).into()),
             fuel_tx::Transaction::Create(create) => Some((*create.policies()).into()),
             fuel_tx::Transaction::Mint(_) => None,
+            _ => None,
         }
     }
 
@@ -404,6 +408,7 @@ impl Transaction {
             fuel_tx::Transaction::Script(script) => Some(script.price().into()),
             fuel_tx::Transaction::Create(create) => Some(create.price().into()),
             fuel_tx::Transaction::Mint(_) => None,
+            _ => None,
         }
     }
 
@@ -413,7 +418,7 @@ impl Transaction {
                 Some((*script.script_gas_limit()).into())
             }
             fuel_tx::Transaction::Create(_) => Some(0.into()),
-            fuel_tx::Transaction::Mint(_) => None,
+            _ => None,
         }
     }
 
@@ -422,29 +427,29 @@ impl Transaction {
             fuel_tx::Transaction::Script(script) => Some(script.maturity().into()),
             fuel_tx::Transaction::Create(create) => Some(create.maturity().into()),
             fuel_tx::Transaction::Mint(_) => None,
+            _ => None,
         }
     }
 
     async fn mint_amount(&self) -> Option<U64> {
         match &self.0 {
-            fuel_tx::Transaction::Script(_) | fuel_tx::Transaction::Create(_) => None,
             fuel_tx::Transaction::Mint(mint) => Some((*mint.mint_amount()).into()),
+            _ => None,
         }
     }
 
     async fn mint_asset_id(&self) -> Option<AssetId> {
         match &self.0 {
-            fuel_tx::Transaction::Script(_) | fuel_tx::Transaction::Create(_) => None,
             fuel_tx::Transaction::Mint(mint) => Some((*mint.mint_asset_id()).into()),
+            _ => None,
         }
     }
 
     // TODO: Maybe we need to do the same `Script` and `Create`
     async fn tx_pointer(&self) -> Option<TxPointer> {
         match &self.0 {
-            fuel_tx::Transaction::Script(_) => None,
-            fuel_tx::Transaction::Create(_) => None,
             fuel_tx::Transaction::Mint(mint) => Some((*mint.tx_pointer()).into()),
+            _ => None,
         }
     }
 
@@ -468,26 +473,32 @@ impl Transaction {
             fuel_tx::Transaction::Create(create) => {
                 Some(create.inputs().iter().map(Into::into).collect())
             }
-            fuel_tx::Transaction::Mint(_) => None,
+            _ => None,
         }
     }
 
-    async fn outputs(&self) -> Vec<Output> {
+    async fn outputs(&self) -> Result<Vec<Output>, async_graphql::Error> {
         match &self.0 {
-            fuel_tx::Transaction::Script(script) => {
-                script.outputs().iter().map(Into::into).collect()
-            }
-            fuel_tx::Transaction::Create(create) => {
-                create.outputs().iter().map(Into::into).collect()
-            }
-            fuel_tx::Transaction::Mint(_) => vec![],
+            fuel_tx::Transaction::Script(script) => script
+                .outputs()
+                .iter()
+                .map(TryInto::try_into)
+                .collect::<Result<_, _>>()
+                .map_err(async_graphql::Error::new),
+            fuel_tx::Transaction::Create(create) => create
+                .outputs()
+                .iter()
+                .map(TryInto::try_into)
+                .collect::<Result<_, _>>()
+                .map_err(async_graphql::Error::new),
+            _ => Ok(vec![]),
         }
     }
 
     async fn output_contract(&self) -> Option<output::ContractOutput> {
         match &self.0 {
-            fuel_tx::Transaction::Script(_) | fuel_tx::Transaction::Create(_) => None,
             fuel_tx::Transaction::Mint(mint) => Some(mint.output_contract().into()),
+            _ => None,
         }
     }
 
@@ -508,6 +519,7 @@ impl Transaction {
                     .collect(),
             ),
             fuel_tx::Transaction::Mint(_) => None,
+            _ => None,
         }
     }
 
@@ -516,8 +528,7 @@ impl Transaction {
             fuel_tx::Transaction::Script(script) => {
                 Some((*script.receipts_root()).into())
             }
-            fuel_tx::Transaction::Create(_) => None,
-            fuel_tx::Transaction::Mint(_) => None,
+            _ => None,
         }
     }
 
@@ -526,7 +537,7 @@ impl Transaction {
         ctx: &Context<'_>,
     ) -> async_graphql::Result<Option<TransactionStatus>> {
         let id = self.1;
-        let query: &Database = ctx.data_unchecked();
+        let query: &ReadView = ctx.data_unchecked();
         let txpool = ctx.data_unchecked::<TxPool>();
         get_tx_status(id, query, txpool).map_err(Into::into)
     }
@@ -535,7 +546,7 @@ impl Transaction {
         &self,
         ctx: &Context<'_>,
     ) -> async_graphql::Result<Option<Vec<Receipt>>> {
-        let query: &Database = ctx.data_unchecked();
+        let query: &ReadView = ctx.data_unchecked();
         let receipts = query
             .receipts(&self.1)
             .into_api_result::<Vec<_>, async_graphql::Error>()?;
@@ -547,8 +558,7 @@ impl Transaction {
             fuel_tx::Transaction::Script(script) => {
                 Some(HexString(script.script().clone()))
             }
-            fuel_tx::Transaction::Create(_) => None,
-            fuel_tx::Transaction::Mint(_) => None,
+            _ => None,
         }
     }
 
@@ -557,42 +567,37 @@ impl Transaction {
             fuel_tx::Transaction::Script(script) => {
                 Some(HexString(script.script_data().clone()))
             }
-            fuel_tx::Transaction::Create(_) => None,
-            fuel_tx::Transaction::Mint(_) => None,
+            _ => None,
         }
     }
 
     async fn bytecode_witness_index(&self) -> Option<u8> {
         match &self.0 {
-            fuel_tx::Transaction::Script(_) => None,
             fuel_tx::Transaction::Create(create) => {
                 Some(*create.bytecode_witness_index())
             }
-            fuel_tx::Transaction::Mint(_) => None,
+            _ => None,
         }
     }
 
     async fn bytecode_length(&self) -> Option<U64> {
         match &self.0 {
-            fuel_tx::Transaction::Script(_) => None,
             fuel_tx::Transaction::Create(create) => {
                 Some((*create.bytecode_length()).into())
             }
-            fuel_tx::Transaction::Mint(_) => None,
+            _ => None,
         }
     }
 
     async fn salt(&self) -> Option<Salt> {
         match &self.0 {
-            fuel_tx::Transaction::Script(_) => None,
             fuel_tx::Transaction::Create(create) => Some((*create.salt()).into()),
-            fuel_tx::Transaction::Mint(_) => None,
+            _ => None,
         }
     }
 
     async fn storage_slots(&self) -> Option<Vec<HexString>> {
         match &self.0 {
-            fuel_tx::Transaction::Script(_) => None,
             fuel_tx::Transaction::Create(create) => Some(
                 create
                     .storage_slots()
@@ -609,7 +614,7 @@ impl Transaction {
                     })
                     .collect(),
             ),
-            fuel_tx::Transaction::Mint(_) => None,
+            _ => None,
         }
     }
 
@@ -622,7 +627,7 @@ impl Transaction {
 #[tracing::instrument(level = "debug", skip(query, txpool), ret, err)]
 pub(crate) fn get_tx_status(
     id: fuel_core_types::fuel_types::Bytes32,
-    query: &Database,
+    query: &ReadView,
     txpool: &TxPool,
 ) -> Result<Option<TransactionStatus>, StorageError> {
     match query

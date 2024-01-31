@@ -1,4 +1,7 @@
-use crate::graphql_api::ports::DatabasePort;
+use crate::fuel_core_graphql_api::ports::{
+    OffChainDatabase,
+    OnChainDatabase,
+};
 use fuel_core_storage::{
     iter::{
         BoxedIter,
@@ -34,7 +37,7 @@ pub trait CoinQueryData: Send + Sync {
     ) -> BoxedIter<StorageResult<Coin>>;
 }
 
-impl<D: DatabasePort + ?Sized> CoinQueryData for D {
+impl<D: OnChainDatabase + OffChainDatabase + ?Sized> CoinQueryData for D {
     fn coin(&self, utxo_id: UtxoId) -> StorageResult<Coin> {
         let coin = self
             .storage::<Coins>()

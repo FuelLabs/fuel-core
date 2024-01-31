@@ -10,7 +10,10 @@ use ethers_core::{
 };
 use fuel_core_types::{
     blockchain::primitives::DaBlockHeight,
-    entities::message::Message,
+    entities::message::{
+        Message,
+        MessageV1,
+    },
     fuel_types::{
         Address,
         Nonce,
@@ -31,7 +34,7 @@ pub struct MessageLog {
 
 impl From<&MessageLog> for Message {
     fn from(message: &MessageLog) -> Self {
-        Self {
+        MessageV1 {
             sender: message.sender,
             recipient: message.recipient,
             nonce: message.nonce,
@@ -39,6 +42,7 @@ impl From<&MessageLog> for Message {
             data: message.data.clone(),
             da_height: message.da_height,
         }
+        .into()
     }
 }
 

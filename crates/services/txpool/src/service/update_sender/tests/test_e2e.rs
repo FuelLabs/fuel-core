@@ -144,7 +144,7 @@ fn test_update_sender_inner(ops: Vec<Op>) {
             Op::DropRecv(i) => {
                 // Real
                 if i < receivers.len() {
-                    receivers.remove(i);
+                    let _ = receivers.remove(i);
                 }
                 // Model
                 if i < model_receivers.len() {

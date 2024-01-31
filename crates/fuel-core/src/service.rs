@@ -1,7 +1,15 @@
+use self::adapters::BlockImporterAdapter;
 use crate::{
     database::Database,
-    service::adapters::P2PAdapter,
+    service::{
+        adapters::{
+            P2PAdapter,
+            PoAAdapter,
+        },
+        genesis::execute_genesis_block,
+    },
 };
+use fuel_core_poa::ports::BlockImporter;
 use fuel_core_services::{
     RunnableService,
     RunnableTask,
@@ -9,20 +17,20 @@ use fuel_core_services::{
     State,
     StateWatcher,
 };
+use fuel_core_storage::{
+    transactional::AtomicView,
+    IsNotFound,
+};
 use std::net::SocketAddr;
 use tracing::warn;
 
 pub use config::{
     Config,
     DbType,
+    RelayerConsensusConfig,
     VMConfig,
 };
 pub use fuel_core_services::Service as ServiceTrait;
-
-use crate::service::adapters::PoAAdapter;
-pub use fuel_core_consensus_module::RelayerVerifierConfig;
-
-use self::adapters::BlockImporterAdapter;
 
 pub mod adapters;
 pub mod config;
@@ -44,7 +52,7 @@ pub struct SharedState {
     /// The Relayer shared state.
     pub relayer: Option<fuel_core_relayer::SharedState<Database>>,
     /// The GraphQL shared state.
-    pub graph_ql: crate::fuel_core_graphql_api::service::SharedState,
+    pub graph_ql: crate::fuel_core_graphql_api::api_service::SharedState,
     /// The underlying database.
     pub database: Database,
     /// Subscribe to new block production.
@@ -187,11 +195,10 @@ pub struct Task {
 
 impl Task {
     /// Private inner method for initializing the fuel service task
-    pub fn new(database: Database, config: Config) -> anyhow::Result<Task> {
+    pub fn new(mut database: Database, config: Config) -> anyhow::Result<Task> {
         // initialize state
         tracing::info!("Initializing database");
         database.init(&config.chain_conf)?;
-        genesis::maybe_initialize_state(&config, &database)?;
 
         // initialize sub services
         tracing::info!("Initializing sub services");
@@ -221,6 +228,16 @@ impl RunnableService for Task {
         _: &StateWatcher,
         _: Self::TaskParams,
     ) -> anyhow::Result<Self::Task> {
+        let view = self.shared.database.latest_view();
+        // check if chain is initialized
+        if let Err(err) = view.get_genesis() {
+            if err.is_not_found() {
+                let result = execute_genesis_block(&self.shared.config, &view)?;
+
+                self.shared.block_importer.commit_result(result).await?;
+            }
+        }
+
         for service in &self.services {
             service.start_and_await().await?;
         }
@@ -305,9 +322,9 @@ mod tests {
             i += 1;
         }
 
-        // current services: graphql, txpool, PoA
+        // current services: graphql, graphql worker, txpool, PoA
         #[allow(unused_mut)]
-        let mut expected_services = 3;
+        let mut expected_services = 4;
 
         // Relayer service is disabled with `Config::local_node`.
         // #[cfg(feature = "relayer")]

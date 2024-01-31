@@ -16,6 +16,7 @@ use poa::PoAConsensus;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[non_exhaustive]
 /// The consensus related data that doesn't live on the
 /// header.
 pub enum Consensus {

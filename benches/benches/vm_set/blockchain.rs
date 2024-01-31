@@ -19,9 +19,13 @@ use fuel_core::{
     },
 };
 use fuel_core_benches::*;
-use fuel_core_storage::vm_storage::{
-    IncreaseStorageKey,
-    VmStorage,
+use fuel_core_storage::{
+    tables::FuelBlocks,
+    vm_storage::{
+        IncreaseStorageKey,
+        VmStorage,
+    },
+    StorageAsMut,
 };
 use fuel_core_types::{
     blockchain::header::ConsensusHeader,
@@ -90,11 +94,15 @@ impl BenchDb {
             }),
         )?;
         // Adds a genesis block to the database.
-        fuel_core::service::genesis::maybe_initialize_state(
-            &Config::local_node(),
-            &database,
-        )
-        .expect("Should init with genesis block");
+        let config = Config::local_node();
+        let block = fuel_core::service::genesis::create_genesis_block(&config);
+        database
+            .storage::<FuelBlocks>()
+            .insert(
+                &0u32.into(),
+                &block.compress(&config.chain_conf.consensus_parameters.chain_id),
+            )
+            .unwrap();
         database.clone().flush()?;
 
         Ok(Self {

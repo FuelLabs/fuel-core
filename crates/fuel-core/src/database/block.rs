@@ -1,23 +1,27 @@
 use crate::database::{
-    storage::{
-        DenseMerkleMetadata,
-        FuelBlockMerkleData,
-        FuelBlockMerkleMetadata,
-        FuelBlockSecondaryKeyBlockHeights,
-        ToDatabaseKey,
-    },
     Column,
     Database,
-    Error as DatabaseError,
 };
 use fuel_core_storage::{
+    blueprint::plain::Plain,
+    codec::{
+        primitive::Primitive,
+        raw::Raw,
+    },
     iter::IterDirection,
     not_found,
+    structured_storage::TableWithBlueprint,
     tables::{
+        merkle::{
+            DenseMerkleMetadata,
+            FuelBlockMerkleData,
+            FuelBlockMerkleMetadata,
+        },
         FuelBlocks,
         Transactions,
     },
     Error as StorageError,
+    Mappable,
     MerkleRootStorage,
     Result as StorageResult,
     StorageAsMut,
@@ -36,51 +40,78 @@ use fuel_core_types::{
     entities::message::MerkleProof,
     fuel_merkle::binary::MerkleTree,
     fuel_types::BlockHeight,
-    tai64::Tai64,
 };
 use itertools::Itertools;
-use std::{
-    borrow::{
-        BorrowMut,
-        Cow,
-    },
-    convert::{
-        TryFrom,
-        TryInto,
-    },
+use std::borrow::{
+    BorrowMut,
+    Cow,
 };
+
+/// The table of fuel block's secondary key - `BlockId`.
+/// It links the `BlockId` to corresponding `BlockHeight`.
+pub struct FuelBlockSecondaryKeyBlockHeights;
+
+impl Mappable for FuelBlockSecondaryKeyBlockHeights {
+    /// Primary key - `BlockId`.
+    type Key = BlockId;
+    type OwnedKey = Self::Key;
+    /// Secondary key - `BlockHeight`.
+    type Value = BlockHeight;
+    type OwnedValue = Self::Value;
+}
+
+impl TableWithBlueprint for FuelBlockSecondaryKeyBlockHeights {
+    type Blueprint = Plain<Raw, Primitive<4>>;
+
+    fn column() -> Column {
+        Column::FuelBlockSecondaryKeyBlockHeights
+    }
+}
+
+#[cfg(test)]
+fuel_core_storage::basic_storage_tests!(
+    FuelBlockSecondaryKeyBlockHeights,
+    <FuelBlockSecondaryKeyBlockHeights as Mappable>::Key::default(),
+    <FuelBlockSecondaryKeyBlockHeights as Mappable>::Value::default()
+);
 
 impl StorageInspect<FuelBlocks> for Database {
     type Error = StorageError;
 
-    fn get(&self, key: &BlockId) -> Result<Option<Cow<CompressedBlock>>, Self::Error> {
-        Database::get(self, key.as_slice(), Column::FuelBlocks).map_err(Into::into)
+    fn get(
+        &self,
+        key: &<FuelBlocks as Mappable>::Key,
+    ) -> Result<Option<Cow<<FuelBlocks as Mappable>::OwnedValue>>, Self::Error> {
+        self.data.storage::<FuelBlocks>().get(key)
     }
 
-    fn contains_key(&self, key: &BlockId) -> Result<bool, Self::Error> {
-        Database::contains_key(self, key.as_slice(), Column::FuelBlocks)
-            .map_err(Into::into)
+    fn contains_key(
+        &self,
+        key: &<FuelBlocks as Mappable>::Key,
+    ) -> Result<bool, Self::Error> {
+        self.data.storage::<FuelBlocks>().contains_key(key)
     }
 }
 
 impl StorageMutate<FuelBlocks> for Database {
     fn insert(
         &mut self,
-        key: &BlockId,
-        value: &CompressedBlock,
-    ) -> Result<Option<CompressedBlock>, Self::Error> {
-        let prev = Database::insert(self, key.as_slice(), Column::FuelBlocks, value)?;
+        key: &<FuelBlocks as Mappable>::Key,
+        value: &<FuelBlocks as Mappable>::Value,
+    ) -> Result<Option<<FuelBlocks as Mappable>::OwnedValue>, Self::Error> {
+        let prev = self
+            .data
+            .storage_as_mut::<FuelBlocks>()
+            .insert(key, value)?;
 
         let height = value.header().height();
+        let block_id = value.id();
         self.storage::<FuelBlockSecondaryKeyBlockHeights>()
-            .insert(height, key)?;
+            .insert(&block_id, key)?;
 
         // Get latest metadata entry
         let prev_metadata = self
-            .iter_all::<Vec<u8>, DenseMerkleMetadata>(
-                Column::FuelBlockMerkleMetadata,
-                Some(IterDirection::Reverse),
-            )
+            .iter_all::<FuelBlockMerkleMetadata>(Some(IterDirection::Reverse))
             .next()
             .transpose()?
             .map(|(_, metadata)| metadata)
@@ -90,8 +121,7 @@ impl StorageMutate<FuelBlocks> for Database {
         let mut tree: MerkleTree<FuelBlockMerkleData, _> =
             MerkleTree::load(storage, prev_metadata.version)
                 .map_err(|err| StorageError::Other(anyhow::anyhow!(err)))?;
-        let data = key.as_slice();
-        tree.push(data)?;
+        tree.push(block_id.as_slice())?;
 
         // Generate new metadata for the updated tree
         let version = tree.leaves_count();
@@ -103,15 +133,18 @@ impl StorageMutate<FuelBlocks> for Database {
         Ok(prev)
     }
 
-    fn remove(&mut self, key: &BlockId) -> Result<Option<CompressedBlock>, Self::Error> {
+    fn remove(
+        &mut self,
+        key: &<FuelBlocks as Mappable>::Key,
+    ) -> Result<Option<<FuelBlocks as Mappable>::OwnedValue>, Self::Error> {
         let prev: Option<CompressedBlock> =
-            Database::take(self, key.as_slice(), Column::FuelBlocks)?;
+            self.data.storage_as_mut::<FuelBlocks>().remove(key)?;
 
         if let Some(block) = &prev {
             let height = block.header().height();
             let _ = self
                 .storage::<FuelBlockSecondaryKeyBlockHeights>()
-                .remove(height);
+                .remove(&block.id());
             // We can't clean up `MerkleTree<FuelBlockMerkleData>`.
             // But if we plan to insert a new block, it will override old values in the
             // `FuelBlockMerkleData` table.
@@ -124,96 +157,42 @@ impl StorageMutate<FuelBlocks> for Database {
 
 impl Database {
     pub fn latest_height(&self) -> StorageResult<BlockHeight> {
-        self.ids_of_latest_block()?
-            .map(|(height, _)| height)
-            .ok_or(not_found!("BlockHeight"))
+        let pair = self
+            .iter_all::<FuelBlocks>(Some(IterDirection::Reverse))
+            .next()
+            .transpose()?;
+
+        let (block_height, _) = pair.ok_or(not_found!("BlockHeight"))?;
+
+        Ok(block_height)
+    }
+
+    pub fn latest_compressed_block(&self) -> StorageResult<Option<CompressedBlock>> {
+        let pair = self
+            .iter_all::<FuelBlocks>(Some(IterDirection::Reverse))
+            .next()
+            .transpose()?;
+
+        Ok(pair.map(|(_, compressed_block)| compressed_block))
     }
 
     /// Get the current block at the head of the chain.
-    pub fn get_current_block(&self) -> StorageResult<Option<Cow<CompressedBlock>>> {
-        let block_ids = self.ids_of_latest_block()?;
-        match block_ids {
-            Some((_, id)) => Ok(StorageAsRef::storage::<FuelBlocks>(self).get(&id)?),
-            None => Ok(None),
-        }
+    pub fn get_current_block(&self) -> StorageResult<Option<CompressedBlock>> {
+        self.latest_compressed_block()
     }
 
-    pub fn block_time(&self, height: &BlockHeight) -> StorageResult<Tai64> {
-        let id = self.get_block_id(height)?.unwrap_or_default();
-        let block = self
-            .storage::<FuelBlocks>()
-            .get(&id)?
-            .ok_or(not_found!(FuelBlocks))?;
-        Ok(block.header().time().to_owned())
-    }
-
-    pub fn get_block_id(&self, height: &BlockHeight) -> StorageResult<Option<BlockId>> {
-        Database::get(
-            self,
-            height.database_key().as_ref(),
-            Column::FuelBlockSecondaryKeyBlockHeights,
-        )
-        .map_err(Into::into)
-    }
-
-    pub fn all_block_ids(
-        &self,
-        start: Option<BlockHeight>,
-        direction: IterDirection,
-    ) -> impl Iterator<Item = StorageResult<(BlockHeight, BlockId)>> + '_ {
-        let start = start.map(|b| b.to_bytes());
-        self.iter_all_by_start::<Vec<u8>, BlockId, _>(
-            Column::FuelBlockSecondaryKeyBlockHeights,
-            start,
-            Some(direction),
-        )
-        .map(|res| {
-            let (height, id) = res?;
-            let block_height_bytes: [u8; 4] = height
-                .as_slice()
-                .try_into()
-                .expect("block height always has correct number of bytes");
-            Ok((block_height_bytes.into(), id))
-        })
-    }
-
-    pub fn ids_of_genesis_block(&self) -> StorageResult<(BlockHeight, BlockId)> {
-        self.iter_all(
-            Column::FuelBlockSecondaryKeyBlockHeights,
-            Some(IterDirection::Forward),
-        )
-        .next()
-        .ok_or(DatabaseError::ChainUninitialized)?
-        .map(|(height, id): (Vec<u8>, BlockId)| {
-            let bytes = <[u8; 4]>::try_from(height.as_slice())
-                .expect("all block heights are stored with the correct amount of bytes");
-            (u32::from_be_bytes(bytes).into(), id)
-        })
-    }
-
-    pub fn ids_of_latest_block(&self) -> StorageResult<Option<(BlockHeight, BlockId)>> {
-        let ids = self
-            .iter_all::<Vec<u8>, BlockId>(
-                Column::FuelBlockSecondaryKeyBlockHeights,
-                Some(IterDirection::Reverse),
-            )
-            .next()
-            .transpose()?
-            .map(|(height, block)| {
-                // safety: we know that all block heights are stored with the correct amount of bytes
-                let bytes = <[u8; 4]>::try_from(height.as_slice()).unwrap();
-                (u32::from_be_bytes(bytes).into(), block)
-            });
-
-        Ok(ids)
+    pub fn get_block_height(&self, id: &BlockId) -> StorageResult<Option<BlockHeight>> {
+        self.storage::<FuelBlockSecondaryKeyBlockHeights>()
+            .get(id)
+            .map(|v| v.map(|v| v.into_owned()))
     }
 
     /// Retrieve the full block and all associated transactions
     pub(crate) fn get_full_block(
         &self,
-        block_id: &BlockId,
+        height: &BlockHeight,
     ) -> StorageResult<Option<Block>> {
-        let db_block = self.storage::<FuelBlocks>().get(block_id)?;
+        let db_block = self.storage::<FuelBlocks>().get(height)?;
         if let Some(block) = db_block {
             // fetch all the transactions
             // TODO: optimize with multi-key get
@@ -336,7 +315,7 @@ mod tests {
         for block in &blocks {
             StorageMutate::<FuelBlocks>::insert(
                 &mut database,
-                &block.id(),
+                block.header().height(),
                 &block.compress(&ChainId::default()),
             )
             .unwrap();
@@ -400,7 +379,7 @@ mod tests {
         for block in &blocks {
             StorageMutate::<FuelBlocks>::insert(
                 database,
-                &block.id(),
+                block.header().height(),
                 &block.compress(&ChainId::default()),
             )
             .unwrap();

@@ -7,6 +7,7 @@ use crate::{
         ContractsInfo,
         ContractsRawCode,
         ContractsState,
+        FuelBlocks,
     },
     ContractsAssetsStorage,
     ContractsStateKey,
@@ -15,6 +16,7 @@ use crate::{
     MerkleRoot,
     MerkleRootStorage,
     StorageAsMut,
+    StorageBatchMutate,
     StorageInspect,
     StorageMutate,
     StorageRead,
@@ -40,6 +42,7 @@ use fuel_core_types::{
     fuel_vm::InterpreterStorage,
     tai64::Tai64,
 };
+use itertools::Itertools;
 use primitive_types::U256;
 use std::borrow::Cow;
 
@@ -340,4 +343,41 @@ pub trait VmStorageRequirements {
         contract_id: &ContractId,
         slots: S,
     ) -> Result<(), Self::Error>;
+}
+
+impl<T> VmStorageRequirements for T
+where
+    T: StorageInspect<FuelBlocks, Error = StorageError>,
+    T: StorageBatchMutate<ContractsState, Error = StorageError>,
+{
+    type Error = StorageError;
+
+    fn block_time(&self, height: &BlockHeight) -> Result<Tai64, Self::Error> {
+        use crate::StorageAsRef;
+
+        let block = self
+            .storage::<FuelBlocks>()
+            .get(height)?
+            .ok_or(not_found!(FuelBlocks))?;
+        Ok(block.header().time().to_owned())
+    }
+
+    fn get_block_id(&self, height: &BlockHeight) -> Result<Option<BlockId>, Self::Error> {
+        use crate::StorageAsRef;
+
+        self.storage::<FuelBlocks>()
+            .get(height)
+            .map(|v| v.map(|v| v.id()))
+    }
+
+    fn init_contract_state<S: Iterator<Item = (Bytes32, Bytes32)>>(
+        &mut self,
+        contract_id: &ContractId,
+        slots: S,
+    ) -> Result<(), Self::Error> {
+        let slots = slots
+            .map(|(key, value)| (ContractsStateKey::new(contract_id, &key), value))
+            .collect_vec();
+        self.init_storage(slots.iter().map(|(key, value)| (key, value)))
+    }
 }
