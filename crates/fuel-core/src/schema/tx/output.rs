@@ -27,6 +27,8 @@ pub enum Output {
     ContractCreated(ContractCreated),
 }
 
+pub type OutputConversionError = String;
+
 pub struct CoinOutput {
     to: fuel_types::Address,
     amount: Word,
@@ -119,9 +121,11 @@ impl ContractCreated {
     }
 }
 
-impl From<&fuel_tx::Output> for Output {
-    fn from(output: &fuel_tx::Output) -> Self {
-        match output {
+impl TryFrom<&fuel_tx::Output> for Output {
+    type Error = OutputConversionError;
+
+    fn try_from(output: &fuel_tx::Output) -> Result<Self, Self::Error> {
+        let val = match output {
             fuel_tx::Output::Coin {
                 to,
                 amount,
@@ -157,7 +161,9 @@ impl From<&fuel_tx::Output> for Output {
                 contract_id: *contract_id,
                 state_root: *state_root,
             }),
-        }
+            _ => return Err(format!("Unsupported output type: {:?}", output)),
+        };
+        Ok(val)
     }
 }
 

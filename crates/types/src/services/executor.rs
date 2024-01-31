@@ -273,6 +273,8 @@ pub enum Error {
     CoinbaseAmountMismatch,
     #[from]
     TransactionValidity(TransactionValidityError),
+    #[display(fmt = "Transaction contained an unsupported variant of {_0}.")]
+    UnknownTransactionType(&'static str),
     // TODO: Replace with `fuel_core_storage::Error` when execution error will live in the
     //  `fuel-core-executor`.
     #[display(fmt = "got error during work with storage {_0}")]
@@ -302,6 +304,14 @@ pub enum Error {
     MessageAlreadySpent(Nonce),
     #[display(fmt = "Expected input of type {_0}")]
     InputTypeMismatch(String),
+    #[display(fmt = "Executing of the genesis block is not allowed")]
+    ExecutingGenesisBlock,
+    #[display(fmt = "The da height exceeded its maximum limit")]
+    DaHeightExceededItsLimit,
+    #[display(fmt = "Unable to find the previous block to fetch the DA height")]
+    PreviousBlockIsNotFound,
+    #[display(fmt = "The relayer gives incorrect messages for the requested da height")]
+    RelayerGivesIncorrectMessages,
 }
 
 impl From<Error> for anyhow::Error {

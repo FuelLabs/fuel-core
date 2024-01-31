@@ -40,6 +40,7 @@ use fuel_core_storage::{
     Result as StorageResult,
     StorageAsMut,
     StorageAsRef,
+    StorageBatchMutate,
     StorageInspect,
     StorageMutate,
     StorageRead,
@@ -91,7 +92,10 @@ use_structured_implementation!(
     FuelBlockMerkleMetadata
 );
 #[cfg(feature = "relayer")]
-use_structured_implementation!(fuel_core_relayer::ports::RelayerMetadata);
+use_structured_implementation!(
+    fuel_core_relayer::storage::RelayerMetadata,
+    fuel_core_relayer::storage::EventsHistory
+);
 
 impl<M> StorageInspect<M> for Database
 where
@@ -163,5 +167,38 @@ where
 
     fn read_alloc(&self, key: &M::Key) -> StorageResult<Option<Vec<u8>>> {
         self.data.storage::<M>().read_alloc(key)
+    }
+}
+
+impl<M> StorageBatchMutate<M> for Database
+where
+    M: Mappable,
+    StructuredStorage<DataSource>:
+        StorageBatchMutate<M, Error = StorageError> + UseStructuredImplementation<M>,
+{
+    fn init_storage<'a, Iter>(&mut self, set: Iter) -> StorageResult<()>
+    where
+        Iter: 'a + Iterator<Item = (&'a M::Key, &'a M::Value)>,
+        M::Key: 'a,
+        M::Value: 'a,
+    {
+        StorageBatchMutate::init_storage(&mut self.data, set)
+    }
+
+    fn insert_batch<'a, Iter>(&mut self, set: Iter) -> StorageResult<()>
+    where
+        Iter: 'a + Iterator<Item = (&'a M::Key, &'a M::Value)>,
+        M::Key: 'a,
+        M::Value: 'a,
+    {
+        StorageBatchMutate::insert_batch(&mut self.data, set)
+    }
+
+    fn remove_batch<'a, Iter>(&mut self, set: Iter) -> StorageResult<()>
+    where
+        Iter: 'a + Iterator<Item = &'a M::Key>,
+        M::Key: 'a,
+    {
+        StorageBatchMutate::remove_batch(&mut self.data, set)
     }
 }

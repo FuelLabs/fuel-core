@@ -19,6 +19,7 @@ use fuel_core_storage::{
         FuelBlocks,
         SealedBlockConsensus,
     },
+    vm_storage::VmStorageRequirements,
     StorageAsMut,
 };
 use fuel_core_types::{
