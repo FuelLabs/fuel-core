@@ -69,7 +69,7 @@ pub async fn dry_run(ctx: &TestContext) -> Result<(), Failed> {
     )
     .await??;
 
-    _dry_runs(ctx, &[&transaction], 1000, DryRunResult::Successful).await
+    _dry_runs(ctx, &[transaction], 1000, DryRunResult::Successful).await
 }
 
 // Dry run multiple transactions
@@ -87,7 +87,7 @@ pub async fn dry_run_multiple_txs(ctx: &TestContext) -> Result<(), Failed> {
 
     _dry_runs(
         ctx,
-        &[&transaction1, &transaction2],
+        &[transaction1, transaction2],
         1000,
         DryRunResult::Successful,
     )
@@ -122,7 +122,7 @@ pub async fn run_contract_large_state(ctx: &TestContext) -> Result<(), Failed> {
         timeout(Duration::from_secs(300), deployment_request).await??;
     }
 
-    _dry_runs(ctx, &[&dry_run], 1000, DryRunResult::MayFail).await
+    _dry_runs(ctx, &[dry_run], 1000, DryRunResult::MayFail).await
 }
 
 // Send non specific transaction from `non_specific_tx.raw` file
@@ -138,12 +138,12 @@ pub async fn non_specific_transaction(ctx: &TestContext) -> Result<(), Failed> {
         script.set_gas_price(0);
     }
 
-    _dry_runs(ctx, &[&dry_run], 1000, DryRunResult::MayFail).await
+    _dry_runs(ctx, &[dry_run], 1000, DryRunResult::MayFail).await
 }
 
 async fn _dry_runs(
     ctx: &TestContext,
-    transactions: &[&Transaction],
+    transactions: &[Transaction],
     count: usize,
     expect: DryRunResult,
 ) -> Result<(), Failed> {

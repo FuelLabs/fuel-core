@@ -363,7 +363,7 @@ impl FuelClient {
     /// Default dry run, matching the exact configuration as the node
     pub async fn dry_run(
         &self,
-        txs: &[&Transaction],
+        txs: &[Transaction],
     ) -> io::Result<Vec<TransactionExecutionStatus>> {
         self.dry_run_opt(txs, None).await
     }
@@ -371,7 +371,7 @@ impl FuelClient {
     /// Dry run with options to override the node behavior
     pub async fn dry_run_opt(
         &self,
-        txs: &[&Transaction],
+        txs: &[Transaction],
         // Disable utxo input checks (exists, unspent, and valid signature)
         utxo_validation: Option<bool>,
     ) -> io::Result<Vec<TransactionExecutionStatus>> {

@@ -79,7 +79,7 @@ async fn dry_run_script() {
         .add_random_fee_input()
         .finalize_as_transaction();
 
-    let tx_statuses = client.dry_run(&[&tx]).await.unwrap();
+    let tx_statuses = client.dry_run(&[tx.clone()]).await.unwrap();
     let log = &tx_statuses.last().expect("Nonempty repsonse").receipts;
     assert_eq!(3, log.len());
 
@@ -119,7 +119,7 @@ async fn dry_run_create() {
         .add_output(Output::contract_created(contract_id, state_root))
         .finalize_as_transaction();
 
-    let tx_statuses = client.dry_run(&[&tx]).await.unwrap();
+    let tx_statuses = client.dry_run(&[tx.clone()]).await.unwrap();
     assert_eq!(
         0,
         tx_statuses
