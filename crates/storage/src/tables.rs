@@ -148,7 +148,43 @@ pub mod merkle {
 
     /// Metadata for dense Merkle trees
     #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
-    pub struct DenseMerkleMetadata {
+    pub enum DenseMerkleMetadata {
+        /// V1 Dense Merkle Metadata
+        V1(DenseMerkleMetadataV1),
+    }
+
+    impl Default for DenseMerkleMetadata {
+        fn default() -> Self {
+            Self::V1(Default::default())
+        }
+    }
+
+    impl DenseMerkleMetadata {
+        /// Create a new dense Merkle metadata object from the given Merkle
+        /// root and version
+        pub fn new(root: MerkleRoot, version: u64) -> Self {
+            let metadata = DenseMerkleMetadataV1 { root, version };
+            Self::V1(metadata)
+        }
+
+        /// Get the Merkle root of the dense Metadata
+        pub fn root(&self) -> &MerkleRoot {
+            match self {
+                DenseMerkleMetadata::V1(metadata) => &metadata.root,
+            }
+        }
+
+        /// Get the version of the dense Metadata
+        pub fn version(&self) -> u64 {
+            match self {
+                DenseMerkleMetadata::V1(metadata) => metadata.version,
+            }
+        }
+    }
+
+    /// Metadata for dense Merkle trees
+    #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
+    pub struct DenseMerkleMetadataV1 {
         /// The root hash of the dense Merkle tree structure
         pub root: MerkleRoot,
         /// The version of the dense Merkle tree structure is equal to the number of
@@ -157,7 +193,7 @@ pub mod merkle {
         pub version: u64,
     }
 
-    impl Default for DenseMerkleMetadata {
+    impl Default for DenseMerkleMetadataV1 {
         fn default() -> Self {
             let empty_merkle_tree = binary::root_calculator::MerkleRootCalculator::new();
             Self {
@@ -167,19 +203,60 @@ pub mod merkle {
         }
     }
 
+    impl From<DenseMerkleMetadataV1> for DenseMerkleMetadata {
+        fn from(value: DenseMerkleMetadataV1) -> Self {
+            Self::V1(value)
+        }
+    }
+
     /// Metadata for sparse Merkle trees
     #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
-    pub struct SparseMerkleMetadata {
+    pub enum SparseMerkleMetadata {
+        /// V1 Sparse Merkle Metadata
+        V1(SparseMerkleMetadataV1),
+    }
+
+    impl Default for SparseMerkleMetadata {
+        fn default() -> Self {
+            Self::V1(Default::default())
+        }
+    }
+
+    impl SparseMerkleMetadata {
+        /// Create a new sparse Merkle metadata object from the given Merkle
+        /// root
+        pub fn new(root: MerkleRoot) -> Self {
+            let metadata = SparseMerkleMetadataV1 { root };
+            Self::V1(metadata)
+        }
+
+        /// Get the Merkle root stored in the metadata
+        pub fn root(&self) -> &MerkleRoot {
+            match self {
+                SparseMerkleMetadata::V1(metadata) => &metadata.root,
+            }
+        }
+    }
+
+    /// Metadata V1 for sparse Merkle trees
+    #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
+    pub struct SparseMerkleMetadataV1 {
         /// The root hash of the sparse Merkle tree structure
         pub root: MerkleRoot,
     }
 
-    impl Default for SparseMerkleMetadata {
+    impl Default for SparseMerkleMetadataV1 {
         fn default() -> Self {
             let empty_merkle_tree = sparse::in_memory::MerkleTree::new();
             Self {
                 root: empty_merkle_tree.root(),
             }
+        }
+    }
+
+    impl From<SparseMerkleMetadataV1> for SparseMerkleMetadata {
+        fn from(value: SparseMerkleMetadataV1) -> Self {
+            Self::V1(value)
         }
     }
 

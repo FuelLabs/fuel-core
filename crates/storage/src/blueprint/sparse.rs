@@ -104,7 +104,7 @@ where
             .get(primary_key)?
             .unwrap_or_default();
 
-        let root = prev_metadata.root;
+        let root = *prev_metadata.root();
         let mut tree: MerkleTree<Nodes, _> = MerkleTree::load(&mut storage, &root)
             .map_err(|err| StorageError::Other(anyhow::anyhow!("{err:?}")))?;
 
@@ -113,7 +113,7 @@ where
 
         // Generate new metadata for the updated tree
         let root = tree.root();
-        let metadata = SparseMerkleMetadata { root };
+        let metadata = SparseMerkleMetadata::new(root);
         storage
             .storage::<Metadata>()
             .insert(primary_key, &metadata)?;
@@ -138,7 +138,7 @@ where
             storage.storage::<Metadata>().get(primary_key)?;
 
         if let Some(prev_metadata) = prev_metadata {
-            let root = prev_metadata.root;
+            let root = *prev_metadata.root();
 
             let mut tree: MerkleTree<Nodes, _> = MerkleTree::load(&mut storage, &root)
                 .map_err(|err| StorageError::Other(anyhow::anyhow!("{err:?}")))?;
@@ -152,7 +152,7 @@ where
                 storage.storage::<Metadata>().remove(primary_key)?;
             } else {
                 // Generate new metadata for the updated tree
-                let metadata = SparseMerkleMetadata { root };
+                let metadata = SparseMerkleMetadata::new(root);
                 storage
                     .storage::<Metadata>()
                     .insert(primary_key, &metadata)?;
@@ -259,7 +259,7 @@ where
         let metadata: Option<Cow<SparseMerkleMetadata>> =
             self.storage_as_ref::<Metadata>().get(key)?;
         let root = metadata
-            .map(|metadata| metadata.root)
+            .map(|metadata| *metadata.root())
             .unwrap_or_else(|| in_memory::MerkleTree::new().root());
         Ok(root)
     }
@@ -346,7 +346,7 @@ where
         });
         storage.as_mut().batch_write(&mut nodes)?;
 
-        let metadata = SparseMerkleMetadata { root };
+        let metadata = SparseMerkleMetadata::new(root);
         storage
             .storage::<Metadata>()
             .insert(primary_key, &metadata)?;
@@ -379,7 +379,7 @@ where
             .get(primary_key)?
             .unwrap_or_default();
 
-        let root = prev_metadata.root;
+        let root = *prev_metadata.root();
         let mut tree: MerkleTree<Nodes, _> = MerkleTree::load(&mut storage, &root)
             .map_err(|err| StorageError::Other(anyhow::anyhow!("{err:?}")))?;
 
@@ -404,7 +404,7 @@ where
         )?;
 
         // Generate new metadata for the updated tree
-        let metadata = SparseMerkleMetadata { root };
+        let metadata = SparseMerkleMetadata::new(root);
         storage
             .storage::<Metadata>()
             .insert(primary_key, &metadata)?;
@@ -436,7 +436,7 @@ where
             .get(primary_key)?
             .unwrap_or_default();
 
-        let root = prev_metadata.root;
+        let root = *prev_metadata.root();
         let mut tree: MerkleTree<Nodes, _> = MerkleTree::load(&mut storage, &root)
             .map_err(|err| StorageError::Other(anyhow::anyhow!("{err:?}")))?;
 
@@ -461,7 +461,7 @@ where
             storage.storage::<Metadata>().remove(primary_key)?;
         } else {
             // Generate new metadata for the updated tree
-            let metadata = SparseMerkleMetadata { root };
+            let metadata = SparseMerkleMetadata::new(root);
             storage
                 .storage::<Metadata>()
                 .insert(primary_key, &metadata)?;
