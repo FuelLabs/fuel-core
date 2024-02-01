@@ -2,7 +2,7 @@ specVersion: v0.1.0
 package:
   name: fuel
   version: v1.0.0
-  url: https://github.com/FuelLabs/firehose-fuel
+  url: https://github.com/streamingfast/firehose-fuel
   doc: |
     Protobuf definitions for developing Substreams Fuel modules.
 

@@ -1,3 +1,8 @@
+# Invoked using:
+#
+#   dummy-blockchain start --tracer=firehose --store-dir=./devel/stdin/firehose-data/reader-node --block-rate=60 | ./devel/stdin/start.sh
+#
+# The `./devel/stdin/start.sh` does the above invocation and pipes the output to the `stdin` process.
 start:
   args:
   - firehose
@@ -5,4 +10,5 @@ start:
   - reader-node-stdin
   - relayer
   flags:
-    # Invoked like `dummy-blockchain --firehose-enabled --block-rate=6 | ./devel/stdin/start.sh`
+    # The dummy block chain genesis block's height is 1
+    common-first-streamable-block: 1

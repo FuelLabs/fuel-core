@@ -19,12 +19,12 @@ As a reference, here is Ethereum's Protobuf Structure:
 
 We have built an end-to-end template, to start the on-boarding process of new chains. This solution consist of:
 
-*firehose-fuel*
+*firehose-acme*
 As mentioned above, the `Reader` process consumes the data that is extracted and streamed from `Firehose`. In Actuality the Reader
 is one process out of multiple ones that creates the _Firehose_. These processes are launched by one application. This application is
 chain specific and by convention, we name is "firehose-<chain-name>". Though this application is chain specific, the structure of the application
 is standardized and is quite similar from chain to chain. For convenience, we have create a boiler plate app to help you get started.
-We named our chain `Acme` this the app is [firehose-fuel](https://github.com/FuelLabs/firehose-fuel)
+We named our chain `Acme` this the app is [firehose-acme](https://github.com/streamingfast/firehose-acme)
 
 *Firehose Logs*
 Firehose logs consist of an instrumented syncing node. We have created a "dummy-blockchain" chain to simulate a node process syncing that can be found [https://github.com/streamingfast/dummy-blockchain](https://github.com/streamingfast/dummy-blockchain).
@@ -47,15 +47,15 @@ Ensure the build was successful
 ./dummy-blockchain --version
 ```
 
-Take note of the location of the built `dummy-blockchain` binary, you will need to configure `firehose-fuel` with it.
+Take note of the location of the built `dummy-blockchain` binary, you will need to configure `firehose-acme` with it.
 
-## Setting up firehose-fuel
+## Setting up firehose-acme
 
 Clone the repository:
 
 ```bash
-git clone git@github.com:FuelLabs/firehose-fuel.git
-cd firehose-fuel
+git clone git@github.com:streamingfast/firehose-acme.git
+cd firehose-acme
 ```
 
 Configure firehose test setup
@@ -71,12 +71,12 @@ modify the flag `reader-node-path: "dummy-blockchain"` to point to the path of y
 
 *all subsequent commands are run from the `devel/standard/` directory*
 
-Start `firefuel`
+Start `fireacme`
 ```bash
 ./start.sh
 ```
 
-This will launch `firefuel` application. Behind the scenes we are starting 3 sub processes: `reader-node`, `relayer`, `firehose`
+This will launch `fireacme` application. Behind the scenes we are starting 3 sub processes: `reader-node`, `relayer`, `firehose`
 
 *reader-node*
 
@@ -105,7 +105,7 @@ ls -las ./firehose-data/storage/merged-blocks
 We have also built tools that allow you to introspect block files:
 
 ```bash
-go install ../../cmd/firefuel && firefuel tools print blocks --store ./firehose-data/storage/merged-blocks 100
+go install ../../cmd/fireacme && fireacme tools print blocks --store ./firehose-data/storage/merged-blocks 100
 ```
 
 At this point we have `reader-node` process running as well a `relayer` & `firehose` process. Both of these processes work together to provide the Firehose data stream.
@@ -121,9 +121,9 @@ We can start streaming blocks with `sf.firehose.v2.Stream` Service:
 grpcurl -plaintext -d '{"start_block_num": 10}' -import-path ./proto -proto sf/acme/type/v1/type.proto localhost:18015 sf.firehose.v2.Stream.Blocks
 ```
 
-# Using `firehose-fuel` as a template
+# Using `firehose-acme` as a template
 
-One of the main reason we provide a `firehose-fuel` repository is to act as a template element that integrators can use to bootstrap
+One of the main reason we provide a `firehose-acme` repository is to act as a template element that integrators can use to bootstrap
 creating the required Firehose chain specific code.
 
 We purposely used `Acme` (and also `acme` and `ACME`) throughout this repository so that integrators can simply copy everything and perform
@@ -134,10 +134,10 @@ as well as the list of files that should be renamed.
 
 ## Cloning
 
-First step is to clone again `firehose-fuel` this time to a dedicated repository that will be the one of your chain:
+First step is to clone again `firehose-acme` this time to a dedicated repository that will be the one of your chain:
 
 ```
-git clone git@github.com:FuelLabs/firehose-fuel.git firehose-<chain>
+git clone git@github.com:streamingfast/firehose-acme.git firehose-<chain>
 ```
 
 > Don't forget to change `<chain>` by the name of your exact chain like `ethereum` so it would became `firehose-ethereum`
@@ -166,10 +166,10 @@ git commit -m "Initial commit"
 
 Perform a **case-sensitive** search/replace for the following terms, order is important:
 
-- `github.com/FuelLabs/firehose-fuel` -> `github.com/<owner>/firehose-<chain>`
-- `ghcr.io/FuelLabs/firehose-fuel` -> `ghcr.io/<owner>/firehose-<chain>`
+- `github.com/streamingfast/firehose-acme` -> `github.com/<owner>/firehose-<chain>`
+- `ghcr.io/streamingfast/firehose-acme` -> `ghcr.io/<owner>/firehose-<chain>`
 - `owner: streamingfast` -> `owner: <owner>`
-- `firefuel` -> `fire<chain_short>` (for the final binary produced)
+- `fireacme` -> `fire<chain_short>` (for the final binary produced)
 - `acme` -> `<chain>` (for variable, identifier and other place not meant for display, `camelCase`)
 - `Acme` -> `<Chain>` (for title(s) and display of chain's full name, `titleCase`)
 - `ACME` -> `<CHAIN>` (for constants)
@@ -187,11 +187,11 @@ export chain_short=eth # Change me!
 export chain_title=Ethereum # Change me!
 export chain_constant=ETHEREUM # Change me!
 
-find . -type f -not -path "./.git/*" -exec sd -f c "github.com/FuelLabs/firehose-fuel" "github.com/$owner/firehose-$chain" {} \;`
-find . -type f -not -path "./.git/*" -exec sd -f c "ghcr.io/FuelLabs/firehose-fuel" "ghcr.io/$owner/firehose-$chain" {} \;`
-find . -type f -not -path "./.git/*" -exec sd -f c "buf.build/FuelLabs/firehose-fuel" "buf.build/$owner/firehose-$chain" {} \;`
+find . -type f -not -path "./.git/*" -exec sd -f c "github.com/streamingfast/firehose-acme" "github.com/$owner/firehose-$chain" {} \;`
+find . -type f -not -path "./.git/*" -exec sd -f c "ghcr.io/streamingfast/firehose-acme" "ghcr.io/$owner/firehose-$chain" {} \;`
+find . -type f -not -path "./.git/*" -exec sd -f c "buf.build/streamingfast/firehose-acme" "buf.build/$owner/firehose-$chain" {} \;`
 find . -type f -not -path "./.git/*" -exec sd -f c "owner: streamingfast" "owner: $owner" {} \;`
-find . -type f -not -path "./.git/*" -exec sd -f c firefuel fire$chain_short {} \;`
+find . -type f -not -path "./.git/*" -exec sd -f c fireacme fire$chain_short {} \;`
 find . -type f -not -path "./.git/*" -exec sd -f c acme $owner {} \;`
 find . -type f -not -path "./.git/*" -exec sd -f c Acme $chain_title {} \;`
 find . -type f -not -path "./.git/*" -exec sd -f c ACME $chain_constant {} \;`
@@ -203,8 +203,8 @@ find . -type f -not -path "./.git/*" -exec sd -f c ACME $chain_constant {} \;`
 ### Files
 
 ```
-git mv ./devel/firefuel ./devel/fireeth
-git mv ./cmd/firefuel ./cmd/fireeth
+git mv ./devel/fireacme ./devel/fireeth
+git mv ./cmd/fireacme ./cmd/fireeth
 git mv ./pb/sf/acme ./pb/sf/ethereum
 git mv ./proto/sf/acme ./proto/sf/ethereum
 ```
@@ -253,7 +253,7 @@ Now the main module has its `types` dependency updated with the newly generated 
 
 Doing a Firehose integration means there is an instrumented node that emits Firehose logs (or if not a node directly, definitely a process that reads and emits Firehose logs).
 
-#### [cmd/firefuel/cli/constants.go](cmd/firefuel/cli/constants.go)
+#### [cmd/fireacme/cli/constants.go](cmd/fireacme/cli/constants.go)
 
 - Replace `ChainExecutableName = "dummy-blockchain"` by the `ChainExecutableName = "<binary>"` where `<binary>` is the node's binary name that should be launched.
 
@@ -264,7 +264,7 @@ Doing a Firehose integration means there is an instrumented node that emits Fire
 
 ### Dockerfile(s) & GitHub Actions
 
-There is two Docker image created by a build of `firehose-fuel`. First, a version described as _vanilla_ where only `firefuel` Golang binary is included and another one described as _bundle_ which includes both the `firacme` binary and the chain's binary that `reader-node` launches.
+There is two Docker image created by a build of `firehose-acme`. First, a version described as _vanilla_ where only `fireacme` Golang binary is included and another one described as _bundle_ which includes both the `firacme` binary and the chain's binary that `reader-node` launches.
 
 Here the files that needs to be modified for this. The Dockerfile are all built on Ubuntu 20.04 images.
 

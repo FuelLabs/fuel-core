@@ -1,30 +1,25 @@
 package main
 
 import (
-	"github.com/FuelLabs/firehose-fuel/codec"
 	pbfuel "github.com/FuelLabs/firehose-fuel/pb/sf/fuel/type/v1"
 	firecore "github.com/streamingfast/firehose-core"
+	fhCmd "github.com/streamingfast/firehose-core/cmd"
 )
 
 func main() {
-	firecore.Main(&firecore.Chain[*pbfuel.Block]{
+	fhCmd.Main(&firecore.Chain[*pbfuel.Block]{
 		ShortName:            "fuel",
 		LongName:             "Fuel",
-		ExecutableName:       "fuel-todo",
-		FullyQualifiedModule: "github.com/FuelLabs/firehose-fuel",
+		ExecutableName:       "dummy-blockchain",
+		FullyQualifiedModule: "github.com/streamingfast/firehose-fuel",
 		Version:              version,
-
-		Protocol:        "FLC",
-		ProtocolVersion: 1,
 
 		FirstStreamableBlock: 1,
 
 		BlockFactory:         func() firecore.Block { return new(pbfuel.Block) },
-		ConsoleReaderFactory: codec.NewConsoleReader,
+		ConsoleReaderFactory: firecore.NewConsoleReader,
 
-		Tools: &firecore.ToolsConfig[*pbfuel.Block]{
-			BlockPrinter: printBlock,
-		},
+		Tools: &firecore.ToolsConfig[*pbfuel.Block]{},
 	})
 }
 

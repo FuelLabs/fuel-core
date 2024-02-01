@@ -1,14 +1,22 @@
 start:
   args:
-    - firehose
-    - merger
-    - reader-node
-    - relayer
+  - firehose
+  - merger
+  - reader-node
+  - relayer
   flags:
-    # Specifies the path to the binary
+    # The dummy block chain genesis block's height is 1
+    common-first-streamable-block: 1
+
+    # Specifies the path to the binary, we assume you did
+    # `go install github.com/streamingfast/dummy-blockchain@latest` (and that you have value
+    # of `go env GOPATH` in your environment).
     reader-node-path: "dummy-blockchain"
+    reader-node-data-dir: "{data-dir}/reader-node"
+
     # Flags that will be added to the dummy chain process command
-    reader-node-arguments: --firehose-enabled --block-rate 90 start
-    # Flags that will be added to the dummy chain process command
-    common-live-blocks-addr: ""
-#    add block merger to merge on lower number of blocks
+    reader-node-arguments:
+      start
+      --tracer=firehose
+      --store-dir={node-data-dir}
+      --block-rate=60
