@@ -15,7 +15,7 @@ pub struct RawKey([u8; Self::SIZE]);
 impl RawKey {
     pub const SIZE: usize = 3;
     pub const ZERO: Self = Self([0; Self::SIZE]);
-    pub const MAX_WRITABLE: Self = Self([u8::MAX; Self::SIZE]);
+    pub const MAX_WRITABLE: Self = Self([u8::MAX, u8::MAX, u8::MAX - 1]);
     pub const DEFAULT_VALUE: Self = Self([u8::MAX; Self::SIZE]);
 
     pub fn as_u32(self) -> u32 {
@@ -24,15 +24,14 @@ impl RawKey {
 
     /// Wraps around just below max/default value.
     pub fn add_u32(self, rhs: u32) -> Self {
-        let lhs = self.as_u32();
-        let v = lhs.wrapping_add(rhs);
-        let b = v.to_be_bytes();
-        let raw = Self([b[1], b[2], b[3]]);
-        if raw == Self::DEFAULT_VALUE {
-            Self::ZERO
-        } else {
-            raw
-        }
+        let lhs = self.as_u32() as u64;
+        let rhs = rhs as u64;
+        // Safety: cannot overflow as both operands are limited to 32 bits
+        let result = (lhs + rhs) % (Self::DEFAULT_VALUE.as_u32() as u64);
+        // Safety: cannot truncate as we are already limited to 24 bits by modulo
+        let v = result as u32;
+        let v = v.to_be_bytes();
+        Self([v[1], v[2], v[3]])
     }
 
     /// Wraps around just below max/default value.
