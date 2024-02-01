@@ -2,10 +2,7 @@
 #[allow(clippy::cast_possible_truncation)]
 #[cfg(test)]
 mod tests {
-    use crate::database::{
-        Database,
-        RelayerReadDatabase,
-    };
+    use crate::database::Database;
     use fuel_core_executor::{
         executor::{
             block_component::PartialBlockComponent,
@@ -14,6 +11,7 @@ mod tests {
             Executor,
             OnceTransactionsSource,
         },
+        ports::RelayerPort,
         refs::ContractRef,
         Config,
     };
@@ -24,6 +22,7 @@ mod tests {
             Messages,
         },
         transactional::AtomicView,
+        Result as StorageResult,
         StorageAsMut,
     };
     use fuel_core_types::{
@@ -117,6 +116,7 @@ mod tests {
                 TransactionExecutionResult,
                 TransactionValidityError,
             },
+            relayer::Event,
         },
         tai64::Tai64,
     };
@@ -131,13 +131,43 @@ mod tests {
         sync::Arc,
     };
 
+    #[derive(Clone, Debug)]
+    struct DisabledRelayer;
+
+    impl RelayerPort for DisabledRelayer {
+        fn enabled(&self) -> bool {
+            false
+        }
+
+        fn get_events(&self, _: &DaBlockHeight) -> anyhow::Result<Vec<Event>> {
+            unimplemented!()
+        }
+    }
+
+    impl AtomicView for DisabledRelayer {
+        type View = Self;
+        type Height = DaBlockHeight;
+
+        fn latest_height(&self) -> Self::Height {
+            0u64.into()
+        }
+
+        fn view_at(&self, _: &Self::Height) -> StorageResult<Self::View> {
+            Ok(self.latest_view())
+        }
+
+        fn latest_view(&self) -> Self::View {
+            self.clone()
+        }
+    }
+
     fn create_executor(
         database: Database,
         config: Config,
-    ) -> Executor<Database, RelayerReadDatabase> {
+    ) -> Executor<Database, DisabledRelayer> {
         Executor {
-            database_view_provider: database.clone(),
-            relayer_view_provider: RelayerReadDatabase::new(database),
+            database_view_provider: database,
+            relayer_view_provider: DisabledRelayer,
             config: Arc::new(config),
         }
     }
@@ -217,7 +247,11 @@ mod tests {
         (create, script)
     }
 
-    pub(crate) fn test_block(num_txs: usize) -> Block {
+    pub(crate) fn test_block(
+        block_height: BlockHeight,
+        da_block_height: DaBlockHeight,
+        num_txs: usize,
+    ) -> Block {
         let transactions = (1..num_txs + 1)
             .map(|i| {
                 TxBuilder::new(2322u64)
@@ -233,6 +267,8 @@ mod tests {
             .collect_vec();
 
         let mut block = Block::default();
+        block.header_mut().set_block_height(block_height);
+        block.header_mut().set_da_height(da_block_height);
         *block.transactions_mut() = transactions;
         block
     }
@@ -260,7 +296,7 @@ mod tests {
     fn executor_validates_correctly_produced_block() {
         let producer = create_executor(Default::default(), Default::default());
         let verifier = create_executor(Default::default(), Default::default());
-        let block = test_block(10);
+        let block = test_block(1u32.into(), 0u64.into(), 10);
 
         let ExecutionResult {
             block,
@@ -283,7 +319,7 @@ mod tests {
     #[test]
     fn executor_commits_transactions_to_block() {
         let producer = create_executor(Default::default(), Default::default());
-        let block = test_block(10);
+        let block = test_block(1u32.into(), 0u64.into(), 10);
         let start_block = block.clone();
 
         let ExecutionResult {
@@ -2259,7 +2295,7 @@ mod tests {
     }
 
     /// Helper to build database and executor for some of the message tests
-    fn make_executor(messages: &[&Message]) -> Executor<Database, RelayerReadDatabase> {
+    fn make_executor(messages: &[&Message]) -> Executor<Database, DisabledRelayer> {
         let mut database = Database::default();
         let database_ref = &mut database;
 
@@ -2767,5 +2803,236 @@ mod tests {
 
         let receipts = &tx_status[0].receipts;
         assert_eq!(time.0, receipts[0].val().unwrap());
+    }
+
+    #[cfg(feature = "relayer")]
+    mod relayer {
+        use super::*;
+        use crate::database::RelayerReadDatabase;
+        use fuel_core_relayer::storage::EventsHistory;
+        use fuel_core_storage::{
+            tables::{
+                FuelBlocks,
+                SpentMessages,
+            },
+            transactional::Transaction,
+            StorageAsMut,
+        };
+
+        fn database_with_genesis_block(da_block_height: u64) -> Database {
+            let db = Database::default();
+            let mut block = Block::default();
+            block.header_mut().set_da_height(da_block_height.into());
+            block.header_mut().recalculate_metadata();
+
+            let mut db_transaction = db.transaction();
+            db_transaction
+                .as_mut()
+                .storage::<FuelBlocks>()
+                .insert(&0.into(), &block)
+                .expect("Should insert genesis block without any problems");
+            db_transaction.commit().expect("Should commit");
+            db
+        }
+
+        fn add_message_to_relayer(db: &mut Database, message: Message) {
+            let mut db_transaction = db.transaction();
+            let da_height = message.da_height();
+            db.storage::<EventsHistory>()
+                .insert(&da_height, &[Event::Message(message)])
+                .expect("Should insert event");
+            db_transaction.commit().expect("Should commit events");
+        }
+
+        fn add_messages_to_relayer(db: &mut Database, relayer_da_height: u64) {
+            for da_height in 0..=relayer_da_height {
+                let mut message = Message::default();
+                message.set_da_height(da_height.into());
+                message.set_nonce(da_height.into());
+
+                add_message_to_relayer(db, message);
+            }
+        }
+
+        fn create_relayer_executor(
+            database: Database,
+        ) -> Executor<Database, RelayerReadDatabase> {
+            Executor {
+                database_view_provider: database.clone(),
+                relayer_view_provider: RelayerReadDatabase::new(database),
+                config: Arc::new(Default::default()),
+            }
+        }
+
+        struct Input {
+            relayer_da_height: u64,
+            block_height: u32,
+            block_da_height: u64,
+            genesis_da_height: Option<u64>,
+        }
+
+        #[test_case::test_case(
+            Input {
+                relayer_da_height: 10,
+                block_height: 1,
+                block_da_height: 10,
+                genesis_da_height: Some(0),
+            } => matches Ok(()) ; "block producer takes all 10 messages from the relayer"
+        )]
+        #[test_case::test_case(
+            Input {
+                relayer_da_height: 10,
+                block_height: 1,
+                block_da_height: 5,
+                genesis_da_height: Some(0),
+            } => matches Ok(()) ; "block producer takes first 5 messages from the relayer"
+        )]
+        #[test_case::test_case(
+            Input {
+                relayer_da_height: 10,
+                block_height: 1,
+                block_da_height: 10,
+                genesis_da_height: Some(5),
+            } => matches Ok(()) ; "block producer takes last 5 messages from the relayer"
+        )]
+        #[test_case::test_case(
+            Input {
+                relayer_da_height: 10,
+                block_height: 1,
+                block_da_height: 10,
+                genesis_da_height: Some(u64::MAX),
+            } => matches Err(ExecutorError::DaHeightExceededItsLimit) ; "block producer fails when previous block exceeds `u64::MAX`"
+        )]
+        #[test_case::test_case(
+            Input {
+                relayer_da_height: 10,
+                block_height: 1,
+                block_da_height: 10,
+                genesis_da_height: None,
+            } => matches Err(ExecutorError::PreviousBlockIsNotFound) ; "block producer fails when previous block doesn't exist"
+        )]
+        #[test_case::test_case(
+            Input {
+                relayer_da_height: 10,
+                block_height: 0,
+                block_da_height: 10,
+                genesis_da_height: Some(0),
+            } => matches Err(ExecutorError::ExecutingGenesisBlock) ; "block producer fails when block height is zero"
+        )]
+        fn block_producer_takes_messages_from_the_relayer(
+            input: Input,
+        ) -> Result<(), ExecutorError> {
+            let genesis_da_height = input.genesis_da_height.unwrap_or_default();
+            let mut db = if let Some(genesis_da_height) = input.genesis_da_height {
+                database_with_genesis_block(genesis_da_height)
+            } else {
+                Database::default()
+            };
+
+            // Given
+            let relayer_da_height = input.relayer_da_height;
+            let block_height = input.block_height;
+            let block_da_height = input.block_da_height;
+            add_messages_to_relayer(&mut db, relayer_da_height);
+            assert_eq!(db.iter_all::<Messages>(None).count(), 0);
+
+            // When
+            let producer = create_relayer_executor(db);
+            let block = test_block(block_height.into(), block_da_height.into(), 10);
+            let result = producer.execute_and_commit(
+                ExecutionTypes::Production(block.into()),
+                Default::default(),
+            )?;
+
+            // Then
+            let view = producer.database_view_provider.latest_view();
+            assert!(result.skipped_transactions.is_empty());
+            assert_eq!(
+                view.iter_all::<Messages>(None).count() as u64,
+                block_da_height - genesis_da_height
+            );
+            let messages = view.iter_all::<Messages>(None);
+            for (da_height, message) in
+                (genesis_da_height + 1..block_da_height).zip(messages)
+            {
+                let (_, message) = message.unwrap();
+                assert_eq!(message.da_height(), da_height.into());
+            }
+            Ok(())
+        }
+
+        #[test]
+        fn block_producer_does_not_take_messages_for_the_same_height() {
+            let genesis_da_height = 1u64;
+            let mut db = database_with_genesis_block(genesis_da_height);
+
+            // Given
+            let relayer_da_height = 10u64;
+            let block_height = 1u32;
+            let block_da_height = 1u64;
+            add_messages_to_relayer(&mut db, relayer_da_height);
+            assert_eq!(db.iter_all::<Messages>(None).count(), 0);
+
+            // When
+            let producer = create_relayer_executor(db);
+            let block = test_block(block_height.into(), block_da_height.into(), 10);
+            let result = producer
+                .execute_and_commit(
+                    ExecutionTypes::Production(block.into()),
+                    Default::default(),
+                )
+                .unwrap();
+
+            // Then
+            let view = producer.database_view_provider.latest_view();
+            assert!(result.skipped_transactions.is_empty());
+            assert_eq!(view.iter_all::<Messages>(None).count() as u64, 0);
+        }
+
+        #[test]
+        fn block_producer_can_use_just_added_message_in_the_transaction() {
+            let genesis_da_height = 1u64;
+            let mut db = database_with_genesis_block(genesis_da_height);
+
+            let block_height = 1u32;
+            let block_da_height = 2u64;
+            let nonce = 1.into();
+            let mut message = Message::default();
+            message.set_da_height(block_da_height.into());
+            message.set_nonce(nonce);
+            add_message_to_relayer(&mut db, message);
+
+            // Given
+            assert_eq!(db.iter_all::<Messages>(None).count(), 0);
+            assert_eq!(db.iter_all::<SpentMessages>(None).count(), 0);
+            let tx = TransactionBuilder::script(vec![], vec![])
+                .script_gas_limit(10)
+                .add_unsigned_message_input(
+                    SecretKey::random(&mut StdRng::seed_from_u64(2322)),
+                    Default::default(),
+                    nonce,
+                    Default::default(),
+                    vec![],
+                )
+                .finalize_as_transaction();
+
+            // When
+            let mut block = test_block(block_height.into(), block_da_height.into(), 0);
+            *block.transactions_mut() = vec![tx];
+            let producer = create_relayer_executor(db);
+            let result = producer
+                .execute_and_commit(
+                    ExecutionTypes::Production(block.into()),
+                    Default::default(),
+                )
+                .unwrap();
+
+            // Then
+            let view = producer.database_view_provider.latest_view();
+            assert!(result.skipped_transactions.is_empty());
+            assert_eq!(view.iter_all::<Messages>(None).count() as u64, 0);
+            // Message added during this block immediately became spent.
+            assert_eq!(view.iter_all::<SpentMessages>(None).count(), 1);
+        }
     }
 }

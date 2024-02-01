@@ -40,7 +40,6 @@ use fuel_core_types::{
     entities::message::MerkleProof,
     fuel_merkle::binary::MerkleTree,
     fuel_types::BlockHeight,
-    tai64::Tai64,
 };
 use itertools::Itertools;
 use std::borrow::{
@@ -120,14 +119,14 @@ impl StorageMutate<FuelBlocks> for Database {
 
         let storage = self.borrow_mut();
         let mut tree: MerkleTree<FuelBlockMerkleData, _> =
-            MerkleTree::load(storage, prev_metadata.version)
+            MerkleTree::load(storage, prev_metadata.version())
                 .map_err(|err| StorageError::Other(anyhow::anyhow!(err)))?;
         tree.push(block_id.as_slice())?;
 
         // Generate new metadata for the updated tree
-        let version = tree.leaves_count();
         let root = tree.root();
-        let metadata = DenseMerkleMetadata { version, root };
+        let version = tree.leaves_count();
+        let metadata = DenseMerkleMetadata::new(root, version);
         self.storage::<FuelBlockMerkleMetadata>()
             .insert(height, &metadata)?;
 
@@ -182,20 +181,6 @@ impl Database {
         self.latest_compressed_block()
     }
 
-    pub fn block_time(&self, height: &BlockHeight) -> StorageResult<Tai64> {
-        let block = self
-            .storage::<FuelBlocks>()
-            .get(height)?
-            .ok_or(not_found!(FuelBlocks))?;
-        Ok(block.header().time().to_owned())
-    }
-
-    pub fn get_block_id(&self, height: &BlockHeight) -> StorageResult<Option<BlockId>> {
-        self.storage::<FuelBlocks>()
-            .get(height)
-            .map(|v| v.map(|v| v.id()))
-    }
-
     pub fn get_block_height(&self, id: &BlockId) -> StorageResult<Option<BlockHeight>> {
         self.storage::<FuelBlockSecondaryKeyBlockHeights>()
             .get(id)
@@ -237,7 +222,7 @@ impl MerkleRootStorage<BlockHeight, FuelBlocks> for Database {
             .storage::<FuelBlockMerkleMetadata>()
             .get(key)?
             .ok_or(not_found!(FuelBlocks))?;
-        Ok(metadata.root)
+        Ok(*metadata.root())
     }
 }
 
@@ -265,11 +250,11 @@ impl Database {
 
         let storage = self;
         let tree: MerkleTree<FuelBlockMerkleData, _> =
-            MerkleTree::load(storage, commit_merkle_metadata.version)
+            MerkleTree::load(storage, commit_merkle_metadata.version())
                 .map_err(|err| StorageError::Other(anyhow::anyhow!(err)))?;
 
         let proof_index = message_merkle_metadata
-            .version
+            .version()
             .checked_sub(1)
             .ok_or(anyhow::anyhow!("The count of leafs - messages is zero"))?;
         let (_, proof_set) = tree
