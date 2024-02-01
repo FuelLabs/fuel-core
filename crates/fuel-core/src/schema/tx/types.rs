@@ -680,12 +680,12 @@ impl DryRunTransaction {
         TransactionId(self.0.id)
     }
 
-    async fn status(&self) -> async_graphql::Result<DryRunTransactionStatus> {
-        Ok(DryRunTransactionStatus::new(self.0.result.clone()))
+    async fn status(&self) -> DryRunTransactionStatus {
+        DryRunTransactionStatus::new(self.0.result.clone())
     }
 
-    async fn receipts(&self) -> async_graphql::Result<Vec<Receipt>> {
-        Ok(self.0.receipts.iter().map(Into::into).collect())
+    async fn receipts(&self) -> Vec<Receipt> {
+        self.0.receipts.iter().map(Into::into).collect()
     }
 }
 
