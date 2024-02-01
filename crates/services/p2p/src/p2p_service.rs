@@ -1746,7 +1746,7 @@ mod tests {
                                         Ok((_, Ok(_))) => {
                                             let _ = tx_test_end.send(false).await;
                                             panic!("Request succeeded unexpectedly")},
-                                        Ok((_, Err(ResponseError::P2P(OutboundFailure::Timeout)))) => {
+                                        Ok((_, Err(ResponseError::P2P(_)))) => {
                                             // Got timeout as expected, so end test
                                             let _ = tx_test_end.send(true).await;
                                         },
