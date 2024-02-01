@@ -62,11 +62,11 @@ enum DataSource {
 }
 
 #[derive(Clone, Debug)]
-pub struct Decoder {
+pub struct StateReader {
     data_source: DataSource,
 }
 
-impl Decoder {
+impl StateReader {
     #[cfg(feature = "std")]
     pub fn json(
         path: impl AsRef<std::path::Path>,

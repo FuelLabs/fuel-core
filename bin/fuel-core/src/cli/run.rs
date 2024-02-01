@@ -36,7 +36,7 @@ use fuel_core::{
     },
 };
 use fuel_core_chain_config::{
-    Decoder,
+    StateReader,
     SnapshotMetadata,
     MAX_GROUP_SIZE,
 };
@@ -261,12 +261,12 @@ impl Command {
         let (chain_conf, state_reader) = match snapshot.as_ref() {
             None => (
                 ChainConfig::local_testnet(),
-                Decoder::in_memory(StateConfig::local_testnet(), MAX_GROUP_SIZE),
+                StateReader::in_memory(StateConfig::local_testnet(), MAX_GROUP_SIZE),
             ),
             Some(path) => {
                 let metadata = SnapshotMetadata::read(path)?;
                 let chain_conf = ChainConfig::from_snapshot_metadata(&metadata)?;
-                let state_config = Decoder::for_snapshot(metadata, MAX_GROUP_SIZE)?;
+                let state_config = StateReader::for_snapshot(metadata, MAX_GROUP_SIZE)?;
                 (chain_conf, state_config)
             }
         };

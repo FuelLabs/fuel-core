@@ -13,7 +13,7 @@ use fuel_core::{
     types::fuel_types::ContractId,
 };
 use fuel_core_chain_config::{
-    Encoder,
+    StateWriter,
     SnapshotMetadata,
     MAX_GROUP_SIZE,
 };
@@ -134,7 +134,7 @@ fn contract_snapshot(
     let (contract, state, balance) = db.get_contract_by_id(contract_id)?;
 
     let metadata = write_metadata(output_dir, Encoding::Json)?;
-    let mut writer = Encoder::for_snapshot(&metadata)?;
+    let mut writer = StateWriter::for_snapshot(&metadata)?;
 
     writer.write_contracts(vec![contract])?;
     writer.write_contract_state(state)?;
@@ -188,7 +188,7 @@ fn write_chain_state(
     db: impl ChainStateDb,
     metadata: &SnapshotMetadata,
 ) -> anyhow::Result<()> {
-    let mut writer = Encoder::for_snapshot(metadata)?;
+    let mut writer = StateWriter::for_snapshot(metadata)?;
     fn write<T>(
         data: impl Iterator<Item = StorageResult<T>>,
         group_size: usize,
@@ -546,7 +546,7 @@ mod tests {
         // given
 
         use fuel_core_chain_config::{
-            Decoder,
+            StateReader,
             ParquetFiles,
         };
         let temp_dir = tempfile::tempdir()?;
@@ -576,7 +576,7 @@ mod tests {
 
         // then
         let files = ParquetFiles::snapshot_default(&snapshot_dir);
-        let reader = Decoder::parquet(files);
+        let reader = StateReader::parquet(files);
 
         let expected_state = sorted_state(state);
 
@@ -654,6 +654,9 @@ mod tests {
 
         Ok(())
     }
+
+    #[cfg(feature = "parquet")]
+    use fuel_core_chain_config::Group;
 
     #[cfg(feature = "parquet")]
     fn assert_groups_as_expected<T, I>(

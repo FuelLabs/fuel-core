@@ -1,6 +1,6 @@
 #![deny(clippy::cast_possible_truncation)]
 #![deny(clippy::arithmetic_side_effects)]
-//#![deny(unused_crate_dependencies)]
+#![deny(unused_crate_dependencies)]
 #![deny(warnings)]
 
 pub mod config;

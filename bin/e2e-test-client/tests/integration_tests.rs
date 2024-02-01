@@ -7,7 +7,7 @@ use fuel_core::service::{
 use fuel_core::txpool::types::ContractId;
 use fuel_core_chain_config::{
     ChainConfig,
-    Decoder,
+    StateReader,
     SnapshotMetadata,
     StateConfig,
     MAX_GROUP_SIZE,
@@ -118,7 +118,7 @@ fn dev_config() -> Config {
     );
 
     config.chain_config = chain_config;
-    config.state_reader = Decoder::in_memory(state_config, MAX_GROUP_SIZE);
+    config.state_reader = StateReader::in_memory(state_config, MAX_GROUP_SIZE);
 
     config.block_producer.coinbase_recipient = Some(
         ContractId::from_str(

@@ -31,7 +31,6 @@ itertools = { workspace = true, optional = true }
 lazy_static = { workspace = true }
 pyroscope = "0.5"
 pyroscope_pprofrs = "0.2"
-serde_json = { workspace = true, features = ["raw_value"], optional = true }
 tikv-jemallocator = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
 tracing = { workspace = true }
@@ -57,13 +56,11 @@ rocksdb = [
   "fuel-core/rocksdb",
   "dep:fuel-core-storage",
   "dep:itertools",
-  "dep:serde_json",
 ]
 rocksdb-production = [
   "fuel-core/rocksdb-production",
   "dep:fuel-core-storage",
   "dep:itertools",
-  "dep:serde_json",
 ]
 # features to enable in production, but increase build times
 production = ["env", "relayer", "rocksdb-production", "p2p"]

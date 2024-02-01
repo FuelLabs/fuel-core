@@ -2,7 +2,7 @@ use clap::ValueEnum;
 use fuel_core_chain_config::{
     default_consensus_dev_key,
     ChainConfig,
-    Decoder,
+    StateReader,
     StateConfig,
     MAX_GROUP_SIZE,
 };
@@ -42,7 +42,7 @@ pub struct Config {
     pub api_request_timeout: Duration,
     pub db_config: DatabaseConfig,
     pub chain_config: ChainConfig,
-    pub state_reader: Decoder,
+    pub state_reader: StateReader,
     /// When `true`:
     /// - Enables manual block production.
     /// - Enables debugger endpoint.
@@ -77,7 +77,7 @@ impl Config {
     pub fn local_node() -> Self {
         let chain_config = ChainConfig::local_testnet();
         let state_config = StateConfig::local_testnet();
-        let state_reader = Decoder::in_memory(state_config.clone(), MAX_GROUP_SIZE);
+        let state_reader = StateReader::in_memory(state_config.clone(), MAX_GROUP_SIZE);
 
         let utxo_validation = false;
         let min_gas_price = 0;

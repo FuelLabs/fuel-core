@@ -223,7 +223,7 @@ pub async fn make_nodes(
     let mut producers_with_txs = Vec::with_capacity(producers.len());
 
     let mut config = config.unwrap_or_else(Config::local_node);
-    let mut extra_state = StateConfig::default();
+    let mut state_config = StateConfig::local_testnet();
 
     for (all, producer) in txs_coins.into_iter().zip(producers.into_iter()) {
         match all {
@@ -231,7 +231,7 @@ pub async fn make_nodes(
                 let mut txs = Vec::with_capacity(all.len());
                 for (tx, initial_coin) in all {
                     txs.push(tx);
-                    extra_state.coins.push(initial_coin);
+                    state_config.coins.push(initial_coin);
                 }
                 producers_with_txs.push(Some((producer.unwrap(), txs)));
             }
@@ -241,8 +241,7 @@ pub async fn make_nodes(
         }
     }
 
-    config.state_reader = inject_extra_state(config.state_reader, extra_state)
-        .expect("Should be able to inject extra state");
+    config.state_reader = StateReader::in_memory(state_config, MAX_GROUP_SIZE);
 
     let bootstrap_nodes: Vec<Bootstrap> =
         futures::stream::iter(bootstrap_setup.into_iter().enumerate())
@@ -365,16 +364,6 @@ pub async fn make_nodes(
         producers,
         validators,
     }
-}
-
-fn inject_extra_state(
-    original_state: StateReader,
-    extra_state: StateConfig,
-) -> anyhow::Result<StateReader> {
-    let mut extended_state = StateConfig::from_reader(original_state)?;
-    extended_state.extend(extra_state);
-
-    Ok(StateReader::in_memory(extended_state, MAX_GROUP_SIZE))
 }
 
 pub fn make_config(name: String, mut node_config: Config) -> Config {

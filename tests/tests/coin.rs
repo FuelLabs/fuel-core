@@ -1,7 +1,7 @@
 use fuel_core::{
     chain_config::{
         CoinConfig,
-        Decoder,
+        StateReader,
         StateConfig,
     },
     database::Database,
@@ -48,7 +48,7 @@ async fn coin() {
         ..Default::default()
     };
     let config = Config {
-        state_reader: Decoder::in_memory(state, 1),
+        state_reader: StateReader::in_memory(state, 1),
         ..Config::local_node()
     };
 

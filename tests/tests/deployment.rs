@@ -2,13 +2,14 @@ use std::path::Path;
 
 use fuel_core::chain_config::{
     ChainConfig,
-    Encoder,
+    StateWriter,
     SnapshotMetadata,
     StateConfig,
     StateEncoding,
 };
 use fuel_core_types::fuel_tx::GasCosts;
 
+#[allow(irrefutable_let_patterns)]
 #[test_case::test_case( "./../deployment/scripts/chainspec/beta" ; "Beta chainconfig" )]
 #[test_case::test_case( "./../deployment/scripts/chainspec/dev" ; "Dev chainconfig"  )]
 fn test_deployment_chainconfig(path: impl AsRef<Path>) -> anyhow::Result<()> {
@@ -25,7 +26,7 @@ fn test_deployment_chainconfig(path: impl AsRef<Path>) -> anyhow::Result<()> {
     let temp_dir = tempfile::tempdir()?;
     let generated_snapshot = SnapshotMetadata::write_json(temp_dir.path())?;
     chain_config.write(generated_snapshot.chain_config())?;
-    Encoder::for_snapshot(&generated_snapshot)?.write(state_config)?;
+    StateWriter::for_snapshot(&generated_snapshot)?.write(state_config)?;
 
     let chain_config_bytes = std::fs::read_to_string(generated_snapshot.chain_config())?;
     let stored_chain_config = std::fs::read_to_string(stored_snapshot.chain_config())?;
@@ -38,13 +39,19 @@ fn test_deployment_chainconfig(path: impl AsRef<Path>) -> anyhow::Result<()> {
     let stored_state_config = {
         let StateEncoding::Json {
             filepath: stored_state,
-        } = stored_snapshot.state_encoding();
+        } = stored_snapshot.state_encoding()
+        else {
+            panic!("State encoding should be JSON")
+        };
         std::fs::read_to_string(stored_state)?
     };
     let generated_state_config = {
         let StateEncoding::Json {
             filepath: generated_state,
-        } = generated_snapshot.state_encoding();
+        } = generated_snapshot.state_encoding()
+        else {
+            panic!("State encoding should be JSON")
+        };
         std::fs::read_to_string(generated_state)?
     };
     pretty_assertions::assert_eq!(

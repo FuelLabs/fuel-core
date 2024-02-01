@@ -5,11 +5,11 @@ mod encoder;
 mod parquet;
 
 pub use decoder::{
-    Decoder,
+    StateReader,
     IntoIter,
 };
 #[cfg(feature = "std")]
-pub use encoder::Encoder;
+pub use encoder::StateWriter;
 #[cfg(feature = "parquet")]
 pub use encoder::ZstdCompressionLevel;
 pub const MAX_GROUP_SIZE: usize = usize::MAX;
@@ -48,7 +48,7 @@ mod tests {
         let mut group_generator = GroupGenerator::new(StdRng::seed_from_u64(0), 100, 10);
         let files = crate::ParquetFiles::snapshot_default(temp_dir.path());
         let mut encoder =
-            Encoder::parquet(&files, encoder::ZstdCompressionLevel::Uncompressed)
+            StateWriter::parquet(&files, encoder::ZstdCompressionLevel::Uncompressed)
                 .unwrap();
 
         // when
@@ -56,7 +56,7 @@ mod tests {
             group_generator.for_each_group(|group| encoder.write_coins(group));
         encoder.close().unwrap();
 
-        let decoded_coin_groups = Decoder::parquet(files).coins().unwrap().collect_vec();
+        let decoded_coin_groups = StateReader::parquet(files).coins().unwrap().collect_vec();
 
         // then
         assert_groups_identical(&coin_groups, decoded_coin_groups, skip_n_groups);
@@ -72,13 +72,13 @@ mod tests {
         let mut group_generator = GroupGenerator::new(StdRng::seed_from_u64(0), 100, 10);
         let files = crate::ParquetFiles::snapshot_default(temp_dir.path());
         let mut encoder =
-            Encoder::parquet(&files, encoder::ZstdCompressionLevel::Level1).unwrap();
+            StateWriter::parquet(&files, encoder::ZstdCompressionLevel::Level1).unwrap();
 
         // when
         let message_groups =
             group_generator.for_each_group(|group| encoder.write_messages(group));
         encoder.close().unwrap();
-        let messages_decoded = Decoder::parquet(files).messages().unwrap().collect_vec();
+        let messages_decoded = StateReader::parquet(files).messages().unwrap().collect_vec();
 
         // then
         assert_groups_identical(&message_groups, messages_decoded, skip_n_groups);
@@ -94,13 +94,13 @@ mod tests {
         let mut group_generator = GroupGenerator::new(StdRng::seed_from_u64(0), 100, 10);
         let files = crate::ParquetFiles::snapshot_default(temp_dir.path());
         let mut encoder =
-            Encoder::parquet(&files, encoder::ZstdCompressionLevel::Level1).unwrap();
+            StateWriter::parquet(&files, encoder::ZstdCompressionLevel::Level1).unwrap();
 
         // when
         let contract_groups =
             group_generator.for_each_group(|group| encoder.write_contracts(group));
         encoder.close().unwrap();
-        let contract_decoded = Decoder::parquet(files).contracts().unwrap().collect_vec();
+        let contract_decoded = StateReader::parquet(files).contracts().unwrap().collect_vec();
 
         // then
         assert_groups_identical(&contract_groups, contract_decoded, skip_n_groups);
@@ -116,13 +116,13 @@ mod tests {
         let mut group_generator = GroupGenerator::new(StdRng::seed_from_u64(0), 100, 10);
         let files = crate::ParquetFiles::snapshot_default(temp_dir.path());
         let mut encoder =
-            Encoder::parquet(&files, encoder::ZstdCompressionLevel::Level1).unwrap();
+            StateWriter::parquet(&files, encoder::ZstdCompressionLevel::Level1).unwrap();
 
         // when
         let contract_state_groups =
             group_generator.for_each_group(|group| encoder.write_contract_state(group));
         encoder.close().unwrap();
-        let decoded_contract_state = Decoder::parquet(files)
+        let decoded_contract_state = StateReader::parquet(files)
             .contract_state()
             .unwrap()
             .collect_vec();
@@ -145,14 +145,14 @@ mod tests {
         let mut group_generator = GroupGenerator::new(StdRng::seed_from_u64(0), 100, 10);
         let files = crate::ParquetFiles::snapshot_default(temp_dir.path());
         let mut encoder =
-            Encoder::parquet(&files, encoder::ZstdCompressionLevel::Level1).unwrap();
+            StateWriter::parquet(&files, encoder::ZstdCompressionLevel::Level1).unwrap();
 
         // when
         let contract_balance_groups =
             group_generator.for_each_group(|group| encoder.write_contract_balance(group));
         encoder.close().unwrap();
 
-        let decoded_contract_balance = Decoder::parquet(files)
+        let decoded_contract_balance = StateReader::parquet(files)
             .contract_balance()
             .unwrap()
             .collect_vec();
@@ -173,7 +173,7 @@ mod tests {
         let temp_dir = tempfile::tempdir().unwrap();
         let file = temp_dir.path().join("state_config.json");
 
-        let mut encoder = Encoder::json(&file);
+        let mut encoder = StateWriter::json(&file);
         let mut group_generator =
             GroupGenerator::new(StdRng::seed_from_u64(0), group_size, 10);
 
@@ -182,7 +182,7 @@ mod tests {
             group_generator.for_each_group(|group| encoder.write_coins(group));
         encoder.close().unwrap();
 
-        let decoded_coins = Decoder::json(file, group_size)
+        let decoded_coins = StateReader::json(file, group_size)
             .unwrap()
             .coins()
             .unwrap()
@@ -200,7 +200,7 @@ mod tests {
         let temp_dir = tempfile::tempdir().unwrap();
         let file = temp_dir.path().join("state_config.json");
 
-        let mut encoder = Encoder::json(&file);
+        let mut encoder = StateWriter::json(&file);
         let mut group_generator =
             GroupGenerator::new(StdRng::seed_from_u64(0), group_size, 10);
 
@@ -209,7 +209,7 @@ mod tests {
             group_generator.for_each_group(|group| encoder.write_messages(group));
         encoder.close().unwrap();
 
-        let decoded_messages = Decoder::json(&file, group_size)
+        let decoded_messages = StateReader::json(&file, group_size)
             .unwrap()
             .messages()
             .unwrap()
@@ -227,7 +227,7 @@ mod tests {
         let temp_dir = tempfile::tempdir().unwrap();
         let file = temp_dir.path().join("state_config.json");
 
-        let mut encoder = Encoder::json(&file);
+        let mut encoder = StateWriter::json(&file);
         let mut group_generator =
             GroupGenerator::new(StdRng::seed_from_u64(0), group_size, 10);
 
@@ -236,7 +236,7 @@ mod tests {
             group_generator.for_each_group(|group| encoder.write_contracts(group));
         encoder.close().unwrap();
 
-        let decoded_contracts = Decoder::json(&file, group_size)
+        let decoded_contracts = StateReader::json(&file, group_size)
             .unwrap()
             .contracts()
             .unwrap()
@@ -254,7 +254,7 @@ mod tests {
         let temp_dir = tempfile::tempdir().unwrap();
         let file = temp_dir.path().join("state_config.json");
 
-        let mut encoder = Encoder::json(&file);
+        let mut encoder = StateWriter::json(&file);
         let mut group_generator =
             GroupGenerator::new(StdRng::seed_from_u64(0), group_size, 10);
 
@@ -263,7 +263,7 @@ mod tests {
             group_generator.for_each_group(|group| encoder.write_contract_state(group));
         encoder.close().unwrap();
 
-        let decoded_contract_state = Decoder::json(&file, group_size)
+        let decoded_contract_state = StateReader::json(&file, group_size)
             .unwrap()
             .contract_state()
             .unwrap()
@@ -285,7 +285,7 @@ mod tests {
         let temp_dir = tempfile::tempdir().unwrap();
         let file = temp_dir.path().join("state_config.json");
 
-        let mut encoder = Encoder::json(&file);
+        let mut encoder = StateWriter::json(&file);
         let mut group_generator =
             GroupGenerator::new(StdRng::seed_from_u64(0), group_size, 10);
 
@@ -294,7 +294,7 @@ mod tests {
             group_generator.for_each_group(|group| encoder.write_contract_balance(group));
         encoder.close().unwrap();
 
-        let decoded_contract_balance = Decoder::json(&file, group_size)
+        let decoded_contract_balance = StateReader::json(&file, group_size)
             .unwrap()
             .contract_balance()
             .unwrap()

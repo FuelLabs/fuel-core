@@ -28,7 +28,7 @@ enum EncoderType {
     },
 }
 
-pub struct Encoder {
+pub struct StateWriter {
     encoder: EncoderType,
 }
 
@@ -152,7 +152,7 @@ impl From<ZstdCompressionLevel> for ::parquet::basic::Compression {
     }
 }
 
-impl Encoder {
+impl StateWriter {
     pub fn for_snapshot(snapshot_metadata: &SnapshotMetadata) -> anyhow::Result<Self> {
         let encoder = match snapshot_metadata.state_encoding() {
             crate::StateEncoding::Json { filepath } => Self::json(filepath),
@@ -352,7 +352,7 @@ mod tests {
         // given
         let dir = tempfile::tempdir().unwrap();
         let file = dir.path().join("state_config.json");
-        let encoder = Encoder::json(&file);
+        let encoder = StateWriter::json(&file);
 
         // when
         encoder.close().unwrap();
@@ -373,7 +373,7 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let files = crate::ParquetFiles::snapshot_default(dir.path());
         let encoder =
-            Encoder::parquet(&files, ZstdCompressionLevel::Uncompressed).unwrap();
+            StateWriter::parquet(&files, ZstdCompressionLevel::Uncompressed).unwrap();
 
         // when
         encoder.close().unwrap();
@@ -441,7 +441,7 @@ mod tests {
     fn test_data_written_in_expected_file<T>(
         rng: impl rand::Rng,
         expected_filename: &str,
-        write: impl FnOnce(Vec<T>, &mut Encoder) -> anyhow::Result<()>,
+        write: impl FnOnce(Vec<T>, &mut StateWriter) -> anyhow::Result<()>,
     ) where
         parquet::PostcardDecoder<T>: Iterator<Item = anyhow::Result<crate::Group<T>>>,
         T: crate::Randomize + PartialEq + ::core::fmt::Debug + Clone,
@@ -450,7 +450,7 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let files = crate::ParquetFiles::snapshot_default(dir.path());
         let mut encoder =
-            Encoder::parquet(&files, ZstdCompressionLevel::Uncompressed).unwrap();
+            StateWriter::parquet(&files, ZstdCompressionLevel::Uncompressed).unwrap();
         let original_data = vec![T::randomize(rng)];
 
         // when
@@ -481,7 +481,7 @@ mod tests {
         // given
         let dir = tempfile::tempdir().unwrap();
         let filepath = dir.path().join("some_file.json");
-        let mut encoder = Encoder::json(&filepath);
+        let mut encoder = StateWriter::json(&filepath);
         let coin = CoinConfig {
             tx_id: Some([1u8; 32].into()),
             output_index: Some(2),
@@ -508,7 +508,7 @@ mod tests {
         // given
         let dir = tempfile::tempdir().unwrap();
         let filepath = dir.path().join("some_file.json");
-        let mut encoder = Encoder::json(&filepath);
+        let mut encoder = StateWriter::json(&filepath);
         let message = MessageConfig {
             sender: [1u8; 32].into(),
             recipient: [2u8; 32].into(),
@@ -533,7 +533,7 @@ mod tests {
         // given
         let dir = tempfile::tempdir().unwrap();
         let filepath = dir.path().join("some_file.json");
-        let mut encoder = Encoder::json(&filepath);
+        let mut encoder = StateWriter::json(&filepath);
         let contract = ContractConfig {
             contract_id: [1u8; 32].into(),
             code: [2u8; 32].into(),

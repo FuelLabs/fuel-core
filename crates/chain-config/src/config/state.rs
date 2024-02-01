@@ -94,7 +94,7 @@ impl StateConfig {
         snapshot_metadata: SnapshotMetadata,
     ) -> anyhow::Result<Self> {
         let decoder =
-            crate::Decoder::for_snapshot(snapshot_metadata, crate::MAX_GROUP_SIZE)?;
+            crate::StateReader::for_snapshot(snapshot_metadata, crate::MAX_GROUP_SIZE)?;
 
         let coins = decoder
             .coins()?

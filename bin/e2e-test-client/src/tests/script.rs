@@ -4,7 +4,7 @@ use crate::test_context::{
 };
 use fuel_core_chain_config::{
     ContractConfig,
-    Decoder,
+    StateReader,
     SnapshotMetadata,
     MAX_GROUP_SIZE,
 };
@@ -84,7 +84,7 @@ fn load_contract(
     path: impl AsRef<Path>,
 ) -> Result<(ContractConfig, Vec<StorageSlot>), Failed> {
     let snapshot = SnapshotMetadata::read(path)?;
-    let reader = Decoder::for_snapshot(snapshot, MAX_GROUP_SIZE)?;
+    let reader = StateReader::for_snapshot(snapshot, MAX_GROUP_SIZE)?;
 
     let state = reader
         .contract_state()?

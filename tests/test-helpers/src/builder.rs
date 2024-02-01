@@ -4,7 +4,7 @@ use fuel_core::{
         CoinConfig,
         ContractBalanceConfig,
         ContractConfig,
-        Decoder,
+        StateReader,
         StateConfig,
     },
     service::{
@@ -214,7 +214,7 @@ impl TestSetupBuilder {
                 ..fuel_core_txpool::Config::default()
             },
             chain_config: chain_conf,
-            state_reader: Decoder::in_memory(state, 1),
+            state_reader: StateReader::in_memory(state, 1),
             block_production: self.trigger,
             ..Config::local_node()
         };

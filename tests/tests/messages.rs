@@ -2,7 +2,7 @@
 
 use fuel_core::{
     chain_config::{
-        Decoder,
+        StateReader,
         MessageConfig,
         StateConfig,
     },
@@ -50,7 +50,7 @@ fn setup_config(messages: impl IntoIterator<Item = MessageConfig>) -> Config {
         ..Default::default()
     };
     let config = Config {
-        state_reader: Decoder::in_memory(state, 1),
+        state_reader: StateReader::in_memory(state, 1),
         ..Config::local_node()
     };
 
