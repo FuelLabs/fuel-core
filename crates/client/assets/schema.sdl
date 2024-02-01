@@ -252,6 +252,23 @@ type ContractParameters {
 
 union DependentCost = LightOperation | HeavyOperation
 
+type DryRunFailureStatus {
+	programState: ProgramState
+	reason: String!
+}
+
+type DryRunSuccessStatus {
+	programState: ProgramState
+}
+
+type DryRunTransaction {
+	id: TransactionId!
+	status: DryRunTransactionStatus!
+	receipts: [Receipt!]!
+}
+
+union DryRunTransactionStatus = DryRunSuccessStatus | DryRunFailureStatus
+
 input ExcludeInput {
 	"""
 	Utxos to exclude from the selection.
@@ -589,7 +606,7 @@ type Mutation {
 	"""
 	Execute a dry-run of the transactions using a fork of current state, no changes are committed.
 	"""
-	dryRun(txs: [HexString!]!, utxoValidation: Boolean): [[Receipt!]!]!
+	dryRun(txs: [HexString!]!, utxoValidation: Boolean): [DryRunTransaction!]!
 	"""
 	Submits transaction to the `TxPool`.
 	

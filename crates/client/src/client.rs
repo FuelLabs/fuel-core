@@ -49,7 +49,10 @@ use fuel_core_types::{
         BlockHeight,
         Nonce,
     },
-    services::p2p::PeerInfo,
+    services::{
+        executor::TransactionExecutionStatus,
+        p2p::PeerInfo,
+    },
 };
 #[cfg(feature = "subscriptions")]
 use futures::StreamExt;
@@ -358,7 +361,10 @@ impl FuelClient {
     }
 
     /// Default dry run, matching the exact configuration as the node
-    pub async fn dry_run(&self, txs: &[&Transaction]) -> io::Result<Vec<Vec<Receipt>>> {
+    pub async fn dry_run(
+        &self,
+        txs: &[&Transaction],
+    ) -> io::Result<Vec<TransactionExecutionStatus>> {
         self.dry_run_opt(txs, None).await
     }
 
@@ -368,7 +374,7 @@ impl FuelClient {
         txs: &[&Transaction],
         // Disable utxo input checks (exists, unspent, and valid signature)
         utxo_validation: Option<bool>,
-    ) -> io::Result<Vec<Vec<Receipt>>> {
+    ) -> io::Result<Vec<TransactionExecutionStatus>> {
         let txs = txs
             .iter()
             .map(|tx| HexString(Bytes(tx.to_bytes())))
@@ -378,16 +384,20 @@ impl FuelClient {
                 txs,
                 utxo_validation,
             });
-        let receipts = self.query(query).await.map(|r| r.dry_run)?;
-        receipts
+        let tx_statuses = self.query(query).await.map(|r| r.dry_run)?;
+        tx_statuses
             .into_iter()
-            .map(|tx_receipts| {
-                tx_receipts
-                    .into_iter()
-                    .map(|receipt| receipt.try_into().map_err(Into::into))
-                    .collect()
-            })
+            .map(|tx_status| tx_status.try_into().map_err(Into::into))
             .collect()
+        // receipts
+        //     .into_iter()
+        //     .map(|tx_receipts| {
+        //         tx_receipts
+        //             .into_iter()
+        //             .map(|receipt| receipt.try_into().map_err(Into::into))
+        //             .collect()
+        //     })
+        //     .collect()
     }
 
     /// Estimate predicates for the transaction

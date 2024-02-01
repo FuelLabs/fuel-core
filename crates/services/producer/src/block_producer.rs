@@ -21,17 +21,17 @@ use fuel_core_types::{
         primitives::DaBlockHeight,
     },
     fuel_asm::Word,
-    fuel_tx::{
-        Receipt,
-        Transaction,
-    },
+    fuel_tx::Transaction,
     fuel_types::{
         BlockHeight,
         Bytes32,
     },
     services::{
         block_producer::Components,
-        executor::UncommittedResult,
+        executor::{
+            TransactionExecutionStatus,
+            UncommittedResult,
+        },
     },
     tai64::Tai64,
 };
@@ -186,7 +186,7 @@ where
         transactions: Vec<Transaction>,
         height: Option<BlockHeight>,
         utxo_validation: Option<bool>,
-    ) -> anyhow::Result<Vec<Vec<Receipt>>> {
+    ) -> anyhow::Result<Vec<TransactionExecutionStatus>> {
         let height = height.unwrap_or_else(|| {
             self.view_provider
                 .latest_height()
@@ -208,22 +208,22 @@ where
 
         let executor = self.executor.clone();
 
-        let receipts =
-            tokio_rayon::spawn_fifo(move || -> anyhow::Result<Vec<Vec<Receipt>>> {
+        // use the blocking threadpool for dry_run to avoid clogging up the main async runtime
+        let tx_statuses = tokio_rayon::spawn_fifo(
+            move || -> anyhow::Result<Vec<TransactionExecutionStatus>> {
                 Ok(executor.dry_run(component, utxo_validation)?)
-            })
-            .await?;
+            },
+        )
+        .await?;
 
-        for (transaction, transaction_receipts) in
-            transactions.iter().zip(receipts.iter())
-        {
+        for (transaction, tx_status) in transactions.iter().zip(tx_statuses.iter()) {
             let is_script = transaction.is_script();
-            if is_script && transaction_receipts.is_empty() {
+            if is_script && tx_status.receipts.is_empty() {
                 return Err(anyhow!("Expected at least one set of receipts"))
             }
         }
 
-        Ok(receipts)
+        Ok(tx_statuses)
     }
 }
 

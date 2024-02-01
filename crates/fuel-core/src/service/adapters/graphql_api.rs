@@ -25,13 +25,11 @@ use fuel_core_txpool::{
 };
 use fuel_core_types::{
     entities::message::MerkleProof,
-    fuel_tx::{
-        Receipt as TxReceipt,
-        Transaction,
-    },
+    fuel_tx::Transaction,
     fuel_types::BlockHeight,
     services::{
         block_importer::SharedImportResult,
+        executor::TransactionExecutionStatus,
         p2p::PeerInfo,
         txpool::InsertionResult,
     },
@@ -91,7 +89,7 @@ impl BlockProducerPort for BlockProducerAdapter {
         transactions: Vec<Transaction>,
         height: Option<BlockHeight>,
         utxo_validation: Option<bool>,
-    ) -> anyhow::Result<Vec<Vec<TxReceipt>>> {
+    ) -> anyhow::Result<Vec<TransactionExecutionStatus>> {
         self.block_producer
             .dry_run(transactions, height, utxo_validation)
             .await

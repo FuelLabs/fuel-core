@@ -10,7 +10,6 @@ use fuel_core_types::{
     },
     fuel_tx::{
         Bytes32,
-        Receipt,
         Transaction,
     },
     fuel_types::BlockHeight,
@@ -18,6 +17,7 @@ use fuel_core_types::{
         block_producer::Components,
         executor::{
             Result as ExecutorResult,
+            TransactionExecutionStatus,
             UncommittedResult,
         },
     },
@@ -75,5 +75,5 @@ pub trait DryRunner: Send + Sync {
         &self,
         block: Components<Vec<Transaction>>,
         utxo_validation: Option<bool>,
-    ) -> ExecutorResult<Vec<Vec<Receipt>>>;
+    ) -> ExecutorResult<Vec<TransactionExecutionStatus>>;
 }

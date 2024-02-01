@@ -34,7 +34,6 @@ use fuel_core_types::{
         Message,
     },
     fuel_tx::{
-        Receipt,
         Transaction,
         TxId,
         TxPointer,
@@ -48,6 +47,7 @@ use fuel_core_types::{
         Nonce,
     },
     services::{
+        executor::TransactionExecutionStatus,
         graphql_api::ContractBalance,
         p2p::PeerInfo,
         txpool::{
@@ -174,7 +174,7 @@ pub trait BlockProducerPort: Send + Sync {
         transactions: Vec<Transaction>,
         height: Option<BlockHeight>,
         utxo_validation: Option<bool>,
-    ) -> anyhow::Result<Vec<Vec<Receipt>>>;
+    ) -> anyhow::Result<Vec<TransactionExecutionStatus>>;
 }
 
 #[async_trait::async_trait]
