@@ -365,7 +365,6 @@ where
         }
 
         Ok(tx_status)
-
         // drop `_temporary_db` without committing to avoid altering state.
     }
 }

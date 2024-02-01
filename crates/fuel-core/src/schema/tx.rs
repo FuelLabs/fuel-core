@@ -68,9 +68,10 @@ use std::{
     sync::Arc,
 };
 use tokio_stream::StreamExt;
-use types::Transaction;
-
-use self::types::DryRunTransaction;
+use types::{
+    DryRunTransaction,
+    Transaction,
+};
 
 pub mod input;
 pub mod output;
@@ -235,7 +236,7 @@ pub struct TxMutation;
 
 #[Object]
 impl TxMutation {
-    /// Execute a dry-run of the transactions using a fork of current state, no changes are committed.
+    /// Execute a dry-run of multiple transactions using a fork of current state, no changes are committed.
     async fn dry_run(
         &self,
         ctx: &Context<'_>,
