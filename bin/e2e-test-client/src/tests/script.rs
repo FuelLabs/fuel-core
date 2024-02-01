@@ -12,8 +12,10 @@ use fuel_core_types::{
         Receipt,
         ScriptExecutionResult,
         Transaction,
+        UniqueIdentifier,
     },
     fuel_types::canonical::Deserialize,
+    services::executor::TransactionExecutionResult,
 };
 use libtest_mimic::Failed;
 use std::time::Duration;
@@ -167,6 +169,8 @@ async fn _dry_runs(
     let queries =
         tokio::time::timeout(Duration::from_secs(60), futures::future::join_all(queries))
             .await?;
+
+    let chain_info = ctx.alice.client.chain_info().await?;
     for query in queries {
         let (query, query_number) = query;
         if let Err(e) = &query {
@@ -174,14 +178,19 @@ async fn _dry_runs(
         }
 
         let tx_statuses = query?;
-        for tx_status in tx_statuses {
+        for (tx_status, tx) in tx_statuses.iter().zip(transactions.iter()) {
             if tx_status.receipts.is_empty() {
                 return Err(
                     format!("Receipts are empty for query_number {query_number}").into(),
                 )
             }
 
+            assert!(tx.id(&chain_info.consensus_parameters.chain_id) == tx_status.id);
             if expect == DryRunResult::Successful {
+                assert!(matches!(
+                    &tx_status.result,
+                    TransactionExecutionResult::Success { result: _result }
+                ));
                 assert!(matches!(
                     tx_status.receipts.last(),
                     Some(Receipt::ScriptResult {
