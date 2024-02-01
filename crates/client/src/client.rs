@@ -389,15 +389,6 @@ impl FuelClient {
             .into_iter()
             .map(|tx_status| tx_status.try_into().map_err(Into::into))
             .collect()
-        // receipts
-        //     .into_iter()
-        //     .map(|tx_receipts| {
-        //         tx_receipts
-        //             .into_iter()
-        //             .map(|receipt| receipt.try_into().map_err(Into::into))
-        //             .collect()
-        //     })
-        //     .collect()
     }
 
     /// Estimate predicates for the transaction
