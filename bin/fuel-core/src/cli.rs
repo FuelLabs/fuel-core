@@ -256,6 +256,7 @@ mod tests {
                             chain_config,
                             encoding_command,
                         },
+                    output_dir,
                     ..
                 }) => Ok((chain_config, output_dir, encoding_command)),
                 _ => bail!("Expected a snapshot everything command"),
@@ -265,7 +266,7 @@ mod tests {
         #[test]
         fn snapshot_everything() {
             // given
-            let line = "./core snapshot --output-directory dir everything";
+            let line = "./core snapshot --output-directory dir everything ";
             let irrelevant_remainder = "encoding json";
 
             // when
@@ -300,7 +301,7 @@ mod tests {
                 .command;
 
             // then
-            let (chain_config, _) =
+            let (chain_config, _, _) =
                 extract_everything_command(command).expect("Can extract command");
             assert!(chain_config.is_none());
         }
@@ -317,7 +318,7 @@ mod tests {
                 .command;
 
             // then
-            let (chain_config, _) =
+            let (chain_config, _, _) =
                 extract_everything_command(command).expect("Can extract command");
             assert_eq!(chain_config, Some(PathBuf::from("./some/chain/config")));
         }
@@ -325,14 +326,14 @@ mod tests {
         #[test]
         fn encoding_is_optional() {
             // given
-            let line = "./core snapshot --output-directory dir everything";
+            let line = "./core snapshot --output-directory ./some/path everything";
             // when
             let command = parse_cli(line, "")
                 .expect("should parse the snapshot command")
                 .command;
 
             // then
-            let (_, encoding_command) =
+            let (_, _, encoding_command) =
                 extract_everything_command(command).expect("Can extract command");
             assert!(encoding_command.is_none());
         }
@@ -348,7 +349,7 @@ mod tests {
                 .command;
 
             // then
-            let (_, encoding_command) =
+            let (_, _, encoding_command) =
                 extract_everything_command(command).expect("Can extract command");
 
             let Some(snapshot::EncodingCommand::Encoding {

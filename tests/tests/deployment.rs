@@ -38,19 +38,13 @@ fn test_deployment_chainconfig(path: impl AsRef<Path>) -> anyhow::Result<()> {
     let stored_state_config = {
         let StateEncoding::Json {
             filepath: stored_state,
-        } = stored_snapshot.state_encoding()
-        else {
-            panic!("State encoding should be JSON")
-        };
+        } = stored_snapshot.state_encoding();
         std::fs::read_to_string(stored_state)?
     };
     let generated_state_config = {
         let StateEncoding::Json {
             filepath: generated_state,
-        } = generated_snapshot.state_encoding()
-        else {
-            panic!("State encoding should be JSON")
-        };
+        } = generated_snapshot.state_encoding();
         std::fs::read_to_string(generated_state)?
     };
     pretty_assertions::assert_eq!(

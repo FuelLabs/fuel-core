@@ -256,7 +256,6 @@ mod tests {
         ContractBalanceConfig,
         ContractConfig,
         ContractStateConfig,
-        Group,
         MessageConfig,
         StateConfig,
     };
@@ -656,6 +655,7 @@ mod tests {
         Ok(())
     }
 
+    #[cfg(feature = "parquet")]
     fn assert_groups_as_expected<T, I>(
         group_size: usize,
         expected_data: Vec<T>,
