@@ -250,7 +250,7 @@ impl TryFrom<Transaction> for fuel_tx::Transaction {
                     .collect(),
             );
             create.into()
-        } else if tx.is_mint {
+        } else {
             let tx_pointer: fuel_tx::TxPointer = tx
                 .tx_pointer
                 .ok_or_else(|| ConversionError::MissingField("tx_pointer".to_string()))?
@@ -279,8 +279,16 @@ impl TryFrom<Transaction> for fuel_tx::Transaction {
                     .into(),
             );
             mint.into()
-        } else {
-            return Err(ConversionError::UnknownVariant("Transaction"));
+        };
+
+        // This `match` block is added here to enforce compilation error if a new variant
+        // is added into the `fuel_tx::Transaction` enum.
+        //
+        // If you face a compilation error, please update the code above and add a new variant below.
+        match tx {
+            fuel_tx::Transaction::Script(_) => {}
+            fuel_tx::Transaction::Create(_) => {}
+            fuel_tx::Transaction::Mint(_) => {}
         };
 
         Ok(tx)
