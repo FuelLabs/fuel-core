@@ -604,7 +604,7 @@ type Mutation {
 	startTx(id: ID!, txJson: String!): RunResult!
 	continueTx(id: ID!): RunResult!
 	"""
-	Execute a dry-run of the transactions using a fork of current state, no changes are committed.
+	Execute a dry-run of multiple transactions using a fork of current state, no changes are committed.
 	"""
 	dryRun(txs: [HexString!]!, utxoValidation: Boolean): [DryRunTransaction!]!
 	"""
