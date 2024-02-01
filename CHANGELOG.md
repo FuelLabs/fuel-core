@@ -10,7 +10,7 @@ Description of the upcoming release here.
 
 ### Changed
 
-- [#1600](https://github.com/FuelLabs/fuel-core/pull/1600): Upgrade to fuel-vm 0.44.0
+- [#1600](https://github.com/FuelLabs/fuel-core/pull/1640): Upgrade to fuel-vm 0.45.0
 - [#1633](https://github.com/FuelLabs/fuel-core/pull/1633): Notify services about importing of the genesis block.
 - [#1625](https://github.com/FuelLabs/fuel-core/pull/1625): Making relayer independent from the executor and preparation for the force transaction inclusion.
 - [#1613](https://github.com/FuelLabs/fuel-core/pull/1613): Add api endpoint to retrieve a message by its nonce.
@@ -25,6 +25,7 @@ Description of the upcoming release here.
 - [#1601](https://github.com/FuelLabs/fuel-core/pull/1601): Fix formatting in docs and check that `cargo doc` passes in the CI.
 
 #### Breaking
+- [#1639](https://github.com/FuelLabs/fuel-core/pull/1639): Make Merkle metadata, i.e. `SparseMerkleMetadata` and `DenseMerkleMetadata` type version-able enums
 - [#1631](https://github.com/FuelLabs/fuel-core/pull/1631): Modify api endpoint to dry run multiple transactions.
 - [#16232](https://github.com/FuelLabs/fuel-core/pull/1632): Make `Message` type a version-able enum
 - [#1628](https://github.com/FuelLabs/fuel-core/pull/1628): Make `CompressedCoin` type a version-able enum

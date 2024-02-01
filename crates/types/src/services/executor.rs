@@ -273,8 +273,6 @@ pub enum Error {
     CoinbaseAmountMismatch,
     #[from]
     TransactionValidity(TransactionValidityError),
-    #[display(fmt = "Transaction contained an unsupported variant of {_0}.")]
-    UnknownTransactionType(&'static str),
     // TODO: Replace with `fuel_core_storage::Error` when execution error will live in the
     //  `fuel-core-executor`.
     #[display(fmt = "got error during work with storage {_0}")]

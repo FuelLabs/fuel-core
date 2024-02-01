@@ -102,7 +102,7 @@ where
                     inputs = tx.inputs().as_slice();
                     outputs = tx.outputs().as_slice();
                 }
-                _ => continue,
+                Transaction::Mint(_) => continue,
             }
             self.persist_owners_index(
                 block_height,
@@ -143,7 +143,6 @@ where
                     owners.push(to);
                 }
                 Output::Contract(_) | Output::ContractCreated { .. } => {}
-                _ => {}
             }
         }
 
