@@ -47,7 +47,6 @@ use fuel_core_types::{
         peer_reputation::{
             AppScore,
             PeerReport,
-            RESPONSE_ERROR_APP_SCORE,
         },
         BlockHeightHeartbeatData,
         GossipData,
@@ -718,14 +717,7 @@ impl SharedState {
 
         let (peer_id, response) = receiver.await.map_err(|e| anyhow!("{e}"))?;
 
-        let Ok(data) = response else {
-            let _ = self.report_peer(
-                FuelPeerId::from(peer_id.to_bytes()),
-                RESPONSE_ERROR_APP_SCORE,
-                "p2p_error",
-            );
-            return Err(anyhow!("Invalid result from peer, already reported"));
-        };
+        let data = response.map_err(|e| anyhow!("Invalid response from peer {e:?}"))?;
         Ok((peer_id.to_bytes(), data))
     }
 
@@ -752,15 +744,7 @@ impl SharedState {
             "Bug: response from non-requested peer"
         );
 
-        let Ok(data) = response else {
-            let _ = self.report_peer(
-                FuelPeerId::from(peer_id),
-                RESPONSE_ERROR_APP_SCORE,
-                "p2p_error",
-            );
-            return Err(anyhow!("Invalid result from peer, already reported"));
-        };
-        Ok(data)
+        response.map_err(|e| anyhow!("Invalid response from peer {e:?}"))
     }
 
     pub fn broadcast_transaction(
