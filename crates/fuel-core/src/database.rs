@@ -521,9 +521,17 @@ mod tests {
     }
 
     #[test]
-    fn column_keys_not_exceed_count_test() {
+    fn column_keys_not_exceed_count_test_on_chain() {
         column_keys_not_exceed_count::<OnChain>();
+    }
+
+    #[test]
+    fn column_keys_not_exceed_count_test_off_chain() {
         column_keys_not_exceed_count::<OffChain>();
+    }
+
+    #[test]
+    fn column_keys_not_exceed_count_test_relayer() {
         column_keys_not_exceed_count::<Relayer>();
     }
 }
