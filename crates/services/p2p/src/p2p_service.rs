@@ -753,7 +753,6 @@ mod tests {
     use libp2p::{
         gossipsub::Topic,
         identity::Keypair,
-        request_response::OutboundFailure,
         swarm::{
             ListenError,
             SwarmEvent,
