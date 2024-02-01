@@ -59,22 +59,22 @@ impl From<(&FuelBlock, BlockId)> for Block {
             id: block.id().as_slice().to_owned(),
             height: **block.header().height(),
             da_height: *block.header().da_height,
-            msg_receipt_count: block.header().application.message_receipt_count,
+            msg_receipt_count: block.header().application().message_receipt_count,
             tx_root: block
                 .header()
-                .application
+                .application()
                 .transactions_root
                 .as_slice()
                 .to_owned(),
             msg_receipt_root: block
                 .header()
-                .application
+                .application()
                 .message_receipt_root
                 .as_slice()
                 .to_owned(),
             prev_id: prev_id.as_slice().to_owned(),
-            prev_root: block.header().consensus.prev_root.as_slice().to_owned(),
-            timestamp: block.header().consensus.time.0,
+            prev_root: block.header().consensus().prev_root.as_slice().to_owned(),
+            timestamp: block.header().consensus().time.0,
             application_hash: block.header().application_hash().to_vec(),
             transactions: block.transactions().iter().map(|tx| tx.into()).collect(),
         }

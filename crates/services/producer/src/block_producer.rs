@@ -130,17 +130,37 @@ where
         // Firehose block logging
         {
             // TODO: hide this behind a feature-gate and make it configurable
+            use base64::prelude::*;
             use fuel_core_firehose_types::prost::Message;
 
-            let prev_id: BlockId = match height.pred() {
-                Some(h) => self.db.get_block(&h)?.id(),
+            let block_hash = result.result().block.header().hash();
+            let parent_hash: BlockId = match height.pred() {
+                Some(h) => self.view_provider.view_at(&h)?.get_block(&h)?.id(),
                 None => BlockId::default(),
             };
+            let parent_heigth = height.pred().unwrap_or_default();
 
-            let fire_block =
-                fuel_core_firehose_types::Block::from((&result.result().block, prev_id));
-            let out_msg = hex::encode(fire_block.encode_to_vec());
-            println!("FIRE PROTO {}", out_msg);
+            let last_irreversible_block = parent_heigth;
+            let unix_timestamp =
+                result.result().block.header().consensus().time.to_unix();
+
+            let fire_block = fuel_core_firehose_types::Block::from((
+                &result.result().block,
+                parent_hash,
+            ));
+            let payload_base64: String =
+                BASE64_STANDARD.encode(fire_block.encode_to_vec());
+
+            println!(
+                "FIRE BLOCK {} {} {} {} {} {} {}",
+                height,
+                block_hash,
+                parent_heigth,
+                parent_hash,
+                last_irreversible_block,
+                unix_timestamp,
+                payload_base64,
+            );
         }
 
         Ok(result)

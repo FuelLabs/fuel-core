@@ -145,6 +145,12 @@ pub fn init_sub_services(
     );
     let tx_pool_adapter = TxPoolAdapter::new(txpool.shared.clone());
 
+    // Firehose logging init
+    {
+        // TODO: hide this behind a feature-gate and make it configurable
+        println!("FIRE INIT 3.0 sf.fuel.type.v1");
+    }
+
     let block_producer = fuel_core_producer::Producer {
         config: config.block_producer.clone(),
         view_provider: database.clone(),
