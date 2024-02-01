@@ -47,7 +47,7 @@ impl NodeInfo {
     async fn peers(&self, _ctx: &Context<'_>) -> async_graphql::Result<Vec<PeerInfo>> {
         #[cfg(feature = "p2p")]
         {
-            let p2p: &crate::fuel_core_graphql_api::service::P2pService =
+            let p2p: &crate::fuel_core_graphql_api::api_service::P2pService =
                 _ctx.data_unchecked();
             let peer_info = p2p.all_peer_info().await?;
             let peers = peer_info.into_iter().map(PeerInfo).collect();

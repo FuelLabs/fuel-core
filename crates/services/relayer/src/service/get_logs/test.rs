@@ -151,14 +151,14 @@ async fn can_paginate_logs(input: Input) -> Expected {
     ] => 1 ; "Can add single"
 )]
 #[test_case(vec![
-    Ok((1, messages_n(3, 0))),
-    Ok((2, messages_n(1, 4)))
-    ] => 2 ; "Can add two"
+    Ok((3, messages_n(3, 0))),
+    Ok((4, messages_n(1, 4)))
+    ] => 4 ; "Can add two"
 )]
 #[test_case(vec![
-    Ok((1, messages_n(3, 0))),
-    Ok((2, vec![]))
-    ] => 2 ; "Can add empty"
+    Ok((3, messages_n(3, 0))),
+    Ok((4, vec![]))
+    ] => 4 ; "Can add empty"
 )]
 #[test_case(vec![
     Ok((7, messages_n(3, 0))),

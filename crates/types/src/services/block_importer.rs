@@ -10,10 +10,15 @@ use crate::{
         Uncommitted,
     },
 };
+use core::ops::Deref;
+use std::sync::Arc;
 
 /// The uncommitted result of the block importing.
 pub type UncommittedResult<DatabaseTransaction> =
     Uncommitted<ImportResult, DatabaseTransaction>;
+
+/// The alias for the `ImportResult` that can be shared between threads.
+pub type SharedImportResult = Arc<dyn Deref<Target = ImportResult> + Send + Sync>;
 
 /// The result of the block import.
 #[derive(Debug)]
@@ -25,6 +30,14 @@ pub struct ImportResult {
     pub tx_status: Vec<TransactionExecutionStatus>,
     /// The source producer of the block.
     pub source: Source,
+}
+
+impl Deref for ImportResult {
+    type Target = Self;
+
+    fn deref(&self) -> &Self::Target {
+        self
+    }
 }
 
 /// The source producer of the block.
@@ -87,8 +100,8 @@ impl BlockImportInfo {
     }
 }
 
-impl From<&ImportResult> for BlockImportInfo {
-    fn from(result: &ImportResult) -> Self {
+impl From<SharedImportResult> for BlockImportInfo {
+    fn from(result: SharedImportResult) -> Self {
         Self {
             block_header: result.sealed_block.entity.header().clone(),
             source: result.source,

@@ -18,7 +18,7 @@ use crate::{
         },
         topics::GossipsubTopics,
     },
-    heartbeat::HeartbeatEvent,
+    heartbeat,
     peer_manager::{
         PeerManager,
         Punisher,
@@ -41,7 +41,7 @@ use fuel_core_types::{
 use futures::prelude::*;
 use libp2p::{
     gossipsub::{
-        Event as GossipsubEvent,
+        self,
         MessageAcceptance,
         MessageId,
         PublishError,
@@ -50,9 +50,8 @@ use libp2p::{
     identify,
     multiaddr::Protocol,
     request_response::{
-        Event as RequestResponseEvent,
+        self,
         InboundRequestId,
-        Message as RequestResponseMessage,
         OutboundRequestId,
         ResponseChannel,
     },
@@ -67,6 +66,7 @@ use std::{
     collections::HashMap,
     time::Duration,
 };
+use tokio::sync::broadcast;
 use tracing::{
     debug,
     warn,
@@ -106,7 +106,7 @@ pub struct FuelP2PService {
     /// It will send it to the specified Peer via its unique ResponseChannel    
     inbound_requests_table: HashMap<InboundRequestId, ResponseChannel<ResponseMessage>>,
 
-    /// NetworkCodec used as <GossipsubCodec> for encoding and decoding of Gossipsub messages    
+    /// NetworkCodec used as `<GossipsubCodec>` for encoding and decoding of Gossipsub messages    
     network_codec: PostcardCodec,
 
     /// Stores additional p2p network info    
@@ -158,7 +158,11 @@ pub enum FuelP2PEvent {
 }
 
 impl FuelP2PService {
-    pub fn new(config: Config, codec: PostcardCodec) -> Self {
+    pub fn new(
+        reserved_peers_updates: broadcast::Sender<usize>,
+        config: Config,
+        codec: PostcardCodec,
+    ) -> Self {
         let gossipsub_data =
             GossipsubData::with_topics(GossipsubTopics::new(&config.network_name));
         let network_metadata = NetworkMetadata { gossipsub_data };
@@ -207,6 +211,7 @@ impl FuelP2PService {
             network_metadata,
             metrics,
             peer_manager: PeerManager::new(
+                reserved_peers_updates,
                 reserved_peers,
                 connection_state,
                 config.max_peers_connected as usize,
@@ -453,8 +458,11 @@ impl FuelP2PService {
         }
     }
 
-    fn handle_gossipsub_event(&mut self, event: GossipsubEvent) -> Option<FuelP2PEvent> {
-        if let GossipsubEvent::Message {
+    fn handle_gossipsub_event(
+        &mut self,
+        event: gossipsub::Event,
+    ) -> Option<FuelP2PEvent> {
+        if let gossipsub::Event::Message {
             propagation_source,
             message,
             message_id,
@@ -538,11 +546,11 @@ impl FuelP2PService {
 
     fn handle_request_response_event(
         &mut self,
-        event: RequestResponseEvent<RequestMessage, ResponseMessage>,
+        event: request_response::Event<RequestMessage, ResponseMessage>,
     ) -> Option<FuelP2PEvent> {
         match event {
-            RequestResponseEvent::Message { peer, message } => match message {
-                RequestResponseMessage::Request {
+            request_response::Event::Message { peer, message } => match message {
+                request_response::Message::Request {
                     request,
                     channel,
                     request_id,
@@ -554,7 +562,7 @@ impl FuelP2PService {
                         request_message: request,
                     })
                 }
-                RequestResponseMessage::Response {
+                request_response::Message::Response {
                     request_id,
                     response,
                 } => {
@@ -565,10 +573,6 @@ impl FuelP2PService {
                     };
 
                     let send_ok = match (channel, response) {
-                        (
-                            ResponseChannelItem::Block(channel),
-                            ResponseMessage::Block(block),
-                        ) => channel.send(block).is_ok(),
                         (
                             ResponseChannelItem::Transactions(channel),
                             ResponseMessage::Transactions(transactions),
@@ -591,14 +595,14 @@ impl FuelP2PService {
                     }
                 }
             },
-            RequestResponseEvent::InboundFailure {
+            request_response::Event::InboundFailure {
                 peer,
                 error,
                 request_id,
             } => {
                 tracing::error!("RequestResponse inbound error for peer: {:?} with id: {:?} and error: {:?}", peer, request_id, error);
             }
-            RequestResponseEvent::OutboundFailure {
+            request_response::Event::OutboundFailure {
                 peer,
                 error,
                 request_id,
@@ -651,8 +655,11 @@ impl FuelP2PService {
         None
     }
 
-    fn handle_heartbeat_event(&mut self, event: HeartbeatEvent) -> Option<FuelP2PEvent> {
-        let HeartbeatEvent {
+    fn handle_heartbeat_event(
+        &mut self,
+        event: heartbeat::Event,
+    ) -> Option<FuelP2PEvent> {
+        let heartbeat::Event {
             peer_id,
             latest_block_height,
         } = event;
@@ -697,16 +704,11 @@ mod tests {
     };
     use fuel_core_types::{
         blockchain::{
-            block::Block,
             consensus::{
                 poa::PoAConsensus,
                 Consensus,
             },
-            header::{
-                BlockHeader,
-                PartialBlockHeader,
-            },
-            SealedBlock,
+            header::BlockHeader,
             SealedBlockHeader,
         },
         fuel_tx::{
@@ -740,6 +742,7 @@ mod tests {
         time::Duration,
     };
     use tokio::sync::{
+        broadcast,
         mpsc,
         oneshot,
         watch,
@@ -752,9 +755,11 @@ mod tests {
     async fn build_service_from_config(mut p2p_config: Config) -> P2PService {
         p2p_config.keypair = Keypair::generate_secp256k1(); // change keypair for each Node
         let max_block_size = p2p_config.max_block_size;
+        let (sender, _) =
+            broadcast::channel(p2p_config.reserved_nodes.len().saturating_add(1));
 
         let mut service =
-            FuelP2PService::new(p2p_config, PostcardCodec::new(max_block_size));
+            FuelP2PService::new(sender, p2p_config, PostcardCodec::new(max_block_size));
         service.start().await.unwrap();
         service
     }
@@ -1458,7 +1463,7 @@ mod tests {
         let mut blocks = Vec::new();
         for i in range {
             let mut header: BlockHeader = Default::default();
-            header.consensus.height = i.into();
+            header.set_block_height(i.into());
 
             let sealed_block = SealedBlockHeader {
                 entity: header,
@@ -1471,8 +1476,8 @@ mod tests {
 
     // Metadata gets skipped during serialization, so this is the fuzzy way to compare blocks
     fn eq_except_metadata(a: &SealedBlockHeader, b: &SealedBlockHeader) -> bool {
-        a.entity.application == b.entity.application
-            && a.entity.consensus == b.entity.consensus
+        a.entity.application() == b.entity.application()
+            && a.entity.consensus() == b.entity.consensus()
     }
 
     async fn request_response_works_with(request_msg: RequestMessage) {
@@ -1504,23 +1509,6 @@ mod tests {
                                 request_sent = true;
 
                                 match request_msg.clone() {
-                                    RequestMessage::Block(_) => {
-                                        let (tx_orchestrator, rx_orchestrator) = oneshot::channel();
-                                        assert!(node_a.send_request_msg(None, request_msg.clone(), ResponseChannelItem::Block(tx_orchestrator)).is_ok());
-                                        let tx_test_end = tx_test_end.clone();
-
-                                        tokio::spawn(async move {
-                                            let response_message = rx_orchestrator.await;
-
-                                            if let Ok(Some(sealed_block)) = response_message {
-                                                let _ = tx_test_end.send(*sealed_block.entity.header().height() == 0.into()).await;
-                                            } else {
-                                                tracing::error!("Orchestrator failed to receive a message: {:?}", response_message);
-                                                let _ = tx_test_end.send(false).await;
-                                            }
-                                        });
-
-                                    }
                                     RequestMessage::SealedHeaders(range) => {
                                         let (tx_orchestrator, rx_orchestrator) = oneshot::channel();
                                         assert!(node_a.send_request_msg(None, request_msg.clone(), ResponseChannelItem::SealedHeaders(tx_orchestrator)).is_ok());
@@ -1568,16 +1556,6 @@ mod tests {
                     // 2. Node B receives the RequestMessage from Node A initiated by the NetworkOrchestrator
                     if let Some(FuelP2PEvent::InboundRequestMessage{ request_id, request_message: received_request_message }) = &node_b_event {
                         match received_request_message {
-                            RequestMessage::Block(_) => {
-                                let block = Block::new(PartialBlockHeader::default(), (0..5).map(|_| Transaction::default_test_tx()).collect(), &[]);
-
-                                let sealed_block = SealedBlock {
-                                    entity: block,
-                                    consensus: Consensus::PoA(PoAConsensus::new(Default::default())),
-                                };
-
-                                let _ = node_b.send_response_msg(*request_id, ResponseMessage::Block(Some(sealed_block)));
-                            }
                             RequestMessage::SealedHeaders(range) => {
                                 let sealed_headers: Vec<_> = arbitrary_headers_for_range(range.clone());
 
@@ -1602,12 +1580,6 @@ mod tests {
     async fn request_response_works_with_transactions() {
         let arbitrary_range = 2..6;
         request_response_works_with(RequestMessage::Transactions(arbitrary_range)).await
-    }
-
-    #[tokio::test]
-    #[instrument]
-    async fn request_response_works_with_block() {
-        request_response_works_with(RequestMessage::Block(0.into())).await
     }
 
     #[tokio::test]
@@ -1654,8 +1626,8 @@ mod tests {
                                 assert_eq!(node_a.outbound_requests_table.len(), 0);
 
                                 // Request successfully sent
-                                let requested_block_height = RequestMessage::Block(0.into());
-                                assert!(node_a.send_request_msg(None, requested_block_height, ResponseChannelItem::Block(tx_orchestrator)).is_ok());
+                                let requested_block_height = RequestMessage::SealedHeaders(0..0);
+                                assert!(node_a.send_request_msg(None, requested_block_height, ResponseChannelItem::SealedHeaders(tx_orchestrator)).is_ok());
 
                                 // 2b. there should be ONE pending outbound requests in the table
                                 assert_eq!(node_a.outbound_requests_table.len(), 1);

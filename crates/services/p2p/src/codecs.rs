@@ -11,7 +11,7 @@ use crate::{
         ResponseMessage,
     },
 };
-use libp2p::request_response::Codec as RequestResponseCodec;
+use libp2p::request_response;
 use std::io;
 
 /// Implement this in order to handle serialization & deserialization of Gossipsub messages
@@ -34,12 +34,12 @@ pub trait NetworkCodec:
     GossipsubCodec<
         RequestMessage = GossipsubBroadcastRequest,
         ResponseMessage = GossipsubMessage,
-    > + RequestResponseCodec<Request = RequestMessage, Response = ResponseMessage>
+    > + request_response::Codec<Request = RequestMessage, Response = ResponseMessage>
     + Clone
     + Send
     + 'static
 {
     /// Returns RequestResponse's Protocol
     /// Needed for initialization of RequestResponse Behaviour
-    fn get_req_res_protocol(&self) -> <Self as RequestResponseCodec>::Protocol;
+    fn get_req_res_protocol(&self) -> <Self as request_response::Codec>::Protocol;
 }

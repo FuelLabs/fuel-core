@@ -16,6 +16,7 @@ mod service;
 #[cfg(any(test, feature = "test-helpers"))]
 pub mod mock_db;
 pub mod ports;
+pub mod storage;
 #[cfg(any(test, feature = "test-helpers"))]
 pub mod test_helpers;
 

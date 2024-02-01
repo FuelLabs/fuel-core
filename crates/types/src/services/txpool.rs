@@ -1,7 +1,10 @@
 //! Types for interoperability with the txpool service
 
 use crate::{
-    blockchain::primitives::BlockId,
+    blockchain::{
+        block::Block,
+        primitives::BlockId,
+    },
     fuel_asm::Word,
     fuel_tx::{
         field::{
@@ -27,6 +30,7 @@ use crate::{
         checked_transaction::Checked,
         ProgramState,
     },
+    services::executor::TransactionExecutionResult,
 };
 use fuel_vm_private::checked_transaction::CheckedTransaction;
 use std::{
@@ -197,6 +201,30 @@ pub enum TransactionStatus {
         /// Result of executing the transaction for scripts
         result: Option<ProgramState>,
     },
+}
+
+/// Converts the transaction execution result to the transaction status.
+pub fn from_executor_to_status(
+    block: &Block,
+    result: TransactionExecutionResult,
+) -> TransactionStatus {
+    let time = block.header().time();
+    let block_id = block.id();
+    match result {
+        TransactionExecutionResult::Success { result } => TransactionStatus::Success {
+            block_id,
+            time,
+            result,
+        },
+        TransactionExecutionResult::Failed { result, reason } => {
+            TransactionStatus::Failed {
+                block_id,
+                time,
+                result,
+                reason: reason.clone(),
+            }
+        }
+    }
 }
 
 #[allow(missing_docs)]

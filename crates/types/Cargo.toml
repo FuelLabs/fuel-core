@@ -19,8 +19,10 @@ version = { workspace = true }
 [dependencies]
 anyhow = { workspace = true }
 bs58 = "0.5"
+derivative = { version = "2" }
 derive_more = { version = "0.99" }
 fuel-vm-private = { workspace = true, default-features = false, features = ["alloc"] }
+rand = { workspace = true, optional = true }
 secrecy = "0.8"
 serde = { workspace = true, features = ["derive"], optional = true }
 tai64 = { version = "4.0", features = ["serde"] }
@@ -31,5 +33,5 @@ zeroize = "1.5"
 default = ["std"]
 serde = ["dep:serde", "fuel-vm-private/serde"]
 std = ["fuel-vm-private/std"]
-random = ["fuel-vm-private/random"]
+random = ["dep:rand", "fuel-vm-private/random"]
 test-helpers = ["random", "fuel-vm-private/test-helpers"]

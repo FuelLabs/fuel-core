@@ -20,11 +20,22 @@ use crate::{
 };
 use tai64::Tai64;
 
+/// Version-able block header type
+#[derive(Clone, Debug, derivative::Derivative)]
+#[derivative(PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[non_exhaustive]
+pub enum BlockHeader {
+    /// V1 BlockHeader
+    V1(BlockHeaderV1),
+}
+
 /// A fuel block header that has all the fields generated because it
 /// has been executed.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, derivative::Derivative)]
+#[derivative(PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub struct BlockHeader {
+pub struct BlockHeaderV1 {
     /// The application header.
     pub application: ApplicationHeader<GeneratedApplicationFields>,
     /// The consensus header.
@@ -32,7 +43,96 @@ pub struct BlockHeader {
     /// The header metadata calculated during creation.
     /// The field is private to enforce the use of the [`PartialBlockHeader::generate`] method.
     #[cfg_attr(feature = "serde", serde(skip))]
+    #[derivative(PartialEq = "ignore")]
     metadata: Option<BlockHeaderMetadata>,
+}
+
+impl From<BlockHeaderV1> for BlockHeader {
+    fn from(v1: BlockHeaderV1) -> Self {
+        BlockHeader::V1(v1)
+    }
+}
+
+impl BlockHeader {
+    /// Getter for consensus portion of header
+    pub fn consensus(&self) -> &ConsensusHeader<GeneratedConsensusFields> {
+        match self {
+            BlockHeader::V1(v1) => &v1.consensus,
+        }
+    }
+
+    /// Getter for application portion of header
+    pub fn application(&self) -> &ApplicationHeader<GeneratedApplicationFields> {
+        match self {
+            BlockHeader::V1(v1) => &v1.application,
+        }
+    }
+
+    /// Getter for metadata portion of header
+    fn metadata(&self) -> &Option<BlockHeaderMetadata> {
+        match self {
+            BlockHeader::V1(v1) => &v1.metadata,
+        }
+    }
+
+    /// Mutable getter for consensus portion of header
+    fn consensus_mut(&mut self) -> &mut ConsensusHeader<GeneratedConsensusFields> {
+        match self {
+            BlockHeader::V1(v1) => &mut v1.consensus,
+        }
+    }
+
+    /// Set the entire consensus header
+    pub fn set_consensus_header(
+        &mut self,
+        consensus: ConsensusHeader<GeneratedConsensusFields>,
+    ) {
+        match self {
+            BlockHeader::V1(v1) => v1.consensus = consensus,
+        }
+    }
+
+    /// Mutable getter for application portion of header
+    fn application_mut(&mut self) -> &mut ApplicationHeader<GeneratedApplicationFields> {
+        match self {
+            BlockHeader::V1(v1) => &mut v1.application,
+        }
+    }
+
+    /// Set the entire application header
+    pub fn set_application_header(
+        &mut self,
+        application: ApplicationHeader<GeneratedApplicationFields>,
+    ) {
+        match self {
+            BlockHeader::V1(v1) => v1.application = application,
+        }
+    }
+
+    /// Set the block height for the header
+    pub fn set_block_height(&mut self, height: BlockHeight) {
+        self.consensus_mut().height = height;
+    }
+
+    /// Set the previous root for the header
+    pub fn set_previous_root(&mut self, root: Bytes32) {
+        self.consensus_mut().prev_root = root;
+    }
+
+    /// Set the time for the header
+    pub fn set_time(&mut self, time: Tai64) {
+        self.consensus_mut().time = time;
+    }
+
+    /// Set the transaction root for the header
+    pub fn set_transaction_root(&mut self, root: Bytes32) {
+        self.application_mut().generated.transactions_root = root;
+    }
+
+    /// Set the DA height for the header
+    pub fn set_da_height(&mut self, da_height: DaBlockHeight) {
+        self.application_mut().da_height = da_height;
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -47,7 +147,7 @@ pub struct PartialBlockHeader {
     pub consensus: ConsensusHeader<Empty>,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(any(test, feature = "test-helpers"), derive(Default))]
 /// The fuel block application header.
@@ -64,7 +164,7 @@ pub struct ApplicationHeader<Generated> {
     pub generated: Generated,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(any(test, feature = "test-helpers"), derive(Default))]
 /// Concrete generated application header fields.
@@ -80,7 +180,7 @@ pub struct GeneratedApplicationFields {
     pub message_receipt_root: Bytes32,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 /// The fuel block consensus header.
 /// This contains fields related to consensus plus
@@ -96,7 +196,7 @@ pub struct ConsensusHeader<Generated> {
     pub generated: Generated,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(any(test, feature = "test-helpers"), derive(Default))]
 /// Concrete generated consensus header fields.
@@ -117,11 +217,12 @@ pub struct BlockHeaderMetadata {
 #[cfg(any(test, feature = "test-helpers"))]
 impl Default for BlockHeader {
     fn default() -> Self {
-        let mut default = Self {
+        let mut default: BlockHeader = BlockHeaderV1 {
             application: Default::default(),
             consensus: Default::default(),
             metadata: None,
-        };
+        }
+        .into();
         default.recalculate_metadata();
         default
     }
@@ -133,8 +234,8 @@ impl BlockHeader {
     /// The method should be used only for tests.
     pub fn new_block(height: BlockHeight, time: Tai64) -> Self {
         let mut default = Self::default();
-        default.consensus.height = height;
-        default.consensus.time = time;
+        default.consensus_mut().height = height;
+        default.consensus_mut().time = time;
         default.recalculate_metadata();
         default
     }
@@ -188,9 +289,14 @@ impl PartialBlockHeader {
 impl BlockHeader {
     /// Re-generate the header metadata.
     pub fn recalculate_metadata(&mut self) {
-        let application_hash = self.application.hash();
-        self.consensus.generated.application_hash = application_hash;
-        self.metadata = Some(BlockHeaderMetadata { id: self.hash() });
+        let application_hash = self.application().hash();
+        self.consensus_mut().generated.application_hash = application_hash;
+        let id = self.hash();
+        match self {
+            BlockHeader::V1(v1) => {
+                v1.metadata = Some(BlockHeaderMetadata { id });
+            }
+        }
     }
 
     /// Get the hash of the fuel header.
@@ -200,14 +306,14 @@ impl BlockHeader {
         // and can't change its final hash on the fly.
         //
         // This assertion is a double-checks that this behavior is not changed.
-        debug_assert_eq!(self.consensus.application_hash, self.application.hash());
+        debug_assert_eq!(self.application_hash(), &self.application().hash());
         // This internally hashes the hash of the application header.
-        self.consensus.hash()
+        self.consensus().hash()
     }
 
     /// Get the cached fuel header hash.
     pub fn id(&self) -> BlockId {
-        if let Some(ref metadata) = self.metadata {
+        if let Some(ref metadata) = self.metadata() {
             metadata.id
         } else {
             self.hash()
@@ -219,7 +325,8 @@ impl BlockHeader {
         // Generate the transaction merkle root.
         let transactions_root = generate_txns_root(transactions);
 
-        transactions_root == self.application.transactions_root
+        transactions_root == self.application().transactions_root
+            && transactions.len() as u64 == self.application().transactions_count
     }
 }
 
@@ -262,7 +369,7 @@ impl PartialBlockHeader {
             },
         };
 
-        let mut header = BlockHeader {
+        let mut header: BlockHeader = BlockHeaderV1 {
             application,
             consensus: ConsensusHeader {
                 prev_root: self.consensus.prev_root,
@@ -274,7 +381,8 @@ impl PartialBlockHeader {
                 },
             },
             metadata: None,
-        };
+        }
+        .into();
 
         // Cache the hash.
         header.recalculate_metadata();
@@ -339,7 +447,7 @@ impl core::ops::Deref for BlockHeader {
     type Target = ApplicationHeader<GeneratedApplicationFields>;
 
     fn deref(&self) -> &Self::Target {
-        &self.application
+        self.application()
     }
 }
 
@@ -369,7 +477,7 @@ impl core::ops::Deref for ConsensusHeader<GeneratedConsensusFields> {
 
 impl core::convert::AsRef<ConsensusHeader<GeneratedConsensusFields>> for BlockHeader {
     fn as_ref(&self) -> &ConsensusHeader<GeneratedConsensusFields> {
-        &self.consensus
+        self.consensus()
     }
 }
 

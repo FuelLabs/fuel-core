@@ -23,6 +23,7 @@ use fuel_core_client::client::{
     types::TransactionStatus,
     FuelClient,
 };
+use fuel_core_poa::service::Mode;
 use fuel_core_relayer::{
     test_helpers::{
         middleware::MockMiddleware,
@@ -109,6 +110,17 @@ async fn relayer_can_download_logs() {
 
     // wait for relayer to catch up
     srv.await_relayer_synced().await.unwrap();
+    // Wait for the block producer to create a block that targets the latest da height.
+    srv.shared
+        .poa_adapter
+        .manually_produce_blocks(
+            None,
+            Mode::Blocks {
+                number_of_blocks: 1,
+            },
+        )
+        .await
+        .unwrap();
 
     // check the db for downloaded messages
     for msg in expected_messages {
@@ -173,6 +185,17 @@ async fn messages_are_spendable_after_relayer_is_synced() {
 
     // wait for relayer to catch up to eth node
     srv.await_relayer_synced().await.unwrap();
+    // Wait for the block producer to create a block that targets the latest da height.
+    srv.shared
+        .poa_adapter
+        .manually_produce_blocks(
+            None,
+            Mode::Blocks {
+                number_of_blocks: 1,
+            },
+        )
+        .await
+        .unwrap();
 
     // verify we have downloaded the message
     let query = client

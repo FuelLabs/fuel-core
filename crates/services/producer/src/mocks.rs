@@ -7,6 +7,7 @@ use crate::ports::{
 use fuel_core_storage::{
     not_found,
     transactional::{
+        AtomicView,
         StorageTransaction,
         Transaction,
     },
@@ -188,6 +189,26 @@ pub struct MockDb {
     pub blocks: Arc<Mutex<HashMap<BlockHeight, CompressedBlock>>>,
 }
 
+impl AtomicView for MockDb {
+    type View = Self;
+
+    type Height = BlockHeight;
+
+    fn latest_height(&self) -> BlockHeight {
+        let blocks = self.blocks.lock().unwrap();
+
+        blocks.keys().max().cloned().unwrap_or_default()
+    }
+
+    fn view_at(&self, _: &BlockHeight) -> StorageResult<Self::View> {
+        Ok(self.latest_view())
+    }
+
+    fn latest_view(&self) -> Self::View {
+        self.clone()
+    }
+}
+
 impl BlockProducerDatabase for MockDb {
     fn get_block(&self, height: &BlockHeight) -> StorageResult<Cow<CompressedBlock>> {
         let blocks = self.blocks.lock().unwrap();
@@ -202,11 +223,5 @@ impl BlockProducerDatabase for MockDb {
         Ok(Bytes32::new(
             [u8::try_from(*height.deref()).expect("Test use small values"); 32],
         ))
-    }
-
-    fn current_block_height(&self) -> StorageResult<BlockHeight> {
-        let blocks = self.blocks.lock().unwrap();
-
-        Ok(blocks.keys().max().cloned().unwrap_or_default())
     }
 }

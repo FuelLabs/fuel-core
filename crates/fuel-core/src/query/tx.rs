@@ -1,4 +1,7 @@
-use crate::graphql_api::ports::DatabasePort;
+use crate::fuel_core_graphql_api::ports::{
+    OffChainDatabase,
+    OnChainDatabase,
+};
 use fuel_core_storage::{
     iter::{
         BoxedIter,
@@ -32,7 +35,10 @@ pub trait SimpleTransactionData: Send + Sync {
     fn transaction(&self, transaction_id: &TxId) -> StorageResult<Transaction>;
 }
 
-impl<D: DatabasePort + ?Sized> SimpleTransactionData for D {
+impl<D> SimpleTransactionData for D
+where
+    D: OnChainDatabase + OffChainDatabase + ?Sized,
+{
     fn transaction(&self, tx_id: &TxId) -> StorageResult<Transaction> {
         self.storage::<Transactions>()
             .get(tx_id)
@@ -57,7 +63,10 @@ pub trait TransactionQueryData: Send + Sync + SimpleTransactionData {
     ) -> BoxedIter<StorageResult<(TxPointer, Transaction)>>;
 }
 
-impl<D: DatabasePort + ?Sized> TransactionQueryData for D {
+impl<D> TransactionQueryData for D
+where
+    D: OnChainDatabase + OffChainDatabase + ?Sized,
+{
     fn status(&self, tx_id: &TxId) -> StorageResult<TransactionStatus> {
         self.tx_status(tx_id)
     }
