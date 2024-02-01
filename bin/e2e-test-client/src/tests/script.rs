@@ -4,8 +4,8 @@ use crate::test_context::{
 };
 use fuel_core_chain_config::{
     ContractConfig,
-    StateReader,
     SnapshotMetadata,
+    StateReader,
     MAX_GROUP_SIZE,
 };
 use fuel_core_types::{

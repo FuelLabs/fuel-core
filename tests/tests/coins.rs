@@ -2,9 +2,9 @@ use crate::helpers::TestContext;
 use fuel_core::{
     chain_config::{
         CoinConfig,
-        StateReader,
         MessageConfig,
         StateConfig,
+        StateReader,
     },
     coins_query::CoinsQueryError,
     service::{

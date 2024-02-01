@@ -1,8 +1,8 @@
 use fuel_core::{
     chain_config::{
         CoinConfig,
-        StateReader,
         StateConfig,
+        StateReader,
     },
     database::Database,
     service::{

@@ -4,8 +4,8 @@ use fuel_core::{
         CoinConfig,
         ContractBalanceConfig,
         ContractConfig,
-        StateReader,
         StateConfig,
+        StateReader,
     },
     service::{
         Config,

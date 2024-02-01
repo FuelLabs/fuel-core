@@ -2,9 +2,9 @@
 
 use fuel_core::{
     chain_config::{
-        StateReader,
         MessageConfig,
         StateConfig,
+        StateReader,
     },
     service::{
         Config,

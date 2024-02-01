@@ -5,8 +5,8 @@ mod encoder;
 mod parquet;
 
 pub use decoder::{
-    StateReader,
     IntoIter,
+    StateReader,
 };
 #[cfg(feature = "std")]
 pub use encoder::StateWriter;
@@ -56,7 +56,8 @@ mod tests {
             group_generator.for_each_group(|group| encoder.write_coins(group));
         encoder.close().unwrap();
 
-        let decoded_coin_groups = StateReader::parquet(files).coins().unwrap().collect_vec();
+        let decoded_coin_groups =
+            StateReader::parquet(files).coins().unwrap().collect_vec();
 
         // then
         assert_groups_identical(&coin_groups, decoded_coin_groups, skip_n_groups);
@@ -78,7 +79,10 @@ mod tests {
         let message_groups =
             group_generator.for_each_group(|group| encoder.write_messages(group));
         encoder.close().unwrap();
-        let messages_decoded = StateReader::parquet(files).messages().unwrap().collect_vec();
+        let messages_decoded = StateReader::parquet(files)
+            .messages()
+            .unwrap()
+            .collect_vec();
 
         // then
         assert_groups_identical(&message_groups, messages_decoded, skip_n_groups);
@@ -100,7 +104,10 @@ mod tests {
         let contract_groups =
             group_generator.for_each_group(|group| encoder.write_contracts(group));
         encoder.close().unwrap();
-        let contract_decoded = StateReader::parquet(files).contracts().unwrap().collect_vec();
+        let contract_decoded = StateReader::parquet(files)
+            .contracts()
+            .unwrap()
+            .collect_vec();
 
         // then
         assert_groups_identical(&contract_groups, contract_decoded, skip_n_groups);

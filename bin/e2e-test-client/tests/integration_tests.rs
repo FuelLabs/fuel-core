@@ -7,9 +7,9 @@ use fuel_core::service::{
 use fuel_core::txpool::types::ContractId;
 use fuel_core_chain_config::{
     ChainConfig,
-    StateReader,
     SnapshotMetadata,
     StateConfig,
+    StateReader,
     MAX_GROUP_SIZE,
 };
 use fuel_core_e2e_client::config::SuiteConfig;

@@ -333,9 +333,9 @@ mod tests {
         ContractBalanceConfig,
         ContractConfig,
         ContractStateConfig,
-        StateReader,
         MessageConfig,
         StateConfig,
+        StateReader,
         MAX_GROUP_SIZE,
     };
     use fuel_core_storage::{

@@ -13,8 +13,8 @@ use fuel_core::{
     types::fuel_types::ContractId,
 };
 use fuel_core_chain_config::{
-    StateWriter,
     SnapshotMetadata,
+    StateWriter,
     MAX_GROUP_SIZE,
 };
 use fuel_core_storage::Result as StorageResult;
@@ -546,8 +546,8 @@ mod tests {
         // given
 
         use fuel_core_chain_config::{
-            StateReader,
             ParquetFiles,
+            StateReader,
         };
         let temp_dir = tempfile::tempdir()?;
 

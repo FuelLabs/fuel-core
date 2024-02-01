@@ -1,9 +1,9 @@
 use fuel_core::{
     chain_config::{
         CoinConfig,
-        StateReader,
         MessageConfig,
         StateConfig,
+        StateReader,
     },
     service::{
         Config,

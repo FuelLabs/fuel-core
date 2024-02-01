@@ -2,8 +2,8 @@ use clap::ValueEnum;
 use fuel_core_chain_config::{
     default_consensus_dev_key,
     ChainConfig,
-    StateReader,
     StateConfig,
+    StateReader,
     MAX_GROUP_SIZE,
 };
 use fuel_core_types::{

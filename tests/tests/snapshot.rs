@@ -4,9 +4,9 @@ use fuel_core::{
         ContractBalanceConfig,
         ContractConfig,
         ContractStateConfig,
-        StateReader,
         MessageConfig,
         StateConfig,
+        StateReader,
     },
     database::Database,
     service::{

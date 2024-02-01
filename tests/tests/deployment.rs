@@ -2,10 +2,10 @@ use std::path::Path;
 
 use fuel_core::chain_config::{
     ChainConfig,
-    StateWriter,
     SnapshotMetadata,
     StateConfig,
     StateEncoding,
+    StateWriter,
 };
 use fuel_core_types::fuel_tx::GasCosts;
 

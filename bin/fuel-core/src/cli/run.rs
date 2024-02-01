@@ -36,8 +36,8 @@ use fuel_core::{
     },
 };
 use fuel_core_chain_config::{
-    StateReader,
     SnapshotMetadata,
+    StateReader,
     MAX_GROUP_SIZE,
 };
 use pyroscope::{
