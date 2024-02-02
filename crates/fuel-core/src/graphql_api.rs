@@ -13,6 +13,7 @@ pub mod api_service;
 pub mod database;
 pub(crate) mod metrics_extension;
 pub mod ports;
+pub mod storage;
 pub(crate) mod view_extension;
 pub mod worker_service;
 
@@ -25,6 +26,7 @@ pub struct Config {
     pub min_gas_price: u64,
     pub max_tx: usize,
     pub max_depth: usize,
+    pub chain_name: String,
     pub consensus_parameters: ConsensusParameters,
     pub consensus_key: Option<Secret<SecretKeyWrapper>>,
 }

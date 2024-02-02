@@ -1,6 +1,9 @@
-use crate::fuel_core_graphql_api::ports::{
-    OffChainDatabase,
-    OnChainDatabase,
+use crate::fuel_core_graphql_api::{
+    ports::{
+        OffChainDatabase,
+        OnChainDatabase,
+    },
+    storage::receipts::Receipts,
 };
 use fuel_core_storage::{
     iter::{
@@ -9,10 +12,7 @@ use fuel_core_storage::{
         IterDirection,
     },
     not_found,
-    tables::{
-        Receipts,
-        Transactions,
-    },
+    tables::Transactions,
     Result as StorageResult,
     StorageAsRef,
 };

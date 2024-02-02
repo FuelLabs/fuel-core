@@ -28,6 +28,7 @@ use fuel_core_types::fuel_tx::ContractId;
 // because we don't need to store the size of the contract. We store/load raw bytes.
 impl TableWithBlueprint for ContractsRawCode {
     type Blueprint = Plain<Raw, Raw>;
+    type Column = Column;
 
     fn column() -> Column {
         Column::ContractsRawCode
@@ -56,6 +57,7 @@ where
 
 impl TableWithBlueprint for ContractsInfo {
     type Blueprint = Plain<Raw, Postcard>;
+    type Column = Column;
 
     fn column() -> Column {
         Column::ContractsInfo
@@ -64,6 +66,7 @@ impl TableWithBlueprint for ContractsInfo {
 
 impl TableWithBlueprint for ContractsLatestUtxo {
     type Blueprint = Plain<Raw, Postcard>;
+    type Column = Column;
 
     fn column() -> Column {
         Column::ContractsLatestUtxo

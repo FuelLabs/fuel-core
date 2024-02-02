@@ -1,8 +1,9 @@
 use crate::{
     database::{
-        Column,
-        Database,
-        Error as DatabaseError,
+        database_description::{
+            on_chain::OnChain,
+            DatabaseDescription,
+        },
         Result as DatabaseResult,
     },
     state::in_memory::{
@@ -26,39 +27,57 @@ pub mod in_memory;
 #[cfg(feature = "rocksdb")]
 pub mod rocks_db;
 
-type DataSourceInner = Arc<dyn TransactableStorage<Column = Column>>;
+type DataSourceInner<Column> = Arc<dyn TransactableStorage<Column = Column>>;
 
 #[derive(Clone, Debug)]
-pub struct DataSource(DataSourceInner);
+pub struct DataSource<Description = OnChain>(DataSourceInner<Description::Column>)
+where
+    Description: DatabaseDescription;
 
-impl From<Arc<MemoryTransactionView>> for DataSource {
-    fn from(inner: Arc<MemoryTransactionView>) -> Self {
+impl<Description> From<Arc<MemoryTransactionView<Description>>>
+    for DataSource<Description>
+where
+    Description: DatabaseDescription,
+{
+    fn from(inner: Arc<MemoryTransactionView<Description>>) -> Self {
         Self(inner)
     }
 }
 
 #[cfg(feature = "rocksdb")]
-impl From<Arc<rocks_db::RocksDb>> for DataSource {
-    fn from(inner: Arc<rocks_db::RocksDb>) -> Self {
+impl<Description> From<Arc<rocks_db::RocksDb<Description>>> for DataSource<Description>
+where
+    Description: DatabaseDescription,
+{
+    fn from(inner: Arc<rocks_db::RocksDb<Description>>) -> Self {
         Self(inner)
     }
 }
 
-impl From<Arc<MemoryStore>> for DataSource {
-    fn from(inner: Arc<MemoryStore>) -> Self {
+impl<Description> From<Arc<MemoryStore<Description>>> for DataSource<Description>
+where
+    Description: DatabaseDescription,
+{
+    fn from(inner: Arc<MemoryStore<Description>>) -> Self {
         Self(inner)
     }
 }
 
-impl core::ops::Deref for DataSource {
-    type Target = DataSourceInner;
+impl<Description> core::ops::Deref for DataSource<Description>
+where
+    Description: DatabaseDescription,
+{
+    type Target = DataSourceInner<Description::Column>;
 
     fn deref(&self) -> &Self::Target {
         &self.0
     }
 }
 
-impl core::ops::DerefMut for DataSource {
+impl<Description> core::ops::DerefMut for DataSource<Description>
+where
+    Description: DatabaseDescription,
+{
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.0
     }
@@ -67,11 +86,5 @@ impl core::ops::DerefMut for DataSource {
 pub trait TransactableStorage:
     IteratorableStore + BatchOperations + Debug + Send + Sync
 {
-    fn checkpoint(&self) -> DatabaseResult<Database> {
-        Err(DatabaseError::Other(anyhow::anyhow!(
-            "Checkpoint is not supported"
-        )))
-    }
-
     fn flush(&self) -> DatabaseResult<()>;
 }

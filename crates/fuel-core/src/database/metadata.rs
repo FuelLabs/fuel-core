@@ -1,127 +1,109 @@
 use crate::{
     database::{
+        database_description::{
+            DatabaseDescription,
+            DatabaseMetadata,
+        },
         storage::UseStructuredImplementation,
-        Column,
         Database,
         Error as DatabaseError,
     },
     state::DataSource,
 };
-use fuel_core_chain_config::ChainConfig;
 use fuel_core_storage::{
     blueprint::plain::Plain,
     codec::postcard::Postcard,
+    not_found,
     structured_storage::{
         StructuredStorage,
         TableWithBlueprint,
     },
+    Error as StorageError,
     Mappable,
     Result as StorageResult,
-    StorageMutate,
+    StorageAsRef,
 };
+use fuel_core_types::fuel_merkle::storage::StorageMutate;
 
-/// The table that stores all metadata. Each key is a string, while the value depends on the context.
-/// The tables mostly used to store metadata for correct work of the `fuel-core`.
-pub struct MetadataTable<V>(core::marker::PhantomData<V>);
+/// The table that stores all metadata about the database.
+pub struct MetadataTable<Description>(core::marker::PhantomData<Description>);
 
-impl<V> Mappable for MetadataTable<V>
+impl<Description> Mappable for MetadataTable<Description>
 where
-    V: Clone,
+    Description: DatabaseDescription,
 {
-    type Key = str;
-    type OwnedKey = String;
-    type Value = V;
-    type OwnedValue = V;
+    type Key = ();
+    type OwnedKey = ();
+    type Value = DatabaseMetadata<Description::Height>;
+    type OwnedValue = Self::Value;
 }
 
-impl<V> TableWithBlueprint for MetadataTable<V>
+impl<Description> TableWithBlueprint for MetadataTable<Description>
 where
-    V: Clone,
+    Description: DatabaseDescription,
 {
     type Blueprint = Plain<Postcard, Postcard>;
+    type Column = Description::Column;
 
-    fn column() -> Column {
-        Column::Metadata
+    fn column() -> Self::Column {
+        Description::metadata_column()
     }
 }
 
-impl<V> UseStructuredImplementation<MetadataTable<V>> for StructuredStorage<DataSource> where
-    V: Clone
+impl<Description> UseStructuredImplementation<MetadataTable<Description>>
+    for StructuredStorage<DataSource<Description>>
+where
+    Description: DatabaseDescription,
 {
 }
 
-pub(crate) const DB_VERSION_KEY: &str = "version";
-pub(crate) const CHAIN_NAME_KEY: &str = "chain_name";
-/// Tracks the total number of transactions written to the chain
-/// It's useful for analyzing TPS or other metrics.
-pub(crate) const TX_COUNT: &str = "total_tx_count";
-
-/// Can be used to perform migrations in the future.
-pub(crate) const DB_VERSION: u32 = 0x00;
-
-impl Database {
+impl<Description> Database<Description>
+where
+    Description: DatabaseDescription,
+    Self: StorageMutate<MetadataTable<Description>, Error = StorageError>,
+{
     /// Ensures the database is initialized and that the database version is correct
-    pub fn init(&mut self, config: &ChainConfig) -> StorageResult<()> {
+    pub fn init(&mut self, height: &Description::Height) -> StorageResult<()> {
         use fuel_core_storage::StorageAsMut;
-        // initialize chain name if not set
-        if self.get_chain_name()?.is_none() {
-            self.storage::<MetadataTable<String>>()
-                .insert(CHAIN_NAME_KEY, &config.chain_name)
-                .and_then(|v| {
-                    if v.is_some() {
-                        Err(DatabaseError::ChainAlreadyInitialized.into())
-                    } else {
-                        Ok(())
-                    }
-                })?;
+
+        if !self
+            .storage::<MetadataTable<Description>>()
+            .contains_key(&())?
+        {
+            let old = self.storage::<MetadataTable<Description>>().insert(
+                &(),
+                &DatabaseMetadata::V1 {
+                    version: Description::version(),
+                    height: *height,
+                },
+            )?;
+
+            if old.is_some() {
+                return Err(DatabaseError::ChainAlreadyInitialized.into())
+            }
         }
 
-        // Ensure the database version is correct
-        if let Some(version) = self.storage::<MetadataTable<u32>>().get(DB_VERSION_KEY)? {
-            let version = version.into_owned();
-            if version != DB_VERSION {
-                return Err(DatabaseError::InvalidDatabaseVersion {
-                    found: version,
-                    expected: DB_VERSION,
-                })?
+        let metadata = self
+            .storage::<MetadataTable<Description>>()
+            .get(&())?
+            .expect("We checked its existence above");
+
+        if metadata.version() != Description::version() {
+            return Err(DatabaseError::InvalidDatabaseVersion {
+                found: metadata.version(),
+                expected: Description::version(),
             }
-        } else {
-            self.storage::<MetadataTable<u32>>()
-                .insert(DB_VERSION_KEY, &DB_VERSION)?;
+            .into())
         }
+
         Ok(())
     }
 
-    pub fn get_chain_name(&self) -> StorageResult<Option<String>> {
-        use fuel_core_storage::StorageAsRef;
-        self.storage::<MetadataTable<String>>()
-            .get(CHAIN_NAME_KEY)
-            .map(|v| v.map(|v| v.into_owned()))
-    }
+    pub fn latest_height(&self) -> StorageResult<Description::Height> {
+        let metadata = self.storage::<MetadataTable<Description>>().get(&())?;
 
-    pub fn increase_tx_count(&self, new_txs: u64) -> StorageResult<u64> {
-        use fuel_core_storage::StorageAsRef;
-        // TODO: how should tx count be initialized after regenesis?
-        let current_tx_count: u64 = self
-            .storage::<MetadataTable<u64>>()
-            .get(TX_COUNT)?
-            .unwrap_or_default()
-            .into_owned();
-        // Using saturating_add because this value doesn't significantly impact the correctness of execution.
-        let new_tx_count = current_tx_count.saturating_add(new_txs);
-        <_ as StorageMutate<MetadataTable<u64>>>::insert(
-            // TODO: Workaround to avoid a mutable borrow of self
-            &mut StructuredStorage::new(self.data.as_ref()),
-            TX_COUNT,
-            &new_tx_count,
-        )?;
-        Ok(new_tx_count)
-    }
+        let metadata = metadata.ok_or(not_found!(MetadataTable<Description>))?;
 
-    pub fn get_tx_count(&self) -> StorageResult<u64> {
-        use fuel_core_storage::StorageAsRef;
-        self.storage::<MetadataTable<u64>>()
-            .get(TX_COUNT)
-            .map(|v| v.unwrap_or_default().into_owned())
+        Ok(*metadata.height())
     }
 }

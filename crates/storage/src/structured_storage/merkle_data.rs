@@ -26,6 +26,7 @@ macro_rules! merkle_table {
     ($table:ident, $key_codec:ident) => {
         impl TableWithBlueprint for $table {
             type Blueprint = Plain<$key_codec, Postcard>;
+            type Column = Column;
 
             fn column() -> Column {
                 Column::$table

@@ -1,5 +1,6 @@
 use self::adapters::BlockImporterAdapter;
 use crate::{
+    combined_database::CombinedDatabase,
     database::Database,
     service::{
         adapters::{
@@ -50,11 +51,15 @@ pub struct SharedState {
     pub network: Option<fuel_core_p2p::service::SharedState>,
     #[cfg(feature = "relayer")]
     /// The Relayer shared state.
-    pub relayer: Option<fuel_core_relayer::SharedState<Database>>,
+    pub relayer: Option<
+        fuel_core_relayer::SharedState<
+            Database<crate::database::database_description::relayer::Relayer>,
+        >,
+    >,
     /// The GraphQL shared state.
     pub graph_ql: crate::fuel_core_graphql_api::api_service::SharedState,
     /// The underlying database.
-    pub database: Database,
+    pub database: CombinedDatabase,
     /// Subscribe to new block production.
     pub block_importer: BlockImporterAdapter,
     /// The config of the service.
@@ -77,7 +82,7 @@ pub struct FuelService {
 impl FuelService {
     /// Creates a `FuelService` instance from service config
     #[tracing::instrument(skip_all, fields(name = %config.name))]
-    pub fn new(database: Database, config: Config) -> anyhow::Result<Self> {
+    pub fn new(database: CombinedDatabase, config: Config) -> anyhow::Result<Self> {
         let config = config.make_config_consistent();
         let task = Task::new(database, config)?;
         let runner = ServiceRunner::new(task);
@@ -93,7 +98,7 @@ impl FuelService {
     /// Creates and starts fuel node instance from service config
     pub async fn new_node(config: Config) -> anyhow::Result<Self> {
         // initialize database
-        let database = match config.database_type {
+        let combined_database = match config.database_type {
             #[cfg(feature = "rocksdb")]
             DbType::RocksDb => {
                 // use a default tmp rocksdb if no path is provided
@@ -101,30 +106,43 @@ impl FuelService {
                     warn!(
                         "No RocksDB path configured, initializing database with a tmp directory"
                     );
-                    Database::default()
+                    CombinedDatabase::default()
                 } else {
                     tracing::info!(
                         "Opening database {:?} with cache size \"{}\"",
                         config.database_path,
                         config.max_database_cache_size
                     );
-                    Database::open(&config.database_path, config.max_database_cache_size)?
+                    CombinedDatabase::open(
+                        &config.database_path,
+                        config.max_database_cache_size,
+                    )?
                 }
             }
-            DbType::InMemory => Database::in_memory(),
+            DbType::InMemory => CombinedDatabase::in_memory(),
             #[cfg(not(feature = "rocksdb"))]
-            _ => Database::in_memory(),
+            _ => CombinedDatabase::in_memory(),
         };
 
-        Self::from_database(database, config).await
+        Self::from_combined_database(combined_database, config).await
     }
 
-    /// Creates and starts fuel node instance from service config and a pre-existing database
+    /// Creates and starts fuel node instance from service config and a pre-existing on-chain database
     pub async fn from_database(
         database: Database,
         config: Config,
     ) -> anyhow::Result<Self> {
-        let service = Self::new(database, config)?;
+        let combined_database =
+            CombinedDatabase::new(database, Default::default(), Default::default());
+        Self::from_combined_database(combined_database, config).await
+    }
+
+    /// Creates and starts fuel node instance from service config and a pre-existing combined database
+    pub async fn from_combined_database(
+        combined_database: CombinedDatabase,
+        config: Config,
+    ) -> anyhow::Result<Self> {
+        let service = Self::new(combined_database, config)?;
         service.runner.start_and_await().await?;
         Ok(service)
     }
@@ -195,14 +213,21 @@ pub struct Task {
 
 impl Task {
     /// Private inner method for initializing the fuel service task
-    pub fn new(mut database: Database, config: Config) -> anyhow::Result<Task> {
+    pub fn new(mut database: CombinedDatabase, config: Config) -> anyhow::Result<Task> {
         // initialize state
         tracing::info!("Initializing database");
-        database.init(&config.chain_conf)?;
+        let block_height = config
+            .chain_conf
+            .initial_state
+            .as_ref()
+            .and_then(|state| state.height)
+            .unwrap_or_default();
+        let da_block_height = 0u64.into();
+        database.init(&block_height, &da_block_height)?;
 
         // initialize sub services
         tracing::info!("Initializing sub services");
-        let (services, shared) = sub_services::init_sub_services(&config, &database)?;
+        let (services, shared) = sub_services::init_sub_services(&config, database)?;
         Ok(Task { services, shared })
     }
 
@@ -228,7 +253,7 @@ impl RunnableService for Task {
         _: &StateWatcher,
         _: Self::TaskParams,
     ) -> anyhow::Result<Self::Task> {
-        let view = self.shared.database.latest_view();
+        let view = self.shared.database.on_chain().latest_view();
         // check if chain is initialized
         if let Err(err) = view.get_genesis() {
             if err.is_not_found() {

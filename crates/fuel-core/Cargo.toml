@@ -46,6 +46,7 @@ rocksdb = { version = "0.21", default-features = false, features = [
     "lz4",
     "multi-threaded-cf",
 ], optional = true }
+serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true, features = ["raw_value"] }
 strum = { workspace = true }
 strum_macros = { workspace = true }
