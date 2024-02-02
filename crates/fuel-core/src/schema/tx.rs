@@ -69,7 +69,7 @@ use std::{
 };
 use tokio_stream::StreamExt;
 use types::{
-    DryRunTransaction,
+    DryRunTransactionExecutionStatus,
     Transaction,
 };
 
@@ -245,7 +245,7 @@ impl TxMutation {
         // This allows for non-existent inputs to be used without signature validation
         // for read-only calls.
         utxo_validation: Option<bool>,
-    ) -> async_graphql::Result<Vec<DryRunTransaction>> {
+    ) -> async_graphql::Result<Vec<DryRunTransactionExecutionStatus>> {
         let block_producer = ctx.data_unchecked::<BlockProducer>();
         let config = ctx.data_unchecked::<Config>();
 
@@ -260,7 +260,10 @@ impl TxMutation {
         let tx_statuses = block_producer
             .dry_run_txs(transactions, None, utxo_validation)
             .await?;
-        let tx_statuses = tx_statuses.into_iter().map(DryRunTransaction).collect();
+        let tx_statuses = tx_statuses
+            .into_iter()
+            .map(DryRunTransactionExecutionStatus)
+            .collect();
 
         Ok(tx_statuses)
     }

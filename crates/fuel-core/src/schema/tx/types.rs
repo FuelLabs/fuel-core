@@ -672,10 +672,10 @@ impl DryRunFailureStatus {
     }
 }
 
-pub struct DryRunTransaction(pub TransactionExecutionStatus);
+pub struct DryRunTransactionExecutionStatus(pub TransactionExecutionStatus);
 
 #[Object]
-impl DryRunTransaction {
+impl DryRunTransactionExecutionStatus {
     async fn id(&self) -> TransactionId {
         TransactionId(self.0.id)
     }

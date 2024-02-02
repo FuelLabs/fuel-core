@@ -261,7 +261,7 @@ type DryRunSuccessStatus {
 	programState: ProgramState
 }
 
-type DryRunTransaction {
+type DryRunTransactionExecutionStatus {
 	id: TransactionId!
 	status: DryRunTransactionStatus!
 	receipts: [Receipt!]!
@@ -606,7 +606,7 @@ type Mutation {
 	"""
 	Execute a dry-run of multiple transactions using a fork of current state, no changes are committed.
 	"""
-	dryRun(txs: [HexString!]!, utxoValidation: Boolean): [DryRunTransaction!]!
+	dryRun(txs: [HexString!]!, utxoValidation: Boolean): [DryRunTransactionExecutionStatus!]!
 	"""
 	Submits transaction to the `TxPool`.
 	

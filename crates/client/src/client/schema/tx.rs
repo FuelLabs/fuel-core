@@ -251,16 +251,16 @@ pub struct DryRunFailureStatus {
 
 #[derive(cynic::QueryFragment, Debug)]
 #[cynic(schema_path = "./assets/schema.sdl")]
-pub struct DryRunTransaction {
+pub struct DryRunTransactionExecutionStatus {
     pub id: TransactionId,
     pub status: DryRunTransactionStatus,
     pub receipts: Vec<Receipt>,
 }
 
-impl TryFrom<DryRunTransaction> for TransactionExecutionStatus {
+impl TryFrom<DryRunTransactionExecutionStatus> for TransactionExecutionStatus {
     type Error = ConversionError;
 
-    fn try_from(schema: DryRunTransaction) -> Result<Self, Self::Error> {
+    fn try_from(schema: DryRunTransactionExecutionStatus) -> Result<Self, Self::Error> {
         let id = schema.id.into();
         let status = schema.status.try_into()?;
         let receipts = schema
@@ -367,7 +367,7 @@ pub struct DryRunArg {
 )]
 pub struct DryRun {
     #[arguments(txs: $txs, utxoValidation: $utxo_validation)]
-    pub dry_run: Vec<DryRunTransaction>,
+    pub dry_run: Vec<DryRunTransactionExecutionStatus>,
 }
 
 #[derive(cynic::QueryFragment, Debug)]
