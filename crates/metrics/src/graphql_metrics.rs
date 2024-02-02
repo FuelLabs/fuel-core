@@ -3,6 +3,7 @@ use prometheus_client::{
     encoding::EncodeLabelSet,
     metrics::{
         family::Family,
+        gauge::Gauge,
         histogram::Histogram,
     },
     registry::Registry,
@@ -17,17 +18,31 @@ pub struct Label {
 
 pub struct GraphqlMetrics {
     pub registry: Registry,
+    // using gauges in case blocks are rolled back for any reason
+    pub total_txs_count: Gauge,
     requests: Family<Label, Histogram>,
 }
 
 impl GraphqlMetrics {
     fn new() -> Self {
         let mut registry = Registry::default();
+        let tx_count_gauge = Gauge::default();
         let requests = Family::<Label, Histogram>::new_with_constructor(|| {
             Histogram::new(timing_buckets().iter().cloned())
         });
         registry.register("graphql_request_duration_seconds", "", requests.clone());
-        Self { registry, requests }
+
+        registry.register(
+            "importer_tx_count",
+            "the total amount of transactions that have been imported on chain",
+            tx_count_gauge.clone(),
+        );
+
+        Self {
+            registry,
+            total_txs_count: tx_count_gauge,
+            requests,
+        }
     }
 
     pub fn graphql_observe(&self, query: &str, time: f64) {

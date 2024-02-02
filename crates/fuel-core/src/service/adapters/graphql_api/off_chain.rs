@@ -1,11 +1,14 @@
 use crate::{
     database::{
-        transactions::OwnedTransactionIndexCursor,
+        database_description::off_chain::OffChain,
         Database,
     },
-    fuel_core_graphql_api::ports::{
-        worker,
-        OffChainDatabase,
+    fuel_core_graphql_api::{
+        ports::{
+            worker,
+            OffChainDatabase,
+        },
+        storage::transactions::OwnedTransactionIndexCursor,
     },
 };
 use fuel_core_storage::{
@@ -24,38 +27,12 @@ use fuel_core_types::{
         Address,
         Bytes32,
         TxPointer,
-        UtxoId,
     },
-    fuel_types::{
-        BlockHeight,
-        Nonce,
-    },
+    fuel_types::BlockHeight,
     services::txpool::TransactionStatus,
 };
 
-impl OffChainDatabase for Database {
-    fn owned_message_ids(
-        &self,
-        owner: &Address,
-        start_message_id: Option<Nonce>,
-        direction: IterDirection,
-    ) -> BoxedIter<'_, StorageResult<Nonce>> {
-        self.owned_message_ids(owner, start_message_id, Some(direction))
-            .map(|result| result.map_err(StorageError::from))
-            .into_boxed()
-    }
-
-    fn owned_coins_ids(
-        &self,
-        owner: &Address,
-        start_coin: Option<UtxoId>,
-        direction: IterDirection,
-    ) -> BoxedIter<'_, StorageResult<UtxoId>> {
-        self.owned_coins_ids(owner, start_coin, Some(direction))
-            .map(|res| res.map_err(StorageError::from))
-            .into_boxed()
-    }
-
+impl OffChainDatabase for Database<OffChain> {
     fn tx_status(&self, tx_id: &TxId) -> StorageResult<TransactionStatus> {
         self.get_tx_status(tx_id)
             .transpose()
@@ -78,7 +55,7 @@ impl OffChainDatabase for Database {
     }
 }
 
-impl worker::OffChainDatabase for Database {
+impl worker::OffChainDatabase for Database<OffChain> {
     fn record_tx_id_owner(
         &mut self,
         owner: &Address,
@@ -95,5 +72,9 @@ impl worker::OffChainDatabase for Database {
         status: TransactionStatus,
     ) -> StorageResult<Option<TransactionStatus>> {
         Database::update_tx_status(self, id, status)
+    }
+
+    fn increase_tx_count(&mut self, new_txs_count: u64) -> StorageResult<u64> {
+        Database::increase_tx_count(self, new_txs_count)
     }
 }

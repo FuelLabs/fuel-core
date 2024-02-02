@@ -112,6 +112,7 @@ where
                             let block = srv
                                 .shared
                                 .database
+                                .on_chain()
                                 .get_sealed_block_by_height(&1.into())
                                 .unwrap()
                                 .unwrap();

@@ -1,5 +1,10 @@
 use crate::database::{
-    Column,
+    database_description::{
+        on_chain::OnChain,
+        DatabaseDescription,
+        DatabaseMetadata,
+    },
+    metadata::MetadataTable,
     Database,
 };
 use fuel_core_storage::{
@@ -62,9 +67,10 @@ impl Mappable for FuelBlockSecondaryKeyBlockHeights {
 
 impl TableWithBlueprint for FuelBlockSecondaryKeyBlockHeights {
     type Blueprint = Plain<Raw, Primitive<4>>;
+    type Column = fuel_core_storage::column::Column;
 
-    fn column() -> Column {
-        Column::FuelBlockSecondaryKeyBlockHeights
+    fn column() -> Self::Column {
+        Self::Column::FuelBlockSecondaryKeyBlockHeights
     }
 }
 
@@ -130,6 +136,17 @@ impl StorageMutate<FuelBlocks> for Database {
         self.storage::<FuelBlockMerkleMetadata>()
             .insert(height, &metadata)?;
 
+        // TODO: Temporary solution to store the block height in the database manually here.
+        //  Later it will be controlled by the `commit_changes` function on the `Database` side.
+        //  https://github.com/FuelLabs/fuel-core/issues/1589
+        self.storage::<MetadataTable<OnChain>>().insert(
+            &(),
+            &DatabaseMetadata::V1 {
+                version: OnChain::version(),
+                height: *height,
+            },
+        )?;
+
         Ok(prev)
     }
 
@@ -156,17 +173,6 @@ impl StorageMutate<FuelBlocks> for Database {
 }
 
 impl Database {
-    pub fn latest_height(&self) -> StorageResult<BlockHeight> {
-        let pair = self
-            .iter_all::<FuelBlocks>(Some(IterDirection::Reverse))
-            .next()
-            .transpose()?;
-
-        let (block_height, _) = pair.ok_or(not_found!("BlockHeight"))?;
-
-        Ok(block_height)
-    }
-
     pub fn latest_compressed_block(&self) -> StorageResult<Option<CompressedBlock>> {
         let pair = self
             .iter_all::<FuelBlocks>(Some(IterDirection::Reverse))

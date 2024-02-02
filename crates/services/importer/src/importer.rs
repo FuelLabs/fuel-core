@@ -279,15 +279,9 @@ where
             return Err(Error::NotUnique(expected_next_height))
         }
 
-        // Update the total tx count in chain metadata
-        let total_txs = db_after_execution
-            // Safety: casting len to u64 since it's impossible to execute a block with more than 2^64 txs
-            .increase_tx_count(result.sealed_block.entity.transactions().len() as u64)?;
-
         db_tx.commit()?;
 
         // update the importer metrics after the block is successfully committed
-        importer_metrics().total_txs_count.set(total_txs as i64);
         importer_metrics()
             .block_height
             .set(*actual_next_height.deref() as i64);
@@ -322,11 +316,6 @@ where
             .latest_block_height()
             .unwrap_or_default()
             .unwrap_or_default();
-        let total_tx_count = self.database.increase_tx_count(0).unwrap_or_default();
-
-        importer_metrics()
-            .total_txs_count
-            .set(total_tx_count as i64);
         importer_metrics()
             .block_height
             .set(*current_block_height.deref() as i64);

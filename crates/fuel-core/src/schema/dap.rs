@@ -1,9 +1,13 @@
 use crate::{
     database::{
+        database_description::on_chain::OnChain,
         transaction::DatabaseTransaction,
         Database,
     },
-    schema::scalars::U64,
+    schema::scalars::{
+        U32,
+        U64,
+    },
 };
 use async_graphql::{
     Context,
@@ -35,6 +39,7 @@ use fuel_core_types::{
             IntoChecked,
         },
         consts,
+        state::DebugEval,
         Interpreter,
         InterpreterError,
     },
@@ -51,9 +56,6 @@ use tracing::{
 };
 use uuid::Uuid;
 
-use crate::schema::scalars::U32;
-use fuel_core_types::fuel_vm::state::DebugEval;
-
 pub struct Config {
     /// `true` means that debugger functionality is enabled.
     debug_enabled: bool,
@@ -63,7 +65,7 @@ pub struct Config {
 pub struct ConcreteStorage {
     vm: HashMap<ID, Interpreter<VmStorage<Database>, Script>>,
     tx: HashMap<ID, Vec<Script>>,
-    db: HashMap<ID, DatabaseTransaction>,
+    db: HashMap<ID, DatabaseTransaction<OnChain>>,
     params: ConsensusParameters,
 }
 
@@ -93,7 +95,7 @@ impl ConcreteStorage {
     pub fn init(
         &mut self,
         txs: &[Script],
-        storage: DatabaseTransaction,
+        storage: DatabaseTransaction<OnChain>,
     ) -> anyhow::Result<ID> {
         let id = Uuid::new_v4();
         let id = ID::from(id);
@@ -124,7 +126,11 @@ impl ConcreteStorage {
         self.db.remove(id).is_some()
     }
 
-    pub fn reset(&mut self, id: &ID, storage: DatabaseTransaction) -> anyhow::Result<()> {
+    pub fn reset(
+        &mut self,
+        id: &ID,
+        storage: DatabaseTransaction<OnChain>,
+    ) -> anyhow::Result<()> {
         let vm_database = Self::vm_database(&storage)?;
         let tx = self
             .tx
@@ -156,7 +162,9 @@ impl ConcreteStorage {
             .ok_or_else(|| anyhow::anyhow!("The VM instance was not found"))
     }
 
-    fn vm_database(storage: &DatabaseTransaction) -> anyhow::Result<VmStorage<Database>> {
+    fn vm_database(
+        storage: &DatabaseTransaction<OnChain>,
+    ) -> anyhow::Result<VmStorage<Database>> {
         let block = storage
             .get_current_block()?
             .ok_or(not_found!("Block for VMDatabase"))?;

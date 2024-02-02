@@ -2,12 +2,16 @@ use crate::{
     database::{
         block::FuelBlockSecondaryKeyBlockHeights,
         coin::OwnedCoins,
+        database_description::DatabaseDescription,
         message::OwnedMessageIds,
+        Database,
+    },
+    fuel_core_graphql_api::storage::{
+        receipts::Receipts,
         transactions::{
             OwnedTransactions,
             TransactionStatuses,
         },
-        Database,
     },
     state::DataSource,
 };
@@ -28,7 +32,6 @@ use fuel_core_storage::{
         ContractsRawCode,
         ContractsState,
         ProcessedTransactions,
-        Receipts,
         SealedBlockConsensus,
         SpentMessages,
         Transactions,
@@ -63,7 +66,10 @@ where
 macro_rules! use_structured_implementation {
     ($($m:ty),*) => {
         $(
-            impl UseStructuredImplementation<$m> for StructuredStorage<DataSource> {}
+            impl<Description> UseStructuredImplementation<$m> for StructuredStorage<DataSource<Description>>
+            where
+                Description: DatabaseDescription,
+            {}
         )*
     };
 }
@@ -93,14 +99,15 @@ use_structured_implementation!(
 );
 #[cfg(feature = "relayer")]
 use_structured_implementation!(
-    fuel_core_relayer::storage::RelayerMetadata,
+    fuel_core_relayer::storage::DaHeightTable,
     fuel_core_relayer::storage::EventsHistory
 );
 
-impl<M> StorageInspect<M> for Database
+impl<Description, M> StorageInspect<M> for Database<Description>
 where
+    Description: DatabaseDescription,
     M: Mappable,
-    StructuredStorage<DataSource>:
+    StructuredStorage<DataSource<Description>>:
         StorageInspect<M, Error = StorageError> + UseStructuredImplementation<M>,
 {
     type Error = StorageError;
@@ -114,10 +121,11 @@ where
     }
 }
 
-impl<M> StorageMutate<M> for Database
+impl<Description, M> StorageMutate<M> for Database<Description>
 where
+    Description: DatabaseDescription,
     M: Mappable,
-    StructuredStorage<DataSource>:
+    StructuredStorage<DataSource<Description>>:
         StorageMutate<M, Error = StorageError> + UseStructuredImplementation<M>,
 {
     fn insert(
@@ -133,10 +141,11 @@ where
     }
 }
 
-impl<Key, M> MerkleRootStorage<Key, M> for Database
+impl<Description, Key, M> MerkleRootStorage<Key, M> for Database<Description>
 where
+    Description: DatabaseDescription,
     M: Mappable,
-    StructuredStorage<DataSource>:
+    StructuredStorage<DataSource<Description>>:
         MerkleRootStorage<Key, M, Error = StorageError> + UseStructuredImplementation<M>,
 {
     fn root(&self, key: &Key) -> StorageResult<MerkleRoot> {
@@ -144,10 +153,11 @@ where
     }
 }
 
-impl<M> StorageSize<M> for Database
+impl<M, Description> StorageSize<M> for Database<Description>
 where
+    Description: DatabaseDescription,
     M: Mappable,
-    StructuredStorage<DataSource>:
+    StructuredStorage<DataSource<Description>>:
         StorageSize<M, Error = StorageError> + UseStructuredImplementation<M>,
 {
     fn size_of_value(&self, key: &M::Key) -> StorageResult<Option<usize>> {
@@ -155,10 +165,11 @@ where
     }
 }
 
-impl<M> StorageRead<M> for Database
+impl<Description, M> StorageRead<M> for Database<Description>
 where
+    Description: DatabaseDescription,
     M: Mappable,
-    StructuredStorage<DataSource>:
+    StructuredStorage<DataSource<Description>>:
         StorageRead<M, Error = StorageError> + UseStructuredImplementation<M>,
 {
     fn read(&self, key: &M::Key, buf: &mut [u8]) -> StorageResult<Option<usize>> {

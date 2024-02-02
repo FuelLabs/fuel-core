@@ -1,5 +1,13 @@
 use crate::{
-    database::transaction::DatabaseTransaction,
+    database::{
+        database_description::{
+            off_chain::OffChain,
+            on_chain::OnChain,
+            relayer::Relayer,
+            DatabaseDescription,
+        },
+        transaction::DatabaseTransaction,
+    },
     state::{
         in_memory::memory_store::MemoryStore,
         DataSource,
@@ -66,25 +74,26 @@ use std::path::Path;
 use tempfile::TempDir;
 
 // Storages implementation
-mod block;
-mod contracts;
-mod message;
-mod sealed_block;
-mod state;
-
-pub(crate) mod coin;
-
 pub mod balances;
+pub mod block;
+pub mod coin;
+pub mod contracts;
+pub mod database_description;
+pub mod message;
 pub mod metadata;
+pub mod sealed_block;
+pub mod state;
+pub mod statistic;
 pub mod storage;
 pub mod transaction;
 pub mod transactions;
 
-pub type Column = fuel_core_storage::column::Column;
-
 #[derive(Clone, Debug)]
-pub struct Database {
-    data: StructuredStorage<DataSource>,
+pub struct Database<Description = OnChain>
+where
+    Description: DatabaseDescription,
+{
+    data: StructuredStorage<DataSource<Description>>,
     // used for RAII
     _drop: Arc<DropResources>,
 }
@@ -118,10 +127,13 @@ impl Drop for DropResources {
     }
 }
 
-impl Database {
+impl<Description> Database<Description>
+where
+    Description: DatabaseDescription,
+{
     pub fn new<D>(data_source: D) -> Self
     where
-        D: Into<DataSource>,
+        D: Into<DataSource<Description>>,
     {
         Self {
             data: StructuredStorage::new(data_source.into()),
@@ -137,7 +149,7 @@ impl Database {
     #[cfg(feature = "rocksdb")]
     pub fn open(path: &Path, capacity: impl Into<Option<usize>>) -> DatabaseResult<Self> {
         use anyhow::Context;
-        let db = RocksDb::default_open(path, capacity.into()).map_err(Into::<anyhow::Error>::into).context("Failed to open rocksdb, you may need to wipe a pre-existing incompatible db `rm -rf ~/.fuel/db`")?;
+        let db = RocksDb::<Description>::default_open(path, capacity.into()).map_err(Into::<anyhow::Error>::into).context("Failed to open rocksdb, you may need to wipe a pre-existing incompatible db `rm -rf ~/.fuel/db`")?;
 
         Ok(Database {
             data: StructuredStorage::new(Arc::new(db).into()),
@@ -155,7 +167,7 @@ impl Database {
     #[cfg(feature = "rocksdb")]
     pub fn rocksdb() -> Self {
         let tmp_dir = TempDir::new().unwrap();
-        let db = RocksDb::default_open(tmp_dir.path(), None).unwrap();
+        let db = RocksDb::<Description>::default_open(tmp_dir.path(), None).unwrap();
         Self {
             data: StructuredStorage::new(Arc::new(db).into()),
             _drop: Arc::new(
@@ -170,12 +182,8 @@ impl Database {
         }
     }
 
-    pub fn transaction(&self) -> DatabaseTransaction {
+    pub fn transaction(&self) -> DatabaseTransaction<Description> {
         self.into()
-    }
-
-    pub fn checkpoint(&self) -> DatabaseResult<Self> {
-        self.data.as_ref().checkpoint()
     }
 
     pub fn flush(self) -> DatabaseResult<()> {
@@ -183,8 +191,11 @@ impl Database {
     }
 }
 
-impl KeyValueStore for DataSource {
-    type Column = Column;
+impl<Description> KeyValueStore for DataSource<Description>
+where
+    Description: DatabaseDescription,
+{
+    type Column = Description::Column;
 
     fn put(&self, key: &[u8], column: Self::Column, value: Value) -> StorageResult<()> {
         self.as_ref().put(key, column, value)
@@ -242,7 +253,10 @@ impl KeyValueStore for DataSource {
     }
 }
 
-impl BatchOperations for DataSource {
+impl<Description> BatchOperations for DataSource<Description>
+where
+    Description: DatabaseDescription,
+{
     fn batch_write(
         &self,
         entries: &mut dyn Iterator<Item = (Vec<u8>, Self::Column, WriteOperation)>,
@@ -252,13 +266,16 @@ impl BatchOperations for DataSource {
 }
 
 /// Read-only methods.
-impl Database {
+impl<Description> Database<Description>
+where
+    Description: DatabaseDescription,
+{
     pub(crate) fn iter_all<M>(
         &self,
         direction: Option<IterDirection>,
     ) -> impl Iterator<Item = StorageResult<(M::OwnedKey, M::OwnedValue)>> + '_
     where
-        M: Mappable + TableWithBlueprint,
+        M: Mappable + TableWithBlueprint<Column = Description::Column>,
         M::Blueprint: Blueprint<M, DataSource>,
     {
         self.iter_all_filtered::<M, [u8; 0]>(None, None, direction)
@@ -269,7 +286,7 @@ impl Database {
         prefix: Option<P>,
     ) -> impl Iterator<Item = StorageResult<(M::OwnedKey, M::OwnedValue)>> + '_
     where
-        M: Mappable + TableWithBlueprint,
+        M: Mappable + TableWithBlueprint<Column = Description::Column>,
         M::Blueprint: Blueprint<M, DataSource>,
         P: AsRef<[u8]>,
     {
@@ -282,7 +299,7 @@ impl Database {
         direction: Option<IterDirection>,
     ) -> impl Iterator<Item = StorageResult<(M::OwnedKey, M::OwnedValue)>> + '_
     where
-        M: Mappable + TableWithBlueprint,
+        M: Mappable + TableWithBlueprint<Column = Description::Column>,
         M::Blueprint: Blueprint<M, DataSource>,
     {
         self.iter_all_filtered::<M, [u8; 0]>(None, start, direction)
@@ -295,7 +312,7 @@ impl Database {
         direction: Option<IterDirection>,
     ) -> impl Iterator<Item = StorageResult<(M::OwnedKey, M::OwnedValue)>> + '_
     where
-        M: Mappable + TableWithBlueprint,
+        M: Mappable + TableWithBlueprint<Column = Description::Column>,
         M::Blueprint: Blueprint<M, DataSource>,
         P: AsRef<[u8]>,
     {
@@ -331,22 +348,31 @@ impl Database {
     }
 }
 
-impl Transactional for Database {
-    type Storage = Database;
+impl<Description> Transactional for Database<Description>
+where
+    Description: DatabaseDescription,
+{
+    type Storage = Database<Description>;
 
-    fn transaction(&self) -> StorageTransaction<Database> {
+    fn transaction(&self) -> StorageTransaction<Database<Description>> {
         StorageTransaction::new(self.transaction())
     }
 }
 
-impl AsRef<Database> for Database {
-    fn as_ref(&self) -> &Database {
+impl<Description> AsRef<Database<Description>> for Database<Description>
+where
+    Description: DatabaseDescription,
+{
+    fn as_ref(&self) -> &Database<Description> {
         self
     }
 }
 
-impl AsMut<Database> for Database {
-    fn as_mut(&mut self) -> &mut Database {
+impl<Description> AsMut<Database<Description>> for Database<Description>
+where
+    Description: DatabaseDescription,
+{
+    fn as_mut(&mut self) -> &mut Database<Description> {
         self
     }
 }
@@ -354,7 +380,10 @@ impl AsMut<Database> for Database {
 /// Construct an ephemeral database
 /// uses rocksdb when rocksdb features are enabled
 /// uses in-memory when rocksdb features are disabled
-impl Default for Database {
+impl<Description> Default for Database<Description>
+where
+    Description: DatabaseDescription,
+{
     fn default() -> Self {
         #[cfg(not(feature = "rocksdb"))]
         {
@@ -387,8 +416,8 @@ impl ChainConfigDb for Database {
     }
 }
 
-impl AtomicView for Database {
-    type View = Database;
+impl AtomicView for Database<OnChain> {
+    type View = Self;
 
     type Height = BlockHeight;
 
@@ -410,16 +439,31 @@ impl AtomicView for Database {
     }
 }
 
-pub struct RelayerReadDatabase(Database);
+impl AtomicView for Database<OffChain> {
+    type View = Self;
 
-impl RelayerReadDatabase {
-    pub fn new(database: Database) -> Self {
-        Self(database)
+    type Height = BlockHeight;
+
+    fn latest_height(&self) -> BlockHeight {
+        // TODO: The database should track the latest height inside of the database object
+        //  instead of fetching it from the `FuelBlocks` table. As a temporary solution,
+        //  fetch it from the table for now.
+        self.latest_height().unwrap_or_default()
+    }
+
+    fn view_at(&self, _: &BlockHeight) -> StorageResult<Self::View> {
+        // TODO: Unimplemented until of the https://github.com/FuelLabs/fuel-core/issues/451
+        Ok(self.latest_view())
+    }
+
+    fn latest_view(&self) -> Self::View {
+        // TODO: https://github.com/FuelLabs/fuel-core/issues/1581
+        self.clone()
     }
 }
 
-impl AtomicView for RelayerReadDatabase {
-    type View = Database;
+impl AtomicView for Database<Relayer> {
+    type View = Self;
     type Height = DaBlockHeight;
 
     fn latest_height(&self) -> Self::Height {
@@ -430,7 +474,7 @@ impl AtomicView for RelayerReadDatabase {
             //  instead of fetching it from the `RelayerMetadata` table. As a temporary solution,
             //  fetch it from the table for now.
             //  https://github.com/FuelLabs/fuel-core/issues/1589
-            self.0.get_finalized_da_height().unwrap_or_default()
+            self.get_finalized_da_height().unwrap_or_default()
         }
         #[cfg(not(feature = "relayer"))]
         {
@@ -443,24 +487,51 @@ impl AtomicView for RelayerReadDatabase {
     }
 
     fn latest_view(&self) -> Self::View {
-        self.0.clone()
+        self.clone()
     }
 }
 
 #[cfg(feature = "rocksdb")]
-pub fn convert_to_rocksdb_direction(
-    direction: fuel_core_storage::iter::IterDirection,
-) -> rocksdb::Direction {
+pub fn convert_to_rocksdb_direction(direction: IterDirection) -> rocksdb::Direction {
     match direction {
         IterDirection::Forward => rocksdb::Direction::Forward,
         IterDirection::Reverse => rocksdb::Direction::Reverse,
     }
 }
 
-#[test]
-fn column_keys_not_exceed_count() {
-    use enum_iterator::all;
-    for column in all::<Column>() {
-        assert!(column.as_usize() < Column::COUNT);
+#[cfg(test)]
+mod tests {
+    use crate::database::database_description::{
+        off_chain::OffChain,
+        on_chain::OnChain,
+        relayer::Relayer,
+        DatabaseDescription,
+    };
+
+    fn column_keys_not_exceed_count<Description>()
+    where
+        Description: DatabaseDescription,
+    {
+        use enum_iterator::all;
+        use fuel_core_storage::kv_store::StorageColumn;
+        use strum::EnumCount;
+        for column in all::<Description::Column>() {
+            assert!(column.as_usize() < Description::Column::COUNT);
+        }
+    }
+
+    #[test]
+    fn column_keys_not_exceed_count_test_on_chain() {
+        column_keys_not_exceed_count::<OnChain>();
+    }
+
+    #[test]
+    fn column_keys_not_exceed_count_test_off_chain() {
+        column_keys_not_exceed_count::<OffChain>();
+    }
+
+    #[test]
+    fn column_keys_not_exceed_count_test_relayer() {
+        column_keys_not_exceed_count::<Relayer>();
     }
 }

@@ -13,14 +13,12 @@ use fuel_core_types::{
         message::Message,
     },
     fuel_tx::{
-        Receipt,
         Transaction,
         TxId,
         UtxoId,
     },
     fuel_types::{
         BlockHeight,
-        Bytes32,
         ContractId,
         Nonce,
     },
@@ -55,18 +53,6 @@ impl Mappable for ContractsLatestUtxo {
     /// The latest UTXO info
     type Value = Self::OwnedValue;
     type OwnedValue = ContractUtxoInfo;
-}
-
-// TODO: Move definition to the service that is responsible for its usage.
-/// Receipts of different hidden internal operations.
-pub struct Receipts;
-
-impl Mappable for Receipts {
-    /// Unique identifier of the transaction.
-    type Key = Self::OwnedKey;
-    type OwnedKey = Bytes32;
-    type Value = [Receipt];
-    type OwnedValue = Vec<Receipt>;
 }
 
 /// The table of consensus metadata associated with sealed (finalized) blocks

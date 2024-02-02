@@ -2808,7 +2808,10 @@ mod tests {
     #[cfg(feature = "relayer")]
     mod relayer {
         use super::*;
-        use crate::database::RelayerReadDatabase;
+        use crate::database::database_description::{
+            on_chain::OnChain,
+            relayer::Relayer,
+        };
         use fuel_core_relayer::storage::EventsHistory;
         use fuel_core_storage::{
             tables::{
@@ -2819,7 +2822,7 @@ mod tests {
             StorageAsMut,
         };
 
-        fn database_with_genesis_block(da_block_height: u64) -> Database {
+        fn database_with_genesis_block(da_block_height: u64) -> Database<OnChain> {
             let db = Database::default();
             let mut block = Block::default();
             block.header_mut().set_da_height(da_block_height.into());
@@ -2835,7 +2838,7 @@ mod tests {
             db
         }
 
-        fn add_message_to_relayer(db: &mut Database, message: Message) {
+        fn add_message_to_relayer(db: &mut Database<Relayer>, message: Message) {
             let mut db_transaction = db.transaction();
             let da_height = message.da_height();
             db.storage::<EventsHistory>()
@@ -2844,7 +2847,7 @@ mod tests {
             db_transaction.commit().expect("Should commit events");
         }
 
-        fn add_messages_to_relayer(db: &mut Database, relayer_da_height: u64) {
+        fn add_messages_to_relayer(db: &mut Database<Relayer>, relayer_da_height: u64) {
             for da_height in 0..=relayer_da_height {
                 let mut message = Message::default();
                 message.set_da_height(da_height.into());
@@ -2855,11 +2858,12 @@ mod tests {
         }
 
         fn create_relayer_executor(
-            database: Database,
-        ) -> Executor<Database, RelayerReadDatabase> {
+            on_chain: Database<OnChain>,
+            relayer: Database<Relayer>,
+        ) -> Executor<Database<OnChain>, Database<Relayer>> {
             Executor {
-                database_view_provider: database.clone(),
-                relayer_view_provider: RelayerReadDatabase::new(database),
+                database_view_provider: on_chain,
+                relayer_view_provider: relayer,
                 config: Arc::new(Default::default()),
             }
         }
@@ -2923,21 +2927,22 @@ mod tests {
             input: Input,
         ) -> Result<(), ExecutorError> {
             let genesis_da_height = input.genesis_da_height.unwrap_or_default();
-            let mut db = if let Some(genesis_da_height) = input.genesis_da_height {
+            let on_chain_db = if let Some(genesis_da_height) = input.genesis_da_height {
                 database_with_genesis_block(genesis_da_height)
             } else {
                 Database::default()
             };
+            let mut relayer_db = Database::<Relayer>::default();
 
             // Given
             let relayer_da_height = input.relayer_da_height;
             let block_height = input.block_height;
             let block_da_height = input.block_da_height;
-            add_messages_to_relayer(&mut db, relayer_da_height);
-            assert_eq!(db.iter_all::<Messages>(None).count(), 0);
+            add_messages_to_relayer(&mut relayer_db, relayer_da_height);
+            assert_eq!(on_chain_db.iter_all::<Messages>(None).count(), 0);
 
             // When
-            let producer = create_relayer_executor(db);
+            let producer = create_relayer_executor(on_chain_db, relayer_db);
             let block = test_block(block_height.into(), block_da_height.into(), 10);
             let result = producer.execute_and_commit(
                 ExecutionTypes::Production(block.into()),
@@ -2964,17 +2969,18 @@ mod tests {
         #[test]
         fn block_producer_does_not_take_messages_for_the_same_height() {
             let genesis_da_height = 1u64;
-            let mut db = database_with_genesis_block(genesis_da_height);
+            let on_chain_db = database_with_genesis_block(genesis_da_height);
+            let mut relayer_db = Database::<Relayer>::default();
 
             // Given
             let relayer_da_height = 10u64;
             let block_height = 1u32;
             let block_da_height = 1u64;
-            add_messages_to_relayer(&mut db, relayer_da_height);
-            assert_eq!(db.iter_all::<Messages>(None).count(), 0);
+            add_messages_to_relayer(&mut relayer_db, relayer_da_height);
+            assert_eq!(on_chain_db.iter_all::<Messages>(None).count(), 0);
 
             // When
-            let producer = create_relayer_executor(db);
+            let producer = create_relayer_executor(on_chain_db, relayer_db);
             let block = test_block(block_height.into(), block_da_height.into(), 10);
             let result = producer
                 .execute_and_commit(
@@ -2992,7 +2998,8 @@ mod tests {
         #[test]
         fn block_producer_can_use_just_added_message_in_the_transaction() {
             let genesis_da_height = 1u64;
-            let mut db = database_with_genesis_block(genesis_da_height);
+            let on_chain_db = database_with_genesis_block(genesis_da_height);
+            let mut relayer_db = Database::<Relayer>::default();
 
             let block_height = 1u32;
             let block_da_height = 2u64;
@@ -3000,11 +3007,11 @@ mod tests {
             let mut message = Message::default();
             message.set_da_height(block_da_height.into());
             message.set_nonce(nonce);
-            add_message_to_relayer(&mut db, message);
+            add_message_to_relayer(&mut relayer_db, message);
 
             // Given
-            assert_eq!(db.iter_all::<Messages>(None).count(), 0);
-            assert_eq!(db.iter_all::<SpentMessages>(None).count(), 0);
+            assert_eq!(on_chain_db.iter_all::<Messages>(None).count(), 0);
+            assert_eq!(on_chain_db.iter_all::<SpentMessages>(None).count(), 0);
             let tx = TransactionBuilder::script(vec![], vec![])
                 .script_gas_limit(10)
                 .add_unsigned_message_input(
@@ -3019,7 +3026,7 @@ mod tests {
             // When
             let mut block = test_block(block_height.into(), block_da_height.into(), 0);
             *block.transactions_mut() = vec![tx];
-            let producer = create_relayer_executor(db);
+            let producer = create_relayer_executor(on_chain_db, relayer_db);
             let result = producer
                 .execute_and_commit(
                     ExecutionTypes::Production(block.into()),
