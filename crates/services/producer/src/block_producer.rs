@@ -194,11 +194,6 @@ where
                 .expect("It is impossible to overflow the current block height")
         });
 
-        let are_txs_script = transactions
-            .iter()
-            .map(|tx| tx.is_script())
-            .collect::<Vec<bool>>();
-
         // The dry run execution should use the state of the blockchain based on the
         // last available block, not on the upcoming one. It means that we need to
         // use the same configuration as the last block -> the same DA height.
@@ -207,7 +202,7 @@ where
         let header = self._new_header(height, Tai64::now())?;
         let component = Components {
             header_to_produce: header,
-            transactions_source: transactions,
+            transactions_source: transactions.clone(),
             gas_limit: u64::MAX,
         };
 
@@ -221,14 +216,17 @@ where
         )
         .await?;
 
-        if are_txs_script
+        if transactions
             .iter()
             .zip(tx_statuses.iter())
-            .any(|(is_script, tx_status)| *is_script && tx_status.receipts.is_empty())
+            .any(|(transaction, tx_status)| {
+                transaction.is_script() && tx_status.receipts.is_empty()
+            })
         {
-            return Err(anyhow!("Expected at least one set of receipts"));
+            Err(anyhow!("Expected at least one set of receipts"))
+        } else {
+            Ok(tx_statuses)
         }
-        Ok(tx_statuses)
     }
 }
 
