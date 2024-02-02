@@ -125,14 +125,14 @@ impl StorageMutate<FuelBlocks> for Database {
 
         let storage = self.borrow_mut();
         let mut tree: MerkleTree<FuelBlockMerkleData, _> =
-            MerkleTree::load(storage, prev_metadata.version)
+            MerkleTree::load(storage, prev_metadata.version())
                 .map_err(|err| StorageError::Other(anyhow::anyhow!(err)))?;
         tree.push(block_id.as_slice())?;
 
         // Generate new metadata for the updated tree
-        let version = tree.leaves_count();
         let root = tree.root();
-        let metadata = DenseMerkleMetadata { version, root };
+        let version = tree.leaves_count();
+        let metadata = DenseMerkleMetadata::new(root, version);
         self.storage::<FuelBlockMerkleMetadata>()
             .insert(height, &metadata)?;
 
@@ -228,7 +228,7 @@ impl MerkleRootStorage<BlockHeight, FuelBlocks> for Database {
             .storage::<FuelBlockMerkleMetadata>()
             .get(key)?
             .ok_or(not_found!(FuelBlocks))?;
-        Ok(metadata.root)
+        Ok(*metadata.root())
     }
 }
 
@@ -256,11 +256,11 @@ impl Database {
 
         let storage = self;
         let tree: MerkleTree<FuelBlockMerkleData, _> =
-            MerkleTree::load(storage, commit_merkle_metadata.version)
+            MerkleTree::load(storage, commit_merkle_metadata.version())
                 .map_err(|err| StorageError::Other(anyhow::anyhow!(err)))?;
 
         let proof_index = message_merkle_metadata
-            .version
+            .version()
             .checked_sub(1)
             .ok_or(anyhow::anyhow!("The count of leafs - messages is zero"))?;
         let (_, proof_set) = tree
