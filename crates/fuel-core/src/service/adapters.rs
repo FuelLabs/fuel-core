@@ -1,7 +1,7 @@
 use crate::{
     database::{
+        database_description::relayer::Relayer,
         Database,
-        RelayerReadDatabase,
     },
     service::sub_services::BlockProducerService,
 };
@@ -67,13 +67,13 @@ impl TransactionsSource {
 
 #[derive(Clone)]
 pub struct ExecutorAdapter {
-    pub executor: Arc<Executor<Database, RelayerReadDatabase>>,
+    pub executor: Arc<Executor<Database, Database<Relayer>>>,
 }
 
 impl ExecutorAdapter {
     pub fn new(
         database: Database,
-        relayer_database: RelayerReadDatabase,
+        relayer_database: Database<Relayer>,
         config: fuel_core_executor::Config,
     ) -> Self {
         let executor = Executor {
@@ -115,9 +115,8 @@ impl ConsensusAdapter {
 
 #[derive(Clone)]
 pub struct MaybeRelayerAdapter {
-    pub database: Database,
     #[cfg(feature = "relayer")]
-    pub relayer_synced: Option<fuel_core_relayer::SharedState<Database>>,
+    pub relayer_synced: Option<fuel_core_relayer::SharedState<Database<Relayer>>>,
     #[cfg(feature = "relayer")]
     pub da_deploy_height: fuel_core_types::blockchain::primitives::DaBlockHeight,
 }

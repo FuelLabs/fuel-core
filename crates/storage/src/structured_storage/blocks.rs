@@ -13,6 +13,7 @@ use crate::{
 
 impl TableWithBlueprint for FuelBlocks {
     type Blueprint = Plain<Primitive<4>, Postcard>;
+    type Column = Column;
 
     fn column() -> Column {
         Column::FuelBlocks

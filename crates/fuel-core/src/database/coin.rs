@@ -1,5 +1,5 @@
 use crate::database::{
-    Column,
+    database_description::on_chain::OnChain,
     Database,
 };
 use fuel_core_chain_config::CoinConfig;
@@ -54,9 +54,10 @@ impl Mappable for OwnedCoins {
 
 impl TableWithBlueprint for OwnedCoins {
     type Blueprint = Plain<Raw, Postcard>;
+    type Column = fuel_core_storage::column::Column;
 
-    fn column() -> Column {
-        Column::OwnedCoins
+    fn column() -> Self::Column {
+        Self::Column::OwnedCoins
     }
 }
 
@@ -100,7 +101,7 @@ impl StorageMutate<Coins> for Database {
     }
 }
 
-impl Database {
+impl Database<OnChain> {
     pub fn owned_coins_ids(
         &self,
         owner: &Address,
@@ -122,7 +123,9 @@ impl Database {
             })
         })
     }
+}
 
+impl Database {
     pub fn coin(&self, utxo_id: &UtxoId) -> StorageResult<CompressedCoin> {
         let coin = self
             .storage_as_ref::<Coins>()

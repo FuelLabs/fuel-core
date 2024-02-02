@@ -1,5 +1,8 @@
 use crate::{
-    database::Database,
+    database::{
+        database_description::relayer::Relayer,
+        Database,
+    },
     service::adapters::{
         ExecutorAdapter,
         TransactionsSource,
@@ -64,7 +67,7 @@ impl fuel_core_executor::refs::ContractStorageTrait for Database {
 
 impl fuel_core_executor::ports::ExecutorDatabaseTrait<Database> for Database {}
 
-impl fuel_core_executor::ports::RelayerPort for Database {
+impl fuel_core_executor::ports::RelayerPort for Database<Relayer> {
     fn enabled(&self) -> bool {
         #[cfg(feature = "relayer")]
         {
