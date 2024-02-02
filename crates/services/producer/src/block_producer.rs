@@ -229,15 +229,6 @@ where
             return Err(anyhow!("Expected at least one set of receipts"));
         }
         Ok(tx_statuses)
-
-        // for (transaction, tx_status) in transactions.iter().zip(tx_statuses.iter()) {
-        //     let is_script = transaction.is_script();
-        //     if is_script && tx_status.receipts.is_empty() {
-        //         return Err(anyhow!("Expected at least one set of receipts"))
-        //     }
-        // }
-
-        // Ok(tx_statuses)
     }
 }
 
