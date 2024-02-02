@@ -12,8 +12,10 @@ use fuel_core_types::{
         Receipt,
         ScriptExecutionResult,
         Transaction,
+        UniqueIdentifier,
     },
     fuel_types::canonical::Deserialize,
+    services::executor::TransactionExecutionResult,
 };
 use libtest_mimic::Failed;
 use std::time::Duration;
@@ -67,7 +69,29 @@ pub async fn dry_run(ctx: &TestContext) -> Result<(), Failed> {
     )
     .await??;
 
-    _dry_runs(ctx, &transaction, 1000, DryRunResult::Successful).await
+    _dry_runs(ctx, &[transaction], 1000, DryRunResult::Successful).await
+}
+
+// Dry run multiple transactions
+pub async fn dry_run_multiple_txs(ctx: &TestContext) -> Result<(), Failed> {
+    let transaction1 = tokio::time::timeout(
+        ctx.config.sync_timeout(),
+        ctx.alice.transfer_tx(ctx.bob.address, 0, None),
+    )
+    .await??;
+    let transaction2 = tokio::time::timeout(
+        ctx.config.sync_timeout(),
+        ctx.alice.transfer_tx(ctx.alice.address, 0, None),
+    )
+    .await??;
+
+    _dry_runs(
+        ctx,
+        &[transaction1, transaction2],
+        1000,
+        DryRunResult::Successful,
+    )
+    .await
 }
 
 // Maybe deploy a contract with large state and execute the script
@@ -98,7 +122,7 @@ pub async fn run_contract_large_state(ctx: &TestContext) -> Result<(), Failed> {
         timeout(Duration::from_secs(300), deployment_request).await??;
     }
 
-    _dry_runs(ctx, &dry_run, 1000, DryRunResult::MayFail).await
+    _dry_runs(ctx, &[dry_run], 1000, DryRunResult::MayFail).await
 }
 
 // Send non specific transaction from `non_specific_tx.raw` file
@@ -114,12 +138,12 @@ pub async fn non_specific_transaction(ctx: &TestContext) -> Result<(), Failed> {
         script.set_gas_price(0);
     }
 
-    _dry_runs(ctx, &dry_run, 1000, DryRunResult::MayFail).await
+    _dry_runs(ctx, &[dry_run], 1000, DryRunResult::MayFail).await
 }
 
 async fn _dry_runs(
     ctx: &TestContext,
-    transaction: &Transaction,
+    transactions: &[Transaction],
     count: usize,
     expect: DryRunResult,
 ) -> Result<(), Failed> {
@@ -128,7 +152,11 @@ async fn _dry_runs(
     for i in 0..count {
         queries.push(async move {
             let before = tokio::time::Instant::now();
-            let query = ctx.alice.client.dry_run_opt(transaction, Some(false)).await;
+            let query = ctx
+                .alice
+                .client
+                .dry_run_opt(transactions, Some(false))
+                .await;
             println!(
                 "Received the response for the query number {i} for {}ms",
                 before.elapsed().as_millis()
@@ -141,27 +169,36 @@ async fn _dry_runs(
     let queries =
         tokio::time::timeout(Duration::from_secs(60), futures::future::join_all(queries))
             .await?;
+
+    let chain_info = ctx.alice.client.chain_info().await?;
     for query in queries {
         let (query, query_number) = query;
         if let Err(e) = &query {
             println!("The query {query_number} failed with {e}");
         }
 
-        let receipts = query?;
-        if receipts.is_empty() {
-            return Err(
-                format!("Receipts are empty for query_number {query_number}").into(),
-            )
-        }
+        let tx_statuses = query?;
+        for (tx_status, tx) in tx_statuses.iter().zip(transactions.iter()) {
+            if tx_status.receipts.is_empty() {
+                return Err(
+                    format!("Receipts are empty for query_number {query_number}").into(),
+                )
+            }
 
-        if expect == DryRunResult::Successful {
-            assert!(matches!(
-                receipts.last(),
-                Some(Receipt::ScriptResult {
-                    result: ScriptExecutionResult::Success,
-                    ..
-                })
-            ));
+            assert!(tx.id(&chain_info.consensus_parameters.chain_id) == tx_status.id);
+            if expect == DryRunResult::Successful {
+                assert!(matches!(
+                    &tx_status.result,
+                    TransactionExecutionResult::Success { result: _result }
+                ));
+                assert!(matches!(
+                    tx_status.receipts.last(),
+                    Some(Receipt::ScriptResult {
+                        result: ScriptExecutionResult::Success,
+                        ..
+                    })
+                ));
+            }
         }
     }
     Ok(())

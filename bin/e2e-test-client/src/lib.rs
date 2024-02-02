@@ -81,6 +81,16 @@ pub fn main_body(config: SuiteConfig, mut args: Arguments) {
             }),
         ),
         Trial::test(
+            "can dry run multiple transfer scripts and get receipts",
+            with_cloned(&config, |config| {
+                async_execute(async {
+                    let ctx = TestContext::new(config).await;
+                    tests::script::dry_run_multiple_txs(&ctx).await
+                })?;
+                Ok(())
+            }),
+        ),
+        Trial::test(
             "dry run script that touches the contract with large state",
             with_cloned(&config, |config| {
                 async_execute(async {

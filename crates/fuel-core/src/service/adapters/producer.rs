@@ -26,10 +26,7 @@ use fuel_core_types::{
         primitives,
     },
     fuel_tx,
-    fuel_tx::{
-        Receipt,
-        Transaction,
-    },
+    fuel_tx::Transaction,
     fuel_types::{
         BlockHeight,
         Bytes32,
@@ -39,6 +36,7 @@ use fuel_core_types::{
         executor::{
             ExecutionTypes,
             Result as ExecutorResult,
+            TransactionExecutionStatus,
             UncommittedResult,
         },
     },
@@ -99,9 +97,9 @@ impl fuel_core_producer::ports::Executor<Vec<Transaction>> for ExecutorAdapter {
 impl fuel_core_producer::ports::DryRunner for ExecutorAdapter {
     fn dry_run(
         &self,
-        block: Components<fuel_tx::Transaction>,
+        block: Components<Vec<fuel_tx::Transaction>>,
         utxo_validation: Option<bool>,
-    ) -> ExecutorResult<Vec<Vec<Receipt>>> {
+    ) -> ExecutorResult<Vec<TransactionExecutionStatus>> {
         self._dry_run(block, utxo_validation)
     }
 }

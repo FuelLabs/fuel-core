@@ -25,13 +25,11 @@ use fuel_core_txpool::{
 };
 use fuel_core_types::{
     entities::message::MerkleProof,
-    fuel_tx::{
-        Receipt as TxReceipt,
-        Transaction,
-    },
+    fuel_tx::Transaction,
     fuel_types::BlockHeight,
     services::{
         block_importer::SharedImportResult,
+        executor::TransactionExecutionStatus,
         p2p::PeerInfo,
         txpool::InsertionResult,
     },
@@ -86,14 +84,14 @@ impl DatabaseMessageProof for Database {
 
 #[async_trait]
 impl BlockProducerPort for BlockProducerAdapter {
-    async fn dry_run_tx(
+    async fn dry_run_txs(
         &self,
-        transaction: Transaction,
+        transactions: Vec<Transaction>,
         height: Option<BlockHeight>,
         utxo_validation: Option<bool>,
-    ) -> anyhow::Result<Vec<TxReceipt>> {
+    ) -> anyhow::Result<Vec<TransactionExecutionStatus>> {
         self.block_producer
-            .dry_run(transaction, height, utxo_validation)
+            .dry_run(transactions, height, utxo_validation)
             .await
     }
 }
