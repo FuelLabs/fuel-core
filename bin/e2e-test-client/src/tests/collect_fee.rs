@@ -11,11 +11,7 @@ pub async fn collect_fee(ctx: &TestContext) -> Result<(), Failed> {
         .alice
         .collect_fee_tx(ctx.config.coinbase_contract_id, AssetId::BASE)
         .await?;
-    let tx_status= ctx
-        .alice
-        .client
-        .submit_and_await_commit(&tx)
-        .await?;
+    let tx_status = ctx.alice.client.submit_and_await_commit(&tx).await?;
 
     if !matches!(
         tx_status,
@@ -25,7 +21,9 @@ pub async fn collect_fee(ctx: &TestContext) -> Result<(), Failed> {
     }
 
     let receipts = match &tx_status {
-        fuel_core_client::client::types::TransactionStatus::Success { receipts, ..} => Some(receipts),
+        fuel_core_client::client::types::TransactionStatus::Success {
+            receipts, ..
+        } => Some(receipts),
         _ => None,
     };
     let receipts = receipts.ok_or("collect fee transaction doesn't have receipts")?;
