@@ -8,6 +8,9 @@ use serde_with::{
     SerializeAs,
 };
 
+/// Skipping fields is problematic for encodings which are not self-describing. This trait is used
+/// to signal that a type's Serialize impl doesn't skip fields. Or, if it does, the type should
+/// override the `non_skipping_serialize` method.
 pub(crate) trait NonSkippingSerialize
 where
     Self: serde::Serialize,

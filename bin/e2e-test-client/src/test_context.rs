@@ -136,9 +136,9 @@ impl Wallet {
             }
             // otherwise update the cursor to check the next page
             if response.has_next_page {
-                cursor = response.cursor
+                cursor = response.cursor;
             } else {
-                break;
+                break
             }
         }
 

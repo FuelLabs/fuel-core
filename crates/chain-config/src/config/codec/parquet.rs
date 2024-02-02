@@ -23,7 +23,6 @@ mod tests {
         },
     };
 
-    #[cfg(feature = "parquet")]
     use bytes::Bytes;
     use itertools::Itertools;
     use parquet::{

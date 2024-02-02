@@ -5,6 +5,7 @@ use crate::test_context::{
 use fuel_core_chain_config::{
     ContractConfig,
     SnapshotMetadata,
+    StateConfig,
     StateReader,
     MAX_GROUP_SIZE,
 };
@@ -84,30 +85,25 @@ fn load_contract(
     path: impl AsRef<Path>,
 ) -> Result<(ContractConfig, Vec<StorageSlot>), Failed> {
     let snapshot = SnapshotMetadata::read(path)?;
-    let reader = StateReader::for_snapshot(snapshot, MAX_GROUP_SIZE)?;
+    let state_config = StateConfig::from_snapshot_metadata(snapshot)?;
 
-    let state = reader
-        .contract_state()?
-        .map_ok(|g| g.data)
-        .flatten_ok()
-        .map_ok(|state| StorageSlot::new(state.key, state.value))
-        .try_collect()?;
+    let state = state_config
+        .contract_state
+        .into_iter()
+        .map(|entry| StorageSlot::new(entry.key, entry.value))
+        .collect();
 
     let contract_config = {
-        let contract_configs: Vec<ContractConfig> = reader
-            .contracts()?
-            .map_ok(|g| g.data)
-            .flatten_ok()
-            .try_collect()?;
+        let contracts = state_config.contracts;
 
-        if contract_configs.len() != 1 {
+        if contracts.len() != 1 {
             return Err(format!(
                 "Expected to find only one contract, but found {}",
-                contract_configs.len()
+                contracts.len()
             )
             .into());
         }
-        let mut contract_config = contract_configs
+        let mut contract_config = contracts
             .into_iter()
             .next()
             .expect("checked there is one element inside");
