@@ -31,7 +31,7 @@ pub fn execute_genesis_block(
         if let Some(messages) = &state_config.messages {
             let messages_events = messages.iter().map(|config| {
                 let message: Message = config.clone().into();
-                Cow::Owned(Event::NewMessage(message))
+                Cow::Owned(Event::MessageImported(message))
             });
 
             worker_service::Task::process_executor_events(
@@ -44,7 +44,7 @@ pub fn execute_genesis_block(
             let mut generated_output_index = 0;
             let coin_events = coins.iter().map(|config| {
                 let coin = create_coin_from_config(config, &mut generated_output_index);
-                Cow::Owned(Event::NewCoin(coin))
+                Cow::Owned(Event::CoinCreated(coin))
             });
 
             worker_service::Task::process_executor_events(

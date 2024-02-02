@@ -2030,9 +2030,9 @@ mod tests {
         assert!(coin.is_none());
         assert_eq!(events.len(), 2);
         assert!(
-            matches!(events[0], ExecutorEvent::ConsumeCoin(spent_coin) if &spent_coin.utxo_id == utxo_id)
+            matches!(events[0], ExecutorEvent::CoinConsumed(spent_coin) if &spent_coin.utxo_id == utxo_id)
         );
-        assert!(matches!(events[1], ExecutorEvent::NewCoin(_)));
+        assert!(matches!(events[1], ExecutorEvent::CoinCreated(_)));
     }
 
     #[test]
@@ -2968,7 +2968,7 @@ mod tests {
             {
                 let (_, message) = message.unwrap();
                 assert_eq!(message.da_height(), da_height.into());
-                assert!(matches!(event, ExecutorEvent::NewMessage(_)));
+                assert!(matches!(event, ExecutorEvent::MessageImported(_)));
             }
             Ok(())
         }
@@ -3048,8 +3048,14 @@ mod tests {
             // Message added during this block immediately became spent.
             assert_eq!(view.iter_all::<SpentMessages>(None).count(), 1);
             assert_eq!(result.events.len(), 2);
-            assert!(matches!(result.events[0], ExecutorEvent::NewMessage(_)));
-            assert!(matches!(result.events[1], ExecutorEvent::ConsumeMessage(_)));
+            assert!(matches!(
+                result.events[0],
+                ExecutorEvent::MessageImported(_)
+            ));
+            assert!(matches!(
+                result.events[1],
+                ExecutorEvent::MessageConsumed(_)
+            ));
         }
     }
 }

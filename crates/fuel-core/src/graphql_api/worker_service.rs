@@ -141,7 +141,7 @@ where
     {
         for event in events {
             match event.deref() {
-                Event::NewMessage(message) => {
+                Event::MessageImported(message) => {
                     block_st_transaction
                         .storage_as_mut::<OwnedMessageIds>()
                         .insert(
@@ -149,7 +149,7 @@ where
                             &(),
                         )?;
                 }
-                Event::ConsumeMessage(message) => {
+                Event::MessageConsumed(message) => {
                     block_st_transaction
                         .storage_as_mut::<OwnedMessageIds>()
                         .remove(&OwnedMessageKey::new(
@@ -157,13 +157,13 @@ where
                             message.nonce(),
                         ))?;
                 }
-                Event::NewCoin(coin) => {
+                Event::CoinCreated(coin) => {
                     let coin_by_owner = owner_coin_id_key(&coin.owner, &coin.utxo_id);
                     block_st_transaction
                         .storage_as_mut::<OwnedCoins>()
                         .insert(&coin_by_owner, &())?;
                 }
-                Event::ConsumeCoin(coin) => {
+                Event::CoinConsumed(coin) => {
                     let key = owner_coin_id_key(&coin.owner, &coin.utxo_id);
                     block_st_transaction
                         .storage_as_mut::<OwnedCoins>()

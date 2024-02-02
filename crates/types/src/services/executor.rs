@@ -57,13 +57,13 @@ pub struct ExecutionResult {
 #[derive(Debug, Clone)]
 pub enum Event {
     /// Imported a new spendable message from the relayer.
-    NewMessage(Message),
+    MessageImported(Message),
     /// The message was consumed by the transaction.
-    ConsumeMessage(Message),
+    MessageConsumed(Message),
     /// Created a new spendable coin, produced by the transaction.
-    NewCoin(Coin),
+    CoinCreated(Coin),
     /// The coin was consumed by the transaction.
-    ConsumeCoin(Coin),
+    CoinConsumed(Coin),
 }
 
 /// The status of a transaction after it is executed.

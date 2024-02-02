@@ -697,7 +697,7 @@ where
                             .insert(message.nonce(), &message)?;
                         execution_data
                             .events
-                            .push(ExecutorEvent::NewMessage(message));
+                            .push(ExecutorEvent::MessageImported(message));
                     }
                 }
             }
@@ -1238,8 +1238,9 @@ where
                     // prune utxo from db
                     let coin = db
                         .storage::<Coins>()
-                        .remove(utxo_id)?
-                        .map(Ok)
+                        .remove(utxo_id)
+                        .map_err(Into::into)
+                        .transpose()
                         .unwrap_or_else(|| {
                             // If the coin is not found in the database, it means that it was
                             // already spent or `utxo_validation` is `false`.
@@ -1250,7 +1251,7 @@ where
 
                     execution_data
                         .events
-                        .push(ExecutorEvent::ConsumeCoin(coin.uncompress(*utxo_id)));
+                        .push(ExecutorEvent::CoinConsumed(coin.uncompress(*utxo_id)));
                 }
                 Input::MessageDataSigned(_) | Input::MessageDataPredicate(_)
                     if reverted =>
@@ -1277,7 +1278,7 @@ where
                         .ok_or_else(|| ExecutorError::MessageAlreadySpent(*nonce))?;
                     execution_data
                         .events
-                        .push(ExecutorEvent::ConsumeMessage(message));
+                        .push(ExecutorEvent::MessageConsumed(message));
                 }
                 _ => {}
             }
@@ -1681,7 +1682,7 @@ where
             }
             execution_data
                 .events
-                .push(ExecutorEvent::NewCoin(coin.uncompress(utxo_id)));
+                .push(ExecutorEvent::CoinCreated(coin.uncompress(utxo_id)));
         }
 
         Ok(())
