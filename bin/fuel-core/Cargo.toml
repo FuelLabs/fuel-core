@@ -42,9 +42,9 @@ tracing-subscriber = { workspace = true, features = [
 url = { version = "2.2", optional = true }
 
 [dev-dependencies]
-test-case = { workspace = true }
 rand = { workspace = true }
 tempfile = { workspace = true }
+test-case = { workspace = true }
 
 [features]
 default = ["env", "relayer", "rocksdb"]
