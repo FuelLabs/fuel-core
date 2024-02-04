@@ -75,6 +75,10 @@ use fuel_core_types::{
     fuel_types::canonical::Serialize,
     fuel_vm::ProgramState as VmProgramState,
     services::{
+        executor::{
+            TransactionExecutionResult,
+            TransactionExecutionStatus,
+        },
         txpool,
         txpool::TransactionStatus as TxStatus,
     },
@@ -617,6 +621,71 @@ impl Transaction {
     /// Return the transaction bytes using canonical encoding
     async fn raw_payload(&self) -> HexString {
         HexString(self.0.clone().to_bytes())
+    }
+}
+
+#[derive(Union, Debug)]
+pub enum DryRunTransactionStatus {
+    Success(DryRunSuccessStatus),
+    Failed(DryRunFailureStatus),
+}
+
+impl DryRunTransactionStatus {
+    pub fn new(tx_status: TransactionExecutionResult) -> Self {
+        match tx_status {
+            TransactionExecutionResult::Success { result } => {
+                DryRunTransactionStatus::Success(DryRunSuccessStatus { result })
+            }
+            TransactionExecutionResult::Failed { result, reason } => {
+                DryRunTransactionStatus::Failed(DryRunFailureStatus { result, reason })
+            }
+        }
+    }
+}
+
+#[derive(Debug)]
+pub struct DryRunSuccessStatus {
+    result: Option<VmProgramState>,
+}
+
+#[Object]
+impl DryRunSuccessStatus {
+    async fn program_state(&self) -> Option<ProgramState> {
+        self.result.map(Into::into)
+    }
+}
+
+#[derive(Debug)]
+pub struct DryRunFailureStatus {
+    result: Option<VmProgramState>,
+    reason: String,
+}
+
+#[Object]
+impl DryRunFailureStatus {
+    async fn program_state(&self) -> Option<ProgramState> {
+        self.result.map(Into::into)
+    }
+
+    async fn reason(&self) -> String {
+        self.reason.clone()
+    }
+}
+
+pub struct DryRunTransactionExecutionStatus(pub TransactionExecutionStatus);
+
+#[Object]
+impl DryRunTransactionExecutionStatus {
+    async fn id(&self) -> TransactionId {
+        TransactionId(self.0.id)
+    }
+
+    async fn status(&self) -> DryRunTransactionStatus {
+        DryRunTransactionStatus::new(self.0.result.clone())
+    }
+
+    async fn receipts(&self) -> Vec<Receipt> {
+        self.0.receipts.iter().map(Into::into).collect()
     }
 }
 
