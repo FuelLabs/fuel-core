@@ -13,10 +13,10 @@ use crate::{
         Encode,
         Encoder,
     },
-    column::Column,
     kv_store::{
         BatchOperations,
         KeyValueStore,
+        StorageColumn,
         WriteOperation,
     },
     structured_storage::TableWithBlueprint,
@@ -92,10 +92,13 @@ where
     }
 }
 
-impl<M, S, KeyCodec, ValueCodec> SupportsBatching<M, S> for Plain<KeyCodec, ValueCodec>
+impl<Column, M, S, KeyCodec, ValueCodec> SupportsBatching<M, S>
+    for Plain<KeyCodec, ValueCodec>
 where
+    Column: StorageColumn,
     S: BatchOperations<Column = Column>,
-    M: Mappable + TableWithBlueprint<Blueprint = Plain<KeyCodec, ValueCodec>>,
+    M: Mappable
+        + TableWithBlueprint<Blueprint = Plain<KeyCodec, ValueCodec>, Column = Column>,
     M::Blueprint: Blueprint<M, S>,
 {
     fn init<'a, Iter>(storage: &mut S, column: S::Column, set: Iter) -> StorageResult<()>

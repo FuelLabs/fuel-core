@@ -16,6 +16,7 @@ use criterion::{
 use ed25519_dalek::Signer;
 use ethnum::U256;
 use fuel_core::{
+    combined_database::CombinedDatabase,
     service::{
         config::Trigger,
         Config,
@@ -325,8 +326,11 @@ fn service_with_many_contracts(
             .unwrap();
     }
 
-    let service = fuel_core::service::FuelService::new(database, config.clone())
-        .expect("Unable to start a FuelService");
+    let service = FuelService::new(
+        CombinedDatabase::new(database, Default::default(), Default::default()),
+        config.clone(),
+    )
+    .expect("Unable to start a FuelService");
     service.start().expect("Unable to start the service");
     (service, rt)
 }
@@ -456,6 +460,7 @@ fn replace_contract_in_service(
     service
         .shared
         .database
+        .on_chain_mut()
         .storage_as_mut::<ContractsRawCode>()
         .insert(contract_id, &contract_bytecode)
         .unwrap();

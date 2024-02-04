@@ -23,6 +23,10 @@ use fuel_core_types::{
         Bytes32,
     },
     fuel_vm,
+    services::executor::{
+        TransactionExecutionResult,
+        TransactionExecutionStatus,
+    },
 };
 use std::convert::{
     TryFrom,
@@ -199,6 +203,80 @@ pub struct SqueezedOutStatus {
     pub reason: String,
 }
 
+#[allow(clippy::enum_variant_names)]
+#[derive(cynic::InlineFragments, Debug)]
+#[cynic(schema_path = "./assets/schema.sdl")]
+pub enum DryRunTransactionStatus {
+    SuccessStatus(DryRunSuccessStatus),
+    FailureStatus(DryRunFailureStatus),
+    #[cynic(fallback)]
+    Unknown,
+}
+
+impl TryFrom<DryRunTransactionStatus> for TransactionExecutionResult {
+    type Error = ConversionError;
+
+    fn try_from(status: DryRunTransactionStatus) -> Result<Self, Self::Error> {
+        Ok(match status {
+            DryRunTransactionStatus::SuccessStatus(s) => {
+                TransactionExecutionResult::Success {
+                    result: s.program_state.map(TryInto::try_into).transpose()?,
+                }
+            }
+            DryRunTransactionStatus::FailureStatus(s) => {
+                TransactionExecutionResult::Failed {
+                    result: s.program_state.map(TryInto::try_into).transpose()?,
+                    reason: s.reason,
+                }
+            }
+            DryRunTransactionStatus::Unknown => {
+                return Err(Self::Error::UnknownVariant("DryRuynTxStatus"))
+            }
+        })
+    }
+}
+
+#[derive(cynic::QueryFragment, Debug)]
+#[cynic(schema_path = "./assets/schema.sdl")]
+pub struct DryRunSuccessStatus {
+    pub program_state: Option<ProgramState>,
+}
+
+#[derive(cynic::QueryFragment, Debug)]
+#[cynic(schema_path = "./assets/schema.sdl")]
+pub struct DryRunFailureStatus {
+    pub reason: String,
+    pub program_state: Option<ProgramState>,
+}
+
+#[derive(cynic::QueryFragment, Debug)]
+#[cynic(schema_path = "./assets/schema.sdl")]
+pub struct DryRunTransactionExecutionStatus {
+    pub id: TransactionId,
+    pub status: DryRunTransactionStatus,
+    pub receipts: Vec<Receipt>,
+}
+
+impl TryFrom<DryRunTransactionExecutionStatus> for TransactionExecutionStatus {
+    type Error = ConversionError;
+
+    fn try_from(schema: DryRunTransactionExecutionStatus) -> Result<Self, Self::Error> {
+        let id = schema.id.into();
+        let status = schema.status.try_into()?;
+        let receipts = schema
+            .receipts
+            .into_iter()
+            .map(|receipt| receipt.try_into())
+            .collect::<Result<Vec<fuel_tx::Receipt>, _>>()?;
+
+        Ok(TransactionExecutionStatus {
+            id,
+            result: status,
+            receipts,
+        })
+    }
+}
+
 #[derive(cynic::QueryVariables, Debug)]
 pub struct TransactionsByOwnerConnectionArgs {
     /// Select transactions based on related `owner`s
@@ -277,7 +355,7 @@ pub struct EstimatePredicates {
 
 #[derive(cynic::QueryVariables)]
 pub struct DryRunArg {
-    pub tx: HexString,
+    pub txs: Vec<HexString>,
     pub utxo_validation: Option<bool>,
 }
 
@@ -288,8 +366,8 @@ pub struct DryRunArg {
     variables = "DryRunArg"
 )]
 pub struct DryRun {
-    #[arguments(tx: $tx, utxoValidation: $utxo_validation)]
-    pub dry_run: Vec<Receipt>,
+    #[arguments(txs: $txs, utxoValidation: $utxo_validation)]
+    pub dry_run: Vec<DryRunTransactionExecutionStatus>,
 }
 
 #[derive(cynic::QueryFragment, Debug)]
@@ -375,7 +453,7 @@ pub mod tests {
         use cynic::MutationBuilder;
         let tx = fuel_tx::Transaction::default_test_tx();
         let query = DryRun::build(DryRunArg {
-            tx: HexString(Bytes(tx.to_bytes())),
+            txs: vec![HexString(Bytes(tx.to_bytes()))],
             utxo_validation: None,
         });
         insta::assert_snapshot!(query.query)

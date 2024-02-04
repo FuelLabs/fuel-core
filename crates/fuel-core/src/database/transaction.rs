@@ -1,6 +1,12 @@
 use crate::{
-    database::Database,
-    state::in_memory::transaction::MemoryTransactionView,
+    database::{
+        database_description::DatabaseDescription,
+        Database,
+    },
+    state::{
+        in_memory::transaction::MemoryTransactionView,
+        DataSource,
+    },
 };
 use fuel_core_storage::{
     transactional::Transaction,
@@ -16,58 +22,83 @@ use std::{
 };
 
 #[derive(Clone, Debug)]
-pub struct DatabaseTransaction {
+pub struct DatabaseTransaction<Description>
+where
+    Description: DatabaseDescription,
+{
     // The primary datastores
-    changes: Arc<MemoryTransactionView>,
+    changes: Arc<MemoryTransactionView<Description>>,
     // The inner db impl using these stores
-    database: Database,
+    database: Database<Description>,
 }
 
-impl AsRef<Database> for DatabaseTransaction {
-    fn as_ref(&self) -> &Database {
+impl<Description> AsRef<Database<Description>> for DatabaseTransaction<Description>
+where
+    Description: DatabaseDescription,
+{
+    fn as_ref(&self) -> &Database<Description> {
         &self.database
     }
 }
 
-impl AsMut<Database> for DatabaseTransaction {
-    fn as_mut(&mut self) -> &mut Database {
+impl<Description> AsMut<Database<Description>> for DatabaseTransaction<Description>
+where
+    Description: DatabaseDescription,
+{
+    fn as_mut(&mut self) -> &mut Database<Description> {
         &mut self.database
     }
 }
 
-impl Deref for DatabaseTransaction {
-    type Target = Database;
+impl<Description> Deref for DatabaseTransaction<Description>
+where
+    Description: DatabaseDescription,
+{
+    type Target = Database<Description>;
 
     fn deref(&self) -> &Self::Target {
         &self.database
     }
 }
 
-impl DerefMut for DatabaseTransaction {
+impl<Description> DerefMut for DatabaseTransaction<Description>
+where
+    Description: DatabaseDescription,
+{
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.database
     }
 }
 
-impl Default for DatabaseTransaction {
+impl<Description> Default for DatabaseTransaction<Description>
+where
+    Description: DatabaseDescription,
+{
     fn default() -> Self {
-        Database::default().transaction()
+        Database::<Description>::default().transaction()
     }
 }
 
-impl Transaction<Database> for DatabaseTransaction {
+impl<Description> Transaction<Database<Description>> for DatabaseTransaction<Description>
+where
+    Description: DatabaseDescription,
+{
     fn commit(&mut self) -> StorageResult<()> {
         // TODO: should commit be fallible if this api is meant to be atomic?
         self.changes.commit()
     }
 }
 
-impl From<&Database> for DatabaseTransaction {
-    fn from(source: &Database) -> Self {
-        let data = Arc::new(MemoryTransactionView::new(source.data.as_ref().clone()));
+impl<Description> From<&Database<Description>> for DatabaseTransaction<Description>
+where
+    Description: DatabaseDescription,
+{
+    fn from(source: &Database<Description>) -> Self {
+        let database: &DataSource<Description> = source.data.as_ref();
+        let data = Arc::new(MemoryTransactionView::new(database.clone()));
         Self {
             changes: data.clone(),
-            database: Database::new(data),
+            database: Database::<Description>::new(data),
         }
     }
 }

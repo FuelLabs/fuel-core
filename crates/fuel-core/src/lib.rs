@@ -24,6 +24,7 @@ pub use fuel_core_txpool as txpool;
 pub use fuel_core_types as types;
 
 pub mod coins_query;
+pub mod combined_database;
 pub mod database;
 pub mod executor;
 pub mod model;

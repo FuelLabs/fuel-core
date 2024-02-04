@@ -36,9 +36,6 @@ pub trait Executor: Send + Sync {
 pub trait ImporterDatabase: Send + Sync {
     /// Returns the latest block height.
     fn latest_block_height(&self) -> StorageResult<Option<BlockHeight>>;
-    /// Update metadata about the total number of transactions on the chain.
-    /// Returns the total count after the update.
-    fn increase_tx_count(&self, new_txs_count: u64) -> StorageResult<u64>;
 }
 
 /// The port for returned database from the executor.
