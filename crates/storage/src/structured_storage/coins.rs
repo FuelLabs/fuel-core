@@ -13,6 +13,7 @@ use crate::{
 
 impl TableWithBlueprint for Coins {
     type Blueprint = Plain<Primitive<33>, Postcard>;
+    type Column = Column;
 
     fn column() -> Column {
         Column::Coins

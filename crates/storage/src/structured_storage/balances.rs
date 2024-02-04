@@ -43,6 +43,7 @@ impl TableWithBlueprint for ContractsAssets {
         ContractsAssetsMerkleData,
         KeyConverter,
     >;
+    type Column = Column;
 
     fn column() -> Column {
         Column::ContractsAssets

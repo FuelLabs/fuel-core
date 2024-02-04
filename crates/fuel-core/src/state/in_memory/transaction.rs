@@ -1,6 +1,9 @@
 use crate::{
     database::{
-        Column,
+        database_description::{
+            on_chain::OnChain,
+            DatabaseDescription,
+        },
         Result as DatabaseResult,
     },
     state::{
@@ -20,6 +23,7 @@ use fuel_core_storage::{
     kv_store::{
         KVItem,
         KeyValueStore,
+        StorageColumn,
         Value,
         WriteOperation,
     },
@@ -41,22 +45,31 @@ use std::{
 };
 
 #[derive(Debug)]
-pub struct MemoryTransactionView {
-    view_layer: MemoryStore,
+pub struct MemoryTransactionView<Description = OnChain>
+where
+    Description: DatabaseDescription,
+{
+    view_layer: MemoryStore<Description>,
     // TODO: Remove `Mutex`.
     // use hashmap to collapse changes (e.g. insert then remove the same key)
-    changes: [Mutex<HashMap<Vec<u8>, WriteOperation>>; Column::COUNT],
-    data_source: DataSource,
+    changes: Vec<Mutex<HashMap<Vec<u8>, WriteOperation>>>,
+    data_source: DataSource<Description>,
 }
 
-impl MemoryTransactionView {
+impl<Description> MemoryTransactionView<Description>
+where
+    Description: DatabaseDescription,
+{
     pub fn new<D>(source: D) -> Self
     where
-        D: Into<DataSource>,
+        D: Into<DataSource<Description>>,
     {
+        use strum::EnumCount;
         Self {
             view_layer: MemoryStore::default(),
-            changes: Default::default(),
+            changes: (0..Description::Column::COUNT)
+                .map(|_| Mutex::new(HashMap::new()))
+                .collect(),
             data_source: source.into(),
         }
     }
@@ -65,7 +78,7 @@ impl MemoryTransactionView {
         let mut iter = self
             .changes
             .iter()
-            .zip(enum_iterator::all::<Column>())
+            .zip(enum_iterator::all::<Description::Column>())
             .flat_map(|(column_map, column)| {
                 let mut map = column_map.lock().expect("poisoned lock");
                 let changes = core::mem::take(map.deref_mut());
@@ -77,13 +90,16 @@ impl MemoryTransactionView {
     }
 }
 
-impl KeyValueStore for MemoryTransactionView {
-    type Column = Column;
+impl<Description> KeyValueStore for MemoryTransactionView<Description>
+where
+    Description: DatabaseDescription,
+{
+    type Column = Description::Column;
 
     fn replace(
         &self,
         key: &[u8],
-        column: Column,
+        column: Self::Column,
         value: Value,
     ) -> StorageResult<Option<Value>> {
         let key_vec = key.to_vec();
@@ -100,7 +116,12 @@ impl KeyValueStore for MemoryTransactionView {
         }
     }
 
-    fn write(&self, key: &[u8], column: Column, buf: &[u8]) -> StorageResult<usize> {
+    fn write(
+        &self,
+        key: &[u8],
+        column: Self::Column,
+        buf: &[u8],
+    ) -> StorageResult<usize> {
         let k = key.to_vec();
         self.changes[column.as_usize()]
             .lock()
@@ -109,7 +130,7 @@ impl KeyValueStore for MemoryTransactionView {
         self.view_layer.write(key, column, buf)
     }
 
-    fn take(&self, key: &[u8], column: Column) -> StorageResult<Option<Value>> {
+    fn take(&self, key: &[u8], column: Self::Column) -> StorageResult<Option<Value>> {
         let k = key.to_vec();
         let contained_key = {
             let mut lock = self.changes[column.as_usize()]
@@ -125,7 +146,7 @@ impl KeyValueStore for MemoryTransactionView {
         }
     }
 
-    fn delete(&self, key: &[u8], column: Column) -> StorageResult<()> {
+    fn delete(&self, key: &[u8], column: Self::Column) -> StorageResult<()> {
         let k = key.to_vec();
         self.changes[column.as_usize()]
             .lock()
@@ -134,7 +155,11 @@ impl KeyValueStore for MemoryTransactionView {
         self.view_layer.delete(key, column)
     }
 
-    fn size_of_value(&self, key: &[u8], column: Column) -> StorageResult<Option<usize>> {
+    fn size_of_value(
+        &self,
+        key: &[u8],
+        column: Self::Column,
+    ) -> StorageResult<Option<usize>> {
         // try to fetch data from View layer if any changes to the key
         if self.changes[column.as_usize()]
             .lock()
@@ -149,7 +174,7 @@ impl KeyValueStore for MemoryTransactionView {
         }
     }
 
-    fn get(&self, key: &[u8], column: Column) -> StorageResult<Option<Value>> {
+    fn get(&self, key: &[u8], column: Self::Column) -> StorageResult<Option<Value>> {
         // try to fetch data from View layer if any changes to the key
         if self.changes[column.as_usize()]
             .lock()
@@ -166,7 +191,7 @@ impl KeyValueStore for MemoryTransactionView {
     fn read(
         &self,
         key: &[u8],
-        column: Column,
+        column: Self::Column,
         buf: &mut [u8],
     ) -> StorageResult<Option<usize>> {
         // try to fetch data from View layer if any changes to the key
@@ -184,10 +209,13 @@ impl KeyValueStore for MemoryTransactionView {
     }
 }
 
-impl IteratorableStore for MemoryTransactionView {
+impl<Description> IteratorableStore for MemoryTransactionView<Description>
+where
+    Description: DatabaseDescription,
+{
     fn iter_all(
         &self,
-        column: Column,
+        column: Self::Column,
         prefix: Option<&[u8]>,
         start: Option<&[u8]>,
         direction: IterDirection,
@@ -242,9 +270,15 @@ impl IteratorableStore for MemoryTransactionView {
     }
 }
 
-impl BatchOperations for MemoryTransactionView {}
+impl<Description> BatchOperations for MemoryTransactionView<Description> where
+    Description: DatabaseDescription
+{
+}
 
-impl TransactableStorage for MemoryTransactionView {
+impl<Description> TransactableStorage for MemoryTransactionView<Description>
+where
+    Description: DatabaseDescription,
+{
     fn flush(&self) -> DatabaseResult<()> {
         for lock in self.changes.iter() {
             lock.lock().expect("poisoned lock").clear();
@@ -257,7 +291,10 @@ impl TransactableStorage for MemoryTransactionView {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use fuel_core_storage::column::Column;
     use std::sync::Arc;
+
+    type MemoryTransactionView = super::MemoryTransactionView<OnChain>;
 
     #[test]
     fn get_returns_from_view() {

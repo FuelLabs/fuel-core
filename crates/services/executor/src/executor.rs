@@ -234,9 +234,9 @@ where
 
     pub fn dry_run(
         &self,
-        component: Components<Transaction>,
+        component: Components<Vec<Transaction>>,
         utxo_validation: Option<bool>,
-    ) -> ExecutorResult<Vec<Vec<Receipt>>> {
+    ) -> ExecutorResult<Vec<TransactionExecutionStatus>> {
         // fallback to service config value if no utxo_validation override is provided
         let utxo_validation =
             utxo_validation.unwrap_or(self.config.utxo_validation_default);
@@ -338,13 +338,13 @@ where
 
     pub fn dry_run(
         self,
-        component: Components<Transaction>,
-    ) -> ExecutorResult<Vec<Vec<Receipt>>> {
+        component: Components<Vec<Transaction>>,
+    ) -> ExecutorResult<Vec<TransactionExecutionStatus>> {
         let component = Components {
             header_to_produce: component.header_to_produce,
-            transactions_source: OnceTransactionsSource::new(vec![
+            transactions_source: OnceTransactionsSource::new(
                 component.transactions_source,
-            ]),
+            ),
             gas_limit: component.gas_limit,
         };
 
@@ -364,10 +364,7 @@ where
             return Err(err)
         }
 
-        Ok(tx_status
-            .into_iter()
-            .map(|tx| tx.receipts)
-            .collect::<Vec<Vec<Receipt>>>())
+        Ok(tx_status)
         // drop `_temporary_db` without committing to avoid altering state.
     }
 }

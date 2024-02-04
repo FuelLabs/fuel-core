@@ -23,10 +23,13 @@ Description of the upcoming release here.
 - [#1579](https://github.com/FuelLabs/fuel-core/pull/1579): The change extracts the off-chain-related logic from the executor and moves it to the GraphQL off-chain worker. It creates two new concepts - Off-chain and On-chain databases where the GraphQL worker has exclusive ownership of the database and may modify it without intersecting with the On-chain database.
 - [#1577](https://github.com/FuelLabs/fuel-core/pull/1577): Moved insertion of sealed blocks into the `BlockImporter` instead of the executor.
 - [#1601](https://github.com/FuelLabs/fuel-core/pull/1601): Fix formatting in docs and check that `cargo doc` passes in the CI.
+- [#1636](https://github.com/FuelLabs/fuel-core/pull/1636): Add more docs to GraphQL DAP API.
 
 #### Breaking
 - [#1639](https://github.com/FuelLabs/fuel-core/pull/1639): Make Merkle metadata, i.e. `SparseMerkleMetadata` and `DenseMerkleMetadata` type version-able enums
-- [#16232](https://github.com/FuelLabs/fuel-core/pull/1632): Make `Message` type a version-able enum
+- [#1632](https://github.com/FuelLabs/fuel-core/pull/1632): Make `Message` type a version-able enum
+- [#1631](https://github.com/FuelLabs/fuel-core/pull/1631): Modify api endpoint to dry run multiple transactions.
+- [#1629](https://github.com/FuelLabs/fuel-core/pull/1629): Use a separate database for each data domain. Each database has its own folder where data is stored.
 - [#1628](https://github.com/FuelLabs/fuel-core/pull/1628): Make `CompressedCoin` type a version-able enum
 - [#1616](https://github.com/FuelLabs/fuel-core/pull/1616): Make `BlockHeader` type a version-able enum
 - [#1614](https://github.com/FuelLabs/fuel-core/pull/1614): Use the default consensus key regardless of trigger mode. The change is breaking because it removes the `--dev-keys` argument. If the `debug` flag is set, the default consensus key will be used, regardless of the trigger mode.
