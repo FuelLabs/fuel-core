@@ -19,11 +19,11 @@ use fuel_core_storage::{
 use fuel_core_types::{
     blockchain::primitives::DaBlockHeight,
     fuel_tx,
-    fuel_tx::Receipt,
     services::{
         block_producer::Components,
         executor::{
             Result as ExecutorResult,
+            TransactionExecutionStatus,
             UncommittedResult,
         },
         relayer::Event,
@@ -53,9 +53,9 @@ impl ExecutorAdapter {
 
     pub(crate) fn _dry_run(
         &self,
-        block: Components<fuel_tx::Transaction>,
+        block: Components<Vec<fuel_tx::Transaction>>,
         utxo_validation: Option<bool>,
-    ) -> ExecutorResult<Vec<Vec<Receipt>>> {
+    ) -> ExecutorResult<Vec<TransactionExecutionStatus>> {
         self.executor.dry_run(block, utxo_validation)
     }
 }
