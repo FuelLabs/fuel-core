@@ -5,40 +5,6 @@ expression: operation.query
 query($id: TransactionId!) {
   transaction(id: $id) {
     rawPayload
-    receipts {
-      param1
-      param2
-      amount
-      assetId
-      gas
-      digest
-      contract {
-        id
-      }
-      is
-      pc
-      ptr
-      ra
-      rb
-      rc
-      rd
-      reason
-      receiptType
-      to {
-        id
-      }
-      toAddress
-      val
-      len
-      result
-      gasUsed
-      data
-      sender
-      recipient
-      nonce
-      contractId
-      subId
-    }
     status {
       __typename
       ... on SubmittedStatus {

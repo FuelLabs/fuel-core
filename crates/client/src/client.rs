@@ -659,34 +659,24 @@ impl FuelClient {
 
         let receipts = match tx.status {
             Some(status) => match status {
-                schema::tx::TransactionStatus::SuccessStatus(status)
-                | schema::tx::TransactionStatus::FailureStatus(status) => Some(
-                    receipts
+                schema::tx::TransactionStatus::SuccessStatus(s) => Some(
+                    s.receipts
                         .into_iter()
                         .map(TryInto::<Receipt>::try_into)
                         .collect::<Result<Vec<Receipt>, ConversionError>>(),
                 )
                 .transpose()?,
-                // schema::tx::TransactionStatus::FailureStatus(s) => Some(
-                //     s.receipts
-                //         .into_iter()
-                //         .map(TryInto::<Receipt>::try_into)
-                //         .collect::<Result<Vec<Receipt>, ConversionError>>(),
-                // )
-                // .transpose()?,
+                schema::tx::TransactionStatus::FailureStatus(s) => Some(
+                    s.receipts
+                        .into_iter()
+                        .map(TryInto::<Receipt>::try_into)
+                        .collect::<Result<Vec<Receipt>, ConversionError>>(),
+                )
+                .transpose()?,
                 _ => None,
             },
             _ => None,
         };
-
-        // let receipts = tx
-        //     .receipts
-        //     .map(|vec| {
-        //         let vec: Result<Vec<Receipt>, ConversionError> =
-        //             vec.into_iter().map(TryInto::<Receipt>::try_into).collect();
-        //         vec
-        //     })
-        //     .transpose()?;
 
         Ok(receipts)
     }
