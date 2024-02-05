@@ -98,8 +98,6 @@ pub struct TransactionEdge {
 #[cynic(graphql_type = "Transaction", schema_path = "./assets/schema.sdl")]
 pub struct OpaqueTransaction {
     pub raw_payload: HexString,
-    // TODO: Remove now that Success and Failure status includes receipts
-    pub receipts: Option<Vec<Receipt>>,
     pub status: Option<TransactionStatus>,
 }
 
