@@ -18,9 +18,10 @@ use crate::{
         P2pDb,
     },
     request_response::messages::{
+        OnResponse,
         RequestMessage,
-        ResponseChannelItem,
         ResponseMessage,
+        ResponseSender,
     },
 };
 use anyhow::anyhow;
@@ -96,12 +97,12 @@ enum TaskRequest {
     },
     GetSealedHeaders {
         block_height_range: Range<u32>,
-        channel: oneshot::Sender<(PeerId, Option<Vec<SealedBlockHeader>>)>,
+        channel: OnResponse<Option<Vec<SealedBlockHeader>>>,
     },
     GetTransactions {
         block_height_range: Range<u32>,
         from_peer: PeerId,
-        channel: oneshot::Sender<Option<Vec<Transactions>>>,
+        channel: OnResponse<Option<Vec<Transactions>>>,
     },
     // Responds back to the p2p network
     RespondWithGossipsubMessageReport((GossipsubMessageInfo, GossipsubMessageAcceptance)),
@@ -162,7 +163,7 @@ pub trait TaskP2PService: Send {
         &mut self,
         peer_id: Option<PeerId>,
         request_msg: RequestMessage,
-        channel_item: ResponseChannelItem,
+        on_response: ResponseSender,
     ) -> anyhow::Result<()>;
 
     fn send_response_msg(
@@ -216,9 +217,9 @@ impl TaskP2PService for FuelP2PService {
         &mut self,
         peer_id: Option<PeerId>,
         request_msg: RequestMessage,
-        channel_item: ResponseChannelItem,
+        on_response: ResponseSender,
     ) -> anyhow::Result<()> {
-        self.send_request_msg(peer_id, request_msg, channel_item)?;
+        self.send_request_msg(peer_id, request_msg, on_response)?;
         Ok(())
     }
 
@@ -530,25 +531,22 @@ where
                         let peer_ids = self.p2p_service.get_peer_ids();
                         let _ = channel.send(peer_ids);
                     }
-                    Some(TaskRequest::GetSealedHeaders { block_height_range, channel: response}) => {
+                    Some(TaskRequest::GetSealedHeaders { block_height_range, channel}) => {
+                        let channel = ResponseSender::SealedHeaders(channel);
                         let request_msg = RequestMessage::SealedHeaders(block_height_range.clone());
-                        let channel_item = ResponseChannelItem::SealedHeaders(response);
 
                         // Note: this range has already been checked for
                         // validity in `SharedState::get_sealed_block_headers`.
-                        let block_height = BlockHeight::from(block_height_range.end.saturating_sub(1));
-                        let peer = self.p2p_service
-                             .get_peer_id_with_height(&block_height);
-                        let found_peers = self.p2p_service.send_request_msg(peer, request_msg, channel_item).is_ok();
-                        if !found_peers {
-                            tracing::debug!("No peers found for block at height {:?}", block_height);
+                        let height = BlockHeight::from(block_height_range.end.saturating_sub(1));
+                        let peer = self.p2p_service.get_peer_id_with_height(&height);
+                        if self.p2p_service.send_request_msg(peer, request_msg, channel).is_err() {
+                            tracing::warn!("No peers found for block at height {:?}", height);
                         }
                     }
                     Some(TaskRequest::GetTransactions { block_height_range, from_peer, channel }) => {
+                        let channel = ResponseSender::Transactions(channel);
                         let request_msg = RequestMessage::Transactions(block_height_range);
-                        let channel_item = ResponseChannelItem::Transactions(channel);
-                        self.p2p_service.send_request_msg(Some(from_peer), request_msg, channel_item)
-                            .expect("We always a peer here, so send has a target");
+                        self.p2p_service.send_request_msg(Some(from_peer), request_msg, channel).expect("We always a peer here, so send has a target");
                     }
                     Some(TaskRequest::RespondWithGossipsubMessageReport((message, acceptance))) => {
                         // report_message(&mut self.p2p_service, message, acceptance);
@@ -717,10 +715,10 @@ impl SharedState {
             })
             .await?;
 
-        receiver
-            .await
-            .map(|(peer_id, headers)| (peer_id.to_bytes(), headers))
-            .map_err(|e| anyhow!("{}", e))
+        let (peer_id, response) = receiver.await.map_err(|e| anyhow!("{e}"))?;
+
+        let data = response.map_err(|e| anyhow!("Invalid response from peer {e:?}"))?;
+        Ok((peer_id.to_bytes(), data))
     }
 
     pub async fn get_transactions_from_peer(
@@ -738,7 +736,15 @@ impl SharedState {
         };
         self.request_sender.send(request).await?;
 
-        receiver.await.map_err(|e| anyhow!("{}", e))
+        let (response_from_peer, response) =
+            receiver.await.map_err(|e| anyhow!("{e}"))?;
+        assert_eq!(
+            peer_id,
+            response_from_peer.to_bytes(),
+            "Bug: response from non-requested peer"
+        );
+
+        response.map_err(|e| anyhow!("Invalid response from peer {e:?}"))
     }
 
     pub fn broadcast_transaction(
@@ -975,7 +981,7 @@ pub mod tests {
             &mut self,
             _peer_id: Option<PeerId>,
             _request_msg: RequestMessage,
-            _channel_item: ResponseChannelItem,
+            _on_response: ResponseSender,
         ) -> anyhow::Result<()> {
             todo!()
         }
