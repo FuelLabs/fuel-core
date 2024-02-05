@@ -28,6 +28,8 @@ pub mod dap;
 pub mod health;
 pub mod message;
 pub mod node_info;
+
+pub mod gas_price;
 pub mod scalars;
 pub mod tx;
 
@@ -43,6 +45,7 @@ pub struct Query(
     contract::ContractQuery,
     contract::ContractBalanceQuery,
     node_info::NodeQuery,
+    gas_price::LatestGasPriceQuery,
     message::MessageQuery,
 );
 
