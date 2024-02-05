@@ -15,7 +15,7 @@ pub mod request_response;
 pub mod service;
 
 pub use gossipsub::config as gossipsub_config;
-pub use heartbeat::HeartbeatConfig;
+pub use heartbeat::Config;
 
 pub use libp2p::{
     multiaddr::Protocol,
@@ -26,6 +26,20 @@ pub use libp2p::{
 #[cfg(feature = "test-helpers")]
 pub mod network_service {
     pub use crate::p2p_service::*;
+}
+
+pub trait TryPeerId {
+    /// Tries convert `Self` into `PeerId`.
+    fn try_to_peer_id(&self) -> Option<PeerId>;
+}
+
+impl TryPeerId for Multiaddr {
+    fn try_to_peer_id(&self) -> Option<PeerId> {
+        self.iter().last().and_then(|p| match p {
+            Protocol::P2p(peer_id) => Some(peer_id),
+            _ => None,
+        })
+    }
 }
 
 #[cfg(test)]

@@ -5,18 +5,19 @@ use tokio::sync::Notify;
 use tokio_util::sync::CancellationToken;
 
 use crate::database::{
+    database_description::on_chain::OnChain,
     genesis_progress::GenesisResource,
     transaction::DatabaseTransaction,
     Database,
 };
 
 pub trait TransactionOpener {
-    fn transaction(&mut self) -> DatabaseTransaction;
+    fn transaction(&mut self) -> DatabaseTransaction<OnChain>;
     fn view_only(&self) -> &Database;
 }
 
 impl TransactionOpener for Database {
-    fn transaction(&mut self) -> DatabaseTransaction {
+    fn transaction(&mut self) -> DatabaseTransaction<OnChain> {
         Database::transaction(self)
     }
 
@@ -126,15 +127,26 @@ mod tests {
         bail,
     };
     use fuel_core_chain_config::Group;
-    use fuel_core_database::Error;
     use fuel_core_storage::{
-        iter::IntoBoxedIter,
+        column::Column,
+        iter::IteratorableStore,
+        kv_store::{
+            BatchOperations,
+            KeyValueStore,
+            Value,
+            WriteOperation,
+        },
         tables::Coins,
+        Error,
+        Result as StorageResult,
         StorageAsMut,
         StorageInspect,
     };
     use fuel_core_types::{
-        entities::coins::coin::CompressedCoin,
+        entities::coins::coin::{
+            CompressedCoin,
+            CompressedCoinV1,
+        },
         fuel_tx::UtxoId,
     };
     use tokio::sync::Notify;
@@ -142,6 +154,7 @@ mod tests {
 
     use crate::{
         database::{
+            database_description::on_chain::OnChain,
             genesis_progress::GenesisResource,
             transaction::DatabaseTransaction,
             Database,
@@ -153,8 +166,7 @@ mod tests {
         },
         state::{
             in_memory::memory_store::MemoryStore,
-            BatchOperations,
-            KeyValueStore,
+            DataSource,
             TransactableStorage,
         },
     };
@@ -286,13 +298,14 @@ mod tests {
     }
 
     fn insert_a_coin(tx: &mut Database, utxo_id: &UtxoId) {
-        let coin = CompressedCoin {
+        let coin: CompressedCoin = CompressedCoinV1 {
             owner: Default::default(),
             amount: Default::default(),
             asset_id: Default::default(),
             maturity: Default::default(),
             tx_pointer: Default::default(),
-        };
+        }
+        .into();
 
         tx.storage_as_mut::<Coins>().insert(utxo_id, &coin).unwrap();
     }
@@ -360,122 +373,88 @@ mod tests {
     }
 
     impl KeyValueStore for BrokenTransactions {
-        fn put(
-            &self,
-            key: &[u8],
-            column: crate::database::Column,
-            value: crate::state::Value,
-        ) -> crate::database::Result<Option<crate::state::Value>> {
+        type Column = Column;
+
+        fn put(&self, key: &[u8], column: Column, value: Value) -> StorageResult<()> {
             self.store.put(key, column, value)
         }
 
-        fn write(
-            &self,
-            key: &[u8],
-            column: crate::database::Column,
-            buf: &[u8],
-        ) -> crate::database::Result<usize> {
+        fn write(&self, key: &[u8], column: Column, buf: &[u8]) -> StorageResult<usize> {
             self.store.write(key, column, buf)
         }
 
         fn replace(
             &self,
             key: &[u8],
-            column: crate::database::Column,
-            buf: &[u8],
-        ) -> crate::database::Result<(usize, Option<crate::state::Value>)> {
+            column: Column,
+            buf: std::sync::Arc<Vec<u8>>,
+        ) -> StorageResult<Option<Value>> {
             self.store.replace(key, column, buf)
         }
 
-        fn take(
-            &self,
-            key: &[u8],
-            column: crate::database::Column,
-        ) -> crate::database::Result<Option<crate::state::Value>> {
+        fn take(&self, key: &[u8], column: Column) -> StorageResult<Option<Value>> {
             self.store.take(key, column)
         }
 
-        fn delete(
-            &self,
-            key: &[u8],
-            column: crate::database::Column,
-        ) -> crate::database::Result<Option<crate::state::Value>> {
+        fn delete(&self, key: &[u8], column: Column) -> StorageResult<()> {
             self.store.delete(key, column)
         }
 
-        fn exists(
-            &self,
-            key: &[u8],
-            column: crate::database::Column,
-        ) -> crate::database::Result<bool> {
+        fn exists(&self, key: &[u8], column: Column) -> StorageResult<bool> {
             self.store.exists(key, column)
         }
 
         fn size_of_value(
             &self,
             key: &[u8],
-            column: crate::database::Column,
-        ) -> crate::database::Result<Option<usize>> {
+            column: Column,
+        ) -> StorageResult<Option<usize>> {
             self.store.size_of_value(key, column)
         }
 
-        fn get(
-            &self,
-            key: &[u8],
-            column: crate::database::Column,
-        ) -> crate::database::Result<Option<crate::state::Value>> {
+        fn get(&self, key: &[u8], column: Column) -> StorageResult<Option<Value>> {
             self.store.get(key, column)
         }
 
         fn read(
             &self,
             key: &[u8],
-            column: crate::database::Column,
+            column: Column,
             buf: &mut [u8],
-        ) -> crate::database::Result<Option<usize>> {
+        ) -> StorageResult<Option<usize>> {
             self.store.read(key, column, buf)
-        }
-
-        fn read_alloc(
-            &self,
-            key: &[u8],
-            column: crate::database::Column,
-        ) -> crate::database::Result<Option<crate::state::Value>> {
-            self.store.read_alloc(key, column)
-        }
-
-        fn iter_all(
-            &self,
-            column: crate::database::Column,
-            prefix: Option<&[u8]>,
-            start: Option<&[u8]>,
-            direction: fuel_core_storage::iter::IterDirection,
-        ) -> fuel_core_storage::iter::BoxedIter<crate::state::KVItem> {
-            self.store
-                .iter_all(column, prefix, start, direction)
-                .into_boxed()
         }
     }
 
     impl BatchOperations for BrokenTransactions {
         fn batch_write(
             &self,
-            _entries: &mut dyn Iterator<
-                Item = (
-                    Vec<u8>,
-                    crate::database::Column,
-                    crate::state::WriteOperation,
-                ),
-            >,
-        ) -> crate::database::Result<()> {
+            _entries: &mut dyn Iterator<Item = (Vec<u8>, Column, WriteOperation)>,
+        ) -> StorageResult<()> {
             Err(Error::Other(anyhow!("I refuse to work!")))
         }
 
-        fn delete_all(
-            &self,
-            _column: crate::database::Column,
-        ) -> crate::database::Result<()> {
+        fn delete_all(&self, _column: Column) -> StorageResult<()> {
             Err(Error::Other(anyhow!("I refuse to work!")))
+        }
+    }
+
+    impl IteratorableStore for BrokenTransactions {
+        fn iter_all(
+            &self,
+            column: Self::Column,
+            prefix: Option<&[u8]>,
+            start: Option<&[u8]>,
+            direction: fuel_core_storage::iter::IterDirection,
+        ) -> fuel_core_storage::iter::BoxedIter<fuel_core_storage::kv_store::KVItem>
+        {
+            unimplemented!()
+        }
+    }
+
+    impl From<BrokenTransactions> for DataSource {
+        fn from(inner: BrokenTransactions) -> Self {
+            DataSource::new(Arc::new(inner))
         }
     }
 
@@ -494,7 +473,7 @@ mod tests {
             CancellationToken::new(),
             |_, _: &mut Database| Ok(()),
             groups,
-            Database::new(Arc::new(BrokenTransactions::new())),
+            Database::new(BrokenTransactions::new()),
         );
         // when
         let result = runner.run();
@@ -549,7 +528,7 @@ mod tests {
             counter: usize,
         }
         impl TransactionOpener for OnlyOneTransactionAllowed {
-            fn transaction(&mut self) -> DatabaseTransaction {
+            fn transaction(&mut self) -> DatabaseTransaction<OnChain> {
                 if self.counter == 0 {
                     self.counter += 1;
                     Database::transaction(&self.db)

@@ -1,66 +1,109 @@
-use crate::database::{
-    Column,
-    Database,
-    Error as DatabaseError,
-    Result as DatabaseResult,
+use crate::{
+    database::{
+        database_description::{
+            DatabaseDescription,
+            DatabaseMetadata,
+        },
+        storage::UseStructuredImplementation,
+        Database,
+        Error as DatabaseError,
+    },
+    state::DataSource,
 };
-use fuel_core_chain_config::ChainConfig;
+use fuel_core_storage::{
+    blueprint::plain::Plain,
+    codec::postcard::Postcard,
+    not_found,
+    structured_storage::{
+        StructuredStorage,
+        TableWithBlueprint,
+    },
+    Error as StorageError,
+    Mappable,
+    Result as StorageResult,
+    StorageAsRef,
+};
+use fuel_core_types::fuel_merkle::storage::StorageMutate;
 
-pub(crate) const DB_VERSION_KEY: &[u8] = b"version";
-pub(crate) const CHAIN_NAME_KEY: &[u8] = b"chain_name";
-/// Tracks the total number of transactions written to the chain
-/// It's useful for analyzing TPS or other metrics.
-pub(crate) const TX_COUNT: &[u8] = b"total_tx_count";
+/// The table that stores all metadata about the database.
+pub struct MetadataTable<Description>(core::marker::PhantomData<Description>);
 
-/// Can be used to perform migrations in the future.
-pub(crate) const DB_VERSION: u32 = 0x00;
+impl<Description> Mappable for MetadataTable<Description>
+where
+    Description: DatabaseDescription,
+{
+    type Key = ();
+    type OwnedKey = ();
+    type Value = DatabaseMetadata<Description::Height>;
+    type OwnedValue = Self::Value;
+}
 
-impl Database {
+impl<Description> TableWithBlueprint for MetadataTable<Description>
+where
+    Description: DatabaseDescription,
+{
+    type Blueprint = Plain<Postcard, Postcard>;
+    type Column = Description::Column;
+
+    fn column() -> Self::Column {
+        Description::metadata_column()
+    }
+}
+
+impl<Description> UseStructuredImplementation<MetadataTable<Description>>
+    for StructuredStorage<DataSource<Description>>
+where
+    Description: DatabaseDescription,
+{
+}
+
+impl<Description> Database<Description>
+where
+    Description: DatabaseDescription,
+    Self: StorageMutate<MetadataTable<Description>, Error = StorageError>,
+{
     /// Ensures the database is initialized and that the database version is correct
-    pub fn init(&self, config: &ChainConfig) -> DatabaseResult<()> {
-        // initialize chain name if not set
-        if self.get_chain_name()?.is_none() {
-            self.insert(CHAIN_NAME_KEY, Column::Metadata, &config.chain_name)
-                .and_then(|v: Option<String>| {
-                    if v.is_some() {
-                        Err(DatabaseError::ChainAlreadyInitialized)
-                    } else {
-                        Ok(())
-                    }
-                })?;
+    pub fn init(&mut self, height: &Description::Height) -> StorageResult<()> {
+        use fuel_core_storage::StorageAsMut;
+
+        if !self
+            .storage::<MetadataTable<Description>>()
+            .contains_key(&())?
+        {
+            let old = self.storage::<MetadataTable<Description>>().insert(
+                &(),
+                &DatabaseMetadata::V1 {
+                    version: Description::version(),
+                    height: *height,
+                },
+            )?;
+
+            if old.is_some() {
+                return Err(DatabaseError::ChainAlreadyInitialized.into())
+            }
         }
 
-        // Ensure the database version is correct
-        if let Some(version) = self.get::<u32>(DB_VERSION_KEY, Column::Metadata)? {
-            if version != DB_VERSION {
-                return Err(DatabaseError::InvalidDatabaseVersion {
-                    found: version,
-                    expected: DB_VERSION,
-                })?
+        let metadata = self
+            .storage::<MetadataTable<Description>>()
+            .get(&())?
+            .expect("We checked its existence above");
+
+        if metadata.version() != Description::version() {
+            return Err(DatabaseError::InvalidDatabaseVersion {
+                found: metadata.version(),
+                expected: Description::version(),
             }
-        } else {
-            let _: Option<u32> =
-                self.insert(DB_VERSION_KEY, Column::Metadata, &DB_VERSION)?;
+            .into())
         }
+
         Ok(())
     }
 
-    pub fn get_chain_name(&self) -> DatabaseResult<Option<String>> {
-        self.get(CHAIN_NAME_KEY, Column::Metadata)
-    }
+    pub fn latest_height(&self) -> StorageResult<Description::Height> {
+        let metadata = self.storage::<MetadataTable<Description>>().get(&())?;
 
-    pub fn increase_tx_count(&self, new_txs: u64) -> DatabaseResult<u64> {
-        // TODO: how should tx count be initialized after regenesis?
-        let current_tx_count: u64 =
-            self.get(TX_COUNT, Column::Metadata)?.unwrap_or_default();
-        // Using saturating_add because this value doesn't significantly impact the correctness of execution.
-        let new_tx_count = current_tx_count.saturating_add(new_txs);
-        self.insert::<_, _, u64>(TX_COUNT, Column::Metadata, &new_tx_count)?;
-        Ok(new_tx_count)
-    }
+        let metadata = metadata.ok_or(not_found!(MetadataTable<Description>))?;
 
-    pub fn get_tx_count(&self) -> DatabaseResult<u64> {
-        self.get(TX_COUNT, Column::Metadata)
-            .map(|v| v.unwrap_or_default())
+        Ok(*metadata.height())
     }
 }

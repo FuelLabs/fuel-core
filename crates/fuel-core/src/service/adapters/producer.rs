@@ -11,6 +11,7 @@ use crate::{
         sub_services::BlockProducerService,
     },
 };
+use fuel_core_executor::executor::OnceTransactionsSource;
 use fuel_core_producer::ports::TxPool;
 use fuel_core_storage::{
     not_found,
@@ -22,12 +23,10 @@ use fuel_core_storage::{
 use fuel_core_types::{
     blockchain::{
         block::CompressedBlock,
-        primitives::{
-            self,
-        },
+        primitives,
     },
     fuel_tx,
-    fuel_tx::Receipt,
+    fuel_tx::Transaction,
     fuel_types::{
         BlockHeight,
         Bytes32,
@@ -37,6 +36,7 @@ use fuel_core_types::{
         executor::{
             ExecutionTypes,
             Result as ExecutorResult,
+            TransactionExecutionStatus,
             UncommittedResult,
         },
     },
@@ -63,23 +63,43 @@ impl TxPool for TxPoolAdapter {
     }
 }
 
-#[async_trait::async_trait]
-impl fuel_core_producer::ports::Executor for ExecutorAdapter {
+impl fuel_core_producer::ports::Executor<TransactionsSource> for ExecutorAdapter {
     type Database = Database;
-    type TxSource = TransactionsSource;
 
     fn execute_without_commit(
         &self,
-        component: Components<Self::TxSource>,
+        component: Components<TransactionsSource>,
     ) -> ExecutorResult<UncommittedResult<StorageTransaction<Database>>> {
         self._execute_without_commit(ExecutionTypes::Production(component))
     }
+}
 
+impl fuel_core_producer::ports::Executor<Vec<Transaction>> for ExecutorAdapter {
+    type Database = Database;
+
+    fn execute_without_commit(
+        &self,
+        component: Components<Vec<Transaction>>,
+    ) -> ExecutorResult<UncommittedResult<StorageTransaction<Database>>> {
+        let Components {
+            header_to_produce,
+            transactions_source,
+            gas_limit,
+        } = component;
+        self._execute_without_commit(ExecutionTypes::Production(Components {
+            header_to_produce,
+            transactions_source: OnceTransactionsSource::new(transactions_source),
+            gas_limit,
+        }))
+    }
+}
+
+impl fuel_core_producer::ports::DryRunner for ExecutorAdapter {
     fn dry_run(
         &self,
-        block: Components<fuel_tx::Transaction>,
+        block: Components<Vec<fuel_tx::Transaction>>,
         utxo_validation: Option<bool>,
-    ) -> ExecutorResult<Vec<Vec<Receipt>>> {
+    ) -> ExecutorResult<Vec<TransactionExecutionStatus>> {
         self._dry_run(block, utxo_validation)
     }
 }
@@ -92,12 +112,12 @@ impl fuel_core_producer::ports::Relayer for MaybeRelayerAdapter {
     ) -> anyhow::Result<primitives::DaBlockHeight> {
         #[cfg(feature = "relayer")]
         {
-            use fuel_core_relayer::ports::RelayerDb;
             if let Some(sync) = self.relayer_synced.as_ref() {
                 sync.await_at_least_synced(height).await?;
+                sync.get_finalized_da_height()
+            } else {
+                Ok(0u64.into())
             }
-
-            Ok(self.database.get_finalized_da_height().unwrap_or_default())
         }
         #[cfg(not(feature = "relayer"))]
         {
@@ -113,17 +133,12 @@ impl fuel_core_producer::ports::Relayer for MaybeRelayerAdapter {
 
 impl fuel_core_producer::ports::BlockProducerDatabase for Database {
     fn get_block(&self, height: &BlockHeight) -> StorageResult<Cow<CompressedBlock>> {
-        let id = self.get_block_id(height)?.ok_or(not_found!("BlockId"))?;
         self.storage::<FuelBlocks>()
-            .get(&id)?
+            .get(height)?
             .ok_or(not_found!(FuelBlocks))
     }
 
     fn block_header_merkle_root(&self, height: &BlockHeight) -> StorageResult<Bytes32> {
         self.storage::<FuelBlocks>().root(height).map(Into::into)
-    }
-
-    fn current_block_height(&self) -> StorageResult<BlockHeight> {
-        self.latest_height()
     }
 }

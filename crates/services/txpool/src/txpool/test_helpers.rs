@@ -1,6 +1,9 @@
 use crate::test_helpers::IntoEstimated;
 use fuel_core_types::{
-    entities::message::Message,
+    entities::message::{
+        Message,
+        MessageV1,
+    },
     fuel_asm::op,
     fuel_tx::{
         Contract,
@@ -18,7 +21,7 @@ pub(crate) fn create_message_predicate_from_message(
     nonce: u64,
 ) -> (Message, Input) {
     let predicate = vec![op::ret(1)].into_iter().collect::<Vec<u8>>();
-    let message = Message {
+    let message = MessageV1 {
         sender: Default::default(),
         recipient: Input::predicate_owner(&predicate),
         nonce: nonce.into(),
@@ -28,7 +31,7 @@ pub(crate) fn create_message_predicate_from_message(
     };
 
     (
-        message.clone(),
+        message.clone().into(),
         Input::message_coin_predicate(
             message.sender,
             Input::predicate_owner(&predicate),

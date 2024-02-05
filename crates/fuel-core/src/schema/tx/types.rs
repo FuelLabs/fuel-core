@@ -5,10 +5,9 @@ use super::{
 };
 use crate::{
     fuel_core_graphql_api::{
-        service::{
-            Database,
-            TxPool,
-        },
+        api_service::TxPool,
+        database::ReadView,
+        ports::DatabaseBlocks,
         Config,
         IntoApiResult,
     },
@@ -76,6 +75,10 @@ use fuel_core_types::{
     fuel_types::canonical::Serialize,
     fuel_vm::ProgramState as VmProgramState,
     services::{
+        executor::{
+            TransactionExecutionResult,
+            TransactionExecutionStatus,
+        },
         txpool,
         txpool::TransactionStatus as TxStatus,
     },
@@ -160,8 +163,9 @@ impl SuccessStatus {
     }
 
     async fn block(&self, ctx: &Context<'_>) -> async_graphql::Result<Block> {
-        let query: &Database = ctx.data_unchecked();
-        let block = query.block(&self.block_id)?;
+        let query: &ReadView = ctx.data_unchecked();
+        let height = query.block_height(&self.block_id)?;
+        let block = query.block(&height)?;
         Ok(block.into())
     }
 
@@ -174,8 +178,8 @@ impl SuccessStatus {
     }
 
     async fn receipts(&self, ctx: &Context<'_>) -> async_graphql::Result<Vec<Receipt>> {
-        let db = ctx.data_unchecked::<Database>();
-        let receipts = db
+        let query: &ReadView = ctx.data_unchecked();
+        let receipts = query
             .receipts(&self.tx_id)
             .unwrap_or_default()
             .into_iter()
@@ -201,8 +205,9 @@ impl FailureStatus {
     }
 
     async fn block(&self, ctx: &Context<'_>) -> async_graphql::Result<Block> {
-        let query: &Database = ctx.data_unchecked();
-        let block = query.block(&self.block_id)?;
+        let query: &ReadView = ctx.data_unchecked();
+        let height = query.block_height(&self.block_id)?;
+        let block = query.block(&height)?;
         Ok(block.into())
     }
 
@@ -219,8 +224,8 @@ impl FailureStatus {
     }
 
     async fn receipts(&self, ctx: &Context<'_>) -> async_graphql::Result<Vec<Receipt>> {
-        let db = ctx.data_unchecked::<Database>();
-        let receipts = db
+        let query: &ReadView = ctx.data_unchecked();
+        let receipts = query
             .receipts(&self.tx_id)
             .unwrap_or_default()
             .into_iter()
@@ -526,7 +531,7 @@ impl Transaction {
         ctx: &Context<'_>,
     ) -> async_graphql::Result<Option<TransactionStatus>> {
         let id = self.1;
-        let query: &Database = ctx.data_unchecked();
+        let query: &ReadView = ctx.data_unchecked();
         let txpool = ctx.data_unchecked::<TxPool>();
         get_tx_status(id, query, txpool).map_err(Into::into)
     }
@@ -535,7 +540,7 @@ impl Transaction {
         &self,
         ctx: &Context<'_>,
     ) -> async_graphql::Result<Option<Vec<Receipt>>> {
-        let query: &Database = ctx.data_unchecked();
+        let query: &ReadView = ctx.data_unchecked();
         let receipts = query
             .receipts(&self.1)
             .into_api_result::<Vec<_>, async_graphql::Error>()?;
@@ -619,10 +624,75 @@ impl Transaction {
     }
 }
 
+#[derive(Union, Debug)]
+pub enum DryRunTransactionStatus {
+    Success(DryRunSuccessStatus),
+    Failed(DryRunFailureStatus),
+}
+
+impl DryRunTransactionStatus {
+    pub fn new(tx_status: TransactionExecutionResult) -> Self {
+        match tx_status {
+            TransactionExecutionResult::Success { result } => {
+                DryRunTransactionStatus::Success(DryRunSuccessStatus { result })
+            }
+            TransactionExecutionResult::Failed { result, reason } => {
+                DryRunTransactionStatus::Failed(DryRunFailureStatus { result, reason })
+            }
+        }
+    }
+}
+
+#[derive(Debug)]
+pub struct DryRunSuccessStatus {
+    result: Option<VmProgramState>,
+}
+
+#[Object]
+impl DryRunSuccessStatus {
+    async fn program_state(&self) -> Option<ProgramState> {
+        self.result.map(Into::into)
+    }
+}
+
+#[derive(Debug)]
+pub struct DryRunFailureStatus {
+    result: Option<VmProgramState>,
+    reason: String,
+}
+
+#[Object]
+impl DryRunFailureStatus {
+    async fn program_state(&self) -> Option<ProgramState> {
+        self.result.map(Into::into)
+    }
+
+    async fn reason(&self) -> String {
+        self.reason.clone()
+    }
+}
+
+pub struct DryRunTransactionExecutionStatus(pub TransactionExecutionStatus);
+
+#[Object]
+impl DryRunTransactionExecutionStatus {
+    async fn id(&self) -> TransactionId {
+        TransactionId(self.0.id)
+    }
+
+    async fn status(&self) -> DryRunTransactionStatus {
+        DryRunTransactionStatus::new(self.0.result.clone())
+    }
+
+    async fn receipts(&self) -> Vec<Receipt> {
+        self.0.receipts.iter().map(Into::into).collect()
+    }
+}
+
 #[tracing::instrument(level = "debug", skip(query, txpool), ret, err)]
 pub(crate) fn get_tx_status(
     id: fuel_core_types::fuel_types::Bytes32,
-    query: &Database,
+    query: &ReadView,
     txpool: &TxPool,
 ) -> Result<Option<TransactionStatus>, StorageError> {
     match query

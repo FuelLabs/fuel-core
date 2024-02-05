@@ -160,7 +160,7 @@ impl FromStr for PeerId {
 
 impl PeerId {
     /// Bind the PeerId and given data of type T together to generate a
-    /// SourcePeer<T>
+    /// `SourcePeer<T>`
     pub fn bind<T>(self, data: T) -> SourcePeer<T> {
         SourcePeer {
             peer_id: self,

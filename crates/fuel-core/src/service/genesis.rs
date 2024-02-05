@@ -1,8 +1,5 @@
 use crate::{
-    database::{
-        Column,
-        Database,
-    },
+    database::Database,
     service::config::Config,
 };
 use anyhow::anyhow;
@@ -12,18 +9,19 @@ use fuel_core_chain_config::{
     GenesisCommitment,
     MessageConfig,
 };
-
-use fuel_core_importer::Importer;
 use fuel_core_storage::{
+    column::Column,
     tables::{
         Coins,
         ContractsInfo,
         ContractsLatestUtxo,
         ContractsRawCode,
-        FuelBlocks,
         Messages,
     },
-    transactional::Transactional,
+    transactional::{
+        StorageTransaction,
+        Transactional,
+    },
     MerkleRoot,
     StorageAsMut,
 };
@@ -43,9 +41,15 @@ use fuel_core_types::{
         SealedBlock,
     },
     entities::{
-        coins::coin::CompressedCoin,
+        coins::coin::{
+            CompressedCoin,
+            CompressedCoinV1,
+        },
         contract::ContractUtxoInfo,
-        message::Message,
+        message::{
+            Message,
+            MessageV1,
+        },
     },
     fuel_tx::{
         Contract,
@@ -72,25 +76,43 @@ pub use runner::{
 mod workers;
 use self::workers::GenesisWorkers;
 
-/// Loads state from the chain config into database
-pub async fn maybe_initialize_state(
+/// Performs the importing of the genesis block from the snapshot.
+pub async fn execute_genesis_block(
     config: &Config,
-    database: &Database,
-) -> anyhow::Result<()> {
-    // check if chain is initialized
-    if database.ids_of_latest_block()?.is_none() {
-        let workers = GenesisWorkers::new(
-            database.clone(),
-            config.chain_config.height.unwrap_or_default(),
-            config.state_reader.clone(),
-        );
+    original_database: &Database,
+) -> anyhow::Result<UncommittedImportResult<StorageTransaction<Database>>> {
+    let workers = GenesisWorkers::new(
+        original_database.clone(),
+        config.chain_config.height.unwrap_or_default(),
+        config.state_reader.clone(),
+    );
 
-        import_chain_state(workers).await?;
-        commit_genesis_block(config, database)?;
-        cleanup_genesis_progress(database)?;
-    }
+    import_chain_state(workers).await?;
 
-    Ok(())
+    let genesis = Genesis {
+        chain_config_hash: config.chain_config.root()?.into(),
+        coins_root: original_database.genesis_coin_root()?.into(),
+        messages_root: original_database.genesis_messages_root()?.into(),
+        contracts_root: original_database.genesis_contracts_root()?.into(),
+    };
+
+    let block = create_genesis_block(config);
+    let consensus = Consensus::Genesis(genesis);
+    let block = SealedBlock {
+        entity: block,
+        consensus,
+    };
+
+    let database_transaction = original_database.transaction()?;
+    let result = UncommittedImportResult::new(
+        ImportResult::new_from_local(block, vec![]),
+        database_transaction,
+    );
+
+    // TODO when's the right time to cleanup?
+    cleanup_genesis_progress(original_database)?;
+
+    Ok(result)
 }
 
 async fn import_chain_state(workers: GenesisWorkers) -> anyhow::Result<()> {
@@ -111,66 +133,6 @@ async fn import_chain_state(workers: GenesisWorkers) -> anyhow::Result<()> {
     Ok(())
 }
 
-fn commit_genesis_block(
-    config: &Config,
-    original_database: &Database,
-) -> anyhow::Result<()> {
-    let mut database_transaction = Transactional::transaction(original_database);
-    let database = database_transaction.as_mut();
-
-    let genesis = Genesis {
-        chain_config_hash: config.chain_config.root()?.into(),
-        coins_root: original_database.genesis_coin_root()?.into(),
-        messages_root: original_database.genesis_messages_root()?.into(),
-        contracts_root: original_database.genesis_contracts_root()?.into(),
-    };
-
-    let block = Block::new(
-        PartialBlockHeader {
-            application: ApplicationHeader::<Empty> {
-                // TODO: Set `da_height` based on the chain config.
-                da_height: Default::default(),
-                generated: Empty,
-            },
-            consensus: ConsensusHeader::<Empty> {
-                // The genesis is a first block, so previous root is zero.
-                prev_root: Bytes32::zeroed(),
-                // The initial height is defined by the `ChainConfig`.
-                height: config.chain_config.height.unwrap_or_default(),
-                time: fuel_core_types::tai64::Tai64::UNIX_EPOCH,
-                generated: Empty,
-            },
-        },
-        // Genesis block doesn't have any transaction.
-        vec![],
-        &[],
-    );
-
-    let block_id = block.id();
-    database.storage::<FuelBlocks>().insert(
-        &block_id,
-        &block.compress(&config.chain_config.consensus_parameters.chain_id),
-    )?;
-    let consensus = Consensus::Genesis(genesis);
-    let block = SealedBlock {
-        entity: block,
-        consensus,
-    };
-
-    let importer = Importer::new(
-        config.block_importer.clone(),
-        original_database.clone(),
-        (),
-        (),
-    );
-    importer.commit_result(UncommittedImportResult::new(
-        ImportResult::new_from_local(block, vec![]),
-        database_transaction,
-    ))?;
-
-    Ok(())
-}
-
 fn cleanup_genesis_progress(database: &Database) -> anyhow::Result<()> {
     let mut database_transaction = Transactional::transaction(database);
     let database = database_transaction.as_mut();
@@ -185,6 +147,47 @@ fn cleanup_genesis_progress(database: &Database) -> anyhow::Result<()> {
 
     database_transaction.commit()?;
 
+    Ok(())
+}
+
+pub fn create_genesis_block(config: &Config) -> Block {
+    let block = Block::new(
+        PartialBlockHeader {
+            application: ApplicationHeader::<Empty> {
+                // TODO: Set `da_height` based on the chain config.
+                da_height: Default::default(),
+                generated: Empty,
+            },
+            consensus: ConsensusHeader::<Empty> {
+                // The genesis is a first block, so previous root is zero.
+                prev_root: Bytes32::zeroed(),
+                // The initial height is defined by the `ChainConfig`.
+                // If it is `None` then it will be zero.
+                height: config.chain_config.height.unwrap_or_default(),
+                time: fuel_core_types::tai64::Tai64::UNIX_EPOCH,
+                generated: Empty,
+            },
+        },
+        // Genesis block doesn't have any transaction.
+        vec![],
+        &[],
+    );
+    block
+}
+
+#[cfg(feature = "test-helpers")]
+pub async fn execute_and_commit_genesis_block(
+    config: &Config,
+    original_database: &Database,
+) -> anyhow::Result<()> {
+    let result = execute_genesis_block(config, original_database)?;
+    let importer = fuel_core_importer::Importer::new(
+        config.block_importer.clone(),
+        original_database.clone(),
+        (),
+        (),
+    );
+    importer.commit_result(result).await?;
     Ok(())
 }
 
@@ -212,13 +215,14 @@ fn init_coin(
     // TODO: Store merkle sum tree root over coins with unspecified utxo ids.
     let utxo_id = coin.utxo_id().unwrap_or(generated_utxo_id(output_index));
 
-    let coin = CompressedCoin {
+    let compressed_coin: CompressedCoin = CompressedCoinV1 {
         owner: coin.owner,
         amount: coin.amount,
         asset_id: coin.asset_id,
         maturity: coin.maturity.unwrap_or_default(),
         tx_pointer: coin.tx_pointer(),
-    };
+    }
+    .into();
 
     // ensure coin can't point to blocks in the future
     let coin_height = coin.tx_pointer.block_height();
@@ -290,14 +294,15 @@ fn init_contract(
 }
 
 fn init_da_message(db: &mut Database, msg: &MessageConfig) -> anyhow::Result<MerkleRoot> {
-    let message = Message {
+    let message: Message = MessageV1 {
         sender: msg.sender,
         recipient: msg.recipient,
         nonce: msg.nonce,
         amount: msg.amount,
         data: msg.data.clone(),
         da_height: msg.da_height,
-    };
+    }
+    .into();
 
     if db
         .storage::<Messages>()
@@ -312,19 +317,18 @@ fn init_da_message(db: &mut Database, msg: &MessageConfig) -> anyhow::Result<Mer
 
 #[cfg(test)]
 mod tests {
+    use super::*;
+
     use crate::{
-        database::{
-            genesis_progress::GenesisResource,
-            Column,
-            Database,
+        combined_database::CombinedDatabase,
+        database::genesis_progress::{
+            GenesisCoinRoots,
+            GenesisResource,
         },
         service::{
             config::Config,
-            genesis::{
-                generated_utxo_id,
-                maybe_initialize_state,
-            },
             FuelService,
+            Task,
         },
     };
     use fuel_core_chain_config::{
@@ -338,6 +342,7 @@ mod tests {
         StateReader,
         MAX_GROUP_SIZE,
     };
+    use fuel_core_services::RunnableService;
     use fuel_core_storage::{
         tables::{
             Coins,
@@ -371,6 +376,7 @@ mod tests {
         RngCore,
         SeedableRng,
     };
+    use std::vec;
 
     #[tokio::test]
     async fn config_initializes_chain_name() {
@@ -491,11 +497,7 @@ mod tests {
         for key in GenesisResource::iter() {
             assert!(db.genesis_progress(&key).is_none());
         }
-        assert!(db
-            .genesis_roots(Column::GenesisCoinRoots)
-            .unwrap()
-            .next()
-            .is_none());
+        assert!(db.genesis_roots(GenesisCoinRoots).unwrap().next().is_none());
         assert!(db
             .genesis_roots(Column::GenesisMessageRoots)
             .unwrap()
@@ -698,11 +700,12 @@ mod tests {
 
         let db = &Database::default();
 
-        maybe_initialize_state(&config, db).await.unwrap();
+        execute_and_commit_genesis_block(&config, db).unwrap();
 
         let expected_msg: Message = msg.into();
 
         let ret_msg = db
+            .as_ref()
             .storage::<Messages>()
             .get(expected_msg.id())
             .unwrap()
@@ -792,8 +795,9 @@ mod tests {
             ..Config::local_node()
         };
 
-        let db = Database::default();
-        let init_result = FuelService::from_database(db.clone(), service_config).await;
+        let db = CombinedDatabase::default();
+        let task = Task::new(db, service_config).unwrap();
+        let init_result = task.into_task(&Default::default(), ()).await;
 
         assert!(init_result.is_err())
     }
@@ -838,8 +842,9 @@ mod tests {
             ..Config::local_node()
         };
 
-        let db = Database::default();
-        let init_result = FuelService::from_database(db.clone(), service_config).await;
+        let db = CombinedDatabase::default();
+        let task = Task::new(db, service_config).unwrap();
+        let init_result = task.into_task(&Default::default(), ()).await;
 
         assert!(init_result.is_err())
     }

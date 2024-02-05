@@ -12,7 +12,6 @@ description = "Fuel metrics"
 
 [dependencies]
 axum = { workspace = true }
-libp2p-prom-client = { workspace = true }
 once_cell = { workspace = true }
 pin-project-lite = { workspace = true }
 prometheus-client = { workspace = true }

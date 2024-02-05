@@ -17,13 +17,13 @@ use fuel_core::{
         ChainConfig,
         StateConfig,
     },
-    database::DatabaseConfig,
+    combined_database::CombinedDatabaseConfig,
     producer::Config as ProducerConfig,
     service::{
         config::Trigger,
         Config,
         DbType,
-        RelayerVerifierConfig,
+        RelayerConsensusConfig,
         ServiceTrait,
         VMConfig,
     },
@@ -149,11 +149,6 @@ pub struct Command {
     #[clap(flatten)]
     pub poa_trigger: PoATriggerArgs,
 
-    /// Use a default insecure consensus key for testing purposes.
-    /// This will not be enabled by default in the future.
-    #[arg(long = "dev-keys", default_value = "true", env)]
-    pub consensus_dev_key: bool,
-
     /// The block's fee recipient public key.
     ///
     /// If not set, `consensus_key` is used as the provider of the `Address`.
@@ -234,7 +229,6 @@ impl Command {
             min_gas_price,
             consensus_key,
             poa_trigger,
-            consensus_dev_key,
             coinbase_recipient,
             #[cfg(feature = "relayer")]
             relayer_args,
@@ -285,9 +279,14 @@ impl Command {
             info!("Block production disabled");
         }
 
+        let consensus_key = load_consensus_key(consensus_key)?;
+        if consensus_key.is_some() && trigger == Trigger::Never {
+            warn!("Consensus key configured but block production is disabled!");
+        }
+
         // if consensus key is not configured, fallback to dev consensus key
-        let consensus_key = load_consensus_key(consensus_key)?.or_else(|| {
-            if consensus_dev_key && trigger != Trigger::Never {
+        let consensus_key = consensus_key.or_else(|| {
+            if debug {
                 let key = default_consensus_dev_key();
                 warn!(
                     "Fuel Core is using an insecure test key for consensus. Public key: {}",
@@ -295,14 +294,9 @@ impl Command {
                 );
                 Some(Secret::new(key.into()))
             } else {
-                // if consensus dev key is disabled, use no key
                 None
             }
         });
-
-        if consensus_key.is_some() && trigger == Trigger::Never {
-            warn!("Consensus key configured but block production is disabled!")
-        }
 
         let coinbase_recipient = if let Some(coinbase_recipient) = coinbase_recipient {
             Some(
@@ -314,21 +308,24 @@ impl Command {
             None
         };
 
-        let verifier = RelayerVerifierConfig {
+        let verifier = RelayerConsensusConfig {
             max_da_lag: max_da_lag.into(),
             max_wait_time: max_wait_time.into(),
         };
 
-        let db_config = DatabaseConfig {
+        let combined_db_config = CombinedDatabaseConfig {
             database_path,
             database_type,
             max_database_cache_size,
         };
 
+        let block_importer =
+            fuel_core::service::config::fuel_core_importer::Config::new(&chain_conf);
+
         let config = Config {
             addr,
             api_request_timeout: api_request_timeout.into(),
-            db_config,
+            combined_db_config,
             chain_config: chain_conf.clone(),
             state_reader,
             debug,
@@ -352,8 +349,7 @@ impl Command {
                 coinbase_recipient,
                 metrics,
             },
-            block_executor: Default::default(),
-            block_importer: Default::default(),
+            block_importer,
             #[cfg(feature = "relayer")]
             relayer: relayer_cfg,
             #[cfg(feature = "p2p")]
@@ -362,7 +358,7 @@ impl Command {
             sync: sync_args.into(),
             consensus_key,
             name,
-            verifier,
+            relayer_consensus_config: verifier,
             min_connected_reserved_peers,
             time_until_synced: time_until_synced.into(),
             query_log_threshold_time: query_log_threshold_time.into(),
@@ -453,16 +449,12 @@ async fn shutdown_signal() -> anyhow::Result<()> {
 
         let mut sigint =
             tokio::signal::unix::signal(tokio::signal::unix::SignalKind::interrupt())?;
-        loop {
-            tokio::select! {
-                _ = sigterm.recv() => {
-                    tracing::info!("sigterm received");
-                    break;
-                }
-                _ = sigint.recv() => {
-                    tracing::info!("sigint received");
-                    break;
-                }
+        tokio::select! {
+            _ = sigterm.recv() => {
+                tracing::info!("sigterm received");
+            }
+            _ = sigint.recv() => {
+                tracing::info!("sigint received");
             }
         }
     }

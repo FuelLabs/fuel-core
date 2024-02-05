@@ -1,29 +1,35 @@
 use crate::{
     database::{
         convert_to_rocksdb_direction,
-        Column,
-        Database,
+        database_description::DatabaseDescription,
         Error as DatabaseError,
         Result as DatabaseResult,
     },
     state::{
         BatchOperations,
         IterDirection,
-        KVItem,
-        KeyValueStore,
         TransactableStorage,
-        Value,
-        WriteOperation,
     },
 };
 use fuel_core_metrics::core_metrics::database_metrics;
-use fuel_core_storage::iter::{
-    BoxedIter,
-    IntoBoxedIter,
+use fuel_core_storage::{
+    iter::{
+        BoxedIter,
+        IntoBoxedIter,
+        IteratorableStore,
+    },
+    kv_store::{
+        KVItem,
+        KeyValueStore,
+        StorageColumn,
+        Value,
+        WriteOperation,
+    },
+    Error as StorageError,
+    Result as StorageResult,
 };
 use rand::RngCore;
 use rocksdb::{
-    checkpoint::Checkpoint,
     BlockBasedOptions,
     BoundColumnFamily,
     Cache,
@@ -39,6 +45,7 @@ use rocksdb::{
 };
 use std::{
     env,
+    fmt::Debug,
     iter,
     path::{
         Path,
@@ -85,28 +92,32 @@ impl Drop for ShallowTempDir {
 }
 
 #[derive(Debug)]
-pub struct RocksDb {
+pub struct RocksDb<Description> {
     db: DB,
-    capacity: Option<usize>,
+    _marker: core::marker::PhantomData<Description>,
 }
 
-impl RocksDb {
+impl<Description> RocksDb<Description>
+where
+    Description: DatabaseDescription,
+{
     pub fn default_open<P: AsRef<Path>>(
         path: P,
         capacity: Option<usize>,
-    ) -> DatabaseResult<RocksDb> {
+    ) -> DatabaseResult<Self> {
         Self::open(
             path,
-            enum_iterator::all::<Column>().collect::<Vec<_>>(),
+            enum_iterator::all::<Description::Column>().collect::<Vec<_>>(),
             capacity,
         )
     }
 
     pub fn open<P: AsRef<Path>>(
         path: P,
-        columns: Vec<Column>,
+        columns: Vec<Description::Column>,
         capacity: Option<usize>,
-    ) -> DatabaseResult<RocksDb> {
+    ) -> DatabaseResult<Self> {
+        let path = path.as_ref().join(Description::name());
         let mut block_opts = BlockBasedOptions::default();
         // See https://github.com/facebook/rocksdb/blob/a1523efcdf2f0e8133b9a9f6e170a0dad49f928f/include/rocksdb/table.h#L246-L271 for details on what the format versions are/do.
         block_opts.set_format_version(5);
@@ -128,10 +139,7 @@ impl RocksDb {
         block_opts.set_bloom_filter(10.0, true);
 
         let cf_descriptors = columns.clone().into_iter().map(|i| {
-            ColumnFamilyDescriptor::new(
-                RocksDb::col_name(i),
-                Self::cf_opts(i, &block_opts),
-            )
+            ColumnFamilyDescriptor::new(Self::col_name(i), Self::cf_opts(i, &block_opts))
         });
 
         let mut opts = Options::default();
@@ -154,7 +162,7 @@ impl RocksDb {
                     Ok(db) => {
                         for i in columns {
                             let opts = Self::cf_opts(i, &block_opts);
-                            db.create_cf(RocksDb::col_name(i), &opts)
+                            db.create_cf(Self::col_name(i), &opts)
                                 .map_err(|e| DatabaseError::Other(e.into()))?;
                         }
                         Ok(db)
@@ -166,7 +174,7 @@ impl RocksDb {
 
                         let cf_descriptors = columns.clone().into_iter().map(|i| {
                             ColumnFamilyDescriptor::new(
-                                RocksDb::col_name(i),
+                                Self::col_name(i),
                                 Self::cf_opts(i, &block_opts),
                             )
                         });
@@ -177,49 +185,33 @@ impl RocksDb {
             ok => ok,
         }
         .map_err(|e| DatabaseError::Other(e.into()))?;
-        let rocks_db = RocksDb { db, capacity };
+        let rocks_db = RocksDb {
+            db,
+            _marker: Default::default(),
+        };
         Ok(rocks_db)
     }
 
-    pub fn checkpoint<P: AsRef<Path>>(&self, path: P) -> DatabaseResult<()> {
-        Checkpoint::new(&self.db)
-            .and_then(|checkpoint| checkpoint.create_checkpoint(path))
-            .map_err(|e| {
-                DatabaseError::Other(anyhow::anyhow!(
-                    "Failed to create a checkpoint: {}",
-                    e
-                ))
-            })
-    }
-
-    fn cf(&self, column: Column) -> Arc<BoundColumnFamily> {
+    fn cf(&self, column: Description::Column) -> Arc<BoundColumnFamily> {
         self.db
-            .cf_handle(&RocksDb::col_name(column))
+            .cf_handle(&Self::col_name(column))
             .expect("invalid column state")
     }
 
-    fn col_name(column: Column) -> String {
+    fn col_name(column: Description::Column) -> String {
         format!("col-{}", column.as_usize())
     }
 
-    fn cf_opts(column: Column, block_opts: &BlockBasedOptions) -> Options {
+    fn cf_opts(column: Description::Column, block_opts: &BlockBasedOptions) -> Options {
         let mut opts = Options::default();
         opts.create_if_missing(true);
         opts.set_compression_type(DBCompressionType::Lz4);
         opts.set_block_based_table_factory(block_opts);
 
         // All double-keys should be configured here
-        match column {
-            Column::OwnedCoins
-            | Column::TransactionsByOwnerBlockIdx
-            | Column::OwnedMessageIds
-            | Column::ContractsAssets
-            | Column::ContractsState => {
-                // prefix is address length
-                opts.set_prefix_extractor(SliceTransform::create_fixed_prefix(32))
-            }
-            _ => {}
-        };
+        if let Some(size) = Description::prefix(&column) {
+            opts.set_prefix_extractor(SliceTransform::create_fixed_prefix(size))
+        }
 
         opts
     }
@@ -234,7 +226,7 @@ impl RocksDb {
     fn reverse_prefix_iter(
         &self,
         prefix: &[u8],
-        column: Column,
+        column: Description::Column,
     ) -> impl Iterator<Item = KVItem> + '_ {
         let maybe_next_item = next_prefix(prefix.to_vec())
             .and_then(|next_prefix| {
@@ -283,7 +275,7 @@ impl RocksDb {
 
     fn _iter_all(
         &self,
-        column: Column,
+        column: Description::Column,
         opts: ReadOptions,
         iter_mode: IteratorMode,
     ) -> impl Iterator<Item = KVItem> + '_ {
@@ -301,66 +293,104 @@ impl RocksDb {
 
                     (key_as_vec, Arc::new(value_as_vec))
                 })
-                .map_err(|e| DatabaseError::Other(e.into()))
+                .map_err(|e| DatabaseError::Other(e.into()).into())
             })
     }
 }
 
-impl KeyValueStore for RocksDb {
-    fn get(&self, key: &[u8], column: Column) -> DatabaseResult<Option<Value>> {
+impl<Description> KeyValueStore for RocksDb<Description>
+where
+    Description: DatabaseDescription,
+{
+    type Column = Description::Column;
+
+    fn write(
+        &self,
+        key: &[u8],
+        column: Self::Column,
+        buf: &[u8],
+    ) -> StorageResult<usize> {
+        let r = buf.len();
+        self.db
+            .put_cf(&self.cf(column), key, buf)
+            .map_err(|e| DatabaseError::Other(e.into()))?;
+
+        database_metrics().write_meter.inc();
+        database_metrics().bytes_written.observe(r as f64);
+
+        Ok(r)
+    }
+
+    fn delete(&self, key: &[u8], column: Self::Column) -> StorageResult<()> {
+        self.db
+            .delete_cf(&self.cf(column), key)
+            .map_err(|e| DatabaseError::Other(e.into()).into())
+    }
+
+    fn size_of_value(
+        &self,
+        key: &[u8],
+        column: Self::Column,
+    ) -> StorageResult<Option<usize>> {
         database_metrics().read_meter.inc();
+
+        Ok(self
+            .db
+            .get_pinned_cf(&self.cf(column), key)
+            .map_err(|e| DatabaseError::Other(e.into()))?
+            .map(|value| value.len()))
+    }
+
+    fn get(&self, key: &[u8], column: Self::Column) -> StorageResult<Option<Value>> {
+        database_metrics().read_meter.inc();
+
         let value = self
             .db
             .get_cf(&self.cf(column), key)
-            .map_err(|e| DatabaseError::Other(e.into()));
+            .map_err(|e| DatabaseError::Other(e.into()))?;
 
-        if let Ok(Some(value)) = &value {
+        if let Some(value) = &value {
             database_metrics().bytes_read.observe(value.len() as f64);
         }
 
-        value.map(|value| value.map(Arc::new))
+        Ok(value.map(Arc::new))
     }
 
-    fn put(
+    fn read(
         &self,
         key: &[u8],
-        column: Column,
-        value: Value,
-    ) -> DatabaseResult<Option<Value>> {
-        database_metrics().write_meter.inc();
-        database_metrics().bytes_written.observe(value.len() as f64);
+        column: Self::Column,
+        mut buf: &mut [u8],
+    ) -> StorageResult<Option<usize>> {
+        database_metrics().read_meter.inc();
 
-        // FIXME: This is a race condition. We should use a transaction.
-        let prev = self.get(key, column)?;
-        // FIXME: This is a race condition. We should use a transaction.
-        self.db
-            .put_cf(&self.cf(column), key, value.as_ref())
-            .map_err(|e| DatabaseError::Other(e.into()))
-            .map(|_| prev)
-    }
-
-    fn delete(&self, key: &[u8], column: Column) -> DatabaseResult<Option<Value>> {
-        // FIXME: This is a race condition. We should use a transaction.
-        let prev = self.get(key, column)?;
-        // FIXME: This is a race condition. We should use a transaction.
-        self.db
-            .delete_cf(&self.cf(column), key)
-            .map_err(|e| DatabaseError::Other(e.into()))
-            .map(|_| prev)
-    }
-
-    fn exists(&self, key: &[u8], column: Column) -> DatabaseResult<bool> {
-        // use pinnable mem ref to avoid memcpy of values associated with the key
-        // since we're just checking for the existence of the key
-        self.db
+        let r = self
+            .db
             .get_pinned_cf(&self.cf(column), key)
-            .map_err(|e| DatabaseError::Other(e.into()))
-            .map(|v| v.is_some())
-    }
+            .map_err(|e| DatabaseError::Other(e.into()))?
+            .map(|value| {
+                let read = value.len();
+                std::io::Write::write_all(&mut buf, value.as_ref())
+                    .map_err(|e| DatabaseError::Other(anyhow::anyhow!(e)))?;
+                StorageResult::Ok(read)
+            })
+            .transpose()?;
 
+        if let Some(r) = &r {
+            database_metrics().bytes_read.observe(*r as f64);
+        }
+
+        Ok(r)
+    }
+}
+
+impl<Description> IteratorableStore for RocksDb<Description>
+where
+    Description: DatabaseDescription,
+{
     fn iter_all(
         &self,
-        column: Column,
+        column: Self::Column,
         prefix: Option<&[u8]>,
         start: Option<&[u8]>,
         direction: IterDirection,
@@ -423,102 +453,16 @@ impl KeyValueStore for RocksDb {
             }
         }
     }
-
-    fn size_of_value(&self, key: &[u8], column: Column) -> DatabaseResult<Option<usize>> {
-        database_metrics().read_meter.inc();
-
-        Ok(self
-            .db
-            .get_pinned_cf(&self.cf(column), key)
-            .map_err(|e| DatabaseError::Other(e.into()))?
-            .map(|value| value.len()))
-    }
-
-    fn read(
-        &self,
-        key: &[u8],
-        column: Column,
-        mut buf: &mut [u8],
-    ) -> DatabaseResult<Option<usize>> {
-        database_metrics().read_meter.inc();
-
-        let r = self
-            .db
-            .get_pinned_cf(&self.cf(column), key)
-            .map_err(|e| DatabaseError::Other(e.into()))?
-            .map(|value| {
-                let read = value.len();
-                std::io::Write::write_all(&mut buf, value.as_ref())
-                    .map_err(|e| DatabaseError::Other(anyhow::anyhow!(e)))?;
-                DatabaseResult::Ok(read)
-            })
-            .transpose()?;
-
-        if let Some(r) = &r {
-            database_metrics().bytes_read.observe(*r as f64);
-        }
-
-        Ok(r)
-    }
-
-    fn write(&self, key: &[u8], column: Column, buf: &[u8]) -> DatabaseResult<usize> {
-        database_metrics().write_meter.inc();
-        database_metrics().bytes_written.observe(buf.len() as f64);
-
-        let r = buf.len();
-        self.db
-            .put_cf(&self.cf(column), key, buf)
-            .map_err(|e| DatabaseError::Other(e.into()))?;
-
-        Ok(r)
-    }
-
-    fn read_alloc(&self, key: &[u8], column: Column) -> DatabaseResult<Option<Value>> {
-        database_metrics().read_meter.inc();
-
-        let r = self
-            .db
-            .get_pinned_cf(&self.cf(column), key)
-            .map_err(|e| DatabaseError::Other(e.into()))?
-            .map(|value| value.to_vec());
-
-        if let Some(r) = &r {
-            database_metrics().bytes_read.observe(r.len() as f64);
-        }
-
-        Ok(r.map(Arc::new))
-    }
-
-    fn replace(
-        &self,
-        key: &[u8],
-        column: Column,
-        buf: &[u8],
-    ) -> DatabaseResult<(usize, Option<Value>)> {
-        // FIXME: This is a race condition. We should use a transaction.
-        let existing = self.read_alloc(key, column)?;
-        // FIXME: This is a race condition. We should use a transaction.
-        let r = self.write(key, column, buf)?;
-
-        Ok((r, existing))
-    }
-
-    fn take(&self, key: &[u8], column: Column) -> DatabaseResult<Option<Value>> {
-        // FIXME: This is a race condition. We should use a transaction.
-        let prev = self.read_alloc(key, column)?;
-        // FIXME: This is a race condition. We should use a transaction.
-        self.db
-            .delete_cf(&self.cf(column), key)
-            .map_err(|e| DatabaseError::Other(e.into()))
-            .map(|_| prev)
-    }
 }
 
-impl BatchOperations for RocksDb {
+impl<Description> BatchOperations for RocksDb<Description>
+where
+    Description: DatabaseDescription,
+{
     fn batch_write(
         &self,
-        entries: &mut dyn Iterator<Item = (Vec<u8>, Column, WriteOperation)>,
-    ) -> DatabaseResult<()> {
+        entries: &mut dyn Iterator<Item = (Vec<u8>, Self::Column, WriteOperation)>,
+    ) -> StorageResult<()> {
         let mut batch = WriteBatch::default();
 
         for (key, column, op) in entries {
@@ -539,11 +483,11 @@ impl BatchOperations for RocksDb {
 
         self.db
             .write(batch)
-            .map_err(|e| DatabaseError::Other(e.into()))
+            .map_err(|e| DatabaseError::Other(e.into()).into())
     }
 
     // use delete_range to delete all keys in a column
-    fn delete_all(&self, column: Column) -> DatabaseResult<()> {
+    fn delete_all(&self, column: Self::Column) -> StorageResult<()> {
         let mut batch = WriteBatch::default();
         batch.delete_range_cf(&self.cf(column), [0u8; 32], [255u8; 32]);
 
@@ -554,22 +498,14 @@ impl BatchOperations for RocksDb {
 
         self.db
             .write(batch)
-            .map_err(|e| DatabaseError::Other(e.into()))
+            .map_err(|e| StorageError::Other(e.into()))
     }
 }
 
-impl TransactableStorage for RocksDb {
-    fn checkpoint(&self) -> DatabaseResult<Database> {
-        let tmp_dir = ShallowTempDir::new();
-        self.checkpoint(&tmp_dir.path)?;
-        let db = RocksDb::default_open(&tmp_dir.path, self.capacity)?;
-        let database = Database::new(Arc::new(db)).with_drop(Box::new(move || {
-            drop(tmp_dir);
-        }));
-
-        Ok(database)
-    }
-
+impl<Description> TransactableStorage for RocksDb<Description>
+where
+    Description: DatabaseDescription,
+{
     fn flush(&self) -> DatabaseResult<()> {
         self.db
             .flush_wal(true)
@@ -595,9 +531,11 @@ fn next_prefix(mut prefix: Vec<u8>) -> Option<Vec<u8>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::database::database_description::on_chain::OnChain;
+    use fuel_core_storage::column::Column;
     use tempfile::TempDir;
 
-    fn create_db() -> (RocksDb, TempDir) {
+    fn create_db() -> (RocksDb<OnChain>, TempDir) {
         let tmp_dir = TempDir::new().unwrap();
         (
             RocksDb::default_open(tmp_dir.path(), None).unwrap(),
@@ -624,7 +562,7 @@ mod tests {
         let expected = Arc::new(vec![1, 2, 3]);
         db.put(&key, Column::Metadata, expected.clone()).unwrap();
         let prev = db
-            .put(&key, Column::Metadata, Arc::new(vec![2, 4, 6]))
+            .replace(&key, Column::Metadata, Arc::new(vec![2, 4, 6]))
             .unwrap();
 
         assert_eq!(prev, Some(expected));
@@ -702,10 +640,7 @@ mod tests {
             (key.clone(), expected.clone())
         );
 
-        assert_eq!(
-            db.delete(&key, Column::Metadata).unwrap().unwrap(),
-            expected
-        );
+        assert_eq!(db.take(&key, Column::Metadata).unwrap().unwrap(), expected);
 
         assert!(!db.exists(&key, Column::Metadata).unwrap());
     }
@@ -729,10 +664,7 @@ mod tests {
             (key.clone(), expected.clone())
         );
 
-        assert_eq!(
-            db.delete(&key, Column::Metadata).unwrap().unwrap(),
-            expected
-        );
+        assert_eq!(db.take(&key, Column::Metadata).unwrap().unwrap(), expected);
 
         assert!(!db.exists(&key, Column::Metadata).unwrap());
     }
@@ -756,10 +688,7 @@ mod tests {
             (key.clone(), expected.clone())
         );
 
-        assert_eq!(
-            db.delete(&key, Column::Metadata).unwrap().unwrap(),
-            expected
-        );
+        assert_eq!(db.take(&key, Column::Metadata).unwrap().unwrap(), expected);
 
         assert!(!db.exists(&key, Column::Metadata).unwrap());
     }

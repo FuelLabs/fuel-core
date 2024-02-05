@@ -1,18 +1,11 @@
-use super::{
-    storage::{
-        GenesisCoinRoots,
-        GenesisContractBalanceRoots,
-        GenesisContractIds,
-        GenesisContractRoots,
-        GenesisContractStateRoots,
-        GenesisMessageRoots,
-        GenesisMetadata,
-        ToDatabaseKey,
-    },
-    Column,
-    Database,
-};
+use crate::state::DataSource;
+
+use super::Database;
 use fuel_core_storage::{
+    blueprint::Blueprint,
+    column::Column,
+    structured_storage::TableWithBlueprint,
+    Mappable,
     MerkleRoot,
     Result,
     StorageAsMut,
@@ -41,11 +34,108 @@ pub enum GenesisResource {
     ContractsRoot,
 }
 
-impl ToDatabaseKey for GenesisResource {
-    type Type<'a> = [u8; 1];
+pub struct GenesisMetadata;
+impl Mappable for GenesisMetadata {
+    type Key = Self::OwnedKey;
+    type OwnedKey = GenesisResource;
+    type Value = Self::OwnedValue;
+    type OwnedValue = usize;
+}
+impl TableWithBlueprint for GenesisMetadata {
+    type Blueprint = Column;
+    type Column = Column;
+    fn column() -> Self::Column {
+        Column::GenesisMetadata
+    }
+}
 
-    fn database_key(&self) -> Self::Type<'_> {
-        [*self as u8]
+pub struct GenesisCoinRoots;
+impl Mappable for GenesisCoinRoots {
+    type Key = Self::OwnedKey;
+    type OwnedKey = MerkleRoot;
+    type Value = Self::OwnedValue;
+    type OwnedValue = ();
+}
+impl TableWithBlueprint for GenesisCoinRoots {
+    type Blueprint = Column;
+    type Column = Column;
+    fn column() -> Self::Column {
+        Column::GenesisCoinRoots
+    }
+}
+
+pub struct GenesisMessageRoots;
+impl Mappable for GenesisMessageRoots {
+    type Key = Self::OwnedKey;
+    type OwnedKey = MerkleRoot;
+    type Value = Self::OwnedValue;
+    type OwnedValue = ();
+}
+impl TableWithBlueprint for GenesisMessageRoots {
+    type Blueprint = Column;
+    type Column = Column;
+    fn column() -> Self::Column {
+        Column::GenesisMessageRoots
+    }
+}
+
+pub struct GenesisContractStateRoots;
+impl Mappable for GenesisContractStateRoots {
+    type Key = Self::OwnedKey;
+    type OwnedKey = MerkleRoot;
+    type Value = Self::OwnedValue;
+    type OwnedValue = ();
+}
+impl TableWithBlueprint for GenesisContractStateRoots {
+    type Blueprint = Column;
+    type Column = Column;
+    fn column() -> Self::Column {
+        Column::GenesisContractStateRoots
+    }
+}
+
+pub struct GenesisContractBalanceRoots;
+impl Mappable for GenesisContractBalanceRoots {
+    type Key = Self::OwnedKey;
+    type OwnedKey = MerkleRoot;
+    type Value = Self::OwnedValue;
+    type OwnedValue = ();
+}
+impl TableWithBlueprint for GenesisContractBalanceRoots {
+    type Blueprint = Column;
+    type Column = Column;
+    fn column() -> Self::Column {
+        Column::GenesisContractBalanceRoots
+    }
+}
+
+pub struct GenesisContractRoots;
+impl Mappable for GenesisContractRoots {
+    type Key = Self::OwnedKey;
+    type OwnedKey = MerkleRoot;
+    type Value = Self::OwnedValue;
+    type OwnedValue = ();
+}
+impl TableWithBlueprint for GenesisContractRoots {
+    type Blueprint = Column;
+    type Column = Column;
+    fn column() -> Self::Column {
+        Column::GenesisContractRoots
+    }
+}
+
+pub struct GenesisContractIds;
+impl Mappable for GenesisContractIds {
+    type Key = Self::OwnedKey;
+    type OwnedKey = ContractId;
+    type Value = Self::OwnedValue;
+    type OwnedValue = ();
+}
+impl TableWithBlueprint for GenesisContractIds {
+    type Blueprint = Column;
+    type Column = Column;
+    fn column() -> Self::Column {
+        Column::GenesisContractIds
     }
 }
 
@@ -99,11 +189,15 @@ impl Database {
         Ok(())
     }
 
-    pub(crate) fn genesis_roots(
+    // TODO fix iter all
+    pub(crate) fn genesis_roots<M>(
         &self,
-        column: Column,
-    ) -> Result<impl Iterator<Item = (MerkleTreeKey, [u8; 32])>> {
-        let roots_iter = self.iter_all::<Vec<u8>, ()>(column, None);
+    ) -> Result<impl Iterator<Item = (MerkleTreeKey, [u8; 32])>>
+    where
+        M: Mappable<OwnedKey = [u8; 32]> + TableWithBlueprint<Column = Column>,
+        M::Blueprint: Blueprint<M, DataSource>,
+    {
+        let roots_iter = self.iter_all::<M>(None);
 
         let roots = process_results(roots_iter, |roots| {
             roots
@@ -117,17 +211,21 @@ impl Database {
         Ok(roots)
     }
 
-    fn compute_genesis_root(&self, column: Column) -> Result<MerkleRoot> {
-        let roots = self.genesis_roots(column)?;
+    fn compute_genesis_root<M>(&self) -> Result<MerkleRoot>
+    where
+        M: Mappable<OwnedKey = [u8; 32]> + TableWithBlueprint<Column = Column>,
+        M::Blueprint: Blueprint<M, DataSource>,
+    {
+        let roots = self.genesis_roots::<M>()?;
         Ok(MerkleTree::root_from_set(roots.into_iter()))
     }
 
     pub fn genesis_coin_root(&self) -> Result<MerkleRoot> {
-        self.compute_genesis_root(Column::GenesisCoinRoots)
+        self.compute_genesis_root::<GenesisCoinRoots>()
     }
 
     pub fn genesis_messages_root(&self) -> Result<MerkleRoot> {
-        self.compute_genesis_root(Column::GenesisMessageRoots)
+        self.compute_genesis_root::<GenesisMessageRoots>()
     }
 
     pub fn genesis_contracts_root(&self) -> Result<MerkleRoot> {
@@ -145,7 +243,7 @@ impl Database {
     pub fn genesis_contract_ids_iter(
         &self,
     ) -> impl Iterator<Item = Result<ContractId>> + '_ {
-        self.iter_all::<Vec<u8>, ()>(Column::GenesisContractIds, None)
+        self.iter_all::<Vec<u8>, ()>(Column::GenesisContractIds)
             .map_ok(|(contract_id, _)| {
                 let bytes32: [u8; 32] = contract_id.try_into().unwrap();
                 ContractId::from(bytes32)

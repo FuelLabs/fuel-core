@@ -20,7 +20,7 @@ fuel-core-types = { workspace = true, default-features = false, features = [
 impl-tools = { workspace = true }
 itertools = { workspace = true, features = ["use_alloc"] }
 parquet = { workspace = true, features = ["zstd"], optional = true }
-postcard = { version = "1.0", features = ["alloc"] }
+postcard = { workspace = true, features = ["alloc"] }
 rand = { workspace = true, optional = true }
 serde = { workspace = true, features = ["derive", "rc"] }
 serde_json = { version = "1.0", features = ["raw_value"], optional = true }

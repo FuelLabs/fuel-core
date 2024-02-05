@@ -1,14 +1,18 @@
 use crate::database::{
-    storage::DatabaseColumn,
-    Column,
+    database_description::on_chain::OnChain,
     Database,
-    Error as DatabaseError,
-    Result as DatabaseResult,
 };
 use fuel_core_chain_config::CoinConfig;
 use fuel_core_storage::{
+    blueprint::plain::Plain,
+    codec::{
+        postcard::Postcard,
+        primitive::utxo_id_to_bytes,
+        raw::Raw,
+    },
     iter::IterDirection,
     not_found,
+    structured_storage::TableWithBlueprint,
     tables::Coins,
     Error as StorageError,
     Mappable,
@@ -23,7 +27,6 @@ use fuel_core_types::{
     entities::coins::coin::CompressedCoin,
     fuel_tx::{
         Address,
-        Bytes32,
         UtxoId,
     },
 };
@@ -37,13 +40,6 @@ pub fn owner_coin_id_key(owner: &Address, coin_id: &UtxoId) -> OwnedCoinKey {
     default
 }
 
-fn utxo_id_to_bytes(utxo_id: &UtxoId) -> [u8; TxId::LEN + 1] {
-    let mut default = [0; TxId::LEN + 1];
-    default[0..TxId::LEN].copy_from_slice(utxo_id.tx_id().as_ref());
-    default[TxId::LEN] = utxo_id.output_index();
-    default
-}
-
 /// The storage table of owned coin ids. Maps addresses to owned coins.
 pub struct OwnedCoins;
 /// The storage key for owned coins: `Address ++ UtxoId`
@@ -53,12 +49,15 @@ impl Mappable for OwnedCoins {
     type Key = Self::OwnedKey;
     type OwnedKey = OwnedCoinKey;
     type Value = Self::OwnedValue;
-    type OwnedValue = bool;
+    type OwnedValue = ();
 }
 
-impl DatabaseColumn for OwnedCoins {
-    fn column() -> Column {
-        Column::OwnedCoins
+impl TableWithBlueprint for OwnedCoins {
+    type Blueprint = Plain<Raw, Postcard>;
+    type Column = fuel_core_storage::column::Column;
+
+    fn column() -> Self::Column {
+        Self::Column::OwnedCoins
     }
 }
 
@@ -66,12 +65,11 @@ impl StorageInspect<Coins> for Database {
     type Error = StorageError;
 
     fn get(&self, key: &UtxoId) -> Result<Option<Cow<CompressedCoin>>, Self::Error> {
-        Database::get(self, &utxo_id_to_bytes(key), Column::Coins).map_err(Into::into)
+        self.data.storage::<Coins>().get(key)
     }
 
     fn contains_key(&self, key: &UtxoId) -> Result<bool, Self::Error> {
-        Database::contains_key(self, &utxo_id_to_bytes(key), Column::Coins)
-            .map_err(Into::into)
+        self.data.storage::<Coins>().contains_key(key)
     }
 }
 
@@ -81,22 +79,21 @@ impl StorageMutate<Coins> for Database {
         key: &UtxoId,
         value: &CompressedCoin,
     ) -> Result<Option<CompressedCoin>, Self::Error> {
-        let coin_by_owner = owner_coin_id_key(&value.owner, key);
+        let coin_by_owner = owner_coin_id_key(value.owner(), key);
         // insert primary record
-        let insert = Database::insert(self, utxo_id_to_bytes(key), Column::Coins, value)?;
+        let insert = self.data.storage_as_mut::<Coins>().insert(key, value)?;
         // insert secondary index by owner
         self.storage_as_mut::<OwnedCoins>()
-            .insert(&coin_by_owner, &true)?;
+            .insert(&coin_by_owner, &())?;
         Ok(insert)
     }
 
     fn remove(&mut self, key: &UtxoId) -> Result<Option<CompressedCoin>, Self::Error> {
-        let coin: Option<CompressedCoin> =
-            Database::remove(self, &utxo_id_to_bytes(key), Column::Coins)?;
+        let coin = self.data.storage_as_mut::<Coins>().remove(key)?;
 
         // cleanup secondary index
         if let Some(coin) = &coin {
-            let key = owner_coin_id_key(&coin.owner, key);
+            let key = owner_coin_id_key(coin.owner(), key);
             self.storage_as_mut::<OwnedCoins>().remove(&key)?;
         }
 
@@ -104,17 +101,16 @@ impl StorageMutate<Coins> for Database {
     }
 }
 
-impl Database {
+impl Database<OnChain> {
     pub fn owned_coins_ids(
         &self,
         owner: &Address,
         start_coin: Option<UtxoId>,
         direction: Option<IterDirection>,
-    ) -> impl Iterator<Item = DatabaseResult<UtxoId>> + '_ {
-        self.iter_all_filtered::<Vec<u8>, bool, _, _>(
-            Column::OwnedCoins,
-            Some(*owner),
-            start_coin.map(|b| owner_coin_id_key(owner, &b)),
+    ) -> impl Iterator<Item = StorageResult<UtxoId>> + '_ {
+        let start_coin = start_coin.map(|b| owner_coin_id_key(owner, &b));
+        self.iter_all_filtered::<OwnedCoins, _>(
+            Some(*owner), start_coin.as_ref(),
             direction,
         )
         // Safety: key is always 64 bytes
@@ -127,7 +123,9 @@ impl Database {
             })
         })
     }
+}
 
+impl Database {
     pub fn coin(&self, utxo_id: &UtxoId) -> StorageResult<CompressedCoin> {
         let coin = self
             .storage_as_ref::<Coins>()
@@ -141,24 +139,39 @@ impl Database {
     pub fn iter_coin_configs(
         &self,
     ) -> impl Iterator<Item = StorageResult<CoinConfig>> + '_ {
-        self.iter_all::<Vec<u8>, CompressedCoin>(Column::Coins, None)
-            .map(|raw_coin| {
-                let coin = raw_coin?;
-
-                let byte_id =
-                    Bytes32::new(coin.0[..32].try_into().map_err(DatabaseError::from)?);
-                let output_index = coin.0[32];
+        self.iter_all::<Coins>(None)
+            .map(|raw_coin| -> StorageResult<CoinConfig> {
+                let (utxo_id, coin) = raw_coin?;
 
                 Ok(CoinConfig {
-                    tx_id: Some(byte_id),
-                    output_index: Some(output_index),
-                    tx_pointer_block_height: Some(coin.1.tx_pointer.block_height()),
-                    tx_pointer_tx_idx: Some(coin.1.tx_pointer.tx_index()),
-                    maturity: Some(coin.1.maturity),
-                    owner: coin.1.owner,
-                    amount: coin.1.amount,
-                    asset_id: coin.1.asset_id,
+                    tx_id: Some(*utxo_id.tx_id()),
+                    output_index: Some(utxo_id.output_index()),
+                    tx_pointer_block_height: Some(coin.tx_pointer().block_height()),
+                    tx_pointer_tx_idx: Some(coin.tx_pointer().tx_index()),
+                    maturity: Some(*coin.maturity()),
+                    owner: *coin.owner(),
+                    amount: *coin.amount(),
+                    asset_id: *coin.asset_id(),
                 })
             })
     }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    fn generate_key(rng: &mut impl rand::Rng) -> <OwnedCoins as Mappable>::Key {
+        let mut bytes = [0u8; 65];
+        rng.fill(bytes.as_mut());
+        bytes
+    }
+
+    fuel_core_storage::basic_storage_tests!(
+        OwnedCoins,
+        [0u8; 65],
+        <OwnedCoins as Mappable>::Value::default(),
+        <OwnedCoins as Mappable>::Value::default(),
+        generate_key
+    );
 }

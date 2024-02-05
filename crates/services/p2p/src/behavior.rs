@@ -1,84 +1,81 @@
 use crate::{
-    codecs::NetworkCodec,
-    config::Config,
-    discovery::{
-        DiscoveryBehaviour,
-        DiscoveryConfig,
+    codecs::{
+        postcard::PostcardCodec,
+        NetworkCodec,
     },
+    config::Config,
+    discovery,
     gossipsub::{
         config::build_gossipsub_behaviour,
         topics::GossipTopic,
     },
-    peer_report::{
-        PeerReportBehaviour,
-        PeerReportEvent,
-    },
+    heartbeat,
+    peer_report,
     request_response::messages::{
-        NetworkResponse,
         RequestMessage,
+        ResponseMessage,
     },
 };
 use fuel_core_types::fuel_types::BlockHeight;
 use libp2p::{
+    allow_block_list,
     gossipsub::{
-        error::PublishError,
-        Gossipsub,
-        GossipsubEvent,
+        self,
         MessageAcceptance,
         MessageId,
+        PublishError,
     },
+    identify,
     request_response::{
+        self,
+        OutboundRequestId,
         ProtocolSupport,
-        RequestId,
-        RequestResponse,
-        RequestResponseConfig,
-        RequestResponseEvent,
         ResponseChannel,
     },
     swarm::NetworkBehaviour,
     Multiaddr,
     PeerId,
 };
-use libp2p_kad::KademliaEvent;
-
-#[derive(Debug)]
-pub enum FuelBehaviourEvent {
-    Discovery(KademliaEvent),
-    PeerReport(PeerReportEvent),
-    Gossipsub(GossipsubEvent),
-    RequestResponse(RequestResponseEvent<RequestMessage, NetworkResponse>),
-}
 
 /// Handles all p2p protocols needed for Fuel.
 #[derive(NetworkBehaviour)]
-#[behaviour(out_event = "FuelBehaviourEvent")]
-pub struct FuelBehaviour<Codec: NetworkCodec> {
-    /// Node discovery
-    discovery: DiscoveryBehaviour,
+pub struct FuelBehaviour {
+    /// **WARNING**: The order of the behaviours is important and fragile, at least for the tests.
 
-    /// Identifies and periodically requests `BlockHeight` from connected nodes
-    peer_report: PeerReportBehaviour,
+    /// The Behaviour to manage connections to blocked peers.
+    blocked_peer: allow_block_list::Behaviour<allow_block_list::BlockedPeers>,
 
     /// Message propagation for p2p
-    gossipsub: Gossipsub,
+    gossipsub: gossipsub::Behaviour,
+
+    /// Handles regular heartbeats from peers
+    heartbeat: heartbeat::Behaviour,
+
+    /// The Behaviour to identify peers.
+    identify: identify::Behaviour,
+
+    /// Identifies and periodically requests `BlockHeight` from connected nodes
+    peer_report: peer_report::Behaviour,
+
+    /// Node discovery
+    discovery: discovery::Behaviour,
 
     /// RequestResponse protocol
-    request_response: RequestResponse<Codec>,
+    request_response: request_response::Behaviour<PostcardCodec>,
 }
 
-impl<Codec: NetworkCodec> FuelBehaviour<Codec> {
-    pub(crate) fn new(p2p_config: &Config, codec: Codec) -> Self {
+impl FuelBehaviour {
+    pub(crate) fn new(p2p_config: &Config, codec: PostcardCodec) -> Self {
         let local_public_key = p2p_config.keypair.public();
         let local_peer_id = PeerId::from_public_key(&local_public_key);
 
         let discovery_config = {
             let mut discovery_config =
-                DiscoveryConfig::new(local_peer_id, p2p_config.network_name.clone());
+                discovery::Config::new(local_peer_id, p2p_config.network_name.clone());
 
             discovery_config
                 .enable_mdns(p2p_config.enable_mdns)
-                .discovery_limit(p2p_config.max_peers_connected as usize)
-                .allow_private_addresses(p2p_config.allow_private_addresses)
+                .max_peers_connected(p2p_config.max_peers_connected as usize)
                 .with_bootstrap_nodes(p2p_config.bootstrap_nodes.clone())
                 .with_reserved_nodes(p2p_config.reserved_nodes.clone())
                 .enable_reserved_nodes_only_mode(p2p_config.reserved_nodes_only_mode);
@@ -96,23 +93,47 @@ impl<Codec: NetworkCodec> FuelBehaviour<Codec> {
 
         let gossipsub = build_gossipsub_behaviour(p2p_config);
 
-        let peer_report = PeerReportBehaviour::new(p2p_config);
+        let peer_report = peer_report::Behaviour::new(p2p_config);
+
+        let identify = {
+            let identify_config = identify::Config::new(
+                "/fuel/1.0".to_string(),
+                p2p_config.keypair.public(),
+            );
+            if let Some(interval) = p2p_config.identify_interval {
+                identify::Behaviour::new(identify_config.with_interval(interval))
+            } else {
+                identify::Behaviour::new(identify_config)
+            }
+        };
+
+        let heartbeat = heartbeat::Behaviour::new(
+            p2p_config.heartbeat_config.clone(),
+            BlockHeight::default(),
+        );
 
         let req_res_protocol =
-            std::iter::once((codec.get_req_res_protocol(), ProtocolSupport::Full));
+            core::iter::once((codec.get_req_res_protocol(), ProtocolSupport::Full));
 
-        let mut req_res_config = RequestResponseConfig::default();
-        req_res_config.set_request_timeout(p2p_config.set_request_timeout);
-        req_res_config.set_connection_keep_alive(p2p_config.set_connection_keep_alive);
+        let req_res_config = request_response::Config::default();
+        req_res_config
+            .clone()
+            .with_request_timeout(p2p_config.set_request_timeout);
 
-        let request_response =
-            RequestResponse::new(codec, req_res_protocol, req_res_config);
+        let request_response = request_response::Behaviour::with_codec(
+            codec,
+            req_res_protocol,
+            req_res_config,
+        );
 
         Self {
             discovery: discovery_config.finish(),
             gossipsub,
             peer_report,
             request_response,
+            blocked_peer: Default::default(),
+            identify,
+            heartbeat,
         }
     }
 
@@ -138,15 +159,15 @@ impl<Codec: NetworkCodec> FuelBehaviour<Codec> {
         &mut self,
         message_request: RequestMessage,
         peer_id: &PeerId,
-    ) -> RequestId {
+    ) -> OutboundRequestId {
         self.request_response.send_request(peer_id, message_request)
     }
 
     pub fn send_response_msg(
         &mut self,
-        channel: ResponseChannel<NetworkResponse>,
-        message: NetworkResponse,
-    ) -> Result<(), NetworkResponse> {
+        channel: ResponseChannel<ResponseMessage>,
+        message: ResponseMessage,
+    ) -> Result<(), ResponseMessage> {
         self.request_response.send_response(channel, message)
     }
 
@@ -166,7 +187,7 @@ impl<Codec: NetworkCodec> FuelBehaviour<Codec> {
             Ok(true) => {
                 tracing::debug!(target: "fuel-p2p", "Sent a report for MessageId: {} from PeerId: {}", msg_id, propagation_source);
                 if should_check_score {
-                    return self.gossipsub.peer_score(propagation_source)
+                    return self.gossipsub.peer_score(propagation_source);
                 }
             }
             Ok(false) => {
@@ -181,35 +202,15 @@ impl<Codec: NetworkCodec> FuelBehaviour<Codec> {
     }
 
     pub fn update_block_height(&mut self, block_height: BlockHeight) {
-        self.peer_report.update_block_height(block_height);
+        self.heartbeat.update_block_height(block_height);
     }
 
     #[cfg(test)]
     pub fn get_peer_score(&self, peer_id: &PeerId) -> Option<f64> {
         self.gossipsub.peer_score(peer_id)
     }
-}
 
-impl From<KademliaEvent> for FuelBehaviourEvent {
-    fn from(event: KademliaEvent) -> Self {
-        FuelBehaviourEvent::Discovery(event)
-    }
-}
-
-impl From<PeerReportEvent> for FuelBehaviourEvent {
-    fn from(event: PeerReportEvent) -> Self {
-        FuelBehaviourEvent::PeerReport(event)
-    }
-}
-
-impl From<GossipsubEvent> for FuelBehaviourEvent {
-    fn from(event: GossipsubEvent) -> Self {
-        FuelBehaviourEvent::Gossipsub(event)
-    }
-}
-
-impl From<RequestResponseEvent<RequestMessage, NetworkResponse>> for FuelBehaviourEvent {
-    fn from(event: RequestResponseEvent<RequestMessage, NetworkResponse>) -> Self {
-        FuelBehaviourEvent::RequestResponse(event)
+    pub fn block_peer(&mut self, peer_id: PeerId) {
+        self.blocked_peer.block_peer(peer_id)
     }
 }

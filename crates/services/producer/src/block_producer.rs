@@ -1,12 +1,16 @@
 use crate::{
     ports,
+    ports::BlockProducerDatabase,
     Config,
 };
 use anyhow::{
     anyhow,
     Context,
 };
-use fuel_core_storage::transactional::StorageTransaction;
+use fuel_core_storage::transactional::{
+    AtomicView,
+    StorageTransaction,
+};
 use fuel_core_types::{
     blockchain::{
         header::{
@@ -17,17 +21,17 @@ use fuel_core_types::{
         primitives::DaBlockHeight,
     },
     fuel_asm::Word,
-    fuel_tx::{
-        Receipt,
-        Transaction,
-    },
+    fuel_tx::Transaction,
     fuel_types::{
         BlockHeight,
         Bytes32,
     },
     services::{
         block_producer::Components,
-        executor::UncommittedResult,
+        executor::{
+            TransactionExecutionStatus,
+            UncommittedResult,
+        },
     },
     tai64::Tai64,
 };
@@ -61,9 +65,9 @@ impl From<Error> for anyhow::Error {
     }
 }
 
-pub struct Producer<Database, TxPool, Executor> {
+pub struct Producer<ViewProvider, TxPool, Executor> {
     pub config: Config,
-    pub db: Database,
+    pub view_provider: ViewProvider,
     pub txpool: TxPool,
     pub executor: Arc<Executor>,
     pub relayer: Box<dyn ports::Relayer>,
@@ -72,20 +76,22 @@ pub struct Producer<Database, TxPool, Executor> {
     pub lock: Mutex<()>,
 }
 
-impl<Database, TxPool, Executor, ExecutorDB, TxSource>
-    Producer<Database, TxPool, Executor>
+impl<ViewProvider, TxPool, Executor> Producer<ViewProvider, TxPool, Executor>
 where
-    Database: ports::BlockProducerDatabase + 'static,
-    TxPool: ports::TxPool<TxSource = TxSource> + 'static,
-    Executor: ports::Executor<Database = ExecutorDB, TxSource = TxSource> + 'static,
+    ViewProvider: AtomicView<Height = BlockHeight> + 'static,
+    ViewProvider::View: BlockProducerDatabase,
 {
-    /// Produces and execute block for the specified height
-    pub async fn produce_and_execute_block(
+    /// Produces and execute block for the specified height.
+    async fn produce_and_execute<TxSource, ExecutorDB>(
         &self,
         height: BlockHeight,
         block_time: Tai64,
+        tx_source: impl FnOnce(BlockHeight) -> TxSource,
         max_gas: Word,
-    ) -> anyhow::Result<UncommittedResult<StorageTransaction<ExecutorDB>>> {
+    ) -> anyhow::Result<UncommittedResult<StorageTransaction<ExecutorDB>>>
+    where
+        Executor: ports::Executor<TxSource, Database = ExecutorDB> + 'static,
+    {
         //  - get previous block info (hash, root, etc)
         //  - select best da_height from relayer
         //  - get available txs from txpool
@@ -97,7 +103,7 @@ where
         // prevent simultaneous block production calls, the guard will drop at the end of this fn.
         let _production_guard = self.lock.lock().await;
 
-        let source = self.txpool.get_source(height);
+        let source = tx_source(height);
 
         let header = self.new_header(height, block_time).await?;
 
@@ -107,7 +113,7 @@ where
             gas_limit: max_gas,
         };
 
-        // Store the context string incase we error.
+        // Store the context string in case we error.
         let context_string =
             format!("Failed to produce block {height:?} due to execution failure");
         let result = self
@@ -119,27 +125,75 @@ where
         debug!("Produced block with result: {:?}", result.result());
         Ok(result)
     }
+}
 
+impl<ViewProvider, TxPool, Executor, ExecutorDB, TxSource>
+    Producer<ViewProvider, TxPool, Executor>
+where
+    ViewProvider: AtomicView<Height = BlockHeight> + 'static,
+    ViewProvider::View: BlockProducerDatabase,
+    TxPool: ports::TxPool<TxSource = TxSource> + 'static,
+    Executor: ports::Executor<TxSource, Database = ExecutorDB> + 'static,
+{
+    /// Produces and execute block for the specified height with transactions from the `TxPool`.
+    pub async fn produce_and_execute_block_txpool(
+        &self,
+        height: BlockHeight,
+        block_time: Tai64,
+        max_gas: Word,
+    ) -> anyhow::Result<UncommittedResult<StorageTransaction<ExecutorDB>>> {
+        self.produce_and_execute(
+            height,
+            block_time,
+            |height| self.txpool.get_source(height),
+            max_gas,
+        )
+        .await
+    }
+}
+
+impl<ViewProvider, TxPool, Executor, ExecutorDB> Producer<ViewProvider, TxPool, Executor>
+where
+    ViewProvider: AtomicView<Height = BlockHeight> + 'static,
+    ViewProvider::View: BlockProducerDatabase,
+    Executor: ports::Executor<Vec<Transaction>, Database = ExecutorDB> + 'static,
+{
+    /// Produces and execute block for the specified height with `transactions`.
+    pub async fn produce_and_execute_block_transactions(
+        &self,
+        height: BlockHeight,
+        block_time: Tai64,
+        transactions: Vec<Transaction>,
+        max_gas: Word,
+    ) -> anyhow::Result<UncommittedResult<StorageTransaction<ExecutorDB>>> {
+        self.produce_and_execute(height, block_time, |_| transactions, max_gas)
+            .await
+    }
+}
+
+impl<ViewProvider, TxPool, Executor> Producer<ViewProvider, TxPool, Executor>
+where
+    ViewProvider: AtomicView<Height = BlockHeight> + 'static,
+    ViewProvider::View: BlockProducerDatabase,
+    Executor: ports::DryRunner + 'static,
+{
     // TODO: Support custom `block_time` for `dry_run`.
-    /// Simulate a transaction without altering any state. Does not aquire the production lock
+    /// Simulates multiple transactions without altering any state. Does not acquire the production lock.
     /// since it is basically a "read only" operation and shouldn't get in the way of normal
     /// production.
     pub async fn dry_run(
         &self,
-        transaction: Transaction,
+        transactions: Vec<Transaction>,
         height: Option<BlockHeight>,
         utxo_validation: Option<bool>,
-    ) -> anyhow::Result<Vec<Receipt>> {
-        let height = match height {
-            None => self
-                .db
-                .current_block_height()?
+    ) -> anyhow::Result<Vec<TransactionExecutionStatus>> {
+        let height = height.unwrap_or_else(|| {
+            self.view_provider
+                .latest_height()
                 .succ()
-                .expect("It is impossible to overflow the current block height"),
-            Some(height) => height,
-        };
+                .expect("It is impossible to overflow the current block height")
+        });
 
-        let is_script = transaction.is_script();
         // The dry run execution should use the state of the blockchain based on the
         // last available block, not on the upcoming one. It means that we need to
         // use the same configuration as the last block -> the same DA height.
@@ -148,31 +202,38 @@ where
         let header = self._new_header(height, Tai64::now())?;
         let component = Components {
             header_to_produce: header,
-            transactions_source: transaction,
+            transactions_source: transactions.clone(),
             gas_limit: u64::MAX,
         };
 
         let executor = self.executor.clone();
+
         // use the blocking threadpool for dry_run to avoid clogging up the main async runtime
-        let res: Vec<_> =
-            tokio_rayon::spawn_fifo(move || -> anyhow::Result<Vec<Receipt>> {
-                Ok(executor
-                    .dry_run(component, utxo_validation)?
-                    .into_iter()
-                    .flatten()
-                    .collect())
+        let tx_statuses = tokio_rayon::spawn_fifo(
+            move || -> anyhow::Result<Vec<TransactionExecutionStatus>> {
+                Ok(executor.dry_run(component, utxo_validation)?)
+            },
+        )
+        .await?;
+
+        if transactions
+            .iter()
+            .zip(tx_statuses.iter())
+            .any(|(transaction, tx_status)| {
+                transaction.is_script() && tx_status.receipts.is_empty()
             })
-            .await?;
-        if is_script && res.is_empty() {
-            return Err(anyhow!("Expected at least one set of receipts"))
+        {
+            Err(anyhow!("Expected at least one set of receipts"))
+        } else {
+            Ok(tx_statuses)
         }
-        Ok(res)
     }
 }
 
-impl<Database, TxPool, Executor> Producer<Database, TxPool, Executor>
+impl<ViewProvider, TxPool, Executor> Producer<ViewProvider, TxPool, Executor>
 where
-    Database: ports::BlockProducerDatabase,
+    ViewProvider: AtomicView + 'static,
+    ViewProvider::View: BlockProducerDatabase,
 {
     /// Create the header for a new block at the provided height
     async fn new_header(
@@ -237,10 +298,11 @@ where
         if height == 0u32.into() {
             Err(Error::GenesisBlock.into())
         } else {
+            let view = self.view_provider.latest_view();
             // get info from previous block height
             let prev_height = height.pred().expect("We checked the height above");
-            let previous_block = self.db.get_block(&prev_height)?;
-            let prev_root = self.db.block_header_merkle_root(&prev_height)?;
+            let previous_block = view.get_block(&prev_height)?;
+            let prev_root = view.block_header_merkle_root(&prev_height)?;
 
             Ok(PreviousBlockInfo {
                 prev_root,

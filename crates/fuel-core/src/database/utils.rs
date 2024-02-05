@@ -1,8 +1,10 @@
 use fuel_core_storage::{
+    structured_storage::TableWithBlueprint,
+    tables::merkle::SparseMerkleMetadata,
     Error,
     Mappable,
     StorageAsMut,
-    StorageInspect,
+    StorageBatchMutate,
     StorageMutate,
 };
 use fuel_core_types::{
@@ -15,13 +17,7 @@ use fuel_core_types::{
     fuel_types::ContractId,
 };
 
-use super::{
-    storage::{
-        DatabaseColumn,
-        SparseMerkleMetadata,
-    },
-    Database,
-};
+use super::Database;
 
 pub(crate) struct MerkleTreeDbUtils<'a, Metadata, Data> {
     db: &'a mut Database,
@@ -30,20 +26,21 @@ pub(crate) struct MerkleTreeDbUtils<'a, Metadata, Data> {
 }
 impl<'a, Metadata, Data> MerkleTreeDbUtils<'a, Metadata, Data>
 where
-    Metadata: DatabaseColumn
+    Metadata: TableWithBlueprint
         + Mappable<
             Key = ContractId,
             Value = SparseMerkleMetadata,
             OwnedValue = SparseMerkleMetadata,
         >,
-    Data: DatabaseColumn
+    Data: TableWithBlueprint
         + Mappable<
             Key = [u8; 32],
             OwnedValue = (u32, u8, [u8; 32], [u8; 32]),
             Value = (u32, u8, [u8; 32], [u8; 32]),
         >,
-    Database:
-        StorageInspect<Metadata, Error = Error> + StorageMutate<Data, Error = Error>,
+    Database: StorageMutate<Data, Error = Error>
+        + StorageMutate<Metadata, Error = Error>
+        + StorageBatchMutate<Data>,
 {
     fn new(db: &'a mut Database) -> Self {
         Self {
@@ -81,7 +78,11 @@ where
     ) -> Result<[u8; 32], Error> {
         let set = entries.map(|(key, value)| (MerkleTreeKey::new(key), value));
         let (root, nodes) = sparse::in_memory::MerkleTree::nodes_from_set(set);
-        self.db.batch_insert(Data::column(), nodes.into_iter())?;
+
+        // TODO dont
+        let iter = nodes.iter().map(|(key, value)| (key, value));
+        <Database as StorageBatchMutate<Data>>::insert_batch(self.db, iter)?;
+
         Ok(root)
     }
 
@@ -103,7 +104,7 @@ where
         new_root: [u8; 32],
         contract_id: &ContractId,
     ) -> Result<(), Error> {
-        let metadata = SparseMerkleMetadata { root: new_root };
+        let metadata = SparseMerkleMetadata::new(new_root);
         self.db
             .storage::<Metadata>()
             .insert(&ContractId::from(**contract_id), &metadata)?;
@@ -116,7 +117,9 @@ where
             .db
             .storage::<Metadata>()
             .get(key)?
-            .map(|c| c.into_owned().root);
+            .map(|c| c.into_owned().root())
+            .copied();
+
         Ok(root)
     }
 }

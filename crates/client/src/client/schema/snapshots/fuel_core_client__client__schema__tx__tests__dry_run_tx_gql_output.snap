@@ -2,40 +2,59 @@
 source: crates/client/src/client/schema/tx.rs
 expression: query.query
 ---
-mutation($tx: HexString!, $utxoValidation: Boolean) {
-  dryRun(tx: $tx, utxoValidation: $utxoValidation) {
-    param1
-    param2
-    amount
-    assetId
-    gas
-    digest
-    contract {
-      id
+mutation($txs: [HexString!]!, $utxoValidation: Boolean) {
+  dryRun(txs: $txs, utxoValidation: $utxoValidation) {
+    id
+    status {
+      __typename
+      ... on DryRunSuccessStatus {
+        programState {
+          returnType
+          data
+        }
+      }
+      ... on DryRunFailureStatus {
+        reason
+        programState {
+          returnType
+          data
+        }
+      }
     }
-    is
-    pc
-    ptr
-    ra
-    rb
-    rc
-    rd
-    reason
-    receiptType
-    to {
-      id
+    receipts {
+      param1
+      param2
+      amount
+      assetId
+      gas
+      digest
+      contract {
+        id
+      }
+      is
+      pc
+      ptr
+      ra
+      rb
+      rc
+      rd
+      reason
+      receiptType
+      to {
+        id
+      }
+      toAddress
+      val
+      len
+      result
+      gasUsed
+      data
+      sender
+      recipient
+      nonce
+      contractId
+      subId
     }
-    toAddress
-    val
-    len
-    result
-    gasUsed
-    data
-    sender
-    recipient
-    nonce
-    contractId
-    subId
   }
 }
 

@@ -7,6 +7,7 @@ use crate::ports::{
 use fuel_core_storage::{
     not_found,
     transactional::{
+        AtomicView,
         StorageTransaction,
         Transaction,
     },
@@ -20,8 +21,6 @@ use fuel_core_types::{
         },
         primitives::DaBlockHeight,
     },
-    fuel_tx,
-    fuel_tx::Receipt,
     fuel_types::{
         Address,
         BlockHeight,
@@ -133,14 +132,12 @@ fn to_block(component: Components<Vec<ArcPoolTx>>) -> Block {
     Block::new(component.header_to_produce, transactions, &[])
 }
 
-impl Executor for MockExecutor {
+impl Executor<Vec<ArcPoolTx>> for MockExecutor {
     type Database = MockDb;
-    /// The source of transaction used by the executor.
-    type TxSource = Vec<ArcPoolTx>;
 
     fn execute_without_commit(
         &self,
-        component: Components<Self::TxSource>,
+        component: Components<Vec<ArcPoolTx>>,
     ) -> ExecutorResult<UncommittedResult<StorageTransaction<MockDb>>> {
         let block = to_block(component);
         // simulate executor inserting a block
@@ -158,26 +155,16 @@ impl Executor for MockExecutor {
             StorageTransaction::new(self.0.clone()),
         ))
     }
-
-    fn dry_run(
-        &self,
-        _block: Components<fuel_tx::Transaction>,
-        _utxo_validation: Option<bool>,
-    ) -> ExecutorResult<Vec<Vec<Receipt>>> {
-        Ok(Default::default())
-    }
 }
 
 pub struct FailingMockExecutor(pub Mutex<Option<ExecutorError>>);
 
-impl Executor for FailingMockExecutor {
+impl Executor<Vec<ArcPoolTx>> for FailingMockExecutor {
     type Database = MockDb;
-    /// The source of transaction used by the executor.
-    type TxSource = Vec<ArcPoolTx>;
 
     fn execute_without_commit(
         &self,
-        component: Components<Self::TxSource>,
+        component: Components<Vec<ArcPoolTx>>,
     ) -> ExecutorResult<UncommittedResult<StorageTransaction<MockDb>>> {
         // simulate an execution failure
         let mut err = self.0.lock().unwrap();
@@ -195,24 +182,31 @@ impl Executor for FailingMockExecutor {
             ))
         }
     }
-
-    fn dry_run(
-        &self,
-        _block: Components<fuel_tx::Transaction>,
-        _utxo_validation: Option<bool>,
-    ) -> ExecutorResult<Vec<Vec<Receipt>>> {
-        let mut err = self.0.lock().unwrap();
-        if let Some(err) = err.take() {
-            Err(err)
-        } else {
-            Ok(Default::default())
-        }
-    }
 }
 
 #[derive(Clone, Default, Debug)]
 pub struct MockDb {
     pub blocks: Arc<Mutex<HashMap<BlockHeight, CompressedBlock>>>,
+}
+
+impl AtomicView for MockDb {
+    type View = Self;
+
+    type Height = BlockHeight;
+
+    fn latest_height(&self) -> BlockHeight {
+        let blocks = self.blocks.lock().unwrap();
+
+        blocks.keys().max().cloned().unwrap_or_default()
+    }
+
+    fn view_at(&self, _: &BlockHeight) -> StorageResult<Self::View> {
+        Ok(self.latest_view())
+    }
+
+    fn latest_view(&self) -> Self::View {
+        self.clone()
+    }
 }
 
 impl BlockProducerDatabase for MockDb {
@@ -229,11 +223,5 @@ impl BlockProducerDatabase for MockDb {
         Ok(Bytes32::new(
             [u8::try_from(*height.deref()).expect("Test use small values"); 32],
         ))
-    }
-
-    fn current_block_height(&self) -> StorageResult<BlockHeight> {
-        let blocks = self.blocks.lock().unwrap();
-
-        Ok(blocks.keys().max().cloned().unwrap_or_default())
     }
 }

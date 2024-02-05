@@ -1,5 +1,6 @@
 use fuel_core::{
     database::Database,
+    fuel_core_graphql_api::ports::DatabaseBlocks,
     service::{
         Config,
         FuelService,
@@ -52,9 +53,10 @@ async fn can_get_sealed_block_from_poa_produced_block() {
 
     let block_id = BlockId::from_str(&block_id).unwrap();
 
+    let block_height = db.block_height(&block_id).unwrap();
     // check sealed block header is correct
     let sealed_block_header = db
-        .get_sealed_block_header(&block_id)
+        .get_sealed_block_header(&block_height)
         .unwrap()
         .expect("expected sealed header to be available");
 
@@ -68,9 +70,10 @@ async fn can_get_sealed_block_from_poa_produced_block() {
         .verify(&poa_public, &block_id.into_message())
         .expect("failed to verify signature");
 
+    let block_height = db.block_height(&block_id).unwrap();
     // check sealed block is correct
     let sealed_block = db
-        .get_sealed_block_by_id(&block_id)
+        .get_sealed_block_by_height(&block_height)
         .unwrap()
         .expect("expected sealed header to be available");
 

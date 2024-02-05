@@ -1,21 +1,30 @@
 use crate::{
     database::{
-        Column,
-        Error as DatabaseError,
+        database_description::{
+            on_chain::OnChain,
+            DatabaseDescription,
+        },
         Result as DatabaseResult,
     },
     state::{
         BatchOperations,
         IterDirection,
-        KVItem,
-        KeyValueStore,
         TransactableStorage,
-        Value,
     },
 };
-use fuel_core_storage::iter::{
-    BoxedIter,
-    IntoBoxedIter,
+use fuel_core_storage::{
+    iter::{
+        BoxedIter,
+        IntoBoxedIter,
+        IteratorableStore,
+    },
+    kv_store::{
+        KVItem,
+        KeyValueStore,
+        StorageColumn,
+        Value,
+    },
+    Result as StorageResult,
 };
 use std::{
     collections::BTreeMap,
@@ -26,16 +35,38 @@ use std::{
     },
 };
 
-#[derive(Default, Debug)]
-pub struct MemoryStore {
+#[derive(Debug)]
+pub struct MemoryStore<Description = OnChain>
+where
+    Description: DatabaseDescription,
+{
     // TODO: Remove `Mutex`.
-    inner: [Mutex<BTreeMap<Vec<u8>, Value>>; Column::COUNT],
+    inner: Vec<Mutex<BTreeMap<Vec<u8>, Value>>>,
+    _marker: core::marker::PhantomData<Description>,
 }
 
-impl MemoryStore {
+impl<Description> Default for MemoryStore<Description>
+where
+    Description: DatabaseDescription,
+{
+    fn default() -> Self {
+        use strum::EnumCount;
+        Self {
+            inner: (0..Description::Column::COUNT)
+                .map(|_| Mutex::new(BTreeMap::new()))
+                .collect(),
+            _marker: Default::default(),
+        }
+    }
+}
+
+impl<Description> MemoryStore<Description>
+where
+    Description: DatabaseDescription,
+{
     pub fn iter_all(
         &self,
-        column: Column,
+        column: Description::Column,
         prefix: Option<&[u8]>,
         start: Option<&[u8]>,
         direction: IterDirection,
@@ -99,87 +130,30 @@ impl MemoryStore {
     }
 }
 
-impl KeyValueStore for MemoryStore {
-    fn get(&self, key: &[u8], column: Column) -> DatabaseResult<Option<Value>> {
-        Ok(self.inner[column.as_usize()]
-            .lock()
-            .expect("poisoned")
-            .get(&key.to_vec())
-            .cloned())
-    }
+impl<Description> KeyValueStore for MemoryStore<Description>
+where
+    Description: DatabaseDescription,
+{
+    type Column = Description::Column;
 
-    fn put(
+    fn replace(
         &self,
         key: &[u8],
-        column: Column,
+        column: Self::Column,
         value: Value,
-    ) -> DatabaseResult<Option<Value>> {
+    ) -> StorageResult<Option<Value>> {
         Ok(self.inner[column.as_usize()]
             .lock()
             .expect("poisoned")
             .insert(key.to_vec(), value))
     }
 
-    fn delete(&self, key: &[u8], column: Column) -> DatabaseResult<Option<Value>> {
-        Ok(self.inner[column.as_usize()]
-            .lock()
-            .expect("poisoned")
-            .remove(&key.to_vec()))
-    }
-
-    fn exists(&self, key: &[u8], column: Column) -> DatabaseResult<bool> {
-        Ok(self.inner[column.as_usize()]
-            .lock()
-            .expect("poisoned")
-            .contains_key(&key.to_vec()))
-    }
-
-    fn iter_all(
-        &self,
-        column: Column,
-        prefix: Option<&[u8]>,
-        start: Option<&[u8]>,
-        direction: IterDirection,
-    ) -> BoxedIter<KVItem> {
-        self.iter_all(column, prefix, start, direction).into_boxed()
-    }
-
-    fn size_of_value(&self, key: &[u8], column: Column) -> DatabaseResult<Option<usize>> {
-        Ok(self.inner[column.as_usize()]
-            .lock()
-            .expect("poisoned")
-            .get(&key.to_vec())
-            .map(|v| v.len()))
-    }
-
-    fn read(
+    fn write(
         &self,
         key: &[u8],
-        column: Column,
-        mut buf: &mut [u8],
-    ) -> DatabaseResult<Option<usize>> {
-        self.inner[column.as_usize()]
-            .lock()
-            .expect("poisoned")
-            .get(&key.to_vec())
-            .map(|value| {
-                let read = value.len();
-                std::io::Write::write_all(&mut buf, value.as_ref())
-                    .map_err(|e| DatabaseError::Other(anyhow::anyhow!(e)))?;
-                DatabaseResult::Ok(read)
-            })
-            .transpose()
-    }
-
-    fn read_alloc(&self, key: &[u8], column: Column) -> DatabaseResult<Option<Value>> {
-        Ok(self.inner[column.as_usize()]
-            .lock()
-            .expect("poisoned")
-            .get(&key.to_vec())
-            .cloned())
-    }
-
-    fn write(&self, key: &[u8], column: Column, buf: &[u8]) -> DatabaseResult<usize> {
+        column: Self::Column,
+        buf: &[u8],
+    ) -> StorageResult<usize> {
         let len = buf.len();
         self.inner[column.as_usize()]
             .lock()
@@ -188,31 +162,59 @@ impl KeyValueStore for MemoryStore {
         Ok(len)
     }
 
-    fn replace(
-        &self,
-        key: &[u8],
-        column: Column,
-        buf: &[u8],
-    ) -> DatabaseResult<(usize, Option<Value>)> {
-        let len = buf.len();
-        let existing = self.inner[column.as_usize()]
-            .lock()
-            .expect("poisoned")
-            .insert(key.to_vec(), Arc::new(buf.to_vec()));
-        Ok((len, existing))
-    }
-
-    fn take(&self, key: &[u8], column: Column) -> DatabaseResult<Option<Value>> {
+    fn take(&self, key: &[u8], column: Self::Column) -> StorageResult<Option<Value>> {
         Ok(self.inner[column.as_usize()]
             .lock()
             .expect("poisoned")
             .remove(&key.to_vec()))
     }
+
+    fn delete(&self, key: &[u8], column: Self::Column) -> StorageResult<()> {
+        self.take(key, column).map(|_| ())
+    }
+
+    fn get(&self, key: &[u8], column: Self::Column) -> StorageResult<Option<Value>> {
+        Ok(self.inner[column.as_usize()]
+            .lock()
+            .expect("poisoned")
+            .get(&key.to_vec())
+            .cloned())
+    }
 }
 
-impl BatchOperations for MemoryStore {}
+impl<Description> IteratorableStore for MemoryStore<Description>
+where
+    Description: DatabaseDescription,
+{
+    fn iter_all(
+        &self,
+        column: Self::Column,
+        prefix: Option<&[u8]>,
+        start: Option<&[u8]>,
+        direction: IterDirection,
+    ) -> BoxedIter<KVItem> {
+        self.iter_all(column, prefix, start, direction).into_boxed()
+    }
+}
 
-impl TransactableStorage for MemoryStore {
+impl<Description> BatchOperations for MemoryStore<Description>
+where
+    Description: DatabaseDescription,
+{
+    fn delete_all(&self, column: Self::Column) -> StorageResult<()> {
+        self.inner[column.as_usize()]
+            .lock()
+            .expect("poisoned")
+            .clear();
+
+        Ok(())
+    }
+}
+
+impl<Description> TransactableStorage for MemoryStore<Description>
+where
+    Description: DatabaseDescription,
+{
     fn flush(&self) -> DatabaseResult<()> {
         for lock in self.inner.iter() {
             lock.lock().expect("poisoned").clear();
@@ -224,13 +226,14 @@ impl TransactableStorage for MemoryStore {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use fuel_core_storage::column::Column;
     use std::sync::Arc;
 
     #[test]
     fn can_use_unit_value() {
         let key = vec![0x00];
 
-        let db = MemoryStore::default();
+        let db = MemoryStore::<OnChain>::default();
         let expected = Arc::new(vec![]);
         db.put(&key.to_vec(), Column::Metadata, expected.clone())
             .unwrap();
@@ -246,10 +249,7 @@ mod tests {
             vec![(key.clone(), expected.clone())]
         );
 
-        assert_eq!(
-            db.delete(&key, Column::Metadata).unwrap().unwrap(),
-            expected
-        );
+        assert_eq!(db.take(&key, Column::Metadata).unwrap().unwrap(), expected);
 
         assert!(!db.exists(&key, Column::Metadata).unwrap());
     }
@@ -258,7 +258,7 @@ mod tests {
     fn can_use_unit_key() {
         let key: Vec<u8> = Vec::with_capacity(0);
 
-        let db = MemoryStore::default();
+        let db = MemoryStore::<OnChain>::default();
         let expected = Arc::new(vec![1, 2, 3]);
         db.put(&key, Column::Metadata, expected.clone()).unwrap();
 
@@ -273,10 +273,7 @@ mod tests {
             vec![(key.clone(), expected.clone())]
         );
 
-        assert_eq!(
-            db.delete(&key, Column::Metadata).unwrap().unwrap(),
-            expected
-        );
+        assert_eq!(db.take(&key, Column::Metadata).unwrap().unwrap(), expected);
 
         assert!(!db.exists(&key, Column::Metadata).unwrap());
     }
@@ -285,7 +282,7 @@ mod tests {
     fn can_use_unit_key_and_value() {
         let key: Vec<u8> = Vec::with_capacity(0);
 
-        let db = MemoryStore::default();
+        let db = MemoryStore::<OnChain>::default();
         let expected = Arc::new(vec![]);
         db.put(&key, Column::Metadata, expected.clone()).unwrap();
 
@@ -300,10 +297,7 @@ mod tests {
             vec![(key.clone(), expected.clone())]
         );
 
-        assert_eq!(
-            db.delete(&key, Column::Metadata).unwrap().unwrap(),
-            expected
-        );
+        assert_eq!(db.take(&key, Column::Metadata).unwrap().unwrap(), expected);
 
         assert!(!db.exists(&key, Column::Metadata).unwrap());
     }

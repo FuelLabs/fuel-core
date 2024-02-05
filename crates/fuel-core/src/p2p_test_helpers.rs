@@ -5,7 +5,7 @@ use crate::{
     database::Database,
     p2p::Multiaddr,
     service::{
-        genesis::maybe_initialize_state,
+        genesis::execute_and_commit_genesis_block,
         Config,
         FuelService,
         ServiceTrait,
@@ -134,8 +134,11 @@ impl Bootstrap {
     /// Spawn a bootstrap node.
     pub async fn new(node_config: &Config) -> Self {
         let bootstrap_config = extract_p2p_config(node_config).await;
+        let bootstrap_config = extract_p2p_config(node_config).await;
         let codec = PostcardCodec::new(bootstrap_config.max_block_size);
-        let mut bootstrap = FuelP2PService::new(bootstrap_config, codec);
+        let (sender, _) =
+            broadcast::channel(bootstrap_config.reserved_nodes.len().saturating_add(1));
+        let mut bootstrap = FuelP2PService::new(sender, bootstrap_config, codec);
         bootstrap.start().await.unwrap();
 
         let listeners = bootstrap.multiaddrs();
@@ -376,11 +379,11 @@ pub fn make_config(name: String, mut node_config: Config) -> Config {
 pub async fn make_node(node_config: Config, test_txs: Vec<Transaction>) -> Node {
     let db = Database::in_memory();
     let node = tokio::time::timeout(
-        Duration::from_secs(1),
+        Duration::from_secs(2),
         FuelService::from_database(db.clone(), node_config),
     )
     .await
-    .expect("All services should start in less than 1 second")
+    .expect("All services should start in less than 2 seconds")
     .expect("The `FuelService should start without error");
 
     let config = node.shared.config.clone();
@@ -395,7 +398,9 @@ pub async fn make_node(node_config: Config, test_txs: Vec<Transaction>) -> Node 
 async fn extract_p2p_config(node_config: &Config) -> fuel_core_p2p::config::Config {
     let bootstrap_config = node_config.p2p.clone();
     let db = Database::in_memory();
-    maybe_initialize_state(node_config, &db).await.unwrap();
+    execute_and_commit_genesis_block(node_config, &db)
+        .await
+        .unwrap();
     bootstrap_config
         .unwrap()
         .init(db.get_genesis().unwrap())

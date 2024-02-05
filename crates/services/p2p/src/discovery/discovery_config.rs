@@ -1,13 +1,17 @@
-use crate::discovery::{
-    mdns::MdnsWrapper,
-    DiscoveryBehaviour,
+use crate::{
+    discovery::{
+        mdns_wrapper::MdnsWrapper,
+        Behaviour,
+    },
+    TryPeerId,
 };
 use libp2p::{
     kad::{
+        self,
         store::MemoryStore,
-        Kademlia,
-        KademliaConfig,
+        Mode,
     },
+    swarm::StreamProtocol,
     Multiaddr,
     PeerId,
 };
@@ -18,20 +22,19 @@ use std::{
 use tracing::warn;
 
 #[derive(Clone, Debug)]
-pub struct DiscoveryConfig {
+pub struct Config {
     local_peer_id: PeerId,
     bootstrap_nodes: Vec<Multiaddr>,
     reserved_nodes: Vec<Multiaddr>,
     reserved_nodes_only_mode: bool,
     random_walk: Option<Duration>,
     with_mdns: bool,
-    allow_private_addresses: bool,
     network_name: String,
     max_peers_connected: usize,
     connection_idle_timeout: Duration,
 }
 
-impl DiscoveryConfig {
+impl Config {
     pub fn new(local_peer_id: PeerId, network_name: String) -> Self {
         Self {
             local_peer_id,
@@ -40,22 +43,15 @@ impl DiscoveryConfig {
             reserved_nodes_only_mode: false,
             random_walk: None,
             max_peers_connected: std::usize::MAX,
-            allow_private_addresses: false,
             with_mdns: false,
             network_name,
             connection_idle_timeout: Duration::from_secs(10),
         }
     }
 
-    /// limit the number of connected nodes
-    pub fn discovery_limit(&mut self, limit: usize) -> &mut Self {
+    /// limit the max number of connected nodes
+    pub fn max_peers_connected(&mut self, limit: usize) -> &mut Self {
         self.max_peers_connected = limit;
-        self
-    }
-
-    /// Enable reporting of private addresses
-    pub fn allow_private_addresses(&mut self, value: bool) -> &mut Self {
-        self.allow_private_addresses = value;
         self
     }
 
@@ -101,14 +97,12 @@ impl DiscoveryConfig {
         self
     }
 
-    pub fn finish(self) -> DiscoveryBehaviour {
-        let DiscoveryConfig {
+    pub fn finish(self) -> Behaviour {
+        let Config {
             local_peer_id,
             bootstrap_nodes,
             network_name,
             max_peers_connected,
-            allow_private_addresses,
-            connection_idle_timeout,
             reserved_nodes,
             reserved_nodes_only_mode,
             ..
@@ -116,29 +110,26 @@ impl DiscoveryConfig {
 
         // kademlia setup
         let memory_store = MemoryStore::new(local_peer_id.to_owned());
-        let mut kademlia_config = KademliaConfig::default();
+        let mut kademlia_config = kad::Config::default();
         let network = format!("/fuel/kad/{network_name}/kad/1.0.0");
-        let network_name = network.as_bytes().to_vec();
-        kademlia_config.set_protocol_names(vec![network_name.into()]);
-        kademlia_config.set_connection_idle_timeout(connection_idle_timeout);
+        kademlia_config.set_protocol_names(vec![
+            StreamProtocol::try_from_owned(network).expect("Invalid kad protocol")
+        ]);
 
         let mut kademlia =
-            Kademlia::with_config(local_peer_id, memory_store, kademlia_config);
+            kad::Behaviour::with_config(local_peer_id, memory_store, kademlia_config);
+        kademlia.set_mode(Some(Mode::Server));
 
         // bootstrap nodes need to have their peer_id defined in the Multiaddr
         let bootstrap_nodes = bootstrap_nodes
             .into_iter()
-            .filter_map(|node| {
-                PeerId::try_from_multiaddr(&node).map(|peer_id| (peer_id, node))
-            })
+            .filter_map(|node| node.try_to_peer_id().map(|peer_id| (peer_id, node)))
             .collect::<Vec<_>>();
 
         // reserved nodes need to have their peer_id defined in the Multiaddr
         let reserved_nodes = reserved_nodes
             .into_iter()
-            .filter_map(|node| {
-                PeerId::try_from_multiaddr(&node).map(|peer_id| (peer_id, node))
-            })
+            .filter_map(|node| node.try_to_peer_id().map(|peer_id| (peer_id, node)))
             .collect::<Vec<_>>();
 
         // add bootstrap nodes only if `reserved_nodes_only_mode` is disabled
@@ -171,21 +162,18 @@ impl DiscoveryConfig {
 
         // mdns setup
         let mdns = if self.with_mdns {
-            MdnsWrapper::default()
+            MdnsWrapper::new(local_peer_id)
         } else {
             MdnsWrapper::disabled()
         };
 
-        DiscoveryBehaviour {
-            bootstrap_nodes,
-            reserved_nodes,
+        Behaviour {
             connected_peers: HashSet::new(),
             kademlia,
             next_kad_random_walk,
             duration_to_next_kad: Duration::from_secs(1),
             max_peers_connected,
             mdns,
-            allow_private_addresses,
         }
     }
 }

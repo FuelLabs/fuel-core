@@ -8,7 +8,7 @@ use fuel_core_services::stream::BoxStream;
 use fuel_core_storage::Result as StorageResult;
 use fuel_core_types::{
     blockchain::{
-        SealedBlock,
+        consensus::Genesis,
         SealedBlockHeader,
     },
     fuel_types::BlockHeight,
@@ -17,20 +17,6 @@ use fuel_core_types::{
 use std::ops::Range;
 
 impl P2pDb for Database {
-    fn get_sealed_block(
-        &self,
-        height: &BlockHeight,
-    ) -> StorageResult<Option<SealedBlock>> {
-        self.get_sealed_block_by_height(height)
-    }
-
-    fn get_sealed_header(
-        &self,
-        height: &BlockHeight,
-    ) -> StorageResult<Option<SealedBlockHeader>> {
-        self.get_sealed_block_header_by_height(height)
-    }
-
     fn get_sealed_headers(
         &self,
         block_height_range: Range<u32>,
@@ -44,6 +30,10 @@ impl P2pDb for Database {
     ) -> StorageResult<Option<Vec<Transactions>>> {
         self.get_transactions_on_blocks(block_height_range)
     }
+
+    fn get_genesis(&self) -> StorageResult<Genesis> {
+        self.get_genesis()
+    }
 }
 
 impl BlockHeightImporter for BlockImporterAdapter {
@@ -55,7 +45,7 @@ impl BlockHeightImporter for BlockImporterAdapter {
         Box::pin(
             BroadcastStream::new(self.block_importer.subscribe())
                 .filter_map(|result| result.ok())
-                .map(|result| result.sealed_block.entity.header().consensus.height),
+                .map(|result| *result.sealed_block.entity.header().height()),
         )
     }
 }

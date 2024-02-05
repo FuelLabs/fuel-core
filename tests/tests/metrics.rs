@@ -16,8 +16,8 @@ async fn test_metrics_endpoint() {
     let mut config = Config::local_node();
     let tmp_dir = TempDir::new().unwrap();
 
-    config.db_config.database_path = tmp_dir.path().to_path_buf();
-    config.db_config.database_type = DbType::RocksDb;
+    config.combined_db_config.database_path = tmp_dir.path().to_path_buf();
+    config.combined_db_config.database_type = DbType::RocksDb;
     // setup server & client
     let srv = FuelService::new_node(config).await.unwrap();
 
