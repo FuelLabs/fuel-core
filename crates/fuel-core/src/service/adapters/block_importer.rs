@@ -1,3 +1,4 @@
+use super::TransactionsSource;
 use crate::{
     database::Database,
     service::adapters::{
@@ -16,9 +17,13 @@ use fuel_core_importer::{
     Config,
     Importer,
 };
-use fuel_core_poa::ports::RelayerPort;
 use fuel_core_storage::{
-    tables::SealedBlockConsensus,
+    iter::IterDirection,
+    tables::{
+        FuelBlocks,
+        SealedBlockConsensus,
+        Transactions,
+    },
     transactional::StorageTransaction,
     Result as StorageResult,
     StorageAsMut,
@@ -27,13 +32,13 @@ use fuel_core_types::{
     blockchain::{
         block::Block,
         consensus::Consensus,
-        primitives::{
-            BlockId,
-            DaBlockHeight,
-        },
         SealedBlock,
     },
-    fuel_types::BlockHeight,
+    fuel_tx::UniqueIdentifier,
+    fuel_types::{
+        BlockHeight,
+        ChainId,
+    },
     services::executor::{
         ExecutionTypes,
         Result as ExecutorResult,
@@ -41,8 +46,6 @@ use fuel_core_types::{
     },
 };
 use std::sync::Arc;
-
-use super::MaybeRelayerAdapter;
 
 impl BlockImporterAdapter {
     pub fn new(
@@ -62,11 +65,7 @@ impl BlockImporterAdapter {
         &self,
         sealed_block: SealedBlock,
     ) -> anyhow::Result<()> {
-        tokio::task::spawn_blocking({
-            let importer = self.block_importer.clone();
-            move || importer.execute_and_commit(sealed_block)
-        })
-        .await??;
+        self.block_importer.execute_and_commit(sealed_block).await?;
         Ok(())
     }
 }
@@ -81,55 +80,40 @@ impl BlockVerifier for VerifierAdapter {
     }
 }
 
-#[async_trait::async_trait]
-impl RelayerPort for MaybeRelayerAdapter {
-    async fn await_until_if_in_range(
-        &self,
-        da_height: &DaBlockHeight,
-        _max_da_lag: &DaBlockHeight,
-    ) -> anyhow::Result<()> {
-        #[cfg(feature = "relayer")]
-        {
-            if let Some(sync) = self.relayer_synced.as_ref() {
-                let current_height = sync.get_finalized_da_height()?;
-                anyhow::ensure!(
-                    da_height.saturating_sub(*current_height) <= **_max_da_lag,
-                    "Relayer is too far out of sync"
-                );
-                sync.await_at_least_synced(da_height).await?;
-            }
-            Ok(())
-        }
-        #[cfg(not(feature = "relayer"))]
-        {
-            anyhow::ensure!(
-                **da_height == 0,
-                "Cannot have a da height above zero without a relayer"
-            );
-            Ok(())
-        }
-    }
-}
-
 impl ImporterDatabase for Database {
-    fn latest_block_height(&self) -> StorageResult<BlockHeight> {
-        self.latest_height()
-    }
-
-    fn increase_tx_count(&self, new_txs_count: u64) -> StorageResult<u64> {
-        self.increase_tx_count(new_txs_count).map_err(Into::into)
+    fn latest_block_height(&self) -> StorageResult<Option<BlockHeight>> {
+        Ok(self
+            .iter_all::<FuelBlocks>(Some(IterDirection::Reverse))
+            .next()
+            .transpose()?
+            .map(|(height, _)| height))
     }
 }
 
 impl ExecutorDatabase for Database {
-    fn seal_block(
+    fn store_new_block(
         &mut self,
-        block_id: &BlockId,
-        consensus: &Consensus,
-    ) -> StorageResult<Option<Consensus>> {
-        self.storage::<SealedBlockConsensus>()
-            .insert(block_id, consensus)
-            .map_err(Into::into)
+        chain_id: &ChainId,
+        block: &SealedBlock,
+    ) -> StorageResult<bool> {
+        let height = block.entity.header().height();
+        let mut found = self
+            .storage::<FuelBlocks>()
+            .insert(height, &block.entity.compress(chain_id))?
+            .is_some();
+        found |= self
+            .storage::<SealedBlockConsensus>()
+            .insert(height, &block.consensus)?
+            .is_some();
+
+        // TODO: Use `batch_insert` from https://github.com/FuelLabs/fuel-core/pull/1576
+        for tx in block.entity.transactions() {
+            found |= self
+                .storage::<Transactions>()
+                .insert(&tx.id(chain_id), tx)?
+                .is_some();
+        }
+        Ok(!found)
     }
 }
 
@@ -141,6 +125,8 @@ impl Executor for ExecutorAdapter {
         block: Block,
     ) -> ExecutorResult<UncommittedExecutionResult<StorageTransaction<Self::Database>>>
     {
-        self._execute_without_commit(ExecutionTypes::Validation(block))
+        self._execute_without_commit::<TransactionsSource>(ExecutionTypes::Validation(
+            block,
+        ))
     }
 }

@@ -9,9 +9,9 @@ use crate::{
 };
 use fuel_core_metrics::importer::importer_metrics;
 use fuel_core_storage::{
+    not_found,
     transactional::StorageTransaction,
     Error as StorageError,
-    IsNotFound,
 };
 use fuel_core_types::{
     blockchain::{
@@ -22,10 +22,14 @@ use fuel_core_types::{
         primitives::BlockId,
         SealedBlock,
     },
-    fuel_types::BlockHeight,
+    fuel_types::{
+        BlockHeight,
+        ChainId,
+    },
     services::{
         block_importer::{
             ImportResult,
+            SharedImportResult,
             UncommittedResult,
         },
         executor,
@@ -35,7 +39,10 @@ use fuel_core_types::{
 };
 use std::{
     ops::Deref,
-    sync::Arc,
+    sync::{
+        Arc,
+        Mutex,
+    },
     time::{
         Instant,
         SystemTime,
@@ -44,6 +51,7 @@ use std::{
 };
 use tokio::sync::{
     broadcast,
+    oneshot,
     TryAcquireError,
 };
 
@@ -59,8 +67,8 @@ pub enum Error {
     )]
     InvalidUnderlyingDatabaseGenesisState,
     #[display(fmt = "The wrong state of database after execution of the block.\
-        The actual height is {_1}, when the next expected height is {_0}.")]
-    InvalidDatabaseStateAfterExecution(BlockHeight, BlockHeight),
+        The actual height is {_1:?}, when the next expected height is {_0:?}.")]
+    InvalidDatabaseStateAfterExecution(Option<BlockHeight>, Option<BlockHeight>),
     #[display(fmt = "Got overflow during increasing the height.")]
     Overflow,
     #[display(fmt = "The non-generic block can't have zero height.")]
@@ -85,6 +93,7 @@ pub enum Error {
     NotUnique(BlockHeight),
     #[from]
     StorageError(StorageError),
+    UnsupportedConsensusVariant(String),
 }
 
 impl From<Error> for anyhow::Error {
@@ -96,15 +105,20 @@ impl From<Error> for anyhow::Error {
 #[cfg(test)]
 impl PartialEq for Error {
     fn eq(&self, other: &Self) -> bool {
-        format!("{self:?}") == format!("{other:?}")
+        format!("{self}") == format!("{other}")
     }
 }
 
 pub struct Importer<D, E, V> {
     database: D,
-    executor: E,
-    verifier: V,
-    broadcast: broadcast::Sender<Arc<ImportResult>>,
+    executor: Arc<E>,
+    verifier: Arc<V>,
+    chain_id: ChainId,
+    broadcast: broadcast::Sender<SharedImportResult>,
+    /// The channel to notify about the end of the processing of the previous block by all listeners.
+    /// It is used to await until all receivers of the notification process the `SharedImportResult`
+    /// before starting committing a new block.
+    prev_block_process_result: Mutex<Option<oneshot::Receiver<()>>>,
     guard: tokio::sync::Semaphore,
 }
 
@@ -114,14 +128,16 @@ impl<D, E, V> Importer<D, E, V> {
 
         Self {
             database,
-            executor,
-            verifier,
+            executor: Arc::new(executor),
+            verifier: Arc::new(verifier),
+            chain_id: config.chain_id,
             broadcast,
+            prev_block_process_result: Default::default(),
             guard: tokio::sync::Semaphore::new(1),
         }
     }
 
-    pub fn subscribe(&self) -> broadcast::Receiver<Arc<ImportResult>> {
+    pub fn subscribe(&self) -> broadcast::Receiver<SharedImportResult> {
         self.broadcast.subscribe()
     }
 
@@ -157,7 +173,7 @@ where
     ///
     /// Only one commit may be in progress at the time. All other calls will fail.
     /// Returns an error if called while another call is in progress.
-    pub fn commit_result<ExecutorDatabase>(
+    pub async fn commit_result<ExecutorDatabase>(
         &self,
         result: UncommittedResult<StorageTransaction<ExecutorDatabase>>,
     ) -> Result<(), Error>
@@ -165,9 +181,22 @@ where
         ExecutorDatabase: ports::ExecutorDatabase,
     {
         let _guard = self.lock()?;
+        // It is safe to unwrap the channel because we have the `_guard`.
+        let previous_block_result = self
+            .prev_block_process_result
+            .lock()
+            .expect("poisoned")
+            .take();
+
+        // Await until all receivers of the notification process the result.
+        if let Some(channel) = previous_block_result {
+            let _ = channel.await;
+        }
+
         self._commit_result(result)
     }
 
+    /// The method commits the result of the block execution and notifies about a new imported block.
     #[tracing::instrument(
         skip_all,
         fields(
@@ -187,7 +216,6 @@ where
         let (result, mut db_tx) = result.into();
         let block = &result.sealed_block.entity;
         let consensus = &result.sealed_block.consensus;
-        let block_id = block.id();
         let actual_next_height = *block.header().height();
 
         // During importing of the genesis block, the database should not be initialized
@@ -196,9 +224,9 @@ where
         // database height + 1.
         let expected_next_height = match consensus {
             Consensus::Genesis(_) => {
-                let result = self.database.latest_block_height();
-                let found = !result.is_not_found();
-                // Because the genesis block is not committed, it should return non found error.
+                let result = self.database.latest_block_height()?;
+                let found = result.is_some();
+                // Because the genesis block is not committed, it should return `None`.
                 // If we find the latest height, something is wrong with the state of the database.
                 if found {
                     return Err(Error::InvalidUnderlyingDatabaseGenesisState)
@@ -210,11 +238,20 @@ where
                     return Err(Error::ZeroNonGenericHeight)
                 }
 
-                let last_db_height = self.database.latest_block_height()?;
+                let last_db_height = self
+                    .database
+                    .latest_block_height()?
+                    .ok_or(not_found!("Latest block height"))?;
                 last_db_height
                     .checked_add(1u32)
                     .ok_or(Error::Overflow)?
                     .into()
+            }
+            _ => {
+                return Err(Error::UnsupportedConsensusVariant(format!(
+                    "{:?}",
+                    consensus
+                )))
             }
         };
 
@@ -228,31 +265,26 @@ where
         let db_after_execution = db_tx.as_mut();
 
         // Importer expects that `UncommittedResult` contains the result of block
-        // execution(It includes the block itself).
+        // execution without block itself.
+        let expected_height = self.database.latest_block_height()?;
         let actual_height = db_after_execution.latest_block_height()?;
-        if expected_next_height != actual_height {
+        if expected_height != actual_height {
             return Err(Error::InvalidDatabaseStateAfterExecution(
-                expected_next_height,
+                expected_height,
                 actual_height,
             ))
         }
 
-        db_after_execution
-            .seal_block(&block_id, &result.sealed_block.consensus)?
-            .should_be_unique(&expected_next_height)?;
-
-        // Update the total tx count in chain metadata
-        let total_txs = db_after_execution
-            // Safety: casting len to u64 since it's impossible to execute a block with more than 2^64 txs
-            .increase_tx_count(result.sealed_block.entity.transactions().len() as u64)?;
+        if !db_after_execution.store_new_block(&self.chain_id, &result.sealed_block)? {
+            return Err(Error::NotUnique(expected_next_height))
+        }
 
         db_tx.commit()?;
 
         // update the importer metrics after the block is successfully committed
-        importer_metrics().total_txs_count.set(total_txs as i64);
         importer_metrics()
             .block_height
-            .set(*actual_height.deref() as i64);
+            .set(*actual_next_height.deref() as i64);
         let current_time = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap()
@@ -262,7 +294,13 @@ where
             .set(current_time);
 
         tracing::info!("Committed block {:#x}", result.sealed_block.entity.id());
-        let _ = self.broadcast.send(Arc::new(result));
+
+        // The `tokio::sync::oneshot::Sender` is used to notify about the end
+        // of the processing of a new block by all listeners.
+        let (sender, receiver) = oneshot::channel();
+        let _ = self.broadcast.send(Arc::new(Awaiter::new(result, sender)));
+        *self.prev_block_process_result.lock().expect("poisoned") = Some(receiver);
+
         Ok(())
     }
 
@@ -273,13 +311,11 @@ where
         // Errors are optimistically handled via fallback to default values since the metrics
         // should get updated regularly anyways and these errors will be discovered and handled
         // correctly in more mission critical areas (such as _commit_result)
-        let current_block_height =
-            self.database.latest_block_height().unwrap_or_default();
-        let total_tx_count = self.database.increase_tx_count(0).unwrap_or_default();
-
-        importer_metrics()
-            .total_txs_count
-            .set(total_tx_count as i64);
+        let current_block_height = self
+            .database
+            .latest_block_height()
+            .unwrap_or_default()
+            .unwrap_or_default();
         importer_metrics()
             .block_height
             .set(*current_block_height.deref() as i64);
@@ -314,12 +350,23 @@ where
         &self,
         sealed_block: SealedBlock,
     ) -> Result<UncommittedResult<StorageTransaction<E::Database>>, Error> {
+        Self::verify_and_execute_block_inner(
+            self.executor.clone(),
+            self.verifier.clone(),
+            sealed_block,
+        )
+    }
+
+    fn verify_and_execute_block_inner(
+        executor: Arc<E>,
+        verifier: Arc<V>,
+        sealed_block: SealedBlock,
+    ) -> Result<UncommittedResult<StorageTransaction<E::Database>>, Error> {
         let consensus = sealed_block.consensus;
         let block = sealed_block.entity;
         let sealed_block_id = block.id();
 
-        let result_of_verification =
-            self.verifier.verify_block_fields(&consensus, &block);
+        let result_of_verification = verifier.verify_block_fields(&consensus, &block);
         if let Err(err) = result_of_verification {
             return Err(Error::FailedVerification(err))
         }
@@ -339,8 +386,7 @@ where
                 tx_status,
             },
             db_tx,
-        ) = self
-            .executor
+        ) = executor
             .execute_without_commit(block)
             .map_err(Error::FailedExecution)?
             .into();
@@ -369,19 +415,47 @@ where
 
 impl<IDatabase, E, V> Importer<IDatabase, E, V>
 where
-    IDatabase: ImporterDatabase,
-    E: Executor,
-    V: BlockVerifier,
+    IDatabase: ImporterDatabase + 'static,
+    E: Executor + 'static,
+    V: BlockVerifier + 'static,
 {
     /// The method validates the `Block` fields and commits the `SealedBlock`.
     /// It is a combination of the [`Importer::verify_and_execute_block`] and [`Importer::commit_result`].
-    pub fn execute_and_commit(&self, sealed_block: SealedBlock) -> Result<(), Error> {
+    pub async fn execute_and_commit(
+        &self,
+        sealed_block: SealedBlock,
+    ) -> Result<(), Error> {
         let _guard = self.lock()?;
+
+        let executor = self.executor.clone();
+        let verifier = self.verifier.clone();
+        let (result, execute_time) = tokio_rayon::spawn_fifo(|| {
+            let start = Instant::now();
+            let result =
+                Self::verify_and_execute_block_inner(executor, verifier, sealed_block);
+            let execute_time = start.elapsed().as_secs_f64();
+            (result, execute_time)
+        })
+        .await;
+
+        let result = result?;
+
+        // It is safe to unwrap the channel because we have the `_guard`.
+        let previous_block_result = self
+            .prev_block_process_result
+            .lock()
+            .expect("poisoned")
+            .take();
+
+        // Await until all receivers of the notification process the result.
+        if let Some(channel) = previous_block_result {
+            let _ = channel.await;
+        }
+
         let start = Instant::now();
-        let result = self.verify_and_execute_block(sealed_block)?;
         let commit_result = self._commit_result(result);
-        // record the execution time to prometheus
-        let time = start.elapsed().as_secs_f64();
+        let commit_time = start.elapsed().as_secs_f64();
+        let time = execute_time + commit_time;
         importer_metrics().execute_and_commit_duration.observe(time);
         // return execution result
         commit_result
@@ -398,6 +472,37 @@ impl<T> ShouldBeUnique for Option<T> {
             Err(Error::NotUnique(*height))
         } else {
             Ok(())
+        }
+    }
+}
+
+/// The wrapper around `ImportResult` to notify about the end of the processing of a new block.
+struct Awaiter {
+    result: ImportResult,
+    release_channel: Option<oneshot::Sender<()>>,
+}
+
+impl Drop for Awaiter {
+    fn drop(&mut self) {
+        if let Some(release_channel) = core::mem::take(&mut self.release_channel) {
+            let _ = release_channel.send(());
+        }
+    }
+}
+
+impl Deref for Awaiter {
+    type Target = ImportResult;
+
+    fn deref(&self) -> &Self::Target {
+        &self.result
+    }
+}
+
+impl Awaiter {
+    fn new(result: ImportResult, channel: oneshot::Sender<()>) -> Self {
+        Self {
+            result,
+            release_channel: Some(channel),
         }
     }
 }

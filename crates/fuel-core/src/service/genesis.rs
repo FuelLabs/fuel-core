@@ -4,24 +4,23 @@ use crate::{
 };
 use anyhow::anyhow;
 use fuel_core_chain_config::{
-    CoinConfig,
     ContractConfig,
     GenesisCommitment,
-    IntoIter,
-    MessageConfig,
+    StateConfig,
 };
-
-use fuel_core_importer::Importer;
+use fuel_core_executor::refs::ContractRef;
 use fuel_core_storage::{
     tables::{
         Coins,
         ContractsInfo,
         ContractsLatestUtxo,
         ContractsRawCode,
-        FuelBlocks,
         Messages,
     },
-    transactional::Transactional,
+    transactional::{
+        StorageTransaction,
+        Transactional,
+    },
     MerkleRoot,
     StorageAsMut,
 };
@@ -41,9 +40,15 @@ use fuel_core_types::{
         SealedBlock,
     },
     entities::{
-        coins::coin::CompressedCoin,
+        coins::coin::{
+            CompressedCoin,
+            CompressedCoinV1,
+        },
         contract::ContractUtxoInfo,
-        message::Message,
+        message::{
+            Message,
+            MessageV1,
+        },
     },
     fuel_merkle::binary,
     fuel_tx::{
@@ -64,98 +69,46 @@ use fuel_core_types::{
 };
 use itertools::Itertools;
 
-/// Loads state from the chain config into database
-pub fn maybe_initialize_state(
-    config: &Config,
-    database: &Database,
-) -> anyhow::Result<()> {
-    // check if chain is initialized
-    if database.ids_of_latest_block()?.is_none() {
-        import_chain_state(config, database)?;
-        commit_genesis_block(config, database)?;
-    }
-
-    Ok(())
-}
-
-fn import_chain_state(
+/// Performs the importing of the genesis block from the snapshot.
+pub fn execute_genesis_block(
     config: &Config,
     original_database: &Database,
-) -> anyhow::Result<()> {
-    let block_height = config.chain_config.height.unwrap_or_default();
-
-    let coins_reader = config.state_decoder.coins()?;
-    let mut _coin_roots =
-        import_coin_configs(&original_database, coins_reader, block_height)?;
-
-    _coin_roots.sort();
-
-    // TODO: other threads should be killed if one encounters a failure
-    // let coins_reader = config.get_message_reader()?;
-    // let handle = tokio::spawn(
-    // async move {
-    // import_message_configs(&original_database, coins_reader, block_height).unwrap()
-    // });
-    //
-    // let coins_reader = config.get_contracts_reader()?;
-    // let handle = tokio::spawn(
-    // async move {
-    // import_contract_configs(&original_database, coins_reader, block_height).unwrap()
-    // });
-    // let contract_importer = message_importer.contracts();
-    // contract_importer.try_for_each(|message| {
-    // match contract? {
-    // TODO output index
-    // ContractComponent::ContractMetadata(contract) => {
-    // init_contract(original_database, contract, cursor as u64, block_height)?
-    // }
-    // ContractComponent::ContractState(contract_id, key, value) => {
-    // init_contract_state(original_database, &contract_id, key, value)?
-    // }
-    // ContractComponent::ContractAsset(contract_id, asset_id, balance) => {
-    // init_contract_balance(
-    // original_database,
-    // &contract_id,
-    // AssetId::from(*asset_id),
-    // balance,
-    // )?;
-    //
-    // State file specs guarantee that ContractAsset will come last when reading contract state
-    // We can calculate the root at this point
-    // contracts_tree.push(
-    // ContractRef::new(&mut *original_database, contract_id)
-    // .root()?
-    // .as_slice(),
-    // );
-    // save_genesis_progress(
-    // cursor + 1,
-    // GenesisRootCalculatorKey::Contracts,
-    // original_database,
-    // )?
-    // }
-    // }
-    // })?;
-
-    Ok(())
-}
-
-fn commit_genesis_block(
-    config: &Config,
-    original_database: &Database,
-) -> anyhow::Result<()> {
+) -> anyhow::Result<UncommittedImportResult<StorageTransaction<Database>>> {
+    // start a db transaction for bulk-writing
     let mut database_transaction = Transactional::transaction(original_database);
-    let database = database_transaction.as_mut();
 
-    // TODO: load roots from storage
+    let database = database_transaction.as_mut();
+    // Initialize the chain id and height.
+
     let chain_config_hash = config.chain_config.root()?.into();
+    let height = config.chain_config.height;
+    let coins_root = init_coin_state(database, &config.state_config, height)?.into();
+    let contracts_root = init_contracts(database, &config.state_config, height)?.into();
+    let messages_root = init_da_messages(database, &config.state_config)?;
+    let messages_root = messages_root.into();
 
     let genesis = Genesis {
         chain_config_hash,
-        coins_root: binary::in_memory::MerkleTree::new().root().into(),
-        contracts_root: binary::in_memory::MerkleTree::new().root().into(),
-        messages_root: binary::in_memory::MerkleTree::new().root().into(),
+        coins_root,
+        contracts_root,
+        messages_root,
     };
 
+    let block = create_genesis_block(config);
+    let consensus = Consensus::Genesis(genesis);
+    let block = SealedBlock {
+        entity: block,
+        consensus,
+    };
+
+    let result = UncommittedImportResult::new(
+        ImportResult::new_from_local(block, vec![]),
+        database_transaction,
+    );
+    Ok(result)
+}
+
+pub fn create_genesis_block(config: &Config) -> Block {
     let block = Block::new(
         PartialBlockHeader {
             application: ApplicationHeader::<Empty> {
@@ -167,6 +120,7 @@ fn commit_genesis_block(
                 // The genesis is a first block, so previous root is zero.
                 prev_root: Bytes32::zeroed(),
                 // The initial height is defined by the `ChainConfig`.
+                // If it is `None` then it will be zero.
                 height: config.chain_config.height.unwrap_or_default(),
                 time: fuel_core_types::tai64::Tai64::UNIX_EPOCH,
                 generated: Empty,
@@ -176,202 +130,177 @@ fn commit_genesis_block(
         vec![],
         &[],
     );
+    block
+}
 
-    let block_id = block.id();
-    database.storage::<FuelBlocks>().insert(
-        &block_id,
-        &block.compress(&config.chain_config.consensus_parameters.chain_id),
-    )?;
-    let consensus = Consensus::Genesis(genesis);
-    let block = SealedBlock {
-        entity: block,
-        consensus,
-    };
-
-    let importer = Importer::new(
+#[cfg(feature = "test-helpers")]
+pub async fn execute_and_commit_genesis_block(
+    config: &Config,
+    original_database: &Database,
+) -> anyhow::Result<()> {
+    let result = execute_genesis_block(config, original_database)?;
+    let importer = fuel_core_importer::Importer::new(
         config.block_importer.clone(),
         original_database.clone(),
         (),
         (),
     );
-    importer.commit_result(UncommittedImportResult::new(
-        ImportResult::new_from_local(block, vec![]),
-        database_transaction,
-    ))?;
-
+    importer.commit_result(result).await?;
     Ok(())
 }
 
-fn import_coin_configs(
-    database: &Database,
-    coin_batches: IntoIter<CoinConfig>,
-    block_height: BlockHeight,
-) -> anyhow::Result<Vec<Bytes32>> {
-    // let (cursor, root_calculator) =
-    // resume_import(database, StateImportProgressKey::Coins)?;
-    // let mut state_reader = JsonBatchReader::new(coins_reader, cursor)?;
-    let mut roots = vec![];
-    let mut generated_output_idx = 0;
-
-    for batch in coin_batches {
-        let mut database_transaction = Transactional::transaction(database);
-        let database = database_transaction.as_mut();
-
-        // TODO
-        let batch = batch.unwrap();
-
-        // TODO: set output_index
-        batch.data.iter().try_for_each(|coin| {
-            let root  = init_coin(database, coin, generated_output_idx, block_height)?;
-            roots.push(root.into());
-
-            generated_output_idx = generated_output_idx
-                .checked_add(1)
-                .expect("The maximum number of UTXOs supported in the genesis configuration has been exceeded.");
-
-            /*
-            save_import_progress(
-                database,
-                StateImportProgressKey::Coins,
-                cursor + 1, // TODO: advance by # bytes read
-                root_calculator,
-            ) */
-            Ok::<(), anyhow::Error>(())
-        })?;
-
-        database_transaction.commit()?;
-    }
-
-    Ok(roots)
-}
-
-fn init_coin(
+fn init_coin_state(
     db: &mut Database,
-    coin: &CoinConfig,
-    output_index: u64,
-    height: BlockHeight,
+    state: &StateConfig,
+    height: Option<BlockHeight>,
 ) -> anyhow::Result<MerkleRoot> {
+    let mut coins_tree = binary::in_memory::MerkleTree::new();
     // TODO: Store merkle sum tree root over coins with unspecified utxo ids.
-    let utxo_id = UtxoId::new(
-        // generated transaction id([0..[out_index/255]])
-        coin.tx_id.unwrap_or_else(|| {
-            Bytes32::try_from(
-                (0..(Bytes32::LEN - WORD_SIZE))
-                    .map(|_| 0u8)
-                    .chain((output_index / 255).to_be_bytes().into_iter())
-                    .collect_vec()
-                    .as_slice(),
-            )
-            .expect("Incorrect genesis transaction id byte length")
-        }),
-        coin.output_index
-            .unwrap_or_else(|| (output_index % 255) as u8),
-    );
+    let mut generated_output_index: u64 = 0;
+    for coin in &state.coins {
+        let utxo_id = UtxoId::new(
+                    // generated transaction id([0..[out_index/255]])
+                    coin.tx_id.unwrap_or_else(|| {
+                        Bytes32::try_from(
+                            (0..(Bytes32::LEN - WORD_SIZE))
+                                .map(|_| 0u8)
+                                .chain(
+                                    (generated_output_index / 255)
+                                        .to_be_bytes()
+                                        .into_iter(),
+                                )
+                                .collect_vec()
+                                .as_slice(),
+                        )
+                        .expect("Incorrect genesis transaction id byte length")
+                    }),
+                    coin.output_index.unwrap_or_else(|| {
+                        generated_output_index = generated_output_index
+                            .checked_add(1)
+                            .expect("The maximum number of UTXOs supported in the genesis configuration has been exceeded.");
+                        (generated_output_index % 255) as u8
+                    }),
+                );
 
-    let coin = CompressedCoin {
-        owner: coin.owner,
-        amount: coin.amount,
-        asset_id: coin.asset_id,
-        maturity: coin.maturity.unwrap_or_default(),
-        tx_pointer: TxPointer::new(
-            coin.tx_pointer_block_height.unwrap_or_default(),
-            coin.tx_pointer_tx_idx.unwrap_or_default(),
-        ),
-    };
+        let compressed_coin: CompressedCoin = CompressedCoinV1 {
+            owner: coin.owner,
+            amount: coin.amount,
+            asset_id: coin.asset_id,
+            maturity: coin.maturity.unwrap_or_default(),
+            tx_pointer: TxPointer::new(
+                coin.tx_pointer_block_height.unwrap_or_default(),
+                coin.tx_pointer_tx_idx.unwrap_or_default(),
+            ),
+        }
+        .into();
 
-    // ensure coin can't point to blocks in the future
-    if coin.tx_pointer.block_height() > height {
-        return Err(anyhow!(
-            "coin tx_pointer height cannot be greater than genesis block"
-        ));
+        // ensure coin can't point to blocks in the future
+        if compressed_coin.tx_pointer().block_height() > height.unwrap_or_default() {
+            return Err(anyhow!(
+                "coin tx_pointer height cannot be greater than genesis block"
+            ))
+        }
+
+        if db
+            .storage::<Coins>()
+            .insert(&utxo_id, &compressed_coin)?
+            .is_some()
+        {
+            return Err(anyhow!("Coin should not exist"))
+        }
+        coins_tree.push(compressed_coin.root()?.as_slice())
     }
-
-    if db.storage::<Coins>().insert(&utxo_id, &coin)?.is_some() {
-        return Err(anyhow!("Coin should not exist"));
-    }
-    coin.root()
+    Ok(coins_tree.root())
 }
 
-fn _init_contract(
+fn init_contracts(
     db: &mut Database,
-    contract_config: ContractConfig,
-    output_index: u64,
-    height: BlockHeight,
-) -> anyhow::Result<()> {
-    // TODO fix output index
-
+    state: &StateConfig,
+    height: Option<BlockHeight>,
+) -> anyhow::Result<MerkleRoot> {
+    let mut contracts_tree = binary::in_memory::MerkleTree::new();
     // initialize contract state
-    let contract = Contract::from(contract_config.code.as_slice());
-    let salt = contract_config.salt;
-    let root = contract.root();
-    let contract_id = contract_config.contract_id;
-    let utxo_id = if let (Some(tx_id), Some(output_idx)) =
-        (contract_config.tx_id, contract_config.output_index)
-    {
-        UtxoId::new(tx_id, output_idx)
-    } else {
-        UtxoId::new(
-            // generated transaction id([0..[out_index/255]])
-            Bytes32::try_from(
-                (0..(Bytes32::LEN - WORD_SIZE))
-                    .map(|_| 0u8)
-                    .chain((output_index as u64 / 255).to_be_bytes().into_iter())
-                    .collect_vec()
-                    .as_slice(),
+    for (generated_output_index, contract_config) in state.contracts.iter().enumerate() {
+        let contract = Contract::from(contract_config.code.as_slice());
+        let salt = contract_config.salt;
+        let root = contract.root();
+        let contract_id = contract_config.contract_id;
+        let utxo_id = if let (Some(tx_id), Some(output_idx)) =
+            (contract_config.tx_id, contract_config.output_index)
+        {
+            UtxoId::new(tx_id, output_idx)
+        } else {
+            #[allow(clippy::cast_possible_truncation)]
+            UtxoId::new(
+                // generated transaction id([0..[out_index/255]])
+                Bytes32::try_from(
+                    (0..(Bytes32::LEN - WORD_SIZE))
+                        .map(|_| 0u8)
+                        .chain(
+                            (generated_output_index as u64 / 255)
+                                .to_be_bytes()
+                                .into_iter(),
+                        )
+                        .collect_vec()
+                        .as_slice(),
+                )
+                .expect("Incorrect genesis transaction id byte length"),
+                generated_output_index as u8,
             )
-            .expect("Incorrect genesis transaction id byte length"),
-            output_index as u8,
-        )
-    };
-    let tx_pointer = if let (Some(block_height), Some(tx_idx)) = (
-        contract_config.tx_pointer_block_height,
-        contract_config.tx_pointer_tx_idx,
-    ) {
-        TxPointer::new(block_height, tx_idx)
-    } else {
-        TxPointer::default()
-    };
+        };
+        let tx_pointer = if let (Some(block_height), Some(tx_idx)) = (
+            contract_config.tx_pointer_block_height,
+            contract_config.tx_pointer_tx_idx,
+        ) {
+            TxPointer::new(block_height, tx_idx)
+        } else {
+            TxPointer::default()
+        };
 
-    if tx_pointer.block_height() > height {
-        return Err(anyhow!(
-            "contract tx_pointer cannot be greater than genesis block"
-        ));
-    }
+        if tx_pointer.block_height() > height.unwrap_or_default() {
+            return Err(anyhow!(
+                "contract tx_pointer cannot be greater than genesis block"
+            ))
+        }
 
-    // insert contract code
-    if db
-        .storage::<ContractsRawCode>()
-        .insert(&contract_id, contract.as_ref())?
-        .is_some()
-    {
-        return Err(anyhow!("Contract code should not exist"));
-    }
+        // insert contract code
+        if db
+            .storage::<ContractsRawCode>()
+            .insert(&contract_id, contract.as_ref())?
+            .is_some()
+        {
+            return Err(anyhow!("Contract code should not exist"))
+        }
 
-    // insert contract root
-    if db
-        .storage::<ContractsInfo>()
-        .insert(&contract_id, &(salt, root))?
-        .is_some()
-    {
-        return Err(anyhow!("Contract info should not exist"));
+        // insert contract root
+        if db
+            .storage::<ContractsInfo>()
+            .insert(&contract_id, &(salt, root))?
+            .is_some()
+        {
+            return Err(anyhow!("Contract info should not exist"))
+        }
+        if db
+            .storage::<ContractsLatestUtxo>()
+            .insert(
+                &contract_id,
+                &ContractUtxoInfo {
+                    utxo_id,
+                    tx_pointer,
+                },
+            )?
+            .is_some()
+        {
+            return Err(anyhow!("Contract utxo should not exist"))
+        }
+        init_contract_state(db, &contract_id, contract_config)?;
+        init_contract_balance(db, &contract_id, contract_config)?;
+        contracts_tree.push(ContractRef::new(&mut *db, contract_id).root()?.as_slice());
     }
-    if db
-        .storage::<ContractsLatestUtxo>()
-        .insert(
-            &contract_id,
-            &ContractUtxoInfo {
-                utxo_id,
-                tx_pointer,
-            },
-        )?
-        .is_some()
-    {
-        return Err(anyhow!("Contract utxo should not exist"));
-    }
-    Ok(())
+    Ok(contracts_tree.root())
 }
 
-fn _init_contract_state(
+fn init_contract_state(
     db: &mut Database,
     contract_id: &ContractId,
     contract: &ContractConfig,
@@ -383,7 +312,35 @@ fn _init_contract_state(
     Ok(())
 }
 
-fn _init_contract_balance(
+fn init_da_messages(
+    db: &mut Database,
+    state: &StateConfig,
+) -> anyhow::Result<MerkleRoot> {
+    let mut message_tree = binary::in_memory::MerkleTree::new();
+    for msg in &state.messages {
+        let message: Message = MessageV1 {
+            sender: msg.sender,
+            recipient: msg.recipient,
+            nonce: msg.nonce,
+            amount: msg.amount,
+            data: msg.data.clone(),
+            da_height: msg.da_height,
+        }
+        .into();
+
+        if db
+            .storage::<Messages>()
+            .insert(message.id(), &message)?
+            .is_some()
+        {
+            return Err(anyhow!("Message should not exist"))
+        }
+        message_tree.push(message.root()?.as_slice());
+    }
+    Ok(message_tree.root())
+}
+
+fn init_contract_balance(
     db: &mut Database,
     contract_id: &ContractId,
     contract: &ContractConfig,
@@ -395,34 +352,17 @@ fn _init_contract_balance(
     Ok(())
 }
 
-fn _init_da_message(db: &mut Database, msg: MessageConfig) -> anyhow::Result<MerkleRoot> {
-    let message = Message {
-        sender: msg.sender,
-        recipient: msg.recipient,
-        nonce: msg.nonce,
-        amount: msg.amount,
-        data: msg.data.clone(),
-        da_height: msg.da_height,
-    };
-
-    if db
-        .storage::<Messages>()
-        .insert(message.id(), &message)?
-        .is_some()
-    {
-        return Err(anyhow!("Message should not exist"));
-    }
-
-    message.root()
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    use crate::service::{
-        config::Config,
-        FuelService,
+    use crate::{
+        combined_database::CombinedDatabase,
+        service::{
+            config::Config,
+            FuelService,
+            Task,
+        },
     };
     use fuel_core_chain_config::{
         ChainConfig,
@@ -430,6 +370,7 @@ mod tests {
         MessageConfig,
         StateConfig,
     };
+    use fuel_core_services::RunnableService;
     use fuel_core_storage::{
         tables::{
             ContractsAssets,
@@ -455,30 +396,6 @@ mod tests {
         SeedableRng,
     };
     use std::vec;
-
-    #[tokio::test]
-    async fn config_initializes_chain_name() {
-        let test_name = "test_net_123".to_string();
-        let service_config = Config {
-            chain_config: ChainConfig {
-                chain_name: test_name.clone(),
-                ..ChainConfig::local_testnet()
-            },
-            ..Config::local_node()
-        };
-
-        let db = Database::default();
-        FuelService::from_database(db.clone(), service_config)
-            .await
-            .unwrap();
-
-        assert_eq!(
-            test_name,
-            db.get_chain_name()
-                .unwrap()
-                .expect("Expected a chain name to be set")
-        )
-    }
 
     #[tokio::test]
     async fn config_initializes_block_height() {
@@ -668,11 +585,14 @@ mod tests {
 
         let db = &Database::default();
 
-        maybe_initialize_state(&config, db).unwrap();
+        let db_transaction = execute_genesis_block(&config, db)
+            .unwrap()
+            .into_transaction();
 
         let expected_msg: Message = msg.into();
 
-        let ret_msg = db
+        let ret_msg = db_transaction
+            .as_ref()
             .storage::<Messages>()
             .get(expected_msg.id())
             .unwrap()
@@ -752,8 +672,9 @@ mod tests {
             ..Config::local_node()
         };
 
-        let db = Database::default();
-        let init_result = FuelService::from_database(db.clone(), service_config).await;
+        let db = CombinedDatabase::default();
+        let task = Task::new(db, service_config).unwrap();
+        let init_result = task.into_task(&Default::default(), ()).await;
 
         assert!(init_result.is_err())
     }
@@ -791,8 +712,9 @@ mod tests {
             ..Config::local_node()
         };
 
-        let db = Database::default();
-        let init_result = FuelService::from_database(db.clone(), service_config).await;
+        let db = CombinedDatabase::default();
+        let task = Task::new(db, service_config).unwrap();
+        let init_result = task.into_task(&Default::default(), ()).await;
 
         assert!(init_result.is_err())
     }

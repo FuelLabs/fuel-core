@@ -1,6 +1,9 @@
 use crate::{
     database::{
-        Column,
+        database_description::{
+            on_chain::OnChain,
+            DatabaseDescription,
+        },
         Result as DatabaseResult,
     },
     state::{
@@ -8,16 +11,23 @@ use crate::{
         BatchOperations,
         DataSource,
         IterDirection,
+        TransactableStorage,
+    },
+};
+use fuel_core_storage::{
+    iter::{
+        BoxedIter,
+        IntoBoxedIter,
+        IteratorableStore,
+    },
+    kv_store::{
         KVItem,
         KeyValueStore,
-        TransactableStorage,
+        StorageColumn,
         Value,
         WriteOperation,
     },
-};
-use fuel_core_storage::iter::{
-    BoxedIter,
-    IntoBoxedIter,
+    Result as StorageResult,
 };
 use itertools::{
     EitherOrBoth,
@@ -35,28 +45,40 @@ use std::{
 };
 
 #[derive(Debug)]
-pub struct MemoryTransactionView {
-    view_layer: MemoryStore,
+pub struct MemoryTransactionView<Description = OnChain>
+where
+    Description: DatabaseDescription,
+{
+    view_layer: MemoryStore<Description>,
     // TODO: Remove `Mutex`.
     // use hashmap to collapse changes (e.g. insert then remove the same key)
-    changes: [Mutex<HashMap<Vec<u8>, WriteOperation>>; Column::COUNT],
-    data_source: DataSource,
+    changes: Vec<Mutex<HashMap<Vec<u8>, WriteOperation>>>,
+    data_source: DataSource<Description>,
 }
 
-impl MemoryTransactionView {
-    pub fn new(source: DataSource) -> Self {
+impl<Description> MemoryTransactionView<Description>
+where
+    Description: DatabaseDescription,
+{
+    pub fn new<D>(source: D) -> Self
+    where
+        D: Into<DataSource<Description>>,
+    {
+        use strum::EnumCount;
         Self {
             view_layer: MemoryStore::default(),
-            changes: Default::default(),
-            data_source: source,
+            changes: (0..Description::Column::COUNT)
+                .map(|_| Mutex::new(HashMap::new()))
+                .collect(),
+            data_source: source.into(),
         }
     }
 
-    pub fn commit(&self) -> DatabaseResult<()> {
+    pub fn commit(&self) -> StorageResult<()> {
         let mut iter = self
             .changes
             .iter()
-            .zip(enum_iterator::all::<Column>())
+            .zip(enum_iterator::all::<Description::Column>())
             .flat_map(|(column_map, column)| {
                 let mut map = column_map.lock().expect("poisoned lock");
                 let changes = core::mem::take(map.deref_mut());
@@ -68,8 +90,91 @@ impl MemoryTransactionView {
     }
 }
 
-impl KeyValueStore for MemoryTransactionView {
-    fn get(&self, key: &[u8], column: Column) -> DatabaseResult<Option<Value>> {
+impl<Description> KeyValueStore for MemoryTransactionView<Description>
+where
+    Description: DatabaseDescription,
+{
+    type Column = Description::Column;
+
+    fn replace(
+        &self,
+        key: &[u8],
+        column: Self::Column,
+        value: Value,
+    ) -> StorageResult<Option<Value>> {
+        let key_vec = key.to_vec();
+        let contained_key = self.changes[column.as_usize()]
+            .lock()
+            .expect("poisoned lock")
+            .insert(key_vec, WriteOperation::Insert(value.clone()))
+            .is_some();
+        let res = self.view_layer.replace(key, column, value);
+        if contained_key {
+            res
+        } else {
+            self.data_source.get(key, column)
+        }
+    }
+
+    fn write(
+        &self,
+        key: &[u8],
+        column: Self::Column,
+        buf: &[u8],
+    ) -> StorageResult<usize> {
+        let k = key.to_vec();
+        self.changes[column.as_usize()]
+            .lock()
+            .expect("poisoned lock")
+            .insert(k, WriteOperation::Insert(Arc::new(buf.to_vec())));
+        self.view_layer.write(key, column, buf)
+    }
+
+    fn take(&self, key: &[u8], column: Self::Column) -> StorageResult<Option<Value>> {
+        let k = key.to_vec();
+        let contained_key = {
+            let mut lock = self.changes[column.as_usize()]
+                .lock()
+                .expect("poisoned lock");
+            lock.insert(k, WriteOperation::Remove).is_some()
+        };
+        let res = self.view_layer.take(key, column);
+        if contained_key {
+            res
+        } else {
+            self.data_source.get(key, column)
+        }
+    }
+
+    fn delete(&self, key: &[u8], column: Self::Column) -> StorageResult<()> {
+        let k = key.to_vec();
+        self.changes[column.as_usize()]
+            .lock()
+            .expect("poisoned lock")
+            .insert(k, WriteOperation::Remove);
+        self.view_layer.delete(key, column)
+    }
+
+    fn size_of_value(
+        &self,
+        key: &[u8],
+        column: Self::Column,
+    ) -> StorageResult<Option<usize>> {
+        // try to fetch data from View layer if any changes to the key
+        if self.changes[column.as_usize()]
+            .lock()
+            .expect("poisoned lock")
+            .contains_key(&key.to_vec())
+        {
+            self.view_layer.size_of_value(key, column)
+        } else {
+            // fall-through to original data source
+            // Note: The getting size from original database may be more performant than from `get`
+            self.data_source.size_of_value(key, column)
+        }
+    }
+
+    fn get(&self, key: &[u8], column: Self::Column) -> StorageResult<Option<Value>> {
         // try to fetch data from View layer if any changes to the key
         if self.changes[column.as_usize()]
             .lock()
@@ -83,57 +188,34 @@ impl KeyValueStore for MemoryTransactionView {
         }
     }
 
-    fn put(
+    fn read(
         &self,
         key: &[u8],
-        column: Column,
-        value: Value,
-    ) -> DatabaseResult<Option<Value>> {
-        let key_vec = key.to_vec();
-        let contained_key = self.changes[column.as_usize()]
-            .lock()
-            .expect("poisoned lock")
-            .insert(key_vec, WriteOperation::Insert(value.clone()))
-            .is_some();
-        let res = self.view_layer.put(key, column, value);
-        if contained_key {
-            res
-        } else {
-            self.data_source.get(key, column)
-        }
-    }
-
-    fn delete(&self, key: &[u8], column: Column) -> DatabaseResult<Option<Value>> {
-        let k = key.to_vec();
-        let contained_key = self.changes[column.as_usize()]
-            .lock()
-            .expect("poisoned lock")
-            .insert(k, WriteOperation::Remove)
-            .is_some();
-        let res = self.view_layer.delete(key, column);
-        if contained_key {
-            res
-        } else {
-            self.data_source.get(key, column)
-        }
-    }
-
-    fn exists(&self, key: &[u8], column: Column) -> DatabaseResult<bool> {
-        let k = key.to_vec();
+        column: Self::Column,
+        buf: &mut [u8],
+    ) -> StorageResult<Option<usize>> {
+        // try to fetch data from View layer if any changes to the key
         if self.changes[column.as_usize()]
             .lock()
             .expect("poisoned lock")
-            .contains_key(&k)
+            .contains_key(&key.to_vec())
         {
-            self.view_layer.exists(key, column)
+            self.view_layer.read(key, column, buf)
         } else {
-            self.data_source.exists(key, column)
+            // fall-through to original data source
+            // Note: The read from original database may be more performant than from `get`
+            self.data_source.read(key, column, buf)
         }
     }
+}
 
+impl<Description> IteratorableStore for MemoryTransactionView<Description>
+where
+    Description: DatabaseDescription,
+{
     fn iter_all(
         &self,
-        column: Column,
+        column: Self::Column,
         prefix: Option<&[u8]>,
         start: Option<&[u8]>,
         direction: IterDirection,
@@ -186,105 +268,17 @@ impl KeyValueStore for MemoryTransactionView {
                     }
                 }).into_boxed()
     }
-
-    fn size_of_value(&self, key: &[u8], column: Column) -> DatabaseResult<Option<usize>> {
-        // try to fetch data from View layer if any changes to the key
-        if self.changes[column.as_usize()]
-            .lock()
-            .expect("poisoned lock")
-            .contains_key(&key.to_vec())
-        {
-            self.view_layer.size_of_value(key, column)
-        } else {
-            // fall-through to original data source
-            self.data_source.size_of_value(key, column)
-        }
-    }
-
-    fn read(
-        &self,
-        key: &[u8],
-        column: Column,
-        buf: &mut [u8],
-    ) -> DatabaseResult<Option<usize>> {
-        // try to fetch data from View layer if any changes to the key
-        if self.changes[column.as_usize()]
-            .lock()
-            .expect("poisoned lock")
-            .contains_key(&key.to_vec())
-        {
-            self.view_layer.read(key, column, buf)
-        } else {
-            // fall-through to original data source
-            self.data_source.read(key, column, buf)
-        }
-    }
-
-    fn read_alloc(&self, key: &[u8], column: Column) -> DatabaseResult<Option<Value>> {
-        if self.changes[column.as_usize()]
-            .lock()
-            .expect("poisoned lock")
-            .contains_key(&key.to_vec())
-        {
-            self.view_layer.read_alloc(key, column)
-        } else {
-            // fall-through to original data source
-            self.data_source.read_alloc(key, column)
-        }
-    }
-
-    fn write(&self, key: &[u8], column: Column, buf: &[u8]) -> DatabaseResult<usize> {
-        let k = key.to_vec();
-        self.changes[column.as_usize()]
-            .lock()
-            .expect("poisoned lock")
-            .insert(k, WriteOperation::Insert(Arc::new(buf.to_vec())));
-        self.view_layer.write(key, column, buf)
-    }
-
-    fn replace(
-        &self,
-        key: &[u8],
-        column: Column,
-        buf: &[u8],
-    ) -> DatabaseResult<(usize, Option<Value>)> {
-        let k = key.to_vec();
-        let contained_key = {
-            let mut lock = self.changes[column.as_usize()]
-                .lock()
-                .expect("poisoned lock");
-            lock.insert(k, WriteOperation::Insert(Arc::new(buf.to_vec())))
-                .is_some()
-        };
-        let res = self.view_layer.replace(key, column, buf)?;
-        let num_written = res.0;
-        if contained_key {
-            Ok(res)
-        } else {
-            Ok((num_written, self.data_source.read_alloc(key, column)?))
-        }
-    }
-
-    fn take(&self, key: &[u8], column: Column) -> DatabaseResult<Option<Value>> {
-        let k = key.to_vec();
-        let contained_key = {
-            let mut lock = self.changes[column.as_usize()]
-                .lock()
-                .expect("poisoned lock");
-            lock.insert(k, WriteOperation::Remove).is_some()
-        };
-        let res = self.view_layer.take(key, column);
-        if contained_key {
-            res
-        } else {
-            self.data_source.read_alloc(key, column)
-        }
-    }
 }
 
-impl BatchOperations for MemoryTransactionView {}
+impl<Description> BatchOperations for MemoryTransactionView<Description> where
+    Description: DatabaseDescription
+{
+}
 
-impl TransactableStorage for MemoryTransactionView {
+impl<Description> TransactableStorage for MemoryTransactionView<Description>
+where
+    Description: DatabaseDescription,
+{
     fn flush(&self) -> DatabaseResult<()> {
         for lock in self.changes.iter() {
             lock.lock().expect("poisoned lock").clear();
@@ -297,7 +291,10 @@ impl TransactableStorage for MemoryTransactionView {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use fuel_core_storage::column::Column;
     use std::sync::Arc;
+
+    type MemoryTransactionView = super::MemoryTransactionView<OnChain>;
 
     #[test]
     fn get_returns_from_view() {
@@ -352,10 +349,11 @@ mod tests {
         let store = Arc::new(MemoryStore::default());
         let view = MemoryTransactionView::new(store);
         let expected = Arc::new(vec![1, 2, 3]);
-        let _ = view.put(&[0xA, 0xB, 0xC], Column::Metadata, expected.clone());
+        view.put(&[0xA, 0xB, 0xC], Column::Metadata, expected.clone())
+            .unwrap();
         // test
         let ret = view
-            .put(&[0xA, 0xB, 0xC], Column::Metadata, Arc::new(vec![2, 4, 6]))
+            .replace(&[0xA, 0xB, 0xC], Column::Metadata, Arc::new(vec![2, 4, 6]))
             .unwrap();
         // verify
         assert_eq!(ret, Some(expected))
@@ -370,7 +368,7 @@ mod tests {
         let expected = Arc::new(vec![1, 2, 3]);
         view.put(&key, Column::Metadata, expected.clone()).unwrap();
         // test
-        let ret = view.delete(&key, Column::Metadata).unwrap();
+        let ret = view.take(&key, Column::Metadata).unwrap();
         let get = view.get(&key, Column::Metadata).unwrap();
         // verify
         assert_eq!(ret, Some(expected));
@@ -386,7 +384,7 @@ mod tests {
         store.put(&key, Column::Metadata, expected.clone()).unwrap();
         let view = MemoryTransactionView::new(store);
         // test
-        let ret = view.delete(&key, Column::Metadata).unwrap();
+        let ret = view.take(&key, Column::Metadata).unwrap();
         let get = view.get(&key, Column::Metadata).unwrap();
         // verify
         assert_eq!(ret, Some(expected));
@@ -402,8 +400,8 @@ mod tests {
         store.put(&key, Column::Metadata, expected.clone()).unwrap();
         let view = MemoryTransactionView::new(store);
         // test
-        let ret1 = view.delete(&key, Column::Metadata).unwrap();
-        let ret2 = view.delete(&key, Column::Metadata).unwrap();
+        let ret1 = view.take(&key, Column::Metadata).unwrap();
+        let ret2 = view.take(&key, Column::Metadata).unwrap();
         let get = view.get(&key, Column::Metadata).unwrap();
         // verify
         assert_eq!(ret1, Some(expected));
@@ -578,8 +576,8 @@ mod tests {
 
         let view = MemoryTransactionView::new(store);
         // test
-        let _ = view.delete(&[0], Column::Metadata).unwrap();
-        let _ = view.delete(&[6], Column::Metadata).unwrap();
+        view.delete(&[0], Column::Metadata).unwrap();
+        view.delete(&[6], Column::Metadata).unwrap();
 
         let ret: Vec<_> = view
             .iter_all(Column::Metadata, None, None, IterDirection::Forward)
@@ -611,10 +609,7 @@ mod tests {
             vec![(key.clone(), expected.clone())]
         );
 
-        assert_eq!(
-            db.delete(&key, Column::Metadata).unwrap().unwrap(),
-            expected
-        );
+        assert_eq!(db.take(&key, Column::Metadata).unwrap().unwrap(), expected);
 
         assert!(!db.exists(&key, Column::Metadata).unwrap());
 
@@ -653,10 +648,7 @@ mod tests {
             vec![(key.clone(), expected.clone())]
         );
 
-        assert_eq!(
-            db.delete(&key, Column::Metadata).unwrap().unwrap(),
-            expected
-        );
+        assert_eq!(db.take(&key, Column::Metadata).unwrap().unwrap(), expected);
 
         assert!(!db.exists(&key, Column::Metadata).unwrap());
 
@@ -695,10 +687,7 @@ mod tests {
             vec![(key.clone(), expected.clone())]
         );
 
-        assert_eq!(
-            db.delete(&key, Column::Metadata).unwrap().unwrap(),
-            expected
-        );
+        assert_eq!(db.take(&key, Column::Metadata).unwrap().unwrap(), expected);
 
         assert!(!db.exists(&key, Column::Metadata).unwrap());
 

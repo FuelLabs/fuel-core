@@ -1,8 +1,9 @@
 use crate::{
     fuel_core_graphql_api::{
-        service::Database,
+        database::ReadView,
         Config as GraphQLConfig,
     },
+    graphql_api::Config,
     query::{
         BlockQueryData,
         ChainQueryData,
@@ -683,19 +684,19 @@ impl HeavyOperation {
 #[Object]
 impl ChainInfo {
     async fn name(&self, ctx: &Context<'_>) -> async_graphql::Result<String> {
-        let data: &Database = ctx.data_unchecked();
-        Ok(data.name()?)
+        let config: &Config = ctx.data_unchecked();
+        Ok(config.chain_name.clone())
     }
 
     async fn latest_block(&self, ctx: &Context<'_>) -> async_graphql::Result<Block> {
-        let query: &Database = ctx.data_unchecked();
+        let query: &ReadView = ctx.data_unchecked();
 
         let latest_block = query.latest_block()?.into();
         Ok(latest_block)
     }
 
     async fn da_height(&self, ctx: &Context<'_>) -> U64 {
-        let query: &Database = ctx.data_unchecked();
+        let query: &ReadView = ctx.data_unchecked();
 
         let height = query
             .da_height()

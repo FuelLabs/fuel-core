@@ -49,7 +49,10 @@ use fuel_core_types::{
         BlockHeight,
         Nonce,
     },
-    services::p2p::PeerInfo,
+    services::{
+        executor::TransactionExecutionStatus,
+        p2p::PeerInfo,
+    },
 };
 #[cfg(feature = "subscriptions")]
 use futures::StreamExt;
@@ -109,7 +112,10 @@ use types::{
 
 use self::schema::{
     block::ProduceBlockArgs,
-    message::MessageProofArgs,
+    message::{
+        MessageProofArgs,
+        NonceArgs,
+    },
 };
 
 pub mod pagination;
@@ -355,26 +361,33 @@ impl FuelClient {
     }
 
     /// Default dry run, matching the exact configuration as the node
-    pub async fn dry_run(&self, tx: &Transaction) -> io::Result<Vec<Receipt>> {
-        self.dry_run_opt(tx, None).await
+    pub async fn dry_run(
+        &self,
+        txs: &[Transaction],
+    ) -> io::Result<Vec<TransactionExecutionStatus>> {
+        self.dry_run_opt(txs, None).await
     }
 
     /// Dry run with options to override the node behavior
     pub async fn dry_run_opt(
         &self,
-        tx: &Transaction,
+        txs: &[Transaction],
         // Disable utxo input checks (exists, unspent, and valid signature)
         utxo_validation: Option<bool>,
-    ) -> io::Result<Vec<Receipt>> {
-        let tx = tx.clone().to_bytes();
-        let query = schema::tx::DryRun::build(DryRunArg {
-            tx: HexString(Bytes(tx)),
-            utxo_validation,
-        });
-        let receipts = self.query(query).await.map(|r| r.dry_run)?;
-        receipts
+    ) -> io::Result<Vec<TransactionExecutionStatus>> {
+        let txs = txs
+            .iter()
+            .map(|tx| HexString(Bytes(tx.to_bytes())))
+            .collect::<Vec<HexString>>();
+        let query: Operation<schema::tx::DryRun, DryRunArg> =
+            schema::tx::DryRun::build(DryRunArg {
+                txs,
+                utxo_validation,
+            });
+        let tx_statuses = self.query(query).await.map(|r| r.dry_run)?;
+        tx_statuses
             .into_iter()
-            .map(|receipt| receipt.try_into().map_err(Into::into))
+            .map(|tx_status| tx_status.try_into().map_err(Into::into))
             .collect()
     }
 
@@ -896,6 +909,15 @@ impl FuelClient {
         let balances = self.query(query).await?.contract_balances.into();
 
         Ok(balances)
+    }
+
+    // Retrieve a message by its nonce
+    pub async fn message(&self, nonce: &Nonce) -> io::Result<Option<types::Message>> {
+        let query = schema::message::MessageQuery::build(NonceArgs {
+            nonce: (*nonce).into(),
+        });
+        let message = self.query(query).await?.message.map(Into::into);
+        Ok(message)
     }
 
     pub async fn messages(

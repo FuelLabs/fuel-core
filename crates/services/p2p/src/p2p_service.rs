@@ -3,9 +3,12 @@ use crate::{
         FuelBehaviour,
         FuelBehaviourEvent,
     },
-    codecs::NetworkCodec,
+    codecs::{
+        postcard::PostcardCodec,
+        GossipsubCodec,
+    },
     config::{
-        build_transport,
+        build_transport_function,
         Config,
     },
     gossipsub::{
@@ -15,20 +18,21 @@ use crate::{
         },
         topics::GossipsubTopics,
     },
+    heartbeat,
     peer_manager::{
         PeerManager,
         Punisher,
     },
     peer_report::PeerReportEvent,
     request_response::messages::{
-        NetworkResponse,
-        OutboundResponse,
         RequestError,
         RequestMessage,
-        ResponseChannelItem,
         ResponseError,
         ResponseMessage,
+        ResponseSendError,
+        ResponseSender,
     },
+    TryPeerId,
 };
 use fuel_core_metrics::p2p_metrics::p2p_metrics;
 use fuel_core_types::{
@@ -38,48 +42,49 @@ use fuel_core_types::{
 use futures::prelude::*;
 use libp2p::{
     gossipsub::{
-        error::PublishError,
-        GossipsubEvent,
+        self,
         MessageAcceptance,
         MessageId,
+        PublishError,
         TopicHash,
     },
+    identify,
     multiaddr::Protocol,
     request_response::{
-        RequestId,
-        RequestResponseEvent,
-        RequestResponseMessage,
+        self,
+        InboundRequestId,
+        OutboundRequestId,
         ResponseChannel,
     },
-    swarm::{
-        AddressScore,
-        ConnectionLimits,
-        SwarmBuilder,
-        SwarmEvent,
-    },
+    swarm::SwarmEvent,
     Multiaddr,
     PeerId,
     Swarm,
+    SwarmBuilder,
 };
 use rand::seq::IteratorRandom;
 use std::{
     collections::HashMap,
     time::Duration,
 };
+use tokio::sync::broadcast;
 use tracing::{
     debug,
     warn,
 };
 
-impl<Codec: NetworkCodec> Punisher for Swarm<FuelBehaviour<Codec>> {
+/// Maximum amount of peer's addresses that we are ready to store per peer
+const MAX_IDENTIFY_ADDRESSES: usize = 10;
+
+impl Punisher for Swarm<FuelBehaviour> {
     fn ban_peer(&mut self, peer_id: PeerId) {
-        self.ban_peer_id(peer_id)
+        self.behaviour_mut().block_peer(peer_id)
     }
 }
 
 /// Listens to the events on the p2p network
 /// And forwards them to the Orchestrator
-pub struct FuelP2PService<Codec: NetworkCodec> {
+pub struct FuelP2PService {
     /// Store the local peer id
     pub local_peer_id: PeerId,
 
@@ -90,20 +95,24 @@ pub struct FuelP2PService<Codec: NetworkCodec> {
     tcp_port: u16,
 
     /// Swarm handler for FuelBehaviour
-    swarm: Swarm<FuelBehaviour<Codec>>,
+    swarm: Swarm<FuelBehaviour>,
 
-    /// Holds the Sender(s) part of the Oneshot Channel from the NetworkOrchestrator
-    /// Once the ResponseMessage is received from the p2p Network
-    /// It will send it to the NetworkOrchestrator via its unique Sender    
-    outbound_requests_table: HashMap<RequestId, ResponseChannelItem>,
+    /// Holds active outbound requests and associated oneshot channels.
+    /// When we send a request to the p2p network, we add it here. The sender
+    /// must provide a channel to receive the response.
+    /// Whenever a response (or an error) is received from the p2p network,
+    /// the request is removed from this table, and the channel is used to
+    /// send the result to the caller.
+    outbound_requests_table: HashMap<OutboundRequestId, ResponseSender>,
 
-    /// Holds the ResponseChannel(s) for the inbound requests from the p2p Network
-    /// Once the Response is prepared by the NetworkOrchestrator
-    /// It will send it to the specified Peer via its unique ResponseChannel    
-    inbound_requests_table: HashMap<RequestId, ResponseChannel<NetworkResponse>>,
+    /// Holds active inbound requests and associated oneshot channels.
+    /// Whenever we're done processing the request, it's removed from this table,
+    /// and the channel is used to send the result to libp2p, which will forward it
+    /// to the peer that requested it.
+    inbound_requests_table: HashMap<InboundRequestId, ResponseChannel<ResponseMessage>>,
 
-    /// NetworkCodec used as <GossipsubCodec> for encoding and decoding of Gossipsub messages    
-    network_codec: Codec,
+    /// NetworkCodec used as `<GossipsubCodec>` for encoding and decoding of Gossipsub messages    
+    network_codec: PostcardCodec,
 
     /// Stores additional p2p network info    
     network_metadata: NetworkMetadata,
@@ -141,8 +150,8 @@ pub enum FuelP2PEvent {
         topic_hash: TopicHash,
         message: FuelGossipsubMessage,
     },
-    RequestMessage {
-        request_id: RequestId,
+    InboundRequestMessage {
+        request_id: InboundRequestId,
         request_message: RequestMessage,
     },
     PeerConnected(PeerId),
@@ -153,64 +162,47 @@ pub enum FuelP2PEvent {
     },
 }
 
-impl<Codec: NetworkCodec> FuelP2PService<Codec> {
-    pub fn new(config: Config, codec: Codec) -> Self {
-        let local_peer_id = PeerId::from(config.keypair.public());
-
+impl FuelP2PService {
+    pub fn new(
+        reserved_peers_updates: broadcast::Sender<usize>,
+        config: Config,
+        codec: PostcardCodec,
+    ) -> Self {
         let gossipsub_data =
             GossipsubData::with_topics(GossipsubTopics::new(&config.network_name));
         let network_metadata = NetworkMetadata { gossipsub_data };
 
         // configure and build P2P Service
-        let (transport, connection_state) = build_transport(&config);
+        let (transport_function, connection_state) = build_transport_function(&config);
         let behaviour = FuelBehaviour::new(&config, codec.clone());
 
-        let total_connections = {
-            let reserved_nodes_count = u32::try_from(config.reserved_nodes.len())
-                .expect("The number of reserved nodes should be less than `u32::max`");
-            // Reserved nodes do not count against the configured peer input/output limits.
-            let total_peers = config
-                .max_peers_connected
-                .saturating_add(reserved_nodes_count);
+        let mut swarm = SwarmBuilder::with_existing_identity(config.keypair.clone())
+            .with_tokio()
+            .with_other_transport(transport_function)
+            .unwrap()
+            .with_behaviour(|_| behaviour)
+            .unwrap()
+            .with_swarm_config(|cfg| {
+                if let Some(timeout) = config.connection_idle_timeout {
+                    cfg.with_idle_connection_timeout(timeout)
+                } else {
+                    cfg
+                }
+            })
+            .build();
 
-            total_peers.saturating_mul(config.max_connections_per_peer)
-        };
-
-        let max_established_incoming = {
-            if config.reserved_nodes_only_mode {
-                // If this is a guarded node,
-                // it should not receive any incoming connection requests.
-                // Rather, it will send outgoing connection requests to its reserved nodes
-                0
-            } else {
-                total_connections / 2
-            }
-        };
-
-        let connection_limits = ConnectionLimits::default()
-            .with_max_established_incoming(Some(max_established_incoming))
-            .with_max_established_per_peer(Some(config.max_connections_per_peer))
-            // libp2p does not manage how many different peers we're connected to
-            // it only takes care that there are 'N' amount of connections established.
-            // Our `PeerManagerBehaviour` will keep track of different peers connected
-            // and disconnect any surplus peers
-            .with_max_established(Some(total_connections));
-
-        let mut swarm =
-            SwarmBuilder::with_tokio_executor(transport, behaviour, local_peer_id)
-                .connection_limits(connection_limits)
-                .build();
+        let local_peer_id = swarm.local_peer_id().to_owned();
 
         let metrics = config.metrics;
 
-        if let Some(public_address) = config.public_address {
-            let _ = swarm.add_external_address(public_address, AddressScore::Infinite);
+        if let Some(public_address) = config.public_address.clone() {
+            swarm.add_external_address(public_address);
         }
 
         let reserved_peers = config
             .reserved_nodes
             .iter()
-            .filter_map(PeerId::try_from_multiaddr)
+            .filter_map(|m| m.try_to_peer_id())
             .collect();
 
         Self {
@@ -224,6 +216,7 @@ impl<Codec: NetworkCodec> FuelP2PService<Codec> {
             network_metadata,
             metrics,
             peer_manager: PeerManager::new(
+                reserved_peers_updates,
                 reserved_peers,
                 connection_state,
                 config.max_peers_connected as usize,
@@ -260,7 +253,7 @@ impl<Codec: NetworkCodec> FuelP2PService<Codec> {
         loop {
             if let SwarmEvent::NewListenAddr { .. } = self.swarm.select_next_some().await
             {
-                break
+                break;
             }
         }
     }
@@ -303,12 +296,13 @@ impl<Codec: NetworkCodec> FuelP2PService<Codec> {
 
     /// Sends RequestMessage to a peer
     /// If the peer is not defined it will pick one at random
+    /// Only returns error if no peers are connected
     pub fn send_request_msg(
         &mut self,
         peer_id: Option<PeerId>,
         message_request: RequestMessage,
-        channel_item: ResponseChannelItem,
-    ) -> Result<RequestId, RequestError> {
+        on_response: ResponseSender,
+    ) -> Result<OutboundRequestId, RequestError> {
         let peer_id = match peer_id {
             Some(peer_id) => peer_id,
             _ => {
@@ -316,7 +310,7 @@ impl<Codec: NetworkCodec> FuelP2PService<Codec> {
                 let peers_count = self.peer_manager.total_peers_connected();
 
                 if peers_count == 0 {
-                    return Err(RequestError::NoPeersConnected)
+                    return Err(RequestError::NoPeersConnected);
                 }
 
                 let mut range = rand::thread_rng();
@@ -329,8 +323,7 @@ impl<Codec: NetworkCodec> FuelP2PService<Codec> {
             .behaviour_mut()
             .send_request_msg(message_request, &peer_id);
 
-        self.outbound_requests_table
-            .insert(request_id, channel_item);
+        self.outbound_requests_table.insert(request_id, on_response);
 
         Ok(request_id)
     }
@@ -338,32 +331,22 @@ impl<Codec: NetworkCodec> FuelP2PService<Codec> {
     /// Sends ResponseMessage to a peer that requested the data
     pub fn send_response_msg(
         &mut self,
-        request_id: RequestId,
-        message: OutboundResponse,
-    ) -> Result<(), ResponseError> {
-        match (
-            self.network_codec.convert_to_network_response(&message),
-            self.inbound_requests_table.remove(&request_id),
-        ) {
-            (Ok(message), Some(channel)) => {
-                if self
-                    .swarm
-                    .behaviour_mut()
-                    .send_response_msg(channel, message)
-                    .is_err()
-                {
-                    debug!("Failed to send ResponseMessage for {:?}", request_id);
-                    return Err(ResponseError::SendingResponseFailed)
-                }
-            }
-            (Ok(_), None) => {
-                debug!("ResponseChannel for {:?} does not exist!", request_id);
-                return Err(ResponseError::ResponseChannelDoesNotExist)
-            }
-            (Err(e), _) => {
-                debug!("Failed to convert to IntermediateResponse with {:?}", e);
-                return Err(ResponseError::ConversionToIntermediateFailed)
-            }
+        request_id: InboundRequestId,
+        message: ResponseMessage,
+    ) -> Result<(), ResponseSendError> {
+        let Some(channel) = self.inbound_requests_table.remove(&request_id) else {
+            debug!("ResponseChannel for {:?} does not exist!", request_id);
+            return Err(ResponseSendError::ResponseChannelDoesNotExist);
+        };
+
+        if self
+            .swarm
+            .behaviour_mut()
+            .send_response_msg(channel, message)
+            .is_err()
+        {
+            debug!("Failed to send ResponseMessage for {:?}", request_id);
+            return Err(ResponseSendError::SendingResponseFailed);
         }
 
         Ok(())
@@ -409,7 +392,7 @@ impl<Codec: NetworkCodec> FuelP2PService<Codec> {
 
     /// Report application score
     /// If application peer score is below allowed threshold
-    /// the peer is banend
+    /// the peer is banned
     pub fn report_peer(
         &mut self,
         peer_id: PeerId,
@@ -468,209 +451,260 @@ impl<Codec: NetworkCodec> FuelP2PService<Codec> {
         event: FuelBehaviourEvent,
     ) -> Option<FuelP2PEvent> {
         match event {
-            FuelBehaviourEvent::Gossipsub(GossipsubEvent::Message {
-                propagation_source,
-                message,
-                message_id,
-            }) => {
-                if let Some(correct_topic) = self
-                    .network_metadata
-                    .gossipsub_data
-                    .topics
-                    .get_gossipsub_tag(&message.topic)
-                {
-                    match self.network_codec.decode(&message.data, correct_topic) {
-                        Ok(decoded_message) => {
-                            return Some(FuelP2PEvent::GossipsubMessage {
-                                peer_id: propagation_source,
-                                message_id,
-                                topic_hash: message.topic,
-                                message: decoded_message,
-                            })
-                        }
-                        Err(err) => {
-                            warn!(target: "fuel-p2p", "Failed to decode a message. ID: {}, Message: {:?} with error: {:?}", message_id, &message.data, err);
-
-                            self.report_message_validation_result(
-                                &message_id,
-                                propagation_source,
-                                MessageAcceptance::Reject,
-                            );
-                        }
-                    }
-                } else {
-                    warn!(target: "fuel-p2p", "GossipTopicTag does not exist for {:?}", &message.topic);
-                }
+            FuelBehaviourEvent::Gossipsub(event) => self.handle_gossipsub_event(event),
+            FuelBehaviourEvent::PeerReport(event) => self.handle_peer_report_event(event),
+            FuelBehaviourEvent::RequestResponse(event) => {
+                self.handle_request_response_event(event)
             }
+            FuelBehaviourEvent::Identify(event) => self.handle_identify_event(event),
+            FuelBehaviourEvent::Heartbeat(event) => self.handle_heartbeat_event(event),
+            _ => None,
+        }
+    }
 
-            FuelBehaviourEvent::PeerReport(peer_report_event) => {
-                match peer_report_event {
-                    PeerReportEvent::PeerIdentified {
-                        peer_id,
-                        addresses,
-                        agent_version,
-                    } => {
-                        if self.metrics {
-                            p2p_metrics().unique_peers.inc();
-                        }
+    fn handle_gossipsub_event(
+        &mut self,
+        event: gossipsub::Event,
+    ) -> Option<FuelP2PEvent> {
+        if let gossipsub::Event::Message {
+            propagation_source,
+            message,
+            message_id,
+        } = event
+        {
+            if let Some(correct_topic) = self
+                .network_metadata
+                .gossipsub_data
+                .topics
+                .get_gossipsub_tag(&message.topic)
+            {
+                match self.network_codec.decode(&message.data, correct_topic) {
+                    Ok(decoded_message) => {
+                        return Some(FuelP2PEvent::GossipsubMessage {
+                            peer_id: propagation_source,
+                            message_id,
+                            topic_hash: message.topic,
+                            message: decoded_message,
+                        })
+                    }
+                    Err(err) => {
+                        warn!(target: "fuel-p2p", "Failed to decode a message. ID: {}, Message: {:?} with error: {:?}", message_id, &message.data, err);
 
-                        self.peer_manager.handle_peer_identified(
-                            &peer_id,
-                            addresses.clone(),
-                            agent_version,
+                        self.report_message_validation_result(
+                            &message_id,
+                            propagation_source,
+                            MessageAcceptance::Reject,
                         );
+                    }
+                }
+            } else {
+                warn!(target: "fuel-p2p", "GossipTopicTag does not exist for {:?}", &message.topic);
+            }
+        }
+        None
+    }
 
-                        self.swarm
-                            .behaviour_mut()
-                            .add_addresses_to_discovery(&peer_id, addresses);
-                    }
-                    PeerReportEvent::PerformDecay => {
-                        self.peer_manager.batch_update_score_with_decay()
-                    }
-                    PeerReportEvent::CheckReservedNodesHealth => {
-                        let disconnected_peers: Vec<_> = self
-                            .peer_manager
-                            .get_disconnected_reserved_peers()
-                            .copied()
-                            .collect();
+    fn handle_peer_report_event(
+        &mut self,
+        event: PeerReportEvent,
+    ) -> Option<FuelP2PEvent> {
+        match event {
+            PeerReportEvent::PerformDecay => {
+                self.peer_manager.batch_update_score_with_decay()
+            }
+            PeerReportEvent::CheckReservedNodesHealth => {
+                let disconnected_peers: Vec<_> = self
+                    .peer_manager
+                    .get_disconnected_reserved_peers()
+                    .copied()
+                    .collect();
 
-                        for peer_id in disconnected_peers {
-                            debug!(target: "fuel-p2p", "Trying to reconnect to reserved peer {:?}", peer_id);
+                for peer_id in disconnected_peers {
+                    debug!(target: "fuel-p2p", "Trying to reconnect to reserved peer {:?}", peer_id);
 
-                            let _ = self.swarm.dial(peer_id);
-                        }
-                    }
-                    PeerReportEvent::PeerInfoUpdated {
-                        peer_id,
-                        block_height,
-                    } => {
-                        self.peer_manager
-                            .handle_peer_info_updated(&peer_id, block_height);
-
-                        return Some(FuelP2PEvent::PeerInfoUpdated {
-                            peer_id,
-                            block_height,
-                        })
-                    }
-                    PeerReportEvent::PeerConnected {
-                        peer_id,
-                        addresses,
-                        initial_connection,
-                    } => {
-                        if self.peer_manager.handle_peer_connected(
-                            &peer_id,
-                            addresses,
-                            initial_connection,
-                        ) {
-                            let _ = self.swarm.disconnect_peer_id(peer_id);
-                        } else if initial_connection {
-                            return Some(FuelP2PEvent::PeerConnected(peer_id))
-                        }
-                    }
-                    PeerReportEvent::PeerDisconnected { peer_id } => {
-                        if self.peer_manager.handle_peer_disconnect(peer_id) {
-                            let _ = self.swarm.dial(peer_id);
-                        }
-                        return Some(FuelP2PEvent::PeerDisconnected(peer_id))
-                    }
+                    let _ = self.swarm.dial(peer_id);
                 }
             }
-            FuelBehaviourEvent::RequestResponse(req_res_event) => match req_res_event {
-                RequestResponseEvent::Message { peer, message } => match message {
-                    RequestResponseMessage::Request {
-                        request,
-                        channel,
-                        request_id,
-                    } => {
-                        self.inbound_requests_table.insert(request_id, channel);
+            PeerReportEvent::PeerConnected {
+                peer_id,
+                initial_connection,
+            } => {
+                if self
+                    .peer_manager
+                    .handle_peer_connected(&peer_id, initial_connection)
+                {
+                    let _ = self.swarm.disconnect_peer_id(peer_id);
+                } else if initial_connection {
+                    return Some(FuelP2PEvent::PeerConnected(peer_id));
+                }
+            }
+            PeerReportEvent::PeerDisconnected { peer_id } => {
+                if self.peer_manager.handle_peer_disconnect(peer_id) {
+                    let _ = self.swarm.dial(peer_id);
+                }
+                return Some(FuelP2PEvent::PeerDisconnected(peer_id));
+            }
+        }
+        None
+    }
 
-                        return Some(FuelP2PEvent::RequestMessage {
-                            request_id,
-                            request_message: request,
-                        })
-                    }
-                    RequestResponseMessage::Response {
-                        request_id,
-                        response,
-                    } => {
-                        match (
-                            self.outbound_requests_table.remove(&request_id),
-                            self.network_codec.convert_to_response(&response),
-                        ) {
-                            (
-                                Some(ResponseChannelItem::Block(channel)),
-                                Ok(ResponseMessage::SealedBlock(block)),
-                            ) => {
-                                if channel.send(*block).is_err() {
-                                    debug!(
-                                        "Failed to send through the channel for {:?}",
-                                        request_id
-                                    );
-                                }
-                            }
-                            (
-                                Some(ResponseChannelItem::Transactions(channel)),
-                                Ok(ResponseMessage::Transactions(transactions)),
-                            ) => {
-                                if channel.send(transactions).is_err() {
-                                    debug!(
-                                        "Failed to send through the channel for {:?}",
-                                        request_id
-                                    );
-                                }
-                            }
-                            (
-                                Some(ResponseChannelItem::SealedHeaders(channel)),
-                                Ok(ResponseMessage::SealedHeaders(headers)),
-                            ) => {
-                                if channel.send((peer, headers)).is_err() {
-                                    debug!(
-                                        "Failed to send through the channel for {:?}",
-                                        request_id
-                                    );
-                                }
-                            }
-
-                            (Some(_), Err(e)) => {
-                                debug!("Failed to convert IntermediateResponse into a ResponseMessage {:?} with {:?}", response, e);
-                            }
-                            (None, Ok(_)) => {
-                                debug!("Send channel not found for {:?}", request_id);
-                            }
-                            _ => {}
-                        }
-                    }
-                },
-                RequestResponseEvent::InboundFailure {
-                    peer,
-                    error,
+    fn handle_request_response_event(
+        &mut self,
+        event: request_response::Event<RequestMessage, ResponseMessage>,
+    ) -> Option<FuelP2PEvent> {
+        match event {
+            request_response::Event::Message { peer, message } => match message {
+                request_response::Message::Request {
+                    request,
+                    channel,
                     request_id,
                 } => {
-                    debug!("RequestResponse inbound error for peer: {:?} with id: {:?} and error: {:?}", peer, request_id, error);
-                }
-                RequestResponseEvent::OutboundFailure {
-                    peer,
-                    error,
-                    request_id,
-                } => {
-                    debug!("RequestResponse outbound error for peer: {:?} with id: {:?} and error: {:?}", peer, request_id, error);
+                    self.inbound_requests_table.insert(request_id, channel);
 
-                    let _ = self.outbound_requests_table.remove(&request_id);
+                    return Some(FuelP2PEvent::InboundRequestMessage {
+                        request_id,
+                        request_message: request,
+                    });
                 }
-                _ => {}
+                request_response::Message::Response {
+                    request_id,
+                    response,
+                } => {
+                    let Some(channel) = self.outbound_requests_table.remove(&request_id)
+                    else {
+                        debug!("Send channel not found for {:?}", request_id);
+                        return None;
+                    };
+
+                    let send_ok = match channel {
+                        ResponseSender::SealedHeaders(c) => match response {
+                            ResponseMessage::SealedHeaders(v) => {
+                                c.send((peer, Ok(v))).is_ok()
+                            }
+                            _ => {
+                                warn!(
+                                    "Invalid response type received for request {:?}",
+                                    request_id
+                                );
+                                c.send((peer, Err(ResponseError::TypeMismatch))).is_ok()
+                            }
+                        },
+                        ResponseSender::Transactions(c) => match response {
+                            ResponseMessage::Transactions(v) => {
+                                c.send((peer, Ok(v))).is_ok()
+                            }
+                            _ => {
+                                warn!(
+                                    "Invalid response type received for request {:?}",
+                                    request_id
+                                );
+                                c.send((peer, Err(ResponseError::TypeMismatch))).is_ok()
+                            }
+                        },
+                    };
+
+                    if !send_ok {
+                        warn!("Failed to send through the channel for {:?}", request_id);
+                    }
+                }
             },
+            request_response::Event::InboundFailure {
+                peer,
+                error,
+                request_id,
+            } => {
+                tracing::error!("RequestResponse inbound error for peer: {:?} with id: {:?} and error: {:?}", peer, request_id, error);
 
+                // Drop the channel, as we can't send a response
+                let _ = self.inbound_requests_table.remove(&request_id);
+            }
+            request_response::Event::OutboundFailure {
+                peer,
+                error,
+                request_id,
+            } => {
+                tracing::error!("RequestResponse outbound error for peer: {:?} with id: {:?} and error: {:?}", peer, request_id, error);
+
+                if let Some(channel) = self.outbound_requests_table.remove(&request_id) {
+                    match channel {
+                        ResponseSender::SealedHeaders(c) => {
+                            let _ = c.send((peer, Err(ResponseError::P2P(error))));
+                        }
+                        ResponseSender::Transactions(c) => {
+                            let _ = c.send((peer, Err(ResponseError::P2P(error))));
+                        }
+                    };
+                }
+            }
             _ => {}
         }
-
         None
+    }
+
+    fn handle_identify_event(&mut self, event: identify::Event) -> Option<FuelP2PEvent> {
+        match event {
+            identify::Event::Received { peer_id, info } => {
+                if self.metrics {
+                    p2p_metrics().unique_peers.inc();
+                }
+
+                let mut addresses = info.listen_addrs;
+                let agent_version = info.agent_version;
+
+                if addresses.len() > MAX_IDENTIFY_ADDRESSES {
+                    let protocol_version = info.protocol_version;
+                    debug!(
+                        target: "fuel-p2p",
+                        "Node {:?} has reported more than {} addresses; it is identified by {:?} and {:?}",
+                        peer_id, MAX_IDENTIFY_ADDRESSES, protocol_version, agent_version
+                    );
+                    addresses.truncate(MAX_IDENTIFY_ADDRESSES);
+                }
+
+                self.peer_manager.handle_peer_identified(
+                    &peer_id,
+                    addresses.clone(),
+                    agent_version,
+                );
+
+                self.swarm
+                    .behaviour_mut()
+                    .add_addresses_to_discovery(&peer_id, addresses);
+            }
+            identify::Event::Sent { .. } => {}
+            identify::Event::Pushed { .. } => {}
+            identify::Event::Error { peer_id, error } => {
+                debug!(target: "fuel-p2p", "Identification with peer {:?} failed => {}", peer_id, error);
+            }
+        }
+        None
+    }
+
+    fn handle_heartbeat_event(
+        &mut self,
+        event: heartbeat::Event,
+    ) -> Option<FuelP2PEvent> {
+        let heartbeat::Event {
+            peer_id,
+            latest_block_height,
+        } = event;
+        self.peer_manager
+            .handle_peer_info_updated(&peer_id, latest_block_height);
+
+        Some(FuelP2PEvent::PeerInfoUpdated {
+            peer_id,
+            block_height: latest_block_height,
+        })
     }
 }
 
 #[allow(clippy::cast_possible_truncation)]
 #[cfg(test)]
 mod tests {
-    use super::FuelP2PService;
+    use super::{
+        FuelP2PService,
+        PublishError,
+    };
     use crate::{
         codecs::postcard::PostcardCodec,
         config::Config,
@@ -687,24 +721,20 @@ mod tests {
         p2p_service::FuelP2PEvent,
         peer_manager::PeerInfo,
         request_response::messages::{
-            OutboundResponse,
             RequestMessage,
-            ResponseChannelItem,
+            ResponseError,
+            ResponseMessage,
+            ResponseSender,
         },
         service::to_message_acceptance,
     };
     use fuel_core_types::{
         blockchain::{
-            block::Block,
             consensus::{
                 poa::PoAConsensus,
                 Consensus,
             },
-            header::{
-                BlockHeader,
-                PartialBlockHeader,
-            },
-            SealedBlock,
+            header::BlockHeader,
             SealedBlockHeader,
         },
         fuel_tx::{
@@ -721,16 +751,15 @@ mod tests {
         StreamExt,
     };
     use libp2p::{
-        gossipsub::{
-            error::PublishError,
-            Topic,
-        },
+        gossipsub::Topic,
         identity::Keypair,
-        swarm::SwarmEvent,
+        swarm::{
+            ListenError,
+            SwarmEvent,
+        },
         Multiaddr,
         PeerId,
     };
-    use libp2p_swarm::PendingInboundConnectionError;
     use rand::Rng;
     use std::{
         collections::HashSet,
@@ -739,21 +768,24 @@ mod tests {
         time::Duration,
     };
     use tokio::sync::{
+        broadcast,
         mpsc,
         oneshot,
         watch,
     };
     use tracing_attributes::instrument;
 
-    type P2PService = FuelP2PService<PostcardCodec>;
+    type P2PService = FuelP2PService;
 
     /// helper function for building FuelP2PService
     async fn build_service_from_config(mut p2p_config: Config) -> P2PService {
         p2p_config.keypair = Keypair::generate_secp256k1(); // change keypair for each Node
         let max_block_size = p2p_config.max_block_size;
+        let (sender, _) =
+            broadcast::channel(p2p_config.reserved_nodes.len().saturating_add(1));
 
         let mut service =
-            FuelP2PService::new(p2p_config, PostcardCodec::new(max_block_size));
+            FuelP2PService::new(sender, p2p_config, PostcardCodec::new(max_block_size));
         service.start().await.unwrap();
         service
     }
@@ -1070,14 +1102,12 @@ mod tests {
             tokio::select! {
                 node_b_event = node_b.next_event() => {
                     if let Some(FuelP2PEvent::PeerConnected(_)) = node_b_event {
-                        // successfully connected to Node B
+                        // successfully connected to Node A
                         break
                     }
                     tracing::info!("Node B Event: {:?}", node_b_event);
                 },
-                node_a_event = node_a.swarm.select_next_some() => {
-                    tracing::info!("Node A Event: {:?}", node_a_event);
-                }
+                _ = node_a.swarm.select_next_some() => {},
             };
         }
     }
@@ -1104,7 +1134,7 @@ mod tests {
             tokio::select! {
                 node_a_event = node_a.swarm.select_next_some() => {
                     tracing::info!("Node A Event: {:?}", node_a_event);
-                    if let SwarmEvent::IncomingConnectionError { error: PendingInboundConnectionError::Transport(TransportError::Other(_)), .. } = node_a_event {
+                    if let SwarmEvent::IncomingConnectionError { error: ListenError::Transport(TransportError::Other(_)), .. } = node_a_event {
                         break
                     }
                 },
@@ -1160,7 +1190,7 @@ mod tests {
     }
 
     // Simulates 2 p2p nodes that connect to each other and consequently exchange Peer Info
-    // On sucessful connection, node B updates its latest BlockHeight
+    // On successful connection, node B updates its latest BlockHeight
     // and shares it with Peer A via Heartbeat protocol
     #[tokio::test]
     #[instrument]
@@ -1180,12 +1210,12 @@ mod tests {
             tokio::select! {
                 node_a_event = node_a.next_event() => {
                     if let Some(FuelP2PEvent::PeerInfoUpdated { peer_id, block_height: _ }) = node_a_event {
-                        if let Some(PeerInfo { peer_addresses, heartbeat_data, client_version, .. }) = node_a.peer_manager.get_peer_info(&peer_id) {
+                        if let Some(PeerInfo {  heartbeat_data, client_version, .. }) = node_a.peer_manager.get_peer_info(&peer_id) {
                             // Exits after it verifies that:
                             // 1. Peer Addresses are known
                             // 2. Client Version is known
                             // 3. Node has responded with their latest BlockHeight
-                            if !peer_addresses.is_empty() && client_version.is_some() && heartbeat_data.block_height == Some(latest_block_height) {
+                            if client_version.is_some() && heartbeat_data.block_height == Some(latest_block_height) {
                                 break;
                             }
                         }
@@ -1199,6 +1229,7 @@ mod tests {
                         // let's update our BlockHeight
                         node_b.update_block_height(latest_block_height);
                     }
+
                     tracing::info!("Node B Event: {:?}", node_b_event);
                 }
             }
@@ -1375,15 +1406,18 @@ mod tests {
 
         // Node C does not connecto to Node A
         // it should receive the propagated message from Node B if `GossipsubMessageAcceptance` is `Accept`
-        node_c.swarm.ban_peer_id(node_a.local_peer_id);
+        node_c
+            .swarm
+            .behaviour_mut()
+            .block_peer(node_a.local_peer_id);
 
         loop {
             tokio::select! {
                 node_a_event = node_a.next_event() => {
                     if let Some(FuelP2PEvent::PeerInfoUpdated { peer_id, block_height: _ }) = node_a_event {
-                        if let Some(PeerInfo { peer_addresses, .. }) = node_a.peer_manager.get_peer_info(&peer_id) {
+                        if node_a.peer_manager.get_peer_info(&peer_id).is_some() {
                             // verifies that we've got at least a single peer address to send message to
-                            if !peer_addresses.is_empty() && !message_sent  {
+                            if !message_sent  {
                                 message_sent = true;
                                 let broadcast_request = broadcast_request.clone();
                                 node_a.publish_message(broadcast_request).unwrap();
@@ -1456,7 +1490,7 @@ mod tests {
         let mut blocks = Vec::new();
         for i in range {
             let mut header: BlockHeader = Default::default();
-            header.consensus.height = i.into();
+            header.set_block_height(i.into());
 
             let sealed_block = SealedBlockHeader {
                 entity: header,
@@ -1469,8 +1503,8 @@ mod tests {
 
     // Metadata gets skipped during serialization, so this is the fuzzy way to compare blocks
     fn eq_except_metadata(a: &SealedBlockHeader, b: &SealedBlockHeader) -> bool {
-        a.entity.application == b.entity.application
-            && a.entity.consensus == b.entity.consensus
+        a.entity.application() == b.entity.application()
+            && a.entity.consensus() == b.entity.consensus()
     }
 
     async fn request_response_works_with(request_msg: RequestMessage) {
@@ -1496,32 +1530,15 @@ mod tests {
                 }
                 node_a_event = node_a.next_event() => {
                     if let Some(FuelP2PEvent::PeerInfoUpdated { peer_id, block_height: _ }) = node_a_event {
-                        if let Some(PeerInfo { peer_addresses, .. }) = node_a.peer_manager.get_peer_info(&peer_id) {
+                        if node_a.peer_manager.get_peer_info(&peer_id).is_some() {
                             // 0. verifies that we've got at least a single peer address to request message from
-                            if !peer_addresses.is_empty() && !request_sent {
+                            if !request_sent {
                                 request_sent = true;
 
                                 match request_msg.clone() {
-                                    RequestMessage::Block(_) => {
-                                        let (tx_orchestrator, rx_orchestrator) = oneshot::channel();
-                                        assert!(node_a.send_request_msg(None, request_msg.clone(), ResponseChannelItem::Block(tx_orchestrator)).is_ok());
-                                        let tx_test_end = tx_test_end.clone();
-
-                                        tokio::spawn(async move {
-                                            let response_message = rx_orchestrator.await;
-
-                                            if let Ok(Some(sealed_block)) = response_message {
-                                                let _ = tx_test_end.send(*sealed_block.entity.header().height() == 0.into()).await;
-                                            } else {
-                                                tracing::error!("Orchestrator failed to receive a message: {:?}", response_message);
-                                                let _ = tx_test_end.send(false).await;
-                                            }
-                                        });
-
-                                    }
                                     RequestMessage::SealedHeaders(range) => {
                                         let (tx_orchestrator, rx_orchestrator) = oneshot::channel();
-                                        assert!(node_a.send_request_msg(None, request_msg.clone(), ResponseChannelItem::SealedHeaders(tx_orchestrator)).is_ok());
+                                        assert!(node_a.send_request_msg(None, request_msg.clone(), ResponseSender::SealedHeaders(tx_orchestrator)).is_ok());
                                         let tx_test_end = tx_test_end.clone();
 
                                         tokio::spawn(async move {
@@ -1529,7 +1546,7 @@ mod tests {
 
                                             let expected = arbitrary_headers_for_range(range.clone());
 
-                                            if let Ok((_, sealed_headers)) = response_message {
+                                            if let Ok((_, Ok(sealed_headers))) = response_message {
                                                 let check = expected.iter().zip(sealed_headers.unwrap().iter()).all(|(a, b)| eq_except_metadata(a, b));
                                                 let _ = tx_test_end.send(check).await;
                                             } else {
@@ -1540,13 +1557,13 @@ mod tests {
                                     }
                                     RequestMessage::Transactions(_range) => {
                                         let (tx_orchestrator, rx_orchestrator) = oneshot::channel();
-                                        assert!(node_a.send_request_msg(None, request_msg.clone(), ResponseChannelItem::Transactions(tx_orchestrator)).is_ok());
+                                        assert!(node_a.send_request_msg(None, request_msg.clone(), ResponseSender::Transactions(tx_orchestrator)).is_ok());
                                         let tx_test_end = tx_test_end.clone();
 
                                         tokio::spawn(async move {
                                             let response_message = rx_orchestrator.await;
 
-                                            if let Ok(Some(transactions)) = response_message {
+                                            if let Ok((_, Ok(Some(transactions)))) = response_message {
                                                 let check = transactions.len() == 1 && transactions[0].0.len() == 5;
                                                 let _ = tx_test_end.send(check).await;
                                             } else {
@@ -1564,27 +1581,17 @@ mod tests {
                 },
                 node_b_event = node_b.next_event() => {
                     // 2. Node B receives the RequestMessage from Node A initiated by the NetworkOrchestrator
-                    if let Some(FuelP2PEvent::RequestMessage{ request_id, request_message: received_request_message }) = &node_b_event {
+                    if let Some(FuelP2PEvent::InboundRequestMessage{ request_id, request_message: received_request_message }) = &node_b_event {
                         match received_request_message {
-                            RequestMessage::Block(_) => {
-                                let block = Block::new(PartialBlockHeader::default(), (0..5).map(|_| Transaction::default_test_tx()).collect(), &[]);
-
-                                let sealed_block = SealedBlock {
-                                    entity: block,
-                                    consensus: Consensus::PoA(PoAConsensus::new(Default::default())),
-                                };
-
-                                let _ = node_b.send_response_msg(*request_id, OutboundResponse::Block(Some(Arc::new(sealed_block))));
-                            }
                             RequestMessage::SealedHeaders(range) => {
                                 let sealed_headers: Vec<_> = arbitrary_headers_for_range(range.clone());
 
-                                let _ = node_b.send_response_msg(*request_id, OutboundResponse::SealedHeaders(Some(sealed_headers)));
+                                let _ = node_b.send_response_msg(*request_id, ResponseMessage::SealedHeaders(Some(sealed_headers)));
                             }
                             RequestMessage::Transactions(_) => {
                                 let txs = (0..5).map(|_| Transaction::default_test_tx()).collect();
                                 let transactions = vec![Transactions(txs)];
-                                let _ = node_b.send_response_msg(*request_id, OutboundResponse::Transactions(Some(Arc::new(transactions))));
+                                let _ = node_b.send_response_msg(*request_id, ResponseMessage::Transactions(Some(transactions)));
                             }
                         }
                     }
@@ -1604,15 +1611,86 @@ mod tests {
 
     #[tokio::test]
     #[instrument]
-    async fn request_response_works_with_block() {
-        request_response_works_with(RequestMessage::Block(0.into())).await
-    }
-
-    #[tokio::test]
-    #[instrument]
     async fn request_response_works_with_sealed_headers_range_inclusive() {
         let arbitrary_range = 2..6;
         request_response_works_with(RequestMessage::SealedHeaders(arbitrary_range)).await
+    }
+
+    /// We send a request for transactions, but it's responded by only headers
+    #[tokio::test]
+    #[instrument]
+    async fn invalid_response_type_is_detected() {
+        let mut p2p_config =
+            Config::default_initialized("invalid_response_type_is_detected");
+
+        // Node A
+        let mut node_a = build_service_from_config(p2p_config.clone()).await;
+
+        // Node B
+        p2p_config.bootstrap_nodes = node_a.multiaddrs();
+        let mut node_b = build_service_from_config(p2p_config.clone()).await;
+
+        let (tx_test_end, mut rx_test_end) = mpsc::channel::<bool>(1);
+
+        let mut request_sent = false;
+
+        loop {
+            tokio::select! {
+                message_sent = rx_test_end.recv() => {
+                    // we received a signal to end the test
+                    assert!(message_sent.unwrap(), "Received incorrect or missing message");
+                    break;
+                }
+                node_a_event = node_a.next_event() => {
+                    if let Some(FuelP2PEvent::PeerInfoUpdated { peer_id, block_height: _ }) = node_a_event {
+                        if node_a.peer_manager.get_peer_info(&peer_id).is_some() {
+                            // 0. verifies that we've got at least a single peer address to request message from
+                            if !request_sent {
+                                request_sent = true;
+
+                                let (tx_orchestrator, rx_orchestrator) = oneshot::channel();
+                                assert!(node_a.send_request_msg(None, RequestMessage::Transactions(0..2), ResponseSender::Transactions(tx_orchestrator)).is_ok());
+                                let tx_test_end = tx_test_end.clone();
+
+                                tokio::spawn(async move {
+                                    let response_message = rx_orchestrator.await;
+
+                                    match response_message {
+                                        Ok((_, Ok(_))) => {
+                                            let _ = tx_test_end.send(false).await;
+                                            panic!("Request succeeded unexpectedly");
+                                        },
+                                        Ok((_, Err(ResponseError::TypeMismatch))) => {
+                                            // Got Invalid Response Type as expected, so end test
+                                            let _ = tx_test_end.send(true).await;
+                                        },
+                                        Ok((_, Err(err))) => {
+                                            let _ = tx_test_end.send(false).await;
+                                            panic!("Unexpected error: {:?}", err);
+                                        },
+                                        Err(_) => {
+                                            let _ = tx_test_end.send(false).await;
+                                            panic!("Channel closed unexpectedly");
+                                        },
+                                    }
+                                });
+                            }
+                        }
+                    }
+
+                    tracing::info!("Node A Event: {:?}", node_a_event);
+                },
+                node_b_event = node_b.next_event() => {
+                    // 2. Node B receives the RequestMessage from Node A initiated by the NetworkOrchestrator
+                    if let Some(FuelP2PEvent::InboundRequestMessage{ request_id, request_message: _ }) = &node_b_event {
+                        let sealed_headers: Vec<_> = arbitrary_headers_for_range(1..3);
+                        let _ = node_b.send_response_msg(*request_id, ResponseMessage::SealedHeaders(Some(sealed_headers)));
+                    }
+
+                    tracing::info!("Node B Event: {:?}", node_b_event);
+                }
+            };
+        }
     }
 
     #[tokio::test]
@@ -1622,13 +1700,14 @@ mod tests {
             Config::default_initialized("req_res_outbound_timeout_works");
 
         // Node A
-        // setup request timeout to 0 in order for the Request to fail
-        p2p_config.set_request_timeout = Duration::from_secs(0);
+        // setup request timeout to 1ms in order for the Request to fail
+        p2p_config.set_request_timeout = Duration::from_millis(1);
 
         let mut node_a = build_service_from_config(p2p_config.clone()).await;
 
         // Node B
         p2p_config.bootstrap_nodes = node_a.multiaddrs();
+        p2p_config.set_request_timeout = Duration::from_secs(20);
         let mut node_b = build_service_from_config(p2p_config.clone()).await;
 
         let (tx_test_end, mut rx_test_end) = tokio::sync::mpsc::channel(1);
@@ -1640,9 +1719,9 @@ mod tests {
             tokio::select! {
                 node_a_event = node_a.next_event() => {
                     if let Some(FuelP2PEvent::PeerInfoUpdated { peer_id, block_height: _ }) = node_a_event {
-                        if let Some(PeerInfo { peer_addresses, .. }) = node_a.peer_manager.get_peer_info(&peer_id) {
+                        if node_a.peer_manager.get_peer_info(&peer_id).is_some() {
                             // 0. verifies that we've got at least a single peer address to request message from
-                            if !peer_addresses.is_empty() && !request_sent {
+                            if !request_sent {
                                 request_sent = true;
 
                                 // 1. Simulating Oneshot channel from the NetworkOrchestrator
@@ -1652,8 +1731,8 @@ mod tests {
                                 assert_eq!(node_a.outbound_requests_table.len(), 0);
 
                                 // Request successfully sent
-                                let requested_block_height = RequestMessage::Block(0.into());
-                                assert!(node_a.send_request_msg(None, requested_block_height, ResponseChannelItem::Block(tx_orchestrator)).is_ok());
+                                let requested_block_height = RequestMessage::SealedHeaders(0..0);
+                                assert!(node_a.send_request_msg(None, requested_block_height, ResponseSender::SealedHeaders(tx_orchestrator)).is_ok());
 
                                 // 2b. there should be ONE pending outbound requests in the table
                                 assert_eq!(node_a.outbound_requests_table.len(), 1);
@@ -1662,8 +1741,21 @@ mod tests {
 
                                 tokio::spawn(async move {
                                     // 3. Simulating NetworkOrchestrator receiving a Timeout Error Message!
-                                    if (rx_orchestrator.await).is_err() {
-                                        let _ = tx_test_end.send(()).await;
+                                    match rx_orchestrator.await {
+                                        Ok((_, Ok(_))) => {
+                                            let _ = tx_test_end.send(false).await;
+                                            panic!("Request succeeded unexpectedly")},
+                                        Ok((_, Err(ResponseError::P2P(_)))) => {
+                                            // Got timeout as expected, so end test
+                                            let _ = tx_test_end.send(true).await;
+                                        },
+                                        Ok((_, Err(err))) => {
+                                            let _ = tx_test_end.send(false).await;
+                                            panic!("Unexpected error: {:?}", err);
+                                        },
+                                        Err(e) => {
+                                            let _ = tx_test_end.send(false).await;
+                                            panic!("Channel closed unexpectedly: {:?}", e)},
                                     }
                                 });
                             }
@@ -1672,7 +1764,8 @@ mod tests {
 
                     tracing::info!("Node A Event: {:?}", node_a_event);
                 },
-                _ = rx_test_end.recv() => {
+                recv = rx_test_end.recv() => {
+                    assert_eq!(recv, Some(true), "Test failed");
                     // we received a signal to end the test
                     // 4. there should be ZERO pending outbound requests in the table
                     // after the Outbound Request Failed with Timeout

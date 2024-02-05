@@ -17,7 +17,7 @@ pub struct SuiteConfig {
     /// The primary endpoint to connect to
     pub endpoint: String,
     /// Max timeout for syncing between wallets
-    /// Default is [`SYNC_TIMEOUT`](crate::SYNC_TIMEOUT)
+    /// Default is [`SYNC_TIMEOUT`]
     #[serde(with = "humantime_serde")]
     pub wallet_sync_timeout: Duration,
     /// Enable slower but more stressful tests. Should be used in full E2E tests but not in CI.

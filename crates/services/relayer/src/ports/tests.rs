@@ -1,72 +1,127 @@
-use std::borrow::Cow;
-
+use crate::{
+    ports::RelayerDb,
+    storage::{
+        DaHeightTable,
+        EventsHistory,
+    },
+};
 use fuel_core_storage::test_helpers::MockStorage;
 use fuel_core_types::entities::message::Message;
+use std::borrow::Cow;
 use test_case::test_case;
 
-use super::*;
-
 #[test]
-fn test_insert_messages() {
+fn test_insert_events() {
+    let same_height = 12;
     let mut db = MockStorage::default();
-    db.expect_insert::<Messages>()
-        .times(2)
-        .returning(|_, _| Ok(None));
-    db.expect_insert::<RelayerMetadata>()
+    db.expect_insert::<EventsHistory>()
         .times(1)
-        .withf(|_, v| **v == 12)
+        .returning(|_, _| Ok(None));
+    db.expect_insert::<DaHeightTable>()
+        .times(1)
+        .withf(move |_, v| **v == same_height)
         .returning(|_, _| Ok(None));
     db.expect_commit().returning(|| Ok(()));
-    db.expect_get::<RelayerMetadata>()
+    db.expect_get::<DaHeightTable>()
         .once()
         .returning(|_| Ok(Some(std::borrow::Cow::Owned(9u64.into()))));
     let mut db = db.into_transactional();
 
-    let m = Message {
-        amount: 10,
-        da_height: 12u64.into(),
-        ..Default::default()
-    };
+    let mut m = Message::default();
+    m.set_amount(10);
+    m.set_da_height(same_height.into());
     let mut m2 = m.clone();
-    m2.nonce = 1.into();
+    m2.set_nonce(1.into());
     assert_ne!(m.id(), m2.id());
-    let messages = [m, m2];
-    db.insert_messages(&12u64.into(), &messages[..]).unwrap();
+    let messages = [m.into(), m2.into()];
+    db.insert_events(&same_height.into(), &messages[..])
+        .unwrap();
 }
 
 #[test]
 fn insert_always_raises_da_height_monotonically() {
-    let messages: Vec<_> = (0..10)
-        .map(|i| Message {
-            amount: i,
-            da_height: i.into(),
-            ..Default::default()
+    // Given
+    let same_height = 12u64.into();
+    let events: Vec<_> = (0..10)
+        .map(|i| {
+            let mut message = Message::default();
+            message.set_amount(i);
+            message.set_da_height(same_height);
+            message
         })
+        .map(Into::into)
         .collect();
 
     let mut db = MockStorage::default();
-    db.expect_insert::<Messages>().returning(|_, _| Ok(None));
-    db.expect_insert::<RelayerMetadata>()
+    db.expect_insert::<EventsHistory>()
+        .returning(|_, _| Ok(None));
+    db.expect_insert::<DaHeightTable>()
         .once()
-        .withf(|_, v| **v == 9)
+        .withf(move |_, v| *v == same_height)
         .returning(|_, _| Ok(None));
     db.expect_commit().returning(|| Ok(()));
-    db.expect_get::<RelayerMetadata>()
+    db.expect_get::<DaHeightTable>()
         .once()
         .returning(|_| Ok(None));
 
+    // When
     let mut db = db.into_transactional();
-    db.insert_messages(&9u64.into(), &messages[5..]).unwrap();
+    let result = db.insert_events(&same_height, &events);
 
-    let mut db = MockStorage::default();
-    db.expect_insert::<Messages>().returning(|_, _| Ok(None));
-    db.expect_commit().returning(|| Ok(()));
-    db.expect_get::<RelayerMetadata>()
-        .once()
-        .returning(|_| Ok(Some(std::borrow::Cow::Owned(9u64.into()))));
+    // Then
+    assert!(result.is_ok());
+}
 
+#[test]
+fn insert_fails_for_messages_with_different_height() {
+    // Given
+    let last_height = 1u64;
+    let events: Vec<_> = (0..=last_height)
+        .map(|i| {
+            let mut message = Message::default();
+            message.set_da_height(i.into());
+            message.set_amount(i);
+            message.into()
+        })
+        .collect();
+
+    let db = MockStorage::default();
+
+    // When
     let mut db = db.into_transactional();
-    db.insert_messages(&5u64.into(), &messages[..5]).unwrap();
+    let result = db.insert_events(&last_height.into(), &events);
+
+    // Then
+    let err = result.expect_err(
+        "Should return error since DA message heights are different between each other",
+    );
+    assert!(err.to_string().contains("Invalid da height"));
+}
+
+#[test]
+fn insert_fails_for_messages_same_height_but_on_different_height() {
+    // Given
+    let last_height = 1u64;
+    let events: Vec<_> = (0..=last_height)
+        .map(|i| {
+            let mut message = Message::default();
+            message.set_da_height(last_height.into());
+            message.set_amount(i);
+            message.into()
+        })
+        .collect();
+
+    let db = MockStorage::default();
+
+    // When
+    let mut db = db.into_transactional();
+    let next_height = last_height + 1;
+    let result = db.insert_events(&next_height.into(), &events);
+
+    // Then
+    let err =
+        result.expect_err("Should return error since DA message heights and commit da heights are different");
+    assert!(err.to_string().contains("Invalid da height"));
 }
 
 #[test_case(None, 0, 0; "can set DA height to 0 when there is none available")]
@@ -83,13 +138,13 @@ fn set_raises_da_height_monotonically(
 ) {
     let mut db = MockStorage::default();
     if let Some(h) = inserts.into() {
-        db.expect_insert::<RelayerMetadata>()
+        db.expect_insert::<DaHeightTable>()
             .once()
             .withf(move |_, v| **v == h)
             .returning(|_, _| Ok(None));
     }
     let get = get.into().map(|g| Cow::Owned(g.into()));
-    db.expect_get::<RelayerMetadata>()
+    db.expect_get::<DaHeightTable>()
         .once()
         .returning(move |_| Ok(get.clone()));
     db.expect_commit().returning(|| Ok(()));

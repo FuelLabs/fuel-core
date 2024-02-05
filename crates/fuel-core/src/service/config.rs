@@ -31,15 +31,17 @@ use fuel_core_p2p::config::{
 #[cfg(feature = "relayer")]
 use fuel_core_relayer::Config as RelayerConfig;
 
+pub use fuel_core_consensus_module::RelayerConsensusConfig;
+pub use fuel_core_importer;
 pub use fuel_core_poa::Trigger;
 
-use crate::database::DatabaseConfig;
+use crate::combined_database::CombinedDatabaseConfig;
 
 #[derive(Clone, Debug)]
 pub struct Config {
     pub addr: SocketAddr,
     pub api_request_timeout: Duration,
-    pub db_config: DatabaseConfig,
+    pub combined_db_config: CombinedDatabaseConfig,
     pub chain_config: ChainConfig,
     pub state_config: StateConfig,
     pub state_decoder: Decoder,
@@ -54,7 +56,6 @@ pub struct Config {
     pub vm: VMConfig,
     pub txpool: fuel_core_txpool::Config,
     pub block_producer: fuel_core_producer::Config,
-    pub block_executor: fuel_core_executor::Config,
     pub block_importer: fuel_core_importer::Config,
     #[cfg(feature = "relayer")]
     pub relayer: Option<RelayerConfig>,
@@ -64,7 +65,7 @@ pub struct Config {
     pub sync: fuel_core_sync::Config,
     pub consensus_key: Option<Secret<SecretKeyWrapper>>,
     pub name: String,
-    pub verifier: fuel_core_consensus_module::RelayerVerifierConfig,
+    pub relayer_consensus_config: fuel_core_consensus_module::RelayerConsensusConfig,
     /// The number of reserved peers to connect to before starting to sync.
     pub min_connected_reserved_peers: usize,
     /// Time to wait after receiving the latest block before considered to be Synced.
@@ -76,13 +77,14 @@ pub struct Config {
 impl Config {
     pub fn local_node() -> Self {
         let chain_conf = ChainConfig::local_testnet();
+        let block_importer = fuel_core_importer::Config::new(&chain_conf);
         let state_config = StateConfig::local_testnet();
         let state_decoder = Decoder::in_memory(state_config.clone(), 1);
 
         let utxo_validation = false;
         let min_gas_price = 0;
 
-        let db_config = DatabaseConfig {
+        let combined_db_config = CombinedDatabaseConfig {
             // Set the cache for tests = 10MB
             max_database_cache_size: 10 * 1024 * 1024,
             database_path: Default::default(),
@@ -95,7 +97,7 @@ impl Config {
         Self {
             addr: SocketAddr::new(Ipv4Addr::new(127, 0, 0, 1).into(), 0),
             api_request_timeout: Duration::from_secs(60),
-            db_config,
+            combined_db_config,
             debug: true,
             chain_config: chain_conf.clone(),
             state_config: state_config.clone(),
@@ -111,8 +113,7 @@ impl Config {
                 ..fuel_core_txpool::Config::default()
             },
             block_producer: Default::default(),
-            block_executor: Default::default(),
-            block_importer: Default::default(),
+            block_importer,
             #[cfg(feature = "relayer")]
             relayer: None,
             #[cfg(feature = "p2p")]
@@ -121,7 +122,7 @@ impl Config {
             sync: fuel_core_sync::Config::default(),
             consensus_key: Some(Secret::new(default_consensus_dev_key().into())),
             name: String::default(),
-            verifier: Default::default(),
+            relayer_consensus_config: Default::default(),
             min_connected_reserved_peers: 0,
             time_until_synced: Duration::ZERO,
             query_log_threshold_time: Duration::from_secs(2),

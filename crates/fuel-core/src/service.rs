@@ -1,7 +1,16 @@
+use self::adapters::BlockImporterAdapter;
 use crate::{
+    combined_database::CombinedDatabase,
     database::Database,
-    service::adapters::P2PAdapter,
+    service::{
+        adapters::{
+            P2PAdapter,
+            PoAAdapter,
+        },
+        genesis::execute_genesis_block,
+    },
 };
+use fuel_core_poa::ports::BlockImporter;
 use fuel_core_services::{
     RunnableService,
     RunnableTask,
@@ -9,19 +18,20 @@ use fuel_core_services::{
     State,
     StateWatcher,
 };
+use fuel_core_storage::{
+    transactional::AtomicView,
+    IsNotFound,
+};
 use std::net::SocketAddr;
 use tracing::warn;
 
 pub use config::{
     Config,
     DbType,
+    RelayerConsensusConfig,
     VMConfig,
 };
 pub use fuel_core_services::Service as ServiceTrait;
-
-pub use fuel_core_consensus_module::RelayerVerifierConfig;
-
-use self::adapters::BlockImporterAdapter;
 
 pub mod adapters;
 pub mod config;
@@ -32,6 +42,8 @@ pub mod sub_services;
 
 #[derive(Clone)]
 pub struct SharedState {
+    /// The PoA adaptor around the shared state of the consensus module.
+    pub poa_adapter: PoAAdapter,
     /// The transaction pool shared state.
     pub txpool: fuel_core_txpool::service::SharedState<P2PAdapter, Database>,
     /// The P2P network shared state.
@@ -39,11 +51,15 @@ pub struct SharedState {
     pub network: Option<fuel_core_p2p::service::SharedState>,
     #[cfg(feature = "relayer")]
     /// The Relayer shared state.
-    pub relayer: Option<fuel_core_relayer::SharedState<Database>>,
+    pub relayer: Option<
+        fuel_core_relayer::SharedState<
+            Database<crate::database::database_description::relayer::Relayer>,
+        >,
+    >,
     /// The GraphQL shared state.
-    pub graph_ql: crate::fuel_core_graphql_api::service::SharedState,
+    pub graph_ql: crate::fuel_core_graphql_api::api_service::SharedState,
     /// The underlying database.
-    pub database: Database,
+    pub database: CombinedDatabase,
     /// Subscribe to new block production.
     pub block_importer: BlockImporterAdapter,
     /// The config of the service.
@@ -66,7 +82,7 @@ pub struct FuelService {
 impl FuelService {
     /// Creates a `FuelService` instance from service config
     #[tracing::instrument(skip_all, fields(name = %config.name))]
-    pub fn new(database: Database, config: Config) -> anyhow::Result<Self> {
+    pub fn new(database: CombinedDatabase, config: Config) -> anyhow::Result<Self> {
         let config = config.make_config_consistent();
         let task = Task::new(database, config)?;
         let runner = ServiceRunner::new(task);
@@ -82,23 +98,34 @@ impl FuelService {
     /// Creates and starts fuel node instance from service config
     pub async fn new_node(config: Config) -> anyhow::Result<Self> {
         // initialize database
-        let database = Database::from_config(&config.db_config)?;
+        let combined_database =
+            CombinedDatabase::from_config(&config.combined_db_config)?;
 
-        Self::from_database(database, config).await
+        Self::from_combined_database(combined_database, config).await
     }
 
-    /// Creates and starts fuel node instance from service config and a pre-existing database
+    /// Creates and starts fuel node instance from service config and a pre-existing on-chain database
     pub async fn from_database(
         database: Database,
         config: Config,
     ) -> anyhow::Result<Self> {
-        let service = Self::new(database, config)?;
+        let combined_database =
+            CombinedDatabase::new(database, Default::default(), Default::default());
+        Self::from_combined_database(combined_database, config).await
+    }
+
+    /// Creates and starts fuel node instance from service config and a pre-existing combined database
+    pub async fn from_combined_database(
+        combined_database: CombinedDatabase,
+        config: Config,
+    ) -> anyhow::Result<Self> {
+        let service = Self::new(combined_database, config)?;
         service.runner.start_and_await().await?;
         Ok(service)
     }
 
     #[cfg(feature = "relayer")]
-    /// Wait for the [`Relayer`] to be in sync with
+    /// Wait for the Relayer to be in sync with
     /// the data availability layer.
     ///
     /// Yields until the relayer reaches a point where it
@@ -163,15 +190,16 @@ pub struct Task {
 
 impl Task {
     /// Private inner method for initializing the fuel service task
-    pub fn new(database: Database, config: Config) -> anyhow::Result<Task> {
+    pub fn new(mut database: CombinedDatabase, config: Config) -> anyhow::Result<Task> {
         // initialize state
         tracing::info!("Initializing database");
-        database.init(&config.chain_config)?;
-        genesis::maybe_initialize_state(&config, &database)?;
+        let block_height = config.chain_config.height.unwrap_or_default();
+        let da_block_height = 0u64.into();
+        database.init(&block_height, &da_block_height)?;
 
         // initialize sub services
         tracing::info!("Initializing sub services");
-        let (services, shared) = sub_services::init_sub_services(&config, &database)?;
+        let (services, shared) = sub_services::init_sub_services(&config, database)?;
         Ok(Task { services, shared })
     }
 
@@ -197,6 +225,16 @@ impl RunnableService for Task {
         _: &StateWatcher,
         _: Self::TaskParams,
     ) -> anyhow::Result<Self::Task> {
+        let view = self.shared.database.on_chain().latest_view();
+        // check if chain is initialized
+        if let Err(err) = view.get_genesis() {
+            if err.is_not_found() {
+                let result = execute_genesis_block(&self.shared.config, &view)?;
+
+                self.shared.block_importer.commit_result(result).await?;
+            }
+        }
+
         for service in &self.services {
             service.start_and_await().await?;
         }
@@ -281,9 +319,9 @@ mod tests {
             i += 1;
         }
 
-        // current services: graphql, txpool, PoA
+        // current services: graphql, graphql worker, txpool, PoA
         #[allow(unused_mut)]
-        let mut expected_services = 3;
+        let mut expected_services = 4;
 
         // Relayer service is disabled with `Config::local_node`.
         // #[cfg(feature = "relayer")]

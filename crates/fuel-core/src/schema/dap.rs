@@ -1,9 +1,13 @@
 use crate::{
     database::{
+        database_description::on_chain::OnChain,
         transaction::DatabaseTransaction,
         Database,
     },
-    schema::scalars::U64,
+    schema::scalars::{
+        U32,
+        U64,
+    },
 };
 use async_graphql::{
     Context,
@@ -35,6 +39,7 @@ use fuel_core_types::{
             IntoChecked,
         },
         consts,
+        state::DebugEval,
         Interpreter,
         InterpreterError,
     },
@@ -51,9 +56,6 @@ use tracing::{
 };
 use uuid::Uuid;
 
-use crate::schema::scalars::U32;
-use fuel_core_types::fuel_vm::state::DebugEval;
-
 pub struct Config {
     /// `true` means that debugger functionality is enabled.
     debug_enabled: bool,
@@ -63,7 +65,7 @@ pub struct Config {
 pub struct ConcreteStorage {
     vm: HashMap<ID, Interpreter<VmStorage<Database>, Script>>,
     tx: HashMap<ID, Vec<Script>>,
-    db: HashMap<ID, DatabaseTransaction>,
+    db: HashMap<ID, DatabaseTransaction<OnChain>>,
     params: ConsensusParameters,
 }
 
@@ -93,7 +95,7 @@ impl ConcreteStorage {
     pub fn init(
         &mut self,
         txs: &[Script],
-        storage: DatabaseTransaction,
+        storage: DatabaseTransaction<OnChain>,
     ) -> anyhow::Result<ID> {
         let id = Uuid::new_v4();
         let id = ID::from(id);
@@ -124,7 +126,11 @@ impl ConcreteStorage {
         self.db.remove(id).is_some()
     }
 
-    pub fn reset(&mut self, id: &ID, storage: DatabaseTransaction) -> anyhow::Result<()> {
+    pub fn reset(
+        &mut self,
+        id: &ID,
+        storage: DatabaseTransaction<OnChain>,
+    ) -> anyhow::Result<()> {
         let vm_database = Self::vm_database(&storage)?;
         let tx = self
             .tx
@@ -156,15 +162,16 @@ impl ConcreteStorage {
             .ok_or_else(|| anyhow::anyhow!("The VM instance was not found"))
     }
 
-    fn vm_database(storage: &DatabaseTransaction) -> anyhow::Result<VmStorage<Database>> {
+    fn vm_database(
+        storage: &DatabaseTransaction<OnChain>,
+    ) -> anyhow::Result<VmStorage<Database>> {
         let block = storage
             .get_current_block()?
-            .ok_or(not_found!("Block for VMDatabase"))?
-            .into_owned();
+            .ok_or(not_found!("Block for VMDatabase"))?;
 
         let vm_database = VmStorage::new(
             storage.as_ref().clone(),
-            &block.header().consensus,
+            block.header().consensus(),
             // TODO: Use a real coinbase address
             Default::default(),
         );
@@ -218,6 +225,7 @@ fn require_debug(ctx: &Context<'_>) -> async_graphql::Result<()> {
 
 #[Object]
 impl DapQuery {
+    /// Read register value by index.
     async fn register(
         &self,
         ctx: &Context<'_>,
@@ -233,6 +241,7 @@ impl DapQuery {
             .map(|val| val.into())
     }
 
+    /// Read read a range of memory bytes.
     async fn memory(
         &self,
         ctx: &Context<'_>,
@@ -252,6 +261,10 @@ impl DapQuery {
 
 #[Object]
 impl DapMutation {
+    /// Initialize a new debugger session, returning its ID.
+    /// A new VM instance is spawned for each session.
+    /// The session is run in a separate database transaction,
+    /// on top of the most recent node state.
     async fn start_session(&self, ctx: &Context<'_>) -> async_graphql::Result<ID> {
         require_debug(ctx)?;
         trace!("Initializing new interpreter");
@@ -269,6 +282,7 @@ impl DapMutation {
         Ok(id)
     }
 
+    /// End debugger session.
     async fn end_session(
         &self,
         ctx: &Context<'_>,
@@ -282,6 +296,7 @@ impl DapMutation {
         Ok(existed)
     }
 
+    /// Reset the VM instance to the initial state.
     async fn reset(&self, ctx: &Context<'_>, id: ID) -> async_graphql::Result<bool> {
         require_debug(ctx)?;
         let db = ctx.data_unchecked::<Database>();
@@ -296,6 +311,7 @@ impl DapMutation {
         Ok(true)
     }
 
+    /// Execute a single fuel-asm instruction.
     async fn execute(
         &self,
         ctx: &Context<'_>,
@@ -317,6 +333,7 @@ impl DapMutation {
         Ok(result)
     }
 
+    /// Set single-stepping mode for the VM instance.
     async fn set_single_stepping(
         &self,
         ctx: &Context<'_>,
@@ -336,6 +353,7 @@ impl DapMutation {
         Ok(enable)
     }
 
+    /// Set a breakpoint for a VM instance.
     async fn set_breakpoint(
         &self,
         ctx: &Context<'_>,
@@ -343,7 +361,7 @@ impl DapMutation {
         breakpoint: gql_types::Breakpoint,
     ) -> async_graphql::Result<bool> {
         require_debug(ctx)?;
-        trace!("Continue execution of VM {:?}", id);
+        trace!("Set breakpoint for VM {:?}", id);
 
         let mut locked = ctx.data_unchecked::<GraphStorage>().lock().await;
         let vm = locked
@@ -355,6 +373,8 @@ impl DapMutation {
         Ok(true)
     }
 
+    /// Run a single transaction in given session until it
+    /// hits a breakpoint or completes.
     async fn start_tx(
         &self,
         ctx: &Context<'_>,
@@ -427,6 +447,8 @@ impl DapMutation {
         }
     }
 
+    /// Resume execution of the VM instance after a breakpoint.
+    /// Runs until the next breakpoint or until the transaction completes.
     async fn continue_tx(
         &self,
         ctx: &Context<'_>,
@@ -493,6 +515,7 @@ mod gql_types {
 
     use fuel_core_types::fuel_vm::Breakpoint as FuelBreakpoint;
 
+    /// Breakpoint, defined as a tuple of contract ID and relative PC offset inside it
     #[derive(Debug, Clone, Copy, InputObject)]
     pub struct Breakpoint {
         contract: ContractId,

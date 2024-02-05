@@ -1,5 +1,6 @@
 use super::*;
 use crate::{
+    mock_db::MockDBProvider,
     ports::BlockImporter,
     MockDb,
 };
@@ -21,14 +22,17 @@ use fuel_core_types::{
         TransactionBuilder,
         Word,
     },
-    services::p2p::GossipsubMessageAcceptance,
+    services::{
+        block_importer::ImportResult,
+        p2p::GossipsubMessageAcceptance,
+    },
 };
 use std::cell::RefCell;
 
 type GossipedTransaction = GossipData<Transaction>;
 
 pub struct TestContext {
-    pub(crate) service: Service<MockP2P, MockDb>,
+    pub(crate) service: Service<MockP2P, MockDBProvider>,
     mock_db: MockDb,
     rng: RefCell<StdRng>,
 }
@@ -38,7 +42,7 @@ impl TestContext {
         TestContextBuilder::new().build_and_start().await
     }
 
-    pub fn service(&self) -> &Service<MockP2P, MockDb> {
+    pub fn service(&self) -> &Service<MockP2P, MockDBProvider> {
         &self.service
     }
 
@@ -103,7 +107,7 @@ mockall::mock! {
     pub Importer {}
 
     impl BlockImporter for Importer {
-        fn block_events(&self) -> BoxStream<Arc<ImportResult>>;
+        fn block_events(&self) -> BoxStream<SharedImportResult>;
     }
 }
 
@@ -115,7 +119,7 @@ impl MockImporter {
             let stream = fuel_core_services::stream::unfold(blocks, |mut blocks| async {
                 let block = blocks.pop();
                 if let Some(sealed_block) = block {
-                    let result =
+                    let result: SharedImportResult =
                         Arc::new(ImportResult::new_from_local(sealed_block, vec![]));
 
                     Some((result, blocks))
@@ -190,7 +194,13 @@ impl TestContextBuilder {
             .importer
             .unwrap_or_else(|| MockImporter::with_blocks(vec![]));
 
-        let service = new_service(config, mock_db.clone(), importer, p2p);
+        let service = new_service(
+            config,
+            MockDBProvider(mock_db.clone()),
+            importer,
+            p2p,
+            Default::default(),
+        );
 
         TestContext {
             service,

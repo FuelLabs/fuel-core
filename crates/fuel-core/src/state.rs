@@ -1,103 +1,90 @@
-use crate::database::{
-    Column,
-    Database,
-    Error as DatabaseError,
-    Result as DatabaseResult,
+use crate::{
+    database::{
+        database_description::{
+            on_chain::OnChain,
+            DatabaseDescription,
+        },
+        Result as DatabaseResult,
+    },
+    state::in_memory::{
+        memory_store::MemoryStore,
+        transaction::MemoryTransactionView,
+    },
 };
-use fuel_core_storage::iter::{
-    BoxedIter,
-    IterDirection,
+use fuel_core_storage::{
+    iter::{
+        IterDirection,
+        IteratorableStore,
+    },
+    kv_store::BatchOperations,
 };
 use std::{
     fmt::Debug,
     sync::Arc,
 };
 
-pub type DataSource = Arc<dyn TransactableStorage>;
-pub type Value = Arc<Vec<u8>>;
-pub type KVItem = DatabaseResult<(Vec<u8>, Value)>;
-
-pub trait KeyValueStore {
-    fn put(
-        &self,
-        key: &[u8],
-        column: Column,
-        value: Value,
-    ) -> DatabaseResult<Option<Value>>;
-
-    fn write(&self, key: &[u8], column: Column, buf: &[u8]) -> DatabaseResult<usize>;
-
-    fn replace(
-        &self,
-        key: &[u8],
-        column: Column,
-        buf: &[u8],
-    ) -> DatabaseResult<(usize, Option<Value>)>;
-
-    fn take(&self, key: &[u8], column: Column) -> DatabaseResult<Option<Value>>;
-
-    fn delete(&self, key: &[u8], column: Column) -> DatabaseResult<Option<Value>>;
-
-    fn exists(&self, key: &[u8], column: Column) -> DatabaseResult<bool>;
-
-    fn size_of_value(&self, key: &[u8], column: Column) -> DatabaseResult<Option<usize>>;
-
-    fn get(&self, key: &[u8], column: Column) -> DatabaseResult<Option<Value>>;
-
-    fn read(
-        &self,
-        key: &[u8],
-        column: Column,
-        buf: &mut [u8],
-    ) -> DatabaseResult<Option<usize>>;
-
-    fn read_alloc(&self, key: &[u8], column: Column) -> DatabaseResult<Option<Value>>;
-
-    fn iter_all(
-        &self,
-        column: Column,
-        prefix: Option<&[u8]>,
-        start: Option<&[u8]>,
-        direction: IterDirection,
-    ) -> BoxedIter<KVItem>;
-}
-
-pub trait BatchOperations: KeyValueStore {
-    fn batch_write(
-        &self,
-        entries: &mut dyn Iterator<Item = (Vec<u8>, Column, WriteOperation)>,
-    ) -> DatabaseResult<()> {
-        for (key, column, op) in entries {
-            match op {
-                // TODO: error handling
-                WriteOperation::Insert(value) => {
-                    let _ = self.put(&key, column, value);
-                }
-                WriteOperation::Remove => {
-                    let _ = self.delete(&key, column);
-                }
-            }
-        }
-        Ok(())
-    }
-}
-
-#[derive(Debug)]
-pub enum WriteOperation {
-    Insert(Value),
-    Remove,
-}
-
-pub trait TransactableStorage: BatchOperations + Debug + Send + Sync {
-    fn checkpoint(&self) -> DatabaseResult<Database> {
-        Err(DatabaseError::Other(anyhow::anyhow!(
-            "Checkpoint is not supported"
-        )))
-    }
-
-    fn flush(&self) -> DatabaseResult<()>;
-}
-
 pub mod in_memory;
 #[cfg(feature = "rocksdb")]
 pub mod rocks_db;
+
+type DataSourceInner<Column> = Arc<dyn TransactableStorage<Column = Column>>;
+
+#[derive(Clone, Debug)]
+pub struct DataSource<Description = OnChain>(DataSourceInner<Description::Column>)
+where
+    Description: DatabaseDescription;
+
+impl<Description> From<Arc<MemoryTransactionView<Description>>>
+    for DataSource<Description>
+where
+    Description: DatabaseDescription,
+{
+    fn from(inner: Arc<MemoryTransactionView<Description>>) -> Self {
+        Self(inner)
+    }
+}
+
+#[cfg(feature = "rocksdb")]
+impl<Description> From<Arc<rocks_db::RocksDb<Description>>> for DataSource<Description>
+where
+    Description: DatabaseDescription,
+{
+    fn from(inner: Arc<rocks_db::RocksDb<Description>>) -> Self {
+        Self(inner)
+    }
+}
+
+impl<Description> From<Arc<MemoryStore<Description>>> for DataSource<Description>
+where
+    Description: DatabaseDescription,
+{
+    fn from(inner: Arc<MemoryStore<Description>>) -> Self {
+        Self(inner)
+    }
+}
+
+impl<Description> core::ops::Deref for DataSource<Description>
+where
+    Description: DatabaseDescription,
+{
+    type Target = DataSourceInner<Description::Column>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl<Description> core::ops::DerefMut for DataSource<Description>
+where
+    Description: DatabaseDescription,
+{
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
+
+pub trait TransactableStorage:
+    IteratorableStore + BatchOperations + Debug + Send + Sync
+{
+    fn flush(&self) -> DatabaseResult<()>;
+}
