@@ -77,7 +77,7 @@ impl EstimateGasPriceQuery {
         )]
         block_horizon: Option<U64>,
     ) -> async_graphql::Result<EstimateGasPrice> {
-        // TODO: implement this using the `block_horizon` parameter
+        // TODO: implement dynamic calculation based on block horizon
         let _ = block_horizon;
 
         let config = ctx.data_unchecked::<GraphQLConfig>();

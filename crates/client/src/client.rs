@@ -6,16 +6,14 @@ use crate::client::{
             SpendQueryElementInput,
         },
         contract::ContractBalanceQueryArgs,
+        gas_price::EstimateGasPrice,
         message::MessageStatusArgs,
         tx::DryRunArg,
         Tai64Timestamp,
         TransactionId,
     },
     types::{
-        gas_price::{
-            EstimateGasPrice,
-            LatestGasPrice,
-        },
+        gas_price::LatestGasPrice,
         message::MessageStatus,
         primitives::{
             Address,

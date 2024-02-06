@@ -28,6 +28,14 @@ pub struct BlockHorizonArgs {
     pub block_horizon: Option<U32>,
 }
 
+impl From<u32> for BlockHorizonArgs {
+    fn from(block_horizon: u32) -> Self {
+        Self {
+            block_horizon: Some(block_horizon.into()),
+        }
+    }
+}
+
 #[derive(cynic::QueryFragment, Debug)]
 #[cynic(
     schema_path = "./assets/schema.sdl",
@@ -35,7 +43,7 @@ pub struct BlockHorizonArgs {
     variables = "BlockHorizonArgs"
 )]
 pub struct QueryEstimateGasPrice {
-    #[arguments(block_horizon: $block_horizon)]
+    #[arguments(blockHorizon: $block_horizon)]
     pub estimate_gas_price: EstimateGasPrice,
 }
 
