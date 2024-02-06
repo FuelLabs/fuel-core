@@ -40,7 +40,7 @@ impl LatestGasPriceQuery {
         let config = ctx.data_unchecked::<GraphQLConfig>();
 
         let query: &ReadView = ctx.data_unchecked();
-        let latest_block: Block<_> = query.latest_block()?.into();
+        let latest_block: Block<_> = query.latest_block()?;
         let block_height: u64 = u32::from(*latest_block.header().height()).into();
 
         Ok(LatestGasPrice {
