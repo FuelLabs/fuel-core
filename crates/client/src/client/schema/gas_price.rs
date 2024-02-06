@@ -7,7 +7,7 @@ use crate::client::schema::{
 #[cynic(schema_path = "./assets/schema.sdl")]
 pub struct LatestGasPrice {
     pub gas_price: U64,
-    // pub block_height: U64,
+    pub block_height: U64,
 }
 
 #[derive(cynic::QueryFragment, Debug)]
