@@ -198,6 +198,13 @@ where
     pub fn flush(self) -> DatabaseResult<()> {
         self.data.as_ref().flush()
     }
+
+    pub fn delete_all(&self, column: Description::Column) -> DatabaseResult<()> {
+        self.data
+            .as_ref()
+            .delete_all(column)
+            .map_err(|e| anyhow::anyhow!(e).into())
+    }
 }
 
 impl<Description> KeyValueStore for DataSource<Description>

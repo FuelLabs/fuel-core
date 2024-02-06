@@ -442,10 +442,10 @@ mod tests {
     impl IteratorableStore for BrokenTransactions {
         fn iter_all(
             &self,
-            column: Self::Column,
-            prefix: Option<&[u8]>,
-            start: Option<&[u8]>,
-            direction: fuel_core_storage::iter::IterDirection,
+            _column: Self::Column,
+            _prefix: Option<&[u8]>,
+            _start: Option<&[u8]>,
+            _direction: fuel_core_storage::iter::IterDirection,
         ) -> fuel_core_storage::iter::BoxedIter<fuel_core_storage::kv_store::KVItem>
         {
             unimplemented!()

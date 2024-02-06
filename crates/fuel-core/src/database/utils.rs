@@ -117,8 +117,7 @@ where
             .db
             .storage::<Metadata>()
             .get(key)?
-            .map(|c| c.into_owned().root())
-            .copied();
+            .map(|c| c.root().to_owned());
 
         Ok(root)
     }

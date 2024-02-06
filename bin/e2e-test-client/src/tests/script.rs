@@ -6,8 +6,6 @@ use fuel_core_chain_config::{
     ContractConfig,
     SnapshotMetadata,
     StateConfig,
-    StateReader,
-    MAX_GROUP_SIZE,
 };
 use fuel_core_types::{
     fuel_tx::{
@@ -24,7 +22,6 @@ use fuel_core_types::{
     fuel_types::canonical::Deserialize,
     services::executor::TransactionExecutionResult,
 };
-use itertools::Itertools;
 use libtest_mimic::Failed;
 use std::{
     path::Path,

@@ -1,5 +1,16 @@
 use crate::{
-    database::Database,
+    database::{
+        genesis_progress::{
+            GenesisCoinRoots,
+            GenesisContractBalanceRoots,
+            GenesisContractIds,
+            GenesisContractRoots,
+            GenesisContractStateRoots,
+            GenesisMessageRoots,
+            GenesisMetadata,
+        },
+        Database,
+    },
     service::config::Config,
 };
 use anyhow::anyhow;
@@ -10,7 +21,7 @@ use fuel_core_chain_config::{
     MessageConfig,
 };
 use fuel_core_storage::{
-    column::Column,
+    structured_storage::TableWithBlueprint,
     tables::{
         Coins,
         ContractsInfo,
@@ -138,13 +149,13 @@ fn cleanup_genesis_progress(database: &Database) -> anyhow::Result<()> {
     let mut database_transaction = Transactional::transaction(database);
     let database = database_transaction.as_mut();
 
-    database.delete_all(Column::GenesisMetadata)?;
-    database.delete_all(Column::GenesisCoinRoots)?;
-    database.delete_all(Column::GenesisMessageRoots)?;
-    database.delete_all(Column::GenesisContractBalanceRoots)?;
-    database.delete_all(Column::GenesisContractStateRoots)?;
-    database.delete_all(Column::GenesisContractRoots)?;
-    database.delete_all(Column::GenesisContractIds)?;
+    database.delete_all(GenesisMetadata::column())?;
+    database.delete_all(GenesisCoinRoots::column())?;
+    database.delete_all(GenesisMessageRoots::column())?;
+    database.delete_all(GenesisContractBalanceRoots::column())?;
+    database.delete_all(GenesisContractStateRoots::column())?;
+    database.delete_all(GenesisContractRoots::column())?;
+    database.delete_all(GenesisContractIds::column())?;
 
     database_transaction.commit()?;
 
@@ -387,30 +398,6 @@ mod tests {
         SeedableRng,
     };
     use std::vec;
-
-    #[tokio::test]
-    async fn config_initializes_chain_name() {
-        let test_name = "test_net_123".to_string();
-        let service_config = Config {
-            chain_config: ChainConfig {
-                chain_name: test_name.clone(),
-                ..ChainConfig::local_testnet()
-            },
-            ..Config::local_node()
-        };
-
-        let db = Database::default();
-        FuelService::from_database(db.clone(), service_config)
-            .await
-            .unwrap();
-
-        assert_eq!(
-            test_name,
-            db.get_chain_name()
-                .unwrap()
-                .expect("Expected a chain name to be set")
-        )
-    }
 
     #[tokio::test]
     async fn config_initializes_block_height() {

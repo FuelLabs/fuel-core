@@ -105,9 +105,9 @@ impl Database {
 
         // TODO dont collect
         <Database as StorageBatchMutate<ContractsState>>::insert_batch(
-            self.as_mut(),
+            self,
             state_entries_iter,
-        );
+        )?;
 
         Ok(())
     }
@@ -577,8 +577,9 @@ mod tests {
                         .get(&contract_id)
                         .unwrap()
                         .unwrap()
-                        .root();
-                    (contract_id, *root)
+                        .root()
+                        .clone();
+                    (contract_id, root)
                 })
                 .collect::<HashSet<_>>();
 
@@ -656,8 +657,9 @@ mod tests {
                         .get(&contract_id)
                         .unwrap()
                         .unwrap()
-                        .root();
-                    (contract_id, *root)
+                        .root()
+                        .clone();
+                    (contract_id, root)
                 })
                 .collect::<Vec<_>>();
 

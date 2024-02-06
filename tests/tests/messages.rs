@@ -592,10 +592,11 @@ async fn can_get_message() {
 
     // configure the messges
     let mut config = Config::local_node();
-    config.chain_conf.initial_state = Some(StateConfig {
-        messages: Some(vec![first_msg.clone()]),
+    let state_config = StateConfig {
+        messages: vec![first_msg.clone()],
         ..Default::default()
-    });
+    };
+    config.state_reader = StateReader::in_memory(state_config, 1);
 
     // setup service and client
     let service = FuelService::new_node(config).await.unwrap();
@@ -612,9 +613,7 @@ async fn can_get_message() {
 #[tokio::test]
 async fn can_get_empty_message() {
     let mut config = Config::local_node();
-    config.chain_conf.initial_state = Some(StateConfig {
-        ..Default::default()
-    });
+    config.state_reader = StateReader::in_memory(StateConfig::default(), 1);
 
     let service = FuelService::new_node(config).await.unwrap();
     let client = FuelClient::from(service.bound_address);

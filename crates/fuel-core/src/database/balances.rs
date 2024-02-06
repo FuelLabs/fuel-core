@@ -83,7 +83,7 @@ impl Database {
     }
 
     fn db_insert_contract_balances(
-        &self,
+        &mut self,
         balances: &[ContractBalanceConfig],
     ) -> Result<(), StorageError> {
         let balance_entries = balances
@@ -102,9 +102,9 @@ impl Database {
 
         // TODO dont collect
         <Database as StorageBatchMutate<ContractsAssets>>::insert_batch(
-            self.as_mut(),
+            self,
             balance_entries_iter,
-        );
+        )?;
 
         Ok(())
     }
@@ -365,8 +365,9 @@ mod tests {
                         .get(&contract_id)
                         .unwrap()
                         .unwrap()
-                        .root();
-                    (contract_id, *root)
+                        .root()
+                        .clone();
+                    (contract_id, root)
                 })
                 .collect::<HashSet<_>>();
 
@@ -442,8 +443,9 @@ mod tests {
                         .get(&contract_id)
                         .unwrap()
                         .unwrap()
-                        .root();
-                    (contract_id, *root)
+                        .root()
+                        .clone();
+                    (contract_id, root)
                 })
                 .collect::<Vec<_>>();
 

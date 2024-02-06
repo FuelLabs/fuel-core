@@ -134,7 +134,6 @@ impl Bootstrap {
     /// Spawn a bootstrap node.
     pub async fn new(node_config: &Config) -> Self {
         let bootstrap_config = extract_p2p_config(node_config).await;
-        let bootstrap_config = extract_p2p_config(node_config).await;
         let codec = PostcardCodec::new(bootstrap_config.max_block_size);
         let (sender, _) =
             broadcast::channel(bootstrap_config.reserved_nodes.len().saturating_add(1));

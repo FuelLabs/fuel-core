@@ -250,7 +250,7 @@ mod tests {
 
     use std::iter::repeat_with;
 
-    use fuel_core::database::storage::FuelBlockSecondaryKeyBlockHeights;
+    use fuel_core::database::block::FuelBlockSecondaryKeyBlockHeights;
     use fuel_core_chain_config::{
         CoinConfig,
         ContractBalanceConfig,
@@ -279,9 +279,15 @@ mod tests {
             DaBlockHeight,
         },
         entities::{
-            coins::coin::CompressedCoin,
+            coins::coin::{
+                CompressedCoin,
+                CompressedCoinV1,
+            },
             contract::ContractUtxoInfo,
-            message::Message,
+            message::{
+                Message,
+                MessageV1,
+            },
         },
         fuel_tx::{
             Contract,
@@ -358,7 +364,7 @@ mod tests {
             let block_id = BlockId::from([0; 32]);
             self.db
                 .storage_as_mut::<FuelBlockSecondaryKeyBlockHeights>()
-                .insert(&height, &block_id)
+                .insert(&block_id, &height)
                 .unwrap();
             height
         }
@@ -366,13 +372,13 @@ mod tests {
         fn given_coin(&mut self) -> CoinConfig {
             let tx_id = self.rng.gen();
             let output_index = self.rng.gen();
-            let coin = CompressedCoin {
+            let coin = CompressedCoin::V1(CompressedCoinV1 {
                 owner: self.rng.gen(),
                 amount: self.rng.gen(),
                 asset_id: self.rng.gen(),
                 maturity: self.rng.gen(),
                 tx_pointer: self.rng.gen(),
-            };
+            });
             self.db
                 .storage_as_mut::<Coins>()
                 .insert(&UtxoId::new(tx_id, output_index), &coin)
@@ -381,37 +387,37 @@ mod tests {
             CoinConfig {
                 tx_id: Some(tx_id),
                 output_index: Some(output_index),
-                tx_pointer_block_height: Some(coin.tx_pointer.block_height()),
-                tx_pointer_tx_idx: Some(coin.tx_pointer.tx_index()),
-                maturity: Some(coin.maturity),
-                owner: coin.owner,
-                amount: coin.amount,
-                asset_id: coin.asset_id,
+                tx_pointer_block_height: Some(coin.tx_pointer().block_height()),
+                tx_pointer_tx_idx: Some(coin.tx_pointer().tx_index()),
+                maturity: Some(*coin.maturity()),
+                owner: *coin.owner(),
+                amount: *coin.amount(),
+                asset_id: *coin.asset_id(),
             }
         }
 
         fn given_message(&mut self) -> MessageConfig {
-            let message = Message {
+            let message = Message::V1(MessageV1 {
                 sender: self.rng.gen(),
                 recipient: self.rng.gen(),
                 amount: self.rng.gen(),
                 nonce: self.rng.gen(),
                 data: self.generate_data(100),
                 da_height: DaBlockHeight(self.rng.gen()),
-            };
+            });
 
             self.db
                 .storage_as_mut::<Messages>()
-                .insert(&message.nonce, &message)
+                .insert(&message.nonce(), &message)
                 .unwrap();
 
             MessageConfig {
-                sender: message.sender,
-                recipient: message.recipient,
-                nonce: message.nonce,
-                amount: message.amount,
-                data: message.data,
-                da_height: message.da_height,
+                sender: *message.sender(),
+                recipient: *message.recipient(),
+                nonce: *message.nonce(),
+                amount: message.amount(),
+                data: message.data().clone(),
+                da_height: message.da_height(),
             }
         }
 
