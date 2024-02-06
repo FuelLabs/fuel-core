@@ -447,37 +447,6 @@ impl FuelClient {
         Ok(status)
     }
 
-    // TODO: Remove this function after the Beta 5 release when we can introduce breaking changes.
-    // This function is now redundant since `submit_and_await_commit` returns
-    // receipts for all successful and failed transactions.
-    #[cfg(feature = "subscriptions")]
-    /// Submits transaction, await confirmation and return receipts.
-    pub async fn submit_and_await_commit_with_receipts(
-        &self,
-        tx: &Transaction,
-    ) -> io::Result<(TransactionStatus, Option<Vec<Receipt>>)> {
-        let tx_id = self.submit(tx).await?;
-        let status = self.await_transaction_commit(&tx_id).await?;
-        let receipts = match &status {
-            TransactionStatus::Submitted { .. } => None,
-            TransactionStatus::Success { receipts, .. } => Some(receipts.clone()),
-            TransactionStatus::SqueezedOut { .. } => {
-                // Note: Returns an error when the transaction has been squeezed
-                // out instead of returning the `SqueezedOut` status. This is
-                // done to maintain existing behavior where retrieving receipts
-                // via `self.receipts(..)` returns an error when the transaction
-                // cannot be found, such as in the case of a squeeze-out.
-                Err(io::Error::new(
-                    ErrorKind::NotFound,
-                    format!("transaction {tx_id} not found"),
-                ))?
-            }
-            TransactionStatus::Failure { receipts, .. } => Some(receipts.clone()),
-        };
-
-        Ok((status, receipts))
-    }
-
     pub async fn start_session(&self) -> io::Result<String> {
         let query = schema::StartSession::build(());
 
@@ -698,14 +667,26 @@ impl FuelClient {
             io::Error::new(ErrorKind::NotFound, format!("transaction {id} not found"))
         })?;
 
-        let receipts = tx
-            .receipts
-            .map(|vec| {
-                let vec: Result<Vec<Receipt>, ConversionError> =
-                    vec.into_iter().map(TryInto::<Receipt>::try_into).collect();
-                vec
-            })
-            .transpose()?;
+        let receipts = match tx.status {
+            Some(status) => match status {
+                schema::tx::TransactionStatus::SuccessStatus(s) => Some(
+                    s.receipts
+                        .into_iter()
+                        .map(TryInto::<Receipt>::try_into)
+                        .collect::<Result<Vec<Receipt>, ConversionError>>(),
+                )
+                .transpose()?,
+                schema::tx::TransactionStatus::FailureStatus(s) => Some(
+                    s.receipts
+                        .into_iter()
+                        .map(TryInto::<Receipt>::try_into)
+                        .collect::<Result<Vec<Receipt>, ConversionError>>(),
+                )
+                .transpose()?,
+                _ => None,
+            },
+            _ => None,
+        };
 
         Ok(receipts)
     }
