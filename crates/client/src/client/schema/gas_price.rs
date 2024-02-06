@@ -17,6 +17,28 @@ pub struct QueryLatestGasPrice {
     pub latest_gas_price: LatestGasPrice,
 }
 
+#[derive(cynic::QueryFragment, Debug)]
+#[cynic(schema_path = "./assets/schema.sdl")]
+pub struct EstimateGasPrice {
+    pub gas_price: U64,
+}
+
+#[derive(cynic::QueryVariables, Debug)]
+pub struct BlockHorizonArgs {
+    pub block_horizon: Option<U32>,
+}
+
+#[derive(cynic::QueryFragment, Debug)]
+#[cynic(
+    schema_path = "./assets/schema.sdl",
+    graphql_type = "Query",
+    variables = "BlockHorizonArgs"
+)]
+pub struct QueryEstimateGasPrice {
+    #[arguments(block_horizon: $block_horizon)]
+    pub estimate_gas_price: EstimateGasPrice,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

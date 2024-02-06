@@ -52,3 +52,37 @@ impl LatestGasPriceQuery {
         })
     }
 }
+
+pub struct EstimateGasPrice {
+    pub gas_price: U64,
+}
+
+#[Object]
+impl EstimateGasPrice {
+    async fn gas_price(&self) -> U64 {
+        self.gas_price
+    }
+}
+
+#[derive(Default)]
+pub struct EstimateGasPriceQuery {}
+
+#[Object]
+impl EstimateGasPriceQuery {
+    async fn estimate_gas_price(
+        &self,
+        ctx: &Context<'_>,
+        #[graphql(
+            desc = "Number of blocks into the future to estimate the gas price for"
+        )]
+        block_horizon: Option<U64>,
+    ) -> async_graphql::Result<EstimateGasPrice> {
+        // TODO: implement this using the `block_horizon` parameter
+        let _ = block_horizon;
+
+        let config = ctx.data_unchecked::<GraphQLConfig>();
+        let gas_price = config.min_gas_price.into();
+
+        Ok(EstimateGasPrice { gas_price })
+    }
+}
