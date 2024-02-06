@@ -75,7 +75,7 @@ impl EstimateGasPriceQuery {
         #[graphql(
             desc = "Number of blocks into the future to estimate the gas price for"
         )]
-        block_horizon: Option<U64>,
+        block_horizon: Option<U32>,
     ) -> async_graphql::Result<EstimateGasPrice> {
         // TODO: implement dynamic calculation based on block horizon
         let _ = block_horizon;
