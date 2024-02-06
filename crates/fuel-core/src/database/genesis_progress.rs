@@ -2,7 +2,14 @@ use crate::state::DataSource;
 
 use super::Database;
 use fuel_core_storage::{
-    blueprint::Blueprint,
+    blueprint::{
+        plain::Plain,
+        Blueprint,
+    },
+    codec::{
+        postcard::Postcard,
+        raw::Raw,
+    },
     column::Column,
     structured_storage::TableWithBlueprint,
     Mappable,
@@ -23,8 +30,12 @@ use itertools::{
     process_results,
     Itertools,
 };
+use serde::{
+    Deserialize,
+    Serialize,
+};
 
-#[derive(Debug, Clone, Copy, strum::EnumIter)]
+#[derive(Debug, Clone, Copy, strum::EnumIter, Serialize, Deserialize)]
 pub enum GenesisResource {
     Coins,
     Messages,
@@ -42,7 +53,7 @@ impl Mappable for GenesisMetadata {
     type OwnedValue = usize;
 }
 impl TableWithBlueprint for GenesisMetadata {
-    type Blueprint = Column;
+    type Blueprint = Plain<Postcard, Postcard>;
     type Column = Column;
     fn column() -> Self::Column {
         Column::GenesisMetadata
@@ -57,7 +68,7 @@ impl Mappable for GenesisCoinRoots {
     type OwnedValue = ();
 }
 impl TableWithBlueprint for GenesisCoinRoots {
-    type Blueprint = Column;
+    type Blueprint = Plain<Raw, Postcard>;
     type Column = Column;
     fn column() -> Self::Column {
         Column::GenesisCoinRoots
@@ -72,7 +83,7 @@ impl Mappable for GenesisMessageRoots {
     type OwnedValue = ();
 }
 impl TableWithBlueprint for GenesisMessageRoots {
-    type Blueprint = Column;
+    type Blueprint = Plain<Raw, Postcard>;
     type Column = Column;
     fn column() -> Self::Column {
         Column::GenesisMessageRoots
@@ -87,7 +98,7 @@ impl Mappable for GenesisContractStateRoots {
     type OwnedValue = ();
 }
 impl TableWithBlueprint for GenesisContractStateRoots {
-    type Blueprint = Column;
+    type Blueprint = Plain<Raw, Postcard>;
     type Column = Column;
     fn column() -> Self::Column {
         Column::GenesisContractStateRoots
@@ -102,7 +113,7 @@ impl Mappable for GenesisContractBalanceRoots {
     type OwnedValue = ();
 }
 impl TableWithBlueprint for GenesisContractBalanceRoots {
-    type Blueprint = Column;
+    type Blueprint = Plain<Raw, Postcard>;
     type Column = Column;
     fn column() -> Self::Column {
         Column::GenesisContractBalanceRoots
@@ -117,7 +128,7 @@ impl Mappable for GenesisContractRoots {
     type OwnedValue = ();
 }
 impl TableWithBlueprint for GenesisContractRoots {
-    type Blueprint = Column;
+    type Blueprint = Plain<Raw, Postcard>;
     type Column = Column;
     fn column() -> Self::Column {
         Column::GenesisContractRoots
@@ -132,7 +143,7 @@ impl Mappable for GenesisContractIds {
     type OwnedValue = ();
 }
 impl TableWithBlueprint for GenesisContractIds {
-    type Blueprint = Column;
+    type Blueprint = Plain<Postcard, Postcard>;
     type Column = Column;
     fn column() -> Self::Column {
         Column::GenesisContractIds
@@ -229,25 +240,22 @@ impl Database {
     }
 
     pub fn genesis_contracts_root(&self) -> Result<MerkleRoot> {
-        self.compute_genesis_root(Column::GenesisContractRoots)
+        self.compute_genesis_root::<GenesisContractRoots>()
     }
 
     pub fn genesis_states_root(&self) -> Result<MerkleRoot> {
-        self.compute_genesis_root(Column::GenesisContractStateRoots)
+        self.compute_genesis_root::<GenesisContractStateRoots>()
     }
 
     pub fn genesis_balances_root(&self) -> Result<MerkleRoot> {
-        self.compute_genesis_root(Column::GenesisContractBalanceRoots)
+        self.compute_genesis_root::<GenesisContractBalanceRoots>()
     }
 
     pub fn genesis_contract_ids_iter(
         &self,
     ) -> impl Iterator<Item = Result<ContractId>> + '_ {
-        self.iter_all::<Vec<u8>, ()>(Column::GenesisContractIds)
-            .map_ok(|(contract_id, _)| {
-                let bytes32: [u8; 32] = contract_id.try_into().unwrap();
-                ContractId::from(bytes32)
-            })
+        self.iter_all::<GenesisContractIds>(None)
+            .map_ok(|(contract_id, _)| contract_id)
             .map(|res| res.map_err(Into::into))
     }
 }

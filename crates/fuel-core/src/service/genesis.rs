@@ -103,7 +103,8 @@ pub async fn execute_genesis_block(
         consensus,
     };
 
-    let database_transaction = original_database.transaction()?;
+    // TODO transaction?
+    let database_transaction = Transactional::transaction(original_database);
     let result = UncommittedImportResult::new(
         ImportResult::new_from_local(block, vec![]),
         database_transaction,
@@ -180,7 +181,7 @@ pub async fn execute_and_commit_genesis_block(
     config: &Config,
     original_database: &Database,
 ) -> anyhow::Result<()> {
-    let result = execute_genesis_block(config, original_database)?;
+    let result = execute_genesis_block(config, original_database).await?;
     let importer = fuel_core_importer::Importer::new(
         config.block_importer.clone(),
         original_database.clone(),
@@ -225,17 +226,22 @@ fn init_coin(
     .into();
 
     // ensure coin can't point to blocks in the future
-    let coin_height = coin.tx_pointer.block_height();
+    let coin_height = coin.tx_pointer().block_height();
     if coin_height > height {
         return Err(anyhow!(
             "coin tx_pointer height ({coin_height}) cannot be greater than genesis block ({height})"
         ))
     }
 
-    if db.storage::<Coins>().insert(&utxo_id, &coin)?.is_some() {
+    if db
+        .storage::<Coins>()
+        .insert(&utxo_id, &compressed_coin)?
+        .is_some()
+    {
         return Err(anyhow!("Coin should not exist"));
     }
-    coin.root()
+
+    compressed_coin.root()
 }
 
 fn init_contract(
@@ -323,6 +329,10 @@ mod tests {
         combined_database::CombinedDatabase,
         database::genesis_progress::{
             GenesisCoinRoots,
+            GenesisContractBalanceRoots,
+            GenesisContractRoots,
+            GenesisContractStateRoots,
+            GenesisMessageRoots,
             GenesisResource,
         },
         service::{
@@ -497,24 +507,28 @@ mod tests {
         for key in GenesisResource::iter() {
             assert!(db.genesis_progress(&key).is_none());
         }
-        assert!(db.genesis_roots(GenesisCoinRoots).unwrap().next().is_none());
         assert!(db
-            .genesis_roots(Column::GenesisMessageRoots)
+            .genesis_roots::<GenesisCoinRoots>()
             .unwrap()
             .next()
             .is_none());
         assert!(db
-            .genesis_roots(Column::GenesisContractRoots)
+            .genesis_roots::<GenesisMessageRoots>()
             .unwrap()
             .next()
             .is_none());
         assert!(db
-            .genesis_roots(Column::GenesisContractStateRoots)
+            .genesis_roots::<GenesisContractRoots>()
             .unwrap()
             .next()
             .is_none());
         assert!(db
-            .genesis_roots(Column::GenesisContractBalanceRoots)
+            .genesis_roots::<GenesisContractStateRoots>()
+            .unwrap()
+            .next()
+            .is_none());
+        assert!(db
+            .genesis_roots::<GenesisContractBalanceRoots>()
             .unwrap()
             .next()
             .is_none());
@@ -700,7 +714,7 @@ mod tests {
 
         let db = &Database::default();
 
-        execute_and_commit_genesis_block(&config, db).unwrap();
+        execute_and_commit_genesis_block(&config, db).await.unwrap();
 
         let expected_msg: Message = msg.into();
 
