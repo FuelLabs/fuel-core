@@ -1,7 +1,7 @@
-//#![deny(clippy::cast_possible_truncation)]
-//#![deny(clippy::arithmetic_side_effects)]
-//#![deny(unused_crate_dependencies)]
-//#![deny(warnings)]
+#![deny(clippy::cast_possible_truncation)]
+#![deny(clippy::arithmetic_side_effects)]
+#![deny(unused_crate_dependencies)]
+#![deny(warnings)]
 
 pub mod config;
 pub mod fee_collection_contract;
@@ -25,4 +25,15 @@ pub fn default_consensus_dev_key() -> SecretKey {
         0x9d, 0x32, 0x7a, 0x2e, 0x9d, 0xdb,
     ];
     SecretKey::try_from(bytes.as_slice()).expect("valid key")
+}
+
+#[cfg(test)]
+mod tests {
+    // Because these dev deps are only needed when `parquet` is enabled. Since `dev-dependencies` cannot be
+    // optional we need to this these statements.
+    use bytes as _;
+    use strum as _;
+    use tempfile as _;
+    // `pretty_assertions` dev dep used only if `std` and `random` are enabled.
+    use pretty_assertions as _;
 }
