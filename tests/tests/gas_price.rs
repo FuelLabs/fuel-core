@@ -3,10 +3,8 @@ use fuel_core::service::{
     FuelService,
 };
 use fuel_core_client::client::{
-    types::gas_price::{
-        EstimateGasPrice,
-        LatestGasPrice,
-    },
+    schema::gas_price::EstimateGasPrice,
+    types::gas_price::LatestGasPrice,
     FuelClient,
 };
 
@@ -30,5 +28,5 @@ async fn estimate_gas_price() {
 
     let EstimateGasPrice { gas_price } =
         client.estimate_gas_price(arbitrary_horizon).await.unwrap();
-    assert_eq!(gas_price, node_config.txpool.min_gas_price);
+    assert_eq!(u64::from(gas_price), node_config.txpool.min_gas_price);
 }
