@@ -1,7 +1,4 @@
-use crate::serialization::{
-    HexIfHumanReadable,
-    NonSkippingSerialize,
-};
+use crate::serialization::HexIfHumanReadable;
 use fuel_core_types::{
     fuel_tx::{
         Contract,
@@ -17,7 +14,6 @@ use fuel_core_types::{
     },
 };
 use serde::{
-    ser::SerializeStruct,
     Deserialize,
     Serialize,
 };
@@ -44,11 +40,13 @@ pub struct ContractConfig {
     pub tx_pointer_tx_idx: Option<u16>,
 }
 
-impl NonSkippingSerialize for ContractConfig {
+#[cfg(feature = "parquet")]
+impl crate::serialization::NonSkippingSerialize for ContractConfig {
     fn non_skipping_serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: serde::Serializer,
     {
+        use serde::ser::SerializeStruct;
         let mut s = serializer.serialize_struct("ContractConfig", 7)?;
         s.serialize_field("contract_id", &self.contract_id)?;
         s.serialize_field("code", &self.code)?;

@@ -8,8 +8,6 @@ use serde::{
     Serialize,
 };
 
-use crate::serialization::NonSkippingSerialize;
-
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, PartialOrd, Ord)]
 // If any fields are added make sure to update the `NonSkippingSerialize` impl
 pub struct ContractBalanceConfig {
@@ -35,4 +33,5 @@ impl crate::Randomize for ContractBalanceConfig {
     }
 }
 
-impl NonSkippingSerialize for ContractBalanceConfig {}
+#[cfg(feature = "parquet")]
+impl crate::serialization::NonSkippingSerialize for ContractBalanceConfig {}

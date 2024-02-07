@@ -1,8 +1,5 @@
 use crate::{
-    serialization::{
-        HexIfHumanReadable,
-        NonSkippingSerialize,
-    },
+    serialization::HexIfHumanReadable,
     GenesisCommitment,
 };
 use fuel_core_storage::MerkleRoot;
@@ -39,7 +36,8 @@ pub struct MessageConfig {
     pub da_height: DaBlockHeight,
 }
 
-impl NonSkippingSerialize for MessageConfig {}
+#[cfg(feature = "parquet")]
+impl crate::serialization::NonSkippingSerialize for MessageConfig {}
 
 #[cfg(all(test, feature = "random"))]
 impl crate::Randomize for MessageConfig {

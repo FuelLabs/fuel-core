@@ -7,8 +7,6 @@ use serde::{
     Serialize,
 };
 
-use crate::serialization::NonSkippingSerialize;
-
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, PartialOrd, Ord)]
 // If any fields are added make sure to update the `NonSkippingSerialize` impl
 pub struct ContractStateConfig {
@@ -17,7 +15,8 @@ pub struct ContractStateConfig {
     pub value: Bytes32,
 }
 
-impl NonSkippingSerialize for ContractStateConfig {}
+#[cfg(feature = "parquet")]
+impl crate::serialization::NonSkippingSerialize for ContractStateConfig {}
 
 #[cfg(all(test, feature = "random"))]
 impl crate::Randomize for ContractStateConfig {

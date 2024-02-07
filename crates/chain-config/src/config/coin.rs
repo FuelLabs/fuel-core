@@ -1,7 +1,4 @@
-use crate::{
-    serialization::NonSkippingSerialize,
-    GenesisCommitment,
-};
+use crate::GenesisCommitment;
 use fuel_core_storage::MerkleRoot;
 use fuel_core_types::{
     entities::coins::coin::CompressedCoin,
@@ -18,10 +15,8 @@ use fuel_core_types::{
     },
 };
 use serde::{
-    ser::SerializeStruct,
     Deserialize,
     Serialize,
-    Serializer,
 };
 
 #[serde_with::skip_serializing_none]
@@ -42,11 +37,13 @@ pub struct CoinConfig {
     pub asset_id: AssetId,
 }
 
-impl NonSkippingSerialize for CoinConfig {
+#[cfg(feature = "parquet")]
+impl crate::serialization::NonSkippingSerialize for CoinConfig {
     fn non_skipping_serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
-        S: Serializer,
+        S: serde::Serializer,
     {
+        use serde::ser::SerializeStruct;
         let mut s = serializer.serialize_struct("CoinConfig", 8)?;
         s.serialize_field("tx_id", &self.tx_id)?;
         s.serialize_field("output_index", &self.output_index)?;
