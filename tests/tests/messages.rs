@@ -49,12 +49,11 @@ fn setup_config(messages: impl IntoIterator<Item = MessageConfig>) -> Config {
         messages: messages.into_iter().collect_vec(),
         ..Default::default()
     };
-    let config = Config {
+
+    Config {
         state_reader: StateReader::in_memory(state, 1),
         ..Config::local_node()
-    };
-
-    config
+    }
 }
 
 #[tokio::test]

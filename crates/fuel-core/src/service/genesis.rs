@@ -136,7 +136,7 @@ async fn import_chain_state(workers: GenesisWorkers) -> anyhow::Result<()> {
             }
         };
 
-        return Err(e)
+        return Err(e);
     }
 
     workers.compute_contracts_root().await?;
@@ -162,7 +162,7 @@ fn cleanup_genesis_progress(database: &Database) -> anyhow::Result<()> {
 }
 
 pub fn create_genesis_block(config: &Config) -> Block {
-    let block = Block::new(
+    Block::new(
         PartialBlockHeader {
             application: ApplicationHeader::<Empty> {
                 // TODO: Set `da_height` based on the chain config.
@@ -182,8 +182,7 @@ pub fn create_genesis_block(config: &Config) -> Block {
         // Genesis block doesn't have any transaction.
         vec![],
         &[],
-    );
-    block
+    )
 }
 
 #[cfg(feature = "test-helpers")]
@@ -240,7 +239,7 @@ fn init_coin(
     if coin_height > height {
         return Err(anyhow!(
             "coin tx_pointer height ({coin_height}) cannot be greater than genesis block ({height})"
-        ))
+        ));
     }
 
     if db
@@ -471,7 +470,6 @@ mod tests {
             contracts,
             contract_state,
             contract_balance,
-            ..Default::default()
         };
         let state_reader = StateReader::in_memory(state, MAX_GROUP_SIZE);
 

@@ -134,7 +134,7 @@ mod tests {
         // given
         let mut buf = [0u8; 33];
         let expected_bytes = postcard::to_slice(&BYTES.as_slice(), &mut buf).unwrap();
-        let mut serializer = postcard::Deserializer::from_bytes(&expected_bytes);
+        let mut serializer = postcard::Deserializer::from_bytes(expected_bytes);
 
         // when
         let decoded = <HexIfHumanReadable as DeserializeAs<Vec<u8>>>::deserialize_as(

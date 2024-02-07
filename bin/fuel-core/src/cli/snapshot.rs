@@ -371,7 +371,7 @@ mod tests {
                     &(),
                     &DatabaseMetadata::V1 {
                         version: OnChain::version(),
-                        height: height.clone(),
+                        height,
                     },
                 )
                 .unwrap();
@@ -418,7 +418,7 @@ mod tests {
 
             self.db
                 .storage_as_mut::<Messages>()
-                .insert(&message.nonce(), &message)
+                .insert(message.nonce(), &message)
                 .unwrap();
 
             MessageConfig {

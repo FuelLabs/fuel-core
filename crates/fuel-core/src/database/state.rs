@@ -89,6 +89,7 @@ impl Database {
             })
             .collect_vec();
 
+        #[allow(clippy::map_identity)]
         let balance_entries_iter =
             balance_entries.iter().map(|(key, value)| (key, value));
 
@@ -553,8 +554,7 @@ mod tests {
             // given
             let mut rng = StdRng::seed_from_u64(0);
 
-            let contract_ids =
-                [[1; 32], [2; 32], [3; 32]].map(|bytes| ContractId::from(bytes));
+            let contract_ids = [[1; 32], [2; 32], [3; 32]].map(ContractId::from);
 
             let state_per_contract = contract_ids
                 .iter()
@@ -579,13 +579,12 @@ mod tests {
             let all_metadata = contract_ids
                 .into_iter()
                 .map(|contract_id| {
-                    let root = database
+                    let root = *database
                         .storage::<ContractsStateMerkleMetadata>()
                         .get(&contract_id)
                         .unwrap()
                         .unwrap()
-                        .root()
-                        .clone();
+                        .root();
                     (contract_id, root)
                 })
                 .collect::<HashSet<_>>();
@@ -604,8 +603,7 @@ mod tests {
             // given
             let mut rng = StdRng::seed_from_u64(0);
 
-            let contract_ids =
-                [[1; 32], [2; 32], [3; 32]].map(|bytes| ContractId::from(bytes));
+            let contract_ids = [[1; 32], [2; 32], [3; 32]].map(ContractId::from);
             let mut random_state = |contract_id: ContractId| ContractStateConfig {
                 contract_id,
                 key: random_bytes32(&mut rng),
@@ -646,11 +644,10 @@ mod tests {
 
             let shuffled_state = contract_0_state
                 .into_iter()
-                .interleave(contract_1_state.into_iter())
-                .interleave(contract_2_state.into_iter())
+                .interleave(contract_1_state)
+                .interleave(contract_2_state)
                 .flatten()
                 .cloned()
-                .into_iter()
                 .collect_vec();
 
             database.update_contract_states(shuffled_state).unwrap();
@@ -659,13 +656,12 @@ mod tests {
             let all_metadata = contract_ids
                 .into_iter()
                 .map(|contract_id| {
-                    let root = database
+                    let root = *database
                         .storage::<ContractsStateMerkleMetadata>()
                         .get(&contract_id)
                         .unwrap()
                         .unwrap()
-                        .root()
-                        .clone();
+                        .root();
                     (contract_id, root)
                 })
                 .collect::<Vec<_>>();
