@@ -57,6 +57,14 @@ jobs:
         run: cargo binstall --no-confirm cargo-sort
       - name: Run Cargo.toml sort check
         run: cargo sort -w --check
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '16'
+      - name: Install Prettier and TOML Plugin
+        run: npm install --global prettier @prettier/plugin-toml
+      - name: Check format of Cargo.toml files
+        run: prettier --check "**/Cargo.toml"
       - uses: FuelLabs/.github/.github/actions/slack-notify-template@master
         if: always() && github.ref == 'refs/heads/master'
         with:
