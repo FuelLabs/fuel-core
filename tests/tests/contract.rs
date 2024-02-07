@@ -268,11 +268,13 @@ async fn can_get_message_proof() {
         .await
         .expect("Should be able to estimate deploy tx");
     // Call the contract.
-    let (status, receipts) = client
-        .submit_and_await_commit_with_receipts(&script)
-        .await
-        .unwrap();
-    matches!(status, TransactionStatus::Success { .. });
+    let tx_status = client.submit_and_await_commit(&script).await.unwrap();
+    matches!(tx_status, TransactionStatus::Success { .. });
+
+    let receipts = match tx_status {
+        TransactionStatus::Success { receipts, .. } => Some(receipts),
+        _ => None,
+    };
 
     // Get the receipts from the contract call.
     let receipts = receipts.unwrap();

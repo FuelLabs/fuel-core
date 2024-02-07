@@ -8,40 +8,6 @@ query($owner: Address!, $after: String, $before: String, $first: Int, $last: Int
       cursor
       node {
         rawPayload
-        receipts {
-          param1
-          param2
-          amount
-          assetId
-          gas
-          digest
-          contract {
-            id
-          }
-          is
-          pc
-          ptr
-          ra
-          rb
-          rc
-          rd
-          reason
-          receiptType
-          to {
-            id
-          }
-          toAddress
-          val
-          len
-          result
-          gasUsed
-          data
-          sender
-          recipient
-          nonce
-          contractId
-          subId
-        }
         status {
           __typename
           ... on SubmittedStatus {
