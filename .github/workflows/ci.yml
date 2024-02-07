@@ -57,14 +57,19 @@ jobs:
         run: cargo binstall --no-confirm cargo-sort
       - name: Run Cargo.toml sort check
         run: cargo sort -w --check
-      - name: Setup Node.js
-        uses: actions/setup-node@v3
-        with:
-          node-version: '16'
       - name: Install Prettier and TOML Plugin
-        run: echo '{}' > package.json && npm install prettier prettier-plugin-toml
+        run: |
+          # prettier has issues with global installation and plugin discovery. The temporary `package.json` createrd by `npm init -y` is a workaround.
+          npm init -y
+          npm install prettier prettier-plugin-toml
       - name: Check format of Cargo.toml files
-        run: npx prettier --check "**/Cargo.toml"
+        run: |
+          if ! npx prettier --check "**/Cargo.toml"; then
+            npx prettier --write "**/Cargo.toml" > /dev/null 2>&1
+            echo "Changes required:"
+            git --no-pager diff --name-only
+            exit 1
+          fi
       - uses: FuelLabs/.github/.github/actions/slack-notify-template@master
         if: always() && github.ref == 'refs/heads/master'
         with:
