@@ -64,7 +64,7 @@ jobs:
       - name: Install Prettier and TOML Plugin
         run: echo '{}' > package.json && npm install prettier prettier-plugin-toml
       - name: Check format of Cargo.toml files
-        run: prettier --check "**/Cargo.toml"
+        run: npx prettier --check "**/Cargo.toml"
       - uses: FuelLabs/.github/.github/actions/slack-notify-template@master
         if: always() && github.ref == 'refs/heads/master'
         with:
