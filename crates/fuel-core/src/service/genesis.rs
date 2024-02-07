@@ -27,7 +27,6 @@ use fuel_core_storage::{
         ContractsInfo,
         ContractsLatestUtxo,
         ContractsRawCode,
-        Messages,
     },
     transactional::{
         StorageTransaction,
@@ -322,7 +321,7 @@ fn init_da_message(db: &mut Database, msg: &MessageConfig) -> anyhow::Result<Mer
     .into();
 
     if db
-        .storage::<Messages>()
+        .storage::<fuel_core_storage::tables::Messages>()
         .insert(message.id(), &message)?
         .is_some()
     {
@@ -369,16 +368,12 @@ mod tests {
             Coins,
             ContractsAssets,
             ContractsState,
-            Messages,
         },
         StorageAsRef,
     };
     use fuel_core_types::{
         blockchain::primitives::DaBlockHeight,
-        entities::{
-            coins::coin::Coin,
-            message::Message,
-        },
+        entities::coins::coin::Coin,
         fuel_asm::op,
         fuel_tx::UtxoId,
         fuel_types::{
@@ -675,6 +670,7 @@ mod tests {
         assert_eq!(test_value, ret)
     }
 
+    #[cfg(feature = "test-helpers")]
     #[tokio::test]
     async fn tests_init_da_msgs() {
         let mut rng = StdRng::seed_from_u64(32492);
@@ -707,7 +703,7 @@ mod tests {
 
         let ret_msg = db
             .as_ref()
-            .storage::<Messages>()
+            .storage::<fuel_core_storage::tables::Messages>()
             .get(expected_msg.id())
             .unwrap()
             .unwrap()
