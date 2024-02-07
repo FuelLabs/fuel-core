@@ -1,16 +1,13 @@
-use super::utils::MerkleTreeDbUtils;
 use crate::database::Database;
 use fuel_core_chain_config::ContractStateConfig;
 use fuel_core_storage::{
     tables::{
-        merkle::{
-            ContractsStateMerkleData,
-            ContractsStateMerkleMetadata,
-        },
+        merkle::ContractsStateMerkleMetadata,
         ContractsState,
     },
     ContractsStateKey,
     Error as StorageError,
+    StorageAsRef,
     StorageBatchMutate,
 };
 use fuel_core_types::fuel_types::{
@@ -57,59 +54,60 @@ impl Database {
     /// On any error while accessing the database.
     pub fn update_contract_states(
         &mut self,
-        slots: impl IntoIterator<Item = ContractStateConfig>,
+        balances: impl IntoIterator<Item = ContractStateConfig>,
     ) -> Result<(), StorageError> {
-        let slots = slots.into_iter().collect_vec();
-
-        self.db_insert_contract_states(&slots)?;
-
-        self.update_state_merkle_tree(slots)?;
-
-        Ok(())
-    }
-
-    fn update_state_merkle_tree(
-        &mut self,
-        slots: Vec<ContractStateConfig>,
-    ) -> Result<(), StorageError> {
-        slots
+        balances
             .into_iter()
             .group_by(|s| s.contract_id)
             .into_iter()
-            .map(|(contract_id, slots)| (contract_id, slots.map(|s| (s.key, s.value))))
-            .try_for_each(|(contract_id, slots)| {
-                let contract_id = ContractId::from(*contract_id);
-                MerkleTreeDbUtils::<
-                    ContractsStateMerkleMetadata,
-                    ContractsStateMerkleData,
-                >::update(self.as_mut(), &contract_id, slots)
+            .try_for_each(|(contract_id, entries)| {
+                if self.state_present(&contract_id)? {
+                    self.db_insert_contract_states(&entries.into_iter().collect_vec())
+                } else {
+                    self.init_contract_state(
+                        &contract_id,
+                        entries.into_iter().map(|e| (e.key, e.value)),
+                    )
+                }
             })?;
+
         Ok(())
     }
 
     fn db_insert_contract_states(
         &mut self,
-        slots: &[ContractStateConfig],
+        balances: &[ContractStateConfig],
     ) -> Result<(), StorageError> {
-        let state_entries = slots
+        let balance_entries = balances
             .iter()
-            .map(|state_entry| {
-                let contract_id = ContractId::from(*state_entry.contract_id);
-
-                let db_key = ContractsStateKey::new(&contract_id, &state_entry.key);
-                (db_key, state_entry.value)
+            .map(|balance_entry| {
+                let db_key = ContractsStateKey::new(
+                    &balance_entry.contract_id,
+                    &balance_entry.key,
+                );
+                (db_key, balance_entry.value)
             })
             .collect_vec();
 
-        let state_entries_iter = state_entries.iter().map(|(key, value)| (key, value));
+        let balance_entries_iter =
+            balance_entries.iter().map(|(key, value)| (key, value));
 
         // TODO dont collect
+        // add test with different contract ids
+
         <Database as StorageBatchMutate<ContractsState>>::insert_batch(
             self,
-            state_entries_iter,
+            balance_entries_iter,
         )?;
 
         Ok(())
+    }
+
+    fn state_present(&mut self, key: &ContractId) -> Result<bool, StorageError> {
+        Ok(self
+            .storage::<ContractsStateMerkleMetadata>()
+            .get(key)?
+            .is_some())
     }
 }
 
@@ -124,6 +122,7 @@ mod tests {
 
     use super::*;
     use fuel_core_storage::{
+        tables::merkle::ContractsStateMerkleMetadata,
         StorageAsMut,
         StorageMutate,
     };
@@ -241,7 +240,7 @@ mod tests {
     #[test]
     fn root_returns_empty_root_for_invalid_contract() {
         let invalid_contract_id = ContractId::from([1u8; 32]);
-        let mut database = Database::<OnChain>::default();
+        let database = Database::<OnChain>::default();
         let empty_root = sparse::in_memory::MerkleTree::new().root();
         let root = database
             .storage::<ContractsState>()
@@ -450,6 +449,10 @@ mod tests {
     }
 
     mod update_contract_state {
+        use fuel_core_storage::codec::{
+            postcard::Postcard,
+            Encode,
+        };
         use fuel_core_types::fuel_merkle::sparse::{
             self,
             MerkleTreeKey,
@@ -508,8 +511,12 @@ mod tests {
         }
 
         fn merkalize(state: &[ContractStateConfig]) -> [u8; 32] {
-            let state = state.iter().map(|s| (MerkleTreeKey::new(s.key), s.value));
-            sparse::in_memory::MerkleTree::nodes_from_set(state.into_iter()).0
+            let state = state.iter().map(|s| {
+                let ckey = ContractsStateKey::new(&s.contract_id, &s.key);
+                let value = Postcard::encode(&s.value).into_owned();
+                (MerkleTreeKey::new(ckey), value)
+            });
+            sparse::in_memory::MerkleTree::root_from_set(state.into_iter())
         }
 
         #[test]

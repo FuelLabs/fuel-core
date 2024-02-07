@@ -250,7 +250,14 @@ mod tests {
 
     use std::iter::repeat_with;
 
-    use fuel_core::database::block::FuelBlockSecondaryKeyBlockHeights;
+    use fuel_core::database::{
+        database_description::{
+            on_chain::OnChain,
+            DatabaseDescription,
+            DatabaseMetadata,
+        },
+        metadata::MetadataTable,
+    };
     use fuel_core_chain_config::{
         CoinConfig,
         ContractBalanceConfig,
@@ -274,10 +281,7 @@ mod tests {
         StorageAsMut,
     };
     use fuel_core_types::{
-        blockchain::primitives::{
-            BlockId,
-            DaBlockHeight,
-        },
+        blockchain::primitives::DaBlockHeight,
         entities::{
             coins::coin::{
                 CompressedCoin,
@@ -361,11 +365,17 @@ mod tests {
 
         fn given_block_height(&mut self) -> BlockHeight {
             let height = BlockHeight::from(10);
-            let block_id = BlockId::from([0; 32]);
             self.db
-                .storage_as_mut::<FuelBlockSecondaryKeyBlockHeights>()
-                .insert(&block_id, &height)
+                .storage::<MetadataTable<OnChain>>()
+                .insert(
+                    &(),
+                    &DatabaseMetadata::V1 {
+                        version: OnChain::version(),
+                        height: height.clone(),
+                    },
+                )
                 .unwrap();
+
             height
         }
 

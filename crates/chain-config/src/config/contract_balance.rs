@@ -1,3 +1,4 @@
+use fuel_core_storage::ContractsAssetKey;
 use fuel_core_types::fuel_types::{
     AssetId,
     ContractId,
@@ -15,6 +16,12 @@ pub struct ContractBalanceConfig {
     pub contract_id: ContractId,
     pub asset_id: AssetId,
     pub amount: u64,
+}
+
+impl ContractBalanceConfig {
+    pub fn contract_asset_key(&self) -> ContractsAssetKey {
+        (&self.contract_id, &self.asset_id).into()
+    }
 }
 
 #[cfg(all(test, feature = "random"))]

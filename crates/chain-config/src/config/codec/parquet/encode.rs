@@ -104,7 +104,7 @@ pub trait Encode<T> {
 pub struct PostcardEncode;
 impl<T> Encode<T> for PostcardEncode
 where
-    T: serde::Serialize,
+    T: NonSkippingSerialize,
 {
     fn encode(data: &T) -> anyhow::Result<Vec<u8>> {
         Ok(postcard::to_stdvec(data)?)

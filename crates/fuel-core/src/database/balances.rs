@@ -1,16 +1,13 @@
-use super::utils::MerkleTreeDbUtils;
 use crate::database::Database;
 use fuel_core_chain_config::ContractBalanceConfig;
 use fuel_core_storage::{
     tables::{
-        merkle::{
-            ContractsAssetsMerkleData,
-            ContractsAssetsMerkleMetadata,
-        },
+        merkle::ContractsAssetsMerkleMetadata,
         ContractsAssets,
     },
     ContractsAssetKey,
     Error as StorageError,
+    StorageAsRef,
     StorageBatchMutate,
 };
 use fuel_core_types::{
@@ -49,36 +46,21 @@ impl Database {
         &mut self,
         balances: impl IntoIterator<Item = ContractBalanceConfig>,
     ) -> Result<(), StorageError> {
-        let balances = balances.into_iter().collect_vec();
-
-        self.db_insert_contract_balances(&balances)?;
-
-        self.update_balance_merkle_tree(balances)?;
-
-        Ok(())
-    }
-
-    fn update_balance_merkle_tree(
-        &mut self,
-        balances: Vec<ContractBalanceConfig>,
-    ) -> Result<(), StorageError> {
         balances
             .into_iter()
             .group_by(|s| s.contract_id)
             .into_iter()
-            .map(|(contract_id, entries)| {
-                (
-                    contract_id,
-                    entries.map(|e| (e.asset_id, e.amount.to_be_bytes())),
-                )
-            })
             .try_for_each(|(contract_id, entries)| {
-                let contract_id = ContractId::from(*contract_id);
-                MerkleTreeDbUtils::<
-                    ContractsAssetsMerkleMetadata,
-                    ContractsAssetsMerkleData,
-                >::update(self, &contract_id, entries)
+                if self.assets_present(&contract_id)? {
+                    self.db_insert_contract_balances(&entries.into_iter().collect_vec())
+                } else {
+                    self.init_contract_balances(
+                        &contract_id,
+                        entries.into_iter().map(|e| (e.asset_id, e.amount)),
+                    )
+                }
             })?;
+
         Ok(())
     }
 
@@ -89,10 +71,10 @@ impl Database {
         let balance_entries = balances
             .iter()
             .map(|balance_entry| {
-                let contract_id = ContractId::from(*balance_entry.contract_id);
-
-                let db_key =
-                    ContractsAssetKey::new(&contract_id, &balance_entry.asset_id);
+                let db_key = ContractsAssetKey::new(
+                    &balance_entry.contract_id,
+                    &balance_entry.asset_id,
+                );
                 (db_key, balance_entry.amount)
             })
             .collect_vec();
@@ -101,12 +83,21 @@ impl Database {
             balance_entries.iter().map(|(key, value)| (key, value));
 
         // TODO dont collect
+        // add test with different contract ids
+
         <Database as StorageBatchMutate<ContractsAssets>>::insert_batch(
             self,
             balance_entries_iter,
         )?;
 
         Ok(())
+    }
+
+    fn assets_present(&mut self, key: &ContractId) -> Result<bool, StorageError> {
+        Ok(self
+            .storage::<ContractsAssetsMerkleMetadata>()
+            .get(key)?
+            .is_some())
     }
 }
 
@@ -119,7 +110,10 @@ mod tests {
 
     use super::*;
     use crate::database::database_description::on_chain::OnChain;
-    use fuel_core_storage::StorageAsMut;
+    use fuel_core_storage::{
+        tables::merkle::ContractsAssetsMerkleMetadata,
+        StorageAsMut,
+    };
     use fuel_core_types::fuel_types::AssetId;
     use rand::{
         rngs::StdRng,
@@ -294,10 +288,11 @@ mod tests {
         }
 
         fn merkalize(balance: &[ContractBalanceConfig]) -> [u8; 32] {
-            let balance = balance
-                .iter()
-                .map(|b| (MerkleTreeKey::new(b.asset_id), b.amount.to_be_bytes()));
-            sparse::in_memory::MerkleTree::nodes_from_set(balance.into_iter()).0
+            let balance = balance.iter().map(|b| {
+                let ckey = ContractsAssetKey::new(&b.contract_id, &b.asset_id);
+                (MerkleTreeKey::new(ckey), b.amount.to_be_bytes())
+            });
+            sparse::in_memory::MerkleTree::root_from_set(balance.into_iter())
         }
 
         #[test]
