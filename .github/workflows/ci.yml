@@ -60,14 +60,14 @@ jobs:
       - name: Install Prettier and TOML Plugin
         run: |
           # prettier has issues with global installation and plugin discovery. The temporary `package.json` createrd by `npm init -y` is a workaround.
-          npm init -y
+          npm init -y > /dev/null 2>&1
           npm install prettier prettier-plugin-toml
       - name: Check format of Cargo.toml files
         run: |
           if ! npx prettier --check "**/Cargo.toml"; then
             npx prettier --write "**/Cargo.toml" > /dev/null 2>&1
             echo "Changes required:"
-            git --no-pager diff --name-only
+            git --no-pager diff
             exit 1
           fi
       - uses: FuelLabs/.github/.github/actions/slack-notify-template@master
