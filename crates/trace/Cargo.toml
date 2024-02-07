@@ -5,12 +5,12 @@ description = "A Tokio tracing initializer for testing"
 edition = { workspace = true }
 homepage = { workspace = true }
 keywords = [
-    "blockchain",
-    "cryptocurrencies",
-    "fuel-client",
-    "fuel-core",
-    "fuel-tracing",
-    "tracing",
+  "blockchain",
+  "cryptocurrencies",
+  "fuel-client",
+  "fuel-core",
+  "fuel-tracing",
+  "tracing",
 ]
 license = { workspace = true }
 name = "fuel-core-trace"

@@ -5,11 +5,11 @@ description = "Storage types and primitives used by Fuel core protocol."
 edition = { workspace = true }
 homepage = { workspace = true }
 keywords = [
-    "blockchain",
-    "cryptocurrencies",
-    "fuel-client",
-    "fuel-core",
-    "fuel-storage",
+  "blockchain",
+  "cryptocurrencies",
+  "fuel-client",
+  "fuel-core",
+  "fuel-storage",
 ]
 license = { workspace = true }
 name = "fuel-core-storage"
@@ -20,7 +20,9 @@ version = { workspace = true }
 anyhow = { workspace = true }
 derive_more = { workspace = true }
 enum-iterator = { workspace = true }
-fuel-core-types = { workspace = true, default-features = false, features = ["serde"] }
+fuel-core-types = { workspace = true, default-features = false, features = [
+  "serde",
+] }
 fuel-vm-private = { workspace = true, default-features = false }
 impl-tools = "0.10"
 itertools = { workspace = true }
@@ -35,7 +37,11 @@ strum_macros = { workspace = true }
 
 [dev-dependencies]
 fuel-core-storage = { path = ".", features = ["test-helpers"] }
-fuel-core-types = { workspace = true, default-features = false, features = ["serde", "random", "test-helpers"] }
+fuel-core-types = { workspace = true, default-features = false, features = [
+  "serde",
+  "random",
+  "test-helpers",
+] }
 
 [features]
 test-helpers = ["dep:mockall", "dep:rand"]

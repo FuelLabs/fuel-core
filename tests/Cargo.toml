@@ -27,7 +27,9 @@ fuel-core = { path = "../crates/fuel-core", default-features = false, features =
 fuel-core-benches = { path = "../benches" }
 fuel-core-client = { path = "../crates/client", features = ["test-helpers"] }
 fuel-core-executor = { workspace = true }
-fuel-core-p2p = { path = "../crates/services/p2p", features = ["test-helpers"], optional = true }
+fuel-core-p2p = { path = "../crates/services/p2p", features = [
+  "test-helpers",
+], optional = true }
 fuel-core-poa = { path = "../crates/services/consensus_module/poa" }
 fuel-core-relayer = { path = "../crates/services/relayer", features = [
   "test-helpers",
