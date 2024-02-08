@@ -113,15 +113,13 @@ pub async fn execute_genesis_block(
         consensus,
     };
 
-    // TODO transaction?
-    let database_transaction = Transactional::transaction(original_database);
+    let mut database_transaction = Transactional::transaction(original_database);
+    cleanup_genesis_progress(database_transaction.as_mut())?;
+
     let result = UncommittedImportResult::new(
         ImportResult::new_from_local(block, vec![]),
         database_transaction,
     );
-
-    // TODO when's the right time to cleanup?
-    cleanup_genesis_progress(original_database)?;
 
     Ok(result)
 }
@@ -144,10 +142,7 @@ async fn import_chain_state(workers: GenesisWorkers) -> anyhow::Result<()> {
     Ok(())
 }
 
-fn cleanup_genesis_progress(database: &Database) -> anyhow::Result<()> {
-    let mut database_transaction = Transactional::transaction(database);
-    let database = database_transaction.as_mut();
-
+fn cleanup_genesis_progress(database: &mut Database) -> anyhow::Result<()> {
     database.delete_all(GenesisMetadata::column())?;
     database.delete_all(GenesisCoinRoots::column())?;
     database.delete_all(GenesisMessageRoots::column())?;
@@ -155,8 +150,6 @@ fn cleanup_genesis_progress(database: &Database) -> anyhow::Result<()> {
     database.delete_all(GenesisContractStateRoots::column())?;
     database.delete_all(GenesisContractRoots::column())?;
     database.delete_all(GenesisContractIds::column())?;
-
-    database_transaction.commit()?;
 
     Ok(())
 }
