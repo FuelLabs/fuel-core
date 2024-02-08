@@ -95,7 +95,6 @@ pub mod statistic;
 pub mod storage;
 pub mod transaction;
 pub mod transactions;
-pub mod utils;
 
 #[derive(Clone, Debug)]
 pub struct Database<Description = OnChain>

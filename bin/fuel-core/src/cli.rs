@@ -308,24 +308,6 @@ mod tests {
         }
 
         #[test]
-        #[ignore = "why doesnt this work?"]
-        fn chain_config_dir_is_optional() {
-            // given
-            let line = "./core snapshot --output-directory ./some/path everything";
-
-            // when
-            let command = parse_cli(line, "")
-                .expect("should parse the snapshot command")
-                .command;
-
-            // then
-            let (chain_config, _, _) =
-                extract_everything_command(command).expect("Can extract command");
-            assert!(chain_config.is_none());
-        }
-
-        #[test]
-        #[ignore = "why doesnt this work?"]
         fn encoding_is_optional() {
             // given
             let line = "./core snapshot --output-directory ./some/path everything";
@@ -341,9 +323,26 @@ mod tests {
         }
 
         #[test]
+        fn chain_config_dir_is_optional() {
+            // given
+            let line =
+                "./core snapshot --output-directory ./some/path everything encoding json";
+
+            // when
+            let command = parse_cli(line, "")
+                .expect("should parse the snapshot command")
+                .command;
+
+            // then
+            let (chain_config, _, _) =
+                extract_everything_command(command).expect("Can extract command");
+            assert!(chain_config.is_none());
+        }
+
+        #[test]
         fn can_choose_json_encoding() {
             // given
-            let line = "./core snapshot --output-directory dir everything  encoding json";
+            let line = "./core snapshot --output-directory dir everything encoding json";
 
             // when
             let command = parse_cli(line, "")
