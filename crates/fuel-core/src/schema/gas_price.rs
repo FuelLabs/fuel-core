@@ -78,6 +78,7 @@ impl EstimateGasPriceQuery {
         block_horizon: Option<U32>,
     ) -> async_graphql::Result<EstimateGasPrice> {
         // TODO: implement dynamic calculation based on block horizon
+        //   https://github.com/FuelLabs/fuel-core/issues/1653
         let _ = block_horizon;
 
         let config = ctx.data_unchecked::<GraphQLConfig>();
