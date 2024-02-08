@@ -518,6 +518,11 @@ type InputMessage {
 }
 
 
+type LatestGasPrice {
+	gasPrice: U64!
+	blockHeight: U32!
+}
+
 type LightOperation {
 	base: U64!
 	unitsPerGas: U64!
@@ -806,6 +811,7 @@ type Query {
 	contractBalance(contract: ContractId!, asset: AssetId!): ContractBalance!
 	contractBalances(filter: ContractBalanceFilterInput!, first: Int, after: String, last: Int, before: String): ContractBalanceConnection!
 	nodeInfo: NodeInfo!
+	latestGasPrice: LatestGasPrice!
 	message(nonce: Nonce!): Message
 	messages(owner: Address, first: Int, after: String, last: Int, before: String): MessageConnection!
 	messageProof(transactionId: TransactionId!, nonce: Nonce!, commitBlockId: BlockId, commitBlockHeight: U32): MessageProof
