@@ -83,11 +83,8 @@ impl Database {
         let balance_entries_iter =
             balance_entries.iter().map(|(key, value)| (key, value));
 
-        // TODO dont collect
-        // add test with different contract ids
-
-        <Database as StorageBatchMutate<ContractsAssets>>::insert_batch(
-            self,
+        <_ as StorageBatchMutate<ContractsAssets>>::insert_batch(
+            &mut self.data,
             balance_entries_iter,
         )?;
 

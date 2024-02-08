@@ -75,17 +75,17 @@ pub enum Column {
 
     /// Table for genesis state import progress tracking.
     GenesisMetadata = 22,
-    /// TODO
+    /// Table for coin roots during genesis state import.
     GenesisCoinRoots = 23,
-    /// TODO
+    /// Table for message roots during genesis state import.
     GenesisMessageRoots = 24,
-    /// TODO
+    /// Table for contract state roots during genesis state import.
     GenesisContractStateRoots = 25,
-    /// TODO
+    /// Table for contract balance roots during genesis state import.
     GenesisContractBalanceRoots = 26,
-    /// TODO
+    /// Table for contract roots during genesis state import.
     GenesisContractRoots = 27,
-    /// TODO
+    /// Table for contract ids during genesis state import.
     GenesisContractIds = 28,
 }
 

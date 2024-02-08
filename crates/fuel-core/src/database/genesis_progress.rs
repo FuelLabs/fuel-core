@@ -200,7 +200,6 @@ impl Database {
         Ok(())
     }
 
-    // TODO fix iter all
     pub(crate) fn genesis_roots<M>(
         &self,
     ) -> Result<impl Iterator<Item = (MerkleTreeKey, [u8; 32])>>

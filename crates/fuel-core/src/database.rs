@@ -86,7 +86,7 @@ pub mod block;
 pub mod coin;
 pub mod contracts;
 pub mod database_description;
-pub mod genesis_progress; // TODO genesis
+pub mod genesis_progress;
 pub mod message;
 pub mod metadata;
 pub mod sealed_block;
