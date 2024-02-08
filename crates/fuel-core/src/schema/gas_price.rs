@@ -1,4 +1,7 @@
-use super::scalars::U64;
+use super::scalars::{
+    U32,
+    U64,
+};
 use crate::{
     fuel_core_graphql_api::{
         database::ReadView,
@@ -14,7 +17,7 @@ use fuel_core_types::blockchain::block::Block;
 
 pub struct LatestGasPrice {
     pub gas_price: U64,
-    pub block_height: U64,
+    pub block_height: U32,
 }
 
 #[Object]
@@ -23,7 +26,7 @@ impl LatestGasPrice {
         self.gas_price
     }
 
-    async fn block_height(&self) -> U64 {
+    async fn block_height(&self) -> U32 {
         self.block_height
     }
 }
@@ -41,7 +44,7 @@ impl LatestGasPriceQuery {
 
         let query: &ReadView = ctx.data_unchecked();
         let latest_block: Block<_> = query.latest_block()?;
-        let block_height: u64 = u32::from(*latest_block.header().height()).into();
+        let block_height = u32::from(*latest_block.header().height());
 
         Ok(LatestGasPrice {
             gas_price: config.min_gas_price.into(),

@@ -2,7 +2,7 @@ use crate::client::schema;
 
 pub struct LatestGasPrice {
     pub gas_price: u64,
-    pub block_height: u64,
+    pub block_height: u32,
 }
 
 // GraphQL Translation

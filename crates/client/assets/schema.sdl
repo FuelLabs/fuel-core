@@ -520,7 +520,7 @@ type InputMessage {
 
 type LatestGasPrice {
 	gasPrice: U64!
-	blockHeight: U64!
+	blockHeight: U32!
 }
 
 type LightOperation {
