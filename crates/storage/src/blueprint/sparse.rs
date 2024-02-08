@@ -306,7 +306,7 @@ where
         if let Some((key, _)) = set.peek() {
             primary_key = KeyConverter::primary_key(*key);
         } else {
-            return Ok(());
+            return Ok(())
         }
 
         let mut storage = StructuredStorage::new(storage);
@@ -316,7 +316,7 @@ where
                 "The {} is already initialized",
                 M::column().name()
             )
-            .into());
+            .into())
         }
 
         let encoded_set = set
@@ -372,7 +372,7 @@ where
         if let Some((key, _)) = set.peek() {
             primary_key = KeyConverter::primary_key(*key);
         } else {
-            return Ok(());
+            return Ok(())
         }
 
         let mut storage = StructuredStorage::new(storage);
@@ -429,7 +429,7 @@ where
         if let Some(key) = set.peek() {
             primary_key = KeyConverter::primary_key(*key);
         } else {
-            return Ok(());
+            return Ok(())
         }
 
         let mut storage = StructuredStorage::new(storage);
