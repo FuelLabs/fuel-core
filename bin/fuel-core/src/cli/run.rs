@@ -368,7 +368,7 @@ impl Command {
 }
 
 pub async fn exec(command: Command) -> anyhow::Result<()> {
-    if command.db_prune {
+    if command.db_prune && command.database_path.exists() {
         tokio::fs::remove_dir_all(&command.database_path).await?
     }
 
