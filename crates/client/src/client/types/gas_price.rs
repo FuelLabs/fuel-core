@@ -14,3 +14,15 @@ impl From<schema::gas_price::LatestGasPrice> for LatestGasPrice {
         }
     }
 }
+
+pub struct EstimateGasPrice {
+    pub gas_price: u64,
+}
+
+impl From<schema::gas_price::EstimateGasPrice> for EstimateGasPrice {
+    fn from(value: schema::gas_price::EstimateGasPrice) -> Self {
+        Self {
+            gas_price: value.gas_price.into(),
+        }
+    }
+}

@@ -46,6 +46,7 @@ pub struct Query(
     contract::ContractBalanceQuery,
     node_info::NodeQuery,
     gas_price::LatestGasPriceQuery,
+    gas_price::EstimateGasPriceQuery,
     message::MessageQuery,
 );
 
