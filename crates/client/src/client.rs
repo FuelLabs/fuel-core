@@ -6,12 +6,14 @@ use crate::client::{
             SpendQueryElementInput,
         },
         contract::ContractBalanceQueryArgs,
+        gas_price::EstimateGasPrice,
         message::MessageStatusArgs,
         tx::DryRunArg,
         Tai64Timestamp,
         TransactionId,
     },
     types::{
+        gas_price::LatestGasPrice,
         message::MessageStatus,
         primitives::{
             Address,
@@ -346,6 +348,19 @@ impl FuelClient {
     pub async fn node_info(&self) -> io::Result<types::NodeInfo> {
         let query = schema::node_info::QueryNodeInfo::build(());
         self.query(query).await.map(|r| r.node_info.into())
+    }
+
+    pub async fn latest_gas_price(&self) -> io::Result<LatestGasPrice> {
+        let query = schema::gas_price::QueryLatestGasPrice::build(());
+        self.query(query).await.map(|r| r.latest_gas_price.into())
+    }
+
+    pub async fn estimate_gas_price(
+        &self,
+        block_horizon: u32,
+    ) -> io::Result<EstimateGasPrice> {
+        let query = schema::gas_price::QueryEstimateGasPrice::build(block_horizon.into());
+        self.query(query).await.map(|r| r.estimate_gas_price)
     }
 
     pub async fn connected_peers_info(&self) -> io::Result<Vec<PeerInfo>> {

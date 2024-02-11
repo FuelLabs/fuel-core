@@ -33,6 +33,8 @@ pub mod coins;
 pub mod contract;
 pub mod message;
 pub mod node_info;
+
+pub mod gas_price;
 pub mod primitives;
 pub mod tx;
 
