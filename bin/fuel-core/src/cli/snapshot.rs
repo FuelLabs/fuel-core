@@ -9,7 +9,11 @@ use fuel_core::{
         ChainConfig,
         ChainStateDb,
     },
-    database::Database,
+    combined_database::CombinedDatabase,
+    database::{
+        database_description::on_chain::OnChain,
+        Database,
+    },
     types::fuel_types::ContractId,
 };
 use fuel_core_chain_config::{
@@ -236,11 +240,11 @@ fn load_chain_config(
     Ok(chain_config)
 }
 
-fn open_db(path: &Path) -> anyhow::Result<Database> {
-    let data_source = fuel_core::state::rocks_db::RocksDb::default_open(path, None)
+fn open_db(path: &Path) -> anyhow::Result<Database<OnChain>> {
+    let db = CombinedDatabase::open(path, 10 * 1024 * 1024)
         .map_err(Into::<anyhow::Error>::into)
         .context(format!("failed to open database at path {path:?}",))?;
-    Ok(Database::new(std::sync::Arc::new(data_source)))
+    Ok(db.on_chain().clone())
 }
 
 #[cfg(test)]
