@@ -8,6 +8,34 @@ use graph::{
 };
 
 #[derive(Clone, Debug, Default)]
+pub struct TriggerFilter {
+    pub(crate) block_filter: FuelBlockFilter,
+}
+
+impl bc::TriggerFilter<Chain> for TriggerFilter {
+    fn extend_with_template(
+        &mut self,
+        _data_source: impl Iterator<Item = <Chain as bc::Blockchain>::DataSourceTemplate>,
+    ) {
+    }
+
+    fn extend<'a>(&mut self, data_sources: impl Iterator<Item = &'a DataSource> + Clone) {
+        let TriggerFilter { block_filter } = self;
+
+        block_filter.extend(FuelBlockFilter::from_data_sources(data_sources.clone()));
+    }
+
+    fn node_capabilities(&self) -> bc::EmptyNodeCapabilities<Chain> {
+        bc::EmptyNodeCapabilities::default()
+    }
+
+    fn to_firehose_filter(self) -> Vec<prost_types::Any> {
+        todo!()
+    }
+}
+
+
+#[derive(Clone, Debug, Default)]
 pub(crate) struct FuelBlockFilter {
     pub trigger_every_block: bool,
 }
@@ -23,32 +51,5 @@ impl FuelBlockFilter {
 
     pub fn extend(&mut self, other: FuelBlockFilter) {
         self.trigger_every_block = self.trigger_every_block || other.trigger_every_block;
-    }
-}
-
-#[derive(Clone, Debug, Default)]
-pub struct TriggerFilter {
-    pub(crate) block_filter: FuelBlockFilter,
-}
-
-impl bc::TriggerFilter<Chain> for TriggerFilter {
-    fn extend<'a>(&mut self, data_sources: impl Iterator<Item = &'a DataSource> + Clone) {
-        let TriggerFilter { block_filter } = self;
-
-        block_filter.extend(FuelBlockFilter::from_data_sources(data_sources.clone()));
-    }
-
-    fn node_capabilities(&self) -> bc::EmptyNodeCapabilities<Chain> {
-        bc::EmptyNodeCapabilities::default()
-    }
-
-    fn extend_with_template(
-        &mut self,
-        _data_source: impl Iterator<Item = <Chain as bc::Blockchain>::DataSourceTemplate>,
-    ) {
-    }
-
-    fn to_firehose_filter(self) -> Vec<prost_types::Any> {
-        todo!()
     }
 }

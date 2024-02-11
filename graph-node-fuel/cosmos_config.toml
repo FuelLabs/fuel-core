@@ -1,0 +1,19 @@
+[deployment]
+[[deployment.rule]]
+shard = "primary"
+indexers = [ "index_node_cosmos_1" ]
+
+[store]
+[store.primary]
+connection= "postgresql://salka1988:arst@localhost:5432/graph-node"
+pool_size = 10
+
+[chains]
+ingestor = "block_ingestor_node"
+
+[chains.localnet]
+shard = "primary"
+protocol = "cosmos"
+provider = [
+    { label = "localnet", details = { type = "firehose", url = "http://0.0.0.0:9030/" }},
+]

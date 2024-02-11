@@ -406,6 +406,7 @@ pub enum BlockchainKind {
     /// Cosmos chains
     Cosmos,
 
+    /// Fuel chains
     Fuel,
 
     Substreams,

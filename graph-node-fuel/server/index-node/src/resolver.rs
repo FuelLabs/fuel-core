@@ -717,6 +717,7 @@ impl<S: Store> IndexNodeResolver<S> {
         try_resolve_for_chain!(graph_chain_cosmos::Chain);
         try_resolve_for_chain!(graph_chain_near::Chain);
         try_resolve_for_chain!(graph_chain_starknet::Chain);
+        try_resolve_for_chain!(graph_chain_fuel::Chain);
 
         // If you're adding support for a new chain and this `match` clause just
         // gave you a compiler error, then this message is for you! You need to

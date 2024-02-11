@@ -639,6 +639,7 @@ async fn main() {
             version_switching_mode,
             Arc::new(subgraph_settings),
         ));
+
         graph::spawn(
             subgraph_registrar
                 .start()

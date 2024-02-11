@@ -58,7 +58,7 @@ provider = [
   { label = "ropsten-0", url = "http://rpc.ropsten.io", transport = "rpc", features = ["archive", "traces"] }
 ]
 
-[chains.goerli]
+  [chains.goerli]
 shard = "primary"
 provider = [
   { label = "goerli-0", url = "http://rpc.goerli.io", transport = "ipc", features = ["archive"] }

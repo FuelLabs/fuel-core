@@ -268,7 +268,7 @@ impl DeploymentStore {
             .logger
             .cheap_clone()
             .unwrap_or_else(|| self.logger.cheap_clone());
-        layout.query(&logger, conn, query)
+              layout.query(&logger, conn, query)
     }
 
     fn check_interface_entity_uniqueness(
@@ -1381,7 +1381,7 @@ impl DeploymentStore {
         &self,
         id: DeploymentHash,
     ) -> Result<DeploymentState, StoreError> {
-        self.with_conn(|conn, _| deployment::state(conn, id).map_err(|e| e.into()))
+            self.with_conn(|conn, _| deployment::state(conn, id).map_err(|e| e.into()))
             .await
     }
 

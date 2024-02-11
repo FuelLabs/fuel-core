@@ -664,9 +664,11 @@ pub fn state(conn: &PgConnection, id: DeploymentHash) -> Result<DeploymentState,
             latest_block_hash,
             earliest_block_number,
         )) => {
+
             let reorg_count = convert_to_u32(Some(reorg_count), "reorg_count", id.as_str())?;
             let max_reorg_depth =
                 convert_to_u32(Some(max_reorg_depth), "max_reorg_depth", id.as_str())?;
+
             let latest_block = crate::detail::block(
                 id.as_str(),
                 "latest_block",

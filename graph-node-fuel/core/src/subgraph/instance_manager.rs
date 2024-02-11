@@ -135,7 +135,7 @@ impl<S: SubgraphStore> SubgraphInstanceManagerTrait for SubgraphInstanceManager<
                 }
                 BlockchainKind::Fuel => {
                     let runner = instance_manager
-                        .build_subgraph_runner::<graph_chain_ethereum::Chain>(
+                        .build_subgraph_runner::<graph_chain_fuel::Chain>(
                             logger.clone(),
                             self.env_vars.cheap_clone(),
                             loc.clone(),

@@ -1,21 +1,51 @@
+#[general]
+#query = "fuel"
+
 [deployment]
 [[deployment.rule]]
-shard = "primary"
-indexers = [ "default" ]
+shards = "primary"
+indexers = [ "fuel-node-indexer" ]
 
 [store]
 [store.primary]
 connection="postgresql://salka1988:arst@localhost:5432/graph-node"
-pool_size = 3
+pool_size = 10
+
+#[store.shard_a]
+#connection = "postgresql://salka1988:arst@localhost:5432/shard-a"
+#pool_size = 10
+
+#[deployment]
+#[[deployment.rule]]
+#shards = [ "primary", "shard_a" ]
+#shards = "primary"
+#indexers = [ "default" ]
 
 [chains]
+#ingestor = "block_ingestor_node"
 ingestor = "block_ingestor_node"
-#ingestor = "default"
 
 [chains.fuel]
 shard = "primary"
 protocol = "fuel"
 provider = [
-    { label = "fuel-firehose", details = { type = "firehose", url = "http://localhost:10015" }},
-    { label = "fuel-substream", details = { type = "substreams", url = "http://localhost:10015", features = [] }},
+    { label = "fuel", details = { type = "firehose", url = "http://localhost:10015" }},
 ]
+
+#ipfs
+#ipfs init & ipfs deamin
+
+#database
+# initdb -D .postgres -E UTF8 --locale=C && pg_ctl -D .postgres -l logfile start && createdb graph-node
+
+#fuel-firehose
+#./start
+
+#graph-node
+#cargo run --bin graph-node -- --config fuel_config.toml --ipfs http://127.0.0.1:5001 --node-id fuel-node-indexer --debug
+
+#graphql
+#./../../graph-tooling/packages/cli/bin/run codegen
+#./../../graph-tooling/packages/cli/bin/run build
+#./../../graph-tooling/packages/cli/bin/run create salka1988/sub  --node http://localhost:8020/
+#./../../graph-tooling/packages/cli/bin/run deploy -l v0.1.0  --node http://localhost:8020/ --ipfs http://localhost:5001 salka1988/sub

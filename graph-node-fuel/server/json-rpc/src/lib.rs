@@ -111,6 +111,7 @@ impl<R: SubgraphRegistrar> ServerState<R> {
         info!(&self.logger, "Received subgraph_deploy request"; "params" => format!("{:?}", params));
 
         let node_id = params.node_id.clone().unwrap_or(self.node_id.clone());
+
         let routes = subgraph_routes(&params.name, self.http_port, self.ws_port);
         match self
             .registrar

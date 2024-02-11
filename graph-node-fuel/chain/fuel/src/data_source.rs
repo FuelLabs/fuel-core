@@ -21,7 +21,6 @@ use graph::{
         Link,
         LinkResolver,
         Logger,
-        SubgraphManifestValidationError,
     },
     semver,
 };
@@ -32,12 +31,10 @@ use std::{
 
 use crate::{
     chain::Chain,
-    codec,
 };
 
-pub const FUEL_KIND: &str = "fuel";
+pub const FUEL_KIND: &str = "fuelnet";
 const BLOCK_HANDLER_KIND: &str = "block";
-const RECEIPT_HANDLER_KIND: &str = "receipt";
 
 /// Runtime representation of a data source.
 #[derive(Clone, Debug)]
@@ -78,14 +75,6 @@ impl DataSource {
         self.mapping.block_handlers.first()
     }
 
-    // fn handler_for_receipt(&self) -> Option<&ReceiptHandler> {
-    //     self.mapping.receipt_handlers.first()
-    // }
-}
-
-#[derive(Clone, Debug, Hash, Eq, PartialEq, Deserialize)]
-pub struct ReceiptHandler {
-    pub(crate) handler: String,
 }
 
 #[derive(Clone, Debug, Default, Hash, Eq, PartialEq, Deserialize)]
@@ -96,8 +85,6 @@ pub struct UnresolvedMapping {
     pub entities: Vec<String>,
     #[serde(default)]
     pub block_handlers: Vec<MappingBlockHandler>,
-    #[serde(default)]
-    pub receipt_handlers: Vec<ReceiptHandler>,
     pub file: Link,
 }
 
@@ -112,7 +99,6 @@ impl UnresolvedMapping {
             language,
             entities,
             block_handlers,
-            receipt_handlers,
             file: link,
         } = self;
 
@@ -264,13 +250,13 @@ pub struct TransactionHandler {
 }
 
 impl blockchain::DataSource<Chain> for DataSource {
-    fn from_template_info(info: DataSourceTemplateInfo<Chain>) -> Result<Self, Error> {
+    fn from_template_info(_info: DataSourceTemplateInfo<Chain>) -> Result<Self, Error> {
         Err(anyhow!("Fuel subgraphs do not support templates"))
     }
 
     fn from_stored_dynamic_data_source(
-        template: &DataSourceTemplate,
-        stored: StoredDynamicDataSource,
+        _template: &DataSourceTemplate,
+        _stored: StoredDynamicDataSource,
     ) -> Result<Self, Error> {
         todo!()
     }
@@ -316,15 +302,12 @@ impl blockchain::DataSource<Chain> for DataSource {
     }
 
     fn handler_kinds(&self) -> HashSet<&str> {
+        // Todo Add handlers if needed
         let mut kinds = HashSet::new();
 
         if self.handler_for_block().is_some() {
             kinds.insert(BLOCK_HANDLER_KIND);
         }
-
-        // if self.handler_for_receipt().is_some() {
-        //     kinds.insert(RECEIPT_HANDLER_KIND);
-        // }
 
         kinds
     }
@@ -381,6 +364,9 @@ impl blockchain::DataSource<Chain> for DataSource {
     }
 
     fn validate(&self) -> Vec<Error> {
+
+        // Todo: Add checks if needed
+
         let mut errors = Vec::new();
 
         if self.kind != FUEL_KIND {
@@ -391,15 +377,6 @@ impl blockchain::DataSource<Chain> for DataSource {
             ))
         }
 
-        // Validate that there is a `source` address if there are receipt handlers
-        let no_source_address = self.address().is_none();
-
-        // Validate not both address and partial addresses are empty.
-        if no_source_address {
-            errors.push(SubgraphManifestValidationError::SourceAddressRequired.into());
-        };
-
-        // Validate that there are no more than one of both block handlers and receipt handlers
         if self.mapping.block_handlers.len() > 1 {
             errors.push(anyhow!("data source has duplicated block handlers"));
         }
@@ -408,9 +385,3 @@ impl blockchain::DataSource<Chain> for DataSource {
     }
 }
 
-pub struct ReceiptWithOutcome {
-    // REVIEW: Do we want to actually also have those two below behind an `Arc` wrapper?
-    // pub outcome: codec::ExecutionOutcomeWithId,
-    // pub receipt: codec::Receipt,
-    pub block: Arc<codec::Block>,
-}

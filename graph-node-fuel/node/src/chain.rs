@@ -10,7 +10,7 @@ use graph::firehose::{FirehoseEndpoint, FirehoseNetworks, SubgraphLimit};
 use graph::ipfs_client::IpfsClient;
 use graph::prelude::{anyhow, tokio};
 use graph::prelude::{prost, MetricsRegistry};
-use graph::slog::{debug, error, info, o, Logger, warn};
+use graph::slog::{debug, error, info, o, Logger};
 use graph::url::Url;
 use graph::util::futures::retry;
 use graph::util::security::SafeDisplay;

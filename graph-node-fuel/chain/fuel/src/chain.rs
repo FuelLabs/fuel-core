@@ -37,7 +37,6 @@ use graph::{
         Logger,
         LoggerFactory,
         MetricsRegistry,
-        TryFutureExt,
     },
     schema::InputSchema,
     substreams::Clock,
@@ -71,8 +70,19 @@ use graph::{
     data::subgraph::UnifiedMappingApiVersion,
     firehose::FirehoseEndpoint,
 };
+use crate::trigger::FuelTrigger;
 
-pub struct FuelStreamBuilder {}
+pub struct Chain {
+    logger_factory: LoggerFactory,
+    name: String,
+    client: Arc<ChainClient<Self>>,
+    chain_store: Arc<dyn ChainStore>,
+    metrics_registry: Arc<MetricsRegistry>,
+    block_stream_builder: Arc<dyn BlockStreamBuilder<Self>>,
+}
+
+
+pub struct FuelStreamBuilder;
 
 pub struct FirehoseMapper {
     adapter: Arc<dyn TriggersAdapterTrait<Chain>>,
@@ -104,8 +114,8 @@ impl BlockStreamMapper<Chain> for FirehoseMapper {
         &self,
         _logger: &Logger,
         _clock: Clock,
-        cursor: FirehoseCursor,
-        message: Vec<u8>,
+        _cursor: FirehoseCursor,
+        _message: Vec<u8>,
     ) -> Result<BlockStreamEvent<Chain>, Error> {
         todo!()
     }
@@ -201,11 +211,6 @@ impl FirehoseMapperTrait<Chain> for FirehoseMapper {
 
 pub struct TriggersAdapter {}
 
-const FUEL_FILTER_MODULE_NAME: &str = "fuel_filter";
-const SUBSTREAMS_TRIGGER_FILTER_BYTES: &[u8; 510162] = include_bytes!(
-    "../../../substreams/substreams-trigger-filter/substreams-trigger-filter-v0.1.0.spkg"
-);
-
 // Todo Emir
 #[async_trait]
 impl BlockStreamBuilder<Chain> for FuelStreamBuilder {
@@ -270,24 +275,15 @@ impl BlockStreamBuilder<Chain> for FuelStreamBuilder {
         panic!("FuelNet does not support polling block stream")
     }
 }
-pub struct Chain {
-    logger_factory: LoggerFactory,
-    name: String,
-    client: Arc<ChainClient<Self>>,
-    chain_store: Arc<dyn ChainStore>,
-    metrics_registry: Arc<MetricsRegistry>,
-    block_stream_builder: Arc<dyn BlockStreamBuilder<Self>>,
-    prefer_substreams: bool,
-}
 
 impl std::fmt::Debug for Chain {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "chain: near")
+        write!(f, "chain: fuel")
     }
 }
 
 impl BlockchainBuilder<Chain> for BasicBlockchainBuilder {
-    fn build(self, config: &Arc<EnvVars>) -> Chain {
+    fn build(self, _config: &Arc<EnvVars>) -> Chain {
         Chain {
             logger_factory: self.logger_factory,
             name: self.name,
@@ -295,7 +291,6 @@ impl BlockchainBuilder<Chain> for BasicBlockchainBuilder {
             client: Arc::new(ChainClient::new_firehose(self.firehose_endpoints)),
             metrics_registry: self.metrics_registry,
             block_stream_builder: Arc::new(FuelStreamBuilder {}),
-            prefer_substreams: config.prefer_substreams_block_streams,
         }
     }
 }
@@ -341,31 +336,16 @@ impl Blockchain for Chain {
         filter: Arc<Self::TriggerFilter>,
         unified_api_version: UnifiedMappingApiVersion,
     ) -> Result<Box<dyn BlockStream<Self>>, Error> {
-        let adapter = self
-            .triggers_adapter(
-                &deployment,
-                &EmptyNodeCapabilities::default(),
+        self.block_stream_builder
+            .build_firehose(
+                self,
+                deployment,
+                store.firehose_cursor(),
+                start_blocks,
+                store.block_ptr(),
+                filter,
                 unified_api_version,
-            )
-            .unwrap_or_else(|_| panic!("no adapter for network {}", self.name));
-
-        let logger = self
-            .logger_factory
-            .subgraph_logger(&deployment)
-            .new(o!("component" => "FirehoseBlockStream"));
-
-        let firehose_mapper = Arc::new(FirehoseMapper { adapter, filter });
-
-        Ok(Box::new(FirehoseBlockStream::new(
-            deployment.hash,
-            self.chain_client(),
-            store.block_ptr(),
-            store.firehose_cursor(),
-            firehose_mapper,
-            start_blocks,
-            logger,
-            self.metrics_registry.clone(),
-        )))
+            ).await
     }
 
     fn chain_store(&self) -> Arc<dyn ChainStore> {
@@ -450,9 +430,24 @@ impl TriggersAdapterTrait<Chain> for TriggersAdapter {
         &self,
         logger: &Logger,
         block: codec::Block,
-        filter: &crate::adapter::TriggerFilter,
+        filter: &TriggerFilter,
     ) -> Result<BlockWithTriggers<Chain>, Error> {
-        todo!()
+
+        let shared_block = Arc::new(block.clone());
+
+        let TriggerFilter {
+            block_filter,
+        } = filter;
+
+        // Todo Add receipts, transactions or whatever
+
+        let mut trigger_data: Vec<_> = vec![];
+
+        if block_filter.trigger_every_block {
+            trigger_data.push(FuelTrigger::Block(shared_block.cheap_clone()));
+        }
+
+        Ok(BlockWithTriggers::new(block, trigger_data, logger))
     }
 
     /// Return `true` if the block with the given hash and number is on the

@@ -15,11 +15,13 @@ use std::{
     cmp::Ordering,
     sync::Arc,
 };
+use graph::runtime::{asc_new, AscHeap, AscPtr, HostExportError};
+use graph::runtime::gas::GasCounter;
+use graph_runtime_wasm::module::ToAscPtr;
 
 #[derive(Debug, Clone)]
 pub enum FuelTrigger {
     Block(Arc<codec::Block>),
-    // Receipt(Arc<ReceiptWithOutcome>),
 }
 
 impl FuelTrigger {
@@ -35,7 +37,7 @@ impl FuelTrigger {
         }
     }
 
-    fn error_context(&self) -> std::string::String {
+    fn error_context(&self) -> String {
         match self {
             FuelTrigger::Block(..) => {
                 format!("Block #{} ({})", self.block_number(), self.block_hash())
@@ -53,11 +55,22 @@ impl CheapClone for FuelTrigger {
     }
 }
 
+impl ToAscPtr for FuelTrigger {
+    fn to_asc_ptr<H: AscHeap>(
+        self,
+        heap: &mut H,
+        gas: &GasCounter,
+    ) -> Result<AscPtr<()>, HostExportError> {
+        Ok(match self {
+            FuelTrigger::Block(block) => asc_new(heap, block.as_ref(), gas)?.erase(),
+        })
+    }
+}
+
 impl TriggerData for FuelTrigger {
     fn error_context(&self) -> String {
         self.error_context()
     }
-
     fn address_match(&self) -> Option<&[u8]> {
         None
     }
