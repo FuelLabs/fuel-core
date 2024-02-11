@@ -165,6 +165,11 @@ where
         })
     }
 
+    #[cfg(feature = "rocksdb")]
+    pub fn prune(path: &Path) -> DatabaseResult<()> {
+        RocksDb::<Description>::prune(path)
+    }
+
     pub fn in_memory() -> Self {
         Self {
             data: StructuredStorage::new(Arc::new(MemoryStore::default()).into()),

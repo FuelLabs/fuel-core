@@ -9,7 +9,6 @@ use fuel_core::{
         ChainConfig,
         ChainStateDb,
     },
-    combined_database::CombinedDatabase,
     database::{
         database_description::on_chain::OnChain,
         Database,
@@ -240,11 +239,10 @@ fn load_chain_config(
     Ok(chain_config)
 }
 
-fn open_db(path: &Path) -> anyhow::Result<Database<OnChain>> {
-    let db = CombinedDatabase::open(path, 10 * 1024 * 1024)
+fn open_db(path: &Path) -> anyhow::Result<Database> {
+    Database::<OnChain>::open(path, None)
         .map_err(Into::<anyhow::Error>::into)
-        .context(format!("failed to open database at path {path:?}",))?;
-    Ok(db.on_chain().clone())
+        .context(format!("failed to open database at path {path:?}",))
 }
 
 #[cfg(test)]

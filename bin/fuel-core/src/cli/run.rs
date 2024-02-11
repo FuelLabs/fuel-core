@@ -17,7 +17,10 @@ use fuel_core::{
         ChainConfig,
         StateConfig,
     },
-    combined_database::CombinedDatabaseConfig,
+    combined_database::{
+        CombinedDatabase,
+        CombinedDatabaseConfig,
+    },
     producer::Config as ProducerConfig,
     service::{
         config::Trigger,
@@ -369,7 +372,7 @@ impl Command {
 
 pub async fn exec(command: Command) -> anyhow::Result<()> {
     if command.db_prune && command.database_path.exists() {
-        tokio::fs::remove_dir_all(&command.database_path).await?
+        CombinedDatabase::prune(&command.database_path)?;
     }
 
     let profiling = command.profiling.clone();
