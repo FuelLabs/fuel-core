@@ -933,7 +933,7 @@ mod tests {
         coin_result
     }
 
-    /// TODO: Should use any mock database instead of the `fuel_core::CombinedDatabase`.
+    // TODO: Should use any mock database instead of the `fuel_core::CombinedDatabase`.
     pub struct TestDatabase {
         database: CombinedDatabase,
         last_coin_index: u64,
