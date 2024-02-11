@@ -32,6 +32,7 @@ mod tests {
     // Because these dev deps are only needed when `parquet` is enabled. Since `dev-dependencies` cannot be
     // optional we need to this these statements.
     use bytes as _;
+    use rand as _;
     use strum as _;
     use tempfile as _;
     // `pretty_assertions` dev dep used only if `std` and `random` are enabled.

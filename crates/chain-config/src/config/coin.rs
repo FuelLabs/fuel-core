@@ -73,7 +73,7 @@ impl CoinConfig {
     }
 }
 
-#[cfg(all(test, feature = "random"))]
+#[cfg(all(test, feature = "random", feature = "std"))]
 impl crate::Randomize for CoinConfig {
     fn randomize(mut rng: impl ::rand::Rng) -> Self {
         Self {

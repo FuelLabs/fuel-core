@@ -39,7 +39,7 @@ pub struct MessageConfig {
 #[cfg(feature = "parquet")]
 impl crate::serialization::NonSkippingSerialize for MessageConfig {}
 
-#[cfg(all(test, feature = "random"))]
+#[cfg(all(test, feature = "random", feature = "std"))]
 impl crate::Randomize for MessageConfig {
     fn randomize(mut rng: impl rand::Rng) -> Self {
         Self {

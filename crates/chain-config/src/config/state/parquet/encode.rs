@@ -4,6 +4,7 @@ use std::{
     sync::Arc,
 };
 
+use crate::serialization::NonSkippingSerialize;
 use fuel_core_types::fuel_types::canonical;
 use itertools::Itertools;
 use parquet::{
@@ -20,6 +21,10 @@ use parquet::{
 use parquet::{
     data_type::ByteArrayType,
     schema::types::Type,
+};
+use postcard::ser_flavors::{
+    AllocVec,
+    Flavor,
 };
 
 pub struct Encoder<W: Write + Send, T, E> {
@@ -82,6 +87,7 @@ where
             .map(|el| E::encode(&el))
             .map_ok(Into::into)
             .try_collect()?;
+        eprintln!("values: {:?}", values);
         column
             .typed::<ByteArrayType>()
             .write_batch(&values, None, None)?;
@@ -104,10 +110,14 @@ pub trait Encode<T> {
 pub struct PostcardEncode;
 impl<T> Encode<T> for PostcardEncode
 where
-    T: serde::Serialize,
+    T: NonSkippingSerialize,
 {
     fn encode(data: &T) -> anyhow::Result<Vec<u8>> {
-        Ok(postcard::to_stdvec(data)?)
+        let mut serializer = postcard::Serializer {
+            output: AllocVec::new(),
+        };
+        data.non_skipping_serialize(&mut serializer)?;
+        Ok(serializer.output.finalize()?)
     }
 }
 

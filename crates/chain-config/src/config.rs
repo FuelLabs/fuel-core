@@ -1,5 +1,4 @@
 mod chain;
-mod codec;
 mod coin;
 mod consensus;
 mod contract;
@@ -10,18 +9,17 @@ mod message;
 mod snapshot_metadata;
 mod state;
 
-#[cfg(all(test, feature = "random"))]
+#[cfg(all(test, feature = "random", feature = "std"))]
 pub(crate) fn random_bytes_32(mut rng: impl rand::Rng) -> [u8; 32] {
     rng.gen()
 }
 
-#[cfg(all(test, feature = "random"))]
+#[cfg(all(test, feature = "random", feature = "std"))]
 pub(crate) trait Randomize {
     fn randomize(rng: impl rand::Rng) -> Self;
 }
 
 pub use chain::*;
-pub use codec::*;
 pub use coin::*;
 pub use consensus::*;
 pub use contract::*;

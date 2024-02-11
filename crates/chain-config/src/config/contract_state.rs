@@ -18,7 +18,7 @@ pub struct ContractStateConfig {
 #[cfg(feature = "parquet")]
 impl crate::serialization::NonSkippingSerialize for ContractStateConfig {}
 
-#[cfg(all(test, feature = "random"))]
+#[cfg(all(test, feature = "random", feature = "std"))]
 impl crate::Randomize for ContractStateConfig {
     fn randomize(mut rng: impl rand::Rng) -> Self {
         Self {

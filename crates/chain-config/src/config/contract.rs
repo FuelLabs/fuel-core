@@ -75,7 +75,7 @@ impl ContractConfig {
     }
 }
 
-#[cfg(all(test, feature = "random"))]
+#[cfg(all(test, feature = "random", feature = "std"))]
 impl crate::Randomize for ContractConfig {
     fn randomize(mut rng: impl ::rand::Rng) -> Self {
         Self {
