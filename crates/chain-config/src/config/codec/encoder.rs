@@ -1,5 +1,7 @@
 use std::path::PathBuf;
 
+use fuel_core_types::fuel_types::BlockHeight;
+
 use crate::{
     config::contract_state::ContractStateConfig,
     CoinConfig,
@@ -25,6 +27,7 @@ enum EncoderType {
         contracts: parquet::PostcardEncoder<ContractConfig>,
         contract_state: parquet::PostcardEncoder<ContractStateConfig>,
         contract_balance: parquet::PostcardEncoder<ContractBalanceConfig>,
+        block_height: parquet::PostcardEncoder<BlockHeight>,
     },
 }
 
@@ -203,6 +206,7 @@ impl StateWriter {
             contracts,
             contract_state,
             contract_balance,
+            block_height,
         } = files;
 
         Ok(Self {
@@ -212,6 +216,7 @@ impl StateWriter {
                 contracts: create_encoder(contracts, compression)?,
                 contract_state: create_encoder(contract_state, compression)?,
                 contract_balance: create_encoder(contract_balance, compression)?,
+                block_height: create_encoder(block_height, compression)?,
             },
         })
     }
@@ -292,6 +297,17 @@ impl StateWriter {
         }
     }
 
+    pub fn write_block_height(&mut self, height: BlockHeight) -> anyhow::Result<()> {
+        match &mut self.encoder {
+            EncoderType::Json { buffer, .. } => {
+                buffer.block_height = height;
+                Ok(())
+            }
+            #[cfg(feature = "parquet")]
+            EncoderType::Parquet { block_height, .. } => block_height.write(vec![height]),
+        }
+    }
+
     pub fn close(self) -> anyhow::Result<()> {
         match self.encoder {
             EncoderType::Json {
@@ -309,12 +325,14 @@ impl StateWriter {
                 contracts,
                 contract_state,
                 contract_balance,
+                block_height,
             } => {
                 coins.close()?;
                 messages.close()?;
                 contracts.close()?;
                 contract_state.close()?;
                 contract_balance.close()?;
+                block_height.close()?;
                 Ok(())
             }
         }
@@ -393,6 +411,7 @@ mod tests {
                 "contracts.parquet",
                 "contract_state.parquet",
                 "contract_balance.parquet",
+                "block_height.parquet",
             ]
             .map(|name| dir.path().join(name)),
         );

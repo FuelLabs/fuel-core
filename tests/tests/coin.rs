@@ -3,6 +3,7 @@ use fuel_core::{
         CoinConfig,
         StateConfig,
         StateReader,
+        MAX_GROUP_SIZE,
     },
     database::Database,
     service::{
@@ -48,7 +49,7 @@ async fn coin() {
         ..Default::default()
     };
     let config = Config {
-        state_reader: StateReader::in_memory(state, 1),
+        state_reader: StateReader::in_memory(state, MAX_GROUP_SIZE),
         ..Config::local_node()
     };
 

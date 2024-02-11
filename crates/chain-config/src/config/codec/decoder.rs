@@ -1,5 +1,6 @@
 use std::fmt::Debug;
 
+use fuel_core_types::fuel_types::BlockHeight;
 use itertools::Itertools;
 
 use crate::{
@@ -54,7 +55,10 @@ impl<T> Iterator for IntoIter<T> {
 #[derive(Clone, Debug)]
 enum DataSource {
     #[cfg(feature = "parquet")]
-    Parquet { files: crate::ParquetFiles },
+    Parquet {
+        files: crate::ParquetFiles,
+        block_height: BlockHeight,
+    },
     InMemory {
         state: StateConfig,
         group_size: usize,
@@ -86,10 +90,28 @@ impl StateReader {
     }
 
     #[cfg(feature = "parquet")]
-    pub fn parquet(files: crate::ParquetFiles) -> Self {
-        Self {
-            data_source: DataSource::Parquet { files },
-        }
+    pub fn parquet(files: crate::ParquetFiles) -> anyhow::Result<Self> {
+        let block_height = Self::read_block_height(&files.block_height)?;
+        Ok(Self {
+            data_source: DataSource::Parquet {
+                files,
+                block_height,
+            },
+        })
+    }
+
+    #[cfg(feature = "parquet")]
+    fn read_block_height(path: &std::path::Path) -> anyhow::Result<BlockHeight> {
+        let file = std::fs::File::open(path)?;
+        let group = super::parquet::PostcardDecoder::new(file)?
+            .next()
+            .ok_or_else(|| anyhow::anyhow!("No block height found"))??
+            .data;
+        let block_height = group
+            .into_iter()
+            .next()
+            .ok_or_else(|| anyhow::anyhow!("No block height found"))?;
+        Ok(block_height)
     }
 
     #[cfg(feature = "std")]
@@ -99,12 +121,11 @@ impl StateReader {
     ) -> anyhow::Result<Self> {
         use crate::StateEncoding;
 
-        let decoder = match snapshot_metadata.take_state_encoding() {
-            StateEncoding::Json { filepath } => Self::json(filepath, default_group_size)?,
+        match snapshot_metadata.take_state_encoding() {
+            StateEncoding::Json { filepath } => Self::json(filepath, default_group_size),
             #[cfg(feature = "parquet")]
             StateEncoding::Parquet { filepaths, .. } => Self::parquet(filepaths),
-        };
-        Ok(decoder)
+        }
     }
 
     pub fn coins(&self) -> anyhow::Result<IntoIter<CoinConfig>> {
@@ -147,6 +168,14 @@ impl StateReader {
         )
     }
 
+    pub fn block_height(&self) -> BlockHeight {
+        match &self.data_source {
+            DataSource::InMemory { state, .. } => state.block_height,
+            #[cfg(feature = "parquet")]
+            DataSource::Parquet { block_height, .. } => *block_height,
+        }
+    }
+
     fn create_iterator<T: Clone>(
         &self,
         extractor: impl FnOnce(&StateConfig) -> &Vec<T>,
@@ -160,7 +189,7 @@ impl StateReader {
                 Ok(Self::in_memory_iter(groups, *group_size))
             }
             #[cfg(feature = "parquet")]
-            DataSource::Parquet { files } => {
+            DataSource::Parquet { files, .. } => {
                 let path = file_picker(files);
                 let file = std::fs::File::open(path)?;
                 Ok(IntoIter::Parquet {

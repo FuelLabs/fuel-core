@@ -87,6 +87,7 @@ where
             .map(|el| E::encode(&el))
             .map_ok(Into::into)
             .try_collect()?;
+        eprintln!("values: {:?}", values);
         column
             .typed::<ByteArrayType>()
             .write_batch(&values, None, None)?;

@@ -45,5 +45,6 @@
     }
   ],
   "contract_state": [],
-  "contract_balance": []
+  "contract_balance": [],
+  "block_height": 0
 }

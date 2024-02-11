@@ -5,6 +5,7 @@ use fuel_core::{
         MessageConfig,
         StateConfig,
         StateReader,
+        MAX_GROUP_SIZE,
     },
     service::{
         Config,
@@ -51,7 +52,7 @@ fn setup_config(messages: impl IntoIterator<Item = MessageConfig>) -> Config {
     };
 
     Config {
-        state_reader: StateReader::in_memory(state, 1),
+        state_reader: StateReader::in_memory(state, MAX_GROUP_SIZE),
         ..Config::local_node()
     }
 }
@@ -595,7 +596,7 @@ async fn can_get_message() {
         messages: vec![first_msg.clone()],
         ..Default::default()
     };
-    config.state_reader = StateReader::in_memory(state_config, 1);
+    config.state_reader = StateReader::in_memory(state_config, MAX_GROUP_SIZE);
 
     // setup service and client
     let service = FuelService::new_node(config).await.unwrap();
@@ -612,7 +613,7 @@ async fn can_get_message() {
 #[tokio::test]
 async fn can_get_empty_message() {
     let mut config = Config::local_node();
-    config.state_reader = StateReader::in_memory(StateConfig::default(), 1);
+    config.state_reader = StateReader::in_memory(StateConfig::default(), MAX_GROUP_SIZE);
 
     let service = FuelService::new_node(config).await.unwrap();
     let client = FuelClient::from(service.bound_address);

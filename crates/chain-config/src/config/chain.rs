@@ -6,10 +6,7 @@ use fuel_core_types::{
         GasCosts,
         TxParameters,
     },
-    fuel_types::{
-        AssetId,
-        BlockHeight,
-    },
+    fuel_types::AssetId,
 };
 use serde::{
     Deserialize,
@@ -45,7 +42,6 @@ pub struct ChainConfig {
     pub block_gas_limit: u64,
     pub consensus_parameters: ConsensusParameters,
     pub consensus: ConsensusConfig,
-    pub height: Option<BlockHeight>,
 }
 
 impl Default for ChainConfig {
@@ -55,7 +51,6 @@ impl Default for ChainConfig {
             block_gas_limit: TxParameters::DEFAULT.max_gas_per_tx * 10, /* TODO: Pick a sensible default */
             consensus_parameters: ConsensusParameters::default(),
             consensus: ConsensusConfig::default_poa(),
-            height: Default::default(),
         }
     }
 }
@@ -112,7 +107,6 @@ impl GenesisCommitment for ChainConfig {
             block_gas_limit,
             consensus_parameters,
             consensus,
-            height,
         } = self;
 
         // TODO: Hash settlement configuration when it will be available.
@@ -121,7 +115,6 @@ impl GenesisCommitment for ChainConfig {
             .chain(block_gas_limit.to_be_bytes())
             .chain(consensus_parameters.root()?)
             .chain(consensus.root()?)
-            .chain(height.unwrap_or_default().to_bytes())
             .finalize();
 
         Ok(config_hash)
@@ -163,12 +156,6 @@ mod tests {
     #[cfg(feature = "std")]
     use std::env::temp_dir;
 
-    use rand::{
-        rngs::StdRng,
-        RngCore,
-        SeedableRng,
-    };
-
     use super::ChainConfig;
 
     #[cfg(feature = "std")]
@@ -195,30 +182,6 @@ mod tests {
     #[test]
     fn can_roundtrip_serialize_local_testnet_config() {
         let config = ChainConfig::local_testnet();
-        let json = serde_json::to_string(&config).unwrap();
-        let deserialized_config: ChainConfig =
-            serde_json::from_str(json.as_str()).unwrap();
-        assert_eq!(config, deserialized_config);
-    }
-
-    #[test]
-    fn snapshot_configurable_block_height() {
-        let mut rng = StdRng::seed_from_u64(2);
-        let config = ChainConfig {
-            height: Some(rng.next_u32().into()),
-            ..ChainConfig::local_testnet()
-        };
-        let json = serde_json::to_string_pretty(&config).unwrap();
-        insta::assert_snapshot!(json);
-    }
-
-    #[test]
-    fn can_roundtrip_serialize_block_height_config() {
-        let mut rng = StdRng::seed_from_u64(2);
-        let config = ChainConfig {
-            height: Some(rng.next_u32().into()),
-            ..ChainConfig::local_testnet()
-        };
         let json = serde_json::to_string(&config).unwrap();
         let deserialized_config: ChainConfig =
             serde_json::from_str(json.as_str()).unwrap();

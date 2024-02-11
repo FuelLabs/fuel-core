@@ -1,3 +1,4 @@
+use fuel_core_types::fuel_types::BlockHeight;
 use serde::{
     Deserializer,
     Serializer,
@@ -24,6 +25,8 @@ where
         self.serialize(serializer)
     }
 }
+
+impl NonSkippingSerialize for BlockHeight {}
 
 /// Encode/decode a byte vector as a hex string if the serializer is human readable. Otherwise, use the default encoding.
 pub(crate) struct HexIfHumanReadable;

@@ -131,6 +131,7 @@ fn contract_snapshot(
     std::fs::create_dir_all(output_dir)?;
 
     let (contract, state, balance) = db.get_contract_by_id(contract_id)?;
+    let block_height = db.get_block_height()?;
 
     let metadata = write_metadata(output_dir, Encoding::Json)?;
     let mut writer = StateWriter::for_snapshot(&metadata)?;
@@ -138,6 +139,7 @@ fn contract_snapshot(
     writer.write_contracts(vec![contract])?;
     writer.write_contract_state(state)?;
     writer.write_contract_balance(balance)?;
+    writer.write_block_height(block_height)?;
     writer.close()?;
     Ok(())
 }
@@ -153,20 +155,15 @@ fn full_snapshot(
     let metadata = write_metadata(output_dir, encoding)?;
 
     write_chain_state(&db, &metadata)?;
-    write_chain_config(db, prev_chain_config, metadata.chain_config())?;
+    write_chain_config(prev_chain_config, metadata.chain_config())?;
     Ok(())
 }
 
 fn write_chain_config(
-    db: impl ChainStateDb,
     chain_config: Option<PathBuf>,
     file: &Path,
 ) -> Result<(), anyhow::Error> {
-    let height = db.get_block_height()?;
-    let chain_config = ChainConfig {
-        height: Some(height),
-        ..load_chain_config(chain_config)?
-    };
+    let chain_config = load_chain_config(chain_config)?;
 
     chain_config.write(file)
 }
@@ -220,6 +217,8 @@ fn write_chain_state(
     write(contract_balances, group_size, |chunk| {
         writer.write_contract_balance(chunk)
     })?;
+
+    writer.write_block_height(db.get_block_height()?)?;
 
     writer.close()?;
 
@@ -353,12 +352,15 @@ mod tests {
                     .collect()
             };
 
+            let block_height = self.given_block_height();
+
             StateConfig {
                 coins,
                 messages,
                 contracts,
                 contract_state,
                 contract_balance,
+                block_height,
             }
         }
 
@@ -543,10 +545,10 @@ mod tests {
 
         // then
         let snapshot = SnapshotMetadata::read(&snapshot_dir)?;
-        let chain_state = ChainConfig::from_snapshot_metadata(&snapshot)?;
-        assert_eq!(chain_state.height, Some(height));
 
         let snapshot = StateConfig::from_snapshot_metadata(snapshot)?;
+
+        assert_eq!(snapshot.block_height, height);
 
         assert_ne!(snapshot, state);
         assert_eq!(snapshot, sorted_state(state));
@@ -591,7 +593,7 @@ mod tests {
 
         // then
         let files = ParquetFiles::snapshot_default(&snapshot_dir);
-        let reader = StateReader::parquet(files);
+        let reader = StateReader::parquet(files)?;
 
         let expected_state = sorted_state(state);
 
@@ -639,8 +641,8 @@ mod tests {
         })?;
 
         // then
-        let snapshot = SnapshotMetadata::read(&snapshot_dir)?;
-        let snapshot_state = StateConfig::from_snapshot_metadata(snapshot)?;
+        let metadata = SnapshotMetadata::read(&snapshot_dir)?;
+        let snapshot_state = StateConfig::from_snapshot_metadata(metadata)?;
 
         let expected_contract_state = state
             .contract_state
@@ -663,7 +665,8 @@ mod tests {
                 messages: vec![],
                 contract_state: expected_contract_state,
                 contract_balance: expected_contract_balance,
-                contracts: vec![random_contract]
+                contracts: vec![random_contract],
+                block_height: state.block_height
             }
         );
 

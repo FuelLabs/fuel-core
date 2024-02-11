@@ -49,6 +49,7 @@ std = [
   "tracing/std",
   "bech32/std",
 ]
-default = ["std", "random"]
+# TODO: remove parquet
+default = ["std", "random", "parquet"]
 parquet = ["std", "dep:parquet", "postcard/use-std"]
 random = ["dep:rand", "fuel-core-types/random"]

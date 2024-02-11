@@ -42,6 +42,7 @@ mod tests {
     #[test]
     fn roundtrip_parquet_coins() {
         // given
+        use fuel_core_types::fuel_types::BlockHeight;
         let skip_n_groups = 3;
         let temp_dir = tempfile::tempdir().unwrap();
 
@@ -50,14 +51,18 @@ mod tests {
         let mut encoder =
             StateWriter::parquet(&files, encoder::ZstdCompressionLevel::Uncompressed)
                 .unwrap();
+        encoder.write_block_height(BlockHeight::new(0)).unwrap();
 
         // when
         let coin_groups =
             group_generator.for_each_group(|group| encoder.write_coins(group));
         encoder.close().unwrap();
 
-        let decoded_coin_groups =
-            StateReader::parquet(files).coins().unwrap().collect_vec();
+        let decoded_coin_groups = StateReader::parquet(files)
+            .unwrap()
+            .coins()
+            .unwrap()
+            .collect_vec();
 
         // then
         assert_groups_identical(&coin_groups, decoded_coin_groups, skip_n_groups);
@@ -67,6 +72,8 @@ mod tests {
     #[test]
     fn roundtrip_parquet_messages() {
         // given
+
+        use fuel_core_types::fuel_types::BlockHeight;
         let skip_n_groups = 3;
         let temp_dir = tempfile::tempdir().unwrap();
 
@@ -74,12 +81,14 @@ mod tests {
         let files = crate::ParquetFiles::snapshot_default(temp_dir.path());
         let mut encoder =
             StateWriter::parquet(&files, encoder::ZstdCompressionLevel::Level1).unwrap();
+        encoder.write_block_height(BlockHeight::new(0)).unwrap();
 
         // when
         let message_groups =
             group_generator.for_each_group(|group| encoder.write_messages(group));
         encoder.close().unwrap();
         let messages_decoded = StateReader::parquet(files)
+            .unwrap()
             .messages()
             .unwrap()
             .collect_vec();
@@ -92,6 +101,8 @@ mod tests {
     #[test]
     fn roundtrip_parquet_contracts() {
         // given
+
+        use fuel_core_types::fuel_types::BlockHeight;
         let skip_n_groups = 3;
         let temp_dir = tempfile::tempdir().unwrap();
 
@@ -99,12 +110,14 @@ mod tests {
         let files = crate::ParquetFiles::snapshot_default(temp_dir.path());
         let mut encoder =
             StateWriter::parquet(&files, encoder::ZstdCompressionLevel::Level1).unwrap();
+        encoder.write_block_height(BlockHeight::new(0)).unwrap();
 
         // when
         let contract_groups =
             group_generator.for_each_group(|group| encoder.write_contracts(group));
         encoder.close().unwrap();
         let contract_decoded = StateReader::parquet(files)
+            .unwrap()
             .contracts()
             .unwrap()
             .collect_vec();
@@ -117,6 +130,8 @@ mod tests {
     #[test]
     fn roundtrip_parquet_contract_state() {
         // given
+
+        use fuel_core_types::fuel_types::BlockHeight;
         let skip_n_groups = 3;
         let temp_dir = tempfile::tempdir().unwrap();
 
@@ -124,12 +139,14 @@ mod tests {
         let files = crate::ParquetFiles::snapshot_default(temp_dir.path());
         let mut encoder =
             StateWriter::parquet(&files, encoder::ZstdCompressionLevel::Level1).unwrap();
+        encoder.write_block_height(BlockHeight::new(0)).unwrap();
 
         // when
         let contract_state_groups =
             group_generator.for_each_group(|group| encoder.write_contract_state(group));
         encoder.close().unwrap();
         let decoded_contract_state = StateReader::parquet(files)
+            .unwrap()
             .contract_state()
             .unwrap()
             .collect_vec();
@@ -146,6 +163,8 @@ mod tests {
     #[test]
     fn roundtrip_parquet_contract_balance() {
         // given
+
+        use fuel_core_types::fuel_types::BlockHeight;
         let skip_n_groups = 3;
         let temp_dir = tempfile::tempdir().unwrap();
 
@@ -153,6 +172,7 @@ mod tests {
         let files = crate::ParquetFiles::snapshot_default(temp_dir.path());
         let mut encoder =
             StateWriter::parquet(&files, encoder::ZstdCompressionLevel::Level1).unwrap();
+        encoder.write_block_height(BlockHeight::new(0)).unwrap();
 
         // when
         let contract_balance_groups =
@@ -160,6 +180,7 @@ mod tests {
         encoder.close().unwrap();
 
         let decoded_contract_balance = StateReader::parquet(files)
+            .unwrap()
             .contract_balance()
             .unwrap()
             .collect_vec();
@@ -170,6 +191,26 @@ mod tests {
             decoded_contract_balance,
             skip_n_groups,
         );
+    }
+
+    #[cfg(feature = "parquet")]
+    #[test]
+    fn roundtrip_parquet_block_height() {
+        // given
+        use fuel_core_types::fuel_types::BlockHeight;
+        let temp_dir = tempfile::tempdir().unwrap();
+        let files = crate::ParquetFiles::snapshot_default(temp_dir.path());
+        let mut encoder =
+            StateWriter::parquet(&files, encoder::ZstdCompressionLevel::Level1).unwrap();
+        let block_height = BlockHeight::new(13);
+
+        // when
+        encoder.write_block_height(block_height).unwrap();
+        encoder.close().unwrap();
+
+        // then
+        let block_height_decoded = StateReader::parquet(files).unwrap().block_height();
+        assert_eq!(block_height, block_height_decoded);
     }
 
     #[test]
@@ -313,6 +354,24 @@ mod tests {
             decoded_contract_balance,
             skip_n_groups,
         );
+    }
+
+    #[test]
+    fn roundtrip_json_block_height() {
+        // given
+        use fuel_core_types::fuel_types::BlockHeight;
+        let temp_dir = tempfile::tempdir().unwrap();
+        let file = temp_dir.path().join("state_config.json");
+        let block_height = BlockHeight::new(13);
+        let mut encoder = StateWriter::json(&file);
+
+        // when
+        encoder.write_block_height(block_height).unwrap();
+        encoder.close().unwrap();
+
+        // then
+        let block_height_decoded = StateReader::json(&file, 100).unwrap().block_height();
+        assert_eq!(block_height, block_height_decoded);
     }
 
     struct GroupGenerator<R> {

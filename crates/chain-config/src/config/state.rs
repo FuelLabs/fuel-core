@@ -25,6 +25,7 @@ use serde::{
 
 #[cfg(feature = "std")]
 use crate::SnapshotMetadata;
+use crate::StateReader;
 
 use super::{
     coin::CoinConfig,
@@ -62,6 +63,8 @@ pub struct StateConfig {
     pub contract_state: Vec<ContractStateConfig>,
     /// Balance entries of all contracts
     pub contract_balance: Vec<ContractBalanceConfig>,
+    /// Block height
+    pub block_height: BlockHeight,
 }
 
 impl StateConfig {
@@ -79,6 +82,7 @@ impl StateConfig {
         let contracts = db.iter_contract_configs().try_collect()?;
         let contract_state = db.iter_contract_state_configs().try_collect()?;
         let contract_balance = db.iter_contract_balance_configs().try_collect()?;
+        let block_height = db.get_block_height()?;
 
         Ok(Self {
             coins,
@@ -86,6 +90,7 @@ impl StateConfig {
             contracts,
             contract_state,
             contract_balance,
+            block_height,
         })
     }
 
@@ -93,38 +98,43 @@ impl StateConfig {
     pub fn from_snapshot_metadata(
         snapshot_metadata: SnapshotMetadata,
     ) -> anyhow::Result<Self> {
-        let decoder =
+        let reader =
             crate::StateReader::for_snapshot(snapshot_metadata, crate::MAX_GROUP_SIZE)?;
+        Self::from_reader(&reader)
+    }
 
-        let coins = decoder
+    pub fn from_reader(reader: &StateReader) -> anyhow::Result<Self> {
+        let coins = reader
             .coins()?
             .map_ok(|group| group.data)
             .flatten_ok()
             .try_collect()?;
 
-        let messages = decoder
+        let messages = reader
             .messages()?
             .map_ok(|group| group.data)
             .flatten_ok()
             .try_collect()?;
 
-        let contracts = decoder
+        let contracts = reader
             .contracts()?
             .map_ok(|group| group.data)
             .flatten_ok()
             .try_collect()?;
 
-        let contract_state = decoder
+        let contract_state = reader
             .contract_state()?
             .map_ok(|group| group.data)
             .flatten_ok()
             .try_collect()?;
 
-        let contract_balance = decoder
+        let contract_balance = reader
             .contract_balance()?
             .map_ok(|group| group.data)
             .flatten_ok()
             .try_collect()?;
+
+        let block_height = reader.block_height();
 
         Ok(Self {
             coins,
@@ -132,6 +142,7 @@ impl StateConfig {
             contracts,
             contract_state,
             contract_balance,
+            block_height,
         })
     }
 
@@ -141,6 +152,7 @@ impl StateConfig {
         let contracts = db.iter_contract_configs().try_collect()?;
         let contract_state = db.iter_contract_state_configs().try_collect()?;
         let contract_balance = db.iter_contract_balance_configs().try_collect()?;
+        let block_height = db.get_block_height()?;
 
         Ok(Self {
             coins,
@@ -148,6 +160,7 @@ impl StateConfig {
             contracts,
             contract_state,
             contract_balance,
+            block_height,
         })
     }
 

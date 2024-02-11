@@ -193,7 +193,7 @@ impl Task {
     pub fn new(mut database: CombinedDatabase, config: Config) -> anyhow::Result<Task> {
         // initialize state
         tracing::info!("Initializing database");
-        let block_height = config.chain_config.height.unwrap_or_default();
+        let block_height = config.state_reader.block_height();
         let da_block_height = 0u64.into();
         database.init(&block_height, &da_block_height)?;
 
@@ -314,7 +314,7 @@ mod tests {
                 task.sub_services()[i].stop_and_await().await.unwrap();
                 assert!(!task.run(&mut watcher).await.unwrap());
             } else {
-                break
+                break;
             }
             i += 1;
         }

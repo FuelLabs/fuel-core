@@ -43,11 +43,8 @@ pub struct GenesisWorkers {
 }
 
 impl GenesisWorkers {
-    pub fn new(
-        db: Database,
-        block_height: BlockHeight,
-        state_reader: StateReader,
-    ) -> Self {
+    pub fn new(db: Database, state_reader: StateReader) -> Self {
+        let block_height = state_reader.block_height();
         Self {
             db,
             cancel_token: CancellationToken::new(),

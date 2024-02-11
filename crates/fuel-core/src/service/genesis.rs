@@ -91,11 +91,8 @@ pub async fn execute_genesis_block(
     config: &Config,
     original_database: &Database,
 ) -> anyhow::Result<UncommittedImportResult<StorageTransaction<Database>>> {
-    let workers = GenesisWorkers::new(
-        original_database.clone(),
-        config.chain_config.height.unwrap_or_default(),
-        config.state_reader.clone(),
-    );
+    let workers =
+        GenesisWorkers::new(original_database.clone(), config.state_reader.clone());
 
     import_chain_state(workers).await?;
 
@@ -155,6 +152,7 @@ fn cleanup_genesis_progress(database: &mut Database) -> anyhow::Result<()> {
 }
 
 pub fn create_genesis_block(config: &Config) -> Block {
+    let block_height = config.state_reader.block_height();
     Block::new(
         PartialBlockHeader {
             application: ApplicationHeader::<Empty> {
@@ -165,9 +163,8 @@ pub fn create_genesis_block(config: &Config) -> Block {
             consensus: ConsensusHeader::<Empty> {
                 // The genesis is a first block, so previous root is zero.
                 prev_root: Bytes32::zeroed(),
-                // The initial height is defined by the `ChainConfig`.
-                // If it is `None` then it will be zero.
-                height: config.chain_config.height.unwrap_or_default(),
+                // The block height at genesis.
+                height: block_height,
                 time: fuel_core_types::tai64::Tai64::UNIX_EPOCH,
                 generated: Empty,
             },
@@ -388,12 +385,16 @@ mod tests {
 
     #[tokio::test]
     async fn config_initializes_block_height() {
-        let height = BlockHeight::from(99u32);
-        let service_config = Config {
-            chain_config: ChainConfig {
-                height: Some(height),
-                ..ChainConfig::local_testnet()
+        let block_height = BlockHeight::from(99u32);
+        let state_reader = StateReader::in_memory(
+            StateConfig {
+                block_height,
+                ..Default::default()
             },
+            MAX_GROUP_SIZE,
+        );
+        let service_config = Config {
+            state_reader,
             ..Config::local_node()
         };
 
@@ -403,7 +404,7 @@ mod tests {
             .unwrap();
 
         assert_eq!(
-            height,
+            block_height,
             db.latest_height()
                 .expect("Expected a block height to be set")
         )
@@ -463,6 +464,7 @@ mod tests {
             contracts,
             contract_state,
             contract_balance,
+            block_height: BlockHeight::from(0u32),
         };
         let state_reader = StateReader::in_memory(state, MAX_GROUP_SIZE);
 
@@ -529,6 +531,11 @@ mod tests {
         let asset_id_bob: AssetId = rng.gen();
         let bob_value = rng.gen();
 
+        let starting_height = {
+            let mut h: u32 = alice_block_created.into();
+            h = h.saturating_add(rng.next_u32());
+            h.into()
+        };
         let state = StateConfig {
             coins: vec![
                 CoinConfig {
@@ -552,20 +559,12 @@ mod tests {
                     asset_id: asset_id_bob,
                 },
             ],
+            block_height: starting_height,
             ..Default::default()
         };
         let state_reader = StateReader::in_memory(state, MAX_GROUP_SIZE);
 
-        let starting_height = {
-            let mut h: u32 = alice_block_created.into();
-            h = h.saturating_add(rng.next_u32());
-            Some(h.into())
-        };
         let service_config = Config {
-            chain_config: ChainConfig {
-                height: starting_height,
-                ..ChainConfig::local_testnet()
-            },
             state_reader,
             ..Config::local_node()
         };
@@ -770,15 +769,12 @@ mod tests {
                 amount: 10,
                 asset_id: Default::default(),
             }],
+            block_height: BlockHeight::from(10u32),
             ..Default::default()
         };
         let state_reader = StateReader::in_memory(state, MAX_GROUP_SIZE);
 
         let service_config = Config {
-            chain_config: ChainConfig {
-                height: Some(BlockHeight::from(10u32)),
-                ..ChainConfig::local_testnet()
-            },
             state_reader,
             ..Config::local_node()
         };
@@ -817,15 +813,12 @@ mod tests {
                 tx_pointer_tx_idx: Some(0),
             }],
             contract_balance: balances,
+            block_height: BlockHeight::from(10u32),
             ..Default::default()
         };
         let state_reader = StateReader::in_memory(state, MAX_GROUP_SIZE);
 
         let service_config = Config {
-            chain_config: ChainConfig {
-                height: Some(BlockHeight::from(10u32)),
-                ..ChainConfig::local_testnet()
-            },
             state_reader,
             ..Config::local_node()
         };

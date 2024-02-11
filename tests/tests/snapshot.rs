@@ -7,6 +7,7 @@ use fuel_core::{
         MessageConfig,
         StateConfig,
         StateReader,
+        MAX_GROUP_SIZE,
     },
     database::Database,
     service::{
@@ -96,12 +97,12 @@ async fn loads_snapshot() {
             data: vec![],
             da_height: DaBlockHeight(rng.gen_range(0..1000)),
         }],
+        block_height: BlockHeight::from(10),
     };
-    let mut config = Config {
-        state_reader: StateReader::in_memory(starting_state.clone(), 1),
+    let config = Config {
+        state_reader: StateReader::in_memory(starting_state.clone(), MAX_GROUP_SIZE),
         ..Config::local_node()
     };
-    config.chain_config.height = Some(BlockHeight::from(10));
 
     // setup server & client
     let _ = FuelService::from_database(db.clone(), config)

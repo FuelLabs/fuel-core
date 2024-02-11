@@ -4,6 +4,7 @@ use fuel_core::{
         MessageConfig,
         StateConfig,
         StateReader,
+        MAX_GROUP_SIZE,
     },
     service::{
         Config,
@@ -73,7 +74,7 @@ async fn balance() {
         ..Default::default()
     };
     let config = Config {
-        state_reader: StateReader::in_memory(state_config, 1),
+        state_reader: StateReader::in_memory(state_config, MAX_GROUP_SIZE),
         ..Config::local_node()
     };
 
@@ -208,7 +209,7 @@ async fn first_5_balances() {
         ..Default::default()
     };
     let config = Config {
-        state_reader: StateReader::in_memory(state_config, 1),
+        state_reader: StateReader::in_memory(state_config, MAX_GROUP_SIZE),
         ..Config::local_node()
     };
 

@@ -6,6 +6,7 @@ use fuel_core::{
         ContractConfig,
         StateConfig,
         StateReader,
+        MAX_GROUP_SIZE,
     },
     service::{
         Config,
@@ -192,10 +193,7 @@ impl TestSetupBuilder {
 
     // setup chainspec and spin up a fuel-node
     pub async fn finalize(&mut self) -> TestContext {
-        let mut chain_conf = ChainConfig {
-            height: Some(self.starting_block),
-            ..ChainConfig::local_testnet()
-        };
+        let mut chain_conf = ChainConfig::local_testnet();
         chain_conf.consensus_parameters.tx_params.max_gas_per_tx = self.gas_limit;
         chain_conf.block_gas_limit = self.gas_limit;
 
@@ -203,6 +201,7 @@ impl TestSetupBuilder {
             coins: self.initial_coins.clone(),
             contracts: self.contracts.values().cloned().collect_vec(),
             contract_balance: self.balances.clone(),
+            block_height: self.starting_block,
             ..StateConfig::default()
         };
 
@@ -214,7 +213,7 @@ impl TestSetupBuilder {
                 ..fuel_core_txpool::Config::default()
             },
             chain_config: chain_conf,
-            state_reader: StateReader::in_memory(state, 1),
+            state_reader: StateReader::in_memory(state, MAX_GROUP_SIZE),
             block_production: self.trigger,
             ..Config::local_node()
         };
