@@ -175,7 +175,11 @@ async fn dry_run_override_utxo_validation() {
         .dry_run_opt(&[tx], Some(false))
         .await
         .unwrap();
-    let log = &tx_statuses.last().expect("Nonempty reponse").receipts;
+    let log = tx_statuses
+        .last()
+        .expect("Nonempty reponse")
+        .result
+        .receipts();
     assert_eq!(2, log.len());
 
     assert!(matches!(log[0],

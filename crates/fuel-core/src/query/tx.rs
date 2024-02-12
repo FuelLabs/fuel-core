@@ -1,9 +1,6 @@
-use crate::fuel_core_graphql_api::{
-    ports::{
-        OffChainDatabase,
-        OnChainDatabase,
-    },
-    storage::receipts::Receipts,
+use crate::fuel_core_graphql_api::ports::{
+    OffChainDatabase,
+    OnChainDatabase,
 };
 use fuel_core_storage::{
     iter::{
@@ -46,9 +43,14 @@ where
     }
 
     fn receipts(&self, tx_id: &TxId) -> StorageResult<Vec<Receipt>> {
-        self.storage::<Receipts>()
-            .get(tx_id)
-            .and_then(|v| v.ok_or(not_found!(Transactions)).map(|tx| tx.into_owned()))
+        let status = self.status(tx_id)?;
+
+        let receipts = match status {
+            TransactionStatus::Success { receipts, .. }
+            | TransactionStatus::Failed { receipts, .. } => Some(receipts),
+            _ => None,
+        };
+        receipts.ok_or(not_found!(Transactions))
     }
 }
 

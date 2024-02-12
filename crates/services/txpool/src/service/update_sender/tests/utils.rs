@@ -7,12 +7,13 @@ pub fn transaction_status_strategy() -> impl Strategy<Value = TransactionStatus>
             block_id: Default::default(),
             time: Tai64(0),
             result: None,
+            receipts: vec![],
         }),
         Just(TransactionStatus::Failed {
             block_id: Default::default(),
             time: Tai64(0),
             result: None,
-            reason: Default::default(),
+            receipts: vec![],
         }),
         Just(TransactionStatus::SqueezedOut {
             reason: Default::default(),

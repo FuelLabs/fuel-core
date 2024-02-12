@@ -1,4 +1,3 @@
-use crate::fuel_core_graphql_api::storage::receipts::Receipts;
 use async_trait::async_trait;
 use fuel_core_services::stream::BoxStream;
 use fuel_core_storage::{
@@ -59,9 +58,7 @@ use fuel_core_types::{
 };
 use std::sync::Arc;
 
-pub trait OffChainDatabase:
-    Send + Sync + StorageInspect<Receipts, Error = StorageError>
-{
+pub trait OffChainDatabase: Send + Sync {
     fn tx_status(&self, tx_id: &TxId) -> StorageResult<TransactionStatus>;
 
     fn owned_transactions_ids(
@@ -202,12 +199,9 @@ pub trait P2pPort: Send + Sync {
 }
 
 pub mod worker {
-    use crate::{
-        database::{
-            database_description::off_chain::OffChain,
-            metadata::MetadataTable,
-        },
-        fuel_core_graphql_api::storage::receipts::Receipts,
+    use crate::database::{
+        database_description::off_chain::OffChain,
+        metadata::MetadataTable,
     };
     use fuel_core_services::stream::BoxStream;
     use fuel_core_storage::{
@@ -231,7 +225,6 @@ pub mod worker {
     pub trait OffChainDatabase:
         Send
         + Sync
-        + StorageMutate<Receipts, Error = StorageError>
         + StorageMutate<MetadataTable<OffChain>, Error = StorageError>
         + Transactional<Storage = Self>
     {

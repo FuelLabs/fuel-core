@@ -220,7 +220,7 @@ where
             .iter()
             .zip(tx_statuses.iter())
             .any(|(transaction, tx_status)| {
-                transaction.is_script() && tx_status.receipts.is_empty()
+                transaction.is_script() && tx_status.result.receipts().is_empty()
             })
         {
             Err(anyhow!("Expected at least one set of receipts"))

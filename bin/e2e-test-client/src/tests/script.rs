@@ -179,7 +179,7 @@ async fn _dry_runs(
 
         let tx_statuses = query?;
         for (tx_status, tx) in tx_statuses.iter().zip(transactions.iter()) {
-            if tx_status.receipts.is_empty() {
+            if tx_status.result.receipts().is_empty() {
                 return Err(
                     format!("Receipts are empty for query_number {query_number}").into(),
                 )
@@ -189,10 +189,13 @@ async fn _dry_runs(
             if expect == DryRunResult::Successful {
                 assert!(matches!(
                     &tx_status.result,
-                    TransactionExecutionResult::Success { result: _result }
+                    TransactionExecutionResult::Success {
+                        result: _result,
+                        ..
+                    }
                 ));
                 assert!(matches!(
-                    tx_status.receipts.last(),
+                    tx_status.result.receipts().last(),
                     Some(Receipt::ScriptResult {
                         result: ScriptExecutionResult::Success,
                         ..
