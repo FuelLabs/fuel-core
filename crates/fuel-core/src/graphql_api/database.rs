@@ -9,7 +9,6 @@ use crate::fuel_core_graphql_api::{
         OffChainDatabase,
         OnChainDatabase,
     },
-    storage::receipts::Receipts,
 };
 use fuel_core_storage::{
     iter::{
@@ -205,21 +204,6 @@ impl OnChainDatabase for ReadView {
         direction: IterDirection,
     ) -> BoxedIter<'_, StorageResult<UtxoId>> {
         self.on_chain.owned_coins_ids(owner, start_coin, direction)
-    }
-}
-
-impl StorageInspect<Receipts> for ReadView {
-    type Error = StorageError;
-
-    fn get(
-        &self,
-        key: &<Receipts as Mappable>::Key,
-    ) -> StorageResult<Option<Cow<<Receipts as Mappable>::OwnedValue>>> {
-        self.off_chain.get(key)
-    }
-
-    fn contains_key(&self, key: &<Receipts as Mappable>::Key) -> StorageResult<bool> {
-        self.off_chain.contains_key(key)
     }
 }
 

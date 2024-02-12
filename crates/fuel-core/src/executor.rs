@@ -721,7 +721,7 @@ mod tests {
                         Default::default(),
                     )
                     .expect("Should execute the block");
-                let receipts = &tx_status[0].receipts;
+                let receipts = tx_status[0].result.receipts();
 
                 if let Some(Receipt::Return { val, .. }) = receipts.first() {
                     *val == 1
@@ -2730,7 +2730,7 @@ mod tests {
             )
             .expect("Should execute the block");
 
-        let receipts = &tx_status[0].receipts;
+        let receipts = tx_status[0].result.receipts();
         assert_eq!(block_height as u64, receipts[0].val().unwrap());
     }
 
@@ -2801,7 +2801,7 @@ mod tests {
             )
             .expect("Should execute the block");
 
-        let receipts = &tx_status[0].receipts;
+        let receipts = tx_status[0].result.receipts();
         assert_eq!(time.0, receipts[0].val().unwrap());
     }
 

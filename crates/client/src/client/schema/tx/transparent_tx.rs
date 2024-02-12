@@ -2,7 +2,6 @@ use crate::client::schema::{
     contract::ContractIdFragment,
     schema,
     tx::{
-        transparent_receipt::Receipt,
         TransactionStatus,
         TxIdArgs,
     },
@@ -130,8 +129,6 @@ pub struct Transaction {
     pub status: Option<TransactionStatus>,
     /// The field of the `Transaction::Script` and `Transaction::Create`.
     pub witnesses: Option<Vec<HexString>>,
-    /// The receipts produced during transaction execution. It is fetched from the database..
-    pub receipts: Option<Vec<Receipt>>,
     /// The field of the `Transaction::Script`.
     pub script: Option<HexString>,
     /// The field of the `Transaction::Script`.

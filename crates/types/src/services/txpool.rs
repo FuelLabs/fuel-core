@@ -17,6 +17,7 @@ use crate::{
         Create,
         Input,
         Output,
+        Receipt,
         Script,
         Transaction,
         TxId,
@@ -184,6 +185,8 @@ pub enum TransactionStatus {
         time: Tai64,
         /// Result of executing the transaction for scripts
         result: Option<ProgramState>,
+        /// The receipts generated during execution of the transaction.
+        receipts: Vec<Receipt>,
     },
     /// Transaction was squeezed of the txpool
     SqueezedOut {
@@ -196,10 +199,10 @@ pub enum TransactionStatus {
         block_id: BlockId,
         /// Time when the block was generated
         time: Tai64,
-        /// Why this happened
-        reason: String,
         /// Result of executing the transaction for scripts
         result: Option<ProgramState>,
+        /// The receipts generated during execution of the transaction.
+        receipts: Vec<Receipt>,
     },
 }
 
@@ -211,17 +214,20 @@ pub fn from_executor_to_status(
     let time = block.header().time();
     let block_id = block.id();
     match result {
-        TransactionExecutionResult::Success { result } => TransactionStatus::Success {
-            block_id,
-            time,
-            result,
-        },
-        TransactionExecutionResult::Failed { result, reason } => {
+        TransactionExecutionResult::Success { result, receipts } => {
+            TransactionStatus::Success {
+                block_id,
+                time,
+                result,
+                receipts,
+            }
+        }
+        TransactionExecutionResult::Failed { result, receipts } => {
             TransactionStatus::Failed {
                 block_id,
                 time,
                 result,
-                reason: reason.clone(),
+                receipts,
             }
         }
     }

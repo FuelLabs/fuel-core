@@ -217,14 +217,25 @@ impl TryFrom<DryRunTransactionStatus> for TransactionExecutionResult {
     fn try_from(status: DryRunTransactionStatus) -> Result<Self, Self::Error> {
         Ok(match status {
             DryRunTransactionStatus::SuccessStatus(s) => {
+                let receipts = s
+                    .receipts
+                    .into_iter()
+                    .map(|receipt| receipt.try_into())
+                    .collect::<Result<Vec<fuel_tx::Receipt>, _>>()?;
                 TransactionExecutionResult::Success {
                     result: s.program_state.map(TryInto::try_into).transpose()?,
+                    receipts,
                 }
             }
             DryRunTransactionStatus::FailureStatus(s) => {
+                let receipts = s
+                    .receipts
+                    .into_iter()
+                    .map(|receipt| receipt.try_into())
+                    .collect::<Result<Vec<fuel_tx::Receipt>, _>>()?;
                 TransactionExecutionResult::Failed {
                     result: s.program_state.map(TryInto::try_into).transpose()?,
-                    reason: s.reason,
+                    receipts,
                 }
             }
             DryRunTransactionStatus::Unknown => {
@@ -238,13 +249,14 @@ impl TryFrom<DryRunTransactionStatus> for TransactionExecutionResult {
 #[cynic(schema_path = "./assets/schema.sdl")]
 pub struct DryRunSuccessStatus {
     pub program_state: Option<ProgramState>,
+    pub receipts: Vec<Receipt>,
 }
 
 #[derive(cynic::QueryFragment, Debug)]
 #[cynic(schema_path = "./assets/schema.sdl")]
 pub struct DryRunFailureStatus {
-    pub reason: String,
     pub program_state: Option<ProgramState>,
+    pub receipts: Vec<Receipt>,
 }
 
 #[derive(cynic::QueryFragment, Debug)]
@@ -252,7 +264,6 @@ pub struct DryRunFailureStatus {
 pub struct DryRunTransactionExecutionStatus {
     pub id: TransactionId,
     pub status: DryRunTransactionStatus,
-    pub receipts: Vec<Receipt>,
 }
 
 impl TryFrom<DryRunTransactionExecutionStatus> for TransactionExecutionStatus {
@@ -261,17 +272,8 @@ impl TryFrom<DryRunTransactionExecutionStatus> for TransactionExecutionStatus {
     fn try_from(schema: DryRunTransactionExecutionStatus) -> Result<Self, Self::Error> {
         let id = schema.id.into();
         let status = schema.status.try_into()?;
-        let receipts = schema
-            .receipts
-            .into_iter()
-            .map(|receipt| receipt.try_into())
-            .collect::<Result<Vec<fuel_tx::Receipt>, _>>()?;
 
-        Ok(TransactionExecutionStatus {
-            id,
-            result: status,
-            receipts,
-        })
+        Ok(TransactionExecutionStatus { id, result: status })
     }
 }
 
