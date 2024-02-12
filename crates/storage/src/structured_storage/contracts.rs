@@ -76,6 +76,7 @@ impl TableWithBlueprint for ContractsLatestUtxo {
 #[cfg(test)]
 mod test {
     use super::*;
+    use crate::tables::ContractsInfoType;
 
     crate::basic_storage_tests!(
         ContractsRawCode,
@@ -87,7 +88,7 @@ mod test {
     crate::basic_storage_tests!(
         ContractsInfo,
         <ContractsInfo as crate::Mappable>::Key::from([1u8; 32]),
-        ([2u8; 32].into(), [3u8; 32].into())
+        ContractsInfoType::V1([2u8; 32].into())
     );
 
     crate::basic_storage_tests!(

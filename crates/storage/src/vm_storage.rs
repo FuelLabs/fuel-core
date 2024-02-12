@@ -42,6 +42,7 @@ use fuel_core_types::{
     fuel_vm::InterpreterStorage,
     tai64::Tai64,
 };
+use fuel_vm_private::storage::ContractsInfoType;
 use itertools::Itertools;
 use primitive_types::U256;
 use std::borrow::Cow;
@@ -227,11 +228,12 @@ where
         salt: &Salt,
         slots: &[StorageSlot],
         contract: &Contract,
-        root: &Bytes32,
         id: &ContractId,
     ) -> Result<(), Self::DataError> {
         self.storage_contract_insert(id, contract)?;
-        self.storage_contract_root_insert(id, salt, root)?;
+
+        let info = ContractsInfoType::V1(*salt);
+        self.storage_contract_info_insert(id, &info)?;
 
         self.database.init_contract_state(
             id,

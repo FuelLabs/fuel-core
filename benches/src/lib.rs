@@ -175,7 +175,7 @@ impl VmBench {
         let input = Input::contract(utxo_id, balance_root, state_root, tx_pointer, id);
         let output = Output::contract(0, rng.gen(), rng.gen());
 
-        db.deploy_contract_with_id(&salt, &[], &contract, &state_root, &id)?;
+        db.deploy_contract_with_id(&salt, &[], &contract, &id)?;
 
         let data = id
             .iter()
@@ -359,7 +359,6 @@ impl TryFrom<VmBench> for VmBenchPrepared {
             let code = iter::once(op::ret(RegId::ONE));
             let code: Vec<u8> = code.collect();
             let code = Contract::from(code);
-            let root = code.root();
 
             let input = tx.inputs().len();
             let output =
@@ -375,16 +374,16 @@ impl TryFrom<VmBench> for VmBenchPrepared {
             tx.add_input(input);
             tx.add_output(output);
 
-            db.deploy_contract_with_id(&VmBench::SALT, &[], &code, &root, &contract)?;
+            db.deploy_contract_with_id(&VmBench::SALT, &[], &code, &contract)?;
         }
 
         if let Some(ContractCode {
             contract,
             salt,
             id,
-            root,
             slots,
             storage_root,
+            ..
         }) = contract_code
         {
             let input_count = tx.inputs().len();
@@ -401,7 +400,7 @@ impl TryFrom<VmBench> for VmBenchPrepared {
             tx.add_input(input);
             tx.add_output(output);
 
-            db.deploy_contract_with_id(&salt, &slots, &contract, &root, &id)?;
+            db.deploy_contract_with_id(&salt, &slots, &contract, &id)?;
         }
 
         for contract_id in empty_contracts {
@@ -423,7 +422,6 @@ impl TryFrom<VmBench> for VmBenchPrepared {
                 &VmBench::SALT,
                 &[],
                 &Contract::default(),
-                &Bytes32::zeroed(),
                 &contract_id,
             )?;
         }

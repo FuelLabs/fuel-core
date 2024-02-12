@@ -118,3 +118,7 @@ itertools = "0.10"
 insta = "1.8"
 tempfile = "3.4"
 tikv-jemallocator = "0.5"
+
+[patch.crates-io]
+fuel-vm-private = { path = "../fuel-vm/fuel-vm", package = "fuel-vm" }
+#fuel-vm-private = { git = 'https://github.com/FuelLabs/fuel-vm', package = "fuel-vm", branch = "bvrooman/feat/versionable-contract-info" }
