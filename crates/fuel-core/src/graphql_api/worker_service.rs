@@ -143,7 +143,6 @@ where
                     owners.push(to);
                 }
                 Output::Contract(_) | Output::ContractCreated { .. } => {}
-                _ => {}
             }
         }
 

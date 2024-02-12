@@ -161,7 +161,6 @@ impl TryFrom<&fuel_tx::Output> for Output {
                 contract_id: *contract_id,
                 state_root: *state_root,
             }),
-            _ => return Err(format!("Unsupported output type: {:?}", output)),
         };
         Ok(val)
     }

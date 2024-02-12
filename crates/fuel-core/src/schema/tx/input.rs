@@ -298,7 +298,6 @@ impl From<&fuel_tx::Input> for Input {
                 predicate: HexString(predicate.clone()),
                 predicate_data: HexString(predicate_data.clone()),
             }),
-            input => todo!("No mapping for input {input:?}"),
         }
     }
 }

@@ -11,10 +11,18 @@ repository = { workspace = true }
 description = "Compression and decompression of Fuel blocks for DA storage."
 
 [dependencies]
+anyhow = { workspace = true }
+async-trait = { workspace = true }
 fuel-core-types = { workspace = true, features = ["serde", "da-compression"] }
 postcard = { version = "1.0", features = ["use-std"] }
+rocksdb = { version = "0.21", default-features = false, optional = true }
 serde = { version = "1.0", features = ["derive"] }
+tokio = { workspace = true, features = ["sync"] }
 
 [dev-dependencies]
 fuel-vm-private = { workspace = true, features = ["test-helpers"] }
 fuel-core-types = { workspace = true, features = ["test-helpers"] }
+
+[features]
+default = ["rocksdb"]
+rocksdb = ["dep:rocksdb"]

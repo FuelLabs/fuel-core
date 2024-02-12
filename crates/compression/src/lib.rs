@@ -1,3 +1,10 @@
+pub mod db;
+mod ports;
+mod services {
+    mod compress;
+    mod decompress;
+}
+
 use serde::{
     Deserialize,
     Serialize,
@@ -18,7 +25,7 @@ use fuel_core_types::{
 };
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct Header {
+struct Header {
     pub da_height: DaBlockHeight,
     pub prev_root: Bytes32,
     pub height: BlockHeight,
@@ -26,20 +33,15 @@ pub struct Header {
 }
 
 /// Compressed block.
-/// The versioning here working depends on the serialization format,
-/// but as long as we we have less than 128 variants, postcard will
-/// make that a single byte.
 #[derive(Clone, Serialize, Deserialize)]
 #[non_exhaustive]
-pub enum CompressedBlock {
-    V0 {
-        /// Registration section of the compressed block
-        registrations: ChangesPerTable,
-        /// Compressed block header
-        header: Header,
-        /// Compressed transactions
-        transactions: Vec<CompactTransaction>,
-    },
+struct CompressedBlock {
+    /// Registration section of the compressed block
+    registrations: ChangesPerTable,
+    /// Compressed block header
+    header: Header,
+    /// Compressed transactions
+    transactions: Vec<CompactTransaction>,
 }
 
 #[cfg(test)]
@@ -49,7 +51,6 @@ mod tests {
     use fuel_core_types::{
         blockchain::primitives::DaBlockHeight,
         fuel_compression::{
-            Compact,
             Compactable,
             CompactionContext,
             InMemoryRegistry,
@@ -62,7 +63,7 @@ mod tests {
 
     #[test]
     fn postcard_roundtrip() {
-        let original = CompressedBlock::V0 {
+        let original = CompressedBlock {
             registrations: ChangesPerTable::from_start_keys(Default::default()),
             header: Header {
                 da_height: DaBlockHeight::default(),
@@ -76,7 +77,7 @@ mod tests {
         let compressed = postcard::to_allocvec(&original).unwrap();
         let decompressed: CompressedBlock = postcard::from_bytes(&compressed).unwrap();
 
-        let CompressedBlock::V0 {
+        let CompressedBlock {
             registrations,
             header,
             transactions,
@@ -91,8 +92,8 @@ mod tests {
     fn compact_transaction() {
         let tx = Transaction::default_test_tx();
         let mut registry = InMemoryRegistry::default();
-        let (compacted, _) = CompactionContext::run(&mut registry, tx.clone());
-        let decompacted = Transaction::decompact(compacted.clone(), &registry);
+        let (compacted, _) = CompactionContext::run(&mut registry, tx.clone()).unwrap();
+        let decompacted = Transaction::decompact(compacted.clone(), &registry).unwrap();
         assert_eq!(tx, decompacted);
 
         // Check size reduction
@@ -105,8 +106,10 @@ mod tests {
     fn compact_transaction_twice_gives_equal_result() {
         let tx = Transaction::default_test_tx();
         let mut registry = InMemoryRegistry::default();
-        let (compacted1, changes1) = CompactionContext::run(&mut registry, tx.clone());
-        let (compacted2, changes2) = CompactionContext::run(&mut registry, tx.clone());
+        let (compacted1, changes1) =
+            CompactionContext::run(&mut registry, tx.clone()).unwrap();
+        let (compacted2, changes2) =
+            CompactionContext::run(&mut registry, tx.clone()).unwrap();
         assert!(!changes1.is_empty());
         assert!(changes2.is_empty());
         let compressed1 = postcard::to_allocvec(&compacted1).unwrap();
@@ -123,9 +126,10 @@ mod tests {
             let mut registry = InMemoryRegistry::default();
 
             let (transactions, registrations) =
-                CompactionContext::run(&mut registry, vec![tx.clone(); i]);
+                CompactionContext::run(&mut registry, vec![tx.clone(); i])
+                    .expect("Compaction error");
 
-            let original = CompressedBlock::V0 {
+            let original = CompressedBlock {
                 registrations,
                 header: Header {
                     da_height: DaBlockHeight::default(),
@@ -157,9 +161,9 @@ mod tests {
 
         let sizes: [usize; 3] = array::from_fn(|_| {
             let (transactions, registrations) =
-                CompactionContext::run(&mut registry, vec![tx.clone()]);
+                CompactionContext::run(&mut registry, vec![tx.clone()]).unwrap();
 
-            let original = CompressedBlock::V0 {
+            let original = CompressedBlock {
                 registrations,
                 header: Header {
                     da_height: DaBlockHeight::default(),

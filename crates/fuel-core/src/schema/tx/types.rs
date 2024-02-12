@@ -382,7 +382,6 @@ impl Transaction {
             fuel_tx::Transaction::Mint(mint) => {
                 Some(vec![Contract(mint.input_contract().contract_id)])
             }
-            _ => None,
         }
     }
 
@@ -390,7 +389,6 @@ impl Transaction {
         match &self.0 {
             fuel_tx::Transaction::Script(_) | fuel_tx::Transaction::Create(_) => None,
             fuel_tx::Transaction::Mint(mint) => Some(mint.input_contract().into()),
-            _ => None,
         }
     }
 
@@ -399,7 +397,6 @@ impl Transaction {
             fuel_tx::Transaction::Script(script) => Some((*script.policies()).into()),
             fuel_tx::Transaction::Create(create) => Some((*create.policies()).into()),
             fuel_tx::Transaction::Mint(_) => None,
-            _ => None,
         }
     }
 
@@ -408,7 +405,6 @@ impl Transaction {
             fuel_tx::Transaction::Script(script) => Some(script.price().into()),
             fuel_tx::Transaction::Create(create) => Some(create.price().into()),
             fuel_tx::Transaction::Mint(_) => None,
-            _ => None,
         }
     }
 
@@ -427,7 +423,6 @@ impl Transaction {
             fuel_tx::Transaction::Script(script) => Some(script.maturity().into()),
             fuel_tx::Transaction::Create(create) => Some(create.maturity().into()),
             fuel_tx::Transaction::Mint(_) => None,
-            _ => None,
         }
     }
 
@@ -519,7 +514,6 @@ impl Transaction {
                     .collect(),
             ),
             fuel_tx::Transaction::Mint(_) => None,
-            _ => None,
         }
     }
 
