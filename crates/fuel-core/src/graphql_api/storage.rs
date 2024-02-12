@@ -1,6 +1,5 @@
 use fuel_core_storage::kv_store::StorageColumn;
 
-pub mod receipts;
 pub mod transactions;
 
 /// GraphQL database tables column ids to the corresponding [`fuel_core_storage::Mappable`] table.
@@ -19,18 +18,16 @@ pub mod transactions;
 pub enum Column {
     /// The column id of metadata about the blockchain
     Metadata = 0,
-    /// See [`Receipts`](receipts::Receipts)
-    Receipts = 1,
     /// The column of the table that stores `true` if `owner` owns `Coin` with `coin_id`
-    OwnedCoins = 2,
+    OwnedCoins = 1,
     /// Transaction id to current status
-    TransactionStatus = 3,
+    TransactionStatus = 2,
     /// The column of the table of all `owner`'s transactions
-    TransactionsByOwnerBlockIdx = 4,
+    TransactionsByOwnerBlockIdx = 3,
     /// The column of the table that stores `true` if `owner` owns `Message` with `message_id`
-    OwnedMessageIds = 5,
+    OwnedMessageIds = 4,
     /// The column of the table that stores statistic about the blockchain.
-    Statistic = 6,
+    Statistic = 5,
 }
 
 impl Column {

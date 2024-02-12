@@ -63,6 +63,7 @@ fn test_send_reg() {
             block_id: BlockId::from([0; 32]),
             time: Tai64(0),
             result: None,
+            receipts: vec![],
         }),
     };
     test_send_inner(
