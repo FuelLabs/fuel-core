@@ -48,7 +48,6 @@ mutation($txs: [HexString!]!, $utxoValidation: Boolean) {
         }
       }
       ... on DryRunFailureStatus {
-        reason
         programState {
           returnType
           data

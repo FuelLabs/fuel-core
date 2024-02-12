@@ -10,6 +10,7 @@ Description of the upcoming release here.
 
 ### Changed
 
+- [#1658](https://github.com/FuelLabs/fuel-core/pull/1658): Removed `Receipts` table. Instead, receipts are part of the `TransactionStatuses` table.
 - [#1650](https://github.com/FuelLabs/fuel-core/pull/1650): Add api endpoint for getting estimates for future gas prices
 - [#1649](https://github.com/FuelLabs/fuel-core/pull/1649): Add api endpoint for getting latest gas price
 - [#1600](https://github.com/FuelLabs/fuel-core/pull/1640): Upgrade to fuel-vm 0.45.0
@@ -29,6 +30,9 @@ Description of the upcoming release here.
 - [#1636](https://github.com/FuelLabs/fuel-core/pull/1636): Add more docs to GraphQL DAP API.
 
 #### Breaking
+- [#1658](https://github.com/FuelLabs/fuel-core/pull/1658): Receipts are part of the transaction status. 
+    Removed `reason` from the `TransactionExecutionResult::Failed`. It can be calculated based on the program state and receipts.
+    Also, it is not possible to fetch `receipts` from the `Transaction` directly anymore. Instead, you need to fetch `status` and its receipts.
 - [#1646](https://github.com/FuelLabs/fuel-core/pull/1646): Remove redundant receipts from queries.
 - [#1639](https://github.com/FuelLabs/fuel-core/pull/1639): Make Merkle metadata, i.e. `SparseMerkleMetadata` and `DenseMerkleMetadata` type version-able enums
 - [#1632](https://github.com/FuelLabs/fuel-core/pull/1632): Make `Message` type a version-able enum
