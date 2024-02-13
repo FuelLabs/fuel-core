@@ -33,7 +33,10 @@ use crate::{
     },
     services::executor::TransactionExecutionResult,
 };
-use fuel_vm_private::checked_transaction::CheckedTransaction;
+use fuel_vm_private::checked_transaction::{
+    CheckError,
+    CheckedTransaction,
+};
 use std::{
     sync::Arc,
     time::Duration,
@@ -234,7 +237,7 @@ pub fn from_executor_to_status(
 }
 
 #[allow(missing_docs)]
-#[derive(thiserror::Error, Debug, PartialEq, Eq, Clone)]
+#[derive(thiserror::Error, Debug, Clone)]
 #[non_exhaustive]
 pub enum Error {
     #[error("TxPool required that transaction contains metadata")]
@@ -306,7 +309,19 @@ pub enum Error {
     TTLReason,
     #[error("Transaction squeezed out because {0}")]
     SqueezedOut(String),
+    #[error("Invalid transaction data: {0:?}")]
+    ConsensusValidity(CheckError),
+    #[error("Mint transactions are disallowed from the txpool")]
+    MintIsDisallowed,
+    #[error("Database error: {0}")]
+    Database(String),
     // TODO: We need it for now until channels are removed from TxPool.
     #[error("Got some unexpected error: {0}")]
     Other(String),
+}
+
+impl From<CheckError> for Error {
+    fn from(e: CheckError) -> Self {
+        Error::ConsensusValidity(e)
+    }
 }

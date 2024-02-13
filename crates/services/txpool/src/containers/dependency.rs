@@ -4,7 +4,6 @@ use crate::{
     Error,
     TxInfo,
 };
-use anyhow::anyhow;
 use fuel_core_types::{
     fuel_tx::{
         input::{
@@ -166,7 +165,7 @@ impl Dependency {
         output: &Output,
         input: &Input,
         is_output_filled: bool,
-    ) -> anyhow::Result<()> {
+    ) -> Result<(), Error> {
         if let Input::CoinSigned(CoinSigned {
             owner,
             amount,
@@ -240,7 +239,9 @@ impl Dependency {
                 }
             };
         } else {
-            return Err(anyhow!("Use it only for coin output check"))
+            return Err(Error::Other(
+                "Use it only for coin output check".to_string(),
+            ))
         }
         Ok(())
     }
@@ -254,13 +255,16 @@ impl Dependency {
         txs: &'a HashMap<TxId, TxInfo>,
         db: &dyn TxPoolDb,
         tx: &'a ArcPoolTx,
-    ) -> anyhow::Result<(
-        usize,
-        HashMap<UtxoId, CoinState>,
-        HashMap<ContractId, ContractState>,
-        HashMap<Nonce, MessageState>,
-        Vec<TxId>,
-    )> {
+    ) -> Result<
+        (
+            usize,
+            HashMap<UtxoId, CoinState>,
+            HashMap<ContractId, ContractState>,
+            HashMap<Nonce, MessageState>,
+            Vec<TxId>,
+        ),
+        Error,
+    > {
         let mut collided: Vec<TxId> = Vec::new();
         // iterate over all inputs and check for collision
         let mut max_depth = 0;
@@ -296,11 +300,16 @@ impl Dependency {
                                 if state.is_in_database() {
                                     // this means it is loaded from db. Get tx to compare output.
                                     if self.utxo_validation {
-                                        let coin = db.utxo(utxo_id)?.ok_or(
-                                            Error::NotInsertedInputUtxoIdNotExisting(
-                                                *utxo_id,
-                                            ),
-                                        )?;
+                                        let coin = db
+                                            .utxo(utxo_id)
+                                            .map_err(|e| {
+                                                Error::Database(format!("{:?}", e))
+                                            })?
+                                            .ok_or(
+                                                Error::NotInsertedInputUtxoIdNotExisting(
+                                                    *utxo_id,
+                                                ),
+                                            )?;
                                         if !coin
                                             .matches_input(input)
                                             .expect("The input is coin above")
@@ -327,9 +336,12 @@ impl Dependency {
                     } else {
                         if self.utxo_validation {
                             // fetch from db and check if tx exist.
-                            let coin = db.utxo(utxo_id)?.ok_or(
-                                Error::NotInsertedInputUtxoIdNotExisting(*utxo_id),
-                            )?;
+                            let coin = db
+                                .utxo(utxo_id)
+                                .map_err(|e| Error::Database(format!("{:?}", e)))?
+                                .ok_or(Error::NotInsertedInputUtxoIdNotExisting(
+                                    *utxo_id,
+                                ))?;
 
                             if !coin
                                 .matches_input(input)
@@ -358,7 +370,10 @@ impl Dependency {
                 | Input::MessageDataPredicate(MessageDataPredicate { nonce, .. }) => {
                     // since message id is derived, we don't need to double check all the fields
                     if self.utxo_validation {
-                        if let Some(db_message) = db.message(nonce)? {
+                        if let Some(db_message) = db
+                            .message(nonce)
+                            .map_err(|e| Error::Database(format!("{:?}", e)))?
+                        {
                             // verify message id integrity
                             if !db_message
                                 .matches_input(input)
@@ -367,7 +382,10 @@ impl Dependency {
                                 return Err(Error::NotInsertedIoMessageMismatch.into())
                             }
                             // return an error if spent block is set
-                            if db.is_message_spent(nonce)? {
+                            if db
+                                .is_message_spent(nonce)
+                                .map_err(|e| Error::Database(format!("{:?}", e)))?
+                            {
                                 return Err(
                                     Error::NotInsertedInputMessageSpent(*nonce).into()
                                 )
@@ -415,7 +433,10 @@ impl Dependency {
                             return Err(Error::NotInsertedMaxDepth.into())
                         }
                     } else {
-                        if !db.contract_exist(contract_id)? {
+                        if !db
+                            .contract_exist(contract_id)
+                            .map_err(|e| Error::Database(format!("{:?}", e)))?
+                        {
                             return Err(Error::NotInsertedInputContractNotExisting(
                                 *contract_id,
                             )
@@ -478,7 +499,7 @@ impl Dependency {
         txs: &'a HashMap<TxId, TxInfo>,
         db: &DB,
         tx: &'a ArcPoolTx,
-    ) -> anyhow::Result<Vec<ArcPoolTx>>
+    ) -> Result<Vec<ArcPoolTx>, Error>
     where
         DB: TxPoolDb,
     {
@@ -532,10 +553,10 @@ impl Dependency {
         // iterate over all outputs and insert them, marking them as available.
         for (index, output) in tx.outputs().iter().enumerate() {
             let index = u8::try_from(index).map_err(|_| {
-                anyhow::anyhow!(
+                Error::Other(format!(
                     "The number of outputs in `{}` is more than `u8::max`",
                     tx.id()
-                )
+                ))
             })?;
             let utxo_id = UtxoId::new(tx.id(), index);
             match output {
@@ -721,9 +742,8 @@ mod tests {
         let out =
             Dependency::check_if_coin_input_can_spend_output(&output, &input, false);
         assert!(out.is_err(), "test2 There should be error");
-        assert_eq!(
-            out.err().unwrap().downcast_ref(),
-            Some(&Error::NotInsertedIoWrongAmount),
+        assert!(
+            matches!(out.err().unwrap(), Error::NotInsertedIoWrongAmount),
             "test2"
         );
 
@@ -739,9 +759,8 @@ mod tests {
         let out =
             Dependency::check_if_coin_input_can_spend_output(&output, &input, false);
         assert!(out.is_err(), "test3 There should be error");
-        assert_eq!(
-            out.err().unwrap().downcast_ref(),
-            Some(&Error::NotInsertedIoWrongOwner),
+        assert!(
+            matches!(out.err().unwrap(), Error::NotInsertedIoWrongOwner),
             "test3"
         );
 
@@ -757,9 +776,8 @@ mod tests {
         let out =
             Dependency::check_if_coin_input_can_spend_output(&output, &input, false);
         assert!(out.is_err(), "test4 There should be error");
-        assert_eq!(
-            out.err().unwrap().downcast_ref(),
-            Some(&Error::NotInsertedIoWrongAssetId),
+        assert!(
+            matches!(out.err().unwrap(), Error::NotInsertedIoWrongAssetId),
             "test4"
         );
 
@@ -775,9 +793,8 @@ mod tests {
         let out =
             Dependency::check_if_coin_input_can_spend_output(&output, &input, false);
         assert!(out.is_err(), "test5 There should be error");
-        assert_eq!(
-            out.err().unwrap().downcast_ref(),
-            Some(&Error::NotInsertedIoWrongAssetId),
+        assert!(
+            matches!(out.err().unwrap(), Error::NotInsertedIoWrongAssetId),
             "test5"
         );
 
@@ -786,9 +803,8 @@ mod tests {
         let out =
             Dependency::check_if_coin_input_can_spend_output(&output, &input, false);
         assert!(out.is_err(), "test6 There should be error");
-        assert_eq!(
-            out.err().unwrap().downcast_ref(),
-            Some(&Error::NotInsertedIoContractOutput),
+        assert!(
+            matches!(out.err().unwrap(), Error::NotInsertedIoContractOutput),
             "test6"
         );
 
@@ -800,9 +816,8 @@ mod tests {
         let out =
             Dependency::check_if_coin_input_can_spend_output(&output, &input, false);
         assert!(out.is_err(), "test8 There should be error");
-        assert_eq!(
-            out.err().unwrap().downcast_ref(),
-            Some(&Error::NotInsertedIoContractOutput),
+        assert!(
+            matches!(out.err().unwrap(), Error::NotInsertedIoContractOutput),
             "test7"
         );
     }
