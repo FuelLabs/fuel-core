@@ -284,7 +284,7 @@ where
         });
 
         if !tx.is_computed() {
-            return Err(Error::NoMetadata.into())
+            return Err(Error::NoMetadata)
         }
 
         // verify max gas is less than block limit
@@ -292,12 +292,11 @@ where
             return Err(Error::NotInsertedMaxGasLimit {
                 tx_gas: tx.max_gas(),
                 block_limit: self.config.chain_config.block_gas_limit,
-            }
-            .into())
+            })
         }
 
         if self.by_hash.contains_key(&tx.id()) {
-            return Err(Error::NotInsertedTxKnown.into())
+            return Err(Error::NotInsertedTxKnown)
         }
 
         let mut max_limit_hit = false;
@@ -307,7 +306,7 @@ where
             // limit is hit, check if we can push out lowest priced tx
             let lowest_price = self.by_gas_price.lowest_value().unwrap_or_default();
             if lowest_price >= tx.price() {
-                return Err(Error::NotInsertedLimitHit.into())
+                return Err(Error::NotInsertedLimitHit)
             }
         }
         if self.config.metrics {
@@ -417,7 +416,7 @@ pub async fn check_single_tx(
     config: &Config,
 ) -> Result<Checked<Transaction>, Error> {
     if tx.is_mint() {
-        return Err(Error::NotSupportedTransactionType.into())
+        return Err(Error::NotSupportedTransactionType)
     }
 
     verify_tx_min_gas_price(&tx, config)?;
