@@ -203,7 +203,7 @@ async fn fail_to_insert_tx_with_dependency_on_invalid_utxo_type() {
         .expect_err("Tx2 should be Err, got Ok");
     assert!(matches!(
         err,
-        Error::NotInsertedInputUtxoIdNotExisting(id) if id == UtxoId::new(tx_faulty_id, 0)
+        Error::NotInsertedInputUtxoIdNotDoesNotExist(id) if id == UtxoId::new(tx_faulty_id, 0)
     ));
 }
 
@@ -246,7 +246,10 @@ async fn try_to_insert_tx2_missing_utxo() {
     let err = txpool
         .insert_single(tx)
         .expect_err("Tx should be Err, got Ok");
-    assert!(matches!(err, Error::NotInsertedInputUtxoIdNotExisting(_)));
+    assert!(matches!(
+        err,
+        Error::NotInsertedInputUtxoIdNotDoesNotExist(_)
+    ));
 }
 
 #[tokio::test]

@@ -303,7 +303,7 @@ impl Dependency {
                                                 Error::Database(format!("{:?}", e))
                                             })?
                                             .ok_or(
-                                                Error::NotInsertedInputUtxoIdNotExisting(
+                                                Error::NotInsertedInputUtxoIdNotDoesNotExist(
                                                     *utxo_id,
                                                 ),
                                             )?;
@@ -334,7 +334,7 @@ impl Dependency {
                             let coin = db
                                 .utxo(utxo_id)
                                 .map_err(|e| Error::Database(format!("{:?}", e)))?
-                                .ok_or(Error::NotInsertedInputUtxoIdNotExisting(
+                                .ok_or(Error::NotInsertedInputUtxoIdNotDoesNotExist(
                                     *utxo_id,
                                 ))?;
 
@@ -426,7 +426,7 @@ impl Dependency {
                             .contract_exist(contract_id)
                             .map_err(|e| Error::Database(format!("{:?}", e)))?
                         {
-                            return Err(Error::NotInsertedInputContractNotExisting(
+                            return Err(Error::NotInsertedInputContractDoesNotExist(
                                 *contract_id,
                             ))
                         }

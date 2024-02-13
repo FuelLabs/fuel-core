@@ -262,16 +262,14 @@ pub enum Error {
         "Transaction is not inserted. A higher priced tx {0:#x} is already spending this message: {1:#x}"
     )]
     NotInsertedCollisionMessageId(TxId, Nonce),
-    #[error(
-        "Transaction is not inserted. Dependent UTXO output is not existing: {0:#x}"
-    )]
-    NotInsertedOutputNotExisting(UtxoId),
-    #[error("Transaction is not inserted. UTXO input contract is not existing: {0:#x}")]
-    NotInsertedInputContractNotExisting(ContractId),
+    #[error("Transaction is not inserted. UTXO input does not exist: {0:#x}")]
+    NotInsertedOutputDoesNotExist(UtxoId),
+    #[error("Transaction is not inserted. UTXO input contract does not exist or was already spent: {0:#x}")]
+    NotInsertedInputContractDoesNotExist(ContractId),
     #[error("Transaction is not inserted. ContractId is already taken {0:#x}")]
     NotInsertedContractIdAlreadyTaken(ContractId),
-    #[error("Transaction is not inserted. UTXO is not existing: {0:#x}")]
-    NotInsertedInputUtxoIdNotExisting(UtxoId),
+    #[error("Transaction is not inserted. UTXO does not exist: {0:#x}")]
+    NotInsertedInputUtxoIdNotDoesNotExist(UtxoId),
     #[error("Transaction is not inserted. UTXO is spent: {0:#x}")]
     NotInsertedInputUtxoIdSpent(UtxoId),
     #[error("Transaction is not inserted. Message is spent: {0:#x}")]
