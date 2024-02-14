@@ -2623,7 +2623,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-core"
-version = "0.22.0"
+version = "0.22.1"
 dependencies = [
  "anyhow",
  "assert_matches",
@@ -2654,6 +2654,7 @@ dependencies = [
  "hyper",
  "itertools 0.10.5",
  "mockall",
+ "num_cpus",
  "proptest",
  "rand",
  "rocksdb",
@@ -2705,11 +2706,11 @@ dependencies = [
 
 [[package]]
 name = "fuel-core-bft"
-version = "0.22.0"
+version = "0.22.1"
 
 [[package]]
 name = "fuel-core-bin"
-version = "0.22.0"
+version = "0.22.1"
 dependencies = [
  "anyhow",
  "clap 4.5.0",
@@ -2735,7 +2736,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-core-chain-config"
-version = "0.22.0"
+version = "0.22.1"
 dependencies = [
  "anyhow",
  "bech32",
@@ -2754,7 +2755,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-core-client"
-version = "0.22.0"
+version = "0.22.1"
 dependencies = [
  "anyhow",
  "cynic",
@@ -2777,7 +2778,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-core-client-bin"
-version = "0.22.0"
+version = "0.22.1"
 dependencies = [
  "clap 4.5.0",
  "fuel-core-client",
@@ -2788,7 +2789,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-core-consensus-module"
-version = "0.22.0"
+version = "0.22.1"
 dependencies = [
  "anyhow",
  "fuel-core-chain-config",
@@ -2800,7 +2801,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-core-database"
-version = "0.22.0"
+version = "0.22.1"
 dependencies = [
  "anyhow",
  "derive_more",
@@ -2811,7 +2812,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-core-e2e-client"
-version = "0.22.0"
+version = "0.22.1"
 dependencies = [
  "anyhow",
  "assert_cmd",
@@ -2836,7 +2837,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-core-executor"
-version = "0.22.0"
+version = "0.22.1"
 dependencies = [
  "anyhow",
  "fuel-core-chain-config",
@@ -2850,7 +2851,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-core-importer"
-version = "0.22.0"
+version = "0.22.1"
 dependencies = [
  "anyhow",
  "derive_more",
@@ -2868,7 +2869,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-core-keygen"
-version = "0.22.0"
+version = "0.22.1"
 dependencies = [
  "anyhow",
  "clap 4.5.0",
@@ -2879,7 +2880,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-core-keygen-bin"
-version = "0.22.0"
+version = "0.22.1"
 dependencies = [
  "anyhow",
  "atty",
@@ -2892,7 +2893,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-core-metrics"
-version = "0.22.0"
+version = "0.22.1"
 dependencies = [
  "axum",
  "once_cell",
@@ -2905,7 +2906,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-core-p2p"
-version = "0.22.0"
+version = "0.22.1"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -2941,7 +2942,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-core-poa"
-version = "0.22.0"
+version = "0.22.1"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -2959,7 +2960,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-core-producer"
-version = "0.22.0"
+version = "0.22.1"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -2976,7 +2977,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-core-relayer"
-version = "0.22.0"
+version = "0.22.1"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -3008,7 +3009,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-core-services"
-version = "0.22.0"
+version = "0.22.1"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -3022,7 +3023,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-core-storage"
-version = "0.22.0"
+version = "0.22.1"
 dependencies = [
  "anyhow",
  "derive_more",
@@ -3044,7 +3045,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-core-sync"
-version = "0.22.0"
+version = "0.22.1"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -3096,7 +3097,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-core-trace"
-version = "0.22.0"
+version = "0.22.1"
 dependencies = [
  "ctor",
  "tracing",
@@ -3106,7 +3107,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-core-txpool"
-version = "0.22.0"
+version = "0.22.1"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -3132,7 +3133,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-core-types"
-version = "0.22.0"
+version = "0.22.1"
 dependencies = [
  "anyhow",
  "bs58",
