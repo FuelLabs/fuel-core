@@ -227,6 +227,7 @@ impl StateWriter {
         self.write_messages(state_config.messages)?;
         self.write_contract_state(state_config.contract_state)?;
         self.write_contract_balance(state_config.contract_balance)?;
+        self.write_block_height(state_config.block_height)?;
         self.close()?;
         Ok(())
     }
@@ -297,6 +298,10 @@ impl StateWriter {
         }
     }
 
+    // TODO: Decide where to store `block_height` for the genesis block.
+    //  it can be part of the chain config or maybe part of something else that
+    //  is available for all nodes in the network.
+    //  https://github.com/FuelLabs/fuel-core/issues/1667
     pub fn write_block_height(&mut self, height: BlockHeight) -> anyhow::Result<()> {
         match &mut self.encoder {
             EncoderType::Json { buffer, .. } => {

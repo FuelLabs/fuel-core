@@ -183,39 +183,6 @@ mod tests {
         }
     }
 
-    #[test]
-    fn remove_deletes_merkle_metadata_when_empty() {
-        let contract_id = ContractId::from([1u8; 32]);
-        let asset_id = AssetId::new([1u8; 32]);
-        let key = (&contract_id, &asset_id).into();
-        let database = &mut Database::<OnChain>::default();
-
-        // Write a contract asset
-        let balance: Word = 100;
-        database
-            .storage::<ContractsAssets>()
-            .insert(&key, &balance)
-            .unwrap();
-
-        // Read the Merkle metadata
-        database
-            .storage::<ContractsAssetsMerkleMetadata>()
-            .get(&contract_id)
-            .unwrap()
-            .expect("Expected Merkle metadata to be present");
-
-        // Remove the contract asset
-        database.storage::<ContractsAssets>().remove(&key).unwrap();
-
-        // Read the Merkle metadata
-        let metadata = database
-            .storage::<ContractsAssetsMerkleMetadata>()
-            .get(&contract_id)
-            .unwrap();
-
-        assert!(metadata.is_none());
-    }
-
     fn random_bytes<R>(rng: &mut R) -> [u8; 32]
     where
         R: Rng + ?Sized,

@@ -24,7 +24,6 @@ use serde_with::serde_as;
 
 #[serde_as]
 #[derive(Clone, Debug, Default, Deserialize, Serialize, Eq, PartialEq)]
-// If any fields are added make sure to update the `NonSkippingSerialize` impl
 pub struct MessageConfig {
     pub sender: Address,
     pub recipient: Address,
@@ -35,9 +34,6 @@ pub struct MessageConfig {
     /// The block height from the parent da layer that originated this message
     pub da_height: DaBlockHeight,
 }
-
-#[cfg(feature = "parquet")]
-impl crate::serialization::NonSkippingSerialize for MessageConfig {}
 
 #[cfg(all(test, feature = "random", feature = "std"))]
 impl crate::Randomize for MessageConfig {

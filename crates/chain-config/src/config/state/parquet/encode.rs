@@ -4,7 +4,6 @@ use std::{
     sync::Arc,
 };
 
-use crate::serialization::NonSkippingSerialize;
 use fuel_core_types::fuel_types::canonical;
 use itertools::Itertools;
 use parquet::{
@@ -87,7 +86,6 @@ where
             .map(|el| E::encode(&el))
             .map_ok(Into::into)
             .try_collect()?;
-        eprintln!("values: {:?}", values);
         column
             .typed::<ByteArrayType>()
             .write_batch(&values, None, None)?;
@@ -110,13 +108,13 @@ pub trait Encode<T> {
 pub struct PostcardEncode;
 impl<T> Encode<T> for PostcardEncode
 where
-    T: NonSkippingSerialize,
+    T: serde::Serialize,
 {
     fn encode(data: &T) -> anyhow::Result<Vec<u8>> {
         let mut serializer = postcard::Serializer {
             output: AllocVec::new(),
         };
-        data.non_skipping_serialize(&mut serializer)?;
+        data.serialize(&mut serializer)?;
         Ok(serializer.output.finalize()?)
     }
 }

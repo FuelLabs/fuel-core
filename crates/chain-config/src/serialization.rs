@@ -8,26 +8,6 @@ use serde_with::{
     SerializeAs,
 };
 
-#[cfg(feature = "parquet")]
-/// Skipping fields is problematic for encodings which are not self-describing. This trait is used
-/// to signal that a type's Serialize impl doesn't skip fields. Or, if it does, the type should
-/// override the `non_skipping_serialize` method.
-pub(crate) trait NonSkippingSerialize
-where
-    Self: serde::Serialize,
-{
-    /// The default to be used only when the Serialize impl doesn't skip fields
-    fn non_skipping_serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        self.serialize(serializer)
-    }
-}
-
-#[cfg(feature = "parquet")]
-impl NonSkippingSerialize for fuel_core_types::fuel_types::BlockHeight {}
-
 /// Encode/decode a byte vector as a hex string if the serializer is human readable. Otherwise, use the default encoding.
 pub(crate) struct HexIfHumanReadable;
 

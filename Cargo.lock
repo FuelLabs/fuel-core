@@ -2821,6 +2821,7 @@ dependencies = [
  "anyhow",
  "bech32",
  "bytes",
+ "fuel-core-chain-config",
  "fuel-core-storage",
  "fuel-core-types",
  "impl-tools",

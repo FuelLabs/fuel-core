@@ -203,6 +203,7 @@ where
         self.data.as_ref().flush()
     }
 
+    /// Removes all entries from the column in the database(a.k.a. pruning the one table).
     pub fn delete_all(&self, column: Description::Column) -> DatabaseResult<()> {
         self.data
             .as_ref()

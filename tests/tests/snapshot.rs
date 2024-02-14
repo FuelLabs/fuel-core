@@ -79,14 +79,13 @@ async fn loads_snapshot() {
         ]
         .into_iter()
         .map(|(owner, amount, asset_id)| CoinConfig {
-            tx_id: None,
-            output_index: None,
             tx_pointer_block_height: Some(Default::default()),
             tx_pointer_tx_idx: Some(0),
             maturity: Some(Default::default()),
             owner,
             amount,
             asset_id,
+            ..Default::default()
         })
         .collect(),
         messages: vec![MessageConfig {

@@ -89,7 +89,7 @@ impl TestContext {
 pub struct TestSetupBuilder {
     pub rng: StdRng,
     pub contracts: HashMap<ContractId, ContractConfig>,
-    pub balances: Vec<ContractBalanceConfig>,
+    pub contract_balances: Vec<ContractBalanceConfig>,
     pub initial_coins: Vec<CoinConfig>,
     pub min_gas_price: u64,
     pub gas_limit: u64,
@@ -140,7 +140,7 @@ impl TestSetupBuilder {
                     asset_id,
                     amount,
                 });
-        self.balances.extend(balances);
+        self.contract_balances.extend(balances);
 
         (salt, contract_id)
     }
@@ -200,7 +200,7 @@ impl TestSetupBuilder {
         let state = StateConfig {
             coins: self.initial_coins.clone(),
             contracts: self.contracts.values().cloned().collect_vec(),
-            contract_balance: self.balances.clone(),
+            contract_balance: self.contract_balances.clone(),
             block_height: self.starting_block,
             ..StateConfig::default()
         };
@@ -240,7 +240,7 @@ impl Default for TestSetupBuilder {
             starting_block: Default::default(),
             utxo_validation: true,
             trigger: Trigger::Instant,
-            balances: vec![],
+            contract_balances: vec![],
         }
     }
 }

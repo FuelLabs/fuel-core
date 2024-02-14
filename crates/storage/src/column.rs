@@ -79,14 +79,10 @@ pub enum Column {
     GenesisCoinRoots = 23,
     /// Table for message roots during genesis state import.
     GenesisMessageRoots = 24,
-    /// Table for contract state roots during genesis state import.
-    GenesisContractStateRoots = 25,
-    /// Table for contract balance roots during genesis state import.
-    GenesisContractBalanceRoots = 26,
     /// Table for contract roots during genesis state import.
-    GenesisContractRoots = 27,
+    GenesisContractRoots = 25,
     /// Table for contract ids during genesis state import.
-    GenesisContractIds = 28,
+    GenesisContractIds = 26,
 }
 
 impl Column {

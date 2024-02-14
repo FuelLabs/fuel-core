@@ -48,14 +48,10 @@ mod coin {
             ]
             .into_iter()
             .map(|(owner, amount, asset_id)| CoinConfig {
-                tx_id: None,
-                output_index: None,
-                tx_pointer_block_height: None,
-                tx_pointer_tx_idx: None,
-                maturity: None,
                 owner,
                 amount,
                 asset_id,
+                ..Default::default()
             })
             .collect(),
             messages: vec![],
@@ -512,14 +508,10 @@ mod all_coins {
             ]
             .into_iter()
             .map(|(owner, amount, asset_id)| CoinConfig {
-                tx_id: None,
-                output_index: None,
-                tx_pointer_block_height: None,
-                tx_pointer_tx_idx: None,
-                maturity: None,
                 owner,
                 amount,
                 asset_id,
+                ..Default::default()
             })
             .collect(),
             messages: vec![(owner, 50), (owner, 150)]

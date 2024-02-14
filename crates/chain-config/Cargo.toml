@@ -29,6 +29,7 @@ tracing = { version = "0.1", default-features = false }
 
 [dev-dependencies]
 bytes = { workspace = true }
+fuel-core-chain-config = { path = ".", features = ["parquet"] }
 fuel-core-types = { workspace = true, default-features = false, features = [
   "random",
   "serde",
@@ -49,7 +50,6 @@ std = [
   "tracing/std",
   "bech32/std",
 ]
-# TODO: remove parquet
-default = ["std", "random", "parquet"]
+default = ["std", "random"]
 parquet = ["std", "dep:parquet", "postcard/use-std"]
 random = ["dep:rand", "fuel-core-types/random"]

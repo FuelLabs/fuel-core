@@ -49,14 +49,10 @@ async fn balance() {
         ]
         .into_iter()
         .map(|(owner, amount, asset_id)| CoinConfig {
-            tx_id: None,
-            output_index: None,
-            tx_pointer_block_height: None,
-            tx_pointer_tx_idx: None,
-            maturity: None,
             owner,
             amount,
             asset_id,
+            ..Default::default()
         })
         .collect(),
         messages: vec![(owner, 60), (owner, 90)]
@@ -164,14 +160,10 @@ async fn first_5_balances() {
                         ]
                     })
                     .map(|(owner, amount, asset_id)| CoinConfig {
-                        tx_id: None,
-                        output_index: None,
-                        tx_pointer_block_height: None,
-                        tx_pointer_tx_idx: None,
-                        maturity: None,
                         owner: *owner,
                         amount,
                         asset_id,
+                        ..Default::default()
                     }),
             );
         }

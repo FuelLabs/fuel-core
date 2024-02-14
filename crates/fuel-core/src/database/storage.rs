@@ -53,10 +53,8 @@ use std::borrow::Cow;
 
 use super::genesis_progress::{
     GenesisCoinRoots,
-    GenesisContractBalanceRoots,
     GenesisContractIds,
     GenesisContractRoots,
-    GenesisContractStateRoots,
     GenesisMessageRoots,
     GenesisMetadata,
 };
@@ -109,8 +107,6 @@ use_structured_implementation!(
     GenesisMetadata,
     GenesisCoinRoots,
     GenesisMessageRoots,
-    GenesisContractStateRoots,
-    GenesisContractBalanceRoots,
     GenesisContractRoots,
     GenesisContractIds
 );

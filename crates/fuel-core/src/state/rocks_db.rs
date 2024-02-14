@@ -495,7 +495,19 @@ where
     // use delete_range to delete all keys in a column
     fn delete_all(&self, column: Self::Column) -> StorageResult<()> {
         let mut batch = WriteBatch::default();
-        batch.delete_range_cf(&self.cf(column), [0u8; 32], [255u8; 32]);
+        let first = self
+            .iter_all(column, None, None, IterDirection::Forward)
+            .next()
+            .transpose()?
+            .map(|(key, _)| key)
+            .unwrap_or_default();
+        let last = self
+            .iter_all(column, None, None, IterDirection::Reverse)
+            .next()
+            .transpose()?
+            .map(|(key, _)| key)
+            .unwrap_or_default();
+        batch.delete_range_cf(&self.cf(column), first, last);
 
         database_metrics().write_meter.inc();
         database_metrics()

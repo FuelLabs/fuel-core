@@ -100,6 +100,7 @@ fn verify_genesis_block_fields(
     );
     ensure!(
         // TODO: Set `da_height` based on the chain config.
+        //  https://github.com/FuelLabs/fuel-core/issues/1667
         header.da_height == Default::default(),
         "The genesis `da_height` is not as expected"
     );

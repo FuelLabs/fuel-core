@@ -7,6 +7,8 @@ use fuel_core_types::fuel_types::BlockHeight;
 pub struct Config {
     /// The chain configuration.
     pub chain_config: ChainConfig,
+    // TODO: Decide do we need it here or inside of the `ChainConfig` or somewhere else.
+    //  https://github.com/FuelLabs/fuel-core/issues/1667
     /// The block height at genesis
     pub block_height: BlockHeight,
 }

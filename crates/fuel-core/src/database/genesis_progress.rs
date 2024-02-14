@@ -89,37 +89,6 @@ impl TableWithBlueprint for GenesisMessageRoots {
         Column::GenesisMessageRoots
     }
 }
-
-pub struct GenesisContractStateRoots;
-impl Mappable for GenesisContractStateRoots {
-    type Key = Self::OwnedKey;
-    type OwnedKey = MerkleRoot;
-    type Value = Self::OwnedValue;
-    type OwnedValue = ();
-}
-impl TableWithBlueprint for GenesisContractStateRoots {
-    type Blueprint = Plain<Raw, Postcard>;
-    type Column = Column;
-    fn column() -> Self::Column {
-        Column::GenesisContractStateRoots
-    }
-}
-
-pub struct GenesisContractBalanceRoots;
-impl Mappable for GenesisContractBalanceRoots {
-    type Key = Self::OwnedKey;
-    type OwnedKey = MerkleRoot;
-    type Value = Self::OwnedValue;
-    type OwnedValue = ();
-}
-impl TableWithBlueprint for GenesisContractBalanceRoots {
-    type Blueprint = Plain<Raw, Postcard>;
-    type Column = Column;
-    fn column() -> Self::Column {
-        Column::GenesisContractBalanceRoots
-    }
-}
-
 pub struct GenesisContractRoots;
 impl Mappable for GenesisContractRoots {
     type Key = Self::OwnedKey;
@@ -185,16 +154,6 @@ impl Database {
         Ok(())
     }
 
-    pub fn add_state_root(&mut self, root: MerkleRoot) -> Result<()> {
-        StorageMutate::<GenesisContractStateRoots>::insert(self, &root, &())?;
-        Ok(())
-    }
-
-    pub fn add_balance_root(&mut self, root: MerkleRoot) -> Result<()> {
-        StorageMutate::<GenesisContractBalanceRoots>::insert(self, &root, &())?;
-        Ok(())
-    }
-
     pub fn add_contract_id(&mut self, contract_id: ContractId) -> Result<()> {
         StorageMutate::<GenesisContractIds>::insert(self, &contract_id, &())?;
         Ok(())
@@ -210,9 +169,7 @@ impl Database {
         let roots_iter = self.iter_all::<M>(None);
 
         let roots = process_results(roots_iter, |roots| {
-            roots
-                .map(|(root, _)| MerkleRoot::try_from(root).unwrap())
-                .collect::<Vec<MerkleRoot>>()
+            roots.map(|(root, _)| root).collect::<Vec<MerkleRoot>>()
         })?
         .into_iter()
         .enumerate()
@@ -240,14 +197,6 @@ impl Database {
 
     pub fn genesis_contracts_root(&self) -> Result<MerkleRoot> {
         self.compute_genesis_root::<GenesisContractRoots>()
-    }
-
-    pub fn genesis_states_root(&self) -> Result<MerkleRoot> {
-        self.compute_genesis_root::<GenesisContractStateRoots>()
-    }
-
-    pub fn genesis_balances_root(&self) -> Result<MerkleRoot> {
-        self.compute_genesis_root::<GenesisContractBalanceRoots>()
     }
 
     pub fn genesis_contract_ids_iter(

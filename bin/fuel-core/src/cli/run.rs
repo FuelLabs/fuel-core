@@ -263,8 +263,8 @@ impl Command {
             Some(path) => {
                 let metadata = SnapshotMetadata::read(path)?;
                 let chain_conf = ChainConfig::from_snapshot_metadata(&metadata)?;
-                let state_config = StateReader::for_snapshot(metadata, MAX_GROUP_SIZE)?;
-                (chain_conf, state_config)
+                let state_reader = StateReader::for_snapshot(metadata, MAX_GROUP_SIZE)?;
+                (chain_conf, state_reader)
             }
         };
 

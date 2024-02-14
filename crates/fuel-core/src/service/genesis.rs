@@ -2,10 +2,8 @@ use crate::{
     database::{
         genesis_progress::{
             GenesisCoinRoots,
-            GenesisContractBalanceRoots,
             GenesisContractIds,
             GenesisContractRoots,
-            GenesisContractStateRoots,
             GenesisMessageRoots,
             GenesisMetadata,
         },
@@ -143,8 +141,6 @@ fn cleanup_genesis_progress(database: &mut Database) -> anyhow::Result<()> {
     database.delete_all(GenesisMetadata::column())?;
     database.delete_all(GenesisCoinRoots::column())?;
     database.delete_all(GenesisMessageRoots::column())?;
-    database.delete_all(GenesisContractBalanceRoots::column())?;
-    database.delete_all(GenesisContractStateRoots::column())?;
     database.delete_all(GenesisContractRoots::column())?;
     database.delete_all(GenesisContractIds::column())?;
 
@@ -157,6 +153,7 @@ pub fn create_genesis_block(config: &Config) -> Block {
         PartialBlockHeader {
             application: ApplicationHeader::<Empty> {
                 // TODO: Set `da_height` based on the chain config.
+                //  https://github.com/FuelLabs/fuel-core/issues/1667
                 da_height: Default::default(),
                 generated: Empty,
             },
@@ -328,9 +325,7 @@ mod tests {
         combined_database::CombinedDatabase,
         database::genesis_progress::{
             GenesisCoinRoots,
-            GenesisContractBalanceRoots,
             GenesisContractRoots,
-            GenesisContractStateRoots,
             GenesisMessageRoots,
             GenesisResource,
         },
@@ -416,14 +411,8 @@ mod tests {
 
         let coins = (0..1000)
             .map(|_| CoinConfig {
-                tx_id: None,
-                output_index: None,
-                tx_pointer_block_height: None,
-                tx_pointer_tx_idx: None,
-                maturity: None,
-                owner: Default::default(),
                 amount: 10,
-                asset_id: Default::default(),
+                ..Default::default()
             })
             .collect_vec();
 
@@ -497,16 +486,6 @@ mod tests {
             .unwrap()
             .next()
             .is_none());
-        assert!(db
-            .genesis_roots::<GenesisContractStateRoots>()
-            .unwrap()
-            .next()
-            .is_none());
-        assert!(db
-            .genesis_roots::<GenesisContractBalanceRoots>()
-            .unwrap()
-            .next()
-            .is_none());
         assert!(db.genesis_contract_ids_iter().next().is_none());
     }
 
@@ -549,14 +528,10 @@ mod tests {
                     asset_id: asset_id_alice,
                 },
                 CoinConfig {
-                    tx_id: None,
-                    output_index: None,
-                    tx_pointer_block_height: None,
-                    tx_pointer_tx_idx: None,
-                    maturity: None,
                     owner: bob,
                     amount: bob_value,
                     asset_id: asset_id_bob,
+                    ..Default::default()
                 },
             ],
             block_height: starting_height,
@@ -724,10 +699,7 @@ mod tests {
                 contract_id,
                 code: contract.into(),
                 salt,
-                tx_id: None,
-                output_index: None,
-                tx_pointer_block_height: None,
-                tx_pointer_tx_idx: None,
+                ..Default::default()
             }],
             contract_balance: vec![contract_balance],
             ..Default::default()
@@ -759,15 +731,11 @@ mod tests {
     async fn coin_tx_pointer_cant_exceed_genesis_height() {
         let state = StateConfig {
             coins: vec![CoinConfig {
-                tx_id: None,
-                output_index: None,
                 // set txpointer height > genesis height
                 tx_pointer_block_height: Some(BlockHeight::from(11u32)),
                 tx_pointer_tx_idx: Some(0),
-                maturity: None,
-                owner: Default::default(),
                 amount: 10,
-                asset_id: Default::default(),
+                ..Default::default()
             }],
             block_height: BlockHeight::from(10u32),
             ..Default::default()
@@ -806,11 +774,10 @@ mod tests {
                 contract_id: ContractId::from(*contract_id),
                 code: contract.into(),
                 salt,
-                tx_id: None,
-                output_index: None,
                 // set txpointer height > genesis height
                 tx_pointer_block_height: Some(BlockHeight::from(11u32)),
                 tx_pointer_tx_idx: Some(0),
+                ..Default::default()
             }],
             contract_balance: balances,
             block_height: BlockHeight::from(10u32),
@@ -852,10 +819,7 @@ mod tests {
             contract_id,
             code: contract.into(),
             salt,
-            tx_id: None,
-            output_index: None,
-            tx_pointer_block_height: None,
-            tx_pointer_tx_idx: None,
+            ..Default::default()
         }
     }
 
@@ -941,14 +905,8 @@ mod tests {
     async fn initializes_coins_with_generated_tx_and_output_idx() {
         let coins = (0..1000)
             .map(|_| CoinConfig {
-                tx_id: None,
-                output_index: None,
-                tx_pointer_block_height: None,
-                tx_pointer_tx_idx: None,
-                maturity: None,
-                owner: Default::default(),
                 amount: 10,
-                asset_id: Default::default(),
+                ..Default::default()
             })
             .collect_vec();
 

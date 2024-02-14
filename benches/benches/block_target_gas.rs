@@ -268,12 +268,7 @@ fn service_with_many_contracts(
         .iter()
         .map(|contract_id| ContractConfig {
             contract_id: *contract_id,
-            code: vec![],
-            salt: Default::default(),
-            tx_id: None,
-            output_index: None,
-            tx_pointer_block_height: None,
-            tx_pointer_tx_idx: None,
+            ..Default::default()
         })
         .collect::<Vec<_>>();
     let state_config = StateConfig {

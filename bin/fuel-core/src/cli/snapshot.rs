@@ -87,7 +87,7 @@ impl EncodingCommand {
 pub enum SubCommands {
     /// Creates a snapshot of the entire database and produces a chain config.
     Everything {
-        /// Specify a path to the the chain config. Defaults used if no path
+        /// Specify a path to the chain config. Defaults used if no path
         /// is provided.
         #[clap(name = "CHAIN_CONFIG", long = "chain")]
         chain_config: Option<PathBuf>,
@@ -562,12 +562,12 @@ mod tests {
     #[test_case(2; "parquet group_size=2")]
     #[test_case(5; "parquet group_size=5")]
     fn everything_snapshot_respects_group_size(group_size: usize) -> anyhow::Result<()> {
-        // given
-
         use fuel_core_chain_config::{
             ParquetFiles,
             StateReader,
         };
+
+        // given
         let temp_dir = tempfile::tempdir()?;
 
         let snapshot_dir = temp_dir.path().join("snapshot");
@@ -676,16 +676,13 @@ mod tests {
     }
 
     #[cfg(feature = "parquet")]
-    use fuel_core_chain_config::Group;
-
-    #[cfg(feature = "parquet")]
     fn assert_groups_as_expected<T, I>(
         group_size: usize,
         expected_data: Vec<T>,
         actual_data: impl FnOnce() -> I,
     ) where
         T: PartialEq + std::fmt::Debug,
-        I: Iterator<Item = anyhow::Result<Group<T>>>,
+        I: Iterator<Item = anyhow::Result<fuel_core_chain_config::Group<T>>>,
     {
         let expected = expected_data
             .into_iter()

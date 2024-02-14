@@ -19,10 +19,8 @@ use serde::{
 };
 use serde_with::serde_as;
 
-#[serde_with::skip_serializing_none]
 #[serde_as]
 #[derive(Clone, Debug, Deserialize, Serialize, Eq, PartialEq, Default)]
-// If any fields are added make sure to update the `NonSkippingSerialize` impl
 pub struct ContractConfig {
     pub contract_id: ContractId,
     #[serde_as(as = "HexIfHumanReadable")]
@@ -40,26 +38,8 @@ pub struct ContractConfig {
     pub tx_pointer_tx_idx: Option<u16>,
 }
 
-#[cfg(feature = "parquet")]
-impl crate::serialization::NonSkippingSerialize for ContractConfig {
-    fn non_skipping_serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
-        use serde::ser::SerializeStruct;
-        let mut s = serializer.serialize_struct("ContractConfig", 7)?;
-        s.serialize_field("contract_id", &self.contract_id)?;
-        s.serialize_field("code", &self.code)?;
-        s.serialize_field("salt", &self.salt)?;
-        s.serialize_field("tx_id", &self.tx_id)?;
-        s.serialize_field("output_index", &self.output_index)?;
-        s.serialize_field("tx_pointer_block_height", &self.tx_pointer_block_height)?;
-        s.serialize_field("tx_pointer_tx_idx", &self.tx_pointer_tx_idx)?;
-        s.end()
-    }
-}
-
 impl ContractConfig {
+    // TODO: Remove https://github.com/FuelLabs/fuel-core/issues/1668
     pub fn utxo_id(&self) -> Option<UtxoId> {
         match (self.tx_id, self.output_index) {
             (Some(tx_id), Some(output_index)) => Some(UtxoId::new(tx_id, output_index)),
@@ -67,6 +47,7 @@ impl ContractConfig {
         }
     }
 
+    // TODO: Remove https://github.com/FuelLabs/fuel-core/issues/1668
     pub fn tx_pointer(&self) -> TxPointer {
         match (self.tx_pointer_block_height, self.tx_pointer_tx_idx) {
             (Some(block_height), Some(tx_idx)) => TxPointer::new(block_height, tx_idx),
