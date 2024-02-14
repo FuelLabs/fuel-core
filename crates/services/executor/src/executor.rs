@@ -1648,3 +1648,153 @@ impl Fee for CreateCheckedMetadata {
         self.fee.min_fee()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Arc;
+
+    use fuel_core::database::Database;
+    use fuel_core_types::{
+        blockchain::{
+            block::PartialFuelBlock,
+            primitives::DaBlockHeight,
+        },
+        fuel_asm::{
+            op,
+            GTFArgs,
+            RegId,
+        },
+        fuel_tx::{
+            Finalizable,
+            TransactionBuilder,
+        },
+        fuel_types::{
+            bytes::WORD_SIZE,
+            AssetId,
+        },
+        services::{
+            executor::ExecutionType,
+            relayer::Event,
+        },
+    };
+
+    use crate::{
+        executor::{
+            ExecutionOptions,
+            PartialBlockComponent,
+        },
+        ports::{
+            ExecutorDatabaseTrait,
+            MaybeCheckedTransaction,
+            RelayerPort,
+            TransactionsSource,
+        },
+        Config,
+    };
+
+    use super::ExecutionInstance;
+
+    pub struct NoRelayer;
+
+    impl RelayerPort for NoRelayer {
+        fn enabled(&self) -> bool {
+            false
+        }
+        fn get_events(&self, _da_height: &DaBlockHeight) -> anyhow::Result<Vec<Event>> {
+            anyhow::bail!("No relayer")
+        }
+    }
+
+    impl TransactionsSource for NoRelayer {
+        fn next(&self, _gas_limit: u64) -> Vec<MaybeCheckedTransaction> {
+            panic!("Querying tx source");
+            vec![]
+        }
+    }
+
+    // ???
+    impl ExecutorDatabaseTrait<Database> for Database {}
+
+    /// Malleable fields should not affect validity of the block
+    #[test]
+    fn malleable_fields_do_not_affect_validity() {
+        let database = Database::in_memory();
+
+        let ei = ExecutionInstance {
+            relayer: NoRelayer,
+            database,
+            config: Arc::new(Config::default()),
+            options: ExecutionOptions::default(),
+        };
+
+        let tx_size_ptr = 32
+            + (ei.config.consensus_parameters.tx_params.max_inputs as usize
+                * (AssetId::LEN + WORD_SIZE));
+        let tx_start_ptr = tx_size_ptr + 8;
+
+        let mut block =
+            PartialFuelBlock {
+                header: Default::default(),
+                transactions: vec![
+                fuel_core_types::fuel_tx::Transaction::default_test_tx(),
+                fuel_core_types::fuel_tx::Transaction::Script(
+                    TransactionBuilder::script(
+                        vec![
+                            // Log tx id (hash)
+                            op::movi(0x21, 32),
+                            op::logd(0x00, 0x00, 0x00, 0x21),
+                            // Load tx size
+                            op::movi(0x21, tx_size_ptr as u32),
+                            op::lw(0x21, 0x21, 0),
+                            // Make heap space for tx bytes, chain_id and computed tx hash
+                            op::addi(0x22, 0x21, 8 + 32),
+                            op::aloc(0x22),
+                            // Compute tx id using chain id and tx size
+                            op::addi(0x22, RegId::HP, 32), // Chain id position
+                            op::gtf_args(0x20, 0x00, GTFArgs::ScriptData),
+                            op::mcpi(0x22, 0x20, 8), // Copy chain id
+                            op::movi(0x20, tx_start_ptr as u32),
+                            op::addi(0x23, 0x22, 8), // Tx bytes position
+                            op::mcp(0x23, 0x20, 0x21), // Copy tx bytes
+                            op::addi(0x24, 0x21, 8), // len(chain_id) + len(tx bytes)
+                            op::logd(0x00, 0x00, 0x22, 0x24), // Log tx id hash
+                            op::s256(RegId::HP, 0x22, 0x24), // Compute tx id hash
+                            op::movi(0x25, 32), // Hash size
+                            op::logd(0x00, 0x00, RegId::HP, 0x25), // Log computed txid
+                            // Debug log
+                            op::ret(0x00),
+                        ]
+                        .into_iter()
+                        .collect(),
+                        ei.config.consensus_parameters.chain_id.to_be_bytes().to_vec(),
+                    )
+                    .add_random_fee_input()
+                    .gas_price(0)
+                    .script_gas_limit(1_000_000)
+                    .finalize(),
+                ),
+            ],
+            };
+
+        let mut block_transaction = ei.database.transaction();
+
+        let r = ei
+            .execute_block(
+                block_transaction.as_mut(),
+                ExecutionType::Production(PartialBlockComponent::from_partial_block(
+                    &mut block,
+                )),
+            )
+            .expect("Invalid block");
+
+        dbg!(r.coinbase);
+        dbg!(r.used_gas);
+        dbg!(r.tx_count);
+        dbg!(r.found_mint);
+        dbg!(r.message_ids);
+        dbg!(r.tx_status);
+        dbg!(r.skipped_transactions);
+
+        panic!();
+    }
+}
