@@ -59,4 +59,4 @@ rocksdb-production = [
   "dep:itertools",
 ]
 # features to enable in production, but increase build times
-production = ["env", "relayer", "rocksdb-production", "p2p"]
+production = ["env", "relayer", "rocksdb-production", "p2p", "parquet"]
