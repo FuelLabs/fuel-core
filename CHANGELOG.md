@@ -150,6 +150,12 @@ Description of the upcoming release here.
 - [#1573](https://github.com/FuelLabs/fuel-core/pull/1573): Remove nested p2p request/response encoding. Only breaks p2p networking compatibility with older fuel-core versions, but is otherwise fully internal.
 
 
+## [Version 0.22.1]
+
+### Fixed
+- [#1664](https://github.com/FuelLabs/fuel-core/pull/1664): Fixed long database initialization after restart of the node by setting limit to the WAL file.
+
+
 ## [Version 0.22.0]
 
 ### Added
