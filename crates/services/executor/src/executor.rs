@@ -1251,7 +1251,7 @@ where
                 | Input::MessageCoinPredicate(MessageCoinPredicate { nonce, .. })
                 | Input::MessageDataSigned(MessageDataSigned { nonce, .. })
                 | Input::MessageDataPredicate(MessageDataPredicate { nonce, .. }) => {
-                    // `MessageDataSigned` and `MessageDataPredicate` are spend only if tx is not reverted
+                    // `MessageDataSigned` and `MessageDataPredicate` are spent only if tx is not reverted
                     // mark message id as spent
                     let was_already_spent =
                         db.storage::<SpentMessages>().insert(nonce, &())?;
