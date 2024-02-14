@@ -18,7 +18,6 @@ use crate::{
                 OwnedMessageIds,
                 OwnedMessageKey,
             },
-            receipts::Receipts,
         },
     },
 };
@@ -48,9 +47,7 @@ use fuel_core_types::{
         },
         Input,
         Output,
-        Receipt,
         Transaction,
-        TxId,
         UniqueIdentifier,
     },
     fuel_types::{
@@ -259,12 +256,7 @@ where
         import_result: &ImportResult,
         db: &mut D,
     ) -> StorageResult<()> {
-        for TransactionExecutionStatus {
-            id,
-            result,
-            receipts,
-        } in import_result.tx_status.iter()
-        {
+        for TransactionExecutionStatus { id, result } in import_result.tx_status.iter() {
             let status = from_executor_to_status(
                 &import_result.sealed_block.entity,
                 result.clone(),
@@ -277,20 +269,6 @@ where
                 )
                 .into());
             }
-
-            self.persist_receipts(id, receipts, db)?;
-        }
-        Ok(())
-    }
-
-    fn persist_receipts(
-        &self,
-        tx_id: &TxId,
-        receipts: &[Receipt],
-        db: &mut D,
-    ) -> StorageResult<()> {
-        if db.storage::<Receipts>().insert(tx_id, receipts)?.is_some() {
-            return Err(anyhow::anyhow!("Receipts already exist for tx {}", tx_id).into());
         }
         Ok(())
     }

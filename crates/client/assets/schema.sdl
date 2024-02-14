@@ -258,10 +258,12 @@ union DependentCost = LightOperation | HeavyOperation
 type DryRunFailureStatus {
 	programState: ProgramState
 	reason: String!
+	receipts: [Receipt!]!
 }
 
 type DryRunSuccessStatus {
 	programState: ProgramState
+	receipts: [Receipt!]!
 }
 
 type DryRunTransactionExecutionStatus {
@@ -973,7 +975,6 @@ type Transaction {
 	witnesses: [HexString!]
 	receiptsRoot: Bytes32
 	status: TransactionStatus
-	receipts: [Receipt!]
 	script: HexString
 	scriptData: HexString
 	bytecodeWitnessIndex: Int

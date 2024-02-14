@@ -7,7 +7,6 @@ use crate::{
     fuel_core_graphql_api::storage::{
         coins::OwnedCoins,
         messages::OwnedMessageIds,
-        receipts::Receipts,
         transactions::{
             OwnedTransactions,
             TransactionStatuses,
@@ -86,7 +85,6 @@ use_structured_implementation!(
     SealedBlockConsensus,
     Transactions,
     ProcessedTransactions,
-    Receipts,
     ContractsStateMerkleMetadata,
     ContractsStateMerkleData,
     ContractsAssetsMerkleMetadata,
