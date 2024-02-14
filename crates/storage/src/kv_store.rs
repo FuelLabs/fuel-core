@@ -12,12 +12,17 @@ pub type Value = Arc<Vec<u8>>;
 pub type KVItem = StorageResult<(Vec<u8>, Value)>;
 
 /// A column of the storage.
-pub trait StorageColumn: Clone {
+pub trait StorageColumn: Copy + core::fmt::Debug {
     /// Returns the name of the column.
     fn name(&self) -> &'static str;
 
     /// Returns the id of the column.
     fn id(&self) -> u32;
+
+    /// Returns the id of the column as an `usize`.
+    fn as_usize(&self) -> usize {
+        self.id() as usize
+    }
 }
 
 // TODO: Use `&mut self` for all mutable methods.
@@ -41,7 +46,7 @@ pub trait KeyValueStore {
         value: Value,
     ) -> StorageResult<Option<Value>> {
         // FIXME: This is a race condition. We should use a transaction.
-        let old_value = self.get(key, column.clone())?;
+        let old_value = self.get(key, column)?;
         self.put(key, column, value)?;
         Ok(old_value)
     }
@@ -53,7 +58,7 @@ pub trait KeyValueStore {
     /// Removes the value from the storage and returns it.
     fn take(&self, key: &[u8], column: Self::Column) -> StorageResult<Option<Value>> {
         // FIXME: This is a race condition. We should use a transaction.
-        let old_value = self.get(key, column.clone())?;
+        let old_value = self.get(key, column)?;
         self.delete(key, column)?;
         Ok(old_value)
     }
@@ -72,7 +77,7 @@ pub trait KeyValueStore {
         key: &[u8],
         column: Self::Column,
     ) -> StorageResult<Option<usize>> {
-        Ok(self.get(key, column.clone())?.map(|value| value.len()))
+        Ok(self.get(key, column)?.map(|value| value.len()))
     }
 
     /// Returns the value from the storage.
@@ -85,7 +90,7 @@ pub trait KeyValueStore {
         column: Self::Column,
         buf: &mut [u8],
     ) -> StorageResult<Option<usize>> {
-        self.get(key, column.clone())?
+        self.get(key, column)?
             .map(|value| {
                 let read = value.len();
                 if read != buf.len() {

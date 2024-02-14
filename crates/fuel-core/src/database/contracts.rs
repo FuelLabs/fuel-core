@@ -119,6 +119,7 @@ impl Database {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::database::database_description::on_chain::OnChain;
     use fuel_core_storage::StorageAsMut;
     use fuel_core_types::fuel_tx::Contract;
     use rand::{
@@ -134,7 +135,7 @@ mod tests {
         rng.fill_bytes(bytes.as_mut());
         let contract: Contract = Contract::from(bytes);
 
-        let database = &mut Database::default();
+        let database = &mut Database::<OnChain>::default();
         database
             .storage::<ContractsRawCode>()
             .insert(&contract_id, contract.as_ref())

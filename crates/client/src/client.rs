@@ -6,12 +6,14 @@ use crate::client::{
             SpendQueryElementInput,
         },
         contract::ContractBalanceQueryArgs,
+        gas_price::EstimateGasPrice,
         message::MessageStatusArgs,
         tx::DryRunArg,
         Tai64Timestamp,
         TransactionId,
     },
     types::{
+        gas_price::LatestGasPrice,
         message::MessageStatus,
         primitives::{
             Address,
@@ -49,7 +51,10 @@ use fuel_core_types::{
         BlockHeight,
         Nonce,
     },
-    services::p2p::PeerInfo,
+    services::{
+        executor::TransactionExecutionStatus,
+        p2p::PeerInfo,
+    },
 };
 #[cfg(feature = "subscriptions")]
 use futures::StreamExt;
@@ -345,6 +350,19 @@ impl FuelClient {
         self.query(query).await.map(|r| r.node_info.into())
     }
 
+    pub async fn latest_gas_price(&self) -> io::Result<LatestGasPrice> {
+        let query = schema::gas_price::QueryLatestGasPrice::build(());
+        self.query(query).await.map(|r| r.latest_gas_price.into())
+    }
+
+    pub async fn estimate_gas_price(
+        &self,
+        block_horizon: u32,
+    ) -> io::Result<EstimateGasPrice> {
+        let query = schema::gas_price::QueryEstimateGasPrice::build(block_horizon.into());
+        self.query(query).await.map(|r| r.estimate_gas_price)
+    }
+
     pub async fn connected_peers_info(&self) -> io::Result<Vec<PeerInfo>> {
         let query = schema::node_info::QueryPeersInfo::build(());
         self.query(query)
@@ -358,26 +376,33 @@ impl FuelClient {
     }
 
     /// Default dry run, matching the exact configuration as the node
-    pub async fn dry_run(&self, tx: &Transaction) -> io::Result<Vec<Receipt>> {
-        self.dry_run_opt(tx, None).await
+    pub async fn dry_run(
+        &self,
+        txs: &[Transaction],
+    ) -> io::Result<Vec<TransactionExecutionStatus>> {
+        self.dry_run_opt(txs, None).await
     }
 
     /// Dry run with options to override the node behavior
     pub async fn dry_run_opt(
         &self,
-        tx: &Transaction,
+        txs: &[Transaction],
         // Disable utxo input checks (exists, unspent, and valid signature)
         utxo_validation: Option<bool>,
-    ) -> io::Result<Vec<Receipt>> {
-        let tx = tx.clone().to_bytes();
-        let query = schema::tx::DryRun::build(DryRunArg {
-            tx: HexString(Bytes(tx)),
-            utxo_validation,
-        });
-        let receipts = self.query(query).await.map(|r| r.dry_run)?;
-        receipts
+    ) -> io::Result<Vec<TransactionExecutionStatus>> {
+        let txs = txs
+            .iter()
+            .map(|tx| HexString(Bytes(tx.to_bytes())))
+            .collect::<Vec<HexString>>();
+        let query: Operation<schema::tx::DryRun, DryRunArg> =
+            schema::tx::DryRun::build(DryRunArg {
+                txs,
+                utxo_validation,
+            });
+        let tx_statuses = self.query(query).await.map(|r| r.dry_run)?;
+        tx_statuses
             .into_iter()
-            .map(|receipt| receipt.try_into().map_err(Into::into))
+            .map(|tx_status| tx_status.try_into().map_err(Into::into))
             .collect()
     }
 
@@ -435,37 +460,6 @@ impl FuelClient {
         ))??;
 
         Ok(status)
-    }
-
-    // TODO: Remove this function after the Beta 5 release when we can introduce breaking changes.
-    // This function is now redundant since `submit_and_await_commit` returns
-    // receipts for all successful and failed transactions.
-    #[cfg(feature = "subscriptions")]
-    /// Submits transaction, await confirmation and return receipts.
-    pub async fn submit_and_await_commit_with_receipts(
-        &self,
-        tx: &Transaction,
-    ) -> io::Result<(TransactionStatus, Option<Vec<Receipt>>)> {
-        let tx_id = self.submit(tx).await?;
-        let status = self.await_transaction_commit(&tx_id).await?;
-        let receipts = match &status {
-            TransactionStatus::Submitted { .. } => None,
-            TransactionStatus::Success { receipts, .. } => Some(receipts.clone()),
-            TransactionStatus::SqueezedOut { .. } => {
-                // Note: Returns an error when the transaction has been squeezed
-                // out instead of returning the `SqueezedOut` status. This is
-                // done to maintain existing behavior where retrieving receipts
-                // via `self.receipts(..)` returns an error when the transaction
-                // cannot be found, such as in the case of a squeeze-out.
-                Err(io::Error::new(
-                    ErrorKind::NotFound,
-                    format!("transaction {tx_id} not found"),
-                ))?
-            }
-            TransactionStatus::Failure { receipts, .. } => Some(receipts.clone()),
-        };
-
-        Ok((status, receipts))
     }
 
     pub async fn start_session(&self) -> io::Result<String> {
@@ -688,14 +682,26 @@ impl FuelClient {
             io::Error::new(ErrorKind::NotFound, format!("transaction {id} not found"))
         })?;
 
-        let receipts = tx
-            .receipts
-            .map(|vec| {
-                let vec: Result<Vec<Receipt>, ConversionError> =
-                    vec.into_iter().map(TryInto::<Receipt>::try_into).collect();
-                vec
-            })
-            .transpose()?;
+        let receipts = match tx.status {
+            Some(status) => match status {
+                schema::tx::TransactionStatus::SuccessStatus(s) => Some(
+                    s.receipts
+                        .into_iter()
+                        .map(TryInto::<Receipt>::try_into)
+                        .collect::<Result<Vec<Receipt>, ConversionError>>(),
+                )
+                .transpose()?,
+                schema::tx::TransactionStatus::FailureStatus(s) => Some(
+                    s.receipts
+                        .into_iter()
+                        .map(TryInto::<Receipt>::try_into)
+                        .collect::<Result<Vec<Receipt>, ConversionError>>(),
+                )
+                .transpose()?,
+                _ => None,
+            },
+            _ => None,
+        };
 
         Ok(receipts)
     }

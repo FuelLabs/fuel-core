@@ -1,5 +1,5 @@
 version: v1
-name: buf.build/streamingfast/firehose-fuel
+name: buf.build/Fuellabs/firehose-fuel
 
 lint:
   use:

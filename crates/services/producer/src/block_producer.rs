@@ -18,23 +18,20 @@ use fuel_core_types::{
             ConsensusHeader,
             PartialBlockHeader,
         },
-        primitives::{
-            BlockId,
-            DaBlockHeight,
-        },
+        primitives::DaBlockHeight,
     },
     fuel_asm::Word,
-    fuel_tx::{
-        Receipt,
-        Transaction,
-    },
+    fuel_tx::Transaction,
     fuel_types::{
         BlockHeight,
         Bytes32,
     },
     services::{
         block_producer::Components,
-        executor::UncommittedResult,
+        executor::{
+            TransactionExecutionStatus,
+            UncommittedResult,
+        },
     },
     tai64::Tai64,
 };
@@ -129,38 +126,19 @@ where
 
         // Firehose block logging
         {
-            // TODO: hide this behind a feature-gate and make it configurable
-            use base64::prelude::*;
+            // TODO: hide this behinda feature-gate and make it configurable
             use fuel_core_firehose_types::prost::Message;
+            use fuel_core_types::blockchain::primitives::BlockId;
 
-            let block_hash = result.result().block.header().hash();
-            let parent_hash: BlockId = match height.pred() {
-                Some(h) => self.view_provider.view_at(&h)?.get_block(&h)?.id(),
+            let prev_id: BlockId = match height.pred() {
+                Some(h) => self.view_provider.latest_view().get_block(&h)?.id(),
                 None => BlockId::default(),
             };
-            let parent_heigth = height.pred().unwrap_or_default();
 
-            let last_irreversible_block = parent_heigth;
-            let unix_timestamp =
-                result.result().block.header().consensus().time.to_unix();
-
-            let fire_block = fuel_core_firehose_types::Block::from((
-                &result.result().block,
-                parent_hash,
-            ));
-            let payload_base64: String =
-                BASE64_STANDARD.encode(fire_block.encode_to_vec());
-
-            println!(
-                "FIRE BLOCK {} {} {} {} {} {} {}",
-                height,
-                block_hash,
-                parent_heigth,
-                parent_hash,
-                last_irreversible_block,
-                unix_timestamp,
-                payload_base64,
-            );
+            let fire_block =
+                fuel_core_firehose_types::Block::from((&result.result().block, prev_id));
+            let out_msg = hex::encode(fire_block.encode_to_vec());
+            println!("FIRE PROTO {}", out_msg);
         }
 
         Ok(result)
@@ -218,15 +196,15 @@ where
     Executor: ports::DryRunner + 'static,
 {
     // TODO: Support custom `block_time` for `dry_run`.
-    /// Simulate a transaction without altering any state. Does not aquire the production lock
+    /// Simulates multiple transactions without altering any state. Does not acquire the production lock.
     /// since it is basically a "read only" operation and shouldn't get in the way of normal
     /// production.
     pub async fn dry_run(
         &self,
-        transaction: Transaction,
+        transactions: Vec<Transaction>,
         height: Option<BlockHeight>,
         utxo_validation: Option<bool>,
-    ) -> anyhow::Result<Vec<Receipt>> {
+    ) -> anyhow::Result<Vec<TransactionExecutionStatus>> {
         let height = height.unwrap_or_else(|| {
             self.view_provider
                 .latest_height()
@@ -234,7 +212,6 @@ where
                 .expect("It is impossible to overflow the current block height")
         });
 
-        let is_script = transaction.is_script();
         // The dry run execution should use the state of the blockchain based on the
         // last available block, not on the upcoming one. It means that we need to
         // use the same configuration as the last block -> the same DA height.
@@ -243,25 +220,31 @@ where
         let header = self._new_header(height, Tai64::now())?;
         let component = Components {
             header_to_produce: header,
-            transactions_source: transaction,
+            transactions_source: transactions.clone(),
             gas_limit: u64::MAX,
         };
 
         let executor = self.executor.clone();
+
         // use the blocking threadpool for dry_run to avoid clogging up the main async runtime
-        let res: Vec<_> =
-            tokio_rayon::spawn_fifo(move || -> anyhow::Result<Vec<Receipt>> {
-                Ok(executor
-                    .dry_run(component, utxo_validation)?
-                    .into_iter()
-                    .flatten()
-                    .collect())
+        let tx_statuses = tokio_rayon::spawn_fifo(
+            move || -> anyhow::Result<Vec<TransactionExecutionStatus>> {
+                Ok(executor.dry_run(component, utxo_validation)?)
+            },
+        )
+        .await?;
+
+        if transactions
+            .iter()
+            .zip(tx_statuses.iter())
+            .any(|(transaction, tx_status)| {
+                transaction.is_script() && tx_status.result.receipts().is_empty()
             })
-            .await?;
-        if is_script && res.is_empty() {
-            return Err(anyhow!("Expected at least one set of receipts"))
+        {
+            Err(anyhow!("Expected at least one set of receipts"))
+        } else {
+            Ok(tx_statuses)
         }
-        Ok(res)
     }
 }
 

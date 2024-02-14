@@ -6,9 +6,9 @@ ARG SF_VERSION=latest
 # image.
 FROM ghcr.io/streamingfast/dummy-blockchain:$CHAIN_VERSION as chain
 
-# The 'ghcr.io/streamingfast/firehose-fuel' image is the one published by
+# The 'ghcr.io/FuelLabs/firehose-fuel' image is the one published by
 # Dockerfile found at the root of this project.
-FROM ghcr.io/streamingfast/firehose-fuel:$SF_VERSION
+FROM ghcr.io/FuelLabs/firehose-fuel:$SF_VERSION
 
 # Adjusted first element of copy to match the path of the binary in the chain image
 COPY --from=chain /app/dummy-blockchain /app/dummy-blockchain

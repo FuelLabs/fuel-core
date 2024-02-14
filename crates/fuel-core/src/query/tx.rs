@@ -9,10 +9,7 @@ use fuel_core_storage::{
         IterDirection,
     },
     not_found,
-    tables::{
-        Receipts,
-        Transactions,
-    },
+    tables::Transactions,
     Result as StorageResult,
     StorageAsRef,
 };
@@ -46,9 +43,14 @@ where
     }
 
     fn receipts(&self, tx_id: &TxId) -> StorageResult<Vec<Receipt>> {
-        self.storage::<Receipts>()
-            .get(tx_id)
-            .and_then(|v| v.ok_or(not_found!(Transactions)).map(|tx| tx.into_owned()))
+        let status = self.status(tx_id)?;
+
+        let receipts = match status {
+            TransactionStatus::Success { receipts, .. }
+            | TransactionStatus::Failed { receipts, .. } => Some(receipts),
+            _ => None,
+        };
+        receipts.ok_or(not_found!(Transactions))
     }
 }
 

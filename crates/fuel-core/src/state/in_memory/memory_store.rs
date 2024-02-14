@@ -1,6 +1,9 @@
 use crate::{
     database::{
-        Column,
+        database_description::{
+            on_chain::OnChain,
+            DatabaseDescription,
+        },
         Result as DatabaseResult,
     },
     state::{
@@ -18,6 +21,7 @@ use fuel_core_storage::{
     kv_store::{
         KVItem,
         KeyValueStore,
+        StorageColumn,
         Value,
     },
     Result as StorageResult,
@@ -31,16 +35,38 @@ use std::{
     },
 };
 
-#[derive(Default, Debug)]
-pub struct MemoryStore {
+#[derive(Debug)]
+pub struct MemoryStore<Description = OnChain>
+where
+    Description: DatabaseDescription,
+{
     // TODO: Remove `Mutex`.
-    inner: [Mutex<BTreeMap<Vec<u8>, Value>>; Column::COUNT],
+    inner: Vec<Mutex<BTreeMap<Vec<u8>, Value>>>,
+    _marker: core::marker::PhantomData<Description>,
 }
 
-impl MemoryStore {
+impl<Description> Default for MemoryStore<Description>
+where
+    Description: DatabaseDescription,
+{
+    fn default() -> Self {
+        use strum::EnumCount;
+        Self {
+            inner: (0..Description::Column::COUNT)
+                .map(|_| Mutex::new(BTreeMap::new()))
+                .collect(),
+            _marker: Default::default(),
+        }
+    }
+}
+
+impl<Description> MemoryStore<Description>
+where
+    Description: DatabaseDescription,
+{
     pub fn iter_all(
         &self,
-        column: Column,
+        column: Description::Column,
         prefix: Option<&[u8]>,
         start: Option<&[u8]>,
         direction: IterDirection,
@@ -104,13 +130,16 @@ impl MemoryStore {
     }
 }
 
-impl KeyValueStore for MemoryStore {
-    type Column = Column;
+impl<Description> KeyValueStore for MemoryStore<Description>
+where
+    Description: DatabaseDescription,
+{
+    type Column = Description::Column;
 
     fn replace(
         &self,
         key: &[u8],
-        column: Column,
+        column: Self::Column,
         value: Value,
     ) -> StorageResult<Option<Value>> {
         Ok(self.inner[column.as_usize()]
@@ -119,7 +148,12 @@ impl KeyValueStore for MemoryStore {
             .insert(key.to_vec(), value))
     }
 
-    fn write(&self, key: &[u8], column: Column, buf: &[u8]) -> StorageResult<usize> {
+    fn write(
+        &self,
+        key: &[u8],
+        column: Self::Column,
+        buf: &[u8],
+    ) -> StorageResult<usize> {
         let len = buf.len();
         self.inner[column.as_usize()]
             .lock()
@@ -128,18 +162,18 @@ impl KeyValueStore for MemoryStore {
         Ok(len)
     }
 
-    fn take(&self, key: &[u8], column: Column) -> StorageResult<Option<Value>> {
+    fn take(&self, key: &[u8], column: Self::Column) -> StorageResult<Option<Value>> {
         Ok(self.inner[column.as_usize()]
             .lock()
             .expect("poisoned")
             .remove(&key.to_vec()))
     }
 
-    fn delete(&self, key: &[u8], column: Column) -> StorageResult<()> {
+    fn delete(&self, key: &[u8], column: Self::Column) -> StorageResult<()> {
         self.take(key, column).map(|_| ())
     }
 
-    fn get(&self, key: &[u8], column: Column) -> StorageResult<Option<Value>> {
+    fn get(&self, key: &[u8], column: Self::Column) -> StorageResult<Option<Value>> {
         Ok(self.inner[column.as_usize()]
             .lock()
             .expect("poisoned")
@@ -148,10 +182,13 @@ impl KeyValueStore for MemoryStore {
     }
 }
 
-impl IteratorableStore for MemoryStore {
+impl<Description> IteratorableStore for MemoryStore<Description>
+where
+    Description: DatabaseDescription,
+{
     fn iter_all(
         &self,
-        column: Column,
+        column: Self::Column,
         prefix: Option<&[u8]>,
         start: Option<&[u8]>,
         direction: IterDirection,
@@ -160,9 +197,15 @@ impl IteratorableStore for MemoryStore {
     }
 }
 
-impl BatchOperations for MemoryStore {}
+impl<Description> BatchOperations for MemoryStore<Description> where
+    Description: DatabaseDescription
+{
+}
 
-impl TransactableStorage for MemoryStore {
+impl<Description> TransactableStorage for MemoryStore<Description>
+where
+    Description: DatabaseDescription,
+{
     fn flush(&self) -> DatabaseResult<()> {
         for lock in self.inner.iter() {
             lock.lock().expect("poisoned").clear();
@@ -174,13 +217,14 @@ impl TransactableStorage for MemoryStore {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use fuel_core_storage::column::Column;
     use std::sync::Arc;
 
     #[test]
     fn can_use_unit_value() {
         let key = vec![0x00];
 
-        let db = MemoryStore::default();
+        let db = MemoryStore::<OnChain>::default();
         let expected = Arc::new(vec![]);
         db.put(&key.to_vec(), Column::Metadata, expected.clone())
             .unwrap();
@@ -205,7 +249,7 @@ mod tests {
     fn can_use_unit_key() {
         let key: Vec<u8> = Vec::with_capacity(0);
 
-        let db = MemoryStore::default();
+        let db = MemoryStore::<OnChain>::default();
         let expected = Arc::new(vec![1, 2, 3]);
         db.put(&key, Column::Metadata, expected.clone()).unwrap();
 
@@ -229,7 +273,7 @@ mod tests {
     fn can_use_unit_key_and_value() {
         let key: Vec<u8> = Vec::with_capacity(0);
 
-        let db = MemoryStore::default();
+        let db = MemoryStore::<OnChain>::default();
         let expected = Arc::new(vec![]);
         db.put(&key, Column::Metadata, expected.clone()).unwrap();
 

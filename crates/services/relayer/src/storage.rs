@@ -7,7 +7,7 @@ use fuel_core_storage::{
         postcard::Postcard,
         primitive::Primitive,
     },
-    column::Column,
+    kv_store::StorageColumn,
     structured_storage::TableWithBlueprint,
     transactional::Transactional,
     Error as StorageError,
@@ -22,9 +22,51 @@ use fuel_core_types::{
     services::relayer::Event,
 };
 
-/// Metadata for relayer.
-pub struct RelayerMetadata;
-impl Mappable for RelayerMetadata {
+/// GraphQL database tables column ids to the corresponding [`fuel_core_storage::Mappable`] table.
+#[repr(u32)]
+#[derive(
+    Copy,
+    Clone,
+    Debug,
+    strum_macros::EnumCount,
+    strum_macros::IntoStaticStr,
+    PartialEq,
+    Eq,
+    enum_iterator::Sequence,
+    Hash,
+)]
+pub enum Column {
+    /// The column id of metadata about the relayer storage.
+    Metadata = 0,
+    /// The column of the table that stores history of the relayer.
+    History = 1,
+    /// The column that tracks the da height of the relayer.
+    RelayerHeight = 2,
+}
+
+impl Column {
+    /// The total count of variants in the enum.
+    pub const COUNT: usize = <Self as strum::EnumCount>::COUNT;
+
+    /// Returns the `usize` representation of the `Column`.
+    pub fn as_u32(&self) -> u32 {
+        *self as u32
+    }
+}
+
+impl StorageColumn for Column {
+    fn name(&self) -> &'static str {
+        self.into()
+    }
+
+    fn id(&self) -> u32 {
+        self.as_u32()
+    }
+}
+
+/// Teh table to track the relayer's da height.
+pub struct DaHeightTable;
+impl Mappable for DaHeightTable {
     type Key = Self::OwnedKey;
     type OwnedKey = ();
     type Value = Self::OwnedValue;
@@ -36,11 +78,12 @@ impl Mappable for RelayerMetadata {
 /// changed from a unit value.
 const METADATA_KEY: () = ();
 
-impl TableWithBlueprint for RelayerMetadata {
+impl TableWithBlueprint for DaHeightTable {
     type Blueprint = Plain<Postcard, Primitive<8>>;
+    type Column = Column;
 
     fn column() -> Column {
-        Column::RelayerMetadata
+        Column::RelayerHeight
     }
 }
 
@@ -58,9 +101,10 @@ impl Mappable for EventsHistory {
 
 impl TableWithBlueprint for EventsHistory {
     type Blueprint = Plain<Primitive<8>, Postcard>;
+    type Column = Column;
 
     fn column() -> Column {
-        Column::RelayerHistory
+        Column::History
     }
 }
 
@@ -68,9 +112,9 @@ impl<T, Storage> RelayerDb for T
 where
     T: Send + Sync,
     T: Transactional<Storage = Storage>,
-    T: StorageMutate<RelayerMetadata, Error = StorageError>,
+    T: StorageMutate<DaHeightTable, Error = StorageError>,
     Storage: StorageMutate<EventsHistory, Error = StorageError>
-        + StorageMutate<RelayerMetadata, Error = StorageError>,
+        + StorageMutate<DaHeightTable, Error = StorageError>,
 {
     fn insert_events(
         &mut self,
@@ -116,7 +160,7 @@ where
     }
 
     fn get_finalized_da_height(&self) -> StorageResult<DaBlockHeight> {
-        Ok(*StorageAsRef::storage::<RelayerMetadata>(&self)
+        Ok(*StorageAsRef::storage::<DaHeightTable>(&self)
             .get(&METADATA_KEY)?
             .unwrap_or_default())
     }
@@ -127,22 +171,20 @@ fn grow_monotonically<Storage>(
     height: &DaBlockHeight,
 ) -> StorageResult<()>
 where
-    Storage: StorageMutate<RelayerMetadata, Error = StorageError>,
+    Storage: StorageMutate<DaHeightTable, Error = StorageError>,
 {
     let current = (&s)
-        .storage::<RelayerMetadata>()
+        .storage::<DaHeightTable>()
         .get(&METADATA_KEY)?
         .map(|cow| cow.as_u64());
     match current {
         Some(current) => {
             if **height > current {
-                s.storage::<RelayerMetadata>()
-                    .insert(&METADATA_KEY, height)?;
+                s.storage::<DaHeightTable>().insert(&METADATA_KEY, height)?;
             }
         }
         None => {
-            s.storage::<RelayerMetadata>()
-                .insert(&METADATA_KEY, height)?;
+            s.storage::<DaHeightTable>().insert(&METADATA_KEY, height)?;
         }
     }
     Ok(())
@@ -153,9 +195,9 @@ mod tests {
     use super::*;
 
     fuel_core_storage::basic_storage_tests!(
-        RelayerMetadata,
-        <RelayerMetadata as Mappable>::Key::default(),
-        <RelayerMetadata as Mappable>::Value::default()
+        DaHeightTable,
+        <DaHeightTable as Mappable>::Key::default(),
+        <DaHeightTable as Mappable>::Value::default()
     );
 
     fuel_core_storage::basic_storage_tests!(

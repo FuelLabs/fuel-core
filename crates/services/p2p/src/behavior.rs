@@ -187,7 +187,7 @@ impl FuelBehaviour {
             Ok(true) => {
                 tracing::debug!(target: "fuel-p2p", "Sent a report for MessageId: {} from PeerId: {}", msg_id, propagation_source);
                 if should_check_score {
-                    return self.gossipsub.peer_score(propagation_source)
+                    return self.gossipsub.peer_score(propagation_source);
                 }
             }
             Ok(false) => {

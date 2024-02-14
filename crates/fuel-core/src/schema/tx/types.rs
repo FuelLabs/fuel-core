@@ -13,7 +13,6 @@ use crate::{
     },
     query::{
         SimpleBlockData,
-        SimpleTransactionData,
         TransactionQueryData,
     },
     schema::{
@@ -75,6 +74,10 @@ use fuel_core_types::{
     fuel_types::canonical::Serialize,
     fuel_vm::ProgramState as VmProgramState,
     services::{
+        executor::{
+            TransactionExecutionResult,
+            TransactionExecutionStatus,
+        },
         txpool,
         txpool::TransactionStatus as TxStatus,
     },
@@ -150,6 +153,7 @@ pub struct SuccessStatus {
     block_id: primitives::BlockId,
     time: Tai64,
     result: Option<VmProgramState>,
+    receipts: Vec<fuel_tx::Receipt>,
 }
 
 #[Object]
@@ -173,15 +177,8 @@ impl SuccessStatus {
         self.result.map(Into::into)
     }
 
-    async fn receipts(&self, ctx: &Context<'_>) -> async_graphql::Result<Vec<Receipt>> {
-        let query: &ReadView = ctx.data_unchecked();
-        let receipts = query
-            .receipts(&self.tx_id)
-            .unwrap_or_default()
-            .into_iter()
-            .map(Into::into)
-            .collect();
-        Ok(receipts)
+    async fn receipts(&self) -> async_graphql::Result<Vec<Receipt>> {
+        Ok(self.receipts.iter().map(Into::into).collect())
     }
 }
 
@@ -190,8 +187,8 @@ pub struct FailureStatus {
     tx_id: TxId,
     block_id: primitives::BlockId,
     time: Tai64,
-    reason: String,
     state: Option<VmProgramState>,
+    receipts: Vec<fuel_tx::Receipt>,
 }
 
 #[Object]
@@ -212,22 +209,15 @@ impl FailureStatus {
     }
 
     async fn reason(&self) -> String {
-        self.reason.clone()
+        TransactionExecutionResult::reason(&self.receipts, &self.state)
     }
 
     async fn program_state(&self) -> Option<ProgramState> {
         self.state.map(Into::into)
     }
 
-    async fn receipts(&self, ctx: &Context<'_>) -> async_graphql::Result<Vec<Receipt>> {
-        let query: &ReadView = ctx.data_unchecked();
-        let receipts = query
-            .receipts(&self.tx_id)
-            .unwrap_or_default()
-            .into_iter()
-            .map(Into::into)
-            .collect();
-        Ok(receipts)
+    async fn receipts(&self) -> async_graphql::Result<Vec<Receipt>> {
+        Ok(self.receipts.iter().map(Into::into).collect())
     }
 }
 
@@ -253,26 +243,28 @@ impl TransactionStatus {
                 block_id,
                 result,
                 time,
+                receipts,
             } => TransactionStatus::Success(SuccessStatus {
                 tx_id,
                 block_id,
                 result,
                 time,
+                receipts,
             }),
             TxStatus::SqueezedOut { reason } => {
                 TransactionStatus::SqueezedOut(SqueezedOutStatus { reason })
             }
             TxStatus::Failed {
                 block_id,
-                reason,
                 time,
                 result,
+                receipts,
             } => TransactionStatus::Failed(FailureStatus {
                 tx_id,
                 block_id,
-                reason,
                 time,
                 state: result,
+                receipts,
             }),
         }
     }
@@ -288,26 +280,28 @@ impl From<TransactionStatus> for TxStatus {
                 block_id,
                 result,
                 time,
+                receipts,
                 ..
             }) => TxStatus::Success {
                 block_id,
                 result,
                 time,
+                receipts,
             },
             TransactionStatus::SqueezedOut(SqueezedOutStatus { reason }) => {
                 TxStatus::SqueezedOut { reason }
             }
             TransactionStatus::Failed(FailureStatus {
                 block_id,
-                reason,
                 time,
                 state: result,
+                receipts,
                 ..
             }) => TxStatus::Failed {
                 block_id,
-                reason,
                 time,
                 result,
+                receipts,
             },
         }
     }
@@ -532,17 +526,6 @@ impl Transaction {
         get_tx_status(id, query, txpool).map_err(Into::into)
     }
 
-    async fn receipts(
-        &self,
-        ctx: &Context<'_>,
-    ) -> async_graphql::Result<Option<Vec<Receipt>>> {
-        let query: &ReadView = ctx.data_unchecked();
-        let receipts = query
-            .receipts(&self.1)
-            .into_api_result::<Vec<_>, async_graphql::Error>()?;
-        Ok(receipts.map(|receipts| receipts.into_iter().map(Receipt).collect()))
-    }
-
     async fn script(&self) -> Option<HexString> {
         match &self.0 {
             fuel_tx::Transaction::Script(script) => {
@@ -617,6 +600,80 @@ impl Transaction {
     /// Return the transaction bytes using canonical encoding
     async fn raw_payload(&self) -> HexString {
         HexString(self.0.clone().to_bytes())
+    }
+}
+
+#[derive(Union, Debug)]
+pub enum DryRunTransactionStatus {
+    Success(DryRunSuccessStatus),
+    Failed(DryRunFailureStatus),
+}
+
+impl DryRunTransactionStatus {
+    pub fn new(tx_status: TransactionExecutionResult) -> Self {
+        match tx_status {
+            TransactionExecutionResult::Success { result, receipts } => {
+                DryRunTransactionStatus::Success(DryRunSuccessStatus { result, receipts })
+            }
+            TransactionExecutionResult::Failed { result, receipts } => {
+                DryRunTransactionStatus::Failed(DryRunFailureStatus { result, receipts })
+            }
+        }
+    }
+}
+
+#[derive(Debug)]
+pub struct DryRunSuccessStatus {
+    result: Option<VmProgramState>,
+    receipts: Vec<fuel_tx::Receipt>,
+}
+
+#[Object]
+impl DryRunSuccessStatus {
+    async fn program_state(&self) -> Option<ProgramState> {
+        self.result.map(Into::into)
+    }
+
+    async fn receipts(&self) -> Vec<Receipt> {
+        self.receipts.iter().map(Into::into).collect()
+    }
+}
+
+#[derive(Debug)]
+pub struct DryRunFailureStatus {
+    result: Option<VmProgramState>,
+    receipts: Vec<fuel_tx::Receipt>,
+}
+
+#[Object]
+impl DryRunFailureStatus {
+    async fn program_state(&self) -> Option<ProgramState> {
+        self.result.map(Into::into)
+    }
+
+    async fn reason(&self) -> String {
+        TransactionExecutionResult::reason(&self.receipts, &self.result)
+    }
+
+    async fn receipts(&self) -> Vec<Receipt> {
+        self.receipts.iter().map(Into::into).collect()
+    }
+}
+
+pub struct DryRunTransactionExecutionStatus(pub TransactionExecutionStatus);
+
+#[Object]
+impl DryRunTransactionExecutionStatus {
+    async fn id(&self) -> TransactionId {
+        TransactionId(self.0.id)
+    }
+
+    async fn status(&self) -> DryRunTransactionStatus {
+        DryRunTransactionStatus::new(self.0.result.clone())
+    }
+
+    async fn receipts(&self) -> Vec<Receipt> {
+        self.0.result.receipts().iter().map(Into::into).collect()
     }
 }
 

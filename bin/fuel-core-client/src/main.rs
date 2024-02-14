@@ -24,7 +24,7 @@ enum TransactionCommands {
     /// Submit a JSON encoded transaction for predicate estimation.
     EstimatePredicates { tx: String },
     /// Submit a JSON encoded transaction for a dry-run execution
-    DryRun { tx: String },
+    DryRun { txs: Vec<String> },
     /// Get the transactions associated with a particular transaction id
     Get { id: String },
     /// Get the receipts for a particular transaction id
@@ -64,11 +64,15 @@ impl CliArgs {
                         .expect("Should be able to estimate predicates");
                     println!("{:?}", tx);
                 }
-                TransactionCommands::DryRun { tx } => {
-                    let tx: Transaction =
-                        serde_json::from_str(tx).expect("invalid transaction json");
+                TransactionCommands::DryRun { txs } => {
+                    let txs: Vec<Transaction> = txs
+                        .iter()
+                        .map(|tx| {
+                            serde_json::from_str(tx).expect("invalid transaction json")
+                        })
+                        .collect();
 
-                    let result = client.dry_run(&tx).await;
+                    let result = client.dry_run(&txs).await;
                     println!("{:?}", result.unwrap());
                 }
                 TransactionCommands::Get { id } => {

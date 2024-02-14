@@ -12,7 +12,6 @@ use fuel_core_storage::{
         ContractsRawCode,
         FuelBlocks,
         Messages,
-        Receipts,
         SealedBlockConsensus,
         Transactions,
     },
@@ -34,7 +33,6 @@ use fuel_core_types::{
         Message,
     },
     fuel_tx::{
-        Receipt,
         Transaction,
         TxId,
         TxPointer,
@@ -48,6 +46,7 @@ use fuel_core_types::{
         Nonce,
     },
     services::{
+        executor::TransactionExecutionStatus,
         graphql_api::ContractBalance,
         p2p::PeerInfo,
         txpool::{
@@ -59,8 +58,30 @@ use fuel_core_types::{
 };
 use std::sync::Arc;
 
-pub trait OffChainDatabase:
-    Send + Sync + StorageInspect<Receipts, Error = StorageError>
+pub trait OffChainDatabase: Send + Sync {
+    fn tx_status(&self, tx_id: &TxId) -> StorageResult<TransactionStatus>;
+
+    fn owned_transactions_ids(
+        &self,
+        owner: Address,
+        start: Option<TxPointer>,
+        direction: IterDirection,
+    ) -> BoxedIter<StorageResult<(TxPointer, TxId)>>;
+}
+
+/// The on chain database port expected by GraphQL API service.
+// TODO: Move `owned_message_ids` and `owned_coins_ids`` to `OffChainDatabase`
+//  https://github.com/FuelLabs/fuel-core/issues/1583
+pub trait OnChainDatabase:
+    Send
+    + Sync
+    + DatabaseBlocks
+    + StorageInspect<Transactions, Error = StorageError>
+    + DatabaseMessages
+    + StorageInspect<Coins, Error = StorageError>
+    + DatabaseContracts
+    + DatabaseChain
+    + DatabaseMessageProof
 {
     fn owned_message_ids(
         &self,
@@ -75,29 +96,6 @@ pub trait OffChainDatabase:
         start_coin: Option<UtxoId>,
         direction: IterDirection,
     ) -> BoxedIter<'_, StorageResult<UtxoId>>;
-
-    fn tx_status(&self, tx_id: &TxId) -> StorageResult<TransactionStatus>;
-
-    fn owned_transactions_ids(
-        &self,
-        owner: Address,
-        start: Option<TxPointer>,
-        direction: IterDirection,
-    ) -> BoxedIter<StorageResult<(TxPointer, TxId)>>;
-}
-
-/// The on chain database port expected by GraphQL API service.
-pub trait OnChainDatabase:
-    Send
-    + Sync
-    + DatabaseBlocks
-    + StorageInspect<Transactions, Error = StorageError>
-    + DatabaseMessages
-    + StorageInspect<Coins, Error = StorageError>
-    + DatabaseContracts
-    + DatabaseChain
-    + DatabaseMessageProof
-{
 }
 
 /// Trait that specifies all the getters required for blocks.
@@ -145,8 +143,6 @@ pub trait DatabaseContracts:
 
 /// Trait that specifies all the getters required for chain metadata.
 pub trait DatabaseChain {
-    fn chain_name(&self) -> StorageResult<String>;
-
     fn da_height(&self) -> StorageResult<DaBlockHeight>;
 }
 
@@ -169,12 +165,12 @@ pub trait TxPoolPort: Send + Sync {
 
 #[async_trait]
 pub trait BlockProducerPort: Send + Sync {
-    async fn dry_run_tx(
+    async fn dry_run_txs(
         &self,
-        transaction: Transaction,
+        transactions: Vec<Transaction>,
         height: Option<BlockHeight>,
         utxo_validation: Option<bool>,
-    ) -> anyhow::Result<Vec<Receipt>>;
+    ) -> anyhow::Result<Vec<TransactionExecutionStatus>>;
 }
 
 #[async_trait::async_trait]
@@ -203,9 +199,12 @@ pub trait P2pPort: Send + Sync {
 }
 
 pub mod worker {
+    use crate::database::{
+        database_description::off_chain::OffChain,
+        metadata::MetadataTable,
+    };
     use fuel_core_services::stream::BoxStream;
     use fuel_core_storage::{
-        tables::Receipts,
         transactional::Transactional,
         Error as StorageError,
         Result as StorageResult,
@@ -226,7 +225,7 @@ pub mod worker {
     pub trait OffChainDatabase:
         Send
         + Sync
-        + StorageMutate<Receipts, Error = StorageError>
+        + StorageMutate<MetadataTable<OffChain>, Error = StorageError>
         + Transactional<Storage = Self>
     {
         fn record_tx_id_owner(
@@ -242,6 +241,10 @@ pub mod worker {
             id: &Bytes32,
             status: TransactionStatus,
         ) -> StorageResult<Option<TransactionStatus>>;
+
+        /// Update metadata about the total number of transactions on the chain.
+        /// Returns the total count after the update.
+        fn increase_tx_count(&mut self, new_txs_count: u64) -> StorageResult<u64>;
     }
 
     pub trait BlockImporter {

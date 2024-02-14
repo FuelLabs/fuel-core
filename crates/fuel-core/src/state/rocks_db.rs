@@ -1,8 +1,7 @@
 use crate::{
     database::{
         convert_to_rocksdb_direction,
-        Column,
-        Database,
+        database_description::DatabaseDescription,
         Error as DatabaseError,
         Result as DatabaseResult,
     },
@@ -22,6 +21,7 @@ use fuel_core_storage::{
     kv_store::{
         KVItem,
         KeyValueStore,
+        StorageColumn,
         Value,
         WriteOperation,
     },
@@ -29,7 +29,6 @@ use fuel_core_storage::{
 };
 use rand::RngCore;
 use rocksdb::{
-    checkpoint::Checkpoint,
     BlockBasedOptions,
     BoundColumnFamily,
     Cache,
@@ -45,6 +44,7 @@ use rocksdb::{
 };
 use std::{
     env,
+    fmt::Debug,
     iter,
     path::{
         Path,
@@ -91,28 +91,32 @@ impl Drop for ShallowTempDir {
 }
 
 #[derive(Debug)]
-pub struct RocksDb {
+pub struct RocksDb<Description> {
     db: DB,
-    capacity: Option<usize>,
+    _marker: core::marker::PhantomData<Description>,
 }
 
-impl RocksDb {
+impl<Description> RocksDb<Description>
+where
+    Description: DatabaseDescription,
+{
     pub fn default_open<P: AsRef<Path>>(
         path: P,
         capacity: Option<usize>,
-    ) -> DatabaseResult<RocksDb> {
+    ) -> DatabaseResult<Self> {
         Self::open(
             path,
-            enum_iterator::all::<Column>().collect::<Vec<_>>(),
+            enum_iterator::all::<Description::Column>().collect::<Vec<_>>(),
             capacity,
         )
     }
 
     pub fn open<P: AsRef<Path>>(
         path: P,
-        columns: Vec<Column>,
+        columns: Vec<Description::Column>,
         capacity: Option<usize>,
-    ) -> DatabaseResult<RocksDb> {
+    ) -> DatabaseResult<Self> {
+        let path = path.as_ref().join(Description::name());
         let mut block_opts = BlockBasedOptions::default();
         // See https://github.com/facebook/rocksdb/blob/a1523efcdf2f0e8133b9a9f6e170a0dad49f928f/include/rocksdb/table.h#L246-L271 for details on what the format versions are/do.
         block_opts.set_format_version(5);
@@ -134,10 +138,7 @@ impl RocksDb {
         block_opts.set_bloom_filter(10.0, true);
 
         let cf_descriptors = columns.clone().into_iter().map(|i| {
-            ColumnFamilyDescriptor::new(
-                RocksDb::col_name(i),
-                Self::cf_opts(i, &block_opts),
-            )
+            ColumnFamilyDescriptor::new(Self::col_name(i), Self::cf_opts(i, &block_opts))
         });
 
         let mut opts = Options::default();
@@ -160,7 +161,7 @@ impl RocksDb {
                     Ok(db) => {
                         for i in columns {
                             let opts = Self::cf_opts(i, &block_opts);
-                            db.create_cf(RocksDb::col_name(i), &opts)
+                            db.create_cf(Self::col_name(i), &opts)
                                 .map_err(|e| DatabaseError::Other(e.into()))?;
                         }
                         Ok(db)
@@ -172,7 +173,7 @@ impl RocksDb {
 
                         let cf_descriptors = columns.clone().into_iter().map(|i| {
                             ColumnFamilyDescriptor::new(
-                                RocksDb::col_name(i),
+                                Self::col_name(i),
                                 Self::cf_opts(i, &block_opts),
                             )
                         });
@@ -183,49 +184,33 @@ impl RocksDb {
             ok => ok,
         }
         .map_err(|e| DatabaseError::Other(e.into()))?;
-        let rocks_db = RocksDb { db, capacity };
+        let rocks_db = RocksDb {
+            db,
+            _marker: Default::default(),
+        };
         Ok(rocks_db)
     }
 
-    pub fn checkpoint<P: AsRef<Path>>(&self, path: P) -> DatabaseResult<()> {
-        Checkpoint::new(&self.db)
-            .and_then(|checkpoint| checkpoint.create_checkpoint(path))
-            .map_err(|e| {
-                DatabaseError::Other(anyhow::anyhow!(
-                    "Failed to create a checkpoint: {}",
-                    e
-                ))
-            })
-    }
-
-    fn cf(&self, column: Column) -> Arc<BoundColumnFamily> {
+    fn cf(&self, column: Description::Column) -> Arc<BoundColumnFamily> {
         self.db
-            .cf_handle(&RocksDb::col_name(column))
+            .cf_handle(&Self::col_name(column))
             .expect("invalid column state")
     }
 
-    fn col_name(column: Column) -> String {
+    fn col_name(column: Description::Column) -> String {
         format!("col-{}", column.as_usize())
     }
 
-    fn cf_opts(column: Column, block_opts: &BlockBasedOptions) -> Options {
+    fn cf_opts(column: Description::Column, block_opts: &BlockBasedOptions) -> Options {
         let mut opts = Options::default();
         opts.create_if_missing(true);
         opts.set_compression_type(DBCompressionType::Lz4);
         opts.set_block_based_table_factory(block_opts);
 
         // All double-keys should be configured here
-        match column {
-            Column::OwnedCoins
-            | Column::TransactionsByOwnerBlockIdx
-            | Column::OwnedMessageIds
-            | Column::ContractsAssets
-            | Column::ContractsState => {
-                // prefix is address length
-                opts.set_prefix_extractor(SliceTransform::create_fixed_prefix(32))
-            }
-            _ => {}
-        };
+        if let Some(size) = Description::prefix(&column) {
+            opts.set_prefix_extractor(SliceTransform::create_fixed_prefix(size))
+        }
 
         opts
     }
@@ -240,7 +225,7 @@ impl RocksDb {
     fn reverse_prefix_iter(
         &self,
         prefix: &[u8],
-        column: Column,
+        column: Description::Column,
     ) -> impl Iterator<Item = KVItem> + '_ {
         let maybe_next_item = next_prefix(prefix.to_vec())
             .and_then(|next_prefix| {
@@ -289,7 +274,7 @@ impl RocksDb {
 
     fn _iter_all(
         &self,
-        column: Column,
+        column: Description::Column,
         opts: ReadOptions,
         iter_mode: IteratorMode,
     ) -> impl Iterator<Item = KVItem> + '_ {
@@ -312,10 +297,18 @@ impl RocksDb {
     }
 }
 
-impl KeyValueStore for RocksDb {
-    type Column = Column;
+impl<Description> KeyValueStore for RocksDb<Description>
+where
+    Description: DatabaseDescription,
+{
+    type Column = Description::Column;
 
-    fn write(&self, key: &[u8], column: Column, buf: &[u8]) -> StorageResult<usize> {
+    fn write(
+        &self,
+        key: &[u8],
+        column: Self::Column,
+        buf: &[u8],
+    ) -> StorageResult<usize> {
         let r = buf.len();
         self.db
             .put_cf(&self.cf(column), key, buf)
@@ -327,13 +320,17 @@ impl KeyValueStore for RocksDb {
         Ok(r)
     }
 
-    fn delete(&self, key: &[u8], column: Column) -> StorageResult<()> {
+    fn delete(&self, key: &[u8], column: Self::Column) -> StorageResult<()> {
         self.db
             .delete_cf(&self.cf(column), key)
             .map_err(|e| DatabaseError::Other(e.into()).into())
     }
 
-    fn size_of_value(&self, key: &[u8], column: Column) -> StorageResult<Option<usize>> {
+    fn size_of_value(
+        &self,
+        key: &[u8],
+        column: Self::Column,
+    ) -> StorageResult<Option<usize>> {
         database_metrics().read_meter.inc();
 
         Ok(self
@@ -343,7 +340,7 @@ impl KeyValueStore for RocksDb {
             .map(|value| value.len()))
     }
 
-    fn get(&self, key: &[u8], column: Column) -> StorageResult<Option<Value>> {
+    fn get(&self, key: &[u8], column: Self::Column) -> StorageResult<Option<Value>> {
         database_metrics().read_meter.inc();
 
         let value = self
@@ -361,7 +358,7 @@ impl KeyValueStore for RocksDb {
     fn read(
         &self,
         key: &[u8],
-        column: Column,
+        column: Self::Column,
         mut buf: &mut [u8],
     ) -> StorageResult<Option<usize>> {
         database_metrics().read_meter.inc();
@@ -386,10 +383,13 @@ impl KeyValueStore for RocksDb {
     }
 }
 
-impl IteratorableStore for RocksDb {
+impl<Description> IteratorableStore for RocksDb<Description>
+where
+    Description: DatabaseDescription,
+{
     fn iter_all(
         &self,
-        column: Column,
+        column: Self::Column,
         prefix: Option<&[u8]>,
         start: Option<&[u8]>,
         direction: IterDirection,
@@ -454,10 +454,13 @@ impl IteratorableStore for RocksDb {
     }
 }
 
-impl BatchOperations for RocksDb {
+impl<Description> BatchOperations for RocksDb<Description>
+where
+    Description: DatabaseDescription,
+{
     fn batch_write(
         &self,
-        entries: &mut dyn Iterator<Item = (Vec<u8>, Column, WriteOperation)>,
+        entries: &mut dyn Iterator<Item = (Vec<u8>, Self::Column, WriteOperation)>,
     ) -> StorageResult<()> {
         let mut batch = WriteBatch::default();
 
@@ -483,18 +486,10 @@ impl BatchOperations for RocksDb {
     }
 }
 
-impl TransactableStorage for RocksDb {
-    fn checkpoint(&self) -> DatabaseResult<Database> {
-        let tmp_dir = ShallowTempDir::new();
-        self.checkpoint(&tmp_dir.path)?;
-        let db = RocksDb::default_open(&tmp_dir.path, self.capacity)?;
-        let database = Database::new(Arc::new(db)).with_drop(Box::new(move || {
-            drop(tmp_dir);
-        }));
-
-        Ok(database)
-    }
-
+impl<Description> TransactableStorage for RocksDb<Description>
+where
+    Description: DatabaseDescription,
+{
     fn flush(&self) -> DatabaseResult<()> {
         self.db
             .flush_wal(true)
@@ -520,9 +515,11 @@ fn next_prefix(mut prefix: Vec<u8>) -> Option<Vec<u8>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::database::database_description::on_chain::OnChain;
+    use fuel_core_storage::column::Column;
     use tempfile::TempDir;
 
-    fn create_db() -> (RocksDb, TempDir) {
+    fn create_db() -> (RocksDb<OnChain>, TempDir) {
         let tmp_dir = TempDir::new().unwrap();
         (
             RocksDb::default_open(tmp_dir.path(), None).unwrap(),

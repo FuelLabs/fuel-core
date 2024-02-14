@@ -2,7 +2,10 @@ use fuel_core_types::{
     blockchain::SealedBlockHeader,
     services::p2p::Transactions,
 };
-use libp2p::PeerId;
+use libp2p::{
+    request_response::OutboundFailure,
+    PeerId,
+};
 use serde::{
     Deserialize,
     Serialize,
@@ -23,23 +26,34 @@ pub enum RequestMessage {
     Transactions(Range<u32>),
 }
 
-/// Holds oneshot channels for specific responses
-#[derive(Debug)]
-pub enum ResponseChannelItem {
-    SealedHeaders(oneshot::Sender<(PeerId, Option<Vec<SealedBlockHeader>>)>),
-    Transactions(oneshot::Sender<Option<Vec<Transactions>>>),
-}
-
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum ResponseMessage {
     SealedHeaders(Option<Vec<SealedBlockHeader>>),
     Transactions(Option<Vec<Transactions>>),
+}
+
+pub type OnResponse<T> = oneshot::Sender<(PeerId, Result<T, ResponseError>)>;
+
+#[derive(Debug)]
+pub enum ResponseSender {
+    SealedHeaders(OnResponse<Option<Vec<SealedBlockHeader>>>),
+    Transactions(OnResponse<Option<Vec<Transactions>>>),
 }
 
 #[derive(Debug, Error)]
 pub enum RequestError {
     #[error("Not currently connected to any peers")]
     NoPeersConnected,
+}
+
+#[derive(Debug, Error)]
+pub enum ResponseError {
+    /// This is the raw error from [`libp2p-request-response`]
+    #[error("P2P outbound error {0}")]
+    P2P(OutboundFailure),
+    /// The peer responded with an invalid response type
+    #[error("Peer response message was of incorrect type")]
+    TypeMismatch,
 }
 
 /// Errors than can occur when attempting to send a response

@@ -43,6 +43,7 @@ impl TableWithBlueprint for ContractsState {
         ContractsStateMerkleData,
         KeyConverter,
     >;
+    type Column = Column;
 
     fn column() -> Column {
         Column::ContractsState

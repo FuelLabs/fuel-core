@@ -29,11 +29,11 @@ main() {
     mkdir -p "$chain_data"
   fi
 
-  # if ! command -v dummy-blockchain >/dev/null 2>&1; then
-  #   usage_error "The 'dummy-blockchain' executable must be found within your PATH, install it from source of 'https://github.com/streamingfast/dummy-blockchain'"
-  # fi
+  if ! command -v dummy-blockchain >/dev/null 2>&1; then
+    usage_error "The 'dummy-blockchain' executable must be found within your PATH, install it from source of 'https://github.com/streamingfast/dummy-blockchain'"
+  fi
 
-  exec go run github.com/streamingfast/dummy-blockchain@v1.2.0 start --tracer=firehose --block-rate=60 --store-dir "$chain_data" | $firefuel -c $(basename $ROOT).yaml start "$@"
+  exec dummy-blockchain --firehose-enabled --block-rate 60 start --store-dir "$chain_data" | $firefuel -c $(basename $ROOT).yaml start "$@"
 }
 
 usage_error() {

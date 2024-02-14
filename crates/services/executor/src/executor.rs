@@ -234,9 +234,9 @@ where
 
     pub fn dry_run(
         &self,
-        component: Components<Transaction>,
+        component: Components<Vec<Transaction>>,
         utxo_validation: Option<bool>,
-    ) -> ExecutorResult<Vec<Vec<Receipt>>> {
+    ) -> ExecutorResult<Vec<TransactionExecutionStatus>> {
         // fallback to service config value if no utxo_validation override is provided
         let utxo_validation =
             utxo_validation.unwrap_or(self.config.utxo_validation_default);
@@ -338,13 +338,13 @@ where
 
     pub fn dry_run(
         self,
-        component: Components<Transaction>,
-    ) -> ExecutorResult<Vec<Vec<Receipt>>> {
+        component: Components<Vec<Transaction>>,
+    ) -> ExecutorResult<Vec<TransactionExecutionStatus>> {
         let component = Components {
             header_to_produce: component.header_to_produce,
-            transactions_source: OnceTransactionsSource::new(vec![
+            transactions_source: OnceTransactionsSource::new(
                 component.transactions_source,
-            ]),
+            ),
             gas_limit: component.gas_limit,
         };
 
@@ -364,10 +364,7 @@ where
             return Err(err)
         }
 
-        Ok(tx_status
-            .into_iter()
-            .map(|tx| tx.receipts)
-            .collect::<Vec<Vec<Receipt>>>())
+        Ok(tx_status)
         // drop `_temporary_db` without committing to avoid altering state.
     }
 }
@@ -898,8 +895,10 @@ where
 
         execution_data.tx_status.push(TransactionExecutionStatus {
             id: coinbase_id,
-            result: TransactionExecutionResult::Success { result: None },
-            receipts: vec![],
+            result: TransactionExecutionResult::Success {
+                result: None,
+                receipts: vec![],
+            },
         });
 
         if block_st_transaction
@@ -1064,31 +1063,6 @@ where
             .storage::<ProcessedTransactions>()
             .insert(&tx_id, &())?;
 
-        let status = if reverted {
-            self.log_backtrace(&vm, &receipts);
-            // get reason for revert
-            let reason = receipts
-                .iter()
-                .find_map(|receipt| match receipt {
-                    // Format as `Revert($rA)`
-                    Receipt::Revert { ra, .. } => Some(format!("Revert({ra})")),
-                    // Display PanicReason e.g. `OutOfGas`
-                    Receipt::Panic { reason, .. } => Some(format!("{}", reason.reason())),
-                    _ => None,
-                })
-                .unwrap_or_else(|| format!("{:?}", &state));
-
-            TransactionExecutionResult::Failed {
-                reason,
-                result: Some(state),
-            }
-        } else {
-            // else tx was a success
-            TransactionExecutionResult::Success {
-                result: Some(state),
-            }
-        };
-
         // Update `execution_data` data only after all steps.
         execution_data.coinbase = execution_data
             .coinbase
@@ -1098,11 +1072,25 @@ where
         execution_data
             .message_ids
             .extend(receipts.iter().filter_map(|r| r.message_id()));
+
+        let status = if reverted {
+            self.log_backtrace(&vm, &receipts);
+            TransactionExecutionResult::Failed {
+                result: Some(state),
+                receipts,
+            }
+        } else {
+            // else tx was a success
+            TransactionExecutionResult::Success {
+                result: Some(state),
+                receipts,
+            }
+        };
+
         // queue up status for this tx to be stored once block id is finalized.
         execution_data.tx_status.push(TransactionExecutionStatus {
             id: tx_id,
             result: status,
-            receipts,
         });
 
         Ok(final_tx)
