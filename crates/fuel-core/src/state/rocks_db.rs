@@ -145,11 +145,13 @@ where
         let mut opts = Options::default();
         opts.create_if_missing(true);
         opts.set_compression_type(DBCompressionType::Lz4);
-        opts.set_bytes_per_sync(1 * 1024 * 1024);
+        opts.set_bytes_per_sync(1024 * 1024);
         // TODO: Use value from the database config from https://github.com/FuelLabs/fuel-core/pull/1519
         opts.set_max_total_wal_size(64 * 1024 * 1024);
         opts.set_keep_log_file_num(1);
-        opts.increase_parallelism(cmp::max(1, num_cpus::get() as i32 / 2));
+        let cpu_number =
+            i32::try_from(num_cpus::get()).expect("The number of CPU can't exceed `i32`");
+        opts.increase_parallelism(cmp::max(1, cpu_number / 2));
         if let Some(capacity) = capacity {
             // Set cache size 1/3 of the capacity. Another 1/3 is
             // used by block cache and the last 1 / 3 remains for other purposes:
