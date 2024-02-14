@@ -425,16 +425,12 @@ async fn shutdown_signal() -> anyhow::Result<()> {
 
         let mut sigint =
             tokio::signal::unix::signal(tokio::signal::unix::SignalKind::interrupt())?;
-        loop {
-            tokio::select! {
-                _ = sigterm.recv() => {
-                    tracing::info!("sigterm received");
-                    break;
-                }
-                _ = sigint.recv() => {
-                    tracing::info!("sigint received");
-                    break;
-                }
+        tokio::select! {
+            _ = sigterm.recv() => {
+                tracing::info!("sigterm received");
+            }
+            _ = sigint.recv() => {
+                tracing::info!("sigint received");
             }
         }
     }
