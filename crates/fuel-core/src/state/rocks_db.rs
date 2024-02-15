@@ -643,27 +643,27 @@ mod tests {
     }
 
     #[test]
-fn delete_all_with_different_key_lengths() {
-    let (db, _tmp) = create_db();
+    fn delete_all_with_different_key_lengths() {
+        let (db, _tmp) = create_db();
 
-    let keys = vec![
-        vec![], // unit key
-        vec![0xA],
-        vec![0xB, 0xC],
-        vec![0xD, 0xE, 0xF],
-    ];
-    let value = Arc::new(vec![1, 2, 3]);
+        let keys = vec![
+            vec![], // unit key
+            vec![0xA],
+            vec![0xB, 0xC],
+            vec![0xD, 0xE, 0xF],
+        ];
+        let value = Arc::new(vec![1, 2, 3]);
 
-    for key in &keys {
-        db.put(key, Column::Metadata, value.clone()).unwrap();
+        for key in &keys {
+            db.put(key, Column::Metadata, value.clone()).unwrap();
+        }
+
+        db.delete_all(Column::Metadata).unwrap();
+
+        for key in &keys {
+            assert_eq!(db.get(key, Column::Metadata).unwrap(), None);
+        }
     }
-
-    db.delete_all(Column::Metadata).unwrap();
-
-    for key in &keys {
-        assert_eq!(db.get(key, Column::Metadata).unwrap(), None);
-    }
-}
 
     #[test]
     fn can_use_unit_value() {
