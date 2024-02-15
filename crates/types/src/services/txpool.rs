@@ -1,10 +1,7 @@
 //! Types for interoperability with the txpool service
 
 use crate::{
-    blockchain::{
-        block::Block,
-        primitives::BlockId,
-    },
+    blockchain::block::Block,
     fuel_asm::Word,
     fuel_tx::{
         field::{
@@ -33,7 +30,10 @@ use crate::{
     },
     services::executor::TransactionExecutionResult,
 };
-use fuel_vm_private::checked_transaction::CheckedTransaction;
+use fuel_vm_private::{
+    checked_transaction::CheckedTransaction,
+    fuel_types::BlockHeight,
+};
 use std::{
     sync::Arc,
     time::Duration,
@@ -180,7 +180,7 @@ pub enum TransactionStatus {
     /// Transaction was successfully included in a block
     Success {
         /// Included in this block
-        block_id: BlockId,
+        block_height: BlockHeight,
         /// Time when the block was generated
         time: Tai64,
         /// Result of executing the transaction for scripts
@@ -196,7 +196,7 @@ pub enum TransactionStatus {
     /// Transaction was included in a block, but the exection was reverted
     Failed {
         /// Included in this block
-        block_id: BlockId,
+        block_height: BlockHeight,
         /// Time when the block was generated
         time: Tai64,
         /// Result of executing the transaction for scripts
@@ -212,11 +212,11 @@ pub fn from_executor_to_status(
     result: TransactionExecutionResult,
 ) -> TransactionStatus {
     let time = block.header().time();
-    let block_id = block.id();
+    let block_height = *block.header().height();
     match result {
         TransactionExecutionResult::Success { result, receipts } => {
             TransactionStatus::Success {
-                block_id,
+                block_height,
                 time,
                 result,
                 receipts,
@@ -224,7 +224,7 @@ pub fn from_executor_to_status(
         }
         TransactionExecutionResult::Failed { result, receipts } => {
             TransactionStatus::Failed {
-                block_id,
+                block_height,
                 time,
                 result,
                 receipts,

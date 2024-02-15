@@ -7,7 +7,6 @@ use crate::{
     fuel_core_graphql_api::{
         api_service::TxPool,
         database::ReadView,
-        ports::DatabaseBlocks,
         Config,
         IntoApiResult,
     },
@@ -43,7 +42,6 @@ use async_graphql::{
 };
 use fuel_core_storage::Error as StorageError;
 use fuel_core_types::{
-    blockchain::primitives,
     fuel_tx::{
         self,
         field::{
@@ -150,7 +148,7 @@ impl SubmittedStatus {
 #[derive(Debug)]
 pub struct SuccessStatus {
     tx_id: TxId,
-    block_id: primitives::BlockId,
+    block_height: fuel_core_types::fuel_types::BlockHeight,
     time: Tai64,
     result: Option<VmProgramState>,
     receipts: Vec<fuel_tx::Receipt>,
@@ -164,8 +162,7 @@ impl SuccessStatus {
 
     async fn block(&self, ctx: &Context<'_>) -> async_graphql::Result<Block> {
         let query: &ReadView = ctx.data_unchecked();
-        let height = query.block_height(&self.block_id)?;
-        let block = query.block(&height)?;
+        let block = query.block(&self.block_height)?;
         Ok(block.into())
     }
 
@@ -185,7 +182,7 @@ impl SuccessStatus {
 #[derive(Debug)]
 pub struct FailureStatus {
     tx_id: TxId,
-    block_id: primitives::BlockId,
+    block_height: fuel_core_types::fuel_types::BlockHeight,
     time: Tai64,
     state: Option<VmProgramState>,
     receipts: Vec<fuel_tx::Receipt>,
@@ -199,8 +196,7 @@ impl FailureStatus {
 
     async fn block(&self, ctx: &Context<'_>) -> async_graphql::Result<Block> {
         let query: &ReadView = ctx.data_unchecked();
-        let height = query.block_height(&self.block_id)?;
-        let block = query.block(&height)?;
+        let block = query.block(&self.block_height)?;
         Ok(block.into())
     }
 
@@ -240,13 +236,13 @@ impl TransactionStatus {
                 TransactionStatus::Submitted(SubmittedStatus(time))
             }
             TxStatus::Success {
-                block_id,
+                block_height,
                 result,
                 time,
                 receipts,
             } => TransactionStatus::Success(SuccessStatus {
                 tx_id,
-                block_id,
+                block_height,
                 result,
                 time,
                 receipts,
@@ -255,13 +251,13 @@ impl TransactionStatus {
                 TransactionStatus::SqueezedOut(SqueezedOutStatus { reason })
             }
             TxStatus::Failed {
-                block_id,
+                block_height,
                 time,
                 result,
                 receipts,
             } => TransactionStatus::Failed(FailureStatus {
                 tx_id,
-                block_id,
+                block_height,
                 time,
                 state: result,
                 receipts,
@@ -277,13 +273,13 @@ impl From<TransactionStatus> for TxStatus {
                 TxStatus::Submitted { time }
             }
             TransactionStatus::Success(SuccessStatus {
-                block_id,
+                block_height,
                 result,
                 time,
                 receipts,
                 ..
             }) => TxStatus::Success {
-                block_id,
+                block_height,
                 result,
                 time,
                 receipts,
@@ -292,13 +288,13 @@ impl From<TransactionStatus> for TxStatus {
                 TxStatus::SqueezedOut { reason }
             }
             TransactionStatus::Failed(FailureStatus {
-                block_id,
+                block_height,
                 time,
                 state: result,
                 receipts,
                 ..
             }) => TxStatus::Failed {
-                block_id,
+                block_height,
                 time,
                 result,
                 receipts,

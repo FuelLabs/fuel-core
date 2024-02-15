@@ -36,6 +36,7 @@ strum_macros = { workspace = true }
 [dev-dependencies]
 fuel-core-storage = { path = ".", features = ["test-helpers"] }
 fuel-core-types = { workspace = true, default-features = false, features = ["serde", "random", "test-helpers"] }
+test-case = { workspace = true }
 
 [features]
 test-helpers = ["dep:mockall", "dep:rand"]

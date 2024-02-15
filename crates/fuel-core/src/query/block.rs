@@ -1,4 +1,7 @@
-use crate::fuel_core_graphql_api::ports::OnChainDatabase;
+use crate::{
+    fuel_core_graphql_api::ports::OnChainDatabase,
+    graphql_api::ports::OffChainDatabase,
+};
 use fuel_core_storage::{
     iter::{
         BoxedIter,
@@ -16,18 +19,15 @@ use fuel_core_types::{
     blockchain::{
         block::CompressedBlock,
         consensus::Consensus,
-        primitives::BlockId,
     },
     fuel_types::BlockHeight,
 };
 
 pub trait SimpleBlockData: Send + Sync {
     fn block(&self, id: &BlockHeight) -> StorageResult<CompressedBlock>;
-
-    fn block_by_id(&self, id: &BlockId) -> StorageResult<CompressedBlock>;
 }
 
-impl<D: OnChainDatabase + ?Sized> SimpleBlockData for D {
+impl<D: OnChainDatabase + OffChainDatabase + ?Sized> SimpleBlockData for D {
     fn block(&self, id: &BlockHeight) -> StorageResult<CompressedBlock> {
         let block = self
             .storage::<FuelBlocks>()
@@ -36,11 +36,6 @@ impl<D: OnChainDatabase + ?Sized> SimpleBlockData for D {
             .into_owned();
 
         Ok(block)
-    }
-
-    fn block_by_id(&self, id: &BlockId) -> StorageResult<CompressedBlock> {
-        let height = self.block_height(id)?;
-        self.block(&height)
     }
 }
 
@@ -58,7 +53,7 @@ pub trait BlockQueryData: Send + Sync + SimpleBlockData {
     fn consensus(&self, id: &BlockHeight) -> StorageResult<Consensus>;
 }
 
-impl<D: OnChainDatabase + ?Sized> BlockQueryData for D {
+impl<D: OnChainDatabase + OffChainDatabase + ?Sized> BlockQueryData for D {
     fn latest_block_height(&self) -> StorageResult<BlockHeight> {
         self.latest_height()
     }

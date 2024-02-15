@@ -1,14 +1,16 @@
 use crate::{
     database::{
-        block::FuelBlockSecondaryKeyBlockHeights,
         coin::OwnedCoins,
         database_description::DatabaseDescription,
         message::OwnedMessageIds,
         Database,
     },
-    fuel_core_graphql_api::storage::transactions::{
-        OwnedTransactions,
-        TransactionStatuses,
+    fuel_core_graphql_api::storage::{
+        blocks::FuelBlockSecondaryKeyBlockHeights,
+        transactions::{
+            OwnedTransactions,
+            TransactionStatuses,
+        },
     },
     state::DataSource,
 };

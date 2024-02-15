@@ -59,6 +59,8 @@ use fuel_core_types::{
 use std::sync::Arc;
 
 pub trait OffChainDatabase: Send + Sync {
+    fn block_height(&self, block_id: &BlockId) -> StorageResult<BlockHeight>;
+
     fn tx_status(&self, tx_id: &TxId) -> StorageResult<TransactionStatus>;
 
     fn owned_transactions_ids(
@@ -103,8 +105,6 @@ pub trait DatabaseBlocks:
     StorageInspect<FuelBlocks, Error = StorageError>
     + StorageInspect<SealedBlockConsensus, Error = StorageError>
 {
-    fn block_height(&self, block_id: &BlockId) -> StorageResult<BlockHeight>;
-
     fn blocks(
         &self,
         height: Option<BlockHeight>,
@@ -199,6 +199,7 @@ pub trait P2pPort: Send + Sync {
 }
 
 pub mod worker {
+    use super::super::storage::blocks::FuelBlockSecondaryKeyBlockHeights;
     use crate::database::{
         database_description::off_chain::OffChain,
         metadata::MetadataTable,
@@ -226,6 +227,7 @@ pub mod worker {
         Send
         + Sync
         + StorageMutate<MetadataTable<OffChain>, Error = StorageError>
+        + StorageMutate<FuelBlockSecondaryKeyBlockHeights, Error = StorageError>
         + Transactional<Storage = Self>
     {
         fn record_tx_id_owner(

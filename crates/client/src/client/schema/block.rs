@@ -87,6 +87,12 @@ pub struct BlockIdFragment {
     pub id: BlockId,
 }
 
+#[derive(cynic::QueryFragment, Debug)]
+#[cynic(schema_path = "./assets/schema.sdl", graphql_type = "Block")]
+pub struct BlockHeightFragment {
+    pub height: U32,
+}
+
 #[derive(cynic::QueryVariables, Debug)]
 pub struct ProduceBlockArgs {
     pub start_timestamp: Option<Tai64Timestamp>,

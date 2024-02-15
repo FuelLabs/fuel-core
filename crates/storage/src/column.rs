@@ -62,16 +62,14 @@ pub enum Column {
     // Below are the tables used for p2p, block production, starting the node.
     /// The column id of metadata about the blockchain
     Metadata = 17,
-    /// See `FuelBlockSecondaryKeyBlockHeights`
-    FuelBlockSecondaryKeyBlockHeights = 18,
     /// See [`SealedBlockConsensus`](crate::tables::SealedBlockConsensus)
-    FuelBlockConsensus = 19,
+    FuelBlockConsensus = 18,
 
     // Below are not required tables. They are used for API and may be removed or moved to another place in the future.
     /// The column of the table that stores `true` if `owner` owns `Coin` with `coin_id`
-    OwnedCoins = 20,
+    OwnedCoins = 19,
     /// The column of the table that stores `true` if `owner` owns `Message` with `message_id`
-    OwnedMessageIds = 21,
+    OwnedMessageIds = 20,
 }
 
 impl Column {

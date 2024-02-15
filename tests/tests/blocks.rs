@@ -45,8 +45,9 @@ use std::{
 #[tokio::test]
 async fn block() {
     // setup test data in the node
-    let block = CompressedBlock::default();
-    let height = block.header().height();
+    let mut block = CompressedBlock::default();
+    let height = 1.into();
+    block.header_mut().set_block_height(height);
     let mut db = Database::default();
     // setup server & client
     let srv = FuelService::from_database(db.clone(), Config::local_node())
@@ -54,13 +55,13 @@ async fn block() {
         .unwrap();
     let client = FuelClient::from(srv.bound_address);
 
-    db.storage::<FuelBlocks>().insert(height, &block).unwrap();
+    db.storage::<FuelBlocks>().insert(&height, &block).unwrap();
     db.storage::<SealedBlockConsensus>()
-        .insert(height, &Consensus::PoA(Default::default()))
+        .insert(&height, &Consensus::PoA(Default::default()))
         .unwrap();
 
     // run test
-    let block = client.block_by_height(**height).await.unwrap();
+    let block = client.block_by_height(height).await.unwrap();
     assert!(block.is_some());
 }
 
@@ -76,7 +77,7 @@ async fn get_genesis_block() {
     let tx = Transaction::default_test_tx();
     client.submit_and_await_commit(&tx).await.unwrap();
 
-    let block = client.block_by_height(13).await.unwrap().unwrap();
+    let block = client.block_by_height(13.into()).await.unwrap().unwrap();
     assert_eq!(block.header.height, 13);
     assert!(matches!(
         block.consensus,
@@ -102,11 +103,10 @@ async fn produce_block() {
         .await
         .unwrap();
 
-    if let TransactionStatus::Success { block_id, .. } =
+    if let TransactionStatus::Success { block_height, .. } =
         transaction_response.unwrap().status
     {
-        let block_id = block_id.parse().unwrap();
-        let block = client.block(&block_id).await.unwrap().unwrap();
+        let block = client.block_by_height(block_height).await.unwrap().unwrap();
         let actual_pub_key = block.block_producer().unwrap();
         let block_height: u32 = block.header.height;
         let expected_pub_key = config
@@ -138,7 +138,7 @@ async fn produce_block_manually() {
     let new_height = client.produce_blocks(1, None).await.unwrap();
 
     assert_eq!(1, *new_height);
-    let block = client.block_by_height(1).await.unwrap().unwrap();
+    let block = client.block_by_height(1.into()).await.unwrap().unwrap();
     assert_eq!(block.header.height, 1);
     let actual_pub_key = block.block_producer().unwrap();
     let expected_pub_key = config

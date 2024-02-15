@@ -1,6 +1,5 @@
 use fuel_core::{
-    database::Database,
-    fuel_core_graphql_api::ports::DatabaseBlocks,
+    combined_database::CombinedDatabase,
     service::{
         Config,
         FuelService,
@@ -11,10 +10,7 @@ use fuel_core_client::client::{
     FuelClient,
 };
 use fuel_core_types::{
-    blockchain::{
-        consensus::Consensus,
-        primitives::BlockId,
-    },
+    blockchain::consensus::Consensus,
     fuel_crypto::SecretKey,
     fuel_tx::Transaction,
     secrecy::Secret,
@@ -23,7 +19,6 @@ use rand::{
     rngs::StdRng,
     SeedableRng,
 };
-use std::str::FromStr;
 
 #[tokio::test]
 async fn can_get_sealed_block_from_poa_produced_block() {
@@ -31,10 +26,10 @@ async fn can_get_sealed_block_from_poa_produced_block() {
     let poa_secret = SecretKey::random(&mut rng);
     let poa_public = poa_secret.public_key();
 
-    let db = Database::default();
+    let db = CombinedDatabase::default();
     let mut config = Config::local_node();
     config.consensus_key = Some(Secret::new(poa_secret.into()));
-    let srv = FuelService::from_database(db.clone(), config)
+    let srv = FuelService::from_combined_database(db.clone(), config)
         .await
         .unwrap();
     let client = FuelClient::from(srv.bound_address);
@@ -44,24 +39,23 @@ async fn can_get_sealed_block_from_poa_produced_block() {
         .await
         .unwrap();
 
-    let block_id = match status {
-        TransactionStatus::Success { block_id, .. } => block_id,
+    let block_height = match status {
+        TransactionStatus::Success { block_height, .. } => block_height,
         _ => {
             panic!("unexpected result")
         }
     };
 
-    let block_id = BlockId::from_str(&block_id).unwrap();
-
-    let block_height = db.block_height(&block_id).unwrap();
     // check sealed block header is correct
     let sealed_block_header = db
+        .on_chain()
         .get_sealed_block_header(&block_height)
         .unwrap()
         .expect("expected sealed header to be available");
 
     // verify signature
     let block_id = sealed_block_header.entity.id();
+    let block_height = sealed_block_header.entity.height();
     let signature = match sealed_block_header.consensus {
         Consensus::PoA(poa) => poa.signature,
         _ => panic!("Not expected consensus"),
@@ -70,10 +64,10 @@ async fn can_get_sealed_block_from_poa_produced_block() {
         .verify(&poa_public, &block_id.into_message())
         .expect("failed to verify signature");
 
-    let block_height = db.block_height(&block_id).unwrap();
     // check sealed block is correct
     let sealed_block = db
-        .get_sealed_block_by_height(&block_height)
+        .on_chain()
+        .get_sealed_block_by_height(block_height)
         .unwrap()
         .expect("expected sealed header to be available");
 
