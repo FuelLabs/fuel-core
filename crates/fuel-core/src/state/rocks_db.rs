@@ -507,7 +507,10 @@ where
             .transpose()?
             .map(|(key, _)| key)
             .unwrap_or_default();
-        batch.delete_range_cf(&self.cf(column), first, last);
+        batch.delete_range_cf(&self.cf(column), first, last.clone());
+
+        // delete_range doesn't delete the last key, so we need to delete it separately
+        batch.delete_cf(&self.cf(column), last);
 
         database_metrics().write_meter.inc();
         database_metrics()
@@ -638,6 +641,29 @@ mod tests {
 
         assert_eq!(db.get(&key, Column::Metadata).unwrap(), None);
     }
+
+    #[test]
+fn delete_all_with_different_key_lengths() {
+    let (db, _tmp) = create_db();
+
+    let keys = vec![
+        vec![], // unit key
+        vec![0xA],
+        vec![0xB, 0xC],
+        vec![0xD, 0xE, 0xF],
+    ];
+    let value = Arc::new(vec![1, 2, 3]);
+
+    for key in &keys {
+        db.put(key, Column::Metadata, value.clone()).unwrap();
+    }
+
+    db.delete_all(Column::Metadata).unwrap();
+
+    for key in &keys {
+        assert_eq!(db.get(key, Column::Metadata).unwrap(), None);
+    }
+}
 
     #[test]
     fn can_use_unit_value() {
