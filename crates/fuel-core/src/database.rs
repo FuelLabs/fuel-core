@@ -286,15 +286,7 @@ where
     }
 
     fn delete_all(&self, column: Self::Column) -> StorageResult<()> {
-        let mut entries = Vec::new();
-        self.iter_all(column, None, None, IterDirection::Forward)
-            .try_for_each(|item| {
-                let (key, _) = item?;
-                entries.push((key, column, WriteOperation::Remove));
-                Ok::<_, StorageError>(())
-            })?;
-
-        self.batch_write(&mut entries.into_iter())
+        self.as_ref().delete_all(column)
     }
 }
 
