@@ -8,8 +8,13 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Description of the upcoming release here.
 
+### Added
+
+- [#1671](https://github.com/FuelLabs/fuel-core/pull/1671): Added a new `Merklelized` blueprint that maintains the binary Merkle tree over the storage data. It supports only the insertion of the objects without removing them.
+
 ### Changed
 
+- [#1671](https://github.com/FuelLabs/fuel-core/pull/1671): The logic related to the `FuelBlockSecondaryKeyBlockHeights` is moved to the off-chain worker.
 - [#1658](https://github.com/FuelLabs/fuel-core/pull/1658): Removed `Receipts` table. Instead, receipts are part of the `TransactionStatuses` table.
 - [#1650](https://github.com/FuelLabs/fuel-core/pull/1650): Add api endpoint for getting estimates for future gas prices
 - [#1649](https://github.com/FuelLabs/fuel-core/pull/1649): Add api endpoint for getting latest gas price
@@ -30,6 +35,7 @@ Description of the upcoming release here.
 - [#1636](https://github.com/FuelLabs/fuel-core/pull/1636): Add more docs to GraphQL DAP API.
 
 #### Breaking
+- [#1671](https://github.com/FuelLabs/fuel-core/pull/1671): The GraphQL API uses block height instead of the block id where it is possible. The transaction status contains `block_height` instead of the `block_id`.
 - [#1658](https://github.com/FuelLabs/fuel-core/pull/1658): Receipts are part of the transaction status. 
     Removed `reason` from the `TransactionExecutionResult::Failed`. It can be calculated based on the program state and receipts.
     Also, it is not possible to fetch `receipts` from the `Transaction` directly anymore. Instead, you need to fetch `status` and its receipts.
