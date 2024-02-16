@@ -112,7 +112,7 @@ impl GenesisWorkers {
 
     pub async fn compute_contracts_root(self) -> anyhow::Result<()> {
         tokio_rayon::spawn(move || {
-            let chunks = self.db.genesis_contract_ids_iter();
+            let chunks = self.db.genesis_loaded_contracts();
 
             let contract_ids = chunks.into_iter().enumerate().map(
                 |(index, chunk)| -> anyhow::Result<_> {
@@ -253,7 +253,6 @@ impl ProcessState for Handler<ContractConfig> {
 }
 
 // wrapper for ContractId to be used in the ProcessState trait
-
 
 impl ProcessState for Handler<ContractId> {
     type Item = ContractId;

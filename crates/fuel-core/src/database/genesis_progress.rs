@@ -104,14 +104,14 @@ impl TableWithBlueprint for GenesisContractRoots {
     }
 }
 
-pub struct GenesisContractIds;
-impl Mappable for GenesisContractIds {
+pub struct GenesisLoadedContract;
+impl Mappable for GenesisLoadedContract {
     type Key = Self::OwnedKey;
     type OwnedKey = ContractId;
     type Value = Self::OwnedValue;
     type OwnedValue = ();
 }
-impl TableWithBlueprint for GenesisContractIds {
+impl TableWithBlueprint for GenesisLoadedContract {
     type Blueprint = Plain<Postcard, Postcard>;
     type Column = Column;
     fn column() -> Self::Column {
@@ -155,7 +155,7 @@ impl Database {
     }
 
     pub fn add_contract_id(&mut self, contract_id: ContractId) -> Result<()> {
-        StorageMutate::<GenesisContractIds>::insert(self, &contract_id, &())?;
+        StorageMutate::<GenesisLoadedContract>::insert(self, &contract_id, &())?;
         Ok(())
     }
 
@@ -199,10 +199,10 @@ impl Database {
         self.compute_genesis_root::<GenesisContractRoots>()
     }
 
-    pub fn genesis_contract_ids_iter(
+    pub fn genesis_loaded_contracts(
         &self,
     ) -> impl Iterator<Item = Result<ContractId>> + '_ {
-        self.iter_all::<GenesisContractIds>(None)
+        self.iter_all::<GenesisLoadedContract>(None)
             .map_ok(|(contract_id, _)| contract_id)
             .map(|res| res.map_err(Into::into))
     }

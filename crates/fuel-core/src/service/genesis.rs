@@ -2,8 +2,8 @@ use crate::{
     database::{
         genesis_progress::{
             GenesisCoinRoots,
-            GenesisContractIds,
             GenesisContractRoots,
+            GenesisLoadedContract,
             GenesisMessageRoots,
             GenesisMetadata,
         },
@@ -142,7 +142,7 @@ fn cleanup_genesis_progress(database: &mut Database) -> anyhow::Result<()> {
     database.delete_all(GenesisCoinRoots::column())?;
     database.delete_all(GenesisMessageRoots::column())?;
     database.delete_all(GenesisContractRoots::column())?;
-    database.delete_all(GenesisContractIds::column())?;
+    database.delete_all(GenesisLoadedContract::column())?;
 
     Ok(())
 }
@@ -486,7 +486,7 @@ mod tests {
             .unwrap()
             .next()
             .is_none());
-        assert!(db.genesis_contract_ids_iter().next().is_none());
+        assert!(db.genesis_loaded_contracts().next().is_none());
     }
 
     #[tokio::test]
