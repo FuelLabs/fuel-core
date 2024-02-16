@@ -27,7 +27,6 @@ impl TransactionOpener for Database {
 }
 
 pub struct GenesisRunner<Handler, Groups, TxOpener> {
-    resource: GenesisResource,
     handler: Handler,
     tx_opener: TxOpener,
     skip: usize,
@@ -36,31 +35,20 @@ pub struct GenesisRunner<Handler, Groups, TxOpener> {
     cancel_token: CancellationToken,
 }
 
-pub trait ProcessState<T> {
-    fn process(&mut self, item: T, tx: &mut Database) -> anyhow::Result<()>;
-}
+pub trait ProcessState {
+    type Item;
 
-pub trait ProcessStateGroup<T> {
-    fn process_group(&mut self, group: Vec<T>, tx: &mut Database) -> anyhow::Result<()>;
-}
-
-impl<T, K> ProcessStateGroup<K> for T
-where
-    T: ProcessState<K>,
-{
-    fn process_group(&mut self, item: Vec<K>, tx: &mut Database) -> anyhow::Result<()> {
-        item.into_iter().try_for_each(|item| self.process(item, tx))
-    }
-}
-
-pub trait HandlesGenesisResource {
     fn genesis_resource() -> GenesisResource;
+    fn process(
+        &mut self,
+        group: Vec<Self::Item>,
+        tx: &mut Database,
+    ) -> anyhow::Result<()>;
 }
 
 impl<Logic, GroupGenerator, TxOpener, Item> GenesisRunner<Logic, GroupGenerator, TxOpener>
 where
-    Logic: ProcessStateGroup<Item>,
-    Item: HandlesGenesisResource,
+    Logic: ProcessState<Item = Item>,
     GroupGenerator: IntoIterator<Item = anyhow::Result<Group<Item>>>,
     TxOpener: TransactionOpener,
 {
@@ -71,10 +59,9 @@ where
         groups: GroupGenerator,
         tx_opener: TxOpener,
     ) -> Self {
-        let resource = Item::genesis_resource();
         let skip = tx_opener
             .view_only()
-            .genesis_progress(&resource)
+            .genesis_progress(&Logic::genesis_resource())
             // The `idx_last_handled` is zero based, so we need to add 1 to skip the already handled groups.
             .map(|idx_last_handled| idx_last_handled.saturating_add(1))
             .unwrap_or_default();
@@ -82,7 +69,6 @@ where
             handler,
             skip,
             groups,
-            resource,
             tx_opener,
             finished_signal,
             cancel_token,
@@ -99,8 +85,8 @@ where
                 let mut tx = self.tx_opener.transaction();
                 let group = group?;
                 let group_num = group.index;
-                self.handler.process_group(group.data, tx.as_mut())?;
-                tx.update_genesis_progress(self.resource, group_num)?;
+                self.handler.process(group.data, tx.as_mut())?;
+                tx.update_genesis_progress(Logic::genesis_resource(), group_num)?;
                 tx.commit()?;
                 Ok(())
             });
@@ -162,7 +148,6 @@ mod tests {
         },
         service::genesis::runner::{
             GenesisRunner,
-            HandlesGenesisResource,
             TransactionOpener,
         },
         state::{
@@ -174,12 +159,28 @@ mod tests {
 
     use super::ProcessState;
 
-    impl<T, K> ProcessState<K> for T
-    where
-        T: FnMut(K, &mut Database) -> anyhow::Result<()>,
-    {
-        fn process(&mut self, item: K, tx: &mut Database) -> anyhow::Result<()> {
-            self(item, tx)
+    type TestHandler<'a, K> =
+        Box<dyn FnMut(K, &mut Database) -> anyhow::Result<()> + Send + 'a>;
+
+    fn to_handler<'a, K: 'a>(
+        closure: impl FnMut(K, &mut Database) -> anyhow::Result<()> + Send + 'a,
+    ) -> TestHandler<'a, K> {
+        Box::new(closure)
+    }
+
+    impl<'a, K> ProcessState for TestHandler<'a, K> {
+        type Item = K;
+
+        fn genesis_resource() -> GenesisResource {
+            GenesisResource::Coins
+        }
+
+        fn process(
+            &mut self,
+            group: Vec<Self::Item>,
+            tx: &mut Database,
+        ) -> anyhow::Result<()> {
+            group.into_iter().try_for_each(|item| self(item, tx))
         }
     }
 
@@ -195,29 +196,20 @@ mod tests {
             })
             .collect()
     }
-    impl HandlesGenesisResource for usize {
-        fn genesis_resource() -> GenesisResource {
-            GenesisResource::Coins
-        }
-    }
-    impl HandlesGenesisResource for () {
-        fn genesis_resource() -> GenesisResource {
-            GenesisResource::Coins
-        }
-    }
 
     #[test]
     fn will_go_through_all_groups() {
         // given
         let groups = given_ok_groups(3);
         let mut called_with_groups = vec![];
+
         let runner = GenesisRunner::new(
             Some(Arc::new(Notify::new())),
             CancellationToken::new(),
-            |group, _: &mut Database| {
+            to_handler(|group: usize, _: &mut Database| {
                 called_with_groups.push(group);
                 Ok(())
-            },
+            }),
             groups,
             Database::default(),
         );
@@ -241,10 +233,10 @@ mod tests {
         let runner = GenesisRunner::new(
             Some(Arc::new(Notify::new())),
             CancellationToken::new(),
-            |element, _: &mut Database| {
+            to_handler(|element, _: &mut Database| {
                 called_with.push(element);
                 Ok(())
-            },
+            }),
             groups,
             db,
         );
@@ -269,7 +261,7 @@ mod tests {
         let runner = GenesisRunner::new(
             Some(Arc::new(Notify::new())),
             CancellationToken::new(),
-            |_, tx: &mut Database| {
+            to_handler(|_, tx: &mut Database| {
                 insert_a_coin(tx, &utxo_id);
 
                 assert!(
@@ -283,7 +275,7 @@ mod tests {
                 );
 
                 Ok(())
-            },
+            }),
             groups,
             outer_db.clone(),
         );
@@ -311,10 +303,10 @@ mod tests {
         let runner = GenesisRunner::new(
             Some(Arc::new(Notify::new())),
             CancellationToken::new(),
-            |_, tx: &mut Database| {
+            to_handler(|_, tx: &mut Database| {
                 insert_a_coin(tx, &utxo_id);
                 bail!("Some error")
-            },
+            }),
             groups,
             db.clone(),
         );
@@ -333,7 +325,7 @@ mod tests {
         let runner = GenesisRunner::new(
             Some(Arc::new(Notify::new())),
             CancellationToken::new(),
-            |_, _: &mut Database| bail!("Some error"),
+            to_handler(|_, _: &mut Database| bail!("Some error")),
             groups,
             Database::default(),
         );
@@ -352,7 +344,7 @@ mod tests {
         let runner = GenesisRunner::new(
             Some(Arc::new(Notify::new())),
             CancellationToken::new(),
-            |_: (), _: &mut Database| Ok(()),
+            to_handler(|_: (), _: &mut Database| Ok(())),
             groups,
             Database::default(),
         );
@@ -372,7 +364,7 @@ mod tests {
         let runner = GenesisRunner::new(
             Some(Arc::new(Notify::new())),
             CancellationToken::new(),
-            |_, _: &mut Database| Ok(()),
+            to_handler(|_, _: &mut Database| Ok(())),
             groups,
             db.clone(),
         );
@@ -417,10 +409,10 @@ mod tests {
         let runner = GenesisRunner::new(
             Some(Arc::new(Notify::new())),
             CancellationToken::new(),
-            |_, tx: &mut Database| {
+            to_handler(|_, tx: &mut Database| {
                 insert_a_coin(tx, &utxo_id);
                 Ok(())
-            },
+            }),
             groups,
             tx_opener,
         );
@@ -447,10 +439,10 @@ mod tests {
             GenesisRunner::new(
                 Some(Arc::clone(&finished_signal)),
                 cancel_token.clone(),
-                move |el, _: &mut Database| {
+                to_handler(move |el, _: &mut Database| {
                     read_groups.lock().unwrap().push(el);
                     Ok(())
-                },
+                }),
                 rx,
                 Database::default(),
             )
@@ -506,7 +498,7 @@ mod tests {
         let runner = GenesisRunner::new(
             Some(Arc::clone(&finished_signal)),
             CancellationToken::new(),
-            |_: (), _: &mut Database| Ok(()),
+            Box::new(|_: (), _: &mut Database| Ok(())) as TestHandler<()>,
             groups,
             Database::default(),
         );
@@ -594,7 +586,7 @@ mod tests {
         let runner = GenesisRunner::new(
             Some(Arc::new(Notify::new())),
             CancellationToken::new(),
-            |_, _: &mut Database| Ok(()),
+            to_handler(|_, _: &mut Database| Ok(())),
             groups,
             Database::new(BrokenTransactions::new()),
         );

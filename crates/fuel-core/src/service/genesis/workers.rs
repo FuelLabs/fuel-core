@@ -1,14 +1,13 @@
-use std::sync::Arc;
+use std::{
+    marker::PhantomData,
+    sync::Arc,
+};
 
 use super::{
     init_coin,
     init_contract,
     init_da_message,
-    runner::{
-        HandlesGenesisResource,
-        ProcessState,
-        ProcessStateGroup,
-    },
+    runner::ProcessState,
     GenesisRunner,
 };
 
@@ -133,8 +132,8 @@ impl GenesisWorkers {
         finished_signal: Arc<Notify>,
     ) -> tokio_rayon::AsyncRayonHandle<Result<(), anyhow::Error>>
     where
-        Handler: ProcessStateGroup<T>,
-        T: HandlesGenesisResource,
+        T: Send + 'static,
+        Handler<T>: ProcessState<Item = T>,
         I: IntoIterator<Item = anyhow::Result<Group<T>>> + Send + 'static,
     {
         let runner = self.create_runner(data, Some(finished_signal));
@@ -145,10 +144,9 @@ impl GenesisWorkers {
         &self,
         data: I,
         finished_signal: Option<Arc<Notify>>,
-    ) -> GenesisRunner<Handler, I, Database>
+    ) -> GenesisRunner<Handler<T>, I, Database>
     where
-        Handler: ProcessStateGroup<T>,
-        T: HandlesGenesisResource,
+        Handler<T>: ProcessState<Item = T>,
         I: IntoIterator<Item = anyhow::Result<Group<T>>>,
     {
         let handler = Handler::new(self.block_height);
@@ -164,59 +162,34 @@ impl GenesisWorkers {
 }
 
 #[derive(Debug, Clone, Copy)]
-struct Handler {
+pub struct Handler<T> {
     output_index: u64,
     block_height: BlockHeight,
+    phaton_data: PhantomData<T>,
 }
 
-impl Handler {
-    fn new(block_height: BlockHeight) -> Self {
+impl<T> Handler<T> {
+    pub fn new(block_height: BlockHeight) -> Self {
         Self {
             output_index: 0,
             block_height,
+            phaton_data: PhantomData,
         }
     }
 }
 
-impl HandlesGenesisResource for CoinConfig {
-    fn genesis_resource() -> GenesisResource {
-        GenesisResource::Coins
-    }
-}
+impl ProcessState for Handler<CoinConfig> {
+    type Item = CoinConfig;
 
-impl HandlesGenesisResource for MessageConfig {
-    fn genesis_resource() -> GenesisResource {
-        GenesisResource::Messages
-    }
-}
-
-impl HandlesGenesisResource for ContractConfig {
-    fn genesis_resource() -> GenesisResource {
-        GenesisResource::Contracts
-    }
-}
-
-impl HandlesGenesisResource for ContractStateConfig {
-    fn genesis_resource() -> GenesisResource {
-        GenesisResource::ContractStates
-    }
-}
-
-impl HandlesGenesisResource for ContractBalanceConfig {
-    fn genesis_resource() -> GenesisResource {
-        GenesisResource::ContractBalances
-    }
-}
-
-impl HandlesGenesisResource for ContractId {
-    fn genesis_resource() -> GenesisResource {
-        GenesisResource::ContractsRoot
-    }
-}
-
-impl ProcessState<CoinConfig> for Handler {
-    fn process(&mut self, coin: CoinConfig, tx: &mut Database) -> anyhow::Result<()> {
-        let root = init_coin(tx, &coin, self.output_index, self.block_height)?;
+    fn process(
+        &mut self,
+        group: Vec<Self::Item>,
+        tx: &mut Database,
+    ) -> anyhow::Result<()> {
+        group
+            .into_iter()
+            .try_for_each(|coin| {
+                let root = init_coin(tx, &coin, self.output_index, self.block_height)?;
         tx.add_coin_root(root)?;
 
         self.output_index = self.output_index
@@ -224,28 +197,46 @@ impl ProcessState<CoinConfig> for Handler {
                 .expect("The maximum number of UTXOs supported in the genesis configuration has been exceeded.");
 
         Ok(())
+            })
+    }
+
+    fn genesis_resource() -> GenesisResource {
+        GenesisResource::Coins
     }
 }
 
-impl ProcessState<MessageConfig> for Handler {
+impl ProcessState for Handler<MessageConfig> {
+    type Item = MessageConfig;
+
     fn process(
         &mut self,
-        message: MessageConfig,
+        group: Vec<Self::Item>,
         tx: &mut Database,
     ) -> anyhow::Result<()> {
-        let root = init_da_message(tx, &message)?;
-        tx.add_message_root(root)?;
-        Ok(())
+        group.into_iter().try_for_each(|message| {
+            let root = init_da_message(tx, &message)?;
+            tx.add_message_root(root)?;
+            Ok(())
+        })
+    }
+
+    fn genesis_resource() -> GenesisResource {
+        GenesisResource::Messages
     }
 }
 
-impl ProcessState<ContractConfig> for Handler {
+impl ProcessState for Handler<ContractConfig> {
+    type Item = ContractConfig;
+
     fn process(
         &mut self,
-        contract: ContractConfig,
+        group: Vec<Self::Item>,
         tx: &mut Database,
     ) -> anyhow::Result<()> {
-        init_contract(tx, &contract, self.output_index, self.block_height)?;
+        group
+            .into_iter()
+            .try_for_each(|contract| {
+                init_contract(tx, &contract, self.output_index, self.block_height)?;
         tx.add_contract_id(contract.contract_id)?;
 
         self.output_index = self.output_index
@@ -253,11 +244,43 @@ impl ProcessState<ContractConfig> for Handler {
                 .expect("The maximum number of UTXOs supported in the genesis configuration has been exceeded.");
 
         Ok::<(), anyhow::Error>(())
+            })
+    }
+
+    fn genesis_resource() -> GenesisResource {
+        GenesisResource::Contracts
     }
 }
 
-impl ProcessStateGroup<ContractStateConfig> for Handler {
-    fn process_group(
+// wrapper for ContractId to be used in the ProcessState trait
+
+
+impl ProcessState for Handler<ContractId> {
+    type Item = ContractId;
+
+    fn process(
+        &mut self,
+        group: Vec<Self::Item>,
+        tx: &mut Database,
+    ) -> anyhow::Result<()> {
+        group.into_iter().try_for_each(|contract_id| {
+            let mut contract_ref = ContractRef::new(&mut *tx, contract_id);
+            let root = contract_ref.root()?;
+            let db = contract_ref.database_mut();
+            db.add_contract_root(root)?;
+            Ok(())
+        })
+    }
+
+    fn genesis_resource() -> GenesisResource {
+        GenesisResource::ContractsRoot
+    }
+}
+
+impl ProcessState for Handler<ContractStateConfig> {
+    type Item = ContractStateConfig;
+
+    fn process(
         &mut self,
         group: Vec<ContractStateConfig>,
         tx: &mut Database,
@@ -265,10 +288,16 @@ impl ProcessStateGroup<ContractStateConfig> for Handler {
         tx.update_contract_states(group)?;
         Ok(())
     }
+
+    fn genesis_resource() -> GenesisResource {
+        GenesisResource::ContractStates
+    }
 }
 
-impl ProcessStateGroup<ContractBalanceConfig> for Handler {
-    fn process_group(
+impl ProcessState for Handler<ContractBalanceConfig> {
+    type Item = ContractBalanceConfig;
+
+    fn process(
         &mut self,
         group: Vec<ContractBalanceConfig>,
         tx: &mut Database,
@@ -276,14 +305,8 @@ impl ProcessStateGroup<ContractBalanceConfig> for Handler {
         tx.update_contract_balances(group)?;
         Ok(())
     }
-}
 
-impl ProcessState<ContractId> for Handler {
-    fn process(&mut self, item: ContractId, tx: &mut Database) -> anyhow::Result<()> {
-        let mut contract_ref = ContractRef::new(tx, item);
-        let root = contract_ref.root()?;
-        let db = contract_ref.database_mut();
-        db.add_contract_root(root)?;
-        Ok(())
+    fn genesis_resource() -> GenesisResource {
+        GenesisResource::ContractBalances
     }
 }
