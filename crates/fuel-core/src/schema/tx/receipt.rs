@@ -1,14 +1,11 @@
-use crate::schema::{
-    contract::Contract,
-    scalars::{
-        Address,
-        AssetId,
-        Bytes32,
-        ContractId,
-        HexString,
-        Nonce,
-        U64,
-    },
+use crate::schema::scalars::{
+    Address,
+    AssetId,
+    Bytes32,
+    ContractId,
+    HexString,
+    Nonce,
+    U64,
 };
 use async_graphql::{
     Enum,
@@ -62,7 +59,7 @@ pub struct Receipt(pub fuel_tx::Receipt);
 
 #[Object]
 impl Receipt {
-    async fn contract(&self) -> Option<Contract> {
+    async fn contract(&self) -> Option<ContractId> {
         Some((*self.0.id()?).into())
     }
     async fn pc(&self) -> Option<U64> {
@@ -71,7 +68,7 @@ impl Receipt {
     async fn is(&self) -> Option<U64> {
         self.0.is().map(Into::into)
     }
-    async fn to(&self) -> Option<Contract> {
+    async fn to(&self) -> Option<ContractId> {
         self.0.to().copied().map(Into::into)
     }
     async fn to_address(&self) -> Option<Address> {

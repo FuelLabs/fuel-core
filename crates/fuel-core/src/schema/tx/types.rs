@@ -17,10 +17,10 @@ use crate::{
     },
     schema::{
         block::Block,
-        contract::Contract,
         scalars::{
             AssetId,
             Bytes32,
+            ContractId,
             HexString,
             Salt,
             Tai64Timestamp,
@@ -365,16 +365,16 @@ impl Transaction {
         }
     }
 
-    async fn input_contracts(&self) -> Option<Vec<Contract>> {
+    async fn input_contracts(&self) -> Option<Vec<ContractId>> {
         match &self.0 {
             fuel_tx::Transaction::Script(script) => {
-                Some(script.input_contracts().map(|v| Contract(*v)).collect())
+                Some(script.input_contracts().map(|v| (*v).into()).collect())
             }
             fuel_tx::Transaction::Create(create) => {
-                Some(create.input_contracts().map(|v| Contract(*v)).collect())
+                Some(create.input_contracts().map(|v| (*v).into()).collect())
             }
             fuel_tx::Transaction::Mint(mint) => {
-                Some(vec![Contract(mint.input_contract().contract_id)])
+                Some(vec![mint.input_contract().contract_id.into()])
             }
         }
     }
