@@ -12,6 +12,7 @@ use crate::{
         view_extension::ViewExtension,
         Config,
     },
+    graphql_api::MAX_COMPLEXITY,
     schema::{
         CoreSchema,
         CoreSchemaBuilder,
@@ -195,6 +196,7 @@ where
         .extension(async_graphql::extensions::Tracing)
         .extension(MetricsExtension::new(log_threshold_ms))
         .extension(ViewExtension::new())
+        .limit_complexity(MAX_COMPLEXITY)
         .finish();
 
     let router = Router::new()

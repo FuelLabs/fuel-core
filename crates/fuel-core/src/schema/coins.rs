@@ -157,6 +157,9 @@ impl CoinQuery {
     }
 
     /// Gets all unspent coins of some `owner` maybe filtered with by `asset_id` per page.
+    #[graphql(
+        complexity = "(first.unwrap_or_default() as usize * child_complexity) + (last.unwrap_or_default() as usize * child_complexity)"
+    )]
     async fn coins(
         &self,
         ctx: &Context<'_>,

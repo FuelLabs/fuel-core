@@ -102,6 +102,9 @@ impl TxQuery {
         }
     }
 
+    #[graphql(
+        complexity = "(first.unwrap_or_default() as usize * child_complexity) + (last.unwrap_or_default() as usize * child_complexity)"
+    )]
     async fn transactions(
         &self,
         ctx: &Context<'_>,
@@ -163,6 +166,9 @@ impl TxQuery {
         .await
     }
 
+    #[graphql(
+        complexity = "(first.unwrap_or_default() as usize * child_complexity) + (last.unwrap_or_default() as usize * child_complexity)"
+    )]
     async fn transactions_by_owner(
         &self,
         ctx: &Context<'_>,

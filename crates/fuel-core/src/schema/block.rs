@@ -216,6 +216,9 @@ impl BlockQuery {
             .into_api_result()
     }
 
+    #[graphql(
+        complexity = "(first.unwrap_or_default() as usize * child_complexity) + (last.unwrap_or_default() as usize * child_complexity)"
+    )]
     async fn blocks(
         &self,
         ctx: &Context<'_>,
@@ -249,6 +252,9 @@ impl HeaderQuery {
             .map(|b| b.0.header().clone().into()))
     }
 
+    #[graphql(
+        complexity = "(first.unwrap_or_default() as usize * child_complexity) + (last.unwrap_or_default() as usize * child_complexity)"
+    )]
     async fn headers(
         &self,
         ctx: &Context<'_>,
