@@ -119,8 +119,9 @@ impl MockImporter {
             let stream = fuel_core_services::stream::unfold(blocks, |mut blocks| async {
                 let block = blocks.pop();
                 if let Some(sealed_block) = block {
-                    let result: SharedImportResult =
-                        Arc::new(ImportResult::new_from_local(sealed_block, vec![]));
+                    let result: SharedImportResult = Arc::new(
+                        ImportResult::new_from_local(sealed_block, vec![], vec![]),
+                    );
 
                     Some((result, blocks))
                 } else {

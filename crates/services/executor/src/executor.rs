@@ -116,6 +116,7 @@ use fuel_core_types::{
         block_producer::Components,
         executor::{
             Error as ExecutorError,
+            Event as ExecutorEvent,
             ExecutionKind,
             ExecutionResult,
             ExecutionType,
@@ -262,6 +263,7 @@ pub struct ExecutionData {
     found_mint: bool,
     message_ids: Vec<MessageId>,
     tx_status: Vec<TransactionExecutionStatus>,
+    events: Vec<ExecutorEvent>,
     pub skipped_transactions: Vec<(TxId, ExecutorError)>,
 }
 
@@ -480,6 +482,7 @@ where
             message_ids,
             tx_status,
             skipped_transactions,
+            events,
             ..
         } = execution_data;
 
@@ -508,6 +511,7 @@ where
             block,
             skipped_transactions,
             tx_status,
+            events,
         };
 
         // Get the complete fuel block.
@@ -531,6 +535,7 @@ where
             found_mint: false,
             message_ids: Vec::new(),
             tx_status: Vec::new(),
+            events: Vec::new(),
             skipped_transactions: Vec::new(),
         };
         let execution_data = &mut data;
@@ -543,7 +548,7 @@ where
         let block_height = *block.header.height();
 
         if self.relayer.enabled() {
-            self.process_da(block_st_transaction, &block.header)?;
+            self.process_da(block_st_transaction, &block.header, execution_data)?;
         }
 
         // ALl transactions should be in the `TxSource`.
@@ -656,6 +661,7 @@ where
         &self,
         block_st_transaction: &mut D,
         header: &PartialBlockHeader,
+        execution_data: &mut ExecutionData,
     ) -> ExecutorResult<()> {
         let block_height = *header.height();
         let prev_block_height = block_height
@@ -686,6 +692,9 @@ where
                         block_st_transaction
                             .storage::<Messages>()
                             .insert(message.nonce(), &message)?;
+                        execution_data
+                            .events
+                            .push(ExecutorEvent::MessageImported(message));
                     }
                 }
             }
@@ -850,7 +859,7 @@ where
 
             self.persist_output_utxos(
                 block_height,
-                execution_data.tx_count,
+                execution_data,
                 &coinbase_id,
                 block_st_transaction.as_mut(),
                 inputs.as_slice(),
@@ -1024,12 +1033,17 @@ where
         }
 
         // change the spent status of the tx inputs
-        self.spend_input_utxos(tx.inputs(), tx_st_transaction.as_mut(), reverted)?;
+        self.spend_input_utxos(
+            tx.inputs(),
+            tx_st_transaction.as_mut(),
+            reverted,
+            execution_data,
+        )?;
 
         // Persist utxos first and after calculate the not utxo outputs
         self.persist_output_utxos(
             *header.height(),
-            execution_data.tx_count,
+            execution_data,
             &tx_id,
             tx_st_transaction.as_mut(),
             tx.inputs(),
@@ -1189,25 +1203,55 @@ where
         inputs: &[Input],
         db: &mut D,
         reverted: bool,
+        execution_data: &mut ExecutionData,
     ) -> ExecutorResult<()> {
         for input in inputs {
             match input {
-                Input::CoinSigned(CoinSigned { utxo_id, .. })
-                | Input::CoinPredicate(CoinPredicate { utxo_id, .. }) => {
+                Input::CoinSigned(CoinSigned {
+                    utxo_id,
+                    owner,
+                    amount,
+                    asset_id,
+                    maturity,
+                    ..
+                })
+                | Input::CoinPredicate(CoinPredicate {
+                    utxo_id,
+                    owner,
+                    amount,
+                    asset_id,
+                    maturity,
+                    ..
+                }) => {
                     // prune utxo from db
-                    db.storage::<Coins>().remove(utxo_id)?;
+                    let coin = db
+                        .storage::<Coins>()
+                        .remove(utxo_id)
+                        .map_err(Into::into)
+                        .transpose()
+                        .unwrap_or_else(|| {
+                            // If the coin is not found in the database, it means that it was
+                            // already spent or `utxo_validation` is `false`.
+                            self.get_coin_or_default(
+                                db, *utxo_id, *owner, *amount, *asset_id, *maturity,
+                            )
+                        })?;
+
+                    execution_data
+                        .events
+                        .push(ExecutorEvent::CoinConsumed(coin.uncompress(*utxo_id)));
                 }
-                Input::MessageDataSigned(_)
-                | Input::MessageDataPredicate(_)
-                if reverted => {
+                Input::MessageDataSigned(_) | Input::MessageDataPredicate(_)
+                    if reverted =>
+                {
                     // Don't spend the retryable messages if transaction is reverted
                     continue
                 }
                 Input::MessageCoinSigned(MessageCoinSigned { nonce, .. })
                 | Input::MessageCoinPredicate(MessageCoinPredicate { nonce, .. })
-                | Input::MessageDataSigned(MessageDataSigned { nonce, .. }) // Spend only if tx is not reverted
-                | Input::MessageDataPredicate(MessageDataPredicate { nonce, .. }) // Spend only if tx is not reverted
-                => {
+                | Input::MessageDataSigned(MessageDataSigned { nonce, .. })
+                | Input::MessageDataPredicate(MessageDataPredicate { nonce, .. }) => {
+                    // `MessageDataSigned` and `MessageDataPredicate` are spent only if tx is not reverted
                     // mark message id as spent
                     let was_already_spent =
                         db.storage::<SpentMessages>().insert(nonce, &())?;
@@ -1216,7 +1260,13 @@ where
                         return Err(ExecutorError::MessageAlreadySpent(*nonce))
                     }
                     // cleanup message contents
-                    db.storage::<Messages>().remove(nonce)?;
+                    let message = db
+                        .storage::<Messages>()
+                        .remove(nonce)?
+                        .ok_or_else(|| ExecutorError::MessageAlreadySpent(*nonce))?;
+                    execution_data
+                        .events
+                        .push(ExecutorEvent::MessageConsumed(message));
                 }
                 _ => {}
             }
@@ -1511,12 +1561,13 @@ where
     fn persist_output_utxos(
         &self,
         block_height: BlockHeight,
-        tx_idx: u16,
+        execution_data: &mut ExecutionData,
         tx_id: &Bytes32,
         db: &mut D,
         inputs: &[Input],
         outputs: &[Output],
     ) -> ExecutorResult<()> {
+        let tx_idx = execution_data.tx_count;
         for (output_index, output) in outputs.iter().enumerate() {
             let index = u8::try_from(output_index)
                 .expect("Transaction can have only up to `u8::MAX` outputs");
@@ -1528,7 +1579,7 @@ where
                     to,
                 } => Self::insert_coin(
                     block_height,
-                    tx_idx,
+                    execution_data,
                     utxo_id,
                     amount,
                     asset_id,
@@ -1558,7 +1609,7 @@ where
                     amount,
                 } => Self::insert_coin(
                     block_height,
-                    tx_idx,
+                    execution_data,
                     utxo_id,
                     amount,
                     asset_id,
@@ -1571,7 +1622,7 @@ where
                     amount,
                 } => Self::insert_coin(
                     block_height,
-                    tx_idx,
+                    execution_data,
                     utxo_id,
                     amount,
                     asset_id,
@@ -1594,7 +1645,7 @@ where
 
     fn insert_coin(
         block_height: BlockHeight,
-        tx_idx: u16,
+        execution_data: &mut ExecutionData,
         utxo_id: UtxoId,
         amount: &Word,
         asset_id: &AssetId,
@@ -1610,13 +1661,16 @@ where
                 amount: *amount,
                 asset_id: *asset_id,
                 maturity: 0u32.into(),
-                tx_pointer: TxPointer::new(block_height, tx_idx),
+                tx_pointer: TxPointer::new(block_height, execution_data.tx_count),
             }
             .into();
 
             if db.storage::<Coins>().insert(&utxo_id, &coin)?.is_some() {
                 return Err(ExecutorError::OutputAlreadyExists)
             }
+            execution_data
+                .events
+                .push(ExecutorEvent::CoinCreated(coin.uncompress(utxo_id)));
         }
 
         Ok(())

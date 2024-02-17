@@ -6,7 +6,10 @@ use crate::{
         SealedBlock,
     },
     services::{
-        executor::TransactionExecutionStatus,
+        executor::{
+            Event,
+            TransactionExecutionStatus,
+        },
         Uncommitted,
     },
 };
@@ -28,6 +31,8 @@ pub struct ImportResult {
     pub sealed_block: SealedBlock,
     /// The status of the transactions execution included into the block.
     pub tx_status: Vec<TransactionExecutionStatus>,
+    /// The events produced during block execution.
+    pub events: Vec<Event>,
     /// The source producer of the block.
     pub source: Source,
 }
@@ -55,10 +60,12 @@ impl ImportResult {
     pub fn new_from_local(
         sealed_block: SealedBlock,
         tx_status: Vec<TransactionExecutionStatus>,
+        events: Vec<Event>,
     ) -> Self {
         Self {
             sealed_block,
             tx_status,
+            events,
             source: Source::Local,
         }
     }
@@ -67,10 +74,12 @@ impl ImportResult {
     pub fn new_from_network(
         sealed_block: SealedBlock,
         tx_status: Vec<TransactionExecutionStatus>,
+        events: Vec<Event>,
     ) -> Self {
         Self {
             sealed_block,
             tx_status,
+            events,
             source: Source::Network,
         }
     }

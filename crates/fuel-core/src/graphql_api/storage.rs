@@ -1,5 +1,7 @@
 use fuel_core_storage::kv_store::StorageColumn;
 
+pub mod coins;
+pub mod messages;
 pub mod transactions;
 
 /// GraphQL database tables column ids to the corresponding [`fuel_core_storage::Mappable`] table.

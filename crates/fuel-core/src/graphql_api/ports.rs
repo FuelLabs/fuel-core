@@ -61,6 +61,20 @@ use std::sync::Arc;
 pub trait OffChainDatabase: Send + Sync {
     fn tx_status(&self, tx_id: &TxId) -> StorageResult<TransactionStatus>;
 
+    fn owned_coins_ids(
+        &self,
+        owner: &Address,
+        start_coin: Option<UtxoId>,
+        direction: IterDirection,
+    ) -> BoxedIter<'_, StorageResult<UtxoId>>;
+
+    fn owned_message_ids(
+        &self,
+        owner: &Address,
+        start_message_id: Option<Nonce>,
+        direction: IterDirection,
+    ) -> BoxedIter<'_, StorageResult<Nonce>>;
+
     fn owned_transactions_ids(
         &self,
         owner: Address,
@@ -70,8 +84,6 @@ pub trait OffChainDatabase: Send + Sync {
 }
 
 /// The on chain database port expected by GraphQL API service.
-// TODO: Move `owned_message_ids` and `owned_coins_ids`` to `OffChainDatabase`
-//  https://github.com/FuelLabs/fuel-core/issues/1583
 pub trait OnChainDatabase:
     Send
     + Sync
@@ -83,19 +95,6 @@ pub trait OnChainDatabase:
     + DatabaseChain
     + DatabaseMessageProof
 {
-    fn owned_message_ids(
-        &self,
-        owner: &Address,
-        start_message_id: Option<Nonce>,
-        direction: IterDirection,
-    ) -> BoxedIter<'_, StorageResult<Nonce>>;
-
-    fn owned_coins_ids(
-        &self,
-        owner: &Address,
-        start_coin: Option<UtxoId>,
-        direction: IterDirection,
-    ) -> BoxedIter<'_, StorageResult<UtxoId>>;
 }
 
 /// Trait that specifies all the getters required for blocks.
@@ -199,9 +198,15 @@ pub trait P2pPort: Send + Sync {
 }
 
 pub mod worker {
-    use crate::database::{
-        database_description::off_chain::OffChain,
-        metadata::MetadataTable,
+    use crate::{
+        database::{
+            database_description::off_chain::OffChain,
+            metadata::MetadataTable,
+        },
+        fuel_core_graphql_api::storage::{
+            coins::OwnedCoins,
+            messages::OwnedMessageIds,
+        },
     };
     use fuel_core_services::stream::BoxStream;
     use fuel_core_storage::{
@@ -225,6 +230,8 @@ pub mod worker {
     pub trait OffChainDatabase:
         Send
         + Sync
+        + StorageMutate<OwnedMessageIds, Error = StorageError>
+        + StorageMutate<OwnedCoins, Error = StorageError>
         + StorageMutate<MetadataTable<OffChain>, Error = StorageError>
         + Transactional<Storage = Self>
     {

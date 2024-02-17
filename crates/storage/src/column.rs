@@ -66,12 +66,6 @@ pub enum Column {
     FuelBlockSecondaryKeyBlockHeights = 18,
     /// See [`SealedBlockConsensus`](crate::tables::SealedBlockConsensus)
     FuelBlockConsensus = 19,
-
-    // Below are not required tables. They are used for API and may be removed or moved to another place in the future.
-    /// The column of the table that stores `true` if `owner` owns `Coin` with `coin_id`
-    OwnedCoins = 20,
-    /// The column of the table that stores `true` if `owner` owns `Message` with `message_id`
-    OwnedMessageIds = 21,
 }
 
 impl Column {
