@@ -63,7 +63,7 @@ pub enum Column {
     /// The column id of metadata about the blockchain
     Metadata = 17,
     /// See [`SealedBlockConsensus`](crate::tables::SealedBlockConsensus)
-    FuelBlockConsensus = 19,
+    FuelBlockConsensus = 18,
 }
 
 impl Column {
