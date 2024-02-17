@@ -79,6 +79,11 @@ impl CombinedDatabase {
         &self.off_chain
     }
 
+    #[cfg(any(feature = "test-helpers", test))]
+    pub fn off_chain_mut(&mut self) -> &mut Database<OffChain> {
+        &mut self.off_chain
+    }
+
     pub fn relayer(&self) -> &Database<Relayer> {
         &self.relayer
     }

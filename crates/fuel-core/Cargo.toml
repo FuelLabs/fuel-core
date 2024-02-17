@@ -41,6 +41,7 @@ futures = { workspace = true }
 hex = { version = "0.4", features = ["serde"] }
 hyper = { workspace = true }
 itertools = { workspace = true }
+num_cpus = { version = "1.16.0", optional = true }
 rand = { workspace = true }
 rocksdb = { version = "0.21", default-features = false, features = [
     "lz4",
@@ -74,7 +75,7 @@ test-strategy = { workspace = true }
 default = ["rocksdb"]
 p2p = ["dep:fuel-core-p2p", "dep:fuel-core-sync"]
 relayer = ["dep:fuel-core-relayer"]
-rocksdb = ["dep:rocksdb", "dep:tempfile"]
+rocksdb = ["dep:rocksdb", "dep:tempfile", "dep:num_cpus"]
 test-helpers = ["fuel-core-p2p?/test-helpers"]
 # features to enable in production, but increase build times
 rocksdb-production = ["rocksdb", "rocksdb/jemalloc"]

@@ -129,6 +129,7 @@ impl TestContextBuilder {
                             block: Default::default(),
                             skipped_transactions: Default::default(),
                             tx_status: Default::default(),
+                            events: Default::default(),
                         },
                         StorageTransaction::new(EmptyStorage),
                     ))
@@ -287,6 +288,7 @@ async fn remove_skipped_transactions() {
                         })
                         .collect(),
                     tx_status: Default::default(),
+                    events: Default::default(),
                 },
                 StorageTransaction::new(EmptyStorage),
             ))

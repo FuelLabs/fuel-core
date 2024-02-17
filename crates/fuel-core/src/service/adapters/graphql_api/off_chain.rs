@@ -27,8 +27,12 @@ use fuel_core_types::{
         Address,
         Bytes32,
         TxPointer,
+        UtxoId,
     },
-    fuel_types::BlockHeight,
+    fuel_types::{
+        BlockHeight,
+        Nonce,
+    },
     services::txpool::TransactionStatus,
 };
 
@@ -37,6 +41,28 @@ impl OffChainDatabase for Database<OffChain> {
         self.get_tx_status(tx_id)
             .transpose()
             .ok_or(not_found!("TransactionId"))?
+    }
+
+    fn owned_coins_ids(
+        &self,
+        owner: &Address,
+        start_coin: Option<UtxoId>,
+        direction: IterDirection,
+    ) -> BoxedIter<'_, StorageResult<UtxoId>> {
+        self.owned_coins_ids(owner, start_coin, Some(direction))
+            .map(|res| res.map_err(StorageError::from))
+            .into_boxed()
+    }
+
+    fn owned_message_ids(
+        &self,
+        owner: &Address,
+        start_message_id: Option<Nonce>,
+        direction: IterDirection,
+    ) -> BoxedIter<'_, StorageResult<Nonce>> {
+        self.owned_message_ids(owner, start_message_id, Some(direction))
+            .map(|result| result.map_err(StorageError::from))
+            .into_boxed()
     }
 
     fn owned_transactions_ids(

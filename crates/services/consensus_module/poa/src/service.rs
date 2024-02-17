@@ -331,6 +331,7 @@ where
                 block,
                 skipped_transactions,
                 tx_status,
+                events,
             },
             db_transaction,
         ) = self
@@ -358,7 +359,7 @@ where
         // Import the sealed block
         self.block_importer
             .commit_result(Uncommitted::new(
-                ImportResult::new_from_local(block, tx_status),
+                ImportResult::new_from_local(block, tx_status, events),
                 db_transaction,
             ))
             .await?;

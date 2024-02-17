@@ -12,48 +12,81 @@ mutation($txs: [HexString!]!, $utxoValidation: Boolean) {
           returnType
           data
         }
+        receipts {
+          param1
+          param2
+          amount
+          assetId
+          gas
+          digest
+          contract {
+            id
+          }
+          is
+          pc
+          ptr
+          ra
+          rb
+          rc
+          rd
+          reason
+          receiptType
+          to {
+            id
+          }
+          toAddress
+          val
+          len
+          result
+          gasUsed
+          data
+          sender
+          recipient
+          nonce
+          contractId
+          subId
+        }
       }
       ... on DryRunFailureStatus {
-        reason
         programState {
           returnType
           data
         }
+        receipts {
+          param1
+          param2
+          amount
+          assetId
+          gas
+          digest
+          contract {
+            id
+          }
+          is
+          pc
+          ptr
+          ra
+          rb
+          rc
+          rd
+          reason
+          receiptType
+          to {
+            id
+          }
+          toAddress
+          val
+          len
+          result
+          gasUsed
+          data
+          sender
+          recipient
+          nonce
+          contractId
+          subId
+        }
       }
-    }
-    receipts {
-      param1
-      param2
-      amount
-      assetId
-      gas
-      digest
-      contract {
-        id
-      }
-      is
-      pc
-      ptr
-      ra
-      rb
-      rc
-      rd
-      reason
-      receiptType
-      to {
-        id
-      }
-      toAddress
-      val
-      len
-      result
-      gasUsed
-      data
-      sender
-      recipient
-      nonce
-      contractId
-      subId
     }
   }
 }
