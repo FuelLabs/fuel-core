@@ -27,7 +27,7 @@ query($id: TransactionId!) {
           assetId
           gas
           digest
-          contract
+          id
           is
           pc
           ptr
@@ -72,7 +72,7 @@ query($id: TransactionId!) {
           assetId
           gas
           digest
-          contract
+          id
           is
           pc
           ptr

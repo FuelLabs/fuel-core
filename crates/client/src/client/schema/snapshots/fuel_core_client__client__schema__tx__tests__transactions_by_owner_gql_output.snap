@@ -30,7 +30,7 @@ query($owner: Address!, $after: String, $before: String, $first: Int, $last: Int
               assetId
               gas
               digest
-              contract
+              id
               is
               pc
               ptr
@@ -75,7 +75,7 @@ query($owner: Address!, $after: String, $before: String, $first: Int, $last: Int
               assetId
               gas
               digest
-              contract
+              id
               is
               pc
               ptr

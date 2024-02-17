@@ -324,7 +324,7 @@ pub struct InputContract {
     pub balance_root: Bytes32,
     pub state_root: Bytes32,
     pub tx_pointer: TxPointer,
-    pub contract: ContractId,
+    pub contract_id: ContractId,
 }
 
 #[derive(cynic::QueryFragment, Debug)]
@@ -506,7 +506,7 @@ impl From<InputContract> for input::contract::Contract {
             balance_root: contract.balance_root.into(),
             state_root: contract.state_root.into(),
             tx_pointer: contract.tx_pointer.into(),
-            contract_id: contract.contract.into(),
+            contract_id: contract.contract_id.into(),
         }
     }
 }

@@ -14,7 +14,7 @@ query($id: TransactionId!) {
       balanceRoot
       stateRoot
       txPointer
-      contract
+      contractId
     }
     inputs {
       __typename
@@ -35,7 +35,7 @@ query($id: TransactionId!) {
         balanceRoot
         stateRoot
         txPointer
-        contract
+        contractId
       }
       ... on InputMessage {
         sender
@@ -109,7 +109,7 @@ query($id: TransactionId!) {
           assetId
           gas
           digest
-          contract
+          id
           is
           pc
           ptr
@@ -154,7 +154,7 @@ query($id: TransactionId!) {
           assetId
           gas
           digest
-          contract
+          id
           is
           pc
           ptr

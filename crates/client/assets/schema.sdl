@@ -508,7 +508,7 @@ type InputContract {
 	balanceRoot: Bytes32!
 	stateRoot: Bytes32!
 	txPointer: TxPointer!
-	contract: ContractId!
+	contractId: ContractId!
 }
 
 type InputMessage {
@@ -826,7 +826,7 @@ type Query {
 }
 
 type Receipt {
-	contract: ContractId
+	id: ContractId
 	pc: U64
 	is: U64
 	to: ContractId
@@ -852,6 +852,9 @@ type Receipt {
 	sender: Address
 	recipient: Address
 	nonce: Nonce
+	"""
+	Set in the case of a Panic receipt to indicate a missing contract input id
+	"""
 	contractId: ContractId
 	subId: Bytes32
 }

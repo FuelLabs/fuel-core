@@ -105,7 +105,7 @@ impl InputContract {
         self.tx_pointer
     }
 
-    async fn contract(&self) -> ContractId {
+    async fn contract_id(&self) -> ContractId {
         self.contract_id
     }
 }

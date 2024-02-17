@@ -19,7 +19,7 @@ mutation($txs: [HexString!]!, $utxoValidation: Boolean) {
           assetId
           gas
           digest
-          contract
+          id
           is
           pc
           ptr
@@ -55,7 +55,7 @@ mutation($txs: [HexString!]!, $utxoValidation: Boolean) {
           assetId
           gas
           digest
-          contract
+          id
           is
           pc
           ptr
