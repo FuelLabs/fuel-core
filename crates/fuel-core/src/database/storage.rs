@@ -1,6 +1,5 @@
 use crate::{
     database::{
-        block::FuelBlockSecondaryKeyBlockHeights,
         database_description::DatabaseDescription,
         Database,
     },

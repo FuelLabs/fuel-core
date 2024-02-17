@@ -8,9 +8,9 @@ use crate::{
         metadata::MetadataTable,
     },
     fuel_core_graphql_api::{
-        storage::blocks::FuelBlockSecondaryKeyBlockHeights,
         ports,
         storage::{
+            blocks::FuelBlockSecondaryKeyBlockHeights,
             coins::{
                 owner_coin_id_key,
                 OwnedCoins,
