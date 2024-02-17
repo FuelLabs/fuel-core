@@ -8,6 +8,10 @@ use crate::{
         },
         primitives::BlockId,
     },
+    entities::{
+        coins::coin::Coin,
+        message::Message,
+    },
     fuel_tx::{
         Receipt,
         TxId,
@@ -45,6 +49,21 @@ pub struct ExecutionResult {
     pub skipped_transactions: Vec<(TxId, Error)>,
     /// The status of the transactions execution included into the block.
     pub tx_status: Vec<TransactionExecutionStatus>,
+    /// The list of all events generated during the execution of the block.
+    pub events: Vec<Event>,
+}
+
+/// The event represents some internal state changes caused by the block execution.
+#[derive(Debug, Clone)]
+pub enum Event {
+    /// Imported a new spendable message from the relayer.
+    MessageImported(Message),
+    /// The message was consumed by the transaction.
+    MessageConsumed(Message),
+    /// Created a new spendable coin, produced by the transaction.
+    CoinCreated(Coin),
+    /// The coin was consumed by the transaction.
+    CoinConsumed(Coin),
 }
 
 /// The status of a transaction after it is executed.

@@ -8,8 +8,18 @@ use crate::{
         metadata::MetadataTable,
     },
     fuel_core_graphql_api::{
-        ports,
         storage::blocks::FuelBlockSecondaryKeyBlockHeights,
+        ports,
+        storage::{
+            coins::{
+                owner_coin_id_key,
+                OwnedCoins,
+            },
+            messages::{
+                OwnedMessageIds,
+                OwnedMessageKey,
+            },
+        },
     },
 };
 use fuel_core_metrics::graphql_metrics::graphql_metrics;
@@ -50,13 +60,20 @@ use fuel_core_types::{
             ImportResult,
             SharedImportResult,
         },
-        executor::TransactionExecutionStatus,
+        executor::{
+            Event,
+            TransactionExecutionStatus,
+        },
         txpool::from_executor_to_status,
     },
 };
 use futures::{
     FutureExt,
     StreamExt,
+};
+use std::{
+    borrow::Cow,
+    ops::Deref,
 };
 
 /// The off-chain GraphQL API worker task processes the imported blocks
@@ -71,7 +88,6 @@ where
     D: ports::worker::OffChainDatabase,
 {
     fn process_block(&mut self, result: SharedImportResult) -> anyhow::Result<()> {
-        // TODO: Implement the creation of indexes for the messages and coins.
         let block = &result.sealed_block.entity;
         let mut transaction = self.database.transaction();
         // save the status for every transaction using the finalized block id
@@ -92,6 +108,11 @@ where
             .increase_tx_count(block.transactions().len() as u64)
             .unwrap_or_default();
 
+        Self::process_executor_events(
+            result.events.iter().map(Cow::Borrowed),
+            transaction.as_mut(),
+        )?;
+
         // TODO: Temporary solution to store the block height in the database manually here.
         //  Later it will be controlled by the `commit_changes` function on the `Database` side.
         //  https://github.com/FuelLabs/fuel-core/issues/1589
@@ -111,6 +132,49 @@ where
         // update the importer metrics after the block is successfully committed
         graphql_metrics().total_txs_count.set(total_tx_count as i64);
 
+        Ok(())
+    }
+
+    /// Process the executor events and update the indexes for the messages and coins.
+    pub fn process_executor_events<'a, Iter>(
+        events: Iter,
+        block_st_transaction: &mut D,
+    ) -> anyhow::Result<()>
+    where
+        Iter: Iterator<Item = Cow<'a, Event>>,
+    {
+        for event in events {
+            match event.deref() {
+                Event::MessageImported(message) => {
+                    block_st_transaction
+                        .storage_as_mut::<OwnedMessageIds>()
+                        .insert(
+                            &OwnedMessageKey::new(message.recipient(), message.nonce()),
+                            &(),
+                        )?;
+                }
+                Event::MessageConsumed(message) => {
+                    block_st_transaction
+                        .storage_as_mut::<OwnedMessageIds>()
+                        .remove(&OwnedMessageKey::new(
+                            message.recipient(),
+                            message.nonce(),
+                        ))?;
+                }
+                Event::CoinCreated(coin) => {
+                    let coin_by_owner = owner_coin_id_key(&coin.owner, &coin.utxo_id);
+                    block_st_transaction
+                        .storage_as_mut::<OwnedCoins>()
+                        .insert(&coin_by_owner, &())?;
+                }
+                Event::CoinConsumed(coin) => {
+                    let key = owner_coin_id_key(&coin.owner, &coin.utxo_id);
+                    block_st_transaction
+                        .storage_as_mut::<OwnedCoins>()
+                        .remove(&key)?;
+                }
+            }
+        }
         Ok(())
     }
 

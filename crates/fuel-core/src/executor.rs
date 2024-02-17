@@ -109,6 +109,7 @@ mod tests {
             block_producer::Components,
             executor::{
                 Error as ExecutorError,
+                Event as ExecutorEvent,
                 ExecutionBlock,
                 ExecutionResult,
                 ExecutionType,
@@ -2012,7 +2013,7 @@ mod tests {
             transactions: vec![tx.into()],
         };
 
-        let ExecutionResult { block, .. } = executor
+        let ExecutionResult { block, events, .. } = executor
             .execute_and_commit(
                 ExecutionBlock::Production(block),
                 ExecutionOptions {
@@ -2022,15 +2023,16 @@ mod tests {
             .unwrap();
 
         // assert the tx coin is spent
-        let coin = db
-            .storage::<Coins>()
-            .get(
-                block.transactions()[0].as_script().unwrap().inputs()[0]
-                    .utxo_id()
-                    .unwrap(),
-            )
+        let utxo_id = block.transactions()[0].as_script().unwrap().inputs()[0]
+            .utxo_id()
             .unwrap();
+        let coin = db.storage::<Coins>().get(utxo_id).unwrap();
         assert!(coin.is_none());
+        assert_eq!(events.len(), 2);
+        assert!(
+            matches!(events[0], ExecutorEvent::CoinConsumed(spent_coin) if &spent_coin.utxo_id == utxo_id)
+        );
+        assert!(matches!(events[1], ExecutorEvent::CoinCreated(_)));
     }
 
     #[test]
@@ -2943,7 +2945,7 @@ mod tests {
 
             // When
             let producer = create_relayer_executor(on_chain_db, relayer_db);
-            let block = test_block(block_height.into(), block_da_height.into(), 10);
+            let block = test_block(block_height.into(), block_da_height.into(), 0);
             let result = producer.execute_and_commit(
                 ExecutionTypes::Production(block.into()),
                 Default::default(),
@@ -2951,17 +2953,22 @@ mod tests {
 
             // Then
             let view = producer.database_view_provider.latest_view();
-            assert!(result.skipped_transactions.is_empty());
             assert_eq!(
                 view.iter_all::<Messages>(None).count() as u64,
                 block_da_height - genesis_da_height
             );
+            assert_eq!(
+                result.events.len() as u64,
+                block_da_height - genesis_da_height
+            );
             let messages = view.iter_all::<Messages>(None);
-            for (da_height, message) in
-                (genesis_da_height + 1..block_da_height).zip(messages)
+            for ((da_height, message), event) in (genesis_da_height + 1..block_da_height)
+                .zip(messages)
+                .zip(result.events.iter())
             {
                 let (_, message) = message.unwrap();
                 assert_eq!(message.da_height(), da_height.into());
+                assert!(matches!(event, ExecutorEvent::MessageImported(_)));
             }
             Ok(())
         }
@@ -3040,6 +3047,15 @@ mod tests {
             assert_eq!(view.iter_all::<Messages>(None).count() as u64, 0);
             // Message added during this block immediately became spent.
             assert_eq!(view.iter_all::<SpentMessages>(None).count(), 1);
+            assert_eq!(result.events.len(), 2);
+            assert!(matches!(
+                result.events[0],
+                ExecutorEvent::MessageImported(_)
+            ));
+            assert!(matches!(
+                result.events[1],
+                ExecutorEvent::MessageConsumed(_)
+            ));
         }
     }
 }
