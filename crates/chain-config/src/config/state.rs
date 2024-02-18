@@ -21,7 +21,7 @@ use super::{
 // TODO: do streaming deserialization to handle large state configs
 #[serde_as]
 #[skip_serializing_none]
-#[derive(Clone, Debug, Default, Deserialize, Serialize, Eq, PartialEq)]
+#[derive(Default, Clone, Debug, Deserialize, Serialize, Eq, PartialEq)]
 pub struct StateConfig {
     /// Spendable coins
     pub coins: Option<Vec<CoinConfig>>,
