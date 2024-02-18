@@ -286,6 +286,7 @@ where
 
 /// The macro that generates basic storage tests for the table with the merklelized structure.
 /// It uses the [`InMemoryStorage`](crate::structured_storage::test::InMemoryStorage).
+#[cfg(feature = "test-helpers")]
 #[macro_export]
 macro_rules! basic_merklelized_storage_tests {
     ($table:ident, $key:expr, $value_insert:expr, $value_return:expr, $random_key:expr) => {
@@ -304,6 +305,8 @@ macro_rules! basic_merklelized_storage_tests {
             use $crate::StorageInspect;
             use $crate::StorageMutate;
             use $crate::rand;
+            use $crate::tables::merkle::DenseMetadataKey;
+            use rand::SeedableRng;
 
             #[allow(dead_code)]
             fn random<T, R>(rng: &mut R) -> T
@@ -472,6 +475,56 @@ macro_rules! basic_merklelized_storage_tests {
                 );
 
                 assert!(result.is_err());
+            }
+
+            #[test]
+            fn root_returns_error_empty_metadata() {
+                let mut storage = InMemoryStorage::default();
+                let mut structured_storage = StructuredStorage::new(&mut storage);
+
+                let root = structured_storage
+                    .storage_as_mut::<$table>()
+                    .root(&$key);
+                assert!(root.is_err())
+            }
+
+            #[test]
+            fn update_produces_non_zero_root() {
+                let mut storage = InMemoryStorage::default();
+                let mut structured_storage = StructuredStorage::new(&mut storage);
+
+                let mut rng = rand::rngs::StdRng::seed_from_u64(1234);
+                let key = $random_key(&mut rng);
+                let value = $value_insert;
+                structured_storage.storage_as_mut::<$table>().insert(&key, &value)
+                    .unwrap();
+
+                let root = structured_storage.storage_as_mut::<$table>().root(&key)
+                    .expect("Should get the root");
+                let empty_root = fuel_core_types::fuel_merkle::binary::in_memory::MerkleTree::new().root();
+                assert_ne!(root, empty_root);
+            }
+
+            #[test]
+            fn has_different_root_after_each_update() {
+                let mut storage = InMemoryStorage::default();
+                let mut structured_storage = StructuredStorage::new(&mut storage);
+
+                let mut rng = rand::rngs::StdRng::seed_from_u64(1234);
+
+                let mut prev_root = fuel_core_types::fuel_merkle::binary::in_memory::MerkleTree::new().root();
+
+                for _ in 0..10 {
+                    let key = $random_key(&mut rng);
+                    let value = $value_insert;
+                    structured_storage.storage_as_mut::<$table>().insert(&key, &value)
+                        .unwrap();
+
+                    let root = structured_storage.storage_as_mut::<$table>().root(&key)
+                        .expect("Should get the root");
+                    assert_ne!(root, prev_root);
+                    prev_root = root;
+                }
             }
         }}
     };

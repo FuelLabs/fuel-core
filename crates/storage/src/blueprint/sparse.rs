@@ -471,6 +471,7 @@ where
 }
 
 /// The macro that generates SMT storage tests for the table with [`crate::structured_storage::test::InMemoryStorage`].
+#[cfg(feature = "test-helpers")]
 #[macro_export]
 macro_rules! root_storage_tests {
     ($table:ident, $metadata_table:ident, $current_key:expr, $foreign_key:expr, $generate_key:ident, $generate_value:ident) => {

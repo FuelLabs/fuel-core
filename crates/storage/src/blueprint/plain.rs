@@ -148,6 +148,7 @@ where
 
 /// The macro that generates basic storage tests for the table with the plain structure.
 /// It uses the [`InMemoryStorage`](crate::structured_storage::test::InMemoryStorage).
+#[cfg(feature = "test-helpers")]
 #[macro_export]
 macro_rules! basic_storage_tests {
     ($table:ident, $key:expr, $value_insert:expr, $value_return:expr, $random_key:expr) => {

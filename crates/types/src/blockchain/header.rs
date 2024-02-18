@@ -81,7 +81,10 @@ impl BlockHeader {
             BlockHeader::V1(v1) => &mut v1.consensus,
         }
     }
+}
 
+#[cfg(feature = "test-helpers")]
+impl BlockHeader {
     /// Set the entire consensus header
     pub fn set_consensus_header(
         &mut self,
