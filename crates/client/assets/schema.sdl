@@ -236,7 +236,7 @@ input ContractBalanceFilterInput {
 }
 
 type ContractCreated {
-	contract: Contract!
+	contract: ContractId!
 	stateRoot: Bytes32!
 }
 
@@ -508,7 +508,7 @@ type InputContract {
 	balanceRoot: Bytes32!
 	stateRoot: Bytes32!
 	txPointer: TxPointer!
-	contract: Contract!
+	contractId: ContractId!
 }
 
 type InputMessage {
@@ -826,10 +826,10 @@ type Query {
 }
 
 type Receipt {
-	contract: Contract
+	id: ContractId
 	pc: U64
 	is: U64
-	to: Contract
+	to: ContractId
 	toAddress: Address
 	amount: U64
 	assetId: AssetId
@@ -852,6 +852,9 @@ type Receipt {
 	sender: Address
 	recipient: Address
 	nonce: Nonce
+	"""
+	Set in the case of a Panic receipt to indicate a missing contract input id
+	"""
 	contractId: ContractId
 	subId: Bytes32
 }
@@ -957,7 +960,7 @@ scalar Tai64Timestamp
 type Transaction {
 	id: TransactionId!
 	inputAssetIds: [AssetId!]
-	inputContracts: [Contract!]
+	inputContracts: [ContractId!]
 	inputContract: InputContract
 	policies: Policies
 	gasPrice: U64

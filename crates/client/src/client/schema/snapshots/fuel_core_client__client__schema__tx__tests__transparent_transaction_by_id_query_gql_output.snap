@@ -8,17 +8,13 @@ query($id: TransactionId!) {
     id
     txPointer
     inputAssetIds
-    inputContracts {
-      id
-    }
+    inputContracts
     inputContract {
       utxoId
       balanceRoot
       stateRoot
       txPointer
-      contract {
-        id
-      }
+      contractId
     }
     inputs {
       __typename
@@ -39,9 +35,7 @@ query($id: TransactionId!) {
         balanceRoot
         stateRoot
         txPointer
-        contract {
-          id
-        }
+        contractId
       }
       ... on InputMessage {
         sender
@@ -81,9 +75,7 @@ query($id: TransactionId!) {
         assetId
       }
       ... on ContractCreated {
-        contract {
-          id
-        }
+        contract
         stateRoot
       }
     }
@@ -117,9 +109,7 @@ query($id: TransactionId!) {
           assetId
           gas
           digest
-          contract {
-            id
-          }
+          id
           is
           pc
           ptr
@@ -129,9 +119,7 @@ query($id: TransactionId!) {
           rd
           reason
           receiptType
-          to {
-            id
-          }
+          to
           toAddress
           val
           len
@@ -166,9 +154,7 @@ query($id: TransactionId!) {
           assetId
           gas
           digest
-          contract {
-            id
-          }
+          id
           is
           pc
           ptr
@@ -178,9 +164,7 @@ query($id: TransactionId!) {
           rd
           reason
           receiptType
-          to {
-            id
-          }
+          to
           toAddress
           val
           len
