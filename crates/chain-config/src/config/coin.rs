@@ -27,7 +27,7 @@ use serde_with::{
 
 #[skip_serializing_none]
 #[serde_as]
-#[derive(Clone, Debug, Deserialize, Serialize, Eq, PartialEq)]
+#[derive(Default, Clone, Debug, Deserialize, Serialize, Eq, PartialEq)]
 pub struct CoinConfig {
     /// auto-generated if None
     #[serde_as(as = "Option<HexType>")]

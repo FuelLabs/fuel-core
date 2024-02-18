@@ -186,6 +186,7 @@ where
                     block: mock_result.block.entity,
                     skipped_transactions,
                     tx_status: vec![],
+                    events: vec![],
                 },
                 StorageTransaction::new(database),
             ))
@@ -361,7 +362,7 @@ async fn commit_result_assert(
     let expected_to_broadcast = sealed_block.clone();
     let importer = Importer::new(Default::default(), underlying_db, (), ());
     let uncommitted_result = UncommittedResult::new(
-        ImportResult::new_from_local(sealed_block, vec![]),
+        ImportResult::new_from_local(sealed_block, vec![], vec![]),
         StorageTransaction::new(executor_db),
     );
 

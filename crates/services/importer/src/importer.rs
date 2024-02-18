@@ -384,6 +384,7 @@ where
                 block,
                 skipped_transactions,
                 tx_status,
+                events,
             },
             db_tx,
         ) = executor
@@ -407,7 +408,8 @@ where
             entity: block,
             consensus,
         };
-        let import_result = ImportResult::new_from_network(sealed_block, tx_status);
+        let import_result =
+            ImportResult::new_from_network(sealed_block, tx_status, events);
 
         Ok(Uncommitted::new(import_result, db_tx))
     }
