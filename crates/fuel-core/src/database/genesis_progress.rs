@@ -12,6 +12,7 @@ use fuel_core_storage::{
     },
     column::Column,
     structured_storage::TableWithBlueprint,
+    tables::ContractsInfo,
     Mappable,
     MerkleRoot,
     Result,
@@ -104,20 +105,7 @@ impl TableWithBlueprint for GenesisContractRoots {
     }
 }
 
-pub struct GenesisLoadedContract;
-impl Mappable for GenesisLoadedContract {
-    type Key = Self::OwnedKey;
-    type OwnedKey = ContractId;
-    type Value = Self::OwnedValue;
-    type OwnedValue = ();
-}
-impl TableWithBlueprint for GenesisLoadedContract {
-    type Blueprint = Plain<Postcard, Postcard>;
-    type Column = Column;
-    fn column() -> Self::Column {
-        Column::GenesisContractIds
-    }
-}
+pub type GenesisImportedContractId = ContractId;
 
 impl Database {
     pub fn genesis_progress(&self, key: &GenesisResource) -> Option<usize> {
@@ -151,11 +139,6 @@ impl Database {
 
     pub fn add_contract_root(&mut self, root: MerkleRoot) -> Result<()> {
         StorageMutate::<GenesisContractRoots>::insert(self, &root, &())?;
-        Ok(())
-    }
-
-    pub fn add_contract_id(&mut self, contract_id: ContractId) -> Result<()> {
-        StorageMutate::<GenesisLoadedContract>::insert(self, &contract_id, &())?;
         Ok(())
     }
 
@@ -201,8 +184,8 @@ impl Database {
 
     pub fn genesis_loaded_contracts(
         &self,
-    ) -> impl Iterator<Item = Result<ContractId>> + '_ {
-        self.iter_all::<GenesisLoadedContract>(None)
+    ) -> impl Iterator<Item = Result<GenesisImportedContractId>> + '_ {
+        self.iter_all::<ContractsInfo>(None)
             .map_ok(|(contract_id, _)| contract_id)
             .map(|res| res.map_err(Into::into))
     }

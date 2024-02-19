@@ -54,7 +54,6 @@ use std::borrow::Cow;
 use super::genesis_progress::{
     GenesisCoinRoots,
     GenesisContractRoots,
-    GenesisLoadedContract,
     GenesisMessageRoots,
     GenesisMetadata,
 };
@@ -107,8 +106,7 @@ use_structured_implementation!(
     GenesisMetadata,
     GenesisCoinRoots,
     GenesisMessageRoots,
-    GenesisContractRoots,
-    GenesisLoadedContract
+    GenesisContractRoots
 );
 
 #[cfg(feature = "relayer")]

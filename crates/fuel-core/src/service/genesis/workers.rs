@@ -12,7 +12,10 @@ use super::{
 };
 
 use crate::database::{
-    genesis_progress::GenesisResource,
+    genesis_progress::{
+        GenesisImportedContractId,
+        GenesisResource,
+    },
     Database,
 };
 use fuel_core_chain_config::{
@@ -26,10 +29,7 @@ use fuel_core_chain_config::{
     StateReader,
 };
 use fuel_core_executor::refs::ContractRef;
-use fuel_core_types::fuel_types::{
-    BlockHeight,
-    ContractId,
-};
+use fuel_core_types::fuel_types::BlockHeight;
 use tokio::sync::Notify;
 use tokio_util::sync::CancellationToken;
 
@@ -237,7 +237,6 @@ impl ProcessState for Handler<ContractConfig> {
             .into_iter()
             .try_for_each(|contract| {
                 init_contract(tx, &contract, self.output_index, self.block_height)?;
-        tx.add_contract_id(contract.contract_id)?;
 
         self.output_index = self.output_index
                 .checked_add(1)
@@ -252,10 +251,8 @@ impl ProcessState for Handler<ContractConfig> {
     }
 }
 
-// wrapper for ContractId to be used in the ProcessState trait
-
-impl ProcessState for Handler<ContractId> {
-    type Item = ContractId;
+impl ProcessState for Handler<GenesisImportedContractId> {
+    type Item = GenesisImportedContractId;
 
     fn process(
         &mut self,
