@@ -5,7 +5,13 @@ authors = { workspace = true }
 categories = ["cryptography::cryptocurrencies"]
 edition = { workspace = true }
 homepage = { workspace = true }
-keywords = ["blockchain", "cryptocurrencies", "fuel-core", "fuel-client", "fuel-database"]
+keywords = [
+  "blockchain",
+  "cryptocurrencies",
+  "fuel-core",
+  "fuel-client",
+  "fuel-database",
+]
 license = { workspace = true }
 repository = { workspace = true }
 description = "The crates contains databases used by Fuel core protocol."
