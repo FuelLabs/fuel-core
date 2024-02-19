@@ -59,7 +59,7 @@ jobs:
         run: cargo sort -w --check
       - name: Install Prettier and TOML Plugin
         run: |
-          # prettier has issues with global installation and plugin discovery. The temporary `package.json` createrd by `npm init -y` is a workaround.
+          # prettier has issues with global installation and plugin discovery. The temporary `package.json` created by `npm init -y` is a workaround.
           npm init -y > /dev/null 2>&1
           npm install prettier prettier-plugin-toml
       - name: Check format of Cargo.toml files
