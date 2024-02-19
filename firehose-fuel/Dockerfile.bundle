@@ -1,0 +1,17 @@
+ARG CHAIN_VERSION=latest
+ARG SF_VERSION=latest
+
+# Here you would actually pull from your own chain image, but for the sake of the demo, we use the dummy-blockchain.
+# The idea is that you bring together your chain's binary at the right and the firehose-fuel's binary into a single
+# image.
+FROM ghcr.io/streamingfast/dummy-blockchain:$CHAIN_VERSION as chain
+
+# The 'ghcr.io/FuelLabs/firehose-fuel' image is the one published by
+# Dockerfile found at the root of this project.
+FROM ghcr.io/FuelLabs/firehose-fuel:$SF_VERSION
+
+# Adjusted first element of copy to match the path of the binary in the chain image
+COPY --from=chain /app/dummy-blockchain /app/dummy-blockchain
+
+COPY tools/docker/motd_node_manager /etc/motd
+COPY tools/docker/scripts/. /usr/local/bin/

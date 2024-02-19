@@ -1,0 +1,26 @@
+global:
+  owner: streamingfast
+  project: firehose-fuel
+  binary: firefuel
+  language: golang
+  variant: application
+  sfreleaser-min-version: v0.7.0
+release:
+  pre-build-hooks:
+    - substreams pack -o "{{ .buildDir }}/substreams-fuel-{{ .release.Version }}.spkg" substreams.yaml
+  upload-extra-assets:
+    - "{{ .buildDir }}/substreams-fuel-{{ .release.Version }}.spkg"
+
+  # By default we disable Brew publishing because it's assumed that most owner
+  # of this repository will not have the a Homebrew tap repository created which
+  # fails the release.
+  #
+  # To enable Brew publishing, create an empty repository `<owner>/homebrew-tap`
+  # which will hold the Homebrew formula.
+  #
+  # If you would like to use a different name than `homebrew-tap`, you can define
+  # brew-tap-repo: <name> below this.
+  #
+  # Once available, you can enable the Brew publishing by removing the `brew-disabled`
+  # line.
+  brew-disabled: true

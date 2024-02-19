@@ -1,0 +1,2 @@
+FIRE a b c
+FIRE 1 2 3

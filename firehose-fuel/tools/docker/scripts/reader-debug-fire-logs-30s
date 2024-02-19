@@ -1,0 +1,13 @@
+#!/bin/bash
+
+port=${MANAGER_API_PORT:-8080}
+
+# description: Stop geth for maintenance, start it back with debug firehose enabled, wait 60s and remove the flag
+curl -sS -XPOST localhost:$port/v1/maintenance?sync=true
+curl -sS -XPOST -d "debug-firehose-logs=true" localhost:$port/v1/resume?sync=true
+
+# We give 10s more than 30s to account for startup time of geth
+sleep 40s
+
+curl -sS -XPOST localhost:$port/v1/maintenance?sync=true
+curl -sS -XPOST -d "debug-firehose-logs=false" localhost:$port/v1/resume?sync=true

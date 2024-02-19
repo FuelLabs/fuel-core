@@ -15,6 +15,8 @@ async-trait = { workspace = true }
 derive_more = { workspace = true }
 fuel-core-storage = { workspace = true }
 fuel-core-types = { workspace = true }
+fuel-core-firehose-types = { workspace = true, optional = true }
+hex = { version = "0.4", optional = true }
 tokio = { workspace = true, features = ["full"] }
 tokio-rayon = { workspace = true }
 tracing = { workspace = true }
@@ -27,3 +29,4 @@ rand = { workspace = true }
 
 [features]
 test-helpers = ["fuel-core-types/test-helpers"]
+firehose = ["dep:fuel-core-firehose-types", "dep:hex"]

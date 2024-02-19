@@ -117,6 +117,24 @@ where
             .context(context_string)?;
 
         debug!("Produced block with result: {:?}", result.result());
+
+        // Firehose block logging
+        #[cfg(feature = "firehose")]
+        {
+            use fuel_core_firehose_types::prost::Message;
+            use fuel_core_types::blockchain::primitives::BlockId;
+
+            let prev_id: BlockId = match height.pred() {
+                Some(h) => self.db.get_block(&h)?.id(),
+                None => BlockId::default(),
+            };
+
+            let fire_block =
+                fuel_core_firehose_types::Block::from((&result.result().block, prev_id));
+            let out_msg = hex::encode(fire_block.encode_to_vec());
+            println!("FIRE PROTO {}", out_msg);
+        }
+
         Ok(result)
     }
 

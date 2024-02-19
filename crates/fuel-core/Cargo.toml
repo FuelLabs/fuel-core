@@ -23,6 +23,7 @@ enum-iterator = "1.2"
 fuel-core-chain-config = { workspace = true }
 fuel-core-consensus-module = { workspace = true }
 fuel-core-database = { workspace = true }
+fuel-core-firehose-types = { workspace = true, optional = true }
 fuel-core-executor = { workspace = true }
 fuel-core-importer = { workspace = true }
 fuel-core-metrics = { workspace = true }
@@ -78,5 +79,6 @@ p2p = ["dep:fuel-core-p2p", "dep:fuel-core-sync"]
 relayer = ["dep:fuel-core-relayer"]
 rocksdb = ["dep:rocksdb", "dep:tempfile"]
 test-helpers = ["fuel-core-p2p?/test-helpers"]
+firehose = ["dep:fuel-core-firehose-types", "fuel-core-producer/firehose"]
 # features to enable in production, but increase build times
 rocksdb-production = ["rocksdb", "rocksdb/jemalloc"]

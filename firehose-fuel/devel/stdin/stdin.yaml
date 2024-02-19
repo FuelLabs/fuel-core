@@ -1,0 +1,8 @@
+start:
+  args:
+  - firehose
+  - merger
+  - reader-node-stdin
+  - relayer
+  flags:
+    # Invoked like `dummy-blockchain --firehose-enabled --block-rate=6 | ./devel/stdin/start.sh`

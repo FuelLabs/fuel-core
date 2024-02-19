@@ -1,0 +1,6 @@
+#!/bin/bash
+# description: Stop geth for maintenance
+
+port=${MANAGER_API_PORT:-8080}
+
+curl -sS -XPOST localhost:$port/v1/maintenance?sync=true
