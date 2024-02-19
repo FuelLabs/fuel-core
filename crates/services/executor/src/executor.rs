@@ -924,6 +924,8 @@ where
     where
         Tx: ExecutableTransaction + PartialEq + Cacheable + Send + Sync + 'static,
         <Tx as IntoChecked>::Metadata: Fee + CheckedMetadata + Clone + Send + Sync,
+        Tx: core::fmt::Debug,
+        <Tx as IntoChecked>::Metadata: core::fmt::Debug,
     {
         let tx_id = checked_tx.id();
         let max_fee = checked_tx.metadata().max_fee();
@@ -953,6 +955,8 @@ where
                 .map_err(TransactionValidityError::from)?;
             debug_assert!(checked_tx.checks().contains(Checks::Signatures));
         }
+
+        dbg!(&checked_tx);
 
         // execute transaction
         // setup database view that only lives for the duration of vm execution
@@ -1666,7 +1670,7 @@ mod tests {
         },
         fuel_tx::{
             Finalizable,
-            TransactionBuilder,
+            TransactionBuilder, UtxoId,
         },
         fuel_types::{
             bytes::WORD_SIZE,
@@ -1675,8 +1679,9 @@ mod tests {
         services::{
             executor::ExecutionType,
             relayer::Event,
-        },
+        }, fuel_vm::SecretKey,
     };
+    use rand::{rngs::StdRng, SeedableRng};
 
     use crate::{
         executor::{
@@ -1707,8 +1712,7 @@ mod tests {
 
     impl TransactionsSource for NoRelayer {
         fn next(&self, _gas_limit: u64) -> Vec<MaybeCheckedTransaction> {
-            panic!("Querying tx source");
-            vec![]
+            panic!("Querying NoRelayer tx source");
         }
     }
 
@@ -1718,6 +1722,8 @@ mod tests {
     /// Malleable fields should not affect validity of the block
     #[test]
     fn malleable_fields_do_not_affect_validity() {
+        let rng = &mut StdRng::seed_from_u64(8586);
+
         let database = Database::in_memory();
 
         let ei = ExecutionInstance {
@@ -1732,49 +1738,85 @@ mod tests {
                 * (AssetId::LEN + WORD_SIZE));
         let tx_start_ptr = tx_size_ptr + 8;
 
-        let mut block =
-            PartialFuelBlock {
-                header: Default::default(),
-                transactions: vec![
+        let tx = TransactionBuilder::script(
+            vec![
+                // Log tx id (hash)
+                op::movi(0x21, 32),
+                op::logd(0x00, 0x00, 0x00, 0x21),
+                // Load tx size
+                op::movi(0x21, tx_size_ptr as u32),
+                op::lw(0x21, 0x21, 0),
+                // Make heap space for tx bytes, chain_id and computed tx hash
+                op::addi(0x22, 0x21, 8 + 32),
+                op::aloc(0x22),
+                // Construct the chain_id and tx bytes for hashing
+                op::addi(0x22, RegId::HP, 32), // Chain id position
+                op::gtf_args(0x20, 0x00, GTFArgs::ScriptData),
+                op::mcpi(0x22, 0x20, 8), // Copy chain id
+                op::movi(0x20, tx_start_ptr as u32),
+                op::addi(0x23, 0x22, 8),   // Tx bytes position
+                op::mcp(0x23, 0x20, 0x21), // Copy tx bytes
+                // Assert that there is exactly one witness
+                op::gtf_args(0x26, 0x00, GTFArgs::ScriptWitnessesCount),
+                op::eq(0x26, 0x26, RegId::ONE),
+                op::jnzf(0x26, 0x00, 1),
+                op::ret(0),
+                // Zero out the only witness (in the heap)
+                op::gtf_args(0x26, 0x00, GTFArgs::WitnessData),
+                op::gtf_args(0x27, 0x00, GTFArgs::WitnessDataLength),
+                op::sub(0x27, 0x26, 0x20), // Offset in relative to the tx bytes
+                op::add(0x27, 0x27, RegId::HP), // Redirect the pointer to heap
+                op::addi(0x26, 0x27, 32 + 8), // Offset of tx bytes in heap
+                op::gtf_args(0x27, 0x00, GTFArgs::WitnessDataLength),
+                op::mcl(0x26, 0x27),
+                // Zero out witness count
+                op::gtf_args(0x26, 0x00, GTFArgs::Script),
+                op::sub(0x26, 0x26, 32 + 8), // Offset to get the witness count address
+                op::add(0x26, 0x26, RegId::HP), // Redirect the pointer to heap
+                op::sub(0x26, 0x26, 0x20), // Offset in relative to the tx bytes
+                op::sw(0x26, RegId::ZERO, 0), // Zero out the witness count
+                // Actually hash
+                op::subi(0x24, 0x21, 64 + 8 - 8),   // len(tx bytes) - (len((witness_data)) + len(witness_data) - len(chain_id))
+                op::s256(RegId::HP, 0x22, 0x24), // Compute tx id hash
+                op::movi(0x25, 32),        // Hash size
+                op::logd(0x00, 0x00, RegId::HP, 0x25), // Log computed txid
+                // Done
+                op::ret(0x00),
+            ]
+            .into_iter()
+            .collect(),
+            ei.config
+                .consensus_parameters
+                .chain_id
+                .to_be_bytes()
+                .to_vec(),
+        )
+        .add_unsigned_coin_input(
+            SecretKey::random(rng),
+            UtxoId::new([3; 32].into(), 0),
+            123456789,
+            AssetId::default(),
+            Default::default(),
+            Default::default(),
+        )
+        .gas_price(0)
+        .script_gas_limit(1_000_000)
+        .finalize();
+
+        use fuel_core_types::fuel_types::canonical::Serialize;
+        println!("{:?}", tx);
+        println!("{:?}", tx.clone().to_bytes());
+        let mut c = tx.clone();
+        c.prepare_execute();
+        println!("{:?}", c.to_bytes());
+
+        let mut block = PartialFuelBlock {
+            header: Default::default(),
+            transactions: vec![
                 fuel_core_types::fuel_tx::Transaction::default_test_tx(),
-                fuel_core_types::fuel_tx::Transaction::Script(
-                    TransactionBuilder::script(
-                        vec![
-                            // Log tx id (hash)
-                            op::movi(0x21, 32),
-                            op::logd(0x00, 0x00, 0x00, 0x21),
-                            // Load tx size
-                            op::movi(0x21, tx_size_ptr as u32),
-                            op::lw(0x21, 0x21, 0),
-                            // Make heap space for tx bytes, chain_id and computed tx hash
-                            op::addi(0x22, 0x21, 8 + 32),
-                            op::aloc(0x22),
-                            // Compute tx id using chain id and tx size
-                            op::addi(0x22, RegId::HP, 32), // Chain id position
-                            op::gtf_args(0x20, 0x00, GTFArgs::ScriptData),
-                            op::mcpi(0x22, 0x20, 8), // Copy chain id
-                            op::movi(0x20, tx_start_ptr as u32),
-                            op::addi(0x23, 0x22, 8), // Tx bytes position
-                            op::mcp(0x23, 0x20, 0x21), // Copy tx bytes
-                            op::addi(0x24, 0x21, 8), // len(chain_id) + len(tx bytes)
-                            op::logd(0x00, 0x00, 0x22, 0x24), // Log tx id hash
-                            op::s256(RegId::HP, 0x22, 0x24), // Compute tx id hash
-                            op::movi(0x25, 32), // Hash size
-                            op::logd(0x00, 0x00, RegId::HP, 0x25), // Log computed txid
-                            // Debug log
-                            op::ret(0x00),
-                        ]
-                        .into_iter()
-                        .collect(),
-                        ei.config.consensus_parameters.chain_id.to_be_bytes().to_vec(),
-                    )
-                    .add_random_fee_input()
-                    .gas_price(0)
-                    .script_gas_limit(1_000_000)
-                    .finalize(),
-                ),
+                fuel_core_types::fuel_tx::Transaction::Script(tx),
             ],
-            };
+        };
 
         let mut block_transaction = ei.database.transaction();
 
@@ -1792,8 +1834,11 @@ mod tests {
         dbg!(r.tx_count);
         dbg!(r.found_mint);
         dbg!(r.message_ids);
-        dbg!(r.tx_status);
+        dbg!(&r.tx_status);
         dbg!(r.skipped_transactions);
+
+        println!("{:?}", r.tx_status[1].result.receipts()[1].data());
+        println!("{:?}", r.tx_status[1].result.receipts()[2].data());
 
         panic!();
     }

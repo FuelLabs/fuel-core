@@ -23,6 +23,7 @@ fuel-core-storage = { workspace = true, features = ["test-helpers"] }
 fuel-core-trace = { path = "../../trace" }
 fuel-core-types = { workspace = true, features = ["test-helpers"] }
 fuel-core = { workspace = true, features = ["test-helpers"] }
+rand = "0.8"
 
 [features]
 default = ["std"]
