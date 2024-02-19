@@ -45,6 +45,9 @@ pub struct Config {
     /// - Enables debugger endpoint.
     /// - Allows setting `utxo_validation` to `false`.
     pub debug: bool,
+    /// Firehose logging
+    #[cfg(feature = "firehose")]
+    pub firehose: bool,
     // default to false until downstream consumers stabilize
     pub utxo_validation: bool,
     pub block_production: Trigger,
@@ -87,6 +90,8 @@ impl Config {
             #[cfg(not(feature = "rocksdb"))]
             database_type: DbType::InMemory,
             debug: true,
+            #[cfg(feature = "firehose")]
+            firehose: false,
             chain_conf: chain_conf.clone(),
             block_production: Trigger::Instant,
             vm: Default::default(),

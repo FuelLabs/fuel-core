@@ -120,7 +120,7 @@ where
 
         // Firehose block logging
         #[cfg(feature = "firehose")]
-        {
+        if self.config.firehose {
             use fuel_core_firehose_types::prost::Message;
             use fuel_core_types::blockchain::primitives::BlockId;
 

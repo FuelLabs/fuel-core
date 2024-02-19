@@ -120,6 +120,11 @@ pub struct Command {
     #[arg(long = "debug", env)]
     pub debug: bool,
 
+    /// Enables firehose logging output.
+    #[cfg(feature = "firehose")]
+    #[arg(long = "firehose", env)]
+    pub firehose: bool,
+
     /// Enable logging of backtraces from vm errors
     #[arg(long = "vm-backtrace", env)]
     pub vm_backtrace: bool,
@@ -222,6 +227,8 @@ impl Command {
             chain_config,
             vm_backtrace,
             debug,
+            #[cfg(feature = "firehose")]
+            firehose,
             utxo_validation,
             min_gas_price,
             consensus_key,
@@ -308,6 +315,8 @@ impl Command {
             database_type,
             chain_conf: chain_conf.clone(),
             debug,
+            #[cfg(feature = "firehose")]
+            firehose,
             utxo_validation,
             block_production: trigger,
             vm: VMConfig {
@@ -327,6 +336,8 @@ impl Command {
                 utxo_validation,
                 coinbase_recipient,
                 metrics,
+                #[cfg(feature = "firehose")]
+                firehose,
             },
             block_executor: Default::default(),
             block_importer: Default::default(),

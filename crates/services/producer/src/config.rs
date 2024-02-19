@@ -5,4 +5,6 @@ pub struct Config {
     pub utxo_validation: bool,
     pub coinbase_recipient: Option<ContractId>,
     pub metrics: bool,
+    #[cfg(feature = "firehose")]
+    pub firehose: bool,
 }
