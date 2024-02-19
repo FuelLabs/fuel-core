@@ -1655,7 +1655,10 @@ impl Fee for CreateCheckedMetadata {
 
 #[cfg(test)]
 mod tests {
-    use std::sync::Arc;
+    use std::{
+        str::FromStr,
+        sync::Arc,
+    };
 
     use fuel_core::database::Database;
     use fuel_core_types::{
@@ -1669,9 +1672,18 @@ mod tests {
             RegId,
         },
         fuel_tx::{
+            field::{
+                Inputs,
+                ReceiptsRoot,
+            },
+            input::coin::CoinSigned,
             Finalizable,
+            Input,
+            Script,
             TransactionBuilder,
-            UtxoId, UniqueIdentifier,
+            TxPointer,
+            UniqueIdentifier,
+            UtxoId,
         },
         fuel_types::{
             bytes::WORD_SIZE,
@@ -1808,30 +1820,56 @@ mod tests {
         .script_gas_limit(1_000_000)
         .finalize();
 
-        let original_id = tx.id(&ei.config.consensus_parameters.chain_id);
+        let run_tx = |tx: Script| {
+            let original_id = tx.id(&ei.config.consensus_parameters.chain_id);
 
-        let mut block = PartialFuelBlock {
-            header: Default::default(),
-            transactions: vec![
-                fuel_core_types::fuel_tx::Transaction::Script(tx),
-            ],
+            let mut block = PartialFuelBlock {
+                header: Default::default(),
+                transactions: vec![fuel_core_types::fuel_tx::Transaction::Script(tx)],
+            };
+
+            let mut block_transaction = ei.database.transaction();
+
+            let r = ei
+                .execute_block(
+                    block_transaction.as_mut(),
+                    ExecutionType::Production(PartialBlockComponent::from_partial_block(
+                        &mut block,
+                    )),
+                )
+                .expect("Invalid block");
+
+            let start_id = r.tx_status[0].result.receipts()[0].data().unwrap();
+            let computed_id = r.tx_status[0].result.receipts()[1].data().unwrap();
+
+            assert_eq!(*original_id, start_id);
+            assert_eq!(*original_id, computed_id);
+
+            original_id
         };
 
-        let mut block_transaction = ei.database.transaction();
+        let original = run_tx(tx.clone());
 
-        let r = ei
-            .execute_block(
-                block_transaction.as_mut(),
-                ExecutionType::Production(PartialBlockComponent::from_partial_block(
-                    &mut block,
-                )),
-            )
-            .expect("Invalid block");
+        // Check that modifying the input coin doesn't affect validity
+        {
+            let mut tx = tx.clone();
 
-        let start_id = r.tx_status[0].result.receipts()[0].data().unwrap();
-        let computed_id = r.tx_status[0].result.receipts()[1].data().unwrap();
+            match tx.inputs_mut()[0] {
+                Input::CoinSigned(CoinSigned {
+                    ref mut tx_pointer, ..
+                }) => *tx_pointer = TxPointer::from_str("123456780001").unwrap(),
+                _ => unreachable!(),
+            };
+            let result = run_tx(tx);
+            assert_eq!(result, original);
+        }
 
-        assert_eq!(*original_id, start_id);
-        assert_eq!(*original_id, computed_id);
+        // Check that modifying the receipts root doesn't affect validity
+        {
+            let mut tx = tx;
+            *tx.receipts_root_mut() = [1u8; 32].into();
+            let result = run_tx(tx);
+            assert_eq!(result, original);
+        }
     }
 }
