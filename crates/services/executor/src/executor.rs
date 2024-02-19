@@ -1670,18 +1670,23 @@ mod tests {
         },
         fuel_tx::{
             Finalizable,
-            TransactionBuilder, UtxoId,
+            TransactionBuilder,
+            UtxoId, UniqueIdentifier,
         },
         fuel_types::{
             bytes::WORD_SIZE,
             AssetId,
         },
+        fuel_vm::SecretKey,
         services::{
             executor::ExecutionType,
             relayer::Event,
-        }, fuel_vm::SecretKey,
+        },
     };
-    use rand::{rngs::StdRng, SeedableRng};
+    use rand::{
+        rngs::StdRng,
+        SeedableRng,
+    };
 
     use crate::{
         executor::{
@@ -1803,17 +1808,11 @@ mod tests {
         .script_gas_limit(1_000_000)
         .finalize();
 
-        use fuel_core_types::fuel_types::canonical::Serialize;
-        println!("{:?}", tx);
-        println!("{:?}", tx.clone().to_bytes());
-        let mut c = tx.clone();
-        c.prepare_execute();
-        println!("{:?}", c.to_bytes());
+        let original_id = tx.id(&ei.config.consensus_parameters.chain_id);
 
         let mut block = PartialFuelBlock {
             header: Default::default(),
             transactions: vec![
-                fuel_core_types::fuel_tx::Transaction::default_test_tx(),
                 fuel_core_types::fuel_tx::Transaction::Script(tx),
             ],
         };
@@ -1829,17 +1828,10 @@ mod tests {
             )
             .expect("Invalid block");
 
-        dbg!(r.coinbase);
-        dbg!(r.used_gas);
-        dbg!(r.tx_count);
-        dbg!(r.found_mint);
-        dbg!(r.message_ids);
-        dbg!(&r.tx_status);
-        dbg!(r.skipped_transactions);
+        let start_id = r.tx_status[0].result.receipts()[0].data().unwrap();
+        let computed_id = r.tx_status[0].result.receipts()[1].data().unwrap();
 
-        println!("{:?}", r.tx_status[1].result.receipts()[1].data());
-        println!("{:?}", r.tx_status[1].result.receipts()[2].data());
-
-        panic!();
+        assert_eq!(*original_id, start_id);
+        assert_eq!(*original_id, computed_id);
     }
 }
