@@ -1,5 +1,4 @@
 use crate::client::schema::{
-    contract::ContractIdFragment,
     schema,
     tx::{
         TransactionStatus,
@@ -9,6 +8,7 @@ use crate::client::schema::{
     AssetId,
     Bytes32,
     ConnectionArgs,
+    ContractId,
     ConversionError,
     HexString,
     Nonce,
@@ -95,7 +95,7 @@ pub struct Transaction {
     ///
     /// The result of a `input_contracts()` helper function is stored here.
     /// It is not an original field of the `Transaction`.
-    pub input_contracts: Option<Vec<ContractIdFragment>>,
+    pub input_contracts: Option<Vec<ContractId>>,
     /// The field of the `Transaction::Mint` transaction.
     pub input_contract: Option<InputContract>,
     /// The field of the `Transaction` type.
@@ -324,7 +324,7 @@ pub struct InputContract {
     pub balance_root: Bytes32,
     pub state_root: Bytes32,
     pub tx_pointer: TxPointer,
-    pub contract: ContractIdFragment,
+    pub contract_id: ContractId,
 }
 
 #[derive(cynic::QueryFragment, Debug)]
@@ -465,7 +465,7 @@ pub struct ContractOutput {
 #[derive(cynic::QueryFragment, Debug)]
 #[cynic(schema_path = "./assets/schema.sdl")]
 pub struct ContractCreated {
-    contract: ContractIdFragment,
+    contract: ContractId,
     state_root: Bytes32,
 }
 
@@ -491,7 +491,7 @@ impl TryFrom<Output> for fuel_tx::Output {
                 asset_id: variable.asset_id.into(),
             },
             Output::ContractCreated(contract) => Self::ContractCreated {
-                contract_id: contract.contract.id.into(),
+                contract_id: contract.contract.into(),
                 state_root: contract.state_root.into(),
             },
             Output::Unknown => return Err(Self::Error::UnknownVariant("Output")),
@@ -506,7 +506,7 @@ impl From<InputContract> for input::contract::Contract {
             balance_root: contract.balance_root.into(),
             state_root: contract.state_root.into(),
             tx_pointer: contract.tx_pointer.into(),
-            contract_id: contract.contract.id.into(),
+            contract_id: contract.contract_id.into(),
         }
     }
 }

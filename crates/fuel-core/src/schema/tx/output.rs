@@ -1,11 +1,9 @@
-use crate::schema::{
-    contract::Contract,
-    scalars::{
-        Address,
-        AssetId,
-        Bytes32,
-        U64,
-    },
+use crate::schema::scalars::{
+    Address,
+    AssetId,
+    Bytes32,
+    ContractId,
+    U64,
 };
 use async_graphql::{
     Object,
@@ -110,7 +108,7 @@ pub struct ContractCreated {
 
 #[Object]
 impl ContractCreated {
-    async fn contract(&self) -> Contract {
+    async fn contract(&self) -> ContractId {
         self.contract_id.into()
     }
 

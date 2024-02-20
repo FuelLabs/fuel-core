@@ -1,5 +1,4 @@
 use crate::client::schema::{
-    contract::ContractIdFragment,
     schema,
     Address,
     AssetId,
@@ -25,7 +24,7 @@ pub struct Receipt {
     pub asset_id: Option<AssetId>,
     pub gas: Option<U64>,
     pub digest: Option<Bytes32>,
-    pub contract: Option<ContractIdFragment>,
+    pub id: Option<ContractId>,
     pub is: Option<U64>,
     pub pc: Option<U64>,
     pub ptr: Option<U64>,
@@ -35,7 +34,7 @@ pub struct Receipt {
     pub rd: Option<U64>,
     pub reason: Option<U64>,
     pub receipt_type: ReceiptType,
-    pub to: Option<ContractIdFragment>,
+    pub to: Option<ContractId>,
     pub to_address: Option<Address>,
     pub val: Option<U64>,
     pub len: Option<U64>,
@@ -73,11 +72,10 @@ impl TryFrom<Receipt> for fuel_tx::Receipt {
     fn try_from(schema: Receipt) -> Result<Self, Self::Error> {
         Ok(match schema.receipt_type {
             ReceiptType::Call => fuel_tx::Receipt::Call {
-                id: schema.contract.map(|id| id.id.into()).unwrap_or_default(),
+                id: schema.id.map(|id| id.into()).unwrap_or_default(),
                 to: schema
                     .to
                     .ok_or_else(|| MissingField("to".to_string()))?
-                    .id
                     .into(),
                 amount: schema
                     .amount
@@ -109,7 +107,7 @@ impl TryFrom<Receipt> for fuel_tx::Receipt {
                     .into(),
             },
             ReceiptType::Return => fuel_tx::Receipt::Return {
-                id: schema.contract.map(|id| id.id.into()).unwrap_or_default(),
+                id: schema.id.map(|id| id.into()).unwrap_or_default(),
                 val: schema
                     .val
                     .ok_or_else(|| MissingField("val".to_string()))?
@@ -124,7 +122,7 @@ impl TryFrom<Receipt> for fuel_tx::Receipt {
                     .into(),
             },
             ReceiptType::ReturnData => fuel_tx::Receipt::ReturnData {
-                id: schema.contract.map(|id| id.id.into()).unwrap_or_default(),
+                id: schema.id.map(|id| id.into()).unwrap_or_default(),
                 ptr: schema
                     .ptr
                     .ok_or_else(|| MissingField("ptr".to_string()))?
@@ -153,7 +151,7 @@ impl TryFrom<Receipt> for fuel_tx::Receipt {
                     .into(),
             },
             ReceiptType::Panic => fuel_tx::Receipt::Panic {
-                id: schema.contract.map(|id| id.id.into()).unwrap_or_default(),
+                id: schema.id.map(|id| id.into()).unwrap_or_default(),
                 reason: schema
                     .reason
                     .ok_or_else(|| MissingField("reason".to_string()))?
@@ -169,7 +167,7 @@ impl TryFrom<Receipt> for fuel_tx::Receipt {
                 contract_id: schema.contract_id.map(Into::into),
             },
             ReceiptType::Revert => fuel_tx::Receipt::Revert {
-                id: schema.contract.map(|id| id.id.into()).unwrap_or_default(),
+                id: schema.id.map(|id| id.into()).unwrap_or_default(),
                 ra: schema
                     .ra
                     .ok_or_else(|| MissingField("ra".to_string()))?
@@ -184,7 +182,7 @@ impl TryFrom<Receipt> for fuel_tx::Receipt {
                     .into(),
             },
             ReceiptType::Log => fuel_tx::Receipt::Log {
-                id: schema.contract.map(|id| id.id.into()).unwrap_or_default(),
+                id: schema.id.map(|id| id.into()).unwrap_or_default(),
                 ra: schema
                     .ra
                     .ok_or_else(|| MissingField("ra".to_string()))?
@@ -211,7 +209,7 @@ impl TryFrom<Receipt> for fuel_tx::Receipt {
                     .into(),
             },
             ReceiptType::LogData => fuel_tx::Receipt::LogData {
-                id: schema.contract.map(|id| id.id.into()).unwrap_or_default(),
+                id: schema.id.map(|id| id.into()).unwrap_or_default(),
                 ra: schema
                     .ra
                     .ok_or_else(|| MissingField("ra".to_string()))?
@@ -248,11 +246,10 @@ impl TryFrom<Receipt> for fuel_tx::Receipt {
                     .into(),
             },
             ReceiptType::Transfer => fuel_tx::Receipt::Transfer {
-                id: schema.contract.map(|id| id.id.into()).unwrap_or_default(),
+                id: schema.id.map(|id| id.into()).unwrap_or_default(),
                 to: schema
                     .to
                     .ok_or_else(|| MissingField("to".to_string()))?
-                    .id
                     .into(),
                 amount: schema
                     .amount
@@ -272,7 +269,7 @@ impl TryFrom<Receipt> for fuel_tx::Receipt {
                     .into(),
             },
             ReceiptType::TransferOut => fuel_tx::Receipt::TransferOut {
-                id: schema.contract.map(|id| id.id.into()).unwrap_or_default(),
+                id: schema.id.map(|id| id.into()).unwrap_or_default(),
                 to: schema
                     .to_address
                     .ok_or_else(|| MissingField("to_address".to_string()))?
@@ -343,7 +340,7 @@ impl TryFrom<Receipt> for fuel_tx::Receipt {
                     .sub_id
                     .ok_or_else(|| MissingField("sub_id".to_string()))?
                     .into(),
-                contract_id: schema.contract.map(|id| id.id.into()).unwrap_or_default(),
+                contract_id: schema.id.map(|id| id.into()).unwrap_or_default(),
                 val: schema
                     .val
                     .ok_or_else(|| MissingField("val".to_string()))?
@@ -362,7 +359,7 @@ impl TryFrom<Receipt> for fuel_tx::Receipt {
                     .sub_id
                     .ok_or_else(|| MissingField("sub_id".to_string()))?
                     .into(),
-                contract_id: schema.contract.map(|id| id.id.into()).unwrap_or_default(),
+                contract_id: schema.id.map(|id| id.into()).unwrap_or_default(),
                 val: schema
                     .val
                     .ok_or_else(|| MissingField("val".to_string()))?

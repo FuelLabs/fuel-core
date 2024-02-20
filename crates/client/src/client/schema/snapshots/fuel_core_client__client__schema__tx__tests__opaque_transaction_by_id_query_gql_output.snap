@@ -27,9 +27,7 @@ query($id: TransactionId!) {
           assetId
           gas
           digest
-          contract {
-            id
-          }
+          id
           is
           pc
           ptr
@@ -39,9 +37,7 @@ query($id: TransactionId!) {
           rd
           reason
           receiptType
-          to {
-            id
-          }
+          to
           toAddress
           val
           len
@@ -76,9 +72,7 @@ query($id: TransactionId!) {
           assetId
           gas
           digest
-          contract {
-            id
-          }
+          id
           is
           pc
           ptr
@@ -88,9 +82,7 @@ query($id: TransactionId!) {
           rd
           reason
           receiptType
-          to {
-            id
-          }
+          to
           toAddress
           val
           len
