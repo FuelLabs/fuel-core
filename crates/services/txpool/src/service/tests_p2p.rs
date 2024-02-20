@@ -1,11 +1,21 @@
 use super::*;
-use crate::service::test_helpers::{
-    MockP2P,
-    TestContextBuilder,
+use crate::{
+    service::test_helpers::{
+        MockP2P,
+        TestContextBuilder,
+    },
+    test_helpers::TEST_COIN_AMOUNT,
 };
 use fuel_core_services::Service;
+use fuel_core_storage::rand::{
+    prelude::StdRng,
+    SeedableRng,
+};
 use fuel_core_types::fuel_tx::{
+    field::Inputs,
+    AssetId,
     Transaction,
+    TransactionBuilder,
     UniqueIdentifier,
 };
 use std::{
@@ -131,5 +141,128 @@ async fn test_insert_from_p2p_does_not_broadcast_to_p2p() {
     assert!(
         not_broadcast.is_err(),
         "expected a timeout because no broadcast should have occurred"
+    )
+}
+
+#[tokio::test]
+async fn test_gossipped_transaction_with_check_error_rejected() {
+    // verify that gossipped transactions which fail basic sanity checks are rejected (punished)
+
+    let mut ctx_builder = TestContextBuilder::new();
+    // add coin to builder db and generate a valid tx
+    let mut tx1 = ctx_builder.setup_script_tx(10);
+    // now intentionally muck up the tx such that it will return a CheckError,
+    // by duplicating an input
+    let script = tx1.as_script_mut().unwrap();
+    let input = script.inputs()[0].clone();
+    script.inputs_mut().push(input);
+    // setup p2p mock - with tx incoming from p2p
+    let txs = vec![tx1.clone()];
+    let mut p2p = MockP2P::new_with_txs(txs);
+    let (send, mut receive) = broadcast::channel::<()>(1);
+    p2p.expect_notify_gossip_transaction_validity()
+        .returning(move |_, validity| {
+            // Expect the transaction to be rejected
+            assert_eq!(validity, GossipsubMessageAcceptance::Reject);
+            // Notify test that the gossipsub acceptance was set
+            send.send(()).unwrap();
+            Ok(())
+        });
+    ctx_builder.with_p2p(p2p);
+
+    // build and start the txpool service
+    let ctx = ctx_builder.build();
+    let service = ctx.service();
+    service.start_and_await().await.unwrap();
+    // verify p2p was notified about the transaction validity
+    let gossip_validity_notified =
+        tokio::time::timeout(Duration::from_millis(100), receive.recv()).await;
+    assert!(
+        gossip_validity_notified.is_ok(),
+        "expected to receive gossip validity notification"
+    )
+}
+
+#[tokio::test]
+async fn test_gossipped_mint_rejected() {
+    // verify that gossipped mint transactions are rejected (punished)
+    let tx1 = TransactionBuilder::mint(
+        0u32.into(),
+        0,
+        Default::default(),
+        Default::default(),
+        1,
+        AssetId::BASE,
+    )
+    .finalize_as_transaction();
+    // setup p2p mock - with tx incoming from p2p
+    let txs = vec![tx1.clone()];
+    let mut p2p = MockP2P::new_with_txs(txs);
+    let (send, mut receive) = broadcast::channel::<()>(1);
+    p2p.expect_notify_gossip_transaction_validity()
+        .returning(move |_, validity| {
+            // Expect the transaction to be rejected
+            assert_eq!(validity, GossipsubMessageAcceptance::Reject);
+            // Notify test that the gossipsub acceptance was set
+            send.send(()).unwrap();
+            Ok(())
+        });
+    // setup test context
+    let mut ctx_builder = TestContextBuilder::new();
+    ctx_builder.with_p2p(p2p);
+
+    // build and start the txpool service
+    let ctx = ctx_builder.build();
+    let service = ctx.service();
+    service.start_and_await().await.unwrap();
+    // verify p2p was notified about the transaction validity
+    let gossip_validity_notified =
+        tokio::time::timeout(Duration::from_millis(100), receive.recv()).await;
+    assert!(
+        gossip_validity_notified.is_ok(),
+        "expected to receive gossip validity notification"
+    )
+}
+
+#[tokio::test]
+async fn test_gossipped_transaction_with_transient_error_ignored() {
+    // verify that gossipped transactions that fails stateful checks are ignored (but not punished)
+    let mut rng = StdRng::seed_from_u64(100);
+    let mut ctx_builder = TestContextBuilder::new();
+    // add coin to builder db and generate a valid tx
+    let mut tx1 = ctx_builder.setup_script_tx(10);
+    // now intentionally muck up the tx such that it will return a coin not found error
+    // by replacing the default coin with one that is not in the database
+    let script = tx1.as_script_mut().unwrap();
+    script.inputs_mut()[0] = crate::test_helpers::random_predicate(
+        &mut rng,
+        AssetId::BASE,
+        TEST_COIN_AMOUNT,
+        None,
+    );
+    // setup p2p mock - with tx incoming from p2p
+    let txs = vec![tx1.clone()];
+    let mut p2p = MockP2P::new_with_txs(txs);
+    let (send, mut receive) = broadcast::channel::<()>(1);
+    p2p.expect_notify_gossip_transaction_validity()
+        .returning(move |_, validity| {
+            // Expect the transaction to be rejected
+            assert_eq!(validity, GossipsubMessageAcceptance::Ignore);
+            // Notify test that the gossipsub acceptance was set
+            send.send(()).unwrap();
+            Ok(())
+        });
+    ctx_builder.with_p2p(p2p);
+
+    // build and start the txpool service
+    let ctx = ctx_builder.build();
+    let service = ctx.service();
+    service.start_and_await().await.unwrap();
+    // verify p2p was notified about the transaction validity
+    let gossip_validity_notified =
+        tokio::time::timeout(Duration::from_millis(100), receive.recv()).await;
+    assert!(
+        gossip_validity_notified.is_ok(),
+        "expected to receive gossip validity notification"
     )
 }
