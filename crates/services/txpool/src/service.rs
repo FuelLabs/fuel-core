@@ -253,7 +253,7 @@ where
                                 },
                                 // Use similar p2p punishment rules as bitcoin
                                 // https://github.com/bitcoin/bitcoin/blob/6ff0aa089c01ff3e610ecb47814ed739d685a14c/src/net_processing.cpp#L1856
-                                Some(Err(Error::ConsensusValidity(_))) => {
+                                Some(Err(Error::ConsensusValidity(_))) | Some(Err(Error::MintIsDisallowed)) => {
                                     GossipsubMessageAcceptance::Reject
                                 },
                                 _ => GossipsubMessageAcceptance::Ignore
@@ -264,14 +264,13 @@ where
                         }
                     };
 
-                    if acceptance != GossipsubMessageAcceptance::Ignore {
-                        let message_info = GossipsubMessageInfo {
-                            message_id,
-                            peer_id,
-                        };
+                    // notify p2p layer about whether this tx was accepted
+                    let message_info = GossipsubMessageInfo {
+                        message_id,
+                        peer_id,
+                    };
 
-                        let _ = self.shared.p2p.notify_gossip_transaction_validity(message_info, acceptance);
-                    }
+                    let _ = self.shared.p2p.notify_gossip_transaction_validity(message_info, acceptance);
 
                     should_continue = true;
                 } else {
