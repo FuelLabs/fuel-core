@@ -1,3 +1,5 @@
+#![allow(warnings)]
+
 use crate::service::update_sender::tests::utils::{
     box_senders,
     MockCreateChannel,

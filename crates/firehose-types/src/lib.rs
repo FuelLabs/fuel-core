@@ -10,6 +10,7 @@ use fuel_core_types::{
         block::Block as FuelBlock,
         primitives::BlockId,
     },
+    fuel_asm::PanicInstruction as FuelPanicInstruction,
     fuel_tx::{
         field::{
             BytecodeLength as _,
@@ -44,17 +45,25 @@ use fuel_core_types::{
         Input as FuelInput,
         Mint as FuelMint,
         Output as FuelOutput,
+        Receipt as FuelReceipt,
         Script as FuelScript,
         StorageSlot as FuelStorageSlot,
         Transaction as FuelTransaction,
+        TxId as FuelTxId,
         TxPointer as FuelTxPointer,
         UtxoId as FuelUtxoId,
     },
 };
 use strum::IntoEnumIterator;
 
-impl From<(&FuelBlock, BlockId)> for Block {
-    fn from((block, prev_id): (&FuelBlock, BlockId)) -> Self {
+/// Extra info used for constructing blocks
+pub struct TxExtra {
+    pub id: FuelTxId,
+    pub receipts: Vec<FuelReceipt>,
+}
+
+impl From<(&FuelBlock, BlockId, &[TxExtra])> for Block {
+    fn from((block, prev_id, tx_extra): (&FuelBlock, BlockId, &[TxExtra])) -> Self {
         Self {
             id: block.id().as_slice().to_owned(),
             height: **block.header().height(),
@@ -76,24 +85,34 @@ impl From<(&FuelBlock, BlockId)> for Block {
             prev_root: block.header().consensus.prev_root.as_slice().to_owned(),
             timestamp: block.header().consensus.time.0,
             application_hash: block.header().application_hash().to_vec(),
-            transactions: block.transactions().iter().map(|tx| tx.into()).collect(),
+            transactions: block
+                .transactions()
+                .iter()
+                .zip(tx_extra)
+                .map(|(tx, tx_extra)| (tx, tx_extra).into())
+                .collect(),
         }
     }
 }
 
-impl From<&FuelTransaction> for Transaction {
-    fn from(value: &FuelTransaction) -> Self {
-        let kind = Some(match value {
-            FuelTransaction::Script(v) => transaction::Kind::Script(v.into()),
+impl From<(&FuelTransaction, &TxExtra)> for Transaction {
+    fn from((tx, tx_extra): (&FuelTransaction, &TxExtra)) -> Self {
+        let kind = Some(match tx {
+            FuelTransaction::Script(v) => {
+                transaction::Kind::Script((v, &tx_extra.receipts).into())
+            }
             FuelTransaction::Create(v) => transaction::Kind::Create(v.into()),
             FuelTransaction::Mint(v) => transaction::Kind::Mint(v.into()),
         });
-        Transaction { kind }
+        Transaction {
+            id: (*tx_extra.id).into(),
+            kind,
+        }
     }
 }
 
-impl From<&FuelScript> for Script {
-    fn from(value: &FuelScript) -> Self {
+impl From<(&FuelScript, &Vec<FuelReceipt>)> for Script {
+    fn from((value, receipts): (&FuelScript, &Vec<FuelReceipt>)) -> Self {
         Self {
             script_gas_limit: *value.script_gas_limit(),
             script: value.script().to_vec(),
@@ -107,6 +126,7 @@ impl From<&FuelScript> for Script {
                 .map(|w| w.as_vec().clone())
                 .collect(),
             receipts_root: value.receipts_root().as_slice().to_owned(),
+            receipts: receipts.iter().map(Into::into).collect(),
         }
     }
 }
@@ -300,6 +320,208 @@ impl From<&FuelStorageSlot> for StorageSlot {
         Self {
             key: value.key().to_vec(),
             value: value.value().to_vec(),
+        }
+    }
+}
+
+impl From<&FuelReceipt> for Receipt {
+    fn from(receipt: &FuelReceipt) -> Self {
+        Self {
+            kind: Some(match receipt {
+                FuelReceipt::Call {
+                    id,
+                    to,
+                    amount,
+                    asset_id,
+                    gas,
+                    param1,
+                    param2,
+                    pc,
+                    is,
+                } => receipt::Kind::Call(CallReceipt {
+                    id: (**id).into(),
+                    to: (**to).into(),
+                    amount: *amount,
+                    asset_id: (**asset_id).into(),
+                    gas: *gas,
+                    param1: *param1,
+                    param2: *param2,
+                    pc: *pc,
+                    is: *is,
+                }),
+                FuelReceipt::Return { id, val, pc, is } => {
+                    receipt::Kind::Return(ReturnReceipt {
+                        id: (**id).into(),
+                        val: *val,
+                        pc: *pc,
+                        is: *is,
+                    })
+                }
+                FuelReceipt::ReturnData {
+                    id,
+                    ptr,
+                    len,
+                    digest,
+                    pc,
+                    is,
+                    data,
+                } => receipt::Kind::ReturnData(ReturnDataReceipt {
+                    id: (**id).into(),
+                    ptr: *ptr,
+                    len: *len,
+                    digest: (**digest).into(),
+                    pc: *pc,
+                    is: *is,
+                    data: data.clone().unwrap_or_default(),
+                }),
+                FuelReceipt::Panic {
+                    id,
+                    reason,
+                    pc,
+                    is,
+                    contract_id,
+                } => receipt::Kind::Panic(PanicReceipt {
+                    id: (**id).into(),
+                    reason: Some(reason.into()),
+                    pc: *pc,
+                    is: *is,
+                    contract_id: contract_id.map(|v| (*v).into()).unwrap_or_default(),
+                }),
+                FuelReceipt::Revert { id, ra, pc, is } => {
+                    receipt::Kind::Revert(RevertReceipt {
+                        id: (**id).into(),
+                        ra: *ra,
+                        pc: *pc,
+                        is: *is,
+                    })
+                }
+                FuelReceipt::Log {
+                    id,
+                    ra,
+                    rb,
+                    rc,
+                    rd,
+                    pc,
+                    is,
+                } => receipt::Kind::Log(LogReceipt {
+                    id: (**id).into(),
+                    ra: *ra,
+                    rb: *rb,
+                    rc: *rc,
+                    rd: *rd,
+                    pc: *pc,
+                    is: *is,
+                }),
+                FuelReceipt::LogData {
+                    id,
+                    ra,
+                    rb,
+                    ptr,
+                    len,
+                    digest,
+                    pc,
+                    is,
+                    data,
+                } => receipt::Kind::LogData(LogDataReceipt {
+                    id: (**id).into(),
+                    ra: *ra,
+                    rb: *rb,
+                    ptr: *ptr,
+                    len: *len,
+                    digest: (*digest).to_vec(),
+                    pc: *pc,
+                    is: *is,
+                    data: data.clone().unwrap_or_default(),
+                }),
+                FuelReceipt::Transfer {
+                    id,
+                    to,
+                    amount,
+                    asset_id,
+                    pc,
+                    is,
+                } => receipt::Kind::Transfer(TransferReceipt {
+                    id: (**id).into(),
+                    to: (**to).into(),
+                    amount: *amount,
+                    asset_id: (**asset_id).into(),
+                    pc: *pc,
+                    is: *is,
+                }),
+                FuelReceipt::TransferOut {
+                    id,
+                    to,
+                    amount,
+                    asset_id,
+                    pc,
+                    is,
+                } => receipt::Kind::TransferOut(TransferOutReceipt {
+                    id: (**id).into(),
+                    to: (**to).into(),
+                    amount: *amount,
+                    asset_id: (**asset_id).into(),
+                    pc: *pc,
+                    is: *is,
+                }),
+                FuelReceipt::ScriptResult { result, gas_used } => {
+                    receipt::Kind::ScriptResult(ScriptResultReceipt {
+                        result: (*result).into(),
+                        gas_used: *gas_used,
+                    })
+                }
+                FuelReceipt::MessageOut {
+                    sender,
+                    recipient,
+                    amount,
+                    nonce,
+                    len,
+                    digest,
+                    data,
+                } => receipt::Kind::MessageOut(MessageOutReceipt {
+                    sender: (**sender).into(),
+                    recipient: (**recipient).into(),
+                    amount: *amount,
+                    nonce: (**nonce).into(),
+                    len: *len,
+                    digest: (*digest).to_vec(),
+                    data: data.clone().unwrap_or_default(),
+                }),
+                FuelReceipt::Mint {
+                    sub_id,
+                    contract_id,
+                    val,
+                    pc,
+                    is,
+                } => receipt::Kind::Mint(MintReceipt {
+                    sub_id: (**sub_id).into(),
+                    contract_id: (**contract_id).into(),
+                    val: *val,
+                    pc: *pc,
+                    is: *is,
+                }),
+                FuelReceipt::Burn {
+                    sub_id,
+                    contract_id,
+                    val,
+                    pc,
+                    is,
+                } => receipt::Kind::Burn(BurnReceipt {
+                    sub_id: (**sub_id).into(),
+                    contract_id: (**contract_id).into(),
+                    val: *val,
+                    pc: *pc,
+                    is: *is,
+                }),
+            }),
+        }
+    }
+}
+
+impl From<&FuelPanicInstruction> for PanicInstruction {
+    fn from(instr: &FuelPanicInstruction) -> Self {
+        Self {
+            reason: (*instr.reason()) as u8 as u32,
+            raw_instruction: *instr.instruction(),
         }
     }
 }

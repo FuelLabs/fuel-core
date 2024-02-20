@@ -19,10 +19,11 @@ message Block {
 }
 
 message Transaction {
+  bytes id = 1;
   oneof kind {
-    Script script = 1;
-    Create create = 2;
-    Mint mint = 3;
+    Script script = 2;
+    Create create = 3;
+    Mint mint = 4;
   }
 }
 
@@ -35,6 +36,7 @@ message Script {
     repeated Output outputs = 6;
     repeated bytes witnesses = 7;
     bytes receipts_root = 8;
+    repeated Receipt receipts = 9;
 }
 
 message Create {
@@ -146,3 +148,143 @@ message TxPointer {
 message Policies {
   repeated uint64 values = 1;
 }
+
+message PanicInstruction {
+  uint32 reason = 1;
+  uint32 raw_instruction = 2;
+}
+
+message Receipt {
+  oneof kind {
+    CallReceipt call = 1;
+    ReturnReceipt return = 2;
+    ReturnDataReceipt return_data = 3;
+    PanicReceipt  panic  = 4;
+    RevertReceipt revert = 5;
+    LogReceipt log = 6;
+    LogDataReceipt log_data = 7;
+    TransferReceipt transfer = 8;
+    TransferOutReceipt transfer_out = 9;
+    ScriptResultReceipt script_result = 10;
+    MessageOutReceipt message_out = 11;
+    MintReceipt mint = 12;
+    BurnReceipt burn = 13;
+  }
+}
+
+message CallReceipt {
+  bytes id = 1;
+  bytes to = 2;
+  uint64 amount = 3;
+  bytes asset_id = 4;
+  uint64 gas = 5;
+  uint64 param1 = 6;
+  uint64 param2 = 7;
+  uint64 pc = 8;
+  uint64 is = 9;
+}
+
+message ReturnReceipt {
+  bytes id = 1;
+  uint64 val = 2;
+  uint64 pc = 3;
+  uint64 is = 4;
+}
+
+message ReturnDataReceipt {
+  bytes id = 1;
+  uint64 ptr = 2;
+  uint64 len = 3;
+  bytes digest = 4;
+  uint64 pc = 5;
+  uint64 is = 6;
+  bytes data = 7;
+}
+
+message PanicReceipt {
+  bytes id = 1;
+  PanicInstruction reason = 2;
+  uint64 pc = 3;
+  uint64 is = 4;
+  bytes contract_id = 5;
+}
+
+message RevertReceipt {
+  bytes id = 1;
+  uint64 ra = 2;
+  uint64 pc = 3;
+  uint64 is = 4;
+}
+
+message LogReceipt {
+  bytes id = 1;
+  uint64 ra = 2;
+  uint64 rb = 3;
+  uint64 rc = 4;
+  uint64 rd = 5;
+  uint64 pc = 6;
+  uint64 is = 7;
+}
+
+message LogDataReceipt {
+  bytes id = 1;
+  uint64 ra = 2;
+  uint64 rb = 3;
+  uint64 ptr = 4;
+  uint64 len = 5;
+  bytes digest = 6;
+  uint64 pc = 7;
+  uint64 is = 8;
+  bytes data = 9;
+}
+
+message TransferReceipt {
+  bytes id = 1;
+  bytes to = 2;
+  uint64 amount = 3;
+  bytes asset_id = 4;
+  uint64 pc = 5;
+  uint64 is = 6;
+}
+
+message TransferOutReceipt {
+  bytes id = 1;
+  bytes to = 2;
+  uint64 amount = 3;
+  bytes asset_id = 4;
+  uint64 pc = 5;
+  uint64 is = 6;
+}
+
+message ScriptResultReceipt {
+  // Values: Success = 0, Revert = 1, Panic = 2, others allowed
+  uint64 result = 1;
+  uint64 gas_used = 2;
+}
+
+message MessageOutReceipt {
+  bytes sender = 1;
+  bytes recipient = 2;
+  uint64 amount = 3;
+  bytes nonce = 4;
+  uint64 len = 5;
+  bytes digest = 6;
+  bytes data = 7;
+}
+
+message MintReceipt {
+  bytes sub_id = 1;
+  bytes contract_id = 2;
+  uint64 val = 3;
+  uint64 pc = 4;
+  uint64 is = 5;
+}
+
+message BurnReceipt {
+  bytes sub_id = 1;
+  bytes contract_id = 2;
+  uint64 val = 3;
+  uint64 pc = 4;
+  uint64 is = 5;
+}
+

@@ -307,6 +307,8 @@ impl Command {
             max_wait_time: max_wait_time.into(),
         };
 
+        let chain_id = chain_conf.consensus_parameters.chain_id;
+
         let config = Config {
             addr,
             api_request_timeout: api_request_timeout.into(),
@@ -335,6 +337,7 @@ impl Command {
             block_producer: ProducerConfig {
                 utxo_validation,
                 coinbase_recipient,
+                chain_id,
                 metrics,
                 #[cfg(feature = "firehose")]
                 firehose,

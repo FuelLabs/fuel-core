@@ -128,10 +128,17 @@ fn import_genesis_block(
     // Export the genesis block to firehose as well
     #[cfg(feature = "firehose")]
     if config.firehose {
-        use fuel_core_firehose_types::prost::Message;
+        use fuel_core_firehose_types::{
+            prost::Message,
+            TxExtra,
+        };
         use fuel_core_types::blockchain::primitives::BlockId;
-        let fire_block =
-            fuel_core_firehose_types::Block::from((&block, BlockId::default()));
+        let tx_extra: [TxExtra; 0] = [];
+        let fire_block = fuel_core_firehose_types::Block::from((
+            &block,
+            BlockId::default(),
+            tx_extra.as_slice(),
+        ));
         let out_msg = hex::encode(fire_block.encode_to_vec());
         println!("FIRE PROTO {}", out_msg);
     }

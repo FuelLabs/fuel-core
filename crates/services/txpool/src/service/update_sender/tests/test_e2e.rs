@@ -4,6 +4,8 @@
 //! The test functions use arbitrary operations to perform
 //! actions such as send, receive, subscribe and drop.
 
+#![allow(warnings)]
+
 use super::*;
 use crate::service::update_sender::tests::test_sending::validate_send;
 use fuel_core_types::blockchain::primitives::BlockId;

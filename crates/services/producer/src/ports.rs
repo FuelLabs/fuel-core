@@ -33,6 +33,9 @@ pub trait BlockProducerDatabase: Send + Sync {
 
     /// Fetch the current block height.
     fn current_block_height(&self) -> StorageResult<BlockHeight>;
+
+    // /// Gets receipts for a transaction
+    // fn get_receipts(&self, height: &TxId) -> StorageResult<Vec<Receipt>>;
 }
 
 #[async_trait]

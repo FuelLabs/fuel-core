@@ -75,7 +75,9 @@ pub struct Producer<Database, TxPool, Executor> {
 impl<Database, TxPool, Executor, ExecutorDB, TxSource>
     Producer<Database, TxPool, Executor>
 where
-    Database: ports::BlockProducerDatabase + 'static,
+    Database: ports::BlockProducerDatabase
+        + fuel_core_storage::StorageInspect<fuel_core_storage::tables::Receipts>
+        + 'static,
     TxPool: ports::TxPool<TxSource = TxSource> + 'static,
     Executor: ports::Executor<Database = ExecutorDB, TxSource = TxSource> + 'static,
 {
@@ -121,16 +123,43 @@ where
         // Firehose block logging
         #[cfg(feature = "firehose")]
         if self.config.firehose {
-            use fuel_core_firehose_types::prost::Message;
-            use fuel_core_types::blockchain::primitives::BlockId;
+            use fuel_core_firehose_types::{
+                prost::Message,
+                TxExtra,
+            };
+            use fuel_core_storage::{
+                tables::Receipts,
+                StorageAsRef,
+            };
+            use fuel_core_types::{
+                blockchain::primitives::BlockId,
+                fuel_tx::UniqueIdentifier,
+            };
 
             let prev_id: BlockId = match height.pred() {
                 Some(h) => self.db.get_block(&h)?.id(),
                 None => BlockId::default(),
             };
 
-            let fire_block =
-                fuel_core_firehose_types::Block::from((&result.result().block, prev_id));
+            let block = &result.result().block;
+
+            let tx_extra: Vec<TxExtra> = block
+                .transactions()
+                .iter()
+                .map(|tx| {
+                    let id = tx.id(&self.config.chain_id);
+                    let receipts = self.db.storage::<Receipts>().get(&id);
+                    let receipts =
+                        receipts.unwrap_or_default().unwrap_or_default().to_vec();
+                    TxExtra { id, receipts }
+                })
+                .collect();
+
+            let fire_block = fuel_core_firehose_types::Block::from((
+                block,
+                prev_id,
+                tx_extra.as_slice(),
+            ));
             let out_msg = hex::encode(fire_block.encode_to_vec());
             println!("FIRE PROTO {}", out_msg);
         }
