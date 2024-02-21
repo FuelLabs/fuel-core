@@ -1,7 +1,4 @@
-use crate::{
-    fuel_core_graphql_api::ports::OnChainDatabase,
-    graphql_api::ports::OffChainDatabase,
-};
+use crate::fuel_core_graphql_api::ports::OnChainDatabase;
 use fuel_core_storage::{
     iter::{
         BoxedIter,
@@ -53,7 +50,7 @@ pub trait BlockQueryData: Send + Sync + SimpleBlockData {
     fn consensus(&self, id: &BlockHeight) -> StorageResult<Consensus>;
 }
 
-impl<D: OnChainDatabase + OffChainDatabase + ?Sized> BlockQueryData for D {
+impl<D: OnChainDatabase + ?Sized> BlockQueryData for D {
     fn latest_block_height(&self) -> StorageResult<BlockHeight> {
         self.latest_height()
     }
