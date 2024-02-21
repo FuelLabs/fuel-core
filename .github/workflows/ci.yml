@@ -592,34 +592,6 @@ jobs:
           ENV: 'fueldevsway.env'
           DELETE_INFRA: true
 
-  # Deploy Latest Fuel-Core Release
-  # TODO: remove deploy steps after the old cluster is decommissioned
-  deploy:
-    if: github.ref == 'refs/heads/master'
-    needs:
-      - publish-docker-image
-    runs-on: buildjet-4vcpu-ubuntu-2204
-    steps:
-      - name: Set Environment Variables
-        run: |
-          tag=(`echo $GITHUB_SHA | cut -c1-7`)
-          echo "IMAGE_TAG=`echo sha-$tag`" >> $GITHUB_ENV
-          echo "DEPLOYMENT_VERSION=$(echo $GITHUB_SHA)" >> $GITHUB_ENV
-
-      - name: Deploy Fuel-Core Developer Environment
-        uses: benc-uk/workflow-dispatch@v1
-        with:
-          workflow: Deploy Fuel-Core on k8s
-          repo: FuelLabs/fuel-deployment
-          ref: refs/heads/master
-          token: ${{ secrets.REPO_TOKEN }}
-          inputs: '{ "k8s-type": "${{ env.K8S }}", "config-directory": "${{ env.CONFIG }}", "config-env": "${{ env.ENV }}", "deployment-version": "${{ env.DEPLOYMENT_VERSION }}", "image-tag": "${{ env.IMAGE_TAG }}", "delete-infra": "${{ env.DELETE_INFRA }}" }'
-        env:
-          K8S: 'eks'
-          CONFIG: 'fuel-dev1'
-          ENV: 'fueldevsway.env'
-          DELETE_INFRA: true
-
   cargo-audit:
     runs-on: ubuntu-latest
     continue-on-error: true
