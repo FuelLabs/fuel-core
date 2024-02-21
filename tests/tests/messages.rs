@@ -4,6 +4,8 @@ use fuel_core::{
     chain_config::{
         MessageConfig,
         StateConfig,
+        StateReader,
+        MAX_GROUP_SIZE,
     },
     service::{
         Config,
@@ -36,11 +38,24 @@ use fuel_core_types::{
     },
     fuel_types::ChainId,
 };
+use itertools::Itertools;
 use rstest::rstest;
 use std::ops::Deref;
 
 #[cfg(feature = "relayer")]
 mod relayer;
+
+fn setup_config(messages: impl IntoIterator<Item = MessageConfig>) -> Config {
+    let state = StateConfig {
+        messages: messages.into_iter().collect_vec(),
+        ..Default::default()
+    };
+
+    Config {
+        state_reader: StateReader::in_memory(state, MAX_GROUP_SIZE),
+        ..Config::local_node()
+    }
+}
 
 #[tokio::test]
 async fn messages_returns_messages_for_all_owners() {
@@ -68,11 +83,7 @@ async fn messages_returns_messages_for_all_owners() {
     };
 
     // configure the messages
-    let mut config = Config::local_node();
-    config.state_config = StateConfig {
-        messages: Some(vec![first_msg, second_msg, third_msg]),
-        ..Default::default()
-    };
+    let config = setup_config(vec![first_msg, second_msg, third_msg]);
 
     // setup server & client
     let srv = FuelService::new_node(config).await.unwrap();
@@ -116,12 +127,7 @@ async fn messages_by_owner_returns_messages_for_the_given_owner() {
         ..Default::default()
     };
 
-    // configure the messages
-    let mut config = Config::local_node();
-    config.state_config = StateConfig {
-        messages: Some(vec![first_msg, second_msg, third_msg]),
-        ..Default::default()
-    };
+    let config = setup_config(vec![first_msg, second_msg, third_msg]);
 
     // setup server & client
     let srv = FuelService::new_node(config).await.unwrap();
@@ -203,11 +209,7 @@ async fn message_status__can_get_unspent() {
         ..Default::default()
     };
 
-    let mut config = Config::local_node();
-    config.state_config = StateConfig {
-        messages: Some(vec![msg]),
-        ..Default::default()
-    };
+    let config = setup_config(vec![msg]);
 
     let srv = FuelService::new_node(config).await.unwrap();
     let client = FuelClient::from(srv.bound_address);
@@ -237,11 +239,7 @@ async fn message_status__can_get_spent() {
         ..Default::default()
     };
 
-    let mut config = Config::local_node();
-    config.state_config = StateConfig {
-        messages: Some(vec![msg]),
-        ..Default::default()
-    };
+    let config = setup_config(vec![msg]);
 
     let srv = FuelService::new_node(config).await.unwrap();
     let client = FuelClient::from(srv.bound_address);
@@ -298,12 +296,13 @@ async fn can_get_message_proof() {
         let config = Config::local_node();
 
         let coin = config
-            .state_config
-            .coins
-            .as_ref()
+            .state_reader
+            .coins()
             .unwrap()
-            .first()
+            .next()
             .unwrap()
+            .unwrap()
+            .data[0]
             .clone();
 
         struct MessageArgs {
@@ -593,10 +592,11 @@ async fn can_get_message() {
 
     // configure the messges
     let mut config = Config::local_node();
-    config.chain_conf.initial_state = Some(StateConfig {
-        messages: Some(vec![first_msg.clone()]),
+    let state_config = StateConfig {
+        messages: vec![first_msg.clone()],
         ..Default::default()
-    });
+    };
+    config.state_reader = StateReader::in_memory(state_config, MAX_GROUP_SIZE);
 
     // setup service and client
     let service = FuelService::new_node(config).await.unwrap();
@@ -613,9 +613,7 @@ async fn can_get_message() {
 #[tokio::test]
 async fn can_get_empty_message() {
     let mut config = Config::local_node();
-    config.chain_conf.initial_state = Some(StateConfig {
-        ..Default::default()
-    });
+    config.state_reader = StateReader::in_memory(StateConfig::default(), MAX_GROUP_SIZE);
 
     let service = FuelService::new_node(config).await.unwrap();
     let client = FuelClient::from(service.bound_address);

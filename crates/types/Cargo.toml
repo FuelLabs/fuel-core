@@ -5,11 +5,11 @@ description = "The primitives and types use by Fuel core protocol."
 edition = { workspace = true }
 homepage = { workspace = true }
 keywords = [
-    "blockchain",
-    "cryptocurrencies",
-    "fuel-client",
-    "fuel-core",
-    "fuel-types",
+  "blockchain",
+  "cryptocurrencies",
+  "fuel-client",
+  "fuel-core",
+  "fuel-types",
 ]
 license = { workspace = true }
 name = "fuel-core-types"
@@ -21,7 +21,9 @@ anyhow = { workspace = true }
 bs58 = "0.5"
 derivative = { version = "2" }
 derive_more = { version = "0.99" }
-fuel-vm-private = { workspace = true, default-features = false, features = ["alloc"] }
+fuel-vm-private = { workspace = true, default-features = false, features = [
+  "alloc",
+] }
 rand = { workspace = true, optional = true }
 secrecy = "0.8"
 serde = { workspace = true, features = ["derive"], optional = true }

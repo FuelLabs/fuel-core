@@ -14,5 +14,9 @@ expression: json
       "amount": "0x0d1865b14bc80dbc",
       "asset_id": "0x0d053242a9719dca480b4f4910fa60671f2068086498c72e30fc8b969e083932"
     }
-  ]
+  ],
+  "messages": [],
+  "contracts": [],
+  "contract_state": [],
+  "contract_balance": []
 }

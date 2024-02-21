@@ -2,8 +2,11 @@ use fuel_core::{
     chain_config::{
         ChainConfig,
         CoinConfig,
+        ContractBalanceConfig,
         ContractConfig,
         StateConfig,
+        StateReader,
+        MAX_GROUP_SIZE,
     },
     service::{
         Config,
@@ -86,6 +89,7 @@ impl TestContext {
 pub struct TestSetupBuilder {
     pub rng: StdRng,
     pub contracts: HashMap<ContractId, ContractConfig>,
+    pub contract_balances: Vec<ContractBalanceConfig>,
     pub initial_coins: Vec<CoinConfig>,
     pub min_gas_price: u64,
     pub gas_limit: u64,
@@ -106,7 +110,7 @@ impl TestSetupBuilder {
     pub fn setup_contract(
         &mut self,
         code: Vec<u8>,
-        balances: Option<Vec<(AssetId, u64)>>,
+        balances: Vec<(AssetId, u64)>,
         utxo_id: Option<UtxoId>,
         tx_pointer: Option<TxPointer>,
     ) -> (Salt, ContractId) {
@@ -122,14 +126,21 @@ impl TestSetupBuilder {
                 contract_id,
                 code,
                 salt,
-                state: None,
-                balances,
                 tx_id: utxo_id.map(|utxo_id| *utxo_id.tx_id()),
                 output_index: utxo_id.map(|utxo_id| utxo_id.output_index()),
                 tx_pointer_block_height: tx_pointer.map(|pointer| pointer.block_height()),
                 tx_pointer_tx_idx: tx_pointer.map(|pointer| pointer.tx_index()),
             },
         );
+        let balances =
+            balances
+                .into_iter()
+                .map(|(asset_id, amount)| ContractBalanceConfig {
+                    contract_id,
+                    asset_id,
+                    amount,
+                });
+        self.contract_balances.extend(balances);
 
         (salt, contract_id)
     }
@@ -182,16 +193,15 @@ impl TestSetupBuilder {
 
     // setup chainspec and spin up a fuel-node
     pub async fn finalize(&mut self) -> TestContext {
-        let mut chain_conf = ChainConfig {
-            height: Some(self.starting_block),
-            ..ChainConfig::local_testnet()
-        };
+        let mut chain_conf = ChainConfig::local_testnet();
         chain_conf.consensus_parameters.tx_params.max_gas_per_tx = self.gas_limit;
         chain_conf.block_gas_limit = self.gas_limit;
 
-        let state_config = StateConfig {
+        let state = StateConfig {
             coins: self.initial_coins.clone(),
             contracts: self.contracts.values().cloned().collect_vec(),
+            contract_balance: self.contract_balances.clone(),
+            block_height: self.starting_block,
             ..StateConfig::default()
         };
 
@@ -203,7 +213,7 @@ impl TestSetupBuilder {
                 ..fuel_core_txpool::Config::default()
             },
             chain_config: chain_conf,
-            state_config,
+            state_reader: StateReader::in_memory(state, MAX_GROUP_SIZE),
             block_production: self.trigger,
             ..Config::local_node()
         };
@@ -230,6 +240,7 @@ impl Default for TestSetupBuilder {
             starting_block: Default::default(),
             utxo_validation: true,
             trigger: Trigger::Instant,
+            contract_balances: vec![],
         }
     }
 }

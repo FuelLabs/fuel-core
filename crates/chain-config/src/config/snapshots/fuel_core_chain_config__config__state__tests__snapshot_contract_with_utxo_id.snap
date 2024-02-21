@@ -3,6 +3,8 @@ source: crates/chain-config/src/config/state.rs
 expression: json
 ---
 {
+  "coins": [],
+  "messages": [],
   "contracts": [
     {
       "contract_id": "0x0000000000000000000000000000000000000000000000000000000000000000",
@@ -11,5 +13,7 @@ expression: json
       "tx_id": "0x644a25da5ad31754e23bc1eca8c766a61ceaa8c60ddc65f158a30209256e35c9",
       "output_index": "0xa4"
     }
-  ]
+  ],
+  "contract_state": [],
+  "contract_balance": []
 }

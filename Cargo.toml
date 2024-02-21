@@ -83,7 +83,7 @@ fuel-vm-private = { version = "0.45.0", package = "fuel-vm", default-features = 
 anyhow = "1.0"
 async-trait = "0.1"
 cynic = { version = "2.2.1", features = ["http-reqwest"] }
-clap = "4.1"
+clap = "4.4"
 derive_more = { version = "0.99" }
 enum-iterator = "1.2"
 hyper = { version = "0.14.26" }
@@ -110,7 +110,7 @@ reqwest = { version = "0.11.16", default-features = false, features = [
   "cookies",
 ] }
 mockall = "0.11"
-test-case = "2.2"
+test-case = "3.3"
 impl-tools = "0.10"
 test-strategy = "0.3"
 parquet = { version = "49.0", default-features = false }

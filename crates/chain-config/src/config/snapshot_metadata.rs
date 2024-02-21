@@ -13,6 +13,7 @@ pub struct ParquetFiles {
     pub contracts: PathBuf,
     pub contract_state: PathBuf,
     pub contract_balance: PathBuf,
+    pub block_height: PathBuf,
 }
 
 #[cfg(feature = "parquet")]
@@ -28,6 +29,7 @@ impl ParquetFiles {
         prepend(&mut self.contracts);
         prepend(&mut self.contract_state);
         prepend(&mut self.contract_balance);
+        prepend(&mut self.block_height);
     }
 }
 
@@ -42,6 +44,7 @@ impl ParquetFiles {
             contracts: parquet_file("contracts"),
             contract_state: parquet_file("contract_state"),
             contract_balance: parquet_file("contract_balance"),
+            block_height: parquet_file("block_height"),
         }
     }
 }
@@ -312,7 +315,8 @@ mod tests {
                         contract_state: temp_dir.path().join("contract_state.parquet"),
                         contract_balance: temp_dir
                             .path()
-                            .join("contract_balance.parquet")
+                            .join("contract_balance.parquet"),
+                        block_height: temp_dir.path().join("block_height.parquet"),
                     },
                     compression: crate::ZstdCompressionLevel::Max,
                     group_size: 10,
@@ -345,6 +349,7 @@ mod tests {
                         contracts: PathBuf::from("./contracts.parquet"),
                         contract_state: PathBuf::from("./contract_state.parquet"),
                         contract_balance: PathBuf::from("./contract_balance.parquet"),
+                        block_height: PathBuf::from("./block_height.parquet"),
                     },
                     compression: crate::ZstdCompressionLevel::Max,
                     group_size: 10,
@@ -382,6 +387,7 @@ mod tests {
                         contract_balance: temp_dir
                             .path()
                             .join("contract_balance.parquet"),
+                        block_height: temp_dir.path().join("block_height.parquet"),
                     },
                     compression: crate::ZstdCompressionLevel::Max,
                     group_size: 10,
@@ -406,6 +412,7 @@ mod tests {
                         contracts: "../other/contracts.parquet".into(),
                         contract_state: "../other/contract_state.parquet".into(),
                         contract_balance: "../other/contract_balance.parquet".into(),
+                        block_height: "../other/block_height.parquet".into(),
                     },
                     compression: crate::ZstdCompressionLevel::Max,
                     group_size: 10,
@@ -432,6 +439,7 @@ mod tests {
                             .join("../other/contract_state.parquet"),
                         contract_balance: snapshot_path
                             .join("../other/contract_balance.parquet"),
+                        block_height: snapshot_path.join("../other/block_height.parquet"),
                     },
                     compression: crate::ZstdCompressionLevel::Max,
                     group_size: 10,

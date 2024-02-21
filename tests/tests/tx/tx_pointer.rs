@@ -41,7 +41,7 @@ async fn tx_pointer_set_from_genesis_for_coin_and_contract_inputs() {
     // setup genesis contract
     let contract_tx_pointer = TxPointer::new(7.into(), rng.gen());
     let (_, contract_id) =
-        test_builder.setup_contract(vec![], None, None, Some(contract_tx_pointer));
+        test_builder.setup_contract(vec![], vec![], None, Some(contract_tx_pointer));
 
     // setup genesis coin
     let coin_tx_pointer = TxPointer::new(starting_block, rng.gen());
@@ -109,7 +109,7 @@ async fn tx_pointer_set_from_previous_block() {
     let block_height = 40;
 
     // setup genesis contract
-    let (_, contract_id) = test_builder.setup_contract(vec![], None, None, None);
+    let (_, contract_id) = test_builder.setup_contract(vec![], vec![], None, None);
 
     // set starting block >= tx_pointer.block_height()
     test_builder.starting_block = block_height.into();
@@ -185,7 +185,7 @@ async fn tx_pointer_unset_when_utxo_validation_disabled() {
     let block_height = 40u32;
 
     // setup genesis contract
-    let (_, contract_id) = test_builder.setup_contract(vec![], None, None, None);
+    let (_, contract_id) = test_builder.setup_contract(vec![], vec![], None, None);
 
     // set starting block >= tx_pointer.block_height()
     test_builder.starting_block = block_height.into();

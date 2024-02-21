@@ -32,12 +32,8 @@ async fn test_contract_balance(
     #[values(100, 0, 18446744073709551615)] test_balance: u64,
 ) {
     let mut test_builder = TestSetupBuilder::new(SEED);
-    let (_, contract_id) = test_builder.setup_contract(
-        vec![],
-        Some(vec![(asset, test_balance)]),
-        None,
-        None,
-    );
+    let (_, contract_id) =
+        test_builder.setup_contract(vec![], vec![(asset, test_balance)], None, None);
 
     // spin up node
     let TestContext {
@@ -60,16 +56,12 @@ async fn test_5_contract_balances(
     #[values(PageDirection::Forward, PageDirection::Backward)] direction: PageDirection,
 ) {
     let mut test_builder = TestSetupBuilder::new(SEED);
-    let (_, contract_id) = test_builder.setup_contract(
-        vec![],
-        Some(vec![
-            (AssetId::new([1u8; 32]), 1000),
-            (AssetId::new([2u8; 32]), 400),
-            (AssetId::new([3u8; 32]), 700),
-        ]),
-        None,
-        None,
-    );
+    let balances = vec![
+        (AssetId::new([1u8; 32]), 1000),
+        (AssetId::new([2u8; 32]), 400),
+        (AssetId::new([3u8; 32]), 700),
+    ];
+    let (_, contract_id) = test_builder.setup_contract(vec![], balances, None, None);
 
     let TestContext {
         client,
@@ -116,12 +108,13 @@ fn key(i: u8) -> Bytes32 {
 async fn can_get_message_proof() {
     let config = Config::local_node();
     let coin = config
-        .state_config
-        .coins
-        .as_ref()
+        .state_reader
+        .coins()
         .unwrap()
-        .first()
+        .next()
         .unwrap()
+        .unwrap()
+        .data[0]
         .clone();
 
     let slots_to_read = 2;

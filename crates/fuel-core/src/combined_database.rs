@@ -50,6 +50,14 @@ impl CombinedDatabase {
     }
 
     #[cfg(feature = "rocksdb")]
+    pub fn prune(path: &std::path::Path) -> DatabaseResult<()> {
+        Database::<OnChain>::prune(path)?;
+        Database::<OffChain>::prune(path)?;
+        Database::<Relayer>::prune(path)?;
+        Ok(())
+    }
+
+    #[cfg(feature = "rocksdb")]
     pub fn open(path: &std::path::Path, capacity: usize) -> DatabaseResult<Self> {
         // TODO: Use different cache sizes for different databases
         let on_chain = Database::open(path, capacity)?;

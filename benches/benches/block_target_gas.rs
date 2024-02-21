@@ -21,7 +21,6 @@ use fuel_core::{
         config::Trigger,
         Config,
         FuelService,
-        ServiceTrait,
     },
     txpool::types::Word,
 };
@@ -29,7 +28,13 @@ use fuel_core_benches::{
     default_gas_costs::default_gas_costs,
     *,
 };
-use fuel_core_chain_config::ContractConfig;
+use fuel_core_chain_config::{
+    ContractConfig,
+    StateConfig,
+    StateReader,
+    MAX_GROUP_SIZE,
+};
+use fuel_core_services::Service;
 use fuel_core_storage::{
     tables::ContractsRawCode,
     vm_storage::IncreaseStorageKey,
@@ -263,17 +268,14 @@ fn service_with_many_contracts(
         .iter()
         .map(|contract_id| ContractConfig {
             contract_id: *contract_id,
-            code: vec![],
-            salt: Default::default(),
-            state: None,
-            balances: None,
-            tx_id: None,
-            output_index: None,
-            tx_pointer_block_height: None,
-            tx_pointer_tx_idx: None,
+            ..Default::default()
         })
         .collect::<Vec<_>>();
-    config.state_config.contracts = contract_configs;
+    let state_config = StateConfig {
+        contracts: contract_configs,
+        ..Default::default()
+    };
+    config.state_reader = StateReader::in_memory(state_config, MAX_GROUP_SIZE);
 
     config
         .chain_config

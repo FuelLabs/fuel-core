@@ -3,6 +3,10 @@ use fuel_core_storage::MerkleRoot;
 use fuel_core_types::{
     entities::coins::coin::CompressedCoin,
     fuel_crypto::Hasher,
+    fuel_tx::{
+        TxPointer,
+        UtxoId,
+    },
     fuel_types::{
         Address,
         AssetId,
@@ -14,10 +18,8 @@ use serde::{
     Deserialize,
     Serialize,
 };
-use serde_with::serde_as;
 
-#[serde_as]
-#[derive(Clone, Debug, Deserialize, Serialize, Eq, PartialEq)]
+#[derive(Clone, Debug, Deserialize, Serialize, Eq, PartialEq, Default)]
 pub struct CoinConfig {
     /// auto-generated if None
     pub tx_id: Option<Bytes32>,
@@ -33,7 +35,25 @@ pub struct CoinConfig {
     pub asset_id: AssetId,
 }
 
-#[cfg(all(test, feature = "random"))]
+impl CoinConfig {
+    // TODO: Remove https://github.com/FuelLabs/fuel-core/issues/1668
+    pub fn utxo_id(&self) -> Option<UtxoId> {
+        match (self.tx_id, self.output_index) {
+            (Some(tx_id), Some(output_index)) => Some(UtxoId::new(tx_id, output_index)),
+            _ => None,
+        }
+    }
+
+    // TODO: Remove https://github.com/FuelLabs/fuel-core/issues/1668
+    pub fn tx_pointer(&self) -> TxPointer {
+        match (self.tx_pointer_block_height, self.tx_pointer_tx_idx) {
+            (Some(block_height), Some(tx_idx)) => TxPointer::new(block_height, tx_idx),
+            _ => TxPointer::default(),
+        }
+    }
+}
+
+#[cfg(all(test, feature = "random", feature = "std"))]
 impl crate::Randomize for CoinConfig {
     fn randomize(mut rng: impl ::rand::Rng) -> Self {
         Self {

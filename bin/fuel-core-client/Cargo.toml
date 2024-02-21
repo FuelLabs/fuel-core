@@ -20,4 +20,3 @@ fuel-core-client = { workspace = true }
 fuel-core-types = { workspace = true, features = ["serde"] }
 serde_json = { workspace = true, features = ["raw_value"] }
 tokio = { workspace = true, features = ["macros"] }
-

@@ -136,4 +136,7 @@ pub trait BatchOperations: KeyValueStore {
         }
         Ok(())
     }
+
+    /// Deletes all values from the storage.
+    fn delete_all(&self, column: Self::Column) -> StorageResult<()>;
 }

@@ -299,7 +299,11 @@ impl Wallet {
         })
     }
 
-    pub async fn deploy_contract(&self, config: ContractConfig) -> anyhow::Result<()> {
+    pub async fn deploy_contract(
+        &self,
+        config: ContractConfig,
+        slots: Vec<StorageSlot>,
+    ) -> anyhow::Result<()> {
         let asset_id = AssetId::zeroed();
         let total_amount = BASE_AMOUNT;
         // select coins
@@ -312,14 +316,9 @@ impl Wallet {
             contract_id,
             code: bytes,
             salt,
-            state,
             ..
         } = config;
-        let slots = state
-            .unwrap_or_default()
-            .into_iter()
-            .map(|(key, value)| StorageSlot::new(key, value))
-            .collect::<Vec<_>>();
+
         let state_root = Contract::initial_state_root(slots.iter());
         let mut tx = TransactionBuilder::create(bytes.into(), salt, slots);
         tx.gas_price(1);

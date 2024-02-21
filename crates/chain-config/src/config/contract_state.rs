@@ -1,17 +1,20 @@
-use fuel_core_types::fuel_types::Bytes32;
+use fuel_core_types::fuel_types::{
+    Bytes32,
+    ContractId,
+};
 use serde::{
     Deserialize,
     Serialize,
 };
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, PartialOrd, Ord)]
 pub struct ContractStateConfig {
-    pub contract_id: Bytes32,
+    pub contract_id: ContractId,
     pub key: Bytes32,
     pub value: Bytes32,
 }
 
-#[cfg(all(test, feature = "random"))]
+#[cfg(all(test, feature = "random", feature = "std"))]
 impl crate::Randomize for ContractStateConfig {
     fn randomize(mut rng: impl rand::Rng) -> Self {
         Self {

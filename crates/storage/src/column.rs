@@ -72,6 +72,17 @@ pub enum Column {
     OwnedCoins = 20,
     /// The column of the table that stores `true` if `owner` owns `Message` with `message_id`
     OwnedMessageIds = 21,
+
+    /// Table for genesis state import progress tracking.
+    GenesisMetadata = 22,
+    /// Table for coin roots during genesis state import.
+    GenesisCoinRoots = 23,
+    /// Table for message roots during genesis state import.
+    GenesisMessageRoots = 24,
+    /// Table for contract roots during genesis state import.
+    GenesisContractRoots = 25,
+    /// Table for contract ids during genesis state import.
+    GenesisContractIds = 26,
 }
 
 impl Column {

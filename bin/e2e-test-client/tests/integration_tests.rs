@@ -9,6 +9,8 @@ use fuel_core_chain_config::{
     ChainConfig,
     SnapshotMetadata,
     StateConfig,
+    StateReader,
+    MAX_GROUP_SIZE,
 };
 use fuel_core_e2e_client::config::SuiteConfig;
 use std::{
@@ -102,8 +104,9 @@ fn dev_config() -> Config {
         .expect("Should be able to open snapshot metadata");
     let chain_config = ChainConfig::from_snapshot_metadata(&snapshot)
         .expect("Should be able to load chain config");
+
     let state_config = StateConfig::from_snapshot_metadata(snapshot)
-        .expect("Should be able to read state config");
+        .expect("Should be able to load and decode state config");
 
     // The `run_contract_large_state` test creates a contract with a huge state
     assert!(
@@ -115,7 +118,7 @@ fn dev_config() -> Config {
     );
 
     config.chain_config = chain_config;
-    config.state_config = state_config;
+    config.state_reader = StateReader::in_memory(state_config, MAX_GROUP_SIZE);
 
     config.block_producer.coinbase_recipient = Some(
         ContractId::from_str(

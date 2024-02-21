@@ -2,8 +2,9 @@ use clap::ValueEnum;
 use fuel_core_chain_config::{
     default_consensus_dev_key,
     ChainConfig,
-    Decoder,
     StateConfig,
+    StateReader,
+    MAX_GROUP_SIZE,
 };
 use fuel_core_types::{
     blockchain::primitives::SecretKeyWrapper,
@@ -43,8 +44,7 @@ pub struct Config {
     pub api_request_timeout: Duration,
     pub combined_db_config: CombinedDatabaseConfig,
     pub chain_config: ChainConfig,
-    pub state_config: StateConfig,
-    pub state_decoder: Decoder,
+    pub state_reader: StateReader,
     /// When `true`:
     /// - Enables manual block production.
     /// - Enables debugger endpoint.
@@ -76,10 +76,10 @@ pub struct Config {
 
 impl Config {
     pub fn local_node() -> Self {
-        let chain_conf = ChainConfig::local_testnet();
-        let block_importer = fuel_core_importer::Config::new(&chain_conf);
+        let chain_config = ChainConfig::local_testnet();
         let state_config = StateConfig::local_testnet();
-        let state_decoder = Decoder::in_memory(state_config.clone(), 1);
+        let block_importer = fuel_core_importer::Config::new(&chain_config);
+        let state_reader = StateReader::in_memory(state_config.clone(), MAX_GROUP_SIZE);
 
         let utxo_validation = false;
         let min_gas_price = 0;
@@ -99,14 +99,13 @@ impl Config {
             api_request_timeout: Duration::from_secs(60),
             combined_db_config,
             debug: true,
-            chain_config: chain_conf.clone(),
-            state_config: state_config.clone(),
-            state_decoder,
+            chain_config: chain_config.clone(),
+            state_reader,
             block_production: Trigger::Instant,
             vm: Default::default(),
             utxo_validation,
             txpool: fuel_core_txpool::Config {
-                chain_config: chain_conf,
+                chain_config,
                 min_gas_price,
                 utxo_validation,
                 transaction_ttl: Duration::from_secs(60 * 100000000),

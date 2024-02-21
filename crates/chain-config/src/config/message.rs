@@ -35,7 +35,7 @@ pub struct MessageConfig {
     pub da_height: DaBlockHeight,
 }
 
-#[cfg(all(test, feature = "random"))]
+#[cfg(all(test, feature = "random", feature = "std"))]
 impl crate::Randomize for MessageConfig {
     fn randomize(mut rng: impl rand::Rng) -> Self {
         Self {

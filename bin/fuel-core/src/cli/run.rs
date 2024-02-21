@@ -15,10 +15,12 @@ use fuel_core::{
     chain_config::{
         default_consensus_dev_key,
         ChainConfig,
-        Decoder,
         StateConfig,
     },
-    combined_database::CombinedDatabaseConfig,
+    combined_database::{
+        CombinedDatabase,
+        CombinedDatabaseConfig,
+    },
     producer::Config as ProducerConfig,
     service::{
         config::Trigger,
@@ -38,6 +40,7 @@ use fuel_core::{
 };
 use fuel_core_chain_config::{
     SnapshotMetadata,
+    StateReader,
     MAX_GROUP_SIZE,
 };
 use pyroscope::{
@@ -111,10 +114,14 @@ pub struct Command {
     )]
     pub database_type: DbType,
 
-    /// Specify either an alias to a built-in configuration or filepath to a directory
-    /// that contains the chain parameters and chain state config JSON files.
-    #[arg(name = "GENESIS_CONFIG", long = "genesis-config", env)]
-    pub genesis_config: Option<String>,
+    /// Snapshot from which to do (re)genesis. Defaults to local testnet configuration.
+    #[arg(name = "SNAPSHOT", long = "snapshot", env)]
+    pub snapshot: Option<PathBuf>,
+
+    /// Prunes the db. Genesis is done from the provided snapshot or the local testnet
+    /// configuration.
+    #[arg(name = "DB_PRUNE", long = "db-prune", env, default_value = "false")]
+    pub db_prune: bool,
 
     /// Should be used for local development only. Enabling debug mode:
     /// - Allows GraphQL Endpoints to arbitrarily advance blocks.
@@ -217,7 +224,8 @@ impl Command {
             max_database_cache_size,
             database_path,
             database_type,
-            genesis_config,
+            db_prune,
+            snapshot,
             vm_backtrace,
             debug,
             utxo_validation,
@@ -247,16 +255,18 @@ impl Command {
 
         let addr = net::SocketAddr::new(ip, port);
 
-        let (chain_conf, state_config) = match genesis_config.as_deref() {
-            None => (ChainConfig::local_testnet(), StateConfig::local_testnet()),
+        let (chain_conf, state_reader) = match snapshot.as_ref() {
+            None => (
+                ChainConfig::local_testnet(),
+                StateReader::in_memory(StateConfig::local_testnet(), MAX_GROUP_SIZE),
+            ),
             Some(path) => {
                 let metadata = SnapshotMetadata::read(path)?;
                 let chain_conf = ChainConfig::from_snapshot_metadata(&metadata)?;
-                let state_config = StateConfig::from_snapshot_metadata(metadata)?;
-                (chain_conf, state_config)
+                let state_reader = StateReader::for_snapshot(metadata, MAX_GROUP_SIZE)?;
+                (chain_conf, state_reader)
             }
         };
-        let state_decoder = Decoder::in_memory(state_config.clone(), MAX_GROUP_SIZE);
 
         #[cfg(feature = "relayer")]
         let relayer_cfg = relayer_args.into_config();
@@ -320,8 +330,7 @@ impl Command {
             api_request_timeout: api_request_timeout.into(),
             combined_db_config,
             chain_config: chain_conf.clone(),
-            state_decoder,
-            state_config,
+            state_reader,
             debug,
             utxo_validation,
             block_production: trigger,
@@ -362,6 +371,10 @@ impl Command {
 }
 
 pub async fn exec(command: Command) -> anyhow::Result<()> {
+    if command.db_prune && command.database_path.exists() {
+        CombinedDatabase::prune(&command.database_path)?;
+    }
+
     let profiling = command.profiling.clone();
     let config = command.get_config()?;
 

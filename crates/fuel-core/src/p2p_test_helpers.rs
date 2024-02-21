@@ -11,6 +11,10 @@ use crate::{
         ServiceTrait,
     },
 };
+use fuel_core_chain_config::{
+    StateReader,
+    MAX_GROUP_SIZE,
+};
 use fuel_core_p2p::{
     codecs::postcard::PostcardCodec,
     network_service::FuelP2PService,
@@ -219,7 +223,9 @@ pub async fn make_nodes(
         .collect();
 
     let mut producers_with_txs = Vec::with_capacity(producers.len());
-    let mut config = config.unwrap_or(Config::local_node());
+
+    let mut config = config.unwrap_or_else(Config::local_node);
+    let mut state_config = StateConfig::local_testnet();
 
     for (all, producer) in txs_coins.into_iter().zip(producers.into_iter()) {
         match all {
@@ -227,7 +233,7 @@ pub async fn make_nodes(
                 let mut txs = Vec::with_capacity(all.len());
                 for (tx, initial_coin) in all {
                     txs.push(tx);
-                    config.state_config.coins.push(initial_coin);
+                    state_config.coins.push(initial_coin);
                 }
                 producers_with_txs.push(Some((producer.unwrap(), txs)));
             }
@@ -237,7 +243,7 @@ pub async fn make_nodes(
         }
     }
 
-    let config = config;
+    config.state_reader = StateReader::in_memory(state_config, MAX_GROUP_SIZE);
 
     let bootstrap_nodes: Vec<Bootstrap> =
         futures::stream::iter(bootstrap_setup.into_iter().enumerate())
