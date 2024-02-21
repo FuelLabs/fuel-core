@@ -198,7 +198,7 @@ pub trait P2pPort: Send + Sync {
 }
 
 pub mod worker {
-    use super::super::storage::blocks::FuelBlockSecondaryKeyBlockHeights;
+    use super::super::storage::blocks::FuelBlockIdsToHeights;
     use crate::{
         database::{
             database_description::off_chain::OffChain,
@@ -234,7 +234,7 @@ pub mod worker {
         + StorageMutate<OwnedMessageIds, Error = StorageError>
         + StorageMutate<OwnedCoins, Error = StorageError>
         + StorageMutate<MetadataTable<OffChain>, Error = StorageError>
-        + StorageMutate<FuelBlockSecondaryKeyBlockHeights, Error = StorageError>
+        + StorageMutate<FuelBlockIdsToHeights, Error = StorageError>
         + Transactional<Storage = Self>
     {
         fn record_tx_id_owner(

@@ -9,7 +9,7 @@ use crate::{
         metadata::MetadataTable,
         Database,
     },
-    fuel_core_graphql_api::storage::blocks::FuelBlockSecondaryKeyBlockHeights,
+    fuel_core_graphql_api::storage::blocks::FuelBlockIdsToHeights,
 };
 use fuel_core_storage::{
     iter::IterDirection,
@@ -100,7 +100,7 @@ impl StorageMutate<FuelBlocks> for Database {
 
 impl Database<OffChain> {
     pub fn get_block_height(&self, id: &BlockId) -> StorageResult<Option<BlockHeight>> {
-        self.storage::<FuelBlockSecondaryKeyBlockHeights>()
+        self.storage::<FuelBlockIdsToHeights>()
             .get(id)
             .map(|v| v.map(|v| v.into_owned()))
     }

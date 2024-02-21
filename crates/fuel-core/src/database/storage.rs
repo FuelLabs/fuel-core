@@ -4,7 +4,7 @@ use crate::{
         Database,
     },
     fuel_core_graphql_api::storage::{
-        blocks::FuelBlockSecondaryKeyBlockHeights,
+        blocks::FuelBlockIdsToHeights,
         coins::OwnedCoins,
         messages::OwnedMessageIds,
         transactions::{
@@ -95,7 +95,7 @@ use_structured_implementation!(
     OwnedMessageIds,
     OwnedTransactions,
     TransactionStatuses,
-    FuelBlockSecondaryKeyBlockHeights,
+    FuelBlockIdsToHeights,
     FuelBlockMerkleData,
     FuelBlockMerkleMetadata
 );
