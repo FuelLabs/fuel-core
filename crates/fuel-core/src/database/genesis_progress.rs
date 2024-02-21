@@ -12,7 +12,7 @@ use fuel_core_storage::{
     },
     column::Column,
     structured_storage::TableWithBlueprint,
-    tables::ContractsInfo,
+    tables::ContractsLatestUtxo,
     Mappable,
     MerkleRoot,
     Result,
@@ -185,7 +185,7 @@ impl Database {
     pub fn genesis_loaded_contracts(
         &self,
     ) -> impl Iterator<Item = Result<GenesisImportedContractId>> + '_ {
-        self.iter_all::<ContractsInfo>(None)
+        self.iter_all::<ContractsLatestUtxo>(None)
             .map_ok(|(contract_id, _)| contract_id)
             .map(|res| res.map_err(Into::into))
     }
