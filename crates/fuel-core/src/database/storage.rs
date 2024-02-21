@@ -1,41 +1,12 @@
-use crate::{
-    database::{
-        database_description::DatabaseDescription,
-        Database,
-    },
-    fuel_core_graphql_api::storage::{
-        blocks::FuelBlockSecondaryKeyBlockHeights,
-        coins::OwnedCoins,
-        messages::OwnedMessageIds,
-        transactions::{
-            OwnedTransactions,
-            TransactionStatuses,
-        },
-    },
-    state::DataSource,
+use crate::database::{
+    database_description::DatabaseDescription,
+    Database,
 };
 use fuel_core_storage::{
     structured_storage::StructuredStorage,
-    tables::{
-        merkle::{
-            ContractsAssetsMerkleData,
-            ContractsAssetsMerkleMetadata,
-            ContractsStateMerkleData,
-            ContractsStateMerkleMetadata,
-            FuelBlockMerkleData,
-            FuelBlockMerkleMetadata,
-        },
-        Coins,
-        ContractsAssets,
-        ContractsInfo,
-        ContractsLatestUtxo,
-        ContractsRawCode,
-        ContractsState,
-        Messages,
-        ProcessedTransactions,
-        SealedBlockConsensus,
-        SpentMessages,
-        Transactions,
+    transactional::{
+        Modifiable,
+        StorageTransaction,
     },
     Error as StorageError,
     Mappable,
@@ -52,74 +23,29 @@ use fuel_core_storage::{
 };
 use std::borrow::Cow;
 
-/// The trait allows selectively inheriting the implementation of storage traits from `StructuredStorage`
-/// for the `Database`. Not all default implementations of the `StructuredStorage` are suitable
-/// for the `Database`. Sometimes we want to override some of them and add a custom implementation
-/// with additional logic. For example, we want to override the `StorageMutate` trait for the `Messages`
-/// table to also track the owner of messages.
-pub trait UseStructuredImplementation<M>
-where
-    M: Mappable,
-{
-}
-
-/// The trait allows to implementation of `UseStructuredImplementation` for the `StructuredStorage` for multiple tables.
-macro_rules! use_structured_implementation {
-    ($($m:ty),*) => {
-        $(
-            impl<Description> UseStructuredImplementation<$m> for StructuredStorage<DataSource<Description>>
-            where
-                Description: DatabaseDescription,
-            {}
-        )*
-    };
-}
-
-use_structured_implementation!(
-    ContractsRawCode,
-    ContractsAssets,
-    ContractsState,
-    ContractsLatestUtxo,
-    ContractsInfo,
-    SpentMessages,
-    SealedBlockConsensus,
-    Transactions,
-    ProcessedTransactions,
-    ContractsStateMerkleMetadata,
-    ContractsStateMerkleData,
-    ContractsAssetsMerkleMetadata,
-    ContractsAssetsMerkleData,
-    Coins,
-    OwnedCoins,
-    Messages,
-    OwnedMessageIds,
-    OwnedTransactions,
-    TransactionStatuses,
-    FuelBlockSecondaryKeyBlockHeights,
-    FuelBlockMerkleData,
-    FuelBlockMerkleMetadata
-);
-#[cfg(feature = "relayer")]
-use_structured_implementation!(
-    fuel_core_relayer::storage::DaHeightTable,
-    fuel_core_relayer::storage::EventsHistory
-);
-
 impl<Description, M> StorageInspect<M> for Database<Description>
 where
     Description: DatabaseDescription,
     M: Mappable,
-    StructuredStorage<DataSource<Description>>:
-        StorageInspect<M, Error = StorageError> + UseStructuredImplementation<M>,
+    for<'a> StructuredStorage<&'a Self>: StorageInspect<M, Error = StorageError>,
 {
     type Error = StorageError;
 
     fn get(&self, key: &M::Key) -> StorageResult<Option<Cow<M::OwnedValue>>> {
-        self.data.storage::<M>().get(key)
+        let storage = StructuredStorage::new(self);
+        let value = storage.storage::<M>().get(key)?;
+
+        if let Some(cow) = value {
+            Ok(Some(Cow::Owned(cow.into_owned())))
+        } else {
+            Ok(None)
+        }
     }
 
     fn contains_key(&self, key: &M::Key) -> StorageResult<bool> {
-        self.data.storage::<M>().contains_key(key)
+        StructuredStorage::new(self)
+            .storage::<M>()
+            .contains_key(key)
     }
 }
 
@@ -127,31 +53,25 @@ impl<Description, M> StorageMutate<M> for Database<Description>
 where
     Description: DatabaseDescription,
     M: Mappable,
-    StructuredStorage<DataSource<Description>>:
-        StorageMutate<M, Error = StorageError> + UseStructuredImplementation<M>,
+    for<'a> StructuredStorage<&'a Self>: StorageInspect<M, Error = StorageError>,
+    for<'a> StorageTransaction<&'a Self>: StorageMutate<M, Error = StorageError>,
 {
     fn insert(
         &mut self,
         key: &M::Key,
         value: &M::Value,
     ) -> StorageResult<Option<M::OwnedValue>> {
-        self.data.storage_as_mut::<M>().insert(key, value)
+        let mut transaction = StorageTransaction::new_transaction(&*self);
+        let prev = transaction.storage_as_mut::<M>().insert(key, value)?;
+        self.commit_changes(transaction.into_changes())?;
+        Ok(prev)
     }
 
     fn remove(&mut self, key: &M::Key) -> StorageResult<Option<M::OwnedValue>> {
-        self.data.storage_as_mut::<M>().remove(key)
-    }
-}
-
-impl<Description, Key, M> MerkleRootStorage<Key, M> for Database<Description>
-where
-    Description: DatabaseDescription,
-    M: Mappable,
-    StructuredStorage<DataSource<Description>>:
-        MerkleRootStorage<Key, M, Error = StorageError> + UseStructuredImplementation<M>,
-{
-    fn root(&self, key: &Key) -> StorageResult<MerkleRoot> {
-        self.data.storage::<M>().root(key)
+        let mut transaction = StorageTransaction::new_transaction(&*self);
+        let prev = transaction.storage_as_mut::<M>().remove(key)?;
+        self.commit_changes(transaction.into_changes())?;
+        Ok(prev)
     }
 }
 
@@ -159,11 +79,25 @@ impl<M, Description> StorageSize<M> for Database<Description>
 where
     Description: DatabaseDescription,
     M: Mappable,
-    StructuredStorage<DataSource<Description>>:
-        StorageSize<M, Error = StorageError> + UseStructuredImplementation<M>,
+    for<'a> StructuredStorage<&'a Self>: StorageSize<M, Error = StorageError>,
 {
     fn size_of_value(&self, key: &M::Key) -> StorageResult<Option<usize>> {
-        <_ as StorageSize<M>>::size_of_value(&self.data, key)
+        <_ as StorageSize<M>>::size_of_value(&StructuredStorage::new(self), key)
+    }
+}
+
+impl<Description, Key, M> MerkleRootStorage<Key, M> for Database<Description>
+where
+    Description: DatabaseDescription,
+    M: Mappable,
+    for<'a> StructuredStorage<&'a Self>: StorageInspect<M, Error = StorageError>,
+    for<'a> StorageTransaction<&'a Self>: MerkleRootStorage<Key, M, Error = StorageError>,
+{
+    fn root(&self, key: &Key) -> StorageResult<MerkleRoot> {
+        // TODO: Use `StructuredStorage` instead of `StorageTransaction` https://github.com/FuelLabs/fuel-vm/pull/679
+        StorageTransaction::new_transaction(self)
+            .storage::<M>()
+            .root(key)
     }
 }
 
@@ -171,23 +105,22 @@ impl<Description, M> StorageRead<M> for Database<Description>
 where
     Description: DatabaseDescription,
     M: Mappable,
-    StructuredStorage<DataSource<Description>>:
-        StorageRead<M, Error = StorageError> + UseStructuredImplementation<M>,
+    for<'a> StructuredStorage<&'a Self>: StorageRead<M, Error = StorageError>,
 {
     fn read(&self, key: &M::Key, buf: &mut [u8]) -> StorageResult<Option<usize>> {
-        self.data.storage::<M>().read(key, buf)
+        StructuredStorage::new(self).storage::<M>().read(key, buf)
     }
 
     fn read_alloc(&self, key: &M::Key) -> StorageResult<Option<Vec<u8>>> {
-        self.data.storage::<M>().read_alloc(key)
+        StructuredStorage::new(self).storage::<M>().read_alloc(key)
     }
 }
 
 impl<M> StorageBatchMutate<M> for Database
 where
     M: Mappable,
-    StructuredStorage<DataSource>:
-        StorageBatchMutate<M, Error = StorageError> + UseStructuredImplementation<M>,
+    for<'a> StructuredStorage<&'a Self>: StorageInspect<M, Error = StorageError>,
+    for<'a> StorageTransaction<&'a Self>: StorageBatchMutate<M, Error = StorageError>,
 {
     fn init_storage<'a, Iter>(&mut self, set: Iter) -> StorageResult<()>
     where
@@ -195,7 +128,10 @@ where
         M::Key: 'a,
         M::Value: 'a,
     {
-        StorageBatchMutate::init_storage(&mut self.data, set)
+        let mut transaction = StorageTransaction::new_transaction(&*self);
+        StorageBatchMutate::init_storage(&mut transaction, set)?;
+        self.commit_changes(transaction.into_changes())?;
+        Ok(())
     }
 
     fn insert_batch<'a, Iter>(&mut self, set: Iter) -> StorageResult<()>
@@ -204,7 +140,10 @@ where
         M::Key: 'a,
         M::Value: 'a,
     {
-        StorageBatchMutate::insert_batch(&mut self.data, set)
+        let mut transaction = StorageTransaction::new_transaction(&*self);
+        StorageBatchMutate::insert_batch(&mut transaction, set)?;
+        self.commit_changes(transaction.into_changes())?;
+        Ok(())
     }
 
     fn remove_batch<'a, Iter>(&mut self, set: Iter) -> StorageResult<()>
@@ -212,6 +151,9 @@ where
         Iter: 'a + Iterator<Item = &'a M::Key>,
         M::Key: 'a,
     {
-        StorageBatchMutate::remove_batch(&mut self.data, set)
+        let mut transaction = StorageTransaction::new_transaction(&*self);
+        StorageBatchMutate::remove_batch(&mut transaction, set)?;
+        self.commit_changes(transaction.into_changes())?;
+        Ok(())
     }
 }

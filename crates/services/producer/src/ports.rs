@@ -1,6 +1,6 @@
 use async_trait::async_trait;
 use fuel_core_storage::{
-    transactional::StorageTransaction,
+    transactional::Changes,
     Result as StorageResult,
 };
 use fuel_core_types::{
@@ -56,15 +56,12 @@ pub trait Relayer: Send + Sync {
 }
 
 pub trait Executor<TxSource>: Send + Sync {
-    /// The database used by the executor.
-    type Database;
-
     /// Executes the block and returns the result of execution with uncommitted database
     /// transaction.
     fn execute_without_commit(
         &self,
         component: Components<TxSource>,
-    ) -> ExecutorResult<UncommittedResult<StorageTransaction<Self::Database>>>;
+    ) -> ExecutorResult<UncommittedResult<Changes>>;
 }
 
 pub trait DryRunner: Send + Sync {

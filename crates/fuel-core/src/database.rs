@@ -1,12 +1,9 @@
 use crate::{
-    database::{
-        database_description::{
-            off_chain::OffChain,
-            on_chain::OnChain,
-            relayer::Relayer,
-            DatabaseDescription,
-        },
-        transaction::DatabaseTransaction,
+    database::database_description::{
+        off_chain::OffChain,
+        on_chain::OnChain,
+        relayer::Relayer,
+        DatabaseDescription,
     },
     state::{
         in_memory::memory_store::MemoryStore,
@@ -20,7 +17,7 @@ use fuel_core_chain_config::{
     MessageConfig,
 };
 use fuel_core_storage::{
-    blueprint::Blueprint,
+    blueprint::BlueprintInspect,
     codec::{
         Decode,
         Encode,
@@ -28,19 +25,14 @@ use fuel_core_storage::{
     },
     iter::IterDirection,
     kv_store::{
-        BatchOperations,
-        KeyValueStore,
+        KeyValueInspect,
         Value,
-        WriteOperation,
     },
-    structured_storage::{
-        StructuredStorage,
-        TableWithBlueprint,
-    },
+    structured_storage::TableWithBlueprint,
     transactional::{
         AtomicView,
-        StorageTransaction,
-        Transactional,
+        Changes,
+        Modifiable,
     },
     Error as StorageError,
     Mappable,
@@ -51,27 +43,18 @@ use fuel_core_types::{
     fuel_types::BlockHeight,
 };
 use std::{
-    fmt::{
-        self,
-        Debug,
-        Formatter,
-    },
-    marker::Send,
+    fmt::Debug,
     sync::Arc,
 };
 
 pub use fuel_core_database::Error;
 pub type Result<T> = core::result::Result<T, Error>;
 
-type DatabaseResult<T> = Result<T>;
-
 // TODO: Extract `Database` and all belongs into `fuel-core-database`.
 #[cfg(feature = "rocksdb")]
 use crate::state::rocks_db::RocksDb;
 #[cfg(feature = "rocksdb")]
 use std::path::Path;
-#[cfg(feature = "rocksdb")]
-use tempfile::TempDir;
 
 // Storages implementation
 pub mod balances;
@@ -83,9 +66,7 @@ pub mod message;
 pub mod metadata;
 pub mod sealed_block;
 pub mod state;
-pub mod statistic;
 pub mod storage;
-pub mod transaction;
 pub mod transactions;
 
 #[derive(Clone, Debug)]
@@ -93,142 +74,46 @@ pub struct Database<Description = OnChain>
 where
     Description: DatabaseDescription,
 {
-    data: StructuredStorage<DataSource<Description>>,
-    // used for RAII
-    _drop: Arc<DropResources>,
-}
-
-type DropFn = Box<dyn FnOnce() + Send + Sync>;
-#[derive(Default)]
-struct DropResources {
-    // move resources into this closure to have them dropped when db drops
-    drop: Option<DropFn>,
-}
-
-impl fmt::Debug for DropResources {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(f, "DropResources")
-    }
-}
-
-impl<F: 'static + FnOnce() + Send + Sync> From<F> for DropResources {
-    fn from(closure: F) -> Self {
-        Self {
-            drop: Option::Some(Box::new(closure)),
-        }
-    }
-}
-
-impl Drop for DropResources {
-    fn drop(&mut self) {
-        if let Some(drop) = self.drop.take() {
-            (drop)()
-        }
-    }
+    data: DataSource<Description>,
 }
 
 impl<Description> Database<Description>
 where
     Description: DatabaseDescription,
 {
-    pub fn new<D>(data_source: D) -> Self
-    where
-        D: Into<DataSource<Description>>,
-    {
-        Self {
-            data: StructuredStorage::new(data_source.into()),
-            _drop: Default::default(),
-        }
-    }
-
-    pub fn with_drop(mut self, drop: DropFn) -> Self {
-        self._drop = Arc::new(drop.into());
-        self
+    pub fn new(data_source: DataSource<Description>) -> Self {
+        Self { data: data_source }
     }
 
     #[cfg(feature = "rocksdb")]
-    pub fn open(path: &Path, capacity: impl Into<Option<usize>>) -> DatabaseResult<Self> {
+    pub fn open(path: &Path, capacity: impl Into<Option<usize>>) -> Result<Self> {
         use anyhow::Context;
         let db = RocksDb::<Description>::default_open(path, capacity.into()).map_err(Into::<anyhow::Error>::into).context("Failed to open rocksdb, you may need to wipe a pre-existing incompatible db `rm -rf ~/.fuel/db`")?;
 
-        Ok(Database {
-            data: StructuredStorage::new(Arc::new(db).into()),
-            _drop: Default::default(),
-        })
+        Ok(Database { data: Arc::new(db) })
     }
 
     pub fn in_memory() -> Self {
-        Self {
-            data: StructuredStorage::new(Arc::new(MemoryStore::default()).into()),
-            _drop: Default::default(),
-        }
+        let data = Arc::<MemoryStore<Description>>::new(MemoryStore::default());
+        Self { data }
     }
 
     #[cfg(feature = "rocksdb")]
     pub fn rocksdb() -> Self {
-        let tmp_dir = TempDir::new().unwrap();
-        let db = RocksDb::<Description>::default_open(tmp_dir.path(), None).unwrap();
-        Self {
-            data: StructuredStorage::new(Arc::new(db).into()),
-            _drop: Arc::new(
-                {
-                    move || {
-                        // cleanup temp dir
-                        drop(tmp_dir);
-                    }
-                }
-                .into(),
-            ),
-        }
-    }
-
-    pub fn transaction(&self) -> DatabaseTransaction<Description> {
-        self.into()
-    }
-
-    pub fn flush(self) -> DatabaseResult<()> {
-        self.data.as_ref().flush()
+        let data =
+            Arc::<RocksDb<Description>>::new(RocksDb::default_open_temp(None).unwrap());
+        Self { data }
     }
 }
 
-impl<Description> KeyValueStore for DataSource<Description>
+impl<Description> KeyValueInspect for Database<Description>
 where
     Description: DatabaseDescription,
 {
     type Column = Description::Column;
 
-    fn put(&self, key: &[u8], column: Self::Column, value: Value) -> StorageResult<()> {
-        self.as_ref().put(key, column, value)
-    }
-
-    fn replace(
-        &self,
-        key: &[u8],
-        column: Self::Column,
-        value: Value,
-    ) -> StorageResult<Option<Value>> {
-        self.as_ref().replace(key, column, value)
-    }
-
-    fn write(
-        &self,
-        key: &[u8],
-        column: Self::Column,
-        buf: &[u8],
-    ) -> StorageResult<usize> {
-        self.as_ref().write(key, column, buf)
-    }
-
-    fn take(&self, key: &[u8], column: Self::Column) -> StorageResult<Option<Value>> {
-        self.as_ref().take(key, column)
-    }
-
-    fn delete(&self, key: &[u8], column: Self::Column) -> StorageResult<()> {
-        self.as_ref().delete(key, column)
-    }
-
     fn exists(&self, key: &[u8], column: Self::Column) -> StorageResult<bool> {
-        self.as_ref().exists(key, column)
+        self.data.as_ref().exists(key, column)
     }
 
     fn size_of_value(
@@ -236,11 +121,11 @@ where
         key: &[u8],
         column: Self::Column,
     ) -> StorageResult<Option<usize>> {
-        self.as_ref().size_of_value(key, column)
+        self.data.as_ref().size_of_value(key, column)
     }
 
     fn get(&self, key: &[u8], column: Self::Column) -> StorageResult<Option<Value>> {
-        self.as_ref().get(key, column)
+        self.data.as_ref().get(key, column)
     }
 
     fn read(
@@ -249,19 +134,16 @@ where
         column: Self::Column,
         buf: &mut [u8],
     ) -> StorageResult<Option<usize>> {
-        self.as_ref().read(key, column, buf)
+        self.data.as_ref().read(key, column, buf)
     }
 }
 
-impl<Description> BatchOperations for DataSource<Description>
+impl<Description> Modifiable for Database<Description>
 where
     Description: DatabaseDescription,
 {
-    fn batch_write(
-        &self,
-        entries: &mut dyn Iterator<Item = (Vec<u8>, Self::Column, WriteOperation)>,
-    ) -> StorageResult<()> {
-        self.as_ref().batch_write(entries)
+    fn commit_changes(&mut self, changes: Changes) -> StorageResult<()> {
+        self.data.as_ref().commit_changes(changes)
     }
 }
 
@@ -276,7 +158,7 @@ where
     ) -> impl Iterator<Item = StorageResult<(M::OwnedKey, M::OwnedValue)>> + '_
     where
         M: Mappable + TableWithBlueprint<Column = Description::Column>,
-        M::Blueprint: Blueprint<M, DataSource>,
+        M::Blueprint: BlueprintInspect<M, Self>,
     {
         self.iter_all_filtered::<M, [u8; 0]>(None, None, direction)
     }
@@ -287,7 +169,7 @@ where
     ) -> impl Iterator<Item = StorageResult<(M::OwnedKey, M::OwnedValue)>> + '_
     where
         M: Mappable + TableWithBlueprint<Column = Description::Column>,
-        M::Blueprint: Blueprint<M, DataSource>,
+        M::Blueprint: BlueprintInspect<M, Self>,
         P: AsRef<[u8]>,
     {
         self.iter_all_filtered::<M, P>(prefix, None, None)
@@ -300,7 +182,7 @@ where
     ) -> impl Iterator<Item = StorageResult<(M::OwnedKey, M::OwnedValue)>> + '_
     where
         M: Mappable + TableWithBlueprint<Column = Description::Column>,
-        M::Blueprint: Blueprint<M, DataSource>,
+        M::Blueprint: BlueprintInspect<M, Self>,
     {
         self.iter_all_filtered::<M, [u8; 0]>(None, start, direction)
     }
@@ -313,11 +195,11 @@ where
     ) -> impl Iterator<Item = StorageResult<(M::OwnedKey, M::OwnedValue)>> + '_
     where
         M: Mappable + TableWithBlueprint<Column = Description::Column>,
-        M::Blueprint: Blueprint<M, DataSource>,
+        M::Blueprint: BlueprintInspect<M, Self>,
         P: AsRef<[u8]>,
     {
         let encoder = start.map(|start| {
-            <M::Blueprint as Blueprint<M, DataSource>>::KeyCodec::encode(start)
+            <M::Blueprint as BlueprintInspect<M, Self>>::KeyCodec::encode(start)
         });
 
         let start = encoder.as_ref().map(|encoder| encoder.as_bytes());
@@ -333,29 +215,18 @@ where
             .map(|val| {
                 val.and_then(|(key, value)| {
                     let key =
-                        <M::Blueprint as Blueprint<M, DataSource>>::KeyCodec::decode(
+                        <M::Blueprint as BlueprintInspect<M, Self>>::KeyCodec::decode(
                             key.as_slice(),
                         )
                         .map_err(|e| StorageError::Codec(anyhow::anyhow!(e)))?;
                     let value =
-                        <M::Blueprint as Blueprint<M, DataSource>>::ValueCodec::decode(
+                        <M::Blueprint as BlueprintInspect<M, Self>>::ValueCodec::decode(
                             value.as_slice(),
                         )
                         .map_err(|e| StorageError::Codec(anyhow::anyhow!(e)))?;
                     Ok((key, value))
                 })
             })
-    }
-}
-
-impl<Description> Transactional for Database<Description>
-where
-    Description: DatabaseDescription,
-{
-    type Storage = Database<Description>;
-
-    fn transaction(&self) -> StorageTransaction<Database<Description>> {
-        StorageTransaction::new(self.transaction())
     }
 }
 

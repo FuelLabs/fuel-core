@@ -9,10 +9,7 @@ use crate::{
         Config,
     },
 };
-use fuel_core_storage::transactional::{
-    StorageTransaction,
-    Transactional,
-};
+use fuel_core_storage::transactional::StorageTransaction;
 use fuel_core_types::{
     entities::message::Message,
     services::executor::Event,
@@ -22,10 +19,10 @@ use std::borrow::Cow;
 /// Performs the importing of the genesis block from the snapshot.
 pub fn execute_genesis_block(
     config: &Config,
-    original_database: &Database<OffChain>,
-) -> anyhow::Result<StorageTransaction<Database<OffChain>>> {
+    original_database: &mut Database<OffChain>,
+) -> anyhow::Result<()> {
     // start a db transaction for bulk-writing
-    let mut database_transaction = Transactional::transaction(original_database);
+    let mut database_transaction = StorageTransaction::new_transaction(original_database);
 
     if let Some(state_config) = &config.chain_conf.initial_state {
         if let Some(messages) = &state_config.messages {
@@ -34,9 +31,9 @@ pub fn execute_genesis_block(
                 Cow::Owned(Event::MessageImported(message))
             });
 
-            worker_service::Task::process_executor_events(
+            worker_service::Task::<Database<OffChain>>::process_executor_events(
                 messages_events,
-                database_transaction.as_mut(),
+                &mut database_transaction,
             )?;
         }
 
@@ -47,12 +44,13 @@ pub fn execute_genesis_block(
                 Cow::Owned(Event::CoinCreated(coin))
             });
 
-            worker_service::Task::process_executor_events(
+            worker_service::Task::<Database<OffChain>>::process_executor_events(
                 coin_events,
-                database_transaction.as_mut(),
+                &mut database_transaction,
             )?;
         }
     }
+    database_transaction.commit()?;
 
-    Ok(database_transaction)
+    Ok(())
 }

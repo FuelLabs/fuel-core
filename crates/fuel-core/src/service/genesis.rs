@@ -1,5 +1,9 @@
 use crate::{
-    database::Database,
+    database::{
+        balances::BalancesInitializer,
+        state::StateInitializer,
+        Database,
+    },
     service::config::Config,
 };
 use anyhow::anyhow;
@@ -19,8 +23,8 @@ use fuel_core_storage::{
         Messages,
     },
     transactional::{
+        Changes,
         StorageTransaction,
-        Transactional,
     },
     MerkleRoot,
     StorageAsMut,
@@ -68,19 +72,22 @@ pub mod off_chain;
 /// Performs the importing of the genesis block from the snapshot.
 pub fn execute_genesis_block(
     config: &Config,
-    original_database: &Database,
-) -> anyhow::Result<UncommittedImportResult<StorageTransaction<Database>>> {
+    original_database: &mut Database,
+) -> anyhow::Result<UncommittedImportResult<Changes>> {
     // start a db transaction for bulk-writing
-    let mut database_transaction = Transactional::transaction(original_database);
+    let mut database_transaction = StorageTransaction::new_transaction(original_database);
 
-    let database = database_transaction.as_mut();
     // Initialize the chain id and height.
 
     let chain_config_hash = config.chain_conf.root()?.into();
-    let coins_root = init_coin_state(database, &config.chain_conf.initial_state)?.into();
+    let coins_root =
+        init_coin_state(&mut database_transaction, &config.chain_conf.initial_state)?
+            .into();
     let contracts_root =
-        init_contracts(database, &config.chain_conf.initial_state)?.into();
-    let messages_root = init_da_messages(database, &config.chain_conf.initial_state)?;
+        init_contracts(&mut database_transaction, &config.chain_conf.initial_state)?
+            .into();
+    let messages_root =
+        init_da_messages(&mut database_transaction, &config.chain_conf.initial_state)?;
     let messages_root = messages_root.into();
 
     let genesis = Genesis {
@@ -99,7 +106,7 @@ pub fn execute_genesis_block(
 
     let result = UncommittedImportResult::new(
         ImportResult::new_from_local(block, vec![], vec![]),
-        database_transaction,
+        database_transaction.into_changes(),
     );
     Ok(result)
 }
@@ -137,7 +144,7 @@ pub fn create_genesis_block(config: &Config) -> Block {
 #[cfg(feature = "test-helpers")]
 pub async fn execute_and_commit_genesis_block(
     config: &Config,
-    original_database: &Database,
+    original_database: &mut Database,
 ) -> anyhow::Result<()> {
     let result = execute_genesis_block(config, original_database)?;
     let importer = fuel_core_importer::Importer::new(
@@ -151,7 +158,7 @@ pub async fn execute_and_commit_genesis_block(
 }
 
 fn init_coin_state(
-    db: &mut Database,
+    db: &mut StorageTransaction<&mut Database>,
     state: &Option<StateConfig>,
 ) -> anyhow::Result<MerkleRoot> {
     let mut coins_tree = binary::in_memory::MerkleTree::new();
@@ -187,7 +194,7 @@ fn init_coin_state(
 }
 
 fn init_contracts(
-    db: &mut Database,
+    db: &mut StorageTransaction<&mut Database>,
     state: &Option<StateConfig>,
 ) -> anyhow::Result<MerkleRoot> {
     let mut contracts_tree = binary::in_memory::MerkleTree::new();
@@ -279,7 +286,7 @@ fn init_contracts(
 }
 
 fn init_contract_state(
-    db: &mut Database,
+    db: &mut StorageTransaction<&mut Database>,
     contract_id: &ContractId,
     contract: &ContractConfig,
 ) -> anyhow::Result<()> {
@@ -291,7 +298,7 @@ fn init_contract_state(
 }
 
 fn init_da_messages(
-    db: &mut Database,
+    db: &mut StorageTransaction<&mut Database>,
     state: &Option<StateConfig>,
 ) -> anyhow::Result<MerkleRoot> {
     let mut message_tree = binary::in_memory::MerkleTree::new();
@@ -316,7 +323,7 @@ fn init_da_messages(
 }
 
 fn init_contract_balance(
-    db: &mut Database,
+    db: &mut StorageTransaction<&mut Database>,
     contract_id: &ContractId,
     contract: &ContractConfig,
 ) -> anyhow::Result<()> {
@@ -599,16 +606,19 @@ mod tests {
             ..Default::default()
         });
 
-        let db = &Database::default();
+        let mut db = Database::default();
 
-        let db_transaction = execute_genesis_block(&config, db)
+        let changes = execute_genesis_block(&config, &mut db)
             .unwrap()
-            .into_transaction();
+            .into_changes();
+        StorageTransaction::new_transaction(&mut db)
+            .with_changes(changes)
+            .commit()
+            .unwrap();
 
         let expected_msg: Message = msg.into();
 
-        let ret_msg = db_transaction
-            .as_ref()
+        let ret_msg = db
             .storage::<Messages>()
             .get(expected_msg.id())
             .unwrap()

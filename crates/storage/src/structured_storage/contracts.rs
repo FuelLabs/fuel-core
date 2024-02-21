@@ -7,7 +7,7 @@ use crate::{
         raw::Raw,
     },
     column::Column,
-    kv_store::KeyValueStore,
+    kv_store::KeyValueInspect,
     structured_storage::{
         StructuredStorage,
         TableWithBlueprint,
@@ -37,19 +37,18 @@ impl TableWithBlueprint for ContractsRawCode {
 
 impl<S> StorageRead<ContractsRawCode> for StructuredStorage<S>
 where
-    S: KeyValueStore<Column = Column>,
+    S: KeyValueInspect<Column = Column>,
 {
     fn read(
         &self,
         key: &ContractId,
         buf: &mut [u8],
     ) -> Result<Option<usize>, Self::Error> {
-        self.storage
-            .read(key.as_ref(), Column::ContractsRawCode, buf)
+        self.inner.read(key.as_ref(), Column::ContractsRawCode, buf)
     }
 
     fn read_alloc(&self, key: &ContractId) -> Result<Option<Vec<u8>>, Self::Error> {
-        self.storage
+        self.inner
             .get(key.as_ref(), Column::ContractsRawCode)
             .map(|value| value.map(|value| value.deref().clone()))
     }

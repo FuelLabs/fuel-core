@@ -29,7 +29,7 @@ use fuel_core_services::{
     ServiceRunner,
     StateWatcher,
 };
-use fuel_core_storage::transactional::StorageTransaction;
+use fuel_core_storage::transactional::Changes;
 use fuel_core_types::{
     blockchain::{
         block::Block,
@@ -245,11 +245,11 @@ where
     }
 }
 
-impl<D, T, B, I> MainTask<T, B, I>
+impl<T, B, I> MainTask<T, B, I>
 where
     T: TransactionPool,
-    B: BlockProducer<Database = D>,
-    I: BlockImporter<Database = D>,
+    B: BlockProducer,
+    I: BlockImporter,
 {
     // Request the block producer to make a new block, and return it when ready
     async fn signal_produce_block(
@@ -257,7 +257,7 @@ where
         height: BlockHeight,
         block_time: Tai64,
         source: TransactionsSource,
-    ) -> anyhow::Result<UncommittedExecutionResult<StorageTransaction<D>>> {
+    ) -> anyhow::Result<UncommittedExecutionResult<Changes>> {
         self.block_producer
             .produce_and_execute_block(height, block_time, source, self.block_gas_limit)
             .await
@@ -333,7 +333,7 @@ where
                 tx_status,
                 events,
             },
-            db_transaction,
+            changes,
         ) = self
             .signal_produce_block(height, block_time, source)
             .await?
@@ -360,7 +360,7 @@ where
         self.block_importer
             .commit_result(Uncommitted::new(
                 ImportResult::new_from_local(block, tx_status, events),
-                db_transaction,
+                changes,
             ))
             .await?;
 
@@ -455,11 +455,11 @@ where
 }
 
 #[async_trait::async_trait]
-impl<D, T, B, I> RunnableTask for MainTask<T, B, I>
+impl<T, B, I> RunnableTask for MainTask<T, B, I>
 where
     T: TransactionPool,
-    B: BlockProducer<Database = D>,
-    I: BlockImporter<Database = D>,
+    B: BlockProducer,
+    I: BlockImporter,
 {
     async fn run(&mut self, watcher: &mut StateWatcher) -> anyhow::Result<bool> {
         let should_continue;
@@ -530,7 +530,7 @@ where
     }
 }
 
-pub fn new_service<D, T, B, I, P>(
+pub fn new_service<T, B, I, P>(
     last_block: &BlockHeader,
     config: Config,
     txpool: T,
@@ -540,8 +540,8 @@ pub fn new_service<D, T, B, I, P>(
 ) -> Service<T, B, I>
 where
     T: TransactionPool + 'static,
-    B: BlockProducer<Database = D> + 'static,
-    I: BlockImporter<Database = D> + 'static,
+    B: BlockProducer + 'static,
+    I: BlockImporter + 'static,
     P: P2pPort,
 {
     Service::new(MainTask::new(

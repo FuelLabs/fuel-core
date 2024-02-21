@@ -253,20 +253,19 @@ impl RunnableService for Task {
         _: &StateWatcher,
         _: Self::TaskParams,
     ) -> anyhow::Result<Self::Task> {
-        let on_view = self.shared.database.on_chain().latest_view();
-        let off_view = self.shared.database.off_chain().latest_view();
+        let mut on_view = self.shared.database.on_chain().latest_view();
+        let mut off_view = self.shared.database.off_chain().latest_view();
         // check if chain is initialized
         if let Err(err) = on_view.get_genesis() {
             if err.is_not_found() {
-                let result = execute_genesis_block(&self.shared.config, &on_view)?;
+                let result = execute_genesis_block(&self.shared.config, &mut on_view)?;
 
                 self.shared.block_importer.commit_result(result).await?;
 
-                let off_chain_db_transaction = genesis::off_chain::execute_genesis_block(
+                genesis::off_chain::execute_genesis_block(
                     &self.shared.config,
-                    &off_view,
+                    &mut off_view,
                 )?;
-                off_chain_db_transaction.commit()?;
             }
         }
 
@@ -310,7 +309,6 @@ impl RunnableTask for Task {
                 );
             }
         }
-        self.shared.database.flush()?;
         Ok(())
     }
 }

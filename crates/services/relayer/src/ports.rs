@@ -32,3 +32,21 @@ pub trait RelayerDb: Send + Sync {
     /// Panics if height is not set as of initialization of database.
     fn get_finalized_da_height(&self) -> StorageResult<DaBlockHeight>;
 }
+
+/// The trait that should be implemented by the database transaction returned by the database.
+#[cfg_attr(test, mockall::automock)]
+pub trait DatabaseTransaction {
+    /// Commits the changes to the underlying storage.
+    fn commit(self) -> StorageResult<()>;
+}
+
+/// The trait indicates that the type supports storage transactions.
+pub trait Transactional {
+    /// The type of the storage transaction;
+    type Transaction<'a>: DatabaseTransaction
+    where
+        Self: 'a;
+
+    /// Returns the storage transaction.
+    fn transaction(&mut self) -> Self::Transaction<'_>;
+}

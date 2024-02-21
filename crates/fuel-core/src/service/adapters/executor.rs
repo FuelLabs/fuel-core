@@ -12,10 +12,7 @@ use fuel_core_executor::{
     executor::ExecutionBlockWithSource,
     ports::MaybeCheckedTransaction,
 };
-use fuel_core_storage::{
-    transactional::StorageTransaction,
-    Error as StorageError,
-};
+use fuel_core_storage::transactional::Changes;
 use fuel_core_types::{
     blockchain::primitives::DaBlockHeight,
     fuel_tx,
@@ -44,11 +41,11 @@ impl ExecutorAdapter {
     pub(crate) fn _execute_without_commit<TxSource>(
         &self,
         block: ExecutionBlockWithSource<TxSource>,
-    ) -> ExecutorResult<UncommittedResult<StorageTransaction<Database>>>
+    ) -> ExecutorResult<UncommittedResult<Changes>>
     where
         TxSource: fuel_core_executor::ports::TransactionsSource,
     {
-        self.executor.execute_without_commit(block)
+        self.executor.execute_without_commit_with_source(block)
     }
 
     pub(crate) fn _dry_run(
@@ -59,13 +56,6 @@ impl ExecutorAdapter {
         self.executor.dry_run(block, utxo_validation)
     }
 }
-
-/// Implemented to satisfy: `GenesisCommitment for ContractRef<&'a mut Database>`
-impl fuel_core_executor::refs::ContractStorageTrait for Database {
-    type InnerError = StorageError;
-}
-
-impl fuel_core_executor::ports::ExecutorDatabaseTrait<Database> for Database {}
 
 impl fuel_core_executor::ports::RelayerPort for Database<Relayer> {
     fn enabled(&self) -> bool {

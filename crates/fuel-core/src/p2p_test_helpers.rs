@@ -397,8 +397,8 @@ pub async fn make_node(node_config: Config, test_txs: Vec<Transaction>) -> Node 
 
 async fn extract_p2p_config(node_config: &Config) -> fuel_core_p2p::config::Config {
     let bootstrap_config = node_config.p2p.clone();
-    let db = Database::in_memory();
-    crate::service::genesis::execute_and_commit_genesis_block(node_config, &db)
+    let mut db = Database::in_memory();
+    crate::service::genesis::execute_and_commit_genesis_block(node_config, &mut db)
         .await
         .unwrap();
     bootstrap_config

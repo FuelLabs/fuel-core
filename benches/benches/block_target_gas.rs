@@ -17,6 +17,10 @@ use ed25519_dalek::Signer;
 use ethnum::U256;
 use fuel_core::{
     combined_database::CombinedDatabase,
+    database::{
+        balances::BalancesInitializer,
+        state::StateInitializer,
+    },
     service::{
         config::Trigger,
         Config,

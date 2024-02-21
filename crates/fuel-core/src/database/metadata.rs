@@ -1,23 +1,16 @@
-use crate::{
-    database::{
-        database_description::{
-            DatabaseDescription,
-            DatabaseMetadata,
-        },
-        storage::UseStructuredImplementation,
-        Database,
-        Error as DatabaseError,
+use crate::database::{
+    database_description::{
+        DatabaseDescription,
+        DatabaseMetadata,
     },
-    state::DataSource,
+    Database,
+    Error as DatabaseError,
 };
 use fuel_core_storage::{
     blueprint::plain::Plain,
     codec::postcard::Postcard,
     not_found,
-    structured_storage::{
-        StructuredStorage,
-        TableWithBlueprint,
-    },
+    structured_storage::TableWithBlueprint,
     Error as StorageError,
     Mappable,
     Result as StorageResult,
@@ -48,13 +41,6 @@ where
     fn column() -> Self::Column {
         Description::metadata_column()
     }
-}
-
-impl<Description> UseStructuredImplementation<MetadataTable<Description>>
-    for StructuredStorage<DataSource<Description>>
-where
-    Description: DatabaseDescription,
-{
 }
 
 impl<Description> Database<Description>

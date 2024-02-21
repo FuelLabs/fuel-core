@@ -41,10 +41,12 @@ where
             for _ in 0..iters {
                 let original_db = vm.as_mut().database_mut().clone();
                 // Simulates the block production/validation with three levels of database transaction.
-                let block_database_tx = original_db.transaction().as_ref().clone();
-                let tx_database_tx = block_database_tx.transaction().as_ref().clone();
-                let vm_tx_database_tx = tx_database_tx.transaction().as_ref().clone();
-                *vm.as_mut().database_mut() = vm_tx_database_tx;
+                // let block_database_tx = StorageTransaction::new_transaction(&original_db);
+                // let relayer_database_tx = StorageTransaction::new_transaction(&block_database_tx);
+                // let thread_database_tx = StorageTransaction::new_transaction(&relayer_database_tx);
+                // let tx_database_tx = StorageTransaction::new_transaction(&thread_database_tx);
+                // let vm_tx_database_tx = StorageTransaction::new_transaction(&tx_database_tx);
+                // *vm.as_mut().database_mut() = vm_tx_database_tx;
 
                 let start = black_box(clock.raw());
                 match instruction {

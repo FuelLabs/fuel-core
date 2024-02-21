@@ -1,4 +1,3 @@
-use crate::database::Database;
 use fuel_core_storage::{
     tables::ContractsState,
     ContractsStateKey,
@@ -11,23 +10,36 @@ use fuel_core_types::fuel_types::{
 };
 use itertools::Itertools;
 
-impl Database {
+pub trait StateInitializer {
     /// Initialize the state of the contract from all leaves.
     /// This method is more performant than inserting state one by one.
-    pub fn init_contract_state<S>(
+    fn init_contract_state<S>(
         &mut self,
         contract_id: &ContractId,
         slots: S,
     ) -> Result<(), StorageError>
     where
-        S: Iterator<Item = (Bytes32, Bytes32)>,
+        S: Iterator<Item = (Bytes32, Bytes32)>;
+}
+
+impl<S> StateInitializer for S
+where
+    S: StorageBatchMutate<ContractsState>,
+{
+    fn init_contract_state<I>(
+        &mut self,
+        contract_id: &ContractId,
+        slots: I,
+    ) -> Result<(), StorageError>
+    where
+        I: Iterator<Item = (Bytes32, Bytes32)>,
     {
         let slots = slots
             .map(|(key, value)| (ContractsStateKey::new(contract_id, &key), value))
             .collect_vec();
         #[allow(clippy::map_identity)]
         <_ as StorageBatchMutate<ContractsState>>::init_storage(
-            &mut self.data,
+            self,
             &mut slots.iter().map(|(key, value)| (key, value)),
         )
     }
@@ -36,8 +48,14 @@ impl Database {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::database::database_description::on_chain::OnChain;
-    use fuel_core_storage::StorageAsMut;
+    use crate::database::{
+        database_description::on_chain::OnChain,
+        Database,
+    };
+    use fuel_core_storage::{
+        transactional::StorageTransaction,
+        StorageAsMut,
+    };
     use fuel_core_types::fuel_types::Bytes32;
     use rand::Rng;
 
@@ -62,7 +80,8 @@ mod tests {
         let data = core::iter::from_fn(gen).take(5_000).collect::<Vec<_>>();
 
         let contract_id = ContractId::from([1u8; 32]);
-        let init_database = &mut Database::default();
+        let mut init_database =
+            StorageTransaction::new_transaction(Database::<OnChain>::default());
 
         init_database
             .init_contract_state(&contract_id, data.clone().into_iter())
@@ -72,7 +91,8 @@ mod tests {
             .root(&contract_id)
             .expect("Should get root");
 
-        let seq_database = &mut Database::<OnChain>::default();
+        let mut seq_database =
+            StorageTransaction::new_transaction(Database::<OnChain>::default());
         for (key, value) in data.iter() {
             seq_database
                 .storage::<ContractsState>()

@@ -3,7 +3,10 @@ use clap::{
     Parser,
     Subcommand,
 };
-use fuel_core::types::fuel_types::ContractId;
+use fuel_core::{
+    database::database_description::on_chain::OnChain,
+    types::fuel_types::ContractId,
+};
 use std::path::PathBuf;
 
 /// Print a snapshot of blockchain state to stdout.
@@ -60,12 +63,13 @@ pub async fn exec(command: Command) -> anyhow::Result<()> {
         database::Database,
     };
     let path = command.database_path;
-    let data_source = fuel_core::state::rocks_db::RocksDb::default_open(&path, None)
-        .map_err(Into::<anyhow::Error>::into)
-        .context(format!(
-            "failed to open database at path {}",
-            path.display()
-        ))?;
+    let data_source =
+        fuel_core::state::rocks_db::RocksDb::<OnChain>::default_open(&path, None)
+            .map_err(Into::<anyhow::Error>::into)
+            .context(format!(
+                "failed to open database at path {}",
+                path.display()
+            ))?;
     let db = Database::new(std::sync::Arc::new(data_source));
 
     match command.subcommand {

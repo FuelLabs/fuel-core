@@ -1,31 +1,68 @@
 use crate::{
-    ports::RelayerDb,
+    ports::{
+        DatabaseTransaction,
+        MockDatabaseTransaction,
+        RelayerDb,
+        Transactional,
+    },
     storage::{
         DaHeightTable,
         EventsHistory,
     },
 };
-use fuel_core_storage::test_helpers::MockStorage;
+use fuel_core_storage::test_helpers::{
+    MockBasic,
+    MockStorage,
+};
 use fuel_core_types::entities::message::Message;
 use std::borrow::Cow;
 use test_case::test_case;
 
+type DBTx = MockStorage<MockBasic, MockDatabaseTransaction>;
+type ReturnDB = Box<dyn Fn() -> DBTx + Send + Sync>;
+
+impl DatabaseTransaction for DBTx {
+    fn commit(self) -> fuel_core_storage::Result<()> {
+        self.data.commit()
+    }
+}
+
+type MockDatabase = MockStorage<MockBasic, ReturnDB>;
+
+impl Transactional for MockDatabase {
+    type Transaction<'a> = DBTx;
+
+    fn transaction(&mut self) -> Self::Transaction<'_> {
+        (self.data)()
+    }
+}
+
 #[test]
 fn test_insert_events() {
     let same_height = 12;
-    let mut db = MockStorage::default();
-    db.expect_insert::<EventsHistory>()
-        .times(1)
-        .returning(|_, _| Ok(None));
-    db.expect_insert::<DaHeightTable>()
-        .times(1)
-        .withf(move |_, v| **v == same_height)
-        .returning(|_, _| Ok(None));
-    db.expect_commit().returning(|| Ok(()));
-    db.expect_get::<DaHeightTable>()
-        .once()
-        .returning(|_| Ok(Some(std::borrow::Cow::Owned(9u64.into()))));
-    let mut db = db.into_transactional();
+    let return_db_tx = move || {
+        let mut db = DBTx::default();
+        db.storage
+            .expect_insert::<EventsHistory>()
+            .times(1)
+            .returning(|_, _| Ok(None));
+        db.storage
+            .expect_insert::<DaHeightTable>()
+            .times(1)
+            .withf(move |_, v| **v == same_height)
+            .returning(|_, _| Ok(None));
+        db.data.expect_commit().returning(|| Ok(()));
+        db.storage
+            .expect_get::<DaHeightTable>()
+            .once()
+            .returning(|_| Ok(Some(std::borrow::Cow::Owned(9u64.into()))));
+        db
+    };
+
+    let mut db = MockDatabase {
+        data: Box::new(return_db_tx),
+        storage: Default::default(),
+    };
 
     let mut m = Message::default();
     m.set_amount(10);
@@ -52,20 +89,29 @@ fn insert_always_raises_da_height_monotonically() {
         .map(Into::into)
         .collect();
 
-    let mut db = MockStorage::default();
-    db.expect_insert::<EventsHistory>()
-        .returning(|_, _| Ok(None));
-    db.expect_insert::<DaHeightTable>()
-        .once()
-        .withf(move |_, v| *v == same_height)
-        .returning(|_, _| Ok(None));
-    db.expect_commit().returning(|| Ok(()));
-    db.expect_get::<DaHeightTable>()
-        .once()
-        .returning(|_| Ok(None));
+    let return_db_tx = move || {
+        let mut db = DBTx::default();
+        db.storage
+            .expect_insert::<EventsHistory>()
+            .returning(|_, _| Ok(None));
+        db.storage
+            .expect_insert::<DaHeightTable>()
+            .once()
+            .withf(move |_, v| *v == same_height)
+            .returning(|_, _| Ok(None));
+        db.data.expect_commit().returning(|| Ok(()));
+        db.storage
+            .expect_get::<DaHeightTable>()
+            .once()
+            .returning(|_| Ok(None));
+        db
+    };
 
     // When
-    let mut db = db.into_transactional();
+    let mut db = MockDatabase {
+        data: Box::new(return_db_tx),
+        storage: Default::default(),
+    };
     let result = db.insert_events(&same_height, &events);
 
     // Then
@@ -85,10 +131,12 @@ fn insert_fails_for_messages_with_different_height() {
         })
         .collect();
 
-    let db = MockStorage::default();
+    let mut db = MockDatabase {
+        data: Box::new(DBTx::default),
+        storage: Default::default(),
+    };
 
     // When
-    let mut db = db.into_transactional();
     let result = db.insert_events(&last_height.into(), &events);
 
     // Then
@@ -111,10 +159,11 @@ fn insert_fails_for_messages_same_height_but_on_different_height() {
         })
         .collect();
 
-    let db = MockStorage::default();
-
     // When
-    let mut db = db.into_transactional();
+    let mut db = MockDatabase {
+        data: Box::new(DBTx::default),
+        storage: Default::default(),
+    };
     let next_height = last_height + 1;
     let result = db.insert_events(&next_height.into(), &events);
 
@@ -136,20 +185,30 @@ fn set_raises_da_height_monotonically(
     inserts: impl Into<Option<u64>>,
     new_height: u64,
 ) {
-    let mut db = MockStorage::default();
-    if let Some(h) = inserts.into() {
-        db.expect_insert::<DaHeightTable>()
+    let inserts = inserts.into();
+    let get = get.into();
+    let return_db_tx = move || {
+        let mut db = DBTx::default();
+        if let Some(h) = inserts {
+            db.storage
+                .expect_insert::<DaHeightTable>()
+                .once()
+                .withf(move |_, v| **v == h)
+                .returning(|_, _| Ok(None));
+        }
+        let get = get.map(|g| Cow::Owned(g.into()));
+        db.storage
+            .expect_get::<DaHeightTable>()
             .once()
-            .withf(move |_, v| **v == h)
-            .returning(|_, _| Ok(None));
-    }
-    let get = get.into().map(|g| Cow::Owned(g.into()));
-    db.expect_get::<DaHeightTable>()
-        .once()
-        .returning(move |_| Ok(get.clone()));
-    db.expect_commit().returning(|| Ok(()));
+            .returning(move |_| Ok(get.clone()));
+        db.data.expect_commit().returning(|| Ok(()));
+        db
+    };
 
-    let mut db = db.into_transactional();
+    let mut db = MockDatabase {
+        data: Box::new(return_db_tx),
+        storage: Default::default(),
+    };
     db.set_finalized_da_height_to_at_least(&new_height.into())
         .unwrap();
 }

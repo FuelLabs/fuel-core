@@ -1,24 +1,15 @@
-use crate::{
-    database::{
-        database_description::{
-            off_chain::OffChain,
-            DatabaseDescription,
-            DatabaseMetadata,
+use crate::fuel_core_graphql_api::{
+    ports,
+    ports::worker::OffChainDatabase,
+    storage::{
+        blocks::FuelBlockSecondaryKeyBlockHeights,
+        coins::{
+            owner_coin_id_key,
+            OwnedCoins,
         },
-        metadata::MetadataTable,
-    },
-    fuel_core_graphql_api::{
-        ports,
-        storage::{
-            blocks::FuelBlockSecondaryKeyBlockHeights,
-            coins::{
-                owner_coin_id_key,
-                OwnedCoins,
-            },
-            messages::{
-                OwnedMessageIds,
-                OwnedMessageKey,
-            },
+        messages::{
+            OwnedMessageIds,
+            OwnedMessageKey,
         },
     },
 };
@@ -85,47 +76,31 @@ pub struct Task<D> {
 
 impl<D> Task<D>
 where
-    D: ports::worker::OffChainDatabase,
+    D: ports::worker::Transactional,
 {
     fn process_block(&mut self, result: SharedImportResult) -> anyhow::Result<()> {
         let block = &result.sealed_block.entity;
         let mut transaction = self.database.transaction();
         // save the status for every transaction using the finalized block id
-        self.persist_transaction_status(&result, transaction.as_mut())?;
+        Self::persist_transaction_status(&result, &mut transaction)?;
 
         // save the associated owner for each transaction in the block
-        self.index_tx_owners_for_block(block, transaction.as_mut())?;
+        Self::index_tx_owners_for_block(block, &mut transaction)?;
 
         let height = block.header().height();
         let block_id = block.id();
         transaction
-            .as_mut()
             .storage::<FuelBlockSecondaryKeyBlockHeights>()
             .insert(&block_id, height)?;
 
         let total_tx_count = transaction
-            .as_mut()
             .increase_tx_count(block.transactions().len() as u64)
             .unwrap_or_default();
 
         Self::process_executor_events(
             result.events.iter().map(Cow::Borrowed),
-            transaction.as_mut(),
+            &mut transaction,
         )?;
-
-        // TODO: Temporary solution to store the block height in the database manually here.
-        //  Later it will be controlled by the `commit_changes` function on the `Database` side.
-        //  https://github.com/FuelLabs/fuel-core/issues/1589
-        transaction
-            .as_mut()
-            .storage::<MetadataTable<OffChain>>()
-            .insert(
-                &(),
-                &DatabaseMetadata::V1 {
-                    version: OffChain::version(),
-                    height: *block.header().height(),
-                },
-            )?;
 
         transaction.commit()?;
 
@@ -136,12 +111,13 @@ where
     }
 
     /// Process the executor events and update the indexes for the messages and coins.
-    pub fn process_executor_events<'a, Iter>(
+    pub fn process_executor_events<'a, Iter, T>(
         events: Iter,
-        block_st_transaction: &mut D,
+        block_st_transaction: &mut T,
     ) -> anyhow::Result<()>
     where
         Iter: Iterator<Item = Cow<'a, Event>>,
+        T: OffChainDatabase,
     {
         for event in events {
             match event.deref() {
@@ -179,11 +155,13 @@ where
     }
 
     /// Associate all transactions within a block to their respective UTXO owners
-    fn index_tx_owners_for_block(
-        &self,
+    fn index_tx_owners_for_block<T>(
         block: &Block,
-        block_st_transaction: &mut D,
-    ) -> anyhow::Result<()> {
+        block_st_transaction: &mut T,
+    ) -> anyhow::Result<()>
+    where
+        T: OffChainDatabase,
+    {
         for (tx_idx, tx) in block.transactions().iter().enumerate() {
             let block_height = *block.header().height();
             let inputs;
@@ -205,7 +183,7 @@ where
                 }
                 Transaction::Mint(_) => continue,
             }
-            self.persist_owners_index(
+            Self::persist_owners_index(
                 block_height,
                 inputs,
                 outputs,
@@ -218,15 +196,17 @@ where
     }
 
     /// Index the tx id by owner for all of the inputs and outputs
-    fn persist_owners_index(
-        &self,
+    fn persist_owners_index<T>(
         block_height: BlockHeight,
         inputs: &[Input],
         outputs: &[Output],
         tx_id: &Bytes32,
         tx_idx: u16,
-        db: &mut D,
-    ) -> StorageResult<()> {
+        db: &mut T,
+    ) -> StorageResult<()>
+    where
+        T: OffChainDatabase,
+    {
         let mut owners = vec![];
         for input in inputs {
             if let Input::CoinSigned(CoinSigned { owner, .. })
@@ -258,11 +238,13 @@ where
         Ok(())
     }
 
-    fn persist_transaction_status(
-        &self,
+    fn persist_transaction_status<T>(
         import_result: &ImportResult,
-        db: &mut D,
-    ) -> StorageResult<()> {
+        db: &mut T,
+    ) -> StorageResult<()>
+    where
+        T: OffChainDatabase,
+    {
         for TransactionExecutionStatus { id, result } in import_result.tx_status.iter() {
             let status = from_executor_to_status(
                 &import_result.sealed_block.entity,
@@ -284,7 +266,7 @@ where
 #[async_trait::async_trait]
 impl<D> RunnableService for Task<D>
 where
-    D: ports::worker::OffChainDatabase,
+    D: ports::worker::Transactional,
 {
     const NAME: &'static str = "GraphQL_Off_Chain_Worker";
     type SharedData = EmptyShared;
@@ -300,7 +282,9 @@ where
         _: &StateWatcher,
         _: Self::TaskParams,
     ) -> anyhow::Result<Self::Task> {
-        let total_tx_count = self.database.increase_tx_count(0).unwrap_or_default();
+        let mut db_tx = self.database.transaction();
+        let total_tx_count = db_tx.increase_tx_count(0).unwrap_or_default();
+        db_tx.commit()?;
         graphql_metrics().total_txs_count.set(total_tx_count as i64);
 
         // TODO: It is possible that the node was shut down before we processed all imported blocks.
@@ -317,7 +301,7 @@ where
 #[async_trait::async_trait]
 impl<D> RunnableTask for Task<D>
 where
-    D: ports::worker::OffChainDatabase,
+    D: ports::worker::Transactional,
 {
     async fn run(&mut self, watcher: &mut StateWatcher) -> anyhow::Result<bool> {
         let should_continue;
@@ -359,7 +343,7 @@ where
 pub fn new_service<I, D>(block_importer: I, database: D) -> ServiceRunner<Task<D>>
 where
     I: ports::worker::BlockImporter,
-    D: ports::worker::OffChainDatabase,
+    D: ports::worker::Transactional,
 {
     let block_importer = block_importer.block_events();
     ServiceRunner::new(Task {

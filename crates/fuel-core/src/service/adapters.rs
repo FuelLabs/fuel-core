@@ -27,6 +27,8 @@ pub mod graphql_api;
 #[cfg(feature = "p2p")]
 pub mod p2p;
 pub mod producer;
+#[cfg(feature = "relayer")]
+pub mod relayer;
 #[cfg(feature = "p2p")]
 pub mod sync;
 pub mod txpool;

@@ -127,10 +127,7 @@ mod tests {
         Rng,
         SeedableRng,
     };
-    use std::{
-        ops::DerefMut,
-        sync::Arc,
-    };
+    use std::sync::Arc;
 
     #[derive(Clone, Debug)]
     struct DisabledRelayer;
@@ -295,8 +292,8 @@ mod tests {
     // Happy path test case that a produced block will also validate
     #[test]
     fn executor_validates_correctly_produced_block() {
-        let producer = create_executor(Default::default(), Default::default());
-        let verifier = create_executor(Default::default(), Default::default());
+        let mut producer = create_executor(Default::default(), Default::default());
+        let mut verifier = create_executor(Default::default(), Default::default());
         let block = test_block(1u32.into(), 0u64.into(), 10);
 
         let ExecutionResult {
@@ -319,7 +316,7 @@ mod tests {
     // Ensure transaction commitment != default after execution
     #[test]
     fn executor_commits_transactions_to_block() {
-        let producer = create_executor(Default::default(), Default::default());
+        let mut producer = create_executor(Default::default(), Default::default());
         let block = test_block(1u32.into(), 0u64.into(), 10);
         let start_block = block.clone();
 
@@ -411,7 +408,7 @@ mod tests {
                 .insert(&recipient, &[])
                 .expect("Should insert coinbase contract");
 
-            let producer = create_executor(database.clone(), config);
+            let mut producer = create_executor(database.clone(), config);
 
             let expected_fee_amount_1 = TransactionFee::checked_from_tx(
                 producer.config.consensus_parameters.gas_costs(),
@@ -578,7 +575,7 @@ mod tests {
             let producer = create_executor(Default::default(), config);
 
             let result = producer
-                .execute_without_commit(ExecutionTypes::DryRun(Components {
+                .execute_without_commit_with_source(ExecutionTypes::DryRun(Components {
                     header_to_produce: Default::default(),
                     transactions_source: OnceTransactionsSource::new(vec![script.into()]),
                     gas_limit: u64::MAX,
@@ -624,7 +621,7 @@ mod tests {
                 .insert(&recipient, &[])
                 .expect("Should insert coinbase contract");
 
-            let producer = create_executor(database.clone(), config);
+            let mut producer = create_executor(database.clone(), config);
 
             let mut block = Block::default();
             *block.transactions_mut() = vec![script.into()];
@@ -642,7 +639,7 @@ mod tests {
             assert!(skipped_transactions.is_empty());
             let produced_txs = produced_block.transactions().to_vec();
 
-            let validator = create_executor(
+            let mut validator = create_executor(
                 Default::default(),
                 // Use the same config as block producer
                 producer.config.as_ref().clone(),
@@ -711,7 +708,7 @@ mod tests {
                     coinbase_recipient: config_coinbase,
                     ..Default::default()
                 };
-                let producer = create_executor(Default::default(), config);
+                let mut producer = create_executor(Default::default(), config);
 
                 let mut block = Block::default();
                 *block.transactions_mut() = vec![script.clone().into()];
@@ -763,7 +760,7 @@ mod tests {
             *block.transactions_mut() = vec![mint.into()];
             block.header_mut().recalculate_metadata();
 
-            let validator = create_executor(
+            let mut validator = create_executor(
                 Default::default(),
                 Config {
                     utxo_validation_default: false,
@@ -794,7 +791,7 @@ mod tests {
             *block.transactions_mut() = vec![mint.into(), tx];
             block.header_mut().recalculate_metadata();
 
-            let validator = create_executor(Default::default(), Default::default());
+            let mut validator = create_executor(Default::default(), Default::default());
             let validation_err = validator
                 .execute_and_commit(ExecutionBlock::Validation(block), Default::default())
                 .expect_err("Expected error because coinbase if invalid");
@@ -808,7 +805,7 @@ mod tests {
         fn invalidate_block_missed_coinbase() {
             let block = Block::default();
 
-            let validator = create_executor(Default::default(), Default::default());
+            let mut validator = create_executor(Default::default(), Default::default());
             let validation_err = validator
                 .execute_and_commit(ExecutionBlock::Validation(block), Default::default())
                 .expect_err("Expected error because coinbase is missing");
@@ -829,7 +826,7 @@ mod tests {
             *block.transactions_mut() = vec![mint.into()];
             block.header_mut().recalculate_metadata();
 
-            let validator = create_executor(Default::default(), Default::default());
+            let mut validator = create_executor(Default::default(), Default::default());
             let validation_err = validator
                 .execute_and_commit(ExecutionBlock::Validation(block), Default::default())
                 .expect_err("Expected error because coinbase if invalid");
@@ -858,7 +855,7 @@ mod tests {
 
             let mut config = Config::default();
             config.consensus_parameters.base_asset_id = [1u8; 32].into();
-            let validator = create_executor(Default::default(), config);
+            let mut validator = create_executor(Default::default(), config);
             let validation_err = validator
                 .execute_and_commit(ExecutionBlock::Validation(block), Default::default())
                 .expect_err("Expected error because coinbase if invalid");
@@ -885,7 +882,7 @@ mod tests {
             *block.transactions_mut() = vec![mint.into()];
             block.header_mut().recalculate_metadata();
 
-            let validator = create_executor(Default::default(), Default::default());
+            let mut validator = create_executor(Default::default(), Default::default());
             let validation_err = validator
                 .execute_and_commit(ExecutionBlock::Validation(block), Default::default())
                 .expect_err("Expected error because coinbase if invalid");
@@ -1147,9 +1144,9 @@ mod tests {
 
         let tx_id = tx.id(&ChainId::default());
 
-        let producer = create_executor(Default::default(), Default::default());
+        let mut producer = create_executor(Default::default(), Default::default());
 
-        let verifier = create_executor(Default::default(), Default::default());
+        let mut verifier = create_executor(Default::default(), Default::default());
 
         let mut block = Block::default();
         *block.transactions_mut() = vec![tx];
@@ -1190,9 +1187,9 @@ mod tests {
             .clone()
             .into();
 
-        let producer = create_executor(Default::default(), Default::default());
+        let mut producer = create_executor(Default::default(), Default::default());
 
-        let verifier = create_executor(Default::default(), Default::default());
+        let mut verifier = create_executor(Default::default(), Default::default());
 
         let mut block = Block::default();
         *block.transactions_mut() = vec![tx];
@@ -1219,7 +1216,7 @@ mod tests {
     fn executor_invalidates_missing_coin_input() {
         let tx: Transaction = Transaction::default();
 
-        let executor = create_executor(
+        let mut executor = create_executor(
             Database::default(),
             Config {
                 utxo_validation_default: true,
@@ -1294,7 +1291,7 @@ mod tests {
         db.storage::<Coins>()
             .insert(&second_input.utxo_id().unwrap().clone(), &second_coin)
             .unwrap();
-        let executor = create_executor(
+        let mut executor = create_executor(
             db.clone(),
             Config {
                 utxo_validation_default: true,
@@ -1370,7 +1367,7 @@ mod tests {
         db.storage::<Coins>()
             .insert(&input.utxo_id().unwrap().clone(), &coin)
             .unwrap();
-        let executor = create_executor(
+        let mut executor = create_executor(
             db.clone(),
             Config {
                 utxo_validation_default: true,
@@ -1426,7 +1423,7 @@ mod tests {
         db.storage::<Coins>()
             .insert(&input.utxo_id().unwrap().clone(), &coin)
             .unwrap();
-        let executor = create_executor(
+        let mut executor = create_executor(
             db.clone(),
             Config {
                 utxo_validation_default: true,
@@ -1477,7 +1474,7 @@ mod tests {
             .finalize_as_transaction();
         let (tx2, tx3) = setup_executable_script();
 
-        let executor = create_executor(Default::default(), Default::default());
+        let mut executor = create_executor(Default::default(), Default::default());
 
         let block = PartialFuelBlock {
             header: Default::default(),
@@ -1526,7 +1523,7 @@ mod tests {
             .into();
 
         let mut db = &Database::default();
-        let executor = create_executor(db.clone(), Default::default());
+        let mut executor = create_executor(db.clone(), Default::default());
 
         let block = PartialFuelBlock {
             header: Default::default(),
@@ -1571,7 +1568,7 @@ mod tests {
             .into();
         let db = &mut Database::default();
 
-        let executor = create_executor(
+        let mut executor = create_executor(
             db.clone(),
             Config {
                 utxo_validation_default: false,
@@ -1628,7 +1625,7 @@ mod tests {
             .into();
         let db = &mut Database::default();
 
-        let executor = create_executor(
+        let mut executor = create_executor(
             db.clone(),
             Config {
                 utxo_validation_default: false,
@@ -1729,9 +1726,9 @@ mod tests {
             .build()
             .transaction()
             .clone();
-        let db = &mut Database::default();
+        let db = Database::default();
 
-        let executor = create_executor(
+        let mut executor = create_executor(
             db.clone(),
             Config {
                 utxo_validation_default: false,
@@ -1835,9 +1832,9 @@ mod tests {
             .build()
             .transaction()
             .clone();
-        let db = &mut Database::default();
+        let db = Database::default();
 
-        let executor = create_executor(
+        let mut executor = create_executor(
             db.clone(),
             Config {
                 utxo_validation_default: false,
@@ -1925,7 +1922,7 @@ mod tests {
         }
         let db = &mut Database::default();
 
-        let executor = create_executor(db.clone(), Default::default());
+        let mut executor = create_executor(db.clone(), Default::default());
 
         let block = PartialFuelBlock {
             header: PartialBlockHeader {
@@ -1994,7 +1991,7 @@ mod tests {
             db.storage::<Coins>().insert(&utxo_id, &coin).unwrap();
         }
 
-        let executor = create_executor(
+        let mut executor = create_executor(
             db.clone(),
             Config {
                 utxo_validation_default: true,
@@ -2069,7 +2066,7 @@ mod tests {
 
         let db = Database::default();
 
-        let setup = create_executor(db.clone(), Default::default());
+        let mut setup = create_executor(db.clone(), Default::default());
 
         setup
             .execute_and_commit(
@@ -2078,20 +2075,20 @@ mod tests {
             )
             .unwrap();
 
-        let producer_view = db.transaction().deref_mut().clone();
-        let producer = create_executor(producer_view, Default::default());
+        let producer = create_executor(db.clone(), Default::default());
         let ExecutionResult {
             block: second_block,
             ..
         } = producer
-            .execute_and_commit(
+            .execute_without_commit(
                 ExecutionBlock::Production(second_block),
                 Default::default(),
             )
-            .unwrap();
+            .unwrap()
+            .into_result();
 
         let verifier = create_executor(db, Default::default());
-        let verify_result = verifier.execute_and_commit(
+        let verify_result = verifier.execute_without_commit(
             ExecutionBlock::Validation(second_block),
             Default::default(),
         );
@@ -2145,7 +2142,7 @@ mod tests {
 
         let db = Database::default();
 
-        let setup = create_executor(db.clone(), Default::default());
+        let mut setup = create_executor(db.clone(), Default::default());
 
         setup
             .execute_and_commit(
@@ -2154,18 +2151,18 @@ mod tests {
             )
             .unwrap();
 
-        let producer_view = db.transaction().deref_mut().clone();
-        let producer = create_executor(producer_view, Default::default());
+        let producer = create_executor(db.clone(), Default::default());
 
         let ExecutionResult {
             block: mut second_block,
             ..
         } = producer
-            .execute_and_commit(
+            .execute_without_commit(
                 ExecutionBlock::Production(second_block),
                 Default::default(),
             )
-            .unwrap();
+            .unwrap()
+            .into_result();
         // Corrupt the utxo_id of the contract output
         if let Transaction::Script(script) = &mut second_block.transactions_mut()[0] {
             if let Input::Contract(contract::Contract { utxo_id, .. }) =
@@ -2177,7 +2174,7 @@ mod tests {
         }
 
         let verifier = create_executor(db, Default::default());
-        let verify_result = verifier.execute_and_commit(
+        let verify_result = verifier.execute_without_commit(
             ExecutionBlock::Validation(second_block),
             Default::default(),
         );
@@ -2196,7 +2193,7 @@ mod tests {
         let script_id = script.id(&ChainId::default());
 
         let mut database = &Database::default();
-        let executor = create_executor(database.clone(), Default::default());
+        let mut executor = create_executor(database.clone(), Default::default());
 
         let block = PartialFuelBlock {
             header: Default::default(),
@@ -2247,7 +2244,7 @@ mod tests {
         let tx_id = tx.id(&ChainId::default());
 
         let mut database = &Database::default();
-        let executor = create_executor(database.clone(), Default::default());
+        let mut executor = create_executor(database.clone(), Default::default());
 
         let block = PartialFuelBlock {
             header: Default::default(),
@@ -2371,7 +2368,7 @@ mod tests {
             transactions: vec![tx.into()],
         };
 
-        let exec = make_executor(&messages);
+        let mut exec = make_executor(&messages);
         let view = exec.database_view_provider.latest_view();
         assert!(!view.message_is_spent(message_coin.nonce()).unwrap());
         assert!(!view.message_is_spent(message_data.nonce()).unwrap());
@@ -2425,7 +2422,7 @@ mod tests {
             transactions: vec![tx.into()],
         };
 
-        let exec = make_executor(&messages);
+        let mut exec = make_executor(&messages);
         let view = exec.database_view_provider.latest_view();
         assert!(!view.message_is_spent(message_coin.nonce()).unwrap());
         assert!(!view.message_is_spent(message_data.nonce()).unwrap());
@@ -2715,7 +2712,7 @@ mod tests {
             .unwrap();
 
         // make executor with db
-        let executor = create_executor(
+        let mut executor = create_executor(
             database.clone(),
             Config {
                 utxo_validation_default: true,
@@ -2786,7 +2783,7 @@ mod tests {
             .unwrap();
 
         // make executor with db
-        let executor = create_executor(
+        let mut executor = create_executor(
             database.clone(),
             Config {
                 utxo_validation_default: true,
@@ -2820,33 +2817,26 @@ mod tests {
                 FuelBlocks,
                 SpentMessages,
             },
-            transactional::Transaction,
             StorageAsMut,
         };
 
         fn database_with_genesis_block(da_block_height: u64) -> Database<OnChain> {
-            let db = Database::default();
+            let mut db = Database::default();
             let mut block = Block::default();
             block.header_mut().set_da_height(da_block_height.into());
             block.header_mut().recalculate_metadata();
 
-            let mut db_transaction = db.transaction();
-            db_transaction
-                .as_mut()
-                .storage::<FuelBlocks>()
+            db.storage::<FuelBlocks>()
                 .insert(&0.into(), &block)
                 .expect("Should insert genesis block without any problems");
-            db_transaction.commit().expect("Should commit");
             db
         }
 
         fn add_message_to_relayer(db: &mut Database<Relayer>, message: Message) {
-            let mut db_transaction = db.transaction();
             let da_height = message.da_height();
             db.storage::<EventsHistory>()
                 .insert(&da_height, &[Event::Message(message)])
                 .expect("Should insert event");
-            db_transaction.commit().expect("Should commit events");
         }
 
         fn add_messages_to_relayer(db: &mut Database<Relayer>, relayer_da_height: u64) {
@@ -2944,7 +2934,7 @@ mod tests {
             assert_eq!(on_chain_db.iter_all::<Messages>(None).count(), 0);
 
             // When
-            let producer = create_relayer_executor(on_chain_db, relayer_db);
+            let mut producer = create_relayer_executor(on_chain_db, relayer_db);
             let block = test_block(block_height.into(), block_da_height.into(), 0);
             let result = producer.execute_and_commit(
                 ExecutionTypes::Production(block.into()),
@@ -2987,7 +2977,7 @@ mod tests {
             assert_eq!(on_chain_db.iter_all::<Messages>(None).count(), 0);
 
             // When
-            let producer = create_relayer_executor(on_chain_db, relayer_db);
+            let mut producer = create_relayer_executor(on_chain_db, relayer_db);
             let block = test_block(block_height.into(), block_da_height.into(), 10);
             let result = producer
                 .execute_and_commit(
@@ -3033,7 +3023,7 @@ mod tests {
             // When
             let mut block = test_block(block_height.into(), block_da_height.into(), 0);
             *block.transactions_mut() = vec![tx];
-            let producer = create_relayer_executor(on_chain_db, relayer_db);
+            let mut producer = create_relayer_executor(on_chain_db, relayer_db);
             let result = producer
                 .execute_and_commit(
                     ExecutionTypes::Production(block.into()),

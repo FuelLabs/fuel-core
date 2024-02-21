@@ -9,7 +9,7 @@ use anyhow::{
 };
 use fuel_core_storage::transactional::{
     AtomicView,
-    StorageTransaction,
+    Changes,
 };
 use fuel_core_types::{
     blockchain::{
@@ -82,15 +82,15 @@ where
     ViewProvider::View: BlockProducerDatabase,
 {
     /// Produces and execute block for the specified height.
-    async fn produce_and_execute<TxSource, ExecutorDB>(
+    async fn produce_and_execute<TxSource>(
         &self,
         height: BlockHeight,
         block_time: Tai64,
         tx_source: impl FnOnce(BlockHeight) -> TxSource,
         max_gas: Word,
-    ) -> anyhow::Result<UncommittedResult<StorageTransaction<ExecutorDB>>>
+    ) -> anyhow::Result<UncommittedResult<Changes>>
     where
-        Executor: ports::Executor<TxSource, Database = ExecutorDB> + 'static,
+        Executor: ports::Executor<TxSource> + 'static,
     {
         //  - get previous block info (hash, root, etc)
         //  - select best da_height from relayer
@@ -127,13 +127,12 @@ where
     }
 }
 
-impl<ViewProvider, TxPool, Executor, ExecutorDB, TxSource>
-    Producer<ViewProvider, TxPool, Executor>
+impl<ViewProvider, TxPool, Executor, TxSource> Producer<ViewProvider, TxPool, Executor>
 where
     ViewProvider: AtomicView<Height = BlockHeight> + 'static,
     ViewProvider::View: BlockProducerDatabase,
     TxPool: ports::TxPool<TxSource = TxSource> + 'static,
-    Executor: ports::Executor<TxSource, Database = ExecutorDB> + 'static,
+    Executor: ports::Executor<TxSource> + 'static,
 {
     /// Produces and execute block for the specified height with transactions from the `TxPool`.
     pub async fn produce_and_execute_block_txpool(
@@ -141,7 +140,7 @@ where
         height: BlockHeight,
         block_time: Tai64,
         max_gas: Word,
-    ) -> anyhow::Result<UncommittedResult<StorageTransaction<ExecutorDB>>> {
+    ) -> anyhow::Result<UncommittedResult<Changes>> {
         self.produce_and_execute(
             height,
             block_time,
@@ -152,11 +151,11 @@ where
     }
 }
 
-impl<ViewProvider, TxPool, Executor, ExecutorDB> Producer<ViewProvider, TxPool, Executor>
+impl<ViewProvider, TxPool, Executor> Producer<ViewProvider, TxPool, Executor>
 where
     ViewProvider: AtomicView<Height = BlockHeight> + 'static,
     ViewProvider::View: BlockProducerDatabase,
-    Executor: ports::Executor<Vec<Transaction>, Database = ExecutorDB> + 'static,
+    Executor: ports::Executor<Vec<Transaction>> + 'static,
 {
     /// Produces and execute block for the specified height with `transactions`.
     pub async fn produce_and_execute_block_transactions(
@@ -165,7 +164,7 @@ where
         block_time: Tai64,
         transactions: Vec<Transaction>,
         max_gas: Word,
-    ) -> anyhow::Result<UncommittedResult<StorageTransaction<ExecutorDB>>> {
+    ) -> anyhow::Result<UncommittedResult<Changes>> {
         self.produce_and_execute(height, block_time, |_| transactions, max_gas)
             .await
     }

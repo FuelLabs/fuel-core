@@ -2,7 +2,7 @@
 
 use crate::kv_store::{
     KVItem,
-    KeyValueStore,
+    KeyValueInspect,
 };
 
 /// A boxed variant of the iterator that can be used as a return type of the traits.
@@ -50,8 +50,8 @@ impl Default for IterDirection {
     }
 }
 
-/// A trait for iterating over the storage of [`KeyValueStore`].
-pub trait IteratorableStore: KeyValueStore {
+/// A trait for iterating over the storage of [`KeyValueInspect`].
+pub trait IteratorableStore: KeyValueInspect {
     /// Returns an iterator over the values in the storage.
     fn iter_all(
         &self,

@@ -5,7 +5,6 @@ use crate::database::{
         relayer::Relayer,
     },
     Database,
-    Result as DatabaseResult,
 };
 use fuel_core_storage::Result as StorageResult;
 use fuel_core_types::{
@@ -35,7 +34,10 @@ impl CombinedDatabase {
     }
 
     #[cfg(feature = "rocksdb")]
-    pub fn open(path: &std::path::Path, capacity: usize) -> DatabaseResult<Self> {
+    pub fn open(
+        path: &std::path::Path,
+        capacity: usize,
+    ) -> crate::database::Result<Self> {
         // TODO: Use different cache sizes for different databases
         let on_chain = Database::open(path, capacity)?;
         let off_chain = Database::open(path, capacity)?;
@@ -86,12 +88,5 @@ impl CombinedDatabase {
 
     pub fn relayer(&self) -> &Database<Relayer> {
         &self.relayer
-    }
-
-    pub fn flush(self) -> DatabaseResult<()> {
-        self.on_chain.flush()?;
-        self.off_chain.flush()?;
-        self.relayer.flush()?;
-        Ok(())
     }
 }
