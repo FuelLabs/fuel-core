@@ -229,7 +229,19 @@ mod tests {
             SpendQuery,
         },
         combined_database::CombinedDatabase,
-        fuel_core_graphql_api::api_service::ReadDatabase as ServiceDatabase,
+        fuel_core_graphql_api::{
+            api_service::ReadDatabase as ServiceDatabase,
+            storage::{
+                coins::{
+                    owner_coin_id_key,
+                    OwnedCoins,
+                },
+                messages::{
+                    OwnedMessageIds,
+                    OwnedMessageKey,
+                },
+            },
+        },
         query::asset_query::{
             AssetQuery,
             AssetSpendTarget,
@@ -921,6 +933,7 @@ mod tests {
         coin_result
     }
 
+    // TODO: Should use any mock database instead of the `fuel_core::CombinedDatabase`.
     pub struct TestDatabase {
         database: CombinedDatabase,
         last_coin_index: u64,
@@ -961,6 +974,9 @@ mod tests {
 
             let db = self.database.on_chain_mut();
             StorageMutate::<Coins>::insert(db, &id, &coin).unwrap();
+            let db = self.database.off_chain_mut();
+            let coin_by_owner = owner_coin_id_key(&owner, &id);
+            StorageMutate::<OwnedCoins>::insert(db, &coin_by_owner, &()).unwrap();
 
             coin.uncompress(id)
         }
@@ -981,6 +997,10 @@ mod tests {
 
             let db = self.database.on_chain_mut();
             StorageMutate::<Messages>::insert(db, message.id(), &message).unwrap();
+            let db = self.database.off_chain_mut();
+            let owned_message_key = OwnedMessageKey::new(&owner, &nonce);
+            StorageMutate::<OwnedMessageIds>::insert(db, &owned_message_key, &())
+                .unwrap();
 
             message
         }

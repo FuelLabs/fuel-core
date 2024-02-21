@@ -151,6 +151,7 @@ impl Executor<Vec<ArcPoolTx>> for MockExecutor {
                 block,
                 skipped_transactions: vec![],
                 tx_status: vec![],
+                events: vec![],
             },
             StorageTransaction::new(self.0.clone()),
         ))
@@ -177,6 +178,7 @@ impl Executor<Vec<ArcPoolTx>> for FailingMockExecutor {
                     block,
                     skipped_transactions: vec![],
                     tx_status: vec![],
+                    events: vec![],
                 },
                 StorageTransaction::new(MockDb::default()),
             ))

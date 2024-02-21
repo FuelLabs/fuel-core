@@ -67,22 +67,16 @@ pub enum Column {
     /// See [`SealedBlockConsensus`](crate::tables::SealedBlockConsensus)
     FuelBlockConsensus = 19,
 
-    // Below are not required tables. They are used for API and may be removed or moved to another place in the future.
-    /// The column of the table that stores `true` if `owner` owns `Coin` with `coin_id`
-    OwnedCoins = 20,
-    /// The column of the table that stores `true` if `owner` owns `Message` with `message_id`
-    OwnedMessageIds = 21,
-
     /// Table for genesis state import progress tracking.
-    GenesisMetadata = 22,
+    GenesisMetadata = 20,
     /// Table for coin roots during genesis state import.
-    GenesisCoinRoots = 23,
+    GenesisCoinRoots = 21,
     /// Table for message roots during genesis state import.
-    GenesisMessageRoots = 24,
+    GenesisMessageRoots = 22,
     /// Table for contract roots during genesis state import.
-    GenesisContractRoots = 25,
+    GenesisContractRoots = 23,
     /// Table for contract ids during genesis state import.
-    GenesisContractIds = 26,
+    GenesisContractIds = 24,
 }
 
 impl Column {

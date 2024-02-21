@@ -50,7 +50,7 @@ pub const TESTNET_WALLET_SECRETS: [&str; 5] = [
 
 pub const STATE_CONFIG_FILENAME: &str = "state_config.json";
 
-#[derive(Clone, Debug, Default, Deserialize, Serialize, Eq, PartialEq)]
+#[derive(Default, Clone, Debug, Default, Deserialize, Serialize, Eq, PartialEq)]
 pub struct StateConfig {
     /// Spendable coins
     pub coins: Vec<CoinConfig>,

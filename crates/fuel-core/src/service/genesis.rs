@@ -13,6 +13,7 @@ use crate::{
 use anyhow::anyhow;
 use fuel_core_chain_config::{
     CoinConfig,
+    CoinConfig,
     ContractConfig,
     GenesisCommitment,
     MessageConfig,
@@ -48,10 +49,7 @@ use fuel_core_types::{
         SealedBlock,
     },
     entities::{
-        coins::coin::{
-            CompressedCoin,
-            CompressedCoinV1,
-        },
+        coins::coin::Coin,
         contract::ContractUtxoInfo,
         message::{
             Message,
@@ -73,6 +71,8 @@ use fuel_core_types::{
     },
 };
 use itertools::Itertools;
+
+pub mod off_chain;
 
 mod runner;
 pub use runner::{
@@ -111,7 +111,7 @@ pub async fn execute_genesis_block(
     cleanup_genesis_progress(database_transaction.as_mut())?;
 
     let result = UncommittedImportResult::new(
-        ImportResult::new_from_local(block, vec![]),
+        ImportResult::new_from_local(block, vec![], vec![]),
         database_transaction,
     );
 
@@ -210,14 +210,7 @@ fn init_coin(
     // TODO: Store merkle sum tree root over coins with unspecified utxo ids.
     let utxo_id = coin.utxo_id().unwrap_or(generated_utxo_id(output_index));
 
-    let compressed_coin: CompressedCoin = CompressedCoinV1 {
-        owner: coin.owner,
-        amount: coin.amount,
-        asset_id: coin.asset_id,
-        maturity: coin.maturity.unwrap_or_default(),
-        tx_pointer: coin.tx_pointer(),
-    }
-    .into();
+    let compressed_coin: CompressedCoin = coin.into();
 
     // ensure coin can't point to blocks in the future
     let coin_height = coin.tx_pointer().block_height();
@@ -294,15 +287,7 @@ fn init_contract(
 }
 
 fn init_da_message(db: &mut Database, msg: &MessageConfig) -> anyhow::Result<MerkleRoot> {
-    let message: Message = MessageV1 {
-        sender: msg.sender,
-        recipient: msg.recipient,
-        nonce: msg.nonce,
-        amount: msg.amount,
-        data: msg.data.clone(),
-        da_height: msg.da_height,
-    }
-    .into();
+    let message: Message = msg.into();
 
     if db
         .storage::<fuel_core_storage::tables::Messages>()
@@ -313,6 +298,44 @@ fn init_da_message(db: &mut Database, msg: &MessageConfig) -> anyhow::Result<Mer
     }
 
     message.root()
+}
+
+// TODO: Remove when re-genesis PRs are merged. Instead we will use `UtxoId` from the `CoinConfig`.
+fn create_coin_from_config(coin: &CoinConfig, generated_output_index: &mut u64) -> Coin {
+    let utxo_id = UtxoId::new(
+        // generated transaction id([0..[out_index/255]])
+        coin.tx_id.unwrap_or_else(|| {
+            Bytes32::try_from(
+                (0..(Bytes32::LEN - WORD_SIZE))
+                    .map(|_| 0u8)
+                    .chain(
+                        (*generated_output_index / 255)
+                            .to_be_bytes(),
+                    )
+                    .collect_vec()
+                    .as_slice(),
+            )
+                .expect("Incorrect genesis transaction id byte length")
+        }),
+        coin.output_index.unwrap_or_else(|| {
+            *generated_output_index = generated_output_index
+                .checked_add(1)
+                .expect("The maximum number of UTXOs supported in the genesis configuration has been exceeded.");
+            (*generated_output_index % 255) as u8
+        }),
+    );
+
+    Coin {
+        utxo_id,
+        owner: coin.owner,
+        amount: coin.amount,
+        asset_id: coin.asset_id,
+        maturity: coin.maturity.unwrap_or_default(),
+        tx_pointer: TxPointer::new(
+            coin.tx_pointer_block_height.unwrap_or_default(),
+            coin.tx_pointer_tx_idx.unwrap_or_default(),
+        ),
+    }
 }
 
 #[cfg(test)]
@@ -541,8 +564,8 @@ mod tests {
             ..Config::local_node()
         };
 
-        let db = Database::default();
-        FuelService::from_database(db.clone(), service_config)
+        let db = CombinedDatabase::default();
+        FuelService::from_combined_database(db.clone(), service_config)
             .await
             .unwrap();
 
@@ -794,11 +817,13 @@ mod tests {
         assert!(init_result.is_err())
     }
 
-    fn get_coins(db: &Database, owner: &Address) -> Vec<Coin> {
-        db.owned_coins_ids(owner, None, None)
+    fn get_coins(db: &CombinedDatabase, owner: &Address) -> Vec<Coin> {
+        db.off_chain()
+            .owned_coins_ids(owner, None, None)
             .map(|r| {
                 let coin_id = r.unwrap();
-                db.storage::<Coins>()
+                db.on_chain()
+                    .storage::<Coins>()
                     .get(&coin_id)
                     .map(|v| v.unwrap().into_owned().uncompress(coin_id))
                     .unwrap()

@@ -236,7 +236,7 @@ input ContractBalanceFilterInput {
 }
 
 type ContractCreated {
-	contract: Contract!
+	contract: ContractId!
 	stateRoot: Bytes32!
 }
 
@@ -258,10 +258,12 @@ union DependentCost = LightOperation | HeavyOperation
 type DryRunFailureStatus {
 	programState: ProgramState
 	reason: String!
+	receipts: [Receipt!]!
 }
 
 type DryRunSuccessStatus {
 	programState: ProgramState
+	receipts: [Receipt!]!
 }
 
 type DryRunTransactionExecutionStatus {
@@ -271,6 +273,10 @@ type DryRunTransactionExecutionStatus {
 }
 
 union DryRunTransactionStatus = DryRunSuccessStatus | DryRunFailureStatus
+
+type EstimateGasPrice {
+	gasPrice: U64!
+}
 
 input ExcludeInput {
 	"""
@@ -502,7 +508,7 @@ type InputContract {
 	balanceRoot: Bytes32!
 	stateRoot: Bytes32!
 	txPointer: TxPointer!
-	contract: Contract!
+	contractId: ContractId!
 }
 
 type InputMessage {
@@ -517,6 +523,11 @@ type InputMessage {
 	predicateData: HexString!
 }
 
+
+type LatestGasPrice {
+	gasPrice: U64!
+	blockHeight: U32!
+}
 
 type LightOperation {
 	base: U64!
@@ -806,6 +817,8 @@ type Query {
 	contractBalance(contract: ContractId!, asset: AssetId!): ContractBalance!
 	contractBalances(filter: ContractBalanceFilterInput!, first: Int, after: String, last: Int, before: String): ContractBalanceConnection!
 	nodeInfo: NodeInfo!
+	latestGasPrice: LatestGasPrice!
+	estimateGasPrice(blockHorizon: U32): EstimateGasPrice!
 	message(nonce: Nonce!): Message
 	messages(owner: Address, first: Int, after: String, last: Int, before: String): MessageConnection!
 	messageProof(transactionId: TransactionId!, nonce: Nonce!, commitBlockId: BlockId, commitBlockHeight: U32): MessageProof
@@ -813,10 +826,10 @@ type Query {
 }
 
 type Receipt {
-	contract: Contract
+	id: ContractId
 	pc: U64
 	is: U64
-	to: Contract
+	to: ContractId
 	toAddress: Address
 	amount: U64
 	assetId: AssetId
@@ -839,6 +852,9 @@ type Receipt {
 	sender: Address
 	recipient: Address
 	nonce: Nonce
+	"""
+	Set in the case of a Panic receipt to indicate a missing contract input id
+	"""
 	contractId: ContractId
 	subId: Bytes32
 }
@@ -944,7 +960,7 @@ scalar Tai64Timestamp
 type Transaction {
 	id: TransactionId!
 	inputAssetIds: [AssetId!]
-	inputContracts: [Contract!]
+	inputContracts: [ContractId!]
 	inputContract: InputContract
 	policies: Policies
 	gasPrice: U64
@@ -962,7 +978,6 @@ type Transaction {
 	witnesses: [HexString!]
 	receiptsRoot: Bytes32
 	status: TransactionStatus
-	receipts: [Receipt!]
 	script: HexString
 	scriptData: HexString
 	bytecodeWitnessIndex: Int

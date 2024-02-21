@@ -263,7 +263,7 @@ where
     fn insert_single(
         &mut self,
         tx: Checked<Transaction>,
-    ) -> anyhow::Result<InsertionResult> {
+    ) -> Result<InsertionResult, Error> {
         let view = self.database.latest_view();
         self.insert_inner(tx, &view)
     }
@@ -274,19 +274,17 @@ where
         &mut self,
         tx: Checked<Transaction>,
         view: &View,
-    ) -> anyhow::Result<InsertionResult> {
+    ) -> Result<InsertionResult, Error> {
         let tx: CheckedTransaction = tx.into();
 
         let tx = Arc::new(match tx {
             CheckedTransaction::Script(script) => PoolTransaction::Script(script),
             CheckedTransaction::Create(create) => PoolTransaction::Create(create),
-            CheckedTransaction::Mint(_) => {
-                return Err(anyhow::anyhow!("Mint transactions is not supported"))
-            }
+            CheckedTransaction::Mint(_) => return Err(Error::MintIsDisallowed),
         });
 
         if !tx.is_computed() {
-            return Err(Error::NoMetadata.into())
+            return Err(Error::NoMetadata)
         }
 
         // verify max gas is less than block limit
@@ -294,12 +292,11 @@ where
             return Err(Error::NotInsertedMaxGasLimit {
                 tx_gas: tx.max_gas(),
                 block_limit: self.config.chain_config.block_gas_limit,
-            }
-            .into())
+            })
         }
 
         if self.by_hash.contains_key(&tx.id()) {
-            return Err(Error::NotInsertedTxKnown.into())
+            return Err(Error::NotInsertedTxKnown)
         }
 
         let mut max_limit_hit = false;
@@ -309,7 +306,7 @@ where
             // limit is hit, check if we can push out lowest priced tx
             let lowest_price = self.by_gas_price.lowest_value().unwrap_or_default();
             if lowest_price >= tx.price() {
-                return Err(Error::NotInsertedLimitHit.into())
+                return Err(Error::NotInsertedLimitHit)
             }
         }
         if self.config.metrics {
@@ -361,7 +358,7 @@ where
         &mut self,
         tx_status_sender: &TxStatusChange,
         txs: Vec<Checked<Transaction>>,
-    ) -> Vec<anyhow::Result<InsertionResult>> {
+    ) -> Vec<Result<InsertionResult, Error>> {
         // Check if that data is okay (witness match input/output, and if recovered signatures ara valid).
         // should be done before transaction comes to txpool, or before it enters RwLocked region.
         let mut res = Vec::new();
@@ -402,7 +399,7 @@ pub async fn check_transactions(
     txs: &[Arc<Transaction>],
     current_height: BlockHeight,
     config: &Config,
-) -> Vec<anyhow::Result<Checked<Transaction>>> {
+) -> Vec<Result<Checked<Transaction>, Error>> {
     let mut checked_txs = Vec::with_capacity(txs.len());
 
     for tx in txs.iter() {
@@ -417,9 +414,9 @@ pub async fn check_single_tx(
     tx: Transaction,
     current_height: BlockHeight,
     config: &Config,
-) -> anyhow::Result<Checked<Transaction>> {
+) -> Result<Checked<Transaction>, Error> {
     if tx.is_mint() {
-        return Err(Error::NotSupportedTransactionType.into())
+        return Err(Error::NotSupportedTransactionType)
     }
 
     verify_tx_min_gas_price(&tx, config)?;
@@ -428,24 +425,20 @@ pub async fn check_single_tx(
         let consensus_params = &config.chain_config.consensus_parameters;
 
         let tx = tx
-            .into_checked_basic(current_height, consensus_params)
-            .map_err(|e| anyhow::anyhow!("{e:?}"))?
-            .check_signatures(&consensus_params.chain_id)
-            .map_err(|e| anyhow::anyhow!("{e:?}"))?;
+            .into_checked_basic(current_height, consensus_params)?
+            .check_signatures(&consensus_params.chain_id)?;
 
         let tx = tx
             .check_predicates_async::<TokioWithRayon>(&CheckPredicateParams::from(
                 consensus_params,
             ))
-            .await
-            .map_err(|e| anyhow::anyhow!("{e:?}"))?;
+            .await?;
 
         debug_assert!(tx.checks().contains(Checks::all()));
 
         tx
     } else {
-        tx.into_checked_basic(current_height, &config.chain_config.consensus_parameters)
-            .map_err(|e| anyhow::anyhow!("{e:?}"))?
+        tx.into_checked_basic(current_height, &config.chain_config.consensus_parameters)?
     };
 
     Ok(tx)

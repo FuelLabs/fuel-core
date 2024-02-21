@@ -22,10 +22,7 @@ impl DatabaseDescription for OnChain {
 
     fn prefix(column: &Self::Column) -> Option<usize> {
         match column {
-            Self::Column::OwnedCoins
-            | Self::Column::OwnedMessageIds
-            | Self::Column::ContractsAssets
-            | Self::Column::ContractsState => {
+            Self::Column::ContractsAssets | Self::Column::ContractsState => {
                 // prefix is address length
                 Some(32)
             }

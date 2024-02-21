@@ -183,6 +183,7 @@ async fn can_build_message_proof() {
                 block_id: message_block_id,
                 time: Tai64::UNIX_EPOCH,
                 result: None,
+                receipts: vec![],
             })
         });
 

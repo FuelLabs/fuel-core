@@ -9,7 +9,6 @@ use crate::fuel_core_graphql_api::{
         OffChainDatabase,
         OnChainDatabase,
     },
-    storage::receipts::Receipts,
 };
 use fuel_core_storage::{
     iter::{
@@ -187,15 +186,11 @@ impl DatabaseMessageProof for ReadView {
     }
 }
 
-impl OnChainDatabase for ReadView {
-    fn owned_message_ids(
-        &self,
-        owner: &Address,
-        start_message_id: Option<Nonce>,
-        direction: IterDirection,
-    ) -> BoxedIter<'_, StorageResult<Nonce>> {
-        self.on_chain
-            .owned_message_ids(owner, start_message_id, direction)
+impl OnChainDatabase for ReadView {}
+
+impl OffChainDatabase for ReadView {
+    fn tx_status(&self, tx_id: &TxId) -> StorageResult<TransactionStatus> {
+        self.off_chain.tx_status(tx_id)
     }
 
     fn owned_coins_ids(
@@ -204,28 +199,17 @@ impl OnChainDatabase for ReadView {
         start_coin: Option<UtxoId>,
         direction: IterDirection,
     ) -> BoxedIter<'_, StorageResult<UtxoId>> {
-        self.on_chain.owned_coins_ids(owner, start_coin, direction)
+        self.off_chain.owned_coins_ids(owner, start_coin, direction)
     }
-}
 
-impl StorageInspect<Receipts> for ReadView {
-    type Error = StorageError;
-
-    fn get(
+    fn owned_message_ids(
         &self,
-        key: &<Receipts as Mappable>::Key,
-    ) -> StorageResult<Option<Cow<<Receipts as Mappable>::OwnedValue>>> {
-        self.off_chain.get(key)
-    }
-
-    fn contains_key(&self, key: &<Receipts as Mappable>::Key) -> StorageResult<bool> {
-        self.off_chain.contains_key(key)
-    }
-}
-
-impl OffChainDatabase for ReadView {
-    fn tx_status(&self, tx_id: &TxId) -> StorageResult<TransactionStatus> {
-        self.off_chain.tx_status(tx_id)
+        owner: &Address,
+        start_message_id: Option<Nonce>,
+        direction: IterDirection,
+    ) -> BoxedIter<'_, StorageResult<Nonce>> {
+        self.off_chain
+            .owned_message_ids(owner, start_message_id, direction)
     }
 
     fn owned_transactions_ids(

@@ -77,6 +77,7 @@ use fuel_core_types::{
         checked_transaction::EstimatePredicates,
         consts::WORD_SIZE,
     },
+    services::executor::TransactionExecutionResult,
 };
 use rand::SeedableRng;
 use utils::{
@@ -355,10 +356,8 @@ fn run_with_service_with_extra_inputs(
     extra_outputs: Vec<Output>,
 ) {
     group.bench_function(id, |b| {
-
         b.to_async(rt).iter(|| {
             let shared = service.shared.clone();
-
 
             let mut tx_builder = fuel_core_types::fuel_tx::TransactionBuilder::script(
                 script.clone().into_iter().collect(),
@@ -385,7 +384,11 @@ fn run_with_service_with_extra_inputs(
                     TxPointer::default(),
                     *contract_id,
                 );
-                let contract_output = Output::contract(input_count as u8, Bytes32::zeroed(), Bytes32::zeroed());
+                let contract_output = Output::contract(
+                    input_count as u8,
+                    Bytes32::zeroed(),
+                    Bytes32::zeroed(),
+                );
 
                 tx_builder
                     .add_input(contract_input)
@@ -400,9 +403,13 @@ fn run_with_service_with_extra_inputs(
                 tx_builder.add_output(*output);
             }
             let mut tx = tx_builder.finalize_as_transaction();
-            tx.estimate_predicates(&shared.config.chain_config.consensus_parameters.clone().into()).unwrap();
+            tx.estimate_predicates(
+                &shared.config.chain_config.consensus_parameters.clone().into(),
+            )
+            .unwrap();
             async move {
-                let tx_id = tx.id(&shared.config.chain_config.consensus_parameters.chain_id);
+                let tx_id =
+                    tx.id(&shared.config.chain_config.consensus_parameters.chain_id);
 
                 let mut sub = shared.block_importer.block_importer.subscribe();
                 shared
@@ -418,13 +425,12 @@ fn run_with_service_with_extra_inputs(
                 assert_eq!(res.sealed_block.entity.transactions().len(), 2);
                 assert_eq!(res.tx_status[0].id, tx_id);
 
-                let fuel_core_types::services::executor::TransactionExecutionResult::Failed {
-                    reason,
-                    ..
-                } = &res.tx_status[0].result
-                    else {
-                        panic!("The execution should fails with out of gas")
-                    };
+                let TransactionExecutionResult::Failed { result, receipts } =
+                    &res.tx_status[0].result
+                else {
+                    panic!("The execution should fails with out of gas")
+                };
+                let reason = TransactionExecutionResult::reason(receipts, result);
                 if !reason.contains("OutOfGas") {
                     panic!("The test failed because of {}", reason);
                 }

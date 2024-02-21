@@ -80,7 +80,11 @@ async fn dry_run_script() {
         .finalize_as_transaction();
 
     let tx_statuses = client.dry_run(&[tx.clone()]).await.unwrap();
-    let log = &tx_statuses.last().expect("Nonempty repsonse").receipts;
+    let log = tx_statuses
+        .last()
+        .expect("Nonempty repsonse")
+        .result
+        .receipts();
     assert_eq!(3, log.len());
 
     assert!(matches!(log[0],
@@ -125,7 +129,8 @@ async fn dry_run_create() {
         tx_statuses
             .last()
             .expect("Nonempty response")
-            .receipts
+            .result
+            .receipts()
             .len()
     );
 

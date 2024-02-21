@@ -1,17 +1,14 @@
-use crate::schema::{
-    contract::Contract,
-    scalars::{
-        Address,
-        AssetId,
-        Bytes32,
-        ContractId,
-        HexString,
-        Nonce,
-        TxPointer,
-        UtxoId,
-        U32,
-        U64,
-    },
+use crate::schema::scalars::{
+    Address,
+    AssetId,
+    Bytes32,
+    ContractId,
+    HexString,
+    Nonce,
+    TxPointer,
+    UtxoId,
+    U32,
+    U64,
 };
 use async_graphql::{
     Object,
@@ -108,8 +105,8 @@ impl InputContract {
         self.tx_pointer
     }
 
-    async fn contract(&self) -> Contract {
-        self.contract_id.0.into()
+    async fn contract_id(&self) -> ContractId {
+        self.contract_id
     }
 }
 
