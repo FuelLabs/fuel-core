@@ -34,9 +34,9 @@ tikv-jemallocator = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true, features = [
-    "ansi",
-    "env-filter",
-    "json",
+  "ansi",
+  "env-filter",
+  "json",
 ] }
 url = { version = "2.2", optional = true }
 
