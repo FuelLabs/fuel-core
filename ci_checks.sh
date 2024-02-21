@@ -6,7 +6,9 @@
 # - Rust `1.75.0`
 # - Nightly rust formatter
 # - `cargo install cargo-sort`
+# - `npm install prettier prettier-plugin-toml`
 
+npx prettier --check "**/Cargo.toml" &&
 cargo +nightly fmt --all -- --check &&
 cargo sort -w --check &&
 source .github/workflows/scripts/verify_openssl.sh &&
