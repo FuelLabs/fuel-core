@@ -404,7 +404,12 @@ fn run_with_service_with_extra_inputs(
             }
             let mut tx = tx_builder.finalize_as_transaction();
             tx.estimate_predicates(
-                &shared.config.chain_config.consensus_parameters.clone().into(),
+                &shared
+                    .config
+                    .chain_config
+                    .consensus_parameters
+                    .clone()
+                    .into(),
             )
             .unwrap();
             async move {

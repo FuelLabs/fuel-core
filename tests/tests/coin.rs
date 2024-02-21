@@ -2,10 +2,6 @@ use fuel_core::{
     chain_config::{
         CoinConfig,
         StateConfig,
-    },
-    chain_config::{
-        CoinConfig,
-        StateConfig,
         StateReader,
         MAX_GROUP_SIZE,
     },
@@ -60,19 +56,17 @@ async fn coin() {
         tx_id: Some(tx_id),
         ..Default::default()
     };
-    let state = StateConfig {
-        coins: vec![coin],
-        ..Default::default()
-    };
-    let config = Config {
-        state_reader: StateReader::in_memory(state, MAX_GROUP_SIZE),
-        ..Config::local_node()
-    };
+    // let state = StateConfig {
+    //     coins: vec![coin],
+    //     ..Default::default()
+    // };
+    // let config = Config {
+    //     state_reader: StateReader::in_memory(state, MAX_GROUP_SIZE),
+    //     ..Config::local_node()
+    // };
 
     // setup server & client
-    let srv = FuelService::from_database(Database::default(), config)
-        .await
-        .unwrap();
+    let srv = setup_service(vec![coin]).await;
     let client = FuelClient::from(srv.bound_address);
 
     // run test

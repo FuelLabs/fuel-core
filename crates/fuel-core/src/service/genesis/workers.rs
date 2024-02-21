@@ -214,7 +214,7 @@ impl ProcessState for Handler<MessageConfig> {
         tx: &mut Database,
     ) -> anyhow::Result<()> {
         group.into_iter().try_for_each(|message| {
-            let root = init_da_message(tx, &message)?;
+            let root = init_da_message(tx, message)?;
             tx.add_message_root(root)?;
             Ok(())
         })

@@ -4,10 +4,7 @@ use crate::{
         Database,
     },
     graphql_api::worker_service,
-    service::{
-        genesis::create_coin_from_config,
-        Config,
-    },
+    service::Config,
 };
 use fuel_core_storage::transactional::{
     StorageTransaction,
@@ -27,32 +24,32 @@ pub fn execute_genesis_block(
     // start a db transaction for bulk-writing
     let mut database_transaction = Transactional::transaction(original_database);
 
-    if let Some(state_config) = &config.chain_conf.initial_state {
-        if let Some(messages) = &state_config.messages {
-            let messages_events = messages.iter().map(|config| {
-                let message: Message = config.clone().into();
-                Cow::Owned(Event::MessageImported(message))
-            });
+    // if let Some(state_config) = &config.chain_config.initial_state {
+    //     if let Some(messages) = &state_config.messages {
+    //         let messages_events = messages.iter().map(|config| {
+    //             let message: Message = config.clone().into();
+    //             Cow::Owned(Event::MessageImported(message))
+    //         });
 
-            worker_service::Task::process_executor_events(
-                messages_events,
-                database_transaction.as_mut(),
-            )?;
-        }
+    //         worker_service::Task::process_executor_events(
+    //             messages_events,
+    //             database_transaction.as_mut(),
+    //         )?;
+    //     }
 
-        if let Some(coins) = &state_config.coins {
-            let mut generated_output_index = 0;
-            let coin_events = coins.iter().map(|config| {
-                let coin = create_coin_from_config(config, &mut generated_output_index);
-                Cow::Owned(Event::CoinCreated(coin))
-            });
+    //     if let Some(coins) = &state_config.coins {
+    //         let mut generated_output_index = 0;
+    //         let coin_events = coins.iter().map(|config| {
+    //             let coin = create_coin_from_config(config, &mut generated_output_index);
+    //             Cow::Owned(Event::CoinCreated(coin))
+    //         });
 
-            worker_service::Task::process_executor_events(
-                coin_events,
-                database_transaction.as_mut(),
-            )?;
-        }
-    }
+    //         worker_service::Task::process_executor_events(
+    //             coin_events,
+    //             database_transaction.as_mut(),
+    //         )?;
+    //     }
+    // }
 
     Ok(database_transaction)
 }

@@ -19,7 +19,7 @@ use serde::{
     Serialize,
 };
 
-#[derive(Default, Clone, Debug, Deserialize, Serialize, Eq, PartialEq, Default)]
+#[derive(Default, Clone, Debug, Deserialize, Serialize, Eq, PartialEq)]
 pub struct CoinConfig {
     /// auto-generated if None
     pub tx_id: Option<Bytes32>,
