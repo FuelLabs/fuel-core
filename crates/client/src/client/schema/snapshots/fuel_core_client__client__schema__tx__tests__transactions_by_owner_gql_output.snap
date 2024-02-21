@@ -30,9 +30,7 @@ query($owner: Address!, $after: String, $before: String, $first: Int, $last: Int
               assetId
               gas
               digest
-              contract {
-                id
-              }
+              id
               is
               pc
               ptr
@@ -42,9 +40,7 @@ query($owner: Address!, $after: String, $before: String, $first: Int, $last: Int
               rd
               reason
               receiptType
-              to {
-                id
-              }
+              to
               toAddress
               val
               len
@@ -79,9 +75,7 @@ query($owner: Address!, $after: String, $before: String, $first: Int, $last: Int
               assetId
               gas
               digest
-              contract {
-                id
-              }
+              id
               is
               pc
               ptr
@@ -91,9 +85,7 @@ query($owner: Address!, $after: String, $before: String, $first: Int, $last: Int
               rd
               reason
               receiptType
-              to {
-                id
-              }
+              to
               toAddress
               val
               len
