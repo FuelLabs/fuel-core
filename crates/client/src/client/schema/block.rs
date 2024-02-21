@@ -8,7 +8,10 @@ use crate::client::schema::{
     U32,
     U64,
 };
-use fuel_core_types::fuel_crypto;
+use fuel_core_types::{
+    fuel_crypto,
+    fuel_types::BlockHeight,
+};
 
 use super::{
     tx::TransactionIdFragment,
@@ -162,6 +165,12 @@ impl Block {
             }
             Consensus::Unknown => None,
         }
+    }
+}
+
+impl From<BlockHeightFragment> for BlockHeight {
+    fn from(fragment: BlockHeightFragment) -> Self {
+        BlockHeight::new(fragment.height.into())
     }
 }
 

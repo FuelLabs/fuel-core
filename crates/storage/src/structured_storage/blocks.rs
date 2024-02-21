@@ -1,7 +1,7 @@
 //! The module contains implementations and tests for the `FuelBlocks` table.
 
 use crate::{
-    blueprint::merklelized::Merklelized,
+    blueprint::merklized::Merklized,
     codec::{
         postcard::Postcard,
         primitive::Primitive,
@@ -33,7 +33,7 @@ impl Encode<CompressedBlock> for BlockEncoder {
 }
 
 impl TableWithBlueprint for FuelBlocks {
-    type Blueprint = Merklelized<
+    type Blueprint = Merklized<
         Primitive<4>,
         Postcard,
         FuelBlockMerkleMetadata,

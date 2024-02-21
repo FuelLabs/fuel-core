@@ -27,7 +27,7 @@ pub trait SimpleBlockData: Send + Sync {
     fn block(&self, id: &BlockHeight) -> StorageResult<CompressedBlock>;
 }
 
-impl<D: OnChainDatabase + OffChainDatabase + ?Sized> SimpleBlockData for D {
+impl<D: OnChainDatabase + ?Sized> SimpleBlockData for D {
     fn block(&self, id: &BlockHeight) -> StorageResult<CompressedBlock> {
         let block = self
             .storage::<FuelBlocks>()

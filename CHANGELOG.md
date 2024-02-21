@@ -10,7 +10,7 @@ Description of the upcoming release here.
 
 ### Added
 
-- [#1671](https://github.com/FuelLabs/fuel-core/pull/1671): Added a new `Merklelized` blueprint that maintains the binary Merkle tree over the storage data. It supports only the insertion of the objects without removing them.
+- [#1671](https://github.com/FuelLabs/fuel-core/pull/1671): Added a new `Merklized` blueprint that maintains the binary Merkle tree over the storage data. It supports only the insertion of the objects without removing them.
 
 ### Changed
 

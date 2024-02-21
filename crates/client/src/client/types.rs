@@ -121,7 +121,7 @@ impl TryFrom<SchemaTxStatus> for TransactionStatus {
                 submitted_at: s.time.0,
             },
             SchemaTxStatus::SuccessStatus(s) => TransactionStatus::Success {
-                block_height: s.block.height.0.into(),
+                block_height: s.block.height.into(),
                 time: s.time.0,
                 program_state: s.program_state.map(TryInto::try_into).transpose()?,
                 receipts: s
@@ -131,7 +131,7 @@ impl TryFrom<SchemaTxStatus> for TransactionStatus {
                     .collect::<Result<Vec<_>, _>>()?,
             },
             SchemaTxStatus::FailureStatus(s) => TransactionStatus::Failure {
-                block_height: s.block.height.0.into(),
+                block_height: s.block.height.into(),
                 time: s.time.0,
                 reason: s.reason,
                 program_state: s.program_state.map(TryInto::try_into).transpose()?,
