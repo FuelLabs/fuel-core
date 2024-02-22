@@ -1,6 +1,6 @@
 use crate::{
     fuel_core_graphql_api::storage::{
-        blocks::FuelBlockSecondaryKeyBlockHeights,
+        blocks::FuelBlockIdsToHeights,
         coins::OwnedCoins,
         messages::OwnedMessageIds,
         transactions::{
@@ -96,7 +96,7 @@ where
     S: KeyValueInspect<Column = Column> + Modifiable,
     StorageTransaction<S>: StorageMutate<OwnedMessageIds, Error = StorageError>
         + StorageMutate<OwnedCoins, Error = StorageError>
-        + StorageMutate<FuelBlockSecondaryKeyBlockHeights, Error = StorageError>,
+        + StorageMutate<FuelBlockIdsToHeights, Error = StorageError>,
 {
     fn record_tx_id_owner(
         &mut self,

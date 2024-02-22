@@ -132,7 +132,7 @@ where
 }
 
 impl<M, S, KeyCodec, ValueCodec, Metadata, Nodes, Encoder> BlueprintMutate<M, S>
-    for Merklelized<KeyCodec, ValueCodec, Metadata, Nodes, Encoder>
+    for Merklized<KeyCodec, ValueCodec, Metadata, Nodes, Encoder>
 where
     M: Mappable,
     S: KeyValueMutate,
