@@ -1,5 +1,6 @@
 use fuel_core_storage::kv_store::StorageColumn;
 
+pub mod blocks;
 pub mod coins;
 pub mod messages;
 pub mod transactions;
@@ -30,6 +31,8 @@ pub enum Column {
     OwnedMessageIds = 4,
     /// The column of the table that stores statistic about the blockchain.
     Statistic = 5,
+    /// See [`blocks::FuelBlockIdsToHeights`]
+    FuelBlockIdsToHeights = 6,
 }
 
 impl Column {

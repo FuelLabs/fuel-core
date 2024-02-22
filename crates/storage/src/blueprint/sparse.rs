@@ -7,6 +7,7 @@ use crate::{
     blueprint::{
         Blueprint,
         SupportsBatching,
+        SupportsMerkle,
     },
     codec::{
         Decode,
@@ -27,7 +28,6 @@ use crate::{
     Error as StorageError,
     Mappable,
     MerkleRoot,
-    MerkleRootStorage,
     Result as StorageResult,
     StorageAsMut,
     StorageInspect,
@@ -240,24 +240,21 @@ where
     }
 }
 
-impl<Column, M, S, KeyCodec, ValueCodec, Metadata, Nodes, KeyConverter>
-    MerkleRootStorage<Metadata::Key, M> for StructuredStorage<S>
+impl<M, S, KeyCodec, ValueCodec, Metadata, Nodes, KeyConverter>
+    SupportsMerkle<Metadata::Key, M, S>
+    for Sparse<KeyCodec, ValueCodec, Metadata, Nodes, KeyConverter>
 where
-    S: KeyValueStore<Column = Column>,
-    M: Mappable
-        + TableWithBlueprint<
-            Blueprint = Sparse<KeyCodec, ValueCodec, Metadata, Nodes, KeyConverter>,
-            Column = Column,
-        >,
-    Self: StorageMutate<M, Error = StorageError>
-        + StorageInspect<Metadata, Error = StorageError>,
+    M: Mappable,
+    S: KeyValueStore,
     Metadata: Mappable<Value = SparseMerkleMetadata, OwnedValue = SparseMerkleMetadata>,
-    Metadata::Key: Sized,
+    Self: Blueprint<M, S>,
+    for<'a> StructuredStorage<&'a S>: StorageInspect<Metadata, Error = StorageError>,
 {
-    fn root(&self, key: &Metadata::Key) -> StorageResult<MerkleRoot> {
+    fn root(storage: &S, key: &Metadata::Key) -> StorageResult<MerkleRoot> {
         use crate::StorageAsRef;
+        let storage = StructuredStorage::new(storage);
         let metadata: Option<Cow<SparseMerkleMetadata>> =
-            self.storage_as_ref::<Metadata>().get(key)?;
+            storage.storage_as_ref::<Metadata>().get(key)?;
         let root = metadata
             .map(|metadata| *metadata.root())
             .unwrap_or_else(|| in_memory::MerkleTree::new().root());
@@ -471,4 +468,241 @@ where
 
         Ok(())
     }
+}
+
+/// The macro that generates SMT storage tests for the table with [`crate::structured_storage::test::InMemoryStorage`].
+#[cfg(feature = "test-helpers")]
+#[macro_export]
+macro_rules! root_storage_tests {
+    ($table:ident, $metadata_table:ident, $current_key:expr, $foreign_key:expr, $generate_key:ident, $generate_value:ident) => {
+        paste::item! {
+        #[cfg(test)]
+        mod [< $table:snake _root_tests >] {
+            use super::*;
+            use $crate::{
+                structured_storage::{
+                    test::InMemoryStorage,
+                    StructuredStorage,
+                },
+                StorageAsMut,
+            };
+            use $crate::rand::{
+                rngs::StdRng,
+                SeedableRng,
+            };
+
+            #[test]
+            fn root() {
+                let mut storage = InMemoryStorage::default();
+                let mut structured_storage = StructuredStorage::new(&mut storage);
+
+                let rng = &mut StdRng::seed_from_u64(1234);
+                let key = $generate_key(&$current_key, rng);
+                let value = $generate_value(rng);
+                structured_storage.storage_as_mut::<$table>().insert(&key, &value)
+                    .unwrap();
+
+                let root = structured_storage.storage_as_mut::<$table>().root(&$current_key);
+                assert!(root.is_ok())
+            }
+
+            #[test]
+            fn root_returns_empty_root_for_empty_metadata() {
+                let mut storage = InMemoryStorage::default();
+                let mut structured_storage = StructuredStorage::new(&mut storage);
+
+                let empty_root = fuel_core_types::fuel_merkle::sparse::in_memory::MerkleTree::new().root();
+                let root = structured_storage
+                    .storage_as_mut::<$table>()
+                    .root(&$current_key)
+                    .unwrap();
+                assert_eq!(root, empty_root)
+            }
+
+            #[test]
+            fn put_updates_the_state_merkle_root_for_the_given_metadata() {
+                let mut storage = InMemoryStorage::default();
+                let mut structured_storage = StructuredStorage::new(&mut storage);
+
+                let rng = &mut StdRng::seed_from_u64(1234);
+                let key = $generate_key(&$current_key, rng);
+                let state = $generate_value(rng);
+
+                // Write the first contract state
+                structured_storage
+                    .storage_as_mut::<$table>()
+                    .insert(&key, &state)
+                    .unwrap();
+
+                // Read the first Merkle root
+                let root_1 = structured_storage
+                    .storage_as_mut::<$table>()
+                    .root(&$current_key)
+                    .unwrap();
+
+                // Write the second contract state
+                let key = $generate_key(&$current_key, rng);
+                let state = $generate_value(rng);
+                structured_storage
+                    .storage_as_mut::<$table>()
+                    .insert(&key, &state)
+                    .unwrap();
+
+                // Read the second Merkle root
+                let root_2 = structured_storage
+                    .storage_as_mut::<$table>()
+                    .root(&$current_key)
+                    .unwrap();
+
+                assert_ne!(root_1, root_2);
+            }
+
+            #[test]
+            fn remove_updates_the_state_merkle_root_for_the_given_metadata() {
+                let mut storage = InMemoryStorage::default();
+                let mut structured_storage = StructuredStorage::new(&mut storage);
+
+                let rng = &mut StdRng::seed_from_u64(1234);
+
+                // Write the first contract state
+                let first_key = $generate_key(&$current_key, rng);
+                let first_state = $generate_value(rng);
+                structured_storage
+                    .storage_as_mut::<$table>()
+                    .insert(&first_key, &first_state)
+                    .unwrap();
+                let root_0 = structured_storage
+                    .storage_as_mut::<$table>()
+                    .root(&$current_key)
+                    .unwrap();
+
+                // Write the second contract state
+                let second_key = $generate_key(&$current_key, rng);
+                let second_state = $generate_value(rng);
+                structured_storage
+                    .storage_as_mut::<$table>()
+                    .insert(&second_key, &second_state)
+                    .unwrap();
+
+                // Read the first Merkle root
+                let root_1 = structured_storage
+                    .storage_as_mut::<$table>()
+                    .root(&$current_key)
+                    .unwrap();
+
+                // Remove the second contract state
+                structured_storage.storage_as_mut::<$table>().remove(&second_key).unwrap();
+
+                // Read the second Merkle root
+                let root_2 = structured_storage
+                    .storage_as_mut::<$table>()
+                    .root(&$current_key)
+                    .unwrap();
+
+                assert_ne!(root_1, root_2);
+                assert_eq!(root_0, root_2);
+            }
+
+            #[test]
+            fn updating_foreign_metadata_does_not_affect_the_given_metadata_insertion() {
+                let given_primary_key = $current_key;
+                let foreign_primary_key = $foreign_key;
+
+                let mut storage = InMemoryStorage::default();
+                let mut structured_storage = StructuredStorage::new(&mut storage);
+
+                let rng = &mut StdRng::seed_from_u64(1234);
+
+                let state_value = $generate_value(rng);
+
+                // Given
+                let given_key = $generate_key(&given_primary_key, rng);
+                let foreign_key = $generate_key(&foreign_primary_key, rng);
+                structured_storage
+                    .storage_as_mut::<$table>()
+                    .insert(&given_key, &state_value)
+                    .unwrap();
+
+                // When
+                structured_storage
+                    .storage_as_mut::<$table>()
+                    .insert(&foreign_key, &state_value)
+                    .unwrap();
+                structured_storage
+                    .storage_as_mut::<$table>()
+                    .remove(&foreign_key)
+                    .unwrap();
+
+                // Then
+                let result = structured_storage
+                    .storage_as_mut::<$table>()
+                    .insert(&given_key, &state_value)
+                    .unwrap();
+
+                assert!(result.is_some());
+            }
+
+            #[test]
+            fn put_creates_merkle_metadata_when_empty() {
+                let mut storage = InMemoryStorage::default();
+                let mut structured_storage = StructuredStorage::new(&mut storage);
+
+                let rng = &mut StdRng::seed_from_u64(1234);
+
+                // Given
+                let key = $generate_key(&$current_key, rng);
+                let state = $generate_value(rng);
+
+                // Write a contract state
+                structured_storage
+                    .storage_as_mut::<$table>()
+                    .insert(&key, &state)
+                    .unwrap();
+
+                // Read the Merkle metadata
+                let metadata = structured_storage
+                    .storage_as_mut::<$metadata_table>()
+                    .get(&$current_key)
+                    .unwrap();
+
+                assert!(metadata.is_some());
+            }
+
+            #[test]
+            fn remove_deletes_merkle_metadata_when_empty() {
+                let mut storage = InMemoryStorage::default();
+                let mut structured_storage = StructuredStorage::new(&mut storage);
+
+                let rng = &mut StdRng::seed_from_u64(1234);
+
+                // Given
+                let key = $generate_key(&$current_key, rng);
+                let state = $generate_value(rng);
+
+                // Write a contract state
+                structured_storage
+                    .storage_as_mut::<$table>()
+                    .insert(&key, &state)
+                    .unwrap();
+
+                // Read the Merkle metadata
+                structured_storage
+                    .storage_as_mut::<$metadata_table>()
+                    .get(&$current_key)
+                    .unwrap()
+                    .expect("Expected Merkle metadata to be present");
+
+                // Remove the contract asset
+                structured_storage.storage_as_mut::<$table>().remove(&key).unwrap();
+
+                // Read the Merkle metadata
+                let metadata = structured_storage
+                    .storage_as_mut::<$metadata_table>()
+                    .get(&$current_key)
+                    .unwrap();
+
+                assert!(metadata.is_none());
+            }
+        }}
+    };
 }

@@ -62,21 +62,19 @@ pub enum Column {
     // Below are the tables used for p2p, block production, starting the node.
     /// The column id of metadata about the blockchain
     Metadata = 17,
-    /// See `FuelBlockSecondaryKeyBlockHeights`
-    FuelBlockSecondaryKeyBlockHeights = 18,
     /// See [`SealedBlockConsensus`](crate::tables::SealedBlockConsensus)
-    FuelBlockConsensus = 19,
+    FuelBlockConsensus = 18,
 
     /// Table for genesis state import progress tracking.
-    GenesisMetadata = 20,
+    GenesisMetadata = 19,
     /// Table for coin roots during genesis state import.
-    GenesisCoinRoots = 21,
+    GenesisCoinRoots = 20,
     /// Table for message roots during genesis state import.
-    GenesisMessageRoots = 22,
+    GenesisMessageRoots = 21,
     /// Table for contract roots during genesis state import.
-    GenesisContractRoots = 23,
+    GenesisContractRoots = 22,
     /// Table for contract ids during genesis state import.
-    GenesisContractIds = 24,
+    GenesisContractIds = 23,
 }
 
 impl Column {

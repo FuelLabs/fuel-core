@@ -48,7 +48,10 @@ use fuel_core_types::{
         Receipt,
         Transaction,
     },
-    fuel_types::canonical::Deserialize,
+    fuel_types::{
+        canonical::Deserialize,
+        BlockHeight,
+    },
     fuel_vm::ProgramState,
 };
 use tai64::Tai64;
@@ -92,7 +95,7 @@ pub enum TransactionStatus {
         submitted_at: Tai64,
     },
     Success {
-        block_id: String,
+        block_height: BlockHeight,
         time: Tai64,
         program_state: Option<ProgramState>,
         receipts: Vec<Receipt>,
@@ -101,7 +104,7 @@ pub enum TransactionStatus {
         reason: String,
     },
     Failure {
-        block_id: String,
+        block_height: BlockHeight,
         time: Tai64,
         reason: String,
         program_state: Option<ProgramState>,
@@ -118,7 +121,7 @@ impl TryFrom<SchemaTxStatus> for TransactionStatus {
                 submitted_at: s.time.0,
             },
             SchemaTxStatus::SuccessStatus(s) => TransactionStatus::Success {
-                block_id: s.block.id.0.to_string(),
+                block_height: s.block.height.into(),
                 time: s.time.0,
                 program_state: s.program_state.map(TryInto::try_into).transpose()?,
                 receipts: s
@@ -128,7 +131,7 @@ impl TryFrom<SchemaTxStatus> for TransactionStatus {
                     .collect::<Result<Vec<_>, _>>()?,
             },
             SchemaTxStatus::FailureStatus(s) => TransactionStatus::Failure {
-                block_id: s.block.id.0.to_string(),
+                block_height: s.block.height.into(),
                 time: s.time.0,
                 reason: s.reason,
                 program_state: s.program_state.map(TryInto::try_into).transpose()?,

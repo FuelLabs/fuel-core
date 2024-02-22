@@ -3,11 +3,10 @@ use super::scalars::{
     Tai64Timestamp,
 };
 use crate::{
-    database::Database,
     fuel_core_graphql_api::{
         api_service::ConsensusModule,
         database::ReadView,
-        ports::DatabaseBlocks,
+        ports::OffChainDatabase,
         Config as GraphQLConfig,
         IntoApiResult,
     },
@@ -92,12 +91,17 @@ impl Block {
         bytes.into()
     }
 
+    async fn height(&self) -> U32 {
+        let height: u32 = (*self.0.header().height()).into();
+        height.into()
+    }
+
     async fn header(&self) -> Header {
         self.0.header().clone().into()
     }
 
     async fn consensus(&self, ctx: &Context<'_>) -> async_graphql::Result<Consensus> {
-        let query: &Database = ctx.data_unchecked();
+        let query: &ReadView = ctx.data_unchecked();
         let height = self.0.header().height();
         let core_consensus = query.consensus(height)?;
 

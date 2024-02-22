@@ -16,7 +16,9 @@ use crate::{
     Mappable,
     Result as StorageResult,
 };
+use fuel_vm_private::prelude::MerkleRoot;
 
+pub mod merklized;
 pub mod plain;
 pub mod sparse;
 
@@ -136,4 +138,15 @@ where
     where
         Iter: 'a + Iterator<Item = &'a M::Key>,
         M::Key: 'a;
+}
+
+/// It is an extension of the blueprint that supporting creation of the Merkle tree over the storage.
+pub trait SupportsMerkle<Key, M, S>: Blueprint<M, S>
+where
+    Key: ?Sized,
+    M: Mappable,
+    S: KeyValueStore,
+{
+    /// Returns the root of the Merkle tree.
+    fn root(storage: &S, key: &Key) -> StorageResult<MerkleRoot>;
 }

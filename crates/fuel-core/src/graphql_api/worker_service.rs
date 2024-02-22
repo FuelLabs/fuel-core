@@ -10,6 +10,7 @@ use crate::{
     fuel_core_graphql_api::{
         ports,
         storage::{
+            blocks::FuelBlockIdsToHeights,
             coins::{
                 owner_coin_id_key,
                 OwnedCoins,
@@ -87,8 +88,6 @@ where
     D: ports::worker::OffChainDatabase,
 {
     fn process_block(&mut self, result: SharedImportResult) -> anyhow::Result<()> {
-        // TODO: Implement table `BlockId -> BlockHeight` to get the block height by block id.
-        //  https://github.com/FuelLabs/fuel-core/issues/1583
         let block = &result.sealed_block.entity;
         let mut transaction = self.database.transaction();
         // save the status for every transaction using the finalized block id
@@ -96,6 +95,14 @@ where
 
         // save the associated owner for each transaction in the block
         self.index_tx_owners_for_block(block, transaction.as_mut())?;
+
+        let height = block.header().height();
+        let block_id = block.id();
+        transaction
+            .as_mut()
+            .storage::<FuelBlockIdsToHeights>()
+            .insert(&block_id, height)?;
+
         let total_tx_count = transaction
             .as_mut()
             .increase_tx_count(block.transactions().len() as u64)

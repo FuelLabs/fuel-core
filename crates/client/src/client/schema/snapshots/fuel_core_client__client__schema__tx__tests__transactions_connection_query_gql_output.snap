@@ -16,7 +16,7 @@ query($after: String, $before: String, $first: Int, $last: Int) {
           ... on SuccessStatus {
             transactionId
             block {
-              id
+              height
             }
             time
             programState {
@@ -60,7 +60,7 @@ query($after: String, $before: String, $first: Int, $last: Int) {
           ... on FailureStatus {
             transactionId
             block {
-              id
+              height
             }
             time
             reason

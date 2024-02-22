@@ -6,7 +6,6 @@
 
 use super::*;
 use crate::service::update_sender::tests::test_sending::validate_send;
-use fuel_core_types::blockchain::primitives::BlockId;
 use std::time::Duration;
 
 const MAX_CHANNELS: usize = 2;
@@ -44,7 +43,7 @@ fn test_update_sender_reg() {
         Send(
             0,
             Status(Success {
-                block_id: BlockId::from([0; 32]),
+                block_height: Default::default(),
                 time: Tai64(0),
                 result: None,
                 receipts: vec![],
