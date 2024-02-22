@@ -67,8 +67,8 @@ pub enum Column {
     OwnedMessageIds = 4,
     /// The column of the table that stores statistic about the blockchain.
     Statistic = 5,
-    /// See [`blocks::FuelBlockSecondaryKeyBlockHeights`]
-    FuelBlockSecondaryKeyBlockHeights = 6,
+    /// See [`blocks::FuelBlockIdsToHeights`]
+    FuelBlockIdsToHeights = 6,
 }
 
 impl Column {

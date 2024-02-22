@@ -198,7 +198,7 @@ pub trait P2pPort: Send + Sync {
 }
 
 pub mod worker {
-    use super::super::storage::blocks::FuelBlockSecondaryKeyBlockHeights;
+    use super::super::storage::blocks::FuelBlockIdsToHeights;
     use crate::fuel_core_graphql_api::storage::{
         coins::OwnedCoins,
         messages::OwnedMessageIds,
@@ -233,7 +233,7 @@ pub mod worker {
     pub trait OffChainDatabase:
         StorageMutate<OwnedMessageIds, Error = StorageError>
         + StorageMutate<OwnedCoins, Error = StorageError>
-        + StorageMutate<FuelBlockSecondaryKeyBlockHeights, Error = StorageError>
+        + StorageMutate<FuelBlockIdsToHeights, Error = StorageError>
     {
         fn record_tx_id_owner(
             &mut self,

@@ -14,9 +14,9 @@ use fuel_core_types::{
 
 /// The table of fuel block's secondary key - `BlockId`.
 /// It links the `BlockId` to corresponding `BlockHeight`.
-pub struct FuelBlockSecondaryKeyBlockHeights;
+pub struct FuelBlockIdsToHeights;
 
-impl Mappable for FuelBlockSecondaryKeyBlockHeights {
+impl Mappable for FuelBlockIdsToHeights {
     /// Primary key - `BlockId`.
     type Key = BlockId;
     type OwnedKey = Self::Key;
@@ -25,18 +25,18 @@ impl Mappable for FuelBlockSecondaryKeyBlockHeights {
     type OwnedValue = Self::Value;
 }
 
-impl TableWithBlueprint for FuelBlockSecondaryKeyBlockHeights {
+impl TableWithBlueprint for FuelBlockIdsToHeights {
     type Blueprint = Plain<Raw, Primitive<4>>;
     type Column = super::Column;
 
     fn column() -> Self::Column {
-        Self::Column::FuelBlockSecondaryKeyBlockHeights
+        Self::Column::FuelBlockIdsToHeights
     }
 }
 
 #[cfg(test)]
 fuel_core_storage::basic_storage_tests!(
-    FuelBlockSecondaryKeyBlockHeights,
-    <FuelBlockSecondaryKeyBlockHeights as Mappable>::Key::default(),
-    <FuelBlockSecondaryKeyBlockHeights as Mappable>::Value::default()
+    FuelBlockIdsToHeights,
+    <FuelBlockIdsToHeights as Mappable>::Key::default(),
+    <FuelBlockIdsToHeights as Mappable>::Value::default()
 );

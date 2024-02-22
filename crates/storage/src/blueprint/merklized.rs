@@ -1,5 +1,5 @@
-//! The module defines the `Merklelized` blueprint for the storage.
-//! The `Merklelized` blueprint implements the binary merkle tree on top of the storage
+//! The module defines the `Merklized` blueprint for the storage.
+//! The `Merklized` blueprint implements the binary merkle tree on top of the storage
 //! for all entries.
 
 use crate::{
@@ -36,7 +36,7 @@ use crate::{
 };
 use fuel_core_types::fuel_merkle::binary::Primitive;
 
-/// The `Merklelized` blueprint builds the storage as a [`Plain`](super::plain::Plain)
+/// The `Merklized` blueprint builds the storage as a [`Plain`](super::plain::Plain)
 /// blueprint and maintains the binary merkle tree by the `Metadata` table.
 ///
 /// It uses the `KeyCodec` and `ValueCodec` to encode/decode the key and value in the
@@ -45,13 +45,13 @@ use fuel_core_types::fuel_merkle::binary::Primitive;
 /// The `Metadata` table stores the metadata of the binary merkle tree(like a root of the tree and leaves count).
 ///
 /// The `ValueEncoder` is used to encode the value for merklelization.
-pub struct Merklelized<KeyCodec, ValueCodec, Metadata, Nodes, ValueEncoder> {
+pub struct Merklized<KeyCodec, ValueCodec, Metadata, Nodes, ValueEncoder> {
     _marker:
         core::marker::PhantomData<(KeyCodec, ValueCodec, Metadata, Nodes, ValueEncoder)>,
 }
 
 impl<KeyCodec, ValueCodec, Metadata, Nodes, Encoder>
-    Merklelized<KeyCodec, ValueCodec, Metadata, Nodes, Encoder>
+    Merklized<KeyCodec, ValueCodec, Metadata, Nodes, Encoder>
 where
     Nodes: Mappable<Key = u64, Value = Primitive, OwnedValue = Primitive>,
 {
@@ -120,7 +120,7 @@ where
 }
 
 impl<M, S, KeyCodec, ValueCodec, Metadata, Nodes, Encoder> BlueprintInspect<M, S>
-    for Merklelized<KeyCodec, ValueCodec, Metadata, Nodes, Encoder>
+    for Merklized<KeyCodec, ValueCodec, Metadata, Nodes, Encoder>
 where
     M: Mappable,
     S: KeyValueInspect,
@@ -215,7 +215,7 @@ where
 }
 
 impl<M, S, KeyCodec, ValueCodec, Metadata, Nodes, Encoder> SupportsMerkle<M::Key, M, S>
-    for Merklelized<KeyCodec, ValueCodec, Metadata, Nodes, Encoder>
+    for Merklized<KeyCodec, ValueCodec, Metadata, Nodes, Encoder>
 where
     M: Mappable,
     S: KeyValueInspect,
@@ -240,7 +240,7 @@ where
 }
 
 impl<M, S, KeyCodec, ValueCodec, Metadata, Nodes, Encoder> SupportsBatching<M, S>
-    for Merklelized<KeyCodec, ValueCodec, Metadata, Nodes, Encoder>
+    for Merklized<KeyCodec, ValueCodec, Metadata, Nodes, Encoder>
 where
     M: Mappable,
     S: BatchOperations,

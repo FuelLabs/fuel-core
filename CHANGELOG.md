@@ -10,11 +10,11 @@ Description of the upcoming release here.
 
 ### Added
 
-- [#1671](https://github.com/FuelLabs/fuel-core/pull/1671): Added a new `Merklelized` blueprint that maintains the binary Merkle tree over the storage data. It supports only the insertion of the objects without removing them.
+- [#1671](https://github.com/FuelLabs/fuel-core/pull/1671): Added a new `Merklized` blueprint that maintains the binary Merkle tree over the storage data. It supports only the insertion of the objects without removing them.
 
 ### Changed
 
-- [#1671](https://github.com/FuelLabs/fuel-core/pull/1671): The logic related to the `FuelBlockSecondaryKeyBlockHeights` is moved to the off-chain worker.
+- [#1671](https://github.com/FuelLabs/fuel-core/pull/1671): The logic related to the `FuelBlockIdsToHeights` is moved to the off-chain worker.
 - [#1663](https://github.com/FuelLabs/fuel-core/pull/1663): Reduce the punishment criteria for mempool gossipping.
 - [#1658](https://github.com/FuelLabs/fuel-core/pull/1658): Removed `Receipts` table. Instead, receipts are part of the `TransactionStatuses` table.
 - [#1640](https://github.com/FuelLabs/fuel-core/pull/1640): Upgrade to fuel-vm 0.45.0.

@@ -19,7 +19,9 @@ fuel-core-types = { workspace = true, features = ["serde"] }
 futures = { workspace = true, optional = true }
 hex = "0.4"
 # Included to enable webpki in the eventsource client
-hyper-rustls = { version = "0.24", features = ["webpki-tokio"], optional = true }
+hyper-rustls = { version = "0.24", features = [
+  "webpki-tokio",
+], optional = true }
 itertools = { workspace = true }
 reqwest = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
@@ -29,7 +31,11 @@ thiserror = "1.0"
 tracing = "0.1"
 
 [dev-dependencies]
-fuel-core-types = { workspace = true, features = ["serde", "std", "test-helpers"] }
+fuel-core-types = { workspace = true, features = [
+  "serde",
+  "std",
+  "test-helpers",
+] }
 insta = { workspace = true }
 
 [build-dependencies]

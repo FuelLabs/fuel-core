@@ -19,7 +19,7 @@ use crate::{
 };
 use fuel_vm_private::prelude::MerkleRoot;
 
-pub mod merklelized;
+pub mod merklized;
 pub mod plain;
 pub mod sparse;
 

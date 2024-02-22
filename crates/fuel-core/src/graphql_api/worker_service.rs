@@ -2,7 +2,7 @@ use crate::fuel_core_graphql_api::{
     ports,
     ports::worker::OffChainDatabase,
     storage::{
-        blocks::FuelBlockSecondaryKeyBlockHeights,
+        blocks::FuelBlockIdsToHeights,
         coins::{
             owner_coin_id_key,
             OwnedCoins,
@@ -90,7 +90,7 @@ where
         let height = block.header().height();
         let block_id = block.id();
         transaction
-            .storage::<FuelBlockSecondaryKeyBlockHeights>()
+            .storage::<FuelBlockIdsToHeights>()
             .insert(&block_id, height)?;
 
         let total_tx_count = transaction
