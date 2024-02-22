@@ -234,11 +234,10 @@ impl RunnableService for Task {
 
                 self.shared.block_importer.commit_result(result).await?;
 
-                let off_chain_db_transaction = genesis::off_chain::execute_genesis_block(
+                genesis::off_chain::execute_genesis_block(
                     &self.shared.config,
                     &off_view,
                 )?;
-                off_chain_db_transaction.commit()?;
             }
         }
 
