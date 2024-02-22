@@ -132,6 +132,31 @@ pub mod merkle {
         fuel_types::BlockHeight,
     };
 
+    /// The key for the corresponding `DenseMerkleMetadata` type.
+    /// The `Latest` variant is used to have the access to the latest dense Merkle tree.
+    #[derive(Default, Debug, Clone, serde::Serialize, serde::Deserialize)]
+    pub enum DenseMetadataKey<PrimaryKey> {
+        /// The primary key of the `DenseMerkleMetadata`.
+        Primary(PrimaryKey),
+        #[default]
+        /// The latest `DenseMerkleMetadata` of the table.
+        Latest,
+    }
+
+    #[cfg(feature = "test-helpers")]
+    impl<PrimaryKey> rand::distributions::Distribution<DenseMetadataKey<PrimaryKey>>
+        for rand::distributions::Standard
+    where
+        rand::distributions::Standard: rand::distributions::Distribution<PrimaryKey>,
+    {
+        fn sample<R: rand::Rng + ?Sized>(
+            &self,
+            rng: &mut R,
+        ) -> DenseMetadataKey<PrimaryKey> {
+            DenseMetadataKey::Primary(rng.gen())
+        }
+    }
+
     /// Metadata for dense Merkle trees
     #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
     pub enum DenseMerkleMetadata {
@@ -260,7 +285,7 @@ pub mod merkle {
     pub struct FuelBlockMerkleMetadata;
 
     impl Mappable for FuelBlockMerkleMetadata {
-        type Key = BlockHeight;
+        type Key = DenseMetadataKey<BlockHeight>;
         type OwnedKey = Self::Key;
         type Value = DenseMerkleMetadata;
         type OwnedValue = Self::Value;

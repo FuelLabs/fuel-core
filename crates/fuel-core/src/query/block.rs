@@ -16,15 +16,12 @@ use fuel_core_types::{
     blockchain::{
         block::CompressedBlock,
         consensus::Consensus,
-        primitives::BlockId,
     },
     fuel_types::BlockHeight,
 };
 
 pub trait SimpleBlockData: Send + Sync {
     fn block(&self, id: &BlockHeight) -> StorageResult<CompressedBlock>;
-
-    fn block_by_id(&self, id: &BlockId) -> StorageResult<CompressedBlock>;
 }
 
 impl<D: OnChainDatabase + ?Sized> SimpleBlockData for D {
@@ -36,11 +33,6 @@ impl<D: OnChainDatabase + ?Sized> SimpleBlockData for D {
             .into_owned();
 
         Ok(block)
-    }
-
-    fn block_by_id(&self, id: &BlockId) -> StorageResult<CompressedBlock> {
-        let height = self.block_height(id)?;
-        self.block(&height)
     }
 }
 

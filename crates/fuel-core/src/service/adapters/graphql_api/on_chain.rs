@@ -24,10 +24,7 @@ use fuel_core_txpool::types::ContractId;
 use fuel_core_types::{
     blockchain::{
         block::CompressedBlock,
-        primitives::{
-            BlockId,
-            DaBlockHeight,
-        },
+        primitives::DaBlockHeight,
     },
     entities::message::Message,
     fuel_tx::AssetId,
@@ -39,11 +36,6 @@ use fuel_core_types::{
 };
 
 impl DatabaseBlocks for Database {
-    fn block_height(&self, id: &BlockId) -> StorageResult<BlockHeight> {
-        self.get_block_height(id)
-            .and_then(|height| height.ok_or(not_found!("BlockHeight")))
-    }
-
     fn blocks(
         &self,
         height: Option<BlockHeight>,

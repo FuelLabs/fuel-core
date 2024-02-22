@@ -8,7 +8,10 @@ use crate::client::schema::{
     U32,
     U64,
 };
-use fuel_core_types::fuel_crypto;
+use fuel_core_types::{
+    fuel_crypto,
+    fuel_types::BlockHeight,
+};
 
 use super::{
     tx::TransactionIdFragment,
@@ -87,6 +90,12 @@ pub struct BlockIdFragment {
     pub id: BlockId,
 }
 
+#[derive(cynic::QueryFragment, Debug)]
+#[cynic(schema_path = "./assets/schema.sdl", graphql_type = "Block")]
+pub struct BlockHeightFragment {
+    pub height: U32,
+}
+
 #[derive(cynic::QueryVariables, Debug)]
 pub struct ProduceBlockArgs {
     pub start_timestamp: Option<Tai64Timestamp>,
@@ -156,6 +165,12 @@ impl Block {
             }
             Consensus::Unknown => None,
         }
+    }
+}
+
+impl From<BlockHeightFragment> for BlockHeight {
+    fn from(fragment: BlockHeightFragment) -> Self {
+        BlockHeight::new(fragment.height.into())
     }
 }
 

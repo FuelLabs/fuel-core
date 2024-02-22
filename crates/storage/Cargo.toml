@@ -42,6 +42,7 @@ fuel-core-types = { workspace = true, default-features = false, features = [
   "random",
   "test-helpers",
 ] }
+test-case = { workspace = true }
 
 [features]
 test-helpers = ["dep:mockall", "dep:rand"]

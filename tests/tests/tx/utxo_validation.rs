@@ -89,9 +89,10 @@ async fn submit_utxo_verified_tx_with_min_gas_price() {
             .ok()
             .unwrap();
 
-        if let TransactionStatus::Success { block_id, .. } = transaction_result.clone() {
-            let block_id = block_id.parse().unwrap();
-            let block_exists = client.block(&block_id).await.unwrap();
+        if let TransactionStatus::Success { block_height, .. } =
+            transaction_result.clone()
+        {
+            let block_exists = client.block_by_height(block_height).await.unwrap();
 
             assert!(block_exists.is_some());
         }

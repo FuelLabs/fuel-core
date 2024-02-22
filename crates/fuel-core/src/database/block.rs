@@ -1,24 +1,22 @@
-use crate::database::{
-    database_description::{
-        on_chain::OnChain,
-        DatabaseDescription,
-        DatabaseMetadata,
+use crate::{
+    database::{
+        database_description::{
+            off_chain::OffChain,
+            on_chain::OnChain,
+            DatabaseDescription,
+            DatabaseMetadata,
+        },
+        metadata::MetadataTable,
+        Database,
     },
-    metadata::MetadataTable,
-    Database,
+    fuel_core_graphql_api::storage::blocks::FuelBlockIdsToHeights,
 };
 use fuel_core_storage::{
-    blueprint::plain::Plain,
-    codec::{
-        primitive::Primitive,
-        raw::Raw,
-    },
     iter::IterDirection,
     not_found,
-    structured_storage::TableWithBlueprint,
     tables::{
         merkle::{
-            DenseMerkleMetadata,
+            DenseMetadataKey,
             FuelBlockMerkleData,
             FuelBlockMerkleMetadata,
         },
@@ -47,39 +45,7 @@ use fuel_core_types::{
     fuel_types::BlockHeight,
 };
 use itertools::Itertools;
-use std::borrow::{
-    BorrowMut,
-    Cow,
-};
-
-/// The table of fuel block's secondary key - `BlockId`.
-/// It links the `BlockId` to corresponding `BlockHeight`.
-pub struct FuelBlockSecondaryKeyBlockHeights;
-
-impl Mappable for FuelBlockSecondaryKeyBlockHeights {
-    /// Primary key - `BlockId`.
-    type Key = BlockId;
-    type OwnedKey = Self::Key;
-    /// Secondary key - `BlockHeight`.
-    type Value = BlockHeight;
-    type OwnedValue = Self::Value;
-}
-
-impl TableWithBlueprint for FuelBlockSecondaryKeyBlockHeights {
-    type Blueprint = Plain<Raw, Primitive<4>>;
-    type Column = fuel_core_storage::column::Column;
-
-    fn column() -> Self::Column {
-        Self::Column::FuelBlockSecondaryKeyBlockHeights
-    }
-}
-
-#[cfg(test)]
-fuel_core_storage::basic_storage_tests!(
-    FuelBlockSecondaryKeyBlockHeights,
-    <FuelBlockSecondaryKeyBlockHeights as Mappable>::Key::default(),
-    <FuelBlockSecondaryKeyBlockHeights as Mappable>::Value::default()
-);
+use std::borrow::Cow;
 
 impl StorageInspect<FuelBlocks> for Database {
     type Error = StorageError;
@@ -110,32 +76,6 @@ impl StorageMutate<FuelBlocks> for Database {
             .storage_as_mut::<FuelBlocks>()
             .insert(key, value)?;
 
-        let height = value.header().height();
-        let block_id = value.id();
-        self.storage::<FuelBlockSecondaryKeyBlockHeights>()
-            .insert(&block_id, key)?;
-
-        // Get latest metadata entry
-        let prev_metadata = self
-            .iter_all::<FuelBlockMerkleMetadata>(Some(IterDirection::Reverse))
-            .next()
-            .transpose()?
-            .map(|(_, metadata)| metadata)
-            .unwrap_or_default();
-
-        let storage = self.borrow_mut();
-        let mut tree: MerkleTree<FuelBlockMerkleData, _> =
-            MerkleTree::load(storage, prev_metadata.version())
-                .map_err(|err| StorageError::Other(anyhow::anyhow!(err)))?;
-        tree.push(block_id.as_slice())?;
-
-        // Generate new metadata for the updated tree
-        let root = tree.root();
-        let version = tree.leaves_count();
-        let metadata = DenseMerkleMetadata::new(root, version);
-        self.storage::<FuelBlockMerkleMetadata>()
-            .insert(height, &metadata)?;
-
         // TODO: Temporary solution to store the block height in the database manually here.
         //  Later it will be controlled by the `commit_changes` function on the `Database` side.
         //  https://github.com/FuelLabs/fuel-core/issues/1589
@@ -143,7 +83,7 @@ impl StorageMutate<FuelBlocks> for Database {
             &(),
             &DatabaseMetadata::V1 {
                 version: OnChain::version(),
-                height: *height,
+                height: *key,
             },
         )?;
 
@@ -154,21 +94,15 @@ impl StorageMutate<FuelBlocks> for Database {
         &mut self,
         key: &<FuelBlocks as Mappable>::Key,
     ) -> Result<Option<<FuelBlocks as Mappable>::OwnedValue>, Self::Error> {
-        let prev: Option<CompressedBlock> =
-            self.data.storage_as_mut::<FuelBlocks>().remove(key)?;
+        self.data.storage_as_mut::<FuelBlocks>().remove(key)
+    }
+}
 
-        if let Some(block) = &prev {
-            let height = block.header().height();
-            let _ = self
-                .storage::<FuelBlockSecondaryKeyBlockHeights>()
-                .remove(&block.id());
-            // We can't clean up `MerkleTree<FuelBlockMerkleData>`.
-            // But if we plan to insert a new block, it will override old values in the
-            // `FuelBlockMerkleData` table.
-            let _ = self.storage::<FuelBlockMerkleMetadata>().remove(height);
-        }
-
-        Ok(prev)
+impl Database<OffChain> {
+    pub fn get_block_height(&self, id: &BlockId) -> StorageResult<Option<BlockHeight>> {
+        self.storage::<FuelBlockIdsToHeights>()
+            .get(id)
+            .map(|v| v.map(|v| v.into_owned()))
     }
 }
 
@@ -185,12 +119,6 @@ impl Database {
     /// Get the current block at the head of the chain.
     pub fn get_current_block(&self) -> StorageResult<Option<CompressedBlock>> {
         self.latest_compressed_block()
-    }
-
-    pub fn get_block_height(&self, id: &BlockId) -> StorageResult<Option<BlockHeight>> {
-        self.storage::<FuelBlockSecondaryKeyBlockHeights>()
-            .get(id)
-            .map(|v| v.map(|v| v.into_owned()))
     }
 
     /// Retrieve the full block and all associated transactions
@@ -224,11 +152,7 @@ impl MerkleRootStorage<BlockHeight, FuelBlocks> for Database {
         &self,
         key: &BlockHeight,
     ) -> Result<fuel_core_storage::MerkleRoot, Self::Error> {
-        let metadata = self
-            .storage::<FuelBlockMerkleMetadata>()
-            .get(key)?
-            .ok_or(not_found!(FuelBlocks))?;
-        Ok(*metadata.root())
+        self.data.storage_as_ref::<FuelBlocks>().root(key)
     }
 }
 
@@ -246,12 +170,12 @@ impl Database {
 
         let message_merkle_metadata = self
             .storage::<FuelBlockMerkleMetadata>()
-            .get(message_block_height)?
+            .get(&DenseMetadataKey::Primary(*message_block_height))?
             .ok_or(not_found!(FuelBlockMerkleMetadata))?;
 
         let commit_merkle_metadata = self
             .storage::<FuelBlockMerkleMetadata>()
-            .get(commit_block_height)?
+            .get(&DenseMetadataKey::Primary(*commit_block_height))?
             .ok_or(not_found!(FuelBlockMerkleMetadata))?;
 
         let storage = self;
@@ -288,76 +212,8 @@ mod tests {
             primitives::Empty,
         },
         fuel_types::ChainId,
-        fuel_vm::crypto::ephemeral_merkle_root,
     };
     use test_case::test_case;
-
-    #[test_case(&[0]; "initial block with height 0")]
-    #[test_case(&[1337]; "initial block with arbitrary height")]
-    #[test_case(&[0, 1, 2, 3, 4, 5, 6, 7, 8, 9]; "ten sequential blocks starting from height 0")]
-    #[test_case(&[100, 101, 102, 103, 104, 105]; "five sequential blocks starting from height 100")]
-    #[test_case(&[0, 2, 5, 7, 11]; "five non-sequential blocks starting from height 0")]
-    #[test_case(&[100, 102, 105, 107, 111]; "five non-sequential blocks starting from height 100")]
-    fn can_get_merkle_root_of_inserted_blocks(heights: &[u32]) {
-        let mut database = Database::default();
-        let blocks = heights
-            .iter()
-            .copied()
-            .map(|height| {
-                let header = PartialBlockHeader {
-                    application: Default::default(),
-                    consensus: ConsensusHeader::<Empty> {
-                        height: height.into(),
-                        ..Default::default()
-                    },
-                };
-                let block = PartialFuelBlock::new(header, vec![]);
-                block.generate(&[])
-            })
-            .collect::<Vec<_>>();
-
-        // Insert the blocks. Each insertion creates a new version of Block
-        // metadata, including a new root.
-        for block in &blocks {
-            StorageMutate::<FuelBlocks>::insert(
-                &mut database,
-                block.header().height(),
-                &block.compress(&ChainId::default()),
-            )
-            .unwrap();
-        }
-
-        // Check each version
-        for version in 1..=blocks.len() {
-            // Generate the expected root for the version
-            let blocks = blocks.iter().take(version).collect::<Vec<_>>();
-            let block_ids = blocks.iter().map(|block| block.id());
-            let expected_root = ephemeral_merkle_root(block_ids);
-
-            // Check that root for the version is present
-            let last_block = blocks.last().unwrap();
-            let actual_root = database
-                .storage::<FuelBlocks>()
-                .root(last_block.header().height())
-                .expect("root to exist")
-                .into();
-
-            assert_eq!(expected_root, actual_root);
-        }
-    }
-
-    #[test]
-    fn get_merkle_root_with_no_blocks_returns_not_found_error() {
-        let database = Database::default();
-
-        // check that root is not present
-        let err = database
-            .storage::<FuelBlocks>()
-            .root(&0u32.into())
-            .expect_err("expected error getting invalid Block Merkle root");
-
-        assert!(matches!(err, fuel_core_storage::Error::NotFound(_, _)));
-    }
 
     const TEST_BLOCKS_COUNT: u32 = 10;
 
