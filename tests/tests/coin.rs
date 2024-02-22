@@ -23,23 +23,22 @@ use fuel_core_client::client::{
     },
     FuelClient,
 };
-use fuel_core_storage::{
-    tables::Coins,
-    StorageAsMut,
-};
 use fuel_core_types::{
-    entities::coins::coin::Coin,
     fuel_asm::*,
     fuel_tx::TxId,
 };
 use rstest::rstest;
 
 async fn setup_service(configs: Vec<CoinConfig>) -> FuelService {
-    let mut config = Config::local_node();
-    config.chain_conf.initial_state = Some(StateConfig {
-        coins: Some(configs),
+    let state = StateConfig {
+        coins: configs,
         ..Default::default()
-    });
+    };
+
+    let config = Config {
+        state_reader: StateReader::in_memory(state, MAX_GROUP_SIZE),
+        ..Config::local_node()
+    };
 
     FuelService::from_database(Database::default(), config)
         .await
@@ -56,14 +55,6 @@ async fn coin() {
         tx_id: Some(tx_id),
         ..Default::default()
     };
-    // let state = StateConfig {
-    //     coins: vec![coin],
-    //     ..Default::default()
-    // };
-    // let config = Config {
-    //     state_reader: StateReader::in_memory(state, MAX_GROUP_SIZE),
-    //     ..Config::local_node()
-    // };
 
     // setup server & client
     let srv = setup_service(vec![coin]).await;

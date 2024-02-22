@@ -13,8 +13,14 @@ use fuel_core_chain_config::{
 use fuel_core_storage::transactional::Transactional;
 use fuel_core_types::{
     entities::coins::coin::Coin,
+    fuel_tx::{
+        Bytes32,
+        UtxoId,
+    },
+    fuel_types::bytes::WORD_SIZE,
     services::executor::Event,
 };
+use itertools::Itertools;
 use std::borrow::Cow;
 
 fn process_messages(
@@ -37,14 +43,38 @@ fn process_messages(
     Ok(())
 }
 
-fn process_coins(db: &Database<OffChain>, coins: Vec<CoinConfig>) -> anyhow::Result<()> {
+// TODO dry
+fn generated_utxo_id(output_index: u64) -> UtxoId {
+    UtxoId::new(
+        // generated transaction id([0..[out_index/255]])
+        Bytes32::try_from(
+            (0..(Bytes32::LEN - WORD_SIZE))
+                .map(|_| 0u8)
+                .chain((output_index / 255).to_be_bytes())
+                .collect_vec()
+                .as_slice(),
+        )
+        .expect("Incorrect genesis transaction id byte length"),
+        (output_index % 255) as u8,
+    )
+}
+
+fn process_coins(
+    db: &Database<OffChain>,
+    coins: Vec<CoinConfig>,
+    output_index: &mut u64,
+) -> anyhow::Result<()> {
     let mut database_transaction = Transactional::transaction(db);
 
-    // let mut generated_output_index = 0;
-    // TODO generate utxo_id like for on-chain
     let coin_events = coins.iter().map(|config| {
+        let utxo_id = config.utxo_id().unwrap_or(generated_utxo_id(*output_index));
+
+        *output_index = output_index
+                .checked_add(1)
+                .expect("The maximum number of UTXOs supported in the genesis configuration has been exceeded.");
+
         let coin = Coin {
-            utxo_id: config.utxo_id().unwrap_or_default(),
+            utxo_id,
             owner: config.owner,
             amount: config.amount,
             asset_id: config.asset_id,
@@ -72,8 +102,9 @@ pub fn execute_genesis_block(
         process_messages(original_database, message_group?.data)?;
     }
 
+    let mut output_index = 0;
     for coin_group in config.state_reader.coins()? {
-        process_coins(original_database, coin_group?.data)?;
+        process_coins(original_database, coin_group?.data, &mut output_index)?;
     }
 
     Ok(())
