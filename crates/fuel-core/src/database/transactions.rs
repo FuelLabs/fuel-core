@@ -11,7 +11,10 @@ use crate::{
     },
 };
 use fuel_core_storage::{
-    iter::IterDirection,
+    iter::{
+        IterDirection,
+        IteratorOverTable,
+    },
     tables::Transactions,
     Result as StorageResult,
 };

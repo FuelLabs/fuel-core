@@ -1,6 +1,9 @@
 use crate::database::Database;
 use fuel_core_storage::{
-    iter::IterDirection,
+    iter::{
+        IterDirection,
+        IteratorOverTable,
+    },
     not_found,
     tables::{
         FuelBlocks,

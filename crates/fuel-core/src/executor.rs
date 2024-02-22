@@ -2813,6 +2813,7 @@ mod tests {
         };
         use fuel_core_relayer::storage::EventsHistory;
         use fuel_core_storage::{
+            iter::IteratorOverTable,
             tables::{
                 FuelBlocks,
                 SpentMessages,

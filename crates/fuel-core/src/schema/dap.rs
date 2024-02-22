@@ -16,7 +16,10 @@ use async_graphql::{
 };
 use fuel_core_storage::{
     not_found,
-    transactional::StorageTransaction,
+    transactional::{
+        IntoTransaction,
+        StorageTransaction,
+    },
     vm_storage::VmStorage,
     InterpreterStorage,
 };
@@ -162,7 +165,7 @@ impl ConcreteStorage {
             .ok_or(not_found!("Block for VMDatabase"))?;
 
         let vm_database = VmStorage::new(
-            StorageTransaction::new_transaction(storage),
+            storage.into_transaction(),
             block.header().consensus(),
             // TODO: Use a real coinbase address
             Default::default(),

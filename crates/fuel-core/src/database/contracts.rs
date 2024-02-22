@@ -1,7 +1,10 @@
 use crate::database::Database;
 use fuel_core_chain_config::ContractConfig;
 use fuel_core_storage::{
-    iter::IterDirection,
+    iter::{
+        IterDirection,
+        IteratorOverTable,
+    },
     tables::{
         ContractsAssets,
         ContractsInfo,

@@ -52,10 +52,10 @@ mod tests {
     use crate::{
         structured_storage::{
             test::InMemoryStorage,
-            StructuredStorage,
             TableWithBlueprint,
         },
         tables::FuelBlocks,
+        transactional::ReadTransaction,
         StorageAsMut,
         StorageMutate,
     };
@@ -87,7 +87,7 @@ mod tests {
     fn can_get_merkle_root_of_inserted_blocks(heights: &[u32]) {
         let storage =
             InMemoryStorage::<<FuelBlocks as TableWithBlueprint>::Column>::default();
-        let mut storage = StructuredStorage::new_transaction(&storage);
+        let mut storage = storage.read_transaction();
         let blocks = heights
             .iter()
             .copied()
@@ -140,7 +140,7 @@ mod tests {
 
         let storage =
             InMemoryStorage::<<FuelBlocks as TableWithBlueprint>::Column>::default();
-        let database = StructuredStorage::new_transaction(&storage);
+        let database = storage.read_transaction();
 
         // check that root is not present
         let err = database

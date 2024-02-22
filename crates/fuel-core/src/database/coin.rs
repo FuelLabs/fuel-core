@@ -10,7 +10,10 @@ use crate::{
 };
 use fuel_core_chain_config::CoinConfig;
 use fuel_core_storage::{
-    iter::IterDirection,
+    iter::{
+        IterDirection,
+        IteratorOverTable,
+    },
     not_found,
     tables::Coins,
     Result as StorageResult,

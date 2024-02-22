@@ -6,7 +6,10 @@ use crate::{
     fuel_core_graphql_api::storage::blocks::FuelBlockIdsToHeights,
 };
 use fuel_core_storage::{
-    iter::IterDirection,
+    iter::{
+        IterDirection,
+        IteratorOverTable,
+    },
     not_found,
     tables::{
         merkle::{

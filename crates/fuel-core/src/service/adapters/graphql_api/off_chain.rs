@@ -18,7 +18,10 @@ use fuel_core_storage::{
         IterDirection,
     },
     not_found,
-    transactional::StorageTransaction,
+    transactional::{
+        IntoTransaction,
+        StorageTransaction,
+    },
     Error as StorageError,
     Result as StorageResult,
 };
@@ -91,6 +94,6 @@ impl Transactional for Database<OffChain> {
     type Transaction<'a> = StorageTransaction<&'a mut Self> where Self: 'a;
 
     fn transaction(&mut self) -> Self::Transaction<'_> {
-        StorageTransaction::new_transaction(self)
+        self.into_transaction()
     }
 }

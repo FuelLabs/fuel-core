@@ -25,7 +25,9 @@ use fuel_core_storage::{
         Changes,
         ConflictPolicy,
         Modifiable,
+        ReadTransaction,
         StorageTransaction,
+        WriteTransaction,
     },
     vm_storage::VmStorage,
     StorageAsMut,
@@ -526,9 +528,10 @@ where
     where
         TxSource: TransactionsSource,
     {
-        let mut block_st_transaction =
-            StorageTransaction::new_transaction(&self.database)
-                .with_policy(ConflictPolicy::Overwrite);
+        let mut block_st_transaction = self
+            .database
+            .read_transaction()
+            .with_policy(ConflictPolicy::Overwrite);
         let mut data = ExecutionData {
             coinbase: 0,
             used_gas: 0,
@@ -556,16 +559,15 @@ where
         // The block level storage transaction that also contains data from the relayer.
         // Starting this point modifications from each thread should be independent
         // and shouldn't touch the same data.
-        let mut block_with_relayer_data_transaction =
-            StorageTransaction::new_transaction(&mut block_st_transaction)
+        let mut block_with_relayer_data_transaction = block_st_transaction.write_transaction()
                 // Enforces independent changes from each thread.
                 .with_policy(ConflictPolicy::Fail);
 
         // We execute transactions in a single thread right now, but later,
         // we will execute them in parallel with a separate independent storage transaction per thread.
-        let mut thread_block_transaction =
-            StorageTransaction::new_transaction(&block_with_relayer_data_transaction)
-                .with_policy(ConflictPolicy::Overwrite);
+        let mut thread_block_transaction = block_with_relayer_data_transaction
+            .read_transaction()
+            .with_policy(ConflictPolicy::Overwrite);
 
         // ALl transactions should be in the `TxSource`.
         // We use `block.transactions` to store executed transactions.
@@ -577,9 +579,9 @@ where
          -> ExecutorResult<()> {
             let tx_count = execution_data.tx_count;
             let tx = {
-                let mut tx_st_transaction =
-                    StorageTransaction::new_transaction(&mut thread_block_transaction)
-                        .with_policy(ConflictPolicy::Overwrite);
+                let mut tx_st_transaction = thread_block_transaction
+                    .write_transaction()
+                    .with_policy(ConflictPolicy::Overwrite);
                 let tx_id = tx.id(&self.config.consensus_parameters.chain_id);
                 let result = self.execute_transaction(
                     tx,
@@ -793,7 +795,7 @@ where
         checked_mint: Checked<Mint>,
         header: &PartialBlockHeader,
         execution_data: &mut ExecutionData,
-        mut block_st_transaction: &mut StorageTransaction<T>,
+        block_st_transaction: &mut StorageTransaction<T>,
         execution_kind: ExecutionKind,
     ) -> ExecutorResult<Transaction>
     where
@@ -871,9 +873,9 @@ where
                 block_st_transaction,
             )?;
 
-            let mut sub_block_db_commit =
-                StorageTransaction::new_transaction(&mut block_st_transaction)
-                    .with_policy(ConflictPolicy::Overwrite);
+            let mut sub_block_db_commit = block_st_transaction
+                .write_transaction()
+                .with_policy(ConflictPolicy::Overwrite);
 
             let mut vm_db = VmStorage::new(
                 &mut sub_block_db_commit,
@@ -999,9 +1001,9 @@ where
 
         // execute transaction
         // setup database view that only lives for the duration of vm execution
-        let mut sub_block_db_commit =
-            StorageTransaction::new_transaction(&tx_st_transaction)
-                .with_policy(ConflictPolicy::Overwrite);
+        let mut sub_block_db_commit = tx_st_transaction
+            .read_transaction()
+            .with_policy(ConflictPolicy::Overwrite);
 
         // execution vm
         let vm_db = VmStorage::new(
@@ -1390,10 +1392,8 @@ where
                             // TODO: Remove usage of the `StorageTransaction` when
                             //  https://github.com/FuelLabs/fuel-vm/pull/679
                             //  is available in the `fuel-core`.
-                            let contract = ContractRef::new(
-                                StorageTransaction::new_transaction(&db),
-                                *contract_id,
-                            );
+                            let contract =
+                                ContractRef::new(db.read_transaction(), *contract_id);
                             let utxo_info =
                                 contract.validated_utxo(self.options.utxo_validation)?;
                             *utxo_id = utxo_info.utxo_id;
@@ -1447,10 +1447,8 @@ where
                             // TODO: Remove usage of the `StorageTransaction` when
                             //  https://github.com/FuelLabs/fuel-vm/pull/679
                             //  is available in the `fuel-core`.
-                            let contract = ContractRef::new(
-                                StorageTransaction::new_transaction(&db),
-                                *contract_id,
-                            );
+                            let contract =
+                                ContractRef::new(db.read_transaction(), *contract_id);
                             let provided_info = ContractUtxoInfo {
                                 utxo_id: *utxo_id,
                                 tx_pointer: *tx_pointer,
@@ -1515,10 +1513,8 @@ where
                         // TODO: Remove usage of the `StorageTransaction` when
                         //  https://github.com/FuelLabs/fuel-vm/pull/679
                         //  is available in the `fuel-core`.
-                        let contract = ContractRef::new(
-                            StorageTransaction::new_transaction(&db),
-                            *contract_id,
-                        );
+                        let contract =
+                            ContractRef::new(db.read_transaction(), *contract_id);
                         contract_output.balance_root = contract.balance_root()?;
                         contract_output.state_root = contract.state_root()?;
                     }
@@ -1542,10 +1538,8 @@ where
                         // TODO: Remove usage of the `StorageTransaction` when
                         //  https://github.com/FuelLabs/fuel-vm/pull/679
                         //  is available in the `fuel-core`.
-                        let contract = ContractRef::new(
-                            StorageTransaction::new_transaction(&db),
-                            *contract_id,
-                        );
+                        let contract =
+                            ContractRef::new(db.read_transaction(), *contract_id);
                         if contract_output.balance_root != contract.balance_root()? {
                             return Err(ExecutorError::InvalidTransactionOutcome {
                                 transaction_id: tx_id,

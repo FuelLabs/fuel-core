@@ -8,8 +8,14 @@ use crate::{
         SupportsBatching,
         SupportsMerkle,
     },
+    iter::{
+        BoxedIter,
+        IterDirection,
+        IterableStore,
+    },
     kv_store::{
         BatchOperations,
+        KVItem,
         KeyValueInspect,
         KeyValueMutate,
         StorageColumn,
@@ -157,11 +163,26 @@ impl<S> BatchOperations for StructuredStorage<S>
 where
     S: BatchOperations,
 {
-    fn batch_write<I>(&mut self, entries: I) -> StorageResult<()>
+    fn batch_write<I>(&mut self, column: Self::Column, entries: I) -> StorageResult<()>
     where
-        I: Iterator<Item = (Vec<u8>, Self::Column, WriteOperation)>,
+        I: Iterator<Item = (Vec<u8>, WriteOperation)>,
     {
-        self.inner.batch_write(entries)
+        self.inner.batch_write(column, entries)
+    }
+}
+
+impl<S> IterableStore for StructuredStorage<S>
+where
+    S: IterableStore,
+{
+    fn iter_store(
+        &self,
+        column: Self::Column,
+        prefix: Option<&[u8]>,
+        start: Option<&[u8]>,
+        direction: IterDirection,
+    ) -> BoxedIter<KVItem> {
+        self.inner.iter_store(column, prefix, start, direction)
     }
 }
 
@@ -177,7 +198,7 @@ where
 impl<Column, S, M> StorageInspect<M> for StructuredStorage<S>
 where
     S: KeyValueInspect<Column = Column>,
-    M: Mappable + TableWithBlueprint<Column = Column>,
+    M: TableWithBlueprint<Column = Column>,
     M::Blueprint: BlueprintInspect<M, StructuredStorage<S>>,
 {
     type Error = StorageError;
@@ -195,7 +216,7 @@ where
 impl<Column, S, M> StorageMutate<M> for StructuredStorage<S>
 where
     S: KeyValueMutate<Column = Column>,
-    M: Mappable + TableWithBlueprint<Column = Column>,
+    M: TableWithBlueprint<Column = Column>,
     M::Blueprint: BlueprintMutate<M, StructuredStorage<S>>,
 {
     fn insert(
@@ -214,7 +235,7 @@ where
 impl<Column, S, M> StorageSize<M> for StructuredStorage<S>
 where
     S: KeyValueInspect<Column = Column>,
-    M: Mappable + TableWithBlueprint<Column = Column>,
+    M: TableWithBlueprint<Column = Column>,
     M::Blueprint: BlueprintInspect<M, StructuredStorage<S>>,
 {
     fn size_of_value(&self, key: &M::Key) -> Result<Option<usize>, Self::Error> {
@@ -225,7 +246,7 @@ where
 impl<Column, S, M> StorageBatchMutate<M> for StructuredStorage<S>
 where
     S: BatchOperations<Column = Column>,
-    M: Mappable + TableWithBlueprint<Column = Column>,
+    M: TableWithBlueprint<Column = Column>,
     M::Blueprint: SupportsBatching<M, StructuredStorage<S>>,
 {
     fn init_storage<'a, Iter>(&mut self, set: Iter) -> Result<(), Self::Error>
@@ -262,7 +283,7 @@ where
     //  https://github.com/FuelLabs/fuel-vm/pull/679
     S: KeyValueMutate<Column = Column>,
     M::Blueprint: BlueprintMutate<M, StructuredStorage<S>>,
-    M: Mappable + TableWithBlueprint<Column = Column>,
+    M: TableWithBlueprint<Column = Column>,
     M::Blueprint: SupportsMerkle<Key, M, StructuredStorage<S>>,
 {
     fn root(&self, key: &Key) -> Result<MerkleRoot, Self::Error> {

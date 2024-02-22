@@ -14,10 +14,21 @@ use crate::{
 };
 use std::{
     collections::{
-        hash_map::Entry,
+        btree_map::Entry,
+        BTreeMap,
         HashMap,
     },
     sync::Arc,
+};
+
+#[cfg(feature = "test-helpers")]
+use crate::{
+    iter::{
+        BoxedIter,
+        IterDirection,
+        IterableStore,
+    },
+    kv_store::KVItem,
 };
 
 /// Provides a view of the storage at the given height.
@@ -52,11 +63,11 @@ pub struct StorageTransactionInner<S> {
 }
 
 impl<S> StorageTransaction<S> {
-    /// Creates a new instance of the structured storage.
-    pub fn new_transaction(storage: S) -> Self {
+    /// Creates a new instance of the storage transaction.
+    pub fn transaction(storage: S, policy: ConflictPolicy, changes: Changes) -> Self {
         StructuredStorage::new(StorageTransactionInner {
-            changes: Default::default(),
-            policy: ConflictPolicy::Overwrite,
+            changes,
+            policy,
             storage,
         })
     }
@@ -103,7 +114,7 @@ pub trait Modifiable {
 }
 
 /// The type describing the list of changes to the storage.
-pub type Changes = HashMap<(u32, Vec<u8>), WriteOperation>;
+pub type Changes = HashMap<u32, BTreeMap<Vec<u8>, WriteOperation>>;
 
 impl<Storage> From<StorageTransaction<Storage>> for Changes {
     fn from(transaction: StorageTransaction<Storage>) -> Self {
@@ -111,15 +122,60 @@ impl<Storage> From<StorageTransaction<Storage>> for Changes {
     }
 }
 
-impl<Storage> StorageTransaction<Storage> {
-    /// Returns the read transaction without ability to commit the changes.
-    pub fn read_transaction(&self) -> StorageTransaction<&Self> {
-        StorageTransaction::new_transaction(self)
-    }
+/// The trait to convert the type into the storage transaction.
+pub trait IntoTransaction: Sized {
+    /// Converts the type into the storage transaction consuming it.
+    fn into_transaction(self) -> StorageTransaction<Self>;
+}
 
+impl<S> IntoTransaction for S
+where
+    S: KeyValueInspect,
+{
+    fn into_transaction(self) -> StorageTransaction<Self> {
+        StorageTransaction::transaction(
+            self,
+            ConflictPolicy::Overwrite,
+            Default::default(),
+        )
+    }
+}
+
+/// Creates a new instance of the storage read transaction.
+pub trait ReadTransaction {
+    /// Returns the read transaction without ability to commit the changes.
+    fn read_transaction(&self) -> StorageTransaction<&Self>;
+}
+
+impl<S> ReadTransaction for S
+where
+    S: KeyValueInspect,
+{
+    fn read_transaction(&self) -> StorageTransaction<&Self> {
+        StorageTransaction::transaction(
+            self,
+            ConflictPolicy::Overwrite,
+            Default::default(),
+        )
+    }
+}
+
+/// Creates a new instance of the storage write transaction.
+pub trait WriteTransaction {
     /// Returns the write transaction that can commit the changes.
-    pub fn write_transaction(&mut self) -> StorageTransaction<&mut Self> {
-        StorageTransaction::new_transaction(self)
+    fn write_transaction(&mut self) -> StorageTransaction<&mut Self>;
+}
+
+impl<S> WriteTransaction for S
+where
+    S: KeyValueInspect + Modifiable,
+{
+    fn write_transaction(&mut self) -> StorageTransaction<&mut Self> {
+        StorageTransaction::transaction(
+            self,
+            ConflictPolicy::Overwrite,
+            Default::default(),
+        )
     }
 }
 
@@ -137,26 +193,29 @@ where
 
 impl<Storage> Modifiable for StorageTransactionInner<Storage> {
     fn commit_changes(&mut self, changes: Changes) -> StorageResult<()> {
-        for (key, value) in changes.into_iter() {
-            match &self.policy {
-                ConflictPolicy::Fail => {
-                    let entry = self.changes.entry(key);
+        for (column, value) in changes.into_iter() {
+            let btree = self.changes.entry(column).or_default();
+            for (k, v) in value {
+                match &self.policy {
+                    ConflictPolicy::Fail => {
+                        let entry = btree.entry(k);
 
-                    match entry {
-                        Entry::Occupied(occupied) => {
-                            return Err(anyhow::anyhow!(
-                                "Conflicting operation {value:?} for the {:?}",
-                                occupied.key()
-                            )
-                            .into());
-                        }
-                        Entry::Vacant(vacant) => {
-                            vacant.insert(value);
+                        match entry {
+                            Entry::Occupied(occupied) => {
+                                return Err(anyhow::anyhow!(
+                                    "Conflicting operation {v:?} for the {:?}",
+                                    occupied.key()
+                                )
+                                .into());
+                            }
+                            Entry::Vacant(vacant) => {
+                                vacant.insert(v);
+                            }
                         }
                     }
-                }
-                ConflictPolicy::Overwrite => {
-                    self.changes.insert(key, value);
+                    ConflictPolicy::Overwrite => {
+                        btree.insert(k, v);
+                    }
                 }
             }
         }
@@ -173,7 +232,11 @@ where
 
     fn get(&self, key: &[u8], column: Self::Column) -> StorageResult<Option<Value>> {
         let k = key.to_vec();
-        if let Some(operation) = self.changes.get(&(column.id(), k)) {
+        if let Some(operation) = self
+            .changes
+            .get(&column.id())
+            .and_then(|btree| btree.get(&k))
+        {
             match operation {
                 WriteOperation::Insert(value) => Ok(Some(value.clone())),
                 WriteOperation::Remove => Ok(None),
@@ -197,7 +260,9 @@ where
     ) -> StorageResult<()> {
         let k = key.to_vec();
         self.changes
-            .insert((column.id(), k), WriteOperation::Insert(value));
+            .entry(column.id())
+            .or_default()
+            .insert(k, WriteOperation::Insert(value));
         Ok(())
     }
 
@@ -208,7 +273,7 @@ where
         value: Value,
     ) -> StorageResult<Option<Value>> {
         let k = key.to_vec();
-        let entry = self.changes.entry((column.id(), k));
+        let entry = self.changes.entry(column.id()).or_default().entry(k);
 
         match entry {
             Entry::Occupied(mut occupied) => {
@@ -233,16 +298,16 @@ where
         buf: &[u8],
     ) -> StorageResult<usize> {
         let k = key.to_vec();
-        self.changes.insert(
-            (column.id(), k),
-            WriteOperation::Insert(Arc::new(buf.to_vec())),
-        );
+        self.changes
+            .entry(column.id())
+            .or_default()
+            .insert(k, WriteOperation::Insert(Arc::new(buf.to_vec())));
         Ok(buf.len())
     }
 
     fn take(&mut self, key: &[u8], column: Self::Column) -> StorageResult<Option<Value>> {
         let k = key.to_vec();
-        let entry = self.changes.entry((column.id(), k));
+        let entry = self.changes.entry(column.id()).or_default().entry(k);
 
         match entry {
             Entry::Occupied(mut occupied) => {
@@ -263,7 +328,9 @@ where
     fn delete(&mut self, key: &[u8], column: Self::Column) -> StorageResult<()> {
         let k = key.to_vec();
         self.changes
-            .insert((column.id(), k), WriteOperation::Remove);
+            .entry(column.id())
+            .or_default()
+            .insert(k, WriteOperation::Remove);
         Ok(())
     }
 }
@@ -273,14 +340,39 @@ where
     Column: StorageColumn,
     S: KeyValueInspect<Column = Column>,
 {
-    fn batch_write<I>(&mut self, entries: I) -> StorageResult<()>
+    fn batch_write<I>(&mut self, column: Column, entries: I) -> StorageResult<()>
     where
-        I: Iterator<Item = (Vec<u8>, Column, WriteOperation)>,
+        I: Iterator<Item = (Vec<u8>, WriteOperation)>,
     {
-        for (key, column, op) in entries {
-            self.changes.insert((column.id(), key), op);
-        }
+        let btree = self.changes.entry(column.id()).or_default();
+        entries.for_each(|(key, operation)| {
+            btree.insert(key, operation);
+        });
         Ok(())
+    }
+}
+
+// The `IterableStore` should only be implemented for the actual storage,
+// not the storage transaction, to maximize the performance.
+//
+// Another reason is that only actual storage with finalized updates should be
+// used to iterate over its entries to avoid inconsistent results.
+//
+// We implement `IterableStore` for `StorageTransactionInner` only to allow
+// using it in the tests and benchmarks as a type(not even implementation of it).
+#[cfg(feature = "test-helpers")]
+impl<S> IterableStore for StorageTransactionInner<S>
+where
+    S: IterableStore,
+{
+    fn iter_store(
+        &self,
+        _: Self::Column,
+        _: Option<&[u8]>,
+        _: Option<&[u8]>,
+        _: IterDirection,
+    ) -> BoxedIter<KVItem> {
+        unimplemented!()
     }
 }
 
@@ -296,13 +388,15 @@ mod test {
 
     impl<Column> Modifiable for InMemoryStorage<Column> {
         fn commit_changes(&mut self, changes: Changes) -> StorageResult<()> {
-            for (key, value) in changes.into_iter() {
-                match value {
-                    WriteOperation::Insert(value) => {
-                        self.storage.insert(key, value);
-                    }
-                    WriteOperation::Remove => {
-                        self.storage.remove(&key);
+            for (column, value) in changes.into_iter() {
+                for (key, value) in value {
+                    match value {
+                        WriteOperation::Insert(value) => {
+                            self.storage.insert((column, key), value);
+                        }
+                        WriteOperation::Remove => {
+                            self.storage.remove(&(column, key));
+                        }
                     }
                 }
             }
@@ -313,7 +407,7 @@ mod test {
     #[test]
     fn modification_works() {
         let mut storage = InMemoryStorage::default();
-        let mut transaction = StorageTransaction::new_transaction(&mut storage);
+        let mut transaction = storage.write_transaction();
 
         let mut sub_transaction = transaction.write_transaction();
 
@@ -330,8 +424,8 @@ mod test {
     #[test]
     fn concurrency_independent_modifications_for_many_transactions_works() {
         let storage = InMemoryStorage::default();
-        let mut transactions = StorageTransaction::new_transaction(storage)
-            .with_policy(ConflictPolicy::Fail);
+        let mut transactions =
+            storage.into_transaction().with_policy(ConflictPolicy::Fail);
 
         let mut sub_transaction1 = transactions.read_transaction();
         let mut sub_transaction2 = transactions.read_transaction();
@@ -354,8 +448,8 @@ mod test {
     #[test]
     fn concurrency_overlapping_modifications_for_many_transactions_fails() {
         let storage = InMemoryStorage::default();
-        let mut transactions = StorageTransaction::new_transaction(storage)
-            .with_policy(ConflictPolicy::Fail);
+        let mut transactions =
+            storage.into_transaction().with_policy(ConflictPolicy::Fail);
 
         let mut sub_transaction1 = transactions.read_transaction();
         let mut sub_transaction2 = transactions.read_transaction();

@@ -1,7 +1,6 @@
 use fuel_core_storage::{
     column::Column,
     kv_store::KeyValueInspect,
-    structured_storage::StructuredStorage,
     tables::{
         merkle::{
             DenseMetadataKey,
@@ -16,6 +15,7 @@ use fuel_core_storage::{
         ConflictPolicy,
         Modifiable,
         StorageTransaction,
+        WriteTransaction,
     },
     MerkleRoot,
     Result as StorageResult,
@@ -113,7 +113,7 @@ where
     type Transaction<'a> = StorageTransaction<&'a mut S> where Self: 'a;
 
     fn storage_transaction(&mut self, changes: Changes) -> Self::Transaction<'_> {
-        StorageTransaction::new_transaction(self)
+        self.write_transaction()
             .with_changes(changes)
             .with_policy(ConflictPolicy::Fail)
     }
@@ -124,8 +124,7 @@ where
     S: KeyValueInspect<Column = Column> + Modifiable,
 {
     fn latest_block_root(&self) -> StorageResult<Option<MerkleRoot>> {
-        let storage = StructuredStorage::new_transaction(self);
-        Ok(storage
+        Ok(self
             .storage_as_ref::<FuelBlockMerkleMetadata>()
             .get(&DenseMetadataKey::Latest)?
             .map(|cow| *cow.root()))
@@ -136,7 +135,7 @@ where
         chain_id: &ChainId,
         block: &SealedBlock,
     ) -> StorageResult<bool> {
-        let mut storage = StructuredStorage::new_transaction(self);
+        let mut storage = self.write_transaction();
         let height = block.entity.header().height();
         let mut found = storage
             .storage_as_mut::<FuelBlocks>()

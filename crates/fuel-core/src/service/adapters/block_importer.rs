@@ -17,7 +17,10 @@ use fuel_core_importer::{
     Importer,
 };
 use fuel_core_storage::{
-    iter::IterDirection,
+    iter::{
+        IterDirection,
+        IteratorOverTable,
+    },
     tables::{
         merkle::{
             DenseMetadataKey,

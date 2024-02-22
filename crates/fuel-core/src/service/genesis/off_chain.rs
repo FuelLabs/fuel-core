@@ -9,7 +9,7 @@ use crate::{
         Config,
     },
 };
-use fuel_core_storage::transactional::StorageTransaction;
+use fuel_core_storage::transactional::WriteTransaction;
 use fuel_core_types::{
     entities::message::Message,
     services::executor::Event,
@@ -22,7 +22,7 @@ pub fn execute_genesis_block(
     original_database: &mut Database<OffChain>,
 ) -> anyhow::Result<()> {
     // start a db transaction for bulk-writing
-    let mut database_transaction = StorageTransaction::new_transaction(original_database);
+    let mut database_transaction = original_database.write_transaction();
 
     if let Some(state_config) = &config.chain_conf.initial_state {
         if let Some(messages) = &state_config.messages {

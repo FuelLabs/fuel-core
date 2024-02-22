@@ -11,7 +11,11 @@ use fuel_core::database::{
     Database,
 };
 use fuel_core_storage::{
-    transactional::StorageTransaction,
+    transactional::{
+        IntoTransaction,
+        ReadTransaction,
+        WriteTransaction,
+    },
     vm_storage::VmStorage,
 };
 use fuel_core_types::{
@@ -64,11 +68,11 @@ fn insert_state_single_contract_database(c: &mut Criterion) {
             let mut db = Database::<OnChain>::default();
             let contract: ContractId = rng.gen();
             setup(&mut db, &contract, n);
-            let outer = StorageTransaction::new_transaction(&mut db);
+            let outer = db.write_transaction();
             b.iter_custom(|iters| {
                 let mut elapsed_time = Duration::default();
                 for _ in 0..iters {
-                    let inner = StorageTransaction::new_transaction(&outer);
+                    let inner = outer.read_transaction();
                     let mut inner_db = VmStorage::new::<GeneratedConsensusFields>(
                         inner,
                         &Default::default(),
@@ -124,12 +128,12 @@ fn insert_state_single_contract_transaction(c: &mut Criterion) {
         group.bench_function(name, |b| {
             let db = Database::<OnChain>::default();
             let contract: ContractId = rng.gen();
-            let mut outer = StorageTransaction::new_transaction(db);
+            let mut outer = db.into_transaction();
             setup(&mut outer, &contract, n);
             b.iter_custom(|iters| {
                 let mut elapsed_time = Duration::default();
                 for _ in 0..iters {
-                    let inner = StorageTransaction::new_transaction(&outer);
+                    let inner = outer.read_transaction();
                     let mut inner_db = VmStorage::new::<GeneratedConsensusFields>(
                         inner,
                         &Default::default(),
@@ -188,12 +192,12 @@ fn insert_state_multiple_contracts_database(c: &mut Criterion) {
                 let contract: ContractId = rng.gen();
                 setup(&mut db, &contract, 1);
             }
-            let outer = StorageTransaction::new_transaction(db);
+            let outer = db.into_transaction();
             b.iter_custom(|iters| {
                 let mut elapsed_time = Duration::default();
                 let contract: ContractId = rng.gen();
                 for _ in 0..iters {
-                    let inner = StorageTransaction::new_transaction(&outer);
+                    let inner = outer.read_transaction();
                     let mut inner_db = VmStorage::new::<GeneratedConsensusFields>(
                         inner,
                         &Default::default(),
@@ -248,7 +252,7 @@ fn insert_state_multiple_contracts_transaction(c: &mut Criterion) {
     let mut bench_state = |group: &mut BenchmarkGroup<WallTime>, name: &str, n: usize| {
         group.bench_function(name, |b| {
             let db = Database::<OnChain>::default();
-            let mut outer = StorageTransaction::new_transaction(db);
+            let mut outer = db.into_transaction();
             for _ in 0..n {
                 let contract: ContractId = rng.gen();
                 setup(&mut outer, &contract, 1);
@@ -257,7 +261,7 @@ fn insert_state_multiple_contracts_transaction(c: &mut Criterion) {
                 let mut elapsed_time = Duration::default();
                 let contract: ContractId = rng.gen();
                 for _ in 0..iters {
-                    let inner = StorageTransaction::new_transaction(&outer);
+                    let inner = outer.read_transaction();
                     let mut inner_db = VmStorage::new::<GeneratedConsensusFields>(
                         inner,
                         &Default::default(),

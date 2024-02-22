@@ -58,7 +58,7 @@ mod tests {
         Database,
     };
     use fuel_core_storage::{
-        transactional::StorageTransaction,
+        transactional::IntoTransaction,
         StorageAsMut,
     };
     use fuel_core_types::fuel_types::AssetId;
@@ -86,8 +86,7 @@ mod tests {
         let data = core::iter::from_fn(gen).take(5_000).collect::<Vec<_>>();
 
         let contract_id = ContractId::from([1u8; 32]);
-        let mut init_database =
-            StorageTransaction::new_transaction(Database::<OnChain>::default());
+        let mut init_database = Database::<OnChain>::default().into_transaction();
 
         init_database
             .init_contract_balances(&contract_id, data.clone().into_iter())
@@ -97,8 +96,7 @@ mod tests {
             .root(&contract_id)
             .expect("Should get root");
 
-        let mut seq_database =
-            StorageTransaction::new_transaction(Database::<OnChain>::default());
+        let mut seq_database = Database::<OnChain>::default().into_transaction();
         for (asset, value) in data.iter() {
             seq_database
                 .storage::<ContractsAssets>()

@@ -15,7 +15,7 @@ use fuel_core_storage::{
     iter::{
         BoxedIter,
         IntoBoxedIter,
-        IteratorableStore,
+        IterableStore,
     },
     kv_store::{
         KVItem,
@@ -259,10 +259,10 @@ where
     }
 
     fn cf(&self, column: Description::Column) -> Arc<BoundColumnFamily> {
-        self.cf_usize(column.id())
+        self.cf_u32(column.id())
     }
 
-    fn cf_usize(&self, column: u32) -> Arc<BoundColumnFamily> {
+    fn cf_u32(&self, column: u32) -> Arc<BoundColumnFamily> {
         self.db
             .cf_handle(&Self::col_name(column))
             .expect("invalid column state")
@@ -300,7 +300,7 @@ where
     ) -> impl Iterator<Item = KVItem> + '_ {
         let maybe_next_item = next_prefix(prefix.to_vec())
             .and_then(|next_prefix| {
-                self.iter_all(
+                self.iter_store(
                     column,
                     Some(next_prefix.as_slice()),
                     None,
@@ -431,11 +431,11 @@ where
     }
 }
 
-impl<Description> IteratorableStore for RocksDb<Description>
+impl<Description> IterableStore for RocksDb<Description>
 where
     Description: DatabaseDescription,
 {
-    fn iter_all(
+    fn iter_store(
         &self,
         column: Self::Column,
         prefix: Option<&[u8]>,
@@ -509,13 +509,16 @@ where
     fn commit_changes(&self, changes: Changes) -> StorageResult<()> {
         let mut batch = WriteBatch::default();
 
-        for ((column, key), op) in changes {
-            match op {
-                WriteOperation::Insert(value) => {
-                    batch.put_cf(&self.cf_usize(column), key, value.as_ref());
-                }
-                WriteOperation::Remove => {
-                    batch.delete_cf(&self.cf_usize(column), key);
+        for (column, ops) in changes {
+            let cf = self.cf_u32(column);
+            for (key, op) in ops {
+                match op {
+                    WriteOperation::Insert(value) => {
+                        batch.put_cf(&cf, key, value.as_ref());
+                    }
+                    WriteOperation::Remove => {
+                        batch.delete_cf(&cf, key);
+                    }
                 }
             }
         }
@@ -549,9 +552,12 @@ mod tests {
     use fuel_core_storage::{
         column::Column,
         kv_store::KeyValueMutate,
-        transactional::StorageTransaction,
+        transactional::ReadTransaction,
     };
-    use std::collections::HashMap;
+    use std::collections::{
+        BTreeMap,
+        HashMap,
+    };
     use tempfile::TempDir;
 
     impl<Description> KeyValueMutate for RocksDb<Description>
@@ -564,7 +570,7 @@ mod tests {
             column: Self::Column,
             buf: &[u8],
         ) -> StorageResult<usize> {
-            let mut transaction = StorageTransaction::new_transaction(&self);
+            let mut transaction = self.read_transaction();
             let len = transaction.write(key, column, buf)?;
             let changes = transaction.into_changes();
             self.commit_changes(changes)?;
@@ -573,7 +579,7 @@ mod tests {
         }
 
         fn delete(&mut self, key: &[u8], column: Self::Column) -> StorageResult<()> {
-            let mut transaction = StorageTransaction::new_transaction(&self);
+            let mut transaction = self.read_transaction();
             transaction.delete(key, column)?;
             let changes = transaction.into_changes();
             self.commit_changes(changes)?;
@@ -644,8 +650,11 @@ mod tests {
 
         let (db, _tmp) = create_db();
         let ops = vec![(
-            (Column::Metadata.id(), key.clone()),
-            WriteOperation::Insert(value.clone()),
+            Column::Metadata.id(),
+            BTreeMap::from_iter(vec![(
+                key.clone(),
+                WriteOperation::Insert(value.clone()),
+            )]),
         )];
 
         db.commit_changes(HashMap::from_iter(ops)).unwrap();
@@ -660,7 +669,10 @@ mod tests {
         let (mut db, _tmp) = create_db();
         db.put(&key, Column::Metadata, value).unwrap();
 
-        let ops = vec![((Column::Metadata.id(), key.clone()), WriteOperation::Remove)];
+        let ops = vec![(
+            Column::Metadata.id(),
+            BTreeMap::from_iter(vec![(key.clone(), WriteOperation::Remove)]),
+        )];
         db.commit_changes(HashMap::from_iter(ops)).unwrap();
 
         assert_eq!(db.get(&key, Column::Metadata).unwrap(), None);
@@ -679,7 +691,7 @@ mod tests {
         assert!(db.exists(&key, Column::Metadata).unwrap());
 
         assert_eq!(
-            db.iter_all(Column::Metadata, None, None, IterDirection::Forward)
+            db.iter_store(Column::Metadata, None, None, IterDirection::Forward)
                 .collect::<Result<Vec<_>, _>>()
                 .unwrap()[0],
             (key.clone(), expected.clone())
@@ -703,7 +715,7 @@ mod tests {
         assert!(db.exists(&key, Column::Metadata).unwrap());
 
         assert_eq!(
-            db.iter_all(Column::Metadata, None, None, IterDirection::Forward)
+            db.iter_store(Column::Metadata, None, None, IterDirection::Forward)
                 .collect::<Result<Vec<_>, _>>()
                 .unwrap()[0],
             (key.clone(), expected.clone())
@@ -727,7 +739,7 @@ mod tests {
         assert!(db.exists(&key, Column::Metadata).unwrap());
 
         assert_eq!(
-            db.iter_all(Column::Metadata, None, None, IterDirection::Forward)
+            db.iter_store(Column::Metadata, None, None, IterDirection::Forward)
                 .collect::<Result<Vec<_>, _>>()
                 .unwrap()[0],
             (key.clone(), expected.clone())

@@ -11,10 +11,12 @@ use criterion::{
     BenchmarkGroup,
     Criterion,
 };
+use std::sync::Arc;
 
 use crate::vm_initialization::vm_initialization;
 use contract::*;
 use fuel_core_benches::*;
+use fuel_core_storage::transactional::IntoTransaction;
 use fuel_core_types::fuel_asm::Instruction;
 use vm_set::*;
 
@@ -41,12 +43,12 @@ where
             for _ in 0..iters {
                 let original_db = vm.as_mut().database_mut().clone();
                 // Simulates the block production/validation with three levels of database transaction.
-                // let block_database_tx = StorageTransaction::new_transaction(&original_db);
-                // let relayer_database_tx = StorageTransaction::new_transaction(&block_database_tx);
-                // let thread_database_tx = StorageTransaction::new_transaction(&relayer_database_tx);
-                // let tx_database_tx = StorageTransaction::new_transaction(&thread_database_tx);
-                // let vm_tx_database_tx = StorageTransaction::new_transaction(&tx_database_tx);
-                // *vm.as_mut().database_mut() = vm_tx_database_tx;
+                let block_database_tx = original_db.clone().into_transaction();
+                let relayer_database_tx = block_database_tx.into_transaction();
+                let thread_database_tx = relayer_database_tx.into_transaction();
+                let tx_database_tx = thread_database_tx.into_transaction();
+                let database = Database::new(Arc::new(tx_database_tx));
+                *vm.as_mut().database_mut() = database.into_transaction();
 
                 let start = black_box(clock.raw());
                 match instruction {

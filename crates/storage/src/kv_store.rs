@@ -127,7 +127,7 @@ pub enum WriteOperation {
 #[impl_tools::autoimpl(for<T: trait> &mut T, Box<T>)]
 pub trait BatchOperations: KeyValueMutate {
     /// Writes the batch of the entries into the storage.
-    fn batch_write<I>(&mut self, entries: I) -> StorageResult<()>
+    fn batch_write<I>(&mut self, column: Self::Column, entries: I) -> StorageResult<()>
     where
-        I: Iterator<Item = (Vec<u8>, Self::Column, WriteOperation)>;
+        I: Iterator<Item = (Vec<u8>, WriteOperation)>;
 }

@@ -5,7 +5,9 @@ use crate::database::{
 use fuel_core_storage::{
     structured_storage::StructuredStorage,
     transactional::{
+        ConflictPolicy,
         Modifiable,
+        ReadTransaction,
         StorageTransaction,
     },
     Error as StorageError,
@@ -61,14 +63,22 @@ where
         key: &M::Key,
         value: &M::Value,
     ) -> StorageResult<Option<M::OwnedValue>> {
-        let mut transaction = StorageTransaction::new_transaction(&*self);
+        let mut transaction = StorageTransaction::transaction(
+            &*self,
+            ConflictPolicy::Overwrite,
+            Default::default(),
+        );
         let prev = transaction.storage_as_mut::<M>().insert(key, value)?;
         self.commit_changes(transaction.into_changes())?;
         Ok(prev)
     }
 
     fn remove(&mut self, key: &M::Key) -> StorageResult<Option<M::OwnedValue>> {
-        let mut transaction = StorageTransaction::new_transaction(&*self);
+        let mut transaction = StorageTransaction::transaction(
+            &*self,
+            ConflictPolicy::Overwrite,
+            Default::default(),
+        );
         let prev = transaction.storage_as_mut::<M>().remove(key)?;
         self.commit_changes(transaction.into_changes())?;
         Ok(prev)
@@ -95,9 +105,7 @@ where
 {
     fn root(&self, key: &Key) -> StorageResult<MerkleRoot> {
         // TODO: Use `StructuredStorage` instead of `StorageTransaction` https://github.com/FuelLabs/fuel-vm/pull/679
-        StorageTransaction::new_transaction(self)
-            .storage::<M>()
-            .root(key)
+        self.read_transaction().storage::<M>().root(key)
     }
 }
 
@@ -116,8 +124,9 @@ where
     }
 }
 
-impl<M> StorageBatchMutate<M> for Database
+impl<Description, M> StorageBatchMutate<M> for Database<Description>
 where
+    Description: DatabaseDescription,
     M: Mappable,
     for<'a> StructuredStorage<&'a Self>: StorageInspect<M, Error = StorageError>,
     for<'a> StorageTransaction<&'a Self>: StorageBatchMutate<M, Error = StorageError>,
@@ -128,7 +137,11 @@ where
         M::Key: 'a,
         M::Value: 'a,
     {
-        let mut transaction = StorageTransaction::new_transaction(&*self);
+        let mut transaction = StorageTransaction::transaction(
+            &*self,
+            ConflictPolicy::Overwrite,
+            Default::default(),
+        );
         StorageBatchMutate::init_storage(&mut transaction, set)?;
         self.commit_changes(transaction.into_changes())?;
         Ok(())
@@ -140,7 +153,11 @@ where
         M::Key: 'a,
         M::Value: 'a,
     {
-        let mut transaction = StorageTransaction::new_transaction(&*self);
+        let mut transaction = StorageTransaction::transaction(
+            &*self,
+            ConflictPolicy::Overwrite,
+            Default::default(),
+        );
         StorageBatchMutate::insert_batch(&mut transaction, set)?;
         self.commit_changes(transaction.into_changes())?;
         Ok(())
@@ -151,7 +168,11 @@ where
         Iter: 'a + Iterator<Item = &'a M::Key>,
         M::Key: 'a,
     {
-        let mut transaction = StorageTransaction::new_transaction(&*self);
+        let mut transaction = StorageTransaction::transaction(
+            &*self,
+            ConflictPolicy::Overwrite,
+            Default::default(),
+        );
         StorageBatchMutate::remove_batch(&mut transaction, set)?;
         self.commit_changes(transaction.into_changes())?;
         Ok(())

@@ -26,7 +26,10 @@ use fuel_core::{
 use fuel_core_benches::*;
 use fuel_core_storage::{
     tables::FuelBlocks,
-    transactional::StorageTransaction,
+    transactional::{
+        IntoTransaction,
+        StorageTransaction,
+    },
     vm_storage::{
         IncreaseStorageKey,
         VmStorage,
@@ -126,7 +129,7 @@ impl BenchDb {
             generated: (),
         };
         VmStorage::new(
-            StorageTransaction::new_transaction(self.db.clone()),
+            self.db.clone().into_transaction(),
             &header,
             ContractId::zeroed(),
         )

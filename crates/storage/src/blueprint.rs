@@ -156,7 +156,5 @@ where
     S: KeyValueInspect,
 {
     /// Returns the root of the Merkle tree.
-    fn root(storage: &S, key: &Key) -> StorageResult<MerkleRoot>
-    where
-        S: KeyValueInspect;
+    fn root(storage: &S, key: &Key) -> StorageResult<MerkleRoot>;
 }

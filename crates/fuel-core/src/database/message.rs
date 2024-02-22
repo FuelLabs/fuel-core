@@ -10,7 +10,10 @@ use crate::{
 };
 use fuel_core_chain_config::MessageConfig;
 use fuel_core_storage::{
-    iter::IterDirection,
+    iter::{
+        IterDirection,
+        IteratorOverTable,
+    },
     tables::{
         Messages,
         SpentMessages,

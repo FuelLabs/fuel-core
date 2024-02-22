@@ -25,6 +25,7 @@ use fuel_core_storage::{
     transactional::{
         Changes,
         StorageTransaction,
+        WriteTransaction,
     },
     MerkleRoot,
     StorageAsMut,
@@ -75,7 +76,7 @@ pub fn execute_genesis_block(
     original_database: &mut Database,
 ) -> anyhow::Result<UncommittedImportResult<Changes>> {
     // start a db transaction for bulk-writing
-    let mut database_transaction = StorageTransaction::new_transaction(original_database);
+    let mut database_transaction = original_database.write_transaction();
 
     // Initialize the chain id and height.
 
@@ -611,7 +612,7 @@ mod tests {
         let changes = execute_genesis_block(&config, &mut db)
             .unwrap()
             .into_changes();
-        StorageTransaction::new_transaction(&mut db)
+        db.write_transaction()
             .with_changes(changes)
             .commit()
             .unwrap();

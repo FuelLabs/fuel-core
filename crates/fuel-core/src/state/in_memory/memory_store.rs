@@ -10,9 +10,10 @@ use crate::{
 };
 use fuel_core_storage::{
     iter::{
+        iterator,
         BoxedIter,
         IntoBoxedIter,
-        IteratorableStore,
+        IterableStore,
     },
     kv_store::{
         KVItem,
@@ -24,7 +25,6 @@ use fuel_core_storage::{
     transactional::Changes,
     Result as StorageResult,
 };
-use itertools::Itertools;
 use std::{
     collections::BTreeMap,
     fmt::Debug,
@@ -72,54 +72,9 @@ where
             (kv.0.clone(), kv.1.clone())
         }
 
-        let collection: Vec<_> = match (prefix, start) {
-            (None, None) => {
-                if direction == IterDirection::Forward {
-                    lock.iter().map(clone).collect()
-                } else {
-                    lock.iter().rev().map(clone).collect()
-                }
-            }
-            (Some(prefix), None) => {
-                if direction == IterDirection::Forward {
-                    lock.range(prefix.to_vec()..)
-                        .take_while(|(key, _)| key.starts_with(prefix))
-                        .map(clone)
-                        .collect()
-                } else {
-                    let mut vec: Vec<_> = lock
-                        .range(prefix.to_vec()..)
-                        .into_boxed()
-                        .take_while(|(key, _)| key.starts_with(prefix))
-                        .map(clone)
-                        .collect();
-
-                    vec.reverse();
-                    vec
-                }
-            }
-            (None, Some(start)) => {
-                if direction == IterDirection::Forward {
-                    lock.range(start.to_vec()..).map(clone).collect()
-                } else {
-                    lock.range(..=start.to_vec()).rev().map(clone).collect()
-                }
-            }
-            (Some(prefix), Some(start)) => {
-                if direction == IterDirection::Forward {
-                    lock.range(start.to_vec()..)
-                        .take_while(|(key, _)| key.starts_with(prefix))
-                        .map(clone)
-                        .collect()
-                } else {
-                    lock.range(..=start.to_vec())
-                        .rev()
-                        .take_while(|(key, _)| key.starts_with(prefix))
-                        .map(clone)
-                        .collect()
-                }
-            }
-        };
+        let collection: Vec<_> = iterator(&lock, prefix, start, direction)
+            .map(clone)
+            .collect();
 
         collection.into_iter().map(Ok)
     }
@@ -140,11 +95,11 @@ where
     }
 }
 
-impl<Description> IteratorableStore for MemoryStore<Description>
+impl<Description> IterableStore for MemoryStore<Description>
 where
     Description: DatabaseDescription,
 {
-    fn iter_all(
+    fn iter_store(
         &self,
         column: Self::Column,
         prefix: Option<&[u8]>,
@@ -160,24 +115,20 @@ where
     Description: DatabaseDescription,
 {
     fn commit_changes(&self, changes: Changes) -> StorageResult<()> {
-        changes
-            .into_iter()
-            .group_by(|((column, _), _)| *column)
-            .into_iter()
-            .for_each(|(key, group)| {
-                let mut lock = self.inner[key as usize].lock().expect("poisoned");
+        for (column, btree) in changes.into_iter() {
+            let mut lock = self.inner[column as usize].lock().expect("poisoned");
 
-                for ((_, key), operation) in group {
-                    match operation {
-                        WriteOperation::Insert(value) => {
-                            lock.insert(key, value);
-                        }
-                        WriteOperation::Remove => {
-                            lock.remove(&key);
-                        }
+            for (key, operation) in btree.into_iter() {
+                match operation {
+                    WriteOperation::Insert(value) => {
+                        lock.insert(key, value);
+                    }
+                    WriteOperation::Remove => {
+                        lock.remove(&key);
                     }
                 }
-            });
+            }
+        }
         Ok(())
     }
 }
@@ -188,7 +139,7 @@ mod tests {
     use fuel_core_storage::{
         column::Column,
         kv_store::KeyValueMutate,
-        transactional::StorageTransaction,
+        transactional::ReadTransaction,
     };
     use std::sync::Arc;
 
@@ -202,7 +153,7 @@ mod tests {
             column: Self::Column,
             buf: &[u8],
         ) -> StorageResult<usize> {
-            let mut transaction = StorageTransaction::new_transaction(&self);
+            let mut transaction = self.read_transaction();
             let len = transaction.write(key, column, buf)?;
             let changes = transaction.into_changes();
             self.commit_changes(changes)?;
@@ -210,7 +161,7 @@ mod tests {
         }
 
         fn delete(&mut self, key: &[u8], column: Self::Column) -> StorageResult<()> {
-            let mut transaction = StorageTransaction::new_transaction(&self);
+            let mut transaction = self.read_transaction();
             transaction.delete(key, column)?;
             let changes = transaction.into_changes();
             self.commit_changes(changes)?;

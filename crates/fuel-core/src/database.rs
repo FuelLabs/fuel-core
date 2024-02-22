@@ -17,25 +17,21 @@ use fuel_core_chain_config::{
     MessageConfig,
 };
 use fuel_core_storage::{
-    blueprint::BlueprintInspect,
-    codec::{
-        Decode,
-        Encode,
-        Encoder,
+    iter::{
+        BoxedIter,
+        IterDirection,
+        IterableStore,
     },
-    iter::IterDirection,
     kv_store::{
+        KVItem,
         KeyValueInspect,
         Value,
     },
-    structured_storage::TableWithBlueprint,
     transactional::{
         AtomicView,
         Changes,
         Modifiable,
     },
-    Error as StorageError,
-    Mappable,
     Result as StorageResult,
 };
 use fuel_core_types::{
@@ -147,86 +143,20 @@ where
     }
 }
 
-/// Read-only methods.
-impl<Description> Database<Description>
+impl<Description> IterableStore for Database<Description>
 where
     Description: DatabaseDescription,
 {
-    pub(crate) fn iter_all<M>(
+    fn iter_store(
         &self,
-        direction: Option<IterDirection>,
-    ) -> impl Iterator<Item = StorageResult<(M::OwnedKey, M::OwnedValue)>> + '_
-    where
-        M: Mappable + TableWithBlueprint<Column = Description::Column>,
-        M::Blueprint: BlueprintInspect<M, Self>,
-    {
-        self.iter_all_filtered::<M, [u8; 0]>(None, None, direction)
-    }
-
-    pub(crate) fn iter_all_by_prefix<M, P>(
-        &self,
-        prefix: Option<P>,
-    ) -> impl Iterator<Item = StorageResult<(M::OwnedKey, M::OwnedValue)>> + '_
-    where
-        M: Mappable + TableWithBlueprint<Column = Description::Column>,
-        M::Blueprint: BlueprintInspect<M, Self>,
-        P: AsRef<[u8]>,
-    {
-        self.iter_all_filtered::<M, P>(prefix, None, None)
-    }
-
-    pub(crate) fn iter_all_by_start<M>(
-        &self,
-        start: Option<&M::Key>,
-        direction: Option<IterDirection>,
-    ) -> impl Iterator<Item = StorageResult<(M::OwnedKey, M::OwnedValue)>> + '_
-    where
-        M: Mappable + TableWithBlueprint<Column = Description::Column>,
-        M::Blueprint: BlueprintInspect<M, Self>,
-    {
-        self.iter_all_filtered::<M, [u8; 0]>(None, start, direction)
-    }
-
-    pub(crate) fn iter_all_filtered<M, P>(
-        &self,
-        prefix: Option<P>,
-        start: Option<&M::Key>,
-        direction: Option<IterDirection>,
-    ) -> impl Iterator<Item = StorageResult<(M::OwnedKey, M::OwnedValue)>> + '_
-    where
-        M: Mappable + TableWithBlueprint<Column = Description::Column>,
-        M::Blueprint: BlueprintInspect<M, Self>,
-        P: AsRef<[u8]>,
-    {
-        let encoder = start.map(|start| {
-            <M::Blueprint as BlueprintInspect<M, Self>>::KeyCodec::encode(start)
-        });
-
-        let start = encoder.as_ref().map(|encoder| encoder.as_bytes());
-
+        column: Self::Column,
+        prefix: Option<&[u8]>,
+        start: Option<&[u8]>,
+        direction: IterDirection,
+    ) -> BoxedIter<KVItem> {
         self.data
             .as_ref()
-            .iter_all(
-                M::column(),
-                prefix.as_ref().map(|p| p.as_ref()),
-                start.as_ref().map(|cow| cow.as_ref()),
-                direction.unwrap_or_default(),
-            )
-            .map(|val| {
-                val.and_then(|(key, value)| {
-                    let key =
-                        <M::Blueprint as BlueprintInspect<M, Self>>::KeyCodec::decode(
-                            key.as_slice(),
-                        )
-                        .map_err(|e| StorageError::Codec(anyhow::anyhow!(e)))?;
-                    let value =
-                        <M::Blueprint as BlueprintInspect<M, Self>>::ValueCodec::decode(
-                            value.as_slice(),
-                        )
-                        .map_err(|e| StorageError::Codec(anyhow::anyhow!(e)))?;
-                    Ok((key, value))
-                })
-            })
+            .iter_store(column, prefix, start, direction)
     }
 }
 

@@ -279,11 +279,10 @@ impl<Column, M, S, KeyCodec, ValueCodec, Metadata, Nodes, KeyConverter>
 where
     Column: StorageColumn,
     S: BatchOperations<Column = Column>,
-    M: Mappable
-        + TableWithBlueprint<
-            Blueprint = Sparse<KeyCodec, ValueCodec, Metadata, Nodes, KeyConverter>,
-            Column = Column,
-        >,
+    M: TableWithBlueprint<
+        Blueprint = Sparse<KeyCodec, ValueCodec, Metadata, Nodes, KeyConverter>,
+        Column = Column,
+    >,
     KeyCodec: Encode<M::Key> + Decode<M::OwnedKey>,
     ValueCodec: Encode<M::Value> + Decode<M::OwnedValue>,
     Metadata: Mappable<Value = SparseMerkleMetadata, OwnedValue = SparseMerkleMetadata>,
@@ -336,9 +335,10 @@ where
         );
 
         storage.batch_write(
+            column,
             encoded_set
                 .into_iter()
-                .map(|(key, value)| (key, column, WriteOperation::Insert(value.into()))),
+                .map(|(key, value)| (key, WriteOperation::Insert(value.into()))),
         )?;
 
         let nodes = nodes.iter().map(|(key, value)| {
@@ -346,9 +346,9 @@ where
                 .as_bytes()
                 .into_owned();
             let value = NodeValueCodec::<S, Nodes>::encode_as_value(value);
-            (key, Nodes::column(), WriteOperation::Insert(value))
+            (key, WriteOperation::Insert(value))
         });
-        storage.batch_write(nodes)?;
+        storage.batch_write(Nodes::column(), nodes)?;
 
         let metadata = SparseMerkleMetadata::new(root);
         storage
@@ -402,9 +402,10 @@ where
         let storage = tree.into_storage();
 
         storage.batch_write(
+            column,
             encoded_set
                 .into_iter()
-                .map(|(key, value)| (key, column, WriteOperation::Insert(value.into()))),
+                .map(|(key, value)| (key, WriteOperation::Insert(value.into()))),
         )?;
 
         // Generate new metadata for the updated tree
@@ -455,9 +456,10 @@ where
         let storage = tree.into_storage();
 
         storage.batch_write(
+            column,
             encoded_set
                 .into_iter()
-                .map(|key| (key, column, WriteOperation::Remove)),
+                .map(|key| (key, WriteOperation::Remove)),
         )?;
 
         if &root == MerkleTree::<Nodes, S>::empty_root() {
@@ -486,7 +488,7 @@ macro_rules! root_storage_tests {
             use super::*;
             use $crate::{
                 structured_storage::test::InMemoryStorage,
-                transactional::StorageTransaction,
+                transactional::WriteTransaction,
                 StorageAsMut,
             };
             use $crate::rand::{
@@ -497,7 +499,7 @@ macro_rules! root_storage_tests {
             #[test]
             fn root() {
                 let mut storage = InMemoryStorage::default();
-                let mut structured_storage = StorageTransaction::new_transaction(&mut storage);
+                let mut structured_storage = storage.write_transaction();
 
                 let rng = &mut StdRng::seed_from_u64(1234);
                 let key = $generate_key(&$current_key, rng);
@@ -512,7 +514,7 @@ macro_rules! root_storage_tests {
             #[test]
             fn root_returns_empty_root_for_empty_metadata() {
                 let mut storage = InMemoryStorage::default();
-                let mut structured_storage = StorageTransaction::new_transaction(&mut storage);
+                let mut structured_storage = storage.write_transaction();
 
                 let empty_root = fuel_core_types::fuel_merkle::sparse::in_memory::MerkleTree::new().root();
                 let root = structured_storage
@@ -525,7 +527,7 @@ macro_rules! root_storage_tests {
             #[test]
             fn put_updates_the_state_merkle_root_for_the_given_metadata() {
                 let mut storage = InMemoryStorage::default();
-                let mut structured_storage = StorageTransaction::new_transaction(&mut storage);
+                let mut structured_storage = storage.write_transaction();
 
                 let rng = &mut StdRng::seed_from_u64(1234);
                 let key = $generate_key(&$current_key, rng);
@@ -563,7 +565,7 @@ macro_rules! root_storage_tests {
             #[test]
             fn remove_updates_the_state_merkle_root_for_the_given_metadata() {
                 let mut storage = InMemoryStorage::default();
-                let mut structured_storage = StorageTransaction::new_transaction(&mut storage);
+                let mut structured_storage = storage.write_transaction();
 
                 let rng = &mut StdRng::seed_from_u64(1234);
 
@@ -612,7 +614,7 @@ macro_rules! root_storage_tests {
                 let foreign_primary_key = $foreign_key;
 
                 let mut storage = InMemoryStorage::default();
-                let mut structured_storage = StorageTransaction::new_transaction(&mut storage);
+                let mut structured_storage = storage.write_transaction();
 
                 let rng = &mut StdRng::seed_from_u64(1234);
 
@@ -648,7 +650,7 @@ macro_rules! root_storage_tests {
             #[test]
             fn put_creates_merkle_metadata_when_empty() {
                 let mut storage = InMemoryStorage::default();
-                let mut structured_storage = StorageTransaction::new_transaction(&mut storage);
+                let mut structured_storage = storage.write_transaction();
 
                 let rng = &mut StdRng::seed_from_u64(1234);
 
@@ -674,7 +676,7 @@ macro_rules! root_storage_tests {
             #[test]
             fn remove_deletes_merkle_metadata_when_empty() {
                 let mut storage = InMemoryStorage::default();
-                let mut structured_storage = StorageTransaction::new_transaction(&mut storage);
+                let mut structured_storage = storage.write_transaction();
 
                 let rng = &mut StdRng::seed_from_u64(1234);
 

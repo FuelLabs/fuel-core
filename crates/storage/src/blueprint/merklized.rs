@@ -316,7 +316,7 @@ macro_rules! basic_merklelized_storage_tests {
             use super::*;
             use $crate::{
                 structured_storage::test::InMemoryStorage,
-                transactional::StorageTransaction,
+                transactional::WriteTransaction,
                 StorageAsMut,
             };
             use $crate::StorageInspect;
@@ -338,7 +338,7 @@ macro_rules! basic_merklelized_storage_tests {
             #[test]
             fn get() {
                 let mut storage = InMemoryStorage::default();
-                let mut structured_storage = StorageTransaction::new_transaction(&mut storage);
+                let mut structured_storage = storage.write_transaction();
                 let key = $key;
 
                 structured_storage
@@ -360,7 +360,7 @@ macro_rules! basic_merklelized_storage_tests {
             #[test]
             fn insert() {
                 let mut storage = InMemoryStorage::default();
-                let mut structured_storage = StorageTransaction::new_transaction(&mut storage);
+                let mut structured_storage = storage.write_transaction();
                 let key = $key;
 
                 structured_storage
@@ -380,7 +380,7 @@ macro_rules! basic_merklelized_storage_tests {
             #[test]
             fn remove_returns_error() {
                 let mut storage = InMemoryStorage::default();
-                let mut structured_storage = StorageTransaction::new_transaction(&mut storage);
+                let mut structured_storage = storage.write_transaction();
                 let key = $key;
 
                 structured_storage
@@ -396,7 +396,7 @@ macro_rules! basic_merklelized_storage_tests {
             #[test]
             fn exists() {
                 let mut storage = InMemoryStorage::default();
-                let mut structured_storage = StorageTransaction::new_transaction(&mut storage);
+                let mut structured_storage = storage.write_transaction();
                 let key = $key;
 
                 // Given
@@ -430,7 +430,7 @@ macro_rules! basic_merklelized_storage_tests {
                 let empty_storage = InMemoryStorage::default();
 
                 let mut init_storage = InMemoryStorage::default();
-                let mut init_structured_storage = StorageTransaction::new_transaction(&mut init_storage);
+                let mut init_structured_storage = init_storage.write_transaction();
 
                 let mut rng = &mut StdRng::seed_from_u64(1234);
                 let gen = || Some($random_key(&mut rng));
@@ -447,7 +447,7 @@ macro_rules! basic_merklelized_storage_tests {
                 init_structured_storage.commit().expect("Should commit the storage");
 
                 let mut insert_storage = InMemoryStorage::default();
-                let mut insert_structured_storage = StorageTransaction::new_transaction(&mut insert_storage);
+                let mut insert_structured_storage = insert_storage.write_transaction();
 
                 <_ as $crate::StorageBatchMutate<$table>>::insert_batch(
                     &mut insert_structured_storage,
@@ -473,7 +473,7 @@ macro_rules! basic_merklelized_storage_tests {
                 };
 
                 let mut init_storage = InMemoryStorage::default();
-                let mut init_structured_storage = StorageTransaction::new_transaction(&mut init_storage);
+                let mut init_structured_storage = init_storage.write_transaction();
 
                 let mut rng = &mut StdRng::seed_from_u64(1234);
                 let gen = || Some($random_key(&mut rng));
@@ -499,7 +499,7 @@ macro_rules! basic_merklelized_storage_tests {
             #[test]
             fn root_returns_error_empty_metadata() {
                 let mut storage = InMemoryStorage::default();
-                let mut structured_storage = StorageTransaction::new_transaction(&mut storage);
+                let mut structured_storage = storage.write_transaction();
 
                 let root = structured_storage
                     .storage_as_mut::<$table>()
@@ -510,7 +510,7 @@ macro_rules! basic_merklelized_storage_tests {
             #[test]
             fn update_produces_non_zero_root() {
                 let mut storage = InMemoryStorage::default();
-                let mut structured_storage = StorageTransaction::new_transaction(&mut storage);
+                let mut structured_storage = storage.write_transaction();
 
                 let mut rng = rand::rngs::StdRng::seed_from_u64(1234);
                 let key = $random_key(&mut rng);
@@ -527,7 +527,7 @@ macro_rules! basic_merklelized_storage_tests {
             #[test]
             fn has_different_root_after_each_update() {
                 let mut storage = InMemoryStorage::default();
-                let mut structured_storage = StorageTransaction::new_transaction(&mut storage);
+                let mut structured_storage = storage.write_transaction();
 
                 let mut rng = rand::rngs::StdRng::seed_from_u64(1234);
 
