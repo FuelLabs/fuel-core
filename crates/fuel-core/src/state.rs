@@ -29,20 +29,25 @@ pub mod rocks_db;
 pub type DataSource<Description>
 where
     Description: DatabaseDescription,
-= Arc<dyn TransactableStorage<Column = Description::Column>>;
+= Arc<dyn TransactableStorage<Description::Height, Column = Description::Column>>;
 
-pub trait TransactableStorage: IterableStore + Debug + Send + Sync {
+pub trait TransactableStorage<Height>: IterableStore + Debug + Send + Sync {
     /// Commits the changes into the storage.
-    fn commit_changes(&self, changes: Changes) -> StorageResult<()>;
+    fn commit_changes(
+        &self,
+        height: Option<Height>,
+        changes: Changes,
+    ) -> StorageResult<()>;
 }
 
 // It is used only to allow conversion of the `StorageTransaction` into the `DataSource`.
 #[cfg(feature = "test-helpers")]
-impl<S> TransactableStorage for fuel_core_storage::transactional::StorageTransaction<S>
+impl<Height, S> TransactableStorage<Height>
+    for fuel_core_storage::transactional::StorageTransaction<S>
 where
     S: IterableStore + Debug + Send + Sync,
 {
-    fn commit_changes(&self, _: Changes) -> StorageResult<()> {
+    fn commit_changes(&self, _: Option<Height>, _: Changes) -> StorageResult<()> {
         unimplemented!()
     }
 }
@@ -51,6 +56,16 @@ where
 pub struct ChangesIterator<'a, Description> {
     changes: &'a Changes,
     _marker: core::marker::PhantomData<Description>,
+}
+
+impl<'a, Description> ChangesIterator<'a, Description> {
+    /// Creates a new instance of the `ChangesIterator`.
+    pub fn new(changes: &'a Changes) -> Self {
+        Self {
+            changes,
+            _marker: Default::default(),
+        }
+    }
 }
 
 impl<'a, Description> KeyValueInspect for ChangesIterator<'a, Description>

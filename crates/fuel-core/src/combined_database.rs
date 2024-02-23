@@ -7,10 +7,6 @@ use crate::database::{
     Database,
 };
 use fuel_core_storage::Result as StorageResult;
-use fuel_core_types::{
-    blockchain::primitives::DaBlockHeight,
-    fuel_types::BlockHeight,
-};
 
 /// A database that combines the on-chain, off-chain and relayer databases into one entity.
 #[derive(Default, Clone)]
@@ -57,14 +53,10 @@ impl CombinedDatabase {
         )
     }
 
-    pub fn init(
-        &mut self,
-        block_height: &BlockHeight,
-        da_block_height: &DaBlockHeight,
-    ) -> StorageResult<()> {
-        self.on_chain.init(block_height)?;
-        self.off_chain.init(block_height)?;
-        self.relayer.init(da_block_height)?;
+    pub fn check_version(&self) -> StorageResult<()> {
+        self.on_chain.check_version()?;
+        self.off_chain.check_version()?;
+        self.relayer.check_version()?;
         Ok(())
     }
 

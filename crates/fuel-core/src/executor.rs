@@ -146,8 +146,8 @@ mod tests {
         type View = Self;
         type Height = DaBlockHeight;
 
-        fn latest_height(&self) -> Self::Height {
-            0u64.into()
+        fn latest_height(&self) -> Option<Self::Height> {
+            Some(0u64.into())
         }
 
         fn view_at(&self, _: &Self::Height) -> StorageResult<Self::View> {
@@ -2807,9 +2807,12 @@ mod tests {
     #[cfg(feature = "relayer")]
     mod relayer {
         use super::*;
-        use crate::database::database_description::{
-            on_chain::OnChain,
-            relayer::Relayer,
+        use crate::{
+            database::database_description::{
+                on_chain::OnChain,
+                relayer::Relayer,
+            },
+            state::ChangesIterator,
         };
         use fuel_core_relayer::storage::EventsHistory;
         use fuel_core_storage::{
@@ -2935,15 +2938,17 @@ mod tests {
             assert_eq!(on_chain_db.iter_all::<Messages>(None).count(), 0);
 
             // When
-            let mut producer = create_relayer_executor(on_chain_db, relayer_db);
+            let producer = create_relayer_executor(on_chain_db, relayer_db);
             let block = test_block(block_height.into(), block_da_height.into(), 0);
-            let result = producer.execute_and_commit(
-                ExecutionTypes::Production(block.into()),
-                Default::default(),
-            )?;
+            let (result, changes) = producer
+                .execute_without_commit(
+                    ExecutionTypes::Production(block.into()),
+                    Default::default(),
+                )?
+                .into();
 
             // Then
-            let view = producer.database_view_provider.latest_view();
+            let view = ChangesIterator::<OnChain>::new(&changes);
             assert_eq!(
                 view.iter_all::<Messages>(None).count() as u64,
                 block_da_height - genesis_da_height
@@ -2978,17 +2983,18 @@ mod tests {
             assert_eq!(on_chain_db.iter_all::<Messages>(None).count(), 0);
 
             // When
-            let mut producer = create_relayer_executor(on_chain_db, relayer_db);
+            let producer = create_relayer_executor(on_chain_db, relayer_db);
             let block = test_block(block_height.into(), block_da_height.into(), 10);
-            let result = producer
-                .execute_and_commit(
+            let (result, changes) = producer
+                .execute_without_commit(
                     ExecutionTypes::Production(block.into()),
                     Default::default(),
                 )
-                .unwrap();
+                .unwrap()
+                .into();
 
             // Then
-            let view = producer.database_view_provider.latest_view();
+            let view = ChangesIterator::<OnChain>::new(&changes);
             assert!(result.skipped_transactions.is_empty());
             assert_eq!(view.iter_all::<Messages>(None).count() as u64, 0);
         }
@@ -3024,16 +3030,17 @@ mod tests {
             // When
             let mut block = test_block(block_height.into(), block_da_height.into(), 0);
             *block.transactions_mut() = vec![tx];
-            let mut producer = create_relayer_executor(on_chain_db, relayer_db);
-            let result = producer
-                .execute_and_commit(
+            let producer = create_relayer_executor(on_chain_db, relayer_db);
+            let (result, changes) = producer
+                .execute_without_commit(
                     ExecutionTypes::Production(block.into()),
                     Default::default(),
                 )
-                .unwrap();
+                .unwrap()
+                .into();
 
             // Then
-            let view = producer.database_view_provider.latest_view();
+            let view = ChangesIterator::<OnChain>::new(&changes);
             assert!(result.skipped_transactions.is_empty());
             assert_eq!(view.iter_all::<Messages>(None).count() as u64, 0);
             // Message added during this block immediately became spent.

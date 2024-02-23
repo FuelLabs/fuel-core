@@ -439,6 +439,7 @@ mod tests {
         assert_eq!(
             test_height,
             db.latest_height()
+                .unwrap()
                 .expect("Expected a block height to be set")
         )
     }

@@ -85,6 +85,7 @@ impl Mappable for DaHeightTable {
 /// changed from a unit value.
 const METADATA_KEY: () = ();
 
+// TODO: Remove `DaHeightTable` and logic associated with it, since the height tracking is controlled by the database
 impl TableWithBlueprint for DaHeightTable {
     type Blueprint = Plain<Postcard, Primitive<8>>;
     type Column = Column;

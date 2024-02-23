@@ -41,7 +41,7 @@ pub trait AtomicView: Send + Sync {
     type Height;
 
     /// Returns the latest block height.
-    fn latest_height(&self) -> Self::Height;
+    fn latest_height(&self) -> Option<Self::Height>;
 
     /// Returns the view of the storage at the given `height`.
     fn view_at(&self, height: &Self::Height) -> StorageResult<Self::View>;

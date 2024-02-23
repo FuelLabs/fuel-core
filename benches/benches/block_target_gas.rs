@@ -256,7 +256,7 @@ fn service_with_many_contracts(
         .build()
         .unwrap();
     let _drop = rt.enter();
-    let mut database = Database::rocksdb();
+    let mut database = Database::rocksdb_temp();
     let mut config = Config::local_node();
     config
         .chain_conf

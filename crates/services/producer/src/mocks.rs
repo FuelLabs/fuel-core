@@ -179,10 +179,10 @@ impl AtomicView for MockDb {
 
     type Height = BlockHeight;
 
-    fn latest_height(&self) -> BlockHeight {
+    fn latest_height(&self) -> Option<BlockHeight> {
         let blocks = self.blocks.lock().unwrap();
 
-        blocks.keys().max().cloned().unwrap_or_default()
+        blocks.keys().max().cloned()
     }
 
     fn view_at(&self, _: &BlockHeight) -> StorageResult<Self::View> {

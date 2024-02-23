@@ -502,11 +502,15 @@ where
     }
 }
 
-impl<Description> TransactableStorage for RocksDb<Description>
+impl<Description> TransactableStorage<Description::Height> for RocksDb<Description>
 where
     Description: DatabaseDescription,
 {
-    fn commit_changes(&self, changes: Changes) -> StorageResult<()> {
+    fn commit_changes(
+        &self,
+        _: Option<Description::Height>,
+        changes: Changes,
+    ) -> StorageResult<()> {
         let mut batch = WriteBatch::default();
 
         for (column, ops) in changes {
@@ -573,7 +577,7 @@ mod tests {
             let mut transaction = self.read_transaction();
             let len = transaction.write(key, column, buf)?;
             let changes = transaction.into_changes();
-            self.commit_changes(changes)?;
+            self.commit_changes(Default::default(), changes)?;
 
             Ok(len)
         }
@@ -582,7 +586,7 @@ mod tests {
             let mut transaction = self.read_transaction();
             transaction.delete(key, column)?;
             let changes = transaction.into_changes();
-            self.commit_changes(changes)?;
+            self.commit_changes(Default::default(), changes)?;
             Ok(())
         }
     }
@@ -657,7 +661,8 @@ mod tests {
             )]),
         )];
 
-        db.commit_changes(HashMap::from_iter(ops)).unwrap();
+        db.commit_changes(Default::default(), HashMap::from_iter(ops))
+            .unwrap();
         assert_eq!(db.get(&key, Column::Metadata).unwrap().unwrap(), value)
     }
 
@@ -673,7 +678,8 @@ mod tests {
             Column::Metadata.id(),
             BTreeMap::from_iter(vec![(key.clone(), WriteOperation::Remove)]),
         )];
-        db.commit_changes(HashMap::from_iter(ops)).unwrap();
+        db.commit_changes(Default::default(), HashMap::from_iter(ops))
+            .unwrap();
 
         assert_eq!(db.get(&key, Column::Metadata).unwrap(), None);
     }

@@ -189,6 +189,7 @@ where
         let height = height.unwrap_or_else(|| {
             self.view_provider
                 .latest_height()
+                .unwrap_or_default()
                 .succ()
                 .expect("It is impossible to overflow the current block height")
         });

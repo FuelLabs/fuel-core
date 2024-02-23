@@ -51,12 +51,14 @@ where
     }
 }
 
+// TODO: After https://github.com/FuelLabs/fuel-vm/pull/679 implement it only for `feature = "test-helpers"`
 impl<Description, M> StorageMutate<M> for Database<Description>
 where
     Description: DatabaseDescription,
     M: Mappable,
     for<'a> StructuredStorage<&'a Self>: StorageInspect<M, Error = StorageError>,
     for<'a> StorageTransaction<&'a Self>: StorageMutate<M, Error = StorageError>,
+    Self: Modifiable,
 {
     fn insert(
         &mut self,
@@ -102,6 +104,7 @@ where
     M: Mappable,
     for<'a> StructuredStorage<&'a Self>: StorageInspect<M, Error = StorageError>,
     for<'a> StorageTransaction<&'a Self>: MerkleRootStorage<Key, M, Error = StorageError>,
+    Self: Modifiable,
 {
     fn root(&self, key: &Key) -> StorageResult<MerkleRoot> {
         // TODO: Use `StructuredStorage` instead of `StorageTransaction` https://github.com/FuelLabs/fuel-vm/pull/679
@@ -130,6 +133,7 @@ where
     M: Mappable,
     for<'a> StructuredStorage<&'a Self>: StorageInspect<M, Error = StorageError>,
     for<'a> StorageTransaction<&'a Self>: StorageBatchMutate<M, Error = StorageError>,
+    Self: Modifiable,
 {
     fn init_storage<'a, Iter>(&mut self, set: Iter) -> StorageResult<()>
     where

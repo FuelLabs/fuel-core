@@ -895,8 +895,8 @@ pub mod tests {
 
         type Height = BlockHeight;
 
-        fn latest_height(&self) -> Self::Height {
-            BlockHeight::default()
+        fn latest_height(&self) -> Option<Self::Height> {
+            Some(BlockHeight::default())
         }
 
         fn view_at(&self, _: &BlockHeight) -> StorageResult<Self::View> {
@@ -1024,8 +1024,8 @@ pub mod tests {
 
         type Height = BlockHeight;
 
-        fn latest_height(&self) -> Self::Height {
-            BlockHeight::default()
+        fn latest_height(&self) -> Option<Self::Height> {
+            Some(BlockHeight::default())
         }
 
         fn view_at(&self, _: &BlockHeight) -> StorageResult<Self::View> {

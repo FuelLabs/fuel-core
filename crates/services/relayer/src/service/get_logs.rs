@@ -95,6 +95,8 @@ where
             }
         }
 
+        // TODO: For https://github.com/FuelLabs/fuel-core/issues/451 we need to write each height
+        //  (not only the last height), even if it's empty.
         if !inserted_last_height {
             database.insert_events(&last_height, &[])?;
         }
