@@ -396,6 +396,7 @@ mod tests {
             ContractsAssets,
             ContractsState,
         },
+        transactional::WriteTransaction,
         StorageAsRef,
     };
     use fuel_core_types::{
