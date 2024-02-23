@@ -24,8 +24,8 @@ use fuel_core_storage::{
     },
     transactional::{
         Changes,
+        ReadTransaction,
         StorageTransaction,
-        WriteTransaction,
     },
     MerkleRoot,
     StorageAsMut,
@@ -73,10 +73,10 @@ pub mod off_chain;
 /// Performs the importing of the genesis block from the snapshot.
 pub fn execute_genesis_block(
     config: &Config,
-    original_database: &mut Database,
+    original_database: &Database,
 ) -> anyhow::Result<UncommittedImportResult<Changes>> {
     // start a db transaction for bulk-writing
-    let mut database_transaction = original_database.write_transaction();
+    let mut database_transaction = original_database.read_transaction();
 
     // Initialize the chain id and height.
 
@@ -145,7 +145,7 @@ pub fn create_genesis_block(config: &Config) -> Block {
 #[cfg(feature = "test-helpers")]
 pub async fn execute_and_commit_genesis_block(
     config: &Config,
-    original_database: &mut Database,
+    original_database: &Database,
 ) -> anyhow::Result<()> {
     let result = execute_genesis_block(config, original_database)?;
     let importer = fuel_core_importer::Importer::new(
@@ -159,7 +159,7 @@ pub async fn execute_and_commit_genesis_block(
 }
 
 fn init_coin_state(
-    db: &mut StorageTransaction<&mut Database>,
+    db: &mut StorageTransaction<&Database>,
     state: &Option<StateConfig>,
 ) -> anyhow::Result<MerkleRoot> {
     let mut coins_tree = binary::in_memory::MerkleTree::new();
@@ -195,7 +195,7 @@ fn init_coin_state(
 }
 
 fn init_contracts(
-    db: &mut StorageTransaction<&mut Database>,
+    db: &mut StorageTransaction<&Database>,
     state: &Option<StateConfig>,
 ) -> anyhow::Result<MerkleRoot> {
     let mut contracts_tree = binary::in_memory::MerkleTree::new();
@@ -287,7 +287,7 @@ fn init_contracts(
 }
 
 fn init_contract_state(
-    db: &mut StorageTransaction<&mut Database>,
+    db: &mut StorageTransaction<&Database>,
     contract_id: &ContractId,
     contract: &ContractConfig,
 ) -> anyhow::Result<()> {
@@ -299,7 +299,7 @@ fn init_contract_state(
 }
 
 fn init_da_messages(
-    db: &mut StorageTransaction<&mut Database>,
+    db: &mut StorageTransaction<&Database>,
     state: &Option<StateConfig>,
 ) -> anyhow::Result<MerkleRoot> {
     let mut message_tree = binary::in_memory::MerkleTree::new();
@@ -324,7 +324,7 @@ fn init_da_messages(
 }
 
 fn init_contract_balance(
-    db: &mut StorageTransaction<&mut Database>,
+    db: &mut StorageTransaction<&Database>,
     contract_id: &ContractId,
     contract: &ContractConfig,
 ) -> anyhow::Result<()> {
@@ -610,9 +610,7 @@ mod tests {
 
         let mut db = Database::default();
 
-        let changes = execute_genesis_block(&config, &mut db)
-            .unwrap()
-            .into_changes();
+        let changes = execute_genesis_block(&config, &db).unwrap().into_changes();
         db.write_transaction()
             .with_changes(changes)
             .commit()

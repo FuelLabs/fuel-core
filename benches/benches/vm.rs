@@ -39,17 +39,17 @@ where
 
             let clock = quanta::Clock::new();
 
+            let original_db = vm.as_mut().database_mut().clone();
+            // Simulates the block production/validation with three levels of database transaction.
+            let block_database_tx = original_db.clone().into_transaction();
+            let relayer_database_tx = block_database_tx.into_transaction();
+            let thread_database_tx = relayer_database_tx.into_transaction();
+            let tx_database_tx = thread_database_tx.into_transaction();
+            let database = Database::new(Arc::new(tx_database_tx));
+            *vm.as_mut().database_mut() = database.into_transaction();
+
             let mut total = core::time::Duration::ZERO;
             for _ in 0..iters {
-                let original_db = vm.as_mut().database_mut().clone();
-                // Simulates the block production/validation with three levels of database transaction.
-                let block_database_tx = original_db.clone().into_transaction();
-                let relayer_database_tx = block_database_tx.into_transaction();
-                let thread_database_tx = relayer_database_tx.into_transaction();
-                let tx_database_tx = thread_database_tx.into_transaction();
-                let database = Database::new(Arc::new(tx_database_tx));
-                *vm.as_mut().database_mut() = database.into_transaction();
-
                 let start = black_box(clock.raw());
                 match instruction {
                     Instruction::CALL(call) => {
@@ -64,9 +64,10 @@ where
                 let end = black_box(clock.raw());
                 total += clock.delta(start, end);
                 vm.reset_vm_state(diff);
-                // restore original db
-                *vm.as_mut().database_mut() = original_db;
+                // Reset database changes.
+                vm.as_mut().database_mut().reset_changes();
             }
+            *vm.as_mut().database_mut() = original_db;
             total
         })
     });

@@ -94,6 +94,11 @@ impl<S> StorageTransaction<S> {
     pub fn into_changes(self) -> Changes {
         self.inner.changes
     }
+
+    /// Resets the changes to the storage.
+    pub fn reset_changes(&mut self) {
+        self.inner.changes = Default::default();
+    }
 }
 
 /// The policy to resolve the conflict during committing of the changes.
