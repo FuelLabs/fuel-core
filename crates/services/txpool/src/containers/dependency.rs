@@ -327,7 +327,7 @@ impl Dependency {
                                 collided.push(*spend_by);
                             }
                         }
-                        // if coin is not spend, it will be spend later down the line
+                        // if coin is not spend, it will be spent later down the line
                     } else {
                         if self.utxo_validation {
                             // fetch from db and check if tx exist.
@@ -460,7 +460,7 @@ impl Dependency {
                     }
                     // check who is priced more
                     if contract.gas_price > tx.price() {
-                        // new tx is priced less then current tx
+                        // new tx is priced less than current tx
                         return Err(Error::NotInsertedCollisionContractId(*contract_id))
                     }
                     // if we are prices more, mark current contract origin for removal.
@@ -567,7 +567,7 @@ impl Dependency {
                     );
                 }
                 Output::Contract(_) => {
-                    // do nothing, this contract is already already found in dependencies.
+                    // do nothing, this contract is already found in dependencies.
                     // as it is tied with input and used_by is already inserted.
                 }
             };

@@ -68,7 +68,7 @@ const TRANSPORT_TIMEOUT: Duration = Duration::from_secs(20);
 
 #[derive(Clone, Debug)]
 pub struct Config<State = Initialized> {
-    /// The keypair used for for handshake during communication with other p2p nodes.
+    /// The keypair used for handshake during communication with other p2p nodes.
     pub keypair: Keypair,
 
     /// Name of the Network
@@ -190,7 +190,7 @@ impl Config<NotInitialized> {
     }
 }
 
-/// Takes secret key bytes generated outside of libp2p.
+/// Takes secret key bytes generated outside libp2p.
 /// And converts it into libp2p's `Keypair::Secp256k1`.
 pub fn convert_to_libp2p_keypair(
     secret_key_bytes: impl AsMut<[u8]>,

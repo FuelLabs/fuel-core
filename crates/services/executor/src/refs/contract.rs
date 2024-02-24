@@ -143,7 +143,7 @@ where
             .root(&contract_id)?;
 
         let contract_hash = *Hasher::default()
-            // `ContractId` already is based on contract's code and salt so we don't need it.
+            // `ContractId` already is based on contract's code and salt, so we don't need it.
             .chain(contract_id.as_ref())
             .chain(utxo.tx_id().as_ref())
             .chain([utxo.output_index()])

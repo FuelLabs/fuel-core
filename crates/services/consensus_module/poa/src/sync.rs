@@ -178,7 +178,7 @@ impl RunnableTask for SyncTask {
                                 has_sufficient_peers: *has_sufficient_peers
                             };
                         } else {
-                            // we considered to be synced but we're obviously not!
+                            // we considered to be synced, but we're obviously not!
                             if *has_sufficient_peers {
                                 self.inner_state = InnerSyncState::SufficientPeers(block_info.block_header);
                                 self.restart_timer().await;
@@ -575,7 +575,7 @@ mod tests {
         // when we run the task again
         let _ = sync_task.run(&mut watcher).await;
 
-        // then the state should be still Synced but it should hold insufficient number of peers
+        // then the state should be still Synced, but it should hold insufficient number of peers
         assert!(matches!(
             sync_task.inner_state,
             InnerSyncState::Synced {

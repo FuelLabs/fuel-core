@@ -241,7 +241,7 @@ impl DapQuery {
             .map(|val| val.into())
     }
 
-    /// Read read a range of memory bytes.
+    /// Read a range of memory bytes.
     async fn memory(
         &self,
         ctx: &Context<'_>,

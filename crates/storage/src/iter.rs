@@ -18,7 +18,7 @@ impl<'a, T> Iterator for BoxedIter<'a, T> {
     }
 }
 
-/// The traits simplifies conversion into `BoxedIter`.
+/// The traits simplify conversion into `BoxedIter`.
 pub trait IntoBoxedIter<'a, T> {
     /// Converts `Self` iterator into `BoxedIter`.
     fn into_boxed(self) -> BoxedIter<'a, T>;
@@ -35,7 +35,7 @@ where
     }
 }
 
-/// A enum for iterating across the database
+/// An enum for iterating across the database
 #[derive(Copy, Clone, Debug, PartialOrd, Eq, PartialEq)]
 pub enum IterDirection {
     /// Iterate forward

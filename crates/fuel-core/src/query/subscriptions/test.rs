@@ -163,7 +163,7 @@ fn transaction_status_change_model(
     stream: impl Iterator<Item = TxStatusMessage>,
 ) -> impl Iterator<Item = Result<TxStatus, Error>> {
     // Combine the initial state with the stream of incoming status messages.
-    // Note that this option will turn into a empty iterator if the initial state is `None`.
+    // Note that this option will turn into an empty iterator if the initial state is `None`.
     let out = state
         .into_iter()
         .chain(stream)
