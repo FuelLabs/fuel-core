@@ -35,12 +35,10 @@ git clone https://github.com/FuelLabs/fuel-core
 
 `rustup` is the official toolchain manager for Rust.
 
-We use some additional components such as `clippy` and `rustfmt`(nightly), to install those:
+We use some additional components such as `clippy` and `rustfmt`, to install those:
 
 ```sh
-rustup component add clippy
-rustup toolchain install nightly
-rustup component add rustfmt --toolchain nightly
+rustup component add clippy rustfmt
 ```
 
 ### Building and testing
@@ -58,7 +56,7 @@ This command will run `cargo build` and also dump the latest schema into `crates
 Linting is done using rustfmt and clippy, which are each separate commands:
 
 ```sh
-cargo +nightly fmt --all
+cargo fmt --all
 ```
 
 ```sh
