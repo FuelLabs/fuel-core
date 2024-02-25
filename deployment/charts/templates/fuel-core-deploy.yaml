@@ -273,7 +273,7 @@ spec:
             httpGet:
               path: /health
               port: {{ .Values.app.target_port }}
-            initialDelaySeconds: 10
+            initialDelaySeconds: 300
             periodSeconds: 5
             timeoutSeconds: 10
           volumeMounts:
