@@ -61,7 +61,12 @@ impl TxPoolPort for TxPoolAdapter {
         &self,
         txs: Vec<Arc<Transaction>>,
     ) -> Vec<anyhow::Result<InsertionResult>> {
-        self.service.insert(txs).await
+        self.service
+            .insert(txs)
+            .await
+            .into_iter()
+            .map(|res| res.map_err(anyhow::Error::from))
+            .collect()
     }
 
     fn tx_update_subscribe(

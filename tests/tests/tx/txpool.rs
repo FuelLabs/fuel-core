@@ -69,7 +69,7 @@ async fn txs_max_script_gas_limit() {
 
     tokio::time::sleep(Duration::from_secs(1)).await;
 
-    let block = client.block_by_height(1).await.unwrap().unwrap();
+    let block = client.block_by_height(1.into()).await.unwrap().unwrap();
     assert_eq!(
         block.transactions.len(),
         transactions.len() + 1 // coinbase

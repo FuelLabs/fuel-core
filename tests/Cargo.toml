@@ -21,18 +21,24 @@ anyhow = { workspace = true }
 async-trait = { workspace = true }
 cynic = { workspace = true }
 ethers = "2"
-fuel-core = { path = "../crates/fuel-core", default-features = false, features = ["test-helpers"] }
+fuel-core = { path = "../crates/fuel-core", default-features = false, features = [
+  "test-helpers",
+] }
 fuel-core-benches = { path = "../benches" }
 fuel-core-client = { path = "../crates/client", features = ["test-helpers"] }
 fuel-core-executor = { workspace = true }
-fuel-core-p2p = { path = "../crates/services/p2p", features = ["test-helpers"], optional = true }
+fuel-core-p2p = { path = "../crates/services/p2p", features = [
+  "test-helpers",
+], optional = true }
 fuel-core-poa = { path = "../crates/services/consensus_module/poa" }
 fuel-core-relayer = { path = "../crates/services/relayer", features = [
-    "test-helpers",
+  "test-helpers",
 ], optional = true }
 fuel-core-storage = { path = "../crates/storage", features = ["test-helpers"] }
 fuel-core-trace = { path = "../crates/trace" }
-fuel-core-txpool = { path = "../crates/services/txpool", features = ["test-helpers"] }
+fuel-core-txpool = { path = "../crates/services/txpool", features = [
+  "test-helpers",
+] }
 fuel-core-types = { path = "../crates/types", features = ["test-helpers"] }
 futures = "0.3"
 hyper = { workspace = true, features = ["server"] }
@@ -47,9 +53,9 @@ tempfile = "3.3"
 test-case = { workspace = true }
 test-helpers = { path = "./test-helpers" }
 tokio = { workspace = true, features = [
-    "macros",
-    "rt-multi-thread",
-    "test-util",
+  "macros",
+  "rt-multi-thread",
+  "test-util",
 ] }
 
 [features]

@@ -97,8 +97,7 @@ impl MockP2P {
             });
             Box::pin(stream)
         });
-        p2p.expect_broadcast_transaction()
-            .returning(move |_| Ok(()));
+
         p2p
     }
 }
@@ -190,7 +189,14 @@ impl TestContextBuilder {
         let config = self.config.unwrap_or_default();
         let mock_db = self.mock_db;
 
-        let p2p = self.p2p.unwrap_or_else(|| MockP2P::new_with_txs(vec![]));
+        let mut p2p = self.p2p.unwrap_or_else(|| MockP2P::new_with_txs(vec![]));
+        // set default handlers for p2p methods after test is set up, so they will be last on the FIFO
+        // ordering of methods handlers: https://docs.rs/mockall/0.12.1/mockall/index.html#matching-multiple-calls
+        p2p.expect_notify_gossip_transaction_validity()
+            .returning(move |_, _| Ok(()));
+        p2p.expect_broadcast_transaction()
+            .returning(move |_| Ok(()));
+
         let importer = self
             .importer
             .unwrap_or_else(|| MockImporter::with_blocks(vec![]));

@@ -1,4 +1,4 @@
-use super::block::BlockIdFragment;
+use super::block::BlockHeightFragment;
 use crate::client::{
     schema::{
         schema,
@@ -178,7 +178,7 @@ pub struct SubmittedStatus {
 #[cynic(schema_path = "./assets/schema.sdl")]
 pub struct SuccessStatus {
     pub transaction_id: TransactionId,
-    pub block: BlockIdFragment,
+    pub block: BlockHeightFragment,
     pub time: Tai64Timestamp,
     pub program_state: Option<ProgramState>,
     pub receipts: Vec<Receipt>,
@@ -188,7 +188,7 @@ pub struct SuccessStatus {
 #[cynic(schema_path = "./assets/schema.sdl")]
 pub struct FailureStatus {
     pub transaction_id: TransactionId,
-    pub block: BlockIdFragment,
+    pub block: BlockHeightFragment,
     pub time: Tai64Timestamp,
     pub reason: String,
     pub program_state: Option<ProgramState>,

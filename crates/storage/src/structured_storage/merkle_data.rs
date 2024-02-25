@@ -43,10 +43,9 @@ macro_rules! merkle_table {
 }
 
 type U64Codec = Primitive<8>;
-type BlockHeightCodec = Primitive<4>;
 
 merkle_table!(FuelBlockMerkleData, U64Codec);
-merkle_table!(FuelBlockMerkleMetadata, BlockHeightCodec);
+merkle_table!(FuelBlockMerkleMetadata, Postcard);
 merkle_table!(ContractsAssetsMerkleData);
 merkle_table!(ContractsAssetsMerkleMetadata);
 merkle_table!(ContractsStateMerkleData);

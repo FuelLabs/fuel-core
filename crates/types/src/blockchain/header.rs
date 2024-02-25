@@ -81,7 +81,10 @@ impl BlockHeader {
             BlockHeader::V1(v1) => &mut v1.consensus,
         }
     }
+}
 
+#[cfg(feature = "test-helpers")]
+impl BlockHeader {
     /// Set the entire consensus header
     pub fn set_consensus_header(
         &mut self,
@@ -112,26 +115,31 @@ impl BlockHeader {
     /// Set the block height for the header
     pub fn set_block_height(&mut self, height: BlockHeight) {
         self.consensus_mut().height = height;
+        self.recalculate_metadata();
     }
 
     /// Set the previous root for the header
     pub fn set_previous_root(&mut self, root: Bytes32) {
         self.consensus_mut().prev_root = root;
+        self.recalculate_metadata();
     }
 
     /// Set the time for the header
     pub fn set_time(&mut self, time: Tai64) {
         self.consensus_mut().time = time;
+        self.recalculate_metadata();
     }
 
     /// Set the transaction root for the header
     pub fn set_transaction_root(&mut self, root: Bytes32) {
         self.application_mut().generated.transactions_root = root;
+        self.recalculate_metadata();
     }
 
     /// Set the DA height for the header
     pub fn set_da_height(&mut self, da_height: DaBlockHeight) {
         self.application_mut().da_height = da_height;
+        self.recalculate_metadata();
     }
 }
 

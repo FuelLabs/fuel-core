@@ -23,6 +23,7 @@ use fuel_core_storage::{
 };
 use fuel_core_txpool::types::TxId;
 use fuel_core_types::{
+    blockchain::primitives::BlockId,
     fuel_tx::{
         Address,
         Bytes32,
@@ -37,6 +38,11 @@ use fuel_core_types::{
 };
 
 impl OffChainDatabase for Database<OffChain> {
+    fn block_height(&self, id: &BlockId) -> StorageResult<BlockHeight> {
+        self.get_block_height(id)
+            .and_then(|height| height.ok_or(not_found!("BlockHeight")))
+    }
+
     fn tx_status(&self, tx_id: &TxId) -> StorageResult<TransactionStatus> {
         self.get_tx_status(tx_id)
             .transpose()

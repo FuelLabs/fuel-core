@@ -95,7 +95,7 @@ query($id: TransactionId!) {
       ... on SuccessStatus {
         transactionId
         block {
-          id
+          height
         }
         time
         programState {
@@ -139,7 +139,7 @@ query($id: TransactionId!) {
       ... on FailureStatus {
         transactionId
         block {
-          id
+          height
         }
         time
         reason

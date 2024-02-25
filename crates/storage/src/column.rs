@@ -62,10 +62,8 @@ pub enum Column {
     // Below are the tables used for p2p, block production, starting the node.
     /// The column id of metadata about the blockchain
     Metadata = 17,
-    /// See `FuelBlockSecondaryKeyBlockHeights`
-    FuelBlockSecondaryKeyBlockHeights = 18,
     /// See [`SealedBlockConsensus`](crate::tables::SealedBlockConsensus)
-    FuelBlockConsensus = 19,
+    FuelBlockConsensus = 18,
 }
 
 impl Column {
