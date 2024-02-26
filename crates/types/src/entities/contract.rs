@@ -21,11 +21,28 @@ pub struct ContractUtxoInfo {
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[non_exhaustive]
 pub enum ContractsInfoType {
+    /// V1
     V1(ContractsInfoTypeV1),
 }
 
+impl ContractsInfoType {
+    /// Get the contract salt
+    pub fn salt(&self) -> &Salt {
+        match self {
+            ContractsInfoType::V1(info) => &info.salt,
+        }
+    }
+}
+
+/// Version 1 of the ContractsInfoType
 #[derive(Debug, Default, Clone, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct ContractsInfoTypeV1 {
-    pub salt: Salt,
+    salt: Salt,
+}
+
+impl From<Salt> for ContractsInfoTypeV1 {
+    fn from(salt: Salt) -> Self {
+        Self { salt }
+    }
 }

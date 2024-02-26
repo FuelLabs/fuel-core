@@ -19,8 +19,9 @@ use crate::{
     },
     StorageRead,
 };
-use core::ops::Deref;
 use fuel_core_types::fuel_tx::ContractId;
+
+use core::ops::Deref;
 
 // # Dev-note: The value of the `ContractsRawCode` has a unique implementation of serialization
 // and deserialization and uses `Raw` codec. Because the value is a contract byte code represented
@@ -76,7 +77,10 @@ impl TableWithBlueprint for ContractsLatestUtxo {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::tables::ContractsInfoType;
+    use fuel_core_types::{
+        entities::contract::ContractsInfoType,
+        fuel_tx::Salt,
+    };
 
     crate::basic_storage_tests!(
         ContractsRawCode,
@@ -88,7 +92,7 @@ mod test {
     crate::basic_storage_tests!(
         ContractsInfo,
         <ContractsInfo as crate::Mappable>::Key::from([1u8; 32]),
-        ContractsInfoType::V1([2u8; 32].into())
+        ContractsInfoType::V1(Salt::new([2u8; 32]).into())
     );
 
     crate::basic_storage_tests!(

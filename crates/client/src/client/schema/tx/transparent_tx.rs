@@ -274,6 +274,7 @@ impl TryFrom<Transaction> for fuel_tx::Transaction {
                         ConversionError::MissingField("mint_asset_id".to_string())
                     })?
                     .into(),
+                0,
             );
             mint.into()
         };

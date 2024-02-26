@@ -642,6 +642,7 @@ where
                 },
                 amount_to_mint,
                 self.config.consensus_parameters.base_asset_id,
+                0, // TODO:
             );
 
             execute_transaction(

@@ -28,6 +28,10 @@ use fuel_core_types::{
         header::ConsensusHeader,
         primitives::BlockId,
     },
+    // entities::contract::{
+    //     ContractsInfoType,
+    //     ContractsInfoTypeV1,
+    // },
     fuel_tx::{
         Contract,
         StorageSlot,
@@ -36,13 +40,12 @@ use fuel_core_types::{
         BlockHeight,
         Bytes32,
         ContractId,
-        Salt,
+        // Salt,
         Word,
     },
     fuel_vm::InterpreterStorage,
     tai64::Tai64,
 };
-use fuel_vm_private::storage::ContractsInfoType;
 use itertools::Itertools;
 use primitive_types::U256;
 use std::borrow::Cow;
@@ -174,6 +177,7 @@ where
 
 impl<D> ContractsAssetsStorage for VmStorage<D> where
     D: MerkleRootStorage<ContractId, ContractsAssets, Error = StorageError>
+        + StorageMutate<ContractsAssets, Error = StorageError>
 {
 }
 
@@ -181,7 +185,9 @@ impl<D> InterpreterStorage for VmStorage<D>
 where
     D: StorageMutate<ContractsInfo, Error = StorageError>
         + MerkleRootStorage<ContractId, ContractsState, Error = StorageError>
+        + StorageMutate<ContractsAssets, Error = StorageError>
         + StorageMutate<ContractsRawCode, Error = StorageError>
+        + StorageMutate<ContractsState, Error = StorageError>
         + StorageRead<ContractsRawCode, Error = StorageError>
         + MerkleRootStorage<ContractId, ContractsAssets, Error = StorageError>
         + VmStorageRequirements<Error = StorageError>,
@@ -225,16 +231,11 @@ where
 
     fn deploy_contract_with_id(
         &mut self,
-        salt: &Salt,
         slots: &[StorageSlot],
         contract: &Contract,
         id: &ContractId,
     ) -> Result<(), Self::DataError> {
         self.storage_contract_insert(id, contract)?;
-
-        let info = ContractsInfoType::V1(*salt);
-        self.storage_contract_info_insert(id, &info)?;
-
         self.database.init_contract_state(
             id,
             slots.iter().map(|slot| (*slot.key(), *slot.value())),

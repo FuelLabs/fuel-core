@@ -14,7 +14,6 @@ use fuel_core_storage::{
     tables::{
         Coins,
         ContractsInfo,
-        ContractsInfoType,
         ContractsLatestUtxo,
         ContractsRawCode,
         Messages,
@@ -43,7 +42,10 @@ use fuel_core_types::{
     },
     entities::{
         coins::coin::Coin,
-        contract::ContractUtxoInfo,
+        contract::{
+            ContractUtxoInfo,
+            ContractsInfoType,
+        },
         message::Message,
     },
     fuel_merkle::binary,
@@ -250,7 +252,7 @@ fn init_contracts(
                 // insert contract salt
                 if db
                     .storage::<ContractsInfo>()
-                    .insert(&contract_id, &ContractsInfoType::V1(salt))?
+                    .insert(&contract_id, &ContractsInfoType::V1(salt.into()))?
                     .is_some()
                 {
                     return Err(anyhow!("Contract info should not exist"))

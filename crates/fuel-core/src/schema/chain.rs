@@ -264,10 +264,6 @@ impl GasCosts {
         self.0.cfsi.into()
     }
 
-    async fn croo(&self) -> U64 {
-        self.0.croo.into()
-    }
-
     async fn div(&self) -> U64 {
         self.0.div.into()
     }
@@ -578,6 +574,10 @@ impl GasCosts {
 
     async fn ccp(&self) -> DependentCost {
         self.0.ccp.into()
+    }
+
+    async fn croo(&self) -> DependentCost {
+        self.0.croo.into()
     }
 
     async fn csiz(&self) -> DependentCost {
