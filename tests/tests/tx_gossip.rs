@@ -8,7 +8,13 @@ use fuel_core::p2p_test_helpers::{
 };
 use fuel_core_client::client::FuelClient;
 use fuel_core_types::{
-    fuel_tx::*,
+    fuel_tx::{
+        input::{
+            coin::CoinSigned,
+            Empty,
+        },
+        *,
+    },
     fuel_vm::*,
     services::{
         block_importer::SharedImportResult,
@@ -161,14 +167,19 @@ async fn test_tx_gossiping_invalid_txs(
 
     for _ in 0..NUMBER_OF_INVALID_TXS {
         let invalid_tx = TransactionBuilder::script(vec![], vec![])
-            .add_unsigned_coin_input(
-                SecretKey::random(&mut rng),
-                rng.gen(),
-                rng.gen(),
-                rng.gen(),
-                Default::default(),
-                Default::default(),
-            )
+            .add_input(Input::CoinSigned(CoinSigned {
+                utxo_id: rng.gen(),
+                owner: rng.gen(),
+                amount: 0,
+                asset_id: rng.gen(),
+                tx_pointer: Default::default(),
+                witness_index: 0,
+                maturity: Default::default(),
+                predicate_gas_used: Empty::new(),
+                predicate: Empty::new(),
+                predicate_data: Empty::new(),
+            }))
+            .add_witness(Witness::default())
             .finalize()
             .into();
 

@@ -1,10 +1,7 @@
 //! Types for interoperability with the txpool service
 
 use crate::{
-    blockchain::{
-        block::Block,
-        primitives::BlockId,
-    },
+    blockchain::block::Block,
     fuel_asm::Word,
     fuel_tx::{
         field::{
@@ -33,7 +30,13 @@ use crate::{
     },
     services::executor::TransactionExecutionResult,
 };
-use fuel_vm_private::checked_transaction::CheckedTransaction;
+use fuel_vm_private::{
+    checked_transaction::{
+        CheckError,
+        CheckedTransaction,
+    },
+    fuel_types::BlockHeight,
+};
 use std::{
     sync::Arc,
     time::Duration,
@@ -180,7 +183,7 @@ pub enum TransactionStatus {
     /// Transaction was successfully included in a block
     Success {
         /// Included in this block
-        block_id: BlockId,
+        block_height: BlockHeight,
         /// Time when the block was generated
         time: Tai64,
         /// Result of executing the transaction for scripts
@@ -196,7 +199,7 @@ pub enum TransactionStatus {
     /// Transaction was included in a block, but the exection was reverted
     Failed {
         /// Included in this block
-        block_id: BlockId,
+        block_height: BlockHeight,
         /// Time when the block was generated
         time: Tai64,
         /// Result of executing the transaction for scripts
@@ -212,11 +215,11 @@ pub fn from_executor_to_status(
     result: TransactionExecutionResult,
 ) -> TransactionStatus {
     let time = block.header().time();
-    let block_id = block.id();
+    let block_height = *block.header().height();
     match result {
         TransactionExecutionResult::Success { result, receipts } => {
             TransactionStatus::Success {
-                block_id,
+                block_height,
                 time,
                 result,
                 receipts,
@@ -224,7 +227,7 @@ pub fn from_executor_to_status(
         }
         TransactionExecutionResult::Failed { result, receipts } => {
             TransactionStatus::Failed {
-                block_id,
+                block_height,
                 time,
                 result,
                 receipts,
@@ -234,7 +237,7 @@ pub fn from_executor_to_status(
 }
 
 #[allow(missing_docs)]
-#[derive(thiserror::Error, Debug, PartialEq, Eq, Clone)]
+#[derive(thiserror::Error, Debug, Clone)]
 #[non_exhaustive]
 pub enum Error {
     #[error("TxPool required that transaction contains metadata")]
@@ -259,16 +262,14 @@ pub enum Error {
         "Transaction is not inserted. A higher priced tx {0:#x} is already spending this message: {1:#x}"
     )]
     NotInsertedCollisionMessageId(TxId, Nonce),
-    #[error(
-        "Transaction is not inserted. Dependent UTXO output is not existing: {0:#x}"
-    )]
-    NotInsertedOutputNotExisting(UtxoId),
-    #[error("Transaction is not inserted. UTXO input contract is not existing: {0:#x}")]
-    NotInsertedInputContractNotExisting(ContractId),
+    #[error("Transaction is not inserted. UTXO input does not exist: {0:#x}")]
+    NotInsertedOutputDoesNotExist(UtxoId),
+    #[error("Transaction is not inserted. UTXO input contract does not exist or was already spent: {0:#x}")]
+    NotInsertedInputContractDoesNotExist(ContractId),
     #[error("Transaction is not inserted. ContractId is already taken {0:#x}")]
     NotInsertedContractIdAlreadyTaken(ContractId),
-    #[error("Transaction is not inserted. UTXO is not existing: {0:#x}")]
-    NotInsertedInputUtxoIdNotExisting(UtxoId),
+    #[error("Transaction is not inserted. UTXO does not exist: {0:#x}")]
+    NotInsertedInputUtxoIdNotDoesNotExist(UtxoId),
     #[error("Transaction is not inserted. UTXO is spent: {0:#x}")]
     NotInsertedInputUtxoIdSpent(UtxoId),
     #[error("Transaction is not inserted. Message is spent: {0:#x}")]
@@ -306,7 +307,19 @@ pub enum Error {
     TTLReason,
     #[error("Transaction squeezed out because {0}")]
     SqueezedOut(String),
+    #[error("Invalid transaction data: {0:?}")]
+    ConsensusValidity(CheckError),
+    #[error("Mint transactions are disallowed from the txpool")]
+    MintIsDisallowed,
+    #[error("Database error: {0}")]
+    Database(String),
     // TODO: We need it for now until channels are removed from TxPool.
     #[error("Got some unexpected error: {0}")]
     Other(String),
+}
+
+impl From<CheckError> for Error {
+    fn from(e: CheckError) -> Self {
+        Error::ConsensusValidity(e)
+    }
 }

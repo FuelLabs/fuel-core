@@ -104,7 +104,10 @@ serde_json = "1.0"
 strum = "0.25"
 strum_macros = "0.25"
 # enable cookie store to support L7 sticky sessions
-reqwest = { version = "0.11.16", default-features = false, features = ["rustls-tls", "cookies"] }
+reqwest = { version = "0.11.16", default-features = false, features = [
+  "rustls-tls",
+  "cookies",
+] }
 mockall = "0.11"
 test-case = "2.2"
 test-strategy = "0.3"

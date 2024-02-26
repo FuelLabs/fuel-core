@@ -1,7 +1,5 @@
 use std::sync::Arc;
 
-use fuel_core_types::blockchain::primitives::BlockId;
-
 use crate::service::update_sender::tests::utils::{
     construct_senders,
     SenderData,
@@ -60,7 +58,7 @@ fn test_send_reg() {
     let update = TxUpdate {
         tx_id: Bytes32::from([2; 32]),
         message: TxStatusMessage::Status(TransactionStatus::Success {
-            block_id: BlockId::from([0; 32]),
+            block_height: Default::default(),
             time: Tai64(0),
             result: None,
             receipts: vec![],

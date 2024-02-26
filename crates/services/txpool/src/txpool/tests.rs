@@ -53,7 +53,7 @@ async fn check_unwrap_tx(tx: Transaction, config: &Config) -> Checked<Transactio
 async fn check_tx(
     tx: Transaction,
     config: &Config,
-) -> anyhow::Result<Checked<Transaction>> {
+) -> Result<Checked<Transaction>, Error> {
     check_single_tx(tx, Default::default(), config).await
 }
 
@@ -156,8 +156,8 @@ async fn faulty_t2_collided_on_contract_id_from_tx1() {
         .insert_single(tx_faulty)
         .expect_err("Tx2 should be Err, got Ok");
     assert!(matches!(
-        err.downcast_ref::<Error>(),
-        Some(Error::NotInsertedCollisionContractId(id)) if id == &contract_id
+        err,
+        Error::NotInsertedCollisionContractId(id) if id == contract_id
     ));
 }
 
@@ -202,8 +202,8 @@ async fn fail_to_insert_tx_with_dependency_on_invalid_utxo_type() {
         .insert_single(tx)
         .expect_err("Tx2 should be Err, got Ok");
     assert!(matches!(
-        err.downcast_ref::<Error>(),
-        Some(Error::NotInsertedInputUtxoIdNotExisting(id)) if id == &UtxoId::new(tx_faulty_id, 0)
+        err,
+        Error::NotInsertedInputUtxoIdNotDoesNotExist(id) if id == UtxoId::new(tx_faulty_id, 0)
     ));
 }
 
@@ -226,10 +226,7 @@ async fn not_inserted_known_tx() {
     let err = txpool
         .insert_single(tx)
         .expect_err("Second insertion of Tx1 should be Err, got Ok");
-    assert!(matches!(
-        err.downcast_ref::<Error>(),
-        Some(Error::NotInsertedTxKnown)
-    ));
+    assert!(matches!(err, Error::NotInsertedTxKnown));
 }
 
 #[tokio::test]
@@ -250,8 +247,8 @@ async fn try_to_insert_tx2_missing_utxo() {
         .insert_single(tx)
         .expect_err("Tx should be Err, got Ok");
     assert!(matches!(
-        err.downcast_ref::<Error>(),
-        Some(Error::NotInsertedInputUtxoIdNotExisting(_))
+        err,
+        Error::NotInsertedInputUtxoIdNotDoesNotExist(_)
     ));
 }
 
@@ -332,8 +329,8 @@ async fn underpriced_tx1_not_included_coin_collision() {
         .insert_single(tx3_checked)
         .expect_err("Tx3 should be Err, got Ok");
     assert!(matches!(
-        err.downcast_ref::<Error>(),
-        Some(Error::NotInsertedCollision(id, utxo_id)) if id == &tx2.id(&Default::default()) && utxo_id == &UtxoId::new(tx1.id(&Default::default()), 0)
+        err,
+        Error::NotInsertedCollision(id, utxo_id) if id == tx2.id(&Default::default()) && utxo_id == UtxoId::new(tx1.id(&Default::default()), 0)
     ));
 }
 
@@ -378,8 +375,8 @@ async fn overpriced_tx_contract_input_not_inserted() {
         .expect_err("Tx2 should be Err, got Ok");
     assert!(
         matches!(
-            err.downcast_ref::<Error>(),
-            Some(Error::NotInsertedContractPricedLower(id)) if id == &contract_id
+            err,
+            Error::NotInsertedContractPricedLower(id) if id == contract_id
         ),
         "wrong err {err:?}"
     );
@@ -554,10 +551,7 @@ async fn tx_limit_hit() {
     let err = txpool
         .insert_single(tx2)
         .expect_err("Tx2 should be Err, got Ok");
-    assert!(matches!(
-        err.downcast_ref::<Error>(),
-        Some(Error::NotInsertedLimitHit)
-    ));
+    assert!(matches!(err, Error::NotInsertedLimitHit));
 }
 
 #[tokio::test]
@@ -604,10 +598,7 @@ async fn tx_depth_hit() {
     let err = txpool
         .insert_single(tx3)
         .expect_err("Tx3 should be Err, got Ok");
-    assert!(matches!(
-        err.downcast_ref::<Error>(),
-        Some(Error::NotInsertedMaxDepth)
-    ));
+    assert!(matches!(err, Error::NotInsertedMaxDepth));
 }
 
 #[tokio::test]
@@ -764,10 +755,7 @@ async fn tx_below_min_gas_price_is_not_insertable() {
     .await
     .expect_err("expected insertion failure");
 
-    assert!(matches!(
-        err.root_cause().downcast_ref::<Error>().unwrap(),
-        Error::NotInsertedGasPriceTooLow
-    ));
+    assert!(matches!(err, Error::NotInsertedGasPriceTooLow));
 }
 
 #[tokio::test]
@@ -811,8 +799,8 @@ async fn tx_rejected_when_input_message_id_is_spent() {
 
     // check error
     assert!(matches!(
-        err.downcast_ref::<Error>(),
-        Some(Error::NotInsertedInputMessageSpent(msg_id)) if msg_id == message.id()
+        err,
+        Error::NotInsertedInputMessageSpent(msg_id) if msg_id == *message.id()
     ));
 }
 
@@ -833,8 +821,8 @@ async fn tx_rejected_from_pool_when_input_message_id_does_not_exist_in_db() {
 
     // check error
     assert!(matches!(
-        err.downcast_ref::<Error>(),
-        Some(Error::NotInsertedInputMessageUnknown(msg_id)) if msg_id == message.id()
+        err,
+        Error::NotInsertedInputMessageUnknown(msg_id) if msg_id == *message.id()
     ));
 }
 
@@ -881,8 +869,8 @@ async fn tx_rejected_from_pool_when_gas_price_is_lower_than_another_tx_with_same
 
     // check error
     assert!(matches!(
-        err.downcast_ref::<Error>(),
-        Some(Error::NotInsertedCollisionMessageId(tx_id, msg_id)) if tx_id == &tx_high_id && msg_id == message.id()
+        err,
+        Error::NotInsertedCollisionMessageId(tx_id, msg_id) if tx_id == tx_high_id && msg_id == *message.id()
     ));
 }
 

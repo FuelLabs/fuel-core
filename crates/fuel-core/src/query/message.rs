@@ -173,17 +173,17 @@ pub fn message_proof<T: MessageProofData + ?Sized>(
         data.ok_or(anyhow::anyhow!("Output message doesn't contain any `data`"))?;
 
     // Get the block id from the transaction status if it's ready.
-    let message_block_id = match database
+    let message_block_height = match database
         .transaction_status(&transaction_id)
-        .into_api_result::<TransactionStatus, StorageError>()?
-    {
-        Some(TransactionStatus::Success { block_id, .. }) => block_id,
+        .into_api_result::<TransactionStatus, StorageError>(
+    )? {
+        Some(TransactionStatus::Success { block_height, .. }) => block_height,
         _ => return Ok(None),
     };
 
     // Get the message fuel block header.
     let (message_block_header, message_block_txs) = match database
-        .block_by_id(&message_block_id)
+        .block(&message_block_height)
         .into_api_result::<CompressedBlock, StorageError>()?
     {
         Some(t) => t.into_inner(),

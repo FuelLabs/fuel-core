@@ -1,13 +1,10 @@
 use std::ops::Deref;
 
 use fuel_core_types::{
-    blockchain::{
-        header::{
-            ApplicationHeader,
-            ConsensusHeader,
-            PartialBlockHeader,
-        },
-        primitives::BlockId,
+    blockchain::header::{
+        ApplicationHeader,
+        ConsensusHeader,
+        PartialBlockHeader,
     },
     entities::message::MerkleProof,
     fuel_tx::{
@@ -63,7 +60,6 @@ mockall::mock! {
     pub ProofDataStorage {}
     impl SimpleBlockData for ProofDataStorage {
         fn block(&self, height: &BlockHeight) -> StorageResult<CompressedBlock>;
-        fn block_by_id(&self, id: &BlockId) -> StorageResult<CompressedBlock>;
     }
 
     impl DatabaseMessageProof for ProofDataStorage {
@@ -175,34 +171,25 @@ async fn can_build_message_proof() {
             move |_, _| Ok(block_proof.clone())
         });
 
-    let message_block_id = message_block.id();
+    let message_block_height = *message_block.header().height();
     data.expect_transaction_status()
         .with(eq(transaction_id))
         .returning(move |_| {
             Ok(TransactionStatus::Success {
-                block_id: message_block_id,
+                block_height: message_block_height,
                 time: Tai64::UNIX_EPOCH,
                 result: None,
                 receipts: vec![],
             })
         });
 
-    data.expect_block().times(1).returning({
+    data.expect_block().times(2).returning({
         let commit_block = commit_block.clone();
+        let message_block = message_block.clone();
         move |block_height| {
             let block = if commit_block.header().height() == block_height {
                 commit_block.clone()
-            } else {
-                panic!("Shouldn't request any other block")
-            };
-            Ok(block)
-        }
-    });
-
-    data.expect_block_by_id().times(1).returning({
-        let message_block = message_block.clone();
-        move |block_id| {
-            let block = if &message_block.id() == block_id {
+            } else if message_block.header().height() == block_height {
                 message_block.clone()
             } else {
                 panic!("Shouldn't request any other block")

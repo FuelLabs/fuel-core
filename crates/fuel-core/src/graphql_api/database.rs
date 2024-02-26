@@ -106,10 +106,6 @@ pub struct ReadView {
 }
 
 impl DatabaseBlocks for ReadView {
-    fn block_height(&self, block_id: &BlockId) -> StorageResult<BlockHeight> {
-        self.on_chain.block_height(block_id)
-    }
-
     fn blocks(
         &self,
         height: Option<BlockHeight>,
@@ -189,6 +185,10 @@ impl DatabaseMessageProof for ReadView {
 impl OnChainDatabase for ReadView {}
 
 impl OffChainDatabase for ReadView {
+    fn block_height(&self, block_id: &BlockId) -> StorageResult<BlockHeight> {
+        self.off_chain.block_height(block_id)
+    }
+
     fn tx_status(&self, tx_id: &TxId) -> StorageResult<TransactionStatus> {
         self.off_chain.tx_status(tx_id)
     }

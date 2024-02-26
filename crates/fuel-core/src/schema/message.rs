@@ -12,7 +12,7 @@ use super::{
 use crate::{
     fuel_core_graphql_api::{
         database::ReadView,
-        ports::DatabaseBlocks,
+        ports::OffChainDatabase,
     },
     graphql_api::IntoApiResult,
     query::MessageQueryData,

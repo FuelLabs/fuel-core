@@ -14,7 +14,9 @@ description = "Fuel Chain config types"
 anyhow = { workspace = true }
 bech32 = "0.9.0"
 fuel-core-storage = { workspace = true }
-fuel-core-types = { workspace = true, default-features = false, features = ["serde"] }
+fuel-core-types = { workspace = true, default-features = false, features = [
+  "serde",
+] }
 hex = { version = "0.4", features = ["serde"] }
 itertools = { workspace = true }
 postcard = { workspace = true, features = ["alloc"] }
@@ -25,7 +27,10 @@ serde_with = "1.11"
 tracing = "0.1"
 
 [dev-dependencies]
-fuel-core-types = { workspace = true, default-features = false, features = ["random", "serde"] }
+fuel-core-types = { workspace = true, default-features = false, features = [
+  "random",
+  "serde",
+] }
 insta = { workspace = true }
 rand = { workspace = true }
 serde_json = { version = "1.0", features = ["raw_value"] }
