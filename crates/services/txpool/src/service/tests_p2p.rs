@@ -193,6 +193,7 @@ async fn test_gossipped_mint_rejected() {
         Default::default(),
         1,
         AssetId::BASE,
+        Default::default(),
     )
     .finalize_as_transaction();
     // setup p2p mock - with tx incoming from p2p

@@ -64,11 +64,11 @@ impl<D: OnChainDatabase + ?Sized> ContractQueryData for D {
     }
 
     fn contract_salt(&self, id: ContractId) -> StorageResult<Salt> {
-        let (salt, _) = self
+        let salt = *self
             .storage::<ContractsInfo>()
             .get(&id)?
             .ok_or(not_found!(ContractsInfo))?
-            .into_owned();
+            .salt();
 
         Ok(salt)
     }

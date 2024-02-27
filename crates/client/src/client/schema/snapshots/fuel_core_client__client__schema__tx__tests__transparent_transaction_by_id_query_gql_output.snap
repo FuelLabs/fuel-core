@@ -86,6 +86,7 @@ query($id: TransactionId!) {
     }
     mintAmount
     mintAssetId
+    mintGasPrice
     receiptsRoot
     status {
       __typename
@@ -194,5 +195,3 @@ query($id: TransactionId!) {
     bytecodeLength
   }
 }
-
-

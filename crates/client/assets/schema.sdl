@@ -318,7 +318,6 @@ type GasCosts {
 	cb: U64!
 	cfei: U64!
 	cfsi: U64!
-	croo: U64!
 	div: U64!
 	divi: U64!
 	ecr1: U64!
@@ -397,6 +396,7 @@ type GasCosts {
 	xori: U64!
 	call: DependentCost!
 	ccp: DependentCost!
+	croo: DependentCost!
 	csiz: DependentCost!
 	k256: DependentCost!
 	ldc: DependentCost!
@@ -969,6 +969,7 @@ type Transaction {
 	maturity: U32
 	mintAmount: U64
 	mintAssetId: AssetId
+	mintGasPrice: U64
 	txPointer: TxPointer
 	isScript: Boolean!
 	isCreate: Boolean!

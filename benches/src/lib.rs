@@ -62,10 +62,10 @@ impl From<Vec<u8>> for ContractCode {
 
         Self {
             contract,
+            salt,
             id,
             root,
             storage_root,
-            salt,
             slots,
         }
     }
@@ -163,8 +163,6 @@ impl VmBench {
 
         let program = Witness::from(program);
 
-        let salt = rng.gen();
-
         let contract = Contract::from(program.as_ref());
         let state_root = Contract::default_state_root();
         let id = VmBench::CONTRACT;
@@ -176,7 +174,7 @@ impl VmBench {
         let input = Input::contract(utxo_id, balance_root, state_root, tx_pointer, id);
         let output = Output::contract(0, rng.gen(), rng.gen());
 
-        db.deploy_contract_with_id(&salt, &[], &contract, &state_root, &id)?;
+        db.deploy_contract_with_id(&[], &contract, &id)?;
 
         let data = id
             .iter()
@@ -360,7 +358,6 @@ impl TryFrom<VmBench> for VmBenchPrepared {
             let code = iter::once(op::ret(RegId::ONE));
             let code: Vec<u8> = code.collect();
             let code = Contract::from(code);
-            let root = code.root();
 
             let input = tx.inputs().len();
             let output =
@@ -376,16 +373,15 @@ impl TryFrom<VmBench> for VmBenchPrepared {
             tx.add_input(input);
             tx.add_output(output);
 
-            db.deploy_contract_with_id(&VmBench::SALT, &[], &code, &root, &contract)?;
+            db.deploy_contract_with_id(&[], &code, &contract)?;
         }
 
         if let Some(ContractCode {
             contract,
-            salt,
             id,
-            root,
             slots,
             storage_root,
+            ..
         }) = contract_code
         {
             let input_count = tx.inputs().len();
@@ -402,7 +398,7 @@ impl TryFrom<VmBench> for VmBenchPrepared {
             tx.add_input(input);
             tx.add_output(output);
 
-            db.deploy_contract_with_id(&salt, &slots, &contract, &root, &id)?;
+            db.deploy_contract_with_id(&slots, &contract, &id)?;
         }
 
         for contract_id in empty_contracts {
@@ -420,13 +416,7 @@ impl TryFrom<VmBench> for VmBenchPrepared {
             tx.add_input(input);
             tx.add_output(output);
 
-            db.deploy_contract_with_id(
-                &VmBench::SALT,
-                &[],
-                &Contract::default(),
-                &Bytes32::zeroed(),
-                &contract_id,
-            )?;
+            db.deploy_contract_with_id(&[], &Contract::default(), &contract_id)?;
         }
 
         inputs.into_iter().for_each(|i| {
