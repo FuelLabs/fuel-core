@@ -4,7 +4,6 @@ use anyhow::{
     anyhow,
     Context,
 };
-use fuel_core_types::fuel_types::canonical;
 use parquet::{
     data_type::AsBytes,
     file::{
@@ -110,18 +109,5 @@ where
         Self: Sized,
     {
         Ok(postcard::from_bytes(bytes)?)
-    }
-}
-
-pub struct CanonicalDecode;
-impl<T> Decode<T> for CanonicalDecode
-where
-    T: canonical::Deserialize,
-{
-    fn decode(bytes: &[u8]) -> anyhow::Result<T>
-    where
-        Self: Sized,
-    {
-        T::from_bytes(bytes).map_err(|e| anyhow!(e))
     }
 }

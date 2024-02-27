@@ -295,7 +295,6 @@ mod tests {
         },
         fuel_tx::{
             Contract,
-            TxPointer,
             UtxoId,
         },
         fuel_types::BlockHeight,
@@ -398,11 +397,11 @@ mod tests {
                 .unwrap();
 
             CoinConfig {
-                tx_id: Some(tx_id),
-                output_index: Some(output_index),
-                tx_pointer_block_height: Some(coin.tx_pointer().block_height()),
-                tx_pointer_tx_idx: Some(coin.tx_pointer().tx_index()),
-                maturity: Some(*coin.maturity()),
+                tx_id,
+                output_index,
+                tx_pointer_block_height: coin.tx_pointer().block_height(),
+                tx_pointer_tx_idx: coin.tx_pointer().tx_index(),
+                maturity: *coin.maturity(),
                 owner: *coin.owner(),
                 amount: *coin.amount(),
                 asset_id: *coin.asset_id(),
@@ -450,8 +449,8 @@ mod tests {
                 .insert(&contract_id, &(salt, root))
                 .unwrap();
 
-            let utxo_id = UtxoId::new(self.rng.gen(), self.rng.gen());
-            let tx_pointer = TxPointer::new(self.rng.gen(), self.rng.gen());
+            let utxo_id = self.rng.gen();
+            let tx_pointer = self.rng.gen();
 
             self.db
                 .storage_as_mut::<ContractsLatestUtxo>()
@@ -468,10 +467,10 @@ mod tests {
                 contract_id,
                 code,
                 salt,
-                tx_id: Some(*utxo_id.tx_id()),
-                output_index: Some(utxo_id.output_index()),
-                tx_pointer_block_height: Some(tx_pointer.block_height()),
-                tx_pointer_tx_idx: Some(tx_pointer.tx_index()),
+                tx_id: *utxo_id.tx_id(),
+                output_index: utxo_id.output_index(),
+                tx_pointer_block_height: tx_pointer.block_height(),
+                tx_pointer_tx_idx: tx_pointer.tx_index(),
             }
         }
 
@@ -697,12 +696,9 @@ mod tests {
     }
 
     fn sorted_state(mut state: StateConfig) -> StateConfig {
-        state.coins.sort_by_key(|coin| {
-            UtxoId::new(
-                coin.tx_id.unwrap_or_default(),
-                coin.output_index.unwrap_or_default(),
-            )
-        });
+        state
+            .coins
+            .sort_by_key(|coin| UtxoId::new(coin.tx_id, coin.output_index));
         state.messages.sort_by_key(|msg| msg.nonce);
         state.contracts.sort_by_key(|contract| contract.contract_id);
         state

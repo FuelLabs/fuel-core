@@ -13,6 +13,7 @@ use fuel_core_types::{
         Salt,
     },
 };
+use rand::Rng;
 use serde::{
     Deserialize,
     Serialize,
@@ -26,34 +27,21 @@ pub struct ContractConfig {
     #[serde_as(as = "HexIfHumanReadable")]
     pub code: Vec<u8>,
     pub salt: Salt,
-    pub tx_id: Option<Bytes32>,
-    pub output_index: Option<u8>,
-    /// TxPointer: auto-generated if None
+    #[serde(default = "random_tx_id")]
+    pub tx_id: Bytes32,
+    #[serde(default = "Default::default")]
+    pub output_index: u8,
+    /// TxPointer:
     /// used if contract is forked from another chain to preserve id & tx_pointer
     /// The block height that the contract was last used in
-    pub tx_pointer_block_height: Option<BlockHeight>,
-    /// TxPointer: auto-generated if None
-    /// used if contract is forked from another chain to preserve id & tx_pointer
+    pub tx_pointer_block_height: BlockHeight,
     /// The index of the originating tx within `tx_pointer_block_height`
-    pub tx_pointer_tx_idx: Option<u16>,
+    pub tx_pointer_tx_idx: u16,
 }
 
-impl ContractConfig {
-    // TODO: Remove https://github.com/FuelLabs/fuel-core/issues/1668
-    pub fn utxo_id(&self) -> Option<UtxoId> {
-        match (self.tx_id, self.output_index) {
-            (Some(tx_id), Some(output_index)) => Some(UtxoId::new(tx_id, output_index)),
-            _ => None,
-        }
-    }
-
-    // TODO: Remove https://github.com/FuelLabs/fuel-core/issues/1668
-    pub fn tx_pointer(&self) -> TxPointer {
-        match (self.tx_pointer_block_height, self.tx_pointer_tx_idx) {
-            (Some(block_height), Some(tx_idx)) => TxPointer::new(block_height, tx_idx),
-            _ => TxPointer::default(),
-        }
-    }
+fn random_tx_id() -> Bytes32 {
+    let mut rng = ::rand::thread_rng();
+    rng.gen()
 }
 
 #[cfg(all(test, feature = "random", feature = "std"))]
@@ -63,19 +51,23 @@ impl crate::Randomize for ContractConfig {
             contract_id: ContractId::new(super::random_bytes_32(&mut rng)),
             code: (super::random_bytes_32(&mut rng)).to_vec(),
             salt: Salt::new(super::random_bytes_32(&mut rng)),
-            tx_id: rng
-                .gen::<bool>()
-                .then(|| super::random_bytes_32(&mut rng).into()),
-            output_index: rng.gen::<bool>().then(|| rng.gen()),
-            tx_pointer_block_height: rng
-                .gen::<bool>()
-                .then(|| BlockHeight::from(rng.gen::<u32>())),
-            tx_pointer_tx_idx: rng.gen::<bool>().then(|| rng.gen()),
+            tx_id: super::random_bytes_32(&mut rng).into(),
+            output_index: rng.gen(),
+            tx_pointer_block_height: BlockHeight::from(rng.gen::<u32>()),
+            tx_pointer_tx_idx: rng.gen(),
         }
     }
 }
 
 impl ContractConfig {
+    pub fn utxo_id(&self) -> UtxoId {
+        UtxoId::new(self.tx_id, self.output_index)
+    }
+
+    pub fn tx_pointer(&self) -> TxPointer {
+        TxPointer::new(self.tx_pointer_block_height, self.tx_pointer_tx_idx)
+    }
+
     pub fn update_contract_id<'a>(
         &mut self,
         storage_slots: impl IntoIterator<Item = &'a StorageSlot>,

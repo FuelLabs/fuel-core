@@ -22,6 +22,7 @@ use fuel_core_types::{
         UniqueIdentifier,
         UtxoId,
     },
+    fuel_types::BlockHeight,
 };
 use rand::{
     rngs::StdRng,
@@ -52,11 +53,11 @@ async fn tx_pointer_set_from_genesis_for_coin_and_contract_inputs() {
 
     // add coin to genesis block
     test_builder.initial_coins.push(CoinConfig {
-        tx_id: Some(*coin_utxo_id.tx_id()),
-        output_index: Some(coin_utxo_id.output_index()),
-        tx_pointer_block_height: Some(coin_tx_pointer.block_height()),
-        tx_pointer_tx_idx: Some(coin_tx_pointer.tx_index()),
-        maturity: None,
+        tx_id: *coin_utxo_id.tx_id(),
+        output_index: coin_utxo_id.output_index(),
+        tx_pointer_block_height: coin_tx_pointer.block_height(),
+        tx_pointer_tx_idx: coin_tx_pointer.tx_index(),
+        maturity: BlockHeight::default(),
         owner,
         amount,
         asset_id: Default::default(),

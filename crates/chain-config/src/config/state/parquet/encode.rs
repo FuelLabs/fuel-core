@@ -4,7 +4,6 @@ use std::{
     sync::Arc,
 };
 
-use fuel_core_types::fuel_types::canonical;
 use itertools::Itertools;
 use parquet::{
     basic::{
@@ -116,15 +115,5 @@ where
         };
         data.serialize(&mut serializer)?;
         Ok(serializer.output.finalize()?)
-    }
-}
-
-pub struct CanonicalEncode;
-impl<T> Encode<T> for CanonicalEncode
-where
-    T: canonical::Serialize,
-{
-    fn encode(data: &T) -> anyhow::Result<Vec<u8>> {
-        Ok(data.to_bytes())
     }
 }

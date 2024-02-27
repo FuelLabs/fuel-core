@@ -52,12 +52,8 @@ use fuel_core_types::{
         contract::ContractUtxoInfo,
         message::Message,
     },
-    fuel_tx::{
-        Contract,
-        UtxoId,
-    },
+    fuel_tx::Contract,
     fuel_types::{
-        bytes::WORD_SIZE,
         BlockHeight,
         Bytes32,
     },
@@ -66,7 +62,6 @@ use fuel_core_types::{
         UncommittedResult as UncommittedImportResult,
     },
 };
-use itertools::Itertools;
 
 pub mod off_chain;
 
@@ -182,36 +177,20 @@ pub async fn execute_and_commit_genesis_block(
     Ok(())
 }
 
-fn generated_utxo_id(output_index: u64) -> UtxoId {
-    UtxoId::new(
-        // generated transaction id([0..[out_index/255]])
-        Bytes32::try_from(
-            (0..(Bytes32::LEN - WORD_SIZE))
-                .map(|_| 0u8)
-                .chain((output_index / 255).to_be_bytes())
-                .collect_vec()
-                .as_slice(),
-        )
-        .expect("Incorrect genesis transaction id byte length"),
-        (output_index % 255) as u8,
-    )
-}
-
 fn init_coin(
     db: &mut Database,
     coin: &CoinConfig,
-    output_index: u64,
     height: BlockHeight,
 ) -> anyhow::Result<MerkleRoot> {
     // TODO: Store merkle sum tree root over coins with unspecified utxo ids.
-    let utxo_id = coin.utxo_id().unwrap_or(generated_utxo_id(output_index));
+    let utxo_id = coin.utxo_id();
 
     let compressed_coin = Coin {
         utxo_id,
         owner: coin.owner,
         amount: coin.amount,
         asset_id: coin.asset_id,
-        maturity: coin.maturity.unwrap_or_default(),
+        maturity: coin.maturity,
         tx_pointer: coin.tx_pointer(),
     }
     .compress();
@@ -238,17 +217,13 @@ fn init_coin(
 fn init_contract(
     db: &mut Database,
     contract_config: &ContractConfig,
-    output_index: u64,
     height: BlockHeight,
 ) -> anyhow::Result<()> {
     let contract = Contract::from(contract_config.code.as_slice());
     let salt = contract_config.salt;
     let root = contract.root();
     let contract_id = contract_config.contract_id;
-    #[allow(clippy::cast_possible_truncation)]
-    let utxo_id = contract_config
-        .utxo_id()
-        .unwrap_or(generated_utxo_id(output_index));
+    let utxo_id = contract_config.utxo_id();
 
     let tx_pointer = contract_config.tx_pointer();
     if tx_pointer.block_height() > height {
@@ -399,6 +374,7 @@ mod tests {
         let coins = (0..1000)
             .map(|_| CoinConfig {
                 amount: 10,
+                tx_id: rng.gen(),
                 ..Default::default()
             })
             .collect_vec();
@@ -504,11 +480,11 @@ mod tests {
         let state = StateConfig {
             coins: vec![
                 CoinConfig {
-                    tx_id: Some(alice_tx_id),
-                    output_index: Some(alice_output_index),
-                    tx_pointer_block_height: Some(alice_block_created),
-                    tx_pointer_tx_idx: Some(alice_block_created_tx_idx),
-                    maturity: Some(alice_maturity),
+                    tx_id: alice_tx_id,
+                    output_index: alice_output_index,
+                    tx_pointer_block_height: alice_block_created,
+                    tx_pointer_tx_idx: alice_block_created_tx_idx,
+                    maturity: alice_maturity,
                     owner: alice,
                     amount: alice_value,
                     asset_id: asset_id_alice,
@@ -590,10 +566,10 @@ mod tests {
                 contract_id,
                 code: contract.into(),
                 salt,
-                tx_id: Some(rng.gen()),
-                output_index: Some(rng.gen()),
-                tx_pointer_block_height: Some(0u32.into()),
-                tx_pointer_tx_idx: Some(rng.gen()),
+                tx_id: rng.gen(),
+                output_index: rng.gen(),
+                tx_pointer_block_height: 0u32.into(),
+                tx_pointer_tx_idx: rng.gen(),
             }],
             contract_state: vec![contract_state],
             ..Default::default()
@@ -718,8 +694,8 @@ mod tests {
         let state = StateConfig {
             coins: vec![CoinConfig {
                 // set txpointer height > genesis height
-                tx_pointer_block_height: Some(BlockHeight::from(11u32)),
-                tx_pointer_tx_idx: Some(0),
+                tx_pointer_block_height: BlockHeight::from(11u32),
+                tx_pointer_tx_idx: 0,
                 amount: 10,
                 ..Default::default()
             }],
@@ -761,8 +737,8 @@ mod tests {
                 code: contract.into(),
                 salt,
                 // set txpointer height > genesis height
-                tx_pointer_block_height: Some(BlockHeight::from(11u32)),
-                tx_pointer_tx_idx: Some(0),
+                tx_pointer_block_height: BlockHeight::from(11u32),
+                tx_pointer_tx_idx: 0,
                 ..Default::default()
             }],
             contract_balance: balances,
@@ -813,10 +789,10 @@ mod tests {
 
     fn given_contract_config_with_tx(rng: &mut StdRng) -> ContractConfig {
         let mut config = given_contract_config(rng);
-        config.tx_id = Some(rng.gen());
-        config.output_index = Some(rng.gen());
-        config.tx_pointer_block_height = Some(0.into());
-        config.tx_pointer_tx_idx = Some(rng.gen());
+        config.tx_id = rng.gen();
+        config.output_index = rng.gen();
+        config.tx_pointer_block_height = 0.into();
+        config.tx_pointer_tx_idx = rng.gen();
 
         config
     }
@@ -846,78 +822,5 @@ mod tests {
         let initialized_contract = db.get_contract_config(contract_id).unwrap();
 
         assert_eq!(initialized_contract, config);
-    }
-
-    #[tokio::test]
-    async fn initializes_contracts_with_generated_tx_and_output_idx() {
-        let mut rng = StdRng::seed_from_u64(10);
-
-        let contracts = (0..1000)
-            .map(|_| given_contract_config(&mut rng))
-            .collect_vec();
-
-        let state = StateConfig {
-            contracts: contracts.clone(),
-            ..Default::default()
-        };
-        let state_reader = StateReader::in_memory(state, MAX_GROUP_SIZE);
-
-        let service_config = Config {
-            state_reader,
-            ..Config::local_node()
-        };
-
-        let db = Database::default();
-        FuelService::from_database(db.clone(), service_config)
-            .await
-            .unwrap();
-
-        for (idx, contract) in contracts.iter().enumerate() {
-            let initialized_contract =
-                db.get_contract_config(contract.contract_id).unwrap();
-
-            let expected_utxo_id = generated_utxo_id(idx as u64);
-
-            assert_eq!(
-                initialized_contract.tx_id.unwrap(),
-                *expected_utxo_id.tx_id()
-            );
-            assert_eq!(
-                initialized_contract.output_index.unwrap(),
-                expected_utxo_id.output_index()
-            );
-        }
-    }
-
-    #[tokio::test]
-    async fn initializes_coins_with_generated_tx_and_output_idx() {
-        let coins = (0..1000)
-            .map(|_| CoinConfig {
-                amount: 10,
-                ..Default::default()
-            })
-            .collect_vec();
-
-        let state = StateConfig {
-            coins: coins.clone(),
-            ..Default::default()
-        };
-        let state_reader = StateReader::in_memory(state, MAX_GROUP_SIZE);
-
-        let service_config = Config {
-            state_reader,
-            ..Config::local_node()
-        };
-
-        let db = Database::default();
-        FuelService::from_database(db.clone(), service_config)
-            .await
-            .unwrap();
-
-        for (idx, _) in coins.iter().enumerate() {
-            let expected_utxo_id = generated_utxo_id(idx as u64);
-            db.coin(&expected_utxo_id)
-                .expect("Coin with expected utxo id should exist");
-        }
     }
 }

@@ -43,10 +43,10 @@ async fn loads_snapshot() {
             contract_id,
             code: vec![8; 32],
             salt: Salt::new([9; 32]),
-            tx_id: Some(rng.gen()),
-            output_index: Some(rng.gen()),
-            tx_pointer_block_height: Some(BlockHeight::from(10)),
-            tx_pointer_tx_idx: Some(rng.gen()),
+            tx_id: rng.gen(),
+            output_index: rng.gen(),
+            tx_pointer_block_height: BlockHeight::from(10),
+            tx_pointer_tx_idx: rng.gen(),
         }],
         contract_balance: vec![
             ContractBalanceConfig {
@@ -79,12 +79,10 @@ async fn loads_snapshot() {
         ]
         .into_iter()
         .map(|(owner, amount, asset_id)| CoinConfig {
-            tx_pointer_block_height: Some(Default::default()),
-            tx_pointer_tx_idx: Some(0),
-            maturity: Some(Default::default()),
             owner,
             amount,
             asset_id,
+            tx_id: rng.gen(),
             ..Default::default()
         })
         .collect(),

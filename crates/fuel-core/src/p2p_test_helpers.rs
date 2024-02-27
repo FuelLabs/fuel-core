@@ -196,9 +196,9 @@ pub async fn make_nodes(
             let all: Vec<_> = (0..num_test_txs)
                 .map(|_| {
                     let secret = SecretKey::random(&mut rng);
-                    let utxo_id: UtxoId = rng.gen();
+                    let utxo_id = rng.gen();
                     let initial_coin =
-                        StateConfig::initial_coin(secret, 10000, Some(utxo_id));
+                        StateConfig::initial_coin(secret, 10000, utxo_id, utxo_id);
                     let tx = TransactionBuilder::script(
                         vec![op::ret(RegId::ONE)].into_iter().collect(),
                         vec![],

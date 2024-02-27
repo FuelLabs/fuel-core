@@ -253,7 +253,7 @@ mod tests {
         // given
         let groups = given_ok_groups(1);
         let outer_db = Database::default();
-        let utxo_id = UtxoId::new(Default::default(), 0);
+        let utxo_id = UtxoId::new(Default::default(), 5);
 
         let is_coin_present =
             |db: &Database| StorageInspect::<Coins>::contains_key(&db, &utxo_id).unwrap();
@@ -298,7 +298,7 @@ mod tests {
         // given
         let groups = given_ok_groups(1);
         let db = Database::default();
-        let utxo_id = UtxoId::new(Default::default(), 0);
+        let utxo_id = UtxoId::new(Default::default(), 5);
 
         let runner = GenesisRunner::new(
             Some(Arc::new(Notify::new())),
@@ -404,7 +404,7 @@ mod tests {
             db: db.clone(),
             counter: 0,
         };
-        let utxo_id = UtxoId::new(Default::default(), 0);
+        let utxo_id = UtxoId::new(Default::default(), 5);
 
         let runner = GenesisRunner::new(
             Some(Arc::new(Notify::new())),
