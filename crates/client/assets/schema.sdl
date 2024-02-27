@@ -969,6 +969,7 @@ type Transaction {
 	maturity: U32
 	mintAmount: U64
 	mintAssetId: AssetId
+	mintGasPrice: U64
 	txPointer: TxPointer
 	isScript: Boolean!
 	isCreate: Boolean!

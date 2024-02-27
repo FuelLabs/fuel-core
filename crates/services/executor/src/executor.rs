@@ -642,7 +642,8 @@ where
                 },
                 amount_to_mint,
                 self.config.consensus_parameters.base_asset_id,
-                0, // TODO: Provide gas price
+                // TODO: Provide gas price https://github.com/FuelLabs/fuel-core/issues/1642
+                0,
             );
 
             execute_transaction(
