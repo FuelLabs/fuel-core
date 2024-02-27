@@ -36,7 +36,6 @@ use fuel_core_types::{
         BlockHeight,
         Bytes32,
         ContractId,
-        // Salt,
         Word,
     },
     fuel_vm::InterpreterStorage,
