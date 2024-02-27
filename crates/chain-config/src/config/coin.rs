@@ -22,7 +22,8 @@ use serde::{
 use serde_with::serde_as;
 
 #[serde_as]
-#[derive(Default, Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+#[derive(Default, Clone, Debug, Eq, PartialEq)]
 pub struct CoinConfig {
     #[serde(default = "random_tx_id")]
     pub tx_id: Bytes32,
@@ -39,6 +40,7 @@ pub struct CoinConfig {
     pub asset_id: AssetId,
 }
 
+#[cfg(feature = "std")]
 fn random_tx_id() -> Bytes32 {
     let mut rng = ::rand::thread_rng();
     rng.gen()

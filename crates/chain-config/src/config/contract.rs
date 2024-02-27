@@ -21,7 +21,8 @@ use serde::{
 use serde_with::serde_as;
 
 #[serde_as]
-#[derive(Clone, Debug, Deserialize, Serialize, Eq, PartialEq, Default)]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+#[derive(Clone, Debug, Eq, PartialEq, Default)]
 pub struct ContractConfig {
     pub contract_id: ContractId,
     #[serde_as(as = "HexIfHumanReadable")]
@@ -39,6 +40,7 @@ pub struct ContractConfig {
     pub tx_pointer_tx_idx: u16,
 }
 
+#[cfg(feature = "std")]
 fn random_tx_id() -> Bytes32 {
     let mut rng = ::rand::thread_rng();
     rng.gen()
