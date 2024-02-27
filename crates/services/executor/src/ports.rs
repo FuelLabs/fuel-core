@@ -78,6 +78,7 @@ pub trait ExecutorDatabaseTrait<D>:
     + StorageMutate<SpentMessages, Error = StorageError>
     + StorageMutate<ContractsLatestUtxo, Error = StorageError>
     + StorageMutate<ContractsRawCode, Error = StorageError>
+    + StorageMutate<ContractsAssets, Error = StorageError>
     + StorageRead<ContractsRawCode>
     + StorageMutate<ContractsInfo, Error = StorageError>
     + MerkleRootStorage<ContractId, ContractsState, Error = StorageError>

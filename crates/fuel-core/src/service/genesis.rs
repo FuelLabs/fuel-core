@@ -49,7 +49,10 @@ use fuel_core_types::{
     },
     entities::{
         coins::coin::Coin,
-        contract::ContractUtxoInfo,
+        contract::{
+            ContractUtxoInfo,
+            ContractsInfoType,
+        },
         message::Message,
     },
     fuel_tx::Contract,
@@ -244,7 +247,7 @@ fn init_contract(
     // insert contract root
     if db
         .storage::<ContractsInfo>()
-        .insert(&contract_id, &(salt, root))?
+        .insert(&contract_id, &ContractsInfoType::V1(salt.into()))?
         .is_some()
     {
         return Err(anyhow!("Contract info should not exist"));
@@ -262,6 +265,7 @@ fn init_contract(
     {
         return Err(anyhow!("Contract utxo should not exist"));
     }
+    
     Ok(())
 }
 

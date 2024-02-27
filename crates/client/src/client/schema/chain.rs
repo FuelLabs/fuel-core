@@ -145,7 +145,6 @@ include_from_impls_and_cynic! {
         pub cb: U64,
         pub cfei: U64,
         pub cfsi: U64,
-        pub croo: U64,
         pub div: U64,
         pub divi: U64,
         pub eck1: U64,
@@ -225,6 +224,7 @@ include_from_impls_and_cynic! {
 
         pub call: DependentCost,
         pub ccp: DependentCost,
+        pub croo: DependentCost,
         pub csiz: DependentCost,
         pub k256: DependentCost,
         pub ldc: DependentCost,

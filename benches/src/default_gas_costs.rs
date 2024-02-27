@@ -13,7 +13,6 @@ pub fn default_gas_costs() -> GasCostsValues {
         cb: 2,
         cfei: 2,
         cfsi: 2,
-        croo: 40,
         div: 2,
         divi: 2,
         eck1: 3347,
@@ -100,6 +99,11 @@ pub fn default_gas_costs() -> GasCostsValues {
         ccp: DependentCost::LightOperation {
             base: 59,
             units_per_gas: 20,
+        },
+        // TODO: Update CROO values based on benchmarks: https://github.com/FuelLabs/fuel-core/issues/1660
+        croo: DependentCost::LightOperation {
+            base: 1,
+            units_per_gas: 1,
         },
         csiz: DependentCost::LightOperation {
             base: 59,

@@ -430,6 +430,14 @@ impl Transaction {
         }
     }
 
+    async fn mint_gas_price(&self) -> Option<U64> {
+        match &self.0 {
+            fuel_tx::Transaction::Script(_) | fuel_tx::Transaction::Create(_) => None,
+            // TODO: We need to add a getter for the `gas_price` field in `Mint` transaction
+            fuel_tx::Transaction::Mint(_) => Some((0).into()),
+        }
+    }
+
     // TODO: Maybe we need to do the same `Script` and `Create`
     async fn tx_pointer(&self) -> Option<TxPointer> {
         match &self.0 {

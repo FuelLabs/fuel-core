@@ -123,6 +123,8 @@ pub struct Transaction {
     pub mint_amount: Option<U64>,
     /// The field of the `Transaction::Mint`.
     pub mint_asset_id: Option<AssetId>,
+    /// The field of the `Transaction::Mint`.
+    pub mint_gas_price: Option<U64>,
     /// The field of the `Transaction::Script`.
     pub receipts_root: Option<Bytes32>,
     /// The status of the transaction fetched from the database.
@@ -272,6 +274,11 @@ impl TryFrom<Transaction> for fuel_tx::Transaction {
                 tx.mint_asset_id
                     .ok_or_else(|| {
                         ConversionError::MissingField("mint_asset_id".to_string())
+                    })?
+                    .into(),
+                tx.mint_gas_price
+                    .ok_or_else(|| {
+                        ConversionError::MissingField("mint_gas_price".to_string())
                     })?
                     .into(),
             );
