@@ -4,26 +4,30 @@ use crate::database::{
 };
 use fuel_core_storage::{
     structured_storage::StructuredStorage,
-    transactional::{
-        ConflictPolicy,
-        Modifiable,
-        ReadTransaction,
-        StorageTransaction,
-    },
     Error as StorageError,
     Mappable,
     MerkleRoot,
     MerkleRootStorage,
     Result as StorageResult,
-    StorageAsMut,
     StorageAsRef,
-    StorageBatchMutate,
     StorageInspect,
-    StorageMutate,
     StorageRead,
     StorageSize,
 };
 use std::borrow::Cow;
+
+#[cfg(feature = "test-helpers")]
+use fuel_core_storage::transactional::{
+    ConflictPolicy,
+    Modifiable,
+    StorageTransaction,
+};
+#[cfg(feature = "test-helpers")]
+use fuel_core_storage::{
+    StorageAsMut,
+    StorageBatchMutate,
+    StorageMutate,
+};
 
 impl<Description, M> StorageInspect<M> for Database<Description>
 where
@@ -51,7 +55,7 @@ where
     }
 }
 
-// TODO: After https://github.com/FuelLabs/fuel-vm/pull/679 implement it only for `feature = "test-helpers"`
+#[cfg(feature = "test-helpers")]
 impl<Description, M> StorageMutate<M> for Database<Description>
 where
     Description: DatabaseDescription,
@@ -102,13 +106,10 @@ impl<Description, Key, M> MerkleRootStorage<Key, M> for Database<Description>
 where
     Description: DatabaseDescription,
     M: Mappable,
-    for<'a> StructuredStorage<&'a Self>: StorageInspect<M, Error = StorageError>,
-    for<'a> StorageTransaction<&'a Self>: MerkleRootStorage<Key, M, Error = StorageError>,
-    Self: Modifiable,
+    for<'a> StructuredStorage<&'a Self>: MerkleRootStorage<Key, M, Error = StorageError>,
 {
     fn root(&self, key: &Key) -> StorageResult<MerkleRoot> {
-        // TODO: Use `StructuredStorage` instead of `StorageTransaction` https://github.com/FuelLabs/fuel-vm/pull/679
-        self.read_transaction().storage::<M>().root(key)
+        StructuredStorage::new(self).storage::<M>().root(key)
     }
 }
 
@@ -127,6 +128,7 @@ where
     }
 }
 
+#[cfg(feature = "test-helpers")]
 impl<Description, M> StorageBatchMutate<M> for Database<Description>
 where
     Description: DatabaseDescription,

@@ -2632,6 +2632,7 @@ dependencies = [
  "clap 4.5.1",
  "derive_more",
  "enum-iterator",
+ "fuel-core",
  "fuel-core-chain-config",
  "fuel-core-consensus-module",
  "fuel-core-database",

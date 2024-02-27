@@ -2,7 +2,8 @@
 #[allow(clippy::cast_possible_truncation)]
 #[cfg(test)]
 mod tests {
-    use crate::database::Database;
+    use crate as fuel_core;
+    use fuel_core::database::Database;
     use fuel_core_executor::{
         executor::{
             block_component::PartialBlockComponent,

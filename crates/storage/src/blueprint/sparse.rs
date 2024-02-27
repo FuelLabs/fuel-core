@@ -253,7 +253,7 @@ impl<M, S, KeyCodec, ValueCodec, Metadata, Nodes, KeyConverter>
     for Sparse<KeyCodec, ValueCodec, Metadata, Nodes, KeyConverter>
 where
     M: Mappable,
-    S: KeyValueMutate,
+    S: KeyValueInspect,
     Metadata: Mappable<Value = SparseMerkleMetadata, OwnedValue = SparseMerkleMetadata>,
     Self: BlueprintInspect<M, S>,
     S: StorageInspect<Metadata, Error = StorageError>,

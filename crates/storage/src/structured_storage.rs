@@ -278,11 +278,7 @@ where
 
 impl<Column, Key, S, M> MerkleRootStorage<Key, M> for StructuredStorage<S>
 where
-    // TODO: Use `KeyValueInspect` instead of `KeyValueMutate` and remove `BlueprintMutate`
-    //  when `MerkleRootStorage` doesn't require `StorageMutate`.
-    //  https://github.com/FuelLabs/fuel-vm/pull/679
-    S: KeyValueMutate<Column = Column>,
-    M::Blueprint: BlueprintMutate<M, StructuredStorage<S>>,
+    S: KeyValueInspect<Column = Column>,
     M: TableWithBlueprint<Column = Column>,
     M::Blueprint: SupportsMerkle<Key, M, StructuredStorage<S>>,
 {

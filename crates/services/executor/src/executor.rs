@@ -11,6 +11,7 @@ use block_component::*;
 use fuel_core_storage::{
     column::Column,
     kv_store::KeyValueInspect,
+    structured_storage::StructuredStorage,
     tables::{
         Coins,
         ContractsInfo,
@@ -1391,11 +1392,10 @@ where
                             ref contract_id,
                             ..
                         }) => {
-                            // TODO: Remove usage of the `StorageTransaction` when
-                            //  https://github.com/FuelLabs/fuel-vm/pull/679
-                            //  is available in the `fuel-core`.
-                            let contract =
-                                ContractRef::new(db.read_transaction(), *contract_id);
+                            let contract = ContractRef::new(
+                                StructuredStorage::new(db),
+                                *contract_id,
+                            );
                             let utxo_info =
                                 contract.validated_utxo(self.options.utxo_validation)?;
                             *utxo_id = utxo_info.utxo_id;
@@ -1446,11 +1446,10 @@ where
                             tx_pointer,
                             ..
                         }) => {
-                            // TODO: Remove usage of the `StorageTransaction` when
-                            //  https://github.com/FuelLabs/fuel-vm/pull/679
-                            //  is available in the `fuel-core`.
-                            let contract =
-                                ContractRef::new(db.read_transaction(), *contract_id);
+                            let contract = ContractRef::new(
+                                StructuredStorage::new(db),
+                                *contract_id,
+                            );
                             let provided_info = ContractUtxoInfo {
                                 utxo_id: *utxo_id,
                                 tx_pointer: *tx_pointer,
@@ -1512,11 +1511,8 @@ where
                                 })
                             };
 
-                        // TODO: Remove usage of the `StorageTransaction` when
-                        //  https://github.com/FuelLabs/fuel-vm/pull/679
-                        //  is available in the `fuel-core`.
                         let contract =
-                            ContractRef::new(db.read_transaction(), *contract_id);
+                            ContractRef::new(StructuredStorage::new(db), *contract_id);
                         contract_output.balance_root = contract.balance_root()?;
                         contract_output.state_root = contract.state_root()?;
                     }
@@ -1537,11 +1533,8 @@ where
                                 })
                             };
 
-                        // TODO: Remove usage of the `StorageTransaction` when
-                        //  https://github.com/FuelLabs/fuel-vm/pull/679
-                        //  is available in the `fuel-core`.
                         let contract =
-                            ContractRef::new(db.read_transaction(), *contract_id);
+                            ContractRef::new(StructuredStorage::new(db), *contract_id);
                         if contract_output.balance_root != contract.balance_root()? {
                             return Err(ExecutorError::InvalidTransactionOutcome {
                                 transaction_id: tx_id,
