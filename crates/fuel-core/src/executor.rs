@@ -757,6 +757,7 @@ mod tests {
                 Default::default(),
                 Default::default(),
                 Default::default(),
+                Default::default(),
             );
 
             let mut block = Block::default();
@@ -783,6 +784,7 @@ mod tests {
         fn invalidate_is_not_last() {
             let mint = Transaction::mint(
                 TxPointer::new(Default::default(), 0),
+                Default::default(),
                 Default::default(),
                 Default::default(),
                 Default::default(),
@@ -823,6 +825,7 @@ mod tests {
                 Default::default(),
                 Default::default(),
                 Default::default(),
+                Default::default(),
             );
 
             let mut block = Block::default();
@@ -846,6 +849,7 @@ mod tests {
         fn invalidate_invalid_base_asset() {
             let mint = Transaction::mint(
                 TxPointer::new(Default::default(), Default::default()),
+                Default::default(),
                 Default::default(),
                 Default::default(),
                 Default::default(),
@@ -878,6 +882,7 @@ mod tests {
                 Default::default(),
                 Default::default(),
                 123,
+                Default::default(),
                 Default::default(),
             );
 

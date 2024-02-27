@@ -42,7 +42,10 @@ use fuel_core_types::{
     },
     entities::{
         coins::coin::Coin,
-        contract::ContractUtxoInfo,
+        contract::{
+            ContractUtxoInfo,
+            ContractsInfoType,
+        },
         message::Message,
     },
     fuel_merkle::binary,
@@ -198,7 +201,6 @@ fn init_contracts(
             {
                 let contract = Contract::from(contract_config.code.as_slice());
                 let salt = contract_config.salt;
-                let root = contract.root();
                 let contract_id = contract_config.contract_id;
                 let utxo_id = if let (Some(tx_id), Some(output_idx)) =
                     (contract_config.tx_id, contract_config.output_index)
@@ -247,10 +249,10 @@ fn init_contracts(
                     return Err(anyhow!("Contract code should not exist"))
                 }
 
-                // insert contract root
+                // insert contract salt
                 if db
                     .storage::<ContractsInfo>()
-                    .insert(&contract_id, &(salt, root))?
+                    .insert(&contract_id, &ContractsInfoType::V1(salt.into()))?
                     .is_some()
                 {
                     return Err(anyhow!("Contract info should not exist"))

@@ -35,12 +35,12 @@ impl Database {
             .into_owned()
             .into();
 
-        let (salt, _) = self
+        let salt = *self
             .storage::<ContractsInfo>()
             .get(&contract_id)
             .unwrap()
             .expect("Contract does not exist")
-            .into_owned();
+            .salt();
 
         let ContractUtxoInfo {
             utxo_id,

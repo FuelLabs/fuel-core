@@ -60,7 +60,6 @@ expression: json
       "cb": 1,
       "cfei": 1,
       "cfsi": 1,
-      "croo": 16,
       "div": 1,
       "divi": 1,
       "eck1": 951,
@@ -147,6 +146,12 @@ expression: json
         "LightOperation": {
           "base": 15,
           "units_per_gas": 103
+        }
+      },
+      "croo": {
+        "LightOperation": {
+          "base": 1,
+          "units_per_gas": 1
         }
       },
       "csiz": {
