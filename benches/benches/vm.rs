@@ -40,7 +40,9 @@ where
             let clock = quanta::Clock::new();
 
             let original_db = vm.as_mut().database_mut().clone();
-            // Simulates the block production/validation with three levels of database transaction.
+            // During block production/validation for each state, which may affect the state of the database,
+            // we create a new storage transaction. The code here simulates the same behavior to have
+            // the same nesting level and the same performance.
             let block_database_tx = original_db.clone().into_transaction();
             let relayer_database_tx = block_database_tx.into_transaction();
             let thread_database_tx = relayer_database_tx.into_transaction();

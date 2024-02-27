@@ -35,9 +35,9 @@ impl CombinedDatabase {
         capacity: usize,
     ) -> crate::database::Result<Self> {
         // TODO: Use different cache sizes for different databases
-        let on_chain = Database::open(path, capacity)?;
-        let off_chain = Database::open(path, capacity)?;
-        let relayer = Database::open(path, capacity)?;
+        let on_chain = Database::open_rocksdb(path, capacity)?;
+        let off_chain = Database::open_rocksdb(path, capacity)?;
+        let relayer = Database::open_rocksdb(path, capacity)?;
         Ok(Self {
             on_chain,
             off_chain,

@@ -23,6 +23,7 @@ use fuel_core_chain_config::{
     ContractConfig,
     MessageConfig,
 };
+use fuel_core_services::SharedMutex;
 use fuel_core_storage::{
     iter::{
         BoxedIter,
@@ -57,10 +58,7 @@ use fuel_core_types::{
 use itertools::Itertools;
 use std::{
     fmt::Debug,
-    sync::{
-        Arc,
-        Mutex,
-    },
+    sync::Arc,
 };
 
 pub use fuel_core_database::Error;
@@ -90,7 +88,7 @@ pub struct Database<Description = OnChain>
 where
     Description: DatabaseDescription,
 {
-    height: Arc<Mutex<Option<Description::Height>>>,
+    height: SharedMutex<Option<Description::Height>>,
     data: DataSource<Description>,
 }
 
@@ -101,20 +99,20 @@ where
 {
     pub fn new(data_source: DataSource<Description>) -> Self {
         let mut database = Self {
-            height: Arc::new(Mutex::new(None)),
+            height: SharedMutex::new(None),
             data: data_source,
         };
         let height = database
             .latest_height()
             .expect("Failed to get latest height during creation of the database");
 
-        database.height = Arc::new(Mutex::new(height));
+        database.height = SharedMutex::new(height);
 
         database
     }
 
     #[cfg(feature = "rocksdb")]
-    pub fn open(path: &Path, capacity: impl Into<Option<usize>>) -> Result<Self> {
+    pub fn open_rocksdb(path: &Path, capacity: impl Into<Option<usize>>) -> Result<Self> {
         use anyhow::Context;
         let db = RocksDb::<Description>::default_open(path, capacity.into()).map_err(Into::<anyhow::Error>::into).context("Failed to open rocksdb, you may need to wipe a pre-existing incompatible db `rm -rf ~/.fuel/db`")?;
 
@@ -129,7 +127,7 @@ where
     pub fn in_memory() -> Self {
         let data = Arc::<MemoryStore<Description>>::new(MemoryStore::default());
         Self {
-            height: Arc::new(Mutex::new(None)),
+            height: SharedMutex::new(None),
             data,
         }
     }
@@ -139,7 +137,7 @@ where
         let data =
             Arc::<RocksDb<Description>>::new(RocksDb::default_open_temp(None).unwrap());
         Self {
-            height: Arc::new(Mutex::new(None)),
+            height: SharedMutex::new(None),
             data,
         }
     }
@@ -240,7 +238,7 @@ impl AtomicView for Database<OnChain> {
     type Height = BlockHeight;
 
     fn latest_height(&self) -> Option<Self::Height> {
-        *self.height.lock().expect("poisoned")
+        *self.height.lock()
     }
 
     fn view_at(&self, _: &BlockHeight) -> StorageResult<Self::View> {
@@ -260,7 +258,7 @@ impl AtomicView for Database<OffChain> {
     type Height = BlockHeight;
 
     fn latest_height(&self) -> Option<Self::Height> {
-        *self.height.lock().expect("poisoned")
+        *self.height.lock()
     }
 
     fn view_at(&self, _: &BlockHeight) -> StorageResult<Self::View> {
@@ -279,7 +277,7 @@ impl AtomicView for Database<Relayer> {
     type Height = DaBlockHeight;
 
     fn latest_height(&self) -> Option<Self::Height> {
-        *self.height.lock().expect("poisoned")
+        *self.height.lock()
     }
 
     fn view_at(&self, _: &Self::Height) -> StorageResult<Self::View> {
@@ -386,7 +384,7 @@ where
     }
 
     let new_height = new_heights.into_iter().last();
-    let prev_height = *database.height.lock().expect("poisoned");
+    let prev_height = *database.height.lock();
 
     match (prev_height, new_height) {
         (None, None) => {
@@ -449,7 +447,7 @@ where
         changes
     };
 
-    let mut guard = database.height.lock().expect("poisoned");
+    let mut guard = database.height.lock();
     database
         .data
         .as_ref()
@@ -503,7 +501,11 @@ mod tests {
             tables::Coins,
             transactional::WriteTransaction,
         };
-        use fuel_core_types::blockchain::block::CompressedBlock;
+        use fuel_core_types::{
+            blockchain::block::CompressedBlock,
+            entities::coins::coin::CompressedCoin,
+            fuel_tx::UtxoId,
+        };
 
         #[test]
         fn column_keys_not_exceed_count_test() {
@@ -536,7 +538,7 @@ mod tests {
             // When
             database
                 .storage_as_mut::<Coins>()
-                .insert(&Default::default(), &Default::default())
+                .insert(&UtxoId::default(), &CompressedCoin::default())
                 .unwrap();
 
             // Then
@@ -606,7 +608,7 @@ mod tests {
             // When
             let result = database
                 .storage_as_mut::<Coins>()
-                .insert(&Default::default(), &Default::default());
+                .insert(&UtxoId::default(), &CompressedCoin::default());
 
             // Then
             assert!(result.is_err());
@@ -661,6 +663,7 @@ mod tests {
                 database_description::off_chain::OffChain,
                 DatabaseHeight,
             },
+            fuel_core_graphql_api::storage::messages::OwnedMessageKey,
             graphql_api::storage::messages::OwnedMessageIds,
         };
         use fuel_core_storage::transactional::WriteTransaction;
@@ -696,7 +699,7 @@ mod tests {
             // When
             database
                 .storage_as_mut::<OwnedMessageIds>()
-                .insert(&Default::default(), &Default::default())
+                .insert(&OwnedMessageKey::default(), &())
                 .unwrap();
 
             // Then
@@ -766,7 +769,7 @@ mod tests {
             // When
             let result = database
                 .storage_as_mut::<OwnedMessageIds>()
-                .insert(&Default::default(), &Default::default());
+                .insert(&OwnedMessageKey::default(), &());
 
             // Then
             assert!(result.is_err());
@@ -858,7 +861,7 @@ mod tests {
             // When
             database
                 .storage_as_mut::<DaHeightTable>()
-                .insert(&Default::default(), &Default::default())
+                .insert(&(), &DaBlockHeight::default())
                 .unwrap();
 
             // Then
@@ -928,7 +931,7 @@ mod tests {
             // When
             let result = database
                 .storage_as_mut::<DaHeightTable>()
-                .insert(&Default::default(), &Default::default());
+                .insert(&(), &DaBlockHeight::default());
 
             // Then
             assert!(result.is_err());
