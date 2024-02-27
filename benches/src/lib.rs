@@ -162,8 +162,6 @@ impl VmBench {
 
         let program = Witness::from(program);
 
-        // let salt = rng.gen();
-
         let contract = Contract::from(program.as_ref());
         let state_root = Contract::default_state_root();
         let id = VmBench::CONTRACT;

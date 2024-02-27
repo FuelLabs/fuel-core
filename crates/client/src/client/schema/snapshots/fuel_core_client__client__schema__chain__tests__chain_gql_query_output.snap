@@ -77,7 +77,6 @@ query {
         cb
         cfei
         cfsi
-        croo
         div
         divi
         eck1
@@ -166,6 +165,17 @@ query {
           }
         }
         ccp {
+          __typename
+          ... on LightOperation {
+            base
+            unitsPerGas
+          }
+          ... on HeavyOperation {
+            base
+            gasPerUnit
+          }
+        }
+        croo {
           __typename
           ... on LightOperation {
             base
@@ -379,5 +389,3 @@ query {
     }
   }
 }
-
-

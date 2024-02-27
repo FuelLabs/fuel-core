@@ -28,10 +28,6 @@ use fuel_core_types::{
         header::ConsensusHeader,
         primitives::BlockId,
     },
-    // entities::contract::{
-    //     ContractsInfoType,
-    //     ContractsInfoTypeV1,
-    // },
     fuel_tx::{
         Contract,
         StorageSlot,
