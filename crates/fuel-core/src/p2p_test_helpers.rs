@@ -40,7 +40,6 @@ use fuel_core_types::{
         TransactionBuilder,
         TxId,
         UniqueIdentifier,
-        UtxoId,
     },
     fuel_types::{
         Address,
@@ -197,8 +196,7 @@ pub async fn make_nodes(
                 .map(|_| {
                     let secret = SecretKey::random(&mut rng);
                     let utxo_id = rng.gen();
-                    let initial_coin =
-                        StateConfig::initial_coin(secret, 10000, utxo_id, utxo_id);
+                    let initial_coin = StateConfig::initial_coin(secret, 10000, utxo_id);
                     let tx = TransactionBuilder::script(
                         vec![op::ret(RegId::ONE)].into_iter().collect(),
                         vec![],

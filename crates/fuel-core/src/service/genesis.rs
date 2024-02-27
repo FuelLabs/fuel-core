@@ -224,7 +224,6 @@ fn init_contract(
 ) -> anyhow::Result<()> {
     let contract = Contract::from(contract_config.code.as_slice());
     let salt = contract_config.salt;
-    let root = contract.root();
     let contract_id = contract_config.contract_id;
     let utxo_id = contract_config.utxo_id();
 
@@ -265,7 +264,7 @@ fn init_contract(
     {
         return Err(anyhow!("Contract utxo should not exist"));
     }
-    
+
     Ok(())
 }
 

@@ -41,7 +41,6 @@
       "cb": 2,
       "cfei": 2,
       "cfsi": 2,
-      "croo": 40,
       "div": 2,
       "divi": 2,
       "eck1": 3347,
@@ -122,6 +121,12 @@
         "LightOperation": {
           "base": 21687,
           "units_per_gas": 4
+        }
+      },
+      "croo": {
+        "LightOperation": {
+          "base": 1,
+          "units_per_gas": 1
         }
       },
       "ccp": {

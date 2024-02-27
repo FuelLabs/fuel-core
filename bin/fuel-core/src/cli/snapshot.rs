@@ -287,17 +287,18 @@ mod tests {
                 CompressedCoin,
                 CompressedCoinV1,
             },
-            contract::ContractUtxoInfo,
+            contract::{
+                ContractUtxoInfo,
+                ContractsInfoType,
+            },
             message::{
                 Message,
                 MessageV1,
             },
         },
-        fuel_tx::{
-            Contract,
-            UtxoId,
-        },
+        fuel_tx::UtxoId,
         fuel_types::BlockHeight,
+        fuel_vm::Salt,
     };
     use rand::{
         rngs::StdRng,
@@ -442,11 +443,10 @@ mod tests {
                 .insert(&contract_id, code.as_ref())
                 .unwrap();
 
-            let root = Contract::from(code.clone()).root();
-            let salt = self.rng.gen();
+            let salt: Salt = self.rng.gen();
             self.db
                 .storage_as_mut::<ContractsInfo>()
-                .insert(&contract_id, &(salt, root))
+                .insert(&contract_id, &ContractsInfoType::V1(salt.into()))
                 .unwrap();
 
             let utxo_id = self.rng.gen();
