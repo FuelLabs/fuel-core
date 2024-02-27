@@ -642,7 +642,7 @@ where
                 },
                 amount_to_mint,
                 self.config.consensus_parameters.base_asset_id,
-                0, // TODO:
+                0, // TODO: Provide gas price
             );
 
             execute_transaction(
