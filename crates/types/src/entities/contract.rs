@@ -16,12 +16,14 @@ pub struct ContractUtxoInfo {
     pub tx_pointer: TxPointer,
 }
 
-/// Versioned enum for holding information about a contract
+/// Versioned type for storing information about a contract. Contract
+/// information is off-chain data.
+// TODO: Move ContractsInfoType to off-chain data storage
 #[derive(Debug, Clone, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[non_exhaustive]
 pub enum ContractsInfoType {
-    /// V1
+    /// V1 ContractsInfoType
     V1(ContractsInfoTypeV1),
 }
 
