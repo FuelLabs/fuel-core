@@ -268,7 +268,7 @@ fn init_contract(
         return Err(anyhow!("Contract code should not exist"));
     }
 
-    // insert contract root
+    // insert contract salt
     if db
         .storage::<ContractsInfo>()
         .insert(&contract_id, &ContractsInfoType::V1(salt.into()))?
@@ -280,10 +280,7 @@ fn init_contract(
         .storage::<ContractsLatestUtxo>()
         .insert(
             &contract_id,
-            &ContractUtxoInfo {
-                utxo_id,
-                tx_pointer,
-            },
+            &ContractUtxoInfo::V1((utxo_id, tx_pointer).into()),
         )?
         .is_some()
     {

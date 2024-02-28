@@ -39,6 +39,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 #### Breaking
 
+- [#1712](https://github.com/FuelLabs/fuel-core/pull/1712): Make `ContractUtxoInfo` type a version-able enum for use in the `ContractsLatestUtxo`table.
 - [#1657](https://github.com/FuelLabs/fuel-core/pull/1657): Changed `CROO` gas price type from `Word` to `DependentGasPrice`. The dependent gas price values are dummy values while awaiting updated benchmarks.
 - [#1671](https://github.com/FuelLabs/fuel-core/pull/1671): The GraphQL API uses block height instead of the block id where it is possible. The transaction status contains `block_height` instead of the `block_id`.
 - [#1675](https://github.com/FuelLabs/fuel-core/pull/1675): Simplify GQL schema by disabling contract resolvers in most cases, and just return a ContractId scalar instead.
