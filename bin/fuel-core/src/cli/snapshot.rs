@@ -456,13 +456,10 @@ mod tests {
             let tx_pointer = TxPointer::new(self.rng.gen(), self.rng.gen());
 
             self.db
-                .storage_as_mut::<ContractsLatestUtxo>()
+                .storage::<ContractsLatestUtxo>()
                 .insert(
                     &contract_id,
-                    &ContractUtxoInfo {
-                        utxo_id,
-                        tx_pointer,
-                    },
+                    &ContractUtxoInfo::V1((utxo_id, tx_pointer).into()),
                 )
                 .unwrap();
 
