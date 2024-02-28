@@ -232,7 +232,7 @@ where
             )?
             .map(|prev| prev.to_vec());
         let result = (bytes_written, prev);
-        return Ok(result)
+        Ok(result)
     }
 
     fn take(&mut self, key: &M::Key) -> Result<Option<Vec<u8>>, Self::Error> {
@@ -240,7 +240,7 @@ where
             .storage
             .take(key.as_ref(), <M as TableWithBlueprint>::column())?
             .map(|value| value.to_vec());
-        return Ok(take)
+        Ok(take)
     }
 }
 
