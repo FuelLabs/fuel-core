@@ -499,25 +499,25 @@ macro_rules! root_storage_tests {
             #[test]
             fn root() {
                 let mut storage = InMemoryStorage::default();
-                let mut structured_storage = storage.write_transaction();
+                let mut storage_transaction = storage.write_transaction();
 
                 let rng = &mut StdRng::seed_from_u64(1234);
                 let key = $generate_key(&$current_key, rng);
                 let value = $generate_value(rng);
-                structured_storage.storage_as_mut::<$table>().insert(&key, &value)
+                storage_transaction.storage_as_mut::<$table>().insert(&key, &value)
                     .unwrap();
 
-                let root = structured_storage.storage_as_mut::<$table>().root(&$current_key);
+                let root = storage_transaction.storage_as_mut::<$table>().root(&$current_key);
                 assert!(root.is_ok())
             }
 
             #[test]
             fn root_returns_empty_root_for_empty_metadata() {
                 let mut storage = InMemoryStorage::default();
-                let mut structured_storage = storage.write_transaction();
+                let mut storage_transaction = storage.write_transaction();
 
                 let empty_root = fuel_core_types::fuel_merkle::sparse::in_memory::MerkleTree::new().root();
-                let root = structured_storage
+                let root = storage_transaction
                     .storage_as_mut::<$table>()
                     .root(&$current_key)
                     .unwrap();
@@ -527,20 +527,20 @@ macro_rules! root_storage_tests {
             #[test]
             fn put_updates_the_state_merkle_root_for_the_given_metadata() {
                 let mut storage = InMemoryStorage::default();
-                let mut structured_storage = storage.write_transaction();
+                let mut storage_transaction = storage.write_transaction();
 
                 let rng = &mut StdRng::seed_from_u64(1234);
                 let key = $generate_key(&$current_key, rng);
                 let state = $generate_value(rng);
 
                 // Write the first contract state
-                structured_storage
+                storage_transaction
                     .storage_as_mut::<$table>()
                     .insert(&key, &state)
                     .unwrap();
 
                 // Read the first Merkle root
-                let root_1 = structured_storage
+                let root_1 = storage_transaction
                     .storage_as_mut::<$table>()
                     .root(&$current_key)
                     .unwrap();
@@ -548,13 +548,13 @@ macro_rules! root_storage_tests {
                 // Write the second contract state
                 let key = $generate_key(&$current_key, rng);
                 let state = $generate_value(rng);
-                structured_storage
+                storage_transaction
                     .storage_as_mut::<$table>()
                     .insert(&key, &state)
                     .unwrap();
 
                 // Read the second Merkle root
-                let root_2 = structured_storage
+                let root_2 = storage_transaction
                     .storage_as_mut::<$table>()
                     .root(&$current_key)
                     .unwrap();
@@ -565,18 +565,18 @@ macro_rules! root_storage_tests {
             #[test]
             fn remove_updates_the_state_merkle_root_for_the_given_metadata() {
                 let mut storage = InMemoryStorage::default();
-                let mut structured_storage = storage.write_transaction();
+                let mut storage_transaction = storage.write_transaction();
 
                 let rng = &mut StdRng::seed_from_u64(1234);
 
                 // Write the first contract state
                 let first_key = $generate_key(&$current_key, rng);
                 let first_state = $generate_value(rng);
-                structured_storage
+                storage_transaction
                     .storage_as_mut::<$table>()
                     .insert(&first_key, &first_state)
                     .unwrap();
-                let root_0 = structured_storage
+                let root_0 = storage_transaction
                     .storage_as_mut::<$table>()
                     .root(&$current_key)
                     .unwrap();
@@ -584,22 +584,22 @@ macro_rules! root_storage_tests {
                 // Write the second contract state
                 let second_key = $generate_key(&$current_key, rng);
                 let second_state = $generate_value(rng);
-                structured_storage
+                storage_transaction
                     .storage_as_mut::<$table>()
                     .insert(&second_key, &second_state)
                     .unwrap();
 
                 // Read the first Merkle root
-                let root_1 = structured_storage
+                let root_1 = storage_transaction
                     .storage_as_mut::<$table>()
                     .root(&$current_key)
                     .unwrap();
 
                 // Remove the second contract state
-                structured_storage.storage_as_mut::<$table>().remove(&second_key).unwrap();
+                storage_transaction.storage_as_mut::<$table>().remove(&second_key).unwrap();
 
                 // Read the second Merkle root
-                let root_2 = structured_storage
+                let root_2 = storage_transaction
                     .storage_as_mut::<$table>()
                     .root(&$current_key)
                     .unwrap();
@@ -614,7 +614,7 @@ macro_rules! root_storage_tests {
                 let foreign_primary_key = $foreign_key;
 
                 let mut storage = InMemoryStorage::default();
-                let mut structured_storage = storage.write_transaction();
+                let mut storage_transaction = storage.write_transaction();
 
                 let rng = &mut StdRng::seed_from_u64(1234);
 
@@ -623,23 +623,23 @@ macro_rules! root_storage_tests {
                 // Given
                 let given_key = $generate_key(&given_primary_key, rng);
                 let foreign_key = $generate_key(&foreign_primary_key, rng);
-                structured_storage
+                storage_transaction
                     .storage_as_mut::<$table>()
                     .insert(&given_key, &state_value)
                     .unwrap();
 
                 // When
-                structured_storage
+                storage_transaction
                     .storage_as_mut::<$table>()
                     .insert(&foreign_key, &state_value)
                     .unwrap();
-                structured_storage
+                storage_transaction
                     .storage_as_mut::<$table>()
                     .remove(&foreign_key)
                     .unwrap();
 
                 // Then
-                let result = structured_storage
+                let result = storage_transaction
                     .storage_as_mut::<$table>()
                     .insert(&given_key, &state_value)
                     .unwrap();
@@ -650,7 +650,7 @@ macro_rules! root_storage_tests {
             #[test]
             fn put_creates_merkle_metadata_when_empty() {
                 let mut storage = InMemoryStorage::default();
-                let mut structured_storage = storage.write_transaction();
+                let mut storage_transaction = storage.write_transaction();
 
                 let rng = &mut StdRng::seed_from_u64(1234);
 
@@ -659,13 +659,13 @@ macro_rules! root_storage_tests {
                 let state = $generate_value(rng);
 
                 // Write a contract state
-                structured_storage
+                storage_transaction
                     .storage_as_mut::<$table>()
                     .insert(&key, &state)
                     .unwrap();
 
                 // Read the Merkle metadata
-                let metadata = structured_storage
+                let metadata = storage_transaction
                     .storage_as_mut::<$metadata_table>()
                     .get(&$current_key)
                     .unwrap();
@@ -676,7 +676,7 @@ macro_rules! root_storage_tests {
             #[test]
             fn remove_deletes_merkle_metadata_when_empty() {
                 let mut storage = InMemoryStorage::default();
-                let mut structured_storage = storage.write_transaction();
+                let mut storage_transaction = storage.write_transaction();
 
                 let rng = &mut StdRng::seed_from_u64(1234);
 
@@ -685,23 +685,23 @@ macro_rules! root_storage_tests {
                 let state = $generate_value(rng);
 
                 // Write a contract state
-                structured_storage
+                storage_transaction
                     .storage_as_mut::<$table>()
                     .insert(&key, &state)
                     .unwrap();
 
                 // Read the Merkle metadata
-                structured_storage
+                storage_transaction
                     .storage_as_mut::<$metadata_table>()
                     .get(&$current_key)
                     .unwrap()
                     .expect("Expected Merkle metadata to be present");
 
                 // Remove the contract asset
-                structured_storage.storage_as_mut::<$table>().remove(&key).unwrap();
+                storage_transaction.storage_as_mut::<$table>().remove(&key).unwrap();
 
                 // Read the Merkle metadata
-                let metadata = structured_storage
+                let metadata = storage_transaction
                     .storage_as_mut::<$metadata_table>()
                     .get(&$current_key)
                     .unwrap();

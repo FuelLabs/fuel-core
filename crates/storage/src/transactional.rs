@@ -410,7 +410,7 @@ mod test {
     }
 
     #[test]
-    fn modification_works() {
+    fn committing_changes_modifies_underlying_storage() {
         let mut storage = InMemoryStorage::default();
         let mut transaction = storage.write_transaction();
 
@@ -427,7 +427,7 @@ mod test {
     }
 
     #[test]
-    fn concurrency_independent_modifications_for_many_transactions_works() {
+    fn committing_changes_from_concurrent_independent_transactions_works() {
         let storage = InMemoryStorage::default();
         let mut transactions =
             storage.into_transaction().with_policy(ConflictPolicy::Fail);
@@ -451,7 +451,7 @@ mod test {
     }
 
     #[test]
-    fn concurrency_overlapping_modifications_for_many_transactions_fails() {
+    fn committing_changes_from_concurrent_overlapping_transactions_fails() {
         let storage = InMemoryStorage::default();
         let mut transactions =
             storage.into_transaction().with_policy(ConflictPolicy::Fail);
@@ -474,5 +474,338 @@ mod test {
         transactions
             .commit_changes(changes2)
             .expect_err("Should fails because of the modification for the same key");
+    }
+
+    #[cfg(test)]
+    mod key_value_functionality {
+        use super::*;
+        use crate::column::Column;
+
+        #[test]
+        fn get_returns_from_view() {
+            // setup
+            let storage = InMemoryStorage::<Column>::default();
+            let mut view = storage.read_transaction();
+            let key = vec![0xA, 0xB, 0xC];
+            let expected = Arc::new(vec![1, 2, 3]);
+            view.put(&key, Column::Metadata, expected.clone()).unwrap();
+            // test
+            let ret = view.get(&key, Column::Metadata).unwrap();
+            // verify
+            assert_eq!(ret, Some(expected))
+        }
+
+        #[test]
+        fn get_returns_from_data_store_when_key_not_in_view() {
+            // setup
+            let mut storage = InMemoryStorage::<Column>::default();
+            let mut write = storage.write_transaction();
+            let key = vec![0xA, 0xB, 0xC];
+            let expected = Arc::new(vec![1, 2, 3]);
+            write.put(&key, Column::Metadata, expected.clone()).unwrap();
+            write.commit().unwrap();
+
+            let view = storage.read_transaction();
+            // test
+            let ret = view.get(&key, Column::Metadata).unwrap();
+            // verify
+            assert_eq!(ret, Some(expected))
+        }
+
+        #[test]
+        fn get_does_not_fetch_from_datastore_if_intentionally_deleted_from_view() {
+            // setup
+            let mut storage = InMemoryStorage::<Column>::default();
+            let mut write = storage.write_transaction();
+            let key = vec![0xA, 0xB, 0xC];
+            let expected = Arc::new(vec![1, 2, 3]);
+            write.put(&key, Column::Metadata, expected.clone()).unwrap();
+            write.commit().unwrap();
+
+            let mut view = storage.read_transaction();
+            view.delete(&key, Column::Metadata).unwrap();
+            // test
+            let ret = view.get(&key, Column::Metadata).unwrap();
+            let original = storage.get(&key, Column::Metadata).unwrap();
+            // verify
+            assert_eq!(ret, None);
+            // also ensure the original value is still intact and we aren't just passing
+            // through None from the data store
+            assert_eq!(original, Some(expected))
+        }
+
+        #[test]
+        fn can_insert_value_into_view() {
+            // setup
+            let mut storage = InMemoryStorage::<Column>::default();
+            let mut write = storage.write_transaction();
+            let expected = Arc::new(vec![1, 2, 3]);
+            write
+                .put(&[0xA, 0xB, 0xC], Column::Metadata, expected.clone())
+                .unwrap();
+            // test
+            let ret = write
+                .replace(&[0xA, 0xB, 0xC], Column::Metadata, Arc::new(vec![2, 4, 6]))
+                .unwrap();
+            // verify
+            assert_eq!(ret, Some(expected))
+        }
+
+        #[test]
+        fn delete_value_from_view_returns_value() {
+            // setup
+            let mut storage = InMemoryStorage::<Column>::default();
+            let mut write = storage.write_transaction();
+            let key = vec![0xA, 0xB, 0xC];
+            let expected = Arc::new(vec![1, 2, 3]);
+            write.put(&key, Column::Metadata, expected.clone()).unwrap();
+            // test
+            let ret = write.take(&key, Column::Metadata).unwrap();
+            let get = write.get(&key, Column::Metadata).unwrap();
+            // verify
+            assert_eq!(ret, Some(expected));
+            assert_eq!(get, None)
+        }
+
+        #[test]
+        fn delete_returns_datastore_value_when_not_in_view() {
+            // setup
+            let mut storage = InMemoryStorage::<Column>::default();
+            let mut write = storage.write_transaction();
+            let key = vec![0xA, 0xB, 0xC];
+            let expected = Arc::new(vec![1, 2, 3]);
+            write.put(&key, Column::Metadata, expected.clone()).unwrap();
+            write.commit().unwrap();
+
+            let mut view = storage.read_transaction();
+            // test
+            let ret = view.take(&key, Column::Metadata).unwrap();
+            let get = view.get(&key, Column::Metadata).unwrap();
+            // verify
+            assert_eq!(ret, Some(expected));
+            assert_eq!(get, None)
+        }
+
+        #[test]
+        fn delete_does_not_return_datastore_value_when_deleted_twice() {
+            // setup
+            let mut storage = InMemoryStorage::<Column>::default();
+            let mut write = storage.write_transaction();
+            let key = vec![0xA, 0xB, 0xC];
+            let expected = Arc::new(vec![1, 2, 3]);
+            write.put(&key, Column::Metadata, expected.clone()).unwrap();
+            write.commit().unwrap();
+
+            let mut view = storage.read_transaction();
+            // test
+            let ret1 = view.take(&key, Column::Metadata).unwrap();
+            let ret2 = view.take(&key, Column::Metadata).unwrap();
+            let get = view.get(&key, Column::Metadata).unwrap();
+            // verify
+            assert_eq!(ret1, Some(expected));
+            assert_eq!(ret2, None);
+            assert_eq!(get, None)
+        }
+
+        #[test]
+        fn exists_checks_view_values() {
+            // setup
+            let mut storage = InMemoryStorage::<Column>::default();
+            let mut write = storage.write_transaction();
+            let key = vec![0xA, 0xB, 0xC];
+            let expected = Arc::new(vec![1, 2, 3]);
+            write.put(&key, Column::Metadata, expected).unwrap();
+            // test
+            let ret = write.exists(&key, Column::Metadata).unwrap();
+            // verify
+            assert!(ret)
+        }
+
+        #[test]
+        fn exists_checks_data_store_when_not_in_view() {
+            // setup
+            let mut storage = InMemoryStorage::<Column>::default();
+            let mut write = storage.write_transaction();
+            let key = vec![0xA, 0xB, 0xC];
+            let expected = Arc::new(vec![1, 2, 3]);
+            write.put(&key, Column::Metadata, expected).unwrap();
+            write.commit().unwrap();
+
+            let view = storage.read_transaction();
+            // test
+            let ret = view.exists(&key, Column::Metadata).unwrap();
+            // verify
+            assert!(ret)
+        }
+
+        #[test]
+        fn exists_does_not_check_data_store_after_intentional_removal_from_view() {
+            // setup
+            let mut storage = InMemoryStorage::<Column>::default();
+            let mut write = storage.write_transaction();
+            let key = vec![0xA, 0xB, 0xC];
+            let expected = Arc::new(vec![1, 2, 3]);
+            write.put(&key, Column::Metadata, expected).unwrap();
+            write.commit().unwrap();
+
+            let mut view = storage.read_transaction();
+            view.delete(&key, Column::Metadata).unwrap();
+            // test
+            let ret = view.exists(&key, Column::Metadata).unwrap();
+            let original = storage.exists(&key, Column::Metadata).unwrap();
+            // verify
+            assert!(!ret);
+            // also ensure the original value is still intact and we aren't just passing
+            // through None from the data store
+            assert!(original)
+        }
+
+        #[test]
+        fn commit_applies_puts() {
+            // setup
+            let mut storage = InMemoryStorage::<Column>::default();
+            let mut write = storage.write_transaction();
+            let key = vec![0xA, 0xB, 0xC];
+            let expected = Arc::new(vec![1, 2, 3]);
+            write.put(&key, Column::Metadata, expected.clone()).unwrap();
+            // test
+            write.commit().unwrap();
+            let ret = storage.get(&key, Column::Metadata).unwrap();
+            // verify
+            assert_eq!(ret, Some(expected))
+        }
+
+        #[test]
+        fn commit_applies_deletes() {
+            // setup
+            let mut storage = InMemoryStorage::<Column>::default();
+            let mut write = storage.write_transaction();
+            let key = vec![0xA, 0xB, 0xC];
+            let expected = Arc::new(vec![1, 2, 3]);
+            write.put(&key, Column::Metadata, expected).unwrap();
+            write.commit().unwrap();
+
+            let mut view = storage.write_transaction();
+            // test
+            view.delete(&key, Column::Metadata).unwrap();
+            view.commit().unwrap();
+            let ret = storage.get(&key, Column::Metadata).unwrap();
+            // verify
+            assert_eq!(ret, None)
+        }
+
+        #[test]
+        fn can_use_unit_value() {
+            let key = vec![0x00];
+
+            let mut storage = InMemoryStorage::<Column>::default();
+            let mut write = storage.write_transaction();
+            let expected = Arc::new(vec![]);
+            write.put(&key, Column::Metadata, expected.clone()).unwrap();
+
+            assert_eq!(
+                write.get(&key, Column::Metadata).unwrap().unwrap(),
+                expected
+            );
+
+            assert!(write.exists(&key, Column::Metadata).unwrap());
+
+            assert_eq!(
+                write.take(&key, Column::Metadata).unwrap().unwrap(),
+                expected
+            );
+
+            assert!(!write.exists(&key, Column::Metadata).unwrap());
+
+            write.commit().unwrap();
+
+            assert!(!storage.exists(&key, Column::Metadata).unwrap());
+
+            let mut storage = InMemoryStorage::<Column>::default();
+            let mut write = storage.write_transaction();
+            write.put(&key, Column::Metadata, expected.clone()).unwrap();
+            write.commit().unwrap();
+
+            assert_eq!(
+                storage.get(&key, Column::Metadata).unwrap().unwrap(),
+                expected
+            );
+        }
+
+        #[test]
+        fn can_use_unit_key() {
+            let key: Vec<u8> = Vec::with_capacity(0);
+
+            let mut storage = InMemoryStorage::<Column>::default();
+            let mut write = storage.write_transaction();
+            let expected = Arc::new(vec![]);
+            write.put(&key, Column::Metadata, expected.clone()).unwrap();
+
+            assert_eq!(
+                write.get(&key, Column::Metadata).unwrap().unwrap(),
+                expected
+            );
+
+            assert!(write.exists(&key, Column::Metadata).unwrap());
+
+            assert_eq!(
+                write.take(&key, Column::Metadata).unwrap().unwrap(),
+                expected
+            );
+
+            assert!(!write.exists(&key, Column::Metadata).unwrap());
+
+            write.commit().unwrap();
+
+            assert!(!storage.exists(&key, Column::Metadata).unwrap());
+
+            let mut storage = InMemoryStorage::<Column>::default();
+            let mut write = storage.write_transaction();
+            write.put(&key, Column::Metadata, expected.clone()).unwrap();
+            write.commit().unwrap();
+
+            assert_eq!(
+                storage.get(&key, Column::Metadata).unwrap().unwrap(),
+                expected
+            );
+        }
+
+        #[test]
+        fn can_use_unit_key_and_value() {
+            let key: Vec<u8> = Vec::with_capacity(0);
+
+            let mut storage = InMemoryStorage::<Column>::default();
+            let mut write = storage.write_transaction();
+            let expected = Arc::new(vec![]);
+            write.put(&key, Column::Metadata, expected.clone()).unwrap();
+
+            assert_eq!(
+                write.get(&key, Column::Metadata).unwrap().unwrap(),
+                expected
+            );
+
+            assert!(write.exists(&key, Column::Metadata).unwrap());
+
+            assert_eq!(
+                write.take(&key, Column::Metadata).unwrap().unwrap(),
+                expected
+            );
+
+            assert!(!write.exists(&key, Column::Metadata).unwrap());
+
+            write.commit().unwrap();
+
+            assert!(!storage.exists(&key, Column::Metadata).unwrap());
+
+            let mut storage = InMemoryStorage::<Column>::default();
+            let mut write = storage.write_transaction();
+            write.put(&key, Column::Metadata, expected.clone()).unwrap();
+            write.commit().unwrap();
+
+            assert_eq!(
+                storage.get(&key, Column::Metadata).unwrap().unwrap(),
+                expected
+            );
+        }
     }
 }

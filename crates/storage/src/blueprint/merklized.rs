@@ -338,16 +338,16 @@ macro_rules! basic_merklelized_storage_tests {
             #[test]
             fn get() {
                 let mut storage = InMemoryStorage::default();
-                let mut structured_storage = storage.write_transaction();
+                let mut storage_transaction = storage.write_transaction();
                 let key = $key;
 
-                structured_storage
+                storage_transaction
                     .storage_as_mut::<$table>()
                     .insert(&key, &$value_insert)
                     .unwrap();
 
                 assert_eq!(
-                    structured_storage
+                    storage_transaction
                         .storage_as_mut::<$table>()
                         .get(&key)
                         .expect("Should get without errors")
@@ -360,15 +360,15 @@ macro_rules! basic_merklelized_storage_tests {
             #[test]
             fn insert() {
                 let mut storage = InMemoryStorage::default();
-                let mut structured_storage = storage.write_transaction();
+                let mut storage_transaction = storage.write_transaction();
                 let key = $key;
 
-                structured_storage
+                storage_transaction
                     .storage_as_mut::<$table>()
                     .insert(&key, &$value_insert)
                     .unwrap();
 
-                let returned = structured_storage
+                let returned = storage_transaction
                     .storage_as_mut::<$table>()
                     .get(&key)
                     .unwrap()
@@ -380,15 +380,15 @@ macro_rules! basic_merklelized_storage_tests {
             #[test]
             fn remove_returns_error() {
                 let mut storage = InMemoryStorage::default();
-                let mut structured_storage = storage.write_transaction();
+                let mut storage_transaction = storage.write_transaction();
                 let key = $key;
 
-                structured_storage
+                storage_transaction
                     .storage_as_mut::<$table>()
                     .insert(&key, &$value_insert)
                     .unwrap();
 
-                let result = structured_storage.storage_as_mut::<$table>().remove(&key);
+                let result = storage_transaction.storage_as_mut::<$table>().remove(&key);
 
                 assert!(result.is_err());
             }
@@ -396,23 +396,23 @@ macro_rules! basic_merklelized_storage_tests {
             #[test]
             fn exists() {
                 let mut storage = InMemoryStorage::default();
-                let mut structured_storage = storage.write_transaction();
+                let mut storage_transaction = storage.write_transaction();
                 let key = $key;
 
                 // Given
-                assert!(!structured_storage
+                assert!(!storage_transaction
                     .storage_as_mut::<$table>()
                     .contains_key(&key)
                     .unwrap());
 
                 // When
-                structured_storage
+                storage_transaction
                     .storage_as_mut::<$table>()
                     .insert(&key, &$value_insert)
                     .unwrap();
 
                 // Then
-                assert!(structured_storage
+                assert!(storage_transaction
                     .storage_as_mut::<$table>()
                     .contains_key(&key)
                     .unwrap());
@@ -499,9 +499,9 @@ macro_rules! basic_merklelized_storage_tests {
             #[test]
             fn root_returns_error_empty_metadata() {
                 let mut storage = InMemoryStorage::default();
-                let mut structured_storage = storage.write_transaction();
+                let mut storage_transaction = storage.write_transaction();
 
-                let root = structured_storage
+                let root = storage_transaction
                     .storage_as_mut::<$table>()
                     .root(&$key);
                 assert!(root.is_err())
@@ -510,15 +510,15 @@ macro_rules! basic_merklelized_storage_tests {
             #[test]
             fn update_produces_non_zero_root() {
                 let mut storage = InMemoryStorage::default();
-                let mut structured_storage = storage.write_transaction();
+                let mut storage_transaction = storage.write_transaction();
 
                 let mut rng = rand::rngs::StdRng::seed_from_u64(1234);
                 let key = $random_key(&mut rng);
                 let value = $value_insert;
-                structured_storage.storage_as_mut::<$table>().insert(&key, &value)
+                storage_transaction.storage_as_mut::<$table>().insert(&key, &value)
                     .unwrap();
 
-                let root = structured_storage.storage_as_mut::<$table>().root(&key)
+                let root = storage_transaction.storage_as_mut::<$table>().root(&key)
                     .expect("Should get the root");
                 let empty_root = fuel_core_types::fuel_merkle::binary::in_memory::MerkleTree::new().root();
                 assert_ne!(root, empty_root);
@@ -527,7 +527,7 @@ macro_rules! basic_merklelized_storage_tests {
             #[test]
             fn has_different_root_after_each_update() {
                 let mut storage = InMemoryStorage::default();
-                let mut structured_storage = storage.write_transaction();
+                let mut storage_transaction = storage.write_transaction();
 
                 let mut rng = rand::rngs::StdRng::seed_from_u64(1234);
 
@@ -536,10 +536,10 @@ macro_rules! basic_merklelized_storage_tests {
                 for _ in 0..10 {
                     let key = $random_key(&mut rng);
                     let value = $value_insert;
-                    structured_storage.storage_as_mut::<$table>().insert(&key, &value)
+                    storage_transaction.storage_as_mut::<$table>().insert(&key, &value)
                         .unwrap();
 
-                    let root = structured_storage.storage_as_mut::<$table>().root(&key)
+                    let root = storage_transaction.storage_as_mut::<$table>().root(&key)
                         .expect("Should get the root");
                     assert_ne!(root, prev_root);
                     prev_root = root;

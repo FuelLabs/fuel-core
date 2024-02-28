@@ -198,16 +198,16 @@ macro_rules! basic_storage_tests {
             #[test]
             fn get() {
                 let mut storage = InMemoryStorage::default();
-                let mut structured_storage = storage.write_transaction();
+                let mut storage_transaction = storage.write_transaction();
                 let key = $key;
 
-                structured_storage
+                storage_transaction
                     .storage_as_mut::<$table>()
                     .insert(&key, &$value_insert)
                     .unwrap();
 
                 assert_eq!(
-                    structured_storage
+                    storage_transaction
                         .storage_as_mut::<$table>()
                         .get(&key)
                         .expect("Should get without errors")
@@ -220,15 +220,15 @@ macro_rules! basic_storage_tests {
             #[test]
             fn insert() {
                 let mut storage = InMemoryStorage::default();
-                let mut structured_storage = storage.write_transaction();
+                let mut storage_transaction = storage.write_transaction();
                 let key = $key;
 
-                structured_storage
+                storage_transaction
                     .storage_as_mut::<$table>()
                     .insert(&key, &$value_insert)
                     .unwrap();
 
-                let returned = structured_storage
+                let returned = storage_transaction
                     .storage_as_mut::<$table>()
                     .get(&key)
                     .unwrap()
@@ -240,17 +240,17 @@ macro_rules! basic_storage_tests {
             #[test]
             fn remove() {
                 let mut storage = InMemoryStorage::default();
-                let mut structured_storage = storage.write_transaction();
+                let mut storage_transaction = storage.write_transaction();
                 let key = $key;
 
-                structured_storage
+                storage_transaction
                     .storage_as_mut::<$table>()
                     .insert(&key, &$value_insert)
                     .unwrap();
 
-                structured_storage.storage_as_mut::<$table>().remove(&key).unwrap();
+                storage_transaction.storage_as_mut::<$table>().remove(&key).unwrap();
 
-                assert!(!structured_storage
+                assert!(!storage_transaction
                     .storage_as_mut::<$table>()
                     .contains_key(&key)
                     .unwrap());
@@ -259,23 +259,23 @@ macro_rules! basic_storage_tests {
             #[test]
             fn exists() {
                 let mut storage = InMemoryStorage::default();
-                let mut structured_storage = storage.write_transaction();
+                let mut storage_transaction = storage.write_transaction();
                 let key = $key;
 
                 // Given
-                assert!(!structured_storage
+                assert!(!storage_transaction
                     .storage_as_mut::<$table>()
                     .contains_key(&key)
                     .unwrap());
 
                 // When
-                structured_storage
+                storage_transaction
                     .storage_as_mut::<$table>()
                     .insert(&key, &$value_insert)
                     .unwrap();
 
                 // Then
-                assert!(structured_storage
+                assert!(storage_transaction
                     .storage_as_mut::<$table>()
                     .contains_key(&key)
                     .unwrap());
@@ -284,23 +284,23 @@ macro_rules! basic_storage_tests {
             #[test]
             fn exists_false_after_removing() {
                 let mut storage = InMemoryStorage::default();
-                let mut structured_storage = storage.write_transaction();
+                let mut storage_transaction = storage.write_transaction();
                 let key = $key;
 
                 // Given
-                structured_storage
+                storage_transaction
                     .storage_as_mut::<$table>()
                     .insert(&key, &$value_insert)
                     .unwrap();
 
                 // When
-                structured_storage
+                storage_transaction
                     .storage_as_mut::<$table>()
                     .remove(&key)
                     .unwrap();
 
                 // Then
-                assert!(!structured_storage
+                assert!(!storage_transaction
                     .storage_as_mut::<$table>()
                     .contains_key(&key)
                     .unwrap());
