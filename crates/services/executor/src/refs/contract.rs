@@ -124,13 +124,13 @@ where
 {
     fn root(&self) -> anyhow::Result<MerkleRoot> {
         let contract_id = *self.contract_id();
-        let utxo = self
+        let utxo = *self
             .database()
             .storage::<ContractsLatestUtxo>()
             .get(&contract_id)?
             .ok_or(not_found!(ContractsLatestUtxo))?
             .into_owned()
-            .utxo_id;
+            .utxo_id();
 
         let state_root = self
             .database()

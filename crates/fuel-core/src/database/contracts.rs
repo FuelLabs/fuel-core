@@ -13,14 +13,11 @@ use fuel_core_storage::{
     Result as StorageResult,
     StorageAsRef,
 };
-use fuel_core_types::{
-    entities::contract::ContractUtxoInfo,
-    fuel_types::{
-        AssetId,
-        Bytes32,
-        ContractId,
-        Word,
-    },
+use fuel_core_types::fuel_types::{
+    AssetId,
+    Bytes32,
+    ContractId,
+    Word,
 };
 
 impl Database {
@@ -42,15 +39,14 @@ impl Database {
             .expect("Contract does not exist")
             .salt();
 
-        let ContractUtxoInfo {
-            utxo_id,
-            tx_pointer,
-        } = self
+        let latest_utxo = self
             .storage::<ContractsLatestUtxo>()
             .get(&contract_id)
             .unwrap()
             .expect("contract does not exist")
             .into_owned();
+        let utxo_id = latest_utxo.utxo_id();
+        let tx_pointer = latest_utxo.tx_pointer();
 
         let state = Some(
             self.iter_all_by_prefix::<ContractsState, _>(Some(contract_id.as_ref()))

@@ -14,6 +14,13 @@ pub enum ContractUtxoInfo {
     V1(ContractUtxoInfoV1),
 }
 
+#[cfg(any(test, feature = "test-helpers"))]
+impl Default for ContractUtxoInfo {
+    fn default() -> Self {
+        Self::V1(Default::default())
+    }
+}
+
 impl ContractUtxoInfo {
     /// Get the Contract UTXO's id
     pub fn utxo_id(&self) -> &UtxoId {
@@ -38,6 +45,15 @@ pub struct ContractUtxoInfoV1 {
     pub utxo_id: UtxoId,
     /// the tx pointer to the utxo
     pub tx_pointer: TxPointer,
+}
+
+impl From<(UtxoId, TxPointer)> for ContractUtxoInfoV1 {
+    fn from((utxo_id, tx_pointer): (UtxoId, TxPointer)) -> Self {
+        Self {
+            utxo_id,
+            tx_pointer,
+        }
+    }
 }
 
 /// Versioned type for storing information about a contract. Contract
