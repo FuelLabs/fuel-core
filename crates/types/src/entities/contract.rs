@@ -9,12 +9,12 @@ use fuel_vm_private::fuel_tx::UtxoId;
 /// Contains information related to the latest contract utxo
 #[derive(Debug, Clone, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[non_exhaustive]
 pub enum ContractUtxoInfo {
     /// V1 ContractUtxoInfo
     V1(ContractUtxoInfoV1),
 }
 
-#[cfg(any(test, feature = "test-helpers"))]
 impl Default for ContractUtxoInfo {
     fn default() -> Self {
         Self::V1(Default::default())
