@@ -1398,8 +1398,8 @@ where
                             );
                             let utxo_info =
                                 contract.validated_utxo(self.options.utxo_validation)?;
-                            *utxo_id = utxo_info.utxo_id;
-                            *tx_pointer = utxo_info.tx_pointer;
+                            *utxo_id = *utxo_info.utxo_id();
+                            *tx_pointer = utxo_info.tx_pointer();
                             *balance_root = contract.balance_root()?;
                             *state_root = contract.state_root()?;
                         }
@@ -1450,10 +1450,8 @@ where
                                 StructuredStorage::new(db),
                                 *contract_id,
                             );
-                            let provided_info = ContractUtxoInfo {
-                                utxo_id: *utxo_id,
-                                tx_pointer: *tx_pointer,
-                            };
+                            let provided_info =
+                                ContractUtxoInfo::V1((*utxo_id, *tx_pointer).into());
                             if provided_info
                                 != contract
                                     .validated_utxo(self.options.utxo_validation)?
@@ -1651,12 +1649,10 @@ where
                     if let Some(Input::Contract(Contract { contract_id, .. })) =
                         inputs.get(contract.input_index as usize)
                     {
+                        let tx_pointer = TxPointer::new(block_height, tx_idx);
                         db.storage::<ContractsLatestUtxo>().insert(
                             contract_id,
-                            &ContractUtxoInfo {
-                                utxo_id,
-                                tx_pointer: TxPointer::new(block_height, tx_idx),
-                            },
+                            &ContractUtxoInfo::V1((utxo_id, tx_pointer).into()),
                         )?;
                     } else {
                         return Err(ExecutorError::TransactionValidity(
@@ -1691,12 +1687,10 @@ where
                     db,
                 )?,
                 Output::ContractCreated { contract_id, .. } => {
+                    let tx_pointer = TxPointer::new(block_height, tx_idx);
                     db.storage::<ContractsLatestUtxo>().insert(
                         contract_id,
-                        &ContractUtxoInfo {
-                            utxo_id,
-                            tx_pointer: TxPointer::new(block_height, tx_idx),
-                        },
+                        &ContractUtxoInfo::V1((utxo_id, tx_pointer).into()),
                     )?;
                 }
             }

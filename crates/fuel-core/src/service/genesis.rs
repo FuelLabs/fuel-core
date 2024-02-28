@@ -269,10 +269,7 @@ fn init_contracts(
                     .storage::<ContractsLatestUtxo>()
                     .insert(
                         &contract_id,
-                        &ContractUtxoInfo {
-                            utxo_id,
-                            tx_pointer,
-                        },
+                        &ContractUtxoInfo::V1((utxo_id, tx_pointer).into()),
                     )?
                     .is_some()
                 {
