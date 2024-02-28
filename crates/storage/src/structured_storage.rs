@@ -19,9 +19,15 @@ use crate::{
     StorageBatchMutate,
     StorageInspect,
     StorageMutate,
+    StorageRead,
     StorageSize,
+    StorageWrite,
 };
-use std::borrow::Cow;
+use std::{
+    borrow::Cow,
+    ops::Deref,
+    sync::Arc,
+};
 
 pub mod balances;
 pub mod blocks;
@@ -170,6 +176,71 @@ where
 {
     fn root(&self, key: &Key) -> Result<MerkleRoot, Self::Error> {
         <M as TableWithBlueprint>::Blueprint::root(&self.storage, key)
+    }
+}
+
+impl<Column, S, M> StorageRead<M> for StructuredStorage<S>
+where
+    S: KeyValueStore<Column = Column>,
+    M: Mappable + TableWithBlueprint<Column = Column>,
+    M::Key: AsRef<[u8]>,
+    M::Blueprint: Blueprint<M, S>,
+{
+    fn read(
+        &self,
+        key: &<M as Mappable>::Key,
+        buf: &mut [u8],
+    ) -> Result<Option<usize>, Self::Error> {
+        self.storage
+            .read(key.as_ref(), <M as TableWithBlueprint>::column(), buf)
+    }
+
+    fn read_alloc(
+        &self,
+        key: &<M as Mappable>::Key,
+    ) -> Result<Option<Vec<u8>>, Self::Error> {
+        self.storage
+            .get(key.as_ref(), <M as TableWithBlueprint>::column())
+            .map(|value| value.map(|value| value.deref().clone()))
+    }
+}
+
+impl<Column, S, M> StorageWrite<M> for StructuredStorage<S>
+where
+    S: KeyValueStore<Column = Column>,
+    M: Mappable + TableWithBlueprint<Column = Column>,
+    M::Key: AsRef<[u8]>,
+    M::Blueprint: Blueprint<M, S>,
+{
+    fn write(&mut self, key: &M::Key, buf: Vec<u8>) -> Result<usize, Self::Error> {
+        self.storage
+            .write(key.as_ref(), <M as TableWithBlueprint>::column(), &buf)
+    }
+
+    fn replace(
+        &mut self,
+        key: &M::Key,
+        buf: Vec<u8>,
+    ) -> Result<(usize, Option<Vec<u8>>), Self::Error> {
+        let bytes_written = buf.len();
+        let prev = self
+            .storage
+            .replace(
+                key.as_ref(),
+                <M as TableWithBlueprint>::column(),
+                Arc::new(buf),
+            )?
+            .map(|prev| prev.to_vec());
+        let result = (bytes_written, prev);
+        return Ok(result)
+    }
+
+    fn take(&mut self, key: &M::Key) -> Result<Option<Vec<u8>>, Self::Error> {
+        let take = self
+            .storage
+            .take(key.as_ref(), <M as TableWithBlueprint>::column())?
+            .map(|value| value.to_vec());
+        return Ok(take)
     }
 }
 
