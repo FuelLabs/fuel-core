@@ -14,6 +14,7 @@ use crate::{
         ContractsRawCode,
     },
 };
+use fuel_vm_private::storage::ContractsState;
 
 // # Dev-note: The value of the `ContractsRawCode` has a unique implementation of serialization
 // and deserialization and uses `Raw` codec. Because the value is a contract byte code represented
@@ -25,6 +26,17 @@ impl TableWithBlueprint for ContractsRawCode {
 
     fn column() -> Column {
         Column::ContractsRawCode
+    }
+}
+
+// # Dev-note: The value of the `ContractsState` table uses raw bytes to
+// represent entries, and uses therefore uses the `Raw` codec.
+impl TableWithBlueprint for ContractsState {
+    type Blueprint = Plain<Raw, Raw>;
+    type Column = Column;
+
+    fn column() -> Column {
+        Column::ContractsState
     }
 }
 
