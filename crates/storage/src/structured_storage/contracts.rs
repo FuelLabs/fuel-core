@@ -29,17 +29,6 @@ impl TableWithBlueprint for ContractsRawCode {
     }
 }
 
-// # Dev-note: The value of the `ContractsState` table uses raw bytes to
-// represent entries, and uses therefore uses the `Raw` codec.
-impl TableWithBlueprint for ContractsState {
-    type Blueprint = Plain<Raw, Raw>;
-    type Column = Column;
-
-    fn column() -> Column {
-        Column::ContractsState
-    }
-}
-
 impl TableWithBlueprint for ContractsInfo {
     type Blueprint = Plain<Raw, Postcard>;
     type Column = Column;
