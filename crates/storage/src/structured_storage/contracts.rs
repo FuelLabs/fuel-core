@@ -14,7 +14,6 @@ use crate::{
         ContractsRawCode,
     },
 };
-use fuel_vm_private::storage::ContractsState;
 
 // # Dev-note: The value of the `ContractsRawCode` has a unique implementation of serialization
 // and deserialization and uses `Raw` codec. Because the value is a contract byte code represented
