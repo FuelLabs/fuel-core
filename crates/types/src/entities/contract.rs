@@ -15,12 +15,14 @@ pub enum ContractUtxoInfo {
 }
 
 impl ContractUtxoInfo {
+    /// Get the Contract UTXO's id
     pub fn utxo_id(&self) -> &UtxoId {
         match self {
             ContractUtxoInfo::V1(info) => &info.utxo_id,
         }
     }
 
+    /// Get the Contract UTXO's transaction pointer
     pub fn tx_pointer(&self) -> TxPointer {
         match self {
             ContractUtxoInfo::V1(info) => info.tx_pointer,
