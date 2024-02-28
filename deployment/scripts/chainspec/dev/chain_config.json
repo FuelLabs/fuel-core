@@ -123,16 +123,16 @@
           "units_per_gas": 4
         }
       },
-      "croo": {
-        "LightOperation": {
-          "base": 1,
-          "units_per_gas": 1
-        }
-      },
       "ccp": {
         "LightOperation": {
           "base": 59,
           "units_per_gas": 20
+        }
+      },
+      "croo": {
+        "LightOperation": {
+          "base": 1,
+          "units_per_gas": 1
         }
       },
       "csiz": {

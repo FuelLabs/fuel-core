@@ -163,6 +163,7 @@ impl GenesisWorkers {
 
 #[derive(Debug, Clone, Copy)]
 pub struct Handler<T> {
+    output_index: u64,
     block_height: BlockHeight,
     phaton_data: PhantomData<T>,
 }
@@ -170,6 +171,7 @@ pub struct Handler<T> {
 impl<T> Handler<T> {
     pub fn new(block_height: BlockHeight) -> Self {
         Self {
+            output_index: 0,
             block_height,
             phaton_data: PhantomData,
         }
@@ -184,12 +186,18 @@ impl ProcessState for Handler<CoinConfig> {
         group: Vec<Self::Item>,
         tx: &mut Database,
     ) -> anyhow::Result<()> {
-        group.into_iter().try_for_each(|coin| {
-            let root = init_coin(tx, &coin, self.block_height)?;
-            tx.add_coin_root(root)?;
+        group
+            .into_iter()
+            .try_for_each(|coin| {
+                let root = init_coin(tx, &coin, self.output_index, self.block_height)?;
+        tx.add_coin_root(root)?;
 
-            Ok(())
-        })
+        self.output_index = self.output_index
+                .checked_add(1)
+                .expect("The maximum number of UTXOs supported in the genesis configuration has been exceeded.");
+
+        Ok(())
+            })
     }
 
     fn genesis_resource() -> GenesisResource {
@@ -225,11 +233,17 @@ impl ProcessState for Handler<ContractConfig> {
         group: Vec<Self::Item>,
         tx: &mut Database,
     ) -> anyhow::Result<()> {
-        group.into_iter().try_for_each(|contract| {
-            init_contract(tx, &contract, self.block_height)?;
+        group
+            .into_iter()
+            .try_for_each(|contract| {
+                init_contract(tx, &contract, self.output_index, self.block_height)?;
 
-            Ok::<(), anyhow::Error>(())
-        })
+        self.output_index = self.output_index
+                .checked_add(1)
+                .expect("The maximum number of UTXOs supported in the genesis configuration has been exceeded.");
+
+        Ok::<(), anyhow::Error>(())
+            })
     }
 
     fn genesis_resource() -> GenesisResource {

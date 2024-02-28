@@ -48,12 +48,10 @@ async fn balance() {
             (owner, 150, asset_id),
         ]
         .into_iter()
-        .enumerate()
-        .map(|(idx, (owner, amount, asset_id))| CoinConfig {
+        .map(|(owner, amount, asset_id)| CoinConfig {
             owner,
             amount,
             asset_id,
-            output_index: idx as u8,
             ..Default::default()
         })
         .collect(),
@@ -161,12 +159,10 @@ async fn first_5_balances() {
                             (owner, 150, asset_id),
                         ]
                     })
-                    .enumerate()
-                    .map(|(idx, (owner, amount, asset_id))| CoinConfig {
+                    .map(|(owner, amount, asset_id)| CoinConfig {
                         owner: *owner,
                         amount,
                         asset_id,
-                        output_index: idx as u8,
                         ..Default::default()
                     }),
             );

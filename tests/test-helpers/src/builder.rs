@@ -120,18 +120,16 @@ impl TestSetupBuilder {
         let contract_id =
             contract.id(&salt.clone(), &root, &Contract::default_state_root());
 
-        let utxo_id = utxo_id.unwrap_or_else(|| self.rng.gen());
-        let tx_pointer = tx_pointer.unwrap_or_else(|| self.rng.gen());
         self.contracts.insert(
             contract_id,
             ContractConfig {
                 contract_id,
                 code,
                 salt,
-                tx_id: *utxo_id.tx_id(),
-                output_index: utxo_id.output_index(),
-                tx_pointer_block_height: tx_pointer.block_height(),
-                tx_pointer_tx_idx: tx_pointer.tx_index(),
+                tx_id: utxo_id.map(|utxo_id| *utxo_id.tx_id()),
+                output_index: utxo_id.map(|utxo_id| utxo_id.output_index()),
+                tx_pointer_block_height: tx_pointer.map(|pointer| pointer.block_height()),
+                tx_pointer_tx_idx: tx_pointer.map(|pointer| pointer.tx_index()),
             },
         );
         let balances =
@@ -175,11 +173,11 @@ impl TestSetupBuilder {
                     }) = input
                     {
                         Some(CoinConfig {
-                            tx_id: *utxo_id.tx_id(),
-                            output_index: utxo_id.output_index(),
-                            tx_pointer_block_height: tx_pointer.block_height(),
-                            tx_pointer_tx_idx: tx_pointer.tx_index(),
-                            maturity: BlockHeight::default(),
+                            tx_id: Some(*utxo_id.tx_id()),
+                            output_index: Some(utxo_id.output_index()),
+                            tx_pointer_block_height: Some(tx_pointer.block_height()),
+                            tx_pointer_tx_idx: Some(tx_pointer.tx_index()),
+                            maturity: None,
                             owner: *owner,
                             amount: *amount,
                             asset_id: *asset_id,

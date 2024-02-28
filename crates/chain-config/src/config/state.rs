@@ -8,10 +8,7 @@ use fuel_core_storage::{
     Result as StorageResult,
 };
 use fuel_core_types::{
-    fuel_tx::{
-        TxId,
-        UtxoId,
-    },
+    fuel_tx::UtxoId,
     fuel_types::{
         Address,
         BlockHeight,
@@ -171,8 +168,7 @@ impl StateConfig {
         tracing::info!("Initial Accounts");
         let coins = TESTNET_WALLET_SECRETS
             .into_iter()
-            .enumerate()
-            .map(|(idx, secret)| {
+            .map(|secret| {
                 let secret = SecretKey::from_str(secret).expect("Expected valid secret");
                 let address = Address::from(*secret.public_key().hash());
                 let bech32_data = Bytes32::new(*address).to_base32();
@@ -185,8 +181,7 @@ impl StateConfig {
                     bech32_encoding,
                     TESTNET_INITIAL_BALANCE
                 );
-                let utxo_id = UtxoId::new(TxId::default(), idx as u8);
-                Self::initial_coin(secret, TESTNET_INITIAL_BALANCE, utxo_id)
+                Self::initial_coin(secret, TESTNET_INITIAL_BALANCE, None)
             })
             .collect_vec();
 
@@ -201,7 +196,7 @@ impl StateConfig {
         tracing::info!("Initial Accounts");
         let mut rng = rand::thread_rng();
         let coins = (0..5)
-            .map(|idx| {
+            .map(|_| {
                 let secret = SecretKey::random(&mut rng);
                 let address = Address::from(*secret.public_key().hash());
                 let bech32_data = Bytes32::new(*address).to_base32();
@@ -214,8 +209,7 @@ impl StateConfig {
                     bech32_encoding,
                     TESTNET_INITIAL_BALANCE
                 );
-                let utxo_id = UtxoId::new(TxId::default(), idx as u8);
-                Self::initial_coin(secret, TESTNET_INITIAL_BALANCE, utxo_id)
+                Self::initial_coin(secret, TESTNET_INITIAL_BALANCE, None)
             })
             .collect_vec();
 
@@ -225,15 +219,22 @@ impl StateConfig {
         }
     }
 
-    pub fn initial_coin(secret: SecretKey, amount: u64, utxo_id: UtxoId) -> CoinConfig {
+    pub fn initial_coin(
+        secret: SecretKey,
+        amount: u64,
+        utxo_id: Option<UtxoId>,
+    ) -> CoinConfig {
         let address = Address::from(*secret.public_key().hash());
 
         CoinConfig {
+            tx_id: utxo_id.as_ref().map(|u| *u.tx_id()),
+            output_index: utxo_id.as_ref().map(|u| u.output_index()),
+            tx_pointer_block_height: None,
+            tx_pointer_tx_idx: None,
+            maturity: None,
             owner: address,
             amount,
-            tx_id: *utxo_id.tx_id(),
-            output_index: utxo_id.output_index(),
-            ..Default::default()
+            asset_id: Default::default(),
         }
     }
 }

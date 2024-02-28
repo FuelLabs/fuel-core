@@ -47,12 +47,10 @@ mod coin {
                 (owner, 150, asset_id_b),
             ]
             .into_iter()
-            .enumerate()
-            .map(|(idx, (owner, amount, asset_id))| CoinConfig {
+            .map(|(owner, amount, asset_id)| CoinConfig {
                 owner,
                 amount,
                 asset_id,
-                output_index: idx as u8,
                 ..Default::default()
             })
             .collect(),
@@ -509,12 +507,10 @@ mod all_coins {
                 (owner, 150, asset_id_b),
             ]
             .into_iter()
-            .enumerate()
-            .map(|(idx, (owner, amount, asset_id))| CoinConfig {
+            .map(|(owner, amount, asset_id)| CoinConfig {
                 owner,
                 amount,
                 asset_id,
-                output_index: idx as u8,
                 ..Default::default()
             })
             .collect(),
