@@ -195,23 +195,20 @@ where
 }
 
 impl<D> ContractsAssetsStorage for VmStorage<D> where
-    D: MerkleRootStorage<ContractId, ContractsAssets, Error = StorageError>
-        + StorageMutate<ContractsAssets, Error = StorageError>
+    D: StorageMutate<ContractsAssets, Error = StorageError>
 {
 }
 
 impl<D> InterpreterStorage for VmStorage<D>
 where
-    D: StorageWrite<ContractsState, Error = StorageError>
-        + MerkleRootStorage<ContractId, ContractsState, Error = StorageError>
-        + StorageMutate<ContractsAssets, Error = StorageError>
-        + StorageMutate<ContractsRawCode, Error = StorageError>
-        + StorageMutate<ContractsState, Error = StorageError>
+    D: StorageWrite<ContractsRawCode, Error = StorageError>
+        + StorageSize<ContractsRawCode, Error = StorageError>
         + StorageRead<ContractsRawCode, Error = StorageError>
-        + MerkleRootStorage<ContractId, ContractsAssets, Error = StorageError>
-        + VmStorageRequirements<Error = StorageError>
+        + StorageMutate<ContractsAssets, Error = StorageError>
+        + StorageWrite<ContractsState, Error = StorageError>
+        + StorageSize<ContractsState, Error = StorageError>
         + StorageRead<ContractsState, Error = StorageError>
-        + StorageWrite<ContractsRawCode, Error = StorageError>,
+        + VmStorageRequirements<Error = StorageError>,
 {
     type DataError = StorageError;
 
