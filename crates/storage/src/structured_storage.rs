@@ -222,12 +222,12 @@ where
     //  without deserialization into `OwnedValue`.
     M::OwnedValue: Into<Vec<u8>>,
 {
-    fn write(&mut self, key: &M::Key, buf: Vec<u8>) -> Result<usize, Self::Error> {
+    fn write(&mut self, key: &M::Key, buf: &[u8]) -> Result<usize, Self::Error> {
         <M as TableWithBlueprint>::Blueprint::put(
             &mut self.storage,
             key,
             M::column(),
-            buf.as_slice(),
+            buf,
         )
         .map(|_| buf.len())
     }
@@ -235,14 +235,14 @@ where
     fn replace(
         &mut self,
         key: &M::Key,
-        buf: Vec<u8>,
+        buf: &[u8],
     ) -> Result<(usize, Option<Vec<u8>>), Self::Error> {
         let bytes_written = buf.len();
         let prev = <M as TableWithBlueprint>::Blueprint::replace(
             &mut self.storage,
             key,
             M::column(),
-            buf.as_slice(),
+            buf,
         )?
         .map(|prev| prev.into());
         let result = (bytes_written, prev);
