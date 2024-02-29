@@ -531,7 +531,7 @@ impl TryFrom<ContractOutput> for output::contract::Contract {
 #[derive(cynic::QueryFragment, Debug)]
 #[cynic(schema_path = "./assets/schema.sdl")]
 pub struct Policies {
-    pub gas_price: Option<U64>,
+    pub tip: Option<U64>,
     pub maturity: Option<U32>,
     pub witness_limit: Option<U64>,
     pub max_fee: Option<U64>,
@@ -540,7 +540,7 @@ pub struct Policies {
 impl From<Policies> for fuel_tx::policies::Policies {
     fn from(value: Policies) -> Self {
         let mut policies = fuel_tx::policies::Policies::new();
-        policies.set(PolicyType::GasPrice, value.gas_price.map(Into::into));
+        policies.set(PolicyType::Tip, value.tip.map(Into::into));
         policies.set(
             PolicyType::Maturity,
             value.maturity.map(|maturity| maturity.0 as u64),

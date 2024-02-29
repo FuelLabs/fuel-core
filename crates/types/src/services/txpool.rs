@@ -8,6 +8,7 @@ use crate::{
             Inputs,
             Outputs,
             ScriptGasLimit,
+            Tip,
         },
         Cacheable,
         Chargeable,
@@ -51,27 +52,50 @@ pub type ArcPoolTx = Arc<PoolTransaction>;
 /// Transaction type used by the transaction pool. Transaction pool supports not
 /// all `fuel_tx::Transaction` variants.
 #[derive(Debug, Eq, PartialEq)]
-pub enum PoolTransaction {
+pub struct PoolTransaction {
+    tx: PoolTransactionVariant,
+    max_gas: Word,
+}
+
+/// Variants of the pool transaction's inner tx
+#[derive(Debug, Eq, PartialEq)]
+pub enum PoolTransactionVariant {
     /// Script
     Script(Checked<Script>),
     /// Create
     Create(Checked<Create>),
 }
 
+impl PoolTransactionVariant {
+    /// Convert into a `PoolTransaction` by attaching a `max_gas` value
+    pub fn into_tx(self, max_gas: Word) -> PoolTransaction {
+        PoolTransaction { tx: self, max_gas }
+    }
+}
+
 impl PoolTransaction {
+    /// Calculate the maximum gas for the transaction
+    pub fn max_gas(&self) -> Word {
+        self.max_gas
+    }
+
     /// Used for accounting purposes when charging byte based fees.
     pub fn metered_bytes_size(&self) -> usize {
-        match self {
-            PoolTransaction::Script(script) => script.transaction().metered_bytes_size(),
-            PoolTransaction::Create(create) => create.transaction().metered_bytes_size(),
+        match &self.tx {
+            PoolTransactionVariant::Script(script) => {
+                script.transaction().metered_bytes_size()
+            }
+            PoolTransactionVariant::Create(create) => {
+                create.transaction().metered_bytes_size()
+            }
         }
     }
 
     /// Returns the transaction ID
     pub fn id(&self) -> TxId {
-        match self {
-            PoolTransaction::Script(script) => script.id(),
-            PoolTransaction::Create(create) => create.id(),
+        match &self.tx {
+            PoolTransactionVariant::Script(script) => script.id(),
+            PoolTransactionVariant::Create(create) => create.id(),
         }
     }
 }
@@ -79,43 +103,50 @@ impl PoolTransaction {
 #[allow(missing_docs)]
 impl PoolTransaction {
     pub fn script_gas_limit(&self) -> Option<Word> {
-        match self {
-            PoolTransaction::Script(script) => {
+        match &self.tx {
+            PoolTransactionVariant::Script(script) => {
                 Some(*script.transaction().script_gas_limit())
             }
-            PoolTransaction::Create(_) => None,
+            PoolTransactionVariant::Create(_) => None,
+        }
+    }
+
+    pub fn tip(&self) -> Word {
+        match &self.tx {
+            PoolTransactionVariant::Script(script) => script.transaction().tip(),
+            PoolTransactionVariant::Create(create) => create.transaction().tip(),
         }
     }
 
     pub fn is_computed(&self) -> bool {
-        match self {
-            PoolTransaction::Script(script) => script.transaction().is_computed(),
-            PoolTransaction::Create(create) => create.transaction().is_computed(),
+        match &self.tx {
+            PoolTransactionVariant::Script(script) => script.transaction().is_computed(),
+            PoolTransactionVariant::Create(create) => create.transaction().is_computed(),
         }
     }
 
     pub fn inputs(&self) -> &Vec<Input> {
-        match self {
-            PoolTransaction::Script(script) => script.transaction().inputs(),
-            PoolTransaction::Create(create) => create.transaction().inputs(),
+        match &self.tx {
+            PoolTransactionVariant::Script(script) => script.transaction().inputs(),
+            PoolTransactionVariant::Create(create) => create.transaction().inputs(),
         }
     }
 
     pub fn outputs(&self) -> &Vec<Output> {
-        match self {
-            PoolTransaction::Script(script) => script.transaction().outputs(),
-            PoolTransaction::Create(create) => create.transaction().outputs(),
+        match &self.tx {
+            PoolTransactionVariant::Script(script) => script.transaction().outputs(),
+            PoolTransactionVariant::Create(create) => create.transaction().outputs(),
         }
     }
 }
 
 impl From<&PoolTransaction> for Transaction {
     fn from(tx: &PoolTransaction) -> Self {
-        match tx {
-            PoolTransaction::Script(script) => {
+        match &tx.tx {
+            PoolTransactionVariant::Script(script) => {
                 Transaction::Script(script.transaction().clone())
             }
-            PoolTransaction::Create(create) => {
+            PoolTransactionVariant::Create(create) => {
                 Transaction::Create(create.transaction().clone())
             }
         }
@@ -124,22 +155,14 @@ impl From<&PoolTransaction> for Transaction {
 
 impl From<&PoolTransaction> for CheckedTransaction {
     fn from(tx: &PoolTransaction) -> Self {
-        match tx {
-            PoolTransaction::Script(script) => CheckedTransaction::Script(script.clone()),
-            PoolTransaction::Create(create) => CheckedTransaction::Create(create.clone()),
+        match &tx.tx {
+            PoolTransactionVariant::Script(script) => {
+                CheckedTransaction::Script(script.clone())
+            }
+            PoolTransactionVariant::Create(create) => {
+                CheckedTransaction::Create(create.clone())
+            }
         }
-    }
-}
-
-impl From<Checked<Script>> for PoolTransaction {
-    fn from(checked: Checked<Script>) -> Self {
-        Self::Script(checked)
-    }
-}
-
-impl From<Checked<Create>> for PoolTransaction {
-    fn from(checked: Checked<Create>) -> Self {
-        Self::Create(checked)
     }
 }
 

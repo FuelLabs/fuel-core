@@ -307,8 +307,8 @@ pub struct Policies(fuel_tx::policies::Policies);
 
 #[Object]
 impl Policies {
-    async fn gas_price(&self) -> Option<U64> {
-        self.0.get(PolicyType::GasPrice).map(Into::into)
+    async fn tip(&self) -> Option<U64> {
+        self.0.get(PolicyType::Tip).map(Into::into)
     }
 
     async fn witness_limit(&self) -> Option<U64> {

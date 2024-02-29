@@ -51,6 +51,7 @@ use fuel_core_types::{
     fuel_tx::{
         field::{
             InputContract,
+            MaxFeeLimit,
             MintAmount,
             MintAssetId,
             OutputContract,
@@ -98,9 +99,7 @@ use fuel_core_types::{
             Checked,
             CheckedTransaction,
             Checks,
-            CreateCheckedMetadata,
             IntoChecked,
-            ScriptCheckedMetadata,
         },
         interpreter::{
             CheckedMetadata,
@@ -820,7 +819,6 @@ where
                 self.verify_input_state(
                     block_st_transaction.as_ref(),
                     inputs.as_mut_slice(),
-                    block_height,
                     header.da_height,
                 )?;
             }
@@ -934,10 +932,10 @@ where
     ) -> ExecutorResult<Transaction>
     where
         Tx: ExecutableTransaction + PartialEq + Cacheable + Send + Sync + 'static,
-        <Tx as IntoChecked>::Metadata: Fee + CheckedMetadata + Clone + Send + Sync,
+        <Tx as IntoChecked>::Metadata: CheckedMetadata + Clone + Send + Sync,
     {
         let tx_id = checked_tx.id();
-        let max_fee = checked_tx.metadata().max_fee();
+        let max_fee = checked_tx.transaction().max_fee_limit();
 
         if self.options.utxo_validation {
             checked_tx = checked_tx
@@ -955,7 +953,6 @@ where
             self.verify_input_state(
                 tx_st_transaction.as_ref(),
                 checked_tx.transaction().inputs(),
-                *header.height(),
                 header.da_height,
             )?;
             // validate transaction signature
@@ -988,7 +985,9 @@ where
         let gas_costs = &self.config.consensus_parameters.gas_costs;
         let fee_params = &self.config.consensus_parameters.fee_params;
 
-        let ready_tx = checked_tx.into_ready(gas_price, gas_costs, fee_params)?;
+        let ready_tx = checked_tx
+            .clone()
+            .into_ready(gas_price, gas_costs, fee_params)?;
 
         let vm_result: StateTransition<_> = vm
             .transact(ready_tx)
@@ -1026,7 +1025,8 @@ where
         }
 
         // update block commitment
-        let (used_gas, tx_fee) = self.total_fee_paid(&tx, max_fee, &receipts)?;
+        let (used_gas, tx_fee) =
+            self.total_fee_paid(&tx, max_fee, &receipts, gas_price)?;
 
         // Check or set the executed transaction.
         match execution_kind {
@@ -1125,7 +1125,6 @@ where
         &self,
         db: &D,
         inputs: &[Input],
-        block_height: BlockHeight,
         block_da_height: DaBlockHeight,
     ) -> ExecutorResult<()> {
         for input in inputs {
@@ -1133,18 +1132,6 @@ where
                 Input::CoinSigned(CoinSigned { utxo_id, .. })
                 | Input::CoinPredicate(CoinPredicate { utxo_id, .. }) => {
                     if let Some(coin) = db.storage::<Coins>().get(utxo_id)? {
-                        let coin_mature_height = coin
-                            .tx_pointer()
-                            .block_height()
-                            .saturating_add(**coin.maturity())
-                            .into();
-                        if block_height < coin_mature_height {
-                            return Err(TransactionValidityError::CoinHasNotMatured(
-                                *utxo_id,
-                            )
-                            .into())
-                        }
-
                         if !coin
                             .matches_input(input)
                             .expect("The input is a coin above")
@@ -1223,7 +1210,6 @@ where
                     owner,
                     amount,
                     asset_id,
-                    maturity,
                     ..
                 })
                 | Input::CoinPredicate(CoinPredicate {
@@ -1231,7 +1217,6 @@ where
                     owner,
                     amount,
                     asset_id,
-                    maturity,
                     ..
                 }) => {
                     // prune utxo from db
@@ -1244,7 +1229,7 @@ where
                             // If the coin is not found in the database, it means that it was
                             // already spent or `utxo_validation` is `false`.
                             self.get_coin_or_default(
-                                db, *utxo_id, *owner, *amount, *asset_id, *maturity,
+                                db, *utxo_id, *owner, *amount, *asset_id,
                             )
                         })?;
 
@@ -1290,6 +1275,7 @@ where
         tx: &Tx,
         max_fee: Word,
         receipts: &[Receipt],
+        gas_price: Word,
     ) -> ExecutorResult<(Word, Word)> {
         let mut used_gas = 0;
         for r in receipts {
@@ -1304,6 +1290,7 @@ where
                 self.config.consensus_parameters.gas_costs(),
                 self.config.consensus_parameters.fee_params(),
                 used_gas,
+                gas_price,
             )
             .ok_or(ExecutorError::FeeOverflow)?;
         // if there's no script result (i.e. create) then fee == base amount
@@ -1334,7 +1321,6 @@ where
                             owner,
                             amount,
                             asset_id,
-                            maturity,
                             ..
                         })
                         | Input::CoinPredicate(CoinPredicate {
@@ -1343,11 +1329,10 @@ where
                             owner,
                             amount,
                             asset_id,
-                            maturity,
                             ..
                         }) => {
                             let coin = self.get_coin_or_default(
-                                db, *utxo_id, *owner, *amount, *asset_id, *maturity,
+                                db, *utxo_id, *owner, *amount, *asset_id,
                             )?;
                             *tx_pointer = *coin.tx_pointer();
                         }
@@ -1381,7 +1366,6 @@ where
                             owner,
                             amount,
                             asset_id,
-                            maturity,
                             ..
                         })
                         | Input::CoinPredicate(CoinPredicate {
@@ -1390,11 +1374,10 @@ where
                             owner,
                             amount,
                             asset_id,
-                            maturity,
                             ..
                         }) => {
                             let coin = self.get_coin_or_default(
-                                db, *utxo_id, *owner, *amount, *asset_id, *maturity,
+                                db, *utxo_id, *owner, *amount, *asset_id,
                             )?;
                             if tx_pointer != coin.tx_pointer() {
                                 return Err(ExecutorError::InvalidTransactionOutcome {
@@ -1514,7 +1497,6 @@ where
         owner: Address,
         amount: u64,
         asset_id: AssetId,
-        maturity: BlockHeight,
     ) -> ExecutorResult<CompressedCoin> {
         if self.options.utxo_validation {
             db.storage::<Coins>()
@@ -1529,7 +1511,6 @@ where
                 owner,
                 amount,
                 asset_id,
-                maturity,
                 tx_pointer: Default::default(),
             }
             .into();
@@ -1665,7 +1646,6 @@ where
                 owner: *to,
                 amount: *amount,
                 asset_id: *asset_id,
-                maturity: 0u32.into(),
                 tx_pointer: TxPointer::new(block_height, execution_data.tx_count),
             }
             .into();
@@ -1679,31 +1659,5 @@ where
         }
 
         Ok(())
-    }
-}
-
-trait Fee {
-    fn max_fee(&self) -> Word;
-
-    fn min_fee(&self) -> Word;
-}
-
-impl Fee for ScriptCheckedMetadata {
-    fn max_fee(&self) -> Word {
-        self.fee.max_fee()
-    }
-
-    fn min_fee(&self) -> Word {
-        self.fee.min_fee()
-    }
-}
-
-impl Fee for CreateCheckedMetadata {
-    fn max_fee(&self) -> Word {
-        self.fee.max_fee()
-    }
-
-    fn min_fee(&self) -> Word {
-        self.fee.min_fee()
     }
 }

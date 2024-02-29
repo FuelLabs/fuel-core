@@ -72,7 +72,7 @@ pub struct ContractState {
     /// origin is needed for child to parent rel, in case when contract is in dependency this is how we make a chain.
     origin: Option<UtxoId>,
     /// gas_price. We can probably derive this from Tx
-    gas_price: GasPrice,
+    tip: Word,
 }
 
 impl ContractState {
@@ -87,7 +87,7 @@ impl ContractState {
 #[derive(Debug, Clone)]
 pub struct MessageState {
     spent_by: TxId,
-    gas_price: GasPrice,
+    tip: Word,
 }
 
 impl Dependency {
@@ -289,43 +289,35 @@ impl Dependency {
                                 .get(spend_by)
                                 .expect("Tx should be always present in txpool");
                             // compare if tx has better price
-                            if txpool_tx.price() > tx.price() {
-                                return Err(Error::NotInsertedCollision(
-                                    *spend_by, *utxo_id,
-                                ))
-                            } else {
-                                if state.is_in_database() {
-                                    // this means it is loaded from db. Get tx to compare output.
-                                    if self.utxo_validation {
-                                        let coin = db
-                                            .utxo(utxo_id)
-                                            .map_err(|e| {
-                                                Error::Database(format!("{:?}", e))
-                                            })?
-                                            .ok_or(
-                                                Error::NotInsertedInputUtxoIdNotDoesNotExist(
-                                                    *utxo_id,
-                                                ),
-                                            )?;
-                                        if !coin
-                                            .matches_input(input)
-                                            .expect("The input is coin above")
-                                        {
-                                            return Err(Error::NotInsertedIoCoinMismatch)
-                                        }
+                            if state.is_in_database() {
+                                // this means it is loaded from db. Get tx to compare output.
+                                if self.utxo_validation {
+                                    let coin = db
+                                        .utxo(utxo_id)
+                                        .map_err(|e| Error::Database(format!("{:?}", e)))?
+                                        .ok_or(
+                                            Error::NotInsertedInputUtxoIdNotDoesNotExist(
+                                                *utxo_id,
+                                            ),
+                                        )?;
+                                    if !coin
+                                        .matches_input(input)
+                                        .expect("The input is coin above")
+                                    {
+                                        return Err(Error::NotInsertedIoCoinMismatch)
                                     }
-                                } else {
-                                    // tx output is in pool
-                                    let output_tx = txs.get(utxo_id.tx_id()).unwrap();
-                                    let output = &output_tx.outputs()
-                                        [utxo_id.output_index() as usize];
-                                    Self::check_if_coin_input_can_spend_output(
-                                        output, input, false,
-                                    )?;
-                                };
+                                }
+                            } else {
+                                // tx output is in pool
+                                let output_tx = txs.get(utxo_id.tx_id()).unwrap();
+                                let output =
+                                    &output_tx.outputs()[utxo_id.output_index() as usize];
+                                Self::check_if_coin_input_can_spend_output(
+                                    output, input, false,
+                                )?;
+                            };
 
-                                collided.push(*spend_by);
-                            }
+                            collided.push(*spend_by);
                         }
                         // if coin is not spend, it will be spend later down the line
                     } else {
@@ -389,33 +381,19 @@ impl Dependency {
                     }
 
                     if let Some(state) = self.messages.get(nonce) {
-                        // some other is already attempting to spend this message, compare gas price
-                        if state.gas_price >= tx.price() {
-                            return Err(Error::NotInsertedCollisionMessageId(
-                                state.spent_by,
-                                *nonce,
-                            ))
-                        } else {
-                            collided.push(state.spent_by);
-                        }
+                        collided.push(state.spent_by);
                     }
                     db_messages.insert(
                         *nonce,
                         MessageState {
                             spent_by: tx.id(),
-                            gas_price: tx.price(),
+                            tip: tx.tip(),
                         },
                     );
                 }
                 Input::Contract(Contract { contract_id, .. }) => {
                     // Does contract exist. We don't need to do any check here other then if contract_id exist or not.
                     if let Some(state) = self.contracts.get(contract_id) {
-                        // check if contract is created after this transaction.
-                        if tx.price() > state.gas_price {
-                            return Err(Error::NotInsertedContractPricedLower(
-                                *contract_id,
-                            ))
-                        }
                         // check depth.
                         max_depth = core::cmp::max(state.depth, max_depth);
                         if max_depth > self.max_depth {
@@ -439,7 +417,7 @@ impl Dependency {
                                 used_by: HashSet::new(),
                                 depth: 0,
                                 origin: None, // there is no owner if contract is in db
-                                gas_price: GasPrice::MAX,
+                                tip: tx.tip(),
                             })
                             .used_by
                             .insert(tx.id());
@@ -457,11 +435,6 @@ impl Dependency {
                     // we have a collision :(
                     if contract.is_in_database() {
                         return Err(Error::NotInsertedContractIdAlreadyTaken(*contract_id))
-                    }
-                    // check who is priced more
-                    if contract.gas_price > tx.price() {
-                        // new tx is priced less then current tx
-                        return Err(Error::NotInsertedCollisionContractId(*contract_id))
                     }
                     // if we are prices more, mark current contract origin for removal.
                     let origin = contract.origin.expect(
@@ -562,7 +535,7 @@ impl Dependency {
                             depth: max_depth,
                             used_by: HashSet::new(),
                             origin: Some(utxo_id),
-                            gas_price: tx.price(),
+                            tip: tx.tip(),
                         },
                     );
                 }
