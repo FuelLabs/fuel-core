@@ -41,6 +41,10 @@ use fuel_core_types::{
     fuel_vm::InterpreterStorage,
     tai64::Tai64,
 };
+use fuel_vm_private::{
+    fuel_storage::StorageWrite,
+    storage::ContractsStateData,
+};
 use itertools::Itertools;
 use primitive_types::U256;
 use std::borrow::Cow;
@@ -161,6 +165,27 @@ where
     }
 }
 
+impl<D, M: Mappable> StorageWrite<M> for VmStorage<D>
+where
+    D: StorageWrite<M, Error = StorageError>,
+{
+    fn write(&mut self, key: &M::Key, buf: &[u8]) -> Result<usize, Self::Error> {
+        StorageWrite::<M>::write(&mut self.database, key, buf)
+    }
+
+    fn replace(
+        &mut self,
+        key: &M::Key,
+        buf: &[u8],
+    ) -> Result<(usize, Option<Vec<u8>>), Self::Error> {
+        StorageWrite::<M>::replace(&mut self.database, key, buf)
+    }
+
+    fn take(&mut self, key: &M::Key) -> Result<Option<Vec<u8>>, Self::Error> {
+        StorageWrite::<M>::take(&mut self.database, key)
+    }
+}
+
 impl<D, K, M: Mappable> MerkleRootStorage<K, M> for VmStorage<D>
 where
     D: MerkleRootStorage<K, M, Error = StorageError>,
@@ -185,7 +210,10 @@ where
         + StorageMutate<ContractsState, Error = StorageError>
         + StorageRead<ContractsRawCode, Error = StorageError>
         + MerkleRootStorage<ContractId, ContractsAssets, Error = StorageError>
-        + VmStorageRequirements<Error = StorageError>,
+        + VmStorageRequirements<Error = StorageError>
+        + StorageRead<ContractsState>
+        + StorageWrite<ContractsState>
+        + StorageWrite<ContractsRawCode>,
 {
     type DataError = StorageError;
 
@@ -237,12 +265,12 @@ where
         )
     }
 
-    fn merkle_contract_state_range(
+    fn contract_state_range(
         &self,
         contract_id: &ContractId,
         start_key: &Bytes32,
         range: usize,
-    ) -> Result<Vec<Option<Cow<Bytes32>>>, Self::DataError> {
+    ) -> Result<Vec<Option<Cow<ContractsStateData>>>, Self::DataError> {
         use crate::StorageAsRef;
 
         let mut key = U256::from_big_endian(start_key.as_ref());
@@ -258,16 +286,22 @@ where
         Ok(results)
     }
 
-    fn merkle_contract_state_insert_range(
+    fn contract_state_insert_range<'a, I>(
         &mut self,
         contract_id: &ContractId,
         start_key: &Bytes32,
-        values: &[Bytes32],
-    ) -> Result<usize, Self::DataError> {
+        values: I,
+    ) -> Result<usize, Self::DataError>
+    where
+        I: Iterator<Item = &'a [u8]>,
+    {
         let mut current_key = U256::from_big_endian(start_key.as_ref());
+
+        // TODO: Is there a safe way to do this?
+        let (values_len, _) = values.size_hint();
         // verify key is in range
         current_key
-            .checked_add(U256::from(values.len()))
+            .checked_add(U256::from(values_len))
             .ok_or_else(|| anyhow!("range op exceeded available keyspace"))?;
 
         let mut key_bytes = Bytes32::zeroed();
@@ -292,7 +326,7 @@ where
         Ok(found_unset as usize)
     }
 
-    fn merkle_contract_state_remove_range(
+    fn contract_state_remove_range(
         &mut self,
         contract_id: &ContractId,
         start_key: &Bytes32,
@@ -376,6 +410,6 @@ where
         let slots = slots
             .map(|(key, value)| (ContractsStateKey::new(contract_id, &key), value))
             .collect_vec();
-        self.init_storage(slots.iter().map(|kv| (&kv.0, &kv.1)))
+        self.init_storage(slots.iter().map(|kv| (&kv.0, kv.1.as_ref())))
     }
 }

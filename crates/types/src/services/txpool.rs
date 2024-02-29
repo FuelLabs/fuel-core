@@ -59,22 +59,6 @@ pub enum PoolTransaction {
 }
 
 impl PoolTransaction {
-    /// Returns the gas price.
-    pub fn price(&self) -> Word {
-        match self {
-            PoolTransaction::Script(script) => script.transaction().price(),
-            PoolTransaction::Create(create) => create.transaction().price(),
-        }
-    }
-
-    /// Returns the maximum amount of gas that the transaction can consume.
-    pub fn max_gas(&self) -> Word {
-        match self {
-            PoolTransaction::Script(script) => script.metadata().fee.max_gas(),
-            PoolTransaction::Create(create) => create.metadata().fee.max_gas(),
-        }
-    }
-
     /// Used for accounting purposes when charging byte based fees.
     pub fn metered_bytes_size(&self) -> usize {
         match self {
