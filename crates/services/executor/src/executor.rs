@@ -977,12 +977,21 @@ where
             self.config.coinbase_recipient,
         );
 
+        // TODO: Use real value
+        let gas_price = 0;
+
         let mut vm = Interpreter::with_storage(
             vm_db,
-            InterpreterParams::from(&self.config.consensus_parameters),
+            InterpreterParams::new(gas_price, &self.config.consensus_parameters),
         );
+
+        let gas_costs = &self.config.consensus_parameters.gas_costs;
+        let fee_params = &self.config.consensus_parameters.fee_params;
+
+        let ready_tx = checked_tx.into_ready(gas_price, gas_costs, fee_params)?;
+
         let vm_result: StateTransition<_> = vm
-            .transact(checked_tx.clone())
+            .transact(ready_tx)
             .map_err(|error| ExecutorError::VmExecution {
                 error: InterpreterError::Storage(anyhow::anyhow!(format!("{error:?}"))),
                 transaction_id: tx_id,
