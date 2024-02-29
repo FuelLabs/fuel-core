@@ -118,7 +118,7 @@ impl Metadata {
 
     fn prepend_relative_paths(&mut self, dir: &Path) {
         if self.chain_config.is_relative() {
-            self.chain_config = dir.join(CHAIN_CONFIG_FILENAME);
+            self.chain_config = dir.join(&self.chain_config);
         }
         self.state_encoding.prepend_relative_paths(dir);
     }
