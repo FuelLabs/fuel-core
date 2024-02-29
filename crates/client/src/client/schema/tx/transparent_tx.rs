@@ -362,7 +362,6 @@ impl TryFrom<Input> for fuel_tx::Input {
                         coin.asset_id.into(),
                         coin.tx_pointer.into(),
                         coin.witness_index.try_into()?,
-                        coin.maturity.into(),
                     )
                 } else {
                     fuel_tx::Input::coin_predicate(
@@ -371,7 +370,6 @@ impl TryFrom<Input> for fuel_tx::Input {
                         coin.amount.into(),
                         coin.asset_id.into(),
                         coin.tx_pointer.into(),
-                        coin.maturity.into(),
                         coin.predicate_gas_used.into(),
                         coin.predicate.into(),
                         coin.predicate_data.into(),

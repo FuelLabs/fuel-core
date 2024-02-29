@@ -4,7 +4,6 @@ use crate::{
     not_found,
     tables::{
         ContractsAssets,
-        ContractsInfo,
         ContractsRawCode,
         ContractsState,
         FuelBlocks,
@@ -203,7 +202,7 @@ impl<D> ContractsAssetsStorage for VmStorage<D> where
 
 impl<D> InterpreterStorage for VmStorage<D>
 where
-    D: StorageMutate<ContractsInfo, Error = StorageError>
+    D: StorageWrite<ContractsState, Error = StorageError>
         + MerkleRootStorage<ContractId, ContractsState, Error = StorageError>
         + StorageMutate<ContractsAssets, Error = StorageError>
         + StorageMutate<ContractsRawCode, Error = StorageError>
@@ -211,9 +210,8 @@ where
         + StorageRead<ContractsRawCode, Error = StorageError>
         + MerkleRootStorage<ContractId, ContractsAssets, Error = StorageError>
         + VmStorageRequirements<Error = StorageError>
-        + StorageRead<ContractsState>
-        + StorageWrite<ContractsState>
-        + StorageWrite<ContractsRawCode>,
+        + StorageRead<ContractsState, Error = StorageError>
+        + StorageWrite<ContractsRawCode, Error = StorageError>,
 {
     type DataError = StorageError;
 
