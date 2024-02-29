@@ -45,9 +45,6 @@ pub struct CoinConfig {
     #[serde_as(as = "Option<HexNumber>")]
     #[serde(default)]
     pub tx_pointer_tx_idx: Option<u16>,
-    #[serde_as(as = "Option<HexNumber>")]
-    #[serde(default)]
-    pub maturity: Option<BlockHeight>,
     #[serde_as(as = "HexType")]
     pub owner: Address,
     #[serde_as(as = "HexNumber")]

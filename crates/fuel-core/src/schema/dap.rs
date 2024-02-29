@@ -9,6 +9,7 @@ use crate::{
         U64,
     },
 };
+use anyhow::anyhow;
 use async_graphql::{
     Context,
     Object,
@@ -39,6 +40,7 @@ use fuel_core_types::{
             IntoChecked,
         },
         consts,
+        interpreter::InterpreterParams,
         state::DebugEval,
         Interpreter,
         InterpreterError,
@@ -112,8 +114,21 @@ impl ConcreteStorage {
                 self.tx.insert(id.clone(), txs.to_owned());
             });
 
-        let mut vm = Interpreter::with_storage(vm_database, (&self.params).into());
-        vm.transact(checked_tx).map_err(|e| anyhow::anyhow!(e))?;
+        // TODO: Pipe this through
+        let gas_price = 0;
+
+        let gas_costs = self.params.gas_costs();
+        let fee_params = self.params.fee_params();
+
+        let ready_tx = checked_tx
+            .into_ready(gas_price, gas_costs, fee_params)
+            .map_err(|e| {
+                anyhow!("Failed to apply dynamic values to checked tx: {:?}", e)
+            })?;
+
+        let interpreter_params = InterpreterParams::new(gas_price, &self.params);
+        let mut vm = Interpreter::with_storage(vm_database, interpreter_params);
+        vm.transact(ready_tx).map_err(|e| anyhow::anyhow!(e))?;
         self.vm.insert(id.clone(), vm);
         self.db.insert(id.clone(), storage);
 
@@ -143,8 +158,21 @@ impl ConcreteStorage {
             .into_checked_basic(vm_database.block_height()?, &self.params)
             .map_err(|e| anyhow::anyhow!("{:?}", e))?;
 
-        let mut vm = Interpreter::with_storage(vm_database, (&self.params).into());
-        vm.transact(checked_tx).map_err(|e| anyhow::anyhow!(e))?;
+        // TODO: Pipe this through
+        let gas_price = 0;
+
+        let gas_costs = self.params.gas_costs();
+        let fee_params = self.params.fee_params();
+
+        let ready_tx = checked_tx
+            .into_ready(gas_price, gas_costs, fee_params)
+            .map_err(|e| {
+                anyhow!("Failed to apply dynamic values to checked tx: {:?}", e)
+            })?;
+
+        let interpreter_params = InterpreterParams::new(gas_price, &self.params);
+        let mut vm = Interpreter::with_storage(vm_database, interpreter_params);
+        vm.transact(ready_tx).map_err(|e| anyhow::anyhow!(e))?;
         self.vm.insert(id.clone(), vm).ok_or_else(|| {
             io::Error::new(io::ErrorKind::NotFound, "The VM instance was not found")
         })?;
@@ -185,7 +213,6 @@ impl ConcreteStorage {
         tx.add_unsigned_coin_input(
             Default::default(),
             &Default::default(),
-            Default::default(),
             Default::default(),
             Default::default(),
             Default::default(),
@@ -391,8 +418,10 @@ impl DapMutation {
 
         let db = locked.db.get(&id).ok_or("Invalid debugging session ID")?;
 
+        let params = locked.params.clone();
+
         let checked_tx = tx
-            .into_checked_basic(db.latest_height()?, &locked.params)
+            .into_checked_basic(db.latest_height()?, &params)
             .map_err(|err| anyhow::anyhow!("{:?}", err))?
             .into();
 
@@ -401,9 +430,20 @@ impl DapMutation {
             .get_mut(&id)
             .ok_or_else(|| async_graphql::Error::new("VM not found"))?;
 
+        // TODO: Pipe this through
+        let gas_price = 0;
+
+        let gas_costs = params.gas_costs();
+        let fee_params = params.fee_params();
+
         match checked_tx {
             CheckedTransaction::Script(script) => {
-                let state_ref = vm.transact(script).map_err(|err| {
+                let ready_tx = script
+                    .into_ready(gas_price, gas_costs, fee_params)
+                    .map_err(|e| {
+                        anyhow!("Failed to apply dynamic values to checked tx: {:?}", e)
+                    })?;
+                let state_ref = vm.transact(ready_tx).map_err(|err| {
                     async_graphql::Error::new(format!("Transaction failed: {err:?}"))
                 })?;
 
@@ -429,7 +469,12 @@ impl DapMutation {
                 })
             }
             CheckedTransaction::Create(create) => {
-                vm.deploy(create).map_err(|err| {
+                let ready_tx = create
+                    .into_ready(gas_price, gas_costs, fee_params)
+                    .map_err(|e| {
+                        anyhow!("Failed to apply dynamic values to checked tx: {:?}", e)
+                    })?;
+                vm.deploy(ready_tx).map_err(|err| {
                     async_graphql::Error::new(format!(
                         "Transaction deploy failed: {err:?}"
                     ))

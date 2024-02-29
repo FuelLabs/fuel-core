@@ -28,7 +28,7 @@ impl Database {
         #[allow(clippy::map_identity)]
         <_ as StorageBatchMutate<ContractsState>>::init_storage(
             &mut self.data,
-            &mut slots.iter().map(|(key, value)| (key, value)),
+            &mut slots.iter().map(|(key, value)| (key, value.as_slice())),
         )
     }
 }

@@ -356,7 +356,6 @@ fn create_coin_from_config(coin: &CoinConfig, generated_output_index: &mut u64) 
         owner: coin.owner,
         amount: coin.amount,
         asset_id: coin.asset_id,
-        maturity: coin.maturity.unwrap_or_default(),
         tx_pointer: TxPointer::new(
             coin.tx_pointer_block_height.unwrap_or_default(),
             coin.tx_pointer_tx_idx.unwrap_or_default(),

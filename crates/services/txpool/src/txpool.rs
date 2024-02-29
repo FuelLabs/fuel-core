@@ -283,12 +283,18 @@ where
         };
         let tx: CheckedTransaction = tx.into();
 
-        let tx = Arc::new(match tx {
-            CheckedTransaction::Script(script) => PoolTransactionVariant::Script(script),
-            CheckedTransaction::Create(create) => PoolTransactionVariant::Create(create),
-            CheckedTransaction::Mint(_) => return Err(Error::MintIsDisallowed),
-        })
-        .into_tx(max_gas);
+        let tx = Arc::new(
+            match tx {
+                CheckedTransaction::Script(script) => {
+                    PoolTransactionVariant::Script(script)
+                }
+                CheckedTransaction::Create(create) => {
+                    PoolTransactionVariant::Create(create)
+                }
+                CheckedTransaction::Mint(_) => return Err(Error::MintIsDisallowed),
+            }
+            .into_tx(max_gas),
+        );
 
         if !tx.is_computed() {
             return Err(Error::NoMetadata)
@@ -317,10 +323,6 @@ where
             }
         }
         if self.config.metrics {
-            txpool_metrics()
-                .gas_price_histogram
-                .observe(tx.price() as f64);
-
             txpool_metrics()
                 .tx_size_histogram
                 .observe(tx.metered_bytes_size() as f64);

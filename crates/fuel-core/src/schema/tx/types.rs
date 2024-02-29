@@ -65,7 +65,6 @@ use fuel_core_types::{
             Witnesses,
         },
         policies::PolicyType,
-        Chargeable,
         Executable,
         TxId,
     },
@@ -386,14 +385,6 @@ impl Transaction {
         match &self.0 {
             fuel_tx::Transaction::Script(script) => Some((*script.policies()).into()),
             fuel_tx::Transaction::Create(create) => Some((*create.policies()).into()),
-            fuel_tx::Transaction::Mint(_) => None,
-        }
-    }
-
-    async fn gas_price(&self) -> Option<U64> {
-        match &self.0 {
-            fuel_tx::Transaction::Script(script) => Some(script.price().into()),
-            fuel_tx::Transaction::Create(create) => Some(create.price().into()),
             fuel_tx::Transaction::Mint(_) => None,
         }
     }

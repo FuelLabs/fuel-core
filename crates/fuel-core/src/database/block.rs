@@ -20,6 +20,8 @@ use fuel_core_storage::{
             FuelBlockMerkleData,
             FuelBlockMerkleMetadata,
         },
+        ContractsRawCode,
+        ContractsState,
         FuelBlocks,
         Transactions,
     },
@@ -31,6 +33,7 @@ use fuel_core_storage::{
     StorageAsRef,
     StorageInspect,
     StorageMutate,
+    StorageWrite,
 };
 use fuel_core_types::{
     blockchain::{
@@ -95,6 +98,56 @@ impl StorageMutate<FuelBlocks> for Database {
         key: &<FuelBlocks as Mappable>::Key,
     ) -> Result<Option<<FuelBlocks as Mappable>::OwnedValue>, Self::Error> {
         self.data.storage_as_mut::<FuelBlocks>().remove(key)
+    }
+}
+
+impl StorageWrite<ContractsRawCode> for Database {
+    fn write(
+        &mut self,
+        key: &<ContractsRawCode as Mappable>::Key,
+        buf: &[u8],
+    ) -> Result<usize, Self::Error> {
+        todo!()
+    }
+
+    fn replace(
+        &mut self,
+        key: &<ContractsRawCode as Mappable>::Key,
+        buf: &[u8],
+    ) -> Result<(usize, Option<Vec<u8>>), Self::Error> {
+        todo!()
+    }
+
+    fn take(
+        &mut self,
+        key: &<ContractsRawCode as Mappable>::Key,
+    ) -> Result<Option<Vec<u8>>, Self::Error> {
+        todo!()
+    }
+}
+
+impl StorageWrite<ContractsState> for Database {
+    fn write(
+        &mut self,
+        key: &<ContractsState as Mappable>::Key,
+        buf: &[u8],
+    ) -> Result<usize, Self::Error> {
+        todo!()
+    }
+
+    fn replace(
+        &mut self,
+        key: &<ContractsState as Mappable>::Key,
+        buf: &[u8],
+    ) -> Result<(usize, Option<Vec<u8>>), Self::Error> {
+        todo!()
+    }
+
+    fn take(
+        &mut self,
+        key: &<ContractsState as Mappable>::Key,
+    ) -> Result<Option<Vec<u8>>, Self::Error> {
+        todo!()
     }
 }
 
