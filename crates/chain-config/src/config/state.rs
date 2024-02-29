@@ -97,8 +97,7 @@ impl StateConfig {
     pub fn from_snapshot_metadata(
         snapshot_metadata: SnapshotMetadata,
     ) -> anyhow::Result<Self> {
-        let reader =
-            crate::StateReader::for_snapshot(snapshot_metadata, crate::MAX_GROUP_SIZE)?;
+        let reader = crate::StateReader::for_snapshot(snapshot_metadata)?;
         Self::from_reader(&reader)
     }
 

@@ -4,7 +4,6 @@ use fuel_core_chain_config::{
     ChainConfig,
     StateConfig,
     StateReader,
-    MAX_GROUP_SIZE,
 };
 use fuel_core_types::{
     blockchain::primitives::SecretKeyWrapper,
@@ -79,7 +78,7 @@ impl Config {
         let chain_config = ChainConfig::local_testnet();
         let state_config = StateConfig::local_testnet();
         let block_importer = fuel_core_importer::Config::new(&chain_config);
-        let state_reader = StateReader::in_memory(state_config.clone(), MAX_GROUP_SIZE);
+        let state_reader = StateReader::in_memory(state_config.clone());
 
         let utxo_validation = false;
         let min_gas_price = 0;

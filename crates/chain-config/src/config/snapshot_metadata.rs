@@ -118,7 +118,7 @@ impl Metadata {
 
     fn prepend_relative_paths(&mut self, dir: &Path) {
         if self.chain_config.is_relative() {
-            self.chain_config = dir.join(&self.chain_config);
+            self.chain_config = dir.join(CHAIN_CONFIG_FILENAME);
         }
         self.state_encoding.prepend_relative_paths(dir);
     }
@@ -204,7 +204,7 @@ mod tests {
             assert_eq!(
                 snapshot.state_encoding(),
                 &StateEncoding::Json {
-                    filepath: temp_dir.path().join("state_config.json")
+                    filepath: temp_dir.path().join("state_config.json"),
                 }
             );
         }
@@ -223,7 +223,7 @@ mod tests {
             assert_eq!(
                 metadata.state_encoding,
                 StateEncoding::Json {
-                    filepath: PathBuf::from("state_config.json")
+                    filepath: PathBuf::from("state_config.json"),
                 }
             );
         }
@@ -245,7 +245,7 @@ mod tests {
             assert_eq!(
                 snapshot.state_encoding(),
                 &StateEncoding::Json {
-                    filepath: temp_dir.path().join("state_config.json")
+                    filepath: temp_dir.path().join("state_config.json"),
                 }
             );
         }
@@ -277,7 +277,7 @@ mod tests {
             assert_eq!(
                 snapshot.state_encoding(),
                 &StateEncoding::Json {
-                    filepath: snapshot_path.join("../other/state_config.json")
+                    filepath: snapshot_path.join("../other/state_config.json"),
                 }
             );
         }

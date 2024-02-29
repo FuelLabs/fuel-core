@@ -38,7 +38,7 @@ async fn can_submit_genesis_message() {
         ..Default::default()
     };
     let node_config = Config {
-        state_reader: StateReader::in_memory(state, MAX_GROUP_SIZE),
+        state_reader: StateReader::in_memory(state),
         utxo_validation: true,
         ..Config::local_node()
     };

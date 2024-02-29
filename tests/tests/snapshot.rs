@@ -7,7 +7,6 @@ use fuel_core::{
         MessageConfig,
         StateConfig,
         StateReader,
-        MAX_GROUP_SIZE,
     },
     database::Database,
     service::{
@@ -99,7 +98,7 @@ async fn loads_snapshot() {
         block_height: BlockHeight::from(10),
     };
     let config = Config {
-        state_reader: StateReader::in_memory(starting_state.clone(), MAX_GROUP_SIZE),
+        state_reader: StateReader::in_memory(starting_state.clone()),
         ..Config::local_node()
     };
 

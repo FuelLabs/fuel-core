@@ -6,7 +6,6 @@ use fuel_core::{
         ContractConfig,
         StateConfig,
         StateReader,
-        MAX_GROUP_SIZE,
     },
     service::{
         Config,
@@ -213,7 +212,7 @@ impl TestSetupBuilder {
                 ..fuel_core_txpool::Config::default()
             },
             chain_config: chain_conf,
-            state_reader: StateReader::in_memory(state, MAX_GROUP_SIZE),
+            state_reader: StateReader::in_memory(state),
             block_production: self.trigger,
             ..Config::local_node()
         };

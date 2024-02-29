@@ -5,7 +5,6 @@ use fuel_core::{
         MessageConfig,
         StateConfig,
         StateReader,
-        MAX_GROUP_SIZE,
     },
     coins_query::CoinsQueryError,
     service::{
@@ -58,7 +57,7 @@ mod coin {
             ..Default::default()
         };
         let config = Config {
-            state_reader: StateReader::in_memory(state, MAX_GROUP_SIZE),
+            state_reader: StateReader::in_memory(state),
             ..Config::local_node()
         };
 
@@ -313,7 +312,7 @@ mod message_coin {
             ..Default::default()
         };
         let config = Config {
-            state_reader: StateReader::in_memory(state, MAX_GROUP_SIZE),
+            state_reader: StateReader::in_memory(state),
             ..Config::local_node()
         };
 
@@ -529,7 +528,7 @@ mod all_coins {
             ..Default::default()
         };
         let config = Config {
-            state_reader: StateReader::in_memory(state, MAX_GROUP_SIZE),
+            state_reader: StateReader::in_memory(state),
             ..Config::local_node()
         };
 
@@ -704,7 +703,7 @@ mod all_coins {
 async fn empty_setup() -> TestContext {
     // setup config
     let config = Config {
-        state_reader: StateReader::in_memory(StateConfig::default(), MAX_GROUP_SIZE),
+        state_reader: StateReader::in_memory(StateConfig::default()),
         ..Config::local_node()
     };
 

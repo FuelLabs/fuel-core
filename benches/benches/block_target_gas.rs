@@ -32,7 +32,6 @@ use fuel_core_chain_config::{
     ContractConfig,
     StateConfig,
     StateReader,
-    MAX_GROUP_SIZE,
 };
 use fuel_core_services::Service;
 use fuel_core_storage::{
@@ -276,7 +275,7 @@ fn service_with_many_contracts(
         contracts: contract_configs,
         ..Default::default()
     };
-    config.state_reader = StateReader::in_memory(state_config, MAX_GROUP_SIZE);
+    config.state_reader = StateReader::in_memory(state_config);
 
     config
         .chain_config

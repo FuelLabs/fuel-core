@@ -33,12 +33,48 @@ use fuel_core_types::fuel_types::BlockHeight;
 use tokio::sync::Notify;
 use tokio_util::sync::CancellationToken;
 
+struct FinishedWorkerSignals {
+    coins: Arc<Notify>,
+    messages: Arc<Notify>,
+    contracts: Arc<Notify>,
+    contract_state: Arc<Notify>,
+    contract_balance: Arc<Notify>,
+}
+
+impl FinishedWorkerSignals {
+    fn new() -> Self {
+        Self {
+            coins: Arc::new(Notify::new()),
+            messages: Arc::new(Notify::new()),
+            contracts: Arc::new(Notify::new()),
+            contract_state: Arc::new(Notify::new()),
+            contract_balance: Arc::new(Notify::new()),
+        }
+    }
+}
+
+impl<'a> IntoIterator for &'a FinishedWorkerSignals {
+    type Item = &'a Arc<Notify>;
+    type IntoIter = std::vec::IntoIter<&'a Arc<Notify>>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        vec![
+            &self.coins,
+            &self.messages,
+            &self.contracts,
+            &self.contract_state,
+            &self.contract_balance,
+        ]
+        .into_iter()
+    }
+}
+
 pub struct GenesisWorkers {
     db: Database,
     cancel_token: CancellationToken,
     block_height: BlockHeight,
     state_reader: StateReader,
-    finished_signals: [Arc<Notify>; 5],
+    finished_signals: FinishedWorkerSignals,
 }
 
 impl GenesisWorkers {
@@ -49,13 +85,7 @@ impl GenesisWorkers {
             cancel_token: CancellationToken::new(),
             block_height,
             state_reader,
-            finished_signals: [
-                Arc::new(Notify::new()),
-                Arc::new(Notify::new()),
-                Arc::new(Notify::new()),
-                Arc::new(Notify::new()),
-                Arc::new(Notify::new()),
-            ],
+            finished_signals: FinishedWorkerSignals::new(),
         }
     }
 
@@ -82,31 +112,31 @@ impl GenesisWorkers {
 
     async fn spawn_coins_worker(&self) -> anyhow::Result<()> {
         let coins = self.state_reader.coins()?;
-        let finished_signal = Arc::clone(&self.finished_signals[0]);
+        let finished_signal = Arc::clone(&self.finished_signals.coins);
         self.spawn_worker(coins, finished_signal).await
     }
 
     async fn spawn_messages_worker(&self) -> anyhow::Result<()> {
         let messages = self.state_reader.messages()?;
-        let finished_signal = Arc::clone(&self.finished_signals[1]);
+        let finished_signal = Arc::clone(&self.finished_signals.messages);
         self.spawn_worker(messages, finished_signal).await
     }
 
     async fn spawn_contracts_worker(&self) -> anyhow::Result<()> {
         let contracts = self.state_reader.contracts()?;
-        let finished_signal = Arc::clone(&self.finished_signals[2]);
+        let finished_signal = Arc::clone(&self.finished_signals.contracts);
         self.spawn_worker(contracts, finished_signal).await
     }
 
     async fn spawn_contract_state_worker(&self) -> anyhow::Result<()> {
         let contract_state = self.state_reader.contract_state()?;
-        let finished_signal = Arc::clone(&self.finished_signals[3]);
+        let finished_signal = Arc::clone(&self.finished_signals.contract_state);
         self.spawn_worker(contract_state, finished_signal).await
     }
 
     async fn spawn_contract_balance_worker(&self) -> anyhow::Result<()> {
         let contract_balance = self.state_reader.contract_balance()?;
-        let finished_signal = Arc::clone(&self.finished_signals[4]);
+        let finished_signal = Arc::clone(&self.finished_signals.contract_balance);
         self.spawn_worker(contract_balance, finished_signal).await
     }
 

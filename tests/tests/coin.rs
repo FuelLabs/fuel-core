@@ -3,7 +3,6 @@ use fuel_core::{
         CoinConfig,
         StateConfig,
         StateReader,
-        MAX_GROUP_SIZE,
     },
     database::Database,
     service::{
@@ -36,7 +35,7 @@ async fn setup_service(configs: Vec<CoinConfig>) -> FuelService {
     };
 
     let config = Config {
-        state_reader: StateReader::in_memory(state, MAX_GROUP_SIZE),
+        state_reader: StateReader::in_memory(state),
         ..Config::local_node()
     };
 

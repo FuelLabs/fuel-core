@@ -41,7 +41,6 @@ use fuel_core::{
 use fuel_core_chain_config::{
     SnapshotMetadata,
     StateReader,
-    MAX_GROUP_SIZE,
 };
 use pyroscope::{
     pyroscope::PyroscopeAgentRunning,
@@ -258,12 +257,12 @@ impl Command {
         let (chain_conf, state_reader) = match snapshot.as_ref() {
             None => (
                 ChainConfig::local_testnet(),
-                StateReader::in_memory(StateConfig::local_testnet(), MAX_GROUP_SIZE),
+                StateReader::in_memory(StateConfig::local_testnet()),
             ),
             Some(path) => {
                 let metadata = SnapshotMetadata::read(path)?;
                 let chain_conf = ChainConfig::from_snapshot_metadata(&metadata)?;
-                let state_reader = StateReader::for_snapshot(metadata, MAX_GROUP_SIZE)?;
+                let state_reader = StateReader::for_snapshot(metadata)?;
                 (chain_conf, state_reader)
             }
         };

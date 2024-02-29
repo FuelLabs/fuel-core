@@ -10,7 +10,6 @@ use fuel_core_chain_config::{
     SnapshotMetadata,
     StateConfig,
     StateReader,
-    MAX_GROUP_SIZE,
 };
 use fuel_core_e2e_client::config::SuiteConfig;
 use std::{
@@ -118,7 +117,7 @@ fn dev_config() -> Config {
     );
 
     config.chain_config = chain_config;
-    config.state_reader = StateReader::in_memory(state_config, MAX_GROUP_SIZE);
+    config.state_reader = StateReader::in_memory(state_config);
 
     config.block_producer.coinbase_recipient = Some(
         ContractId::from_str(

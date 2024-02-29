@@ -13,6 +13,7 @@ use crate::{
     Group,
     MessageConfig,
     StateConfig,
+    MAX_GROUP_SIZE,
 };
 
 use super::GroupResult;
@@ -80,12 +81,17 @@ impl StateReader {
 
         let state = serde_json::from_reader(&mut file)?;
 
-        Ok(Self::in_memory(state, group_size))
+        Ok(Self {
+            data_source: DataSource::InMemory { state, group_size },
+        })
     }
 
-    pub fn in_memory(state: StateConfig, group_size: usize) -> Self {
+    pub fn in_memory(state: StateConfig) -> Self {
         Self {
-            data_source: DataSource::InMemory { state, group_size },
+            data_source: DataSource::InMemory {
+                state,
+                group_size: MAX_GROUP_SIZE,
+            },
         }
     }
 
@@ -117,12 +123,11 @@ impl StateReader {
     #[cfg(feature = "std")]
     pub fn for_snapshot(
         snapshot_metadata: crate::config::SnapshotMetadata,
-        default_group_size: usize,
     ) -> anyhow::Result<Self> {
         use crate::StateEncoding;
 
         match snapshot_metadata.take_state_encoding() {
-            StateEncoding::Json { filepath } => Self::json(filepath, default_group_size),
+            StateEncoding::Json { filepath } => Self::json(filepath, MAX_GROUP_SIZE),
             #[cfg(feature = "parquet")]
             StateEncoding::Parquet { filepaths, .. } => Self::parquet(filepaths),
         }

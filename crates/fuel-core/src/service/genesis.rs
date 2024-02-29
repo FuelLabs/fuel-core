@@ -331,7 +331,6 @@ mod tests {
         MessageConfig,
         StateConfig,
         StateReader,
-        MAX_GROUP_SIZE,
     };
     use fuel_core_services::RunnableService;
     use fuel_core_storage::{
@@ -368,13 +367,10 @@ mod tests {
     #[tokio::test]
     async fn config_initializes_block_height() {
         let block_height = BlockHeight::from(99u32);
-        let state_reader = StateReader::in_memory(
-            StateConfig {
-                block_height,
-                ..Default::default()
-            },
-            MAX_GROUP_SIZE,
-        );
+        let state_reader = StateReader::in_memory(StateConfig {
+            block_height,
+            ..Default::default()
+        });
         let service_config = Config {
             state_reader,
             ..Config::local_node()
@@ -442,7 +438,7 @@ mod tests {
             contract_balance,
             block_height: BlockHeight::from(0u32),
         };
-        let state_reader = StateReader::in_memory(state, MAX_GROUP_SIZE);
+        let state_reader = StateReader::in_memory(state);
 
         let service_config = Config {
             state_reader,
@@ -523,7 +519,7 @@ mod tests {
             block_height: starting_height,
             ..Default::default()
         };
-        let state_reader = StateReader::in_memory(state, MAX_GROUP_SIZE);
+        let state_reader = StateReader::in_memory(state);
 
         let service_config = Config {
             state_reader,
@@ -598,7 +594,7 @@ mod tests {
             contract_state: vec![contract_state],
             ..Default::default()
         };
-        let state_reader = StateReader::in_memory(state, MAX_GROUP_SIZE);
+        let state_reader = StateReader::in_memory(state);
 
         let service_config = Config {
             chain_config: ChainConfig::local_testnet(),
@@ -639,7 +635,7 @@ mod tests {
             messages: vec![msg.clone()],
             ..Default::default()
         };
-        let state_reader = StateReader::in_memory(state, MAX_GROUP_SIZE);
+        let state_reader = StateReader::in_memory(state);
 
         let config = Config {
             state_reader,
@@ -690,7 +686,7 @@ mod tests {
             contract_balance: vec![contract_balance],
             ..Default::default()
         };
-        let state_reader = StateReader::in_memory(state, MAX_GROUP_SIZE);
+        let state_reader = StateReader::in_memory(state);
 
         let service_config = Config {
             chain_config: ChainConfig::local_testnet(),
@@ -726,7 +722,7 @@ mod tests {
             block_height: BlockHeight::from(10u32),
             ..Default::default()
         };
-        let state_reader = StateReader::in_memory(state, MAX_GROUP_SIZE);
+        let state_reader = StateReader::in_memory(state);
 
         let service_config = Config {
             state_reader,
@@ -769,7 +765,7 @@ mod tests {
             block_height: BlockHeight::from(10u32),
             ..Default::default()
         };
-        let state_reader = StateReader::in_memory(state, MAX_GROUP_SIZE);
+        let state_reader = StateReader::in_memory(state);
 
         let service_config = Config {
             state_reader,
@@ -831,7 +827,7 @@ mod tests {
             contracts: vec![config.clone()],
             ..Default::default()
         };
-        let state_reader = StateReader::in_memory(state, MAX_GROUP_SIZE);
+        let state_reader = StateReader::in_memory(state);
 
         let service_config = Config {
             state_reader,
@@ -860,7 +856,7 @@ mod tests {
             contracts: contracts.clone(),
             ..Default::default()
         };
-        let state_reader = StateReader::in_memory(state, MAX_GROUP_SIZE);
+        let state_reader = StateReader::in_memory(state);
 
         let service_config = Config {
             state_reader,
@@ -902,7 +898,7 @@ mod tests {
             coins: coins.clone(),
             ..Default::default()
         };
-        let state_reader = StateReader::in_memory(state, MAX_GROUP_SIZE);
+        let state_reader = StateReader::in_memory(state);
 
         let service_config = Config {
             state_reader,

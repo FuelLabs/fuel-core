@@ -124,10 +124,7 @@ fn load_contract(
             )
             .into());
         }
-        let mut contract_config = contracts
-            .into_iter()
-            .next()
-            .expect("checked there is one element inside");
+        let mut contract_config = contracts[0].clone();
 
         contract_config.update_contract_id(&state);
 

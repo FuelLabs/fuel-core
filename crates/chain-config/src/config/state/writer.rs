@@ -158,7 +158,7 @@ impl From<ZstdCompressionLevel> for ::parquet::basic::Compression {
 impl StateWriter {
     pub fn for_snapshot(snapshot_metadata: &SnapshotMetadata) -> anyhow::Result<Self> {
         let encoder = match snapshot_metadata.state_encoding() {
-            crate::StateEncoding::Json { filepath } => Self::json(filepath),
+            crate::StateEncoding::Json { filepath, .. } => Self::json(filepath),
             #[cfg(feature = "parquet")]
             crate::StateEncoding::Parquet {
                 filepaths,
