@@ -213,15 +213,20 @@ impl<ViewProvider> TxPool<ViewProvider> {
     pub fn remove(
         &mut self,
         tx_status_sender: &TxStatusChange,
-        tx_ids: &[TxId],
+        tx_ids: Vec<(TxId, String)>,
     ) -> Vec<ArcPoolTx> {
         let mut removed = Vec::new();
-        for tx_id in tx_ids {
-            let rem = self.remove_by_tx_id(tx_id);
-            tx_status_sender.send_squeezed_out(*tx_id, Error::Removed);
+        for (tx_id, reason) in tx_ids.into_iter() {
+            let rem = self.remove_by_tx_id(&tx_id);
+            tx_status_sender.send_squeezed_out(tx_id, Error::SqueezedOut(reason.clone()));
             for dependent_tx in rem.iter() {
-                if tx_id != &dependent_tx.id() {
-                    tx_status_sender.send_squeezed_out(dependent_tx.id(), Error::Removed);
+                if tx_id != dependent_tx.id() {
+                    tx_status_sender.send_squeezed_out(
+                        dependent_tx.id(),
+                        Error::SqueezedOut(
+                            format!("Parent transaction with {tx_id}, was removed because of the {reason}")
+                        )
+                    );
                 }
             }
             removed.extend(rem.into_iter());
@@ -259,8 +264,8 @@ where
     ViewProvider: AtomicView<View = View>,
     View: TxPoolDb,
 {
-    #[cfg(any(test, feature = "test-helpers"))]
-    pub fn insert_single(
+    #[cfg(test)]
+    fn insert_single(
         &mut self,
         tx: Checked<Transaction>,
     ) -> Result<InsertionResult, Error> {

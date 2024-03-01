@@ -243,9 +243,16 @@ async fn simple_insert_removal_subscription() {
     }
 
     // remove them
-    service
-        .shared
-        .remove(vec![tx1.cached_id().unwrap(), tx2.cached_id().unwrap()]);
+    service.shared.remove(vec![
+        (
+            tx1.cached_id().unwrap(),
+            "Because of the test purposes".to_string(),
+        ),
+        (
+            tx2.cached_id().unwrap(),
+            "Because of the test purposes".to_string(),
+        ),
+    ]);
 
     let update = tx1_subscribe_updates.next().await.unwrap();
     assert_eq!(

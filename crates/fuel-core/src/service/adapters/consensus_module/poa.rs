@@ -33,7 +33,10 @@ use fuel_core_types::{
             BlockImportInfo,
             UncommittedResult as UncommittedImporterResult,
         },
-        executor::UncommittedResult,
+        executor::{
+            Error as ExecutorError,
+            UncommittedResult,
+        },
         txpool::ArcPoolTx,
     },
     tai64::Tai64,
@@ -82,8 +85,12 @@ impl TransactionPool for TxPoolAdapter {
         self.service.total_consumable_gas()
     }
 
-    fn remove_txs(&self, ids: Vec<TxId>) -> Vec<ArcPoolTx> {
-        self.service.remove_txs(ids)
+    fn remove_txs(&self, ids: Vec<(TxId, ExecutorError)>) -> Vec<ArcPoolTx> {
+        self.service.remove_txs(
+            ids.into_iter()
+                .map(|(tx_id, err)| (tx_id, err.to_string()))
+                .collect(),
+        )
     }
 
     fn transaction_status_events(&self) -> BoxStream<TxId> {

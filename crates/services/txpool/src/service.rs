@@ -303,8 +303,8 @@ impl<P2P, ViewProvider> SharedState<P2P, ViewProvider> {
         self.txpool.lock().consumable_gas()
     }
 
-    pub fn remove_txs(&self, ids: Vec<TxId>) -> Vec<ArcPoolTx> {
-        self.txpool.lock().remove(&self.tx_status_sender, &ids)
+    pub fn remove_txs(&self, ids: Vec<(TxId, String)>) -> Vec<ArcPoolTx> {
+        self.txpool.lock().remove(&self.tx_status_sender, ids)
     }
 
     pub fn find(&self, ids: Vec<TxId>) -> Vec<Option<TxInfo>> {
@@ -330,8 +330,8 @@ impl<P2P, ViewProvider> SharedState<P2P, ViewProvider> {
         sorted_txs
     }
 
-    pub fn remove(&self, ids: Vec<TxId>) -> Vec<ArcPoolTx> {
-        self.txpool.lock().remove(&self.tx_status_sender, &ids)
+    pub fn remove(&self, ids: Vec<(TxId, String)>) -> Vec<ArcPoolTx> {
+        self.txpool.lock().remove(&self.tx_status_sender, ids)
     }
 
     pub fn new_tx_notification_subscribe(&self) -> broadcast::Receiver<TxId> {

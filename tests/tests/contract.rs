@@ -24,16 +24,12 @@ use fuel_core_client::client::{
     types::TransactionStatus,
     FuelClient,
 };
-use rand::{
-    Rng,
-    SeedableRng,
-};
+use rand::SeedableRng;
 // use fuel_core_storage::structured_storage::{
 //     test::InMemoryStorage,
 //     StructuredStorage,
 // };
 use fuel_core::database::database_description::on_chain::OnChain;
-use fuel_core_txpool::TxPool;
 use fuel_core_types::{
     fuel_asm::*,
     fuel_tx::*,
@@ -44,6 +40,11 @@ use fuel_core_types::{
     },
 };
 
+use fuel_core::chain_config::{
+    ChainConfig,
+    CoinConfig,
+    StateConfig,
+};
 use rstest::rstest;
 
 const SEED: u64 = 2322;
@@ -51,13 +52,45 @@ const SEED: u64 = 2322;
 #[tokio::test]
 async fn test_contract_info() {
     let mut rng = rand::rngs::StdRng::seed_from_u64(0xBAADF00D);
-
-    let database = Database::<OnChain>::in_memory();
-    let mut config = fuel_core_txpool::Config::default();
-    config.utxo_validation = false;
-    let mut tx_pool = TxPool::new(config, database.clone());
-
     let secret = SecretKey::random(&mut rng);
+    let amount = 10000;
+    let owner = Input::owner(&secret.public_key());
+    let utxo_id_1 = UtxoId::new([1; 32].into(), 0);
+    let utxo_id_2 = UtxoId::new([1; 32].into(), 1);
+
+    let config = Config {
+        debug: true,
+        utxo_validation: true,
+        chain_conf: ChainConfig {
+            initial_state: Some(StateConfig {
+                coins: Some(vec![
+                    CoinConfig {
+                        tx_id: Some(*utxo_id_1.tx_id()),
+                        output_index: Some(utxo_id_1.output_index()),
+                        owner,
+                        amount,
+                        asset_id: AssetId::BASE,
+                        ..Default::default()
+                    },
+                    CoinConfig {
+                        tx_id: Some(*utxo_id_2.tx_id()),
+                        output_index: Some(utxo_id_2.output_index()),
+                        owner,
+                        amount,
+                        asset_id: AssetId::BASE,
+                        ..Default::default()
+                    },
+                ]),
+                ..Default::default()
+            }),
+            ..ChainConfig::local_testnet()
+        },
+        ..Config::local_node()
+    };
+    let node = FuelService::from_database(Database::<OnChain>::in_memory(), config)
+        .await
+        .unwrap();
+    let client = FuelClient::from(node.bound_address);
 
     let contract_input = {
         let bytecode: Witness = vec![].into();
@@ -72,8 +105,8 @@ async fn test_contract_info() {
         let create_tx = TransactionBuilder::create(bytecode, salt, vec![])
             .add_unsigned_coin_input(
                 secret,
-                rng.gen(),
-                100,
+                utxo_id_1,
+                amount,
                 Default::default(),
                 Default::default(),
                 Default::default(),
@@ -91,36 +124,26 @@ async fn test_contract_info() {
             contract_id,
         );
 
-        tx_pool
-            .insert_single(create_tx)
+        client
+            .submit_and_await_commit(create_tx.transaction())
+            .await
             .expect("cannot insert tx into transaction pool");
 
         contract_input
     };
 
-    let bytecode: Witness = vec![].into();
-    let salt = Salt::zeroed();
-    let balance_root = Contract::default_state_root();
-    let state_root = Contract::default_state_root();
-
-    let contract_tx = TransactionBuilder::create(bytecode, salt, vec![])
+    let contract_tx = TransactionBuilder::script(vec![], vec![])
+        .add_input(contract_input)
         .add_unsigned_coin_input(
             secret,
-            rng.gen(),
-            100,
+            utxo_id_2,
+            amount,
             Default::default(),
             Default::default(),
             Default::default(),
         )
-        .add_input(contract_input)
-        .add_output(Output::contract(1, balance_root, state_root))
+        .add_output(Output::contract(0, Default::default(), Default::default()))
         .finalize_as_transaction();
-
-    let mut config = Config::local_node();
-    config.debug = true;
-    config.utxo_validation = true;
-    let node = FuelService::from_database(database, config).await.unwrap();
-    let client = FuelClient::from(node.bound_address);
 
     let tx_status = client
         .submit_and_await_commit(&contract_tx.into())
