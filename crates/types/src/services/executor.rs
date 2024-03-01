@@ -314,6 +314,8 @@ pub enum Error {
     CoinbaseCannotIncreaseBalance(anyhow::Error),
     #[display(fmt = "Coinbase amount mismatches with expected.")]
     CoinbaseAmountMismatch,
+    #[display(fmt = "Coinbase gas price mismatches with expected.")]
+    CoinbaseGasPriceMismatch,
     #[from]
     TransactionValidity(TransactionValidityError),
     // TODO: Replace with `fuel_core_storage::Error` when execution error will live in the
@@ -385,8 +387,6 @@ impl From<ValidityError> for Error {
 pub enum TransactionValidityError {
     #[error("Coin({0:#x}) input was already spent")]
     CoinAlreadySpent(UtxoId),
-    #[error("Coin({0:#x}) has not yet reached maturity")]
-    CoinHasNotMatured(UtxoId),
     #[error("The input coin({0:#x}) doesn't match the coin from database")]
     CoinMismatch(UtxoId),
     #[error("The specified coin({0:#x}) doesn't exist")]

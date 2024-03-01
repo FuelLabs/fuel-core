@@ -71,6 +71,11 @@ pub struct ConcreteStorage {
     params: ConsensusParameters,
 }
 
+/// The gas price used for transactions in the debugger. It is set to 0 because
+/// the debugger does not actually execute transactions, but only simulates
+/// their execution.
+const GAS_PRICE: u64 = 0;
+
 impl ConcreteStorage {
     pub fn new(params: ConsensusParameters) -> Self {
         Self {
@@ -114,19 +119,16 @@ impl ConcreteStorage {
                 self.tx.insert(id.clone(), txs.to_owned());
             });
 
-        // TODO: Pipe this through
-        let gas_price = 0;
-
         let gas_costs = self.params.gas_costs();
         let fee_params = self.params.fee_params();
 
         let ready_tx = checked_tx
-            .into_ready(gas_price, gas_costs, fee_params)
+            .into_ready(GAS_PRICE, gas_costs, fee_params)
             .map_err(|e| {
                 anyhow!("Failed to apply dynamic values to checked tx: {:?}", e)
             })?;
 
-        let interpreter_params = InterpreterParams::new(gas_price, &self.params);
+        let interpreter_params = InterpreterParams::new(GAS_PRICE, &self.params);
         let mut vm = Interpreter::with_storage(vm_database, interpreter_params);
         vm.transact(ready_tx).map_err(|e| anyhow::anyhow!(e))?;
         self.vm.insert(id.clone(), vm);
@@ -158,19 +160,16 @@ impl ConcreteStorage {
             .into_checked_basic(vm_database.block_height()?, &self.params)
             .map_err(|e| anyhow::anyhow!("{:?}", e))?;
 
-        // TODO: Pipe this through
-        let gas_price = 0;
-
         let gas_costs = self.params.gas_costs();
         let fee_params = self.params.fee_params();
 
         let ready_tx = checked_tx
-            .into_ready(gas_price, gas_costs, fee_params)
+            .into_ready(GAS_PRICE, gas_costs, fee_params)
             .map_err(|e| {
                 anyhow!("Failed to apply dynamic values to checked tx: {:?}", e)
             })?;
 
-        let interpreter_params = InterpreterParams::new(gas_price, &self.params);
+        let interpreter_params = InterpreterParams::new(GAS_PRICE, &self.params);
         let mut vm = Interpreter::with_storage(vm_database, interpreter_params);
         vm.transact(ready_tx).map_err(|e| anyhow::anyhow!(e))?;
         self.vm.insert(id.clone(), vm).ok_or_else(|| {
@@ -430,16 +429,13 @@ impl DapMutation {
             .get_mut(&id)
             .ok_or_else(|| async_graphql::Error::new("VM not found"))?;
 
-        // TODO: Pipe this through
-        let gas_price = 0;
-
         let gas_costs = params.gas_costs();
         let fee_params = params.fee_params();
 
         match checked_tx {
             CheckedTransaction::Script(script) => {
                 let ready_tx = script
-                    .into_ready(gas_price, gas_costs, fee_params)
+                    .into_ready(GAS_PRICE, gas_costs, fee_params)
                     .map_err(|e| {
                         anyhow!("Failed to apply dynamic values to checked tx: {:?}", e)
                     })?;
@@ -470,7 +466,7 @@ impl DapMutation {
             }
             CheckedTransaction::Create(create) => {
                 let ready_tx = create
-                    .into_ready(gas_price, gas_costs, fee_params)
+                    .into_ready(GAS_PRICE, gas_costs, fee_params)
                     .map_err(|e| {
                         anyhow!("Failed to apply dynamic values to checked tx: {:?}", e)
                     })?;

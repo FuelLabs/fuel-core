@@ -52,6 +52,7 @@ use fuel_core_types::{
             Maturity,
             MintAmount,
             MintAssetId,
+            MintGasPrice,
             OutputContract,
             Outputs,
             Policies as PoliciesField,
@@ -424,8 +425,7 @@ impl Transaction {
     async fn mint_gas_price(&self) -> Option<U64> {
         match &self.0 {
             fuel_tx::Transaction::Script(_) | fuel_tx::Transaction::Create(_) => None,
-            // TODO: We need to add a getter for the `gas_price` field in `Mint` transaction
-            fuel_tx::Transaction::Mint(_) => Some((0).into()),
+            fuel_tx::Transaction::Mint(mint) => Some((*mint.gas_price()).into()),
         }
     }
 

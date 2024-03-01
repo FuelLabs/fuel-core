@@ -52,6 +52,7 @@ mod tests {
             Rng,
         },
         fuel_tx::{
+            Chargeable,
             FeeParameters,
             GasCosts,
             Output,
@@ -61,6 +62,7 @@ mod tests {
             checked_transaction::builder::TransactionBuilderExt,
             SecretKey,
         },
+        services::txpool::PoolTransactionVariant,
     };
     use itertools::Itertools;
     use std::sync::Arc;
@@ -69,7 +71,7 @@ mod tests {
 
     #[derive(Debug, Clone, Copy, PartialEq)]
     struct TxGas {
-        pub price: u64,
+        pub tip: u64,
         pub limit: u64,
     }
 
@@ -82,21 +84,21 @@ mod tests {
             gas_price_factor: 1,
             gas_per_byte: 0,
         };
+        let gas_costs = GasCosts::free();
 
         let mut txs = txs
             .iter()
             .map(|tx_gas| {
-                TransactionBuilder::script(
+                let tx = TransactionBuilder::script(
                     vec![op::ret(RegId::ONE)].into_iter().collect(),
                     vec![],
                 )
-                .gas_price(tx_gas.price)
+                .tip(tx_gas.tip)
                 .script_gas_limit(tx_gas.limit)
                 .add_unsigned_coin_input(
                     SecretKey::random(&mut rng),
                     rng.gen(),
                     1_000_000,
-                    Default::default(),
                     Default::default(),
                     Default::default(),
                 )
@@ -106,20 +108,22 @@ mod tests {
                     asset_id: Default::default(),
                 })
                 .with_fee_params(fee_params)
-                .with_gas_costs(GasCosts::free())
+                .with_gas_costs(gas_costs.clone())
                 // The block producer assumes transactions are already checked
                 // so it doesn't need to compute valid sigs for tests
-                .finalize_checked_basic(Default::default()).into()
+                .finalize_checked_basic(Default::default());
+                let max_gas = tx.transaction().max_gas(&gas_costs, &fee_params);
+                PoolTransactionVariant::Script(tx).into_tx(max_gas)
             })
             .map(Arc::new)
             .collect::<Vec<ArcPoolTx>>();
-        txs.sort_by_key(|a| core::cmp::Reverse(a.price()));
+        txs.sort_by_key(|a| core::cmp::Reverse(a.tip()));
 
         select_transactions(txs.into_iter(), block_gas_limit)
             .into_iter()
             .map(|tx| TxGas {
                 limit: tx.script_gas_limit().unwrap_or_default(),
-                price: tx.price(),
+                tip: tx.tip(),
             })
             .collect()
     }
@@ -133,34 +137,34 @@ mod tests {
     #[rstest::rstest]
     #[test]
     #[case(999, vec![])]
-    #[case(1000, vec![TxGas { price: 5, limit: 1000 }])]
-    #[case(2500, vec![TxGas { price: 5, limit: 1000 }, TxGas { price: 2, limit: 1000 }])]
+    #[case(1000, vec![TxGas { tip: 5, limit: 1000 }])]
+    #[case(2500, vec![TxGas { tip: 5, limit: 1000 }, TxGas { tip: 2, limit: 1000 }])]
     #[case(4000, vec![
-        TxGas { price: 5, limit: 1000 },
-        TxGas { price: 4, limit: 3000 }
+        TxGas { tip: 5, limit: 1000 },
+        TxGas { tip: 4, limit: 3000 }
     ])]
     #[case(5000, vec![
-        TxGas { price: 5, limit: 1000 },
-        TxGas { price: 4, limit: 3000 },
-        TxGas { price: 2, limit: 1000 }])
+        TxGas { tip: 5, limit: 1000 },
+        TxGas { tip: 4, limit: 3000 },
+        TxGas { tip: 2, limit: 1000 }])
     ]
     #[case(6_000, vec![
-        TxGas { price: 5, limit: 1000 },
-        TxGas { price: 4, limit: 3000 },
-        TxGas { price: 3, limit: 2000 }
+        TxGas { tip: 5, limit: 1000 },
+        TxGas { tip: 4, limit: 3000 },
+        TxGas { tip: 3, limit: 2000 }
     ])]
     #[case(7_000, vec![
-        TxGas { price: 5, limit: 1000 },
-        TxGas { price: 4, limit: 3000 },
-        TxGas { price: 3, limit: 2000 },
-        TxGas { price: 2, limit: 1000 }
+        TxGas { tip: 5, limit: 1000 },
+        TxGas { tip: 4, limit: 3000 },
+        TxGas { tip: 3, limit: 2000 },
+        TxGas { tip: 2, limit: 1000 }
     ])]
     #[case(8_000, vec![
-        TxGas { price: 5, limit: 1000 },
-        TxGas { price: 4, limit: 3000 },
-        TxGas { price: 3, limit: 2000 },
-        TxGas { price: 2, limit: 1000 },
-        TxGas { price: 1, limit: 1000 }
+        TxGas { tip: 5, limit: 1000 },
+        TxGas { tip: 4, limit: 3000 },
+        TxGas { tip: 3, limit: 2000 },
+        TxGas { tip: 2, limit: 1000 },
+        TxGas { tip: 1, limit: 1000 }
     ])]
     fn selector_prefers_highest_gas_txs_and_sorts(
         #[case] selection_limit: u64,
@@ -168,11 +172,11 @@ mod tests {
     ) {
         #[rustfmt::skip]
         let original = [
-            TxGas { price: 3, limit: 2000 },
-            TxGas { price: 1, limit: 1000 },
-            TxGas { price: 4, limit: 3000 },
-            TxGas { price: 5, limit: 1000 },
-            TxGas { price: 2, limit: 1000 },
+            TxGas { tip: 3, limit: 2000 },
+            TxGas { tip: 1, limit: 1000 },
+            TxGas { tip: 4, limit: 3000 },
+            TxGas { tip: 5, limit: 1000 },
+            TxGas { tip: 2, limit: 1000 },
         ];
 
         let selected = make_txs_and_select(&original, selection_limit);
@@ -186,11 +190,11 @@ mod tests {
     fn selector_doesnt_exceed_max_gas_per_block() {
         #[rustfmt::skip]
         let original = [
-            TxGas { price: 3, limit: 2000 },
-            TxGas { price: 1, limit: 1000 },
-            TxGas { price: 4, limit: 3000 },
-            TxGas { price: 5, limit: 1000 },
-            TxGas { price: 2, limit: 1000 },
+            TxGas { tip: 3, limit: 2000 },
+            TxGas { tip: 1, limit: 1000 },
+            TxGas { tip: 4, limit: 3000 },
+            TxGas { tip: 5, limit: 1000 },
+            TxGas { tip: 2, limit: 1000 },
         ];
 
         for k in 0..original.len() {

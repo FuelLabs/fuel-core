@@ -436,7 +436,7 @@ impl Dependency {
                                 used_by: HashSet::new(),
                                 depth: 0,
                                 origin: None, // there is no owner if contract is in db
-                                tip: tx.tip(),
+                                tip: Word::MAX,
                             })
                             .used_by
                             .insert(tx.id());
@@ -705,7 +705,6 @@ mod tests {
             UtxoId::default(),
             Address::default(),
             10,
-            AssetId::default(),
             Default::default(),
             Default::default(),
             Default::default(),

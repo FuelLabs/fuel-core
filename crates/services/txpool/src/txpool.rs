@@ -276,6 +276,7 @@ where
         let gas_costs = &consensus_params.gas_costs;
         let fee_params = &consensus_params.fee_params;
 
+        // TODO: Move `max_gas` to metadata of `Checked<Tx>`.
         let max_gas = match tx.transaction() {
             Transaction::Script(inner) => inner.max_gas(gas_costs, fee_params),
             Transaction::Create(inner) => inner.max_gas(gas_costs, fee_params),
@@ -448,7 +449,33 @@ pub async fn check_single_tx(
         tx.into_checked_basic(current_height, &config.chain_config.consensus_parameters)?
     };
 
+    let tx = verify_tx_min_gas_price(tx, config)?;
+
     Ok(tx)
+}
+
+fn verify_tx_min_gas_price(
+    tx: Checked<Transaction>,
+    config: &Config,
+) -> Result<Checked<Transaction>, Error> {
+    let tx: CheckedTransaction = tx.into();
+    let min_gas_price = config.min_gas_price;
+    let gas_costs = &config.chain_config.consensus_parameters.gas_costs;
+    let fee_parameters = &config.chain_config.consensus_parameters.fee_params;
+    let read = match tx {
+        CheckedTransaction::Script(script) => {
+            let read = script.into_ready(min_gas_price, gas_costs, &fee_parameters)?;
+            let (_, checked) = read.decompose();
+            CheckedTransaction::Script(checked)
+        }
+        CheckedTransaction::Create(create) => {
+            let read = create.into_ready(min_gas_price, gas_costs, &fee_parameters)?;
+            let (_, checked) = read.decompose();
+            CheckedTransaction::Create(checked)
+        }
+        CheckedTransaction::Mint(_) => return Err(Error::MintIsDisallowed),
+    };
+    Ok(read.into())
 }
 
 pub struct TokioWithRayon;

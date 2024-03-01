@@ -292,13 +292,6 @@ where
     {
         let mut current_key = U256::from_big_endian(start_key.as_ref());
 
-        // TODO: Is there a safe way to do this?
-        let (values_len, _) = values.size_hint();
-        // verify key is in range
-        current_key
-            .checked_add(U256::from(values_len))
-            .ok_or_else(|| anyhow!("range op exceeded available keyspace"))?;
-
         let mut key_bytes = Bytes32::zeroed();
         let mut found_unset = 0u32;
         for value in values {

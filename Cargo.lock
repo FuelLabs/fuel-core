@@ -2611,8 +2611,6 @@ dependencies = [
 [[package]]
 name = "fuel-asm"
 version = "0.47.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b22cafe8e69722869cf7731699bc62a145d56d56b7c0854292170d73d9ab1ae7"
 dependencies = [
  "bitflags 2.4.2",
  "fuel-types",
@@ -3151,8 +3149,6 @@ dependencies = [
 [[package]]
 name = "fuel-crypto"
 version = "0.47.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "74f104316bd490380463c61448790c4c643aad04cba4cdbb7cac1b092212ac1b"
 dependencies = [
  "coins-bip32",
  "coins-bip39",
@@ -3172,8 +3168,6 @@ dependencies = [
 [[package]]
 name = "fuel-derive"
 version = "0.47.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6a4346761c79ff8500e2b4b0a6810d0567f0b300b50a38f8969d4903ddff8bfc"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -3184,8 +3178,6 @@ dependencies = [
 [[package]]
 name = "fuel-merkle"
 version = "0.47.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "65d63411ed6f5c5b9d882e69213bc0cfd47ae05ad39e05c06653b06bcf3947cc"
 dependencies = [
  "derive_more",
  "digest 0.10.7",
@@ -3199,14 +3191,10 @@ dependencies = [
 [[package]]
 name = "fuel-storage"
 version = "0.47.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "633ade66c3899e26a9cf98e021d790137d17aec6c0a13b65f98003e0e7573b9c"
 
 [[package]]
 name = "fuel-tx"
 version = "0.47.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "145163c8c989acc0e696be26a53bf4e2cea36e93d76b29d78e1513fb38550686"
 dependencies = [
  "bitflags 2.4.2",
  "derivative",
@@ -3227,8 +3215,6 @@ dependencies = [
 [[package]]
 name = "fuel-types"
 version = "0.47.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9bceb3e3b352a14d62c75308273cee63a142225b6191ce988a6890b54054b5e2"
 dependencies = [
  "fuel-derive",
  "hex",
@@ -3239,8 +3225,6 @@ dependencies = [
 [[package]]
 name = "fuel-vm"
 version = "0.47.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c7c83180351b50003e873d8b34dc9f702ef59cb8ab662a019f65d725113dc021"
 dependencies = [
  "anyhow",
  "async-trait",
