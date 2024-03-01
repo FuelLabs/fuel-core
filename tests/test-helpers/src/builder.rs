@@ -62,7 +62,7 @@ impl TestContext {
             1_000_000,
             script,
             vec![],
-            Policies::new().with_gas_price(0),
+            Policies::new(),
             vec![Input::coin_signed(
                 self.rng.gen(),
                 from,
@@ -70,12 +70,11 @@ impl TestContext {
                 Default::default(),
                 Default::default(),
                 Default::default(),
-                Default::default(),
             )],
             vec![Output::coin(to, amount, Default::default())],
             vec![vec![].into()],
         )
-        .into();
+            .into();
         self.client.submit_and_await_commit(&tx).await?;
         Ok(tx.id(&Default::default()))
     }
@@ -145,28 +144,27 @@ impl TestSetupBuilder {
                 .flat_map(|t| t.inputs())
                 .filter_map(|input| {
                     if let Input::CoinSigned(CoinSigned {
-                        amount,
-                        owner,
-                        asset_id,
-                        utxo_id,
-                        tx_pointer,
-                        ..
-                    })
+                                                 amount,
+                                                 owner,
+                                                 asset_id,
+                                                 utxo_id,
+                                                 tx_pointer,
+                                                 ..
+                                             })
                     | Input::CoinPredicate(CoinPredicate {
-                        amount,
-                        owner,
-                        asset_id,
-                        utxo_id,
-                        tx_pointer,
-                        ..
-                    }) = input
+                                               amount,
+                                               owner,
+                                               asset_id,
+                                               utxo_id,
+                                               tx_pointer,
+                                               ..
+                                           }) = input
                     {
                         Some(CoinConfig {
                             tx_id: Some(*utxo_id.tx_id()),
                             output_index: Some(utxo_id.output_index()),
                             tx_pointer_block_height: Some(tx_pointer.block_height()),
                             tx_pointer_tx_idx: Some(tx_pointer.tx_index()),
-                            maturity: None,
                             owner: *owner,
                             amount: *amount,
                             asset_id: *asset_id,

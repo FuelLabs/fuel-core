@@ -6,7 +6,6 @@ use fuel_core_chain_config::ContractConfig;
 use fuel_core_types::{
     fuel_tx::{
         field::{
-            GasPrice,
             ScriptGasLimit,
         },
         Receipt,
@@ -28,10 +27,10 @@ pub async fn receipts(ctx: &TestContext) -> Result<(), Failed> {
         ctx.config.sync_timeout(),
         ctx.alice.transfer(ctx.bob.address, BASE_AMOUNT, None),
     )
-    .await??;
+        .await??;
     let status = result.status;
     if !result.success {
-        return Err(format!("transfer failed with status {status:?}").into())
+        return Err(format!("transfer failed with status {status:?}").into());
     }
     println!("The tx id of the script: {}", result.tx_id);
 
@@ -48,7 +47,7 @@ pub async fn receipts(ctx: &TestContext) -> Result<(), Failed> {
         if receipts.is_none() {
             return Err(
                 format!("Receipts are empty for query_number {query_number}").into(),
-            )
+            );
         }
     }
 
@@ -67,7 +66,7 @@ pub async fn dry_run(ctx: &TestContext) -> Result<(), Failed> {
         ctx.config.sync_timeout(),
         ctx.alice.transfer_tx(ctx.bob.address, 0, None),
     )
-    .await??;
+        .await??;
 
     _dry_runs(ctx, &[transaction], 1000, DryRunResult::Successful).await
 }
@@ -78,12 +77,12 @@ pub async fn dry_run_multiple_txs(ctx: &TestContext) -> Result<(), Failed> {
         ctx.config.sync_timeout(),
         ctx.alice.transfer_tx(ctx.bob.address, 0, None),
     )
-    .await??;
+        .await??;
     let transaction2 = tokio::time::timeout(
         ctx.config.sync_timeout(),
         ctx.alice.transfer_tx(ctx.alice.address, 0, None),
     )
-    .await??;
+        .await??;
 
     _dry_runs(
         ctx,
@@ -91,7 +90,7 @@ pub async fn dry_run_multiple_txs(ctx: &TestContext) -> Result<(), Failed> {
         1000,
         DryRunResult::Successful,
     )
-    .await
+        .await
 }
 
 // Maybe deploy a contract with large state and execute the script
@@ -135,7 +134,6 @@ pub async fn non_specific_transaction(ctx: &TestContext) -> Result<(), Failed> {
 
     if let Some(script) = dry_run.as_script_mut() {
         *script.script_gas_limit_mut() = 100000;
-        script.set_gas_price(0);
     }
 
     _dry_runs(ctx, &[dry_run], 1000, DryRunResult::MayFail).await
@@ -182,7 +180,7 @@ async fn _dry_runs(
             if tx_status.result.receipts().is_empty() {
                 return Err(
                     format!("Receipts are empty for query_number {query_number}").into(),
-                )
+                );
             }
 
             assert!(tx.id(&chain_info.consensus_parameters.chain_id) == tx_status.id);
