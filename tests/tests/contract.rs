@@ -2,9 +2,19 @@ use crate::helpers::{
     TestContext,
     TestSetupBuilder,
 };
-use fuel_core::service::{
-    Config,
-    FuelService,
+use fuel_core::{
+    database::{
+        // database_description::on_chain::OnChain,
+        Database,
+    },
+    service::{
+        Config,
+        FuelService,
+    },
+    // state::in_memory::{
+    //     memory_store::MemoryStore,
+    //     transaction::MemoryTransactionView,
+    // },
 };
 use fuel_core_client::client::{
     pagination::{
@@ -14,15 +24,111 @@ use fuel_core_client::client::{
     types::TransactionStatus,
     FuelClient,
 };
+use rand::{
+    Rng,
+    SeedableRng,
+};
+// use fuel_core_storage::structured_storage::{
+//     test::InMemoryStorage,
+//     StructuredStorage,
+// };
+use fuel_core::database::database_description::on_chain::OnChain;
+use fuel_core_txpool::TxPool;
 use fuel_core_types::{
     fuel_asm::*,
     fuel_tx::*,
     fuel_types::canonical::Serialize,
-    fuel_vm::*,
+    fuel_vm::{
+        checked_transaction::IntoChecked,
+        *,
+    },
 };
+
 use rstest::rstest;
 
 const SEED: u64 = 2322;
+
+#[tokio::test]
+async fn test_contract_info() {
+    let mut rng = rand::rngs::StdRng::seed_from_u64(0xBAADF00D);
+
+    let database = Database::<OnChain>::in_memory();
+    let mut config = fuel_core_txpool::Config::default();
+    config.utxo_validation = false;
+    let mut tx_pool = TxPool::new(config, database.clone());
+
+    let secret = SecretKey::random(&mut rng);
+
+    let contract_input = {
+        let bytecode: Witness = vec![].into();
+        let salt = Salt::zeroed();
+        let contract = Contract::from(bytecode.as_ref());
+        let code_root = contract.root();
+        let balance_root = Contract::default_state_root();
+        let state_root = Contract::default_state_root();
+
+        let contract_id = contract.id(&salt, &code_root, &state_root);
+        let output = Output::contract_created(contract_id, state_root);
+        let create_tx = TransactionBuilder::create(bytecode, salt, vec![])
+            .add_unsigned_coin_input(
+                secret,
+                rng.gen(),
+                100,
+                Default::default(),
+                Default::default(),
+                Default::default(),
+            )
+            .add_output(output)
+            .finalize_as_transaction()
+            .into_checked(Default::default(), &Default::default())
+            .expect("Cannot check transaction");
+
+        let contract_input = Input::contract(
+            UtxoId::new(create_tx.id(), 1),
+            balance_root,
+            state_root,
+            Default::default(),
+            contract_id,
+        );
+
+        tx_pool
+            .insert_single(create_tx)
+            .expect("cannot insert tx into transaction pool");
+
+        contract_input
+    };
+
+    let bytecode: Witness = vec![].into();
+    let salt = Salt::zeroed();
+    let balance_root = Contract::default_state_root();
+    let state_root = Contract::default_state_root();
+
+    let contract_tx = TransactionBuilder::create(bytecode, salt, vec![])
+        .add_unsigned_coin_input(
+            secret,
+            rng.gen(),
+            100,
+            Default::default(),
+            Default::default(),
+            Default::default(),
+        )
+        .add_input(contract_input)
+        .add_output(Output::contract(1, balance_root, state_root))
+        .finalize_as_transaction();
+
+    let mut config = Config::local_node();
+    config.debug = true;
+    config.utxo_validation = true;
+    let node = FuelService::from_database(database, config).await.unwrap();
+    let client = FuelClient::from(node.bound_address);
+
+    let tx_status = client
+        .submit_and_await_commit(&contract_tx.into())
+        .await
+        .unwrap();
+
+    assert!(matches!(tx_status, TransactionStatus::Success { .. }));
+}
 
 #[rstest]
 #[tokio::test]

@@ -259,8 +259,8 @@ where
     ViewProvider: AtomicView<View = View>,
     View: TxPoolDb,
 {
-    #[cfg(test)]
-    fn insert_single(
+    #[cfg(any(test, feature = "test-helpers"))]
+    pub fn insert_single(
         &mut self,
         tx: Checked<Transaction>,
     ) -> Result<InsertionResult, Error> {
