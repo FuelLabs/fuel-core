@@ -678,7 +678,7 @@ pub struct SharedState {
     reserved_peers_broadcast: broadcast::Sender<usize>,
     /// Used for communicating with the `Task`.
     request_sender: mpsc::Sender<TaskRequest>,
-    /// Sender of p2p blopck height data
+    /// Sender of p2p block height data
     block_height_broadcast: broadcast::Sender<BlockHeightHeartbeatData>,
 }
 
