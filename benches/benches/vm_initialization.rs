@@ -102,7 +102,7 @@ pub fn vm_initialization(c: &mut Criterion) {
                 let mut vm = black_box(
                     Interpreter::<_, Script, NotSupportedEcal>::with_memory_storage(),
                 );
-                let ready_tx = tx.clone().test_into_read();
+                let ready_tx = tx.clone().test_into_ready();
                 black_box(vm.init_script(ready_tx))
                     .expect("Should be able to execute transaction");
             })

@@ -260,7 +260,7 @@ async fn message_status__can_get_spent() {
         1_000_000,
         vec![],
         vec![],
-        policies::Policies::new().with_gas_price(0),
+        policies::Policies::new(),
         vec![input],
         vec![output],
         vec![Vec::new().into()],

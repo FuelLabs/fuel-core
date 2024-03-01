@@ -5,6 +5,7 @@ mod tests {
     use fuel_core_storage::{
         tables::ContractsState,
         vm_storage::VmStorage,
+        InterpreterStorage,
         StorageMutate,
     };
     use fuel_core_txpool::types::ContractId;
@@ -199,8 +200,13 @@ mod tests {
                     U256::from_big_endian(&start_key).checked_add(i.into())?;
                 let current_key = u256_to_bytes32(current_key);
                 let result = db
-                    .contract_state_range(&contract_id, &current_key)
+                    .contract_state_range(
+                        &contract_id,
+                        &current_key,
+                        insertion_range.len(),
+                    )
                     .unwrap()
+                    .iter()
                     .map(Cow::into_owned)
                     .map(|b| *b);
                 result
@@ -297,8 +303,9 @@ mod tests {
 
                 let current_key = u256_to_bytes32(current_key);
                 let result = db
-                    .contract_state_range(&contract_id, &current_key)
+                    .contract_state_range(&contract_id, &current_key, remove_count)
                     .unwrap()
+                    .iter()
                     .map(Cow::into_owned)t
                     .map(|b| *b);
                 result

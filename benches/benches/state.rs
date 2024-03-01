@@ -127,7 +127,7 @@ fn insert_state_single_contract_transaction(c: &mut Criterion) {
                     );
                     let start = std::time::Instant::now();
                     inner_db
-                        .contract_state_insert(&contract, &state, &value)
+                        .contract_state_insert(&contract, &state, value.as_slice())
                         .expect("failed to insert state into transaction");
                     elapsed_time += start.elapsed();
                 }
@@ -191,7 +191,7 @@ fn insert_state_multiple_contracts_database(c: &mut Criterion) {
                     );
                     let start = std::time::Instant::now();
                     inner_db
-                        .contract_state_insert(&contract, &state, &value)
+                        .contract_state_insert(&contract, &state, value.as_slice())
                         .expect("failed to insert state into transaction");
                     elapsed_time += start.elapsed();
                 }
@@ -255,7 +255,7 @@ fn insert_state_multiple_contracts_transaction(c: &mut Criterion) {
                     );
                     let start = std::time::Instant::now();
                     inner_db
-                        .contract_state_insert(&contract, &state, &value)
+                        .contract_state_insert(&contract, &state, value.as_slice())
                         .expect("failed to insert state into transaction");
                     elapsed_time += start.elapsed();
                 }

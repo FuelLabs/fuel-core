@@ -13,6 +13,7 @@ use fuel_core_types::{
         Address,
         AssetId,
         ContractId,
+        Finalizable,
         Input,
         Output,
         Script,
@@ -235,7 +236,6 @@ fn script_tx(
             amount,
             Default::default(),
             // use a zeroed out txpointer
-            Default::default(),
             Default::default(),
         )
         .add_input(Input::contract(
