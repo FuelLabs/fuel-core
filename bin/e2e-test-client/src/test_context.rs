@@ -41,10 +41,10 @@ use fuel_core_types::{
         canonical::Serialize,
         Address,
         AssetId,
+        Bytes32,
     },
     fuel_vm::SecretKey,
 };
-use fuel_core_types::fuel_types::Bytes32;
 
 use crate::config::{
     ClientConfig,

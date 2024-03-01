@@ -20,9 +20,9 @@ pub struct CoinByIdArgs {
 
 #[derive(cynic::QueryFragment, Debug)]
 #[cynic(
-schema_path = "./assets/schema.sdl",
-graphql_type = "Query",
-variables = "CoinByIdArgs"
+    schema_path = "./assets/schema.sdl",
+    graphql_type = "Query",
+    variables = "CoinByIdArgs"
 )]
 pub struct CoinByIdQuery {
     #[arguments(utxoId: $ utxo_id)]
@@ -82,9 +82,9 @@ impl From<(Address, AssetId, PaginationRequest<String>)> for CoinsConnectionArgs
 
 #[derive(cynic::QueryFragment, Debug)]
 #[cynic(
-schema_path = "./assets/schema.sdl",
-graphql_type = "Query",
-variables = "CoinsConnectionArgs"
+    schema_path = "./assets/schema.sdl",
+    graphql_type = "Query",
+    variables = "CoinsConnectionArgs"
 )]
 pub struct CoinsQuery {
     #[arguments(filter: $ filter, after: $ after, before: $ before, first: $ first, last: $ last)]
@@ -188,7 +188,7 @@ pub struct CoinsToSpendArgs {
 }
 
 pub(crate) type CoinsToSpendArgsTuple =
-(Address, Vec<SpendQueryElementInput>, Option<ExcludeInput>);
+    (Address, Vec<SpendQueryElementInput>, Option<ExcludeInput>);
 
 impl From<CoinsToSpendArgsTuple> for CoinsToSpendArgs {
     fn from(r: CoinsToSpendArgsTuple) -> Self {
@@ -202,9 +202,9 @@ impl From<CoinsToSpendArgsTuple> for CoinsToSpendArgs {
 
 #[derive(cynic::QueryFragment, Debug)]
 #[cynic(
-schema_path = "./assets/schema.sdl",
-graphql_type = "Query",
-variables = "CoinsToSpendArgs"
+    schema_path = "./assets/schema.sdl",
+    graphql_type = "Query",
+    variables = "CoinsToSpendArgs"
 )]
 pub struct CoinsToSpendQuery {
     #[arguments(owner: $ owner, queryPerAsset: $ query_per_asset, excludedIds: $ excluded_ids)]

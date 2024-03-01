@@ -5,9 +5,7 @@ use crate::test_context::{
 use fuel_core_chain_config::ContractConfig;
 use fuel_core_types::{
     fuel_tx::{
-        field::{
-            ScriptGasLimit,
-        },
+        field::ScriptGasLimit,
         Receipt,
         ScriptExecutionResult,
         Transaction,
@@ -27,7 +25,7 @@ pub async fn receipts(ctx: &TestContext) -> Result<(), Failed> {
         ctx.config.sync_timeout(),
         ctx.alice.transfer(ctx.bob.address, BASE_AMOUNT, None),
     )
-        .await??;
+    .await??;
     let status = result.status;
     if !result.success {
         return Err(format!("transfer failed with status {status:?}").into());
@@ -66,7 +64,7 @@ pub async fn dry_run(ctx: &TestContext) -> Result<(), Failed> {
         ctx.config.sync_timeout(),
         ctx.alice.transfer_tx(ctx.bob.address, 0, None),
     )
-        .await??;
+    .await??;
 
     _dry_runs(ctx, &[transaction], 1000, DryRunResult::Successful).await
 }
@@ -77,12 +75,12 @@ pub async fn dry_run_multiple_txs(ctx: &TestContext) -> Result<(), Failed> {
         ctx.config.sync_timeout(),
         ctx.alice.transfer_tx(ctx.bob.address, 0, None),
     )
-        .await??;
+    .await??;
     let transaction2 = tokio::time::timeout(
         ctx.config.sync_timeout(),
         ctx.alice.transfer_tx(ctx.alice.address, 0, None),
     )
-        .await??;
+    .await??;
 
     _dry_runs(
         ctx,
@@ -90,7 +88,7 @@ pub async fn dry_run_multiple_txs(ctx: &TestContext) -> Result<(), Failed> {
         1000,
         DryRunResult::Successful,
     )
-        .await
+    .await
 }
 
 // Maybe deploy a contract with large state and execute the script

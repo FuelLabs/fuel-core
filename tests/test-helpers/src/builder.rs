@@ -74,7 +74,7 @@ impl TestContext {
             vec![Output::coin(to, amount, Default::default())],
             vec![vec![].into()],
         )
-            .into();
+        .into();
         self.client.submit_and_await_commit(&tx).await?;
         Ok(tx.id(&Default::default()))
     }
@@ -144,21 +144,21 @@ impl TestSetupBuilder {
                 .flat_map(|t| t.inputs())
                 .filter_map(|input| {
                     if let Input::CoinSigned(CoinSigned {
-                                                 amount,
-                                                 owner,
-                                                 asset_id,
-                                                 utxo_id,
-                                                 tx_pointer,
-                                                 ..
-                                             })
+                        amount,
+                        owner,
+                        asset_id,
+                        utxo_id,
+                        tx_pointer,
+                        ..
+                    })
                     | Input::CoinPredicate(CoinPredicate {
-                                               amount,
-                                               owner,
-                                               asset_id,
-                                               utxo_id,
-                                               tx_pointer,
-                                               ..
-                                           }) = input
+                        amount,
+                        owner,
+                        asset_id,
+                        utxo_id,
+                        tx_pointer,
+                        ..
+                    }) = input
                     {
                         Some(CoinConfig {
                             tx_id: Some(*utxo_id.tx_id()),

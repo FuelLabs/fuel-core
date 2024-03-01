@@ -140,8 +140,8 @@ impl VmBench {
     }
 
     pub fn contract<R>(rng: &mut R, instruction: Instruction) -> anyhow::Result<Self>
-        where
-            R: Rng,
+    where
+        R: Rng,
     {
         Self::contract_using_db(rng, new_db(), instruction)
     }
@@ -151,8 +151,8 @@ impl VmBench {
         mut db: VmStorage<Database>,
         instruction: Instruction,
     ) -> anyhow::Result<Self>
-        where
-            R: Rng,
+    where
+        R: Rng,
     {
         let bench = Self::new(instruction);
 
@@ -376,12 +376,12 @@ impl TryFrom<VmBench> for VmBenchPrepared {
         }
 
         if let Some(ContractCode {
-                        contract,
-                        id,
-                        slots,
-                        storage_root,
-                        ..
-                    }) = contract_code
+            contract,
+            id,
+            slots,
+            storage_root,
+            ..
+        }) = contract_code
         {
             let input_count = tx.inputs().len();
             let output =

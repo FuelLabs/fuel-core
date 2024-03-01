@@ -40,9 +40,9 @@ use itertools::Itertools;
 /// Retrieves the transaction in opaque form
 #[derive(cynic::QueryFragment, Debug)]
 #[cynic(
-schema_path = "./assets/schema.sdl",
-graphql_type = "Query",
-variables = "TxIdArgs"
+    schema_path = "./assets/schema.sdl",
+    graphql_type = "Query",
+    variables = "TxIdArgs"
 )]
 pub struct TransactionQuery {
     #[arguments(id: $ id)]
@@ -51,9 +51,9 @@ pub struct TransactionQuery {
 
 #[derive(cynic::QueryFragment, Debug)]
 #[cynic(
-schema_path = "./assets/schema.sdl",
-graphql_type = "Query",
-variables = "ConnectionArgs"
+    schema_path = "./assets/schema.sdl",
+    graphql_type = "Query",
+    variables = "ConnectionArgs"
 )]
 pub struct TransactionsQuery {
     #[arguments(after: $ after, before: $ before, first: $ first, last: $ last)]
@@ -186,7 +186,7 @@ impl TryFrom<Transaction> for fuel_tx::Transaction {
                         ConversionError::MissingField("witnesses".to_string())
                     })?
                     .into_iter()
-                    .map(|w| w.0.0.into())
+                    .map(|w| w.0 .0.into())
                     .collect(),
             );
             *script.receipts_root_mut() = tx
@@ -217,11 +217,11 @@ impl TryFrom<Transaction> for fuel_tx::Transaction {
                     })?
                     .into_iter()
                     .map(|slot| {
-                        if slot.0.0.len() != 64 {
+                        if slot.0 .0.len() != 64 {
                             return Err(ConversionError::BytesLength);
                         }
-                        let key = &slot.0.0[0..32];
-                        let value = &slot.0.0[32..];
+                        let key = &slot.0 .0[0..32];
+                        let value = &slot.0 .0[32..];
                         Ok(StorageSlot::new(
                             // unwrap is safe because length is checked
                             fuel_types::Bytes32::try_from(key)
@@ -245,7 +245,7 @@ impl TryFrom<Transaction> for fuel_tx::Transaction {
                         ConversionError::MissingField("witnesses".to_string())
                     })?
                     .into_iter()
-                    .map(|w| w.0.0.into())
+                    .map(|w| w.0 .0.into())
                     .collect(),
             );
             create.into()
@@ -353,7 +353,7 @@ impl TryFrom<Input> for fuel_tx::Input {
     fn try_from(input: Input) -> Result<fuel_tx::Input, Self::Error> {
         Ok(match input {
             Input::InputCoin(coin) => {
-                if coin.predicate.0.0.is_empty() {
+                if coin.predicate.0 .0.is_empty() {
                     fuel_tx::Input::coin_signed(
                         coin.utxo_id.into(),
                         coin.owner.into(),
@@ -378,8 +378,8 @@ impl TryFrom<Input> for fuel_tx::Input {
             Input::InputContract(contract) => fuel_tx::Input::Contract(contract.into()),
             Input::InputMessage(message) => {
                 match (
-                    message.data.0.0.is_empty(),
-                    message.predicate.0.0.is_empty(),
+                    message.data.0 .0.is_empty(),
+                    message.predicate.0 .0.is_empty(),
                 ) {
                     (true, true) => Self::message_coin_signed(
                         message.sender.into(),
