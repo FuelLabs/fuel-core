@@ -1,5 +1,5 @@
 [package]
-name = "fuel-core-executor"
+name = "fuel-core-upgradable-executor"
 version = { workspace = true }
 authors = { workspace = true }
 edition = { workspace = true }
@@ -7,27 +7,31 @@ homepage = { workspace = true }
 keywords = ["blockchain", "fuel", "fuel-vm"]
 license = { workspace = true }
 repository = { workspace = true }
-description = "Fuel Block Executor"
+description = "Fuel Block Upgradable Executor"
+build = "build.rs"
 
 [dependencies]
 anyhow = { workspace = true }
-fuel-core-chain-config = { workspace = true, default-features = false }
 fuel-core-storage = { workspace = true }
-fuel-core-types = { workspace = true, default-features = false }
-hex = { version = "0.4", features = ["serde"] }
-parking_lot = { workspace = true }
-serde = { workspace = true }
-tracing = { workspace = true }
+fuel-core-types = { workspace = true }
+fuel-core-wasm-executor = { path = "wasm-executor" }
+lazy_static = { version = "1.4" }
+postcard = { workspace = true }
+wasmtime = { version = "18.0.1", default-features = false, features = [
+  "cache",
+  "cranelift",
+  "parallel-compilation",
+  "pooling-allocator",
+] }
 
 [dev-dependencies]
 fuel-core-storage = { workspace = true, features = ["test-helpers"] }
-fuel-core-trace = { path = "../../trace" }
 fuel-core-types = { workspace = true, features = ["test-helpers"] }
 
 [features]
 default = ["std"]
-std = ["fuel-core-chain-config/default", "fuel-core-types/default"]
+std = []
 test-helpers = [
-  "fuel-core-types/test-helpers",
   "fuel-core-storage/test-helpers",
+  "fuel-core-types/test-helpers",
 ]

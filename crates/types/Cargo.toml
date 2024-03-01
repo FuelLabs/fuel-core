@@ -27,13 +27,14 @@ fuel-vm-private = { workspace = true, default-features = false, features = [
 rand = { workspace = true, optional = true }
 secrecy = "0.8"
 serde = { workspace = true, features = ["derive"], optional = true }
+serde_with = { workspace = true, optional = true }
 tai64 = { version = "4.0", features = ["serde"] }
 thiserror = "1.0"
 zeroize = "1.5"
 
 [features]
 default = ["std"]
-serde = ["dep:serde", "fuel-vm-private/serde"]
+serde = ["dep:serde", "dep:serde_with", "fuel-vm-private/serde"]
 std = ["fuel-vm-private/std"]
 random = ["dep:rand", "fuel-vm-private/random"]
 test-helpers = ["random", "fuel-vm-private/test-helpers"]

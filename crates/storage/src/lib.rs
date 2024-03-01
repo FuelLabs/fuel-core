@@ -4,6 +4,7 @@
 //! defined here are used by services but are flexible enough to customize the
 //! logic when the `Database` is known.
 
+// #![cfg_attr(not(feature = "std"), no_std)]
 #![deny(clippy::arithmetic_side_effects)]
 #![deny(clippy::cast_possible_truncation)]
 #![deny(unused_crate_dependencies)]
@@ -73,7 +74,7 @@ impl From<Error> for anyhow::Error {
 
 impl From<Error> for ExecutorError {
     fn from(e: Error) -> Self {
-        ExecutorError::StorageError(anyhow::anyhow!(e))
+        ExecutorError::StorageError(e.to_string())
     }
 }
 

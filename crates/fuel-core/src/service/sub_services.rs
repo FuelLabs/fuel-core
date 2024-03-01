@@ -60,12 +60,10 @@ pub fn init_sub_services(
     let executor = ExecutorAdapter::new(
         database.on_chain().clone(),
         database.relayer().clone(),
-        fuel_core_executor::Config {
-            consensus_parameters: config.chain_conf.consensus_parameters.clone(),
-            coinbase_recipient: config
-                .block_producer
-                .coinbase_recipient
-                .unwrap_or_default(),
+        fuel_core_upgradable_executor::config::Config {
+            // TODO: The `config.chain_conf.consensus_parameters` should be `Option<ConsensusParameters>`.
+            //  All places that use `config.chain_conf.consensus_parameters` should fetch it from the executor.
+            consensus_parameters: Some(config.chain_conf.consensus_parameters.clone()),
             backtrace: config.vm.backtrace,
             utxo_validation_default: config.utxo_validation,
         },
@@ -195,6 +193,7 @@ pub fn init_sub_services(
     let graphql_worker = fuel_core_graphql_api::worker_service::new_service(
         importer_adapter.clone(),
         database.off_chain().clone(),
+        config.chain_conf.consensus_parameters.chain_id,
     );
 
     let graphql_config = GraphQLConfig {
