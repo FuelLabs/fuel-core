@@ -35,6 +35,7 @@ pub mod vm_storage;
 
 pub use fuel_vm_private::storage::{
     ContractsAssetKey,
+    ContractsStateData,
     ContractsStateKey,
 };
 #[doc(hidden)]

@@ -20,7 +20,7 @@ impl Database {
         slots: S,
     ) -> Result<(), StorageError>
     where
-        S: Iterator<Item = (Bytes32, Bytes32)>,
+        S: Iterator<Item = (Bytes32, Vec<u8>)>,
     {
         let slots = slots
             .map(|(key, value)| (ContractsStateKey::new(contract_id, &key), value))
