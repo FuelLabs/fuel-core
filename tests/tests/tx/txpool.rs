@@ -10,7 +10,6 @@ use fuel_core_types::{
     fuel_tx,
     fuel_tx::*,
 };
-use itertools::Itertools;
 use rand::{
     rngs::StdRng,
     Rng,
@@ -35,7 +34,6 @@ async fn txs_max_script_gas_limit() {
                 vec![],
             )
             .script_gas_limit(MAX_GAS_LIMIT / 2)
-            .gas_price(1)
             .add_unsigned_coin_input(
                 SecretKey::random(&mut rng),
                 rng.gen(),

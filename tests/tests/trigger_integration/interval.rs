@@ -121,7 +121,6 @@ async fn poa_interval_produces_nonempty_blocks_at_correct_rate() {
             rng.gen(),
             rng.gen(),
             Default::default(),
-            Default::default(),
         )
         .finalize_as_transaction();
         let _tx_id = client.submit(&tx).await.unwrap();

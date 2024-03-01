@@ -37,12 +37,10 @@ fn create_transaction<R: Rng>(rng: &mut R, script: Vec<Instruction>) -> Transact
     let script = script.into_iter().collect();
     let mut tx = TransactionBuilder::script(script, vec![])
         .script_gas_limit(10000)
-        .gas_price(1)
         .add_input(Input::coin_predicate(
             rng.gen(),
             owner,
             1000,
-            Default::default(),
             Default::default(),
             Default::default(),
             Default::default(),
@@ -53,7 +51,6 @@ fn create_transaction<R: Rng>(rng: &mut R, script: Vec<Instruction>) -> Transact
             rng.gen(),
             owner,
             1000,
-            Default::default(),
             Default::default(),
             Default::default(),
             Default::default(),
@@ -101,7 +98,6 @@ async fn subscribe_txn_status() {
             AssetId::zeroed(),
             TxPointer::default(),
             Default::default(),
-            Default::default(),
             predicate,
             vec![],
         );
@@ -109,9 +105,7 @@ async fn subscribe_txn_status() {
             gas_limit,
             script,
             vec![],
-            policies::Policies::new()
-                .with_gas_price(gas_price + (i as u64))
-                .with_maturity(maturity),
+            policies::Policies::new().with_maturity(maturity),
             vec![coin_input],
             vec![],
             vec![],
@@ -176,7 +170,6 @@ async fn test_regression_in_subscribe() {
         rng.gen(),
         rng.gen(),
         rng.gen(),
-        Default::default(),
         Default::default(),
         predicate,
         vec![],

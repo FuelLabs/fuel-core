@@ -5,7 +5,6 @@ mod tests {
     use fuel_core_storage::{
         tables::ContractsState,
         vm_storage::VmStorage,
-        InterpreterStorage,
         StorageMutate,
     };
     use fuel_core_txpool::types::ContractId;
@@ -99,14 +98,14 @@ mod tests {
             StorageMutate::<ContractsState>::insert(
                 db.database_mut(),
                 &(&contract_id, &key).into(),
-                &value,
+                value.as_slice(),
             )
             .unwrap();
         }
 
         // perform sequential read
         Ok(db
-            .merkle_contract_state_range(&contract_id, &Bytes32::new(start_key), range)
+            .contract_state_range(&contract_id, &Bytes32::new(start_key), range)
             .map_err(|_| ())?
             .into_iter()
             .map(|v| v.map(Cow::into_owned).map(|v| *v))
@@ -175,14 +174,14 @@ mod tests {
             StorageMutate::<ContractsState>::insert(
                 db.database_mut(),
                 &(&contract_id, &key).into(),
-                &value,
+                value.as_slice(),
             )
             .unwrap();
         }
 
         // test insert range
         let insert_status = db
-            .merkle_contract_state_insert_range(
+            .contract_state_insert_range(
                 &contract_id,
                 &Bytes32::new(start_key),
                 &insertion_range
@@ -200,7 +199,7 @@ mod tests {
                     U256::from_big_endian(&start_key).checked_add(i.into())?;
                 let current_key = u256_to_bytes32(current_key);
                 let result = db
-                    .merkle_contract_state(&contract_id, &current_key)
+                    .contract_state_range(&contract_id, &current_key)
                     .unwrap()
                     .map(Cow::into_owned)
                     .map(|b| *b);
@@ -271,14 +270,14 @@ mod tests {
             StorageMutate::<ContractsState>::insert(
                 db.database_mut(),
                 &(&contract_id, &key).into(),
-                &value,
+                value.as_slice(),
             )
             .unwrap();
         }
 
         // test remove range
         let remove_status = db
-            .merkle_contract_state_remove_range(
+            .contract_state_remove_range(
                 &contract_id,
                 &Bytes32::new(start_key),
                 remove_count,
@@ -298,7 +297,7 @@ mod tests {
 
                 let current_key = u256_to_bytes32(current_key);
                 let result = db
-                    .merkle_contract_state(&contract_id, &current_key)
+                    .contract_state_range(&contract_id, &current_key)
                     .unwrap()
                     .map(Cow::into_owned)
                     .map(|b| *b);

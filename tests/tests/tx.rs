@@ -74,7 +74,6 @@ async fn dry_run_script() {
 
     let tx = TransactionBuilder::script(script, vec![])
         .script_gas_limit(gas_limit)
-        .gas_price(gas_price)
         .maturity(maturity)
         .add_random_fee_input()
         .finalize_as_transaction();
@@ -164,7 +163,6 @@ async fn submit() {
 
     let tx = TransactionBuilder::script(script, vec![])
         .script_gas_limit(gas_limit)
-        .gas_price(gas_price)
         .maturity(maturity)
         .add_random_fee_input()
         .finalize_as_transaction();
@@ -659,7 +657,6 @@ fn create_mock_tx(val: u64) -> Transaction {
             SecretKey::random(&mut rng),
             rng.gen(),
             1_000_000,
-            Default::default(),
             Default::default(),
             Default::default(),
         )

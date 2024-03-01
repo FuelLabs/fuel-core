@@ -48,7 +48,6 @@ fn transaction<R: Rng>(
                 rng.gen(),
                 AssetId::BASE,
                 rng.gen(),
-                rng.gen(),
                 0,
                 vec![255; 1],
                 vec![255; 1],
@@ -103,7 +102,15 @@ pub fn vm_initialization(c: &mut Criterion) {
                 let mut vm = black_box(
                     Interpreter::<_, Script, NotSupportedEcal>::with_memory_storage(),
                 );
-                black_box(vm.init_script(tx.clone()))
+                // TODO: Does this need to be parameterized or passed through?
+                let gas_price = 0;
+                let gas_costs = &consensus_params.gas_costs;
+                let fee_params = &consensus_params.fee_params;
+                let ready_tx = tx
+                    .clone()
+                    .to_ready(gas_price, gas_costs, fee_params)
+                    .unwrap();
+                black_box(vm.init_script(ready_tx))
                     .expect("Should be able to execute transaction");
             })
         });

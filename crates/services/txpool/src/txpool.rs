@@ -464,12 +464,12 @@ fn verify_tx_min_gas_price(
     let fee_parameters = &config.chain_config.consensus_parameters.fee_params;
     let read = match tx {
         CheckedTransaction::Script(script) => {
-            let read = script.into_ready(min_gas_price, gas_costs, &fee_parameters)?;
+            let read = script.into_ready(min_gas_price, gas_costs, fee_parameters)?;
             let (_, checked) = read.decompose();
             CheckedTransaction::Script(checked)
         }
         CheckedTransaction::Create(create) => {
-            let read = create.into_ready(min_gas_price, gas_costs, &fee_parameters)?;
+            let read = create.into_ready(min_gas_price, gas_costs, fee_parameters)?;
             let (_, checked) = read.decompose();
             CheckedTransaction::Create(checked)
         }

@@ -108,9 +108,7 @@ async fn make_block_with_fee(rng: &mut StdRng, ctx: &TestContext) {
                 1000,
                 Default::default(),
                 Default::default(),
-                Default::default(),
             )
-            .gas_price(1)
             .script_gas_limit(1_000_000)
             .finalize_as_transaction();
     let tx_status = ctx.client.submit_and_await_commit(&tx).await.unwrap();
@@ -158,7 +156,6 @@ async fn collect_fees(ctx: &TestContext) {
                 .collect(),
         )
             .add_random_fee_input() // No coinbase fee for this block
-            .gas_price(0)
             .script_gas_limit(1_000_000)
             .add_input(Input::contract(
                 Default::default(),
@@ -291,7 +288,6 @@ async fn missing_variable_output() {
                 .collect(),
         )
             .add_random_fee_input() // No coinbase fee for this block
-            .gas_price(0)
             .script_gas_limit(1_000_000)
             .add_input(Input::contract(
                 Default::default(),

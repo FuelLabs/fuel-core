@@ -293,34 +293,32 @@ impl Dependency {
                                 return Err(Error::NotInsertedCollision(
                                     *spend_by, *utxo_id,
                                 ))
-                            } else {
-                                if state.is_in_database() {
-                                    // this means it is loaded from db. Get tx to compare output.
-                                    if self.utxo_validation {
-                                        let coin = db
-                                            .utxo(utxo_id)
-                                            .map_err(|e| Error::Database(format!("{:?}", e)))?
-                                            .ok_or(
-                                                Error::NotInsertedInputUtxoIdNotDoesNotExist(
-                                                    *utxo_id,
-                                                ),
-                                            )?;
-                                        if !coin
-                                            .matches_input(input)
-                                            .expect("The input is coin above")
-                                        {
-                                            return Err(Error::NotInsertedIoCoinMismatch)
-                                        }
+                            } else if state.is_in_database() {
+                                // this means it is loaded from db. Get tx to compare output.
+                                if self.utxo_validation {
+                                    let coin = db
+                                        .utxo(utxo_id)
+                                        .map_err(|e| Error::Database(format!("{:?}", e)))?
+                                        .ok_or(
+                                            Error::NotInsertedInputUtxoIdNotDoesNotExist(
+                                                *utxo_id,
+                                            ),
+                                        )?;
+                                    if !coin
+                                        .matches_input(input)
+                                        .expect("The input is coin above")
+                                    {
+                                        return Err(Error::NotInsertedIoCoinMismatch)
                                     }
-                                } else {
-                                    // tx output is in pool
-                                    let output_tx = txs.get(utxo_id.tx_id()).unwrap();
-                                    let output = &output_tx.outputs()
-                                        [utxo_id.output_index() as usize];
-                                    Self::check_if_coin_input_can_spend_output(
-                                        output, input, false,
-                                    )?;
-                                };
+                                }
+                            } else {
+                                // tx output is in pool
+                                let output_tx = txs.get(utxo_id.tx_id()).unwrap();
+                                let output =
+                                    &output_tx.outputs()[utxo_id.output_index() as usize];
+                                Self::check_if_coin_input_can_spend_output(
+                                    output, input, false,
+                                )?;
                             }
 
                             collided.push(*spend_by);

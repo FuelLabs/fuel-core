@@ -362,13 +362,11 @@ fn run_with_service_with_extra_inputs(
             );
             tx_builder
                 .script_gas_limit(TARGET_BLOCK_GAS_LIMIT - BASE)
-                .gas_price(1)
                 .add_unsigned_coin_input(
                     SecretKey::random(rng),
                     rng.gen(),
                     u32::MAX as u64,
                     AssetId::BASE,
-                    Default::default(),
                     Default::default(),
                 );
             for contract_id in &contract_ids {

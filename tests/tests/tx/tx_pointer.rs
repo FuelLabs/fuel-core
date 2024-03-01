@@ -13,7 +13,6 @@ use fuel_core_types::{
         Address,
         AssetId,
         ContractId,
-        Finalizable,
         Input,
         Output,
         Script,
@@ -56,7 +55,6 @@ async fn tx_pointer_set_from_genesis_for_coin_and_contract_inputs() {
         output_index: Some(coin_utxo_id.output_index()),
         tx_pointer_block_height: Some(coin_tx_pointer.block_height()),
         tx_pointer_tx_idx: Some(coin_tx_pointer.tx_index()),
-        maturity: None,
         owner,
         amount,
         asset_id: Default::default(),
@@ -231,7 +229,6 @@ fn script_tx(
 ) -> Script {
     TransactionBuilder::script(vec![], vec![])
         .script_gas_limit(10000)
-        .gas_price(1)
         .add_unsigned_coin_input(
             secret_key,
             coin_utxo_id,
