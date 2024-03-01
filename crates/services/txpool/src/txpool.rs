@@ -37,14 +37,10 @@ use fuel_core_metrics::txpool_metrics::txpool_metrics;
 use fuel_core_storage::transactional::AtomicView;
 use fuel_core_types::{
     blockchain::block::Block,
-    fuel_tx::Chargeable,
     fuel_vm::checked_transaction::CheckPredicateParams,
     services::{
         executor::TransactionExecutionStatus,
-        txpool::{
-            from_executor_to_status,
-            PoolTransactionVariant,
-        },
+        txpool::from_executor_to_status,
     },
 };
 use std::{
@@ -272,30 +268,13 @@ where
         tx: Checked<Transaction>,
         view: &View,
     ) -> Result<InsertionResult, Error> {
-        let consensus_params = &self.config.chain_config.consensus_parameters;
-        let gas_costs = &consensus_params.gas_costs;
-        let fee_params = &consensus_params.fee_params;
-
-        // TODO: Move `max_gas` to metadata of `Checked<Tx>`.
-        let max_gas = match tx.transaction() {
-            Transaction::Script(inner) => inner.max_gas(gas_costs, fee_params),
-            Transaction::Create(inner) => inner.max_gas(gas_costs, fee_params),
-            Transaction::Mint(_) => return Err(Error::MintIsDisallowed),
-        };
         let tx: CheckedTransaction = tx.into();
 
-        let tx = Arc::new(
-            match tx {
-                CheckedTransaction::Script(script) => {
-                    PoolTransactionVariant::Script(script)
-                }
-                CheckedTransaction::Create(create) => {
-                    PoolTransactionVariant::Create(create)
-                }
-                CheckedTransaction::Mint(_) => return Err(Error::MintIsDisallowed),
-            }
-            .into_tx(max_gas),
-        );
+        let tx = Arc::new(match tx {
+            CheckedTransaction::Script(script) => PoolTransaction::Script(script),
+            CheckedTransaction::Create(create) => PoolTransaction::Create(create),
+            CheckedTransaction::Mint(_) => return Err(Error::MintIsDisallowed),
+        });
 
         if !tx.is_computed() {
             return Err(Error::NoMetadata)

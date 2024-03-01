@@ -52,7 +52,6 @@ mod tests {
             Rng,
         },
         fuel_tx::{
-            Chargeable,
             FeeParameters,
             GasCosts,
             Output,
@@ -62,7 +61,6 @@ mod tests {
             checked_transaction::builder::TransactionBuilderExt,
             SecretKey,
         },
-        services::txpool::PoolTransactionVariant,
     };
     use itertools::Itertools;
     use std::sync::Arc;
@@ -84,12 +82,11 @@ mod tests {
             gas_price_factor: 1,
             gas_per_byte: 0,
         };
-        let gas_costs = GasCosts::free();
 
         let mut txs = txs
             .iter()
             .map(|tx_gas| {
-                let tx = TransactionBuilder::script(
+                TransactionBuilder::script(
                     vec![op::ret(RegId::ONE)].into_iter().collect(),
                     vec![],
                 )
@@ -108,12 +105,10 @@ mod tests {
                     asset_id: Default::default(),
                 })
                 .with_fee_params(fee_params)
-                .with_gas_costs(gas_costs.clone())
+                .with_gas_costs(GasCosts::free())
                 // The block producer assumes transactions are already checked
                 // so it doesn't need to compute valid sigs for tests
-                .finalize_checked_basic(Default::default());
-                let max_gas = tx.transaction().max_gas(&gas_costs, &fee_params);
-                PoolTransactionVariant::Script(tx).into_tx(max_gas)
+                .finalize_checked_basic(Default::default()).into()
             })
             .map(Arc::new)
             .collect::<Vec<ArcPoolTx>>();

@@ -360,7 +360,7 @@ impl Wallet {
     }
 }
 
-// TODO: This is a temporary solution to convert a Vec<u8> to Bytes32
+// TODO: Remove when dynamic storage slots are supported.
 fn vec_to_bytes_32(vec: Vec<u8>) -> Bytes32 {
     let mut bytes = [0u8; 32];
     bytes.copy_from_slice(&vec);

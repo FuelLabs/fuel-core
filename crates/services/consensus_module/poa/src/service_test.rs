@@ -252,6 +252,7 @@ impl MockTransactionPool {
 
 fn make_tx(rng: &mut StdRng) -> Script {
     TransactionBuilder::script(vec![], vec![])
+        .max_fee_limit(0)
         .script_gas_limit(rng.gen_range(1..TxParameters::DEFAULT.max_gas_per_tx))
         .finalize_without_signature()
 }

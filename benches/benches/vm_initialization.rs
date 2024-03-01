@@ -66,7 +66,7 @@ fn transaction<R: Rng>(
         script,
         script_data,
         Policies::new()
-            .with_gas_price(0)
+            .with_max_fee(0)
             .with_maturity(0.into())
             .with_max_fee(Word::MAX),
         inputs,
@@ -102,14 +102,7 @@ pub fn vm_initialization(c: &mut Criterion) {
                 let mut vm = black_box(
                     Interpreter::<_, Script, NotSupportedEcal>::with_memory_storage(),
                 );
-                // TODO: Does this need to be parameterized or passed through?
-                let gas_price = 0;
-                let gas_costs = &consensus_params.gas_costs;
-                let fee_params = &consensus_params.fee_params;
-                let ready_tx = tx
-                    .clone()
-                    .to_ready(gas_price, gas_costs, fee_params)
-                    .unwrap();
+                let ready_tx = tx.clone().test_into_read();
                 black_box(vm.init_script(ready_tx))
                     .expect("Should be able to execute transaction");
             })

@@ -164,13 +164,11 @@ fn signed_transfers(c: &mut Criterion) {
                 1000,
                 Default::default(),
                 Default::default(),
-                Default::default(),
             )
             .add_unsigned_coin_input(
                 SecretKey::random(rng),
                 rng.gen(),
                 1000,
-                Default::default(),
                 Default::default(),
                 Default::default(),
             )

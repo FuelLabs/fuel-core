@@ -301,7 +301,7 @@ fn service_with_many_contracts(
                 (0..state_size).map(|_| {
                     storage_key.to_big_endian(key_bytes.as_mut());
                     storage_key.increase().unwrap();
-                    (key_bytes, key_bytes)
+                    (key_bytes, key_bytes.to_vec())
                 }),
             )
             .unwrap();
