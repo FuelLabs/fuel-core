@@ -10,6 +10,7 @@ use fuel_core_types::{
     fuel_tx,
     fuel_tx::*,
 };
+use itertools::Itertools;
 use rand::{
     rngs::StdRng,
     Rng,
@@ -38,7 +39,6 @@ async fn txs_max_script_gas_limit() {
                 SecretKey::random(&mut rng),
                 rng.gen(),
                 1000 + i,
-                Default::default(),
                 Default::default(),
                 Default::default(),
             )

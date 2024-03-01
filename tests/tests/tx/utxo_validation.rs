@@ -45,7 +45,6 @@ async fn submit_utxo_verified_tx_with_min_gas_price() {
                 1000 + i,
                 Default::default(),
                 Default::default(),
-                Default::default(),
             )
             .add_input(Input::contract(
                 Default::default(),

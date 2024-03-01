@@ -299,7 +299,7 @@ mod tests {
                 let result = db
                     .contract_state_range(&contract_id, &current_key)
                     .unwrap()
-                    .map(Cow::into_owned)
+                    .map(Cow::into_owned)t
                     .map(|b| *b);
                 result
             })
