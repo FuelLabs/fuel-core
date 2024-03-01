@@ -74,7 +74,6 @@ async fn subscribe_txn_status() {
     let srv = FuelService::new_node(config).await.unwrap();
     let client = FuelClient::from(srv.bound_address);
 
-    let gas_price = 10;
     let gas_limit = 1_000_000;
     let maturity = Default::default();
 

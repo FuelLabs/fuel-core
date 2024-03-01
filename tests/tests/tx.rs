@@ -57,7 +57,6 @@ async fn dry_run_script() {
     let srv = FuelService::new_node(Config::local_node()).await.unwrap();
     let client = FuelClient::from(srv.bound_address);
 
-    let gas_price = Default::default();
     let gas_limit = 1_000_000;
     let maturity = Default::default();
 

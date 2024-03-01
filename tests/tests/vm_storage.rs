@@ -109,7 +109,7 @@ mod tests {
             .contract_state_range(&contract_id, &Bytes32::new(start_key), range)
             .map_err(|_| ())?
             .into_iter()
-            .map(|v| v.map(Cow::into_owned).map(|v| *v))
+            .map(|v| v.map(Cow::into_owned).map(|v| v.0).map(bytes_32_from_vec))
             .collect())
     }
 
@@ -185,32 +185,38 @@ mod tests {
             .contract_state_insert_range(
                 &contract_id,
                 &Bytes32::new(start_key),
-                &insertion_range
-                    .iter()
-                    .map(|v| Bytes32::new(*v))
-                    .collect::<Vec<_>>(),
+                insertion_range.iter().map(|v| v.as_slice()),
             )
             .map_err(|_| ())
             .map(|v| v == 0);
 
         // check stored data
-        let results: Vec<_> = (0..insertion_range.len())
-            .filter_map(|i| {
-                let current_key =
-                    U256::from_big_endian(&start_key).checked_add(i.into())?;
-                let current_key = u256_to_bytes32(current_key);
-                let result = db
-                    .contract_state_range(
-                        &contract_id,
-                        &current_key,
-                        insertion_range.len(),
-                    )
-                    .unwrap()
-                    .iter()
-                    .map(Cow::into_owned)
-                    .map(|b| *b);
-                result
-            })
+        // let results: Vec<_> = (0..insertion_range.len())
+        //     .filter_map(|i| {
+        //         let current_key =
+        //             U256::from_big_endian(&start_key).checked_add(i.into())?;
+        //         let current_key = u256_to_bytes32(current_key);
+        //         let result = db
+        //             .contract_state_range(
+        //                 &contract_id,
+        //                 &current_key,
+        //                 insertion_range.len(),
+        //             )
+        //             .unwrap()
+        //             .iter()
+        //             .map(Cow::into_owned)
+        //             .map(|b| *b);
+        //         result
+        //     })
+        //     .collect();
+
+        let results: Vec<_> = db
+            .contract_state_range(&contract_id, &start_key.into(), insertion_range.len())
+            .unwrap()
+            .into_iter()
+            .filter_map(|x| x.map(Cow::into_owned))
+            .map(|data| data.0)
+            .map(bytes_32_from_vec)
             .collect();
 
         // verify all data from insertion request is actually inserted if successful
@@ -292,26 +298,44 @@ mod tests {
             .is_some();
 
         // check stored data
-        let results: Vec<_> = (0..remove_count)
-            .filter_map(|i| {
-                let (current_key, overflow) =
-                    U256::from_big_endian(&start_key).overflowing_add(i.into());
+        // let results: Vec<_> = (0..remove_count)
+        //     .filter_map(|i| {
+        //         let (current_key, overflow) =
+        //             U256::from_big_endian(&start_key).overflowing_add(i.into());
+        //
+        //         if overflow {
+        //             return None
+        //         }
+        //
+        //         let current_key = u256_to_bytes32(current_key);
+        //         let result = db
+        //             .contract_state_range(&contract_id, &current_key, remove_count)
+        //             .unwrap()
+        //             .iter()
+        //             .filter_map(|x| *x)
+        //             .map(Cow::into_owned)
+        //             .map(|data| data.0)
+        //             .map(bytes_32_from_vec);
+        //         Some(result)
+        //     })
+        //     .flatten()
+        //     .collect();
 
-                if overflow {
-                    return None
-                }
-
-                let current_key = u256_to_bytes32(current_key);
-                let result = db
-                    .contract_state_range(&contract_id, &current_key, remove_count)
-                    .unwrap()
-                    .iter()
-                    .map(Cow::into_owned)t
-                    .map(|b| *b);
-                result
-            })
+        let results = db
+            .contract_state_range(&contract_id, &start_key.into(), remove_count)
+            .unwrap()
+            .into_iter()
+            .filter_map(|x| x.map(Cow::into_owned))
+            .map(|data| data.0)
+            .map(bytes_32_from_vec)
             .collect();
 
         (results, remove_status)
+    }
+
+    fn bytes_32_from_vec(v: Vec<u8>) -> [u8; 32] {
+        let mut bytes = [0u8; 32];
+        bytes.copy_from_slice(&v);
+        bytes
     }
 }
