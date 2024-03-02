@@ -290,7 +290,13 @@ where
     where
         I: Iterator<Item = &'a [u8]>,
     {
+        let values: Vec<_> = values.collect();
         let mut current_key = U256::from_big_endian(start_key.as_ref());
+
+        // verify key is in range
+        current_key
+            .checked_add(U256::from(values.len()))
+            .ok_or_else(|| anyhow!("range op exceeded available keyspace"))?;
 
         let mut key_bytes = Bytes32::zeroed();
         let mut found_unset = 0u32;

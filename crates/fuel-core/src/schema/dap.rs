@@ -28,6 +28,8 @@ use fuel_core_types::{
         Word,
     },
     fuel_tx::{
+        field::Policies,
+        policies::PolicyType,
         Buildable,
         ConsensusParameters,
         Executable,
@@ -218,6 +220,7 @@ impl ConcreteStorage {
             Default::default(),
         );
         tx.add_witness(vec![].into());
+        tx.policies_mut().set(PolicyType::MaxFee, Some(0));
         tx
     }
 }

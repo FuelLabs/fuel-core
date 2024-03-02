@@ -60,11 +60,9 @@ enum DryRunResult {
 
 // Dry run the transaction.
 pub async fn dry_run(ctx: &TestContext) -> Result<(), Failed> {
-    let max_fee_limit = 1000;
     let transaction = tokio::time::timeout(
         ctx.config.sync_timeout(),
-        ctx.alice
-            .transfer_tx(ctx.bob.address, 0, None, max_fee_limit),
+        ctx.alice.transfer_tx(ctx.bob.address, 0, None),
     )
     .await??;
 
@@ -73,17 +71,14 @@ pub async fn dry_run(ctx: &TestContext) -> Result<(), Failed> {
 
 // Dry run multiple transactions
 pub async fn dry_run_multiple_txs(ctx: &TestContext) -> Result<(), Failed> {
-    let max_fee_limit = 1000;
     let transaction1 = tokio::time::timeout(
         ctx.config.sync_timeout(),
-        ctx.alice
-            .transfer_tx(ctx.bob.address, 0, None, max_fee_limit),
+        ctx.alice.transfer_tx(ctx.bob.address, 0, None),
     )
     .await??;
     let transaction2 = tokio::time::timeout(
         ctx.config.sync_timeout(),
-        ctx.alice
-            .transfer_tx(ctx.alice.address, 0, None, max_fee_limit),
+        ctx.alice.transfer_tx(ctx.alice.address, 0, None),
     )
     .await??;
 

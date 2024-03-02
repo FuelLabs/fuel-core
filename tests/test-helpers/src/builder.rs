@@ -62,7 +62,7 @@ impl TestContext {
             1_000_000,
             script,
             vec![],
-            Policies::new(),
+            Policies::new().with_max_fee(0),
             vec![Input::coin_signed(
                 self.rng.gen(),
                 from,

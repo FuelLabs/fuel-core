@@ -6,10 +6,14 @@ mod tests {
         tables::ContractsState,
         vm_storage::VmStorage,
         InterpreterStorage,
+        StorageAsMut,
         StorageMutate,
     };
     use fuel_core_txpool::types::ContractId;
-    use fuel_core_types::fuel_types::Bytes32;
+    use fuel_core_types::{
+        fuel_types::Bytes32,
+        fuel_vm::ContractsStateKey,
+    };
     use primitive_types::U256;
     use std::borrow::Cow;
     use test_case::test_case;
@@ -33,8 +37,8 @@ mod tests {
     ; "read single uninitialized value"
     )]
     #[test_case(
-    &[(key(0), [0; 32])], key(0), 1
-    => Ok(vec![Some([0; 32])])
+    &[(key(0), vec![0; 32])], key(0), 1
+    => Ok(vec![Some(vec![0; 32])])
     ; "read single initialized value"
     )]
     #[test_case(
@@ -43,33 +47,33 @@ mod tests {
     ; "read uninitialized range"
     )]
     #[test_case(
-    &[(key(1), [1; 32]), (key(2), [2; 32])], key(0), 3
-    => Ok(vec![None, Some([1; 32]), Some([2; 32])])
+    &[(key(1), vec![1; 32]), (key(2), vec![2; 32])], key(0), 3
+    => Ok(vec![None, Some(vec![1; 32]), Some(vec![2; 32])])
     ; "read uninitialized start range"
     )]
     #[test_case(
-    &[(key(0), [0; 32]), (key(2), [2; 32])], key(0), 3
-    => Ok(vec![Some([0; 32]), None, Some([2; 32])])
+    &[(key(0), vec![0; 32]), (key(2), vec![2; 32])], key(0), 3
+    => Ok(vec![Some(vec![0; 32]), None, Some(vec![2; 32])])
     ; "read uninitialized middle range"
     )]
     #[test_case(
-    &[(key(0), [0; 32]), (key(1), [1; 32])], key(0), 3
-    => Ok(vec![Some([0; 32]), Some([1; 32]), None])
+    &[(key(0), vec![0; 32]), (key(1), vec![1; 32])], key(0), 3
+    => Ok(vec![Some(vec![0; 32]), Some(vec![1; 32]), None])
     ; "read uninitialized end range"
     )]
     #[test_case(
-    &[(key(0), [0; 32]), (key(1), [1; 32]), (key(2), [2; 32])], key(0), 3
-    => Ok(vec![Some([0; 32]), Some([1; 32]), Some([2; 32])])
+    &[(key(0), vec![0; 32]), (key(1), vec![1; 32]), (key(2), vec![2; 32])], key(0), 3
+    => Ok(vec![Some(vec![0; 32]), Some(vec![1; 32]), Some(vec![2; 32])])
     ; "read fully initialized range"
     )]
     #[test_case(
-    &[(key(0), [0; 32]), (key(1), [1; 32]), (key(2), [2; 32])], key(0), 2
-    => Ok(vec![Some([0; 32]), Some([1; 32])])
+    &[(key(0), vec![0; 32]), (key(1), vec![1; 32]), (key(2), vec![2; 32])], key(0), 2
+    => Ok(vec![Some(vec![0; 32]), Some(vec![1; 32])])
     ; "read subset of initialized range"
     )]
     #[test_case(
-    &[(key(0), [0; 32]), (key(2), [2; 32])], key(0), 2
-    => Ok(vec![Some([0; 32]), None])
+    &[(key(0), vec![0; 32]), (key(2), vec![2; 32])], key(0), 2
+    => Ok(vec![Some(vec![0; 32]), None])
     ; "read subset of partially set range without running too far"
     )]
     #[test_case(
@@ -78,15 +82,15 @@ mod tests {
     ; "read fails on uninitialized range if keyspace exceeded"
     )]
     #[test_case(
-    &[(*u256_to_bytes32(U256::MAX), [0; 32])], *u256_to_bytes32(U256::MAX), 2
+    &[(*u256_to_bytes32(U256::MAX), vec![0; 32])], *u256_to_bytes32(U256::MAX), 2
     => Err(())
     ; "read fails on partially initialized range if keyspace exceeded"
     )]
     fn read_sequential_range(
-        prefilled_slots: &[([u8; 32], [u8; 32])],
+        prefilled_slots: &[([u8; 32], Vec<u8>)],
         start_key: [u8; 32],
         range: usize,
-    ) -> Result<Vec<Option<[u8; 32]>>, ()> {
+    ) -> Result<Vec<Option<Vec<u8>>>, ()> {
         let mut db = VmStorage::<Database>::default();
 
         let contract_id = ContractId::new([0u8; 32]);
@@ -94,7 +98,6 @@ mod tests {
         // prefill db
         for (key, value) in prefilled_slots {
             let key = Bytes32::from(*key);
-            let value = Bytes32::new(*value);
 
             StorageMutate::<ContractsState>::insert(
                 db.database_mut(),
@@ -109,59 +112,59 @@ mod tests {
             .contract_state_range(&contract_id, &Bytes32::new(start_key), range)
             .map_err(|_| ())?
             .into_iter()
-            .map(|v| v.map(Cow::into_owned).map(|v| v.0).map(bytes_32_from_vec))
+            .map(|v| v.map(Cow::into_owned).map(|v| v.0))
             .collect())
     }
 
     #[test_case(
-    &[], key(0), &[[1; 32]]
+    &[], key(0), &[vec![1; 32]]
     => Ok(false)
     ; "insert single value over uninitialized range"
     )]
     #[test_case(
-    &[(key(0), [0; 32])], key(0), &[[1; 32]]
+    &[(key(0), vec![0; 32])], key(0), &[vec![1; 32]]
     => Ok(true)
     ; "insert single value over initialized range"
     )]
     #[test_case(
-    &[], key(0), &[[1; 32], [2; 32]]
+    &[], key(0), &[vec![1; 32], vec![2; 32]]
     => Ok(false)
     ; "insert multiple slots over uninitialized range"
     )]
     #[test_case(
-    &[(key(1), [0; 32]), (key(2), [0; 32])], key(0), &[[1; 32], [2; 32], [3; 32]]
+    &[(key(1), vec![0; 32]), (key(2), vec![0; 32])], key(0), &[vec![1; 32], vec![2; 32], vec![3; 32]]
     => Ok(false)
     ; "insert multiple slots with uninitialized start of the range"
     )]
     #[test_case(
-    &[(key(0), [0; 32]), (key(2), [0; 32])], key(0), &[[1; 32], [2; 32], [3; 32]]
+    &[(key(0), vec![0; 32]), (key(2), vec![0; 32])], key(0), &[vec![1; 32], vec![2; 32], vec![3; 32]]
     => Ok(false)
     ; "insert multiple slots with uninitialized middle of the range"
     )]
     #[test_case(
-    &[(key(0), [0; 32]), (key(1), [0; 32])], key(0), &[[1; 32], [2; 32], [3; 32]]
+    &[(key(0), vec![0; 32]), (key(1), vec![0; 32])], key(0), &[vec![1; 32], vec![2; 32], vec![3; 32]]
     => Ok(false)
     ; "insert multiple slots with uninitialized end of the range"
     )]
     #[test_case(
-    &[(key(0), [0; 32]), (key(1), [0; 32]), (key(2), [0; 32])], key(0), &[[1; 32], [2; 32], [3; 32]]
+    &[(key(0), vec![0; 32]), (key(1), vec![0; 32]), (key(2), vec![0; 32])], key(0), &[vec![1; 32], vec![2; 32], vec![3; 32]]
     => Ok(true)
     ; "insert multiple slots over initialized range"
     )]
     #[test_case(
-    &[(key(0), [0; 32]), (key(1), [0; 32]), (key(2), [0; 32]), (key(3), [0; 32])], key(1), &[[1; 32], [2; 32]]
+    &[(key(0), vec![0; 32]), (key(1), vec![0; 32]), (key(2), vec![0; 32]), (key(3), vec![0; 32])], key(1), &[vec![1; 32], vec![2; 32]]
     => Ok(true)
     ; "insert multiple slots over sub-range of prefilled data"
     )]
     #[test_case(
-    &[], *u256_to_bytes32(U256::MAX), &[[1; 32], [2; 32]]
+    &[], *u256_to_bytes32(U256::MAX), &[vec![1; 32], vec![2; 32]]
     => Err(())
     ; "insert fails if start_key + range > u256::MAX"
     )]
     fn insert_range(
-        prefilled_slots: &[([u8; 32], [u8; 32])],
+        prefilled_slots: &[([u8; 32], Vec<u8>)],
         start_key: [u8; 32],
-        insertion_range: &[[u8; 32]],
+        insertion_range: &[Vec<u8>],
     ) -> Result<bool, ()> {
         let mut db = VmStorage::<Database>::default();
 
@@ -170,7 +173,6 @@ mod tests {
         // prefill db
         for (key, value) in prefilled_slots {
             let key = Bytes32::from(*key);
-            let value = Bytes32::new(*value);
 
             StorageMutate::<ContractsState>::insert(
                 db.database_mut(),
@@ -191,32 +193,20 @@ mod tests {
             .map(|v| v == 0);
 
         // check stored data
-        // let results: Vec<_> = (0..insertion_range.len())
-        //     .filter_map(|i| {
-        //         let current_key =
-        //             U256::from_big_endian(&start_key).checked_add(i.into())?;
-        //         let current_key = u256_to_bytes32(current_key);
-        //         let result = db
-        //             .contract_state_range(
-        //                 &contract_id,
-        //                 &current_key,
-        //                 insertion_range.len(),
-        //             )
-        //             .unwrap()
-        //             .iter()
-        //             .map(Cow::into_owned)
-        //             .map(|b| *b);
-        //         result
-        //     })
-        //     .collect();
-
-        let results: Vec<_> = db
-            .contract_state_range(&contract_id, &start_key.into(), insertion_range.len())
-            .unwrap()
-            .into_iter()
-            .filter_map(|x| x.map(Cow::into_owned))
-            .map(|data| data.0)
-            .map(bytes_32_from_vec)
+        let results: Vec<_> = (0..insertion_range.len())
+            .filter_map(|i| {
+                let current_key =
+                    U256::from_big_endian(&start_key).checked_add(i.into())?;
+                let current_key = u256_to_bytes32(current_key);
+                let state_key = ContractsStateKey::new(&contract_id, &current_key);
+                let result = db
+                    .storage::<ContractsState>()
+                    .get(&state_key)
+                    .unwrap()
+                    .map(Cow::into_owned)
+                    .map(|b| b.0);
+                result
+            })
             .collect();
 
         // verify all data from insertion request is actually inserted if successful
@@ -236,7 +226,7 @@ mod tests {
     ; "remove single value over uninitialized range"
     )]
     #[test_case(
-    &[([0; 32], [0; 32])], [0; 32], 1
+    &[([0; 32], vec![0; 32])], [0; 32], 1
     => (vec![], true)
     ; "remove single value over initialized range"
     )]
@@ -246,30 +236,30 @@ mod tests {
     ; "remove multiple slots over uninitialized range"
     )]
     #[test_case(
-    &[([0; 32], [0; 32]), (key(1), [0; 32])], [0; 32], 2
+    &[([0; 32], vec![0; 32]), (key(1), vec![0; 32])], [0; 32], 2
     => (vec![], true)
     ; "remove multiple slots over initialized range"
     )]
     #[test_case(
-    &[(key(1), [0; 32]), (key(2), [0; 32])], [0; 32], 3
+    &[(key(1), vec![0; 32]), (key(2), vec![0; 32])], [0; 32], 3
     => (vec![], false)
     ; "remove multiple slots over partially uninitialized start range"
     )]
     #[test_case(
-    &[([0; 32], [0; 32]), (key(1), [0; 32])], [0; 32], 3
+    &[([0; 32], vec![0; 32]), (key(1), vec![0; 32])], [0; 32], 3
     => (vec![], false)
     ; "remove multiple slots over partially uninitialized end range"
     )]
     #[test_case(
-    &[([0; 32], [0; 32]), (key(2), [0; 32])], [0; 32], 3
+    &[([0; 32], vec![0; 32]), (key(2), vec![0; 32])], [0; 32], 3
     => (vec![], false)
     ; "remove multiple slots over partially uninitialized middle range"
     )]
     fn remove_range(
-        prefilled_slots: &[([u8; 32], [u8; 32])],
+        prefilled_slots: &[([u8; 32], Vec<u8>)],
         start_key: [u8; 32],
         remove_count: usize,
-    ) -> (Vec<[u8; 32]>, bool) {
+    ) -> (Vec<Vec<u8>>, bool) {
         let mut db = VmStorage::<Database>::default();
 
         let contract_id = ContractId::new([0u8; 32]);
@@ -277,7 +267,6 @@ mod tests {
         // prefill db
         for (key, value) in prefilled_slots {
             let key = Bytes32::from(*key);
-            let value = Bytes32::new(*value);
 
             StorageMutate::<ContractsState>::insert(
                 db.database_mut(),
@@ -298,44 +287,27 @@ mod tests {
             .is_some();
 
         // check stored data
-        // let results: Vec<_> = (0..remove_count)
-        //     .filter_map(|i| {
-        //         let (current_key, overflow) =
-        //             U256::from_big_endian(&start_key).overflowing_add(i.into());
-        //
-        //         if overflow {
-        //             return None
-        //         }
-        //
-        //         let current_key = u256_to_bytes32(current_key);
-        //         let result = db
-        //             .contract_state_range(&contract_id, &current_key, remove_count)
-        //             .unwrap()
-        //             .iter()
-        //             .filter_map(|x| *x)
-        //             .map(Cow::into_owned)
-        //             .map(|data| data.0)
-        //             .map(bytes_32_from_vec);
-        //         Some(result)
-        //     })
-        //     .flatten()
-        //     .collect();
+        let results: Vec<_> = (0..remove_count)
+            .filter_map(|i| {
+                let (current_key, overflow) =
+                    U256::from_big_endian(&start_key).overflowing_add(i.into());
 
-        let results = db
-            .contract_state_range(&contract_id, &start_key.into(), remove_count)
-            .unwrap()
-            .into_iter()
-            .filter_map(|x| x.map(Cow::into_owned))
-            .map(|data| data.0)
-            .map(bytes_32_from_vec)
+                if overflow {
+                    return None
+                }
+
+                let current_key = u256_to_bytes32(current_key);
+                let state_key = ContractsStateKey::new(&contract_id, &current_key);
+                let result = db
+                    .storage::<ContractsState>()
+                    .get(&state_key)
+                    .unwrap()
+                    .map(Cow::into_owned)
+                    .map(|b| b.0);
+                result
+            })
             .collect();
 
         (results, remove_status)
-    }
-
-    fn bytes_32_from_vec(v: Vec<u8>) -> [u8; 32] {
-        let mut bytes = [0u8; 32];
-        bytes.copy_from_slice(&v);
-        bytes
     }
 }

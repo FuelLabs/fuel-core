@@ -4,7 +4,7 @@
         "script": [80,64,0,202,80,68,0,186,51,65,16,0,36,4,0,0],
         "script_data": [],
         "policies": {
-            "bits": "GasPrice | Maturity",
+            "bits": "Maturity | MaxFee",
             "values": [0, 0, 0, 0]
         },
         "inputs": [
@@ -22,7 +22,25 @@
                         "tx_index": 0
                     },
                     "witness_index": 0,
-                    "maturity": 0,
+                    "predicate_gas_used": null,
+                    "predicate": null,
+                    "predicate_data": null
+                }
+            },
+            {
+                "CoinSigned": {
+                    "utxo_id": {
+                        "tx_id": "c49d65de61cf04588a764b557d25cc6c6b4bc0d7429227e2a21e61c213b3a3e2",
+                        "output_index": 1
+                    },
+                    "owner": "f1e92c42b90934aa6372e30bc568a326f6e66a1a0288595e6e3fbd392a4f3e6e",
+                    "amount": 10599410012256088338,
+                    "asset_id": "0000000000000000000000000000000000000000000000000000000000000000",
+                    "tx_pointer": {
+                        "block_height": 0,
+                        "tx_index": 0
+                    },
+                    "witness_index": 0,
                     "predicate_gas_used": null,
                     "predicate": null,
                     "predicate_data": null

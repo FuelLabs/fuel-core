@@ -104,7 +104,9 @@ async fn subscribe_txn_status() {
             gas_limit,
             script,
             vec![],
-            policies::Policies::new().with_maturity(maturity),
+            policies::Policies::new()
+                .with_maturity(maturity)
+                .with_max_fee(0),
             vec![coin_input],
             vec![],
             vec![],

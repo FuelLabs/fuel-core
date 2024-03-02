@@ -110,6 +110,7 @@ async fn submit_utxo_verified_tx_below_min_gas_price_fails() {
         op::ret(RegId::ONE).to_bytes().into_iter().collect(),
         vec![],
     )
+    .add_random_fee_input()
     .script_gas_limit(100)
     .finalize_as_transaction();
 
@@ -125,11 +126,8 @@ async fn submit_utxo_verified_tx_below_min_gas_price_fails() {
     let result = client.submit(&tx).await;
 
     assert!(result.is_err());
-    assert!(result
-        .err()
-        .unwrap()
-        .to_string()
-        .contains("The gas price is too low"));
+    let error = result.err().unwrap().to_string();
+    assert!(error.contains("InsufficientMaxFee"));
 }
 
 // verify that dry run can disable utxo_validation by simulating a transaction with unsigned

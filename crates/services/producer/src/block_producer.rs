@@ -111,7 +111,7 @@ where
             header_to_produce: header,
             transactions_source: source,
             // TODO: Provide gas price https://github.com/FuelLabs/fuel-core/issues/1642
-            gas_price: 1,
+            gas_price: self.config.gas_price,
             gas_limit: max_gas,
         };
 
@@ -206,7 +206,7 @@ where
             header_to_produce: header,
             transactions_source: transactions.clone(),
             // TODO: Provide gas price https://github.com/FuelLabs/fuel-core/issues/1642
-            gas_price: 1,
+            gas_price: self.config.gas_price,
             gas_limit: u64::MAX,
         };
 

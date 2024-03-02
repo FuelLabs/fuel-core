@@ -240,7 +240,7 @@ async fn can_get_message_proof() {
         1_000_000,
         script,
         script_data,
-        policies::Policies::new(),
+        policies::Policies::new().with_max_fee(0),
         inputs,
         outputs,
         vec![],

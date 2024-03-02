@@ -7,14 +7,9 @@ use libtest_mimic::Failed;
 
 // Alice collects tokens from coinbase contract.
 pub async fn collect_fee(ctx: &TestContext) -> Result<(), Failed> {
-    let max_fee_limit = 1000;
     let tx = ctx
         .alice
-        .collect_fee_tx(
-            ctx.config.coinbase_contract_id,
-            AssetId::BASE,
-            max_fee_limit,
-        )
+        .collect_fee_tx(ctx.config.coinbase_contract_id, AssetId::BASE)
         .await?;
     let tx_status = ctx.alice.client.submit_and_await_commit(&tx).await?;
 

@@ -52,7 +52,7 @@ use crate::config::{
 };
 
 // The base amount needed to cover the cost of a simple transaction
-pub const BASE_AMOUNT: u64 = 1_000_000;
+pub const BASE_AMOUNT: u64 = 100_000_000;
 
 pub struct TestContext {
     pub alice: Wallet,
@@ -152,7 +152,6 @@ impl Wallet {
         destination: Address,
         transfer_amount: u64,
         asset_id: Option<AssetId>,
-        max_fee_limit: u64,
     ) -> anyhow::Result<Transaction> {
         let asset_id = asset_id.unwrap_or_default();
         let total_amount = transfer_amount + BASE_AMOUNT;
@@ -164,7 +163,7 @@ impl Wallet {
 
         // build transaction
         let mut tx = TransactionBuilder::script(Default::default(), Default::default());
-        tx.max_fee_limit(max_fee_limit);
+        tx.max_fee_limit(BASE_AMOUNT);
         tx.script_gas_limit(0);
 
         for coin in coins {
@@ -198,7 +197,6 @@ impl Wallet {
         &self,
         coinbase_contract: ContractId,
         asset_id: AssetId,
-        max_fee_limit: u64,
     ) -> anyhow::Result<Transaction> {
         // select coins
         let coins = &self
@@ -237,7 +235,7 @@ impl Wallet {
                 .chain(0u64.to_bytes().into_iter())
                 .collect(),
         );
-        tx.max_fee_limit(max_fee_limit);
+        tx.max_fee_limit(BASE_AMOUNT);
         tx.script_gas_limit(BASE_AMOUNT);
 
         tx.add_input(Input::contract(
@@ -281,9 +279,8 @@ impl Wallet {
         transfer_amount: u64,
         asset_id: Option<AssetId>,
     ) -> anyhow::Result<TransferResult> {
-        let max_fee_limit = 1000;
         let tx = self
-            .transfer_tx(destination, transfer_amount, asset_id, max_fee_limit)
+            .transfer_tx(destination, transfer_amount, asset_id)
             .await?;
         let tx_id = tx.id(&self.consensus_params.chain_id);
         println!("submitting tx... {:?}", tx_id);
@@ -302,7 +299,7 @@ impl Wallet {
     }
 
     pub async fn deploy_contract(&self, config: ContractConfig) -> anyhow::Result<()> {
-        let asset_id = AssetId::zeroed();
+        let asset_id = AssetId::BASE;
         let total_amount = BASE_AMOUNT;
         // select coins
         let coins = &self
@@ -345,6 +342,7 @@ impl Wallet {
             amount: 0,
             asset_id,
         });
+        tx.max_fee_limit(BASE_AMOUNT);
 
         let tx = tx.finalize();
         println!("The size of the transaction is {}", tx.size());
