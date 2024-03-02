@@ -2611,6 +2611,7 @@ dependencies = [
 [[package]]
 name = "fuel-asm"
 version = "0.47.0"
+source = "git+https://github.com/FuelLabs/fuel-vm?branch=hotfix/fixes-during-integration-with-fuel-core#a9dfe4a0aa3c65120cdc8c80830bce3085aaed08"
 dependencies = [
  "bitflags 2.4.2",
  "fuel-types",
@@ -3149,6 +3150,7 @@ dependencies = [
 [[package]]
 name = "fuel-crypto"
 version = "0.47.0"
+source = "git+https://github.com/FuelLabs/fuel-vm?branch=hotfix/fixes-during-integration-with-fuel-core#a9dfe4a0aa3c65120cdc8c80830bce3085aaed08"
 dependencies = [
  "coins-bip32",
  "coins-bip39",
@@ -3168,6 +3170,7 @@ dependencies = [
 [[package]]
 name = "fuel-derive"
 version = "0.47.0"
+source = "git+https://github.com/FuelLabs/fuel-vm?branch=hotfix/fixes-during-integration-with-fuel-core#a9dfe4a0aa3c65120cdc8c80830bce3085aaed08"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -3178,6 +3181,7 @@ dependencies = [
 [[package]]
 name = "fuel-merkle"
 version = "0.47.0"
+source = "git+https://github.com/FuelLabs/fuel-vm?branch=hotfix/fixes-during-integration-with-fuel-core#a9dfe4a0aa3c65120cdc8c80830bce3085aaed08"
 dependencies = [
  "derive_more",
  "digest 0.10.7",
@@ -3191,10 +3195,12 @@ dependencies = [
 [[package]]
 name = "fuel-storage"
 version = "0.47.0"
+source = "git+https://github.com/FuelLabs/fuel-vm?branch=hotfix/fixes-during-integration-with-fuel-core#a9dfe4a0aa3c65120cdc8c80830bce3085aaed08"
 
 [[package]]
 name = "fuel-tx"
 version = "0.47.0"
+source = "git+https://github.com/FuelLabs/fuel-vm?branch=hotfix/fixes-during-integration-with-fuel-core#a9dfe4a0aa3c65120cdc8c80830bce3085aaed08"
 dependencies = [
  "bitflags 2.4.2",
  "derivative",
@@ -3215,6 +3221,7 @@ dependencies = [
 [[package]]
 name = "fuel-types"
 version = "0.47.0"
+source = "git+https://github.com/FuelLabs/fuel-vm?branch=hotfix/fixes-during-integration-with-fuel-core#a9dfe4a0aa3c65120cdc8c80830bce3085aaed08"
 dependencies = [
  "fuel-derive",
  "hex",
@@ -3225,6 +3232,7 @@ dependencies = [
 [[package]]
 name = "fuel-vm"
 version = "0.47.0"
+source = "git+https://github.com/FuelLabs/fuel-vm?branch=hotfix/fixes-during-integration-with-fuel-core#a9dfe4a0aa3c65120cdc8c80830bce3085aaed08"
 dependencies = [
  "anyhow",
  "async-trait",

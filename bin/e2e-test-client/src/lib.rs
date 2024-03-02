@@ -110,15 +110,15 @@ pub fn main_body(config: SuiteConfig, mut args: Arguments) {
                 Ok(())
             }),
         ),
-        // Trial::test(
-        //     "can deploy a large contract",
-        //     with_cloned(&config, |config| {
-        //         async_execute(async {
-        //             let ctx = TestContext::new(config).await;
-        //             tests::transfers::transfer_back(&ctx).await
-        //         })
-        //     }),
-        // ),
+        Trial::test(
+            "can deploy a large contract",
+            with_cloned(&config, |config| {
+                async_execute(async {
+                    let ctx = TestContext::new(config).await;
+                    tests::transfers::transfer_back(&ctx).await
+                })
+            }),
+        ),
     ];
 
     libtest_mimic::run(&args, tests).exit();
