@@ -34,7 +34,7 @@ pub fn execute_genesis_block(
                 Cow::Owned(Event::MessageImported(message))
             });
 
-            worker_service::Task::process_executor_events(
+            worker_service::process_executor_events(
                 messages_events,
                 database_transaction.as_mut(),
             )?;
@@ -47,7 +47,7 @@ pub fn execute_genesis_block(
                 Cow::Owned(Event::CoinCreated(coin))
             });
 
-            worker_service::Task::process_executor_events(
+            worker_service::process_executor_events(
                 coin_events,
                 database_transaction.as_mut(),
             )?;

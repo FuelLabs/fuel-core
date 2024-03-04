@@ -32,16 +32,11 @@ use fuel_core_types::{
     tai64::Tai64,
 };
 
-use crate::service::TxStatusMessage;
 use fuel_core_metrics::txpool_metrics::txpool_metrics;
 use fuel_core_storage::transactional::AtomicView;
 use fuel_core_types::{
-    blockchain::block::Block,
     fuel_vm::checked_transaction::CheckPredicateParams,
-    services::{
-        executor::TransactionExecutionStatus,
-        txpool::from_executor_to_status,
-    },
+    services::executor::TransactionExecutionStatus,
 };
 use std::{
     cmp::Reverse,
@@ -184,20 +179,11 @@ impl<ViewProvider> TxPool<ViewProvider> {
     /// When block is updated we need to receive all spend outputs and remove them from txpool.
     pub fn block_update(
         &mut self,
-        tx_status_sender: &TxStatusChange,
-        block: &Block,
         tx_status: &[TransactionExecutionStatus],
         // spend_outputs: [Input], added_outputs: [AddedOutputs]
     ) {
-        let height = block.header().height();
         for status in tx_status {
             let tx_id = status.id;
-            let status = from_executor_to_status(block, status.result.clone());
-            tx_status_sender.send_complete(
-                tx_id,
-                height,
-                TxStatusMessage::Status(status),
-            );
             self.remove_committed_tx(&tx_id);
         }
     }
