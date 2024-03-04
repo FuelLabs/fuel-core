@@ -34,7 +34,7 @@ fn process_messages(
         Cow::Owned(Event::MessageImported(message))
     });
 
-    worker_service::Task::process_executor_events(
+    worker_service::process_executor_events(
         message_events,
         database_transaction.as_mut(),
     )?;
@@ -83,10 +83,7 @@ fn process_coins(
         Cow::Owned(Event::CoinCreated(coin))
     });
 
-    worker_service::Task::process_executor_events(
-        coin_events,
-        database_transaction.as_mut(),
-    )?;
+    worker_service::process_executor_events(coin_events, database_transaction.as_mut())?;
 
     database_transaction.commit()?;
     Ok(())

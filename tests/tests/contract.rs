@@ -3,6 +3,7 @@ use crate::helpers::{
     TestSetupBuilder,
 };
 use fuel_core::{
+    chain_config::StateReader,
     database::{
         database_description::on_chain::OnChain,
         Database,
@@ -32,7 +33,6 @@ use fuel_core_types::{
 use rand::SeedableRng;
 
 use fuel_core::chain_config::{
-    ChainConfig,
     CoinConfig,
     StateConfig,
 };
@@ -49,35 +49,34 @@ async fn calling_the_contract_with_enabled_utxo_validation_is_successful() {
     let utxo_id_1 = UtxoId::new([1; 32].into(), 0);
     let utxo_id_2 = UtxoId::new([1; 32].into(), 1);
 
+    let state_config = StateConfig {
+        coins: vec![
+            CoinConfig {
+                tx_id: Some(*utxo_id_1.tx_id()),
+                output_index: Some(utxo_id_1.output_index()),
+                owner,
+                amount,
+                asset_id: AssetId::BASE,
+                ..Default::default()
+            },
+            CoinConfig {
+                tx_id: Some(*utxo_id_2.tx_id()),
+                output_index: Some(utxo_id_2.output_index()),
+                owner,
+                amount,
+                asset_id: AssetId::BASE,
+                ..Default::default()
+            },
+        ],
+        ..Default::default()
+    };
     let config = Config {
         debug: true,
         utxo_validation: true,
-        chain_conf: ChainConfig {
-            initial_state: Some(StateConfig {
-                coins: Some(vec![
-                    CoinConfig {
-                        tx_id: Some(*utxo_id_1.tx_id()),
-                        output_index: Some(utxo_id_1.output_index()),
-                        owner,
-                        amount,
-                        asset_id: AssetId::BASE,
-                        ..Default::default()
-                    },
-                    CoinConfig {
-                        tx_id: Some(*utxo_id_2.tx_id()),
-                        output_index: Some(utxo_id_2.output_index()),
-                        owner,
-                        amount,
-                        asset_id: AssetId::BASE,
-                        ..Default::default()
-                    },
-                ]),
-                ..Default::default()
-            }),
-            ..ChainConfig::local_testnet()
-        },
+        state_reader: StateReader::in_memory(state_config),
         ..Config::local_node()
     };
+
     let node = FuelService::from_database(Database::<OnChain>::in_memory(), config)
         .await
         .unwrap();
