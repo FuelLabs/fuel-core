@@ -170,7 +170,7 @@ The client functionality is available through a service endpoint that expect Gra
 
 The transaction executor currently performs instant block production. Changes are persisted to RocksDB by default.
 
--   Service endpoint: `/graphql`
+-   Service endpoint: `/v1/graphql`
 -   Schema (available after building): `crates/client/assets/schema.sdl`
 
 The service expects a mutation defined as `submit` that receives a [Transaction](https://github.com/FuelLabs/fuel-vm/tree/master/fuel-tx) in hex encoded binary format, as [specified here](https://github.com/FuelLabs/fuel-specs/blob/master/src/tx-format/transaction.md).
