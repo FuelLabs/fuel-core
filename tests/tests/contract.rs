@@ -41,7 +41,7 @@ use rstest::rstest;
 const SEED: u64 = 2322;
 
 #[tokio::test]
-async fn test_contract_info() {
+async fn calling_the_contract_with_enabled_utxo_validation_is_successful() {
     let mut rng = rand::rngs::StdRng::seed_from_u64(0xBAADF00D);
     let secret = SecretKey::random(&mut rng);
     let amount = 10000;
@@ -83,6 +83,7 @@ async fn test_contract_info() {
         .unwrap();
     let client = FuelClient::from(node.bound_address);
 
+    // Given
     let contract_input = {
         let bytecode: Witness = vec![].into();
         let salt = Salt::zeroed();
@@ -122,6 +123,7 @@ async fn test_contract_info() {
         contract_input
     };
 
+    // When
     let contract_tx = TransactionBuilder::script(vec![], vec![])
         .add_input(contract_input)
         .add_unsigned_coin_input(
@@ -133,9 +135,9 @@ async fn test_contract_info() {
         )
         .add_output(Output::contract(0, Default::default(), Default::default()))
         .finalize_as_transaction();
-
     let tx_status = client.submit_and_await_commit(&contract_tx).await.unwrap();
 
+    // Then
     assert!(matches!(tx_status, TransactionStatus::Success { .. }));
 }
 
