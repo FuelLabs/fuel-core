@@ -12,10 +12,9 @@ expression: json
         "output_index": "0xc9",
         "tx_pointer_block_height": "0xe46d13fb",
         "tx_pointer_tx_idx": "0xf4a4",
-        "maturity": "0x63f8fe17",
-        "owner": "0xa2d8d9ed086c0f3f03f94ec89a67bfdc6a1e22b69d667e5ac8055d00a3f57027",
-        "amount": "0x0d1865b14bc80dbc",
-        "asset_id": "0x0d053242a9719dca480b4f4910fa60671f2068086498c72e30fc8b969e083932"
+        "owner": "0x17a2d8d9ed086c0f3f03f94ec89a67bfdc6a1e22b69d667e5ac8055d00a3f570",
+        "amount": "0x4bc80dbc43bd0a27",
+        "asset_id": "0xb10d053242a9719dca480b4f4910fa60671f2068086498c72e30fc8b969e0839"
       }
     ]
   },

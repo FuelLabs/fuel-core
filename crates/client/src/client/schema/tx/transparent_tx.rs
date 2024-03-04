@@ -45,7 +45,7 @@ use itertools::Itertools;
     variables = "TxIdArgs"
 )]
 pub struct TransactionQuery {
-    #[arguments(id: $id)]
+    #[arguments(id: $ id)]
     pub transaction: Option<Transaction>,
 }
 
@@ -56,7 +56,7 @@ pub struct TransactionQuery {
     variables = "ConnectionArgs"
 )]
 pub struct TransactionsQuery {
-    #[arguments(after: $after, before: $before, first: $first, last: $last)]
+    #[arguments(after: $ after, before: $ before, first: $ first, last: $ last)]
     pub transactions: TransactionConnection,
 }
 
@@ -218,7 +218,7 @@ impl TryFrom<Transaction> for fuel_tx::Transaction {
                     .into_iter()
                     .map(|slot| {
                         if slot.0 .0.len() != 64 {
-                            return Err(ConversionError::BytesLength)
+                            return Err(ConversionError::BytesLength);
                         }
                         let key = &slot.0 .0[0..32];
                         let value = &slot.0 .0[32..];
@@ -318,7 +318,6 @@ pub struct InputCoin {
     pub asset_id: AssetId,
     pub tx_pointer: TxPointer,
     pub witness_index: i32,
-    pub maturity: U32,
     pub predicate_gas_used: U64,
     pub predicate: HexString,
     pub predicate_data: HexString,
@@ -362,7 +361,6 @@ impl TryFrom<Input> for fuel_tx::Input {
                         coin.asset_id.into(),
                         coin.tx_pointer.into(),
                         coin.witness_index.try_into()?,
-                        coin.maturity.into(),
                     )
                 } else {
                     fuel_tx::Input::coin_predicate(
@@ -371,7 +369,6 @@ impl TryFrom<Input> for fuel_tx::Input {
                         coin.amount.into(),
                         coin.asset_id.into(),
                         coin.tx_pointer.into(),
-                        coin.maturity.into(),
                         coin.predicate_gas_used.into(),
                         coin.predicate.into(),
                         coin.predicate_data.into(),
@@ -533,7 +530,7 @@ impl TryFrom<ContractOutput> for output::contract::Contract {
 #[derive(cynic::QueryFragment, Debug)]
 #[cynic(schema_path = "./assets/schema.sdl")]
 pub struct Policies {
-    pub gas_price: Option<U64>,
+    pub tip: Option<U64>,
     pub maturity: Option<U32>,
     pub witness_limit: Option<U64>,
     pub max_fee: Option<U64>,
@@ -542,7 +539,7 @@ pub struct Policies {
 impl From<Policies> for fuel_tx::policies::Policies {
     fn from(value: Policies) -> Self {
         let mut policies = fuel_tx::policies::Policies::new();
-        policies.set(PolicyType::GasPrice, value.gas_price.map(Into::into));
+        policies.set(PolicyType::Tip, value.tip.map(Into::into));
         policies.set(
             PolicyType::Maturity,
             value.maturity.map(|maturity| maturity.0 as u64),

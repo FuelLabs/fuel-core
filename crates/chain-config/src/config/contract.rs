@@ -26,7 +26,7 @@ use serde_with::{
 
 #[skip_serializing_none]
 #[serde_as]
-#[derive(Clone, Debug, Deserialize, Serialize, Eq, PartialEq)]
+#[derive(Default, Clone, Debug, Deserialize, Serialize, Eq, PartialEq)]
 pub struct ContractConfig {
     #[serde_as(as = "HexType")]
     pub contract_id: ContractId,
@@ -36,7 +36,7 @@ pub struct ContractConfig {
     pub salt: Salt,
     #[serde_as(as = "Option<Vec<(HexType, HexType)>>")]
     #[serde(default)]
-    pub state: Option<Vec<(Bytes32, Bytes32)>>,
+    pub state: Option<Vec<(Bytes32, Vec<u8>)>>,
     #[serde_as(as = "Option<Vec<(HexType, HexNumber)>>")]
     #[serde(default)]
     pub balances: Option<Vec<(AssetId, u64)>>,
@@ -67,8 +67,16 @@ impl ContractConfig {
         let bytes = &self.code;
         let salt = self.salt;
         let slots = self.state.clone().map(|slots| {
+            // TODO: When supporting dynamic storage, use byte vector directly instead of mapping it into a Bytes32.
             slots
                 .into_iter()
+                .map(|(key, value)| {
+                    (
+                        key,
+                        TryFrom::try_from(value.as_slice())
+                            .expect("Expected 32 byte storage slot"),
+                    )
+                })
                 .map(|(key, value)| StorageSlot::new(key, value))
                 .collect::<Vec<_>>()
         });

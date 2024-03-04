@@ -14,7 +14,6 @@ use crate::{
     fuel_types::{
         Address,
         AssetId,
-        BlockHeight,
     },
 };
 
@@ -31,8 +30,6 @@ pub struct Coin {
     /// Different incompatible coins can coexist with different asset ids.
     /// This is the "color" of the coin.
     pub asset_id: AssetId,
-    /// This coin cannot be spent until the given height
-    pub maturity: BlockHeight,
     /// Indexes the block and transaction this coin originated from
     pub tx_pointer: TxPointer,
 }
@@ -44,7 +41,6 @@ impl Coin {
             owner: self.owner,
             amount: self.amount,
             asset_id: self.asset_id,
-            maturity: self.maturity,
             tx_pointer: self.tx_pointer,
         })
     }
@@ -78,8 +74,6 @@ pub struct CompressedCoinV1 {
     /// Different incompatible coins can coexist with different asset ids.
     /// This is the "color" of the coin.
     pub asset_id: AssetId,
-    /// This coin cannot be spent until the given height
-    pub maturity: BlockHeight,
     /// Indexes the block and transaction this coin originated from
     pub tx_pointer: TxPointer,
 }
@@ -99,7 +93,6 @@ impl CompressedCoin {
                 owner: coin.owner,
                 amount: coin.amount,
                 asset_id: coin.asset_id,
-                maturity: coin.maturity,
                 tx_pointer: coin.tx_pointer,
             },
         }
@@ -144,20 +137,6 @@ impl CompressedCoin {
     pub fn set_asset_id(&mut self, asset_id: AssetId) {
         match self {
             CompressedCoin::V1(coin) => coin.asset_id = asset_id,
-        }
-    }
-
-    /// Get the maturity of the coin
-    pub fn maturity(&self) -> &BlockHeight {
-        match self {
-            CompressedCoin::V1(coin) => &coin.maturity,
-        }
-    }
-
-    /// Set the maturity of the coin
-    pub fn set_maturity(&mut self, maturity: BlockHeight) {
-        match self {
-            CompressedCoin::V1(coin) => coin.maturity = maturity,
         }
     }
 

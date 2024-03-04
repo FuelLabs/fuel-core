@@ -54,7 +54,6 @@ async fn balance() {
                 output_index: None,
                 tx_pointer_block_height: None,
                 tx_pointer_tx_idx: None,
-                maturity: None,
                 owner,
                 amount,
                 asset_id,
@@ -104,7 +103,6 @@ async fn balance() {
                     coin.asset_id,
                     Default::default(),
                     0,
-                    coin.maturity.into(),
                 )),
                 CoinType::MessageCoin(message) => {
                     tx.add_input(Input::message_coin_signed(
@@ -167,7 +165,6 @@ async fn first_5_balances() {
                         output_index: None,
                         tx_pointer_block_height: None,
                         tx_pointer_tx_idx: None,
-                        maturity: None,
                         owner: *owner,
                         amount,
                         asset_id,

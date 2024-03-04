@@ -15,7 +15,6 @@ use fuel_core_storage::{
 };
 use fuel_core_types::fuel_types::{
     AssetId,
-    Bytes32,
     ContractId,
     Word,
 };
@@ -50,8 +49,8 @@ impl Database {
 
         let state = Some(
             self.iter_all_by_prefix::<ContractsState, _>(Some(contract_id.as_ref()))
-                .map(|res| -> StorageResult<(Bytes32, Bytes32)> {
-                    let (key, value) = res?;
+                .map(|res| {
+                    let (key, value) = res.map(|(key, value)| (key, value.0))?;
 
                     Ok((*key.state_key(), value))
                 })

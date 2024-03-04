@@ -71,7 +71,6 @@ impl Database {
                     output_index: Some(utxo_id.output_index()),
                     tx_pointer_block_height: Some(coin.tx_pointer().block_height()),
                     tx_pointer_tx_idx: Some(coin.tx_pointer().tx_index()),
-                    maturity: Some(*coin.maturity()),
                     owner: *coin.owner(),
                     amount: *coin.amount(),
                     asset_id: *coin.asset_id(),

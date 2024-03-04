@@ -45,9 +45,6 @@ pub struct CoinConfig {
     #[serde_as(as = "Option<HexNumber>")]
     #[serde(default)]
     pub tx_pointer_tx_idx: Option<u16>,
-    #[serde_as(as = "Option<HexNumber>")]
-    #[serde(default)]
-    pub maturity: Option<BlockHeight>,
     #[serde_as(as = "HexType")]
     pub owner: Address,
     #[serde_as(as = "HexNumber")]
@@ -61,14 +58,12 @@ impl GenesisCommitment for CompressedCoin {
         let owner = self.owner();
         let amount = self.amount();
         let asset_id = self.asset_id();
-        let maturity = self.maturity();
         let tx_pointer = self.tx_pointer();
 
         let coin_hash = *Hasher::default()
             .chain(owner)
             .chain(amount.to_be_bytes())
             .chain(asset_id)
-            .chain((*maturity).to_be_bytes())
             .chain(tx_pointer.block_height().to_be_bytes())
             .chain(tx_pointer.tx_index().to_be_bytes())
             .finalize();

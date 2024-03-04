@@ -41,6 +41,7 @@ use fuel_core_types::{
         canonical::Serialize,
         Address,
         AssetId,
+        Bytes32,
     },
     fuel_vm::SecretKey,
 };
@@ -51,7 +52,7 @@ use crate::config::{
 };
 
 // The base amount needed to cover the cost of a simple transaction
-pub const BASE_AMOUNT: u64 = 1_000_000;
+pub const BASE_AMOUNT: u64 = 100_000_000;
 
 pub struct TestContext {
     pub alice: Wallet,
@@ -132,13 +133,13 @@ impl Wallet {
             results = response.results;
             // check if page has the utxos we're looking for
             if results.iter().any(|coin| coin.utxo_id == utxo_id) {
-                return Ok(true)
+                return Ok(true);
             }
             // otherwise update the cursor to check the next page
             if response.has_next_page {
                 cursor = response.cursor;
             } else {
-                break
+                break;
             }
         }
 
@@ -162,7 +163,7 @@ impl Wallet {
 
         // build transaction
         let mut tx = TransactionBuilder::script(Default::default(), Default::default());
-        tx.gas_price(1);
+        tx.max_fee_limit(BASE_AMOUNT);
         tx.script_gas_limit(0);
 
         for coin in coins {
@@ -173,7 +174,6 @@ impl Wallet {
                     coin.amount,
                     coin.asset_id,
                     Default::default(),
-                    coin.maturity.into(),
                 );
             }
         }
@@ -235,7 +235,7 @@ impl Wallet {
                 .chain(0u64.to_bytes().into_iter())
                 .collect(),
         );
-        tx.gas_price(1);
+        tx.max_fee_limit(BASE_AMOUNT);
         tx.script_gas_limit(BASE_AMOUNT);
 
         tx.add_input(Input::contract(
@@ -253,7 +253,6 @@ impl Wallet {
                     coin.amount,
                     coin.asset_id,
                     Default::default(),
-                    coin.maturity.into(),
                 );
             }
         }
@@ -300,7 +299,7 @@ impl Wallet {
     }
 
     pub async fn deploy_contract(&self, config: ContractConfig) -> anyhow::Result<()> {
-        let asset_id = AssetId::zeroed();
+        let asset_id = AssetId::BASE;
         let total_amount = BASE_AMOUNT;
         // select coins
         let coins = &self
@@ -318,11 +317,10 @@ impl Wallet {
         let slots = state
             .unwrap_or_default()
             .into_iter()
-            .map(|(key, value)| StorageSlot::new(key, value))
+            .map(|(key, value)| StorageSlot::new(key, vec_to_bytes_32(value)))
             .collect::<Vec<_>>();
         let state_root = Contract::initial_state_root(slots.iter());
         let mut tx = TransactionBuilder::create(bytes.into(), salt, slots);
-        tx.gas_price(1);
 
         for coin in coins {
             if let CoinType::Coin(coin) = coin {
@@ -332,7 +330,6 @@ impl Wallet {
                     coin.amount,
                     coin.asset_id,
                     Default::default(),
-                    coin.maturity.into(),
                 );
             }
         }
@@ -345,6 +342,7 @@ impl Wallet {
             amount: 0,
             asset_id,
         });
+        tx.max_fee_limit(BASE_AMOUNT);
 
         let tx = tx.finalize();
         println!("The size of the transaction is {}", tx.size());
@@ -358,11 +356,18 @@ impl Wallet {
         if let TransactionStatus::Failure { .. } | TransactionStatus::SqueezedOut { .. } =
             &status
         {
-            return Err(anyhow!(format!("unexpected transaction status {status:?}")))
+            return Err(anyhow!(format!("unexpected transaction status {status:?}")));
         }
 
         Ok(())
     }
+}
+
+// TODO: Remove when dynamic storage slots are supported.
+fn vec_to_bytes_32(vec: Vec<u8>) -> Bytes32 {
+    let mut bytes = [0u8; 32];
+    bytes.copy_from_slice(&vec);
+    bytes.into()
 }
 
 pub struct TransferResult {

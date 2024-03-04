@@ -52,7 +52,6 @@ mod coin {
                     output_index: None,
                     tx_pointer_block_height: None,
                     tx_pointer_tx_idx: None,
-                    maturity: None,
                     owner,
                     amount,
                     asset_id,
@@ -120,7 +119,6 @@ mod coin {
                         coin.amount,
                         coin.asset_id,
                         Default::default(),
-                        coin.maturity.into(),
                     );
                 }
             }
@@ -512,7 +510,6 @@ mod all_coins {
                     output_index: None,
                     tx_pointer_block_height: None,
                     tx_pointer_tx_idx: None,
-                    maturity: None,
                     owner,
                     amount,
                     asset_id,

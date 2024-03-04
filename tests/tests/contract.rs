@@ -216,7 +216,6 @@ async fn can_get_message_proof() {
         coin.asset_id,
         TxPointer::default(),
         Default::default(),
-        Default::default(),
         predicate,
         vec![],
     );
@@ -241,7 +240,7 @@ async fn can_get_message_proof() {
         1_000_000,
         script,
         script_data,
-        policies::Policies::new().with_gas_price(0),
+        policies::Policies::new().with_max_fee(0),
         inputs,
         outputs,
         vec![],

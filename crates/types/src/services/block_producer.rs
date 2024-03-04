@@ -11,6 +11,8 @@ pub struct Components<Source> {
     /// It can be a predefined vector of transactions, a stream of transactions,
     /// or any other type that carries the transactions.
     pub transactions_source: Source,
+    /// The gas price for all transactions in the block.
+    pub gas_price: u64,
     /// The gas limit of the block.
     pub gas_limit: u64,
 }

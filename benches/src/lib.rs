@@ -342,7 +342,7 @@ impl TryFrom<VmBench> for VmBenchPrepared {
         {
             return Err(anyhow::anyhow!(
                 "a prepare script should not call/return into different contexts.",
-            ))
+            ));
         }
 
         let prepare_script = prepare_script
@@ -437,7 +437,6 @@ impl TryFrom<VmBench> for VmBenchPrepared {
         params.fee_params.gas_per_byte = 0;
         params.gas_costs = GasCosts::free();
         let mut tx = tx
-            .gas_price(gas_price)
             .script_gas_limit(gas_limit)
             .maturity(maturity)
             .with_params(params.clone())
@@ -445,8 +444,9 @@ impl TryFrom<VmBench> for VmBenchPrepared {
         tx.estimate_predicates(&CheckPredicateParams::from(&params))
             .unwrap();
         let tx = tx.into_checked(height, &params).unwrap();
+        let interpreter_params = InterpreterParams::new(gas_price, &params);
 
-        let mut txtor = Transactor::new(db, InterpreterParams::from(&params));
+        let mut txtor = Transactor::new(db, interpreter_params);
 
         txtor.transact(tx);
 

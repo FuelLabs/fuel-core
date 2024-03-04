@@ -41,8 +41,8 @@ async fn snapshot_state_config() {
             code: vec![8; 32],
             salt: Salt::new([9; 32]),
             state: Some(vec![
-                (Bytes32::new([5u8; 32]), Bytes32::new([8u8; 32])),
-                (Bytes32::new([7u8; 32]), Bytes32::new([9u8; 32])),
+                (Bytes32::new([5u8; 32]), Bytes32::new([8u8; 32]).to_vec()),
+                (Bytes32::new([7u8; 32]), Bytes32::new([9u8; 32]).to_vec()),
             ]),
             balances: Some(vec![
                 (AssetId::new([3u8; 32]), 100),
@@ -65,7 +65,6 @@ async fn snapshot_state_config() {
                 output_index: None,
                 tx_pointer_block_height: Some(Default::default()),
                 tx_pointer_tx_idx: Some(0),
-                maturity: Some(Default::default()),
                 owner,
                 amount,
                 asset_id,
@@ -107,7 +106,6 @@ async fn snapshot_state_config() {
             state_coin[i].tx_pointer_block_height,
             starting_coin[i].tx_pointer_block_height
         );
-        assert_eq!(state_coin[i].maturity, starting_coin[i].maturity);
     }
 
     assert_eq!(state_conf.height, starting_state.height);
