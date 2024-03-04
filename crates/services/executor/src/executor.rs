@@ -957,9 +957,9 @@ where
                 .check_predicates(&CheckPredicateParams::from(
                     &self.config.consensus_parameters,
                 ))
-                .map_err(|_| {
+                .map_err(|e| {
                     ExecutorError::TransactionValidity(
-                        TransactionValidityError::InvalidPredicate(tx_id),
+                        TransactionValidityError::Validation(e),
                     )
                 })?;
             debug_assert!(checked_tx.checks().contains(Checks::Predicates));
@@ -1023,6 +1023,40 @@ where
         {
             tx.precompute(&self.config.consensus_parameters.chain_id)?;
             debug_assert_eq!(tx.id(&self.config.consensus_parameters.chain_id), tx_id);
+        }
+
+        for (original_input, produced_input) in checked_tx
+            .transaction()
+            .inputs()
+            .iter()
+            .zip(tx.inputs_mut())
+        {
+            let predicate_gas_used = original_input.predicate_gas_used();
+
+            if let Some(gas_used) = predicate_gas_used {
+                match produced_input {
+                    Input::CoinPredicate(CoinPredicate {
+                        predicate_gas_used, ..
+                    })
+                    | Input::MessageCoinPredicate(MessageCoinPredicate {
+                        predicate_gas_used,
+                        ..
+                    })
+                    | Input::MessageDataPredicate(MessageDataPredicate {
+                        predicate_gas_used,
+                        ..
+                    }) => {
+                        *predicate_gas_used = gas_used;
+                    }
+                    _ => {
+                        debug_assert!(false, "This error is not possible unless VM changes the order of inputs, \
+                        or we added a new predicate inputs.");
+                        return Err(ExecutorError::InvalidTransactionOutcome {
+                            transaction_id: tx_id,
+                        })
+                    }
+                }
+            }
         }
 
         // We always need to update inputs with storage state before execution,
