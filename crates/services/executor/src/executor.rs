@@ -450,21 +450,21 @@ where
 
         let executable_block = block.map_validation(PartialFuelBlock::from);
 
-        let mut state_transaction = self.database.transaction();
+        let mut storage_transaction = self.database.transaction();
 
         let (block, execution_data) = match executable_block {
             ExecutionTypes::DryRun(block_components) => {
-                self.execute_dry_run(block_components, &mut state_transaction)?
+                self.execute_dry_run(block_components, &mut storage_transaction)?
             }
             ExecutionTypes::Production(block_components) => {
-                self.execute_production(block_components, &mut state_transaction)?
+                self.execute_production(block_components, &mut storage_transaction)?
             }
             ExecutionTypes::Validation(block) => self.execute_validation(block)?,
         };
 
         self.complete_transaction(
             block,
-            state_transaction,
+            storage_transaction,
             execution_data,
             maybe_block_id,
         )
@@ -473,7 +473,7 @@ where
     fn execute_dry_run<TxSource: TransactionsSource>(
         &self,
         component: Components<TxSource>,
-        block_st_transaction: &mut StorageTransaction<D>,
+        storage_transaction: &mut StorageTransaction<D>,
     ) -> ExecutorResult<(PartialFuelBlock, ExecutionData)> {
         let mut block = PartialFuelBlock::new(component.header_to_produce, vec![]);
         let component = PartialBlockComponent::from_component(
@@ -484,7 +484,7 @@ where
         );
 
         let execution_data = self.execute_block(
-            block_st_transaction.as_mut(),
+            storage_transaction.as_mut(),
             ExecutionType::DryRun(component),
         )?;
         Ok((block, execution_data))
@@ -493,7 +493,7 @@ where
     fn execute_production<TxSource: TransactionsSource>(
         &self,
         component: Components<TxSource>,
-        block_st_transaction: &mut StorageTransaction<D>,
+        storage_transaction: &mut StorageTransaction<D>,
     ) -> ExecutorResult<(PartialFuelBlock, ExecutionData)> {
         let mut block = PartialFuelBlock::new(component.header_to_produce, vec![]);
         let component = PartialBlockComponent::from_component(
@@ -504,7 +504,7 @@ where
         );
 
         let execution_data = self.execute_block(
-            block_st_transaction.as_mut(),
+            storage_transaction.as_mut(),
             ExecutionType::Production(component),
         )?;
         Ok((block, execution_data))
@@ -526,9 +526,9 @@ where
     fn complete_transaction(
         self,
         block: PartialFuelBlock,
-        state_transaction: StorageTransaction<D>,
+        storage_transaction: StorageTransaction<D>,
         execution_data: ExecutionData,
-        maybe_block_id: Option<BlockId>,
+        expected_block_id: Option<BlockId>,
     ) -> ExecutorResult<UncommittedResult<StorageTransaction<D>>> {
         let ExecutionData {
             coinbase,
@@ -542,22 +542,12 @@ where
 
         let block = block.generate(&message_ids[..]);
 
-        let finalized_block_id = block.id();
+        let finalized_block_id = Self::finalize_block_id(&block, expected_block_id)?;
 
         debug!(
             "Block {:#x} fees: {} gas: {}",
-            maybe_block_id.unwrap_or(finalized_block_id),
-            coinbase,
-            used_gas
+            finalized_block_id, coinbase, used_gas
         );
-
-        // check if block id doesn't match proposed block id
-        if let Some(pre_exec_block_id) = maybe_block_id {
-            // The block id comparison compares the whole blocks including all fields.
-            if pre_exec_block_id != finalized_block_id {
-                return Err(ExecutorError::InvalidBlockId)
-            }
-        }
 
         let result = ExecutionResult {
             block,
@@ -566,8 +556,20 @@ where
             events,
         };
 
-        // Get the complete fuel block.
-        Ok(UncommittedResult::new(result, state_transaction))
+        Ok(UncommittedResult::new(result, storage_transaction))
+    }
+
+    fn finalize_block_id(
+        block: &Block,
+        expected_block_id: Option<BlockId>,
+    ) -> ExecutorResult<BlockId> {
+        let block_id = block.id();
+        if let Some(expected_block_id) = expected_block_id {
+            if block_id != expected_block_id {
+                return Err(ExecutorError::InvalidBlockId)
+            }
+        }
+        Ok(block_id)
     }
 
     #[tracing::instrument(skip_all)]
