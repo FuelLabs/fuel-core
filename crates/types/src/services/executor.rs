@@ -151,30 +151,6 @@ impl<P> ExecutionTypes<P, Block> {
 pub type ExecutionType<T> = ExecutionTypes<T, T>;
 
 impl<P, V> ExecutionTypes<P, V> {
-    /// Map the production type if producing.
-    pub fn map_production<Q, F>(self, f: F) -> ExecutionTypes<Q, V>
-    where
-        F: FnOnce(P) -> Q,
-    {
-        match self {
-            ExecutionTypes::DryRun(p) => ExecutionTypes::DryRun(f(p)),
-            ExecutionTypes::Production(p) => ExecutionTypes::Production(f(p)),
-            ExecutionTypes::Validation(v) => ExecutionTypes::Validation(v),
-        }
-    }
-
-    /// Map the validation type if validating.
-    pub fn map_validation<W, F>(self, f: F) -> ExecutionTypes<P, W>
-    where
-        F: FnOnce(V) -> W,
-    {
-        match self {
-            ExecutionTypes::DryRun(p) => ExecutionTypes::DryRun(p),
-            ExecutionTypes::Production(p) => ExecutionTypes::Production(p),
-            ExecutionTypes::Validation(v) => ExecutionTypes::Validation(f(v)),
-        }
-    }
-
     /// Get a reference version of the inner type.
     pub fn as_ref(&self) -> ExecutionTypes<&P, &V> {
         match *self {

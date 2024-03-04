@@ -458,7 +458,8 @@ where
                 self.execute_production(block_components, &mut storage_transaction)?
             }
             ExecutionTypes::Validation(block) => {
-                self.execute_validation(PartialFuelBlock::from(block))?
+                let partial_block = PartialFuelBlock::from(block);
+                self.execute_validation(partial_block, &mut storage_transaction)?
             }
         };
 
@@ -513,11 +514,11 @@ where
     fn execute_validation(
         &self,
         mut block: PartialFuelBlock,
+        storage_transaction: &mut StorageTransaction<D>,
     ) -> ExecutorResult<(PartialFuelBlock, ExecutionData)> {
         let component = PartialBlockComponent::from_partial_block(&mut block);
-        let mut block_st_transaction = self.database.transaction();
         let execution_data = self.execute_block(
-            block_st_transaction.as_mut(),
+            storage_transaction.as_mut(),
             ExecutionType::Validation(component),
         )?;
         Ok((block, execution_data))
