@@ -405,12 +405,6 @@ pub enum TransactionValidityError {
     ContractDoesNotExist(ContractId),
     #[error("Contract output index isn't valid: {0:#x}")]
     InvalidContractInputIndex(UtxoId),
-    #[error("The transaction contains predicate inputs which aren't enabled: {0:#x}")]
-    PredicateExecutionDisabled(TxId),
-    #[error(
-        "The transaction contains a predicate which failed to validate: TransactionId({0:#x})"
-    )]
-    InvalidPredicate(TxId),
     #[error("Transaction validity: {0:#?}")]
     Validation(CheckError),
 }
