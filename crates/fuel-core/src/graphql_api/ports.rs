@@ -260,4 +260,14 @@ pub mod worker {
         /// Returns a stream of imported block.
         fn block_events(&self) -> BoxStream<SharedImportResult>;
     }
+
+    pub trait TxPool: Send + Sync {
+        /// Sends the complete status of the transaction.
+        fn send_complete(
+            &self,
+            id: Bytes32,
+            block_height: &BlockHeight,
+            status: TransactionStatus,
+        );
+    }
 }

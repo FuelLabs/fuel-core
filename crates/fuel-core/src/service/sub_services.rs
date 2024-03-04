@@ -193,6 +193,7 @@ pub fn init_sub_services(
     .data(database.on_chain().clone());
 
     let graphql_worker = fuel_core_graphql_api::worker_service::new_service(
+        tx_pool_adapter.clone(),
         importer_adapter.clone(),
         database.off_chain().clone(),
     );
