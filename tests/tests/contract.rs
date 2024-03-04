@@ -4,17 +4,13 @@ use crate::helpers::{
 };
 use fuel_core::{
     database::{
-        // database_description::on_chain::OnChain,
+        database_description::on_chain::OnChain,
         Database,
     },
     service::{
         Config,
         FuelService,
     },
-    // state::in_memory::{
-    //     memory_store::MemoryStore,
-    //     transaction::MemoryTransactionView,
-    // },
 };
 use fuel_core_client::client::{
     pagination::{
@@ -24,12 +20,6 @@ use fuel_core_client::client::{
     types::TransactionStatus,
     FuelClient,
 };
-use rand::SeedableRng;
-// use fuel_core_storage::structured_storage::{
-//     test::InMemoryStorage,
-//     StructuredStorage,
-// };
-use fuel_core::database::database_description::on_chain::OnChain;
 use fuel_core_types::{
     fuel_asm::*,
     fuel_tx::*,
@@ -39,6 +29,7 @@ use fuel_core_types::{
         *,
     },
 };
+use rand::SeedableRng;
 
 use fuel_core::chain_config::{
     ChainConfig,
