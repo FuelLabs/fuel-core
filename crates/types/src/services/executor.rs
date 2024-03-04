@@ -152,7 +152,7 @@ pub type ExecutionType<T> = ExecutionTypes<T, T>;
 
 impl<P, V> ExecutionTypes<P, V> {
     /// Map the production type if producing.
-    pub fn map_p<Q, F>(self, f: F) -> ExecutionTypes<Q, V>
+    pub fn map_production<Q, F>(self, f: F) -> ExecutionTypes<Q, V>
     where
         F: FnOnce(P) -> Q,
     {
@@ -164,7 +164,7 @@ impl<P, V> ExecutionTypes<P, V> {
     }
 
     /// Map the validation type if validating.
-    pub fn map_v<W, F>(self, f: F) -> ExecutionTypes<P, W>
+    pub fn map_validation<W, F>(self, f: F) -> ExecutionTypes<P, W>
     where
         F: FnOnce(V) -> W,
     {
