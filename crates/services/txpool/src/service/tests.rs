@@ -246,15 +246,23 @@ async fn simple_insert_removal_subscription() {
     }
 
     // remove them
-    service
-        .shared
-        .remove(vec![tx1.cached_id().unwrap(), tx2.cached_id().unwrap()]);
+    service.shared.remove(vec![
+        (
+            tx1.cached_id().unwrap(),
+            "Because of the test purposes".to_string(),
+        ),
+        (
+            tx2.cached_id().unwrap(),
+            "Because of the test purposes".to_string(),
+        ),
+    ]);
 
     let update = tx1_subscribe_updates.next().await.unwrap();
     assert_eq!(
         update,
         TxStatusMessage::Status(TransactionStatus::SqueezedOut {
-            reason: "Transaction removed.".to_string()
+            reason: "Transaction squeezed out because Because of the test purposes"
+                .to_string()
         }),
         "Second message in tx1 stream should be squeezed out"
     );
@@ -263,7 +271,8 @@ async fn simple_insert_removal_subscription() {
     assert_eq!(
         update,
         TxStatusMessage::Status(TransactionStatus::SqueezedOut {
-            reason: "Transaction removed.".to_string()
+            reason: "Transaction squeezed out because Because of the test purposes"
+                .to_string()
         }),
         "Second message in tx2 stream should be squeezed out"
     );

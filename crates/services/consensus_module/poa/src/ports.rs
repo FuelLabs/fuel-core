@@ -22,7 +22,10 @@ use fuel_core_types::{
             BlockImportInfo,
             UncommittedResult as UncommittedImportResult,
         },
-        executor::UncommittedResult as UncommittedExecutionResult,
+        executor::{
+            Error as ExecutorError,
+            UncommittedResult as UncommittedExecutionResult,
+        },
         txpool::ArcPoolTx,
     },
     tai64::Tai64,
@@ -35,7 +38,7 @@ pub trait TransactionPool: Send + Sync {
 
     fn total_consumable_gas(&self) -> u64;
 
-    fn remove_txs(&self, tx_ids: Vec<TxId>) -> Vec<ArcPoolTx>;
+    fn remove_txs(&self, tx_ids: Vec<(TxId, ExecutorError)>) -> Vec<ArcPoolTx>;
 
     fn transaction_status_events(&self) -> BoxStream<TxId>;
 }

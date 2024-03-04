@@ -2,9 +2,15 @@ use crate::helpers::{
     TestContext,
     TestSetupBuilder,
 };
-use fuel_core::service::{
-    Config,
-    FuelService,
+use fuel_core::{
+    database::{
+        database_description::on_chain::OnChain,
+        Database,
+    },
+    service::{
+        Config,
+        FuelService,
+    },
 };
 use fuel_core_client::client::{
     pagination::{
@@ -18,11 +24,122 @@ use fuel_core_types::{
     fuel_asm::*,
     fuel_tx::*,
     fuel_types::canonical::Serialize,
-    fuel_vm::*,
+    fuel_vm::{
+        checked_transaction::IntoChecked,
+        *,
+    },
+};
+use rand::SeedableRng;
+
+use fuel_core::chain_config::{
+    ChainConfig,
+    CoinConfig,
+    StateConfig,
 };
 use rstest::rstest;
 
 const SEED: u64 = 2322;
+
+#[tokio::test]
+async fn calling_the_contract_with_enabled_utxo_validation_is_successful() {
+    let mut rng = rand::rngs::StdRng::seed_from_u64(0xBAADF00D);
+    let secret = SecretKey::random(&mut rng);
+    let amount = 10000;
+    let owner = Input::owner(&secret.public_key());
+    let utxo_id_1 = UtxoId::new([1; 32].into(), 0);
+    let utxo_id_2 = UtxoId::new([1; 32].into(), 1);
+
+    let config = Config {
+        debug: true,
+        utxo_validation: true,
+        chain_conf: ChainConfig {
+            initial_state: Some(StateConfig {
+                coins: Some(vec![
+                    CoinConfig {
+                        tx_id: Some(*utxo_id_1.tx_id()),
+                        output_index: Some(utxo_id_1.output_index()),
+                        owner,
+                        amount,
+                        asset_id: AssetId::BASE,
+                        ..Default::default()
+                    },
+                    CoinConfig {
+                        tx_id: Some(*utxo_id_2.tx_id()),
+                        output_index: Some(utxo_id_2.output_index()),
+                        owner,
+                        amount,
+                        asset_id: AssetId::BASE,
+                        ..Default::default()
+                    },
+                ]),
+                ..Default::default()
+            }),
+            ..ChainConfig::local_testnet()
+        },
+        ..Config::local_node()
+    };
+    let node = FuelService::from_database(Database::<OnChain>::in_memory(), config)
+        .await
+        .unwrap();
+    let client = FuelClient::from(node.bound_address);
+
+    // Given
+    let contract_input = {
+        let bytecode: Witness = vec![].into();
+        let salt = Salt::zeroed();
+        let contract = Contract::from(bytecode.as_ref());
+        let code_root = contract.root();
+        let balance_root = Contract::default_state_root();
+        let state_root = Contract::default_state_root();
+
+        let contract_id = contract.id(&salt, &code_root, &state_root);
+        let output = Output::contract_created(contract_id, state_root);
+        let create_tx = TransactionBuilder::create(bytecode, salt, vec![])
+            .add_unsigned_coin_input(
+                secret,
+                utxo_id_1,
+                amount,
+                Default::default(),
+                Default::default(),
+            )
+            .add_output(output)
+            .finalize_as_transaction()
+            .into_checked(Default::default(), &Default::default())
+            .expect("Cannot check transaction");
+
+        let contract_input = Input::contract(
+            UtxoId::new(create_tx.id(), 1),
+            balance_root,
+            state_root,
+            Default::default(),
+            contract_id,
+        );
+
+        client
+            .submit_and_await_commit(create_tx.transaction())
+            .await
+            .expect("cannot insert tx into transaction pool");
+
+        contract_input
+    };
+
+    // When
+    let contract_tx = TransactionBuilder::script(vec![], vec![])
+        .add_input(contract_input)
+        .add_unsigned_coin_input(
+            secret,
+            utxo_id_2,
+            amount,
+            Default::default(),
+            Default::default(),
+        )
+        .add_output(Output::contract(0, Default::default(), Default::default()))
+        .finalize_as_transaction();
+    let tx_status = client.submit_and_await_commit(&contract_tx).await.unwrap();
+
+    // Then
+    assert!(matches!(tx_status, TransactionStatus::Success { .. }));
+}
 
 #[rstest]
 #[tokio::test]

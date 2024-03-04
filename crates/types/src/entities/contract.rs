@@ -88,3 +88,9 @@ impl From<Salt> for ContractsInfoTypeV1 {
         Self { salt }
     }
 }
+
+impl From<Salt> for ContractsInfoType {
+    fn from(salt: Salt) -> Self {
+        ContractsInfoType::V1(salt.into())
+    }
+}
