@@ -56,6 +56,7 @@ use fuel_core_types::{
             MintAssetId,
             MintGasPrice,
             OutputContract,
+            Salt,
             TxPointer as TxPointerField,
         },
         input,
@@ -1017,7 +1018,7 @@ where
             .into();
         let reverted = vm_result.should_revert();
 
-        let (state, mut tx, receipts) = vm_result.into_inner();
+        let (state, mut tx, receipts): (_, Tx, _) = vm_result.into_inner();
         #[cfg(debug_assertions)]
         {
             tx.precompute(&self.config.consensus_parameters.chain_id)?;
@@ -1071,6 +1072,20 @@ where
             return Err(ExecutorError::InvalidTransactionOutcome {
                 transaction_id: tx_id,
             })
+        }
+
+        // TODO: Move to an off-chain worker: https://github.com/FuelLabs/fuel-core/issues/1721
+        if let Some(create) = tx.as_create() {
+            let contract_id = create
+                .metadata()
+                .as_ref()
+                .expect("The metadata always should exist after VM execution stage")
+                .contract_id;
+            let salt = *create.salt();
+            tx_st_transaction
+                .as_mut()
+                .storage::<ContractsInfo>()
+                .insert(&contract_id, &(salt.into()))?;
         }
 
         let final_tx = tx.into();

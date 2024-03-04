@@ -109,7 +109,6 @@ async fn test_contract_info() {
                 amount,
                 Default::default(),
                 Default::default(),
-                Default::default(),
             )
             .add_output(output)
             .finalize_as_transaction()
@@ -140,15 +139,11 @@ async fn test_contract_info() {
             amount,
             Default::default(),
             Default::default(),
-            Default::default(),
         )
         .add_output(Output::contract(0, Default::default(), Default::default()))
         .finalize_as_transaction();
 
-    let tx_status = client
-        .submit_and_await_commit(&contract_tx.into())
-        .await
-        .unwrap();
+    let tx_status = client.submit_and_await_commit(&contract_tx).await.unwrap();
 
     assert!(matches!(tx_status, TransactionStatus::Success { .. }));
 }
