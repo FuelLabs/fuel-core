@@ -35,7 +35,10 @@ use fuel_core_types::{
             PartialFuelBlock,
         },
         header::PartialBlockHeader,
-        primitives::DaBlockHeight,
+        primitives::{
+            BlockId,
+            DaBlockHeight,
+        },
     },
     entities::{
         coins::coin::{
@@ -443,65 +446,28 @@ where
     where
         TxSource: TransactionsSource,
     {
-        // Compute the block id before execution if there is one.
-        let pre_exec_block_id = block.id();
+        let maybe_block_id = block.id();
 
-        // If there is full fuel block for validation then map it into
-        // a partial header.
         let executable_block = block.map_validation(PartialFuelBlock::from);
 
-        let mut block_st_transaction = self.database.transaction();
+        let mut state_transaction = self.database.transaction();
 
         let (block, execution_data) = match executable_block {
             ExecutionTypes::DryRun(block_components) => {
-                self.execute_dry_run(block_components, &mut block_st_transaction)?
+                self.execute_dry_run(block_components, &mut state_transaction)?
             }
             ExecutionTypes::Production(block_components) => {
-                self.execute_production(block_components, &mut block_st_transaction)?
+                self.execute_production(block_components, &mut state_transaction)?
             }
             ExecutionTypes::Validation(block) => self.execute_validation(block)?,
         };
 
-        let ExecutionData {
-            coinbase,
-            used_gas,
-            message_ids,
-            tx_status,
-            skipped_transactions,
-            events,
-            ..
-        } = execution_data;
-
-        // Now that the transactions have been executed, generate the full header.
-
-        let block = block.generate(&message_ids[..]);
-
-        let finalized_block_id = block.id();
-
-        debug!(
-            "Block {:#x} fees: {} gas: {}",
-            pre_exec_block_id.unwrap_or(finalized_block_id),
-            coinbase,
-            used_gas
-        );
-
-        // check if block id doesn't match proposed block id
-        if let Some(pre_exec_block_id) = pre_exec_block_id {
-            // The block id comparison compares the whole blocks including all fields.
-            if pre_exec_block_id != finalized_block_id {
-                return Err(ExecutorError::InvalidBlockId)
-            }
-        }
-
-        let result = ExecutionResult {
+        self.complete_transaction(
             block,
-            skipped_transactions,
-            tx_status,
-            events,
-        };
-
-        // Get the complete fuel block.
-        Ok(UncommittedResult::new(result, block_st_transaction))
+            state_transaction,
+            execution_data,
+            maybe_block_id,
+        )
     }
 
     fn execute_dry_run<TxSource: TransactionsSource>(
@@ -555,6 +521,53 @@ where
             ExecutionType::Validation(component),
         )?;
         Ok((block, execution_data))
+    }
+
+    fn complete_transaction(
+        self,
+        block: PartialFuelBlock,
+        state_transaction: StorageTransaction<D>,
+        execution_data: ExecutionData,
+        maybe_block_id: Option<BlockId>,
+    ) -> ExecutorResult<UncommittedResult<StorageTransaction<D>>> {
+        let ExecutionData {
+            coinbase,
+            used_gas,
+            message_ids,
+            tx_status,
+            skipped_transactions,
+            events,
+            ..
+        } = execution_data;
+
+        let block = block.generate(&message_ids[..]);
+
+        let finalized_block_id = block.id();
+
+        debug!(
+            "Block {:#x} fees: {} gas: {}",
+            maybe_block_id.unwrap_or(finalized_block_id),
+            coinbase,
+            used_gas
+        );
+
+        // check if block id doesn't match proposed block id
+        if let Some(pre_exec_block_id) = maybe_block_id {
+            // The block id comparison compares the whole blocks including all fields.
+            if pre_exec_block_id != finalized_block_id {
+                return Err(ExecutorError::InvalidBlockId)
+            }
+        }
+
+        let result = ExecutionResult {
+            block,
+            skipped_transactions,
+            tx_status,
+            events,
+        };
+
+        // Get the complete fuel block.
+        Ok(UncommittedResult::new(result, state_transaction))
     }
 
     #[tracing::instrument(skip_all)]
