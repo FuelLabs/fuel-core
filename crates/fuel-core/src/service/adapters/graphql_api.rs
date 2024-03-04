@@ -25,13 +25,19 @@ use fuel_core_txpool::{
 };
 use fuel_core_types::{
     entities::message::MerkleProof,
-    fuel_tx::Transaction,
+    fuel_tx::{
+        Bytes32,
+        Transaction,
+    },
     fuel_types::BlockHeight,
     services::{
         block_importer::SharedImportResult,
         executor::TransactionExecutionStatus,
         p2p::PeerInfo,
-        txpool::InsertionResult,
+        txpool::{
+            InsertionResult,
+            TransactionStatus,
+        },
     },
     tai64::Tai64,
 };
@@ -142,5 +148,16 @@ impl P2pPort for P2PAdapter {
 impl worker::BlockImporter for BlockImporterAdapter {
     fn block_events(&self) -> BoxStream<SharedImportResult> {
         self.events()
+    }
+}
+
+impl worker::TxPool for TxPoolAdapter {
+    fn send_complete(
+        &self,
+        id: Bytes32,
+        block_height: &BlockHeight,
+        status: TransactionStatus,
+    ) {
+        self.service.send_complete(id, block_height, status)
     }
 }

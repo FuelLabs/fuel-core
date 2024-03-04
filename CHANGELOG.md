@@ -14,6 +14,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ### Changed
 
+- [#1723](https://github.com/FuelLabs/fuel-core/pull/1723): Notify about imported blocks from the off-chain worker.
+- [#1717](https://github.com/FuelLabs/fuel-core/pull/1717): The fix for the [#1657](https://github.com/FuelLabs/fuel-core/pull/1657) to include the contract into `ContractsInfo` table.
 - [#1657](https://github.com/FuelLabs/fuel-core/pull/1657): Upgrade to `fuel-vm` 0.46.0.
 - [#1671](https://github.com/FuelLabs/fuel-core/pull/1671): The logic related to the `FuelBlockIdsToHeights` is moved to the off-chain worker.
 - [#1663](https://github.com/FuelLabs/fuel-core/pull/1663): Reduce the punishment criteria for mempool gossipping.
@@ -62,6 +64,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
     Using uniform-sized batches may result in batches containing items from multiple contracts. Optimal performance can presumably be achieved by selecting a batch size that typically encompasses an entire contract's state or balance, allowing for immediate initialization of relevant Merkle trees.
 
+- [#1722](https://github.com/FuelLabs/fuel-core/pull/1722): Bugfix: Zero `predicate_gas_used` field during validation of the produced block.
 - [#1714](https://github.com/FuelLabs/fuel-core/pull/1714): The change bumps the `fuel-vm` to `0.47.1`. It breaks several breaking changes into the protocol:
   - All malleable fields are zero during the execution and unavailable through the GTF getters. Accessing them via the memory directly is still possible, but they are zero.
   - The `Transaction` doesn't define the gas price anymore. The gas price is defined by the block producer and recorded in the `Mint` transaction at the end of the block. A price of future blocks can be fetched through a [new API nedopoint](https://github.com/FuelLabs/fuel-core/issues/1641) and the price of the last block can be fetch or via the block or another [API endpoint](https://github.com/FuelLabs/fuel-core/issues/1647).

@@ -64,7 +64,10 @@ mod tests {
                 TxPointer as TxPointerTraitTrait,
             },
             input::{
-                coin::CoinSigned,
+                coin::{
+                    CoinPredicate,
+                    CoinSigned,
+                },
                 contract,
                 Input,
             },
@@ -98,7 +101,10 @@ mod tests {
             Word,
         },
         fuel_vm::{
-            checked_transaction::CheckError,
+            checked_transaction::{
+                CheckError,
+                EstimatePredicates,
+            },
             interpreter::ExecutableTransaction,
             script_with_data_offset,
             util::test_helpers::TestBuilder as TxBuilder,
@@ -2829,6 +2835,85 @@ mod tests {
 
         let receipts = tx_status[0].result.receipts();
         assert_eq!(time.0, receipts[0].val().unwrap());
+    }
+
+    #[test]
+    fn tx_with_coin_predicate_included_by_block_producer_and_accepted_by_validator() {
+        let mut rng = StdRng::seed_from_u64(2322u64);
+        let predicate: Vec<u8> = vec![op::ret(RegId::ONE)].into_iter().collect();
+        let owner = Input::predicate_owner(&predicate);
+        let amount = 1000;
+
+        let config = Config {
+            utxo_validation_default: true,
+            ..Default::default()
+        };
+
+        let mut tx = TransactionBuilder::script(
+            vec![op::ret(RegId::ONE)].into_iter().collect(),
+            vec![],
+        )
+        .max_fee_limit(amount)
+        .add_input(Input::coin_predicate(
+            rng.gen(),
+            owner,
+            amount,
+            AssetId::BASE,
+            rng.gen(),
+            0,
+            predicate,
+            vec![],
+        ))
+        .add_output(Output::Change {
+            to: Default::default(),
+            amount: 0,
+            asset_id: Default::default(),
+        })
+        .finalize();
+        tx.estimate_predicates(&config.consensus_parameters.clone().into())
+            .unwrap();
+        let db = &mut Database::default();
+
+        // insert coin into state
+        if let Input::CoinPredicate(CoinPredicate {
+            utxo_id,
+            owner,
+            amount,
+            asset_id,
+            tx_pointer,
+            ..
+        }) = tx.inputs()[0]
+        {
+            let mut coin = CompressedCoin::default();
+            coin.set_owner(owner);
+            coin.set_amount(amount);
+            coin.set_asset_id(asset_id);
+            coin.set_tx_pointer(tx_pointer);
+            db.storage::<Coins>().insert(&utxo_id, &coin).unwrap();
+        }
+
+        let producer = create_executor(db.clone(), config.clone());
+
+        let ExecutionResult {
+            block,
+            skipped_transactions,
+            ..
+        } = producer
+            .execute_without_commit(ExecutionTypes::Production(Components {
+                header_to_produce: PartialBlockHeader::default(),
+                transactions_source: OnceTransactionsSource::new(vec![tx.into()]),
+                gas_price: 1,
+                gas_limit: u64::MAX,
+            }))
+            .unwrap()
+            .into_result();
+        assert!(skipped_transactions.is_empty());
+
+        let validator = create_executor(db.clone(), config);
+        let result = validator.execute_without_commit::<OnceTransactionsSource>(
+            ExecutionTypes::Validation(block),
+        );
+        assert!(result.is_ok(), "{result:?}")
     }
 
     #[cfg(feature = "relayer")]

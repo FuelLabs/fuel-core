@@ -56,6 +56,7 @@ use fuel_core_types::{
             MintAssetId,
             MintGasPrice,
             OutputContract,
+            Salt,
             TxPointer as TxPointerField,
         },
         input,
@@ -956,9 +957,9 @@ where
                 .check_predicates(&CheckPredicateParams::from(
                     &self.config.consensus_parameters,
                 ))
-                .map_err(|_| {
+                .map_err(|e| {
                     ExecutorError::TransactionValidity(
-                        TransactionValidityError::InvalidPredicate(tx_id),
+                        TransactionValidityError::Validation(e),
                     )
                 })?;
             debug_assert!(checked_tx.checks().contains(Checks::Predicates));
@@ -1017,11 +1018,45 @@ where
             .into();
         let reverted = vm_result.should_revert();
 
-        let (state, mut tx, receipts) = vm_result.into_inner();
+        let (state, mut tx, receipts): (_, Tx, _) = vm_result.into_inner();
         #[cfg(debug_assertions)]
         {
             tx.precompute(&self.config.consensus_parameters.chain_id)?;
             debug_assert_eq!(tx.id(&self.config.consensus_parameters.chain_id), tx_id);
+        }
+
+        for (original_input, produced_input) in checked_tx
+            .transaction()
+            .inputs()
+            .iter()
+            .zip(tx.inputs_mut())
+        {
+            let predicate_gas_used = original_input.predicate_gas_used();
+
+            if let Some(gas_used) = predicate_gas_used {
+                match produced_input {
+                    Input::CoinPredicate(CoinPredicate {
+                        predicate_gas_used, ..
+                    })
+                    | Input::MessageCoinPredicate(MessageCoinPredicate {
+                        predicate_gas_used,
+                        ..
+                    })
+                    | Input::MessageDataPredicate(MessageDataPredicate {
+                        predicate_gas_used,
+                        ..
+                    }) => {
+                        *predicate_gas_used = gas_used;
+                    }
+                    _ => {
+                        debug_assert!(false, "This error is not possible unless VM changes the order of inputs, \
+                        or we added a new predicate inputs.");
+                        return Err(ExecutorError::InvalidTransactionOutcome {
+                            transaction_id: tx_id,
+                        })
+                    }
+                }
+            }
         }
 
         // We always need to update inputs with storage state before execution,
@@ -1071,6 +1106,20 @@ where
             return Err(ExecutorError::InvalidTransactionOutcome {
                 transaction_id: tx_id,
             })
+        }
+
+        // TODO: Move to an off-chain worker: https://github.com/FuelLabs/fuel-core/issues/1721
+        if let Some(create) = tx.as_create() {
+            let contract_id = create
+                .metadata()
+                .as_ref()
+                .expect("The metadata always should exist after VM execution stage")
+                .contract_id;
+            let salt = *create.salt();
+            tx_st_transaction
+                .as_mut()
+                .storage::<ContractsInfo>()
+                .insert(&contract_id, &(salt.into()))?;
         }
 
         let final_tx = tx.into();
