@@ -448,18 +448,18 @@ where
     {
         let maybe_block_id = block.id();
 
-        let executable_block = block.map_validation(PartialFuelBlock::from);
-
         let mut storage_transaction = self.database.transaction();
 
-        let (block, execution_data) = match executable_block {
+        let (block, execution_data) = match block {
             ExecutionTypes::DryRun(block_components) => {
                 self.execute_dry_run(block_components, &mut storage_transaction)?
             }
             ExecutionTypes::Production(block_components) => {
                 self.execute_production(block_components, &mut storage_transaction)?
             }
-            ExecutionTypes::Validation(block) => self.execute_validation(block)?,
+            ExecutionTypes::Validation(block) => {
+                self.execute_validation(PartialFuelBlock::from(block))?
+            }
         };
 
         self.complete_transaction(
