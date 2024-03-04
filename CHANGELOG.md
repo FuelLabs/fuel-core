@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ### Added
 
+- [#1713](https://github.com/FuelLabs/fuel-core/pull/1713): Added automatic `impl` of traits `StorageWrite` and `StorageRead` for `StructuredStorage`. Tables that use a `Blueprint` can be read and written using these interfaces provided by structured storage types.
 - [#1671](https://github.com/FuelLabs/fuel-core/pull/1671): Added a new `Merklized` blueprint that maintains the binary Merkle tree over the storage data. It supports only the insertion of the objects without removing them.
 - [#1657](https://github.com/FuelLabs/fuel-core/pull/1657): Moved `ContractsInfo` table from `fuel-vm` to on-chain tables, and created version-able `ContractsInfoType` to act as the table's data type.
 
@@ -38,6 +39,15 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 - [#1636](https://github.com/FuelLabs/fuel-core/pull/1636): Add more docs to GraphQL DAP API.
 
 #### Breaking
+
+- [#1714](https://github.com/FuelLabs/fuel-core/pull/1714): The change bumps the `fuel-vm` to `0.47.1`. It breaks several breaking changes into the protocol:
+  - All malleable fields are zero during the execution and unavailable through the GTF getters. Accessing them via the memory directly is still possible, but they are zero.
+  - The `Transaction` doesn't define the gas price anymore. The gas price is defined by the block producer and recorded in the `Mint` transaction at the end of the block. A price of future blocks can be fetched through a [new API nedopoint](https://github.com/FuelLabs/fuel-core/issues/1641) and the price of the last block can be fetch or via the block or another [API endpoint](https://github.com/FuelLabs/fuel-core/issues/1647).
+  - The `GasPrice` policy is replaced with the `Tip` policy. The user may specify in the native tokens how much he wants to pay the block producer to include his transaction in the block. It is the prioritization mechanism to incentivize the block producer to include users transactions earlier.
+  - The `MaxFee` policy is mandatory to set. Without it, the transaction pool will reject the transaction. Since the block producer defines the gas price, the only way to control how much user agreed to pay can be done only through this policy.
+  - The `maturity` field is removed from the `Input::Coin`. The same affect can be achieve with the `Maturity` policy on the transaction and predicate. This changes breaks how input coin is created and removes the passing of this argument.
+  - The metadata of the `Checked<Tx>` doesn't contain `max_fee` and `min_fee` anymore. Only `max_gas` and `min_gas`. The `max_fee` is controlled by the user via the `MaxFee` policy.
+  - Added automatic `impl` of traits `StorageWrite` and `StorageRead` for `StructuredStorage`. Tables that use a `Blueprint` can be read and written using these interfaces provided by structured storage types.
 
 - [#1712](https://github.com/FuelLabs/fuel-core/pull/1712): Make `ContractUtxoInfo` type a version-able enum for use in the `ContractsLatestUtxo`table.
 - [#1657](https://github.com/FuelLabs/fuel-core/pull/1657): Changed `CROO` gas price type from `Word` to `DependentGasPrice`. The dependent gas price values are dummy values while awaiting updated benchmarks.

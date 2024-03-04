@@ -84,11 +84,13 @@ impl fuel_core_producer::ports::Executor<Vec<Transaction>> for ExecutorAdapter {
         let Components {
             header_to_produce,
             transactions_source,
+            gas_price,
             gas_limit,
         } = component;
         self._execute_without_commit(ExecutionTypes::Production(Components {
             header_to_produce,
             transactions_source: OnceTransactionsSource::new(transactions_source),
+            gas_price,
             gas_limit,
         }))
     }

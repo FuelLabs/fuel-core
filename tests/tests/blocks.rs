@@ -28,7 +28,6 @@ use fuel_core_types::{
         consensus::Consensus,
     },
     fuel_tx::*,
-    fuel_types::ChainId,
     secrecy::ExposeSecret,
     tai64::Tai64,
 };
@@ -96,16 +95,9 @@ async fn produce_block() {
     let client = FuelClient::from(srv.bound_address);
 
     let tx = Transaction::default_test_tx();
-    client.submit_and_await_commit(&tx).await.unwrap();
+    let status = client.submit_and_await_commit(&tx).await.unwrap();
 
-    let transaction_response = client
-        .transaction(&tx.id(&ChainId::default()))
-        .await
-        .unwrap();
-
-    if let TransactionStatus::Success { block_height, .. } =
-        transaction_response.unwrap().status
-    {
+    if let TransactionStatus::Success { block_height, .. } = status {
         let block = client.block_by_height(block_height).await.unwrap().unwrap();
         let actual_pub_key = block.block_producer().unwrap();
         let block_height: u32 = block.header.height;

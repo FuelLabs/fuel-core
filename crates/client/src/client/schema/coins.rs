@@ -25,7 +25,7 @@ pub struct CoinByIdArgs {
     variables = "CoinByIdArgs"
 )]
 pub struct CoinByIdQuery {
-    #[arguments(utxoId: $utxo_id)]
+    #[arguments(utxoId: $ utxo_id)]
     pub coin: Option<Coin>,
 }
 
@@ -87,7 +87,7 @@ impl From<(Address, AssetId, PaginationRequest<String>)> for CoinsConnectionArgs
     variables = "CoinsConnectionArgs"
 )]
 pub struct CoinsQuery {
-    #[arguments(filter: $filter, after: $after, before: $before, first: $first, last: $last)]
+    #[arguments(filter: $ filter, after: $ after, before: $ before, first: $ first, last: $ last)]
     pub coins: CoinConnection,
 }
 
@@ -112,7 +112,6 @@ pub struct Coin {
     pub block_created: U32,
     pub asset_id: AssetId,
     pub utxo_id: UtxoId,
-    pub maturity: U32,
     pub owner: Address,
 }
 
@@ -208,7 +207,7 @@ impl From<CoinsToSpendArgsTuple> for CoinsToSpendArgs {
     variables = "CoinsToSpendArgs"
 )]
 pub struct CoinsToSpendQuery {
-    #[arguments(owner: $owner, queryPerAsset: $query_per_asset, excludedIds: $excluded_ids)]
+    #[arguments(owner: $ owner, queryPerAsset: $ query_per_asset, excludedIds: $ excluded_ids)]
     pub coins_to_spend: Vec<Vec<CoinType>>,
 }
 

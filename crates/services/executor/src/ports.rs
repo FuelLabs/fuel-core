@@ -17,6 +17,8 @@ use fuel_core_storage::{
     StorageBatchMutate,
     StorageMutate,
     StorageRead,
+    StorageSize,
+    StorageWrite,
 };
 use fuel_core_types::{
     blockchain::primitives::DaBlockHeight,
@@ -73,13 +75,17 @@ pub trait ExecutorDatabaseTrait<D>:
     StorageInspect<FuelBlocks, Error = StorageError>
     + StorageMutate<Messages, Error = StorageError>
     + StorageMutate<ProcessedTransactions, Error = StorageError>
-    + MerkleRootStorage<ContractId, ContractsAssets, Error = StorageError>
     + StorageMutate<Coins, Error = StorageError>
     + StorageMutate<SpentMessages, Error = StorageError>
     + StorageMutate<ContractsLatestUtxo, Error = StorageError>
-    + StorageMutate<ContractsRawCode, Error = StorageError>
+    + StorageWrite<ContractsRawCode, Error = StorageError>
+    + StorageSize<ContractsRawCode, Error = StorageError>
+    + StorageRead<ContractsRawCode, Error = StorageError>
+    + StorageWrite<ContractsState, Error = StorageError>
+    + StorageSize<ContractsState, Error = StorageError>
+    + StorageRead<ContractsState, Error = StorageError>
+    + MerkleRootStorage<ContractId, ContractsAssets, Error = StorageError>
     + StorageMutate<ContractsAssets, Error = StorageError>
-    + StorageRead<ContractsRawCode>
     + StorageMutate<ContractsInfo, Error = StorageError>
     + MerkleRootStorage<ContractId, ContractsState, Error = StorageError>
     + StorageBatchMutate<ContractsState, Error = StorageError>

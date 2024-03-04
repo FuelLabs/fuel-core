@@ -32,7 +32,6 @@ pub struct Coin {
     pub block_created: u32,
     pub asset_id: AssetId,
     pub utxo_id: UtxoId,
-    pub maturity: u32,
     pub owner: Address,
 }
 
@@ -66,7 +65,6 @@ impl From<schema::coins::Coin> for Coin {
             block_created: value.block_created.into(),
             asset_id: value.asset_id.into(),
             utxo_id: value.utxo_id.into(),
-            maturity: value.maturity.into(),
             owner: value.owner.into(),
         }
     }

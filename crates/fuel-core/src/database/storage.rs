@@ -49,6 +49,7 @@ use fuel_core_storage::{
     StorageMutate,
     StorageRead,
     StorageSize,
+    StorageWrite,
 };
 use std::borrow::Cow;
 
@@ -180,6 +181,30 @@ where
 
     fn read_alloc(&self, key: &M::Key) -> StorageResult<Option<Vec<u8>>> {
         self.data.storage::<M>().read_alloc(key)
+    }
+}
+
+impl<M, Description> StorageWrite<M> for Database<Description>
+where
+    Description: DatabaseDescription,
+    M: Mappable,
+    StructuredStorage<DataSource<Description>>:
+        StorageWrite<M, Error = StorageError> + UseStructuredImplementation<M>,
+{
+    fn write(&mut self, key: &M::Key, buf: &[u8]) -> Result<usize, Self::Error> {
+        <_ as StorageWrite<M>>::write(&mut self.data, key, buf)
+    }
+
+    fn replace(
+        &mut self,
+        key: &M::Key,
+        buf: &[u8],
+    ) -> Result<(usize, Option<Vec<u8>>), Self::Error> {
+        <_ as StorageWrite<M>>::replace(&mut self.data, key, buf)
+    }
+
+    fn take(&mut self, key: &M::Key) -> Result<Option<Vec<u8>>, Self::Error> {
+        <_ as StorageWrite<M>>::take(&mut self.data, key)
     }
 }
 

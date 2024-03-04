@@ -301,7 +301,7 @@ fn service_with_many_contracts(
                 (0..state_size).map(|_| {
                     storage_key.to_big_endian(key_bytes.as_mut());
                     storage_key.increase().unwrap();
-                    (key_bytes, key_bytes)
+                    (key_bytes, key_bytes.to_vec())
                 }),
             )
             .unwrap();
@@ -362,13 +362,11 @@ fn run_with_service_with_extra_inputs(
             );
             tx_builder
                 .script_gas_limit(TARGET_BLOCK_GAS_LIMIT - BASE)
-                .gas_price(1)
                 .add_unsigned_coin_input(
                     SecretKey::random(rng),
                     rng.gen(),
                     u32::MAX as u64,
                     AssetId::BASE,
-                    Default::default(),
                     Default::default(),
                 );
             for contract_id in &contract_ids {

@@ -48,7 +48,6 @@ fn transaction<R: Rng>(
                 rng.gen(),
                 AssetId::BASE,
                 rng.gen(),
-                rng.gen(),
                 0,
                 vec![255; 1],
                 vec![255; 1],
@@ -67,7 +66,7 @@ fn transaction<R: Rng>(
         script,
         script_data,
         Policies::new()
-            .with_gas_price(0)
+            .with_max_fee(0)
             .with_maturity(0.into())
             .with_max_fee(Word::MAX),
         inputs,
@@ -103,7 +102,8 @@ pub fn vm_initialization(c: &mut Criterion) {
                 let mut vm = black_box(
                     Interpreter::<_, Script, NotSupportedEcal>::with_memory_storage(),
                 );
-                black_box(vm.init_script(tx.clone()))
+                let ready_tx = tx.clone().test_into_ready();
+                black_box(vm.init_script(ready_tx))
                     .expect("Should be able to execute transaction");
             })
         });

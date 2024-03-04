@@ -20,7 +20,7 @@ impl Database {
         slots: S,
     ) -> Result<(), StorageError>
     where
-        S: Iterator<Item = (Bytes32, Bytes32)>,
+        S: Iterator<Item = (Bytes32, Vec<u8>)>,
     {
         let slots = slots
             .map(|(key, value)| (ContractsStateKey::new(contract_id, &key), value))
@@ -28,7 +28,7 @@ impl Database {
         #[allow(clippy::map_identity)]
         <_ as StorageBatchMutate<ContractsState>>::init_storage(
             &mut self.data,
-            &mut slots.iter().map(|(key, value)| (key, value)),
+            &mut slots.iter().map(|(key, value)| (key, value.as_slice())),
         )
     }
 }
@@ -58,7 +58,7 @@ mod tests {
         };
 
         let rng = &mut StdRng::seed_from_u64(1234);
-        let gen = || Some((random_bytes32(rng), random_bytes32(rng)));
+        let gen = || Some((random_bytes32(rng), random_bytes32(rng).to_vec()));
         let data = core::iter::from_fn(gen).take(5_000).collect::<Vec<_>>();
 
         let contract_id = ContractId::from([1u8; 32]);
@@ -99,8 +99,8 @@ mod tests {
                 .expect("Should get a state from seq database")
                 .unwrap()
                 .into_owned();
-            assert_eq!(init_value, value);
-            assert_eq!(seq_value, value);
+            assert_eq!(init_value.0, value);
+            assert_eq!(seq_value.0, value);
         }
     }
 }

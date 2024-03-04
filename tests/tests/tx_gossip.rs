@@ -174,7 +174,6 @@ async fn test_tx_gossiping_invalid_txs(
                 asset_id: rng.gen(),
                 tx_pointer: Default::default(),
                 witness_index: 0,
-                maturity: Default::default(),
                 predicate_gas_used: Empty::new(),
                 predicate: Empty::new(),
                 predicate_data: Empty::new(),

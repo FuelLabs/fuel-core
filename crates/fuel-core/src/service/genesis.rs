@@ -356,7 +356,6 @@ fn create_coin_from_config(coin: &CoinConfig, generated_output_index: &mut u64) 
         owner: coin.owner,
         amount: coin.amount,
         asset_id: coin.asset_id,
-        maturity: coin.maturity.unwrap_or_default(),
         tx_pointer: TxPointer::new(
             coin.tx_pointer_block_height.unwrap_or_default(),
             coin.tx_pointer_tx_idx.unwrap_or_default(),
@@ -443,7 +442,6 @@ mod tests {
         let alice: Address = rng.gen();
         let asset_id_alice: AssetId = rng.gen();
         let alice_value = rng.gen();
-        let alice_maturity: BlockHeight = rng.next_u32().into();
         let alice_block_created: BlockHeight = rng.next_u32().into();
         let alice_block_created_tx_idx = rng.gen();
         let alice_tx_id = rng.gen();
@@ -464,7 +462,6 @@ mod tests {
                             output_index: Some(alice_output_index),
                             tx_pointer_block_height: Some(alice_block_created),
                             tx_pointer_tx_idx: Some(alice_block_created_tx_idx),
-                            maturity: Some(alice_maturity),
                             owner: alice,
                             amount: alice_value,
                             asset_id: asset_id_alice,
@@ -474,7 +471,6 @@ mod tests {
                             output_index: None,
                             tx_pointer_block_height: None,
                             tx_pointer_tx_idx: None,
-                            maturity: None,
                             owner: bob,
                             amount: bob_value,
                             asset_id: asset_id_bob,
@@ -509,14 +505,12 @@ mod tests {
                 amount,
                 asset_id,
                 tx_pointer,
-                maturity,
                 ..
             }] if utxo_id == alice_utxo_id
             && owner == alice
             && amount == alice_value
             && asset_id == asset_id_alice
             && tx_pointer.block_height() == alice_block_created
-            && maturity == alice_maturity,
         ));
         assert!(matches!(
             bob_coins.as_slice(),
@@ -537,7 +531,7 @@ mod tests {
 
         let test_key: Bytes32 = rng.gen();
         let test_value: Bytes32 = rng.gen();
-        let state = vec![(test_key, test_value)];
+        let state = vec![(test_key, test_value.to_vec())];
         let salt: Salt = rng.gen();
         let contract = Contract::from(op::ret(0x10).to_bytes().to_vec());
         let root = contract.root();
@@ -576,7 +570,7 @@ mod tests {
             .expect("Expect a state entry to exist with test_key")
             .into_owned();
 
-        assert_eq!(test_value, ret)
+        assert_eq!(test_value.to_vec(), ret.0)
     }
 
     #[tokio::test]
@@ -677,7 +671,6 @@ mod tests {
                         // set txpointer height > genesis height
                         tx_pointer_block_height: Some(BlockHeight::from(11u32)),
                         tx_pointer_tx_idx: Some(0),
-                        maturity: None,
                         owner: Default::default(),
                         amount: 10,
                         asset_id: Default::default(),
