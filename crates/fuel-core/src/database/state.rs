@@ -25,7 +25,7 @@ impl Database {
         slots: S,
     ) -> Result<(), StorageError>
     where
-        S: Iterator<Item = (Bytes32, Bytes32)>,
+        S: Iterator<Item = (Bytes32, Vec<u8>)>,
     {
         let slots = slots
             .map(|(key, value)| (ContractsStateKey::new(contract_id, &key), value))
@@ -33,7 +33,7 @@ impl Database {
         #[allow(clippy::map_identity)]
         <_ as StorageBatchMutate<ContractsState>>::init_storage(
             &mut self.data,
-            &mut slots.iter().map(|(key, value)| (key, value)),
+            &mut slots.iter().map(|(key, value)| (key, value.as_slice())),
         )
     }
 
@@ -54,15 +54,15 @@ impl Database {
     /// On any error while accessing the database.
     pub fn update_contract_states(
         &mut self,
-        balances: impl IntoIterator<Item = ContractStateConfig>,
+        states: impl IntoIterator<Item = ContractStateConfig>,
     ) -> Result<(), StorageError> {
-        balances
+        states
             .into_iter()
             .group_by(|s| s.contract_id)
             .into_iter()
             .try_for_each(|(contract_id, entries)| {
                 if self.state_present(&contract_id)? {
-                    self.db_insert_contract_states(&entries.into_iter().collect_vec())
+                    self.db_insert_contract_states(entries.into_iter().collect_vec())
                 } else {
                     self.init_contract_state(
                         &contract_id,
@@ -76,26 +76,25 @@ impl Database {
 
     fn db_insert_contract_states(
         &mut self,
-        balances: &[ContractStateConfig],
+        states: impl IntoIterator<Item = ContractStateConfig>,
     ) -> Result<(), StorageError> {
-        let balance_entries = balances
-            .iter()
-            .map(|balance_entry| {
-                let db_key = ContractsStateKey::new(
-                    &balance_entry.contract_id,
-                    &balance_entry.key,
-                );
-                (db_key, balance_entry.value)
+        let state_entries = states
+            .into_iter()
+            .map(|state_entry| {
+                let db_key =
+                    ContractsStateKey::new(&state_entry.contract_id, &state_entry.key);
+                (db_key, state_entry.value)
             })
             .collect_vec();
 
         #[allow(clippy::map_identity)]
-        let balance_entries_iter =
-            balance_entries.iter().map(|(key, value)| (key, value));
+        let state_entries_iter = state_entries
+            .iter()
+            .map(|(key, value)| (key, value.as_slice()));
 
         <_ as StorageBatchMutate<ContractsState>>::insert_batch(
             &mut self.data,
-            balance_entries_iter,
+            state_entries_iter,
         )?;
 
         Ok(())
@@ -151,7 +150,7 @@ mod tests {
         };
 
         let rng = &mut StdRng::seed_from_u64(1234);
-        let gen = || Some((random_bytes32(rng), random_bytes32(rng)));
+        let gen = || Some((random_bytes32(rng), random_bytes32(rng).to_vec()));
         let data = core::iter::from_fn(gen).take(5_000).collect::<Vec<_>>();
 
         let contract_id = ContractId::from([1u8; 32]);
@@ -192,16 +191,12 @@ mod tests {
                 .expect("Should get a state from seq database")
                 .unwrap()
                 .into_owned();
-            assert_eq!(init_value, value);
-            assert_eq!(seq_value, value);
+            assert_eq!(init_value.0, value);
+            assert_eq!(seq_value.0, value);
         }
     }
 
     mod update_contract_state {
-        use fuel_core_storage::codec::{
-            postcard::Postcard,
-            Encode,
-        };
         use fuel_core_types::fuel_merkle::sparse::{
             self,
             MerkleTreeKey,
@@ -215,7 +210,7 @@ mod tests {
             let state_groups = repeat_with(|| ContractStateConfig {
                 contract_id: random_contract_id(&mut rng),
                 key: random_bytes32(&mut rng),
-                value: random_bytes32(&mut rng),
+                value: random_bytes32(&mut rng).to_vec(),
             })
             .chunks(100)
             .into_iter()
@@ -245,7 +240,7 @@ mod tests {
                     ContractStateConfig {
                         contract_id,
                         key,
-                        value,
+                        value: value.0,
                     }
                 })
                 .collect();
@@ -262,8 +257,7 @@ mod tests {
         fn merkalize(state: &[ContractStateConfig]) -> [u8; 32] {
             let state = state.iter().map(|s| {
                 let ckey = ContractsStateKey::new(&s.contract_id, &s.key);
-                let value = Postcard::encode(&s.value).into_owned();
-                (MerkleTreeKey::new(ckey), value)
+                (MerkleTreeKey::new(ckey), &s.value)
             });
             sparse::in_memory::MerkleTree::root_from_set(state.into_iter())
         }
@@ -276,7 +270,7 @@ mod tests {
             let state = repeat_with(|| ContractStateConfig {
                 contract_id,
                 key: random_bytes32(&mut rng),
-                value: random_bytes32(&mut rng),
+                value: random_bytes32(&mut rng).to_vec(),
             })
             .take(100)
             .collect_vec();
@@ -310,7 +304,7 @@ mod tests {
                     repeat_with(|| ContractStateConfig {
                         contract_id: *id,
                         key: random_bytes32(&mut rng),
-                        value: random_bytes32(&mut rng),
+                        value: random_bytes32(&mut rng).to_vec(),
                     })
                     .take(10)
                     .collect_vec()
@@ -355,7 +349,7 @@ mod tests {
             let mut random_state = |contract_id: ContractId| ContractStateConfig {
                 contract_id,
                 key: random_bytes32(&mut rng),
-                value: random_bytes32(&mut rng),
+                value: random_bytes32(&mut rng).to_vec(),
             };
             let state_per_contract = contract_ids
                 .iter()

@@ -392,7 +392,6 @@ mod tests {
                 owner: self.rng.gen(),
                 amount: self.rng.gen(),
                 asset_id: self.rng.gen(),
-                maturity: self.rng.gen(),
                 tx_pointer: self.rng.gen(),
             });
             self.db
@@ -405,7 +404,6 @@ mod tests {
                 output_index: Some(output_index),
                 tx_pointer_block_height: Some(coin.tx_pointer().block_height()),
                 tx_pointer_tx_idx: Some(coin.tx_pointer().tx_index()),
-                maturity: Some(*coin.maturity()),
                 owner: *coin.owner(),
                 amount: *coin.amount(),
                 asset_id: *coin.asset_id(),
@@ -486,7 +484,7 @@ mod tests {
         ) -> ContractStateConfig {
             let state_key = self.rng.gen();
             let key = ContractsStateKey::new(&contract_id, &state_key);
-            let value = self.rng.gen();
+            let value = self.generate_data(100);
             self.db
                 .storage_as_mut::<ContractsState>()
                 .insert(&key, &value)

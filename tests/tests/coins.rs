@@ -119,7 +119,6 @@ mod coin {
                         coin.amount,
                         coin.asset_id,
                         Default::default(),
-                        coin.maturity.into(),
                     );
                 }
             }

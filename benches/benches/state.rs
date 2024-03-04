@@ -35,7 +35,7 @@ fn setup(db: &mut Database, contract: &ContractId, n: usize) {
 
     let mut rng_values = thread_rng();
     let gen_values = || -> Bytes32 { rng_values.gen() };
-    let state_values = iter::repeat_with(gen_values).take(n);
+    let state_values = iter::repeat_with(gen_values).map(|b| b.to_vec()).take(n);
 
     // State key-values
     let state_key_values = state_keys.zip(state_values);
@@ -66,7 +66,7 @@ fn insert_state_single_contract_database(c: &mut Criterion) {
                     );
                     let start = std::time::Instant::now();
                     inner_db
-                        .merkle_contract_state_insert(&contract, &state, &value)
+                        .contract_state_insert(&contract, &state, value.as_slice())
                         .expect("failed to insert state into transaction");
                     elapsed_time += start.elapsed();
                 }
@@ -127,7 +127,7 @@ fn insert_state_single_contract_transaction(c: &mut Criterion) {
                     );
                     let start = std::time::Instant::now();
                     inner_db
-                        .merkle_contract_state_insert(&contract, &state, &value)
+                        .contract_state_insert(&contract, &state, value.as_slice())
                         .expect("failed to insert state into transaction");
                     elapsed_time += start.elapsed();
                 }
@@ -191,7 +191,7 @@ fn insert_state_multiple_contracts_database(c: &mut Criterion) {
                     );
                     let start = std::time::Instant::now();
                     inner_db
-                        .merkle_contract_state_insert(&contract, &state, &value)
+                        .contract_state_insert(&contract, &state, value.as_slice())
                         .expect("failed to insert state into transaction");
                     elapsed_time += start.elapsed();
                 }
@@ -255,7 +255,7 @@ fn insert_state_multiple_contracts_transaction(c: &mut Criterion) {
                     );
                     let start = std::time::Instant::now();
                     inner_db
-                        .merkle_contract_state_insert(&contract, &state, &value)
+                        .contract_state_insert(&contract, &state, value.as_slice())
                         .expect("failed to insert state into transaction");
                     elapsed_time += start.elapsed();
                 }

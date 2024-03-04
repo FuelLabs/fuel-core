@@ -511,7 +511,6 @@ mod tests {
             output_index: Some(2),
             tx_pointer_block_height: Some(BlockHeight::new(3)),
             tx_pointer_tx_idx: Some(4),
-            maturity: Some(BlockHeight::new(5)),
             owner: [6u8; 32].into(),
             amount: 7,
             asset_id: [8u8; 32].into(),

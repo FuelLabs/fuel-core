@@ -9,26 +9,26 @@ use crate::{
 use std::cmp;
 
 /// all transactions sorted by min/max price
-pub type PriceSort = Sort<PriceSortKey>;
+pub type TipSort = Sort<TipSortKey>;
 
 #[derive(Clone, Debug)]
-pub struct PriceSortKey {
-    price: GasPrice,
+pub struct TipSortKey {
+    tip: Word,
     tx_id: TxId,
 }
 
-impl SortableKey for PriceSortKey {
+impl SortableKey for TipSortKey {
     type Value = GasPrice;
 
     fn new(info: &TxInfo) -> Self {
         Self {
-            price: info.tx().price(),
+            tip: info.tx().tip(),
             tx_id: info.tx().id(),
         }
     }
 
     fn value(&self) -> &Self::Value {
-        &self.price
+        &self.tip
     }
 
     fn tx_id(&self) -> &TxId {
@@ -36,23 +36,23 @@ impl SortableKey for PriceSortKey {
     }
 }
 
-impl PartialEq for PriceSortKey {
+impl PartialEq for TipSortKey {
     fn eq(&self, other: &Self) -> bool {
         self.tx_id == other.tx_id
     }
 }
 
-impl Eq for PriceSortKey {}
+impl Eq for TipSortKey {}
 
-impl PartialOrd for PriceSortKey {
+impl PartialOrd for TipSortKey {
     fn partial_cmp(&self, other: &Self) -> Option<cmp::Ordering> {
         Some(self.cmp(other))
     }
 }
 
-impl Ord for PriceSortKey {
+impl Ord for TipSortKey {
     fn cmp(&self, other: &Self) -> cmp::Ordering {
-        let cmp = self.price.cmp(&other.price);
+        let cmp = self.tip.cmp(&other.tip);
         if cmp == cmp::Ordering::Equal {
             return self.tx_id.cmp(&other.tx_id)
         }

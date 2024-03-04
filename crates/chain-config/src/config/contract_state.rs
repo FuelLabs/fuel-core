@@ -7,11 +7,11 @@ use serde::{
     Serialize,
 };
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, PartialOrd, Ord)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, PartialOrd, Ord)]
 pub struct ContractStateConfig {
     pub contract_id: ContractId,
     pub key: Bytes32,
-    pub value: Bytes32,
+    pub value: Vec<u8>,
 }
 
 #[cfg(all(test, feature = "random", feature = "std"))]

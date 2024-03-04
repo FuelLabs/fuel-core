@@ -24,6 +24,7 @@ use fuel_core_storage::{
         ContractsInfo,
         ContractsLatestUtxo,
         ContractsRawCode,
+        Messages,
     },
     transactional::{
         StorageTransaction,
@@ -214,7 +215,6 @@ fn init_coin(
         owner: coin.owner,
         amount: coin.amount,
         asset_id: coin.asset_id,
-        maturity: coin.maturity.unwrap_or_default(),
         tx_pointer: coin.tx_pointer(),
     }
     .compress();
@@ -294,7 +294,7 @@ fn init_da_message(db: &mut Database, msg: MessageConfig) -> anyhow::Result<Merk
     let message: Message = msg.into();
 
     if db
-        .storage::<fuel_core_storage::tables::Messages>()
+        .storage::<Messages>()
         .insert(message.id(), &message)?
         .is_some()
     {
@@ -418,7 +418,7 @@ mod tests {
             .map(|_| ContractStateConfig {
                 contract_id: rng.gen(),
                 key: rng.gen(),
-                value: rng.gen(),
+                value: [1, 2, 3].to_vec(),
             })
             .collect_vec();
 
@@ -480,7 +480,6 @@ mod tests {
         let alice: Address = rng.gen();
         let asset_id_alice: AssetId = rng.gen();
         let alice_value = rng.gen();
-        let alice_maturity: BlockHeight = rng.next_u32().into();
         let alice_block_created: BlockHeight = rng.next_u32().into();
         let alice_block_created_tx_idx = rng.gen();
         let alice_tx_id = rng.gen();
@@ -504,7 +503,6 @@ mod tests {
                     output_index: Some(alice_output_index),
                     tx_pointer_block_height: Some(alice_block_created),
                     tx_pointer_tx_idx: Some(alice_block_created_tx_idx),
-                    maturity: Some(alice_maturity),
                     owner: alice,
                     amount: alice_value,
                     asset_id: asset_id_alice,
@@ -542,14 +540,12 @@ mod tests {
                 amount,
                 asset_id,
                 tx_pointer,
-                maturity,
                 ..
             }] if utxo_id == alice_utxo_id
             && owner == alice
             && amount == alice_value
             && asset_id == asset_id_alice
             && tx_pointer.block_height() == alice_block_created
-            && maturity == alice_maturity,
         ));
         assert!(matches!(
             bob_coins.as_slice(),
@@ -574,11 +570,11 @@ mod tests {
         let contract_id = contract.id(&salt, &root, &Contract::default_state_root());
 
         let test_key = rng.gen();
-        let test_value = rng.gen();
+        let test_value = [1, 2, 3].to_vec();
         let contract_state = ContractStateConfig {
             contract_id,
             key: test_key,
-            value: test_value,
+            value: test_value.clone(),
         };
 
         let state = StateConfig {
@@ -614,7 +610,7 @@ mod tests {
             .expect("Expect a state entry to exist with test_key")
             .into_owned();
 
-        assert_eq!(test_value, ret)
+        assert_eq!(test_value.to_vec(), ret.0)
     }
 
     #[cfg(feature = "test-helpers")]

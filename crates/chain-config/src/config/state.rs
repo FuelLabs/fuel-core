@@ -230,7 +230,6 @@ impl StateConfig {
             output_index: utxo_id.as_ref().map(|u| u.output_index()),
             tx_pointer_block_height: None,
             tx_pointer_tx_idx: None,
-            maturity: None,
             owner: address,
             amount,
             asset_id: Default::default(),

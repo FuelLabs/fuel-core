@@ -29,7 +29,6 @@ pub struct CoinConfig {
     /// used if coin is forked from another chain to preserve id & tx_pointer
     /// The index of the originating tx within `tx_pointer_block_height`
     pub tx_pointer_tx_idx: Option<u16>,
-    pub maturity: Option<BlockHeight>,
     pub owner: Address,
     pub amount: u64,
     pub asset_id: AssetId,
@@ -65,7 +64,6 @@ impl crate::Randomize for CoinConfig {
                 .gen::<bool>()
                 .then(|| BlockHeight::new(rng.gen())),
             tx_pointer_tx_idx: rng.gen::<bool>().then(|| rng.gen()),
-            maturity: rng.gen::<bool>().then(|| BlockHeight::new(rng.gen())),
             owner: Address::new(super::random_bytes_32(&mut rng)),
             amount: rng.gen(),
             asset_id: AssetId::new(super::random_bytes_32(rng)),
@@ -78,14 +76,12 @@ impl GenesisCommitment for CompressedCoin {
         let owner = self.owner();
         let amount = self.amount();
         let asset_id = self.asset_id();
-        let maturity = self.maturity();
         let tx_pointer = self.tx_pointer();
 
         let coin_hash = *Hasher::default()
             .chain(owner)
             .chain(amount.to_be_bytes())
             .chain(asset_id)
-            .chain((*maturity).to_be_bytes())
             .chain(tx_pointer.block_height().to_be_bytes())
             .chain(tx_pointer.tx_index().to_be_bytes())
             .finalize();

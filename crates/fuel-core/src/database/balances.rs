@@ -52,7 +52,7 @@ impl Database {
             .into_iter()
             .try_for_each(|(contract_id, entries)| {
                 if self.assets_present(&contract_id)? {
-                    self.db_insert_contract_balances(&entries.into_iter().collect_vec())
+                    self.db_insert_contract_balances(entries.into_iter().collect_vec())
                 } else {
                     self.init_contract_balances(
                         &contract_id,
@@ -66,10 +66,10 @@ impl Database {
 
     fn db_insert_contract_balances(
         &mut self,
-        balances: &[ContractBalanceConfig],
+        balances: impl IntoIterator<Item = ContractBalanceConfig>,
     ) -> Result<(), StorageError> {
         let balance_entries = balances
-            .iter()
+            .into_iter()
             .map(|balance_entry| {
                 let db_key = ContractsAssetKey::new(
                     &balance_entry.contract_id,

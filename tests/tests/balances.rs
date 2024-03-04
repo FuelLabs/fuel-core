@@ -100,7 +100,6 @@ async fn balance() {
                     coin.asset_id,
                     Default::default(),
                     0,
-                    coin.maturity.into(),
                 )),
                 CoinType::MessageCoin(message) => {
                     tx.add_input(Input::message_coin_signed(

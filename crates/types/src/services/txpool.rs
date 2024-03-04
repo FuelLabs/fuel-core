@@ -8,6 +8,7 @@ use crate::{
             Inputs,
             Outputs,
             ScriptGasLimit,
+            Tip,
         },
         Cacheable,
         Chargeable,
@@ -59,22 +60,6 @@ pub enum PoolTransaction {
 }
 
 impl PoolTransaction {
-    /// Returns the gas price.
-    pub fn price(&self) -> Word {
-        match self {
-            PoolTransaction::Script(script) => script.transaction().price(),
-            PoolTransaction::Create(create) => create.transaction().price(),
-        }
-    }
-
-    /// Returns the maximum amount of gas that the transaction can consume.
-    pub fn max_gas(&self) -> Word {
-        match self {
-            PoolTransaction::Script(script) => script.metadata().fee.max_gas(),
-            PoolTransaction::Create(create) => create.metadata().fee.max_gas(),
-        }
-    }
-
     /// Used for accounting purposes when charging byte based fees.
     pub fn metered_bytes_size(&self) -> usize {
         match self {
@@ -90,6 +75,14 @@ impl PoolTransaction {
             PoolTransaction::Create(create) => create.id(),
         }
     }
+
+    /// Returns the maximum amount of gas that the transaction can consume.
+    pub fn max_gas(&self) -> Word {
+        match self {
+            PoolTransaction::Script(script) => script.metadata().max_gas,
+            PoolTransaction::Create(create) => create.metadata().max_gas,
+        }
+    }
 }
 
 #[allow(missing_docs)]
@@ -100,6 +93,13 @@ impl PoolTransaction {
                 Some(*script.transaction().script_gas_limit())
             }
             PoolTransaction::Create(_) => None,
+        }
+    }
+
+    pub fn tip(&self) -> Word {
+        match self {
+            Self::Script(script) => script.transaction().tip(),
+            Self::Create(create) => create.transaction().tip(),
         }
     }
 

@@ -25,7 +25,6 @@ query($id: TransactionId!) {
         assetId
         txPointer
         witnessIndex
-        maturity
         predicateGasUsed
         predicate
         predicateData
@@ -184,7 +183,7 @@ query($id: TransactionId!) {
     script
     scriptData
     policies {
-      gasPrice
+      tip
       maturity
       witnessLimit
       maxFee

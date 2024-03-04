@@ -46,10 +46,11 @@ impl TestContext {
         &self.service
     }
 
-    pub fn setup_script_tx(&self, gas_price: Word) -> Transaction {
+    pub fn setup_script_tx(&self, tip: Word) -> Transaction {
         let (_, gas_coin) = self.setup_coin();
         let mut tx = TransactionBuilder::script(vec![], vec![])
-            .gas_price(gas_price)
+            .max_fee_limit(tip)
+            .tip(tip)
             .script_gas_limit(1000)
             .add_input(gas_coin)
             .finalize_as_transaction();
@@ -171,10 +172,11 @@ impl TestContextBuilder {
         self.p2p = Some(p2p)
     }
 
-    pub fn setup_script_tx(&mut self, gas_price: Word) -> Transaction {
+    pub fn setup_script_tx(&mut self, tip: Word) -> Transaction {
         let (_, gas_coin) = self.setup_coin();
         TransactionBuilder::script(vec![], vec![])
-            .gas_price(gas_price)
+            .tip(tip)
+            .max_fee_limit(tip)
             .script_gas_limit(1000)
             .add_input(gas_coin)
             .finalize_as_transaction()

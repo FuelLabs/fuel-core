@@ -20,7 +20,7 @@ use serde::{
 use serde_with::serde_as;
 
 #[serde_as]
-#[derive(Clone, Debug, Deserialize, Serialize, Eq, PartialEq, Default)]
+#[derive(Default, Clone, Debug, Deserialize, Serialize, Eq, PartialEq)]
 pub struct ContractConfig {
     pub contract_id: ContractId,
     #[serde_as(as = "HexIfHumanReadable")]

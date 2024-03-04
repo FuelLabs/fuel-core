@@ -349,6 +349,7 @@ impl Command {
             block_producer: ProducerConfig {
                 utxo_validation,
                 coinbase_recipient,
+                gas_price: min_gas_price,
                 metrics,
             },
             block_importer,

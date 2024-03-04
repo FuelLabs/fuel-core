@@ -63,12 +63,12 @@ async fn loads_snapshot() {
             ContractStateConfig {
                 contract_id,
                 key: Bytes32::new([5u8; 32]),
-                value: Bytes32::new([8u8; 32]),
+                value: [8u8; 32].to_vec(),
             },
             ContractStateConfig {
                 contract_id,
                 key: Bytes32::new([7u8; 32]),
-                value: Bytes32::new([9u8; 32]),
+                value: [9u8; 32].to_vec(),
             },
         ],
         coins: vec![
@@ -80,7 +80,6 @@ async fn loads_snapshot() {
         .map(|(owner, amount, asset_id)| CoinConfig {
             tx_pointer_block_height: Some(Default::default()),
             tx_pointer_tx_idx: Some(0),
-            maturity: Some(Default::default()),
             owner,
             amount,
             asset_id,
@@ -124,7 +123,6 @@ async fn loads_snapshot() {
             state_coin[i].tx_pointer_block_height,
             starting_coin[i].tx_pointer_block_height
         );
-        assert_eq!(state_coin[i].maturity, starting_coin[i].maturity);
     }
 
     assert_eq!(state_conf.contracts, starting_state.contracts);

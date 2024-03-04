@@ -18,11 +18,13 @@ use fuel_core_storage::{
     Result as StorageResult,
     StorageAsRef,
 };
-use fuel_core_types::fuel_types::{
-    AssetId,
-    Bytes32,
-    ContractId,
-    Word,
+use fuel_core_types::{
+    fuel_tx::Bytes32,
+    fuel_types::{
+        AssetId,
+        ContractId,
+        Word,
+    },
 };
 
 impl Database {
@@ -30,14 +32,14 @@ impl Database {
         &self,
     ) -> impl Iterator<Item = StorageResult<ContractStateConfig>> + '_ {
         self.iter_all::<ContractsState>(None).map(|res| {
-            let res = res?;
-            let contract_id = *res.0.contract_id();
-            let key = *res.0.state_key();
+            let (key, value) = res?;
+            let contract_id = *key.contract_id();
+            let key = *key.state_key();
 
             Ok(ContractStateConfig {
                 contract_id,
                 key,
-                value: res.1,
+                value: value.0,
             })
         })
     }
@@ -118,12 +120,12 @@ impl Database {
     pub fn contract_states(
         &self,
         contract_id: ContractId,
-    ) -> impl Iterator<Item = StorageResult<(Bytes32, Bytes32)>> + '_ {
+    ) -> impl Iterator<Item = StorageResult<(Bytes32, Vec<u8>)>> + '_ {
         self.iter_all_by_prefix::<ContractsState, _>(Some(contract_id))
-            .map(|res| -> StorageResult<(Bytes32, Bytes32)> {
+            .map(|res| -> StorageResult<(Bytes32, Vec<u8>)> {
                 let (key, value) = res?;
 
-                Ok((*key.state_key(), value))
+                Ok((*key.state_key(), value.0))
             })
     }
 

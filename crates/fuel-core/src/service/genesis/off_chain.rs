@@ -78,7 +78,6 @@ fn process_coins(
             owner: config.owner,
             amount: config.amount,
             asset_id: config.asset_id,
-            maturity: config.maturity.unwrap_or_default(),
             tx_pointer: config.tx_pointer(),
         };
         Cow::Owned(Event::CoinCreated(coin))
