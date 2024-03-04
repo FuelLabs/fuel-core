@@ -271,7 +271,7 @@ spec:
               protocol: TCP
           livenessProbe:
             httpGet:
-              path: /v/health
+              path: /v1/health
               port: {{ .Values.app.target_port }}
             initialDelaySeconds: 300
             periodSeconds: 5
