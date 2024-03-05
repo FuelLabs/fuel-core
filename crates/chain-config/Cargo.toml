@@ -12,30 +12,44 @@ description = "Fuel Chain config types"
 
 [dependencies]
 anyhow = { workspace = true }
-bech32 = "0.9.0"
+bech32 = { version = "0.9.0", default-features = false }
 fuel-core-storage = { workspace = true }
 fuel-core-types = { workspace = true, default-features = false, features = [
   "serde",
 ] }
-hex = { version = "0.4", features = ["serde"] }
-itertools = { workspace = true }
+impl-tools = { workspace = true }
+itertools = { workspace = true, features = ["use_alloc"] }
+parquet = { workspace = true, features = ["zstd"], optional = true }
 postcard = { workspace = true, features = ["alloc"] }
 rand = { workspace = true, optional = true }
 serde = { workspace = true, features = ["derive", "rc"] }
 serde_json = { version = "1.0", features = ["raw_value"], optional = true }
-serde_with = "1.11"
-tracing = "0.1"
+serde_with = { workspace = true, features = ["macros", "hex"] }
+tracing = { version = "0.1", default-features = false }
 
 [dev-dependencies]
+bytes = { workspace = true }
+fuel-core-chain-config = { path = ".", features = ["parquet"] }
 fuel-core-types = { workspace = true, default-features = false, features = [
   "random",
   "serde",
 ] }
 insta = { workspace = true }
+pretty_assertions = { workspace = true }
 rand = { workspace = true }
 serde_json = { version = "1.0", features = ["raw_value"] }
+strum = { workspace = true, features = ["derive"] }
+tempfile = { workspace = true }
 
 [features]
-default = ["std", "fuel-core-types/std"]
+std = [
+  "itertools/use_std",
+  "serde_json/std",
+  "fuel-core-types/std",
+  "anyhow/std",
+  "tracing/std",
+  "bech32/std",
+]
+default = ["std", "random"]
+parquet = ["std", "dep:parquet", "postcard/use-std"]
 random = ["dep:rand", "fuel-core-types/random"]
-std = ["dep:serde_json", "fuel-core-types/std", "anyhow/std"]

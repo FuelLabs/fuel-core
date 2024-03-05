@@ -60,9 +60,10 @@ impl Database {
         Ok(coin)
     }
 
-    pub fn get_coin_config(&self) -> StorageResult<Option<Vec<CoinConfig>>> {
-        let configs = self
-            .iter_all::<Coins>(None)
+    pub fn iter_coin_configs(
+        &self,
+    ) -> impl Iterator<Item = StorageResult<CoinConfig>> + '_ {
+        self.iter_all::<Coins>(None)
             .map(|raw_coin| -> StorageResult<CoinConfig> {
                 let (utxo_id, coin) = raw_coin?;
 
@@ -76,8 +77,5 @@ impl Database {
                     asset_id: *coin.asset_id(),
                 })
             })
-            .collect::<StorageResult<Vec<CoinConfig>>>()?;
-
-        Ok(Some(configs))
     }
 }

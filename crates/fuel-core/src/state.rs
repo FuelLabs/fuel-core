@@ -34,6 +34,12 @@ pub struct DataSource<Description = OnChain>(DataSourceInner<Description::Column
 where
     Description: DatabaseDescription;
 
+impl DataSource<OnChain> {
+    pub fn new(inner: DataSourceInner<<OnChain as DatabaseDescription>::Column>) -> Self {
+        Self(inner)
+    }
+}
+
 impl<Description> From<Arc<MemoryTransactionView<Description>>>
     for DataSource<Description>
 where

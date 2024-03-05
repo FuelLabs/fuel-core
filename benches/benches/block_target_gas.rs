@@ -21,7 +21,6 @@ use fuel_core::{
         config::Trigger,
         Config,
         FuelService,
-        ServiceTrait,
     },
     txpool::types::Word,
 };
@@ -29,7 +28,12 @@ use fuel_core_benches::{
     default_gas_costs::default_gas_costs,
     *,
 };
-use fuel_core_chain_config::ContractConfig;
+use fuel_core_chain_config::{
+    ContractConfig,
+    StateConfig,
+    StateReader,
+};
+use fuel_core_services::Service;
 use fuel_core_storage::{
     tables::ContractsRawCode,
     vm_storage::IncreaseStorageKey,
@@ -255,7 +259,7 @@ fn service_with_many_contracts(
     let mut database = Database::rocksdb();
     let mut config = Config::local_node();
     config
-        .chain_conf
+        .chain_config
         .consensus_parameters
         .tx_params
         .max_gas_per_tx = TARGET_BLOCK_GAS_LIMIT;
@@ -264,27 +268,25 @@ fn service_with_many_contracts(
         .iter()
         .map(|contract_id| ContractConfig {
             contract_id: *contract_id,
-            code: vec![],
-            salt: Default::default(),
-            state: None,
-            balances: None,
-            tx_id: None,
-            output_index: None,
-            tx_pointer_block_height: None,
-            tx_pointer_tx_idx: None,
+            ..Default::default()
         })
         .collect::<Vec<_>>();
-    config.chain_conf.initial_state.as_mut().unwrap().contracts = Some(contract_configs);
+    let state_config = StateConfig {
+        contracts: contract_configs,
+        ..Default::default()
+    };
+    config.state_reader = StateReader::in_memory(state_config);
 
     config
-        .chain_conf
+        .chain_config
         .consensus_parameters
         .predicate_params
         .max_gas_per_predicate = TARGET_BLOCK_GAS_LIMIT;
-    config.chain_conf.block_gas_limit = TARGET_BLOCK_GAS_LIMIT;
-    config.chain_conf.consensus_parameters.gas_costs = GasCosts::new(default_gas_costs());
+    config.chain_config.block_gas_limit = TARGET_BLOCK_GAS_LIMIT;
+    config.chain_config.consensus_parameters.gas_costs =
+        GasCosts::new(default_gas_costs());
     config
-        .chain_conf
+        .chain_config
         .consensus_parameters
         .fee_params
         .gas_per_byte = 0;
@@ -399,12 +401,17 @@ fn run_with_service_with_extra_inputs(
             }
             let mut tx = tx_builder.finalize_as_transaction();
             tx.estimate_predicates(
-                &shared.config.chain_conf.consensus_parameters.clone().into(),
+                &shared
+                    .config
+                    .chain_config
+                    .consensus_parameters
+                    .clone()
+                    .into(),
             )
             .unwrap();
             async move {
                 let tx_id =
-                    tx.id(&shared.config.chain_conf.consensus_parameters.chain_id);
+                    tx.id(&shared.config.chain_config.consensus_parameters.chain_id);
 
                 let mut sub = shared.block_importer.block_importer.subscribe();
                 shared

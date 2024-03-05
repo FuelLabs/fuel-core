@@ -41,7 +41,6 @@ use fuel_core_types::{
         canonical::Serialize,
         Address,
         AssetId,
-        Bytes32,
     },
     fuel_vm::SecretKey,
 };
@@ -298,7 +297,11 @@ impl Wallet {
         })
     }
 
-    pub async fn deploy_contract(&self, config: ContractConfig) -> anyhow::Result<()> {
+    pub async fn deploy_contract(
+        &self,
+        config: ContractConfig,
+        slots: Vec<StorageSlot>,
+    ) -> anyhow::Result<()> {
         let asset_id = AssetId::BASE;
         let total_amount = BASE_AMOUNT;
         // select coins
@@ -311,14 +314,8 @@ impl Wallet {
             contract_id,
             code: bytes,
             salt,
-            state,
             ..
         } = config;
-        let slots = state
-            .unwrap_or_default()
-            .into_iter()
-            .map(|(key, value)| StorageSlot::new(key, vec_to_bytes_32(value)))
-            .collect::<Vec<_>>();
         let state_root = Contract::initial_state_root(slots.iter());
         let mut tx = TransactionBuilder::create(bytes.into(), salt, slots);
 
@@ -361,13 +358,6 @@ impl Wallet {
 
         Ok(())
     }
-}
-
-// TODO: Remove when dynamic storage slots are supported.
-fn vec_to_bytes_32(vec: Vec<u8>) -> Bytes32 {
-    let mut bytes = [0u8; 32];
-    bytes.copy_from_slice(&vec);
-    bytes.into()
 }
 
 pub struct TransferResult {

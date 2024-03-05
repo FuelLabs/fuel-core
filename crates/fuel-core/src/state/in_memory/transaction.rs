@@ -270,9 +270,26 @@ where
     }
 }
 
-impl<Description> BatchOperations for MemoryTransactionView<Description> where
-    Description: DatabaseDescription
+impl<Description> BatchOperations for MemoryTransactionView<Description>
+where
+    Description: DatabaseDescription,
 {
+    fn delete_all(&self, column: Self::Column) -> StorageResult<()> {
+        self.view_layer.delete_all(column)?;
+
+        let ops: Vec<_> = self
+            .data_source
+            .iter_all(column, None, None, IterDirection::Forward)
+            .map_ok(|(key, _)| (key, WriteOperation::Remove))
+            .try_collect()?;
+
+        self.changes[column.as_usize()]
+            .lock()
+            .expect("poisoned lock")
+            .extend(ops);
+
+        Ok(())
+    }
 }
 
 impl<Description> TransactableStorage for MemoryTransactionView<Description>

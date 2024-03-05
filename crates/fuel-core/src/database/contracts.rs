@@ -1,7 +1,12 @@
 use crate::database::Database;
-use fuel_core_chain_config::ContractConfig;
+use fuel_core_chain_config::{
+    ContractBalanceConfig,
+    ContractConfig,
+    ContractStateConfig,
+};
 use fuel_core_storage::{
     iter::IterDirection,
+    not_found,
     tables::{
         ContractsAssets,
         ContractsInfo,
@@ -13,23 +18,61 @@ use fuel_core_storage::{
     Result as StorageResult,
     StorageAsRef,
 };
-use fuel_core_types::fuel_types::{
-    AssetId,
-    ContractId,
-    Word,
+use fuel_core_types::{
+    fuel_tx::Bytes32,
+    fuel_types::{
+        AssetId,
+        ContractId,
+        Word,
+    },
 };
 
 impl Database {
-    pub fn get_contract_config_by_id(
+    pub fn iter_contract_state_configs(
+        &self,
+    ) -> impl Iterator<Item = StorageResult<ContractStateConfig>> + '_ {
+        self.iter_all::<ContractsState>(None).map(|res| {
+            let (key, value) = res?;
+            let contract_id = *key.contract_id();
+            let key = *key.state_key();
+
+            Ok(ContractStateConfig {
+                contract_id,
+                key,
+                value: value.0,
+            })
+        })
+    }
+
+    pub fn iter_contract_balance_configs(
+        &self,
+    ) -> impl Iterator<Item = StorageResult<ContractBalanceConfig>> + '_ {
+        self.iter_all::<ContractsAssets>(None).map(|res| {
+            let res = res?;
+
+            let contract_id = *res.0.contract_id();
+            let asset_id = *res.0.asset_id();
+
+            Ok(ContractBalanceConfig {
+                contract_id,
+                asset_id,
+                amount: res.1,
+            })
+        })
+    }
+
+    pub fn get_contract_config(
         &self,
         contract_id: ContractId,
     ) -> StorageResult<ContractConfig> {
-        let code: Vec<u8> = self
+        let code = self
             .storage::<ContractsRawCode>()
             .get(&contract_id)?
-            .unwrap()
-            .into_owned()
-            .into();
+            .map(|v| {
+                let code: Vec<u8> = v.into_owned().into();
+                code
+            })
+            .ok_or_else(|| not_found!("ContractsRawCode"))?;
 
         let salt = *self
             .storage::<ContractsInfo>()
@@ -47,34 +90,10 @@ impl Database {
         let utxo_id = latest_utxo.utxo_id();
         let tx_pointer = latest_utxo.tx_pointer();
 
-        let state = Some(
-            self.iter_all_by_prefix::<ContractsState, _>(Some(contract_id.as_ref()))
-                .map(|res| {
-                    let (key, value) = res.map(|(key, value)| (key, value.0))?;
-
-                    Ok((*key.state_key(), value))
-                })
-                .filter(|val| val.is_ok())
-                .collect::<StorageResult<Vec<_>>>()?,
-        );
-
-        let balances = Some(
-            self.iter_all_by_prefix::<ContractsAssets, _>(Some(contract_id.as_ref()))
-                .map(|res| {
-                    let (key, value) = res?;
-
-                    Ok((*key.asset_id(), value))
-                })
-                .filter(|val| val.is_ok())
-                .collect::<StorageResult<Vec<_>>>()?,
-        );
-
         Ok(ContractConfig {
             contract_id,
             code,
             salt,
-            state,
-            balances,
             tx_id: Some(*utxo_id.tx_id()),
             output_index: Some(utxo_id.output_index()),
             tx_pointer_block_height: Some(tx_pointer.block_height()),
@@ -98,16 +117,27 @@ impl Database {
         .map(|res| res.map(|(key, balance)| (*key.asset_id(), balance)))
     }
 
-    pub fn get_contract_config(&self) -> StorageResult<Option<Vec<ContractConfig>>> {
-        let configs = self
-            .iter_all::<ContractsRawCode>(None)
-            .map(|raw_contract_id| -> StorageResult<ContractConfig> {
-                let contract_id = raw_contract_id?.0;
-                self.get_contract_config_by_id(contract_id)
-            })
-            .collect::<StorageResult<Vec<ContractConfig>>>()?;
+    pub fn contract_states(
+        &self,
+        contract_id: ContractId,
+    ) -> impl Iterator<Item = StorageResult<(Bytes32, Vec<u8>)>> + '_ {
+        self.iter_all_by_prefix::<ContractsState, _>(Some(contract_id))
+            .map(|res| -> StorageResult<(Bytes32, Vec<u8>)> {
+                let (key, value) = res?;
 
-        Ok(Some(configs))
+                Ok((*key.state_key(), value.0))
+            })
+    }
+
+    pub fn iter_contract_configs(
+        &self,
+    ) -> impl Iterator<Item = StorageResult<ContractConfig>> + '_ {
+        self.iter_all::<ContractsRawCode>(None).map(
+            |raw_contract_id| -> StorageResult<ContractConfig> {
+                let contract_id = raw_contract_id?.0;
+                self.get_contract_config(contract_id)
+            },
+        )
     }
 }
 

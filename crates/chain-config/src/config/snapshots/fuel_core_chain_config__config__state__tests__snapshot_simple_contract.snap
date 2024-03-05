@@ -1,0 +1,17 @@
+---
+source: crates/chain-config/src/config/state.rs
+expression: json
+---
+{
+  "coins": [],
+  "messages": [],
+  "contracts": [
+    {
+      "contract_id": "0x0000000000000000000000000000000000000000000000000000000000000000",
+      "code": "0x24400000",
+      "salt": "0x0000000000000000000000000000000000000000000000000000000000000000"
+    }
+  ],
+  "contract_state": [],
+  "contract_balance": []
+}

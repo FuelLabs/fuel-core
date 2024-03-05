@@ -5,6 +5,7 @@ use crate::kv_store::{
     KeyValueStore,
 };
 
+// TODO: BoxedIter to be used until RPITIT lands in stable rust.
 /// A boxed variant of the iterator that can be used as a return type of the traits.
 pub struct BoxedIter<'a, T> {
     iter: Box<dyn Iterator<Item = T> + 'a>,

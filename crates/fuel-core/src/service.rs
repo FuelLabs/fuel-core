@@ -23,7 +23,6 @@ use fuel_core_storage::{
     IsNotFound,
 };
 use std::net::SocketAddr;
-use tracing::warn;
 
 pub use config::{
     Config,
@@ -88,6 +87,7 @@ impl FuelService {
         let runner = ServiceRunner::new(task);
         let shared = runner.shared.clone();
         let bound_address = runner.shared.graph_ql.bound_address;
+
         Ok(FuelService {
             bound_address,
             shared,
@@ -98,31 +98,8 @@ impl FuelService {
     /// Creates and starts fuel node instance from service config
     pub async fn new_node(config: Config) -> anyhow::Result<Self> {
         // initialize database
-        let combined_database = match config.database_type {
-            #[cfg(feature = "rocksdb")]
-            DbType::RocksDb => {
-                // use a default tmp rocksdb if no path is provided
-                if config.database_path.as_os_str().is_empty() {
-                    warn!(
-                        "No RocksDB path configured, initializing database with a tmp directory"
-                    );
-                    CombinedDatabase::default()
-                } else {
-                    tracing::info!(
-                        "Opening database {:?} with cache size \"{}\"",
-                        config.database_path,
-                        config.max_database_cache_size
-                    );
-                    CombinedDatabase::open(
-                        &config.database_path,
-                        config.max_database_cache_size,
-                    )?
-                }
-            }
-            DbType::InMemory => CombinedDatabase::in_memory(),
-            #[cfg(not(feature = "rocksdb"))]
-            _ => CombinedDatabase::in_memory(),
-        };
+        let combined_database =
+            CombinedDatabase::from_config(&config.combined_db_config)?;
 
         Self::from_combined_database(combined_database, config).await
     }
@@ -216,12 +193,7 @@ impl Task {
     pub fn new(mut database: CombinedDatabase, config: Config) -> anyhow::Result<Task> {
         // initialize state
         tracing::info!("Initializing database");
-        let block_height = config
-            .chain_conf
-            .initial_state
-            .as_ref()
-            .and_then(|state| state.height)
-            .unwrap_or_default();
+        let block_height = config.state_reader.block_height();
         let da_block_height = 0u64.into();
         database.init(&block_height, &da_block_height)?;
 
@@ -258,15 +230,14 @@ impl RunnableService for Task {
         // check if chain is initialized
         if let Err(err) = on_view.get_genesis() {
             if err.is_not_found() {
-                let result = execute_genesis_block(&self.shared.config, &on_view)?;
+                let result = execute_genesis_block(&self.shared.config, &on_view).await?;
 
                 self.shared.block_importer.commit_result(result).await?;
 
-                let off_chain_db_transaction = genesis::off_chain::execute_genesis_block(
+                genesis::off_chain::execute_genesis_block(
                     &self.shared.config,
                     &off_view,
                 )?;
-                off_chain_db_transaction.commit()?;
             }
         }
 
@@ -349,7 +320,7 @@ mod tests {
                 task.sub_services()[i].stop_and_await().await.unwrap();
                 assert!(!task.run(&mut watcher).await.unwrap());
             } else {
-                break
+                break;
             }
             i += 1;
         }

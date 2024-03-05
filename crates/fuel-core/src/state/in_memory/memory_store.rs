@@ -197,9 +197,18 @@ where
     }
 }
 
-impl<Description> BatchOperations for MemoryStore<Description> where
-    Description: DatabaseDescription
+impl<Description> BatchOperations for MemoryStore<Description>
+where
+    Description: DatabaseDescription,
 {
+    fn delete_all(&self, column: Self::Column) -> StorageResult<()> {
+        self.inner[column.as_usize()]
+            .lock()
+            .expect("poisoned")
+            .clear();
+
+        Ok(())
+    }
 }
 
 impl<Description> TransactableStorage for MemoryStore<Description>

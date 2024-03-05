@@ -34,20 +34,20 @@ pub fn encode_metrics_response() -> impl IntoResponse {
             .lock()
             .expect("The service metrics lock is poisoned");
         if encode(&mut encoded, lock.deref()).is_err() {
-            return error_body()
+            return error_body();
         }
     }
 
     if encode(&mut encoded, &txpool_metrics().registry).is_err() {
-        return error_body()
+        return error_body();
     }
 
     if encode(&mut encoded, &graphql_metrics().registry).is_err() {
-        return error_body()
+        return error_body();
     }
 
     if encode(&mut encoded, &importer_metrics().registry).is_err() {
-        return error_body()
+        return error_body();
     }
 
     Response::builder()

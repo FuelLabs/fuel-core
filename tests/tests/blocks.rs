@@ -1,4 +1,8 @@
 use fuel_core::{
+    chain_config::{
+        StateConfig,
+        StateReader,
+    },
     database::Database,
     service::{
         Config,
@@ -66,8 +70,14 @@ async fn block() {
 
 #[tokio::test]
 async fn get_genesis_block() {
-    let mut config = Config::local_node();
-    config.chain_conf.initial_state.as_mut().unwrap().height = Some(13u32.into());
+    let config = Config {
+        state_reader: StateReader::in_memory(StateConfig {
+            block_height: 13u32.into(),
+            ..StateConfig::local_testnet()
+        }),
+        ..Config::local_node()
+    };
+
     let srv = FuelService::from_database(Database::default(), config)
         .await
         .unwrap();

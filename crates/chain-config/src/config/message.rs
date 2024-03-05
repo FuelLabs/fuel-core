@@ -1,8 +1,5 @@
 use crate::{
-    serialization::{
-        HexNumber,
-        HexType,
-    },
+    serialization::HexIfHumanReadable,
     GenesisCommitment,
 };
 use fuel_core_storage::MerkleRoot;
@@ -28,19 +25,28 @@ use serde_with::serde_as;
 #[serde_as]
 #[derive(Clone, Debug, Default, Deserialize, Serialize, Eq, PartialEq)]
 pub struct MessageConfig {
-    #[serde_as(as = "HexType")]
     pub sender: Address,
-    #[serde_as(as = "HexType")]
     pub recipient: Address,
-    #[serde_as(as = "HexType")]
     pub nonce: Nonce,
-    #[serde_as(as = "HexNumber")]
     pub amount: Word,
-    #[serde_as(as = "HexType")]
+    #[serde_as(as = "HexIfHumanReadable")]
     pub data: Vec<u8>,
     /// The block height from the parent da layer that originated this message
-    #[serde_as(as = "HexNumber")]
     pub da_height: DaBlockHeight,
+}
+
+#[cfg(all(test, feature = "random", feature = "std"))]
+impl crate::Randomize for MessageConfig {
+    fn randomize(mut rng: impl rand::Rng) -> Self {
+        Self {
+            sender: Address::new(super::random_bytes_32(&mut rng)),
+            recipient: Address::new(super::random_bytes_32(&mut rng)),
+            nonce: Nonce::new(super::random_bytes_32(&mut rng)),
+            amount: rng.gen(),
+            data: (super::random_bytes_32(&mut rng)).to_vec(),
+            da_height: DaBlockHeight(rng.gen()),
+        }
+    }
 }
 
 impl From<MessageConfig> for Message {

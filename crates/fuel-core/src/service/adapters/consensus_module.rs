@@ -33,7 +33,8 @@ pub mod poa;
 
 impl VerifierAdapter {
     pub fn new(config: &Config, database: Database) -> Self {
-        let config = VerifierConfig::new(config.chain_conf.clone());
+        let block_height = config.state_reader.block_height();
+        let config = VerifierConfig::new(config.chain_config.clone(), block_height);
         Self {
             block_verifier: Arc::new(Verifier::new(config, database)),
         }

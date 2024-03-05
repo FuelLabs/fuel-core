@@ -14,9 +14,11 @@ use crate::{
     },
 };
 use fuel_core_chain_config::{
-    ChainConfigDb,
+    ChainStateDb,
     CoinConfig,
+    ContractBalanceConfig,
     ContractConfig,
+    ContractStateConfig,
     MessageConfig,
 };
 use fuel_core_storage::{
@@ -26,7 +28,11 @@ use fuel_core_storage::{
         Encode,
         Encoder,
     },
-    iter::IterDirection,
+    iter::{
+        BoxedIter,
+        IntoBoxedIter,
+        IterDirection,
+    },
     kv_store::{
         BatchOperations,
         KeyValueStore,
@@ -50,6 +56,7 @@ use fuel_core_types::{
     blockchain::primitives::DaBlockHeight,
     fuel_types::BlockHeight,
 };
+use itertools::Itertools;
 use std::{
     fmt::{
         self,
@@ -79,6 +86,7 @@ pub mod block;
 pub mod coin;
 pub mod contracts;
 pub mod database_description;
+pub mod genesis_progress;
 pub mod message;
 pub mod metadata;
 pub mod sealed_block;
@@ -157,6 +165,11 @@ where
         })
     }
 
+    #[cfg(feature = "rocksdb")]
+    pub fn prune(path: &Path) -> DatabaseResult<()> {
+        RocksDb::<Description>::prune(path)
+    }
+
     pub fn in_memory() -> Self {
         Self {
             data: StructuredStorage::new(Arc::new(MemoryStore::default()).into()),
@@ -188,6 +201,14 @@ where
 
     pub fn flush(self) -> DatabaseResult<()> {
         self.data.as_ref().flush()
+    }
+
+    /// Removes all entries from the column in the database(a.k.a. pruning the one table).
+    pub fn delete_all(&self, column: Description::Column) -> DatabaseResult<()> {
+        self.data
+            .as_ref()
+            .delete_all(column)
+            .map_err(|e| anyhow::anyhow!(e).into())
     }
 }
 
@@ -262,6 +283,10 @@ where
         entries: &mut dyn Iterator<Item = (Vec<u8>, Self::Column, WriteOperation)>,
     ) -> StorageResult<()> {
         self.as_ref().batch_write(entries)
+    }
+
+    fn delete_all(&self, column: Self::Column) -> StorageResult<()> {
+        self.as_ref().delete_all(column)
     }
 }
 
@@ -396,19 +421,61 @@ where
     }
 }
 
-/// Implement `ChainConfigDb` so that `Database` can be passed to
+/// Implement `ChainStateDb` so that `Database` can be passed to
 /// `StateConfig's` `generate_state_config()` method
-impl ChainConfigDb for Database {
-    fn get_coin_config(&self) -> StorageResult<Option<Vec<CoinConfig>>> {
-        Self::get_coin_config(self).map_err(Into::into)
+impl ChainStateDb for Database {
+    fn get_contract_by_id(
+        &self,
+        contract_id: fuel_core_types::fuel_types::ContractId,
+    ) -> StorageResult<(
+        ContractConfig,
+        Vec<ContractStateConfig>,
+        Vec<ContractBalanceConfig>,
+    )> {
+        let contract = self.get_contract_config(contract_id)?;
+        let state = self
+            .contract_states(contract_id)
+            .map_ok(move |(key, value)| ContractStateConfig {
+                contract_id,
+                key,
+                value,
+            })
+            .try_collect()?;
+
+        let balances = self
+            .contract_balances(contract_id, None, None)
+            .map_ok(move |(asset_id, amount)| ContractBalanceConfig {
+                contract_id,
+                asset_id,
+                amount,
+            })
+            .try_collect()?;
+
+        Ok((contract, state, balances))
     }
 
-    fn get_contract_config(&self) -> StorageResult<Option<Vec<ContractConfig>>> {
-        Self::get_contract_config(self)
+    fn iter_coin_configs(&self) -> BoxedIter<StorageResult<CoinConfig>> {
+        Self::iter_coin_configs(self).into_boxed()
     }
 
-    fn get_message_config(&self) -> StorageResult<Option<Vec<MessageConfig>>> {
-        Self::get_message_config(self).map_err(Into::into)
+    fn iter_contract_configs(&self) -> BoxedIter<StorageResult<ContractConfig>> {
+        Self::iter_contract_configs(self).into_boxed()
+    }
+
+    fn iter_contract_state_configs(
+        &self,
+    ) -> BoxedIter<StorageResult<fuel_core_chain_config::ContractStateConfig>> {
+        Self::iter_contract_state_configs(self).into_boxed()
+    }
+
+    fn iter_contract_balance_configs(
+        &self,
+    ) -> BoxedIter<StorageResult<fuel_core_chain_config::ContractBalanceConfig>> {
+        Self::iter_contract_balance_configs(self).into_boxed()
+    }
+
+    fn iter_message_configs(&self) -> BoxedIter<StorageResult<MessageConfig>> {
+        Self::iter_message_configs(self).into_boxed()
     }
 
     fn get_block_height(&self) -> StorageResult<BlockHeight> {

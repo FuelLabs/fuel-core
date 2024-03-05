@@ -1,17 +1,28 @@
-use crate::database::{
-    database_description::{
-        off_chain::OffChain,
-        on_chain::OnChain,
-        relayer::Relayer,
+use crate::{
+    database::{
+        database_description::{
+            off_chain::OffChain,
+            on_chain::OnChain,
+            relayer::Relayer,
+        },
+        Database,
+        Result as DatabaseResult,
     },
-    Database,
-    Result as DatabaseResult,
+    service::DbType,
 };
 use fuel_core_storage::Result as StorageResult;
 use fuel_core_types::{
     blockchain::primitives::DaBlockHeight,
     fuel_types::BlockHeight,
 };
+use std::path::PathBuf;
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct CombinedDatabaseConfig {
+    pub database_path: PathBuf,
+    pub database_type: DbType,
+    pub max_database_cache_size: usize,
+}
 
 /// A database that combines the on-chain, off-chain and relayer databases into one entity.
 #[derive(Default, Clone)]
@@ -35,6 +46,14 @@ impl CombinedDatabase {
     }
 
     #[cfg(feature = "rocksdb")]
+    pub fn prune(path: &std::path::Path) -> DatabaseResult<()> {
+        Database::<OnChain>::prune(path)?;
+        Database::<OffChain>::prune(path)?;
+        Database::<Relayer>::prune(path)?;
+        Ok(())
+    }
+
+    #[cfg(feature = "rocksdb")]
     pub fn open(path: &std::path::Path, capacity: usize) -> DatabaseResult<Self> {
         // TODO: Use different cache sizes for different databases
         let on_chain = Database::open(path, capacity)?;
@@ -45,6 +64,36 @@ impl CombinedDatabase {
             off_chain,
             relayer,
         })
+    }
+
+    pub fn from_config(config: &CombinedDatabaseConfig) -> DatabaseResult<Self> {
+        let combined_database = match config.database_type {
+            #[cfg(feature = "rocksdb")]
+            DbType::RocksDb => {
+                // use a default tmp rocksdb if no path is provided
+                if config.database_path.as_os_str().is_empty() {
+                    tracing::warn!(
+                        "No RocksDB path configured, initializing database with a tmp directory"
+                    );
+                    CombinedDatabase::default()
+                } else {
+                    tracing::info!(
+                        "Opening database {:?} with cache size \"{}\"",
+                        config.database_path,
+                        config.max_database_cache_size
+                    );
+                    CombinedDatabase::open(
+                        &config.database_path,
+                        config.max_database_cache_size,
+                    )?
+                }
+            }
+            DbType::InMemory => CombinedDatabase::in_memory(),
+            #[cfg(not(feature = "rocksdb"))]
+            _ => CombinedDatabase::in_memory(),
+        };
+
+        Ok(combined_database)
     }
 
     pub fn in_memory() -> Self {

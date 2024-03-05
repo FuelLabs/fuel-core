@@ -53,6 +53,13 @@ use fuel_core_storage::{
 };
 use std::borrow::Cow;
 
+use super::genesis_progress::{
+    GenesisCoinRoots,
+    GenesisContractRoots,
+    GenesisMessageRoots,
+    GenesisMetadata,
+};
+
 /// The trait allows selectively inheriting the implementation of storage traits from `StructuredStorage`
 /// for the `Database`. Not all default implementations of the `StructuredStorage` are suitable
 /// for the `Database`. Sometimes we want to override some of them and add a custom implementation
@@ -98,8 +105,13 @@ use_structured_implementation!(
     TransactionStatuses,
     FuelBlockIdsToHeights,
     FuelBlockMerkleData,
-    FuelBlockMerkleMetadata
+    FuelBlockMerkleMetadata,
+    GenesisMetadata,
+    GenesisCoinRoots,
+    GenesisMessageRoots,
+    GenesisContractRoots
 );
+
 #[cfg(feature = "relayer")]
 use_structured_implementation!(
     fuel_core_relayer::storage::DaHeightTable,

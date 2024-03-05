@@ -331,5 +331,13 @@ pub mod test {
         }
     }
 
-    impl<Column> BatchOperations for InMemoryStorage<Column> where Column: StorageColumn {}
+    impl<Column> BatchOperations for InMemoryStorage<Column>
+    where
+        Column: StorageColumn,
+    {
+        fn delete_all(&self, column: Self::Column) -> StorageResult<()> {
+            self.storage.borrow_mut().retain(|k, _| k.0 != column.id());
+            Ok(())
+        }
+    }
 }
