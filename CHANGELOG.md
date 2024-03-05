@@ -6,6 +6,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased]
 
+### Breaking
+
+- [#1727](https://github.com/FuelLabs/fuel-core/pull/1727): Remove unused `map_v` and `map_p` functions on `ExecutionTypes`
+
 ## [Version 0.23.0]
 
 ### Added

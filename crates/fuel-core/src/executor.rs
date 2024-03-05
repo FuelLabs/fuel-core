@@ -679,13 +679,12 @@ mod tests {
                 )
                 .unwrap();
             assert_eq!(validated_block.transactions(), produced_txs);
-            let (asset_id, amount) = validator
+            let res = validator
                 .database_view_provider
                 .latest_view()
                 .contract_balances(recipient, None, None)
-                .next()
-                .unwrap()
-                .unwrap();
+                .next();
+            let (asset_id, amount) = res.unwrap().unwrap();
             assert_eq!(asset_id, AssetId::zeroed());
             assert_ne!(amount, 0);
         }

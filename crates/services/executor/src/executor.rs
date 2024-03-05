@@ -35,7 +35,10 @@ use fuel_core_types::{
             PartialFuelBlock,
         },
         header::PartialBlockHeader,
-        primitives::DaBlockHeight,
+        primitives::{
+            BlockId,
+            DaBlockHeight,
+        },
     },
     entities::{
         coins::coin::{
@@ -391,11 +394,7 @@ pub mod block_component {
     impl<'a> PartialBlockComponent<'a, OnceTransactionsSource> {
         pub fn from_partial_block(block: &'a mut PartialFuelBlock) -> Self {
             let transaction = core::mem::take(&mut block.transactions);
-            let gas_price = if let Some(Transaction::Mint(mint)) = transaction.last() {
-                *mint.gas_price()
-            } else {
-                0
-            };
+            let gas_price = get_gas_price_from_mint_tx(&transaction[..]);
 
             Self {
                 empty_block: block,
@@ -404,6 +403,14 @@ pub mod block_component {
                 gas_limit: u64::MAX,
                 _marker: Default::default(),
             }
+        }
+    }
+
+    fn get_gas_price_from_mint_tx(transactions: &[Transaction]) -> u64 {
+        if let Some(Transaction::Mint(mint)) = transactions.last() {
+            *mint.gas_price()
+        } else {
+            0
         }
     }
 
@@ -439,59 +446,91 @@ where
     where
         TxSource: TransactionsSource,
     {
-        // Compute the block id before execution if there is one.
-        let pre_exec_block_id = block.id();
+        let maybe_block_id = block.id();
 
-        // If there is full fuel block for validation then map it into
-        // a partial header.
-        let block = block.map_v(PartialFuelBlock::from);
-
-        // Create a new storage transaction.
-        let mut block_st_transaction = self.database.transaction();
+        let mut storage_transaction = self.database.transaction();
 
         let (block, execution_data) = match block {
-            ExecutionTypes::DryRun(component) => {
-                let mut block =
-                    PartialFuelBlock::new(component.header_to_produce, vec![]);
-                let component = PartialBlockComponent::from_component(
-                    &mut block,
-                    component.transactions_source,
-                    component.gas_price,
-                    component.gas_limit,
-                );
-
-                let execution_data = self.execute_block(
-                    block_st_transaction.as_mut(),
-                    ExecutionType::DryRun(component),
-                )?;
-                (block, execution_data)
+            ExecutionTypes::DryRun(block_components) => {
+                self.execute_dry_run(block_components, &mut storage_transaction)?
             }
-            ExecutionTypes::Production(component) => {
-                let mut block =
-                    PartialFuelBlock::new(component.header_to_produce, vec![]);
-                let component = PartialBlockComponent::from_component(
-                    &mut block,
-                    component.transactions_source,
-                    component.gas_price,
-                    component.gas_limit,
-                );
-
-                let execution_data = self.execute_block(
-                    block_st_transaction.as_mut(),
-                    ExecutionType::Production(component),
-                )?;
-                (block, execution_data)
+            ExecutionTypes::Production(block_components) => {
+                self.execute_production(block_components, &mut storage_transaction)?
             }
-            ExecutionTypes::Validation(mut block) => {
-                let component = PartialBlockComponent::from_partial_block(&mut block);
-                let execution_data = self.execute_block(
-                    block_st_transaction.as_mut(),
-                    ExecutionType::Validation(component),
-                )?;
-                (block, execution_data)
+            ExecutionTypes::Validation(block) => {
+                let partial_block = PartialFuelBlock::from(block);
+                self.execute_validation(partial_block, &mut storage_transaction)?
             }
         };
 
+        self.complete_transaction(
+            block,
+            storage_transaction,
+            execution_data,
+            maybe_block_id,
+        )
+    }
+
+    fn execute_dry_run<TxSource: TransactionsSource>(
+        &self,
+        component: Components<TxSource>,
+        storage_transaction: &mut StorageTransaction<D>,
+    ) -> ExecutorResult<(PartialFuelBlock, ExecutionData)> {
+        let mut block = PartialFuelBlock::new(component.header_to_produce, vec![]);
+        let component = PartialBlockComponent::from_component(
+            &mut block,
+            component.transactions_source,
+            component.gas_price,
+            component.gas_limit,
+        );
+
+        let execution_data = self.execute_block(
+            storage_transaction.as_mut(),
+            ExecutionType::DryRun(component),
+        )?;
+        Ok((block, execution_data))
+    }
+
+    fn execute_production<TxSource: TransactionsSource>(
+        &self,
+        component: Components<TxSource>,
+        storage_transaction: &mut StorageTransaction<D>,
+    ) -> ExecutorResult<(PartialFuelBlock, ExecutionData)> {
+        let mut block = PartialFuelBlock::new(component.header_to_produce, vec![]);
+        let component = PartialBlockComponent::from_component(
+            &mut block,
+            component.transactions_source,
+            component.gas_price,
+            component.gas_limit,
+        );
+
+        let execution_data = self.execute_block(
+            storage_transaction.as_mut(),
+            ExecutionType::Production(component),
+        )?;
+        Ok((block, execution_data))
+    }
+
+    fn execute_validation(
+        &self,
+        mut block: PartialFuelBlock,
+        storage_transaction: &mut StorageTransaction<D>,
+    ) -> ExecutorResult<(PartialFuelBlock, ExecutionData)> {
+        let component = PartialBlockComponent::from_partial_block(&mut block);
+        let execution_data = self.execute_block(
+            storage_transaction.as_mut(),
+            ExecutionType::Validation(component),
+        )?;
+        Ok((block, execution_data))
+    }
+
+    fn complete_transaction(
+        self,
+        block: PartialFuelBlock,
+        storage_transaction: StorageTransaction<D>,
+        execution_data: ExecutionData,
+        expected_block_id: Option<BlockId>,
+    ) -> ExecutorResult<UncommittedResult<StorageTransaction<D>>> {
         let ExecutionData {
             coinbase,
             used_gas,
@@ -502,26 +541,14 @@ where
             ..
         } = execution_data;
 
-        // Now that the transactions have been executed, generate the full header.
-
         let block = block.generate(&message_ids[..]);
 
-        let finalized_block_id = block.id();
+        let finalized_block_id = Self::finalize_block_id(&block, expected_block_id)?;
 
         debug!(
             "Block {:#x} fees: {} gas: {}",
-            pre_exec_block_id.unwrap_or(finalized_block_id),
-            coinbase,
-            used_gas
+            finalized_block_id, coinbase, used_gas
         );
-
-        // check if block id doesn't match proposed block id
-        if let Some(pre_exec_block_id) = pre_exec_block_id {
-            // The block id comparison compares the whole blocks including all fields.
-            if pre_exec_block_id != finalized_block_id {
-                return Err(ExecutorError::InvalidBlockId)
-            }
-        }
 
         let result = ExecutionResult {
             block,
@@ -530,8 +557,20 @@ where
             events,
         };
 
-        // Get the complete fuel block.
-        Ok(UncommittedResult::new(result, block_st_transaction))
+        Ok(UncommittedResult::new(result, storage_transaction))
+    }
+
+    fn finalize_block_id(
+        block: &Block,
+        expected_block_id: Option<BlockId>,
+    ) -> ExecutorResult<BlockId> {
+        let block_id = block.id();
+        if let Some(expected_block_id) = expected_block_id {
+            if block_id != expected_block_id {
+                return Err(ExecutorError::InvalidBlockId)
+            }
+        }
+        Ok(block_id)
     }
 
     #[tracing::instrument(skip_all)]
