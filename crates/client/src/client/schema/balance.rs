@@ -10,13 +10,13 @@ use crate::client::{
     PaginationRequest,
 };
 
-#[derive(cynic::QueryVariables, Debug)]
+#[derive(cynic::QueryVariables, Clone, Debug)]
 pub struct BalanceArgs {
     pub owner: Address,
     pub asset_id: AssetId,
 }
 
-#[derive(cynic::QueryFragment, Debug)]
+#[derive(cynic::QueryFragment, Clone, Debug)]
 #[cynic(
     schema_path = "./assets/schema.sdl",
     graphql_type = "Query",
@@ -34,7 +34,7 @@ pub struct BalanceFilterInput {
     pub owner: Address,
 }
 
-#[derive(cynic::QueryVariables, Debug)]
+#[derive(cynic::QueryVariables, Clone, Debug)]
 pub struct BalancesConnectionArgs {
     /// Filter coins based on a filter
     filter: BalanceFilterInput,
@@ -70,7 +70,7 @@ impl From<(Address, PaginationRequest<String>)> for BalancesConnectionArgs {
     }
 }
 
-#[derive(cynic::QueryFragment, Debug)]
+#[derive(cynic::QueryFragment, Clone, Debug)]
 #[cynic(
     schema_path = "./assets/schema.sdl",
     graphql_type = "Query",
@@ -81,21 +81,21 @@ pub struct BalancesQuery {
     pub balances: BalanceConnection,
 }
 
-#[derive(cynic::QueryFragment, Debug)]
+#[derive(cynic::QueryFragment, Clone, Debug)]
 #[cynic(schema_path = "./assets/schema.sdl")]
 pub struct BalanceConnection {
     pub edges: Vec<BalanceEdge>,
     pub page_info: PageInfo,
 }
 
-#[derive(cynic::QueryFragment, Debug)]
+#[derive(cynic::QueryFragment, Clone, Debug)]
 #[cynic(schema_path = "./assets/schema.sdl")]
 pub struct BalanceEdge {
     pub cursor: String,
     pub node: Balance,
 }
 
-#[derive(cynic::QueryFragment, Debug)]
+#[derive(cynic::QueryFragment, Clone, Debug)]
 #[cynic(schema_path = "./assets/schema.sdl")]
 pub struct Balance {
     pub owner: Address,

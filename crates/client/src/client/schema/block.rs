@@ -15,12 +15,12 @@ use super::{
     Bytes32,
 };
 
-#[derive(cynic::QueryVariables, Debug)]
+#[derive(cynic::QueryVariables, Clone, Debug)]
 pub struct BlockByIdArgs {
     pub id: Option<BlockId>,
 }
 
-#[derive(cynic::QueryFragment, Debug)]
+#[derive(cynic::QueryFragment, Clone, Debug)]
 #[cynic(
     schema_path = "./assets/schema.sdl",
     graphql_type = "Query",
@@ -31,12 +31,12 @@ pub struct BlockByIdQuery {
     pub block: Option<Block>,
 }
 
-#[derive(cynic::QueryVariables, Debug)]
+#[derive(cynic::QueryVariables, Clone, Debug)]
 pub struct BlockByHeightArgs {
     pub height: Option<U32>,
 }
 
-#[derive(cynic::QueryFragment, Debug)]
+#[derive(cynic::QueryFragment, Clone, Debug)]
 #[cynic(
     schema_path = "./assets/schema.sdl",
     graphql_type = "Query",
@@ -47,7 +47,7 @@ pub struct BlockByHeightQuery {
     pub block: Option<Block>,
 }
 
-#[derive(cynic::QueryFragment, Debug)]
+#[derive(cynic::QueryFragment, Clone, Debug)]
 #[cynic(
     schema_path = "./assets/schema.sdl",
     graphql_type = "Query",
@@ -58,21 +58,21 @@ pub struct BlocksQuery {
     pub blocks: BlockConnection,
 }
 
-#[derive(cynic::QueryFragment, Debug)]
+#[derive(cynic::QueryFragment, Clone, Debug)]
 #[cynic(schema_path = "./assets/schema.sdl")]
 pub struct BlockConnection {
     pub edges: Vec<BlockEdge>,
     pub page_info: PageInfo,
 }
 
-#[derive(cynic::QueryFragment, Debug)]
+#[derive(cynic::QueryFragment, Clone, Debug)]
 #[cynic(schema_path = "./assets/schema.sdl")]
 pub struct BlockEdge {
     pub cursor: String,
     pub node: Block,
 }
 
-#[derive(cynic::QueryFragment, Debug)]
+#[derive(cynic::QueryFragment, Clone, Debug)]
 #[cynic(schema_path = "./assets/schema.sdl")]
 pub struct Block {
     pub id: BlockId,
@@ -81,19 +81,19 @@ pub struct Block {
     pub transactions: Vec<TransactionIdFragment>,
 }
 
-#[derive(cynic::QueryFragment, Debug)]
+#[derive(cynic::QueryFragment, Clone, Debug)]
 #[cynic(schema_path = "./assets/schema.sdl", graphql_type = "Block")]
 pub struct BlockIdFragment {
     pub id: BlockId,
 }
 
-#[derive(cynic::QueryVariables, Debug)]
+#[derive(cynic::QueryVariables, Clone, Debug)]
 pub struct ProduceBlockArgs {
     pub start_timestamp: Option<Tai64Timestamp>,
     pub blocks_to_produce: U32,
 }
 
-#[derive(cynic::QueryFragment, Debug)]
+#[derive(cynic::QueryFragment, Clone, Debug)]
 #[cynic(
     schema_path = "./assets/schema.sdl",
     variables = "ProduceBlockArgs",
@@ -104,7 +104,7 @@ pub struct BlockMutation {
     pub produce_blocks: U32,
 }
 
-#[derive(cynic::QueryFragment, Debug)]
+#[derive(cynic::QueryFragment, Clone, Debug)]
 #[cynic(schema_path = "./assets/schema.sdl")]
 pub struct Header {
     pub id: BlockId,
@@ -119,7 +119,7 @@ pub struct Header {
     pub application_hash: Bytes32,
 }
 
-#[derive(cynic::InlineFragments, Debug)]
+#[derive(cynic::InlineFragments, Clone, Debug)]
 #[cynic(schema_path = "./assets/schema.sdl")]
 pub enum Consensus {
     Genesis(Genesis),
@@ -128,7 +128,7 @@ pub enum Consensus {
     Unknown,
 }
 
-#[derive(cynic::QueryFragment, Debug)]
+#[derive(cynic::QueryFragment, Clone, Debug)]
 #[cynic(schema_path = "./assets/schema.sdl")]
 pub struct Genesis {
     pub chain_config_hash: Bytes32,
@@ -137,7 +137,7 @@ pub struct Genesis {
     pub messages_root: Bytes32,
 }
 
-#[derive(cynic::QueryFragment, Debug)]
+#[derive(cynic::QueryFragment, Clone, Debug)]
 #[cynic(schema_path = "./assets/schema.sdl")]
 pub struct PoAConsensus {
     pub signature: Signature,
