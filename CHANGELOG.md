@@ -8,6 +8,12 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Description of the upcoming release here.
 
+## [Version 0.22.3]
+
+### Added
+
+- [#1732](https://github.com/FuelLabs/fuel-core/pull/1732): Added `Clone` bounds to most datatypes of `fuel-core-client`.
+
 ## [Version 0.22.2]
 
 ### Added
