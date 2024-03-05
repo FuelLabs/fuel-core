@@ -146,7 +146,7 @@ impl FromStr for FuelClient {
         let mut url = reqwest::Url::parse(&raw_url)
             .map_err(anyhow::Error::msg)
             .with_context(|| format!("Invalid fuel-core URL: {str}"))?;
-        url.set_path("/graphql");
+        url.set_path("/v1/graphql");
 
         #[cfg(feature = "subscriptions")]
         {
@@ -245,7 +245,7 @@ impl FuelClient {
         use hyper_rustls as _;
         use reqwest::cookie::CookieStore;
         let mut url = self.url.clone();
-        url.set_path("/graphql-sub");
+        url.set_path("/v1/graphql-sub");
         let json_query = serde_json::to_string(&q)?;
         let mut client_builder = es::ClientBuilder::for_url(url.as_str())
             .map_err(|e| {
