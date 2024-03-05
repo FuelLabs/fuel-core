@@ -7,6 +7,7 @@ use crate::client::{
     PaginatedResult,
 };
 
+#[derive(Copy, Clone, Debug)]
 pub struct Balance {
     pub owner: Address,
     pub amount: u64,

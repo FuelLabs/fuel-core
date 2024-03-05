@@ -1,5 +1,6 @@
 use crate::client::schema;
 
+#[derive(Clone, Debug)]
 pub struct NodeInfo {
     pub utxo_validation: bool,
     pub vm_backtrace: bool,
