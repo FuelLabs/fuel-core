@@ -4,20 +4,20 @@ use crate::client::schema::{
     U64,
 };
 
-#[derive(cynic::QueryFragment, Debug)]
+#[derive(cynic::QueryFragment, Clone, Debug)]
 #[cynic(schema_path = "./assets/schema.sdl")]
 pub struct LatestGasPrice {
     pub gas_price: U64,
     pub block_height: U32,
 }
 
-#[derive(cynic::QueryFragment, Debug)]
+#[derive(cynic::QueryFragment, Clone, Debug)]
 #[cynic(schema_path = "./assets/schema.sdl", graphql_type = "Query")]
 pub struct QueryLatestGasPrice {
     pub latest_gas_price: LatestGasPrice,
 }
 
-#[derive(cynic::QueryFragment, Debug)]
+#[derive(cynic::QueryFragment, Clone, Debug)]
 #[cynic(schema_path = "./assets/schema.sdl")]
 pub struct EstimateGasPrice {
     pub gas_price: U64,
@@ -36,7 +36,7 @@ impl From<u32> for BlockHorizonArgs {
     }
 }
 
-#[derive(cynic::QueryFragment, Debug)]
+#[derive(cynic::QueryFragment, Clone, Debug)]
 #[cynic(
     schema_path = "./assets/schema.sdl",
     graphql_type = "Query",

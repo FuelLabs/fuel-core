@@ -12,7 +12,7 @@ use crate::client::{
 };
 use tai64::Tai64;
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct Block {
     pub id: BlockId,
     pub header: Header,
@@ -27,7 +27,7 @@ impl Block {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct Header {
     pub id: BlockId,
     pub da_height: u64,
@@ -41,14 +41,14 @@ pub struct Header {
     pub application_hash: Hash,
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub enum Consensus {
     Genesis(Genesis),
     PoAConsensus(PoAConsensus),
     Unknown,
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct Genesis {
     pub chain_config_hash: Hash,
     pub coins_root: MerkleRoot,
@@ -56,7 +56,7 @@ pub struct Genesis {
     pub messages_root: MerkleRoot,
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct PoAConsensus {
     pub signature: Signature,
 }

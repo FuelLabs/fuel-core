@@ -38,7 +38,7 @@ use fuel_core_types::{
 use itertools::Itertools;
 
 /// Retrieves the transaction in opaque form
-#[derive(cynic::QueryFragment, Debug)]
+#[derive(cynic::QueryFragment, Clone, Debug)]
 #[cynic(
     schema_path = "./assets/schema.sdl",
     graphql_type = "Query",
@@ -49,7 +49,7 @@ pub struct TransactionQuery {
     pub transaction: Option<Transaction>,
 }
 
-#[derive(cynic::QueryFragment, Debug)]
+#[derive(cynic::QueryFragment, Clone, Debug)]
 #[cynic(
     schema_path = "./assets/schema.sdl",
     graphql_type = "Query",
@@ -60,14 +60,14 @@ pub struct TransactionsQuery {
     pub transactions: TransactionConnection,
 }
 
-#[derive(cynic::QueryFragment, Debug)]
+#[derive(cynic::QueryFragment, Clone, Debug)]
 #[cynic(schema_path = "./assets/schema.sdl")]
 pub struct TransactionConnection {
     pub edges: Vec<TransactionEdge>,
     pub page_info: PageInfo,
 }
 
-#[derive(cynic::QueryFragment, Debug)]
+#[derive(cynic::QueryFragment, Clone, Debug)]
 #[cynic(schema_path = "./assets/schema.sdl")]
 pub struct TransactionEdge {
     pub cursor: String,
@@ -77,7 +77,7 @@ pub struct TransactionEdge {
 /// The `Transaction` schema is a combination of all fields available in
 /// the `fuel_tx::Transaction` from each variant plus some additional
 /// data from helper functions that are often fetched by the user.
-#[derive(cynic::QueryFragment, Debug)]
+#[derive(cynic::QueryFragment, Clone, Debug)]
 #[cynic(schema_path = "./assets/schema.sdl")]
 pub struct Transaction {
     /// The field of the `Transaction::Script` type.
@@ -299,7 +299,7 @@ impl TryFrom<Transaction> for fuel_tx::Transaction {
     }
 }
 
-#[derive(cynic::InlineFragments, Debug)]
+#[derive(cynic::InlineFragments, Clone, Debug)]
 #[cynic(schema_path = "./assets/schema.sdl")]
 pub enum Input {
     InputCoin(InputCoin),
@@ -309,7 +309,7 @@ pub enum Input {
     Unknown,
 }
 
-#[derive(cynic::QueryFragment, Debug)]
+#[derive(cynic::QueryFragment, Clone, Debug)]
 #[cynic(schema_path = "./assets/schema.sdl")]
 pub struct InputCoin {
     pub utxo_id: UtxoId,
@@ -323,7 +323,7 @@ pub struct InputCoin {
     pub predicate_data: HexString,
 }
 
-#[derive(cynic::QueryFragment, Debug)]
+#[derive(cynic::QueryFragment, Clone, Debug)]
 #[cynic(schema_path = "./assets/schema.sdl")]
 pub struct InputContract {
     pub utxo_id: UtxoId,
@@ -333,7 +333,7 @@ pub struct InputContract {
     pub contract_id: ContractId,
 }
 
-#[derive(cynic::QueryFragment, Debug)]
+#[derive(cynic::QueryFragment, Clone, Debug)]
 #[cynic(schema_path = "./assets/schema.sdl")]
 pub struct InputMessage {
     sender: Address,
@@ -422,7 +422,7 @@ impl TryFrom<Input> for fuel_tx::Input {
     }
 }
 
-#[derive(cynic::InlineFragments, Debug)]
+#[derive(cynic::InlineFragments, Clone, Debug)]
 #[cynic(schema_path = "./assets/schema.sdl")]
 pub enum Output {
     CoinOutput(CoinOutput),
@@ -434,7 +434,7 @@ pub enum Output {
     Unknown,
 }
 
-#[derive(cynic::QueryFragment, Debug)]
+#[derive(cynic::QueryFragment, Clone, Debug)]
 #[cynic(schema_path = "./assets/schema.sdl")]
 pub struct CoinOutput {
     pub to: Address,
@@ -442,7 +442,7 @@ pub struct CoinOutput {
     pub asset_id: AssetId,
 }
 
-#[derive(cynic::QueryFragment, Debug)]
+#[derive(cynic::QueryFragment, Clone, Debug)]
 #[cynic(schema_path = "./assets/schema.sdl")]
 pub struct ChangeOutput {
     pub to: Address,
@@ -450,7 +450,7 @@ pub struct ChangeOutput {
     pub asset_id: AssetId,
 }
 
-#[derive(cynic::QueryFragment, Debug)]
+#[derive(cynic::QueryFragment, Clone, Debug)]
 #[cynic(schema_path = "./assets/schema.sdl")]
 pub struct VariableOutput {
     pub to: Address,
@@ -458,7 +458,7 @@ pub struct VariableOutput {
     pub asset_id: AssetId,
 }
 
-#[derive(cynic::QueryFragment, Debug)]
+#[derive(cynic::QueryFragment, Clone, Debug)]
 #[cynic(schema_path = "./assets/schema.sdl")]
 pub struct ContractOutput {
     pub input_index: i32,
@@ -466,7 +466,7 @@ pub struct ContractOutput {
     pub state_root: Bytes32,
 }
 
-#[derive(cynic::QueryFragment, Debug)]
+#[derive(cynic::QueryFragment, Clone, Debug)]
 #[cynic(schema_path = "./assets/schema.sdl")]
 pub struct ContractCreated {
     contract: ContractId,
@@ -527,7 +527,7 @@ impl TryFrom<ContractOutput> for output::contract::Contract {
     }
 }
 
-#[derive(cynic::QueryFragment, Debug)]
+#[derive(cynic::QueryFragment, Clone, Debug)]
 #[cynic(schema_path = "./assets/schema.sdl")]
 pub struct Policies {
     pub tip: Option<U64>,
