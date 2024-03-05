@@ -1,6 +1,5 @@
 use crate::client::schema::{
     schema,
-    tx::OpaqueTransaction,
     BlockId,
     ConnectionArgs,
     PageInfo,
@@ -63,27 +62,9 @@ pub struct BlocksQuery {
 }
 
 #[derive(cynic::QueryFragment, Debug)]
-#[cynic(
-    schema_path = "./assets/schema.sdl",
-    graphql_type = "Query",
-    variables = "ConnectionArgs"
-)]
-pub struct FullBlocksQuery {
-    #[arguments(after: $after, before: $before, first: $first, last: $last)]
-    pub blocks: FullBlockConnection,
-}
-
-#[derive(cynic::QueryFragment, Debug)]
 #[cynic(schema_path = "./assets/schema.sdl")]
 pub struct BlockConnection {
     pub edges: Vec<BlockEdge>,
-    pub page_info: PageInfo,
-}
-
-#[derive(cynic::QueryFragment, Debug)]
-#[cynic(schema_path = "./assets/schema.sdl", graphql_type = "BlockConnection")]
-pub struct FullBlockConnection {
-    pub edges: Vec<FullBlockEdge>,
     pub page_info: PageInfo,
 }
 
@@ -94,13 +75,6 @@ pub struct BlockEdge {
     pub node: Block,
 }
 
-#[derive(cynic::QueryFragment, Debug)]
-#[cynic(schema_path = "./assets/schema.sdl", graphql_type = "BlockEdge")]
-pub struct FullBlockEdge {
-    pub cursor: String,
-    pub node: FullBlock,
-}
-
 /// Block with transactiuon ids
 #[derive(cynic::QueryFragment, Debug)]
 #[cynic(schema_path = "./assets/schema.sdl")]
@@ -109,16 +83,6 @@ pub struct Block {
     pub header: Header,
     pub consensus: Consensus,
     pub transactions: Vec<TransactionIdFragment>,
-}
-
-/// Block with full transaction data
-#[derive(cynic::QueryFragment, Debug)]
-#[cynic(schema_path = "./assets/schema.sdl", graphql_type = "Block")]
-pub struct FullBlock {
-    pub id: BlockId,
-    pub header: Header,
-    pub consensus: Consensus,
-    pub transactions: Vec<OpaqueTransaction>,
 }
 
 #[derive(cynic::QueryFragment, Debug)]
