@@ -13,12 +13,12 @@ use crate::client::{
     PaginationRequest,
 };
 
-#[derive(cynic::QueryVariables, Debug)]
+#[derive(cynic::QueryVariables, Clone, Debug)]
 pub struct CoinByIdArgs {
     pub utxo_id: UtxoId,
 }
 
-#[derive(cynic::QueryFragment, Debug)]
+#[derive(cynic::QueryFragment, Clone, Debug)]
 #[cynic(
     schema_path = "./assets/schema.sdl",
     graphql_type = "Query",
@@ -38,7 +38,7 @@ pub struct CoinFilterInput {
     pub asset_id: Option<AssetId>,
 }
 
-#[derive(cynic::QueryVariables, Debug)]
+#[derive(cynic::QueryVariables, Clone, Debug)]
 pub struct CoinsConnectionArgs {
     /// Filter coins based on a filter
     filter: CoinFilterInput,
@@ -80,7 +80,7 @@ impl From<(Address, AssetId, PaginationRequest<String>)> for CoinsConnectionArgs
     }
 }
 
-#[derive(cynic::QueryFragment, Debug)]
+#[derive(cynic::QueryFragment, Clone, Debug)]
 #[cynic(
     schema_path = "./assets/schema.sdl",
     graphql_type = "Query",
@@ -91,14 +91,14 @@ pub struct CoinsQuery {
     pub coins: CoinConnection,
 }
 
-#[derive(cynic::QueryFragment, Debug)]
+#[derive(cynic::QueryFragment, Clone, Debug)]
 #[cynic(schema_path = "./assets/schema.sdl")]
 pub struct CoinConnection {
     pub edges: Vec<CoinEdge>,
     pub page_info: PageInfo,
 }
 
-#[derive(cynic::QueryFragment, Debug)]
+#[derive(cynic::QueryFragment, Clone, Debug)]
 #[cynic(schema_path = "./assets/schema.sdl")]
 pub struct CoinEdge {
     pub cursor: String,
@@ -116,7 +116,7 @@ pub struct Coin {
     pub owner: Address,
 }
 
-#[derive(cynic::QueryFragment, Debug)]
+#[derive(cynic::QueryFragment, Clone, Debug)]
 #[cynic(schema_path = "./assets/schema.sdl", graphql_type = "Coin")]
 pub struct CoinIdFragment {
     pub utxo_id: UtxoId,
@@ -178,7 +178,7 @@ impl CoinType {
     }
 }
 
-#[derive(cynic::QueryVariables, Debug)]
+#[derive(cynic::QueryVariables, Clone, Debug)]
 pub struct CoinsToSpendArgs {
     /// The `Address` of the assets' coins owner.
     owner: Address,
@@ -201,7 +201,7 @@ impl From<CoinsToSpendArgsTuple> for CoinsToSpendArgs {
     }
 }
 
-#[derive(cynic::QueryFragment, Debug)]
+#[derive(cynic::QueryFragment, Clone, Debug)]
 #[cynic(
     schema_path = "./assets/schema.sdl",
     graphql_type = "Query",
