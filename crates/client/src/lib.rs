@@ -4,3 +4,6 @@
 #![deny(warnings)]
 pub mod client;
 pub mod schema;
+
+/// The GraphQL schema used by the library.
+pub const SCHEMA_SDL: &[u8] = include_bytes!("../assets/schema.sdl");

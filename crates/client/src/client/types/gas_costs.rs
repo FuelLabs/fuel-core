@@ -30,7 +30,7 @@ macro_rules! include_from_impls {
 }
 
 include_from_impls! {
-    #[derive(Clone, Debug)]
+    #[derive(Copy, Clone, Debug)]
     pub struct GasCosts {
         pub add: u64,
         pub addi: u64,
@@ -148,7 +148,7 @@ include_from_impls! {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Copy, Clone, Debug)]
 pub enum DependentCost {
     LightOperation { base: u64, units_per_gas: u64 },
     HeavyOperation { base: u64, gas_per_unit: u64 },

@@ -8,6 +8,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Description of the upcoming release here.
 
+### Added
+
+- [#1729](https://github.com/FuelLabs/fuel-core/pull/1729): Exposed the `schema.sdl` file from `fuel-core-client`. The user can create his own queries by using this file.
+
 ## [Version 0.22.1]
 
 ### Fixed
