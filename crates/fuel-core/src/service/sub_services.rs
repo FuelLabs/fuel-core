@@ -28,6 +28,7 @@ use tokio::sync::Mutex;
 
 #[cfg(feature = "relayer")]
 use crate::relayer::Config as RelayerConfig;
+use crate::service::adapters::producer::StaticGasPrice;
 #[cfg(feature = "relayer")]
 use fuel_core_types::blockchain::primitives::DaBlockHeight;
 
@@ -40,6 +41,7 @@ pub type BlockProducerService = fuel_core_producer::block_producer::Producer<
     Database,
     TxPoolAdapter,
     ExecutorAdapter,
+    StaticGasPrice,
 >;
 pub type GraphQL = fuel_core_graphql_api::api_service::Service;
 
@@ -141,6 +143,8 @@ pub fn init_sub_services(
     );
     let tx_pool_adapter = TxPoolAdapter::new(txpool.shared.clone());
 
+    let gas_price_provider = StaticGasPrice::new(config.block_producer.gas_price);
+
     let block_producer = fuel_core_producer::Producer {
         config: config.block_producer.clone(),
         view_provider: database.on_chain().clone(),
@@ -148,6 +152,7 @@ pub fn init_sub_services(
         executor: Arc::new(executor),
         relayer: Box::new(relayer_adapter.clone()),
         lock: Mutex::new(()),
+        gas_price_provider,
     };
     let producer_adapter = BlockProducerAdapter::new(block_producer);
 
