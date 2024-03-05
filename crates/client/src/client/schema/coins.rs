@@ -18,7 +18,7 @@ pub struct CoinByIdArgs {
     pub utxo_id: UtxoId,
 }
 
-#[derive(cynic::QueryFragment, Debug)]
+#[derive(cynic::QueryFragment, Clone, Debug)]
 #[cynic(
     schema_path = "./assets/schema.sdl",
     graphql_type = "Query",
@@ -80,7 +80,7 @@ impl From<(Address, AssetId, PaginationRequest<String>)> for CoinsConnectionArgs
     }
 }
 
-#[derive(cynic::QueryFragment, Debug)]
+#[derive(cynic::QueryFragment, Clone, Debug)]
 #[cynic(
     schema_path = "./assets/schema.sdl",
     graphql_type = "Query",
@@ -91,14 +91,14 @@ pub struct CoinsQuery {
     pub coins: CoinConnection,
 }
 
-#[derive(cynic::QueryFragment, Debug)]
+#[derive(cynic::QueryFragment, Clone, Debug)]
 #[cynic(schema_path = "./assets/schema.sdl")]
 pub struct CoinConnection {
     pub edges: Vec<CoinEdge>,
     pub page_info: PageInfo,
 }
 
-#[derive(cynic::QueryFragment, Debug)]
+#[derive(cynic::QueryFragment, Clone, Debug)]
 #[cynic(schema_path = "./assets/schema.sdl")]
 pub struct CoinEdge {
     pub cursor: String,
@@ -115,7 +115,7 @@ pub struct Coin {
     pub owner: Address,
 }
 
-#[derive(cynic::QueryFragment, Debug)]
+#[derive(cynic::QueryFragment, Clone, Debug)]
 #[cynic(schema_path = "./assets/schema.sdl", graphql_type = "Coin")]
 pub struct CoinIdFragment {
     pub utxo_id: UtxoId,
@@ -200,7 +200,7 @@ impl From<CoinsToSpendArgsTuple> for CoinsToSpendArgs {
     }
 }
 
-#[derive(cynic::QueryFragment, Debug)]
+#[derive(cynic::QueryFragment, Clone, Debug)]
 #[cynic(
     schema_path = "./assets/schema.sdl",
     graphql_type = "Query",

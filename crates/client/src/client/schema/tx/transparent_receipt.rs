@@ -15,7 +15,7 @@ use fuel_core_types::{
     fuel_tx,
 };
 
-#[derive(cynic::QueryFragment, Debug)]
+#[derive(cynic::QueryFragment, Clone, Debug)]
 #[cynic(schema_path = "./assets/schema.sdl")]
 pub struct Receipt {
     pub param1: Option<U64>,

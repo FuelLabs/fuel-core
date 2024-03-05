@@ -15,7 +15,7 @@ pub struct Contract {
     pub salt: Salt,
 }
 
-#[derive(Debug)]
+#[derive(Copy, Clone, Debug)]
 pub struct ContractBalance {
     pub contract: ContractId,
     pub amount: u64,

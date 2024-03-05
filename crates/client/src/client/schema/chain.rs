@@ -7,7 +7,7 @@ use crate::client::schema::{
     U8,
 };
 
-#[derive(cynic::QueryFragment, Debug)]
+#[derive(cynic::QueryFragment, Clone, Debug)]
 #[cynic(schema_path = "./assets/schema.sdl")]
 pub struct ConsensusParameters {
     pub tx_params: TxParameters,
@@ -20,7 +20,7 @@ pub struct ConsensusParameters {
     pub gas_costs: GasCosts,
 }
 
-#[derive(cynic::QueryFragment, Debug)]
+#[derive(cynic::QueryFragment, Clone, Debug)]
 #[cynic(schema_path = "./assets/schema.sdl")]
 pub struct TxParameters {
     pub max_inputs: U8,
@@ -42,7 +42,7 @@ impl From<TxParameters> for fuel_core_types::fuel_tx::TxParameters {
     }
 }
 
-#[derive(cynic::QueryFragment, Debug)]
+#[derive(cynic::QueryFragment, Clone, Debug)]
 #[cynic(schema_path = "./assets/schema.sdl")]
 pub struct PredicateParameters {
     pub max_predicate_length: U64,
@@ -62,7 +62,7 @@ impl From<PredicateParameters> for fuel_core_types::fuel_tx::PredicateParameters
     }
 }
 
-#[derive(cynic::QueryFragment, Debug)]
+#[derive(cynic::QueryFragment, Clone, Debug)]
 #[cynic(schema_path = "./assets/schema.sdl")]
 pub struct ScriptParameters {
     pub max_script_length: U64,
@@ -78,7 +78,7 @@ impl From<ScriptParameters> for fuel_core_types::fuel_tx::ScriptParameters {
     }
 }
 
-#[derive(cynic::QueryFragment, Debug)]
+#[derive(cynic::QueryFragment, Clone, Debug)]
 #[cynic(schema_path = "./assets/schema.sdl")]
 pub struct ContractParameters {
     pub contract_max_size: U64,
@@ -94,7 +94,7 @@ impl From<ContractParameters> for fuel_core_types::fuel_tx::ContractParameters {
     }
 }
 
-#[derive(cynic::QueryFragment, Debug)]
+#[derive(cynic::QueryFragment, Clone, Debug)]
 #[cynic(schema_path = "./assets/schema.sdl")]
 pub struct FeeParameters {
     pub gas_price_factor: U64,
@@ -114,7 +114,7 @@ macro_rules! include_from_impls_and_cynic {
     ($(#[$meta:meta])* $vis:vis struct $name:ident {
         $($field_vis:vis $field_name:ident: $field_type:ty,)*
     }) => {
-        #[derive(cynic::QueryFragment, Debug)]
+        #[derive(cynic::QueryFragment, Clone, Debug)]
         #[cynic(schema_path = "./assets/schema.sdl")]
         $vis struct $name {
             $($field_vis $field_name: $field_type,)*
@@ -249,21 +249,21 @@ include_from_impls_and_cynic! {
     }
 }
 
-#[derive(cynic::QueryFragment, Debug)]
+#[derive(cynic::QueryFragment, Clone, Debug)]
 #[cynic(schema_path = "./assets/schema.sdl")]
 pub struct LightOperation {
     pub base: U64,
     pub units_per_gas: U64,
 }
 
-#[derive(cynic::QueryFragment, Debug)]
+#[derive(cynic::QueryFragment, Clone, Debug)]
 #[cynic(schema_path = "./assets/schema.sdl")]
 pub struct HeavyOperation {
     pub base: U64,
     pub gas_per_unit: U64,
 }
 
-#[derive(cynic::InlineFragments, Debug)]
+#[derive(cynic::InlineFragments, Clone, Debug)]
 #[cynic(schema_path = "./assets/schema.sdl")]
 pub enum DependentCost {
     LightOperation(LightOperation),
@@ -311,13 +311,13 @@ impl From<ConsensusParameters> for fuel_core_types::fuel_tx::ConsensusParameters
     }
 }
 
-#[derive(cynic::QueryFragment, Debug)]
+#[derive(cynic::QueryFragment, Clone, Debug)]
 #[cynic(schema_path = "./assets/schema.sdl", graphql_type = "Query")]
 pub struct ChainQuery {
     pub chain: ChainInfo,
 }
 
-#[derive(cynic::QueryFragment, Debug)]
+#[derive(cynic::QueryFragment, Clone, Debug)]
 #[cynic(schema_path = "./assets/schema.sdl")]
 pub struct ChainInfo {
     pub da_height: U64,
