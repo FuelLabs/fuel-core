@@ -220,7 +220,7 @@ pub async fn make_nodes(
     let mut producers_with_txs = Vec::with_capacity(producers.len());
 
     let mut config = config.unwrap_or_else(Config::local_node);
-    let mut state_config = StateConfig::local_testnet();
+    let mut state_config = config.state_reader.state_config().unwrap();
 
     for (all, producer) in txs_coins.into_iter().zip(producers.into_iter()) {
         match all {

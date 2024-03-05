@@ -72,6 +72,14 @@ pub struct StateReader {
 }
 
 impl StateReader {
+    pub fn state_config(self) -> Option<StateConfig> {
+        match self.data_source {
+            DataSource::InMemory { state, .. } => Some(state),
+            #[cfg(feature = "parquet")]
+            DataSource::Parquet { .. } => None,
+        }
+    }
+
     #[cfg(feature = "std")]
     pub fn json(
         path: impl AsRef<std::path::Path>,
