@@ -2,7 +2,10 @@ use bech32::{
     ToBase32,
     Variant::Bech32m,
 };
-use core::str::FromStr;
+use core::{
+    fmt::Debug,
+    str::FromStr,
+};
 use fuel_core_storage::{
     iter::BoxedIter,
     Result as StorageResult,
@@ -12,12 +15,11 @@ use fuel_core_types::{
     fuel_types::{
         Address,
         BlockHeight,
+        Bytes32,
     },
     fuel_vm::SecretKey,
 };
 use itertools::Itertools;
-
-use fuel_core_types::fuel_types::Bytes32;
 use serde::{
     Deserialize,
     Serialize,
@@ -34,7 +36,11 @@ use super::{
     message::MessageConfig,
 };
 
-use std::fmt::Debug;
+#[cfg(feature = "parquet")]
+mod parquet;
+mod reader;
+#[cfg(feature = "std")]
+mod writer;
 
 // Fuel Network human-readable part for bech32 encoding
 pub const FUEL_BECH32_HRP: &str = "fuel";
@@ -237,7 +243,6 @@ impl StateConfig {
     }
 }
 
-// TODO: BoxedIter to be used until RPITIT lands in stable rust.
 #[impl_tools::autoimpl(for<T: trait> &T, &mut T)]
 pub trait ChainStateDb {
     /// Returns the contract config along with its state and balance
@@ -267,12 +272,6 @@ pub trait ChainStateDb {
     /// Returns the last available block height.
     fn get_block_height(&self) -> StorageResult<BlockHeight>;
 }
-
-#[cfg(feature = "parquet")]
-mod parquet;
-mod reader;
-#[cfg(feature = "std")]
-mod writer;
 
 pub use reader::{
     IntoIter,

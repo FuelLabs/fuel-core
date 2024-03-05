@@ -24,14 +24,14 @@ pub enum IntoIter<T> {
     },
     #[cfg(feature = "parquet")]
     Parquet {
-        decoder: super::parquet::PostcardDecoder<T>,
+        decoder: super::parquet::decode::PostcardDecoder<T>,
     },
 }
 
 #[cfg(feature = "parquet")]
 impl<T> Iterator for IntoIter<T>
 where
-    super::parquet::PostcardDecoder<T>: Iterator<Item = GroupResult<T>>,
+    super::parquet::decode::PostcardDecoder<T>: Iterator<Item = GroupResult<T>>,
 {
     type Item = GroupResult<T>;
 
@@ -42,6 +42,7 @@ where
         }
     }
 }
+
 #[cfg(not(feature = "parquet"))]
 impl<T> Iterator for IntoIter<T> {
     type Item = GroupResult<T>;
@@ -117,7 +118,7 @@ impl StateReader {
     #[cfg(feature = "parquet")]
     fn read_block_height(path: &std::path::Path) -> anyhow::Result<BlockHeight> {
         let file = std::fs::File::open(path)?;
-        let group = super::parquet::PostcardDecoder::new(file)?
+        let group = super::parquet::decode::PostcardDecoder::new(file)?
             .next()
             .ok_or_else(|| anyhow::anyhow!("No block height found"))??
             .data;
@@ -206,7 +207,7 @@ impl StateReader {
                 let path = file_picker(files);
                 let file = std::fs::File::open(path)?;
                 Ok(IntoIter::Parquet {
-                    decoder: super::parquet::Decoder::new(file)?,
+                    decoder: super::parquet::decode::Decoder::new(file)?,
                 })
             }
         }

@@ -25,13 +25,13 @@ use postcard::ser_flavors::{
     Flavor,
 };
 
+pub type PostcardEncoder<T> = Encoder<std::fs::File, T, PostcardEncode>;
+
 pub struct Encoder<W: Write + Send, T, E> {
     writer: SerializedFileWriter<W>,
     _type: PhantomData<T>,
     _encoding: PhantomData<E>,
 }
-
-pub type PostcardEncoder<T> = Encoder<std::fs::File, T, PostcardEncode>;
 
 impl<W: Write + Send, T, E> Encoder<W, T, E>
 where
@@ -105,6 +105,7 @@ pub trait Encode<T> {
 }
 
 pub struct PostcardEncode;
+
 impl<T> Encode<T> for PostcardEncode
 where
     T: serde::Serialize,

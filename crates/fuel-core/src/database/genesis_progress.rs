@@ -47,12 +47,14 @@ pub enum GenesisResource {
 }
 
 pub struct GenesisMetadata;
+
 impl Mappable for GenesisMetadata {
     type Key = Self::OwnedKey;
     type OwnedKey = GenesisResource;
     type Value = Self::OwnedValue;
     type OwnedValue = usize;
 }
+
 impl TableWithBlueprint for GenesisMetadata {
     type Blueprint = Plain<Postcard, Postcard>;
     type Column = Column;
@@ -62,12 +64,14 @@ impl TableWithBlueprint for GenesisMetadata {
 }
 
 pub struct GenesisCoinRoots;
+
 impl Mappable for GenesisCoinRoots {
     type Key = Self::OwnedKey;
     type OwnedKey = MerkleRoot;
     type Value = Self::OwnedValue;
     type OwnedValue = ();
 }
+
 impl TableWithBlueprint for GenesisCoinRoots {
     type Blueprint = Plain<Raw, Postcard>;
     type Column = Column;
@@ -77,12 +81,14 @@ impl TableWithBlueprint for GenesisCoinRoots {
 }
 
 pub struct GenesisMessageRoots;
+
 impl Mappable for GenesisMessageRoots {
     type Key = Self::OwnedKey;
     type OwnedKey = MerkleRoot;
     type Value = Self::OwnedValue;
     type OwnedValue = ();
 }
+
 impl TableWithBlueprint for GenesisMessageRoots {
     type Blueprint = Plain<Raw, Postcard>;
     type Column = Column;
@@ -90,13 +96,16 @@ impl TableWithBlueprint for GenesisMessageRoots {
         Column::GenesisMessageRoots
     }
 }
+
 pub struct GenesisContractRoots;
+
 impl Mappable for GenesisContractRoots {
     type Key = Self::OwnedKey;
     type OwnedKey = MerkleRoot;
     type Value = Self::OwnedValue;
     type OwnedValue = ();
 }
+
 impl TableWithBlueprint for GenesisContractRoots {
     type Blueprint = Plain<Raw, Postcard>;
     type Column = Column;

@@ -22,6 +22,7 @@ use crate::config::state::{
 };
 
 pub type PostcardDecoder<T> = Decoder<std::fs::File, T, PostcardDecode>;
+
 pub struct Decoder<R: ChunkReader, T, D> {
     data_source: SerializedFileReader<R>,
     group_index: usize,
@@ -100,6 +101,7 @@ impl<R: ChunkReader + 'static, T, D> Decoder<R, T, D> {
 }
 
 pub struct PostcardDecode;
+
 impl<T> Decode<T> for PostcardDecode
 where
     T: serde::de::DeserializeOwned,

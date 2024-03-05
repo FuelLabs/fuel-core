@@ -43,7 +43,7 @@ fn process_messages(
     Ok(())
 }
 
-// TODO dry
+// TODO: Remove as part of the https://github.com/FuelLabs/fuel-core/issues/1668
 fn generated_utxo_id(output_index: u64) -> UtxoId {
     UtxoId::new(
         // generated transaction id([0..[out_index/255]])
@@ -90,6 +90,8 @@ fn process_coins(
 }
 
 /// Performs the importing of the genesis block from the snapshot.
+// TODO: The regenesis of the off-chain database should go in the same way as the on-chain database.
+//  https://github.com/FuelLabs/fuel-core/issues/1619
 pub fn execute_genesis_block(
     config: &Config,
     original_database: &Database<OffChain>,

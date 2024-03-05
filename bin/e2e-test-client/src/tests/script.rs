@@ -10,7 +10,6 @@ use fuel_core_chain_config::{
 use fuel_core_types::{
     fuel_tx::{
         field::ScriptGasLimit,
-        Bytes32,
         Receipt,
         ScriptExecutionResult,
         StorageSlot,
@@ -20,6 +19,7 @@ use fuel_core_types::{
     fuel_types::canonical::Deserialize,
     services::executor::TransactionExecutionResult,
 };
+use itertools::Itertools;
 use libtest_mimic::Failed;
 use std::{
     path::Path,
@@ -100,13 +100,6 @@ pub async fn dry_run_multiple_txs(ctx: &TestContext) -> Result<(), Failed> {
     .await
 }
 
-// TODO: Remove when dynamic storage slots are supported.
-fn vec_to_bytes_32(vec: Vec<u8>) -> Bytes32 {
-    let mut bytes = [0u8; 32];
-    bytes.copy_from_slice(&vec);
-    bytes.into()
-}
-
 fn load_contract(
     path: impl AsRef<Path>,
 ) -> Result<(ContractConfig, Vec<StorageSlot>), Failed> {
@@ -116,8 +109,13 @@ fn load_contract(
     let state = state_config
         .contract_state
         .into_iter()
-        .map(|entry| StorageSlot::new(entry.key, vec_to_bytes_32(entry.value)))
-        .collect();
+        .map(|entry| {
+            Ok::<_, core::array::TryFromSliceError>(StorageSlot::new(
+                entry.key,
+                entry.value.as_slice().try_into()?,
+            ))
+        })
+        .try_collect()?;
 
     let contract_config = {
         let contracts = state_config.contracts;

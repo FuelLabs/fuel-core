@@ -1,13 +1,27 @@
-mod decode;
-mod encode;
-
-pub use decode::*;
-pub use encode::*;
+pub mod decode;
+pub mod encode;
 
 #[cfg(feature = "random")]
 #[cfg(test)]
 mod tests {
-    use crate::Randomize;
+    use crate::{
+        CoinConfig,
+        Group,
+        Randomize,
+    };
+    use bytes::Bytes;
+    use itertools::Itertools;
+    use parquet::{
+        basic::ZstdLevel,
+        file::reader::{
+            ChunkReader,
+            Length,
+        },
+    };
+    use rand::{
+        rngs::StdRng,
+        SeedableRng,
+    };
     use std::{
         io::{
             Cursor,
@@ -23,26 +37,10 @@ mod tests {
         },
     };
 
-    use bytes::Bytes;
-    use itertools::Itertools;
-    use parquet::{
-        basic::ZstdLevel,
-        file::reader::{
-            ChunkReader,
-            Length,
-        },
+    use super::{
+        decode::*,
+        encode::*,
     };
-    use rand::{
-        rngs::StdRng,
-        SeedableRng,
-    };
-
-    use crate::{
-        CoinConfig,
-        Group,
-    };
-
-    use super::*;
 
     #[derive(Clone)]
     struct TrackingReader {

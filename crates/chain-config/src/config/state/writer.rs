@@ -1,7 +1,3 @@
-use std::path::PathBuf;
-
-use fuel_core_types::fuel_types::BlockHeight;
-
 use crate::{
     config::contract_state::ContractStateConfig,
     CoinConfig,
@@ -11,6 +7,8 @@ use crate::{
     SnapshotMetadata,
     StateConfig,
 };
+use fuel_core_types::fuel_types::BlockHeight;
+use std::path::PathBuf;
 
 #[cfg(feature = "parquet")]
 use super::parquet;
@@ -22,12 +20,12 @@ enum EncoderType {
     },
     #[cfg(feature = "parquet")]
     Parquet {
-        coins: parquet::PostcardEncoder<CoinConfig>,
-        messages: parquet::PostcardEncoder<MessageConfig>,
-        contracts: parquet::PostcardEncoder<ContractConfig>,
-        contract_state: parquet::PostcardEncoder<ContractStateConfig>,
-        contract_balance: parquet::PostcardEncoder<ContractBalanceConfig>,
-        block_height: parquet::PostcardEncoder<BlockHeight>,
+        coins: parquet::encode::PostcardEncoder<CoinConfig>,
+        messages: parquet::encode::PostcardEncoder<MessageConfig>,
+        contracts: parquet::encode::PostcardEncoder<ContractConfig>,
+        contract_state: parquet::encode::PostcardEncoder<ContractStateConfig>,
+        contract_balance: parquet::encode::PostcardEncoder<ContractBalanceConfig>,
+        block_height: parquet::encode::PostcardEncoder<BlockHeight>,
     },
 }
 
@@ -190,12 +188,12 @@ impl StateWriter {
         fn create_encoder<T>(
             path: &Path,
             compression: Compression,
-        ) -> anyhow::Result<parquet::PostcardEncoder<T>>
+        ) -> anyhow::Result<parquet::encode::PostcardEncoder<T>>
         where
-            parquet::PostcardEncode: parquet::Encode<T>,
+            parquet::encode::PostcardEncode: parquet::encode::Encode<T>,
         {
             let file = std::fs::File::create(path)?;
-            parquet::Encoder::new(file, compression)
+            parquet::encode::Encoder::new(file, compression)
         }
 
         let compression = compression_level.into();
@@ -467,7 +465,8 @@ mod tests {
         expected_filename: &str,
         write: impl FnOnce(Vec<T>, &mut StateWriter) -> anyhow::Result<()>,
     ) where
-        parquet::PostcardDecoder<T>: Iterator<Item = anyhow::Result<crate::Group<T>>>,
+        parquet::decode::PostcardDecoder<T>:
+            Iterator<Item = anyhow::Result<crate::Group<T>>>,
         T: crate::Randomize + PartialEq + ::core::fmt::Debug + Clone,
     {
         // given
@@ -483,7 +482,7 @@ mod tests {
 
         // then
         let file = std::fs::File::open(dir.path().join(expected_filename)).unwrap();
-        let decoded = parquet::PostcardDecoder::<T>::new(file)
+        let decoded = parquet::decode::PostcardDecoder::<T>::new(file)
             .unwrap()
             .collect::<Result<Vec<_>, _>>()
             .unwrap();

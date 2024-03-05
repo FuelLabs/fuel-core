@@ -1,5 +1,3 @@
-use std::path::PathBuf;
-
 use crate::{
     database::{
         database_description::{
@@ -17,9 +15,7 @@ use fuel_core_types::{
     blockchain::primitives::DaBlockHeight,
     fuel_types::BlockHeight,
 };
-
-#[cfg(feature = "rocksdb")]
-use tracing::warn;
+use std::path::PathBuf;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct CombinedDatabaseConfig {
@@ -76,7 +72,7 @@ impl CombinedDatabase {
             DbType::RocksDb => {
                 // use a default tmp rocksdb if no path is provided
                 if config.database_path.as_os_str().is_empty() {
-                    warn!(
+                    tracing::warn!(
                         "No RocksDB path configured, initializing database with a tmp directory"
                     );
                     CombinedDatabase::default()

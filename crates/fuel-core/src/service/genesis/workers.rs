@@ -1,14 +1,13 @@
-use std::{
-    marker::PhantomData,
-    sync::Arc,
-};
-
 use super::{
     init_coin,
     init_contract,
     init_da_message,
     runner::ProcessState,
     GenesisRunner,
+};
+use std::{
+    marker::PhantomData,
+    sync::Arc,
 };
 
 use crate::database::{
@@ -193,6 +192,8 @@ impl GenesisWorkers {
 
 #[derive(Debug, Clone, Copy)]
 pub struct Handler<T> {
+    // TODO: Remove this as part of the https://github.com/FuelLabs/fuel-core/issues/1668.
+    //  Currently if we interrupt the regenesis process, we will use incorrect values.
     output_index: u64,
     block_height: BlockHeight,
     phaton_data: PhantomData<T>,
@@ -220,13 +221,13 @@ impl ProcessState for Handler<CoinConfig> {
             .into_iter()
             .try_for_each(|coin| {
                 let root = init_coin(tx, &coin, self.output_index, self.block_height)?;
-        tx.add_coin_root(root)?;
+                tx.add_coin_root(root)?;
 
-        self.output_index = self.output_index
-                .checked_add(1)
-                .expect("The maximum number of UTXOs supported in the genesis configuration has been exceeded.");
+                self.output_index = self.output_index
+                        .checked_add(1)
+                        .expect("The maximum number of UTXOs supported in the genesis configuration has been exceeded.");
 
-        Ok(())
+                Ok(())
             })
     }
 
@@ -268,11 +269,11 @@ impl ProcessState for Handler<ContractConfig> {
             .try_for_each(|contract| {
                 init_contract(tx, &contract, self.output_index, self.block_height)?;
 
-        self.output_index = self.output_index
-                .checked_add(1)
-                .expect("The maximum number of UTXOs supported in the genesis configuration has been exceeded.");
+                self.output_index = self.output_index
+                        .checked_add(1)
+                        .expect("The maximum number of UTXOs supported in the genesis configuration has been exceeded.");
 
-        Ok::<(), anyhow::Error>(())
+                Ok::<(), anyhow::Error>(())
             })
     }
 

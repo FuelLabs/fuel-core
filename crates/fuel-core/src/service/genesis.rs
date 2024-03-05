@@ -1,3 +1,4 @@
+use self::workers::GenesisWorkers;
 use crate::{
     database::{
         genesis_progress::{
@@ -73,15 +74,13 @@ use fuel_core_types::{
 use itertools::Itertools;
 
 pub mod off_chain;
-
 mod runner;
+mod workers;
+
 pub use runner::{
     GenesisRunner,
     TransactionOpener,
 };
-
-mod workers;
-use self::workers::GenesisWorkers;
 
 /// Performs the importing of the genesis block from the snapshot.
 pub async fn execute_genesis_block(
@@ -186,6 +185,7 @@ pub async fn execute_and_commit_genesis_block(
     Ok(())
 }
 
+// TODO: Remove as part of the https://github.com/FuelLabs/fuel-core/issues/1668
 fn generated_utxo_id(output_index: u64) -> UtxoId {
     UtxoId::new(
         // generated transaction id([0..[out_index/255]])
