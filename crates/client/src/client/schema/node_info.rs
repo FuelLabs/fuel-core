@@ -15,7 +15,7 @@ use std::{
     },
 };
 
-#[derive(cynic::QueryFragment, Debug)]
+#[derive(cynic::QueryFragment, Clone, Debug)]
 #[cynic(schema_path = "./assets/schema.sdl")]
 pub struct NodeInfo {
     pub utxo_validation: bool,

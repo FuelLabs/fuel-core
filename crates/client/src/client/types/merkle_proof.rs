@@ -3,7 +3,7 @@ use crate::client::{
     types::primitives::MerkleRoot,
 };
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct MerkleProof {
     /// The proof set of the message proof.
     pub proof_set: Vec<MerkleRoot>,
