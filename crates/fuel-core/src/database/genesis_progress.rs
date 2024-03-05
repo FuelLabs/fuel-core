@@ -63,6 +63,7 @@ impl TableWithBlueprint for GenesisMetadata {
     }
 }
 
+// TODO: Remove as part of the https://github.com/FuelLabs/fuel-core/issues/1734
 pub struct GenesisCoinRoots;
 
 impl Mappable for GenesisCoinRoots {
@@ -80,6 +81,7 @@ impl TableWithBlueprint for GenesisCoinRoots {
     }
 }
 
+// TODO: Remove as part of the https://github.com/FuelLabs/fuel-core/issues/1734
 pub struct GenesisMessageRoots;
 
 impl Mappable for GenesisMessageRoots {
@@ -97,6 +99,7 @@ impl TableWithBlueprint for GenesisMessageRoots {
     }
 }
 
+// TODO: Remove as part of the https://github.com/FuelLabs/fuel-core/issues/1734
 pub struct GenesisContractRoots;
 
 impl Mappable for GenesisContractRoots {
