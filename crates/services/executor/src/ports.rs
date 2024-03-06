@@ -55,6 +55,21 @@ impl MaybeCheckedTransaction {
             MaybeCheckedTransaction::Transaction(tx) => tx.id(chain_id),
         }
     }
+
+    pub fn transaction(&self) -> fuel_tx::Transaction {
+        match self {
+            MaybeCheckedTransaction::CheckedTransaction(checked) => match checked {
+                CheckedTransaction::Script(script) => {
+                    script.transaction().to_owned().into()
+                }
+                CheckedTransaction::Create(create) => {
+                    create.transaction().to_owned().into()
+                }
+                CheckedTransaction::Mint(mint) => mint.transaction().to_owned().into(),
+            },
+            MaybeCheckedTransaction::Transaction(tx) => tx.clone(),
+        }
+    }
 }
 
 pub trait TransactionsSource {

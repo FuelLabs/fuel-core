@@ -1,4 +1,3 @@
-use super::TransactionsSource;
 use crate::{
     database::Database,
     service::adapters::{
@@ -40,7 +39,6 @@ use fuel_core_types::{
         ChainId,
     },
     services::executor::{
-        ExecutionTypes,
         Result as ExecutorResult,
         UncommittedResult as UncommittedExecutionResult,
     },
@@ -120,13 +118,11 @@ impl ExecutorDatabase for Database {
 impl Executor for ExecutorAdapter {
     type Database = Database;
 
-    fn execute_without_commit(
+    fn execute_validation(
         &self,
         block: Block,
     ) -> ExecutorResult<UncommittedExecutionResult<StorageTransaction<Self::Database>>>
     {
-        self._execute_without_commit::<TransactionsSource>(ExecutionTypes::Validation(
-            block,
-        ))
+        self._validation(block)
     }
 }

@@ -388,7 +388,7 @@ where
             },
             db_tx,
         ) = executor
-            .execute_without_commit(block)
+            .execute_validation(block)
             .map_err(Error::FailedExecution)?
             .into();
 

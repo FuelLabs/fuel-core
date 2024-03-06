@@ -123,7 +123,6 @@ use fuel_core_types::{
             Event as ExecutorEvent,
             ExecutionKind,
             ExecutionResult,
-            ExecutionType,
             ExecutionTypes,
             Result as ExecutorResult,
             TransactionExecutionResult,
@@ -144,7 +143,7 @@ use tracing::{
     warn,
 };
 
-pub type ExecutionBlockWithSource<TxSource> = ExecutionTypes<Components<TxSource>, Block>;
+pub type ExecutionBlockWithSource<TxSource> = ExecutionTypes<Components<TxSource>>;
 
 pub struct OnceTransactionsSource {
     transactions: ParkingMutex<Vec<MaybeCheckedTransaction>>,
@@ -237,6 +236,19 @@ where
         executor.execute_inner(block)
     }
 
+    pub fn execute_validation(
+        &self,
+        block: Block,
+    ) -> ExecutorResult<UncommittedResult<StorageTransaction<View>>> {
+        let executor = ExecutionInstance {
+            database: self.database_view_provider.latest_view(),
+            relayer: self.relayer_view_provider.latest_view(),
+            config: self.config.clone(),
+            options: self.config.as_ref().into(),
+        };
+        executor.execute_validation(block)
+    }
+
     pub fn dry_run(
         &self,
         component: Components<Vec<Transaction>>,
@@ -319,7 +331,6 @@ where
                 gas_price: 0,
                 gas_limit: u64::MAX,
             }),
-            ExecutionTypes::Validation(block) => ExecutionTypes::Validation(block),
         };
 
         let (result, db_transaction) = self.execute_without_commit(component)?.into();
@@ -457,14 +468,28 @@ where
             ExecutionTypes::Production(block_components) => {
                 self.execute_production(block_components, &mut storage_transaction)?
             }
-            ExecutionTypes::Validation(block) => {
-                let partial_block = PartialFuelBlock::from(block);
-                self.execute_validation(partial_block, &mut storage_transaction)?
-            }
         };
 
         self.complete_transaction(
             block,
+            storage_transaction,
+            execution_data,
+            maybe_block_id,
+        )
+    }
+
+    pub fn execute_validation(
+        self,
+        block: Block,
+    ) -> ExecutorResult<UncommittedResult<StorageTransaction<D>>> {
+        let maybe_block_id = Some(block.id());
+        let mut partial = PartialFuelBlock::from(block);
+        let components = PartialBlockComponent::from_partial_block(&mut partial);
+        let mut storage_transaction = self.database.transaction();
+        let execution_data =
+            self.execute_block_validation(storage_transaction.as_mut(), components)?;
+        self.complete_transaction(
+            partial,
             storage_transaction,
             execution_data,
             maybe_block_id,
@@ -477,17 +502,15 @@ where
         storage_transaction: &mut StorageTransaction<D>,
     ) -> ExecutorResult<(PartialFuelBlock, ExecutionData)> {
         let mut block = PartialFuelBlock::new(component.header_to_produce, vec![]);
-        let component = PartialBlockComponent::from_component(
+        let components = PartialBlockComponent::from_component(
             &mut block,
             component.transactions_source,
             component.gas_price,
             component.gas_limit,
         );
 
-        let execution_data = self.execute_block(
-            storage_transaction.as_mut(),
-            ExecutionType::DryRun(component),
-        )?;
+        let execution_data =
+            self.execute_block_dry_run(storage_transaction.as_mut(), components)?;
         Ok((block, execution_data))
     }
 
@@ -497,29 +520,17 @@ where
         storage_transaction: &mut StorageTransaction<D>,
     ) -> ExecutorResult<(PartialFuelBlock, ExecutionData)> {
         let mut block = PartialFuelBlock::new(component.header_to_produce, vec![]);
-        let component = PartialBlockComponent::from_component(
+        let components = PartialBlockComponent::from_component(
             &mut block,
             component.transactions_source,
             component.gas_price,
             component.gas_limit,
         );
 
-        let execution_data = self.execute_block(
+        let execution_data = self.execute_block_production(
             storage_transaction.as_mut(),
-            ExecutionType::Production(component),
-        )?;
-        Ok((block, execution_data))
-    }
-
-    fn execute_validation(
-        &self,
-        mut block: PartialFuelBlock,
-        storage_transaction: &mut StorageTransaction<D>,
-    ) -> ExecutorResult<(PartialFuelBlock, ExecutionData)> {
-        let component = PartialBlockComponent::from_partial_block(&mut block);
-        let execution_data = self.execute_block(
-            storage_transaction.as_mut(),
-            ExecutionType::Validation(component),
+            components,
+            component.gas_price,
         )?;
         Ok((block, execution_data))
     }
@@ -573,30 +584,28 @@ where
         Ok(block_id)
     }
 
-    #[tracing::instrument(skip_all)]
-    /// Execute the fuel block with all transactions.
-    fn execute_block<TxSource>(
-        &self,
-        storage_transaction: &mut D,
-        block: ExecutionType<PartialBlockComponent<TxSource>>,
-    ) -> ExecutorResult<ExecutionData>
-    where
-        TxSource: TransactionsSource,
-    {
-        let (execution_kind, component) = block.split();
-        match execution_kind {
-            ExecutionKind::DryRun => {
-                self.execute_block_dry_run(storage_transaction, component)
-            }
-            ExecutionKind::Production => {
-                let gas_price = component.gas_price;
-                self.execute_block_production(storage_transaction, component, gas_price)
-            }
-            ExecutionKind::Validation => {
-                self.execute_block_validation(storage_transaction, component)
-            }
-        }
-    }
+    // #[tracing::instrument(skip_all)]
+    // /// Execute the fuel block with all transactions.
+    // fn execute_block<TxSource>(
+    //     &self,
+    //     storage_transaction: &mut D,
+    //     execution_kind: ExecutionKind,
+    //     components: PartialBlockComponent<TxSource>,
+    // ) -> ExecutorResult<ExecutionData>
+    // where
+    //     TxSource: TransactionsSource,
+    // {
+    //     match execution_kind {
+    //         ExecutionKind::DryRun => {
+    //             self.execute_block_dry_run(storage_transaction, components)
+    //         }
+    //         ExecutionKind::Production => {
+    //             let gas_price = components.gas_price;
+    //             self.execute_block_production(storage_transaction, components, gas_price)
+    //         }
+    //         ExecutionKind::Validation => todo!("remove this"),
+    //     }
+    // }
 
     fn execute_block_dry_run<TxSource>(
         &self,
@@ -606,27 +615,31 @@ where
     where
         TxSource: TransactionsSource,
     {
+        // TODO
+        let gas_price = 0;
         self.execute_block_inner(
             storage_transaction,
             ExecutionKind::DryRun,
             &mut component,
+            gas_price,
         )
     }
 
     fn execute_block_production<TxSource>(
         &self,
         storage_transaction: &mut D,
-        mut component: PartialBlockComponent<TxSource>,
+        mut components: PartialBlockComponent<TxSource>,
         gas_price: Word,
     ) -> ExecutorResult<ExecutionData>
     where
         TxSource: TransactionsSource,
     {
-        let block_height = *(component.empty_block.header.height());
+        let block_height = *(components.empty_block.header.height());
         let mut execution_data = self.execute_block_inner(
             storage_transaction,
             ExecutionKind::Production,
-            &mut component,
+            &mut components,
+            gas_price,
         )?;
         let amount_to_mint = if self.config.coinbase_recipient != ContractId::zeroed() {
             execution_data.coinbase
@@ -658,23 +671,23 @@ where
             storage_transaction,
             gas_price,
             ExecutionKind::Production,
-            &mut component,
+            &mut components,
         )?;
         Ok(execution_data)
     }
 
-    fn execute_block_validation<TxSource>(
+    fn execute_block_validation(
         &self,
         storage_transaction: &mut D,
-        mut component: PartialBlockComponent<TxSource>,
-    ) -> ExecutorResult<ExecutionData>
-    where
-        TxSource: TransactionsSource,
-    {
+        mut component: PartialBlockComponent<OnceTransactionsSource>,
+    ) -> ExecutorResult<ExecutionData> {
+        let gas_price = Self::get_gas_price_from_mint_tx(&component)
+            .ok_or(ExecutorError::MintMissing)?;
         self.execute_block_inner(
             storage_transaction,
             ExecutionKind::Validation,
             &mut component,
+            gas_price,
         )
     }
 
@@ -696,6 +709,7 @@ where
         storage_transaction: &mut D,
         execution_kind: ExecutionKind,
         component: &mut PartialBlockComponent<TxSource>,
+        gas_price: Word,
     ) -> ExecutorResult<ExecutionData>
     where
         TxSource: TransactionsSource,
@@ -705,7 +719,6 @@ where
 
         // Split out the execution kind and partial block.
         let block = &component.empty_block;
-        let gas_price = component.gas_price;
         let mut remaining_gas_limit = component.gas_limit;
 
         if self.relayer.enabled() {
@@ -1797,5 +1810,21 @@ where
         }
 
         Ok(())
+    }
+    fn get_gas_price_from_mint_tx(
+        components: &PartialBlockComponent<OnceTransactionsSource>,
+    ) -> Option<Word> {
+        if let Some(Transaction::Mint(mint)) = components
+            .transactions_source
+            .transactions
+            .lock()
+            .iter()
+            .last()
+            .map(|tx| tx.transaction())
+        {
+            Some(*mint.gas_price())
+        } else {
+            None
+        }
     }
 }

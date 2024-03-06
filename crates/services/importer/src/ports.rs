@@ -26,7 +26,7 @@ pub trait Executor: Send + Sync {
 
     /// Executes the block and returns the result of execution with uncommitted database
     /// transaction.
-    fn execute_without_commit(
+    fn execute_validation(
         &self,
         block: Block,
     ) -> ExecutorResult<UncommittedResult<StorageTransaction<Self::Database>>>;

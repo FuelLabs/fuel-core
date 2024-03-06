@@ -17,7 +17,10 @@ use fuel_core_storage::{
     Error as StorageError,
 };
 use fuel_core_types::{
-    blockchain::primitives::DaBlockHeight,
+    blockchain::{
+        block::Block,
+        primitives::DaBlockHeight,
+    },
     fuel_tx,
     services::{
         block_producer::Components,
@@ -57,6 +60,13 @@ impl ExecutorAdapter {
         utxo_validation: Option<bool>,
     ) -> ExecutorResult<Vec<TransactionExecutionStatus>> {
         self.executor.dry_run(block, utxo_validation)
+    }
+
+    pub(crate) fn _validation(
+        &self,
+        block: Block,
+    ) -> ExecutorResult<UncommittedResult<StorageTransaction<Database>>> {
+        self.executor.execute_validation(block)
     }
 }
 
