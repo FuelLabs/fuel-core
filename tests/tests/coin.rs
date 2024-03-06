@@ -50,8 +50,8 @@ async fn coin() {
     let output_index = 5;
     let tx_id = TxId::new([1u8; 32]);
     let coin = CoinConfig {
-        output_index: Some(output_index),
-        tx_id: Some(tx_id),
+        output_index,
+        tx_id,
         ..Default::default()
     };
 

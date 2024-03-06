@@ -400,10 +400,10 @@ mod tests {
                 .unwrap();
 
             CoinConfig {
-                tx_id: Some(tx_id),
-                output_index: Some(output_index),
-                tx_pointer_block_height: Some(coin.tx_pointer().block_height()),
-                tx_pointer_tx_idx: Some(coin.tx_pointer().tx_index()),
+                tx_id,
+                output_index,
+                tx_pointer_block_height: coin.tx_pointer().block_height(),
+                tx_pointer_tx_idx: coin.tx_pointer().tx_index(),
                 owner: *coin.owner(),
                 amount: *coin.amount(),
                 asset_id: *coin.asset_id(),
@@ -694,12 +694,9 @@ mod tests {
     }
 
     fn sorted_state(mut state: StateConfig) -> StateConfig {
-        state.coins.sort_by_key(|coin| {
-            UtxoId::new(
-                coin.tx_id.unwrap_or_default(),
-                coin.output_index.unwrap_or_default(),
-            )
-        });
+        state
+            .coins
+            .sort_by_key(|coin| UtxoId::new(coin.tx_id, coin.output_index));
         state.messages.sort_by_key(|msg| msg.nonce);
         state.contracts.sort_by_key(|contract| contract.contract_id);
         state

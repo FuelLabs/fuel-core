@@ -204,12 +204,9 @@ fn generated_utxo_id(output_index: u64) -> UtxoId {
 fn init_coin(
     db: &mut Database,
     coin: &CoinConfig,
-    output_index: u64,
     height: BlockHeight,
 ) -> anyhow::Result<MerkleRoot> {
-    // TODO: Store merkle sum tree root over coins with unspecified utxo ids.
-    let utxo_id = coin.utxo_id().unwrap_or(generated_utxo_id(output_index));
-
+    let utxo_id = coin.utxo_id();
     let compressed_coin = Coin {
         utxo_id,
         owner: coin.owner,
@@ -395,6 +392,7 @@ mod tests {
         let coins = (0..1000)
             .map(|_| CoinConfig {
                 amount: 10,
+                tx_id: rng.gen(),
                 ..Default::default()
             })
             .collect_vec();
@@ -499,10 +497,10 @@ mod tests {
         let state = StateConfig {
             coins: vec![
                 CoinConfig {
-                    tx_id: Some(alice_tx_id),
-                    output_index: Some(alice_output_index),
-                    tx_pointer_block_height: Some(alice_block_created),
-                    tx_pointer_tx_idx: Some(alice_block_created_tx_idx),
+                    tx_id: alice_tx_id,
+                    output_index: alice_output_index,
+                    tx_pointer_block_height: alice_block_created,
+                    tx_pointer_tx_idx: alice_block_created_tx_idx,
                     owner: alice,
                     amount: alice_value,
                     asset_id: asset_id_alice,
@@ -710,8 +708,7 @@ mod tests {
         let state = StateConfig {
             coins: vec![CoinConfig {
                 // set txpointer height > genesis height
-                tx_pointer_block_height: Some(BlockHeight::from(11u32)),
-                tx_pointer_tx_idx: Some(0),
+                tx_pointer_block_height: BlockHeight::from(11u32),
                 amount: 10,
                 ..Default::default()
             }],
@@ -878,38 +875,6 @@ mod tests {
                 initialized_contract.output_index.unwrap(),
                 expected_utxo_id.output_index()
             );
-        }
-    }
-
-    #[tokio::test]
-    async fn initializes_coins_with_generated_tx_and_output_idx() {
-        let coins = (0..1000)
-            .map(|_| CoinConfig {
-                amount: 10,
-                ..Default::default()
-            })
-            .collect_vec();
-
-        let state = StateConfig {
-            coins: coins.clone(),
-            ..Default::default()
-        };
-        let state_reader = StateReader::in_memory(state);
-
-        let service_config = Config {
-            state_reader,
-            ..Config::local_node()
-        };
-
-        let db = Database::default();
-        FuelService::from_database(db.clone(), service_config)
-            .await
-            .unwrap();
-
-        for (idx, _) in coins.iter().enumerate() {
-            let expected_utxo_id = generated_utxo_id(idx as u64);
-            db.coin(&expected_utxo_id)
-                .expect("Coin with expected utxo id should exist");
         }
     }
 }

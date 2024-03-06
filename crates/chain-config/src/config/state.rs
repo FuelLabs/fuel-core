@@ -11,7 +11,6 @@ use fuel_core_storage::{
     Result as StorageResult,
 };
 use fuel_core_types::{
-    fuel_tx::UtxoId,
     fuel_types::{
         Address,
         BlockHeight,
@@ -168,12 +167,19 @@ impl StateConfig {
         })
     }
 
+    fn usize_to_bytes32(num: usize) -> Bytes32 {
+        let mut bytes = [0u8; 32];
+        bytes[..std::mem::size_of::<usize>()].copy_from_slice(&num.to_be_bytes());
+        Bytes32::new(bytes)
+    }
+
     pub fn local_testnet() -> Self {
         // endow some preset accounts with an initial balance
         tracing::info!("Initial Accounts");
         let coins = TESTNET_WALLET_SECRETS
             .into_iter()
-            .map(|secret| {
+            .enumerate()
+            .map(|(idx, secret)| {
                 let secret = SecretKey::from_str(secret).expect("Expected valid secret");
                 let address = Address::from(*secret.public_key().hash());
                 let bech32_data = Bytes32::new(*address).to_base32();
@@ -186,7 +192,8 @@ impl StateConfig {
                     bech32_encoding,
                     TESTNET_INITIAL_BALANCE
                 );
-                Self::initial_coin(secret, TESTNET_INITIAL_BALANCE, None)
+                let tx_id = Self::usize_to_bytes32(idx);
+                Self::initial_coin(secret, TESTNET_INITIAL_BALANCE, tx_id)
             })
             .collect_vec();
 
@@ -201,7 +208,8 @@ impl StateConfig {
         tracing::info!("Initial Accounts");
         let mut rng = rand::thread_rng();
         let coins = (0..5)
-            .map(|_| {
+            .enumerate()
+            .map(|(idx, _)| {
                 let secret = SecretKey::random(&mut rng);
                 let address = Address::from(*secret.public_key().hash());
                 let bech32_data = Bytes32::new(*address).to_base32();
@@ -214,7 +222,8 @@ impl StateConfig {
                     bech32_encoding,
                     TESTNET_INITIAL_BALANCE
                 );
-                Self::initial_coin(secret, TESTNET_INITIAL_BALANCE, None)
+                let tx_id = Self::usize_to_bytes32(idx);
+                Self::initial_coin(secret, TESTNET_INITIAL_BALANCE, tx_id)
             })
             .collect_vec();
 
@@ -224,21 +233,14 @@ impl StateConfig {
         }
     }
 
-    pub fn initial_coin(
-        secret: SecretKey,
-        amount: u64,
-        utxo_id: Option<UtxoId>,
-    ) -> CoinConfig {
-        let address = Address::from(*secret.public_key().hash());
+    pub fn initial_coin(secret: SecretKey, amount: u64, tx_id: Bytes32) -> CoinConfig {
+        let owner = Address::from(*secret.public_key().hash());
 
         CoinConfig {
-            tx_id: utxo_id.as_ref().map(|u| *u.tx_id()),
-            output_index: utxo_id.as_ref().map(|u| u.output_index()),
-            tx_pointer_block_height: None,
-            tx_pointer_tx_idx: None,
-            owner: address,
+            tx_id,
             amount,
-            asset_id: Default::default(),
+            owner,
+            ..Default::default()
         }
     }
 }

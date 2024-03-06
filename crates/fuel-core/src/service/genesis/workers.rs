@@ -202,6 +202,7 @@ pub struct Handler<T> {
 impl<T> Handler<T> {
     pub fn new(block_height: BlockHeight) -> Self {
         Self {
+            // TODO remove
             output_index: 0,
             block_height,
             phaton_data: PhantomData,
@@ -220,7 +221,7 @@ impl ProcessState for Handler<CoinConfig> {
         group
             .into_iter()
             .try_for_each(|coin| {
-                let root = init_coin(tx, &coin, self.output_index, self.block_height)?;
+                let root = init_coin(tx, &coin, self.block_height)?;
                 tx.add_coin_root(root)?;
 
                 self.output_index = self.output_index

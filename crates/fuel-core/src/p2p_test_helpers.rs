@@ -193,9 +193,8 @@ pub async fn make_nodes(
             let all: Vec<_> = (0..num_test_txs)
                 .map(|_| {
                     let secret = SecretKey::random(&mut rng);
-                    let utxo_id: UtxoId = rng.gen();
-                    let initial_coin =
-                        StateConfig::initial_coin(secret, 10000, Some(utxo_id));
+                    let tx_id: Bytes32 = rng.gen();
+                    let initial_coin = StateConfig::initial_coin(secret, 10000, tx_id);
                     let tx = TransactionBuilder::script(
                         vec![op::ret(RegId::ONE)].into_iter().collect(),
                         vec![],
@@ -203,7 +202,7 @@ pub async fn make_nodes(
                     .script_gas_limit(100000)
                     .add_unsigned_coin_input(
                         secret,
-                        utxo_id,
+                        UtxoId::new(tx_id, 0),
                         initial_coin.amount,
                         initial_coin.asset_id,
                         Default::default(),

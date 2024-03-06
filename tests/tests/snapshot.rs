@@ -78,8 +78,6 @@ async fn loads_snapshot() {
         ]
         .into_iter()
         .map(|(owner, amount, asset_id)| CoinConfig {
-            tx_pointer_block_height: Some(Default::default()),
-            tx_pointer_tx_idx: Some(0),
             owner,
             amount,
             asset_id,

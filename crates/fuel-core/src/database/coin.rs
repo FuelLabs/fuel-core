@@ -68,10 +68,10 @@ impl Database {
                 let (utxo_id, coin) = raw_coin?;
 
                 Ok(CoinConfig {
-                    tx_id: Some(*utxo_id.tx_id()),
-                    output_index: Some(utxo_id.output_index()),
-                    tx_pointer_block_height: Some(coin.tx_pointer().block_height()),
-                    tx_pointer_tx_idx: Some(coin.tx_pointer().tx_index()),
+                    tx_id: *utxo_id.tx_id(),
+                    output_index: utxo_id.output_index(),
+                    tx_pointer_block_height: coin.tx_pointer().block_height(),
+                    tx_pointer_tx_idx: coin.tx_pointer().tx_index(),
                     owner: *coin.owner(),
                     amount: *coin.amount(),
                     asset_id: *coin.asset_id(),
