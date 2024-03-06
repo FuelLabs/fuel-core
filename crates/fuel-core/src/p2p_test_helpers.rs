@@ -196,7 +196,8 @@ pub async fn make_nodes(
                 .map(|_| {
                     let secret = SecretKey::random(&mut rng);
                     let initial_coin = CoinConfig {
-                        // set idx to prevent overlapping utxo_ids
+                        // set idx to prevent overlapping utxo_ids when
+                        // merging with existing coins from config
                         output_index: 2,
                         ..coin_generator.generate_with(secret, 10000)
                     };
