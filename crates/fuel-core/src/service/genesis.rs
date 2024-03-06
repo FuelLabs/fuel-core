@@ -174,7 +174,6 @@ fn init_coin(
     coin: &CoinConfig,
     height: BlockHeight,
 ) -> anyhow::Result<()> {
-    // TODO: Store merkle sum tree root over coins with unspecified utxo ids.
     let utxo_id = coin.utxo_id();
 
     let compressed_coin = Coin {
