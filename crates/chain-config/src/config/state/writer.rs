@@ -560,10 +560,10 @@ mod tests {
             contract_id: [1u8; 32].into(),
             code: [2u8; 32].into(),
             salt: [3u8; 32].into(),
-            tx_id: Some([4u8; 32].into()),
-            output_index: Some(5),
-            tx_pointer_block_height: Some(BlockHeight::new(6)),
-            tx_pointer_tx_idx: Some(7),
+            tx_id: [4u8; 32].into(),
+            output_index: 5,
+            tx_pointer_block_height: BlockHeight::new(6),
+            tx_pointer_tx_idx: 7,
         };
 
         // when

@@ -149,7 +149,7 @@ async fn test_contract_balance(
 ) {
     let mut test_builder = TestSetupBuilder::new(SEED);
     let (_, contract_id) =
-        test_builder.setup_contract(vec![], vec![(asset, test_balance)], None, None);
+        test_builder.setup_contract(vec![], vec![(asset, test_balance)], None);
 
     // spin up node
     let TestContext {
@@ -177,7 +177,7 @@ async fn test_5_contract_balances(
         (AssetId::new([2u8; 32]), 400),
         (AssetId::new([3u8; 32]), 700),
     ];
-    let (_, contract_id) = test_builder.setup_contract(vec![], balances, None, None);
+    let (_, contract_id) = test_builder.setup_contract(vec![], balances, None);
 
     let TestContext {
         client,
