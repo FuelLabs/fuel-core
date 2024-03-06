@@ -11,10 +11,7 @@ use std::{
 };
 
 use crate::database::{
-    genesis_progress::{
-        GenesisImportedContractId,
-        GenesisResource,
-    },
+    genesis_progress::GenesisResource,
     Database,
 };
 use fuel_core_chain_config::{
@@ -22,12 +19,10 @@ use fuel_core_chain_config::{
     ContractBalanceConfig,
     ContractConfig,
     ContractStateConfig,
-    GenesisCommitment,
     Group,
     MessageConfig,
     StateReader,
 };
-use fuel_core_executor::refs::ContractRef;
 use fuel_core_types::fuel_types::BlockHeight;
 use tokio::sync::Notify;
 use tokio_util::sync::CancellationToken;
@@ -139,22 +134,6 @@ impl GenesisWorkers {
         self.spawn_worker(contract_balance, finished_signal).await
     }
 
-    pub async fn compute_contracts_root(self) -> anyhow::Result<()> {
-        tokio_rayon::spawn(move || {
-            let chunks = self.db.genesis_loaded_contracts();
-
-            let contract_ids = chunks.into_iter().enumerate().map(
-                |(index, chunk)| -> anyhow::Result<_> {
-                    let data = vec![chunk?];
-                    Ok(Group { index, data })
-                },
-            );
-
-            self.create_runner(contract_ids, None).run()
-        })
-        .await
-    }
-
     fn spawn_worker<T, I>(
         &self,
         data: I,
@@ -214,8 +193,7 @@ impl ProcessState for Handler<CoinConfig> {
         tx: &mut Database,
     ) -> anyhow::Result<()> {
         group.into_iter().try_for_each(|coin| {
-            let root = init_coin(tx, &coin, self.block_height)?;
-            tx.add_coin_root(root)?;
+            init_coin(tx, &coin, self.block_height)?;
             Ok(())
         })
     }
@@ -233,11 +211,9 @@ impl ProcessState for Handler<MessageConfig> {
         group: Vec<Self::Item>,
         tx: &mut Database,
     ) -> anyhow::Result<()> {
-        group.into_iter().try_for_each(|message| {
-            let root = init_da_message(tx, message)?;
-            tx.add_message_root(root)?;
-            Ok(())
-        })
+        group
+            .into_iter()
+            .try_for_each(|message| init_da_message(tx, message))
     }
 
     fn genesis_resource() -> GenesisResource {
@@ -261,28 +237,6 @@ impl ProcessState for Handler<ContractConfig> {
 
     fn genesis_resource() -> GenesisResource {
         GenesisResource::Contracts
-    }
-}
-
-impl ProcessState for Handler<GenesisImportedContractId> {
-    type Item = GenesisImportedContractId;
-
-    fn process(
-        &mut self,
-        group: Vec<Self::Item>,
-        tx: &mut Database,
-    ) -> anyhow::Result<()> {
-        group.into_iter().try_for_each(|contract_id| {
-            let mut contract_ref = ContractRef::new(&mut *tx, contract_id);
-            let root = contract_ref.root()?;
-            let db = contract_ref.database_mut();
-            db.add_contract_root(root)?;
-            Ok(())
-        })
-    }
-
-    fn genesis_resource() -> GenesisResource {
-        GenesisResource::ContractsRoot
     }
 }
 

@@ -1,12 +1,7 @@
 use self::workers::GenesisWorkers;
 use crate::{
     database::{
-        genesis_progress::{
-            GenesisCoinRoots,
-            GenesisContractRoots,
-            GenesisMessageRoots,
-            GenesisMetadata,
-        },
+        genesis_progress::GenesisMetadata,
         Database,
     },
     service::config::Config,
@@ -31,7 +26,6 @@ use fuel_core_storage::{
         StorageTransaction,
         Transactional,
     },
-    MerkleRoot,
     StorageAsMut,
 };
 use fuel_core_types::{
@@ -89,7 +83,7 @@ pub async fn execute_genesis_block(
 
     let genesis = Genesis {
         chain_config_hash: config.chain_config.root()?.into(),
-        coins_root: original_database.genesis_coin_root()?.into(),
+        coins_root: original_database.genesis_coins_root()?.into(),
         messages_root: original_database.genesis_messages_root()?.into(),
         contracts_root: original_database.genesis_contracts_root()?.into(),
     };
@@ -125,18 +119,13 @@ async fn import_chain_state(workers: GenesisWorkers) -> anyhow::Result<()> {
         return Err(e);
     }
 
-    workers.compute_contracts_root().await?;
-
     Ok(())
 }
 
 fn cleanup_genesis_progress(database: &mut Database) -> anyhow::Result<()> {
-    database.delete_all(GenesisMetadata::column())?;
-    database.delete_all(GenesisCoinRoots::column())?;
-    database.delete_all(GenesisMessageRoots::column())?;
-    database.delete_all(GenesisContractRoots::column())?;
-
-    Ok(())
+    database
+        .delete_all(GenesisMetadata::column())
+        .map_err(|e| e.into())
 }
 
 pub fn create_genesis_block(config: &Config) -> Block {
@@ -184,8 +173,10 @@ fn init_coin(
     db: &mut Database,
     coin: &CoinConfig,
     height: BlockHeight,
-) -> anyhow::Result<MerkleRoot> {
+) -> anyhow::Result<()> {
+    // TODO: Store merkle sum tree root over coins with unspecified utxo ids.
     let utxo_id = coin.utxo_id();
+
     let compressed_coin = Coin {
         utxo_id,
         owner: coin.owner,
@@ -211,7 +202,7 @@ fn init_coin(
         return Err(anyhow!("Coin should not exist"));
     }
 
-    compressed_coin.root()
+    Ok(())
 }
 
 fn init_contract(
@@ -263,7 +254,7 @@ fn init_contract(
     Ok(())
 }
 
-fn init_da_message(db: &mut Database, msg: MessageConfig) -> anyhow::Result<MerkleRoot> {
+fn init_da_message(db: &mut Database, msg: MessageConfig) -> anyhow::Result<()> {
     let message: Message = msg.into();
 
     if db
@@ -274,7 +265,7 @@ fn init_da_message(db: &mut Database, msg: MessageConfig) -> anyhow::Result<Merk
         return Err(anyhow!("Message should not exist"));
     }
 
-    message.root()
+    Ok(())
 }
 
 #[cfg(test)]
@@ -283,12 +274,7 @@ mod tests {
 
     use crate::{
         combined_database::CombinedDatabase,
-        database::genesis_progress::{
-            GenesisCoinRoots,
-            GenesisContractRoots,
-            GenesisMessageRoots,
-            GenesisResource,
-        },
+        database::genesis_progress::GenesisResource,
         service::{
             config::Config,
             FuelService,
@@ -428,21 +414,6 @@ mod tests {
         for key in GenesisResource::iter() {
             assert!(db.genesis_progress(&key).is_none());
         }
-        assert!(db
-            .genesis_roots::<GenesisCoinRoots>()
-            .unwrap()
-            .next()
-            .is_none());
-        assert!(db
-            .genesis_roots::<GenesisMessageRoots>()
-            .unwrap()
-            .next()
-            .is_none());
-        assert!(db
-            .genesis_roots::<GenesisContractRoots>()
-            .unwrap()
-            .next()
-            .is_none());
     }
 
     #[tokio::test]
