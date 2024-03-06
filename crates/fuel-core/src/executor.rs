@@ -368,7 +368,10 @@ mod tests {
 
     mod coinbase {
         use super::*;
-        use fuel_core_storage::transactional::AtomicView;
+        use fuel_core_storage::transactional::{
+            AtomicView,
+            Modifiable,
+        };
 
         #[test]
         fn executor_commits_transactions_with_non_zero_coinbase_generation() {
@@ -439,18 +442,23 @@ mod tests {
                 },
                 changes,
             ) = producer
-                .execute_without_commit(ExecutionTypes::Production(Components {
-                    header_to_produce: header,
-                    transactions_source: OnceTransactionsSource::new(vec![
-                        script.into(),
-                        invalid_duplicate_tx,
-                    ]),
-                    gas_price: price,
-                    gas_limit: u64::MAX,
-                }))
+                .execute_without_commit_with_source(ExecutionTypes::Production(
+                    Components {
+                        header_to_produce: header,
+                        transactions_source: OnceTransactionsSource::new(vec![
+                            script.into(),
+                            invalid_duplicate_tx,
+                        ]),
+                        gas_price: price,
+                        gas_limit: u64::MAX,
+                    },
+                ))
                 .unwrap()
                 .into();
-            changes.commit().unwrap();
+            producer
+                .database_view_provider
+                .commit_changes(changes)
+                .unwrap();
 
             assert_eq!(skipped_transactions.len(), 1);
             assert_eq!(block.transactions().len(), 2);
@@ -516,15 +524,22 @@ mod tests {
                 },
                 changes,
             ) = producer
-                .execute_without_commit(ExecutionTypes::Production(Components {
-                    header_to_produce: header,
-                    transactions_source: OnceTransactionsSource::new(vec![script.into()]),
-                    gas_price: price,
-                    gas_limit: u64::MAX,
-                }))
+                .execute_without_commit_with_source(ExecutionTypes::Production(
+                    Components {
+                        header_to_produce: header,
+                        transactions_source: OnceTransactionsSource::new(vec![
+                            script.into()
+                        ]),
+                        gas_price: price,
+                        gas_limit: u64::MAX,
+                    },
+                ))
                 .unwrap()
                 .into();
-            changes.commit().unwrap();
+            producer
+                .database_view_provider
+                .commit_changes(changes)
+                .unwrap();
 
             assert_eq!(skipped_transactions.len(), 0);
             assert_eq!(block.transactions().len(), 2);
@@ -644,19 +659,23 @@ mod tests {
                 .insert(&recipient, &[])
                 .expect("Should insert coinbase contract");
 
-            let mut producer = create_executor(database.clone(), config);
+            let producer = create_executor(database.clone(), config);
 
             let ExecutionResult {
                 block: produced_block,
                 skipped_transactions,
                 ..
             } = producer
-                .execute_without_commit(ExecutionTypes::Production(Components {
-                    header_to_produce: PartialBlockHeader::default(),
-                    transactions_source: OnceTransactionsSource::new(vec![script.into()]),
-                    gas_price: price,
-                    gas_limit: u64::MAX,
-                }))
+                .execute_without_commit_with_source(ExecutionTypes::Production(
+                    Components {
+                        header_to_produce: PartialBlockHeader::default(),
+                        transactions_source: OnceTransactionsSource::new(vec![
+                            script.into()
+                        ]),
+                        gas_price: price,
+                        gas_limit: u64::MAX,
+                    },
+                ))
                 .unwrap()
                 .into_result();
             assert!(skipped_transactions.is_empty());
@@ -1899,7 +1918,7 @@ mod tests {
         let ExecutionResult {
             block, tx_status, ..
         } = executor
-            .execute_without_commit(ExecutionTypes::Production(Components {
+            .execute_without_commit_with_source(ExecutionTypes::Production(Components {
                 header_to_produce: block.header,
                 transactions_source: OnceTransactionsSource::new(block.transactions),
                 gas_price: 0,
@@ -1916,9 +1935,9 @@ mod tests {
         assert_eq!(tx.inputs()[0].state_root(), state_root);
 
         executor
-            .execute_without_commit::<OnceTransactionsSource>(ExecutionTypes::Validation(
-                block,
-            ))
+            .execute_without_commit_with_source::<OnceTransactionsSource>(
+                ExecutionTypes::Validation(block),
+            )
             .expect("Validation of block should be successful");
     }
 
@@ -2897,7 +2916,7 @@ mod tests {
             skipped_transactions,
             ..
         } = producer
-            .execute_without_commit(ExecutionTypes::Production(Components {
+            .execute_without_commit_with_source(ExecutionTypes::Production(Components {
                 header_to_produce: PartialBlockHeader::default(),
                 transactions_source: OnceTransactionsSource::new(vec![tx.into()]),
                 gas_price: 1,
@@ -2908,9 +2927,10 @@ mod tests {
         assert!(skipped_transactions.is_empty());
 
         let validator = create_executor(db.clone(), config);
-        let result = validator.execute_without_commit::<OnceTransactionsSource>(
-            ExecutionTypes::Validation(block),
-        );
+        let result = validator
+            .execute_without_commit_with_source::<OnceTransactionsSource>(
+                ExecutionTypes::Validation(block),
+            );
         assert!(result.is_ok(), "{result:?}")
     }
 

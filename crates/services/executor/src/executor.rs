@@ -221,6 +221,7 @@ where
             ExecutionTypes::Production(block) => ExecutionTypes::Production(Components {
                 header_to_produce: block.header,
                 transactions_source: OnceTransactionsSource::new(block.transactions),
+                gas_price: 0,
                 gas_limit: u64::MAX,
             }),
             ExecutionTypes::Validation(block) => ExecutionTypes::Validation(block),
@@ -1014,7 +1015,7 @@ where
             self.validate_inputs_state(
                 checked_tx.transaction().inputs(),
                 tx_id,
-                tx_st_transaction.as_mut(),
+                tx_st_transaction,
             )?;
         }
 
@@ -1148,7 +1149,6 @@ where
                 .contract_id;
             let salt = *create.salt();
             tx_st_transaction
-                .as_mut()
                 .storage::<ContractsInfo>()
                 .insert(&contract_id, &(salt.into()))?;
         }
@@ -1382,7 +1382,14 @@ where
     /// Computes all zeroed or variable inputs.
     /// In production mode, updates the inputs with computed values.
     /// In validation mode, compares the inputs with computed inputs.
-    fn compute_inputs(&self, inputs: &mut [Input], db: &mut D) -> ExecutorResult<()> {
+    fn compute_inputs<T>(
+        &self,
+        inputs: &mut [Input],
+        db: &StorageTransaction<T>,
+    ) -> ExecutorResult<()>
+    where
+        T: KeyValueInspect<Column = Column>,
+    {
         for input in inputs {
             match input {
                 Input::CoinSigned(CoinSigned {
@@ -1428,12 +1435,15 @@ where
         Ok(())
     }
 
-    fn validate_inputs_state(
+    fn validate_inputs_state<T>(
         &self,
         inputs: &[Input],
         tx_id: TxId,
-        db: &mut D,
-    ) -> ExecutorResult<()> {
+        db: &StorageTransaction<T>,
+    ) -> ExecutorResult<()>
+    where
+        T: KeyValueInspect<Column = Column>,
+    {
         for input in inputs {
             match input {
                 Input::CoinSigned(CoinSigned {
@@ -1468,7 +1478,8 @@ where
                     tx_pointer,
                     ..
                 }) => {
-                    let mut contract = ContractRef::new(&mut *db, *contract_id);
+                    let contract =
+                        ContractRef::new(StructuredStorage::new(db), *contract_id);
                     let provided_info =
                         ContractUtxoInfo::V1((*utxo_id, *tx_pointer).into());
                     if provided_info
@@ -1504,6 +1515,7 @@ where
         &self,
         outputs: &mut [Output],
         inputs: &[Input],
+        tx_id: TxId,
         db: &StorageTransaction<T>,
     ) -> ExecutorResult<()>
     where

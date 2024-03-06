@@ -8,6 +8,11 @@ use crate::{
         SupportsBatching,
         SupportsMerkle,
     },
+    codec::{
+        raw::Raw,
+        Encode,
+        Encoder,
+    },
     iter::{
         BoxedIter,
         IterDirection,
@@ -294,18 +299,21 @@ where
 
 impl<Column, S, M> StorageRead<M> for StructuredStorage<S>
 where
-    S: KeyValueStore<Column = Column>,
+    S: KeyValueInspect<Column = Column>,
     M: Mappable + TableWithBlueprint<Column = Column, Value = [u8]>,
-    M::Blueprint: Blueprint<M, S, ValueCodec = Raw>,
+    M::Blueprint: BlueprintInspect<M, StructuredStorage<S>, ValueCodec = Raw>,
 {
     fn read(
         &self,
         key: &<M as Mappable>::Key,
         buf: &mut [u8],
     ) -> Result<Option<usize>, Self::Error> {
-        let key_encoder = <M::Blueprint as Blueprint<M, S>>::KeyCodec::encode(key);
+        let key_encoder =
+            <M::Blueprint as BlueprintInspect<M, StructuredStorage<S>>>::KeyCodec::encode(
+                key,
+            );
         let key_bytes = key_encoder.as_bytes();
-        self.storage
+        self.inner
             .read(key_bytes.as_ref(), <M as TableWithBlueprint>::column(), buf)
     }
 
@@ -313,9 +321,12 @@ where
         &self,
         key: &<M as Mappable>::Key,
     ) -> Result<Option<Vec<u8>>, Self::Error> {
-        let key_encoder = <M::Blueprint as Blueprint<M, S>>::KeyCodec::encode(key);
+        let key_encoder =
+            <M::Blueprint as BlueprintInspect<M, StructuredStorage<S>>>::KeyCodec::encode(
+                key,
+            );
         let key_bytes = key_encoder.as_bytes();
-        self.storage
+        self.inner
             .get(key_bytes.as_ref(), <M as TableWithBlueprint>::column())
             // TODO: Return `Value` instead of cloned `Vec<u8>`.
             .map(|value| value.map(|value| value.deref().clone()))
@@ -324,21 +335,16 @@ where
 
 impl<Column, S, M> StorageWrite<M> for StructuredStorage<S>
 where
-    S: KeyValueStore<Column = Column>,
+    S: KeyValueMutate<Column = Column>,
     M: TableWithBlueprint<Column = Column, Value = [u8]>,
-    M::Blueprint: Blueprint<M, S, ValueCodec = Raw>,
+    M::Blueprint: BlueprintMutate<M, StructuredStorage<S>, ValueCodec = Raw>,
     // TODO: Add new methods to the `Blueprint` that allows work with bytes directly
     //  without deserialization into `OwnedValue`.
     M::OwnedValue: Into<Vec<u8>>,
 {
     fn write(&mut self, key: &M::Key, buf: &[u8]) -> Result<usize, Self::Error> {
-        <M as TableWithBlueprint>::Blueprint::put(
-            &mut self.storage,
-            key,
-            M::column(),
-            buf,
-        )
-        .map(|_| buf.len())
+        <M as TableWithBlueprint>::Blueprint::put(self, key, M::column(), buf)
+            .map(|_| buf.len())
     }
 
     fn replace(
@@ -347,24 +353,16 @@ where
         buf: &[u8],
     ) -> Result<(usize, Option<Vec<u8>>), Self::Error> {
         let bytes_written = buf.len();
-        let prev = <M as TableWithBlueprint>::Blueprint::replace(
-            &mut self.storage,
-            key,
-            M::column(),
-            buf,
-        )?
-        .map(|prev| prev.into());
+        let prev =
+            <M as TableWithBlueprint>::Blueprint::replace(self, key, M::column(), buf)?
+                .map(|prev| prev.into());
         let result = (bytes_written, prev);
         Ok(result)
     }
 
     fn take(&mut self, key: &M::Key) -> Result<Option<Vec<u8>>, Self::Error> {
-        let take = <M as TableWithBlueprint>::Blueprint::take(
-            &mut self.storage,
-            key,
-            M::column(),
-        )?
-        .map(|value| value.into());
+        let take = <M as TableWithBlueprint>::Blueprint::take(self, key, M::column())?
+            .map(|value| value.into());
         Ok(take)
     }
 }

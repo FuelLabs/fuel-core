@@ -419,8 +419,6 @@ impl DapMutation {
             .get_mut(&id)
             .ok_or_else(|| async_graphql::Error::new("VM not found"))?;
 
-        let params = locked.params.clone();
-
         let checked_tx = tx
             .into_checked_basic(vm.as_ref().block_height()?, &params)
             .map_err(|err| anyhow::anyhow!("{:?}", err))?
