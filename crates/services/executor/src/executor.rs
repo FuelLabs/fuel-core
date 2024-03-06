@@ -583,7 +583,6 @@ where
     where
         TxSource: TransactionsSource,
     {
-
         let (execution_kind, component) = block.split();
         match execution_kind {
             ExecutionKind::DryRun => {
@@ -601,28 +600,35 @@ where
 
     fn execute_block_dry_run<TxSource>(
         &self,
-        storage_transaction: &mut StorageTransaction<D>,
-        component: PartialBlockComponent<TxSource>,
+        storage_transaction: &mut D,
+        mut component: PartialBlockComponent<TxSource>,
     ) -> ExecutorResult<ExecutionData>
     where
         TxSource: TransactionsSource,
     {
-        self.execute_block_inner(storage_transaction, ExecutionKind::DryRun, component)
+        self.execute_block_inner(
+            storage_transaction,
+            ExecutionKind::DryRun,
+            &mut component,
+        )
     }
 
     fn execute_block_production<TxSource>(
         &self,
-        storage_transaction: &mut StorageTransaction<D>,
-        component: PartialBlockComponent<TxSource>,
+        storage_transaction: &mut D,
+        mut component: PartialBlockComponent<TxSource>,
         gas_price: Word,
     ) -> ExecutorResult<ExecutionData>
     where
         TxSource: TransactionsSource,
     {
         let block_height = *(component.empty_block.header.height());
-        let execution_data = self.execute_block_inner(storage_transaction, ExecutionKind::Production, component)?;
-        let amount_to_mint = if self.config.coinbase_recipient != ContractId::zeroed()
-        {
+        let mut execution_data = self.execute_block_inner(
+            storage_transaction,
+            ExecutionKind::Production,
+            &mut component,
+        )?;
+        let amount_to_mint = if self.config.coinbase_recipient != ContractId::zeroed() {
             execution_data.coinbase
         } else {
             0
@@ -646,22 +652,30 @@ where
             gas_price,
         );
 
-        execute_transaction(
-            execution_data,
+        self.outer_execute_transaction(
+            &mut execution_data,
             MaybeCheckedTransaction::Transaction(coinbase_tx.into()),
+            storage_transaction,
+            gas_price,
+            ExecutionKind::Production,
+            &mut component,
         )?;
         Ok(execution_data)
     }
 
     fn execute_block_validation<TxSource>(
         &self,
-        storage_transaction: &mut StorageTransaction<D>,
-        component: PartialBlockComponent<TxSource>,
+        storage_transaction: &mut D,
+        mut component: PartialBlockComponent<TxSource>,
     ) -> ExecutorResult<ExecutionData>
     where
         TxSource: TransactionsSource,
     {
-        self.execute_block_inner(storage_transaction, ExecutionKind::Validation, component)
+        self.execute_block_inner(
+            storage_transaction,
+            ExecutionKind::Validation,
+            &mut component,
+        )
     }
 
     fn init_execution_data() -> ExecutionData {
@@ -679,19 +693,18 @@ where
 
     fn execute_block_inner<TxSource>(
         &self,
-        storage_transaction: &mut StorageTransaction<D>,
+        storage_transaction: &mut D,
         execution_kind: ExecutionKind,
-        component: PartialBlockComponent<TxSource>,
+        component: &mut PartialBlockComponent<TxSource>,
     ) -> ExecutorResult<ExecutionData>
     where
         TxSource: TransactionsSource,
     {
-        let mut data =  Self::init_execution_data();
+        let mut data = Self::init_execution_data();
         let execution_data = &mut data;
 
         // Split out the execution kind and partial block.
-        let block = component.empty_block;
-        let source = component.transactions_source;
+        let block = &component.empty_block;
         let gas_price = component.gas_price;
         let mut remaining_gas_limit = component.gas_limit;
 
@@ -702,81 +715,100 @@ where
         // ALl transactions should be in the `TxSource`.
         // We use `block.transactions` to store executed transactions.
         debug_assert!(block.transactions.is_empty());
-        let mut iter = source.next(remaining_gas_limit).into_iter().peekable();
-
-        let mut execute_transaction = |execution_data: &mut ExecutionData,
-                                       tx: MaybeCheckedTransaction|
-                                       -> ExecutorResult<()> {
-            let tx_count = execution_data.tx_count;
-            let tx = {
-                let mut tx_st_transaction = storage_transaction.transaction();
-                let tx_id = tx.id(&self.config.consensus_parameters.chain_id);
-                let result = self.execute_transaction(
-                    tx,
-                    &tx_id,
-                    &block.header,
-                    gas_price,
-                    execution_data,
-                    execution_kind,
-                    &mut tx_st_transaction,
-                );
-
-                let tx = match result {
-                    Err(err) => {
-                        return match execution_kind {
-                            ExecutionKind::Production => {
-                                // If, during block production, we get an invalid transaction,
-                                // remove it from the block and continue block creation. An invalid
-                                // transaction means that the caller didn't validate it first, so
-                                // maybe something is wrong with validation rules in the `TxPool`
-                                // (or in another place that should validate it). Or we forgot to
-                                // clean up some dependent/conflict transactions. But it definitely
-                                // means that something went wrong, and we must fix it.
-                                execution_data.skipped_transactions.push((tx_id, err));
-                                Ok(())
-                            }
-                            ExecutionKind::DryRun | ExecutionKind::Validation => Err(err),
-                        }
-                    }
-                    Ok(tx) => tx,
-                };
-
-                if let Err(err) = tx_st_transaction.commit() {
-                    return Err(err.into())
-                }
-                tx
-            };
-
-            block.transactions.push(tx);
-            execution_data.tx_count = tx_count
-                .checked_add(1)
-                .ok_or(ExecutorError::TooManyTransactions)?;
-
-            Ok(())
-        };
+        let mut iter = component
+            .transactions_source
+            .next(remaining_gas_limit)
+            .into_iter()
+            .peekable();
 
         while iter.peek().is_some() {
             for transaction in iter {
-                execute_transaction(&mut *execution_data, transaction)?;
+                self.outer_execute_transaction(
+                    &mut *execution_data,
+                    transaction,
+                    storage_transaction,
+                    gas_price,
+                    execution_kind,
+                    component,
+                )?;
             }
 
             remaining_gas_limit =
                 component.gas_limit.saturating_sub(execution_data.used_gas);
 
-            iter = source.next(remaining_gas_limit).into_iter().peekable();
+            iter = component
+                .transactions_source
+                .next(remaining_gas_limit)
+                .into_iter()
+                .peekable();
         }
 
         // After the execution of all transactions in production mode, we can set the final fee.
-        if execution_kind == ExecutionKind::Production {
-
-        }
+        if execution_kind == ExecutionKind::Production {}
 
         if execution_kind != ExecutionKind::DryRun && !data.found_mint {
             return Err(ExecutorError::MintMissing)
         }
 
         Ok(data)
+    }
 
+    fn outer_execute_transaction<TxSource: TransactionsSource>(
+        &self,
+        execution_data: &mut ExecutionData,
+        tx: MaybeCheckedTransaction,
+        storage_transaction: &mut D,
+        gas_price: Word,
+        execution_kind: ExecutionKind,
+        component: &mut PartialBlockComponent<TxSource>,
+    ) -> ExecutorResult<()> {
+        let header = &component.empty_block.header;
+        let tx_count = execution_data.tx_count;
+        let tx = {
+            let mut tx_st_transaction = storage_transaction.transaction();
+            let tx_id = tx.id(&self.config.consensus_parameters.chain_id);
+            let result = self.execute_transaction(
+                tx,
+                &tx_id,
+                header,
+                gas_price,
+                execution_data,
+                execution_kind,
+                &mut tx_st_transaction,
+            );
+
+            let tx = match result {
+                Err(err) => {
+                    return match execution_kind {
+                        ExecutionKind::Production => {
+                            // If, during block production, we get an invalid transaction,
+                            // remove it from the block and continue block creation. An invalid
+                            // transaction means that the caller didn't validate it first, so
+                            // maybe something is wrong with validation rules in the `TxPool`
+                            // (or in another place that should validate it). Or we forgot to
+                            // clean up some dependent/conflict transactions. But it definitely
+                            // means that something went wrong, and we must fix it.
+                            execution_data.skipped_transactions.push((tx_id, err));
+                            Ok(())
+                        }
+                        ExecutionKind::DryRun | ExecutionKind::Validation => Err(err),
+                    }
+                }
+                Ok(tx) => tx,
+            };
+
+            if let Err(err) = tx_st_transaction.commit() {
+                return Err(err.into())
+            }
+            tx
+        };
+
+        component.empty_block.transactions.push(tx);
+        execution_data.tx_count = tx_count
+            .checked_add(1)
+            .ok_or(ExecutorError::TooManyTransactions)?;
+
+        Ok(())
     }
 
     fn process_da(
