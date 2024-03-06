@@ -53,7 +53,6 @@ use futures::StreamExt;
 use itertools::Itertools;
 use rand::{
     rngs::StdRng,
-    Rng,
     SeedableRng,
 };
 use std::{
@@ -197,8 +196,8 @@ pub async fn make_nodes(
                 .map(|_| {
                     let secret = SecretKey::random(&mut rng);
                     let initial_coin = CoinConfig {
-                        // set id to prevent overlapping utxo_ids
-                        tx_id: rng.gen(),
+                        // set idx to prevent overlapping utxo_ids
+                        output_index: 2,
                         ..coin_generator.generate_with(secret, 10000)
                     };
                     let tx = TransactionBuilder::script(
