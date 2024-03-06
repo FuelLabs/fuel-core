@@ -108,6 +108,7 @@ fn dev_config() -> Config {
     );
 
     config.chain_conf = chain_config;
+    config.block_producer.gas_price = 1;
     config.block_producer.coinbase_recipient = Some(
         ContractId::from_str(
             "0x7777777777777777777777777777777777777777777777777777777777777777",

@@ -82,7 +82,7 @@ impl BenchDb {
             (0..state_size).map(|_| {
                 storage_key.to_big_endian(key_bytes.as_mut());
                 storage_key.increase().unwrap();
-                (key_bytes, key_bytes)
+                (key_bytes, key_bytes.to_vec())
             }),
         )?;
 
@@ -517,7 +517,6 @@ pub fn run(c: &mut Criterion) {
             AssetId::zeroed(),
             Default::default(),
             Default::default(),
-            Default::default(),
             predicate,
             vec![],
         );
@@ -601,7 +600,6 @@ pub fn run(c: &mut Criterion) {
                 owner,
                 Word::MAX,
                 AssetId::zeroed(),
-                Default::default(),
                 Default::default(),
                 Default::default(),
                 predicate,

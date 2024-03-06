@@ -60,17 +60,21 @@ mod tests {
                 MintAssetId,
                 OutputContract,
                 Outputs,
+                Policies,
                 Script as ScriptField,
                 TxPointer as TxPointerTraitTrait,
             },
             input::{
-                coin::CoinSigned,
+                coin::{
+                    CoinPredicate,
+                    CoinSigned,
+                },
                 contract,
                 Input,
             },
+            policies::PolicyType,
             Bytes32,
             Cacheable,
-            Chargeable,
             ConsensusParameters,
             Create,
             FeeParameters,
@@ -98,7 +102,10 @@ mod tests {
             Word,
         },
         fuel_vm::{
-            checked_transaction::CheckError,
+            checked_transaction::{
+                CheckError,
+                EstimatePredicates,
+            },
             interpreter::ExecutableTransaction,
             script_with_data_offset,
             util::test_helpers::TestBuilder as TxBuilder,
@@ -376,13 +383,13 @@ mod tests {
             // the `Mint` transaction from the first block to validate the contract
             // state transition between blocks.
             let price = 1;
+            let amount = 10000;
             let limit = 0;
             let gas_price_factor = 1;
             let script = TxBuilder::new(1u64)
                 .script_gas_limit(limit)
-                // Set a price for the test
-                .gas_price(price)
-                .coin_input(AssetId::BASE, 10000)
+                .max_fee_limit(amount)
+                .coin_input(AssetId::BASE, amount)
                 .change_output(AssetId::BASE)
                 .build()
                 .transaction()
@@ -415,26 +422,35 @@ mod tests {
                 producer.config.consensus_parameters.gas_costs(),
                 producer.config.consensus_parameters.fee_params(),
                 &script,
+                price,
             )
             .unwrap()
             .max_fee();
             let invalid_duplicate_tx = script.clone().into();
 
-            let mut block = Block::default();
-            block.header_mut().set_block_height(1.into());
-            *block.transactions_mut() = vec![script.into(), invalid_duplicate_tx];
-            block.header_mut().recalculate_metadata();
+            let mut header = PartialBlockHeader::default();
+            header.consensus.height = 1.into();
 
-            let ExecutionResult {
-                block,
-                skipped_transactions,
-                ..
-            } = producer
-                .execute_and_commit(
-                    ExecutionBlock::Production(block.into()),
-                    Default::default(),
-                )
-                .unwrap();
+            let (
+                ExecutionResult {
+                    block,
+                    skipped_transactions,
+                    ..
+                },
+                changes,
+            ) = producer
+                .execute_without_commit(ExecutionTypes::Production(Components {
+                    header_to_produce: header,
+                    transactions_source: OnceTransactionsSource::new(vec![
+                        script.into(),
+                        invalid_duplicate_tx,
+                    ]),
+                    gas_price: price,
+                    gas_limit: u64::MAX,
+                }))
+                .unwrap()
+                .into();
+            changes.commit().unwrap();
 
             assert_eq!(skipped_transactions.len(), 1);
             assert_eq!(block.transactions().len(), 2);
@@ -473,9 +489,8 @@ mod tests {
 
             let script = TxBuilder::new(2u64)
                 .script_gas_limit(limit)
-                // Set a price for the test
-                .gas_price(price)
-                .coin_input(AssetId::BASE, 10000)
+                .max_fee_limit(amount)
+                .coin_input(AssetId::BASE, amount)
                 .change_output(AssetId::BASE)
                 .build()
                 .transaction()
@@ -485,25 +500,31 @@ mod tests {
                 producer.config.consensus_parameters.gas_costs(),
                 producer.config.consensus_parameters.fee_params(),
                 &script,
+                price,
             )
             .unwrap()
             .max_fee();
 
-            let mut block = Block::default();
-            block.header_mut().set_block_height(2.into());
-            *block.transactions_mut() = vec![script.into()];
-            block.header_mut().recalculate_metadata();
+            let mut header = PartialBlockHeader::default();
+            header.consensus.height = 2.into();
 
-            let ExecutionResult {
-                block,
-                skipped_transactions,
-                ..
-            } = producer
-                .execute_and_commit(
-                    ExecutionBlock::Production(block.into()),
-                    Default::default(),
-                )
-                .unwrap();
+            let (
+                ExecutionResult {
+                    block,
+                    skipped_transactions,
+                    ..
+                },
+                changes,
+            ) = producer
+                .execute_without_commit(ExecutionTypes::Production(Components {
+                    header_to_produce: header,
+                    transactions_source: OnceTransactionsSource::new(vec![script.into()]),
+                    gas_price: price,
+                    gas_limit: u64::MAX,
+                }))
+                .unwrap()
+                .into();
+            changes.commit().unwrap();
 
             assert_eq!(skipped_transactions.len(), 0);
             assert_eq!(block.transactions().len(), 2);
@@ -579,6 +600,7 @@ mod tests {
                 .execute_without_commit_with_source(ExecutionTypes::DryRun(Components {
                     header_to_produce: Default::default(),
                     transactions_source: OnceTransactionsSource::new(vec![script.into()]),
+                    gas_price: 0,
                     gas_limit: u64::MAX,
                 }))
                 .unwrap();
@@ -590,12 +612,12 @@ mod tests {
         #[test]
         fn executor_commits_transactions_with_non_zero_coinbase_validation() {
             let price = 1;
+            let amount = 10000;
             let limit = 0;
             let gas_price_factor = 1;
             let script = TxBuilder::new(2322u64)
                 .script_gas_limit(limit)
-                // Set a price for the test
-                .gas_price(price)
+                .max_fee_limit(amount)
                 .coin_input(AssetId::BASE, 10000)
                 .change_output(AssetId::BASE)
                 .build()
@@ -624,19 +646,19 @@ mod tests {
 
             let mut producer = create_executor(database.clone(), config);
 
-            let mut block = Block::default();
-            *block.transactions_mut() = vec![script.into()];
-
             let ExecutionResult {
                 block: produced_block,
                 skipped_transactions,
                 ..
             } = producer
-                .execute_and_commit(
-                    ExecutionBlock::Production(block.into()),
-                    Default::default(),
-                )
-                .unwrap();
+                .execute_without_commit(ExecutionTypes::Production(Components {
+                    header_to_produce: PartialBlockHeader::default(),
+                    transactions_source: OnceTransactionsSource::new(vec![script.into()]),
+                    gas_price: price,
+                    gas_limit: u64::MAX,
+                }))
+                .unwrap()
+                .into_result();
             assert!(skipped_transactions.is_empty());
             let produced_txs = produced_block.transactions().to_vec();
 
@@ -904,12 +926,10 @@ mod tests {
     fn executor_invalidates_missing_gas_input() {
         let mut rng = StdRng::seed_from_u64(2322u64);
         let producer = create_executor(Default::default(), Default::default());
-        let consensus_parameters = &producer.config.consensus_parameters;
-
         let verifier = create_executor(Default::default(), Default::default());
 
         let gas_limit = 100;
-        let gas_price = 1;
+        let max_fee = 1;
         let script = TransactionBuilder::script(vec![], vec![])
             .add_unsigned_coin_input(
                 SecretKey::random(&mut rng),
@@ -917,18 +937,10 @@ mod tests {
                 rng.gen(),
                 rng.gen(),
                 Default::default(),
-                Default::default(),
             )
             .script_gas_limit(gas_limit)
-            .gas_price(gas_price)
+            .max_fee_limit(max_fee)
             .finalize();
-        let max_fee: u64 = script
-            .max_fee(
-                consensus_parameters.gas_costs(),
-                consensus_parameters.fee_params(),
-            )
-            .try_into()
-            .unwrap();
         let tx: Transaction = script.into();
 
         let mut block = PartialFuelBlock {
@@ -1056,7 +1068,6 @@ mod tests {
             SecretKey::random(&mut rng),
             rng.gen(),
             10,
-            Default::default(),
             Default::default(),
             Default::default(),
         )
@@ -1220,7 +1231,8 @@ mod tests {
     // invalidate a block if a tx is missing at least one coin input
     #[test]
     fn executor_invalidates_missing_coin_input() {
-        let tx: Transaction = Transaction::default();
+        let mut tx: Script = Script::default();
+        tx.policies_mut().set(PolicyType::MaxFee, Some(0));
 
         let mut executor = create_executor(
             Database::default(),
@@ -1232,7 +1244,7 @@ mod tests {
 
         let block = PartialFuelBlock {
             header: Default::default(),
-            transactions: vec![tx],
+            transactions: vec![tx.into()],
         };
 
         let ExecutionResult {
@@ -1466,7 +1478,7 @@ mod tests {
 
     #[test]
     fn skipped_txs_not_affect_order() {
-        // `tx1` is invalid because it doesn't have inputs for gas.
+        // `tx1` is invalid because it doesn't have inputs for max fee.
         // `tx2` is a `Create` transaction with some code inside.
         // `tx3` is a `Script` transaction that depends on `tx2`. It will be skipped
         // if `tx2` is not executed before `tx3`.
@@ -1476,7 +1488,7 @@ mod tests {
         let tx1 = TransactionBuilder::script(vec![], vec![])
             .add_random_fee_input()
             .script_gas_limit(1000000)
-            .gas_price(1000000)
+            .tip(1000000)
             .finalize_as_transaction();
         let (tx2, tx3) = setup_executable_script();
 
@@ -1887,8 +1899,14 @@ mod tests {
         let ExecutionResult {
             block, tx_status, ..
         } = executor
-            .execute_and_commit(ExecutionBlock::Production(block), Default::default())
-            .unwrap();
+            .execute_without_commit(ExecutionTypes::Production(Components {
+                header_to_produce: block.header,
+                transactions_source: OnceTransactionsSource::new(block.transactions),
+                gas_price: 0,
+                gas_limit: u64::MAX,
+            }))
+            .unwrap()
+            .into_result();
         assert!(matches!(
             tx_status[1].result,
             TransactionExecutionResult::Success { .. }
@@ -1896,6 +1914,12 @@ mod tests {
         let tx = block.transactions()[0].as_script().unwrap();
         assert_eq!(tx.inputs()[0].balance_root(), balance_root);
         assert_eq!(tx.inputs()[0].state_root(), state_root);
+
+        executor
+            .execute_without_commit::<OnceTransactionsSource>(ExecutionTypes::Validation(
+                block,
+            ))
+            .expect("Validation of block should be successful");
     }
 
     #[test]
@@ -1968,7 +1992,6 @@ mod tests {
             SecretKey::random(&mut rng),
             rng.gen(),
             100,
-            Default::default(),
             Default::default(),
             Default::default(),
         )
@@ -2074,16 +2097,21 @@ mod tests {
 
         let mut setup = create_executor(db.clone(), Default::default());
 
-        setup
+        let ExecutionResult {
+            skipped_transactions,
+            ..
+        } = setup
             .execute_and_commit(
                 ExecutionBlock::Production(first_block),
                 Default::default(),
             )
             .unwrap();
+        assert!(skipped_transactions.is_empty());
 
         let producer = create_executor(db.clone(), Default::default());
         let ExecutionResult {
             block: second_block,
+            skipped_transactions,
             ..
         } = producer
             .execute_without_commit(
@@ -2092,6 +2120,7 @@ mod tests {
             )
             .unwrap()
             .into_result();
+        assert!(skipped_transactions.is_empty());
 
         let verifier = create_executor(db, Default::default());
         let verify_result = verifier.execute_without_commit(
@@ -2684,7 +2713,6 @@ mod tests {
                 1000,
                 base_asset_id,
                 Default::default(),
-                Default::default(),
             )
             .finalize();
 
@@ -2710,7 +2738,6 @@ mod tests {
         coin.set_owner(*coin_input.input_owner().unwrap());
         coin.set_amount(coin_input.amount().unwrap());
         coin.set_asset_id(*coin_input.asset_id(&base_asset_id).unwrap());
-        coin.set_maturity(coin_input.maturity().unwrap());
         coin.set_tx_pointer(TxPointer::new(Default::default(), block_tx_idx));
         database
             .storage::<Coins>()
@@ -2755,7 +2782,6 @@ mod tests {
                 1000,
                 base_asset_id,
                 Default::default(),
-                Default::default(),
             )
             .finalize();
 
@@ -2782,7 +2808,6 @@ mod tests {
         coin.set_owner(*coin_input.input_owner().unwrap());
         coin.set_amount(coin_input.amount().unwrap());
         coin.set_asset_id(*coin_input.asset_id(&base_asset_id).unwrap());
-        coin.set_maturity(coin_input.maturity().unwrap());
         database
             .storage::<Coins>()
             .insert(coin_input.utxo_id().unwrap(), &coin)
@@ -2808,6 +2833,85 @@ mod tests {
 
         let receipts = tx_status[0].result.receipts();
         assert_eq!(time.0, receipts[0].val().unwrap());
+    }
+
+    #[test]
+    fn tx_with_coin_predicate_included_by_block_producer_and_accepted_by_validator() {
+        let mut rng = StdRng::seed_from_u64(2322u64);
+        let predicate: Vec<u8> = vec![op::ret(RegId::ONE)].into_iter().collect();
+        let owner = Input::predicate_owner(&predicate);
+        let amount = 1000;
+
+        let config = Config {
+            utxo_validation_default: true,
+            ..Default::default()
+        };
+
+        let mut tx = TransactionBuilder::script(
+            vec![op::ret(RegId::ONE)].into_iter().collect(),
+            vec![],
+        )
+        .max_fee_limit(amount)
+        .add_input(Input::coin_predicate(
+            rng.gen(),
+            owner,
+            amount,
+            AssetId::BASE,
+            rng.gen(),
+            0,
+            predicate,
+            vec![],
+        ))
+        .add_output(Output::Change {
+            to: Default::default(),
+            amount: 0,
+            asset_id: Default::default(),
+        })
+        .finalize();
+        tx.estimate_predicates(&config.consensus_parameters.clone().into())
+            .unwrap();
+        let db = &mut Database::default();
+
+        // insert coin into state
+        if let Input::CoinPredicate(CoinPredicate {
+            utxo_id,
+            owner,
+            amount,
+            asset_id,
+            tx_pointer,
+            ..
+        }) = tx.inputs()[0]
+        {
+            let mut coin = CompressedCoin::default();
+            coin.set_owner(owner);
+            coin.set_amount(amount);
+            coin.set_asset_id(asset_id);
+            coin.set_tx_pointer(tx_pointer);
+            db.storage::<Coins>().insert(&utxo_id, &coin).unwrap();
+        }
+
+        let producer = create_executor(db.clone(), config.clone());
+
+        let ExecutionResult {
+            block,
+            skipped_transactions,
+            ..
+        } = producer
+            .execute_without_commit(ExecutionTypes::Production(Components {
+                header_to_produce: PartialBlockHeader::default(),
+                transactions_source: OnceTransactionsSource::new(vec![tx.into()]),
+                gas_price: 1,
+                gas_limit: u64::MAX,
+            }))
+            .unwrap()
+            .into_result();
+        assert!(skipped_transactions.is_empty());
+
+        let validator = create_executor(db.clone(), config);
+        let result = validator.execute_without_commit::<OnceTransactionsSource>(
+            ExecutionTypes::Validation(block),
+        );
+        assert!(result.is_ok(), "{result:?}")
     }
 
     #[cfg(feature = "relayer")]

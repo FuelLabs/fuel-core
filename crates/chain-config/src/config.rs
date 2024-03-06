@@ -230,7 +230,8 @@ mod tests {
         let mut rng = StdRng::seed_from_u64(1);
         let state = if state {
             let test_key: Bytes32 = rng.gen();
-            let test_value: Bytes32 = rng.gen();
+            let bytes: Bytes32 = rng.gen();
+            let test_value: Vec<u8> = bytes.to_vec();
             Some(vec![(test_key, test_value)])
         } else {
             None
@@ -280,7 +281,6 @@ mod tests {
         let output_index: Option<u8> = Some(rng.gen());
         let block_created = Some(rng.next_u32().into());
         let block_created_tx_idx = Some(rng.gen());
-        let maturity = Some(rng.next_u32().into());
         let owner = rng.gen();
         let amount = rng.gen();
         let asset_id = rng.gen();
@@ -292,7 +292,6 @@ mod tests {
                     output_index,
                     tx_pointer_block_height: block_created,
                     tx_pointer_tx_idx: block_created_tx_idx,
-                    maturity,
                     owner,
                     amount,
                     asset_id,

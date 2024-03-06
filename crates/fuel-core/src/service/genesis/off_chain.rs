@@ -31,7 +31,7 @@ pub fn execute_genesis_block(
                 Cow::Owned(Event::MessageImported(message))
             });
 
-            worker_service::Task::<Database<OffChain>>::process_executor_events(
+            worker_service::process_executor_events(
                 messages_events,
                 &mut database_transaction,
             )?;
@@ -44,7 +44,7 @@ pub fn execute_genesis_block(
                 Cow::Owned(Event::CoinCreated(coin))
             });
 
-            worker_service::Task::<Database<OffChain>>::process_executor_events(
+            worker_service::process_executor_events(
                 coin_events,
                 &mut database_transaction,
             )?;

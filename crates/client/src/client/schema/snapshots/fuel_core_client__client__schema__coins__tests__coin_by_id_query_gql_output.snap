@@ -8,9 +8,6 @@ query($utxoId: UtxoId!) {
     blockCreated
     assetId
     utxoId
-    maturity
     owner
   }
 }
-
-

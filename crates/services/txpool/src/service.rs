@@ -94,10 +94,10 @@ impl TxStatusChange {
         &self,
         id: Bytes32,
         block_height: &BlockHeight,
-        message: impl Into<TxStatusMessage>,
+        message: TxStatusMessage,
     ) {
         tracing::info!("Transaction {id} successfully included in block {block_height}");
-        self.update_sender.send(TxUpdate::new(id, message.into()));
+        self.update_sender.send(TxUpdate::new(id, message));
     }
 
     pub fn send_submitted(&self, id: Bytes32, time: Tai64) {
@@ -208,14 +208,9 @@ where
                         .sealed_block
                         .entity.header().height();
 
-                    let block = &result
-                        .sealed_block
-                        .entity;
                     {
                         let mut lock = self.shared.txpool.lock();
                         lock.block_update(
-                            &self.shared.tx_status_sender,
-                            block,
                             &result.tx_status,
                         );
                         *self.shared.current_height.lock() = new_height;
@@ -303,8 +298,8 @@ impl<P2P, ViewProvider> SharedState<P2P, ViewProvider> {
         self.txpool.lock().consumable_gas()
     }
 
-    pub fn remove_txs(&self, ids: Vec<TxId>) -> Vec<ArcPoolTx> {
-        self.txpool.lock().remove(&self.tx_status_sender, &ids)
+    pub fn remove_txs(&self, ids: Vec<(TxId, String)>) -> Vec<ArcPoolTx> {
+        self.txpool.lock().remove(&self.tx_status_sender, ids)
     }
 
     pub fn find(&self, ids: Vec<TxId>) -> Vec<Option<TxInfo>> {
@@ -330,8 +325,8 @@ impl<P2P, ViewProvider> SharedState<P2P, ViewProvider> {
         sorted_txs
     }
 
-    pub fn remove(&self, ids: Vec<TxId>) -> Vec<ArcPoolTx> {
-        self.txpool.lock().remove(&self.tx_status_sender, &ids)
+    pub fn remove(&self, ids: Vec<(TxId, String)>) -> Vec<ArcPoolTx> {
+        self.txpool.lock().remove(&self.tx_status_sender, ids)
     }
 
     pub fn new_tx_notification_subscribe(&self) -> broadcast::Receiver<TxId> {
@@ -343,6 +338,19 @@ impl<P2P, ViewProvider> SharedState<P2P, ViewProvider> {
             .update_sender
             .try_subscribe::<MpscChannel>(tx_id)
             .ok_or(anyhow!("Maximum number of subscriptions reached"))
+    }
+
+    pub fn send_complete(
+        &self,
+        id: Bytes32,
+        block_height: &BlockHeight,
+        status: TransactionStatus,
+    ) {
+        self.tx_status_sender.send_complete(
+            id,
+            block_height,
+            TxStatusMessage::Status(status),
+        )
     }
 }
 

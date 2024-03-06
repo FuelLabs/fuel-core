@@ -57,9 +57,12 @@ use fuel_core_types::{
     fuel_tx::{
         field::{
             InputContract,
+            MaxFeeLimit,
             MintAmount,
             MintAssetId,
+            MintGasPrice,
             OutputContract,
+            Salt,
             TxPointer as TxPointerField,
         },
         input,
@@ -104,9 +107,7 @@ use fuel_core_types::{
             Checked,
             CheckedTransaction,
             Checks,
-            CreateCheckedMetadata,
             IntoChecked,
-            ScriptCheckedMetadata,
         },
         interpreter::{
             CheckedMetadata,
@@ -357,6 +358,7 @@ where
             transactions_source: OnceTransactionsSource::new(
                 component.transactions_source,
             ),
+            gas_price: component.gas_price,
             gas_limit: component.gas_limit,
         };
 
@@ -384,10 +386,12 @@ where
 // TODO: Make this module private after moving unit tests from `fuel-core` here.
 pub mod block_component {
     use super::*;
+    use fuel_core_types::fuel_tx::field::MintGasPrice;
 
     pub struct PartialBlockComponent<'a, TxSource> {
         pub empty_block: &'a mut PartialFuelBlock,
         pub transactions_source: TxSource,
+        pub gas_price: u64,
         pub gas_limit: u64,
         /// The private marker to allow creation of the type only by constructor.
         _marker: core::marker::PhantomData<()>,
@@ -396,9 +400,16 @@ pub mod block_component {
     impl<'a> PartialBlockComponent<'a, OnceTransactionsSource> {
         pub fn from_partial_block(block: &'a mut PartialFuelBlock) -> Self {
             let transaction = core::mem::take(&mut block.transactions);
+            let gas_price = if let Some(Transaction::Mint(mint)) = transaction.last() {
+                *mint.gas_price()
+            } else {
+                0
+            };
+
             Self {
                 empty_block: block,
                 transactions_source: OnceTransactionsSource::new(transaction),
+                gas_price,
                 gas_limit: u64::MAX,
                 _marker: Default::default(),
             }
@@ -409,12 +420,14 @@ pub mod block_component {
         pub fn from_component(
             block: &'a mut PartialFuelBlock,
             transactions_source: TxSource,
+            gas_price: u64,
             gas_limit: u64,
         ) -> Self {
             debug_assert!(block.transactions.is_empty());
             PartialBlockComponent {
                 empty_block: block,
                 transactions_source,
+                gas_price,
                 gas_limit,
                 _marker: Default::default(),
             }
@@ -449,6 +462,7 @@ where
                 let component = PartialBlockComponent::from_component(
                     &mut block,
                     component.transactions_source,
+                    component.gas_price,
                     component.gas_limit,
                 );
 
@@ -462,6 +476,7 @@ where
                 let component = PartialBlockComponent::from_component(
                     &mut block,
                     component.transactions_source,
+                    component.gas_price,
                     component.gas_limit,
                 );
 
@@ -550,6 +565,7 @@ where
         let (execution_kind, component) = block.split();
         let block = component.empty_block;
         let source = component.transactions_source;
+        let gas_price = component.gas_price;
         let mut remaining_gas_limit = component.gas_limit;
         let block_height = *block.header.height();
 
@@ -588,6 +604,7 @@ where
                     tx,
                     &tx_id,
                     &block.header,
+                    gas_price,
                     execution_data,
                     execution_kind,
                     &mut tx_st_transaction,
@@ -663,8 +680,7 @@ where
                 },
                 amount_to_mint,
                 self.config.consensus_parameters.base_asset_id,
-                // TODO: Provide gas price https://github.com/FuelLabs/fuel-core/issues/1642
-                0,
+                gas_price,
             );
 
             execute_transaction(
@@ -741,6 +757,7 @@ where
         tx: MaybeCheckedTransaction,
         tx_id: &TxId,
         header: &PartialBlockHeader,
+        gas_price: Word,
         execution_data: &mut ExecutionData,
         execution_kind: ExecutionKind,
         tx_st_transaction: &mut StorageTransaction<T>,
@@ -772,6 +789,7 @@ where
             CheckedTransaction::Script(script) => self.execute_create_or_script(
                 script,
                 header,
+                gas_price,
                 execution_data,
                 tx_st_transaction,
                 execution_kind,
@@ -779,6 +797,7 @@ where
             CheckedTransaction::Create(create) => self.execute_create_or_script(
                 create,
                 header,
+                gas_price,
                 execution_data,
                 tx_st_transaction,
                 execution_kind,
@@ -786,6 +805,7 @@ where
             CheckedTransaction::Mint(mint) => self.execute_mint(
                 mint,
                 header,
+                gas_price,
                 execution_data,
                 tx_st_transaction,
                 execution_kind,
@@ -797,6 +817,7 @@ where
         &self,
         checked_mint: Checked<Mint>,
         header: &PartialBlockHeader,
+        gas_price: Word,
         execution_data: &mut ExecutionData,
         block_st_transaction: &mut StorageTransaction<T>,
         execution_kind: ExecutionKind,
@@ -842,6 +863,9 @@ where
             if *mint.mint_amount() != execution_data.coinbase {
                 return Err(ExecutorError::CoinbaseAmountMismatch)
             }
+            if *mint.gas_price() != gas_price {
+                return Err(ExecutorError::CoinbaseGasPriceMismatch)
+            }
 
             let block_height = *header.height();
 
@@ -855,26 +879,22 @@ where
                 self.verify_input_state(
                     block_st_transaction,
                     inputs.as_mut_slice(),
-                    block_height,
                     header.da_height,
                 )?;
             }
 
-            self.compute_inputs(
-                match execution_kind {
-                    ExecutionKind::DryRun => {
-                        ExecutionTypes::DryRun(inputs.as_mut_slice())
-                    }
-                    ExecutionKind::Production => {
-                        ExecutionTypes::Production(inputs.as_mut_slice())
-                    }
-                    ExecutionKind::Validation => {
-                        ExecutionTypes::Validation(inputs.as_slice())
-                    }
-                },
-                coinbase_id,
-                block_st_transaction,
-            )?;
+            match execution_kind {
+                ExecutionKind::DryRun | ExecutionKind::Production => {
+                    self.compute_inputs(inputs.as_mut_slice(), block_st_transaction)?;
+                }
+                ExecutionKind::Validation => {
+                    self.validate_inputs_state(
+                        inputs.as_mut_slice(),
+                        coinbase_id,
+                        block_st_transaction,
+                    )?;
+                }
+            }
 
             let mut sub_block_db_commit = block_st_transaction
                 .write_transaction()
@@ -904,21 +924,9 @@ where
                 inputs.as_slice(),
                 outputs.as_slice(),
             )?;
-            self.compute_not_utxo_outputs(
-                match execution_kind {
-                    ExecutionKind::DryRun => ExecutionTypes::DryRun((
-                        outputs.as_mut_slice(),
-                        inputs.as_slice(),
-                    )),
-                    ExecutionKind::Production => ExecutionTypes::Production((
-                        outputs.as_mut_slice(),
-                        inputs.as_slice(),
-                    )),
-                    ExecutionKind::Validation => ExecutionTypes::Validation((
-                        outputs.as_slice(),
-                        inputs.as_slice(),
-                    )),
-                },
+            self.compute_state_of_not_utxo_outputs(
+                outputs.as_mut_slice(),
+                inputs.as_slice(),
                 coinbase_id,
                 block_st_transaction,
             )?;
@@ -964,26 +972,27 @@ where
         &self,
         mut checked_tx: Checked<Tx>,
         header: &PartialBlockHeader,
+        gas_price: Word,
         execution_data: &mut ExecutionData,
         tx_st_transaction: &mut StorageTransaction<T>,
         execution_kind: ExecutionKind,
     ) -> ExecutorResult<Transaction>
     where
         Tx: ExecutableTransaction + PartialEq + Cacheable + Send + Sync + 'static,
-        <Tx as IntoChecked>::Metadata: Fee + CheckedMetadata + Clone + Send + Sync,
+        <Tx as IntoChecked>::Metadata: CheckedMetadata + Clone + Send + Sync,
         T: KeyValueInspect<Column = Column>,
     {
         let tx_id = checked_tx.id();
-        let max_fee = checked_tx.metadata().max_fee();
+        let max_fee = checked_tx.transaction().max_fee_limit();
 
         if self.options.utxo_validation {
             checked_tx = checked_tx
                 .check_predicates(&CheckPredicateParams::from(
                     &self.config.consensus_parameters,
                 ))
-                .map_err(|_| {
+                .map_err(|e| {
                     ExecutorError::TransactionValidity(
-                        TransactionValidityError::InvalidPredicate(tx_id),
+                        TransactionValidityError::Validation(e),
                     )
                 })?;
             debug_assert!(checked_tx.checks().contains(Checks::Predicates));
@@ -992,7 +1001,6 @@ where
             self.verify_input_state(
                 tx_st_transaction,
                 checked_tx.transaction().inputs(),
-                *header.height(),
                 header.da_height,
             )?;
             // validate transaction signature
@@ -1000,6 +1008,14 @@ where
                 .check_signatures(&self.config.consensus_parameters.chain_id)
                 .map_err(TransactionValidityError::from)?;
             debug_assert!(checked_tx.checks().contains(Checks::Signatures));
+        }
+
+        if execution_kind == ExecutionKind::Validation {
+            self.validate_inputs_state(
+                checked_tx.transaction().inputs(),
+                tx_id,
+                tx_st_transaction.as_mut(),
+            )?;
         }
 
         // execute transaction
@@ -1017,10 +1033,18 @@ where
 
         let mut vm = Interpreter::with_storage(
             vm_db,
-            InterpreterParams::from(&self.config.consensus_parameters),
+            InterpreterParams::new(gas_price, &self.config.consensus_parameters),
         );
+
+        let gas_costs = &self.config.consensus_parameters.gas_costs;
+        let fee_params = &self.config.consensus_parameters.fee_params;
+
+        let ready_tx = checked_tx
+            .clone()
+            .into_ready(gas_price, gas_costs, fee_params)?;
+
         let vm_result: StateTransition<_> = vm
-            .transact(checked_tx.clone())
+            .transact(ready_tx)
             .map_err(|error| ExecutorError::VmExecution {
                 error: InterpreterError::Storage(anyhow::anyhow!(format!("{error:?}"))),
                 transaction_id: tx_id,
@@ -1028,26 +1052,50 @@ where
             .into();
         let reverted = vm_result.should_revert();
 
-        let (state, mut tx, receipts) = vm_result.into_inner();
+        let (state, mut tx, receipts): (_, Tx, _) = vm_result.into_inner();
         #[cfg(debug_assertions)]
         {
             tx.precompute(&self.config.consensus_parameters.chain_id)?;
             debug_assert_eq!(tx.id(&self.config.consensus_parameters.chain_id), tx_id);
         }
 
-        // TODO: We need to call this function before `vm.transact` but we can't do that because of
-        //  `Checked<Transaction>` immutability requirements. So we do it here after its execution for now.
-        //  But it should be fixed in the future.
-        //  https://github.com/FuelLabs/fuel-vm/issues/651
-        self.compute_inputs(
-            match execution_kind {
-                ExecutionKind::DryRun => ExecutionTypes::DryRun(tx.inputs_mut()),
-                ExecutionKind::Production => ExecutionTypes::Production(tx.inputs_mut()),
-                ExecutionKind::Validation => ExecutionTypes::Validation(tx.inputs()),
-            },
-            tx_id,
-            tx_st_transaction,
-        )?;
+        for (original_input, produced_input) in checked_tx
+            .transaction()
+            .inputs()
+            .iter()
+            .zip(tx.inputs_mut())
+        {
+            let predicate_gas_used = original_input.predicate_gas_used();
+
+            if let Some(gas_used) = predicate_gas_used {
+                match produced_input {
+                    Input::CoinPredicate(CoinPredicate {
+                        predicate_gas_used, ..
+                    })
+                    | Input::MessageCoinPredicate(MessageCoinPredicate {
+                        predicate_gas_used,
+                        ..
+                    })
+                    | Input::MessageDataPredicate(MessageDataPredicate {
+                        predicate_gas_used,
+                        ..
+                    }) => {
+                        *predicate_gas_used = gas_used;
+                    }
+                    _ => {
+                        debug_assert!(false, "This error is not possible unless VM changes the order of inputs, \
+                        or we added a new predicate inputs.");
+                        return Err(ExecutorError::InvalidTransactionOutcome {
+                            transaction_id: tx_id,
+                        })
+                    }
+                }
+            }
+        }
+
+        // We always need to update inputs with storage state before execution,
+        // because VM zeroes malleable fields during the execution.
+        self.compute_inputs(tx.inputs_mut(), tx_st_transaction)?;
 
         // only commit state changes if execution was a success
         if !reverted {
@@ -1057,22 +1105,8 @@ where
         }
 
         // update block commitment
-        let (used_gas, tx_fee) = self.total_fee_paid(&tx, max_fee, &receipts)?;
-
-        // Check or set the executed transaction.
-        match execution_kind {
-            ExecutionKind::Validation => {
-                // ensure tx matches vm output exactly
-                if &tx != checked_tx.transaction() {
-                    return Err(ExecutorError::InvalidTransactionOutcome {
-                        transaction_id: tx_id,
-                    })
-                }
-            }
-            ExecutionKind::DryRun | ExecutionKind::Production => {
-                // malleate the block with the resultant tx from the vm
-            }
-        }
+        let (used_gas, tx_fee) =
+            self.total_fee_paid(&tx, max_fee, &receipts, gas_price)?;
 
         // change the spent status of the tx inputs
         self.spend_input_utxos(tx.inputs(), tx_st_transaction, reverted, execution_data)?;
@@ -1086,25 +1120,38 @@ where
             tx.inputs(),
             tx.outputs(),
         )?;
-        // TODO: Inputs, in most cases, are heavier than outputs, so cloning them, but we
-        //  need to avoid cloning in the future.
-        let mut outputs = tx.outputs().clone();
-        self.compute_not_utxo_outputs(
-            match execution_kind {
-                ExecutionKind::DryRun => {
-                    ExecutionTypes::DryRun((&mut outputs, tx.inputs()))
-                }
-                ExecutionKind::Production => {
-                    ExecutionTypes::Production((&mut outputs, tx.inputs()))
-                }
-                ExecutionKind::Validation => {
-                    ExecutionTypes::Validation((&outputs, tx.inputs()))
-                }
-            },
+
+        // We always need to update outputs with storage state after execution.
+        let mut outputs = core::mem::take(tx.outputs_mut());
+        self.compute_state_of_not_utxo_outputs(
+            &mut outputs,
+            tx.inputs(),
             tx_id,
             tx_st_transaction,
         )?;
         *tx.outputs_mut() = outputs;
+
+        // The validator ensures that the generated transaction by him is the same as provided by the block producer.
+        if execution_kind == ExecutionKind::Validation && &tx != checked_tx.transaction()
+        {
+            return Err(ExecutorError::InvalidTransactionOutcome {
+                transaction_id: tx_id,
+            })
+        }
+
+        // TODO: Move to an off-chain worker: https://github.com/FuelLabs/fuel-core/issues/1721
+        if let Some(create) = tx.as_create() {
+            let contract_id = create
+                .metadata()
+                .as_ref()
+                .expect("The metadata always should exist after VM execution stage")
+                .contract_id;
+            let salt = *create.salt();
+            tx_st_transaction
+                .as_mut()
+                .storage::<ContractsInfo>()
+                .insert(&contract_id, &(salt.into()))?;
+        }
 
         let final_tx = tx.into();
 
@@ -1149,7 +1196,6 @@ where
         &self,
         db: &StorageTransaction<T>,
         inputs: &[Input],
-        block_height: BlockHeight,
         block_da_height: DaBlockHeight,
     ) -> ExecutorResult<()>
     where
@@ -1160,18 +1206,6 @@ where
                 Input::CoinSigned(CoinSigned { utxo_id, .. })
                 | Input::CoinPredicate(CoinPredicate { utxo_id, .. }) => {
                     if let Some(coin) = db.storage::<Coins>().get(utxo_id)? {
-                        let coin_mature_height = coin
-                            .tx_pointer()
-                            .block_height()
-                            .saturating_add(**coin.maturity())
-                            .into();
-                        if block_height < coin_mature_height {
-                            return Err(TransactionValidityError::CoinHasNotMatured(
-                                *utxo_id,
-                            )
-                            .into())
-                        }
-
                         if !coin
                             .matches_input(input)
                             .expect("The input is a coin above")
@@ -1253,7 +1287,6 @@ where
                     owner,
                     amount,
                     asset_id,
-                    maturity,
                     ..
                 })
                 | Input::CoinPredicate(CoinPredicate {
@@ -1261,7 +1294,6 @@ where
                     owner,
                     amount,
                     asset_id,
-                    maturity,
                     ..
                 }) => {
                     // prune utxo from db
@@ -1274,7 +1306,7 @@ where
                             // If the coin is not found in the database, it means that it was
                             // already spent or `utxo_validation` is `false`.
                             self.get_coin_or_default(
-                                db, *utxo_id, *owner, *amount, *asset_id, *maturity,
+                                db, *utxo_id, *owner, *amount, *asset_id,
                             )
                         })?;
 
@@ -1320,6 +1352,7 @@ where
         tx: &Tx,
         max_fee: Word,
         receipts: &[Receipt],
+        gas_price: Word,
     ) -> ExecutorResult<(Word, Word)> {
         let mut used_gas = 0;
         for r in receipts {
@@ -1334,6 +1367,7 @@ where
                 self.config.consensus_parameters.gas_costs(),
                 self.config.consensus_parameters.fee_params(),
                 used_gas,
+                gas_price,
             )
             .ok_or(ExecutorError::FeeOverflow)?;
         // if there's no script result (i.e. create) then fee == base amount
@@ -1348,132 +1382,114 @@ where
     /// Computes all zeroed or variable inputs.
     /// In production mode, updates the inputs with computed values.
     /// In validation mode, compares the inputs with computed inputs.
-    fn compute_inputs<T>(
-        &self,
-        inputs: ExecutionTypes<&mut [Input], &[Input]>,
-        tx_id: TxId,
-        db: &StorageTransaction<T>,
-    ) -> ExecutorResult<()>
-    where
-        T: KeyValueInspect<Column = Column>,
-    {
-        match inputs {
-            ExecutionTypes::DryRun(inputs) | ExecutionTypes::Production(inputs) => {
-                for input in inputs {
-                    match input {
-                        Input::CoinSigned(CoinSigned {
-                            tx_pointer,
-                            utxo_id,
-                            owner,
-                            amount,
-                            asset_id,
-                            maturity,
-                            ..
-                        })
-                        | Input::CoinPredicate(CoinPredicate {
-                            tx_pointer,
-                            utxo_id,
-                            owner,
-                            amount,
-                            asset_id,
-                            maturity,
-                            ..
-                        }) => {
-                            let coin = self.get_coin_or_default(
-                                db, *utxo_id, *owner, *amount, *asset_id, *maturity,
-                            )?;
-                            *tx_pointer = *coin.tx_pointer();
-                        }
-                        Input::Contract(Contract {
-                            ref mut utxo_id,
-                            ref mut balance_root,
-                            ref mut state_root,
-                            ref mut tx_pointer,
-                            ref contract_id,
-                            ..
-                        }) => {
-                            let contract = ContractRef::new(
-                                StructuredStorage::new(db),
-                                *contract_id,
-                            );
-                            let utxo_info =
-                                contract.validated_utxo(self.options.utxo_validation)?;
-                            *utxo_id = *utxo_info.utxo_id();
-                            *tx_pointer = utxo_info.tx_pointer();
-                            *balance_root = contract.balance_root()?;
-                            *state_root = contract.state_root()?;
-                        }
-                        _ => {}
-                    }
+    fn compute_inputs(&self, inputs: &mut [Input], db: &mut D) -> ExecutorResult<()> {
+        for input in inputs {
+            match input {
+                Input::CoinSigned(CoinSigned {
+                    tx_pointer,
+                    utxo_id,
+                    owner,
+                    amount,
+                    asset_id,
+                    ..
+                })
+                | Input::CoinPredicate(CoinPredicate {
+                    tx_pointer,
+                    utxo_id,
+                    owner,
+                    amount,
+                    asset_id,
+                    ..
+                }) => {
+                    let coin = self
+                        .get_coin_or_default(db, *utxo_id, *owner, *amount, *asset_id)?;
+                    *tx_pointer = *coin.tx_pointer();
                 }
+                Input::Contract(Contract {
+                    ref mut utxo_id,
+                    ref mut balance_root,
+                    ref mut state_root,
+                    ref mut tx_pointer,
+                    ref contract_id,
+                    ..
+                }) => {
+                    let contract =
+                        ContractRef::new(StructuredStorage::new(db), *contract_id);
+                    let utxo_info =
+                        contract.validated_utxo(self.options.utxo_validation)?;
+                    *utxo_id = *utxo_info.utxo_id();
+                    *tx_pointer = utxo_info.tx_pointer();
+                    *balance_root = contract.balance_root()?;
+                    *state_root = contract.state_root()?;
+                }
+                _ => {}
             }
-            // Needed to convince the compiler that tx is taken by ref here
-            ExecutionTypes::Validation(inputs) => {
-                for input in inputs {
-                    match input {
-                        Input::CoinSigned(CoinSigned {
-                            tx_pointer,
-                            utxo_id,
-                            owner,
-                            amount,
-                            asset_id,
-                            maturity,
-                            ..
+        }
+        Ok(())
+    }
+
+    fn validate_inputs_state(
+        &self,
+        inputs: &[Input],
+        tx_id: TxId,
+        db: &mut D,
+    ) -> ExecutorResult<()> {
+        for input in inputs {
+            match input {
+                Input::CoinSigned(CoinSigned {
+                    tx_pointer,
+                    utxo_id,
+                    owner,
+                    amount,
+                    asset_id,
+                    ..
+                })
+                | Input::CoinPredicate(CoinPredicate {
+                    tx_pointer,
+                    utxo_id,
+                    owner,
+                    amount,
+                    asset_id,
+                    ..
+                }) => {
+                    let coin = self
+                        .get_coin_or_default(db, *utxo_id, *owner, *amount, *asset_id)?;
+                    if tx_pointer != coin.tx_pointer() {
+                        return Err(ExecutorError::InvalidTransactionOutcome {
+                            transaction_id: tx_id,
                         })
-                        | Input::CoinPredicate(CoinPredicate {
-                            tx_pointer,
-                            utxo_id,
-                            owner,
-                            amount,
-                            asset_id,
-                            maturity,
-                            ..
-                        }) => {
-                            let coin = self.get_coin_or_default(
-                                db, *utxo_id, *owner, *amount, *asset_id, *maturity,
-                            )?;
-                            if tx_pointer != coin.tx_pointer() {
-                                return Err(ExecutorError::InvalidTransactionOutcome {
-                                    transaction_id: tx_id,
-                                })
-                            }
-                        }
-                        Input::Contract(Contract {
-                            utxo_id,
-                            balance_root,
-                            state_root,
-                            contract_id,
-                            tx_pointer,
-                            ..
-                        }) => {
-                            let contract = ContractRef::new(
-                                StructuredStorage::new(db),
-                                *contract_id,
-                            );
-                            let provided_info =
-                                ContractUtxoInfo::V1((*utxo_id, *tx_pointer).into());
-                            if provided_info
-                                != contract
-                                    .validated_utxo(self.options.utxo_validation)?
-                            {
-                                return Err(ExecutorError::InvalidTransactionOutcome {
-                                    transaction_id: tx_id,
-                                })
-                            }
-                            if balance_root != &contract.balance_root()? {
-                                return Err(ExecutorError::InvalidTransactionOutcome {
-                                    transaction_id: tx_id,
-                                })
-                            }
-                            if state_root != &contract.state_root()? {
-                                return Err(ExecutorError::InvalidTransactionOutcome {
-                                    transaction_id: tx_id,
-                                })
-                            }
-                        }
-                        _ => {}
                     }
                 }
+                Input::Contract(Contract {
+                    utxo_id,
+                    balance_root,
+                    state_root,
+                    contract_id,
+                    tx_pointer,
+                    ..
+                }) => {
+                    let mut contract = ContractRef::new(&mut *db, *contract_id);
+                    let provided_info =
+                        ContractUtxoInfo::V1((*utxo_id, *tx_pointer).into());
+                    if provided_info
+                        != contract.validated_utxo(self.options.utxo_validation)?
+                    {
+                        return Err(ExecutorError::InvalidTransactionOutcome {
+                            transaction_id: tx_id,
+                        })
+                    }
+                    if balance_root != &contract.balance_root()? {
+                        return Err(ExecutorError::InvalidTransactionOutcome {
+                            transaction_id: tx_id,
+                        })
+                    }
+                    if state_root != &contract.state_root()? {
+                        return Err(ExecutorError::InvalidTransactionOutcome {
+                            transaction_id: tx_id,
+                        })
+                    }
+                }
+                _ => {}
             }
         }
         Ok(())
@@ -1484,67 +1500,31 @@ where
     /// Computes all zeroed or variable outputs.
     /// In production mode, updates the outputs with computed values.
     /// In validation mode, compares the outputs with computed inputs.
-    fn compute_not_utxo_outputs<T>(
+    fn compute_state_of_not_utxo_outputs<T>(
         &self,
-        tx: ExecutionTypes<(&mut [Output], &[Input]), (&[Output], &[Input])>,
-        tx_id: TxId,
+        outputs: &mut [Output],
+        inputs: &[Input],
         db: &StorageTransaction<T>,
     ) -> ExecutorResult<()>
     where
         T: KeyValueInspect<Column = Column>,
     {
-        match tx {
-            ExecutionTypes::DryRun(tx) | ExecutionTypes::Production(tx) => {
-                for output in tx.0.iter_mut() {
-                    if let Output::Contract(contract_output) = output {
-                        let contract_id =
-                            if let Some(Input::Contract(Contract {
-                                contract_id, ..
-                            })) = tx.1.get(contract_output.input_index as usize)
-                            {
-                                contract_id
-                            } else {
-                                return Err(ExecutorError::InvalidTransactionOutcome {
-                                    transaction_id: tx_id,
-                                })
-                            };
+        for output in outputs {
+            if let Output::Contract(contract_output) = output {
+                let contract_id =
+                    if let Some(Input::Contract(Contract { contract_id, .. })) =
+                        inputs.get(contract_output.input_index as usize)
+                    {
+                        contract_id
+                    } else {
+                        return Err(ExecutorError::InvalidTransactionOutcome {
+                            transaction_id: tx_id,
+                        })
+                    };
 
-                        let contract =
-                            ContractRef::new(StructuredStorage::new(db), *contract_id);
-                        contract_output.balance_root = contract.balance_root()?;
-                        contract_output.state_root = contract.state_root()?;
-                    }
-                }
-            }
-            ExecutionTypes::Validation(tx) => {
-                for output in tx.0 {
-                    if let Output::Contract(contract_output) = output {
-                        let contract_id =
-                            if let Some(Input::Contract(Contract {
-                                contract_id, ..
-                            })) = tx.1.get(contract_output.input_index as usize)
-                            {
-                                contract_id
-                            } else {
-                                return Err(ExecutorError::InvalidTransactionOutcome {
-                                    transaction_id: tx_id,
-                                })
-                            };
-
-                        let contract =
-                            ContractRef::new(StructuredStorage::new(db), *contract_id);
-                        if contract_output.balance_root != contract.balance_root()? {
-                            return Err(ExecutorError::InvalidTransactionOutcome {
-                                transaction_id: tx_id,
-                            })
-                        }
-                        if contract_output.state_root != contract.state_root()? {
-                            return Err(ExecutorError::InvalidTransactionOutcome {
-                                transaction_id: tx_id,
-                            })
-                        }
-                    }
-                }
+                let contract = ContractRef::new(StructuredStorage::new(db), *contract_id);
+                contract_output.balance_root = contract.balance_root()?;
+                contract_output.state_root = contract.state_root()?;
             }
         }
         Ok(())
@@ -1558,7 +1538,6 @@ where
         owner: Address,
         amount: u64,
         asset_id: AssetId,
-        maturity: BlockHeight,
     ) -> ExecutorResult<CompressedCoin>
     where
         T: KeyValueInspect<Column = Column>,
@@ -1576,7 +1555,6 @@ where
                 owner,
                 amount,
                 asset_id,
-                maturity,
                 tx_pointer: Default::default(),
             }
             .into();
@@ -1718,7 +1696,6 @@ where
                 owner: *to,
                 amount: *amount,
                 asset_id: *asset_id,
-                maturity: 0u32.into(),
                 tx_pointer: TxPointer::new(block_height, execution_data.tx_count),
             }
             .into();
@@ -1732,31 +1709,5 @@ where
         }
 
         Ok(())
-    }
-}
-
-trait Fee {
-    fn max_fee(&self) -> Word;
-
-    fn min_fee(&self) -> Word;
-}
-
-impl Fee for ScriptCheckedMetadata {
-    fn max_fee(&self) -> Word {
-        self.fee.max_fee()
-    }
-
-    fn min_fee(&self) -> Word {
-        self.fee.min_fee()
-    }
-}
-
-impl Fee for CreateCheckedMetadata {
-    fn max_fee(&self) -> Word {
-        self.fee.max_fee()
-    }
-
-    fn min_fee(&self) -> Word {
-        self.fee.min_fee()
     }
 }

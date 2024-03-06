@@ -10,7 +10,7 @@ spec:
     matchLabels:
       app: {{ .Values.app.selector_name }}
   endpoints:
-  - path: /metrics 
+  - path: /v1/metrics
     port: http
 {{- end }}
 ---
@@ -271,7 +271,7 @@ spec:
               protocol: TCP
           livenessProbe:
             httpGet:
-              path: /health
+              path: /v1/health
               port: {{ .Values.app.target_port }}
             initialDelaySeconds: 300
             periodSeconds: 5

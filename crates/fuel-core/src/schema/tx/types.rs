@@ -52,6 +52,7 @@ use fuel_core_types::{
             Maturity,
             MintAmount,
             MintAssetId,
+            MintGasPrice,
             OutputContract,
             Outputs,
             Policies as PoliciesField,
@@ -65,7 +66,6 @@ use fuel_core_types::{
             Witnesses,
         },
         policies::PolicyType,
-        Chargeable,
         Executable,
         TxId,
     },
@@ -307,8 +307,8 @@ pub struct Policies(fuel_tx::policies::Policies);
 
 #[Object]
 impl Policies {
-    async fn gas_price(&self) -> Option<U64> {
-        self.0.get(PolicyType::GasPrice).map(Into::into)
+    async fn tip(&self) -> Option<U64> {
+        self.0.get(PolicyType::Tip).map(Into::into)
     }
 
     async fn witness_limit(&self) -> Option<U64> {
@@ -390,14 +390,6 @@ impl Transaction {
         }
     }
 
-    async fn gas_price(&self) -> Option<U64> {
-        match &self.0 {
-            fuel_tx::Transaction::Script(script) => Some(script.price().into()),
-            fuel_tx::Transaction::Create(create) => Some(create.price().into()),
-            fuel_tx::Transaction::Mint(_) => None,
-        }
-    }
-
     async fn script_gas_limit(&self) -> Option<U64> {
         match &self.0 {
             fuel_tx::Transaction::Script(script) => {
@@ -433,8 +425,7 @@ impl Transaction {
     async fn mint_gas_price(&self) -> Option<U64> {
         match &self.0 {
             fuel_tx::Transaction::Script(_) | fuel_tx::Transaction::Create(_) => None,
-            // TODO: We need to add a getter for the `gas_price` field in `Mint` transaction
-            fuel_tx::Transaction::Mint(_) => Some((0).into()),
+            fuel_tx::Transaction::Mint(mint) => Some((*mint.gas_price()).into()),
         }
     }
 

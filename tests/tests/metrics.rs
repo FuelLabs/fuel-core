@@ -47,7 +47,7 @@ async fn test_metrics_endpoint() {
         .await
         .unwrap();
 
-    let resp = reqwest::get(format!("http://{}/metrics", srv.bound_address))
+    let resp = reqwest::get(format!("http://{}/v1/metrics", srv.bound_address))
         .await
         .unwrap()
         .text()
