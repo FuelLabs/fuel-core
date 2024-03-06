@@ -186,6 +186,7 @@ pub async fn make_nodes(
 
     let mut rng = StdRng::seed_from_u64(11);
 
+    let mut coin_generator = CoinConfigGenerator::new();
     let txs_coins: Vec<_> = producers
         .iter()
         .map(|p| {
@@ -193,8 +194,7 @@ pub async fn make_nodes(
             let all: Vec<_> = (0..num_test_txs)
                 .map(|_| {
                     let secret = SecretKey::random(&mut rng);
-                    let tx_id: Bytes32 = rng.gen();
-                    let initial_coin = StateConfig::initial_coin(secret, 10000, tx_id);
+                    let initial_coin = CoinConfigGenerator.generate_with(secret, 10000);
                     let tx = TransactionBuilder::script(
                         vec![op::ret(RegId::ONE)].into_iter().collect(),
                         vec![],

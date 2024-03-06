@@ -1,6 +1,7 @@
 use fuel_core::{
     chain_config::{
         CoinConfig,
+        CoinConfigGenerator,
         ContractBalanceConfig,
         ContractConfig,
         ContractStateConfig,
@@ -36,6 +37,7 @@ async fn loads_snapshot() {
     let owner = Address::default();
 
     // setup config
+    let mut coin_generator = CoinConfigGenerator::new();
     let contract_id = ContractId::new([11; 32]);
     let starting_state = StateConfig {
         contracts: vec![ContractConfig {
@@ -81,7 +83,7 @@ async fn loads_snapshot() {
             owner,
             amount,
             asset_id,
-            ..Default::default()
+            ..coin_generator.generate()
         })
         .collect(),
         messages: vec![MessageConfig {

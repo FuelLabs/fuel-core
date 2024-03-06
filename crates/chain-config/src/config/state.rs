@@ -24,6 +24,7 @@ use serde::{
     Serialize,
 };
 
+use crate::CoinConfigGenerator;
 #[cfg(feature = "std")]
 use crate::SnapshotMetadata;
 
@@ -167,19 +168,14 @@ impl StateConfig {
         })
     }
 
-    fn usize_to_bytes32(num: usize) -> Bytes32 {
-        let mut bytes = [0u8; 32];
-        bytes[..std::mem::size_of::<usize>()].copy_from_slice(&num.to_be_bytes());
-        Bytes32::new(bytes)
-    }
-
     pub fn local_testnet() -> Self {
         // endow some preset accounts with an initial balance
         tracing::info!("Initial Accounts");
+
+        let mut coin_generator = CoinConfigGenerator::new();
         let coins = TESTNET_WALLET_SECRETS
             .into_iter()
-            .enumerate()
-            .map(|(idx, secret)| {
+            .map(|secret| {
                 let secret = SecretKey::from_str(secret).expect("Expected valid secret");
                 let address = Address::from(*secret.public_key().hash());
                 let bech32_data = Bytes32::new(*address).to_base32();
@@ -192,8 +188,7 @@ impl StateConfig {
                     bech32_encoding,
                     TESTNET_INITIAL_BALANCE
                 );
-                let tx_id = Self::usize_to_bytes32(idx);
-                Self::initial_coin(secret, TESTNET_INITIAL_BALANCE, tx_id)
+                coin_generator.generate_with(secret, TESTNET_INITIAL_BALANCE)
             })
             .collect_vec();
 
@@ -207,9 +202,9 @@ impl StateConfig {
     pub fn random_testnet() -> Self {
         tracing::info!("Initial Accounts");
         let mut rng = rand::thread_rng();
+        let mut coin_generator = CoinConfigGenerator::new();
         let coins = (0..5)
-            .enumerate()
-            .map(|(idx, _)| {
+            .map(|_| {
                 let secret = SecretKey::random(&mut rng);
                 let address = Address::from(*secret.public_key().hash());
                 let bech32_data = Bytes32::new(*address).to_base32();
@@ -222,25 +217,13 @@ impl StateConfig {
                     bech32_encoding,
                     TESTNET_INITIAL_BALANCE
                 );
-                let tx_id = Self::usize_to_bytes32(idx);
-                Self::initial_coin(secret, TESTNET_INITIAL_BALANCE, tx_id)
+                coin_generator.generate_with(secret, TESTNET_INITIAL_BALANCE)
             })
             .collect_vec();
 
         Self {
             coins,
             ..StateConfig::default()
-        }
-    }
-
-    pub fn initial_coin(secret: SecretKey, amount: u64, tx_id: Bytes32) -> CoinConfig {
-        let owner = Address::from(*secret.public_key().hash());
-
-        CoinConfig {
-            tx_id,
-            amount,
-            owner,
-            ..Default::default()
         }
     }
 }

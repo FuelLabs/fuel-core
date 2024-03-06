@@ -8,12 +8,15 @@ use fuel_core_types::{
         UtxoId,
     },
     fuel_types::{
+        bytes::WORD_SIZE,
         Address,
         AssetId,
         BlockHeight,
         Bytes32,
     },
+    fuel_vm::SecretKey,
 };
+use itertools::Itertools;
 use serde::{
     Deserialize,
     Serialize,
@@ -32,6 +35,50 @@ pub struct CoinConfig {
     pub owner: Address,
     pub amount: u64,
     pub asset_id: AssetId,
+}
+
+/// Generates a new coin config with a unique utxo id for testing
+pub struct CoinConfigGenerator {
+    count: usize,
+}
+
+impl CoinConfigGenerator {
+    pub fn new() -> Self {
+        Self { count: 0 }
+    }
+
+    pub fn generate(&mut self) -> CoinConfig {
+        // generated transaction id([0..[count/255]])
+        let tx_id = Bytes32::try_from(
+            (0..(Bytes32::LEN - WORD_SIZE))
+                .map(|_| 0u8)
+                .chain((self.count as u64 / 255).to_be_bytes().into_iter())
+                .collect_vec()
+                .as_slice(),
+        )
+        .expect("Incorrect transaction id byte length");
+
+        let config = CoinConfig {
+            tx_id,
+            output_index: self.count as u8,
+            ..Default::default()
+        };
+        self.count += 1;
+
+        config
+    }
+
+    pub fn generate_with(&mut self, secret: SecretKey, amount: u64) -> CoinConfig {
+        let owner = Address::from(*secret.public_key().hash());
+
+        let config = CoinConfig {
+            amount,
+            owner,
+            ..self.generate()
+        };
+
+        config
+    }
 }
 
 impl CoinConfig {
@@ -75,5 +122,47 @@ impl GenesisCommitment for CompressedCoin {
             .finalize();
 
         Ok(coin_hash)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use fuel_core_types::{
+        fuel_types::{
+            Address,
+            Bytes32,
+        },
+        fuel_vm::SecretKey,
+    };
+
+    #[test]
+    fn test_coin_config_generator() {
+        let mut generator = CoinConfigGenerator::new();
+        let coin = generator.generate();
+        assert_eq!(coin.tx_id, Bytes32::from([0u8; 32]));
+        assert_eq!(coin.output_index, 0);
+
+        let coin = generator.generate();
+        assert_eq!(coin.tx_id, Bytes32::from([0u8; 32]));
+        assert_eq!(coin.output_index, 1);
+
+        let coin = generator.generate();
+        assert_eq!(coin.tx_id, Bytes32::from([0u8; 32]));
+        assert_eq!(coin.output_index, 2);
+    }
+
+    #[test]
+    fn test_coin_config_generator_with() {
+        let mut rng = rand::thread_rng();
+        let mut generator = CoinConfigGenerator::new();
+        let secret = SecretKey::random(&mut rng);
+
+        let coin = generator.generate_with(secret, 100);
+
+        assert_eq!(coin.tx_id, Bytes32::from([0u8; 32]));
+        assert_eq!(coin.output_index, 0);
+        assert_eq!(coin.owner, Address::from(*secret.public_key().hash()));
+        assert_eq!(coin.amount, 100);
     }
 }
