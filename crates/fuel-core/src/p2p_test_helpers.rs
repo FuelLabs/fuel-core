@@ -1,7 +1,7 @@
 //! # Helpers for creating networks of nodes
 
 use crate::{
-    chain_config::StateConfig,
+    chain_config::CoinConfigGenerator,
     database::Database,
     p2p::Multiaddr,
     service::{
@@ -37,7 +37,6 @@ use fuel_core_types::{
         TransactionBuilder,
         TxId,
         UniqueIdentifier,
-        UtxoId,
     },
     fuel_types::{
         Address,
@@ -51,7 +50,6 @@ use futures::StreamExt;
 use itertools::Itertools;
 use rand::{
     rngs::StdRng,
-    Rng,
     SeedableRng,
 };
 use std::{
@@ -194,7 +192,7 @@ pub async fn make_nodes(
             let all: Vec<_> = (0..num_test_txs)
                 .map(|_| {
                     let secret = SecretKey::random(&mut rng);
-                    let initial_coin = CoinConfigGenerator.generate_with(secret, 10000);
+                    let initial_coin = coin_generator.generate_with(secret, 10000);
                     let tx = TransactionBuilder::script(
                         vec![op::ret(RegId::ONE)].into_iter().collect(),
                         vec![],
@@ -202,7 +200,7 @@ pub async fn make_nodes(
                     .script_gas_limit(100000)
                     .add_unsigned_coin_input(
                         secret,
-                        UtxoId::new(tx_id, 0),
+                        initial_coin.utxo_id(),
                         initial_coin.amount,
                         initial_coin.asset_id,
                         Default::default(),
