@@ -393,12 +393,12 @@ pub mod block_component {
 
     impl<'a> PartialBlockComponent<'a, OnceTransactionsSource> {
         pub fn from_partial_block(block: &'a mut PartialFuelBlock) -> Self {
-            let transaction = core::mem::take(&mut block.transactions);
-            let gas_price = get_gas_price_from_mint_tx(&transaction[..]);
+            let transactions = core::mem::take(&mut block.transactions);
+            let gas_price = get_gas_price_from_mint_tx(&transactions[..]);
 
             Self {
                 empty_block: block,
-                transactions_source: OnceTransactionsSource::new(transaction),
+                transactions_source: OnceTransactionsSource::new(transactions),
                 gas_price,
                 gas_limit: u64::MAX,
                 _marker: Default::default(),
@@ -577,13 +577,95 @@ where
     /// Execute the fuel block with all transactions.
     fn execute_block<TxSource>(
         &self,
-        block_st_transaction: &mut D,
+        storage_transaction: &mut D,
         block: ExecutionType<PartialBlockComponent<TxSource>>,
     ) -> ExecutorResult<ExecutionData>
     where
         TxSource: TransactionsSource,
     {
-        let mut data = ExecutionData {
+
+        let (execution_kind, component) = block.split();
+        match execution_kind {
+            ExecutionKind::DryRun => {
+                self.execute_block_dry_run(storage_transaction, component)
+            }
+            ExecutionKind::Production => {
+                let gas_price = component.gas_price;
+                self.execute_block_production(storage_transaction, component, gas_price)
+            }
+            ExecutionKind::Validation => {
+                self.execute_block_validation(storage_transaction, component)
+            }
+        }
+    }
+
+    fn execute_block_dry_run<TxSource>(
+        &self,
+        storage_transaction: &mut StorageTransaction<D>,
+        component: PartialBlockComponent<TxSource>,
+    ) -> ExecutorResult<ExecutionData>
+    where
+        TxSource: TransactionsSource,
+    {
+        self.execute_block_inner(storage_transaction, ExecutionKind::DryRun, component)
+    }
+
+    fn execute_block_production<TxSource>(
+        &self,
+        storage_transaction: &mut StorageTransaction<D>,
+        component: PartialBlockComponent<TxSource>,
+        gas_price: Word,
+    ) -> ExecutorResult<ExecutionData>
+    where
+        TxSource: TransactionsSource,
+    {
+        let block_height = *(component.empty_block.header.height());
+        let execution_data = self.execute_block_inner(storage_transaction, ExecutionKind::Production, component)?;
+        let amount_to_mint = if self.config.coinbase_recipient != ContractId::zeroed()
+        {
+            execution_data.coinbase
+        } else {
+            0
+        };
+        let coinbase_tx = Transaction::mint(
+            TxPointer::new(block_height, execution_data.tx_count),
+            input::contract::Contract {
+                utxo_id: UtxoId::new(Bytes32::zeroed(), 0),
+                balance_root: Bytes32::zeroed(),
+                state_root: Bytes32::zeroed(),
+                tx_pointer: TxPointer::new(BlockHeight::new(0), 0),
+                contract_id: self.config.coinbase_recipient,
+            },
+            output::contract::Contract {
+                input_index: 0,
+                balance_root: Bytes32::zeroed(),
+                state_root: Bytes32::zeroed(),
+            },
+            amount_to_mint,
+            self.config.consensus_parameters.base_asset_id,
+            gas_price,
+        );
+
+        execute_transaction(
+            execution_data,
+            MaybeCheckedTransaction::Transaction(coinbase_tx.into()),
+        )?;
+        Ok(execution_data)
+    }
+
+    fn execute_block_validation<TxSource>(
+        &self,
+        storage_transaction: &mut StorageTransaction<D>,
+        component: PartialBlockComponent<TxSource>,
+    ) -> ExecutorResult<ExecutionData>
+    where
+        TxSource: TransactionsSource,
+    {
+        self.execute_block_inner(storage_transaction, ExecutionKind::Validation, component)
+    }
+
+    fn init_execution_data() -> ExecutionData {
+        ExecutionData {
             coinbase: 0,
             used_gas: 0,
             tx_count: 0,
@@ -592,19 +674,29 @@ where
             tx_status: Vec::new(),
             events: Vec::new(),
             skipped_transactions: Vec::new(),
-        };
+        }
+    }
+
+    fn execute_block_inner<TxSource>(
+        &self,
+        storage_transaction: &mut StorageTransaction<D>,
+        execution_kind: ExecutionKind,
+        component: PartialBlockComponent<TxSource>,
+    ) -> ExecutorResult<ExecutionData>
+    where
+        TxSource: TransactionsSource,
+    {
+        let mut data =  Self::init_execution_data();
         let execution_data = &mut data;
 
         // Split out the execution kind and partial block.
-        let (execution_kind, component) = block.split();
         let block = component.empty_block;
         let source = component.transactions_source;
         let gas_price = component.gas_price;
         let mut remaining_gas_limit = component.gas_limit;
-        let block_height = *block.header.height();
 
         if self.relayer.enabled() {
-            self.process_da(block_st_transaction, &block.header, execution_data)?;
+            self.process_da(storage_transaction, &block.header, execution_data)?;
         }
 
         // ALl transactions should be in the `TxSource`.
@@ -614,10 +706,10 @@ where
 
         let mut execute_transaction = |execution_data: &mut ExecutionData,
                                        tx: MaybeCheckedTransaction|
-         -> ExecutorResult<()> {
+                                       -> ExecutorResult<()> {
             let tx_count = execution_data.tx_count;
             let tx = {
-                let mut tx_st_transaction = block_st_transaction.transaction();
+                let mut tx_st_transaction = storage_transaction.transaction();
                 let tx_id = tx.id(&self.config.consensus_parameters.chain_id);
                 let result = self.execute_transaction(
                     tx,
@@ -676,36 +768,7 @@ where
 
         // After the execution of all transactions in production mode, we can set the final fee.
         if execution_kind == ExecutionKind::Production {
-            let amount_to_mint = if self.config.coinbase_recipient != ContractId::zeroed()
-            {
-                execution_data.coinbase
-            } else {
-                0
-            };
 
-            let coinbase_tx = Transaction::mint(
-                TxPointer::new(block_height, execution_data.tx_count),
-                input::contract::Contract {
-                    utxo_id: UtxoId::new(Bytes32::zeroed(), 0),
-                    balance_root: Bytes32::zeroed(),
-                    state_root: Bytes32::zeroed(),
-                    tx_pointer: TxPointer::new(BlockHeight::new(0), 0),
-                    contract_id: self.config.coinbase_recipient,
-                },
-                output::contract::Contract {
-                    input_index: 0,
-                    balance_root: Bytes32::zeroed(),
-                    state_root: Bytes32::zeroed(),
-                },
-                amount_to_mint,
-                self.config.consensus_parameters.base_asset_id,
-                gas_price,
-            );
-
-            execute_transaction(
-                execution_data,
-                MaybeCheckedTransaction::Transaction(coinbase_tx.into()),
-            )?;
         }
 
         if execution_kind != ExecutionKind::DryRun && !data.found_mint {
@@ -713,6 +776,7 @@ where
         }
 
         Ok(data)
+
     }
 
     fn process_da(
