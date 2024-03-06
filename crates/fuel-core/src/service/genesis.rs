@@ -88,7 +88,7 @@ pub async fn execute_genesis_block(
 
     let genesis = Genesis {
         chain_config_hash: config.chain_config.root()?.into(),
-        coins_root: original_database.genesis_coin_root()?.into(),
+        coins_root: original_database.genesis_coins_root()?.into(),
         messages_root: original_database.genesis_messages_root()?.into(),
         contracts_root: original_database.genesis_contracts_root()?.into(),
     };

@@ -11,18 +11,13 @@ use fuel_core_storage::{
         ContractsLatestUtxo,
         Messages,
     },
-    transactional::Transactional,
     Mappable,
     MerkleRoot,
     Result,
     StorageAsMut,
     StorageInspect,
 };
-use fuel_core_types::{
-    fuel_merkle::binary::root_calculator::MerkleRootCalculator,
-    fuel_types::ContractId,
-};
-use itertools::process_results;
+use fuel_core_types::fuel_merkle::binary::root_calculator::MerkleRootCalculator;
 use serde::{
     Deserialize,
     Serialize,
@@ -55,8 +50,6 @@ impl TableWithBlueprint for GenesisMetadata {
     }
 }
 
-pub type GenesisImportedContractId = ContractId;
-
 impl Database {
     pub fn genesis_progress(&self, key: &GenesisResource) -> Option<usize> {
         Some(
@@ -77,49 +70,40 @@ impl Database {
         Ok(())
     }
 
-    pub fn genesis_coin_root(&self) -> Result<MerkleRoot> {
-        let roots_iter = self.iter_all::<Coins>(None);
+    pub fn genesis_coins_root(&self) -> Result<MerkleRoot> {
+        let coins = self.iter_all::<Coins>(None);
 
-        let roots = process_results(roots_iter, |roots| {
-            roots
-                .map(|(_, coin)| coin.root().unwrap())
-                .collect::<Vec<MerkleRoot>>()
-        })?
-        .into_iter();
+        let mut root_calculator = MerkleRootCalculator::new();
+        for coin in coins {
+            let (_, coin) = coin?;
+            root_calculator.push(coin.root()?.as_slice());
+        }
 
-        Ok(MerkleRootCalculator::new().root_from_iterator(roots))
+        Ok(root_calculator.root())
     }
 
     pub fn genesis_messages_root(&self) -> Result<MerkleRoot> {
-        let roots_iter = self.iter_all::<Messages>(None);
+        let messages = self.iter_all::<Messages>(None);
 
-        let roots = process_results(roots_iter, |roots| {
-            roots
-                .map(|(_, message)| message.root().unwrap())
-                .collect::<Vec<MerkleRoot>>()
-        })?
-        .into_iter();
+        let mut root_calculator = MerkleRootCalculator::new();
+        for message in messages {
+            let (_, message) = message?;
+            root_calculator.push(message.root()?.as_slice());
+        }
 
-        Ok(MerkleRootCalculator::new().root_from_iterator(roots))
+        Ok(root_calculator.root())
     }
 
     pub fn genesis_contracts_root(&self) -> Result<MerkleRoot> {
-        let mut database_transaction = Transactional::transaction(self);
+        let contracts = self.iter_all::<ContractsLatestUtxo>(None);
 
-        let database = database_transaction.as_mut();
-        let contracts_iter = self.iter_all::<ContractsLatestUtxo>(None);
+        let mut root_calculator = MerkleRootCalculator::new();
+        for contract in contracts {
+            let (contract_id, _) = contract?;
+            let root = ContractRef::new(self, contract_id).root()?;
+            root_calculator.push(root.as_slice());
+        }
 
-        let roots = process_results(contracts_iter, |contracts| {
-            contracts
-                .map(|(contract_id, _)| {
-                    ContractRef::new(&mut *database, contract_id)
-                        .root()
-                        .unwrap()
-                })
-                .collect::<Vec<MerkleRoot>>()
-        })?
-        .into_iter();
-
-        Ok(MerkleRootCalculator::new().root_from_iterator(roots))
+        Ok(root_calculator.root())
     }
 }
