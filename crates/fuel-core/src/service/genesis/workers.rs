@@ -11,7 +11,9 @@ use std::{
 };
 
 use crate::database::{
+    balances::BalancesInitializer,
     genesis_progress::GenesisResource,
+    state::StateInitializer,
     Database,
 };
 use fuel_core_chain_config::{
@@ -23,6 +25,7 @@ use fuel_core_chain_config::{
     MessageConfig,
     StateReader,
 };
+use fuel_core_storage::transactional::StorageTransaction;
 use fuel_core_types::fuel_types::BlockHeight;
 use tokio::sync::Notify;
 use tokio_util::sync::CancellationToken;
@@ -190,7 +193,7 @@ impl ProcessState for Handler<CoinConfig> {
     fn process(
         &mut self,
         group: Vec<Self::Item>,
-        tx: &mut Database,
+        tx: &mut StorageTransaction<&mut Database>,
     ) -> anyhow::Result<()> {
         group.into_iter().try_for_each(|coin| {
             init_coin(tx, &coin, self.block_height)?;
@@ -209,7 +212,7 @@ impl ProcessState for Handler<MessageConfig> {
     fn process(
         &mut self,
         group: Vec<Self::Item>,
-        tx: &mut Database,
+        tx: &mut StorageTransaction<&mut Database>,
     ) -> anyhow::Result<()> {
         group
             .into_iter()
@@ -227,7 +230,7 @@ impl ProcessState for Handler<ContractConfig> {
     fn process(
         &mut self,
         group: Vec<Self::Item>,
-        tx: &mut Database,
+        tx: &mut StorageTransaction<&mut Database>,
     ) -> anyhow::Result<()> {
         group.into_iter().try_for_each(|contract| {
             init_contract(tx, &contract, self.block_height)?;
@@ -246,7 +249,7 @@ impl ProcessState for Handler<ContractStateConfig> {
     fn process(
         &mut self,
         group: Vec<ContractStateConfig>,
-        tx: &mut Database,
+        tx: &mut StorageTransaction<&mut Database>,
     ) -> anyhow::Result<()> {
         tx.update_contract_states(group)?;
         Ok(())
@@ -263,7 +266,7 @@ impl ProcessState for Handler<ContractBalanceConfig> {
     fn process(
         &mut self,
         group: Vec<ContractBalanceConfig>,
-        tx: &mut Database,
+        tx: &mut StorageTransaction<&mut Database>,
     ) -> anyhow::Result<()> {
         tx.update_contract_balances(group)?;
         Ok(())

@@ -6,12 +6,11 @@ use crate::{
     graphql_api::worker_service,
     service::Config,
 };
-use fuel_core_storage::transactional::WriteTransaction;
 use fuel_core_chain_config::{
     CoinConfig,
     MessageConfig,
 };
-use fuel_core_storage::transactional::Transactional;
+use fuel_core_storage::transactional::WriteTransaction;
 use fuel_core_types::{
     entities::coins::coin::Coin,
     services::executor::Event,
@@ -19,7 +18,7 @@ use fuel_core_types::{
 use std::borrow::Cow;
 
 fn process_messages(
-    db: &Database<OffChain>,
+    original_database: &mut Database<OffChain>,
     messages: Vec<MessageConfig>,
 ) -> anyhow::Result<()> {
     let mut database_transaction = original_database.write_transaction();
@@ -29,17 +28,17 @@ fn process_messages(
         Cow::Owned(Event::MessageImported(message))
     });
 
-    worker_service::process_executor_events(
-        message_events,
-        &mut database_transaction,
-    )?;
+    worker_service::process_executor_events(message_events, &mut database_transaction)?;
 
     database_transaction.commit()?;
     Ok(())
 }
 
-fn process_coins(db: &Database<OffChain>, coins: Vec<CoinConfig>) -> anyhow::Result<()> {
-    let mut database_transaction = Transactional::transaction(db);
+fn process_coins(
+    original_database: &mut Database<OffChain>,
+    coins: Vec<CoinConfig>,
+) -> anyhow::Result<()> {
+    let mut database_transaction = original_database.write_transaction();
 
     let coin_events = coins.iter().map(|config| {
         let coin = Coin {
@@ -52,7 +51,7 @@ fn process_coins(db: &Database<OffChain>, coins: Vec<CoinConfig>) -> anyhow::Res
         Cow::Owned(Event::CoinCreated(coin))
     });
 
-    worker_service::process_executor_events(coin_events, database_transaction.as_mut())?;
+    worker_service::process_executor_events(coin_events, &mut database_transaction)?;
 
     database_transaction.commit()?;
     Ok(())
@@ -63,7 +62,7 @@ fn process_coins(db: &Database<OffChain>, coins: Vec<CoinConfig>) -> anyhow::Res
 //  https://github.com/FuelLabs/fuel-core/issues/1619
 pub fn execute_genesis_block(
     config: &Config,
-    original_database: &Database<OffChain>,
+    original_database: &mut Database<OffChain>,
 ) -> anyhow::Result<()> {
     for message_group in config.state_reader.messages()? {
         process_messages(original_database, message_group?.data)?;

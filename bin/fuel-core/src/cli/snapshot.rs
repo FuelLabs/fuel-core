@@ -240,7 +240,7 @@ fn load_chain_config(
 }
 
 fn open_db(path: &Path) -> anyhow::Result<Database> {
-    Database::<OnChain>::open(path, None)
+    Database::<OnChain>::open_rocksdb(path, None)
         .map_err(Into::<anyhow::Error>::into)
         .context(format!("failed to open database at path {path:?}",))
 }

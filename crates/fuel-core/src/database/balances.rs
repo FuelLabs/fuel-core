@@ -1,3 +1,4 @@
+use fuel_core_chain_config::ContractBalanceConfig;
 use fuel_core_storage::{
     tables::{
         merkle::ContractsAssetsMerkleMetadata,
@@ -7,6 +8,7 @@ use fuel_core_storage::{
     Error as StorageError,
     StorageAsRef,
     StorageBatchMutate,
+    StorageInspect,
 };
 use fuel_core_types::{
     fuel_asm::Word,
@@ -27,11 +29,16 @@ pub trait BalancesInitializer {
     ) -> Result<(), StorageError>
     where
         S: Iterator<Item = (AssetId, Word)>;
+    fn update_contract_balances(
+        &mut self,
+        balances: impl IntoIterator<Item = ContractBalanceConfig>,
+    ) -> Result<(), StorageError>;
 }
 
 impl<S> BalancesInitializer for S
 where
-    S: StorageBatchMutate<ContractsAssets>,
+    S: StorageInspect<ContractsAssetsMerkleMetadata, Error = StorageError>,
+    S: StorageBatchMutate<ContractsAssets, Error = StorageError>,
 {
     fn init_contract_balances<I>(
         &mut self,
@@ -53,7 +60,7 @@ where
         )
     }
 
-    pub fn update_contract_balances(
+    fn update_contract_balances(
         &mut self,
         balances: impl IntoIterator<Item = ContractBalanceConfig>,
     ) -> Result<(), StorageError> {
@@ -62,8 +69,30 @@ where
             .group_by(|s| s.contract_id)
             .into_iter()
             .try_for_each(|(contract_id, entries)| {
-                if self.assets_present(&contract_id)? {
-                    self.db_insert_contract_balances(entries.into_iter().collect_vec())
+                if self
+                    .storage::<ContractsAssetsMerkleMetadata>()
+                    .get(&contract_id)?
+                    .is_some()
+                {
+                    let balance_entries = entries
+                        .into_iter()
+                        .map(|balance_entry| {
+                            let db_key = ContractsAssetKey::new(
+                                &balance_entry.contract_id,
+                                &balance_entry.asset_id,
+                            );
+                            (db_key, balance_entry.amount)
+                        })
+                        .collect_vec();
+
+                    #[allow(clippy::map_identity)]
+                    let balance_entries_iter =
+                        balance_entries.iter().map(|(key, value)| (key, value));
+
+                    <_ as StorageBatchMutate<ContractsAssets>>::insert_batch(
+                        self,
+                        balance_entries_iter,
+                    )
                 } else {
                     self.init_contract_balances(
                         &contract_id,
@@ -73,40 +102,6 @@ where
             })?;
 
         Ok(())
-    }
-
-    fn db_insert_contract_balances(
-        &mut self,
-        balances: impl IntoIterator<Item = ContractBalanceConfig>,
-    ) -> Result<(), StorageError> {
-        let balance_entries = balances
-            .into_iter()
-            .map(|balance_entry| {
-                let db_key = ContractsAssetKey::new(
-                    &balance_entry.contract_id,
-                    &balance_entry.asset_id,
-                );
-                (db_key, balance_entry.amount)
-            })
-            .collect_vec();
-
-        #[allow(clippy::map_identity)]
-        let balance_entries_iter =
-            balance_entries.iter().map(|(key, value)| (key, value));
-
-        <_ as StorageBatchMutate<ContractsAssets>>::insert_batch(
-            &mut self.data,
-            balance_entries_iter,
-        )?;
-
-        Ok(())
-    }
-
-    fn assets_present(&mut self, key: &ContractId) -> Result<bool, StorageError> {
-        Ok(self
-            .storage::<ContractsAssetsMerkleMetadata>()
-            .get(key)?
-            .is_some())
     }
 }
 
@@ -168,7 +163,7 @@ mod tests {
         let mut seq_database = Database::<OnChain>::default().into_transaction();
         for (asset, value) in data.iter() {
             seq_database
-                .storage::<ContractsAssets>()
+                .storage_as_mut::<ContractsAssets>()
                 .insert(&ContractsAssetKey::new(&contract_id, asset), value)
                 .expect("Should insert a state");
         }
@@ -205,6 +200,10 @@ mod tests {
     }
 
     mod update_contract_balance {
+        use fuel_core_storage::{
+            iter::IteratorOverTable,
+            transactional::WriteTransaction,
+        };
         use fuel_core_types::{
             fuel_merkle::sparse::{
                 self,
@@ -230,14 +229,16 @@ mod tests {
             .take(10)
             .collect_vec();
 
-            let database = &mut Database::default();
+            let mut database = Database::<OnChain>::default();
+            let mut transaction = database.write_transaction();
 
             // when
             for group in &balance_groups {
-                database
+                transaction
                     .update_contract_balances(group.clone())
                     .expect("Should insert contract balances");
             }
+            transaction.commit().unwrap();
 
             // then
             let balances_in_db: Vec<_> = database
@@ -287,7 +288,7 @@ mod tests {
             .take(100)
             .collect_vec();
 
-            let database = &mut Database::default();
+            let mut database = Database::<OnChain>::default().into_transaction();
 
             // when
             database.update_contract_balances(balances.clone()).unwrap();
@@ -323,7 +324,7 @@ mod tests {
                 })
                 .collect_vec();
 
-            let database = &mut Database::default();
+            let mut database = Database::<OnChain>::default().into_transaction();
 
             // when
             let balances = balance_per_contract.clone().into_iter().flatten();
@@ -372,7 +373,7 @@ mod tests {
                 })
                 .collect_vec();
 
-            let database = &mut Database::default();
+            let mut database = Database::<OnChain>::default().into_transaction();
 
             // when
             use itertools::Itertools;

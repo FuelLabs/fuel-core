@@ -1,12 +1,18 @@
-use crate::database::{
-    database_description::{
-        off_chain::OffChain,
-        on_chain::OnChain,
-        relayer::Relayer,
+use crate::{
+    database,
+    database::{
+        database_description::{
+            off_chain::OffChain,
+            on_chain::OnChain,
+            relayer::Relayer,
+        },
+        Database,
+        Result as DatabaseResult,
     },
-    Database,
+    service::DbType,
 };
 use fuel_core_storage::Result as StorageResult;
+use std::path::PathBuf;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct CombinedDatabaseConfig {
@@ -37,10 +43,10 @@ impl CombinedDatabase {
     }
 
     #[cfg(feature = "rocksdb")]
-    pub fn prune(path: &std::path::Path) -> DatabaseResult<()> {
-        Database::<OnChain>::prune(path)?;
-        Database::<OffChain>::prune(path)?;
-        Database::<Relayer>::prune(path)?;
+    pub fn prune(path: &std::path::Path) -> database::Result<()> {
+        crate::state::rocks_db::RocksDb::<OnChain>::prune(path)?;
+        crate::state::rocks_db::RocksDb::<OffChain>::prune(path)?;
+        crate::state::rocks_db::RocksDb::<Relayer>::prune(path)?;
         Ok(())
     }
 

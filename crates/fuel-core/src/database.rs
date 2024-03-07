@@ -29,6 +29,7 @@ use fuel_core_services::SharedMutex;
 use fuel_core_storage::{
     iter::{
         BoxedIter,
+        IntoBoxedIter,
         IterDirection,
         IterableStore,
         IteratorOverTable,
@@ -127,11 +128,6 @@ impl<Description> Database<Description>
 where
     Description: DatabaseDescription,
 {
-    #[cfg(feature = "rocksdb")]
-    pub fn prune(path: &Path) -> DatabaseResult<()> {
-        RocksDb::<Description>::prune(path)
-    }
-
     pub fn in_memory() -> Self {
         let data = Arc::<MemoryStore<Description>>::new(MemoryStore::default());
         Self {
@@ -262,13 +258,13 @@ impl ChainStateDb for Database {
 
     fn iter_contract_state_configs(
         &self,
-    ) -> BoxedIter<StorageResult<fuel_core_chain_config::ContractStateConfig>> {
+    ) -> BoxedIter<StorageResult<ContractStateConfig>> {
         Self::iter_contract_state_configs(self).into_boxed()
     }
 
     fn iter_contract_balance_configs(
         &self,
-    ) -> BoxedIter<StorageResult<fuel_core_chain_config::ContractBalanceConfig>> {
+    ) -> BoxedIter<StorageResult<ContractBalanceConfig>> {
         Self::iter_contract_balance_configs(self).into_boxed()
     }
 

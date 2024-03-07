@@ -25,7 +25,6 @@ use fuel_core_storage::{
         WriteOperation,
     },
     transactional::Changes,
-    Error as StorageError,
     Result as StorageResult,
 };
 use rand::RngCore;
@@ -171,6 +170,7 @@ where
     }
 
     pub fn prune(path: &Path) -> DatabaseResult<()> {
+        let path = path.join(Description::name());
         DB::destroy(&Options::default(), path)
             .map_err(|e| DatabaseError::Other(e.into()))?;
         Ok(())
@@ -543,36 +543,6 @@ where
             .write(batch)
             .map_err(|e| DatabaseError::Other(e.into()).into())
     }
-
-    // use delete_range to delete all keys in a column
-    fn delete_all(&self, column: Self::Column) -> StorageResult<()> {
-        let mut batch = WriteBatch::default();
-        let first = self
-            .iter_all(column, None, None, IterDirection::Forward)
-            .next()
-            .transpose()?
-            .map(|(key, _)| key)
-            .unwrap_or_default();
-        let last = self
-            .iter_all(column, None, None, IterDirection::Reverse)
-            .next()
-            .transpose()?
-            .map(|(key, _)| key)
-            .unwrap_or_default();
-        batch.delete_range_cf(&self.cf(column), first, last.clone());
-
-        // delete_range doesn't delete the last key, so we need to delete it separately
-        batch.delete_cf(&self.cf(column), last);
-
-        database_metrics().write_meter.inc();
-        database_metrics()
-            .bytes_written
-            .observe(batch.size_in_bytes() as f64);
-
-        self.db
-            .write(batch)
-            .map_err(|e| StorageError::Other(e.into()))
-    }
 }
 
 /// The `None` means overflow, so there is not following prefix.
@@ -719,29 +689,6 @@ mod tests {
             .unwrap();
 
         assert_eq!(db.get(&key, Column::Metadata).unwrap(), None);
-    }
-
-    #[test]
-    fn delete_all_with_different_key_lengths() {
-        let (db, _tmp) = create_db();
-
-        let keys = vec![
-            vec![], // unit key
-            vec![0xA],
-            vec![0xB, 0xC],
-            vec![0xD, 0xE, 0xF],
-        ];
-        let value = Arc::new(vec![1, 2, 3]);
-
-        for key in &keys {
-            db.put(key, Column::Metadata, value.clone()).unwrap();
-        }
-
-        db.delete_all(Column::Metadata).unwrap();
-
-        for key in &keys {
-            assert_eq!(db.get(key, Column::Metadata).unwrap(), None);
-        }
     }
 
     #[test]
