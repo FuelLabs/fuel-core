@@ -51,12 +51,11 @@ pub trait AtomicView: Send + Sync {
 }
 
 /// Storage transaction on top of the storage.
-pub type StorageTransaction<S> = StructuredStorage<StorageTransactionInner<S>>;
+pub type StorageTransaction<S> = StructuredStorage<InMemoryTransaction<S>>;
 
-/// The inner representation of the storage transaction.
-#[doc(hidden)]
+/// In memory transaction accumulates `Changes` over the storage.
 #[derive(Default, Debug, Clone)]
-pub struct StorageTransactionInner<S> {
+pub struct InMemoryTransaction<S> {
     pub(crate) changes: Changes,
     pub(crate) policy: ConflictPolicy,
     pub(crate) storage: S,
@@ -65,7 +64,7 @@ pub struct StorageTransactionInner<S> {
 impl<S> StorageTransaction<S> {
     /// Creates a new instance of the storage transaction.
     pub fn transaction(storage: S, policy: ConflictPolicy, changes: Changes) -> Self {
-        StructuredStorage::new(StorageTransactionInner {
+        StructuredStorage::new(InMemoryTransaction {
             changes,
             policy,
             storage,
@@ -74,7 +73,7 @@ impl<S> StorageTransaction<S> {
 
     /// Creates a new instance of the structured storage with a `ConflictPolicy`.
     pub fn with_policy(self, policy: ConflictPolicy) -> Self {
-        StructuredStorage::new(StorageTransactionInner {
+        StructuredStorage::new(InMemoryTransaction {
             changes: self.inner.changes,
             policy,
             storage: self.inner.storage,
@@ -83,7 +82,7 @@ impl<S> StorageTransaction<S> {
 
     /// Creates a new instance of the structured storage with a `Changes`.
     pub fn with_changes(self, changes: Changes) -> Self {
-        StructuredStorage::new(StorageTransactionInner {
+        StructuredStorage::new(InMemoryTransaction {
             changes,
             policy: self.inner.policy,
             storage: self.inner.storage,
@@ -196,7 +195,7 @@ where
     }
 }
 
-impl<Storage> Modifiable for StorageTransactionInner<Storage> {
+impl<Storage> Modifiable for InMemoryTransaction<Storage> {
     fn commit_changes(&mut self, changes: Changes) -> StorageResult<()> {
         for (column, value) in changes.into_iter() {
             let btree = self.changes.entry(column).or_default();
@@ -228,7 +227,7 @@ impl<Storage> Modifiable for StorageTransactionInner<Storage> {
     }
 }
 
-impl<Column, S> KeyValueInspect for StorageTransactionInner<S>
+impl<Column, S> KeyValueInspect for InMemoryTransaction<S>
 where
     Column: StorageColumn,
     S: KeyValueInspect<Column = Column>,
@@ -252,7 +251,7 @@ where
     }
 }
 
-impl<Column, S> KeyValueMutate for StorageTransactionInner<S>
+impl<Column, S> KeyValueMutate for InMemoryTransaction<S>
 where
     Column: StorageColumn,
     S: KeyValueInspect<Column = Column>,
@@ -340,7 +339,7 @@ where
     }
 }
 
-impl<Column, S> BatchOperations for StorageTransactionInner<S>
+impl<Column, S> BatchOperations for InMemoryTransaction<S>
 where
     Column: StorageColumn,
     S: KeyValueInspect<Column = Column>,
@@ -366,7 +365,7 @@ where
 // We implement `IterableStore` for `StorageTransactionInner` only to allow
 // using it in the tests and benchmarks as a type(not even implementation of it).
 #[cfg(feature = "test-helpers")]
-impl<S> IterableStore for StorageTransactionInner<S>
+impl<S> IterableStore for InMemoryTransaction<S>
 where
     S: IterableStore,
 {

@@ -1934,7 +1934,7 @@ mod tests {
         assert_eq!(tx.inputs()[0].balance_root(), balance_root);
         assert_eq!(tx.inputs()[0].state_root(), state_root);
 
-        executor
+        let _ = executor
             .execute_without_commit_with_source::<OnceTransactionsSource>(
                 ExecutionTypes::Validation(block),
             )

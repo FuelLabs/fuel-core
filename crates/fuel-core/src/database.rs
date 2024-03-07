@@ -421,7 +421,7 @@ where
 
     // Changes for each block should be committed separately.
     // If we have more than one height, it means we are mixing commits
-    // for several heights in one butch - return error in this case.
+    // for several heights in one batch - return error in this case.
     if new_heights.len() > 1 {
         return Err(DatabaseError::MultipleHeightsInCommit {
             heights: new_heights.iter().map(DatabaseHeight::as_u64).collect(),

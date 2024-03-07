@@ -13,6 +13,7 @@ pub mod txpool;
 /// The uncommitted `Result` of some action with storage changes.
 /// The user should commit the result by itself.
 #[derive(Debug)]
+#[must_use]
 pub struct Uncommitted<Result, Changes> {
     /// The result of the action.
     result: Result,

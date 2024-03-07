@@ -29,6 +29,7 @@ pub trait BalancesInitializer {
     ) -> Result<(), StorageError>
     where
         S: Iterator<Item = (AssetId, Word)>;
+
     fn update_contract_balances(
         &mut self,
         balances: impl IntoIterator<Item = ContractBalanceConfig>,
