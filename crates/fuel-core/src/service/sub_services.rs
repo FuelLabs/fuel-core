@@ -61,7 +61,7 @@ pub fn init_sub_services(
         database.on_chain().clone(),
         database.relayer().clone(),
         fuel_core_executor::Config {
-            consensus_parameters: config.chain_conf.consensus_parameters.clone(),
+            consensus_parameters: config.chain_config.consensus_parameters.clone(),
             coinbase_recipient: config
                 .block_producer
                 .coinbase_recipient
@@ -103,7 +103,7 @@ pub fn init_sub_services(
     #[cfg(feature = "p2p")]
     let mut network = config.p2p.clone().map(|p2p_config| {
         fuel_core_p2p::service::new_service(
-            config.chain_conf.consensus_parameters.chain_id,
+            config.chain_config.consensus_parameters.chain_id,
             p2p_config,
             database.on_chain().clone(),
             importer_adapter.clone(),
@@ -187,7 +187,7 @@ pub fn init_sub_services(
     // TODO: Figure out on how to move it into `fuel-core-graphql-api`.
     let schema = crate::schema::dap::init(
         build_schema(),
-        config.chain_conf.consensus_parameters.clone(),
+        config.chain_config.consensus_parameters.clone(),
         config.debug,
     )
     .data(database.on_chain().clone());
@@ -206,8 +206,8 @@ pub fn init_sub_services(
         min_gas_price: config.txpool.min_gas_price,
         max_tx: config.txpool.max_tx,
         max_depth: config.txpool.max_depth,
-        chain_name: config.chain_conf.chain_name.clone(),
-        consensus_parameters: config.chain_conf.consensus_parameters.clone(),
+        chain_name: config.chain_config.chain_name.clone(),
+        consensus_parameters: config.chain_config.consensus_parameters.clone(),
         consensus_key: config.consensus_key.clone(),
     };
 

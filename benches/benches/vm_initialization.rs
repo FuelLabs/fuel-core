@@ -16,7 +16,6 @@ use fuel_core_types::{
         Output,
         Script,
         Transaction,
-        Word,
     },
     fuel_types::canonical::Serialize,
     fuel_vm::{
@@ -65,10 +64,7 @@ fn transaction<R: Rng>(
         1_000_000,
         script,
         script_data,
-        Policies::new()
-            .with_max_fee(0)
-            .with_maturity(0.into())
-            .with_max_fee(Word::MAX),
+        Policies::new().with_max_fee(0).with_maturity(0.into()),
         inputs,
         outputs,
         vec![vec![123; 32].into(); 1],

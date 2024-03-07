@@ -72,6 +72,12 @@ impl From<Error> for anyhow::Error {
     }
 }
 
+impl From<TryFromSliceError> for Error {
+    fn from(e: TryFromSliceError) -> Self {
+        Self::Other(anyhow::anyhow!(e))
+    }
+}
+
 impl From<Error> for ExecutorError {
     fn from(e: Error) -> Self {
         ExecutorError::StorageError(anyhow::anyhow!(e))
@@ -87,12 +93,6 @@ impl From<Error> for fuel_vm_private::prelude::InterpreterError<Error> {
 impl From<Error> for fuel_vm_private::prelude::RuntimeError<Error> {
     fn from(e: Error) -> Self {
         fuel_vm_private::prelude::RuntimeError::Storage(e)
-    }
-}
-
-impl From<TryFromSliceError> for Error {
-    fn from(e: TryFromSliceError) -> Self {
-        Self::Other(anyhow::anyhow!(e))
     }
 }
 

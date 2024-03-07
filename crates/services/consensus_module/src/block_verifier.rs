@@ -55,13 +55,7 @@ where
     ) -> anyhow::Result<()> {
         match consensus {
             Consensus::Genesis(_) => {
-                let expected_genesis_height = self
-                    .config
-                    .chain_config
-                    .initial_state
-                    .as_ref()
-                    .map(|config| config.height.unwrap_or_else(|| 0u32.into()))
-                    .unwrap_or_else(|| 0u32.into());
+                let expected_genesis_height = self.config.block_height;
                 verify_genesis_block_fields(expected_genesis_height, block.header())
             }
             Consensus::PoA(_) => {
@@ -106,6 +100,7 @@ fn verify_genesis_block_fields(
     );
     ensure!(
         // TODO: Set `da_height` based on the chain config.
+        //  https://github.com/FuelLabs/fuel-core/issues/1667
         header.da_height == Default::default(),
         "The genesis `da_height` is not as expected"
     );

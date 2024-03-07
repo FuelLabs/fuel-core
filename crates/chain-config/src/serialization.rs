@@ -1,166 +1,131 @@
-use core::fmt;
-use fuel_core_types::{
-    blockchain::primitives::DaBlockHeight,
-    fuel_types::{
-        bytes::WORD_SIZE,
-        BlockHeight,
-    },
-};
 use serde::{
-    de::Error,
     Deserializer,
     Serializer,
 };
 use serde_with::{
+    formats::Lowercase,
     DeserializeAs,
     SerializeAs,
 };
-use std::convert::TryFrom;
 
-/// Used for primitive number types which don't implement AsRef or TryFrom<&[u8]>
-pub(crate) struct HexNumber;
+/// Encode/decode a byte vector as a hex string if the serializer is human readable. Otherwise, use the default encoding.
+pub(crate) struct HexIfHumanReadable;
 
-impl SerializeAs<BlockHeight> for HexNumber {
-    fn serialize_as<S>(value: &BlockHeight, serializer: S) -> Result<S::Ok, S::Error>
+impl SerializeAs<Vec<u8>> for HexIfHumanReadable {
+    fn serialize_as<S>(value: &Vec<u8>, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
     {
-        let number: u32 = (*value).into();
-        HexNumber::serialize_as(&number, serializer)
-    }
-}
-
-impl<'de> DeserializeAs<'de, BlockHeight> for HexNumber {
-    fn deserialize_as<D>(deserializer: D) -> Result<BlockHeight, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        let number: u32 = HexNumber::deserialize_as(deserializer)?;
-        Ok(number.into())
-    }
-}
-
-impl SerializeAs<DaBlockHeight> for HexNumber {
-    fn serialize_as<S>(value: &DaBlockHeight, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        let number: u64 = (*value).into();
-        HexNumber::serialize_as(&number, serializer)
-    }
-}
-
-impl<'de> DeserializeAs<'de, DaBlockHeight> for HexNumber {
-    fn deserialize_as<D>(deserializer: D) -> Result<DaBlockHeight, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        let number: u64 = HexNumber::deserialize_as(deserializer)?;
-        Ok(number.into())
-    }
-}
-
-pub(crate) struct HexType;
-
-impl<T: AsRef<[u8]>> SerializeAs<T> for HexType {
-    fn serialize_as<S>(value: &T, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        serde_hex::serialize(value, serializer)
-    }
-}
-
-impl<'de, T, E> DeserializeAs<'de, T> for HexType
-where
-    for<'a> T: TryFrom<&'a [u8], Error = E>,
-    E: fmt::Display,
-{
-    fn deserialize_as<D>(deserializer: D) -> Result<T, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        serde_hex::deserialize(deserializer)
-    }
-}
-
-pub mod serde_hex {
-    use core::fmt;
-    use hex::{
-        FromHex,
-        ToHex,
-    };
-    use serde::{
-        de::Error,
-        Deserializer,
-        Serializer,
-    };
-    use std::convert::TryFrom;
-
-    pub fn serialize<T, S>(target: T, ser: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-        T: ToHex,
-    {
-        let s = format!("0x{}", target.encode_hex::<String>());
-        ser.serialize_str(&s)
-    }
-
-    pub fn deserialize<'de, T, E, D>(des: D) -> Result<T, D::Error>
-    where
-        D: Deserializer<'de>,
-        for<'a> T: TryFrom<&'a [u8], Error = E>,
-        E: fmt::Display,
-    {
-        let raw_string: String = serde::Deserialize::deserialize(des)?;
-        let stripped_prefix = raw_string.trim_start_matches("0x");
-        let bytes: Vec<u8> =
-            FromHex::from_hex(stripped_prefix).map_err(D::Error::custom)?;
-        let result = T::try_from(bytes.as_slice()).map_err(D::Error::custom)?;
-        Ok(result)
-    }
-}
-
-macro_rules! impl_hex_number {
-    ($i:ident) => {
-        impl SerializeAs<$i> for HexNumber {
-            fn serialize_as<S>(value: &$i, serializer: S) -> Result<S::Ok, S::Error>
-            where
-                S: Serializer,
-            {
-                let bytes = value.to_be_bytes();
-                serde_hex::serialize(bytes, serializer)
-            }
+        if serializer.is_human_readable() {
+            serde_with::hex::Hex::<Lowercase>::serialize_as(value, serializer)
+        } else {
+            Ok(serde::Serialize::serialize(value, serializer)?)
         }
-
-        impl<'de> DeserializeAs<'de, $i> for HexNumber {
-            fn deserialize_as<D>(deserializer: D) -> Result<$i, D::Error>
-            where
-                D: Deserializer<'de>,
-            {
-                const SIZE: usize = core::mem::size_of::<$i>();
-                let mut bytes: Vec<u8> = serde_hex::deserialize(deserializer)?;
-                let pad =
-                    SIZE.checked_sub(bytes.len())
-                        .ok_or(D::Error::custom(format!(
-                            "value cant exceed {WORD_SIZE} bytes"
-                        )))?;
-
-                if pad != 0 {
-                    // pad if length < word size
-                    bytes = (0..pad).map(|_| 0u8).chain(bytes.into_iter()).collect();
-                }
-
-                // We've already verified the bytes.len == WORD_SIZE, force the conversion here.
-                Ok($i::from_be_bytes(
-                    bytes.try_into().expect("byte lengths checked"),
-                ))
-            }
-        }
-    };
+    }
 }
 
-impl_hex_number!(u8);
-impl_hex_number!(u16);
-impl_hex_number!(u32);
-impl_hex_number!(u64);
+impl<'a> DeserializeAs<'a, Vec<u8>> for HexIfHumanReadable {
+    fn deserialize_as<D>(deserializer: D) -> Result<Vec<u8>, D::Error>
+    where
+        D: Deserializer<'a>,
+    {
+        if deserializer.is_human_readable() {
+            // Per docs: doesn't care about lower/upper case, decodes even mixed case.
+            serde_with::hex::Hex::<Lowercase>::deserialize_as(deserializer)
+        } else {
+            serde::Deserialize::deserialize(deserializer)
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::HexIfHumanReadable;
+    use postcard::ser_flavors::{
+        AllocVec,
+        Flavor,
+    };
+    use serde_json::de::StrRead;
+    use serde_with::{
+        DeserializeAs,
+        SerializeAs,
+    };
+
+    const BYTES: [u8; 32] = [1u8; 32];
+    const HUMAN_READABLE_FORM: &str =
+        "\"0101010101010101010101010101010101010101010101010101010101010101\"";
+
+    #[test]
+    fn encodes_hex_type_as_human_readable() {
+        // given
+        let value = Vec::from(BYTES);
+        let mut buf = vec![];
+        let mut serializer = serde_json::Serializer::new(&mut buf);
+
+        // when
+        <HexIfHumanReadable as SerializeAs<Vec<u8>>>::serialize_as(
+            &value,
+            &mut serializer,
+        )
+        .unwrap();
+
+        // then
+        let actual = String::from_utf8(buf).unwrap();
+        assert_eq!(actual, HUMAN_READABLE_FORM);
+    }
+
+    #[test]
+    fn decodes_hex_type_as_human_readable() {
+        // given
+        let serialized = HUMAN_READABLE_FORM;
+        let mut deserializer = serde_json::Deserializer::new(StrRead::new(serialized));
+
+        // when
+        let decoded = <HexIfHumanReadable as DeserializeAs<Vec<u8>>>::deserialize_as(
+            &mut deserializer,
+        )
+        .unwrap();
+
+        // then
+        let expectation = Vec::from(BYTES);
+        assert_eq!(decoded, expectation);
+    }
+
+    #[test]
+    fn encodes_hex_type_as_machine_readable() {
+        // given
+        let mut buf = [0u8; 33];
+        let expected_bytes = postcard::to_slice(&BYTES.as_slice(), &mut buf).unwrap();
+        let mut serializer = postcard::Serializer {
+            output: AllocVec::default(),
+        };
+
+        // when
+        <HexIfHumanReadable as SerializeAs<Vec<u8>>>::serialize_as(
+            &BYTES.to_vec(),
+            &mut serializer,
+        )
+        .unwrap();
+
+        // then
+        let bytes = serializer.output.finalize().unwrap();
+        assert_eq!(bytes.as_slice(), expected_bytes);
+    }
+
+    #[test]
+    fn decodes_hex_type_as_machine_readable() {
+        // given
+        let mut buf = [0u8; 33];
+        let expected_bytes = postcard::to_slice(&BYTES.as_slice(), &mut buf).unwrap();
+        let mut serializer = postcard::Deserializer::from_bytes(expected_bytes);
+
+        // when
+        let decoded = <HexIfHumanReadable as DeserializeAs<Vec<u8>>>::deserialize_as(
+            &mut serializer,
+        )
+        .unwrap();
+
+        // then
+        assert_eq!(BYTES.to_vec(), decoded);
+    }
+}

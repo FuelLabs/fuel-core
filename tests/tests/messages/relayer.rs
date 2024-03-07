@@ -1,4 +1,5 @@
 use super::*;
+use fuel_core::chain_config::StateReader;
 use fuel_core_types::blockchain::primitives::DaBlockHeight;
 use rand::{
     rngs::StdRng,
@@ -32,12 +33,15 @@ async fn can_submit_genesis_message() {
         )
         .finalize_as_transaction();
 
-    let mut node_config = Config::local_node();
-    node_config.chain_conf.initial_state = Some(StateConfig {
-        messages: Some(vec![msg1]),
+    let state = StateConfig {
+        messages: vec![msg1],
         ..Default::default()
-    });
-    node_config.utxo_validation = true;
+    };
+    let node_config = Config {
+        state_reader: StateReader::in_memory(state),
+        utxo_validation: true,
+        ..Config::local_node()
+    };
 
     let srv = FuelService::new_node(node_config.clone()).await.unwrap();
     let client = FuelClient::from(srv.bound_address);

@@ -1,7 +1,9 @@
 use fuel_core::{
     chain_config::{
         CoinConfig,
+        CoinConfigGenerator,
         StateConfig,
+        StateReader,
     },
     database::Database,
     service::{
@@ -21,15 +23,22 @@ use fuel_core_client::client::{
     },
     FuelClient,
 };
-use fuel_core_types::fuel_asm::*;
+use fuel_core_types::{
+    fuel_asm::*,
+    fuel_tx::TxId,
+};
 use rstest::rstest;
 
 async fn setup_service(configs: Vec<CoinConfig>) -> FuelService {
-    let mut config = Config::local_node();
-    config.chain_conf.initial_state = Some(StateConfig {
-        coins: Some(configs),
+    let state = StateConfig {
+        coins: configs,
         ..Default::default()
-    });
+    };
+
+    let config = Config {
+        state_reader: StateReader::in_memory(state),
+        ..Config::local_node()
+    };
 
     FuelService::from_database(Database::default(), config)
         .await
@@ -39,20 +48,20 @@ async fn setup_service(configs: Vec<CoinConfig>) -> FuelService {
 #[tokio::test]
 async fn coin() {
     // setup test data in the node
-    let tx_index = Default::default();
-    let output_index = 0;
-    let utxo_id = UtxoId::new(tx_index, output_index);
+    let output_index = 5;
+    let tx_id = TxId::new([1u8; 32]);
+    let coin = CoinConfig {
+        output_index,
+        tx_id,
+        ..Default::default()
+    };
 
     // setup server & client
-    let srv = setup_service(vec![CoinConfig {
-        tx_id: Some(tx_index),
-        output_index: Some(output_index),
-        ..Default::default()
-    }])
-    .await;
+    let srv = setup_service(vec![coin]).await;
     let client = FuelClient::from(srv.bound_address);
 
     // run test
+    let utxo_id = UtxoId::new(tx_id, output_index);
     let coin = client.coin(&utxo_id).await.unwrap();
     assert!(coin.is_some());
 }
@@ -66,11 +75,12 @@ async fn first_5_coins(
     let owner = Address::default();
 
     // setup test data in the node
+    let mut coin_generator = CoinConfigGenerator::new();
     let coins: Vec<_> = (1..10usize)
         .map(|i| CoinConfig {
             owner,
             amount: i as Word,
-            ..Default::default()
+            ..coin_generator.generate()
         })
         .collect();
 
@@ -101,12 +111,13 @@ async fn only_asset_id_filtered_coins() {
     let asset_id = AssetId::new([1u8; 32]);
 
     // setup test data in the node
+    let mut coin_generator = CoinConfigGenerator::new();
     let coins: Vec<_> = (1..10usize)
         .map(|i| CoinConfig {
             owner,
             amount: i as Word,
             asset_id: if i <= 5 { asset_id } else { Default::default() },
-            ..Default::default()
+            ..coin_generator.generate()
         })
         .collect();
 
@@ -144,6 +155,7 @@ async fn get_coins_forwards_backwards(
             owner,
             amount: i as Word,
             asset_id,
+            output_index: i as u8,
             ..Default::default()
         })
         .collect();

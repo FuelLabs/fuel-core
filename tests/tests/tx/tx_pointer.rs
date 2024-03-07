@@ -41,7 +41,7 @@ async fn tx_pointer_set_from_genesis_for_coin_and_contract_inputs() {
     // setup genesis contract
     let contract_tx_pointer = TxPointer::new(7.into(), rng.gen());
     let (_, contract_id) =
-        test_builder.setup_contract(vec![], None, None, Some(contract_tx_pointer));
+        test_builder.setup_contract(vec![], vec![], Some(contract_tx_pointer));
 
     // setup genesis coin
     let coin_tx_pointer = TxPointer::new(starting_block, rng.gen());
@@ -52,17 +52,17 @@ async fn tx_pointer_set_from_genesis_for_coin_and_contract_inputs() {
 
     // add coin to genesis block
     test_builder.initial_coins.push(CoinConfig {
-        tx_id: Some(*coin_utxo_id.tx_id()),
-        output_index: Some(coin_utxo_id.output_index()),
-        tx_pointer_block_height: Some(coin_tx_pointer.block_height()),
-        tx_pointer_tx_idx: Some(coin_tx_pointer.tx_index()),
+        tx_id: *coin_utxo_id.tx_id(),
+        output_index: coin_utxo_id.output_index(),
+        tx_pointer_block_height: coin_tx_pointer.block_height(),
+        tx_pointer_tx_idx: coin_tx_pointer.tx_index(),
         owner,
         amount,
         asset_id: Default::default(),
     });
 
     // set starting block >= tx_pointer.block_height()
-    test_builder.starting_block = Some(starting_block);
+    test_builder.starting_block = starting_block;
 
     // construct a transaction that uses both the coin and contract from genesis,
     // with the tx_pointer's left as null
@@ -108,10 +108,10 @@ async fn tx_pointer_set_from_previous_block() {
     let block_height = 40;
 
     // setup genesis contract
-    let (_, contract_id) = test_builder.setup_contract(vec![], None, None, None);
+    let (_, contract_id) = test_builder.setup_contract(vec![], vec![], None);
 
     // set starting block >= tx_pointer.block_height()
-    test_builder.starting_block = Some(block_height.into());
+    test_builder.starting_block = block_height.into();
 
     // setup genesis coin
     let coin_utxo_id: UtxoId = rng.gen();
@@ -184,10 +184,10 @@ async fn tx_pointer_unset_when_utxo_validation_disabled() {
     let block_height = 40u32;
 
     // setup genesis contract
-    let (_, contract_id) = test_builder.setup_contract(vec![], None, None, None);
+    let (_, contract_id) = test_builder.setup_contract(vec![], vec![], None);
 
     // set starting block >= tx_pointer.block_height()
-    test_builder.starting_block = Some(block_height.into());
+    test_builder.starting_block = block_height.into();
     test_builder.utxo_validation = false;
 
     let secret_key: SecretKey = SecretKey::random(&mut rng);

@@ -127,7 +127,7 @@ where
     type InnerError = StorageError;
 }
 
-impl<'a, Database> GenesisCommitment for ContractRef<&'a mut Database>
+impl<'a, Database> GenesisCommitment for ContractRef<&'a Database>
 where
     Database: ContractStorageTrait,
     anyhow::Error: From<Database::InnerError>,
@@ -143,12 +143,12 @@ where
             .utxo_id();
 
         let state_root = self
-            .database()
+            .database
             .storage::<ContractsState>()
             .root(&contract_id)?;
 
         let balance_root = self
-            .database()
+            .database
             .storage::<ContractsAssets>()
             .root(&contract_id)?;
 

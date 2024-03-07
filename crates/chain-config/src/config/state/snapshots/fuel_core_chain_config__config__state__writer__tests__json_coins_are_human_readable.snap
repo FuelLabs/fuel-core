@@ -1,0 +1,22 @@
+---
+source: crates/chain-config/src/config/state/writer.rs
+expression: encoded_json
+---
+{
+  "coins": [
+    {
+      "tx_id": "0101010101010101010101010101010101010101010101010101010101010101",
+      "output_index": 2,
+      "tx_pointer_block_height": 3,
+      "tx_pointer_tx_idx": 4,
+      "owner": "0606060606060606060606060606060606060606060606060606060606060606",
+      "amount": 7,
+      "asset_id": "0808080808080808080808080808080808080808080808080808080808080808"
+    }
+  ],
+  "messages": [],
+  "contracts": [],
+  "contract_state": [],
+  "contract_balance": [],
+  "block_height": 0
+}

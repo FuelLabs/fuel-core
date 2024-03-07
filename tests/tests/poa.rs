@@ -114,7 +114,7 @@ mod p2p {
         let pub_key = Input::owner(&secret.public_key());
 
         let mut config = Config::local_node();
-        config.chain_conf.consensus = ConsensusConfig::PoA {
+        config.chain_config.consensus = ConsensusConfig::PoA {
             signing_key: pub_key,
         };
 

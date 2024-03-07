@@ -2,6 +2,8 @@ use clap::ValueEnum;
 use fuel_core_chain_config::{
     default_consensus_dev_key,
     ChainConfig,
+    StateConfig,
+    StateReader,
 };
 use fuel_core_types::{
     blockchain::primitives::SecretKeyWrapper,
@@ -12,7 +14,6 @@ use std::{
         Ipv4Addr,
         SocketAddr,
     },
-    path::PathBuf,
     time::Duration,
 };
 use strum_macros::{
@@ -34,14 +35,15 @@ pub use fuel_core_consensus_module::RelayerConsensusConfig;
 pub use fuel_core_importer;
 pub use fuel_core_poa::Trigger;
 
+use crate::combined_database::CombinedDatabaseConfig;
+
 #[derive(Clone, Debug)]
 pub struct Config {
     pub addr: SocketAddr,
     pub api_request_timeout: Duration,
-    pub max_database_cache_size: usize,
-    pub database_path: PathBuf,
-    pub database_type: DbType,
-    pub chain_conf: ChainConfig,
+    pub combined_db_config: CombinedDatabaseConfig,
+    pub chain_config: ChainConfig,
+    pub state_reader: StateReader,
     /// When `true`:
     /// - Enables manual block production.
     /// - Enables debugger endpoint.
@@ -73,14 +75,15 @@ pub struct Config {
 
 impl Config {
     pub fn local_node() -> Self {
-        let chain_conf = ChainConfig::local_testnet();
-        let block_importer = fuel_core_importer::Config::new(&chain_conf);
+        let chain_config = ChainConfig::local_testnet();
+        let state_config = StateConfig::local_testnet();
+        let block_importer = fuel_core_importer::Config::new(&chain_config);
+        let state_reader = StateReader::in_memory(state_config.clone());
+
         let utxo_validation = false;
         let min_gas_price = 0;
 
-        Self {
-            addr: SocketAddr::new(Ipv4Addr::new(127, 0, 0, 1).into(), 0),
-            api_request_timeout: Duration::from_secs(60),
+        let combined_db_config = CombinedDatabaseConfig {
             // Set the cache for tests = 10MB
             max_database_cache_size: 10 * 1024 * 1024,
             database_path: Default::default(),
@@ -88,13 +91,20 @@ impl Config {
             database_type: DbType::RocksDb,
             #[cfg(not(feature = "rocksdb"))]
             database_type: DbType::InMemory,
+        };
+
+        Self {
+            addr: SocketAddr::new(Ipv4Addr::new(127, 0, 0, 1).into(), 0),
+            api_request_timeout: Duration::from_secs(60),
+            combined_db_config,
             debug: true,
-            chain_conf: chain_conf.clone(),
+            chain_config: chain_config.clone(),
+            state_reader,
             block_production: Trigger::Instant,
             vm: Default::default(),
             utxo_validation,
             txpool: fuel_core_txpool::Config {
-                chain_config: chain_conf,
+                chain_config,
                 min_gas_price,
                 utxo_validation,
                 transaction_ttl: Duration::from_secs(60 * 100000000),
@@ -129,9 +139,9 @@ impl Config {
             self.utxo_validation = true;
         }
 
-        if self.txpool.chain_config != self.chain_conf {
+        if self.txpool.chain_config != self.chain_config {
             tracing::warn!("The `ChainConfig` of `TxPool` was inconsistent");
-            self.txpool.chain_config = self.chain_conf.clone();
+            self.txpool.chain_config = self.chain_config.clone();
         }
 
         if self.txpool.min_gas_price != self.block_producer.gas_price {
@@ -160,10 +170,10 @@ impl From<&Config> for fuel_core_poa::Config {
     fn from(config: &Config) -> Self {
         fuel_core_poa::Config {
             trigger: config.block_production,
-            block_gas_limit: config.chain_conf.block_gas_limit,
+            block_gas_limit: config.chain_config.block_gas_limit,
             signing_key: config.consensus_key.clone(),
             metrics: false,
-            consensus_params: config.chain_conf.consensus_parameters.clone(),
+            consensus_params: config.chain_config.consensus_parameters.clone(),
             min_connected_reserved_peers: config.min_connected_reserved_peers,
             time_until_synced: config.time_until_synced,
         }

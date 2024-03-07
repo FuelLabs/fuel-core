@@ -8,6 +8,13 @@ use crate::database::{
 };
 use fuel_core_storage::Result as StorageResult;
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct CombinedDatabaseConfig {
+    pub database_path: PathBuf,
+    pub database_type: DbType,
+    pub max_database_cache_size: usize,
+}
+
 /// A database that combines the on-chain, off-chain and relayer databases into one entity.
 #[derive(Default, Clone)]
 pub struct CombinedDatabase {
@@ -30,6 +37,14 @@ impl CombinedDatabase {
     }
 
     #[cfg(feature = "rocksdb")]
+    pub fn prune(path: &std::path::Path) -> DatabaseResult<()> {
+        Database::<OnChain>::prune(path)?;
+        Database::<OffChain>::prune(path)?;
+        Database::<Relayer>::prune(path)?;
+        Ok(())
+    }
+
+    #[cfg(feature = "rocksdb")]
     pub fn open(
         path: &std::path::Path,
         capacity: usize,
@@ -43,6 +58,36 @@ impl CombinedDatabase {
             off_chain,
             relayer,
         })
+    }
+
+    pub fn from_config(config: &CombinedDatabaseConfig) -> DatabaseResult<Self> {
+        let combined_database = match config.database_type {
+            #[cfg(feature = "rocksdb")]
+            DbType::RocksDb => {
+                // use a default tmp rocksdb if no path is provided
+                if config.database_path.as_os_str().is_empty() {
+                    tracing::warn!(
+                        "No RocksDB path configured, initializing database with a tmp directory"
+                    );
+                    CombinedDatabase::default()
+                } else {
+                    tracing::info!(
+                        "Opening database {:?} with cache size \"{}\"",
+                        config.database_path,
+                        config.max_database_cache_size
+                    );
+                    CombinedDatabase::open(
+                        &config.database_path,
+                        config.max_database_cache_size,
+                    )?
+                }
+            }
+            DbType::InMemory => CombinedDatabase::in_memory(),
+            #[cfg(not(feature = "rocksdb"))]
+            _ => CombinedDatabase::in_memory(),
+        };
+
+        Ok(combined_database)
     }
 
     pub fn in_memory() -> Self {

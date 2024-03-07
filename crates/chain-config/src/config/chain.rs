@@ -1,8 +1,3 @@
-use bech32::{
-    ToBase32,
-    Variant::Bech32m,
-};
-use core::str::FromStr;
 use fuel_core_storage::MerkleRoot;
 use fuel_core_types::{
     fuel_crypto::Hasher,
@@ -10,16 +5,9 @@ use fuel_core_types::{
         ConsensusParameters,
         GasCosts,
         TxParameters,
-        UtxoId,
     },
-    fuel_types::{
-        Address,
-        AssetId,
-        Bytes32,
-    },
-    fuel_vm::SecretKey,
+    fuel_types::AssetId,
 };
-use itertools::Itertools;
 use serde::{
     Deserialize,
     Serialize,
@@ -29,24 +17,20 @@ use serde_with::{
     skip_serializing_none,
 };
 #[cfg(feature = "std")]
-use std::{
-    io::ErrorKind,
-    path::PathBuf,
-};
+use std::fs::File;
+#[cfg(feature = "std")]
+use std::path::Path;
 
 use crate::{
-    config::{
-        coin::CoinConfig,
-        state::StateConfig,
-    },
     genesis::GenesisCommitment,
     ConsensusConfig,
 };
 
-// Fuel Network human-readable part for bech32 encoding
-pub const FUEL_BECH32_HRP: &str = "fuel";
+#[cfg(feature = "std")]
+use crate::SnapshotMetadata;
+
 pub const LOCAL_TESTNET: &str = "local_testnet";
-pub const TESTNET_INITIAL_BALANCE: u64 = 10_000_000;
+pub const CHAIN_CONFIG_FILENAME: &str = "chain_config.json";
 
 #[serde_as]
 // TODO: Remove not consensus/network fields from `ChainConfig` or create a new config only
@@ -56,8 +40,6 @@ pub const TESTNET_INITIAL_BALANCE: u64 = 10_000_000;
 pub struct ChainConfig {
     pub chain_name: String,
     pub block_gas_limit: u64,
-    #[serde(default)]
-    pub initial_state: Option<StateConfig>,
     pub consensus_parameters: ConsensusParameters,
     pub consensus: ConsensusConfig,
 }
@@ -68,7 +50,6 @@ impl Default for ChainConfig {
             chain_name: "local".into(),
             block_gas_limit: TxParameters::DEFAULT.max_gas_per_tx * 10, /* TODO: Pick a sensible default */
             consensus_parameters: ConsensusParameters::default(),
-            initial_state: None,
             consensus: ConsensusConfig::default_poa(),
         }
     }
@@ -77,116 +58,41 @@ impl Default for ChainConfig {
 impl ChainConfig {
     pub const BASE_ASSET: AssetId = AssetId::zeroed();
 
+    #[cfg(feature = "std")]
+    pub fn load(path: impl AsRef<Path>) -> anyhow::Result<Self> {
+        let path = path.as_ref();
+        let file = std::fs::File::open(path)?;
+        serde_json::from_reader(&file).map_err(|e| {
+            anyhow::Error::new(e).context(format!(
+                "an error occurred while loading the chain state file: {:?}",
+                path.to_str()
+            ))
+        })
+    }
+
+    #[cfg(feature = "std")]
+    pub fn from_snapshot_metadata(
+        snapshot_metadata: &SnapshotMetadata,
+    ) -> anyhow::Result<Self> {
+        Self::load(snapshot_metadata.chain_config())
+    }
+
+    #[cfg(feature = "std")]
+    pub fn write(&self, path: impl AsRef<Path>) -> anyhow::Result<()> {
+        use anyhow::Context;
+
+        let state_writer = File::create(path)?;
+
+        serde_json::to_writer_pretty(state_writer, self)
+            .context("failed to dump chain parameters snapshot to JSON")?;
+
+        Ok(())
+    }
+
     pub fn local_testnet() -> Self {
-        // endow some preset accounts with an initial balance
-        tracing::info!("Initial Accounts");
-        let secrets = [
-            "0xde97d8624a438121b86a1956544bd72ed68cd69f2c99555b08b1e8c51ffd511c",
-            "0x37fa81c84ccd547c30c176b118d5cb892bdb113e8e80141f266519422ef9eefd",
-            "0x862512a2363db2b3a375c0d4bbbd27172180d89f23f2e259bac850ab02619301",
-            "0x976e5c3fa620092c718d852ca703b6da9e3075b9f2ecb8ed42d9f746bf26aafb",
-            "0x7f8a325504e7315eda997db7861c9447f5c3eff26333b20180475d94443a10c6",
-        ];
-        let initial_coins = secrets
-            .into_iter()
-            .map(|secret| {
-                let secret = SecretKey::from_str(secret).expect("Expected valid secret");
-                let address = Address::from(*secret.public_key().hash());
-                let bech32_data = Bytes32::new(*address).to_base32();
-                let bech32_encoding =
-                    bech32::encode(FUEL_BECH32_HRP, bech32_data, Bech32m).unwrap();
-                tracing::info!(
-                    "PrivateKey({:#x}), Address({:#x} [bech32: {}]), Balance({})",
-                    secret,
-                    address,
-                    bech32_encoding,
-                    TESTNET_INITIAL_BALANCE
-                );
-                Self::initial_coin(secret, TESTNET_INITIAL_BALANCE, None)
-            })
-            .collect_vec();
-
         Self {
             chain_name: LOCAL_TESTNET.to_string(),
-            initial_state: Some(StateConfig {
-                coins: Some(initial_coins),
-                ..StateConfig::default()
-            }),
             ..Default::default()
-        }
-    }
-
-    #[cfg(feature = "random")]
-    pub fn random_testnet() -> Self {
-        tracing::info!("Initial Accounts");
-        let mut rng = rand::thread_rng();
-        let initial_coins = (0..5)
-            .map(|_| {
-                let secret = SecretKey::random(&mut rng);
-                let address = Address::from(*secret.public_key().hash());
-                let bech32_data = Bytes32::new(*address).to_base32();
-                let bech32_encoding =
-                    bech32::encode(FUEL_BECH32_HRP, bech32_data, Bech32m).unwrap();
-                tracing::info!(
-                    "PrivateKey({:#x}), Address({:#x} [bech32: {}]), Balance({})",
-                    secret,
-                    address,
-                    bech32_encoding,
-                    TESTNET_INITIAL_BALANCE
-                );
-                Self::initial_coin(secret, TESTNET_INITIAL_BALANCE, None)
-            })
-            .collect_vec();
-
-        Self {
-            chain_name: LOCAL_TESTNET.to_string(),
-            initial_state: Some(StateConfig {
-                coins: Some(initial_coins),
-                ..StateConfig::default()
-            }),
-            ..Default::default()
-        }
-    }
-
-    pub fn initial_coin(
-        secret: SecretKey,
-        amount: u64,
-        utxo_id: Option<UtxoId>,
-    ) -> CoinConfig {
-        let address = Address::from(*secret.public_key().hash());
-
-        CoinConfig {
-            tx_id: utxo_id.as_ref().map(|u| *u.tx_id()),
-            output_index: utxo_id.as_ref().map(|u| u.output_index()),
-            tx_pointer_block_height: None,
-            tx_pointer_tx_idx: None,
-            owner: address,
-            amount,
-            asset_id: Default::default(),
-        }
-    }
-}
-
-#[cfg(feature = "std")]
-impl FromStr for ChainConfig {
-    type Err = std::io::Error;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s {
-            LOCAL_TESTNET => Ok(Self::local_testnet()),
-            s => {
-                // Attempt to load chain config from path
-                let path = PathBuf::from(s.to_string());
-                let contents = std::fs::read(path)?;
-                serde_json::from_slice(&contents).map_err(|e| {
-                    std::io::Error::new(
-                        ErrorKind::InvalidData,
-                        anyhow::Error::new(e).context(format!(
-                            "an error occurred while loading the chain config file {s}"
-                        )),
-                    )
-                })
-            }
         }
     }
 }
@@ -199,8 +105,6 @@ impl GenesisCommitment for ChainConfig {
         let ChainConfig {
             chain_name,
             block_gas_limit,
-            // Skip the `initial_state` bec
-            initial_state: _,
             consensus_parameters,
             consensus,
         } = self;
@@ -244,5 +148,43 @@ impl GenesisCommitment for ConsensusConfig {
         let hash = Hasher::default().chain(bytes).finalize();
 
         Ok(hash.into())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    #[cfg(feature = "std")]
+    use std::env::temp_dir;
+
+    use super::ChainConfig;
+
+    #[cfg(feature = "std")]
+    #[test]
+    fn can_roundtrip_write_and_read() {
+        let tmp_dir = temp_dir();
+        let file = tmp_dir.join("config.json");
+
+        let disk_config = ChainConfig::local_testnet();
+        disk_config.write(&file).unwrap();
+
+        let load_config = ChainConfig::load(&file).unwrap();
+
+        assert_eq!(disk_config, load_config);
+    }
+
+    #[test]
+    fn snapshot_local_testnet_config() {
+        let config = ChainConfig::local_testnet();
+        let json = serde_json::to_string_pretty(&config).unwrap();
+        insta::assert_snapshot!(json);
+    }
+
+    #[test]
+    fn can_roundtrip_serialize_local_testnet_config() {
+        let config = ChainConfig::local_testnet();
+        let json = serde_json::to_string(&config).unwrap();
+        let deserialized_config: ChainConfig =
+            serde_json::from_str(json.as_str()).unwrap();
+        assert_eq!(config, deserialized_config);
     }
 }

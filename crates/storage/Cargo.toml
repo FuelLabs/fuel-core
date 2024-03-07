@@ -25,7 +25,7 @@ fuel-core-types = { workspace = true, default-features = false, features = [
 ] }
 fuel-vm-private = { workspace = true, default-features = false }
 impl-tools = "0.10"
-itertools = { workspace = true }
+itertools = { workspace = true, features = ["use_alloc"] }
 mockall = { workspace = true, optional = true }
 paste = "1"
 postcard = { workspace = true, features = ["alloc"] }
