@@ -1,6 +1,7 @@
 use fuel_core::{
     chain_config::{
         CoinConfig,
+        CoinConfigGenerator,
         MessageConfig,
         StateConfig,
         StateReader,
@@ -39,6 +40,7 @@ async fn balance() {
     let asset_id = AssetId::BASE;
 
     // setup config
+    let mut coin_generator = CoinConfigGenerator::new();
     let state_config = StateConfig {
         contracts: vec![],
         coins: vec![
@@ -51,7 +53,7 @@ async fn balance() {
             owner,
             amount,
             asset_id,
-            ..Default::default()
+            ..coin_generator.generate()
         })
         .collect(),
         messages: vec![(owner, 60), (owner, 90)]
@@ -144,6 +146,7 @@ async fn first_5_balances() {
     let all_owners = [Address::default(), owner, Address::from([20u8; 32])];
     let coins = {
         // setup all coins for all owners
+        let mut coin_generator = CoinConfigGenerator::new();
         let mut coins = vec![];
         for owner in all_owners.iter() {
             coins.extend(
@@ -161,7 +164,7 @@ async fn first_5_balances() {
                         owner: *owner,
                         amount,
                         asset_id,
-                        ..Default::default()
+                        ..coin_generator.generate()
                     }),
             );
         }

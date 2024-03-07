@@ -11,7 +11,6 @@ use fuel_core_storage::{
     Result as StorageResult,
 };
 use fuel_core_types::{
-    fuel_tx::UtxoId,
     fuel_types::{
         Address,
         BlockHeight,
@@ -25,6 +24,7 @@ use serde::{
     Serialize,
 };
 
+use crate::CoinConfigGenerator;
 #[cfg(feature = "std")]
 use crate::SnapshotMetadata;
 
@@ -171,6 +171,8 @@ impl StateConfig {
     pub fn local_testnet() -> Self {
         // endow some preset accounts with an initial balance
         tracing::info!("Initial Accounts");
+
+        let mut coin_generator = CoinConfigGenerator::new();
         let coins = TESTNET_WALLET_SECRETS
             .into_iter()
             .map(|secret| {
@@ -186,7 +188,7 @@ impl StateConfig {
                     bech32_encoding,
                     TESTNET_INITIAL_BALANCE
                 );
-                Self::initial_coin(secret, TESTNET_INITIAL_BALANCE, None)
+                coin_generator.generate_with(secret, TESTNET_INITIAL_BALANCE)
             })
             .collect_vec();
 
@@ -200,6 +202,7 @@ impl StateConfig {
     pub fn random_testnet() -> Self {
         tracing::info!("Initial Accounts");
         let mut rng = rand::thread_rng();
+        let mut coin_generator = CoinConfigGenerator::new();
         let coins = (0..5)
             .map(|_| {
                 let secret = SecretKey::random(&mut rng);
@@ -214,31 +217,13 @@ impl StateConfig {
                     bech32_encoding,
                     TESTNET_INITIAL_BALANCE
                 );
-                Self::initial_coin(secret, TESTNET_INITIAL_BALANCE, None)
+                coin_generator.generate_with(secret, TESTNET_INITIAL_BALANCE)
             })
             .collect_vec();
 
         Self {
             coins,
             ..StateConfig::default()
-        }
-    }
-
-    pub fn initial_coin(
-        secret: SecretKey,
-        amount: u64,
-        utxo_id: Option<UtxoId>,
-    ) -> CoinConfig {
-        let address = Address::from(*secret.public_key().hash());
-
-        CoinConfig {
-            tx_id: utxo_id.as_ref().map(|u| *u.tx_id()),
-            output_index: utxo_id.as_ref().map(|u| u.output_index()),
-            tx_pointer_block_height: None,
-            tx_pointer_tx_idx: None,
-            owner: address,
-            amount,
-            asset_id: Default::default(),
         }
     }
 }

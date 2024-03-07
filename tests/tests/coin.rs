@@ -1,6 +1,7 @@
 use fuel_core::{
     chain_config::{
         CoinConfig,
+        CoinConfigGenerator,
         StateConfig,
         StateReader,
     },
@@ -50,8 +51,8 @@ async fn coin() {
     let output_index = 5;
     let tx_id = TxId::new([1u8; 32]);
     let coin = CoinConfig {
-        output_index: Some(output_index),
-        tx_id: Some(tx_id),
+        output_index,
+        tx_id,
         ..Default::default()
     };
 
@@ -74,11 +75,12 @@ async fn first_5_coins(
     let owner = Address::default();
 
     // setup test data in the node
+    let mut coin_generator = CoinConfigGenerator::new();
     let coins: Vec<_> = (1..10usize)
         .map(|i| CoinConfig {
             owner,
             amount: i as Word,
-            ..Default::default()
+            ..coin_generator.generate()
         })
         .collect();
 
@@ -109,12 +111,13 @@ async fn only_asset_id_filtered_coins() {
     let asset_id = AssetId::new([1u8; 32]);
 
     // setup test data in the node
+    let mut coin_generator = CoinConfigGenerator::new();
     let coins: Vec<_> = (1..10usize)
         .map(|i| CoinConfig {
             owner,
             amount: i as Word,
             asset_id: if i <= 5 { asset_id } else { Default::default() },
-            ..Default::default()
+            ..coin_generator.generate()
         })
         .collect();
 
@@ -152,6 +155,7 @@ async fn get_coins_forwards_backwards(
             owner,
             amount: i as Word,
             asset_id,
+            output_index: i as u8,
             ..Default::default()
         })
         .collect();

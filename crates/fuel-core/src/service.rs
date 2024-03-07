@@ -120,7 +120,13 @@ impl FuelService {
         config: Config,
     ) -> anyhow::Result<Self> {
         let service = Self::new(combined_database, config)?;
-        service.runner.start_and_await().await?;
+        let state = service.runner.start_and_await().await?;
+
+        if !state.started() {
+            return Err(anyhow::anyhow!(
+                "The state of the service is not started: {state:?}"
+            ));
+        }
         Ok(service)
     }
 

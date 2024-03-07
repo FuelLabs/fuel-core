@@ -52,16 +52,16 @@ async fn calling_the_contract_with_enabled_utxo_validation_is_successful() {
     let state_config = StateConfig {
         coins: vec![
             CoinConfig {
-                tx_id: Some(*utxo_id_1.tx_id()),
-                output_index: Some(utxo_id_1.output_index()),
+                tx_id: *utxo_id_1.tx_id(),
+                output_index: utxo_id_1.output_index(),
                 owner,
                 amount,
                 asset_id: AssetId::BASE,
                 ..Default::default()
             },
             CoinConfig {
-                tx_id: Some(*utxo_id_2.tx_id()),
-                output_index: Some(utxo_id_2.output_index()),
+                tx_id: *utxo_id_2.tx_id(),
+                output_index: utxo_id_2.output_index(),
                 owner,
                 amount,
                 asset_id: AssetId::BASE,
@@ -149,7 +149,7 @@ async fn test_contract_balance(
 ) {
     let mut test_builder = TestSetupBuilder::new(SEED);
     let (_, contract_id) =
-        test_builder.setup_contract(vec![], vec![(asset, test_balance)], None, None);
+        test_builder.setup_contract(vec![], vec![(asset, test_balance)], None);
 
     // spin up node
     let TestContext {
@@ -177,7 +177,7 @@ async fn test_5_contract_balances(
         (AssetId::new([2u8; 32]), 400),
         (AssetId::new([3u8; 32]), 700),
     ];
-    let (_, contract_id) = test_builder.setup_contract(vec![], balances, None, None);
+    let (_, contract_id) = test_builder.setup_contract(vec![], balances, None);
 
     let TestContext {
         client,

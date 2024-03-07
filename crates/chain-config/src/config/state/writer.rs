@@ -506,10 +506,10 @@ mod tests {
         let filepath = dir.path().join("some_file.json");
         let mut encoder = StateWriter::json(&filepath);
         let coin = CoinConfig {
-            tx_id: Some([1u8; 32].into()),
-            output_index: Some(2),
-            tx_pointer_block_height: Some(BlockHeight::new(3)),
-            tx_pointer_tx_idx: Some(4),
+            tx_id: [1u8; 32].into(),
+            output_index: 2,
+            tx_pointer_block_height: BlockHeight::new(3),
+            tx_pointer_tx_idx: 4,
             owner: [6u8; 32].into(),
             amount: 7,
             asset_id: [8u8; 32].into(),
@@ -560,10 +560,10 @@ mod tests {
             contract_id: [1u8; 32].into(),
             code: [2u8; 32].into(),
             salt: [3u8; 32].into(),
-            tx_id: Some([4u8; 32].into()),
-            output_index: Some(5),
-            tx_pointer_block_height: Some(BlockHeight::new(6)),
-            tx_pointer_tx_idx: Some(7),
+            tx_id: [4u8; 32].into(),
+            output_index: 5,
+            tx_pointer_block_height: BlockHeight::new(6),
+            tx_pointer_tx_idx: 7,
         };
 
         // when

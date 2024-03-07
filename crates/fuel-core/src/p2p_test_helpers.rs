@@ -1,7 +1,10 @@
 //! # Helpers for creating networks of nodes
 
 use crate::{
-    chain_config::StateConfig,
+    chain_config::{
+        CoinConfig,
+        CoinConfigGenerator,
+    },
     database::Database,
     p2p::Multiaddr,
     service::{
@@ -37,7 +40,6 @@ use fuel_core_types::{
         TransactionBuilder,
         TxId,
         UniqueIdentifier,
-        UtxoId,
     },
     fuel_types::{
         Address,
@@ -51,7 +53,6 @@ use futures::StreamExt;
 use itertools::Itertools;
 use rand::{
     rngs::StdRng,
-    Rng,
     SeedableRng,
 };
 use std::{
@@ -186,6 +187,7 @@ pub async fn make_nodes(
 
     let mut rng = StdRng::seed_from_u64(11);
 
+    let mut coin_generator = CoinConfigGenerator::new();
     let txs_coins: Vec<_> = producers
         .iter()
         .map(|p| {
@@ -193,9 +195,12 @@ pub async fn make_nodes(
             let all: Vec<_> = (0..num_test_txs)
                 .map(|_| {
                     let secret = SecretKey::random(&mut rng);
-                    let utxo_id: UtxoId = rng.gen();
-                    let initial_coin =
-                        StateConfig::initial_coin(secret, 10000, Some(utxo_id));
+                    let initial_coin = CoinConfig {
+                        // set idx to prevent overlapping utxo_ids when
+                        // merging with existing coins from config
+                        output_index: 2,
+                        ..coin_generator.generate_with(secret, 10000)
+                    };
                     let tx = TransactionBuilder::script(
                         vec![op::ret(RegId::ONE)].into_iter().collect(),
                         vec![],
@@ -203,7 +208,7 @@ pub async fn make_nodes(
                     .script_gas_limit(100000)
                     .add_unsigned_coin_input(
                         secret,
-                        utxo_id,
+                        initial_coin.utxo_id(),
                         initial_coin.amount,
                         initial_coin.asset_id,
                         Default::default(),

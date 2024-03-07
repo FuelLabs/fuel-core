@@ -24,7 +24,10 @@ use rand::{
 
 mod coin {
     use super::*;
-    use fuel_core::chain_config::StateReader;
+    use fuel_core::chain_config::{
+        CoinConfigGenerator,
+        StateReader,
+    };
     use fuel_core_client::client::types::CoinType;
     use fuel_core_types::fuel_crypto::SecretKey;
     use rand::Rng;
@@ -35,6 +38,7 @@ mod coin {
         asset_id_b: AssetId,
     ) -> TestContext {
         // setup config
+        let mut coin_generator = CoinConfigGenerator::new();
         let state = StateConfig {
             contracts: vec![],
             coins: vec![
@@ -50,7 +54,7 @@ mod coin {
                 owner,
                 amount,
                 asset_id,
-                ..Default::default()
+                ..coin_generator.generate()
             })
             .collect(),
             messages: vec![],
@@ -486,7 +490,10 @@ mod message_coin {
 
 // It is combination of coins and deposit coins test cases.
 mod all_coins {
-    use fuel_core::chain_config::StateReader;
+    use fuel_core::chain_config::{
+        CoinConfigGenerator,
+        StateReader,
+    };
     use fuel_core_client::client::types::CoinType;
     use fuel_core_types::blockchain::primitives::DaBlockHeight;
 
@@ -496,6 +503,7 @@ mod all_coins {
         let asset_id_a = AssetId::BASE;
 
         // setup config
+        let mut coin_generator = CoinConfigGenerator::new();
         let state = StateConfig {
             contracts: vec![],
             coins: vec![
@@ -509,7 +517,7 @@ mod all_coins {
                 owner,
                 amount,
                 asset_id,
-                ..Default::default()
+                ..coin_generator.generate()
             })
             .collect(),
             messages: vec![(owner, 50), (owner, 150)]

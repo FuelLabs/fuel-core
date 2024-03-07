@@ -13,6 +13,7 @@ use fuel_core_types::{
         BlockHeight,
         Bytes32,
     },
+    fuel_vm::SecretKey,
 };
 use serde::{
     Deserialize,
@@ -22,33 +23,60 @@ use serde::{
 #[derive(Default, Clone, Debug, Deserialize, Serialize, Eq, PartialEq)]
 pub struct CoinConfig {
     /// auto-generated if None
-    pub tx_id: Option<Bytes32>,
-    pub output_index: Option<u8>,
+    pub tx_id: Bytes32,
+    pub output_index: u8,
     /// used if coin is forked from another chain to preserve id & tx_pointer
-    pub tx_pointer_block_height: Option<BlockHeight>,
+    pub tx_pointer_block_height: BlockHeight,
     /// used if coin is forked from another chain to preserve id & tx_pointer
     /// The index of the originating tx within `tx_pointer_block_height`
-    pub tx_pointer_tx_idx: Option<u16>,
+    pub tx_pointer_tx_idx: u16,
     pub owner: Address,
     pub amount: u64,
     pub asset_id: AssetId,
 }
 
-impl CoinConfig {
-    // TODO: Remove https://github.com/FuelLabs/fuel-core/issues/1668
-    pub fn utxo_id(&self) -> Option<UtxoId> {
-        match (self.tx_id, self.output_index) {
-            (Some(tx_id), Some(output_index)) => Some(UtxoId::new(tx_id, output_index)),
-            _ => None,
-        }
+/// Generates a new coin config with a unique utxo id for testing
+#[derive(Default, Debug)]
+pub struct CoinConfigGenerator {
+    count: usize,
+}
+
+impl CoinConfigGenerator {
+    pub fn new() -> Self {
+        Self { count: 0 }
     }
 
-    // TODO: Remove https://github.com/FuelLabs/fuel-core/issues/1668
-    pub fn tx_pointer(&self) -> TxPointer {
-        match (self.tx_pointer_block_height, self.tx_pointer_tx_idx) {
-            (Some(block_height), Some(tx_idx)) => TxPointer::new(block_height, tx_idx),
-            _ => TxPointer::default(),
+    pub fn generate(&mut self) -> CoinConfig {
+        let mut bytes = [0u8; 32];
+        bytes[..std::mem::size_of::<usize>()].copy_from_slice(&self.count.to_be_bytes());
+
+        let config = CoinConfig {
+            tx_id: Bytes32::from(bytes),
+            ..Default::default()
+        };
+        self.count = self.count.checked_add(1).expect("Max coin count reached");
+
+        config
+    }
+
+    pub fn generate_with(&mut self, secret: SecretKey, amount: u64) -> CoinConfig {
+        let owner = Address::from(*secret.public_key().hash());
+
+        CoinConfig {
+            amount,
+            owner,
+            ..self.generate()
         }
+    }
+}
+
+impl CoinConfig {
+    pub fn utxo_id(&self) -> UtxoId {
+        UtxoId::new(self.tx_id, self.output_index)
+    }
+
+    pub fn tx_pointer(&self) -> TxPointer {
+        TxPointer::new(self.tx_pointer_block_height, self.tx_pointer_tx_idx)
     }
 }
 
@@ -56,14 +84,10 @@ impl CoinConfig {
 impl crate::Randomize for CoinConfig {
     fn randomize(mut rng: impl ::rand::Rng) -> Self {
         Self {
-            tx_id: rng
-                .gen::<bool>()
-                .then(|| super::random_bytes_32(&mut rng).into()),
-            output_index: rng.gen::<bool>().then(|| rng.gen()),
-            tx_pointer_block_height: rng
-                .gen::<bool>()
-                .then(|| BlockHeight::new(rng.gen())),
-            tx_pointer_tx_idx: rng.gen::<bool>().then(|| rng.gen()),
+            tx_id: super::random_bytes_32(&mut rng).into(),
+            output_index: rng.gen(),
+            tx_pointer_block_height: rng.gen(),
+            tx_pointer_tx_idx: rng.gen(),
             owner: Address::new(super::random_bytes_32(&mut rng)),
             amount: rng.gen(),
             asset_id: AssetId::new(super::random_bytes_32(rng)),
@@ -87,5 +111,36 @@ impl GenesisCommitment for CompressedCoin {
             .finalize();
 
         Ok(coin_hash)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use fuel_core_types::{
+        fuel_types::Address,
+        fuel_vm::SecretKey,
+    };
+
+    #[test]
+    fn test_generate_unique_utxo_id() {
+        let mut generator = CoinConfigGenerator::new();
+        let config1 = generator.generate();
+        let config2 = generator.generate();
+
+        assert_ne!(config1.utxo_id(), config2.utxo_id());
+    }
+
+    #[test]
+    fn test_generate_with_owner_and_amount() {
+        let mut rng = rand::thread_rng();
+        let secret = SecretKey::random(&mut rng);
+        let amount = 1000;
+
+        let mut generator = CoinConfigGenerator::new();
+        let config = generator.generate_with(secret, amount);
+
+        assert_eq!(config.owner, Address::from(*secret.public_key().hash()));
+        assert_eq!(config.amount, amount);
     }
 }
