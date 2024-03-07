@@ -528,7 +528,7 @@ mod tests {
                 salt,
                 tx_id: rng.gen(),
                 output_index: rng.gen(),
-                tx_pointer_block_height: rng.gen(),
+                tx_pointer_block_height: 0.into(),
                 tx_pointer_tx_idx: rng.gen(),
             }],
             contract_state: vec![contract_state],
