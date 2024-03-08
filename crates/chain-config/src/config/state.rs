@@ -11,6 +11,10 @@ use fuel_core_storage::{
     Result as StorageResult,
 };
 use fuel_core_types::{
+    blockchain::{
+        block::CompressedBlock,
+        primitives::DaBlockHeight,
+    },
     fuel_types::{
         Address,
         BlockHeight,
@@ -70,6 +74,8 @@ pub struct StateConfig {
     pub contract_balance: Vec<ContractBalanceConfig>,
     /// Block height
     pub block_height: BlockHeight,
+    /// Da block height
+    pub da_block_height: DaBlockHeight,
 }
 
 impl StateConfig {
@@ -87,7 +93,7 @@ impl StateConfig {
         let contracts = db.iter_contract_configs().try_collect()?;
         let contract_state = db.iter_contract_state_configs().try_collect()?;
         let contract_balance = db.iter_contract_balance_configs().try_collect()?;
-        let block_height = db.get_block_height()?;
+        let block = db.get_last_block()?;
 
         Ok(Self {
             coins,
@@ -95,7 +101,8 @@ impl StateConfig {
             contracts,
             contract_state,
             contract_balance,
-            block_height,
+            block_height: *block.header().height(),
+            da_block_height: block.header().da_height,
         })
     }
 
@@ -139,6 +146,7 @@ impl StateConfig {
             .try_collect()?;
 
         let block_height = reader.block_height();
+        let da_block_height = reader.da_block_height();
 
         Ok(Self {
             coins,
@@ -147,6 +155,7 @@ impl StateConfig {
             contract_state,
             contract_balance,
             block_height,
+            da_block_height,
         })
     }
 
@@ -156,7 +165,7 @@ impl StateConfig {
         let contracts = db.iter_contract_configs().try_collect()?;
         let contract_state = db.iter_contract_state_configs().try_collect()?;
         let contract_balance = db.iter_contract_balance_configs().try_collect()?;
-        let block_height = db.get_block_height()?;
+        let block = db.get_last_block()?;
 
         Ok(Self {
             coins,
@@ -164,7 +173,8 @@ impl StateConfig {
             contracts,
             contract_state,
             contract_balance,
-            block_height,
+            block_height: *block.header().height(),
+            da_block_height: block.header().da_height,
         })
     }
 
@@ -254,8 +264,8 @@ pub trait ChainStateDb {
     ) -> BoxedIter<StorageResult<ContractBalanceConfig>>;
     /// Returns *all* unspent message configs available in the database.
     fn iter_message_configs(&self) -> BoxedIter<StorageResult<MessageConfig>>;
-    /// Returns the last available block height.
-    fn get_block_height(&self) -> StorageResult<BlockHeight>;
+    /// Returns the last available block.
+    fn get_last_block(&self) -> StorageResult<CompressedBlock>;
 }
 
 pub use reader::{
@@ -294,7 +304,6 @@ mod tests {
     #[test]
     fn roundtrip_parquet_coins() {
         // given
-        use fuel_core_types::fuel_types::BlockHeight;
         let skip_n_groups = 3;
         let temp_dir = tempfile::tempdir().unwrap();
 
@@ -303,7 +312,7 @@ mod tests {
         let mut encoder =
             StateWriter::parquet(&files, writer::ZstdCompressionLevel::Uncompressed)
                 .unwrap();
-        encoder.write_block_height(BlockHeight::new(0)).unwrap();
+        encoder.write_block_data(0u32.into(), 0u64.into()).unwrap();
 
         // when
         let coin_groups =
@@ -324,8 +333,6 @@ mod tests {
     #[test]
     fn roundtrip_parquet_messages() {
         // given
-
-        use fuel_core_types::fuel_types::BlockHeight;
         let skip_n_groups = 3;
         let temp_dir = tempfile::tempdir().unwrap();
 
@@ -333,7 +340,7 @@ mod tests {
         let files = crate::ParquetFiles::snapshot_default(temp_dir.path());
         let mut encoder =
             StateWriter::parquet(&files, writer::ZstdCompressionLevel::Level1).unwrap();
-        encoder.write_block_height(BlockHeight::new(0)).unwrap();
+        encoder.write_block_data(0u32.into(), 0u64.into()).unwrap();
 
         // when
         let message_groups =
@@ -353,8 +360,6 @@ mod tests {
     #[test]
     fn roundtrip_parquet_contracts() {
         // given
-
-        use fuel_core_types::fuel_types::BlockHeight;
         let skip_n_groups = 3;
         let temp_dir = tempfile::tempdir().unwrap();
 
@@ -362,7 +367,7 @@ mod tests {
         let files = crate::ParquetFiles::snapshot_default(temp_dir.path());
         let mut encoder =
             StateWriter::parquet(&files, writer::ZstdCompressionLevel::Level1).unwrap();
-        encoder.write_block_height(BlockHeight::new(0)).unwrap();
+        encoder.write_block_data(0u32.into(), 0u64.into()).unwrap();
 
         // when
         let contract_groups =
@@ -382,8 +387,6 @@ mod tests {
     #[test]
     fn roundtrip_parquet_contract_state() {
         // given
-
-        use fuel_core_types::fuel_types::BlockHeight;
         let skip_n_groups = 3;
         let temp_dir = tempfile::tempdir().unwrap();
 
@@ -391,7 +394,7 @@ mod tests {
         let files = crate::ParquetFiles::snapshot_default(temp_dir.path());
         let mut encoder =
             StateWriter::parquet(&files, writer::ZstdCompressionLevel::Level1).unwrap();
-        encoder.write_block_height(BlockHeight::new(0)).unwrap();
+        encoder.write_block_data(0u32.into(), 0u64.into()).unwrap();
 
         // when
         let contract_state_groups =
@@ -415,8 +418,6 @@ mod tests {
     #[test]
     fn roundtrip_parquet_contract_balance() {
         // given
-
-        use fuel_core_types::fuel_types::BlockHeight;
         let skip_n_groups = 3;
         let temp_dir = tempfile::tempdir().unwrap();
 
@@ -424,7 +425,7 @@ mod tests {
         let files = crate::ParquetFiles::snapshot_default(temp_dir.path());
         let mut encoder =
             StateWriter::parquet(&files, writer::ZstdCompressionLevel::Level1).unwrap();
-        encoder.write_block_height(BlockHeight::new(0)).unwrap();
+        encoder.write_block_data(0u32.into(), 0u64.into()).unwrap();
 
         // when
         let contract_balance_groups =
@@ -449,20 +450,25 @@ mod tests {
     #[test]
     fn roundtrip_parquet_block_height() {
         // given
-        use fuel_core_types::fuel_types::BlockHeight;
         let temp_dir = tempfile::tempdir().unwrap();
         let files = crate::ParquetFiles::snapshot_default(temp_dir.path());
         let mut encoder =
             StateWriter::parquet(&files, writer::ZstdCompressionLevel::Level1).unwrap();
-        let block_height = BlockHeight::new(13);
+        let block_height = 13u32.into();
+        let da_block_height = 14u64.into();
 
         // when
-        encoder.write_block_height(block_height).unwrap();
+        encoder
+            .write_block_data(block_height, da_block_height)
+            .unwrap();
         encoder.close().unwrap();
 
         // then
-        let block_height_decoded = StateReader::parquet(files).unwrap().block_height();
+        let reader = StateReader::parquet(files).unwrap();
+        let block_height_decoded = reader.block_height();
+        let da_block_height_decoded = reader.da_block_height();
         assert_eq!(block_height, block_height_decoded);
+        assert_eq!(da_block_height, da_block_height_decoded);
     }
 
     #[test]
@@ -611,19 +617,24 @@ mod tests {
     #[test]
     fn roundtrip_json_block_height() {
         // given
-        use fuel_core_types::fuel_types::BlockHeight;
         let temp_dir = tempfile::tempdir().unwrap();
         let file = temp_dir.path().join("state_config.json");
-        let block_height = BlockHeight::new(13);
+        let block_height = 13u32.into();
+        let da_block_height = 14u64.into();
         let mut encoder = StateWriter::json(&file);
 
         // when
-        encoder.write_block_height(block_height).unwrap();
+        encoder
+            .write_block_data(block_height, da_block_height)
+            .unwrap();
         encoder.close().unwrap();
 
         // then
-        let block_height_decoded = StateReader::json(&file, 100).unwrap().block_height();
+        let reader = StateReader::json(&file, 100).unwrap();
+        let block_height_decoded = reader.block_height();
+        let da_block_height_decoded = reader.da_block_height();
         assert_eq!(block_height, block_height_decoded);
+        assert_eq!(da_block_height, da_block_height_decoded);
     }
 
     struct GroupGenerator<R> {

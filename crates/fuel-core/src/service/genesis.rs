@@ -40,7 +40,10 @@ use fuel_core_types::{
             ConsensusHeader,
             PartialBlockHeader,
         },
-        primitives::Empty,
+        primitives::{
+            DaBlockHeight,
+            Empty,
+        },
         SealedBlock,
     },
     entities::{
@@ -253,8 +256,18 @@ fn init_contract(
     Ok(())
 }
 
-fn init_da_message(db: &mut Database, msg: MessageConfig) -> anyhow::Result<()> {
+fn init_da_message(
+    db: &mut Database,
+    msg: MessageConfig,
+    da_height: DaBlockHeight,
+) -> anyhow::Result<()> {
     let message: Message = msg.into();
+
+    if message.da_height() > da_height {
+        return Err(anyhow!(
+            "message da_height cannot be greater than genesis da block height"
+        ));
+    }
 
     if db
         .storage::<Messages>()
@@ -396,6 +409,7 @@ mod tests {
             contract_state,
             contract_balance,
             block_height: BlockHeight::from(0u32),
+            da_block_height: Default::default(),
         };
         let state_reader = StateReader::in_memory(state);
 

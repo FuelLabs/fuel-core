@@ -1,6 +1,9 @@
 use std::fmt::Debug;
 
-use fuel_core_types::fuel_types::BlockHeight;
+use fuel_core_types::{
+    blockchain::primitives::DaBlockHeight,
+    fuel_types::BlockHeight,
+};
 use itertools::Itertools;
 
 use crate::{
@@ -60,6 +63,7 @@ enum DataSource {
     Parquet {
         files: crate::ParquetFiles,
         block_height: BlockHeight,
+        da_block_height: DaBlockHeight,
     },
     InMemory {
         state: StateConfig,
@@ -107,16 +111,21 @@ impl StateReader {
     #[cfg(feature = "parquet")]
     pub fn parquet(files: crate::ParquetFiles) -> anyhow::Result<Self> {
         let block_height = Self::read_block_height(&files.block_height)?;
+        let da_block_height = Self::read_block_height(&files.da_block_height)?;
         Ok(Self {
             data_source: DataSource::Parquet {
                 files,
                 block_height,
+                da_block_height,
             },
         })
     }
 
     #[cfg(feature = "parquet")]
-    fn read_block_height(path: &std::path::Path) -> anyhow::Result<BlockHeight> {
+    fn read_block_height<Height>(path: &std::path::Path) -> anyhow::Result<Height>
+    where
+        Height: serde::de::DeserializeOwned,
+    {
         let file = std::fs::File::open(path)?;
         let group = super::parquet::decode::PostcardDecoder::new(file)?
             .next()
@@ -187,6 +196,16 @@ impl StateReader {
             DataSource::InMemory { state, .. } => state.block_height,
             #[cfg(feature = "parquet")]
             DataSource::Parquet { block_height, .. } => *block_height,
+        }
+    }
+
+    pub fn da_block_height(&self) -> DaBlockHeight {
+        match &self.data_source {
+            DataSource::InMemory { state, .. } => state.da_block_height,
+            #[cfg(feature = "parquet")]
+            DataSource::Parquet {
+                da_block_height, ..
+            } => *da_block_height,
         }
     }
 

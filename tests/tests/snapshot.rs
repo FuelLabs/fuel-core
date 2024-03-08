@@ -95,6 +95,7 @@ async fn loads_snapshot() {
             da_height: DaBlockHeight(rng.gen_range(0..1000)),
         }],
         block_height: BlockHeight::from(10),
+        da_block_height: 20u64.into(),
     };
     let config = Config {
         state_reader: StateReader::in_memory(starting_state.clone()),
