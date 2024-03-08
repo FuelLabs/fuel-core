@@ -46,6 +46,7 @@ use fuel_core_types::{
     fuel_vm::checked_transaction::Checked,
 };
 
+use fuel_core_types::fuel_tx::Finalizable;
 use std::{
     cmp::Reverse,
     collections::HashMap,
@@ -91,6 +92,126 @@ async fn insert_simple_tx_succeeds() {
     txpool
         .insert_inner(tx)
         .expect("Transaction should be OK, got Err");
+}
+
+#[tokio::test]
+async fn insert_simple_tx_with_blacklisted_utxo_id_fails() {
+    let mut rng = StdRng::seed_from_u64(0);
+    let db = MockDb::default();
+    let mut txpool = TxPool::new(Default::default(), db.clone());
+
+    let (_, gas_coin) = setup_coin(&mut rng, Some(&txpool.database));
+    let tx = TransactionBuilder::script(vec![], vec![])
+        .script_gas_limit(GAS_LIMIT)
+        .add_input(gas_coin.clone())
+        .finalize_as_transaction();
+    let tx = check_unwrap_tx(tx, db.clone(), &txpool.config).await;
+    let utxo_id = *gas_coin.utxo_id().unwrap();
+
+    // Given
+    txpool.config_mut().blacklist.coins.insert(utxo_id);
+
+    // When
+    let result = txpool.insert_inner(tx);
+
+    // Then
+    assert!(result.is_err());
+    assert!(result
+        .unwrap_err()
+        .to_string()
+        .contains(format!("The UTXO `{}` is blacklisted", utxo_id).as_str()));
+}
+
+#[tokio::test]
+async fn insert_simple_tx_with_blacklisted_owner_fails() {
+    let mut rng = StdRng::seed_from_u64(0);
+    let db = MockDb::default();
+    let mut txpool = TxPool::new(Default::default(), db.clone());
+
+    let (_, gas_coin) = setup_coin(&mut rng, Some(&txpool.database));
+    let tx = TransactionBuilder::script(vec![], vec![])
+        .script_gas_limit(GAS_LIMIT)
+        .add_input(gas_coin.clone())
+        .finalize_as_transaction();
+    let tx = check_unwrap_tx(tx, db.clone(), &txpool.config).await;
+    let owner = *gas_coin.input_owner().unwrap();
+
+    // Given
+    txpool.config_mut().blacklist.owners.insert(owner);
+
+    // When
+    let result = txpool.insert_inner(tx);
+
+    // Then
+    assert!(result.is_err());
+    assert!(result
+        .unwrap_err()
+        .to_string()
+        .contains(format!("The owner `{}` is blacklisted", owner).as_str()));
+}
+
+#[tokio::test]
+async fn insert_simple_tx_with_blacklisted_contract_fails() {
+    let mut rng = StdRng::seed_from_u64(0);
+    let db = MockDb::default();
+    let mut txpool = TxPool::new(Default::default(), db.clone());
+    let contract_id = Contract::EMPTY_CONTRACT_ID;
+
+    let (_, gas_coin) = setup_coin(&mut rng, Some(&txpool.database));
+    let tx = TransactionBuilder::script(vec![], vec![])
+        .script_gas_limit(GAS_LIMIT)
+        .add_input(gas_coin.clone())
+        .add_input(create_contract_input(
+            Default::default(),
+            Default::default(),
+            contract_id,
+        ))
+        .add_output(Output::contract(1, Default::default(), Default::default()))
+        .finalize_as_transaction();
+    let tx = check_unwrap_tx(tx, db.clone(), &txpool.config).await;
+
+    // Given
+    txpool.config_mut().blacklist.contracts.insert(contract_id);
+
+    // When
+    let result = txpool.insert_inner(tx);
+
+    // Then
+    assert!(result.is_err());
+    assert!(result
+        .unwrap_err()
+        .to_string()
+        .contains(format!("The contract `{}` is blacklisted", contract_id).as_str()));
+}
+
+#[tokio::test]
+async fn insert_simple_tx_with_blacklisted_message_fails() {
+    let (message, input) = create_message_predicate_from_message(5000, 0);
+
+    let tx = TransactionBuilder::script(vec![], vec![])
+        .script_gas_limit(GAS_LIMIT)
+        .add_input(input)
+        .finalize_as_transaction();
+
+    let nonce = message.nonce;
+    let db = MockDb::default();
+    db.insert_message(message);
+    let mut txpool = TxPool::new(Default::default(), db.clone());
+
+    let tx = check_unwrap_tx(tx, db.clone(), &txpool.config).await;
+
+    // Given
+    txpool.config_mut().blacklist.messages.insert(nonce);
+
+    // When
+    let result = txpool.insert_inner(tx);
+
+    // Then
+    assert!(result.is_err());
+    assert!(result
+        .unwrap_err()
+        .to_string()
+        .contains(format!("The message `{}` is blacklisted", nonce).as_str()));
 }
 
 #[tokio::test]
@@ -236,7 +357,10 @@ async fn not_inserted_known_tx() {
     let db = MockDb::default();
     let mut txpool = TxPool::new(config, db.clone());
 
-    let tx = Transaction::default_test_tx();
+    let tx = TransactionBuilder::script(vec![], vec![])
+        .add_random_fee_input()
+        .finalize()
+        .into();
     let tx = check_unwrap_tx(tx, db.clone(), &txpool.config).await;
 
     txpool

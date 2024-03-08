@@ -36,7 +36,24 @@ use fuel_core_types::{
 };
 
 use fuel_core_metrics::txpool_metrics::txpool_metrics;
-use fuel_core_types::fuel_vm::checked_transaction::CheckPredicateParams;
+use fuel_core_types::{
+    fuel_tx::{
+        input::{
+            coin::{
+                CoinPredicate,
+                CoinSigned,
+            },
+            message::{
+                MessageCoinPredicate,
+                MessageCoinSigned,
+                MessageDataPredicate,
+                MessageDataSigned,
+            },
+        },
+        Input,
+    },
+    fuel_vm::checked_transaction::CheckPredicateParams,
+};
 use std::{
     cmp::Reverse,
     collections::HashMap,
@@ -44,6 +61,11 @@ use std::{
     sync::Arc,
 };
 use tokio_rayon::AsyncRayonHandle;
+
+#[cfg(test)]
+mod test_helpers;
+#[cfg(test)]
+mod tests;
 
 #[derive(Debug, Clone)]
 pub struct TxPool<DB> {
@@ -77,6 +99,11 @@ where
         &self.config
     }
 
+    #[cfg(test)]
+    pub fn config_mut(&mut self) -> &mut Config {
+        &mut self.config
+    }
+
     pub fn txs(&self) -> &HashMap<TxId, TxInfo> {
         &self.by_hash
     }
@@ -100,6 +127,8 @@ where
                 return Err(anyhow::anyhow!("Mint transactions is not supported"))
             }
         });
+
+        self.check_blacklisting(tx.as_ref())?;
 
         if !tx.is_computed() {
             return Err(Error::NoMetadata.into())
@@ -232,12 +261,10 @@ where
         let mut res = Vec::new();
 
         for tx in txs.into_iter() {
-            res.push(self.insert_inner(tx));
-        }
+            let tx_id = tx.id();
+            let result = self.insert_inner(tx);
 
-        // announce to subscribers
-        for ret in res.iter() {
-            match ret {
+            match &result {
                 Ok(InsertionResult {
                     removed,
                     inserted,
@@ -253,11 +280,15 @@ where
                         Tai64::from_unix(submitted_time.as_secs() as i64),
                     );
                 }
-                Err(_) => {
-                    // @dev should not broadcast tx if error occurred
+                Err(err) => {
+                    tx_status_sender
+                        .send_squeezed_out(tx_id, Error::SqueezedOut(err.to_string()));
                 }
             }
+
+            res.push(result);
         }
+
         res
     }
 
@@ -370,6 +401,85 @@ where
 
         result
     }
+
+    fn check_blacklisting(&self, tx: &PoolTransaction) -> anyhow::Result<()> {
+        for input in tx.inputs() {
+            match input {
+                Input::CoinSigned(CoinSigned { utxo_id, owner, .. })
+                | Input::CoinPredicate(CoinPredicate { utxo_id, owner, .. }) => {
+                    if self.config.blacklist.contains_coin(utxo_id) {
+                        return Err(anyhow::anyhow!(
+                            "The UTXO `{}` is blacklisted",
+                            utxo_id
+                        ))
+                    }
+                    if self.config.blacklist.contains_address(owner) {
+                        return Err(anyhow::anyhow!(
+                            "The owner `{}` is blacklisted",
+                            owner
+                        ))
+                    }
+                }
+                Input::Contract(contract) => {
+                    if self
+                        .config
+                        .blacklist
+                        .contains_contract(&contract.contract_id)
+                    {
+                        return Err(anyhow::anyhow!(
+                            "The contract `{}` is blacklisted",
+                            contract.contract_id
+                        ))
+                    }
+                }
+                Input::MessageCoinSigned(MessageCoinSigned {
+                    nonce,
+                    sender,
+                    recipient,
+                    ..
+                })
+                | Input::MessageCoinPredicate(MessageCoinPredicate {
+                    nonce,
+                    sender,
+                    recipient,
+                    ..
+                })
+                | Input::MessageDataSigned(MessageDataSigned {
+                    nonce,
+                    sender,
+                    recipient,
+                    ..
+                })
+                | Input::MessageDataPredicate(MessageDataPredicate {
+                    nonce,
+                    sender,
+                    recipient,
+                    ..
+                }) => {
+                    if self.config.blacklist.contains_message(nonce) {
+                        return Err(anyhow::anyhow!(
+                            "The message `{}` is blacklisted",
+                            nonce
+                        ))
+                    }
+                    if self.config.blacklist.contains_address(sender) {
+                        return Err(anyhow::anyhow!(
+                            "The sender `{}` is blacklisted",
+                            sender
+                        ))
+                    }
+                    if self.config.blacklist.contains_address(recipient) {
+                        return Err(anyhow::anyhow!(
+                            "The recipient `{}` is blacklisted",
+                            recipient
+                        ))
+                    }
+                }
+            }
+        }
+
+        Ok(())
+    }
 }
 
 pub async fn check_transactions(
@@ -464,8 +574,3 @@ impl ParallelExecutor for TokioWithRayon {
         futures::future::join_all(futures).await
     }
 }
-
-#[cfg(test)]
-mod test_helpers;
-#[cfg(test)]
-mod tests;

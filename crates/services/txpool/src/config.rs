@@ -1,5 +1,60 @@
+use crate::types::ContractId;
 use fuel_core_chain_config::ChainConfig;
-use std::time::Duration;
+use fuel_core_types::{
+    fuel_tx::{
+        Address,
+        UtxoId,
+    },
+    fuel_types::Nonce,
+};
+use std::{
+    collections::HashSet,
+    time::Duration,
+};
+
+#[derive(Default, Debug, Clone, PartialEq, Eq)]
+pub struct BlackList {
+    /// Blacklisted addresses.
+    pub(crate) owners: HashSet<Address>,
+    /// Blacklisted UTXO ids.
+    pub(crate) coins: HashSet<UtxoId>,
+    /// Blacklisted messages by `Nonce`.
+    pub(crate) messages: HashSet<Nonce>,
+    /// Blacklisted contracts.
+    pub(crate) contracts: HashSet<ContractId>,
+}
+
+impl BlackList {
+    pub fn new(
+        owners: Vec<Address>,
+        utxo_ids: Vec<UtxoId>,
+        messages: Vec<Nonce>,
+        contracts: Vec<ContractId>,
+    ) -> Self {
+        Self {
+            owners: owners.into_iter().collect(),
+            coins: utxo_ids.into_iter().collect(),
+            messages: messages.into_iter().collect(),
+            contracts: contracts.into_iter().collect(),
+        }
+    }
+
+    pub fn contains_address(&self, address: &Address) -> bool {
+        self.owners.contains(address)
+    }
+
+    pub fn contains_coin(&self, utxo_id: &UtxoId) -> bool {
+        self.coins.contains(utxo_id)
+    }
+
+    pub fn contains_message(&self, nonce: &Nonce) -> bool {
+        self.messages.contains(nonce)
+    }
+
+    pub fn contains_contract(&self, contract_id: &ContractId) -> bool {
+        self.contracts.contains(contract_id)
+    }
+}
 
 #[derive(Debug, Clone)]
 pub struct Config {
@@ -19,6 +74,8 @@ pub struct Config {
     pub transaction_ttl: Duration,
     /// The number of allowed active transaction status subscriptions.
     pub number_of_active_subscription: usize,
+    /// The blacklist used to validate transaction.
+    pub blacklist: BlackList,
 }
 
 impl Default for Config {
@@ -40,6 +97,7 @@ impl Default for Config {
             metrics,
             transaction_ttl,
             number_of_active_subscription,
+            Default::default(),
         )
     }
 }
@@ -55,6 +113,7 @@ impl Config {
         metrics: bool,
         transaction_ttl: Duration,
         number_of_active_subscription: usize,
+        blacklist: BlackList,
     ) -> Self {
         // # Dev-note: If you add a new field, be sure that this field is propagated correctly
         //  in all places where `new` is used.
@@ -67,6 +126,7 @@ impl Config {
             metrics,
             transaction_ttl,
             number_of_active_subscription,
+            blacklist,
         }
     }
 }
