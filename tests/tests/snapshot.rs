@@ -92,7 +92,7 @@ async fn loads_snapshot() {
             nonce: Nonce::from(rng.gen_range(0..1000)),
             amount: rng.gen_range(0..1000),
             data: vec![],
-            da_height: DaBlockHeight(rng.gen_range(0..1000)),
+            da_height: DaBlockHeight(19),
         }],
         block_height: BlockHeight::from(10),
         da_block_height: 20u64.into(),

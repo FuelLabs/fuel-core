@@ -482,9 +482,8 @@ impl ChainStateDb for Database {
     }
 
     fn get_last_block(&self) -> StorageResult<CompressedBlock> {
-        Ok(self
-            .latest_compressed_block()?
-            .ok_or(not_found!(FuelBlocks))?)
+        self.latest_compressed_block()?
+            .ok_or(not_found!(FuelBlocks))
     }
 }
 

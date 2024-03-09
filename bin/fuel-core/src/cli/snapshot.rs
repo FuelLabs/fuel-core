@@ -371,10 +371,7 @@ mod tests {
             let height = 10u32.into();
             block.header_mut().application_mut().da_height = 14u64.into();
             block.header_mut().set_block_height(height);
-            self.db
-                .storage::<FuelBlocks>()
-                .insert(&height, &block)
-                .unwrap();
+            let _ = self.db.storage::<FuelBlocks>().insert(&height, &block);
 
             block
         }
