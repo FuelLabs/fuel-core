@@ -588,7 +588,7 @@ async fn can_get_message() {
         ..Default::default()
     };
 
-    // configure the messges
+    // configure the messages
     let mut config = Config::local_node();
     let state_config = StateConfig {
         messages: vec![first_msg.clone()],

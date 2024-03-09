@@ -22,7 +22,7 @@ use crate::{
 };
 use fuel_core_types::fuel_vm::ContractsAssetKey;
 
-/// The key convertor used to convert the key from the `ContractsAssets` table
+/// The key converter used to convert the key from the `ContractsAssets` table
 /// to the key of the `ContractsAssetsMerkleMetadata` table.
 pub struct KeyConverter;
 
