@@ -8,6 +8,33 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Description of the upcoming release here.
 
+## [Version 0.22.4]
+
+### Added
+
+- [#1743](https://github.com/FuelLabs/fuel-core/pull/1743): Added blacklisting of the transactions on the `TxPool` level.
+  ```shell
+        --tx-blacklist-addresses <TX_BLACKLIST_ADDRESSES>
+            The list of banned addresses ignored by the `TxPool`
+            
+            [env: TX_BLACKLIST_ADDRESSES=]
+  
+        --tx-blacklist-coins <TX_BLACKLIST_COINS>
+            The list of banned coins ignored by the `TxPool`
+            
+            [env: TX_BLACKLIST_COINS=]
+  
+        --tx-blacklist-messages <TX_BLACKLIST_MESSAGES>
+            The list of banned messages ignored by the `TxPool`
+            
+            [env: TX_BLACKLIST_MESSAGES=]
+  
+        --tx-blacklist-contracts <TX_BLACKLIST_CONTRACTS>
+            The list of banned contracts ignored by the `TxPool`
+            
+            [env: TX_BLACKLIST_CONTRACTS=]
+  ```
+
 ## [Version 0.22.3]
 
 ### Added
