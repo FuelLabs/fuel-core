@@ -252,7 +252,7 @@ where
         self.insert_inner(tx, &view)
     }
 
-    #[tracing::instrument(level = "info", skip_all, fields(tx_id = %tx.id()), ret, err)]
+    #[tracing::instrument(level = "debug", skip_all, fields(tx_id = %tx.id()), ret, err)]
     // this is atomic operation. Return removed(pushed out/replaced) transactions
     fn insert_inner(
         &mut self,
