@@ -133,12 +133,11 @@ fn cleanup_genesis_progress(database: &mut Database) -> anyhow::Result<()> {
 
 pub fn create_genesis_block(config: &Config) -> Block {
     let block_height = config.state_reader.block_height();
+    let da_block_height = config.state_reader.da_block_height();
     Block::new(
         PartialBlockHeader {
             application: ApplicationHeader::<Empty> {
-                // TODO: Set `da_height` based on the chain config.
-                //  https://github.com/FuelLabs/fuel-core/issues/1667
-                da_height: Default::default(),
+                da_height: da_block_height,
                 generated: Empty,
             },
             consensus: ConsensusHeader::<Empty> {

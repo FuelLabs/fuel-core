@@ -302,10 +302,6 @@ impl StateWriter {
         }
     }
 
-    // TODO: Decide where to store `block_height` for the genesis block.
-    //  it can be part of the chain config or maybe part of something else that
-    //  is available for all nodes in the network.
-    //  https://github.com/FuelLabs/fuel-core/issues/1667
     pub fn write_block_data(
         &mut self,
         height: BlockHeight,
