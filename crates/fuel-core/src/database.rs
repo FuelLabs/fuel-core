@@ -27,6 +27,7 @@ use fuel_core_chain_config::{
 };
 use fuel_core_services::SharedMutex;
 use fuel_core_storage::{
+    self,
     iter::{
         BoxedIter,
         IntoBoxedIter,
@@ -41,10 +42,6 @@ use fuel_core_storage::{
     },
     not_found,
     tables::FuelBlocks,
-    structured_storage::{
-        StructuredStorage,
-        TableWithBlueprint,
-    },
     transactional::{
         AtomicView,
         Changes,
@@ -58,7 +55,10 @@ use fuel_core_storage::{
     StorageMutate,
 };
 use fuel_core_types::{
-    blockchain::primitives::DaBlockHeight,
+    blockchain::{
+        block::CompressedBlock,
+        primitives::DaBlockHeight,
+    },
     fuel_merkle::storage::StorageInspect,
     fuel_types::BlockHeight,
 };
@@ -74,8 +74,6 @@ pub type Result<T> = core::result::Result<T, Error>;
 // TODO: Extract `Database` and all belongs into `fuel-core-database`.
 #[cfg(feature = "rocksdb")]
 use crate::state::rocks_db::RocksDb;
-use fuel_core_storage::tables::FuelBlocks;
-use fuel_core_types::blockchain::block::CompressedBlock;
 #[cfg(feature = "rocksdb")]
 use std::path::Path;
 

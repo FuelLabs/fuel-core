@@ -44,6 +44,8 @@ mod tests;
 
 #[derive(Debug, derive_more::Display)]
 pub enum Error {
+    #[display(fmt = "Genesis block is absent")]
+    NoGenesisBlock,
     #[display(
         fmt = "The block height {height} should be higher than the previous block height {previous_block}"
     )]
@@ -298,7 +300,10 @@ where
         &self,
         height: BlockHeight,
     ) -> anyhow::Result<PreviousBlockInfo> {
-        let latest_height = self.view_provider.latest_height();
+        let latest_height = self
+            .view_provider
+            .latest_height()
+            .ok_or(Error::NoGenesisBlock)?;
         // block 0 is reserved for genesis
         if height <= latest_height {
             Err(Error::BlockHeightShouldBeHigherThanPrevious {
