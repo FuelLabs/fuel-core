@@ -66,7 +66,7 @@ impl ExecutorAdapter {
         &self,
         block: Block,
     ) -> ExecutorResult<UncommittedResult<StorageTransaction<Database>>> {
-        self.executor.execute_validation(block)
+        self.executor.validate_without_commit(block)
     }
 }
 

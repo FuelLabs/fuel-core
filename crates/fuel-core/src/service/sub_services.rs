@@ -23,12 +23,12 @@ use crate::{
     },
 };
 use fuel_core_poa::Trigger;
+use fuel_core_producer::block_producer::gas_price::StaticGasPrice;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
 #[cfg(feature = "relayer")]
 use crate::relayer::Config as RelayerConfig;
-use crate::service::adapters::producer::StaticGasPrice;
 #[cfg(feature = "relayer")]
 use fuel_core_types::blockchain::primitives::DaBlockHeight;
 

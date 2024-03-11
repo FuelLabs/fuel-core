@@ -78,6 +78,7 @@ mod tests {
             Create,
             FeeParameters,
             Finalizable,
+            Mint,
             Output,
             Receipt,
             Script,
@@ -317,8 +318,7 @@ mod tests {
             )
             .unwrap();
 
-        let validation_result = verifier
-            .execute_and_commit(ExecutionTypes::Validation(block), Default::default());
+        let validation_result = verifier.validate_and_commit(block, Default::default());
         assert!(validation_result.is_ok());
         assert!(skipped_transactions.is_empty());
     }
@@ -673,10 +673,7 @@ mod tests {
                 block: validated_block,
                 ..
             } = validator
-                .execute_and_commit(
-                    ExecutionBlock::Validation(produced_block),
-                    Default::default(),
-                )
+                .validate_and_commit(produced_block, Default::default())
                 .unwrap();
             assert_eq!(validated_block.transactions(), produced_txs);
             let res = validator
@@ -793,7 +790,7 @@ mod tests {
                 },
             );
             let validation_err = validator
-                .execute_and_commit(ExecutionBlock::Validation(block), Default::default())
+                .validate_and_commit(block, Default::default())
                 .expect_err("Expected error because coinbase if invalid");
             assert!(matches!(
                 validation_err,
@@ -819,12 +816,9 @@ mod tests {
 
             let validator = create_executor(Default::default(), Default::default());
             let validation_err = validator
-                .execute_and_commit(ExecutionBlock::Validation(block), Default::default())
+                .validate_and_commit(block, Default::default())
                 .expect_err("Expected error because coinbase if invalid");
-            assert!(matches!(
-                validation_err,
-                ExecutorError::MintIsNotLastTransaction
-            ));
+            assert!(matches!(validation_err, ExecutorError::MintMissing));
         }
 
         #[test]
@@ -833,7 +827,7 @@ mod tests {
 
             let validator = create_executor(Default::default(), Default::default());
             let validation_err = validator
-                .execute_and_commit(ExecutionBlock::Validation(block), Default::default())
+                .validate_and_commit(block, Default::default())
                 .expect_err("Expected error because coinbase is missing");
             assert!(matches!(validation_err, ExecutorError::MintMissing));
         }
@@ -855,7 +849,7 @@ mod tests {
 
             let validator = create_executor(Default::default(), Default::default());
             let validation_err = validator
-                .execute_and_commit(ExecutionBlock::Validation(block), Default::default())
+                .validate_and_commit(block, Default::default())
                 .expect_err("Expected error because coinbase if invalid");
 
             assert!(matches!(
@@ -885,7 +879,7 @@ mod tests {
             config.consensus_parameters.base_asset_id = [1u8; 32].into();
             let validator = create_executor(Default::default(), config);
             let validation_err = validator
-                .execute_and_commit(ExecutionBlock::Validation(block), Default::default())
+                .validate_and_commit(block, Default::default())
                 .expect_err("Expected error because coinbase if invalid");
 
             assert!(matches!(
@@ -913,7 +907,7 @@ mod tests {
 
             let validator = create_executor(Default::default(), Default::default());
             let validation_err = validator
-                .execute_and_commit(ExecutionBlock::Validation(block), Default::default())
+                .validate_and_commit(block, Default::default())
                 .expect_err("Expected error because coinbase if invalid");
             assert!(matches!(
                 validation_err,
@@ -944,10 +938,13 @@ mod tests {
             .finalize();
         let tx: Transaction = script.into();
 
-        let mut block = PartialFuelBlock {
-            header: Default::default(),
-            transactions: vec![tx.clone()],
-        };
+        // let mut block = PartialFuelBlock {
+        //     header: Default::default(),
+        //     transactions: vec![tx.clone()],
+        // };
+
+        let mut block =
+            Block::new(Default::default(), vec![tx.clone()], Default::default());
 
         let ExecutionData {
             skipped_transactions,
@@ -955,7 +952,7 @@ mod tests {
         } = producer
             .execute_block(
                 ExecutionType::Production(PartialBlockComponent::from_partial_block(
-                    &mut block,
+                    &mut PartialFuelBlock::from(block.clone()),
                 )),
                 Default::default(),
             )
@@ -970,24 +967,16 @@ mod tests {
             ) if expected == max_fee
         ));
 
+        let options = Default::default();
         // Produced block is valid
         verifier
-            .execute_block(
-                ExecutionType::Validation(PartialBlockComponent::from_partial_block(
-                    &mut block,
-                )),
-                Default::default(),
-            )
+            .execute_block_validation(block.clone(), options)
             .unwrap();
 
         // Invalidate the block with Insufficient tx
-        block.transactions.insert(block.transactions.len() - 1, tx);
-        let verify_result = verifier.execute_block(
-            ExecutionType::Validation(PartialBlockComponent::from_partial_block(
-                &mut block,
-            )),
-            Default::default(),
-        );
+        let index = block.transactions().len() - 1;
+        block.transactions_mut().insert(index, tx);
+        let verify_result = verifier.execute_block_validation(block, options);
         assert!(matches!(
             verify_result,
             Err(ExecutorError::InvalidTransaction(
@@ -1004,13 +993,12 @@ mod tests {
 
         let verifier = create_executor(Default::default(), Default::default());
 
-        let mut block = PartialFuelBlock {
-            header: Default::default(),
-            transactions: vec![
-                Transaction::default_test_tx(),
-                Transaction::default_test_tx(),
-            ],
-        };
+        let transactions = vec![
+            Transaction::default_test_tx(),
+            Transaction::default_test_tx(),
+        ];
+
+        let mut block = Block::new(Default::default(), transactions, Default::default());
 
         let ExecutionData {
             skipped_transactions,
@@ -1018,7 +1006,7 @@ mod tests {
         } = producer
             .execute_block(
                 ExecutionType::Production(PartialBlockComponent::from_partial_block(
-                    &mut block,
+                    &mut PartialFuelBlock::from(block.clone()),
                 )),
                 Default::default(),
             )
@@ -1029,26 +1017,18 @@ mod tests {
             &ExecutorError::TransactionIdCollision(_)
         ));
 
+        let options = Default::default();
         // Produced block is valid
         verifier
-            .execute_block(
-                ExecutionType::Validation(PartialBlockComponent::from_partial_block(
-                    &mut block,
-                )),
-                Default::default(),
-            )
+            .execute_block_validation(block.clone(), options)
             .unwrap();
 
         // Make the block invalid by adding of the duplicating transaction
+        let index = block.transactions().len() - 1;
         block
-            .transactions
-            .insert(block.transactions.len() - 1, Transaction::default_test_tx());
-        let verify_result = verifier.execute_block(
-            ExecutionType::Validation(PartialBlockComponent::from_partial_block(
-                &mut block,
-            )),
-            Default::default(),
-        );
+            .transactions_mut()
+            .insert(index, Transaction::default_test_tx());
+        let verify_result = verifier.execute_block_validation(block, options);
         assert!(matches!(
             verify_result,
             Err(ExecutorError::TransactionIdCollision(_))
@@ -1088,10 +1068,8 @@ mod tests {
 
         let verifier = create_executor(Default::default(), config);
 
-        let mut block = PartialFuelBlock {
-            header: Default::default(),
-            transactions: vec![tx.clone()],
-        };
+        let mut block =
+            Block::new(Default::default(), vec![tx.clone()], Default::default());
 
         let ExecutionData {
             skipped_transactions,
@@ -1099,7 +1077,7 @@ mod tests {
         } = producer
             .execute_block(
                 ExecutionType::Production(PartialBlockComponent::from_partial_block(
-                    &mut block,
+                    &mut PartialFuelBlock::from(block.clone()),
                 )),
                 ExecutionOptions {
                     utxo_validation: true,
@@ -1115,27 +1093,20 @@ mod tests {
         ));
 
         // Produced block is valid
+        let options = ExecutionOptions {
+            utxo_validation: true,
+        };
         verifier
-            .execute_block(
-                ExecutionType::Validation(PartialBlockComponent::from_partial_block(
-                    &mut block,
-                )),
-                ExecutionOptions {
-                    utxo_validation: true,
-                },
-            )
+            .execute_block_validation(block.clone(), options)
             .unwrap();
 
         // Invalidate block by adding transaction with not existing coin
-        block.transactions.insert(block.transactions.len() - 1, tx);
-        let verify_result = verifier.execute_block(
-            ExecutionType::Validation(PartialBlockComponent::from_partial_block(
-                &mut block,
-            )),
-            ExecutionOptions {
-                utxo_validation: true,
-            },
-        );
+        let index = block.transactions().len() - 1;
+        block.transactions_mut().insert(index, tx);
+        let options = ExecutionOptions {
+            utxo_validation: true,
+        };
+        let verify_result = verifier.execute_block_validation(block, options);
         assert!(matches!(
             verify_result,
             Err(ExecutorError::TransactionValidity(
@@ -1183,8 +1154,7 @@ mod tests {
             }
         }
 
-        let verify_result = verifier
-            .execute_and_commit(ExecutionBlock::Validation(block), Default::default());
+        let verify_result = verifier.validate_and_commit(block, Default::default());
         assert!(matches!(
             verify_result,
             Err(ExecutorError::InvalidTransactionOutcome { transaction_id }) if transaction_id == tx_id
@@ -1223,8 +1193,7 @@ mod tests {
         block.header_mut().set_transaction_root(rng.gen());
         block.header_mut().recalculate_metadata();
 
-        let verify_result = verifier
-            .execute_and_commit(ExecutionBlock::Validation(block), Default::default());
+        let verify_result = verifier.validate_and_commit(block, Default::default());
 
         assert!(matches!(verify_result, Err(ExecutorError::InvalidBlockId)))
     }
@@ -1917,9 +1886,7 @@ mod tests {
         assert_eq!(tx.inputs()[0].state_root(), state_root);
 
         executor
-            .execute_without_commit::<OnceTransactionsSource>(ExecutionTypes::Validation(
-                block,
-            ))
+            .validate_without_commit(block)
             .expect("Validation of block should be successful");
     }
 
@@ -2124,10 +2091,8 @@ mod tests {
         assert!(skipped_transactions.is_empty());
 
         let verifier = create_executor(db, Default::default());
-        let verify_result = verifier.execute_and_commit(
-            ExecutionBlock::Validation(second_block),
-            Default::default(),
-        );
+        let verify_result =
+            verifier.validate_and_commit(second_block, Default::default());
         assert!(verify_result.is_ok());
     }
 
@@ -2149,10 +2114,10 @@ mod tests {
             .clone()
             .into();
 
-        let first_block = PartialFuelBlock {
-            header: Default::default(),
-            transactions: vec![tx.into(), tx2],
-        };
+        let transactions = vec![tx.into(), tx2];
+
+        let first_block =
+            Block::new(Default::default(), transactions, Default::default());
 
         let tx3: Transaction = TxBuilder::new(2322)
             .start_script(vec![op::addi(0x10, RegId::ZERO, 1), op::ret(1)], vec![])
@@ -2165,16 +2130,28 @@ mod tests {
             .into();
         let tx_id = tx3.id(&ChainId::default());
 
-        let second_block = PartialFuelBlock {
-            header: PartialBlockHeader {
-                consensus: ConsensusHeader {
-                    height: 2.into(),
-                    ..Default::default()
-                },
+        // let second_block = PartialFuelBlock {
+        //     header: PartialBlockHeader {
+        //         consensus: ConsensusHeader {
+        //             height: 2.into(),
+        //             ..Default::default()
+        //         },
+        //         ..Default::default()
+        //     },
+        //     transactions: vec![tx3],
+        // };
+
+        let header = PartialBlockHeader {
+            consensus: ConsensusHeader {
+                height: 2.into(),
                 ..Default::default()
             },
-            transactions: vec![tx3],
+            ..Default::default()
         };
+
+        let txs = vec![tx3];
+
+        let second_block = Block::new(header, txs, Default::default());
 
         let db = Database::default();
 
@@ -2182,7 +2159,7 @@ mod tests {
 
         setup
             .execute_and_commit(
-                ExecutionBlock::Production(first_block),
+                ExecutionBlock::Production(first_block.into()),
                 Default::default(),
             )
             .unwrap();
@@ -2195,7 +2172,7 @@ mod tests {
             ..
         } = producer
             .execute_and_commit(
-                ExecutionBlock::Production(second_block),
+                ExecutionBlock::Production(second_block.into()),
                 Default::default(),
             )
             .unwrap();
@@ -2210,10 +2187,8 @@ mod tests {
         }
 
         let verifier = create_executor(db, Default::default());
-        let verify_result = verifier.execute_and_commit(
-            ExecutionBlock::Validation(second_block),
-            Default::default(),
-        );
+        let verify_result =
+            verifier.validate_and_commit(second_block, Default::default());
 
         assert!(matches!(
             verify_result,
@@ -2370,13 +2345,11 @@ mod tests {
             )
             .expect("block execution failed unexpectedly");
 
+        let options = ExecutionOptions {
+            utxo_validation: true,
+        };
         make_executor(&[&message])
-            .execute_and_commit(
-                ExecutionBlock::Validation(block),
-                ExecutionOptions {
-                    utxo_validation: true,
-                },
-            )
+            .validate_and_commit(block, options)
             .expect("block validation failed unexpectedly");
     }
 
@@ -2511,27 +2484,23 @@ mod tests {
                 TransactionValidityError::MessageDoesNotExist(_)
             )
         ));
+        let options = ExecutionOptions {
+            utxo_validation: true,
+        };
 
         // Produced block is valid
         make_executor(&[]) // No messages in the db
-            .execute_and_commit(
-                ExecutionBlock::Validation(block.clone()),
-                ExecutionOptions {
-                    utxo_validation: true,
-                },
-            )
+            .validate_and_commit(block.clone(), options)
             .unwrap();
 
         // Invalidate block by returning back `tx` with not existing message
         let index = block.transactions().len() - 1;
         block.transactions_mut().insert(index, tx);
+        let options = ExecutionOptions {
+            utxo_validation: true,
+        };
         let res = make_executor(&[]) // No messages in the db
-            .execute_and_commit(
-                ExecutionBlock::Validation(block),
-                ExecutionOptions {
-                    utxo_validation: true,
-                },
-            );
+            .validate_and_commit(block, options);
         assert!(matches!(
             res,
             Err(ExecutorError::TransactionValidity(
@@ -2569,25 +2538,18 @@ mod tests {
             )
         ));
 
+        let options = ExecutionOptions {
+            utxo_validation: true,
+        };
         // Produced block is valid
         make_executor(&[&message])
-            .execute_and_commit(
-                ExecutionBlock::Validation(block.clone()),
-                ExecutionOptions {
-                    utxo_validation: true,
-                },
-            )
+            .validate_and_commit(block.clone(), options)
             .unwrap();
 
         // Invalidate block by return back `tx` with not ready message.
         let index = block.transactions().len() - 1;
         block.transactions_mut().insert(index, tx);
-        let res = make_executor(&[&message]).execute_and_commit(
-            ExecutionBlock::Validation(block),
-            ExecutionOptions {
-                utxo_validation: true,
-            },
-        );
+        let res = make_executor(&[&message]).validate_and_commit(block, options);
         assert!(matches!(
             res,
             Err(ExecutorError::TransactionValidity(
@@ -2637,24 +2599,24 @@ mod tests {
         let (mut tx2, _) = make_tx_and_message(&mut rng, 0);
         tx2.as_script_mut().unwrap().inputs_mut()[0] =
             tx1.as_script().unwrap().inputs()[0].clone();
+        let mint_tx = Mint::default();
 
-        let mut block = PartialFuelBlock {
-            header: Default::default(),
-            transactions: vec![tx1, tx2.clone()],
-        };
+        let txs = vec![tx1, tx2.clone()];
+        let mut block = Block::new(Default::default(), txs, &[]);
 
         let exec = make_executor(&[&message]);
+        let options = ExecutionOptions {
+            utxo_validation: true,
+        };
         let ExecutionData {
             skipped_transactions,
             ..
         } = exec
             .execute_block(
                 ExecutionType::Production(PartialBlockComponent::from_partial_block(
-                    &mut block,
+                    &mut PartialFuelBlock::from(block.clone()),
                 )),
-                ExecutionOptions {
-                    utxo_validation: true,
-                },
+                options,
             )
             .unwrap();
         // One of two transactions is skipped.
@@ -2669,27 +2631,18 @@ mod tests {
 
         // Produced block is valid
         let exec = make_executor(&[&message]);
-        exec.execute_block(
-            ExecutionType::Validation(PartialBlockComponent::from_partial_block(
-                &mut block,
-            )),
-            ExecutionOptions {
-                utxo_validation: true,
-            },
-        )
-        .unwrap();
+        block.transactions_mut().push(mint_tx.clone().into());
+        exec.execute_block_validation(block.clone(), options)
+            .unwrap();
+        // remove mint
+        let _ = block.transactions_mut().pop();
 
         // Invalidate block by return back `tx2` transaction skipped during production.
-        block.transactions.insert(block.transactions.len() - 1, tx2);
+        let index = block.transactions().len() - 1;
+        block.transactions_mut().insert(index, tx2);
+        block.transactions_mut().push(mint_tx.into());
         let exec = make_executor(&[&message]);
-        let res = exec.execute_block(
-            ExecutionType::Validation(PartialBlockComponent::from_partial_block(
-                &mut block,
-            )),
-            ExecutionOptions {
-                utxo_validation: true,
-            },
-        );
+        let res = exec.execute_block_validation(block, options);
         assert!(matches!(
             res,
             Err(ExecutorError::TransactionValidity(
@@ -2909,9 +2862,7 @@ mod tests {
         assert!(skipped_transactions.is_empty());
 
         let validator = create_executor(db.clone(), config);
-        let result = validator.execute_without_commit::<OnceTransactionsSource>(
-            ExecutionTypes::Validation(block),
-        );
+        let result = validator.validate_without_commit(block);
         assert!(result.is_ok(), "{result:?}")
     }
 

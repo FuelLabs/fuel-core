@@ -174,23 +174,21 @@ where
     R: Fn() -> ExecutorResult<MockExecutionResult> + Send + 'static,
 {
     let mut executor = MockExecutor::default();
-    executor
-        .expect_execute_without_commit()
-        .return_once(move |_| {
-            let mock_result = result()?;
-            let skipped_transactions: Vec<_> = (0..mock_result.skipped_transactions)
-                .map(|_| (TxId::zeroed(), ExecutorError::InvalidBlockId))
-                .collect();
-            Ok(Uncommitted::new(
-                ExecutionResult {
-                    block: mock_result.block.entity,
-                    skipped_transactions,
-                    tx_status: vec![],
-                    events: vec![],
-                },
-                StorageTransaction::new(database),
-            ))
-        });
+    executor.expect_execute_validation().return_once(move |_| {
+        let mock_result = result()?;
+        let skipped_transactions: Vec<_> = (0..mock_result.skipped_transactions)
+            .map(|_| (TxId::zeroed(), ExecutorError::InvalidBlockId))
+            .collect();
+        Ok(Uncommitted::new(
+            ExecutionResult {
+                block: mock_result.block.entity,
+                skipped_transactions,
+                tx_status: vec![],
+                events: vec![],
+            },
+            StorageTransaction::new(database),
+        ))
+    });
 
     executor
 }

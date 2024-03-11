@@ -123,6 +123,7 @@ use fuel_core_types::{
             Event as ExecutorEvent,
             ExecutionKind,
             ExecutionResult,
+            ExecutionType,
             ExecutionTypes,
             Result as ExecutorResult,
             TransactionExecutionResult,
@@ -200,6 +201,20 @@ where
         executor.execute_and_commit(block)
     }
 
+    pub fn validate_and_commit(
+        &self,
+        block: Block,
+        options: ExecutionOptions,
+    ) -> ExecutorResult<ExecutionResult> {
+        let executor = ExecutionInstance {
+            database: self.database_view_provider.latest_view(),
+            relayer: self.relayer_view_provider.latest_view(),
+            config: self.config.clone(),
+            options,
+        };
+        executor.validate_and_commit(block)
+    }
+
     /// Executes the partial block and returns `ExecutionData` as a result.
     #[cfg(any(test, feature = "test-helpers"))]
     pub fn execute_block<TxSource>(
@@ -216,8 +231,22 @@ where
             config: self.config.clone(),
             options,
         };
-        let mut block_transaction = executor.database.transaction();
-        executor.execute_block(block_transaction.as_mut(), block)
+        let mut storage_transaction = executor.database.transaction();
+        let (execution_kind, components) = block.split();
+        let gas_price = components.gas_price;
+        match execution_kind {
+            ExecutionKind::DryRun => {
+                executor.execute_block_dry_run(storage_transaction.as_mut(), components)
+            }
+            ExecutionKind::Production => executor.execute_block_production(
+                storage_transaction.as_mut(),
+                components,
+                gas_price,
+            ),
+            ExecutionKind::Validation => {
+                todo!("remove this")
+            }
+        }
     }
 
     pub fn execute_without_commit<TxSource>(
@@ -236,7 +265,7 @@ where
         executor.execute_inner(block)
     }
 
-    pub fn execute_validation(
+    pub fn validate_without_commit(
         &self,
         block: Block,
     ) -> ExecutorResult<UncommittedResult<StorageTransaction<View>>> {
@@ -245,6 +274,20 @@ where
             relayer: self.relayer_view_provider.latest_view(),
             config: self.config.clone(),
             options: self.config.as_ref().into(),
+        };
+        executor.execute_validation(block)
+    }
+
+    pub fn execute_block_validation(
+        &self,
+        block: Block,
+        options: ExecutionOptions,
+    ) -> ExecutorResult<UncommittedResult<StorageTransaction<View>>> {
+        let executor = ExecutionInstance {
+            database: self.database_view_provider.latest_view(),
+            relayer: self.relayer_view_provider.latest_view(),
+            config: self.config.clone(),
+            options,
         };
         executor.execute_validation(block)
     }
@@ -337,6 +380,12 @@ where
         db_transaction.commit()?;
         Ok(result)
     }
+
+    fn validate_and_commit(self, block: Block) -> ExecutorResult<ExecutionResult> {
+        let (result, db_transaction) = self.validate_without_commit(block)?.into();
+        db_transaction.commit()?;
+        Ok(result)
+    }
 }
 
 impl<R, D> ExecutionInstance<R, D>
@@ -352,6 +401,13 @@ where
         TxSource: TransactionsSource,
     {
         self.execute_inner(block)
+    }
+
+    pub fn validate_without_commit(
+        self,
+        block: Block,
+    ) -> ExecutorResult<UncommittedResult<StorageTransaction<D>>> {
+        self.execute_validation(block)
     }
 
     pub fn dry_run(
@@ -754,13 +810,6 @@ where
                 .next(remaining_gas_limit)
                 .into_iter()
                 .peekable();
-        }
-
-        // After the execution of all transactions in production mode, we can set the final fee.
-        if execution_kind == ExecutionKind::Production {}
-
-        if execution_kind != ExecutionKind::DryRun && !data.found_mint {
-            return Err(ExecutorError::MintMissing)
         }
 
         Ok(data)

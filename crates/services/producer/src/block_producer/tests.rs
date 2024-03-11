@@ -10,6 +10,8 @@ use crate::{
     Config,
     Producer,
 };
+
+use crate::block_producer::gas_price::StaticGasPrice;
 use fuel_core_producer as _;
 use fuel_core_types::{
     blockchain::{
@@ -248,7 +250,8 @@ impl<Executor> TestContext<Executor> {
         }
     }
 
-    pub fn producer(self) -> Producer<MockDb, MockTxPool, Executor> {
+    pub fn producer(self) -> Producer<MockDb, MockTxPool, Executor, StaticGasPrice> {
+        let gas_price = self.config.gas_price;
         Producer {
             config: self.config,
             view_provider: self.db,
@@ -256,6 +259,7 @@ impl<Executor> TestContext<Executor> {
             executor: self.executor,
             relayer: Box::new(self.relayer),
             lock: Default::default(),
+            gas_price_provider: StaticGasPrice::new(gas_price),
         }
     }
 }
