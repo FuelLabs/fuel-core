@@ -40,7 +40,10 @@ use fuel_core_types::{
             ConsensusHeader,
             PartialBlockHeader,
         },
-        primitives::Empty,
+        primitives::{
+            DaBlockHeight,
+            Empty,
+        },
         SealedBlock,
     },
     entities::{
@@ -138,12 +141,11 @@ fn cleanup_genesis_progress(
 
 pub fn create_genesis_block(config: &Config) -> Block {
     let block_height = config.state_reader.block_height();
+    let da_block_height = config.state_reader.da_block_height();
     Block::new(
         PartialBlockHeader {
             application: ApplicationHeader::<Empty> {
-                // TODO: Set `da_height` based on the chain config.
-                //  https://github.com/FuelLabs/fuel-core/issues/1667
-                da_height: Default::default(),
+                da_height: da_block_height,
                 generated: Empty,
             },
             consensus: ConsensusHeader::<Empty> {
@@ -264,8 +266,15 @@ fn init_contract(
 fn init_da_message(
     transaction: &mut StorageTransaction<&mut Database>,
     msg: MessageConfig,
+    da_height: DaBlockHeight,
 ) -> anyhow::Result<()> {
     let message: Message = msg.into();
+
+    if message.da_height() > da_height {
+        return Err(anyhow!(
+            "message da_height cannot be greater than genesis da block height"
+        ));
+    }
 
     if transaction
         .storage::<Messages>()
@@ -411,6 +420,7 @@ mod tests {
             contract_state,
             contract_balance,
             block_height: BlockHeight::from(0u32),
+            da_block_height: Default::default(),
         };
         let state_reader = StateReader::in_memory(state);
 

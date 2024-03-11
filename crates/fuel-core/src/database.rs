@@ -41,6 +41,10 @@ use fuel_core_storage::{
     },
     not_found,
     tables::FuelBlocks,
+    structured_storage::{
+        StructuredStorage,
+        TableWithBlueprint,
+    },
     transactional::{
         AtomicView,
         Changes,
@@ -70,6 +74,8 @@ pub type Result<T> = core::result::Result<T, Error>;
 // TODO: Extract `Database` and all belongs into `fuel-core-database`.
 #[cfg(feature = "rocksdb")]
 use crate::state::rocks_db::RocksDb;
+use fuel_core_storage::tables::FuelBlocks;
+use fuel_core_types::blockchain::block::CompressedBlock;
 #[cfg(feature = "rocksdb")]
 use std::path::Path;
 
@@ -272,9 +278,9 @@ impl ChainStateDb for Database {
         Self::iter_message_configs(self).into_boxed()
     }
 
-    fn get_block_height(&self) -> StorageResult<BlockHeight> {
-        self.latest_height()?
-            .ok_or(not_found!("Block height not found"))
+    fn get_last_block(&self) -> StorageResult<CompressedBlock> {
+        self.latest_compressed_block()?
+            .ok_or(not_found!(FuelBlocks))
     }
 }
 

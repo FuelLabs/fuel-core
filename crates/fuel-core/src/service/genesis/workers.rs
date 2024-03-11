@@ -26,7 +26,10 @@ use fuel_core_chain_config::{
     StateReader,
 };
 use fuel_core_storage::transactional::StorageTransaction;
-use fuel_core_types::fuel_types::BlockHeight;
+use fuel_core_types::{
+    blockchain::primitives::DaBlockHeight,
+    fuel_types::BlockHeight,
+};
 use tokio::sync::Notify;
 use tokio_util::sync::CancellationToken;
 
@@ -70,6 +73,7 @@ pub struct GenesisWorkers {
     db: Database,
     cancel_token: CancellationToken,
     block_height: BlockHeight,
+    da_block_height: DaBlockHeight,
     state_reader: StateReader,
     finished_signals: FinishedWorkerSignals,
 }
@@ -77,10 +81,12 @@ pub struct GenesisWorkers {
 impl GenesisWorkers {
     pub fn new(db: Database, state_reader: StateReader) -> Self {
         let block_height = state_reader.block_height();
+        let da_block_height = state_reader.da_block_height();
         Self {
             db,
             cancel_token: CancellationToken::new(),
             block_height,
+            da_block_height,
             state_reader,
             finished_signals: FinishedWorkerSignals::new(),
         }
@@ -160,7 +166,7 @@ impl GenesisWorkers {
         Handler<T>: ProcessState<Item = T>,
         I: IntoIterator<Item = anyhow::Result<Group<T>>>,
     {
-        let handler = Handler::new(self.block_height);
+        let handler = Handler::new(self.block_height, self.da_block_height);
         let database = self.db.clone();
         GenesisRunner::new(
             finished_signal,
@@ -175,13 +181,15 @@ impl GenesisWorkers {
 #[derive(Debug, Clone, Copy)]
 pub struct Handler<T> {
     block_height: BlockHeight,
+    da_block_height: DaBlockHeight,
     phaton_data: PhantomData<T>,
 }
 
 impl<T> Handler<T> {
-    pub fn new(block_height: BlockHeight) -> Self {
+    pub fn new(block_height: BlockHeight, da_block_height: DaBlockHeight) -> Self {
         Self {
             block_height,
+            da_block_height,
             phaton_data: PhantomData,
         }
     }
@@ -216,7 +224,7 @@ impl ProcessState for Handler<MessageConfig> {
     ) -> anyhow::Result<()> {
         group
             .into_iter()
-            .try_for_each(|message| init_da_message(tx, message))
+            .try_for_each(|message| init_da_message(tx, message, self.da_block_height))
     }
 
     fn genesis_resource() -> GenesisResource {
