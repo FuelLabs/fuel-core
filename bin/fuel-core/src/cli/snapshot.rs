@@ -270,6 +270,10 @@ mod tests {
             FuelBlocks,
             Messages,
         },
+        transactional::{
+            IntoTransaction,
+            StorageTransaction,
+        },
         ContractsAssetKey,
         ContractsStateKey,
         StorageAsMut,
@@ -310,13 +314,20 @@ mod tests {
     use super::*;
 
     struct DbPopulator {
-        db: Database,
+        db: StorageTransaction<Database>,
         rng: StdRng,
     }
 
     impl DbPopulator {
         fn new(db: Database, rng: StdRng) -> Self {
-            Self { db, rng }
+            Self {
+                db: db.into_transaction(),
+                rng,
+            }
+        }
+
+        fn commit(self) {
+            self.db.commit().expect("failed to commit transaction");
         }
 
         fn given_persisted_state(
@@ -371,7 +382,10 @@ mod tests {
             let height = 10u32.into();
             block.header_mut().application_mut().da_height = 14u64.into();
             block.header_mut().set_block_height(height);
-            let _ = self.db.storage::<FuelBlocks>().insert(&height, &block);
+            let _ = self
+                .db
+                .storage_as_mut::<FuelBlocks>()
+                .insert(&height, &block);
 
             block
         }
@@ -521,7 +535,7 @@ mod tests {
 
         let block = db.given_block();
         let state = db.given_persisted_state(10, 10, 10, 10, 10);
-        drop(db);
+        db.commit();
 
         // when
         exec(Command {
@@ -565,7 +579,7 @@ mod tests {
 
         db.given_block();
         let state = db.given_persisted_state(10, 10, 10, 10, 10);
-        drop(db);
+        db.commit();
 
         // when
         exec(Command {
@@ -622,7 +636,7 @@ mod tests {
         let state = sorted_state(db.given_persisted_state(10, 10, 10, 10, 10));
         let random_contract = state.contracts.choose(&mut db.rng).unwrap().clone();
         let contract_id = random_contract.contract_id;
-        drop(db);
+        db.commit();
 
         // when
         exec(Command {
