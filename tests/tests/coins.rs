@@ -309,7 +309,7 @@ mod message_coin {
                     nonce: (nonce as u64).into(),
                     amount,
                     data: vec![],
-                    da_height: DaBlockHeight::from(1u64),
+                    da_height: DaBlockHeight::from(0u64),
                 })
                 .collect(),
             ..Default::default()
@@ -529,7 +529,7 @@ mod all_coins {
                     nonce: (nonce as u64).into(),
                     amount,
                     data: vec![],
-                    da_height: DaBlockHeight::from(1u64),
+                    da_height: DaBlockHeight::from(0u64),
                 })
                 .collect(),
             ..Default::default()

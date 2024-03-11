@@ -132,5 +132,6 @@
   ],
   "contract_state": [],
   "contract_balance": [],
-  "block_height": 0
+  "block_height": 0,
+  "da_block_height": 0
 }

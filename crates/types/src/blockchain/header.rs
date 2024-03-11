@@ -96,7 +96,9 @@ impl BlockHeader {
     }
 
     /// Mutable getter for application portion of header
-    fn application_mut(&mut self) -> &mut ApplicationHeader<GeneratedApplicationFields> {
+    pub fn application_mut(
+        &mut self,
+    ) -> &mut ApplicationHeader<GeneratedApplicationFields> {
         match self {
             BlockHeader::V1(v1) => &mut v1.application,
         }

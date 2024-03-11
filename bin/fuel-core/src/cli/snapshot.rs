@@ -134,7 +134,7 @@ fn contract_snapshot(
     std::fs::create_dir_all(output_dir)?;
 
     let (contract, state, balance) = db.get_contract_by_id(contract_id)?;
-    let block_height = db.get_block_height()?;
+    let block = db.get_last_block()?;
 
     let metadata = write_metadata(output_dir, Encoding::Json)?;
     let mut writer = StateWriter::for_snapshot(&metadata)?;
@@ -142,7 +142,7 @@ fn contract_snapshot(
     writer.write_contracts(vec![contract])?;
     writer.write_contract_state(state)?;
     writer.write_contract_balance(balance)?;
-    writer.write_block_height(block_height)?;
+    writer.write_block_data(*block.header().height(), block.header().da_height)?;
     writer.close()?;
     Ok(())
 }
@@ -221,7 +221,8 @@ fn write_chain_state(
         writer.write_contract_balance(chunk)
     })?;
 
-    writer.write_block_height(db.get_block_height()?)?;
+    let block = db.get_last_block()?;
+    writer.write_block_data(*block.header().height(), block.header().da_height)?;
 
     writer.close()?;
 
@@ -250,14 +251,6 @@ mod tests {
 
     use std::iter::repeat_with;
 
-    use fuel_core::database::{
-        database_description::{
-            on_chain::OnChain,
-            DatabaseDescription,
-            DatabaseMetadata,
-        },
-        metadata::MetadataTable,
-    };
     use fuel_core_chain_config::{
         CoinConfig,
         ContractBalanceConfig,
@@ -274,6 +267,7 @@ mod tests {
             ContractsLatestUtxo,
             ContractsRawCode,
             ContractsState,
+            FuelBlocks,
             Messages,
         },
         ContractsAssetKey,
@@ -281,7 +275,10 @@ mod tests {
         StorageAsMut,
     };
     use fuel_core_types::{
-        blockchain::primitives::DaBlockHeight,
+        blockchain::{
+            block::CompressedBlock,
+            primitives::DaBlockHeight,
+        },
         entities::{
             coins::coin::{
                 CompressedCoin,
@@ -300,7 +297,6 @@ mod tests {
             TxPointer,
             UtxoId,
         },
-        fuel_types::BlockHeight,
         fuel_vm::Salt,
     };
     use rand::{
@@ -357,7 +353,7 @@ mod tests {
                     .collect()
             };
 
-            let block_height = self.given_block_height();
+            let block = self.given_block();
 
             StateConfig {
                 coins,
@@ -365,24 +361,19 @@ mod tests {
                 contracts,
                 contract_state,
                 contract_balance,
-                block_height,
+                block_height: *block.header().height(),
+                da_block_height: block.header().da_height,
             }
         }
 
-        fn given_block_height(&mut self) -> BlockHeight {
-            let height = BlockHeight::from(10);
-            self.db
-                .storage::<MetadataTable<OnChain>>()
-                .insert(
-                    &(),
-                    &DatabaseMetadata::V1 {
-                        version: OnChain::version(),
-                        height,
-                    },
-                )
-                .unwrap();
+        fn given_block(&mut self) -> CompressedBlock {
+            let mut block = CompressedBlock::default();
+            let height = 10u32.into();
+            block.header_mut().application_mut().da_height = 14u64.into();
+            block.header_mut().set_block_height(height);
+            let _ = self.db.storage::<FuelBlocks>().insert(&height, &block);
 
-            height
+            block
         }
 
         fn given_coin(&mut self) -> CoinConfig {
@@ -528,7 +519,7 @@ mod tests {
         let db_path = temp_dir.path().join("db");
         let mut db = DbPopulator::new(open_db(&db_path)?, StdRng::seed_from_u64(2));
 
-        let height = db.given_block_height();
+        let block = db.given_block();
         let state = db.given_persisted_state(10, 10, 10, 10, 10);
         drop(db);
 
@@ -547,7 +538,8 @@ mod tests {
 
         let snapshot = StateConfig::from_snapshot_metadata(snapshot)?;
 
-        assert_eq!(snapshot.block_height, height);
+        assert_eq!(snapshot.block_height, *block.header().height());
+        assert_eq!(snapshot.da_block_height, block.header().da_height);
 
         assert_ne!(snapshot, state);
         assert_eq!(snapshot, sorted_state(state));
@@ -571,7 +563,7 @@ mod tests {
         let db_path = temp_dir.path().join("db");
         let mut db = DbPopulator::new(open_db(&db_path)?, StdRng::seed_from_u64(2));
 
-        db.given_block_height();
+        db.given_block();
         let state = db.given_persisted_state(10, 10, 10, 10, 10);
         drop(db);
 
@@ -665,7 +657,8 @@ mod tests {
                 contract_state: expected_contract_state,
                 contract_balance: expected_contract_balance,
                 contracts: vec![random_contract],
-                block_height: state.block_height
+                block_height: state.block_height,
+                da_block_height: state.da_block_height,
             }
         );
 

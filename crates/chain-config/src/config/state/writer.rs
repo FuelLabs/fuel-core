@@ -7,7 +7,10 @@ use crate::{
     SnapshotMetadata,
     StateConfig,
 };
-use fuel_core_types::fuel_types::BlockHeight;
+use fuel_core_types::{
+    blockchain::primitives::DaBlockHeight,
+    fuel_types::BlockHeight,
+};
 use std::path::PathBuf;
 
 #[cfg(feature = "parquet")]
@@ -26,6 +29,7 @@ enum EncoderType {
         contract_state: parquet::encode::PostcardEncoder<ContractStateConfig>,
         contract_balance: parquet::encode::PostcardEncoder<ContractBalanceConfig>,
         block_height: parquet::encode::PostcardEncoder<BlockHeight>,
+        da_block_height: parquet::encode::PostcardEncoder<DaBlockHeight>,
     },
 }
 
@@ -205,6 +209,7 @@ impl StateWriter {
             contract_state,
             contract_balance,
             block_height,
+            da_block_height,
         } = files;
 
         Ok(Self {
@@ -215,6 +220,7 @@ impl StateWriter {
                 contract_state: create_encoder(contract_state, compression)?,
                 contract_balance: create_encoder(contract_balance, compression)?,
                 block_height: create_encoder(block_height, compression)?,
+                da_block_height: create_encoder(da_block_height, compression)?,
             },
         })
     }
@@ -225,7 +231,7 @@ impl StateWriter {
         self.write_messages(state_config.messages)?;
         self.write_contract_state(state_config.contract_state)?;
         self.write_contract_balance(state_config.contract_balance)?;
-        self.write_block_height(state_config.block_height)?;
+        self.write_block_data(state_config.block_height, state_config.da_block_height)?;
         self.close()?;
         Ok(())
     }
@@ -296,18 +302,27 @@ impl StateWriter {
         }
     }
 
-    // TODO: Decide where to store `block_height` for the genesis block.
-    //  it can be part of the chain config or maybe part of something else that
-    //  is available for all nodes in the network.
-    //  https://github.com/FuelLabs/fuel-core/issues/1667
-    pub fn write_block_height(&mut self, height: BlockHeight) -> anyhow::Result<()> {
+    pub fn write_block_data(
+        &mut self,
+        height: BlockHeight,
+        da_height: DaBlockHeight,
+    ) -> anyhow::Result<()> {
         match &mut self.encoder {
             EncoderType::Json { buffer, .. } => {
                 buffer.block_height = height;
+                buffer.da_block_height = da_height;
                 Ok(())
             }
             #[cfg(feature = "parquet")]
-            EncoderType::Parquet { block_height, .. } => block_height.write(vec![height]),
+            EncoderType::Parquet {
+                block_height,
+                da_block_height,
+                ..
+            } => {
+                block_height.write(vec![height])?;
+                da_block_height.write(vec![da_height])?;
+                Ok(())
+            }
         }
     }
 
@@ -329,6 +344,7 @@ impl StateWriter {
                 contract_state,
                 contract_balance,
                 block_height,
+                da_block_height,
             } => {
                 coins.close()?;
                 messages.close()?;
@@ -336,6 +352,7 @@ impl StateWriter {
                 contract_state.close()?;
                 contract_balance.close()?;
                 block_height.close()?;
+                da_block_height.close()?;
                 Ok(())
             }
         }
@@ -415,6 +432,7 @@ mod tests {
                 "contract_state.parquet",
                 "contract_balance.parquet",
                 "block_height.parquet",
+                "da_block_height.parquet",
             ]
             .map(|name| dir.path().join(name)),
         );

@@ -65,7 +65,7 @@ async fn balance() {
                 nonce: (nonce as u64).into(),
                 amount,
                 data: vec![],
-                da_height: DaBlockHeight::from(1usize),
+                da_height: DaBlockHeight::from(0usize),
             })
             .collect(),
         ..Default::default()
@@ -184,7 +184,7 @@ async fn first_5_balances() {
                         nonce: (nonce as u64).into(),
                         amount,
                         data: vec![],
-                        da_height: DaBlockHeight::from(1usize),
+                        da_height: DaBlockHeight::from(0usize),
                     };
                     nonce += 1;
                     message
