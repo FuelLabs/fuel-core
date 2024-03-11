@@ -436,6 +436,7 @@ mod tests {
                 "contract_state.parquet",
                 "contract_balance.parquet",
                 "block_height.parquet",
+                "da_block_height.parquet",
             ]
             .map(|name| dir.path().join(name)),
         );
