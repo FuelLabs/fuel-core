@@ -12,7 +12,7 @@ pub struct Config {
     pub chain_config: ChainConfig,
     /// The block height of the genesis block.
     pub block_height: BlockHeight,
-    /// The DAT block height at genesis block.
+    /// The DA block height at genesis block.
     pub da_block_height: DaBlockHeight,
 }
 
