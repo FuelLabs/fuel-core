@@ -35,6 +35,21 @@ use fuel_core_types::{
 use fuel_core_metrics::txpool_metrics::txpool_metrics;
 use fuel_core_storage::transactional::AtomicView;
 use fuel_core_types::{
+    fuel_tx::{
+        input::{
+            coin::{
+                CoinPredicate,
+                CoinSigned,
+            },
+            message::{
+                MessageCoinPredicate,
+                MessageCoinSigned,
+                MessageDataPredicate,
+                MessageDataSigned,
+            },
+        },
+        Input,
+    },
     fuel_vm::checked_transaction::CheckPredicateParams,
     services::executor::TransactionExecutionStatus,
 };
@@ -45,6 +60,11 @@ use std::{
     sync::Arc,
 };
 use tokio_rayon::AsyncRayonHandle;
+
+#[cfg(test)]
+mod test_helpers;
+#[cfg(test)]
+mod tests;
 
 #[derive(Debug, Clone)]
 pub struct TxPool<ViewProvider> {
@@ -73,6 +93,11 @@ impl<ViewProvider> TxPool<ViewProvider> {
     #[cfg(test)]
     pub fn config(&self) -> &Config {
         &self.config
+    }
+
+    #[cfg(test)]
+    pub fn config_mut(&mut self) -> &mut Config {
+        &mut self.config
     }
 
     pub fn txs(&self) -> &HashMap<TxId, TxInfo> {
@@ -236,6 +261,67 @@ impl<ViewProvider> TxPool<ViewProvider> {
 
         result
     }
+
+    fn check_blacklisting(&self, tx: &PoolTransaction) -> Result<(), Error> {
+        for input in tx.inputs() {
+            match input {
+                Input::CoinSigned(CoinSigned { utxo_id, owner, .. })
+                | Input::CoinPredicate(CoinPredicate { utxo_id, owner, .. }) => {
+                    if self.config.blacklist.contains_coin(utxo_id) {
+                        return Err(Error::BlacklistedUTXO(*utxo_id))
+                    }
+                    if self.config.blacklist.contains_address(owner) {
+                        return Err(Error::BlacklistedOwner(*owner))
+                    }
+                }
+                Input::Contract(contract) => {
+                    if self
+                        .config
+                        .blacklist
+                        .contains_contract(&contract.contract_id)
+                    {
+                        return Err(Error::BlacklistedContract(contract.contract_id))
+                    }
+                }
+                Input::MessageCoinSigned(MessageCoinSigned {
+                    nonce,
+                    sender,
+                    recipient,
+                    ..
+                })
+                | Input::MessageCoinPredicate(MessageCoinPredicate {
+                    nonce,
+                    sender,
+                    recipient,
+                    ..
+                })
+                | Input::MessageDataSigned(MessageDataSigned {
+                    nonce,
+                    sender,
+                    recipient,
+                    ..
+                })
+                | Input::MessageDataPredicate(MessageDataPredicate {
+                    nonce,
+                    sender,
+                    recipient,
+                    ..
+                }) => {
+                    if self.config.blacklist.contains_message(nonce) {
+                        return Err(Error::BlacklistedMessage(*nonce))
+                    }
+                    if self.config.blacklist.contains_address(sender) {
+                        return Err(Error::BlacklistedOwner(*sender))
+                    }
+                    if self.config.blacklist.contains_address(recipient) {
+                        return Err(Error::BlacklistedOwner(*recipient))
+                    }
+                }
+            }
+        }
+
+        Ok(())
+    }
 }
 
 impl<ViewProvider, View> TxPool<ViewProvider>
@@ -266,6 +352,8 @@ where
             CheckedTransaction::Create(create) => PoolTransaction::Create(create),
             CheckedTransaction::Mint(_) => return Err(Error::MintIsDisallowed),
         });
+
+        self.check_blacklisting(tx.as_ref())?;
 
         if !tx.is_computed() {
             return Err(Error::NoMetadata)
@@ -469,8 +557,3 @@ impl ParallelExecutor for TokioWithRayon {
         futures::future::join_all(futures).await
     }
 }
-
-#[cfg(test)]
-mod test_helpers;
-#[cfg(test)]
-mod tests;

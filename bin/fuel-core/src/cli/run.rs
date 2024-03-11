@@ -1,15 +1,15 @@
 #![allow(unused_variables)]
 use crate::{
     cli::{
-        run::consensus::PoATriggerArgs,
+        run::{
+            consensus::PoATriggerArgs,
+            tx_pool::TxPoolArgs,
+        },
         DEFAULT_DB_PATH,
     },
     FuelService,
 };
-use anyhow::{
-    anyhow,
-    Context,
-};
+use anyhow::Context;
 use clap::Parser;
 use fuel_core::{
     chain_config::{
@@ -30,7 +30,10 @@ use fuel_core::{
         ServiceTrait,
         VMConfig,
     },
-    txpool::Config as TxPoolConfig,
+    txpool::{
+        config::BlackList,
+        Config as TxPoolConfig,
+    },
     types::{
         blockchain::primitives::SecretKeyWrapper,
         fuel_tx::ContractId,
@@ -73,6 +76,7 @@ mod consensus;
 mod profiling;
 #[cfg(feature = "relayer")]
 mod relayer;
+mod tx_pool;
 
 /// Run the Fuel client node locally.
 #[derive(Debug, Clone, Parser)]
@@ -155,7 +159,11 @@ pub struct Command {
     ///
     /// If not set, `consensus_key` is used as the provider of the `Address`.
     #[arg(long = "coinbase-recipient", env)]
-    pub coinbase_recipient: Option<String>,
+    pub coinbase_recipient: Option<ContractId>,
+
+    /// The cli arguments supported by the `TxPool`.
+    #[clap(flatten)]
+    pub tx_pool: TxPoolArgs,
 
     #[cfg_attr(feature = "relayer", clap(flatten))]
     #[cfg(feature = "relayer")]
@@ -177,22 +185,6 @@ pub struct Command {
 
     #[clap(long = "verify-max-relayer-wait", default_value = "30s", env)]
     pub max_wait_time: humantime::Duration,
-
-    /// The max time to live of the transaction inside of the `TxPool`.
-    #[clap(long = "tx-pool-ttl", default_value = "5m", env)]
-    pub tx_pool_ttl: humantime::Duration,
-
-    /// The max number of transactions that the `TxPool` can simultaneously store.
-    #[clap(long = "tx-max-number", default_value = "4064", env)]
-    pub tx_max_number: usize,
-
-    /// The max depth of the dependent transactions that supported by the `TxPool`.
-    #[clap(long = "tx-max-depth", default_value = "10", env)]
-    pub tx_max_depth: usize,
-
-    /// The maximum number of active subscriptions that supported by the `TxPool`.
-    #[clap(long = "tx-number-active-subscriptions", default_value = "4064", env)]
-    pub tx_number_active_subscriptions: usize,
 
     /// The number of reserved peers to connect to before starting to sync.
     #[clap(long = "min-connected-reserved-peers", default_value = "0", env)]
@@ -241,10 +233,7 @@ impl Command {
             metrics,
             max_da_lag,
             max_wait_time,
-            tx_pool_ttl,
-            tx_max_number,
-            tx_max_depth,
-            tx_number_active_subscriptions,
+            tx_pool,
             min_connected_reserved_peers,
             time_until_synced,
             query_log_threshold_time,
@@ -301,10 +290,7 @@ impl Command {
         });
 
         let coinbase_recipient = if let Some(coinbase_recipient) = coinbase_recipient {
-            Some(
-                ContractId::from_str(coinbase_recipient.as_str())
-                    .map_err(|err| anyhow!(err))?,
-            )
+            Some(coinbase_recipient)
         } else {
             tracing::warn!("The coinbase recipient `ContractId` is not set!");
             None
@@ -323,6 +309,24 @@ impl Command {
 
         let block_importer =
             fuel_core::service::config::fuel_core_importer::Config::new(&chain_conf);
+
+        let TxPoolArgs {
+            tx_pool_ttl,
+            tx_max_number,
+            tx_max_depth,
+            tx_number_active_subscriptions,
+            tx_blacklist_addresses,
+            tx_blacklist_coins,
+            tx_blacklist_messages,
+            tx_blacklist_contracts,
+        } = tx_pool;
+
+        let blacklist = BlackList::new(
+            tx_blacklist_addresses,
+            tx_blacklist_coins,
+            tx_blacklist_messages,
+            tx_blacklist_contracts,
+        );
 
         let config = Config {
             addr,
@@ -345,6 +349,7 @@ impl Command {
                 metrics,
                 tx_pool_ttl.into(),
                 tx_number_active_subscriptions,
+                blacklist,
             ),
             block_producer: ProducerConfig {
                 utxo_validation,

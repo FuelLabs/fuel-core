@@ -22,6 +22,7 @@ use crate::{
         UtxoId,
     },
     fuel_types::{
+        Address,
         ContractId,
         Nonce,
     },
@@ -311,6 +312,14 @@ pub enum Error {
     ConsensusValidity(CheckError),
     #[error("Mint transactions are disallowed from the txpool")]
     MintIsDisallowed,
+    #[error("The UTXO `{0}` is blacklisted")]
+    BlacklistedUTXO(UtxoId),
+    #[error("The owner `{0}` is blacklisted")]
+    BlacklistedOwner(Address),
+    #[error("The contract `{0}` is blacklisted")]
+    BlacklistedContract(ContractId),
+    #[error("The message `{0}` is blacklisted")]
+    BlacklistedMessage(Nonce),
     #[error("Database error: {0}")]
     Database(String),
     // TODO: We need it for now until channels are removed from TxPool.
