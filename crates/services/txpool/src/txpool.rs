@@ -35,6 +35,21 @@ use fuel_core_types::{
 use fuel_core_metrics::txpool_metrics::txpool_metrics;
 use fuel_core_storage::transactional::AtomicView;
 use fuel_core_types::{
+    fuel_tx::{
+        input::{
+            coin::{
+                CoinPredicate,
+                CoinSigned,
+            },
+            message::{
+                MessageCoinPredicate,
+                MessageCoinSigned,
+                MessageDataPredicate,
+                MessageDataSigned,
+            },
+        },
+        Input,
+    },
     fuel_vm::checked_transaction::CheckPredicateParams,
     services::executor::TransactionExecutionStatus,
 };
@@ -247,22 +262,16 @@ impl<ViewProvider> TxPool<ViewProvider> {
         result
     }
 
-    fn check_blacklisting(&self, tx: &PoolTransaction) -> anyhow::Result<()> {
+    fn check_blacklisting(&self, tx: &PoolTransaction) -> Result<(), Error> {
         for input in tx.inputs() {
             match input {
                 Input::CoinSigned(CoinSigned { utxo_id, owner, .. })
                 | Input::CoinPredicate(CoinPredicate { utxo_id, owner, .. }) => {
                     if self.config.blacklist.contains_coin(utxo_id) {
-                        return Err(anyhow::anyhow!(
-                            "The UTXO `{}` is blacklisted",
-                            utxo_id
-                        ))
+                        return Err(Error::BlacklistedUTXO(*utxo_id))
                     }
                     if self.config.blacklist.contains_address(owner) {
-                        return Err(anyhow::anyhow!(
-                            "The owner `{}` is blacklisted",
-                            owner
-                        ))
+                        return Err(Error::BlacklistedOwner(*owner))
                     }
                 }
                 Input::Contract(contract) => {
@@ -271,10 +280,7 @@ impl<ViewProvider> TxPool<ViewProvider> {
                         .blacklist
                         .contains_contract(&contract.contract_id)
                     {
-                        return Err(anyhow::anyhow!(
-                            "The contract `{}` is blacklisted",
-                            contract.contract_id
-                        ))
+                        return Err(Error::BlacklistedContract(contract.contract_id))
                     }
                 }
                 Input::MessageCoinSigned(MessageCoinSigned {
@@ -302,22 +308,13 @@ impl<ViewProvider> TxPool<ViewProvider> {
                     ..
                 }) => {
                     if self.config.blacklist.contains_message(nonce) {
-                        return Err(anyhow::anyhow!(
-                            "The message `{}` is blacklisted",
-                            nonce
-                        ))
+                        return Err(Error::BlacklistedMessage(*nonce))
                     }
                     if self.config.blacklist.contains_address(sender) {
-                        return Err(anyhow::anyhow!(
-                            "The sender `{}` is blacklisted",
-                            sender
-                        ))
+                        return Err(Error::BlacklistedOwner(*sender))
                     }
                     if self.config.blacklist.contains_address(recipient) {
-                        return Err(anyhow::anyhow!(
-                            "The recipient `{}` is blacklisted",
-                            recipient
-                        ))
+                        return Err(Error::BlacklistedOwner(*recipient))
                     }
                 }
             }

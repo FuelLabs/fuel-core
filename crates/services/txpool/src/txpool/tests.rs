@@ -82,23 +82,22 @@ async fn insert_simple_tx_succeeds() {
 
 #[tokio::test]
 async fn insert_simple_tx_with_blacklisted_utxo_id_fails() {
-    let mut rng = StdRng::seed_from_u64(0);
-    let db = MockDb::default();
-    let mut txpool = TxPool::new(Default::default(), db.clone());
+    let mut context = TextContext::default();
 
-    let (_, gas_coin) = setup_coin(&mut rng, Some(&txpool.database));
+    let (_, gas_coin) = context.setup_coin();
     let tx = TransactionBuilder::script(vec![], vec![])
         .script_gas_limit(GAS_LIMIT)
         .add_input(gas_coin.clone())
         .finalize_as_transaction();
-    let tx = check_unwrap_tx(tx, db.clone(), &txpool.config).await;
+    let mut txpool = context.build();
+    let tx = check_unwrap_tx(tx, &txpool.config).await;
     let utxo_id = *gas_coin.utxo_id().unwrap();
 
     // Given
     txpool.config_mut().blacklist.coins.insert(utxo_id);
 
     // When
-    let result = txpool.insert_inner(tx);
+    let result = txpool.insert_single(tx);
 
     // Then
     assert!(result.is_err());
@@ -110,23 +109,22 @@ async fn insert_simple_tx_with_blacklisted_utxo_id_fails() {
 
 #[tokio::test]
 async fn insert_simple_tx_with_blacklisted_owner_fails() {
-    let mut rng = StdRng::seed_from_u64(0);
-    let db = MockDb::default();
-    let mut txpool = TxPool::new(Default::default(), db.clone());
+    let mut context = TextContext::default();
 
-    let (_, gas_coin) = setup_coin(&mut rng, Some(&txpool.database));
+    let (_, gas_coin) = context.setup_coin();
     let tx = TransactionBuilder::script(vec![], vec![])
         .script_gas_limit(GAS_LIMIT)
         .add_input(gas_coin.clone())
         .finalize_as_transaction();
-    let tx = check_unwrap_tx(tx, db.clone(), &txpool.config).await;
+    let mut txpool = context.build();
+    let tx = check_unwrap_tx(tx, &txpool.config).await;
     let owner = *gas_coin.input_owner().unwrap();
 
     // Given
     txpool.config_mut().blacklist.owners.insert(owner);
 
     // When
-    let result = txpool.insert_inner(tx);
+    let result = txpool.insert_single(tx);
 
     // Then
     assert!(result.is_err());
@@ -138,12 +136,10 @@ async fn insert_simple_tx_with_blacklisted_owner_fails() {
 
 #[tokio::test]
 async fn insert_simple_tx_with_blacklisted_contract_fails() {
-    let mut rng = StdRng::seed_from_u64(0);
-    let db = MockDb::default();
-    let mut txpool = TxPool::new(Default::default(), db.clone());
+    let mut context = TextContext::default();
     let contract_id = Contract::EMPTY_CONTRACT_ID;
 
-    let (_, gas_coin) = setup_coin(&mut rng, Some(&txpool.database));
+    let (_, gas_coin) = context.setup_coin();
     let tx = TransactionBuilder::script(vec![], vec![])
         .script_gas_limit(GAS_LIMIT)
         .add_input(gas_coin.clone())
@@ -154,13 +150,14 @@ async fn insert_simple_tx_with_blacklisted_contract_fails() {
         ))
         .add_output(Output::contract(1, Default::default(), Default::default()))
         .finalize_as_transaction();
-    let tx = check_unwrap_tx(tx, db.clone(), &txpool.config).await;
+    let mut txpool = context.build();
+    let tx = check_unwrap_tx(tx, &txpool.config).await;
 
     // Given
     txpool.config_mut().blacklist.contracts.insert(contract_id);
 
     // When
-    let result = txpool.insert_inner(tx);
+    let result = txpool.insert_single(tx);
 
     // Then
     assert!(result.is_err());
@@ -179,18 +176,18 @@ async fn insert_simple_tx_with_blacklisted_message_fails() {
         .add_input(input)
         .finalize_as_transaction();
 
-    let nonce = message.nonce;
-    let db = MockDb::default();
-    db.insert_message(message);
-    let mut txpool = TxPool::new(Default::default(), db.clone());
+    let nonce = *message.nonce();
+    let mut context = TextContext::default();
+    context.database_mut().insert_message(message);
+    let mut txpool = context.build();
 
-    let tx = check_unwrap_tx(tx, db.clone(), &txpool.config).await;
+    let tx = check_unwrap_tx(tx, &txpool.config).await;
 
     // Given
     txpool.config_mut().blacklist.messages.insert(nonce);
 
     // When
-    let result = txpool.insert_inner(tx);
+    let result = txpool.insert_single(tx);
 
     // Then
     assert!(result.is_err());
@@ -351,7 +348,7 @@ async fn not_inserted_known_tx() {
         .add_random_fee_input()
         .finalize()
         .into();
-    let tx = check_unwrap_tx(tx, db.clone(), &txpool.config).await;
+    let tx = check_unwrap_tx(tx, &txpool.config).await;
 
     txpool
         .insert_single(tx.clone())
