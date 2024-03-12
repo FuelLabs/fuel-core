@@ -31,7 +31,7 @@ pub enum Error {
         /// the database version expected by this build of fuel-core
         expected: u32,
     },
-    /// Multiple heights found in the commit to teh database.
+    /// Multiple heights found in the commit to the database.
     #[display(fmt = "Multiple heights found in the commit {heights:?}")]
     MultipleHeightsInCommit {
         /// List of heights found in the commit.

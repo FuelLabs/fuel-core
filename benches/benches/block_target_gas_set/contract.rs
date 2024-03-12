@@ -332,7 +332,6 @@ pub fn run_contract(group: &mut BenchmarkGroup<WallTime>) {
             AssetId::zeroed(),
             Default::default(),
             Default::default(),
-            Default::default(),
             predicate,
             vec![],
         );

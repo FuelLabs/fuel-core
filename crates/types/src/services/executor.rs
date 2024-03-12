@@ -318,6 +318,8 @@ pub enum Error {
     CoinbaseCannotIncreaseBalance(String),
     #[display(fmt = "Coinbase amount mismatches with expected.")]
     CoinbaseAmountMismatch,
+    #[display(fmt = "Coinbase gas price mismatches with expected.")]
+    CoinbaseGasPriceMismatch,
     #[from]
     TransactionValidity(TransactionValidityError),
     // TODO: Replace with `fuel_core_storage::Error` when execution error will live in the
@@ -384,8 +386,6 @@ impl From<ValidityError> for Error {
 pub enum TransactionValidityError {
     #[error("Coin({0:#x}) input was already spent")]
     CoinAlreadySpent(UtxoId),
-    #[error("Coin({0:#x}) has not yet reached maturity")]
-    CoinHasNotMatured(UtxoId),
     #[error("The input coin({0:#x}) doesn't match the coin from database")]
     CoinMismatch(UtxoId),
     #[error("The specified coin({0:#x}) doesn't exist")]
@@ -404,12 +404,6 @@ pub enum TransactionValidityError {
     ContractDoesNotExist(ContractId),
     #[error("Contract output index isn't valid: {0:#x}")]
     InvalidContractInputIndex(UtxoId),
-    #[error("The transaction contains predicate inputs which aren't enabled: {0:#x}")]
-    PredicateExecutionDisabled(TxId),
-    #[error(
-        "The transaction contains a predicate which failed to validate: TransactionId({0:#x})"
-    )]
-    InvalidPredicate(TxId),
     #[error("Transaction validity: {0:#?}")]
     Validation(CheckError),
 }

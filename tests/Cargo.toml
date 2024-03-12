@@ -57,6 +57,8 @@ tokio = { workspace = true, features = [
   "rt-multi-thread",
   "test-util",
 ] }
+[dev-dependencies]
+pretty_assertions = "1.4"
 
 [features]
 default = ["fuel-core/default", "relayer"]

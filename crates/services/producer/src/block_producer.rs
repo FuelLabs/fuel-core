@@ -44,10 +44,15 @@ mod tests;
 
 #[derive(Debug, derive_more::Display)]
 pub enum Error {
+    #[display(fmt = "Genesis block is absent")]
+    NoGenesisBlock,
     #[display(
-        fmt = "0 is an invalid block height for production. It is reserved for genesis data."
+        fmt = "The block height {height} should be higher than the previous block height {previous_block}"
     )]
-    GenesisBlock,
+    BlockHeightShouldBeHigherThanPrevious {
+        height: BlockHeight,
+        previous_block: BlockHeight,
+    },
     #[display(fmt = "Previous block height {_0} doesn't exist")]
     MissingBlock(BlockHeight),
     #[display(
@@ -111,6 +116,8 @@ where
             header_to_produce: header,
             transactions_source: source,
             coinbase_recipient: self.config.coinbase_recipient.unwrap_or_default(),
+            // TODO: Provide gas price https://github.com/FuelLabs/fuel-core/issues/1642
+            gas_price: self.config.gas_price,
             gas_limit: max_gas,
         };
 
@@ -205,6 +212,8 @@ where
             header_to_produce: header,
             transactions_source: transactions.clone(),
             coinbase_recipient: self.config.coinbase_recipient.unwrap_or_default(),
+            // TODO: Provide gas price https://github.com/FuelLabs/fuel-core/issues/1642
+            gas_price: self.config.gas_price,
             gas_limit: u64::MAX,
         };
 
@@ -234,7 +243,7 @@ where
 
 impl<ViewProvider, TxPool, Executor> Producer<ViewProvider, TxPool, Executor>
 where
-    ViewProvider: AtomicView + 'static,
+    ViewProvider: AtomicView<Height = BlockHeight> + 'static,
     ViewProvider::View: BlockProducerDatabase,
 {
     /// Create the header for a new block at the provided height
@@ -293,12 +302,17 @@ where
         &self,
         height: BlockHeight,
     ) -> anyhow::Result<PreviousBlockInfo> {
-        // TODO: It is not guaranteed that the genesis height is `0` height. Update the code to
-        //  use a genesis height from the database. If the `height` less than genesis height ->
-        //  return a new error.
+        let latest_height = self
+            .view_provider
+            .latest_height()
+            .ok_or(Error::NoGenesisBlock)?;
         // block 0 is reserved for genesis
-        if height == 0u32.into() {
-            Err(Error::GenesisBlock.into())
+        if height <= latest_height {
+            Err(Error::BlockHeightShouldBeHigherThanPrevious {
+                height,
+                previous_block: latest_height,
+            }
+            .into())
         } else {
             let view = self.view_provider.latest_view();
             // get info from previous block height

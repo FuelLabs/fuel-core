@@ -32,8 +32,13 @@ use fuel_core_types::{
         UtxoId,
     },
     fuel_types::ChainId,
-    fuel_vm::checked_transaction::Checked,
+    fuel_vm::checked_transaction::{
+        CheckError,
+        Checked,
+    },
 };
+
+use fuel_core_types::fuel_tx::Finalizable;
 use std::{
     cmp::Reverse,
     collections::HashMap,
@@ -76,13 +81,131 @@ async fn insert_simple_tx_succeeds() {
 }
 
 #[tokio::test]
+async fn insert_simple_tx_with_blacklisted_utxo_id_fails() {
+    let mut context = TextContext::default();
+
+    let (_, gas_coin) = context.setup_coin();
+    let tx = TransactionBuilder::script(vec![], vec![])
+        .script_gas_limit(GAS_LIMIT)
+        .add_input(gas_coin.clone())
+        .finalize_as_transaction();
+    let mut txpool = context.build();
+    let tx = check_unwrap_tx(tx, &txpool.config).await;
+    let utxo_id = *gas_coin.utxo_id().unwrap();
+
+    // Given
+    txpool.config_mut().blacklist.coins.insert(utxo_id);
+
+    // When
+    let result = txpool.insert_single(tx);
+
+    // Then
+    assert!(result.is_err());
+    assert!(result
+        .unwrap_err()
+        .to_string()
+        .contains(format!("The UTXO `{}` is blacklisted", utxo_id).as_str()));
+}
+
+#[tokio::test]
+async fn insert_simple_tx_with_blacklisted_owner_fails() {
+    let mut context = TextContext::default();
+
+    let (_, gas_coin) = context.setup_coin();
+    let tx = TransactionBuilder::script(vec![], vec![])
+        .script_gas_limit(GAS_LIMIT)
+        .add_input(gas_coin.clone())
+        .finalize_as_transaction();
+    let mut txpool = context.build();
+    let tx = check_unwrap_tx(tx, &txpool.config).await;
+    let owner = *gas_coin.input_owner().unwrap();
+
+    // Given
+    txpool.config_mut().blacklist.owners.insert(owner);
+
+    // When
+    let result = txpool.insert_single(tx);
+
+    // Then
+    assert!(result.is_err());
+    assert!(result
+        .unwrap_err()
+        .to_string()
+        .contains(format!("The owner `{}` is blacklisted", owner).as_str()));
+}
+
+#[tokio::test]
+async fn insert_simple_tx_with_blacklisted_contract_fails() {
+    let mut context = TextContext::default();
+    let contract_id = Contract::EMPTY_CONTRACT_ID;
+
+    let (_, gas_coin) = context.setup_coin();
+    let tx = TransactionBuilder::script(vec![], vec![])
+        .script_gas_limit(GAS_LIMIT)
+        .add_input(gas_coin.clone())
+        .add_input(create_contract_input(
+            Default::default(),
+            Default::default(),
+            contract_id,
+        ))
+        .add_output(Output::contract(1, Default::default(), Default::default()))
+        .finalize_as_transaction();
+    let mut txpool = context.build();
+    let tx = check_unwrap_tx(tx, &txpool.config).await;
+
+    // Given
+    txpool.config_mut().blacklist.contracts.insert(contract_id);
+
+    // When
+    let result = txpool.insert_single(tx);
+
+    // Then
+    assert!(result.is_err());
+    assert!(result
+        .unwrap_err()
+        .to_string()
+        .contains(format!("The contract `{}` is blacklisted", contract_id).as_str()));
+}
+
+#[tokio::test]
+async fn insert_simple_tx_with_blacklisted_message_fails() {
+    let (message, input) = create_message_predicate_from_message(5000, 0);
+
+    let tx = TransactionBuilder::script(vec![], vec![])
+        .script_gas_limit(GAS_LIMIT)
+        .add_input(input)
+        .finalize_as_transaction();
+
+    let nonce = *message.nonce();
+    let mut context = TextContext::default();
+    context.database_mut().insert_message(message);
+    let mut txpool = context.build();
+
+    let tx = check_unwrap_tx(tx, &txpool.config).await;
+
+    // Given
+    txpool.config_mut().blacklist.messages.insert(nonce);
+
+    // When
+    let result = txpool.insert_single(tx);
+
+    // Then
+    assert!(result.is_err());
+    assert!(result
+        .unwrap_err()
+        .to_string()
+        .contains(format!("The message `{}` is blacklisted", nonce).as_str()));
+}
+
+#[tokio::test]
 async fn insert_simple_tx_dependency_chain_succeeds() {
     let mut context = TextContext::default();
 
     let (_, gas_coin) = context.setup_coin();
     let (output, unset_input) = context.create_output_and_input(1);
     let tx1 = TransactionBuilder::script(vec![], vec![])
-        .gas_price(1)
+        .tip(1)
+        .max_fee_limit(1)
         .script_gas_limit(GAS_LIMIT)
         .add_input(gas_coin)
         .add_output(output)
@@ -91,7 +214,8 @@ async fn insert_simple_tx_dependency_chain_succeeds() {
     let (_, gas_coin) = context.setup_coin();
     let input = unset_input.into_input(UtxoId::new(tx1.id(&Default::default()), 0));
     let tx2 = TransactionBuilder::script(vec![], vec![])
-        .gas_price(1)
+        .tip(1)
+        .max_fee_limit(1)
         .script_gas_limit(GAS_LIMIT)
         .add_input(input)
         .add_input(gas_coin)
@@ -123,7 +247,8 @@ async fn faulty_t2_collided_on_contract_id_from_tx1() {
         Default::default(),
         Default::default(),
     )
-    .gas_price(10)
+    .tip(10)
+    .max_fee_limit(10)
     .add_input(gas_coin)
     .add_output(create_contract_output(contract_id))
     .add_output(output)
@@ -139,7 +264,8 @@ async fn faulty_t2_collided_on_contract_id_from_tx1() {
         Default::default(),
         Default::default(),
     )
-    .gas_price(9)
+    .tip(9)
+    .max_fee_limit(9)
     .add_input(gas_coin)
     .add_input(input)
     .add_output(create_contract_output(contract_id))
@@ -179,7 +305,9 @@ async fn fail_to_insert_tx_with_dependency_on_invalid_utxo_type() {
     // create a second transaction with utxo id referring to
     // the wrong type of utxo (contract instead of coin)
     let tx = TransactionBuilder::script(vec![], vec![])
-        .gas_price(1)
+        .tip(1)
+        .max_fee_limit(1)
+        .max_fee_limit(1)
         .script_gas_limit(GAS_LIMIT)
         .add_input(context.random_predicate(
             AssetId::BASE,
@@ -216,7 +344,10 @@ async fn not_inserted_known_tx() {
     let context = TextContext::default().config(config);
     let mut txpool = context.build();
 
-    let tx = Transaction::default_test_tx();
+    let tx = TransactionBuilder::script(vec![], vec![])
+        .add_random_fee_input()
+        .finalize()
+        .into();
     let tx = check_unwrap_tx(tx, &txpool.config).await;
 
     txpool
@@ -235,7 +366,8 @@ async fn try_to_insert_tx2_missing_utxo() {
 
     let input = context.random_predicate(AssetId::BASE, TEST_COIN_AMOUNT, None);
     let tx = TransactionBuilder::script(vec![], vec![])
-        .gas_price(10)
+        .tip(10)
+        .max_fee_limit(10)
         .script_gas_limit(GAS_LIMIT)
         .add_input(input)
         .finalize_as_transaction();
@@ -259,13 +391,15 @@ async fn higher_priced_tx_removes_lower_priced_tx() {
     let (_, coin_input) = context.setup_coin();
 
     let tx1 = TransactionBuilder::script(vec![], vec![])
-        .gas_price(10)
+        .tip(10)
+        .max_fee_limit(10)
         .script_gas_limit(GAS_LIMIT)
         .add_input(coin_input.clone())
         .finalize_as_transaction();
 
     let tx2 = TransactionBuilder::script(vec![], vec![])
-        .gas_price(20)
+        .tip(20)
+        .max_fee_limit(20)
         .script_gas_limit(GAS_LIMIT)
         .add_input(coin_input)
         .finalize_as_transaction();
@@ -291,9 +425,10 @@ async fn underpriced_tx1_not_included_coin_collision() {
     let mut context = TextContext::default();
 
     let (_, gas_coin) = context.setup_coin();
-    let (output, unset_input) = context.create_output_and_input(10);
+    let (output, unset_input) = context.create_output_and_input(20);
     let tx1 = TransactionBuilder::script(vec![], vec![])
-        .gas_price(20)
+        .tip(20)
+        .max_fee_limit(20)
         .script_gas_limit(GAS_LIMIT)
         .add_input(gas_coin)
         .add_output(output)
@@ -302,13 +437,15 @@ async fn underpriced_tx1_not_included_coin_collision() {
     let input = unset_input.into_input(UtxoId::new(tx1.id(&Default::default()), 0));
 
     let tx2 = TransactionBuilder::script(vec![], vec![])
-        .gas_price(20)
+        .tip(20)
+        .max_fee_limit(20)
         .script_gas_limit(GAS_LIMIT)
         .add_input(input.clone())
         .finalize_as_transaction();
 
     let tx3 = TransactionBuilder::script(vec![], vec![])
-        .gas_price(10)
+        .tip(10)
+        .max_fee_limit(10)
         .script_gas_limit(GAS_LIMIT)
         .add_input(input)
         .finalize_as_transaction();
@@ -345,14 +482,16 @@ async fn overpriced_tx_contract_input_not_inserted() {
         Default::default(),
         Default::default(),
     )
-    .gas_price(10)
+    .tip(10)
+    .max_fee_limit(10)
     .add_input(gas_funds)
     .add_output(create_contract_output(contract_id))
     .finalize_as_transaction();
 
     let (_, gas_funds) = context.setup_coin();
     let tx2 = TransactionBuilder::script(vec![], vec![])
-        .gas_price(11)
+        .tip(11)
+        .max_fee_limit(11)
         .script_gas_limit(GAS_LIMIT)
         .add_input(gas_funds)
         .add_input(create_contract_input(
@@ -393,14 +532,16 @@ async fn dependent_contract_input_inserted() {
         Default::default(),
         Default::default(),
     )
-    .gas_price(10)
+    .tip(10)
+    .max_fee_limit(10)
     .add_input(gas_funds)
     .add_output(create_contract_output(contract_id))
     .finalize_as_transaction();
 
     let (_, gas_funds) = context.setup_coin();
     let tx2 = TransactionBuilder::script(vec![], vec![])
-        .gas_price(10)
+        .tip(10)
+        .max_fee_limit(10)
         .script_gas_limit(GAS_LIMIT)
         .add_input(gas_funds)
         .add_input(create_contract_input(
@@ -430,7 +571,8 @@ async fn more_priced_tx3_removes_tx1_and_dependent_tx2() {
 
     let (output, unset_input) = context.create_output_and_input(10);
     let tx1 = TransactionBuilder::script(vec![], vec![])
-        .gas_price(10)
+        .tip(10)
+        .max_fee_limit(10)
         .script_gas_limit(GAS_LIMIT)
         .add_input(gas_coin.clone())
         .add_output(output)
@@ -439,13 +581,15 @@ async fn more_priced_tx3_removes_tx1_and_dependent_tx2() {
     let input = unset_input.into_input(UtxoId::new(tx1.id(&Default::default()), 0));
 
     let tx2 = TransactionBuilder::script(vec![], vec![])
-        .gas_price(9)
+        .tip(9)
+        .max_fee_limit(9)
         .script_gas_limit(GAS_LIMIT)
         .add_input(input)
         .finalize_as_transaction();
 
     let tx3 = TransactionBuilder::script(vec![], vec![])
-        .gas_price(20)
+        .tip(20)
+        .max_fee_limit(20)
         .script_gas_limit(GAS_LIMIT)
         .add_input(gas_coin)
         .finalize_as_transaction();
@@ -482,19 +626,22 @@ async fn more_priced_tx2_removes_tx1_and_more_priced_tx3_removes_tx2() {
     let (_, gas_coin) = context.setup_coin();
 
     let tx1 = TransactionBuilder::script(vec![], vec![])
-        .gas_price(10)
+        .tip(10)
+        .max_fee_limit(10)
         .script_gas_limit(GAS_LIMIT)
         .add_input(gas_coin.clone())
         .finalize_as_transaction();
 
     let tx2 = TransactionBuilder::script(vec![], vec![])
-        .gas_price(11)
+        .tip(11)
+        .max_fee_limit(11)
         .script_gas_limit(GAS_LIMIT)
         .add_input(gas_coin.clone())
         .finalize_as_transaction();
 
     let tx3 = TransactionBuilder::script(vec![], vec![])
-        .gas_price(12)
+        .tip(12)
+        .max_fee_limit(12)
         .script_gas_limit(GAS_LIMIT)
         .add_input(gas_coin)
         .finalize_as_transaction();
@@ -607,21 +754,24 @@ async fn sorted_out_tx1_2_4() {
 
     let (_, gas_coin) = context.setup_coin();
     let tx1 = TransactionBuilder::script(vec![], vec![])
-        .gas_price(10)
+        .tip(10)
+        .max_fee_limit(10)
         .script_gas_limit(GAS_LIMIT)
         .add_input(gas_coin)
         .finalize_as_transaction();
 
     let (_, gas_coin) = context.setup_coin();
     let tx2 = TransactionBuilder::script(vec![], vec![])
-        .gas_price(9)
+        .tip(9)
+        .max_fee_limit(9)
         .script_gas_limit(GAS_LIMIT)
         .add_input(gas_coin)
         .finalize_as_transaction();
 
     let (_, gas_coin) = context.setup_coin();
     let tx3 = TransactionBuilder::script(vec![], vec![])
-        .gas_price(20)
+        .tip(20)
+        .max_fee_limit(20)
         .script_gas_limit(GAS_LIMIT)
         .add_input(gas_coin)
         .finalize_as_transaction();
@@ -660,7 +810,8 @@ async fn find_dependent_tx1_tx2() {
     let (_, gas_coin) = context.setup_coin();
     let (output, unset_input) = context.create_output_and_input(10_000);
     let tx1 = TransactionBuilder::script(vec![], vec![])
-        .gas_price(11)
+        .tip(11)
+        .max_fee_limit(11)
         .script_gas_limit(GAS_LIMIT)
         .add_input(gas_coin)
         .add_output(output)
@@ -669,7 +820,8 @@ async fn find_dependent_tx1_tx2() {
     let input = unset_input.into_input(UtxoId::new(tx1.id(&Default::default()), 0));
     let (output, unset_input) = context.create_output_and_input(7_500);
     let tx2 = TransactionBuilder::script(vec![], vec![])
-        .gas_price(10)
+        .tip(10)
+        .max_fee_limit(10)
         .script_gas_limit(GAS_LIMIT)
         .add_input(input)
         .add_output(output)
@@ -677,7 +829,8 @@ async fn find_dependent_tx1_tx2() {
 
     let input = unset_input.into_input(UtxoId::new(tx2.id(&Default::default()), 0));
     let tx3 = TransactionBuilder::script(vec![], vec![])
-        .gas_price(9)
+        .tip(9)
+        .max_fee_limit(9)
         .script_gas_limit(GAS_LIMIT)
         .add_input(input)
         .finalize_as_transaction();
@@ -708,7 +861,7 @@ async fn find_dependent_tx1_tx2() {
 
     let mut list: Vec<_> = seen.into_values().collect();
     // sort from high to low price
-    list.sort_by_key(|tx| Reverse(tx.price()));
+    list.sort_by_key(|tx| Reverse(tx.tip()));
     assert_eq!(list.len(), 3, "We should have three items");
     assert_eq!(list[0].id(), tx1_id, "Tx1 should be first.");
     assert_eq!(list[1].id(), tx2_id, "Tx2 should be second.");
@@ -724,7 +877,8 @@ async fn tx_at_least_min_gas_price_is_insertable() {
 
     let (_, gas_coin) = context.setup_coin();
     let tx = TransactionBuilder::script(vec![], vec![])
-        .gas_price(10)
+        .tip(10)
+        .max_fee_limit(1000)
         .script_gas_limit(GAS_LIMIT)
         .add_input(gas_coin)
         .finalize_as_transaction();
@@ -740,7 +894,8 @@ async fn tx_below_min_gas_price_is_not_insertable() {
 
     let gas_coin = context.random_predicate(AssetId::BASE, TEST_COIN_AMOUNT, None);
     let tx = TransactionBuilder::script(vec![], vec![])
-        .gas_price(10)
+        .tip(10)
+        .max_fee_limit(10)
         .script_gas_limit(GAS_LIMIT)
         .add_input(gas_coin)
         .finalize_as_transaction();
@@ -755,7 +910,10 @@ async fn tx_below_min_gas_price_is_not_insertable() {
     .await
     .expect_err("expected insertion failure");
 
-    assert!(matches!(err, Error::NotInsertedGasPriceTooLow));
+    assert!(matches!(
+        err,
+        Error::ConsensusValidity(CheckError::InsufficientMaxFee { .. })
+    ));
 }
 
 #[tokio::test]
@@ -837,13 +995,15 @@ async fn tx_rejected_from_pool_when_gas_price_is_lower_than_another_tx_with_same
         create_message_predicate_from_message(message_amount, 0);
 
     let tx_high = TransactionBuilder::script(vec![], vec![])
-        .gas_price(gas_price_high)
+        .tip(gas_price_high)
+        .max_fee_limit(gas_price_high)
         .script_gas_limit(GAS_LIMIT)
         .add_input(conflicting_message_input.clone())
         .finalize_as_transaction();
 
     let tx_low = TransactionBuilder::script(vec![], vec![])
-        .gas_price(gas_price_low)
+        .tip(gas_price_low)
+        .max_fee_limit(gas_price_low)
         .script_gas_limit(GAS_LIMIT)
         .add_input(conflicting_message_input)
         .finalize_as_transaction();
@@ -885,7 +1045,8 @@ async fn higher_priced_tx_squeezes_out_lower_priced_tx_with_same_message_id() {
 
     // Insert a tx for the message id with a low gas amount
     let tx_low = TransactionBuilder::script(vec![], vec![])
-        .gas_price(gas_price_low)
+        .tip(gas_price_low)
+        .max_fee_limit(gas_price_low)
         .script_gas_limit(GAS_LIMIT)
         .add_input(conflicting_message_input.clone())
         .finalize_as_transaction();
@@ -902,7 +1063,8 @@ async fn higher_priced_tx_squeezes_out_lower_priced_tx_with_same_message_id() {
     // prices of both the new and existing transactions. Since the existing transaction's gas
     // price is lower, we accept the new transaction and squeeze out the old transaction.
     let tx_high = TransactionBuilder::script(vec![], vec![])
-        .gas_price(gas_price_high)
+        .tip(gas_price_high)
+        .max_fee_limit(gas_price_high)
         .script_gas_limit(GAS_LIMIT)
         .add_input(conflicting_message_input)
         .finalize_as_transaction();
@@ -927,20 +1089,23 @@ async fn message_of_squeezed_out_tx_can_be_resubmitted_at_lower_gas_price() {
 
     // Insert a tx for the message id with a low gas amount
     let tx1 = TransactionBuilder::script(vec![], vec![])
-        .gas_price(2)
+        .tip(2)
+        .max_fee_limit(2)
         .script_gas_limit(GAS_LIMIT)
         .add_input(message_input_1.clone())
         .add_input(message_input_2.clone())
         .finalize_as_transaction();
 
     let tx2 = TransactionBuilder::script(vec![], vec![])
-        .gas_price(3)
+        .tip(3)
+        .max_fee_limit(3)
         .script_gas_limit(GAS_LIMIT)
         .add_input(message_input_1)
         .finalize_as_transaction();
 
     let tx3 = TransactionBuilder::script(vec![], vec![])
-        .gas_price(1)
+        .tip(1)
+        .max_fee_limit(1)
         .script_gas_limit(GAS_LIMIT)
         .add_input(message_input_2)
         .finalize_as_transaction();

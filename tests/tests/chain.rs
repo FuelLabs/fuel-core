@@ -13,14 +13,14 @@ async fn chain_info() {
     let chain_info = client.chain_info().await.unwrap();
 
     assert_eq!(0, chain_info.da_height);
-    assert_eq!(node_config.chain_conf.chain_name, chain_info.name);
+    assert_eq!(node_config.chain_config.chain_name, chain_info.name);
     assert_eq!(
-        node_config.chain_conf.consensus_parameters,
+        node_config.chain_config.consensus_parameters,
         chain_info.consensus_parameters.clone()
     );
 
     assert_eq!(
-        node_config.chain_conf.consensus_parameters.gas_costs,
+        node_config.chain_config.consensus_parameters.gas_costs,
         chain_info.consensus_parameters.gas_costs
     );
 }

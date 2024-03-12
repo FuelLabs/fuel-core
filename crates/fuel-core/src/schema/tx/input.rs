@@ -7,7 +7,6 @@ use crate::schema::scalars::{
     Nonce,
     TxPointer,
     UtxoId,
-    U32,
     U64,
 };
 use async_graphql::{
@@ -30,7 +29,6 @@ pub struct InputCoin {
     asset_id: AssetId,
     tx_pointer: TxPointer,
     witness_index: u8,
-    maturity: U32,
     predicate_gas_used: U64,
     predicate: HexString,
     predicate_data: HexString,
@@ -60,10 +58,6 @@ impl InputCoin {
 
     async fn witness_index(&self) -> u8 {
         self.witness_index
-    }
-
-    async fn maturity(&self) -> U32 {
-        self.maturity
     }
 
     async fn predicate_gas_used(&self) -> U64 {
@@ -171,7 +165,6 @@ impl From<&fuel_tx::Input> for Input {
                 asset_id,
                 tx_pointer,
                 witness_index,
-                maturity,
                 ..
             }) => Input::Coin(InputCoin {
                 utxo_id: UtxoId(*utxo_id),
@@ -180,7 +173,6 @@ impl From<&fuel_tx::Input> for Input {
                 asset_id: AssetId(*asset_id),
                 tx_pointer: TxPointer(*tx_pointer),
                 witness_index: *witness_index,
-                maturity: (*maturity).into(),
                 predicate_gas_used: 0.into(),
                 predicate: HexString(Default::default()),
                 predicate_data: HexString(Default::default()),
@@ -191,7 +183,6 @@ impl From<&fuel_tx::Input> for Input {
                 amount,
                 asset_id,
                 tx_pointer,
-                maturity,
                 predicate,
                 predicate_data,
                 predicate_gas_used,
@@ -203,7 +194,6 @@ impl From<&fuel_tx::Input> for Input {
                 asset_id: AssetId(*asset_id),
                 tx_pointer: TxPointer(*tx_pointer),
                 witness_index: Default::default(),
-                maturity: (*maturity).into(),
                 predicate_gas_used: (*predicate_gas_used).into(),
                 predicate: HexString(predicate.clone()),
                 predicate_data: HexString(predicate_data.clone()),

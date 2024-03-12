@@ -63,25 +63,22 @@ impl Database {
         Ok(coin)
     }
 
-    pub fn get_coin_config(&self) -> StorageResult<Option<Vec<CoinConfig>>> {
-        let configs = self
-            .iter_all::<Coins>(None)
+    pub fn iter_coin_configs(
+        &self,
+    ) -> impl Iterator<Item = StorageResult<CoinConfig>> + '_ {
+        self.iter_all::<Coins>(None)
             .map(|raw_coin| -> StorageResult<CoinConfig> {
                 let (utxo_id, coin) = raw_coin?;
 
                 Ok(CoinConfig {
-                    tx_id: Some(*utxo_id.tx_id()),
-                    output_index: Some(utxo_id.output_index()),
-                    tx_pointer_block_height: Some(coin.tx_pointer().block_height()),
-                    tx_pointer_tx_idx: Some(coin.tx_pointer().tx_index()),
-                    maturity: Some(*coin.maturity()),
+                    tx_id: *utxo_id.tx_id(),
+                    output_index: utxo_id.output_index(),
+                    tx_pointer_block_height: coin.tx_pointer().block_height(),
+                    tx_pointer_tx_idx: coin.tx_pointer().tx_index(),
                     owner: *coin.owner(),
                     amount: *coin.amount(),
                     asset_id: *coin.asset_id(),
                 })
             })
-            .collect::<StorageResult<Vec<CoinConfig>>>()?;
-
-        Ok(Some(configs))
     }
 }

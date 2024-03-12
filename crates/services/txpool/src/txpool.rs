@@ -1,7 +1,7 @@
 use crate::{
     containers::{
         dependency::Dependency,
-        price_sort::PriceSort,
+        price_sort::TipSort,
         time_sort::TimeSort,
     },
     ports::TxPoolDb,
@@ -12,10 +12,7 @@ use crate::{
     TxInfo,
 };
 use fuel_core_types::{
-    fuel_tx::{
-        Chargeable,
-        Transaction,
-    },
+    fuel_tx::Transaction,
     fuel_types::BlockHeight,
     fuel_vm::{
         checked_transaction::{
@@ -35,16 +32,26 @@ use fuel_core_types::{
     tai64::Tai64,
 };
 
-use crate::service::TxStatusMessage;
 use fuel_core_metrics::txpool_metrics::txpool_metrics;
 use fuel_core_storage::transactional::AtomicView;
 use fuel_core_types::{
-    blockchain::block::Block,
-    fuel_vm::checked_transaction::CheckPredicateParams,
-    services::{
-        executor::TransactionExecutionStatus,
-        txpool::from_executor_to_status,
+    fuel_tx::{
+        input::{
+            coin::{
+                CoinPredicate,
+                CoinSigned,
+            },
+            message::{
+                MessageCoinPredicate,
+                MessageCoinSigned,
+                MessageDataPredicate,
+                MessageDataSigned,
+            },
+        },
+        Input,
     },
+    fuel_vm::checked_transaction::CheckPredicateParams,
+    services::executor::TransactionExecutionStatus,
 };
 use std::{
     cmp::Reverse,
@@ -54,10 +61,15 @@ use std::{
 };
 use tokio_rayon::AsyncRayonHandle;
 
+#[cfg(test)]
+mod test_helpers;
+#[cfg(test)]
+mod tests;
+
 #[derive(Debug, Clone)]
 pub struct TxPool<ViewProvider> {
     by_hash: HashMap<TxId, TxInfo>,
-    by_gas_price: PriceSort,
+    by_tip: TipSort,
     by_time: TimeSort,
     by_dependency: Dependency,
     config: Config,
@@ -70,7 +82,7 @@ impl<ViewProvider> TxPool<ViewProvider> {
 
         Self {
             by_hash: HashMap::new(),
-            by_gas_price: PriceSort::default(),
+            by_tip: TipSort::default(),
             by_time: TimeSort::default(),
             by_dependency: Dependency::new(max_depth, config.utxo_validation),
             config,
@@ -83,6 +95,11 @@ impl<ViewProvider> TxPool<ViewProvider> {
         &self.config
     }
 
+    #[cfg(test)]
+    pub fn config_mut(&mut self) -> &mut Config {
+        &mut self.config
+    }
+
     pub fn txs(&self) -> &HashMap<TxId, TxInfo> {
         &self.by_hash
     }
@@ -93,11 +110,7 @@ impl<ViewProvider> TxPool<ViewProvider> {
 
     /// Return all sorted transactions that are includable in next block.
     pub fn sorted_includable(&self) -> impl Iterator<Item = ArcPoolTx> + '_ {
-        self.by_gas_price
-            .sort
-            .iter()
-            .rev()
-            .map(|(_, tx)| tx.clone())
+        self.by_tip.sort.iter().rev().map(|(_, tx)| tx.clone())
     }
 
     pub fn remove_inner(&mut self, tx: &ArcPoolTx) -> Vec<ArcPoolTx> {
@@ -123,7 +136,7 @@ impl<ViewProvider> TxPool<ViewProvider> {
         let info = self.by_hash.remove(tx_id);
         if let Some(info) = &info {
             self.by_time.remove(info);
-            self.by_gas_price.remove(info);
+            self.by_tip.remove(info);
         }
 
         info
@@ -167,7 +180,7 @@ impl<ViewProvider> TxPool<ViewProvider> {
         }
         let mut list: Vec<_> = seen.into_values().collect();
         // sort from high to low price
-        list.sort_by_key(|tx| Reverse(tx.price()));
+        list.sort_by_key(|tx| Reverse(tx.tip()));
 
         list
     }
@@ -191,20 +204,11 @@ impl<ViewProvider> TxPool<ViewProvider> {
     /// When block is updated we need to receive all spend outputs and remove them from txpool.
     pub fn block_update(
         &mut self,
-        tx_status_sender: &TxStatusChange,
-        block: &Block,
         tx_status: &[TransactionExecutionStatus],
         // spend_outputs: [Input], added_outputs: [AddedOutputs]
     ) {
-        let height = block.header().height();
         for status in tx_status {
             let tx_id = status.id;
-            let status = from_executor_to_status(block, status.result.clone());
-            tx_status_sender.send_complete(
-                tx_id,
-                height,
-                TxStatusMessage::Status(status),
-            );
             self.remove_committed_tx(&tx_id);
         }
     }
@@ -213,15 +217,20 @@ impl<ViewProvider> TxPool<ViewProvider> {
     pub fn remove(
         &mut self,
         tx_status_sender: &TxStatusChange,
-        tx_ids: &[TxId],
+        tx_ids: Vec<(TxId, String)>,
     ) -> Vec<ArcPoolTx> {
         let mut removed = Vec::new();
-        for tx_id in tx_ids {
-            let rem = self.remove_by_tx_id(tx_id);
-            tx_status_sender.send_squeezed_out(*tx_id, Error::Removed);
+        for (tx_id, reason) in tx_ids.into_iter() {
+            let rem = self.remove_by_tx_id(&tx_id);
+            tx_status_sender.send_squeezed_out(tx_id, Error::SqueezedOut(reason.clone()));
             for dependent_tx in rem.iter() {
-                if tx_id != &dependent_tx.id() {
-                    tx_status_sender.send_squeezed_out(dependent_tx.id(), Error::Removed);
+                if tx_id != dependent_tx.id() {
+                    tx_status_sender.send_squeezed_out(
+                        dependent_tx.id(),
+                        Error::SqueezedOut(
+                            format!("Parent transaction with {tx_id}, was removed because of the {reason}")
+                        )
+                    );
                 }
             }
             removed.extend(rem.into_iter());
@@ -252,6 +261,67 @@ impl<ViewProvider> TxPool<ViewProvider> {
 
         result
     }
+
+    fn check_blacklisting(&self, tx: &PoolTransaction) -> Result<(), Error> {
+        for input in tx.inputs() {
+            match input {
+                Input::CoinSigned(CoinSigned { utxo_id, owner, .. })
+                | Input::CoinPredicate(CoinPredicate { utxo_id, owner, .. }) => {
+                    if self.config.blacklist.contains_coin(utxo_id) {
+                        return Err(Error::BlacklistedUTXO(*utxo_id))
+                    }
+                    if self.config.blacklist.contains_address(owner) {
+                        return Err(Error::BlacklistedOwner(*owner))
+                    }
+                }
+                Input::Contract(contract) => {
+                    if self
+                        .config
+                        .blacklist
+                        .contains_contract(&contract.contract_id)
+                    {
+                        return Err(Error::BlacklistedContract(contract.contract_id))
+                    }
+                }
+                Input::MessageCoinSigned(MessageCoinSigned {
+                    nonce,
+                    sender,
+                    recipient,
+                    ..
+                })
+                | Input::MessageCoinPredicate(MessageCoinPredicate {
+                    nonce,
+                    sender,
+                    recipient,
+                    ..
+                })
+                | Input::MessageDataSigned(MessageDataSigned {
+                    nonce,
+                    sender,
+                    recipient,
+                    ..
+                })
+                | Input::MessageDataPredicate(MessageDataPredicate {
+                    nonce,
+                    sender,
+                    recipient,
+                    ..
+                }) => {
+                    if self.config.blacklist.contains_message(nonce) {
+                        return Err(Error::BlacklistedMessage(*nonce))
+                    }
+                    if self.config.blacklist.contains_address(sender) {
+                        return Err(Error::BlacklistedOwner(*sender))
+                    }
+                    if self.config.blacklist.contains_address(recipient) {
+                        return Err(Error::BlacklistedOwner(*recipient))
+                    }
+                }
+            }
+        }
+
+        Ok(())
+    }
 }
 
 impl<ViewProvider, View> TxPool<ViewProvider>
@@ -268,7 +338,7 @@ where
         self.insert_inner(tx, &view)
     }
 
-    #[tracing::instrument(level = "info", skip_all, fields(tx_id = %tx.id()), ret, err)]
+    #[tracing::instrument(level = "debug", skip_all, fields(tx_id = %tx.id()), ret, err)]
     // this is atomic operation. Return removed(pushed out/replaced) transactions
     fn insert_inner(
         &mut self,
@@ -282,6 +352,8 @@ where
             CheckedTransaction::Create(create) => PoolTransaction::Create(create),
             CheckedTransaction::Mint(_) => return Err(Error::MintIsDisallowed),
         });
+
+        self.check_blacklisting(tx.as_ref())?;
 
         if !tx.is_computed() {
             return Err(Error::NoMetadata)
@@ -304,16 +376,12 @@ where
         if self.by_hash.len() >= self.config.max_tx {
             max_limit_hit = true;
             // limit is hit, check if we can push out lowest priced tx
-            let lowest_price = self.by_gas_price.lowest_value().unwrap_or_default();
-            if lowest_price >= tx.price() {
+            let lowest_tip = self.by_tip.lowest_value().unwrap_or_default();
+            if lowest_tip >= tx.tip() {
                 return Err(Error::NotInsertedLimitHit)
             }
         }
         if self.config.metrics {
-            txpool_metrics()
-                .gas_price_histogram
-                .observe(tx.price() as f64);
-
             txpool_metrics()
                 .tx_size_histogram
                 .observe(tx.metered_bytes_size() as f64);
@@ -322,7 +390,7 @@ where
         let rem = self.by_dependency.insert(&self.by_hash, view, &tx)?;
         let info = TxInfo::new(tx.clone());
         let submitted_time = info.submitted_time();
-        self.by_gas_price.insert(&info);
+        self.by_tip.insert(&info);
         self.by_time.insert(&info);
         self.by_hash.insert(tx.id(), info);
 
@@ -330,7 +398,7 @@ where
         let removed = if rem.is_empty() {
             if max_limit_hit {
                 // remove last tx from sort
-                let rem_tx = self.by_gas_price.lowest_tx().unwrap(); // safe to unwrap limit is hit
+                let rem_tx = self.by_tip.lowest_tx().unwrap(); // safe to unwrap limit is hit
                 self.remove_inner(&rem_tx);
                 vec![rem_tx]
             } else {
@@ -419,8 +487,6 @@ pub async fn check_single_tx(
         return Err(Error::NotSupportedTransactionType)
     }
 
-    verify_tx_min_gas_price(&tx, config)?;
-
     let tx: Checked<Transaction> = if config.utxo_validation {
         let consensus_params = &config.chain_config.consensus_parameters;
 
@@ -441,25 +507,33 @@ pub async fn check_single_tx(
         tx.into_checked_basic(current_height, &config.chain_config.consensus_parameters)?
     };
 
+    let tx = verify_tx_min_gas_price(tx, config)?;
+
     Ok(tx)
 }
 
-fn verify_tx_min_gas_price(tx: &Transaction, config: &Config) -> Result<(), Error> {
-    let price = match tx {
-        Transaction::Script(script) => script.price(),
-        Transaction::Create(create) => create.price(),
-        Transaction::Mint(_) => return Err(Error::NotSupportedTransactionType),
+fn verify_tx_min_gas_price(
+    tx: Checked<Transaction>,
+    config: &Config,
+) -> Result<Checked<Transaction>, Error> {
+    let tx: CheckedTransaction = tx.into();
+    let min_gas_price = config.min_gas_price;
+    let gas_costs = &config.chain_config.consensus_parameters.gas_costs;
+    let fee_parameters = &config.chain_config.consensus_parameters.fee_params;
+    let read = match tx {
+        CheckedTransaction::Script(script) => {
+            let read = script.into_ready(min_gas_price, gas_costs, fee_parameters)?;
+            let (_, checked) = read.decompose();
+            CheckedTransaction::Script(checked)
+        }
+        CheckedTransaction::Create(create) => {
+            let read = create.into_ready(min_gas_price, gas_costs, fee_parameters)?;
+            let (_, checked) = read.decompose();
+            CheckedTransaction::Create(checked)
+        }
+        CheckedTransaction::Mint(_) => return Err(Error::MintIsDisallowed),
     };
-    if config.metrics {
-        // Gas Price metrics are recorded here to avoid double matching for
-        // every single transaction, but also means metrics aren't collected on gas
-        // price if there is no minimum gas price
-        txpool_metrics().gas_price_histogram.observe(price as f64);
-    }
-    if price < config.min_gas_price {
-        return Err(Error::NotInsertedGasPriceTooLow)
-    }
-    Ok(())
+    Ok(read.into())
 }
 
 pub struct TokioWithRayon;
@@ -483,8 +557,3 @@ impl ParallelExecutor for TokioWithRayon {
         futures::future::join_all(futures).await
     }
 }
-
-#[cfg(test)]
-mod test_helpers;
-#[cfg(test)]
-mod tests;

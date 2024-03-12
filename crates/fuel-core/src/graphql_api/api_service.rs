@@ -198,14 +198,14 @@ where
         .finish();
 
     let router = Router::new()
-        .route("/playground", get(graphql_playground))
-        .route("/graphql", post(graphql_handler).options(ok))
+        .route("/v1/playground", get(graphql_playground))
+        .route("/v1/graphql", post(graphql_handler).options(ok))
         .route(
-            "/graphql-sub",
+            "/v1/graphql-sub",
             post(graphql_subscription_handler).options(ok),
         )
-        .route("/metrics", get(metrics))
-        .route("/health", get(health))
+        .route("/v1/metrics", get(metrics))
+        .route("/v1/health", get(health))
         .layer(Extension(schema))
         .layer(TraceLayer::new_for_http())
         .layer(TimeoutLayer::new(request_timeout))
@@ -235,7 +235,9 @@ where
 }
 
 async fn graphql_playground() -> impl IntoResponse {
-    Html(playground_source(GraphQLPlaygroundConfig::new("/graphql")))
+    Html(playground_source(GraphQLPlaygroundConfig::new(
+        "/v1/graphql",
+    )))
 }
 
 async fn health() -> Json<serde_json::Value> {

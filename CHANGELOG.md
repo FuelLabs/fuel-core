@@ -10,11 +10,74 @@ Description of the upcoming release here.
 
 ### Added
 
+- [#1747](https://github.com/FuelLabs/fuel-core/pull/1747): The DA block height is now included in the genesis state.
+- [#1740](https://github.com/FuelLabs/fuel-core/pull/1740): Remove optional fields from genesis configs
+- [#1737](https://github.com/FuelLabs/fuel-core/pull/1737): Remove temporary tables for calculating roots during genesis.
+- [#1731](https://github.com/FuelLabs/fuel-core/pull/1731): Expose `schema.sdl` from `fuel-core-client`.
+
+### Changed
+
+#### Breaking
+- [#1694](https://github.com/FuelLabs/fuel-core/pull/1694): The change moves the database transaction logic from the `fuel-core` to the `fuel-core-storage` level. The corresponding [issue](https://github.com/FuelLabs/fuel-core/issues/1589) described the reason behind it.
+
+    ## Technical details of implementation
+
+    - The change splits the `KeyValueStore` into `KeyValueInspect` and `KeyValueMutate`, as well the `Blueprint` into `BlueprintInspect` and `BlueprintMutate`. It allows requiring less restricted constraints for any read-related operations.
+
+    - One of the main ideas of the change is to allow for the actual storage only to implement `KeyValueInspect` and `Modifiable` without the `KeyValueMutate`. It simplifies work with the databases and provides a safe way of interacting with them (Modification into the database can only go through the `Modifiable::commit_changes`). This feature is used to [track the height](https://github.com/FuelLabs/fuel-core/pull/1694/files#diff-c95a3d57a39feac7c8c2f3b193a24eec39e794413adc741df36450f9a4539898) of each database during commits and even limit how commits are done, providing additional safety. This part of the change was done as a [separate commit](https://github.com/FuelLabs/fuel-core/pull/1694/commits/7b1141ac838568e3590f09dd420cb24a6946bd32).
+    
+    - The `StorageTransaction` is a `StructuredStorage` that uses `InMemoryTransaction` inside to accumulate modifications. Only `InMemoryTransaction` has a real implementation of the `KeyValueMutate`(Other types only implement it in tests).
+    
+    - The implementation of the `Modifiable` for the `Database` contains a business logic that provides additional safety but limits the usage of the database. The `Database` now tracks its height and is responsible for its updates. In the `commit_changes` function, it analyzes the changes that were done and tries to find a new height(For example, in the case of the `OnChain` database, we are looking for a new `Block` in the `FuelBlocks` table).
+    
+    - As was planned in the issue, now the executor has full control over how commits to the storage are done.
+    
+    - All mutation methods now require `&mut self` - exclusive ownership over the object to be able to write into it. It almost negates the chance of concurrent modification of the storage, but it is still possible since the `Database` implements the `Clone` trait. To be sure that we don't corrupt the state of the database, the `commit_changes` function implements additional safety checks to be sure that we commit updates per each height only once time.
+
+    - Side changes:
+      - The `drop` function was moved from `Database` to `RocksDB` as a preparation for the state rewind since the read view should also keep the drop function until it is destroyed.
+      - The `StatisticTable` table lives in the off-chain worker.
+      - Removed duplication of the `Database` from the `dap::ConcreteStorage` since it is already available from the VM.
+      - The executor return only produced `Changes` instead of the storage transaction, which simplifies the interaction between modules and port definition.
+      - The logic related to the iteration over the storage is moved to the `fuel-core-storage` crate and is now reusable. It provides an `interator` method that duplicates the logic from `MemoryStore` on iterating over the `BTreeMap` and methods like `iter_all`, `iter_all_by_prefix`, etc. It was done in a separate revivable [commit](https://github.com/FuelLabs/fuel-core/pull/1694/commits/5b9bd78320e6f36d0650ec05698f12f7d1b3c7c9).
+      - The `MemoryTransactionView` is fully replaced by the `StorageTransactionInner`.
+      - Removed `flush` method from the `Database` since it is not needed after https://github.com/FuelLabs/fuel-core/pull/1664.
+
+- [#1693](https://github.com/FuelLabs/fuel-core/pull/1693): The change separates the initial chain state from the chain config and stores them in separate files when generating a snapshot. The state snapshot can be generated in a new format where parquet is used for compression and indexing while postcard is used for encoding. This enables importing in a stream like fashion which reduces memory requirements. Json encoding is still supported to enable easy manual setup. However, parquet is prefered for large state files.
+
+  ### Snapshot command
+
+  The CLI was expanded to allow customizing the used encoding. Snapshots are now generated along with a metadata file describing the encoding used. The metadata file contains encoding details as well as the location of additional files inside the snapshot directory containing the actual data. The chain config is always generated in the JSON format.
+
+  The snapshot command now has the '--output-directory' for specifying where to save the snapshot.
+
+  ### Run command
+
+  The run command now includes the 'db_prune' flag which when provided will prune the existing db and start genesis from the provided snapshot metadata file or the local testnet configuration.
+
+  The snapshot metadata file contains paths to the chain config file and files containing chain state items (coins, messages, contracts, contract states, and balances), which are loaded via streaming.
+
+  Each item group in the genesis process is handled by a separate worker, allowing for parallel loading. Workers stream file contents in batches.
+
+  A database transaction is committed every time an item group is succesfully loaded. Resumability is achieved by recording the last loaded group index within the same db tx. If loading is aborted, the remaining workers are shutdown. Upon restart, workers resume from the last processed group.
+
+  ### Contract States and Balances
+
+  Using uniform-sized batches may result in batches containing items from multiple contracts. Optimal performance can presumably be achieved by selecting a batch size that typically encompasses an entire contract's state or balance, allowing for immediate initialization of relevant Merkle trees.
+
+
+## [Version 0.23.0]
+
+### Added
+
+- [#1713](https://github.com/FuelLabs/fuel-core/pull/1713): Added automatic `impl` of traits `StorageWrite` and `StorageRead` for `StructuredStorage`. Tables that use a `Blueprint` can be read and written using these interfaces provided by structured storage types.
 - [#1671](https://github.com/FuelLabs/fuel-core/pull/1671): Added a new `Merklized` blueprint that maintains the binary Merkle tree over the storage data. It supports only the insertion of the objects without removing them.
 - [#1657](https://github.com/FuelLabs/fuel-core/pull/1657): Moved `ContractsInfo` table from `fuel-vm` to on-chain tables, and created version-able `ContractsInfoType` to act as the table's data type.
 
 ### Changed
 
+- [#1723](https://github.com/FuelLabs/fuel-core/pull/1723): Notify about imported blocks from the off-chain worker.
+- [#1717](https://github.com/FuelLabs/fuel-core/pull/1717): The fix for the [#1657](https://github.com/FuelLabs/fuel-core/pull/1657) to include the contract into `ContractsInfo` table.
 - [#1657](https://github.com/FuelLabs/fuel-core/pull/1657): Upgrade to `fuel-vm` 0.46.0.
 - [#1671](https://github.com/FuelLabs/fuel-core/pull/1671): The logic related to the `FuelBlockIdsToHeights` is moved to the off-chain worker.
 - [#1663](https://github.com/FuelLabs/fuel-core/pull/1663): Reduce the punishment criteria for mempool gossipping.
@@ -40,30 +103,17 @@ Description of the upcoming release here.
 - [#1636](https://github.com/FuelLabs/fuel-core/pull/1636): Add more docs to GraphQL DAP API.
 
 #### Breaking
-- [#1671](https://github.com/FuelLabs/fuel-core/pull/1671): The change moves the database transaction logic from the `fuel-core` to the `fuel-core-storage` level. The corresponding [issue](https://github.com/FuelLabs/fuel-core/issues/1589) described the reason behind it.
 
-    ## Technical details of implementation
-
-    - The change splits the `KeyValueStore` into `KeyValueInspect` and `KeyValueMutate`, as well the `Blueprint` into `BlueprintInspect` and `BlueprintMutate`. It allows requiring less restricted constraints for any read-related operations.
-
-    - One of the main ideas of the change is to allow for the actual storage only to implement `KeyValueInspect` and `Modifiable` without the `KeyValueMutate`. It simplifies work with the databases and provides a safe way of interacting with them (Modification into the database can only go through the `Modifiable::commit_changes`). This feature is used to [track the height](https://github.com/FuelLabs/fuel-core/pull/1694/files#diff-c95a3d57a39feac7c8c2f3b193a24eec39e794413adc741df36450f9a4539898) of each database during commits and even limit how commits are done, providing additional safety. This part of the change was done as a [separate commit](https://github.com/FuelLabs/fuel-core/pull/1694/commits/7b1141ac838568e3590f09dd420cb24a6946bd32).
-    
-    - The `StorageTransaction` is a `StructuredStorage` that uses `StorageTransactionInner` inside to accumulate modifications. Only `StorageStorageInner` has a real implementation of the `KeyValueMutate`(Other types only implement it in tests).
-    
-    - The implementation of the `Modifiable` for the `Database` contains a business logic that provides additional safety but limits the usage of the database. The `Database` now tracks its height and is responsible for its updates. In the `commit_changes` function, it analyzes the changes that were done and tries to find a new height(For example, in the case of the `OnChain` database, we are looking for a new `Block` in the `FuelBlocks` table).
-    
-    - As was planned in the issue, now the executor has full control over how commits to the storage are done.
-    
-    - All mutation methods now require `&mut self` - exclusive ownership over the object to be able to write into it. It almost negates the chance of concurrent modification of the storage, but it is still possible since the `Database` implements the `Clone` trait. To be sure that we don't corrupt the state of the database, the `commit_changes` function implements additional safety checks to be sure that we commit updates per each height only once time.
-
-    - Side changes:
-      - The `drop` function was moved from `Database` to `RocksDB` as a preparation for the state rewind since the read view should also keep the drop function until it is destroyed.
-      - The `StatisticTable` table lives in the off-chain worker.
-      - Removed duplication of the `Database` from the `dapp::ConcreteStorage` since it is already available from the VM.
-      - The executor return only produced `Changes` instead of the storage transaction, which simplifies the interaction between modules and port definition.
-      - The logic related to the iteration over the storage is moved to the `fuel-core-storage` crate and is now reusable. It provides an `interator` method that duplicates the logic from `MemoryStore` on iterating over the `BTreeMap` and methods like `iter_all`, `iter_all_by_prefix`, etc. It was done in a separate revivable [commit](https://github.com/FuelLabs/fuel-core/pull/1694/commits/5b9bd78320e6f36d0650ec05698f12f7d1b3c7c9).
-      - The `MemoryTransactionView` is fully replaced by the `StorageTransactionInner`.
-      - Removed `flush` method from the `Database` since it is not needed after https://github.com/FuelLabs/fuel-core/pull/1664.
+- [#1725](https://github.com/FuelLabs/fuel-core/pull/1725): All API endpoints now are prefixed with `/v1` version. New usage looks like: `/v1/playground`, `/v1/graphql`, `/v1/graphql-sub`, `/v1/metrics`, `/v1/health`.
+- [#1722](https://github.com/FuelLabs/fuel-core/pull/1722): Bugfix: Zero `predicate_gas_used` field during validation of the produced block.
+- [#1714](https://github.com/FuelLabs/fuel-core/pull/1714): The change bumps the `fuel-vm` to `0.47.1`. It breaks several breaking changes into the protocol:
+  - All malleable fields are zero during the execution and unavailable through the GTF getters. Accessing them via the memory directly is still possible, but they are zero.
+  - The `Transaction` doesn't define the gas price anymore. The gas price is defined by the block producer and recorded in the `Mint` transaction at the end of the block. A price of future blocks can be fetched through a [new API nedopoint](https://github.com/FuelLabs/fuel-core/issues/1641) and the price of the last block can be fetch or via the block or another [API endpoint](https://github.com/FuelLabs/fuel-core/issues/1647).
+  - The `GasPrice` policy is replaced with the `Tip` policy. The user may specify in the native tokens how much he wants to pay the block producer to include his transaction in the block. It is the prioritization mechanism to incentivize the block producer to include users transactions earlier.
+  - The `MaxFee` policy is mandatory to set. Without it, the transaction pool will reject the transaction. Since the block producer defines the gas price, the only way to control how much user agreed to pay can be done only through this policy.
+  - The `maturity` field is removed from the `Input::Coin`. The same affect can be achieve with the `Maturity` policy on the transaction and predicate. This changes breaks how input coin is created and removes the passing of this argument.
+  - The metadata of the `Checked<Tx>` doesn't contain `max_fee` and `min_fee` anymore. Only `max_gas` and `min_gas`. The `max_fee` is controlled by the user via the `MaxFee` policy.
+  - Added automatic `impl` of traits `StorageWrite` and `StorageRead` for `StructuredStorage`. Tables that use a `Blueprint` can be read and written using these interfaces provided by structured storage types.
 
 - [#1712](https://github.com/FuelLabs/fuel-core/pull/1712): Make `ContractUtxoInfo` type a version-able enum for use in the `ContractsLatestUtxo`table.
 - [#1657](https://github.com/FuelLabs/fuel-core/pull/1657): Changed `CROO` gas price type from `Word` to `DependentGasPrice`. The dependent gas price values are dummy values while awaiting updated benchmarks.
@@ -188,6 +238,45 @@ Description of the upcoming release here.
 
 - [#1573](https://github.com/FuelLabs/fuel-core/pull/1573): Remove nested p2p request/response encoding. Only breaks p2p networking compatibility with older fuel-core versions, but is otherwise fully internal.
 
+
+## [Version 0.22.4]
+
+### Added
+
+- [#1743](https://github.com/FuelLabs/fuel-core/pull/1743): Added blacklisting of the transactions on the `TxPool` level.
+  ```shell
+        --tx-blacklist-addresses <TX_BLACKLIST_ADDRESSES>
+            The list of banned addresses ignored by the `TxPool`
+            
+            [env: TX_BLACKLIST_ADDRESSES=]
+  
+        --tx-blacklist-coins <TX_BLACKLIST_COINS>
+            The list of banned coins ignored by the `TxPool`
+            
+            [env: TX_BLACKLIST_COINS=]
+  
+        --tx-blacklist-messages <TX_BLACKLIST_MESSAGES>
+            The list of banned messages ignored by the `TxPool`
+            
+            [env: TX_BLACKLIST_MESSAGES=]
+  
+        --tx-blacklist-contracts <TX_BLACKLIST_CONTRACTS>
+            The list of banned contracts ignored by the `TxPool`
+            
+            [env: TX_BLACKLIST_CONTRACTS=]
+  ```
+
+## [Version 0.22.3]
+
+### Added
+
+- [#1732](https://github.com/FuelLabs/fuel-core/pull/1732): Added `Clone` bounds to most datatypes of `fuel-core-client`.
+
+## [Version 0.22.2]
+
+### Added
+
+- [#1729](https://github.com/FuelLabs/fuel-core/pull/1729): Exposed the `schema.sdl` file from `fuel-core-client`. The user can create his own queries by using this file.
 
 ## [Version 0.22.1]
 

@@ -60,10 +60,14 @@ pub fn init_sub_services(
     let executor = ExecutorAdapter::new(
         database.on_chain().clone(),
         database.relayer().clone(),
-        fuel_core_upgradable_executor::config::Config {
+        fuel_core_executor::Config {
             // TODO: The `config.chain_conf.consensus_parameters` should be `Option<ConsensusParameters>`.
             //  All places that use `config.chain_conf.consensus_parameters` should fetch it from the executor.
-            consensus_parameters: Some(config.chain_conf.consensus_parameters.clone()),
+            consensus_parameters: Some(config.chain_config.consensus_parameters.clone()),
+            coinbase_recipient: config
+                .block_producer
+                .coinbase_recipient
+                .unwrap_or_default(),
             backtrace: config.vm.backtrace,
             utxo_validation_default: config.utxo_validation,
         },
@@ -101,7 +105,7 @@ pub fn init_sub_services(
     #[cfg(feature = "p2p")]
     let mut network = config.p2p.clone().map(|p2p_config| {
         fuel_core_p2p::service::new_service(
-            config.chain_conf.consensus_parameters.chain_id,
+            config.chain_config.consensus_parameters.chain_id,
             p2p_config,
             database.on_chain().clone(),
             importer_adapter.clone(),
@@ -185,12 +189,13 @@ pub fn init_sub_services(
     // TODO: Figure out on how to move it into `fuel-core-graphql-api`.
     let schema = crate::schema::dap::init(
         build_schema(),
-        config.chain_conf.consensus_parameters.clone(),
+        config.chain_config.consensus_parameters.clone(),
         config.debug,
     )
     .data(database.on_chain().clone());
 
     let graphql_worker = fuel_core_graphql_api::worker_service::new_service(
+        tx_pool_adapter.clone(),
         importer_adapter.clone(),
         database.off_chain().clone(),
         config.chain_conf.consensus_parameters.chain_id,
@@ -204,8 +209,8 @@ pub fn init_sub_services(
         min_gas_price: config.txpool.min_gas_price,
         max_tx: config.txpool.max_tx,
         max_depth: config.txpool.max_depth,
-        chain_name: config.chain_conf.chain_name.clone(),
-        consensus_parameters: config.chain_conf.consensus_parameters.clone(),
+        chain_name: config.chain_config.chain_name.clone(),
+        consensus_parameters: config.chain_config.consensus_parameters.clone(),
         consensus_key: config.consensus_key.clone(),
     };
 

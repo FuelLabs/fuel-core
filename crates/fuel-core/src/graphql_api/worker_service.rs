@@ -70,24 +70,26 @@ use std::{
 
 /// The off-chain GraphQL API worker task processes the imported blocks
 /// and actualize the information used by the GraphQL service.
-pub struct Task<D> {
+pub struct Task<TxPool, D> {
+    tx_pool: TxPool,
     block_importer: BoxStream<SharedImportResult>,
     database: D,
     chain_id: ChainId,
 }
 
-impl<D> Task<D>
+impl<TxPool, D> Task<TxPool, D>
 where
+    TxPool: ports::worker::TxPool,
     D: ports::worker::Transactional,
 {
     fn process_block(&mut self, result: SharedImportResult) -> anyhow::Result<()> {
         let block = &result.sealed_block.entity;
         let mut transaction = self.database.transaction();
         // save the status for every transaction using the finalized block id
-        Self::persist_transaction_status(&result, &mut transaction)?;
+        persist_transaction_status(&result, &mut transaction)?;
 
         // save the associated owner for each transaction in the block
-        Self::index_tx_owners_for_block(block, &mut transaction, &self.chain_id)?;
+        index_tx_owners_for_block(block, &mut transaction, &self.chain_id)?;
 
         let height = block.header().height();
         let block_id = block.id();
@@ -99,174 +101,181 @@ where
             .increase_tx_count(block.transactions().len() as u64)
             .unwrap_or_default();
 
-        Self::process_executor_events(
+        process_executor_events(
             result.events.iter().map(Cow::Borrowed),
             &mut transaction,
         )?;
 
         transaction.commit()?;
 
+        for status in result.tx_status.iter() {
+            let tx_id = status.id;
+            let status = from_executor_to_status(block, status.result.clone());
+            self.tx_pool.send_complete(tx_id, height, status);
+        }
+
         // update the importer metrics after the block is successfully committed
         graphql_metrics().total_txs_count.set(total_tx_count as i64);
 
         Ok(())
     }
+}
 
-    /// Process the executor events and update the indexes for the messages and coins.
-    pub fn process_executor_events<'a, Iter, T>(
-        events: Iter,
-        block_st_transaction: &mut T,
-    ) -> anyhow::Result<()>
-    where
-        Iter: Iterator<Item = Cow<'a, Event>>,
-        T: OffChainDatabase,
-    {
-        for event in events {
-            match event.deref() {
-                Event::MessageImported(message) => {
-                    block_st_transaction
-                        .storage_as_mut::<OwnedMessageIds>()
-                        .insert(
-                            &OwnedMessageKey::new(message.recipient(), message.nonce()),
-                            &(),
-                        )?;
-                }
-                Event::MessageConsumed(message) => {
-                    block_st_transaction
-                        .storage_as_mut::<OwnedMessageIds>()
-                        .remove(&OwnedMessageKey::new(
-                            message.recipient(),
-                            message.nonce(),
-                        ))?;
-                }
-                Event::CoinCreated(coin) => {
-                    let coin_by_owner = owner_coin_id_key(&coin.owner, &coin.utxo_id);
-                    block_st_transaction
-                        .storage_as_mut::<OwnedCoins>()
-                        .insert(&coin_by_owner, &())?;
-                }
-                Event::CoinConsumed(coin) => {
-                    let key = owner_coin_id_key(&coin.owner, &coin.utxo_id);
-                    block_st_transaction
-                        .storage_as_mut::<OwnedCoins>()
-                        .remove(&key)?;
-                }
+/// Process the executor events and update the indexes for the messages and coins.
+pub fn process_executor_events<'a, Iter, T>(
+    events: Iter,
+    block_st_transaction: &mut T,
+) -> anyhow::Result<()>
+where
+    Iter: Iterator<Item = Cow<'a, Event>>,
+    T: OffChainDatabase,
+{
+    for event in events {
+        match event.deref() {
+            Event::MessageImported(message) => {
+                block_st_transaction
+                    .storage_as_mut::<OwnedMessageIds>()
+                    .insert(
+                        &OwnedMessageKey::new(message.recipient(), message.nonce()),
+                        &(),
+                    )?;
+            }
+            Event::MessageConsumed(message) => {
+                block_st_transaction
+                    .storage_as_mut::<OwnedMessageIds>()
+                    .remove(&OwnedMessageKey::new(
+                        message.recipient(),
+                        message.nonce(),
+                    ))?;
+            }
+            Event::CoinCreated(coin) => {
+                let coin_by_owner = owner_coin_id_key(&coin.owner, &coin.utxo_id);
+                block_st_transaction
+                    .storage_as_mut::<OwnedCoins>()
+                    .insert(&coin_by_owner, &())?;
+            }
+            Event::CoinConsumed(coin) => {
+                let key = owner_coin_id_key(&coin.owner, &coin.utxo_id);
+                block_st_transaction
+                    .storage_as_mut::<OwnedCoins>()
+                    .remove(&key)?;
             }
         }
-        Ok(())
+    }
+    Ok(())
+}
+
+/// Associate all transactions within a block to their respective UTXO owners
+fn index_tx_owners_for_block<T>(
+    block: &Block,
+    block_st_transaction: &mut T,
+    chain_id: &ChainId,
+) -> anyhow::Result<()>
+where
+    T: OffChainDatabase,
+{
+    for (tx_idx, tx) in block.transactions().iter().enumerate() {
+        let block_height = *block.header().height();
+        let inputs;
+        let outputs;
+        let tx_idx = u16::try_from(tx_idx).map_err(|e| {
+            anyhow::anyhow!("The block has more than `u16::MAX` transactions, {}", e)
+        })?;
+        let tx_id = tx.id(chain_id).expect(
+            "The imported block should contains only transactions with cached id",
+        );
+        match tx {
+            Transaction::Script(tx) => {
+                inputs = tx.inputs().as_slice();
+                outputs = tx.outputs().as_slice();
+            }
+            Transaction::Create(tx) => {
+                inputs = tx.inputs().as_slice();
+                outputs = tx.outputs().as_slice();
+            }
+            Transaction::Mint(_) => continue,
+        }
+        persist_owners_index(
+            block_height,
+            inputs,
+            outputs,
+            &tx_id,
+            tx_idx,
+            block_st_transaction,
+        )?;
+    }
+    Ok(())
+}
+
+/// Index the tx id by owner for all of the inputs and outputs
+fn persist_owners_index<T>(
+    block_height: BlockHeight,
+    inputs: &[Input],
+    outputs: &[Output],
+    tx_id: &Bytes32,
+    tx_idx: u16,
+    db: &mut T,
+) -> StorageResult<()>
+where
+    T: OffChainDatabase,
+{
+    let mut owners = vec![];
+    for input in inputs {
+        if let Input::CoinSigned(CoinSigned { owner, .. })
+        | Input::CoinPredicate(CoinPredicate { owner, .. }) = input
+        {
+            owners.push(owner);
+        }
     }
 
-    /// Associate all transactions within a block to their respective UTXO owners
-    fn index_tx_owners_for_block<T>(
-        block: &Block,
-        block_st_transaction: &mut T,
-        chain_id: &ChainId,
-    ) -> anyhow::Result<()>
-    where
-        T: OffChainDatabase,
-    {
-        for (tx_idx, tx) in block.transactions().iter().enumerate() {
-            let block_height = *block.header().height();
-            let inputs;
-            let outputs;
-            let tx_idx = u16::try_from(tx_idx).map_err(|e| {
-                anyhow::anyhow!("The block has more than `u16::MAX` transactions, {}", e)
-            })?;
-            let tx_id = tx.id(chain_id);
-            match tx {
-                Transaction::Script(tx) => {
-                    inputs = tx.inputs().as_slice();
-                    outputs = tx.outputs().as_slice();
-                }
-                Transaction::Create(tx) => {
-                    inputs = tx.inputs().as_slice();
-                    outputs = tx.outputs().as_slice();
-                }
-                Transaction::Mint(_) => continue,
+    for output in outputs {
+        match output {
+            Output::Coin { to, .. }
+            | Output::Change { to, .. }
+            | Output::Variable { to, .. } => {
+                owners.push(to);
             }
-            Self::persist_owners_index(
-                block_height,
-                inputs,
-                outputs,
-                &tx_id,
-                tx_idx,
-                block_st_transaction,
-            )?;
+            Output::Contract(_) | Output::ContractCreated { .. } => {}
         }
-        Ok(())
     }
 
-    /// Index the tx id by owner for all of the inputs and outputs
-    fn persist_owners_index<T>(
-        block_height: BlockHeight,
-        inputs: &[Input],
-        outputs: &[Output],
-        tx_id: &Bytes32,
-        tx_idx: u16,
-        db: &mut T,
-    ) -> StorageResult<()>
-    where
-        T: OffChainDatabase,
-    {
-        let mut owners = vec![];
-        for input in inputs {
-            if let Input::CoinSigned(CoinSigned { owner, .. })
-            | Input::CoinPredicate(CoinPredicate { owner, .. }) = input
-            {
-                owners.push(owner);
-            }
-        }
+    // dedupe owners from inputs and outputs prior to indexing
+    owners.sort();
+    owners.dedup();
 
-        for output in outputs {
-            match output {
-                Output::Coin { to, .. }
-                | Output::Change { to, .. }
-                | Output::Variable { to, .. } => {
-                    owners.push(to);
-                }
-                Output::Contract(_) | Output::ContractCreated { .. } => {}
-            }
-        }
-
-        // dedupe owners from inputs and outputs prior to indexing
-        owners.sort();
-        owners.dedup();
-
-        for owner in owners {
-            db.record_tx_id_owner(owner, block_height, tx_idx, tx_id)?;
-        }
-
-        Ok(())
+    for owner in owners {
+        db.record_tx_id_owner(owner, block_height, tx_idx, tx_id)?;
     }
 
-    fn persist_transaction_status<T>(
-        import_result: &ImportResult,
-        db: &mut T,
-    ) -> StorageResult<()>
-    where
-        T: OffChainDatabase,
-    {
-        for TransactionExecutionStatus { id, result } in import_result.tx_status.iter() {
-            let status = from_executor_to_status(
-                &import_result.sealed_block.entity,
-                result.clone(),
-            );
+    Ok(())
+}
 
-            if db.update_tx_status(id, status)?.is_some() {
-                return Err(anyhow::anyhow!(
-                    "Transaction status already exists for tx {}",
-                    id
-                )
-                .into());
-            }
+fn persist_transaction_status<T>(
+    import_result: &ImportResult,
+    db: &mut T,
+) -> StorageResult<()>
+where
+    T: OffChainDatabase,
+{
+    for TransactionExecutionStatus { id, result } in import_result.tx_status.iter() {
+        let status =
+            from_executor_to_status(&import_result.sealed_block.entity, result.clone());
+
+        if db.update_tx_status(id, status)?.is_some() {
+            return Err(anyhow::anyhow!(
+                "Transaction status already exists for tx {}",
+                id
+            )
+            .into());
         }
-        Ok(())
     }
+    Ok(())
 }
 
 #[async_trait::async_trait]
-impl<D> RunnableService for Task<D>
+impl<TxPool, D> RunnableService for Task<TxPool, D>
 where
+    TxPool: ports::worker::TxPool,
     D: ports::worker::Transactional,
 {
     const NAME: &'static str = "GraphQL_Off_Chain_Worker";
@@ -300,8 +309,9 @@ where
 }
 
 #[async_trait::async_trait]
-impl<D> RunnableTask for Task<D>
+impl<TxPool, D> RunnableTask for Task<TxPool, D>
 where
+    TxPool: ports::worker::TxPool,
     D: ports::worker::Transactional,
 {
     async fn run(&mut self, watcher: &mut StateWatcher) -> anyhow::Result<bool> {
@@ -341,17 +351,20 @@ where
     }
 }
 
-pub fn new_service<I, D>(
+pub fn new_service<TxPool, I, D>(
+    tx_pool: TxPool,
     block_importer: I,
     database: D,
     chain_id: ChainId,
-) -> ServiceRunner<Task<D>>
+) -> ServiceRunner<Task<TxPool, D>>
 where
+    TxPool: ports::worker::TxPool,
     I: ports::worker::BlockImporter,
     D: ports::worker::Transactional,
 {
     let block_importer = block_importer.block_events();
     ServiceRunner::new(Task {
+        tx_pool,
         block_importer,
         database,
         chain_id,

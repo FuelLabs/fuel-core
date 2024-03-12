@@ -27,6 +27,7 @@ use fuel_core_storage::{
     StorageAsMut,
     StorageBatchMutate,
     StorageMutate,
+    StorageWrite,
 };
 
 impl<Description, M> StorageInspect<M> for Database<Description>
@@ -125,6 +126,53 @@ where
 
     fn read_alloc(&self, key: &M::Key) -> StorageResult<Option<Vec<u8>>> {
         StructuredStorage::new(self).storage::<M>().read_alloc(key)
+    }
+}
+
+#[cfg(feature = "test-helpers")]
+impl<M, Description> StorageWrite<M> for Database<Description>
+where
+    Description: DatabaseDescription,
+    M: Mappable,
+    for<'a> StructuredStorage<&'a Self>: StorageInspect<M, Error = StorageError>,
+    for<'a> StorageTransaction<&'a Self>: StorageWrite<M, Error = StorageError>,
+    Self: Modifiable,
+{
+    fn write(&mut self, key: &M::Key, buf: &[u8]) -> Result<usize, Self::Error> {
+        let mut transaction = StorageTransaction::transaction(
+            &*self,
+            ConflictPolicy::Overwrite,
+            Default::default(),
+        );
+        let prev = <_ as StorageWrite<M>>::write(&mut transaction, key, buf)?;
+        self.commit_changes(transaction.into_changes())?;
+        Ok(prev)
+    }
+
+    fn replace(
+        &mut self,
+        key: &M::Key,
+        buf: &[u8],
+    ) -> Result<(usize, Option<Vec<u8>>), Self::Error> {
+        let mut transaction = StorageTransaction::transaction(
+            &*self,
+            ConflictPolicy::Overwrite,
+            Default::default(),
+        );
+        let prev = <_ as StorageWrite<M>>::replace(&mut transaction, key, buf)?;
+        self.commit_changes(transaction.into_changes())?;
+        Ok(prev)
+    }
+
+    fn take(&mut self, key: &M::Key) -> Result<Option<Vec<u8>>, Self::Error> {
+        let mut transaction = StorageTransaction::transaction(
+            &*self,
+            ConflictPolicy::Overwrite,
+            Default::default(),
+        );
+        let prev = <_ as StorageWrite<M>>::take(&mut transaction, key)?;
+        self.commit_changes(transaction.into_changes())?;
+        Ok(prev)
     }
 }
 

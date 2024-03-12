@@ -47,7 +47,10 @@ async fn cant_produce_at_genesis_height() {
         .expect_err("expected failure");
 
     assert!(
-        matches!(err.downcast_ref::<Error>(), Some(Error::GenesisBlock)),
+        matches!(
+            err.downcast_ref::<Error>(),
+            Some(Error::BlockHeightShouldBeHigherThanPrevious { .. })
+        ),
         "unexpected err {err:?}"
     );
 }

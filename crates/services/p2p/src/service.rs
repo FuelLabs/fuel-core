@@ -705,7 +705,7 @@ impl SharedState {
         if block_height_range.is_empty() {
             return Err(anyhow!(
                 "Cannot retrieve headers for an empty range of block heights"
-            ))
+            ));
         }
 
         self.request_sender

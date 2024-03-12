@@ -1,20 +1,25 @@
 #![allow(unused_variables)]
 use crate::{
     cli::{
-        run::consensus::PoATriggerArgs,
+        run::{
+            consensus::PoATriggerArgs,
+            tx_pool::TxPoolArgs,
+        },
         DEFAULT_DB_PATH,
     },
     FuelService,
 };
-use anyhow::{
-    anyhow,
-    Context,
-};
+use anyhow::Context;
 use clap::Parser;
 use fuel_core::{
     chain_config::{
         default_consensus_dev_key,
         ChainConfig,
+        StateConfig,
+    },
+    combined_database::{
+        CombinedDatabase,
+        CombinedDatabaseConfig,
     },
     producer::Config as ProducerConfig,
     service::{
@@ -25,13 +30,20 @@ use fuel_core::{
         ServiceTrait,
         VMConfig,
     },
-    txpool::Config as TxPoolConfig,
+    txpool::{
+        config::BlackList,
+        Config as TxPoolConfig,
+    },
     types::{
         blockchain::primitives::SecretKeyWrapper,
         fuel_tx::ContractId,
         fuel_vm::SecretKey,
         secrecy::Secret,
     },
+};
+use fuel_core_chain_config::{
+    SnapshotMetadata,
+    StateReader,
 };
 use pyroscope::{
     pyroscope::PyroscopeAgentRunning,
@@ -64,6 +76,7 @@ mod consensus;
 mod profiling;
 #[cfg(feature = "relayer")]
 mod relayer;
+mod tx_pool;
 
 /// Run the Fuel client node locally.
 #[derive(Debug, Clone, Parser)]
@@ -104,14 +117,14 @@ pub struct Command {
     )]
     pub database_type: DbType,
 
-    /// Specify either an alias to a built-in configuration or filepath to a JSON file.
-    #[arg(
-        name = "CHAIN_CONFIG",
-        long = "chain",
-        default_value = "local_testnet",
-        env
-    )]
-    pub chain_config: String,
+    /// Snapshot from which to do (re)genesis. Defaults to local testnet configuration.
+    #[arg(name = "SNAPSHOT", long = "snapshot", env)]
+    pub snapshot: Option<PathBuf>,
+
+    /// Prunes the db. Genesis is done from the provided snapshot or the local testnet
+    /// configuration.
+    #[arg(name = "DB_PRUNE", long = "db-prune", env, default_value = "false")]
+    pub db_prune: bool,
 
     /// Should be used for local development only. Enabling debug mode:
     /// - Allows GraphQL Endpoints to arbitrarily advance blocks.
@@ -146,7 +159,11 @@ pub struct Command {
     ///
     /// If not set, `consensus_key` is used as the provider of the `Address`.
     #[arg(long = "coinbase-recipient", env)]
-    pub coinbase_recipient: Option<String>,
+    pub coinbase_recipient: Option<ContractId>,
+
+    /// The cli arguments supported by the `TxPool`.
+    #[clap(flatten)]
+    pub tx_pool: TxPoolArgs,
 
     #[cfg_attr(feature = "relayer", clap(flatten))]
     #[cfg(feature = "relayer")]
@@ -168,22 +185,6 @@ pub struct Command {
 
     #[clap(long = "verify-max-relayer-wait", default_value = "30s", env)]
     pub max_wait_time: humantime::Duration,
-
-    /// The max time to live of the transaction inside of the `TxPool`.
-    #[clap(long = "tx-pool-ttl", default_value = "5m", env)]
-    pub tx_pool_ttl: humantime::Duration,
-
-    /// The max number of transactions that the `TxPool` can simultaneously store.
-    #[clap(long = "tx-max-number", default_value = "4064", env)]
-    pub tx_max_number: usize,
-
-    /// The max depth of the dependent transactions that supported by the `TxPool`.
-    #[clap(long = "tx-max-depth", default_value = "10", env)]
-    pub tx_max_depth: usize,
-
-    /// The maximum number of active subscriptions that supported by the `TxPool`.
-    #[clap(long = "tx-number-active-subscriptions", default_value = "4064", env)]
-    pub tx_number_active_subscriptions: usize,
 
     /// The number of reserved peers to connect to before starting to sync.
     #[clap(long = "min-connected-reserved-peers", default_value = "0", env)]
@@ -214,7 +215,8 @@ impl Command {
             max_database_cache_size,
             database_path,
             database_type,
-            chain_config,
+            db_prune,
+            snapshot,
             vm_backtrace,
             debug,
             utxo_validation,
@@ -231,10 +233,7 @@ impl Command {
             metrics,
             max_da_lag,
             max_wait_time,
-            tx_pool_ttl,
-            tx_max_number,
-            tx_max_depth,
-            tx_number_active_subscriptions,
+            tx_pool,
             min_connected_reserved_peers,
             time_until_synced,
             query_log_threshold_time,
@@ -244,7 +243,18 @@ impl Command {
 
         let addr = net::SocketAddr::new(ip, port);
 
-        let chain_conf: ChainConfig = chain_config.as_str().parse()?;
+        let (chain_conf, state_reader) = match snapshot.as_ref() {
+            None => (
+                ChainConfig::local_testnet(),
+                StateReader::in_memory(StateConfig::local_testnet()),
+            ),
+            Some(path) => {
+                let metadata = SnapshotMetadata::read(path)?;
+                let chain_conf = ChainConfig::from_snapshot_metadata(&metadata)?;
+                let state_reader = StateReader::for_snapshot(metadata)?;
+                (chain_conf, state_reader)
+            }
+        };
 
         #[cfg(feature = "relayer")]
         let relayer_cfg = relayer_args.into_config();
@@ -280,10 +290,7 @@ impl Command {
         });
 
         let coinbase_recipient = if let Some(coinbase_recipient) = coinbase_recipient {
-            Some(
-                ContractId::from_str(coinbase_recipient.as_str())
-                    .map_err(|err| anyhow!(err))?,
-            )
+            Some(coinbase_recipient)
         } else {
             tracing::warn!("The coinbase recipient `ContractId` is not set!");
             None
@@ -294,16 +301,39 @@ impl Command {
             max_wait_time: max_wait_time.into(),
         };
 
+        let combined_db_config = CombinedDatabaseConfig {
+            database_path,
+            database_type,
+            max_database_cache_size,
+        };
+
         let block_importer =
             fuel_core::service::config::fuel_core_importer::Config::new(&chain_conf);
+
+        let TxPoolArgs {
+            tx_pool_ttl,
+            tx_max_number,
+            tx_max_depth,
+            tx_number_active_subscriptions,
+            tx_blacklist_addresses,
+            tx_blacklist_coins,
+            tx_blacklist_messages,
+            tx_blacklist_contracts,
+        } = tx_pool;
+
+        let blacklist = BlackList::new(
+            tx_blacklist_addresses,
+            tx_blacklist_coins,
+            tx_blacklist_messages,
+            tx_blacklist_contracts,
+        );
 
         let config = Config {
             addr,
             api_request_timeout: api_request_timeout.into(),
-            max_database_cache_size,
-            database_path,
-            database_type,
-            chain_conf: chain_conf.clone(),
+            combined_db_config,
+            chain_config: chain_conf.clone(),
+            state_reader,
             debug,
             utxo_validation,
             block_production: trigger,
@@ -319,10 +349,12 @@ impl Command {
                 metrics,
                 tx_pool_ttl.into(),
                 tx_number_active_subscriptions,
+                blacklist,
             ),
             block_producer: ProducerConfig {
                 utxo_validation,
                 coinbase_recipient,
+                gas_price: min_gas_price,
                 metrics,
             },
             block_importer,
@@ -344,6 +376,10 @@ impl Command {
 }
 
 pub async fn exec(command: Command) -> anyhow::Result<()> {
+    if command.db_prune && command.database_path.exists() {
+        CombinedDatabase::prune(&command.database_path)?;
+    }
+
     let profiling = command.profiling.clone();
     let config = command.get_config()?;
 
@@ -400,7 +436,7 @@ fn start_pyroscope_agent(
             let agent = PyroscopeAgent::builder(url, &"fuel-core".to_string())
                 .tags(vec![
                     ("service", config.name.as_str()),
-                    ("network", config.chain_conf.chain_name.as_str()),
+                    ("network", config.chain_config.chain_name.as_str()),
                 ])
                 .backend(pprof_backend(
                     PprofConfig::new().sample_rate(profiling_args.pprof_sample_rate),

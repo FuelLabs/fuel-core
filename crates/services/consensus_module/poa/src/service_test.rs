@@ -228,15 +228,15 @@ impl MockTransactionPool {
                 .sum()
         });
         let removed = txs.clone();
-        txpool
-            .expect_remove_txs()
-            .returning(move |tx_ids: Vec<TxId>| {
+        txpool.expect_remove_txs().returning(
+            move |tx_ids: Vec<(TxId, ExecutorError)>| {
                 let mut guard = removed.lock().unwrap();
-                for id in tx_ids {
+                for (id, _) in tx_ids {
                     guard.retain(|tx| tx.id(&ChainId::default()) == id);
                 }
                 vec![]
-            });
+            },
+        );
 
         TxPoolContext {
             txpool,
@@ -248,7 +248,7 @@ impl MockTransactionPool {
 
 fn make_tx(rng: &mut StdRng) -> Script {
     TransactionBuilder::script(vec![], vec![])
-        .gas_price(0)
+        .max_fee_limit(0)
         .script_gas_limit(rng.gen_range(1..TxParameters::DEFAULT.max_gas_per_tx))
         .finalize_without_signature()
 }
@@ -304,6 +304,7 @@ async fn remove_skipped_transactions() {
     let mut txpool = MockTransactionPool::no_tx_updates();
     // Test created for only for this check.
     txpool.expect_remove_txs().returning(move |skipped_ids| {
+        let skipped_ids: Vec<_> = skipped_ids.into_iter().map(|(id, _)| id).collect();
         // Transform transactions into ids.
         let skipped_transactions: Vec<_> = skipped_transactions
             .iter()

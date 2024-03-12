@@ -14,6 +14,7 @@ pub mod txpool;
 /// The user should commit the result by itself.
 #[derive(Debug)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[must_use]
 pub struct Uncommitted<Result, Changes> {
     /// The result of the action.
     result: Result,

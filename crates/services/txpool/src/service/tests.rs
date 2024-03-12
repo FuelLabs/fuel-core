@@ -206,22 +206,25 @@ async fn simple_insert_removal_subscription() {
 
     let out = service.shared.insert(vec![tx1.clone(), tx2.clone()]).await;
 
-    if out[0].is_ok() {
-        assert_eq!(
-            new_tx_notification.try_recv(),
-            Ok(tx1.cached_id().unwrap()),
-            "First added should be tx1"
-        );
-        let update = tx1_subscribe_updates.next().await.unwrap();
-        assert!(
-            matches!(
-                update,
-                TxStatusMessage::Status(TransactionStatus::Submitted { .. })
-            ),
-            "First message in tx1 stream should be Submitted"
-        );
-    } else {
-        panic!("Tx1 should be OK, got err");
+    match &out[0] {
+        Ok(_) => {
+            assert_eq!(
+                new_tx_notification.try_recv(),
+                Ok(tx1.cached_id().unwrap()),
+                "First added should be tx1"
+            );
+            let update = tx1_subscribe_updates.next().await.unwrap();
+            assert!(
+                matches!(
+                    update,
+                    TxStatusMessage::Status(TransactionStatus::Submitted { .. })
+                ),
+                "First message in tx1 stream should be Submitted"
+            );
+        }
+        Err(err) => {
+            panic!("Tx1 should be OK, got err, {:?}", err)
+        }
     }
 
     if out[1].is_ok() {
@@ -243,15 +246,23 @@ async fn simple_insert_removal_subscription() {
     }
 
     // remove them
-    service
-        .shared
-        .remove(vec![tx1.cached_id().unwrap(), tx2.cached_id().unwrap()]);
+    service.shared.remove(vec![
+        (
+            tx1.cached_id().unwrap(),
+            "Because of the test purposes".to_string(),
+        ),
+        (
+            tx2.cached_id().unwrap(),
+            "Because of the test purposes".to_string(),
+        ),
+    ]);
 
     let update = tx1_subscribe_updates.next().await.unwrap();
     assert_eq!(
         update,
         TxStatusMessage::Status(TransactionStatus::SqueezedOut {
-            reason: "Transaction removed.".to_string()
+            reason: "Transaction squeezed out because Because of the test purposes"
+                .to_string()
         }),
         "Second message in tx1 stream should be squeezed out"
     );
@@ -260,7 +271,8 @@ async fn simple_insert_removal_subscription() {
     assert_eq!(
         update,
         TxStatusMessage::Status(TransactionStatus::SqueezedOut {
-            reason: "Transaction removed.".to_string()
+            reason: "Transaction squeezed out because Because of the test purposes"
+                .to_string()
         }),
         "Second message in tx2 stream should be squeezed out"
     );
