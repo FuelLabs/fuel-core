@@ -22,6 +22,7 @@ wasmtime = { version = "18.0.1", default-features = false, features = [
   "cranelift",
   "parallel-compilation",
   "pooling-allocator",
+  "runtime",
 ] }
 
 [dev-dependencies]

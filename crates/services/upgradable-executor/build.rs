@@ -25,10 +25,15 @@ fn main() {
         target_dir,
     ];
 
-    let output = Command::new(cargo)
-        .current_dir(project_root())
-        .args(args)
-        .output();
+    let mut cargo = Command::new(cargo);
+    cargo.env("CARGO_PROFILE_RELEASE_LTO", "true");
+    cargo.env("CARGO_PROFILE_RELEASE_PANIC", "abort");
+    cargo.env("CARGO_PROFILE_RELEASE_CODEGEN_UNITS", "1");
+    cargo.env("CARGO_PROFILE_RELEASE_OPT_LEVEL", "3");
+    cargo.env("CARGO_PROFILE_RELEASE_STRIP", "symbols");
+    cargo.current_dir(project_root()).args(args);
+
+    let output = cargo.output();
 
     match output {
         Ok(output) => {
