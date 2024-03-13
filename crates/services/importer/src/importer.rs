@@ -196,7 +196,7 @@ where
         let mut guard = self
             .database
             .try_lock()
-            .expect("Semaphore prevents from multiple access to teh database");
+            .expect("Semaphore prevents concurrent access to the database");
         let database = guard.deref_mut();
 
         self._commit_result(result, database)
@@ -464,7 +464,7 @@ where
         let mut guard = self
             .database
             .try_lock()
-            .expect("Semaphore prevents from multiple access to teh database");
+            .expect("Semaphore prevents concurrent access to the database");
         let database = guard.deref_mut();
         let commit_result = self._commit_result(result, database);
         let commit_time = start.elapsed().as_secs_f64();
