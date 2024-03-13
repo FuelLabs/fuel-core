@@ -108,7 +108,7 @@ where
         &self,
         block: fuel_core_types::services::executor::ExecutionBlock,
     ) -> fuel_core_types::services::executor::Result<UncommittedResult<Changes>> {
-        self.execute_without_commit_with_coinbase(block, Default::default())
+        self.execute_without_commit_with_coinbase(block, Default::default(), 0)
     }
 
     #[cfg(any(test, feature = "test-helpers"))]
@@ -116,6 +116,7 @@ where
         &self,
         block: fuel_core_types::services::executor::ExecutionBlock,
         coinbase_recipient: fuel_core_types::fuel_types::ContractId,
+        gas_price: u64,
     ) -> fuel_core_types::services::executor::Result<UncommittedResult<Changes>> {
         let component = match block {
             ExecutionTypes::DryRun(_) => {
@@ -125,12 +126,14 @@ where
                 header_to_produce: block.header,
                 transactions_source: OnceTransactionsSource::new(block.transactions),
                 coinbase_recipient,
+                gas_price,
                 gas_limit: u64::MAX,
             }),
             ExecutionTypes::Validation(block) => ExecutionTypes::Validation(block),
         };
 
-        self.execute_inner(component, self.config.as_ref().into())
+        let option = self.config.as_ref().into();
+        self.execute_inner(component, option)
     }
 }
 
@@ -144,12 +147,12 @@ where
     pub fn execute_without_commit_with_source<TxSource>(
         &self,
         block: ExecutionBlockWithSource<TxSource>,
-        option: ExecutionOptions,
     ) -> ReturnType
     where
         TxSource: TransactionsSource + Send + Sync + 'static,
     {
-        self.execute_inner(block, option)
+        let options = self.config.as_ref().into();
+        self.execute_inner(block, options)
     }
 
     pub fn dry_run(
@@ -173,6 +176,7 @@ where
                 component.transactions_source,
             ),
             coinbase_recipient: Default::default(),
+            gas_price: component.gas_price,
             gas_limit: component.gas_limit,
         };
 
@@ -181,10 +185,7 @@ where
             tx_status,
             ..
         } = self
-            .execute_without_commit_with_source(
-                ExecutionTypes::DryRun(component),
-                options,
-            )?
+            .execute_inner(ExecutionTypes::DryRun(component), options)?
             .into_result();
 
         // If one of the transactions fails, return an error.
@@ -209,6 +210,7 @@ where
                 header_to_produce,
                 transactions_source,
                 coinbase_recipient,
+                gas_price,
                 gas_limit,
             } = component;
 
@@ -218,6 +220,7 @@ where
                 header_to_produce,
                 transactions_source: (),
                 coinbase_recipient,
+                gas_price,
                 gas_limit,
             }
         });

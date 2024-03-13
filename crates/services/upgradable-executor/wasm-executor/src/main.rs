@@ -58,6 +58,7 @@ pub fn execute_without_commit(component_len: u32, options_len: u32) -> ReturnTyp
         let Components {
             header_to_produce,
             gas_limit,
+            gas_price,
             coinbase_recipient,
             ..
         } = component;
@@ -65,6 +66,7 @@ pub fn execute_without_commit(component_len: u32, options_len: u32) -> ReturnTyp
         Components {
             header_to_produce,
             gas_limit,
+            gas_price,
             transactions_source: WasmTxSource::new(),
             coinbase_recipient,
         }

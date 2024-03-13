@@ -181,9 +181,7 @@ where
         let tx_idx = u16::try_from(tx_idx).map_err(|e| {
             anyhow::anyhow!("The block has more than `u16::MAX` transactions, {}", e)
         })?;
-        let tx_id = tx.id(chain_id).expect(
-            "The imported block should contains only transactions with cached id",
-        );
+        let tx_id = tx.id(chain_id);
         match tx {
             Transaction::Script(tx) => {
                 inputs = tx.inputs().as_slice();

@@ -65,14 +65,14 @@ fuel-core-services = { version = "0.23.0", path = "./crates/services" }
 fuel-core-consensus-module = { version = "0.23.0", path = "./crates/services/consensus_module" }
 fuel-core-bft = { version = "0.23.0", path = "./crates/services/consensus_module/bft" }
 fuel-core-poa = { version = "0.23.0", path = "./crates/services/consensus_module/poa" }
-fuel-core-executor = { version = "0.23.0", path = "./crates/services/executor" }
+fuel-core-executor = { version = "0.23.0", path = "./crates/services/executor", default-features = false }
 fuel-core-importer = { version = "0.23.0", path = "./crates/services/importer" }
 fuel-core-p2p = { version = "0.23.0", path = "./crates/services/p2p" }
 fuel-core-producer = { version = "0.23.0", path = "./crates/services/producer" }
 fuel-core-relayer = { version = "0.23.0", path = "./crates/services/relayer" }
 fuel-core-sync = { version = "0.23.0", path = "./crates/services/sync" }
 fuel-core-txpool = { version = "0.23.0", path = "./crates/services/txpool" }
-fuel-core-storage = { version = "0.23.0", path = "./crates/storage" }
+fuel-core-storage = { version = "0.23.0", path = "./crates/storage", default-features = false }
 fuel-core-trace = { version = "0.23.0", path = "./crates/trace" }
 fuel-core-types = { version = "0.23.0", path = "./crates/types", default-features = false }
 fuel-core-tests = { version = "0.0.0", path = "./tests" }
@@ -130,3 +130,6 @@ itertools = { version = "0.12", default-features = false }
 insta = "1.8"
 tempfile = "3.4"
 tikv-jemallocator = "0.5"
+
+[patch.crates-io]
+fuel-vm = { path = "../fuel-vm/fuel-vm" }

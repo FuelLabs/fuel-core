@@ -45,9 +45,7 @@ impl ExecutorAdapter {
     where
         TxSource: fuel_core_executor::ports::TransactionsSource + Send + Sync + 'static,
     {
-        let options = self.executor.config.as_ref().into();
-        self.executor
-            .execute_without_commit_with_source(block, options)
+        self.executor.execute_without_commit_with_source(block)
     }
 
     pub(crate) fn _dry_run(

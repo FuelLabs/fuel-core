@@ -255,6 +255,7 @@ pub mod block_component {
                 empty_block: block,
                 transactions_source: OnceTransactionsSource::new(transaction),
                 coinbase_contract_id: Default::default(),
+                gas_price,
                 gas_limit: u64::MAX,
                 _marker: Default::default(),
             }
@@ -265,8 +266,8 @@ pub mod block_component {
         pub fn from_component(
             block: &'a mut PartialFuelBlock,
             transactions_source: TxSource,
-            gas_price: u64,
             coinbase_contract_id: ContractId,
+            gas_price: u64,
             gas_limit: u64,
         ) -> Self {
             debug_assert!(block.transactions.is_empty());
@@ -667,6 +668,7 @@ where
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn execute_mint<T>(
         &self,
         checked_mint: Checked<Mint>,
@@ -843,9 +845,7 @@ where
 
         if self.options.utxo_validation {
             checked_tx = checked_tx
-                .check_predicates(&CheckPredicateParams::from(
-                    &self.consensus_params,
-                ))
+                .check_predicates(&CheckPredicateParams::from(&self.consensus_params))
                 .map_err(|e| {
                     ExecutorError::TransactionValidity(
                         TransactionValidityError::Validation(e),
@@ -889,7 +889,7 @@ where
 
         let mut vm = Interpreter::with_storage(
             vm_db,
-            InterpreterParams::from(gas_price, &self.consensus_params),
+            InterpreterParams::new(gas_price, &self.consensus_params),
         );
 
         let gas_costs = &self.consensus_params.gas_costs;

@@ -290,7 +290,6 @@ impl ExecutionKind {
     }
 }
 
-#[cfg_attr(feature = "serde", serde_with::serde_as)]
 #[allow(missing_docs)]
 #[derive(Debug, PartialEq, derive_more::Display, derive_more::From)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]

@@ -602,18 +602,13 @@ mod tests {
             let producer = create_executor(Default::default(), config);
 
             let result = producer
-                .execute_without_commit_with_source(
-                    ExecutionTypes::DryRun(Components {
-                        header_to_produce: Default::default(),
-                        transactions_source: OnceTransactionsSource::new(vec![
-                            script.into()
-                        ]),
-                        coinbase_recipient: recipient,
-                        gas_price: 0,
-                        gas_limit: u64::MAX,
-                    }),
-                    Default::default(),
-                )
+                .execute_without_commit_with_source(ExecutionTypes::DryRun(Components {
+                    header_to_produce: Default::default(),
+                    transactions_source: OnceTransactionsSource::new(vec![script.into()]),
+                    coinbase_recipient: recipient,
+                    gas_price: 0,
+                    gas_limit: u64::MAX,
+                }))
                 .unwrap();
             let ExecutionResult { block, .. } = result.into_result();
 
@@ -654,7 +649,7 @@ mod tests {
                 .insert(&recipient, &[])
                 .expect("Should insert coinbase contract");
 
-            let producer = create_executor(database.clone(), config);
+            let producer = create_executor(database.clone(), config.clone());
 
             let ExecutionResult {
                 block: produced_block,
@@ -749,6 +744,7 @@ mod tests {
                     .execute_without_commit_with_coinbase(
                         ExecutionBlock::Production(block.into()),
                         config_coinbase,
+                        0,
                     )
                     .expect("Should execute the block")
                     .into();
@@ -2062,9 +2058,7 @@ mod tests {
             skipped_transactions,
             ..
         } = setup
-            .execute_and_commit(
-                ExecutionBlock::Production(first_block),
-            )
+            .execute_and_commit(ExecutionBlock::Production(first_block))
             .unwrap();
         assert!(skipped_transactions.is_empty());
 
@@ -2712,8 +2706,10 @@ mod tests {
         let owner = Input::predicate_owner(&predicate);
         let amount = 1000;
 
+        let consensus_parameters = ConsensusParameters::default();
         let config = Config {
             utxo_validation_default: true,
+            consensus_parameters: Some(consensus_parameters.clone()),
             ..Default::default()
         };
 
@@ -2738,7 +2734,7 @@ mod tests {
             asset_id: Default::default(),
         })
         .finalize();
-        tx.estimate_predicates(&config.consensus_parameters.clone().into())
+        tx.estimate_predicates(&consensus_parameters.clone().into())
             .unwrap();
         let db = &mut Database::default();
 
@@ -2770,6 +2766,7 @@ mod tests {
             .execute_without_commit_with_source(ExecutionTypes::Production(Components {
                 header_to_produce: PartialBlockHeader::default(),
                 transactions_source: OnceTransactionsSource::new(vec![tx.into()]),
+                coinbase_recipient: Default::default(),
                 gas_price: 1,
                 gas_limit: u64::MAX,
             }))
