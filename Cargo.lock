@@ -3075,6 +3075,7 @@ dependencies = [
  "fuel-core-trace",
  "fuel-core-types",
  "rand",
+ "thiserror",
  "tokio",
  "tokio-rayon",
  "tracing",

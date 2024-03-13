@@ -1,4 +1,5 @@
 use fuel_core_types::fuel_types::BlockHeight;
+use thiserror::Error;
 
 /// The parameters required to retrieve the gas price for a block
 pub struct GasPriceParams {
@@ -22,10 +23,16 @@ impl From<BlockHeight> for GasPriceParams {
     }
 }
 
+#[derive(Error, Debug)]
+pub enum GasPriceError {
+    #[error("Failed to retrieve gas price for block: {0}")]
+    GasPriceRetrievalFailed(anyhow::Error),
+}
+
 /// Interface for retrieving the gas price for a block
 pub trait ProducerGasPrice {
     /// The gas price for all transactions in the block.
-    fn gas_price(&self, params: GasPriceParams) -> u64;
+    fn gas_price(&self, params: GasPriceParams) -> Result<u64, GasPriceError>;
 }
 
 pub struct StaticGasPrice {
@@ -39,7 +46,7 @@ impl StaticGasPrice {
 }
 
 impl ProducerGasPrice for StaticGasPrice {
-    fn gas_price(&self, _params: GasPriceParams) -> u64 {
-        self.gas_price
+    fn gas_price(&self, _params: GasPriceParams) -> Result<u64, GasPriceError> {
+        Ok(self.gas_price)
     }
 }

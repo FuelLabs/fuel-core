@@ -18,6 +18,7 @@ fuel-core-types = { workspace = true }
 tokio = { workspace = true, features = ["full"] }
 tokio-rayon = { workspace = true }
 tracing = { workspace = true }
+thiserror = "1.0.57"
 
 [dev-dependencies]
 fuel-core-producer = { path = "", features = ["test-helpers"] }
