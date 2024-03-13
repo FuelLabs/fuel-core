@@ -21,11 +21,11 @@ use fuel_core_storage::{
     Mappable,
     Result as StorageResult,
     StorageAsMut,
+    StorageInspect,
     StorageMutate,
 };
 use fuel_core_types::{
     blockchain::primitives::DaBlockHeight,
-    fuel_merkle::storage::StorageInspect,
     services::relayer::Event,
 };
 

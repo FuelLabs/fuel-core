@@ -379,9 +379,9 @@ pub mod test {
         kv_store::Value,
         Result as StorageResult,
     };
-    use std::collections::BTreeMap;
+    use std::collections::HashMap;
 
-    type Storage = BTreeMap<(u32, Vec<u8>), Value>;
+    type Storage = HashMap<(u32, Vec<u8>), Value>;
 
     /// The in-memory storage for testing purposes.
     #[derive(Debug, PartialEq, Eq)]

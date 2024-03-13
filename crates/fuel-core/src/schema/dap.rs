@@ -68,11 +68,11 @@ pub struct Config {
     debug_enabled: bool,
 }
 
-type FreezedDatabase = VmStorage<StorageTransaction<crate::database::Database<OnChain>>>;
+type FrozenDatabase = VmStorage<StorageTransaction<Database<OnChain>>>;
 
 #[derive(Debug, Clone, Default)]
 pub struct ConcreteStorage {
-    vm: HashMap<ID, Interpreter<FreezedDatabase, Script>>,
+    vm: HashMap<ID, Interpreter<FrozenDatabase, Script>>,
     tx: HashMap<ID, Vec<Script>>,
     params: ConsensusParameters,
 }
@@ -188,7 +188,7 @@ impl ConcreteStorage {
             .ok_or_else(|| anyhow::anyhow!("The VM instance was not found"))
     }
 
-    fn vm_database(storage: Database<OnChain>) -> anyhow::Result<FreezedDatabase> {
+    fn vm_database(storage: Database<OnChain>) -> anyhow::Result<FrozenDatabase> {
         let block = storage
             .get_current_block()?
             .ok_or(not_found!("Block for VMDatabase"))?;
