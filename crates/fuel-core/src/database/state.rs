@@ -8,13 +8,11 @@ use fuel_core_storage::{
     Error as StorageError,
     StorageAsRef,
     StorageBatchMutate,
+    StorageInspect,
 };
-use fuel_core_types::{
-    fuel_merkle::storage::StorageInspect,
-    fuel_types::{
-        Bytes32,
-        ContractId,
-    },
+use fuel_core_types::fuel_types::{
+    Bytes32,
+    ContractId,
 };
 use itertools::Itertools;
 
@@ -52,7 +50,6 @@ where
         let slots = slots
             .map(|(key, value)| (ContractsStateKey::new(contract_id, &key), value))
             .collect_vec();
-        #[allow(clippy::map_identity)]
         <_ as StorageBatchMutate<ContractsState>>::init_storage(
             self,
             &mut slots.iter().map(|(key, value)| (key, value.as_slice())),
@@ -90,8 +87,6 @@ where
                 {
                     let state_entries = entries
                         .into_iter()
-                        .collect_vec()
-                        .into_iter()
                         .map(|state_entry| {
                             let db_key = ContractsStateKey::new(
                                 &state_entry.contract_id,
@@ -101,7 +96,6 @@ where
                         })
                         .collect_vec();
 
-                    #[allow(clippy::map_identity)]
                     let state_entries_iter = state_entries
                         .iter()
                         .map(|(key, value)| (key, value.as_slice()));

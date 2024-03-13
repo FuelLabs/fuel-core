@@ -424,7 +424,7 @@ where
         }
 
         // The block level storage transaction that also contains data from the relayer.
-        // Starting this point modifications from each thread should be independent
+        // Starting from this point, modifications from each thread should be independent
         // and shouldn't touch the same data.
         let mut block_with_relayer_data_transaction = block_st_transaction.write_transaction()
                 // Enforces independent changes from each thread.

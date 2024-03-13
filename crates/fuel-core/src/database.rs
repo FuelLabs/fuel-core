@@ -52,6 +52,7 @@ use fuel_core_storage::{
     Error as StorageError,
     Result as StorageResult,
     StorageAsMut,
+    StorageInspect,
     StorageMutate,
 };
 use fuel_core_types::{
@@ -59,7 +60,6 @@ use fuel_core_types::{
         block::CompressedBlock,
         primitives::DaBlockHeight,
     },
-    fuel_merkle::storage::StorageInspect,
     fuel_types::BlockHeight,
 };
 use itertools::Itertools;

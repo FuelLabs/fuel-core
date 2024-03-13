@@ -89,7 +89,7 @@ where
     fn get(&self, key: &[u8], column: Self::Column) -> StorageResult<Option<Value>> {
         Ok(self.inner[column.as_usize()]
             .lock()
-            .expect("poisoned")
+            .map_err(|e| anyhow::anyhow!("The lock is poisoned: {}", e))?
             .get(&key.to_vec())
             .cloned())
     }
@@ -120,7 +120,9 @@ where
         changes: Changes,
     ) -> StorageResult<()> {
         for (column, btree) in changes.into_iter() {
-            let mut lock = self.inner[column as usize].lock().expect("poisoned");
+            let mut lock = self.inner[column as usize]
+                .lock()
+                .map_err(|e| anyhow::anyhow!("The lock is poisoned: {}", e))?;
 
             for (key, operation) in btree.into_iter() {
                 match operation {
