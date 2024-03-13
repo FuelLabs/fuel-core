@@ -193,8 +193,13 @@ where
         if let Some(channel) = previous_block_result {
             let _ = channel.await;
         }
+        let mut guard = self
+            .database
+            .try_lock()
+            .expect("Semaphore prevents from multiple access to teh database");
+        let database = guard.deref_mut();
 
-        self._commit_result(result)
+        self._commit_result(result, database)
     }
 
     /// The method commits the result of the block execution and notifies about a new imported block.
@@ -207,12 +212,11 @@ where
         ),
         err
     )]
-    fn _commit_result(&self, result: UncommittedResult<Changes>) -> Result<(), Error> {
-        let mut guard = self
-            .database
-            .try_lock()
-            .expect("Semaphore prevents from multiple access to teh database");
-        let database = guard.deref_mut();
+    fn _commit_result(
+        &self,
+        result: UncommittedResult<Changes>,
+        database: &mut D,
+    ) -> Result<(), Error> {
         let (result, changes) = result.into();
         let block = &result.sealed_block.entity;
         let consensus = &result.sealed_block.consensus;
@@ -456,7 +460,13 @@ where
         }
 
         let start = Instant::now();
-        let commit_result = self._commit_result(result);
+
+        let mut guard = self
+            .database
+            .try_lock()
+            .expect("Semaphore prevents from multiple access to teh database");
+        let database = guard.deref_mut();
+        let commit_result = self._commit_result(result, database);
         let commit_time = start.elapsed().as_secs_f64();
         let time = execute_time + commit_time;
         importer_metrics().execute_and_commit_duration.observe(time);
