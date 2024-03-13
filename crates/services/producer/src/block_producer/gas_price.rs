@@ -27,3 +27,19 @@ pub trait ProducerGasPrice {
     /// The gas price for all transactions in the block.
     fn gas_price(&self, params: GasPriceParams) -> u64;
 }
+
+pub struct StaticGasPrice {
+    pub gas_price: u64,
+}
+
+impl StaticGasPrice {
+    pub fn new(gas_price: u64) -> Self {
+        Self { gas_price }
+    }
+}
+
+impl ProducerGasPrice for StaticGasPrice {
+    fn gas_price(&self, _params: GasPriceParams) -> u64 {
+        self.gas_price
+    }
+}
