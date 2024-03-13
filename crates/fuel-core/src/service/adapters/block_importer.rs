@@ -11,22 +11,27 @@ use fuel_core_importer::{
     ports::{
         BlockVerifier,
         Executor,
-        ExecutorDatabase,
         ImporterDatabase,
     },
     Config,
     Importer,
 };
 use fuel_core_storage::{
-    iter::IterDirection,
-    tables::{
-        FuelBlocks,
-        SealedBlockConsensus,
-        Transactions,
+    iter::{
+        IterDirection,
+        IteratorOverTable,
     },
-    transactional::StorageTransaction,
+    tables::{
+        merkle::{
+            DenseMetadataKey,
+            FuelBlockMerkleMetadata,
+        },
+        FuelBlocks,
+    },
+    transactional::Changes,
+    MerkleRoot,
     Result as StorageResult,
-    StorageAsMut,
+    StorageAsRef,
 };
 use fuel_core_types::{
     blockchain::{
@@ -34,11 +39,7 @@ use fuel_core_types::{
         consensus::Consensus,
         SealedBlock,
     },
-    fuel_tx::UniqueIdentifier,
-    fuel_types::{
-        BlockHeight,
-        ChainId,
-    },
+    fuel_types::BlockHeight,
     services::executor::{
         ExecutionTypes,
         Result as ExecutorResult,
@@ -88,43 +89,20 @@ impl ImporterDatabase for Database {
             .transpose()?
             .map(|(height, _)| height))
     }
-}
 
-impl ExecutorDatabase for Database {
-    fn store_new_block(
-        &mut self,
-        chain_id: &ChainId,
-        block: &SealedBlock,
-    ) -> StorageResult<bool> {
-        let height = block.entity.header().height();
-        let mut found = self
-            .storage::<FuelBlocks>()
-            .insert(height, &block.entity.compress(chain_id))?
-            .is_some();
-        found |= self
-            .storage::<SealedBlockConsensus>()
-            .insert(height, &block.consensus)?
-            .is_some();
-
-        // TODO: Use `batch_insert` from https://github.com/FuelLabs/fuel-core/pull/1576
-        for tx in block.entity.transactions() {
-            found |= self
-                .storage::<Transactions>()
-                .insert(&tx.id(chain_id), tx)?
-                .is_some();
-        }
-        Ok(!found)
+    fn latest_block_root(&self) -> StorageResult<Option<MerkleRoot>> {
+        Ok(self
+            .storage_as_ref::<FuelBlockMerkleMetadata>()
+            .get(&DenseMetadataKey::Latest)?
+            .map(|cow| *cow.root()))
     }
 }
 
 impl Executor for ExecutorAdapter {
-    type Database = Database;
-
     fn execute_without_commit(
         &self,
         block: Block,
-    ) -> ExecutorResult<UncommittedExecutionResult<StorageTransaction<Self::Database>>>
-    {
+    ) -> ExecutorResult<UncommittedExecutionResult<Changes>> {
         self._execute_without_commit::<TransactionsSource>(ExecutionTypes::Validation(
             block,
         ))

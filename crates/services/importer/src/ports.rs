@@ -1,6 +1,26 @@
 use fuel_core_storage::{
-    transactional::StorageTransaction,
+    column::Column,
+    kv_store::KeyValueInspect,
+    tables::{
+        merkle::{
+            DenseMetadataKey,
+            FuelBlockMerkleMetadata,
+        },
+        FuelBlocks,
+        SealedBlockConsensus,
+        Transactions,
+    },
+    transactional::{
+        Changes,
+        ConflictPolicy,
+        Modifiable,
+        StorageTransaction,
+        WriteTransaction,
+    },
+    MerkleRoot,
     Result as StorageResult,
+    StorageAsMut,
+    StorageAsRef,
 };
 use fuel_core_types::{
     blockchain::{
@@ -8,6 +28,7 @@ use fuel_core_types::{
         consensus::Consensus,
         SealedBlock,
     },
+    fuel_tx::UniqueIdentifier,
     fuel_types::{
         BlockHeight,
         ChainId,
@@ -21,25 +42,40 @@ use fuel_core_types::{
 #[cfg_attr(test, mockall::automock(type Database = crate::importer::test::MockDatabase;))]
 /// The executors port.
 pub trait Executor: Send + Sync {
-    /// The database used by the executor.
-    type Database: ExecutorDatabase;
-
     /// Executes the block and returns the result of execution with uncommitted database
     /// transaction.
     fn execute_without_commit(
         &self,
         block: Block,
-    ) -> ExecutorResult<UncommittedResult<StorageTransaction<Self::Database>>>;
+    ) -> ExecutorResult<UncommittedResult<Changes>>;
 }
 
-/// The database port used by the block importer.
-pub trait ImporterDatabase: Send + Sync {
+/// The trait indicates that the type supports storage transactions.
+pub trait Transactional {
+    /// The type of the storage transaction;
+    type Transaction<'a>: DatabaseTransaction
+    where
+        Self: 'a;
+
+    /// Returns the storage transaction based on the `Changes`.
+    fn storage_transaction(&mut self, changes: Changes) -> Self::Transaction<'_>;
+}
+
+/// The alias port used by the block importer.
+pub trait ImporterDatabase: Transactional + Send + Sync {
     /// Returns the latest block height.
     fn latest_block_height(&self) -> StorageResult<Option<BlockHeight>>;
+
+    /// Returns the latest block root.
+    fn latest_block_root(&self) -> StorageResult<Option<MerkleRoot>>;
 }
 
-/// The port for returned database from the executor.
-pub trait ExecutorDatabase: ImporterDatabase {
+/// The port of the storage transaction required by the importer.
+#[cfg_attr(test, mockall::automock)]
+pub trait DatabaseTransaction {
+    /// Returns the latest block root.
+    fn latest_block_root(&self) -> StorageResult<Option<MerkleRoot>>;
+
     /// Inserts the `SealedBlock`.
     ///
     /// The method returns `true` if the block is a new, otherwise `false`.
@@ -50,6 +86,9 @@ pub trait ExecutorDatabase: ImporterDatabase {
         chain_id: &ChainId,
         block: &SealedBlock,
     ) -> StorageResult<bool>;
+
+    /// Commits the changes to the underlying storage.
+    fn commit(self) -> StorageResult<()>;
 }
 
 #[cfg_attr(test, mockall::automock)]
@@ -65,4 +104,61 @@ pub trait BlockVerifier: Send + Sync {
         consensus: &Consensus,
         block: &Block,
     ) -> anyhow::Result<()>;
+}
+
+impl<S> Transactional for S
+where
+    S: KeyValueInspect<Column = Column> + Modifiable,
+{
+    type Transaction<'a> = StorageTransaction<&'a mut S> where Self: 'a;
+
+    fn storage_transaction(&mut self, changes: Changes) -> Self::Transaction<'_> {
+        self.write_transaction()
+            .with_changes(changes)
+            .with_policy(ConflictPolicy::Fail)
+    }
+}
+
+impl<S> DatabaseTransaction for StorageTransaction<S>
+where
+    S: KeyValueInspect<Column = Column> + Modifiable,
+{
+    fn latest_block_root(&self) -> StorageResult<Option<MerkleRoot>> {
+        Ok(self
+            .storage_as_ref::<FuelBlockMerkleMetadata>()
+            .get(&DenseMetadataKey::Latest)?
+            .map(|cow| *cow.root()))
+    }
+
+    fn store_new_block(
+        &mut self,
+        chain_id: &ChainId,
+        block: &SealedBlock,
+    ) -> StorageResult<bool> {
+        let mut storage = self.write_transaction();
+        let height = block.entity.header().height();
+        let mut found = storage
+            .storage_as_mut::<FuelBlocks>()
+            .insert(height, &block.entity.compress(chain_id))?
+            .is_some();
+        found |= storage
+            .storage_as_mut::<SealedBlockConsensus>()
+            .insert(height, &block.consensus)?
+            .is_some();
+
+        // TODO: Use `batch_insert` from https://github.com/FuelLabs/fuel-core/pull/1576
+        for tx in block.entity.transactions() {
+            found |= storage
+                .storage_as_mut::<Transactions>()
+                .insert(&tx.id(chain_id), tx)?
+                .is_some();
+        }
+        storage.commit()?;
+        Ok(!found)
+    }
+
+    fn commit(self) -> StorageResult<()> {
+        self.commit()?;
+        Ok(())
+    }
 }

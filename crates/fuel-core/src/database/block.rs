@@ -1,18 +1,15 @@
 use crate::{
     database::{
-        database_description::{
-            off_chain::OffChain,
-            on_chain::OnChain,
-            DatabaseDescription,
-            DatabaseMetadata,
-        },
-        metadata::MetadataTable,
+        database_description::off_chain::OffChain,
         Database,
     },
     fuel_core_graphql_api::storage::blocks::FuelBlockIdsToHeights,
 };
 use fuel_core_storage::{
-    iter::IterDirection,
+    iter::{
+        IterDirection,
+        IteratorOverTable,
+    },
     not_found,
     tables::{
         merkle::{
@@ -24,13 +21,8 @@ use fuel_core_storage::{
         Transactions,
     },
     Error as StorageError,
-    Mappable,
-    MerkleRootStorage,
     Result as StorageResult,
-    StorageAsMut,
     StorageAsRef,
-    StorageInspect,
-    StorageMutate,
 };
 use fuel_core_types::{
     blockchain::{
@@ -46,57 +38,6 @@ use fuel_core_types::{
 };
 use itertools::Itertools;
 use std::borrow::Cow;
-
-impl StorageInspect<FuelBlocks> for Database {
-    type Error = StorageError;
-
-    fn get(
-        &self,
-        key: &<FuelBlocks as Mappable>::Key,
-    ) -> Result<Option<Cow<<FuelBlocks as Mappable>::OwnedValue>>, Self::Error> {
-        self.data.storage::<FuelBlocks>().get(key)
-    }
-
-    fn contains_key(
-        &self,
-        key: &<FuelBlocks as Mappable>::Key,
-    ) -> Result<bool, Self::Error> {
-        self.data.storage::<FuelBlocks>().contains_key(key)
-    }
-}
-
-impl StorageMutate<FuelBlocks> for Database {
-    fn insert(
-        &mut self,
-        key: &<FuelBlocks as Mappable>::Key,
-        value: &<FuelBlocks as Mappable>::Value,
-    ) -> Result<Option<<FuelBlocks as Mappable>::OwnedValue>, Self::Error> {
-        let prev = self
-            .data
-            .storage_as_mut::<FuelBlocks>()
-            .insert(key, value)?;
-
-        // TODO: Temporary solution to store the block height in the database manually here.
-        //  Later it will be controlled by the `commit_changes` function on the `Database` side.
-        //  https://github.com/FuelLabs/fuel-core/issues/1589
-        self.storage::<MetadataTable<OnChain>>().insert(
-            &(),
-            &DatabaseMetadata::V1 {
-                version: OnChain::version(),
-                height: *key,
-            },
-        )?;
-
-        Ok(prev)
-    }
-
-    fn remove(
-        &mut self,
-        key: &<FuelBlocks as Mappable>::Key,
-    ) -> Result<Option<<FuelBlocks as Mappable>::OwnedValue>, Self::Error> {
-        self.data.storage_as_mut::<FuelBlocks>().remove(key)
-    }
-}
 
 impl Database<OffChain> {
     pub fn get_block_height(&self, id: &BlockId) -> StorageResult<Option<BlockHeight>> {
@@ -147,15 +88,6 @@ impl Database {
     }
 }
 
-impl MerkleRootStorage<BlockHeight, FuelBlocks> for Database {
-    fn root(
-        &self,
-        key: &BlockHeight,
-    ) -> Result<fuel_core_storage::MerkleRoot, Self::Error> {
-        self.data.storage_as_ref::<FuelBlocks>().root(key)
-    }
-}
-
 impl Database {
     pub fn block_history_proof(
         &self,
@@ -202,6 +134,7 @@ impl Database {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use fuel_core_storage::StorageMutate;
     use fuel_core_types::{
         blockchain::{
             block::PartialFuelBlock,

@@ -1,5 +1,4 @@
 use crate::{
-    database::Database,
     fuel_core_graphql_api::ports::ConsensusModulePort,
     service::adapters::{
         BlockImporterAdapter,
@@ -23,7 +22,7 @@ use fuel_core_poa::{
     },
 };
 use fuel_core_services::stream::BoxStream;
-use fuel_core_storage::transactional::StorageTransaction;
+use fuel_core_storage::transactional::Changes;
 use fuel_core_types::{
     fuel_asm::Word,
     fuel_tx::TxId,
@@ -103,15 +102,13 @@ impl TransactionPool for TxPoolAdapter {
 
 #[async_trait::async_trait]
 impl fuel_core_poa::ports::BlockProducer for BlockProducerAdapter {
-    type Database = Database;
-
     async fn produce_and_execute_block(
         &self,
         height: BlockHeight,
         block_time: Tai64,
         source: TransactionsSource,
         max_gas: Word,
-    ) -> anyhow::Result<UncommittedResult<StorageTransaction<Database>>> {
+    ) -> anyhow::Result<UncommittedResult<Changes>> {
         match source {
             TransactionsSource::TxPool => {
                 self.block_producer
@@ -131,11 +128,9 @@ impl fuel_core_poa::ports::BlockProducer for BlockProducerAdapter {
 
 #[async_trait::async_trait]
 impl BlockImporter for BlockImporterAdapter {
-    type Database = Database;
-
     async fn commit_result(
         &self,
-        result: UncommittedImporterResult<StorageTransaction<Self::Database>>,
+        result: UncommittedImporterResult<Changes>,
     ) -> anyhow::Result<()> {
         self.block_importer
             .commit_result(result)

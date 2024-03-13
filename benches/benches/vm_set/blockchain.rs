@@ -12,6 +12,11 @@ use criterion::{
     Throughput,
 };
 use fuel_core::{
+    database::{
+        balances::BalancesInitializer,
+        database_description::on_chain::OnChain,
+        state::StateInitializer,
+    },
     service::Config,
     state::rocks_db::{
         RocksDb,
@@ -21,6 +26,10 @@ use fuel_core::{
 use fuel_core_benches::*;
 use fuel_core_storage::{
     tables::FuelBlocks,
+    transactional::{
+        IntoTransaction,
+        StorageTransaction,
+    },
     vm_storage::{
         IncreaseStorageKey,
         VmStorage,
@@ -60,7 +69,8 @@ impl BenchDb {
     fn new(contract_id: &ContractId) -> anyhow::Result<Self> {
         let tmp_dir = ShallowTempDir::new();
 
-        let db = Arc::new(RocksDb::default_open(tmp_dir.path(), None).unwrap());
+        let db =
+            Arc::new(RocksDb::<OnChain>::default_open(tmp_dir.path(), None).unwrap());
         let mut storage_key = primitive_types::U256::zero();
         let mut key_bytes = Bytes32::zeroed();
 
@@ -103,7 +113,6 @@ impl BenchDb {
                 &block.compress(&config.chain_config.consensus_parameters.chain_id),
             )
             .unwrap();
-        database.clone().flush()?;
 
         Ok(Self {
             _tmp_dir: tmp_dir,
@@ -112,14 +121,18 @@ impl BenchDb {
     }
 
     /// Creates a `VmDatabase` instance.
-    fn to_vm_database(&self) -> VmStorage<Database> {
+    fn to_vm_database(&self) -> VmStorage<StorageTransaction<Database>> {
         let header = ConsensusHeader {
             prev_root: Default::default(),
             height: 1.into(),
             time: Tai64::UNIX_EPOCH,
             generated: (),
         };
-        VmStorage::new(self.db.clone(), &header, ContractId::zeroed())
+        VmStorage::new(
+            self.db.clone().into_transaction(),
+            &header,
+            ContractId::zeroed(),
+        )
     }
 }
 

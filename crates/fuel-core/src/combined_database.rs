@@ -1,4 +1,5 @@
 use crate::{
+    database,
     database::{
         database_description::{
             off_chain::OffChain,
@@ -11,10 +12,6 @@ use crate::{
     service::DbType,
 };
 use fuel_core_storage::Result as StorageResult;
-use fuel_core_types::{
-    blockchain::primitives::DaBlockHeight,
-    fuel_types::BlockHeight,
-};
 use std::path::PathBuf;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -46,19 +43,22 @@ impl CombinedDatabase {
     }
 
     #[cfg(feature = "rocksdb")]
-    pub fn prune(path: &std::path::Path) -> DatabaseResult<()> {
-        Database::<OnChain>::prune(path)?;
-        Database::<OffChain>::prune(path)?;
-        Database::<Relayer>::prune(path)?;
+    pub fn prune(path: &std::path::Path) -> database::Result<()> {
+        crate::state::rocks_db::RocksDb::<OnChain>::prune(path)?;
+        crate::state::rocks_db::RocksDb::<OffChain>::prune(path)?;
+        crate::state::rocks_db::RocksDb::<Relayer>::prune(path)?;
         Ok(())
     }
 
     #[cfg(feature = "rocksdb")]
-    pub fn open(path: &std::path::Path, capacity: usize) -> DatabaseResult<Self> {
+    pub fn open(
+        path: &std::path::Path,
+        capacity: usize,
+    ) -> crate::database::Result<Self> {
         // TODO: Use different cache sizes for different databases
-        let on_chain = Database::open(path, capacity)?;
-        let off_chain = Database::open(path, capacity)?;
-        let relayer = Database::open(path, capacity)?;
+        let on_chain = Database::open_rocksdb(path, capacity)?;
+        let off_chain = Database::open_rocksdb(path, capacity)?;
+        let relayer = Database::open_rocksdb(path, capacity)?;
         Ok(Self {
             on_chain,
             off_chain,
@@ -104,14 +104,10 @@ impl CombinedDatabase {
         )
     }
 
-    pub fn init(
-        &mut self,
-        block_height: &BlockHeight,
-        da_block_height: &DaBlockHeight,
-    ) -> StorageResult<()> {
-        self.on_chain.init(block_height)?;
-        self.off_chain.init(block_height)?;
-        self.relayer.init(da_block_height)?;
+    pub fn check_version(&self) -> StorageResult<()> {
+        self.on_chain.check_version()?;
+        self.off_chain.check_version()?;
+        self.relayer.check_version()?;
         Ok(())
     }
 
@@ -135,12 +131,5 @@ impl CombinedDatabase {
 
     pub fn relayer(&self) -> &Database<Relayer> {
         &self.relayer
-    }
-
-    pub fn flush(self) -> DatabaseResult<()> {
-        self.on_chain.flush()?;
-        self.off_chain.flush()?;
-        self.relayer.flush()?;
-        Ok(())
     }
 }

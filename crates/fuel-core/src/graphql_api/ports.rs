@@ -199,19 +199,12 @@ pub trait P2pPort: Send + Sync {
 
 pub mod worker {
     use super::super::storage::blocks::FuelBlockIdsToHeights;
-    use crate::{
-        database::{
-            database_description::off_chain::OffChain,
-            metadata::MetadataTable,
-        },
-        fuel_core_graphql_api::storage::{
-            coins::OwnedCoins,
-            messages::OwnedMessageIds,
-        },
+    use crate::fuel_core_graphql_api::storage::{
+        coins::OwnedCoins,
+        messages::OwnedMessageIds,
     };
     use fuel_core_services::stream::BoxStream;
     use fuel_core_storage::{
-        transactional::Transactional,
         Error as StorageError,
         Result as StorageResult,
         StorageMutate,
@@ -228,14 +221,19 @@ pub mod worker {
         },
     };
 
+    pub trait Transactional: Send + Sync {
+        type Transaction<'a>: OffChainDatabase
+        where
+            Self: 'a;
+
+        /// Creates a write database transaction.
+        fn transaction(&mut self) -> Self::Transaction<'_>;
+    }
+
     pub trait OffChainDatabase:
-        Send
-        + Sync
-        + StorageMutate<OwnedMessageIds, Error = StorageError>
+        StorageMutate<OwnedMessageIds, Error = StorageError>
         + StorageMutate<OwnedCoins, Error = StorageError>
-        + StorageMutate<MetadataTable<OffChain>, Error = StorageError>
         + StorageMutate<FuelBlockIdsToHeights, Error = StorageError>
-        + Transactional<Storage = Self>
     {
         fn record_tx_id_owner(
             &mut self,
@@ -254,6 +252,9 @@ pub mod worker {
         /// Update metadata about the total number of transactions on the chain.
         /// Returns the total count after the update.
         fn increase_tx_count(&mut self, new_txs_count: u64) -> StorageResult<u64>;
+
+        /// Commits the underlying changes into the database.
+        fn commit(self) -> StorageResult<()>;
     }
 
     pub trait BlockImporter {

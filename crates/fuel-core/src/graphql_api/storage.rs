@@ -1,8 +1,44 @@
-use fuel_core_storage::kv_store::StorageColumn;
+use crate::{
+    fuel_core_graphql_api::storage::{
+        blocks::FuelBlockIdsToHeights,
+        coins::OwnedCoins,
+        messages::OwnedMessageIds,
+        transactions::{
+            OwnedTransactionIndexKey,
+            OwnedTransactions,
+            TransactionStatuses,
+        },
+    },
+    graphql_api::ports::worker::OffChainDatabase,
+};
+use fuel_core_storage::{
+    kv_store::{
+        KeyValueInspect,
+        StorageColumn,
+    },
+    transactional::{
+        Modifiable,
+        StorageTransaction,
+    },
+    Error as StorageError,
+    Result as StorageResult,
+    StorageAsMut,
+    StorageMutate,
+};
+use fuel_core_types::{
+    fuel_tx::{
+        Address,
+        Bytes32,
+    },
+    fuel_types::BlockHeight,
+    services::txpool::TransactionStatus,
+};
+use statistic::StatisticTable;
 
 pub mod blocks;
 pub mod coins;
 pub mod messages;
+pub mod statistic;
 pub mod transactions;
 
 /// GraphQL database tables column ids to the corresponding [`fuel_core_storage::Mappable`] table.
@@ -52,5 +88,56 @@ impl StorageColumn for Column {
 
     fn id(&self) -> u32 {
         self.as_u32()
+    }
+}
+
+impl<S> OffChainDatabase for StorageTransaction<S>
+where
+    S: KeyValueInspect<Column = Column> + Modifiable,
+    StorageTransaction<S>: StorageMutate<OwnedMessageIds, Error = StorageError>
+        + StorageMutate<OwnedCoins, Error = StorageError>
+        + StorageMutate<FuelBlockIdsToHeights, Error = StorageError>,
+{
+    fn record_tx_id_owner(
+        &mut self,
+        owner: &Address,
+        block_height: BlockHeight,
+        tx_idx: u16,
+        tx_id: &Bytes32,
+    ) -> StorageResult<Option<Bytes32>> {
+        self.storage::<OwnedTransactions>().insert(
+            &OwnedTransactionIndexKey::new(owner, block_height, tx_idx),
+            tx_id,
+        )
+    }
+
+    fn update_tx_status(
+        &mut self,
+        id: &Bytes32,
+        status: TransactionStatus,
+    ) -> StorageResult<Option<TransactionStatus>> {
+        self.storage::<TransactionStatuses>().insert(id, &status)
+    }
+
+    fn increase_tx_count(&mut self, new_txs_count: u64) -> StorageResult<u64> {
+        /// Tracks the total number of transactions written to the chain
+        /// It's useful for analyzing TPS or other metrics.
+        const TX_COUNT: &str = "total_tx_count";
+
+        // TODO: how should tx count be initialized after regenesis?
+        let current_tx_count: u64 = self
+            .storage::<StatisticTable<u64>>()
+            .get(TX_COUNT)?
+            .unwrap_or_default()
+            .into_owned();
+        // Using saturating_add because this value doesn't significantly impact the correctness of execution.
+        let new_tx_count = current_tx_count.saturating_add(new_txs_count);
+        <_ as StorageMutate<StatisticTable<u64>>>::insert(self, TX_COUNT, &new_tx_count)?;
+        Ok(new_tx_count)
+    }
+
+    fn commit(self) -> StorageResult<()> {
+        self.commit()?;
+        Ok(())
     }
 }

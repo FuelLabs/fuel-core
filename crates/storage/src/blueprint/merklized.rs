@@ -4,7 +4,8 @@
 
 use crate::{
     blueprint::{
-        Blueprint,
+        BlueprintInspect,
+        BlueprintMutate,
         SupportsBatching,
         SupportsMerkle,
     },
@@ -15,7 +16,8 @@ use crate::{
     },
     kv_store::{
         BatchOperations,
-        KeyValueStore,
+        KeyValueInspect,
+        KeyValueMutate,
     },
     not_found,
     structured_storage::StructuredStorage,
@@ -53,7 +55,11 @@ impl<KeyCodec, ValueCodec, Metadata, Nodes, Encoder>
 where
     Nodes: Mappable<Key = u64, Value = Primitive, OwnedValue = Primitive>,
 {
-    fn insert_into_tree<S, K, V>(storage: &mut S, key: K, value: &V) -> StorageResult<()>
+    fn insert_into_tree<S, K, V>(
+        mut storage: &mut S,
+        key: K,
+        value: &V,
+    ) -> StorageResult<()>
     where
         V: ?Sized,
         Metadata: Mappable<
@@ -61,11 +67,12 @@ where
             Value = DenseMerkleMetadata,
             OwnedValue = DenseMerkleMetadata,
         >,
+        S: StorageMutate<Metadata, Error = StorageError>
+            + StorageMutate<Nodes, Error = StorageError>,
         for<'a> StructuredStorage<&'a mut S>: StorageMutate<Metadata, Error = StorageError>
             + StorageMutate<Nodes, Error = StorageError>,
         Encoder: Encode<V>,
     {
-        let mut storage = StructuredStorage::new(storage);
         // Get latest metadata entry
         let prev_metadata = storage
             .storage::<Metadata>()
@@ -99,7 +106,7 @@ where
 
     fn remove<S>(storage: &mut S, key: &[u8], column: S::Column) -> StorageResult<()>
     where
-        S: KeyValueStore,
+        S: KeyValueMutate,
     {
         if storage.exists(key, column)? {
             Err(anyhow::anyhow!(
@@ -112,11 +119,23 @@ where
     }
 }
 
-impl<M, S, KeyCodec, ValueCodec, Metadata, Nodes, Encoder> Blueprint<M, S>
+impl<M, S, KeyCodec, ValueCodec, Metadata, Nodes, Encoder> BlueprintInspect<M, S>
     for Merklized<KeyCodec, ValueCodec, Metadata, Nodes, Encoder>
 where
     M: Mappable,
-    S: KeyValueStore,
+    S: KeyValueInspect,
+    KeyCodec: Encode<M::Key> + Decode<M::OwnedKey>,
+    ValueCodec: Encode<M::Value> + Decode<M::OwnedValue>,
+{
+    type KeyCodec = KeyCodec;
+    type ValueCodec = ValueCodec;
+}
+
+impl<M, S, KeyCodec, ValueCodec, Metadata, Nodes, Encoder> BlueprintMutate<M, S>
+    for Merklized<KeyCodec, ValueCodec, Metadata, Nodes, Encoder>
+where
+    M: Mappable,
+    S: KeyValueMutate,
     KeyCodec: Encode<M::Key> + Decode<M::OwnedKey>,
     ValueCodec: Encode<M::Value> + Decode<M::OwnedValue>,
     Encoder: Encode<M::Value>,
@@ -127,12 +146,11 @@ where
         OwnedValue = DenseMerkleMetadata,
     >,
     Nodes: Mappable<Key = u64, Value = Primitive, OwnedValue = Primitive>,
+    S: StorageMutate<Metadata, Error = StorageError>
+        + StorageMutate<Nodes, Error = StorageError>,
     for<'a> StructuredStorage<&'a mut S>: StorageMutate<Metadata, Error = StorageError>
         + StorageMutate<Nodes, Error = StorageError>,
 {
-    type KeyCodec = KeyCodec;
-    type ValueCodec = ValueCodec;
-
     fn put(
         storage: &mut S,
         key: &M::Key,
@@ -200,19 +218,18 @@ impl<M, S, KeyCodec, ValueCodec, Metadata, Nodes, Encoder> SupportsMerkle<M::Key
     for Merklized<KeyCodec, ValueCodec, Metadata, Nodes, Encoder>
 where
     M: Mappable,
-    S: KeyValueStore,
+    S: KeyValueInspect,
     Metadata: Mappable<
         Key = DenseMetadataKey<M::OwnedKey>,
         OwnedKey = DenseMetadataKey<M::OwnedKey>,
         Value = DenseMerkleMetadata,
         OwnedValue = DenseMerkleMetadata,
     >,
-    Self: Blueprint<M, S>,
-    for<'a> StructuredStorage<&'a S>: StorageInspect<Metadata, Error = StorageError>,
+    Self: BlueprintInspect<M, S>,
+    S: StorageInspect<Metadata, Error = StorageError>,
 {
     fn root(storage: &S, key: &M::Key) -> StorageResult<MerkleRoot> {
         use crate::StorageAsRef;
-        let storage = StructuredStorage::new(storage);
         let key = key.to_owned().into();
         let metadata = storage
             .storage_as_ref::<Metadata>()
@@ -237,6 +254,8 @@ where
         OwnedValue = DenseMerkleMetadata,
     >,
     Nodes: Mappable<Key = u64, Value = Primitive, OwnedValue = Primitive>,
+    S: StorageMutate<Metadata, Error = StorageError>
+        + StorageMutate<Nodes, Error = StorageError>,
     for<'a> StructuredStorage<&'a mut S>: StorageMutate<Metadata, Error = StorageError>
         + StorageMutate<Nodes, Error = StorageError>,
 {
@@ -260,7 +279,7 @@ where
         M::Value: 'a,
     {
         for (key, value) in set {
-            <Self as Blueprint<M, S>>::replace(storage, key, column, value)?;
+            <Self as BlueprintMutate<M, S>>::replace(storage, key, column, value)?;
         }
 
         Ok(())
@@ -296,10 +315,8 @@ macro_rules! basic_merklelized_storage_tests {
         mod [< $table:snake _basic_tests >] {
             use super::*;
             use $crate::{
-                structured_storage::{
-                    test::InMemoryStorage,
-                    StructuredStorage,
-                },
+                structured_storage::test::InMemoryStorage,
+                transactional::WriteTransaction,
                 StorageAsMut,
             };
             use $crate::StorageInspect;
@@ -321,16 +338,16 @@ macro_rules! basic_merklelized_storage_tests {
             #[test]
             fn get() {
                 let mut storage = InMemoryStorage::default();
-                let mut structured_storage = StructuredStorage::new(&mut storage);
+                let mut storage_transaction = storage.write_transaction();
                 let key = $key;
 
-                structured_storage
+                storage_transaction
                     .storage_as_mut::<$table>()
                     .insert(&key, &$value_insert)
                     .unwrap();
 
                 assert_eq!(
-                    structured_storage
+                    storage_transaction
                         .storage_as_mut::<$table>()
                         .get(&key)
                         .expect("Should get without errors")
@@ -343,15 +360,15 @@ macro_rules! basic_merklelized_storage_tests {
             #[test]
             fn insert() {
                 let mut storage = InMemoryStorage::default();
-                let mut structured_storage = StructuredStorage::new(&mut storage);
+                let mut storage_transaction = storage.write_transaction();
                 let key = $key;
 
-                structured_storage
+                storage_transaction
                     .storage_as_mut::<$table>()
                     .insert(&key, &$value_insert)
                     .unwrap();
 
-                let returned = structured_storage
+                let returned = storage_transaction
                     .storage_as_mut::<$table>()
                     .get(&key)
                     .unwrap()
@@ -363,15 +380,15 @@ macro_rules! basic_merklelized_storage_tests {
             #[test]
             fn remove_returns_error() {
                 let mut storage = InMemoryStorage::default();
-                let mut structured_storage = StructuredStorage::new(&mut storage);
+                let mut storage_transaction = storage.write_transaction();
                 let key = $key;
 
-                structured_storage
+                storage_transaction
                     .storage_as_mut::<$table>()
                     .insert(&key, &$value_insert)
                     .unwrap();
 
-                let result = structured_storage.storage_as_mut::<$table>().remove(&key);
+                let result = storage_transaction.storage_as_mut::<$table>().remove(&key);
 
                 assert!(result.is_err());
             }
@@ -379,23 +396,23 @@ macro_rules! basic_merklelized_storage_tests {
             #[test]
             fn exists() {
                 let mut storage = InMemoryStorage::default();
-                let mut structured_storage = StructuredStorage::new(&mut storage);
+                let mut storage_transaction = storage.write_transaction();
                 let key = $key;
 
                 // Given
-                assert!(!structured_storage
+                assert!(!storage_transaction
                     .storage_as_mut::<$table>()
                     .contains_key(&key)
                     .unwrap());
 
                 // When
-                structured_storage
+                storage_transaction
                     .storage_as_mut::<$table>()
                     .insert(&key, &$value_insert)
                     .unwrap();
 
                 // Then
-                assert!(structured_storage
+                assert!(storage_transaction
                     .storage_as_mut::<$table>()
                     .contains_key(&key)
                     .unwrap());
@@ -413,7 +430,7 @@ macro_rules! basic_merklelized_storage_tests {
                 let empty_storage = InMemoryStorage::default();
 
                 let mut init_storage = InMemoryStorage::default();
-                let mut init_structured_storage = StructuredStorage::new(&mut init_storage);
+                let mut init_structured_storage = init_storage.write_transaction();
 
                 let mut rng = &mut StdRng::seed_from_u64(1234);
                 let gen = || Some($random_key(&mut rng));
@@ -427,9 +444,10 @@ macro_rules! basic_merklelized_storage_tests {
                         (k, value)
                     })
                 ).expect("Should initialize the storage successfully");
+                init_structured_storage.commit().expect("Should commit the storage");
 
                 let mut insert_storage = InMemoryStorage::default();
-                let mut insert_structured_storage = StructuredStorage::new(&mut insert_storage);
+                let mut insert_structured_storage = insert_storage.write_transaction();
 
                 <_ as $crate::StorageBatchMutate<$table>>::insert_batch(
                     &mut insert_structured_storage,
@@ -438,6 +456,7 @@ macro_rules! basic_merklelized_storage_tests {
                         (k, value)
                     })
                 ).expect("Should insert batch successfully");
+                insert_structured_storage.commit().expect("Should commit the storage");
 
                 assert_eq!(init_storage, insert_storage);
                 assert_ne!(init_storage, empty_storage);
@@ -454,7 +473,7 @@ macro_rules! basic_merklelized_storage_tests {
                 };
 
                 let mut init_storage = InMemoryStorage::default();
-                let mut init_structured_storage = StructuredStorage::new(&mut init_storage);
+                let mut init_structured_storage = init_storage.write_transaction();
 
                 let mut rng = &mut StdRng::seed_from_u64(1234);
                 let gen = || Some($random_key(&mut rng));
@@ -480,9 +499,9 @@ macro_rules! basic_merklelized_storage_tests {
             #[test]
             fn root_returns_error_empty_metadata() {
                 let mut storage = InMemoryStorage::default();
-                let mut structured_storage = StructuredStorage::new(&mut storage);
+                let mut storage_transaction = storage.write_transaction();
 
-                let root = structured_storage
+                let root = storage_transaction
                     .storage_as_mut::<$table>()
                     .root(&$key);
                 assert!(root.is_err())
@@ -491,15 +510,15 @@ macro_rules! basic_merklelized_storage_tests {
             #[test]
             fn update_produces_non_zero_root() {
                 let mut storage = InMemoryStorage::default();
-                let mut structured_storage = StructuredStorage::new(&mut storage);
+                let mut storage_transaction = storage.write_transaction();
 
                 let mut rng = rand::rngs::StdRng::seed_from_u64(1234);
                 let key = $random_key(&mut rng);
                 let value = $value_insert;
-                structured_storage.storage_as_mut::<$table>().insert(&key, &value)
+                storage_transaction.storage_as_mut::<$table>().insert(&key, &value)
                     .unwrap();
 
-                let root = structured_storage.storage_as_mut::<$table>().root(&key)
+                let root = storage_transaction.storage_as_mut::<$table>().root(&key)
                     .expect("Should get the root");
                 let empty_root = fuel_core_types::fuel_merkle::binary::in_memory::MerkleTree::new().root();
                 assert_ne!(root, empty_root);
@@ -508,7 +527,7 @@ macro_rules! basic_merklelized_storage_tests {
             #[test]
             fn has_different_root_after_each_update() {
                 let mut storage = InMemoryStorage::default();
-                let mut structured_storage = StructuredStorage::new(&mut storage);
+                let mut storage_transaction = storage.write_transaction();
 
                 let mut rng = rand::rngs::StdRng::seed_from_u64(1234);
 
@@ -517,10 +536,10 @@ macro_rules! basic_merklelized_storage_tests {
                 for _ in 0..10 {
                     let key = $random_key(&mut rng);
                     let value = $value_insert;
-                    structured_storage.storage_as_mut::<$table>().insert(&key, &value)
+                    storage_transaction.storage_as_mut::<$table>().insert(&key, &value)
                         .unwrap();
 
-                    let root = structured_storage.storage_as_mut::<$table>().root(&key)
+                    let root = storage_transaction.storage_as_mut::<$table>().root(&key)
                         .expect("Should get the root");
                     assert_ne!(root, prev_root);
                     prev_root = root;

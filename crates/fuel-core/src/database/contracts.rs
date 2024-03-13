@@ -5,7 +5,10 @@ use fuel_core_chain_config::{
     ContractStateConfig,
 };
 use fuel_core_storage::{
-    iter::IterDirection,
+    iter::{
+        IterDirection,
+        IteratorOverTable,
+    },
     not_found,
     tables::{
         ContractsAssets,

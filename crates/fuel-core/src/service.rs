@@ -196,12 +196,10 @@ pub struct Task {
 
 impl Task {
     /// Private inner method for initializing the fuel service task
-    pub fn new(mut database: CombinedDatabase, config: Config) -> anyhow::Result<Task> {
+    pub fn new(database: CombinedDatabase, config: Config) -> anyhow::Result<Task> {
         // initialize state
         tracing::info!("Initializing database");
-        let block_height = config.state_reader.block_height();
-        let da_block_height = 0u64.into();
-        database.init(&block_height, &da_block_height)?;
+        database.check_version()?;
 
         // initialize sub services
         tracing::info!("Initializing sub services");
@@ -232,7 +230,7 @@ impl RunnableService for Task {
         _: Self::TaskParams,
     ) -> anyhow::Result<Self::Task> {
         let on_view = self.shared.database.on_chain().latest_view();
-        let off_view = self.shared.database.off_chain().latest_view();
+        let mut off_view = self.shared.database.off_chain().latest_view();
         // check if chain is initialized
         if let Err(err) = on_view.get_genesis() {
             if err.is_not_found() {
@@ -242,7 +240,7 @@ impl RunnableService for Task {
 
                 genesis::off_chain::execute_genesis_block(
                     &self.shared.config,
-                    &off_view,
+                    &mut off_view,
                 )?;
             }
         }
@@ -287,7 +285,6 @@ impl RunnableTask for Task {
                 );
             }
         }
-        self.shared.database.flush()?;
         Ok(())
     }
 }

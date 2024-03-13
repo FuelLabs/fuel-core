@@ -31,12 +31,13 @@ use fuel_core_types::{
     },
 };
 
+use fuel_core_storage::transactional::StorageTransaction;
 pub use rand::Rng;
 use std::iter;
 
 const LARGE_GAS_LIMIT: u64 = u64::MAX - 1001;
 
-fn new_db() -> VmStorage<Database> {
+fn new_db() -> VmStorage<StorageTransaction<Database>> {
     // when rocksdb is enabled, this creates a new db instance with a temporary path
     VmStorage::default()
 }
@@ -89,7 +90,7 @@ pub struct VmBench {
     pub inputs: Vec<Input>,
     pub outputs: Vec<Output>,
     pub witnesses: Vec<Witness>,
-    pub db: Option<VmStorage<Database>>,
+    pub db: Option<VmStorage<StorageTransaction<Database>>>,
     pub instruction: Instruction,
     pub prepare_call: Option<PrepareCall>,
     pub dummy_contract: Option<ContractId>,
@@ -100,7 +101,7 @@ pub struct VmBench {
 
 #[derive(Debug, Clone)]
 pub struct VmBenchPrepared {
-    pub vm: Interpreter<VmStorage<Database>, Script>,
+    pub vm: Interpreter<VmStorage<StorageTransaction<Database>>, Script>,
     pub instruction: Instruction,
     pub diff: diff::Diff<diff::InitialVmState>,
 }
@@ -148,7 +149,7 @@ impl VmBench {
 
     pub fn contract_using_db<R>(
         rng: &mut R,
-        mut db: VmStorage<Database>,
+        mut db: VmStorage<StorageTransaction<Database>>,
         instruction: Instruction,
     ) -> anyhow::Result<Self>
     where
@@ -207,7 +208,7 @@ impl VmBench {
             .with_prepare_call(prepare_call))
     }
 
-    pub fn with_db(mut self, db: VmStorage<Database>) -> Self {
+    pub fn with_db(mut self, db: VmStorage<StorageTransaction<Database>>) -> Self {
         self.db.replace(db);
         self
     }
@@ -468,8 +469,6 @@ impl TryFrom<VmBench> for VmBenchPrepared {
 
         let start_vm = vm.clone();
         let original_db = vm.as_mut().database_mut().clone();
-        let database_tx = original_db.transaction().as_ref().clone();
-        *vm.as_mut().database_mut() = database_tx;
         let mut vm = vm.add_recording();
         match instruction {
             Instruction::CALL(call) => {

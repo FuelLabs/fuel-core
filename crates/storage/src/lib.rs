@@ -119,6 +119,7 @@ impl<T> IsNotFound for Result<T> {
 
 /// The traits allow work with the storage in batches.
 /// Some implementations can perform batch operations faster than one by one.
+#[impl_tools::autoimpl(for<T: trait> &mut T)]
 pub trait StorageBatchMutate<Type: Mappable>: StorageMutate<Type> {
     /// Initialize the storage with batch insertion. This method is more performant than
     /// [`Self::insert_batch`] in some cases.

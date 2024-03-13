@@ -18,10 +18,6 @@ use fuel_core_services::{
     Service as StorageTrait,
     State,
 };
-use fuel_core_storage::{
-    test_helpers::EmptyStorage,
-    transactional::StorageTransaction,
-};
 use fuel_core_types::{
     blockchain::{
         header::BlockHeader,
@@ -131,7 +127,7 @@ impl TestContextBuilder {
                             tx_status: Default::default(),
                             events: Default::default(),
                         },
-                        StorageTransaction::new(EmptyStorage),
+                        Default::default(),
                     ))
                 });
             producer
@@ -290,7 +286,7 @@ async fn remove_skipped_transactions() {
                     tx_status: Default::default(),
                     events: Default::default(),
                 },
-                StorageTransaction::new(EmptyStorage),
+                Default::default(),
             ))
         });
 

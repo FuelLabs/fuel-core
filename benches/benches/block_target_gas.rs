@@ -17,6 +17,10 @@ use ed25519_dalek::Signer;
 use ethnum::U256;
 use fuel_core::{
     combined_database::CombinedDatabase,
+    database::{
+        balances::BalancesInitializer,
+        state::StateInitializer,
+    },
     service::{
         config::Trigger,
         Config,
@@ -256,7 +260,7 @@ fn service_with_many_contracts(
         .build()
         .unwrap();
     let _drop = rt.enter();
-    let mut database = Database::rocksdb();
+    let mut database = Database::rocksdb_temp();
     let mut config = Config::local_node();
     config
         .chain_config

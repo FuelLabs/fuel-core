@@ -5,7 +5,8 @@
 
 use crate::{
     blueprint::{
-        Blueprint,
+        BlueprintInspect,
+        BlueprintMutate,
         SupportsBatching,
     },
     codec::{
@@ -15,7 +16,8 @@ use crate::{
     },
     kv_store::{
         BatchOperations,
-        KeyValueStore,
+        KeyValueInspect,
+        KeyValueMutate,
         StorageColumn,
         WriteOperation,
     },
@@ -31,16 +33,24 @@ pub struct Plain<KeyCodec, ValueCodec> {
     _marker: core::marker::PhantomData<(KeyCodec, ValueCodec)>,
 }
 
-impl<M, S, KeyCodec, ValueCodec> Blueprint<M, S> for Plain<KeyCodec, ValueCodec>
+impl<M, S, KeyCodec, ValueCodec> BlueprintInspect<M, S> for Plain<KeyCodec, ValueCodec>
 where
     M: Mappable,
-    S: KeyValueStore,
+    S: KeyValueInspect,
     KeyCodec: Encode<M::Key> + Decode<M::OwnedKey>,
     ValueCodec: Encode<M::Value> + Decode<M::OwnedValue>,
 {
     type KeyCodec = KeyCodec;
     type ValueCodec = ValueCodec;
+}
 
+impl<M, S, KeyCodec, ValueCodec> BlueprintMutate<M, S> for Plain<KeyCodec, ValueCodec>
+where
+    M: Mappable,
+    S: KeyValueMutate,
+    KeyCodec: Encode<M::Key> + Decode<M::OwnedKey>,
+    ValueCodec: Encode<M::Value> + Decode<M::OwnedValue>,
+{
     fn put(
         storage: &mut S,
         key: &M::Key,
@@ -97,9 +107,8 @@ impl<Column, M, S, KeyCodec, ValueCodec> SupportsBatching<M, S>
 where
     Column: StorageColumn,
     S: BatchOperations<Column = Column>,
-    M: Mappable
-        + TableWithBlueprint<Blueprint = Plain<KeyCodec, ValueCodec>, Column = Column>,
-    M::Blueprint: Blueprint<M, S>,
+    M: TableWithBlueprint<Blueprint = Plain<KeyCodec, ValueCodec>, Column = Column>,
+    M::Blueprint: BlueprintMutate<M, S>,
 {
     fn init<'a, Iter>(storage: &mut S, column: S::Column, set: Iter) -> StorageResult<()>
     where
@@ -120,13 +129,19 @@ where
         M::Key: 'a,
         M::Value: 'a,
     {
-        storage.batch_write(&mut set.map(|(key, value)| {
-            let key_encoder = <M::Blueprint as Blueprint<M, S>>::KeyCodec::encode(key);
-            let key_bytes = key_encoder.as_bytes().to_vec();
-            let value =
-                <M::Blueprint as Blueprint<M, S>>::ValueCodec::encode_as_value(value);
-            (key_bytes, column, WriteOperation::Insert(value))
-        }))
+        storage.batch_write(
+            column,
+            set.map(|(key, value)| {
+                let key_encoder =
+                    <M::Blueprint as BlueprintInspect<M, S>>::KeyCodec::encode(key);
+                let key_bytes = key_encoder.as_bytes().to_vec();
+                let value =
+                    <M::Blueprint as BlueprintInspect<M, S>>::ValueCodec::encode_as_value(
+                        value,
+                    );
+                (key_bytes, WriteOperation::Insert(value))
+            }),
+        )
     }
 
     fn remove<'a, Iter>(
@@ -138,11 +153,15 @@ where
         Iter: 'a + Iterator<Item = &'a M::Key>,
         M::Key: 'a,
     {
-        storage.batch_write(&mut set.map(|key| {
-            let key_encoder = <M::Blueprint as Blueprint<M, S>>::KeyCodec::encode(key);
-            let key_bytes = key_encoder.as_bytes().to_vec();
-            (key_bytes, column, WriteOperation::Remove)
-        }))
+        storage.batch_write(
+            column,
+            set.map(|key| {
+                let key_encoder =
+                    <M::Blueprint as BlueprintInspect<M, S>>::KeyCodec::encode(key);
+                let key_bytes = key_encoder.as_bytes().to_vec();
+                (key_bytes, WriteOperation::Remove)
+            }),
+        )
     }
 }
 
@@ -158,10 +177,8 @@ macro_rules! basic_storage_tests {
         mod [< $table:snake _basic_tests >] {
             use super::*;
             use $crate::{
-                structured_storage::{
-                    test::InMemoryStorage,
-                    StructuredStorage,
-                },
+                structured_storage::test::InMemoryStorage,
+                transactional::WriteTransaction,
                 StorageAsMut,
             };
             use $crate::StorageInspect;
@@ -181,16 +198,16 @@ macro_rules! basic_storage_tests {
             #[test]
             fn get() {
                 let mut storage = InMemoryStorage::default();
-                let mut structured_storage = StructuredStorage::new(&mut storage);
+                let mut storage_transaction = storage.write_transaction();
                 let key = $key;
 
-                structured_storage
+                storage_transaction
                     .storage_as_mut::<$table>()
                     .insert(&key, &$value_insert)
                     .unwrap();
 
                 assert_eq!(
-                    structured_storage
+                    storage_transaction
                         .storage_as_mut::<$table>()
                         .get(&key)
                         .expect("Should get without errors")
@@ -203,15 +220,15 @@ macro_rules! basic_storage_tests {
             #[test]
             fn insert() {
                 let mut storage = InMemoryStorage::default();
-                let mut structured_storage = StructuredStorage::new(&mut storage);
+                let mut storage_transaction = storage.write_transaction();
                 let key = $key;
 
-                structured_storage
+                storage_transaction
                     .storage_as_mut::<$table>()
                     .insert(&key, &$value_insert)
                     .unwrap();
 
-                let returned = structured_storage
+                let returned = storage_transaction
                     .storage_as_mut::<$table>()
                     .get(&key)
                     .unwrap()
@@ -223,17 +240,17 @@ macro_rules! basic_storage_tests {
             #[test]
             fn remove() {
                 let mut storage = InMemoryStorage::default();
-                let mut structured_storage = StructuredStorage::new(&mut storage);
+                let mut storage_transaction = storage.write_transaction();
                 let key = $key;
 
-                structured_storage
+                storage_transaction
                     .storage_as_mut::<$table>()
                     .insert(&key, &$value_insert)
                     .unwrap();
 
-                structured_storage.storage_as_mut::<$table>().remove(&key).unwrap();
+                storage_transaction.storage_as_mut::<$table>().remove(&key).unwrap();
 
-                assert!(!structured_storage
+                assert!(!storage_transaction
                     .storage_as_mut::<$table>()
                     .contains_key(&key)
                     .unwrap());
@@ -242,23 +259,23 @@ macro_rules! basic_storage_tests {
             #[test]
             fn exists() {
                 let mut storage = InMemoryStorage::default();
-                let mut structured_storage = StructuredStorage::new(&mut storage);
+                let mut storage_transaction = storage.write_transaction();
                 let key = $key;
 
                 // Given
-                assert!(!structured_storage
+                assert!(!storage_transaction
                     .storage_as_mut::<$table>()
                     .contains_key(&key)
                     .unwrap());
 
                 // When
-                structured_storage
+                storage_transaction
                     .storage_as_mut::<$table>()
                     .insert(&key, &$value_insert)
                     .unwrap();
 
                 // Then
-                assert!(structured_storage
+                assert!(storage_transaction
                     .storage_as_mut::<$table>()
                     .contains_key(&key)
                     .unwrap());
@@ -267,23 +284,23 @@ macro_rules! basic_storage_tests {
             #[test]
             fn exists_false_after_removing() {
                 let mut storage = InMemoryStorage::default();
-                let mut structured_storage = StructuredStorage::new(&mut storage);
+                let mut storage_transaction = storage.write_transaction();
                 let key = $key;
 
                 // Given
-                structured_storage
+                storage_transaction
                     .storage_as_mut::<$table>()
                     .insert(&key, &$value_insert)
                     .unwrap();
 
                 // When
-                structured_storage
+                storage_transaction
                     .storage_as_mut::<$table>()
                     .remove(&key)
                     .unwrap();
 
                 // Then
-                assert!(!structured_storage
+                assert!(!storage_transaction
                     .storage_as_mut::<$table>()
                     .contains_key(&key)
                     .unwrap());
@@ -301,7 +318,7 @@ macro_rules! basic_storage_tests {
                 let empty_storage = InMemoryStorage::default();
 
                 let mut init_storage = InMemoryStorage::default();
-                let mut init_structured_storage = StructuredStorage::new(&mut init_storage);
+                let mut init_structured_storage = init_storage.write_transaction();
 
                 let mut rng = &mut StdRng::seed_from_u64(1234);
                 let gen = || Some($random_key(&mut rng));
@@ -315,9 +332,10 @@ macro_rules! basic_storage_tests {
                         (k, value)
                     })
                 ).expect("Should initialize the storage successfully");
+                init_structured_storage.commit().expect("Should commit changes");
 
                 let mut insert_storage = InMemoryStorage::default();
-                let mut insert_structured_storage = StructuredStorage::new(&mut insert_storage);
+                let mut insert_structured_storage = insert_storage.write_transaction();
 
                 <_ as $crate::StorageBatchMutate<$table>>::insert_batch(
                     &mut insert_structured_storage,
@@ -326,24 +344,27 @@ macro_rules! basic_storage_tests {
                         (k, value)
                     })
                 ).expect("Should insert batch successfully");
+                insert_structured_storage.commit().expect("Should commit changes");
 
                 assert_eq!(init_storage, insert_storage);
                 assert_ne!(init_storage, empty_storage);
                 assert_ne!(insert_storage, empty_storage);
 
-                let mut remove_from_insert_structured_storage = StructuredStorage::new(&mut insert_storage);
+                let mut remove_from_insert_structured_storage = insert_storage.write_transaction();
                 <_ as $crate::StorageBatchMutate<$table>>::remove_batch(
                     &mut remove_from_insert_structured_storage,
                     &mut data.iter()
                 ).expect("Should remove all entries successfully from insert storage");
+                remove_from_insert_structured_storage.commit().expect("Should commit changes");
                 assert_ne!(init_storage, insert_storage);
                 assert_eq!(insert_storage, empty_storage);
 
-                let mut remove_from_init_structured_storage = StructuredStorage::new(&mut init_storage);
+                let mut remove_from_init_structured_storage = init_storage.write_transaction();
                 <_ as $crate::StorageBatchMutate<$table>>::remove_batch(
                     &mut remove_from_init_structured_storage,
                     &mut data.iter()
                 ).expect("Should remove all entries successfully from init storage");
+                remove_from_init_structured_storage.commit().expect("Should commit changes");
                 assert_eq!(init_storage, insert_storage);
                 assert_eq!(init_storage, empty_storage);
             }

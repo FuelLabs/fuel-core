@@ -14,7 +14,6 @@ use fuel_core_chain_config::{
     MessageConfig,
 };
 use fuel_core_storage::{
-    structured_storage::TableWithBlueprint,
     tables::{
         Coins,
         ContractsInfo,
@@ -23,8 +22,9 @@ use fuel_core_storage::{
         Messages,
     },
     transactional::{
+        Changes,
+        ReadTransaction,
         StorageTransaction,
-        Transactional,
     },
     StorageAsMut,
 };
@@ -64,11 +64,13 @@ use fuel_core_types::{
         UncommittedResult as UncommittedImportResult,
     },
 };
+use strum::IntoEnumIterator;
 
 pub mod off_chain;
 mod runner;
 mod workers;
 
+use crate::database::genesis_progress::GenesisResource;
 pub use runner::{
     GenesisRunner,
     TransactionOpener,
@@ -78,7 +80,7 @@ pub use runner::{
 pub async fn execute_genesis_block(
     config: &Config,
     original_database: &Database,
-) -> anyhow::Result<UncommittedImportResult<StorageTransaction<Database>>> {
+) -> anyhow::Result<UncommittedImportResult<Changes>> {
     let workers =
         GenesisWorkers::new(original_database.clone(), config.state_reader.clone());
 
@@ -98,12 +100,12 @@ pub async fn execute_genesis_block(
         consensus,
     };
 
-    let mut database_transaction = Transactional::transaction(original_database);
-    cleanup_genesis_progress(database_transaction.as_mut())?;
+    let mut database_transaction = original_database.read_transaction();
+    cleanup_genesis_progress(&mut database_transaction)?;
 
     let result = UncommittedImportResult::new(
         ImportResult::new_from_local(block, vec![], vec![]),
-        database_transaction,
+        database_transaction.into_changes(),
     );
 
     Ok(result)
@@ -125,10 +127,16 @@ async fn import_chain_state(workers: GenesisWorkers) -> anyhow::Result<()> {
     Ok(())
 }
 
-fn cleanup_genesis_progress(database: &mut Database) -> anyhow::Result<()> {
-    database
-        .delete_all(GenesisMetadata::column())
-        .map_err(|e| e.into())
+fn cleanup_genesis_progress(
+    transaction: &mut StorageTransaction<&Database>,
+) -> anyhow::Result<()> {
+    for resource in GenesisResource::iter() {
+        transaction
+            .storage_as_mut::<GenesisMetadata>()
+            .remove(&resource)
+            .map_err(|e| anyhow::anyhow!("{e}"))?;
+    }
+    Ok(())
 }
 
 pub fn create_genesis_block(config: &Config) -> Block {
@@ -172,7 +180,7 @@ pub async fn execute_and_commit_genesis_block(
 }
 
 fn init_coin(
-    db: &mut Database,
+    transaction: &mut StorageTransaction<&mut Database>,
     coin: &CoinConfig,
     height: BlockHeight,
 ) -> anyhow::Result<()> {
@@ -195,7 +203,7 @@ fn init_coin(
         ));
     }
 
-    if db
+    if transaction
         .storage::<Coins>()
         .insert(&utxo_id, &compressed_coin)?
         .is_some()
@@ -207,7 +215,7 @@ fn init_coin(
 }
 
 fn init_contract(
-    db: &mut Database,
+    transaction: &mut StorageTransaction<&mut Database>,
     contract_config: &ContractConfig,
     height: BlockHeight,
 ) -> anyhow::Result<()> {
@@ -225,7 +233,7 @@ fn init_contract(
     }
 
     // insert contract code
-    if db
+    if transaction
         .storage::<ContractsRawCode>()
         .insert(&contract_id, contract.as_ref())?
         .is_some()
@@ -234,14 +242,14 @@ fn init_contract(
     }
 
     // insert contract salt
-    if db
+    if transaction
         .storage::<ContractsInfo>()
         .insert(&contract_id, &ContractsInfoType::V1(salt.into()))?
         .is_some()
     {
         return Err(anyhow!("Contract info should not exist"));
     }
-    if db
+    if transaction
         .storage::<ContractsLatestUtxo>()
         .insert(
             &contract_id,
@@ -256,7 +264,7 @@ fn init_contract(
 }
 
 fn init_da_message(
-    db: &mut Database,
+    transaction: &mut StorageTransaction<&mut Database>,
     msg: MessageConfig,
     da_height: DaBlockHeight,
 ) -> anyhow::Result<()> {
@@ -268,7 +276,7 @@ fn init_da_message(
         ));
     }
 
-    if db
+    if transaction
         .storage::<Messages>()
         .insert(message.id(), &message)?
         .is_some()
@@ -285,7 +293,10 @@ mod tests {
 
     use crate::{
         combined_database::CombinedDatabase,
-        database::genesis_progress::GenesisResource,
+        database::genesis_progress::{
+            GenesisProgressInspect,
+            GenesisResource,
+        },
         service::{
             config::Config,
             FuelService,
@@ -354,6 +365,7 @@ mod tests {
         assert_eq!(
             block_height,
             db.latest_height()
+                .unwrap()
                 .expect("Expected a block height to be set")
         )
     }
@@ -595,15 +607,16 @@ mod tests {
             ..Config::local_node()
         };
 
-        let db = &Database::default();
+        let db = Database::default();
 
-        execute_and_commit_genesis_block(&config, db).await.unwrap();
+        execute_and_commit_genesis_block(&config, &db)
+            .await
+            .unwrap();
 
         let expected_msg: Message = msg.into();
 
         let ret_msg = db
-            .as_ref()
-            .storage::<fuel_core_storage::tables::Messages>()
+            .storage::<Messages>()
             .get(expected_msg.id())
             .unwrap()
             .unwrap()

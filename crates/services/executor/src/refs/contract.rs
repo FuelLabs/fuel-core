@@ -7,6 +7,7 @@ use fuel_core_storage::{
         ContractsLatestUtxo,
         ContractsState,
     },
+    Error as StorageError,
     Mappable,
     MerkleRoot,
     MerkleRootStorage,
@@ -92,7 +93,7 @@ where
     Database: MerkleRootStorage<ContractId, ContractsAssets>,
 {
     pub fn balance_root(
-        &mut self,
+        &self,
     ) -> Result<Bytes32, <Database as StorageInspect<ContractsAssets>>::Error> {
         self.database.root(&self.contract_id).map(Into::into)
     }
@@ -103,7 +104,7 @@ where
     Database: MerkleRootStorage<ContractId, ContractsState>,
 {
     pub fn state_root(
-        &mut self,
+        &self,
     ) -> Result<Bytes32, <Database as StorageInspect<ContractsState>>::Error> {
         self.database.root(&self.contract_id).map(Into::into)
     }
@@ -115,6 +116,15 @@ pub trait ContractStorageTrait:
     + MerkleRootStorage<ContractId, ContractsAssets, Error = Self::InnerError>
 {
     type InnerError: fmt::Debug + fmt::Display + Send + Sync + 'static;
+}
+
+impl<D> ContractStorageTrait for D
+where
+    D: StorageInspect<ContractsLatestUtxo, Error = StorageError>
+        + MerkleRootStorage<ContractId, ContractsState, Error = StorageError>
+        + MerkleRootStorage<ContractId, ContractsAssets, Error = StorageError>,
+{
+    type InnerError = StorageError;
 }
 
 impl<'a, Database> GenesisCommitment for ContractRef<&'a Database>

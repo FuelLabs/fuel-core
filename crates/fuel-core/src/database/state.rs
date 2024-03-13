@@ -1,4 +1,3 @@
-use crate::database::Database;
 use fuel_core_chain_config::ContractStateConfig;
 use fuel_core_storage::{
     tables::{
@@ -9,6 +8,7 @@ use fuel_core_storage::{
     Error as StorageError,
     StorageAsRef,
     StorageBatchMutate,
+    StorageInspect,
 };
 use fuel_core_types::fuel_types::{
     Bytes32,
@@ -16,23 +16,42 @@ use fuel_core_types::fuel_types::{
 };
 use itertools::Itertools;
 
-impl Database {
+pub trait StateInitializer {
     /// Initialize the state of the contract from all leaves.
     /// This method is more performant than inserting state one by one.
-    pub fn init_contract_state<S>(
+    fn init_contract_state<S>(
         &mut self,
         contract_id: &ContractId,
         slots: S,
     ) -> Result<(), StorageError>
     where
-        S: Iterator<Item = (Bytes32, Vec<u8>)>,
+        S: Iterator<Item = (Bytes32, Vec<u8>)>;
+
+    /// Updates the state of multiple contracts based on provided state slots.
+    fn update_contract_states(
+        &mut self,
+        states: impl IntoIterator<Item = ContractStateConfig>,
+    ) -> Result<(), StorageError>;
+}
+
+impl<S> StateInitializer for S
+where
+    S: StorageInspect<ContractsStateMerkleMetadata, Error = StorageError>,
+    S: StorageBatchMutate<ContractsState, Error = StorageError>,
+{
+    fn init_contract_state<I>(
+        &mut self,
+        contract_id: &ContractId,
+        slots: I,
+    ) -> Result<(), StorageError>
+    where
+        I: Iterator<Item = (Bytes32, Vec<u8>)>,
     {
         let slots = slots
             .map(|(key, value)| (ContractsStateKey::new(contract_id, &key), value))
             .collect_vec();
-        #[allow(clippy::map_identity)]
         <_ as StorageBatchMutate<ContractsState>>::init_storage(
-            &mut self.data,
+            self,
             &mut slots.iter().map(|(key, value)| (key, value.as_slice())),
         )
     }
@@ -52,7 +71,7 @@ impl Database {
     ///
     /// # Errors
     /// On any error while accessing the database.
-    pub fn update_contract_states(
+    fn update_contract_states(
         &mut self,
         states: impl IntoIterator<Item = ContractStateConfig>,
     ) -> Result<(), StorageError> {
@@ -61,8 +80,30 @@ impl Database {
             .group_by(|s| s.contract_id)
             .into_iter()
             .try_for_each(|(contract_id, entries)| {
-                if self.state_present(&contract_id)? {
-                    self.db_insert_contract_states(entries.into_iter().collect_vec())
+                if self
+                    .storage::<ContractsStateMerkleMetadata>()
+                    .get(&contract_id)?
+                    .is_some()
+                {
+                    let state_entries = entries
+                        .into_iter()
+                        .map(|state_entry| {
+                            let db_key = ContractsStateKey::new(
+                                &state_entry.contract_id,
+                                &state_entry.key,
+                            );
+                            (db_key, state_entry.value)
+                        })
+                        .collect_vec();
+
+                    let state_entries_iter = state_entries
+                        .iter()
+                        .map(|(key, value)| (key, value.as_slice()));
+
+                    <_ as StorageBatchMutate<ContractsState>>::insert_batch(
+                        self,
+                        state_entries_iter,
+                    )
                 } else {
                     self.init_contract_state(
                         &contract_id,
@@ -73,61 +114,21 @@ impl Database {
 
         Ok(())
     }
-
-    fn db_insert_contract_states(
-        &mut self,
-        states: impl IntoIterator<Item = ContractStateConfig>,
-    ) -> Result<(), StorageError> {
-        let state_entries = states
-            .into_iter()
-            .map(|state_entry| {
-                let db_key =
-                    ContractsStateKey::new(&state_entry.contract_id, &state_entry.key);
-                (db_key, state_entry.value)
-            })
-            .collect_vec();
-
-        #[allow(clippy::map_identity)]
-        let state_entries_iter = state_entries
-            .iter()
-            .map(|(key, value)| (key, value.as_slice()));
-
-        <_ as StorageBatchMutate<ContractsState>>::insert_batch(
-            &mut self.data,
-            state_entries_iter,
-        )?;
-
-        Ok(())
-    }
-
-    fn state_present(&mut self, key: &ContractId) -> Result<bool, StorageError> {
-        Ok(self
-            .storage::<ContractsStateMerkleMetadata>()
-            .get(key)?
-            .is_some())
-    }
 }
 
 #[cfg(test)]
 mod tests {
-    use std::{
-        collections::HashSet,
-        iter::repeat_with,
-    };
-
-    use crate::database::database_description::on_chain::OnChain;
-
     use super::*;
+    use crate::database::{
+        database_description::on_chain::OnChain,
+        Database,
+    };
     use fuel_core_storage::{
-        tables::merkle::ContractsStateMerkleMetadata,
+        transactional::IntoTransaction,
         StorageAsMut,
     };
-    use rand::{
-        self,
-        rngs::StdRng,
-        Rng,
-        SeedableRng,
-    };
+    use fuel_core_types::fuel_types::Bytes32;
+    use rand::Rng;
 
     fn random_bytes32<R>(rng: &mut R) -> Bytes32
     where
@@ -154,7 +155,7 @@ mod tests {
         let data = core::iter::from_fn(gen).take(5_000).collect::<Vec<_>>();
 
         let contract_id = ContractId::from([1u8; 32]);
-        let init_database = &mut Database::<OnChain>::default();
+        let mut init_database = Database::<OnChain>::default().into_transaction();
 
         init_database
             .init_contract_state(&contract_id, data.clone().into_iter())
@@ -164,10 +165,10 @@ mod tests {
             .root(&contract_id)
             .expect("Should get root");
 
-        let seq_database = &mut Database::<OnChain>::default();
+        let mut seq_database = Database::<OnChain>::default().into_transaction();
         for (key, value) in data.iter() {
             seq_database
-                .storage::<ContractsState>()
+                .storage_as_mut::<ContractsState>()
                 .insert(&ContractsStateKey::new(&contract_id, key), value)
                 .expect("Should insert a state");
         }
@@ -197,10 +198,17 @@ mod tests {
     }
 
     mod update_contract_state {
+        use core::iter::repeat_with;
+        use fuel_core_storage::iter::IteratorOverTable;
         use fuel_core_types::fuel_merkle::sparse::{
             self,
             MerkleTreeKey,
         };
+        use rand::{
+            rngs::StdRng,
+            SeedableRng,
+        };
+        use std::collections::HashSet;
 
         use super::*;
         #[test]
@@ -364,7 +372,6 @@ mod tests {
             let database = &mut Database::<OnChain>::default();
 
             // when
-            use itertools::Itertools;
             let contract_0_state = state_per_contract[0]
                 .iter()
                 .chunks(2)

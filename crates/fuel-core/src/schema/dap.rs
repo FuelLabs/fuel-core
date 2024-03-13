@@ -1,7 +1,6 @@
 use crate::{
     database::{
         database_description::on_chain::OnChain,
-        transaction::DatabaseTransaction,
         Database,
     },
     schema::scalars::{
@@ -18,6 +17,10 @@ use async_graphql::{
 };
 use fuel_core_storage::{
     not_found,
+    transactional::{
+        IntoTransaction,
+        StorageTransaction,
+    },
     vm_storage::VmStorage,
     InterpreterStorage,
 };
@@ -65,11 +68,12 @@ pub struct Config {
     debug_enabled: bool,
 }
 
+type FrozenDatabase = VmStorage<StorageTransaction<Database<OnChain>>>;
+
 #[derive(Debug, Clone, Default)]
 pub struct ConcreteStorage {
-    vm: HashMap<ID, Interpreter<VmStorage<Database>, Script>>,
+    vm: HashMap<ID, Interpreter<FrozenDatabase, Script>>,
     tx: HashMap<ID, Vec<Script>>,
-    db: HashMap<ID, DatabaseTransaction<OnChain>>,
     params: ConsensusParameters,
 }
 
@@ -104,12 +108,12 @@ impl ConcreteStorage {
     pub fn init(
         &mut self,
         txs: &[Script],
-        storage: DatabaseTransaction<OnChain>,
+        storage: Database<OnChain>,
     ) -> anyhow::Result<ID> {
         let id = Uuid::new_v4();
         let id = ID::from(id);
 
-        let vm_database = Self::vm_database(&storage)?;
+        let vm_database = Self::vm_database(storage)?;
         let tx = Self::dummy_tx();
         let checked_tx = tx
             .into_checked_basic(vm_database.block_height()?, &self.params)
@@ -134,23 +138,17 @@ impl ConcreteStorage {
         let mut vm = Interpreter::with_storage(vm_database, interpreter_params);
         vm.transact(ready_tx).map_err(|e| anyhow::anyhow!(e))?;
         self.vm.insert(id.clone(), vm);
-        self.db.insert(id.clone(), storage);
 
         Ok(id)
     }
 
     pub fn kill(&mut self, id: &ID) -> bool {
         self.tx.remove(id);
-        self.vm.remove(id);
-        self.db.remove(id).is_some()
+        self.vm.remove(id).is_some()
     }
 
-    pub fn reset(
-        &mut self,
-        id: &ID,
-        storage: DatabaseTransaction<OnChain>,
-    ) -> anyhow::Result<()> {
-        let vm_database = Self::vm_database(&storage)?;
+    pub fn reset(&mut self, id: &ID, storage: Database<OnChain>) -> anyhow::Result<()> {
+        let vm_database = Self::vm_database(storage)?;
         let tx = self
             .tx
             .get(id)
@@ -177,7 +175,6 @@ impl ConcreteStorage {
         self.vm.insert(id.clone(), vm).ok_or_else(|| {
             io::Error::new(io::ErrorKind::NotFound, "The VM instance was not found")
         })?;
-        self.db.insert(id.clone(), storage);
         Ok(())
     }
 
@@ -191,15 +188,13 @@ impl ConcreteStorage {
             .ok_or_else(|| anyhow::anyhow!("The VM instance was not found"))
     }
 
-    fn vm_database(
-        storage: &DatabaseTransaction<OnChain>,
-    ) -> anyhow::Result<VmStorage<Database>> {
+    fn vm_database(storage: Database<OnChain>) -> anyhow::Result<FrozenDatabase> {
         let block = storage
             .get_current_block()?
             .ok_or(not_found!("Block for VMDatabase"))?;
 
         let vm_database = VmStorage::new(
-            storage.as_ref().clone(),
+            storage.into_transaction(),
             block.header().consensus(),
             // TODO: Use a real coinbase address
             Default::default(),
@@ -304,7 +299,7 @@ impl DapMutation {
             .data_unchecked::<GraphStorage>()
             .lock()
             .await
-            .init(&[], db.transaction())?;
+            .init(&[], db.clone())?;
 
         debug!("Session {:?} initialized", id);
 
@@ -333,7 +328,7 @@ impl DapMutation {
         ctx.data_unchecked::<GraphStorage>()
             .lock()
             .await
-            .reset(&id, db.transaction())?;
+            .reset(&id, db.clone())?;
 
         debug!("Session {:?} was reset", id);
 
@@ -417,20 +412,17 @@ impl DapMutation {
             .map_err(|_| async_graphql::Error::new("Invalid transaction JSON"))?;
 
         let mut locked = ctx.data_unchecked::<GraphStorage>().lock().await;
-
-        let db = locked.db.get(&id).ok_or("Invalid debugging session ID")?;
-
         let params = locked.params.clone();
-
-        let checked_tx = tx
-            .into_checked_basic(db.latest_height()?, &params)
-            .map_err(|err| anyhow::anyhow!("{:?}", err))?
-            .into();
 
         let vm = locked
             .vm
             .get_mut(&id)
             .ok_or_else(|| async_graphql::Error::new("VM not found"))?;
+
+        let checked_tx = tx
+            .into_checked_basic(vm.as_ref().block_height()?, &params)
+            .map_err(|err| anyhow::anyhow!("{:?}", err))?
+            .into();
 
         let gas_costs = params.gas_costs();
         let fee_params = params.fee_params();

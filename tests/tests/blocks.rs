@@ -23,6 +23,7 @@ use fuel_core_storage::{
         FuelBlocks,
         SealedBlockConsensus,
     },
+    transactional::WriteTransaction,
     vm_storage::VmStorageRequirements,
     StorageAsMut,
 };
@@ -58,10 +59,16 @@ async fn block() {
         .unwrap();
     let client = FuelClient::from(srv.bound_address);
 
-    db.storage::<FuelBlocks>().insert(&height, &block).unwrap();
-    db.storage::<SealedBlockConsensus>()
+    let mut transaction = db.write_transaction();
+    transaction
+        .storage::<FuelBlocks>()
+        .insert(&height, &block)
+        .unwrap();
+    transaction
+        .storage::<SealedBlockConsensus>()
         .insert(&height, &Consensus::PoA(Default::default()))
         .unwrap();
+    transaction.commit().unwrap();
 
     // run test
     let block = client.block_by_height(height).await.unwrap();

@@ -2,9 +2,8 @@
 
 use crate::{
     transactional::{
-        StorageTransaction,
-        Transaction,
-        Transactional,
+        Changes,
+        Modifiable,
     },
     Error as StorageError,
     Mappable,
@@ -14,36 +13,6 @@ use crate::{
     StorageInspect,
     StorageMutate,
 };
-
-/// The empty transactional storage.
-#[derive(Default, Clone, Copy, Debug)]
-pub struct EmptyStorage;
-
-impl AsRef<EmptyStorage> for EmptyStorage {
-    fn as_ref(&self) -> &EmptyStorage {
-        self
-    }
-}
-
-impl AsMut<EmptyStorage> for EmptyStorage {
-    fn as_mut(&mut self) -> &mut EmptyStorage {
-        self
-    }
-}
-
-impl Transactional for EmptyStorage {
-    type Storage = EmptyStorage;
-
-    fn transaction(&self) -> StorageTransaction<Self::Storage> {
-        StorageTransaction::new(EmptyStorage)
-    }
-}
-
-impl Transaction<EmptyStorage> for EmptyStorage {
-    fn commit(&mut self) -> StorageResult<()> {
-        Ok(())
-    }
-}
 
 /// The trait is used to provide a generic mocked implementation for all possible `StorageInspect`,
 /// `StorageMutate`, and `MerkleRootStorage` traits.
@@ -77,12 +46,21 @@ pub trait MockStorageMethods {
     ) -> StorageResult<MerkleRoot>;
 }
 
-mockall::mock! {
-    /// The mocked storage is useful to test functionality build on top of the `StorageInspect`,
-    /// `StorageMutate`, and `MerkleRootStorage` traits.
-    pub Storage {}
+/// The mocked storage is useful to test functionality build on top of the `StorageInspect`,
+/// `StorageMutate`, and `MerkleRootStorage` traits.
+#[derive(Default, Debug, Clone)]
+pub struct MockStorage<Storage, Data> {
+    /// The mocked storage.
+    pub storage: Storage,
+    /// Additional data to be used in the tests.
+    pub data: Data,
+}
 
-    impl MockStorageMethods for Storage {
+mockall::mock! {
+    /// The basic mocked storage
+    pub Basic {}
+
+    impl MockStorageMethods for Basic {
         fn get<M: Mappable + 'static>(
             &self,
             key: &M::Key,
@@ -104,42 +82,15 @@ mockall::mock! {
         fn root<Key: 'static, M: Mappable + 'static>(&self, key: &Key) -> StorageResult<MerkleRoot>;
     }
 
-    impl Transactional for Storage {
-        type Storage = Self;
-
-        fn transaction(&self) -> StorageTransaction<Self>;
-    }
-
-    impl Transaction<Self> for Storage {
-        fn commit(&mut self) -> StorageResult<()>;
+    impl Modifiable for Basic {
+        fn commit_changes(&mut self, changes: Changes) -> StorageResult<()>;
     }
 }
 
-impl MockStorage {
-    /// Packs `self` into one more `MockStorage` and implements `Transactional` trait by this move.
-    pub fn into_transactional(self) -> MockStorage {
-        let mut db = MockStorage::default();
-        db.expect_transaction()
-            .return_once(move || StorageTransaction::new(self));
-        db
-    }
-}
-
-impl AsRef<MockStorage> for MockStorage {
-    fn as_ref(&self) -> &MockStorage {
-        self
-    }
-}
-
-impl AsMut<MockStorage> for MockStorage {
-    fn as_mut(&mut self) -> &mut MockStorage {
-        self
-    }
-}
-
-impl<M> StorageInspect<M> for MockStorage
+impl<M, Storage, Data> StorageInspect<M> for MockStorage<Storage, Data>
 where
     M: Mappable + 'static,
+    Storage: MockStorageMethods,
 {
     type Error = StorageError;
 
@@ -147,37 +98,39 @@ where
         &self,
         key: &M::Key,
     ) -> StorageResult<Option<std::borrow::Cow<M::OwnedValue>>> {
-        MockStorageMethods::get::<M>(self, key)
+        MockStorageMethods::get::<M>(&self.storage, key)
     }
 
     fn contains_key(&self, key: &M::Key) -> StorageResult<bool> {
-        MockStorageMethods::contains_key::<M>(self, key)
+        MockStorageMethods::contains_key::<M>(&self.storage, key)
     }
 }
 
-impl<M> StorageMutate<M> for MockStorage
+impl<M, Storage, Data> StorageMutate<M> for MockStorage<Storage, Data>
 where
     M: Mappable + 'static,
+    Storage: MockStorageMethods,
 {
     fn insert(
         &mut self,
         key: &M::Key,
         value: &M::Value,
     ) -> StorageResult<Option<M::OwnedValue>> {
-        MockStorageMethods::insert::<M>(self, key, value)
+        MockStorageMethods::insert::<M>(&mut self.storage, key, value)
     }
 
     fn remove(&mut self, key: &M::Key) -> StorageResult<Option<M::OwnedValue>> {
-        MockStorageMethods::remove::<M>(self, key)
+        MockStorageMethods::remove::<M>(&mut self.storage, key)
     }
 }
 
-impl<Key, M> MerkleRootStorage<Key, M> for MockStorage
+impl<Key, M, Storage, Data> MerkleRootStorage<Key, M> for MockStorage<Storage, Data>
 where
     Key: 'static,
     M: Mappable + 'static,
+    Storage: MockStorageMethods,
 {
     fn root(&self, key: &Key) -> StorageResult<MerkleRoot> {
-        MockStorageMethods::root::<Key, M>(self, key)
+        MockStorageMethods::root::<Key, M>(&self.storage, key)
     }
 }

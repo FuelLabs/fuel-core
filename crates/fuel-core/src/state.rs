@@ -1,22 +1,20 @@
-use crate::{
-    database::{
-        database_description::{
-            on_chain::OnChain,
-            DatabaseDescription,
-        },
-        Result as DatabaseResult,
-    },
-    state::in_memory::{
-        memory_store::MemoryStore,
-        transaction::MemoryTransactionView,
-    },
-};
+use crate::database::database_description::DatabaseDescription;
 use fuel_core_storage::{
     iter::{
+        BoxedIter,
+        IntoBoxedIter,
         IterDirection,
-        IteratorableStore,
+        IterableStore,
     },
-    kv_store::BatchOperations,
+    kv_store::{
+        KVItem,
+        KeyValueInspect,
+        StorageColumn,
+        Value,
+        WriteOperation,
+    },
+    transactional::Changes,
+    Result as StorageResult,
 };
 use std::{
     fmt::Debug,
@@ -27,70 +25,88 @@ pub mod in_memory;
 #[cfg(feature = "rocksdb")]
 pub mod rocks_db;
 
-type DataSourceInner<Column> = Arc<dyn TransactableStorage<Column = Column>>;
-
-#[derive(Clone, Debug)]
-pub struct DataSource<Description = OnChain>(DataSourceInner<Description::Column>)
+#[allow(type_alias_bounds)]
+pub type DataSource<Description>
 where
-    Description: DatabaseDescription;
+    Description: DatabaseDescription,
+= Arc<dyn TransactableStorage<Description::Height, Column = Description::Column>>;
 
-impl DataSource<OnChain> {
-    pub fn new(inner: DataSourceInner<<OnChain as DatabaseDescription>::Column>) -> Self {
-        Self(inner)
+pub trait TransactableStorage<Height>: IterableStore + Debug + Send + Sync {
+    /// Commits the changes into the storage.
+    fn commit_changes(
+        &self,
+        height: Option<Height>,
+        changes: Changes,
+    ) -> StorageResult<()>;
+}
+
+// It is used only to allow conversion of the `StorageTransaction` into the `DataSource`.
+#[cfg(feature = "test-helpers")]
+impl<Height, S> TransactableStorage<Height>
+    for fuel_core_storage::transactional::StorageTransaction<S>
+where
+    S: IterableStore + Debug + Send + Sync,
+{
+    fn commit_changes(&self, _: Option<Height>, _: Changes) -> StorageResult<()> {
+        unimplemented!()
     }
 }
 
-impl<Description> From<Arc<MemoryTransactionView<Description>>>
-    for DataSource<Description>
+/// A type that allows to iterate over the `Changes`.
+pub struct ChangesIterator<'a, Description> {
+    changes: &'a Changes,
+    _marker: core::marker::PhantomData<Description>,
+}
+
+impl<'a, Description> ChangesIterator<'a, Description> {
+    /// Creates a new instance of the `ChangesIterator`.
+    pub fn new(changes: &'a Changes) -> Self {
+        Self {
+            changes,
+            _marker: Default::default(),
+        }
+    }
+}
+
+impl<'a, Description> KeyValueInspect for ChangesIterator<'a, Description>
 where
     Description: DatabaseDescription,
 {
-    fn from(inner: Arc<MemoryTransactionView<Description>>) -> Self {
-        Self(inner)
+    type Column = Description::Column;
+
+    fn get(&self, key: &[u8], column: Self::Column) -> StorageResult<Option<Value>> {
+        Ok(self
+            .changes
+            .get(&column.id())
+            .and_then(|tree| tree.get(&key.to_vec()))
+            .and_then(|operation| match operation {
+                WriteOperation::Insert(value) => Some(value.clone()),
+                WriteOperation::Remove => None,
+            }))
     }
 }
 
-#[cfg(feature = "rocksdb")]
-impl<Description> From<Arc<rocks_db::RocksDb<Description>>> for DataSource<Description>
+impl<'a, Description> IterableStore for ChangesIterator<'a, Description>
 where
     Description: DatabaseDescription,
 {
-    fn from(inner: Arc<rocks_db::RocksDb<Description>>) -> Self {
-        Self(inner)
+    fn iter_store(
+        &self,
+        column: Self::Column,
+        prefix: Option<&[u8]>,
+        start: Option<&[u8]>,
+        direction: IterDirection,
+    ) -> BoxedIter<KVItem> {
+        if let Some(tree) = self.changes.get(&column.id()) {
+            fuel_core_storage::iter::iterator(tree, prefix, start, direction)
+                .filter_map(|(key, value)| match value {
+                    WriteOperation::Insert(value) => Some((key.clone(), value.clone())),
+                    WriteOperation::Remove => None,
+                })
+                .map(Ok)
+                .into_boxed()
+        } else {
+            core::iter::empty().into_boxed()
+        }
     }
-}
-
-impl<Description> From<Arc<MemoryStore<Description>>> for DataSource<Description>
-where
-    Description: DatabaseDescription,
-{
-    fn from(inner: Arc<MemoryStore<Description>>) -> Self {
-        Self(inner)
-    }
-}
-
-impl<Description> core::ops::Deref for DataSource<Description>
-where
-    Description: DatabaseDescription,
-{
-    type Target = DataSourceInner<Description::Column>;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
-impl<Description> core::ops::DerefMut for DataSource<Description>
-where
-    Description: DatabaseDescription,
-{
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.0
-    }
-}
-
-pub trait TransactableStorage:
-    IteratorableStore + BatchOperations + Debug + Send + Sync
-{
-    fn flush(&self) -> DatabaseResult<()>;
 }

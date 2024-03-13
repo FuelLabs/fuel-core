@@ -94,7 +94,7 @@ async fn can_manually_produce_block(
                     tx_status: Default::default(),
                     events: Default::default(),
                 },
-                StorageTransaction::new(EmptyStorage),
+                Default::default(),
             ))
         });
     ctx_builder.with_importer(importer);

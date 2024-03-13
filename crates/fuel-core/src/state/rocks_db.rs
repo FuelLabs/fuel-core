@@ -6,7 +6,6 @@ use crate::{
         Result as DatabaseResult,
     },
     state::{
-        BatchOperations,
         IterDirection,
         TransactableStorage,
     },
@@ -16,16 +15,16 @@ use fuel_core_storage::{
     iter::{
         BoxedIter,
         IntoBoxedIter,
-        IteratorableStore,
+        IterableStore,
     },
     kv_store::{
         KVItem,
-        KeyValueStore,
+        KeyValueInspect,
         StorageColumn,
         Value,
         WriteOperation,
     },
-    Error as StorageError,
+    transactional::Changes,
     Result as StorageResult,
 };
 use rand::RngCore;
@@ -46,7 +45,11 @@ use rocksdb::{
 use std::{
     cmp,
     env,
-    fmt::Debug,
+    fmt,
+    fmt::{
+        Debug,
+        Formatter,
+    },
     iter,
     path::{
         Path,
@@ -54,6 +57,7 @@ use std::{
     },
     sync::Arc,
 };
+use tempfile::TempDir;
 
 type DB = DBWithThreadMode<MultiThreaded>;
 
@@ -92,9 +96,40 @@ impl Drop for ShallowTempDir {
     }
 }
 
+type DropFn = Box<dyn FnOnce() + Send + Sync>;
+#[derive(Default)]
+struct DropResources {
+    // move resources into this closure to have them dropped when db drops
+    drop: Option<DropFn>,
+}
+
+impl fmt::Debug for DropResources {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "DropResources")
+    }
+}
+
+impl<F: 'static + FnOnce() + Send + Sync> From<F> for DropResources {
+    fn from(closure: F) -> Self {
+        Self {
+            drop: Option::Some(Box::new(closure)),
+        }
+    }
+}
+
+impl Drop for DropResources {
+    fn drop(&mut self) {
+        if let Some(drop) = self.drop.take() {
+            (drop)()
+        }
+    }
+}
+
 #[derive(Debug)]
 pub struct RocksDb<Description> {
     db: DB,
+    // used for RAII
+    _drop: DropResources,
     _marker: core::marker::PhantomData<Description>,
 }
 
@@ -102,6 +137,27 @@ impl<Description> RocksDb<Description>
 where
     Description: DatabaseDescription,
 {
+    pub fn default_open_temp(capacity: Option<usize>) -> DatabaseResult<Self> {
+        let tmp_dir = TempDir::new().unwrap();
+        let path = tmp_dir.path();
+        let result = Self::open(
+            path,
+            enum_iterator::all::<Description::Column>().collect::<Vec<_>>(),
+            capacity,
+        );
+        let mut db = result?;
+
+        db._drop = {
+            move || {
+                // cleanup temp dir
+                drop(tmp_dir);
+            }
+        }
+        .into();
+
+        Ok(db)
+    }
+
     pub fn default_open<P: AsRef<Path>>(
         path: P,
         capacity: Option<usize>,
@@ -114,6 +170,7 @@ where
     }
 
     pub fn prune(path: &Path) -> DatabaseResult<()> {
+        let path = path.join(Description::name());
         DB::destroy(&Options::default(), path)
             .map_err(|e| DatabaseError::Other(e.into()))?;
         Ok(())
@@ -146,7 +203,10 @@ where
         block_opts.set_bloom_filter(10.0, true);
 
         let cf_descriptors = columns.clone().into_iter().map(|i| {
-            ColumnFamilyDescriptor::new(Self::col_name(i), Self::cf_opts(i, &block_opts))
+            ColumnFamilyDescriptor::new(
+                Self::col_name(i.id()),
+                Self::cf_opts(i, &block_opts),
+            )
         });
 
         let mut opts = Options::default();
@@ -174,7 +234,7 @@ where
                     Ok(db) => {
                         for i in columns {
                             let opts = Self::cf_opts(i, &block_opts);
-                            db.create_cf(Self::col_name(i), &opts)
+                            db.create_cf(Self::col_name(i.id()), &opts)
                                 .map_err(|e| DatabaseError::Other(e.into()))?;
                         }
                         Ok(db)
@@ -186,7 +246,7 @@ where
 
                         let cf_descriptors = columns.clone().into_iter().map(|i| {
                             ColumnFamilyDescriptor::new(
-                                Self::col_name(i),
+                                Self::col_name(i.id()),
                                 Self::cf_opts(i, &block_opts),
                             )
                         });
@@ -199,19 +259,24 @@ where
         .map_err(|e| DatabaseError::Other(e.into()))?;
         let rocks_db = RocksDb {
             db,
+            _drop: Default::default(),
             _marker: Default::default(),
         };
         Ok(rocks_db)
     }
 
     fn cf(&self, column: Description::Column) -> Arc<BoundColumnFamily> {
+        self.cf_u32(column.id())
+    }
+
+    fn cf_u32(&self, column: u32) -> Arc<BoundColumnFamily> {
         self.db
             .cf_handle(&Self::col_name(column))
             .expect("invalid column state")
     }
 
-    fn col_name(column: Description::Column) -> String {
-        format!("col-{}", column.as_usize())
+    fn col_name(column: u32) -> String {
+        format!("col-{}", column)
     }
 
     fn cf_opts(column: Description::Column, block_opts: &BlockBasedOptions) -> Options {
@@ -242,7 +307,7 @@ where
     ) -> impl Iterator<Item = KVItem> + '_ {
         let maybe_next_item = next_prefix(prefix.to_vec())
             .and_then(|next_prefix| {
-                self.iter_all(
+                self.iter_store(
                     column,
                     Some(next_prefix.as_slice()),
                     None,
@@ -310,34 +375,11 @@ where
     }
 }
 
-impl<Description> KeyValueStore for RocksDb<Description>
+impl<Description> KeyValueInspect for RocksDb<Description>
 where
     Description: DatabaseDescription,
 {
     type Column = Description::Column;
-
-    fn write(
-        &self,
-        key: &[u8],
-        column: Self::Column,
-        buf: &[u8],
-    ) -> StorageResult<usize> {
-        let r = buf.len();
-        self.db
-            .put_cf(&self.cf(column), key, buf)
-            .map_err(|e| DatabaseError::Other(e.into()))?;
-
-        database_metrics().write_meter.inc();
-        database_metrics().bytes_written.observe(r as f64);
-
-        Ok(r)
-    }
-
-    fn delete(&self, key: &[u8], column: Self::Column) -> StorageResult<()> {
-        self.db
-            .delete_cf(&self.cf(column), key)
-            .map_err(|e| DatabaseError::Other(e.into()).into())
-    }
 
     fn size_of_value(
         &self,
@@ -396,11 +438,11 @@ where
     }
 }
 
-impl<Description> IteratorableStore for RocksDb<Description>
+impl<Description> IterableStore for RocksDb<Description>
 where
     Description: DatabaseDescription,
 {
-    fn iter_all(
+    fn iter_store(
         &self,
         column: Self::Column,
         prefix: Option<&[u8]>,
@@ -467,23 +509,27 @@ where
     }
 }
 
-impl<Description> BatchOperations for RocksDb<Description>
+impl<Description> TransactableStorage<Description::Height> for RocksDb<Description>
 where
     Description: DatabaseDescription,
 {
-    fn batch_write(
+    fn commit_changes(
         &self,
-        entries: &mut dyn Iterator<Item = (Vec<u8>, Self::Column, WriteOperation)>,
+        _: Option<Description::Height>,
+        changes: Changes,
     ) -> StorageResult<()> {
         let mut batch = WriteBatch::default();
 
-        for (key, column, op) in entries {
-            match op {
-                WriteOperation::Insert(value) => {
-                    batch.put_cf(&self.cf(column), key, value.as_ref());
-                }
-                WriteOperation::Remove => {
-                    batch.delete_cf(&self.cf(column), key);
+        for (column, ops) in changes {
+            let cf = self.cf_u32(column);
+            for (key, op) in ops {
+                match op {
+                    WriteOperation::Insert(value) => {
+                        batch.put_cf(&cf, key, value.as_ref());
+                    }
+                    WriteOperation::Remove => {
+                        batch.delete_cf(&cf, key);
+                    }
                 }
             }
         }
@@ -496,51 +542,6 @@ where
         self.db
             .write(batch)
             .map_err(|e| DatabaseError::Other(e.into()).into())
-    }
-
-    // use delete_range to delete all keys in a column
-    fn delete_all(&self, column: Self::Column) -> StorageResult<()> {
-        let mut batch = WriteBatch::default();
-        let first = self
-            .iter_all(column, None, None, IterDirection::Forward)
-            .next()
-            .transpose()?
-            .map(|(key, _)| key)
-            .unwrap_or_default();
-        let last = self
-            .iter_all(column, None, None, IterDirection::Reverse)
-            .next()
-            .transpose()?
-            .map(|(key, _)| key)
-            .unwrap_or_default();
-        batch.delete_range_cf(&self.cf(column), first, last.clone());
-
-        // delete_range doesn't delete the last key, so we need to delete it separately
-        batch.delete_cf(&self.cf(column), last);
-
-        database_metrics().write_meter.inc();
-        database_metrics()
-            .bytes_written
-            .observe(batch.size_in_bytes() as f64);
-
-        self.db
-            .write(batch)
-            .map_err(|e| StorageError::Other(e.into()))
-    }
-}
-
-impl<Description> TransactableStorage for RocksDb<Description>
-where
-    Description: DatabaseDescription,
-{
-    fn flush(&self) -> DatabaseResult<()> {
-        self.db
-            .flush_wal(true)
-            .map_err(|e| anyhow::anyhow!("Unable to flush WAL file: {}", e))?;
-        self.db
-            .flush()
-            .map_err(|e| anyhow::anyhow!("Unable to flush SST files: {}", e))?;
-        Ok(())
     }
 }
 
@@ -559,8 +560,43 @@ fn next_prefix(mut prefix: Vec<u8>) -> Option<Vec<u8>> {
 mod tests {
     use super::*;
     use crate::database::database_description::on_chain::OnChain;
-    use fuel_core_storage::column::Column;
+    use fuel_core_storage::{
+        column::Column,
+        kv_store::KeyValueMutate,
+        transactional::ReadTransaction,
+    };
+    use std::collections::{
+        BTreeMap,
+        HashMap,
+    };
     use tempfile::TempDir;
+
+    impl<Description> KeyValueMutate for RocksDb<Description>
+    where
+        Description: DatabaseDescription,
+    {
+        fn write(
+            &mut self,
+            key: &[u8],
+            column: Self::Column,
+            buf: &[u8],
+        ) -> StorageResult<usize> {
+            let mut transaction = self.read_transaction();
+            let len = transaction.write(key, column, buf)?;
+            let changes = transaction.into_changes();
+            self.commit_changes(Default::default(), changes)?;
+
+            Ok(len)
+        }
+
+        fn delete(&mut self, key: &[u8], column: Self::Column) -> StorageResult<()> {
+            let mut transaction = self.read_transaction();
+            transaction.delete(key, column)?;
+            let changes = transaction.into_changes();
+            self.commit_changes(Default::default(), changes)?;
+            Ok(())
+        }
+    }
 
     fn create_db() -> (RocksDb<OnChain>, TempDir) {
         let tmp_dir = TempDir::new().unwrap();
@@ -574,7 +610,7 @@ mod tests {
     fn can_put_and_read() {
         let key = vec![0xA, 0xB, 0xC];
 
-        let (db, _tmp) = create_db();
+        let (mut db, _tmp) = create_db();
         let expected = Arc::new(vec![1, 2, 3]);
         db.put(&key, Column::Metadata, expected.clone()).unwrap();
 
@@ -585,7 +621,7 @@ mod tests {
     fn put_returns_previous_value() {
         let key = vec![0xA, 0xB, 0xC];
 
-        let (db, _tmp) = create_db();
+        let (mut db, _tmp) = create_db();
         let expected = Arc::new(vec![1, 2, 3]);
         db.put(&key, Column::Metadata, expected.clone()).unwrap();
         let prev = db
@@ -599,7 +635,7 @@ mod tests {
     fn delete_and_get() {
         let key = vec![0xA, 0xB, 0xC];
 
-        let (db, _tmp) = create_db();
+        let (mut db, _tmp) = create_db();
         let expected = Arc::new(vec![1, 2, 3]);
         db.put(&key, Column::Metadata, expected.clone()).unwrap();
         assert_eq!(db.get(&key, Column::Metadata).unwrap().unwrap(), expected);
@@ -612,70 +648,54 @@ mod tests {
     fn key_exists() {
         let key = vec![0xA, 0xB, 0xC];
 
-        let (db, _tmp) = create_db();
+        let (mut db, _tmp) = create_db();
         let expected = Arc::new(vec![1, 2, 3]);
         db.put(&key, Column::Metadata, expected).unwrap();
         assert!(db.exists(&key, Column::Metadata).unwrap());
     }
 
     #[test]
-    fn batch_write_inserts() {
+    fn commit_changes_inserts() {
         let key = vec![0xA, 0xB, 0xC];
         let value = Arc::new(vec![1, 2, 3]);
 
         let (db, _tmp) = create_db();
         let ops = vec![(
-            key.clone(),
-            Column::Metadata,
-            WriteOperation::Insert(value.clone()),
+            Column::Metadata.id(),
+            BTreeMap::from_iter(vec![(
+                key.clone(),
+                WriteOperation::Insert(value.clone()),
+            )]),
         )];
 
-        db.batch_write(&mut ops.into_iter()).unwrap();
+        db.commit_changes(Default::default(), HashMap::from_iter(ops))
+            .unwrap();
         assert_eq!(db.get(&key, Column::Metadata).unwrap().unwrap(), value)
     }
 
     #[test]
-    fn batch_write_removes() {
+    fn commit_changes_removes() {
         let key = vec![0xA, 0xB, 0xC];
         let value = Arc::new(vec![1, 2, 3]);
 
-        let (db, _tmp) = create_db();
+        let (mut db, _tmp) = create_db();
         db.put(&key, Column::Metadata, value).unwrap();
 
-        let ops = vec![(key.clone(), Column::Metadata, WriteOperation::Remove)];
-        db.batch_write(&mut ops.into_iter()).unwrap();
+        let ops = vec![(
+            Column::Metadata.id(),
+            BTreeMap::from_iter(vec![(key.clone(), WriteOperation::Remove)]),
+        )];
+        db.commit_changes(Default::default(), HashMap::from_iter(ops))
+            .unwrap();
 
         assert_eq!(db.get(&key, Column::Metadata).unwrap(), None);
-    }
-
-    #[test]
-    fn delete_all_with_different_key_lengths() {
-        let (db, _tmp) = create_db();
-
-        let keys = vec![
-            vec![], // unit key
-            vec![0xA],
-            vec![0xB, 0xC],
-            vec![0xD, 0xE, 0xF],
-        ];
-        let value = Arc::new(vec![1, 2, 3]);
-
-        for key in &keys {
-            db.put(key, Column::Metadata, value.clone()).unwrap();
-        }
-
-        db.delete_all(Column::Metadata).unwrap();
-
-        for key in &keys {
-            assert_eq!(db.get(key, Column::Metadata).unwrap(), None);
-        }
     }
 
     #[test]
     fn can_use_unit_value() {
         let key = vec![0x00];
 
-        let (db, _tmp) = create_db();
+        let (mut db, _tmp) = create_db();
         let expected = Arc::new(vec![]);
         db.put(&key, Column::Metadata, expected.clone()).unwrap();
 
@@ -684,7 +704,7 @@ mod tests {
         assert!(db.exists(&key, Column::Metadata).unwrap());
 
         assert_eq!(
-            db.iter_all(Column::Metadata, None, None, IterDirection::Forward)
+            db.iter_store(Column::Metadata, None, None, IterDirection::Forward)
                 .collect::<Result<Vec<_>, _>>()
                 .unwrap()[0],
             (key.clone(), expected.clone())
@@ -699,7 +719,7 @@ mod tests {
     fn can_use_unit_key() {
         let key: Vec<u8> = Vec::with_capacity(0);
 
-        let (db, _tmp) = create_db();
+        let (mut db, _tmp) = create_db();
         let expected = Arc::new(vec![1, 2, 3]);
         db.put(&key, Column::Metadata, expected.clone()).unwrap();
 
@@ -708,7 +728,7 @@ mod tests {
         assert!(db.exists(&key, Column::Metadata).unwrap());
 
         assert_eq!(
-            db.iter_all(Column::Metadata, None, None, IterDirection::Forward)
+            db.iter_store(Column::Metadata, None, None, IterDirection::Forward)
                 .collect::<Result<Vec<_>, _>>()
                 .unwrap()[0],
             (key.clone(), expected.clone())
@@ -723,7 +743,7 @@ mod tests {
     fn can_use_unit_key_and_value() {
         let key: Vec<u8> = Vec::with_capacity(0);
 
-        let (db, _tmp) = create_db();
+        let (mut db, _tmp) = create_db();
         let expected = Arc::new(vec![]);
         db.put(&key, Column::Metadata, expected.clone()).unwrap();
 
@@ -732,7 +752,7 @@ mod tests {
         assert!(db.exists(&key, Column::Metadata).unwrap());
 
         assert_eq!(
-            db.iter_all(Column::Metadata, None, None, IterDirection::Forward)
+            db.iter_store(Column::Metadata, None, None, IterDirection::Forward)
                 .collect::<Result<Vec<_>, _>>()
                 .unwrap()[0],
             (key.clone(), expected.clone())

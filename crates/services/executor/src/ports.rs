@@ -1,31 +1,7 @@
-use fuel_core_storage::{
-    tables::{
-        Coins,
-        ContractsAssets,
-        ContractsInfo,
-        ContractsLatestUtxo,
-        ContractsRawCode,
-        ContractsState,
-        FuelBlocks,
-        Messages,
-        ProcessedTransactions,
-        SpentMessages,
-    },
-    transactional::Transactional,
-    Error as StorageError,
-    MerkleRootStorage,
-    StorageBatchMutate,
-    StorageMutate,
-    StorageRead,
-    StorageSize,
-    StorageWrite,
-};
 use fuel_core_types::{
     blockchain::primitives::DaBlockHeight,
-    fuel_merkle::storage::StorageInspect,
     fuel_tx,
     fuel_tx::{
-        ContractId,
         TxId,
         UniqueIdentifier,
     },
@@ -68,28 +44,4 @@ pub trait RelayerPort {
 
     /// Get events from the relayer at a given da height.
     fn get_events(&self, da_height: &DaBlockHeight) -> anyhow::Result<Vec<Event>>;
-}
-
-// TODO: Remove `Clone` bound
-pub trait ExecutorDatabaseTrait<D>:
-    StorageInspect<FuelBlocks, Error = StorageError>
-    + StorageMutate<Messages, Error = StorageError>
-    + StorageMutate<ProcessedTransactions, Error = StorageError>
-    + StorageMutate<Coins, Error = StorageError>
-    + StorageMutate<SpentMessages, Error = StorageError>
-    + StorageMutate<ContractsLatestUtxo, Error = StorageError>
-    + StorageWrite<ContractsRawCode, Error = StorageError>
-    + StorageSize<ContractsRawCode, Error = StorageError>
-    + StorageRead<ContractsRawCode, Error = StorageError>
-    + StorageWrite<ContractsState, Error = StorageError>
-    + StorageSize<ContractsState, Error = StorageError>
-    + StorageRead<ContractsState, Error = StorageError>
-    + MerkleRootStorage<ContractId, ContractsAssets, Error = StorageError>
-    + StorageMutate<ContractsAssets, Error = StorageError>
-    + StorageMutate<ContractsInfo, Error = StorageError>
-    + MerkleRootStorage<ContractId, ContractsState, Error = StorageError>
-    + StorageBatchMutate<ContractsState, Error = StorageError>
-    + Transactional<Storage = D>
-    + Clone
-{
 }

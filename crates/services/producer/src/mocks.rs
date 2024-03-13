@@ -8,8 +8,7 @@ use fuel_core_storage::{
     not_found,
     transactional::{
         AtomicView,
-        StorageTransaction,
-        Transaction,
+        Changes,
     },
     Result as StorageResult,
 };
@@ -87,12 +86,6 @@ struct DatabaseTransaction {
     database: MockDb,
 }
 
-impl Transaction<MockDb> for DatabaseTransaction {
-    fn commit(&mut self) -> StorageResult<()> {
-        Ok(())
-    }
-}
-
 impl AsMut<MockDb> for DatabaseTransaction {
     fn as_mut(&mut self) -> &mut MockDb {
         &mut self.database
@@ -102,12 +95,6 @@ impl AsMut<MockDb> for DatabaseTransaction {
 impl AsRef<MockDb> for DatabaseTransaction {
     fn as_ref(&self) -> &MockDb {
         &self.database
-    }
-}
-
-impl Transaction<MockDb> for MockDb {
-    fn commit(&mut self) -> StorageResult<()> {
-        Ok(())
     }
 }
 
@@ -133,12 +120,10 @@ fn to_block(component: Components<Vec<ArcPoolTx>>) -> Block {
 }
 
 impl Executor<Vec<ArcPoolTx>> for MockExecutor {
-    type Database = MockDb;
-
     fn execute_without_commit(
         &self,
         component: Components<Vec<ArcPoolTx>>,
-    ) -> ExecutorResult<UncommittedResult<StorageTransaction<MockDb>>> {
+    ) -> ExecutorResult<UncommittedResult<Changes>> {
         let block = to_block(component);
         // simulate executor inserting a block
         let mut block_db = self.0.blocks.lock().unwrap();
@@ -153,7 +138,7 @@ impl Executor<Vec<ArcPoolTx>> for MockExecutor {
                 tx_status: vec![],
                 events: vec![],
             },
-            StorageTransaction::new(self.0.clone()),
+            Default::default(),
         ))
     }
 }
@@ -161,12 +146,10 @@ impl Executor<Vec<ArcPoolTx>> for MockExecutor {
 pub struct FailingMockExecutor(pub Mutex<Option<ExecutorError>>);
 
 impl Executor<Vec<ArcPoolTx>> for FailingMockExecutor {
-    type Database = MockDb;
-
     fn execute_without_commit(
         &self,
         component: Components<Vec<ArcPoolTx>>,
-    ) -> ExecutorResult<UncommittedResult<StorageTransaction<MockDb>>> {
+    ) -> ExecutorResult<UncommittedResult<Changes>> {
         // simulate an execution failure
         let mut err = self.0.lock().unwrap();
         if let Some(err) = err.take() {
@@ -180,7 +163,7 @@ impl Executor<Vec<ArcPoolTx>> for FailingMockExecutor {
                     tx_status: vec![],
                     events: vec![],
                 },
-                StorageTransaction::new(MockDb::default()),
+                Default::default(),
             ))
         }
     }
@@ -196,10 +179,10 @@ impl AtomicView for MockDb {
 
     type Height = BlockHeight;
 
-    fn latest_height(&self) -> BlockHeight {
+    fn latest_height(&self) -> Option<BlockHeight> {
         let blocks = self.blocks.lock().unwrap();
 
-        blocks.keys().max().cloned().unwrap_or_default()
+        blocks.keys().max().cloned()
     }
 
     fn view_at(&self, _: &BlockHeight) -> StorageResult<Self::View> {

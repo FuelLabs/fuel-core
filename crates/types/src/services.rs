@@ -10,23 +10,21 @@ pub mod txpool;
 
 // TODO: Define a one common error for all services like
 
-/// The uncommitted `Result` of some action with database transaction.
+/// The uncommitted `Result` of some action with storage changes.
 /// The user should commit the result by itself.
 #[derive(Debug)]
-pub struct Uncommitted<Result, DatabaseTransaction> {
+#[must_use]
+pub struct Uncommitted<Result, Changes> {
     /// The result of the action.
     result: Result,
-    /// The database transaction with not committed state.
-    database_transaction: DatabaseTransaction,
+    /// The storage changes.
+    changes: Changes,
 }
 
-impl<Result, DatabaseTransaction> Uncommitted<Result, DatabaseTransaction> {
+impl<Result, Changes> Uncommitted<Result, Changes> {
     /// Create a new instance of `Uncommitted`.
-    pub fn new(result: Result, database_transaction: DatabaseTransaction) -> Self {
-        Self {
-            result,
-            database_transaction,
-        }
+    pub fn new(result: Result, changes: Changes) -> Self {
+        Self { result, changes }
     }
 
     /// Returns a reference to the `Result`.
@@ -34,13 +32,9 @@ impl<Result, DatabaseTransaction> Uncommitted<Result, DatabaseTransaction> {
         &self.result
     }
 
-    /// Return the result and database transaction.
-    ///
-    /// The caller can unpack the `Uncommitted`, apply some changes and pack it again into
-    /// `UncommittedResult`. Because `commit` of the database transaction consumes `self`,
-    /// after committing it is not possible create `Uncommitted`.
-    pub fn into(self) -> (Result, DatabaseTransaction) {
-        (self.result, self.database_transaction)
+    /// Return the result and storage changes.
+    pub fn into(self) -> (Result, Changes) {
+        (self.result, self.changes)
     }
 
     /// Discards the database transaction and returns only the result of the action.
@@ -48,8 +42,8 @@ impl<Result, DatabaseTransaction> Uncommitted<Result, DatabaseTransaction> {
         self.result
     }
 
-    /// Discards the result and return database transaction.
-    pub fn into_transaction(self) -> DatabaseTransaction {
-        self.database_transaction
+    /// Discards the result and return storage changes.
+    pub fn into_changes(self) -> Changes {
+        self.changes
     }
 }

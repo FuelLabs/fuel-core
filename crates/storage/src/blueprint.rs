@@ -11,7 +11,8 @@ use crate::{
     },
     kv_store::{
         BatchOperations,
-        KeyValueStore,
+        KeyValueInspect,
+        KeyValueMutate,
     },
     Mappable,
     Result as StorageResult,
@@ -31,42 +32,15 @@ pub mod sparse;
 ///
 /// The blueprint is responsible for encoding/decoding(usually it is done via `KeyCodec` and `ValueCodec`)
 /// the key and value and putting/extracting it to/from the storage.
-pub trait Blueprint<M, S>
+pub trait BlueprintInspect<M, S>
 where
     M: Mappable,
-    S: KeyValueStore,
+    S: KeyValueInspect,
 {
     /// The codec used to encode and decode storage key.
     type KeyCodec: Encode<M::Key> + Decode<M::OwnedKey>;
     /// The codec used to encode and decode storage value.
     type ValueCodec: Encode<M::Value> + Decode<M::OwnedValue>;
-
-    /// Puts the key-value pair into the storage.
-    fn put(
-        storage: &mut S,
-        key: &M::Key,
-        column: S::Column,
-        value: &M::Value,
-    ) -> StorageResult<()>;
-
-    /// Puts the key-value pair into the storage and returns the old value.
-    fn replace(
-        storage: &mut S,
-        key: &M::Key,
-        column: S::Column,
-        value: &M::Value,
-    ) -> StorageResult<Option<M::OwnedValue>>;
-
-    /// Takes the value from the storage and returns it.
-    /// The value is removed from the storage.
-    fn take(
-        storage: &mut S,
-        key: &M::Key,
-        column: S::Column,
-    ) -> StorageResult<Option<M::OwnedValue>>;
-
-    /// Removes the value from the storage.
-    fn delete(storage: &mut S, key: &M::Key, column: S::Column) -> StorageResult<()>;
 
     /// Checks if the value exists in the storage.
     fn exists(storage: &S, key: &M::Key, column: S::Column) -> StorageResult<bool> {
@@ -103,9 +77,43 @@ where
     }
 }
 
+/// It is an extension of the [`BlueprintInspect`] that allows mutating the storage.
+pub trait BlueprintMutate<M, S>: BlueprintInspect<M, S>
+where
+    M: Mappable,
+    S: KeyValueMutate,
+{
+    /// Puts the key-value pair into the storage.
+    fn put(
+        storage: &mut S,
+        key: &M::Key,
+        column: S::Column,
+        value: &M::Value,
+    ) -> StorageResult<()>;
+
+    /// Puts the key-value pair into the storage and returns the old value.
+    fn replace(
+        storage: &mut S,
+        key: &M::Key,
+        column: S::Column,
+        value: &M::Value,
+    ) -> StorageResult<Option<M::OwnedValue>>;
+
+    /// Takes the value from the storage and returns it.
+    /// The value is removed from the storage.
+    fn take(
+        storage: &mut S,
+        key: &M::Key,
+        column: S::Column,
+    ) -> StorageResult<Option<M::OwnedValue>>;
+
+    /// Removes the value from the storage.
+    fn delete(storage: &mut S, key: &M::Key, column: S::Column) -> StorageResult<()>;
+}
+
 /// It is an extension of the blueprint that allows supporting batch operations.
 /// Usually, they are more performant than initializing/inserting/removing values one by one.
-pub trait SupportsBatching<M, S>: Blueprint<M, S>
+pub trait SupportsBatching<M, S>: BlueprintMutate<M, S>
 where
     M: Mappable,
     S: BatchOperations,
@@ -141,11 +149,11 @@ where
 }
 
 /// It is an extension of the blueprint that supporting creation of the Merkle tree over the storage.
-pub trait SupportsMerkle<Key, M, S>: Blueprint<M, S>
+pub trait SupportsMerkle<Key, M, S>: BlueprintInspect<M, S>
 where
     Key: ?Sized,
     M: Mappable,
-    S: KeyValueStore,
+    S: KeyValueInspect,
 {
     /// Returns the root of the Merkle tree.
     fn root(storage: &S, key: &Key) -> StorageResult<MerkleRoot>;

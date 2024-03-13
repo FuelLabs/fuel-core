@@ -1,6 +1,10 @@
 //! The module provides definition and implementation of the relayer storage.
 
-use crate::ports::RelayerDb;
+use crate::ports::{
+    DatabaseTransaction,
+    RelayerDb,
+    Transactional,
+};
 use fuel_core_storage::{
     blueprint::plain::Plain,
     codec::{
@@ -9,12 +13,15 @@ use fuel_core_storage::{
     },
     kv_store::StorageColumn,
     structured_storage::TableWithBlueprint,
-    transactional::Transactional,
+    transactional::{
+        Modifiable,
+        StorageTransaction,
+    },
     Error as StorageError,
     Mappable,
     Result as StorageResult,
     StorageAsMut,
-    StorageAsRef,
+    StorageInspect,
     StorageMutate,
 };
 use fuel_core_types::{
@@ -78,6 +85,7 @@ impl Mappable for DaHeightTable {
 /// changed from a unit value.
 const METADATA_KEY: () = ();
 
+// TODO: Remove `DaHeightTable` and logic associated with it, since the height tracking is controlled by the database
 impl TableWithBlueprint for DaHeightTable {
     type Blueprint = Plain<Postcard, Primitive<8>>;
     type Column = Column;
@@ -108,12 +116,12 @@ impl TableWithBlueprint for EventsHistory {
     }
 }
 
-impl<T, Storage> RelayerDb for T
+impl<T> RelayerDb for T
 where
     T: Send + Sync,
-    T: Transactional<Storage = Storage>,
-    T: StorageMutate<DaHeightTable, Error = StorageError>,
-    Storage: StorageMutate<EventsHistory, Error = StorageError>
+    T: Transactional,
+    T: StorageInspect<DaHeightTable, Error = StorageError>,
+    for<'a> T::Transaction<'a>: StorageMutate<EventsHistory, Error = StorageError>
         + StorageMutate<DaHeightTable, Error = StorageError>,
 {
     fn insert_events(
@@ -126,7 +134,6 @@ where
         // height. Also so that the messages are inserted atomically
         // with the height.
         let mut db_tx = self.transaction();
-        let db = db_tx.as_mut();
 
         for event in events {
             if da_height != &event.da_height() {
@@ -134,9 +141,9 @@ where
             }
         }
 
-        db.storage::<EventsHistory>().insert(da_height, events)?;
+        db_tx.storage::<EventsHistory>().insert(da_height, events)?;
 
-        grow_monotonically(db, da_height)?;
+        grow_monotonically(&mut db_tx, da_height)?;
         db_tx.commit()?;
         // TODO: Think later about how to clean up the history of the relayer.
         //  Since we don't have too much information on the relayer and it can be useful
@@ -153,16 +160,27 @@ where
         // set atomically with the insertion based on the current
         // height.
         let mut db_tx = self.transaction();
-        let db = db_tx.as_mut();
-        grow_monotonically(db, height)?;
+        grow_monotonically(&mut db_tx, height)?;
         db_tx.commit()?;
         Ok(())
     }
 
     fn get_finalized_da_height(&self) -> StorageResult<DaBlockHeight> {
-        Ok(*StorageAsRef::storage::<DaHeightTable>(&self)
+        use fuel_core_storage::StorageAsRef;
+        Ok(*self
+            .storage::<DaHeightTable>()
             .get(&METADATA_KEY)?
             .unwrap_or_default())
+    }
+}
+
+impl<S> DatabaseTransaction for StorageTransaction<S>
+where
+    S: Modifiable,
+{
+    fn commit(self) -> StorageResult<()> {
+        self.commit()?;
+        Ok(())
     }
 }
 

@@ -25,46 +25,11 @@ pub trait StorageColumn: Copy + core::fmt::Debug {
     }
 }
 
-// TODO: Use `&mut self` for all mutable methods.
-//  It requires refactoring of all services because right now, most of them work with `&self` storage.
-/// The definition of the key-value store.
+/// The definition of the key-value inspection store.
 #[impl_tools::autoimpl(for<T: trait> &T, &mut T, Box<T>, Arc<T>)]
-pub trait KeyValueStore {
+pub trait KeyValueInspect {
     /// The type of the column.
     type Column: StorageColumn;
-
-    /// Inserts the `Value` into the storage.
-    fn put(&self, key: &[u8], column: Self::Column, value: Value) -> StorageResult<()> {
-        self.write(key, column, value.as_ref()).map(|_| ())
-    }
-
-    /// Put the `Value` into the storage and return the old value.
-    fn replace(
-        &self,
-        key: &[u8],
-        column: Self::Column,
-        value: Value,
-    ) -> StorageResult<Option<Value>> {
-        // FIXME: This is a race condition. We should use a transaction.
-        let old_value = self.get(key, column)?;
-        self.put(key, column, value)?;
-        Ok(old_value)
-    }
-
-    /// Writes the `buf` into the storage and returns the number of written bytes.
-    fn write(&self, key: &[u8], column: Self::Column, buf: &[u8])
-        -> StorageResult<usize>;
-
-    /// Removes the value from the storage and returns it.
-    fn take(&self, key: &[u8], column: Self::Column) -> StorageResult<Option<Value>> {
-        // FIXME: This is a race condition. We should use a transaction.
-        let old_value = self.get(key, column)?;
-        self.delete(key, column)?;
-        Ok(old_value)
-    }
-
-    /// Removes the value from the storage.
-    fn delete(&self, key: &[u8], column: Self::Column) -> StorageResult<()>;
 
     /// Checks if the value exists in the storage.
     fn exists(&self, key: &[u8], column: Self::Column) -> StorageResult<bool> {
@@ -105,8 +70,52 @@ pub trait KeyValueStore {
     }
 }
 
+/// The definition of the key-value mutation store.
+#[impl_tools::autoimpl(for<T: trait> &mut T, Box<T>)]
+pub trait KeyValueMutate: KeyValueInspect {
+    /// Inserts the `Value` into the storage.
+    fn put(
+        &mut self,
+        key: &[u8],
+        column: Self::Column,
+        value: Value,
+    ) -> StorageResult<()> {
+        self.write(key, column, value.as_ref()).map(|_| ())
+    }
+
+    /// Put the `Value` into the storage and return the old value.
+    fn replace(
+        &mut self,
+        key: &[u8],
+        column: Self::Column,
+        value: Value,
+    ) -> StorageResult<Option<Value>> {
+        let old_value = self.get(key, column)?;
+        self.put(key, column, value)?;
+        Ok(old_value)
+    }
+
+    /// Writes the `buf` into the storage and returns the number of written bytes.
+    fn write(
+        &mut self,
+        key: &[u8],
+        column: Self::Column,
+        buf: &[u8],
+    ) -> StorageResult<usize>;
+
+    /// Removes the value from the storage and returns it.
+    fn take(&mut self, key: &[u8], column: Self::Column) -> StorageResult<Option<Value>> {
+        let old_value = self.get(key, column)?;
+        self.delete(key, column)?;
+        Ok(old_value)
+    }
+
+    /// Removes the value from the storage.
+    fn delete(&mut self, key: &[u8], column: Self::Column) -> StorageResult<()>;
+}
+
 /// The operation to write into the storage.
-#[derive(Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum WriteOperation {
     /// Insert the value into the storage.
     Insert(Value),
@@ -115,28 +124,10 @@ pub enum WriteOperation {
 }
 
 /// The definition of the key-value store with batch operations.
-#[impl_tools::autoimpl(for<T: trait> &T, &mut T, Box<T>, Arc<T>)]
-pub trait BatchOperations: KeyValueStore {
+#[impl_tools::autoimpl(for<T: trait> &mut T, Box<T>)]
+pub trait BatchOperations: KeyValueMutate {
     /// Writes the batch of the entries into the storage.
-    // TODO: Replace `dyn Iterator` with a generic iterator when `Database` will not use `dyn BatchOperations`.
-    fn batch_write(
-        &self,
-        entries: &mut dyn Iterator<Item = (Vec<u8>, Self::Column, WriteOperation)>,
-    ) -> StorageResult<()> {
-        // TODO: Optimize implementation for in-memory storages.
-        for (key, column, op) in entries {
-            match op {
-                WriteOperation::Insert(value) => {
-                    self.put(&key, column, value)?;
-                }
-                WriteOperation::Remove => {
-                    self.delete(&key, column)?;
-                }
-            }
-        }
-        Ok(())
-    }
-
-    /// Deletes all values from the storage.
-    fn delete_all(&self, column: Self::Column) -> StorageResult<()>;
+    fn batch_write<I>(&mut self, column: Self::Column, entries: I) -> StorageResult<()>
+    where
+        I: Iterator<Item = (Vec<u8>, WriteOperation)>;
 }

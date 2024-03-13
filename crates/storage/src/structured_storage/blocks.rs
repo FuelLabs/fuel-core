@@ -52,10 +52,10 @@ mod tests {
     use crate::{
         structured_storage::{
             test::InMemoryStorage,
-            StructuredStorage,
             TableWithBlueprint,
         },
         tables::FuelBlocks,
+        transactional::ReadTransaction,
         StorageAsMut,
         StorageMutate,
     };
@@ -85,9 +85,9 @@ mod tests {
     #[test_case::test_case(&[0, 2, 5, 7, 11]; "five non-sequential blocks starting from height 0")]
     #[test_case::test_case(&[100, 102, 105, 107, 111]; "five non-sequential blocks starting from height 100")]
     fn can_get_merkle_root_of_inserted_blocks(heights: &[u32]) {
-        let mut storage =
+        let storage =
             InMemoryStorage::<<FuelBlocks as TableWithBlueprint>::Column>::default();
-        let mut database = StructuredStorage::new(&mut storage);
+        let mut storage = storage.read_transaction();
         let blocks = heights
             .iter()
             .copied()
@@ -108,7 +108,7 @@ mod tests {
         // metadata, including a new root.
         for block in &blocks {
             StorageMutate::<FuelBlocks>::insert(
-                &mut database,
+                &mut storage,
                 block.header().height(),
                 &block.compress(&ChainId::default()),
             )
@@ -124,7 +124,7 @@ mod tests {
 
             // Check that root for the version is present
             let last_block = blocks.last().unwrap();
-            let actual_root = database
+            let actual_root = storage
                 .storage::<FuelBlocks>()
                 .root(last_block.header().height())
                 .expect("root to exist")
@@ -140,7 +140,7 @@ mod tests {
 
         let storage =
             InMemoryStorage::<<FuelBlocks as TableWithBlueprint>::Column>::default();
-        let database = StructuredStorage::new(&storage);
+        let database = storage.read_transaction();
 
         // check that root is not present
         let err = database

@@ -1,24 +1,30 @@
 use fuel_core_chain_config::Group;
-use fuel_core_storage::transactional::Transaction;
+use fuel_core_storage::transactional::{
+    StorageTransaction,
+    WriteTransaction,
+};
 use std::sync::Arc;
 use tokio::sync::Notify;
 use tokio_util::sync::CancellationToken;
 
 use crate::database::{
-    database_description::on_chain::OnChain,
-    genesis_progress::GenesisResource,
-    transaction::DatabaseTransaction,
+    genesis_progress::{
+        GenesisProgressInspect,
+        GenesisProgressMutate,
+        GenesisResource,
+    },
     Database,
 };
 
 pub trait TransactionOpener {
-    fn transaction(&mut self) -> DatabaseTransaction<OnChain>;
+    fn transaction(&mut self) -> StorageTransaction<&mut Database>;
+
     fn view_only(&self) -> &Database;
 }
 
 impl TransactionOpener for Database {
-    fn transaction(&mut self) -> DatabaseTransaction<OnChain> {
-        Database::transaction(self)
+    fn transaction(&mut self) -> StorageTransaction<&mut Database> {
+        self.write_transaction()
     }
 
     fn view_only(&self) -> &Database {
@@ -39,10 +45,11 @@ pub trait ProcessState {
     type Item;
 
     fn genesis_resource() -> GenesisResource;
+
     fn process(
         &mut self,
         group: Vec<Self::Item>,
-        tx: &mut Database,
+        tx: &mut StorageTransaction<&mut Database>,
     ) -> anyhow::Result<()>;
 }
 
@@ -85,7 +92,7 @@ where
                 let mut tx = self.tx_opener.transaction();
                 let group = group?;
                 let group_num = group.index;
-                self.handler.process(group.data, tx.as_mut())?;
+                self.handler.process(group.data, &mut tx)?;
                 tx.update_genesis_progress(Logic::genesis_resource(), group_num)?;
                 tx.commit()?;
                 Ok(())
@@ -116,17 +123,25 @@ mod tests {
     use fuel_core_chain_config::Group;
     use fuel_core_storage::{
         column::Column,
-        iter::IteratorableStore,
+        iter::{
+            BoxedIter,
+            IterDirection,
+            IterableStore,
+        },
         kv_store::{
-            BatchOperations,
-            KeyValueStore,
+            KVItem,
+            KeyValueInspect,
             Value,
-            WriteOperation,
         },
         tables::Coins,
-        Error,
+        transactional::{
+            Changes,
+            StorageTransaction,
+            WriteTransaction,
+        },
         Result as StorageResult,
         StorageAsMut,
+        StorageAsRef,
         StorageInspect,
     };
     use fuel_core_types::{
@@ -135,15 +150,18 @@ mod tests {
             CompressedCoinV1,
         },
         fuel_tx::UtxoId,
+        fuel_types::BlockHeight,
     };
     use tokio::sync::Notify;
     use tokio_util::sync::CancellationToken;
 
     use crate::{
         database::{
-            database_description::on_chain::OnChain,
-            genesis_progress::GenesisResource,
-            transaction::DatabaseTransaction,
+            genesis_progress::{
+                GenesisProgressInspect,
+                GenesisProgressMutate,
+                GenesisResource,
+            },
             Database,
         },
         service::genesis::runner::{
@@ -152,18 +170,22 @@ mod tests {
         },
         state::{
             in_memory::memory_store::MemoryStore,
-            DataSource,
             TransactableStorage,
         },
     };
 
     use super::ProcessState;
 
-    type TestHandler<'a, K> =
-        Box<dyn FnMut(K, &mut Database) -> anyhow::Result<()> + Send + 'a>;
+    type TestHandler<'a, K> = Box<
+        dyn FnMut(K, &mut StorageTransaction<&mut Database>) -> anyhow::Result<()>
+            + Send
+            + 'a,
+    >;
 
     fn to_handler<'a, K: 'a>(
-        closure: impl FnMut(K, &mut Database) -> anyhow::Result<()> + Send + 'a,
+        closure: impl FnMut(K, &mut StorageTransaction<&mut Database>) -> anyhow::Result<()>
+            + Send
+            + 'a,
     ) -> TestHandler<'a, K> {
         Box::new(closure)
     }
@@ -178,7 +200,7 @@ mod tests {
         fn process(
             &mut self,
             group: Vec<Self::Item>,
-            tx: &mut Database,
+            tx: &mut StorageTransaction<&mut Database>,
         ) -> anyhow::Result<()> {
             group.into_iter().try_for_each(|item| self(item, tx))
         }
@@ -206,7 +228,7 @@ mod tests {
         let runner = GenesisRunner::new(
             Some(Arc::new(Notify::new())),
             CancellationToken::new(),
-            to_handler(|group: usize, _: &mut Database| {
+            to_handler(|group: usize, _: _| {
                 called_with_groups.push(group);
                 Ok(())
             }),
@@ -233,7 +255,7 @@ mod tests {
         let runner = GenesisRunner::new(
             Some(Arc::new(Notify::new())),
             CancellationToken::new(),
-            to_handler(|element, _: &mut Database| {
+            to_handler(|element, _: _| {
                 called_with.push(element);
                 Ok(())
             }),
@@ -255,22 +277,22 @@ mod tests {
         let outer_db = Database::default();
         let utxo_id = UtxoId::new(Default::default(), 0);
 
-        let is_coin_present =
-            |db: &Database| StorageInspect::<Coins>::contains_key(&db, &utxo_id).unwrap();
-
         let runner = GenesisRunner::new(
             Some(Arc::new(Notify::new())),
             CancellationToken::new(),
-            to_handler(|_, tx: &mut Database| {
+            to_handler(|_, tx: _| {
                 insert_a_coin(tx, &utxo_id);
 
                 assert!(
-                    is_coin_present(tx),
+                    tx.storage::<Coins>().contains_key(&utxo_id).unwrap(),
                     "Coin should be present in the tx db view"
                 );
 
                 assert!(
-                    !is_coin_present(&outer_db),
+                    !outer_db
+                        .storage_as_ref::<Coins>()
+                        .contains_key(&utxo_id)
+                        .unwrap(),
                     "Coin should not be present in the outer db "
                 );
 
@@ -284,10 +306,13 @@ mod tests {
         runner.run().unwrap();
 
         // then
-        assert!(is_coin_present(&outer_db));
+        assert!(outer_db
+            .storage_as_ref::<Coins>()
+            .contains_key(&utxo_id)
+            .unwrap());
     }
 
-    fn insert_a_coin(tx: &mut Database, utxo_id: &UtxoId) {
+    fn insert_a_coin(tx: &mut StorageTransaction<&mut Database>, utxo_id: &UtxoId) {
         let coin: CompressedCoin = CompressedCoinV1::default().into();
 
         tx.storage_as_mut::<Coins>().insert(utxo_id, &coin).unwrap();
@@ -303,7 +328,7 @@ mod tests {
         let runner = GenesisRunner::new(
             Some(Arc::new(Notify::new())),
             CancellationToken::new(),
-            to_handler(|_, tx: &mut Database| {
+            to_handler(|_, tx: _| {
                 insert_a_coin(tx, &utxo_id);
                 bail!("Some error")
             }),
@@ -325,7 +350,7 @@ mod tests {
         let runner = GenesisRunner::new(
             Some(Arc::new(Notify::new())),
             CancellationToken::new(),
-            to_handler(|_, _: &mut Database| bail!("Some error")),
+            to_handler(|_, _: _| bail!("Some error")),
             groups,
             Database::default(),
         );
@@ -344,7 +369,7 @@ mod tests {
         let runner = GenesisRunner::new(
             Some(Arc::new(Notify::new())),
             CancellationToken::new(),
-            to_handler(|_: (), _: &mut Database| Ok(())),
+            to_handler(|_: (), _: _| Ok(())),
             groups,
             Database::default(),
         );
@@ -364,7 +389,7 @@ mod tests {
         let runner = GenesisRunner::new(
             Some(Arc::new(Notify::new())),
             CancellationToken::new(),
-            to_handler(|_, _: &mut Database| Ok(())),
+            to_handler(|_, _: _| Ok(())),
             groups,
             db.clone(),
         );
@@ -383,10 +408,10 @@ mod tests {
             counter: usize,
         }
         impl TransactionOpener for OnlyOneTransactionAllowed {
-            fn transaction(&mut self) -> DatabaseTransaction<OnChain> {
+            fn transaction(&mut self) -> StorageTransaction<&mut Database> {
                 if self.counter == 0 {
                     self.counter += 1;
-                    Database::transaction(&self.db)
+                    self.db.write_transaction()
                 } else {
                     panic!("Only one transaction should be opened")
                 }
@@ -409,7 +434,7 @@ mod tests {
         let runner = GenesisRunner::new(
             Some(Arc::new(Notify::new())),
             CancellationToken::new(),
-            to_handler(|_, tx: &mut Database| {
+            to_handler(|_, tx: _| {
                 insert_a_coin(tx, &utxo_id);
                 Ok(())
             }),
@@ -439,7 +464,7 @@ mod tests {
             GenesisRunner::new(
                 Some(Arc::clone(&finished_signal)),
                 cancel_token.clone(),
-                to_handler(move |el, _: &mut Database| {
+                to_handler(move |el, _: _| {
                     read_groups.lock().unwrap().push(el);
                     Ok(())
                 }),
@@ -498,7 +523,8 @@ mod tests {
         let runner = GenesisRunner::new(
             Some(Arc::clone(&finished_signal)),
             CancellationToken::new(),
-            Box::new(|_: (), _: &mut Database| Ok(())) as TestHandler<()>,
+            Box::new(|_: (), _: &mut StorageTransaction<&mut Database>| Ok(()))
+                as TestHandler<()>,
             groups,
             Database::default(),
         );
@@ -526,56 +552,33 @@ mod tests {
         }
     }
 
-    impl KeyValueStore for BrokenTransactions {
+    impl KeyValueInspect for BrokenTransactions {
         type Column = Column;
 
-        fn write(&self, key: &[u8], column: Column, buf: &[u8]) -> StorageResult<usize> {
-            self.store.write(key, column, buf)
-        }
-
-        fn delete(&self, key: &[u8], column: Column) -> StorageResult<()> {
-            self.store.delete(key, column)
-        }
         fn get(&self, key: &[u8], column: Column) -> StorageResult<Option<Value>> {
             self.store.get(key, column)
         }
     }
 
-    impl BatchOperations for BrokenTransactions {
-        fn batch_write(
+    impl IterableStore for BrokenTransactions {
+        fn iter_store(
             &self,
-            _entries: &mut dyn Iterator<Item = (Vec<u8>, Column, WriteOperation)>,
+            _: Self::Column,
+            _: Option<&[u8]>,
+            _: Option<&[u8]>,
+            _: IterDirection,
+        ) -> BoxedIter<KVItem> {
+            unimplemented!()
+        }
+    }
+
+    impl TransactableStorage<BlockHeight> for BrokenTransactions {
+        fn commit_changes(
+            &self,
+            _: Option<BlockHeight>,
+            _: Changes,
         ) -> StorageResult<()> {
-            Err(Error::Other(anyhow!("I refuse to work!")))
-        }
-
-        fn delete_all(&self, _column: Column) -> StorageResult<()> {
-            Err(Error::Other(anyhow!("I refuse to work!")))
-        }
-    }
-
-    impl IteratorableStore for BrokenTransactions {
-        fn iter_all(
-            &self,
-            _column: Self::Column,
-            _prefix: Option<&[u8]>,
-            _start: Option<&[u8]>,
-            _direction: fuel_core_storage::iter::IterDirection,
-        ) -> fuel_core_storage::iter::BoxedIter<fuel_core_storage::kv_store::KVItem>
-        {
-            unimplemented!()
-        }
-    }
-
-    impl From<BrokenTransactions> for DataSource {
-        fn from(inner: BrokenTransactions) -> Self {
-            DataSource::new(Arc::new(inner))
-        }
-    }
-
-    impl TransactableStorage for BrokenTransactions {
-        fn flush(&self) -> crate::database::Result<()> {
-            unimplemented!()
+            Err(anyhow::anyhow!("I refuse to work!").into())
         }
     }
 
@@ -586,9 +589,9 @@ mod tests {
         let runner = GenesisRunner::new(
             Some(Arc::new(Notify::new())),
             CancellationToken::new(),
-            to_handler(|_, _: &mut Database| Ok(())),
+            to_handler(|_, _: _| Ok(())),
             groups,
-            Database::new(BrokenTransactions::new()),
+            Database::new(Arc::new(BrokenTransactions::new())),
         );
         // when
         let result = runner.run();

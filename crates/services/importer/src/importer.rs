@@ -1,7 +1,7 @@
 use crate::{
-    ports,
     ports::{
         BlockVerifier,
+        DatabaseTransaction,
         Executor,
         ImporterDatabase,
     },
@@ -10,8 +10,9 @@ use crate::{
 use fuel_core_metrics::importer::importer_metrics;
 use fuel_core_storage::{
     not_found,
-    transactional::StorageTransaction,
+    transactional::Changes,
     Error as StorageError,
+    MerkleRoot,
 };
 use fuel_core_types::{
     blockchain::{
@@ -38,7 +39,10 @@ use fuel_core_types::{
     },
 };
 use std::{
-    ops::Deref,
+    ops::{
+        Deref,
+        DerefMut,
+    },
     sync::{
         Arc,
         Mutex,
@@ -66,9 +70,9 @@ pub enum Error {
         fmt = "The wrong state of database during insertion of the genesis block."
     )]
     InvalidUnderlyingDatabaseGenesisState,
-    #[display(fmt = "The wrong state of database after execution of the block.\
-        The actual height is {_1:?}, when the next expected height is {_0:?}.")]
-    InvalidDatabaseStateAfterExecution(Option<BlockHeight>, Option<BlockHeight>),
+    #[display(fmt = "The wrong state of storage after execution of the block.\
+        The actual root is {_1:?}, when the expected root is {_0:?}.")]
+    InvalidDatabaseStateAfterExecution(Option<MerkleRoot>, Option<MerkleRoot>),
     #[display(fmt = "Got overflow during increasing the height.")]
     Overflow,
     #[display(fmt = "The non-generic block can't have zero height.")]
@@ -110,7 +114,7 @@ impl PartialEq for Error {
 }
 
 pub struct Importer<D, E, V> {
-    database: D,
+    database: Mutex<D>,
     executor: Arc<E>,
     verifier: Arc<V>,
     chain_id: ChainId,
@@ -127,7 +131,7 @@ impl<D, E, V> Importer<D, E, V> {
         let (broadcast, _) = broadcast::channel(config.max_block_notify_buffer);
 
         Self {
-            database,
+            database: Mutex::new(database),
             executor: Arc::new(executor),
             verifier: Arc::new(verifier),
             chain_id: config.chain_id,
@@ -173,13 +177,10 @@ where
     ///
     /// Only one commit may be in progress at the time. All other calls will fail.
     /// Returns an error if called while another call is in progress.
-    pub async fn commit_result<ExecutorDatabase>(
+    pub async fn commit_result(
         &self,
-        result: UncommittedResult<StorageTransaction<ExecutorDatabase>>,
-    ) -> Result<(), Error>
-    where
-        ExecutorDatabase: ports::ExecutorDatabase,
-    {
+        result: UncommittedResult<Changes>,
+    ) -> Result<(), Error> {
         let _guard = self.lock()?;
         // It is safe to unwrap the channel because we have the `_guard`.
         let previous_block_result = self
@@ -192,8 +193,13 @@ where
         if let Some(channel) = previous_block_result {
             let _ = channel.await;
         }
+        let mut guard = self
+            .database
+            .try_lock()
+            .expect("Semaphore prevents concurrent access to the database");
+        let database = guard.deref_mut();
 
-        self._commit_result(result)
+        self._commit_result(result, database)
     }
 
     /// The method commits the result of the block execution and notifies about a new imported block.
@@ -206,14 +212,12 @@ where
         ),
         err
     )]
-    fn _commit_result<ExecutorDatabase>(
+    fn _commit_result(
         &self,
-        result: UncommittedResult<StorageTransaction<ExecutorDatabase>>,
-    ) -> Result<(), Error>
-    where
-        ExecutorDatabase: ports::ExecutorDatabase,
-    {
-        let (result, mut db_tx) = result.into();
+        result: UncommittedResult<Changes>,
+        database: &mut D,
+    ) -> Result<(), Error> {
+        let (result, changes) = result.into();
         let block = &result.sealed_block.entity;
         let consensus = &result.sealed_block.consensus;
         let actual_next_height = *block.header().height();
@@ -224,7 +228,7 @@ where
         // database height + 1.
         let expected_next_height = match consensus {
             Consensus::Genesis(_) => {
-                let result = self.database.latest_block_height()?;
+                let result = database.latest_block_height()?;
                 let found = result.is_some();
                 // Because the genesis block is not committed, it should return `None`.
                 // If we find the latest height, something is wrong with the state of the database.
@@ -238,8 +242,7 @@ where
                     return Err(Error::ZeroNonGenericHeight)
                 }
 
-                let last_db_height = self
-                    .database
+                let last_db_height = database
                     .latest_block_height()?
                     .ok_or(not_found!("Latest block height"))?;
                 last_db_height
@@ -262,16 +265,16 @@ where
             ))
         }
 
-        let db_after_execution = db_tx.as_mut();
-
         // Importer expects that `UncommittedResult` contains the result of block
         // execution without block itself.
-        let expected_height = self.database.latest_block_height()?;
-        let actual_height = db_after_execution.latest_block_height()?;
-        if expected_height != actual_height {
+        let expected_block_root = database.latest_block_root()?;
+
+        let mut db_after_execution = database.storage_transaction(changes);
+        let actual_block_root = db_after_execution.latest_block_root()?;
+        if actual_block_root != expected_block_root {
             return Err(Error::InvalidDatabaseStateAfterExecution(
-                expected_height,
-                actual_height,
+                expected_block_root,
+                actual_block_root,
             ))
         }
 
@@ -279,7 +282,7 @@ where
             return Err(Error::NotUnique(expected_next_height))
         }
 
-        db_tx.commit()?;
+        db_after_execution.commit()?;
 
         // update the importer metrics after the block is successfully committed
         importer_metrics()
@@ -313,6 +316,8 @@ where
         // correctly in more mission critical areas (such as _commit_result)
         let current_block_height = self
             .database
+            .try_lock()
+            .expect("Init function is the first to access the database")
             .latest_block_height()
             .unwrap_or_default()
             .unwrap_or_default();
@@ -349,7 +354,7 @@ where
     pub fn verify_and_execute_block(
         &self,
         sealed_block: SealedBlock,
-    ) -> Result<UncommittedResult<StorageTransaction<E::Database>>, Error> {
+    ) -> Result<UncommittedResult<Changes>, Error> {
         Self::verify_and_execute_block_inner(
             self.executor.clone(),
             self.verifier.clone(),
@@ -361,7 +366,7 @@ where
         executor: Arc<E>,
         verifier: Arc<V>,
         sealed_block: SealedBlock,
-    ) -> Result<UncommittedResult<StorageTransaction<E::Database>>, Error> {
+    ) -> Result<UncommittedResult<Changes>, Error> {
         let consensus = sealed_block.consensus;
         let block = sealed_block.entity;
         let sealed_block_id = block.id();
@@ -386,7 +391,7 @@ where
                 tx_status,
                 events,
             },
-            db_tx,
+            changes,
         ) = executor
             .execute_without_commit(block)
             .map_err(Error::FailedExecution)?
@@ -411,7 +416,7 @@ where
         let import_result =
             ImportResult::new_from_network(sealed_block, tx_status, events);
 
-        Ok(Uncommitted::new(import_result, db_tx))
+        Ok(Uncommitted::new(import_result, changes))
     }
 }
 
@@ -455,7 +460,13 @@ where
         }
 
         let start = Instant::now();
-        let commit_result = self._commit_result(result);
+
+        let mut guard = self
+            .database
+            .try_lock()
+            .expect("Semaphore prevents concurrent access to the database");
+        let database = guard.deref_mut();
+        let commit_result = self._commit_result(result, database);
         let commit_time = start.elapsed().as_secs_f64();
         let time = execute_time + commit_time;
         importer_metrics().execute_and_commit_duration.observe(time);

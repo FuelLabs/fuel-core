@@ -16,7 +16,7 @@ use fuel_core_producer::ports::TxPool;
 use fuel_core_storage::{
     not_found,
     tables::FuelBlocks,
-    transactional::StorageTransaction,
+    transactional::Changes,
     Result as StorageResult,
     StorageAsRef,
 };
@@ -64,23 +64,19 @@ impl TxPool for TxPoolAdapter {
 }
 
 impl fuel_core_producer::ports::Executor<TransactionsSource> for ExecutorAdapter {
-    type Database = Database;
-
     fn execute_without_commit(
         &self,
         component: Components<TransactionsSource>,
-    ) -> ExecutorResult<UncommittedResult<StorageTransaction<Database>>> {
+    ) -> ExecutorResult<UncommittedResult<Changes>> {
         self._execute_without_commit(ExecutionTypes::Production(component))
     }
 }
 
 impl fuel_core_producer::ports::Executor<Vec<Transaction>> for ExecutorAdapter {
-    type Database = Database;
-
     fn execute_without_commit(
         &self,
         component: Components<Vec<Transaction>>,
-    ) -> ExecutorResult<UncommittedResult<StorageTransaction<Database>>> {
+    ) -> ExecutorResult<UncommittedResult<Changes>> {
         let Components {
             header_to_produce,
             transactions_source,

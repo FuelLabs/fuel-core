@@ -27,7 +27,7 @@ async fn can_restart_node() {
     // start node once
     {
         use fuel_core::service::ServiceTrait;
-        let database = Database::open(tmp_dir.path(), None).unwrap();
+        let database = Database::open_rocksdb(tmp_dir.path(), None).unwrap();
         let first_startup = FuelService::from_database(database, Config::local_node())
             .await
             .unwrap();
@@ -35,7 +35,7 @@ async fn can_restart_node() {
     }
 
     {
-        let database = Database::open(tmp_dir.path(), None).unwrap();
+        let database = Database::open_rocksdb(tmp_dir.path(), None).unwrap();
         let _second_startup = FuelService::from_database(database, Config::local_node())
             .await
             .unwrap();

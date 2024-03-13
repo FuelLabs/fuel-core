@@ -7,12 +7,14 @@ use crate::{
         OwnedTransactionIndexCursor,
         OwnedTransactionIndexKey,
         OwnedTransactions,
-        TransactionIndex,
         TransactionStatuses,
     },
 };
 use fuel_core_storage::{
-    iter::IterDirection,
+    iter::{
+        IterDirection,
+        IteratorOverTable,
+    },
     tables::Transactions,
     Result as StorageResult,
 };
@@ -23,10 +25,7 @@ use fuel_core_types::{
         Transaction,
         TxPointer,
     },
-    fuel_types::{
-        Address,
-        BlockHeight,
-    },
+    fuel_types::Address,
     services::txpool::TransactionStatus,
 };
 
@@ -63,29 +62,6 @@ impl Database<OffChain> {
         .map(|res| {
             res.map(|(key, tx_id)| (TxPointer::new(key.block_height, key.tx_idx), tx_id))
         })
-    }
-
-    pub fn record_tx_id_owner(
-        &mut self,
-        owner: &Address,
-        block_height: BlockHeight,
-        tx_idx: TransactionIndex,
-        tx_id: &Bytes32,
-    ) -> StorageResult<Option<Bytes32>> {
-        use fuel_core_storage::StorageAsMut;
-        self.storage::<OwnedTransactions>().insert(
-            &OwnedTransactionIndexKey::new(owner, block_height, tx_idx),
-            tx_id,
-        )
-    }
-
-    pub fn update_tx_status(
-        &mut self,
-        id: &Bytes32,
-        status: TransactionStatus,
-    ) -> StorageResult<Option<TransactionStatus>> {
-        use fuel_core_storage::StorageAsMut;
-        self.storage::<TransactionStatuses>().insert(id, &status)
     }
 
     pub fn get_tx_status(

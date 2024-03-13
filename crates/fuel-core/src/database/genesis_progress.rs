@@ -5,17 +5,20 @@ use fuel_core_storage::{
     blueprint::plain::Plain,
     codec::postcard::Postcard,
     column::Column,
+    iter::IteratorOverTable,
     structured_storage::TableWithBlueprint,
     tables::{
         Coins,
         ContractsLatestUtxo,
         Messages,
     },
+    Error as StorageError,
     Mappable,
     MerkleRoot,
     Result,
     StorageAsMut,
     StorageInspect,
+    StorageMutate,
 };
 use fuel_core_types::fuel_merkle::binary::root_calculator::MerkleRootCalculator;
 use serde::{
@@ -50,16 +53,36 @@ impl TableWithBlueprint for GenesisMetadata {
     }
 }
 
-impl Database {
-    pub fn genesis_progress(&self, key: &GenesisResource) -> Option<usize> {
+pub trait GenesisProgressInspect {
+    fn genesis_progress(&self, key: &GenesisResource) -> Option<usize>;
+}
+
+pub trait GenesisProgressMutate {
+    fn update_genesis_progress(
+        &mut self,
+        key: GenesisResource,
+        processed_group: usize,
+    ) -> Result<()>;
+}
+
+impl<S> GenesisProgressInspect for S
+where
+    S: StorageInspect<GenesisMetadata, Error = StorageError>,
+{
+    fn genesis_progress(&self, key: &GenesisResource) -> Option<usize> {
         Some(
             StorageInspect::<GenesisMetadata>::get(self, key)
-                .unwrap()?
+                .ok()??
                 .into_owned(),
         )
     }
+}
 
-    pub fn update_genesis_progress(
+impl<S> GenesisProgressMutate for S
+where
+    S: StorageMutate<GenesisMetadata, Error = StorageError>,
+{
+    fn update_genesis_progress(
         &mut self,
         key: GenesisResource,
         processed_group: usize,
@@ -69,7 +92,9 @@ impl Database {
 
         Ok(())
     }
+}
 
+impl Database {
     pub fn genesis_coins_root(&self) -> Result<MerkleRoot> {
         let coins = self.iter_all::<Coins>(None);
 

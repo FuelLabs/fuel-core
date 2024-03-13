@@ -3,6 +3,7 @@ use crate::state::{
     StateWatcher,
 };
 use anyhow::anyhow;
+use core::ops::Deref;
 use fuel_core_metrics::{
     future_tracker::FutureTracker,
     services::{
@@ -24,6 +25,14 @@ pub struct SharedMutex<T>(Shared<parking_lot::Mutex<T>>);
 impl<T> Clone for SharedMutex<T> {
     fn clone(&self) -> Self {
         Self(self.0.clone())
+    }
+}
+
+impl<T> Deref for SharedMutex<T> {
+    type Target = Shared<parking_lot::Mutex<T>>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
     }
 }
 

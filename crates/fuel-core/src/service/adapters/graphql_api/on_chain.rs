@@ -14,6 +14,7 @@ use fuel_core_storage::{
         BoxedIter,
         IntoBoxedIter,
         IterDirection,
+        IteratorOverTable,
     },
     not_found,
     tables::FuelBlocks,
