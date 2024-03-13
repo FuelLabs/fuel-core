@@ -15,10 +15,10 @@ async-trait = { workspace = true }
 derive_more = { workspace = true }
 fuel-core-storage = { workspace = true }
 fuel-core-types = { workspace = true }
+thiserror = "1.0.57"
 tokio = { workspace = true, features = ["full"] }
 tokio-rayon = { workspace = true }
 tracing = { workspace = true }
-thiserror = "1.0.57"
 
 [dev-dependencies]
 fuel-core-producer = { path = "", features = ["test-helpers"] }
