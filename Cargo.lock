@@ -3386,6 +3386,7 @@ name = "fuel-core-upgradable-executor"
 version = "0.23.0"
 dependencies = [
  "anyhow",
+ "fuel-core-executor",
  "fuel-core-storage",
  "fuel-core-types",
  "fuel-core-wasm-executor",

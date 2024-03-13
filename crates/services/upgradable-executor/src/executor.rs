@@ -1,16 +1,22 @@
-use crate::{
-    config::Config,
-    instance::Instance,
-    COMPILED_UNDERLYING_EXECUTOR,
-    DEFAULT_ENGINE,
+use crate::config::Config;
+use fuel_core_executor::{
+    executor::{
+        ExecutionBlockWithSource,
+        ExecutionInstance,
+        ExecutionOptions,
+        OnceTransactionsSource,
+    },
+    ports::{
+        RelayerPort,
+        TransactionsSource,
+    },
 };
-#[cfg(any(test, feature = "test-helpers"))]
-use fuel_core_storage::transactional::Changes;
 use fuel_core_storage::{
     column::Column,
     kv_store::KeyValueInspect,
     transactional::{
         AtomicView,
+        Changes,
         Modifiable,
     },
 };
@@ -28,34 +34,19 @@ use fuel_core_types::{
             Result as ExecutorResult,
             TransactionExecutionStatus,
         },
+        Uncommitted,
     },
-};
-use fuel_core_wasm_executor::{
-    fuel_core_executor::{
-        executor::{
-            ExecutionBlockWithSource,
-            ExecutionOptions,
-            OnceTransactionsSource,
-        },
-        ports::{
-            RelayerPort,
-            TransactionsSource,
-        },
-    },
-    utils::ReturnType,
 };
 use std::sync::Arc;
-use wasmtime::{
-    Engine,
-    Module,
-};
 
 pub struct Executor<S, R> {
     pub storage_view_provider: S,
     pub relayer_view_provider: R,
     pub config: Arc<Config>,
-    engine: Engine,
-    module: Module,
+    #[cfg(feature = "wasm-executor")]
+    engine: wasmtime::Engine,
+    #[cfg(feature = "wasm-executor")]
+    module: wasmtime::Module,
 }
 
 impl<S, R> Executor<S, R> {
@@ -64,14 +55,14 @@ impl<S, R> Executor<S, R> {
         relayer_view_provider: R,
         config: Arc<Config>,
     ) -> Self {
-        let engine = DEFAULT_ENGINE.clone();
-        let module = COMPILED_UNDERLYING_EXECUTOR.clone();
         Self {
             storage_view_provider,
             relayer_view_provider,
             config,
-            engine,
-            module,
+            #[cfg(feature = "wasm-executor")]
+            engine: crate::DEFAULT_ENGINE.clone(),
+            #[cfg(feature = "wasm-executor")]
+            module: crate::COMPILED_UNDERLYING_EXECUTOR.clone(),
         }
     }
 }
@@ -147,7 +138,7 @@ where
     pub fn execute_without_commit_with_source<TxSource>(
         &self,
         block: ExecutionBlockWithSource<TxSource>,
-    ) -> ReturnType
+    ) -> ExecutorResult<Uncommitted<ExecutionResult, Changes>>
     where
         TxSource: TransactionsSource + Send + Sync + 'static,
     {
@@ -167,7 +158,7 @@ where
         let options = ExecutionOptions {
             utxo_validation,
             backtrace: self.config.backtrace,
-            consensus_params: self.config.consensus_parameters.clone(),
+            consensus_params: Some(self.config.consensus_parameters.clone()),
         };
 
         let component = Components {
@@ -200,7 +191,23 @@ where
         &self,
         block: ExecutionBlockWithSource<TxSource>,
         options: ExecutionOptions,
-    ) -> ReturnType
+    ) -> ExecutorResult<Uncommitted<ExecutionResult, Changes>>
+    where
+        TxSource: TransactionsSource + Send + Sync + 'static,
+    {
+        #[cfg(feature = "wasm-executor")]
+        return self.wasm_execute_inner(block, options);
+
+        #[cfg(not(feature = "wasm-executor"))]
+        return self.native_execute_inner(block, options);
+    }
+
+    #[cfg(feature = "wasm-executor")]
+    fn wasm_execute_inner<TxSource>(
+        &self,
+        block: ExecutionBlockWithSource<TxSource>,
+        options: ExecutionOptions,
+    ) -> ExecutorResult<Uncommitted<ExecutionResult, Changes>>
     where
         TxSource: TransactionsSource + Send + Sync + 'static,
     {
@@ -228,13 +235,38 @@ where
         let storage = self.storage_view_provider.latest_view();
         let relayer = self.relayer_view_provider.latest_view();
 
-        let instance = Instance::new(&self.engine)
+        let instance = crate::instance::Instance::new(&self.engine)
             .add_input_data(block, options)?
             .add_source(source)?
             .add_storage(storage)?
             .add_relayer(relayer)?;
 
         instance.run(&self.module)
+    }
+
+    #[allow(dead_code)]
+    fn native_execute_inner<TxSource>(
+        &self,
+        block: ExecutionBlockWithSource<TxSource>,
+        mut options: ExecutionOptions,
+    ) -> ExecutorResult<Uncommitted<ExecutionResult, Changes>>
+    where
+        TxSource: TransactionsSource + Send + Sync + 'static,
+    {
+        let storage = self.storage_view_provider.latest_view();
+        let relayer = self.relayer_view_provider.latest_view();
+        let consensus_params = options
+            .consensus_params
+            .take()
+            .unwrap_or_else(|| self.config.consensus_parameters.clone());
+
+        let instance = ExecutionInstance {
+            relayer,
+            database: storage,
+            consensus_params,
+            options,
+        };
+        instance.execute_without_commit(block)
     }
 }
 

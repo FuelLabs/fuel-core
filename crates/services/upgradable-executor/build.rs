@@ -8,6 +8,16 @@ use std::{
 };
 
 fn main() {
+    let wasm_executor_enabled = env::var_os("CARGO_FEATURE_WASM_EXECUTOR").is_some();
+
+    println!("cargo:rerun-if-changed=build.rs");
+    println!("cargo:rerun-if-changed=wasm-executor/src/lib.rs");
+    println!("cargo:rerun-if-changed=wasm-executor/src/main.rs");
+
+    if !wasm_executor_enabled {
+        return;
+    }
+
     let out_dir = env::var_os("OUT_DIR").unwrap();
     let dest_path = Path::new(&out_dir);
 
@@ -48,10 +58,6 @@ fn main() {
             println!("cargo:warning={:?}", err);
         }
     }
-
-    println!("cargo:rerun-if-changed=build.rs");
-    println!("cargo:rerun-if-changed=wasm-executor/src/lib.rs");
-    println!("cargo:rerun-if-changed=wasm-executor/src/main.rs");
 }
 
 fn project_root() -> PathBuf {

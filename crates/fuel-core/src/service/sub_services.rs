@@ -61,9 +61,7 @@ pub fn init_sub_services(
         database.on_chain().clone(),
         database.relayer().clone(),
         fuel_core_upgradable_executor::config::Config {
-            // TODO: The `config.chain_conf.consensus_parameters` should be `Option<ConsensusParameters>`.
-            //  All places that use `config.chain_conf.consensus_parameters` should fetch it from the executor.
-            consensus_parameters: Some(config.chain_config.consensus_parameters.clone()),
+            consensus_parameters: config.chain_config.consensus_parameters.clone(),
             backtrace: config.vm.backtrace,
             utxo_validation_default: config.utxo_validation,
         },

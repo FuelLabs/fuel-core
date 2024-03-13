@@ -395,7 +395,7 @@ mod tests {
                 ..Default::default()
             };
             let config = Config {
-                consensus_parameters: Some(consensus_parameters.clone()),
+                consensus_parameters: consensus_parameters.clone(),
                 ..Default::default()
             };
 
@@ -594,7 +594,7 @@ mod tests {
             let mut consensus_parameters = ConsensusParameters::default();
             consensus_parameters.fee_params.gas_price_factor = gas_price_factor;
             let config = Config {
-                consensus_parameters: Some(consensus_parameters),
+                consensus_parameters,
                 ..Default::default()
             };
             let recipient = [1u8; 32].into();
@@ -636,10 +636,10 @@ mod tests {
                 ..Default::default()
             };
             let config = Config {
-                consensus_parameters: Some(ConsensusParameters {
+                consensus_parameters: ConsensusParameters {
                     fee_params,
                     ..Default::default()
-                }),
+                },
                 ..Default::default()
             };
             let database = &mut Database::default();
@@ -896,7 +896,7 @@ mod tests {
             };
 
             let config = Config {
-                consensus_parameters: Some(consensus_parameters),
+                consensus_parameters,
                 ..Default::default()
             };
             let mut validator = create_executor(Default::default(), config);
@@ -944,7 +944,7 @@ mod tests {
         let mut rng = StdRng::seed_from_u64(2322u64);
         let consensus_parameters = ConsensusParameters::default();
         let config = Config {
-            consensus_parameters: Some(consensus_parameters.clone()),
+            consensus_parameters: consensus_parameters.clone(),
             ..Default::default()
         };
         let producer = create_executor(Default::default(), config.clone());
@@ -1818,7 +1818,7 @@ mod tests {
             db.clone(),
             Config {
                 utxo_validation_default: false,
-                consensus_parameters: Some(consensus_parameters.clone()),
+                consensus_parameters: consensus_parameters.clone(),
                 ..Default::default()
             },
         );
@@ -2709,7 +2709,7 @@ mod tests {
         let consensus_parameters = ConsensusParameters::default();
         let config = Config {
             utxo_validation_default: true,
-            consensus_parameters: Some(consensus_parameters.clone()),
+            consensus_parameters: consensus_parameters.clone(),
             ..Default::default()
         };
 

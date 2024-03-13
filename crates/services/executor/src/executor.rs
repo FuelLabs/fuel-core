@@ -189,6 +189,8 @@ pub struct ExecutionOptions {
     pub utxo_validation: bool,
     /// Print execution backtraces if transaction execution reverts.
     pub backtrace: bool,
+    // TODO: It is a temporary workaround to pass the `consensus_params`
+    //  into the WASM executor. Later WASM will fetch it from the storage directly.
     /// The configuration allows overriding the default consensus parameters.
     pub consensus_params: Option<ConsensusParameters>,
 }

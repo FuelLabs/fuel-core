@@ -12,6 +12,7 @@ npx prettier --check "**/Cargo.toml" &&
 cargo +nightly fmt --all -- --check &&
 cargo sort -w --check &&
 source .github/workflows/scripts/verify_openssl.sh &&
+cargo clippy -p fuel-core-wasm-executor --target wasm32-unknown-unknown --no-default-features &&
 cargo clippy --all-targets --all-features &&
 cargo doc --all-features --workspace --no-deps &&
 cargo make check --locked &&
