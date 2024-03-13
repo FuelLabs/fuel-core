@@ -14,7 +14,7 @@ build = "build.rs"
 anyhow = { workspace = true }
 fuel-core-storage = { workspace = true }
 fuel-core-types = { workspace = true }
-fuel-core-wasm-executor = { path = "wasm-executor" }
+fuel-core-wasm-executor = { workspace = true }
 lazy_static = { version = "1.4" }
 postcard = { workspace = true }
 wasmtime = { version = "18.0.1", default-features = false, features = [
