@@ -115,6 +115,8 @@ jobs:
       matrix:
         include:
           - command: clippy
+            args: -p fuel-core-wasm-executor --target wasm32-unknown-unknown --no-default-features
+          - command: clippy
             args: --all-targets --all-features
           - command: check
             args: --all-targets
@@ -122,6 +124,8 @@ jobs:
             args: --all-features --workspace --no-deps
           - command: make
             args: check --locked
+          - command: test
+            args: --workspace
           - command: test
             args: --all-features --workspace
           - command: test

@@ -84,3 +84,4 @@ rocksdb = ["dep:rocksdb", "dep:tempfile", "dep:num_cpus"]
 test-helpers = ["fuel-core-p2p?/test-helpers", "fuel-core-storage/test-helpers"]
 # features to enable in production, but increase build times
 rocksdb-production = ["rocksdb", "rocksdb/jemalloc"]
+wasm-executor = ["fuel-core-upgradable-executor/wasm-executor"]
