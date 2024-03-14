@@ -354,9 +354,9 @@ impl Command {
             block_producer: ProducerConfig {
                 utxo_validation,
                 coinbase_recipient,
-                gas_price: min_gas_price,
                 metrics,
             },
+            static_gas_price: min_gas_price,
             block_importer,
             #[cfg(feature = "relayer")]
             relayer: relayer_cfg,

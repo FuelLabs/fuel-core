@@ -143,7 +143,7 @@ pub fn init_sub_services(
     );
     let tx_pool_adapter = TxPoolAdapter::new(txpool.shared.clone());
 
-    let gas_price_provider = StaticGasPrice::new(config.block_producer.gas_price);
+    let gas_price_provider = StaticGasPrice::new(config.static_gas_price);
 
     let block_producer = fuel_core_producer::Producer {
         config: config.block_producer.clone(),
