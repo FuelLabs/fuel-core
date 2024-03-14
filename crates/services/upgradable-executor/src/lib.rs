@@ -1,3 +1,7 @@
+#![deny(clippy::arithmetic_side_effects)]
+#![deny(clippy::cast_possible_truncation)]
+#![deny(unused_crate_dependencies)]
+
 #[cfg(feature = "wasm-executor")]
 use wasmtime::{
     Config,

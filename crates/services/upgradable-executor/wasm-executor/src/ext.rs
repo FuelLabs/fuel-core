@@ -142,7 +142,7 @@ pub fn input_component(size: usize) -> anyhow::Result<InputType> {
     unsafe {
         host::input_component(
             Ptr32Mut::from_slice(encoded_block.as_mut_slice()),
-            size as u32,
+            u32::try_from(size).expect("We only support wasm32 target; qed"),
         )
     };
 
@@ -158,7 +158,7 @@ pub fn input_options(size: usize) -> anyhow::Result<ExecutionOptions> {
     unsafe {
         host::input_options(
             Ptr32Mut::from_slice(encoded_block.as_mut_slice()),
-            size as u32,
+            u32::try_from(size).expect("We only support wasm32 target; qed"),
         )
     };
 
@@ -182,7 +182,7 @@ pub fn next_transactions(gas_limit: u64) -> anyhow::Result<Vec<MaybeCheckedTrans
     unsafe {
         host::consume_next_txs(
             Ptr32Mut::from_slice(encoded_block.as_mut_slice()),
-            size as u32,
+            u32::try_from(size).expect("We only support wasm32 target; qed"),
         )
     };
 
@@ -197,7 +197,11 @@ pub fn next_transactions(gas_limit: u64) -> anyhow::Result<Vec<MaybeCheckedTrans
 
 pub fn size_of_value(key: &[u8], column: u32) -> anyhow::Result<Option<usize>> {
     let val = unsafe {
-        host::storage_size_of_value(Ptr32::from_slice(key), key.len() as u32, column)
+        host::storage_size_of_value(
+            Ptr32::from_slice(key),
+            u32::try_from(key.len()).expect("We only support wasm32 target; qed"),
+            column,
+        )
     };
 
     let (exists, size, result) = unpack_exists_size_result(val);
@@ -220,10 +224,10 @@ pub fn get(key: &[u8], column: u32, out: &mut [u8]) -> anyhow::Result<()> {
     let result = unsafe {
         host::storage_get(
             Ptr32::from_slice(key),
-            key.len() as u32,
+            u32::try_from(key.len()).expect("We only support wasm32 target; qed"),
             column,
             Ptr32Mut::from_slice(out),
-            output_size as u32,
+            u32::try_from(output_size).expect("We only support wasm32 target; qed"),
         )
     };
 

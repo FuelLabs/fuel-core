@@ -3421,7 +3421,6 @@ dependencies = [
  "fuel-core-storage",
  "fuel-core-types",
  "postcard",
- "serde",
 ]
 
 [[package]]

@@ -1,3 +1,7 @@
+#![deny(clippy::arithmetic_side_effects)]
+#![deny(clippy::cast_possible_truncation)]
+#![deny(unused_crate_dependencies)]
+
 use crate::{
     relayer::WasmRelayer,
     storage::WasmStorage,
@@ -19,6 +23,7 @@ use fuel_core_types::services::{
     },
     Uncommitted,
 };
+use fuel_core_wasm_executor as _;
 
 mod ext;
 mod relayer;
@@ -31,7 +36,10 @@ pub extern "C" fn execute(component_len: u32, options_len: u32) -> u64 {
     let result = execute_without_commit(component_len, options_len);
     let encoded = postcard::to_allocvec(&result).expect("Failed to encode the result");
     let static_slice = encoded.leak();
-    pack_ptr_and_len(static_slice.as_ptr() as u32, static_slice.len() as u32)
+    pack_ptr_and_len(
+        static_slice.as_ptr() as u32,
+        u32::try_from(static_slice.len()).expect("We only support wasm32 target; qed"),
+    )
 }
 
 pub fn execute_without_commit(component_len: u32, options_len: u32) -> ReturnType {
