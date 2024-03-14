@@ -1,6 +1,10 @@
+#![allow(non_snake_case)]
 use crate::{
     block_producer::{
-        gas_price::StaticGasPrice,
+        gas_price::{
+            ProducerGasPrice,
+            StaticGasPrice,
+        },
         Error,
     },
     mocks::{
@@ -206,6 +210,37 @@ async fn production_fails_on_execution_error() {
     );
 }
 
+// TODO: Add test that checks the gas price on the mint tx after `Executor` refactor
+//   https://github.com/FuelLabs/fuel-core/issues/1751
+#[ignore]
+#[tokio::test]
+async fn produce_and_execute_block_txpool__includes_gas_price_provided_on_mint_tx() {
+    todo!()
+    // // given
+    // let gas_price = 1_000;
+    // let gas_price_provider = StaticGasPrice::new(gas_price);
+    // let ctx = TestContext::default();
+    // let producer = ctx.producer_with_gas_price_provider(gas_price_provider);
+    //
+    // // when
+    // let changes = producer
+    //     .produce_and_execute_block_txpool(1u32.into(), Tai64::now(), 1_000_000_000)
+    //     .await
+    //     .unwrap();
+    //
+    // // then
+    // let mint_tx = changes.get_mint_tx();
+    // assert_eq!(mint_tx.gas_price, gas_price);
+}
+
+// TODO: Add test that checks the failure case for gas_price after `Executor` refactor
+//   https://github.com/FuelLabs/fuel-core/issues/1751
+#[ignore]
+#[tokio::test]
+async fn produce_and_execute_block_txpool__block_production_fails() {
+    todo!()
+}
+
 struct TestContext<Executor> {
     config: Config,
     db: MockDb,
@@ -256,6 +291,17 @@ impl<Executor> TestContext<Executor> {
 
     pub fn producer(self) -> Producer<MockDb, MockTxPool, Executor, StaticGasPrice> {
         let gas_price = self.config.gas_price;
+        let static_gas_price = StaticGasPrice::new(gas_price);
+        self.producer_with_gas_price_provider(static_gas_price)
+    }
+
+    pub fn producer_with_gas_price_provider<GasPriceProvider>(
+        self,
+        gas_price_provider: GasPriceProvider,
+    ) -> Producer<MockDb, MockTxPool, Executor, GasPriceProvider>
+    where
+        GasPriceProvider: ProducerGasPrice,
+    {
         Producer {
             config: self.config,
             view_provider: self.db,
@@ -263,7 +309,7 @@ impl<Executor> TestContext<Executor> {
             executor: self.executor,
             relayer: Box::new(self.relayer),
             lock: Default::default(),
-            gas_price_provider: StaticGasPrice::new(gas_price),
+            gas_price_provider,
         }
     }
 }
