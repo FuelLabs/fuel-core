@@ -106,7 +106,6 @@ impl Config {
             utxo_validation,
             txpool: fuel_core_txpool::Config {
                 chain_config,
-                min_gas_price,
                 utxo_validation,
                 transaction_ttl: Duration::from_secs(60 * 100000000),
                 ..fuel_core_txpool::Config::default()
@@ -145,15 +144,6 @@ impl Config {
             self.txpool.chain_config = self.chain_config.clone();
         }
 
-        if self.txpool.min_gas_price != self.static_gas_price {
-            tracing::warn!(
-                "The `min_gas_price` of `TxPool` was inconsistent with `BlockProducer`"
-            );
-            let min_gas_price =
-                core::cmp::max(self.txpool.min_gas_price, self.static_gas_price);
-            self.txpool.min_gas_price = min_gas_price;
-            self.static_gas_price = min_gas_price;
-        }
         if self.txpool.utxo_validation != self.utxo_validation {
             tracing::warn!("The `utxo_validation` of `TxPool` was inconsistent");
             self.txpool.utxo_validation = self.utxo_validation;

@@ -207,7 +207,6 @@ impl TestSetupBuilder {
             utxo_validation: self.utxo_validation,
             txpool: fuel_core_txpool::Config {
                 chain_config: chain_conf.clone(),
-                min_gas_price: self.min_gas_price,
                 ..fuel_core_txpool::Config::default()
             },
             chain_config: chain_conf,

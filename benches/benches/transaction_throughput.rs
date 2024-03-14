@@ -105,7 +105,7 @@ where
                                 test_builder.finalize().await;
 
                             // insert all transactions
-                            srv.shared.txpool.insert(transactions).await;
+                            srv.shared.txpool_shared_state.insert(transactions).await;
                             let _ = client.produce_blocks(1, None).await;
 
                             // sanity check block to ensure the transactions were actually processed

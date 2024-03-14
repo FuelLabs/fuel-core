@@ -241,6 +241,8 @@ pub fn from_executor_to_status(
 #[derive(thiserror::Error, Debug, Clone)]
 #[non_exhaustive]
 pub enum Error {
+    #[error("Gas price not found for block height {0}")]
+    GasPriceNotFound(BlockHeight),
     #[error("TxPool required that transaction contains metadata")]
     NoMetadata,
     #[error("TxPool doesn't support this type of transaction.")]

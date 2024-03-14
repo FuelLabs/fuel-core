@@ -10,8 +10,15 @@ use fuel_core_consensus_module::{
     RelayerConsensusConfig,
 };
 use fuel_core_executor::executor::Executor;
+use fuel_core_producer::block_producer::gas_price::{
+    GasPriceParams,
+    ProducerGasPrice,
+};
 use fuel_core_services::stream::BoxStream;
-use fuel_core_txpool::service::SharedState as TxPoolSharedState;
+use fuel_core_txpool::{
+    service::SharedState as TxPoolSharedState,
+    txpool::TxPoolGasPrice,
+};
 #[cfg(feature = "p2p")]
 use fuel_core_types::services::p2p::peer_reputation::AppScore;
 use fuel_core_types::{
@@ -33,6 +40,29 @@ pub mod relayer;
 pub mod sync;
 pub mod txpool;
 
+#[derive(Debug, Clone)]
+pub struct StaticGasPrice {
+    pub gas_price: u64,
+}
+
+impl StaticGasPrice {
+    pub fn new(gas_price: u64) -> Self {
+        Self { gas_price }
+    }
+}
+
+impl TxPoolGasPrice for StaticGasPrice {
+    fn gas_price(&self, _block_height: BlockHeight) -> Option<u64> {
+        Some(self.gas_price)
+    }
+}
+
+impl ProducerGasPrice for StaticGasPrice {
+    fn gas_price(&self, _block_height: GasPriceParams) -> Option<u64> {
+        Some(self.gas_price)
+    }
+}
+
 #[derive(Clone)]
 pub struct PoAAdapter {
     shared_state: Option<fuel_core_poa::service::SharedState>,
@@ -40,24 +70,24 @@ pub struct PoAAdapter {
 
 #[derive(Clone)]
 pub struct TxPoolAdapter {
-    service: TxPoolSharedState<P2PAdapter, Database>,
+    service: TxPoolSharedState<P2PAdapter, Database, StaticGasPrice>,
 }
 
 impl TxPoolAdapter {
-    pub fn new(service: TxPoolSharedState<P2PAdapter, Database>) -> Self {
+    pub fn new(service: TxPoolSharedState<P2PAdapter, Database, StaticGasPrice>) -> Self {
         Self { service }
     }
 }
 
 #[derive(Clone)]
 pub struct TransactionsSource {
-    txpool: TxPoolSharedState<P2PAdapter, Database>,
+    txpool: TxPoolSharedState<P2PAdapter, Database, StaticGasPrice>,
     _block_height: BlockHeight,
 }
 
 impl TransactionsSource {
     pub fn new(
-        txpool: TxPoolSharedState<P2PAdapter, Database>,
+        txpool: TxPoolSharedState<P2PAdapter, Database, StaticGasPrice>,
         block_height: BlockHeight,
     ) -> Self {
         Self {

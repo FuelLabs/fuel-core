@@ -118,7 +118,10 @@ where
 
         let header = self.new_header(height, block_time).await?;
 
-        let gas_price = self.gas_price_provider.gas_price(height.into())?;
+        let gas_price = self
+            .gas_price_provider
+            .gas_price(height.into())
+            .ok_or(anyhow!("No gas price found for block {height:?}"))?;
 
         let component = Components {
             header_to_produce: header,
@@ -214,7 +217,10 @@ where
                 .expect("It is impossible to overflow the current block height")
         });
 
-        let gas_price = self.gas_price_provider.gas_price(height.into())?;
+        let gas_price = self
+            .gas_price_provider
+            .gas_price(height.into())
+            .ok_or(anyhow!("No gas price found for height {height:?}"))?;
 
         // The dry run execution should use the state of the blockchain based on the
         // last available block, not on the upcoming one. It means that we need to

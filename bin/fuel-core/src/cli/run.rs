@@ -344,7 +344,6 @@ impl Command {
                 tx_max_number,
                 tx_max_depth,
                 chain_conf,
-                min_gas_price,
                 utxo_validation,
                 metrics,
                 tx_pool_ttl.into(),
