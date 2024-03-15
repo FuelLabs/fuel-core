@@ -197,8 +197,10 @@ pub trait P2pPort: Send + Sync {
     async fn all_peer_info(&self) -> anyhow::Result<Vec<PeerInfo>>;
 }
 
+/// Trait for defining how to estimate gas price for future blocks
 #[async_trait::async_trait]
 pub trait GasPriceEstimate: Send + Sync {
+    /// The worst case scenario for gas price at a given horizon
     async fn worst_case_gas_price(&self, height: BlockHeight) -> u64;
 }
 

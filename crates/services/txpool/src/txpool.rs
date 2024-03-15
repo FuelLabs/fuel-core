@@ -76,7 +76,9 @@ pub struct TxPool<ViewProvider> {
     database: ViewProvider,
 }
 
+/// Trait for getting gas price for the Tx Pool code to look up the gas price for a given block height
 pub trait TxPoolGasPrice {
+    /// Get gas price for specific block height if it is known
     fn gas_price(&self, block_height: BlockHeight) -> Option<GasPrice>;
 }
 
