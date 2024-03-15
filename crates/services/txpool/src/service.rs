@@ -128,13 +128,11 @@ pub struct SharedState<P2P, ViewProvider, GasPriceProvider> {
     consensus_params: ConsensusParameters,
     current_height: Arc<ParkingMutex<BlockHeight>>,
     config: Config,
-    gas_price_provider: GasPriceProvider,
+    gas_price_provider: Arc<GasPriceProvider>,
 }
 
 impl<P2P, ViewProvider, GasPriceProvider> Clone
     for SharedState<P2P, ViewProvider, GasPriceProvider>
-where
-    GasPriceProvider: Clone,
 {
     fn clone(&self) -> Self {
         Self {
@@ -505,7 +503,7 @@ where
             consensus_params,
             current_height: Arc::new(ParkingMutex::new(current_height)),
             config,
-            gas_price_provider,
+            gas_price_provider: Arc::new(gas_price_provider),
         },
         ttl_timer,
     };

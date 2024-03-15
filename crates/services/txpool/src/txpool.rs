@@ -82,6 +82,12 @@ pub trait TxPoolGasPrice {
     fn gas_price(&self, block_height: BlockHeight) -> Option<GasPrice>;
 }
 
+impl<T: TxPoolGasPrice> TxPoolGasPrice for Arc<T> {
+    fn gas_price(&self, block_height: BlockHeight) -> Option<GasPrice> {
+        self.deref().gas_price(block_height)
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct MockTxPoolGasPrice {
     pub gas_price: Option<GasPrice>,
