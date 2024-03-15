@@ -5,13 +5,22 @@ use super::scalars::{
 use crate::{
     fuel_core_graphql_api::database::ReadView,
     graphql_api::api_service::GasPriceProvider,
-    query::BlockQueryData,
+    query::{
+        BlockQueryData,
+        SimpleTransactionData,
+    },
 };
 use async_graphql::{
     Context,
     Object,
 };
-use fuel_core_types::blockchain::block::Block;
+use fuel_core_types::{
+    blockchain::block::Block,
+    fuel_tx::{
+        field::MintGasPrice,
+        Transaction,
+    },
+};
 
 pub struct LatestGasPrice {
     pub gas_price: U64,
@@ -38,20 +47,18 @@ impl LatestGasPriceQuery {
         &self,
         ctx: &Context<'_>,
     ) -> async_graphql::Result<LatestGasPrice> {
-        let gas_price_provider = ctx.data_unchecked::<GasPriceProvider>();
         let query: &ReadView = ctx.data_unchecked();
 
         let latest_block: Block<_> = query.latest_block()?;
-        let block_height = u32::from(*latest_block.header().height());
-        let gas_price = gas_price_provider
-            .known_gas_price(block_height.into())
-            .await
-            .ok_or(async_graphql::Error::new(format!(
-                "Gas price not found for latest block:{block_height:?}"
-            )))?;
-
+        let block_height: u32 = (*latest_block.header().height()).into();
+        let mut gas_price: U64 = 0.into();
+        if let Some(tx_id) = latest_block.transactions().last() {
+            if let Transaction::Mint(mint_tx) = query.transaction(tx_id)? {
+                gas_price = (*mint_tx.gas_price()).into();
+            }
+        }
         Ok(LatestGasPrice {
-            gas_price: gas_price.into(),
+            gas_price,
             block_height: block_height.into(),
         })
     }
@@ -83,8 +90,7 @@ impl EstimateGasPriceQuery {
     ) -> async_graphql::Result<EstimateGasPrice> {
         let query: &ReadView = ctx.data_unchecked();
 
-        let latest_block: Block<_> = query.latest_block()?;
-        let latest_block_height = u32::from(*latest_block.header().height());
+        let latest_block_height: u32 = query.latest_block_height()?.into();
         let target_block = block_horizon
             .and_then(|h| h.0.checked_add(latest_block_height))
             .ok_or(async_graphql::Error::new(format!(
