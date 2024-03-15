@@ -1025,6 +1025,7 @@ async fn tx_rejected_from_pool_when_gas_price_is_lower_than_another_tx_with_same
 ) {
     let mut context = TextContext::default();
     let message_amount = 10_000;
+    let max_fee_limit = 10u64;
     let gas_price_high = 2u64;
     let gas_price_low = 1u64;
     let (message, conflicting_message_input) =
@@ -1032,14 +1033,14 @@ async fn tx_rejected_from_pool_when_gas_price_is_lower_than_another_tx_with_same
 
     let tx_high = TransactionBuilder::script(vec![], vec![])
         .tip(gas_price_high)
-        .max_fee_limit(gas_price_high)
+        .max_fee_limit(max_fee_limit)
         .script_gas_limit(GAS_LIMIT)
         .add_input(conflicting_message_input.clone())
         .finalize_as_transaction();
 
     let tx_low = TransactionBuilder::script(vec![], vec![])
         .tip(gas_price_low)
-        .max_fee_limit(gas_price_low)
+        .max_fee_limit(max_fee_limit)
         .script_gas_limit(GAS_LIMIT)
         .add_input(conflicting_message_input)
         .finalize_as_transaction();
@@ -1075,6 +1076,7 @@ async fn higher_priced_tx_squeezes_out_lower_priced_tx_with_same_message_id() {
     let mut context = TextContext::default();
     let message_amount = 10_000;
     let gas_price_high = 2u64;
+    let max_fee_limit = 10u64;
     let gas_price_low = 1u64;
     let (message, conflicting_message_input) =
         create_message_predicate_from_message(message_amount, 0);
@@ -1082,7 +1084,7 @@ async fn higher_priced_tx_squeezes_out_lower_priced_tx_with_same_message_id() {
     // Insert a tx for the message id with a low gas amount
     let tx_low = TransactionBuilder::script(vec![], vec![])
         .tip(gas_price_low)
-        .max_fee_limit(gas_price_low)
+        .max_fee_limit(max_fee_limit)
         .script_gas_limit(GAS_LIMIT)
         .add_input(conflicting_message_input.clone())
         .finalize_as_transaction();
@@ -1100,7 +1102,7 @@ async fn higher_priced_tx_squeezes_out_lower_priced_tx_with_same_message_id() {
     // price is lower, we accept the new transaction and squeeze out the old transaction.
     let tx_high = TransactionBuilder::script(vec![], vec![])
         .tip(gas_price_high)
-        .max_fee_limit(gas_price_high)
+        .max_fee_limit(max_fee_limit)
         .script_gas_limit(GAS_LIMIT)
         .add_input(conflicting_message_input)
         .finalize_as_transaction();
