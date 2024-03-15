@@ -1,17 +1,15 @@
 use crate::{
+    service::test_helpers::MockTxPoolGasPrice,
     test_helpers::{
         IntoEstimated,
         TextContext,
         TEST_COIN_AMOUNT,
     },
-    txpool::{
-        test_helpers::{
-            create_coin_output,
-            create_contract_input,
-            create_contract_output,
-            create_message_predicate_from_message,
-        },
-        MockTxPoolGasPrice,
+    txpool::test_helpers::{
+        create_coin_output,
+        create_contract_input,
+        create_contract_output,
+        create_message_predicate_from_message,
     },
     Config,
     Error,

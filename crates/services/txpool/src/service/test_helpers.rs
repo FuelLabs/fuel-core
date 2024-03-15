@@ -2,13 +2,13 @@ use super::*;
 use crate::{
     mock_db::MockDBProvider,
     ports::BlockImporter,
-    txpool::MockTxPoolGasPrice,
     MockDb,
 };
 use fuel_core_services::{
     stream::BoxStream,
     Service as ServiceTrait,
 };
+use fuel_core_txpool::types::GasPrice;
 use fuel_core_types::{
     blockchain::SealedBlock,
     entities::coins::coin::Coin,
@@ -36,6 +36,29 @@ pub struct TestContext {
     pub(crate) service: Service<MockP2P, MockDBProvider, MockTxPoolGasPrice>,
     mock_db: MockDb,
     rng: RefCell<StdRng>,
+}
+
+#[derive(Debug, Clone)]
+pub struct MockTxPoolGasPrice {
+    pub gas_price: Option<GasPrice>,
+}
+
+impl MockTxPoolGasPrice {
+    pub fn new(gas_price: GasPrice) -> Self {
+        Self {
+            gas_price: Some(gas_price),
+        }
+    }
+
+    pub fn new_none() -> Self {
+        Self { gas_price: None }
+    }
+}
+
+impl TxPoolGasPrice for MockTxPoolGasPrice {
+    fn gas_price(&self, _block_height: BlockHeight) -> Option<GasPrice> {
+        self.gas_price
+    }
 }
 
 impl TestContext {

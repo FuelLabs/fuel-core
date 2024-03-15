@@ -27,25 +27,3 @@ pub trait ProducerGasPrice {
     /// The gas price for all transactions in the block.
     fn gas_price(&self, params: GasPriceParams) -> Option<u64>;
 }
-
-pub struct MockProducerGasPrice {
-    pub gas_price: Option<u64>,
-}
-
-impl MockProducerGasPrice {
-    pub fn new(gas_price: u64) -> Self {
-        Self {
-            gas_price: Some(gas_price),
-        }
-    }
-
-    pub fn new_none() -> Self {
-        Self { gas_price: None }
-    }
-}
-
-impl ProducerGasPrice for MockProducerGasPrice {
-    fn gas_price(&self, _params: GasPriceParams) -> Option<u64> {
-        self.gas_price
-    }
-}

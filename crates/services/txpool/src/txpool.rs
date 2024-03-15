@@ -88,29 +88,6 @@ impl<T: TxPoolGasPrice> TxPoolGasPrice for Arc<T> {
     }
 }
 
-#[derive(Debug, Clone)]
-pub struct MockTxPoolGasPrice {
-    pub gas_price: Option<GasPrice>,
-}
-
-impl MockTxPoolGasPrice {
-    pub fn new(gas_price: GasPrice) -> Self {
-        Self {
-            gas_price: Some(gas_price),
-        }
-    }
-
-    pub fn new_none() -> Self {
-        Self { gas_price: None }
-    }
-}
-
-impl TxPoolGasPrice for MockTxPoolGasPrice {
-    fn gas_price(&self, _block_height: BlockHeight) -> Option<GasPrice> {
-        self.gas_price
-    }
-}
-
 impl<ViewProvider> TxPool<ViewProvider> {
     pub fn new(config: Config, database: ViewProvider) -> Self {
         let max_depth = config.max_depth;

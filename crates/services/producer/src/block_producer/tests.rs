@@ -2,7 +2,7 @@
 use crate::{
     block_producer::{
         gas_price::{
-            MockProducerGasPrice,
+            GasPriceParams,
             ProducerGasPrice,
         },
         Error,
@@ -42,6 +42,24 @@ use std::sync::{
     Arc,
     Mutex,
 };
+
+pub struct MockProducerGasPrice {
+    pub gas_price: Option<u64>,
+}
+
+impl MockProducerGasPrice {
+    pub fn new(gas_price: u64) -> Self {
+        Self {
+            gas_price: Some(gas_price),
+        }
+    }
+}
+
+impl ProducerGasPrice for MockProducerGasPrice {
+    fn gas_price(&self, _params: GasPriceParams) -> Option<u64> {
+        self.gas_price
+    }
+}
 
 #[tokio::test]
 async fn cant_produce_at_genesis_height() {
