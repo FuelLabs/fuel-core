@@ -4,7 +4,7 @@ version = { workspace = true }
 authors = { workspace = true }
 edition = { workspace = true }
 homepage = { workspace = true }
-keywords = ["blockchain", "fuel", "fuel-vm"]
+keywords = ["blockchain", "fuel", "fuel-vm", "upgradable"]
 license = { workspace = true }
 repository = { workspace = true }
 description = "Fuel Block Upgradable Executor"
@@ -32,7 +32,7 @@ fuel-core-types = { workspace = true, features = ["test-helpers"] }
 
 [features]
 default = ["std"]
-std = []
+std = ["fuel-core-executor/std", "fuel-core-storage/std", "fuel-core-types/std"]
 wasm-executor = [
   "dep:anyhow",
   "dep:lazy_static",

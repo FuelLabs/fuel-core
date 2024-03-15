@@ -1,6 +1,17 @@
+//! This is the main entry point for the wasm executor.
+//! The module defines the `execute` function that the host will call.
+//! The result of the execution is the `ExecutionResult` with the list of changes to the storage.
+//!
+//! During return, the result of the execution modules leaks the memory,
+//! allowing the WASM runner to get access to the data.
+//!
+//! Currently, the WASM executor is designed only for one block execution per WASM instance.
+//! But later, it will be improved, and the instance will be reusable.
+
 #![deny(clippy::arithmetic_side_effects)]
 #![deny(clippy::cast_possible_truncation)]
 #![deny(unused_crate_dependencies)]
+#![deny(warnings)]
 
 use crate::{
     relayer::WasmRelayer,
@@ -11,17 +22,17 @@ use crate::{
         ReturnType,
     },
 };
-use fuel_core_executor::executor::{
-    default_consensus_parameters,
-    ExecutionInstance,
-};
-use fuel_core_types::services::{
-    block_producer::Components,
-    executor::{
-        Error as ExecutorError,
-        ExecutionResult,
+use fuel_core_executor::executor::ExecutionInstance;
+use fuel_core_types::{
+    fuel_tx::ConsensusParameters,
+    services::{
+        block_producer::Components,
+        executor::{
+            Error as ExecutorError,
+            ExecutionResult,
+        },
+        Uncommitted,
     },
-    Uncommitted,
 };
 use fuel_core_wasm_executor as _;
 
@@ -52,7 +63,7 @@ pub fn execute_without_commit(component_len: u32, options_len: u32) -> ReturnTyp
     {
         consensus_params
     } else {
-        default_consensus_parameters()
+        ConsensusParameters::default()
     };
 
     let instance = ExecutionInstance {
@@ -101,4 +112,5 @@ pub fn execute_without_commit(component_len: u32, options_len: u32) -> ReturnTyp
     ))
 }
 
+// It is not used. It was added to make clippy happy.
 fn main() {}

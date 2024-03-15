@@ -1,3 +1,14 @@
+use fuel_core_executor::{
+    executor::{
+        ExecutionBlockWithSource,
+        ExecutionOptions,
+    },
+    ports::{
+        MaybeCheckedTransaction,
+        RelayerPort,
+        TransactionsSource,
+    },
+};
 use fuel_core_storage::{
     column::Column,
     kv_store::{
@@ -14,23 +25,10 @@ use fuel_core_types::{
         Result as ExecutorResult,
     },
 };
-use fuel_core_wasm_executor::{
-    fuel_core_executor::{
-        executor::{
-            ExecutionBlockWithSource,
-            ExecutionOptions,
-        },
-        ports::{
-            MaybeCheckedTransaction,
-            RelayerPort,
-            TransactionsSource,
-        },
-    },
-    utils::{
-        pack_exists_size_result,
-        unpack_ptr_and_len,
-        ReturnType,
-    },
+use fuel_core_wasm_executor::utils::{
+    pack_exists_size_result,
+    unpack_ptr_and_len,
+    ReturnType,
 };
 use std::{
     collections::HashMap,
@@ -48,30 +46,42 @@ use wasmtime::{
 };
 
 trait CallerHelper {
-    fn write(&mut self, ptr: u32, encoded: &[u8]);
+    /// Writes the encoded data to the memory at the provided pointer.
+    fn write(&mut self, ptr: u32, encoded: &[u8]) -> anyhow::Result<()>;
 }
 
 impl<'a> CallerHelper for Caller<'a, ExecutionState> {
-    fn write(&mut self, ptr: u32, encoded: &[u8]) {
+    fn write(&mut self, ptr: u32, encoded: &[u8]) -> anyhow::Result<()> {
         let memory = self.data_mut().memory.expect("Memory is initialized; qed");
         let mut store = self.as_context_mut();
         memory
             .write(&mut store, ptr as usize, encoded)
-            .expect("Should write into the memory unless we've changed the implementation on the WASM side");
+            .map_err(|e| anyhow::anyhow!("Failed to write to the memory: {}", e))
     }
 }
 
+/// The state used by the host functions provided for the WASM executor.
 struct ExecutionState {
+    /// The memory used by the WASM module.
     memory: Option<Memory>,
     next_transaction: HashMap<u32, Vec<Vec<u8>>>,
     relayer_events: HashMap<DaBlockHeight, Value>,
 }
 
+/// The WASM instance has several stages of initialization.
+/// When the instance is fully initialized, it is possible to run it.
+///
+/// Each stage has a state. Advancing the stage may add a new state that
+/// will later be used by the next stages or a `run` function.
+///
+/// Currently, the order of the definition of the host functions doesn't matter,
+/// but later, the data from previous stages may be used to initialize new stages.
 pub struct Instance<Stage = ()> {
     store: Store<ExecutionState>,
     stage: Stage,
 }
 
+/// The stage indicates that the instance is fresh and newly created.
 pub struct Created {
     linker: Linker<ExecutionState>,
 }
@@ -94,85 +104,13 @@ impl Instance {
     }
 }
 
-pub struct InputData {
+/// This stage adds host functions to get transactions from the transaction source.
+pub struct Source {
     linker: Linker<ExecutionState>,
-    input_component_size: u32,
-    input_options_size: u32,
 }
 
 impl Instance<Created> {
-    pub fn add_input_data(
-        mut self,
-        block: ExecutionBlockWithSource<()>,
-        options: ExecutionOptions,
-    ) -> ExecutorResult<Instance<InputData>> {
-        let encoded_block = postcard::to_allocvec(&block).map_err(|e| {
-            ExecutorError::Other(format!(
-                "Failed encoding of the block for `input` function: {}",
-                e
-            ))
-        })?;
-        let encoded_block_size = encoded_block.len() as u32;
-
-        let input = Func::wrap(
-            &mut self.store,
-            move |mut caller: Caller<'_, ExecutionState>, out_ptr: u32, out_len: u32| {
-                assert_eq!(out_len, encoded_block_size);
-                caller.write(out_ptr, &encoded_block);
-            },
-        );
-        self.stage
-            .linker
-            .define(&self.store, "host_v0", "input_component", input)
-            .map_err(|e| {
-                ExecutorError::Other(format!(
-                    "Failed definition of the `input_component` function: {}",
-                    e
-                ))
-            })?;
-
-        let encoded_options = postcard::to_allocvec(&options).map_err(|e| {
-            ExecutorError::Other(format!(
-                "Failed encoding of the execution options for `input_options` function: {}",
-                e
-            ))
-        })?;
-        let encoded_encoded_options_size = encoded_options.len() as u32;
-
-        let input = Func::wrap(
-            &mut self.store,
-            move |mut caller: Caller<'_, ExecutionState>, out_ptr: u32, out_len: u32| {
-                assert_eq!(out_len, encoded_encoded_options_size);
-                caller.write(out_ptr, &encoded_options);
-            },
-        );
-        self.stage
-            .linker
-            .define(&self.store, "host_v0", "input_options", input)
-            .map_err(|e| {
-                ExecutorError::Other(format!(
-                    "Failed definition of the `input_options` function: {}",
-                    e
-                ))
-            })?;
-        Ok(Instance {
-            store: self.store,
-            stage: InputData {
-                linker: self.stage.linker,
-                input_component_size: encoded_block_size,
-                input_options_size: encoded_encoded_options_size,
-            },
-        })
-    }
-}
-
-pub struct Source {
-    linker: Linker<ExecutionState>,
-    input_component_size: u32,
-    input_options_size: u32,
-}
-
-impl Instance<InputData> {
+    /// Adds host functions for the `source`.
     pub fn add_source<TxSource>(
         mut self,
         source: Option<TxSource>,
@@ -183,9 +121,11 @@ impl Instance<InputData> {
         let source = source.map(|source| Arc::new(source));
         let peek_next_txs_size = Func::wrap(
             &mut self.store,
-            move |mut caller: Caller<'_, ExecutionState>, gas_limit: u64| -> u32 {
+            move |mut caller: Caller<'_, ExecutionState>,
+                  gas_limit: u64|
+                  -> anyhow::Result<u32> {
                 let Some(source) = source.clone() else {
-                    return 0;
+                    return Ok(0);
                 };
 
                 let txs: Vec<_> = source
@@ -201,8 +141,18 @@ impl Instance<InputData> {
                     })
                     .collect();
 
-                let encoded_txs = postcard::to_allocvec(&txs).expect("Should encode txs");
-                let encoded_size = encoded_txs.len() as u32;
+                let encoded_txs = postcard::to_allocvec(&txs).map_err(|e| {
+                    ExecutorError::Other(format!(
+                        "Failed encoding of the transactions for `peek_next_txs_size` function: {}",
+                        e
+                    ))
+                })?;
+                let encoded_size = u32::try_from(encoded_txs.len()).map_err(|e| {
+                    ExecutorError::Other(format!(
+                        "The encoded transactions are more than `u32::MAX`. We support only wasm32: {}",
+                        e
+                    ))
+                })?;
 
                 caller
                     .data_mut()
@@ -210,7 +160,7 @@ impl Instance<InputData> {
                     .entry(encoded_size)
                     .or_default()
                     .push(encoded_txs);
-                encoded_size
+                Ok(encoded_size)
             },
         );
         self.stage
@@ -232,7 +182,8 @@ impl Instance<InputData> {
             &mut self.store,
             move |mut caller: Caller<'_, ExecutionState>,
                   output_ptr: u32,
-                  output_size: u32| {
+                  output_size: u32|
+                  -> anyhow::Result<()> {
                 let encoded = caller
                     .data_mut()
                     .next_transaction
@@ -240,7 +191,7 @@ impl Instance<InputData> {
                     .and_then(|vector| vector.pop())
                     .unwrap_or_default();
 
-                caller.write(output_ptr, &encoded);
+                caller.write(output_ptr, &encoded)
             },
         );
         self.stage
@@ -257,20 +208,18 @@ impl Instance<InputData> {
             store: self.store,
             stage: Source {
                 linker: self.stage.linker,
-                input_component_size: self.stage.input_component_size,
-                input_options_size: self.stage.input_options_size,
             },
         })
     }
 }
 
+/// This stage adds host functions for the storage.
 pub struct Storage {
     linker: Linker<ExecutionState>,
-    input_component_size: u32,
-    input_options_size: u32,
 }
 
 impl Instance<Source> {
+    /// Adds getters to the `storage`.
     pub fn add_storage<S>(mut self, storage: S) -> ExecutorResult<Instance<Storage>>
     where
         S: KeyValueInspect<Column = Column> + Send + Sync + 'static,
@@ -284,22 +233,24 @@ impl Instance<Source> {
                   key_ptr: u32,
                   key_len: u32,
                   column: u32|
-                  -> u64 {
-                // TODO: Add support for new columns during upgrades.
+                  -> anyhow::Result<u64> {
                 let column = fuel_core_storage::column::Column::try_from(column)
-                    .expect("Unknown column");
+                    .map_err(|e| anyhow::anyhow!("Unknown column: {}", e))?;
 
                 let (ptr, len) = (key_ptr as usize, key_len as usize);
-                let memory = caller.data().memory.expect("Memory was initialized above");
-                let key = &memory.data(&caller)[ptr..ptr + len];
+                let memory = caller
+                    .data()
+                    .memory
+                    .expect("Memory was initialized above; qed");
+
+                let key = &memory.data(&caller)[ptr..ptr.saturating_add(len)];
                 if let Ok(value) = storage.size_of_value(key, column) {
-                    pack_exists_size_result(
-                        value.is_some(),
-                        value.unwrap_or_default() as u32,
-                        0,
-                    )
+                    let size = u32::try_from(value.unwrap_or_default()).map_err(|e|
+                        anyhow::anyhow!("The size of the value is more than `u32::MAX`. We support only wasm32: {}", e))?;
+
+                    Ok(pack_exists_size_result(value.is_some(), size, 0))
                 } else {
-                    pack_exists_size_result(false, 0, 0)
+                    Ok(pack_exists_size_result(false, 0, 0))
                 }
             },
         );
@@ -327,22 +278,30 @@ impl Instance<Source> {
                   column: u32,
                   out_ptr: u32,
                   out_len: u32|
-                  -> u32 {
-                // TODO: Add support for new columns during upgrades.
+                  -> anyhow::Result<u32> {
                 let column = fuel_core_storage::column::Column::try_from(column)
-                    .expect("Unknown column");
+                    .map_err(|e| anyhow::anyhow!("Unknown column: {}", e))?;
                 let (ptr, len) = (key_ptr as usize, key_len as usize);
-                let memory = caller.data().memory.expect("Memory was initialized above");
-                let key = &memory.data(&caller)[ptr..ptr + len];
+                let memory = caller
+                    .data()
+                    .memory
+                    .expect("Memory was initialized above; qed");
+
+                let key = &memory.data(&caller)[ptr..ptr.saturating_add(len)];
                 if let Ok(value) = storage.get(key, column) {
-                    let value = value.expect(
-                        "The WASM calls `get` only after `storage_size_of_value` return `Some`",
-                    );
-                    assert_eq!(value.len(), out_len as usize);
-                    caller.write(out_ptr, value.as_slice());
-                    0
+                    let value = value.ok_or(anyhow::anyhow!("\
+                        The WASM executor should call `get` only after `storage_size_of_value`."))?;
+
+                    if value.len() != out_len as usize {
+                        return Err(anyhow::anyhow!(
+                            "The provided buffer size is not equal to the value size."
+                        ));
+                    }
+
+                    caller.write(out_ptr, value.as_slice())?;
+                    Ok(0)
                 } else {
-                    1
+                    Ok(1)
                 }
             },
         );
@@ -360,20 +319,18 @@ impl Instance<Source> {
             store: self.store,
             stage: Storage {
                 linker: self.stage.linker,
-                input_component_size: self.stage.input_component_size,
-                input_options_size: self.stage.input_options_size,
             },
         })
     }
 }
 
+/// This stage adds host functions for the relayer.
 pub struct Relayer {
     linker: Linker<ExecutionState>,
-    input_component_size: u32,
-    input_options_size: u32,
 }
 
 impl Instance<Storage> {
+    /// Adds host functions for the `relayer`.
     pub fn add_relayer<R>(mut self, relayer: R) -> ExecutorResult<Instance<Relayer>>
     where
         R: RelayerPort + Send + Sync + 'static,
@@ -398,27 +355,32 @@ impl Instance<Storage> {
         let relayer = arc_relayer.clone();
         let relayer_size_of_events = Func::wrap(
             &mut self.store,
-            move |mut caller: Caller<'_, ExecutionState>, da_block_height: u64| -> u64 {
+            move |mut caller: Caller<'_, ExecutionState>,
+                  da_block_height: u64|
+                  -> anyhow::Result<u64> {
                 let da_block_height: DaBlockHeight = da_block_height.into();
 
-                if let Some(encoded_event) =
+                if let Some(encoded_events) =
                     caller.data().relayer_events.get(&da_block_height)
                 {
-                    pack_exists_size_result(true, encoded_event.len() as u32, 0)
+                    let encoded_size = u32::try_from(encoded_events.len()).map_err(|e|
+                        anyhow::anyhow!("The size of encoded events is more than `u32::MAX`. We support only wasm32: {}", e))?;
+                    Ok(pack_exists_size_result(true, encoded_size, 0))
                 } else {
                     let events = relayer.get_events(&da_block_height);
 
                     if let Ok(events) = events {
-                        let encoded_events =
-                            postcard::to_allocvec(&events).expect("Should encode events");
-                        let encoded_size = encoded_events.len() as u32;
+                        let encoded_events = postcard::to_allocvec(&events)
+                            .map_err(|e| anyhow::anyhow!(e))?;
+                        let encoded_size = u32::try_from(encoded_events.len()).map_err(|e|
+                           anyhow::anyhow!("The size of encoded events is more than `u32::MAX`. We support only wasm32: {}", e))?;
                         caller
                             .data_mut()
                             .relayer_events
                             .insert(da_block_height, encoded_events.into());
-                        pack_exists_size_result(true, encoded_size, 0)
+                        Ok(pack_exists_size_result(true, encoded_size, 0))
                     } else {
-                        pack_exists_size_result(false, 0, 1)
+                        Ok(pack_exists_size_result(false, 0, 1))
                     }
                 }
             },
@@ -442,14 +404,16 @@ impl Instance<Storage> {
             &mut self.store,
             move |mut caller: Caller<'_, ExecutionState>,
                   da_block_height: u64,
-                  out_ptr: u32| {
+                  out_ptr: u32|
+                  -> anyhow::Result<()> {
                 let da_block_height: DaBlockHeight = da_block_height.into();
                 let encoded_events = caller
                     .data()
                     .relayer_events
                     .get(&da_block_height)
-                    .expect("The `relayer_size_of_events` should be called before `relayer_get_events`").clone();
-                caller.write(out_ptr, encoded_events.as_ref());
+                    .ok_or(anyhow::anyhow!("The `relayer_size_of_events` should be called before `relayer_get_events`"))?.clone();
+                caller.write(out_ptr, encoded_events.as_ref())?;
+                Ok(())
             },
         );
         self.stage
@@ -471,14 +435,109 @@ impl Instance<Storage> {
             store: self.store,
             stage: Relayer {
                 linker: self.stage.linker,
-                input_component_size: self.stage.input_component_size,
-                input_options_size: self.stage.input_options_size,
             },
         })
     }
 }
 
+/// This stage adds host functions - getter for the input data like `Block` and `ExecutionOptions`.
+pub struct InputData {
+    linker: Linker<ExecutionState>,
+    input_component_size: u32,
+    input_options_size: u32,
+}
+
 impl Instance<Relayer> {
+    /// Adds getters for the `block` and `options`.
+    pub fn add_input_data(
+        mut self,
+        block: ExecutionBlockWithSource<()>,
+        options: ExecutionOptions,
+    ) -> ExecutorResult<Instance<InputData>> {
+        let encoded_block = postcard::to_allocvec(&block).map_err(|e| {
+            ExecutorError::Other(format!(
+                "Failed encoding of the block for `input` function: {}",
+                e
+            ))
+        })?;
+        let encoded_block_size = u32::try_from(encoded_block.len()).map_err(|e| {
+            ExecutorError::Other(format!(
+                "The encoded block is more than `u32::MAX`. We support only wasm32: {}",
+                e
+            ))
+        })?;
+
+        let input = Func::wrap(
+            &mut self.store,
+            move |mut caller: Caller<'_, ExecutionState>,
+                  out_ptr: u32,
+                  out_len: u32|
+                  -> anyhow::Result<()> {
+                if out_len != encoded_block_size {
+                    return Err(anyhow::anyhow!("The provided buffer size is not equal to the encoded block size."));
+                }
+
+                caller.write(out_ptr, &encoded_block)
+            },
+        );
+        self.stage
+            .linker
+            .define(&self.store, "host_v0", "input_component", input)
+            .map_err(|e| {
+                ExecutorError::Other(format!(
+                    "Failed definition of the `input_component` function: {}",
+                    e
+                ))
+            })?;
+
+        let encoded_options = postcard::to_allocvec(&options).map_err(|e| {
+            ExecutorError::Other(format!(
+                "Failed encoding of the execution options for `input_options` function: {}",
+                e
+            ))
+        })?;
+        let encoded_options_size = u32::try_from(encoded_options.len()).map_err(|e| {
+            ExecutorError::Other(format!(
+                "The encoded option is more than `u32::MAX`. We support only wasm32: {}",
+                e
+            ))
+        })?;
+
+        let input = Func::wrap(
+            &mut self.store,
+            move |mut caller: Caller<'_, ExecutionState>,
+                  out_ptr: u32,
+                  out_len: u32|
+                  -> anyhow::Result<()> {
+                if out_len != encoded_options_size {
+                    return Err(anyhow::anyhow!("The provided buffer size is not equal to the encoded options size."));
+                }
+
+                caller.write(out_ptr, &encoded_options)
+            },
+        );
+        self.stage
+            .linker
+            .define(&self.store, "host_v0", "input_options", input)
+            .map_err(|e| {
+                ExecutorError::Other(format!(
+                    "Failed definition of the `input_options` function: {}",
+                    e
+                ))
+            })?;
+        Ok(Instance {
+            store: self.store,
+            stage: InputData {
+                linker: self.stage.linker,
+                input_component_size: encoded_block_size,
+                input_options_size: encoded_options_size,
+            },
+        })
+    }
+}
+
+impl Instance<InputData> {
+    /// Runs the WASM instance from the compiled `Module`.
     pub fn run(self, module: &Module) -> ReturnType {
         self.internal_run(module).map_err(|e| {
             ExecutorError::Other(format!("Error with WASM initialization: {}", e))
@@ -525,8 +584,8 @@ impl Instance<Relayer> {
             .store
             .data()
             .memory
-            .expect("Memory was initialized above");
-        let slice = &memory.data(&self.store)[ptr..ptr + len];
+            .expect("Memory was initialized above; qed");
+        let slice = &memory.data(&self.store)[ptr..ptr.saturating_add(len)];
 
         postcard::from_bytes(slice).map_err(|e| anyhow::anyhow!(e))
     }

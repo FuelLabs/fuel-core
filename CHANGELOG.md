@@ -10,6 +10,7 @@ Description of the upcoming release here.
 
 ### Added
 
+- [#1716](https://github.com/FuelLabs/fuel-core/pull/1716): Added support of WASM state transition along with upgradable execution that works with native(std) and WASM(non-std) executors. The `fuel-core` now requires a `wasm32-unknown-unknown` target to build.
 - [#1747](https://github.com/FuelLabs/fuel-core/pull/1747): The DA block height is now included in the genesis state.
 - [#1740](https://github.com/FuelLabs/fuel-core/pull/1740): Remove optional fields from genesis configs
 - [#1737](https://github.com/FuelLabs/fuel-core/pull/1737): Remove temporary tables for calculating roots during genesis.

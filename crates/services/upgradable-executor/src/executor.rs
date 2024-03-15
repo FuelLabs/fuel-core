@@ -39,6 +39,10 @@ use fuel_core_types::{
 };
 use std::sync::Arc;
 
+/// The upgradable executor supports the WASM version of the state transition function.
+/// If the block allows it, the executor uses a native state transition function.
+/// If not, the WASM version of the state transition function will be used
+/// (if the database has a corresponding bytecode).
 pub struct Executor<S, R> {
     pub storage_view_provider: S,
     pub relayer_view_provider: R,
@@ -95,6 +99,7 @@ where
     R::View: RelayerPort + Send + Sync + 'static,
 {
     #[cfg(any(test, feature = "test-helpers"))]
+    /// Executes the block and returns the result of the execution with storage changes.
     pub fn execute_without_commit(
         &self,
         block: fuel_core_types::services::executor::ExecutionBlock,
@@ -103,6 +108,8 @@ where
     }
 
     #[cfg(any(test, feature = "test-helpers"))]
+    /// The analog of the [`Self::execute_without_commit`] method,
+    /// but with the ability to specify the coinbase recipient and the gas price.
     pub fn execute_without_commit_with_coinbase(
         &self,
         block: fuel_core_types::services::executor::ExecutionBlock,
@@ -135,6 +142,7 @@ where
     R: AtomicView<Height = DaBlockHeight>,
     R::View: RelayerPort + Send + Sync + 'static,
 {
+    /// Executes the block and returns the result of the execution without committing the changes.
     pub fn execute_without_commit_with_source<TxSource>(
         &self,
         block: ExecutionBlockWithSource<TxSource>,
@@ -146,6 +154,8 @@ where
         self.execute_inner(block, options)
     }
 
+    /// Executes the block and returns the result of the execution without committing
+    /// the changes in the dry run mode.
     pub fn dry_run(
         &self,
         component: Components<Vec<Transaction>>,
@@ -236,10 +246,10 @@ where
         let relayer = self.relayer_view_provider.latest_view();
 
         let instance = crate::instance::Instance::new(&self.engine)
-            .add_input_data(block, options)?
             .add_source(source)?
             .add_storage(storage)?
-            .add_relayer(relayer)?;
+            .add_relayer(relayer)?
+            .add_input_data(block, options)?;
 
         instance.run(&self.module)
     }

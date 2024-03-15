@@ -136,6 +136,7 @@ mod host {
 #[repr(transparent)]
 pub struct ReturnResult(u16);
 
+/// Gets the `InputType` by using the host function. The `size` is the size of the encoded input.
 pub fn input_component(size: usize) -> anyhow::Result<InputType> {
     let mut encoded_block = vec![0u8; size];
     let size = encoded_block.len();
@@ -152,6 +153,7 @@ pub fn input_component(size: usize) -> anyhow::Result<InputType> {
     Ok(input)
 }
 
+/// Gets the `ExecutionOptions` by using the host function. The `size` is the size of the encoded input.
 pub fn input_options(size: usize) -> anyhow::Result<ExecutionOptions> {
     let mut encoded_block = vec![0u8; size];
     let size = encoded_block.len();
@@ -169,6 +171,7 @@ pub fn input_options(size: usize) -> anyhow::Result<ExecutionOptions> {
     Ok(input)
 }
 
+/// Gets the next transactions by using the host function.
 pub fn next_transactions(gas_limit: u64) -> anyhow::Result<Vec<MaybeCheckedTransaction>> {
     let next_size = unsafe { host::peek_next_txs_size(gas_limit) };
 
@@ -195,6 +198,7 @@ pub fn next_transactions(gas_limit: u64) -> anyhow::Result<Vec<MaybeCheckedTrans
         .collect())
 }
 
+/// Gets the size of the value under the `key` in the `column` from the storage.
 pub fn size_of_value(key: &[u8], column: u32) -> anyhow::Result<Option<usize>> {
     let val = unsafe {
         host::storage_size_of_value(
@@ -219,6 +223,7 @@ pub fn size_of_value(key: &[u8], column: u32) -> anyhow::Result<Option<usize>> {
     }
 }
 
+/// Gets the value under the `key` in the `column` from the storage and copies it to the `out`.
 pub fn get(key: &[u8], column: u32, out: &mut [u8]) -> anyhow::Result<()> {
     let output_size = out.len();
     let result = unsafe {
@@ -240,10 +245,12 @@ pub fn get(key: &[u8], column: u32, out: &mut [u8]) -> anyhow::Result<()> {
     Ok(())
 }
 
+/// Returns `true` if the relayer is enabled. Uses a host function.
 pub fn relayer_enabled() -> bool {
     unsafe { host::relayer_enabled() }
 }
 
+/// Gets the events at the `da_block_height` from the relayer by using host functions.
 pub fn relayer_get_events(da_block_height: DaBlockHeight) -> anyhow::Result<Vec<Event>> {
     let size = unsafe { host::relayer_size_of_events(da_block_height.into()) };
     let (exists, size, result) = unpack_exists_size_result(size);

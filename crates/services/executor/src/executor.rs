@@ -191,14 +191,9 @@ pub struct ExecutionOptions {
     pub backtrace: bool,
     // TODO: It is a temporary workaround to pass the `consensus_params`
     //  into the WASM executor. Later WASM will fetch it from the storage directly.
+    //  https://github.com/FuelLabs/fuel-core/issues/1753
     /// The configuration allows overriding the default consensus parameters.
     pub consensus_params: Option<ConsensusParameters>,
-}
-
-/// The default consensus parameters used by the executor.
-// TODO: Move this function to a separate crate.
-pub fn default_consensus_parameters() -> ConsensusParameters {
-    ConsensusParameters::default()
 }
 
 /// The executor instance performs block production and validation. Given a block, it will execute all
@@ -247,16 +242,17 @@ pub mod block_component {
     impl<'a> PartialBlockComponent<'a, OnceTransactionsSource> {
         pub fn from_partial_block(block: &'a mut PartialFuelBlock) -> Self {
             let transaction = core::mem::take(&mut block.transactions);
-            let gas_price = if let Some(Transaction::Mint(mint)) = transaction.last() {
-                *mint.gas_price()
-            } else {
-                0
-            };
+            let (gas_price, coinbase_contract_id) =
+                if let Some(Transaction::Mint(mint)) = transaction.last() {
+                    (*mint.gas_price(), mint.input_contract().contract_id)
+                } else {
+                    (0, Default::default())
+                };
 
             Self {
                 empty_block: block,
                 transactions_source: OnceTransactionsSource::new(transaction),
-                coinbase_contract_id: Default::default(),
+                coinbase_contract_id,
                 gas_price,
                 gas_limit: u64::MAX,
                 _marker: Default::default(),
