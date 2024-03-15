@@ -2,6 +2,7 @@ use super::*;
 use crate::{
     mock_db::MockDBProvider,
     ports::BlockImporter,
+    txpool::MockTxPoolGasPrice,
     MockDb,
 };
 use fuel_core_services::{
@@ -32,7 +33,7 @@ use std::cell::RefCell;
 type GossipedTransaction = GossipData<Transaction>;
 
 pub struct TestContext {
-    pub(crate) service: Service<MockP2P, MockDBProvider>,
+    pub(crate) service: Service<MockP2P, MockDBProvider, MockTxPoolGasPrice>,
     mock_db: MockDb,
     rng: RefCell<StdRng>,
 }
@@ -42,7 +43,7 @@ impl TestContext {
         TestContextBuilder::new().build_and_start().await
     }
 
-    pub fn service(&self) -> &Service<MockP2P, MockDBProvider> {
+    pub fn service(&self) -> &Service<MockP2P, MockDBProvider, MockTxPoolGasPrice> {
         &self.service
     }
 
@@ -188,6 +189,7 @@ impl TestContextBuilder {
 
     pub fn build(self) -> TestContext {
         let rng = RefCell::new(self.rng);
+        let gas_price = 0;
         let config = self.config.unwrap_or_default();
         let mock_db = self.mock_db;
 
@@ -202,6 +204,7 @@ impl TestContextBuilder {
         let importer = self
             .importer
             .unwrap_or_else(|| MockImporter::with_blocks(vec![]));
+        let gas_price_provider = MockTxPoolGasPrice::new(gas_price);
 
         let service = new_service(
             config,
@@ -209,6 +212,7 @@ impl TestContextBuilder {
             importer,
             p2p,
             Default::default(),
+            gas_price_provider,
         );
 
         TestContext {

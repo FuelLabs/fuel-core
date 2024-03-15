@@ -152,7 +152,7 @@ pub fn init_sub_services(
         executor: Arc::new(executor),
         relayer: Box::new(relayer_adapter.clone()),
         lock: Mutex::new(()),
-        gas_price_provider,
+        gas_price_provider: gas_price_provider.clone(),
     };
     let producer_adapter = BlockProducerAdapter::new(block_producer);
 
@@ -208,7 +208,6 @@ pub fn init_sub_services(
         utxo_validation: config.utxo_validation,
         debug: config.debug,
         vm_backtrace: config.vm.backtrace,
-        min_gas_price: config.static_gas_price,
         max_tx: config.txpool.max_tx,
         max_depth: config.txpool.max_depth,
         chain_name: config.chain_config.chain_name.clone(),
@@ -225,6 +224,7 @@ pub fn init_sub_services(
         Box::new(producer_adapter),
         Box::new(poa_adapter.clone()),
         Box::new(p2p_adapter),
+        Box::new(gas_price_provider),
         config.query_log_threshold_time,
         config.api_request_timeout,
     )?;

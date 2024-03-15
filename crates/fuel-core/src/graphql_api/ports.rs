@@ -197,6 +197,12 @@ pub trait P2pPort: Send + Sync {
     async fn all_peer_info(&self) -> anyhow::Result<Vec<PeerInfo>>;
 }
 
+#[async_trait::async_trait]
+pub trait GraphQLGasPrice: Send + Sync {
+    async fn known_gas_price(&self, height: BlockHeight) -> Option<u64>;
+    async fn worst_case_gas_price(&self, height: BlockHeight) -> u64;
+}
+
 pub mod worker {
     use super::super::storage::blocks::FuelBlockIdsToHeights;
     use crate::fuel_core_graphql_api::storage::{

@@ -212,6 +212,7 @@ impl TestSetupBuilder {
             chain_config: chain_conf,
             state_reader: StateReader::in_memory(state),
             block_production: self.trigger,
+            static_gas_price: self.min_gas_price,
             ..Config::local_node()
         };
 

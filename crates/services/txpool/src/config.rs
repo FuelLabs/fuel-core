@@ -62,8 +62,6 @@ pub struct Config {
     pub max_tx: usize,
     /// max depth of connected UTXO excluding contracts
     pub max_depth: usize,
-    /// The minimum allowed gas price
-    // pub min_gas_price: u64,
     /// Flag to disable utxo existence and signature checks
     pub utxo_validation: bool,
     /// chain config

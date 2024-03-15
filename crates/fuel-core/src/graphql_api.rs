@@ -23,7 +23,6 @@ pub struct Config {
     pub utxo_validation: bool,
     pub debug: bool,
     pub vm_backtrace: bool,
-    pub min_gas_price: u64,
     pub max_tx: usize,
     pub max_depth: usize,
     pub chain_name: String,

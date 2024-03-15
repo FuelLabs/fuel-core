@@ -28,20 +28,24 @@ pub trait ProducerGasPrice {
     fn gas_price(&self, params: GasPriceParams) -> Option<u64>;
 }
 
-pub struct MockGasPrice {
+pub struct MockProducerGasPrice {
     pub gas_price: Option<u64>,
 }
 
-impl MockGasPrice {
+impl MockProducerGasPrice {
     pub fn new(gas_price: u64) -> Self {
         Self {
             gas_price: Some(gas_price),
         }
     }
+
+    pub fn new_none() -> Self {
+        Self { gas_price: None }
+    }
 }
 
-impl ProducerGasPrice for MockGasPrice {
+impl ProducerGasPrice for MockProducerGasPrice {
     fn gas_price(&self, _params: GasPriceParams) -> Option<u64> {
-        self.gas_price.clone()
+        self.gas_price
     }
 }

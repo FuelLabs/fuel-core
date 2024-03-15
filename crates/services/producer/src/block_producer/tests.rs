@@ -2,8 +2,8 @@
 use crate::{
     block_producer::{
         gas_price::{
+            MockProducerGasPrice,
             ProducerGasPrice,
-            StaticGasPrice,
         },
         Error,
     },
@@ -247,6 +247,7 @@ struct TestContext<Executor> {
     relayer: MockRelayer,
     executor: Arc<Executor>,
     txpool: MockTxPool,
+    gas_price: u64,
 }
 
 impl TestContext<MockExecutor> {
@@ -280,18 +281,22 @@ impl<Executor> TestContext<Executor> {
         let txpool = MockTxPool::default();
         let relayer = MockRelayer::default();
         let config = Config::default();
+        let gas_price = 0;
         Self {
             config,
             db,
             relayer,
             executor: Arc::new(executor),
             txpool,
+            gas_price,
         }
     }
 
-    pub fn producer(self) -> Producer<MockDb, MockTxPool, Executor, StaticGasPrice> {
-        let gas_price = self.config.gas_price;
-        let static_gas_price = StaticGasPrice::new(gas_price);
+    pub fn producer(
+        self,
+    ) -> Producer<MockDb, MockTxPool, Executor, MockProducerGasPrice> {
+        let gas_price = self.gas_price;
+        let static_gas_price = MockProducerGasPrice::new(gas_price);
         self.producer_with_gas_price_provider(static_gas_price)
     }
 

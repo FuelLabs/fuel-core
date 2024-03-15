@@ -4,11 +4,14 @@ use crate::{
         TextContext,
         TEST_COIN_AMOUNT,
     },
-    txpool::test_helpers::{
-        create_coin_output,
-        create_contract_input,
-        create_contract_output,
-        create_message_predicate_from_message,
+    txpool::{
+        test_helpers::{
+            create_coin_output,
+            create_contract_input,
+            create_contract_output,
+            create_message_predicate_from_message,
+        },
+        MockTxPoolGasPrice,
     },
     Config,
     Error,
@@ -38,6 +41,7 @@ use fuel_core_types::{
     },
 };
 
+use crate::types::GasPrice;
 use fuel_core_types::fuel_tx::Finalizable;
 use std::{
     cmp::Reverse,
@@ -49,8 +53,13 @@ use super::check_single_tx;
 
 const GAS_LIMIT: Word = 1000;
 
-async fn check_unwrap_tx(tx: Transaction, config: &Config) -> Checked<Transaction> {
-    check_single_tx(tx, Default::default(), config)
+async fn check_unwrap_tx(
+    tx: Transaction,
+    config: &Config,
+    gas_price: GasPrice,
+) -> Checked<Transaction> {
+    let gas_price_provider = MockTxPoolGasPrice::new(gas_price);
+    check_single_tx(tx, Default::default(), config, &gas_price_provider)
         .await
         .expect("Transaction should be checked")
 }
@@ -58,13 +67,16 @@ async fn check_unwrap_tx(tx: Transaction, config: &Config) -> Checked<Transactio
 async fn check_tx(
     tx: Transaction,
     config: &Config,
+    gas_price: Word,
 ) -> Result<Checked<Transaction>, Error> {
-    check_single_tx(tx, Default::default(), config).await
+    let gas_price_provider = MockTxPoolGasPrice::new(gas_price);
+    check_single_tx(tx, Default::default(), config, &gas_price_provider).await
 }
 
 #[tokio::test]
 async fn insert_simple_tx_succeeds() {
     let mut context = TextContext::default();
+    let gas_price = 0;
 
     let (_, gas_coin) = context.setup_coin();
     let tx = TransactionBuilder::script(vec![], vec![])
@@ -73,7 +85,7 @@ async fn insert_simple_tx_succeeds() {
         .finalize_as_transaction();
 
     let mut txpool = context.build();
-    let tx = check_unwrap_tx(tx, &txpool.config).await;
+    let tx = check_unwrap_tx(tx, &txpool.config, gas_price).await;
 
     txpool
         .insert_single(tx)
@@ -83,6 +95,7 @@ async fn insert_simple_tx_succeeds() {
 #[tokio::test]
 async fn insert_simple_tx_with_blacklisted_utxo_id_fails() {
     let mut context = TextContext::default();
+    let gas_price = 0;
 
     let (_, gas_coin) = context.setup_coin();
     let tx = TransactionBuilder::script(vec![], vec![])
@@ -90,7 +103,7 @@ async fn insert_simple_tx_with_blacklisted_utxo_id_fails() {
         .add_input(gas_coin.clone())
         .finalize_as_transaction();
     let mut txpool = context.build();
-    let tx = check_unwrap_tx(tx, &txpool.config).await;
+    let tx = check_unwrap_tx(tx, &txpool.config, gas_price).await;
     let utxo_id = *gas_coin.utxo_id().unwrap();
 
     // Given
@@ -110,6 +123,7 @@ async fn insert_simple_tx_with_blacklisted_utxo_id_fails() {
 #[tokio::test]
 async fn insert_simple_tx_with_blacklisted_owner_fails() {
     let mut context = TextContext::default();
+    let gas_price = 0;
 
     let (_, gas_coin) = context.setup_coin();
     let tx = TransactionBuilder::script(vec![], vec![])
@@ -117,7 +131,7 @@ async fn insert_simple_tx_with_blacklisted_owner_fails() {
         .add_input(gas_coin.clone())
         .finalize_as_transaction();
     let mut txpool = context.build();
-    let tx = check_unwrap_tx(tx, &txpool.config).await;
+    let tx = check_unwrap_tx(tx, &txpool.config, gas_price).await;
     let owner = *gas_coin.input_owner().unwrap();
 
     // Given
@@ -138,6 +152,7 @@ async fn insert_simple_tx_with_blacklisted_owner_fails() {
 async fn insert_simple_tx_with_blacklisted_contract_fails() {
     let mut context = TextContext::default();
     let contract_id = Contract::EMPTY_CONTRACT_ID;
+    let gas_price = 0;
 
     let (_, gas_coin) = context.setup_coin();
     let tx = TransactionBuilder::script(vec![], vec![])
@@ -151,7 +166,7 @@ async fn insert_simple_tx_with_blacklisted_contract_fails() {
         .add_output(Output::contract(1, Default::default(), Default::default()))
         .finalize_as_transaction();
     let mut txpool = context.build();
-    let tx = check_unwrap_tx(tx, &txpool.config).await;
+    let tx = check_unwrap_tx(tx, &txpool.config, gas_price).await;
 
     // Given
     txpool.config_mut().blacklist.contracts.insert(contract_id);
@@ -170,6 +185,7 @@ async fn insert_simple_tx_with_blacklisted_contract_fails() {
 #[tokio::test]
 async fn insert_simple_tx_with_blacklisted_message_fails() {
     let (message, input) = create_message_predicate_from_message(5000, 0);
+    let gas_price = 0;
 
     let tx = TransactionBuilder::script(vec![], vec![])
         .script_gas_limit(GAS_LIMIT)
@@ -181,7 +197,7 @@ async fn insert_simple_tx_with_blacklisted_message_fails() {
     context.database_mut().insert_message(message);
     let mut txpool = context.build();
 
-    let tx = check_unwrap_tx(tx, &txpool.config).await;
+    let tx = check_unwrap_tx(tx, &txpool.config, gas_price).await;
 
     // Given
     txpool.config_mut().blacklist.messages.insert(nonce);
@@ -200,6 +216,7 @@ async fn insert_simple_tx_with_blacklisted_message_fails() {
 #[tokio::test]
 async fn insert_simple_tx_dependency_chain_succeeds() {
     let mut context = TextContext::default();
+    let gas_price = 0;
 
     let (_, gas_coin) = context.setup_coin();
     let (output, unset_input) = context.create_output_and_input(1);
@@ -222,8 +239,8 @@ async fn insert_simple_tx_dependency_chain_succeeds() {
         .finalize_as_transaction();
 
     let mut txpool = context.build();
-    let tx1 = check_unwrap_tx(tx1, &txpool.config).await;
-    let tx2 = check_unwrap_tx(tx2, &txpool.config).await;
+    let tx1 = check_unwrap_tx(tx1, &txpool.config, gas_price).await;
+    let tx2 = check_unwrap_tx(tx2, &txpool.config, gas_price).await;
 
     txpool
         .insert_single(tx1)
@@ -236,6 +253,7 @@ async fn insert_simple_tx_dependency_chain_succeeds() {
 #[tokio::test]
 async fn faulty_t2_collided_on_contract_id_from_tx1() {
     let mut context = TextContext::default();
+    let gas_price = 0;
 
     let contract_id = Contract::EMPTY_CONTRACT_ID;
 
@@ -273,10 +291,10 @@ async fn faulty_t2_collided_on_contract_id_from_tx1() {
     .finalize_as_transaction();
 
     let mut txpool = context.build();
-    let tx = check_unwrap_tx(tx, &txpool.config).await;
+    let tx = check_unwrap_tx(tx, &txpool.config, gas_price).await;
     txpool.insert_single(tx).expect("Tx1 should be Ok, got Err");
 
-    let tx_faulty = check_unwrap_tx(tx_faulty, &txpool.config).await;
+    let tx_faulty = check_unwrap_tx(tx_faulty, &txpool.config, gas_price).await;
 
     let err = txpool
         .insert_single(tx_faulty)
@@ -290,6 +308,7 @@ async fn faulty_t2_collided_on_contract_id_from_tx1() {
 #[tokio::test]
 async fn fail_to_insert_tx_with_dependency_on_invalid_utxo_type() {
     let mut context = TextContext::default();
+    let gas_price = 0;
 
     let contract_id = Contract::EMPTY_CONTRACT_ID;
     let (_, gas_coin) = context.setup_coin();
@@ -318,13 +337,13 @@ async fn fail_to_insert_tx_with_dependency_on_invalid_utxo_type() {
 
     let mut txpool = context.build();
     let tx_faulty_id = tx_faulty.id(&ChainId::default());
-    let tx_faulty = check_unwrap_tx(tx_faulty, &txpool.config).await;
+    let tx_faulty = check_unwrap_tx(tx_faulty, &txpool.config, gas_price).await;
 
     txpool
         .insert_single(tx_faulty.clone())
         .expect("Tx1 should be Ok, got Err");
 
-    let tx = check_unwrap_tx(tx, &txpool.config).await;
+    let tx = check_unwrap_tx(tx, &txpool.config, gas_price).await;
 
     let err = txpool
         .insert_single(tx)
@@ -341,6 +360,7 @@ async fn not_inserted_known_tx() {
         utxo_validation: false,
         ..Default::default()
     };
+    let gas_price = 0;
     let context = TextContext::default().config(config);
     let mut txpool = context.build();
 
@@ -348,7 +368,7 @@ async fn not_inserted_known_tx() {
         .add_random_fee_input()
         .finalize()
         .into();
-    let tx = check_unwrap_tx(tx, &txpool.config).await;
+    let tx = check_unwrap_tx(tx, &txpool.config, gas_price).await;
 
     txpool
         .insert_single(tx.clone())
@@ -363,6 +383,7 @@ async fn not_inserted_known_tx() {
 #[tokio::test]
 async fn try_to_insert_tx2_missing_utxo() {
     let mut context = TextContext::default();
+    let gas_price = 0;
 
     let input = context.random_predicate(AssetId::BASE, TEST_COIN_AMOUNT, None);
     let tx = TransactionBuilder::script(vec![], vec![])
@@ -373,7 +394,7 @@ async fn try_to_insert_tx2_missing_utxo() {
         .finalize_as_transaction();
 
     let mut txpool = context.build();
-    let tx = check_unwrap_tx(tx, &txpool.config).await;
+    let tx = check_unwrap_tx(tx, &txpool.config, gas_price).await;
 
     let err = txpool
         .insert_single(tx)
@@ -387,6 +408,7 @@ async fn try_to_insert_tx2_missing_utxo() {
 #[tokio::test]
 async fn higher_priced_tx_removes_lower_priced_tx() {
     let mut context = TextContext::default();
+    let gas_price = 0;
 
     let (_, coin_input) = context.setup_coin();
 
@@ -406,13 +428,13 @@ async fn higher_priced_tx_removes_lower_priced_tx() {
 
     let tx1_id = tx1.id(&ChainId::default());
     let mut txpool = context.build();
-    let tx1 = check_unwrap_tx(tx1, &txpool.config).await;
+    let tx1 = check_unwrap_tx(tx1, &txpool.config, gas_price).await;
 
     txpool
         .insert_single(tx1.clone())
         .expect("Tx1 should be Ok, got Err");
 
-    let tx2 = check_unwrap_tx(tx2, &txpool.config).await;
+    let tx2 = check_unwrap_tx(tx2, &txpool.config, gas_price).await;
 
     let vec = txpool
         .insert_single(tx2)
@@ -423,6 +445,7 @@ async fn higher_priced_tx_removes_lower_priced_tx() {
 #[tokio::test]
 async fn underpriced_tx1_not_included_coin_collision() {
     let mut context = TextContext::default();
+    let gas_price = 0;
 
     let (_, gas_coin) = context.setup_coin();
     let (output, unset_input) = context.create_output_and_input(20);
@@ -451,17 +474,17 @@ async fn underpriced_tx1_not_included_coin_collision() {
         .finalize_as_transaction();
 
     let mut txpool = context.build();
-    let tx1_checked = check_unwrap_tx(tx1.clone(), txpool.config()).await;
+    let tx1_checked = check_unwrap_tx(tx1.clone(), txpool.config(), gas_price).await;
     txpool
         .insert_single(tx1_checked)
         .expect("Tx1 should be Ok, got Err");
 
-    let tx2_checked = check_unwrap_tx(tx2.clone(), txpool.config()).await;
+    let tx2_checked = check_unwrap_tx(tx2.clone(), txpool.config(), gas_price).await;
     txpool
         .insert_single(tx2_checked)
         .expect("Tx2 should be Ok, got Err");
 
-    let tx3_checked = check_unwrap_tx(tx3, txpool.config()).await;
+    let tx3_checked = check_unwrap_tx(tx3, txpool.config(), gas_price).await;
     let err = txpool
         .insert_single(tx3_checked)
         .expect_err("Tx3 should be Err, got Ok");
@@ -474,6 +497,7 @@ async fn underpriced_tx1_not_included_coin_collision() {
 #[tokio::test]
 async fn overpriced_tx_contract_input_not_inserted() {
     let mut context = TextContext::default();
+    let gas_price = 0;
 
     let contract_id = Contract::EMPTY_CONTRACT_ID;
     let (_, gas_funds) = context.setup_coin();
@@ -503,12 +527,12 @@ async fn overpriced_tx_contract_input_not_inserted() {
         .finalize_as_transaction();
 
     let mut txpool = context.build();
-    let tx1 = check_unwrap_tx(tx1, &txpool.config).await;
+    let tx1 = check_unwrap_tx(tx1, &txpool.config, gas_price).await;
     txpool
         .insert_single(tx1)
         .expect("Tx1 should be Ok, got err");
 
-    let tx2 = check_unwrap_tx(tx2, &txpool.config).await;
+    let tx2 = check_unwrap_tx(tx2, &txpool.config, gas_price).await;
     let err = txpool
         .insert_single(tx2)
         .expect_err("Tx2 should be Err, got Ok");
@@ -524,6 +548,7 @@ async fn overpriced_tx_contract_input_not_inserted() {
 #[tokio::test]
 async fn dependent_contract_input_inserted() {
     let mut context = TextContext::default();
+    let gas_price = 0;
 
     let contract_id = Contract::EMPTY_CONTRACT_ID;
     let (_, gas_funds) = context.setup_coin();
@@ -553,8 +578,8 @@ async fn dependent_contract_input_inserted() {
         .finalize_as_transaction();
 
     let mut txpool = context.build();
-    let tx1 = check_unwrap_tx(tx1, &txpool.config).await;
-    let tx2 = check_unwrap_tx(tx2, &txpool.config).await;
+    let tx1 = check_unwrap_tx(tx1, &txpool.config, gas_price).await;
+    let tx2 = check_unwrap_tx(tx2, &txpool.config, gas_price).await;
     txpool
         .insert_single(tx1)
         .expect("Tx1 should be Ok, got Err");
@@ -566,6 +591,7 @@ async fn dependent_contract_input_inserted() {
 #[tokio::test]
 async fn more_priced_tx3_removes_tx1_and_dependent_tx2() {
     let mut context = TextContext::default();
+    let gas_price = 0;
 
     let (_, gas_coin) = context.setup_coin();
 
@@ -597,9 +623,9 @@ async fn more_priced_tx3_removes_tx1_and_dependent_tx2() {
     let tx1_id = tx1.id(&ChainId::default());
     let tx2_id = tx2.id(&ChainId::default());
     let mut txpool = context.build();
-    let tx1 = check_unwrap_tx(tx1, &txpool.config).await;
-    let tx2 = check_unwrap_tx(tx2, &txpool.config).await;
-    let tx3 = check_unwrap_tx(tx3, &txpool.config).await;
+    let tx1 = check_unwrap_tx(tx1, &txpool.config, gas_price).await;
+    let tx2 = check_unwrap_tx(tx2, &txpool.config, gas_price).await;
+    let tx3 = check_unwrap_tx(tx3, &txpool.config, gas_price).await;
 
     txpool
         .insert_single(tx1.clone())
@@ -622,6 +648,7 @@ async fn more_priced_tx3_removes_tx1_and_dependent_tx2() {
 #[tokio::test]
 async fn more_priced_tx2_removes_tx1_and_more_priced_tx3_removes_tx2() {
     let mut context = TextContext::default();
+    let gas_price = 0;
 
     let (_, gas_coin) = context.setup_coin();
 
@@ -647,9 +674,9 @@ async fn more_priced_tx2_removes_tx1_and_more_priced_tx3_removes_tx2() {
         .finalize_as_transaction();
 
     let mut txpool = context.build();
-    let tx1 = check_unwrap_tx(tx1, &txpool.config).await;
-    let tx2 = check_unwrap_tx(tx2, &txpool.config).await;
-    let tx3 = check_unwrap_tx(tx3, &txpool.config).await;
+    let tx1 = check_unwrap_tx(tx1, &txpool.config, gas_price).await;
+    let tx2 = check_unwrap_tx(tx2, &txpool.config, gas_price).await;
+    let tx3 = check_unwrap_tx(tx3, &txpool.config, gas_price).await;
 
     txpool
         .insert_single(tx1)
@@ -674,6 +701,7 @@ async fn tx_limit_hit() {
         max_tx: 1,
         ..Default::default()
     });
+    let gas_price = 0;
 
     let (_, gas_coin) = context.setup_coin();
     let tx1 = TransactionBuilder::script(vec![], vec![])
@@ -689,8 +717,8 @@ async fn tx_limit_hit() {
         .finalize_as_transaction();
 
     let mut txpool = context.build();
-    let tx1 = check_unwrap_tx(tx1, &txpool.config).await;
-    let tx2 = check_unwrap_tx(tx2, &txpool.config).await;
+    let tx1 = check_unwrap_tx(tx1, &txpool.config, gas_price).await;
+    let tx2 = check_unwrap_tx(tx2, &txpool.config, gas_price).await;
     txpool
         .insert_single(tx1)
         .expect("Tx1 should be Ok, got Err");
@@ -707,6 +735,7 @@ async fn tx_depth_hit() {
         max_depth: 2,
         ..Default::default()
     });
+    let gas_price = 0;
 
     let (_, gas_coin) = context.setup_coin();
     let (output, unset_input) = context.create_output_and_input(10_000);
@@ -731,9 +760,9 @@ async fn tx_depth_hit() {
         .finalize_as_transaction();
 
     let mut txpool = context.build();
-    let tx1 = check_unwrap_tx(tx1, &txpool.config).await;
-    let tx2 = check_unwrap_tx(tx2, &txpool.config).await;
-    let tx3 = check_unwrap_tx(tx3, &txpool.config).await;
+    let tx1 = check_unwrap_tx(tx1, &txpool.config, gas_price).await;
+    let tx2 = check_unwrap_tx(tx2, &txpool.config, gas_price).await;
+    let tx3 = check_unwrap_tx(tx3, &txpool.config, gas_price).await;
 
     txpool
         .insert_single(tx1)
@@ -780,10 +809,12 @@ async fn sorted_out_tx1_2_4() {
     let tx2_id = tx2.id(&ChainId::default());
     let tx3_id = tx3.id(&ChainId::default());
 
+    let gas_price = 0;
+
     let mut txpool = context.build();
-    let tx1 = check_unwrap_tx(tx1, &txpool.config).await;
-    let tx2 = check_unwrap_tx(tx2, &txpool.config).await;
-    let tx3 = check_unwrap_tx(tx3, &txpool.config).await;
+    let tx1 = check_unwrap_tx(tx1, &txpool.config, gas_price).await;
+    let tx2 = check_unwrap_tx(tx2, &txpool.config, gas_price).await;
+    let tx3 = check_unwrap_tx(tx3, &txpool.config, gas_price).await;
 
     txpool
         .insert_single(tx1)
@@ -806,6 +837,7 @@ async fn sorted_out_tx1_2_4() {
 #[tokio::test]
 async fn find_dependent_tx1_tx2() {
     let mut context = TextContext::default();
+    let gas_price = 0;
 
     let (_, gas_coin) = context.setup_coin();
     let (output, unset_input) = context.create_output_and_input(10_000);
@@ -840,9 +872,9 @@ async fn find_dependent_tx1_tx2() {
     let tx3_id = tx3.id(&ChainId::default());
 
     let mut txpool = context.build();
-    let tx1 = check_unwrap_tx(tx1, &txpool.config).await;
-    let tx2 = check_unwrap_tx(tx2, &txpool.config).await;
-    let tx3 = check_unwrap_tx(tx3, &txpool.config).await;
+    let tx1 = check_unwrap_tx(tx1, &txpool.config, gas_price).await;
+    let tx2 = check_unwrap_tx(tx2, &txpool.config, gas_price).await;
+    let tx3 = check_unwrap_tx(tx3, &txpool.config, gas_price).await;
 
     txpool
         .insert_single(tx1)
@@ -870,8 +902,8 @@ async fn find_dependent_tx1_tx2() {
 
 #[tokio::test]
 async fn tx_at_least_min_gas_price_is_insertable() {
+    let gas_price = 10;
     let mut context = TextContext::default().config(Config {
-        min_gas_price: 10,
         ..Default::default()
     });
 
@@ -884,7 +916,7 @@ async fn tx_at_least_min_gas_price_is_insertable() {
         .finalize_as_transaction();
 
     let mut txpool = context.build();
-    let tx = check_unwrap_tx(tx, &txpool.config).await;
+    let tx = check_unwrap_tx(tx, &txpool.config, gas_price).await;
     txpool.insert_single(tx).expect("Tx should be Ok, got Err");
 }
 
@@ -899,13 +931,14 @@ async fn tx_below_min_gas_price_is_not_insertable() {
         .script_gas_limit(GAS_LIMIT)
         .add_input(gas_coin)
         .finalize_as_transaction();
+    let gas_price = 11;
 
     let err = check_tx(
         tx,
         &Config {
-            min_gas_price: 11,
             ..Default::default()
         },
+        gas_price,
     )
     .await
     .expect_err("expected insertion failure");
@@ -930,8 +963,9 @@ async fn tx_inserted_into_pool_when_input_message_id_exists_in_db() {
 
     let tx1_id = tx.id(&ChainId::default());
     let mut txpool = context.build();
+    let gas_price = 0;
 
-    let tx = check_unwrap_tx(tx, &txpool.config).await;
+    let tx = check_unwrap_tx(tx, &txpool.config, gas_price).await;
     txpool.insert_single(tx).expect("should succeed");
 
     let tx_info = txpool.find_one(&tx1_id).unwrap();
@@ -951,8 +985,9 @@ async fn tx_rejected_when_input_message_id_is_spent() {
     context.database_mut().insert_message(message.clone());
     context.database_mut().spend_message(*message.id());
     let mut txpool = context.build();
+    let gas_price = 0;
 
-    let tx = check_unwrap_tx(tx, &txpool.config).await;
+    let tx = check_unwrap_tx(tx, &txpool.config, gas_price).await;
     let err = txpool.insert_single(tx).expect_err("should fail");
 
     // check error
@@ -970,11 +1005,12 @@ async fn tx_rejected_from_pool_when_input_message_id_does_not_exist_in_db() {
         .script_gas_limit(GAS_LIMIT)
         .add_input(input)
         .finalize_as_transaction();
+    let gas_price = 0;
 
     // Do not insert any messages into the DB to ensure there is no matching message for the
     // tx.
     let mut txpool = context.build();
-    let tx = check_unwrap_tx(tx, &txpool.config).await;
+    let tx = check_unwrap_tx(tx, &txpool.config, gas_price).await;
     let err = txpool.insert_single(tx).expect_err("should fail");
 
     // check error
@@ -1013,14 +1049,14 @@ async fn tx_rejected_from_pool_when_gas_price_is_lower_than_another_tx_with_same
     let mut txpool = context.build();
 
     let tx_high_id = tx_high.id(&ChainId::default());
-    let tx_high = check_unwrap_tx(tx_high, &txpool.config).await;
+    let tx_high = check_unwrap_tx(tx_high, &txpool.config, gas_price_high).await;
 
     // Insert a tx for the message id with a high gas amount
     txpool
         .insert_single(tx_high)
         .expect("expected successful insertion");
 
-    let tx_low = check_unwrap_tx(tx_low, &txpool.config).await;
+    let tx_low = check_unwrap_tx(tx_low, &txpool.config, gas_price_low).await;
     // Insert a tx for the message id with a low gas amount
     // Because the new transaction's id matches an existing transaction, we compare the gas
     // prices of both the new and existing transactions. Since the existing transaction's gas
@@ -1055,7 +1091,7 @@ async fn higher_priced_tx_squeezes_out_lower_priced_tx_with_same_message_id() {
 
     let mut txpool = context.build();
     let tx_low_id = tx_low.id(&ChainId::default());
-    let tx_low = check_unwrap_tx(tx_low, &txpool.config).await;
+    let tx_low = check_unwrap_tx(tx_low, &txpool.config, gas_price_low).await;
     txpool.insert_single(tx_low).expect("should succeed");
 
     // Insert a tx for the message id with a high gas amount
@@ -1068,7 +1104,7 @@ async fn higher_priced_tx_squeezes_out_lower_priced_tx_with_same_message_id() {
         .script_gas_limit(GAS_LIMIT)
         .add_input(conflicting_message_input)
         .finalize_as_transaction();
-    let tx_high = check_unwrap_tx(tx_high, &txpool.config).await;
+    let tx_high = check_unwrap_tx(tx_high, &txpool.config, gas_price_high).await;
     let squeezed_out_txs = txpool.insert_single(tx_high).expect("should succeed");
 
     assert_eq!(squeezed_out_txs.removed.len(), 1);
@@ -1110,13 +1146,15 @@ async fn message_of_squeezed_out_tx_can_be_resubmitted_at_lower_gas_price() {
         .add_input(message_input_2)
         .finalize_as_transaction();
 
+    let gas_price = 0;
+
     context.database_mut().insert_message(message_1);
     context.database_mut().insert_message(message_2);
     let mut txpool = context.build();
 
-    let tx1 = check_unwrap_tx(tx1, &txpool.config).await;
-    let tx2 = check_unwrap_tx(tx2, &txpool.config).await;
-    let tx3 = check_unwrap_tx(tx3, &txpool.config).await;
+    let tx1 = check_unwrap_tx(tx1, &txpool.config, gas_price).await;
+    let tx2 = check_unwrap_tx(tx2, &txpool.config, gas_price).await;
+    let tx3 = check_unwrap_tx(tx3, &txpool.config, gas_price).await;
 
     txpool.insert_single(tx1).expect("should succeed");
 
@@ -1138,7 +1176,9 @@ async fn predicates_with_incorrect_owner_fails() {
         .add_input(coin)
         .finalize_as_transaction();
 
-    let err = check_tx(tx, &Default::default())
+    let gas_price = 0;
+
+    let err = check_tx(tx, &Default::default(), gas_price)
         .await
         .expect_err("Transaction should be err, got ok");
 
@@ -1177,7 +1217,9 @@ async fn predicate_without_enough_gas_returns_out_of_gas() {
         .add_input(coin)
         .finalize_as_transaction();
 
-    let err = check_tx(tx, &Default::default())
+    let gas_price = 0;
+
+    let err = check_tx(tx, &Default::default(), gas_price)
         .await
         .expect_err("Transaction should be err, got ok");
 
@@ -1206,7 +1248,9 @@ async fn predicate_that_returns_false_is_invalid() {
         .add_input(coin)
         .finalize_as_transaction();
 
-    let err = check_tx(tx, &Default::default())
+    let gas_price = 0;
+
+    let err = check_tx(tx, &Default::default(), gas_price)
         .await
         .expect_err("Transaction should be err, got ok");
 
