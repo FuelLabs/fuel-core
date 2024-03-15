@@ -3,7 +3,7 @@ use crate::{
         database_description::relayer::Relayer,
         Database,
     },
-    graphql_api::ports::GraphQLGasPrice,
+    graphql_api::ports::GasPriceEstimate,
     service::sub_services::BlockProducerService,
 };
 use fuel_core_consensus_module::{
@@ -65,11 +65,7 @@ impl ProducerGasPrice for StaticGasPrice {
 }
 
 #[async_trait::async_trait]
-impl GraphQLGasPrice for StaticGasPrice {
-    async fn known_gas_price(&self, _height: BlockHeight) -> Option<u64> {
-        Some(self.gas_price)
-    }
-
+impl GasPriceEstimate for StaticGasPrice {
     async fn worst_case_gas_price(&self, _height: BlockHeight) -> u64 {
         self.gas_price
     }

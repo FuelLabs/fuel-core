@@ -198,8 +198,7 @@ pub trait P2pPort: Send + Sync {
 }
 
 #[async_trait::async_trait]
-pub trait GraphQLGasPrice: Send + Sync {
-    async fn known_gas_price(&self, height: BlockHeight) -> Option<u64>;
+pub trait GasPriceEstimate: Send + Sync {
     async fn worst_case_gas_price(&self, height: BlockHeight) -> u64;
 }
 

@@ -4,7 +4,7 @@ use crate::{
         ports::{
             BlockProducerPort,
             ConsensusModulePort,
-            GraphQLGasPrice,
+            GasPriceEstimate,
             OffChainDatabase,
             OnChainDatabase,
             P2pPort,
@@ -89,7 +89,7 @@ pub type TxPool = Box<dyn TxPoolPort>;
 pub type ConsensusModule = Box<dyn ConsensusModulePort>;
 pub type P2pService = Box<dyn P2pPort>;
 
-pub type GasPriceProvider = Box<dyn GraphQLGasPrice>;
+pub type GasPriceProvider = Box<dyn GasPriceEstimate>;
 
 #[derive(Clone)]
 pub struct SharedState {
