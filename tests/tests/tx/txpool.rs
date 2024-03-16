@@ -63,7 +63,7 @@ async fn txs_max_script_gas_limit() {
         .into_iter()
         .map(|script| Arc::new(fuel_tx::Transaction::from(script)))
         .collect::<Vec<_>>();
-    srv.shared.txpool.insert(txs).await;
+    srv.shared.txpool_shared_state.insert(txs).await;
 
     tokio::time::sleep(Duration::from_secs(1)).await;
 

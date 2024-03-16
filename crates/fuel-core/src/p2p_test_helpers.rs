@@ -472,7 +472,7 @@ impl Node {
             let tx_result = self
                 .node
                 .shared
-                .txpool
+                .txpool_shared_state
                 .insert(vec![Arc::new(tx.clone())])
                 .await
                 .pop()

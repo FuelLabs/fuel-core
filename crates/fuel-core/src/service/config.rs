@@ -55,6 +55,7 @@ pub struct Config {
     pub vm: VMConfig,
     pub txpool: fuel_core_txpool::Config,
     pub block_producer: fuel_core_producer::Config,
+    pub static_gas_price: u64,
     pub block_importer: fuel_core_importer::Config,
     #[cfg(feature = "relayer")]
     pub relayer: Option<RelayerConfig>,
@@ -105,15 +106,14 @@ impl Config {
             utxo_validation,
             txpool: fuel_core_txpool::Config {
                 chain_config,
-                min_gas_price,
                 utxo_validation,
                 transaction_ttl: Duration::from_secs(60 * 100000000),
                 ..fuel_core_txpool::Config::default()
             },
             block_producer: fuel_core_producer::Config {
-                gas_price: min_gas_price,
                 ..Default::default()
             },
+            static_gas_price: min_gas_price,
             block_importer,
             #[cfg(feature = "relayer")]
             relayer: None,
@@ -144,15 +144,6 @@ impl Config {
             self.txpool.chain_config = self.chain_config.clone();
         }
 
-        if self.txpool.min_gas_price != self.block_producer.gas_price {
-            tracing::warn!(
-                "The `min_gas_price` of `TxPool` was inconsistent with `BlockProducer`"
-            );
-            let min_gas_price =
-                core::cmp::max(self.txpool.min_gas_price, self.block_producer.gas_price);
-            self.txpool.min_gas_price = min_gas_price;
-            self.block_producer.gas_price = min_gas_price;
-        }
         if self.txpool.utxo_validation != self.utxo_validation {
             tracing::warn!("The `utxo_validation` of `TxPool` was inconsistent");
             self.txpool.utxo_validation = self.utxo_validation;
