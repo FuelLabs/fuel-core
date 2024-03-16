@@ -16,7 +16,6 @@ async fn node_info() {
     let NodeInfo {
         utxo_validation,
         vm_backtrace,
-        min_gas_price,
         max_depth,
         max_tx,
         ..
@@ -24,7 +23,6 @@ async fn node_info() {
 
     assert_eq!(utxo_validation, node_config.utxo_validation);
     assert_eq!(vm_backtrace, node_config.vm.backtrace);
-    assert_eq!(min_gas_price, node_config.txpool.min_gas_price);
     assert_eq!(max_depth, node_config.txpool.max_depth as u64);
     assert_eq!(max_tx, node_config.txpool.max_tx as u64);
 }

@@ -20,7 +20,6 @@ use std::{
 pub struct NodeInfo {
     pub utxo_validation: bool,
     pub vm_backtrace: bool,
-    pub min_gas_price: U64,
     pub max_tx: U64,
     pub max_depth: U64,
     pub node_version: String,

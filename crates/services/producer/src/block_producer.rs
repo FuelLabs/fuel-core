@@ -1,4 +1,5 @@
 use crate::{
+    block_producer::gas_price::GasPriceProvider as GasPriceProviderConstraint,
     ports,
     ports::BlockProducerDatabase,
     Config,
@@ -42,6 +43,8 @@ use tracing::debug;
 #[cfg(test)]
 mod tests;
 
+pub mod gas_price;
+
 #[derive(Debug, derive_more::Display)]
 pub enum Error {
     #[display(fmt = "Genesis block is absent")]
@@ -70,7 +73,7 @@ impl From<Error> for anyhow::Error {
     }
 }
 
-pub struct Producer<ViewProvider, TxPool, Executor> {
+pub struct Producer<ViewProvider, TxPool, Executor, GasPriceProvider> {
     pub config: Config,
     pub view_provider: ViewProvider,
     pub txpool: TxPool,
@@ -79,12 +82,15 @@ pub struct Producer<ViewProvider, TxPool, Executor> {
     // use a tokio lock since we want callers to yield until the previous block
     // execution has completed (which may take a while).
     pub lock: Mutex<()>,
+    pub gas_price_provider: GasPriceProvider,
 }
 
-impl<ViewProvider, TxPool, Executor> Producer<ViewProvider, TxPool, Executor>
+impl<ViewProvider, TxPool, Executor, GasPriceProvider>
+    Producer<ViewProvider, TxPool, Executor, GasPriceProvider>
 where
     ViewProvider: AtomicView<Height = BlockHeight> + 'static,
     ViewProvider::View: BlockProducerDatabase,
+    GasPriceProvider: GasPriceProviderConstraint,
 {
     /// Produces and execute block for the specified height.
     async fn produce_and_execute<TxSource>(
@@ -112,11 +118,15 @@ where
 
         let header = self.new_header(height, block_time).await?;
 
+        let gas_price = self
+            .gas_price_provider
+            .gas_price(height.into())
+            .ok_or(anyhow!("No gas price found for block {height:?}"))?;
+
         let component = Components {
             header_to_produce: header,
             transactions_source: source,
-            // TODO: Provide gas price https://github.com/FuelLabs/fuel-core/issues/1642
-            gas_price: self.config.gas_price,
+            gas_price,
             gas_limit: max_gas,
         };
 
@@ -134,12 +144,14 @@ where
     }
 }
 
-impl<ViewProvider, TxPool, Executor, TxSource> Producer<ViewProvider, TxPool, Executor>
+impl<ViewProvider, TxPool, Executor, TxSource, GasPriceProvider>
+    Producer<ViewProvider, TxPool, Executor, GasPriceProvider>
 where
     ViewProvider: AtomicView<Height = BlockHeight> + 'static,
     ViewProvider::View: BlockProducerDatabase,
     TxPool: ports::TxPool<TxSource = TxSource> + 'static,
     Executor: ports::Executor<TxSource> + 'static,
+    GasPriceProvider: GasPriceProviderConstraint,
 {
     /// Produces and execute block for the specified height with transactions from the `TxPool`.
     pub async fn produce_and_execute_block_txpool(
@@ -158,11 +170,13 @@ where
     }
 }
 
-impl<ViewProvider, TxPool, Executor> Producer<ViewProvider, TxPool, Executor>
+impl<ViewProvider, TxPool, Executor, GasPriceProvider>
+    Producer<ViewProvider, TxPool, Executor, GasPriceProvider>
 where
     ViewProvider: AtomicView<Height = BlockHeight> + 'static,
     ViewProvider::View: BlockProducerDatabase,
     Executor: ports::Executor<Vec<Transaction>> + 'static,
+    GasPriceProvider: GasPriceProviderConstraint,
 {
     /// Produces and execute block for the specified height with `transactions`.
     pub async fn produce_and_execute_block_transactions(
@@ -177,11 +191,13 @@ where
     }
 }
 
-impl<ViewProvider, TxPool, Executor> Producer<ViewProvider, TxPool, Executor>
+impl<ViewProvider, TxPool, Executor, GasPriceProvider>
+    Producer<ViewProvider, TxPool, Executor, GasPriceProvider>
 where
     ViewProvider: AtomicView<Height = BlockHeight> + 'static,
     ViewProvider::View: BlockProducerDatabase,
     Executor: ports::DryRunner + 'static,
+    GasPriceProvider: GasPriceProviderConstraint,
 {
     // TODO: Support custom `block_time` for `dry_run`.
     /// Simulates multiple transactions without altering any state. Does not acquire the production lock.
@@ -201,6 +217,11 @@ where
                 .expect("It is impossible to overflow the current block height")
         });
 
+        let gas_price = self
+            .gas_price_provider
+            .gas_price(height.into())
+            .ok_or(anyhow!("No gas price found for height {height:?}"))?;
+
         // The dry run execution should use the state of the blockchain based on the
         // last available block, not on the upcoming one. It means that we need to
         // use the same configuration as the last block -> the same DA height.
@@ -210,8 +231,7 @@ where
         let component = Components {
             header_to_produce: header,
             transactions_source: transactions.clone(),
-            // TODO: Provide gas price https://github.com/FuelLabs/fuel-core/issues/1642
-            gas_price: self.config.gas_price,
+            gas_price,
             gas_limit: u64::MAX,
         };
 
@@ -239,7 +259,7 @@ where
     }
 }
 
-impl<ViewProvider, TxPool, Executor> Producer<ViewProvider, TxPool, Executor>
+impl<ViewProvider, TxPool, Executor, GP> Producer<ViewProvider, TxPool, Executor, GP>
 where
     ViewProvider: AtomicView<Height = BlockHeight> + 'static,
     ViewProvider::View: BlockProducerDatabase,

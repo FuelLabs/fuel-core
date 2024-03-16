@@ -1,9 +1,17 @@
+#![allow(non_snake_case)]
 use crate::{
-    block_producer::Error,
+    block_producer::{
+        gas_price::{
+            GasPriceParams,
+            GasPriceProvider,
+        },
+        Error,
+    },
     mocks::{
         FailingMockExecutor,
         MockDb,
         MockExecutor,
+        MockExecutorWithCapture,
         MockRelayer,
         MockTxPool,
     },
@@ -35,6 +43,28 @@ use std::sync::{
     Arc,
     Mutex,
 };
+
+pub struct MockProducerGasPrice {
+    pub gas_price: Option<u64>,
+}
+
+impl MockProducerGasPrice {
+    pub fn new(gas_price: u64) -> Self {
+        Self {
+            gas_price: Some(gas_price),
+        }
+    }
+
+    pub fn new_none() -> Self {
+        Self { gas_price: None }
+    }
+}
+
+impl GasPriceProvider for MockProducerGasPrice {
+    fn gas_price(&self, _params: GasPriceParams) -> Option<u64> {
+        self.gas_price
+    }
+}
 
 #[tokio::test]
 async fn cant_produce_at_genesis_height() {
@@ -203,12 +233,58 @@ async fn production_fails_on_execution_error() {
     );
 }
 
+// TODO: Add test that checks the gas price on the mint tx after `Executor` refactor
+//   https://github.com/FuelLabs/fuel-core/issues/1751
+#[tokio::test]
+async fn produce_and_execute_block_txpool__executor_receives_gas_price_provided() {
+    // given
+    let gas_price = 1_000;
+    let gas_price_provider = MockProducerGasPrice::new(gas_price);
+    let executor = MockExecutorWithCapture::default();
+    let ctx = TestContext::default_from_executor(executor.clone());
+
+    let producer = ctx.producer_with_gas_price_provider(gas_price_provider);
+
+    // when
+    let _ = producer
+        .produce_and_execute_block_txpool(1u32.into(), Tai64::now(), 1_000_000_000)
+        .await
+        .unwrap();
+
+    // then
+    let captured = executor.captured.lock().unwrap();
+    let expected = gas_price;
+    let actual = captured
+        .as_ref()
+        .expect("expected executor to be called")
+        .gas_price;
+    assert_eq!(expected, actual);
+}
+
+#[tokio::test]
+async fn produce_and_execute_block_txpool__missing_gas_price_causes_block_production_to_fail(
+) {
+    // given
+    let gas_price_provider = MockProducerGasPrice::new_none();
+    let ctx = TestContext::default();
+    let producer = ctx.producer_with_gas_price_provider(gas_price_provider);
+
+    // when
+    let result = producer
+        .produce_and_execute_block_txpool(1u32.into(), Tai64::now(), 1_000_000_000)
+        .await;
+
+    // then
+    assert!(result.is_err());
+}
+
 struct TestContext<Executor> {
     config: Config,
     db: MockDb,
     relayer: MockRelayer,
     executor: Arc<Executor>,
     txpool: MockTxPool,
+    gas_price: u64,
 }
 
 impl TestContext<MockExecutor> {
@@ -242,16 +318,32 @@ impl<Executor> TestContext<Executor> {
         let txpool = MockTxPool::default();
         let relayer = MockRelayer::default();
         let config = Config::default();
+        let gas_price = 0;
         Self {
             config,
             db,
             relayer,
             executor: Arc::new(executor),
             txpool,
+            gas_price,
         }
     }
 
-    pub fn producer(self) -> Producer<MockDb, MockTxPool, Executor> {
+    pub fn producer(
+        self,
+    ) -> Producer<MockDb, MockTxPool, Executor, MockProducerGasPrice> {
+        let gas_price = self.gas_price;
+        let static_gas_price = MockProducerGasPrice::new(gas_price);
+        self.producer_with_gas_price_provider(static_gas_price)
+    }
+
+    pub fn producer_with_gas_price_provider<GasPrice>(
+        self,
+        gas_price_provider: GasPrice,
+    ) -> Producer<MockDb, MockTxPool, Executor, GasPrice>
+    where
+        GasPrice: GasPriceProvider,
+    {
         Producer {
             config: self.config,
             view_provider: self.db,
@@ -259,6 +351,7 @@ impl<Executor> TestContext<Executor> {
             executor: self.executor,
             relayer: Box::new(self.relayer),
             lock: Default::default(),
+            gas_price_provider,
         }
     }
 }

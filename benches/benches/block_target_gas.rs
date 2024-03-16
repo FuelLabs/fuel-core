@@ -419,7 +419,7 @@ fn run_with_service_with_extra_inputs(
 
                 let mut sub = shared.block_importer.block_importer.subscribe();
                 shared
-                    .txpool
+                    .txpool_shared_state
                     .insert(vec![std::sync::Arc::new(tx)])
                     .await
                     .into_iter()
