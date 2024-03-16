@@ -11,6 +11,7 @@ use crate::{
         FailingMockExecutor,
         MockDb,
         MockExecutor,
+        MockExecutorWithCapture,
         MockRelayer,
         MockTxPool,
     },
@@ -52,6 +53,10 @@ impl MockProducerGasPrice {
         Self {
             gas_price: Some(gas_price),
         }
+    }
+
+    pub fn new_none() -> Self {
+        Self { gas_price: None }
     }
 }
 
@@ -232,31 +237,46 @@ async fn production_fails_on_execution_error() {
 //   https://github.com/FuelLabs/fuel-core/issues/1751
 #[ignore]
 #[tokio::test]
-async fn produce_and_execute_block_txpool__includes_gas_price_provided_on_mint_tx() {
-    todo!()
-    // // given
-    // let gas_price = 1_000;
-    // let gas_price_provider = StaticGasPrice::new(gas_price);
-    // let ctx = TestContext::default();
-    // let producer = ctx.producer_with_gas_price_provider(gas_price_provider);
-    //
-    // // when
-    // let changes = producer
-    //     .produce_and_execute_block_txpool(1u32.into(), Tai64::now(), 1_000_000_000)
-    //     .await
-    //     .unwrap();
-    //
-    // // then
-    // let mint_tx = changes.get_mint_tx();
-    // assert_eq!(mint_tx.gas_price, gas_price);
+async fn produce_and_execute_block_txpool__executor_receives_gas_price_provided() {
+    // given
+    let gas_price = 1_000;
+    let gas_price_provider = MockProducerGasPrice::new(gas_price);
+    let executor = MockExecutorWithCapture::default();
+    let ctx = TestContext::default_from_executor(executor.clone());
+
+    let producer = ctx.producer_with_gas_price_provider(gas_price_provider);
+
+    // when
+    let _ = producer
+        .produce_and_execute_block_txpool(1u32.into(), Tai64::now(), 1_000_000_000)
+        .await
+        .unwrap();
+
+    // then
+    let captured = executor.captured.lock().unwrap();
+    let expected = gas_price;
+    let actual = captured
+        .as_ref()
+        .expect("expected executor to be called")
+        .gas_price;
+    assert_eq!(expected, actual);
 }
 
-// TODO: Add test that checks the failure case for gas_price after `Executor` refactor
-//   https://github.com/FuelLabs/fuel-core/issues/1751
-#[ignore]
 #[tokio::test]
-async fn produce_and_execute_block_txpool__block_production_fails() {
-    todo!()
+async fn produce_and_execute_block_txpool__missing_gas_price_causes_block_production_to_fail(
+) {
+    // given
+    let gas_price_provider = MockProducerGasPrice::new_none();
+    let ctx = TestContext::default();
+    let producer = ctx.producer_with_gas_price_provider(gas_price_provider);
+
+    // when
+    let result = producer
+        .produce_and_execute_block_txpool(1u32.into(), Tai64::now(), 1_000_000_000)
+        .await;
+
+    // then
+    assert!(result.is_err());
 }
 
 struct TestContext<Executor> {

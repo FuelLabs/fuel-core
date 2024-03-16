@@ -169,6 +169,37 @@ impl Executor<Vec<ArcPoolTx>> for FailingMockExecutor {
     }
 }
 
+#[derive(Clone)]
+pub struct MockExecutorWithCapture {
+    pub captured: Arc<Mutex<Option<Components<Vec<ArcPoolTx>>>>>,
+}
+
+impl Executor<Vec<ArcPoolTx>> for MockExecutorWithCapture {
+    fn execute_without_commit(
+        &self,
+        component: Components<Vec<ArcPoolTx>>,
+    ) -> ExecutorResult<UncommittedResult<Changes>> {
+        *self.captured.lock().unwrap() = Some(component.clone());
+        Ok(UncommittedResult::new(
+            ExecutionResult {
+                block: to_block(component),
+                skipped_transactions: vec![],
+                tx_status: vec![],
+                events: vec![],
+            },
+            Default::default(),
+        ))
+    }
+}
+
+impl Default for MockExecutorWithCapture {
+    fn default() -> Self {
+        Self {
+            captured: Arc::new(Mutex::new(None)),
+        }
+    }
+}
+
 #[derive(Clone, Default, Debug)]
 pub struct MockDb {
     pub blocks: Arc<Mutex<HashMap<BlockHeight, CompressedBlock>>>,

@@ -3,7 +3,7 @@
 use crate::blockchain::header::PartialBlockHeader;
 
 /// The components required to produce a block.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Components<Source> {
     /// The partial block header of the future block without transactions related information.
     pub header_to_produce: PartialBlockHeader,
