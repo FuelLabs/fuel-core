@@ -26,7 +26,7 @@ impl FuelService {
     pub async fn submit(&self, tx: Transaction) -> anyhow::Result<InsertionResult> {
         let results: Vec<_> = self
             .shared
-            .txpool
+            .txpool_shared_state
             .insert(vec![Arc::new(tx)])
             .await
             .into_iter()
@@ -80,7 +80,7 @@ impl FuelService {
         &self,
         id: Bytes32,
     ) -> anyhow::Result<impl Stream<Item = anyhow::Result<TransactionStatus>>> {
-        let txpool = self.shared.txpool.clone();
+        let txpool = self.shared.txpool_shared_state.clone();
         let db = self.shared.database.off_chain().clone();
         let rx = txpool.tx_update_subscribe(id)?;
         Ok(transaction_status_change(

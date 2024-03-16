@@ -344,7 +344,6 @@ impl Command {
                 tx_max_number,
                 tx_max_depth,
                 chain_conf,
-                min_gas_price,
                 utxo_validation,
                 metrics,
                 tx_pool_ttl.into(),
@@ -354,9 +353,9 @@ impl Command {
             block_producer: ProducerConfig {
                 utxo_validation,
                 coinbase_recipient,
-                gas_price: min_gas_price,
                 metrics,
             },
+            static_gas_price: min_gas_price,
             block_importer,
             #[cfg(feature = "relayer")]
             relayer: relayer_cfg,

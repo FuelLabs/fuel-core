@@ -28,6 +28,7 @@ use tokio::sync::Mutex;
 
 #[cfg(feature = "relayer")]
 use crate::relayer::Config as RelayerConfig;
+use crate::service::StaticGasPrice;
 #[cfg(feature = "relayer")]
 use fuel_core_types::blockchain::primitives::DaBlockHeight;
 
@@ -35,11 +36,12 @@ pub type PoAService =
     fuel_core_poa::Service<TxPoolAdapter, BlockProducerAdapter, BlockImporterAdapter>;
 #[cfg(feature = "p2p")]
 pub type P2PService = fuel_core_p2p::service::Service<Database>;
-pub type TxPoolService = fuel_core_txpool::Service<P2PAdapter, Database>;
+pub type TxPoolService = fuel_core_txpool::Service<P2PAdapter, Database, StaticGasPrice>;
 pub type BlockProducerService = fuel_core_producer::block_producer::Producer<
     Database,
     TxPoolAdapter,
     ExecutorAdapter,
+    StaticGasPrice,
 >;
 pub type GraphQL = fuel_core_graphql_api::api_service::Service;
 
@@ -132,12 +134,14 @@ pub fn init_sub_services(
     #[cfg(not(feature = "p2p"))]
     let p2p_adapter = P2PAdapter::new();
 
+    let gas_price_provider = StaticGasPrice::new(config.static_gas_price);
     let txpool = fuel_core_txpool::new_service(
         config.txpool.clone(),
         database.on_chain().clone(),
         importer_adapter.clone(),
         p2p_adapter.clone(),
         last_height,
+        gas_price_provider.clone(),
     );
     let tx_pool_adapter = TxPoolAdapter::new(txpool.shared.clone());
 
@@ -148,6 +152,7 @@ pub fn init_sub_services(
         executor: Arc::new(executor),
         relayer: Box::new(relayer_adapter.clone()),
         lock: Mutex::new(()),
+        gas_price_provider: gas_price_provider.clone(),
     };
     let producer_adapter = BlockProducerAdapter::new(block_producer);
 
@@ -203,7 +208,6 @@ pub fn init_sub_services(
         utxo_validation: config.utxo_validation,
         debug: config.debug,
         vm_backtrace: config.vm.backtrace,
-        min_gas_price: config.txpool.min_gas_price,
         max_tx: config.txpool.max_tx,
         max_depth: config.txpool.max_depth,
         chain_name: config.chain_config.chain_name.clone(),
@@ -220,13 +224,14 @@ pub fn init_sub_services(
         Box::new(producer_adapter),
         Box::new(poa_adapter.clone()),
         Box::new(p2p_adapter),
+        Box::new(gas_price_provider),
         config.query_log_threshold_time,
         config.api_request_timeout,
     )?;
 
     let shared = SharedState {
         poa_adapter,
-        txpool: txpool.shared.clone(),
+        txpool_shared_state: txpool.shared.clone(),
         #[cfg(feature = "p2p")]
         network: network.as_ref().map(|n| n.shared.clone()),
         #[cfg(feature = "relayer")]

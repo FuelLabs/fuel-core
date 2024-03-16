@@ -12,7 +12,6 @@ use std::time::UNIX_EPOCH;
 pub struct NodeInfo {
     utxo_validation: bool,
     vm_backtrace: bool,
-    min_gas_price: U64,
     max_tx: U64,
     max_depth: U64,
     node_version: String,
@@ -26,10 +25,6 @@ impl NodeInfo {
 
     async fn vm_backtrace(&self) -> bool {
         self.vm_backtrace
-    }
-
-    async fn min_gas_price(&self) -> U64 {
-        self.min_gas_price
     }
 
     async fn max_tx(&self) -> U64 {
@@ -75,7 +70,6 @@ impl NodeQuery {
         Ok(NodeInfo {
             utxo_validation: config.utxo_validation,
             vm_backtrace: config.vm_backtrace,
-            min_gas_price: config.min_gas_price.into(),
             max_tx: (config.max_tx as u64).into(),
             max_depth: (config.max_depth as u64).into(),
             node_version: VERSION.to_owned(),
