@@ -77,12 +77,12 @@ pub struct TxPool<ViewProvider> {
 }
 
 /// Trait for getting gas price for the Tx Pool code to look up the gas price for a given block height
-pub trait TxPoolGasPrice {
+pub trait GasPriceProvider {
     /// Get gas price for specific block height if it is known
     fn gas_price(&self, block_height: BlockHeight) -> Option<GasPrice>;
 }
 
-impl<T: TxPoolGasPrice> TxPoolGasPrice for Arc<T> {
+impl<T: GasPriceProvider> GasPriceProvider for Arc<T> {
     fn gas_price(&self, block_height: BlockHeight) -> Option<GasPrice> {
         self.deref().gas_price(block_height)
     }
@@ -475,12 +475,15 @@ where
     }
 }
 
-pub async fn check_transactions<GasPriceProvider: TxPoolGasPrice>(
+pub async fn check_transactions<Provider>(
     txs: &[Arc<Transaction>],
     current_height: BlockHeight,
     config: &Config,
-    gas_price_provider: &GasPriceProvider,
-) -> Vec<Result<Checked<Transaction>, Error>> {
+    gas_price_provider: &Provider,
+) -> Vec<Result<Checked<Transaction>, Error>>
+where
+    Provider: GasPriceProvider,
+{
     let mut checked_txs = Vec::with_capacity(txs.len());
 
     for tx in txs.iter() {
@@ -498,7 +501,7 @@ pub async fn check_transactions<GasPriceProvider: TxPoolGasPrice>(
     checked_txs
 }
 
-pub async fn check_single_tx<GasPrice: TxPoolGasPrice>(
+pub async fn check_single_tx<GasPrice: GasPriceProvider>(
     tx: Transaction,
     current_height: BlockHeight,
     config: &Config,

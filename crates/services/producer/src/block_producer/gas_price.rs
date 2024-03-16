@@ -23,7 +23,7 @@ impl From<BlockHeight> for GasPriceParams {
 }
 
 /// Interface for retrieving the gas price for a block
-pub trait ProducerGasPrice {
+pub trait GasPriceProvider {
     /// The gas price for all transactions in the block.
     fn gas_price(&self, params: GasPriceParams) -> Option<u64>;
 }

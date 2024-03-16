@@ -3,7 +3,7 @@ use crate::{
     block_producer::{
         gas_price::{
             GasPriceParams,
-            ProducerGasPrice,
+            GasPriceProvider,
         },
         Error,
     },
@@ -60,7 +60,7 @@ impl MockProducerGasPrice {
     }
 }
 
-impl ProducerGasPrice for MockProducerGasPrice {
+impl GasPriceProvider for MockProducerGasPrice {
     fn gas_price(&self, _params: GasPriceParams) -> Option<u64> {
         self.gas_price
     }
@@ -235,7 +235,6 @@ async fn production_fails_on_execution_error() {
 
 // TODO: Add test that checks the gas price on the mint tx after `Executor` refactor
 //   https://github.com/FuelLabs/fuel-core/issues/1751
-#[ignore]
 #[tokio::test]
 async fn produce_and_execute_block_txpool__executor_receives_gas_price_provided() {
     // given
@@ -338,12 +337,12 @@ impl<Executor> TestContext<Executor> {
         self.producer_with_gas_price_provider(static_gas_price)
     }
 
-    pub fn producer_with_gas_price_provider<GasPriceProvider>(
+    pub fn producer_with_gas_price_provider<GasPrice>(
         self,
-        gas_price_provider: GasPriceProvider,
-    ) -> Producer<MockDb, MockTxPool, Executor, GasPriceProvider>
+        gas_price_provider: GasPrice,
+    ) -> Producer<MockDb, MockTxPool, Executor, GasPrice>
     where
-        GasPriceProvider: ProducerGasPrice,
+        GasPrice: GasPriceProvider,
     {
         Producer {
             config: self.config,

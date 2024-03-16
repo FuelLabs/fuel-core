@@ -55,7 +55,7 @@ impl MockTxPoolGasPrice {
     }
 }
 
-impl TxPoolGasPrice for MockTxPoolGasPrice {
+impl GasPriceProviderConstraint for MockTxPoolGasPrice {
     fn gas_price(&self, _block_height: BlockHeight) -> Option<GasPrice> {
         self.gas_price
     }

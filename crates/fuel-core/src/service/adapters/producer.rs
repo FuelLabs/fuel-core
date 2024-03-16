@@ -5,6 +5,7 @@ use crate::{
             BlockProducerAdapter,
             ExecutorAdapter,
             MaybeRelayerAdapter,
+            StaticGasPrice,
             TransactionsSource,
             TxPoolAdapter,
         },
@@ -12,7 +13,13 @@ use crate::{
     },
 };
 use fuel_core_executor::executor::OnceTransactionsSource;
-use fuel_core_producer::ports::TxPool;
+use fuel_core_producer::{
+    block_producer::gas_price::{
+        GasPriceParams,
+        GasPriceProvider,
+    },
+    ports::TxPool,
+};
 use fuel_core_storage::{
     not_found,
     tables::FuelBlocks,
@@ -138,5 +145,11 @@ impl fuel_core_producer::ports::BlockProducerDatabase for Database {
 
     fn block_header_merkle_root(&self, height: &BlockHeight) -> StorageResult<Bytes32> {
         self.storage::<FuelBlocks>().root(height).map(Into::into)
+    }
+}
+
+impl GasPriceProvider for StaticGasPrice {
+    fn gas_price(&self, _block_height: GasPriceParams) -> Option<u64> {
+        Some(self.gas_price)
     }
 }

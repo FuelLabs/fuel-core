@@ -1,5 +1,5 @@
 use crate::{
-    block_producer::gas_price::ProducerGasPrice,
+    block_producer::gas_price::GasPriceProvider as GasPriceProviderConstraint,
     ports,
     ports::BlockProducerDatabase,
     Config,
@@ -90,7 +90,7 @@ impl<ViewProvider, TxPool, Executor, GasPriceProvider>
 where
     ViewProvider: AtomicView<Height = BlockHeight> + 'static,
     ViewProvider::View: BlockProducerDatabase,
-    GasPriceProvider: ProducerGasPrice,
+    GasPriceProvider: GasPriceProviderConstraint,
 {
     /// Produces and execute block for the specified height.
     async fn produce_and_execute<TxSource>(
@@ -151,7 +151,7 @@ where
     ViewProvider::View: BlockProducerDatabase,
     TxPool: ports::TxPool<TxSource = TxSource> + 'static,
     Executor: ports::Executor<TxSource> + 'static,
-    GasPriceProvider: ProducerGasPrice,
+    GasPriceProvider: GasPriceProviderConstraint,
 {
     /// Produces and execute block for the specified height with transactions from the `TxPool`.
     pub async fn produce_and_execute_block_txpool(
@@ -176,7 +176,7 @@ where
     ViewProvider: AtomicView<Height = BlockHeight> + 'static,
     ViewProvider::View: BlockProducerDatabase,
     Executor: ports::Executor<Vec<Transaction>> + 'static,
-    GasPriceProvider: ProducerGasPrice,
+    GasPriceProvider: GasPriceProviderConstraint,
 {
     /// Produces and execute block for the specified height with `transactions`.
     pub async fn produce_and_execute_block_transactions(
@@ -197,7 +197,7 @@ where
     ViewProvider: AtomicView<Height = BlockHeight> + 'static,
     ViewProvider::View: BlockProducerDatabase,
     Executor: ports::DryRunner + 'static,
-    GasPriceProvider: ProducerGasPrice,
+    GasPriceProvider: GasPriceProviderConstraint,
 {
     // TODO: Support custom `block_time` for `dry_run`.
     /// Simulates multiple transactions without altering any state. Does not acquire the production lock.

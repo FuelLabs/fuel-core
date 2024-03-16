@@ -8,6 +8,7 @@ use crate::{
     txpool::{
         check_single_tx,
         check_transactions,
+        GasPriceProvider as GasPriceProviderConstraint,
     },
     Config,
     Error as TxPoolError,
@@ -50,7 +51,6 @@ use fuel_core_types::{
     tai64::Tai64,
 };
 
-use crate::txpool::TxPoolGasPrice;
 use anyhow::anyhow;
 use fuel_core_storage::transactional::AtomicView;
 use fuel_core_types::services::block_importer::SharedImportResult;
@@ -161,7 +161,7 @@ where
     P2P: PeerToPeer<GossipedTransaction = TransactionGossipData>,
     ViewProvider: AtomicView<View = View>,
     View: TxPoolDb,
-    GasPriceProvider: TxPoolGasPrice + Send + Sync + Clone,
+    GasPriceProvider: GasPriceProviderConstraint + Send + Sync + Clone,
 {
     const NAME: &'static str = "TxPool";
 
@@ -190,7 +190,7 @@ where
     P2P: PeerToPeer<GossipedTransaction = TransactionGossipData>,
     ViewProvider: AtomicView<View = View>,
     View: TxPoolDb,
-    GasPriceProvider: TxPoolGasPrice + Send + Sync,
+    GasPriceProvider: GasPriceProviderConstraint + Send + Sync,
 {
     async fn run(&mut self, watcher: &mut StateWatcher) -> anyhow::Result<bool> {
         let should_continue;
@@ -371,7 +371,7 @@ where
     P2P: PeerToPeer<GossipedTransaction = TransactionGossipData>,
     ViewProvider: AtomicView<View = View>,
     View: TxPoolDb,
-    GasPriceProvider: TxPoolGasPrice,
+    GasPriceProvider: GasPriceProviderConstraint,
 {
     #[tracing::instrument(name = "insert_submitted_txn", skip_all)]
     pub async fn insert(
@@ -476,7 +476,7 @@ where
     P2P: PeerToPeer<GossipedTransaction = TransactionGossipData> + 'static,
     ViewProvider: AtomicView,
     ViewProvider::View: TxPoolDb,
-    GasPriceProvider: TxPoolGasPrice + Send + Sync + Clone,
+    GasPriceProvider: GasPriceProviderConstraint + Send + Sync + Clone,
 {
     let p2p = Arc::new(p2p);
     let gossiped_tx_stream = p2p.gossiped_transaction_events();

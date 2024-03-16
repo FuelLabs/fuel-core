@@ -3,7 +3,6 @@ use crate::{
         database_description::relayer::Relayer,
         Database,
     },
-    graphql_api::ports::GasPriceEstimate,
     service::sub_services::BlockProducerService,
 };
 use fuel_core_consensus_module::{
@@ -11,15 +10,8 @@ use fuel_core_consensus_module::{
     RelayerConsensusConfig,
 };
 use fuel_core_executor::executor::Executor;
-use fuel_core_producer::block_producer::gas_price::{
-    GasPriceParams,
-    ProducerGasPrice,
-};
 use fuel_core_services::stream::BoxStream;
-use fuel_core_txpool::{
-    service::SharedState as TxPoolSharedState,
-    txpool::TxPoolGasPrice,
-};
+use fuel_core_txpool::service::SharedState as TxPoolSharedState;
 #[cfg(feature = "p2p")]
 use fuel_core_types::services::p2p::peer_reputation::AppScore;
 use fuel_core_types::{
@@ -49,25 +41,6 @@ pub struct StaticGasPrice {
 impl StaticGasPrice {
     pub fn new(gas_price: u64) -> Self {
         Self { gas_price }
-    }
-}
-
-impl TxPoolGasPrice for StaticGasPrice {
-    fn gas_price(&self, _block_height: BlockHeight) -> Option<u64> {
-        Some(self.gas_price)
-    }
-}
-
-impl ProducerGasPrice for StaticGasPrice {
-    fn gas_price(&self, _block_height: GasPriceParams) -> Option<u64> {
-        Some(self.gas_price)
-    }
-}
-
-#[async_trait::async_trait]
-impl GasPriceEstimate for StaticGasPrice {
-    async fn worst_case_gas_price(&self, _height: BlockHeight) -> u64 {
-        self.gas_price
     }
 }
 
