@@ -45,7 +45,7 @@ async fn setup_service_with_coin(
     let tx_id = [0u8; 32];
     let output_index = 0;
     let coin_config = CoinConfig {
-        tx_id: tx_id.clone().into(),
+        tx_id: tx_id.into(),
         output_index,
         tx_pointer_block_height: Default::default(),
         tx_pointer_tx_idx: 0,
