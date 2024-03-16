@@ -34,8 +34,8 @@ use fuel_core_benches::{
 };
 use fuel_core_chain_config::{
     ContractConfig,
+    SnapshotReader,
     StateConfig,
-    StateReader,
 };
 use fuel_core_services::Service;
 use fuel_core_storage::{
@@ -279,7 +279,7 @@ fn service_with_many_contracts(
         contracts: contract_configs,
         ..Default::default()
     };
-    config.state_reader = StateReader::in_memory(state_config);
+    config.state_reader = SnapshotReader::in_memory(state_config);
 
     config
         .chain_config

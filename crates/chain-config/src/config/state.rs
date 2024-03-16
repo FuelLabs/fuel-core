@@ -110,11 +110,11 @@ impl StateConfig {
     pub fn from_snapshot_metadata(
         snapshot_metadata: SnapshotMetadata,
     ) -> anyhow::Result<Self> {
-        let reader = crate::StateReader::for_snapshot(snapshot_metadata)?;
+        let reader = crate::SnapshotReader::for_snapshot(snapshot_metadata)?;
         Self::from_reader(&reader)
     }
 
-    pub fn from_reader(reader: &StateReader) -> anyhow::Result<Self> {
+    pub fn from_reader(reader: &SnapshotReader) -> anyhow::Result<Self> {
         let coins = reader
             .coins()?
             .map_ok(|group| group.data)
@@ -270,10 +270,10 @@ pub trait ChainStateDb {
 
 pub use reader::{
     IntoIter,
-    StateReader,
+    SnapshotReader,
 };
 #[cfg(feature = "std")]
-pub use writer::StateWriter;
+pub use writer::SnapshotWriter;
 #[cfg(feature = "parquet")]
 pub use writer::ZstdCompressionLevel;
 pub const MAX_GROUP_SIZE: usize = usize::MAX;
@@ -304,22 +304,25 @@ mod tests {
     #[test]
     fn roundtrip_parquet_coins() {
         // given
+
+        use std::env::temp_dir;
         let skip_n_groups = 3;
         let temp_dir = tempfile::tempdir().unwrap();
 
         let mut group_generator = GroupGenerator::new(StdRng::seed_from_u64(0), 100, 10);
-        let files = crate::ParquetFiles::snapshot_default(temp_dir.path());
-        let mut encoder =
-            StateWriter::parquet(&files, writer::ZstdCompressionLevel::Uncompressed)
-                .unwrap();
+        let mut encoder = SnapshotWriter::parquet(
+            &temp_dir.path(),
+            writer::ZstdCompressionLevel::Uncompressed,
+        )
+        .unwrap();
         encoder.write_block_data(0u32.into(), 0u64.into()).unwrap();
 
         // when
         let coin_groups =
             group_generator.for_each_group(|group| encoder.write_coins(group));
-        encoder.close().unwrap();
+        let snapshot = encoder.close().unwrap();
 
-        let decoded_coin_groups = StateReader::parquet(files)
+        let decoded_coin_groups = SnapshotReader::for_snapshot(snapshot)
             .unwrap()
             .coins()
             .unwrap()
@@ -337,16 +340,18 @@ mod tests {
         let temp_dir = tempfile::tempdir().unwrap();
 
         let mut group_generator = GroupGenerator::new(StdRng::seed_from_u64(0), 100, 10);
-        let files = crate::ParquetFiles::snapshot_default(temp_dir.path());
-        let mut encoder =
-            StateWriter::parquet(&files, writer::ZstdCompressionLevel::Level1).unwrap();
+        let mut encoder = SnapshotWriter::parquet(
+            &temp_dir.path(),
+            writer::ZstdCompressionLevel::Level1,
+        )
+        .unwrap();
         encoder.write_block_data(0u32.into(), 0u64.into()).unwrap();
 
         // when
         let message_groups =
             group_generator.for_each_group(|group| encoder.write_messages(group));
-        encoder.close().unwrap();
-        let messages_decoded = StateReader::parquet(files)
+        let snapshot = encoder.close().unwrap();
+        let messages_decoded = SnapshotReader::for_snapshot(snapshot)
             .unwrap()
             .messages()
             .unwrap()
@@ -364,16 +369,18 @@ mod tests {
         let temp_dir = tempfile::tempdir().unwrap();
 
         let mut group_generator = GroupGenerator::new(StdRng::seed_from_u64(0), 100, 10);
-        let files = crate::ParquetFiles::snapshot_default(temp_dir.path());
-        let mut encoder =
-            StateWriter::parquet(&files, writer::ZstdCompressionLevel::Level1).unwrap();
+        let mut encoder = SnapshotWriter::parquet(
+            &temp_dir.path(),
+            writer::ZstdCompressionLevel::Level1,
+        )
+        .unwrap();
         encoder.write_block_data(0u32.into(), 0u64.into()).unwrap();
 
         // when
         let contract_groups =
             group_generator.for_each_group(|group| encoder.write_contracts(group));
-        encoder.close().unwrap();
-        let contract_decoded = StateReader::parquet(files)
+        let snapshot = encoder.close().unwrap();
+        let contract_decoded = SnapshotReader::for_snapshot(snapshot)
             .unwrap()
             .contracts()
             .unwrap()
@@ -391,16 +398,18 @@ mod tests {
         let temp_dir = tempfile::tempdir().unwrap();
 
         let mut group_generator = GroupGenerator::new(StdRng::seed_from_u64(0), 100, 10);
-        let files = crate::ParquetFiles::snapshot_default(temp_dir.path());
-        let mut encoder =
-            StateWriter::parquet(&files, writer::ZstdCompressionLevel::Level1).unwrap();
+        let mut encoder = SnapshotWriter::parquet(
+            &temp_dir.path(),
+            writer::ZstdCompressionLevel::Level1,
+        )
+        .unwrap();
         encoder.write_block_data(0u32.into(), 0u64.into()).unwrap();
 
         // when
         let contract_state_groups =
             group_generator.for_each_group(|group| encoder.write_contract_state(group));
-        encoder.close().unwrap();
-        let decoded_contract_state = StateReader::parquet(files)
+        let snapshot = encoder.close().unwrap();
+        let decoded_contract_state = SnapshotReader::for_snapshot(snapshot)
             .unwrap()
             .contract_state()
             .unwrap()
@@ -422,17 +431,18 @@ mod tests {
         let temp_dir = tempfile::tempdir().unwrap();
 
         let mut group_generator = GroupGenerator::new(StdRng::seed_from_u64(0), 100, 10);
-        let files = crate::ParquetFiles::snapshot_default(temp_dir.path());
-        let mut encoder =
-            StateWriter::parquet(&files, writer::ZstdCompressionLevel::Level1).unwrap();
+        let mut encoder = SnapshotWriter::parquet(
+            &temp_dir.path(),
+            writer::ZstdCompressionLevel::Level1,
+        )
+        .unwrap();
         encoder.write_block_data(0u32.into(), 0u64.into()).unwrap();
 
         // when
         let contract_balance_groups =
             group_generator.for_each_group(|group| encoder.write_contract_balance(group));
-        encoder.close().unwrap();
-
-        let decoded_contract_balance = StateReader::parquet(files)
+        let snapshot = encoder.close().unwrap();
+        let decoded_contract_balance = SnapshotReader::for_snapshot(snapshot)
             .unwrap()
             .contract_balance()
             .unwrap()
@@ -451,9 +461,11 @@ mod tests {
     fn roundtrip_parquet_block_height() {
         // given
         let temp_dir = tempfile::tempdir().unwrap();
-        let files = crate::ParquetFiles::snapshot_default(temp_dir.path());
-        let mut encoder =
-            StateWriter::parquet(&files, writer::ZstdCompressionLevel::Level1).unwrap();
+        let mut encoder = SnapshotWriter::parquet(
+            &temp_dir.path(),
+            writer::ZstdCompressionLevel::Level1,
+        )
+        .unwrap();
         let block_height = 13u32.into();
         let da_block_height = 14u64.into();
 
@@ -461,10 +473,10 @@ mod tests {
         encoder
             .write_block_data(block_height, da_block_height)
             .unwrap();
-        encoder.close().unwrap();
+        let snapshot = encoder.close().unwrap();
 
         // then
-        let reader = StateReader::parquet(files).unwrap();
+        let reader = SnapshotReader::for_snapshot(snapshot).unwrap();
         let block_height_decoded = reader.block_height();
         let da_block_height_decoded = reader.da_block_height();
         assert_eq!(block_height, block_height_decoded);
@@ -479,16 +491,16 @@ mod tests {
         let temp_dir = tempfile::tempdir().unwrap();
         let file = temp_dir.path().join("state_config.json");
 
-        let mut encoder = StateWriter::json(&file);
+        let mut encoder = SnapshotWriter::json(&file);
         let mut group_generator =
             GroupGenerator::new(StdRng::seed_from_u64(0), group_size, 10);
 
         // when
         let coin_groups =
             group_generator.for_each_group(|group| encoder.write_coins(group));
-        encoder.close().unwrap();
 
-        let decoded_coins = StateReader::json(file, group_size)
+        let snapshot = encoder.close().unwrap();
+        let decoded_coins = SnapshotReader::for_snapshot(snapshot)
             .unwrap()
             .coins()
             .unwrap()
@@ -506,16 +518,16 @@ mod tests {
         let temp_dir = tempfile::tempdir().unwrap();
         let file = temp_dir.path().join("state_config.json");
 
-        let mut encoder = StateWriter::json(&file);
+        let mut encoder = SnapshotWriter::json(&file);
         let mut group_generator =
             GroupGenerator::new(StdRng::seed_from_u64(0), group_size, 10);
 
         // when
         let message_groups =
             group_generator.for_each_group(|group| encoder.write_messages(group));
-        encoder.close().unwrap();
+        let snapshot = encoder.close().unwrap();
 
-        let decoded_messages = StateReader::json(&file, group_size)
+        let decoded_messages = SnapshotReader::for_snapshot(snapshot)
             .unwrap()
             .messages()
             .unwrap()
@@ -533,16 +545,16 @@ mod tests {
         let temp_dir = tempfile::tempdir().unwrap();
         let file = temp_dir.path().join("state_config.json");
 
-        let mut encoder = StateWriter::json(&file);
+        let mut encoder = SnapshotWriter::json(&file);
         let mut group_generator =
             GroupGenerator::new(StdRng::seed_from_u64(0), group_size, 10);
 
         // when
         let contract_groups =
             group_generator.for_each_group(|group| encoder.write_contracts(group));
-        encoder.close().unwrap();
+        let snapshot = encoder.close().unwrap();
 
-        let decoded_contracts = StateReader::json(&file, group_size)
+        let decoded_contracts = SnapshotReader::for_snapshot(snapshot)
             .unwrap()
             .contracts()
             .unwrap()
@@ -560,16 +572,16 @@ mod tests {
         let temp_dir = tempfile::tempdir().unwrap();
         let file = temp_dir.path().join("state_config.json");
 
-        let mut encoder = StateWriter::json(&file);
+        let mut encoder = SnapshotWriter::json(&file);
         let mut group_generator =
             GroupGenerator::new(StdRng::seed_from_u64(0), group_size, 10);
 
         // when
         let contract_state_groups =
             group_generator.for_each_group(|group| encoder.write_contract_state(group));
-        encoder.close().unwrap();
+        let snapshot = encoder.close().unwrap();
 
-        let decoded_contract_state = StateReader::json(&file, group_size)
+        let decoded_contract_state = SnapshotReader::for_snapshot(snapshot)
             .unwrap()
             .contract_state()
             .unwrap()
@@ -591,16 +603,16 @@ mod tests {
         let temp_dir = tempfile::tempdir().unwrap();
         let file = temp_dir.path().join("state_config.json");
 
-        let mut encoder = StateWriter::json(&file);
+        let mut encoder = SnapshotWriter::json(&file);
         let mut group_generator =
             GroupGenerator::new(StdRng::seed_from_u64(0), group_size, 10);
 
         // when
         let contract_balance_groups =
             group_generator.for_each_group(|group| encoder.write_contract_balance(group));
-        encoder.close().unwrap();
+        let snapshot = encoder.close().unwrap();
 
-        let decoded_contract_balance = StateReader::json(&file, group_size)
+        let decoded_contract_balance = SnapshotReader::for_snapshot(snapshot)
             .unwrap()
             .contract_balance()
             .unwrap()
@@ -621,16 +633,16 @@ mod tests {
         let file = temp_dir.path().join("state_config.json");
         let block_height = 13u32.into();
         let da_block_height = 14u64.into();
-        let mut encoder = StateWriter::json(&file);
+        let mut encoder = SnapshotWriter::json(&file);
 
         // when
         encoder
             .write_block_data(block_height, da_block_height)
             .unwrap();
-        encoder.close().unwrap();
+        let snapshot = encoder.close().unwrap();
 
         // then
-        let reader = StateReader::json(&file, 100).unwrap();
+        let reader = SnapshotReader::for_snapshot(snapshot).unwrap();
         let block_height_decoded = reader.block_height();
         let da_block_height_decoded = reader.da_block_height();
         assert_eq!(block_height, block_height_decoded);

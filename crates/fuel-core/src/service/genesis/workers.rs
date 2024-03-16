@@ -23,7 +23,7 @@ use fuel_core_chain_config::{
     ContractStateConfig,
     Group,
     MessageConfig,
-    StateReader,
+    SnapshotReader,
 };
 use fuel_core_storage::transactional::StorageTransaction;
 use fuel_core_types::{
@@ -74,12 +74,12 @@ pub struct GenesisWorkers {
     cancel_token: CancellationToken,
     block_height: BlockHeight,
     da_block_height: DaBlockHeight,
-    state_reader: StateReader,
+    state_reader: SnapshotReader,
     finished_signals: FinishedWorkerSignals,
 }
 
 impl GenesisWorkers {
-    pub fn new(db: Database, state_reader: StateReader) -> Self {
+    pub fn new(db: Database, state_reader: SnapshotReader) -> Self {
         let block_height = state_reader.block_height();
         let da_block_height = state_reader.da_block_height();
         Self {

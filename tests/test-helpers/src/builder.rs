@@ -4,8 +4,8 @@ use fuel_core::{
         CoinConfig,
         ContractBalanceConfig,
         ContractConfig,
+        SnapshotReader,
         StateConfig,
-        StateReader,
     },
     service::{
         Config,
@@ -210,7 +210,7 @@ impl TestSetupBuilder {
                 ..fuel_core_txpool::Config::default()
             },
             chain_config: chain_conf,
-            state_reader: StateReader::in_memory(state),
+            state_reader: SnapshotReader::in_memory(state),
             block_production: self.trigger,
             static_gas_price: self.min_gas_price,
             ..Config::local_node()

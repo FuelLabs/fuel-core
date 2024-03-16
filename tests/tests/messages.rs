@@ -3,8 +3,8 @@
 use fuel_core::{
     chain_config::{
         MessageConfig,
+        SnapshotReader,
         StateConfig,
-        StateReader,
     },
     service::{
         Config,
@@ -51,7 +51,7 @@ fn setup_config(messages: impl IntoIterator<Item = MessageConfig>) -> Config {
     };
 
     Config {
-        state_reader: StateReader::in_memory(state),
+        state_reader: SnapshotReader::in_memory(state),
         ..Config::local_node()
     }
 }
@@ -594,7 +594,7 @@ async fn can_get_message() {
         messages: vec![first_msg.clone()],
         ..Default::default()
     };
-    config.state_reader = StateReader::in_memory(state_config);
+    config.state_reader = SnapshotReader::in_memory(state_config);
 
     // setup service and client
     let service = FuelService::new_node(config).await.unwrap();
@@ -611,7 +611,7 @@ async fn can_get_message() {
 #[tokio::test]
 async fn can_get_empty_message() {
     let mut config = Config::local_node();
-    config.state_reader = StateReader::in_memory(StateConfig::default());
+    config.state_reader = SnapshotReader::in_memory(StateConfig::default());
 
     let service = FuelService::new_node(config).await.unwrap();
     let client = FuelClient::from(service.bound_address);

@@ -6,8 +6,8 @@ use fuel_core::{
         ContractConfig,
         ContractStateConfig,
         MessageConfig,
+        SnapshotReader,
         StateConfig,
-        StateReader,
     },
     database::Database,
     service::{
@@ -98,7 +98,7 @@ async fn loads_snapshot() {
         da_block_height: 20u64.into(),
     };
     let config = Config {
-        state_reader: StateReader::in_memory(starting_state.clone()),
+        state_reader: SnapshotReader::in_memory(starting_state.clone()),
         ..Config::local_node()
     };
 

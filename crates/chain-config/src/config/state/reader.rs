@@ -61,7 +61,6 @@ impl<T> Iterator for IntoIter<T> {
 enum DataSource {
     #[cfg(feature = "parquet")]
     Parquet {
-        files: crate::ParquetFiles,
         block_height: BlockHeight,
         da_block_height: DaBlockHeight,
     },
@@ -72,11 +71,11 @@ enum DataSource {
 }
 
 #[derive(Clone, Debug)]
-pub struct StateReader {
+pub struct SnapshotReader {
     data_source: DataSource,
 }
 
-impl StateReader {
+impl SnapshotReader {
     pub fn state_config(self) -> Option<StateConfig> {
         match self.data_source {
             DataSource::InMemory { state, .. } => Some(state),
@@ -86,17 +85,18 @@ impl StateReader {
     }
 
     #[cfg(feature = "std")]
-    pub fn json(
+    fn json(
         path: impl AsRef<std::path::Path>,
         group_size: usize,
     ) -> anyhow::Result<Self> {
-        let mut file = std::fs::File::open(path)?;
-
-        let state = serde_json::from_reader(&mut file)?;
-
-        Ok(Self {
-            data_source: DataSource::InMemory { state, group_size },
-        })
+        todo!()
+        // let mut file = std::fs::File::open(path)?;
+        //
+        // let state = serde_json::from_reader(&mut file)?;
+        //
+        // Ok(Self {
+        //     data_source: DataSource::InMemory { state, group_size },
+        // })
     }
 
     pub fn in_memory(state: StateConfig) -> Self {
@@ -109,16 +109,21 @@ impl StateReader {
     }
 
     #[cfg(feature = "parquet")]
-    pub fn parquet(files: crate::ParquetFiles) -> anyhow::Result<Self> {
-        let block_height = Self::read_block_height(&files.block_height)?;
-        let da_block_height = Self::read_block_height(&files.da_block_height)?;
-        Ok(Self {
-            data_source: DataSource::Parquet {
-                files,
-                block_height,
-                da_block_height,
-            },
-        })
+    fn parquet(
+        tables: Vec<std::path::PathBuf>,
+        da_block_height: std::path::PathBuf,
+        block_height: std::path::PathBuf,
+    ) -> anyhow::Result<Self> {
+        todo!()
+        // let block_height = Self::read_block_height(&files.block_height)?;
+        // let da_block_height = Self::read_block_height(&files.da_block_height)?;
+        // Ok(Self {
+        //     data_source: DataSource::Parquet {
+        //         files,
+        //         block_height,
+        //         da_block_height,
+        //     },
+        // })
     }
 
     #[cfg(feature = "parquet")]
@@ -142,53 +147,38 @@ impl StateReader {
     pub fn for_snapshot(
         snapshot_metadata: crate::config::SnapshotMetadata,
     ) -> anyhow::Result<Self> {
-        use crate::StateEncoding;
+        use crate::TableEncoding;
 
-        match snapshot_metadata.take_state_encoding() {
-            StateEncoding::Json { filepath } => Self::json(filepath, MAX_GROUP_SIZE),
+        match snapshot_metadata.table_encoding {
+            TableEncoding::Json { filepath } => Self::json(filepath, MAX_GROUP_SIZE),
             #[cfg(feature = "parquet")]
-            StateEncoding::Parquet { filepaths, .. } => Self::parquet(filepaths),
+            TableEncoding::Parquet {
+                tables,
+                block_height,
+                da_block_height,
+                ..
+            } => Self::parquet(tables, da_block_height, block_height),
         }
     }
 
     pub fn coins(&self) -> anyhow::Result<IntoIter<CoinConfig>> {
-        self.create_iterator(
-            |state| &state.coins,
-            #[cfg(feature = "parquet")]
-            |files| &files.coins,
-        )
+        todo!()
     }
 
     pub fn messages(&self) -> anyhow::Result<IntoIter<MessageConfig>> {
-        self.create_iterator(
-            |state| &state.messages,
-            #[cfg(feature = "parquet")]
-            |files| &files.messages,
-        )
+        todo!()
     }
 
     pub fn contracts(&self) -> anyhow::Result<IntoIter<ContractConfig>> {
-        self.create_iterator(
-            |state| &state.contracts,
-            #[cfg(feature = "parquet")]
-            |files| &files.contracts,
-        )
+        todo!()
     }
 
     pub fn contract_state(&self) -> anyhow::Result<IntoIter<ContractStateConfig>> {
-        self.create_iterator(
-            |state| &state.contract_state,
-            #[cfg(feature = "parquet")]
-            |files| &files.contract_state,
-        )
+        todo!()
     }
 
     pub fn contract_balance(&self) -> anyhow::Result<IntoIter<ContractBalanceConfig>> {
-        self.create_iterator(
-            |state| &state.contract_balance,
-            #[cfg(feature = "parquet")]
-            |files| &files.contract_balance,
-        )
+        todo!()
     }
 
     pub fn block_height(&self) -> BlockHeight {
@@ -209,28 +199,28 @@ impl StateReader {
         }
     }
 
-    fn create_iterator<T: Clone>(
-        &self,
-        extractor: impl FnOnce(&StateConfig) -> &Vec<T>,
-        #[cfg(feature = "parquet")] file_picker: impl FnOnce(
-            &crate::ParquetFiles,
-        ) -> &std::path::Path,
-    ) -> anyhow::Result<IntoIter<T>> {
-        match &self.data_source {
-            DataSource::InMemory { state, group_size } => {
-                let groups = extractor(state).clone();
-                Ok(Self::in_memory_iter(groups, *group_size))
-            }
-            #[cfg(feature = "parquet")]
-            DataSource::Parquet { files, .. } => {
-                let path = file_picker(files);
-                let file = std::fs::File::open(path)?;
-                Ok(IntoIter::Parquet {
-                    decoder: super::parquet::decode::Decoder::new(file)?,
-                })
-            }
-        }
-    }
+    // fn create_iterator<T: Clone>(
+    //     &self,
+    //     extractor: impl FnOnce(&StateConfig) -> &Vec<T>,
+    //     #[cfg(feature = "parquet")] file_picker: impl FnOnce(
+    //         &crate::ParquetFiles,
+    //     ) -> &std::path::Path,
+    // ) -> anyhow::Result<IntoIter<T>> {
+    //     match &self.data_source {
+    //         DataSource::InMemory { state, group_size } => {
+    //             let groups = extractor(state).clone();
+    //             Ok(Self::in_memory_iter(groups, *group_size))
+    //         }
+    //         #[cfg(feature = "parquet")]
+    //         DataSource::Parquet { files, .. } => {
+    //             let path = file_picker(files);
+    //             let file = std::fs::File::open(path)?;
+    //             Ok(IntoIter::Parquet {
+    //                 decoder: super::parquet::decode::Decoder::new(file)?,
+    //             })
+    //         }
+    //     }
+    // }
 
     fn in_memory_iter<T>(items: Vec<T>, group_size: usize) -> IntoIter<T> {
         let groups = items

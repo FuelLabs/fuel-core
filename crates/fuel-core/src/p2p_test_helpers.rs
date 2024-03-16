@@ -13,7 +13,7 @@ use crate::{
         ServiceTrait,
     },
 };
-use fuel_core_chain_config::StateReader;
+use fuel_core_chain_config::SnapshotReader;
 use fuel_core_p2p::{
     codecs::postcard::PostcardCodec,
     network_service::FuelP2PService,
@@ -243,7 +243,7 @@ pub async fn make_nodes(
         }
     }
 
-    config.state_reader = StateReader::in_memory(state_config);
+    config.state_reader = SnapshotReader::in_memory(state_config);
 
     let bootstrap_nodes: Vec<Bootstrap> =
         futures::stream::iter(bootstrap_setup.into_iter().enumerate())

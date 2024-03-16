@@ -17,7 +17,7 @@ use fuel_core::{
 };
 use fuel_core_chain_config::{
     SnapshotMetadata,
-    StateWriter,
+    SnapshotWriter,
     MAX_GROUP_SIZE,
 };
 use fuel_core_storage::Result as StorageResult;
@@ -136,8 +136,7 @@ fn contract_snapshot(
     let (contract, state, balance) = db.get_contract_by_id(contract_id)?;
     let block = db.get_last_block()?;
 
-    let metadata = write_metadata(output_dir, Encoding::Json)?;
-    let mut writer = StateWriter::for_snapshot(&metadata)?;
+    let mut writer = SnapshotWriter::json(output_dir);
 
     writer.write_contracts(vec![contract])?;
     writer.write_contract_state(state)?;
@@ -155,39 +154,13 @@ fn full_snapshot(
 ) -> Result<(), anyhow::Error> {
     std::fs::create_dir_all(output_dir)?;
 
-    let metadata = write_metadata(output_dir, encoding)?;
+    let mut writer = match encoding {
+        Encoding::Json => SnapshotWriter::json(output_dir),
+    };
 
-    write_chain_state(&db, &metadata)?;
-    write_chain_config(prev_chain_config, metadata.chain_config())?;
-    Ok(())
-}
+    let prev_chain_config = load_chain_config(prev_chain_config)?;
+    writer.write_chain_config(&prev_chain_config)?;
 
-fn write_chain_config(
-    chain_config: Option<PathBuf>,
-    file: &Path,
-) -> Result<(), anyhow::Error> {
-    let chain_config = load_chain_config(chain_config)?;
-
-    chain_config.write(file)
-}
-
-fn write_metadata(dir: &Path, encoding: Encoding) -> anyhow::Result<SnapshotMetadata> {
-    match encoding {
-        Encoding::Json => SnapshotMetadata::write_json(dir),
-        #[cfg(feature = "parquet")]
-        Encoding::Parquet {
-            compression,
-            group_size,
-            ..
-        } => SnapshotMetadata::write_parquet(dir, compression.try_into()?, group_size),
-    }
-}
-
-fn write_chain_state(
-    db: impl ChainStateDb,
-    metadata: &SnapshotMetadata,
-) -> anyhow::Result<()> {
-    let mut writer = StateWriter::for_snapshot(metadata)?;
     fn write<T>(
         data: impl Iterator<Item = StorageResult<T>>,
         group_size: usize,
@@ -197,10 +170,8 @@ fn write_chain_state(
             .into_iter()
             .try_for_each(|chunk| write(chunk.try_collect()?))
     }
-    let group_size = metadata
-        .state_encoding()
-        .group_size()
-        .unwrap_or(MAX_GROUP_SIZE);
+    todo!("Propagate group size");
+    let group_size = MAX_GROUP_SIZE;
 
     let coins = db.iter_coin_configs();
     write(coins, group_size, |chunk| writer.write_coins(chunk))?;
@@ -567,7 +538,7 @@ mod tests {
     fn everything_snapshot_respects_group_size(group_size: usize) -> anyhow::Result<()> {
         use fuel_core_chain_config::{
             ParquetFiles,
-            StateReader,
+            SnapshotReader,
         };
 
         // given
@@ -598,7 +569,7 @@ mod tests {
 
         // then
         let files = ParquetFiles::snapshot_default(&snapshot_dir);
-        let reader = StateReader::parquet(files)?;
+        let reader = SnapshotReader::parquet(files)?;
 
         let expected_state = sorted_state(state);
 
