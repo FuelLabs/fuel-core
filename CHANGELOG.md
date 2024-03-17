@@ -66,6 +66,9 @@ Description of the upcoming release here.
 
   Using uniform-sized batches may result in batches containing items from multiple contracts. Optimal performance can presumably be achieved by selecting a batch size that typically encompasses an entire contract's state or balance, allowing for immediate initialization of relevant Merkle trees.
 
+### Removed
+
+- [#1757](https://github.com/FuelLabs/fuel-core/pull/1757): Removed `protobuf` from everywhere since `libp2p` uses `quick-protobuf`.
 
 ## [Version 0.23.0]
 

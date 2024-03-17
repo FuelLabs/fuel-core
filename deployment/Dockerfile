@@ -14,7 +14,6 @@ RUN apt-get update && \
     lld \
     clang \
     libclang-dev \
-    protobuf-compiler \
     && xx-apt-get update  \
     && xx-apt-get install -y libc6-dev g++ binutils \
     && apt-get clean \

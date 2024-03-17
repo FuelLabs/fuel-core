@@ -21,7 +21,6 @@ To build Fuel Core you'll need to at least have the following installed:
 -   `git` - version control
 -   [`rustup`](https://rustup.rs/) - Rust installer and toolchain manager
 -   [`clang`](http://releases.llvm.org/download.html) - Used to build system libraries (required for rocksdb).
--   [`protoc`](https://grpc.io/docs/protoc-installation/) - Used to compile Protocol Buffer files (required by libp2p).
 
 See the [README.md](README.md#system-requirements) for platform specific setup steps.
 
