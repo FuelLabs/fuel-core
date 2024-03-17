@@ -143,12 +143,14 @@ fn contract_snapshot(
 ) -> Result<(), anyhow::Error> {
     std::fs::create_dir_all(output_dir)?;
 
-    let (contract, state, balance) = db.get_contract_by_id(contract_id)?;
+    let (code, info, utxo, state, balance) = db.get_contract_by_id(contract_id)?;
     let block = db.get_last_block()?;
 
     let mut writer = SnapshotWriter::json(output_dir);
 
-    writer.write_contracts(vec![contract])?;
+    writer.write_contracts_code(vec![code]);
+    writer.write_contracts_info(vec![info]);
+    writer.write_contracts_utxos(vec![utxo]);
     writer.write_contract_state(state)?;
     writer.write_contract_balance(balance)?;
     writer.write_block_data(*block.header().height(), block.header().da_height)?;
@@ -193,8 +195,16 @@ fn full_snapshot(
     let messages = db.iter_message_configs();
     write(messages, group_size, |chunk| writer.write_messages(chunk))?;
 
-    let contracts = db.iter_contract_configs();
-    write(contracts, group_size, |chunk| writer.write_contracts(chunk))?;
+    let code = db.iter_contracts_code();
+    write(code, group_size, |chunk| writer.write_contracts_code(chunk))?;
+
+    let info = db.iter_contracts_info();
+    write(info, group_size, |chunk| writer.write_contracts_info(chunk))?;
+
+    let utxos = db.iter_contracts_latest_utxo();
+    write(utxos, group_size, |chunk| {
+        writer.write_contracts_utxos(chunk)
+    })?;
 
     let contract_states = db.iter_contract_state_configs();
     write(contract_states, group_size, |chunk| {

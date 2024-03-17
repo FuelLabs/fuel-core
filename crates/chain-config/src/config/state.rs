@@ -200,81 +200,51 @@ impl StateConfig {
         self.contract_balance.extend(other.contract_balance);
     }
 
-    pub fn generate_state_config(db: impl ChainStateDb) -> StorageResult<Self> {
-        let coins = db.iter_coin_configs().try_collect()?;
-        let messages = db.iter_message_configs().try_collect()?;
-        let contracts = db.iter_contract_configs().try_collect()?;
-        let contract_state = db.iter_contract_state_configs().try_collect()?;
-        let contract_balance = db.iter_contract_balance_configs().try_collect()?;
-        let block = db.get_last_block()?;
+    pub fn from_tables(
+        coins: Vec<MyEntry<Coins>>,
+        messages: Vec<MyEntry<Messages>>,
+        contract_state: Vec<MyEntry<ContractsState>>,
+        contract_balance: Vec<MyEntry<ContractsAssets>>,
+        contract_code: Vec<MyEntry<ContractsRawCode>>,
+        contract_info: Vec<MyEntry<ContractsInfo>>,
+        contract_utxo: Vec<MyEntry<ContractsLatestUtxo>>,
+        da_block_height: DaBlockHeight,
+        block_height: BlockHeight,
+    ) -> Self {
+        let coins = coins.into_iter().map(|coin| coin.into()).collect();
+        let messages = messages.into_iter().map(|message| message.into()).collect();
+        let contract_state = contract_state
+            .into_iter()
+            .map(|state| state.into())
+            .collect();
 
-        Ok(Self {
-            coins,
-            messages,
-            contracts,
-            contract_state,
-            contract_balance,
-            block_height: *block.header().height(),
-            da_block_height: block.header().da_height,
-        })
-    }
+        let contract_balance = contract_balance
+            .into_iter()
+            .map(|balance| balance.into())
+            .collect();
 
-    #[cfg(feature = "std")]
-    pub fn from_snapshot_metadata(
-        snapshot_metadata: SnapshotMetadata,
-    ) -> anyhow::Result<Self> {
-        let reader = crate::SnapshotReader::for_snapshot(snapshot_metadata)?;
-        Self::from_reader(&reader)
-    }
+        let contract_code: HashMap<ContractId, Vec<u8>> = contract_code
+            .into_iter()
+            .map(|entry| (entry.key, entry.value.into()))
+            .collect();
 
-    pub fn from_reader(reader: &SnapshotReader) -> anyhow::Result<Self> {
-        let coins = reader
-            .coins()?
-            .map_ok(|group| group.data)
-            .flatten_ok()
-            .map_ok(|coin| coin.into())
-            .try_collect()?;
-
-        let messages = reader
-            .messages()?
-            .map_ok(|group| group.data)
-            .flatten_ok()
-            .map_ok(|message| message.into())
-            .try_collect()?;
-
-        let contract_code: Vec<(ContractId, Vec<u8>)> = reader
-            .contracts_raw_code()?
-            .map_ok(|group| group.data)
-            .flatten_ok()
-            .map_ok(|entry| (entry.key, entry.value.into()))
-            .try_collect()?;
-
-        let contract_code: HashMap<_, _> = contract_code.into_iter().collect();
-
-        let contract_salt: Vec<(ContractId, Salt)> = reader
-            .contracts_info()?
-            .map_ok(|group| group.data)
-            .flatten_ok()
-            .map_ok(|entry| match entry.value {
+        let contract_salt: HashMap<ContractId, Salt> = contract_info
+            .into_iter()
+            .map(|entry| match entry.value {
                 ContractsInfoType::V1(info) => (entry.key, info.into()),
                 _ => unreachable!(),
             })
-            .try_collect()?;
-        let contract_salt: HashMap<_, _> = contract_salt.into_iter().collect();
+            .collect();
 
-        let contract_utxos: Vec<(ContractId, (UtxoId, TxPointer))> = reader
-            .contracts_latest_utxo()?
-            .map_ok(|group| group.data)
-            .flatten_ok()
-            .map_ok(|entry| match entry.value {
+        let contract_utxos: HashMap<ContractId, (UtxoId, TxPointer)> = contract_utxo
+            .into_iter()
+            .map(|entry| match entry.value {
                 ContractUtxoInfo::V1(utxo) => {
                     (entry.key, (utxo.utxo_id, utxo.tx_pointer))
                 }
                 _ => unreachable!(),
             })
-            .try_collect()?;
-
-        let contract_utxos: HashMap<_, _> = contract_utxos.into_iter().collect();
+            .collect();
 
         let all_ids = contract_code
             .keys()
@@ -306,25 +276,7 @@ impl StateConfig {
                 }
             })
             .collect();
-
-        let contract_state = reader
-            .contract_state()?
-            .map_ok(|group| group.data)
-            .flatten_ok()
-            .map_ok(|state| state.into())
-            .try_collect()?;
-
-        let contract_balance = reader
-            .contract_balance()?
-            .map_ok(|group| group.data)
-            .flatten_ok()
-            .map_ok(|balance| balance.into())
-            .try_collect()?;
-
-        let block_height = reader.block_height();
-        let da_block_height = reader.da_block_height();
-
-        Ok(Self {
+        Self {
             coins,
             messages,
             contracts,
@@ -332,26 +284,104 @@ impl StateConfig {
             contract_balance,
             block_height,
             da_block_height,
-        })
+        }
     }
 
-    pub fn from_db(db: impl ChainStateDb) -> anyhow::Result<Self> {
+    pub fn generate_state_config(db: impl ChainStateDb) -> StorageResult<Self> {
         let coins = db.iter_coin_configs().try_collect()?;
         let messages = db.iter_message_configs().try_collect()?;
-        let contracts = db.iter_contract_configs().try_collect()?;
         let contract_state = db.iter_contract_state_configs().try_collect()?;
         let contract_balance = db.iter_contract_balance_configs().try_collect()?;
+        let contract_code = db.iter_contracts_code().try_collect()?;
+        let contract_info = db.iter_contracts_info().try_collect()?;
+        let contract_utxo = db.iter_contracts_latest_utxo().try_collect()?;
         let block = db.get_last_block()?;
+        let da_block_height = block.header().da_height;
+        let block_height = *block.header().height();
 
-        Ok(Self {
+        Ok(Self::from_tables(
             coins,
             messages,
-            contracts,
             contract_state,
             contract_balance,
-            block_height: *block.header().height(),
-            da_block_height: block.header().da_height,
-        })
+            contract_code,
+            contract_info,
+            contract_utxo,
+            da_block_height,
+            block_height,
+        ))
+    }
+
+    #[cfg(feature = "std")]
+    pub fn from_snapshot_metadata(
+        snapshot_metadata: SnapshotMetadata,
+    ) -> anyhow::Result<Self> {
+        let reader = crate::SnapshotReader::for_snapshot(snapshot_metadata)?;
+        Self::from_reader(&reader)
+    }
+
+    pub fn from_reader(reader: &SnapshotReader) -> anyhow::Result<Self> {
+        let coins = reader
+            .coins()?
+            .map_ok(|batch| batch.data)
+            .flatten_ok()
+            .try_collect()?;
+
+        let messages = reader
+            .messages()?
+            .map_ok(|batch| batch.data)
+            .flatten_ok()
+            .try_collect()?;
+
+        let contract_state = reader
+            .contract_state()?
+            .map_ok(|batch| batch.data)
+            .flatten_ok()
+            .try_collect()?;
+
+        let contract_balance = reader
+            .contract_balance()?
+            .map_ok(|batch| batch.data)
+            .flatten_ok()
+            .try_collect()?;
+
+        let contract_code = reader
+            .contracts_raw_code()?
+            .map_ok(|batch| batch.data)
+            .flatten_ok()
+            .try_collect()?;
+
+        let contract_info = reader
+            .contracts_info()?
+            .map_ok(|batch| batch.data)
+            .flatten_ok()
+            .try_collect()?;
+
+        let contract_utxo = reader
+            .contracts_latest_utxo()?
+            .map_ok(|batch| batch.data)
+            .flatten_ok()
+            .try_collect()?;
+
+        let block_height = reader.block_height();
+        let da_block_height = reader.da_block_height();
+
+        Ok(Self::from_tables(
+            coins,
+            messages,
+            contract_state,
+            contract_balance,
+            contract_code,
+            contract_info,
+            contract_utxo,
+            da_block_height,
+            block_height,
+        ))
+    }
+
+    // TODO: this seems to be a duplicate, remove it
+    pub fn from_db(db: impl ChainStateDb) -> anyhow::Result<Self> {
+        Ok(Self::generate_state_config(db)?)
     }
 
     pub fn local_testnet() -> Self {
@@ -421,25 +451,33 @@ pub trait ChainStateDb {
         &self,
         contract_id: fuel_core_types::fuel_types::ContractId,
     ) -> StorageResult<(
-        ContractConfig,
-        Vec<ContractStateConfig>,
-        Vec<ContractBalanceConfig>,
+        MyEntry<ContractsRawCode>,
+        MyEntry<ContractsInfo>,
+        MyEntry<ContractsLatestUtxo>,
+        Vec<MyEntry<ContractsState>>,
+        Vec<MyEntry<ContractsAssets>>,
     )>;
     /// Returns *all* unspent coin configs available in the database.
-    fn iter_coin_configs(&self) -> BoxedIter<StorageResult<CoinConfig>>;
-    /// Returns *alive* contract configs available in the database.
-    fn iter_contract_configs(&self) -> BoxedIter<StorageResult<ContractConfig>>;
+    fn iter_coin_configs(&self) -> BoxedIter<StorageResult<MyEntry<Coins>>>;
+
+    fn iter_contracts_code(&self) -> BoxedIter<StorageResult<MyEntry<ContractsRawCode>>>;
+
+    fn iter_contracts_info(&self) -> BoxedIter<StorageResult<MyEntry<ContractsInfo>>>;
+
+    fn iter_contracts_latest_utxo(
+        &self,
+    ) -> BoxedIter<StorageResult<MyEntry<ContractsLatestUtxo>>>;
 
     /// Returns the state of all contracts
     fn iter_contract_state_configs(
         &self,
-    ) -> BoxedIter<StorageResult<ContractStateConfig>>;
+    ) -> BoxedIter<StorageResult<MyEntry<ContractsState>>>;
     /// Returns the balances of all contracts
     fn iter_contract_balance_configs(
         &self,
-    ) -> BoxedIter<StorageResult<ContractBalanceConfig>>;
+    ) -> BoxedIter<StorageResult<MyEntry<ContractsAssets>>>;
     /// Returns *all* unspent message configs available in the database.
-    fn iter_message_configs(&self) -> BoxedIter<StorageResult<MessageConfig>>;
+    fn iter_message_configs(&self) -> BoxedIter<StorageResult<MyEntry<Messages>>>;
     /// Returns the last available block.
     fn get_last_block(&self) -> StorageResult<CompressedBlock>;
 }

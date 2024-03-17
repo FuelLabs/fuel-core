@@ -3,6 +3,7 @@ use crate::{
         contract_state::ContractStateConfig,
         my_entry::MyEntry,
     },
+    AsTable,
     ChainConfig,
     CoinConfig,
     ContractBalanceConfig,
@@ -15,7 +16,15 @@ use crate::{
 use fuel_core_storage::{
     kv_store::StorageColumn,
     structured_storage::TableWithBlueprint,
-    tables::Coins,
+    tables::{
+        Coins,
+        ContractsAssets,
+        ContractsInfo,
+        ContractsLatestUtxo,
+        ContractsRawCode,
+        ContractsState,
+        Messages,
+    },
     Mappable,
 };
 use fuel_core_types::{
@@ -190,20 +199,6 @@ where
 }
 
 impl SnapshotWriter {
-    pub fn for_metadata(snapshot_metadata: &SnapshotMetadata) -> anyhow::Result<Self> {
-        todo!()
-        // let encoder = match snapshot_metadata.state_encoding() {
-        //     crate::StateEncoding::Json { filepath, .. } => Self::json(filepath),
-        //     #[cfg(feature = "parquet")]
-        //     crate::StateEncoding::Parquet {
-        //         filepaths,
-        //         compression,
-        //         ..
-        //     } => Self::parquet(filepaths, *compression)?,
-        // };
-        // Ok(encoder)
-    }
-
     pub fn json(dir: impl Into<PathBuf>) -> Self {
         Self {
             encoder: EncoderType::Json {
@@ -234,11 +229,13 @@ impl SnapshotWriter {
         mut self,
         state_config: StateConfig,
     ) -> anyhow::Result<SnapshotMetadata> {
-        self.write_coins(state_config.coins)?;
-        self.write_contracts(state_config.contracts)?;
-        self.write_messages(state_config.messages)?;
-        self.write_contract_state(state_config.contract_state)?;
-        self.write_contract_balance(state_config.contract_balance)?;
+        self.write_coins(state_config.as_table())?;
+        self.write_contracts_code(state_config.as_table())?;
+        self.write_contracts_info(state_config.as_table())?;
+        self.write_contracts_utxos(state_config.as_table())?;
+        self.write_messages(state_config.as_table())?;
+        self.write_contract_state(state_config.as_table())?;
+        self.write_contract_balance(state_config.as_table())?;
         self.write_block_data(state_config.block_height, state_config.da_block_height)?;
         self.close()
     }
@@ -250,9 +247,8 @@ impl SnapshotWriter {
         chain_config.write(self.dir.join("chain_config.json"))
     }
 
-    pub fn write_coins(&mut self, elements: Vec<CoinConfig>) -> anyhow::Result<()> {
-        let elements = elements.into_iter().map(|e| e.into()).collect();
-        self.wrt::<Coins>(elements)
+    pub fn write_coins(&mut self, elements: Vec<MyEntry<Coins>>) -> anyhow::Result<()> {
+        self.wrt(elements)
     }
 
     pub fn wrt<T>(&mut self, elements: Vec<MyEntry<T>>) -> anyhow::Result<()>
@@ -290,29 +286,46 @@ impl SnapshotWriter {
         }
     }
 
-    pub fn write_contracts(
+    pub fn write_contracts_code(
         &mut self,
-        elements: Vec<ContractConfig>,
+        elements: Vec<MyEntry<ContractsRawCode>>,
     ) -> anyhow::Result<()> {
-        todo!()
+        self.wrt(elements)
     }
 
-    pub fn write_messages(&mut self, elements: Vec<MessageConfig>) -> anyhow::Result<()> {
-        todo!()
+    pub fn write_contracts_info(
+        &mut self,
+        elements: Vec<MyEntry<ContractsInfo>>,
+    ) -> anyhow::Result<()> {
+        self.wrt(elements)
+    }
+
+    pub fn write_contracts_utxos(
+        &mut self,
+        elements: Vec<MyEntry<ContractsLatestUtxo>>,
+    ) -> anyhow::Result<()> {
+        self.wrt(elements)
+    }
+
+    pub fn write_messages(
+        &mut self,
+        elements: Vec<MyEntry<Messages>>,
+    ) -> anyhow::Result<()> {
+        self.wrt(elements)
     }
 
     pub fn write_contract_state(
         &mut self,
-        elements: Vec<ContractStateConfig>,
+        elements: Vec<MyEntry<ContractsState>>,
     ) -> anyhow::Result<()> {
-        todo!()
+        self.wrt(elements)
     }
 
     pub fn write_contract_balance(
         &mut self,
-        elements: Vec<ContractBalanceConfig>,
+        elements: Vec<MyEntry<ContractsAssets>>,
     ) -> anyhow::Result<()> {
-        todo!()
+        self.wrt(elements)
     }
 
     pub fn write_block_data(

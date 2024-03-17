@@ -35,6 +35,7 @@ use fuel_core_types::{
     },
     services::graphql_api::ContractBalance,
 };
+use itertools::Itertools;
 
 impl DatabaseBlocks for Database {
     fn blocks(
@@ -82,15 +83,12 @@ impl DatabaseContracts for Database {
         direction: IterDirection,
     ) -> BoxedIter<StorageResult<ContractBalance>> {
         self.contract_balances(contract, start_asset, Some(direction))
-            .map(move |result| {
-                result
-                    .map_err(StorageError::from)
-                    .map(|(asset_id, amount)| ContractBalance {
-                        owner: contract,
-                        amount,
-                        asset_id,
-                    })
+            .map_ok(|entry| ContractBalance {
+                owner: *entry.key.contract_id(),
+                amount: entry.value,
+                asset_id: *entry.key.asset_id(),
             })
+            .map(|res| res.map_err(StorageError::from))
             .into_boxed()
     }
 }

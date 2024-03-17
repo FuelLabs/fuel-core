@@ -1,14 +1,23 @@
-use anyhow::{anyhow, Context};
+use anyhow::{
+    anyhow,
+    Context,
+};
 use parquet::{
     data_type::AsBytes,
     file::{
-        reader::{ChunkReader, FileReader},
+        reader::{
+            ChunkReader,
+            FileReader,
+        },
         serialized_reader::SerializedFileReader,
     },
     record::RowAccessor,
 };
 
-use crate::config::state::{Group, GroupResult};
+use crate::config::state::{
+    Group,
+    GroupResult,
+};
 
 pub struct Decoder<R: ChunkReader> {
     data_source: SerializedFileReader<R>,

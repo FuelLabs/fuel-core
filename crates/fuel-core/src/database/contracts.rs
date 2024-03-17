@@ -3,6 +3,7 @@ use fuel_core_chain_config::{
     ContractBalanceConfig,
     ContractConfig,
     ContractStateConfig,
+    MyEntry,
 };
 use fuel_core_storage::{
     iter::{
@@ -29,79 +30,60 @@ use fuel_core_types::{
         Word,
     },
 };
+use itertools::Itertools;
 
 impl Database {
-    pub fn iter_contract_state_configs(
+    pub fn iter_contract_state(
         &self,
-    ) -> impl Iterator<Item = StorageResult<ContractStateConfig>> + '_ {
-        self.iter_all::<ContractsState>(None).map(|res| {
-            let (key, value) = res?;
-            let contract_id = *key.contract_id();
-            let key = *key.state_key();
-
-            Ok(ContractStateConfig {
-                contract_id,
-                key,
-                value: value.0,
-            })
-        })
+    ) -> impl Iterator<Item = StorageResult<MyEntry<ContractsState>>> + '_ {
+        self.iter_all::<ContractsState>(None)
+            .map_ok(|(key, value)| MyEntry { key, value })
     }
 
-    pub fn iter_contract_balance_configs(
+    pub fn iter_contract_balance(
         &self,
-    ) -> impl Iterator<Item = StorageResult<ContractBalanceConfig>> + '_ {
-        self.iter_all::<ContractsAssets>(None).map(|res| {
-            let res = res?;
-
-            let contract_id = *res.0.contract_id();
-            let asset_id = *res.0.asset_id();
-
-            Ok(ContractBalanceConfig {
-                contract_id,
-                asset_id,
-                amount: res.1,
-            })
-        })
+    ) -> impl Iterator<Item = StorageResult<MyEntry<ContractsAssets>>> + '_ {
+        self.iter_all::<ContractsAssets>(None)
+            .map_ok(|(key, value)| MyEntry { key, value })
     }
 
-    pub fn get_contract_config(
+    pub fn get_contract_code(
         &self,
         contract_id: ContractId,
-    ) -> StorageResult<ContractConfig> {
-        let code = self
-            .storage::<ContractsRawCode>()
+    ) -> StorageResult<MyEntry<ContractsRawCode>> {
+        self.storage::<ContractsRawCode>()
             .get(&contract_id)?
-            .map(|v| {
-                let code: Vec<u8> = v.into_owned().into();
-                code
+            .map(|value| MyEntry {
+                key: contract_id,
+                value: value.into_owned(),
             })
-            .ok_or_else(|| not_found!("ContractsRawCode"))?;
+            .ok_or_else(|| not_found!("ContractsRawCode"))
+    }
 
-        let salt = *self
-            .storage::<ContractsInfo>()
-            .get(&contract_id)
-            .unwrap()
-            .expect("Contract does not exist")
-            .salt();
+    pub fn get_contract_info(
+        &self,
+        contract_id: ContractId,
+    ) -> StorageResult<MyEntry<ContractsInfo>> {
+        self.storage::<ContractsInfo>()
+            .get(&contract_id)?
+            .map(|value| MyEntry {
+                key: contract_id,
+                value: value.into_owned(),
+            })
+            .ok_or_else(|| not_found!("ContractsInfo"))
+    }
 
-        let latest_utxo = self
-            .storage::<ContractsLatestUtxo>()
-            .get(&contract_id)
-            .unwrap()
-            .expect("contract does not exist")
-            .into_owned();
-        let utxo_id = latest_utxo.utxo_id();
-        let tx_pointer = latest_utxo.tx_pointer();
-
-        Ok(ContractConfig {
-            contract_id,
-            code,
-            salt,
-            tx_id: *utxo_id.tx_id(),
-            output_index: utxo_id.output_index(),
-            tx_pointer_block_height: tx_pointer.block_height(),
-            tx_pointer_tx_idx: tx_pointer.tx_index(),
-        })
+    pub fn get_contract_latest_utxo(
+        &self,
+        contract_id: ContractId,
+    ) -> StorageResult<MyEntry<ContractsLatestUtxo>> {
+        self.storage::<ContractsLatestUtxo>()
+            .get(&contract_id)?
+            .map(|value| MyEntry {
+                key: contract_id,
+                value: value.into_owned(),
+            })
+            .ok_or_else(|| not_found!("ContractsLatestUtxo"))
     }
 
     pub fn contract_balances(
@@ -109,7 +91,7 @@ impl Database {
         contract: ContractId,
         start_asset: Option<AssetId>,
         direction: Option<IterDirection>,
-    ) -> impl Iterator<Item = StorageResult<(AssetId, Word)>> + '_ {
+    ) -> impl Iterator<Item = StorageResult<MyEntry<ContractsAssets>>> + '_ {
         let start_asset =
             start_asset.map(|asset| ContractsAssetKey::new(&contract, &asset));
         self.iter_all_filtered::<ContractsAssets, _>(
@@ -117,30 +99,15 @@ impl Database {
             start_asset.as_ref(),
             direction,
         )
-        .map(|res| res.map(|(key, balance)| (*key.asset_id(), balance)))
+        .map_ok(|(key, value)| MyEntry { key, value })
     }
 
     pub fn contract_states(
         &self,
         contract_id: ContractId,
-    ) -> impl Iterator<Item = StorageResult<(Bytes32, Vec<u8>)>> + '_ {
+    ) -> impl Iterator<Item = StorageResult<MyEntry<ContractsState>>> + '_ {
         self.iter_all_by_prefix::<ContractsState, _>(Some(contract_id))
-            .map(|res| -> StorageResult<(Bytes32, Vec<u8>)> {
-                let (key, value) = res?;
-
-                Ok((*key.state_key(), value.0))
-            })
-    }
-
-    pub fn iter_contract_configs(
-        &self,
-    ) -> impl Iterator<Item = StorageResult<ContractConfig>> + '_ {
-        self.iter_all::<ContractsRawCode>(None).map(
-            |raw_contract_id| -> StorageResult<ContractConfig> {
-                let contract_id = raw_contract_id?.0;
-                self.get_contract_config(contract_id)
-            },
-        )
+            .map_ok(|(key, value)| MyEntry { key, value })
     }
 }
 

@@ -24,6 +24,7 @@ use fuel_core_chain_config::{
     ContractConfig,
     ContractStateConfig,
     MessageConfig,
+    MyEntry,
 };
 use fuel_core_services::SharedMutex;
 use fuel_core_storage::{
@@ -41,7 +42,16 @@ use fuel_core_storage::{
         Value,
     },
     not_found,
-    tables::FuelBlocks,
+    tables::{
+        Coins,
+        ContractsAssets,
+        ContractsInfo,
+        ContractsLatestUtxo,
+        ContractsRawCode,
+        ContractsState,
+        FuelBlocks,
+        Messages,
+    },
     transactional::{
         AtomicView,
         Changes,
@@ -226,59 +236,60 @@ impl ChainStateDb for Database {
         &self,
         contract_id: fuel_core_types::fuel_types::ContractId,
     ) -> StorageResult<(
-        ContractConfig,
-        Vec<ContractStateConfig>,
-        Vec<ContractBalanceConfig>,
+        MyEntry<ContractsRawCode>,
+        MyEntry<ContractsInfo>,
+        MyEntry<ContractsLatestUtxo>,
+        Vec<MyEntry<ContractsState>>,
+        Vec<MyEntry<ContractsAssets>>,
     )> {
-        let contract = self.get_contract_config(contract_id)?;
-        let state = self
-            .contract_states(contract_id)
-            .map_ok(move |(key, value)| ContractStateConfig {
-                contract_id,
-                key,
-                value,
-            })
-            .try_collect()?;
-
+        let raw_code = self.get_contract_code(contract_id)?;
+        let info = self.get_contract_info(contract_id)?;
+        let latest_utxo = self.get_contract_latest_utxo(contract_id)?;
+        let states = self.contract_states(contract_id).try_collect()?;
         let balances = self
             .contract_balances(contract_id, None, None)
-            .map_ok(move |(asset_id, amount)| ContractBalanceConfig {
-                contract_id,
-                asset_id,
-                amount,
-            })
             .try_collect()?;
 
-        Ok((contract, state, balances))
+        Ok((raw_code, info, latest_utxo, states, balances))
     }
 
-    fn iter_coin_configs(&self) -> BoxedIter<StorageResult<CoinConfig>> {
-        Self::iter_coin_configs(self).into_boxed()
-    }
-
-    fn iter_contract_configs(&self) -> BoxedIter<StorageResult<ContractConfig>> {
-        Self::iter_contract_configs(self).into_boxed()
+    fn iter_coin_configs(&self) -> BoxedIter<StorageResult<MyEntry<Coins>>> {
+        Self::iter_coins(self).into_boxed()
     }
 
     fn iter_contract_state_configs(
         &self,
-    ) -> BoxedIter<StorageResult<ContractStateConfig>> {
-        Self::iter_contract_state_configs(self).into_boxed()
+    ) -> BoxedIter<StorageResult<MyEntry<ContractsState>>> {
+        Self::iter_contract_state(self).into_boxed()
     }
 
     fn iter_contract_balance_configs(
         &self,
-    ) -> BoxedIter<StorageResult<ContractBalanceConfig>> {
-        Self::iter_contract_balance_configs(self).into_boxed()
+    ) -> BoxedIter<StorageResult<MyEntry<ContractsAssets>>> {
+        Self::iter_contract_balance(self).into_boxed()
     }
 
-    fn iter_message_configs(&self) -> BoxedIter<StorageResult<MessageConfig>> {
-        Self::iter_message_configs(self).into_boxed()
+    fn iter_message_configs(&self) -> BoxedIter<StorageResult<MyEntry<Messages>>> {
+        Self::iter_messages(self).into_boxed()
     }
 
     fn get_last_block(&self) -> StorageResult<CompressedBlock> {
         self.latest_compressed_block()?
             .ok_or(not_found!(FuelBlocks))
+    }
+
+    fn iter_contracts_code(&self) -> BoxedIter<StorageResult<MyEntry<ContractsRawCode>>> {
+        todo!()
+    }
+
+    fn iter_contracts_info(&self) -> BoxedIter<StorageResult<MyEntry<ContractsInfo>>> {
+        todo!()
+    }
+
+    fn iter_contracts_latest_utxo(
+        &self,
+    ) -> BoxedIter<StorageResult<MyEntry<ContractsLatestUtxo>>> {
+        todo!()
     }
 }
 
