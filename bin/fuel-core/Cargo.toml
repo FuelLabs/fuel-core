@@ -48,11 +48,12 @@ tempfile = { workspace = true }
 test-case = { workspace = true }
 
 [features]
-default = ["env", "relayer", "rocksdb"]
+# TODO: remove parquet
+default = ["env", "relayer", "rocksdb", "parquet"]
 env = ["dep:dotenvy"]
 p2p = ["fuel-core/p2p", "const_format"]
 relayer = ["fuel-core/relayer", "dep:url"]
-parquet = ["fuel-core-chain-config/parquet"]
+parquet = ["fuel-core-chain-config/parquet", "fuel-core-types/serde"]
 rocksdb = ["fuel-core/rocksdb", "dep:fuel-core-storage", "dep:itertools"]
 rocksdb-production = [
   "fuel-core/rocksdb-production",

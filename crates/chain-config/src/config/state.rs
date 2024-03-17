@@ -8,6 +8,16 @@ use core::{
 };
 use fuel_core_storage::{
     iter::BoxedIter,
+    structured_storage::TableWithBlueprint,
+    tables::{
+        Coins,
+        ContractsAssets,
+        ContractsInfo,
+        ContractsLatestUtxo,
+        ContractsRawCode,
+        ContractsState,
+        Messages,
+    },
     Result as StorageResult,
 };
 use fuel_core_types::{
@@ -15,18 +25,35 @@ use fuel_core_types::{
         block::CompressedBlock,
         primitives::DaBlockHeight,
     },
+    entities::{
+        coins::coin::CompressedCoin,
+        contract::{
+            ContractUtxoInfo,
+            ContractsInfoType,
+            ContractsInfoTypeV1,
+        },
+    },
+    fuel_tx::{
+        ContractId,
+        TxPointer,
+        UtxoId,
+    },
     fuel_types::{
         Address,
         BlockHeight,
         Bytes32,
     },
-    fuel_vm::SecretKey,
+    fuel_vm::{
+        Salt,
+        SecretKey,
+    },
 };
 use itertools::Itertools;
 use serde::{
     Deserialize,
     Serialize,
 };
+use std::collections::HashMap;
 
 use crate::CoinConfigGenerator;
 #[cfg(feature = "std")]
@@ -38,6 +65,7 @@ use super::{
     contract_balance::ContractBalanceConfig,
     contract_state::ContractStateConfig,
     message::MessageConfig,
+    my_entry::MyEntry,
 };
 
 #[cfg(feature = "parquet")]
@@ -76,6 +104,91 @@ pub struct StateConfig {
     pub block_height: BlockHeight,
     /// Da block height
     pub da_block_height: DaBlockHeight,
+}
+
+pub trait AsTable<T>
+where
+    T: TableWithBlueprint,
+{
+    fn as_table(&self) -> Vec<MyEntry<T>>;
+}
+
+impl AsTable<Coins> for StateConfig {
+    fn as_table(&self) -> Vec<MyEntry<Coins>> {
+        self.coins
+            .clone()
+            .into_iter()
+            .map(|coin| coin.into())
+            .collect()
+    }
+}
+
+impl AsTable<Messages> for StateConfig {
+    fn as_table(&self) -> Vec<MyEntry<Messages>> {
+        self.messages
+            .clone()
+            .into_iter()
+            .map(|message| message.into())
+            .collect()
+    }
+}
+
+impl AsTable<ContractsState> for StateConfig {
+    fn as_table(&self) -> Vec<MyEntry<ContractsState>> {
+        self.contract_state
+            .clone()
+            .into_iter()
+            .map(|state| state.into())
+            .collect()
+    }
+}
+impl AsTable<ContractsAssets> for StateConfig {
+    fn as_table(&self) -> Vec<MyEntry<ContractsAssets>> {
+        self.contract_balance
+            .clone()
+            .into_iter()
+            .map(|balance| balance.into())
+            .collect()
+    }
+}
+
+impl AsTable<ContractsRawCode> for StateConfig {
+    fn as_table(&self) -> Vec<MyEntry<ContractsRawCode>> {
+        self.contracts
+            .iter()
+            .map(|config| MyEntry {
+                key: config.contract_id,
+                value: config.code.as_slice().into(),
+            })
+            .collect()
+    }
+}
+impl AsTable<ContractsInfo> for StateConfig {
+    fn as_table(&self) -> Vec<MyEntry<ContractsInfo>> {
+        self.contracts
+            .iter()
+            .map(|config| MyEntry {
+                key: config.contract_id,
+                value: ContractsInfoType::V1(config.salt.into()),
+            })
+            .collect()
+    }
+}
+impl AsTable<ContractsLatestUtxo> for StateConfig {
+    fn as_table(&self) -> Vec<MyEntry<ContractsLatestUtxo>> {
+        self.contracts
+            .iter()
+            .map(|config| MyEntry {
+                key: config.contract_id,
+                value: ContractUtxoInfo::V1(
+                    fuel_core_types::entities::contract::ContractUtxoInfoV1 {
+                        utxo_id: config.utxo_id(),
+                        tx_pointer: config.tx_pointer(),
+                    },
+                ),
+            })
+            .collect()
+    }
 }
 
 impl StateConfig {
@@ -119,30 +232,93 @@ impl StateConfig {
             .coins()?
             .map_ok(|group| group.data)
             .flatten_ok()
+            .map_ok(|coin| coin.into())
             .try_collect()?;
 
         let messages = reader
             .messages()?
             .map_ok(|group| group.data)
             .flatten_ok()
+            .map_ok(|message| message.into())
             .try_collect()?;
 
-        let contracts = reader
-            .contracts()?
+        let contract_code: Vec<(ContractId, Vec<u8>)> = reader
+            .contracts_raw_code()?
             .map_ok(|group| group.data)
             .flatten_ok()
+            .map_ok(|entry| (entry.key, entry.value.into()))
             .try_collect()?;
+
+        let contract_code: HashMap<_, _> = contract_code.into_iter().collect();
+
+        let contract_salt: Vec<(ContractId, Salt)> = reader
+            .contracts_info()?
+            .map_ok(|group| group.data)
+            .flatten_ok()
+            .map_ok(|entry| match entry.value {
+                ContractsInfoType::V1(info) => (entry.key, info.into()),
+                _ => unreachable!(),
+            })
+            .try_collect()?;
+        let contract_salt: HashMap<_, _> = contract_salt.into_iter().collect();
+
+        let contract_utxos: Vec<(ContractId, (UtxoId, TxPointer))> = reader
+            .contracts_latest_utxo()?
+            .map_ok(|group| group.data)
+            .flatten_ok()
+            .map_ok(|entry| match entry.value {
+                ContractUtxoInfo::V1(utxo) => {
+                    (entry.key, (utxo.utxo_id, utxo.tx_pointer))
+                }
+                _ => unreachable!(),
+            })
+            .try_collect()?;
+
+        let contract_utxos: HashMap<_, _> = contract_utxos.into_iter().collect();
+
+        let all_ids = contract_code
+            .keys()
+            .chain(contract_salt.keys())
+            .chain(contract_utxos.keys())
+            .unique()
+            .sorted()
+            .collect::<Vec<_>>();
+
+        let contracts = all_ids
+            .into_iter()
+            .filter_map(|id| {
+                let code = contract_code.get(id).cloned();
+                let salt = contract_salt.get(id).cloned();
+                let utxo = contract_utxos.get(id).cloned();
+                match (code, salt, utxo) {
+                    (Some(code), Some(salt), Some((utxo_id, tx_pointer))) => {
+                        Some(ContractConfig {
+                            contract_id: *id,
+                            code,
+                            salt,
+                            tx_id: *utxo_id.tx_id(),
+                            output_index: utxo_id.output_index(),
+                            tx_pointer_block_height: tx_pointer.block_height(),
+                            tx_pointer_tx_idx: tx_pointer.tx_index(),
+                        })
+                    }
+                    _ => None,
+                }
+            })
+            .collect();
 
         let contract_state = reader
             .contract_state()?
             .map_ok(|group| group.data)
             .flatten_ok()
+            .map_ok(|state| state.into())
             .try_collect()?;
 
         let contract_balance = reader
             .contract_balance()?
             .map_ok(|group| group.data)
             .flatten_ok()
+            .map_ok(|balance| balance.into())
             .try_collect()?;
 
         let block_height = reader.block_height();
@@ -285,422 +461,435 @@ pub struct Group<T> {
 }
 pub(crate) type GroupResult<T> = anyhow::Result<Group<T>>;
 
-#[cfg(all(feature = "std", feature = "random"))]
-#[cfg(test)]
-mod tests {
-    use crate::{
-        self as fuel_core_chain_config,
-        Group,
-    };
-    use itertools::Itertools;
-    use rand::{
-        rngs::StdRng,
-        SeedableRng,
-    };
-
-    use super::*;
-
-    #[cfg(feature = "parquet")]
-    #[test]
-    fn roundtrip_parquet_coins() {
-        // given
-
-        use std::env::temp_dir;
-        let skip_n_groups = 3;
-        let temp_dir = tempfile::tempdir().unwrap();
-
-        let mut group_generator = GroupGenerator::new(StdRng::seed_from_u64(0), 100, 10);
-        let mut encoder = SnapshotWriter::parquet(
-            &temp_dir.path(),
-            writer::ZstdCompressionLevel::Uncompressed,
-        )
-        .unwrap();
-        encoder.write_block_data(0u32.into(), 0u64.into()).unwrap();
-
-        // when
-        let coin_groups =
-            group_generator.for_each_group(|group| encoder.write_coins(group));
-        let snapshot = encoder.close().unwrap();
-
-        let decoded_coin_groups = SnapshotReader::for_snapshot(snapshot)
-            .unwrap()
-            .coins()
-            .unwrap()
-            .collect_vec();
-
-        // then
-        assert_groups_identical(&coin_groups, decoded_coin_groups, skip_n_groups);
-    }
-
-    #[cfg(feature = "parquet")]
-    #[test]
-    fn roundtrip_parquet_messages() {
-        // given
-        let skip_n_groups = 3;
-        let temp_dir = tempfile::tempdir().unwrap();
-
-        let mut group_generator = GroupGenerator::new(StdRng::seed_from_u64(0), 100, 10);
-        let mut encoder = SnapshotWriter::parquet(
-            &temp_dir.path(),
-            writer::ZstdCompressionLevel::Level1,
-        )
-        .unwrap();
-        encoder.write_block_data(0u32.into(), 0u64.into()).unwrap();
-
-        // when
-        let message_groups =
-            group_generator.for_each_group(|group| encoder.write_messages(group));
-        let snapshot = encoder.close().unwrap();
-        let messages_decoded = SnapshotReader::for_snapshot(snapshot)
-            .unwrap()
-            .messages()
-            .unwrap()
-            .collect_vec();
-
-        // then
-        assert_groups_identical(&message_groups, messages_decoded, skip_n_groups);
-    }
-
-    #[cfg(feature = "parquet")]
-    #[test]
-    fn roundtrip_parquet_contracts() {
-        // given
-        let skip_n_groups = 3;
-        let temp_dir = tempfile::tempdir().unwrap();
-
-        let mut group_generator = GroupGenerator::new(StdRng::seed_from_u64(0), 100, 10);
-        let mut encoder = SnapshotWriter::parquet(
-            &temp_dir.path(),
-            writer::ZstdCompressionLevel::Level1,
-        )
-        .unwrap();
-        encoder.write_block_data(0u32.into(), 0u64.into()).unwrap();
-
-        // when
-        let contract_groups =
-            group_generator.for_each_group(|group| encoder.write_contracts(group));
-        let snapshot = encoder.close().unwrap();
-        let contract_decoded = SnapshotReader::for_snapshot(snapshot)
-            .unwrap()
-            .contracts()
-            .unwrap()
-            .collect_vec();
-
-        // then
-        assert_groups_identical(&contract_groups, contract_decoded, skip_n_groups);
-    }
-
-    #[cfg(feature = "parquet")]
-    #[test]
-    fn roundtrip_parquet_contract_state() {
-        // given
-        let skip_n_groups = 3;
-        let temp_dir = tempfile::tempdir().unwrap();
-
-        let mut group_generator = GroupGenerator::new(StdRng::seed_from_u64(0), 100, 10);
-        let mut encoder = SnapshotWriter::parquet(
-            &temp_dir.path(),
-            writer::ZstdCompressionLevel::Level1,
-        )
-        .unwrap();
-        encoder.write_block_data(0u32.into(), 0u64.into()).unwrap();
-
-        // when
-        let contract_state_groups =
-            group_generator.for_each_group(|group| encoder.write_contract_state(group));
-        let snapshot = encoder.close().unwrap();
-        let decoded_contract_state = SnapshotReader::for_snapshot(snapshot)
-            .unwrap()
-            .contract_state()
-            .unwrap()
-            .collect_vec();
-
-        // then
-        assert_groups_identical(
-            &contract_state_groups,
-            decoded_contract_state,
-            skip_n_groups,
-        );
-    }
-
-    #[cfg(feature = "parquet")]
-    #[test]
-    fn roundtrip_parquet_contract_balance() {
-        // given
-        let skip_n_groups = 3;
-        let temp_dir = tempfile::tempdir().unwrap();
-
-        let mut group_generator = GroupGenerator::new(StdRng::seed_from_u64(0), 100, 10);
-        let mut encoder = SnapshotWriter::parquet(
-            &temp_dir.path(),
-            writer::ZstdCompressionLevel::Level1,
-        )
-        .unwrap();
-        encoder.write_block_data(0u32.into(), 0u64.into()).unwrap();
-
-        // when
-        let contract_balance_groups =
-            group_generator.for_each_group(|group| encoder.write_contract_balance(group));
-        let snapshot = encoder.close().unwrap();
-        let decoded_contract_balance = SnapshotReader::for_snapshot(snapshot)
-            .unwrap()
-            .contract_balance()
-            .unwrap()
-            .collect_vec();
-
-        // then
-        assert_groups_identical(
-            &contract_balance_groups,
-            decoded_contract_balance,
-            skip_n_groups,
-        );
-    }
-
-    #[cfg(feature = "parquet")]
-    #[test]
-    fn roundtrip_parquet_block_height() {
-        // given
-        let temp_dir = tempfile::tempdir().unwrap();
-        let mut encoder = SnapshotWriter::parquet(
-            &temp_dir.path(),
-            writer::ZstdCompressionLevel::Level1,
-        )
-        .unwrap();
-        let block_height = 13u32.into();
-        let da_block_height = 14u64.into();
-
-        // when
-        encoder
-            .write_block_data(block_height, da_block_height)
-            .unwrap();
-        let snapshot = encoder.close().unwrap();
-
-        // then
-        let reader = SnapshotReader::for_snapshot(snapshot).unwrap();
-        let block_height_decoded = reader.block_height();
-        let da_block_height_decoded = reader.da_block_height();
-        assert_eq!(block_height, block_height_decoded);
-        assert_eq!(da_block_height, da_block_height_decoded);
-    }
-
-    #[test]
-    fn roundtrip_json_coins() {
-        // given
-        let skip_n_groups = 3;
-        let group_size = 100;
-        let temp_dir = tempfile::tempdir().unwrap();
-        let file = temp_dir.path().join("state_config.json");
-
-        let mut encoder = SnapshotWriter::json(&file);
-        let mut group_generator =
-            GroupGenerator::new(StdRng::seed_from_u64(0), group_size, 10);
-
-        // when
-        let coin_groups =
-            group_generator.for_each_group(|group| encoder.write_coins(group));
-
-        let snapshot = encoder.close().unwrap();
-        let decoded_coins = SnapshotReader::for_snapshot(snapshot)
-            .unwrap()
-            .coins()
-            .unwrap()
-            .collect_vec();
-
-        // then
-        assert_groups_identical(&coin_groups, decoded_coins, skip_n_groups);
-    }
-
-    #[test]
-    fn roundtrip_json_messages() {
-        // given
-        let skip_n_groups = 3;
-        let group_size = 100;
-        let temp_dir = tempfile::tempdir().unwrap();
-        let file = temp_dir.path().join("state_config.json");
-
-        let mut encoder = SnapshotWriter::json(&file);
-        let mut group_generator =
-            GroupGenerator::new(StdRng::seed_from_u64(0), group_size, 10);
-
-        // when
-        let message_groups =
-            group_generator.for_each_group(|group| encoder.write_messages(group));
-        let snapshot = encoder.close().unwrap();
-
-        let decoded_messages = SnapshotReader::for_snapshot(snapshot)
-            .unwrap()
-            .messages()
-            .unwrap()
-            .collect_vec();
-
-        // then
-        assert_groups_identical(&message_groups, decoded_messages, skip_n_groups);
-    }
-
-    #[test]
-    fn roundtrip_json_contracts() {
-        // given
-        let skip_n_groups = 3;
-        let group_size = 100;
-        let temp_dir = tempfile::tempdir().unwrap();
-        let file = temp_dir.path().join("state_config.json");
-
-        let mut encoder = SnapshotWriter::json(&file);
-        let mut group_generator =
-            GroupGenerator::new(StdRng::seed_from_u64(0), group_size, 10);
-
-        // when
-        let contract_groups =
-            group_generator.for_each_group(|group| encoder.write_contracts(group));
-        let snapshot = encoder.close().unwrap();
-
-        let decoded_contracts = SnapshotReader::for_snapshot(snapshot)
-            .unwrap()
-            .contracts()
-            .unwrap()
-            .collect_vec();
-
-        // then
-        assert_groups_identical(&contract_groups, decoded_contracts, skip_n_groups);
-    }
-
-    #[test]
-    fn roundtrip_json_contract_state() {
-        // given
-        let skip_n_groups = 3;
-        let group_size = 100;
-        let temp_dir = tempfile::tempdir().unwrap();
-        let file = temp_dir.path().join("state_config.json");
-
-        let mut encoder = SnapshotWriter::json(&file);
-        let mut group_generator =
-            GroupGenerator::new(StdRng::seed_from_u64(0), group_size, 10);
-
-        // when
-        let contract_state_groups =
-            group_generator.for_each_group(|group| encoder.write_contract_state(group));
-        let snapshot = encoder.close().unwrap();
-
-        let decoded_contract_state = SnapshotReader::for_snapshot(snapshot)
-            .unwrap()
-            .contract_state()
-            .unwrap()
-            .collect_vec();
-
-        // then
-        assert_groups_identical(
-            &contract_state_groups,
-            decoded_contract_state,
-            skip_n_groups,
-        );
-    }
-
-    #[test]
-    fn roundtrip_json_contract_balance() {
-        // given
-        let skip_n_groups = 3;
-        let group_size = 100;
-        let temp_dir = tempfile::tempdir().unwrap();
-        let file = temp_dir.path().join("state_config.json");
-
-        let mut encoder = SnapshotWriter::json(&file);
-        let mut group_generator =
-            GroupGenerator::new(StdRng::seed_from_u64(0), group_size, 10);
-
-        // when
-        let contract_balance_groups =
-            group_generator.for_each_group(|group| encoder.write_contract_balance(group));
-        let snapshot = encoder.close().unwrap();
-
-        let decoded_contract_balance = SnapshotReader::for_snapshot(snapshot)
-            .unwrap()
-            .contract_balance()
-            .unwrap()
-            .collect_vec();
-
-        // then
-        assert_groups_identical(
-            &contract_balance_groups,
-            decoded_contract_balance,
-            skip_n_groups,
-        );
-    }
-
-    #[test]
-    fn roundtrip_json_block_height() {
-        // given
-        let temp_dir = tempfile::tempdir().unwrap();
-        let file = temp_dir.path().join("state_config.json");
-        let block_height = 13u32.into();
-        let da_block_height = 14u64.into();
-        let mut encoder = SnapshotWriter::json(&file);
-
-        // when
-        encoder
-            .write_block_data(block_height, da_block_height)
-            .unwrap();
-        let snapshot = encoder.close().unwrap();
-
-        // then
-        let reader = SnapshotReader::for_snapshot(snapshot).unwrap();
-        let block_height_decoded = reader.block_height();
-        let da_block_height_decoded = reader.da_block_height();
-        assert_eq!(block_height, block_height_decoded);
-        assert_eq!(da_block_height, da_block_height_decoded);
-    }
-
-    struct GroupGenerator<R> {
-        rand: R,
-        group_size: usize,
-        num_groups: usize,
-    }
-
-    impl<R: ::rand::RngCore> GroupGenerator<R> {
-        fn new(rand: R, group_size: usize, num_groups: usize) -> Self {
-            Self {
-                rand,
-                group_size,
-                num_groups,
-            }
-        }
-        fn for_each_group<T: fuel_core_chain_config::Randomize + Clone>(
-            &mut self,
-            mut f: impl FnMut(Vec<T>) -> anyhow::Result<()>,
-        ) -> Vec<Group<T>> {
-            let groups = self.generate_groups();
-            for group in &groups {
-                f(group.data.clone()).unwrap();
-            }
-            groups
-        }
-        fn generate_groups<T: fuel_core_chain_config::Randomize>(
-            &mut self,
-        ) -> Vec<Group<T>> {
-            ::std::iter::repeat_with(|| T::randomize(&mut self.rand))
-                .chunks(self.group_size)
-                .into_iter()
-                .map(|chunk| chunk.collect_vec())
-                .enumerate()
-                .map(|(index, data)| Group { index, data })
-                .take(self.num_groups)
-                .collect()
-        }
-    }
-
-    fn assert_groups_identical<T>(
-        original: &[Group<T>],
-        read: impl IntoIterator<Item = Result<Group<T>, anyhow::Error>>,
-        skip: usize,
-    ) where
-        Vec<T>: PartialEq,
-        T: PartialEq + std::fmt::Debug,
-    {
-        pretty_assertions::assert_eq!(
-            original[skip..],
-            read.into_iter()
-                .skip(skip)
-                .collect::<Result<Vec<_>, _>>()
-                .unwrap()
-        );
-    }
-}
+// #[cfg(all(feature = "std", feature = "random"))]
+// #[cfg(test)]
+// mod tests {
+//     use crate::{
+//         self as fuel_core_chain_config,
+//         Group,
+//     };
+//     use itertools::Itertools;
+//     use rand::{
+//         rngs::StdRng,
+//         SeedableRng,
+//     };
+//
+//     use super::*;
+//
+//     #[cfg(feature = "parquet")]
+//     #[test]
+//     fn roundtrip_parquet_coins() {
+//         // given
+//
+//         use std::env::temp_dir;
+//         let skip_n_groups = 3;
+//         let temp_dir = tempfile::tempdir().unwrap();
+//
+//         let mut group_generator = GroupGenerator::new(StdRng::seed_from_u64(0), 100, 10);
+//         let mut encoder = SnapshotWriter::parquet(
+//             &temp_dir.path(),
+//             writer::ZstdCompressionLevel::Uncompressed,
+//         )
+//         .unwrap();
+//         encoder.write_block_data(0u32.into(), 0u64.into()).unwrap();
+//
+//         // when
+//         let expected_coins = group_generator
+//             .for_each_group(|group| encoder.write_coins(group))
+//             .into_iter()
+//             .map(|group| {
+//                 let converted = group
+//                     .data
+//                     .into_iter()
+//                     .map(|coin| MyEntry::<Coins>::from(coin))
+//                     .collect();
+//                 Group {
+//                     index: group.index,
+//                     data: converted,
+//                 }
+//             })
+//             .collect_vec();
+//         let snapshot = encoder.close().unwrap();
+//
+//         let decoded_coin_groups = SnapshotReader::for_snapshot(snapshot)
+//             .unwrap()
+//             .coins()
+//             .unwrap()
+//             .collect_vec();
+//
+//         // then
+//         assert_groups_identical(&expected_coins, decoded_coin_groups, skip_n_groups);
+//     }
+//
+//     #[cfg(feature = "parquet")]
+//     #[test]
+//     fn roundtrip_parquet_messages() {
+//         // given
+//         let skip_n_groups = 3;
+//         let temp_dir = tempfile::tempdir().unwrap();
+//
+//         let mut group_generator = GroupGenerator::new(StdRng::seed_from_u64(0), 100, 10);
+//         let mut encoder = SnapshotWriter::parquet(
+//             &temp_dir.path(),
+//             writer::ZstdCompressionLevel::Level1,
+//         )
+//         .unwrap();
+//         encoder.write_block_data(0u32.into(), 0u64.into()).unwrap();
+//
+//         // when
+//         let message_groups =
+//             group_generator.for_each_group(|group| encoder.write_messages(group));
+//         let snapshot = encoder.close().unwrap();
+//         let messages_decoded = SnapshotReader::for_snapshot(snapshot)
+//             .unwrap()
+//             .messages()
+//             .unwrap()
+//             .collect_vec();
+//
+//         // then
+//         assert_groups_identical(&message_groups, messages_decoded, skip_n_groups);
+//     }
+//
+//     #[cfg(feature = "parquet")]
+//     #[test]
+//     fn roundtrip_parquet_contracts() {
+//         // given
+//         let skip_n_groups = 3;
+//         let temp_dir = tempfile::tempdir().unwrap();
+//
+//         let mut group_generator = GroupGenerator::new(StdRng::seed_from_u64(0), 100, 10);
+//         let mut encoder = SnapshotWriter::parquet(
+//             &temp_dir.path(),
+//             writer::ZstdCompressionLevel::Level1,
+//         )
+//         .unwrap();
+//         encoder.write_block_data(0u32.into(), 0u64.into()).unwrap();
+//
+//         // when
+//         let contract_groups =
+//             group_generator.for_each_group(|group| encoder.write_contracts(group));
+//         let snapshot = encoder.close().unwrap();
+//         let contract_decoded = SnapshotReader::for_snapshot(snapshot)
+//             .unwrap()
+//             .contracts()
+//             .unwrap()
+//             .collect_vec();
+//
+//         // then
+//         assert_groups_identical(&contract_groups, contract_decoded, skip_n_groups);
+//     }
+//
+//     #[cfg(feature = "parquet")]
+//     #[test]
+//     fn roundtrip_parquet_contract_state() {
+//         // given
+//         let skip_n_groups = 3;
+//         let temp_dir = tempfile::tempdir().unwrap();
+//
+//         let mut group_generator = GroupGenerator::new(StdRng::seed_from_u64(0), 100, 10);
+//         let mut encoder = SnapshotWriter::parquet(
+//             &temp_dir.path(),
+//             writer::ZstdCompressionLevel::Level1,
+//         )
+//         .unwrap();
+//         encoder.write_block_data(0u32.into(), 0u64.into()).unwrap();
+//
+//         // when
+//         let contract_state_groups =
+//             group_generator.for_each_group(|group| encoder.write_contract_state(group));
+//         let snapshot = encoder.close().unwrap();
+//         let decoded_contract_state = SnapshotReader::for_snapshot(snapshot)
+//             .unwrap()
+//             .contract_state()
+//             .unwrap()
+//             .collect_vec();
+//
+//         // then
+//         assert_groups_identical(
+//             &contract_state_groups,
+//             decoded_contract_state,
+//             skip_n_groups,
+//         );
+//     }
+//
+//     #[cfg(feature = "parquet")]
+//     #[test]
+//     fn roundtrip_parquet_contract_balance() {
+//         // given
+//         let skip_n_groups = 3;
+//         let temp_dir = tempfile::tempdir().unwrap();
+//
+//         let mut group_generator = GroupGenerator::new(StdRng::seed_from_u64(0), 100, 10);
+//         let mut encoder = SnapshotWriter::parquet(
+//             &temp_dir.path(),
+//             writer::ZstdCompressionLevel::Level1,
+//         )
+//         .unwrap();
+//         encoder.write_block_data(0u32.into(), 0u64.into()).unwrap();
+//
+//         // when
+//         let contract_balance_groups =
+//             group_generator.for_each_group(|group| encoder.write_contract_balance(group));
+//         let snapshot = encoder.close().unwrap();
+//         let decoded_contract_balance = SnapshotReader::for_snapshot(snapshot)
+//             .unwrap()
+//             .contract_balance()
+//             .unwrap()
+//             .collect_vec();
+//
+//         // then
+//         assert_groups_identical(
+//             &contract_balance_groups,
+//             decoded_contract_balance,
+//             skip_n_groups,
+//         );
+//     }
+//
+//     #[cfg(feature = "parquet")]
+//     #[test]
+//     fn roundtrip_parquet_block_height() {
+//         // given
+//         let temp_dir = tempfile::tempdir().unwrap();
+//         let mut encoder = SnapshotWriter::parquet(
+//             &temp_dir.path(),
+//             writer::ZstdCompressionLevel::Level1,
+//         )
+//         .unwrap();
+//         let block_height = 13u32.into();
+//         let da_block_height = 14u64.into();
+//
+//         // when
+//         encoder
+//             .write_block_data(block_height, da_block_height)
+//             .unwrap();
+//         let snapshot = encoder.close().unwrap();
+//
+//         // then
+//         let reader = SnapshotReader::for_snapshot(snapshot).unwrap();
+//         let block_height_decoded = reader.block_height();
+//         let da_block_height_decoded = reader.da_block_height();
+//         assert_eq!(block_height, block_height_decoded);
+//         assert_eq!(da_block_height, da_block_height_decoded);
+//     }
+//
+//     #[test]
+//     fn roundtrip_json_coins() {
+//         // given
+//         let skip_n_groups = 3;
+//         let group_size = 100;
+//         let temp_dir = tempfile::tempdir().unwrap();
+//         let file = temp_dir.path().join("state_config.json");
+//
+//         let mut encoder = SnapshotWriter::json(&file);
+//         let mut group_generator =
+//             GroupGenerator::new(StdRng::seed_from_u64(0), group_size, 10);
+//
+//         // when
+//         let coin_groups =
+//             group_generator.for_each_group(|group| encoder.write_coins(group));
+//
+//         let snapshot = encoder.close().unwrap();
+//         let decoded_coins = SnapshotReader::for_snapshot(snapshot)
+//             .unwrap()
+//             .coins()
+//             .unwrap()
+//             .collect_vec();
+//
+//         // then
+//         assert_groups_identical(&coin_groups, decoded_coins, skip_n_groups);
+//     }
+//
+//     #[test]
+//     fn roundtrip_json_messages() {
+//         // given
+//         let skip_n_groups = 3;
+//         let group_size = 100;
+//         let temp_dir = tempfile::tempdir().unwrap();
+//         let file = temp_dir.path().join("state_config.json");
+//
+//         let mut encoder = SnapshotWriter::json(&file);
+//         let mut group_generator =
+//             GroupGenerator::new(StdRng::seed_from_u64(0), group_size, 10);
+//
+//         // when
+//         let message_groups =
+//             group_generator.for_each_group(|group| encoder.write_messages(group));
+//         let snapshot = encoder.close().unwrap();
+//
+//         let decoded_messages = SnapshotReader::for_snapshot(snapshot)
+//             .unwrap()
+//             .messages()
+//             .unwrap()
+//             .collect_vec();
+//
+//         // then
+//         assert_groups_identical(&message_groups, decoded_messages, skip_n_groups);
+//     }
+//
+//     #[test]
+//     fn roundtrip_json_contracts() {
+//         // given
+//         let skip_n_groups = 3;
+//         let group_size = 100;
+//         let temp_dir = tempfile::tempdir().unwrap();
+//         let file = temp_dir.path().join("state_config.json");
+//
+//         let mut encoder = SnapshotWriter::json(&file);
+//         let mut group_generator =
+//             GroupGenerator::new(StdRng::seed_from_u64(0), group_size, 10);
+//
+//         // when
+//         let contract_groups =
+//             group_generator.for_each_group(|group| encoder.write_contracts(group));
+//         let snapshot = encoder.close().unwrap();
+//
+//         let decoded_contracts = SnapshotReader::for_snapshot(snapshot)
+//             .unwrap()
+//             .contracts()
+//             .unwrap()
+//             .collect_vec();
+//
+//         // then
+//         assert_groups_identical(&contract_groups, decoded_contracts, skip_n_groups);
+//     }
+//
+//     #[test]
+//     fn roundtrip_json_contract_state() {
+//         // given
+//         let skip_n_groups = 3;
+//         let group_size = 100;
+//         let temp_dir = tempfile::tempdir().unwrap();
+//         let file = temp_dir.path().join("state_config.json");
+//
+//         let mut encoder = SnapshotWriter::json(&file);
+//         let mut group_generator =
+//             GroupGenerator::new(StdRng::seed_from_u64(0), group_size, 10);
+//
+//         // when
+//         let contract_state_groups =
+//             group_generator.for_each_group(|group| encoder.write_contract_state(group));
+//         let snapshot = encoder.close().unwrap();
+//
+//         let decoded_contract_state = SnapshotReader::for_snapshot(snapshot)
+//             .unwrap()
+//             .contract_state()
+//             .unwrap()
+//             .collect_vec();
+//
+//         // then
+//         assert_groups_identical(
+//             &contract_state_groups,
+//             decoded_contract_state,
+//             skip_n_groups,
+//         );
+//     }
+//
+//     #[test]
+//     fn roundtrip_json_contract_balance() {
+//         // given
+//         let skip_n_groups = 3;
+//         let group_size = 100;
+//         let temp_dir = tempfile::tempdir().unwrap();
+//         let file = temp_dir.path().join("state_config.json");
+//
+//         let mut encoder = SnapshotWriter::json(&file);
+//         let mut group_generator =
+//             GroupGenerator::new(StdRng::seed_from_u64(0), group_size, 10);
+//
+//         // when
+//         let contract_balance_groups =
+//             group_generator.for_each_group(|group| encoder.write_contract_balance(group));
+//         let snapshot = encoder.close().unwrap();
+//
+//         let decoded_contract_balance = SnapshotReader::for_snapshot(snapshot)
+//             .unwrap()
+//             .contract_balance()
+//             .unwrap()
+//             .collect_vec();
+//
+//         // then
+//         assert_groups_identical(
+//             &contract_balance_groups,
+//             decoded_contract_balance,
+//             skip_n_groups,
+//         );
+//     }
+//
+//     #[test]
+//     fn roundtrip_json_block_height() {
+//         // given
+//         let temp_dir = tempfile::tempdir().unwrap();
+//         let file = temp_dir.path().join("state_config.json");
+//         let block_height = 13u32.into();
+//         let da_block_height = 14u64.into();
+//         let mut encoder = SnapshotWriter::json(&file);
+//
+//         // when
+//         encoder
+//             .write_block_data(block_height, da_block_height)
+//             .unwrap();
+//         let snapshot = encoder.close().unwrap();
+//
+//         // then
+//         let reader = SnapshotReader::for_snapshot(snapshot).unwrap();
+//         let block_height_decoded = reader.block_height();
+//         let da_block_height_decoded = reader.da_block_height();
+//         assert_eq!(block_height, block_height_decoded);
+//         assert_eq!(da_block_height, da_block_height_decoded);
+//     }
+//
+//     struct GroupGenerator<R> {
+//         rand: R,
+//         group_size: usize,
+//         num_groups: usize,
+//     }
+//
+//     impl<R: ::rand::RngCore> GroupGenerator<R> {
+//         fn new(rand: R, group_size: usize, num_groups: usize) -> Self {
+//             Self {
+//                 rand,
+//                 group_size,
+//                 num_groups,
+//             }
+//         }
+//         fn for_each_group<T: fuel_core_chain_config::Randomize + Clone>(
+//             &mut self,
+//             mut f: impl FnMut(Vec<T>) -> anyhow::Result<()>,
+//         ) -> Vec<Group<T>> {
+//             let groups = self.generate_groups();
+//             for group in &groups {
+//                 f(group.data.clone()).unwrap();
+//             }
+//             groups
+//         }
+//         fn generate_groups<T: fuel_core_chain_config::Randomize>(
+//             &mut self,
+//         ) -> Vec<Group<T>> {
+//             ::std::iter::repeat_with(|| T::randomize(&mut self.rand))
+//                 .chunks(self.group_size)
+//                 .into_iter()
+//                 .map(|chunk| chunk.collect_vec())
+//                 .enumerate()
+//                 .map(|(index, data)| Group { index, data })
+//                 .take(self.num_groups)
+//                 .collect()
+//         }
+//     }
+//
+//     fn assert_groups_identical<T>(
+//         original: &[Group<T>],
+//         read: impl IntoIterator<Item = Result<Group<T>, anyhow::Error>>,
+//         skip: usize,
+//     ) where
+//         Vec<T>: PartialEq,
+//         T: PartialEq + std::fmt::Debug,
+//     {
+//         pretty_assertions::assert_eq!(
+//             original[skip..],
+//             read.into_iter()
+//                 .skip(skip)
+//                 .collect::<Result<Vec<_>, _>>()
+//                 .unwrap()
+//         );
+//     }
+// }

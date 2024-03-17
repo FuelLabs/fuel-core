@@ -1,9 +1,10 @@
-use std::path::{
-    Path,
-    PathBuf,
+use std::{
+    collections::HashMap,
+    path::{
+        Path,
+        PathBuf,
+    },
 };
-
-use crate::CHAIN_CONFIG_FILENAME;
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq)]
 pub enum TableEncoding {
@@ -12,7 +13,7 @@ pub enum TableEncoding {
     },
     #[cfg(feature = "parquet")]
     Parquet {
-        tables: Vec<PathBuf>,
+        tables: HashMap<String, PathBuf>,
         block_height: PathBuf,
         da_block_height: PathBuf,
         compression: crate::ZstdCompressionLevel,

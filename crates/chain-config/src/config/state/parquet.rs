@@ -129,10 +129,10 @@ mod tests {
         let bytes = TrackingReader::new(buffer);
         let bytes_read = bytes.read_bytes.clone();
 
-        let mut decoder = Decoder::<_, _, PostcardDecode>::new(bytes).unwrap();
+        let mut decoder = Decoder::new(bytes).unwrap();
 
         // when
-        let _: Group<CoinConfig> = decoder.nth(1).unwrap().unwrap();
+        let _: Group<_> = decoder.nth(1).unwrap().unwrap();
 
         // then
         let actually_read = bytes_read.load(std::sync::atomic::Ordering::SeqCst);

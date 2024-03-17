@@ -1,4 +1,11 @@
-use crate::serialization::HexIfHumanReadable;
+use crate::{
+    serialization::HexIfHumanReadable,
+    MyEntry,
+};
+use fuel_core_storage::{
+    tables::ContractsState,
+    ContractsStateKey,
+};
 use fuel_core_types::fuel_types::{
     Bytes32,
     ContractId,
@@ -16,6 +23,25 @@ pub struct ContractStateConfig {
     pub key: Bytes32,
     #[serde_as(as = "HexIfHumanReadable")]
     pub value: Vec<u8>,
+}
+
+impl From<MyEntry<ContractsState>> for ContractStateConfig {
+    fn from(value: MyEntry<ContractsState>) -> Self {
+        Self {
+            contract_id: *value.key.contract_id(),
+            key: *value.key.state_key(),
+            value: value.value.into(),
+        }
+    }
+}
+
+impl From<ContractStateConfig> for MyEntry<ContractsState> {
+    fn from(value: ContractStateConfig) -> Self {
+        MyEntry {
+            key: ContractsStateKey::new(&value.contract_id, &value.key),
+            value: value.value.into(),
+        }
+    }
 }
 
 #[cfg(all(test, feature = "random", feature = "std"))]

@@ -1,5 +1,22 @@
-use std::fmt::Debug;
+use std::{
+    collections::HashMap,
+    fmt::Debug,
+};
 
+use anyhow::Context;
+use fuel_core_storage::{
+    kv_store::StorageColumn,
+    structured_storage::TableWithBlueprint,
+    tables::{
+        Coins,
+        ContractsAssets,
+        ContractsInfo,
+        ContractsLatestUtxo,
+        ContractsRawCode,
+        ContractsState,
+        Messages,
+    },
+};
 use fuel_core_types::{
     blockchain::primitives::DaBlockHeight,
     fuel_types::BlockHeight,
@@ -10,16 +27,17 @@ use crate::{
     config::{
         contract_balance::ContractBalanceConfig,
         contract_state::ContractStateConfig,
+        my_entry::MyEntry,
     },
+    AsTable,
     CoinConfig,
     ContractConfig,
     Group,
+    GroupResult,
     MessageConfig,
     StateConfig,
     MAX_GROUP_SIZE,
 };
-
-use super::GroupResult;
 
 pub enum IntoIter<T> {
     InMemory {
@@ -27,21 +45,31 @@ pub enum IntoIter<T> {
     },
     #[cfg(feature = "parquet")]
     Parquet {
-        decoder: super::parquet::decode::PostcardDecoder<T>,
+        decoder: super::parquet::decode::Decoder<std::fs::File>,
     },
 }
 
 #[cfg(feature = "parquet")]
 impl<T> Iterator for IntoIter<T>
 where
-    super::parquet::decode::PostcardDecoder<T>: Iterator<Item = GroupResult<T>>,
+    T: serde::de::DeserializeOwned,
 {
     type Item = GroupResult<T>;
 
     fn next(&mut self) -> Option<Self::Item> {
         match self {
             IntoIter::InMemory { groups } => groups.next(),
-            IntoIter::Parquet { decoder } => decoder.next(),
+            IntoIter::Parquet { decoder } => Some(decoder.next()?.map(|bytes_group| {
+                let decoded = bytes_group
+                    .data
+                    .into_iter()
+                    .map(|bytes| postcard::from_bytes(&bytes).unwrap())
+                    .collect();
+                Group {
+                    index: bytes_group.index,
+                    data: decoded,
+                }
+            })),
         }
     }
 }
@@ -61,6 +89,7 @@ impl<T> Iterator for IntoIter<T> {
 enum DataSource {
     #[cfg(feature = "parquet")]
     Parquet {
+        tables: HashMap<String, std::path::PathBuf>,
         block_height: BlockHeight,
         da_block_height: DaBlockHeight,
     },
@@ -89,14 +118,13 @@ impl SnapshotReader {
         path: impl AsRef<std::path::Path>,
         group_size: usize,
     ) -> anyhow::Result<Self> {
-        todo!()
-        // let mut file = std::fs::File::open(path)?;
-        //
-        // let state = serde_json::from_reader(&mut file)?;
-        //
-        // Ok(Self {
-        //     data_source: DataSource::InMemory { state, group_size },
-        // })
+        let mut file = std::fs::File::open(path)?;
+
+        let state = serde_json::from_reader(&mut file)?;
+
+        Ok(Self {
+            data_source: DataSource::InMemory { state, group_size },
+        })
     }
 
     pub fn in_memory(state: StateConfig) -> Self {
@@ -110,20 +138,19 @@ impl SnapshotReader {
 
     #[cfg(feature = "parquet")]
     fn parquet(
-        tables: Vec<std::path::PathBuf>,
-        da_block_height: std::path::PathBuf,
+        tables: HashMap<String, std::path::PathBuf>,
         block_height: std::path::PathBuf,
+        da_block_height: std::path::PathBuf,
     ) -> anyhow::Result<Self> {
-        todo!()
-        // let block_height = Self::read_block_height(&files.block_height)?;
-        // let da_block_height = Self::read_block_height(&files.da_block_height)?;
-        // Ok(Self {
-        //     data_source: DataSource::Parquet {
-        //         files,
-        //         block_height,
-        //         da_block_height,
-        //     },
-        // })
+        let block_height = Self::read_block_height(&block_height)?;
+        let da_block_height = Self::read_block_height(&da_block_height)?;
+        Ok(Self {
+            data_source: DataSource::Parquet {
+                tables,
+                block_height,
+                da_block_height,
+            },
+        })
     }
 
     #[cfg(feature = "parquet")]
@@ -131,8 +158,10 @@ impl SnapshotReader {
     where
         Height: serde::de::DeserializeOwned,
     {
+        use super::parquet::decode::Decoder;
+
         let file = std::fs::File::open(path)?;
-        let group = super::parquet::decode::PostcardDecoder::new(file)?
+        let group = Decoder::new(file)?
             .next()
             .ok_or_else(|| anyhow::anyhow!("No block height found"))??
             .data;
@@ -140,7 +169,7 @@ impl SnapshotReader {
             .into_iter()
             .next()
             .ok_or_else(|| anyhow::anyhow!("No block height found"))?;
-        Ok(block_height)
+        postcard::from_bytes(&block_height).map_err(Into::into)
     }
 
     #[cfg(feature = "std")]
@@ -161,24 +190,77 @@ impl SnapshotReader {
         }
     }
 
-    pub fn coins(&self) -> anyhow::Result<IntoIter<CoinConfig>> {
-        todo!()
+    pub fn rdr<T>(&self) -> anyhow::Result<IntoIter<MyEntry<T>>>
+    where
+        T: TableWithBlueprint,
+        StateConfig: AsTable<T>,
+        MyEntry<T>: serde::de::DeserializeOwned,
+    {
+        match &self.data_source {
+            DataSource::Parquet { tables, .. } => {
+                let name = T::column().name();
+                let path = tables.get(name).ok_or_else(|| {
+                    anyhow::anyhow!("table '{name}' not found snapshot metadata.")
+                })?;
+                let file = std::fs::File::open(path).with_context(|| {
+                    format!("Could not open {path:?} in order to read table '{name}'")
+                })?;
+
+                Ok(IntoIter::Parquet {
+                    decoder: super::parquet::decode::Decoder::new(file)?,
+                })
+            }
+            DataSource::InMemory { state, group_size } => {
+                let collection = state
+                    .as_table()
+                    .into_iter()
+                    .chunks(*group_size)
+                    .into_iter()
+                    .enumerate()
+                    .map(|(index, vec_chunk)| {
+                        Ok(Group {
+                            data: vec_chunk.collect(),
+                            index,
+                        })
+                    })
+                    .collect_vec();
+                Ok(IntoIter::InMemory {
+                    groups: collection.into_iter(),
+                })
+            }
+        }
     }
 
-    pub fn messages(&self) -> anyhow::Result<IntoIter<MessageConfig>> {
-        todo!()
+    pub fn coins(&self) -> anyhow::Result<IntoIter<MyEntry<Coins>>> {
+        self.rdr()
     }
 
-    pub fn contracts(&self) -> anyhow::Result<IntoIter<ContractConfig>> {
-        todo!()
+    pub fn messages(&self) -> anyhow::Result<IntoIter<MyEntry<Messages>>> {
+        self.rdr()
     }
 
-    pub fn contract_state(&self) -> anyhow::Result<IntoIter<ContractStateConfig>> {
-        todo!()
+    pub fn contracts_raw_code(
+        &self,
+    ) -> anyhow::Result<IntoIter<MyEntry<ContractsRawCode>>> {
+        self.rdr()
     }
 
-    pub fn contract_balance(&self) -> anyhow::Result<IntoIter<ContractBalanceConfig>> {
-        todo!()
+    pub fn contracts_info(&self) -> anyhow::Result<IntoIter<MyEntry<ContractsInfo>>> {
+        self.rdr()
+    }
+
+    pub fn contracts_latest_utxo(
+        &self,
+    ) -> anyhow::Result<IntoIter<MyEntry<ContractsLatestUtxo>>> {
+        self.rdr()
+    }
+
+    pub fn contract_state(&self) -> anyhow::Result<IntoIter<MyEntry<ContractsState>>> {
+        self.rdr()
+    }
+
+    pub fn contract_balance(&self) -> anyhow::Result<IntoIter<MyEntry<ContractsAssets>>> {
+        self.rdr()
     }
 
     pub fn block_height(&self) -> BlockHeight {

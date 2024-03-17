@@ -5,6 +5,7 @@ mod contract;
 mod contract_balance;
 mod contract_state;
 mod message;
+mod my_entry;
 #[cfg(feature = "std")]
 mod snapshot_metadata;
 mod state;
@@ -26,6 +27,7 @@ pub use contract::*;
 pub use contract_balance::*;
 pub use contract_state::*;
 pub use message::*;
+pub use my_entry::*;
 #[cfg(feature = "std")]
 pub use snapshot_metadata::*;
 pub use state::*;

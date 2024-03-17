@@ -30,7 +30,9 @@ use serde::{
 pub enum GenesisResource {
     Coins,
     Messages,
-    Contracts,
+    ContractsCode,
+    ContractsInfo,
+    ContractsLatestUtxo,
     ContractStates,
     ContractBalances,
     ContractsRoot,

@@ -12,6 +12,7 @@ use fuel_core_chain_config::{
     ContractConfig,
     GenesisCommitment,
     MessageConfig,
+    MyEntry,
 };
 use fuel_core_storage::{
     tables::{
@@ -181,22 +182,22 @@ pub async fn execute_and_commit_genesis_block(
 
 fn init_coin(
     transaction: &mut StorageTransaction<&mut Database>,
-    coin: &CoinConfig,
+    coin: &MyEntry<Coins>,
     height: BlockHeight,
 ) -> anyhow::Result<()> {
-    let utxo_id = coin.utxo_id();
+    let utxo_id = coin.key;
 
     let compressed_coin = Coin {
         utxo_id,
-        owner: coin.owner,
-        amount: coin.amount,
-        asset_id: coin.asset_id,
-        tx_pointer: coin.tx_pointer(),
+        owner: *coin.value.owner(),
+        amount: *coin.value.amount(),
+        asset_id: *coin.value.asset_id(),
+        tx_pointer: *coin.value.tx_pointer(),
     }
     .compress();
 
     // ensure coin can't point to blocks in the future
-    let coin_height = coin.tx_pointer().block_height();
+    let coin_height = coin.value.tx_pointer().block_height();
     if coin_height > height {
         return Err(anyhow!(
             "coin tx_pointer height ({coin_height}) cannot be greater than genesis block ({height})"
@@ -214,47 +215,22 @@ fn init_coin(
     Ok(())
 }
 
-fn init_contract(
+fn init_contract_latest_utxo(
     transaction: &mut StorageTransaction<&mut Database>,
-    contract_config: &ContractConfig,
+    entry: &MyEntry<ContractsLatestUtxo>,
     height: BlockHeight,
 ) -> anyhow::Result<()> {
-    let contract = Contract::from(contract_config.code.as_slice());
-    let salt = contract_config.salt;
-    let contract_id = contract_config.contract_id;
-    #[allow(clippy::cast_possible_truncation)]
-    let utxo_id = contract_config.utxo_id();
+    let contract_id = entry.key;
 
-    let tx_pointer = contract_config.tx_pointer();
-    if tx_pointer.block_height() > height {
+    if entry.value.tx_pointer().block_height() > height {
         return Err(anyhow!(
             "contract tx_pointer cannot be greater than genesis block"
         ));
     }
 
-    // insert contract code
-    if transaction
-        .storage::<ContractsRawCode>()
-        .insert(&contract_id, contract.as_ref())?
-        .is_some()
-    {
-        return Err(anyhow!("Contract code should not exist"));
-    }
-
-    // insert contract salt
-    if transaction
-        .storage::<ContractsInfo>()
-        .insert(&contract_id, &ContractsInfoType::V1(salt.into()))?
-        .is_some()
-    {
-        return Err(anyhow!("Contract info should not exist"));
-    }
     if transaction
         .storage::<ContractsLatestUtxo>()
-        .insert(
-            &contract_id,
-            &ContractUtxoInfo::V1((utxo_id, tx_pointer).into()),
-        )?
+        .insert(&contract_id, &entry.value)?
         .is_some()
     {
         return Err(anyhow!("Contract utxo should not exist"));
@@ -263,12 +239,50 @@ fn init_contract(
     Ok(())
 }
 
+fn init_contract_info(
+    transaction: &mut StorageTransaction<&mut Database>,
+    entry: &MyEntry<ContractsInfo>,
+) -> anyhow::Result<()> {
+    let salt = &entry.value;
+    let contract_id = entry.key;
+
+    // insert contract salt
+    if transaction
+        .storage::<ContractsInfo>()
+        .insert(&contract_id, salt)?
+        .is_some()
+    {
+        return Err(anyhow!("Contract info should not exist"));
+    }
+
+    Ok(())
+}
+
+fn init_contract_raw_code(
+    transaction: &mut StorageTransaction<&mut Database>,
+    entry: &MyEntry<ContractsRawCode>,
+) -> anyhow::Result<()> {
+    let contract = entry.value.as_ref();
+    let contract_id = entry.key;
+
+    // insert contract code
+    if transaction
+        .storage::<ContractsRawCode>()
+        .insert(&contract_id, contract)?
+        .is_some()
+    {
+        return Err(anyhow!("Contract code should not exist"));
+    }
+
+    Ok(())
+}
+
 fn init_da_message(
     transaction: &mut StorageTransaction<&mut Database>,
-    msg: MessageConfig,
+    msg: MyEntry<Messages>,
     da_height: DaBlockHeight,
 ) -> anyhow::Result<()> {
-    let message: Message = msg.into();
+    let message: Message = msg.value;
 
     if message.da_height() > da_height {
         return Err(anyhow!(

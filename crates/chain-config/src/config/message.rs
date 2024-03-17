@@ -1,8 +1,12 @@
 use crate::{
     serialization::HexIfHumanReadable,
     GenesisCommitment,
+    MyEntry,
 };
-use fuel_core_storage::MerkleRoot;
+use fuel_core_storage::{
+    tables::Messages,
+    MerkleRoot,
+};
 use fuel_core_types::{
     blockchain::primitives::DaBlockHeight,
     entities::message::{
@@ -33,6 +37,35 @@ pub struct MessageConfig {
     pub data: Vec<u8>,
     /// The block height from the parent da layer that originated this message
     pub da_height: DaBlockHeight,
+}
+
+impl From<MyEntry<Messages>> for MessageConfig {
+    fn from(value: MyEntry<Messages>) -> Self {
+        Self {
+            sender: *value.value.sender(),
+            recipient: *value.value.recipient(),
+            nonce: *value.value.nonce(),
+            amount: value.value.amount(),
+            data: value.value.data().to_vec(),
+            da_height: value.value.da_height(),
+        }
+    }
+}
+
+impl From<MessageConfig> for MyEntry<Messages> {
+    fn from(value: MessageConfig) -> Self {
+        MyEntry {
+            key: value.nonce,
+            value: Message::V1(MessageV1 {
+                sender: value.sender,
+                recipient: value.recipient,
+                nonce: value.nonce,
+                amount: value.amount,
+                data: value.data,
+                da_height: value.da_height,
+            }),
+        }
+    }
 }
 
 #[cfg(all(test, feature = "random", feature = "std"))]
