@@ -60,7 +60,7 @@ Description of the upcoming release here.
 
   Each item group in the genesis process is handled by a separate worker, allowing for parallel loading. Workers stream file contents in batches.
 
-  A database transaction is committed every time an item group is succesfully loaded. Resumability is achieved by recording the last loaded group index within the same db tx. If loading is aborted, the remaining workers are shutdown. Upon restart, workers resume from the last processed group.
+  A database transaction is committed every time an item group is successfully loaded. Resumability is achieved by recording the last loaded group index within the same db tx. If loading is aborted, the remaining workers are shutdown. Upon restart, workers resume from the last processed group.
 
   ### Contract States and Balances
 
