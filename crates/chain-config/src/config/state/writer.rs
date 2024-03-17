@@ -225,17 +225,17 @@ impl SnapshotWriter {
         })
     }
 
-    pub fn write(
+    pub fn write_state_config(
         mut self,
         state_config: StateConfig,
     ) -> anyhow::Result<SnapshotMetadata> {
-        self.write_coins(state_config.as_table())?;
-        self.write_contracts_code(state_config.as_table())?;
-        self.write_contracts_info(state_config.as_table())?;
-        self.write_contracts_utxos(state_config.as_table())?;
-        self.write_messages(state_config.as_table())?;
-        self.write_contract_state(state_config.as_table())?;
-        self.write_contract_balance(state_config.as_table())?;
+        self.write::<Coins>(state_config.as_table())?;
+        self.write::<ContractsRawCode>(state_config.as_table())?;
+        self.write::<ContractsInfo>(state_config.as_table())?;
+        self.write::<ContractsLatestUtxo>(state_config.as_table())?;
+        self.write::<Messages>(state_config.as_table())?;
+        self.write::<ContractsState>(state_config.as_table())?;
+        self.write::<ContractsAssets>(state_config.as_table())?;
         self.write_block_data(state_config.block_height, state_config.da_block_height)?;
         self.close()
     }
@@ -247,11 +247,7 @@ impl SnapshotWriter {
         chain_config.write(self.dir.join("chain_config.json"))
     }
 
-    pub fn write_coins(&mut self, elements: Vec<MyEntry<Coins>>) -> anyhow::Result<()> {
-        self.wrt(elements)
-    }
-
-    pub fn wrt<T>(&mut self, elements: Vec<MyEntry<T>>) -> anyhow::Result<()>
+    pub fn write<T>(&mut self, elements: Vec<MyEntry<T>>) -> anyhow::Result<()>
     where
         T: TableWithBlueprint,
         T::OwnedValue: serde::Serialize,
@@ -284,48 +280,6 @@ impl SnapshotWriter {
                 encoder.write(encoded)
             }
         }
-    }
-
-    pub fn write_contracts_code(
-        &mut self,
-        elements: Vec<MyEntry<ContractsRawCode>>,
-    ) -> anyhow::Result<()> {
-        self.wrt(elements)
-    }
-
-    pub fn write_contracts_info(
-        &mut self,
-        elements: Vec<MyEntry<ContractsInfo>>,
-    ) -> anyhow::Result<()> {
-        self.wrt(elements)
-    }
-
-    pub fn write_contracts_utxos(
-        &mut self,
-        elements: Vec<MyEntry<ContractsLatestUtxo>>,
-    ) -> anyhow::Result<()> {
-        self.wrt(elements)
-    }
-
-    pub fn write_messages(
-        &mut self,
-        elements: Vec<MyEntry<Messages>>,
-    ) -> anyhow::Result<()> {
-        self.wrt(elements)
-    }
-
-    pub fn write_contract_state(
-        &mut self,
-        elements: Vec<MyEntry<ContractsState>>,
-    ) -> anyhow::Result<()> {
-        self.wrt(elements)
-    }
-
-    pub fn write_contract_balance(
-        &mut self,
-        elements: Vec<MyEntry<ContractsAssets>>,
-    ) -> anyhow::Result<()> {
-        self.wrt(elements)
     }
 
     pub fn write_block_data(

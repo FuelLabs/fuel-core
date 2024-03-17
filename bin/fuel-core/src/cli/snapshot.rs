@@ -148,11 +148,11 @@ fn contract_snapshot(
 
     let mut writer = SnapshotWriter::json(output_dir);
 
-    writer.write_contracts_code(vec![code]);
-    writer.write_contracts_info(vec![info]);
-    writer.write_contracts_utxos(vec![utxo]);
-    writer.write_contract_state(state)?;
-    writer.write_contract_balance(balance)?;
+    writer.write(vec![code])?;
+    writer.write(vec![info])?;
+    writer.write(vec![utxo])?;
+    writer.write(state)?;
+    writer.write(balance)?;
     writer.write_block_data(*block.header().height(), block.header().da_height)?;
     writer.close()?;
     Ok(())
@@ -190,31 +190,25 @@ fn full_snapshot(
     let group_size = encoding.group_size().unwrap_or(MAX_GROUP_SIZE);
 
     let coins = db.iter_coin_configs();
-    write(coins, group_size, |chunk| writer.write_coins(chunk))?;
+    write(coins, group_size, |chunk| writer.write(chunk))?;
 
     let messages = db.iter_message_configs();
-    write(messages, group_size, |chunk| writer.write_messages(chunk))?;
+    write(messages, group_size, |chunk| writer.write(chunk))?;
 
     let code = db.iter_contracts_code();
-    write(code, group_size, |chunk| writer.write_contracts_code(chunk))?;
+    write(code, group_size, |chunk| writer.write(chunk))?;
 
     let info = db.iter_contracts_info();
-    write(info, group_size, |chunk| writer.write_contracts_info(chunk))?;
+    write(info, group_size, |chunk| writer.write(chunk))?;
 
     let utxos = db.iter_contracts_latest_utxo();
-    write(utxos, group_size, |chunk| {
-        writer.write_contracts_utxos(chunk)
-    })?;
+    write(utxos, group_size, |chunk| writer.write(chunk))?;
 
     let contract_states = db.iter_contract_state_configs();
-    write(contract_states, group_size, |chunk| {
-        writer.write_contract_state(chunk)
-    })?;
+    write(contract_states, group_size, |chunk| writer.write(chunk))?;
 
     let contract_balances = db.iter_contract_balance_configs();
-    write(contract_balances, group_size, |chunk| {
-        writer.write_contract_balance(chunk)
-    })?;
+    write(contract_balances, group_size, |chunk| writer.write(chunk))?;
 
     let block = db.get_last_block()?;
     writer.write_block_data(*block.header().height(), block.header().da_height)?;

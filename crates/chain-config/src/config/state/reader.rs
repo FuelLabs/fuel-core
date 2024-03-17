@@ -190,7 +190,7 @@ impl SnapshotReader {
         }
     }
 
-    pub fn rdr<T>(&self) -> anyhow::Result<IntoIter<MyEntry<T>>>
+    pub fn read<T>(&self) -> anyhow::Result<IntoIter<MyEntry<T>>>
     where
         T: TableWithBlueprint,
         StateConfig: AsTable<T>,
@@ -229,38 +229,6 @@ impl SnapshotReader {
                 })
             }
         }
-    }
-
-    pub fn coins(&self) -> anyhow::Result<IntoIter<MyEntry<Coins>>> {
-        self.rdr()
-    }
-
-    pub fn messages(&self) -> anyhow::Result<IntoIter<MyEntry<Messages>>> {
-        self.rdr()
-    }
-
-    pub fn contracts_raw_code(
-        &self,
-    ) -> anyhow::Result<IntoIter<MyEntry<ContractsRawCode>>> {
-        self.rdr()
-    }
-
-    pub fn contracts_info(&self) -> anyhow::Result<IntoIter<MyEntry<ContractsInfo>>> {
-        self.rdr()
-    }
-
-    pub fn contracts_latest_utxo(
-        &self,
-    ) -> anyhow::Result<IntoIter<MyEntry<ContractsLatestUtxo>>> {
-        self.rdr()
-    }
-
-    pub fn contract_state(&self) -> anyhow::Result<IntoIter<MyEntry<ContractsState>>> {
-        self.rdr()
-    }
-
-    pub fn contract_balance(&self) -> anyhow::Result<IntoIter<MyEntry<ContractsAssets>>> {
-        self.rdr()
     }
 
     pub fn block_height(&self) -> BlockHeight {

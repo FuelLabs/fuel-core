@@ -26,7 +26,7 @@ fn test_deployment_chainconfig(path: impl AsRef<Path>) -> anyhow::Result<()> {
     let temp_dir = tempfile::tempdir()?;
     let mut writer = SnapshotWriter::json(temp_dir.path());
     writer.write_chain_config(&chain_config)?;
-    let generated_snapshot = writer.write(state_config)?;
+    let generated_snapshot = writer.write_state_config(state_config)?;
 
     let chain_config_bytes = std::fs::read_to_string(generated_snapshot.chain_config)?;
     let stored_chain_config = std::fs::read_to_string(stored_snapshot.chain_config)?;

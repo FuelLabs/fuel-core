@@ -322,43 +322,43 @@ impl StateConfig {
 
     pub fn from_reader(reader: &SnapshotReader) -> anyhow::Result<Self> {
         let coins = reader
-            .coins()?
+            .read()?
             .map_ok(|batch| batch.data)
             .flatten_ok()
             .try_collect()?;
 
         let messages = reader
-            .messages()?
+            .read()?
             .map_ok(|batch| batch.data)
             .flatten_ok()
             .try_collect()?;
 
         let contract_state = reader
-            .contract_state()?
+            .read()?
             .map_ok(|batch| batch.data)
             .flatten_ok()
             .try_collect()?;
 
         let contract_balance = reader
-            .contract_balance()?
+            .read()?
             .map_ok(|batch| batch.data)
             .flatten_ok()
             .try_collect()?;
 
         let contract_code = reader
-            .contracts_raw_code()?
+            .read()?
             .map_ok(|batch| batch.data)
             .flatten_ok()
             .try_collect()?;
 
         let contract_info = reader
-            .contracts_info()?
+            .read()?
             .map_ok(|batch| batch.data)
             .flatten_ok()
             .try_collect()?;
 
         let contract_utxo = reader
-            .contracts_latest_utxo()?
+            .read()?
             .map_ok(|batch| batch.data)
             .flatten_ok()
             .try_collect()?;

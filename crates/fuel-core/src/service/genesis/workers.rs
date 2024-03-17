@@ -136,43 +136,43 @@ impl GenesisWorkers {
     }
 
     async fn spawn_coins_worker(&self) -> anyhow::Result<()> {
-        let coins = self.state_reader.coins()?;
+        let coins = self.state_reader.read::<Coins>()?;
         let finished_signal = Arc::clone(&self.finished_signals.coins);
         self.spawn_worker(coins, finished_signal).await
     }
 
     async fn spawn_messages_worker(&self) -> anyhow::Result<()> {
-        let messages = self.state_reader.messages()?;
+        let messages = self.state_reader.read::<Messages>()?;
         let finished_signal = Arc::clone(&self.finished_signals.messages);
         self.spawn_worker(messages, finished_signal).await
     }
 
     async fn spawn_contracts_code_worker(&self) -> anyhow::Result<()> {
-        let contracts = self.state_reader.contracts_raw_code()?;
+        let contracts = self.state_reader.read::<ContractsRawCode>()?;
         let finished_signal = Arc::clone(&self.finished_signals.contracts_code);
         self.spawn_worker(contracts, finished_signal).await
     }
 
     async fn spawn_contracts_info_worker(&self) -> anyhow::Result<()> {
-        let contracts = self.state_reader.contracts_info()?;
+        let contracts = self.state_reader.read::<ContractsInfo>()?;
         let finished_signal = Arc::clone(&self.finished_signals.contracts_info);
         self.spawn_worker(contracts, finished_signal).await
     }
 
     async fn spawn_contracts_utxo_worker(&self) -> anyhow::Result<()> {
-        let contracts = self.state_reader.contracts_latest_utxo()?;
+        let contracts = self.state_reader.read::<ContractsLatestUtxo>()?;
         let finished_signal = Arc::clone(&self.finished_signals.contracts_utxos);
         self.spawn_worker(contracts, finished_signal).await
     }
 
     async fn spawn_contract_state_worker(&self) -> anyhow::Result<()> {
-        let contract_state = self.state_reader.contract_state()?;
+        let contract_state = self.state_reader.read::<ContractsState>()?;
         let finished_signal = Arc::clone(&self.finished_signals.contract_state);
         self.spawn_worker(contract_state, finished_signal).await
     }
 
     async fn spawn_contract_balance_worker(&self) -> anyhow::Result<()> {
-        let contract_balance = self.state_reader.contract_balance()?;
+        let contract_balance = self.state_reader.read::<ContractsAssets>()?;
         let finished_signal = Arc::clone(&self.finished_signals.contract_balance);
         self.spawn_worker(contract_balance, finished_signal).await
     }

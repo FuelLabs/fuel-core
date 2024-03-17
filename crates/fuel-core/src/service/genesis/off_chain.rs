@@ -70,11 +70,11 @@ pub fn execute_genesis_block(
     config: &Config,
     original_database: &mut Database<OffChain>,
 ) -> anyhow::Result<()> {
-    for message_group in config.state_reader.messages()? {
+    for message_group in config.state_reader.read()? {
         process_messages(original_database, message_group?.data)?;
     }
 
-    for coin_group in config.state_reader.coins()? {
+    for coin_group in config.state_reader.read()? {
         process_coins(original_database, coin_group?.data)?;
     }
 
