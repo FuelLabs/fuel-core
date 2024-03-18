@@ -146,7 +146,7 @@ async fn test_insert_from_p2p_does_not_broadcast_to_p2p() {
 
 #[tokio::test]
 async fn test_gossipped_transaction_with_check_error_rejected() {
-    // verify that gossipped transactions which fail basic sanity checks are rejected (punished)
+    // verify that gossiped transactions which fail basic sanity checks are rejected (punished)
 
     let mut ctx_builder = TestContextBuilder::new();
     // add coin to builder db and generate a valid tx

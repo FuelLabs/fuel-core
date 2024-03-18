@@ -1000,7 +1000,7 @@ mod tests {
             let (reserved_nodes, reserved_multiaddrs) =
                 setup_bootstrap_nodes(&p2p_config, RESERVED_NODE_SIZE).await;
 
-            // set up the guraded node service with `reserved_nodes_only_mode`
+            // set up the guarded node service with `reserved_nodes_only_mode`
             let guarded_node_service = {
                 let mut p2p_config = p2p_config.clone();
                 p2p_config.reserved_nodes = reserved_multiaddrs;
@@ -1451,7 +1451,7 @@ mod tests {
 
                         // Node B received the correct message
                         // If we try to publish it again we will get `PublishError::Duplicate`
-                        // This asserts that our MessageId calculation is consistant irrespective of which Peer sends it
+                        // This asserts that our MessageId calculation is consistent irrespective of which Peer sends it
                         let broadcast_request = broadcast_request.clone();
                         matches!(node_b.publish_message(broadcast_request), Err(PublishError::Duplicate));
 
