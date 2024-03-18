@@ -24,20 +24,19 @@ There are several system requirements including clang.
 ```bash
 brew update
 brew install cmake
-brew install protobuf
 ```
 
 #### Debian
 
 ```bash
 apt update
-apt install -y cmake pkg-config build-essential git clang libclang-dev protobuf-compiler
+apt install -y cmake pkg-config build-essential git clang libclang-dev
 ```
 
 #### Arch
 
 ```bash
-pacman -Syu --needed --noconfirm cmake gcc pkgconf git clang protobuf-compiler
+pacman -Syu --needed --noconfirm cmake gcc pkgconf git clang
 ```
 
 ### Compiling

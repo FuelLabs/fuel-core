@@ -6,9 +6,9 @@ on:
     branches:
       - master
   pull_request:
-    types: [opened, synchronize, reopened, labeled, unlabeled]
+    types: [ opened, synchronize, reopened, labeled, unlabeled ]
   release:
-    types: [published]
+    types: [ published ]
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
@@ -40,7 +40,7 @@ jobs:
         with:
           toolchain: ${{ env.NIGHTLY_RUST_VERSION }}
           components: rustfmt
-          
+
       - name: Rustfmt check
         run: cargo +${{ env.NIGHTLY_RUST_VERSION }} fmt --all -- --check
 
@@ -161,10 +161,6 @@ jobs:
         uses: davidB/rust-cargo-make@v1
         with:
           version: "0.36.4"
-      - name: Install Protoc
-        run: |
-          sudo apt-get update
-          sudo apt-get install protobuf-compiler
       - uses: rui314/setup-mold@v1
       - uses: buildjet/cache@v3
         with:
@@ -245,11 +241,6 @@ jobs:
         uses: dtolnay/rust-toolchain@master
         with:
           toolchain: ${{ env.RUST_VERSION }}
-
-      - name: Install Protoc
-        run: |
-          sudo apt-get update
-          sudo apt-get install protobuf-compiler
 
       - name: Publish crate
         uses: xgreenx/publish-crates@v1
@@ -579,7 +570,7 @@ jobs:
 
   # Deploy Fuel Core Ephemeral Developer Environment
   deploy-eph-env:
-    if:  startsWith(github.head_ref, 'preview/')
+    if: startsWith(github.head_ref, 'preview/')
     needs:
       - publish-docker-image
     runs-on: buildjet-4vcpu-ubuntu-2204
