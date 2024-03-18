@@ -19,6 +19,29 @@ pub enum TableEncoding {
         compression: crate::ZstdCompressionLevel,
     },
 }
+impl TableEncoding {
+    fn strip_prefix(&mut self, dir: &Path) -> anyhow::Result<()> {
+        match self {
+            TableEncoding::Json { filepath } => {
+                *filepath = filepath.strip_prefix(dir)?.to_owned();
+            }
+            #[cfg(feature = "parquet")]
+            TableEncoding::Parquet {
+                tables,
+                block_height,
+                da_block_height,
+                ..
+            } => {
+                for (_, path) in tables {
+                    *path = path.strip_prefix(dir)?.to_owned();
+                }
+                *da_block_height = da_block_height.strip_prefix(dir)?.to_owned();
+                *block_height = block_height.strip_prefix(dir)?.to_owned();
+            }
+        }
+        Ok(())
+    }
+}
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq)]
 pub struct SnapshotMetadata {
@@ -34,8 +57,10 @@ impl SnapshotMetadata {
         Ok(serde_json::from_reader(&file)?)
     }
 
-    pub fn set_parent_dir(&mut self, dir: &Path) {
-        todo!()
+    pub fn strip_prefix(&mut self, dir: &Path) -> anyhow::Result<()> {
+        self.chain_config = self.chain_config.strip_prefix(dir)?.to_owned();
+        self.table_encoding.strip_prefix(dir)?;
+        Ok(())
     }
 
     pub fn write(&self, dir: &Path) -> anyhow::Result<()> {
