@@ -165,9 +165,6 @@ jobs:
         uses: davidB/rust-cargo-make@v1
         with:
           version: "0.36.4"
-      - name: Install Protoc
-        run: |
-          sudo apt-get update
       - uses: rui314/setup-mold@v1
       - uses: buildjet/cache@v3
         with:
@@ -248,10 +245,6 @@ jobs:
         uses: dtolnay/rust-toolchain@master
         with:
           toolchain: ${{ env.RUST_VERSION }}
-
-      - name: Install Protoc
-        run: |
-          sudo apt-get update
 
       - name: Publish crate
         uses: xgreenx/publish-crates@v1
