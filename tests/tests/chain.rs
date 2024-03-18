@@ -171,6 +171,6 @@ async fn network_operates_with_non_zero_base_asset_id() {
     let balance = client
         .balance(&owner, Some(&new_base_asset_id))
         .await
-        .expect("Should fetch hte balance");
+        .expect("Should fetch the balance");
     assert_eq!(balance, amount - expected_fee);
 }
