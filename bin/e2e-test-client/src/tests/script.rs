@@ -100,46 +100,21 @@ pub async fn dry_run_multiple_txs(ctx: &TestContext) -> Result<(), Failed> {
     .await
 }
 
-fn load_contract(
-    path: impl AsRef<Path>,
-) -> Result<(ContractConfig, Vec<StorageSlot>), Failed> {
+fn load_contract(path: impl AsRef<Path>) -> Result<ContractConfig, Failed> {
     let snapshot = SnapshotMetadata::read(path)?;
     let state_config = StateConfig::from_snapshot_metadata(snapshot)?;
-
-    let state = state_config
-        .contract_state
+    let contract_config = state_config
+        .contracts
         .into_iter()
-        .map(|entry| {
-            Ok::<_, core::array::TryFromSliceError>(StorageSlot::new(
-                entry.key,
-                entry.value.as_slice().try_into()?,
-            ))
-        })
-        .try_collect()?;
+        .next()
+        .ok_or_else(|| "No contract found in the state")?;
 
-    let contract_config = {
-        let contracts = state_config.contracts;
-
-        if contracts.len() != 1 {
-            return Err(format!(
-                "Expected to find only one contract, but found {}",
-                contracts.len()
-            )
-            .into());
-        }
-        let mut contract_config = contracts[0].clone();
-
-        contract_config.update_contract_id(&state);
-
-        contract_config
-    };
-
-    Ok((contract_config, state))
+    Ok(contract_config)
 }
 
 // Maybe deploy a contract with large state and execute the script
 pub async fn run_contract_large_state(ctx: &TestContext) -> Result<(), Failed> {
-    let (contract_config, state) = load_contract("./src/tests/test_data/large_state")?;
+    let contract_config = load_contract("./src/tests/test_data/large_state")?;
     let dry_run = include_bytes!("test_data/large_state/tx.json");
     let dry_run: Transaction = serde_json::from_slice(dry_run.as_ref())
         .expect("Should be able do decode the Transaction");
@@ -154,7 +129,7 @@ pub async fn run_contract_large_state(ctx: &TestContext) -> Result<(), Failed> {
     // if the contract is not deployed yet, let's deploy it
     let result = ctx.bob.client.contract(&contract_id).await;
     if result?.is_none() {
-        let deployment_request = ctx.bob.deploy_contract(contract_config, state);
+        let deployment_request = ctx.bob.deploy_contract(contract_config);
 
         // wait for contract to deploy in 300 seconds because `state_root` calculation is too long.
         // https://github.com/FuelLabs/fuel-core/issues/1143

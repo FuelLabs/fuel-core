@@ -24,11 +24,7 @@ use fuel_core_types::{
 use itertools::Itertools;
 
 use crate::{
-    config::{
-        contract_balance::ContractBalanceConfig,
-        contract_state::ContractStateConfig,
-        my_entry::MyEntry,
-    },
+    config::my_entry::MyEntry,
     AsTable,
     CoinConfig,
     ContractConfig,

@@ -24,6 +24,7 @@ use fuel_core_types::{
     },
     fuel_crypto::PublicKey,
     fuel_tx::{
+        Bytes32,
         ConsensusParameters,
         Contract,
         ContractId,
@@ -44,6 +45,7 @@ use fuel_core_types::{
     },
     fuel_vm::SecretKey,
 };
+use itertools::Itertools;
 
 use crate::config::{
     ClientConfig,
@@ -297,11 +299,7 @@ impl Wallet {
         })
     }
 
-    pub async fn deploy_contract(
-        &self,
-        config: ContractConfig,
-        slots: Vec<StorageSlot>,
-    ) -> anyhow::Result<()> {
+    pub async fn deploy_contract(&self, config: ContractConfig) -> anyhow::Result<()> {
         let asset_id = AssetId::BASE;
         let total_amount = BASE_AMOUNT;
         // select coins
@@ -316,8 +314,20 @@ impl Wallet {
             salt,
             ..
         } = config;
-        let state_root = Contract::initial_state_root(slots.iter());
-        let mut tx = TransactionBuilder::create(bytes.into(), salt, slots);
+        let state = config
+            .state
+            .iter()
+            .map(|(k, v)| {
+                let value = Bytes32::new(
+                    v.as_slice()
+                        .try_into()
+                        .expect("state value to fit in 32 bytes"),
+                );
+                StorageSlot::new(*k, value)
+            })
+            .collect_vec();
+        let state_root = Contract::initial_state_root(state.iter());
+        let mut tx = TransactionBuilder::create(bytes.into(), salt, state);
 
         for coin in coins {
             if let CoinType::Coin(coin) = coin {

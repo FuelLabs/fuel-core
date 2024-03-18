@@ -29,7 +29,7 @@ pub async fn deploy_large_contract(ctx: &TestContext) -> Result<(), Failed> {
     let storage_slots = vec![];
     contract_config.update_contract_id(&storage_slots);
 
-    let deployment_request = ctx.bob.deploy_contract(contract_config, storage_slots);
+    let deployment_request = ctx.bob.deploy_contract(contract_config);
 
     // wait for contract to deploy in 5 minutes, because 16mb takes a lot of time.
     timeout(Duration::from_secs(300), deployment_request).await??;

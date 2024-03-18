@@ -1,12 +1,8 @@
 use crate::{
-    config::{
-        contract_state::ContractStateConfig,
-        my_entry::MyEntry,
-    },
+    config::my_entry::MyEntry,
     AsTable,
     ChainConfig,
     CoinConfig,
-    ContractBalanceConfig,
     ContractConfig,
     MessageConfig,
     SnapshotMetadata,

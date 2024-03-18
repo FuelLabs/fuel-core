@@ -1,7 +1,4 @@
-use fuel_core_chain_config::{
-    ContractBalanceConfig,
-    MyEntry,
-};
+use fuel_core_chain_config::MyEntry;
 use fuel_core_storage::{
     tables::{
         merkle::ContractsAssetsMerkleMetadata,

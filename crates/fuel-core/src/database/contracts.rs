@@ -1,8 +1,6 @@
 use crate::database::Database;
 use fuel_core_chain_config::{
-    ContractBalanceConfig,
     ContractConfig,
-    ContractStateConfig,
     MyEntry,
 };
 use fuel_core_storage::{

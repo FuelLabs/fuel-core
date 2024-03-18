@@ -2,9 +2,7 @@ use fuel_core::{
     chain_config::{
         CoinConfig,
         CoinConfigGenerator,
-        ContractBalanceConfig,
         ContractConfig,
-        ContractStateConfig,
         MessageConfig,
         SnapshotReader,
         StateConfig,

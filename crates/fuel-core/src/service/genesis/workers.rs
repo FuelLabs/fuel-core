@@ -20,9 +20,7 @@ use crate::database::{
 };
 use fuel_core_chain_config::{
     CoinConfig,
-    ContractBalanceConfig,
     ContractConfig,
-    ContractStateConfig,
     Group,
     MessageConfig,
     MyEntry,

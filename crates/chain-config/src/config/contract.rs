@@ -1,6 +1,7 @@
 use crate::serialization::HexIfHumanReadable;
 use fuel_core_types::{
     fuel_tx::{
+        AssetId,
         Contract,
         ContractId,
         StorageSlot,
@@ -36,6 +37,8 @@ pub struct ContractConfig {
     /// used if contract is forked from another chain to preserve id & tx_pointer
     /// The index of the originating tx within `tx_pointer_block_height`
     pub tx_pointer_tx_idx: u16,
+    pub state: Vec<(Bytes32, Vec<u8>)>,
+    pub balance: Vec<(AssetId, u64)>,
 }
 
 impl ContractConfig {
@@ -59,6 +62,11 @@ impl crate::Randomize for ContractConfig {
             output_index: rng.gen(),
             tx_pointer_block_height: rng.gen(),
             tx_pointer_tx_idx: rng.gen(),
+            state: vec![(
+                super::random_bytes_32(&mut rng).into(),
+                super::random_bytes_32(&mut rng).to_vec(),
+            )],
+            balance: vec![(AssetId::new(super::random_bytes_32(&mut rng)), rng.gen())],
         }
     }
 }

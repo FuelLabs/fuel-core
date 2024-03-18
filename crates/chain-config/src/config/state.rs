@@ -21,6 +21,8 @@ use fuel_core_storage::{
         ContractsState,
         Messages,
     },
+    ContractsAssetKey,
+    ContractsStateKey,
     Result as StorageResult,
 };
 use fuel_core_types::{
@@ -65,8 +67,6 @@ use crate::SnapshotMetadata;
 use super::{
     coin::CoinConfig,
     contract::ContractConfig,
-    contract_balance::ContractBalanceConfig,
-    contract_state::ContractStateConfig,
     message::MessageConfig,
     my_entry::MyEntry,
 };
@@ -99,10 +99,6 @@ pub struct StateConfig {
     pub messages: Vec<MessageConfig>,
     /// Contracts
     pub contracts: Vec<ContractConfig>,
-    /// State entries of all contracts
-    pub contract_state: Vec<ContractStateConfig>,
-    /// Balance entries of all contracts
-    pub contract_balance: Vec<ContractBalanceConfig>,
     /// Block height
     pub block_height: BlockHeight,
     /// Da block height
@@ -138,19 +134,27 @@ impl AsTable<Messages> for StateConfig {
 
 impl AsTable<ContractsState> for StateConfig {
     fn as_table(&self) -> Vec<MyEntry<ContractsState>> {
-        self.contract_state
-            .clone()
-            .into_iter()
-            .map(|state| state.into())
+        self.contracts
+            .iter()
+            .flat_map(|contract| {
+                contract.state.iter().map(|(key, value)| MyEntry {
+                    key: ContractsStateKey::new(&contract.contract_id, key),
+                    value: value.clone().into(),
+                })
+            })
             .collect()
     }
 }
 impl AsTable<ContractsAssets> for StateConfig {
     fn as_table(&self) -> Vec<MyEntry<ContractsAssets>> {
-        self.contract_balance
-            .clone()
-            .into_iter()
-            .map(|balance| balance.into())
+        self.contracts
+            .iter()
+            .flat_map(|contract| {
+                contract.balance.iter().map(|(asset_id, amount)| MyEntry {
+                    key: ContractsAssetKey::new(&contract.contract_id, asset_id),
+                    value: *amount,
+                })
+            })
             .collect()
     }
 }
@@ -199,8 +203,6 @@ impl StateConfig {
         self.coins.extend(other.coins);
         self.messages.extend(other.messages);
         self.contracts.extend(other.contracts);
-        self.contract_state.extend(other.contract_state);
-        self.contract_balance.extend(other.contract_balance);
     }
 
     pub fn from_tables(
@@ -216,15 +218,25 @@ impl StateConfig {
     ) -> Self {
         let coins = coins.into_iter().map(|coin| coin.into()).collect();
         let messages = messages.into_iter().map(|message| message.into()).collect();
-        let contract_state = contract_state
+        let state: HashMap<_, _> = contract_state
             .into_iter()
-            .map(|state| state.into())
-            .collect();
+            .map(|state| {
+                (
+                    *state.key.contract_id(),
+                    (*state.key.state_key(), Vec::<u8>::from(state.value)),
+                )
+            })
+            .into_group_map();
 
-        let contract_balance = contract_balance
+        let balance: HashMap<_, _> = contract_balance
             .into_iter()
-            .map(|balance| balance.into())
-            .collect();
+            .map(|balance| {
+                (
+                    *balance.key.contract_id(),
+                    (*balance.key.asset_id(), balance.value),
+                )
+            })
+            .into_group_map();
 
         let contract_code: HashMap<ContractId, Vec<u8>> = contract_code
             .into_iter()
@@ -263,6 +275,8 @@ impl StateConfig {
                 let code = contract_code.get(id).cloned();
                 let salt = contract_salt.get(id).cloned();
                 let utxo = contract_utxos.get(id).cloned();
+                let state = state.get(id).cloned().unwrap_or_default();
+                let balance = balance.get(id).cloned().unwrap_or_default();
                 match (code, salt, utxo) {
                     (Some(code), Some(salt), Some((utxo_id, tx_pointer))) => {
                         Some(ContractConfig {
@@ -273,6 +287,8 @@ impl StateConfig {
                             output_index: utxo_id.output_index(),
                             tx_pointer_block_height: tx_pointer.block_height(),
                             tx_pointer_tx_idx: tx_pointer.tx_index(),
+                            state,
+                            balance,
                         })
                     }
                     _ => None,
@@ -283,8 +299,6 @@ impl StateConfig {
             coins,
             messages,
             contracts,
-            contract_state,
-            contract_balance,
             block_height,
             da_block_height,
         }
