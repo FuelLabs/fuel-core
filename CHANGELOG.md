@@ -10,6 +10,7 @@ Description of the upcoming release here.
 
 ### Added
 
+- [#1760](https://github.com/FuelLabs/fuel-core/pull/1760): Added tests to verify that the network operates with a custom chain id and base asset id.
 - [#1752](https://github.com/FuelLabs/fuel-core/pull/1752): Add `ProducerGasPrice` trait that the `Producer` depends on to get the gas price for the block.
 - [#1747](https://github.com/FuelLabs/fuel-core/pull/1747): The DA block height is now included in the genesis state.
 - [#1740](https://github.com/FuelLabs/fuel-core/pull/1740): Remove optional fields from genesis configs
