@@ -5,12 +5,10 @@ use clap::{
     Subcommand,
 };
 use fuel_core::{
-    chain_config::{
-        ChainConfig,
-        ChainStateDb,
-    },
+    chain_config::ChainConfig,
     database::{
         database_description::on_chain::OnChain,
+        ChainStateDb,
         Database,
     },
     types::fuel_types::ContractId,
@@ -20,7 +18,24 @@ use fuel_core_chain_config::{
     SnapshotWriter,
     MAX_GROUP_SIZE,
 };
-use fuel_core_storage::Result as StorageResult;
+use fuel_core_storage::{
+    iter::IterDirection,
+    tables::{
+        Coins,
+        ContractsAssets,
+        ContractsInfo,
+        ContractsLatestUtxo,
+        ContractsRawCode,
+        ContractsState,
+        FuelBlocks,
+        Messages,
+    },
+    Result as StorageResult,
+};
+use fuel_core_types::{
+    blockchain::block::Block,
+    fuel_tx::Bytes32,
+};
 use itertools::Itertools;
 use std::path::{
     Path,
@@ -143,9 +158,39 @@ fn contract_snapshot(
 ) -> Result<(), anyhow::Error> {
     std::fs::create_dir_all(output_dir)?;
 
-    let (code, info, utxo, state, balance) = db.get_contract_by_id(contract_id)?;
-    let block = db.get_last_block()?;
+    let code = db
+        .entries::<ContractsRawCode>(Some(contract_id.as_ref()), IterDirection::Forward)
+        .next()
+        .ok_or_else(|| {
+            anyhow::anyhow!("contract code not found! id: {:?}", contract_id)
+        })??;
 
+    let info = db
+        .entries::<ContractsInfo>(Some(contract_id.as_ref()), IterDirection::Forward)
+        .next()
+        .ok_or_else(|| {
+            anyhow::anyhow!("contract info not found! id: {:?}", contract_id)
+        })??;
+
+    let utxo = db
+        .entries::<ContractsLatestUtxo>(
+            Some(contract_id.as_ref()),
+            IterDirection::Forward,
+        )
+        .next()
+        .ok_or_else(|| {
+            anyhow::anyhow!("contract utxo not found! id: {:?}", contract_id)
+        })??;
+
+    let state = db
+        .entries::<ContractsState>(Some(contract_id.as_ref()), IterDirection::Forward)
+        .try_collect()?;
+
+    let balance = db
+        .entries::<ContractsAssets>(Some(contract_id.as_ref()), IterDirection::Forward)
+        .try_collect()?;
+
+    let block = get_last_block(&db)?;
     let mut writer = SnapshotWriter::json(output_dir);
 
     writer.write(vec![code])?;
@@ -189,33 +234,41 @@ fn full_snapshot(
     }
     let group_size = encoding.group_size().unwrap_or(MAX_GROUP_SIZE);
 
-    let coins = db.iter_coin_configs();
+    let coins = db.entries::<Coins>(None, IterDirection::Forward);
     write(coins, group_size, |chunk| writer.write(chunk))?;
 
-    let messages = db.iter_message_configs();
+    let messages = db.entries::<Messages>(None, IterDirection::Forward);
     write(messages, group_size, |chunk| writer.write(chunk))?;
 
-    let code = db.iter_contracts_code();
+    let code = db.entries::<ContractsRawCode>(None, IterDirection::Forward);
     write(code, group_size, |chunk| writer.write(chunk))?;
 
-    let info = db.iter_contracts_info();
+    let info = db.entries::<ContractsInfo>(None, IterDirection::Forward);
     write(info, group_size, |chunk| writer.write(chunk))?;
 
-    let utxos = db.iter_contracts_latest_utxo();
+    let utxos = db.entries::<ContractsLatestUtxo>(None, IterDirection::Forward);
     write(utxos, group_size, |chunk| writer.write(chunk))?;
 
-    let contract_states = db.iter_contract_state_configs();
+    let contract_states = db.entries::<ContractsState>(None, IterDirection::Forward);
     write(contract_states, group_size, |chunk| writer.write(chunk))?;
 
-    let contract_balances = db.iter_contract_balance_configs();
+    let contract_balances = db.entries::<ContractsAssets>(None, IterDirection::Forward);
     write(contract_balances, group_size, |chunk| writer.write(chunk))?;
 
-    let block = db.get_last_block()?;
+    let block = get_last_block(db)?;
     writer.write_block_data(*block.header().height(), block.header().da_height)?;
 
     writer.close()?;
 
     Ok(())
+}
+
+fn get_last_block(db: impl ChainStateDb) -> anyhow::Result<Block<Bytes32>> {
+    Ok(db
+        .entries::<FuelBlocks>(None, IterDirection::Reverse)
+        .next()
+        .ok_or_else(|| anyhow::anyhow!("no block found! Cannot determine block height"))??
+        .value)
 }
 
 fn load_chain_config(

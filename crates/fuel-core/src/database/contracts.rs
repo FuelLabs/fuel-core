@@ -47,7 +47,28 @@ impl Database {
             .map_ok(|(key, value)| MyEntry { key, value })
     }
 
-    pub fn get_contract_code(
+    pub fn iter_contracts_code(
+        &self,
+    ) -> impl Iterator<Item = StorageResult<MyEntry<ContractsRawCode>>> + '_ {
+        self.iter_all::<ContractsRawCode>(None)
+            .map_ok(|(key, value)| MyEntry { key, value })
+    }
+
+    pub fn iter_contracts_info(
+        &self,
+    ) -> impl Iterator<Item = StorageResult<MyEntry<ContractsInfo>>> + '_ {
+        self.iter_all::<ContractsInfo>(None)
+            .map_ok(|(key, value)| MyEntry { key, value })
+    }
+
+    pub fn iter_contracts_latest_utxo(
+        &self,
+    ) -> impl Iterator<Item = StorageResult<MyEntry<ContractsLatestUtxo>>> + '_ {
+        self.iter_all::<ContractsLatestUtxo>(None)
+            .map_ok(|(key, value)| MyEntry { key, value })
+    }
+
+    pub fn contract_code(
         &self,
         contract_id: ContractId,
     ) -> StorageResult<MyEntry<ContractsRawCode>> {
@@ -60,7 +81,7 @@ impl Database {
             .ok_or_else(|| not_found!("ContractsRawCode"))
     }
 
-    pub fn get_contract_info(
+    pub fn contract_info(
         &self,
         contract_id: ContractId,
     ) -> StorageResult<MyEntry<ContractsInfo>> {
@@ -73,7 +94,7 @@ impl Database {
             .ok_or_else(|| not_found!("ContractsInfo"))
     }
 
-    pub fn get_contract_latest_utxo(
+    pub fn contract_latest_utxo(
         &self,
         contract_id: ContractId,
     ) -> StorageResult<MyEntry<ContractsLatestUtxo>> {
@@ -86,7 +107,7 @@ impl Database {
             .ok_or_else(|| not_found!("ContractsLatestUtxo"))
     }
 
-    pub fn contract_balances(
+    pub fn filter_contract_balances(
         &self,
         contract: ContractId,
         start_asset: Option<AssetId>,
@@ -102,7 +123,7 @@ impl Database {
         .map_ok(|(key, value)| MyEntry { key, value })
     }
 
-    pub fn contract_states(
+    pub fn filter_contract_states(
         &self,
         contract_id: ContractId,
     ) -> impl Iterator<Item = StorageResult<MyEntry<ContractsState>>> + '_ {

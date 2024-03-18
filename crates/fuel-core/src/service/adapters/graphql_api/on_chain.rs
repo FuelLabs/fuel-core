@@ -82,7 +82,7 @@ impl DatabaseContracts for Database {
         start_asset: Option<AssetId>,
         direction: IterDirection,
     ) -> BoxedIter<StorageResult<ContractBalance>> {
-        self.contract_balances(contract, start_asset, Some(direction))
+        self.filter_contract_balances(contract, start_asset, Some(direction))
             .map_ok(|entry| ContractBalance {
                 owner: *entry.key.contract_id(),
                 amount: entry.value,

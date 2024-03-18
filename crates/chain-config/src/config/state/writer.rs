@@ -47,6 +47,8 @@ use super::parquet;
 enum EncoderType {
     Json {
         buffer: HashMap<String, Vec<Value>>,
+        da_block_height: Option<DaBlockHeight>,
+        block_height: Option<BlockHeight>,
     },
     #[cfg(feature = "parquet")]
     Parquet {
@@ -203,6 +205,8 @@ impl SnapshotWriter {
         Self {
             encoder: EncoderType::Json {
                 buffer: HashMap::default(),
+                da_block_height: None,
+                block_height: None,
             },
             dir: dir.into(),
         }
@@ -287,12 +291,46 @@ impl SnapshotWriter {
         height: BlockHeight,
         da_height: DaBlockHeight,
     ) -> anyhow::Result<()> {
-        todo!()
+        match &mut self.encoder {
+            EncoderType::Json {
+                da_block_height,
+                block_height,
+                ..
+            } => {
+                *block_height = Some(height);
+                *da_block_height = Some(da_height);
+                Ok(())
+            }
+            #[cfg(feature = "parquet")]
+            EncoderType::Parquet {
+                block_height,
+                da_block_height,
+                ..
+            } => {
+                let block_height_file = File::create(block_height)?;
+                let da_block_height_file = File::create(da_block_height)?;
+                let mut block_height_encoder = parquet::encode::Encoder::new(
+                    block_height_file,
+                    ::parquet::basic::Compression::UNCOMPRESSED,
+                )?;
+                let mut da_block_height_encoder = parquet::encode::Encoder::new(
+                    da_block_height_file,
+                    ::parquet::basic::Compression::UNCOMPRESSED,
+                )?;
+                block_height_encoder.write(vec![postcard::to_stdvec(&height)?])?;
+                da_block_height_encoder.write(vec![postcard::to_stdvec(&da_height)?])?;
+                Ok(())
+            }
+        }
     }
 
     pub fn close(self) -> anyhow::Result<SnapshotMetadata> {
         match self.encoder {
-            EncoderType::Json { buffer } => {
+            EncoderType::Json {
+                buffer,
+                da_block_height,
+                block_height,
+            } => {
                 let state_file_path = self.dir.join("state_config.json");
 
                 let file = std::fs::File::create(&state_file_path)?;
@@ -300,6 +338,16 @@ impl SnapshotWriter {
                 for (k, v) in buffer {
                     map.insert(k, serde_json::Value::Array(v));
                 }
+
+                map.insert(
+                    "block_height".to_string(),
+                    serde_json::to_value(block_height).unwrap(),
+                );
+
+                map.insert(
+                    "da_block_height".to_string(),
+                    serde_json::to_value(da_block_height).unwrap(),
+                );
 
                 serde_json::to_writer_pretty(file, &map)?;
 

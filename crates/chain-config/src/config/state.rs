@@ -7,7 +7,10 @@ use core::{
     str::FromStr,
 };
 use fuel_core_storage::{
+    blueprint::BlueprintInspect,
+    column::Column,
     iter::BoxedIter,
+    kv_store::KeyValueInspect,
     structured_storage::TableWithBlueprint,
     tables::{
         Coins,
@@ -287,30 +290,30 @@ impl StateConfig {
         }
     }
 
-    pub fn generate_state_config(db: impl ChainStateDb) -> StorageResult<Self> {
-        let coins = db.iter_coin_configs().try_collect()?;
-        let messages = db.iter_message_configs().try_collect()?;
-        let contract_state = db.iter_contract_state_configs().try_collect()?;
-        let contract_balance = db.iter_contract_balance_configs().try_collect()?;
-        let contract_code = db.iter_contracts_code().try_collect()?;
-        let contract_info = db.iter_contracts_info().try_collect()?;
-        let contract_utxo = db.iter_contracts_latest_utxo().try_collect()?;
-        let block = db.get_last_block()?;
-        let da_block_height = block.header().da_height;
-        let block_height = *block.header().height();
-
-        Ok(Self::from_tables(
-            coins,
-            messages,
-            contract_state,
-            contract_balance,
-            contract_code,
-            contract_info,
-            contract_utxo,
-            da_block_height,
-            block_height,
-        ))
-    }
+    // pub fn generate_state_config(db: impl ChainStateDb) -> StorageResult<Self> {
+    //     let coins = db.entries().try_collect()?;
+    //     let messages = db.entries().try_collect()?;
+    //     let contract_state = db.entries().try_collect()?;
+    //     let contract_balance = db.entries().try_collect()?;
+    //     let contract_code = db.entries().try_collect()?;
+    //     let contract_info = db.entries().try_collect()?;
+    //     let contract_utxo = db.entries().try_collect()?;
+    //     let block = db.get_last_block()?;
+    //     let da_block_height = block.header().da_height;
+    //     let block_height = *block.header().height();
+    //
+    //     Ok(Self::from_tables(
+    //         coins,
+    //         messages,
+    //         contract_state,
+    //         contract_balance,
+    //         contract_code,
+    //         contract_info,
+    //         contract_utxo,
+    //         da_block_height,
+    //         block_height,
+    //     ))
+    // }
 
     #[cfg(feature = "std")]
     pub fn from_snapshot_metadata(
@@ -379,10 +382,10 @@ impl StateConfig {
         ))
     }
 
-    // TODO: this seems to be a duplicate, remove it
-    pub fn from_db(db: impl ChainStateDb) -> anyhow::Result<Self> {
-        Ok(Self::generate_state_config(db)?)
-    }
+    // // TODO: this seems to be a duplicate, remove it
+    // pub fn from_db(db: impl ChainStateDb) -> anyhow::Result<Self> {
+    //     Ok(Self::generate_state_config(db)?)
+    // }
 
     pub fn local_testnet() -> Self {
         // endow some preset accounts with an initial balance
@@ -442,44 +445,6 @@ impl StateConfig {
             ..StateConfig::default()
         }
     }
-}
-
-#[impl_tools::autoimpl(for<T: trait> &T, &mut T)]
-pub trait ChainStateDb {
-    /// Returns the contract config along with its state and balance
-    fn get_contract_by_id(
-        &self,
-        contract_id: fuel_core_types::fuel_types::ContractId,
-    ) -> StorageResult<(
-        MyEntry<ContractsRawCode>,
-        MyEntry<ContractsInfo>,
-        MyEntry<ContractsLatestUtxo>,
-        Vec<MyEntry<ContractsState>>,
-        Vec<MyEntry<ContractsAssets>>,
-    )>;
-    /// Returns *all* unspent coin configs available in the database.
-    fn iter_coin_configs(&self) -> BoxedIter<StorageResult<MyEntry<Coins>>>;
-
-    fn iter_contracts_code(&self) -> BoxedIter<StorageResult<MyEntry<ContractsRawCode>>>;
-
-    fn iter_contracts_info(&self) -> BoxedIter<StorageResult<MyEntry<ContractsInfo>>>;
-
-    fn iter_contracts_latest_utxo(
-        &self,
-    ) -> BoxedIter<StorageResult<MyEntry<ContractsLatestUtxo>>>;
-
-    /// Returns the state of all contracts
-    fn iter_contract_state_configs(
-        &self,
-    ) -> BoxedIter<StorageResult<MyEntry<ContractsState>>>;
-    /// Returns the balances of all contracts
-    fn iter_contract_balance_configs(
-        &self,
-    ) -> BoxedIter<StorageResult<MyEntry<ContractsAssets>>>;
-    /// Returns *all* unspent message configs available in the database.
-    fn iter_message_configs(&self) -> BoxedIter<StorageResult<MyEntry<Messages>>>;
-    /// Returns the last available block.
-    fn get_last_block(&self) -> StorageResult<CompressedBlock>;
 }
 
 pub use reader::{

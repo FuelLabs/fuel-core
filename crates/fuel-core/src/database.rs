@@ -18,7 +18,6 @@ use crate::{
     },
 };
 use fuel_core_chain_config::{
-    ChainStateDb,
     CoinConfig,
     ContractBalanceConfig,
     ContractConfig,
@@ -29,9 +28,10 @@ use fuel_core_chain_config::{
 use fuel_core_services::SharedMutex;
 use fuel_core_storage::{
     self,
+    blueprint::BlueprintInspect,
+    column::Column,
     iter::{
         BoxedIter,
-        IntoBoxedIter,
         IterDirection,
         IterableStore,
         IteratorOverTable,
@@ -42,6 +42,7 @@ use fuel_core_storage::{
         Value,
     },
     not_found,
+    structured_storage::TableWithBlueprint,
     tables::{
         Coins,
         ContractsAssets,
@@ -228,68 +229,31 @@ where
         }
     }
 }
+// TODO: There is probably a trait that can be used instead of a ChainStateDb
+#[impl_tools::autoimpl(for<K: trait> &K, &mut K)]
+pub trait ChainStateDb: KeyValueInspect {
+    fn entries<T>(
+        &self,
+        prefix: Option<&[u8]>,
+        direction: IterDirection,
+    ) -> impl Iterator<Item = StorageResult<MyEntry<T>>>
+    where
+        T: TableWithBlueprint<Column = Column>,
+        <T as TableWithBlueprint>::Blueprint: BlueprintInspect<T, Database<OnChain>>;
+}
 
-/// Implement `ChainStateDb` so that `Database` can be passed to
-/// `StateConfig's` `generate_state_config()` method
 impl ChainStateDb for Database {
-    fn get_contract_by_id(
+    fn entries<T>(
         &self,
-        contract_id: fuel_core_types::fuel_types::ContractId,
-    ) -> StorageResult<(
-        MyEntry<ContractsRawCode>,
-        MyEntry<ContractsInfo>,
-        MyEntry<ContractsLatestUtxo>,
-        Vec<MyEntry<ContractsState>>,
-        Vec<MyEntry<ContractsAssets>>,
-    )> {
-        let raw_code = self.get_contract_code(contract_id)?;
-        let info = self.get_contract_info(contract_id)?;
-        let latest_utxo = self.get_contract_latest_utxo(contract_id)?;
-        let states = self.contract_states(contract_id).try_collect()?;
-        let balances = self
-            .contract_balances(contract_id, None, None)
-            .try_collect()?;
-
-        Ok((raw_code, info, latest_utxo, states, balances))
-    }
-
-    fn iter_coin_configs(&self) -> BoxedIter<StorageResult<MyEntry<Coins>>> {
-        Self::iter_coins(self).into_boxed()
-    }
-
-    fn iter_contract_state_configs(
-        &self,
-    ) -> BoxedIter<StorageResult<MyEntry<ContractsState>>> {
-        Self::iter_contract_state(self).into_boxed()
-    }
-
-    fn iter_contract_balance_configs(
-        &self,
-    ) -> BoxedIter<StorageResult<MyEntry<ContractsAssets>>> {
-        Self::iter_contract_balance(self).into_boxed()
-    }
-
-    fn iter_message_configs(&self) -> BoxedIter<StorageResult<MyEntry<Messages>>> {
-        Self::iter_messages(self).into_boxed()
-    }
-
-    fn get_last_block(&self) -> StorageResult<CompressedBlock> {
-        self.latest_compressed_block()?
-            .ok_or(not_found!(FuelBlocks))
-    }
-
-    fn iter_contracts_code(&self) -> BoxedIter<StorageResult<MyEntry<ContractsRawCode>>> {
-        todo!()
-    }
-
-    fn iter_contracts_info(&self) -> BoxedIter<StorageResult<MyEntry<ContractsInfo>>> {
-        todo!()
-    }
-
-    fn iter_contracts_latest_utxo(
-        &self,
-    ) -> BoxedIter<StorageResult<MyEntry<ContractsLatestUtxo>>> {
-        todo!()
+        prefix: Option<&[u8]>,
+        direction: IterDirection,
+    ) -> impl Iterator<Item = StorageResult<MyEntry<T>>>
+    where
+        T: TableWithBlueprint<Column = Column>,
+        <T as TableWithBlueprint>::Blueprint: BlueprintInspect<T, Self>,
+    {
+        self.iter_all_filtered::<T, _>(prefix, None, Some(direction))
+            .map_ok(|(key, value)| MyEntry { key, value })
     }
 }
 

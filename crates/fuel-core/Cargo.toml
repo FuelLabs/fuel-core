@@ -11,6 +11,7 @@ repository = { workspace = true }
 version = { workspace = true }
 
 [dependencies]
+impl-tools = { workspace = true }
 anyhow = { workspace = true }
 async-graphql = { version = "4.0", features = [
   "tracing",
