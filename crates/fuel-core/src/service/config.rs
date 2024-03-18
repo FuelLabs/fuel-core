@@ -144,6 +144,12 @@ impl Config {
             self.txpool.chain_config = self.chain_config.clone();
         }
 
+        if self.block_importer.chain_id != self.chain_config.consensus_parameters.chain_id
+        {
+            tracing::warn!("The `ChainConfig` of `BlockImporter` was inconsistent");
+            self.block_importer.chain_id = self.chain_config.consensus_parameters.chain_id
+        }
+
         if self.txpool.utxo_validation != self.utxo_validation {
             tracing::warn!("The `utxo_validation` of `TxPool` was inconsistent");
             self.txpool.utxo_validation = self.utxo_validation;

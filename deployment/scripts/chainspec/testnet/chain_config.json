@@ -1,5 +1,5 @@
 {
-  "chain_name": "Testnet Beta 5",
+  "chain_name": "Upgradable Testnet",
   "block_gas_limit": 30000000,
   "consensus_parameters": {
     "tx_params": {
@@ -7,21 +7,21 @@
       "max_outputs": 255,
       "max_witnesses": 255,
       "max_gas_per_tx": 30000000,
-      "max_size": 17825792
+      "max_size": 112640
     },
     "predicate_params": {
-      "max_predicate_length": 1048576,
-      "max_predicate_data_length": 1048576,
-      "max_message_data_length": 1048576,
+      "max_predicate_length": 102400,
+      "max_predicate_data_length": 102400,
+      "max_message_data_length": 102400,
       "max_gas_per_predicate": 30000000
     },
     "script_params": {
-      "max_script_length": 1048576,
-      "max_script_data_length": 1048576
+      "max_script_length": 102400,
+      "max_script_data_length": 102400
     },
     "contract_params": {
-      "contract_max_size": 16777216,
-      "max_storage_slots": 65536
+      "contract_max_size": 102400,
+      "max_storage_slots": 1760
     },
     "fee_params": {
       "gas_price_factor": 92,

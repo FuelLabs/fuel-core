@@ -10,6 +10,7 @@ Description of the upcoming release here.
 
 ### Added
 
+- [#1760](https://github.com/FuelLabs/fuel-core/pull/1760): Added tests to verify that the network operates with a custom chain id and base asset id.
 - [#1752](https://github.com/FuelLabs/fuel-core/pull/1752): Add `ProducerGasPrice` trait that the `Producer` depends on to get the gas price for the block.
 - [#1747](https://github.com/FuelLabs/fuel-core/pull/1747): The DA block height is now included in the genesis state.
 - [#1740](https://github.com/FuelLabs/fuel-core/pull/1740): Remove optional fields from genesis configs
@@ -19,6 +20,14 @@ Description of the upcoming release here.
 ### Changed
 
 #### Breaking
+- [#1761](https://github.com/FuelLabs/fuel-core/pull/1761): Adjustments to the upcoming testnet configs:
+  - Decreased the max size of the contract/predicate/script to be 100KB.
+  - Decreased the max size of the transaction to be 110KB.
+  - Decreased the max number of storage slots to be 1760(110KB / 64).
+  - Removed fake coins from the genesis state.
+  - Renamed folders to be "testnet" and "dev-testnet".
+  - The name of the networks are "Upgradable Testnet" and "Upgradable Dev Testnet".
+
 - [#1694](https://github.com/FuelLabs/fuel-core/pull/1694): The change moves the database transaction logic from the `fuel-core` to the `fuel-core-storage` level. The corresponding [issue](https://github.com/FuelLabs/fuel-core/issues/1589) described the reason behind it.
 
     ## Technical details of implementation
@@ -66,6 +75,9 @@ Description of the upcoming release here.
 
   Using uniform-sized batches may result in batches containing items from multiple contracts. Optimal performance can presumably be achieved by selecting a batch size that typically encompasses an entire contract's state or balance, allowing for immediate initialization of relevant Merkle trees.
 
+### Removed
+
+- [#1757](https://github.com/FuelLabs/fuel-core/pull/1757): Removed `protobuf` from everywhere since `libp2p` uses `quick-protobuf`.
 
 ## [Version 0.23.0]
 

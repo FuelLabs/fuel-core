@@ -10,8 +10,8 @@ use fuel_core::chain_config::{
 use fuel_core_types::fuel_tx::GasCosts;
 
 #[allow(irrefutable_let_patterns)]
-#[test_case::test_case( "./../deployment/scripts/chainspec/beta" ; "Beta chainconfig" )]
-#[test_case::test_case( "./../deployment/scripts/chainspec/dev" ; "Dev chainconfig"  )]
+#[test_case::test_case( "./../deployment/scripts/chainspec/testnet" ; "Beta chainconfig" )]
+#[test_case::test_case( "./../deployment/scripts/chainspec/dev-testnet" ; "Dev chainconfig"  )]
 fn test_deployment_chainconfig(path: impl AsRef<Path>) -> anyhow::Result<()> {
     let path = path.as_ref();
     let stored_snapshot = SnapshotMetadata::read(path).unwrap();
