@@ -76,7 +76,8 @@ fuel-core-types = { version = "0.23.0", path = "./crates/types", default-feature
 fuel-core-tests = { version = "0.0.0", path = "./tests" }
 fuel-core-xtask = { version = "0.0.0", path = "./xtask" }
 
-fuel-vm-private = { version = "0.47.1", package = "fuel-vm", git = "https://github.com/FuelLabs/fuel-vm", branch = "feature/regenesis_off_chain", default-features = false } # Fuel dependencies
+# Fuel dependencies 
+fuel-vm-private = { version = "0.47.1", package = "fuel-vm", git = "https://github.com/FuelLabs/fuel-vm", branch = "feature/regenesis_off_chain", default-features = false }
 
 # Common dependencies
 anyhow = "1.0"

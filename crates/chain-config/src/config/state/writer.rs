@@ -302,23 +302,31 @@ impl SnapshotWriter {
             EncoderType::Parquet {
                 block_height,
                 da_block_height,
+                compression,
                 ..
             } => {
-                let block_height_file = File::create(block_height)?;
-                let da_block_height_file = File::create(da_block_height)?;
-                let mut block_height_encoder = parquet::encode::Encoder::new(
-                    block_height_file,
-                    ::parquet::basic::Compression::UNCOMPRESSED,
-                )?;
-                let mut da_block_height_encoder = parquet::encode::Encoder::new(
-                    da_block_height_file,
-                    ::parquet::basic::Compression::UNCOMPRESSED,
-                )?;
-                block_height_encoder.write(vec![postcard::to_stdvec(&height)?])?;
-                da_block_height_encoder.write(vec![postcard::to_stdvec(&da_height)?])?;
+                let dt: u32 = height.into();
+                eprintln!("Writing {:?}", dt);
+                Self::write_single_el_parquet(block_height, height, *compression)?;
+                let dt: u64 = da_height.into();
+                eprintln!("Writing {:?}", dt);
+                Self::write_single_el_parquet(da_block_height, da_height, *compression)?;
+
                 Ok(())
             }
         }
+    }
+
+    #[cfg(feature = "parquet")]
+    fn write_single_el_parquet(
+        path: &std::path::Path,
+        data: impl serde::Serialize,
+        compression: ZstdCompressionLevel,
+    ) -> anyhow::Result<()> {
+        let mut encoder =
+            parquet::encode::Encoder::new(File::create(path)?, compression.into())?;
+        encoder.write(vec![postcard::to_stdvec(&data)?])?;
+        encoder.close()
     }
 
     pub fn close(self) -> anyhow::Result<SnapshotMetadata> {

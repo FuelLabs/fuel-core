@@ -75,7 +75,10 @@ impl SnapshotMetadata {
     pub fn read(dir: impl AsRef<Path>) -> anyhow::Result<Self> {
         let path = dir.as_ref().join(Self::METADATA_FILENAME);
         let file = std::fs::File::open(path)?;
-        Ok(serde_json::from_reader(&file)?)
+        let mut snapshot: Self = serde_json::from_reader(&file)?;
+        snapshot.prepend_path(dir.as_ref());
+
+        Ok(snapshot)
     }
 
     pub fn strip_prefix(&mut self, dir: &Path) -> anyhow::Result<()> {

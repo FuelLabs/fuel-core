@@ -251,7 +251,7 @@ impl Command {
             Some(path) => {
                 let metadata = SnapshotMetadata::read(path)?;
                 let chain_conf = ChainConfig::from_snapshot_metadata(&metadata)?;
-                let state_reader = SnapshotReader::for_snapshot(metadata)?;
+                let state_reader = SnapshotReader::open(metadata)?;
                 (chain_conf, state_reader)
             }
         };
@@ -375,6 +375,7 @@ impl Command {
 }
 
 pub async fn exec(command: Command) -> anyhow::Result<()> {
+    #[cfg(feature = "rocks-db")]
     if command.db_prune && command.database_path.exists() {
         CombinedDatabase::prune(&command.database_path)?;
     }

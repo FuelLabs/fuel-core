@@ -378,7 +378,7 @@ impl StateConfig {
     pub fn from_snapshot_metadata(
         snapshot_metadata: SnapshotMetadata,
     ) -> anyhow::Result<Self> {
-        let reader = crate::SnapshotReader::for_snapshot(snapshot_metadata)?;
+        let reader = crate::SnapshotReader::open(snapshot_metadata)?;
         Self::from_reader(&reader)
     }
 

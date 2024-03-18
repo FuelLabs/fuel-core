@@ -169,7 +169,7 @@ impl SnapshotReader {
     }
 
     #[cfg(feature = "std")]
-    pub fn for_snapshot(
+    pub fn open(
         snapshot_metadata: crate::config::SnapshotMetadata,
     ) -> anyhow::Result<Self> {
         use crate::TableEncoding;
@@ -182,7 +182,7 @@ impl SnapshotReader {
                 block_height,
                 da_block_height,
                 ..
-            } => Self::parquet(tables, da_block_height, block_height),
+            } => Self::parquet(tables, block_height, da_block_height),
         }
     }
 

@@ -42,8 +42,10 @@ tracing-subscriber = { workspace = true, features = [
 url = { version = "2.2", optional = true }
 
 [dev-dependencies]
+pretty_assertions = { workspace = true }
 fuel-core-types = { workspace = true, features = ["test-helpers"] }
 rand = { workspace = true }
+serde = { workspace = true }
 tempfile = { workspace = true }
 test-case = { workspace = true }
 
