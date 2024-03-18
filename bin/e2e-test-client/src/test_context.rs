@@ -4,7 +4,10 @@ use anyhow::{
     anyhow,
     Context,
 };
-use fuel_core_chain_config::ContractConfig;
+use fuel_core_chain_config::{
+    ContractConfig,
+    ContractState,
+};
 use fuel_core_client::client::{
     pagination::{
         PageDirection,
@@ -317,14 +320,20 @@ impl Wallet {
         let state = config
             .states
             .iter()
-            .map(|(k, v)| {
-                let value = Bytes32::new(
-                    v.as_slice()
-                        .try_into()
-                        .expect("state value to fit in 32 bytes"),
-                );
-                StorageSlot::new(*k, value)
-            })
+            .map(
+                |ContractState {
+                     state_key,
+                     state_value,
+                 }| {
+                    let value = Bytes32::new(
+                        state_value
+                            .as_slice()
+                            .try_into()
+                            .expect("state value to fit in 32 bytes"),
+                    );
+                    StorageSlot::new(*state_key, value)
+                },
+            )
             .collect_vec();
         let state_root = Contract::initial_state_root(state.iter());
         let mut tx = TransactionBuilder::create(bytes.into(), salt, state);
