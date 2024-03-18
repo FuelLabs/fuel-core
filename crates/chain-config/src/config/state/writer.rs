@@ -187,6 +187,7 @@ where
     T::OwnedValue: serde::Serialize,
     T::OwnedKey: serde::Serialize,
 {
+    #[cfg(feature = "parquet")]
     pub fn encode_postcard(&self) -> Vec<u8> {
         postcard::to_stdvec(self).unwrap()
     }
@@ -323,29 +324,42 @@ impl SnapshotWriter {
     pub fn close(self) -> anyhow::Result<SnapshotMetadata> {
         match self.encoder {
             EncoderType::Json {
-                buffer,
+                mut buffer,
                 da_block_height,
                 block_height,
             } => {
-                let state_file_path = self.dir.join("state_config.json");
-
-                let file = std::fs::File::create(&state_file_path)?;
-                let mut map = serde_json::map::Map::new();
-                for (k, v) in buffer {
-                    map.insert(k, serde_json::Value::Array(v));
+                fn extract_table<T>(
+                    buffer: &mut HashMap<String, Vec<Value>>,
+                ) -> anyhow::Result<Vec<MyEntry<T>>>
+                where
+                    T: TableWithBlueprint,
+                    T::OwnedKey: serde::de::DeserializeOwned,
+                    T::OwnedValue: serde::de::DeserializeOwned,
+                {
+                    Ok(buffer
+                        .remove_entry(T::column().name())
+                        .unwrap_or_default()
+                        .1
+                        .into_iter()
+                        .map(serde_json::from_value)
+                        .try_collect()?)
                 }
 
-                map.insert(
-                    "block_height".to_string(),
-                    serde_json::to_value(block_height).unwrap(),
+                let state_config = StateConfig::from_tables(
+                    extract_table(&mut buffer)?,
+                    extract_table(&mut buffer)?,
+                    extract_table(&mut buffer)?,
+                    extract_table(&mut buffer)?,
+                    extract_table(&mut buffer)?,
+                    extract_table(&mut buffer)?,
+                    extract_table(&mut buffer)?,
+                    da_block_height.unwrap_or_default(),
+                    block_height.unwrap_or_default(),
                 );
 
-                map.insert(
-                    "da_block_height".to_string(),
-                    serde_json::to_value(da_block_height).unwrap(),
-                );
-
-                serde_json::to_writer_pretty(file, &map)?;
+                let state_file_path = self.dir.join("state_config.json");
+                let file = std::fs::File::create(&state_file_path)?;
+                serde_json::to_writer_pretty(file, &state_config)?;
 
                 Self::write_metadata(
                     &self.dir,
@@ -390,243 +404,111 @@ impl SnapshotWriter {
         };
         metadata.strip_prefix(dir)?;
         metadata.write(dir)?;
+        metadata.prepend_path(dir);
         Ok(metadata)
     }
 }
 
-// #[cfg(feature = "random")]
-// #[cfg(test)]
-// mod tests {
-//     use fuel_core_types::{
-//         blockchain::primitives::DaBlockHeight,
-//         fuel_types::{
-//             BlockHeight,
-//             Nonce,
-//         },
-//     };
-//
-//     use super::*;
-//     use itertools::Itertools;
-//
-//     #[cfg(feature = "parquet")]
-//     #[test]
-//     fn can_roundtrip_compression_level() {
-//         use strum::IntoEnumIterator;
-//
-//         for level in crate::ZstdCompressionLevel::iter() {
-//             let u8_level = u8::from(level);
-//             let roundtrip = ZstdCompressionLevel::try_from(u8_level).unwrap();
-//             assert_eq!(level, roundtrip);
-//         }
-//     }
-//
-//     #[test]
-//     fn json_encoder_generates_single_file_with_expected_name() {
-//         // given
-//         let dir = tempfile::tempdir().unwrap();
-//         let file = dir.path().join("state_config.json");
-//         let encoder = SnapshotWriter::json(&file);
-//
-//         // when
-//         encoder.close().unwrap();
-//
-//         // then
-//         let entries: Vec<_> = dir.path().read_dir().unwrap().try_collect().unwrap();
-//
-//         match entries.as_slice() {
-//             [entry] => assert_eq!(entry.path(), file),
-//             _ => panic!("Expected single file \"state_config.json\""),
-//         }
-//     }
-//
-//     #[cfg(feature = "parquet")]
-//     #[test]
-//     fn parquet_encoder_generates_expected_filenames() {
-//         // given
-//         let dir = tempfile::tempdir().unwrap();
-//         let encoder =
-//             SnapshotWriter::parquet(dir.path(), ZstdCompressionLevel::Uncompressed)
-//                 .unwrap();
-//
-//         // when
-//         encoder.close().unwrap();
-//
-//         // then
-//         let entries: std::collections::HashSet<_> = dir
-//             .path()
-//             .read_dir()
-//             .unwrap()
-//             .map_ok(|entry| entry.path())
-//             .try_collect()
-//             .unwrap();
-//         let expected_files = std::collections::HashSet::from(
-//             [
-//                 "coins.parquet",
-//                 "messages.parquet",
-//                 "contracts.parquet",
-//                 "contract_state.parquet",
-//                 "contract_balance.parquet",
-//                 "block_height.parquet",
-//                 "da_block_height.parquet",
-//             ]
-//             .map(|name| dir.path().join(name)),
-//         );
-//
-//         assert_eq!(entries, expected_files);
-//     }
-//
-//     #[cfg(feature = "parquet")]
-//     #[test]
-//     fn parquet_encoder_encodes_types_in_expected_files() {
-//         use rand::SeedableRng;
-//         let mut rng = rand::rngs::StdRng::seed_from_u64(0);
-//
-//         test_data_written_in_expected_file::<CoinConfig>(
-//             &mut rng,
-//             "coins.parquet",
-//             |coins, encoder| encoder.write_coins(coins),
-//         );
-//
-//         test_data_written_in_expected_file::<MessageConfig>(
-//             &mut rng,
-//             "messages.parquet",
-//             |coins, encoder| encoder.write_messages(coins),
-//         );
-//
-//         test_data_written_in_expected_file::<ContractConfig>(
-//             &mut rng,
-//             "contracts.parquet",
-//             |coins, encoder| encoder.write_contracts(coins),
-//         );
-//
-//         test_data_written_in_expected_file::<ContractStateConfig>(
-//             &mut rng,
-//             "contract_state.parquet",
-//             |coins, encoder| encoder.write_contract_state(coins),
-//         );
-//
-//         test_data_written_in_expected_file::<ContractBalanceConfig>(
-//             &mut rng,
-//             "contract_balance.parquet",
-//             |coins, encoder| encoder.write_contract_balance(coins),
-//         );
-//     }
-//
-//     #[cfg(feature = "parquet")]
-//     fn test_data_written_in_expected_file<T>(
-//         rng: impl rand::Rng,
-//         expected_filename: &str,
-//         write: impl FnOnce(Vec<T>, &mut SnapshotWriter) -> anyhow::Result<()>,
-//     ) where
-//         parquet::decode::Decoder<std::fs::File>:
-//             Iterator<Item = anyhow::Result<crate::Group<T>>>,
-//         T: crate::Randomize + PartialEq + ::core::fmt::Debug + Clone,
-//     {
-//         // given
-//
-//         use self::parquet::decode::Decoder;
-//         let dir = tempfile::tempdir().unwrap();
-//         let mut encoder =
-//             SnapshotWriter::parquet(dir.path(), ZstdCompressionLevel::Uncompressed)
-//                 .unwrap();
-//         let original_data = vec![T::randomize(rng)];
-//
-//         // when
-//         write(original_data.clone(), &mut encoder).unwrap();
-//         encoder.close().unwrap();
-//
-//         // then
-//         let file = std::fs::File::open(dir.path().join(expected_filename)).unwrap();
-//         let decoded = parquet::decode::PostcardDecoder::<T>::new(file)
-//             .unwrap()
-//             .collect::<Result<Vec<_>, _>>()
-//             .unwrap();
-//         assert_eq!(original_data, decoded.first().unwrap().data);
-//     }
-//
-//     #[cfg(feature = "parquet")]
-//     #[test]
-//     fn all_compressions_are_valid() {
-//         use ::parquet::basic::Compression;
-//         use strum::IntoEnumIterator;
-//         for level in ZstdCompressionLevel::iter() {
-//             let _ = Compression::from(level);
-//         }
-//     }
-//
-//     #[test]
-//     fn json_coins_are_human_readable() {
-//         // given
-//         let dir = tempfile::tempdir().unwrap();
-//         let filepath = dir.path().join("some_file.json");
-//         let mut encoder = SnapshotWriter::json(&filepath);
-//         let coin = CoinConfig {
-//             tx_id: [1u8; 32].into(),
-//             output_index: 2,
-//             tx_pointer_block_height: BlockHeight::new(3),
-//             tx_pointer_tx_idx: 4,
-//             owner: [6u8; 32].into(),
-//             amount: 7,
-//             asset_id: [8u8; 32].into(),
-//         };
-//
-//         // when
-//         encoder.write_coins(vec![coin.clone()]).unwrap();
-//         encoder.close().unwrap();
-//
-//         // then
-//         let encoded_json = std::fs::read_to_string(&filepath).unwrap();
-//
-//         insta::assert_snapshot!(encoded_json);
-//     }
-//
-//     #[test]
-//     fn json_messages_are_human_readable() {
-//         // given
-//         let dir = tempfile::tempdir().unwrap();
-//         let filepath = dir.path().join("some_file.json");
-//         let mut encoder = SnapshotWriter::json(&filepath);
-//         let message = MessageConfig {
-//             sender: [1u8; 32].into(),
-//             recipient: [2u8; 32].into(),
-//             nonce: Nonce::new([3u8; 32]),
-//             amount: 4,
-//             data: [5u8; 32].into(),
-//             da_height: DaBlockHeight(6),
-//         };
-//
-//         // when
-//         encoder.write_messages(vec![message.clone()]).unwrap();
-//         encoder.close().unwrap();
-//
-//         // then
-//         let encoded_json = std::fs::read_to_string(filepath).unwrap();
-//
-//         insta::assert_snapshot!(encoded_json);
-//     }
-//
-//     #[test]
-//     fn json_contracts_are_human_readable() {
-//         // given
-//         let dir = tempfile::tempdir().unwrap();
-//         let filepath = dir.path().join("some_file.json");
-//         let mut encoder = SnapshotWriter::json(&filepath);
-//         let contract = ContractConfig {
-//             contract_id: [1u8; 32].into(),
-//             code: [2u8; 32].into(),
-//             salt: [3u8; 32].into(),
-//             tx_id: [4u8; 32].into(),
-//             output_index: 5,
-//             tx_pointer_block_height: BlockHeight::new(6),
-//             tx_pointer_tx_idx: 7,
-//         };
-//
-//         // when
-//         encoder.write_contracts(vec![contract.clone()]).unwrap();
-//         encoder.close().unwrap();
-//
-//         // then
-//         let encoded_json = std::fs::read_to_string(filepath).unwrap();
-//         insta::assert_snapshot!(encoded_json);
-//     }
-// }
+#[cfg(feature = "random")]
+#[cfg(test)]
+mod tests {
+    use fuel_core_types::{
+        blockchain::primitives::DaBlockHeight,
+        fuel_types::{
+            BlockHeight,
+            Nonce,
+        },
+    };
+    use rand::{
+        rngs::StdRng,
+        SeedableRng,
+    };
+
+    use super::*;
+    use itertools::Itertools;
+
+    #[cfg(feature = "parquet")]
+    #[test]
+    fn can_roundtrip_compression_level() {
+        use strum::IntoEnumIterator;
+
+        for level in crate::ZstdCompressionLevel::iter() {
+            let u8_level = u8::from(level);
+            let roundtrip = ZstdCompressionLevel::try_from(u8_level).unwrap();
+            assert_eq!(level, roundtrip);
+        }
+    }
+
+    #[cfg(feature = "parquet")]
+    #[test]
+    fn parquet_encoder_encodes_tables_in_expected_files() {
+        fn file_created_and_present_in_metadata<T>()
+        where
+            T: TableWithBlueprint,
+            T::OwnedKey: serde::Serialize,
+            T::OwnedValue: serde::Serialize,
+        {
+            // given
+            use pretty_assertions::assert_eq;
+
+            let dir = tempfile::tempdir().unwrap();
+            let mut encoder =
+                SnapshotWriter::parquet(dir.path(), ZstdCompressionLevel::Uncompressed)
+                    .unwrap();
+
+            // when
+            encoder.write::<T>(vec![]).unwrap();
+            let snapshot = encoder.close().unwrap();
+
+            // then
+            let TableEncoding::Parquet { tables, .. } = snapshot.table_encoding else {
+                panic!("Expected parquet encoding")
+            };
+            assert_eq!(tables.len(), 1, "Expected single table");
+            let (table_name, path) = tables.into_iter().next().unwrap();
+
+            assert_eq!(table_name, T::column().name());
+            assert!(dir.path().join(path).exists());
+        }
+
+        file_created_and_present_in_metadata::<Coins>();
+        file_created_and_present_in_metadata::<Messages>();
+        file_created_and_present_in_metadata::<ContractsRawCode>();
+        file_created_and_present_in_metadata::<ContractsInfo>();
+        file_created_and_present_in_metadata::<ContractsLatestUtxo>();
+        file_created_and_present_in_metadata::<ContractsState>();
+        file_created_and_present_in_metadata::<ContractsAssets>();
+    }
+
+    #[cfg(feature = "parquet")]
+    #[test]
+    fn all_compressions_are_valid() {
+        use ::parquet::basic::Compression;
+        use strum::IntoEnumIterator;
+        for level in ZstdCompressionLevel::iter() {
+            let _ = Compression::from(level);
+        }
+    }
+
+    #[cfg(all(feature = "random", feature = "std"))]
+    #[test]
+    fn json_snapshot_is_human_readable() {
+        // given
+        use crate::Randomize;
+        let dir = tempfile::tempdir().unwrap();
+        let encoder = SnapshotWriter::json(dir.path());
+        let mut rng = StdRng::from_seed([0; 32]);
+        let state = StateConfig::randomize(&mut rng);
+
+        // when
+        let snapshot = encoder.write_state_config(state).unwrap();
+
+        // then
+        let TableEncoding::Json { filepath } = snapshot.table_encoding else {
+            panic!("Expected json encoding")
+        };
+        let encoded_json = std::fs::read_to_string(filepath).unwrap();
+
+        insta::assert_snapshot!(encoded_json);
+    }
+}

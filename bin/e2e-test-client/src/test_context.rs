@@ -315,7 +315,7 @@ impl Wallet {
             ..
         } = config;
         let state = config
-            .state
+            .states
             .iter()
             .map(|(k, v)| {
                 let value = Bytes32::new(

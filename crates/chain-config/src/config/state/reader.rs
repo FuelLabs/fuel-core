@@ -193,6 +193,7 @@ impl SnapshotReader {
         MyEntry<T>: serde::de::DeserializeOwned,
     {
         match &self.data_source {
+            #[cfg(feature = "parquet")]
             DataSource::Parquet { tables, .. } => {
                 let name = T::column().name();
                 let path = tables.get(name).ok_or_else(|| {

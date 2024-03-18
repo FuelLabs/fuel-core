@@ -58,11 +58,18 @@ use serde::{
     Deserialize,
     Serialize,
 };
-use std::collections::HashMap;
+use std::{
+    collections::HashMap,
+    iter::repeat_with,
+};
 
-use crate::CoinConfigGenerator;
 #[cfg(feature = "std")]
 use crate::SnapshotMetadata;
+use crate::{
+    CoinConfigGenerator,
+    ContractAsset,
+    ContractState,
+};
 
 use super::{
     coin::CoinConfig,
@@ -105,6 +112,29 @@ pub struct StateConfig {
     pub da_block_height: DaBlockHeight,
 }
 
+#[cfg(all(test, feature = "random", feature = "std"))]
+impl crate::Randomize for StateConfig {
+    fn randomize(mut rng: impl rand::Rng) -> Self {
+        let amount = 2;
+        fn rand_collection<T: crate::Randomize>(
+            mut rng: impl rand::Rng,
+            amount: usize,
+        ) -> Vec<T> {
+            repeat_with(|| crate::Randomize::randomize(&mut rng))
+                .take(amount)
+                .collect()
+        }
+
+        Self {
+            coins: rand_collection(&mut rng, amount),
+            messages: rand_collection(&mut rng, amount),
+            contracts: rand_collection(&mut rng, amount),
+            block_height: rng.gen(),
+            da_block_height: rng.gen(),
+        }
+    }
+}
+
 pub trait AsTable<T>
 where
     T: TableWithBlueprint,
@@ -137,10 +167,15 @@ impl AsTable<ContractsState> for StateConfig {
         self.contracts
             .iter()
             .flat_map(|contract| {
-                contract.state.iter().map(|(key, value)| MyEntry {
-                    key: ContractsStateKey::new(&contract.contract_id, key),
-                    value: value.clone().into(),
-                })
+                contract.states.iter().map(
+                    |ContractState {
+                         state_key,
+                         state_value,
+                     }| MyEntry {
+                        key: ContractsStateKey::new(&contract.contract_id, state_key),
+                        value: state_value.clone().into(),
+                    },
+                )
             })
             .collect()
     }
@@ -150,10 +185,13 @@ impl AsTable<ContractsAssets> for StateConfig {
         self.contracts
             .iter()
             .flat_map(|contract| {
-                contract.balance.iter().map(|(asset_id, amount)| MyEntry {
-                    key: ContractsAssetKey::new(&contract.contract_id, asset_id),
-                    value: *amount,
-                })
+                contract
+                    .balances
+                    .iter()
+                    .map(|ContractAsset { asset_id, amount }| MyEntry {
+                        key: ContractsAssetKey::new(&contract.contract_id, asset_id),
+                        value: *amount,
+                    })
             })
             .collect()
     }
@@ -205,6 +243,7 @@ impl StateConfig {
         self.contracts.extend(other.contracts);
     }
 
+    #[cfg(feature = "std")]
     pub fn from_tables(
         coins: Vec<MyEntry<Coins>>,
         messages: Vec<MyEntry<Messages>>,
@@ -223,7 +262,10 @@ impl StateConfig {
             .map(|state| {
                 (
                     *state.key.contract_id(),
-                    (*state.key.state_key(), Vec::<u8>::from(state.value)),
+                    ContractState {
+                        state_key: *state.key.state_key(),
+                        state_value: state.value.into(),
+                    },
                 )
             })
             .into_group_map();
@@ -233,7 +275,10 @@ impl StateConfig {
             .map(|balance| {
                 (
                     *balance.key.contract_id(),
-                    (*balance.key.asset_id(), balance.value),
+                    ContractAsset {
+                        asset_id: *balance.key.asset_id(),
+                        amount: balance.value,
+                    },
                 )
             })
             .into_group_map();
@@ -275,8 +320,8 @@ impl StateConfig {
                 let code = contract_code.get(id).cloned();
                 let salt = contract_salt.get(id).cloned();
                 let utxo = contract_utxos.get(id).cloned();
-                let state = state.get(id).cloned().unwrap_or_default();
-                let balance = balance.get(id).cloned().unwrap_or_default();
+                let states = state.get(id).cloned().unwrap_or_default();
+                let balances = balance.get(id).cloned().unwrap_or_default();
                 match (code, salt, utxo) {
                     (Some(code), Some(salt), Some((utxo_id, tx_pointer))) => {
                         Some(ContractConfig {
@@ -287,8 +332,8 @@ impl StateConfig {
                             output_index: utxo_id.output_index(),
                             tx_pointer_block_height: tx_pointer.block_height(),
                             tx_pointer_tx_idx: tx_pointer.tx_index(),
-                            state,
-                            balance,
+                            states,
+                            balances,
                         })
                     }
                     _ => None,
@@ -337,6 +382,7 @@ impl StateConfig {
         Self::from_reader(&reader)
     }
 
+    #[cfg(feature = "std")]
     pub fn from_reader(reader: &SnapshotReader) -> anyhow::Result<Self> {
         let coins = reader
             .read()?

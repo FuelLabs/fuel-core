@@ -127,8 +127,8 @@ impl TestSetupBuilder {
                 output_index: utxo_id.output_index(),
                 tx_pointer_block_height: tx_pointer.block_height(),
                 tx_pointer_tx_idx: tx_pointer.tx_index(),
-                state: vec![],
-                balance: balances,
+                states: vec![],
+                balances,
             },
         );
 

@@ -37,8 +37,22 @@ pub struct ContractConfig {
     /// used if contract is forked from another chain to preserve id & tx_pointer
     /// The index of the originating tx within `tx_pointer_block_height`
     pub tx_pointer_tx_idx: u16,
-    pub state: Vec<(Bytes32, Vec<u8>)>,
-    pub balance: Vec<(AssetId, u64)>,
+    pub states: Vec<ContractState>,
+    pub balances: Vec<ContractAsset>,
+}
+
+#[serde_as]
+#[derive(Clone, Debug, Deserialize, Serialize, Eq, PartialEq)]
+pub struct ContractState {
+    pub state_key: Bytes32,
+    #[serde_as(as = "HexIfHumanReadable")]
+    pub state_value: Vec<u8>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize, Eq, PartialEq)]
+pub struct ContractAsset {
+    pub asset_id: AssetId,
+    pub amount: u64,
 }
 
 impl ContractConfig {
@@ -62,11 +76,14 @@ impl crate::Randomize for ContractConfig {
             output_index: rng.gen(),
             tx_pointer_block_height: rng.gen(),
             tx_pointer_tx_idx: rng.gen(),
-            state: vec![(
-                super::random_bytes_32(&mut rng).into(),
-                super::random_bytes_32(&mut rng).to_vec(),
-            )],
-            balance: vec![(AssetId::new(super::random_bytes_32(&mut rng)), rng.gen())],
+            states: vec![ContractState {
+                state_key: super::random_bytes_32(&mut rng).into(),
+                state_value: super::random_bytes_32(&mut rng).to_vec(),
+            }],
+            balances: vec![ContractAsset {
+                asset_id: AssetId::new(super::random_bytes_32(&mut rng)),
+                amount: rng.gen(),
+            }],
         }
     }
 }
