@@ -6,6 +6,7 @@ use crate::{
     MessageConfig,
     SnapshotMetadata,
     StateConfig,
+    TxStatusConfig,
 };
 use fuel_core_types::{
     blockchain::primitives::DaBlockHeight,
@@ -28,6 +29,7 @@ enum EncoderType {
         contracts: parquet::encode::PostcardEncoder<ContractConfig>,
         contract_state: parquet::encode::PostcardEncoder<ContractStateConfig>,
         contract_balance: parquet::encode::PostcardEncoder<ContractBalanceConfig>,
+        tx_statuses: parquet::encode::PostcardEncoder<TxStatusConfig>,
         block_height: parquet::encode::PostcardEncoder<BlockHeight>,
         da_block_height: parquet::encode::PostcardEncoder<DaBlockHeight>,
     },
@@ -208,6 +210,7 @@ impl StateWriter {
             contracts,
             contract_state,
             contract_balance,
+            tx_statuses,
             block_height,
             da_block_height,
         } = files;
@@ -219,6 +222,7 @@ impl StateWriter {
                 contracts: create_encoder(contracts, compression)?,
                 contract_state: create_encoder(contract_state, compression)?,
                 contract_balance: create_encoder(contract_balance, compression)?,
+                tx_statuses: create_encoder(tx_statuses, compression)?,
                 block_height: create_encoder(block_height, compression)?,
                 da_block_height: create_encoder(da_block_height, compression)?,
             },
@@ -302,6 +306,20 @@ impl StateWriter {
         }
     }
 
+    pub fn write_tx_statuses(
+        &mut self,
+        elements: Vec<TxStatusConfig>,
+    ) -> anyhow::Result<()> {
+        match &mut self.encoder {
+            EncoderType::Json { buffer: state, .. } => {
+                state.tx_statuses.extend(elements);
+                Ok(())
+            }
+            #[cfg(feature = "parquet")]
+            EncoderType::Parquet { tx_statuses, .. } => tx_statuses.write(elements),
+        }
+    }
+
     pub fn write_block_data(
         &mut self,
         height: BlockHeight,
@@ -343,6 +361,7 @@ impl StateWriter {
                 contracts,
                 contract_state,
                 contract_balance,
+                tx_statuses,
                 block_height,
                 da_block_height,
             } => {
@@ -351,6 +370,7 @@ impl StateWriter {
                 contracts.close()?;
                 contract_state.close()?;
                 contract_balance.close()?;
+                tx_statuses.close()?;
                 block_height.close()?;
                 da_block_height.close()?;
                 Ok(())

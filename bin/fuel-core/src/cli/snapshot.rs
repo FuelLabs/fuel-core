@@ -10,12 +10,19 @@ use fuel_core::{
         ChainStateDb,
     },
     database::{
-        database_description::on_chain::OnChain,
+        database_description::{
+            off_chain::OffChain,
+            on_chain::OnChain,
+        },
         Database,
     },
-    types::fuel_types::ContractId,
+    types::{
+        fuel_types::ContractId,
+        // tai64::Tai64,
+    },
 };
 use fuel_core_chain_config::{
+    OffchainStateDb,
     SnapshotMetadata,
     StateWriter,
     MAX_GROUP_SIZE,
@@ -107,6 +114,7 @@ pub enum SubCommands {
 #[cfg(any(feature = "rocksdb", feature = "rocksdb-production"))]
 pub fn exec(command: Command) -> anyhow::Result<()> {
     let db = open_db(&command.database_path)?;
+    let offchain_db = open_offchain_db(&command.database_path)?;
     let output_dir = command.output_dir;
 
     match command.subcommand {
@@ -118,7 +126,7 @@ pub fn exec(command: Command) -> anyhow::Result<()> {
             let encoding = encoding_command
                 .map(|f| f.encoding())
                 .unwrap_or_else(|| Encoding::Json);
-            full_snapshot(chain_config, &output_dir, encoding, &db)
+            full_snapshot(chain_config, &output_dir, encoding, &db, &offchain_db)
         }
         SubCommands::Contract { contract_id } => {
             contract_snapshot(&db, contract_id, &output_dir)
@@ -152,6 +160,7 @@ fn full_snapshot(
     output_dir: &Path,
     encoding: Encoding,
     db: impl ChainStateDb,
+    offchain_db: impl OffchainStateDb,
 ) -> Result<(), anyhow::Error> {
     std::fs::create_dir_all(output_dir)?;
 
@@ -159,6 +168,7 @@ fn full_snapshot(
 
     write_chain_state(&db, &metadata)?;
     write_chain_config(prev_chain_config, metadata.chain_config())?;
+    write_offchain_state(&offchain_db, &metadata)?;
     Ok(())
 }
 
@@ -229,6 +239,35 @@ fn write_chain_state(
     Ok(())
 }
 
+fn write_offchain_state(
+    db: impl OffchainStateDb,
+    metadata: &SnapshotMetadata,
+) -> anyhow::Result<()> {
+    let mut writer = StateWriter::for_snapshot(metadata)?;
+    fn write<T>(
+        data: impl Iterator<Item = StorageResult<T>>,
+        group_size: usize,
+        mut write: impl FnMut(Vec<T>) -> anyhow::Result<()>,
+    ) -> anyhow::Result<()> {
+        data.chunks(group_size)
+            .into_iter()
+            .try_for_each(|chunk| write(chunk.try_collect()?))
+    }
+    let group_size = metadata
+        .state_encoding()
+        .group_size()
+        .unwrap_or(MAX_GROUP_SIZE);
+
+    let tx_statuses = db.iter_tx_statuses();
+    write(tx_statuses, group_size, |chunk| {
+        writer.write_tx_statuses(chunk)
+    })?;
+
+    writer.close()?;
+
+    Ok(())
+}
+
 fn load_chain_config(
     chain_config: Option<PathBuf>,
 ) -> Result<ChainConfig, anyhow::Error> {
@@ -240,8 +279,14 @@ fn load_chain_config(
     Ok(chain_config)
 }
 
-fn open_db(path: &Path) -> anyhow::Result<Database> {
+fn open_db(path: &Path) -> anyhow::Result<Database<OnChain>> {
     Database::<OnChain>::open_rocksdb(path, None)
+        .map_err(Into::<anyhow::Error>::into)
+        .context(format!("failed to open database at path {path:?}",))
+}
+
+fn open_offchain_db(path: &Path) -> anyhow::Result<Database<OffChain>> {
+    Database::<OffChain>::open_rocksdb(path, None)
         .map_err(Into::<anyhow::Error>::into)
         .context(format!("failed to open database at path {path:?}",))
 }
@@ -258,6 +303,7 @@ mod tests {
         ContractStateConfig,
         MessageConfig,
         StateConfig,
+        TxStatusConfig,
     };
     use fuel_core_storage::{
         tables::{
@@ -298,10 +344,16 @@ mod tests {
             },
         },
         fuel_tx::{
+            Receipt,
+            ScriptExecutionResult,
             TxPointer,
             UtxoId,
         },
-        fuel_vm::Salt,
+        fuel_vm::{
+            ProgramState,
+            Salt,
+        },
+        services::txpool::TransactionStatus,
     };
     use rand::{
         rngs::StdRng,
@@ -337,6 +389,7 @@ mod tests {
             contracts: usize,
             states_per_contract: usize,
             balances_per_contract: usize,
+            tx_statuses: usize,
         ) -> StateConfig {
             let coins = repeat_with(|| self.given_coin()).take(coins).collect();
 
@@ -364,6 +417,23 @@ mod tests {
                     .collect()
             };
 
+            let tx_statuses = {
+                (0..tx_statuses)
+                    .map(|_| TxStatusConfig {
+                        id: self.rng.gen(),
+                        status: TransactionStatus::Success {
+                            result: Some(ProgramState::Return(self.rng.gen())),
+                            block_height: self.rng.gen::<u32>().into(),
+                            time: Tai64::from_unix(self.rng.gen_range(10..10000)),
+                            receipts: vec![Receipt::ScriptResult {
+                                result: ScriptExecutionResult::Success,
+                                gas_used: self.rng.gen(),
+                            }],
+                        },
+                    })
+                    .collect()
+            };
+
             let block = self.given_block();
 
             StateConfig {
@@ -372,6 +442,7 @@ mod tests {
                 contracts,
                 contract_state,
                 contract_balance,
+                tx_statuses,
                 block_height: *block.header().height(),
                 da_block_height: block.header().da_height,
             }
@@ -534,7 +605,7 @@ mod tests {
         let mut db = DbPopulator::new(open_db(&db_path)?, StdRng::seed_from_u64(2));
 
         let block = db.given_block();
-        let state = db.given_persisted_state(10, 10, 10, 10, 10);
+        let state = db.given_persisted_state(10, 10, 10, 10, 10, 10);
         db.commit();
 
         // when
@@ -547,10 +618,15 @@ mod tests {
             },
         })?;
 
+        dbg!(&snapshot_dir);
+        std::thread::sleep(std::time::Duration::from_secs(1000));
+
         // then
         let snapshot = SnapshotMetadata::read(&snapshot_dir)?;
 
         let snapshot = StateConfig::from_snapshot_metadata(snapshot)?;
+
+        dbg!(&snapshot);
 
         assert_eq!(snapshot.block_height, *block.header().height());
         assert_eq!(snapshot.da_block_height, block.header().da_height);
@@ -633,7 +709,7 @@ mod tests {
         let db_path = temp_dir.path().join("db");
         let mut db = DbPopulator::new(open_db(&db_path)?, StdRng::seed_from_u64(2));
 
-        let state = sorted_state(db.given_persisted_state(10, 10, 10, 10, 10));
+        let state = sorted_state(db.given_persisted_state(10, 10, 10, 10, 10, 10));
         let random_contract = state.contracts.choose(&mut db.rng).unwrap().clone();
         let contract_id = random_contract.contract_id;
         db.commit();
@@ -671,6 +747,7 @@ mod tests {
                 contract_state: expected_contract_state,
                 contract_balance: expected_contract_balance,
                 contracts: vec![random_contract],
+                tx_statuses: vec![],
                 block_height: state.block_height,
                 da_block_height: state.da_block_height,
             }

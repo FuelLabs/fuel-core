@@ -76,7 +76,8 @@ pub struct TransactionExecutionStatus {
 }
 
 /// The result of transaction execution.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum TransactionExecutionResult {
     /// Transaction was successfully executed.
     Success {

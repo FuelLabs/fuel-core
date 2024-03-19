@@ -1,4 +1,5 @@
 use async_trait::async_trait;
+use fuel_core_chain_config::TxStatusConfig;
 use fuel_core_services::stream::BoxStream;
 use fuel_core_storage::{
     iter::{
@@ -62,6 +63,8 @@ pub trait OffChainDatabase: Send + Sync {
     fn block_height(&self, block_id: &BlockId) -> StorageResult<BlockHeight>;
 
     fn tx_status(&self, tx_id: &TxId) -> StorageResult<TransactionStatus>;
+
+    fn iter_tx_statuses(&self) -> BoxedIter<StorageResult<TxStatusConfig>>;
 
     fn owned_coins_ids(
         &self,

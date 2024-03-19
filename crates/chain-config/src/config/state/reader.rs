@@ -16,6 +16,7 @@ use crate::{
     Group,
     MessageConfig,
     StateConfig,
+    TxStatusConfig,
     MAX_GROUP_SIZE,
 };
 
@@ -188,6 +189,14 @@ impl StateReader {
             |state| &state.contract_balance,
             #[cfg(feature = "parquet")]
             |files| &files.contract_balance,
+        )
+    }
+
+    pub fn tx_statuses(&self) -> anyhow::Result<IntoIter<TxStatusConfig>> {
+        self.create_iterator(
+            |state| &state.tx_statuses,
+            #[cfg(feature = "parquet")]
+            |files| &files.tx_statuses,
         )
     }
 

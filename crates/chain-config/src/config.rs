@@ -8,6 +8,7 @@ mod message;
 #[cfg(feature = "std")]
 mod snapshot_metadata;
 mod state;
+mod tx_status;
 
 #[cfg(all(test, feature = "random", feature = "std"))]
 pub(crate) fn random_bytes_32(mut rng: impl rand::Rng) -> [u8; 32] {
@@ -29,3 +30,4 @@ pub use message::*;
 #[cfg(feature = "std")]
 pub use snapshot_metadata::*;
 pub use state::*;
+pub use tx_status::*;

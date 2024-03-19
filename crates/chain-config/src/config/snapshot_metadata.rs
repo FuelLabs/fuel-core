@@ -13,6 +13,7 @@ pub struct ParquetFiles {
     pub contracts: PathBuf,
     pub contract_state: PathBuf,
     pub contract_balance: PathBuf,
+    pub tx_statuses: PathBuf,
     pub block_height: PathBuf,
     pub da_block_height: PathBuf,
 }
@@ -30,6 +31,7 @@ impl ParquetFiles {
         prepend(&mut self.contracts);
         prepend(&mut self.contract_state);
         prepend(&mut self.contract_balance);
+        prepend(&mut self.tx_statuses);
         prepend(&mut self.block_height);
         prepend(&mut self.da_block_height);
     }
@@ -46,6 +48,7 @@ impl ParquetFiles {
             contracts: parquet_file("contracts"),
             contract_state: parquet_file("contract_state"),
             contract_balance: parquet_file("contract_balance"),
+            tx_statuses: parquet_file("tx_statuses"),
             block_height: parquet_file("block_height"),
             da_block_height: parquet_file("da_block_height"),
         }
@@ -319,6 +322,7 @@ mod tests {
                         contract_balance: temp_dir
                             .path()
                             .join("contract_balance.parquet"),
+                        tx_statuses: temp_dir.path().join("tx_statuses.parquet"),
                         block_height: temp_dir.path().join("block_height.parquet"),
                         da_block_height: temp_dir.path().join("da_block_height.parquet"),
                     },
@@ -353,6 +357,7 @@ mod tests {
                         contracts: PathBuf::from("./contracts.parquet"),
                         contract_state: PathBuf::from("./contract_state.parquet"),
                         contract_balance: PathBuf::from("./contract_balance.parquet"),
+                        tx_statuses: PathBuf::from("./tx_statuses.parquet"),
                         block_height: PathBuf::from("./block_height.parquet"),
                         da_block_height: PathBuf::from("./da_block_height.parquet"),
                     },
@@ -392,6 +397,7 @@ mod tests {
                         contract_balance: temp_dir
                             .path()
                             .join("contract_balance.parquet"),
+                        tx_statuses: temp_dir.path().join("tx_statuses.parquet"),
                         block_height: temp_dir.path().join("block_height.parquet"),
                         da_block_height: temp_dir.path().join("da_block_height.parquet"),
                     },
@@ -418,6 +424,7 @@ mod tests {
                         contracts: "../other/contracts.parquet".into(),
                         contract_state: "../other/contract_state.parquet".into(),
                         contract_balance: "../other/contract_balance.parquet".into(),
+                        tx_statuses: "../other/tx_statuses.parquet".into(),
                         block_height: "../other/block_height.parquet".into(),
                         da_block_height: "../other/da_block_height.parquet".into(),
                     },
@@ -446,6 +453,7 @@ mod tests {
                             .join("../other/contract_state.parquet"),
                         contract_balance: snapshot_path
                             .join("../other/contract_balance.parquet"),
+                        tx_statuses: snapshot_path.join("../other/tx_statuses.parquet"),
                         block_height: snapshot_path.join("../other/block_height.parquet"),
                         da_block_height: snapshot_path
                             .join("../other/da_block_height.parquet"),

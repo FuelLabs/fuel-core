@@ -38,6 +38,10 @@ use super::{
     contract_balance::ContractBalanceConfig,
     contract_state::ContractStateConfig,
     message::MessageConfig,
+    tx_status::{
+        self,
+        TxStatusConfig,
+    },
 };
 
 #[cfg(feature = "parquet")]
@@ -76,6 +80,8 @@ pub struct StateConfig {
     pub block_height: BlockHeight,
     /// Da block height
     pub da_block_height: DaBlockHeight,
+    /// Transaction statuses
+    pub tx_statuses: Vec<TxStatusConfig>,
 }
 
 impl StateConfig {
@@ -87,12 +93,17 @@ impl StateConfig {
         self.contract_balance.extend(other.contract_balance);
     }
 
-    pub fn generate_state_config(db: impl ChainStateDb) -> StorageResult<Self> {
+    pub fn generate_state_config(
+        db: impl ChainStateDb,
+        offchain_db: impl OffchainStateDb,
+    ) -> StorageResult<Self> {
         let coins = db.iter_coin_configs().try_collect()?;
         let messages = db.iter_message_configs().try_collect()?;
         let contracts = db.iter_contract_configs().try_collect()?;
         let contract_state = db.iter_contract_state_configs().try_collect()?;
         let contract_balance = db.iter_contract_balance_configs().try_collect()?;
+        // let tx_statuses = offchain_db.iter_tx_statuses().try_collect()?;
+        let tx_statuses = todo!();
         let block = db.get_last_block()?;
 
         Ok(Self {
@@ -101,6 +112,7 @@ impl StateConfig {
             contracts,
             contract_state,
             contract_balance,
+            tx_statuses,
             block_height: *block.header().height(),
             da_block_height: block.header().da_height,
         })
@@ -145,6 +157,12 @@ impl StateConfig {
             .flatten_ok()
             .try_collect()?;
 
+        let tx_statuses = reader
+            .tx_statuses()?
+            .map_ok(|group| group.data)
+            .flatten_ok()
+            .try_collect()?;
+
         let block_height = reader.block_height();
         let da_block_height = reader.da_block_height();
 
@@ -154,17 +172,23 @@ impl StateConfig {
             contracts,
             contract_state,
             contract_balance,
+            tx_statuses,
             block_height,
             da_block_height,
         })
     }
 
-    pub fn from_db(db: impl ChainStateDb) -> anyhow::Result<Self> {
+    pub fn from_db(
+        db: impl ChainStateDb,
+        offchain_db: impl OffchainStateDb,
+    ) -> anyhow::Result<Self> {
         let coins = db.iter_coin_configs().try_collect()?;
         let messages = db.iter_message_configs().try_collect()?;
         let contracts = db.iter_contract_configs().try_collect()?;
         let contract_state = db.iter_contract_state_configs().try_collect()?;
         let contract_balance = db.iter_contract_balance_configs().try_collect()?;
+        // let tx_statuses = offchain_db.iter_tx_statuses().try_collect()?;
+        let tx_statuses = todo!();
         let block = db.get_last_block()?;
 
         Ok(Self {
@@ -173,6 +197,7 @@ impl StateConfig {
             contracts,
             contract_state,
             contract_balance,
+            tx_statuses,
             block_height: *block.header().height(),
             da_block_height: block.header().da_height,
         })
@@ -266,6 +291,14 @@ pub trait ChainStateDb {
     fn iter_message_configs(&self) -> BoxedIter<StorageResult<MessageConfig>>;
     /// Returns the last available block.
     fn get_last_block(&self) -> StorageResult<CompressedBlock>;
+}
+
+#[impl_tools::autoimpl(for<T: trait> &T, &mut T)]
+pub trait OffchainStateDb {
+    /// Returns *all* transaction statuses.
+    fn iter_tx_statuses(&self) -> BoxedIter<StorageResult<TxStatusConfig>>;
+    /// Returns all statistic table items.
+    fn iter_statistics(&self) -> BoxedIter<StorageResult<(String, Vec<u8>)>>;
 }
 
 pub use reader::{

@@ -8,8 +8,12 @@ use fuel_core::{
         MessageConfig,
         StateConfig,
         StateReader,
+        TxStatusConfig,
     },
-    database::Database,
+    database::{
+        database_description::off_chain::OffChain,
+        Database,
+    },
     service::{
         Config,
         FuelService,
@@ -17,11 +21,18 @@ use fuel_core::{
 };
 use fuel_core_types::{
     blockchain::primitives::DaBlockHeight,
+    fuel_tx::{
+        Receipt,
+        ScriptExecutionResult,
+    },
     fuel_types::{
         BlockHeight,
         Nonce,
         *,
     },
+    fuel_vm::ProgramState,
+    services::txpool::TransactionStatus,
+    tai64::Tai64,
 };
 use rand::{
     rngs::StdRng,
@@ -33,6 +44,7 @@ use rand::{
 async fn loads_snapshot() {
     let mut rng = StdRng::seed_from_u64(1234);
     let db = Database::default();
+    let offchain_db = Database::<OffChain>::default();
 
     let owner = Address::default();
 
@@ -94,6 +106,18 @@ async fn loads_snapshot() {
             data: vec![],
             da_height: DaBlockHeight(19),
         }],
+        tx_statuses: vec![TxStatusConfig {
+            id: rng.gen(),
+            status: TransactionStatus::Success {
+                result: Some(ProgramState::Return(rng.gen())),
+                block_height: rng.gen::<u32>().into(),
+                time: Tai64::from_unix(rng.gen_range(10..10000)),
+                receipts: vec![Receipt::ScriptResult {
+                    result: ScriptExecutionResult::Success,
+                    gas_used: rng.gen(),
+                }],
+            },
+        }],
         block_height: BlockHeight::from(10),
         da_block_height: 20u64.into(),
     };
@@ -107,7 +131,7 @@ async fn loads_snapshot() {
         .await
         .unwrap();
 
-    let state_conf = StateConfig::from_db(db).unwrap();
+    let state_conf = StateConfig::from_db(db, offchain_db).unwrap();
 
     // initial state
 

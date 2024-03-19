@@ -10,12 +10,14 @@ use crate::{
         },
         storage::transactions::OwnedTransactionIndexCursor,
     },
+    graphql_api::storage::transactions::TransactionStatuses,
 };
 use fuel_core_storage::{
     iter::{
         BoxedIter,
         IntoBoxedIter,
         IterDirection,
+        IteratorOverTable,
     },
     not_found,
     transactional::{
@@ -50,6 +52,21 @@ impl OffChainDatabase for Database<OffChain> {
         self.get_tx_status(tx_id)
             .transpose()
             .ok_or(not_found!("TransactionId"))?
+    }
+
+    fn iter_tx_statuses(
+        &self,
+    ) -> BoxedIter<StorageResult<fuel_core_chain_config::TxStatusConfig>> {
+        self.iter_all::<TransactionStatuses>(None)
+            .map(|result| {
+                result
+                    .map(|(tx_id, status)| fuel_core_chain_config::TxStatusConfig {
+                        id: tx_id,
+                        status,
+                    })
+                    .map_err(StorageError::from)
+            })
+            .into_boxed()
     }
 
     fn owned_coins_ids(

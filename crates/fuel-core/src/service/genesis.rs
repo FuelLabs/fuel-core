@@ -312,6 +312,7 @@ mod tests {
         MessageConfig,
         StateConfig,
         StateReader,
+        TxStatusConfig,
     };
     use fuel_core_services::RunnableService;
     use fuel_core_storage::{
@@ -326,7 +327,11 @@ mod tests {
         blockchain::primitives::DaBlockHeight,
         entities::coins::coin::Coin,
         fuel_asm::op,
-        fuel_tx::UtxoId,
+        fuel_tx::{
+            Receipt,
+            ScriptExecutionResult,
+            UtxoId,
+        },
         fuel_types::{
             Address,
             AssetId,
@@ -334,7 +339,15 @@ mod tests {
             ContractId,
             Salt,
         },
-        fuel_vm::Contract,
+        fuel_vm::{
+            Contract,
+            ProgramState,
+        },
+        services::{
+            executor::TransactionExecutionResult,
+            txpool::TransactionStatus,
+        },
+        tai64::Tai64,
     };
     use itertools::Itertools;
     use rand::{
@@ -413,12 +426,28 @@ mod tests {
             })
             .collect_vec();
 
+        let tx_statuses = (0..1000)
+            .map(|_| TxStatusConfig {
+                id: rng.gen(),
+                status: TransactionStatus::Success {
+                    result: Some(ProgramState::Return(rng.gen())),
+                    block_height: rng.gen::<u32>().into(),
+                    time: Tai64::from_unix(rng.gen_range(10..10000)),
+                    receipts: vec![Receipt::ScriptResult {
+                        result: ScriptExecutionResult::Success,
+                        gas_used: rng.gen(),
+                    }],
+                },
+            })
+            .collect_vec();
+
         let state = StateConfig {
             coins,
             messages,
             contracts,
             contract_state,
             contract_balance,
+            tx_statuses,
             block_height: BlockHeight::from(0u32),
             da_block_height: Default::default(),
         };

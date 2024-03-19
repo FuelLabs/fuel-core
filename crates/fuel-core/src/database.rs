@@ -10,7 +10,14 @@ use crate::{
         metadata::MetadataTable,
         Error as DatabaseError,
     },
-    graphql_api::storage::blocks::FuelBlockIdsToHeights,
+    graphql_api::{
+        ports::OffChainDatabase,
+        storage::{
+            blocks::FuelBlockIdsToHeights,
+            statistic::StatisticTable,
+            transactions::TransactionStatuses,
+        },
+    },
     state::{
         in_memory::memory_store::MemoryStore,
         ChangesIterator,
@@ -24,6 +31,8 @@ use fuel_core_chain_config::{
     ContractConfig,
     ContractStateConfig,
     MessageConfig,
+    OffchainStateDb,
+    TxStatusConfig,
 };
 use fuel_core_services::SharedMutex;
 use fuel_core_storage::{
@@ -52,6 +61,7 @@ use fuel_core_storage::{
     Error as StorageError,
     Result as StorageResult,
     StorageAsMut,
+    StorageAsRef,
     StorageInspect,
     StorageMutate,
 };
@@ -221,7 +231,7 @@ where
 
 /// Implement `ChainStateDb` so that `Database` can be passed to
 /// `StateConfig's` `generate_state_config()` method
-impl ChainStateDb for Database {
+impl ChainStateDb for Database<OnChain> {
     fn get_contract_by_id(
         &self,
         contract_id: fuel_core_types::fuel_types::ContractId,
@@ -279,6 +289,28 @@ impl ChainStateDb for Database {
     fn get_last_block(&self) -> StorageResult<CompressedBlock> {
         self.latest_compressed_block()?
             .ok_or(not_found!(FuelBlocks))
+    }
+}
+
+impl OffchainStateDb for Database<OffChain> {
+    fn iter_tx_statuses(&self) -> BoxedIter<StorageResult<TxStatusConfig>> {
+        <Self as OffChainDatabase>::iter_tx_statuses(self)
+    }
+
+    fn iter_statistics(&self) -> BoxedIter<StorageResult<(String, Vec<u8>)>> {
+        const TX_COUNT: &str = "total_tx_count";
+
+        [self
+            .storage_as_ref::<StatisticTable<u64>>()
+            .get(TX_COUNT)
+            .map(|item| {
+                (
+                    "total_tx_count".to_string(),
+                    item.unwrap_or_default().into_owned().to_be_bytes().to_vec(),
+                )
+            })]
+        .into_iter()
+        .into_boxed()
     }
 }
 

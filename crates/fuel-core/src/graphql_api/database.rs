@@ -10,10 +10,12 @@ use crate::fuel_core_graphql_api::{
         OnChainDatabase,
     },
 };
+use fuel_core_chain_config::TxStatusConfig;
 use fuel_core_storage::{
     iter::{
         BoxedIter,
         IterDirection,
+        IteratorOverTable,
     },
     transactional::AtomicView,
     Error as StorageError,
@@ -56,6 +58,8 @@ use std::{
     borrow::Cow,
     sync::Arc,
 };
+
+use super::storage::transactions::TransactionStatuses;
 
 mod arc_wrapper;
 
@@ -191,6 +195,10 @@ impl OffChainDatabase for ReadView {
 
     fn tx_status(&self, tx_id: &TxId) -> StorageResult<TransactionStatus> {
         self.off_chain.tx_status(tx_id)
+    }
+
+    fn iter_tx_statuses(&self) -> BoxedIter<StorageResult<TxStatusConfig>> {
+        self.off_chain.iter_tx_statuses()
     }
 
     fn owned_coins_ids(
