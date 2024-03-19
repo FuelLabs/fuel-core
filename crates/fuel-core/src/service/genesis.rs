@@ -8,10 +8,7 @@ use crate::{
 };
 use anyhow::anyhow;
 use fuel_core_chain_config::{
-    CoinConfig,
-    ContractConfig,
     GenesisCommitment,
-    MessageConfig,
     MyEntry,
 };
 use fuel_core_storage::{
@@ -49,13 +46,8 @@ use fuel_core_types::{
     },
     entities::{
         coins::coin::Coin,
-        contract::{
-            ContractUtxoInfo,
-            ContractsInfoType,
-        },
         message::Message,
     },
-    fuel_tx::Contract,
     fuel_types::{
         BlockHeight,
         Bytes32,

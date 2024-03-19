@@ -8,10 +8,7 @@ use crate::{
         OwnedCoins,
     },
 };
-use fuel_core_chain_config::{
-    CoinConfig,
-    MyEntry,
-};
+use fuel_core_chain_config::MyEntry;
 use fuel_core_storage::{
     iter::{
         IterDirection,

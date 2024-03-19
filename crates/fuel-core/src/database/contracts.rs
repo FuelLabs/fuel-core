@@ -1,8 +1,5 @@
 use crate::database::Database;
-use fuel_core_chain_config::{
-    ContractConfig,
-    MyEntry,
-};
+use fuel_core_chain_config::MyEntry;
 use fuel_core_storage::{
     iter::{
         IterDirection,
@@ -20,13 +17,9 @@ use fuel_core_storage::{
     Result as StorageResult,
     StorageAsRef,
 };
-use fuel_core_types::{
-    fuel_tx::Bytes32,
-    fuel_types::{
-        AssetId,
-        ContractId,
-        Word,
-    },
+use fuel_core_types::fuel_types::{
+    AssetId,
+    ContractId,
 };
 use itertools::Itertools;
 

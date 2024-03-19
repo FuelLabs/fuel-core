@@ -17,12 +17,7 @@ use crate::{
         DataSource,
     },
 };
-use fuel_core_chain_config::{
-    CoinConfig,
-    ContractConfig,
-    MessageConfig,
-    MyEntry,
-};
+use fuel_core_chain_config::MyEntry;
 use fuel_core_services::SharedMutex;
 use fuel_core_storage::{
     self,
@@ -39,18 +34,8 @@ use fuel_core_storage::{
         KeyValueInspect,
         Value,
     },
-    not_found,
     structured_storage::TableWithBlueprint,
-    tables::{
-        Coins,
-        ContractsAssets,
-        ContractsInfo,
-        ContractsLatestUtxo,
-        ContractsRawCode,
-        ContractsState,
-        FuelBlocks,
-        Messages,
-    },
+    tables::FuelBlocks,
     transactional::{
         AtomicView,
         Changes,
@@ -65,10 +50,7 @@ use fuel_core_storage::{
     StorageMutate,
 };
 use fuel_core_types::{
-    blockchain::{
-        block::CompressedBlock,
-        primitives::DaBlockHeight,
-    },
+    blockchain::primitives::DaBlockHeight,
     fuel_types::BlockHeight,
 };
 use itertools::Itertools;

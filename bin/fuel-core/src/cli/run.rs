@@ -17,10 +17,7 @@ use fuel_core::{
         ChainConfig,
         StateConfig,
     },
-    combined_database::{
-        CombinedDatabase,
-        CombinedDatabaseConfig,
-    },
+    combined_database::CombinedDatabaseConfig,
     producer::Config as ProducerConfig,
     service::{
         config::Trigger,
@@ -377,7 +374,7 @@ impl Command {
 pub async fn exec(command: Command) -> anyhow::Result<()> {
     #[cfg(feature = "rocks-db")]
     if command.db_prune && command.database_path.exists() {
-        CombinedDatabase::prune(&command.database_path)?;
+        fuel_core::combined_database::CombinedDatabase::prune(&command.database_path)?;
     }
 
     let profiling = command.profiling.clone();

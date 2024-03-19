@@ -1,32 +1,3 @@
-use fuel_core::{
-    chain_config::{
-        CoinConfig,
-        CoinConfigGenerator,
-        ContractConfig,
-        MessageConfig,
-        SnapshotReader,
-        StateConfig,
-    },
-    database::Database,
-    service::{
-        Config,
-        FuelService,
-    },
-};
-use fuel_core_types::{
-    blockchain::primitives::DaBlockHeight,
-    fuel_types::{
-        BlockHeight,
-        Nonce,
-        *,
-    },
-};
-use rand::{
-    rngs::StdRng,
-    Rng,
-    SeedableRng,
-};
-
 // #[tokio::test]
 // async fn loads_snapshot() {
 //     let mut rng = StdRng::seed_from_u64(1234);

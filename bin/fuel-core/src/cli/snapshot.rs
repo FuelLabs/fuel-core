@@ -14,7 +14,6 @@ use fuel_core::{
     types::fuel_types::ContractId,
 };
 use fuel_core_chain_config::{
-    SnapshotMetadata,
     SnapshotWriter,
     MAX_GROUP_SIZE,
 };
@@ -295,6 +294,7 @@ mod tests {
     use fuel_core_chain_config::{
         AsTable,
         MyEntry,
+        SnapshotMetadata,
         SnapshotReader,
         StateConfig,
     };

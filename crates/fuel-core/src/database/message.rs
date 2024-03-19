@@ -8,10 +8,7 @@ use crate::{
         OwnedMessageKey,
     },
 };
-use fuel_core_chain_config::{
-    MessageConfig,
-    MyEntry,
-};
+use fuel_core_chain_config::MyEntry;
 use fuel_core_storage::{
     iter::{
         IterDirection,

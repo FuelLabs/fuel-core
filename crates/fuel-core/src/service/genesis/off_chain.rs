@@ -6,11 +6,7 @@ use crate::{
     graphql_api::worker_service,
     service::Config,
 };
-use fuel_core_chain_config::{
-    CoinConfig,
-    MessageConfig,
-    MyEntry,
-};
+use fuel_core_chain_config::MyEntry;
 use fuel_core_storage::{
     tables::{
         Coins,

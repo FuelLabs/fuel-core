@@ -12,14 +12,13 @@ use fuel_core_types::{
         field::ScriptGasLimit,
         Receipt,
         ScriptExecutionResult,
-        StorageSlot,
         Transaction,
         UniqueIdentifier,
     },
     fuel_types::canonical::Deserialize,
     services::executor::TransactionExecutionResult,
 };
-use itertools::Itertools;
+
 use libtest_mimic::Failed;
 use std::{
     path::Path,
