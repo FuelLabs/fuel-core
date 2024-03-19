@@ -1,21 +1,12 @@
-use fuel_core_chain_config::MyEntry;
+use fuel_core_chain_config::TableEntry;
 use fuel_core_storage::{
-    tables::{
-        merkle::ContractsAssetsMerkleMetadata,
-        ContractsAssets,
-    },
-    ContractsAssetKey,
-    Error as StorageError,
-    StorageAsRef,
-    StorageBatchMutate,
+    tables::{merkle::ContractsAssetsMerkleMetadata, ContractsAssets},
+    ContractsAssetKey, Error as StorageError, StorageAsRef, StorageBatchMutate,
     StorageInspect,
 };
 use fuel_core_types::{
     fuel_asm::Word,
-    fuel_types::{
-        AssetId,
-        ContractId,
-    },
+    fuel_types::{AssetId, ContractId},
 };
 use itertools::Itertools;
 
@@ -32,7 +23,7 @@ pub trait BalancesInitializer {
 
     fn update_contract_balances(
         &mut self,
-        balances: impl IntoIterator<Item = MyEntry<ContractsAssets>>,
+        balances: impl IntoIterator<Item = TableEntry<ContractsAssets>>,
     ) -> Result<(), StorageError>;
 }
 
@@ -63,7 +54,7 @@ where
 
     fn update_contract_balances(
         &mut self,
-        balances: impl IntoIterator<Item = MyEntry<ContractsAssets>>,
+        balances: impl IntoIterator<Item = TableEntry<ContractsAssets>>,
     ) -> Result<(), StorageError> {
         balances
             .into_iter()

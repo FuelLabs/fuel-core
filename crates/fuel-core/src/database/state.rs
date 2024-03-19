@@ -1,19 +1,10 @@
-use fuel_core_chain_config::MyEntry;
+use fuel_core_chain_config::TableEntry;
 use fuel_core_storage::{
-    tables::{
-        merkle::ContractsStateMerkleMetadata,
-        ContractsState,
-    },
-    ContractsStateKey,
-    Error as StorageError,
-    StorageAsRef,
-    StorageBatchMutate,
+    tables::{merkle::ContractsStateMerkleMetadata, ContractsState},
+    ContractsStateKey, Error as StorageError, StorageAsRef, StorageBatchMutate,
     StorageInspect,
 };
-use fuel_core_types::fuel_types::{
-    Bytes32,
-    ContractId,
-};
+use fuel_core_types::fuel_types::{Bytes32, ContractId};
 use itertools::Itertools;
 
 pub trait StateInitializer {
@@ -30,7 +21,7 @@ pub trait StateInitializer {
     /// Updates the state of multiple contracts based on provided state slots.
     fn update_contract_states(
         &mut self,
-        states: impl IntoIterator<Item = MyEntry<ContractsState>>,
+        states: impl IntoIterator<Item = TableEntry<ContractsState>>,
     ) -> Result<(), StorageError>;
 }
 
@@ -73,7 +64,7 @@ where
     /// On any error while accessing the database.
     fn update_contract_states(
         &mut self,
-        states: impl IntoIterator<Item = MyEntry<ContractsState>>,
+        states: impl IntoIterator<Item = TableEntry<ContractsState>>,
     ) -> Result<(), StorageError> {
         states
             .into_iter()

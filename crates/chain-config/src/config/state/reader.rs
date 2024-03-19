@@ -2,18 +2,11 @@ use std::fmt::Debug;
 
 use anyhow::Context;
 use fuel_core_storage::structured_storage::TableWithBlueprint;
-use fuel_core_types::{
-    blockchain::primitives::DaBlockHeight,
-    fuel_types::BlockHeight,
-};
+use fuel_core_types::{blockchain::primitives::DaBlockHeight, fuel_types::BlockHeight};
 use itertools::Itertools;
 
 use crate::{
-    config::my_entry::MyEntry,
-    AsTable,
-    Group,
-    GroupResult,
-    StateConfig,
+    config::table_entry::TableEntry, AsTable, Group, GroupResult, StateConfig,
     MAX_GROUP_SIZE,
 };
 
@@ -176,11 +169,11 @@ impl SnapshotReader {
         }
     }
 
-    pub fn read<T>(&self) -> anyhow::Result<IntoIter<MyEntry<T>>>
+    pub fn read<T>(&self) -> anyhow::Result<IntoIter<TableEntry<T>>>
     where
         T: TableWithBlueprint,
         StateConfig: AsTable<T>,
-        MyEntry<T>: serde::de::DeserializeOwned,
+        TableEntry<T>: serde::de::DeserializeOwned,
     {
         match &self.data_source {
             #[cfg(feature = "parquet")]

@@ -1,7 +1,7 @@
 use fuel_core_storage::Mappable;
 
 #[derive(serde::Serialize, serde::Deserialize)]
-pub struct MyEntry<T>
+pub struct TableEntry<T>
 where
     T: Mappable,
 {
@@ -9,7 +9,7 @@ where
     pub value: T::OwnedValue,
 }
 
-impl<T> Clone for MyEntry<T>
+impl<T> Clone for TableEntry<T>
 where
     T: Mappable,
     T::OwnedKey: Clone,
@@ -23,7 +23,7 @@ where
     }
 }
 
-impl<T> Copy for MyEntry<T>
+impl<T> Copy for TableEntry<T>
 where
     T: Mappable,
     T::OwnedKey: Copy,
@@ -31,21 +31,21 @@ where
 {
 }
 
-impl<T> std::fmt::Debug for MyEntry<T>
+impl<T> std::fmt::Debug for TableEntry<T>
 where
     T: Mappable,
     T::OwnedKey: std::fmt::Debug,
     T::OwnedValue: std::fmt::Debug,
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> core::fmt::Result {
-        f.debug_struct("MyEntry")
+        f.debug_struct("TableEntry")
             .field("key", &self.key)
             .field("value", &self.value)
             .finish()
     }
 }
 
-impl<T> PartialEq for MyEntry<T>
+impl<T> PartialEq for TableEntry<T>
 where
     T: Mappable,
     T::OwnedKey: PartialEq,
@@ -56,7 +56,7 @@ where
     }
 }
 
-impl<T> Eq for MyEntry<T>
+impl<T> Eq for TableEntry<T>
 where
     T: Mappable,
     T::OwnedKey: Eq,
@@ -64,7 +64,7 @@ where
 {
 }
 
-impl<T> PartialOrd for MyEntry<T>
+impl<T> PartialOrd for TableEntry<T>
 where
     T: Mappable,
     T::OwnedKey: PartialOrd,
@@ -78,7 +78,7 @@ where
     }
 }
 
-impl<T> Ord for MyEntry<T>
+impl<T> Ord for TableEntry<T>
 where
     T: Mappable,
     T::OwnedKey: Ord,

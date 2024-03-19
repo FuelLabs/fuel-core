@@ -1,45 +1,23 @@
 use crate::cli::DEFAULT_DB_PATH;
 use anyhow::Context;
-use clap::{
-    Parser,
-    Subcommand,
-};
+use clap::{Parser, Subcommand};
 use fuel_core::{
     chain_config::ChainConfig,
-    database::{
-        database_description::on_chain::OnChain,
-        ChainStateDb,
-        Database,
-    },
+    database::{database_description::on_chain::OnChain, ChainStateDb, Database},
     types::fuel_types::ContractId,
 };
-use fuel_core_chain_config::{
-    SnapshotWriter,
-    MAX_GROUP_SIZE,
-};
+use fuel_core_chain_config::{SnapshotWriter, MAX_GROUP_SIZE};
 use fuel_core_storage::{
     iter::IterDirection,
     tables::{
-        Coins,
-        ContractsAssets,
-        ContractsInfo,
-        ContractsLatestUtxo,
-        ContractsRawCode,
-        ContractsState,
-        FuelBlocks,
-        Messages,
+        Coins, ContractsAssets, ContractsInfo, ContractsLatestUtxo, ContractsRawCode,
+        ContractsState, FuelBlocks, Messages,
     },
     Result as StorageResult,
 };
-use fuel_core_types::{
-    blockchain::block::Block,
-    fuel_tx::Bytes32,
-};
+use fuel_core_types::{blockchain::block::Block, fuel_tx::Bytes32};
 use itertools::Itertools;
-use std::path::{
-    Path,
-    PathBuf,
-};
+use std::path::{Path, PathBuf};
 
 /// Print a snapshot of blockchain state to stdout.
 #[derive(Debug, Clone, Parser)]
@@ -292,63 +270,28 @@ mod tests {
     use std::iter::repeat_with;
 
     use fuel_core_chain_config::{
-        AsTable,
-        MyEntry,
-        SnapshotMetadata,
-        SnapshotReader,
-        StateConfig,
+        AsTable, SnapshotMetadata, SnapshotReader, StateConfig, TableEntry,
     };
     use fuel_core_storage::{
         structured_storage::TableWithBlueprint,
         tables::{
-            Coins,
-            ContractsAssets,
-            ContractsInfo,
-            ContractsLatestUtxo,
-            ContractsRawCode,
-            ContractsState,
-            FuelBlocks,
-            Messages,
+            Coins, ContractsAssets, ContractsInfo, ContractsLatestUtxo, ContractsRawCode,
+            ContractsState, FuelBlocks, Messages,
         },
-        transactional::{
-            IntoTransaction,
-            StorageTransaction,
-        },
-        ContractsAssetKey,
-        ContractsStateKey,
-        StorageAsMut,
+        transactional::{IntoTransaction, StorageTransaction},
+        ContractsAssetKey, ContractsStateKey, StorageAsMut,
     };
     use fuel_core_types::{
-        blockchain::{
-            block::CompressedBlock,
-            primitives::DaBlockHeight,
-        },
+        blockchain::{block::CompressedBlock, primitives::DaBlockHeight},
         entities::{
-            coins::coin::{
-                CompressedCoin,
-                CompressedCoinV1,
-            },
-            contract::{
-                ContractUtxoInfo,
-                ContractsInfoType,
-            },
-            message::{
-                Message,
-                MessageV1,
-            },
+            coins::coin::{CompressedCoin, CompressedCoinV1},
+            contract::{ContractUtxoInfo, ContractsInfoType},
+            message::{Message, MessageV1},
         },
-        fuel_tx::{
-            TxPointer,
-            UtxoId,
-        },
+        fuel_tx::{TxPointer, UtxoId},
         fuel_vm::Salt,
     };
-    use rand::{
-        rngs::StdRng,
-        seq::SliceRandom,
-        Rng,
-        SeedableRng,
-    };
+    use rand::{rngs::StdRng, seq::SliceRandom, Rng, SeedableRng};
     use test_case::test_case;
 
     use super::*;
@@ -360,14 +303,14 @@ mod tests {
 
     #[derive(Debug, PartialEq)]
     struct OnChainData {
-        coins: Vec<MyEntry<Coins>>,
-        messages: Vec<MyEntry<Messages>>,
-        contract_code: Vec<MyEntry<ContractsRawCode>>,
-        contract_info: Vec<MyEntry<ContractsInfo>>,
-        contract_utxo: Vec<MyEntry<ContractsLatestUtxo>>,
-        contract_state: Vec<MyEntry<ContractsState>>,
-        contract_balance: Vec<MyEntry<ContractsAssets>>,
-        block: MyEntry<FuelBlocks>,
+        coins: Vec<TableEntry<Coins>>,
+        messages: Vec<TableEntry<Messages>>,
+        contract_code: Vec<TableEntry<ContractsRawCode>>,
+        contract_info: Vec<TableEntry<ContractsInfo>>,
+        contract_utxo: Vec<TableEntry<ContractsLatestUtxo>>,
+        contract_state: Vec<TableEntry<ContractsState>>,
+        contract_balance: Vec<TableEntry<ContractsAssets>>,
+        block: TableEntry<FuelBlocks>,
     }
 
     impl OnChainData {
@@ -409,11 +352,11 @@ mod tests {
         fn read_from_snapshot(snapshot: SnapshotMetadata) -> Self {
             let mut reader = SnapshotReader::open(snapshot).unwrap();
 
-            fn read<T>(reader: &mut SnapshotReader) -> Vec<MyEntry<T>>
+            fn read<T>(reader: &mut SnapshotReader) -> Vec<TableEntry<T>>
             where
                 T: TableWithBlueprint,
                 StateConfig: AsTable<T>,
-                MyEntry<T>: serde::de::DeserializeOwned,
+                TableEntry<T>: serde::de::DeserializeOwned,
             {
                 reader
                     .read::<T>()
@@ -429,7 +372,7 @@ mod tests {
                 let height = reader.block_height();
                 block.header_mut().application_mut().da_height = reader.da_block_height();
                 block.header_mut().set_block_height(height);
-                MyEntry {
+                TableEntry {
                     key: height,
                     value: block,
                 }
@@ -528,7 +471,7 @@ mod tests {
             }
         }
 
-        fn given_block(&mut self) -> MyEntry<FuelBlocks> {
+        fn given_block(&mut self) -> TableEntry<FuelBlocks> {
             let mut block = CompressedBlock::default();
             let height = self.rng.gen();
             block.header_mut().application_mut().da_height = self.rng.gen();
@@ -538,13 +481,13 @@ mod tests {
                 .storage_as_mut::<FuelBlocks>()
                 .insert(&height, &block);
 
-            MyEntry {
+            TableEntry {
                 key: height,
                 value: block,
             }
         }
 
-        fn given_coin(&mut self) -> MyEntry<Coins> {
+        fn given_coin(&mut self) -> TableEntry<Coins> {
             let tx_id = self.rng.gen();
             let output_index = self.rng.gen();
             let coin = CompressedCoin::V1(CompressedCoinV1 {
@@ -559,10 +502,10 @@ mod tests {
                 .insert(&key, &coin)
                 .unwrap();
 
-            MyEntry { key, value: coin }
+            TableEntry { key, value: coin }
         }
 
-        fn given_message(&mut self) -> MyEntry<Messages> {
+        fn given_message(&mut self) -> TableEntry<Messages> {
             let message = Message::V1(MessageV1 {
                 sender: self.rng.gen(),
                 recipient: self.rng.gen(),
@@ -578,7 +521,7 @@ mod tests {
                 .insert(&key, &message)
                 .unwrap();
 
-            MyEntry {
+            TableEntry {
                 key,
                 value: message,
             }
@@ -587,7 +530,7 @@ mod tests {
         fn given_contract_code(
             &mut self,
             contract_id: ContractId,
-        ) -> MyEntry<ContractsRawCode> {
+        ) -> TableEntry<ContractsRawCode> {
             let key = contract_id;
 
             let code = self.generate_data(1000);
@@ -596,7 +539,7 @@ mod tests {
                 .insert(&key, code.as_ref())
                 .unwrap();
 
-            MyEntry {
+            TableEntry {
                 key,
                 value: code.into(),
             }
@@ -605,13 +548,13 @@ mod tests {
         fn given_contract_info(
             &mut self,
             contract_id: ContractId,
-        ) -> MyEntry<ContractsInfo> {
+        ) -> TableEntry<ContractsInfo> {
             let salt: Salt = self.rng.gen();
             self.db
                 .storage_as_mut::<ContractsInfo>()
                 .insert(&contract_id, &ContractsInfoType::V1(salt.into()))
                 .unwrap();
-            MyEntry {
+            TableEntry {
                 key: contract_id,
                 value: ContractsInfoType::V1(salt.into()),
             }
@@ -620,7 +563,7 @@ mod tests {
         fn given_contract_utxo(
             &mut self,
             contract_id: ContractId,
-        ) -> MyEntry<ContractsLatestUtxo> {
+        ) -> TableEntry<ContractsLatestUtxo> {
             let utxo_id = UtxoId::new(self.rng.gen(), self.rng.gen());
             let tx_pointer = TxPointer::new(self.rng.gen(), self.rng.gen());
 
@@ -630,7 +573,7 @@ mod tests {
                 .insert(&contract_id, &value)
                 .unwrap();
 
-            MyEntry {
+            TableEntry {
                 key: contract_id,
                 value,
             }
@@ -639,7 +582,7 @@ mod tests {
         fn given_contract_state(
             &mut self,
             contract_id: ContractId,
-        ) -> MyEntry<ContractsState> {
+        ) -> TableEntry<ContractsState> {
             let state_key = self.rng.gen();
             let key = ContractsStateKey::new(&contract_id, &state_key);
             let state_value = self.generate_data(100);
@@ -647,7 +590,7 @@ mod tests {
                 .storage_as_mut::<ContractsState>()
                 .insert(&key, &state_value)
                 .unwrap();
-            MyEntry {
+            TableEntry {
                 key,
                 value: state_value.into(),
             }
@@ -656,7 +599,7 @@ mod tests {
         fn given_contract_asset(
             &mut self,
             contract_id: ContractId,
-        ) -> MyEntry<ContractsAssets> {
+        ) -> TableEntry<ContractsAssets> {
             let asset_id = self.rng.gen();
             let key = ContractsAssetKey::new(&contract_id, &asset_id);
             let amount = self.rng.gen();
@@ -664,7 +607,7 @@ mod tests {
                 .storage_as_mut::<ContractsAssets>()
                 .insert(&key, &amount)
                 .unwrap();
-            MyEntry { key, value: amount }
+            TableEntry { key, value: amount }
         }
 
         fn generate_data(&mut self, max_amount: usize) -> Vec<u8> {
@@ -803,7 +746,7 @@ mod tests {
     #[cfg(feature = "parquet")]
     fn assert_groups_as_expected<T>(
         expected_group_size: usize,
-        expected_data: Vec<MyEntry<T>>,
+        expected_data: Vec<TableEntry<T>>,
         reader: &mut SnapshotReader,
     ) where
         T: TableWithBlueprint,

@@ -1,66 +1,31 @@
-use bech32::{
-    ToBase32,
-    Variant::Bech32m,
-};
-use core::{
-    fmt::Debug,
-    str::FromStr,
-};
+use bech32::{ToBase32, Variant::Bech32m};
+use core::{fmt::Debug, str::FromStr};
 use fuel_core_storage::{
     structured_storage::TableWithBlueprint,
     tables::{
-        Coins,
-        ContractsAssets,
-        ContractsInfo,
-        ContractsLatestUtxo,
-        ContractsRawCode,
-        ContractsState,
-        Messages,
+        Coins, ContractsAssets, ContractsInfo, ContractsLatestUtxo, ContractsRawCode,
+        ContractsState, Messages,
     },
-    ContractsAssetKey,
-    ContractsStateKey,
+    ContractsAssetKey, ContractsStateKey,
 };
 use fuel_core_types::{
     blockchain::primitives::DaBlockHeight,
-    entities::contract::{
-        ContractUtxoInfo,
-        ContractsInfoType,
-    },
-    fuel_tx::{
-        ContractId,
-        TxPointer,
-        UtxoId,
-    },
-    fuel_types::{
-        Address,
-        BlockHeight,
-        Bytes32,
-    },
-    fuel_vm::{
-        Salt,
-        SecretKey,
-    },
+    entities::contract::{ContractUtxoInfo, ContractsInfoType},
+    fuel_tx::{ContractId, TxPointer, UtxoId},
+    fuel_types::{Address, BlockHeight, Bytes32},
+    fuel_vm::{Salt, SecretKey},
 };
 use itertools::Itertools;
-use serde::{
-    Deserialize,
-    Serialize,
-};
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
 #[cfg(feature = "std")]
 use crate::SnapshotMetadata;
-use crate::{
-    CoinConfigGenerator,
-    ContractAsset,
-    ContractState,
-};
+use crate::{CoinConfigGenerator, ContractAsset, ContractState};
 
 use super::{
-    coin::CoinConfig,
-    contract::ContractConfig,
-    message::MessageConfig,
-    my_entry::MyEntry,
+    coin::CoinConfig, contract::ContractConfig, message::MessageConfig,
+    table_entry::TableEntry,
 };
 
 #[cfg(feature = "parquet")]
@@ -124,11 +89,11 @@ pub trait AsTable<T>
 where
     T: TableWithBlueprint,
 {
-    fn as_table(&self) -> Vec<MyEntry<T>>;
+    fn as_table(&self) -> Vec<TableEntry<T>>;
 }
 
 impl AsTable<Coins> for StateConfig {
-    fn as_table(&self) -> Vec<MyEntry<Coins>> {
+    fn as_table(&self) -> Vec<TableEntry<Coins>> {
         self.coins
             .clone()
             .into_iter()
@@ -138,7 +103,7 @@ impl AsTable<Coins> for StateConfig {
 }
 
 impl AsTable<Messages> for StateConfig {
-    fn as_table(&self) -> Vec<MyEntry<Messages>> {
+    fn as_table(&self) -> Vec<TableEntry<Messages>> {
         self.messages
             .clone()
             .into_iter()
@@ -148,7 +113,7 @@ impl AsTable<Messages> for StateConfig {
 }
 
 impl AsTable<ContractsState> for StateConfig {
-    fn as_table(&self) -> Vec<MyEntry<ContractsState>> {
+    fn as_table(&self) -> Vec<TableEntry<ContractsState>> {
         self.contracts
             .iter()
             .flat_map(|contract| {
@@ -156,7 +121,7 @@ impl AsTable<ContractsState> for StateConfig {
                     |ContractState {
                          state_key,
                          state_value,
-                     }| MyEntry {
+                     }| TableEntry {
                         key: ContractsStateKey::new(&contract.contract_id, state_key),
                         value: state_value.clone().into(),
                     },
@@ -166,14 +131,14 @@ impl AsTable<ContractsState> for StateConfig {
     }
 }
 impl AsTable<ContractsAssets> for StateConfig {
-    fn as_table(&self) -> Vec<MyEntry<ContractsAssets>> {
+    fn as_table(&self) -> Vec<TableEntry<ContractsAssets>> {
         self.contracts
             .iter()
             .flat_map(|contract| {
                 contract
                     .balances
                     .iter()
-                    .map(|ContractAsset { asset_id, amount }| MyEntry {
+                    .map(|ContractAsset { asset_id, amount }| TableEntry {
                         key: ContractsAssetKey::new(&contract.contract_id, asset_id),
                         value: *amount,
                     })
@@ -183,10 +148,10 @@ impl AsTable<ContractsAssets> for StateConfig {
 }
 
 impl AsTable<ContractsRawCode> for StateConfig {
-    fn as_table(&self) -> Vec<MyEntry<ContractsRawCode>> {
+    fn as_table(&self) -> Vec<TableEntry<ContractsRawCode>> {
         self.contracts
             .iter()
-            .map(|config| MyEntry {
+            .map(|config| TableEntry {
                 key: config.contract_id,
                 value: config.code.as_slice().into(),
             })
@@ -194,10 +159,10 @@ impl AsTable<ContractsRawCode> for StateConfig {
     }
 }
 impl AsTable<ContractsInfo> for StateConfig {
-    fn as_table(&self) -> Vec<MyEntry<ContractsInfo>> {
+    fn as_table(&self) -> Vec<TableEntry<ContractsInfo>> {
         self.contracts
             .iter()
-            .map(|config| MyEntry {
+            .map(|config| TableEntry {
                 key: config.contract_id,
                 value: ContractsInfoType::V1(config.salt.into()),
             })
@@ -205,10 +170,10 @@ impl AsTable<ContractsInfo> for StateConfig {
     }
 }
 impl AsTable<ContractsLatestUtxo> for StateConfig {
-    fn as_table(&self) -> Vec<MyEntry<ContractsLatestUtxo>> {
+    fn as_table(&self) -> Vec<TableEntry<ContractsLatestUtxo>> {
         self.contracts
             .iter()
-            .map(|config| MyEntry {
+            .map(|config| TableEntry {
                 key: config.contract_id,
                 value: ContractUtxoInfo::V1(
                     fuel_core_types::entities::contract::ContractUtxoInfoV1 {
@@ -230,13 +195,13 @@ impl StateConfig {
 
     #[cfg(feature = "std")]
     pub fn from_tables(
-        coins: Vec<MyEntry<Coins>>,
-        messages: Vec<MyEntry<Messages>>,
-        contract_state: Vec<MyEntry<ContractsState>>,
-        contract_balance: Vec<MyEntry<ContractsAssets>>,
-        contract_code: Vec<MyEntry<ContractsRawCode>>,
-        contract_info: Vec<MyEntry<ContractsInfo>>,
-        contract_utxo: Vec<MyEntry<ContractsLatestUtxo>>,
+        coins: Vec<TableEntry<Coins>>,
+        messages: Vec<TableEntry<Messages>>,
+        contract_state: Vec<TableEntry<ContractsState>>,
+        contract_balance: Vec<TableEntry<ContractsAssets>>,
+        contract_code: Vec<TableEntry<ContractsRawCode>>,
+        contract_info: Vec<TableEntry<ContractsInfo>>,
+        contract_utxo: Vec<TableEntry<ContractsLatestUtxo>>,
         da_block_height: DaBlockHeight,
         block_height: BlockHeight,
     ) -> Self {
@@ -491,10 +456,7 @@ impl StateConfig {
     }
 }
 
-pub use reader::{
-    IntoIter,
-    SnapshotReader,
-};
+pub use reader::{IntoIter, SnapshotReader};
 #[cfg(feature = "std")]
 pub use writer::SnapshotWriter;
 #[cfg(feature = "parquet")]
@@ -513,16 +475,10 @@ pub(crate) type GroupResult<T> = anyhow::Result<Group<T>>;
 mod tests {
     use std::path::Path;
 
-    use crate::{
-        Group,
-        Randomize,
-    };
+    use crate::{Group, Randomize};
 
     use itertools::Itertools;
-    use rand::{
-        rngs::StdRng,
-        SeedableRng,
-    };
+    use rand::{rngs::StdRng, SeedableRng};
 
     use super::*;
 
@@ -531,26 +487,15 @@ mod tests {
         use std::path::Path;
 
         use fuel_core_storage::tables::{
-            Coins,
-            ContractsAssets,
-            ContractsInfo,
-            ContractsLatestUtxo,
-            ContractsRawCode,
-            ContractsState,
-            Messages,
+            Coins, ContractsAssets, ContractsInfo, ContractsLatestUtxo, ContractsRawCode,
+            ContractsState, Messages,
         };
 
         use crate::{
-            config::state::writer,
-            SnapshotMetadata,
-            SnapshotReader,
-            SnapshotWriter,
+            config::state::writer, SnapshotMetadata, SnapshotReader, SnapshotWriter,
         };
 
-        use super::{
-            assert_roundtrip,
-            assert_roundtrip_block_heights,
-        };
+        use super::{assert_roundtrip, assert_roundtrip_block_heights};
 
         #[test]
         fn roundtrip() {
@@ -595,29 +540,16 @@ mod tests {
     mod json {
         use std::path::Path;
 
-        use fuel_core_storage::tables::{
-            Coins,
-            Messages,
-        };
+        use fuel_core_storage::tables::{Coins, Messages};
         use itertools::Itertools;
-        use rand::{
-            rngs::StdRng,
-            SeedableRng,
-        };
+        use rand::{rngs::StdRng, SeedableRng};
 
         use crate::{
-            ContractConfig,
-            Randomize,
-            SnapshotMetadata,
-            SnapshotReader,
-            SnapshotWriter,
+            ContractConfig, Randomize, SnapshotMetadata, SnapshotReader, SnapshotWriter,
             StateConfig,
         };
 
-        use super::{
-            assert_roundtrip,
-            assert_roundtrip_block_heights,
-        };
+        use super::{assert_roundtrip, assert_roundtrip_block_heights};
 
         #[test]
         fn roundtrip() {
@@ -708,7 +640,7 @@ mod tests {
             + core::fmt::Debug
             + PartialEq,
         StateConfig: AsTable<T>,
-        MyEntry<T>: Randomize,
+        TableEntry<T>: Randomize,
     {
         // given
         let skip_n_groups = 3;
@@ -754,12 +686,12 @@ mod tests {
         fn write_groups<T>(
             &mut self,
             encoder: &mut SnapshotWriter,
-        ) -> Vec<Group<MyEntry<T>>>
+        ) -> Vec<Group<TableEntry<T>>>
         where
             T: TableWithBlueprint,
             T::OwnedKey: serde::Serialize,
             T::OwnedValue: serde::Serialize,
-            MyEntry<T>: Randomize,
+            TableEntry<T>: Randomize,
         {
             let groups = self.generate_groups();
             for group in &groups {
@@ -841,7 +773,7 @@ mod tests {
 
         use fuel_core_storage::tables::Coins;
 
-        use crate::MyEntry;
+        use crate::TableEntry;
 
         use fuel_core_types::entities::coins::coin::CompressedCoinV1;
 
@@ -854,7 +786,7 @@ mod tests {
         macro_rules! delegating_impl {
             ($($table: ty),*) => {
                 $(
-                    impl Randomize for MyEntry<$table> {
+                    impl Randomize for TableEntry<$table> {
                         fn randomize(mut rng: impl rand::Rng) -> Self {
                             Self {
                                 key: Randomize::randomize(&mut rng),
@@ -876,7 +808,7 @@ mod tests {
         );
 
         // Messages are special, because they have the key inside of the value as well
-        impl Randomize for MyEntry<Messages> {
+        impl Randomize for TableEntry<Messages> {
             fn randomize(mut rng: impl rand::Rng) -> Self {
                 let value = Message::randomize(&mut rng);
                 Self {

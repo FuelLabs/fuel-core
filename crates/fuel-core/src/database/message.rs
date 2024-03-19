@@ -1,32 +1,16 @@
 use crate::{
-    database::{
-        database_description::off_chain::OffChain,
-        Database,
-    },
-    fuel_core_graphql_api::storage::messages::{
-        OwnedMessageIds,
-        OwnedMessageKey,
-    },
+    database::{database_description::off_chain::OffChain, Database},
+    fuel_core_graphql_api::storage::messages::{OwnedMessageIds, OwnedMessageKey},
 };
-use fuel_core_chain_config::MyEntry;
+use fuel_core_chain_config::TableEntry;
 use fuel_core_storage::{
-    iter::{
-        IterDirection,
-        IteratorOverTable,
-    },
-    tables::{
-        Messages,
-        SpentMessages,
-    },
-    Error as StorageError,
-    Result as StorageResult,
+    iter::{IterDirection, IteratorOverTable},
+    tables::{Messages, SpentMessages},
+    Error as StorageError, Result as StorageResult,
 };
 use fuel_core_types::{
     entities::message::Message,
-    fuel_types::{
-        Address,
-        Nonce,
-    },
+    fuel_types::{Address, Nonce},
 };
 use itertools::Itertools;
 
@@ -60,7 +44,7 @@ impl Database {
 
     pub fn iter_messages(
         &self,
-    ) -> impl Iterator<Item = StorageResult<MyEntry<Messages>>> + '_ {
+    ) -> impl Iterator<Item = StorageResult<TableEntry<Messages>>> + '_ {
         self.iter_all_by_start::<Messages>(None, None)
             .filter_map(|msg| {
                 // Return only unspent messages
@@ -74,7 +58,7 @@ impl Database {
                     Some(msg.map_err(StorageError::from))
                 }
             })
-            .map_ok(|(key, value)| MyEntry { key, value })
+            .map_ok(|(key, value)| TableEntry { key, value })
     }
 
     pub fn message_is_spent(&self, id: &Nonce) -> StorageResult<bool> {

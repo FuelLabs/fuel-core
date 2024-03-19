@@ -1,29 +1,13 @@
-use crate::{
-    serialization::HexIfHumanReadable,
-    GenesisCommitment,
-    MyEntry,
-};
-use fuel_core_storage::{
-    tables::Messages,
-    MerkleRoot,
-};
+use crate::{serialization::HexIfHumanReadable, GenesisCommitment, TableEntry};
+use fuel_core_storage::{tables::Messages, MerkleRoot};
 use fuel_core_types::{
     blockchain::primitives::DaBlockHeight,
-    entities::message::{
-        Message,
-        MessageV1,
-    },
+    entities::message::{Message, MessageV1},
     fuel_asm::Word,
     fuel_crypto::Hasher,
-    fuel_types::{
-        Address,
-        Nonce,
-    },
+    fuel_types::{Address, Nonce},
 };
-use serde::{
-    Deserialize,
-    Serialize,
-};
+use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 
 #[serde_as]
@@ -39,8 +23,8 @@ pub struct MessageConfig {
     pub da_height: DaBlockHeight,
 }
 
-impl From<MyEntry<Messages>> for MessageConfig {
-    fn from(value: MyEntry<Messages>) -> Self {
+impl From<TableEntry<Messages>> for MessageConfig {
+    fn from(value: TableEntry<Messages>) -> Self {
         Self {
             sender: *value.value.sender(),
             recipient: *value.value.recipient(),
@@ -52,9 +36,9 @@ impl From<MyEntry<Messages>> for MessageConfig {
     }
 }
 
-impl From<MessageConfig> for MyEntry<Messages> {
+impl From<MessageConfig> for TableEntry<Messages> {
     fn from(value: MessageConfig) -> Self {
-        MyEntry {
+        TableEntry {
             key: value.nonce,
             value: Message::V1(MessageV1 {
                 sender: value.sender,

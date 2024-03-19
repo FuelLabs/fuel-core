@@ -1,28 +1,19 @@
 use crate::{
-    database::{
-        database_description::off_chain::OffChain,
-        Database,
-    },
+    database::{database_description::off_chain::OffChain, Database},
     graphql_api::worker_service,
     service::Config,
 };
-use fuel_core_chain_config::MyEntry;
+use fuel_core_chain_config::TableEntry;
 use fuel_core_storage::{
-    tables::{
-        Coins,
-        Messages,
-    },
+    tables::{Coins, Messages},
     transactional::WriteTransaction,
 };
-use fuel_core_types::{
-    entities::coins::coin::Coin,
-    services::executor::Event,
-};
+use fuel_core_types::{entities::coins::coin::Coin, services::executor::Event};
 use std::borrow::Cow;
 
 fn process_messages(
     original_database: &mut Database<OffChain>,
-    messages: Vec<MyEntry<Messages>>,
+    messages: Vec<TableEntry<Messages>>,
 ) -> anyhow::Result<()> {
     let mut database_transaction = original_database.write_transaction();
 
@@ -38,7 +29,7 @@ fn process_messages(
 
 fn process_coins(
     original_database: &mut Database<OffChain>,
-    coins: Vec<MyEntry<Coins>>,
+    coins: Vec<TableEntry<Coins>>,
 ) -> anyhow::Result<()> {
     let mut database_transaction = original_database.write_transaction();
 

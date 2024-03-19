@@ -1,31 +1,18 @@
 use crate::{
-    database::{
-        database_description::off_chain::OffChain,
-        Database,
-    },
-    fuel_core_graphql_api::storage::coins::{
-        owner_coin_id_key,
-        OwnedCoins,
-    },
+    database::{database_description::off_chain::OffChain, Database},
+    fuel_core_graphql_api::storage::coins::{owner_coin_id_key, OwnedCoins},
 };
-use fuel_core_chain_config::MyEntry;
+use fuel_core_chain_config::TableEntry;
 use fuel_core_storage::{
-    iter::{
-        IterDirection,
-        IteratorOverTable,
-    },
+    iter::{IterDirection, IteratorOverTable},
     not_found,
     tables::Coins,
-    Result as StorageResult,
-    StorageAsRef,
+    Result as StorageResult, StorageAsRef,
 };
 use fuel_core_txpool::types::TxId;
 use fuel_core_types::{
     entities::coins::coin::CompressedCoin,
-    fuel_tx::{
-        Address,
-        UtxoId,
-    },
+    fuel_tx::{Address, UtxoId},
 };
 use itertools::Itertools;
 
@@ -64,8 +51,10 @@ impl Database {
         Ok(coin)
     }
 
-    pub fn iter_coins(&self) -> impl Iterator<Item = StorageResult<MyEntry<Coins>>> + '_ {
+    pub fn iter_coins(
+        &self,
+    ) -> impl Iterator<Item = StorageResult<TableEntry<Coins>>> + '_ {
         self.iter_all::<Coins>(None)
-            .map_ok(|(key, value)| MyEntry { key, value })
+            .map_ok(|(key, value)| TableEntry { key, value })
     }
 }

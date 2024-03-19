@@ -1,44 +1,22 @@
 use super::{
-    init_coin,
-    init_contract_info,
-    init_contract_latest_utxo,
-    init_contract_raw_code,
-    init_da_message,
-    runner::ProcessState,
-    GenesisRunner,
+    init_coin, init_contract_info, init_contract_latest_utxo, init_contract_raw_code,
+    init_da_message, runner::ProcessState, GenesisRunner,
 };
-use std::{
-    marker::PhantomData,
-    sync::Arc,
-};
+use std::{marker::PhantomData, sync::Arc};
 
 use crate::database::{
-    balances::BalancesInitializer,
-    genesis_progress::GenesisResource,
-    state::StateInitializer,
-    Database,
+    balances::BalancesInitializer, genesis_progress::GenesisResource,
+    state::StateInitializer, Database,
 };
-use fuel_core_chain_config::{
-    Group,
-    MyEntry,
-    SnapshotReader,
-};
+use fuel_core_chain_config::{Group, SnapshotReader, TableEntry};
 use fuel_core_storage::{
     tables::{
-        Coins,
-        ContractsAssets,
-        ContractsInfo,
-        ContractsLatestUtxo,
-        ContractsRawCode,
-        ContractsState,
-        Messages,
+        Coins, ContractsAssets, ContractsInfo, ContractsLatestUtxo, ContractsRawCode,
+        ContractsState, Messages,
     },
     transactional::StorageTransaction,
 };
-use fuel_core_types::{
-    blockchain::primitives::DaBlockHeight,
-    fuel_types::BlockHeight,
-};
+use fuel_core_types::{blockchain::primitives::DaBlockHeight, fuel_types::BlockHeight};
 use tokio::sync::Notify;
 use tokio_util::sync::CancellationToken;
 
@@ -224,8 +202,8 @@ impl<T> Handler<T> {
     }
 }
 
-impl ProcessState for Handler<MyEntry<Coins>> {
-    type Item = MyEntry<Coins>;
+impl ProcessState for Handler<TableEntry<Coins>> {
+    type Item = TableEntry<Coins>;
 
     fn process(
         &mut self,
@@ -243,8 +221,8 @@ impl ProcessState for Handler<MyEntry<Coins>> {
     }
 }
 
-impl ProcessState for Handler<MyEntry<Messages>> {
-    type Item = MyEntry<Messages>;
+impl ProcessState for Handler<TableEntry<Messages>> {
+    type Item = TableEntry<Messages>;
 
     fn process(
         &mut self,
@@ -261,8 +239,8 @@ impl ProcessState for Handler<MyEntry<Messages>> {
     }
 }
 
-impl ProcessState for Handler<MyEntry<ContractsRawCode>> {
-    type Item = MyEntry<ContractsRawCode>;
+impl ProcessState for Handler<TableEntry<ContractsRawCode>> {
+    type Item = TableEntry<ContractsRawCode>;
 
     fn process(
         &mut self,
@@ -280,8 +258,8 @@ impl ProcessState for Handler<MyEntry<ContractsRawCode>> {
     }
 }
 
-impl ProcessState for Handler<MyEntry<ContractsInfo>> {
-    type Item = MyEntry<ContractsInfo>;
+impl ProcessState for Handler<TableEntry<ContractsInfo>> {
+    type Item = TableEntry<ContractsInfo>;
 
     fn process(
         &mut self,
@@ -299,8 +277,8 @@ impl ProcessState for Handler<MyEntry<ContractsInfo>> {
     }
 }
 
-impl ProcessState for Handler<MyEntry<ContractsLatestUtxo>> {
-    type Item = MyEntry<ContractsLatestUtxo>;
+impl ProcessState for Handler<TableEntry<ContractsLatestUtxo>> {
+    type Item = TableEntry<ContractsLatestUtxo>;
 
     fn process(
         &mut self,
@@ -318,8 +296,8 @@ impl ProcessState for Handler<MyEntry<ContractsLatestUtxo>> {
     }
 }
 
-impl ProcessState for Handler<MyEntry<ContractsState>> {
-    type Item = MyEntry<ContractsState>;
+impl ProcessState for Handler<TableEntry<ContractsState>> {
+    type Item = TableEntry<ContractsState>;
 
     fn process(
         &mut self,
@@ -335,8 +313,8 @@ impl ProcessState for Handler<MyEntry<ContractsState>> {
     }
 }
 
-impl ProcessState for Handler<MyEntry<ContractsAssets>> {
-    type Item = MyEntry<ContractsAssets>;
+impl ProcessState for Handler<TableEntry<ContractsAssets>> {
+    type Item = TableEntry<ContractsAssets>;
 
     fn process(
         &mut self,

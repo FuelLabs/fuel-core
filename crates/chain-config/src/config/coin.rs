@@ -1,32 +1,15 @@
 use crate::GenesisCommitment;
-use fuel_core_storage::{
-    tables::Coins,
-    MerkleRoot,
-};
+use fuel_core_storage::{tables::Coins, MerkleRoot};
 use fuel_core_types::{
-    entities::coins::coin::{
-        CompressedCoin,
-        CompressedCoinV1,
-    },
+    entities::coins::coin::{CompressedCoin, CompressedCoinV1},
     fuel_crypto::Hasher,
-    fuel_tx::{
-        TxPointer,
-        UtxoId,
-    },
-    fuel_types::{
-        Address,
-        AssetId,
-        BlockHeight,
-        Bytes32,
-    },
+    fuel_tx::{TxPointer, UtxoId},
+    fuel_types::{Address, AssetId, BlockHeight, Bytes32},
     fuel_vm::SecretKey,
 };
-use serde::{
-    Deserialize,
-    Serialize,
-};
+use serde::{Deserialize, Serialize};
 
-use super::my_entry::MyEntry;
+use super::table_entry::TableEntry;
 
 #[derive(Default, Clone, Debug, Deserialize, Serialize, Eq, PartialEq)]
 pub struct CoinConfig {
@@ -43,8 +26,8 @@ pub struct CoinConfig {
     pub asset_id: AssetId,
 }
 
-impl From<MyEntry<Coins>> for CoinConfig {
-    fn from(value: MyEntry<Coins>) -> Self {
+impl From<TableEntry<Coins>> for CoinConfig {
+    fn from(value: TableEntry<Coins>) -> Self {
         CoinConfig {
             tx_id: *value.key.tx_id(),
             output_index: value.key.output_index(),
@@ -57,7 +40,7 @@ impl From<MyEntry<Coins>> for CoinConfig {
     }
 }
 
-impl From<CoinConfig> for MyEntry<Coins> {
+impl From<CoinConfig> for TableEntry<Coins> {
     fn from(config: CoinConfig) -> Self {
         Self {
             key: UtxoId::new(config.tx_id, config.output_index),
@@ -156,10 +139,7 @@ impl GenesisCommitment for CompressedCoin {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use fuel_core_types::{
-        fuel_types::Address,
-        fuel_vm::SecretKey,
-    };
+    use fuel_core_types::{fuel_types::Address, fuel_vm::SecretKey};
 
     #[test]
     fn test_generate_unique_utxo_id() {

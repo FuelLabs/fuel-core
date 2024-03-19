@@ -1,35 +1,20 @@
 use crate::{
-    config::my_entry::MyEntry,
-    AsTable,
-    ChainConfig,
-    SnapshotMetadata,
-    StateConfig,
+    config::table_entry::TableEntry, AsTable, ChainConfig, SnapshotMetadata, StateConfig,
     TableEncoding,
 };
 use fuel_core_storage::{
     kv_store::StorageColumn,
     structured_storage::TableWithBlueprint,
     tables::{
-        Coins,
-        ContractsAssets,
-        ContractsInfo,
-        ContractsLatestUtxo,
-        ContractsRawCode,
-        ContractsState,
-        Messages,
+        Coins, ContractsAssets, ContractsInfo, ContractsLatestUtxo, ContractsRawCode,
+        ContractsState, Messages,
     },
     Mappable,
 };
-use fuel_core_types::{
-    blockchain::primitives::DaBlockHeight,
-    fuel_types::BlockHeight,
-};
+use fuel_core_types::{blockchain::primitives::DaBlockHeight, fuel_types::BlockHeight};
 use itertools::Itertools;
 use serde_json::Value;
-use std::{
-    collections::HashMap,
-    path::PathBuf,
-};
+use std::{collections::HashMap, path::PathBuf};
 
 #[cfg(feature = "parquet")]
 use super::parquet;
@@ -175,7 +160,7 @@ impl From<ZstdCompressionLevel> for ::parquet::basic::Compression {
     }
 }
 
-impl<T> MyEntry<T>
+impl<T> TableEntry<T>
 where
     T: Mappable,
     T::OwnedValue: serde::Serialize,
@@ -242,7 +227,7 @@ impl SnapshotWriter {
         chain_config.write(self.dir.join("chain_config.json"))
     }
 
-    pub fn write<T>(&mut self, elements: Vec<MyEntry<T>>) -> anyhow::Result<()>
+    pub fn write<T>(&mut self, elements: Vec<TableEntry<T>>) -> anyhow::Result<()>
     where
         T: TableWithBlueprint,
         T::OwnedValue: serde::Serialize,
@@ -330,7 +315,7 @@ impl SnapshotWriter {
             } => {
                 fn extract_table<T>(
                     buffer: &mut HashMap<String, Vec<Value>>,
-                ) -> anyhow::Result<Vec<MyEntry<T>>>
+                ) -> anyhow::Result<Vec<TableEntry<T>>>
                 where
                     T: TableWithBlueprint,
                     T::OwnedKey: serde::de::DeserializeOwned,
@@ -410,10 +395,7 @@ impl SnapshotWriter {
 #[cfg(feature = "random")]
 #[cfg(test)]
 mod tests {
-    use rand::{
-        rngs::StdRng,
-        SeedableRng,
-    };
+    use rand::{rngs::StdRng, SeedableRng};
 
     use super::*;
 

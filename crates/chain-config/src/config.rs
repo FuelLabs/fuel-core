@@ -3,10 +3,10 @@ mod coin;
 mod consensus;
 mod contract;
 mod message;
-mod my_entry;
 #[cfg(feature = "std")]
 mod snapshot_metadata;
 mod state;
+mod table_entry;
 
 #[cfg(all(test, feature = "random", feature = "std"))]
 pub(crate) fn random_bytes_32(mut rng: impl rand::Rng) -> [u8; 32] {
@@ -23,7 +23,8 @@ pub use coin::*;
 pub use consensus::*;
 pub use contract::*;
 pub use message::*;
-pub use my_entry::*;
 #[cfg(feature = "std")]
 pub use snapshot_metadata::*;
 pub use state::*;
+pub use table_entry::*;
+
