@@ -16,10 +16,12 @@ use fuel_core_chain_config::{
 use fuel_core_storage::{
     tables::{
         Coins,
+        ConsensusParametersVersions,
         ContractsInfo,
         ContractsLatestUtxo,
         ContractsRawCode,
         Messages,
+        StateTransitionBytecodeVersions,
     },
     transactional::{
         Changes,
@@ -38,7 +40,9 @@ use fuel_core_types::{
         header::{
             ApplicationHeader,
             ConsensusHeader,
+            ConsensusParametersVersion,
             PartialBlockHeader,
+            StateTransitionBytecodeVersion,
         },
         primitives::{
             DaBlockHeight,
@@ -87,6 +91,8 @@ pub async fn execute_genesis_block(
     import_chain_state(workers).await?;
 
     let genesis = Genesis {
+        // TODO: We can get the serialized consensus parameters from the database.
+        //  https://github.com/FuelLabs/fuel-core/issues/1570
         chain_config_hash: config.chain_config.root()?.into(),
         coins_root: original_database.genesis_coins_root()?.into(),
         messages_root: original_database.genesis_messages_root()?.into(),
@@ -101,6 +107,20 @@ pub async fn execute_genesis_block(
     };
 
     let mut database_transaction = original_database.read_transaction();
+    // TODO: The chain config should be part of the snapshot state.
+    //  https://github.com/FuelLabs/fuel-core/issues/1570
+    database_transaction
+        .storage_as_mut::<ConsensusParametersVersions>()
+        .insert(
+            &ConsensusParametersVersion::MIN,
+            &config.chain_config.consensus_parameters,
+        )?;
+    // TODO: The bytecode of the state transition function should be part of the snapshot state.
+    //  https://github.com/FuelLabs/fuel-core/issues/1570
+    database_transaction
+        .storage_as_mut::<StateTransitionBytecodeVersions>()
+        .insert(&ConsensusParametersVersion::MIN, &[])?;
+
     cleanup_genesis_progress(&mut database_transaction)?;
 
     let result = UncommittedImportResult::new(
@@ -146,6 +166,12 @@ pub fn create_genesis_block(config: &Config) -> Block {
         PartialBlockHeader {
             application: ApplicationHeader::<Empty> {
                 da_height: da_block_height,
+                // After regenesis, we don't need to support old consensus parameters,
+                // so we can start the versioning from the beginning.
+                consensus_parameters_version: ConsensusParametersVersion::MIN,
+                // After regenesis, we don't need to support old state transition functions,
+                // so we can start the versioning from the beginning.
+                state_transition_bytecode_version: StateTransitionBytecodeVersion::MIN,
                 generated: Empty,
             },
             consensus: ConsensusHeader::<Empty> {

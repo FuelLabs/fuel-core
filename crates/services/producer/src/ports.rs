@@ -6,6 +6,10 @@ use fuel_core_storage::{
 use fuel_core_types::{
     blockchain::{
         block::CompressedBlock,
+        header::{
+            ConsensusParametersVersion,
+            StateTransitionBytecodeVersion,
+        },
         primitives::DaBlockHeight,
     },
     fuel_tx::{
@@ -30,6 +34,16 @@ pub trait BlockProducerDatabase: Send + Sync {
 
     /// Gets the block header BMT MMR root at `height`.
     fn block_header_merkle_root(&self, height: &BlockHeight) -> StorageResult<Bytes32>;
+
+    /// Returns the latest consensus parameters version.
+    fn latest_consensus_parameters_version(
+        &self,
+    ) -> StorageResult<ConsensusParametersVersion>;
+
+    /// Returns the latest state transition bytecode version.
+    fn latest_state_transition_bytecode_version(
+        &self,
+    ) -> StorageResult<StateTransitionBytecodeVersion>;
 }
 
 #[async_trait]

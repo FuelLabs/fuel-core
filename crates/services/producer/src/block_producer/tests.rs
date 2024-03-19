@@ -101,6 +101,8 @@ async fn can_produce_initial_block() {
 async fn can_produce_next_block() {
     // simple happy path for producing atop pre-existing block
     let mut rng = StdRng::seed_from_u64(0u64);
+    let consensus_parameters_version = 0;
+    let state_transition_bytecode_version = 0;
     // setup dummy previous block
     let prev_height = 1u32.into();
     let previous_block = PartialFuelBlock {
@@ -121,6 +123,8 @@ async fn can_produce_next_block() {
         blocks: Arc::new(Mutex::new(
             vec![(prev_height, previous_block)].into_iter().collect(),
         )),
+        consensus_parameters_version,
+        state_transition_bytecode_version,
     };
 
     let ctx = TestContext::default_from_db(db);
@@ -136,6 +140,66 @@ async fn can_produce_next_block() {
         .await;
 
     assert!(result.is_ok());
+}
+
+#[tokio::test]
+async fn can_produce_next_block_that_contains_non_zero_versions() {
+    let mut rng = StdRng::seed_from_u64(0u64);
+    // setup dummy previous block
+    let prev_height = 1u32.into();
+    let previous_block = PartialFuelBlock {
+        header: PartialBlockHeader {
+            consensus: ConsensusHeader {
+                height: prev_height,
+                prev_root: rng.gen(),
+                ..Default::default()
+            },
+            ..Default::default()
+        },
+        transactions: vec![],
+    }
+    .generate(&[])
+    .compress(&Default::default());
+
+    // Given
+    let consensus_parameters_version = rng.gen();
+    let state_transition_bytecode_version = rng.gen();
+    let db = MockDb {
+        blocks: Arc::new(Mutex::new(
+            vec![(prev_height, previous_block)].into_iter().collect(),
+        )),
+        consensus_parameters_version,
+        state_transition_bytecode_version,
+    };
+
+    let ctx = TestContext::default_from_db(db);
+    let producer = ctx.producer();
+
+    // When
+    let result = producer
+        .produce_and_execute_block_txpool(
+            prev_height
+                .succ()
+                .expect("The block height should be valid"),
+            Tai64::now(),
+            1_000_000_000,
+        )
+        .await
+        .expect("Should produce next block successfully")
+        .into_result();
+
+    // Then
+    let header = result.block.header();
+    assert_ne!(header.consensus_parameters_version, 0);
+    assert_eq!(
+        header.consensus_parameters_version,
+        consensus_parameters_version
+    );
+    assert_ne!(header.state_transition_bytecode_version, 0);
+    assert_eq!(
+        header.state_transition_bytecode_version,
+        state_transition_bytecode_version
+    );
 }
 
 #[tokio::test]
@@ -177,6 +241,8 @@ async fn cant_produce_if_previous_block_da_height_too_high() {
         blocks: Arc::new(Mutex::new(
             vec![(prev_height, previous_block)].into_iter().collect(),
         )),
+        consensus_parameters_version: 0,
+        state_transition_bytecode_version: 0,
     };
     let ctx = TestContext {
         relayer: MockRelayer {
@@ -307,6 +373,8 @@ impl<Executor> TestContext<Executor> {
             blocks: Arc::new(Mutex::new(
                 vec![(genesis_height, genesis_block)].into_iter().collect(),
             )),
+            consensus_parameters_version: 0,
+            state_transition_bytecode_version: 0,
         }
     }
 
