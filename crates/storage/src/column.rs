@@ -18,10 +18,10 @@ use crate::kv_store::StorageColumn;
     Hash,
 )]
 pub enum Column {
+    /// The column id of metadata about the blockchain.
+    Metadata = 0,
     /// See [`ContractsRawCode`](crate::tables::ContractsRawCode)
-    ContractsRawCode = 0,
-    /// See [`ContractsInfo`](crate::tables::ContractsInfo)
-    ContractsInfo = 1,
+    ContractsRawCode = 1,
     /// See [`ContractsState`](crate::tables::ContractsState)
     ContractsState = 2,
     /// See [`ContractsLatestUtxo`](crate::tables::ContractsLatestUtxo)
@@ -60,13 +60,11 @@ pub enum Column {
     //  and `MemoryTransactionView` because they rely on linear index incrementation.
 
     // Below are the tables used for p2p, block production, starting the node.
-    /// The column id of metadata about the blockchain
-    Metadata = 17,
     /// See [`SealedBlockConsensus`](crate::tables::SealedBlockConsensus)
-    FuelBlockConsensus = 18,
+    FuelBlockConsensus = 17,
 
     /// Table for genesis state import progress tracking.
-    GenesisMetadata = 19,
+    GenesisMetadata = 18,
 }
 
 impl Column {

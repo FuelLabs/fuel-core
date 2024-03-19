@@ -577,7 +577,6 @@ mod tests {
         let contract = ContractConfig {
             contract_id: [1u8; 32].into(),
             code: [2u8; 32].into(),
-            salt: [3u8; 32].into(),
             tx_id: [4u8; 32].into(),
             output_index: 5,
             tx_pointer_block_height: BlockHeight::new(6),

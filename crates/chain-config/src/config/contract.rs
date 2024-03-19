@@ -25,7 +25,6 @@ pub struct ContractConfig {
     pub contract_id: ContractId,
     #[serde_as(as = "HexIfHumanReadable")]
     pub code: Vec<u8>,
-    pub salt: Salt,
     pub tx_id: Bytes32,
     pub output_index: u8,
     /// TxPointer: auto-generated if None
@@ -54,7 +53,6 @@ impl crate::Randomize for ContractConfig {
         Self {
             contract_id: ContractId::new(super::random_bytes_32(&mut rng)),
             code: (super::random_bytes_32(&mut rng)).to_vec(),
-            salt: Salt::new(super::random_bytes_32(&mut rng)),
             tx_id: super::random_bytes_32(&mut rng).into(),
             output_index: rng.gen(),
             tx_pointer_block_height: rng.gen(),
@@ -66,13 +64,14 @@ impl crate::Randomize for ContractConfig {
 impl ContractConfig {
     pub fn update_contract_id<'a>(
         &mut self,
+        salt: Salt,
         storage_slots: impl IntoIterator<Item = &'a StorageSlot>,
     ) {
         let state_root = Contract::initial_state_root(storage_slots.into_iter());
 
         let contract = Contract::from(self.code.clone());
         let root = contract.root();
-        let contract_id = contract.id(&self.salt, &root, &state_root);
+        let contract_id = contract.id(&salt, &root, &state_root);
         self.contract_id = contract_id;
     }
 }

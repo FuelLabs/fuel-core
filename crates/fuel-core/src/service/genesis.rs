@@ -16,7 +16,6 @@ use fuel_core_chain_config::{
 use fuel_core_storage::{
     tables::{
         Coins,
-        ContractsInfo,
         ContractsLatestUtxo,
         ContractsRawCode,
         Messages,
@@ -48,10 +47,7 @@ use fuel_core_types::{
     },
     entities::{
         coins::coin::Coin,
-        contract::{
-            ContractUtxoInfo,
-            ContractsInfoType,
-        },
+        contract::ContractUtxoInfo,
         message::Message,
     },
     fuel_tx::Contract,
@@ -220,7 +216,6 @@ fn init_contract(
     height: BlockHeight,
 ) -> anyhow::Result<()> {
     let contract = Contract::from(contract_config.code.as_slice());
-    let salt = contract_config.salt;
     let contract_id = contract_config.contract_id;
     #[allow(clippy::cast_possible_truncation)]
     let utxo_id = contract_config.utxo_id();
@@ -241,14 +236,6 @@ fn init_contract(
         return Err(anyhow!("Contract code should not exist"));
     }
 
-    // insert contract salt
-    if transaction
-        .storage::<ContractsInfo>()
-        .insert(&contract_id, &ContractsInfoType::V1(salt.into()))?
-        .is_some()
-    {
-        return Err(anyhow!("Contract info should not exist"));
-    }
     if transaction
         .storage::<ContractsLatestUtxo>()
         .insert(
@@ -550,7 +537,6 @@ mod tests {
             contracts: vec![ContractConfig {
                 contract_id,
                 code: contract.into(),
-                salt,
                 tx_id: rng.gen(),
                 output_index: rng.gen(),
                 tx_pointer_block_height: 0.into(),
@@ -646,7 +632,6 @@ mod tests {
             contracts: vec![ContractConfig {
                 contract_id,
                 code: contract.into(),
-                salt,
                 ..Default::default()
             }],
             contract_balance: vec![contract_balance],
@@ -713,14 +698,12 @@ mod tests {
             asset_id: test_asset_id,
             amount: test_balance,
         }];
-        let salt: Salt = rng.gen();
         let contract = Contract::from(op::ret(0x10).to_bytes().to_vec());
 
         let state = StateConfig {
             contracts: vec![ContractConfig {
                 contract_id: ContractId::from(*contract_id),
                 code: contract.into(),
-                salt,
                 // set txpointer height > genesis height
                 tx_pointer_block_height: BlockHeight::from(11u32),
                 tx_pointer_tx_idx: 0,
@@ -767,7 +750,6 @@ mod tests {
         ContractConfig {
             contract_id,
             code: contract.into(),
-            salt,
             ..Default::default()
         }
     }
