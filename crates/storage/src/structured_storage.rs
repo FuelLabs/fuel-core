@@ -57,6 +57,7 @@ pub mod messages;
 pub mod sealed_block;
 pub mod state;
 pub mod transactions;
+pub mod upgrades;
 
 /// The table can implement this trait to indicate that it has a blueprint.
 /// It inherits the default implementation of the storage traits through the [`StructuredStorage`]

@@ -8,6 +8,8 @@ query($id: BlockId) {
     header {
       id
       daHeight
+      consensusParametersVersion
+      stateTransitionBytecodeVersion
       transactionsCount
       messageReceiptCount
       transactionsRoot
@@ -34,5 +36,3 @@ query($id: BlockId) {
     }
   }
 }
-
-
