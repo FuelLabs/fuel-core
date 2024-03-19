@@ -13,6 +13,11 @@ use std::{
 pub(crate) static ETH_LOG_MESSAGE: Lazy<H256> =
     Lazy::new(crate::abi::bridge::MessageSentFilter::signature);
 
+pub(crate) static ETH_FORCED_TX: Lazy<H256> =
+    Lazy::new(crate::abi::bridge::TransactionFilter::signature);
+
+// pub(crate) static ETH_LOG_TRANSACTION: Lazy<H256> = Lazy::new(crate::abi::bridge::)
+
 // TODO: Move settlement fields into `ChainConfig` because it is part of the consensus.
 #[derive(Clone, Debug)]
 /// Configuration settings for the Relayer.

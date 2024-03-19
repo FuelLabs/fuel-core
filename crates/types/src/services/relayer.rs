@@ -2,7 +2,10 @@
 
 use crate::{
     blockchain::primitives::DaBlockHeight,
-    entities::message::Message,
+    entities::{
+        Message,
+        RelayedTransaction,
+    },
 };
 
 /// The event that may come from the relayer.
@@ -11,6 +14,8 @@ use crate::{
 pub enum Event {
     /// The message event which was sent to the bridge.
     Message(Message),
+    /// A transaction that was forced included from L1
+    Transaction(RelayedTransaction),
 }
 
 impl Event {
@@ -18,6 +23,7 @@ impl Event {
     pub fn da_height(&self) -> DaBlockHeight {
         match self {
             Event::Message(message) => message.da_height(),
+            Event::Transaction(transaction) => transaction.da_height(),
         }
     }
 }
@@ -25,5 +31,11 @@ impl Event {
 impl From<Message> for Event {
     fn from(message: Message) -> Self {
         Event::Message(message)
+    }
+}
+
+impl From<RelayedTransaction> for Event {
+    fn from(transaction: RelayedTransaction) -> Self {
+        Event::Transaction(transaction)
     }
 }

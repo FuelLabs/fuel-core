@@ -23,7 +23,7 @@ use ethers_core::{
     },
 };
 use fuel_core_types::{
-    entities::message::Message,
+    entities::Message,
     fuel_types::Address,
 };
 

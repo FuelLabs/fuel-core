@@ -14,7 +14,7 @@ use fuel_core_storage::test_helpers::{
     MockBasic,
     MockStorage,
 };
-use fuel_core_types::entities::message::Message;
+use fuel_core_types::entities::relayer::message::Message;
 use std::borrow::Cow;
 use test_case::test_case;
 

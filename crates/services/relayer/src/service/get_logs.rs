@@ -1,5 +1,8 @@
 use super::*;
-use fuel_core_types::services::relayer::Event;
+use fuel_core_types::{
+    entities::RelayedTransaction,
+    services::relayer::Event,
+};
 use futures::TryStreamExt;
 use std::collections::BTreeMap;
 
@@ -75,6 +78,9 @@ where
                                 Some(Ok(Event::Message(Message::from(&m))))
                             }
                             // TODO: Log out ignored messages.
+                            EthEventLog::Transaction(tx) => {
+                                Some(Ok(Event::Transaction(RelayedTransaction::from(tx))))
+                            }
                             EthEventLog::Ignored => None,
                         }
                     }
