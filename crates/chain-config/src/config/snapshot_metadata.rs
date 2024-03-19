@@ -1,9 +1,6 @@
-use std::{
-    collections::HashMap,
-    path::{
-        Path,
-        PathBuf,
-    },
+use std::path::{
+    Path,
+    PathBuf,
 };
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq)]
@@ -13,7 +10,7 @@ pub enum TableEncoding {
     },
     #[cfg(feature = "parquet")]
     Parquet {
-        tables: HashMap<String, PathBuf>,
+        tables: std::collections::HashMap<String, PathBuf>,
         block_height: PathBuf,
         da_block_height: PathBuf,
         compression: crate::ZstdCompressionLevel,
@@ -81,10 +78,10 @@ impl SnapshotMetadata {
         Ok(snapshot)
     }
 
-    pub fn strip_prefix(&mut self, dir: &Path) -> anyhow::Result<()> {
+    pub fn strip_prefix(&mut self, dir: &Path) -> anyhow::Result<&mut Self> {
         self.chain_config = self.chain_config.strip_prefix(dir)?.to_owned();
         self.table_encoding.strip_prefix(dir)?;
-        Ok(())
+        Ok(self)
     }
 
     pub fn prepend_path(&mut self, dir: &Path) {

@@ -4,10 +4,7 @@ pub mod encode;
 #[cfg(feature = "random")]
 #[cfg(test)]
 mod tests {
-    use crate::{
-        CoinConfig,
-        Group,
-    };
+    use crate::Group;
     use bytes::Bytes;
     use itertools::Itertools;
     use parquet::{

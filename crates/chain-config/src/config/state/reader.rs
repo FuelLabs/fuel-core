@@ -1,22 +1,7 @@
-use std::{
-    collections::HashMap,
-    fmt::Debug,
-};
+use std::fmt::Debug;
 
 use anyhow::Context;
-use fuel_core_storage::{
-    kv_store::StorageColumn,
-    structured_storage::TableWithBlueprint,
-    tables::{
-        Coins,
-        ContractsAssets,
-        ContractsInfo,
-        ContractsLatestUtxo,
-        ContractsRawCode,
-        ContractsState,
-        Messages,
-    },
-};
+use fuel_core_storage::structured_storage::TableWithBlueprint;
 use fuel_core_types::{
     blockchain::primitives::DaBlockHeight,
     fuel_types::BlockHeight,
@@ -26,11 +11,8 @@ use itertools::Itertools;
 use crate::{
     config::my_entry::MyEntry,
     AsTable,
-    CoinConfig,
-    ContractConfig,
     Group,
     GroupResult,
-    MessageConfig,
     StateConfig,
     MAX_GROUP_SIZE,
 };
@@ -85,7 +67,7 @@ impl<T> Iterator for IntoIter<T> {
 enum DataSource {
     #[cfg(feature = "parquet")]
     Parquet {
-        tables: HashMap<String, std::path::PathBuf>,
+        tables: std::collections::HashMap<String, std::path::PathBuf>,
         block_height: BlockHeight,
         da_block_height: DaBlockHeight,
     },
@@ -114,7 +96,9 @@ impl SnapshotReader {
         path: impl AsRef<std::path::Path>,
         group_size: usize,
     ) -> anyhow::Result<Self> {
-        let mut file = std::fs::File::open(path)?;
+        let path = path.as_ref();
+        let mut file = std::fs::File::open(path)
+            .with_context(|| format!("Could not open snapshot file: {path:?}"))?;
 
         let state = serde_json::from_reader(&mut file)?;
 
@@ -134,7 +118,7 @@ impl SnapshotReader {
 
     #[cfg(feature = "parquet")]
     fn parquet(
-        tables: HashMap<String, std::path::PathBuf>,
+        tables: std::collections::HashMap<String, std::path::PathBuf>,
         block_height: std::path::PathBuf,
         da_block_height: std::path::PathBuf,
     ) -> anyhow::Result<Self> {
@@ -172,10 +156,16 @@ impl SnapshotReader {
     pub fn open(
         snapshot_metadata: crate::config::SnapshotMetadata,
     ) -> anyhow::Result<Self> {
-        use crate::TableEncoding;
+        Self::open_w_config(snapshot_metadata, MAX_GROUP_SIZE)
+    }
 
+    pub fn open_w_config(
+        snapshot_metadata: crate::config::SnapshotMetadata,
+        json_group_size: usize,
+    ) -> anyhow::Result<Self> {
+        use crate::TableEncoding;
         match snapshot_metadata.table_encoding {
-            TableEncoding::Json { filepath } => Self::json(filepath, MAX_GROUP_SIZE),
+            TableEncoding::Json { filepath } => Self::json(filepath, json_group_size),
             #[cfg(feature = "parquet")]
             TableEncoding::Parquet {
                 tables,
@@ -195,6 +185,7 @@ impl SnapshotReader {
         match &self.data_source {
             #[cfg(feature = "parquet")]
             DataSource::Parquet { tables, .. } => {
+                use fuel_core_storage::kv_store::StorageColumn;
                 let name = T::column().name();
                 let path = tables.get(name).ok_or_else(|| {
                     anyhow::anyhow!("table '{name}' not found snapshot metadata.")
@@ -244,47 +235,5 @@ impl SnapshotReader {
                 da_block_height, ..
             } => *da_block_height,
         }
-    }
-
-    // fn create_iterator<T: Clone>(
-    //     &self,
-    //     extractor: impl FnOnce(&StateConfig) -> &Vec<T>,
-    //     #[cfg(feature = "parquet")] file_picker: impl FnOnce(
-    //         &crate::ParquetFiles,
-    //     ) -> &std::path::Path,
-    // ) -> anyhow::Result<IntoIter<T>> {
-    //     match &self.data_source {
-    //         DataSource::InMemory { state, group_size } => {
-    //             let groups = extractor(state).clone();
-    //             Ok(Self::in_memory_iter(groups, *group_size))
-    //         }
-    //         #[cfg(feature = "parquet")]
-    //         DataSource::Parquet { files, .. } => {
-    //             let path = file_picker(files);
-    //             let file = std::fs::File::open(path)?;
-    //             Ok(IntoIter::Parquet {
-    //                 decoder: super::parquet::decode::Decoder::new(file)?,
-    //             })
-    //         }
-    //     }
-    // }
-
-    fn in_memory_iter<T>(items: Vec<T>, group_size: usize) -> IntoIter<T> {
-        let groups = items
-            .into_iter()
-            .chunks(group_size)
-            .into_iter()
-            .map(Itertools::collect_vec)
-            .enumerate()
-            .map(|(index, vec_chunk)| {
-                Ok(Group {
-                    data: vec_chunk,
-                    index,
-                })
-            })
-            .collect_vec()
-            .into_iter();
-
-        IntoIter::InMemory { groups }
     }
 }

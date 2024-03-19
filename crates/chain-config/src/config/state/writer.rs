@@ -2,9 +2,6 @@ use crate::{
     config::my_entry::MyEntry,
     AsTable,
     ChainConfig,
-    CoinConfig,
-    ContractConfig,
-    MessageConfig,
     SnapshotMetadata,
     StateConfig,
     TableEncoding,
@@ -25,15 +22,12 @@ use fuel_core_storage::{
 };
 use fuel_core_types::{
     blockchain::primitives::DaBlockHeight,
-    entities::coins::coin::CompressedCoin,
-    fuel_tx::UtxoId,
     fuel_types::BlockHeight,
 };
 use itertools::Itertools;
 use serde_json::Value;
 use std::{
     collections::HashMap,
-    fs::File,
     path::PathBuf,
 };
 
@@ -231,10 +225,10 @@ impl SnapshotWriter {
         state_config: StateConfig,
     ) -> anyhow::Result<SnapshotMetadata> {
         self.write::<Coins>(state_config.as_table())?;
+        self.write::<Messages>(state_config.as_table())?;
         self.write::<ContractsRawCode>(state_config.as_table())?;
         self.write::<ContractsInfo>(state_config.as_table())?;
         self.write::<ContractsLatestUtxo>(state_config.as_table())?;
-        self.write::<Messages>(state_config.as_table())?;
         self.write::<ContractsState>(state_config.as_table())?;
         self.write::<ContractsAssets>(state_config.as_table())?;
         self.write_block_data(state_config.block_height, state_config.da_block_height)?;
@@ -256,9 +250,9 @@ impl SnapshotWriter {
     {
         let name = T::column().name().to_string();
         match &mut self.encoder {
-            EncoderType::Json { buffer: state, .. } => {
+            EncoderType::Json { buffer, .. } => {
                 let values = elements.into_iter().map(|e| e.encode_json()).collect_vec();
-                state.entry(name).or_insert_with(Vec::new).extend(values);
+                buffer.entry(name).or_insert_with(Vec::new).extend(values);
                 Ok(())
             }
             #[cfg(feature = "parquet")]
@@ -271,7 +265,7 @@ impl SnapshotWriter {
                 let file_path = self.dir.join(format!("{name}.parquet"));
                 let (_, encoder) =
                     table_encoders.entry(name.clone()).or_insert_with(|| {
-                        let file = File::create(&file_path).unwrap();
+                        let file = std::fs::File::create(&file_path).unwrap();
                         (
                             file_path,
                             parquet::encode::Encoder::new(file, (*compression).into())
@@ -305,11 +299,7 @@ impl SnapshotWriter {
                 compression,
                 ..
             } => {
-                let dt: u32 = height.into();
-                eprintln!("Writing {:?}", dt);
                 Self::write_single_el_parquet(block_height, height, *compression)?;
-                let dt: u64 = da_height.into();
-                eprintln!("Writing {:?}", dt);
                 Self::write_single_el_parquet(da_block_height, da_height, *compression)?;
 
                 Ok(())
@@ -323,8 +313,10 @@ impl SnapshotWriter {
         data: impl serde::Serialize,
         compression: ZstdCompressionLevel,
     ) -> anyhow::Result<()> {
-        let mut encoder =
-            parquet::encode::Encoder::new(File::create(path)?, compression.into())?;
+        let mut encoder = parquet::encode::Encoder::new(
+            std::fs::File::create(path)?,
+            compression.into(),
+        )?;
         encoder.write(vec![postcard::to_stdvec(&data)?])?;
         encoder.close()
     }
@@ -406,13 +398,11 @@ impl SnapshotWriter {
         dir: &std::path::Path,
         table_encoding: TableEncoding,
     ) -> anyhow::Result<SnapshotMetadata> {
-        let mut metadata = SnapshotMetadata {
+        let metadata = SnapshotMetadata {
             chain_config: dir.join("chain_config.json"),
             table_encoding,
         };
-        metadata.strip_prefix(dir)?;
-        metadata.write(dir)?;
-        metadata.prepend_path(dir);
+        metadata.clone().strip_prefix(dir)?.write(dir)?;
         Ok(metadata)
     }
 }
@@ -420,20 +410,12 @@ impl SnapshotWriter {
 #[cfg(feature = "random")]
 #[cfg(test)]
 mod tests {
-    use fuel_core_types::{
-        blockchain::primitives::DaBlockHeight,
-        fuel_types::{
-            BlockHeight,
-            Nonce,
-        },
-    };
     use rand::{
         rngs::StdRng,
         SeedableRng,
     };
 
     use super::*;
-    use itertools::Itertools;
 
     #[cfg(feature = "parquet")]
     #[test]
