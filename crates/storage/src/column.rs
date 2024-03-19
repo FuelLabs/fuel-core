@@ -18,55 +18,54 @@ use crate::kv_store::StorageColumn;
     Hash,
 )]
 pub enum Column {
+    /// The column id of metadata about the blockchain
+    Metadata = 0,
     /// See [`ContractsRawCode`](crate::tables::ContractsRawCode)
-    ContractsRawCode = 0,
+    ContractsRawCode = 1,
     /// See [`ContractsInfo`](crate::tables::ContractsInfo)
-    ContractsInfo = 1,
+    ContractsInfo = 2,
     /// See [`ContractsState`](crate::tables::ContractsState)
-    ContractsState = 2,
+    ContractsState = 3,
     /// See [`ContractsLatestUtxo`](crate::tables::ContractsLatestUtxo)
-    ContractsLatestUtxo = 3,
+    ContractsLatestUtxo = 4,
     /// See [`ContractsAssets`](crate::tables::ContractsAssets)
-    ContractsAssets = 4,
+    ContractsAssets = 5,
     /// See [`Coins`](crate::tables::Coins)
-    Coins = 5,
+    Coins = 6,
     /// See [`Transactions`](crate::tables::Transactions)
-    Transactions = 6,
+    Transactions = 7,
     /// See [`FuelBlocks`](crate::tables::FuelBlocks)
-    FuelBlocks = 7,
+    FuelBlocks = 8,
     /// See [`FuelBlockMerkleData`](crate::tables::merkle::FuelBlockMerkleData)
-    FuelBlockMerkleData = 8,
+    FuelBlockMerkleData = 9,
     /// See [`FuelBlockMerkleMetadata`](crate::tables::merkle::FuelBlockMerkleMetadata)
-    FuelBlockMerkleMetadata = 9,
+    FuelBlockMerkleMetadata = 10,
     /// Messages that have been spent.
     /// Existence of a key in this column means that the message has been spent.
     /// See [`SpentMessages`](crate::tables::SpentMessages)
-    SpentMessages = 10,
+    SpentMessages = 11,
     /// See [`ContractsAssetsMerkleData`](crate::tables::merkle::ContractsAssetsMerkleData)
-    ContractsAssetsMerkleData = 11,
+    ContractsAssetsMerkleData = 12,
     /// See [`ContractsAssetsMerkleMetadata`](crate::tables::merkle::ContractsAssetsMerkleMetadata)
-    ContractsAssetsMerkleMetadata = 12,
+    ContractsAssetsMerkleMetadata = 13,
     /// See [`ContractsStateMerkleData`](crate::tables::merkle::ContractsStateMerkleData)
-    ContractsStateMerkleData = 13,
+    ContractsStateMerkleData = 14,
     /// See [`ContractsStateMerkleMetadata`](crate::tables::merkle::ContractsStateMerkleMetadata)
-    ContractsStateMerkleMetadata = 14,
+    ContractsStateMerkleMetadata = 15,
     /// See [`Messages`](crate::tables::Messages)
-    Messages = 15,
+    Messages = 16,
     /// See [`ProcessedTransactions`](crate::tables::ProcessedTransactions)
-    ProcessedTransactions = 16,
-
-    // TODO: Extract the columns below into a separate enum to not mix
-    //  required columns and non-required columns. It will break `MemoryStore`
-    //  and `MemoryTransactionView` because they rely on linear index incrementation.
-
-    // Below are the tables used for p2p, block production, starting the node.
-    /// The column id of metadata about the blockchain
-    Metadata = 17,
+    ProcessedTransactions = 17,
     /// See [`SealedBlockConsensus`](crate::tables::SealedBlockConsensus)
     FuelBlockConsensus = 18,
+    /// See [`ConsensusParametersVersions`](crate::tables::ConsensusParametersVersions)
+    ConsensusParametersVersions = 19,
+    /// See [`StateTransitionBytecodeVersions`](crate::tables::StateTransitionBytecodeVersions)
+    StateTransitionBytecodeVersions = 20,
 
+    // TODO: Remove this column and use `Metadata` column instead.
     /// Table for genesis state import progress tracking.
-    GenesisMetadata = 19,
+    GenesisMetadata = 21,
 }
 
 impl Column {

@@ -119,6 +119,8 @@ pub struct BlockMutation {
 pub struct Header {
     pub id: BlockId,
     pub da_height: U64,
+    pub consensus_parameters_version: U32,
+    pub state_transition_bytecode_version: U32,
     pub transactions_count: U64,
     pub message_receipt_count: U64,
     pub transactions_root: Bytes32,

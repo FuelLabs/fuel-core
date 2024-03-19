@@ -6,6 +6,10 @@ use fuel_core_types::{
     blockchain::{
         block::CompressedBlock,
         consensus::Consensus,
+        header::{
+            ConsensusParametersVersion,
+            StateTransitionBytecodeVersion,
+        },
     },
     entities::{
         coins::coin::CompressedCoin,
@@ -16,6 +20,7 @@ use fuel_core_types::{
         message::Message,
     },
     fuel_tx::{
+        ConsensusParameters,
         Transaction,
         TxId,
         UtxoId,
@@ -127,6 +132,26 @@ impl Mappable for ProcessedTransactions {
     type OwnedKey = TxId;
     type Value = Self::OwnedValue;
     type OwnedValue = ();
+}
+
+/// The storage table of consensus parameters.
+pub struct ConsensusParametersVersions;
+
+impl Mappable for ConsensusParametersVersions {
+    type Key = Self::OwnedKey;
+    type OwnedKey = ConsensusParametersVersion;
+    type Value = Self::OwnedValue;
+    type OwnedValue = ConsensusParameters;
+}
+
+/// The storage table of state transition bytecodes.
+pub struct StateTransitionBytecodeVersions;
+
+impl Mappable for StateTransitionBytecodeVersions {
+    type Key = Self::OwnedKey;
+    type OwnedKey = StateTransitionBytecodeVersion;
+    type Value = [u8];
+    type OwnedValue = Vec<u8>;
 }
 
 /// The module contains definition of merkle-related tables.

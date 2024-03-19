@@ -66,216 +66,333 @@ impl GasPriceProvider for MockProducerGasPrice {
     }
 }
 
-#[tokio::test]
-async fn cant_produce_at_genesis_height() {
-    let ctx = TestContext::default();
-    let producer = ctx.producer();
+// Tests for the `produce_and_execute_block_txpool` method.
+mod produce_and_execute_block_txpool {
+    use super::*;
 
-    let err = producer
-        .produce_and_execute_block_txpool(0u32.into(), Tai64::now(), 1_000_000_000)
-        .await
-        .expect_err("expected failure");
+    #[tokio::test]
+    async fn cant_produce_at_genesis_height() {
+        let ctx = TestContext::default();
+        let producer = ctx.producer();
 
-    assert!(
-        matches!(
-            err.downcast_ref::<Error>(),
-            Some(Error::BlockHeightShouldBeHigherThanPrevious { .. })
-        ),
-        "unexpected err {err:?}"
-    );
-}
+        let err = producer
+            .produce_and_execute_block_txpool(0u32.into(), Tai64::now(), 1_000_000_000)
+            .await
+            .expect_err("expected failure");
 
-#[tokio::test]
-async fn can_produce_initial_block() {
-    let ctx = TestContext::default();
-    let producer = ctx.producer();
-
-    let result = producer
-        .produce_and_execute_block_txpool(1u32.into(), Tai64::now(), 1_000_000_000)
-        .await;
-
-    assert!(result.is_ok());
-}
-
-#[tokio::test]
-async fn can_produce_next_block() {
-    // simple happy path for producing atop pre-existing block
-    let mut rng = StdRng::seed_from_u64(0u64);
-    // setup dummy previous block
-    let prev_height = 1u32.into();
-    let previous_block = PartialFuelBlock {
-        header: PartialBlockHeader {
-            consensus: ConsensusHeader {
-                height: prev_height,
-                prev_root: rng.gen(),
-                ..Default::default()
-            },
-            ..Default::default()
-        },
-        transactions: vec![],
+        assert!(
+            matches!(
+                err.downcast_ref::<Error>(),
+                Some(Error::BlockHeightShouldBeHigherThanPrevious { .. })
+            ),
+            "unexpected err {err:?}"
+        );
     }
-    .generate(&[])
-    .compress(&Default::default());
 
-    let db = MockDb {
-        blocks: Arc::new(Mutex::new(
-            vec![(prev_height, previous_block)].into_iter().collect(),
-        )),
-    };
+    #[tokio::test]
+    async fn can_produce_initial_block() {
+        let ctx = TestContext::default();
+        let producer = ctx.producer();
 
-    let ctx = TestContext::default_from_db(db);
-    let producer = ctx.producer();
-    let result = producer
-        .produce_and_execute_block_txpool(
-            prev_height
-                .succ()
-                .expect("The block height should be valid"),
-            Tai64::now(),
-            1_000_000_000,
-        )
-        .await;
+        let result = producer
+            .produce_and_execute_block_txpool(1u32.into(), Tai64::now(), 1_000_000_000)
+            .await;
 
-    assert!(result.is_ok());
-}
-
-#[tokio::test]
-async fn cant_produce_if_no_previous_block() {
-    // fail if there is no block that precedes the current height.
-    let ctx = TestContext::default();
-    let producer = ctx.producer();
-
-    let err = producer
-        .produce_and_execute_block_txpool(100u32.into(), Tai64::now(), 1_000_000_000)
-        .await
-        .expect_err("expected failure");
-
-    assert!(err.to_string().contains("Didn't find block for test"));
-}
-
-#[tokio::test]
-async fn cant_produce_if_previous_block_da_height_too_high() {
-    // setup previous block with a high da_height
-    let prev_da_height = 100u64.into();
-    let prev_height = 1u32.into();
-    let previous_block = PartialFuelBlock {
-        header: PartialBlockHeader {
-            application: ApplicationHeader {
-                da_height: prev_da_height,
-                ..Default::default()
-            },
-            consensus: ConsensusHeader {
-                height: prev_height,
-                ..Default::default()
-            },
-        },
-        transactions: vec![],
+        assert!(result.is_ok());
     }
-    .generate(&[])
-    .compress(&Default::default());
 
-    let db = MockDb {
-        blocks: Arc::new(Mutex::new(
-            vec![(prev_height, previous_block)].into_iter().collect(),
-        )),
-    };
-    let ctx = TestContext {
-        relayer: MockRelayer {
-            // set our relayer best finalized height to less than previous
-            best_finalized_height: prev_da_height - 1u64.into(),
-            ..Default::default()
-        },
-        ..TestContext::default_from_db(db)
-    };
-    let producer = ctx.producer();
+    #[tokio::test]
+    async fn can_produce_next_block() {
+        // simple happy path for producing atop pre-existing block
+        let mut rng = StdRng::seed_from_u64(0u64);
+        let consensus_parameters_version = 0;
+        let state_transition_bytecode_version = 0;
+        // setup dummy previous block
+        let prev_height = 1u32.into();
+        let previous_block = PartialFuelBlock {
+            header: PartialBlockHeader {
+                consensus: ConsensusHeader {
+                    height: prev_height,
+                    prev_root: rng.gen(),
+                    ..Default::default()
+                },
+                ..Default::default()
+            },
+            transactions: vec![],
+        }
+        .generate(&[])
+        .compress(&Default::default());
 
-    let err = producer
-        .produce_and_execute_block_txpool(
-            prev_height
-                .succ()
-                .expect("The block height should be valid"),
-            Tai64::now(),
-            1_000_000_000,
-        )
-        .await
-        .expect_err("expected failure");
+        let db = MockDb {
+            blocks: Arc::new(Mutex::new(
+                vec![(prev_height, previous_block)].into_iter().collect(),
+            )),
+            consensus_parameters_version,
+            state_transition_bytecode_version,
+        };
 
-    assert!(
-        matches!(
-            err.downcast_ref::<Error>(),
-            Some(Error::InvalidDaFinalizationState {
-                previous_block,
-                best
-            }) if *previous_block == prev_da_height && *best == prev_da_height - 1u64.into()
-        ),
-        "unexpected err {err:?}"
-    );
-}
+        let ctx = TestContext::default_from_db(db);
+        let producer = ctx.producer();
+        let result = producer
+            .produce_and_execute_block_txpool(
+                prev_height
+                    .succ()
+                    .expect("The block height should be valid"),
+                Tai64::now(),
+                1_000_000_000,
+            )
+            .await;
 
-#[tokio::test]
-async fn production_fails_on_execution_error() {
-    let ctx = TestContext::default_from_executor(FailingMockExecutor(Mutex::new(Some(
-        ExecutorError::TransactionIdCollision(Default::default()),
-    ))));
+        assert!(result.is_ok());
+    }
 
-    let producer = ctx.producer();
+    #[tokio::test]
+    async fn next_block_contains_expected_consensus_parameters_version() {
+        let mut rng = StdRng::seed_from_u64(0u64);
+        // setup dummy previous block
+        let prev_height = 1u32.into();
+        let previous_block = PartialFuelBlock {
+            header: PartialBlockHeader {
+                consensus: ConsensusHeader {
+                    height: prev_height,
+                    prev_root: rng.gen(),
+                    ..Default::default()
+                },
+                ..Default::default()
+            },
+            transactions: vec![],
+        }
+        .generate(&[])
+        .compress(&Default::default());
 
-    let err = producer
-        .produce_and_execute_block_txpool(1u32.into(), Tai64::now(), 1_000_000_000)
-        .await
-        .expect_err("expected failure");
+        // Given
+        let consensus_parameters_version = 123;
+        let db = MockDb {
+            blocks: Arc::new(Mutex::new(
+                vec![(prev_height, previous_block)].into_iter().collect(),
+            )),
+            consensus_parameters_version,
+            state_transition_bytecode_version: 0,
+        };
 
-    assert!(
-        matches!(
-            err.downcast_ref::<ExecutorError>(),
-            Some(ExecutorError::TransactionIdCollision { .. })
-        ),
-        "unexpected err {err:?}"
-    );
-}
+        let ctx = TestContext::default_from_db(db);
+        let producer = ctx.producer();
 
-// TODO: Add test that checks the gas price on the mint tx after `Executor` refactor
-//   https://github.com/FuelLabs/fuel-core/issues/1751
-#[tokio::test]
-async fn produce_and_execute_block_txpool__executor_receives_gas_price_provided() {
-    // given
-    let gas_price = 1_000;
-    let gas_price_provider = MockProducerGasPrice::new(gas_price);
-    let executor = MockExecutorWithCapture::default();
-    let ctx = TestContext::default_from_executor(executor.clone());
+        // When
+        let result = producer
+            .produce_and_execute_block_txpool(
+                prev_height
+                    .succ()
+                    .expect("The block height should be valid"),
+                Tai64::now(),
+                1_000_000_000,
+            )
+            .await
+            .expect("Should produce next block successfully")
+            .into_result();
 
-    let producer = ctx.producer_with_gas_price_provider(gas_price_provider);
+        // Then
+        let header = result.block.header();
+        assert_eq!(
+            header.consensus_parameters_version,
+            consensus_parameters_version
+        );
+    }
 
-    // when
-    let _ = producer
-        .produce_and_execute_block_txpool(1u32.into(), Tai64::now(), 1_000_000_000)
-        .await
-        .unwrap();
+    #[tokio::test]
+    async fn next_block_contains_expected_state_transition_bytecode_version() {
+        let mut rng = StdRng::seed_from_u64(0u64);
+        // setup dummy previous block
+        let prev_height = 1u32.into();
+        let previous_block = PartialFuelBlock {
+            header: PartialBlockHeader {
+                consensus: ConsensusHeader {
+                    height: prev_height,
+                    prev_root: rng.gen(),
+                    ..Default::default()
+                },
+                ..Default::default()
+            },
+            transactions: vec![],
+        }
+        .generate(&[])
+        .compress(&Default::default());
 
-    // then
-    let captured = executor.captured.lock().unwrap();
-    let expected = gas_price;
-    let actual = captured
-        .as_ref()
-        .expect("expected executor to be called")
-        .gas_price;
-    assert_eq!(expected, actual);
-}
+        // Given
+        let state_transition_bytecode_version = 321;
+        let db = MockDb {
+            blocks: Arc::new(Mutex::new(
+                vec![(prev_height, previous_block)].into_iter().collect(),
+            )),
+            consensus_parameters_version: 0,
+            state_transition_bytecode_version,
+        };
 
-#[tokio::test]
-async fn produce_and_execute_block_txpool__missing_gas_price_causes_block_production_to_fail(
-) {
-    // given
-    let gas_price_provider = MockProducerGasPrice::new_none();
-    let ctx = TestContext::default();
-    let producer = ctx.producer_with_gas_price_provider(gas_price_provider);
+        let ctx = TestContext::default_from_db(db);
+        let producer = ctx.producer();
 
-    // when
-    let result = producer
-        .produce_and_execute_block_txpool(1u32.into(), Tai64::now(), 1_000_000_000)
-        .await;
+        // When
+        let result = producer
+            .produce_and_execute_block_txpool(
+                prev_height
+                    .succ()
+                    .expect("The block height should be valid"),
+                Tai64::now(),
+                1_000_000_000,
+            )
+            .await
+            .expect("Should produce next block successfully")
+            .into_result();
 
-    // then
-    assert!(result.is_err());
+        // Then
+        let header = result.block.header();
+        assert_eq!(
+            header.state_transition_bytecode_version,
+            state_transition_bytecode_version
+        );
+    }
+
+    #[tokio::test]
+    async fn cant_produce_if_no_previous_block() {
+        // fail if there is no block that precedes the current height.
+        let ctx = TestContext::default();
+        let producer = ctx.producer();
+
+        let err = producer
+            .produce_and_execute_block_txpool(100u32.into(), Tai64::now(), 1_000_000_000)
+            .await
+            .expect_err("expected failure");
+
+        assert!(err.to_string().contains("Didn't find block for test"));
+    }
+
+    #[tokio::test]
+    async fn cant_produce_if_previous_block_da_height_too_high() {
+        // setup previous block with a high da_height
+        let prev_da_height = 100u64.into();
+        let prev_height = 1u32.into();
+        let previous_block = PartialFuelBlock {
+            header: PartialBlockHeader {
+                application: ApplicationHeader {
+                    da_height: prev_da_height,
+                    ..Default::default()
+                },
+                consensus: ConsensusHeader {
+                    height: prev_height,
+                    ..Default::default()
+                },
+            },
+            transactions: vec![],
+        }
+        .generate(&[])
+        .compress(&Default::default());
+
+        let db = MockDb {
+            blocks: Arc::new(Mutex::new(
+                vec![(prev_height, previous_block)].into_iter().collect(),
+            )),
+            consensus_parameters_version: 0,
+            state_transition_bytecode_version: 0,
+        };
+        let ctx = TestContext {
+            relayer: MockRelayer {
+                // set our relayer best finalized height to less than previous
+                best_finalized_height: prev_da_height - 1u64.into(),
+                ..Default::default()
+            },
+            ..TestContext::default_from_db(db)
+        };
+        let producer = ctx.producer();
+
+        let err = producer
+            .produce_and_execute_block_txpool(
+                prev_height
+                    .succ()
+                    .expect("The block height should be valid"),
+                Tai64::now(),
+                1_000_000_000,
+            )
+            .await
+            .expect_err("expected failure");
+
+        assert!(
+            matches!(
+                err.downcast_ref::<Error>(),
+                Some(Error::InvalidDaFinalizationState {
+                    previous_block,
+                    best
+                }) if *previous_block == prev_da_height && *best == prev_da_height - 1u64.into()
+            ),
+            "unexpected err {err:?}"
+        );
+    }
+
+    #[tokio::test]
+    async fn production_fails_on_execution_error() {
+        let ctx = TestContext::default_from_executor(FailingMockExecutor(Mutex::new(
+            Some(ExecutorError::TransactionIdCollision(Default::default())),
+        )));
+
+        let producer = ctx.producer();
+
+        let err = producer
+            .produce_and_execute_block_txpool(1u32.into(), Tai64::now(), 1_000_000_000)
+            .await
+            .expect_err("expected failure");
+
+        assert!(
+            matches!(
+                err.downcast_ref::<ExecutorError>(),
+                Some(ExecutorError::TransactionIdCollision { .. })
+            ),
+            "unexpected err {err:?}"
+        );
+    }
+
+    // TODO: Add test that checks the gas price on the mint tx after `Executor` refactor
+    //   https://github.com/FuelLabs/fuel-core/issues/1751
+    #[tokio::test]
+    async fn produce_and_execute_block_txpool__executor_receives_gas_price_provided() {
+        // given
+        let gas_price = 1_000;
+        let gas_price_provider = MockProducerGasPrice::new(gas_price);
+        let executor = MockExecutorWithCapture::default();
+        let ctx = TestContext::default_from_executor(executor.clone());
+
+        let producer = ctx.producer_with_gas_price_provider(gas_price_provider);
+
+        // when
+        let _ = producer
+            .produce_and_execute_block_txpool(1u32.into(), Tai64::now(), 1_000_000_000)
+            .await
+            .unwrap();
+
+        // then
+        let captured = executor.captured.lock().unwrap();
+        let expected = gas_price;
+        let actual = captured
+            .as_ref()
+            .expect("expected executor to be called")
+            .gas_price;
+        assert_eq!(expected, actual);
+    }
+
+    #[tokio::test]
+    async fn produce_and_execute_block_txpool__missing_gas_price_causes_block_production_to_fail(
+    ) {
+        // given
+        let gas_price_provider = MockProducerGasPrice::new_none();
+        let ctx = TestContext::default();
+        let producer = ctx.producer_with_gas_price_provider(gas_price_provider);
+
+        // when
+        let result = producer
+            .produce_and_execute_block_txpool(1u32.into(), Tai64::now(), 1_000_000_000)
+            .await;
+
+        // then
+        assert!(result.is_err());
+    }
 }
 
 struct TestContext<Executor> {
@@ -307,6 +424,8 @@ impl<Executor> TestContext<Executor> {
             blocks: Arc::new(Mutex::new(
                 vec![(genesis_height, genesis_block)].into_iter().collect(),
             )),
+            consensus_parameters_version: 0,
+            state_transition_bytecode_version: 0,
         }
     }
 

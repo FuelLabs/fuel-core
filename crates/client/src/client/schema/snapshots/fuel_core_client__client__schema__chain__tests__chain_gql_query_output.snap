@@ -11,6 +11,8 @@ query {
       header {
         id
         daHeight
+        consensusParametersVersion
+        stateTransitionBytecodeVersion
         transactionsCount
         messageReceiptCount
         transactionsRoot
