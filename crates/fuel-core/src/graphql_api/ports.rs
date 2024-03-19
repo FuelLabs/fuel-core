@@ -8,7 +8,6 @@ use fuel_core_storage::{
     tables::{
         Coins,
         ContractsAssets,
-        ContractsInfo,
         ContractsRawCode,
         FuelBlocks,
         Messages,
@@ -33,6 +32,7 @@ use fuel_core_types::{
         Message,
     },
     fuel_tx::{
+        Salt,
         Transaction,
         TxId,
         TxPointer,
@@ -83,6 +83,8 @@ pub trait OffChainDatabase: Send + Sync {
         start: Option<TxPointer>,
         direction: IterDirection,
     ) -> BoxedIter<StorageResult<(TxPointer, TxId)>>;
+
+    fn contract_salt(&self, contract_id: &ContractId) -> StorageResult<Salt>;
 }
 
 /// The on chain database port expected by GraphQL API service.
@@ -129,7 +131,6 @@ pub trait DatabaseMessages: StorageInspect<Messages, Error = StorageError> {
 /// Trait that specifies all the getters required for contract.
 pub trait DatabaseContracts:
     StorageInspect<ContractsRawCode, Error = StorageError>
-    + StorageInspect<ContractsInfo, Error = StorageError>
     + StorageInspect<ContractsAssets, Error = StorageError>
 {
     fn contract_balances(
@@ -208,6 +209,7 @@ pub mod worker {
     use super::super::storage::blocks::FuelBlockIdsToHeights;
     use crate::fuel_core_graphql_api::storage::{
         coins::OwnedCoins,
+        contracts::ContractsInfo,
         messages::OwnedMessageIds,
     };
     use fuel_core_services::stream::BoxStream;
@@ -241,6 +243,7 @@ pub mod worker {
         StorageMutate<OwnedMessageIds, Error = StorageError>
         + StorageMutate<OwnedCoins, Error = StorageError>
         + StorageMutate<FuelBlockIdsToHeights, Error = StorageError>
+        + StorageMutate<ContractsInfo, Error = StorageError>
     {
         fn record_tx_id_owner(
             &mut self,

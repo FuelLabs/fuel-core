@@ -22,50 +22,48 @@ pub enum Column {
     Metadata = 0,
     /// See [`ContractsRawCode`](crate::tables::ContractsRawCode)
     ContractsRawCode = 1,
-    /// See [`ContractsInfo`](crate::tables::ContractsInfo)
-    ContractsInfo = 2,
     /// See [`ContractsState`](crate::tables::ContractsState)
-    ContractsState = 3,
+    ContractsState = 2,
     /// See [`ContractsLatestUtxo`](crate::tables::ContractsLatestUtxo)
-    ContractsLatestUtxo = 4,
+    ContractsLatestUtxo = 3,
     /// See [`ContractsAssets`](crate::tables::ContractsAssets)
-    ContractsAssets = 5,
+    ContractsAssets = 4,
     /// See [`Coins`](crate::tables::Coins)
-    Coins = 6,
+    Coins = 5,
     /// See [`Transactions`](crate::tables::Transactions)
-    Transactions = 7,
+    Transactions = 6,
     /// See [`FuelBlocks`](crate::tables::FuelBlocks)
-    FuelBlocks = 8,
+    FuelBlocks = 7,
     /// See [`FuelBlockMerkleData`](crate::tables::merkle::FuelBlockMerkleData)
-    FuelBlockMerkleData = 9,
+    FuelBlockMerkleData = 8,
     /// See [`FuelBlockMerkleMetadata`](crate::tables::merkle::FuelBlockMerkleMetadata)
-    FuelBlockMerkleMetadata = 10,
+    FuelBlockMerkleMetadata = 9,
     /// Messages that have been spent.
     /// Existence of a key in this column means that the message has been spent.
     /// See [`SpentMessages`](crate::tables::SpentMessages)
-    SpentMessages = 11,
+    SpentMessages = 10,
     /// See [`ContractsAssetsMerkleData`](crate::tables::merkle::ContractsAssetsMerkleData)
-    ContractsAssetsMerkleData = 12,
+    ContractsAssetsMerkleData = 11,
     /// See [`ContractsAssetsMerkleMetadata`](crate::tables::merkle::ContractsAssetsMerkleMetadata)
-    ContractsAssetsMerkleMetadata = 13,
+    ContractsAssetsMerkleMetadata = 12,
     /// See [`ContractsStateMerkleData`](crate::tables::merkle::ContractsStateMerkleData)
-    ContractsStateMerkleData = 14,
+    ContractsStateMerkleData = 13,
     /// See [`ContractsStateMerkleMetadata`](crate::tables::merkle::ContractsStateMerkleMetadata)
-    ContractsStateMerkleMetadata = 15,
+    ContractsStateMerkleMetadata = 14,
     /// See [`Messages`](crate::tables::Messages)
-    Messages = 16,
+    Messages = 15,
     /// See [`ProcessedTransactions`](crate::tables::ProcessedTransactions)
-    ProcessedTransactions = 17,
+    ProcessedTransactions = 16,
     /// See [`SealedBlockConsensus`](crate::tables::SealedBlockConsensus)
-    FuelBlockConsensus = 18,
+    FuelBlockConsensus = 17,
     /// See [`ConsensusParametersVersions`](crate::tables::ConsensusParametersVersions)
-    ConsensusParametersVersions = 19,
+    ConsensusParametersVersions = 18,
     /// See [`StateTransitionBytecodeVersions`](crate::tables::StateTransitionBytecodeVersions)
-    StateTransitionBytecodeVersions = 20,
+    StateTransitionBytecodeVersions = 19,
 
     // TODO: Remove this column and use `Metadata` column instead.
     /// Table for genesis state import progress tracking.
-    GenesisMetadata = 21,
+    GenesisMetadata = 20,
 }
 
 impl Column {

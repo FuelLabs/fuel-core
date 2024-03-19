@@ -24,6 +24,7 @@ use fuel_core_types::{
     fuel_crypto::SecretKey,
     fuel_tx::{
         Cacheable,
+        Contract,
         Finalizable,
         Input,
         Output,
@@ -56,9 +57,14 @@ async fn setup(rng: &mut StdRng) -> TestContext {
     let address: Address = rng.gen();
     let salt: Salt = rng.gen();
     let contract = fuel_core::chain_config::fee_collection_contract::generate(address);
-    let witness: Witness = contract.into();
+    let witness: Witness = contract.clone().into();
+    let contract = Contract::from(contract);
+    let root = contract.root();
+    let state_root = Contract::default_state_root();
+    let contract_id = contract.id(&salt, &root, &state_root);
     let mut create_tx = TransactionBuilder::create(witness.clone(), salt, vec![])
         .add_random_fee_input()
+        .add_output(Output::contract_created(contract_id, state_root))
         .finalize();
     create_tx
         .precompute(&ChainId::default())

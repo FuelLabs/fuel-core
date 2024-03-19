@@ -21,6 +21,7 @@ Description of the upcoming release here.
 ### Changed
 
 #### Breaking
+- [#1768](https://github.com/FuelLabs/fuel-core/pull/1768): Moved `ContractsInfo` table to the off-chain database. Removed `salt` field from the `ContractConfig`.
 - [#1761](https://github.com/FuelLabs/fuel-core/pull/1761): Adjustments to the upcoming testnet configs:
   - Decreased the max size of the contract/predicate/script to be 100KB.
   - Decreased the max size of the transaction to be 110KB.
