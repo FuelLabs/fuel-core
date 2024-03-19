@@ -300,11 +300,17 @@ where
         height: BlockHeight,
         block_time: Tai64,
     ) -> anyhow::Result<PartialBlockHeader> {
-        let previous_block_info = self.previous_block_info(height)?;
+        let view = self.view_provider.latest_view();
+        let previous_block_info = self.previous_block_info(height, &view)?;
+        let consensus_parameters_version = view.latest_consensus_parameters_version()?;
+        let state_transition_bytecode_version =
+            view.latest_state_transition_bytecode_version()?;
 
         Ok(PartialBlockHeader {
             application: ApplicationHeader {
                 da_height: previous_block_info.da_height,
+                consensus_parameters_version,
+                state_transition_bytecode_version,
                 generated: Default::default(),
             },
             consensus: ConsensusHeader {
@@ -319,6 +325,7 @@ where
     fn previous_block_info(
         &self,
         height: BlockHeight,
+        view: &ViewProvider::View,
     ) -> anyhow::Result<PreviousBlockInfo> {
         let latest_height = self
             .view_provider
@@ -332,7 +339,6 @@ where
             }
             .into())
         } else {
-            let view = self.view_provider.latest_view();
             // get info from previous block height
             let prev_height = height.pred().expect("We checked the height above");
             let previous_block = view.get_block(&prev_height)?;

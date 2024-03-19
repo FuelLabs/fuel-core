@@ -18,6 +18,10 @@ use fuel_core_types::{
             Block,
             CompressedBlock,
         },
+        header::{
+            ConsensusParametersVersion,
+            StateTransitionBytecodeVersion,
+        },
         primitives::DaBlockHeight,
     },
     fuel_types::{
@@ -205,6 +209,8 @@ impl Default for MockExecutorWithCapture {
 #[derive(Clone, Default, Debug)]
 pub struct MockDb {
     pub blocks: Arc<Mutex<HashMap<BlockHeight, CompressedBlock>>>,
+    pub consensus_parameters_version: ConsensusParametersVersion,
+    pub state_transition_bytecode_version: StateTransitionBytecodeVersion,
 }
 
 impl AtomicView for MockDb {
@@ -241,5 +247,17 @@ impl BlockProducerDatabase for MockDb {
         Ok(Bytes32::new(
             [u8::try_from(*height.deref()).expect("Test use small values"); 32],
         ))
+    }
+
+    fn latest_consensus_parameters_version(
+        &self,
+    ) -> StorageResult<ConsensusParametersVersion> {
+        Ok(self.consensus_parameters_version)
+    }
+
+    fn latest_state_transition_bytecode_version(
+        &self,
+    ) -> StorageResult<StateTransitionBytecodeVersion> {
+        Ok(self.state_transition_bytecode_version)
     }
 }

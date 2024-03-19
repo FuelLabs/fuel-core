@@ -229,7 +229,13 @@ impl From<Block> for PartialFuelBlock {
             Block::V1(BlockV1 {
                 header:
                     BlockHeader::V1(BlockHeaderV1 {
-                        application: ApplicationHeader { da_height, .. },
+                        application:
+                            ApplicationHeader {
+                                da_height,
+                                consensus_parameters_version,
+                                state_transition_bytecode_version,
+                                ..
+                            },
                         consensus:
                             ConsensusHeader {
                                 prev_root,
@@ -244,6 +250,8 @@ impl From<Block> for PartialFuelBlock {
                 header: PartialBlockHeader {
                     application: ApplicationHeader {
                         da_height,
+                        consensus_parameters_version,
+                        state_transition_bytecode_version,
                         generated: Empty {},
                     },
                     consensus: ConsensusHeader {
