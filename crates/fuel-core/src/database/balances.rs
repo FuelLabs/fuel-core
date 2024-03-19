@@ -1,12 +1,21 @@
 use fuel_core_chain_config::TableEntry;
 use fuel_core_storage::{
-    tables::{merkle::ContractsAssetsMerkleMetadata, ContractsAssets},
-    ContractsAssetKey, Error as StorageError, StorageAsRef, StorageBatchMutate,
+    tables::{
+        merkle::ContractsAssetsMerkleMetadata,
+        ContractsAssets,
+    },
+    ContractsAssetKey,
+    Error as StorageError,
+    StorageAsRef,
+    StorageBatchMutate,
     StorageInspect,
 };
 use fuel_core_types::{
     fuel_asm::Word,
-    fuel_types::{AssetId, ContractId},
+    fuel_types::{
+        AssetId,
+        ContractId,
+    },
 };
 use itertools::Itertools;
 

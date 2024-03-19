@@ -1,15 +1,26 @@
 use crate::database::Database;
 use fuel_core_chain_config::TableEntry;
 use fuel_core_storage::{
-    iter::{IterDirection, IteratorOverTable},
+    iter::{
+        IterDirection,
+        IteratorOverTable,
+    },
     not_found,
     tables::{
-        ContractsAssets, ContractsInfo, ContractsLatestUtxo, ContractsRawCode,
+        ContractsAssets,
+        ContractsInfo,
+        ContractsLatestUtxo,
+        ContractsRawCode,
         ContractsState,
     },
-    ContractsAssetKey, Result as StorageResult, StorageAsRef,
+    ContractsAssetKey,
+    Result as StorageResult,
+    StorageAsRef,
 };
-use fuel_core_types::fuel_types::{AssetId, ContractId};
+use fuel_core_types::fuel_types::{
+    AssetId,
+    ContractId,
+};
 use itertools::Itertools;
 
 impl Database {
@@ -118,7 +129,10 @@ mod tests {
     use crate::database::database_description::on_chain::OnChain;
     use fuel_core_storage::StorageAsMut;
     use fuel_core_types::fuel_tx::Contract;
-    use rand::{RngCore, SeedableRng};
+    use rand::{
+        RngCore,
+        SeedableRng,
+    };
 
     #[test]
     fn raw_code_put_huge_contract() {

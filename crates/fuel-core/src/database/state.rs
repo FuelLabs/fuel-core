@@ -1,10 +1,19 @@
 use fuel_core_chain_config::TableEntry;
 use fuel_core_storage::{
-    tables::{merkle::ContractsStateMerkleMetadata, ContractsState},
-    ContractsStateKey, Error as StorageError, StorageAsRef, StorageBatchMutate,
+    tables::{
+        merkle::ContractsStateMerkleMetadata,
+        ContractsState,
+    },
+    ContractsStateKey,
+    Error as StorageError,
+    StorageAsRef,
+    StorageBatchMutate,
     StorageInspect,
 };
-use fuel_core_types::fuel_types::{Bytes32, ContractId};
+use fuel_core_types::fuel_types::{
+    Bytes32,
+    ContractId,
+};
 use itertools::Itertools;
 
 pub trait StateInitializer {

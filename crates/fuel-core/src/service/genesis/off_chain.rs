@@ -1,14 +1,23 @@
 use crate::{
-    database::{database_description::off_chain::OffChain, Database},
+    database::{
+        database_description::off_chain::OffChain,
+        Database,
+    },
     graphql_api::worker_service,
     service::Config,
 };
 use fuel_core_chain_config::TableEntry;
 use fuel_core_storage::{
-    tables::{Coins, Messages},
+    tables::{
+        Coins,
+        Messages,
+    },
     transactional::WriteTransaction,
 };
-use fuel_core_types::{entities::coins::coin::Coin, services::executor::Event};
+use fuel_core_types::{
+    entities::coins::coin::Coin,
+    services::executor::Event,
+};
 use std::borrow::Cow;
 
 fn process_messages(

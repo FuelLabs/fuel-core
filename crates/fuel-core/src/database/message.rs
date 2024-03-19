@@ -1,16 +1,32 @@
 use crate::{
-    database::{database_description::off_chain::OffChain, Database},
-    fuel_core_graphql_api::storage::messages::{OwnedMessageIds, OwnedMessageKey},
+    database::{
+        database_description::off_chain::OffChain,
+        Database,
+    },
+    fuel_core_graphql_api::storage::messages::{
+        OwnedMessageIds,
+        OwnedMessageKey,
+    },
 };
 use fuel_core_chain_config::TableEntry;
 use fuel_core_storage::{
-    iter::{IterDirection, IteratorOverTable},
-    tables::{Messages, SpentMessages},
-    Error as StorageError, Result as StorageResult,
+    iter::{
+        IterDirection,
+        IteratorOverTable,
+    },
+    tables::{
+        Messages,
+        SpentMessages,
+    },
+    Error as StorageError,
+    Result as StorageResult,
 };
 use fuel_core_types::{
     entities::message::Message,
-    fuel_types::{Address, Nonce},
+    fuel_types::{
+        Address,
+        Nonce,
+    },
 };
 use itertools::Itertools;
 

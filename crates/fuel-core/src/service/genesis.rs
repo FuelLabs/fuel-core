@@ -1,27 +1,60 @@
 use self::workers::GenesisWorkers;
 use crate::{
-    database::{genesis_progress::GenesisMetadata, Database},
+    database::{
+        genesis_progress::GenesisMetadata,
+        Database,
+    },
     service::config::Config,
 };
 use anyhow::anyhow;
-use fuel_core_chain_config::{GenesisCommitment, TableEntry};
+use fuel_core_chain_config::{
+    GenesisCommitment,
+    TableEntry,
+};
 use fuel_core_storage::{
-    tables::{Coins, ContractsInfo, ContractsLatestUtxo, ContractsRawCode, Messages},
-    transactional::{Changes, ReadTransaction, StorageTransaction},
+    tables::{
+        Coins,
+        ContractsInfo,
+        ContractsLatestUtxo,
+        ContractsRawCode,
+        Messages,
+    },
+    transactional::{
+        Changes,
+        ReadTransaction,
+        StorageTransaction,
+    },
     StorageAsMut,
 };
 use fuel_core_types::{
     blockchain::{
         block::Block,
-        consensus::{Consensus, Genesis},
-        header::{ApplicationHeader, ConsensusHeader, PartialBlockHeader},
-        primitives::{DaBlockHeight, Empty},
+        consensus::{
+            Consensus,
+            Genesis,
+        },
+        header::{
+            ApplicationHeader,
+            ConsensusHeader,
+            PartialBlockHeader,
+        },
+        primitives::{
+            DaBlockHeight,
+            Empty,
+        },
         SealedBlock,
     },
-    entities::{coins::coin::Coin, message::Message},
-    fuel_types::{BlockHeight, Bytes32},
+    entities::{
+        coins::coin::Coin,
+        message::Message,
+    },
+    fuel_types::{
+        BlockHeight,
+        Bytes32,
+    },
     services::block_importer::{
-        ImportResult, UncommittedResult as UncommittedImportResult,
+        ImportResult,
+        UncommittedResult as UncommittedImportResult,
     },
 };
 use strum::IntoEnumIterator;
@@ -31,7 +64,10 @@ mod runner;
 mod workers;
 
 use crate::database::genesis_progress::GenesisResource;
-pub use runner::{GenesisRunner, TransactionOpener};
+pub use runner::{
+    GenesisRunner,
+    TransactionOpener,
+};
 
 /// Performs the importing of the genesis block from the snapshot.
 pub async fn execute_genesis_block(

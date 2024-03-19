@@ -1,13 +1,30 @@
 use crate::GenesisCommitment;
-use fuel_core_storage::{tables::Coins, MerkleRoot};
+use fuel_core_storage::{
+    tables::Coins,
+    MerkleRoot,
+};
 use fuel_core_types::{
-    entities::coins::coin::{CompressedCoin, CompressedCoinV1},
+    entities::coins::coin::{
+        CompressedCoin,
+        CompressedCoinV1,
+    },
     fuel_crypto::Hasher,
-    fuel_tx::{TxPointer, UtxoId},
-    fuel_types::{Address, AssetId, BlockHeight, Bytes32},
+    fuel_tx::{
+        TxPointer,
+        UtxoId,
+    },
+    fuel_types::{
+        Address,
+        AssetId,
+        BlockHeight,
+        Bytes32,
+    },
     fuel_vm::SecretKey,
 };
-use serde::{Deserialize, Serialize};
+use serde::{
+    Deserialize,
+    Serialize,
+};
 
 use super::table_entry::TableEntry;
 
@@ -139,7 +156,10 @@ impl GenesisCommitment for CompressedCoin {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use fuel_core_types::{fuel_types::Address, fuel_vm::SecretKey};
+    use fuel_core_types::{
+        fuel_types::Address,
+        fuel_vm::SecretKey,
+    };
 
     #[test]
     fn test_generate_unique_utxo_id() {

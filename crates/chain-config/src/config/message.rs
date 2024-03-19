@@ -1,13 +1,29 @@
-use crate::{serialization::HexIfHumanReadable, GenesisCommitment, TableEntry};
-use fuel_core_storage::{tables::Messages, MerkleRoot};
+use crate::{
+    serialization::HexIfHumanReadable,
+    GenesisCommitment,
+    TableEntry,
+};
+use fuel_core_storage::{
+    tables::Messages,
+    MerkleRoot,
+};
 use fuel_core_types::{
     blockchain::primitives::DaBlockHeight,
-    entities::message::{Message, MessageV1},
+    entities::message::{
+        Message,
+        MessageV1,
+    },
     fuel_asm::Word,
     fuel_crypto::Hasher,
-    fuel_types::{Address, Nonce},
+    fuel_types::{
+        Address,
+        Nonce,
+    },
 };
-use serde::{Deserialize, Serialize};
+use serde::{
+    Deserialize,
+    Serialize,
+};
 use serde_with::serde_as;
 
 #[serde_as]

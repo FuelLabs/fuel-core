@@ -1,22 +1,44 @@
 use super::{
-    init_coin, init_contract_info, init_contract_latest_utxo, init_contract_raw_code,
-    init_da_message, runner::ProcessState, GenesisRunner,
+    init_coin,
+    init_contract_info,
+    init_contract_latest_utxo,
+    init_contract_raw_code,
+    init_da_message,
+    runner::ProcessState,
+    GenesisRunner,
 };
-use std::{marker::PhantomData, sync::Arc};
+use std::{
+    marker::PhantomData,
+    sync::Arc,
+};
 
 use crate::database::{
-    balances::BalancesInitializer, genesis_progress::GenesisResource,
-    state::StateInitializer, Database,
+    balances::BalancesInitializer,
+    genesis_progress::GenesisResource,
+    state::StateInitializer,
+    Database,
 };
-use fuel_core_chain_config::{Group, SnapshotReader, TableEntry};
+use fuel_core_chain_config::{
+    Group,
+    SnapshotReader,
+    TableEntry,
+};
 use fuel_core_storage::{
     tables::{
-        Coins, ContractsAssets, ContractsInfo, ContractsLatestUtxo, ContractsRawCode,
-        ContractsState, Messages,
+        Coins,
+        ContractsAssets,
+        ContractsInfo,
+        ContractsLatestUtxo,
+        ContractsRawCode,
+        ContractsState,
+        Messages,
     },
     transactional::StorageTransaction,
 };
-use fuel_core_types::{blockchain::primitives::DaBlockHeight, fuel_types::BlockHeight};
+use fuel_core_types::{
+    blockchain::primitives::DaBlockHeight,
+    fuel_types::BlockHeight,
+};
 use tokio::sync::Notify;
 use tokio_util::sync::CancellationToken;
 

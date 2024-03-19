@@ -1,18 +1,31 @@
 use crate::{
-    database::{database_description::off_chain::OffChain, Database},
-    fuel_core_graphql_api::storage::coins::{owner_coin_id_key, OwnedCoins},
+    database::{
+        database_description::off_chain::OffChain,
+        Database,
+    },
+    fuel_core_graphql_api::storage::coins::{
+        owner_coin_id_key,
+        OwnedCoins,
+    },
 };
 use fuel_core_chain_config::TableEntry;
 use fuel_core_storage::{
-    iter::{IterDirection, IteratorOverTable},
+    iter::{
+        IterDirection,
+        IteratorOverTable,
+    },
     not_found,
     tables::Coins,
-    Result as StorageResult, StorageAsRef,
+    Result as StorageResult,
+    StorageAsRef,
 };
 use fuel_core_txpool::types::TxId;
 use fuel_core_types::{
     entities::coins::coin::CompressedCoin,
-    fuel_tx::{Address, UtxoId},
+    fuel_tx::{
+        Address,
+        UtxoId,
+    },
 };
 use itertools::Itertools;
 
