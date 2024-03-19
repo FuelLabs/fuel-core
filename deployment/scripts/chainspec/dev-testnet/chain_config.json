@@ -1,5 +1,5 @@
 {
-  "chain_name": "Testnet",
+  "chain_name": "Upgradable Dev Testnet",
   "block_gas_limit": 1000000000,
   "consensus_parameters": {
     "tx_params": {
