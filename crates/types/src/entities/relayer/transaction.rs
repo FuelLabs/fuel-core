@@ -64,7 +64,8 @@ impl RelayedTransactionV1 {
         let hasher = fuel_crypto::Hasher::default()
             .chain(self.max_gas.to_be_bytes())
             .chain(self.serialized_transaction.as_slice());
-
+        /// TODO: This needs some kind of nonce, potentially using the block number + event idx
+        /// if the contract won't provide it.
         RelayedTransactionId((*hasher.finalize()).into())
     }
 }
