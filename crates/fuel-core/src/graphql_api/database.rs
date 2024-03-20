@@ -40,6 +40,7 @@ use fuel_core_types::{
     fuel_tx::{
         Address,
         AssetId,
+        Salt,
         TxPointer,
         UtxoId,
     },
@@ -220,5 +221,9 @@ impl OffChainDatabase for ReadView {
     ) -> BoxedIter<StorageResult<(TxPointer, TxId)>> {
         self.off_chain
             .owned_transactions_ids(owner, start, direction)
+    }
+
+    fn contract_salt(&self, contract_id: &ContractId) -> StorageResult<Salt> {
+        self.off_chain.contract_salt(contract_id)
     }
 }

@@ -13,7 +13,6 @@ use fuel_core_storage::{
     structured_storage::StructuredStorage,
     tables::{
         Coins,
-        ContractsInfo,
         ContractsLatestUtxo,
         FuelBlocks,
         Messages,
@@ -60,7 +59,6 @@ use fuel_core_types::{
             MintAssetId,
             MintGasPrice,
             OutputContract,
-            Salt,
             TxPointer as TxPointerField,
         },
         input,
@@ -993,19 +991,6 @@ where
             })
         }
 
-        // TODO: Move to an off-chain worker: https://github.com/FuelLabs/fuel-core/issues/1721
-        if let Some(create) = tx.as_create() {
-            let contract_id = create
-                .metadata()
-                .as_ref()
-                .expect("The metadata always should exist after VM execution stage")
-                .contract_id;
-            let salt = *create.salt();
-            tx_st_transaction
-                .storage::<ContractsInfo>()
-                .insert(&contract_id, &(salt.into()))?;
-        }
-
         let final_tx = tx.into();
 
         // Store tx into the block db transaction
@@ -1075,7 +1060,7 @@ where
                 }
                 Input::Contract(contract) => {
                     if !db
-                        .storage::<ContractsInfo>()
+                        .storage::<ContractsLatestUtxo>()
                         .contains_key(&contract.contract_id)?
                     {
                         return Err(TransactionValidityError::ContractDoesNotExist(

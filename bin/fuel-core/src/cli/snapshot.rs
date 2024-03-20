@@ -263,7 +263,6 @@ mod tests {
         tables::{
             Coins,
             ContractsAssets,
-            ContractsInfo,
             ContractsLatestUtxo,
             ContractsRawCode,
             ContractsState,
@@ -288,10 +287,7 @@ mod tests {
                 CompressedCoin,
                 CompressedCoinV1,
             },
-            contract::{
-                ContractUtxoInfo,
-                ContractsInfoType,
-            },
+            contract::ContractUtxoInfo,
             message::{
                 Message,
                 MessageV1,
@@ -301,7 +297,6 @@ mod tests {
             TxPointer,
             UtxoId,
         },
-        fuel_vm::Salt,
     };
     use rand::{
         rngs::StdRng,
@@ -449,12 +444,6 @@ mod tests {
                 .insert(&contract_id, code.as_ref())
                 .unwrap();
 
-            let salt: Salt = self.rng.gen();
-            self.db
-                .storage_as_mut::<ContractsInfo>()
-                .insert(&contract_id, &ContractsInfoType::V1(salt.into()))
-                .unwrap();
-
             let utxo_id = UtxoId::new(self.rng.gen(), self.rng.gen());
             let tx_pointer = TxPointer::new(self.rng.gen(), self.rng.gen());
 
@@ -469,7 +458,6 @@ mod tests {
             ContractConfig {
                 contract_id,
                 code,
-                salt,
                 tx_id: *utxo_id.tx_id(),
                 output_index: utxo_id.output_index(),
                 tx_pointer_block_height: tx_pointer.block_height(),

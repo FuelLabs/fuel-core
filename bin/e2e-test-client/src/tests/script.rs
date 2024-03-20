@@ -16,7 +16,10 @@ use fuel_core_types::{
         Transaction,
         UniqueIdentifier,
     },
-    fuel_types::canonical::Deserialize,
+    fuel_types::{
+        canonical::Deserialize,
+        Salt,
+    },
     services::executor::TransactionExecutionResult,
 };
 use itertools::Itertools;
@@ -101,6 +104,7 @@ pub async fn dry_run_multiple_txs(ctx: &TestContext) -> Result<(), Failed> {
 }
 
 fn load_contract(
+    salt: Salt,
     path: impl AsRef<Path>,
 ) -> Result<(ContractConfig, Vec<StorageSlot>), Failed> {
     let snapshot = SnapshotMetadata::read(path)?;
@@ -129,7 +133,7 @@ fn load_contract(
         }
         let mut contract_config = contracts[0].clone();
 
-        contract_config.update_contract_id(&state);
+        contract_config.update_contract_id(salt, &state);
 
         contract_config
     };
@@ -139,7 +143,11 @@ fn load_contract(
 
 // Maybe deploy a contract with large state and execute the script
 pub async fn run_contract_large_state(ctx: &TestContext) -> Result<(), Failed> {
-    let (contract_config, state) = load_contract("./src/tests/test_data/large_state")?;
+    let salt: Salt = "0x3b91bab936e4f3db9453046b34c142514e78b64374bf61a04ab45afbd6bca83e"
+        .parse()
+        .expect("Should be able to parse the salt");
+    let (contract_config, state) =
+        load_contract(salt, "./src/tests/test_data/large_state")?;
     let dry_run = include_bytes!("test_data/large_state/tx.json");
     let dry_run: Transaction = serde_json::from_slice(dry_run.as_ref())
         .expect("Should be able do decode the Transaction");
@@ -154,11 +162,9 @@ pub async fn run_contract_large_state(ctx: &TestContext) -> Result<(), Failed> {
     // if the contract is not deployed yet, let's deploy it
     let result = ctx.bob.client.contract(&contract_id).await;
     if result?.is_none() {
-        let deployment_request = ctx.bob.deploy_contract(contract_config, state);
+        let deployment_request = ctx.bob.deploy_contract(contract_config, salt, state);
 
-        // wait for contract to deploy in 300 seconds because `state_root` calculation is too long.
-        // https://github.com/FuelLabs/fuel-core/issues/1143
-        timeout(Duration::from_secs(300), deployment_request).await??;
+        timeout(Duration::from_secs(20), deployment_request).await??;
     }
 
     _dry_runs(ctx, &[dry_run], 1000, DryRunResult::MayFail).await

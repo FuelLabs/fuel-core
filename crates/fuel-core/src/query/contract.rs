@@ -1,4 +1,7 @@
-use crate::fuel_core_graphql_api::ports::OnChainDatabase;
+use crate::fuel_core_graphql_api::ports::{
+    OffChainDatabase,
+    OnChainDatabase,
+};
 use fuel_core_storage::{
     iter::{
         BoxedIter,
@@ -7,7 +10,6 @@ use fuel_core_storage::{
     not_found,
     tables::{
         ContractsAssets,
-        ContractsInfo,
         ContractsRawCode,
     },
     Result as StorageResult,
@@ -43,7 +45,7 @@ pub trait ContractQueryData: Send + Sync {
     ) -> BoxedIter<StorageResult<ContractBalance>>;
 }
 
-impl<D: OnChainDatabase + ?Sized> ContractQueryData for D {
+impl<D: OnChainDatabase + OffChainDatabase + ?Sized> ContractQueryData for D {
     fn contract_id(&self, id: ContractId) -> StorageResult<ContractId> {
         let contract_exists = self.storage::<ContractsRawCode>().contains_key(&id)?;
         if contract_exists {
@@ -64,13 +66,7 @@ impl<D: OnChainDatabase + ?Sized> ContractQueryData for D {
     }
 
     fn contract_salt(&self, id: ContractId) -> StorageResult<Salt> {
-        let salt = *self
-            .storage::<ContractsInfo>()
-            .get(&id)?
-            .ok_or(not_found!(ContractsInfo))?
-            .salt();
-
-        Ok(salt)
+        self.contract_salt(&id)
     }
 
     fn contract_balance(

@@ -41,6 +41,7 @@ use fuel_core_types::{
         canonical::Serialize,
         Address,
         AssetId,
+        Salt,
     },
     fuel_vm::SecretKey,
 };
@@ -300,6 +301,7 @@ impl Wallet {
     pub async fn deploy_contract(
         &self,
         config: ContractConfig,
+        salt: Salt,
         slots: Vec<StorageSlot>,
     ) -> anyhow::Result<()> {
         let asset_id = AssetId::BASE;
@@ -313,7 +315,6 @@ impl Wallet {
         let ContractConfig {
             contract_id,
             code: bytes,
-            salt,
             ..
         } = config;
         let state_root = Contract::initial_state_root(slots.iter());

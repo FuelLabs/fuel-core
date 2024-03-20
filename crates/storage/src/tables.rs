@@ -13,10 +13,7 @@ use fuel_core_types::{
     },
     entities::{
         coins::coin::CompressedCoin,
-        contract::{
-            ContractUtxoInfo,
-            ContractsInfoType,
-        },
+        contract::ContractUtxoInfo,
         message::Message,
     },
     fuel_tx::{
@@ -60,16 +57,6 @@ impl Mappable for ContractsLatestUtxo {
     /// The latest UTXO info
     type Value = Self::OwnedValue;
     type OwnedValue = ContractUtxoInfo;
-}
-
-/// Contract info
-pub struct ContractsInfo;
-
-impl Mappable for ContractsInfo {
-    type Key = Self::OwnedKey;
-    type OwnedKey = ContractId;
-    type Value = Self::OwnedValue;
-    type OwnedValue = ContractsInfoType;
 }
 
 /// The table of consensus metadata associated with sealed (finalized) blocks

@@ -8,7 +8,10 @@ use crate::{
             worker::Transactional,
             OffChainDatabase,
         },
-        storage::transactions::OwnedTransactionIndexCursor,
+        storage::{
+            contracts::ContractsInfo,
+            transactions::OwnedTransactionIndexCursor,
+        },
     },
 };
 use fuel_core_storage::{
@@ -24,12 +27,17 @@ use fuel_core_storage::{
     },
     Error as StorageError,
     Result as StorageResult,
+    StorageAsRef,
 };
-use fuel_core_txpool::types::TxId;
+use fuel_core_txpool::types::{
+    ContractId,
+    TxId,
+};
 use fuel_core_types::{
     blockchain::primitives::BlockId,
     fuel_tx::{
         Address,
+        Salt,
         TxPointer,
         UtxoId,
     },
@@ -87,6 +95,16 @@ impl OffChainDatabase for Database<OffChain> {
         self.owned_transactions(owner, start, Some(direction))
             .map(|result| result.map_err(StorageError::from))
             .into_boxed()
+    }
+
+    fn contract_salt(&self, contract_id: &ContractId) -> StorageResult<Salt> {
+        let salt = *self
+            .storage_as_ref::<ContractsInfo>()
+            .get(contract_id)?
+            .ok_or(not_found!(ContractsInfo))?
+            .salt();
+
+        Ok(salt)
     }
 }
 
