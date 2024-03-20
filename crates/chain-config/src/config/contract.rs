@@ -14,6 +14,7 @@ use fuel_core_types::{
         Salt,
     },
 };
+use itertools::Itertools;
 use serde::{
     Deserialize,
     Serialize,
@@ -47,6 +48,16 @@ pub struct ContractState {
     pub key: Bytes32,
     #[serde_as(as = "HexIfHumanReadable")]
     pub value: Vec<u8>,
+}
+
+impl TryFrom<ContractState> for StorageSlot {
+    type Error = anyhow::Error;
+
+    fn try_from(value: ContractState) -> Result<Self, Self::Error> {
+        let key = value.key;
+        let value = Bytes32::try_from(value.value.as_slice())?;
+        Ok(Self::new(key, value))
+    }
 }
 
 #[cfg(feature = "test-helpers")]
@@ -88,18 +99,33 @@ impl ContractConfig {
 #[cfg(feature = "test-helpers")]
 impl crate::Randomize for ContractConfig {
     fn randomize(mut rng: impl ::rand::Rng) -> Self {
+        let code = Bytes32::randomize(&mut rng).to_vec();
+        let salt = crate::Randomize::randomize(&mut rng);
+        let states = vec![ContractState {
+            key: Bytes32::randomize(&mut rng),
+            value: Bytes32::randomize(&mut rng).to_vec(),
+        }];
+
+        let contract = Contract::from(code.clone());
+        let state_root = {
+            let states = states
+                .iter()
+                .cloned()
+                .map(|state| StorageSlot::try_from(state).expect("32 bytes"))
+                .collect_vec();
+            Contract::initial_state_root(states.iter())
+        };
+        let contract_id = contract.id(&salt, &contract.root(), &state_root);
+
         Self {
-            contract_id: crate::Randomize::randomize(&mut rng),
-            code: Bytes32::randomize(&mut rng).to_vec(),
-            salt: crate::Randomize::randomize(&mut rng),
+            contract_id,
+            code,
+            salt,
             tx_id: crate::Randomize::randomize(&mut rng),
             output_index: rng.gen(),
             tx_pointer_block_height: crate::Randomize::randomize(&mut rng),
             tx_pointer_tx_idx: rng.gen(),
-            states: vec![ContractState {
-                key: Bytes32::randomize(&mut rng),
-                value: Bytes32::randomize(&mut rng).to_vec(),
-            }],
+            states,
             balances: vec![ContractAsset {
                 asset_id: crate::Randomize::randomize(&mut rng),
                 amount: rng.gen(),

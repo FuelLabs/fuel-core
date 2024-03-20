@@ -293,525 +293,460 @@ fn init_da_message(
     Ok(())
 }
 
-// #[cfg(test)]
-// mod tests {
-//     use super::*;
-//
-//     use crate::{
-//         combined_database::CombinedDatabase,
-//         database::genesis_progress::{
-//             GenesisProgressInspect,
-//             GenesisResource,
-//         },
-//         service::{
-//             config::Config,
-//             FuelService,
-//             Task,
-//         },
-//     };
-//     use fuel_core_chain_config::{
-//         ChainConfig,
-//         CoinConfig,
-//         ContractBalanceConfig,
-//         ContractConfig,
-//         ContractStateConfig,
-//         MessageConfig,
-//         SnapshotReader,
-//         StateConfig,
-//     };
-//     use fuel_core_services::RunnableService;
-//     use fuel_core_storage::{
-//         tables::{
-//             Coins,
-//             ContractsAssets,
-//             ContractsState,
-//         },
-//         StorageAsRef,
-//     };
-//     use fuel_core_types::{
-//         blockchain::primitives::DaBlockHeight,
-//         entities::coins::coin::Coin,
-//         fuel_asm::op,
-//         fuel_tx::UtxoId,
-//         fuel_types::{
-//             Address,
-//             AssetId,
-//             BlockHeight,
-//             ContractId,
-//             Salt,
-//         },
-//         fuel_vm::Contract,
-//     };
-//     use itertools::Itertools;
-//     use rand::{
-//         rngs::StdRng,
-//         Rng,
-//         RngCore,
-//         SeedableRng,
-//     };
-//     use std::vec;
-//
-//     #[tokio::test]
-//     async fn config_initializes_block_height() {
-//         let block_height = BlockHeight::from(99u32);
-//         let state_reader = SnapshotReader::in_memory(StateConfig {
-//             block_height,
-//             ..Default::default()
-//         });
-//         let service_config = Config {
-//             state_reader,
-//             ..Config::local_node()
-//         };
-//
-//         let db = Database::default();
-//         FuelService::from_database(db.clone(), service_config)
-//             .await
-//             .unwrap();
-//
-//         assert_eq!(
-//             block_height,
-//             db.latest_height()
-//                 .unwrap()
-//                 .expect("Expected a block height to be set")
-//         )
-//     }
-//
-//     #[tokio::test]
-//     async fn genesis_columns_are_cleared_after_import() {
-//         let mut rng = StdRng::seed_from_u64(10);
-//
-//         let coins = (0..1000)
-//             .map(|_| CoinConfig {
-//                 amount: 10,
-//                 tx_id: rng.gen(),
-//                 ..Default::default()
-//             })
-//             .collect_vec();
-//
-//         let messages = (0..1000)
-//             .map(|_| MessageConfig {
-//                 sender: rng.gen(),
-//                 recipient: rng.gen(),
-//                 nonce: rng.gen(),
-//                 amount: rng.gen(),
-//                 data: vec![rng.gen()],
-//                 da_height: DaBlockHeight(0),
-//             })
-//             .collect_vec();
-//
-//         let contracts = (0..1000)
-//             .map(|_| given_contract_config(&mut rng))
-//             .collect_vec();
-//
-//         let contract_state = (0..1000)
-//             .map(|_| ContractStateConfig {
-//                 contract_id: rng.gen(),
-//                 key: rng.gen(),
-//                 value: [1, 2, 3].to_vec(),
-//             })
-//             .collect_vec();
-//
-//         let contract_balance = (0..1000)
-//             .map(|_| ContractBalanceConfig {
-//                 contract_id: rng.gen(),
-//                 asset_id: rng.gen(),
-//                 amount: rng.next_u64(),
-//             })
-//             .collect_vec();
-//
-//         let state = StateConfig {
-//             coins,
-//             messages,
-//             contracts,
-//             contract_state,
-//             contract_balance,
-//             block_height: BlockHeight::from(0u32),
-//             da_block_height: Default::default(),
-//         };
-//         let state_reader = SnapshotReader::in_memory(state);
-//
-//         let service_config = Config {
-//             state_reader,
-//             ..Config::local_node()
-//         };
-//
-//         let db = Database::default();
-//         FuelService::from_database(db.clone(), service_config)
-//             .await
-//             .unwrap();
-//
-//         use strum::IntoEnumIterator;
-//         for key in GenesisResource::iter() {
-//             assert!(db.genesis_progress(&key).is_none());
-//         }
-//     }
-//
-//     #[tokio::test]
-//     async fn config_state_initializes_multiple_coins_with_different_owners_and_asset_ids()
-//     {
-//         let mut rng = StdRng::seed_from_u64(10);
-//
-//         // a coin with all options set
-//         let alice: Address = rng.gen();
-//         let asset_id_alice: AssetId = rng.gen();
-//         let alice_value = rng.gen();
-//         let alice_block_created: BlockHeight = rng.next_u32().into();
-//         let alice_block_created_tx_idx = rng.gen();
-//         let alice_tx_id = rng.gen();
-//         let alice_output_index = rng.gen();
-//         let alice_utxo_id = UtxoId::new(alice_tx_id, alice_output_index);
-//
-//         // a coin with minimal options set
-//         let bob: Address = rng.gen();
-//         let asset_id_bob: AssetId = rng.gen();
-//         let bob_value = rng.gen();
-//
-//         let starting_height = {
-//             let mut h: u32 = alice_block_created.into();
-//             h = h.saturating_add(rng.next_u32());
-//             h.into()
-//         };
-//         let state = StateConfig {
-//             coins: vec![
-//                 CoinConfig {
-//                     tx_id: alice_tx_id,
-//                     output_index: alice_output_index,
-//                     tx_pointer_block_height: alice_block_created,
-//                     tx_pointer_tx_idx: alice_block_created_tx_idx,
-//                     owner: alice,
-//                     amount: alice_value,
-//                     asset_id: asset_id_alice,
-//                 },
-//                 CoinConfig {
-//                     owner: bob,
-//                     amount: bob_value,
-//                     asset_id: asset_id_bob,
-//                     ..Default::default()
-//                 },
-//             ],
-//             block_height: starting_height,
-//             ..Default::default()
-//         };
-//         let state_reader = SnapshotReader::in_memory(state);
-//
-//         let service_config = Config {
-//             state_reader,
-//             ..Config::local_node()
-//         };
-//
-//         let db = CombinedDatabase::default();
-//         FuelService::from_combined_database(db.clone(), service_config)
-//             .await
-//             .unwrap();
-//
-//         let alice_coins = get_coins(&db, &alice);
-//         let bob_coins = get_coins(&db, &bob);
-//
-//         assert!(matches!(
-//             alice_coins.as_slice(),
-//             &[Coin {
-//                 utxo_id,
-//                 owner,
-//                 amount,
-//                 asset_id,
-//                 tx_pointer,
-//                 ..
-//             }] if utxo_id == alice_utxo_id
-//             && owner == alice
-//             && amount == alice_value
-//             && asset_id == asset_id_alice
-//             && tx_pointer.block_height() == alice_block_created
-//         ));
-//         assert!(matches!(
-//             bob_coins.as_slice(),
-//             &[Coin {
-//                 owner,
-//                 amount,
-//                 asset_id,
-//                 ..
-//             }] if owner == bob
-//             && amount == bob_value
-//             && asset_id == asset_id_bob
-//         ));
-//     }
-//
-//     #[tokio::test]
-//     async fn config_state_initializes_contract_state() {
-//         let mut rng = StdRng::seed_from_u64(10);
-//
-//         let salt: Salt = rng.gen();
-//         let contract = Contract::from(op::ret(0x10).to_bytes().to_vec());
-//         let root = contract.root();
-//         let contract_id = contract.id(&salt, &root, &Contract::default_state_root());
-//
-//         let test_key = rng.gen();
-//         let test_value = [1, 2, 3].to_vec();
-//         let contract_state = ContractStateConfig {
-//             contract_id,
-//             key: test_key,
-//             value: test_value.clone(),
-//         };
-//
-//         let state = StateConfig {
-//             contracts: vec![ContractConfig {
-//                 contract_id,
-//                 code: contract.into(),
-//                 salt,
-//                 tx_id: rng.gen(),
-//                 output_index: rng.gen(),
-//                 tx_pointer_block_height: 0.into(),
-//                 tx_pointer_tx_idx: rng.gen(),
-//             }],
-//             contract_state: vec![contract_state],
-//             ..Default::default()
-//         };
-//         let state_reader = SnapshotReader::in_memory(state);
-//
-//         let service_config = Config {
-//             chain_config: ChainConfig::local_testnet(),
-//             state_reader,
-//             ..Config::local_node()
-//         };
-//
-//         let db = Database::default();
-//         FuelService::from_database(db.clone(), service_config)
-//             .await
-//             .unwrap();
-//
-//         let ret = db
-//             .storage::<ContractsState>()
-//             .get(&(&contract_id, &test_key).into())
-//             .unwrap()
-//             .expect("Expect a state entry to exist with test_key")
-//             .into_owned();
-//
-//         assert_eq!(test_value.to_vec(), ret.0)
-//     }
-//
-//     #[cfg(feature = "test-helpers")]
-//     #[tokio::test]
-//     async fn tests_init_da_msgs() {
-//         let mut rng = StdRng::seed_from_u64(32492);
-//
-//         let msg = MessageConfig {
-//             sender: rng.gen(),
-//             recipient: rng.gen(),
-//             nonce: rng.gen(),
-//             amount: rng.gen(),
-//             data: vec![rng.gen()],
-//             da_height: DaBlockHeight(0),
-//         };
-//
-//         let state = StateConfig {
-//             messages: vec![msg.clone()],
-//             ..Default::default()
-//         };
-//         let state_reader = SnapshotReader::in_memory(state);
-//
-//         let config = Config {
-//             state_reader,
-//             ..Config::local_node()
-//         };
-//
-//         let db = Database::default();
-//
-//         execute_and_commit_genesis_block(&config, &db)
-//             .await
-//             .unwrap();
-//
-//         let expected_msg: Message = msg.into();
-//
-//         let ret_msg = db
-//             .storage::<Messages>()
-//             .get(expected_msg.id())
-//             .unwrap()
-//             .unwrap()
-//             .into_owned();
-//
-//         assert_eq!(expected_msg, ret_msg);
-//     }
-//
-//     #[tokio::test]
-//     async fn config_state_initializes_contract_balance() {
-//         let mut rng = StdRng::seed_from_u64(10);
-//
-//         let salt: Salt = rng.gen();
-//         let contract = Contract::from(op::ret(0x10).to_bytes().to_vec());
-//         let root = contract.root();
-//         let contract_id = contract.id(&salt, &root, &Contract::default_state_root());
-//
-//         let test_asset_id = rng.gen();
-//         let test_balance = rng.next_u64();
-//         let contract_balance = ContractBalanceConfig {
-//             contract_id,
-//             asset_id: test_asset_id,
-//             amount: test_balance,
-//         };
-//
-//         let state = StateConfig {
-//             contracts: vec![ContractConfig {
-//                 contract_id,
-//                 code: contract.into(),
-//                 salt,
-//                 ..Default::default()
-//             }],
-//             contract_balance: vec![contract_balance],
-//             ..Default::default()
-//         };
-//         let state_reader = SnapshotReader::in_memory(state);
-//
-//         let service_config = Config {
-//             chain_config: ChainConfig::local_testnet(),
-//             state_reader,
-//             ..Config::local_node()
-//         };
-//
-//         let db = Database::default();
-//         FuelService::from_database(db.clone(), service_config)
-//             .await
-//             .unwrap();
-//
-//         let ret = db
-//             .storage::<ContractsAssets>()
-//             .get(&(&contract_id, &test_asset_id).into())
-//             .unwrap()
-//             .expect("Expected a balance to be present")
-//             .into_owned();
-//
-//         assert_eq!(test_balance, ret)
-//     }
-//
-//     #[tokio::test]
-//     async fn coin_tx_pointer_cant_exceed_genesis_height() {
-//         let state = StateConfig {
-//             coins: vec![CoinConfig {
-//                 // set txpointer height > genesis height
-//                 tx_pointer_block_height: BlockHeight::from(11u32),
-//                 amount: 10,
-//                 ..Default::default()
-//             }],
-//             block_height: BlockHeight::from(10u32),
-//             ..Default::default()
-//         };
-//         let state_reader = SnapshotReader::in_memory(state);
-//
-//         let service_config = Config {
-//             state_reader,
-//             ..Config::local_node()
-//         };
-//
-//         let db = CombinedDatabase::default();
-//         let task = Task::new(db, service_config).unwrap();
-//         let init_result = task.into_task(&Default::default(), ()).await;
-//
-//         assert!(init_result.is_err())
-//     }
-//
-//     #[tokio::test]
-//     async fn contract_tx_pointer_cant_exceed_genesis_height() {
-//         let mut rng = StdRng::seed_from_u64(10);
-//
-//         let test_asset_id: AssetId = rng.gen();
-//         let test_balance: u64 = rng.next_u64();
-//         let contract_id = Default::default();
-//         let balances = vec![ContractBalanceConfig {
-//             contract_id,
-//             asset_id: test_asset_id,
-//             amount: test_balance,
-//         }];
-//         let salt: Salt = rng.gen();
-//         let contract = Contract::from(op::ret(0x10).to_bytes().to_vec());
-//
-//         let state = StateConfig {
-//             contracts: vec![ContractConfig {
-//                 contract_id: ContractId::from(*contract_id),
-//                 code: contract.into(),
-//                 salt,
-//                 // set txpointer height > genesis height
-//                 tx_pointer_block_height: BlockHeight::from(11u32),
-//                 tx_pointer_tx_idx: 0,
-//                 ..Default::default()
-//             }],
-//             contract_balance: balances,
-//             block_height: BlockHeight::from(10u32),
-//             ..Default::default()
-//         };
-//         let state_reader = SnapshotReader::in_memory(state);
-//
-//         let service_config = Config {
-//             state_reader,
-//             ..Config::local_node()
-//         };
-//
-//         let db = CombinedDatabase::default();
-//         let task = Task::new(db, service_config).unwrap();
-//         let init_result = task.into_task(&Default::default(), ()).await;
-//
-//         assert!(init_result.is_err())
-//     }
-//
-//     fn get_coins(db: &CombinedDatabase, owner: &Address) -> Vec<Coin> {
-//         db.off_chain()
-//             .owned_coins_ids(owner, None, None)
-//             .map(|r| {
-//                 let coin_id = r.unwrap();
-//                 db.on_chain()
-//                     .storage::<Coins>()
-//                     .get(&coin_id)
-//                     .map(|v| v.unwrap().into_owned().uncompress(coin_id))
-//                     .unwrap()
-//             })
-//             .collect()
-//     }
-//
-//     fn given_contract_config(rng: &mut StdRng) -> ContractConfig {
-//         let contract = Contract::from(op::ret(0x10).to_bytes().to_vec());
-//         let salt = rng.gen();
-//         let root = contract.root();
-//         let contract_id = contract.id(&salt, &root, &Contract::default_state_root());
-//
-//         ContractConfig {
-//             contract_id,
-//             code: contract.into(),
-//             salt,
-//             ..Default::default()
-//         }
-//     }
-//
-//     fn given_contract_config_with_tx(rng: &mut StdRng) -> ContractConfig {
-//         let mut config = given_contract_config(rng);
-//         config.tx_id = rng.gen();
-//         config.output_index = rng.gen();
-//         config.tx_pointer_block_height = 0.into();
-//         config.tx_pointer_tx_idx = rng.gen();
-//
-//         config
-//     }
-//
-//     #[tokio::test]
-//     async fn config_state_initializes_contract() {
-//         let mut rng = StdRng::seed_from_u64(10);
-//         let config = given_contract_config_with_tx(&mut rng);
-//         let contract_id = config.contract_id;
-//
-//         let state = StateConfig {
-//             contracts: vec![config.clone()],
-//             ..Default::default()
-//         };
-//         let state_reader = SnapshotReader::in_memory(state);
-//
-//         let service_config = Config {
-//             state_reader,
-//             ..Config::local_node()
-//         };
-//
-//         let db = Database::default();
-//         FuelService::from_database(db.clone(), service_config)
-//             .await
-//             .unwrap();
-//
-//         let initialized_contract = db.get_contract_config(contract_id).unwrap();
-//
-//         assert_eq!(initialized_contract, config);
-//     }
-// }
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    use crate::{
+        combined_database::CombinedDatabase,
+        database::{
+            genesis_progress::{
+                GenesisProgressInspect,
+                GenesisResource,
+            },
+            ChainStateDb,
+        },
+        service::{
+            config::Config,
+            FuelService,
+            Task,
+        },
+    };
+    use fuel_core_chain_config::{
+        ChainConfig,
+        CoinConfig,
+        ContractConfig,
+        MessageConfig,
+        Randomize,
+        SnapshotReader,
+        StateConfig,
+    };
+    use fuel_core_services::RunnableService;
+    use fuel_core_storage::{
+        blueprint::BlueprintInspect,
+        column::Column,
+        iter::IterDirection,
+        structured_storage::TableWithBlueprint,
+        tables::{
+            Coins,
+            ContractsAssets,
+            ContractsState,
+        },
+        StorageAsRef,
+    };
+    use fuel_core_types::{
+        blockchain::primitives::DaBlockHeight,
+        entities::coins::coin::Coin,
+        fuel_asm::op,
+        fuel_tx::UtxoId,
+        fuel_types::{
+            Address,
+            AssetId,
+            BlockHeight,
+            ContractId,
+            Salt,
+        },
+        fuel_vm::Contract,
+    };
+    use itertools::Itertools;
+    use rand::{
+        rngs::StdRng,
+        Rng,
+        RngCore,
+        SeedableRng,
+    };
+    use std::vec;
+
+    #[tokio::test]
+    async fn config_initializes_block_height() {
+        let block_height = BlockHeight::from(99u32);
+        let state_reader = SnapshotReader::in_memory(StateConfig {
+            block_height,
+            ..Default::default()
+        });
+        let service_config = Config {
+            state_reader,
+            ..Config::local_node()
+        };
+
+        let db = Database::default();
+        FuelService::from_database(db.clone(), service_config)
+            .await
+            .unwrap();
+
+        assert_eq!(
+            block_height,
+            db.latest_height()
+                .unwrap()
+                .expect("Expected a block height to be set")
+        )
+    }
+
+    #[tokio::test]
+    async fn genesis_columns_are_cleared_after_import() {
+        let mut rng = StdRng::seed_from_u64(10);
+
+        let coins = std::iter::repeat_with(|| CoinConfig {
+            tx_pointer_block_height: 0.into(),
+            ..Randomize::randomize(&mut rng)
+        })
+        .take(1000)
+        .collect_vec();
+
+        let messages = std::iter::repeat_with(|| MessageConfig {
+            da_height: DaBlockHeight(0),
+            ..MessageConfig::randomize(&mut rng)
+        })
+        .take(1000)
+        .collect_vec();
+
+        let contracts = std::iter::repeat_with(|| given_contract_config(&mut rng))
+            .take(1000)
+            .collect_vec();
+
+        let state = StateConfig {
+            coins,
+            messages,
+            contracts,
+            block_height: BlockHeight::from(0u32),
+            da_block_height: Default::default(),
+        };
+        let state_reader = SnapshotReader::in_memory(state);
+
+        let service_config = Config {
+            state_reader,
+            ..Config::local_node()
+        };
+
+        let db = Database::default();
+        FuelService::from_database(db.clone(), service_config)
+            .await
+            .unwrap();
+
+        use strum::IntoEnumIterator;
+        for key in GenesisResource::iter() {
+            assert!(db.genesis_progress(&key).is_none());
+        }
+    }
+
+    #[tokio::test]
+    async fn config_state_initializes_multiple_coins_with_different_owners_and_asset_ids()
+    {
+        let mut rng = StdRng::seed_from_u64(10);
+
+        // a coin with all options set
+        let alice: Address = rng.gen();
+        let asset_id_alice: AssetId = rng.gen();
+        let alice_value = rng.gen();
+        let alice_block_created: BlockHeight = rng.next_u32().into();
+        let alice_block_created_tx_idx = rng.gen();
+        let alice_tx_id = rng.gen();
+        let alice_output_index = rng.gen();
+        let alice_utxo_id = UtxoId::new(alice_tx_id, alice_output_index);
+
+        // a coin with minimal options set
+        let bob: Address = rng.gen();
+        let asset_id_bob: AssetId = rng.gen();
+        let bob_value = rng.gen();
+
+        let starting_height = {
+            let mut h: u32 = alice_block_created.into();
+            h = h.saturating_add(rng.next_u32());
+            h.into()
+        };
+        let state = StateConfig {
+            coins: vec![
+                CoinConfig {
+                    tx_id: alice_tx_id,
+                    output_index: alice_output_index,
+                    tx_pointer_block_height: alice_block_created,
+                    tx_pointer_tx_idx: alice_block_created_tx_idx,
+                    owner: alice,
+                    amount: alice_value,
+                    asset_id: asset_id_alice,
+                },
+                CoinConfig {
+                    owner: bob,
+                    amount: bob_value,
+                    asset_id: asset_id_bob,
+                    ..Default::default()
+                },
+            ],
+            block_height: starting_height,
+            ..Default::default()
+        };
+        let state_reader = SnapshotReader::in_memory(state);
+
+        let service_config = Config {
+            state_reader,
+            ..Config::local_node()
+        };
+
+        let db = CombinedDatabase::default();
+        FuelService::from_combined_database(db.clone(), service_config)
+            .await
+            .unwrap();
+
+        let alice_coins = get_coins(&db, &alice);
+        let bob_coins = get_coins(&db, &bob);
+
+        assert!(matches!(
+            alice_coins.as_slice(),
+            &[Coin {
+                utxo_id,
+                owner,
+                amount,
+                asset_id,
+                tx_pointer,
+                ..
+            }] if utxo_id == alice_utxo_id
+            && owner == alice
+            && amount == alice_value
+            && asset_id == asset_id_alice
+            && tx_pointer.block_height() == alice_block_created
+        ));
+        assert!(matches!(
+            bob_coins.as_slice(),
+            &[Coin {
+                owner,
+                amount,
+                asset_id,
+                ..
+            }] if owner == bob
+            && amount == bob_value
+            && asset_id == asset_id_bob
+        ));
+    }
+
+    #[tokio::test]
+    async fn config_state_initializes_contract_state() {
+        // given
+        let mut rng = StdRng::seed_from_u64(10);
+
+        let contract = given_contract_config(&mut rng);
+        let contract_id = contract.contract_id;
+        let states = contract.states.clone();
+        let state_reader = SnapshotReader::in_memory(StateConfig {
+            contracts: vec![contract],
+            ..Default::default()
+        });
+
+        let service_config = Config {
+            state_reader,
+            ..Config::local_node()
+        };
+        let db = Database::default();
+
+        // when
+        FuelService::from_database(db.clone(), service_config)
+            .await
+            .unwrap();
+
+        // then
+        for state in states {
+            let ret = db
+                .storage::<ContractsState>()
+                .get(&(&contract_id, &state.key).into())
+                .unwrap()
+                .expect("Expect a state entry to exist")
+                .into_owned();
+            assert_eq!(state.value, ret.0)
+        }
+    }
+
+    #[cfg(feature = "test-helpers")]
+    #[tokio::test]
+    async fn tests_init_da_msgs() {
+        let mut rng = StdRng::seed_from_u64(32492);
+
+        let msg = MessageConfig {
+            sender: rng.gen(),
+            recipient: rng.gen(),
+            nonce: rng.gen(),
+            amount: rng.gen(),
+            data: vec![rng.gen()],
+            da_height: DaBlockHeight(0),
+        };
+
+        let state = StateConfig {
+            messages: vec![msg.clone()],
+            ..Default::default()
+        };
+        let state_reader = SnapshotReader::in_memory(state);
+
+        let config = Config {
+            state_reader,
+            ..Config::local_node()
+        };
+
+        let db = Database::default();
+
+        execute_and_commit_genesis_block(&config, &db)
+            .await
+            .unwrap();
+
+        let expected_msg: Message = msg.into();
+
+        let ret_msg = db
+            .storage::<Messages>()
+            .get(expected_msg.id())
+            .unwrap()
+            .unwrap()
+            .into_owned();
+
+        assert_eq!(expected_msg, ret_msg);
+    }
+
+    #[tokio::test]
+    async fn config_state_initializes_contract_balance() {
+        let mut rng = StdRng::seed_from_u64(10);
+
+        let contract = given_contract_config(&mut rng);
+        let contract_id = contract.contract_id;
+        let balances = contract.balances.clone();
+        let state_reader = SnapshotReader::in_memory(StateConfig {
+            contracts: vec![contract],
+            ..Default::default()
+        });
+
+        let service_config = Config {
+            state_reader,
+            ..Config::local_node()
+        };
+
+        let db = Database::default();
+        FuelService::from_database(db.clone(), service_config)
+            .await
+            .unwrap();
+
+        for balance in balances {
+            let ret = db
+                .storage::<ContractsAssets>()
+                .get(&(&contract_id, &balance.asset_id).into())
+                .unwrap()
+                .expect("Expected a balance to be present")
+                .into_owned();
+
+            assert_eq!(balance.amount, ret)
+        }
+    }
+
+    #[tokio::test]
+    async fn coin_tx_pointer_cant_exceed_genesis_height() {
+        let state = StateConfig {
+            coins: vec![CoinConfig {
+                // set txpointer height > genesis height
+                tx_pointer_block_height: BlockHeight::from(11u32),
+                amount: 10,
+                ..Default::default()
+            }],
+            block_height: BlockHeight::from(10u32),
+            ..Default::default()
+        };
+        let state_reader = SnapshotReader::in_memory(state);
+
+        let service_config = Config {
+            state_reader,
+            ..Config::local_node()
+        };
+
+        let db = CombinedDatabase::default();
+        let task = Task::new(db, service_config).unwrap();
+        let init_result = task.into_task(&Default::default(), ()).await;
+
+        assert!(init_result.is_err())
+    }
+
+    #[tokio::test]
+    async fn contract_tx_pointer_cant_exceed_genesis_height() {
+        let mut rng = StdRng::seed_from_u64(10);
+
+        let state = StateConfig {
+            contracts: vec![ContractConfig {
+                // set txpointer height > genesis height
+                tx_pointer_block_height: BlockHeight::from(11u32),
+                ..given_contract_config(&mut rng)
+            }],
+            block_height: BlockHeight::from(10u32),
+            ..Default::default()
+        };
+        let state_reader = SnapshotReader::in_memory(state);
+
+        let service_config = Config {
+            state_reader,
+            ..Config::local_node()
+        };
+
+        let db = CombinedDatabase::default();
+        let task = Task::new(db, service_config).unwrap();
+        let init_result = task.into_task(&Default::default(), ()).await;
+
+        assert!(init_result.is_err())
+    }
+
+    fn get_coins(db: &CombinedDatabase, owner: &Address) -> Vec<Coin> {
+        db.off_chain()
+            .owned_coins_ids(owner, None, None)
+            .map(|r| {
+                let coin_id = r.unwrap();
+                db.on_chain()
+                    .storage::<Coins>()
+                    .get(&coin_id)
+                    .map(|v| v.unwrap().into_owned().uncompress(coin_id))
+                    .unwrap()
+            })
+            .collect()
+    }
+
+    fn given_contract_config(rng: &mut StdRng) -> ContractConfig {
+        ContractConfig {
+            tx_pointer_block_height: 0.into(),
+            ..ContractConfig::randomize(rng)
+        }
+    }
+
+    #[tokio::test]
+    async fn config_state_initializes_contract() {
+        let mut rng = StdRng::seed_from_u64(10);
+
+        let initial_state = StateConfig {
+            contracts: vec![given_contract_config(&mut rng)],
+            ..Default::default()
+        };
+        let state_reader = SnapshotReader::in_memory(initial_state.clone());
+
+        let service_config = Config {
+            state_reader,
+            ..Config::local_node()
+        };
+
+        let db = Database::default();
+        FuelService::from_database(db.clone(), service_config)
+            .await
+            .unwrap();
+
+        fn get_entries<T>(db: &Database) -> Vec<TableEntry<T>>
+        where
+            T: TableWithBlueprint<Column = Column>,
+            T::Blueprint: BlueprintInspect<T, Database>,
+        {
+            db.entries(None, IterDirection::Forward)
+                .try_collect()
+                .unwrap()
+        }
+
+        let stored_state = StateConfig::from_tables(
+            get_entries(&db),
+            get_entries(&db),
+            get_entries(&db),
+            get_entries(&db),
+            get_entries(&db),
+            get_entries(&db),
+            get_entries(&db),
+            DaBlockHeight(0),
+            0.into(),
+        );
+
+        assert_eq!(initial_state, stored_state);
+    }
+}
