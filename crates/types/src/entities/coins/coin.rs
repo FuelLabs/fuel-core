@@ -2,6 +2,7 @@
 
 use crate::{
     fuel_asm::Word,
+    fuel_crypto,
     fuel_tx::{
         input::coin::{
             CoinPredicate,
@@ -14,6 +15,7 @@ use crate::{
     fuel_types::{
         Address,
         AssetId,
+        Bytes32,
     },
 };
 
@@ -43,6 +45,17 @@ impl Coin {
             asset_id: self.asset_id,
             tx_pointer: self.tx_pointer,
         })
+    }
+
+    /// Hash the inner values of the coin into a single `Bytes32` hash.
+    pub fn hash(&self) -> Bytes32 {
+        let hasher = fuel_crypto::Hasher::default()
+            .chain(&self.owner)
+            .chain(&self.amount.to_be_bytes())
+            .chain(&self.asset_id)
+            .chain(&self.tx_pointer.block_height().to_be_bytes())
+            .chain(&self.tx_pointer.tx_index().to_be_bytes());
+        hasher.finalize()
     }
 }
 

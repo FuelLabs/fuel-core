@@ -213,8 +213,8 @@ async fn can_build_message_proof() {
     .unwrap()
     .unwrap();
     assert_eq!(
-        proof.message_block_header.message_receipt_root,
-        message_block.header().message_receipt_root
+        proof.message_block_header.message_outbox_root,
+        message_block.header().message_outbox_root
     );
     assert_eq!(
         proof.message_block_header.height(),

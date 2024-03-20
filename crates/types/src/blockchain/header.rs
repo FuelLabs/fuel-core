@@ -10,6 +10,7 @@ use super::{
 };
 use crate::{
     fuel_merkle,
+    fuel_merkle::binary::root_calculator::MerkleRootCalculator,
     fuel_tx::Transaction,
     fuel_types::{
         canonical::Serialize,
@@ -17,6 +18,7 @@ use crate::{
         Bytes32,
         MessageId,
     },
+    services::executor::Event,
 };
 use tai64::Tai64;
 
@@ -195,7 +197,9 @@ pub struct GeneratedApplicationFields {
     /// Merkle root of transactions.
     pub transactions_root: Bytes32,
     /// Merkle root of message receipts in this block.
-    pub message_receipt_root: Bytes32,
+    pub message_outbox_root: Bytes32,
+    /// Root hash of all imported events from L1
+    pub event_inbox_root: Bytes32,
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -365,17 +369,31 @@ impl PartialBlockHeader {
         self,
         transactions: &[Transaction],
         message_ids: &[MessageId],
+        events: &[Event],
     ) -> BlockHeader {
         // Generate the transaction merkle root.
         let transactions_root = generate_txns_root(transactions);
 
         // Generate the message merkle root.
-        let mut message_tree =
-            fuel_merkle::binary::root_calculator::MerkleRootCalculator::new();
-        for id in message_ids {
-            message_tree.push(id.as_ref());
-        }
-        let message_receipt_root = message_tree.root().into();
+        let message_outbox_root = message_ids
+            .iter()
+            .fold(MerkleRootCalculator::new(), |mut tree, id| {
+                tree.push(id.as_ref());
+                tree
+            })
+            .root()
+            .into();
+
+        // Generate the event merkle root.
+        let event_inbox_root = events
+            .iter()
+            .map(|event| event.hash())
+            .fold(MerkleRootCalculator::new(), |mut tree, event| {
+                tree.push(event.as_ref());
+                tree
+            })
+            .root()
+            .into();
 
         let application = ApplicationHeader {
             da_height: self.application.da_height,
@@ -387,7 +405,8 @@ impl PartialBlockHeader {
                 transactions_count: transactions.len() as u64,
                 message_receipt_count: message_ids.len() as u64,
                 transactions_root,
-                message_receipt_root,
+                message_outbox_root,
+                event_inbox_root,
             },
         };
 
@@ -432,7 +451,7 @@ impl ApplicationHeader<GeneratedApplicationFields> {
         hasher.input(self.transactions_count.to_be_bytes());
         hasher.input(self.message_receipt_count.to_be_bytes());
         hasher.input(self.transactions_root.as_ref());
-        hasher.input(self.message_receipt_root.as_ref());
+        hasher.input(self.message_outbox_root.as_ref());
         hasher.input(self.consensus_parameters_version.to_bytes().as_slice());
         hasher.input(self.state_transition_bytecode_version.to_bytes().as_slice());
         hasher.digest()

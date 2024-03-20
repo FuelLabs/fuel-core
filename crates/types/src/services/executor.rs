@@ -31,7 +31,10 @@ use crate::{
     },
     services::Uncommitted,
 };
-use std::error::Error as StdError;
+use std::{
+    error::Error as StdError,
+    ops::Deref,
+};
 
 /// The alias for executor result.
 pub type Result<T> = core::result::Result<T, Error>;
@@ -64,6 +67,18 @@ pub enum Event {
     CoinCreated(Coin),
     /// The coin was consumed by the transaction.
     CoinConsumed(Coin),
+}
+
+impl Event {
+    /// Get the hash of the internal values of the event.
+    pub fn hash(&self) -> Bytes32 {
+        match self {
+            Event::MessageImported(message) => (*message.id().deref()).into(),
+            Event::MessageConsumed(message) => (*message.id().deref()).into(),
+            Event::CoinCreated(coin) => coin.hash(),
+            Event::CoinConsumed(coin) => coin.hash(),
+        }
+    }
 }
 
 /// The status of a transaction after it is executed.

@@ -24,6 +24,7 @@ use crate::{
         ChainId,
         MessageId,
     },
+    services::executor::Event,
 };
 
 /// Version-able block type
@@ -86,9 +87,10 @@ impl Block<Transaction> {
         header: PartialBlockHeader,
         transactions: Vec<Transaction>,
         message_ids: &[MessageId],
+        events: &[Event],
     ) -> Self {
         let inner = BlockV1 {
-            header: header.generate(&transactions, message_ids),
+            header: header.generate(&transactions, message_ids, events),
             transactions,
         };
         Block::V1(inner)
@@ -218,8 +220,8 @@ impl PartialFuelBlock {
     ///
     /// Message ids are produced by executed the transactions and collecting
     /// the ids from the receipts of messages outputs.
-    pub fn generate(self, message_ids: &[MessageId]) -> Block {
-        Block::new(self.header, self.transactions, message_ids)
+    pub fn generate(self, message_ids: &[MessageId], events: &[Event]) -> Block {
+        Block::new(self.header, self.transactions, message_ids, events)
     }
 }
 

@@ -504,7 +504,7 @@ where
 
         // Now that the transactions have been executed, generate the full header.
 
-        let block = block.generate(&message_ids[..]);
+        let block = block.generate(&message_ids[..], &events);
 
         let finalized_block_id = block.id();
 

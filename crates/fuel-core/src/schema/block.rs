@@ -165,7 +165,7 @@ impl Header {
 
     /// Merkle root of message receipts in this block.
     async fn message_receipt_root(&self) -> Bytes32 {
-        self.0.message_receipt_root.into()
+        self.0.message_outbox_root.into()
     }
 
     /// Fuel block height.
