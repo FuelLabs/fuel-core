@@ -29,7 +29,17 @@ pub struct RelayedTransactionV1 {
 
 /// The hash of a relayed transaction
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(
+    Debug,
+    Clone,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    Hash,
+    derive_more::Display,
+    derive_more::From,
+)]
 pub struct RelayedTransactionId(Bytes32);
 
 impl RelayedTransaction {
