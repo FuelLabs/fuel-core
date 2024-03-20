@@ -26,27 +26,18 @@ use fuel_core_types::{
         ContractUtxoInfo,
         ContractsInfoType,
     },
-    fuel_tx::{
-        ContractId,
-        TxPointer,
-        UtxoId,
-    },
     fuel_types::{
         Address,
         BlockHeight,
         Bytes32,
     },
-    fuel_vm::{
-        Salt,
-        SecretKey,
-    },
+    fuel_vm::SecretKey,
 };
 use itertools::Itertools;
 use serde::{
     Deserialize,
     Serialize,
 };
-use std::collections::HashMap;
 
 #[cfg(feature = "std")]
 use crate::SnapshotMetadata;
@@ -97,7 +88,7 @@ pub struct StateConfig {
     pub da_block_height: DaBlockHeight,
 }
 
-#[cfg(all(test, feature = "random", feature = "std"))]
+#[cfg(feature = "test-helpers")]
 impl crate::Randomize for StateConfig {
     fn randomize(mut rng: impl rand::Rng) -> Self {
         let amount = 2;
@@ -240,6 +231,8 @@ impl StateConfig {
         da_block_height: DaBlockHeight,
         block_height: BlockHeight,
     ) -> Self {
+        use std::collections::HashMap;
+
         let coins = coins.into_iter().map(|coin| coin.into()).collect();
         let messages = messages.into_iter().map(|message| message.into()).collect();
         let contract_ids = contract_code
@@ -272,12 +265,12 @@ impl StateConfig {
             })
             .into_group_map();
 
-        let mut contract_code: HashMap<ContractId, Vec<u8>> = contract_code
+        let mut contract_code: HashMap<_, Vec<u8>> = contract_code
             .into_iter()
             .map(|entry| (entry.key, entry.value.into()))
             .collect();
 
-        let mut contract_salt: HashMap<ContractId, Salt> = contract_info
+        let mut contract_salt: HashMap<_, _> = contract_info
             .into_iter()
             .map(|entry| match entry.value {
                 ContractsInfoType::V1(info) => (entry.key, info.into()),
@@ -285,7 +278,7 @@ impl StateConfig {
             })
             .collect();
 
-        let mut contract_utxos: HashMap<ContractId, (UtxoId, TxPointer)> = contract_utxo
+        let mut contract_utxos: HashMap<_, _> = contract_utxo
             .into_iter()
             .map(|entry| match entry.value {
                 ContractUtxoInfo::V1(utxo) => {
@@ -798,186 +791,5 @@ mod tests {
                 .collect::<Result<Vec<_>, _>>()
                 .unwrap()
         );
-    }
-
-    mod randomize_impls {
-        use fuel_core_types::fuel_tx::UtxoId;
-
-        use fuel_core_types::fuel_types::Bytes32;
-
-        use fuel_core_storage::ContractsStateKey;
-
-        use fuel_core_storage::ContractsAssetKey;
-
-        use fuel_core_storage::ContractsStateData;
-
-        use fuel_core_types::entities::contract::ContractUtxoInfo;
-
-        use fuel_core_types::fuel_vm::Salt;
-
-        use fuel_core_types::entities::contract::ContractsInfoType;
-
-        use fuel_core_types;
-
-        use fuel_core_storage::tables::ContractsLatestUtxo;
-
-        use fuel_core_storage::tables::ContractsInfo;
-
-        use fuel_core_storage::tables::ContractsAssets;
-
-        use fuel_core_storage::tables::ContractsState;
-
-        use fuel_core_types::fuel_tx::ContractId;
-
-        use fuel_core_types::entities::message::MessageV1;
-
-        use fuel_core_types::fuel_types::Nonce;
-
-        use fuel_core_types::entities::message::Message;
-
-        use fuel_core_storage::tables::Messages;
-
-        use fuel_core_storage::tables::ContractsRawCode;
-
-        use fuel_core_storage::tables::Coins;
-
-        use crate::TableEntry;
-
-        use fuel_core_types::entities::coins::coin::CompressedCoinV1;
-
-        use rand;
-
-        use fuel_core_types::entities::coins::coin::CompressedCoin;
-
-        use crate::Randomize;
-
-        macro_rules! delegating_impl {
-            ($($table: ty),*) => {
-                $(
-                    impl Randomize for TableEntry<$table> {
-                        fn randomize(mut rng: impl rand::Rng) -> Self {
-                            Self {
-                                key: Randomize::randomize(&mut rng),
-                                value: Randomize::randomize(&mut rng),
-                            }
-                        }
-                    }
-                )*
-            };
-        }
-
-        delegating_impl!(
-            Coins,
-            ContractsRawCode,
-            ContractsState,
-            ContractsAssets,
-            ContractsInfo,
-            ContractsLatestUtxo
-        );
-
-        // Messages are special, because they have the key inside of the value as well
-        impl Randomize for TableEntry<Messages> {
-            fn randomize(mut rng: impl rand::Rng) -> Self {
-                let value = Message::randomize(&mut rng);
-                Self {
-                    key: *value.nonce(),
-                    value,
-                }
-            }
-        }
-
-        impl Randomize for CompressedCoin {
-            fn randomize(mut rng: impl rand::Rng) -> Self {
-                Self::V1(CompressedCoinV1 {
-                    owner: rng.gen(),
-                    amount: rng.gen(),
-                    asset_id: rng.gen(),
-                    tx_pointer: rng.gen(),
-                })
-            }
-        }
-
-        impl Randomize for Nonce {
-            fn randomize(mut rng: impl rand::Rng) -> Self {
-                rng.gen()
-            }
-        }
-
-        impl Randomize for Message {
-            fn randomize(mut rng: impl rand::Rng) -> Self {
-                Self::V1(MessageV1 {
-                    sender: rng.gen(),
-                    recipient: rng.gen(),
-                    nonce: rng.gen(),
-                    amount: rng.gen(),
-                    data: rng.gen::<[u8; 32]>().to_vec(),
-                    da_height: rng.gen(),
-                })
-            }
-        }
-
-        impl Randomize for ContractId {
-            fn randomize(mut rng: impl rand::Rng) -> Self {
-                rng.gen()
-            }
-        }
-
-        impl Randomize for fuel_core_types::fuel_vm::Contract {
-            fn randomize(mut rng: impl rand::Rng) -> Self {
-                rng.gen::<[u8; 32]>().to_vec().into()
-            }
-        }
-
-        impl Randomize for ContractsInfoType {
-            fn randomize(mut rng: impl rand::Rng) -> Self {
-                let salt: Salt = rng.gen();
-                Self::V1(salt.into())
-            }
-        }
-
-        impl Randomize for ContractUtxoInfo {
-            fn randomize(mut rng: impl rand::Rng) -> Self {
-                ContractUtxoInfo::V1(
-                    fuel_core_types::entities::contract::ContractUtxoInfoV1 {
-                        utxo_id: rng.gen(),
-                        tx_pointer: rng.gen(),
-                    },
-                )
-            }
-        }
-
-        impl Randomize for ContractsStateData {
-            fn randomize(mut rng: impl rand::Rng) -> Self {
-                rng.gen::<[u8; 32]>().to_vec().into()
-            }
-        }
-
-        impl Randomize for ContractsAssetKey {
-            fn randomize(mut rng: impl rand::Rng) -> Self {
-                let contract_id: ContractId = rng.gen();
-                let asset_id: fuel_core_types::fuel_types::AssetId = rng.gen();
-                Self::new(&contract_id, &asset_id)
-            }
-        }
-
-        impl Randomize for ContractsStateKey {
-            fn randomize(mut rng: impl rand::Rng) -> Self {
-                let contract_id: ContractId = rng.gen();
-                let state_key: Bytes32 = rng.gen();
-                Self::new(&contract_id, &state_key)
-            }
-        }
-
-        impl Randomize for u64 {
-            fn randomize(mut rng: impl rand::Rng) -> Self {
-                rng.gen()
-            }
-        }
-
-        impl Randomize for UtxoId {
-            fn randomize(mut rng: impl rand::Rng) -> Self {
-                Self::new(rng.gen(), rng.gen())
-            }
-        }
     }
 }

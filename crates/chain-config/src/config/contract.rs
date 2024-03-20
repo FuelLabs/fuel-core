@@ -49,10 +49,30 @@ pub struct ContractState {
     pub value: Vec<u8>,
 }
 
+#[cfg(feature = "test-helpers")]
+impl crate::Randomize for ContractState {
+    fn randomize(mut rng: impl ::rand::Rng) -> Self {
+        Self {
+            key: crate::Randomize::randomize(&mut rng),
+            value: Bytes32::randomize(&mut rng).to_vec(),
+        }
+    }
+}
+
 #[derive(Clone, Debug, Deserialize, Serialize, Eq, PartialEq)]
 pub struct ContractAsset {
     pub asset_id: AssetId,
     pub amount: u64,
+}
+
+#[cfg(feature = "test-helpers")]
+impl crate::Randomize for ContractAsset {
+    fn randomize(mut rng: impl ::rand::Rng) -> Self {
+        Self {
+            asset_id: crate::Randomize::randomize(&mut rng),
+            amount: crate::Randomize::randomize(&mut rng),
+        }
+    }
 }
 
 impl ContractConfig {
@@ -65,23 +85,23 @@ impl ContractConfig {
     }
 }
 
-#[cfg(all(test, feature = "random", feature = "std"))]
+#[cfg(feature = "test-helpers")]
 impl crate::Randomize for ContractConfig {
     fn randomize(mut rng: impl ::rand::Rng) -> Self {
         Self {
-            contract_id: ContractId::new(super::random_bytes_32(&mut rng)),
-            code: (super::random_bytes_32(&mut rng)).to_vec(),
-            salt: Salt::new(super::random_bytes_32(&mut rng)),
-            tx_id: super::random_bytes_32(&mut rng).into(),
+            contract_id: crate::Randomize::randomize(&mut rng),
+            code: Bytes32::randomize(&mut rng).to_vec(),
+            salt: crate::Randomize::randomize(&mut rng),
+            tx_id: crate::Randomize::randomize(&mut rng),
             output_index: rng.gen(),
-            tx_pointer_block_height: rng.gen(),
+            tx_pointer_block_height: crate::Randomize::randomize(&mut rng),
             tx_pointer_tx_idx: rng.gen(),
             states: vec![ContractState {
-                key: super::random_bytes_32(&mut rng).into(),
-                value: super::random_bytes_32(&mut rng).to_vec(),
+                key: Bytes32::randomize(&mut rng),
+                value: Bytes32::randomize(&mut rng).to_vec(),
             }],
             balances: vec![ContractAsset {
-                asset_id: AssetId::new(super::random_bytes_32(&mut rng)),
+                asset_id: crate::Randomize::randomize(&mut rng),
                 amount: rng.gen(),
             }],
         }

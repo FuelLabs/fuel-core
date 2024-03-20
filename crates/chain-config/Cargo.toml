@@ -50,6 +50,6 @@ std = [
   "tracing/std",
   "bech32/std",
 ]
-default = ["std", "random"]
+default = ["std"]
 parquet = ["std", "dep:parquet", "postcard/use-std"]
-random = ["dep:rand", "fuel-core-types/random"]
+test-helpers = ["dep:rand", "fuel-core-types/random"]

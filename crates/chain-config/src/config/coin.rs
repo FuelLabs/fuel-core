@@ -119,17 +119,17 @@ impl CoinConfig {
     }
 }
 
-#[cfg(all(test, feature = "random", feature = "std"))]
+#[cfg(feature = "test-helpers")]
 impl crate::Randomize for CoinConfig {
     fn randomize(mut rng: impl ::rand::Rng) -> Self {
         Self {
-            tx_id: super::random_bytes_32(&mut rng).into(),
+            tx_id: crate::Randomize::randomize(&mut rng),
             output_index: rng.gen(),
             tx_pointer_block_height: rng.gen(),
             tx_pointer_tx_idx: rng.gen(),
-            owner: Address::new(super::random_bytes_32(&mut rng)),
+            owner: crate::Randomize::randomize(&mut rng),
             amount: rng.gen(),
-            asset_id: AssetId::new(super::random_bytes_32(rng)),
+            asset_id: crate::Randomize::randomize(&mut rng),
         }
     }
 }
