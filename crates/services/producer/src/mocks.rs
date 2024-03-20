@@ -121,7 +121,7 @@ fn to_block(component: &Components<Vec<ArcPoolTx>>) -> Block {
         .into_iter()
         .map(|tx| tx.as_ref().into())
         .collect();
-    Block::new(component.header_to_produce.clone(), transactions, &[])
+    Block::new(component.header_to_produce.clone(), transactions, &[], &[])
 }
 
 impl Executor<Vec<ArcPoolTx>> for MockExecutor {

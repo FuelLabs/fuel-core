@@ -384,7 +384,7 @@ impl PartialBlockHeader {
             .root()
             .into();
 
-        // Generate the event merkle root.
+        // Generate the inbound event merkle root.
         let event_inbox_root = events
             .iter()
             .map(|event| event.hash())

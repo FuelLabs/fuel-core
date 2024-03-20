@@ -1,5 +1,6 @@
 #[allow(clippy::arithmetic_side_effects)]
 #[allow(clippy::cast_possible_truncation)]
+#[allow(non_snake_case)]
 #[cfg(test)]
 mod tests {
     use crate as fuel_core;
@@ -3104,21 +3105,19 @@ mod tests {
         fn execute_without_commit__block_producer_includes_correct_inbox_event_merkle_root(
         ) {
             // given
-            let genesis_da_height = 1u64;
+            let genesis_da_height = 3u64;
             let on_chain_db = database_with_genesis_block(genesis_da_height);
             let mut relayer_db = Database::<Relayer>::default();
-            let mut root_calculator = MerkleRootCalculator::new();
-            let block_height = 2u32;
+            let block_height = 1u32;
             let relayer_da_height = 10u64;
-            for da_height in 0..=relayer_da_height {
+            let mut root_calculator = MerkleRootCalculator::new();
+            for da_height in (genesis_da_height + 1)..=relayer_da_height {
                 let mut message = Message::default();
                 message.set_da_height(da_height.into());
                 message.set_nonce(da_height.into());
-                root_calculator.push(message.id());
-
+                root_calculator.push(message.id().as_ref());
                 add_message_to_relayer(&mut relayer_db, message);
             }
-            let expected = root_calculator.root();
 
             // when
             let producer = create_relayer_executor(on_chain_db, relayer_db);
@@ -3132,6 +3131,7 @@ mod tests {
                 .into();
 
             // then
+            let expected = root_calculator.root().into();
             let actual = result.block.header().application().event_inbox_root;
             assert_eq!(actual, expected);
         }
