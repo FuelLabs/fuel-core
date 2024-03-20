@@ -3118,10 +3118,10 @@ mod tests {
                 root_calculator.push(message.id().as_ref());
                 add_message_to_relayer(&mut relayer_db, message);
             }
-
-            // when
             let producer = create_relayer_executor(on_chain_db, relayer_db);
             let block = test_block(block_height.into(), relayer_da_height.into(), 0);
+
+            // when
             let (result, _) = producer
                 .execute_without_commit(
                     ExecutionTypes::Production(block.into()),
