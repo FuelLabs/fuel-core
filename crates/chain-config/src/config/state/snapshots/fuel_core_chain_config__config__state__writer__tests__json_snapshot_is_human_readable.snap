@@ -52,8 +52,8 @@ expression: encoded_json
       "tx_pointer_tx_idx": 15803,
       "states": [
         {
-          "state_key": "32473b01b1dcb1caac942722a4787bb185e4791916926e5fdb25dd842f736ab9",
-          "state_value": "73e87f53b4857842789a1dd59167629b3c5cabe47dbf48827ec0818e00de4b29"
+          "key": "32473b01b1dcb1caac942722a4787bb185e4791916926e5fdb25dd842f736ab9",
+          "value": "73e87f53b4857842789a1dd59167629b3c5cabe47dbf48827ec0818e00de4b29"
         }
       ],
       "balances": [
@@ -73,8 +73,8 @@ expression: encoded_json
       "tx_pointer_tx_idx": 7761,
       "states": [
         {
-          "state_key": "cd3c364076623c0231898be0722c08e4eb229c44cb957d29cf7370af8a1b9c54",
-          "state_value": "2d49b3c83cfb9c683fb7d0526e29d77e89e7bfefd4f73ada3d19ac87d45351f0"
+          "key": "cd3c364076623c0231898be0722c08e4eb229c44cb957d29cf7370af8a1b9c54",
+          "value": "2d49b3c83cfb9c683fb7d0526e29d77e89e7bfefd4f73ada3d19ac87d45351f0"
         }
       ],
       "balances": [

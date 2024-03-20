@@ -48,6 +48,8 @@ rand = { workspace = true }
 serde = { workspace = true }
 tempfile = { workspace = true }
 test-case = { workspace = true }
+# TODO: remove 
+serde_json = { workspace = true }
 
 [features]
 # TODO: remove parquet

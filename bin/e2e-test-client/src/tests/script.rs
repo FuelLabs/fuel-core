@@ -106,7 +106,7 @@ fn load_contract(path: impl AsRef<Path>) -> Result<ContractConfig, Failed> {
         .contracts
         .into_iter()
         .next()
-        .ok_or_else(|| "No contract found in the state")?;
+        .ok_or("No contract found in the state")?;
 
     Ok(contract_config)
 }
@@ -123,7 +123,6 @@ pub async fn run_contract_large_state(ctx: &TestContext) -> Result<(), Failed> {
     // `test_data/large_state/state_config.json` together with:
     // 244, 41, 47, 229, 13, 33, 102, 142, 20, 6, 54, 171, 105, 199, 212, 179, 208, 105, 246, 110, 185, 239, 61, 164, 176, 163, 36, 64, 156, 195, 107, 140,
     let contract_id = contract_config.contract_id;
-    println!("\nThe `contract_id` of the contract with large state: {contract_id}");
 
     // if the contract is not deployed yet, let's deploy it
     let result = ctx.bob.client.contract(&contract_id).await;

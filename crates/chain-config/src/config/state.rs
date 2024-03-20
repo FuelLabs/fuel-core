@@ -154,8 +154,8 @@ impl AsTable<ContractsState> for StateConfig {
             .flat_map(|contract| {
                 contract.states.iter().map(
                     |ContractState {
-                         state_key,
-                         state_value,
+                         key: state_key,
+                         value: state_value,
                      }| TableEntry {
                         key: ContractsStateKey::new(&contract.contract_id, state_key),
                         value: state_value.clone().into(),
@@ -252,8 +252,8 @@ impl StateConfig {
                 (
                     *state.key.contract_id(),
                     ContractState {
-                        state_key: *state.key.state_key(),
-                        state_value: state.value.into(),
+                        key: *state.key.state_key(),
+                        value: state.value.into(),
                     },
                 )
             })

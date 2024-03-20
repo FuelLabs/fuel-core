@@ -315,26 +315,23 @@ impl Wallet {
             contract_id,
             code: bytes,
             salt,
+            states,
             ..
         } = config;
-        let state = config
-            .states
+
+        let state = states
             .iter()
-            .map(
-                |ContractState {
-                     state_key,
-                     state_value,
-                 }| {
-                    let value = Bytes32::new(
-                        state_value
-                            .as_slice()
-                            .try_into()
-                            .expect("state value to fit in 32 bytes"),
-                    );
-                    StorageSlot::new(*state_key, value)
-                },
-            )
+            .map(|ContractState { key, value }| {
+                let value = Bytes32::new(
+                    value
+                        .as_slice()
+                        .try_into()
+                        .expect("state value to fit in 32 bytes"),
+                );
+                StorageSlot::new(*key, value)
+            })
             .collect_vec();
+
         let state_root = Contract::initial_state_root(state.iter());
         let mut tx = TransactionBuilder::create(bytes.into(), salt, state);
 
@@ -349,6 +346,7 @@ impl Wallet {
                 );
             }
         }
+
         tx.add_output(Output::ContractCreated {
             contract_id,
             state_root,
