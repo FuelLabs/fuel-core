@@ -24,7 +24,7 @@ use fuel_core_txpool::{
     types::TxId,
 };
 use fuel_core_types::{
-    entities::message::MerkleProof,
+    entities::relayer::message::MerkleProof,
     fuel_tx::{
         Bytes32,
         Transaction,

@@ -3,7 +3,7 @@ use fuel_core_storage::Result as StorageResult;
 use fuel_core_types::{
     entities::{
         coins::coin::CompressedCoin,
-        message::Message,
+        relayer::message::Message,
     },
     fuel_tx::{
         Transaction,

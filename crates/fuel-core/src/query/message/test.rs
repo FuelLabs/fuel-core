@@ -6,7 +6,7 @@ use fuel_core_types::{
         ConsensusHeader,
         PartialBlockHeader,
     },
-    entities::message::MerkleProof,
+    entities::relayer::message::MerkleProof,
     fuel_tx::{
         Script,
         Transaction,

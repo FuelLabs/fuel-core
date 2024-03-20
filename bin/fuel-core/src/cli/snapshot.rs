@@ -292,7 +292,7 @@ mod tests {
                 ContractUtxoInfo,
                 ContractsInfoType,
             },
-            message::{
+            relayer::message::{
                 Message,
                 MessageV1,
             },

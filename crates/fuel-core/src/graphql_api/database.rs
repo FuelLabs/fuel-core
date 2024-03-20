@@ -33,7 +33,7 @@ use fuel_core_types::{
             DaBlockHeight,
         },
     },
-    entities::message::{
+    entities::relayer::message::{
         MerkleProof,
         Message,
     },

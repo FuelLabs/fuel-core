@@ -27,7 +27,7 @@ use fuel_core_types::{
         block::CompressedBlock,
         primitives::DaBlockHeight,
     },
-    entities::message::Message,
+    entities::relayer::message::Message,
     fuel_tx::AssetId,
     fuel_types::{
         BlockHeight,

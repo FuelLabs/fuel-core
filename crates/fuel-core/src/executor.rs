@@ -40,7 +40,7 @@ mod tests {
         },
         entities::{
             coins::coin::CompressedCoin,
-            message::{
+            relayer::message::{
                 Message,
                 MessageV1,
             },

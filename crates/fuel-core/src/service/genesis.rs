@@ -52,7 +52,7 @@ use fuel_core_types::{
             ContractUtxoInfo,
             ContractsInfoType,
         },
-        message::Message,
+        relayer::message::Message,
     },
     fuel_tx::Contract,
     fuel_types::{

@@ -20,7 +20,7 @@ use fuel_core_txpool::ports::BlockImporter;
 use fuel_core_types::{
     entities::{
         coins::coin::CompressedCoin,
-        message::Message,
+        relayer::message::Message,
     },
     fuel_tx::{
         Transaction,
