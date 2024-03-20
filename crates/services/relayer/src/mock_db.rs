@@ -52,6 +52,18 @@ impl MockDb {
             .iter()
             .find_map(|(_, map)| map.get(id).cloned())
     }
+
+    pub fn get_transaction(
+        &self,
+        id: &RelayedTransactionId,
+    ) -> Option<RelayedTransaction> {
+        self.data
+            .lock()
+            .unwrap()
+            .transactions
+            .iter()
+            .find_map(|(_, map)| map.get(id).cloned())
+    }
 }
 
 impl RelayerDb for MockDb {

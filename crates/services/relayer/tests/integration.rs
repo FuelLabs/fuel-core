@@ -2,7 +2,10 @@
 
 use ethers_core::types::U256;
 use fuel_core_relayer::{
-    bridge::MessageSentFilter,
+    bridge::{
+        MessageSentFilter,
+        TransactionFilter,
+    },
     mock_db::MockDb,
     new_service_test,
     ports::RelayerDb,
@@ -121,6 +124,40 @@ async fn can_get_messages() {
 
     for msg in expected_messages {
         assert_eq!(mock_db.get_message(msg.id()).unwrap(), msg);
+    }
+}
+
+#[tokio::test(start_paused = true)]
+async fn can_get_transactions() {
+    let mock_db = MockDb::default();
+    let eth_node = MockMiddleware::default();
+
+    let config = Config::default();
+    let contract_address = config.eth_v2_listening_contracts[0];
+    let transaction = |max_gas: u64, block_number: u64| {
+        let transaction = TransactionFilter {
+            max_gas,
+            ..Default::default()
+        };
+        let mut log = transaction.into_log();
+        log.address = contract_address;
+        log.block_number = Some(block_number.into());
+        log
+    };
+
+    let logs = vec![transaction(2, 1), transaction(3, 2)];
+    let expected_transactions: Vec<_> = logs.iter().map(|l| l.to_tx()).collect();
+    eth_node.update_data(|data| data.logs_batch = vec![logs.clone()]);
+    // Setup the eth node with a block high enough that there
+    // will be some finalized blocks.
+    eth_node.update_data(|data| data.best_block.number = Some(100.into()));
+    let relayer = new_service_test(eth_node, mock_db.clone(), config);
+    relayer.start_and_await().await.unwrap();
+
+    relayer.shared.await_synced().await.unwrap();
+
+    for tx in expected_transactions {
+        assert_eq!(mock_db.get_transaction(&tx.relayed_id()).unwrap(), tx);
     }
 }
 
