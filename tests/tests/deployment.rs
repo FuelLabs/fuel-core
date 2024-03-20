@@ -28,10 +28,14 @@ fn test_deployment_chainconfig(path: impl AsRef<Path>) -> anyhow::Result<()> {
     writer.write_chain_config(&chain_config)?;
     let generated_snapshot = writer.write_state_config(state_config)?;
 
-    let chain_config_bytes = std::fs::read_to_string(generated_snapshot.chain_config)?;
-    let stored_chain_config = std::fs::read_to_string(stored_snapshot.chain_config)?;
+    let chain_config = std::fs::read_to_string(generated_snapshot.chain_config)?
+        .trim()
+        .to_string();
+    let stored_chain_config = std::fs::read_to_string(stored_snapshot.chain_config)?
+        .trim()
+        .to_string();
     pretty_assertions::assert_eq!(
-        chain_config_bytes,
+        chain_config,
         stored_chain_config,
         "Chain config should match the one in the deployment directory"
     );
@@ -43,7 +47,7 @@ fn test_deployment_chainconfig(path: impl AsRef<Path>) -> anyhow::Result<()> {
         else {
             panic!("State encoding should be JSON")
         };
-        std::fs::read_to_string(stored_state)?
+        std::fs::read_to_string(stored_state)?.trim().to_string()
     };
     let generated_state_config = {
         let TableEncoding::Json {
@@ -52,7 +56,7 @@ fn test_deployment_chainconfig(path: impl AsRef<Path>) -> anyhow::Result<()> {
         else {
             panic!("State encoding should be JSON")
         };
-        std::fs::read_to_string(generated_state)?
+        std::fs::read_to_string(generated_state)?.trim().to_string()
     };
     pretty_assertions::assert_eq!(
         stored_state_config,

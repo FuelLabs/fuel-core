@@ -1,16 +1,32 @@
-use crate::test_context::{TestContext, BASE_AMOUNT};
-use fuel_core_chain_config::{ContractConfig, SnapshotMetadata, StateConfig};
+use crate::test_context::{
+    TestContext,
+    BASE_AMOUNT,
+};
+use fuel_core_chain_config::{
+    ContractConfig,
+    SnapshotMetadata,
+    StateConfig,
+};
 use fuel_core_types::{
     fuel_tx::{
-        field::ScriptGasLimit, Receipt, ScriptExecutionResult, Transaction,
+        field::ScriptGasLimit,
+        Receipt,
+        ScriptExecutionResult,
+        Transaction,
         UniqueIdentifier,
     },
-    fuel_types::{canonical::Deserialize, Salt},
+    fuel_types::{
+        canonical::Deserialize,
+        Salt,
+    },
     services::executor::TransactionExecutionResult,
 };
 
 use libtest_mimic::Failed;
-use std::{path::Path, time::Duration};
+use std::{
+    path::Path,
+    time::Duration,
+};
 use tokio::time::timeout;
 
 // Executes transfer script and gets the receipts.
@@ -180,10 +196,9 @@ async fn _dry_runs(
         let tx_statuses = query?;
         for (tx_status, tx) in tx_statuses.iter().zip(transactions.iter()) {
             if tx_status.result.receipts().is_empty() {
-                return Err(format!(
-                    "Receipts are empty for query_number {query_number}"
-                )
-                .into());
+                return Err(
+                    format!("Receipts are empty for query_number {query_number}").into(),
+                );
             }
 
             assert!(tx.id(&chain_info.consensus_parameters.chain_id) == tx_status.id);

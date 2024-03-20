@@ -1,24 +1,47 @@
 use super::{
-    init_coin, init_contract_latest_utxo, init_contract_raw_code, init_da_message,
-    runner::ProcessState, GenesisRunner,
+    init_coin,
+    init_contract_latest_utxo,
+    init_contract_raw_code,
+    init_da_message,
+    runner::ProcessState,
+    GenesisRunner,
 };
-use std::{collections::HashMap, marker::PhantomData, sync::Arc};
+use std::{
+    collections::HashMap,
+    marker::PhantomData,
+    sync::Arc,
+};
 
 use crate::database::{
-    balances::BalancesInitializer, genesis_progress::GenesisResource,
-    state::StateInitializer, Database,
+    balances::BalancesInitializer,
+    genesis_progress::GenesisResource,
+    state::StateInitializer,
+    Database,
 };
-use fuel_core_chain_config::{AsTable, Group, SnapshotReader, StateConfig, TableEntry};
+use fuel_core_chain_config::{
+    AsTable,
+    Group,
+    SnapshotReader,
+    StateConfig,
+    TableEntry,
+};
 use fuel_core_storage::{
     kv_store::StorageColumn,
     structured_storage::TableWithBlueprint,
     tables::{
-        Coins, ContractsAssets, ContractsLatestUtxo, ContractsRawCode, ContractsState,
+        Coins,
+        ContractsAssets,
+        ContractsLatestUtxo,
+        ContractsRawCode,
+        ContractsState,
         Messages,
     },
     transactional::StorageTransaction,
 };
-use fuel_core_types::{blockchain::primitives::DaBlockHeight, fuel_types::BlockHeight};
+use fuel_core_types::{
+    blockchain::primitives::DaBlockHeight,
+    fuel_types::BlockHeight,
+};
 use tokio::sync::Notify;
 use tokio_rayon::AsyncRayonHandle;
 use tokio_util::sync::CancellationToken;

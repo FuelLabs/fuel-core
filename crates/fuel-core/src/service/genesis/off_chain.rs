@@ -1,19 +1,32 @@
 use crate::{
     database::{
-        database_description::{off_chain::OffChain, on_chain::OnChain},
+        database_description::{
+            off_chain::OffChain,
+            on_chain::OnChain,
+        },
         Database,
     },
     graphql_api::worker_service,
 };
 use fuel_core_storage::{
     iter::IteratorOverTable,
-    tables::{Coins, Messages, Transactions},
+    tables::{
+        Coins,
+        Messages,
+        Transactions,
+    },
     transactional::WriteTransaction,
 };
 use fuel_core_txpool::types::TxId;
 use fuel_core_types::{
-    entities::{coins::coin::CompressedCoin, message::Message},
-    fuel_tx::{Transaction, UtxoId},
+    entities::{
+        coins::coin::CompressedCoin,
+        message::Message,
+    },
+    fuel_tx::{
+        Transaction,
+        UtxoId,
+    },
     fuel_types::Nonce,
     services::executor::Event,
 };

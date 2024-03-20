@@ -1,33 +1,63 @@
 use self::workers::GenesisWorkers;
 use crate::{
-    database::{genesis_progress::GenesisMetadata, Database},
+    database::{
+        genesis_progress::GenesisMetadata,
+        Database,
+    },
     service::config::Config,
 };
 use anyhow::anyhow;
-use fuel_core_chain_config::{GenesisCommitment, TableEntry};
+use fuel_core_chain_config::{
+    GenesisCommitment,
+    TableEntry,
+};
 use fuel_core_storage::{
     tables::{
-        Coins, ConsensusParametersVersions, ContractsLatestUtxo, ContractsRawCode,
-        Messages, StateTransitionBytecodeVersions,
+        Coins,
+        ConsensusParametersVersions,
+        ContractsLatestUtxo,
+        ContractsRawCode,
+        Messages,
+        StateTransitionBytecodeVersions,
     },
-    transactional::{Changes, ReadTransaction, StorageTransaction},
+    transactional::{
+        Changes,
+        ReadTransaction,
+        StorageTransaction,
+    },
     StorageAsMut,
 };
 use fuel_core_types::{
     blockchain::{
         block::Block,
-        consensus::{Consensus, Genesis},
-        header::{
-            ApplicationHeader, ConsensusHeader, ConsensusParametersVersion,
-            PartialBlockHeader, StateTransitionBytecodeVersion,
+        consensus::{
+            Consensus,
+            Genesis,
         },
-        primitives::{DaBlockHeight, Empty},
+        header::{
+            ApplicationHeader,
+            ConsensusHeader,
+            ConsensusParametersVersion,
+            PartialBlockHeader,
+            StateTransitionBytecodeVersion,
+        },
+        primitives::{
+            DaBlockHeight,
+            Empty,
+        },
         SealedBlock,
     },
-    entities::{coins::coin::Coin, contract::ContractUtxoInfo, message::Message},
-    fuel_types::{BlockHeight, Bytes32},
+    entities::{
+        coins::coin::Coin,
+        message::Message,
+    },
+    fuel_types::{
+        BlockHeight,
+        Bytes32,
+    },
     services::block_importer::{
-        ImportResult, UncommittedResult as UncommittedImportResult,
+        ImportResult,
+        UncommittedResult as UncommittedImportResult,
     },
 };
 use strum::IntoEnumIterator;
@@ -37,7 +67,10 @@ mod runner;
 mod workers;
 
 use crate::database::genesis_progress::GenesisResource;
-pub use runner::{GenesisRunner, TransactionOpener};
+pub use runner::{
+    GenesisRunner,
+    TransactionOpener,
+};
 
 /// Performs the importing of the genesis block from the snapshot.
 pub async fn execute_genesis_block(
@@ -273,15 +306,26 @@ mod tests {
     use crate::{
         combined_database::CombinedDatabase,
         database::{
-            genesis_progress::{GenesisProgressInspect, GenesisResource},
+            genesis_progress::{
+                GenesisProgressInspect,
+                GenesisResource,
+            },
             ChainStateDb,
         },
         query::BlockQueryData,
-        service::{config::Config, FuelService, Task},
+        service::{
+            config::Config,
+            FuelService,
+            Task,
+        },
     };
     use fuel_core_chain_config::{
-        ChainConfig, CoinConfig, ContractConfig, MessageConfig, Randomize,
-        SnapshotReader, StateConfig,
+        CoinConfig,
+        ContractConfig,
+        MessageConfig,
+        Randomize,
+        SnapshotReader,
+        StateConfig,
     };
     use fuel_core_services::RunnableService;
     use fuel_core_storage::{
@@ -289,19 +333,30 @@ mod tests {
         column::Column,
         iter::IterDirection,
         structured_storage::TableWithBlueprint,
-        tables::{Coins, ContractsAssets, ContractsState},
+        tables::{
+            Coins,
+            ContractsAssets,
+            ContractsState,
+        },
         StorageAsRef,
     };
     use fuel_core_types::{
         blockchain::primitives::DaBlockHeight,
         entities::coins::coin::Coin,
-        fuel_asm::op,
         fuel_tx::UtxoId,
-        fuel_types::{Address, AssetId, BlockHeight, ContractId, Salt},
-        fuel_vm::Contract,
+        fuel_types::{
+            Address,
+            AssetId,
+            BlockHeight,
+        },
     };
     use itertools::Itertools;
-    use rand::{rngs::StdRng, Rng, RngCore, SeedableRng};
+    use rand::{
+        rngs::StdRng,
+        Rng,
+        RngCore,
+        SeedableRng,
+    };
     use std::vec;
 
     #[tokio::test]

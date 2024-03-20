@@ -1,20 +1,34 @@
 use crate::{
-    config::table_entry::TableEntry, AsTable, ChainConfig, SnapshotMetadata, StateConfig,
+    config::table_entry::TableEntry,
+    AsTable,
+    ChainConfig,
+    SnapshotMetadata,
+    StateConfig,
     TableEncoding,
 };
 use fuel_core_storage::{
     kv_store::StorageColumn,
     structured_storage::TableWithBlueprint,
     tables::{
-        Coins, ContractsAssets, ContractsLatestUtxo, ContractsRawCode, ContractsState,
+        Coins,
+        ContractsAssets,
+        ContractsLatestUtxo,
+        ContractsRawCode,
+        ContractsState,
         Messages,
     },
     Mappable,
 };
-use fuel_core_types::{blockchain::primitives::DaBlockHeight, fuel_types::BlockHeight};
+use fuel_core_types::{
+    blockchain::primitives::DaBlockHeight,
+    fuel_types::BlockHeight,
+};
 use itertools::Itertools;
 use serde_json::Value;
-use std::{collections::HashMap, path::PathBuf};
+use std::{
+    collections::HashMap,
+    path::PathBuf,
+};
 
 #[cfg(feature = "parquet")]
 use super::parquet;
@@ -393,7 +407,10 @@ impl SnapshotWriter {
 #[cfg(feature = "random")]
 #[cfg(test)]
 mod tests {
-    use rand::{rngs::StdRng, SeedableRng};
+    use rand::{
+        rngs::StdRng,
+        SeedableRng,
+    };
 
     use super::*;
 

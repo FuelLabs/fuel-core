@@ -1,31 +1,43 @@
 use fuel_core::{
     chain_config::{
-        CoinConfig, CoinConfigGenerator, ContractConfig, MessageConfig, Randomize,
-        SnapshotReader, StateConfig, TableEntry,
+        Randomize,
+        SnapshotReader,
+        StateConfig,
+        TableEntry,
     },
-    database::{ChainStateDb, Database},
+    database::{
+        ChainStateDb,
+        Database,
+    },
     query::BlockQueryData,
-    service::{Config, FuelService},
+    service::{
+        Config,
+        FuelService,
+    },
 };
 use fuel_core_storage::{
-    blueprint::BlueprintInspect, column::Column, iter::IterDirection,
+    blueprint::BlueprintInspect,
+    column::Column,
+    iter::IterDirection,
     structured_storage::TableWithBlueprint,
 };
-use fuel_core_types::{
-    blockchain::primitives::DaBlockHeight,
-    fuel_types::{BlockHeight, Nonce, *},
+use fuel_core_types::blockchain::primitives::DaBlockHeight;
+use rand::{
+    rngs::StdRng,
+    SeedableRng,
 };
-use rand::{rngs::StdRng, Rng, SeedableRng};
 
 #[tokio::test]
 async fn loads_snapshot() {
     let mut rng = StdRng::seed_from_u64(1234);
     let db = Database::default();
 
-    let owner = Address::default();
-
     // setup config
-    let starting_state = StateConfig::randomize(&mut rng);
+    let starting_state = StateConfig {
+        block_height: u32::MAX.into(),
+        da_block_height: DaBlockHeight(u64::MAX),
+        ..StateConfig::randomize(&mut rng)
+    };
     let config = Config {
         state_reader: SnapshotReader::in_memory(starting_state.clone()),
         ..Config::local_node()
@@ -60,6 +72,5 @@ async fn loads_snapshot() {
     );
 
     // initial state
-
-    assert_eq!(starting_state, stored_state);
+    pretty_assertions::assert_eq!(starting_state.sorted(), stored_state);
 }

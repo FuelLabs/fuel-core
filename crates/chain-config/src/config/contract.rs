@@ -1,10 +1,24 @@
 use crate::serialization::HexIfHumanReadable;
 use fuel_core_types::{
-    fuel_tx::{AssetId, Contract, ContractId, StorageSlot, TxPointer, UtxoId},
-    fuel_types::{BlockHeight, Bytes32, Salt},
+    fuel_tx::{
+        AssetId,
+        Contract,
+        ContractId,
+        StorageSlot,
+        TxPointer,
+        UtxoId,
+    },
+    fuel_types::{
+        BlockHeight,
+        Bytes32,
+        Salt,
+    },
 };
 use itertools::Itertools;
-use serde::{Deserialize, Serialize};
+use serde::{
+    Deserialize,
+    Serialize,
+};
 use serde_with::serde_as;
 
 #[serde_as]
@@ -119,7 +133,7 @@ impl crate::Randomize for ContractConfig {
 }
 
 impl ContractConfig {
-    pub fn update_contract_id<'a>(&mut self, salt: Salt) {
+    pub fn update_contract_id(&mut self, salt: Salt) {
         let slots: Vec<_> = self
             .states
             .iter()

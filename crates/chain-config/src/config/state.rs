@@ -1,28 +1,52 @@
-use bech32::{ToBase32, Variant::Bech32m};
-use core::{fmt::Debug, str::FromStr};
+use bech32::{
+    ToBase32,
+    Variant::Bech32m,
+};
+use core::{
+    fmt::Debug,
+    str::FromStr,
+};
 use fuel_core_storage::{
     structured_storage::TableWithBlueprint,
     tables::{
-        Coins, ContractsAssets, ContractsLatestUtxo, ContractsRawCode, ContractsState,
+        Coins,
+        ContractsAssets,
+        ContractsLatestUtxo,
+        ContractsRawCode,
+        ContractsState,
         Messages,
     },
-    ContractsAssetKey, ContractsStateKey,
+    ContractsAssetKey,
+    ContractsStateKey,
 };
 use fuel_core_types::{
     blockchain::primitives::DaBlockHeight,
-    entities::contract::{ContractUtxoInfo, ContractsInfoType},
-    fuel_types::{Address, BlockHeight, Bytes32},
+    entities::contract::ContractUtxoInfo,
+    fuel_types::{
+        Address,
+        BlockHeight,
+        Bytes32,
+    },
     fuel_vm::SecretKey,
 };
 use itertools::Itertools;
-use serde::{Deserialize, Serialize};
+use serde::{
+    Deserialize,
+    Serialize,
+};
 
 #[cfg(feature = "std")]
 use crate::SnapshotMetadata;
-use crate::{CoinConfigGenerator, ContractAsset, ContractState};
+use crate::{
+    CoinConfigGenerator,
+    ContractAsset,
+    ContractState,
+};
 
 use super::{
-    coin::CoinConfig, contract::ContractConfig, message::MessageConfig,
+    coin::CoinConfig,
+    contract::ContractConfig,
+    message::MessageConfig,
     table_entry::TableEntry,
 };
 
@@ -174,6 +198,28 @@ impl AsTable<ContractsLatestUtxo> for StateConfig {
 }
 
 impl StateConfig {
+    pub fn sorted(mut self) -> Self {
+        self.coins = self
+            .coins
+            .into_iter()
+            .sorted_by_key(|c| c.utxo_id())
+            .collect();
+
+        self.messages = self
+            .messages
+            .into_iter()
+            .sorted_by_key(|m| m.nonce)
+            .collect();
+
+        self.contracts = self
+            .contracts
+            .into_iter()
+            .sorted_by_key(|c| c.contract_id)
+            .collect();
+
+        self
+    }
+
     pub fn extend(&mut self, other: Self) {
         self.coins.extend(other.coins);
         self.messages.extend(other.messages);
@@ -273,31 +319,6 @@ impl StateConfig {
             da_block_height,
         }
     }
-
-    // pub fn generate_state_config(db: impl ChainStateDb) -> StorageResult<Self> {
-    //     let coins = db.entries().try_collect()?;
-    //     let messages = db.entries().try_collect()?;
-    //     let contract_state = db.entries().try_collect()?;
-    //     let contract_balance = db.entries().try_collect()?;
-    //     let contract_code = db.entries().try_collect()?;
-    //     let contract_info = db.entries().try_collect()?;
-    //     let contract_utxo = db.entries().try_collect()?;
-    //     let block = db.get_last_block()?;
-    //     let da_block_height = block.header().da_height;
-    //     let block_height = *block.header().height();
-    //
-    //     Ok(Self::from_tables(
-    //         coins,
-    //         messages,
-    //         contract_state,
-    //         contract_balance,
-    //         contract_code,
-    //         contract_info,
-    //         contract_utxo,
-    //         da_block_height,
-    //         block_height,
-    //     ))
-    // }
 
     #[cfg(feature = "std")]
     pub fn from_snapshot_metadata(
@@ -420,7 +441,10 @@ impl StateConfig {
     }
 }
 
-pub use reader::{IntoIter, SnapshotReader};
+pub use reader::{
+    IntoIter,
+    SnapshotReader,
+};
 #[cfg(feature = "std")]
 pub use writer::SnapshotWriter;
 #[cfg(feature = "parquet")]
@@ -439,10 +463,16 @@ pub(crate) type GroupResult<T> = anyhow::Result<Group<T>>;
 mod tests {
     use std::path::Path;
 
-    use crate::{Group, Randomize};
+    use crate::{
+        Group,
+        Randomize,
+    };
 
     use itertools::Itertools;
-    use rand::{rngs::StdRng, SeedableRng};
+    use rand::{
+        rngs::StdRng,
+        SeedableRng,
+    };
 
     use super::*;
 
@@ -451,15 +481,26 @@ mod tests {
         use std::path::Path;
 
         use fuel_core_storage::tables::{
-            Coins, ContractsAssets, ContractsInfo, ContractsLatestUtxo, ContractsRawCode,
-            ContractsState, Messages,
+            Coins,
+            ContractsAssets,
+            ContractsInfo,
+            ContractsLatestUtxo,
+            ContractsRawCode,
+            ContractsState,
+            Messages,
         };
 
         use crate::{
-            config::state::writer, SnapshotMetadata, SnapshotReader, SnapshotWriter,
+            config::state::writer,
+            SnapshotMetadata,
+            SnapshotReader,
+            SnapshotWriter,
         };
 
-        use super::{assert_roundtrip, assert_roundtrip_block_heights};
+        use super::{
+            assert_roundtrip,
+            assert_roundtrip_block_heights,
+        };
 
         #[test]
         fn roundtrip() {
@@ -504,16 +545,29 @@ mod tests {
     mod json {
         use std::path::Path;
 
-        use fuel_core_storage::tables::{Coins, Messages};
+        use fuel_core_storage::tables::{
+            Coins,
+            Messages,
+        };
         use itertools::Itertools;
-        use rand::{rngs::StdRng, SeedableRng};
+        use rand::{
+            rngs::StdRng,
+            SeedableRng,
+        };
 
         use crate::{
-            ContractConfig, Randomize, SnapshotMetadata, SnapshotReader, SnapshotWriter,
+            ContractConfig,
+            Randomize,
+            SnapshotMetadata,
+            SnapshotReader,
+            SnapshotWriter,
             StateConfig,
         };
 
-        use super::{assert_roundtrip, assert_roundtrip_block_heights};
+        use super::{
+            assert_roundtrip,
+            assert_roundtrip_block_heights,
+        };
 
         #[test]
         fn roundtrip() {
