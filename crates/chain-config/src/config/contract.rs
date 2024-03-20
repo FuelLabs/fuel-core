@@ -1,24 +1,10 @@
 use crate::serialization::HexIfHumanReadable;
 use fuel_core_types::{
-    fuel_tx::{
-        AssetId,
-        Contract,
-        ContractId,
-        StorageSlot,
-        TxPointer,
-        UtxoId,
-    },
-    fuel_types::{
-        BlockHeight,
-        Bytes32,
-        Salt,
-    },
+    fuel_tx::{AssetId, Contract, ContractId, StorageSlot, TxPointer, UtxoId},
+    fuel_types::{BlockHeight, Bytes32, Salt},
 };
 use itertools::Itertools;
-use serde::{
-    Deserialize,
-    Serialize,
-};
+use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 
 #[serde_as]
@@ -27,7 +13,6 @@ pub struct ContractConfig {
     pub contract_id: ContractId,
     #[serde_as(as = "HexIfHumanReadable")]
     pub code: Vec<u8>,
-    pub salt: Salt,
     pub tx_id: Bytes32,
     pub output_index: u8,
     /// TxPointer: auto-generated if None
@@ -100,7 +85,6 @@ impl ContractConfig {
 impl crate::Randomize for ContractConfig {
     fn randomize(mut rng: impl ::rand::Rng) -> Self {
         let code = Bytes32::randomize(&mut rng).to_vec();
-        let salt = crate::Randomize::randomize(&mut rng);
         let states = vec![ContractState {
             key: Bytes32::randomize(&mut rng),
             value: Bytes32::randomize(&mut rng).to_vec(),
@@ -115,12 +99,12 @@ impl crate::Randomize for ContractConfig {
                 .collect_vec();
             Contract::initial_state_root(states.iter())
         };
+        let salt = Salt::zeroed();
         let contract_id = contract.id(&salt, &contract.root(), &state_root);
 
         Self {
             contract_id,
             code,
-            salt,
             tx_id: crate::Randomize::randomize(&mut rng),
             output_index: rng.gen(),
             tx_pointer_block_height: crate::Randomize::randomize(&mut rng),
@@ -135,15 +119,19 @@ impl crate::Randomize for ContractConfig {
 }
 
 impl ContractConfig {
-    pub fn update_contract_id<'a>(
-        &mut self,
-        storage_slots: impl IntoIterator<Item = &'a StorageSlot>,
-    ) {
-        let state_root = Contract::initial_state_root(storage_slots.into_iter());
+    pub fn update_contract_id<'a>(&mut self, salt: Salt) {
+        let slots: Vec<_> = self
+            .states
+            .iter()
+            .cloned()
+            .map(StorageSlot::try_from)
+            .try_collect()
+            .unwrap();
+        let state_root = Contract::initial_state_root(slots.iter());
 
         let contract = Contract::from(self.code.clone());
         let root = contract.root();
-        let contract_id = contract.id(&self.salt, &root, &state_root);
+        let contract_id = contract.id(&salt, &root, &state_root);
         self.contract_id = contract_id;
     }
 }

@@ -1,35 +1,20 @@
 use crate::{
-    config::table_entry::TableEntry,
-    AsTable,
-    ChainConfig,
-    SnapshotMetadata,
-    StateConfig,
+    config::table_entry::TableEntry, AsTable, ChainConfig, SnapshotMetadata, StateConfig,
     TableEncoding,
 };
 use fuel_core_storage::{
     kv_store::StorageColumn,
     structured_storage::TableWithBlueprint,
     tables::{
-        Coins,
-        ContractsAssets,
-        ContractsInfo,
-        ContractsLatestUtxo,
-        ContractsRawCode,
-        ContractsState,
+        Coins, ContractsAssets, ContractsLatestUtxo, ContractsRawCode, ContractsState,
         Messages,
     },
     Mappable,
 };
-use fuel_core_types::{
-    blockchain::primitives::DaBlockHeight,
-    fuel_types::BlockHeight,
-};
+use fuel_core_types::{blockchain::primitives::DaBlockHeight, fuel_types::BlockHeight};
 use itertools::Itertools;
 use serde_json::Value;
-use std::{
-    collections::HashMap,
-    path::PathBuf,
-};
+use std::{collections::HashMap, path::PathBuf};
 
 #[cfg(feature = "parquet")]
 use super::parquet;
@@ -227,7 +212,6 @@ impl SnapshotWriter {
         self.write::<Coins>(state_config.as_table())?;
         self.write::<Messages>(state_config.as_table())?;
         self.write::<ContractsRawCode>(state_config.as_table())?;
-        self.write::<ContractsInfo>(state_config.as_table())?;
         self.write::<ContractsLatestUtxo>(state_config.as_table())?;
         self.write::<ContractsState>(state_config.as_table())?;
         self.write::<ContractsAssets>(state_config.as_table())?;
@@ -352,7 +336,6 @@ impl SnapshotWriter {
                     extract_table(&mut buffer)?,
                     extract_table(&mut buffer)?,
                     extract_table(&mut buffer)?,
-                    extract_table(&mut buffer)?,
                     da_block_height.unwrap_or_default(),
                     block_height.unwrap_or_default(),
                 );
@@ -410,10 +393,7 @@ impl SnapshotWriter {
 #[cfg(feature = "random")]
 #[cfg(test)]
 mod tests {
-    use rand::{
-        rngs::StdRng,
-        SeedableRng,
-    };
+    use rand::{rngs::StdRng, SeedableRng};
 
     use super::*;
 

@@ -1,29 +1,16 @@
-use crate::test_context::{
-    TestContext,
-    BASE_AMOUNT,
-};
-use fuel_core_chain_config::{
-    ContractConfig,
-    SnapshotMetadata,
-    StateConfig,
-};
+use crate::test_context::{TestContext, BASE_AMOUNT};
+use fuel_core_chain_config::{ContractConfig, SnapshotMetadata, StateConfig};
 use fuel_core_types::{
     fuel_tx::{
-        field::ScriptGasLimit,
-        Receipt,
-        ScriptExecutionResult,
-        Transaction,
+        field::ScriptGasLimit, Receipt, ScriptExecutionResult, Transaction,
         UniqueIdentifier,
     },
-    fuel_types::canonical::Deserialize,
+    fuel_types::{canonical::Deserialize, Salt},
     services::executor::TransactionExecutionResult,
 };
 
 use libtest_mimic::Failed;
-use std::{
-    path::Path,
-    time::Duration,
-};
+use std::{path::Path, time::Duration};
 use tokio::time::timeout;
 
 // Executes transfer script and gets the receipts.
@@ -99,21 +86,25 @@ pub async fn dry_run_multiple_txs(ctx: &TestContext) -> Result<(), Failed> {
     .await
 }
 
-fn load_contract(path: impl AsRef<Path>) -> Result<ContractConfig, Failed> {
+fn load_contract(salt: Salt, path: impl AsRef<Path>) -> Result<ContractConfig, Failed> {
     let snapshot = SnapshotMetadata::read(path)?;
     let state_config = StateConfig::from_snapshot_metadata(snapshot)?;
-    let contract_config = state_config
+    let mut contract_config = state_config
         .contracts
         .into_iter()
         .next()
         .ok_or("No contract found in the state")?;
 
+    contract_config.update_contract_id(salt);
     Ok(contract_config)
 }
 
 // Maybe deploy a contract with large state and execute the script
 pub async fn run_contract_large_state(ctx: &TestContext) -> Result<(), Failed> {
-    let contract_config = load_contract("./src/tests/test_data/large_state")?;
+    let salt: Salt = "0x3b91bab936e4f3db9453046b34c142514e78b64374bf61a04ab45afbd6bca83e"
+        .parse()
+        .expect("Should be able to parse the salt");
+    let contract_config = load_contract(salt, "./src/tests/test_data/large_state")?;
     let dry_run = include_bytes!("test_data/large_state/tx.json");
     let dry_run: Transaction = serde_json::from_slice(dry_run.as_ref())
         .expect("Should be able do decode the Transaction");
@@ -127,11 +118,9 @@ pub async fn run_contract_large_state(ctx: &TestContext) -> Result<(), Failed> {
     // if the contract is not deployed yet, let's deploy it
     let result = ctx.bob.client.contract(&contract_id).await;
     if result?.is_none() {
-        let deployment_request = ctx.bob.deploy_contract(contract_config);
+        let deployment_request = ctx.bob.deploy_contract(contract_config, salt);
 
-        // wait for contract to deploy in 300 seconds because `state_root` calculation is too long.
-        // https://github.com/FuelLabs/fuel-core/issues/1143
-        timeout(Duration::from_secs(300), deployment_request).await??;
+        timeout(Duration::from_secs(20), deployment_request).await??;
     }
 
     _dry_runs(ctx, &[dry_run], 1000, DryRunResult::MayFail).await
@@ -191,9 +180,10 @@ async fn _dry_runs(
         let tx_statuses = query?;
         for (tx_status, tx) in tx_statuses.iter().zip(transactions.iter()) {
             if tx_status.result.receipts().is_empty() {
-                return Err(
-                    format!("Receipts are empty for query_number {query_number}").into(),
-                );
+                return Err(format!(
+                    "Receipts are empty for query_number {query_number}"
+                )
+                .into());
             }
 
             assert!(tx.id(&chain_info.consensus_parameters.chain_id) == tx_status.id);

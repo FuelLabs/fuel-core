@@ -447,6 +447,14 @@ type Header {
 	"""
 	daHeight: U64!
 	"""
+	The version of the consensus parameters used to create this block.
+	"""
+	consensusParametersVersion: U32!
+	"""
+	The version of the state transition bytecode used to create this block.
+	"""
+	stateTransitionBytecodeVersion: U32!
+	"""
 	Number of transactions in this block.
 	"""
 	transactionsCount: U64!

@@ -1,26 +1,12 @@
 use crate::database::Database;
 use fuel_core_chain_config::TableEntry;
 use fuel_core_storage::{
-    iter::{
-        IterDirection,
-        IteratorOverTable,
-    },
+    iter::{IterDirection, IteratorOverTable},
     not_found,
-    tables::{
-        ContractsAssets,
-        ContractsInfo,
-        ContractsLatestUtxo,
-        ContractsRawCode,
-        ContractsState,
-    },
-    ContractsAssetKey,
-    Result as StorageResult,
-    StorageAsRef,
+    tables::{ContractsAssets, ContractsLatestUtxo, ContractsRawCode, ContractsState},
+    ContractsAssetKey, Result as StorageResult, StorageAsRef,
 };
-use fuel_core_types::fuel_types::{
-    AssetId,
-    ContractId,
-};
+use fuel_core_types::fuel_types::{AssetId, ContractId};
 use itertools::Itertools;
 
 impl Database {
@@ -45,13 +31,6 @@ impl Database {
             .map_ok(|(key, value)| TableEntry { key, value })
     }
 
-    pub fn iter_contracts_info(
-        &self,
-    ) -> impl Iterator<Item = StorageResult<TableEntry<ContractsInfo>>> + '_ {
-        self.iter_all::<ContractsInfo>(None)
-            .map_ok(|(key, value)| TableEntry { key, value })
-    }
-
     pub fn iter_contracts_latest_utxo(
         &self,
     ) -> impl Iterator<Item = StorageResult<TableEntry<ContractsLatestUtxo>>> + '_ {
@@ -70,19 +49,6 @@ impl Database {
                 value: value.into_owned(),
             })
             .ok_or_else(|| not_found!("ContractsRawCode"))
-    }
-
-    pub fn contract_info(
-        &self,
-        contract_id: ContractId,
-    ) -> StorageResult<TableEntry<ContractsInfo>> {
-        self.storage::<ContractsInfo>()
-            .get(&contract_id)?
-            .map(|value| TableEntry {
-                key: contract_id,
-                value: value.into_owned(),
-            })
-            .ok_or_else(|| not_found!("ContractsInfo"))
     }
 
     pub fn contract_latest_utxo(
@@ -129,10 +95,7 @@ mod tests {
     use crate::database::database_description::on_chain::OnChain;
     use fuel_core_storage::StorageAsMut;
     use fuel_core_types::fuel_tx::Contract;
-    use rand::{
-        RngCore,
-        SeedableRng,
-    };
+    use rand::{RngCore, SeedableRng};
 
     #[test]
     fn raw_code_put_huge_contract() {

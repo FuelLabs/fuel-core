@@ -7,6 +7,7 @@ use crate::fuel_core_graphql_api::{
             owner_coin_id_key,
             OwnedCoins,
         },
+        contracts::ContractsInfo,
         messages::{
             OwnedMessageIds,
             OwnedMessageKey,
@@ -32,6 +33,7 @@ use fuel_core_types::{
         field::{
             Inputs,
             Outputs,
+            Salt,
         },
         input::coin::{
             CoinPredicate,
@@ -88,6 +90,9 @@ where
 
         // save the associated owner for each transaction in the block
         index_tx_owners_for_block(block, &mut transaction)?;
+
+        // save the transaction related information
+        process_transactions(block.transactions().iter(), &mut transaction)?;
 
         let height = block.header().height();
         let block_id = block.id();
@@ -264,6 +269,34 @@ where
                 id
             )
             .into());
+        }
+    }
+    Ok(())
+}
+
+pub fn process_transactions<'a, I, T>(transactions: I, db: &mut T) -> StorageResult<()>
+where
+    I: Iterator<Item = &'a Transaction>,
+    T: OffChainDatabase,
+{
+    for tx in transactions {
+        match tx {
+            Transaction::Create(create) => {
+                let contract_id = create
+                    .outputs()
+                    .iter()
+                    .filter_map(|output| output.contract_id().cloned())
+                    .next()
+                    .expect("Committed `Create` transaction should have a contract id");
+
+                let salt = *create.salt();
+
+                db.storage::<ContractsInfo>()
+                    .insert(&contract_id, &(salt.into()))?;
+            }
+            Transaction::Script(_) | Transaction::Mint(_) => {
+                // Do nothing
+            }
         }
     }
     Ok(())

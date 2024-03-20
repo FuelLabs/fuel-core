@@ -11,6 +11,8 @@ query($after: String, $before: String, $first: Int, $last: Int) {
         header {
           id
           daHeight
+          consensusParametersVersion
+          stateTransitionBytecodeVersion
           transactionsCount
           messageReceiptCount
           transactionsRoot
@@ -45,5 +47,3 @@ query($after: String, $before: String, $first: Int, $last: Int) {
     }
   }
 }
-
-

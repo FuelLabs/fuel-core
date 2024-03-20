@@ -156,6 +156,11 @@ pub struct PartialBlockHeader {
     pub consensus: ConsensusHeader<Empty>,
 }
 
+/// The type representing the version of the consensus parameters.
+pub type ConsensusParametersVersion = u32;
+/// The type representing the version of the state transition bytecode.
+pub type StateTransitionBytecodeVersion = u32;
+
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(any(test, feature = "test-helpers"), derive(Default))]
@@ -169,6 +174,10 @@ pub struct ApplicationHeader<Generated> {
     /// layer 1 chain. They should also verify that the block number isn't too stale and is increasing.
     /// Some similar concerns are noted in this issue: <https://github.com/FuelLabs/fuel-specs/issues/220>
     pub da_height: DaBlockHeight,
+    /// The version of the consensus parameters used to execute this block.
+    pub consensus_parameters_version: ConsensusParametersVersion,
+    /// The version of the state transition bytecode used to execute this block.
+    pub state_transition_bytecode_version: StateTransitionBytecodeVersion,
     /// Generated application fields.
     pub generated: Generated,
 }
@@ -370,6 +379,10 @@ impl PartialBlockHeader {
 
         let application = ApplicationHeader {
             da_height: self.application.da_height,
+            consensus_parameters_version: self.application.consensus_parameters_version,
+            state_transition_bytecode_version: self
+                .application
+                .state_transition_bytecode_version,
             generated: GeneratedApplicationFields {
                 transactions_count: transactions.len() as u64,
                 message_receipt_count: message_ids.len() as u64,
@@ -415,11 +428,13 @@ impl ApplicationHeader<GeneratedApplicationFields> {
     pub fn hash(&self) -> Bytes32 {
         // Order matters and is the same as the spec.
         let mut hasher = crate::fuel_crypto::Hasher::default();
-        hasher.input(&self.da_height.to_bytes()[..]);
+        hasher.input(self.da_height.to_bytes().as_slice());
         hasher.input(self.transactions_count.to_be_bytes());
         hasher.input(self.message_receipt_count.to_be_bytes());
         hasher.input(self.transactions_root.as_ref());
         hasher.input(self.message_receipt_root.as_ref());
+        hasher.input(self.consensus_parameters_version.to_bytes().as_slice());
+        hasher.input(self.state_transition_bytecode_version.to_bytes().as_slice());
         hasher.digest()
     }
 }

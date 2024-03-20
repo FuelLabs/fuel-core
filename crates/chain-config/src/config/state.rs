@@ -1,56 +1,28 @@
-use bech32::{
-    ToBase32,
-    Variant::Bech32m,
-};
-use core::{
-    fmt::Debug,
-    str::FromStr,
-};
+use bech32::{ToBase32, Variant::Bech32m};
+use core::{fmt::Debug, str::FromStr};
 use fuel_core_storage::{
     structured_storage::TableWithBlueprint,
     tables::{
-        Coins,
-        ContractsAssets,
-        ContractsInfo,
-        ContractsLatestUtxo,
-        ContractsRawCode,
-        ContractsState,
+        Coins, ContractsAssets, ContractsLatestUtxo, ContractsRawCode, ContractsState,
         Messages,
     },
-    ContractsAssetKey,
-    ContractsStateKey,
+    ContractsAssetKey, ContractsStateKey,
 };
 use fuel_core_types::{
     blockchain::primitives::DaBlockHeight,
-    entities::contract::{
-        ContractUtxoInfo,
-        ContractsInfoType,
-    },
-    fuel_types::{
-        Address,
-        BlockHeight,
-        Bytes32,
-    },
+    entities::contract::{ContractUtxoInfo, ContractsInfoType},
+    fuel_types::{Address, BlockHeight, Bytes32},
     fuel_vm::SecretKey,
 };
 use itertools::Itertools;
-use serde::{
-    Deserialize,
-    Serialize,
-};
+use serde::{Deserialize, Serialize};
 
 #[cfg(feature = "std")]
 use crate::SnapshotMetadata;
-use crate::{
-    CoinConfigGenerator,
-    ContractAsset,
-    ContractState,
-};
+use crate::{CoinConfigGenerator, ContractAsset, ContractState};
 
 use super::{
-    coin::CoinConfig,
-    contract::ContractConfig,
-    message::MessageConfig,
+    coin::CoinConfig, contract::ContractConfig, message::MessageConfig,
     table_entry::TableEntry,
 };
 
@@ -184,17 +156,6 @@ impl AsTable<ContractsRawCode> for StateConfig {
             .collect()
     }
 }
-impl AsTable<ContractsInfo> for StateConfig {
-    fn as_table(&self) -> Vec<TableEntry<ContractsInfo>> {
-        self.contracts
-            .iter()
-            .map(|config| TableEntry {
-                key: config.contract_id,
-                value: ContractsInfoType::V1(config.salt.into()),
-            })
-            .collect()
-    }
-}
 impl AsTable<ContractsLatestUtxo> for StateConfig {
     fn as_table(&self) -> Vec<TableEntry<ContractsLatestUtxo>> {
         self.contracts
@@ -226,7 +187,6 @@ impl StateConfig {
         contract_state: Vec<TableEntry<ContractsState>>,
         contract_balance: Vec<TableEntry<ContractsAssets>>,
         contract_code: Vec<TableEntry<ContractsRawCode>>,
-        contract_info: Vec<TableEntry<ContractsInfo>>,
         contract_utxo: Vec<TableEntry<ContractsLatestUtxo>>,
         da_block_height: DaBlockHeight,
         block_height: BlockHeight,
@@ -270,14 +230,6 @@ impl StateConfig {
             .map(|entry| (entry.key, entry.value.into()))
             .collect();
 
-        let mut contract_salt: HashMap<_, _> = contract_info
-            .into_iter()
-            .map(|entry| match entry.value {
-                ContractsInfoType::V1(info) => (entry.key, info.into()),
-                _ => unreachable!(),
-            })
-            .collect();
-
         let mut contract_utxos: HashMap<_, _> = contract_utxo
             .into_iter()
             .map(|entry| match entry.value {
@@ -294,9 +246,6 @@ impl StateConfig {
                 let code = contract_code
                     .remove(&id)
                     .ok_or_else(|| anyhow::anyhow!("Missing code for contract: {id}"))?;
-                let salt = contract_salt
-                    .remove(&id)
-                    .ok_or_else(|| anyhow::anyhow!("Missing salt for contract: {id}"))?;
                 let (utxo_id, tx_pointer) = contract_utxos
                     .remove(&id)
                     .ok_or_else(|| anyhow::anyhow!("Missing utxo for contract: {id}"))?;
@@ -306,7 +255,6 @@ impl StateConfig {
                 Ok(ContractConfig {
                     contract_id: id,
                     code,
-                    salt,
                     tx_id: *utxo_id.tx_id(),
                     output_index: utxo_id.output_index(),
                     tx_pointer_block_height: tx_pointer.block_height(),
@@ -391,12 +339,6 @@ impl StateConfig {
             .flatten_ok()
             .try_collect()?;
 
-        let contract_info = reader
-            .read()?
-            .map_ok(|batch| batch.data)
-            .flatten_ok()
-            .try_collect()?;
-
         let contract_utxo = reader
             .read()?
             .map_ok(|batch| batch.data)
@@ -412,17 +354,11 @@ impl StateConfig {
             contract_state,
             contract_balance,
             contract_code,
-            contract_info,
             contract_utxo,
             da_block_height,
             block_height,
         ))
     }
-
-    // // TODO: this seems to be a duplicate, remove it
-    // pub fn from_db(db: impl ChainStateDb) -> anyhow::Result<Self> {
-    //     Ok(Self::generate_state_config(db)?)
-    // }
 
     pub fn local_testnet() -> Self {
         // endow some preset accounts with an initial balance
@@ -484,10 +420,7 @@ impl StateConfig {
     }
 }
 
-pub use reader::{
-    IntoIter,
-    SnapshotReader,
-};
+pub use reader::{IntoIter, SnapshotReader};
 #[cfg(feature = "std")]
 pub use writer::SnapshotWriter;
 #[cfg(feature = "parquet")]
@@ -506,16 +439,10 @@ pub(crate) type GroupResult<T> = anyhow::Result<Group<T>>;
 mod tests {
     use std::path::Path;
 
-    use crate::{
-        Group,
-        Randomize,
-    };
+    use crate::{Group, Randomize};
 
     use itertools::Itertools;
-    use rand::{
-        rngs::StdRng,
-        SeedableRng,
-    };
+    use rand::{rngs::StdRng, SeedableRng};
 
     use super::*;
 
@@ -524,26 +451,15 @@ mod tests {
         use std::path::Path;
 
         use fuel_core_storage::tables::{
-            Coins,
-            ContractsAssets,
-            ContractsInfo,
-            ContractsLatestUtxo,
-            ContractsRawCode,
-            ContractsState,
-            Messages,
+            Coins, ContractsAssets, ContractsInfo, ContractsLatestUtxo, ContractsRawCode,
+            ContractsState, Messages,
         };
 
         use crate::{
-            config::state::writer,
-            SnapshotMetadata,
-            SnapshotReader,
-            SnapshotWriter,
+            config::state::writer, SnapshotMetadata, SnapshotReader, SnapshotWriter,
         };
 
-        use super::{
-            assert_roundtrip,
-            assert_roundtrip_block_heights,
-        };
+        use super::{assert_roundtrip, assert_roundtrip_block_heights};
 
         #[test]
         fn roundtrip() {
@@ -588,29 +504,16 @@ mod tests {
     mod json {
         use std::path::Path;
 
-        use fuel_core_storage::tables::{
-            Coins,
-            Messages,
-        };
+        use fuel_core_storage::tables::{Coins, Messages};
         use itertools::Itertools;
-        use rand::{
-            rngs::StdRng,
-            SeedableRng,
-        };
+        use rand::{rngs::StdRng, SeedableRng};
 
         use crate::{
-            ContractConfig,
-            Randomize,
-            SnapshotMetadata,
-            SnapshotReader,
-            SnapshotWriter,
+            ContractConfig, Randomize, SnapshotMetadata, SnapshotReader, SnapshotWriter,
             StateConfig,
         };
 
-        use super::{
-            assert_roundtrip,
-            assert_roundtrip_block_heights,
-        };
+        use super::{assert_roundtrip, assert_roundtrip_block_heights};
 
         #[test]
         fn roundtrip() {

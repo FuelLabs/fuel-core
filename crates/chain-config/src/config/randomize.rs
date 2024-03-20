@@ -4,45 +4,20 @@ pub trait Randomize {
 
 use fuel_core_storage::{
     tables::{
-        Coins,
-        ContractsAssets,
-        ContractsInfo,
-        ContractsLatestUtxo,
-        ContractsRawCode,
-        ContractsState,
+        Coins, ContractsAssets, ContractsLatestUtxo, ContractsRawCode, ContractsState,
         Messages,
     },
-    ContractsAssetKey,
-    ContractsStateData,
-    ContractsStateKey,
+    ContractsAssetKey, ContractsStateData, ContractsStateKey,
 };
 use fuel_core_types::{
     blockchain::primitives::DaBlockHeight,
     entities::{
-        coins::coin::{
-            CompressedCoin,
-            CompressedCoinV1,
-        },
-        contract::{
-            ContractUtxoInfo,
-            ContractsInfoType,
-        },
-        message::{
-            Message,
-            MessageV1,
-        },
+        coins::coin::{CompressedCoin, CompressedCoinV1},
+        contract::{ContractUtxoInfo, ContractsInfoType},
+        message::{Message, MessageV1},
     },
-    fuel_tx::{
-        ContractId,
-        UtxoId,
-    },
-    fuel_types::{
-        Address,
-        AssetId,
-        BlockHeight,
-        Bytes32,
-        Nonce,
-    },
+    fuel_tx::{ContractId, UtxoId},
+    fuel_types::{Address, AssetId, BlockHeight, Bytes32, Nonce},
     fuel_vm::Salt,
 };
 
@@ -80,7 +55,6 @@ delegating_table_impl!(
     ContractsRawCode,
     ContractsState,
     ContractsAssets,
-    ContractsInfo,
     ContractsLatestUtxo
 );
 

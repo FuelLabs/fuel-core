@@ -8,6 +8,8 @@ query($height: U32) {
     header {
       id
       daHeight
+      consensusParametersVersion
+      stateTransitionBytecodeVersion
       transactionsCount
       messageReceiptCount
       transactionsRoot
@@ -34,5 +36,3 @@ query($height: U32) {
     }
   }
 }
-
-

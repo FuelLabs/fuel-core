@@ -1,60 +1,33 @@
 use self::workers::GenesisWorkers;
 use crate::{
-    database::{
-        genesis_progress::GenesisMetadata,
-        Database,
-    },
+    database::{genesis_progress::GenesisMetadata, Database},
     service::config::Config,
 };
 use anyhow::anyhow;
-use fuel_core_chain_config::{
-    GenesisCommitment,
-    TableEntry,
-};
+use fuel_core_chain_config::{GenesisCommitment, TableEntry};
 use fuel_core_storage::{
     tables::{
-        Coins,
-        ContractsInfo,
-        ContractsLatestUtxo,
-        ContractsRawCode,
-        Messages,
+        Coins, ConsensusParametersVersions, ContractsLatestUtxo, ContractsRawCode,
+        Messages, StateTransitionBytecodeVersions,
     },
-    transactional::{
-        Changes,
-        ReadTransaction,
-        StorageTransaction,
-    },
+    transactional::{Changes, ReadTransaction, StorageTransaction},
     StorageAsMut,
 };
 use fuel_core_types::{
     blockchain::{
         block::Block,
-        consensus::{
-            Consensus,
-            Genesis,
-        },
+        consensus::{Consensus, Genesis},
         header::{
-            ApplicationHeader,
-            ConsensusHeader,
-            PartialBlockHeader,
+            ApplicationHeader, ConsensusHeader, ConsensusParametersVersion,
+            PartialBlockHeader, StateTransitionBytecodeVersion,
         },
-        primitives::{
-            DaBlockHeight,
-            Empty,
-        },
+        primitives::{DaBlockHeight, Empty},
         SealedBlock,
     },
-    entities::{
-        coins::coin::Coin,
-        message::Message,
-    },
-    fuel_types::{
-        BlockHeight,
-        Bytes32,
-    },
+    entities::{coins::coin::Coin, contract::ContractUtxoInfo, message::Message},
+    fuel_types::{BlockHeight, Bytes32},
     services::block_importer::{
-        ImportResult,
-        UncommittedResult as UncommittedImportResult,
+        ImportResult, UncommittedResult as UncommittedImportResult,
     },
 };
 use strum::IntoEnumIterator;
@@ -64,10 +37,7 @@ mod runner;
 mod workers;
 
 use crate::database::genesis_progress::GenesisResource;
-pub use runner::{
-    GenesisRunner,
-    TransactionOpener,
-};
+pub use runner::{GenesisRunner, TransactionOpener};
 
 /// Performs the importing of the genesis block from the snapshot.
 pub async fn execute_genesis_block(
@@ -80,6 +50,8 @@ pub async fn execute_genesis_block(
     import_chain_state(workers).await?;
 
     let genesis = Genesis {
+        // TODO: We can get the serialized consensus parameters from the database.
+        //  https://github.com/FuelLabs/fuel-core/issues/1570
         chain_config_hash: config.chain_config.root()?.into(),
         coins_root: original_database.genesis_coins_root()?.into(),
         messages_root: original_database.genesis_messages_root()?.into(),
@@ -94,6 +66,20 @@ pub async fn execute_genesis_block(
     };
 
     let mut database_transaction = original_database.read_transaction();
+    // TODO: The chain config should be part of the snapshot state.
+    //  https://github.com/FuelLabs/fuel-core/issues/1570
+    database_transaction
+        .storage_as_mut::<ConsensusParametersVersions>()
+        .insert(
+            &ConsensusParametersVersion::MIN,
+            &config.chain_config.consensus_parameters,
+        )?;
+    // TODO: The bytecode of the state transition function should be part of the snapshot state.
+    //  https://github.com/FuelLabs/fuel-core/issues/1570
+    database_transaction
+        .storage_as_mut::<StateTransitionBytecodeVersions>()
+        .insert(&ConsensusParametersVersion::MIN, &[])?;
+
     cleanup_genesis_progress(&mut database_transaction)?;
 
     let result = UncommittedImportResult::new(
@@ -139,6 +125,12 @@ pub fn create_genesis_block(config: &Config) -> Block {
         PartialBlockHeader {
             application: ApplicationHeader::<Empty> {
                 da_height: da_block_height,
+                // After regenesis, we don't need to support old consensus parameters,
+                // so we can start the versioning from the beginning.
+                consensus_parameters_version: ConsensusParametersVersion::MIN,
+                // After regenesis, we don't need to support old state transition functions,
+                // so we can start the versioning from the beginning.
+                state_transition_bytecode_version: StateTransitionBytecodeVersion::MIN,
                 generated: Empty,
             },
             consensus: ConsensusHeader::<Empty> {
@@ -231,25 +223,6 @@ fn init_contract_latest_utxo(
     Ok(())
 }
 
-fn init_contract_info(
-    transaction: &mut StorageTransaction<&mut Database>,
-    entry: &TableEntry<ContractsInfo>,
-) -> anyhow::Result<()> {
-    let salt = &entry.value;
-    let contract_id = entry.key;
-
-    // insert contract salt
-    if transaction
-        .storage::<ContractsInfo>()
-        .insert(&contract_id, salt)?
-        .is_some()
-    {
-        return Err(anyhow!("Contract info should not exist"));
-    }
-
-    Ok(())
-}
-
 fn init_contract_raw_code(
     transaction: &mut StorageTransaction<&mut Database>,
     entry: &TableEntry<ContractsRawCode>,
@@ -300,26 +273,15 @@ mod tests {
     use crate::{
         combined_database::CombinedDatabase,
         database::{
-            genesis_progress::{
-                GenesisProgressInspect,
-                GenesisResource,
-            },
+            genesis_progress::{GenesisProgressInspect, GenesisResource},
             ChainStateDb,
         },
-        service::{
-            config::Config,
-            FuelService,
-            Task,
-        },
+        query::BlockQueryData,
+        service::{config::Config, FuelService, Task},
     };
     use fuel_core_chain_config::{
-        ChainConfig,
-        CoinConfig,
-        ContractConfig,
-        MessageConfig,
-        Randomize,
-        SnapshotReader,
-        StateConfig,
+        ChainConfig, CoinConfig, ContractConfig, MessageConfig, Randomize,
+        SnapshotReader, StateConfig,
     };
     use fuel_core_services::RunnableService;
     use fuel_core_storage::{
@@ -327,11 +289,7 @@ mod tests {
         column::Column,
         iter::IterDirection,
         structured_storage::TableWithBlueprint,
-        tables::{
-            Coins,
-            ContractsAssets,
-            ContractsState,
-        },
+        tables::{Coins, ContractsAssets, ContractsState},
         StorageAsRef,
     };
     use fuel_core_types::{
@@ -339,22 +297,11 @@ mod tests {
         entities::coins::coin::Coin,
         fuel_asm::op,
         fuel_tx::UtxoId,
-        fuel_types::{
-            Address,
-            AssetId,
-            BlockHeight,
-            ContractId,
-            Salt,
-        },
+        fuel_types::{Address, AssetId, BlockHeight, ContractId, Salt},
         fuel_vm::Contract,
     };
     use itertools::Itertools;
-    use rand::{
-        rngs::StdRng,
-        Rng,
-        RngCore,
-        SeedableRng,
-    };
+    use rand::{rngs::StdRng, Rng, RngCore, SeedableRng};
     use std::vec;
 
     #[tokio::test]
@@ -735,6 +682,7 @@ mod tests {
                 .unwrap()
         }
 
+        let block = db.latest_block().unwrap();
         let stored_state = StateConfig::from_tables(
             get_entries(&db),
             get_entries(&db),
@@ -742,9 +690,8 @@ mod tests {
             get_entries(&db),
             get_entries(&db),
             get_entries(&db),
-            get_entries(&db),
-            DaBlockHeight(0),
-            0.into(),
+            block.header().da_height,
+            *block.header().height(),
         );
 
         assert_eq!(initial_state, stored_state);

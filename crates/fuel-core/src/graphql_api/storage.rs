@@ -37,6 +37,7 @@ use statistic::StatisticTable;
 
 pub mod blocks;
 pub mod coins;
+pub mod contracts;
 pub mod messages;
 pub mod statistic;
 pub mod transactions;
@@ -69,6 +70,8 @@ pub enum Column {
     Statistic = 5,
     /// See [`blocks::FuelBlockIdsToHeights`]
     FuelBlockIdsToHeights = 6,
+    /// See [`ContractsInfo`](contracts::ContractsInfo)
+    ContractsInfo = 7,
 }
 
 impl Column {

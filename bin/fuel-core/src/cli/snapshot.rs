@@ -1,45 +1,23 @@
 use crate::cli::DEFAULT_DB_PATH;
 use anyhow::Context;
-use clap::{
-    Parser,
-    Subcommand,
-};
+use clap::{Parser, Subcommand};
 use fuel_core::{
     chain_config::ChainConfig,
-    database::{
-        database_description::on_chain::OnChain,
-        ChainStateDb,
-        Database,
-    },
+    database::{database_description::on_chain::OnChain, ChainStateDb, Database},
     types::fuel_types::ContractId,
 };
-use fuel_core_chain_config::{
-    SnapshotWriter,
-    MAX_GROUP_SIZE,
-};
+use fuel_core_chain_config::{SnapshotWriter, MAX_GROUP_SIZE};
 use fuel_core_storage::{
     iter::IterDirection,
     tables::{
-        Coins,
-        ContractsAssets,
-        ContractsInfo,
-        ContractsLatestUtxo,
-        ContractsRawCode,
-        ContractsState,
-        FuelBlocks,
-        Messages,
+        Coins, ContractsAssets, ContractsLatestUtxo, ContractsRawCode, ContractsState,
+        FuelBlocks, Messages,
     },
     Result as StorageResult,
 };
-use fuel_core_types::{
-    blockchain::block::Block,
-    fuel_tx::Bytes32,
-};
+use fuel_core_types::{blockchain::block::Block, fuel_tx::Bytes32};
 use itertools::Itertools;
-use std::path::{
-    Path,
-    PathBuf,
-};
+use std::path::{Path, PathBuf};
 
 /// Print a snapshot of blockchain state to stdout.
 #[derive(Debug, Clone, Parser)]
@@ -164,13 +142,6 @@ fn contract_snapshot(
             anyhow::anyhow!("contract code not found! id: {:?}", contract_id)
         })??;
 
-    let info = db
-        .entries::<ContractsInfo>(Some(contract_id.as_ref()), IterDirection::Forward)
-        .next()
-        .ok_or_else(|| {
-            anyhow::anyhow!("contract info not found! id: {:?}", contract_id)
-        })??;
-
     let utxo = db
         .entries::<ContractsLatestUtxo>(
             Some(contract_id.as_ref()),
@@ -193,7 +164,6 @@ fn contract_snapshot(
     let mut writer = SnapshotWriter::json(output_dir);
 
     writer.write(vec![code])?;
-    writer.write(vec![info])?;
     writer.write(vec![utxo])?;
     writer.write(state)?;
     writer.write(balance)?;
@@ -240,9 +210,6 @@ fn full_snapshot(
 
     let code = db.entries::<ContractsRawCode>(None, IterDirection::Forward);
     write(code, group_size, |chunk| writer.write(chunk))?;
-
-    let info = db.entries::<ContractsInfo>(None, IterDirection::Forward);
-    write(info, group_size, |chunk| writer.write(chunk))?;
 
     let utxos = db.entries::<ContractsLatestUtxo>(None, IterDirection::Forward);
     write(utxos, group_size, |chunk| writer.write(chunk))?;
@@ -292,63 +259,27 @@ mod tests {
     use std::iter::repeat_with;
 
     use fuel_core_chain_config::{
-        AsTable,
-        SnapshotMetadata,
-        SnapshotReader,
-        StateConfig,
-        TableEntry,
+        AsTable, SnapshotMetadata, SnapshotReader, StateConfig, TableEntry,
     };
     use fuel_core_storage::{
         structured_storage::TableWithBlueprint,
         tables::{
-            Coins,
-            ContractsAssets,
-            ContractsInfo,
-            ContractsLatestUtxo,
-            ContractsRawCode,
-            ContractsState,
-            FuelBlocks,
-            Messages,
+            Coins, ContractsAssets, ContractsLatestUtxo, ContractsRawCode,
+            ContractsState, FuelBlocks, Messages,
         },
-        transactional::{
-            IntoTransaction,
-            StorageTransaction,
-        },
-        ContractsAssetKey,
-        ContractsStateKey,
-        StorageAsMut,
+        transactional::{IntoTransaction, StorageTransaction},
+        ContractsAssetKey, ContractsStateKey, StorageAsMut,
     };
     use fuel_core_types::{
-        blockchain::{
-            block::CompressedBlock,
-            primitives::DaBlockHeight,
-        },
+        blockchain::{block::CompressedBlock, primitives::DaBlockHeight},
         entities::{
-            coins::coin::{
-                CompressedCoin,
-                CompressedCoinV1,
-            },
-            contract::{
-                ContractUtxoInfo,
-                ContractsInfoType,
-            },
-            message::{
-                Message,
-                MessageV1,
-            },
+            coins::coin::{CompressedCoin, CompressedCoinV1},
+            contract::ContractUtxoInfo,
+            message::{Message, MessageV1},
         },
-        fuel_tx::{
-            TxPointer,
-            UtxoId,
-        },
-        fuel_vm::Salt,
+        fuel_tx::{TxPointer, UtxoId},
     };
-    use rand::{
-        rngs::StdRng,
-        seq::SliceRandom,
-        Rng,
-        SeedableRng,
-    };
+    use rand::{rngs::StdRng, seq::SliceRandom, Rng, SeedableRng};
     use test_case::test_case;
 
     use super::*;
@@ -363,7 +294,6 @@ mod tests {
         coins: Vec<TableEntry<Coins>>,
         messages: Vec<TableEntry<Messages>>,
         contract_code: Vec<TableEntry<ContractsRawCode>>,
-        contract_info: Vec<TableEntry<ContractsInfo>>,
         contract_utxo: Vec<TableEntry<ContractsLatestUtxo>>,
         contract_state: Vec<TableEntry<ContractsState>>,
         contract_balance: Vec<TableEntry<ContractsAssets>>,
@@ -375,7 +305,6 @@ mod tests {
             self.coins.sort_by_key(|e| e.key);
             self.messages.sort_by_key(|e| e.key);
             self.contract_code.sort_by_key(|e| e.key);
-            self.contract_info.sort_by_key(|e| e.key);
             self.contract_utxo.sort_by_key(|e| e.key);
             self.contract_state.sort_by_key(|e| e.key);
             self.contract_balance.sort_by_key(|e| e.key);
@@ -386,7 +315,6 @@ mod tests {
             let coins = self.coins;
             let messages = self.messages;
             let contract_code = self.contract_code;
-            let contract_info = self.contract_info;
             let contract_utxo = self.contract_utxo;
             let contract_state = self.contract_state;
             let contract_balance = self.contract_balance;
@@ -399,7 +327,6 @@ mod tests {
                 contract_state,
                 contract_balance,
                 contract_code,
-                contract_info,
                 contract_utxo,
                 da_height,
                 *height,
@@ -441,7 +368,6 @@ mod tests {
                 coins: read(reader),
                 messages: read(reader),
                 contract_code: read(reader),
-                contract_info: read(reader),
                 contract_utxo: read(reader),
                 contract_state: read(reader),
                 contract_balance: read(reader),
@@ -487,11 +413,6 @@ mod tests {
                 .map(|id| self.given_contract_code(*id))
                 .collect();
 
-            let contract_info = contract_ids
-                .iter()
-                .map(|id| self.given_contract_info(*id))
-                .collect();
-
             let contract_utxo = contract_ids
                 .iter()
                 .map(|id| self.given_contract_utxo(*id))
@@ -520,7 +441,6 @@ mod tests {
                 coins,
                 messages,
                 contract_code,
-                contract_info,
                 contract_utxo,
                 contract_state,
                 contract_balance,
@@ -599,21 +519,6 @@ mod tests {
             TableEntry {
                 key,
                 value: code.into(),
-            }
-        }
-
-        fn given_contract_info(
-            &mut self,
-            contract_id: ContractId,
-        ) -> TableEntry<ContractsInfo> {
-            let salt: Salt = self.rng.gen();
-            self.db
-                .storage_as_mut::<ContractsInfo>()
-                .insert(&contract_id, &ContractsInfoType::V1(salt.into()))
-                .unwrap();
-            TableEntry {
-                key: contract_id,
-                value: ContractsInfoType::V1(salt.into()),
             }
         }
 

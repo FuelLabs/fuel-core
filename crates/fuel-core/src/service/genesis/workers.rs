@@ -1,49 +1,24 @@
 use super::{
-    init_coin,
-    init_contract_info,
-    init_contract_latest_utxo,
-    init_contract_raw_code,
-    init_da_message,
-    runner::ProcessState,
-    GenesisRunner,
+    init_coin, init_contract_latest_utxo, init_contract_raw_code, init_da_message,
+    runner::ProcessState, GenesisRunner,
 };
-use std::{
-    collections::HashMap,
-    marker::PhantomData,
-    sync::Arc,
-};
+use std::{collections::HashMap, marker::PhantomData, sync::Arc};
 
 use crate::database::{
-    balances::BalancesInitializer,
-    genesis_progress::GenesisResource,
-    state::StateInitializer,
-    Database,
+    balances::BalancesInitializer, genesis_progress::GenesisResource,
+    state::StateInitializer, Database,
 };
-use fuel_core_chain_config::{
-    AsTable,
-    Group,
-    SnapshotReader,
-    StateConfig,
-    TableEntry,
-};
+use fuel_core_chain_config::{AsTable, Group, SnapshotReader, StateConfig, TableEntry};
 use fuel_core_storage::{
     kv_store::StorageColumn,
     structured_storage::TableWithBlueprint,
     tables::{
-        Coins,
-        ContractsAssets,
-        ContractsInfo,
-        ContractsLatestUtxo,
-        ContractsRawCode,
-        ContractsState,
+        Coins, ContractsAssets, ContractsLatestUtxo, ContractsRawCode, ContractsState,
         Messages,
     },
     transactional::StorageTransaction,
 };
-use fuel_core_types::{
-    blockchain::primitives::DaBlockHeight,
-    fuel_types::BlockHeight,
-};
+use fuel_core_types::{blockchain::primitives::DaBlockHeight, fuel_types::BlockHeight};
 use tokio::sync::Notify;
 use tokio_rayon::AsyncRayonHandle;
 use tokio_util::sync::CancellationToken;
@@ -76,7 +51,6 @@ impl GenesisWorkers {
             self.spawn_worker::<Coins>()?,
             self.spawn_worker::<Messages>()?,
             self.spawn_worker::<ContractsRawCode>()?,
-            self.spawn_worker::<ContractsInfo>()?,
             self.spawn_worker::<ContractsLatestUtxo>()?,
             self.spawn_worker::<ContractsState>()?,
             self.spawn_worker::<ContractsAssets>()?,
@@ -208,25 +182,6 @@ impl ProcessState for Handler<TableEntry<ContractsRawCode>> {
 
     fn genesis_resource() -> GenesisResource {
         GenesisResource::ContractsCode
-    }
-}
-
-impl ProcessState for Handler<TableEntry<ContractsInfo>> {
-    type Item = TableEntry<ContractsInfo>;
-
-    fn process(
-        &mut self,
-        group: Vec<Self::Item>,
-        tx: &mut StorageTransaction<&mut Database>,
-    ) -> anyhow::Result<()> {
-        group.into_iter().try_for_each(|contract| {
-            init_contract_info(tx, &contract)?;
-            Ok::<(), anyhow::Error>(())
-        })
-    }
-
-    fn genesis_resource() -> GenesisResource {
-        GenesisResource::ContractsInfo
     }
 }
 

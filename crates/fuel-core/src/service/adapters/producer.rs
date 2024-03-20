@@ -21,8 +21,16 @@ use fuel_core_producer::{
     ports::TxPool,
 };
 use fuel_core_storage::{
+    iter::{
+        IterDirection,
+        IteratorOverTable,
+    },
     not_found,
-    tables::FuelBlocks,
+    tables::{
+        ConsensusParametersVersions,
+        FuelBlocks,
+        StateTransitionBytecodeVersions,
+    },
     transactional::Changes,
     Result as StorageResult,
     StorageAsRef,
@@ -30,6 +38,10 @@ use fuel_core_storage::{
 use fuel_core_types::{
     blockchain::{
         block::CompressedBlock,
+        header::{
+            ConsensusParametersVersion,
+            StateTransitionBytecodeVersion,
+        },
         primitives,
     },
     fuel_tx,
@@ -145,6 +157,28 @@ impl fuel_core_producer::ports::BlockProducerDatabase for Database {
 
     fn block_header_merkle_root(&self, height: &BlockHeight) -> StorageResult<Bytes32> {
         self.storage::<FuelBlocks>().root(height).map(Into::into)
+    }
+
+    fn latest_consensus_parameters_version(
+        &self,
+    ) -> StorageResult<ConsensusParametersVersion> {
+        let (version, _) = self
+            .iter_all::<ConsensusParametersVersions>(Some(IterDirection::Reverse))
+            .next()
+            .ok_or(not_found!(ConsensusParametersVersions))??;
+
+        Ok(version)
+    }
+
+    fn latest_state_transition_bytecode_version(
+        &self,
+    ) -> StorageResult<StateTransitionBytecodeVersion> {
+        let (version, _) = self
+            .iter_all::<StateTransitionBytecodeVersions>(Some(IterDirection::Reverse))
+            .next()
+            .ok_or(not_found!(StateTransitionBytecodeVersions))??;
+
+        Ok(version)
     }
 }
 

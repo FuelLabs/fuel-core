@@ -130,6 +130,8 @@ async fn can_build_message_proof() {
     let commit_block_header = PartialBlockHeader {
         application: ApplicationHeader {
             da_height: 0u64.into(),
+            consensus_parameters_version: Default::default(),
+            state_transition_bytecode_version: Default::default(),
             generated: Default::default(),
         },
         consensus: ConsensusHeader {
@@ -144,6 +146,8 @@ async fn can_build_message_proof() {
     let message_block_header = PartialBlockHeader {
         application: ApplicationHeader {
             da_height: 0u64.into(),
+            consensus_parameters_version: Default::default(),
+            state_transition_bytecode_version: Default::default(),
             generated: Default::default(),
         },
         consensus: ConsensusHeader {
