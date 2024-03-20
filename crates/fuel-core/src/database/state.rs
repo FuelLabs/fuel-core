@@ -196,11 +196,8 @@ mod tests {
 
     mod update_contract_state {
         use core::iter::repeat_with;
-        use fuel_core_chain_config::{
-            ContractState,
-            Randomize,
-        };
-        use fuel_core_storage::iter::IteratorOverTable;
+        use fuel_core_chain_config::Randomize;
+
         use fuel_core_types::fuel_merkle::sparse::{
             self,
             MerkleTreeKey,

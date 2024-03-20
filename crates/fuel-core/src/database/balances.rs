@@ -200,12 +200,9 @@ mod tests {
             iter::IteratorOverTable,
             transactional::WriteTransaction,
         };
-        use fuel_core_types::{
-            fuel_merkle::sparse::{
-                self,
-                MerkleTreeKey,
-            },
-            fuel_types::canonical::Deserialize,
+        use fuel_core_types::fuel_merkle::sparse::{
+            self,
+            MerkleTreeKey,
         };
 
         use super::*;

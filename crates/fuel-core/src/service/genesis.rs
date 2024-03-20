@@ -104,7 +104,7 @@ pub async fn execute_genesis_block(
     Ok(result)
 }
 
-async fn import_chain_state(workers: GenesisWorkers) -> anyhow::Result<()> {
+async fn import_chain_state(mut workers: GenesisWorkers) -> anyhow::Result<()> {
     if let Err(e) = workers.run_imports().await {
         workers.shutdown();
         tokio::select! {

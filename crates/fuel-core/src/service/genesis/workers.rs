@@ -8,6 +8,7 @@ use super::{
     GenesisRunner,
 };
 use std::{
+    collections::HashMap,
     marker::PhantomData,
     sync::Arc,
 };
@@ -19,11 +20,15 @@ use crate::database::{
     Database,
 };
 use fuel_core_chain_config::{
+    AsTable,
     Group,
     SnapshotReader,
+    StateConfig,
     TableEntry,
 };
 use fuel_core_storage::{
+    kv_store::StorageColumn,
+    structured_storage::TableWithBlueprint,
     tables::{
         Coins,
         ContractsAssets,
@@ -40,49 +45,8 @@ use fuel_core_types::{
     fuel_types::BlockHeight,
 };
 use tokio::sync::Notify;
+use tokio_rayon::AsyncRayonHandle;
 use tokio_util::sync::CancellationToken;
-
-struct FinishedWorkerSignals {
-    coins: Arc<Notify>,
-    messages: Arc<Notify>,
-    contracts_code: Arc<Notify>,
-    contracts_info: Arc<Notify>,
-    contracts_utxos: Arc<Notify>,
-    contract_state: Arc<Notify>,
-    contract_balance: Arc<Notify>,
-}
-
-impl FinishedWorkerSignals {
-    fn new() -> Self {
-        Self {
-            coins: Arc::new(Notify::new()),
-            messages: Arc::new(Notify::new()),
-            contract_state: Arc::new(Notify::new()),
-            contract_balance: Arc::new(Notify::new()),
-            contracts_code: Arc::new(Notify::new()),
-            contracts_info: Arc::new(Notify::new()),
-            contracts_utxos: Arc::new(Notify::new()),
-        }
-    }
-}
-
-impl<'a> IntoIterator for &'a FinishedWorkerSignals {
-    type Item = &'a Arc<Notify>;
-    type IntoIter = std::vec::IntoIter<&'a Arc<Notify>>;
-
-    fn into_iter(self) -> Self::IntoIter {
-        vec![
-            &self.coins,
-            &self.messages,
-            &self.contracts_code,
-            &self.contracts_info,
-            &self.contracts_utxos,
-            &self.contract_state,
-            &self.contract_balance,
-        ]
-        .into_iter()
-    }
-}
 
 pub struct GenesisWorkers {
     db: Database,
@@ -90,7 +54,7 @@ pub struct GenesisWorkers {
     block_height: BlockHeight,
     da_block_height: DaBlockHeight,
     state_reader: SnapshotReader,
-    finished_signals: FinishedWorkerSignals,
+    finished_signals: HashMap<String, Arc<Notify>>,
 }
 
 impl GenesisWorkers {
@@ -103,25 +67,25 @@ impl GenesisWorkers {
             block_height,
             da_block_height,
             state_reader,
-            finished_signals: FinishedWorkerSignals::new(),
+            finished_signals: HashMap::default(),
         }
     }
 
-    pub async fn run_imports(&self) -> anyhow::Result<()> {
+    pub async fn run_imports(&mut self) -> anyhow::Result<()> {
         tokio::try_join!(
-            self.spawn_coins_worker(),
-            self.spawn_messages_worker(),
-            self.spawn_contracts_code_worker(),
-            self.spawn_contracts_info_worker(),
-            self.spawn_contracts_utxo_worker(),
-            self.spawn_contract_state_worker(),
-            self.spawn_contract_balance_worker()
+            self.spawn_worker::<Coins>()?,
+            self.spawn_worker::<Messages>()?,
+            self.spawn_worker::<ContractsRawCode>()?,
+            self.spawn_worker::<ContractsInfo>()?,
+            self.spawn_worker::<ContractsLatestUtxo>()?,
+            self.spawn_worker::<ContractsState>()?,
+            self.spawn_worker::<ContractsAssets>()?,
         )
         .map(|_| ())
     }
 
     pub async fn finished(&self) {
-        for signal in &self.finished_signals {
+        for signal in self.finished_signals.values() {
             signal.notified().await;
         }
     }
@@ -130,60 +94,27 @@ impl GenesisWorkers {
         self.cancel_token.cancel()
     }
 
-    async fn spawn_coins_worker(&self) -> anyhow::Result<()> {
-        let coins = self.state_reader.read::<Coins>()?;
-        let finished_signal = Arc::clone(&self.finished_signals.coins);
-        self.spawn_worker(coins, finished_signal).await
-    }
-
-    async fn spawn_messages_worker(&self) -> anyhow::Result<()> {
-        let messages = self.state_reader.read::<Messages>()?;
-        let finished_signal = Arc::clone(&self.finished_signals.messages);
-        self.spawn_worker(messages, finished_signal).await
-    }
-
-    async fn spawn_contracts_code_worker(&self) -> anyhow::Result<()> {
-        let contracts = self.state_reader.read::<ContractsRawCode>()?;
-        let finished_signal = Arc::clone(&self.finished_signals.contracts_code);
-        self.spawn_worker(contracts, finished_signal).await
-    }
-
-    async fn spawn_contracts_info_worker(&self) -> anyhow::Result<()> {
-        let contracts = self.state_reader.read::<ContractsInfo>()?;
-        let finished_signal = Arc::clone(&self.finished_signals.contracts_info);
-        self.spawn_worker(contracts, finished_signal).await
-    }
-
-    async fn spawn_contracts_utxo_worker(&self) -> anyhow::Result<()> {
-        let contracts = self.state_reader.read::<ContractsLatestUtxo>()?;
-        let finished_signal = Arc::clone(&self.finished_signals.contracts_utxos);
-        self.spawn_worker(contracts, finished_signal).await
-    }
-
-    async fn spawn_contract_state_worker(&self) -> anyhow::Result<()> {
-        let contract_state = self.state_reader.read::<ContractsState>()?;
-        let finished_signal = Arc::clone(&self.finished_signals.contract_state);
-        self.spawn_worker(contract_state, finished_signal).await
-    }
-
-    async fn spawn_contract_balance_worker(&self) -> anyhow::Result<()> {
-        let contract_balance = self.state_reader.read::<ContractsAssets>()?;
-        let finished_signal = Arc::clone(&self.finished_signals.contract_balance);
-        self.spawn_worker(contract_balance, finished_signal).await
-    }
-
-    fn spawn_worker<T, I>(
-        &self,
-        data: I,
-        finished_signal: Arc<Notify>,
-    ) -> tokio_rayon::AsyncRayonHandle<Result<(), anyhow::Error>>
+    pub fn spawn_worker<T>(
+        &mut self,
+    ) -> anyhow::Result<AsyncRayonHandle<anyhow::Result<()>>>
     where
-        T: Send + 'static,
-        Handler<T>: ProcessState<Item = T>,
-        I: IntoIterator<Item = anyhow::Result<Group<T>>> + Send + 'static,
+        T: TableWithBlueprint + Send + 'static,
+        T::OwnedKey: serde::de::DeserializeOwned + Send,
+        T::OwnedValue: serde::de::DeserializeOwned + Send,
+        StateConfig: AsTable<T>,
+        Handler<TableEntry<T>>: ProcessState<Item = TableEntry<T>>,
     {
-        let runner = self.create_runner(data, Some(finished_signal));
-        tokio_rayon::spawn(move || runner.run())
+        let groups = self.state_reader.read::<T>()?;
+        let finished_signal = self.get_signal(T::column().name());
+        let runner = self.create_runner(groups, Some(finished_signal));
+        Ok(tokio_rayon::spawn(move || runner.run()))
+    }
+
+    fn get_signal(&mut self, name: &str) -> Arc<Notify> {
+        self.finished_signals
+            .entry(name.to_string())
+            .or_insert_with(|| Arc::new(Notify::new()))
+            .clone()
     }
 
     fn create_runner<T, I>(
