@@ -266,10 +266,10 @@ pub trait SnapshotDataSource {
         add_tables!(
             Coins,
             Messages,
-            ContractsRawCode,
-            ContractsLatestUtxo,
             ContractsAssets,
-            ContractsState
+            ContractsState,
+            ContractsRawCode,
+            ContractsLatestUtxo
         );
 
         let block = self.latest_block()?;

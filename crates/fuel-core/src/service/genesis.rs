@@ -120,11 +120,9 @@ pub async fn execute_genesis_block(
     // Needs to be given the progress because `iter_all` is not implemented on db transactions.
     cleanup_genesis_progress(&mut database_transaction, genesis_progress)?;
 
-    let changes = database_transaction.into_changes();
-    eprintln!("Genesis block changes: {:?}", changes);
     let result = UncommittedImportResult::new(
         ImportResult::new_from_local(block, vec![], vec![]),
-        changes,
+        database_transaction.into_changes(),
     );
 
     Ok(result)
