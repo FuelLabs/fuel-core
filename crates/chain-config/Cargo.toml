@@ -17,7 +17,6 @@ fuel-core-storage = { workspace = true }
 fuel-core-types = { workspace = true, default-features = false, features = [
   "serde",
 ] }
-impl-tools = { workspace = true }
 itertools = { workspace = true, features = ["use_alloc"] }
 parquet = { workspace = true, features = ["zstd"], optional = true }
 postcard = { workspace = true, features = ["alloc"] }

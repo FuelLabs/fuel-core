@@ -1,5 +1,5 @@
-//#![deny(clippy::arithmetic_side_effects)]
-//#![deny(clippy::cast_possible_truncation)]
+#![deny(clippy::arithmetic_side_effects)]
+#![deny(clippy::cast_possible_truncation)]
 
 use clap::ValueEnum;
 use fuel_core_types::{

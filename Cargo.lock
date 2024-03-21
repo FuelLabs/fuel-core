@@ -2835,7 +2835,6 @@ dependencies = [
  "fuel-core-chain-config",
  "fuel-core-storage",
  "fuel-core-types",
- "impl-tools",
  "insta",
  "itertools 0.12.1",
  "parquet",

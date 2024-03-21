@@ -4,11 +4,11 @@
 //! defined here are used by services but are flexible enough to customize the
 //! logic when the `Database` is known.
 
-//#![deny(clippy::arithmetic_side_effects)]
-//#![deny(clippy::cast_possible_truncation)]
-//#![deny(unused_crate_dependencies)]
-//#![deny(missing_docs)]
-//#![deny(warnings)]
+#![deny(clippy::arithmetic_side_effects)]
+#![deny(clippy::cast_possible_truncation)]
+#![deny(unused_crate_dependencies)]
+#![deny(missing_docs)]
+#![deny(warnings)]
 
 use core::array::TryFromSliceError;
 use fuel_core_types::services::executor::Error as ExecutorError;
