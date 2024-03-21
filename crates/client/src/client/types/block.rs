@@ -37,6 +37,7 @@ pub struct Header {
     pub message_receipt_count: u64,
     pub transactions_root: MerkleRoot,
     pub message_outbox_root: MerkleRoot,
+    pub event_inbox_root: MerkleRoot,
     pub height: u32,
     pub prev_root: MerkleRoot,
     pub time: Tai64,
