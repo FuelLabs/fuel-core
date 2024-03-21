@@ -9,7 +9,6 @@ use crate::{
     TableEncoding,
 };
 use fuel_core_storage::{
-    kv_store::StorageColumn,
     structured_storage::TableWithBlueprint,
     tables::{
         Coins,
@@ -26,10 +25,7 @@ use fuel_core_types::{
     fuel_types::BlockHeight,
 };
 use serde_json::Value;
-use std::{
-    collections::HashMap,
-    path::PathBuf,
-};
+use std::path::PathBuf;
 
 #[cfg(feature = "parquet")]
 use super::parquet;
@@ -41,8 +37,10 @@ enum EncoderType {
     #[cfg(feature = "parquet")]
     Parquet {
         compression: ZstdCompressionLevel,
-        table_encoders:
-            HashMap<String, (PathBuf, parquet::encode::Encoder<std::fs::File>)>,
+        table_encoders: std::collections::HashMap<
+            String,
+            (PathBuf, parquet::encode::Encoder<std::fs::File>),
+        >,
         block_height: PathBuf,
         da_block_height: PathBuf,
     },
@@ -207,7 +205,7 @@ impl SnapshotWriter {
         let dir = dir.into();
         Ok(Self {
             encoder: EncoderType::Parquet {
-                table_encoders: HashMap::default(),
+                table_encoders: std::collections::HashMap::default(),
                 compression: compression_level,
                 block_height: dir.join("block_height.parquet"),
                 da_block_height: dir.join("da_block_height.parquet"),
@@ -244,7 +242,6 @@ impl SnapshotWriter {
         T::OwnedKey: serde::Serialize,
         StateConfigBuilder: AddTable<T>,
     {
-        let name = T::column().name().to_string();
         match &mut self.encoder {
             EncoderType::Json { builder, .. } => {
                 builder.add(elements);
@@ -256,6 +253,8 @@ impl SnapshotWriter {
                 table_encoders,
                 ..
             } => {
+                use fuel_core_storage::kv_store::StorageColumn;
+                let name = T::column().name().to_string();
                 let encoded = elements.into_iter().map(|e| e.encode_postcard()).collect();
                 let file_path = self.dir.join(format!("{name}.parquet"));
                 let (_, encoder) =
@@ -335,7 +334,7 @@ impl SnapshotWriter {
                 da_block_height,
                 compression,
             } => {
-                let mut files = HashMap::new();
+                let mut files = std::collections::HashMap::new();
                 for (name, (file, encoder)) in table_encoders {
                     encoder.close()?;
                     files.insert(name, file);

@@ -106,6 +106,7 @@ impl StateConfigBuilder {
         self.da_block_height = Some(da_block_height);
     }
 
+    #[cfg(feature = "std")]
     pub fn build(self) -> anyhow::Result<StateConfig> {
         use std::collections::HashMap;
 
