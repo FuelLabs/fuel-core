@@ -5,6 +5,7 @@ use fuel_core::{
         StateConfig,
         TableEntry,
     },
+    combined_database::CombinedDatabase,
     database::{
         ChainStateDb,
         Database,
@@ -30,7 +31,7 @@ use rand::{
 #[tokio::test]
 async fn loads_snapshot() {
     let mut rng = StdRng::seed_from_u64(1234);
-    let db = Database::default();
+    let db = CombinedDatabase::default();
 
     // setup config
     let starting_state = StateConfig {
@@ -44,32 +45,11 @@ async fn loads_snapshot() {
     };
 
     // setup server & client
-    let _ = FuelService::from_database(db.clone(), config)
+    let _ = FuelService::from_combined_database(db.clone(), config)
         .await
         .unwrap();
 
-    fn get_entries<T>(db: &Database) -> Vec<TableEntry<T>>
-    where
-        T: TableWithBlueprint<Column = Column>,
-        T::Blueprint: BlueprintInspect<T, Database>,
-    {
-        use itertools::Itertools;
-        db.entries(None, IterDirection::Forward)
-            .try_collect()
-            .unwrap()
-    }
-
-    let block = db.latest_block().unwrap();
-    let stored_state = StateConfig::from_tables(
-        get_entries(&db),
-        get_entries(&db),
-        get_entries(&db),
-        get_entries(&db),
-        get_entries(&db),
-        get_entries(&db),
-        block.header().da_height,
-        *block.header().height(),
-    );
+    let stored_state = db.read_state_config().unwrap();
 
     // initial state
     pretty_assertions::assert_eq!(starting_state.sorted(), stored_state);

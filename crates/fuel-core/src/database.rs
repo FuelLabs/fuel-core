@@ -1,4 +1,5 @@
 use crate::{
+    combined_database::CombinedDatabase,
     database::{
         database_description::{
             off_chain::OffChain,
@@ -11,18 +12,21 @@ use crate::{
         Error as DatabaseError,
     },
     graphql_api::storage::blocks::FuelBlockIdsToHeights,
+    query::BlockQueryData,
     state::{
         in_memory::memory_store::MemoryStore,
         ChangesIterator,
         DataSource,
     },
 };
-use fuel_core_chain_config::TableEntry;
+use fuel_core_chain_config::{
+    StateConfig,
+    TableEntry,
+};
 use fuel_core_services::SharedMutex;
 use fuel_core_storage::{
     self,
     blueprint::BlueprintInspect,
-    column::Column,
     iter::{
         BoxedIter,
         IterDirection,
@@ -50,7 +54,10 @@ use fuel_core_storage::{
     StorageMutate,
 };
 use fuel_core_types::{
-    blockchain::primitives::DaBlockHeight,
+    blockchain::{
+        block::CompressedBlock,
+        primitives::DaBlockHeight,
+    },
     fuel_types::BlockHeight,
 };
 use itertools::Itertools;
@@ -211,29 +218,82 @@ where
 }
 // TODO: There is probably a trait that can be used instead of a ChainStateDb
 #[impl_tools::autoimpl(for<K: trait> &K, &mut K)]
-pub trait ChainStateDb: KeyValueInspect {
-    fn entries<T>(
+pub trait ChainStateDb {
+    fn on_chain_entries<T>(
         &self,
         prefix: Option<&[u8]>,
         direction: IterDirection,
     ) -> impl Iterator<Item = StorageResult<TableEntry<T>>>
     where
-        T: TableWithBlueprint<Column = Column>,
+        T: TableWithBlueprint<Column = fuel_core_storage::column::Column>,
         <T as TableWithBlueprint>::Blueprint: BlueprintInspect<T, Database<OnChain>>;
+
+    fn off_chain_entries<T>(
+        &self,
+        prefix: Option<&[u8]>,
+        direction: IterDirection,
+    ) -> impl Iterator<Item = StorageResult<TableEntry<T>>>
+    where
+        T: TableWithBlueprint<Column = crate::graphql_api::storage::Column>,
+        <T as TableWithBlueprint>::Blueprint: BlueprintInspect<T, Database<OffChain>>;
+
+    fn latest_block(&self) -> StorageResult<CompressedBlock>;
+
+    fn read_state_config(&self) -> StorageResult<StateConfig> {
+        let block = self.latest_block()?;
+
+        let state_config = StateConfig::from_tables(
+            self.on_chain_entries(None, IterDirection::Forward)
+                .try_collect()?,
+            self.on_chain_entries(None, IterDirection::Forward)
+                .try_collect()?,
+            self.on_chain_entries(None, IterDirection::Forward)
+                .try_collect()?,
+            self.on_chain_entries(None, IterDirection::Forward)
+                .try_collect()?,
+            self.on_chain_entries(None, IterDirection::Forward)
+                .try_collect()?,
+            self.on_chain_entries(None, IterDirection::Forward)
+                .try_collect()?,
+            block.header().da_height,
+            *block.header().height(),
+        );
+
+        Ok(state_config)
+    }
 }
 
-impl ChainStateDb for Database {
-    fn entries<T>(
+impl ChainStateDb for CombinedDatabase {
+    fn on_chain_entries<T>(
         &self,
         prefix: Option<&[u8]>,
         direction: IterDirection,
     ) -> impl Iterator<Item = StorageResult<TableEntry<T>>>
     where
-        T: TableWithBlueprint<Column = Column>,
-        <T as TableWithBlueprint>::Blueprint: BlueprintInspect<T, Self>,
+        T: TableWithBlueprint<Column = fuel_core_storage::column::Column>,
+        <T as TableWithBlueprint>::Blueprint: BlueprintInspect<T, Database<OnChain>>,
     {
-        self.iter_all_filtered::<T, _>(prefix, None, Some(direction))
+        self.on_chain()
+            .iter_all_filtered::<T, _>(prefix, None, Some(direction))
             .map_ok(|(key, value)| TableEntry { key, value })
+    }
+
+    fn off_chain_entries<T>(
+        &self,
+        prefix: Option<&[u8]>,
+        direction: IterDirection,
+    ) -> impl Iterator<Item = StorageResult<TableEntry<T>>>
+    where
+        T: TableWithBlueprint<Column = crate::graphql_api::storage::Column>,
+        <T as TableWithBlueprint>::Blueprint: BlueprintInspect<T, Database<OffChain>>,
+    {
+        self.off_chain()
+            .iter_all_filtered::<T, _>(prefix, None, Some(direction))
+            .map_ok(|(key, value)| TableEntry { key, value })
+    }
+
+    fn latest_block(&self) -> StorageResult<CompressedBlock> {
+        self.on_chain().latest_block()
     }
 }
 

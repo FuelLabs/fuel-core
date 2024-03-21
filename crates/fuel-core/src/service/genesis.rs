@@ -722,33 +722,12 @@ mod tests {
             ..Config::local_node()
         };
 
-        let db = Database::default();
-        FuelService::from_database(db.clone(), service_config)
+        let db = CombinedDatabase::default();
+        FuelService::from_combined_database(db.clone(), service_config)
             .await
             .unwrap();
 
-        fn get_entries<T>(db: &Database) -> Vec<TableEntry<T>>
-        where
-            T: TableWithBlueprint<Column = Column>,
-            T::Blueprint: BlueprintInspect<T, Database>,
-        {
-            db.entries(None, IterDirection::Forward)
-                .try_collect()
-                .unwrap()
-        }
-
-        let block = db.latest_block().unwrap();
-        let stored_state = StateConfig::from_tables(
-            get_entries(&db),
-            get_entries(&db),
-            get_entries(&db),
-            get_entries(&db),
-            get_entries(&db),
-            get_entries(&db),
-            block.header().da_height,
-            *block.header().height(),
-        );
-
+        let stored_state = db.read_state_config().unwrap();
         assert_eq!(initial_state, stored_state);
     }
 }

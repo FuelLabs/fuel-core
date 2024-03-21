@@ -6,6 +6,7 @@ use clap::{
 };
 use fuel_core::{
     chain_config::ChainConfig,
+    combined_database::CombinedDatabase,
     database::{
         database_description::on_chain::OnChain,
         ChainStateDb,
@@ -157,14 +158,17 @@ fn contract_snapshot(
     std::fs::create_dir_all(output_dir)?;
 
     let code = db
-        .entries::<ContractsRawCode>(Some(contract_id.as_ref()), IterDirection::Forward)
+        .on_chain_entries::<ContractsRawCode>(
+            Some(contract_id.as_ref()),
+            IterDirection::Forward,
+        )
         .next()
         .ok_or_else(|| {
             anyhow::anyhow!("contract code not found! id: {:?}", contract_id)
         })??;
 
     let utxo = db
-        .entries::<ContractsLatestUtxo>(
+        .on_chain_entries::<ContractsLatestUtxo>(
             Some(contract_id.as_ref()),
             IterDirection::Forward,
         )
@@ -174,11 +178,17 @@ fn contract_snapshot(
         })??;
 
     let state = db
-        .entries::<ContractsState>(Some(contract_id.as_ref()), IterDirection::Forward)
+        .on_chain_entries::<ContractsState>(
+            Some(contract_id.as_ref()),
+            IterDirection::Forward,
+        )
         .try_collect()?;
 
     let balance = db
-        .entries::<ContractsAssets>(Some(contract_id.as_ref()), IterDirection::Forward)
+        .on_chain_entries::<ContractsAssets>(
+            Some(contract_id.as_ref()),
+            IterDirection::Forward,
+        )
         .try_collect()?;
 
     let block = get_last_block(&db)?;
@@ -223,22 +233,24 @@ fn full_snapshot(
     }
     let group_size = encoding.group_size().unwrap_or(MAX_GROUP_SIZE);
 
-    let coins = db.entries::<Coins>(None, IterDirection::Forward);
+    let coins = db.on_chain_entries::<Coins>(None, IterDirection::Forward);
     write(coins, group_size, |chunk| writer.write(chunk))?;
 
-    let messages = db.entries::<Messages>(None, IterDirection::Forward);
+    let messages = db.on_chain_entries::<Messages>(None, IterDirection::Forward);
     write(messages, group_size, |chunk| writer.write(chunk))?;
 
-    let code = db.entries::<ContractsRawCode>(None, IterDirection::Forward);
+    let code = db.on_chain_entries::<ContractsRawCode>(None, IterDirection::Forward);
     write(code, group_size, |chunk| writer.write(chunk))?;
 
-    let utxos = db.entries::<ContractsLatestUtxo>(None, IterDirection::Forward);
+    let utxos = db.on_chain_entries::<ContractsLatestUtxo>(None, IterDirection::Forward);
     write(utxos, group_size, |chunk| writer.write(chunk))?;
 
-    let contract_states = db.entries::<ContractsState>(None, IterDirection::Forward);
+    let contract_states =
+        db.on_chain_entries::<ContractsState>(None, IterDirection::Forward);
     write(contract_states, group_size, |chunk| writer.write(chunk))?;
 
-    let contract_balances = db.entries::<ContractsAssets>(None, IterDirection::Forward);
+    let contract_balances =
+        db.on_chain_entries::<ContractsAssets>(None, IterDirection::Forward);
     write(contract_balances, group_size, |chunk| writer.write(chunk))?;
 
     let block = get_last_block(db)?;
@@ -251,7 +263,7 @@ fn full_snapshot(
 
 fn get_last_block(db: impl ChainStateDb) -> anyhow::Result<Block<Bytes32>> {
     Ok(db
-        .entries::<FuelBlocks>(None, IterDirection::Reverse)
+        .on_chain_entries::<FuelBlocks>(None, IterDirection::Reverse)
         .next()
         .ok_or_else(|| anyhow::anyhow!("no block found! Cannot determine block height"))??
         .value)
@@ -268,10 +280,10 @@ fn load_chain_config(
     Ok(chain_config)
 }
 
-fn open_db(path: &Path) -> anyhow::Result<Database> {
-    Database::<OnChain>::open_rocksdb(path, None)
+fn open_db(path: &Path) -> anyhow::Result<CombinedDatabase> {
+    CombinedDatabase::open(path, 1024 * 1024 * 1024)
         .map_err(Into::<anyhow::Error>::into)
-        .context(format!("failed to open database at path {path:?}",))
+        .context(format!("failed to open combined database at path {path:?}",))
 }
 
 #[cfg(test)]
@@ -429,9 +441,9 @@ mod tests {
     }
 
     impl DbPopulator {
-        fn new(db: Database, rng: StdRng) -> Self {
+        fn new(db: CombinedDatabase, rng: StdRng) -> Self {
             Self {
-                db: db.into_transaction(),
+                db: (db.on_chain().clone()).into_transaction(),
                 rng,
             }
         }
