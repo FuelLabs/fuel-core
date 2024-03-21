@@ -11,8 +11,7 @@ fn main() {
     let wasm_executor_enabled = env::var_os("CARGO_FEATURE_WASM_EXECUTOR").is_some();
 
     println!("cargo:rerun-if-changed=build.rs");
-    println!("cargo:rerun-if-changed=wasm-executor/src/lib.rs");
-    println!("cargo:rerun-if-changed=wasm-executor/src/main.rs");
+    println!("cargo:rerun-if-changed=wasm-executor/src/*");
 
     if !wasm_executor_enabled {
         return;
