@@ -21,6 +21,7 @@ use crate::{
 };
 use fuel_core_chain_config::{
     StateConfig,
+    StateConfigBuilder,
     TableEntry,
 };
 use fuel_core_services::SharedMutex;
@@ -39,7 +40,15 @@ use fuel_core_storage::{
         Value,
     },
     structured_storage::TableWithBlueprint,
-    tables::FuelBlocks,
+    tables::{
+        Coins,
+        ContractsAssets,
+        ContractsLatestUtxo,
+        ContractsRawCode,
+        ContractsState,
+        FuelBlocks,
+        Messages,
+    },
     transactional::{
         AtomicView,
         Changes,
@@ -216,7 +225,7 @@ where
         }
     }
 }
-// TODO: There is probably a trait that can be used instead of a ChainStateDb
+
 #[impl_tools::autoimpl(for<K: trait> &K, &mut K)]
 pub trait SnapshotDataSource {
     fn on_chain_entries<T>(
@@ -240,24 +249,34 @@ pub trait SnapshotDataSource {
     fn latest_block(&self) -> StorageResult<CompressedBlock>;
 
     fn read_state_config(&self) -> StorageResult<StateConfig> {
-        let block = self.latest_block()?;
+        use fuel_core_chain_config::AddTable;
+        let mut builder = StateConfigBuilder::default();
 
-        let state_config = StateConfig::from_tables(
-            self.on_chain_entries(None, IterDirection::Forward)
-                .try_collect()?,
-            self.on_chain_entries(None, IterDirection::Forward)
-                .try_collect()?,
-            self.on_chain_entries(None, IterDirection::Forward)
-                .try_collect()?,
-            self.on_chain_entries(None, IterDirection::Forward)
-                .try_collect()?,
-            self.on_chain_entries(None, IterDirection::Forward)
-                .try_collect()?,
-            self.on_chain_entries(None, IterDirection::Forward)
-                .try_collect()?,
-            block.header().da_height,
-            *block.header().height(),
+        macro_rules! add_tables {
+            ($($table: ty),*) => {
+                $(
+                    let table = self
+                        .on_chain_entries::<$table>(None, IterDirection::Forward)
+                        .try_collect()?;
+                    builder.add(table);
+                )*
+            };
+        }
+
+        add_tables!(
+            Coins,
+            Messages,
+            ContractsRawCode,
+            ContractsLatestUtxo,
+            ContractsAssets,
+            ContractsState
         );
+
+        let block = self.latest_block()?;
+        builder.set_block_height(*block.header().height());
+        builder.set_da_block_height(block.header().da_height);
+
+        let state_config = builder.build()?;
 
         Ok(state_config)
     }

@@ -18,6 +18,7 @@ use fuel_core_storage::{
     },
     ContractsAssetKey,
     ContractsStateKey,
+    Mappable,
 };
 use fuel_core_types::{
     blockchain::primitives::DaBlockHeight,
@@ -82,6 +83,172 @@ pub struct StateConfig {
     pub block_height: BlockHeight,
     /// Da block height
     pub da_block_height: DaBlockHeight,
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct StateConfigBuilder {
+    coins: Vec<TableEntry<Coins>>,
+    messages: Vec<TableEntry<Messages>>,
+    contract_state: Vec<TableEntry<ContractsState>>,
+    contract_balance: Vec<TableEntry<ContractsAssets>>,
+    contract_code: Vec<TableEntry<ContractsRawCode>>,
+    contract_utxo: Vec<TableEntry<ContractsLatestUtxo>>,
+    block_height: Option<BlockHeight>,
+    da_block_height: Option<DaBlockHeight>,
+}
+
+impl StateConfigBuilder {
+    pub fn set_block_height(&mut self, block_height: BlockHeight) {
+        self.block_height = Some(block_height);
+    }
+
+    pub fn set_da_block_height(&mut self, da_block_height: DaBlockHeight) {
+        self.da_block_height = Some(da_block_height);
+    }
+
+    pub fn build(self) -> anyhow::Result<StateConfig> {
+        use std::collections::HashMap;
+
+        let coins = self.coins.into_iter().map(|coin| coin.into()).collect();
+        let messages = self
+            .messages
+            .into_iter()
+            .map(|message| message.into())
+            .collect();
+        let contract_ids = self
+            .contract_code
+            .iter()
+            .map(|entry| entry.key)
+            .collect::<Vec<_>>();
+        let mut state: HashMap<_, _> = self
+            .contract_state
+            .into_iter()
+            .map(|state| {
+                (
+                    *state.key.contract_id(),
+                    ContractStateConfig {
+                        key: *state.key.state_key(),
+                        value: state.value.into(),
+                    },
+                )
+            })
+            .into_group_map();
+
+        let mut balance: HashMap<_, _> = self
+            .contract_balance
+            .into_iter()
+            .map(|balance| {
+                (
+                    *balance.key.contract_id(),
+                    ContractBalanceConfig {
+                        asset_id: *balance.key.asset_id(),
+                        amount: balance.value,
+                    },
+                )
+            })
+            .into_group_map();
+
+        let mut contract_code: HashMap<_, Vec<u8>> = self
+            .contract_code
+            .into_iter()
+            .map(|entry| (entry.key, entry.value.into()))
+            .collect();
+
+        let mut contract_utxos: HashMap<_, _> = self
+            .contract_utxo
+            .into_iter()
+            .map(|entry| match entry.value {
+                ContractUtxoInfo::V1(utxo) => {
+                    (entry.key, (utxo.utxo_id, utxo.tx_pointer))
+                }
+                _ => unreachable!(),
+            })
+            .collect();
+
+        let contracts = contract_ids
+            .into_iter()
+            .map(|id| -> anyhow::Result<_> {
+                let code = contract_code
+                    .remove(&id)
+                    .ok_or_else(|| anyhow::anyhow!("Missing code for contract: {id}"))?;
+                let (utxo_id, tx_pointer) = contract_utxos
+                    .remove(&id)
+                    .ok_or_else(|| anyhow::anyhow!("Missing utxo for contract: {id}"))?;
+                let states = state.remove(&id).unwrap_or_default();
+                let balances = balance.remove(&id).unwrap_or_default();
+
+                Ok(ContractConfig {
+                    contract_id: id,
+                    code,
+                    tx_id: *utxo_id.tx_id(),
+                    output_index: utxo_id.output_index(),
+                    tx_pointer_block_height: tx_pointer.block_height(),
+                    tx_pointer_tx_idx: tx_pointer.tx_index(),
+                    states,
+                    balances,
+                })
+            })
+            .try_collect()?;
+
+        let block_height = self
+            .block_height
+            .ok_or_else(|| anyhow::anyhow!("Block height missing"))?;
+
+        let da_block_height = self
+            .da_block_height
+            .ok_or_else(|| anyhow::anyhow!("Da block height missing"))?;
+
+        Ok(StateConfig {
+            coins,
+            messages,
+            contracts,
+            block_height,
+            da_block_height,
+        })
+    }
+}
+
+pub trait AddTable<T>
+where
+    T: Mappable,
+{
+    fn add(&mut self, _entries: Vec<TableEntry<T>>);
+}
+
+impl AddTable<Coins> for StateConfigBuilder {
+    fn add(&mut self, entries: Vec<TableEntry<Coins>>) {
+        self.coins.extend(entries);
+    }
+}
+
+impl AddTable<Messages> for StateConfigBuilder {
+    fn add(&mut self, entries: Vec<TableEntry<Messages>>) {
+        self.messages.extend(entries);
+    }
+}
+
+impl AddTable<ContractsState> for StateConfigBuilder {
+    fn add(&mut self, entries: Vec<TableEntry<ContractsState>>) {
+        self.contract_state.extend(entries);
+    }
+}
+
+impl AddTable<ContractsAssets> for StateConfigBuilder {
+    fn add(&mut self, entries: Vec<TableEntry<ContractsAssets>>) {
+        self.contract_balance.extend(entries);
+    }
+}
+
+impl AddTable<ContractsRawCode> for StateConfigBuilder {
+    fn add(&mut self, entries: Vec<TableEntry<ContractsRawCode>>) {
+        self.contract_code.extend(entries);
+    }
+}
+
+impl AddTable<ContractsLatestUtxo> for StateConfigBuilder {
+    fn add(&mut self, entries: Vec<TableEntry<ContractsLatestUtxo>>) {
+        self.contract_utxo.extend(entries);
+    }
 }
 
 #[cfg(feature = "test-helpers")]
@@ -226,100 +393,6 @@ impl StateConfig {
     }
 
     #[cfg(feature = "std")]
-    pub fn from_tables(
-        coins: Vec<TableEntry<Coins>>,
-        messages: Vec<TableEntry<Messages>>,
-        contract_state: Vec<TableEntry<ContractsState>>,
-        contract_balance: Vec<TableEntry<ContractsAssets>>,
-        contract_code: Vec<TableEntry<ContractsRawCode>>,
-        contract_utxo: Vec<TableEntry<ContractsLatestUtxo>>,
-        da_block_height: DaBlockHeight,
-        block_height: BlockHeight,
-    ) -> Self {
-        use std::collections::HashMap;
-
-        let coins = coins.into_iter().map(|coin| coin.into()).collect();
-        let messages = messages.into_iter().map(|message| message.into()).collect();
-        let contract_ids = contract_code
-            .iter()
-            .map(|entry| entry.key)
-            .collect::<Vec<_>>();
-        let mut state: HashMap<_, _> = contract_state
-            .into_iter()
-            .map(|state| {
-                (
-                    *state.key.contract_id(),
-                    ContractStateConfig {
-                        key: *state.key.state_key(),
-                        value: state.value.into(),
-                    },
-                )
-            })
-            .into_group_map();
-
-        let mut balance: HashMap<_, _> = contract_balance
-            .into_iter()
-            .map(|balance| {
-                (
-                    *balance.key.contract_id(),
-                    ContractBalanceConfig {
-                        asset_id: *balance.key.asset_id(),
-                        amount: balance.value,
-                    },
-                )
-            })
-            .into_group_map();
-
-        let mut contract_code: HashMap<_, Vec<u8>> = contract_code
-            .into_iter()
-            .map(|entry| (entry.key, entry.value.into()))
-            .collect();
-
-        let mut contract_utxos: HashMap<_, _> = contract_utxo
-            .into_iter()
-            .map(|entry| match entry.value {
-                ContractUtxoInfo::V1(utxo) => {
-                    (entry.key, (utxo.utxo_id, utxo.tx_pointer))
-                }
-                _ => unreachable!(),
-            })
-            .collect();
-
-        let contracts = contract_ids
-            .into_iter()
-            .map(|id| -> anyhow::Result<_> {
-                let code = contract_code
-                    .remove(&id)
-                    .ok_or_else(|| anyhow::anyhow!("Missing code for contract: {id}"))?;
-                let (utxo_id, tx_pointer) = contract_utxos
-                    .remove(&id)
-                    .ok_or_else(|| anyhow::anyhow!("Missing utxo for contract: {id}"))?;
-                let states = state.remove(&id).unwrap_or_default();
-                let balances = balance.remove(&id).unwrap_or_default();
-
-                Ok(ContractConfig {
-                    contract_id: id,
-                    code,
-                    tx_id: *utxo_id.tx_id(),
-                    output_index: utxo_id.output_index(),
-                    tx_pointer_block_height: tx_pointer.block_height(),
-                    tx_pointer_tx_idx: tx_pointer.tx_index(),
-                    states,
-                    balances,
-                })
-            })
-            .try_collect()
-            .unwrap();
-        Self {
-            coins,
-            messages,
-            contracts,
-            block_height,
-            da_block_height,
-        }
-    }
-
-    #[cfg(feature = "std")]
     pub fn from_snapshot_metadata(
         snapshot_metadata: SnapshotMetadata,
     ) -> anyhow::Result<Self> {
@@ -329,55 +402,63 @@ impl StateConfig {
 
     #[cfg(feature = "std")]
     pub fn from_reader(reader: &SnapshotReader) -> anyhow::Result<Self> {
+        let mut builder = StateConfigBuilder::default();
+
         let coins = reader
-            .read()?
+            .read::<Coins>()?
             .map_ok(|batch| batch.data)
             .flatten_ok()
             .try_collect()?;
+
+        builder.add(coins);
 
         let messages = reader
-            .read()?
+            .read::<Messages>()?
             .map_ok(|batch| batch.data)
             .flatten_ok()
             .try_collect()?;
+
+        builder.add(messages);
 
         let contract_state = reader
-            .read()?
+            .read::<ContractsState>()?
             .map_ok(|batch| batch.data)
             .flatten_ok()
             .try_collect()?;
+
+        builder.add(contract_state);
 
         let contract_balance = reader
-            .read()?
+            .read::<ContractsAssets>()?
             .map_ok(|batch| batch.data)
             .flatten_ok()
             .try_collect()?;
+
+        builder.add(contract_balance);
 
         let contract_code = reader
-            .read()?
+            .read::<ContractsRawCode>()?
             .map_ok(|batch| batch.data)
             .flatten_ok()
             .try_collect()?;
+
+        builder.add(contract_code);
 
         let contract_utxo = reader
-            .read()?
+            .read::<ContractsLatestUtxo>()?
             .map_ok(|batch| batch.data)
             .flatten_ok()
             .try_collect()?;
 
-        let block_height = reader.block_height();
-        let da_block_height = reader.da_block_height();
+        builder.add(contract_utxo);
 
-        Ok(Self::from_tables(
-            coins,
-            messages,
-            contract_state,
-            contract_balance,
-            contract_code,
-            contract_utxo,
-            da_block_height,
-            block_height,
-        ))
+        let block_height = reader.block_height();
+        builder.set_block_height(block_height);
+
+        let da_block_height = reader.da_block_height();
+        builder.set_da_block_height(da_block_height);
+
+        builder.build()
     }
 
     pub fn local_testnet() -> Self {
@@ -662,6 +743,7 @@ mod tests {
             + PartialEq,
         StateConfig: AsTable<T>,
         TableEntry<T>: Randomize,
+        StateConfigBuilder: AddTable<T>,
     {
         // given
         let skip_n_groups = 3;
@@ -716,6 +798,7 @@ mod tests {
             T::OwnedKey: serde::Serialize,
             T::OwnedValue: serde::Serialize,
             TableEntry<T>: Randomize,
+            StateConfigBuilder: AddTable<T>,
         {
             let groups = self.generate_groups();
             for group in &groups {

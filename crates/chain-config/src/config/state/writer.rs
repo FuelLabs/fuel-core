@@ -1,9 +1,11 @@
 use crate::{
     config::table_entry::TableEntry,
+    AddTable,
     AsTable,
     ChainConfig,
     SnapshotMetadata,
     StateConfig,
+    StateConfigBuilder,
     TableEncoding,
 };
 use fuel_core_storage::{
@@ -23,7 +25,6 @@ use fuel_core_types::{
     blockchain::primitives::DaBlockHeight,
     fuel_types::BlockHeight,
 };
-use itertools::Itertools;
 use serde_json::Value;
 use std::{
     collections::HashMap,
@@ -35,9 +36,7 @@ use super::parquet;
 
 enum EncoderType {
     Json {
-        buffer: HashMap<String, Vec<Value>>,
-        da_block_height: Option<DaBlockHeight>,
-        block_height: Option<BlockHeight>,
+        builder: StateConfigBuilder,
     },
     #[cfg(feature = "parquet")]
     Parquet {
@@ -194,9 +193,7 @@ impl SnapshotWriter {
     pub fn json(dir: impl Into<PathBuf>) -> Self {
         Self {
             encoder: EncoderType::Json {
-                buffer: HashMap::default(),
-                da_block_height: None,
-                block_height: None,
+                builder: StateConfigBuilder::default(),
             },
             dir: dir.into(),
         }
@@ -245,12 +242,12 @@ impl SnapshotWriter {
         T: TableWithBlueprint,
         T::OwnedValue: serde::Serialize,
         T::OwnedKey: serde::Serialize,
+        StateConfigBuilder: AddTable<T>,
     {
         let name = T::column().name().to_string();
         match &mut self.encoder {
-            EncoderType::Json { buffer, .. } => {
-                let values = elements.into_iter().map(|e| e.encode_json()).collect_vec();
-                buffer.entry(name).or_insert_with(Vec::new).extend(values);
+            EncoderType::Json { builder, .. } => {
+                builder.add(elements);
                 Ok(())
             }
             #[cfg(feature = "parquet")]
@@ -281,13 +278,9 @@ impl SnapshotWriter {
         da_height: DaBlockHeight,
     ) -> anyhow::Result<()> {
         match &mut self.encoder {
-            EncoderType::Json {
-                da_block_height,
-                block_height,
-                ..
-            } => {
-                *block_height = Some(height);
-                *da_block_height = Some(da_height);
+            EncoderType::Json { builder, .. } => {
+                builder.set_block_height(height);
+                builder.set_da_block_height(da_height);
                 Ok(())
             }
             #[cfg(feature = "parquet")]
@@ -321,38 +314,8 @@ impl SnapshotWriter {
 
     pub fn close(self) -> anyhow::Result<SnapshotMetadata> {
         match self.encoder {
-            EncoderType::Json {
-                mut buffer,
-                da_block_height,
-                block_height,
-            } => {
-                fn extract_table<T>(
-                    buffer: &mut HashMap<String, Vec<Value>>,
-                ) -> anyhow::Result<Vec<TableEntry<T>>>
-                where
-                    T: TableWithBlueprint,
-                    T::OwnedKey: serde::de::DeserializeOwned,
-                    T::OwnedValue: serde::de::DeserializeOwned,
-                {
-                    Ok(buffer
-                        .remove_entry(T::column().name())
-                        .unwrap_or_default()
-                        .1
-                        .into_iter()
-                        .map(serde_json::from_value)
-                        .try_collect()?)
-                }
-
-                let state_config = StateConfig::from_tables(
-                    extract_table(&mut buffer)?,
-                    extract_table(&mut buffer)?,
-                    extract_table(&mut buffer)?,
-                    extract_table(&mut buffer)?,
-                    extract_table(&mut buffer)?,
-                    extract_table(&mut buffer)?,
-                    da_block_height.unwrap_or_default(),
-                    block_height.unwrap_or_default(),
-                );
+            EncoderType::Json { builder } => {
+                let state_config = builder.build()?;
 
                 let state_file_path = self.dir.join("state_config.json");
                 let file = std::fs::File::create(&state_file_path)?;
@@ -431,6 +394,7 @@ mod tests {
             T: TableWithBlueprint,
             T::OwnedKey: serde::Serialize,
             T::OwnedValue: serde::Serialize,
+            StateConfigBuilder: AddTable<T>,
         {
             // given
             use pretty_assertions::assert_eq;

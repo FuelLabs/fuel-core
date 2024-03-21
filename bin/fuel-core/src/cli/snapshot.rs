@@ -290,10 +290,12 @@ mod tests {
 
     use fuel_core::database::Database;
     use fuel_core_chain_config::{
+        AddTable,
         AsTable,
         SnapshotMetadata,
         SnapshotReader,
         StateConfig,
+        StateConfigBuilder,
         TableEntry,
     };
     use fuel_core_storage::{
@@ -374,25 +376,21 @@ mod tests {
         }
 
         fn into_state_config(self) -> StateConfig {
-            let coins = self.coins;
-            let messages = self.messages;
-            let contract_code = self.contract_code;
-            let contract_utxo = self.contract_utxo;
-            let contract_state = self.contract_state;
-            let contract_balance = self.contract_balance;
+            let mut builder = StateConfigBuilder::default();
+            builder.add(self.coins);
+            builder.add(self.messages);
+            builder.add(self.contract_code);
+            builder.add(self.contract_utxo);
+            builder.add(self.contract_state);
+            builder.add(self.contract_balance);
 
             let height = self.block.value.header().height();
+            builder.set_block_height(*height);
+
             let da_height = self.block.value.header().application().da_height;
-            StateConfig::from_tables(
-                coins,
-                messages,
-                contract_state,
-                contract_balance,
-                contract_code,
-                contract_utxo,
-                da_height,
-                *height,
-            )
+            builder.set_da_block_height(da_height);
+
+            builder.build().unwrap()
         }
 
         fn read_from_snapshot(snapshot: SnapshotMetadata) -> Self {
