@@ -37,22 +37,22 @@ pub struct ContractConfig {
     /// used if contract is forked from another chain to preserve id & tx_pointer
     /// The index of the originating tx within `tx_pointer_block_height`
     pub tx_pointer_tx_idx: u16,
-    pub states: Vec<ContractState>,
-    pub balances: Vec<ContractAsset>,
+    pub states: Vec<ContractStateConfig>,
+    pub balances: Vec<ContractBalanceConfig>,
 }
 
 #[serde_as]
 #[derive(Clone, Debug, Deserialize, Serialize, Eq, PartialEq)]
-pub struct ContractState {
+pub struct ContractStateConfig {
     pub key: Bytes32,
     #[serde_as(as = "HexIfHumanReadable")]
     pub value: Vec<u8>,
 }
 
-impl TryFrom<ContractState> for StorageSlot {
+impl TryFrom<ContractStateConfig> for StorageSlot {
     type Error = anyhow::Error;
 
-    fn try_from(value: ContractState) -> Result<Self, Self::Error> {
+    fn try_from(value: ContractStateConfig) -> Result<Self, Self::Error> {
         let key = value.key;
         let value = Bytes32::try_from(value.value.as_slice())?;
         Ok(Self::new(key, value))
@@ -60,7 +60,7 @@ impl TryFrom<ContractState> for StorageSlot {
 }
 
 #[cfg(feature = "test-helpers")]
-impl crate::Randomize for ContractState {
+impl crate::Randomize for ContractStateConfig {
     fn randomize(mut rng: impl ::rand::Rng) -> Self {
         Self {
             key: crate::Randomize::randomize(&mut rng),
@@ -70,13 +70,13 @@ impl crate::Randomize for ContractState {
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize, Eq, PartialEq)]
-pub struct ContractAsset {
+pub struct ContractBalanceConfig {
     pub asset_id: AssetId,
     pub amount: u64,
 }
 
 #[cfg(feature = "test-helpers")]
-impl crate::Randomize for ContractAsset {
+impl crate::Randomize for ContractBalanceConfig {
     fn randomize(mut rng: impl ::rand::Rng) -> Self {
         Self {
             asset_id: crate::Randomize::randomize(&mut rng),
@@ -99,7 +99,7 @@ impl ContractConfig {
 impl crate::Randomize for ContractConfig {
     fn randomize(mut rng: impl ::rand::Rng) -> Self {
         let code = Bytes32::randomize(&mut rng).to_vec();
-        let states = vec![ContractState {
+        let states = vec![ContractStateConfig {
             key: Bytes32::randomize(&mut rng),
             value: Bytes32::randomize(&mut rng).to_vec(),
         }];
@@ -124,7 +124,7 @@ impl crate::Randomize for ContractConfig {
             tx_pointer_block_height: crate::Randomize::randomize(&mut rng),
             tx_pointer_tx_idx: rng.gen(),
             states,
-            balances: vec![ContractAsset {
+            balances: vec![ContractBalanceConfig {
                 asset_id: crate::Randomize::randomize(&mut rng),
                 amount: rng.gen(),
             }],

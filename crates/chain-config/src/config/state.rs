@@ -39,8 +39,8 @@ use serde::{
 use crate::SnapshotMetadata;
 use crate::{
     CoinConfigGenerator,
-    ContractAsset,
-    ContractState,
+    ContractBalanceConfig,
+    ContractStateConfig,
 };
 
 use super::{
@@ -140,7 +140,7 @@ impl AsTable<ContractsState> for StateConfig {
             .iter()
             .flat_map(|contract| {
                 contract.states.iter().map(
-                    |ContractState {
+                    |ContractStateConfig {
                          key: state_key,
                          value: state_value,
                      }| TableEntry {
@@ -157,13 +157,12 @@ impl AsTable<ContractsAssets> for StateConfig {
         self.contracts
             .iter()
             .flat_map(|contract| {
-                contract
-                    .balances
-                    .iter()
-                    .map(|ContractAsset { asset_id, amount }| TableEntry {
+                contract.balances.iter().map(
+                    |ContractBalanceConfig { asset_id, amount }| TableEntry {
                         key: ContractsAssetKey::new(&contract.contract_id, asset_id),
                         value: *amount,
-                    })
+                    },
+                )
             })
             .collect()
     }
@@ -250,7 +249,7 @@ impl StateConfig {
             .map(|state| {
                 (
                     *state.key.contract_id(),
-                    ContractState {
+                    ContractStateConfig {
                         key: *state.key.state_key(),
                         value: state.value.into(),
                     },
@@ -263,7 +262,7 @@ impl StateConfig {
             .map(|balance| {
                 (
                     *balance.key.contract_id(),
-                    ContractAsset {
+                    ContractBalanceConfig {
                         asset_id: *balance.key.asset_id(),
                         amount: balance.value,
                     },

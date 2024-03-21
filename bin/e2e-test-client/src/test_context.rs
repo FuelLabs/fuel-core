@@ -6,7 +6,7 @@ use anyhow::{
 };
 use fuel_core_chain_config::{
     ContractConfig,
-    ContractState,
+    ContractStateConfig,
 };
 use fuel_core_client::client::{
     pagination::{
@@ -325,7 +325,7 @@ impl Wallet {
 
         let state = states
             .iter()
-            .map(|ContractState { key, value }| {
+            .map(|ContractStateConfig { key, value }| {
                 let value = Bytes32::new(
                     value
                         .as_slice()

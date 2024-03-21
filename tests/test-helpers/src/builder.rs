@@ -2,7 +2,7 @@ use fuel_core::{
     chain_config::{
         ChainConfig,
         CoinConfig,
-        ContractAsset,
+        ContractBalanceConfig,
         ContractConfig,
         SnapshotReader,
         StateConfig,
@@ -107,7 +107,7 @@ impl TestSetupBuilder {
     pub fn setup_contract(
         &mut self,
         code: Vec<u8>,
-        balances: Vec<ContractAsset>,
+        balances: Vec<ContractBalanceConfig>,
         tx_pointer: Option<TxPointer>,
     ) -> (Salt, ContractId) {
         let contract = Contract::from(code.clone());
