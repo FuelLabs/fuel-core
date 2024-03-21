@@ -16,7 +16,8 @@ query($after: String, $before: String, $first: Int, $last: Int) {
           transactionsCount
           messageReceiptCount
           transactionsRoot
-          messageReceiptRoot
+          messageOutboxRoot
+          eventInboxRoot
           height
           prevRoot
           time

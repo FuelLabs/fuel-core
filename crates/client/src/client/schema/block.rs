@@ -125,6 +125,7 @@ pub struct Header {
     pub message_receipt_count: U64,
     pub transactions_root: Bytes32,
     pub message_outbox_root: Bytes32,
+    pub event_inbox_root: Bytes32,
     pub height: U32,
     pub prev_root: Bytes32,
     pub time: Tai64Timestamp,
