@@ -160,7 +160,7 @@ pub fn create_genesis_block(config: &Config) -> Block {
     let da_block_height = config.state_reader.da_block_height();
     let transactions = vec![];
     let message_ids = &[];
-    let events = &[];
+    let events = Default::default();
     Block::new(
         PartialBlockHeader {
             application: ApplicationHeader::<Empty> {

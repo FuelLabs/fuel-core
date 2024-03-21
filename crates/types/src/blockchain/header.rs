@@ -18,7 +18,6 @@ use crate::{
         Bytes32,
         MessageId,
     },
-    services::executor::Event,
 };
 use tai64::Tai64;
 
@@ -369,7 +368,7 @@ impl PartialBlockHeader {
         self,
         transactions: &[Transaction],
         message_ids: &[MessageId],
-        events: &[Event],
+        event_inbox_root: Bytes32,
     ) -> BlockHeader {
         // Generate the transaction merkle root.
         let transactions_root = generate_txns_root(transactions);
@@ -379,17 +378,6 @@ impl PartialBlockHeader {
             .iter()
             .fold(MerkleRootCalculator::new(), |mut tree, id| {
                 tree.push(id.as_ref());
-                tree
-            })
-            .root()
-            .into();
-
-        // Generate the inbound event merkle root.
-        let event_inbox_root = events
-            .iter()
-            .map(|event| event.hash())
-            .fold(MerkleRootCalculator::new(), |mut tree, event| {
-                tree.push(event.as_ref());
                 tree
             })
             .root()

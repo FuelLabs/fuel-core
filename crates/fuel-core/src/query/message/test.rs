@@ -141,7 +141,7 @@ async fn can_build_message_proof() {
             generated: Default::default(),
         },
     }
-    .generate(&[], &[], &[]);
+    .generate(&[], &[], Default::default());
     let commit_block = CompressedBlock::test(commit_block_header, vec![]);
     let message_block_header = PartialBlockHeader {
         application: ApplicationHeader {
@@ -157,7 +157,7 @@ async fn can_build_message_proof() {
             generated: Default::default(),
         },
     }
-    .generate(&[], &message_ids, &[]);
+    .generate(&[], &message_ids, Default::default());
     let message_block = CompressedBlock::test(message_block_header, TXNS.to_vec());
 
     let block_proof = MerkleProof {
