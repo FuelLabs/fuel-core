@@ -3,6 +3,7 @@ use crate::{
     service::adapters::{
         BlockImporterAdapter,
         P2PAdapter,
+        StaticGasPrice,
     },
 };
 use fuel_core_services::stream::BoxStream;
@@ -16,7 +17,10 @@ use fuel_core_storage::{
     Result as StorageResult,
     StorageAsRef,
 };
-use fuel_core_txpool::ports::BlockImporter;
+use fuel_core_txpool::{
+    ports::BlockImporter,
+    txpool::GasPriceProvider,
+};
 use fuel_core_types::{
     entities::{
         coins::coin::CompressedCoin,
@@ -27,6 +31,7 @@ use fuel_core_types::{
         UtxoId,
     },
     fuel_types::{
+        BlockHeight,
         ContractId,
         Nonce,
     },
@@ -130,5 +135,11 @@ impl fuel_core_txpool::ports::TxPoolDb for Database {
 
     fn is_message_spent(&self, id: &Nonce) -> StorageResult<bool> {
         self.storage::<SpentMessages>().contains_key(id)
+    }
+}
+
+impl GasPriceProvider for StaticGasPrice {
+    fn gas_price(&self, _block_height: BlockHeight) -> Option<u64> {
+        Some(self.gas_price)
     }
 }

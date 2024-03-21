@@ -138,6 +138,16 @@ impl Header {
         self.0.da_height.0.into()
     }
 
+    /// The version of the consensus parameters used to create this block.
+    async fn consensus_parameters_version(&self) -> U32 {
+        self.0.consensus_parameters_version.into()
+    }
+
+    /// The version of the state transition bytecode used to create this block.
+    async fn state_transition_bytecode_version(&self) -> U32 {
+        self.0.state_transition_bytecode_version.into()
+    }
+
     /// Number of transactions in this block.
     async fn transactions_count(&self) -> U64 {
         self.0.transactions_count.into()

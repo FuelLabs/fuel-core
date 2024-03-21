@@ -18,10 +18,10 @@ use crate::kv_store::StorageColumn;
     Hash,
 )]
 pub enum Column {
+    /// The column id of metadata about the blockchain
+    Metadata = 0,
     /// See [`ContractsRawCode`](crate::tables::ContractsRawCode)
-    ContractsRawCode = 0,
-    /// See [`ContractsInfo`](crate::tables::ContractsInfo)
-    ContractsInfo = 1,
+    ContractsRawCode = 1,
     /// See [`ContractsState`](crate::tables::ContractsState)
     ContractsState = 2,
     /// See [`ContractsLatestUtxo`](crate::tables::ContractsLatestUtxo)
@@ -54,19 +54,16 @@ pub enum Column {
     Messages = 15,
     /// See [`ProcessedTransactions`](crate::tables::ProcessedTransactions)
     ProcessedTransactions = 16,
-
-    // TODO: Extract the columns below into a separate enum to not mix
-    //  required columns and non-required columns. It will break `MemoryStore`
-    //  and `MemoryTransactionView` because they rely on linear index incrementation.
-
-    // Below are the tables used for p2p, block production, starting the node.
-    /// The column id of metadata about the blockchain
-    Metadata = 17,
     /// See [`SealedBlockConsensus`](crate::tables::SealedBlockConsensus)
-    FuelBlockConsensus = 18,
+    FuelBlockConsensus = 17,
+    /// See [`ConsensusParametersVersions`](crate::tables::ConsensusParametersVersions)
+    ConsensusParametersVersions = 18,
+    /// See [`StateTransitionBytecodeVersions`](crate::tables::StateTransitionBytecodeVersions)
+    StateTransitionBytecodeVersions = 19,
 
+    // TODO: Remove this column and use `Metadata` column instead.
     /// Table for genesis state import progress tracking.
-    GenesisMetadata = 19,
+    GenesisMetadata = 20,
 }
 
 impl Column {

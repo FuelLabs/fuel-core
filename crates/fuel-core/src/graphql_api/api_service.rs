@@ -4,6 +4,7 @@ use crate::{
         ports::{
             BlockProducerPort,
             ConsensusModulePort,
+            GasPriceEstimate,
             OffChainDatabase,
             OnChainDatabase,
             P2pPort,
@@ -87,6 +88,8 @@ pub type BlockProducer = Box<dyn BlockProducerPort>;
 pub type TxPool = Box<dyn TxPoolPort>;
 pub type ConsensusModule = Box<dyn ConsensusModulePort>;
 pub type P2pService = Box<dyn P2pPort>;
+
+pub type GasPriceProvider = Box<dyn GasPriceEstimate>;
 
 #[derive(Clone)]
 pub struct SharedState {
@@ -173,6 +176,7 @@ pub fn new_service<OnChain, OffChain>(
     producer: BlockProducer,
     consensus_module: ConsensusModule,
     p2p_service: P2pService,
+    gas_price_provider: GasPriceProvider,
     log_threshold_ms: Duration,
     request_timeout: Duration,
 ) -> anyhow::Result<Service>
@@ -192,6 +196,7 @@ where
         .data(producer)
         .data(consensus_module)
         .data(p2p_service)
+        .data(gas_price_provider)
         .extension(async_graphql::extensions::Tracing)
         .extension(MetricsExtension::new(log_threshold_ms))
         .extension(ViewExtension::new())

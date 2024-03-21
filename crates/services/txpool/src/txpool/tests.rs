@@ -1,4 +1,5 @@
 use crate::{
+    service::test_helpers::MockTxPoolGasPrice,
     test_helpers::{
         IntoEstimated,
         TextContext,
@@ -38,6 +39,7 @@ use fuel_core_types::{
     },
 };
 
+use crate::types::GasPrice;
 use fuel_core_types::fuel_tx::Finalizable;
 use std::{
     cmp::Reverse,
@@ -50,7 +52,17 @@ use super::check_single_tx;
 const GAS_LIMIT: Word = 1000;
 
 async fn check_unwrap_tx(tx: Transaction, config: &Config) -> Checked<Transaction> {
-    check_single_tx(tx, Default::default(), config)
+    let gas_price = 0;
+    check_unwrap_tx_with_gas_price(tx, config, gas_price).await
+}
+
+async fn check_unwrap_tx_with_gas_price(
+    tx: Transaction,
+    config: &Config,
+    gas_price: GasPrice,
+) -> Checked<Transaction> {
+    let gas_price_provider = MockTxPoolGasPrice::new(gas_price);
+    check_single_tx(tx, Default::default(), config, &gas_price_provider)
         .await
         .expect("Transaction should be checked")
 }
@@ -59,7 +71,17 @@ async fn check_tx(
     tx: Transaction,
     config: &Config,
 ) -> Result<Checked<Transaction>, Error> {
-    check_single_tx(tx, Default::default(), config).await
+    let gas_price = 0;
+    check_tx_with_gas_price(tx, config, gas_price).await
+}
+
+async fn check_tx_with_gas_price(
+    tx: Transaction,
+    config: &Config,
+    gas_price: GasPrice,
+) -> Result<Checked<Transaction>, Error> {
+    let gas_price_provider = MockTxPoolGasPrice::new(gas_price);
+    check_single_tx(tx, Default::default(), config, &gas_price_provider).await
 }
 
 #[tokio::test]
@@ -870,8 +892,8 @@ async fn find_dependent_tx1_tx2() {
 
 #[tokio::test]
 async fn tx_at_least_min_gas_price_is_insertable() {
+    let gas_price = 10;
     let mut context = TextContext::default().config(Config {
-        min_gas_price: 10,
         ..Default::default()
     });
 
@@ -884,7 +906,7 @@ async fn tx_at_least_min_gas_price_is_insertable() {
         .finalize_as_transaction();
 
     let mut txpool = context.build();
-    let tx = check_unwrap_tx(tx, &txpool.config).await;
+    let tx = check_unwrap_tx_with_gas_price(tx, &txpool.config, gas_price).await;
     txpool.insert_single(tx).expect("Tx should be Ok, got Err");
 }
 
@@ -899,13 +921,14 @@ async fn tx_below_min_gas_price_is_not_insertable() {
         .script_gas_limit(GAS_LIMIT)
         .add_input(gas_coin)
         .finalize_as_transaction();
+    let gas_price = 11;
 
-    let err = check_tx(
+    let err = check_tx_with_gas_price(
         tx,
         &Config {
-            min_gas_price: 11,
             ..Default::default()
         },
+        gas_price,
     )
     .await
     .expect_err("expected insertion failure");
@@ -989,6 +1012,7 @@ async fn tx_rejected_from_pool_when_gas_price_is_lower_than_another_tx_with_same
 ) {
     let mut context = TextContext::default();
     let message_amount = 10_000;
+    let max_fee_limit = 10u64;
     let gas_price_high = 2u64;
     let gas_price_low = 1u64;
     let (message, conflicting_message_input) =
@@ -996,14 +1020,14 @@ async fn tx_rejected_from_pool_when_gas_price_is_lower_than_another_tx_with_same
 
     let tx_high = TransactionBuilder::script(vec![], vec![])
         .tip(gas_price_high)
-        .max_fee_limit(gas_price_high)
+        .max_fee_limit(max_fee_limit)
         .script_gas_limit(GAS_LIMIT)
         .add_input(conflicting_message_input.clone())
         .finalize_as_transaction();
 
     let tx_low = TransactionBuilder::script(vec![], vec![])
         .tip(gas_price_low)
-        .max_fee_limit(gas_price_low)
+        .max_fee_limit(max_fee_limit)
         .script_gas_limit(GAS_LIMIT)
         .add_input(conflicting_message_input)
         .finalize_as_transaction();
@@ -1013,14 +1037,16 @@ async fn tx_rejected_from_pool_when_gas_price_is_lower_than_another_tx_with_same
     let mut txpool = context.build();
 
     let tx_high_id = tx_high.id(&ChainId::default());
-    let tx_high = check_unwrap_tx(tx_high, &txpool.config).await;
+    let tx_high =
+        check_unwrap_tx_with_gas_price(tx_high, &txpool.config, gas_price_high).await;
 
     // Insert a tx for the message id with a high gas amount
     txpool
         .insert_single(tx_high)
         .expect("expected successful insertion");
 
-    let tx_low = check_unwrap_tx(tx_low, &txpool.config).await;
+    let tx_low =
+        check_unwrap_tx_with_gas_price(tx_low, &txpool.config, gas_price_low).await;
     // Insert a tx for the message id with a low gas amount
     // Because the new transaction's id matches an existing transaction, we compare the gas
     // prices of both the new and existing transactions. Since the existing transaction's gas
@@ -1039,6 +1065,7 @@ async fn higher_priced_tx_squeezes_out_lower_priced_tx_with_same_message_id() {
     let mut context = TextContext::default();
     let message_amount = 10_000;
     let gas_price_high = 2u64;
+    let max_fee_limit = 10u64;
     let gas_price_low = 1u64;
     let (message, conflicting_message_input) =
         create_message_predicate_from_message(message_amount, 0);
@@ -1046,7 +1073,7 @@ async fn higher_priced_tx_squeezes_out_lower_priced_tx_with_same_message_id() {
     // Insert a tx for the message id with a low gas amount
     let tx_low = TransactionBuilder::script(vec![], vec![])
         .tip(gas_price_low)
-        .max_fee_limit(gas_price_low)
+        .max_fee_limit(max_fee_limit)
         .script_gas_limit(GAS_LIMIT)
         .add_input(conflicting_message_input.clone())
         .finalize_as_transaction();
@@ -1055,7 +1082,8 @@ async fn higher_priced_tx_squeezes_out_lower_priced_tx_with_same_message_id() {
 
     let mut txpool = context.build();
     let tx_low_id = tx_low.id(&ChainId::default());
-    let tx_low = check_unwrap_tx(tx_low, &txpool.config).await;
+    let tx_low =
+        check_unwrap_tx_with_gas_price(tx_low, &txpool.config, gas_price_low).await;
     txpool.insert_single(tx_low).expect("should succeed");
 
     // Insert a tx for the message id with a high gas amount
@@ -1064,11 +1092,12 @@ async fn higher_priced_tx_squeezes_out_lower_priced_tx_with_same_message_id() {
     // price is lower, we accept the new transaction and squeeze out the old transaction.
     let tx_high = TransactionBuilder::script(vec![], vec![])
         .tip(gas_price_high)
-        .max_fee_limit(gas_price_high)
+        .max_fee_limit(max_fee_limit)
         .script_gas_limit(GAS_LIMIT)
         .add_input(conflicting_message_input)
         .finalize_as_transaction();
-    let tx_high = check_unwrap_tx(tx_high, &txpool.config).await;
+    let tx_high =
+        check_unwrap_tx_with_gas_price(tx_high, &txpool.config, gas_price_high).await;
     let squeezed_out_txs = txpool.insert_single(tx_high).expect("should succeed");
 
     assert_eq!(squeezed_out_txs.removed.len(), 1);

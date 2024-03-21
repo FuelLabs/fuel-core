@@ -99,8 +99,9 @@ async fn execute_suite(config_path: String) {
 fn dev_config() -> Config {
     let mut config = Config::local_node();
 
-    let snapshot = SnapshotMetadata::read("../../deployment/scripts/chainspec/dev")
-        .expect("Should be able to open snapshot metadata");
+    let snapshot =
+        SnapshotMetadata::read("../../deployment/scripts/chainspec/dev-testnet")
+            .expect("Should be able to open snapshot metadata");
     let chain_config = ChainConfig::from_snapshot_metadata(&snapshot)
         .expect("Should be able to load chain config");
 
@@ -117,7 +118,7 @@ fn dev_config() -> Config {
     );
 
     config.chain_config = chain_config;
-    config.block_producer.gas_price = 1;
+    config.static_gas_price = 1;
     config.state_reader = StateReader::in_memory(state_config);
 
     config.block_producer.coinbase_recipient = Some(

@@ -43,7 +43,6 @@ async fn loads_snapshot() {
         contracts: vec![ContractConfig {
             contract_id,
             code: vec![8; 32],
-            salt: Salt::new([9; 32]),
             tx_id: rng.gen(),
             output_index: rng.gen(),
             tx_pointer_block_height: BlockHeight::from(10),

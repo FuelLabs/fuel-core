@@ -12,7 +12,6 @@ use fuel_core_storage::{
     not_found,
     tables::{
         ContractsAssets,
-        ContractsInfo,
         ContractsLatestUtxo,
         ContractsRawCode,
         ContractsState,
@@ -77,13 +76,6 @@ impl Database {
             })
             .ok_or_else(|| not_found!("ContractsRawCode"))?;
 
-        let salt = *self
-            .storage::<ContractsInfo>()
-            .get(&contract_id)
-            .unwrap()
-            .expect("Contract does not exist")
-            .salt();
-
         let latest_utxo = self
             .storage::<ContractsLatestUtxo>()
             .get(&contract_id)
@@ -96,7 +88,6 @@ impl Database {
         Ok(ContractConfig {
             contract_id,
             code,
-            salt,
             tx_id: *utxo_id.tx_id(),
             output_index: utxo_id.output_index(),
             tx_pointer_block_height: tx_pointer.block_height(),

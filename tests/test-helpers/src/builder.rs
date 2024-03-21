@@ -114,8 +114,7 @@ impl TestSetupBuilder {
         let contract = Contract::from(code.clone());
         let root = contract.root();
         let salt: Salt = self.rng.gen();
-        let contract_id =
-            contract.id(&salt.clone(), &root, &Contract::default_state_root());
+        let contract_id = contract.id(&salt, &root, &Contract::default_state_root());
 
         let tx_pointer = tx_pointer.unwrap_or_default();
         let utxo_id: UtxoId = self.rng.gen();
@@ -124,7 +123,6 @@ impl TestSetupBuilder {
             ContractConfig {
                 contract_id,
                 code,
-                salt,
                 tx_id: *utxo_id.tx_id(),
                 output_index: utxo_id.output_index(),
                 tx_pointer_block_height: tx_pointer.block_height(),
@@ -207,12 +205,12 @@ impl TestSetupBuilder {
             utxo_validation: self.utxo_validation,
             txpool: fuel_core_txpool::Config {
                 chain_config: chain_conf.clone(),
-                min_gas_price: self.min_gas_price,
                 ..fuel_core_txpool::Config::default()
             },
             chain_config: chain_conf,
             state_reader: StateReader::in_memory(state),
             block_production: self.trigger,
+            static_gas_price: self.min_gas_price,
             ..Config::local_node()
         };
 

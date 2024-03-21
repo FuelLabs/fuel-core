@@ -1,6 +1,7 @@
 use super::{
     BlockImporterAdapter,
     BlockProducerAdapter,
+    StaticGasPrice,
 };
 use crate::{
     database::Database,
@@ -8,6 +9,7 @@ use crate::{
         worker,
         BlockProducerPort,
         DatabaseMessageProof,
+        GasPriceEstimate,
         P2pPort,
         TxPoolPort,
     },
@@ -159,5 +161,12 @@ impl worker::TxPool for TxPoolAdapter {
         status: TransactionStatus,
     ) {
         self.service.send_complete(id, block_height, status)
+    }
+}
+
+#[async_trait::async_trait]
+impl GasPriceEstimate for StaticGasPrice {
+    async fn worst_case_gas_price(&self, _height: BlockHeight) -> u64 {
+        self.gas_price
     }
 }

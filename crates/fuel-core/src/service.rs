@@ -24,6 +24,7 @@ use fuel_core_storage::{
 };
 use std::net::SocketAddr;
 
+use crate::service::adapters::StaticGasPrice;
 pub use config::{
     Config,
     DbType,
@@ -44,7 +45,8 @@ pub struct SharedState {
     /// The PoA adaptor around the shared state of the consensus module.
     pub poa_adapter: PoAAdapter,
     /// The transaction pool shared state.
-    pub txpool: fuel_core_txpool::service::SharedState<P2PAdapter, Database>,
+    pub txpool_shared_state:
+        fuel_core_txpool::service::SharedState<P2PAdapter, Database, StaticGasPrice>,
     /// The P2P network shared state.
     #[cfg(feature = "p2p")]
     pub network: Option<fuel_core_p2p::service::SharedState>,
@@ -238,10 +240,7 @@ impl RunnableService for Task {
 
                 self.shared.block_importer.commit_result(result).await?;
 
-                genesis::off_chain::execute_genesis_block(
-                    &self.shared.config,
-                    &mut off_view,
-                )?;
+                genesis::off_chain::execute_genesis_block(&on_view, &mut off_view)?;
             }
         }
 

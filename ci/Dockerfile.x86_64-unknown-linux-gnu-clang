@@ -1,4 +1,4 @@
 FROM ghcr.io/cross-rs/x86_64-unknown-linux-gnu:main@sha256:bf0cd3027befe882feb5a2b4040dc6dbdcb799b25c5338342a03163cea43da1b
 
 RUN apt-get update && \
-    apt-get install --assume-yes clang libclang-dev binutils-aarch64-linux-gnu protobuf-compiler
+    apt-get install --assume-yes clang libclang-dev binutils-aarch64-linux-gnu

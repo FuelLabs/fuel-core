@@ -18,6 +18,10 @@ use fuel_core_types::{
             Block,
             CompressedBlock,
         },
+        header::{
+            ConsensusParametersVersion,
+            StateTransitionBytecodeVersion,
+        },
         primitives::DaBlockHeight,
     },
     fuel_types::{
@@ -110,13 +114,14 @@ impl AsRef<MockDb> for MockDb {
     }
 }
 
-fn to_block(component: Components<Vec<ArcPoolTx>>) -> Block {
+fn to_block(component: &Components<Vec<ArcPoolTx>>) -> Block {
     let transactions = component
         .transactions_source
+        .clone()
         .into_iter()
         .map(|tx| tx.as_ref().into())
         .collect();
-    Block::new(component.header_to_produce, transactions, &[])
+    Block::new(component.header_to_produce.clone(), transactions, &[])
 }
 
 impl Executor<Vec<ArcPoolTx>> for MockExecutor {
@@ -124,7 +129,7 @@ impl Executor<Vec<ArcPoolTx>> for MockExecutor {
         &self,
         component: Components<Vec<ArcPoolTx>>,
     ) -> ExecutorResult<UncommittedResult<Changes>> {
-        let block = to_block(component);
+        let block = to_block(&component);
         // simulate executor inserting a block
         let mut block_db = self.0.blocks.lock().unwrap();
         block_db.insert(
@@ -155,7 +160,7 @@ impl Executor<Vec<ArcPoolTx>> for FailingMockExecutor {
         if let Some(err) = err.take() {
             Err(err)
         } else {
-            let block = to_block(component);
+            let block = to_block(&component);
             Ok(UncommittedResult::new(
                 ExecutionResult {
                     block,
@@ -169,9 +174,43 @@ impl Executor<Vec<ArcPoolTx>> for FailingMockExecutor {
     }
 }
 
+#[derive(Clone)]
+pub struct MockExecutorWithCapture {
+    pub captured: Arc<Mutex<Option<Components<Vec<ArcPoolTx>>>>>,
+}
+
+impl Executor<Vec<ArcPoolTx>> for MockExecutorWithCapture {
+    fn execute_without_commit(
+        &self,
+        component: Components<Vec<ArcPoolTx>>,
+    ) -> ExecutorResult<UncommittedResult<Changes>> {
+        let block = to_block(&component);
+        *self.captured.lock().unwrap() = Some(component);
+        Ok(UncommittedResult::new(
+            ExecutionResult {
+                block,
+                skipped_transactions: vec![],
+                tx_status: vec![],
+                events: vec![],
+            },
+            Default::default(),
+        ))
+    }
+}
+
+impl Default for MockExecutorWithCapture {
+    fn default() -> Self {
+        Self {
+            captured: Arc::new(Mutex::new(None)),
+        }
+    }
+}
+
 #[derive(Clone, Default, Debug)]
 pub struct MockDb {
     pub blocks: Arc<Mutex<HashMap<BlockHeight, CompressedBlock>>>,
+    pub consensus_parameters_version: ConsensusParametersVersion,
+    pub state_transition_bytecode_version: StateTransitionBytecodeVersion,
 }
 
 impl AtomicView for MockDb {
@@ -208,5 +247,17 @@ impl BlockProducerDatabase for MockDb {
         Ok(Bytes32::new(
             [u8::try_from(*height.deref()).expect("Test use small values"); 32],
         ))
+    }
+
+    fn latest_consensus_parameters_version(
+        &self,
+    ) -> StorageResult<ConsensusParametersVersion> {
+        Ok(self.consensus_parameters_version)
+    }
+
+    fn latest_state_transition_bytecode_version(
+        &self,
+    ) -> StorageResult<StateTransitionBytecodeVersion> {
+        Ok(self.state_transition_bytecode_version)
     }
 }

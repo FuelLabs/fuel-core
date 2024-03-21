@@ -31,6 +31,8 @@ impl Block {
 pub struct Header {
     pub id: BlockId,
     pub da_height: u64,
+    pub consensus_parameters_version: u32,
+    pub state_transition_bytecode_version: u32,
     pub transactions_count: u64,
     pub message_receipt_count: u64,
     pub transactions_root: MerkleRoot,
@@ -68,6 +70,10 @@ impl From<schema::block::Header> for Header {
         Self {
             id: value.id.into(),
             da_height: value.da_height.into(),
+            consensus_parameters_version: value.consensus_parameters_version.into(),
+            state_transition_bytecode_version: value
+                .state_transition_bytecode_version
+                .into(),
             transactions_count: value.transactions_count.into(),
             message_receipt_count: value.message_receipt_count.into(),
             transactions_root: value.transactions_root.into(),

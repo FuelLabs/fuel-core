@@ -16,10 +16,11 @@ use fuel_core_chain_config::{
 use fuel_core_storage::{
     tables::{
         Coins,
-        ContractsInfo,
+        ConsensusParametersVersions,
         ContractsLatestUtxo,
         ContractsRawCode,
         Messages,
+        StateTransitionBytecodeVersions,
     },
     transactional::{
         Changes,
@@ -38,7 +39,9 @@ use fuel_core_types::{
         header::{
             ApplicationHeader,
             ConsensusHeader,
+            ConsensusParametersVersion,
             PartialBlockHeader,
+            StateTransitionBytecodeVersion,
         },
         primitives::{
             DaBlockHeight,
@@ -48,10 +51,7 @@ use fuel_core_types::{
     },
     entities::{
         coins::coin::Coin,
-        contract::{
-            ContractUtxoInfo,
-            ContractsInfoType,
-        },
+        contract::ContractUtxoInfo,
         relayer::message::Message,
     },
     fuel_tx::Contract,
@@ -87,6 +87,8 @@ pub async fn execute_genesis_block(
     import_chain_state(workers).await?;
 
     let genesis = Genesis {
+        // TODO: We can get the serialized consensus parameters from the database.
+        //  https://github.com/FuelLabs/fuel-core/issues/1570
         chain_config_hash: config.chain_config.root()?.into(),
         coins_root: original_database.genesis_coins_root()?.into(),
         messages_root: original_database.genesis_messages_root()?.into(),
@@ -101,6 +103,20 @@ pub async fn execute_genesis_block(
     };
 
     let mut database_transaction = original_database.read_transaction();
+    // TODO: The chain config should be part of the snapshot state.
+    //  https://github.com/FuelLabs/fuel-core/issues/1570
+    database_transaction
+        .storage_as_mut::<ConsensusParametersVersions>()
+        .insert(
+            &ConsensusParametersVersion::MIN,
+            &config.chain_config.consensus_parameters,
+        )?;
+    // TODO: The bytecode of the state transition function should be part of the snapshot state.
+    //  https://github.com/FuelLabs/fuel-core/issues/1570
+    database_transaction
+        .storage_as_mut::<StateTransitionBytecodeVersions>()
+        .insert(&ConsensusParametersVersion::MIN, &[])?;
+
     cleanup_genesis_progress(&mut database_transaction)?;
 
     let result = UncommittedImportResult::new(
@@ -146,6 +162,12 @@ pub fn create_genesis_block(config: &Config) -> Block {
         PartialBlockHeader {
             application: ApplicationHeader::<Empty> {
                 da_height: da_block_height,
+                // After regenesis, we don't need to support old consensus parameters,
+                // so we can start the versioning from the beginning.
+                consensus_parameters_version: ConsensusParametersVersion::MIN,
+                // After regenesis, we don't need to support old state transition functions,
+                // so we can start the versioning from the beginning.
+                state_transition_bytecode_version: StateTransitionBytecodeVersion::MIN,
                 generated: Empty,
             },
             consensus: ConsensusHeader::<Empty> {
@@ -220,7 +242,6 @@ fn init_contract(
     height: BlockHeight,
 ) -> anyhow::Result<()> {
     let contract = Contract::from(contract_config.code.as_slice());
-    let salt = contract_config.salt;
     let contract_id = contract_config.contract_id;
     #[allow(clippy::cast_possible_truncation)]
     let utxo_id = contract_config.utxo_id();
@@ -241,14 +262,6 @@ fn init_contract(
         return Err(anyhow!("Contract code should not exist"));
     }
 
-    // insert contract salt
-    if transaction
-        .storage::<ContractsInfo>()
-        .insert(&contract_id, &ContractsInfoType::V1(salt.into()))?
-        .is_some()
-    {
-        return Err(anyhow!("Contract info should not exist"));
-    }
     if transaction
         .storage::<ContractsLatestUtxo>()
         .insert(
@@ -550,7 +563,6 @@ mod tests {
             contracts: vec![ContractConfig {
                 contract_id,
                 code: contract.into(),
-                salt,
                 tx_id: rng.gen(),
                 output_index: rng.gen(),
                 tx_pointer_block_height: 0.into(),
@@ -646,7 +658,6 @@ mod tests {
             contracts: vec![ContractConfig {
                 contract_id,
                 code: contract.into(),
-                salt,
                 ..Default::default()
             }],
             contract_balance: vec![contract_balance],
@@ -713,14 +724,12 @@ mod tests {
             asset_id: test_asset_id,
             amount: test_balance,
         }];
-        let salt: Salt = rng.gen();
         let contract = Contract::from(op::ret(0x10).to_bytes().to_vec());
 
         let state = StateConfig {
             contracts: vec![ContractConfig {
                 contract_id: ContractId::from(*contract_id),
                 code: contract.into(),
-                salt,
                 // set txpointer height > genesis height
                 tx_pointer_block_height: BlockHeight::from(11u32),
                 tx_pointer_tx_idx: 0,
@@ -767,7 +776,6 @@ mod tests {
         ContractConfig {
             contract_id,
             code: contract.into(),
-            salt,
             ..Default::default()
         }
     }

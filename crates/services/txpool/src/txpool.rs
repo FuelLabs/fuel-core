@@ -76,6 +76,18 @@ pub struct TxPool<ViewProvider> {
     database: ViewProvider,
 }
 
+/// Trait for getting gas price for the Tx Pool code to look up the gas price for a given block height
+pub trait GasPriceProvider {
+    /// Get gas price for specific block height if it is known
+    fn gas_price(&self, block_height: BlockHeight) -> Option<GasPrice>;
+}
+
+impl<T: GasPriceProvider> GasPriceProvider for Arc<T> {
+    fn gas_price(&self, block_height: BlockHeight) -> Option<GasPrice> {
+        self.deref().gas_price(block_height)
+    }
+}
+
 impl<ViewProvider> TxPool<ViewProvider> {
     pub fn new(config: Config, database: ViewProvider) -> Self {
         let max_depth = config.max_depth;
@@ -463,25 +475,37 @@ where
     }
 }
 
-pub async fn check_transactions(
+pub async fn check_transactions<Provider>(
     txs: &[Arc<Transaction>],
     current_height: BlockHeight,
     config: &Config,
-) -> Vec<Result<Checked<Transaction>, Error>> {
+    gas_price_provider: &Provider,
+) -> Vec<Result<Checked<Transaction>, Error>>
+where
+    Provider: GasPriceProvider,
+{
     let mut checked_txs = Vec::with_capacity(txs.len());
 
     for tx in txs.iter() {
-        checked_txs
-            .push(check_single_tx(tx.deref().clone(), current_height, config).await);
+        checked_txs.push(
+            check_single_tx(
+                tx.deref().clone(),
+                current_height,
+                config,
+                gas_price_provider,
+            )
+            .await,
+        );
     }
 
     checked_txs
 }
 
-pub async fn check_single_tx(
+pub async fn check_single_tx<GasPrice: GasPriceProvider>(
     tx: Transaction,
     current_height: BlockHeight,
     config: &Config,
+    gas_price_provider: &GasPrice,
 ) -> Result<Checked<Transaction>, Error> {
     if tx.is_mint() {
         return Err(Error::NotSupportedTransactionType)
@@ -507,7 +531,11 @@ pub async fn check_single_tx(
         tx.into_checked_basic(current_height, &config.chain_config.consensus_parameters)?
     };
 
-    let tx = verify_tx_min_gas_price(tx, config)?;
+    let gas_price = gas_price_provider
+        .gas_price(current_height)
+        .ok_or(Error::GasPriceNotFound(current_height))?;
+
+    let tx = verify_tx_min_gas_price(tx, config, gas_price)?;
 
     Ok(tx)
 }
@@ -515,20 +543,20 @@ pub async fn check_single_tx(
 fn verify_tx_min_gas_price(
     tx: Checked<Transaction>,
     config: &Config,
+    gas_price: GasPrice,
 ) -> Result<Checked<Transaction>, Error> {
     let tx: CheckedTransaction = tx.into();
-    let min_gas_price = config.min_gas_price;
     let gas_costs = &config.chain_config.consensus_parameters.gas_costs;
     let fee_parameters = &config.chain_config.consensus_parameters.fee_params;
     let read = match tx {
         CheckedTransaction::Script(script) => {
-            let read = script.into_ready(min_gas_price, gas_costs, fee_parameters)?;
-            let (_, checked) = read.decompose();
+            let ready = script.into_ready(gas_price, gas_costs, fee_parameters)?;
+            let (_, checked) = ready.decompose();
             CheckedTransaction::Script(checked)
         }
         CheckedTransaction::Create(create) => {
-            let read = create.into_ready(min_gas_price, gas_costs, fee_parameters)?;
-            let (_, checked) = read.decompose();
+            let ready = create.into_ready(gas_price, gas_costs, fee_parameters)?;
+            let (_, checked) = ready.decompose();
             CheckedTransaction::Create(checked)
         }
         CheckedTransaction::Mint(_) => return Err(Error::MintIsDisallowed),
