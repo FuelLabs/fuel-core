@@ -14,7 +14,6 @@ use std::{
 
 use crate::database::{
     balances::BalancesInitializer,
-    genesis_progress::GenesisResource,
     state::StateInitializer,
     Database,
 };
@@ -166,8 +165,8 @@ impl ProcessState for Handler<TableEntry<Coins>> {
         })
     }
 
-    fn genesis_resource() -> GenesisResource {
-        GenesisResource::Coins
+    fn genesis_resource() -> &'static str {
+        Coins::column().name()
     }
 }
 
@@ -184,8 +183,8 @@ impl ProcessState for Handler<TableEntry<Messages>> {
             .try_for_each(|message| init_da_message(tx, message, self.da_block_height))
     }
 
-    fn genesis_resource() -> GenesisResource {
-        GenesisResource::Messages
+    fn genesis_resource() -> &'static str {
+        Messages::column().name()
     }
 }
 
@@ -203,8 +202,8 @@ impl ProcessState for Handler<TableEntry<ContractsRawCode>> {
         })
     }
 
-    fn genesis_resource() -> GenesisResource {
-        GenesisResource::ContractsCode
+    fn genesis_resource() -> &'static str {
+        ContractsRawCode::column().name()
     }
 }
 
@@ -222,8 +221,8 @@ impl ProcessState for Handler<TableEntry<ContractsLatestUtxo>> {
         })
     }
 
-    fn genesis_resource() -> GenesisResource {
-        GenesisResource::ContractsLatestUtxo
+    fn genesis_resource() -> &'static str {
+        ContractsLatestUtxo::column().name()
     }
 }
 
@@ -239,8 +238,8 @@ impl ProcessState for Handler<TableEntry<ContractsState>> {
         Ok(())
     }
 
-    fn genesis_resource() -> GenesisResource {
-        GenesisResource::ContractStates
+    fn genesis_resource() -> &'static str {
+        ContractsLatestUtxo::column().name()
     }
 }
 
@@ -256,7 +255,7 @@ impl ProcessState for Handler<TableEntry<ContractsAssets>> {
         Ok(())
     }
 
-    fn genesis_resource() -> GenesisResource {
-        GenesisResource::ContractBalances
+    fn genesis_resource() -> &'static str {
+        ContractsAssets::column().name()
     }
 }

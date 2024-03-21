@@ -1,6 +1,7 @@
 use self::workers::GenesisWorkers;
 use crate::{
     database::{
+        database_description::on_chain::OnChain,
         genesis_progress::GenesisMetadata,
         Database,
     },
@@ -12,6 +13,7 @@ use fuel_core_chain_config::{
     TableEntry,
 };
 use fuel_core_storage::{
+    iter::IteratorOverTable,
     tables::{
         Coins,
         ConsensusParametersVersions,
@@ -22,8 +24,8 @@ use fuel_core_storage::{
     },
     transactional::{
         Changes,
-        ReadTransaction,
         StorageTransaction,
+        WriteTransaction,
     },
     StorageAsMut,
 };
@@ -60,13 +62,12 @@ use fuel_core_types::{
         UncommittedResult as UncommittedImportResult,
     },
 };
-use strum::IntoEnumIterator;
 
 pub mod off_chain;
 mod runner;
 mod workers;
 
-use crate::database::genesis_progress::GenesisResource;
+use itertools::Itertools;
 pub use runner::{
     GenesisRunner,
     TransactionOpener,
@@ -81,6 +82,7 @@ pub async fn execute_genesis_block(
         GenesisWorkers::new(original_database.clone(), config.state_reader.clone());
 
     import_chain_state(workers).await?;
+    let genesis_progress = fetch_genesis_progress(original_database)?;
 
     let genesis = Genesis {
         // TODO: We can get the serialized consensus parameters from the database.
@@ -98,7 +100,8 @@ pub async fn execute_genesis_block(
         consensus,
     };
 
-    let mut database_transaction = original_database.read_transaction();
+    let mut db = original_database.clone();
+    let mut database_transaction = db.write_transaction();
     // TODO: The chain config should be part of the snapshot state.
     //  https://github.com/FuelLabs/fuel-core/issues/1570
     database_transaction
@@ -113,14 +116,26 @@ pub async fn execute_genesis_block(
         .storage_as_mut::<StateTransitionBytecodeVersions>()
         .insert(&ConsensusParametersVersion::MIN, &[])?;
 
-    cleanup_genesis_progress(&mut database_transaction)?;
+    // Needs to be given the progress because `iter_all` is not implemented on db transactions.
+    cleanup_genesis_progress(&mut database_transaction, genesis_progress)?;
 
+    let changes = database_transaction.into_changes();
+    eprintln!("Genesis block changes: {:?}", changes);
     let result = UncommittedImportResult::new(
         ImportResult::new_from_local(block, vec![], vec![]),
-        database_transaction.into_changes(),
+        changes,
     );
 
     Ok(result)
+}
+
+fn fetch_genesis_progress(
+    original_database: &Database,
+) -> Result<Vec<String>, anyhow::Error> {
+    Ok(original_database
+        .iter_all::<GenesisMetadata<OnChain>>(None)
+        .map_ok(|(k, _)| k)
+        .try_collect()?)
 }
 
 async fn import_chain_state(mut workers: GenesisWorkers) -> anyhow::Result<()> {
@@ -140,14 +155,14 @@ async fn import_chain_state(mut workers: GenesisWorkers) -> anyhow::Result<()> {
 }
 
 fn cleanup_genesis_progress(
-    transaction: &mut StorageTransaction<&Database>,
+    tx: &mut StorageTransaction<&mut Database<OnChain>>,
+    genesis_progress: Vec<String>,
 ) -> anyhow::Result<()> {
-    for resource in GenesisResource::iter() {
-        transaction
-            .storage_as_mut::<GenesisMetadata>()
-            .remove(&resource)
-            .map_err(|e| anyhow::anyhow!("{e}"))?;
+    for key in genesis_progress {
+        tx.storage_as_mut::<GenesisMetadata<OnChain>>()
+            .remove(&key)?;
     }
+
     Ok(())
 }
 
@@ -305,14 +320,7 @@ mod tests {
 
     use crate::{
         combined_database::CombinedDatabase,
-        database::{
-            genesis_progress::{
-                GenesisProgressInspect,
-                GenesisResource,
-            },
-            ChainStateDb,
-        },
-        query::BlockQueryData,
+        database::SnapshotDataSource,
         service::{
             config::Config,
             FuelService,
@@ -329,10 +337,6 @@ mod tests {
     };
     use fuel_core_services::RunnableService;
     use fuel_core_storage::{
-        blueprint::BlueprintInspect,
-        column::Column,
-        iter::IterDirection,
-        structured_storage::TableWithBlueprint,
         tables::{
             Coins,
             ContractsAssets,
@@ -425,10 +429,8 @@ mod tests {
             .await
             .unwrap();
 
-        use strum::IntoEnumIterator;
-        for key in GenesisResource::iter() {
-            assert!(db.genesis_progress(&key).is_none());
-        }
+        let keys = db.iter_all::<GenesisMetadata<OnChain>>(None).count();
+        assert_eq!(keys, 0);
     }
 
     #[tokio::test]

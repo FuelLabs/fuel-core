@@ -3,24 +3,13 @@ use fuel_core::{
         Randomize,
         SnapshotReader,
         StateConfig,
-        TableEntry,
     },
     combined_database::CombinedDatabase,
-    database::{
-        ChainStateDb,
-        Database,
-    },
-    query::BlockQueryData,
+    database::SnapshotDataSource,
     service::{
         Config,
         FuelService,
     },
-};
-use fuel_core_storage::{
-    blueprint::BlueprintInspect,
-    column::Column,
-    iter::IterDirection,
-    structured_storage::TableWithBlueprint,
 };
 use fuel_core_types::blockchain::primitives::DaBlockHeight;
 use rand::{

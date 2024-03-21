@@ -11,7 +11,6 @@ use crate::database::{
     genesis_progress::{
         GenesisProgressInspect,
         GenesisProgressMutate,
-        GenesisResource,
     },
     Database,
 };
@@ -44,7 +43,7 @@ pub struct GenesisRunner<Handler, Groups, TxOpener> {
 pub trait ProcessState {
     type Item;
 
-    fn genesis_resource() -> GenesisResource;
+    fn genesis_resource() -> &'static str;
 
     fn process(
         &mut self,
@@ -68,7 +67,7 @@ where
     ) -> Self {
         let skip = tx_opener
             .view_only()
-            .genesis_progress(&Logic::genesis_resource())
+            .genesis_progress(Logic::genesis_resource())
             // The `idx_last_handled` is zero based, so we need to add 1 to skip the already handled groups.
             .map(|idx_last_handled| idx_last_handled.saturating_add(1))
             .unwrap_or_default();
@@ -131,8 +130,10 @@ mod tests {
         kv_store::{
             KVItem,
             KeyValueInspect,
+            StorageColumn,
             Value,
         },
+        structured_storage::TableWithBlueprint,
         tables::Coins,
         transactional::{
             Changes,
@@ -160,7 +161,6 @@ mod tests {
             genesis_progress::{
                 GenesisProgressInspect,
                 GenesisProgressMutate,
-                GenesisResource,
             },
             Database,
         },
@@ -193,8 +193,8 @@ mod tests {
     impl<'a, K> ProcessState for TestHandler<'a, K> {
         type Item = K;
 
-        fn genesis_resource() -> GenesisResource {
-            GenesisResource::Coins
+        fn genesis_resource() -> &'static str {
+            Coins::column().name()
         }
 
         fn process(
@@ -249,7 +249,7 @@ mod tests {
         let groups: Vec<Result<Group<usize>, anyhow::Error>> = given_ok_groups(2);
         let mut called_with = vec![];
         let mut db = Database::default();
-        db.update_genesis_progress(GenesisResource::Coins, 0)
+        db.update_genesis_progress(Coins::column().name(), 0)
             .unwrap();
 
         let runner = GenesisRunner::new(
@@ -398,7 +398,7 @@ mod tests {
         runner.run().unwrap();
 
         // then
-        assert_eq!(db.genesis_progress(&GenesisResource::Coins), Some(1));
+        assert_eq!(db.genesis_progress(Coins::column().name()), Some(1));
     }
 
     #[test]
@@ -446,7 +446,7 @@ mod tests {
         runner.run().unwrap();
 
         // then
-        assert_eq!(db.genesis_progress(&GenesisResource::Coins), Some(0));
+        assert_eq!(db.genesis_progress(Coins::column().name()), Some(0));
         assert!(StorageInspect::<Coins>::contains_key(&db, &utxo_id).unwrap());
     }
 

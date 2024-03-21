@@ -7,11 +7,7 @@ use clap::{
 use fuel_core::{
     chain_config::ChainConfig,
     combined_database::CombinedDatabase,
-    database::{
-        database_description::on_chain::OnChain,
-        ChainStateDb,
-        Database,
-    },
+    database::SnapshotDataSource,
     types::fuel_types::ContractId,
 };
 use fuel_core_chain_config::{
@@ -151,7 +147,7 @@ pub fn exec(command: Command) -> anyhow::Result<()> {
 }
 
 fn contract_snapshot(
-    db: impl ChainStateDb,
+    db: impl SnapshotDataSource,
     contract_id: ContractId,
     output_dir: &Path,
 ) -> Result<(), anyhow::Error> {
@@ -207,7 +203,7 @@ fn full_snapshot(
     prev_chain_config: Option<PathBuf>,
     output_dir: &Path,
     encoding: Encoding,
-    db: impl ChainStateDb,
+    db: impl SnapshotDataSource,
 ) -> Result<(), anyhow::Error> {
     std::fs::create_dir_all(output_dir)?;
 
@@ -261,7 +257,7 @@ fn full_snapshot(
     Ok(())
 }
 
-fn get_last_block(db: impl ChainStateDb) -> anyhow::Result<Block<Bytes32>> {
+fn get_last_block(db: impl SnapshotDataSource) -> anyhow::Result<Block<Bytes32>> {
     Ok(db
         .on_chain_entries::<FuelBlocks>(None, IterDirection::Reverse)
         .next()
@@ -291,6 +287,7 @@ mod tests {
 
     use std::iter::repeat_with;
 
+    use fuel_core::database::Database;
     use fuel_core_chain_config::{
         AsTable,
         SnapshotMetadata,

@@ -218,7 +218,7 @@ where
 }
 // TODO: There is probably a trait that can be used instead of a ChainStateDb
 #[impl_tools::autoimpl(for<K: trait> &K, &mut K)]
-pub trait ChainStateDb {
+pub trait SnapshotDataSource {
     fn on_chain_entries<T>(
         &self,
         prefix: Option<&[u8]>,
@@ -263,7 +263,7 @@ pub trait ChainStateDb {
     }
 }
 
-impl ChainStateDb for CombinedDatabase {
+impl SnapshotDataSource for CombinedDatabase {
     fn on_chain_entries<T>(
         &self,
         prefix: Option<&[u8]>,
