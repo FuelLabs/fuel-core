@@ -79,6 +79,7 @@ impl From<schema::block::Header> for Header {
             message_receipt_count: value.message_receipt_count.into(),
             transactions_root: value.transactions_root.into(),
             message_outbox_root: value.message_outbox_root.into(),
+            event_inbox_root: value.event_inbox_root.into(),
             height: value.height.into(),
             prev_root: value.prev_root.into(),
             time: value.time.0,
