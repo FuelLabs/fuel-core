@@ -328,7 +328,6 @@ impl Command {
             addr,
             api_request_timeout: api_request_timeout.into(),
             combined_db_config,
-            chain_config: chain_config.clone(),
             snapshot_reader,
             debug,
             utxo_validation,
@@ -428,11 +427,11 @@ fn start_pyroscope_agent(
         .pyroscope_url
         .as_ref()
         .map(|url| -> anyhow::Result<_> {
-            // Configure profiling backend
+            let chain_config = config.snapshot_reader.chain_config();
             let agent = PyroscopeAgent::builder(url, &"fuel-core".to_string())
                 .tags(vec![
                     ("service", config.name.as_str()),
-                    ("network", config.chain_config.chain_name.as_str()),
+                    ("network", chain_config.chain_name.as_str()),
                 ])
                 .backend(pprof_backend(
                     PprofConfig::new().sample_rate(profiling_args.pprof_sample_rate),

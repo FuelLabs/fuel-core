@@ -195,6 +195,7 @@ fn contract_snapshot(
     writer.write(state)?;
     writer.write(balance)?;
     writer.write_block_data(*block.header().height(), block.header().da_height)?;
+    writer.write_chain_config(&ChainConfig::local_testnet())?;
     writer.close()?;
     Ok(())
 }

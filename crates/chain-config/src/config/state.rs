@@ -462,6 +462,7 @@ mod tests {
     use std::path::Path;
 
     use crate::{
+        ChainConfig,
         Group,
         Randomize,
     };
@@ -551,6 +552,7 @@ mod tests {
         };
 
         use crate::{
+            ChainConfig,
             ContractConfig,
             Randomize,
             SnapshotMetadata,
@@ -593,12 +595,15 @@ mod tests {
                     .collect_vec();
 
             let tmp_dir = tempfile::tempdir().unwrap();
-            let writer = SnapshotWriter::json(tmp_dir.path());
+            let mut writer = SnapshotWriter::json(tmp_dir.path());
 
             let state = StateConfig {
                 contracts,
                 ..Default::default()
             };
+            writer
+                .write_chain_config(&ChainConfig::local_testnet())
+                .unwrap();
 
             // when
             let snapshot = writer.write_state_config(state.clone()).unwrap();
@@ -620,6 +625,9 @@ mod tests {
         let block_height = 13u32.into();
         let da_block_height = 14u64.into();
         let mut writer = writer(temp_dir.path());
+        writer
+            .write_chain_config(&ChainConfig::local_testnet())
+            .unwrap();
 
         // when
         writer
@@ -663,17 +671,20 @@ mod tests {
         let group_size = 1;
         let mut group_generator =
             GroupGenerator::new(StdRng::seed_from_u64(0), group_size, num_groups);
-        let mut encoder = writer(temp_dir.path());
+        let mut snapshot_writer = writer(temp_dir.path());
+        snapshot_writer
+            .write_chain_config(&ChainConfig::local_testnet())
+            .unwrap();
 
         // when
         let expected_groups = group_generator
-            .write_groups::<T>(&mut encoder)
+            .write_groups::<T>(&mut snapshot_writer)
             .into_iter()
             .collect_vec();
-        encoder
+        snapshot_writer
             .write_block_data(10.into(), DaBlockHeight(11))
             .unwrap();
-        let snapshot = encoder.close().unwrap();
+        let snapshot = snapshot_writer.close().unwrap();
 
         let actual_groups = reader(snapshot, group_size).read().unwrap().collect_vec();
 

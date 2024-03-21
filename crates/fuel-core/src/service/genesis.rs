@@ -84,10 +84,11 @@ pub async fn execute_genesis_block(
     import_chain_state(workers).await?;
     let genesis_progress = fetch_genesis_progress(original_database)?;
 
+    let chain_config = config.snapshot_reader.chain_config();
     let genesis = Genesis {
         // TODO: We can get the serialized consensus parameters from the database.
         //  https://github.com/FuelLabs/fuel-core/issues/1570
-        chain_config_hash: config.chain_config.root()?.into(),
+        chain_config_hash: chain_config.root()?.into(),
         coins_root: original_database.genesis_coins_root()?.into(),
         messages_root: original_database.genesis_messages_root()?.into(),
         contracts_root: original_database.genesis_contracts_root()?.into(),
@@ -108,7 +109,7 @@ pub async fn execute_genesis_block(
         .storage_as_mut::<ConsensusParametersVersions>()
         .insert(
             &ConsensusParametersVersion::MIN,
-            &config.chain_config.consensus_parameters,
+            &chain_config.consensus_parameters,
         )?;
     // TODO: The bytecode of the state transition function should be part of the snapshot state.
     //  https://github.com/FuelLabs/fuel-core/issues/1570

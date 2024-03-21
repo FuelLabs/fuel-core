@@ -198,7 +198,6 @@ impl TestSetupBuilder {
                 chain_config: chain_conf.clone(),
                 ..fuel_core_txpool::Config::default()
             },
-            chain_config: chain_conf.clone(),
             snapshot_reader: SnapshotReader::in_memory(state, chain_conf),
             block_production: self.trigger,
             static_gas_price: self.min_gas_price,
