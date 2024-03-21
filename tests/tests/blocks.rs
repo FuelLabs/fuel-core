@@ -77,11 +77,15 @@ async fn block() {
 
 #[tokio::test]
 async fn get_genesis_block() {
+    let chain_config = fuel_core::chain_config::ChainConfig::local_testnet();
     let config = Config {
-        snapshot_reader: SnapshotReader::in_memory(StateConfig {
-            block_height: 13u32.into(),
-            ..StateConfig::local_testnet()
-        }),
+        snapshot_reader: SnapshotReader::in_memory(
+            StateConfig {
+                block_height: 13u32.into(),
+                ..StateConfig::local_testnet()
+            },
+            chain_config,
+        ),
         ..Config::local_node()
     };
 

@@ -1,5 +1,6 @@
 use std::fmt::Debug;
 
+use anyhow::Context;
 use fuel_core_storage::structured_storage::TableWithBlueprint;
 use fuel_core_types::{
     blockchain::primitives::DaBlockHeight,
@@ -10,6 +11,7 @@ use itertools::Itertools;
 use crate::{
     config::table_entry::TableEntry,
     AsTable,
+    ChainConfig,
     Group,
     GroupResult,
     StateConfig,
@@ -78,42 +80,38 @@ enum DataSource {
 
 #[derive(Clone, Debug)]
 pub struct SnapshotReader {
+    chain_config: ChainConfig,
     data_source: DataSource,
 }
 
 impl SnapshotReader {
-    pub fn state_config(self) -> Option<StateConfig> {
-        match self.data_source {
-            DataSource::InMemory { state, .. } => Some(state),
-            #[cfg(feature = "parquet")]
-            DataSource::Parquet { .. } => None,
-        }
-    }
-
-    #[cfg(feature = "std")]
-    fn json(
-        path: impl AsRef<std::path::Path>,
-        group_size: usize,
-    ) -> anyhow::Result<Self> {
-        use anyhow::Context;
-        let path = path.as_ref();
-        let mut file = std::fs::File::open(path)
-            .with_context(|| format!("Could not open snapshot file: {path:?}"))?;
-
-        let state = serde_json::from_reader(&mut file)?;
-
-        Ok(Self {
-            data_source: DataSource::InMemory { state, group_size },
-        })
-    }
-
-    pub fn in_memory(state: StateConfig) -> Self {
+    pub fn in_memory(state: StateConfig, chain_config: ChainConfig) -> Self {
         Self {
             data_source: DataSource::InMemory {
                 state,
                 group_size: MAX_GROUP_SIZE,
             },
+            chain_config,
         }
+    }
+
+    #[cfg(feature = "std")]
+    fn json(
+        state_file: impl AsRef<std::path::Path>,
+        chain_config: ChainConfig,
+        group_size: usize,
+    ) -> anyhow::Result<Self> {
+        let state = {
+            let path = state_file.as_ref();
+            let mut file = std::fs::File::open(path)
+                .with_context(|| format!("Could not open snapshot file: {path:?}"))?;
+            serde_json::from_reader(&mut file)?
+        };
+
+        Ok(Self {
+            data_source: DataSource::InMemory { state, group_size },
+            chain_config,
+        })
     }
 
     #[cfg(feature = "parquet")]
@@ -121,6 +119,7 @@ impl SnapshotReader {
         tables: std::collections::HashMap<String, std::path::PathBuf>,
         block_height: std::path::PathBuf,
         da_block_height: std::path::PathBuf,
+        chain_config: ChainConfig,
     ) -> anyhow::Result<Self> {
         let block_height = Self::read_block_height(&block_height)?;
         let da_block_height = Self::read_block_height(&da_block_height)?;
@@ -130,6 +129,7 @@ impl SnapshotReader {
                 block_height,
                 da_block_height,
             },
+            chain_config,
         })
     }
 
@@ -165,15 +165,24 @@ impl SnapshotReader {
         json_group_size: usize,
     ) -> anyhow::Result<Self> {
         use crate::TableEncoding;
+        let chain_config = {
+            let path = &snapshot_metadata.chain_config;
+            let mut file = std::fs::File::open(path)
+                .with_context(|| format!("Could not open chain config file: {path:?}"))?;
+            serde_json::from_reader(&mut file)?
+        };
+
         match snapshot_metadata.table_encoding {
-            TableEncoding::Json { filepath } => Self::json(filepath, json_group_size),
+            TableEncoding::Json { filepath } => {
+                Self::json(filepath, chain_config, json_group_size)
+            }
             #[cfg(feature = "parquet")]
             TableEncoding::Parquet {
                 tables,
                 block_height,
                 da_block_height,
                 ..
-            } => Self::parquet(tables, block_height, da_block_height),
+            } => Self::parquet(tables, block_height, da_block_height, chain_config),
         }
     }
 
@@ -186,7 +195,6 @@ impl SnapshotReader {
         match &self.data_source {
             #[cfg(feature = "parquet")]
             DataSource::Parquet { tables, .. } => {
-                use anyhow::Context;
                 use fuel_core_storage::kv_store::StorageColumn;
                 let name = T::column().name();
                 let path = tables.get(name).ok_or_else(|| {
@@ -219,6 +227,10 @@ impl SnapshotReader {
                 })
             }
         }
+    }
+
+    pub fn chain_config(&self) -> &ChainConfig {
+        &self.chain_config
     }
 
     pub fn block_height(&self) -> BlockHeight {

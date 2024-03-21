@@ -240,16 +240,14 @@ impl Command {
 
         let addr = net::SocketAddr::new(ip, port);
 
-        let (chain_conf, snapshot_reader) = match snapshot.as_ref() {
-            None => (
+        let snapshot_reader = match snapshot.as_ref() {
+            None => SnapshotReader::in_memory(
+                StateConfig::local_testnet(),
                 ChainConfig::local_testnet(),
-                SnapshotReader::in_memory(StateConfig::local_testnet()),
             ),
             Some(path) => {
                 let metadata = SnapshotMetadata::read(path)?;
-                let chain_conf = ChainConfig::from_snapshot_metadata(&metadata)?;
-                let snapshot_reader = SnapshotReader::open(metadata)?;
-                (chain_conf, snapshot_reader)
+                SnapshotReader::open(metadata)?
             }
         };
 
@@ -304,8 +302,9 @@ impl Command {
             max_database_cache_size,
         };
 
+        let chain_config = snapshot_reader.chain_config().clone();
         let block_importer =
-            fuel_core::service::config::fuel_core_importer::Config::new(&chain_conf);
+            fuel_core::service::config::fuel_core_importer::Config::new(&chain_config);
 
         let TxPoolArgs {
             tx_pool_ttl,
@@ -329,7 +328,7 @@ impl Command {
             addr,
             api_request_timeout: api_request_timeout.into(),
             combined_db_config,
-            chain_config: chain_conf.clone(),
+            chain_config: chain_config.clone(),
             snapshot_reader,
             debug,
             utxo_validation,
@@ -340,7 +339,7 @@ impl Command {
             txpool: TxPoolConfig::new(
                 tx_max_number,
                 tx_max_depth,
-                chain_conf,
+                chain_config,
                 utxo_validation,
                 metrics,
                 tx_pool_ttl.into(),

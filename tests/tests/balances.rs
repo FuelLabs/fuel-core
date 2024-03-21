@@ -1,5 +1,6 @@
 use fuel_core::{
     chain_config::{
+        ChainConfig,
         CoinConfig,
         CoinConfigGenerator,
         MessageConfig,
@@ -70,8 +71,9 @@ async fn balance() {
             .collect(),
         ..Default::default()
     };
+    let chain_config = ChainConfig::local_testnet();
     let config = Config {
-        snapshot_reader: SnapshotReader::in_memory(state_config),
+        snapshot_reader: SnapshotReader::in_memory(state_config, chain_config),
         ..Config::local_node()
     };
 
@@ -201,8 +203,9 @@ async fn first_5_balances() {
         messages,
         ..Default::default()
     };
+    let chain_config = ChainConfig::local_testnet();
     let config = Config {
-        snapshot_reader: SnapshotReader::in_memory(state_config),
+        snapshot_reader: SnapshotReader::in_memory(state_config, chain_config),
         ..Config::local_node()
     };
 

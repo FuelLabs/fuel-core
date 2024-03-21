@@ -1,5 +1,6 @@
 use fuel_core::{
     chain_config::{
+        ChainConfig,
         Randomize,
         SnapshotReader,
         StateConfig,
@@ -28,8 +29,9 @@ async fn loads_snapshot() {
         da_block_height: DaBlockHeight(u64::MAX),
         ..StateConfig::randomize(&mut rng)
     };
+    let chain_config = ChainConfig::local_testnet();
     let config = Config {
-        snapshot_reader: SnapshotReader::in_memory(starting_state.clone()),
+        snapshot_reader: SnapshotReader::in_memory(starting_state.clone(), chain_config),
         ..Config::local_node()
     };
 

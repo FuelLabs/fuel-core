@@ -79,7 +79,8 @@ impl Config {
         let chain_config = ChainConfig::local_testnet();
         let state_config = StateConfig::local_testnet();
         let block_importer = fuel_core_importer::Config::new(&chain_config);
-        let snapshot_reader = SnapshotReader::in_memory(state_config.clone());
+        let snapshot_reader =
+            SnapshotReader::in_memory(state_config.clone(), chain_config.clone());
 
         let utxo_validation = false;
         let min_gas_price = 0;

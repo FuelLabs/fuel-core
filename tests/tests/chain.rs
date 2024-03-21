@@ -1,5 +1,6 @@
 use fuel_core::{
     chain_config::{
+        ChainConfig,
         CoinConfig,
         SnapshotReader,
         StateConfig,
@@ -70,11 +71,12 @@ async fn network_operates_with_non_zero_chain_id() {
         }],
         ..Default::default()
     };
+    let chain_config = ChainConfig::local_testnet();
     let mut node_config = Config {
         debug: true,
         utxo_validation: true,
         static_gas_price: 1,
-        snapshot_reader: SnapshotReader::in_memory(state_config),
+        snapshot_reader: SnapshotReader::in_memory(state_config, chain_config),
         ..Config::local_node()
     };
 
@@ -132,11 +134,12 @@ async fn network_operates_with_non_zero_base_asset_id() {
         }],
         ..Default::default()
     };
+    let chain_config = ChainConfig::local_testnet();
     let mut node_config = Config {
         debug: true,
         utxo_validation: true,
         static_gas_price: 1,
-        snapshot_reader: SnapshotReader::in_memory(state_config),
+        snapshot_reader: SnapshotReader::in_memory(state_config, chain_config),
         ..Config::local_node()
     };
 
