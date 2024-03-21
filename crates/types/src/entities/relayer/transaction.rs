@@ -15,9 +15,15 @@ pub enum RelayedTransaction {
     V1(RelayedTransactionV1),
 }
 
+impl Default for RelayedTransaction {
+    fn default() -> Self {
+        Self::V1(Default::default())
+    }
+}
+
 /// The V1 version of the relayed transaction
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Default, Debug, Clone, PartialEq, Eq)]
 pub struct RelayedTransactionV1 {
     /// The max gas that this transaction can consume
     pub max_gas: u64,
@@ -43,10 +49,35 @@ pub struct RelayedTransactionV1 {
 pub struct RelayedTransactionId(Bytes32);
 
 impl RelayedTransaction {
-    /// Get the DA height the transaction originated from
+    /// Get the DA height that originated this transaction from L1
     pub fn da_height(&self) -> DaBlockHeight {
         match self {
             RelayedTransaction::V1(transaction) => transaction.da_height,
+        }
+    }
+
+    /// Set the da height
+    pub fn set_da_height(&mut self, height: DaBlockHeight) {
+        match self {
+            RelayedTransaction::V1(transaction) => {
+                transaction.da_height = height;
+            }
+        }
+    }
+
+    /// Get the max gas
+    pub fn max_gas(&self) -> u64 {
+        match self {
+            RelayedTransaction::V1(transaction) => transaction.max_gas,
+        }
+    }
+
+    /// Set the max gas
+    pub fn set_mas_gas(&mut self, max_gas: u64) {
+        match self {
+            RelayedTransaction::V1(transaction) => {
+                transaction.max_gas = max_gas;
+            }
         }
     }
 
