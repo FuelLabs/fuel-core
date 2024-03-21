@@ -52,7 +52,7 @@ impl LogTestHelper for Log {
     fn to_tx(&self) -> RelayedTransaction {
         match EthEventLog::try_from(self).unwrap() {
             EthEventLog::Transaction(t) => RelayedTransaction::from(t),
-            _ => panic!("This log does not form a message"),
+            _ => panic!("This log does not form a relayed transaction"),
         }
     }
 }

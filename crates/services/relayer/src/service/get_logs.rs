@@ -77,10 +77,10 @@ where
                             EthEventLog::Message(m) => {
                                 Some(Ok(Event::Message(Message::from(&m))))
                             }
-                            // TODO: Log out ignored messages.
                             EthEventLog::Transaction(tx) => {
                                 Some(Ok(Event::Transaction(RelayedTransaction::from(tx))))
                             }
+                            // TODO: Log out ignored messages.
                             EthEventLog::Ignored => None,
                         }
                     }

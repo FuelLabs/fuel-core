@@ -16,7 +16,7 @@ use fuel_core_storage::test_helpers::{
 };
 use fuel_core_types::{
     entities::{
-        relayer::message::Message,
+        Message,
         RelayedTransaction,
     },
     services::relayer::Event,
