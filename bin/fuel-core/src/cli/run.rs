@@ -250,12 +250,13 @@ impl Command {
                 SnapshotReader::open(metadata)?
             }
         };
+        let chain_config = snapshot_reader.chain_config().clone();
 
         #[cfg(feature = "relayer")]
         let relayer_cfg = relayer_args.into_config();
 
         #[cfg(feature = "p2p")]
-        let p2p_cfg = p2p_args.into_config(chain_conf.chain_name.clone(), metrics)?;
+        let p2p_cfg = p2p_args.into_config(chain_config.chain_name.clone(), metrics)?;
 
         let trigger: Trigger = poa_trigger.into();
 
@@ -302,7 +303,6 @@ impl Command {
             max_database_cache_size,
         };
 
-        let chain_config = snapshot_reader.chain_config().clone();
         let block_importer =
             fuel_core::service::config::fuel_core_importer::Config::new(&chain_config);
 

@@ -13,7 +13,10 @@ use crate::{
         ServiceTrait,
     },
 };
-use fuel_core_chain_config::SnapshotReader;
+use fuel_core_chain_config::{
+    SnapshotReader,
+    StateConfig,
+};
 use fuel_core_p2p::{
     codecs::postcard::PostcardCodec,
     network_service::FuelP2PService,
@@ -225,7 +228,7 @@ pub async fn make_nodes(
     let mut producers_with_txs = Vec::with_capacity(producers.len());
 
     let mut config = config.unwrap_or_else(Config::local_node);
-    let mut state_config = config.snapshot_reader.state_config().unwrap();
+    let mut state_config = StateConfig::from_reader(&config.snapshot_reader).unwrap();
 
     for (all, producer) in txs_coins.into_iter().zip(producers.into_iter()) {
         match all {
@@ -243,7 +246,8 @@ pub async fn make_nodes(
         }
     }
 
-    config.snapshot_reader = SnapshotReader::in_memory(state_config);
+    let chain_config = config.snapshot_reader.chain_config().clone();
+    config.snapshot_reader = SnapshotReader::in_memory(state_config, chain_config);
 
     let bootstrap_nodes: Vec<Bootstrap> =
         futures::stream::iter(bootstrap_setup.into_iter().enumerate())
@@ -259,11 +263,7 @@ pub async fn make_nodes(
                         config.clone(),
                     );
                     if let Some(BootstrapSetup { pub_key, .. }) = boot {
-                        match &mut node_config.chain_config.consensus {
-                            crate::chain_config::ConsensusConfig::PoA { signing_key } => {
-                                *signing_key = pub_key;
-                            }
-                        }
+                        update_signing_key(&mut node_config, pub_key);
                     }
                     Bootstrap::new(&node_config).await
                 }
@@ -307,12 +307,7 @@ pub async fn make_nodes(
             }
 
             node_config.utxo_validation = utxo_validation;
-            let pub_key = secret.public_key();
-            match &mut node_config.chain_config.consensus {
-                crate::chain_config::ConsensusConfig::PoA { signing_key } => {
-                    *signing_key = Input::owner(&pub_key);
-                }
-            }
+            update_signing_key(&mut node_config, Input::owner(&secret.public_key()));
 
             node_config.consensus_key = Some(Secret::new(secret.into()));
 
@@ -352,11 +347,7 @@ pub async fn make_nodes(
                     node_config.p2p.as_mut().unwrap().reserved_nodes = boots.clone();
                 }
             }
-            match &mut node_config.chain_config.consensus {
-                crate::chain_config::ConsensusConfig::PoA { signing_key } => {
-                    *signing_key = pub_key;
-                }
-            }
+            update_signing_key(&mut node_config, pub_key);
         }
         validators.push(make_node(node_config, Vec::with_capacity(0)).await)
     }
@@ -366,6 +357,19 @@ pub async fn make_nodes(
         producers,
         validators,
     }
+}
+
+fn update_signing_key(config: &mut Config, key: Address) {
+    let snapshot_reader = &config.snapshot_reader;
+    let state_config = StateConfig::from_reader(&snapshot_reader).unwrap();
+
+    let mut chain_config = snapshot_reader.chain_config().clone();
+    match &mut chain_config.consensus {
+        crate::chain_config::ConsensusConfig::PoA { signing_key } => {
+            *signing_key = key;
+        }
+    }
+    config.snapshot_reader = SnapshotReader::in_memory(state_config, chain_config);
 }
 
 pub fn make_config(name: String, mut node_config: Config) -> Config {
