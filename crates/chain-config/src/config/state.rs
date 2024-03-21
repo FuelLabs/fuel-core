@@ -410,7 +410,7 @@ impl StateConfig {
         }
     }
 
-    #[cfg(feature = "random")]
+    #[cfg(feature = "test-helpers")]
     pub fn random_testnet() -> Self {
         tracing::info!("Initial Accounts");
         let mut rng = rand::thread_rng();
@@ -457,7 +457,6 @@ pub struct Group<T> {
 }
 pub(crate) type GroupResult<T> = anyhow::Result<Group<T>>;
 
-#[cfg(all(feature = "std", feature = "random"))]
 #[cfg(test)]
 mod tests {
     use std::path::Path;
@@ -475,14 +474,12 @@ mod tests {
 
     use super::*;
 
-    #[cfg(feature = "parquet")]
     mod parquet {
         use std::path::Path;
 
         use fuel_core_storage::tables::{
             Coins,
             ContractsAssets,
-            ContractsInfo,
             ContractsLatestUtxo,
             ContractsRawCode,
             ContractsState,
@@ -521,7 +518,6 @@ mod tests {
             test_tables!(
                 Coins,
                 ContractsAssets,
-                ContractsInfo,
                 ContractsLatestUtxo,
                 ContractsRawCode,
                 ContractsState,

@@ -71,7 +71,7 @@ async fn balance() {
         ..Default::default()
     };
     let config = Config {
-        state_reader: SnapshotReader::in_memory(state_config),
+        snapshot_reader: SnapshotReader::in_memory(state_config),
         ..Config::local_node()
     };
 
@@ -202,7 +202,7 @@ async fn first_5_balances() {
         ..Default::default()
     };
     let config = Config {
-        state_reader: SnapshotReader::in_memory(state_config),
+        snapshot_reader: SnapshotReader::in_memory(state_config),
         ..Config::local_node()
     };
 

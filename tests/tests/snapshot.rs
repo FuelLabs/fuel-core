@@ -29,7 +29,7 @@ async fn loads_snapshot() {
         ..StateConfig::randomize(&mut rng)
     };
     let config = Config {
-        state_reader: SnapshotReader::in_memory(starting_state.clone()),
+        snapshot_reader: SnapshotReader::in_memory(starting_state.clone()),
         ..Config::local_node()
     };
 

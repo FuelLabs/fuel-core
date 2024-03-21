@@ -58,7 +58,7 @@ async fn setup_service_with_coin(
         ..Default::default()
     };
     let config = Config {
-        state_reader: SnapshotReader::in_memory(state),
+        snapshot_reader: SnapshotReader::in_memory(state),
         static_gas_price,
         ..Config::local_node()
     };

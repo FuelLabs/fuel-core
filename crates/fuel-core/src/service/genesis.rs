@@ -79,7 +79,7 @@ pub async fn execute_genesis_block(
     original_database: &Database,
 ) -> anyhow::Result<UncommittedImportResult<Changes>> {
     let workers =
-        GenesisWorkers::new(original_database.clone(), config.state_reader.clone());
+        GenesisWorkers::new(original_database.clone(), config.snapshot_reader.clone());
 
     import_chain_state(workers).await?;
     let genesis_progress = fetch_genesis_progress(original_database)?;
@@ -167,8 +167,8 @@ fn cleanup_genesis_progress(
 }
 
 pub fn create_genesis_block(config: &Config) -> Block {
-    let block_height = config.state_reader.block_height();
-    let da_block_height = config.state_reader.da_block_height();
+    let block_height = config.snapshot_reader.block_height();
+    let da_block_height = config.snapshot_reader.da_block_height();
     Block::new(
         PartialBlockHeader {
             application: ApplicationHeader::<Empty> {
@@ -366,12 +366,12 @@ mod tests {
     #[tokio::test]
     async fn config_initializes_block_height() {
         let block_height = BlockHeight::from(99u32);
-        let state_reader = SnapshotReader::in_memory(StateConfig {
+        let snapshot_reader = SnapshotReader::in_memory(StateConfig {
             block_height,
             ..Default::default()
         });
         let service_config = Config {
-            state_reader,
+            snapshot_reader,
             ..Config::local_node()
         };
 
@@ -417,10 +417,10 @@ mod tests {
             block_height: BlockHeight::from(0u32),
             da_block_height: Default::default(),
         };
-        let state_reader = SnapshotReader::in_memory(state);
+        let snapshot_reader = SnapshotReader::in_memory(state);
 
         let service_config = Config {
-            state_reader,
+            snapshot_reader,
             ..Config::local_node()
         };
 
@@ -479,10 +479,10 @@ mod tests {
             block_height: starting_height,
             ..Default::default()
         };
-        let state_reader = SnapshotReader::in_memory(state);
+        let snapshot_reader = SnapshotReader::in_memory(state);
 
         let service_config = Config {
-            state_reader,
+            snapshot_reader,
             ..Config::local_node()
         };
 
@@ -530,13 +530,13 @@ mod tests {
         let contract = given_contract_config(&mut rng);
         let contract_id = contract.contract_id;
         let states = contract.states.clone();
-        let state_reader = SnapshotReader::in_memory(StateConfig {
+        let snapshot_reader = SnapshotReader::in_memory(StateConfig {
             contracts: vec![contract],
             ..Default::default()
         });
 
         let service_config = Config {
-            state_reader,
+            snapshot_reader,
             ..Config::local_node()
         };
         let db = Database::default();
@@ -576,10 +576,10 @@ mod tests {
             messages: vec![msg.clone()],
             ..Default::default()
         };
-        let state_reader = SnapshotReader::in_memory(state);
+        let snapshot_reader = SnapshotReader::in_memory(state);
 
         let config = Config {
-            state_reader,
+            snapshot_reader,
             ..Config::local_node()
         };
 
@@ -608,13 +608,13 @@ mod tests {
         let contract = given_contract_config(&mut rng);
         let contract_id = contract.contract_id;
         let balances = contract.balances.clone();
-        let state_reader = SnapshotReader::in_memory(StateConfig {
+        let snapshot_reader = SnapshotReader::in_memory(StateConfig {
             contracts: vec![contract],
             ..Default::default()
         });
 
         let service_config = Config {
-            state_reader,
+            snapshot_reader,
             ..Config::local_node()
         };
 
@@ -647,10 +647,10 @@ mod tests {
             block_height: BlockHeight::from(10u32),
             ..Default::default()
         };
-        let state_reader = SnapshotReader::in_memory(state);
+        let snapshot_reader = SnapshotReader::in_memory(state);
 
         let service_config = Config {
-            state_reader,
+            snapshot_reader,
             ..Config::local_node()
         };
 
@@ -674,10 +674,10 @@ mod tests {
             block_height: BlockHeight::from(10u32),
             ..Default::default()
         };
-        let state_reader = SnapshotReader::in_memory(state);
+        let snapshot_reader = SnapshotReader::in_memory(state);
 
         let service_config = Config {
-            state_reader,
+            snapshot_reader,
             ..Config::local_node()
         };
 
@@ -717,10 +717,10 @@ mod tests {
             contracts: vec![given_contract_config(&mut rng)],
             ..Default::default()
         };
-        let state_reader = SnapshotReader::in_memory(initial_state.clone());
+        let snapshot_reader = SnapshotReader::in_memory(initial_state.clone());
 
         let service_config = Config {
-            state_reader,
+            snapshot_reader,
             ..Config::local_node()
         };
 

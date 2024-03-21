@@ -43,48 +43,46 @@ expression: encoded_json
   ],
   "contracts": [
     {
-      "contract_id": "03d30a245ac74a02e26e45cb80ee1b9c00a93345ce5f12bea9ffe04748d6696c",
-      "code": "30631735193aea95b8f9082c10620c0d6e3fc9596b4538d0dc24bec371bb3e46",
-      "salt": "34561f8892e604021ab96b632eafa229ec3dd885442b44972526c4e8ce25a041",
+      "contract_id": "84b864d0bb6f5cbf7af5b0b53cd78457f2fdba800ab44572e67f47853001a494",
+      "code": "03d30a245ac74a02e26e45cb80ee1b9c00a93345ce5f12bea9ffe04748d6696c",
       "tx_id": "6c3955d818bb1ab0e832877d628233e3e1d64f76b71a80ec4f332f4d1a6742c5",
       "output_index": 55,
       "tx_pointer_block_height": 737809138,
       "tx_pointer_tx_idx": 15803,
       "states": [
         {
-          "key": "32473b01b1dcb1caac942722a4787bb185e4791916926e5fdb25dd842f736ab9",
-          "value": "73e87f53b4857842789a1dd59167629b3c5cabe47dbf48827ec0818e00de4b29"
+          "key": "30631735193aea95b8f9082c10620c0d6e3fc9596b4538d0dc24bec371bb3e46",
+          "value": "34561f8892e604021ab96b632eafa229ec3dd885442b44972526c4e8ce25a041"
         }
       ],
       "balances": [
         {
-          "asset_id": "7f047c3beda43d6e9f9b1b1bc44cdfce3574e7f7f0b2de2323a06ebc356bad61",
-          "amount": 11569263823071193159
+          "asset_id": "32473b01b1dcb1caac942722a4787bb185e4791916926e5fdb25dd842f736ab9",
+          "amount": 12588167786327338867
         }
       ]
     },
     {
-      "contract_id": "b313d811012d4be723755687120a7c6df2389c373c8fbe06bda7a61120652668",
-      "code": "dd5687fee73fac7a2c564da689e9da76e1430d191fbc937d42f74104aa291871",
-      "salt": "f4b9d120f76583a1da5d1123f2b8a0ac606b940a66e42efd782af5203112331a",
-      "tx_id": "dc2ed6f402dca396bfe6dfa3ac8a57ea08860870fd515cf7ca6afb887dd1e09b",
-      "output_index": 232,
-      "tx_pointer_block_height": 1958882788,
-      "tx_pointer_tx_idx": 7761,
+      "contract_id": "ef8361ae6133519413ccda29b9e0c6a1123fa5c757b3d115c2db68d8248c05ec",
+      "code": "7f53b4857842789a1dd59167629b3c5cabe47dbf48827ec0818e00de4b297f04",
+      "tx_id": "dd5687fee73fac7a2c564da689e9da76e1430d191fbc937d42f74104aa291871",
+      "output_index": 244,
+      "tx_pointer_block_height": 3604148409,
+      "tx_pointer_tx_idx": 17105,
       "states": [
         {
-          "key": "cd3c364076623c0231898be0722c08e4eb229c44cb957d29cf7370af8a1b9c54",
-          "value": "2d49b3c83cfb9c683fb7d0526e29d77e89e7bfefd4f73ada3d19ac87d45351f0"
+          "key": "7c3beda43d6e9f9b1b1bc44cdfce3574e7f7f0b2de2323a06ebc356bad614726",
+          "value": "b313d811012d4be723755687120a7c6df2389c373c8fbe06bda7a61120652668"
         }
       ],
       "balances": [
         {
-          "asset_id": "196a880b95c3ea244dd060d2b6538196d048b7a6d04c8edc89579d86fd3fc90c",
-          "amount": 12170732773640396882
+          "asset_id": "20f76583a1da5d1123f2b8a0ac606b940a66e42efd782af5203112331adc2ed6",
+          "amount": 10029194223911757044
         }
       ]
     }
   ],
-  "block_height": 3777489313,
-  "da_block_height": 13543794589260817228
+  "block_height": 2346951900,
+  "da_block_height": 14074420184374977699
 }

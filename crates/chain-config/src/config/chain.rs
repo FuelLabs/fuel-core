@@ -81,9 +81,9 @@ impl ChainConfig {
     pub fn write(&self, path: impl AsRef<Path>) -> anyhow::Result<()> {
         use anyhow::Context;
 
-        let state_writer = File::create(path)?;
+        let file = File::create(path)?;
 
-        serde_json::to_writer_pretty(state_writer, self)
+        serde_json::to_writer_pretty(file, self)
             .context("failed to dump chain parameters snapshot to JSON")?;
 
         Ok(())

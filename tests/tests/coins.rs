@@ -61,7 +61,7 @@ mod coin {
             ..Default::default()
         };
         let config = Config {
-            state_reader: SnapshotReader::in_memory(state),
+            snapshot_reader: SnapshotReader::in_memory(state),
             ..Config::local_node()
         };
 
@@ -315,7 +315,7 @@ mod message_coin {
             ..Default::default()
         };
         let config = Config {
-            state_reader: SnapshotReader::in_memory(state),
+            snapshot_reader: SnapshotReader::in_memory(state),
             ..Config::local_node()
         };
 
@@ -535,7 +535,7 @@ mod all_coins {
             ..Default::default()
         };
         let config = Config {
-            state_reader: SnapshotReader::in_memory(state),
+            snapshot_reader: SnapshotReader::in_memory(state),
             ..Config::local_node()
         };
 
@@ -710,7 +710,7 @@ mod all_coins {
 async fn empty_setup() -> TestContext {
     // setup config
     let config = Config {
-        state_reader: SnapshotReader::in_memory(StateConfig::default()),
+        snapshot_reader: SnapshotReader::in_memory(StateConfig::default()),
         ..Config::local_node()
     };
 

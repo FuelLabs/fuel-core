@@ -119,7 +119,7 @@ fn dev_config() -> Config {
 
     config.chain_config = chain_config;
     config.static_gas_price = 1;
-    config.state_reader = SnapshotReader::in_memory(state_config);
+    config.snapshot_reader = SnapshotReader::in_memory(state_config);
 
     config.block_producer.coinbase_recipient = Some(
         ContractId::from_str(

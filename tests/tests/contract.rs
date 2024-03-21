@@ -74,7 +74,7 @@ async fn calling_the_contract_with_enabled_utxo_validation_is_successful() {
     let config = Config {
         debug: true,
         utxo_validation: true,
-        state_reader: SnapshotReader::in_memory(state_config),
+        snapshot_reader: SnapshotReader::in_memory(state_config),
         ..Config::local_node()
     };
 
@@ -238,7 +238,7 @@ fn key(i: u8) -> Bytes32 {
 async fn can_get_message_proof() {
     let config = Config::local_node();
     let coin = config
-        .state_reader
+        .snapshot_reader
         .read::<Coins>()
         .unwrap()
         .next()

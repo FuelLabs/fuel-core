@@ -240,7 +240,7 @@ impl Command {
 
         let addr = net::SocketAddr::new(ip, port);
 
-        let (chain_conf, state_reader) = match snapshot.as_ref() {
+        let (chain_conf, snapshot_reader) = match snapshot.as_ref() {
             None => (
                 ChainConfig::local_testnet(),
                 SnapshotReader::in_memory(StateConfig::local_testnet()),
@@ -248,8 +248,8 @@ impl Command {
             Some(path) => {
                 let metadata = SnapshotMetadata::read(path)?;
                 let chain_conf = ChainConfig::from_snapshot_metadata(&metadata)?;
-                let state_reader = SnapshotReader::open(metadata)?;
-                (chain_conf, state_reader)
+                let snapshot_reader = SnapshotReader::open(metadata)?;
+                (chain_conf, snapshot_reader)
             }
         };
 
@@ -330,7 +330,7 @@ impl Command {
             api_request_timeout: api_request_timeout.into(),
             combined_db_config,
             chain_config: chain_conf.clone(),
-            state_reader,
+            snapshot_reader,
             debug,
             utxo_validation,
             block_production: trigger,

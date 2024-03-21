@@ -279,7 +279,7 @@ fn service_with_many_contracts(
         contracts: contract_configs,
         ..Default::default()
     };
-    config.state_reader = SnapshotReader::in_memory(state_config);
+    config.snapshot_reader = SnapshotReader::in_memory(state_config);
 
     config
         .chain_config

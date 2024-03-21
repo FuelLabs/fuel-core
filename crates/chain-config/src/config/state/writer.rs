@@ -404,7 +404,6 @@ impl SnapshotWriter {
     }
 }
 
-#[cfg(feature = "random")]
 #[cfg(test)]
 mod tests {
     use rand::{
@@ -414,7 +413,6 @@ mod tests {
 
     use super::*;
 
-    #[cfg(feature = "parquet")]
     #[test]
     fn can_roundtrip_compression_level() {
         use strum::IntoEnumIterator;
@@ -426,7 +424,6 @@ mod tests {
         }
     }
 
-    #[cfg(feature = "parquet")]
     #[test]
     fn parquet_encoder_encodes_tables_in_expected_files() {
         fn file_created_and_present_in_metadata<T>()
@@ -461,13 +458,11 @@ mod tests {
         file_created_and_present_in_metadata::<Coins>();
         file_created_and_present_in_metadata::<Messages>();
         file_created_and_present_in_metadata::<ContractsRawCode>();
-        file_created_and_present_in_metadata::<ContractsInfo>();
         file_created_and_present_in_metadata::<ContractsLatestUtxo>();
         file_created_and_present_in_metadata::<ContractsState>();
         file_created_and_present_in_metadata::<ContractsAssets>();
     }
 
-    #[cfg(feature = "parquet")]
     #[test]
     fn all_compressions_are_valid() {
         use ::parquet::basic::Compression;
@@ -477,18 +472,17 @@ mod tests {
         }
     }
 
-    #[cfg(all(feature = "random", feature = "std"))]
     #[test]
     fn json_snapshot_is_human_readable() {
         // given
         use crate::Randomize;
         let dir = tempfile::tempdir().unwrap();
-        let encoder = SnapshotWriter::json(dir.path());
+        let writer = SnapshotWriter::json(dir.path());
         let mut rng = StdRng::from_seed([0; 32]);
         let state = StateConfig::randomize(&mut rng);
 
         // when
-        let snapshot = encoder.write_state_config(state).unwrap();
+        let snapshot = writer.write_state_config(state).unwrap();
 
         // then
         let TableEncoding::Json { filepath } = snapshot.table_encoding else {

@@ -74,7 +74,7 @@ async fn network_operates_with_non_zero_chain_id() {
         debug: true,
         utxo_validation: true,
         static_gas_price: 1,
-        state_reader: SnapshotReader::in_memory(state_config),
+        snapshot_reader: SnapshotReader::in_memory(state_config),
         ..Config::local_node()
     };
 
@@ -136,7 +136,7 @@ async fn network_operates_with_non_zero_base_asset_id() {
         debug: true,
         utxo_validation: true,
         static_gas_price: 1,
-        state_reader: SnapshotReader::in_memory(state_config),
+        snapshot_reader: SnapshotReader::in_memory(state_config),
         ..Config::local_node()
     };
 

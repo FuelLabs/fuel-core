@@ -1,7 +1,6 @@
 pub mod decode;
 pub mod encode;
 
-#[cfg(feature = "random")]
 #[cfg(test)]
 mod tests {
     use crate::Group;

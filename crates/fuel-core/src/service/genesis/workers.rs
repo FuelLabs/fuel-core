@@ -50,20 +50,20 @@ pub struct GenesisWorkers {
     cancel_token: CancellationToken,
     block_height: BlockHeight,
     da_block_height: DaBlockHeight,
-    state_reader: SnapshotReader,
+    snapshot_reader: SnapshotReader,
     finished_signals: HashMap<String, Arc<Notify>>,
 }
 
 impl GenesisWorkers {
-    pub fn new(db: Database, state_reader: SnapshotReader) -> Self {
-        let block_height = state_reader.block_height();
-        let da_block_height = state_reader.da_block_height();
+    pub fn new(db: Database, snapshot_reader: SnapshotReader) -> Self {
+        let block_height = snapshot_reader.block_height();
+        let da_block_height = snapshot_reader.da_block_height();
         Self {
             db,
             cancel_token: CancellationToken::new(),
             block_height,
             da_block_height,
-            state_reader,
+            snapshot_reader,
             finished_signals: HashMap::default(),
         }
     }
@@ -100,7 +100,7 @@ impl GenesisWorkers {
         StateConfig: AsTable<T>,
         Handler<TableEntry<T>>: ProcessState<Item = TableEntry<T>>,
     {
-        let groups = self.state_reader.read::<T>()?;
+        let groups = self.snapshot_reader.read::<T>()?;
         let finished_signal = self.get_signal(T::column().name());
         let runner = self.create_runner(groups, Some(finished_signal));
         Ok(tokio_rayon::spawn(move || runner.run()))

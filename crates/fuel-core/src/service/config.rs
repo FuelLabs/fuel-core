@@ -43,7 +43,7 @@ pub struct Config {
     pub api_request_timeout: Duration,
     pub combined_db_config: CombinedDatabaseConfig,
     pub chain_config: ChainConfig,
-    pub state_reader: SnapshotReader,
+    pub snapshot_reader: SnapshotReader,
     /// When `true`:
     /// - Enables manual block production.
     /// - Enables debugger endpoint.
@@ -79,7 +79,7 @@ impl Config {
         let chain_config = ChainConfig::local_testnet();
         let state_config = StateConfig::local_testnet();
         let block_importer = fuel_core_importer::Config::new(&chain_config);
-        let state_reader = SnapshotReader::in_memory(state_config.clone());
+        let snapshot_reader = SnapshotReader::in_memory(state_config.clone());
 
         let utxo_validation = false;
         let min_gas_price = 0;
@@ -100,7 +100,7 @@ impl Config {
             combined_db_config,
             debug: true,
             chain_config: chain_config.clone(),
-            state_reader,
+            snapshot_reader,
             block_production: Trigger::Instant,
             vm: Default::default(),
             utxo_validation,

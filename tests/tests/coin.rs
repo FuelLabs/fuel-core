@@ -36,7 +36,7 @@ async fn setup_service(configs: Vec<CoinConfig>) -> FuelService {
     };
 
     let config = Config {
-        state_reader: SnapshotReader::in_memory(state),
+        snapshot_reader: SnapshotReader::in_memory(state),
         ..Config::local_node()
     };
 
