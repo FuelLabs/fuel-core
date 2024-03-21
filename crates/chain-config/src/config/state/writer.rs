@@ -368,6 +368,7 @@ impl SnapshotWriter {
 
 #[cfg(test)]
 mod tests {
+    use fuel_core_storage::kv_store::StorageColumn;
     use rand::{
         rngs::StdRng,
         SeedableRng,
