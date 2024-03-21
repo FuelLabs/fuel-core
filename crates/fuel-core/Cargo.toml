@@ -11,7 +11,6 @@ repository = { workspace = true }
 version = { workspace = true }
 
 [dependencies]
-impl-tools = { workspace = true }
 anyhow = { workspace = true }
 async-graphql = { version = "4.0", features = [
   "tracing",
@@ -39,6 +38,7 @@ fuel-core-types = { workspace = true, features = ["serde"] }
 futures = { workspace = true }
 hex = { version = "0.4", features = ["serde"] }
 hyper = { workspace = true }
+impl-tools = { workspace = true }
 itertools = { workspace = true }
 num_cpus = { version = "1.16.0", optional = true }
 rand = { workspace = true }
@@ -63,14 +63,14 @@ uuid = { version = "1.1", features = ["v4"] }
 [dev-dependencies]
 assert_matches = "1.5"
 fuel-core = { path = ".", features = ["test-helpers"] }
+fuel-core-chain-config = { path = "../chain-config", features = [
+  "test-helpers",
+] }
 fuel-core-executor = { workspace = true, features = ["std", "test-helpers"] }
 fuel-core-services = { path = "./../services", features = ["test-helpers"] }
 fuel-core-storage = { path = "./../storage", features = ["test-helpers"] }
 fuel-core-trace = { path = "./../trace" }
 fuel-core-types = { path = "./../types", features = ["test-helpers"] }
-fuel-core-chain-config = { path = "../chain-config", features = [
-  "test-helpers",
-] }
 mockall = { workspace = true }
 proptest = { workspace = true }
 test-case = { workspace = true }
