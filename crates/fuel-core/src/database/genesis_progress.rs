@@ -83,7 +83,7 @@ where
         processed_group: usize,
     ) -> Result<()> {
         self.storage_as_mut::<GenesisMetadata<Description>>()
-            .insert(&key, &processed_group)?;
+            .insert(key, &processed_group)?;
 
         Ok(())
     }

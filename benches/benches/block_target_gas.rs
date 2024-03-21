@@ -33,6 +33,7 @@ use fuel_core_benches::{
     *,
 };
 use fuel_core_chain_config::{
+    ChainConfig,
     ContractConfig,
     SnapshotReader,
     StateConfig,
@@ -261,12 +262,15 @@ fn service_with_many_contracts(
         .unwrap();
     let _drop = rt.enter();
     let mut database = Database::rocksdb_temp();
-    let mut config = Config::local_node();
-    config
-        .chain_config
+    let mut chain_config = ChainConfig::local_testnet();
+    chain_config.consensus_parameters.tx_params.max_gas_per_tx = TARGET_BLOCK_GAS_LIMIT;
+    chain_config
         .consensus_parameters
-        .tx_params
-        .max_gas_per_tx = TARGET_BLOCK_GAS_LIMIT;
+        .predicate_params
+        .max_gas_per_predicate = TARGET_BLOCK_GAS_LIMIT;
+    chain_config.consensus_parameters.gas_costs = GasCosts::new(default_gas_costs());
+    chain_config.consensus_parameters.fee_params.gas_per_byte = 0;
+    chain_config.block_gas_limit = TARGET_BLOCK_GAS_LIMIT;
 
     let contract_configs = contract_ids
         .iter()
@@ -275,25 +279,15 @@ fn service_with_many_contracts(
             ..Default::default()
         })
         .collect::<Vec<_>>();
+
     let state_config = StateConfig {
         contracts: contract_configs,
         ..Default::default()
     };
-    config.snapshot_reader = SnapshotReader::in_memory(state_config);
-
-    config
-        .chain_config
-        .consensus_parameters
-        .predicate_params
-        .max_gas_per_predicate = TARGET_BLOCK_GAS_LIMIT;
-    config.chain_config.block_gas_limit = TARGET_BLOCK_GAS_LIMIT;
-    config.chain_config.consensus_parameters.gas_costs =
-        GasCosts::new(default_gas_costs());
-    config
-        .chain_config
-        .consensus_parameters
-        .fee_params
-        .gas_per_byte = 0;
+    let mut config = Config {
+        snapshot_reader: SnapshotReader::in_memory(state_config, chain_config),
+        ..Config::local_node()
+    };
     config.utxo_validation = false;
     config.block_production = Trigger::Instant;
 
@@ -404,18 +398,11 @@ fn run_with_service_with_extra_inputs(
                 tx_builder.add_output(*output);
             }
             let mut tx = tx_builder.finalize_as_transaction();
-            tx.estimate_predicates(
-                &shared
-                    .config
-                    .chain_config
-                    .consensus_parameters
-                    .clone()
-                    .into(),
-            )
-            .unwrap();
+            let chain_config = shared.config.snapshot_reader.chain_config().clone();
+            tx.estimate_predicates(&chain_config.consensus_parameters.clone().into())
+                .unwrap();
             async move {
-                let tx_id =
-                    tx.id(&shared.config.chain_config.consensus_parameters.chain_id);
+                let tx_id = tx.id(&chain_config.consensus_parameters.chain_id);
 
                 let mut sub = shared.block_importer.block_importer.subscribe();
                 shared

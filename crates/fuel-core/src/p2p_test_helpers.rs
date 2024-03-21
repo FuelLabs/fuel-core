@@ -361,7 +361,7 @@ pub async fn make_nodes(
 
 fn update_signing_key(config: &mut Config, key: Address) {
     let snapshot_reader = &config.snapshot_reader;
-    let state_config = StateConfig::from_reader(&snapshot_reader).unwrap();
+    let state_config = StateConfig::from_reader(snapshot_reader).unwrap();
 
     let mut chain_config = snapshot_reader.chain_config().clone();
     match &mut chain_config.consensus {
