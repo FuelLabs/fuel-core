@@ -48,12 +48,9 @@ rand = { workspace = true }
 serde = { workspace = true }
 tempfile = { workspace = true }
 test-case = { workspace = true }
-# TODO: remove 
-serde_json = { workspace = true }
 
 [features]
-# TODO: remove parquet
-default = ["env", "relayer", "rocksdb", "parquet"]
+default = ["env", "relayer", "rocksdb"]
 env = ["dep:dotenvy"]
 p2p = ["fuel-core/p2p", "const_format"]
 relayer = ["fuel-core/relayer", "dep:url"]

@@ -2816,7 +2816,6 @@ dependencies = [
  "pyroscope_pprofrs",
  "rand",
  "serde",
- "serde_json",
  "tempfile",
  "test-case",
  "tikv-jemallocator",
