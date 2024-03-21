@@ -2,7 +2,6 @@ use crate::config::Config;
 use fuel_core_executor::{
     executor::{
         ExecutionBlockWithSource,
-        ExecutionInstance,
         ExecutionOptions,
         OnceTransactionsSource,
     },
@@ -40,7 +39,7 @@ use fuel_core_types::{
 use std::sync::Arc;
 
 /// The upgradable executor supports the WASM version of the state transition function.
-/// If the block allows it, the executor uses a native state transition function.
+/// If the block has a version the same as a native executor, we will use it.
 /// If not, the WASM version of the state transition function will be used
 /// (if the database has a corresponding bytecode).
 pub struct Executor<S, R> {
@@ -254,7 +253,7 @@ where
         instance.run(&self.module)
     }
 
-    #[allow(dead_code)]
+    #[cfg(not(feature = "wasm-executor"))]
     fn native_execute_inner<TxSource>(
         &self,
         block: ExecutionBlockWithSource<TxSource>,
@@ -270,7 +269,7 @@ where
             .take()
             .unwrap_or_else(|| self.config.consensus_parameters.clone());
 
-        let instance = ExecutionInstance {
+        let instance = fuel_core_executor::executor::ExecutionInstance {
             relayer,
             database: storage,
             consensus_params,

@@ -20,7 +20,6 @@ use derive_more::{
     UpperHex,
 };
 use secrecy::{
-    zeroize,
     CloneableSecret,
     DebugSecret,
 };

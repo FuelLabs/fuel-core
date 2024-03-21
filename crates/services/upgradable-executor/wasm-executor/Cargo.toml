@@ -23,6 +23,9 @@ fuel-core-storage = { workspace = true, default-features = false }
 fuel-core-types = { workspace = true, default-features = false }
 postcard = { workspace = true }
 
+[dev-dependencies]
+proptest = { workspace = true }
+
 [features]
 default = ["std"]
 std = []

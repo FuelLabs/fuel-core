@@ -131,6 +131,7 @@ impl RunnableService for SyncTask {
 
 #[async_trait::async_trait]
 impl RunnableTask for SyncTask {
+    #[allow(clippy::blocks_in_conditions)]
     #[tracing::instrument(level = "debug", skip_all, err, ret)]
     async fn run(&mut self, watcher: &mut StateWatcher) -> anyhow::Result<bool> {
         let mut should_continue = true;

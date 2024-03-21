@@ -41,3 +41,33 @@ pub fn unpack_exists_size_result(val: u64) -> (bool, u32, u16) {
 pub type InputType = ExecutionBlockWithSource<()>;
 
 pub type ReturnType = ExecutorResult<Uncommitted<ExecutionResult, Changes>>;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use proptest::prelude::prop::*;
+
+    proptest::proptest! {
+        #[test]
+        fn can_pack_any_values(exists: bool, size: u32, result: u16) {
+            pack_exists_size_result(exists, size, result);
+        }
+
+        #[test]
+        fn can_unpack_any_values(value: u64) {
+            let _ = unpack_exists_size_result(value);
+        }
+
+
+        #[test]
+        fn unpacks_packed_values(exists: bool, size: u32, result: u16) {
+            let packed = pack_exists_size_result(exists, size, result);
+            let (unpacked_exists, unpacked_size, unpacked_result) =
+                unpack_exists_size_result(packed);
+
+            proptest::prop_assert_eq!(exists, unpacked_exists);
+            proptest::prop_assert_eq!(size, unpacked_size);
+            proptest::prop_assert_eq!(result, unpacked_result);
+        }
+    }
+}

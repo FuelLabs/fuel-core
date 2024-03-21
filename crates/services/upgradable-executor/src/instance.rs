@@ -64,7 +64,7 @@ impl<'a> CallerHelper for Caller<'a, ExecutionState> {
 struct ExecutionState {
     /// The memory used by the WASM module.
     memory: Option<Memory>,
-    next_transaction: HashMap<u32, Vec<Vec<u8>>>,
+    next_transactions: HashMap<u32, Vec<Vec<u8>>>,
     relayer_events: HashMap<DaBlockHeight, Value>,
 }
 
@@ -92,7 +92,7 @@ impl Instance {
                 engine,
                 ExecutionState {
                     memory: None,
-                    next_transaction: Default::default(),
+                    next_transactions: Default::default(),
                     relayer_events: Default::default(),
                 },
             ),
@@ -184,7 +184,7 @@ impl Instance<Created> {
 
             caller
                 .data_mut()
-                .next_transaction
+                .next_transactions
                 .entry(encoded_size)
                 .or_default()
                 .push(encoded_txs);
@@ -201,7 +201,7 @@ impl Instance<Created> {
               -> anyhow::Result<()> {
             let encoded = caller
                 .data_mut()
-                .next_transaction
+                .next_transactions
                 .get_mut(&output_size)
                 .and_then(|vector| vector.pop())
                 .unwrap_or_default();

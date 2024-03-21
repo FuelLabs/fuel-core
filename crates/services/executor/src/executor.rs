@@ -225,7 +225,6 @@ where
 // TODO: Make this module private after moving unit tests from `fuel-core` here.
 pub mod block_component {
     use super::*;
-    use fuel_core_types::fuel_tx::field::MintGasPrice;
 
     pub struct PartialBlockComponent<'a, TxSource> {
         pub empty_block: &'a mut PartialFuelBlock,
