@@ -728,27 +728,6 @@ where
             return Err(ExecutorError::DaHeightExceededItsLimit)
         };
 
-        // // Generate the message merkle root.
-        // let message_outbox_root = message_ids
-        //     .iter()
-        //     .fold(MerkleRootCalculator::new(), |mut tree, id| {
-        //         tree.push(id.as_ref());
-        //         tree
-        //     })
-        //     .root()
-        //     .into();
-        //
-        // // Generate the inbound event merkle root.
-        // let event_inbox_root = events
-        //     .iter()
-        //     .map(|event| event.hash())
-        //     .fold(MerkleRootCalculator::new(), |mut tree, event| {
-        //         tree.push(event.as_ref());
-        //         tree
-        //     })
-        //     .root()
-        //     .into();
-
         let mut root_calculator = MerkleRootCalculator::new();
 
         for da_height in next_unprocessed_da_height..=header.da_height.0 {

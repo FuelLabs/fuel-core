@@ -367,14 +367,14 @@ impl PartialBlockHeader {
     pub fn generate(
         self,
         transactions: &[Transaction],
-        message_ids: &[MessageId],
+        outbox_message_ids: &[MessageId],
         event_inbox_root: Bytes32,
     ) -> BlockHeader {
         // Generate the transaction merkle root.
         let transactions_root = generate_txns_root(transactions);
 
         // Generate the message merkle root.
-        let message_outbox_root = message_ids
+        let message_outbox_root = outbox_message_ids
             .iter()
             .fold(MerkleRootCalculator::new(), |mut tree, id| {
                 tree.push(id.as_ref());
@@ -391,7 +391,7 @@ impl PartialBlockHeader {
                 .state_transition_bytecode_version,
             generated: GeneratedApplicationFields {
                 transactions_count: transactions.len() as u64,
-                message_receipt_count: message_ids.len() as u64,
+                message_receipt_count: outbox_message_ids.len() as u64,
                 transactions_root,
                 message_outbox_root,
                 event_inbox_root,

@@ -86,11 +86,11 @@ impl Block<Transaction> {
     pub fn new(
         header: PartialBlockHeader,
         transactions: Vec<Transaction>,
-        message_ids: &[MessageId],
+        outbox_message_ids: &[MessageId],
         event_inbox_root: Bytes32,
     ) -> Self {
         let inner = BlockV1 {
-            header: header.generate(&transactions, message_ids, event_inbox_root),
+            header: header.generate(&transactions, outbox_message_ids, event_inbox_root),
             transactions,
         };
         Block::V1(inner)
@@ -220,11 +220,15 @@ impl PartialFuelBlock {
     ///
     /// Message ids are produced by executed the transactions and collecting
     /// the ids from the receipts of messages outputs.
-    pub fn generate(self, message_ids: &[MessageId], event_inbox_root: Bytes32) -> Block {
+    pub fn generate(
+        self,
+        outbox_message_ids: &[MessageId],
+        event_inbox_root: Bytes32,
+    ) -> Block {
         Block::new(
             self.header,
             self.transactions,
-            message_ids,
+            outbox_message_ids,
             event_inbox_root,
         )
     }
