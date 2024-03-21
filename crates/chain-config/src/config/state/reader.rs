@@ -1,6 +1,5 @@
 use std::fmt::Debug;
 
-use anyhow::Context;
 use fuel_core_storage::structured_storage::TableWithBlueprint;
 use fuel_core_types::{
     blockchain::primitives::DaBlockHeight,
@@ -101,6 +100,7 @@ impl SnapshotReader {
         chain_config: ChainConfig,
         group_size: usize,
     ) -> anyhow::Result<Self> {
+        use anyhow::Context;
         let state = {
             let path = state_file.as_ref();
             let mut file = std::fs::File::open(path)
@@ -165,6 +165,7 @@ impl SnapshotReader {
         json_group_size: usize,
     ) -> anyhow::Result<Self> {
         use crate::TableEncoding;
+        use anyhow::Context;
         let chain_config = {
             let path = &snapshot_metadata.chain_config;
             let mut file = std::fs::File::open(path)
@@ -195,6 +196,7 @@ impl SnapshotReader {
         match &self.data_source {
             #[cfg(feature = "parquet")]
             DataSource::Parquet { tables, .. } => {
+                use anyhow::Context;
                 use fuel_core_storage::kv_store::StorageColumn;
                 let name = T::column().name();
                 let path = tables.get(name).ok_or_else(|| {
