@@ -124,7 +124,7 @@ impl TryFrom<&Log> for EthEventLog {
             }
             n if n == *config::ETH_FORCED_TX => {
                 if log.topics.len() != 1 {
-                    return Err(anyhow!("Malformed topics for Message"))
+                    return Err(anyhow!("Malformed topics for forced Transaction"))
                 }
 
                 let raw_log = RawLog {
