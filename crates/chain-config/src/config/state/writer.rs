@@ -24,7 +24,6 @@ use fuel_core_types::{
     blockchain::primitives::DaBlockHeight,
     fuel_types::BlockHeight,
 };
-use serde_json::Value;
 use std::path::PathBuf;
 
 #[cfg(feature = "parquet")]
@@ -180,10 +179,6 @@ where
     #[cfg(feature = "parquet")]
     pub fn encode_postcard(&self) -> Vec<u8> {
         postcard::to_stdvec(self).unwrap()
-    }
-
-    pub fn encode_json(&self) -> Value {
-        serde_json::to_value(self).unwrap()
     }
 }
 
