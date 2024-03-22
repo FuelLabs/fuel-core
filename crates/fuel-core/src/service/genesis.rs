@@ -52,7 +52,7 @@ use fuel_core_types::{
     entities::{
         coins::coin::Coin,
         contract::ContractUtxoInfo,
-        message::Message,
+        relayer::message::Message,
     },
     fuel_tx::Contract,
     fuel_types::{

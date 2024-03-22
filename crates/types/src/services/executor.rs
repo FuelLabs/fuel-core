@@ -10,7 +10,7 @@ use crate::{
     },
     entities::{
         coins::coin::Coin,
-        message::Message,
+        relayer::message::Message,
     },
     fuel_tx::{
         Receipt,

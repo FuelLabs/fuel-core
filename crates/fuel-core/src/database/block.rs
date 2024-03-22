@@ -32,7 +32,7 @@ use fuel_core_types::{
         },
         primitives::BlockId,
     },
-    entities::message::MerkleProof,
+    entities::relayer::message::MerkleProof,
     fuel_merkle::binary::MerkleTree,
     fuel_types::BlockHeight,
 };

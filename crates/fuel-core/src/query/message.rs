@@ -28,7 +28,7 @@ use fuel_core_storage::{
 };
 use fuel_core_types::{
     blockchain::block::CompressedBlock,
-    entities::message::{
+    entities::relayer::message::{
         MerkleProof,
         Message,
         MessageProof,

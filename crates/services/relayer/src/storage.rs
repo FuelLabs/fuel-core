@@ -221,6 +221,9 @@ mod tests {
     fuel_core_storage::basic_storage_tests!(
         EventsHistory,
         <EventsHistory as Mappable>::Key::default(),
-        vec![Event::Message(Default::default())]
+        vec![
+            Event::Message(Default::default()),
+            Event::Transaction(Default::default())
+        ]
     );
 }

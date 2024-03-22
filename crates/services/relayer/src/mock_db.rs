@@ -7,7 +7,11 @@ use fuel_core_storage::{
 };
 use fuel_core_types::{
     blockchain::primitives::DaBlockHeight,
-    entities::message::Message,
+    entities::{
+        relayer::transaction::RelayedTransactionId,
+        Message,
+        RelayedTransaction,
+    },
     fuel_types::Nonce,
     services::relayer::Event,
 };
@@ -25,6 +29,8 @@ use std::{
 #[derive(Default)]
 pub struct Data {
     pub messages: BTreeMap<DaBlockHeight, HashMap<Nonce, Message>>,
+    pub transactions:
+        BTreeMap<DaBlockHeight, HashMap<RelayedTransactionId, RelayedTransaction>>,
     pub finalized_da_height: Option<DaBlockHeight>,
 }
 
@@ -46,6 +52,18 @@ impl MockDb {
             .iter()
             .find_map(|(_, map)| map.get(id).cloned())
     }
+
+    pub fn get_transaction(
+        &self,
+        id: &RelayedTransactionId,
+    ) -> Option<RelayedTransaction> {
+        self.data
+            .lock()
+            .unwrap()
+            .transactions
+            .iter()
+            .find_map(|(_, map)| map.get(id).cloned())
+    }
 }
 
 impl RelayerDb for MockDb {
@@ -62,6 +80,12 @@ impl RelayerDb for MockDb {
                         .entry(message.da_height())
                         .or_default()
                         .insert(*message.id(), message.clone());
+                }
+                Event::Transaction(transaction) => {
+                    m.transactions
+                        .entry(transaction.da_height())
+                        .or_default()
+                        .insert(transaction.id(), transaction.clone());
                 }
             }
         }

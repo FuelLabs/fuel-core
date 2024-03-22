@@ -22,7 +22,7 @@ use fuel_core_storage::{
     Result as StorageResult,
 };
 use fuel_core_types::{
-    entities::message::Message,
+    entities::relayer::message::Message,
     fuel_types::{
         Address,
         Nonce,
