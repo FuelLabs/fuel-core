@@ -33,6 +33,7 @@ impl Event {
     pub fn hash(&self) -> Bytes32 {
         match self {
             Event::Message(message) => (*message.id().deref()).into(),
+            Event::Transaction(transaction) => transaction.relayed_id().into(),
         }
     }
 }

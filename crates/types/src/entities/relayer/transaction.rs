@@ -45,6 +45,7 @@ pub struct RelayedTransactionV1 {
     Hash,
     derive_more::Display,
     derive_more::From,
+    derive_more::Into,
 )]
 pub struct RelayedTransactionId(Bytes32);
 
@@ -73,10 +74,26 @@ impl RelayedTransaction {
     }
 
     /// Set the max gas
-    pub fn set_mas_gas(&mut self, max_gas: u64) {
+    pub fn set_max_gas(&mut self, max_gas: u64) {
         match self {
             RelayedTransaction::V1(transaction) => {
                 transaction.max_gas = max_gas;
+            }
+        }
+    }
+
+    /// Get the canonically serialized transaction
+    pub fn serialized_transaction(&self) -> &[u8] {
+        match self {
+            RelayedTransaction::V1(transaction) => &transaction.serialized_transaction,
+        }
+    }
+
+    /// Set the serialized transaction bytes
+    pub fn set_serialized_transaction(&mut self, serialized_bytes: Vec<u8>) {
+        match self {
+            RelayedTransaction::V1(transaction) => {
+                transaction.serialized_transaction = serialized_bytes;
             }
         }
     }
