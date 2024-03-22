@@ -1,5 +1,8 @@
+use crate::graphql_api::storage::Column as OffChainColumn;
+
 use super::{
     database_description::{
+        off_chain::OffChain,
         on_chain::OnChain,
         DatabaseDescription,
     },
@@ -42,6 +45,14 @@ impl TableWithBlueprint for GenesisMetadata<OnChain> {
     type Column = <OnChain as DatabaseDescription>::Column;
     fn column() -> Self::Column {
         Column::GenesisMetadata
+    }
+}
+
+impl TableWithBlueprint for GenesisMetadata<OffChain> {
+    type Blueprint = Plain<Postcard, Postcard>;
+    type Column = <OffChain as DatabaseDescription>::Column;
+    fn column() -> Self::Column {
+        OffChainColumn::GenesisMetadata
     }
 }
 

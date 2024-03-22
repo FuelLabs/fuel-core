@@ -1,3 +1,10 @@
+use fuel_core_chain_config::{
+    AddTable,
+    AsTable,
+    StateConfig,
+    StateConfigBuilder,
+    TableEntry,
+};
 use fuel_core_storage::{
     blueprint::plain::Plain,
     codec::{
@@ -58,6 +65,18 @@ impl TableWithBlueprint for TransactionStatuses {
 
     fn column() -> Self::Column {
         Self::Column::TransactionStatus
+    }
+}
+
+impl AsTable<TransactionStatuses> for StateConfig {
+    fn as_table(&self) -> Vec<TableEntry<TransactionStatuses>> {
+        Vec::new() // Do not include these for now
+    }
+}
+
+impl AddTable<TransactionStatuses> for StateConfigBuilder {
+    fn add(&mut self, _entries: Vec<TableEntry<TransactionStatuses>>) {
+        // Do not include these for now
     }
 }
 

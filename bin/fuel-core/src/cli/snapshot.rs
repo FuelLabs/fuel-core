@@ -8,6 +8,7 @@ use fuel_core::{
     chain_config::ChainConfig,
     combined_database::CombinedDatabase,
     database::SnapshotDataSource,
+    fuel_core_graphql_api::storage::transactions::TransactionStatuses,
     types::fuel_types::ContractId,
 };
 use fuel_core_chain_config::{
@@ -24,6 +25,7 @@ use fuel_core_storage::{
         ContractsState,
         FuelBlocks,
         Messages,
+        Transactions,
     },
     Result as StorageResult,
 };
@@ -249,6 +251,15 @@ fn full_snapshot(
     let contract_balances =
         db.on_chain_entries::<ContractsAssets>(None, IterDirection::Forward);
     write(contract_balances, group_size, |chunk| writer.write(chunk))?;
+
+    let transactions = db.on_chain_entries::<Transactions>(None, IterDirection::Forward);
+    write(transactions, group_size, |chunk| writer.write(chunk))?;
+
+    let transaction_statuses =
+        db.off_chain_entries::<TransactionStatuses>(None, IterDirection::Forward);
+    write(transaction_statuses, group_size, |chunk| {
+        writer.write(chunk)
+    })?;
 
     let block = get_last_block(db)?;
     writer.write_block_data(*block.header().height(), block.header().da_height)?;

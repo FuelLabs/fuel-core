@@ -12,14 +12,21 @@ use std::{
     sync::Arc,
 };
 
-use crate::database::{
-    balances::BalancesInitializer,
-    state::StateInitializer,
-    Database,
+use crate::{
+    combined_database::CombinedDatabase,
+    database::{
+        balances::BalancesInitializer,
+        database_description::{
+            off_chain::OffChain,
+            on_chain::OnChain,
+        },
+        state::StateInitializer,
+        Database,
+    },
+    graphql_api::storage::transactions::TransactionStatuses,
 };
 use fuel_core_chain_config::{
     AsTable,
-    Group,
     SnapshotReader,
     StateConfig,
     TableEntry,
@@ -34,8 +41,10 @@ use fuel_core_storage::{
         ContractsRawCode,
         ContractsState,
         Messages,
+        Transactions,
     },
     transactional::StorageTransaction,
+    StorageAsMut,
 };
 use fuel_core_types::{
     blockchain::primitives::DaBlockHeight,
@@ -46,7 +55,7 @@ use tokio_rayon::AsyncRayonHandle;
 use tokio_util::sync::CancellationToken;
 
 pub struct GenesisWorkers {
-    db: Database,
+    db: CombinedDatabase,
     cancel_token: CancellationToken,
     block_height: BlockHeight,
     da_block_height: DaBlockHeight,
@@ -55,7 +64,7 @@ pub struct GenesisWorkers {
 }
 
 impl GenesisWorkers {
-    pub fn new(db: Database, snapshot_reader: SnapshotReader) -> Self {
+    pub fn new(db: CombinedDatabase, snapshot_reader: SnapshotReader) -> Self {
         let block_height = snapshot_reader.block_height();
         let da_block_height = snapshot_reader.da_block_height();
         Self {
@@ -70,12 +79,14 @@ impl GenesisWorkers {
 
     pub async fn run_imports(&mut self) -> anyhow::Result<()> {
         tokio::try_join!(
-            self.spawn_worker::<Coins>()?,
-            self.spawn_worker::<Messages>()?,
-            self.spawn_worker::<ContractsRawCode>()?,
-            self.spawn_worker::<ContractsLatestUtxo>()?,
-            self.spawn_worker::<ContractsState>()?,
-            self.spawn_worker::<ContractsAssets>()?,
+            self.spawn_worker_on_chain::<Coins>()?,
+            self.spawn_worker_on_chain::<Messages>()?,
+            self.spawn_worker_on_chain::<ContractsRawCode>()?,
+            self.spawn_worker_on_chain::<ContractsLatestUtxo>()?,
+            self.spawn_worker_on_chain::<ContractsState>()?,
+            self.spawn_worker_on_chain::<ContractsAssets>()?,
+            self.spawn_worker_on_chain::<Transactions>()?,
+            self.spawn_worker_off_chain::<TransactionStatuses>()?,
         )
         .map(|_| ())
     }
@@ -90,7 +101,7 @@ impl GenesisWorkers {
         self.cancel_token.cancel()
     }
 
-    pub fn spawn_worker<T>(
+    pub fn spawn_worker_on_chain<T>(
         &mut self,
     ) -> anyhow::Result<AsyncRayonHandle<anyhow::Result<()>>>
     where
@@ -98,11 +109,40 @@ impl GenesisWorkers {
         T::OwnedKey: serde::de::DeserializeOwned + Send,
         T::OwnedValue: serde::de::DeserializeOwned + Send,
         StateConfig: AsTable<T>,
-        Handler<TableEntry<T>>: ProcessState<Item = TableEntry<T>>,
+        Handler<TableEntry<T>>: ProcessState<Item = TableEntry<T>, DbDesc = OnChain>,
     {
         let groups = self.snapshot_reader.read::<T>()?;
         let finished_signal = self.get_signal(T::column().name());
-        let runner = self.create_runner(groups, Some(finished_signal));
+
+        let runner = GenesisRunner::new(
+            Some(finished_signal),
+            self.cancel_token.clone(),
+            Handler::new(self.block_height, self.da_block_height),
+            groups,
+            self.db.on_chain().clone(),
+        );
+        Ok(tokio_rayon::spawn(move || runner.run()))
+    }
+
+    pub fn spawn_worker_off_chain<T>(
+        &mut self,
+    ) -> anyhow::Result<AsyncRayonHandle<anyhow::Result<()>>>
+    where
+        T: TableWithBlueprint + Send + 'static,
+        T::OwnedKey: serde::de::DeserializeOwned + Send,
+        T::OwnedValue: serde::de::DeserializeOwned + Send,
+        StateConfig: AsTable<T>,
+        Handler<TableEntry<T>>: ProcessState<Item = TableEntry<T>, DbDesc = OffChain>,
+    {
+        let groups = self.snapshot_reader.read::<T>()?;
+        let finished_signal = self.get_signal(T::column().name());
+        let runner = GenesisRunner::new(
+            Some(finished_signal),
+            self.cancel_token.clone(),
+            Handler::new(self.block_height, self.da_block_height),
+            groups,
+            self.db.off_chain().clone(),
+        );
         Ok(tokio_rayon::spawn(move || runner.run()))
     }
 
@@ -111,26 +151,6 @@ impl GenesisWorkers {
             .entry(name.to_string())
             .or_insert_with(|| Arc::new(Notify::new()))
             .clone()
-    }
-
-    fn create_runner<T, I>(
-        &self,
-        data: I,
-        finished_signal: Option<Arc<Notify>>,
-    ) -> GenesisRunner<Handler<T>, I, Database>
-    where
-        Handler<T>: ProcessState<Item = T>,
-        I: IntoIterator<Item = anyhow::Result<Group<T>>>,
-    {
-        let handler = Handler::new(self.block_height, self.da_block_height);
-        let database = self.db.clone();
-        GenesisRunner::new(
-            finished_signal,
-            self.cancel_token.clone(),
-            handler,
-            data,
-            database,
-        )
     }
 }
 
@@ -153,6 +173,7 @@ impl<T> Handler<T> {
 
 impl ProcessState for Handler<TableEntry<Coins>> {
     type Item = TableEntry<Coins>;
+    type DbDesc = OnChain;
 
     fn process(
         &mut self,
@@ -172,6 +193,7 @@ impl ProcessState for Handler<TableEntry<Coins>> {
 
 impl ProcessState for Handler<TableEntry<Messages>> {
     type Item = TableEntry<Messages>;
+    type DbDesc = OnChain;
 
     fn process(
         &mut self,
@@ -190,6 +212,7 @@ impl ProcessState for Handler<TableEntry<Messages>> {
 
 impl ProcessState for Handler<TableEntry<ContractsRawCode>> {
     type Item = TableEntry<ContractsRawCode>;
+    type DbDesc = OnChain;
 
     fn process(
         &mut self,
@@ -209,6 +232,7 @@ impl ProcessState for Handler<TableEntry<ContractsRawCode>> {
 
 impl ProcessState for Handler<TableEntry<ContractsLatestUtxo>> {
     type Item = TableEntry<ContractsLatestUtxo>;
+    type DbDesc = OnChain;
 
     fn process(
         &mut self,
@@ -228,6 +252,7 @@ impl ProcessState for Handler<TableEntry<ContractsLatestUtxo>> {
 
 impl ProcessState for Handler<TableEntry<ContractsState>> {
     type Item = TableEntry<ContractsState>;
+    type DbDesc = OnChain;
 
     fn process(
         &mut self,
@@ -245,6 +270,7 @@ impl ProcessState for Handler<TableEntry<ContractsState>> {
 
 impl ProcessState for Handler<TableEntry<ContractsAssets>> {
     type Item = TableEntry<ContractsAssets>;
+    type DbDesc = OnChain;
 
     fn process(
         &mut self,
@@ -257,5 +283,47 @@ impl ProcessState for Handler<TableEntry<ContractsAssets>> {
 
     fn genesis_resource() -> &'static str {
         ContractsAssets::column().name()
+    }
+}
+
+impl ProcessState for Handler<TableEntry<Transactions>> {
+    type Item = TableEntry<Transactions>;
+    type DbDesc = OnChain;
+
+    fn process(
+        &mut self,
+        group: Vec<Self::Item>,
+        tx: &mut StorageTransaction<&mut Database>,
+    ) -> anyhow::Result<()> {
+        for transaction in &group {
+            tx.storage::<Transactions>()
+                .insert(&transaction.key, &transaction.value)?;
+        }
+        Ok(())
+    }
+
+    fn genesis_resource() -> &'static str {
+        Transactions::column().name()
+    }
+}
+
+impl ProcessState for Handler<TableEntry<TransactionStatuses>> {
+    type Item = TableEntry<TransactionStatuses>;
+    type DbDesc = OffChain;
+
+    fn process(
+        &mut self,
+        group: Vec<Self::Item>,
+        tx: &mut StorageTransaction<&mut Database<Self::DbDesc>>,
+    ) -> anyhow::Result<()> {
+        for tx_status in group {
+            tx.storage::<TransactionStatuses>()
+                .insert(&tx_status.key, &tx_status.value)?;
+        }
+        Ok(())
+    }
+
+    fn genesis_resource() -> &'static str {
+        TransactionStatuses::column().name()
     }
 }

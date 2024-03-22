@@ -236,7 +236,9 @@ impl RunnableService for Task {
         // check if chain is initialized
         if let Err(err) = on_view.get_genesis() {
             if err.is_not_found() {
-                let result = execute_genesis_block(&self.shared.config, &on_view).await?;
+                let result =
+                    execute_genesis_block(&self.shared.config, &self.shared.database)
+                        .await?;
 
                 self.shared.block_importer.commit_result(result).await?;
 

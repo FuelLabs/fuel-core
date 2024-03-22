@@ -1,7 +1,11 @@
 use self::workers::GenesisWorkers;
 use crate::{
+    combined_database::CombinedDatabase,
     database::{
-        database_description::on_chain::OnChain,
+        database_description::{
+            off_chain::OffChain,
+            on_chain::OnChain,
+        },
         genesis_progress::GenesisMetadata,
         Database,
     },
@@ -70,28 +74,37 @@ mod workers;
 use itertools::Itertools;
 pub use runner::{
     GenesisRunner,
-    TransactionOpener,
+    // TransactionOpener,
 };
 
 /// Performs the importing of the genesis block from the snapshot.
 pub async fn execute_genesis_block(
     config: &Config,
-    original_database: &Database,
+    db: &CombinedDatabase,
 ) -> anyhow::Result<UncommittedImportResult<Changes>> {
-    let workers =
-        GenesisWorkers::new(original_database.clone(), config.snapshot_reader.clone());
+    let workers = GenesisWorkers::new(db.clone(), config.snapshot_reader.clone());
 
     import_chain_state(workers).await?;
-    let genesis_progress = fetch_genesis_progress(original_database)?;
+
+    let genesis_progress_on_chain: Vec<String> = db
+        .on_chain()
+        .iter_all::<GenesisMetadata<OnChain>>(None)
+        .map_ok(|(k, _)| k)
+        .try_collect()?;
+    let genesis_progress_off_chain: Vec<String> = db
+        .off_chain()
+        .iter_all::<GenesisMetadata<OffChain>>(None)
+        .map_ok(|(k, _)| k)
+        .try_collect()?;
 
     let chain_config = config.snapshot_reader.chain_config();
     let genesis = Genesis {
         // TODO: We can get the serialized consensus parameters from the database.
         //  https://github.com/FuelLabs/fuel-core/issues/1570
         chain_config_hash: chain_config.root()?.into(),
-        coins_root: original_database.genesis_coins_root()?.into(),
-        messages_root: original_database.genesis_messages_root()?.into(),
-        contracts_root: original_database.genesis_contracts_root()?.into(),
+        coins_root: db.on_chain().genesis_coins_root()?.into(),
+        messages_root: db.on_chain().genesis_messages_root()?.into(),
+        contracts_root: db.on_chain().genesis_contracts_root()?.into(),
     };
 
     let block = create_genesis_block(config);
@@ -101,11 +114,14 @@ pub async fn execute_genesis_block(
         consensus,
     };
 
-    let mut db = original_database.clone();
-    let mut database_transaction = db.write_transaction();
+    let mut on_chain = db.on_chain().clone();
+    let mut database_transaction_on_chain = on_chain.write_transaction();
+    let mut off_chain = db.off_chain().clone();
+    let mut database_transaction_off_chain = off_chain.write_transaction();
+
     // TODO: The chain config should be part of the snapshot state.
     //  https://github.com/FuelLabs/fuel-core/issues/1570
-    database_transaction
+    database_transaction_on_chain
         .storage_as_mut::<ConsensusParametersVersions>()
         .insert(
             &ConsensusParametersVersion::MIN,
@@ -113,28 +129,30 @@ pub async fn execute_genesis_block(
         )?;
     // TODO: The bytecode of the state transition function should be part of the snapshot state.
     //  https://github.com/FuelLabs/fuel-core/issues/1570
-    database_transaction
+    database_transaction_on_chain
         .storage_as_mut::<StateTransitionBytecodeVersions>()
         .insert(&ConsensusParametersVersion::MIN, &[])?;
 
     // Needs to be given the progress because `iter_all` is not implemented on db transactions.
-    cleanup_genesis_progress(&mut database_transaction, genesis_progress)?;
+    for key in genesis_progress_on_chain {
+        database_transaction_on_chain
+            .storage_as_mut::<GenesisMetadata<OnChain>>()
+            .remove(&key)?;
+    }
+    for key in genesis_progress_off_chain {
+        database_transaction_off_chain
+            .storage_as_mut::<GenesisMetadata<OffChain>>()
+            .remove(&key)?;
+    }
+
+    // TODO: We must do atomic commit of both databases somehow
 
     let result = UncommittedImportResult::new(
         ImportResult::new_from_local(block, vec![], vec![]),
-        database_transaction.into_changes(),
+        database_transaction_on_chain.into_changes(),
     );
 
     Ok(result)
-}
-
-fn fetch_genesis_progress(
-    original_database: &Database,
-) -> Result<Vec<String>, anyhow::Error> {
-    Ok(original_database
-        .iter_all::<GenesisMetadata<OnChain>>(None)
-        .map_ok(|(k, _)| k)
-        .try_collect()?)
 }
 
 async fn import_chain_state(mut workers: GenesisWorkers) -> anyhow::Result<()> {
@@ -148,18 +166,6 @@ async fn import_chain_state(mut workers: GenesisWorkers) -> anyhow::Result<()> {
         };
 
         return Err(e);
-    }
-
-    Ok(())
-}
-
-fn cleanup_genesis_progress(
-    tx: &mut StorageTransaction<&mut Database<OnChain>>,
-    genesis_progress: Vec<String>,
-) -> anyhow::Result<()> {
-    for key in genesis_progress {
-        tx.storage_as_mut::<GenesisMetadata<OnChain>>()
-            .remove(&key)?;
     }
 
     Ok(())
@@ -198,12 +204,12 @@ pub fn create_genesis_block(config: &Config) -> Block {
 #[cfg(feature = "test-helpers")]
 pub async fn execute_and_commit_genesis_block(
     config: &Config,
-    original_database: &Database,
+    original_database: &CombinedDatabase,
 ) -> anyhow::Result<()> {
     let result = execute_genesis_block(config, original_database).await?;
     let importer = fuel_core_importer::Importer::new(
         config.block_importer.clone(),
-        original_database.clone(),
+        original_database.on_chain().clone(),
         (),
         (),
     );

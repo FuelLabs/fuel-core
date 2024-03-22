@@ -10,6 +10,7 @@ use crate::{
         TransactionStatuses,
     },
 };
+use fuel_core_chain_config::TableEntry;
 use fuel_core_storage::{
     iter::{
         IterDirection,
@@ -17,6 +18,7 @@ use fuel_core_storage::{
     },
     tables::Transactions,
     Result as StorageResult,
+    StorageMutate,
 };
 use fuel_core_types::{
     self,
@@ -29,6 +31,8 @@ use fuel_core_types::{
     services::txpool::TransactionStatus,
 };
 
+use super::database_description::on_chain::OnChain;
+
 impl Database {
     pub fn all_transactions(
         &self,
@@ -37,6 +41,19 @@ impl Database {
     ) -> impl Iterator<Item = StorageResult<Transaction>> + '_ {
         self.iter_all_by_start::<Transactions>(start, direction)
             .map(|res| res.map(|(_, tx)| tx))
+    }
+}
+
+impl Database<OnChain> {
+    pub fn update_transactions(
+        &mut self,
+        group: Vec<TableEntry<Transactions>>,
+    ) -> StorageResult<()> {
+        // TODO: Batch insert
+        for tx in &group {
+            StorageMutate::<Transactions>::insert(self, &tx.key, &tx.value)?;
+        }
+        Ok(())
     }
 }
 

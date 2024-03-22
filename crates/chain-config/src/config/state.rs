@@ -15,6 +15,7 @@ use fuel_core_storage::{
         ContractsRawCode,
         ContractsState,
         Messages,
+        Transactions,
     },
     ContractsAssetKey,
     ContractsStateKey,
@@ -252,6 +253,12 @@ impl AddTable<ContractsLatestUtxo> for StateConfigBuilder {
     }
 }
 
+impl AddTable<Transactions> for StateConfigBuilder {
+    fn add(&mut self, _entries: Vec<TableEntry<Transactions>>) {
+        // Do not include these for now
+    }
+}
+
 #[cfg(feature = "test-helpers")]
 impl crate::Randomize for StateConfig {
     fn randomize(mut rng: impl rand::Rng) -> Self {
@@ -361,6 +368,11 @@ impl AsTable<ContractsLatestUtxo> for StateConfig {
                 ),
             })
             .collect()
+    }
+}
+impl AsTable<Transactions> for StateConfig {
+    fn as_table(&self) -> Vec<TableEntry<Transactions>> {
+        Vec::new() // Do not include these for now
     }
 }
 

@@ -58,20 +58,22 @@ pub mod transactions;
 pub enum Column {
     /// The column id of metadata about the blockchain
     Metadata = 0,
+    /// Metadata for genesis progress
+    GenesisMetadata = 1,
     /// The column of the table that stores `true` if `owner` owns `Coin` with `coin_id`
-    OwnedCoins = 1,
+    OwnedCoins = 2,
     /// Transaction id to current status
-    TransactionStatus = 2,
+    TransactionStatus = 3,
     /// The column of the table of all `owner`'s transactions
-    TransactionsByOwnerBlockIdx = 3,
+    TransactionsByOwnerBlockIdx = 4,
     /// The column of the table that stores `true` if `owner` owns `Message` with `message_id`
-    OwnedMessageIds = 4,
+    OwnedMessageIds = 5,
     /// The column of the table that stores statistic about the blockchain.
-    Statistic = 5,
+    Statistic = 6,
     /// See [`blocks::FuelBlockIdsToHeights`]
-    FuelBlockIdsToHeights = 6,
+    FuelBlockIdsToHeights = 7,
     /// See [`ContractsInfo`](contracts::ContractsInfo)
-    ContractsInfo = 7,
+    ContractsInfo = 8,
 }
 
 impl Column {
