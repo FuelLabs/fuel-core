@@ -263,7 +263,7 @@ mod tests {
                 Coin,
                 CompressedCoin,
             },
-            message::{
+            relayer::message::{
                 Message,
                 MessageV1,
             },

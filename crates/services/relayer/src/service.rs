@@ -29,7 +29,7 @@ use fuel_core_services::{
 };
 use fuel_core_types::{
     blockchain::primitives::DaBlockHeight,
-    entities::message::Message,
+    entities::Message,
 };
 use futures::StreamExt;
 use std::{

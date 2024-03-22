@@ -1,6 +1,6 @@
 use crate::test_helpers::IntoEstimated;
 use fuel_core_types::{
-    entities::message::{
+    entities::relayer::message::{
         Message,
         MessageV1,
     },

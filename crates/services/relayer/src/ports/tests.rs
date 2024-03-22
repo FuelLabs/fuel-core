@@ -14,7 +14,13 @@ use fuel_core_storage::test_helpers::{
     MockBasic,
     MockStorage,
 };
-use fuel_core_types::entities::message::Message;
+use fuel_core_types::{
+    entities::{
+        Message,
+        RelayedTransaction,
+    },
+    services::relayer::Event,
+};
 use std::borrow::Cow;
 use test_case::test_case;
 
@@ -119,58 +125,85 @@ fn insert_always_raises_da_height_monotonically() {
 }
 
 #[test]
-fn insert_fails_for_messages_with_different_height() {
-    // Given
-    let last_height = 1u64;
-    let events: Vec<_> = (0..=last_height)
-        .map(|i| {
-            let mut message = Message::default();
-            message.set_da_height(i.into());
-            message.set_amount(i);
-            message.into()
-        })
-        .collect();
+fn insert_fails_for_events_with_different_height() {
+    fn inner_test<F: Fn(u64) -> Event>(f: F) {
+        // Given
+        let last_height = 1u64;
+        let events: Vec<_> = (0..=last_height).map(f).collect();
 
-    let mut db = MockDatabase {
-        data: Box::new(DBTx::default),
-        storage: Default::default(),
-    };
+        let mut db = MockDatabase {
+            data: Box::new(DBTx::default),
+            storage: Default::default(),
+        };
 
-    // When
-    let result = db.insert_events(&last_height.into(), &events);
+        // When
+        let result = db.insert_events(&last_height.into(), &events);
 
-    // Then
-    let err = result.expect_err(
-        "Should return error since DA message heights are different between each other",
-    );
-    assert!(err.to_string().contains("Invalid da height"));
+        // Then
+        let err = result.expect_err(
+            "Should return error since DA message heights are different between each other",
+        );
+        assert!(err.to_string().contains("Invalid da height"));
+    }
+
+    // test with messages
+    inner_test(|i| {
+        let mut message = Message::default();
+        message.set_da_height(i.into());
+        message.set_amount(i);
+        message.into()
+    });
+
+    // test with forced transactions
+    inner_test(|i| {
+        let mut transaction = RelayedTransaction::default();
+        transaction.set_da_height(i.into());
+        transaction.set_max_gas(i);
+        transaction.into()
+    })
 }
 
 #[test]
-fn insert_fails_for_messages_same_height_but_on_different_height() {
-    // Given
+fn insert_fails_for_events_same_height_but_on_different_height() {
+    fn inner_test<F: Fn(u64) -> Event>(f: F, last_height: u64) {
+        // Given
+        let events: Vec<_> = (0..=last_height).map(f).collect();
+
+        // When
+        let mut db = MockDatabase {
+            data: Box::new(DBTx::default),
+            storage: Default::default(),
+        };
+        let next_height = last_height + 1;
+        let result = db.insert_events(&next_height.into(), &events);
+
+        // Then
+        let err =
+            result.expect_err("Should return error since DA message heights and commit da heights are different");
+        assert!(err.to_string().contains("Invalid da height"));
+    }
+
     let last_height = 1u64;
-    let events: Vec<_> = (0..=last_height)
-        .map(|i| {
+    // messages
+    inner_test(
+        |i| {
             let mut message = Message::default();
             message.set_da_height(last_height.into());
             message.set_amount(i);
             message.into()
-        })
-        .collect();
-
-    // When
-    let mut db = MockDatabase {
-        data: Box::new(DBTx::default),
-        storage: Default::default(),
-    };
-    let next_height = last_height + 1;
-    let result = db.insert_events(&next_height.into(), &events);
-
-    // Then
-    let err =
-        result.expect_err("Should return error since DA message heights and commit da heights are different");
-    assert!(err.to_string().contains("Invalid da height"));
+        },
+        last_height,
+    );
+    // relayed transactions
+    inner_test(
+        |i| {
+            let mut transaction = RelayedTransaction::default();
+            transaction.set_da_height(last_height.into());
+            transaction.set_max_gas(i);
+            transaction.into()
+        },
+        last_height,
+    );
 }
 
 #[test_case(None, 0, 0; "can set DA height to 0 when there is none available")]

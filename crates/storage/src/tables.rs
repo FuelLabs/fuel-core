@@ -14,7 +14,7 @@ use fuel_core_types::{
     entities::{
         coins::coin::CompressedCoin,
         contract::ContractUtxoInfo,
-        message::Message,
+        relayer::message::Message,
     },
     fuel_tx::{
         ConsensusParameters,

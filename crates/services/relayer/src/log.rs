@@ -10,9 +10,15 @@ use ethers_core::{
 };
 use fuel_core_types::{
     blockchain::primitives::DaBlockHeight,
-    entities::message::{
-        Message,
-        MessageV1,
+    entities::{
+        relayer::{
+            message::{
+                Message,
+                MessageV1,
+            },
+            transaction::RelayedTransactionV1,
+        },
+        RelayedTransaction,
     },
     fuel_types::{
         Address,
@@ -32,6 +38,13 @@ pub struct MessageLog {
     pub da_height: DaBlockHeight,
 }
 
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct TransactionLog {
+    pub max_gas: u64,
+    pub serialized_transaction: Vec<u8>,
+    pub da_height: DaBlockHeight,
+}
+
 impl From<&MessageLog> for Message {
     fn from(message: &MessageLog) -> Self {
         MessageV1 {
@@ -46,10 +59,22 @@ impl From<&MessageLog> for Message {
     }
 }
 
+impl From<TransactionLog> for RelayedTransaction {
+    fn from(transaction: TransactionLog) -> Self {
+        RelayedTransactionV1 {
+            max_gas: transaction.max_gas,
+            serialized_transaction: transaction.serialized_transaction,
+            da_height: transaction.da_height,
+        }
+        .into()
+    }
+}
+
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub enum EthEventLog {
     // Bridge message from da side
     Message(MessageLog),
+    Transaction(TransactionLog),
     Ignored,
 }
 
@@ -63,6 +88,7 @@ impl TryFrom<&Log> for EthEventLog {
 
         let log = match log.topics[0] {
             n if n == *config::ETH_LOG_MESSAGE => {
+                // event has 3 indexed fields, so it should have 4 topics
                 if log.topics.len() != 4 {
                     return Err(anyhow!("Malformed topics for Message"))
                 }
@@ -87,6 +113,36 @@ impl TryFrom<&Log> for EthEventLog {
                     nonce,
                     sender,
                     recipient,
+                    // Safety: logs without block numbers are rejected by
+                    // FinalizationQueue::append_eth_log before the conversion to EthEventLog happens.
+                    // If block_number is none, that means the log is pending.
+                    da_height: DaBlockHeight::from(
+                        log.block_number
+                            .ok_or(anyhow!("Log missing block height"))?
+                            .as_u64(),
+                    ),
+                })
+            }
+            n if n == *config::ETH_FORCED_TX => {
+                // event has no indexed fields, so there is only 1 topic
+                if log.topics.len() != 1 {
+                    return Err(anyhow!("Malformed topics for forced Transaction"))
+                }
+
+                let raw_log = RawLog {
+                    topics: log.topics.clone(),
+                    data: log.data.to_vec(),
+                };
+
+                let event = abi::bridge::TransactionFilter::decode_log(&raw_log)
+                    .map_err(anyhow::Error::msg)?;
+
+                let max_gas = event.max_gas;
+                let serialized_transaction = event.canonically_serialized_tx;
+
+                Self::Transaction(TransactionLog {
+                    max_gas,
+                    serialized_transaction: serialized_transaction.to_vec(),
                     // Safety: logs without block numbers are rejected by
                     // FinalizationQueue::append_eth_log before the conversion to EthEventLog happens.
                     // If block_number is none, that means the log is pending.

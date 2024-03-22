@@ -750,6 +750,9 @@ where
                             .events
                             .push(ExecutorEvent::MessageImported(message));
                     }
+                    Event::Transaction(_) => {
+                        // TODO: implement handling of forced transactions in a later PR
+                    }
                 }
             }
         }

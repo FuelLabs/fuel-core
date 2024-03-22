@@ -33,7 +33,7 @@ use async_graphql::{
 };
 use fuel_core_types::entities;
 
-pub struct Message(pub(crate) entities::message::Message);
+pub struct Message(pub(crate) entities::relayer::message::Message);
 
 #[Object]
 impl Message {
@@ -158,7 +158,7 @@ impl MessageQuery {
         Ok(status.into())
     }
 }
-pub struct MerkleProof(pub(crate) entities::message::MerkleProof);
+pub struct MerkleProof(pub(crate) entities::relayer::message::MerkleProof);
 
 #[Object]
 impl MerkleProof {
@@ -176,7 +176,7 @@ impl MerkleProof {
     }
 }
 
-pub struct MessageProof(pub(crate) entities::message::MessageProof);
+pub struct MessageProof(pub(crate) entities::relayer::message::MessageProof);
 
 #[Object]
 impl MessageProof {
@@ -217,19 +217,19 @@ impl MessageProof {
     }
 }
 
-impl From<entities::message::Message> for Message {
-    fn from(message: entities::message::Message) -> Self {
+impl From<entities::relayer::message::Message> for Message {
+    fn from(message: entities::relayer::message::Message) -> Self {
         Message(message)
     }
 }
 
-impl From<entities::message::MerkleProof> for MerkleProof {
-    fn from(proof: entities::message::MerkleProof) -> Self {
+impl From<entities::relayer::message::MerkleProof> for MerkleProof {
+    fn from(proof: entities::relayer::message::MerkleProof) -> Self {
         MerkleProof(proof)
     }
 }
 
-pub struct MessageStatus(pub(crate) entities::message::MessageStatus);
+pub struct MessageStatus(pub(crate) entities::relayer::message::MessageStatus);
 
 #[derive(Enum, Copy, Clone, Eq, PartialEq)]
 enum MessageState {
@@ -242,15 +242,15 @@ enum MessageState {
 impl MessageStatus {
     async fn state(&self) -> MessageState {
         match self.0.state {
-            entities::message::MessageState::Unspent => MessageState::Unspent,
-            entities::message::MessageState::Spent => MessageState::Spent,
-            entities::message::MessageState::NotFound => MessageState::NotFound,
+            entities::relayer::message::MessageState::Unspent => MessageState::Unspent,
+            entities::relayer::message::MessageState::Spent => MessageState::Spent,
+            entities::relayer::message::MessageState::NotFound => MessageState::NotFound,
         }
     }
 }
 
-impl From<entities::message::MessageStatus> for MessageStatus {
-    fn from(status: entities::message::MessageStatus) -> Self {
+impl From<entities::relayer::message::MessageStatus> for MessageStatus {
+    fn from(status: entities::relayer::message::MessageStatus) -> Self {
         MessageStatus(status)
     }
 }

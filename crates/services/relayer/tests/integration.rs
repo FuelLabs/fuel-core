@@ -1,8 +1,14 @@
 #![cfg(feature = "test-helpers")]
 
-use ethers_core::types::U256;
+use ethers_core::types::{
+    Log,
+    U256,
+};
 use fuel_core_relayer::{
-    bridge::MessageSentFilter,
+    bridge::{
+        MessageSentFilter,
+        TransactionFilter,
+    },
     mock_db::MockDb,
     new_service_test,
     ports::RelayerDb,
@@ -90,12 +96,8 @@ async fn stop_service_at_the_middle() {
 }
 
 #[tokio::test(start_paused = true)]
-async fn can_get_messages() {
-    let mock_db = MockDb::default();
-    let eth_node = MockMiddleware::default();
-
-    let config = Config::default();
-    let contract_address = config.eth_v2_listening_contracts[0];
+#[allow(non_snake_case)]
+async fn relayer__downloads_message_logs_to_events_table() {
     let message = |nonce: u64, block_number: u64| {
         let message = MessageSentFilter {
             nonce: U256::from_dec_str(nonce.to_string().as_str())
@@ -103,24 +105,48 @@ async fn can_get_messages() {
             ..Default::default()
         };
         let mut log = message.into_log();
-        log.address = contract_address;
         log.block_number = Some(block_number.into());
         log
     };
 
+    // setup mock data
     let logs = vec![message(1, 3), message(2, 5)];
     let expected_messages: Vec<_> = logs.iter().map(|l| l.to_msg()).collect();
-    eth_node.update_data(|data| data.logs_batch = vec![logs.clone()]);
-    // Setup the eth node with a block high enough that there
-    // will be some finalized blocks.
-    eth_node.update_data(|data| data.best_block.number = Some(100.into()));
-    let relayer = new_service_test(eth_node, mock_db.clone(), config);
-    relayer.start_and_await().await.unwrap();
-
-    relayer.shared.await_synced().await.unwrap();
-
+    let mut ctx = TestContext::new();
+    // given logs
+    ctx.given_logs(logs);
+    // when the relayer runs
+    let mock_db = ctx.when_relayer_syncs().await;
+    // expect several messages in the database
     for msg in expected_messages {
         assert_eq!(mock_db.get_message(msg.id()).unwrap(), msg);
+    }
+}
+
+#[tokio::test(start_paused = true)]
+#[allow(non_snake_case)]
+async fn relayer__downloads_transaction_logs_to_events_table() {
+    let transaction = |max_gas: u64, block_number: u64| {
+        let transaction = TransactionFilter {
+            max_gas,
+            ..Default::default()
+        };
+        let mut log = transaction.into_log();
+        log.block_number = Some(block_number.into());
+        log
+    };
+
+    // setup mock data
+    let logs = vec![transaction(2, 1), transaction(3, 2)];
+    let expected_transactions: Vec<_> = logs.iter().map(|l| l.to_tx()).collect();
+    let mut ctx = TestContext::new();
+    // given logs
+    ctx.given_logs(logs);
+    // when the relayer runs
+    let mock_db = ctx.when_relayer_syncs().await;
+    // expect several transaction events in the database
+    for tx in expected_transactions {
+        assert_eq!(mock_db.get_transaction(&tx.id()).unwrap(), tx);
     }
 }
 
@@ -160,4 +186,43 @@ async fn deploy_height_is_set() {
     relayer.shared.await_synced().await.unwrap();
     rx.await.unwrap();
     assert_eq!(*mock_db.get_finalized_da_height().unwrap(), 54);
+}
+
+struct TestContext {
+    mock_db: MockDb,
+    eth_node: MockMiddleware,
+    config: Config,
+}
+
+impl TestContext {
+    fn new() -> Self {
+        Self {
+            mock_db: MockDb::default(),
+            eth_node: MockMiddleware::default(),
+            config: Config::default(),
+        }
+    }
+
+    fn given_logs(&mut self, mut logs: Vec<Log>) {
+        let contract_address = self.config.eth_v2_listening_contracts[0];
+        for log in &mut logs {
+            log.address = contract_address;
+        }
+
+        self.eth_node
+            .update_data(|data| data.logs_batch = vec![logs.clone()]);
+        // Setup the eth node with a block high enough that there
+        // will be some finalized blocks.
+        self.eth_node
+            .update_data(|data| data.best_block.number = Some(100.into()));
+    }
+
+    async fn when_relayer_syncs(self) -> MockDb {
+        let relayer = new_service_test(self.eth_node, self.mock_db.clone(), self.config);
+        relayer.start_and_await().await.unwrap();
+
+        relayer.shared.await_synced().await.unwrap();
+
+        self.mock_db
+    }
 }
