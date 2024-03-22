@@ -100,7 +100,7 @@ mod tests {
                     },
                 };
                 let block = PartialFuelBlock::new(header, vec![]);
-                block.generate(&[])
+                block.generate(&[], Default::default())
             })
             .collect::<Vec<_>>();
 
