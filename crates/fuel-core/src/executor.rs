@@ -132,7 +132,6 @@ mod tests {
         Rng,
         SeedableRng,
     };
-    use std::sync::Arc;
 
     #[derive(Clone, Debug)]
     struct DisabledRelayer;
@@ -2964,10 +2963,7 @@ mod tests {
 
             // when
             let (result, _) = producer
-                .execute_without_commit(
-                    ExecutionTypes::Production(block.into()),
-                    Default::default(),
-                )
+                .execute_without_commit(ExecutionTypes::Production(block.into()))
                 .unwrap()
                 .into();
 
