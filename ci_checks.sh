@@ -3,7 +3,7 @@
 # The script runs almost all CI checks locally.
 #
 # Requires installed:
-# - Rust `1.77.0`
+# - Rust `1.75.0`
 # - Nightly rust formatter
 # - `cargo install cargo-sort`
 # - `npm install prettier prettier-plugin-toml`
