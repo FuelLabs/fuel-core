@@ -139,7 +139,7 @@ impl<ViewProvider> TxPool<ViewProvider> {
             for remove in removed.iter() {
                 self.remove_tx(&remove.id());
             }
-            return removed;
+            return removed
         }
         Vec::new()
     }
@@ -256,7 +256,7 @@ impl<ViewProvider> TxPool<ViewProvider> {
             tokio::time::Instant::now().checked_sub(self.config.transaction_ttl)
         else {
             // TTL is so big that we don't need to prune any transactions
-            return vec![];
+            return vec![]
         };
 
         let mut result = vec![];
@@ -267,7 +267,7 @@ impl<ViewProvider> TxPool<ViewProvider> {
                 let removed = self.remove_inner(&oldest_tx);
                 result.extend(removed.into_iter());
             } else {
-                break;
+                break
             }
         }
 
@@ -280,10 +280,10 @@ impl<ViewProvider> TxPool<ViewProvider> {
                 Input::CoinSigned(CoinSigned { utxo_id, owner, .. })
                 | Input::CoinPredicate(CoinPredicate { utxo_id, owner, .. }) => {
                     if self.config.blacklist.contains_coin(utxo_id) {
-                        return Err(Error::BlacklistedUTXO(*utxo_id));
+                        return Err(Error::BlacklistedUTXO(*utxo_id))
                     }
                     if self.config.blacklist.contains_address(owner) {
-                        return Err(Error::BlacklistedOwner(*owner));
+                        return Err(Error::BlacklistedOwner(*owner))
                     }
                 }
                 Input::Contract(contract) => {
@@ -292,7 +292,7 @@ impl<ViewProvider> TxPool<ViewProvider> {
                         .blacklist
                         .contains_contract(&contract.contract_id)
                     {
-                        return Err(Error::BlacklistedContract(contract.contract_id));
+                        return Err(Error::BlacklistedContract(contract.contract_id))
                     }
                 }
                 Input::MessageCoinSigned(MessageCoinSigned {
@@ -320,13 +320,13 @@ impl<ViewProvider> TxPool<ViewProvider> {
                     ..
                 }) => {
                     if self.config.blacklist.contains_message(nonce) {
-                        return Err(Error::BlacklistedMessage(*nonce));
+                        return Err(Error::BlacklistedMessage(*nonce))
                     }
                     if self.config.blacklist.contains_address(sender) {
-                        return Err(Error::BlacklistedOwner(*sender));
+                        return Err(Error::BlacklistedOwner(*sender))
                     }
                     if self.config.blacklist.contains_address(recipient) {
-                        return Err(Error::BlacklistedOwner(*recipient));
+                        return Err(Error::BlacklistedOwner(*recipient))
                     }
                 }
             }
@@ -368,7 +368,7 @@ where
         self.check_blacklisting(tx.as_ref())?;
 
         if !tx.is_computed() {
-            return Err(Error::NoMetadata);
+            return Err(Error::NoMetadata)
         }
 
         // verify max gas is less than block limit
@@ -376,11 +376,11 @@ where
             return Err(Error::NotInsertedMaxGasLimit {
                 tx_gas: tx.max_gas(),
                 block_limit: self.config.chain_config.block_gas_limit,
-            });
+            })
         }
 
         if self.by_hash.contains_key(&tx.id()) {
-            return Err(Error::NotInsertedTxKnown);
+            return Err(Error::NotInsertedTxKnown)
         }
 
         let mut max_limit_hit = false;
@@ -390,7 +390,7 @@ where
             // limit is hit, check if we can push out lowest priced tx
             let lowest_tip = self.by_tip.lowest_value().unwrap_or_default();
             if lowest_tip >= tx.tip() {
-                return Err(Error::NotInsertedLimitHit);
+                return Err(Error::NotInsertedLimitHit)
             }
         }
         if self.config.metrics {
@@ -508,7 +508,7 @@ pub async fn check_single_tx<GasPrice: GasPriceProvider>(
     gas_price_provider: &GasPrice,
 ) -> Result<Checked<Transaction>, Error> {
     if tx.is_mint() {
-        return Err(Error::NotSupportedTransactionType);
+        return Err(Error::NotSupportedTransactionType)
     }
 
     let tx: Checked<Transaction> = if config.utxo_validation {
