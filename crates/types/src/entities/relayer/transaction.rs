@@ -50,6 +50,7 @@ pub struct RelayedTransactionV1 {
 pub struct RelayedTransactionId(Bytes32);
 
 impl RelayedTransaction {
+    #[cfg(any(test, feature = "test-helpers"))]
     /// Get the DA height that originated this transaction from L1
     pub fn da_height(&self) -> DaBlockHeight {
         match self {
@@ -57,6 +58,7 @@ impl RelayedTransaction {
         }
     }
 
+    #[cfg(any(test, feature = "test-helpers"))]
     /// Set the da height
     pub fn set_da_height(&mut self, height: DaBlockHeight) {
         match self {
@@ -66,6 +68,7 @@ impl RelayedTransaction {
         }
     }
 
+    #[cfg(any(test, feature = "test-helpers"))]
     /// Get the max gas
     pub fn max_gas(&self) -> u64 {
         match self {
@@ -73,6 +76,7 @@ impl RelayedTransaction {
         }
     }
 
+    #[cfg(any(test, feature = "test-helpers"))]
     /// Set the max gas
     pub fn set_max_gas(&mut self, max_gas: u64) {
         match self {
@@ -82,6 +86,7 @@ impl RelayedTransaction {
         }
     }
 
+    #[cfg(any(test, feature = "test-helpers"))]
     /// Get the canonically serialized transaction
     pub fn serialized_transaction(&self) -> &[u8] {
         match self {
@@ -89,6 +94,7 @@ impl RelayedTransaction {
         }
     }
 
+    #[cfg(any(test, feature = "test-helpers"))]
     /// Set the serialized transaction bytes
     pub fn set_serialized_transaction(&mut self, serialized_bytes: Vec<u8>) {
         match self {
