@@ -167,7 +167,7 @@ mod tests {
         database: Database,
         config: Config,
     ) -> Executor<Database, DisabledRelayer> {
-        Executor::new(database, DisabledRelayer, Arc::new(config))
+        Executor::new(database, DisabledRelayer, config)
     }
 
     pub(crate) fn setup_executable_script() -> (Create, Script) {
@@ -2835,7 +2835,7 @@ mod tests {
             on_chain: Database<OnChain>,
             relayer: Database<Relayer>,
         ) -> Executor<Database<OnChain>, Database<Relayer>> {
-            Executor::new(on_chain, relayer, Arc::new(Default::default()))
+            Executor::new(on_chain, relayer, Default::default())
         }
 
         struct Input {

@@ -4,7 +4,8 @@ use fuel_core_types::fuel_tx::ConsensusParameters;
 #[derive(Clone, Debug, Default)]
 pub struct Config {
     /// Network-wide common parameters used for validating the chain.
-    /// The executor already has these parameters, and this field allows override the used value.
+    /// The executor already has these parameters, and this field allows us
+    /// to override the existing value.
     pub consensus_parameters: ConsensusParameters,
     /// Print execution backtraces if transaction execution reverts.
     pub backtrace: bool,

@@ -56,12 +56,12 @@ impl<S, R> Executor<S, R> {
     pub fn new(
         storage_view_provider: S,
         relayer_view_provider: R,
-        config: Arc<Config>,
+        config: Config,
     ) -> Self {
         Self {
             storage_view_provider,
             relayer_view_provider,
-            config,
+            config: Arc::new(config),
             #[cfg(feature = "wasm-executor")]
             engine: crate::DEFAULT_ENGINE.clone(),
             #[cfg(feature = "wasm-executor")]

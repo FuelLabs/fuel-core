@@ -89,7 +89,7 @@ impl ExecutorAdapter {
         relayer_database: Database<Relayer>,
         config: fuel_core_upgradable_executor::config::Config,
     ) -> Self {
-        let executor = Executor::new(database, relayer_database, Arc::new(config));
+        let executor = Executor::new(database, relayer_database, config);
         Self {
             executor: Arc::new(executor),
         }
