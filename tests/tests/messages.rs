@@ -519,7 +519,7 @@ async fn can_get_message_proof() {
                 .map(Bytes32::from)
                 .collect();
             assert!(verify_merkle(
-                result.message_block_header.message_receipt_root,
+                result.message_block_header.message_outbox_root,
                 &generated_message_id,
                 message_proof_index,
                 &message_proof_set,
@@ -539,7 +539,7 @@ async fn can_get_message_proof() {
 
             // Check the root matches the proof and the root on the header.
             assert_eq!(
-                <[u8; 32]>::from(result.message_block_header.message_receipt_root),
+                <[u8; 32]>::from(result.message_block_header.message_outbox_root),
                 expected_root
             );
 

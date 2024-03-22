@@ -13,7 +13,8 @@ query($height: U32) {
       transactionsCount
       messageReceiptCount
       transactionsRoot
-      messageReceiptRoot
+      messageOutboxRoot
+      eventInboxRoot
       height
       prevRoot
       time
