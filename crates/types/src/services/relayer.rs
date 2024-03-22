@@ -16,7 +16,7 @@ use std::ops::Deref;
 pub enum Event {
     /// The message event which was sent to the bridge.
     Message(Message),
-    /// A transaction that was forced included from L1
+    /// A transaction that was forcibly included from L1
     Transaction(RelayedTransaction),
 }
 
