@@ -99,16 +99,16 @@ impl RelayedTransaction {
     }
 
     /// The hash of the relayed transaction
-    pub fn relayed_id(&self) -> RelayedTransactionId {
+    pub fn id(&self) -> RelayedTransactionId {
         match &self {
-            RelayedTransaction::V1(tx) => tx.relayed_transaction_id(),
+            RelayedTransaction::V1(tx) => tx.id(),
         }
     }
 }
 
 impl RelayedTransactionV1 {
     /// The hash of the relayed transaction (max_gas (big endian) || serialized_transaction)
-    pub fn relayed_transaction_id(&self) -> RelayedTransactionId {
+    pub fn id(&self) -> RelayedTransactionId {
         let hasher = fuel_crypto::Hasher::default()
             .chain(self.max_gas.to_be_bytes())
             .chain(self.serialized_transaction.as_slice());

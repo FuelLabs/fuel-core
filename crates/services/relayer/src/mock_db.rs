@@ -85,7 +85,7 @@ impl RelayerDb for MockDb {
                     m.transactions
                         .entry(transaction.da_height())
                         .or_default()
-                        .insert(transaction.relayed_id(), transaction.clone());
+                        .insert(transaction.id(), transaction.clone());
                 }
             }
         }

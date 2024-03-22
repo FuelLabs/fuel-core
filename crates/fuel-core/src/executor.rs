@@ -3135,7 +3135,7 @@ mod tests {
                 transaction.set_da_height(da_height.into());
                 transaction.set_max_gas(da_height);
                 transaction.set_serialized_transaction(da_height.to_be_bytes().to_vec());
-                root_calculator.push(Bytes32::from(transaction.relayed_id()).as_ref());
+                root_calculator.push(Bytes32::from(transaction.id()).as_ref());
                 // add events to relayer
                 add_events_to_relayer(
                     &mut relayer_db,
