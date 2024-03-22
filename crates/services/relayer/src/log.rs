@@ -88,6 +88,7 @@ impl TryFrom<&Log> for EthEventLog {
 
         let log = match log.topics[0] {
             n if n == *config::ETH_LOG_MESSAGE => {
+                // event has 3 indexed fields, so it should have 4 topics
                 if log.topics.len() != 4 {
                     return Err(anyhow!("Malformed topics for Message"))
                 }
@@ -123,6 +124,7 @@ impl TryFrom<&Log> for EthEventLog {
                 })
             }
             n if n == *config::ETH_FORCED_TX => {
+                // event has no indexed fields, so there is only 1 topic
                 if log.topics.len() != 1 {
                     return Err(anyhow!("Malformed topics for forced Transaction"))
                 }
