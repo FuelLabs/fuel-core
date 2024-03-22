@@ -469,7 +469,11 @@ type Header {
 	"""
 	Merkle root of message receipts in this block.
 	"""
-	messageReceiptRoot: Bytes32!
+	messageOutboxRoot: Bytes32!
+	"""
+	Merkle root of inbox events in this block.
+	"""
+	eventInboxRoot: Bytes32!
 	"""
 	Fuel block height.
 	"""

@@ -53,6 +53,7 @@ use fuel_core_types::{
         RegId,
         Word,
     },
+    fuel_merkle::binary::root_calculator::MerkleRootCalculator,
     fuel_tx::{
         field::{
             InputContract,
@@ -304,6 +305,7 @@ pub struct ExecutionData {
     events: Vec<ExecutorEvent>,
     changes: Changes,
     pub skipped_transactions: Vec<(TxId, ExecutorError)>,
+    event_inbox_root: Bytes32,
 }
 
 /// Per-block execution options
@@ -499,12 +501,13 @@ where
             skipped_transactions,
             events,
             changes,
+            event_inbox_root,
             ..
         } = execution_data;
 
         // Now that the transactions have been executed, generate the full header.
 
-        let block = block.generate(&message_ids[..]);
+        let block = block.generate(&message_ids[..], event_inbox_root);
 
         let finalized_block_id = block.id();
 
@@ -557,6 +560,7 @@ where
             events: Vec::new(),
             changes: Default::default(),
             skipped_transactions: Vec::new(),
+            event_inbox_root: Default::default(),
         };
         let execution_data = &mut data;
 
@@ -724,6 +728,8 @@ where
             return Err(ExecutorError::DaHeightExceededItsLimit)
         };
 
+        let mut root_calculator = MerkleRootCalculator::new();
+
         for da_height in next_unprocessed_da_height..=header.da_height.0 {
             let da_height = da_height.into();
             let events = self
@@ -731,6 +737,7 @@ where
                 .get_events(&da_height)
                 .map_err(|err| ExecutorError::RelayerError(err.into()))?;
             for event in events {
+                root_calculator.push(event.hash().as_ref());
                 match event {
                     Event::Message(message) => {
                         if message.da_height() != da_height {
@@ -746,6 +753,8 @@ where
                 }
             }
         }
+
+        execution_data.event_inbox_root = root_calculator.root().into();
 
         Ok(())
     }

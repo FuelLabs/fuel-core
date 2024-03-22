@@ -3,7 +3,9 @@
 use crate::{
     blockchain::primitives::DaBlockHeight,
     entities::message::Message,
+    fuel_types::Bytes32,
 };
+use std::ops::Deref;
 
 /// The event that may come from the relayer.
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -18,6 +20,13 @@ impl Event {
     pub fn da_height(&self) -> DaBlockHeight {
         match self {
             Event::Message(message) => message.da_height(),
+        }
+    }
+
+    /// Get hashed value of the event.
+    pub fn hash(&self) -> Bytes32 {
+        match self {
+            Event::Message(message) => (*message.id().deref()).into(),
         }
     }
 }
