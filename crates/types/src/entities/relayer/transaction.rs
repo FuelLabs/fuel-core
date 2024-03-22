@@ -50,7 +50,13 @@ pub struct RelayedTransactionV1 {
 pub struct RelayedTransactionId(Bytes32);
 
 impl RelayedTransaction {
-    #[cfg(any(test, feature = "test-helpers"))]
+    /// The hash of the relayed transaction
+    pub fn id(&self) -> RelayedTransactionId {
+        match &self {
+            RelayedTransaction::V1(tx) => tx.id(),
+        }
+    }
+
     /// Get the DA height that originated this transaction from L1
     pub fn da_height(&self) -> DaBlockHeight {
         match self {
@@ -101,13 +107,6 @@ impl RelayedTransaction {
             RelayedTransaction::V1(transaction) => {
                 transaction.serialized_transaction = serialized_bytes;
             }
-        }
-    }
-
-    /// The hash of the relayed transaction
-    pub fn id(&self) -> RelayedTransactionId {
-        match &self {
-            RelayedTransaction::V1(tx) => tx.id(),
         }
     }
 }
