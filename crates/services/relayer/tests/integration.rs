@@ -1,4 +1,5 @@
 #![cfg(feature = "test-helpers")]
+#![allow(non_snake_case)]
 
 use ethers_core::types::{
     Log,
@@ -96,19 +97,7 @@ async fn stop_service_at_the_middle() {
 }
 
 #[tokio::test(start_paused = true)]
-#[allow(non_snake_case)]
 async fn relayer__downloads_message_logs_to_events_table() {
-    let message = |nonce: u64, block_number: u64| {
-        let message = MessageSentFilter {
-            nonce: U256::from_dec_str(nonce.to_string().as_str())
-                .expect("Should convert to U256"),
-            ..Default::default()
-        };
-        let mut log = message.into_log();
-        log.block_number = Some(block_number.into());
-        log
-    };
-
     // setup mock data
     let logs = vec![message(1, 3), message(2, 5)];
     let expected_messages: Vec<_> = logs.iter().map(|l| l.to_msg()).collect();
@@ -124,30 +113,87 @@ async fn relayer__downloads_message_logs_to_events_table() {
 }
 
 #[tokio::test(start_paused = true)]
-#[allow(non_snake_case)]
 async fn relayer__downloads_transaction_logs_to_events_table() {
-    let transaction = |max_gas: u64, block_number: u64| {
-        let transaction = TransactionFilter {
-            max_gas,
-            ..Default::default()
-        };
-        let mut log = transaction.into_log();
-        log.block_number = Some(block_number.into());
-        log
-    };
-
     // setup mock data
-    let logs = vec![transaction(2, 1), transaction(3, 2)];
+    let block_one_tx = transaction(2, 1, 0);
+    let block_two_tx = transaction(3, 2, 0);
+    let logs = vec![block_one_tx, block_two_tx];
     let expected_transactions: Vec<_> = logs.iter().map(|l| l.to_tx()).collect();
     let mut ctx = TestContext::new();
     // given logs
     ctx.given_logs(logs);
     // when the relayer runs
     let mock_db = ctx.when_relayer_syncs().await;
-    // expect several transaction events in the database
-    for tx in expected_transactions {
-        assert_eq!(mock_db.get_transaction(&tx.id()).unwrap(), tx);
+    // then
+    let block_one_actual = mock_db
+        .get_transactions_for_block(1u64.into())
+        .pop()
+        .unwrap();
+    assert_eq!(block_one_actual, expected_transactions[0]);
+    let block_two_actual = mock_db
+        .get_transactions_for_block(2u64.into())
+        .pop()
+        .unwrap();
+    assert_eq!(block_two_actual, expected_transactions[1]);
+}
+
+#[tokio::test(start_paused = true)]
+async fn relayer__downloaded_transaction_logs_will_always_be_stored_in_block_index_order()
+{
+    let blocks = vec![1u64, 2, 3, 4];
+    let ordered_logs: Vec<Log> = vec![
+        // one
+        transaction(2, 1, 0),
+        transaction(4, 1, 1),
+        transaction(8, 1, 2),
+        // two
+        transaction(3, 2, 0),
+        transaction(7, 2, 1),
+        // three
+        transaction(4, 3, 0),
+        transaction(9, 3, 1),
+        transaction(2, 3, 2),
+        // four
+        transaction(3, 4, 0),
+        transaction(7, 4, 1),
+        transaction(5, 4, 2),
+    ];
+    let expected_transactions: Vec<_> = ordered_logs.iter().map(|l| l.to_tx()).collect();
+    let mut ctx = TestContext::new();
+
+    // given
+    let shuffled_logs = ordered_logs.iter().cloned().rev().collect();
+    ctx.given_logs(shuffled_logs);
+    // when
+    let mock_db = ctx.when_relayer_syncs().await;
+    // then
+    let mut actual = Vec::new();
+    for block in blocks {
+        actual.extend(mock_db.get_transactions_for_block(block.into()));
     }
+    assert_eq!(actual, expected_transactions);
+}
+
+fn message(nonce: u64, block_number: u64) -> Log {
+    let message = MessageSentFilter {
+        nonce: U256::from_dec_str(nonce.to_string().as_str())
+            .expect("Should convert to U256"),
+        ..Default::default()
+    };
+    let mut log = message.into_log();
+    log.block_number = Some(block_number.into());
+    log
+}
+
+fn transaction(max_gas: u64, block_number: u64, block_index: u64) -> Log {
+    let transaction = TransactionFilter {
+        max_gas,
+        ..Default::default()
+    };
+    let mut log = transaction.into_log();
+    log.block_number = Some(block_number.into());
+    log.log_index = Some(block_index.into());
+    log
 }
 
 #[tokio::test(start_paused = true)]
