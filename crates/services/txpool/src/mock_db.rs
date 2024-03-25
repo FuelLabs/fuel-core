@@ -88,7 +88,7 @@ impl TxPoolDb for MockDb {
     }
 
     fn message(&self, id: &Nonce) -> StorageResult<Option<Message>> {
-        Ok(self.data.lock().unwrap().messages.get(id).map(Clone::clone))
+        Ok(self.data.lock().unwrap().messages.get(id).cloned())
     }
 
     fn is_message_spent(&self, id: &Nonce) -> StorageResult<bool> {

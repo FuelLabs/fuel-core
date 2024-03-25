@@ -11,7 +11,6 @@ use fuel_core_storage::{
         WriteTransaction,
     },
     Mappable,
-    StorageAsMut,
     StorageAsRef,
     StorageInspect,
     StorageMutate,
@@ -56,8 +55,12 @@ impl<Logic, GroupGenerator, DbDesc: DatabaseDescription, Item>
 where
     Logic: ProcessState<Item = Item, DbDesc = DbDesc>,
     GroupGenerator: IntoIterator<Item = anyhow::Result<Group<Item>>>,
-    GenesisMetadata<DbDesc>:
-        TableWithBlueprint<Column = DbDesc::Column, Value = usize, OwnedValue = usize>,
+    GenesisMetadata<DbDesc>: TableWithBlueprint<
+        Column = DbDesc::Column,
+        Key = str,
+        Value = usize,
+        OwnedValue = usize,
+    >,
     Database<DbDesc>:
         StorageInspect<GenesisMetadata<DbDesc>> + WriteTransaction + Modifiable,
     for<'a> StructuredStorage<InMemoryTransaction<&'a mut Database<DbDesc>>>:
