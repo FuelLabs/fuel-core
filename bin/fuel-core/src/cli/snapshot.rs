@@ -7,29 +7,34 @@ use clap::{
 use fuel_core::{
     chain_config::ChainConfig,
     combined_database::CombinedDatabase,
-    database::SnapshotDataSource,
+    database::{
+        database_description::{
+            on_chain::OnChain,
+            DatabaseDescription,
+        },
+        Database,
+    },
     types::fuel_types::ContractId,
 };
 use fuel_core_chain_config::{
+    AddTable,
     SnapshotWriter,
+    StateConfigBuilder,
+    TableEntry,
     MAX_GROUP_SIZE,
 };
 use fuel_core_storage::{
+    blueprint::BlueprintInspect,
     iter::IterDirection,
+    structured_storage::TableWithBlueprint,
     tables::{
         Coins,
         ContractsAssets,
         ContractsLatestUtxo,
         ContractsRawCode,
         ContractsState,
-        FuelBlocks,
         Messages,
     },
-    Result as StorageResult,
-};
-use fuel_core_types::{
-    blockchain::block::Block,
-    fuel_tx::Bytes32,
 };
 use itertools::Itertools;
 use std::path::{
@@ -149,33 +154,32 @@ pub fn exec(command: Command) -> anyhow::Result<()> {
             let encoding = encoding_command
                 .map(|f| f.encoding())
                 .unwrap_or_else(|| Encoding::Json);
-            full_snapshot(chain_config, &output_dir, encoding, &db)
+            full_snapshot(chain_config, &output_dir, encoding, db)
         }
         SubCommands::Contract { contract_id } => {
-            contract_snapshot(&db, contract_id, &output_dir)
+            contract_snapshot(db, contract_id, &output_dir)
         }
     }
 }
 
 fn contract_snapshot(
-    db: impl SnapshotDataSource,
+    db: CombinedDatabase,
     contract_id: ContractId,
     output_dir: &Path,
 ) -> Result<(), anyhow::Error> {
     std::fs::create_dir_all(output_dir)?;
 
     let code = db
-        .on_chain_entries::<ContractsRawCode>(
-            Some(contract_id.as_ref()),
-            IterDirection::Forward,
-        )
+        .on_chain()
+        .entries::<ContractsRawCode>(Some(contract_id.as_ref()), IterDirection::Forward)
         .next()
         .ok_or_else(|| {
             anyhow::anyhow!("contract code not found! id: {:?}", contract_id)
         })??;
 
     let utxo = db
-        .on_chain_entries::<ContractsLatestUtxo>(
+        .on_chain()
+        .entries::<ContractsLatestUtxo>(
             Some(contract_id.as_ref()),
             IterDirection::Forward,
         )
@@ -185,20 +189,16 @@ fn contract_snapshot(
         })??;
 
     let state = db
-        .on_chain_entries::<ContractsState>(
-            Some(contract_id.as_ref()),
-            IterDirection::Forward,
-        )
+        .on_chain()
+        .entries::<ContractsState>(Some(contract_id.as_ref()), IterDirection::Forward)
         .try_collect()?;
 
     let balance = db
-        .on_chain_entries::<ContractsAssets>(
-            Some(contract_id.as_ref()),
-            IterDirection::Forward,
-        )
+        .on_chain()
+        .entries::<ContractsAssets>(Some(contract_id.as_ref()), IterDirection::Forward)
         .try_collect()?;
 
-    let block = get_last_block(&db)?;
+    let block = db.on_chain().latest_block()?;
     let mut writer = SnapshotWriter::json(output_dir);
 
     writer.write(vec![code])?;
@@ -215,7 +215,7 @@ fn full_snapshot(
     prev_chain_config: Option<PathBuf>,
     output_dir: &Path,
     encoding: Encoding,
-    db: impl SnapshotDataSource,
+    db: CombinedDatabase,
 ) -> Result<(), anyhow::Error> {
     std::fs::create_dir_all(output_dir)?;
 
@@ -231,50 +231,37 @@ fn full_snapshot(
     writer.write_chain_config(&prev_chain_config)?;
 
     fn write<T>(
-        data: impl Iterator<Item = StorageResult<T>>,
+        db: &CombinedDatabase,
         group_size: usize,
-        mut write: impl FnMut(Vec<T>) -> anyhow::Result<()>,
-    ) -> anyhow::Result<()> {
-        data.chunks(group_size)
+        writer: &mut SnapshotWriter,
+    ) -> anyhow::Result<()>
+    where
+        T: TableWithBlueprint<Column = <OnChain as DatabaseDescription>::Column>,
+        T::Blueprint: BlueprintInspect<T, Database>,
+        TableEntry<T>: serde::Serialize,
+        StateConfigBuilder: AddTable<T>,
+    {
+        db.on_chain()
+            .entries::<T>(None, IterDirection::Forward)
+            .chunks(group_size)
             .into_iter()
-            .try_for_each(|chunk| write(chunk.try_collect()?))
+            .try_for_each(|chunk| writer.write(chunk.try_collect()?))
     }
     let group_size = encoding.group_size().unwrap_or(MAX_GROUP_SIZE);
 
-    let coins = db.on_chain_entries::<Coins>(None, IterDirection::Forward);
-    write(coins, group_size, |chunk| writer.write(chunk))?;
+    write::<Coins>(&db, group_size, &mut writer)?;
+    write::<Messages>(&db, group_size, &mut writer)?;
+    write::<ContractsRawCode>(&db, group_size, &mut writer)?;
+    write::<ContractsLatestUtxo>(&db, group_size, &mut writer)?;
+    write::<ContractsState>(&db, group_size, &mut writer)?;
+    write::<ContractsAssets>(&db, group_size, &mut writer)?;
 
-    let messages = db.on_chain_entries::<Messages>(None, IterDirection::Forward);
-    write(messages, group_size, |chunk| writer.write(chunk))?;
-
-    let code = db.on_chain_entries::<ContractsRawCode>(None, IterDirection::Forward);
-    write(code, group_size, |chunk| writer.write(chunk))?;
-
-    let utxos = db.on_chain_entries::<ContractsLatestUtxo>(None, IterDirection::Forward);
-    write(utxos, group_size, |chunk| writer.write(chunk))?;
-
-    let contract_states =
-        db.on_chain_entries::<ContractsState>(None, IterDirection::Forward);
-    write(contract_states, group_size, |chunk| writer.write(chunk))?;
-
-    let contract_balances =
-        db.on_chain_entries::<ContractsAssets>(None, IterDirection::Forward);
-    write(contract_balances, group_size, |chunk| writer.write(chunk))?;
-
-    let block = get_last_block(db)?;
+    let block = db.on_chain().latest_block()?;
     writer.write_block_data(*block.header().height(), block.header().da_height)?;
 
     writer.close()?;
 
     Ok(())
-}
-
-fn get_last_block(db: impl SnapshotDataSource) -> anyhow::Result<Block<Bytes32>> {
-    Ok(db
-        .on_chain_entries::<FuelBlocks>(None, IterDirection::Reverse)
-        .next()
-        .ok_or_else(|| anyhow::anyhow!("no block found! Cannot determine block height"))??
-        .value)
 }
 
 fn load_chain_config(

@@ -217,8 +217,7 @@ impl SnapshotWriter {
     pub fn write<T>(&mut self, elements: Vec<TableEntry<T>>) -> anyhow::Result<()>
     where
         T: TableWithBlueprint,
-        T::OwnedValue: serde::Serialize,
-        T::OwnedKey: serde::Serialize,
+        TableEntry<T>: serde::Serialize,
         StateConfigBuilder: AddTable<T>,
     {
         match &mut self.encoder {

@@ -6,7 +6,6 @@ use fuel_core::{
         StateConfig,
     },
     combined_database::CombinedDatabase,
-    database::SnapshotDataSource,
     service::{
         Config,
         FuelService,

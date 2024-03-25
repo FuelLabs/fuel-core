@@ -319,7 +319,6 @@ mod tests {
 
     use crate::{
         combined_database::CombinedDatabase,
-        database::SnapshotDataSource,
         service::{
             config::Config,
             FuelService,

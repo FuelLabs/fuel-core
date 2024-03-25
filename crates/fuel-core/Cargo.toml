@@ -38,7 +38,6 @@ fuel-core-types = { workspace = true, features = ["serde"] }
 futures = { workspace = true }
 hex = { version = "0.4", features = ["serde"] }
 hyper = { workspace = true }
-impl-tools = { workspace = true }
 itertools = { workspace = true }
 num_cpus = { version = "1.16.0", optional = true }
 rand = { workspace = true }
