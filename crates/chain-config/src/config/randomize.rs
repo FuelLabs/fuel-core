@@ -26,10 +26,8 @@ use fuel_core_types::{
             ContractUtxoInfo,
             ContractsInfoType,
         },
-        message::{
-            Message,
-            MessageV1,
-        },
+        relayer::message::MessageV1,
+        Message,
     },
     fuel_tx::{
         ContractId,

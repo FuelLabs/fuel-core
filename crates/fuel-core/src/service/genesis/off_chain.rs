@@ -21,7 +21,7 @@ use fuel_core_txpool::types::TxId;
 use fuel_core_types::{
     entities::{
         coins::coin::CompressedCoin,
-        message::Message,
+        Message,
     },
     fuel_tx::{
         Transaction,

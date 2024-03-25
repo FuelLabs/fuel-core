@@ -23,7 +23,10 @@ use ethers_core::{
     },
 };
 use fuel_core_types::{
-    entities::message::Message,
+    entities::{
+        Message,
+        RelayedTransaction,
+    },
     fuel_types::Address,
 };
 
@@ -31,6 +34,7 @@ pub mod middleware;
 
 pub trait LogTestHelper {
     fn to_msg(&self) -> Message;
+    fn to_tx(&self) -> RelayedTransaction;
 }
 
 pub trait EvtToLog {
@@ -44,9 +48,22 @@ impl LogTestHelper for Log {
             _ => panic!("This log does not form a message"),
         }
     }
+
+    fn to_tx(&self) -> RelayedTransaction {
+        match EthEventLog::try_from(self).unwrap() {
+            EthEventLog::Transaction(t) => RelayedTransaction::from(t),
+            _ => panic!("This log does not form a relayed transaction"),
+        }
+    }
 }
 
 impl EvtToLog for crate::abi::bridge::MessageSentFilter {
+    fn into_log(self) -> Log {
+        event_to_log(self, &crate::abi::bridge::MESSAGESENT_ABI)
+    }
+}
+
+impl EvtToLog for crate::abi::bridge::TransactionFilter {
     fn into_log(self) -> Log {
         event_to_log(self, &crate::abi::bridge::MESSAGESENT_ABI)
     }

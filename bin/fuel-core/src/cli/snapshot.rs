@@ -326,7 +326,7 @@ mod tests {
                 CompressedCoinV1,
             },
             contract::ContractUtxoInfo,
-            message::{
+            relayer::message::{
                 Message,
                 MessageV1,
             },

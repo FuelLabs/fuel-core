@@ -9,7 +9,7 @@ use fuel_core_storage::{
 };
 use fuel_core_types::{
     blockchain::primitives::DaBlockHeight,
-    entities::message::{
+    entities::relayer::message::{
         Message,
         MessageV1,
     },

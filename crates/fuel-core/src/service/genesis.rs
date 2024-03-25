@@ -51,7 +51,7 @@ use fuel_core_types::{
     },
     entities::{
         coins::coin::Coin,
-        message::Message,
+        Message,
     },
     fuel_types::{
         BlockHeight,
@@ -168,6 +168,9 @@ fn cleanup_genesis_progress(
 pub fn create_genesis_block(config: &Config) -> Block {
     let block_height = config.snapshot_reader.block_height();
     let da_block_height = config.snapshot_reader.da_block_height();
+    let transactions = vec![];
+    let message_ids = &[];
+    let events = Default::default();
     Block::new(
         PartialBlockHeader {
             application: ApplicationHeader::<Empty> {
@@ -181,17 +184,15 @@ pub fn create_genesis_block(config: &Config) -> Block {
                 generated: Empty,
             },
             consensus: ConsensusHeader::<Empty> {
-                // The genesis is a first block, so previous root is zero.
                 prev_root: Bytes32::zeroed(),
-                // The block height at genesis.
                 height: block_height,
                 time: fuel_core_types::tai64::Tai64::UNIX_EPOCH,
                 generated: Empty,
             },
         },
-        // Genesis block doesn't have any transaction.
-        vec![],
-        &[],
+        transactions,
+        message_ids,
+        events,
     )
 }
 
