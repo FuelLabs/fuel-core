@@ -1,60 +1,25 @@
 //! Utilities and helper methods for writing tests
 
-use anyhow::{
-    anyhow,
-    Context,
-};
-use fuel_core_chain_config::{
-    ContractConfig,
-    ContractStateConfig,
-};
+use anyhow::{anyhow, Context};
+use fuel_core_chain_config::ContractConfig;
 use fuel_core_client::client::{
-    pagination::{
-        PageDirection,
-        PaginationRequest,
-    },
-    types::{
-        CoinType,
-        TransactionStatus,
-    },
+    pagination::{PageDirection, PaginationRequest},
+    types::{CoinType, TransactionStatus},
     FuelClient,
 };
 use fuel_core_types::{
-    fuel_asm::{
-        op,
-        GTFArgs,
-        RegId,
-    },
+    fuel_asm::{op, GTFArgs, RegId},
     fuel_crypto::PublicKey,
     fuel_tx::{
-        Bytes32,
-        ConsensusParameters,
-        Contract,
-        ContractId,
-        Finalizable,
-        Input,
-        Output,
-        StorageSlot,
-        Transaction,
-        TransactionBuilder,
-        TxId,
-        UniqueIdentifier,
-        UtxoId,
+        ConsensusParameters, Contract, ContractId, Finalizable, Input, Output,
+        Transaction, TransactionBuilder, TxId, UniqueIdentifier, UtxoId,
     },
-    fuel_types::{
-        canonical::Serialize,
-        Address,
-        AssetId,
-        Salt,
-    },
+    fuel_types::{canonical::Serialize, Address, AssetId, Salt},
     fuel_vm::SecretKey,
 };
 use itertools::Itertools;
 
-use crate::config::{
-    ClientConfig,
-    SuiteConfig,
-};
+use crate::config::{ClientConfig, SuiteConfig};
 
 // The base amount needed to cover the cost of a simple transaction
 pub const BASE_AMOUNT: u64 = 100_000_000;
@@ -323,18 +288,10 @@ impl Wallet {
             ..
         } = config;
 
-        let state = states
-            .iter()
-            .map(|ContractStateConfig { key, value }| {
-                let value = Bytes32::new(
-                    value
-                        .as_slice()
-                        .try_into()
-                        .expect("state value to fit in 32 bytes"),
-                );
-                StorageSlot::new(*key, value)
-            })
-            .collect_vec();
+        let state: Vec<_> = states
+            .into_iter()
+            .map(|entry| entry.try_into())
+            .try_collect()?;
 
         let state_root = Contract::initial_state_root(state.iter());
         let mut tx = TransactionBuilder::create(bytes.into(), salt, state);

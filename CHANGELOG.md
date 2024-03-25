@@ -21,6 +21,7 @@ Description of the upcoming release here.
 ### Changed
 
 #### Breaking
+- [#1771](https://github.com/FuelLabs/fuel-core/pull/1771): Contract 'states' and 'balances' brought back into `ContractConfig`. Parquet now writes a file per table.
 - [#1768](https://github.com/FuelLabs/fuel-core/pull/1768): Moved `ContractsInfo` table to the off-chain database. Removed `salt` field from the `ContractConfig`.
 - [#1761](https://github.com/FuelLabs/fuel-core/pull/1761): Adjustments to the upcoming testnet configs:
   - Decreased the max size of the contract/predicate/script to be 100KB.
@@ -458,4 +459,3 @@ FuelVM received a lot of safety and stability improvements:
 - [#1399](https://github.com/FuelLabs/fuel-core/pull/1399): Removed `relayer-da-finalization` parameter from the relayer CLI.
 - [#1338](https://github.com/FuelLabs/fuel-core/pull/1338): Updated GraphQL client to use `DependentCost` for `k256`, `mcpi`, `s256`, `scwq`, `swwq` opcodes.
 - [#1322](https://github.com/FuelLabs/fuel-core/pull/1322): The `manual_blocks_enabled` flag is removed from the CLI. The analog is a `debug` flag.
-- [#1771](https://github.com/FuelLabs/fuel-core/pull/1771): Contract 'states' and 'balances' brought back into `ContractConfig`. Parquet now writes a file per table.

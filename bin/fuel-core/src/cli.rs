@@ -1,15 +1,6 @@
 use clap::Parser;
-use std::{
-    env,
-    path::PathBuf,
-    str::FromStr,
-};
-use tracing_subscriber::{
-    filter::EnvFilter,
-    layer::SubscriberExt,
-    registry,
-    Layer,
-};
+use std::{env, path::PathBuf, str::FromStr};
+use tracing_subscriber::{filter::EnvFilter, layer::SubscriberExt, registry, Layer};
 
 #[cfg(feature = "env")]
 use dotenvy::dotenv;
@@ -22,6 +13,8 @@ pub mod fee_contract;
 pub mod run;
 #[cfg(any(feature = "rocksdb", feature = "rocksdb-production"))]
 pub mod snapshot;
+// Default database cache is 1 GB
+pub const DEFAULT_DATABASE_CACHE_SIZE: usize = 1024 * 1024 * 1024;
 
 #[derive(Parser, Debug)]
 #[clap(
@@ -112,7 +105,7 @@ pub async fn run_cli() -> anyhow::Result<()> {
         let command = run::Command::try_parse();
         if let Ok(command) = command {
             tracing::warn!("This cli format for running `fuel-core` is deprecated and will be removed. Please use `fuel-core run` or use `--help` for more information");
-            return run::exec(command).await
+            return run::exec(command).await;
         }
     }
 
@@ -138,10 +131,7 @@ mod tests {
     use fuel_core_types::fuel_types::ContractId;
     use std::path::PathBuf;
 
-    use crate::cli::{
-        snapshot,
-        Fuel,
-    };
+    use crate::cli::{snapshot, Fuel};
 
     use super::Opt;
 

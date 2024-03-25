@@ -1,41 +1,22 @@
 use crate::cli::DEFAULT_DB_PATH;
 use anyhow::Context;
-use clap::{
-    Parser,
-    Subcommand,
-};
+use clap::{Parser, Subcommand};
 use fuel_core::{
-    chain_config::ChainConfig,
-    combined_database::CombinedDatabase,
-    database::SnapshotDataSource,
-    types::fuel_types::ContractId,
+    chain_config::ChainConfig, combined_database::CombinedDatabase,
+    database::SnapshotDataSource, types::fuel_types::ContractId,
 };
-use fuel_core_chain_config::{
-    SnapshotWriter,
-    MAX_GROUP_SIZE,
-};
+use fuel_core_chain_config::{SnapshotWriter, MAX_GROUP_SIZE};
 use fuel_core_storage::{
     iter::IterDirection,
     tables::{
-        Coins,
-        ContractsAssets,
-        ContractsLatestUtxo,
-        ContractsRawCode,
-        ContractsState,
-        FuelBlocks,
-        Messages,
+        Coins, ContractsAssets, ContractsLatestUtxo, ContractsRawCode, ContractsState,
+        FuelBlocks, Messages,
     },
     Result as StorageResult,
 };
-use fuel_core_types::{
-    blockchain::block::Block,
-    fuel_tx::Bytes32,
-};
+use fuel_core_types::{blockchain::block::Block, fuel_tx::Bytes32};
 use itertools::Itertools;
-use std::path::{
-    Path,
-    PathBuf,
-};
+use std::path::{Path, PathBuf};
 
 /// Print a snapshot of blockchain state to stdout.
 #[derive(Debug, Clone, Parser)]
@@ -52,6 +33,14 @@ pub struct Command {
     /// Where to save the snapshot
     #[arg(name = "OUTPUT_DIR", long = "output-directory")]
     pub(crate) output_dir: PathBuf,
+
+    /// The maximum database cache size in bytes.
+    #[arg(
+        long = "max-database-cache-size",
+        default_value_t = super::DEFAULT_DATABASE_CACHE_SIZE,
+        env
+    )]
+    pub max_database_cache_size: usize,
 
     /// The sub-command of the snapshot operation.
     #[command(subcommand)]
@@ -126,7 +115,10 @@ pub enum SubCommands {
 
 #[cfg(any(feature = "rocksdb", feature = "rocksdb-production"))]
 pub fn exec(command: Command) -> anyhow::Result<()> {
-    let db = open_db(&command.database_path)?;
+    let db = open_db(
+        &command.database_path,
+        Some(command.max_database_cache_size),
+    )?;
     let output_dir = command.output_dir;
 
     match command.subcommand {
@@ -277,8 +269,8 @@ fn load_chain_config(
     Ok(chain_config)
 }
 
-fn open_db(path: &Path) -> anyhow::Result<CombinedDatabase> {
-    CombinedDatabase::open(path, 1024 * 1024 * 1024)
+fn open_db(path: &Path, capacity: Option<usize>) -> anyhow::Result<CombinedDatabase> {
+    CombinedDatabase::open(path, capacity.unwrap_or(1024 * 1024 * 1024))
         .map_err(Into::<anyhow::Error>::into)
         .context(format!("failed to open combined database at path {path:?}",))
 }
@@ -290,61 +282,31 @@ mod tests {
 
     use fuel_core::database::Database;
     use fuel_core_chain_config::{
-        AddTable,
-        AsTable,
-        SnapshotMetadata,
-        SnapshotReader,
-        StateConfig,
-        StateConfigBuilder,
-        TableEntry,
+        AddTable, AsTable, SnapshotMetadata, SnapshotReader, StateConfig,
+        StateConfigBuilder, TableEntry,
     };
     use fuel_core_storage::{
         structured_storage::TableWithBlueprint,
         tables::{
-            Coins,
-            ContractsAssets,
-            ContractsLatestUtxo,
-            ContractsRawCode,
-            ContractsState,
-            FuelBlocks,
-            Messages,
+            Coins, ContractsAssets, ContractsLatestUtxo, ContractsRawCode,
+            ContractsState, FuelBlocks, Messages,
         },
-        transactional::{
-            IntoTransaction,
-            StorageTransaction,
-        },
-        ContractsAssetKey,
-        ContractsStateKey,
-        StorageAsMut,
+        transactional::{IntoTransaction, StorageTransaction},
+        ContractsAssetKey, ContractsStateKey, StorageAsMut,
     };
     use fuel_core_types::{
-        blockchain::{
-            block::CompressedBlock,
-            primitives::DaBlockHeight,
-        },
+        blockchain::{block::CompressedBlock, primitives::DaBlockHeight},
         entities::{
-            coins::coin::{
-                CompressedCoin,
-                CompressedCoinV1,
-            },
+            coins::coin::{CompressedCoin, CompressedCoinV1},
             contract::ContractUtxoInfo,
-            message::{
-                Message,
-                MessageV1,
-            },
+            message::{Message, MessageV1},
         },
-        fuel_tx::{
-            TxPointer,
-            UtxoId,
-        },
+        fuel_tx::{TxPointer, UtxoId},
     };
-    use rand::{
-        rngs::StdRng,
-        seq::SliceRandom,
-        Rng,
-        SeedableRng,
-    };
+    use rand::{rngs::StdRng, seq::SliceRandom, Rng, SeedableRng};
     use test_case::test_case;
+
+    use crate::cli::DEFAULT_DATABASE_CACHE_SIZE;
 
     use super::*;
 
@@ -649,7 +611,7 @@ mod tests {
 
         let snapshot_dir = temp_dir.path().join("snapshot");
         let db_path = temp_dir.path().join("db");
-        let mut db = DbPopulator::new(open_db(&db_path)?, StdRng::seed_from_u64(2));
+        let mut db = DbPopulator::new(open_db(&db_path, None)?, StdRng::seed_from_u64(2));
 
         let state = db.given_persisted_on_chain_data(10, 10, 10, 10, 10);
         db.commit();
@@ -657,6 +619,7 @@ mod tests {
         // when
         exec(Command {
             database_path: db_path,
+            max_database_cache_size: DEFAULT_DATABASE_CACHE_SIZE,
             output_dir: snapshot_dir.clone(),
             subcommand: SubCommands::Everything {
                 chain_config: None,
@@ -688,7 +651,7 @@ mod tests {
 
         let snapshot_dir = temp_dir.path().join("snapshot");
         let db_path = temp_dir.path().join("db");
-        let mut db = DbPopulator::new(open_db(&db_path)?, StdRng::seed_from_u64(2));
+        let mut db = DbPopulator::new(open_db(&db_path, None)?, StdRng::seed_from_u64(2));
 
         let state = db.given_persisted_on_chain_data(10, 10, 10, 10, 10);
         db.commit();
@@ -697,6 +660,7 @@ mod tests {
         exec(Command {
             database_path: db_path,
             output_dir: snapshot_dir.clone(),
+            max_database_cache_size: DEFAULT_DATABASE_CACHE_SIZE,
             subcommand: SubCommands::Everything {
                 chain_config: None,
                 encoding_command: Some(EncodingCommand::Encoding {
@@ -725,7 +689,7 @@ mod tests {
         let snapshot_dir = temp_dir.path().join("snapshot");
 
         let db_path = temp_dir.path().join("db");
-        let mut db = DbPopulator::new(open_db(&db_path)?, StdRng::seed_from_u64(2));
+        let mut db = DbPopulator::new(open_db(&db_path, None)?, StdRng::seed_from_u64(2));
 
         let original_state = db
             .given_persisted_on_chain_data(10, 10, 10, 10, 10)
@@ -744,6 +708,7 @@ mod tests {
         exec(Command {
             database_path: db_path,
             output_dir: snapshot_dir.clone(),
+            max_database_cache_size: DEFAULT_DATABASE_CACHE_SIZE,
             subcommand: SubCommands::Contract { contract_id },
         })?;
 
