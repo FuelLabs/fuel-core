@@ -2,7 +2,6 @@
 
 use fuel_core::{
     chain_config::{
-        ChainConfig,
         MessageConfig,
         SnapshotReader,
         StateConfig,
@@ -52,9 +51,8 @@ fn setup_config(messages: impl IntoIterator<Item = MessageConfig>) -> Config {
         ..Default::default()
     };
 
-    let chain_config = ChainConfig::local_testnet();
     Config {
-        snapshot_reader: SnapshotReader::in_memory(state, chain_config),
+        snapshot_reader: SnapshotReader::local_testnet().with_state_config(state),
         ..Config::local_node()
     }
 }
@@ -598,8 +596,8 @@ async fn can_get_message() {
         messages: vec![first_msg.clone()],
         ..Default::default()
     };
-    let chain_config = ChainConfig::local_testnet();
-    config.snapshot_reader = SnapshotReader::in_memory(state_config, chain_config);
+    config.snapshot_reader =
+        SnapshotReader::local_testnet().with_state_config(state_config);
 
     // setup service and client
     let service = FuelService::new_node(config).await.unwrap();
@@ -616,9 +614,8 @@ async fn can_get_message() {
 #[tokio::test]
 async fn can_get_empty_message() {
     let mut config = Config::local_node();
-    let chain_config = ChainConfig::local_testnet();
     config.snapshot_reader =
-        SnapshotReader::in_memory(StateConfig::default(), chain_config);
+        SnapshotReader::local_testnet().with_state_config(StateConfig::default());
 
     let service = FuelService::new_node(config).await.unwrap();
     let client = FuelClient::from(service.bound_address);

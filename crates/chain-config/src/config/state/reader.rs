@@ -87,13 +87,33 @@ pub struct SnapshotReader {
 }
 
 impl SnapshotReader {
-    pub fn in_memory(state: StateConfig, chain_config: ChainConfig) -> Self {
+    #[cfg(feature = "test-helpers")]
+    pub fn local_testnet() -> Self {
+        let state = StateConfig::local_testnet();
+        let chain_config = ChainConfig::local_testnet();
         Self {
             data_source: DataSource::InMemory {
                 state,
                 group_size: MAX_GROUP_SIZE,
             },
             chain_config,
+        }
+    }
+
+    pub fn with_chain_config(self, chain_config: ChainConfig) -> Self {
+        Self {
+            chain_config,
+            ..self
+        }
+    }
+
+    pub fn with_state_config(self, state_config: StateConfig) -> Self {
+        Self {
+            data_source: DataSource::InMemory {
+                state: state_config,
+                group_size: MAX_GROUP_SIZE,
+            },
+            ..self
         }
     }
 

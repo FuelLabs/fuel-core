@@ -2,7 +2,6 @@
 
 use fuel_core::{
     chain_config::{
-        ChainConfig,
         CoinConfig,
         SnapshotReader,
         StateConfig,
@@ -58,9 +57,8 @@ async fn setup_service_with_coin(
         coins: vec![coin_config],
         ..Default::default()
     };
-    let chain_config = ChainConfig::local_testnet();
     let config = Config {
-        snapshot_reader: SnapshotReader::in_memory(state, chain_config),
+        snapshot_reader: SnapshotReader::local_testnet().with_state_config(state),
         static_gas_price,
         ..Config::local_node()
     };

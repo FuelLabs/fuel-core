@@ -1,7 +1,6 @@
 use crate::helpers::TestContext;
 use fuel_core::{
     chain_config::{
-        ChainConfig,
         CoinConfig,
         MessageConfig,
         SnapshotReader,
@@ -26,7 +25,6 @@ use rand::{
 mod coin {
     use super::*;
     use fuel_core::chain_config::{
-        ChainConfig,
         CoinConfigGenerator,
         SnapshotReader,
     };
@@ -62,9 +60,8 @@ mod coin {
             messages: vec![],
             ..Default::default()
         };
-        let chain_config = ChainConfig::local_testnet();
         let config = Config {
-            snapshot_reader: SnapshotReader::in_memory(state, chain_config),
+            snapshot_reader: SnapshotReader::local_testnet().with_state_config(state),
             ..Config::local_node()
         };
 
@@ -286,10 +283,7 @@ mod coin {
 }
 
 mod message_coin {
-    use fuel_core::chain_config::{
-        ChainConfig,
-        SnapshotReader,
-    };
+    use fuel_core::chain_config::SnapshotReader;
     use fuel_core_client::client::types::CoinType;
     use fuel_core_types::{
         blockchain::primitives::DaBlockHeight,
@@ -320,9 +314,8 @@ mod message_coin {
                 .collect(),
             ..Default::default()
         };
-        let chain_config = ChainConfig::local_testnet();
         let config = Config {
-            snapshot_reader: SnapshotReader::in_memory(state, chain_config),
+            snapshot_reader: SnapshotReader::local_testnet().with_state_config(state),
             ..Config::local_node()
         };
 
@@ -498,7 +491,6 @@ mod message_coin {
 // It is combination of coins and deposit coins test cases.
 mod all_coins {
     use fuel_core::chain_config::{
-        ChainConfig,
         CoinConfigGenerator,
         SnapshotReader,
     };
@@ -542,9 +534,8 @@ mod all_coins {
                 .collect(),
             ..Default::default()
         };
-        let chain_config = ChainConfig::local_testnet();
         let config = Config {
-            snapshot_reader: SnapshotReader::in_memory(state, chain_config),
+            snapshot_reader: SnapshotReader::local_testnet().with_state_config(state),
             ..Config::local_node()
         };
 
@@ -718,9 +709,9 @@ mod all_coins {
 
 async fn empty_setup() -> TestContext {
     // setup config
-    let chain_config = ChainConfig::local_testnet();
     let config = Config {
-        snapshot_reader: SnapshotReader::in_memory(StateConfig::default(), chain_config),
+        snapshot_reader: SnapshotReader::local_testnet()
+            .with_state_config(StateConfig::default()),
         ..Config::local_node()
     };
 

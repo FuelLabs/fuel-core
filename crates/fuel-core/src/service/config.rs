@@ -1,9 +1,7 @@
 use clap::ValueEnum;
 use fuel_core_chain_config::{
     default_consensus_dev_key,
-    ChainConfig,
     SnapshotReader,
-    StateConfig,
 };
 use fuel_core_types::{
     blockchain::primitives::SecretKeyWrapper,
@@ -75,11 +73,9 @@ pub struct Config {
 
 impl Config {
     pub fn local_node() -> Self {
-        let chain_config = ChainConfig::local_testnet();
-        let state_config = StateConfig::local_testnet();
+        let snapshot_reader = SnapshotReader::local_testnet();
+        let chain_config = snapshot_reader.chain_config().clone();
         let block_importer = fuel_core_importer::Config::new(&chain_config);
-        let snapshot_reader =
-            SnapshotReader::in_memory(state_config.clone(), chain_config.clone());
 
         let utxo_validation = false;
         let min_gas_price = 0;

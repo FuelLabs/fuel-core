@@ -86,11 +86,7 @@ async fn can_get_sealed_block_from_poa_produced_block() {
 mod p2p {
     use super::*;
     use fuel_core::{
-        chain_config::{
-            ConsensusConfig,
-            SnapshotReader,
-            StateConfig,
-        },
+        chain_config::ConsensusConfig,
         p2p_test_helpers::{
             make_config,
             make_node,
@@ -192,14 +188,12 @@ mod p2p {
 
     fn update_signing_key(config: &mut Config, key: Address) {
         let snapshot_reader = &config.snapshot_reader;
-        let state_config = StateConfig::from_reader(snapshot_reader).unwrap();
-
         let mut chain_config = snapshot_reader.chain_config().clone();
         match &mut chain_config.consensus {
             ConsensusConfig::PoA { signing_key } => {
                 *signing_key = key;
             }
         }
-        config.snapshot_reader = SnapshotReader::in_memory(state_config, chain_config);
+        config.snapshot_reader = snapshot_reader.clone().with_chain_config(chain_config)
     }
 }
