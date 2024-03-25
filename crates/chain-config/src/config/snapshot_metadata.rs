@@ -106,67 +106,21 @@ mod tests {
         use super::*;
 
         #[test]
-        fn prepends_paths() {
-            // given
-            let mut snapshot = SnapshotMetadata {
-                chain_config: "chain_config.json".into(),
-                table_encoding: TableEncoding::Json {
-                    filepath: "state_config.json".into(),
-                },
-            };
-
-            // when
-            snapshot.prepend_path(Path::new("./dir"));
-
-            // then
-            assert_eq!(
-                snapshot,
-                SnapshotMetadata {
-                    chain_config: PathBuf::from("./dir/chain_config.json"),
-                    table_encoding: TableEncoding::Json {
-                        filepath: PathBuf::from("./dir/state_config.json"),
-                    },
-                }
-            );
-        }
-
-        #[test]
-        fn strips_prefix() {
-            // given
-            let mut snapshot = SnapshotMetadata {
-                chain_config: "./dir/chain_config.json".into(),
-                table_encoding: TableEncoding::Json {
-                    filepath: "./dir/state_config.json".into(),
-                },
-            };
-
-            // when
-            snapshot.strip_prefix(Path::new("./dir")).unwrap();
-
-            // then
-            assert_eq!(
-                snapshot,
-                SnapshotMetadata {
-                    chain_config: PathBuf::from("chain_config.json"),
-                    table_encoding: TableEncoding::Json {
-                        filepath: PathBuf::from("state_config.json"),
-                    },
-                }
-            );
-        }
-
-        #[test]
-        fn reading_a_snapshot_produces_valid_paths() {
+        fn directory_added_to_paths_upon_load() {
             // given
             let temp_dir = tempfile::tempdir().unwrap();
             let dir = temp_dir.path();
-            let snapshot = SnapshotMetadata {
+            let data = SnapshotMetadata {
                 chain_config: "chain_config.json".into(),
                 table_encoding: TableEncoding::Json {
                     filepath: "state_config.json".into(),
                 },
             };
-            snapshot.write(dir).unwrap();
+            serde_json::to_writer(
+                std::fs::File::create(dir.join("metadata.json")).unwrap(),
+                &data,
+            )
+            .unwrap();
 
             // when
             let snapshot = SnapshotMetadata::read(temp_dir.path()).unwrap();
@@ -182,116 +136,63 @@ mod tests {
                 }
             );
         }
+
+        #[test]
+        fn directory_removed_from_paths_upon_save() {
+            // given
+            let temp_dir = tempfile::tempdir().unwrap();
+            let dir = temp_dir.path();
+            let snapshot = SnapshotMetadata {
+                chain_config: dir.join("chain_config.json"),
+                table_encoding: TableEncoding::Json {
+                    filepath: dir.join("state_config.json"),
+                },
+            };
+
+            // when
+            snapshot.write(temp_dir.path()).unwrap();
+
+            // then
+            let data: SnapshotMetadata = serde_json::from_reader(
+                std::fs::File::open(temp_dir.path().join("metadata.json")).unwrap(),
+            )
+            .unwrap();
+            assert_eq!(
+                data,
+                SnapshotMetadata {
+                    chain_config: "chain_config.json".into(),
+                    table_encoding: TableEncoding::Json {
+                        filepath: "state_config.json".into(),
+                    }
+                }
+            );
+        }
     }
 
     #[cfg(feature = "parquet")]
     mod parquet {
         use super::*;
-
         #[test]
-        fn prepends_paths() {
-            // given
-            let mut snapshot = SnapshotMetadata {
-                chain_config: "chain_config.json".into(),
-                table_encoding: TableEncoding::Parquet {
-                    tables: [
-                        ("Coins".to_string(), "Coins.parquet".into()),
-                        ("Messages".to_string(), "Messages.parquet".into()),
-                    ]
-                    .into_iter()
-                    .collect(),
-                    block_height: "block_height.parquet".into(),
-                    da_block_height: "da_block_height.parquet".into(),
-                    compression: crate::ZstdCompressionLevel::Max,
-                },
-            };
-
-            // when
-            snapshot.prepend_path(Path::new("./dir"));
-
-            // then
-            assert_eq!(
-                snapshot,
-                SnapshotMetadata {
-                    chain_config: PathBuf::from("./dir/chain_config.json"),
-                    table_encoding: TableEncoding::Parquet {
-                        tables: [
-                            ("Coins".to_string(), PathBuf::from("./dir/Coins.parquet")),
-                            (
-                                "Messages".to_string(),
-                                PathBuf::from("./dir/Messages.parquet")
-                            ),
-                        ]
-                        .into_iter()
-                        .collect(),
-                        block_height: PathBuf::from("./dir/block_height.parquet"),
-                        da_block_height: PathBuf::from("./dir/da_block_height.parquet"),
-                        compression: crate::ZstdCompressionLevel::Max,
-                    },
-                }
-            );
-        }
-
-        #[test]
-        fn strips_prefix() {
-            // given
-            let mut snapshot = SnapshotMetadata {
-                chain_config: "./dir/chain_config.json".into(),
-                table_encoding: TableEncoding::Parquet {
-                    tables: [
-                        ("Coins".to_string(), "./dir/Coins.parquet".into()),
-                        ("Messages".to_string(), "./dir/Messages.parquet".into()),
-                    ]
-                    .into_iter()
-                    .collect(),
-                    block_height: "./dir/block_height.parquet".into(),
-                    da_block_height: "./dir/da_block_height.parquet".into(),
-                    compression: crate::ZstdCompressionLevel::Max,
-                },
-            };
-
-            // when
-            snapshot.strip_prefix(Path::new("./dir")).unwrap();
-
-            // then
-            assert_eq!(
-                snapshot,
-                SnapshotMetadata {
-                    chain_config: PathBuf::from("chain_config.json"),
-                    table_encoding: TableEncoding::Parquet {
-                        tables: [
-                            ("Coins".to_string(), PathBuf::from("Coins.parquet")),
-                            ("Messages".to_string(), PathBuf::from("Messages.parquet")),
-                        ]
-                        .into_iter()
-                        .collect(),
-                        block_height: PathBuf::from("block_height.parquet"),
-                        da_block_height: PathBuf::from("da_block_height.parquet"),
-                        compression: crate::ZstdCompressionLevel::Max,
-                    },
-                }
-            );
-        }
-
-        #[test]
-        fn reading_a_snapshot_produces_valid_paths() {
+        fn directory_added_to_paths_upon_load() {
             // given
             let temp_dir = tempfile::tempdir().unwrap();
-            SnapshotMetadata {
+            let dir = temp_dir.path();
+            let data = SnapshotMetadata {
                 chain_config: "chain_config.json".into(),
                 table_encoding: TableEncoding::Parquet {
-                    tables: [
-                        ("Coins".to_string(), "Coins.parquet".into()),
-                        ("Messages".to_string(), "Messages.parquet".into()),
-                    ]
-                    .into_iter()
-                    .collect(),
+                    tables: std::collections::HashMap::from_iter(vec![(
+                        "coins".into(),
+                        "coins.parquet".into(),
+                    )]),
                     block_height: "block_height.parquet".into(),
                     da_block_height: "da_block_height.parquet".into(),
-                    compression: crate::ZstdCompressionLevel::Max,
+                    compression: crate::ZstdCompressionLevel::Level1,
                 },
-            }
-            .write(temp_dir.path())
+            };
+            serde_json::to_writer(
+                std::fs::File::create(dir.join("metadata.json")).unwrap(),
+                &data,
+            )
             .unwrap();
 
             // when
@@ -301,20 +202,58 @@ mod tests {
             assert_eq!(
                 snapshot,
                 SnapshotMetadata {
-                    chain_config: temp_dir.path().join("chain_config.json"),
+                    chain_config: dir.join("chain_config.json"),
                     table_encoding: TableEncoding::Parquet {
-                        tables: [
-                            ("Coins".to_string(), temp_dir.path().join("Coins.parquet")),
-                            (
-                                "Messages".to_string(),
-                                temp_dir.path().join("Messages.parquet")
-                            ),
-                        ]
-                        .into_iter()
-                        .collect(),
+                        tables: std::collections::HashMap::from_iter(vec![(
+                            "coins".into(),
+                            temp_dir.path().join("coins.parquet")
+                        )]),
                         block_height: temp_dir.path().join("block_height.parquet"),
                         da_block_height: temp_dir.path().join("da_block_height.parquet"),
-                        compression: crate::ZstdCompressionLevel::Max,
+                        compression: crate::ZstdCompressionLevel::Level1,
+                    }
+                }
+            );
+        }
+
+        #[test]
+        fn directory_removed_from_paths_upon_save() {
+            // given
+            let temp_dir = tempfile::tempdir().unwrap();
+            let dir = temp_dir.path();
+            let snapshot = SnapshotMetadata {
+                chain_config: dir.join("chain_config.json"),
+                table_encoding: TableEncoding::Parquet {
+                    tables: std::collections::HashMap::from_iter([(
+                        "coins".into(),
+                        dir.join("coins.parquet"),
+                    )]),
+                    block_height: dir.join("block_height.parquet"),
+                    da_block_height: dir.join("da_block_height.parquet"),
+                    compression: crate::ZstdCompressionLevel::Level1,
+                },
+            };
+
+            // when
+            snapshot.write(temp_dir.path()).unwrap();
+
+            // then
+            let data: SnapshotMetadata = serde_json::from_reader(
+                std::fs::File::open(temp_dir.path().join("metadata.json")).unwrap(),
+            )
+            .unwrap();
+            assert_eq!(
+                data,
+                SnapshotMetadata {
+                    chain_config: "chain_config.json".into(),
+                    table_encoding: TableEncoding::Parquet {
+                        tables: std::collections::HashMap::from_iter([(
+                            "coins".into(),
+                            "coins.parquet".into(),
+                        )]),
+                        block_height: "block_height.parquet".into(),
+                        da_block_height: "da_block_height.parquet".into(),
+                        compression: crate::ZstdCompressionLevel::Level1,
                     }
                 }
             );

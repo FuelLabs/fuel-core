@@ -37,17 +37,20 @@ where
     fn next(&mut self) -> Option<Self::Item> {
         match self {
             IntoIter::InMemory { groups } => groups.next(),
-            IntoIter::Parquet { decoder } => Some(decoder.next()?.map(|bytes_group| {
-                let decoded = bytes_group
-                    .data
-                    .into_iter()
-                    .map(|bytes| postcard::from_bytes(&bytes).unwrap())
-                    .collect();
-                Group {
-                    index: bytes_group.index,
-                    data: decoded,
-                }
-            })),
+            IntoIter::Parquet { decoder } => {
+                let group = decoder.next()?.and_then(|bytes_group| {
+                    let decoded = bytes_group
+                        .data
+                        .into_iter()
+                        .map(|bytes| postcard::from_bytes(&bytes))
+                        .try_collect()?;
+                    Ok(Group {
+                        index: bytes_group.index,
+                        data: decoded,
+                    })
+                });
+                Some(group)
+            }
         }
     }
 }
