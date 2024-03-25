@@ -600,7 +600,7 @@ mod tests {
             ..Config::local_node()
         };
 
-        let db = Database::default();
+        let db = CombinedDatabase::default();
 
         execute_and_commit_genesis_block(&config, &db)
             .await

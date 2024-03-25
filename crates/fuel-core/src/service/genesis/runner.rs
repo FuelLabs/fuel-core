@@ -22,7 +22,10 @@ use tokio_util::sync::CancellationToken;
 
 use crate::database::{
     database_description::DatabaseDescription,
-    genesis_progress::GenesisMetadata,
+    genesis_progress::{
+        GenesisMetadata,
+        GenesisProgressMutate,
+    },
     Database,
 };
 
@@ -103,9 +106,9 @@ where
                 let mut tx = db.write_transaction();
                 self.handler.process(group.data, &mut tx)?;
 
-                // tx.update_genesis_progress(Logic::genesis_resource(), group_num)?;
-                tx.storage_as_mut::<GenesisMetadata<DbDesc>>()
-                    .insert(Logic::genesis_resource(), &group_num)?;
+                tx.update_genesis_progress(Logic::genesis_resource(), group_num)?;
+                // tx.storage_as_mut::<GenesisMetadata<DbDesc>>()
+                //     .insert(Logic::genesis_resource(), &group_num)?;
                 tx.commit()?;
                 Ok(())
             });
@@ -165,7 +168,6 @@ mod tests {
         transactional::{
             Changes,
             StorageTransaction,
-            WriteTransaction,
         },
         Result as StorageResult,
         StorageAsMut,
@@ -184,17 +186,13 @@ mod tests {
     use tokio_util::sync::CancellationToken;
 
     use crate::{
+        combined_database::CombinedDatabase,
         database::{
-            genesis_progress::{
-                GenesisProgressInspect,
-                GenesisProgressMutate,
-            },
+            database_description::on_chain::OnChain,
+            genesis_progress::GenesisProgressMutate,
             Database,
         },
-        service::genesis::runner::{
-            GenesisRunner,
-            TransactionOpener,
-        },
+        service::genesis::runner::GenesisRunner,
         state::{
             in_memory::memory_store::MemoryStore,
             TransactableStorage,
@@ -276,7 +274,7 @@ mod tests {
         // given
         let groups: Vec<Result<Group<usize>, anyhow::Error>> = given_ok_groups(2);
         let mut called_with = vec![];
-        let mut db = Database::default();
+        let mut db = CombinedDatabase::default();
         db.update_genesis_progress(Coins::column().name(), 0)
             .unwrap();
 
