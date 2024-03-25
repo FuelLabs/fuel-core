@@ -68,24 +68,24 @@ where
     while let Some((last_height, events)) = logs.try_next().await? {
         let last_height = last_height.into();
         let mut ordered_events = BTreeMap::<DaBlockHeight, Vec<Event>>::new();
-        let fuel_events =
-            events
-                .into_iter()
-                .filter_map(|event| match EthEventLog::try_from(&event) {
-                    Ok(event) => {
-                        match event {
-                            EthEventLog::Message(m) => {
-                                Some(Ok(Event::Message(Message::from(&m))))
-                            }
-                            EthEventLog::Transaction(tx) => {
-                                Some(Ok(Event::Transaction(RelayedTransaction::from(tx))))
-                            }
-                            // TODO: Log out ignored messages.
-                            EthEventLog::Ignored => None,
+        let sorted_events = sort_events_by_log_index(events);
+        let fuel_events = sorted_events.into_iter().filter_map(|event| {
+            match EthEventLog::try_from(&event) {
+                Ok(event) => {
+                    match event {
+                        EthEventLog::Message(m) => {
+                            Some(Ok(Event::Message(Message::from(&m))))
                         }
+                        EthEventLog::Transaction(tx) => {
+                            Some(Ok(Event::Transaction(RelayedTransaction::from(tx))))
+                        }
+                        // TODO: Log out ignored messages.
+                        EthEventLog::Ignored => None,
                     }
-                    Err(e) => Some(Err(e)),
-                });
+                }
+                Err(e) => Some(Err(e)),
+            }
+        });
 
         for event in fuel_events {
             let event = event?;
@@ -108,4 +108,13 @@ where
         }
     }
     Ok(())
+}
+
+fn sort_events_by_log_index(mut events: Vec<Log>) -> Vec<Log> {
+    events.sort_by(|a, b| {
+        let a = a.log_index.unwrap();
+        let b = b.log_index.unwrap();
+        a.cmp(&b)
+    });
+    events
 }

@@ -174,6 +174,42 @@ async fn relayer__downloaded_transaction_logs_will_always_be_stored_in_block_ind
     assert_eq!(actual, expected_transactions);
 }
 
+#[tokio::test(start_paused = true)]
+async fn relayer__downloaded_message_logs_will_always_be_stored_in_block_index_order() {
+    let blocks = vec![1u64, 2, 3, 4];
+    let ordered_logs: Vec<Log> = vec![
+        // one
+        message(1, 1),
+        message(2, 1),
+        message(3, 1),
+        // two
+        message(4, 2),
+        message(5, 2),
+        // three
+        message(6, 3),
+        message(7, 3),
+        message(8, 3),
+        // four
+        message(9, 4),
+        message(10, 4),
+        message(11, 4),
+    ];
+    let expected_messages: Vec<_> = ordered_logs.iter().map(|l| l.to_msg()).collect();
+    let mut ctx = TestContext::new();
+
+    // given
+    let shuffled_logs = ordered_logs.iter().cloned().rev().collect();
+    ctx.given_logs(shuffled_logs);
+    // when
+    let mock_db = ctx.when_relayer_syncs().await;
+    // then
+    let mut actual = Vec::new();
+    for block in blocks {
+        actual.extend(mock_db.get_messages_for_block(block.into()));
+    }
+    assert_eq!(actual, expected_messages);
+}
+
 fn message(nonce: u64, block_number: u64) -> Log {
     let message = MessageSentFilter {
         nonce: U256::from_dec_str(nonce.to_string().as_str())

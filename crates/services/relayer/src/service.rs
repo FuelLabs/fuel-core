@@ -153,6 +153,7 @@ where
             self.config.log_page_size,
         );
         let logs = logs.take_until(self.shutdown.while_started());
+
         write_logs(&mut self.database, logs).await
     }
 

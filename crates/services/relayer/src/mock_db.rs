@@ -53,6 +53,16 @@ impl MockDb {
             .find_map(|(_, map)| map.get(id).cloned())
     }
 
+    pub fn get_messages_for_block(&self, da_block_height: DaBlockHeight) -> Vec<Message> {
+        self.data
+            .lock()
+            .unwrap()
+            .messages
+            .get(&da_block_height)
+            .map(|map| map.iter().map(|(_, msg)| msg).cloned().collect())
+            .unwrap_or_default()
+    }
+
     pub fn get_transaction(
         &self,
         id: &RelayedTransactionId,
