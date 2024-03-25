@@ -78,21 +78,22 @@ impl SnapshotMetadata {
         Ok(snapshot)
     }
 
-    pub fn strip_prefix(&mut self, dir: &Path) -> anyhow::Result<&mut Self> {
+    fn strip_prefix(&mut self, dir: &Path) -> anyhow::Result<&mut Self> {
         self.chain_config = self.chain_config.strip_prefix(dir)?.to_owned();
         self.table_encoding.strip_prefix(dir)?;
         Ok(self)
     }
 
-    pub fn prepend_path(&mut self, dir: &Path) {
+    fn prepend_path(&mut self, dir: &Path) {
         self.chain_config = dir.join(&self.chain_config);
         self.table_encoding.prepend_path(dir);
     }
 
-    pub fn write(&self, dir: &Path) -> anyhow::Result<()> {
+    pub fn write(mut self, dir: &Path) -> anyhow::Result<()> {
+        self.strip_prefix(dir)?;
         let path = dir.join(Self::METADATA_FILENAME);
         let file = std::fs::File::create(path)?;
-        serde_json::to_writer_pretty(file, self)?;
+        serde_json::to_writer_pretty(file, &self)?;
         Ok(())
     }
 }

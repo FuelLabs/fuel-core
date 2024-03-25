@@ -356,7 +356,7 @@ impl SnapshotWriter {
             chain_config: dir.join("chain_config.json"),
             table_encoding,
         };
-        metadata.clone().strip_prefix(dir)?.write(dir)?;
+        metadata.clone().write(dir)?;
         Ok(metadata)
     }
 }

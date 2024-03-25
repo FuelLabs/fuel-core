@@ -1,7 +1,10 @@
 #![allow(unused_variables)]
 use crate::{
     cli::{
-        run::{consensus::PoATriggerArgs, tx_pool::TxPoolArgs},
+        run::{
+            consensus::PoATriggerArgs,
+            tx_pool::TxPoolArgs,
+        },
         DEFAULT_DB_PATH,
     },
     FuelService,
@@ -9,23 +12,55 @@ use crate::{
 use anyhow::Context;
 use clap::Parser;
 use fuel_core::{
-    chain_config::{default_consensus_dev_key, ChainConfig, StateConfig},
+    chain_config::{
+        default_consensus_dev_key,
+        ChainConfig,
+        StateConfig,
+    },
     combined_database::CombinedDatabaseConfig,
     producer::Config as ProducerConfig,
     service::{
-        config::Trigger, Config, DbType, RelayerConsensusConfig, ServiceTrait, VMConfig,
+        config::Trigger,
+        Config,
+        DbType,
+        RelayerConsensusConfig,
+        ServiceTrait,
+        VMConfig,
     },
-    txpool::{config::BlackList, Config as TxPoolConfig},
+    txpool::{
+        config::BlackList,
+        Config as TxPoolConfig,
+    },
     types::{
-        blockchain::primitives::SecretKeyWrapper, fuel_tx::ContractId,
-        fuel_vm::SecretKey, secrecy::Secret,
+        blockchain::primitives::SecretKeyWrapper,
+        fuel_tx::ContractId,
+        fuel_vm::SecretKey,
+        secrecy::Secret,
     },
 };
-use fuel_core_chain_config::{SnapshotMetadata, SnapshotReader};
-use pyroscope::{pyroscope::PyroscopeAgentRunning, PyroscopeAgent};
-use pyroscope_pprofrs::{pprof_backend, PprofConfig};
-use std::{env, net, path::PathBuf, str::FromStr};
-use tracing::{info, trace, warn};
+use fuel_core_chain_config::{
+    SnapshotMetadata,
+    SnapshotReader,
+};
+use pyroscope::{
+    pyroscope::PyroscopeAgentRunning,
+    PyroscopeAgent,
+};
+use pyroscope_pprofrs::{
+    pprof_backend,
+    PprofConfig,
+};
+use std::{
+    env,
+    net,
+    path::PathBuf,
+    str::FromStr,
+};
+use tracing::{
+    info,
+    trace,
+    warn,
+};
 
 use super::DEFAULT_DATABASE_CACHE_SIZE;
 
