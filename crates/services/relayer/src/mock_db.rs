@@ -30,7 +30,7 @@ use std::{
 pub struct Data {
     pub messages: BTreeMap<DaBlockHeight, HashMap<Nonce, Message>>,
     pub transactions:
-        BTreeMap<DaBlockHeight, HashMap<RelayedTransactionId, RelayedTransaction>>,
+        BTreeMap<DaBlockHeight, Vec<(RelayedTransactionId, RelayedTransaction)>>,
     pub finalized_da_height: Option<DaBlockHeight>,
 }
 
@@ -62,7 +62,26 @@ impl MockDb {
             .unwrap()
             .transactions
             .iter()
-            .find_map(|(_, map)| map.get(id).cloned())
+            .find_map(|(_, txs)| {
+                txs.iter()
+                    .find_map(
+                        |(inner_id, tx)| if id == inner_id { Some(tx) } else { None },
+                    )
+                    .cloned()
+            })
+    }
+
+    pub fn get_transactions_for_block(
+        &self,
+        da_block_height: DaBlockHeight,
+    ) -> Vec<RelayedTransaction> {
+        self.data
+            .lock()
+            .unwrap()
+            .transactions
+            .get(&da_block_height)
+            .map(|map| map.iter().map(|(_, tx)| tx).cloned().collect())
+            .unwrap_or_default()
     }
 }
 
@@ -85,7 +104,7 @@ impl RelayerDb for MockDb {
                     m.transactions
                         .entry(transaction.da_height())
                         .or_default()
-                        .insert(transaction.id(), transaction.clone());
+                        .push((transaction.id(), transaction.clone()));
                 }
             }
         }
