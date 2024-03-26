@@ -216,6 +216,7 @@ async fn relayer__downloaded_message_logs_will_always_be_stored_in_block_index_o
 
 #[tokio::test(start_paused = true)]
 async fn relayer__if_a_log_does_not_include_index_then_event_not_included() {
+    todo!();
     let mut ctx = TestContext::new();
     // given
     let block_height = 1;
