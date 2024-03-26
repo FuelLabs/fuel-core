@@ -49,14 +49,8 @@ impl MockDb {
             .iter()
             .find_map(|(_, map)| {
                 map.iter()
-                    .find_map(|(inner_nonce, msg)| {
-                        if nonce == inner_nonce {
-                            Some(msg)
-                        } else {
-                            None
-                        }
-                    })
-                    .cloned()
+                    .find(|(inner_nonce, _msg)| nonce == inner_nonce)
+                    .map(|(_, msg)| msg.clone())
             })
     }
 
@@ -81,10 +75,8 @@ impl MockDb {
             .iter()
             .find_map(|(_, txs)| {
                 txs.iter()
-                    .find_map(
-                        |(inner_id, tx)| if id == inner_id { Some(tx) } else { None },
-                    )
-                    .cloned()
+                    .find(|(inner_id, _tx)| id == inner_id)
+                    .map(|(_, tx)| tx.clone())
             })
     }
 
