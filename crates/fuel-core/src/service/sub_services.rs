@@ -8,11 +8,18 @@ use crate::{
     schema::build_schema,
     service::{
         adapters::{
-            BlockImporterAdapter, BlockProducerAdapter, ExecutorAdapter,
-            MaybeRelayerAdapter, PoAAdapter, TxPoolAdapter, VerifierAdapter,
+            BlockImporterAdapter,
+            BlockProducerAdapter,
+            ExecutorAdapter,
+            MaybeRelayerAdapter,
+            PoAAdapter,
+            TxPoolAdapter,
+            VerifierAdapter,
         },
         genesis::create_genesis_block,
-        Config, SharedState, SubServices,
+        Config,
+        SharedState,
+        SubServices,
     },
 };
 use fuel_core_poa::Trigger;

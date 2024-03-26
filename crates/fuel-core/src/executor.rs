@@ -6,65 +6,132 @@ mod tests {
     use crate as fuel_core;
     use fuel_core::database::Database;
     use fuel_core_executor::{
-        executor::OnceTransactionsSource, ports::RelayerPort, refs::ContractRef,
+        executor::OnceTransactionsSource,
+        ports::RelayerPort,
+        refs::ContractRef,
     };
     use fuel_core_storage::{
-        tables::{Coins, ContractsRawCode, Messages},
+        tables::{
+            Coins,
+            ContractsRawCode,
+            Messages,
+        },
         transactional::AtomicView,
-        Result as StorageResult, StorageAsMut,
+        Result as StorageResult,
+        StorageAsMut,
     };
     use fuel_core_types::{
         blockchain::{
-            block::{Block, PartialFuelBlock},
-            header::{ConsensusHeader, PartialBlockHeader},
+            block::{
+                Block,
+                PartialFuelBlock,
+            },
+            header::{
+                ConsensusHeader,
+                PartialBlockHeader,
+            },
             primitives::DaBlockHeight,
         },
         entities::{
             coins::coin::CompressedCoin,
-            relayer::message::{Message, MessageV1},
+            relayer::message::{
+                Message,
+                MessageV1,
+            },
         },
-        fuel_asm::{op, GTFArgs, RegId},
+        fuel_asm::{
+            op,
+            GTFArgs,
+            RegId,
+        },
         fuel_crypto::SecretKey,
         fuel_merkle::sparse,
         fuel_tx::{
             field::{
-                InputContract, Inputs, MintAmount, MintAssetId, OutputContract, Outputs,
-                Policies, Script as ScriptField, TxPointer as TxPointerTraitTrait,
+                InputContract,
+                Inputs,
+                MintAmount,
+                MintAssetId,
+                OutputContract,
+                Outputs,
+                Policies,
+                Script as ScriptField,
+                TxPointer as TxPointerTraitTrait,
             },
             input::{
-                coin::{CoinPredicate, CoinSigned},
-                contract, Input,
+                coin::{
+                    CoinPredicate,
+                    CoinSigned,
+                },
+                contract,
+                Input,
             },
             policies::PolicyType,
-            Bytes32, Cacheable, ConsensusParameters, Create, FeeParameters, Finalizable,
-            Output, Receipt, Script, Transaction, TransactionBuilder, TransactionFee,
-            TxParameters, TxPointer, UniqueIdentifier, UtxoId, ValidityError,
+            Bytes32,
+            Cacheable,
+            ConsensusParameters,
+            Create,
+            FeeParameters,
+            Finalizable,
+            Output,
+            Receipt,
+            Script,
+            Transaction,
+            TransactionBuilder,
+            TransactionFee,
+            TxParameters,
+            TxPointer,
+            UniqueIdentifier,
+            UtxoId,
+            ValidityError,
         },
         fuel_types::{
-            canonical::Serialize, Address, AssetId, BlockHeight, ChainId, ContractId,
-            Salt, Word,
+            canonical::Serialize,
+            Address,
+            AssetId,
+            BlockHeight,
+            ChainId,
+            ContractId,
+            Salt,
+            Word,
         },
         fuel_vm::{
-            checked_transaction::{CheckError, EstimatePredicates},
+            checked_transaction::{
+                CheckError,
+                EstimatePredicates,
+            },
             interpreter::ExecutableTransaction,
             script_with_data_offset,
             util::test_helpers::TestBuilder as TxBuilder,
-            Call, CallFrame, Contract,
+            Call,
+            CallFrame,
+            Contract,
         },
         services::{
             block_producer::Components,
             executor::{
-                Error as ExecutorError, Event as ExecutorEvent, ExecutionBlock,
-                ExecutionResult, ExecutionTypes, TransactionExecutionResult,
+                Error as ExecutorError,
+                Event as ExecutorEvent,
+                ExecutionBlock,
+                ExecutionResult,
+                ExecutionTypes,
+                TransactionExecutionResult,
                 TransactionValidityError,
             },
             relayer::Event,
         },
         tai64::Tai64,
     };
-    use fuel_core_upgradable_executor::{config::Config, executor::Executor};
+    use fuel_core_upgradable_executor::{
+        config::Config,
+        executor::Executor,
+    };
     use itertools::Itertools;
-    use rand::{prelude::StdRng, Rng, SeedableRng};
+    use rand::{
+        prelude::StdRng,
+        Rng,
+        SeedableRng,
+    };
 
     #[derive(Clone, Debug)]
     struct DisabledRelayer;
@@ -291,7 +358,10 @@ mod tests {
         use super::*;
         use fuel_core_storage::{
             iter::IterDirection,
-            transactional::{AtomicView, Modifiable},
+            transactional::{
+                AtomicView,
+                Modifiable,
+            },
         };
         use fuel_core_types::services::graphql_api::ContractBalance;
 
@@ -2728,13 +2798,19 @@ mod tests {
     mod relayer {
         use super::*;
         use crate::{
-            database::database_description::{on_chain::OnChain, relayer::Relayer},
+            database::database_description::{
+                on_chain::OnChain,
+                relayer::Relayer,
+            },
             state::ChangesIterator,
         };
         use fuel_core_relayer::storage::EventsHistory;
         use fuel_core_storage::{
             iter::IteratorOverTable,
-            tables::{FuelBlocks, SpentMessages},
+            tables::{
+                FuelBlocks,
+                SpentMessages,
+            },
             StorageAsMut,
         };
         use fuel_core_types::{
