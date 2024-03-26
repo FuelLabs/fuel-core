@@ -120,7 +120,7 @@ fn sort_events_by_log_index(events: Vec<Log>) -> anyhow::Result<Vec<Log>> {
             Ok((log_index, e))
         })
         .collect::<anyhow::Result<Vec<_>>>()?;
-    with_indexes.sort_by(|(index_a, _a), (index_b, _b)| index_a.cmp(&index_b));
+    with_indexes.sort_by(|(index_a, _a), (index_b, _b)| index_a.cmp(index_b));
     let new_events = with_indexes.into_iter().map(|(_, e)| e).collect();
     Ok(new_events)
 }
