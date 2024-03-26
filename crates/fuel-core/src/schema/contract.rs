@@ -2,6 +2,7 @@ use crate::{
     fuel_core_graphql_api::{
         database::ReadView,
         IntoApiResult,
+        MAX_COMPLEXITY,
     },
     query::ContractQueryData,
     schema::scalars::{
@@ -40,6 +41,8 @@ impl Contract {
         self.0.into()
     }
 
+    // use > 1/2 of MAX_COMPLEXITY to prevent abuse by querying a lot of bytecode
+    #[graphql(complexity = "MAX_COMPLEXITY / 2 + 1")]
     async fn bytecode(&self, ctx: &Context<'_>) -> async_graphql::Result<HexString> {
         let query: &ReadView = ctx.data_unchecked();
         query
@@ -124,6 +127,9 @@ impl ContractBalanceQuery {
             })
     }
 
+    #[graphql(
+        complexity = "(first.unwrap_or_default() as usize * child_complexity) + (last.unwrap_or_default() as usize * child_complexity)"
+    )]
     async fn contract_balances(
         &self,
         ctx: &Context<'_>,

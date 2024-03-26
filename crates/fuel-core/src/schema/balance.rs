@@ -69,6 +69,9 @@ impl BalanceQuery {
     //  It should be replaced with `UtxoId`.
     //  This API should be migrated to the indexer for better support and
     //  discontinued within fuel-core.
+    #[graphql(
+        complexity = "(first.unwrap_or_default() as usize * child_complexity) + (last.unwrap_or_default() as usize * child_complexity)"
+    )]
     async fn balances(
         &self,
         ctx: &Context<'_>,

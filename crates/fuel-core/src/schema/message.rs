@@ -77,6 +77,9 @@ impl MessageQuery {
         query.message(&nonce).into_api_result()
     }
 
+    #[graphql(
+        complexity = "(first.unwrap_or_default() as usize * child_complexity) + (last.unwrap_or_default() as usize * child_complexity)"
+    )]
     async fn messages(
         &self,
         ctx: &Context<'_>,

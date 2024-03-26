@@ -9,6 +9,8 @@ use fuel_core_types::{
 };
 use std::net::SocketAddr;
 
+pub const MAX_COMPLEXITY: usize = 2000;
+
 pub mod api_service;
 pub mod database;
 pub(crate) mod metrics_extension;
