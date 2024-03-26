@@ -119,7 +119,7 @@ async fn can_paginate_logs(input: Input) -> Expected {
     let eth_node = MockMiddleware::default();
 
     eth_node.update_data(|data| {
-        data.logs_batch = vec![logs];
+        data.logs_batch = vec![logs].into();
         data.best_block.number = Some((*eth_gap.end()).into());
     });
     let count = std::sync::Arc::new(AtomicUsize::new(0));

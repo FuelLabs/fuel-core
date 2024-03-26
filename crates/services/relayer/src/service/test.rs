@@ -20,7 +20,7 @@ async fn can_download_logs() {
             ..Default::default()
         },
     ];
-    eth_node.update_data(|data| data.logs_batch = vec![logs.clone()]);
+    eth_node.update_data(|data| data.logs_batch = vec![logs.clone()].into());
 
     let eth_state = super::state::test_builder::TestDataSource {
         eth_remote_finalized: 5,
