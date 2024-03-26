@@ -99,17 +99,20 @@ async fn stop_service_at_the_middle() {
 #[tokio::test(start_paused = true)]
 async fn relayer__downloads_message_logs_to_events_table() {
     // setup mock data
-    let logs = vec![message(1, 3), message(2, 5)];
+    let block_three_msg = message(3, 3, 0);
+    let block_five_msg = message(2, 5, 0);
+    let logs = vec![block_three_msg, block_five_msg];
     let expected_messages: Vec<_> = logs.iter().map(|l| l.to_msg()).collect();
     let mut ctx = TestContext::new();
     // given logs
     ctx.given_logs(logs);
     // when the relayer runs
     let mock_db = ctx.when_relayer_syncs().await;
-    // expect several messages in the database
-    for msg in expected_messages {
-        assert_eq!(mock_db.get_message(msg.id()).unwrap(), msg);
-    }
+    // then
+    let block_one_actual = mock_db.get_messages_for_block(1u64.into()).pop().unwrap();
+    assert_eq!(block_one_actual, expected_messages[0]);
+    let block_two_actual = mock_db.get_messages_for_block(2u64.into()).pop().unwrap();
+    assert_eq!(block_two_actual, expected_messages[1]);
 }
 
 #[tokio::test(start_paused = true)]
@@ -179,20 +182,20 @@ async fn relayer__downloaded_message_logs_will_always_be_stored_in_block_index_o
     let blocks = vec![1u64, 2, 3, 4];
     let ordered_logs: Vec<Log> = vec![
         // one
-        message(1, 1),
-        message(2, 1),
-        message(3, 1),
+        message(1, 1, 0),
+        message(2, 1, 1),
+        message(3, 1, 2),
         // two
-        message(4, 2),
-        message(5, 2),
+        message(4, 2, 0),
+        message(5, 2, 1),
         // three
-        message(6, 3),
-        message(7, 3),
-        message(8, 3),
+        message(6, 3, 0),
+        message(7, 3, 1),
+        message(8, 3, 2),
         // four
-        message(9, 4),
-        message(10, 4),
-        message(11, 4),
+        message(9, 4, 0),
+        message(10, 4, 1),
+        message(11, 4, 2),
     ];
     let expected_messages: Vec<_> = ordered_logs.iter().map(|l| l.to_msg()).collect();
     let mut ctx = TestContext::new();
@@ -210,7 +213,24 @@ async fn relayer__downloaded_message_logs_will_always_be_stored_in_block_index_o
     assert_eq!(actual, expected_messages);
 }
 
-fn message(nonce: u64, block_number: u64) -> Log {
+#[tokio::test(start_paused = true)]
+async fn relayer__if_a_log_does_not_include_index_then_event_not_included() {
+    let mut ctx = TestContext::new();
+    // given
+    let block_height = 1;
+    let mut log = message(3, block_height, 2);
+    log.log_index = None;
+    ctx.given_logs(vec![log]);
+    // when
+    let mock_db = ctx.when_relayer_syncs().await;
+
+    // then
+    assert!(mock_db
+        .get_messages_for_block(block_height.into())
+        .is_empty());
+}
+
+fn message(nonce: u64, block_number: u64, block_index: u64) -> Log {
     let message = MessageSentFilter {
         nonce: U256::from_dec_str(nonce.to_string().as_str())
             .expect("Should convert to U256"),
@@ -218,6 +238,7 @@ fn message(nonce: u64, block_number: u64) -> Log {
     };
     let mut log = message.into_log();
     log.block_number = Some(block_number.into());
+    log.log_index = Some(block_index.into());
     log
 }
 
@@ -292,7 +313,7 @@ impl TestContext {
         }
 
         self.eth_node
-            .update_data(|data| data.logs_batch = vec![logs.clone()]);
+            .update_data(|data| data.logs_batch = vec![logs.clone()].into());
         // Setup the eth node with a block high enough that there
         // will be some finalized blocks.
         self.eth_node
