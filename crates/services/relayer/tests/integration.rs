@@ -208,7 +208,8 @@ async fn relayer__downloaded_message_logs_will_always_be_stored_in_block_index_o
     // then
     let mut actual = Vec::new();
     for block in blocks {
-        actual.extend(mock_db.get_messages_for_block(block.into()));
+        let messages = mock_db.get_messages_for_block(block.into());
+        actual.extend(messages);
     }
     assert_eq!(actual, expected_messages);
 }

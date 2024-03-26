@@ -95,7 +95,6 @@ where
 
         let mut inserted_last_height = false;
         for (height, events) in ordered_events {
-            dbg!(&height, &events);
             database.insert_events(&height, &events)?;
             if height == last_height {
                 inserted_last_height = true;
