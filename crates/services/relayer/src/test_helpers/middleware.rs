@@ -51,7 +51,7 @@ struct InnerState {
 pub struct MockData {
     pub is_syncing: SyncingStatus,
     pub best_block: Block<TxHash>,
-    pub logs_batch: Vec<Vec<Log>>,
+    pub logs_batch: Option<Vec<Vec<Log>>>,
     pub logs_batch_index: usize,
 }
 
@@ -141,7 +141,7 @@ impl Default for MockData {
         MockData {
             best_block,
             is_syncing: SyncingStatus::IsFalse,
-            logs_batch: Vec::new(),
+            logs_batch: Some(Vec::new()),
             logs_batch_index: 0,
         }
     }
@@ -263,6 +263,11 @@ impl Middleware for MockMiddleware {
         self.before_event(TriggerType::GetLogs(filter));
         let r = self.update_data(|data| {
             data.logs_batch
+                .take()
+                .unwrap_or_else(|| {
+                    tracing::debug!("No logs batch found");
+                    Vec::new()
+                })
                 .iter()
                 .flat_map(|logs| {
                     logs.iter().filter_map(|log| {

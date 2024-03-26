@@ -99,8 +99,10 @@ async fn stop_service_at_the_middle() {
 #[tokio::test(start_paused = true)]
 async fn relayer__downloads_message_logs_to_events_table() {
     // setup mock data
-    let block_three_msg = message(3, 3, 0);
-    let block_five_msg = message(2, 5, 0);
+    let block_one = 1;
+    let block_two = 2;
+    let block_three_msg = message(3, block_one, 0);
+    let block_five_msg = message(2, block_two, 0);
     let logs = vec![block_three_msg, block_five_msg];
     let expected_messages: Vec<_> = logs.iter().map(|l| l.to_msg()).collect();
     let mut ctx = TestContext::new();
@@ -109,9 +111,15 @@ async fn relayer__downloads_message_logs_to_events_table() {
     // when the relayer runs
     let mock_db = ctx.when_relayer_syncs().await;
     // then
-    let block_one_actual = mock_db.get_messages_for_block(1u64.into()).pop().unwrap();
+    let block_one_actual = mock_db
+        .get_messages_for_block(block_one.into())
+        .pop()
+        .unwrap();
     assert_eq!(block_one_actual, expected_messages[0]);
-    let block_two_actual = mock_db.get_messages_for_block(2u64.into()).pop().unwrap();
+    let block_two_actual = mock_db
+        .get_messages_for_block(block_two.into())
+        .pop()
+        .unwrap();
     assert_eq!(block_two_actual, expected_messages[1]);
 }
 
@@ -216,7 +224,6 @@ async fn relayer__downloaded_message_logs_will_always_be_stored_in_block_index_o
 
 #[tokio::test(start_paused = true)]
 async fn relayer__if_a_log_does_not_include_index_then_event_not_included() {
-    todo!();
     let mut ctx = TestContext::new();
     // given
     let block_height = 1;
