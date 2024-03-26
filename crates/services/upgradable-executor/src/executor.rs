@@ -52,20 +52,44 @@ pub struct Executor<S, R> {
     module: wasmtime::Module,
 }
 
+#[cfg(feature = "wasm-executor")]
+mod private {
+    use std::sync::OnceLock;
+    use wasmtime::{
+        Engine,
+        Module,
+    };
+
+    /// The default engine for the WASM executor. It is used to compile the WASM bytecode.
+    pub(crate) static DEFAULT_ENGINE: OnceLock<Engine> = OnceLock::new();
+
+    /// The default module compiles the WASM bytecode of the native executor.
+    /// It is used to create the WASM instance of the executor.
+    pub(crate) static COMPILED_UNDERLYING_EXECUTOR: OnceLock<Module> = OnceLock::new();
+}
+
 impl<S, R> Executor<S, R> {
     pub fn new(
         storage_view_provider: S,
         relayer_view_provider: R,
         config: Config,
     ) -> Self {
+        #[cfg(feature = "wasm-executor")]
+        let engine = private::DEFAULT_ENGINE.get_or_init(wasmtime::Engine::default);
+        #[cfg(feature = "wasm-executor")]
+        let module = private::COMPILED_UNDERLYING_EXECUTOR.get_or_init(|| {
+            wasmtime::Module::new(engine, crate::WASM_BYTECODE)
+                .expect("Failed to compile the WASM bytecode")
+        });
+
         Self {
             storage_view_provider,
             relayer_view_provider,
             config: Arc::new(config),
             #[cfg(feature = "wasm-executor")]
-            engine: crate::DEFAULT_ENGINE.clone(),
+            engine: engine.clone(),
             #[cfg(feature = "wasm-executor")]
-            module: crate::COMPILED_UNDERLYING_EXECUTOR.clone(),
+            module: module.clone(),
         }
     }
 }

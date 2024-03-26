@@ -16,7 +16,6 @@ fuel-core-executor = { workspace = true }
 fuel-core-storage = { workspace = true }
 fuel-core-types = { workspace = true }
 fuel-core-wasm-executor = { workspace = true, optional = true }
-lazy_static = { workspace = true, optional = true }
 postcard = { workspace = true, optional = true }
 wasmtime = { version = "18.0.1", default-features = false, features = [
   "cache",
@@ -35,7 +34,6 @@ default = ["std"]
 std = ["fuel-core-executor/std", "fuel-core-storage/std", "fuel-core-types/std"]
 wasm-executor = [
   "dep:anyhow",
-  "dep:lazy_static",
   "dep:postcard",
   "dep:fuel-core-wasm-executor",
   "dep:wasmtime",
