@@ -89,7 +89,7 @@ async fn relayer_can_download_logs() {
 
     let logs = vec![message(1, 3), message(2, 5)];
     let expected_messages: Vec<_> = logs.iter().map(|l| l.to_msg()).collect();
-    eth_node.update_data(|data| data.logs_batch = vec![logs.clone()]);
+    eth_node.update_data(|data| data.logs_batch = vec![logs.clone()].into());
     // Setup the eth node with a block high enough that there
     // will be some finalized blocks.
     eth_node.update_data(|data| data.best_block.number = Some(200.into()));
@@ -158,7 +158,7 @@ async fn messages_are_spendable_after_relayer_is_synced() {
         Some(amount),
         None,
     )];
-    eth_node.update_data(|data| data.logs_batch = vec![logs.clone()]);
+    eth_node.update_data(|data| data.logs_batch = vec![logs.clone()].into());
     // Setup the eth node with a block high enough that there
     // will be some finalized blocks.
     eth_node.update_data(|data| data.best_block.number = Some(200.into()));
