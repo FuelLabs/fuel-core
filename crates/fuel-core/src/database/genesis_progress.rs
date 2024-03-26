@@ -1,4 +1,10 @@
-use super::Database;
+use super::{
+    database_description::{
+        on_chain::OnChain,
+        DatabaseDescription,
+    },
+    Database,
+};
 use fuel_core_chain_config::GenesisCommitment;
 use fuel_core_executor::refs::ContractRef;
 use fuel_core_storage::{
@@ -21,74 +27,63 @@ use fuel_core_storage::{
     StorageMutate,
 };
 use fuel_core_types::fuel_merkle::binary::root_calculator::MerkleRootCalculator;
-use serde::{
-    Deserialize,
-    Serialize,
-};
 
-#[derive(Debug, Clone, Copy, strum::EnumIter, Serialize, Deserialize)]
-pub enum GenesisResource {
-    Coins,
-    Messages,
-    Contracts,
-    ContractStates,
-    ContractBalances,
-    ContractsRoot,
-}
+pub struct GenesisMetadata<Description>(core::marker::PhantomData<Description>);
 
-pub struct GenesisMetadata;
-
-impl Mappable for GenesisMetadata {
-    type Key = Self::OwnedKey;
-    type OwnedKey = GenesisResource;
+impl<Description> Mappable for GenesisMetadata<Description> {
+    type Key = str;
+    type OwnedKey = String;
     type Value = Self::OwnedValue;
     type OwnedValue = usize;
 }
 
-impl TableWithBlueprint for GenesisMetadata {
+impl TableWithBlueprint for GenesisMetadata<OnChain> {
     type Blueprint = Plain<Postcard, Postcard>;
-    type Column = Column;
+    type Column = <OnChain as DatabaseDescription>::Column;
     fn column() -> Self::Column {
         Column::GenesisMetadata
     }
 }
 
-pub trait GenesisProgressInspect {
-    fn genesis_progress(&self, key: &GenesisResource) -> Option<usize>;
+pub trait GenesisProgressInspect<Description> {
+    fn genesis_progress(&self, key: &str) -> Option<usize>;
 }
 
-pub trait GenesisProgressMutate {
+pub trait GenesisProgressMutate<Description> {
     fn update_genesis_progress(
         &mut self,
-        key: GenesisResource,
+        key: &str,
         processed_group: usize,
     ) -> Result<()>;
 }
 
-impl<S> GenesisProgressInspect for S
+impl<S, Description> GenesisProgressInspect<Description> for S
 where
-    S: StorageInspect<GenesisMetadata, Error = StorageError>,
+    S: StorageInspect<GenesisMetadata<Description>, Error = StorageError>,
 {
-    fn genesis_progress(&self, key: &GenesisResource) -> Option<usize> {
+    fn genesis_progress(
+        &self,
+        key: &<GenesisMetadata<Description> as Mappable>::Key,
+    ) -> Option<usize> {
         Some(
-            StorageInspect::<GenesisMetadata>::get(self, key)
+            StorageInspect::<GenesisMetadata<Description>>::get(self, key)
                 .ok()??
                 .into_owned(),
         )
     }
 }
 
-impl<S> GenesisProgressMutate for S
+impl<S, Description> GenesisProgressMutate<Description> for S
 where
-    S: StorageMutate<GenesisMetadata, Error = StorageError>,
+    S: StorageMutate<GenesisMetadata<Description>, Error = StorageError>,
 {
     fn update_genesis_progress(
         &mut self,
-        key: GenesisResource,
+        key: &<GenesisMetadata<Description> as Mappable>::Key,
         processed_group: usize,
     ) -> Result<()> {
-        self.storage_as_mut::<GenesisMetadata>()
-            .insert(&key, &processed_group)?;
+        self.storage_as_mut::<GenesisMetadata<Description>>()
+            .insert(key, &processed_group)?;
 
         Ok(())
     }

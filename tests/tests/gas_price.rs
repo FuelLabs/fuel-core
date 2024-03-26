@@ -3,8 +3,8 @@
 use fuel_core::{
     chain_config::{
         CoinConfig,
+        SnapshotReader,
         StateConfig,
-        StateReader,
     },
     service::{
         Config,
@@ -58,7 +58,7 @@ async fn setup_service_with_coin(
         ..Default::default()
     };
     let config = Config {
-        state_reader: StateReader::in_memory(state),
+        snapshot_reader: SnapshotReader::local_testnet().with_state_config(state),
         static_gas_price,
         ..Config::local_node()
     };

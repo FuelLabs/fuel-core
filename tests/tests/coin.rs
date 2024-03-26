@@ -2,8 +2,8 @@ use fuel_core::{
     chain_config::{
         CoinConfig,
         CoinConfigGenerator,
+        SnapshotReader,
         StateConfig,
-        StateReader,
     },
     database::Database,
     service::{
@@ -36,7 +36,7 @@ async fn setup_service(configs: Vec<CoinConfig>) -> FuelService {
     };
 
     let config = Config {
-        state_reader: StateReader::in_memory(state),
+        snapshot_reader: SnapshotReader::local_testnet().with_state_config(state),
         ..Config::local_node()
     };
 

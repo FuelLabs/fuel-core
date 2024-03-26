@@ -1,110 +1,86 @@
 use super::{
     init_coin,
-    init_contract,
+    init_contract_latest_utxo,
+    init_contract_raw_code,
     init_da_message,
     runner::ProcessState,
     GenesisRunner,
 };
 use std::{
+    collections::HashMap,
     marker::PhantomData,
     sync::Arc,
 };
 
 use crate::database::{
     balances::BalancesInitializer,
-    genesis_progress::GenesisResource,
     state::StateInitializer,
     Database,
 };
 use fuel_core_chain_config::{
-    CoinConfig,
-    ContractBalanceConfig,
-    ContractConfig,
-    ContractStateConfig,
-    Group,
-    MessageConfig,
-    StateReader,
+    AsTable,
+    SnapshotReader,
+    StateConfig,
+    TableEntry,
 };
-use fuel_core_storage::transactional::StorageTransaction;
+use fuel_core_storage::{
+    kv_store::StorageColumn,
+    structured_storage::TableWithBlueprint,
+    tables::{
+        Coins,
+        ContractsAssets,
+        ContractsLatestUtxo,
+        ContractsRawCode,
+        ContractsState,
+        Messages,
+    },
+    transactional::StorageTransaction,
+};
 use fuel_core_types::{
     blockchain::primitives::DaBlockHeight,
     fuel_types::BlockHeight,
 };
 use tokio::sync::Notify;
+use tokio_rayon::AsyncRayonHandle;
 use tokio_util::sync::CancellationToken;
-
-struct FinishedWorkerSignals {
-    coins: Arc<Notify>,
-    messages: Arc<Notify>,
-    contracts: Arc<Notify>,
-    contract_state: Arc<Notify>,
-    contract_balance: Arc<Notify>,
-}
-
-impl FinishedWorkerSignals {
-    fn new() -> Self {
-        Self {
-            coins: Arc::new(Notify::new()),
-            messages: Arc::new(Notify::new()),
-            contracts: Arc::new(Notify::new()),
-            contract_state: Arc::new(Notify::new()),
-            contract_balance: Arc::new(Notify::new()),
-        }
-    }
-}
-
-impl<'a> IntoIterator for &'a FinishedWorkerSignals {
-    type Item = &'a Arc<Notify>;
-    type IntoIter = std::vec::IntoIter<&'a Arc<Notify>>;
-
-    fn into_iter(self) -> Self::IntoIter {
-        vec![
-            &self.coins,
-            &self.messages,
-            &self.contracts,
-            &self.contract_state,
-            &self.contract_balance,
-        ]
-        .into_iter()
-    }
-}
 
 pub struct GenesisWorkers {
     db: Database,
     cancel_token: CancellationToken,
     block_height: BlockHeight,
     da_block_height: DaBlockHeight,
-    state_reader: StateReader,
-    finished_signals: FinishedWorkerSignals,
+    snapshot_reader: SnapshotReader,
+    finished_signals: HashMap<String, Arc<Notify>>,
 }
 
 impl GenesisWorkers {
-    pub fn new(db: Database, state_reader: StateReader) -> Self {
-        let block_height = state_reader.block_height();
-        let da_block_height = state_reader.da_block_height();
+    pub fn new(db: Database, snapshot_reader: SnapshotReader) -> Self {
+        let block_height = snapshot_reader.block_height();
+        let da_block_height = snapshot_reader.da_block_height();
         Self {
             db,
             cancel_token: CancellationToken::new(),
             block_height,
             da_block_height,
-            state_reader,
-            finished_signals: FinishedWorkerSignals::new(),
+            snapshot_reader,
+            finished_signals: HashMap::default(),
         }
     }
 
-    pub async fn run_imports(&self) -> anyhow::Result<()> {
+    pub async fn run_imports(&mut self) -> anyhow::Result<()> {
         tokio::try_join!(
-            self.spawn_coins_worker(),
-            self.spawn_messages_worker(),
-            self.spawn_contracts_worker(),
-            self.spawn_contract_state_worker(),
-            self.spawn_contract_balance_worker()
+            self.spawn_worker::<Coins>()?,
+            self.spawn_worker::<Messages>()?,
+            self.spawn_worker::<ContractsRawCode>()?,
+            self.spawn_worker::<ContractsLatestUtxo>()?,
+            self.spawn_worker::<ContractsState>()?,
+            self.spawn_worker::<ContractsAssets>()?,
         )
         .map(|_| ())
     }
 
     pub async fn finished(&self) {
-        for signal in &self.finished_signals {
+        for signal in self.finished_signals.values() {
             signal.notified().await;
         }
     }
@@ -113,68 +89,36 @@ impl GenesisWorkers {
         self.cancel_token.cancel()
     }
 
-    async fn spawn_coins_worker(&self) -> anyhow::Result<()> {
-        let coins = self.state_reader.coins()?;
-        let finished_signal = Arc::clone(&self.finished_signals.coins);
-        self.spawn_worker(coins, finished_signal).await
-    }
-
-    async fn spawn_messages_worker(&self) -> anyhow::Result<()> {
-        let messages = self.state_reader.messages()?;
-        let finished_signal = Arc::clone(&self.finished_signals.messages);
-        self.spawn_worker(messages, finished_signal).await
-    }
-
-    async fn spawn_contracts_worker(&self) -> anyhow::Result<()> {
-        let contracts = self.state_reader.contracts()?;
-        let finished_signal = Arc::clone(&self.finished_signals.contracts);
-        self.spawn_worker(contracts, finished_signal).await
-    }
-
-    async fn spawn_contract_state_worker(&self) -> anyhow::Result<()> {
-        let contract_state = self.state_reader.contract_state()?;
-        let finished_signal = Arc::clone(&self.finished_signals.contract_state);
-        self.spawn_worker(contract_state, finished_signal).await
-    }
-
-    async fn spawn_contract_balance_worker(&self) -> anyhow::Result<()> {
-        let contract_balance = self.state_reader.contract_balance()?;
-        let finished_signal = Arc::clone(&self.finished_signals.contract_balance);
-        self.spawn_worker(contract_balance, finished_signal).await
-    }
-
-    fn spawn_worker<T, I>(
-        &self,
-        data: I,
-        finished_signal: Arc<Notify>,
-    ) -> tokio_rayon::AsyncRayonHandle<Result<(), anyhow::Error>>
+    pub fn spawn_worker<T>(
+        &mut self,
+    ) -> anyhow::Result<AsyncRayonHandle<anyhow::Result<()>>>
     where
-        T: Send + 'static,
-        Handler<T>: ProcessState<Item = T>,
-        I: IntoIterator<Item = anyhow::Result<Group<T>>> + Send + 'static,
+        T: TableWithBlueprint + Send + 'static,
+        T::OwnedKey: serde::de::DeserializeOwned + Send,
+        T::OwnedValue: serde::de::DeserializeOwned + Send,
+        StateConfig: AsTable<T>,
+        Handler<T>: ProcessState<Table = T>,
     {
-        let runner = self.create_runner(data, Some(finished_signal));
-        tokio_rayon::spawn(move || runner.run())
-    }
-
-    fn create_runner<T, I>(
-        &self,
-        data: I,
-        finished_signal: Option<Arc<Notify>>,
-    ) -> GenesisRunner<Handler<T>, I, Database>
-    where
-        Handler<T>: ProcessState<Item = T>,
-        I: IntoIterator<Item = anyhow::Result<Group<T>>>,
-    {
+        let groups = self.snapshot_reader.read::<T>()?;
+        let finished_signal = self.get_signal(T::column().name());
         let handler = Handler::new(self.block_height, self.da_block_height);
+
         let database = self.db.clone();
-        GenesisRunner::new(
-            finished_signal,
+        let runner = GenesisRunner::new(
+            Some(finished_signal),
             self.cancel_token.clone(),
             handler,
-            data,
+            groups,
             database,
-        )
+        );
+        Ok(tokio_rayon::spawn(move || runner.run()))
+    }
+
+    fn get_signal(&mut self, name: &str) -> Arc<Notify> {
+        self.finished_signals
+            .entry(name.to_string())
+            .or_insert_with(|| Arc::new(Notify::new()))
+            .clone()
     }
 }
 
@@ -195,12 +139,12 @@ impl<T> Handler<T> {
     }
 }
 
-impl ProcessState for Handler<CoinConfig> {
-    type Item = CoinConfig;
+impl ProcessState for Handler<Coins> {
+    type Table = Coins;
 
     fn process(
         &mut self,
-        group: Vec<Self::Item>,
+        group: Vec<TableEntry<Self::Table>>,
         tx: &mut StorageTransaction<&mut Database>,
     ) -> anyhow::Result<()> {
         group.into_iter().try_for_each(|coin| {
@@ -208,79 +152,74 @@ impl ProcessState for Handler<CoinConfig> {
             Ok(())
         })
     }
-
-    fn genesis_resource() -> GenesisResource {
-        GenesisResource::Coins
-    }
 }
 
-impl ProcessState for Handler<MessageConfig> {
-    type Item = MessageConfig;
+impl ProcessState for Handler<Messages> {
+    type Table = Messages;
 
     fn process(
         &mut self,
-        group: Vec<Self::Item>,
+        group: Vec<TableEntry<Self::Table>>,
         tx: &mut StorageTransaction<&mut Database>,
     ) -> anyhow::Result<()> {
         group
             .into_iter()
             .try_for_each(|message| init_da_message(tx, message, self.da_block_height))
     }
-
-    fn genesis_resource() -> GenesisResource {
-        GenesisResource::Messages
-    }
 }
 
-impl ProcessState for Handler<ContractConfig> {
-    type Item = ContractConfig;
+impl ProcessState for Handler<ContractsRawCode> {
+    type Table = ContractsRawCode;
 
     fn process(
         &mut self,
-        group: Vec<Self::Item>,
+        group: Vec<TableEntry<Self::Table>>,
         tx: &mut StorageTransaction<&mut Database>,
     ) -> anyhow::Result<()> {
         group.into_iter().try_for_each(|contract| {
-            init_contract(tx, &contract, self.block_height)?;
+            init_contract_raw_code(tx, &contract)?;
             Ok::<(), anyhow::Error>(())
         })
     }
-
-    fn genesis_resource() -> GenesisResource {
-        GenesisResource::Contracts
-    }
 }
 
-impl ProcessState for Handler<ContractStateConfig> {
-    type Item = ContractStateConfig;
+impl ProcessState for Handler<ContractsLatestUtxo> {
+    type Table = ContractsLatestUtxo;
 
     fn process(
         &mut self,
-        group: Vec<ContractStateConfig>,
+        group: Vec<TableEntry<Self::Table>>,
+        tx: &mut StorageTransaction<&mut Database>,
+    ) -> anyhow::Result<()> {
+        group.into_iter().try_for_each(|contract| {
+            init_contract_latest_utxo(tx, &contract, self.block_height)?;
+            Ok::<(), anyhow::Error>(())
+        })
+    }
+}
+
+impl ProcessState for Handler<ContractsState> {
+    type Table = ContractsState;
+
+    fn process(
+        &mut self,
+        group: Vec<TableEntry<Self::Table>>,
         tx: &mut StorageTransaction<&mut Database>,
     ) -> anyhow::Result<()> {
         tx.update_contract_states(group)?;
         Ok(())
     }
-
-    fn genesis_resource() -> GenesisResource {
-        GenesisResource::ContractStates
-    }
 }
 
-impl ProcessState for Handler<ContractBalanceConfig> {
-    type Item = ContractBalanceConfig;
+impl ProcessState for Handler<ContractsAssets> {
+    type Table = ContractsAssets;
 
     fn process(
         &mut self,
-        group: Vec<ContractBalanceConfig>,
+        group: Vec<TableEntry<Self::Table>>,
         tx: &mut StorageTransaction<&mut Database>,
     ) -> anyhow::Result<()> {
         tx.update_contract_balances(group)?;
         Ok(())
-    }
-
-    fn genesis_resource() -> GenesisResource {
-        GenesisResource::ContractBalances
     }
 }

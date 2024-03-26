@@ -1,8 +1,12 @@
 use crate::{
     serialization::HexIfHumanReadable,
     GenesisCommitment,
+    TableEntry,
 };
-use fuel_core_storage::MerkleRoot;
+use fuel_core_storage::{
+    tables::Messages,
+    MerkleRoot,
+};
 use fuel_core_types::{
     blockchain::primitives::DaBlockHeight,
     entities::relayer::message::{
@@ -35,16 +39,45 @@ pub struct MessageConfig {
     pub da_height: DaBlockHeight,
 }
 
-#[cfg(all(test, feature = "random", feature = "std"))]
+impl From<TableEntry<Messages>> for MessageConfig {
+    fn from(value: TableEntry<Messages>) -> Self {
+        Self {
+            sender: *value.value.sender(),
+            recipient: *value.value.recipient(),
+            nonce: *value.value.nonce(),
+            amount: value.value.amount(),
+            data: value.value.data().to_vec(),
+            da_height: value.value.da_height(),
+        }
+    }
+}
+
+impl From<MessageConfig> for TableEntry<Messages> {
+    fn from(value: MessageConfig) -> Self {
+        TableEntry {
+            key: value.nonce,
+            value: Message::V1(MessageV1 {
+                sender: value.sender,
+                recipient: value.recipient,
+                nonce: value.nonce,
+                amount: value.amount,
+                data: value.data,
+                da_height: value.da_height,
+            }),
+        }
+    }
+}
+
+#[cfg(feature = "test-helpers")]
 impl crate::Randomize for MessageConfig {
     fn randomize(mut rng: impl rand::Rng) -> Self {
         Self {
-            sender: Address::new(super::random_bytes_32(&mut rng)),
-            recipient: Address::new(super::random_bytes_32(&mut rng)),
-            nonce: Nonce::new(super::random_bytes_32(&mut rng)),
-            amount: rng.gen(),
-            data: (super::random_bytes_32(&mut rng)).to_vec(),
-            da_height: DaBlockHeight(rng.gen()),
+            sender: crate::Randomize::randomize(&mut rng),
+            recipient: crate::Randomize::randomize(&mut rng),
+            nonce: crate::Randomize::randomize(&mut rng),
+            amount: crate::Randomize::randomize(&mut rng),
+            data: fuel_core_types::fuel_types::Bytes32::randomize(&mut rng).to_vec(),
+            da_height: crate::Randomize::randomize(&mut rng),
         }
     }
 }

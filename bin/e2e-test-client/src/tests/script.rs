@@ -12,7 +12,6 @@ use fuel_core_types::{
         field::ScriptGasLimit,
         Receipt,
         ScriptExecutionResult,
-        StorageSlot,
         Transaction,
         UniqueIdentifier,
     },
@@ -22,7 +21,7 @@ use fuel_core_types::{
     },
     services::executor::TransactionExecutionResult,
 };
-use itertools::Itertools;
+
 use libtest_mimic::Failed;
 use std::{
     path::Path,
@@ -103,42 +102,17 @@ pub async fn dry_run_multiple_txs(ctx: &TestContext) -> Result<(), Failed> {
     .await
 }
 
-fn load_contract(
-    salt: Salt,
-    path: impl AsRef<Path>,
-) -> Result<(ContractConfig, Vec<StorageSlot>), Failed> {
+fn load_contract(salt: Salt, path: impl AsRef<Path>) -> Result<ContractConfig, Failed> {
     let snapshot = SnapshotMetadata::read(path)?;
     let state_config = StateConfig::from_snapshot_metadata(snapshot)?;
-
-    let state = state_config
-        .contract_state
+    let mut contract_config = state_config
+        .contracts
         .into_iter()
-        .map(|entry| {
-            Ok::<_, core::array::TryFromSliceError>(StorageSlot::new(
-                entry.key,
-                entry.value.as_slice().try_into()?,
-            ))
-        })
-        .try_collect()?;
+        .next()
+        .ok_or("No contract found in the state")?;
 
-    let contract_config = {
-        let contracts = state_config.contracts;
-
-        if contracts.len() != 1 {
-            return Err(format!(
-                "Expected to find only one contract, but found {}",
-                contracts.len()
-            )
-            .into());
-        }
-        let mut contract_config = contracts[0].clone();
-
-        contract_config.update_contract_id(salt, &state);
-
-        contract_config
-    };
-
-    Ok((contract_config, state))
+    contract_config.update_contract_id(salt);
+    Ok(contract_config)
 }
 
 // Maybe deploy a contract with large state and execute the script
@@ -146,8 +120,7 @@ pub async fn run_contract_large_state(ctx: &TestContext) -> Result<(), Failed> {
     let salt: Salt = "0x3b91bab936e4f3db9453046b34c142514e78b64374bf61a04ab45afbd6bca83e"
         .parse()
         .expect("Should be able to parse the salt");
-    let (contract_config, state) =
-        load_contract(salt, "./src/tests/test_data/large_state")?;
+    let contract_config = load_contract(salt, "./src/tests/test_data/large_state")?;
     let dry_run = include_bytes!("test_data/large_state/tx.json");
     let dry_run: Transaction = serde_json::from_slice(dry_run.as_ref())
         .expect("Should be able do decode the Transaction");
@@ -157,12 +130,11 @@ pub async fn run_contract_large_state(ctx: &TestContext) -> Result<(), Failed> {
     // `test_data/large_state/state_config.json` together with:
     // 244, 41, 47, 229, 13, 33, 102, 142, 20, 6, 54, 171, 105, 199, 212, 179, 208, 105, 246, 110, 185, 239, 61, 164, 176, 163, 36, 64, 156, 195, 107, 140,
     let contract_id = contract_config.contract_id;
-    println!("\nThe `contract_id` of the contract with large state: {contract_id}");
 
     // if the contract is not deployed yet, let's deploy it
     let result = ctx.bob.client.contract(&contract_id).await;
     if result?.is_none() {
-        let deployment_request = ctx.bob.deploy_contract(contract_config, salt, state);
+        let deployment_request = ctx.bob.deploy_contract(contract_config, salt);
 
         timeout(Duration::from_secs(20), deployment_request).await??;
     }

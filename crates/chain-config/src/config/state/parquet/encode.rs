@@ -1,6 +1,5 @@
 use std::{
     io::Write,
-    marker::PhantomData,
     sync::Arc,
 };
 
@@ -25,17 +24,16 @@ use postcard::ser_flavors::{
     Flavor,
 };
 
-pub type PostcardEncoder<T> = Encoder<std::fs::File, T, PostcardEncode>;
-
-pub struct Encoder<W: Write + Send, T, E> {
+pub struct Encoder<W>
+where
+    W: Write,
+{
     writer: SerializedFileWriter<W>,
-    _type: PhantomData<T>,
-    _encoding: PhantomData<E>,
 }
 
-impl<W: Write + Send, T, E> Encoder<W, T, E>
+impl<W> Encoder<W>
 where
-    E: Encode<T>,
+    W: Write + Send,
 {
     pub fn new(writer: W, compression: Compression) -> anyhow::Result<Self> {
         let writer = SerializedFileWriter::new(
@@ -48,11 +46,7 @@ where
             ),
         )?;
 
-        Ok(Self {
-            writer,
-            _type: PhantomData,
-            _encoding: PhantomData,
-        })
+        Ok(Self { writer })
     }
 
     fn single_element_schema() -> Type {
@@ -69,22 +63,17 @@ where
     }
 }
 
-impl<W, T, E> Encoder<W, T, E>
+impl<W> Encoder<W>
 where
     W: Write + Send,
-    E: Encode<T>,
 {
-    pub fn write(&mut self, elements: Vec<T>) -> anyhow::Result<()> {
+    pub fn write(&mut self, elements: Vec<Vec<u8>>) -> anyhow::Result<()> {
         let mut group = self.writer.next_row_group()?;
         let mut column = group
             .next_column()?
             .ok_or_else(|| anyhow::anyhow!("Missing column. Check the schema!"))?;
 
-        let values: Vec<_> = elements
-            .into_iter()
-            .map(|el| E::encode(&el))
-            .map_ok(Into::into)
-            .try_collect()?;
+        let values = elements.into_iter().map(Into::into).collect_vec();
         column
             .typed::<ByteArrayType>()
             .write_batch(&values, None, None)?;

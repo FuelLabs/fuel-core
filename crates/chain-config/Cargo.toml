@@ -17,7 +17,6 @@ fuel-core-storage = { workspace = true }
 fuel-core-types = { workspace = true, default-features = false, features = [
   "serde",
 ] }
-impl-tools = { workspace = true }
 itertools = { workspace = true, features = ["use_alloc"] }
 parquet = { workspace = true, features = ["zstd"], optional = true }
 postcard = { workspace = true, features = ["alloc"] }
@@ -29,7 +28,7 @@ tracing = { version = "0.1", default-features = false }
 
 [dev-dependencies]
 bytes = { workspace = true }
-fuel-core-chain-config = { path = ".", features = ["parquet"] }
+fuel-core-chain-config = { path = ".", features = ["parquet", "test-helpers"] }
 fuel-core-types = { workspace = true, default-features = false, features = [
   "random",
   "serde",
@@ -50,6 +49,6 @@ std = [
   "tracing/std",
   "bech32/std",
 ]
-default = ["std", "random"]
+default = ["std"]
 parquet = ["std", "dep:parquet", "postcard/use-std"]
-random = ["dep:rand", "fuel-core-types/random"]
+test-helpers = ["dep:rand", "fuel-core-types/random"]

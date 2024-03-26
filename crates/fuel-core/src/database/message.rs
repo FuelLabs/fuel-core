@@ -8,7 +8,7 @@ use crate::{
         OwnedMessageKey,
     },
 };
-use fuel_core_chain_config::MessageConfig;
+use fuel_core_chain_config::TableEntry;
 use fuel_core_storage::{
     iter::{
         IterDirection,
@@ -28,6 +28,7 @@ use fuel_core_types::{
         Nonce,
     },
 };
+use itertools::Itertools;
 
 impl Database<OffChain> {
     pub fn owned_message_ids(
@@ -57,14 +58,14 @@ impl Database {
             .map(|res| res.map(|(_, message)| message))
     }
 
-    pub fn iter_message_configs(
+    pub fn iter_messages(
         &self,
-    ) -> impl Iterator<Item = StorageResult<MessageConfig>> + '_ {
-        self.all_messages(None, None)
+    ) -> impl Iterator<Item = StorageResult<TableEntry<Messages>>> + '_ {
+        self.iter_all_by_start::<Messages>(None, None)
             .filter_map(|msg| {
                 // Return only unspent messages
                 if let Ok(msg) = msg {
-                    match self.message_is_spent(msg.id()) {
+                    match self.message_is_spent(msg.1.id()) {
                         Ok(false) => Some(Ok(msg)),
                         Ok(true) => None,
                         Err(e) => Some(Err(e)),
@@ -73,18 +74,7 @@ impl Database {
                     Some(msg.map_err(StorageError::from))
                 }
             })
-            .map(|msg| -> StorageResult<MessageConfig> {
-                let msg = msg?;
-
-                Ok(MessageConfig {
-                    sender: *msg.sender(),
-                    recipient: *msg.recipient(),
-                    nonce: *msg.nonce(),
-                    amount: msg.amount(),
-                    data: msg.data().clone(),
-                    da_height: msg.da_height(),
-                })
-            })
+            .map_ok(|(key, value)| TableEntry { key, value })
     }
 
     pub fn message_is_spent(&self, id: &Nonce) -> StorageResult<bool> {

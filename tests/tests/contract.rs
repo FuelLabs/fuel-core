@@ -3,7 +3,7 @@ use crate::helpers::{
     TestSetupBuilder,
 };
 use fuel_core::{
-    chain_config::StateReader,
+    chain_config::SnapshotReader,
     database::{
         database_description::on_chain::OnChain,
         Database,
@@ -21,6 +21,7 @@ use fuel_core_client::client::{
     types::TransactionStatus,
     FuelClient,
 };
+use fuel_core_storage::tables::Coins;
 use fuel_core_types::{
     fuel_asm::*,
     fuel_tx::*,
@@ -73,7 +74,7 @@ async fn calling_the_contract_with_enabled_utxo_validation_is_successful() {
     let config = Config {
         debug: true,
         utxo_validation: true,
-        state_reader: StateReader::in_memory(state_config),
+        snapshot_reader: SnapshotReader::local_testnet().with_state_config(state_config),
         ..Config::local_node()
     };
 
@@ -147,9 +148,17 @@ async fn test_contract_balance(
     asset: AssetId,
     #[values(100, 0, 18446744073709551615)] test_balance: u64,
 ) {
+    use fuel_core::chain_config::ContractBalanceConfig;
+
     let mut test_builder = TestSetupBuilder::new(SEED);
-    let (_, contract_id) =
-        test_builder.setup_contract(vec![], vec![(asset, test_balance)], None);
+    let (_, contract_id) = test_builder.setup_contract(
+        vec![],
+        vec![ContractBalanceConfig {
+            asset_id: asset,
+            amount: test_balance,
+        }],
+        None,
+    );
 
     // spin up node
     let TestContext {
@@ -171,12 +180,17 @@ async fn test_contract_balance(
 async fn test_5_contract_balances(
     #[values(PageDirection::Forward, PageDirection::Backward)] direction: PageDirection,
 ) {
+    use fuel_core::chain_config::ContractBalanceConfig;
+
     let mut test_builder = TestSetupBuilder::new(SEED);
-    let balances = vec![
+    let balances = [
         (AssetId::new([1u8; 32]), 1000),
         (AssetId::new([2u8; 32]), 400),
         (AssetId::new([3u8; 32]), 700),
-    ];
+    ]
+    .map(|(asset_id, amount)| ContractBalanceConfig { asset_id, amount })
+    .to_vec();
+
     let (_, contract_id) = test_builder.setup_contract(vec![], balances, None);
 
     let TestContext {
@@ -224,13 +238,14 @@ fn key(i: u8) -> Bytes32 {
 async fn can_get_message_proof() {
     let config = Config::local_node();
     let coin = config
-        .state_reader
-        .coins()
+        .snapshot_reader
+        .read::<Coins>()
         .unwrap()
         .next()
         .unwrap()
         .unwrap()
         .data[0]
+        .value
         .clone();
 
     let slots_to_read = 2;
@@ -319,7 +334,7 @@ async fn can_get_message_proof() {
         Default::default(),
         owner,
         1000,
-        coin.asset_id,
+        *coin.asset_id(),
         TxPointer::default(),
         Default::default(),
         predicate,

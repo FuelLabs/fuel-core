@@ -17,20 +17,13 @@ use crate::{
         DataSource,
     },
 };
-use fuel_core_chain_config::{
-    ChainStateDb,
-    CoinConfig,
-    ContractBalanceConfig,
-    ContractConfig,
-    ContractStateConfig,
-    MessageConfig,
-};
+use fuel_core_chain_config::TableEntry;
 use fuel_core_services::SharedMutex;
 use fuel_core_storage::{
     self,
+    blueprint::BlueprintInspect,
     iter::{
         BoxedIter,
-        IntoBoxedIter,
         IterDirection,
         IterableStore,
         IteratorOverTable,
@@ -41,6 +34,7 @@ use fuel_core_storage::{
         Value,
     },
     not_found,
+    structured_storage::TableWithBlueprint,
     tables::FuelBlocks,
     transactional::{
         AtomicView,
@@ -98,6 +92,31 @@ where
 {
     height: SharedMutex<Option<Description::Height>>,
     data: DataSource<Description>,
+}
+
+impl Database<OnChain> {
+    pub fn latest_block(&self) -> StorageResult<CompressedBlock> {
+        self.iter_all::<FuelBlocks>(Some(IterDirection::Reverse))
+            .next()
+            .transpose()?
+            .map(|(_, block)| block)
+            .ok_or_else(|| not_found!("FuelBlocks"))
+    }
+
+    pub fn entries<'a, T>(
+        &'a self,
+        prefix: Option<&[u8]>,
+        direction: IterDirection,
+    ) -> impl Iterator<Item = StorageResult<TableEntry<T>>> + 'a
+    where
+        T: TableWithBlueprint<Column = <OnChain as DatabaseDescription>::Column>,
+        T::OwnedValue: 'a,
+        T::OwnedKey: 'a,
+        T::Blueprint: BlueprintInspect<T, Self>,
+    {
+        self.iter_all_filtered::<T, _>(prefix, None, Some(direction))
+            .map_ok(|(key, value)| TableEntry { key, value })
+    }
 }
 
 impl<Description> Database<Description>
@@ -216,69 +235,6 @@ where
         {
             Self::rocksdb_temp()
         }
-    }
-}
-
-/// Implement `ChainStateDb` so that `Database` can be passed to
-/// `StateConfig's` `generate_state_config()` method
-impl ChainStateDb for Database {
-    fn get_contract_by_id(
-        &self,
-        contract_id: fuel_core_types::fuel_types::ContractId,
-    ) -> StorageResult<(
-        ContractConfig,
-        Vec<ContractStateConfig>,
-        Vec<ContractBalanceConfig>,
-    )> {
-        let contract = self.get_contract_config(contract_id)?;
-        let state = self
-            .contract_states(contract_id)
-            .map_ok(move |(key, value)| ContractStateConfig {
-                contract_id,
-                key,
-                value,
-            })
-            .try_collect()?;
-
-        let balances = self
-            .contract_balances(contract_id, None, None)
-            .map_ok(move |(asset_id, amount)| ContractBalanceConfig {
-                contract_id,
-                asset_id,
-                amount,
-            })
-            .try_collect()?;
-
-        Ok((contract, state, balances))
-    }
-
-    fn iter_coin_configs(&self) -> BoxedIter<StorageResult<CoinConfig>> {
-        Self::iter_coin_configs(self).into_boxed()
-    }
-
-    fn iter_contract_configs(&self) -> BoxedIter<StorageResult<ContractConfig>> {
-        Self::iter_contract_configs(self).into_boxed()
-    }
-
-    fn iter_contract_state_configs(
-        &self,
-    ) -> BoxedIter<StorageResult<ContractStateConfig>> {
-        Self::iter_contract_state_configs(self).into_boxed()
-    }
-
-    fn iter_contract_balance_configs(
-        &self,
-    ) -> BoxedIter<StorageResult<ContractBalanceConfig>> {
-        Self::iter_contract_balance_configs(self).into_boxed()
-    }
-
-    fn iter_message_configs(&self) -> BoxedIter<StorageResult<MessageConfig>> {
-        Self::iter_message_configs(self).into_boxed()
-    }
-
-    fn get_last_block(&self) -> StorageResult<CompressedBlock> {
-        self.latest_compressed_block()?
-            .ok_or(not_found!(FuelBlocks))
     }
 }
 

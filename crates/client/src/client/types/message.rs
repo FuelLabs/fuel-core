@@ -12,7 +12,7 @@ use crate::client::{
     PaginatedResult,
 };
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Message {
     pub amount: u64,
     pub sender: Address,
@@ -22,7 +22,7 @@ pub struct Message {
     pub da_height: u64,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct MessageProof {
     /// Proof that message is contained within the provided block header.
     pub message_proof: MerkleProof,

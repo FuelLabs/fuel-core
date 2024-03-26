@@ -11,6 +11,20 @@ use crate::{
     },
     service::DbType,
 };
+#[cfg(feature = "test-helpers")]
+use fuel_core_chain_config::{
+    StateConfig,
+    StateConfigBuilder,
+};
+#[cfg(feature = "test-helpers")]
+use fuel_core_storage::tables::{
+    Coins,
+    ContractsAssets,
+    ContractsLatestUtxo,
+    ContractsRawCode,
+    ContractsState,
+    Messages,
+};
 use fuel_core_storage::Result as StorageResult;
 use std::path::PathBuf;
 
@@ -131,5 +145,41 @@ impl CombinedDatabase {
 
     pub fn relayer(&self) -> &Database<Relayer> {
         &self.relayer
+    }
+
+    #[cfg(feature = "test-helpers")]
+    pub fn read_state_config(&self) -> StorageResult<StateConfig> {
+        use fuel_core_chain_config::AddTable;
+        use itertools::Itertools;
+        let mut builder = StateConfigBuilder::default();
+
+        macro_rules! add_tables {
+            ($($table: ty),*) => {
+                $(
+                    let table = self
+                        .on_chain()
+                        .entries::<$table>(None, fuel_core_storage::iter::IterDirection::Forward)
+                        .try_collect()?;
+                    builder.add(table);
+                )*
+            };
+        }
+
+        add_tables!(
+            Coins,
+            Messages,
+            ContractsAssets,
+            ContractsState,
+            ContractsRawCode,
+            ContractsLatestUtxo
+        );
+
+        let block = self.on_chain().latest_block()?;
+        builder.set_block_height(*block.header().height());
+        builder.set_da_block_height(block.header().da_height);
+
+        let state_config = builder.build()?;
+
+        Ok(state_config)
     }
 }
