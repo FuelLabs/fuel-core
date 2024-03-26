@@ -30,7 +30,6 @@ use crate::{
 use crate::SnapshotMetadata;
 
 pub const LOCAL_TESTNET: &str = "local_testnet";
-pub const CHAIN_CONFIG_FILENAME: &str = "chain_config.json";
 
 #[serde_as]
 // TODO: Remove not consensus/network fields from `ChainConfig` or create a new config only
