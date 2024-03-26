@@ -124,7 +124,6 @@ pretty_assertions = "1.4.0"
 proptest = "1.1"
 pin-project-lite = "0.2"
 axum = "0.5"
-lazy_static = "1.4"
 once_cell = "1.16"
 prometheus-client = "0.22.0"
 itertools = { version = "0.12", default-features = false }

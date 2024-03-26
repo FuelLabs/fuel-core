@@ -2960,7 +2960,6 @@ dependencies = [
  "hex",
  "humantime",
  "itertools 0.12.1",
- "lazy_static",
  "pyroscope",
  "pyroscope_pprofrs",
  "rand",
@@ -3407,7 +3406,6 @@ dependencies = [
  "fuel-core-storage",
  "fuel-core-types",
  "fuel-core-wasm-executor",
- "lazy_static",
  "postcard",
  "wasmtime",
 ]

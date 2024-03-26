@@ -14,8 +14,8 @@ use tracing_subscriber::{
 #[cfg(feature = "env")]
 use dotenvy::dotenv;
 
-lazy_static::lazy_static! {
-    pub static ref DEFAULT_DB_PATH: PathBuf = dirs::home_dir().unwrap().join(".fuel").join("db");
+pub fn default_db_path() -> PathBuf {
+    dirs::home_dir().unwrap().join(".fuel").join("db")
 }
 
 pub mod fee_contract;
@@ -153,7 +153,7 @@ mod tests {
     }
 
     mod snapshot_tests {
-        use crate::cli::DEFAULT_DB_PATH;
+        use crate::cli::default_db_path;
 
         use super::*;
 
@@ -187,7 +187,7 @@ mod tests {
             let Fuel::Snapshot(snapshot::Command { database_path, .. }) = command else {
                 panic!("Expected a snapshot command")
             };
-            assert_eq!(database_path, DEFAULT_DB_PATH.as_path());
+            assert_eq!(database_path, default_db_path().as_path());
         }
 
         #[test]
