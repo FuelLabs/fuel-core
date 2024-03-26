@@ -1,19 +1,32 @@
 use crate::{
-    database::{database_description::off_chain::OffChain, Database},
+    database::{
+        database_description::off_chain::OffChain,
+        Database,
+    },
     fuel_core_graphql_api::storage::transactions::{
-        OwnedTransactionIndexCursor, OwnedTransactionIndexKey, OwnedTransactions,
+        OwnedTransactionIndexCursor,
+        OwnedTransactionIndexKey,
+        OwnedTransactions,
         TransactionStatuses,
     },
 };
 use fuel_core_chain_config::TableEntry;
 use fuel_core_storage::{
-    iter::{IterDirection, IteratorOverTable},
+    iter::{
+        IterDirection,
+        IteratorOverTable,
+    },
     tables::Transactions,
-    Result as StorageResult, StorageMutate,
+    Result as StorageResult,
+    StorageMutate,
 };
 use fuel_core_types::{
     self,
-    fuel_tx::{Bytes32, Transaction, TxPointer},
+    fuel_tx::{
+        Bytes32,
+        Transaction,
+        TxPointer,
+    },
     fuel_types::Address,
     services::txpool::TransactionStatus,
 };

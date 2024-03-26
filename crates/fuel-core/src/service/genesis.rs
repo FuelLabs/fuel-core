@@ -599,6 +599,7 @@ mod tests {
         let expected_msg: Message = msg.into();
 
         let ret_msg = db
+            .on_chain()
             .storage::<Messages>()
             .get(expected_msg.id())
             .unwrap()

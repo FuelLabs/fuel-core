@@ -102,14 +102,19 @@ impl Database<OnChain> {
             .map(|(_, block)| block)
             .ok_or_else(|| not_found!("FuelBlocks"))
     }
+}
 
+impl<DbDesc> Database<DbDesc>
+where
+    DbDesc: DatabaseDescription,
+{
     pub fn entries<'a, T>(
         &'a self,
         prefix: Option<&[u8]>,
         direction: IterDirection,
     ) -> impl Iterator<Item = StorageResult<TableEntry<T>>> + 'a
     where
-        T: TableWithBlueprint<Column = <OnChain as DatabaseDescription>::Column>,
+        T: TableWithBlueprint<Column = <DbDesc as DatabaseDescription>::Column>,
         T::OwnedValue: 'a,
         T::OwnedKey: 'a,
         T::Blueprint: BlueprintInspect<T, Self>,

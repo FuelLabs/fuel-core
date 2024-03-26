@@ -1,29 +1,49 @@
 use crate::cli::DEFAULT_DB_PATH;
 use anyhow::Context;
-use clap::{Parser, Subcommand};
+use clap::{
+    Parser,
+    Subcommand,
+};
 use fuel_core::{
     chain_config::ChainConfig,
     combined_database::CombinedDatabase,
     database::{
-        database_description::{on_chain::OnChain, DatabaseDescription},
+        database_description::{
+            off_chain::OffChain,
+            on_chain::OnChain,
+            DatabaseDescription,
+        },
         Database,
     },
+    fuel_core_graphql_api::storage::transactions::TransactionStatuses,
     types::fuel_types::ContractId,
 };
 use fuel_core_chain_config::{
-    AddTable, SnapshotWriter, StateConfigBuilder, TableEntry, MAX_GROUP_SIZE,
+    AddTable,
+    SnapshotWriter,
+    StateConfigBuilder,
+    TableEntry,
+    MAX_GROUP_SIZE,
 };
 use fuel_core_storage::{
     blueprint::BlueprintInspect,
     iter::IterDirection,
     structured_storage::TableWithBlueprint,
     tables::{
-        Coins, ContractsAssets, ContractsLatestUtxo, ContractsRawCode, ContractsState,
-        Messages, Transactions,
+        Coins,
+        ContractsAssets,
+        ContractsLatestUtxo,
+        ContractsRawCode,
+        ContractsState,
+        Messages,
+        Transactions,
     },
 };
 use itertools::Itertools;
-use std::path::{Path, PathBuf};
+use std::path::{
+    Path,
+    PathBuf,
+};
 
 /// Print a snapshot of blockchain state to stdout.
 #[derive(Debug, Clone, Parser)]
@@ -198,7 +218,7 @@ fn full_snapshot(
     prev_chain_config: Option<PathBuf>,
     output_dir: &Path,
     encoding: Encoding,
-    db: CombinedDatabase,
+    combined_db: CombinedDatabase,
 ) -> Result<(), anyhow::Error> {
     std::fs::create_dir_all(output_dir)?;
 
@@ -213,34 +233,38 @@ fn full_snapshot(
     let prev_chain_config = load_chain_config(prev_chain_config)?;
     writer.write_chain_config(&prev_chain_config)?;
 
-    fn write<T>(
-        db: &CombinedDatabase,
+    fn write<T, DbDesc>(
+        db: &Database<DbDesc>,
         group_size: usize,
         writer: &mut SnapshotWriter,
     ) -> anyhow::Result<()>
     where
-        T: TableWithBlueprint<Column = <OnChain as DatabaseDescription>::Column>,
-        T::Blueprint: BlueprintInspect<T, Database>,
+        T: TableWithBlueprint<Column = <DbDesc as DatabaseDescription>::Column>,
+        T::Blueprint: BlueprintInspect<T, Database<DbDesc>>,
         TableEntry<T>: serde::Serialize,
         StateConfigBuilder: AddTable<T>,
+        DbDesc: DatabaseDescription,
     {
-        db.on_chain()
-            .entries::<T>(None, IterDirection::Forward)
+        db.entries::<T>(None, IterDirection::Forward)
             .chunks(group_size)
             .into_iter()
             .try_for_each(|chunk| writer.write(chunk.try_collect()?))
     }
     let group_size = encoding.group_size().unwrap_or(MAX_GROUP_SIZE);
 
-    write::<Coins>(&db, group_size, &mut writer)?;
-    write::<Messages>(&db, group_size, &mut writer)?;
-    write::<ContractsRawCode>(&db, group_size, &mut writer)?;
-    write::<ContractsLatestUtxo>(&db, group_size, &mut writer)?;
-    write::<ContractsState>(&db, group_size, &mut writer)?;
-    write::<ContractsAssets>(&db, group_size, &mut writer)?;
+    let db = combined_db.on_chain();
+    write::<Coins, OnChain>(&db, group_size, &mut writer)?;
+    write::<Messages, OnChain>(&db, group_size, &mut writer)?;
+    write::<ContractsRawCode, OnChain>(&db, group_size, &mut writer)?;
+    write::<ContractsLatestUtxo, OnChain>(&db, group_size, &mut writer)?;
+    write::<ContractsState, OnChain>(&db, group_size, &mut writer)?;
+    write::<ContractsAssets, OnChain>(&db, group_size, &mut writer)?;
+    write::<Transactions, OnChain>(&db, group_size, &mut writer)?;
 
-    todo!("Add back transactions and tx statuses");
-    let block = db.on_chain().latest_block()?;
+    let db = combined_db.off_chain();
+    write::<TransactionStatuses, OffChain>(&db, group_size, &mut writer)?;
+
+    let block = combined_db.on_chain().latest_block()?;
     writer.write_block_data(*block.header().height(), block.header().da_height)?;
 
     writer.close()?;
@@ -272,28 +296,60 @@ mod tests {
 
     use fuel_core::database::Database;
     use fuel_core_chain_config::{
-        AddTable, AsTable, SnapshotMetadata, SnapshotReader, StateConfig,
-        StateConfigBuilder, TableEntry,
+        AddTable,
+        AsTable,
+        SnapshotMetadata,
+        SnapshotReader,
+        StateConfig,
+        StateConfigBuilder,
+        TableEntry,
     };
     use fuel_core_storage::{
         structured_storage::TableWithBlueprint,
         tables::{
-            Coins, ContractsAssets, ContractsLatestUtxo, ContractsRawCode,
-            ContractsState, FuelBlocks, Messages,
+            Coins,
+            ContractsAssets,
+            ContractsLatestUtxo,
+            ContractsRawCode,
+            ContractsState,
+            FuelBlocks,
+            Messages,
         },
-        transactional::{IntoTransaction, StorageTransaction},
-        ContractsAssetKey, ContractsStateKey, StorageAsMut,
+        transactional::{
+            IntoTransaction,
+            StorageTransaction,
+        },
+        ContractsAssetKey,
+        ContractsStateKey,
+        StorageAsMut,
     };
     use fuel_core_types::{
-        blockchain::{block::CompressedBlock, primitives::DaBlockHeight},
-        entities::{
-            coins::coin::{CompressedCoin, CompressedCoinV1},
-            contract::ContractUtxoInfo,
-            relayer::message::{Message, MessageV1},
+        blockchain::{
+            block::CompressedBlock,
+            primitives::DaBlockHeight,
         },
-        fuel_tx::{TxPointer, UtxoId},
+        entities::{
+            coins::coin::{
+                CompressedCoin,
+                CompressedCoinV1,
+            },
+            contract::ContractUtxoInfo,
+            relayer::message::{
+                Message,
+                MessageV1,
+            },
+        },
+        fuel_tx::{
+            TxPointer,
+            UtxoId,
+        },
     };
-    use rand::{rngs::StdRng, seq::SliceRandom, Rng, SeedableRng};
+    use rand::{
+        rngs::StdRng,
+        seq::SliceRandom,
+        Rng,
+        SeedableRng,
+    };
     use test_case::test_case;
 
     use crate::cli::DEFAULT_DATABASE_CACHE_SIZE;

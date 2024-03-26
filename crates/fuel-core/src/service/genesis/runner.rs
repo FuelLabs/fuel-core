@@ -1,11 +1,23 @@
-use fuel_core_chain_config::{Group, TableEntry};
+use fuel_core_chain_config::{
+    Group,
+    TableEntry,
+};
 use fuel_core_storage::{
     kv_store::StorageColumn,
-    structured_storage::{StructuredStorage, TableWithBlueprint},
-    transactional::{
-        InMemoryTransaction, Modifiable, StorageTransaction, WriteTransaction,
+    structured_storage::{
+        StructuredStorage,
+        TableWithBlueprint,
     },
-    Mappable, StorageAsRef, StorageInspect, StorageMutate,
+    transactional::{
+        InMemoryTransaction,
+        Modifiable,
+        StorageTransaction,
+        WriteTransaction,
+    },
+    Mappable,
+    StorageAsRef,
+    StorageInspect,
+    StorageMutate,
 };
 use std::sync::Arc;
 use tokio::sync::Notify;
@@ -13,7 +25,10 @@ use tokio_util::sync::CancellationToken;
 
 use crate::database::{
     database_description::DatabaseDescription,
-    genesis_progress::{GenesisMetadata, GenesisProgressMutate},
+    genesis_progress::{
+        GenesisMetadata,
+        GenesisProgressMutate,
+    },
     Database,
 };
 
@@ -26,7 +41,6 @@ pub struct GenesisRunner<Handler, Groups, DbDesc: DatabaseDescription> {
     db: Database<DbDesc>,
 }
 
-// TODO: problem, cannot determine the descritor even though we know the actual column type
 pub trait ProcessState {
     type Table: TableWithBlueprint;
     type DbDesc: DatabaseDescription;
@@ -97,9 +111,11 @@ where
                 let mut tx = db.write_transaction();
                 self.handler.process(group.data, &mut tx)?;
 
-                tx.update_genesis_progress(Logic::Table::column().name(), group_num)?;
-                // tx.storage_as_mut::<GenesisMetadata<DbDesc>>()
-                //     .insert(Logic::genesis_resource(), &group_num)?;
+                GenesisProgressMutate::<DbDesc>::update_genesis_progress(
+                    &mut tx,
+                    Logic::Table::column().name(),
+                    group_num,
+                )?;
                 tx.commit()?;
                 Ok(())
             });
@@ -114,28 +130,60 @@ where
 
 #[cfg(test)]
 mod tests {
+    use crate::database::genesis_progress::GenesisProgressInspect;
     use std::{
-        sync::{Arc, Mutex},
+        sync::{
+            Arc,
+            Mutex,
+        },
         time::Duration,
     };
 
-    use anyhow::{anyhow, bail};
-    use fuel_core_chain_config::{Group, Randomize, TableEntry};
+    use anyhow::{
+        anyhow,
+        bail,
+    };
+    use fuel_core_chain_config::{
+        Group,
+        Randomize,
+        TableEntry,
+    };
     use fuel_core_storage::{
         column::Column,
-        iter::{BoxedIter, IterDirection, IterableStore},
-        kv_store::{KVItem, KeyValueInspect, StorageColumn, Value},
+        iter::{
+            BoxedIter,
+            IterDirection,
+            IterableStore,
+        },
+        kv_store::{
+            KVItem,
+            KeyValueInspect,
+            StorageColumn,
+            Value,
+        },
         structured_storage::TableWithBlueprint,
         tables::Coins,
-        transactional::{Changes, StorageTransaction},
-        Result as StorageResult, StorageAsMut, StorageAsRef, StorageInspect,
+        transactional::{
+            Changes,
+            StorageTransaction,
+        },
+        Result as StorageResult,
+        StorageAsMut,
+        StorageAsRef,
+        StorageInspect,
     };
     use fuel_core_types::{
-        entities::coins::coin::{CompressedCoin, CompressedCoinV1},
+        entities::coins::coin::{
+            CompressedCoin,
+            CompressedCoinV1,
+        },
         fuel_tx::UtxoId,
         fuel_types::BlockHeight,
     };
-    use rand::{rngs::StdRng, SeedableRng};
+    use rand::{
+        rngs::StdRng,
+        SeedableRng,
+    };
     use tokio::sync::Notify;
     use tokio_util::sync::CancellationToken;
 
@@ -143,10 +191,14 @@ mod tests {
         combined_database::CombinedDatabase,
         database::{
             database_description::on_chain::OnChain,
-            genesis_progress::GenesisProgressMutate, Database,
+            genesis_progress::GenesisProgressMutate,
+            Database,
         },
         service::genesis::runner::GenesisRunner,
-        state::{in_memory::memory_store::MemoryStore, TransactableStorage},
+        state::{
+            in_memory::memory_store::MemoryStore,
+            TransactableStorage,
+        },
     };
 
     use super::ProcessState;
@@ -253,9 +305,12 @@ mod tests {
 
         let mut called_with = vec![];
         let mut db = CombinedDatabase::default();
-        db.on_chain()
-            .update_genesis_progress(Coins::column().name(), 0)
-            .unwrap();
+        GenesisProgressMutate::<OnChain>::update_genesis_progress(
+            db.on_chain_mut(),
+            Coins::column().name(),
+            0,
+        )
+        .unwrap();
 
         let runner = GenesisRunner::new(
             Some(Arc::new(Notify::new())),
@@ -403,57 +458,14 @@ mod tests {
         runner.run().unwrap();
 
         // then
-        assert_eq!(db.genesis_progress(Coins::column().name()), Some(1));
+        assert_eq!(
+            GenesisProgressInspect::<OnChain>::genesis_progress(
+                &db,
+                Coins::column().name(),
+            ),
+            Some(1)
+        );
     }
-
-    // #[test]
-    // fn genesis_progress_is_increased_in_same_transaction_as_batch_work() {
-    //     struct OnlyOneTransactionAllowed {
-    //         db: Database,
-    //         counter: usize,
-    //     }
-    //     impl TransactionOpener for OnlyOneTransactionAllowed {
-    //         fn transaction(&mut self) -> StorageTransaction<&mut Database> {
-    //             if self.counter == 0 {
-    //                 self.counter += 1;
-    //                 self.db.write_transaction()
-    //             } else {
-    //                 panic!("Only one transaction should be opened")
-    //             }
-    //         }
-
-    //         fn view_only(&self) -> &Database {
-    //             &self.db
-    //         }
-    //     }
-
-    // given
-    // let data = TestData::new(1);
-    // let db = Database::default();
-    // let tx_opener = OnlyOneTransactionAllowed {
-    //     db: db.clone(),
-    //     counter: 0,
-    // };
-    // let utxo_id = UtxoId::new(Default::default(), 0);
-    //
-    // let runner = GenesisRunner::new(
-    //     Some(Arc::new(Notify::new())),
-    //     CancellationToken::new(),
-    //     TestHandler::new(|_, tx| {
-    //         insert_a_coin(tx, &utxo_id);
-    //         Ok(())
-    //     }),
-    //     data.as_ok_groups(),
-    //     tx_opener,
-    // );
-
-    //     // when
-    //     runner.run().unwrap();
-
-    // then
-    // assert_eq!(db.genesis_progress(Coins::column().name()), Some(0));
-    // assert!(db.storage_as_ref::<Coins>().contains_key(&utxo_id).unwrap());
-    // }
 
     #[tokio::test]
     async fn processing_stops_when_cancelled() {
