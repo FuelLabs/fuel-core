@@ -126,6 +126,7 @@ where
         let component = Components {
             header_to_produce: header,
             transactions_source: source,
+            coinbase_recipient: self.config.coinbase_recipient.unwrap_or_default(),
             gas_price,
             gas_limit: max_gas,
         };
@@ -231,6 +232,7 @@ where
         let component = Components {
             header_to_produce: header,
             transactions_source: transactions.clone(),
+            coinbase_recipient: self.config.coinbase_recipient.unwrap_or_default(),
             gas_price,
             gas_limit: u64::MAX,
         };

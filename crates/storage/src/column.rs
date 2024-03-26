@@ -16,6 +16,7 @@ use crate::kv_store::StorageColumn;
     Eq,
     enum_iterator::Sequence,
     Hash,
+    num_enum::TryFromPrimitive,
 )]
 pub enum Column {
     /// The column id of metadata about the blockchain

@@ -78,7 +78,7 @@ impl From<Error> for StorageError {
 
 impl From<Error> for ExecutorError {
     fn from(e: Error) -> Self {
-        ExecutorError::StorageError(anyhow::anyhow!(StorageError::from(e)))
+        ExecutorError::StorageError(format!("{}", StorageError::from(e)))
     }
 }
 

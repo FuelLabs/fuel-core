@@ -80,7 +80,7 @@ impl From<TryFromSliceError> for Error {
 
 impl From<Error> for ExecutorError {
     fn from(e: Error) -> Self {
-        ExecutorError::StorageError(anyhow::anyhow!(e))
+        ExecutorError::StorageError(e.to_string())
     }
 }
 

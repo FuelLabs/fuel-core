@@ -9,7 +9,6 @@ use fuel_core_consensus_module::{
     block_verifier::Verifier,
     RelayerConsensusConfig,
 };
-use fuel_core_executor::executor::Executor;
 use fuel_core_services::stream::BoxStream;
 use fuel_core_txpool::service::SharedState as TxPoolSharedState;
 #[cfg(feature = "p2p")]
@@ -18,6 +17,7 @@ use fuel_core_types::{
     fuel_types::BlockHeight,
     services::block_importer::SharedImportResult,
 };
+use fuel_core_upgradable_executor::executor::Executor;
 use std::sync::Arc;
 
 pub mod block_importer;
@@ -87,13 +87,9 @@ impl ExecutorAdapter {
     pub fn new(
         database: Database,
         relayer_database: Database<Relayer>,
-        config: fuel_core_executor::Config,
+        config: fuel_core_upgradable_executor::config::Config,
     ) -> Self {
-        let executor = Executor {
-            database_view_provider: database,
-            relayer_view_provider: relayer_database,
-            config: Arc::new(config),
-        };
+        let executor = Executor::new(database, relayer_database, config);
         Self {
             executor: Arc::new(executor),
         }

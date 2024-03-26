@@ -8,18 +8,11 @@ use crate::{
     schema::build_schema,
     service::{
         adapters::{
-            BlockImporterAdapter,
-            BlockProducerAdapter,
-            ExecutorAdapter,
-            MaybeRelayerAdapter,
-            PoAAdapter,
-            TxPoolAdapter,
-            VerifierAdapter,
+            BlockImporterAdapter, BlockProducerAdapter, ExecutorAdapter,
+            MaybeRelayerAdapter, PoAAdapter, TxPoolAdapter, VerifierAdapter,
         },
         genesis::create_genesis_block,
-        Config,
-        SharedState,
-        SubServices,
+        Config, SharedState, SubServices,
     },
 };
 use fuel_core_poa::Trigger;
@@ -63,12 +56,8 @@ pub fn init_sub_services(
     let executor = ExecutorAdapter::new(
         database.on_chain().clone(),
         database.relayer().clone(),
-        fuel_core_executor::Config {
+        fuel_core_upgradable_executor::config::Config {
             consensus_parameters: chain_config.consensus_parameters.clone(),
-            coinbase_recipient: config
-                .block_producer
-                .coinbase_recipient
-                .unwrap_or_default(),
             backtrace: config.vm.backtrace,
             utxo_validation_default: config.utxo_validation,
         },
@@ -204,6 +193,7 @@ pub fn init_sub_services(
         tx_pool_adapter.clone(),
         importer_adapter.clone(),
         database.off_chain().clone(),
+        chain_config.consensus_parameters.chain_id,
     );
 
     let chain_config = config.snapshot_reader.chain_config();

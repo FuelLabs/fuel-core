@@ -69,13 +69,7 @@ impl MockDb {
 
 impl TxPoolDb for MockDb {
     fn utxo(&self, utxo_id: &UtxoId) -> StorageResult<Option<CompressedCoin>> {
-        Ok(self
-            .data
-            .lock()
-            .unwrap()
-            .coins
-            .get(utxo_id)
-            .map(Clone::clone))
+        Ok(self.data.lock().unwrap().coins.get(utxo_id).cloned())
     }
 
     fn contract_exist(&self, contract_id: &ContractId) -> StorageResult<bool> {
@@ -88,7 +82,7 @@ impl TxPoolDb for MockDb {
     }
 
     fn message(&self, id: &Nonce) -> StorageResult<Option<Message>> {
-        Ok(self.data.lock().unwrap().messages.get(id).map(Clone::clone))
+        Ok(self.data.lock().unwrap().messages.get(id).cloned())
     }
 
     fn is_message_spent(&self, id: &Nonce) -> StorageResult<bool> {
