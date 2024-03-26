@@ -17,7 +17,7 @@ path = "src/main.rs"
 
 [dependencies]
 anyhow = { workspace = true }
-clap = { workspace = true, features = ["derive", "env"] }
+clap = { workspace = true, features = ["derive", "env", "string"] }
 const_format = { version = "0.2", optional = true }
 dirs = "4.0"
 dotenvy = { version = "0.15", optional = true }
@@ -28,7 +28,6 @@ fuel-core-types = { workspace = true }
 hex = "0.4"
 humantime = "2.1"
 itertools = { workspace = true, optional = true }
-lazy_static = { workspace = true }
 pyroscope = "0.5"
 pyroscope_pprofrs = "0.2"
 tikv-jemallocator = { workspace = true }

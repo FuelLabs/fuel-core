@@ -43,7 +43,7 @@ quick-protobuf = "0.8.1"
 quick-protobuf-codec = "0.3.0"
 rand = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
-serde_with = "1.11"
+serde_with = { workspace = true }
 sha2 = "0.10"
 thiserror = "1.0.47"
 tokio = { workspace = true, features = ["sync"] }

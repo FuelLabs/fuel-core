@@ -1,4 +1,4 @@
-use crate::cli::DEFAULT_DB_PATH;
+use crate::cli::default_db_path;
 use anyhow::Context;
 use clap::{
     Parser,
@@ -35,7 +35,7 @@ pub struct Command {
         name = "DB_PATH",
         long = "db-path",
         value_parser,
-        default_value = (*DEFAULT_DB_PATH).to_str().unwrap()
+        default_value = default_db_path().into_os_string()
     )]
     pub(crate) database_path: PathBuf,
 

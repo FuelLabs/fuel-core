@@ -25,13 +25,10 @@ use crate::{
     },
     fuel_vm::{
         checked_transaction::CheckError,
-        Backtrace,
-        InterpreterError,
         ProgramState,
     },
     services::Uncommitted,
 };
-use std::error::Error as StdError;
 
 /// The alias for executor result.
 pub type Result<T> = core::result::Result<T, Error>;
@@ -40,6 +37,7 @@ pub type UncommittedResult<DatabaseTransaction> =
     Uncommitted<ExecutionResult, DatabaseTransaction>;
 
 /// The result of transactions execution.
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug)]
 pub struct ExecutionResult {
     /// Created block during the execution of transactions. It contains only valid transactions.
@@ -55,6 +53,7 @@ pub struct ExecutionResult {
 
 /// The event represents some internal state changes caused by the block execution.
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum Event {
     /// Imported a new spendable message from the relayer.
     MessageImported(Message),
@@ -68,6 +67,7 @@ pub enum Event {
 
 /// The status of a transaction after it is executed.
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct TransactionExecutionStatus {
     /// The id of the transaction.
     pub id: Bytes32,
@@ -77,6 +77,7 @@ pub struct TransactionExecutionStatus {
 
 /// The result of transaction execution.
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum TransactionExecutionResult {
     /// Transaction was successfully executed.
     Success {
@@ -121,6 +122,7 @@ impl TransactionExecutionResult {
 /// Execution wrapper where the types
 /// depend on the type of execution.
 #[derive(Debug, Clone, Copy)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum ExecutionTypes<P, V> {
     /// DryRun mode where P is being produced.
     DryRun(P),
@@ -289,7 +291,8 @@ impl ExecutionKind {
 }
 
 #[allow(missing_docs)]
-#[derive(Debug, derive_more::Display, derive_more::From)]
+#[derive(Debug, PartialEq, derive_more::Display, derive_more::From)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[non_exhaustive]
 pub enum Error {
     #[display(fmt = "Transaction id was already used: {_0:#x}")]
@@ -311,7 +314,7 @@ pub enum Error {
     #[display(fmt = "The `Mint` transaction mismatches expectations.")]
     MintMismatch,
     #[display(fmt = "Can't increase the balance of the coinbase contract: {_0}.")]
-    CoinbaseCannotIncreaseBalance(anyhow::Error),
+    CoinbaseCannotIncreaseBalance(String),
     #[display(fmt = "Coinbase amount mismatches with expected.")]
     CoinbaseAmountMismatch,
     #[display(fmt = "Coinbase gas price mismatches with expected.")]
@@ -321,20 +324,17 @@ pub enum Error {
     // TODO: Replace with `fuel_core_storage::Error` when execution error will live in the
     //  `fuel-core-executor`.
     #[display(fmt = "got error during work with storage {_0}")]
-    StorageError(anyhow::Error),
+    StorageError(String),
     #[display(fmt = "got error during work with relayer {_0}")]
-    RelayerError(Box<dyn StdError + Send + Sync>),
+    RelayerError(String),
     #[display(fmt = "Transaction({transaction_id:#x}) execution error: {error:?}")]
     VmExecution {
-        // TODO: Replace with `fuel_core_storage::Error` when execution error will live in the
-        //  `fuel-core-executor`.
-        error: InterpreterError<anyhow::Error>,
+        // TODO: Use `InterpreterError<StorageError>` when `InterpreterError` implements serde
+        error: String,
         transaction_id: Bytes32,
     },
     #[display(fmt = "{_0:?}")]
     InvalidTransaction(CheckError),
-    #[display(fmt = "Execution error with backtrace")]
-    Backtrace(Box<Backtrace>),
     #[display(fmt = "Transaction doesn't match expected result: {transaction_id:#x}")]
     InvalidTransactionOutcome { transaction_id: Bytes32 },
     #[display(fmt = "The amount of charged fees is invalid")]
@@ -355,17 +355,14 @@ pub enum Error {
     PreviousBlockIsNotFound,
     #[display(fmt = "The relayer gives incorrect messages for the requested da height")]
     RelayerGivesIncorrectMessages,
+    /// It is possible to occur untyped errors in the case of the upgrade.
+    #[display(fmt = "Occurred untyped error: {_0}")]
+    Other(String),
 }
 
 impl From<Error> for anyhow::Error {
     fn from(error: Error) -> Self {
         anyhow::Error::msg(error)
-    }
-}
-
-impl From<Backtrace> for Error {
-    fn from(e: Backtrace) -> Self {
-        Error::Backtrace(Box::new(e))
     }
 }
 
@@ -382,7 +379,8 @@ impl From<ValidityError> for Error {
 }
 
 #[allow(missing_docs)]
-#[derive(thiserror::Error, Debug)]
+#[derive(thiserror::Error, Debug, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[non_exhaustive]
 pub enum TransactionValidityError {
     #[error("Coin({0:#x}) input was already spent")]

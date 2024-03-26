@@ -47,6 +47,7 @@ use fuel_core_types::{
     fuel_types::{
         BlockHeight,
         Bytes32,
+        ChainId,
     },
     services::{
         block_importer::{
@@ -75,6 +76,7 @@ pub struct Task<TxPool, D> {
     tx_pool: TxPool,
     block_importer: BoxStream<SharedImportResult>,
     database: D,
+    chain_id: ChainId,
 }
 
 impl<TxPool, D> Task<TxPool, D>
@@ -89,7 +91,7 @@ where
         persist_transaction_status(&result, &mut transaction)?;
 
         // save the associated owner for each transaction in the block
-        index_tx_owners_for_block(block, &mut transaction)?;
+        index_tx_owners_for_block(block, &mut transaction, &self.chain_id)?;
 
         // save the transaction related information
         process_transactions(block.transactions().iter(), &mut transaction)?;
@@ -172,6 +174,7 @@ where
 fn index_tx_owners_for_block<T>(
     block: &Block,
     block_st_transaction: &mut T,
+    chain_id: &ChainId,
 ) -> anyhow::Result<()>
 where
     T: OffChainDatabase,
@@ -183,9 +186,7 @@ where
         let tx_idx = u16::try_from(tx_idx).map_err(|e| {
             anyhow::anyhow!("The block has more than `u16::MAX` transactions, {}", e)
         })?;
-        let tx_id = tx.cached_id().expect(
-            "The imported block should contains only transactions with cached id",
-        );
+        let tx_id = tx.id(chain_id);
         match tx {
             Transaction::Script(tx) => {
                 inputs = tx.inputs().as_slice();
@@ -385,6 +386,7 @@ pub fn new_service<TxPool, I, D>(
     tx_pool: TxPool,
     block_importer: I,
     database: D,
+    chain_id: ChainId,
 ) -> ServiceRunner<Task<TxPool, D>>
 where
     TxPool: ports::worker::TxPool,
@@ -396,5 +398,6 @@ where
         tx_pool,
         block_importer,
         database,
+        chain_id,
     })
 }
