@@ -1,5 +1,6 @@
 #[allow(clippy::arithmetic_side_effects)]
 #[allow(clippy::cast_possible_truncation)]
+#[allow(non_snake_case)]
 #[cfg(test)]
 mod tests {
     use crate as fuel_core;
@@ -40,7 +41,7 @@ mod tests {
         },
         entities::{
             coins::coin::CompressedCoin,
-            message::{
+            relayer::message::{
                 Message,
                 MessageV1,
             },
@@ -2965,6 +2966,10 @@ mod tests {
             },
             StorageAsMut,
         };
+        use fuel_core_types::{
+            entities::RelayedTransaction,
+            fuel_merkle::binary::root_calculator::MerkleRootCalculator,
+        };
 
         fn database_with_genesis_block(da_block_height: u64) -> Database<OnChain> {
             let mut db = Database::default();
@@ -2982,6 +2987,16 @@ mod tests {
             let da_height = message.da_height();
             db.storage::<EventsHistory>()
                 .insert(&da_height, &[Event::Message(message)])
+                .expect("Should insert event");
+        }
+
+        fn add_events_to_relayer(
+            db: &mut Database<Relayer>,
+            da_height: DaBlockHeight,
+            events: &[Event],
+        ) {
+            db.storage::<EventsHistory>()
+                .insert(&da_height, events)
                 .expect("Should insert event");
         }
 
@@ -3109,6 +3124,53 @@ mod tests {
                 assert!(matches!(event, ExecutorEvent::MessageImported(_)));
             }
             Ok(())
+        }
+
+        #[test]
+        fn execute_without_commit__block_producer_includes_correct_inbox_event_merkle_root(
+        ) {
+            // given
+            let genesis_da_height = 3u64;
+            let on_chain_db = database_with_genesis_block(genesis_da_height);
+            let mut relayer_db = Database::<Relayer>::default();
+            let block_height = 1u32;
+            let relayer_da_height = 10u64;
+            let mut root_calculator = MerkleRootCalculator::new();
+            for da_height in (genesis_da_height + 1)..=relayer_da_height {
+                // message
+                let mut message = Message::default();
+                message.set_da_height(da_height.into());
+                message.set_nonce(da_height.into());
+                root_calculator.push(message.id().as_ref());
+                // transaction
+                let mut transaction = RelayedTransaction::default();
+                transaction.set_da_height(da_height.into());
+                transaction.set_max_gas(da_height);
+                transaction.set_serialized_transaction(da_height.to_be_bytes().to_vec());
+                root_calculator.push(Bytes32::from(transaction.id()).as_ref());
+                // add events to relayer
+                add_events_to_relayer(
+                    &mut relayer_db,
+                    da_height.into(),
+                    &[message.into(), transaction.into()],
+                );
+            }
+            let producer = create_relayer_executor(on_chain_db, relayer_db);
+            let block = test_block(block_height.into(), relayer_da_height.into(), 0);
+
+            // when
+            let (result, _) = producer
+                .execute_without_commit(
+                    ExecutionTypes::Production(block.into()),
+                    Default::default(),
+                )
+                .unwrap()
+                .into();
+
+            // then
+            let expected = root_calculator.root().into();
+            let actual = result.block.header().application().event_inbox_root;
+            assert_eq!(actual, expected);
         }
 
         #[test]

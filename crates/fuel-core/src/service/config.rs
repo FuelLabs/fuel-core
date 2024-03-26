@@ -1,32 +1,14 @@
 use clap::ValueEnum;
-use fuel_core_chain_config::{
-    default_consensus_dev_key,
-    ChainConfig,
-    SnapshotReader,
-    StateConfig,
-};
-use fuel_core_types::{
-    blockchain::primitives::SecretKeyWrapper,
-    secrecy::Secret,
-};
+use fuel_core_chain_config::{default_consensus_dev_key, SnapshotReader};
+use fuel_core_types::{blockchain::primitives::SecretKeyWrapper, secrecy::Secret};
 use std::{
-    net::{
-        Ipv4Addr,
-        SocketAddr,
-    },
+    net::{Ipv4Addr, SocketAddr},
     time::Duration,
 };
-use strum_macros::{
-    Display,
-    EnumString,
-    EnumVariantNames,
-};
+use strum_macros::{Display, EnumString, EnumVariantNames};
 
 #[cfg(feature = "p2p")]
-use fuel_core_p2p::config::{
-    Config as P2PConfig,
-    NotInitialized,
-};
+use fuel_core_p2p::config::{Config as P2PConfig, NotInitialized};
 
 #[cfg(feature = "relayer")]
 use fuel_core_relayer::Config as RelayerConfig;
@@ -74,12 +56,11 @@ pub struct Config {
 }
 
 impl Config {
+    #[cfg(feature = "test-helpers")]
     pub fn local_node() -> Self {
-        let chain_config = ChainConfig::local_testnet();
-        let state_config = StateConfig::local_testnet();
+        let snapshot_reader = SnapshotReader::local_testnet();
+        let chain_config = snapshot_reader.chain_config().clone();
         let block_importer = fuel_core_importer::Config::new(&chain_config);
-        let snapshot_reader =
-            SnapshotReader::in_memory(state_config.clone(), chain_config.clone());
 
         let utxo_validation = false;
         let min_gas_price = 0;

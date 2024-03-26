@@ -285,7 +285,9 @@ fn service_with_many_contracts(
         ..Default::default()
     };
     let mut config = Config {
-        snapshot_reader: SnapshotReader::in_memory(state_config, chain_config),
+        snapshot_reader: SnapshotReader::local_testnet()
+            .with_state_config(state_config)
+            .with_chain_config(chain_config),
         ..Config::local_node()
     };
     config.utxo_validation = false;

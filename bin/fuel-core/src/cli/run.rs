@@ -12,11 +12,7 @@ use crate::{
 use anyhow::Context;
 use clap::Parser;
 use fuel_core::{
-    chain_config::{
-        default_consensus_dev_key,
-        ChainConfig,
-        StateConfig,
-    },
+    chain_config::default_consensus_dev_key,
     combined_database::CombinedDatabaseConfig,
     producer::Config as ProducerConfig,
     service::{
@@ -62,9 +58,9 @@ use tracing::{
     warn,
 };
 
+use super::DEFAULT_DATABASE_CACHE_SIZE;
+
 pub const CONSENSUS_KEY_ENV: &str = "CONSENSUS_KEY_SECRET";
-// Default database cache is 1 GB
-const DEFAULT_DATABASE_CACHE_SIZE: usize = 1024 * 1024 * 1024;
 
 #[cfg(feature = "p2p")]
 mod p2p;
@@ -241,10 +237,7 @@ impl Command {
         let addr = net::SocketAddr::new(ip, port);
 
         let snapshot_reader = match snapshot.as_ref() {
-            None => SnapshotReader::in_memory(
-                StateConfig::local_testnet(),
-                ChainConfig::local_testnet(),
-            ),
+            None => SnapshotReader::local_testnet(),
             Some(path) => {
                 let metadata = SnapshotMetadata::read(path)?;
                 SnapshotReader::open(metadata)?

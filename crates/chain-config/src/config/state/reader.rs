@@ -37,17 +37,20 @@ where
     fn next(&mut self) -> Option<Self::Item> {
         match self {
             IntoIter::InMemory { groups } => groups.next(),
-            IntoIter::Parquet { decoder } => Some(decoder.next()?.map(|bytes_group| {
-                let decoded = bytes_group
-                    .data
-                    .into_iter()
-                    .map(|bytes| postcard::from_bytes(&bytes).unwrap())
-                    .collect();
-                Group {
-                    index: bytes_group.index,
-                    data: decoded,
-                }
-            })),
+            IntoIter::Parquet { decoder } => {
+                let group = decoder.next()?.and_then(|bytes_group| {
+                    let decoded = bytes_group
+                        .data
+                        .into_iter()
+                        .map(|bytes| postcard::from_bytes(&bytes))
+                        .try_collect()?;
+                    Ok(Group {
+                        index: bytes_group.index,
+                        data: decoded,
+                    })
+                });
+                Some(group)
+            }
         }
     }
 }
@@ -84,13 +87,33 @@ pub struct SnapshotReader {
 }
 
 impl SnapshotReader {
-    pub fn in_memory(state: StateConfig, chain_config: ChainConfig) -> Self {
+    #[cfg(feature = "test-helpers")]
+    pub fn local_testnet() -> Self {
+        let state = StateConfig::local_testnet();
+        let chain_config = ChainConfig::local_testnet();
         Self {
             data_source: DataSource::InMemory {
                 state,
                 group_size: MAX_GROUP_SIZE,
             },
             chain_config,
+        }
+    }
+
+    pub fn with_chain_config(self, chain_config: ChainConfig) -> Self {
+        Self {
+            chain_config,
+            ..self
+        }
+    }
+
+    pub fn with_state_config(self, state_config: StateConfig) -> Self {
+        Self {
+            data_source: DataSource::InMemory {
+                state: state_config,
+                group_size: MAX_GROUP_SIZE,
+            },
+            ..self
         }
     }
 

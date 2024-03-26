@@ -13,7 +13,8 @@ query($id: BlockId) {
       transactionsCount
       messageReceiptCount
       transactionsRoot
-      messageReceiptRoot
+      messageOutboxRoot
+      eventInboxRoot
       height
       prevRoot
       time

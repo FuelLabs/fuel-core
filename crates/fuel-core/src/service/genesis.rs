@@ -55,7 +55,7 @@ use fuel_core_types::{
     },
     entities::{
         coins::coin::Coin,
-        message::Message,
+        Message,
     },
     fuel_types::{
         BlockHeight,
@@ -174,6 +174,9 @@ async fn import_chain_state(mut workers: GenesisWorkers) -> anyhow::Result<()> {
 pub fn create_genesis_block(config: &Config) -> Block {
     let block_height = config.snapshot_reader.block_height();
     let da_block_height = config.snapshot_reader.da_block_height();
+    let transactions = vec![];
+    let message_ids = &[];
+    let events = Default::default();
     Block::new(
         PartialBlockHeader {
             application: ApplicationHeader::<Empty> {
@@ -187,17 +190,15 @@ pub fn create_genesis_block(config: &Config) -> Block {
                 generated: Empty,
             },
             consensus: ConsensusHeader::<Empty> {
-                // The genesis is a first block, so previous root is zero.
                 prev_root: Bytes32::zeroed(),
-                // The block height at genesis.
                 height: block_height,
                 time: fuel_core_types::tai64::Tai64::UNIX_EPOCH,
                 generated: Empty,
             },
         },
-        // Genesis block doesn't have any transaction.
-        vec![],
-        &[],
+        transactions,
+        message_ids,
+        events,
     )
 }
 
@@ -325,7 +326,6 @@ mod tests {
 
     use crate::{
         combined_database::CombinedDatabase,
-        database::SnapshotDataSource,
         service::{
             config::Config,
             FuelService,
@@ -333,7 +333,6 @@ mod tests {
         },
     };
     use fuel_core_chain_config::{
-        ChainConfig,
         CoinConfig,
         ContractConfig,
         MessageConfig,
@@ -372,14 +371,11 @@ mod tests {
     #[tokio::test]
     async fn config_initializes_block_height() {
         let block_height = BlockHeight::from(99u32);
-        let chain_config = ChainConfig::local_testnet();
-        let snapshot_reader = SnapshotReader::in_memory(
-            StateConfig {
+        let snapshot_reader =
+            SnapshotReader::local_testnet().with_state_config(StateConfig {
                 block_height,
                 ..Default::default()
-            },
-            chain_config,
-        );
+            });
         let service_config = Config {
             snapshot_reader,
             ..Config::local_node()
@@ -427,8 +423,7 @@ mod tests {
             block_height: BlockHeight::from(0u32),
             da_block_height: Default::default(),
         };
-        let chain_config = ChainConfig::local_testnet();
-        let snapshot_reader = SnapshotReader::in_memory(state, chain_config);
+        let snapshot_reader = SnapshotReader::local_testnet().with_state_config(state);
 
         let service_config = Config {
             snapshot_reader,
@@ -490,8 +485,7 @@ mod tests {
             block_height: starting_height,
             ..Default::default()
         };
-        let chain_config = ChainConfig::local_testnet();
-        let snapshot_reader = SnapshotReader::in_memory(state, chain_config);
+        let snapshot_reader = SnapshotReader::local_testnet().with_state_config(state);
 
         let service_config = Config {
             snapshot_reader,
@@ -542,14 +536,11 @@ mod tests {
         let contract = given_contract_config(&mut rng);
         let contract_id = contract.contract_id;
         let states = contract.states.clone();
-        let chain_config = ChainConfig::local_testnet();
-        let snapshot_reader = SnapshotReader::in_memory(
-            StateConfig {
+        let snapshot_reader =
+            SnapshotReader::local_testnet().with_state_config(StateConfig {
                 contracts: vec![contract],
                 ..Default::default()
-            },
-            chain_config,
-        );
+            });
 
         let service_config = Config {
             snapshot_reader,
@@ -592,8 +583,7 @@ mod tests {
             messages: vec![msg.clone()],
             ..Default::default()
         };
-        let chain_config = ChainConfig::local_testnet();
-        let snapshot_reader = SnapshotReader::in_memory(state, chain_config);
+        let snapshot_reader = SnapshotReader::local_testnet().with_state_config(state);
 
         let config = Config {
             snapshot_reader,
@@ -625,14 +615,11 @@ mod tests {
         let contract = given_contract_config(&mut rng);
         let contract_id = contract.contract_id;
         let balances = contract.balances.clone();
-        let chain_config = ChainConfig::local_testnet();
-        let snapshot_reader = SnapshotReader::in_memory(
-            StateConfig {
+        let snapshot_reader =
+            SnapshotReader::local_testnet().with_state_config(StateConfig {
                 contracts: vec![contract],
                 ..Default::default()
-            },
-            chain_config,
-        );
+            });
 
         let service_config = Config {
             snapshot_reader,
@@ -668,8 +655,7 @@ mod tests {
             block_height: BlockHeight::from(10u32),
             ..Default::default()
         };
-        let chain_config = ChainConfig::local_testnet();
-        let snapshot_reader = SnapshotReader::in_memory(state, chain_config);
+        let snapshot_reader = SnapshotReader::local_testnet().with_state_config(state);
 
         let service_config = Config {
             snapshot_reader,
@@ -696,8 +682,7 @@ mod tests {
             block_height: BlockHeight::from(10u32),
             ..Default::default()
         };
-        let chain_config = ChainConfig::local_testnet();
-        let snapshot_reader = SnapshotReader::in_memory(state, chain_config);
+        let snapshot_reader = SnapshotReader::local_testnet().with_state_config(state);
 
         let service_config = Config {
             snapshot_reader,
@@ -740,9 +725,8 @@ mod tests {
             contracts: vec![given_contract_config(&mut rng)],
             ..Default::default()
         };
-        let chain_config = ChainConfig::local_testnet();
         let snapshot_reader =
-            SnapshotReader::in_memory(initial_state.clone(), chain_config);
+            SnapshotReader::local_testnet().with_state_config(initial_state.clone());
 
         let service_config = Config {
             snapshot_reader,

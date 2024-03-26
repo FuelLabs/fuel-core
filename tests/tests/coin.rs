@@ -1,6 +1,5 @@
 use fuel_core::{
     chain_config::{
-        ChainConfig,
         CoinConfig,
         CoinConfigGenerator,
         SnapshotReader,
@@ -36,9 +35,8 @@ async fn setup_service(configs: Vec<CoinConfig>) -> FuelService {
         ..Default::default()
     };
 
-    let chain_config = ChainConfig::local_testnet();
     let config = Config {
-        snapshot_reader: SnapshotReader::in_memory(state, chain_config),
+        snapshot_reader: SnapshotReader::local_testnet().with_state_config(state),
         ..Config::local_node()
     };
 

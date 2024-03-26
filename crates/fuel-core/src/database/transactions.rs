@@ -1,32 +1,19 @@
 use crate::{
-    database::{
-        database_description::off_chain::OffChain,
-        Database,
-    },
+    database::{database_description::off_chain::OffChain, Database},
     fuel_core_graphql_api::storage::transactions::{
-        OwnedTransactionIndexCursor,
-        OwnedTransactionIndexKey,
-        OwnedTransactions,
+        OwnedTransactionIndexCursor, OwnedTransactionIndexKey, OwnedTransactions,
         TransactionStatuses,
     },
 };
 use fuel_core_chain_config::TableEntry;
 use fuel_core_storage::{
-    iter::{
-        IterDirection,
-        IteratorOverTable,
-    },
+    iter::{IterDirection, IteratorOverTable},
     tables::Transactions,
-    Result as StorageResult,
-    StorageMutate,
+    Result as StorageResult, StorageMutate,
 };
 use fuel_core_types::{
     self,
-    fuel_tx::{
-        Bytes32,
-        Transaction,
-        TxPointer,
-    },
+    fuel_tx::{Bytes32, Transaction, TxPointer},
     fuel_types::Address,
     services::txpool::TransactionStatus,
 };
@@ -41,19 +28,6 @@ impl Database {
     ) -> impl Iterator<Item = StorageResult<Transaction>> + '_ {
         self.iter_all_by_start::<Transactions>(start, direction)
             .map(|res| res.map(|(_, tx)| tx))
-    }
-}
-
-impl Database<OnChain> {
-    pub fn update_transactions(
-        &mut self,
-        group: Vec<TableEntry<Transactions>>,
-    ) -> StorageResult<()> {
-        // TODO: Batch insert
-        for tx in &group {
-            StorageMutate::<Transactions>::insert(self, &tx.key, &tx.value)?;
-        }
-        Ok(())
     }
 }
 

@@ -1,12 +1,10 @@
 use fuel_core::{
     chain_config::{
-        ChainConfig,
         Randomize,
         SnapshotReader,
         StateConfig,
     },
     combined_database::CombinedDatabase,
-    database::SnapshotDataSource,
     service::{
         Config,
         FuelService,
@@ -29,9 +27,9 @@ async fn loads_snapshot() {
         da_block_height: DaBlockHeight(u64::MAX),
         ..StateConfig::randomize(&mut rng)
     };
-    let chain_config = ChainConfig::local_testnet();
     let config = Config {
-        snapshot_reader: SnapshotReader::in_memory(starting_state.clone(), chain_config),
+        snapshot_reader: SnapshotReader::local_testnet()
+            .with_state_config(starting_state.clone()),
         ..Config::local_node()
     };
 

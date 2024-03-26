@@ -12,8 +12,6 @@ where
 impl<T> Clone for TableEntry<T>
 where
     T: Mappable,
-    T::OwnedKey: Clone,
-    T::OwnedValue: Clone,
 {
     fn clone(&self) -> Self {
         Self {

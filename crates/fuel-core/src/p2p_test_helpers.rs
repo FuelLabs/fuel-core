@@ -14,10 +14,7 @@ use crate::{
         ServiceTrait,
     },
 };
-use fuel_core_chain_config::{
-    SnapshotReader,
-    StateConfig,
-};
+use fuel_core_chain_config::StateConfig;
 use fuel_core_p2p::{
     codecs::postcard::PostcardCodec,
     network_service::FuelP2PService,
@@ -247,8 +244,10 @@ pub async fn make_nodes(
         }
     }
 
-    let chain_config = config.snapshot_reader.chain_config().clone();
-    config.snapshot_reader = SnapshotReader::in_memory(state_config, chain_config);
+    config.snapshot_reader = config
+        .snapshot_reader
+        .clone()
+        .with_state_config(state_config);
 
     let bootstrap_nodes: Vec<Bootstrap> =
         futures::stream::iter(bootstrap_setup.into_iter().enumerate())
@@ -362,7 +361,6 @@ pub async fn make_nodes(
 
 fn update_signing_key(config: &mut Config, key: Address) {
     let snapshot_reader = &config.snapshot_reader;
-    let state_config = StateConfig::from_reader(snapshot_reader).unwrap();
 
     let mut chain_config = snapshot_reader.chain_config().clone();
     match &mut chain_config.consensus {
@@ -370,7 +368,7 @@ fn update_signing_key(config: &mut Config, key: Address) {
             *signing_key = key;
         }
     }
-    config.snapshot_reader = SnapshotReader::in_memory(state_config, chain_config);
+    config.snapshot_reader = snapshot_reader.clone().with_chain_config(chain_config)
 }
 
 pub fn make_config(name: String, mut node_config: Config) -> Config {

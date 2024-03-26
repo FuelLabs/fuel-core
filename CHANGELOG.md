@@ -10,6 +10,7 @@ Description of the upcoming release here.
 
 ### Added
 
+- [#1770](https://github.com/FuelLabs/fuel-core/pull/1770): Add the new L1 event type for forced transactions.
 - [#1767](https://github.com/FuelLabs/fuel-core/pull/1767): Added consensus parameters version and state transition version to the `ApplicationHeader` to describe what was used to produce this block.
 - [#1760](https://github.com/FuelLabs/fuel-core/pull/1760): Added tests to verify that the network operates with a custom chain id and base asset id.
 - [#1752](https://github.com/FuelLabs/fuel-core/pull/1752): Add `ProducerGasPrice` trait that the `Producer` depends on to get the gas price for the block.
@@ -21,6 +22,8 @@ Description of the upcoming release here.
 ### Changed
 
 #### Breaking
+- [#1771](https://github.com/FuelLabs/fuel-core/pull/1771): Contract 'states' and 'balances' brought back into `ContractConfig`. Parquet now writes a file per table.
+- [#1769](https://github.com/FuelLabs/fuel-core/pull/1769): Include new field on header for the merkle root of imported events. Rename other message root field.
 - [#1768](https://github.com/FuelLabs/fuel-core/pull/1768): Moved `ContractsInfo` table to the off-chain database. Removed `salt` field from the `ContractConfig`.
 - [#1761](https://github.com/FuelLabs/fuel-core/pull/1761): Adjustments to the upcoming testnet configs:
   - Decreased the max size of the contract/predicate/script to be 100KB.
@@ -458,4 +461,3 @@ FuelVM received a lot of safety and stability improvements:
 - [#1399](https://github.com/FuelLabs/fuel-core/pull/1399): Removed `relayer-da-finalization` parameter from the relayer CLI.
 - [#1338](https://github.com/FuelLabs/fuel-core/pull/1338): Updated GraphQL client to use `DependentCost` for `k256`, `mcpi`, `s256`, `scwq`, `swwq` opcodes.
 - [#1322](https://github.com/FuelLabs/fuel-core/pull/1322): The `manual_blocks_enabled` flag is removed from the CLI. The analog is a `debug` flag.
-- [#1771](https://github.com/FuelLabs/fuel-core/pull/1771): Contract 'states' and 'balances' brought back into `ContractConfig`. Parquet now writes a file per table.

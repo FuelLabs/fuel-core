@@ -120,7 +120,7 @@ mod produce_and_execute_block_txpool {
             },
             transactions: vec![],
         }
-        .generate(&[])
+        .generate(&[], Default::default())
         .compress(&Default::default());
 
         let db = MockDb {
@@ -162,7 +162,7 @@ mod produce_and_execute_block_txpool {
             },
             transactions: vec![],
         }
-        .generate(&[])
+        .generate(&[], Default::default())
         .compress(&Default::default());
 
         // Given
@@ -215,7 +215,7 @@ mod produce_and_execute_block_txpool {
             },
             transactions: vec![],
         }
-        .generate(&[])
+        .generate(&[], Default::default())
         .compress(&Default::default());
 
         // Given
@@ -284,7 +284,7 @@ mod produce_and_execute_block_txpool {
             },
             transactions: vec![],
         }
-        .generate(&[])
+        .generate(&[], Default::default())
         .compress(&Default::default());
 
         let db = MockDb {

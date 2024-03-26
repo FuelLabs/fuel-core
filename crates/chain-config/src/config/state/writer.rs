@@ -1,30 +1,16 @@
 use crate::{
     config::table_entry::TableEntry,
     AddTable,
-    AsTable,
     ChainConfig,
     SnapshotMetadata,
-    StateConfig,
     StateConfigBuilder,
     TableEncoding,
 };
-use fuel_core_storage::{
-    structured_storage::TableWithBlueprint,
-    tables::{
-        Coins,
-        ContractsAssets,
-        ContractsLatestUtxo,
-        ContractsRawCode,
-        ContractsState,
-        Messages,
-    },
-    Mappable,
-};
+use fuel_core_storage::structured_storage::TableWithBlueprint;
 use fuel_core_types::{
     blockchain::primitives::DaBlockHeight,
     fuel_types::BlockHeight,
 };
-use serde_json::Value;
 use std::path::PathBuf;
 
 #[cfg(feature = "parquet")]
@@ -37,10 +23,7 @@ enum EncoderType {
     #[cfg(feature = "parquet")]
     Parquet {
         compression: ZstdCompressionLevel,
-        table_encoders: std::collections::HashMap<
-            String,
-            (PathBuf, parquet::encode::Encoder<std::fs::File>),
-        >,
+        table_encoders: TableEncoders,
         block_height: PathBuf,
         da_block_height: PathBuf,
     },
@@ -171,22 +154,6 @@ impl From<ZstdCompressionLevel> for ::parquet::basic::Compression {
     }
 }
 
-impl<T> TableEntry<T>
-where
-    T: Mappable,
-    T::OwnedValue: serde::Serialize,
-    T::OwnedKey: serde::Serialize,
-{
-    #[cfg(feature = "parquet")]
-    pub fn encode_postcard(&self) -> Vec<u8> {
-        postcard::to_stdvec(self).unwrap()
-    }
-
-    pub fn encode_json(&self) -> Value {
-        serde_json::to_value(self).unwrap()
-    }
-}
-
 impl SnapshotWriter {
     pub fn json(dir: impl Into<PathBuf>) -> Self {
         Self {
@@ -205,7 +172,7 @@ impl SnapshotWriter {
         let dir = dir.into();
         Ok(Self {
             encoder: EncoderType::Parquet {
-                table_encoders: std::collections::HashMap::default(),
+                table_encoders: TableEncoders::new(dir.clone(), compression_level),
                 compression: compression_level,
                 block_height: dir.join("block_height.parquet"),
                 da_block_height: dir.join("da_block_height.parquet"),
@@ -214,10 +181,22 @@ impl SnapshotWriter {
         })
     }
 
+    #[cfg(feature = "test-helpers")]
     pub fn write_state_config(
         mut self,
-        state_config: StateConfig,
+        state_config: crate::StateConfig,
     ) -> anyhow::Result<SnapshotMetadata> {
+        use fuel_core_storage::tables::{
+            Coins,
+            ContractsAssets,
+            ContractsLatestUtxo,
+            ContractsRawCode,
+            ContractsState,
+            Messages,
+        };
+
+        use crate::AsTable;
+
         self.write::<Coins>(state_config.as_table())?;
         self.write::<Messages>(state_config.as_table())?;
         self.write::<ContractsRawCode>(state_config.as_table())?;
@@ -238,8 +217,7 @@ impl SnapshotWriter {
     pub fn write<T>(&mut self, elements: Vec<TableEntry<T>>) -> anyhow::Result<()>
     where
         T: TableWithBlueprint,
-        T::OwnedValue: serde::Serialize,
-        T::OwnedKey: serde::Serialize,
+        TableEntry<T>: serde::Serialize,
         StateConfigBuilder: AddTable<T>,
     {
         match &mut self.encoder {
@@ -248,25 +226,8 @@ impl SnapshotWriter {
                 Ok(())
             }
             #[cfg(feature = "parquet")]
-            EncoderType::Parquet {
-                compression,
-                table_encoders,
-                ..
-            } => {
-                use fuel_core_storage::kv_store::StorageColumn;
-                let name = T::column().name().to_string();
-                let encoded = elements.into_iter().map(|e| e.encode_postcard()).collect();
-                let file_path = self.dir.join(format!("{name}.parquet"));
-                let (_, encoder) =
-                    table_encoders.entry(name.clone()).or_insert_with(|| {
-                        let file = std::fs::File::create(&file_path).unwrap();
-                        (
-                            file_path,
-                            parquet::encode::Encoder::new(file, (*compression).into())
-                                .unwrap(),
-                        )
-                    });
-                encoder.write(encoded)
+            EncoderType::Parquet { table_encoders, .. } => {
+                table_encoders.encoder::<T>()?.write::<T>(elements)
             }
         }
     }
@@ -334,16 +295,12 @@ impl SnapshotWriter {
                 da_block_height,
                 compression,
             } => {
-                let mut files = std::collections::HashMap::new();
-                for (name, (file, encoder)) in table_encoders {
-                    encoder.close()?;
-                    files.insert(name, file);
-                }
+                let tables = table_encoders.close()?;
 
                 Self::write_metadata(
                     &self.dir,
                     TableEncoding::Parquet {
-                        tables: files,
+                        tables,
                         block_height,
                         da_block_height,
                         compression,
@@ -361,18 +318,108 @@ impl SnapshotWriter {
             chain_config: dir.join("chain_config.json"),
             table_encoding,
         };
-        metadata.clone().strip_prefix(dir)?.write(dir)?;
+        metadata.clone().write(dir)?;
         Ok(metadata)
+    }
+}
+
+#[cfg(feature = "parquet")]
+struct PostcardParquetEncoder {
+    path: PathBuf,
+    encoder: parquet::encode::Encoder<std::fs::File>,
+}
+
+#[cfg(feature = "parquet")]
+impl PostcardParquetEncoder {
+    pub fn new(path: PathBuf, encoder: parquet::encode::Encoder<std::fs::File>) -> Self {
+        Self { path, encoder }
+    }
+
+    fn write<T>(&mut self, elements: Vec<TableEntry<T>>) -> anyhow::Result<()>
+    where
+        T: fuel_core_storage::Mappable,
+        TableEntry<T>: serde::Serialize,
+    {
+        use itertools::Itertools;
+        let encoded: Vec<_> = elements
+            .into_iter()
+            .map(|entry| postcard::to_stdvec(&entry))
+            .try_collect()?;
+        self.encoder.write(encoded)
+    }
+}
+
+#[cfg(feature = "parquet")]
+struct TableEncoders {
+    dir: PathBuf,
+    compression: ZstdCompressionLevel,
+    encoders: std::collections::HashMap<String, PostcardParquetEncoder>,
+}
+
+#[cfg(feature = "parquet")]
+impl TableEncoders {
+    fn new(dir: PathBuf, compression: ZstdCompressionLevel) -> Self {
+        Self {
+            dir,
+            compression,
+            encoders: Default::default(),
+        }
+    }
+
+    fn encoder<T: fuel_core_storage::structured_storage::TableWithBlueprint>(
+        &mut self,
+    ) -> anyhow::Result<&mut PostcardParquetEncoder> {
+        use fuel_core_storage::kv_store::StorageColumn;
+
+        let name = StorageColumn::name(&T::column()).to_string();
+
+        let encoder = match self.encoders.entry(name) {
+            std::collections::hash_map::Entry::Occupied(encoder) => encoder.into_mut(),
+            std::collections::hash_map::Entry::Vacant(vacant) => {
+                let name = vacant.key();
+                let file_path = self.dir.join(format!("{name}.parquet"));
+                let file = std::fs::File::create(&file_path)?;
+                let encoder = PostcardParquetEncoder::new(
+                    file_path,
+                    parquet::encode::Encoder::new(file, self.compression.into())?,
+                );
+                vacant.insert(encoder)
+            }
+        };
+
+        Ok(encoder)
+    }
+
+    fn close(self) -> anyhow::Result<std::collections::HashMap<String, PathBuf>> {
+        let mut files = std::collections::HashMap::new();
+        for (file, encoder) in self.encoders {
+            encoder.encoder.close()?;
+            files.insert(file, encoder.path);
+        }
+        Ok(files)
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use fuel_core_storage::kv_store::StorageColumn;
+    use fuel_core_storage::{
+        kv_store::StorageColumn,
+        structured_storage::TableWithBlueprint,
+        tables::{
+            Coins,
+            ContractsAssets,
+            ContractsLatestUtxo,
+            ContractsRawCode,
+            ContractsState,
+            Messages,
+        },
+    };
     use rand::{
         rngs::StdRng,
         SeedableRng,
     };
+
+    use crate::StateConfig;
 
     use super::*;
 

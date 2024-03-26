@@ -1,55 +1,33 @@
 use super::{
-    init_coin,
-    init_contract_latest_utxo,
-    init_contract_raw_code,
-    init_da_message,
-    runner::ProcessState,
-    GenesisRunner,
+    init_coin, init_contract_latest_utxo, init_contract_raw_code, init_da_message,
+    runner::ProcessState, GenesisRunner,
 };
-use std::{
-    collections::HashMap,
-    marker::PhantomData,
-    sync::Arc,
-};
+use std::{collections::HashMap, marker::PhantomData, sync::Arc};
 
 use crate::{
     combined_database::CombinedDatabase,
     database::{
         balances::BalancesInitializer,
         database_description::{
-            off_chain::OffChain,
-            on_chain::OnChain,
+            off_chain::OffChain, on_chain::OnChain, DatabaseDescription,
         },
         state::StateInitializer,
         Database,
     },
     graphql_api::storage::transactions::TransactionStatuses,
 };
-use fuel_core_chain_config::{
-    AsTable,
-    SnapshotReader,
-    StateConfig,
-    TableEntry,
-};
+use fuel_core_chain_config::{AsTable, SnapshotReader, StateConfig, TableEntry};
 use fuel_core_storage::{
     kv_store::StorageColumn,
     structured_storage::TableWithBlueprint,
     tables::{
-        Coins,
-        ContractsAssets,
-        ContractsLatestUtxo,
-        ContractsRawCode,
-        ContractsState,
-        Messages,
-        Transactions,
+        Coins, ContractsAssets, ContractsLatestUtxo, ContractsRawCode, ContractsState,
+        Messages, Transactions,
     },
     transactional::StorageTransaction,
     StorageAsMut,
 };
-use fuel_core_types::{
-    blockchain::primitives::DaBlockHeight,
-    fuel_types::BlockHeight,
-};
+use fuel_core_types::{blockchain::primitives::DaBlockHeight, fuel_types::BlockHeight};
 use tokio::sync::Notify;
 use tokio_rayon::AsyncRayonHandle;
 use tokio_util::sync::CancellationToken;
@@ -109,7 +87,7 @@ impl GenesisWorkers {
         T::OwnedKey: serde::de::DeserializeOwned + Send,
         T::OwnedValue: serde::de::DeserializeOwned + Send,
         StateConfig: AsTable<T>,
-        Handler<TableEntry<T>>: ProcessState<Item = TableEntry<T>, DbDesc = OnChain>,
+        Handler<T>: ProcessState<Table = T, DbDesc = OnChain>,
     {
         let groups = self.snapshot_reader.read::<T>()?;
         let finished_signal = self.get_signal(T::column().name());
@@ -124,15 +102,18 @@ impl GenesisWorkers {
         Ok(tokio_rayon::spawn(move || runner.run()))
     }
 
+    // TODO: serde bounds can be written shorter
     pub fn spawn_worker_off_chain<T>(
         &mut self,
     ) -> anyhow::Result<AsyncRayonHandle<anyhow::Result<()>>>
     where
-        T: TableWithBlueprint + Send + 'static,
+        T: TableWithBlueprint<Column = <OffChain as DatabaseDescription>::Column>
+            + Send
+            + 'static,
         T::OwnedKey: serde::de::DeserializeOwned + Send,
         T::OwnedValue: serde::de::DeserializeOwned + Send,
         StateConfig: AsTable<T>,
-        Handler<TableEntry<T>>: ProcessState<Item = TableEntry<T>, DbDesc = OffChain>,
+        Handler<T>: ProcessState<Table = T, DbDesc = OffChain>,
     {
         let groups = self.snapshot_reader.read::<T>()?;
         let finished_signal = self.get_signal(T::column().name());
@@ -171,13 +152,13 @@ impl<T> Handler<T> {
     }
 }
 
-impl ProcessState for Handler<TableEntry<Coins>> {
-    type Item = TableEntry<Coins>;
+impl ProcessState for Handler<Coins> {
+    type Table = Coins;
     type DbDesc = OnChain;
 
     fn process(
         &mut self,
-        group: Vec<Self::Item>,
+        group: Vec<TableEntry<Self::Table>>,
         tx: &mut StorageTransaction<&mut Database>,
     ) -> anyhow::Result<()> {
         group.into_iter().try_for_each(|coin| {
@@ -185,38 +166,30 @@ impl ProcessState for Handler<TableEntry<Coins>> {
             Ok(())
         })
     }
-
-    fn genesis_resource() -> &'static str {
-        Coins::column().name()
-    }
 }
 
-impl ProcessState for Handler<TableEntry<Messages>> {
-    type Item = TableEntry<Messages>;
+impl ProcessState for Handler<Messages> {
+    type Table = Messages;
     type DbDesc = OnChain;
 
     fn process(
         &mut self,
-        group: Vec<Self::Item>,
+        group: Vec<TableEntry<Self::Table>>,
         tx: &mut StorageTransaction<&mut Database>,
     ) -> anyhow::Result<()> {
         group
             .into_iter()
             .try_for_each(|message| init_da_message(tx, message, self.da_block_height))
     }
-
-    fn genesis_resource() -> &'static str {
-        Messages::column().name()
-    }
 }
 
-impl ProcessState for Handler<TableEntry<ContractsRawCode>> {
-    type Item = TableEntry<ContractsRawCode>;
+impl ProcessState for Handler<ContractsRawCode> {
+    type Table = ContractsRawCode;
     type DbDesc = OnChain;
 
     fn process(
         &mut self,
-        group: Vec<Self::Item>,
+        group: Vec<TableEntry<Self::Table>>,
         tx: &mut StorageTransaction<&mut Database>,
     ) -> anyhow::Result<()> {
         group.into_iter().try_for_each(|contract| {
@@ -224,19 +197,15 @@ impl ProcessState for Handler<TableEntry<ContractsRawCode>> {
             Ok::<(), anyhow::Error>(())
         })
     }
-
-    fn genesis_resource() -> &'static str {
-        ContractsRawCode::column().name()
-    }
 }
 
-impl ProcessState for Handler<TableEntry<ContractsLatestUtxo>> {
-    type Item = TableEntry<ContractsLatestUtxo>;
+impl ProcessState for Handler<ContractsLatestUtxo> {
+    type Table = ContractsLatestUtxo;
     type DbDesc = OnChain;
 
     fn process(
         &mut self,
-        group: Vec<Self::Item>,
+        group: Vec<TableEntry<Self::Table>>,
         tx: &mut StorageTransaction<&mut Database>,
     ) -> anyhow::Result<()> {
         group.into_iter().try_for_each(|contract| {
@@ -244,56 +213,44 @@ impl ProcessState for Handler<TableEntry<ContractsLatestUtxo>> {
             Ok::<(), anyhow::Error>(())
         })
     }
-
-    fn genesis_resource() -> &'static str {
-        ContractsLatestUtxo::column().name()
-    }
 }
 
-impl ProcessState for Handler<TableEntry<ContractsState>> {
-    type Item = TableEntry<ContractsState>;
+impl ProcessState for Handler<ContractsState> {
+    type Table = ContractsState;
     type DbDesc = OnChain;
 
     fn process(
         &mut self,
-        group: Vec<Self::Item>,
+        group: Vec<TableEntry<Self::Table>>,
         tx: &mut StorageTransaction<&mut Database>,
     ) -> anyhow::Result<()> {
         tx.update_contract_states(group)?;
         Ok(())
     }
-
-    fn genesis_resource() -> &'static str {
-        ContractsLatestUtxo::column().name()
-    }
 }
 
-impl ProcessState for Handler<TableEntry<ContractsAssets>> {
-    type Item = TableEntry<ContractsAssets>;
+impl ProcessState for Handler<ContractsAssets> {
+    type Table = ContractsAssets;
     type DbDesc = OnChain;
 
     fn process(
         &mut self,
-        group: Vec<Self::Item>,
+        group: Vec<TableEntry<Self::Table>>,
         tx: &mut StorageTransaction<&mut Database>,
     ) -> anyhow::Result<()> {
         tx.update_contract_balances(group)?;
         Ok(())
     }
-
-    fn genesis_resource() -> &'static str {
-        ContractsAssets::column().name()
-    }
 }
 
-impl ProcessState for Handler<TableEntry<Transactions>> {
-    type Item = TableEntry<Transactions>;
+impl ProcessState for Handler<Transactions> {
+    type Table = Transactions;
     type DbDesc = OnChain;
 
     fn process(
         &mut self,
-        group: Vec<Self::Item>,
-        tx: &mut StorageTransaction<&mut Database>,
+        group: Vec<TableEntry<Self::Table>>,
+        tx: &mut StorageTransaction<&mut Database<Self::DbDesc>>,
     ) -> anyhow::Result<()> {
         for transaction in &group {
             tx.storage::<Transactions>()
@@ -301,19 +258,15 @@ impl ProcessState for Handler<TableEntry<Transactions>> {
         }
         Ok(())
     }
-
-    fn genesis_resource() -> &'static str {
-        Transactions::column().name()
-    }
 }
 
-impl ProcessState for Handler<TableEntry<TransactionStatuses>> {
-    type Item = TableEntry<TransactionStatuses>;
+impl ProcessState for Handler<TransactionStatuses> {
+    type Table = TransactionStatuses;
     type DbDesc = OffChain;
 
     fn process(
         &mut self,
-        group: Vec<Self::Item>,
+        group: Vec<TableEntry<Self::Table>>,
         tx: &mut StorageTransaction<&mut Database<Self::DbDesc>>,
     ) -> anyhow::Result<()> {
         for tx_status in group {
@@ -321,9 +274,5 @@ impl ProcessState for Handler<TableEntry<TransactionStatuses>> {
                 .insert(&tx_status.key, &tx_status.value)?;
         }
         Ok(())
-    }
-
-    fn genesis_resource() -> &'static str {
-        TransactionStatuses::column().name()
     }
 }

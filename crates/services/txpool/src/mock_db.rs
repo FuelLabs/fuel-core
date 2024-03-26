@@ -9,7 +9,7 @@ use fuel_core_types::{
             Coin,
             CompressedCoin,
         },
-        message::Message,
+        relayer::message::Message,
     },
     fuel_tx::{
         Contract,
