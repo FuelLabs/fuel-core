@@ -11,21 +11,21 @@ use crate::{
     },
     service::DbType,
 };
+#[cfg(feature = "test-helpers")]
 use fuel_core_chain_config::{
     StateConfig,
     StateConfigBuilder,
 };
-use fuel_core_storage::{
-    tables::{
-        Coins,
-        ContractsAssets,
-        ContractsLatestUtxo,
-        ContractsRawCode,
-        ContractsState,
-        Messages,
-    },
-    Result as StorageResult,
+#[cfg(feature = "test-helpers")]
+use fuel_core_storage::tables::{
+    Coins,
+    ContractsAssets,
+    ContractsLatestUtxo,
+    ContractsRawCode,
+    ContractsState,
+    Messages,
 };
+use fuel_core_storage::Result as StorageResult;
 use std::path::PathBuf;
 
 #[derive(Clone, Debug, Eq, PartialEq)]

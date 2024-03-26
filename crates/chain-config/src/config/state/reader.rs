@@ -87,7 +87,6 @@ pub struct SnapshotReader {
 }
 
 impl SnapshotReader {
-    #[cfg(feature = "test-helpers")]
     pub fn local_testnet() -> Self {
         let state = StateConfig::local_testnet();
         let chain_config = ChainConfig::local_testnet();
