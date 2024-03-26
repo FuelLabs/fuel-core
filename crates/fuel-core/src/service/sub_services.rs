@@ -62,12 +62,8 @@ pub fn init_sub_services(
     let executor = ExecutorAdapter::new(
         database.on_chain().clone(),
         database.relayer().clone(),
-        fuel_core_executor::Config {
+        fuel_core_upgradable_executor::config::Config {
             consensus_parameters: config.chain_config.consensus_parameters.clone(),
-            coinbase_recipient: config
-                .block_producer
-                .coinbase_recipient
-                .unwrap_or_default(),
             backtrace: config.vm.backtrace,
             utxo_validation_default: config.utxo_validation,
         },
@@ -201,6 +197,7 @@ pub fn init_sub_services(
         tx_pool_adapter.clone(),
         importer_adapter.clone(),
         database.off_chain().clone(),
+        config.chain_config.consensus_parameters.chain_id,
     );
 
     let graphql_config = GraphQLConfig {

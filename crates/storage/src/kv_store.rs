@@ -115,7 +115,7 @@ pub trait KeyValueMutate: KeyValueInspect {
 }
 
 /// The operation to write into the storage.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub enum WriteOperation {
     /// Insert the value into the storage.
     Insert(Value),

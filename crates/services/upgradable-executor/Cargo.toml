@@ -1,0 +1,46 @@
+[package]
+name = "fuel-core-upgradable-executor"
+version = { workspace = true }
+authors = { workspace = true }
+edition = { workspace = true }
+homepage = { workspace = true }
+keywords = ["blockchain", "fuel", "fuel-vm", "upgradable"]
+license = { workspace = true }
+repository = { workspace = true }
+description = "Fuel Block Upgradable Executor"
+build = "build.rs"
+
+[dependencies]
+anyhow = { workspace = true, optional = true }
+fuel-core-executor = { workspace = true }
+fuel-core-storage = { workspace = true }
+fuel-core-types = { workspace = true }
+fuel-core-wasm-executor = { workspace = true, optional = true }
+lazy_static = { workspace = true, optional = true }
+postcard = { workspace = true, optional = true }
+wasmtime = { version = "18.0.1", default-features = false, features = [
+  "cache",
+  "cranelift",
+  "parallel-compilation",
+  "pooling-allocator",
+  "runtime",
+], optional = true }
+
+[dev-dependencies]
+fuel-core-storage = { workspace = true, features = ["test-helpers"] }
+fuel-core-types = { workspace = true, features = ["test-helpers"] }
+
+[features]
+default = ["std"]
+std = ["fuel-core-executor/std", "fuel-core-storage/std", "fuel-core-types/std"]
+wasm-executor = [
+  "dep:anyhow",
+  "dep:lazy_static",
+  "dep:postcard",
+  "dep:fuel-core-wasm-executor",
+  "dep:wasmtime",
+]
+test-helpers = [
+  "fuel-core-storage/test-helpers",
+  "fuel-core-types/test-helpers",
+]

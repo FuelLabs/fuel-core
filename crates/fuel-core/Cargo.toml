@@ -35,6 +35,7 @@ fuel-core-storage = { workspace = true }
 fuel-core-sync = { workspace = true, optional = true }
 fuel-core-txpool = { workspace = true }
 fuel-core-types = { workspace = true, features = ["serde"] }
+fuel-core-upgradable-executor = { workspace = true }
 futures = { workspace = true }
 hex = { version = "0.4", features = ["serde"] }
 hyper = { workspace = true }
@@ -67,6 +68,9 @@ fuel-core-services = { path = "./../services", features = ["test-helpers"] }
 fuel-core-storage = { path = "./../storage", features = ["test-helpers"] }
 fuel-core-trace = { path = "./../trace" }
 fuel-core-types = { path = "./../types", features = ["test-helpers"] }
+fuel-core-upgradable-executor = { workspace = true, features = [
+  "test-helpers",
+] }
 mockall = { workspace = true }
 proptest = { workspace = true }
 test-case = { workspace = true }
@@ -80,3 +84,4 @@ rocksdb = ["dep:rocksdb", "dep:tempfile", "dep:num_cpus"]
 test-helpers = ["fuel-core-p2p?/test-helpers", "fuel-core-storage/test-helpers"]
 # features to enable in production, but increase build times
 rocksdb-production = ["rocksdb", "rocksdb/jemalloc"]
+wasm-executor = ["fuel-core-upgradable-executor/wasm-executor"]

@@ -20,13 +20,13 @@ use derive_more::{
     UpperHex,
 };
 use secrecy::{
-    zeroize,
     CloneableSecret,
     DebugSecret,
 };
 use zeroize::Zeroize;
 
 #[derive(Clone, Copy, Debug, Default)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 /// Empty generated fields.
 pub struct Empty;
 

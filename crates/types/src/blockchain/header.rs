@@ -147,6 +147,7 @@ impl BlockHeader {
 }
 
 #[derive(Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(any(test, feature = "test-helpers"), derive(Default))]
 /// A partially complete fuel block header that doesn't not
 /// have any generated fields because it has not been executed yet.
