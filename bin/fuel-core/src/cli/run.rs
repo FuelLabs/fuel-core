@@ -363,7 +363,7 @@ impl Command {
 }
 
 pub async fn exec(command: Command) -> anyhow::Result<()> {
-    #[cfg(feature = "rocks-db")]
+    #[cfg(any(feature = "rocks-db", feature = "rocksdb-production"))]
     if command.db_prune && command.database_path.exists() {
         fuel_core::combined_database::CombinedDatabase::prune(&command.database_path)?;
     }
