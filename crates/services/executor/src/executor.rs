@@ -5,7 +5,6 @@ use crate::{
         TransactionsSource,
     },
     refs::ContractRef,
-    Config,
 };
 use block_component::*;
 use fuel_core_storage::{
@@ -21,7 +20,6 @@ use fuel_core_storage::{
         SpentMessages,
     },
     transactional::{
-        AtomicView,
         Changes,
         ConflictPolicy,
         Modifiable,
@@ -84,6 +82,7 @@ use fuel_core_types::{
         Bytes32,
         Cacheable,
         Chargeable,
+        ConsensusParameters,
         Input,
         Mint,
         Output,
@@ -116,7 +115,6 @@ use fuel_core_types::{
         state::StateTransition,
         Backtrace as FuelBacktrace,
         Interpreter,
-        InterpreterError,
     },
     services::{
         block_producer::Components,
@@ -137,10 +135,7 @@ use fuel_core_types::{
     },
 };
 use parking_lot::Mutex as ParkingMutex;
-use std::{
-    borrow::Cow,
-    sync::Arc,
-};
+use std::borrow::Cow;
 use tracing::{
     debug,
     warn,
@@ -172,127 +167,6 @@ impl TransactionsSource for OnceTransactionsSource {
     }
 }
 
-/// The executor is used for block production and validation of the blocks.
-#[derive(Clone, Debug)]
-pub struct Executor<D, R> {
-    pub database_view_provider: D,
-    pub relayer_view_provider: R,
-    pub config: Arc<Config>,
-}
-
-impl<D, R, View> Executor<D, R>
-where
-    R: AtomicView<Height = DaBlockHeight>,
-    R::View: RelayerPort,
-    D: AtomicView<View = View, Height = BlockHeight> + Modifiable,
-    D::View: KeyValueInspect<Column = Column>,
-{
-    #[cfg(any(test, feature = "test-helpers"))]
-    /// Executes the block and commits the result of the execution into the inner `Database`.
-    pub fn execute_and_commit(
-        &mut self,
-        block: fuel_core_types::services::executor::ExecutionBlock,
-        options: ExecutionOptions,
-    ) -> ExecutorResult<ExecutionResult> {
-        let (result, changes) = self.execute_without_commit(block, options)?.into();
-
-        self.database_view_provider.commit_changes(changes)?;
-        Ok(result)
-    }
-
-    #[cfg(any(test, feature = "test-helpers"))]
-    pub fn execute_without_commit(
-        &self,
-        block: fuel_core_types::services::executor::ExecutionBlock,
-        options: ExecutionOptions,
-    ) -> ExecutorResult<UncommittedResult<Changes>> {
-        let executor = ExecutionInstance {
-            database: self.database_view_provider.latest_view(),
-            relayer: self.relayer_view_provider.latest_view(),
-            config: self.config.clone(),
-            options,
-        };
-
-        let component = match block {
-            ExecutionTypes::DryRun(_) => {
-                panic!("It is not possible to commit the dry run result");
-            }
-            ExecutionTypes::Production(block) => ExecutionTypes::Production(Components {
-                header_to_produce: block.header,
-                transactions_source: OnceTransactionsSource::new(block.transactions),
-                gas_price: 0,
-                gas_limit: u64::MAX,
-            }),
-            ExecutionTypes::Validation(block) => ExecutionTypes::Validation(block),
-        };
-
-        executor.execute_without_commit(component)
-    }
-}
-
-impl<D, R, View> Executor<D, R>
-where
-    R: AtomicView<Height = DaBlockHeight>,
-    R::View: RelayerPort,
-    D: AtomicView<View = View, Height = BlockHeight>,
-    D::View: KeyValueInspect<Column = Column>,
-{
-    /// Executes the partial block and returns `ExecutionData` as a result.
-    #[cfg(any(test, feature = "test-helpers"))]
-    pub fn execute_block<TxSource>(
-        &self,
-        block: ExecutionType<PartialBlockComponent<TxSource>>,
-        options: ExecutionOptions,
-    ) -> ExecutorResult<ExecutionData>
-    where
-        TxSource: TransactionsSource,
-    {
-        let executor = ExecutionInstance {
-            database: self.database_view_provider.latest_view(),
-            relayer: self.relayer_view_provider.latest_view(),
-            config: self.config.clone(),
-            options,
-        };
-        executor.execute_block(block)
-    }
-
-    pub fn execute_without_commit_with_source<TxSource>(
-        &self,
-        block: ExecutionBlockWithSource<TxSource>,
-    ) -> ExecutorResult<UncommittedResult<Changes>>
-    where
-        TxSource: TransactionsSource,
-    {
-        let executor = ExecutionInstance {
-            database: self.database_view_provider.latest_view(),
-            relayer: self.relayer_view_provider.latest_view(),
-            config: self.config.clone(),
-            options: self.config.as_ref().into(),
-        };
-        executor.execute_inner(block)
-    }
-
-    pub fn dry_run(
-        &self,
-        component: Components<Vec<Transaction>>,
-        utxo_validation: Option<bool>,
-    ) -> ExecutorResult<Vec<TransactionExecutionStatus>> {
-        // fallback to service config value if no utxo_validation override is provided
-        let utxo_validation =
-            utxo_validation.unwrap_or(self.config.utxo_validation_default);
-
-        let options = ExecutionOptions { utxo_validation };
-
-        let executor = ExecutionInstance {
-            database: self.database_view_provider.latest_view(),
-            relayer: self.relayer_view_provider.latest_view(),
-            config: self.config.clone(),
-            options,
-        };
-        executor.dry_run(component)
-    }
-}
-
 /// Data that is generated after executing all transactions.
 #[derive(Default)]
 pub struct ExecutionData {
@@ -309,18 +183,17 @@ pub struct ExecutionData {
 }
 
 /// Per-block execution options
-#[derive(Copy, Clone, Default, Debug)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Default, Debug)]
 pub struct ExecutionOptions {
     /// UTXO Validation flag, when disabled the executor skips signature and UTXO existence checks
     pub utxo_validation: bool,
-}
-
-impl From<&Config> for ExecutionOptions {
-    fn from(value: &Config) -> Self {
-        Self {
-            utxo_validation: value.utxo_validation_default,
-        }
-    }
+    /// Print execution backtraces if transaction execution reverts.
+    pub backtrace: bool,
+    // TODO: It is a temporary workaround to pass the `consensus_params`
+    //  into the WASM executor. Later WASM will fetch it from the storage directly.
+    //  https://github.com/FuelLabs/fuel-core/issues/1753
+    /// The configuration allows overriding the default consensus parameters.
+    pub consensus_params: Option<ConsensusParameters>,
 }
 
 /// The executor instance performs block production and validation. Given a block, it will execute all
@@ -328,10 +201,10 @@ impl From<&Config> for ExecutionOptions {
 /// In production mode, block fields like transaction commitments are set based on the executed txs.
 /// In validation mode, the processed block commitments are compared with the proposed block.
 #[derive(Clone, Debug)]
-struct ExecutionInstance<R, D> {
+pub struct ExecutionInstance<R, D> {
     pub relayer: R,
     pub database: D,
-    pub config: Arc<Config>,
+    pub consensus_params: ConsensusParameters,
     pub options: ExecutionOptions,
 }
 
@@ -349,49 +222,16 @@ where
     {
         self.execute_inner(block)
     }
-
-    pub fn dry_run(
-        self,
-        component: Components<Vec<Transaction>>,
-    ) -> ExecutorResult<Vec<TransactionExecutionStatus>> {
-        let component = Components {
-            header_to_produce: component.header_to_produce,
-            transactions_source: OnceTransactionsSource::new(
-                component.transactions_source,
-            ),
-            gas_price: component.gas_price,
-            gas_limit: component.gas_limit,
-        };
-
-        let (
-            ExecutionResult {
-                skipped_transactions,
-                tx_status,
-                ..
-            },
-            _temporary_db,
-        ) = self
-            .execute_without_commit(ExecutionTypes::DryRun(component))?
-            .into();
-
-        // If one of the transactions fails, return an error.
-        if let Some((_, err)) = skipped_transactions.into_iter().next() {
-            return Err(err)
-        }
-
-        Ok(tx_status)
-        // drop `_temporary_db` without committing to avoid altering state.
-    }
 }
 
 // TODO: Make this module private after moving unit tests from `fuel-core` here.
 pub mod block_component {
     use super::*;
-    use fuel_core_types::fuel_tx::field::MintGasPrice;
 
     pub struct PartialBlockComponent<'a, TxSource> {
         pub empty_block: &'a mut PartialFuelBlock,
         pub transactions_source: TxSource,
+        pub coinbase_contract_id: ContractId,
         pub gas_price: u64,
         pub gas_limit: u64,
         /// The private marker to allow creation of the type only by constructor.
@@ -401,15 +241,17 @@ pub mod block_component {
     impl<'a> PartialBlockComponent<'a, OnceTransactionsSource> {
         pub fn from_partial_block(block: &'a mut PartialFuelBlock) -> Self {
             let transaction = core::mem::take(&mut block.transactions);
-            let gas_price = if let Some(Transaction::Mint(mint)) = transaction.last() {
-                *mint.gas_price()
-            } else {
-                0
-            };
+            let (gas_price, coinbase_contract_id) =
+                if let Some(Transaction::Mint(mint)) = transaction.last() {
+                    (*mint.gas_price(), mint.input_contract().contract_id)
+                } else {
+                    (0, Default::default())
+                };
 
             Self {
                 empty_block: block,
                 transactions_source: OnceTransactionsSource::new(transaction),
+                coinbase_contract_id,
                 gas_price,
                 gas_limit: u64::MAX,
                 _marker: Default::default(),
@@ -421,6 +263,7 @@ pub mod block_component {
         pub fn from_component(
             block: &'a mut PartialFuelBlock,
             transactions_source: TxSource,
+            coinbase_contract_id: ContractId,
             gas_price: u64,
             gas_limit: u64,
         ) -> Self {
@@ -429,6 +272,7 @@ pub mod block_component {
                 empty_block: block,
                 transactions_source,
                 gas_price,
+                coinbase_contract_id,
                 gas_limit,
                 _marker: Default::default(),
             }
@@ -463,6 +307,7 @@ where
                 let component = PartialBlockComponent::from_component(
                     &mut block,
                     component.transactions_source,
+                    component.coinbase_recipient,
                     component.gas_price,
                     component.gas_limit,
                 );
@@ -477,6 +322,7 @@ where
                 let component = PartialBlockComponent::from_component(
                     &mut block,
                     component.transactions_source,
+                    component.coinbase_recipient,
                     component.gas_price,
                     component.gas_limit,
                 );
@@ -569,6 +415,7 @@ where
         let block = component.empty_block;
         let source = component.transactions_source;
         let gas_price = component.gas_price;
+        let coinbase_contract_id = component.coinbase_contract_id;
         let mut remaining_gas_limit = component.gas_limit;
         let block_height = *block.header.height();
 
@@ -602,11 +449,12 @@ where
                 let mut tx_st_transaction = thread_block_transaction
                     .write_transaction()
                     .with_policy(ConflictPolicy::Overwrite);
-                let tx_id = tx.id(&self.config.consensus_parameters.chain_id);
+                let tx_id = tx.id(&self.consensus_params.chain_id);
                 let result = self.execute_transaction(
                     tx,
                     &tx_id,
                     &block.header,
+                    coinbase_contract_id,
                     gas_price,
                     execution_data,
                     execution_kind,
@@ -660,8 +508,7 @@ where
 
         // After the execution of all transactions in production mode, we can set the final fee.
         if execution_kind == ExecutionKind::Production {
-            let amount_to_mint = if self.config.coinbase_recipient != ContractId::zeroed()
-            {
+            let amount_to_mint = if coinbase_contract_id != ContractId::zeroed() {
                 execution_data.coinbase
             } else {
                 0
@@ -674,7 +521,7 @@ where
                     balance_root: Bytes32::zeroed(),
                     state_root: Bytes32::zeroed(),
                     tx_pointer: TxPointer::new(BlockHeight::new(0), 0),
-                    contract_id: self.config.coinbase_recipient,
+                    contract_id: coinbase_contract_id,
                 },
                 output::contract::Contract {
                     input_index: 0,
@@ -682,7 +529,7 @@ where
                     state_root: Bytes32::zeroed(),
                 },
                 amount_to_mint,
-                self.config.consensus_parameters.base_asset_id,
+                self.consensus_params.base_asset_id,
                 gas_price,
             );
 
@@ -735,7 +582,7 @@ where
             let events = self
                 .relayer
                 .get_events(&da_height)
-                .map_err(|err| ExecutorError::RelayerError(err.into()))?;
+                .map_err(|err| ExecutorError::RelayerError(err.to_string()))?;
             for event in events {
                 root_calculator.push(event.hash().as_ref());
                 match event {
@@ -768,6 +615,7 @@ where
         tx: MaybeCheckedTransaction,
         tx_id: &TxId,
         header: &PartialBlockHeader,
+        coinbase_contract_id: ContractId,
         gas_price: Word,
         execution_data: &mut ExecutionData,
         execution_kind: ExecutionKind,
@@ -791,7 +639,7 @@ where
         let block_height = *header.height();
         let checked_tx = match tx {
             MaybeCheckedTransaction::Transaction(tx) => tx
-                .into_checked_basic(block_height, &self.config.consensus_parameters)?
+                .into_checked_basic(block_height, &self.consensus_params)?
                 .into(),
             MaybeCheckedTransaction::CheckedTransaction(checked_tx) => checked_tx,
         };
@@ -800,6 +648,7 @@ where
             CheckedTransaction::Script(script) => self.execute_create_or_script(
                 script,
                 header,
+                coinbase_contract_id,
                 gas_price,
                 execution_data,
                 tx_st_transaction,
@@ -808,6 +657,7 @@ where
             CheckedTransaction::Create(create) => self.execute_create_or_script(
                 create,
                 header,
+                coinbase_contract_id,
                 gas_price,
                 execution_data,
                 tx_st_transaction,
@@ -816,6 +666,7 @@ where
             CheckedTransaction::Mint(mint) => self.execute_mint(
                 mint,
                 header,
+                coinbase_contract_id,
                 gas_price,
                 execution_data,
                 tx_st_transaction,
@@ -824,10 +675,12 @@ where
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn execute_mint<T>(
         &self,
         checked_mint: Checked<Mint>,
         header: &PartialBlockHeader,
+        coinbase_contract_id: ContractId,
         gas_price: Word,
         execution_data: &mut ExecutionData,
         block_st_transaction: &mut StorageTransaction<T>,
@@ -914,7 +767,7 @@ where
             let mut vm_db = VmStorage::new(
                 &mut sub_block_db_commit,
                 &header.consensus,
-                self.config.coinbase_recipient,
+                coinbase_contract_id,
             );
 
             fuel_vm::interpreter::contract::balance_increase(
@@ -923,7 +776,7 @@ where
                 mint.mint_asset_id(),
                 *mint.mint_amount(),
             )
-            .map_err(|e| anyhow::anyhow!(format!("{e}")))
+            .map_err(|e| format!("{e}"))
             .map_err(ExecutorError::CoinbaseCannotIncreaseBalance)?;
             sub_block_db_commit.commit()?;
 
@@ -983,6 +836,7 @@ where
         &self,
         mut checked_tx: Checked<Tx>,
         header: &PartialBlockHeader,
+        coinbase_contract_id: ContractId,
         gas_price: Word,
         execution_data: &mut ExecutionData,
         tx_st_transaction: &mut StorageTransaction<T>,
@@ -998,9 +852,7 @@ where
 
         if self.options.utxo_validation {
             checked_tx = checked_tx
-                .check_predicates(&CheckPredicateParams::from(
-                    &self.config.consensus_parameters,
-                ))
+                .check_predicates(&CheckPredicateParams::from(&self.consensus_params))
                 .map_err(|e| {
                     ExecutorError::TransactionValidity(
                         TransactionValidityError::Validation(e),
@@ -1016,7 +868,7 @@ where
             )?;
             // validate transaction signature
             checked_tx = checked_tx
-                .check_signatures(&self.config.consensus_parameters.chain_id)
+                .check_signatures(&self.consensus_params.chain_id)
                 .map_err(TransactionValidityError::from)?;
             debug_assert!(checked_tx.checks().contains(Checks::Signatures));
         }
@@ -1039,16 +891,16 @@ where
         let vm_db = VmStorage::new(
             &mut sub_block_db_commit,
             &header.consensus,
-            self.config.coinbase_recipient,
+            coinbase_contract_id,
         );
 
         let mut vm = Interpreter::with_storage(
             vm_db,
-            InterpreterParams::new(gas_price, &self.config.consensus_parameters),
+            InterpreterParams::new(gas_price, &self.consensus_params),
         );
 
-        let gas_costs = &self.config.consensus_parameters.gas_costs;
-        let fee_params = &self.config.consensus_parameters.fee_params;
+        let gas_costs = &self.consensus_params.gas_costs;
+        let fee_params = &self.consensus_params.fee_params;
 
         let ready_tx = checked_tx
             .clone()
@@ -1057,7 +909,7 @@ where
         let vm_result: StateTransition<_> = vm
             .transact(ready_tx)
             .map_err(|error| ExecutorError::VmExecution {
-                error: InterpreterError::Storage(anyhow::anyhow!(format!("{error:?}"))),
+                error: error.to_string(),
                 transaction_id: tx_id,
             })?
             .into();
@@ -1066,8 +918,8 @@ where
         let (state, mut tx, receipts): (_, Tx, _) = vm_result.into_inner();
         #[cfg(debug_assertions)]
         {
-            tx.precompute(&self.config.consensus_parameters.chain_id)?;
-            debug_assert_eq!(tx.id(&self.config.consensus_parameters.chain_id), tx_id);
+            tx.precompute(&self.consensus_params.chain_id)?;
+            debug_assert_eq!(tx.id(&self.consensus_params.chain_id), tx_id);
         }
 
         for (original_input, produced_input) in checked_tx
@@ -1333,7 +1185,7 @@ where
                     let message = db
                         .storage::<Messages>()
                         .remove(nonce)?
-                        .ok_or_else(|| ExecutorError::MessageAlreadySpent(*nonce))?;
+                        .ok_or(ExecutorError::MessageAlreadySpent(*nonce))?;
                     execution_data
                         .events
                         .push(ExecutorEvent::MessageConsumed(message));
@@ -1361,8 +1213,8 @@ where
 
         let fee = tx
             .refund_fee(
-                self.config.consensus_parameters.gas_costs(),
-                self.config.consensus_parameters.fee_params(),
+                self.consensus_params.gas_costs(),
+                self.consensus_params.fee_params(),
                 used_gas,
                 gas_price,
             )
@@ -1577,7 +1429,7 @@ where
         vm: &Interpreter<VmStorage<T>, Tx>,
         receipts: &[Receipt],
     ) {
-        if self.config.backtrace {
+        if self.options.backtrace {
             if let Some(backtrace) = receipts
                 .iter()
                 .find_map(Receipt::result)

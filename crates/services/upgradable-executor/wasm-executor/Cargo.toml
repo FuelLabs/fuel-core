@@ -1,0 +1,31 @@
+[package]
+name = "fuel-core-wasm-executor"
+version = { workspace = true }
+authors = { workspace = true }
+edition = { workspace = true }
+homepage = { workspace = true }
+keywords = ["blockchain", "fuel", "fuel-vm"]
+license = { workspace = true }
+repository = { workspace = true }
+description = "Fuel Block WASM version of the Executor"
+
+[[bin]]
+name = "fuel-core-wasm-executor"
+path = "src/main.rs"
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+anyhow = { workspace = true }
+fuel-core-executor = { workspace = true, default-features = false }
+fuel-core-storage = { workspace = true, default-features = false }
+fuel-core-types = { workspace = true, default-features = false }
+postcard = { workspace = true }
+
+[dev-dependencies]
+proptest = { workspace = true }
+
+[features]
+default = ["std"]
+std = []

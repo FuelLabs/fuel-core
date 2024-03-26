@@ -27,6 +27,7 @@ fuel-vm-private = { workspace = true, default-features = false }
 impl-tools = "0.10"
 itertools = { workspace = true, features = ["use_alloc"] }
 mockall = { workspace = true, optional = true }
+num_enum = { workspace = true }
 paste = "1"
 postcard = { workspace = true, features = ["alloc"] }
 primitive-types = { workspace = true, default-features = false }
@@ -45,4 +46,6 @@ fuel-core-types = { workspace = true, default-features = false, features = [
 test-case = { workspace = true }
 
 [features]
+default = ["std"]
+std = ["fuel-core-types/std"]
 test-helpers = ["dep:mockall", "dep:rand"]

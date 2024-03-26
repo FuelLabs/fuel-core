@@ -1,11 +1,11 @@
 #![allow(unused_variables)]
 use crate::{
     cli::{
+        default_db_path,
         run::{
             consensus::PoATriggerArgs,
             tx_pool::TxPoolArgs,
         },
-        DEFAULT_DB_PATH,
     },
     FuelService,
 };
@@ -96,7 +96,7 @@ pub struct Command {
         name = "DB_PATH",
         long = "db-path",
         value_parser,
-        default_value = (*DEFAULT_DB_PATH).to_str().unwrap(),
+        default_value = default_db_path().into_os_string(),
         env
     )]
     pub database_path: PathBuf,
@@ -363,7 +363,7 @@ impl Command {
 }
 
 pub async fn exec(command: Command) -> anyhow::Result<()> {
-    #[cfg(feature = "rocks-db")]
+    #[cfg(any(feature = "rocks-db", feature = "rocksdb-production"))]
     if command.db_prune && command.database_path.exists() {
         fuel_core::combined_database::CombinedDatabase::prune(&command.database_path)?;
     }
