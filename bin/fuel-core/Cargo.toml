@@ -31,6 +31,7 @@ itertools = { workspace = true, optional = true }
 lazy_static = { workspace = true }
 pyroscope = "0.5"
 pyroscope_pprofrs = "0.2"
+serde = { workspace = true }
 tikv-jemallocator = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
 tracing = { workspace = true }
@@ -39,7 +40,6 @@ tracing-subscriber = { workspace = true, features = [
   "env-filter",
   "json",
 ] }
-serde = { workspace = true }
 url = { version = "2.2", optional = true }
 
 [dev-dependencies]
