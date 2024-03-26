@@ -155,6 +155,7 @@ impl From<ZstdCompressionLevel> for ::parquet::basic::Compression {
 }
 
 impl SnapshotWriter {
+    const CHAIN_CONFIG_FILENAME: &'static str = "chain_config.json";
     pub fn json(dir: impl Into<PathBuf>) -> Self {
         Self {
             encoder: EncoderType::Json {
@@ -211,7 +212,7 @@ impl SnapshotWriter {
         &mut self,
         chain_config: &ChainConfig,
     ) -> anyhow::Result<()> {
-        chain_config.write(self.dir.join("chain_config.json"))
+        chain_config.write(self.dir.join(Self::CHAIN_CONFIG_FILENAME))
     }
 
     pub fn write<T>(&mut self, elements: Vec<TableEntry<T>>) -> anyhow::Result<()>
@@ -315,7 +316,7 @@ impl SnapshotWriter {
         table_encoding: TableEncoding,
     ) -> anyhow::Result<SnapshotMetadata> {
         let metadata = SnapshotMetadata {
-            chain_config: dir.join("chain_config.json"),
+            chain_config: dir.join(Self::CHAIN_CONFIG_FILENAME),
             table_encoding,
         };
         metadata.clone().write(dir)?;

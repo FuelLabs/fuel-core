@@ -111,9 +111,9 @@ mod tests {
             let temp_dir = tempfile::tempdir().unwrap();
             let dir = temp_dir.path();
             let data = SnapshotMetadata {
-                chain_config: "chain_config.json".into(),
+                chain_config: "some_chain_config.json".into(),
                 table_encoding: TableEncoding::Json {
-                    filepath: "state_config.json".into(),
+                    filepath: "some_state_file.json".into(),
                 },
             };
             serde_json::to_writer(
@@ -129,9 +129,9 @@ mod tests {
             assert_eq!(
                 snapshot,
                 SnapshotMetadata {
-                    chain_config: dir.join("chain_config.json"),
+                    chain_config: dir.join("some_chain_config.json"),
                     table_encoding: TableEncoding::Json {
-                        filepath: temp_dir.path().join("state_config.json"),
+                        filepath: temp_dir.path().join("some_state_file.json"),
                     }
                 }
             );
@@ -143,9 +143,9 @@ mod tests {
             let temp_dir = tempfile::tempdir().unwrap();
             let dir = temp_dir.path();
             let snapshot = SnapshotMetadata {
-                chain_config: dir.join("chain_config.json"),
+                chain_config: dir.join("some_chain_config.json"),
                 table_encoding: TableEncoding::Json {
-                    filepath: dir.join("state_config.json"),
+                    filepath: dir.join("some_state_file.json"),
                 },
             };
 
@@ -160,9 +160,9 @@ mod tests {
             assert_eq!(
                 data,
                 SnapshotMetadata {
-                    chain_config: "chain_config.json".into(),
+                    chain_config: "some_chain_config.json".into(),
                     table_encoding: TableEncoding::Json {
-                        filepath: "state_config.json".into(),
+                        filepath: "some_state_file.json".into(),
                     }
                 }
             );
@@ -178,7 +178,7 @@ mod tests {
             let temp_dir = tempfile::tempdir().unwrap();
             let dir = temp_dir.path();
             let data = SnapshotMetadata {
-                chain_config: "chain_config.json".into(),
+                chain_config: "some_chain_config.json".into(),
                 table_encoding: TableEncoding::Parquet {
                     tables: std::collections::HashMap::from_iter(vec![(
                         "coins".into(),
@@ -202,7 +202,7 @@ mod tests {
             assert_eq!(
                 snapshot,
                 SnapshotMetadata {
-                    chain_config: dir.join("chain_config.json"),
+                    chain_config: dir.join("some_chain_config.json"),
                     table_encoding: TableEncoding::Parquet {
                         tables: std::collections::HashMap::from_iter(vec![(
                             "coins".into(),
@@ -222,7 +222,7 @@ mod tests {
             let temp_dir = tempfile::tempdir().unwrap();
             let dir = temp_dir.path();
             let snapshot = SnapshotMetadata {
-                chain_config: dir.join("chain_config.json"),
+                chain_config: dir.join("some_chain_config.json"),
                 table_encoding: TableEncoding::Parquet {
                     tables: std::collections::HashMap::from_iter([(
                         "coins".into(),
@@ -245,7 +245,7 @@ mod tests {
             assert_eq!(
                 data,
                 SnapshotMetadata {
-                    chain_config: "chain_config.json".into(),
+                    chain_config: "some_chain_config.json".into(),
                     table_encoding: TableEncoding::Parquet {
                         tables: std::collections::HashMap::from_iter([(
                             "coins".into(),
