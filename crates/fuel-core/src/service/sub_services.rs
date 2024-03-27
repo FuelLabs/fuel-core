@@ -16,7 +16,7 @@ use crate::{
             TxPoolAdapter,
             VerifierAdapter,
         },
-        genesis::create_genesis_block,
+        genesis::on_chain::create_genesis_block,
         Config,
         SharedState,
         SubServices,

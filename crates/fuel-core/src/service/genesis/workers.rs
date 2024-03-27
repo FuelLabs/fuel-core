@@ -1,8 +1,10 @@
 use super::{
-    init_coin,
-    init_contract_latest_utxo,
-    init_contract_raw_code,
-    init_da_message,
+    on_chain::{
+        init_coin,
+        init_contract_latest_utxo,
+        init_contract_raw_code,
+        init_da_message,
+    },
     runner::ProcessState,
     GenesisRunner,
 };
