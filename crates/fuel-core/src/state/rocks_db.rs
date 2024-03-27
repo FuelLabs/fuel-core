@@ -10,6 +10,7 @@ use crate::{
         TransactableStorage,
     },
 };
+use anyhow::anyhow;
 use fuel_core_metrics::core_metrics::database_metrics;
 use fuel_core_storage::{
     iter::{

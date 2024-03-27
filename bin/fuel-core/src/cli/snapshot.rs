@@ -365,7 +365,7 @@ mod tests {
     use super::*;
 
     struct DbPopulator {
-        db: StorageTransaction<Database>,
+        db: CombinedDatabase,
         rng: StdRng,
     }
 
@@ -454,34 +454,22 @@ mod tests {
 
     impl DbPopulator {
         fn new(db: CombinedDatabase, rng: StdRng) -> Self {
-            Self {
-                db: (db.on_chain().clone()).into_transaction(),
-                rng,
-            }
+            Self { db, rng }
         }
 
-        fn commit(self) {
-            self.db.commit().expect("failed to commit transaction");
-        }
+        // Db will flush data upon being dropped. Important to do before snapshotting
+        fn flush(self) {}
 
-        fn given_persisted_on_chain_data(
-            &mut self,
-            coins: usize,
-            messages: usize,
-            contracts: usize,
-            states_per_contract: usize,
-            balances_per_contract: usize,
-        ) -> OnChainData {
-            let coins = repeat_with(|| self.given_coin()).take(coins).collect();
-            let messages = repeat_with(|| self.given_message())
-                .take(messages)
-                .collect();
+        fn given_persisted_on_chain_data(&mut self) -> OnChainData {
+            let amount = 10;
+            let coins = repeat_with(|| self.given_coin()).take(amount).collect();
+            let messages = repeat_with(|| self.given_message()).take(amount).collect();
 
             let contract_ids = repeat_with(|| {
                 let contract_id: ContractId = self.rng.gen();
                 contract_id
             })
-            .take(contracts)
+            .take(amount)
             .collect_vec();
 
             let contract_code = contract_ids
@@ -498,7 +486,7 @@ mod tests {
                 .iter()
                 .flat_map(|id| {
                     repeat_with(|| self.given_contract_state(*id))
-                        .take(states_per_contract)
+                        .take(amount)
                         .collect_vec()
                 })
                 .collect();
@@ -507,7 +495,7 @@ mod tests {
                 .iter()
                 .flat_map(|id| {
                     repeat_with(|| self.given_contract_asset(*id))
-                        .take(balances_per_contract)
+                        .take(amount)
                         .collect_vec()
                 })
                 .collect();
@@ -531,6 +519,7 @@ mod tests {
             block.header_mut().set_block_height(height);
             let _ = self
                 .db
+                .on_chain_mut()
                 .storage_as_mut::<FuelBlocks>()
                 .insert(&height, &block);
 
@@ -551,6 +540,7 @@ mod tests {
             });
             let key = UtxoId::new(tx_id, output_index);
             self.db
+                .on_chain_mut()
                 .storage_as_mut::<Coins>()
                 .insert(&key, &coin)
                 .unwrap();
@@ -570,6 +560,7 @@ mod tests {
 
             let key = *message.nonce();
             self.db
+                .on_chain_mut()
                 .storage_as_mut::<Messages>()
                 .insert(&key, &message)
                 .unwrap();
@@ -588,6 +579,7 @@ mod tests {
 
             let code = self.generate_data(1000);
             self.db
+                .on_chain_mut()
                 .storage_as_mut::<ContractsRawCode>()
                 .insert(&key, code.as_ref())
                 .unwrap();
@@ -607,6 +599,7 @@ mod tests {
 
             let value = ContractUtxoInfo::V1((utxo_id, tx_pointer).into());
             self.db
+                .on_chain_mut()
                 .storage::<ContractsLatestUtxo>()
                 .insert(&contract_id, &value)
                 .unwrap();
@@ -625,6 +618,7 @@ mod tests {
             let key = ContractsStateKey::new(&contract_id, &state_key);
             let state_value = self.generate_data(100);
             self.db
+                .on_chain_mut()
                 .storage_as_mut::<ContractsState>()
                 .insert(&key, &state_value)
                 .unwrap();
@@ -642,6 +636,7 @@ mod tests {
             let key = ContractsAssetKey::new(&contract_id, &asset_id);
             let amount = self.rng.gen();
             self.db
+                .on_chain_mut()
                 .storage_as_mut::<ContractsAssets>()
                 .insert(&key, &amount)
                 .unwrap();
@@ -665,10 +660,11 @@ mod tests {
 
         let snapshot_dir = temp_dir.path().join("snapshot");
         let db_path = temp_dir.path().join("db");
-        let mut db = DbPopulator::new(open_db(&db_path, None)?, StdRng::seed_from_u64(2));
+        std::fs::create_dir(&db_path)?;
 
-        let state = db.given_persisted_on_chain_data(10, 10, 10, 10, 10);
-        db.commit();
+        let mut db = DbPopulator::new(open_db(&db_path, None)?, StdRng::seed_from_u64(2));
+        let state = db.given_persisted_on_chain_data();
+        db.flush();
 
         // when
         exec(Command {
@@ -707,8 +703,8 @@ mod tests {
         let db_path = temp_dir.path().join("db");
         let mut db = DbPopulator::new(open_db(&db_path, None)?, StdRng::seed_from_u64(2));
 
-        let state = db.given_persisted_on_chain_data(10, 10, 10, 10, 10);
-        db.commit();
+        let state = db.given_persisted_on_chain_data();
+        db.flush();
 
         // when
         exec(Command {
@@ -746,7 +742,7 @@ mod tests {
         let mut db = DbPopulator::new(open_db(&db_path, None)?, StdRng::seed_from_u64(2));
 
         let original_state = db
-            .given_persisted_on_chain_data(10, 10, 10, 10, 10)
+            .given_persisted_on_chain_data()
             .sorted()
             .into_state_config();
 
@@ -756,7 +752,7 @@ mod tests {
             .unwrap()
             .clone();
         let contract_id = randomly_chosen_contract.contract_id;
-        db.commit();
+        db.flush();
 
         // when
         exec(Command {

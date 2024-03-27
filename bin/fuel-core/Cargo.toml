@@ -43,13 +43,15 @@ url = { version = "2.2", optional = true }
 
 [dev-dependencies]
 fuel-core-types = { workspace = true, features = ["test-helpers"] }
+fuel-core = { workspace = true, features = ["test-helpers"] }
 pretty_assertions = { workspace = true }
 rand = { workspace = true }
 tempfile = { workspace = true }
 test-case = { workspace = true }
 
 [features]
-default = ["env", "relayer", "rocksdb"]
+# TODO: remove parquet
+default = ["env", "relayer", "rocksdb", "parquet"]
 env = ["dep:dotenvy"]
 p2p = ["fuel-core/p2p", "const_format"]
 relayer = ["fuel-core/relayer", "dep:url"]
