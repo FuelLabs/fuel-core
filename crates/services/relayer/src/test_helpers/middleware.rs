@@ -162,6 +162,7 @@ impl Default for MockMiddleware {
         s
     }
 }
+
 #[derive(Error, Debug)]
 /// Thrown when an error happens at the Nonce Manager
 pub enum MockMiddlewareError {
@@ -261,11 +262,8 @@ impl Middleware for MockMiddleware {
     async fn get_logs(&self, filter: &Filter) -> Result<Vec<Log>, Self::Error> {
         tokio::task::yield_now().await;
         self.before_event(TriggerType::GetLogs(filter));
-        let r = self.update_data(|data| {
-            let (leave, take) = take_logs_based_on_filter(&mut data.logs_batch, filter);
-            data.logs_batch = leave;
-            take
-        });
+        let r =
+            self.update_data(|data| take_logs_based_on_filter(&data.logs_batch, filter));
         self.after_event(TriggerType::GetLogs(filter));
         Ok(r)
     }
@@ -284,61 +282,26 @@ impl Middleware for MockMiddleware {
     }
 }
 
-fn take_logs_based_on_filter(
-    logs_batch: &mut [Vec<Log>],
-    filter: &Filter,
-) -> (Vec<Vec<Log>>, Vec<Log>) {
-    let (leave, take) = logs_batch
+fn take_logs_based_on_filter(logs_batch: &[Vec<Log>], filter: &Filter) -> Vec<Log> {
+    logs_batch
         .iter()
-        .map(|logs| {
-            logs.iter()
-                .fold((Vec::new(), Vec::new()), |(mut leave, mut take), log| {
-                    let r = if let Some(address) = filter.address.as_ref() {
-                        match address {
-                            ethers_core::types::ValueOrArray::Value(v) => {
-                                log.address == *v
-                            }
-                            ethers_core::types::ValueOrArray::Array(v) => {
-                                v.iter().any(|v| log.address == *v)
-                            }
-                        }
-                    } else {
-                        false
-                    };
-                    let r = if let Some(log_block_num) = log.block_number {
-                        if let Some(from_block) = filter
-                            .block_option
-                            .get_from_block()
-                            .and_then(|b| b.as_number())
-                        {
-                            if let Some(to_block) = filter
-                                .block_option
-                                .get_to_block()
-                                .and_then(|b| b.as_number())
-                            {
-                                r && log_block_num >= from_block
-                                    && log_block_num <= to_block
-                            } else {
-                                false
-                            }
-                        } else {
-                            true
-                        }
-                    } else {
-                        false
-                    };
-                    if r {
-                        take.push(log.clone());
-                    } else {
-                        leave.push(log.clone());
+        .flat_map(|logs| {
+            logs.iter().filter_map(|log| {
+                let r = match filter.address.as_ref()? {
+                    ethers_core::types::ValueOrArray::Value(v) => log.address == *v,
+                    ethers_core::types::ValueOrArray::Array(v) => {
+                        v.iter().any(|v| log.address == *v)
                     }
-                    (leave, take)
-                })
+                };
+                let log_block_num = log.block_number?;
+                let r = r
+                    && log_block_num
+                        >= filter.block_option.get_from_block()?.as_number()?
+                    && log_block_num
+                        <= filter.block_option.get_to_block()?.as_number()?;
+                r.then_some(log)
+            })
         })
-        .fold((Vec::new(), Vec::new()), |(mut leave, mut take), (l, t)| {
-            leave.push(l);
-            take.extend(t);
-            (leave, take)
-        });
-    (leave, take)
+        .cloned()
+        .collect()
 }

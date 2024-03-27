@@ -231,7 +231,8 @@ async fn relayer__if_a_log_does_not_include_index_then_event_not_included() {
     log.log_index = None;
     ctx.given_logs(vec![log]);
     // when
-    let mock_db = ctx.when_relayer_syncs().await;
+    let timeout_millis = 100;
+    let mock_db = ctx.when_relayer_tries_to_sync(timeout_millis).await;
 
     // then
     assert!(mock_db
@@ -334,6 +335,19 @@ impl TestContext {
         relayer.start_and_await().await.unwrap();
 
         relayer.shared.await_synced().await.unwrap();
+
+        self.mock_db
+    }
+
+    async fn when_relayer_tries_to_sync(self, timeout_millis: u64) -> MockDb {
+        let relayer = new_service_test(self.eth_node, self.mock_db.clone(), self.config);
+        relayer.start_and_await().await.unwrap();
+
+        let run_fut = relayer.shared.await_synced();
+
+        tokio::time::timeout(std::time::Duration::from_millis(timeout_millis), run_fut)
+            .await
+            .expect_err("Should timeout");
 
         self.mock_db
     }
