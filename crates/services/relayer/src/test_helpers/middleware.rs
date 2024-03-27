@@ -262,34 +262,9 @@ impl Middleware for MockMiddleware {
         tokio::task::yield_now().await;
         self.before_event(TriggerType::GetLogs(filter));
         let r = self.update_data(|data| {
-            data.logs_batch
-                .take()
-                .unwrap_or_else(|| {
-                    tracing::debug!("No logs batch found");
-                    Vec::new()
-                })
-                .iter()
-                .flat_map(|logs| {
-                    logs.iter().filter_map(|log| {
-                        let r = match filter.address.as_ref()? {
-                            ethers_core::types::ValueOrArray::Value(v) => {
-                                log.address == *v
-                            }
-                            ethers_core::types::ValueOrArray::Array(v) => {
-                                v.iter().any(|v| log.address == *v)
-                            }
-                        };
-                        let log_block_num = log.block_number?;
-                        let r = r
-                            && log_block_num
-                                >= filter.block_option.get_from_block()?.as_number()?
-                            && log_block_num
-                                <= filter.block_option.get_to_block()?.as_number()?;
-                        r.then_some(log)
-                    })
-                })
-                .cloned()
-                .collect()
+            let (leave, take) = take_logs_based_on_filter(&mut data.logs_batch, filter);
+            data.logs_batch = Some(leave);
+            take
         });
         self.after_event(TriggerType::GetLogs(filter));
         Ok(r)
@@ -307,4 +282,68 @@ impl Middleware for MockMiddleware {
         self.after_event(TriggerType::GetBlock(block_id));
         r
     }
+}
+
+fn take_logs_based_on_filter(
+    logs_batch: &mut Option<Vec<Vec<Log>>>,
+    filter: &Filter,
+) -> (Vec<Vec<Log>>, Vec<Log>) {
+    let (leave, take) = logs_batch
+        .take()
+        .unwrap_or_else(|| {
+            tracing::debug!("No logs batch found");
+            Vec::new()
+        })
+        .iter()
+        .map(|logs| {
+            logs.iter()
+                .fold((Vec::new(), Vec::new()), |(mut leave, mut take), log| {
+                    let r = if let Some(address) = filter.address.as_ref() {
+                        match address {
+                            ethers_core::types::ValueOrArray::Value(v) => {
+                                log.address == *v
+                            }
+                            ethers_core::types::ValueOrArray::Array(v) => {
+                                v.iter().any(|v| log.address == *v)
+                            }
+                        }
+                    } else {
+                        false
+                    };
+                    let r = if let Some(log_block_num) = log.block_number {
+                        if let Some(from_block) = filter
+                            .block_option
+                            .get_from_block()
+                            .and_then(|b| b.as_number())
+                        {
+                            if let Some(to_block) = filter
+                                .block_option
+                                .get_to_block()
+                                .and_then(|b| b.as_number())
+                            {
+                                r && log_block_num >= from_block
+                                    && log_block_num <= to_block
+                            } else {
+                                false
+                            }
+                        } else {
+                            true
+                        }
+                    } else {
+                        false
+                    };
+                    if r {
+                        take.push(log.clone());
+                    } else {
+                        leave.push(log.clone());
+                    }
+                    (leave, take)
+                })
+        })
+        .fold((Vec::new(), Vec::new()), |(mut leave, mut take), (l, t)| {
+            leave.push(l);
+            take.extend(t);
+            (leave, take)
+        });
+    (leave, take)
 }
