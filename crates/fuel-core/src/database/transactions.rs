@@ -10,7 +10,7 @@ use crate::{
         TransactionStatuses,
     },
 };
-use fuel_core_chain_config::TableEntry;
+
 use fuel_core_storage::{
     iter::{
         IterDirection,
@@ -18,7 +18,6 @@ use fuel_core_storage::{
     },
     tables::Transactions,
     Result as StorageResult,
-    StorageMutate,
 };
 use fuel_core_types::{
     self,
@@ -30,8 +29,6 @@ use fuel_core_types::{
     fuel_types::Address,
     services::txpool::TransactionStatus,
 };
-
-use super::database_description::on_chain::OnChain;
 
 impl Database {
     pub fn all_transactions(

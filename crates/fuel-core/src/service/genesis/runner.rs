@@ -14,7 +14,6 @@ use fuel_core_storage::{
         StorageTransaction,
         WriteTransaction,
     },
-    Mappable,
     StorageAsRef,
     StorageInspect,
     StorageMutate,
