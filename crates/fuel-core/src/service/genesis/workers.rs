@@ -81,7 +81,7 @@ impl GenesisWorkers {
         }
     }
 
-    pub async fn run_imports(&mut self) -> anyhow::Result<()> {
+    pub async fn run_on_chain_imports(&mut self) -> anyhow::Result<()> {
         tokio::try_join!(
             self.spawn_worker_on_chain::<Coins>()?,
             self.spawn_worker_on_chain::<Messages>()?,
@@ -90,6 +90,12 @@ impl GenesisWorkers {
             self.spawn_worker_on_chain::<ContractsState>()?,
             self.spawn_worker_on_chain::<ContractsAssets>()?,
             self.spawn_worker_on_chain::<Transactions>()?,
+        )
+        .map(|_| ())
+    }
+
+    pub async fn run_off_chain_imports(&mut self) -> anyhow::Result<()> {
+        tokio::try_join!(
             self.spawn_worker_off_chain::<TransactionStatuses>()?,
             self.spawn_worker_off_chain::<OwnedTransactions>()?,
         )

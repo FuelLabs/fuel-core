@@ -1,4 +1,5 @@
 use crate::{
+    combined_database::CombinedDatabase,
     database::{
         database_description::{
             off_chain::OffChain,
@@ -16,6 +17,7 @@ use crate::{
         worker_service,
     },
 };
+use fuel_core_chain_config::SnapshotReader;
 use fuel_core_storage::{
     blueprint::BlueprintInspect,
     iter::IteratorOverTable,
@@ -40,6 +42,8 @@ use fuel_core_storage::{
 use fuel_core_types::services::executor::Event;
 use itertools::Itertools;
 use std::borrow::Cow;
+
+use super::workers::GenesisWorkers;
 
 const CHUNK_SIZE: usize = 1024;
 
@@ -91,13 +95,23 @@ where
 /// Performs the importing of the genesis block from the snapshot.
 // TODO: The regenesis of the off-chain database should go in the same way as the on-chain database.
 //  https://github.com/FuelLabs/fuel-core/issues/1619
-pub fn execute_genesis_block(
-    on_chain_database: &Database<OnChain>,
-    off_chain_database: &mut Database<OffChain>,
+pub async fn execute_genesis_block(
+    db: &CombinedDatabase,
+    snapshot_reader: SnapshotReader,
 ) -> anyhow::Result<()> {
+    let mut workers = GenesisWorkers::new(db.clone(), snapshot_reader);
+    if let Err(e) = workers.run_off_chain_imports().await {
+        workers.shutdown();
+        workers.finished();
+
+        return Err(e);
+    }
+
+    let on_chain_database = db.on_chain();
+    let mut off_chain_database = db.off_chain().clone();
     derive_offchain_table::<Messages, OwnedMessageIds, _>(
         on_chain_database,
-        off_chain_database,
+        &mut off_chain_database,
         |tx, chunk| {
             let events = chunk
                 .into_iter()
@@ -108,7 +122,7 @@ pub fn execute_genesis_block(
 
     derive_offchain_table::<Coins, OwnedCoins, _>(
         on_chain_database,
-        off_chain_database,
+        &mut off_chain_database,
         |tx, chunk| {
             let events = chunk.into_iter().map(|(utxo_id, coin)| {
                 let coin = coin.uncompress(utxo_id);
@@ -120,7 +134,7 @@ pub fn execute_genesis_block(
 
     derive_offchain_table::<Transactions, ContractsInfo, _>(
         on_chain_database,
-        off_chain_database,
+        &mut off_chain_database,
         |tx, chunk| {
             let transactions = chunk.iter().map(|(_, tx)| tx);
             worker_service::process_transactions(transactions, tx)?;

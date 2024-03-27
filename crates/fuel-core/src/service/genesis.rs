@@ -156,14 +156,9 @@ pub async fn execute_genesis_block(
 }
 
 async fn import_chain_state(mut workers: GenesisWorkers) -> anyhow::Result<()> {
-    if let Err(e) = workers.run_imports().await {
+    if let Err(e) = workers.run_on_chain_imports().await {
         workers.shutdown();
-        tokio::select! {
-            _ = workers.finished() => {}
-            _ = tokio::time::sleep(tokio::time::Duration::from_secs(10)) => {
-                return Err(anyhow!("Timeout while importing genesis state"));
-            }
-        };
+        workers.finished().await;
 
         return Err(e);
     }

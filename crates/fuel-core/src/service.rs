@@ -242,7 +242,11 @@ impl RunnableService for Task {
 
                 self.shared.block_importer.commit_result(result).await?;
 
-                genesis::off_chain::execute_genesis_block(&on_view, &mut off_view)?;
+                genesis::off_chain::execute_genesis_block(
+                    &self.shared.database,
+                    self.shared.config.snapshot_reader.clone(),
+                )
+                .await?;
             }
         }
 
