@@ -15,7 +15,10 @@ use fuel_core::{
         },
         Database,
     },
-    fuel_core_graphql_api::storage::transactions::TransactionStatuses,
+    fuel_core_graphql_api::storage::transactions::{
+        OwnedTransactions,
+        TransactionStatuses,
+    },
     types::fuel_types::ContractId,
 };
 use fuel_core_chain_config::{
@@ -263,6 +266,7 @@ fn full_snapshot(
 
     let db = combined_db.off_chain();
     write::<TransactionStatuses, OffChain>(&db, group_size, &mut writer)?;
+    write::<OwnedTransactions, OffChain>(&db, group_size, &mut writer)?;
 
     let block = combined_db.on_chain().latest_block()?;
     writer.write_block_data(*block.header().height(), block.header().da_height)?;

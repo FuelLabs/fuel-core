@@ -24,7 +24,10 @@ use crate::{
         state::StateInitializer,
         Database,
     },
-    graphql_api::storage::transactions::TransactionStatuses,
+    graphql_api::storage::transactions::{
+        OwnedTransactions,
+        TransactionStatuses,
+    },
 };
 use fuel_core_chain_config::{
     AsTable,
@@ -88,6 +91,7 @@ impl GenesisWorkers {
             self.spawn_worker_on_chain::<ContractsAssets>()?,
             self.spawn_worker_on_chain::<Transactions>()?,
             self.spawn_worker_off_chain::<TransactionStatuses>()?,
+            self.spawn_worker_off_chain::<OwnedTransactions>()?,
         )
         .map(|_| ())
     }
@@ -295,6 +299,23 @@ impl ProcessState for Handler<TransactionStatuses> {
         for tx_status in group {
             tx.storage::<TransactionStatuses>()
                 .insert(&tx_status.key, &tx_status.value)?;
+        }
+        Ok(())
+    }
+}
+
+impl ProcessState for Handler<OwnedTransactions> {
+    type Table = OwnedTransactions;
+    type DbDesc = OffChain;
+
+    fn process(
+        &mut self,
+        group: Vec<TableEntry<Self::Table>>,
+        tx: &mut StorageTransaction<&mut Database<Self::DbDesc>>,
+    ) -> anyhow::Result<()> {
+        for entry in group {
+            tx.storage::<OwnedTransactions>()
+                .insert(&entry.key, &entry.value)?;
         }
         Ok(())
     }
