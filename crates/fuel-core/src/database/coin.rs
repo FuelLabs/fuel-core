@@ -45,7 +45,9 @@ impl Database<OffChain> {
             res.map(|(key, _)| {
                 UtxoId::new(
                     TxId::try_from(&key[32..64]).expect("The slice has size 32"),
-                    key[64],
+                    u16::from_be_bytes(
+                        key[64..].try_into().expect("The slice has size 2"),
+                    )
                 )
             })
         })

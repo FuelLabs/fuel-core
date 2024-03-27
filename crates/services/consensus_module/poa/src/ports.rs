@@ -8,7 +8,6 @@ use fuel_core_types::{
         header::BlockHeader,
         primitives::DaBlockHeight,
     },
-    fuel_asm::Word,
     fuel_tx::{
         Transaction,
         TxId,
@@ -59,7 +58,6 @@ pub trait BlockProducer: Send + Sync {
         height: BlockHeight,
         block_time: Tai64,
         source: TransactionsSource,
-        max_gas: Word,
     ) -> anyhow::Result<UncommittedExecutionResult<Changes>>;
 }
 

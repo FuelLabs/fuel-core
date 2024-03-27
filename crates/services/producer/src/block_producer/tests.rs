@@ -76,7 +76,7 @@ mod produce_and_execute_block_txpool {
         let producer = ctx.producer();
 
         let err = producer
-            .produce_and_execute_block_txpool(0u32.into(), Tai64::now(), 1_000_000_000)
+            .produce_and_execute_block_txpool(0u32.into(), Tai64::now())
             .await
             .expect_err("expected failure");
 
@@ -95,7 +95,7 @@ mod produce_and_execute_block_txpool {
         let producer = ctx.producer();
 
         let result = producer
-            .produce_and_execute_block_txpool(1u32.into(), Tai64::now(), 1_000_000_000)
+            .produce_and_execute_block_txpool(1u32.into(), Tai64::now())
             .await;
 
         assert!(result.is_ok());
@@ -139,7 +139,6 @@ mod produce_and_execute_block_txpool {
                     .succ()
                     .expect("The block height should be valid"),
                 Tai64::now(),
-                1_000_000_000,
             )
             .await;
 
@@ -185,7 +184,6 @@ mod produce_and_execute_block_txpool {
                     .succ()
                     .expect("The block height should be valid"),
                 Tai64::now(),
-                1_000_000_000,
             )
             .await
             .expect("Should produce next block successfully")
@@ -238,7 +236,6 @@ mod produce_and_execute_block_txpool {
                     .succ()
                     .expect("The block height should be valid"),
                 Tai64::now(),
-                1_000_000_000,
             )
             .await
             .expect("Should produce next block successfully")
@@ -259,7 +256,7 @@ mod produce_and_execute_block_txpool {
         let producer = ctx.producer();
 
         let err = producer
-            .produce_and_execute_block_txpool(100u32.into(), Tai64::now(), 1_000_000_000)
+            .produce_and_execute_block_txpool(100u32.into(), Tai64::now())
             .await
             .expect_err("expected failure");
 
@@ -310,7 +307,6 @@ mod produce_and_execute_block_txpool {
                     .succ()
                     .expect("The block height should be valid"),
                 Tai64::now(),
-                1_000_000_000,
             )
             .await
             .expect_err("expected failure");
@@ -336,7 +332,7 @@ mod produce_and_execute_block_txpool {
         let producer = ctx.producer();
 
         let err = producer
-            .produce_and_execute_block_txpool(1u32.into(), Tai64::now(), 1_000_000_000)
+            .produce_and_execute_block_txpool(1u32.into(), Tai64::now())
             .await
             .expect_err("expected failure");
 
@@ -363,7 +359,7 @@ mod produce_and_execute_block_txpool {
 
         // when
         let _ = producer
-            .produce_and_execute_block_txpool(1u32.into(), Tai64::now(), 1_000_000_000)
+            .produce_and_execute_block_txpool(1u32.into(), Tai64::now())
             .await
             .unwrap();
 
@@ -387,7 +383,7 @@ mod produce_and_execute_block_txpool {
 
         // when
         let result = producer
-            .produce_and_execute_block_txpool(1u32.into(), Tai64::now(), 1_000_000_000)
+            .produce_and_execute_block_txpool(1u32.into(), Tai64::now())
             .await;
 
         // then

@@ -111,15 +111,15 @@ impl VmBench {
     pub const CONTRACT: ContractId = ContractId::zeroed();
 
     pub fn new(instruction: Instruction) -> Self {
-        let tx_params = TxParameters {
-            max_gas_per_tx: LARGE_GAS_LIMIT + 1,
-            ..Default::default()
-        };
+        let mut consensus_params = ConsensusParameters::default();
+        consensus_params.set_tx_params(
+            TxParameters::default().with_max_gas_per_tx(LARGE_GAS_LIMIT + 1),
+        );
+        consensus_params.set_fee_params(FeeParameters::default().with_gas_per_byte(0));
+        consensus_params.set_gas_costs(GasCosts::free());
+
         Self {
-            params: ConsensusParameters {
-                tx_params,
-                ..Default::default()
-            },
+            params: consensus_params,
             gas_price: 0,
             gas_limit: LARGE_GAS_LIMIT,
             maturity: Default::default(),
@@ -361,7 +361,7 @@ impl TryFrom<VmBench> for VmBenchPrepared {
 
             let input = tx.inputs().len();
             let output =
-                Output::contract(input as u8, Bytes32::zeroed(), Bytes32::zeroed());
+                Output::contract(input as u16, Bytes32::zeroed(), Bytes32::zeroed());
             let input = Input::contract(
                 UtxoId::default(),
                 Bytes32::zeroed(),
@@ -385,8 +385,11 @@ impl TryFrom<VmBench> for VmBenchPrepared {
         }) = contract_code
         {
             let input_count = tx.inputs().len();
-            let output =
-                Output::contract(input_count as u8, Bytes32::zeroed(), Bytes32::zeroed());
+            let output = Output::contract(
+                input_count as u16,
+                Bytes32::zeroed(),
+                Bytes32::zeroed(),
+            );
             let input = Input::contract(
                 UtxoId::default(),
                 Bytes32::zeroed(),
@@ -403,8 +406,11 @@ impl TryFrom<VmBench> for VmBenchPrepared {
 
         for contract_id in empty_contracts {
             let input_count = tx.inputs().len();
-            let output =
-                Output::contract(input_count as u8, Bytes32::zeroed(), Bytes32::zeroed());
+            let output = Output::contract(
+                input_count as u16,
+                Bytes32::zeroed(),
+                Bytes32::zeroed(),
+            );
             let input = Input::contract(
                 UtxoId::default(),
                 Bytes32::zeroed(),
@@ -434,9 +440,6 @@ impl TryFrom<VmBench> for VmBenchPrepared {
         // add at least one coin input
         tx.add_random_fee_input();
 
-        let mut params = params;
-        params.fee_params.gas_per_byte = 0;
-        params.gas_costs = GasCosts::free();
         let mut tx = tx
             .script_gas_limit(gas_limit)
             .maturity(maturity)

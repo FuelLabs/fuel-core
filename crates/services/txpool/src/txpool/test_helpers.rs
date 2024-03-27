@@ -51,7 +51,7 @@ pub(crate) fn create_coin_output() -> Output {
 
 pub(crate) fn create_contract_input(
     tx_id: TxId,
-    output_index: u8,
+    output_index: u16,
     contract_id: ContractId,
 ) -> Input {
     Input::contract(

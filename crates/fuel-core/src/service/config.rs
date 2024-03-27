@@ -75,6 +75,7 @@ pub struct Config {
 }
 
 impl Config {
+    #[cfg(feature = "test-helpers")]
     pub fn local_node() -> Self {
         let chain_config = ChainConfig::local_testnet();
         let state_config = StateConfig::local_testnet();
@@ -144,10 +145,12 @@ impl Config {
             self.txpool.chain_config = self.chain_config.clone();
         }
 
-        if self.block_importer.chain_id != self.chain_config.consensus_parameters.chain_id
+        if self.block_importer.chain_id
+            != self.chain_config.consensus_parameters.chain_id()
         {
             tracing::warn!("The `ChainConfig` of `BlockImporter` was inconsistent");
-            self.block_importer.chain_id = self.chain_config.consensus_parameters.chain_id
+            self.block_importer.chain_id =
+                self.chain_config.consensus_parameters.chain_id()
         }
 
         if self.txpool.utxo_validation != self.utxo_validation {
@@ -167,7 +170,6 @@ impl From<&Config> for fuel_core_poa::Config {
     fn from(config: &Config) -> Self {
         fuel_core_poa::Config {
             trigger: config.block_production,
-            block_gas_limit: config.chain_config.block_gas_limit,
             signing_key: config.consensus_key.clone(),
             metrics: false,
             consensus_params: config.chain_config.consensus_parameters.clone(),

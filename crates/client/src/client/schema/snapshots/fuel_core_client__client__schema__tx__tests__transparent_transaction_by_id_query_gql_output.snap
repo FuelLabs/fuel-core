@@ -191,6 +191,5 @@ query($id: TransactionId!) {
     salt
     storageSlots
     bytecodeWitnessIndex
-    bytecodeLength
   }
 }

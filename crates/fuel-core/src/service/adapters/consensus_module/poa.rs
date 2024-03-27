@@ -24,7 +24,6 @@ use fuel_core_poa::{
 use fuel_core_services::stream::BoxStream;
 use fuel_core_storage::transactional::Changes;
 use fuel_core_types::{
-    fuel_asm::Word,
     fuel_tx::TxId,
     fuel_types::BlockHeight,
     services::{
@@ -107,19 +106,16 @@ impl fuel_core_poa::ports::BlockProducer for BlockProducerAdapter {
         height: BlockHeight,
         block_time: Tai64,
         source: TransactionsSource,
-        max_gas: Word,
     ) -> anyhow::Result<UncommittedResult<Changes>> {
         match source {
             TransactionsSource::TxPool => {
                 self.block_producer
-                    .produce_and_execute_block_txpool(height, block_time, max_gas)
+                    .produce_and_execute_block_txpool(height, block_time)
                     .await
             }
             TransactionsSource::SpecificTransactions(txs) => {
                 self.block_producer
-                    .produce_and_execute_block_transactions(
-                        height, block_time, txs, max_gas,
-                    )
+                    .produce_and_execute_block_transactions(height, block_time, txs)
                     .await
             }
         }

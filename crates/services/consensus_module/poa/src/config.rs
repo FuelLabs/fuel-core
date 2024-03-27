@@ -1,6 +1,5 @@
 use fuel_core_types::{
     blockchain::primitives::SecretKeyWrapper,
-    fuel_asm::Word,
     fuel_tx::ConsensusParameters,
     secrecy::Secret,
 };
@@ -9,7 +8,6 @@ use tokio::time::Duration;
 #[derive(Debug, Clone)]
 pub struct Config {
     pub trigger: Trigger,
-    pub block_gas_limit: Word,
     pub signing_key: Option<Secret<SecretKeyWrapper>>,
     pub metrics: bool,
     pub consensus_params: ConsensusParameters,
@@ -21,7 +19,6 @@ impl Default for Config {
     fn default() -> Self {
         Config {
             trigger: Trigger::default(),
-            block_gas_limit: 0,
             signing_key: None,
             metrics: false,
             consensus_params: ConsensusParameters::default(),

@@ -53,3 +53,4 @@ std = [
 default = ["std", "random"]
 parquet = ["std", "dep:parquet", "postcard/use-std"]
 random = ["dep:rand", "fuel-core-types/random"]
+test-helpers = []
