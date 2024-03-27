@@ -24,9 +24,12 @@ use crate::{
         state::StateInitializer,
         Database,
     },
-    graphql_api::storage::transactions::{
-        OwnedTransactions,
-        TransactionStatuses,
+    graphql_api::storage::{
+        blocks::FuelBlockIdsToHeights,
+        transactions::{
+            OwnedTransactions,
+            TransactionStatuses,
+        },
     },
 };
 use fuel_core_chain_config::{
@@ -98,6 +101,7 @@ impl GenesisWorkers {
         tokio::try_join!(
             self.spawn_worker_off_chain::<TransactionStatuses>()?,
             self.spawn_worker_off_chain::<OwnedTransactions>()?,
+            self.spawn_worker_off_chain::<FuelBlockIdsToHeights>()?
         )
         .map(|_| ())
     }
@@ -303,8 +307,25 @@ impl ProcessState for Handler<TransactionStatuses> {
         tx: &mut StorageTransaction<&mut Database<Self::DbDesc>>,
     ) -> anyhow::Result<()> {
         for tx_status in group {
-            tx.storage::<TransactionStatuses>()
+            tx.storage::<Self::Table>()
                 .insert(&tx_status.key, &tx_status.value)?;
+        }
+        Ok(())
+    }
+}
+
+impl ProcessState for Handler<FuelBlockIdsToHeights> {
+    type Table = FuelBlockIdsToHeights;
+    type DbDesc = OffChain;
+
+    fn process(
+        &mut self,
+        group: Vec<TableEntry<Self::Table>>,
+        tx: &mut StorageTransaction<&mut Database<Self::DbDesc>>,
+    ) -> anyhow::Result<()> {
+        for entry in group {
+            tx.storage::<Self::Table>()
+                .insert(&entry.key, &entry.value)?;
         }
         Ok(())
     }

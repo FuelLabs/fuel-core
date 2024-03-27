@@ -1,3 +1,10 @@
+use fuel_core_chain_config::{
+    AddTable,
+    AsTable,
+    StateConfig,
+    StateConfigBuilder,
+    TableEntry,
+};
 use fuel_core_storage::{
     blueprint::plain::Plain,
     codec::{
@@ -31,6 +38,18 @@ impl TableWithBlueprint for FuelBlockIdsToHeights {
 
     fn column() -> Self::Column {
         Self::Column::FuelBlockIdsToHeights
+    }
+}
+
+impl AsTable<FuelBlockIdsToHeights> for StateConfig {
+    fn as_table(&self) -> Vec<TableEntry<FuelBlockIdsToHeights>> {
+        Vec::new() // Do not include these for now
+    }
+}
+
+impl AddTable<FuelBlockIdsToHeights> for StateConfigBuilder {
+    fn add(&mut self, _entries: Vec<TableEntry<FuelBlockIdsToHeights>>) {
+        // Do not include these for now
     }
 }
 

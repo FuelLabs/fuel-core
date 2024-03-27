@@ -102,7 +102,7 @@ pub async fn execute_genesis_block(
     let mut workers = GenesisWorkers::new(db.clone(), snapshot_reader);
     if let Err(e) = workers.run_off_chain_imports().await {
         workers.shutdown();
-        workers.finished();
+        workers.finished().await;
 
         return Err(e);
     }
