@@ -84,6 +84,7 @@ async fn relayer_can_download_logs() {
             None,
             None,
             None,
+            0,
         )
     };
 
@@ -157,6 +158,7 @@ async fn messages_are_spendable_after_relayer_is_synced() {
         Some(recipient.into()),
         Some(amount),
         None,
+        0,
     )];
     eth_node.update_data(|data| data.logs_batch = vec![logs.clone()].into());
     // Setup the eth node with a block high enough that there
@@ -258,6 +260,7 @@ fn make_message_event(
     recipient: Option<[u8; 32]>,
     amount: Option<u64>,
     data: Option<Vec<u8>>,
+    log_index: u64,
 ) -> Log {
     let message = fuel_core_relayer::bridge::MessageSentFilter {
         nonce: U256::from_big_endian(nonce.as_ref()),
@@ -269,6 +272,7 @@ fn make_message_event(
     let mut log = message.into_log();
     log.address = contract_address;
     log.block_number = Some(block_number.into());
+    log.log_index = Some(log_index.into());
     log
 }
 
