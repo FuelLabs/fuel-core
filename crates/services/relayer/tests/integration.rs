@@ -322,7 +322,7 @@ impl TestContext {
         }
 
         self.eth_node
-            .update_data(|data| data.logs_batch = vec![logs.clone()].into());
+            .update_data(|data| data.logs_batch = vec![logs.clone()]);
         // Setup the eth node with a block high enough that there
         // will be some finalized blocks.
         self.eth_node
