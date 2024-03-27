@@ -348,9 +348,12 @@ mod tests {
             },
         },
         fuel_tx::{
+            TransactionBuilder,
             TxPointer,
+            UniqueIdentifier,
             UtxoId,
         },
+        fuel_types::ChainId,
     };
     use rand::{
         rngs::StdRng,
@@ -371,6 +374,12 @@ mod tests {
 
     #[derive(Debug, PartialEq)]
     struct OnChainData {
+        common: CommonData,
+        transactions: Vec<TableEntry<Transactions>>,
+    }
+
+    #[derive(Debug, PartialEq)]
+    struct CommonData {
         coins: Vec<TableEntry<Coins>>,
         messages: Vec<TableEntry<Messages>>,
         contract_code: Vec<TableEntry<ContractsRawCode>>,
@@ -380,8 +389,8 @@ mod tests {
         block: TableEntry<FuelBlocks>,
     }
 
-    impl OnChainData {
-        fn sorted(mut self) -> OnChainData {
+    impl CommonData {
+        fn sorted(mut self) -> CommonData {
             self.coins.sort_by_key(|e| e.key);
             self.messages.sort_by_key(|e| e.key);
             self.contract_code.sort_by_key(|e| e.key);
@@ -390,20 +399,28 @@ mod tests {
             self.contract_balance.sort_by_key(|e| e.key);
             self
         }
+    }
+
+    impl OnChainData {
+        fn sorted(mut self) -> OnChainData {
+            self.common = self.common.sorted();
+            self.transactions.sort_by_key(|e| e.key);
+            self
+        }
 
         fn into_state_config(self) -> StateConfig {
             let mut builder = StateConfigBuilder::default();
-            builder.add(self.coins);
-            builder.add(self.messages);
-            builder.add(self.contract_code);
-            builder.add(self.contract_utxo);
-            builder.add(self.contract_state);
-            builder.add(self.contract_balance);
+            builder.add(self.common.coins);
+            builder.add(self.common.messages);
+            builder.add(self.common.contract_code);
+            builder.add(self.common.contract_utxo);
+            builder.add(self.common.contract_state);
+            builder.add(self.common.contract_balance);
 
-            let height = self.block.value.header().height();
+            let height = self.common.block.value.header().height();
             builder.set_block_height(*height);
 
-            let da_height = self.block.value.header().application().da_height;
+            let da_height = self.common.block.value.header().application().da_height;
             builder.set_da_block_height(da_height);
 
             builder.build().unwrap()
@@ -441,13 +458,16 @@ mod tests {
             let reader = &mut reader;
 
             Self {
-                coins: read(reader),
-                messages: read(reader),
-                contract_code: read(reader),
-                contract_utxo: read(reader),
-                contract_state: read(reader),
-                contract_balance: read(reader),
-                block,
+                common: CommonData {
+                    coins: read(reader),
+                    messages: read(reader),
+                    contract_code: read(reader),
+                    contract_utxo: read(reader),
+                    contract_state: read(reader),
+                    contract_balance: read(reader),
+                    block,
+                },
+                transactions: read(reader),
             }
         }
     }
@@ -460,7 +480,7 @@ mod tests {
         // Db will flush data upon being dropped. Important to do before snapshotting
         fn flush(self) {}
 
-        fn given_persisted_on_chain_data(&mut self) -> OnChainData {
+        fn given_persisted_data(&mut self) -> OnChainData {
             let amount = 10;
             let coins = repeat_with(|| self.given_coin()).take(amount).collect();
             let messages = repeat_with(|| self.given_message()).take(amount).collect();
@@ -500,16 +520,40 @@ mod tests {
                 })
                 .collect();
 
+            let transactions = vec![self.given_transaction()];
+
             let block = self.given_block();
+
             OnChainData {
-                coins,
-                messages,
-                contract_code,
-                contract_utxo,
-                contract_state,
-                contract_balance,
-                block,
+                common: CommonData {
+                    coins,
+                    messages,
+                    contract_code,
+                    contract_utxo,
+                    contract_state,
+                    contract_balance,
+                    block,
+                },
+                transactions,
             }
+        }
+
+        fn given_transaction(&mut self) -> TableEntry<Transactions> {
+            let tx = TransactionBuilder::script(
+                self.generate_data(1000),
+                self.generate_data(1000),
+            )
+            .finalize_as_transaction();
+
+            let id = tx.id(&ChainId::new(self.rng.gen::<u64>()));
+
+            self.db
+                .on_chain_mut()
+                .storage_as_mut::<Transactions>()
+                .insert(&id, &tx)
+                .unwrap();
+
+            TableEntry { key: id, value: tx }
         }
 
         fn given_block(&mut self) -> TableEntry<FuelBlocks> {
@@ -663,7 +707,7 @@ mod tests {
         std::fs::create_dir(&db_path)?;
 
         let mut db = DbPopulator::new(open_db(&db_path, None)?, StdRng::seed_from_u64(2));
-        let state = db.given_persisted_on_chain_data();
+        let state = db.given_persisted_data();
         db.flush();
 
         // when
@@ -682,10 +726,15 @@ mod tests {
 
         let written_data = OnChainData::read_from_snapshot(snapshot);
 
-        assert_eq!(written_data.block, state.block);
+        assert_eq!(written_data.common.block, state.common.block);
 
-        assert_ne!(written_data, state);
-        assert_eq!(written_data, state.sorted());
+        if let Encoding::Json = encoding {
+            assert_ne!(written_data.common, state.common);
+            assert_eq!(written_data.common, state.common.sorted());
+        } else {
+            assert_ne!(written_data, state);
+            assert_eq!(written_data, state.sorted());
+        }
 
         Ok(())
     }
@@ -703,7 +752,7 @@ mod tests {
         let db_path = temp_dir.path().join("db");
         let mut db = DbPopulator::new(open_db(&db_path, None)?, StdRng::seed_from_u64(2));
 
-        let state = db.given_persisted_on_chain_data();
+        let state = db.given_persisted_data();
         db.flush();
 
         // when
@@ -727,7 +776,7 @@ mod tests {
         let mut reader = SnapshotReader::open(snapshot)?;
 
         let expected_state = state.sorted();
-        assert_groups_as_expected(group_size, expected_state.coins, &mut reader);
+        assert_groups_as_expected(group_size, expected_state.common.coins, &mut reader);
 
         Ok(())
     }
@@ -741,10 +790,7 @@ mod tests {
         let db_path = temp_dir.path().join("db");
         let mut db = DbPopulator::new(open_db(&db_path, None)?, StdRng::seed_from_u64(2));
 
-        let original_state = db
-            .given_persisted_on_chain_data()
-            .sorted()
-            .into_state_config();
+        let original_state = db.given_persisted_data().sorted().into_state_config();
 
         let randomly_chosen_contract = original_state
             .contracts
