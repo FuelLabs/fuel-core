@@ -59,7 +59,6 @@ pub fn init_sub_services(
         });
     let last_height = *last_block_header.height();
 
-    let chain_config = config.snapshot_reader.chain_config();
     let executor = ExecutorAdapter::new(
         database.on_chain().clone(),
         database.relayer().clone(),

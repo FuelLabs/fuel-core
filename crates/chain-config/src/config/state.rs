@@ -1,10 +1,12 @@
-use bech32::{
-    ToBase32,
-    Variant::Bech32m,
+use super::{
+    coin::CoinConfig,
+    contract::ContractConfig,
+    message::MessageConfig,
+    table_entry::TableEntry,
 };
-use core::{
-    fmt::Debug,
-    str::FromStr,
+use crate::{
+    ContractBalanceConfig,
+    ContractStateConfig,
 };
 use fuel_core_storage::{
     structured_storage::TableWithBlueprint,
@@ -23,12 +25,7 @@ use fuel_core_storage::{
 use fuel_core_types::{
     blockchain::primitives::DaBlockHeight,
     entities::contract::ContractUtxoInfo,
-    fuel_types::{
-        Address,
-        BlockHeight,
-        Bytes32,
-    },
-    fuel_vm::SecretKey,
+    fuel_types::BlockHeight,
 };
 use itertools::Itertools;
 use serde::{
@@ -38,17 +35,21 @@ use serde::{
 
 #[cfg(feature = "std")]
 use crate::SnapshotMetadata;
-use crate::{
-    CoinConfigGenerator,
-    ContractBalanceConfig,
-    ContractStateConfig,
-};
 
-use super::{
-    coin::CoinConfig,
-    contract::ContractConfig,
-    message::MessageConfig,
-    table_entry::TableEntry,
+#[cfg(feature = "test-helpers")]
+use crate::CoinConfigGenerator;
+#[cfg(feature = "test-helpers")]
+use bech32::{
+    ToBase32,
+    Variant::Bech32m,
+};
+#[cfg(feature = "test-helpers")]
+use core::str::FromStr;
+#[cfg(feature = "test-helpers")]
+use fuel_core_types::{
+    fuel_types::Address,
+    fuel_types::Bytes32,
+    fuel_vm::SecretKey,
 };
 
 #[cfg(feature = "parquet")]
@@ -460,6 +461,7 @@ impl StateConfig {
         builder.build()
     }
 
+    #[cfg(feature = "test-helpers")]
     pub fn local_testnet() -> Self {
         // endow some preset accounts with an initial balance
         tracing::info!("Initial Accounts");

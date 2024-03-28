@@ -1,8 +1,5 @@
 use clap::ValueEnum;
-use fuel_core_chain_config::{
-    ChainConfig,
-    SnapshotReader,
-};
+use fuel_core_chain_config::SnapshotReader;
 use fuel_core_types::{
     blockchain::primitives::SecretKeyWrapper,
     secrecy::Secret,
@@ -163,7 +160,6 @@ impl From<&Config> for fuel_core_poa::Config {
         let chain_config = config.snapshot_reader.chain_config();
         fuel_core_poa::Config {
             trigger: config.block_production,
-            block_gas_limit: chain_config.block_gas_limit,
             signing_key: config.consensus_key.clone(),
             metrics: false,
             consensus_params: chain_config.consensus_parameters.clone(),

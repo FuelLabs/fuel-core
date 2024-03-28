@@ -266,17 +266,14 @@ fn service_with_many_contracts(
     let _drop = rt.enter();
     let mut database = Database::rocksdb_temp();
 
-    let mut chain_config = ChainConfig::local_node();
+    let mut chain_config = ChainConfig::local_testnet();
 
     chain_config.consensus_parameters.set_tx_params(
         TxParameters::default().with_max_gas_per_tx(TARGET_BLOCK_GAS_LIMIT),
     );
-    chain_config
-        .consensus_parameters
-        .set_predicate_params(
-            PredicateParameters::default()
-                .with_max_gas_per_predicate(TARGET_BLOCK_GAS_LIMIT),
-        );
+    chain_config.consensus_parameters.set_predicate_params(
+        PredicateParameters::default().with_max_gas_per_predicate(TARGET_BLOCK_GAS_LIMIT),
+    );
     chain_config
         .consensus_parameters
         .set_fee_params(FeeParameters::default().with_gas_per_byte(0));

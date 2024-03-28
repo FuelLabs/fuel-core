@@ -206,7 +206,7 @@ fn contract_snapshot(
     writer.write(state)?;
     writer.write(balance)?;
     writer.write_block_data(*block.header().height(), block.header().da_height)?;
-    writer.write_chain_config(&ChainConfig::local_testnet())?;
+    writer.write_chain_config(&crate::cli::local_testnet_chain_config())?;
     writer.close()?;
     Ok(())
 }
@@ -269,7 +269,7 @@ fn load_chain_config(
 ) -> Result<ChainConfig, anyhow::Error> {
     let chain_config = match chain_config {
         Some(file) => ChainConfig::load(file)?,
-        None => crate::cli::local_testnet(),
+        None => crate::cli::local_testnet_chain_config(),
     };
 
     Ok(chain_config)

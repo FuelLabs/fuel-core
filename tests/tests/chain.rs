@@ -76,9 +76,7 @@ async fn network_operates_with_non_zero_chain_id() {
 
     // Given
     let chain_id = ChainId::new(0xDEAD);
-    chain_config
-        .consensus_parameters
-        .set_chain_id(chain_id);
+    chain_config.consensus_parameters.set_chain_id(chain_id);
     let node_config = Config {
         debug: true,
         utxo_validation: true,
