@@ -13,6 +13,7 @@ use fuel_core_storage::{
     structured_storage::StructuredStorage,
     tables::{
         Coins,
+        ConsensusParametersVersions,
         ContractsLatestUtxo,
         FuelBlocks,
         Messages,
@@ -22,6 +23,7 @@ use fuel_core_storage::{
     transactional::{
         Changes,
         ConflictPolicy,
+        IntoTransaction,
         Modifiable,
         ReadTransaction,
         StorageTransaction,
@@ -189,11 +191,6 @@ pub struct ExecutionOptions {
     pub utxo_validation: bool,
     /// Print execution backtraces if transaction execution reverts.
     pub backtrace: bool,
-    // TODO: It is a temporary workaround to pass the `consensus_params`
-    //  into the WASM executor. Later WASM will fetch it from the storage directly.
-    //  https://github.com/FuelLabs/fuel-core/issues/1753
-    /// The configuration allows overriding the default consensus parameters.
-    pub consensus_params: Option<ConsensusParameters>,
 }
 
 /// The executor instance performs block production and validation. Given a block, it will execute all
@@ -204,7 +201,6 @@ pub struct ExecutionOptions {
 pub struct ExecutionInstance<R, D> {
     pub relayer: R,
     pub database: D,
-    pub consensus_params: ConsensusParameters,
     pub options: ExecutionOptions,
 }
 
@@ -233,7 +229,6 @@ pub mod block_component {
         pub transactions_source: TxSource,
         pub coinbase_contract_id: ContractId,
         pub gas_price: u64,
-        pub gas_limit: u64,
         /// The private marker to allow creation of the type only by constructor.
         _marker: core::marker::PhantomData<()>,
     }
@@ -253,7 +248,6 @@ pub mod block_component {
                 transactions_source: OnceTransactionsSource::new(transaction),
                 coinbase_contract_id,
                 gas_price,
-                gas_limit: u64::MAX,
                 _marker: Default::default(),
             }
         }
@@ -265,7 +259,6 @@ pub mod block_component {
             transactions_source: TxSource,
             coinbase_contract_id: ContractId,
             gas_price: u64,
-            gas_limit: u64,
         ) -> Self {
             debug_assert!(block.transactions.is_empty());
             PartialBlockComponent {
@@ -273,7 +266,6 @@ pub mod block_component {
                 transactions_source,
                 gas_price,
                 coinbase_contract_id,
-                gas_limit,
                 _marker: Default::default(),
             }
         }
@@ -304,37 +296,56 @@ where
             ExecutionTypes::DryRun(component) => {
                 let mut block =
                     PartialFuelBlock::new(component.header_to_produce, vec![]);
+                let block_executor = BlockExecutor::new(
+                    self.relayer,
+                    self.database,
+                    self.options,
+                    &block,
+                )?;
                 let component = PartialBlockComponent::from_component(
                     &mut block,
                     component.transactions_source,
                     component.coinbase_recipient,
                     component.gas_price,
-                    component.gas_limit,
                 );
-
                 let execution_data =
-                    self.execute_block(ExecutionType::DryRun(component))?;
+                    block_executor.execute_block(ExecutionType::DryRun(component))?;
+
                 (block, execution_data)
             }
             ExecutionTypes::Production(component) => {
                 let mut block =
                     PartialFuelBlock::new(component.header_to_produce, vec![]);
+                let block_executor = BlockExecutor::new(
+                    self.relayer,
+                    self.database,
+                    self.options,
+                    &block,
+                )?;
+
                 let component = PartialBlockComponent::from_component(
                     &mut block,
                     component.transactions_source,
                     component.coinbase_recipient,
                     component.gas_price,
-                    component.gas_limit,
                 );
 
                 let execution_data =
-                    self.execute_block(ExecutionType::Production(component))?;
+                    block_executor.execute_block(ExecutionType::Production(component))?;
+
                 (block, execution_data)
             }
             ExecutionTypes::Validation(mut block) => {
+                let block_executor = BlockExecutor::new(
+                    self.relayer,
+                    self.database,
+                    self.options,
+                    &block,
+                )?;
+
                 let component = PartialBlockComponent::from_partial_block(&mut block);
                 let execution_data =
-                    self.execute_block(ExecutionType::Validation(component))?;
+                    block_executor.execute_block(ExecutionType::Validation(component))?;
                 (block, execution_data)
             }
         };
@@ -382,20 +393,63 @@ where
         // Get the complete fuel block.
         Ok(UncommittedResult::new(result, changes))
     }
+}
 
+#[derive(Clone, Debug)]
+pub struct BlockExecutor<R, D> {
+    relayer: R,
+    block_st_transaction: StorageTransaction<D>,
+    consensus_params: ConsensusParameters,
+    options: ExecutionOptions,
+}
+
+impl<R, D> BlockExecutor<R, D>
+where
+    D: KeyValueInspect<Column = Column>,
+{
+    pub fn new(
+        relayer: R,
+        database: D,
+        options: ExecutionOptions,
+        block: &PartialFuelBlock,
+    ) -> ExecutorResult<Self> {
+        let consensus_params_version = block.header.consensus_parameters_version;
+
+        let block_st_transaction = database
+            .into_transaction()
+            .with_policy(ConflictPolicy::Overwrite);
+        let consensus_params = block_st_transaction
+            .storage::<ConsensusParametersVersions>()
+            .get(&consensus_params_version)?
+            .ok_or(ExecutorError::ConsensusParametersNotFound(
+                consensus_params_version,
+            ))?
+            .into_owned();
+
+        Ok(Self {
+            relayer,
+            block_st_transaction,
+            consensus_params,
+            options,
+        })
+    }
+}
+
+impl<R, D> BlockExecutor<R, D>
+where
+    R: RelayerPort,
+    D: KeyValueInspect<Column = Column>,
+{
     #[tracing::instrument(skip_all)]
     /// Execute the fuel block with all transactions.
     fn execute_block<TxSource>(
-        &self,
+        mut self,
         block: ExecutionType<PartialBlockComponent<TxSource>>,
     ) -> ExecutorResult<ExecutionData>
     where
         TxSource: TransactionsSource,
     {
-        let mut block_st_transaction = self
-            .database
-            .read_transaction()
-            .with_policy(ConflictPolicy::Overwrite);
+        let block_gas_limit = self.consensus_params.block_gas_limit();
         let mut data = ExecutionData {
             coinbase: 0,
             used_gas: 0,
@@ -416,17 +470,17 @@ where
         let source = component.transactions_source;
         let gas_price = component.gas_price;
         let coinbase_contract_id = component.coinbase_contract_id;
-        let mut remaining_gas_limit = component.gas_limit;
+        let mut remaining_gas_limit = block_gas_limit;
         let block_height = *block.header.height();
 
         if self.relayer.enabled() {
-            self.process_da(&mut block_st_transaction, &block.header, execution_data)?;
+            self.process_da(&block.header, execution_data)?;
         }
 
         // The block level storage transaction that also contains data from the relayer.
         // Starting from this point, modifications from each thread should be independent
         // and shouldn't touch the same data.
-        let mut block_with_relayer_data_transaction = block_st_transaction.write_transaction()
+        let mut block_with_relayer_data_transaction = self.block_st_transaction.read_transaction()
                 // Enforces independent changes from each thread.
                 .with_policy(ConflictPolicy::Fail);
 
@@ -449,7 +503,7 @@ where
                 let mut tx_st_transaction = thread_block_transaction
                     .write_transaction()
                     .with_policy(ConflictPolicy::Overwrite);
-                let tx_id = tx.id(&self.consensus_params.chain_id);
+                let tx_id = tx.id(&self.consensus_params.chain_id());
                 let result = self.execute_transaction(
                     tx,
                     &tx_id,
@@ -500,8 +554,7 @@ where
                 execute_transaction(&mut *execution_data, transaction)?;
             }
 
-            remaining_gas_limit =
-                component.gas_limit.saturating_sub(execution_data.used_gas);
+            remaining_gas_limit = block_gas_limit.saturating_sub(execution_data.used_gas);
 
             iter = source.next(remaining_gas_limit).into_iter().peekable();
         }
@@ -529,7 +582,7 @@ where
                     state_root: Bytes32::zeroed(),
                 },
                 amount_to_mint,
-                self.consensus_params.base_asset_id,
+                *self.consensus_params.base_asset_id(),
                 gas_price,
             );
 
@@ -541,32 +594,30 @@ where
 
         let changes_from_thread = thread_block_transaction.into_changes();
         block_with_relayer_data_transaction.commit_changes(changes_from_thread)?;
-        block_with_relayer_data_transaction.commit()?;
+        self.block_st_transaction
+            .commit_changes(block_with_relayer_data_transaction.into_changes())?;
 
         if execution_kind != ExecutionKind::DryRun && !data.found_mint {
             return Err(ExecutorError::MintMissing)
         }
 
-        data.changes = block_st_transaction.into_changes();
+        data.changes = self.block_st_transaction.into_changes();
 
         Ok(data)
     }
 
-    fn process_da<T>(
-        &self,
-        block_st_transaction: &mut StorageTransaction<T>,
+    fn process_da(
+        &mut self,
         header: &PartialBlockHeader,
         execution_data: &mut ExecutionData,
-    ) -> ExecutorResult<()>
-    where
-        T: KeyValueInspect<Column = Column>,
-    {
+    ) -> ExecutorResult<()> {
         let block_height = *header.height();
         let prev_block_height = block_height
             .pred()
             .ok_or(ExecutorError::ExecutingGenesisBlock)?;
 
-        let prev_block_header = block_st_transaction
+        let prev_block_header = self
+            .block_st_transaction
             .storage::<FuelBlocks>()
             .get(&prev_block_height)?
             .ok_or(ExecutorError::PreviousBlockIsNotFound)?;
@@ -590,8 +641,8 @@ where
                         if message.da_height() != da_height {
                             return Err(ExecutorError::RelayerGivesIncorrectMessages)
                         }
-                        block_st_transaction
-                            .storage::<Messages>()
+                        self.block_st_transaction
+                            .storage_as_mut::<Messages>()
                             .insert(message.nonce(), &message)?;
                         execution_data
                             .events
@@ -868,7 +919,7 @@ where
             )?;
             // validate transaction signature
             checked_tx = checked_tx
-                .check_signatures(&self.consensus_params.chain_id)
+                .check_signatures(&self.consensus_params.chain_id())
                 .map_err(TransactionValidityError::from)?;
             debug_assert!(checked_tx.checks().contains(Checks::Signatures));
         }
@@ -899,8 +950,8 @@ where
             InterpreterParams::new(gas_price, &self.consensus_params),
         );
 
-        let gas_costs = &self.consensus_params.gas_costs;
-        let fee_params = &self.consensus_params.fee_params;
+        let gas_costs = self.consensus_params.gas_costs();
+        let fee_params = self.consensus_params.fee_params();
 
         let ready_tx = checked_tx
             .clone()
@@ -918,8 +969,8 @@ where
         let (state, mut tx, receipts): (_, Tx, _) = vm_result.into_inner();
         #[cfg(debug_assertions)]
         {
-            tx.precompute(&self.consensus_params.chain_id)?;
-            debug_assert_eq!(tx.id(&self.consensus_params.chain_id), tx_id);
+            tx.precompute(&self.consensus_params.chain_id())?;
+            debug_assert_eq!(tx.id(&self.consensus_params.chain_id()), tx_id);
         }
 
         for (original_input, produced_input) in checked_tx
@@ -1467,8 +1518,8 @@ where
     {
         let tx_idx = execution_data.tx_count;
         for (output_index, output) in outputs.iter().enumerate() {
-            let index = u8::try_from(output_index)
-                .expect("Transaction can have only up to `u8::MAX` outputs");
+            let index = u16::try_from(output_index)
+                .expect("Transaction can have only up to `u16::MAX` outputs");
             let utxo_id = UtxoId::new(*tx_id, index);
             match output {
                 Output::Coin {

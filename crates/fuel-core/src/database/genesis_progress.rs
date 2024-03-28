@@ -100,8 +100,8 @@ impl Database {
 
         let mut root_calculator = MerkleRootCalculator::new();
         for coin in coins {
-            let (_, coin) = coin?;
-            root_calculator.push(coin.root()?.as_slice());
+            let (utxo_id, coin) = coin?;
+            root_calculator.push(coin.uncompress(utxo_id).root()?.as_slice());
         }
 
         Ok(root_calculator.root())

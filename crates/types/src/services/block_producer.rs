@@ -19,6 +19,4 @@ pub struct Components<Source> {
     pub coinbase_recipient: ContractId,
     /// The gas price for all transactions in the block.
     pub gas_price: u64,
-    /// The gas limit of the block.
-    pub gas_limit: u64,
 }

@@ -46,8 +46,8 @@ async fn chain_info() {
     );
 
     assert_eq!(
-        node_config.chain_config.consensus_parameters.gas_costs,
-        chain_info.consensus_parameters.gas_costs
+        node_config.chain_config.consensus_parameters.gas_costs(),
+        chain_info.consensus_parameters.gas_costs()
     );
 }
 
@@ -80,7 +80,10 @@ async fn network_operates_with_non_zero_chain_id() {
 
     // Given
     let chain_id = ChainId::new(0xDEAD);
-    node_config.chain_config.consensus_parameters.chain_id = chain_id;
+    node_config
+        .chain_config
+        .consensus_parameters
+        .set_chain_id(chain_id);
     let srv = FuelService::new_node(node_config.clone()).await.unwrap();
     let client = FuelClient::from(srv.bound_address);
     let script = TransactionBuilder::script(vec![], vec![])
@@ -140,7 +143,10 @@ async fn network_operates_with_non_zero_base_asset_id() {
         ..Config::local_node()
     };
 
-    node_config.chain_config.consensus_parameters.base_asset_id = new_base_asset_id;
+    node_config
+        .chain_config
+        .consensus_parameters
+        .set_base_asset_id(new_base_asset_id);
     let srv = FuelService::new_node(node_config.clone()).await.unwrap();
     let client = FuelClient::from(srv.bound_address);
     let script = TransactionBuilder::script(vec![], vec![])

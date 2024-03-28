@@ -1,4 +1,5 @@
 use clap::Parser;
+use fuel_core_chain_config::ChainConfig;
 use std::{
     env,
     path::PathBuf,
@@ -128,6 +129,15 @@ pub async fn run_cli() -> anyhow::Result<()> {
             e.exit()
         }
     }
+}
+
+/// Returns the chain configuration for the local testnet.
+pub fn local_testnet() -> ChainConfig {
+    const TESTNET_CHAIN_CONFIG: &[u8] =
+        include_bytes!("../../../deployment/scripts/chainspec/testnet/chain_config.json");
+
+    let config: ChainConfig = serde_json::from_slice(TESTNET_CHAIN_CONFIG).unwrap();
+    config
 }
 
 #[cfg(any(feature = "rocksdb", feature = "rocksdb-production"))]

@@ -229,7 +229,7 @@ async fn _dry_runs(
                 );
             }
 
-            assert!(tx.id(&chain_info.consensus_parameters.chain_id) == tx_status.id);
+            assert!(tx.id(&chain_info.consensus_parameters.chain_id()) == tx_status.id);
             if expect == DryRunResult::Successful {
                 assert!(matches!(
                     &tx_status.result,

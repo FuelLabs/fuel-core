@@ -372,10 +372,15 @@ where
         }
 
         // verify max gas is less than block limit
-        if tx.max_gas() > self.config.chain_config.block_gas_limit {
+        let block_gas_limit = self
+            .config
+            .chain_config
+            .consensus_parameters
+            .block_gas_limit();
+        if tx.max_gas() > block_gas_limit {
             return Err(Error::NotInsertedMaxGasLimit {
                 tx_gas: tx.max_gas(),
-                block_limit: self.config.chain_config.block_gas_limit,
+                block_limit: block_gas_limit,
             })
         }
 
@@ -516,7 +521,7 @@ pub async fn check_single_tx<GasPrice: GasPriceProvider>(
 
         let tx = tx
             .into_checked_basic(current_height, consensus_params)?
-            .check_signatures(&consensus_params.chain_id)?;
+            .check_signatures(&consensus_params.chain_id())?;
 
         let tx = tx
             .check_predicates_async::<TokioWithRayon>(&CheckPredicateParams::from(
@@ -546,8 +551,8 @@ fn verify_tx_min_gas_price(
     gas_price: GasPrice,
 ) -> Result<Checked<Transaction>, Error> {
     let tx: CheckedTransaction = tx.into();
-    let gas_costs = &config.chain_config.consensus_parameters.gas_costs;
-    let fee_parameters = &config.chain_config.consensus_parameters.fee_params;
+    let gas_costs = config.chain_config.consensus_parameters.gas_costs();
+    let fee_parameters = config.chain_config.consensus_parameters.fee_params();
     let read = match tx {
         CheckedTransaction::Script(script) => {
             let ready = script.into_ready(gas_price, gas_costs, fee_parameters)?;

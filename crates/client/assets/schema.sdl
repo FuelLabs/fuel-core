@@ -120,7 +120,7 @@ type Coin {
 	"""
 	TxPointer - the index of the transaction that created this coin
 	"""
-	txCreatedIdx: U64!
+	txCreatedIdx: U16!
 }
 
 type CoinConnection {
@@ -177,15 +177,20 @@ union CoinType = Coin | MessageCoin
 union Consensus = Genesis | PoAConsensus
 
 type ConsensusParameters {
+	version: ConsensusParametersVersion!
 	txParams: TxParameters!
 	predicateParams: PredicateParameters!
 	scriptParams: ScriptParameters!
 	contractParams: ContractParameters!
 	feeParams: FeeParameters!
 	baseAssetId: AssetId!
+	blockGasLimit: U64!
 	chainId: U64!
 	gasCosts: GasCosts!
+	privilegedAddress: Address!
 }
+
+union ConsensusParametersVersion = Version
 
 type Contract {
 	id: ContractId!
@@ -243,15 +248,18 @@ type ContractCreated {
 scalar ContractId
 
 type ContractOutput {
-	inputIndex: Int!
+	inputIndex: U16!
 	balanceRoot: Bytes32!
 	stateRoot: Bytes32!
 }
 
 type ContractParameters {
+	version: ContractParametersVersion!
 	contractMaxSize: U64!
 	maxStorageSlots: U64!
 }
+
+union ContractParametersVersion = Version
 
 union DependentCost = LightOperation | HeavyOperation
 
@@ -299,12 +307,16 @@ type FailureStatus {
 }
 
 type FeeParameters {
+	version: FeeParametersVersion!
 	gasPriceFactor: U64!
 	gasPerByte: U64!
 }
 
+union FeeParametersVersion = Version
+
 
 type GasCosts {
+	version: GasCostsVersion!
 	add: U64!
 	addi: U64!
 	aloc: U64!
@@ -417,6 +429,8 @@ type GasCosts {
 	newStoragePerByte: U64!
 }
 
+union GasCostsVersion = Version
+
 type Genesis {
 	"""
 	The chain configs define what consensus type to use, what settlement layer to use,
@@ -527,7 +541,7 @@ type InputMessage {
 	recipient: Address!
 	amount: U64!
 	nonce: Nonce!
-	witnessIndex: Int!
+	witnessIndex: U16!
 	predicateGasUsed: U64!
 	data: HexString!
 	predicate: HexString!
@@ -762,11 +776,14 @@ type Policies {
 }
 
 type PredicateParameters {
+	version: PredicateParametersVersion!
 	maxPredicateLength: U64!
 	maxPredicateDataLength: U64!
 	maxGasPerPredicate: U64!
 	maxMessageDataLength: U64!
 }
+
+union PredicateParametersVersion = Version
 
 type ProgramState {
 	returnType: ReturnType!
@@ -905,9 +922,12 @@ enum RunState {
 scalar Salt
 
 type ScriptParameters {
+	version: ScriptParametersVersion!
 	maxScriptLength: U64!
 	maxScriptDataLength: U64!
 }
+
+union ScriptParametersVersion = Version
 
 scalar Signature
 
@@ -990,8 +1010,7 @@ type Transaction {
 	status: TransactionStatus
 	script: HexString
 	scriptData: HexString
-	bytecodeWitnessIndex: Int
-	bytecodeLength: U64
+	bytecodeWitnessIndex: U16
 	salt: Salt
 	storageSlots: [HexString!]
 	"""
@@ -1034,14 +1053,19 @@ scalar TransactionId
 union TransactionStatus = SubmittedStatus | SuccessStatus | SqueezedOutStatus | FailureStatus
 
 type TxParameters {
-	maxInputs: U8!
-	maxOutputs: U8!
+	version: TxParametersVersion!
+	maxInputs: U16!
+	maxOutputs: U16!
 	maxWitnesses: U32!
 	maxGasPerTx: U64!
 	maxSize: U64!
 }
 
+union TxParametersVersion = Version
+
 scalar TxPointer
+
+scalar U16
 
 scalar U32
 
@@ -1055,6 +1079,10 @@ type VariableOutput {
 	to: Address!
 	amount: U64!
 	assetId: AssetId!
+}
+
+type Version {
+	value: U8!
 }
 
 schema {

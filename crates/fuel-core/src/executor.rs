@@ -13,12 +13,17 @@ mod tests {
     use fuel_core_storage::{
         tables::{
             Coins,
+            ConsensusParametersVersions,
             ContractsRawCode,
             Messages,
         },
-        transactional::AtomicView,
+        transactional::{
+            AtomicView,
+            WriteTransaction,
+        },
         Result as StorageResult,
         StorageAsMut,
+        StorageAsRef,
     };
     use fuel_core_types::{
         blockchain::{
@@ -122,16 +127,25 @@ mod tests {
         },
         tai64::Tai64,
     };
-    use fuel_core_upgradable_executor::{
-        config::Config,
-        executor::Executor,
-    };
+    use fuel_core_upgradable_executor::executor::Executor;
     use itertools::Itertools;
     use rand::{
         prelude::StdRng,
         Rng,
         SeedableRng,
     };
+
+    #[derive(Clone, Debug, Default)]
+    struct Config {
+        /// Network-wide common parameters used for validating the chain.
+        /// The executor already has these parameters, and this field allows us
+        /// to override the existing value.
+        pub consensus_parameters: ConsensusParameters,
+        /// Print execution backtraces if transaction execution reverts.
+        pub backtrace: bool,
+        /// Default mode for utxo_validation
+        pub utxo_validation_default: bool,
+    }
 
     #[derive(Clone, Debug)]
     struct DisabledRelayer;
@@ -163,11 +177,31 @@ mod tests {
         }
     }
 
+    fn add_consensus_parameters(
+        mut database: Database,
+        consensus_parameters: &ConsensusParameters,
+    ) -> Database {
+        // Set the consensus parameters for the executor.
+        let mut tx = database.write_transaction();
+        tx.storage_as_mut::<ConsensusParametersVersions>()
+            .insert(&0, consensus_parameters)
+            .unwrap();
+        tx.commit().unwrap();
+        database
+    }
+
     fn create_executor(
         database: Database,
         config: Config,
     ) -> Executor<Database, DisabledRelayer> {
-        Executor::new(database, DisabledRelayer, config)
+        let executor_config = fuel_core_upgradable_executor::config::Config {
+            backtrace: config.backtrace,
+            utxo_validation_default: config.utxo_validation_default,
+        };
+
+        let database = add_consensus_parameters(database, &config.consensus_parameters);
+
+        Executor::new(database, DisabledRelayer, executor_config)
     }
 
     pub(crate) fn setup_executable_script() -> (Create, Script) {
@@ -230,7 +264,7 @@ mod tests {
         .collect();
 
         let script = TxBuilder::new(2322)
-            .script_gas_limit(TxParameters::DEFAULT.max_gas_per_tx >> 1)
+            .script_gas_limit(TxParameters::DEFAULT.max_gas_per_tx() >> 1)
             .start_script(script, script_data)
             .contract_input(contract_id)
             .coin_input(asset_id, input_amount)
@@ -386,14 +420,10 @@ mod tests {
 
             let recipient = Contract::EMPTY_CONTRACT_ID;
 
-            let fee_params = FeeParameters {
-                gas_price_factor,
-                ..Default::default()
-            };
-            let consensus_parameters = ConsensusParameters {
-                fee_params,
-                ..Default::default()
-            };
+            let fee_params =
+                FeeParameters::default().with_gas_price_factor(gas_price_factor);
+            let mut consensus_parameters = ConsensusParameters::default();
+            consensus_parameters.set_fee_params(fee_params);
             let config = Config {
                 consensus_parameters: consensus_parameters.clone(),
                 ..Default::default()
@@ -436,7 +466,6 @@ mod tests {
                             invalid_duplicate_tx,
                         ]),
                         gas_price: price,
-                        gas_limit: u64::MAX,
                         coinbase_recipient: recipient,
                     },
                 ))
@@ -518,7 +547,6 @@ mod tests {
                             script.into()
                         ]),
                         gas_price: price,
-                        gas_limit: u64::MAX,
                         coinbase_recipient: recipient,
                     },
                 ))
@@ -547,7 +575,7 @@ mod tests {
                 );
                 assert_eq!(
                     second_mint.input_contract().utxo_id,
-                    UtxoId::new(first_mint.id(&consensus_parameters.chain_id), 0)
+                    UtxoId::new(first_mint.id(&consensus_parameters.chain_id()), 0)
                 );
                 assert_eq!(
                     second_mint.input_contract().tx_pointer,
@@ -591,8 +619,10 @@ mod tests {
                 .transaction()
                 .clone();
 
+            let fee_params =
+                FeeParameters::default().with_gas_price_factor(gas_price_factor);
             let mut consensus_parameters = ConsensusParameters::default();
-            consensus_parameters.fee_params.gas_price_factor = gas_price_factor;
+            consensus_parameters.set_fee_params(fee_params);
             let config = Config {
                 consensus_parameters,
                 ..Default::default()
@@ -607,7 +637,6 @@ mod tests {
                     transactions_source: OnceTransactionsSource::new(vec![script.into()]),
                     coinbase_recipient: recipient,
                     gas_price: 0,
-                    gas_limit: u64::MAX,
                 }))
                 .unwrap();
             let ExecutionResult { block, .. } = result.into_result();
@@ -631,15 +660,12 @@ mod tests {
                 .clone();
             let recipient = Contract::EMPTY_CONTRACT_ID;
 
-            let fee_params = FeeParameters {
-                gas_price_factor,
-                ..Default::default()
-            };
+            let fee_params =
+                FeeParameters::default().with_gas_price_factor(gas_price_factor);
+            let mut consensus_parameters = ConsensusParameters::default();
+            consensus_parameters.set_fee_params(fee_params);
             let config = Config {
-                consensus_parameters: ConsensusParameters {
-                    fee_params,
-                    ..Default::default()
-                },
+                consensus_parameters,
                 ..Default::default()
             };
             let database = &mut Database::default();
@@ -663,7 +689,6 @@ mod tests {
                             script.into()
                         ]),
                         gas_price: price,
-                        gas_limit: u64::MAX,
                         coinbase_recipient: recipient,
                     },
                 ))
@@ -890,10 +915,8 @@ mod tests {
             *block.transactions_mut() = vec![mint.into()];
             block.header_mut().recalculate_metadata();
 
-            let consensus_parameters = ConsensusParameters {
-                base_asset_id: [1u8; 32].into(),
-                ..Default::default()
-            };
+            let mut consensus_parameters = ConsensusParameters::default();
+            consensus_parameters.set_base_asset_id([1u8; 32].into());
 
             let config = Config {
                 consensus_parameters,
@@ -1501,7 +1524,7 @@ mod tests {
             .clone()
             .into();
 
-        let mut db = &Database::default();
+        let db = &Database::default();
         let mut executor = create_executor(db.clone(), Default::default());
 
         let block = PartialFuelBlock {
@@ -1844,7 +1867,7 @@ mod tests {
 
         let mut new_tx = executed_tx.clone();
         *new_tx.script_mut() = vec![];
-        new_tx.precompute(&consensus_parameters.chain_id).unwrap();
+        new_tx.precompute(&consensus_parameters.chain_id()).unwrap();
 
         let block = PartialFuelBlock {
             header: PartialBlockHeader {
@@ -1864,7 +1887,6 @@ mod tests {
                 header_to_produce: block.header,
                 transactions_source: OnceTransactionsSource::new(block.transactions),
                 gas_price: 0,
-                gas_limit: u64::MAX,
                 coinbase_recipient: Default::default(),
             }))
             .unwrap()
@@ -2168,7 +2190,7 @@ mod tests {
         let (deploy, script) = setup_executable_script();
         let script_id = script.id(&ChainId::default());
 
-        let mut database = &Database::default();
+        let database = &Database::default();
         let mut executor = create_executor(database.clone(), Default::default());
 
         let block = PartialFuelBlock {
@@ -2188,7 +2210,7 @@ mod tests {
             .iter()
             .enumerate()
         {
-            let id = UtxoId::new(script_id, idx as u8);
+            let id = UtxoId::new(script_id, idx as u16);
             match output {
                 Output::Change { .. } | Output::Variable { .. } | Output::Coin { .. } => {
                     let maybe_utxo = database.storage::<Coins>().get(&id).unwrap();
@@ -2219,7 +2241,7 @@ mod tests {
             .into();
         let tx_id = tx.id(&ChainId::default());
 
-        let mut database = &Database::default();
+        let database = &Database::default();
         let mut executor = create_executor(database.clone(), Default::default());
 
         let block = PartialFuelBlock {
@@ -2768,7 +2790,6 @@ mod tests {
                 transactions_source: OnceTransactionsSource::new(vec![tx.into()]),
                 coinbase_recipient: Default::default(),
                 gas_price: 1,
-                gas_limit: u64::MAX,
             }))
             .unwrap()
             .into_result();
@@ -2807,12 +2828,15 @@ mod tests {
         };
 
         fn database_with_genesis_block(da_block_height: u64) -> Database<OnChain> {
-            let mut db = Database::default();
+            let mut db = add_consensus_parameters(
+                Database::default(),
+                &ConsensusParameters::default(),
+            );
             let mut block = Block::default();
             block.header_mut().set_da_height(da_block_height.into());
             block.header_mut().recalculate_metadata();
 
-            db.storage::<FuelBlocks>()
+            db.storage_as_mut::<FuelBlocks>()
                 .insert(&0.into(), &block)
                 .expect("Should insert genesis block without any problems");
             db
@@ -2914,7 +2938,10 @@ mod tests {
             let on_chain_db = if let Some(genesis_da_height) = input.genesis_da_height {
                 database_with_genesis_block(genesis_da_height)
             } else {
-                Database::default()
+                add_consensus_parameters(
+                    Database::default(),
+                    &ConsensusParameters::default(),
+                )
             };
             let mut relayer_db = Database::<Relayer>::default();
 
