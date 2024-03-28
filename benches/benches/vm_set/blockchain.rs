@@ -111,7 +111,7 @@ impl BenchDb {
             .storage::<FuelBlocks>()
             .insert(
                 &0u32.into(),
-                &block.compress(&chain_config.consensus_parameters.chain_id),
+                &block.compress(&chain_config.consensus_parameters.chain_id()),
             )
             .unwrap();
 

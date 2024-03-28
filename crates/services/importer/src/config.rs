@@ -13,7 +13,7 @@ impl Config {
         Self {
             max_block_notify_buffer: 1 << 10,
             metrics: false,
-            chain_id: chain_config.consensus_parameters.chain_id,
+            chain_id: chain_config.consensus_parameters.chain_id(),
         }
     }
 }

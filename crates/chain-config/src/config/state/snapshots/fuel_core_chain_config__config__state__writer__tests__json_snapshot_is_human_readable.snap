@@ -6,7 +6,7 @@ expression: encoded_json
   "coins": [
     {
       "tx_id": "9b07815f04497e2e05d22cac3aa061410b20868cc619154c42a1c61be9902717",
-      "output_index": 178,
+      "output_index": 3250,
       "tx_pointer_block_height": 1405935179,
       "tx_pointer_tx_idx": 35726,
       "owner": "c168fe4896f5b70ccb10f1a705e061d0fdfa189618d28b0d44efef92cbf44b58",
@@ -15,7 +15,7 @@ expression: encoded_json
     },
     {
       "tx_id": "9f1e39113f9f6164ea2867f8deccf3c3c518f146de9554f03f27a83d5b1185f3",
-      "output_index": 158,
+      "output_index": 10142,
       "tx_pointer_block_height": 476225137,
       "tx_pointer_tx_idx": 52207,
       "owner": "357e2bd9e13962516b0a41403276437b25f0ffbe897cf476c0777e9d246ff397",
@@ -46,7 +46,7 @@ expression: encoded_json
       "contract_id": "84b864d0bb6f5cbf7af5b0b53cd78457f2fdba800ab44572e67f47853001a494",
       "code": "03d30a245ac74a02e26e45cb80ee1b9c00a93345ce5f12bea9ffe04748d6696c",
       "tx_id": "6c3955d818bb1ab0e832877d628233e3e1d64f76b71a80ec4f332f4d1a6742c5",
-      "output_index": 55,
+      "output_index": 23607,
       "tx_pointer_block_height": 737809138,
       "tx_pointer_tx_idx": 15803,
       "states": [
@@ -66,7 +66,7 @@ expression: encoded_json
       "contract_id": "ef8361ae6133519413ccda29b9e0c6a1123fa5c757b3d115c2db68d8248c05ec",
       "code": "7f53b4857842789a1dd59167629b3c5cabe47dbf48827ec0818e00de4b297f04",
       "tx_id": "dd5687fee73fac7a2c564da689e9da76e1430d191fbc937d42f74104aa291871",
-      "output_index": 244,
+      "output_index": 63732,
       "tx_pointer_block_height": 3604148409,
       "tx_pointer_tx_idx": 17105,
       "states": [

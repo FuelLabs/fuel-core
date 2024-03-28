@@ -237,7 +237,7 @@ impl Command {
         let addr = net::SocketAddr::new(ip, port);
 
         let snapshot_reader = match snapshot.as_ref() {
-            None => SnapshotReader::local_testnet(),
+            None => crate::cli::local_testnet_reader(),
             Some(path) => {
                 let metadata = SnapshotMetadata::read(path)?;
                 SnapshotReader::open(metadata)?

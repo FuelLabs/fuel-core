@@ -17,6 +17,7 @@ use crate::client::schema::{
     TransactionId,
     TxPointer,
     UtxoId,
+    U16,
     U32,
     U64,
 };
@@ -142,12 +143,7 @@ pub struct Transaction {
     /// The field of the `Transaction::Create`.
     pub storage_slots: Option<Vec<HexString>>,
     /// The field of the `Transaction::Create`.
-    pub bytecode_witness_index: Option<i32>,
-    /// The size of the bytecode of the `Transaction::Create`.
-    ///
-    /// The result of a `bytecode_length()` helper function is stored here.
-    /// It is not an original field of the `Transaction`.
-    pub bytecode_length: Option<U64>,
+    pub bytecode_witness_index: Option<U16>,
 }
 
 impl TryFrom<Transaction> for fuel_tx::Transaction {
@@ -204,7 +200,7 @@ impl TryFrom<Transaction> for fuel_tx::Transaction {
                             "bytecode_witness_index".to_string(),
                         )
                     })?
-                    .try_into()?,
+                    .into(),
                 tx.policies
                     .ok_or_else(|| ConversionError::MissingField("policies".to_string()))?
                     .into(),
@@ -340,7 +336,7 @@ pub struct InputMessage {
     recipient: Address,
     amount: U64,
     nonce: Nonce,
-    witness_index: i32,
+    witness_index: U16,
     predicate_gas_used: U64,
     data: HexString,
     predicate: HexString,
@@ -386,7 +382,7 @@ impl TryFrom<Input> for fuel_tx::Input {
                         message.recipient.into(),
                         message.amount.into(),
                         message.nonce.into(),
-                        message.witness_index.try_into()?,
+                        message.witness_index.into(),
                     ),
                     (true, false) => Self::message_coin_predicate(
                         message.sender.into(),
@@ -402,7 +398,7 @@ impl TryFrom<Input> for fuel_tx::Input {
                         message.recipient.into(),
                         message.amount.into(),
                         message.nonce.into(),
-                        message.witness_index.try_into()?,
+                        message.witness_index.into(),
                         message.data.into(),
                     ),
                     (false, false) => Self::message_data_predicate(
@@ -461,7 +457,7 @@ pub struct VariableOutput {
 #[derive(cynic::QueryFragment, Clone, Debug)]
 #[cynic(schema_path = "./assets/schema.sdl")]
 pub struct ContractOutput {
-    pub input_index: i32,
+    pub input_index: U16,
     pub balance_root: Bytes32,
     pub state_root: Bytes32,
 }
@@ -520,7 +516,7 @@ impl TryFrom<ContractOutput> for output::contract::Contract {
 
     fn try_from(contract: ContractOutput) -> Result<Self, Self::Error> {
         Ok(output::contract::Contract {
-            input_index: contract.input_index.try_into()?,
+            input_index: contract.input_index.into(),
             balance_root: contract.balance_root.into(),
             state_root: contract.state_root.into(),
         })

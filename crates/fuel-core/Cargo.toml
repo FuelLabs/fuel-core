@@ -63,9 +63,6 @@ uuid = { version = "1.1", features = ["v4"] }
 [dev-dependencies]
 assert_matches = "1.5"
 fuel-core = { path = ".", features = ["test-helpers"] }
-fuel-core-chain-config = { path = "../chain-config", features = [
-  "test-helpers",
-] }
 fuel-core-executor = { workspace = true, features = ["std", "test-helpers"] }
 fuel-core-services = { path = "./../services", features = ["test-helpers"] }
 fuel-core-storage = { path = "./../storage", features = ["test-helpers"] }
@@ -88,6 +85,7 @@ test-helpers = [
   "fuel-core-p2p?/test-helpers",
   "fuel-core-storage/test-helpers",
   "fuel-core-chain-config/test-helpers",
+  "fuel-core-txpool/test-helpers",
 ]
 # features to enable in production, but increase build times
 rocksdb-production = ["rocksdb", "rocksdb/jemalloc"]

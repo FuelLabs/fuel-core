@@ -25,6 +25,7 @@ use crate::{
             Tai64Timestamp,
             TransactionId,
             TxPointer,
+            U16,
             U32,
             U64,
         },
@@ -45,7 +46,6 @@ use fuel_core_types::{
     fuel_tx::{
         self,
         field::{
-            BytecodeLength,
             BytecodeWitnessIndex,
             InputContract,
             Inputs,
@@ -541,21 +541,11 @@ impl Transaction {
         }
     }
 
-    async fn bytecode_witness_index(&self) -> Option<u8> {
+    async fn bytecode_witness_index(&self) -> Option<U16> {
         match &self.0 {
             fuel_tx::Transaction::Script(_) => None,
             fuel_tx::Transaction::Create(create) => {
-                Some(*create.bytecode_witness_index())
-            }
-            fuel_tx::Transaction::Mint(_) => None,
-        }
-    }
-
-    async fn bytecode_length(&self) -> Option<U64> {
-        match &self.0 {
-            fuel_tx::Transaction::Script(_) => None,
-            fuel_tx::Transaction::Create(create) => {
-                Some((*create.bytecode_length()).into())
+                Some((*create.bytecode_witness_index()).into())
             }
             fuel_tx::Transaction::Mint(_) => None,
         }

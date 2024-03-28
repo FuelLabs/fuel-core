@@ -1,17 +1,11 @@
 use clap::ValueEnum;
-use fuel_core_chain_config::{
-    default_consensus_dev_key,
-    SnapshotReader,
-};
+use fuel_core_chain_config::SnapshotReader;
 use fuel_core_types::{
     blockchain::primitives::SecretKeyWrapper,
     secrecy::Secret,
 };
 use std::{
-    net::{
-        Ipv4Addr,
-        SocketAddr,
-    },
+    net::SocketAddr,
     time::Duration,
 };
 use strum_macros::{
@@ -92,7 +86,7 @@ impl Config {
         };
 
         Self {
-            addr: SocketAddr::new(Ipv4Addr::new(127, 0, 0, 1).into(), 0),
+            addr: SocketAddr::new(std::net::Ipv4Addr::new(127, 0, 0, 1).into(), 0),
             api_request_timeout: Duration::from_secs(60),
             combined_db_config,
             debug: true,
@@ -117,7 +111,9 @@ impl Config {
             p2p: Some(P2PConfig::<NotInitialized>::default("test_network")),
             #[cfg(feature = "p2p")]
             sync: fuel_core_sync::Config::default(),
-            consensus_key: Some(Secret::new(default_consensus_dev_key().into())),
+            consensus_key: Some(Secret::new(
+                fuel_core_chain_config::default_consensus_dev_key().into(),
+            )),
             name: String::default(),
             relayer_consensus_config: Default::default(),
             min_connected_reserved_peers: 0,
@@ -141,9 +137,9 @@ impl Config {
             self.txpool.chain_config = chain_config.clone();
         }
 
-        if self.block_importer.chain_id != chain_config.consensus_parameters.chain_id {
+        if self.block_importer.chain_id != chain_config.consensus_parameters.chain_id() {
             tracing::warn!("The `ChainConfig` of `BlockImporter` was inconsistent");
-            self.block_importer.chain_id = chain_config.consensus_parameters.chain_id
+            self.block_importer.chain_id = chain_config.consensus_parameters.chain_id()
         }
 
         if self.txpool.utxo_validation != self.utxo_validation {
@@ -164,7 +160,6 @@ impl From<&Config> for fuel_core_poa::Config {
         let chain_config = config.snapshot_reader.chain_config();
         fuel_core_poa::Config {
             trigger: config.block_production,
-            block_gas_limit: chain_config.block_gas_limit,
             signing_key: config.consensus_key.clone(),
             metrics: false,
             consensus_params: chain_config.consensus_parameters.clone(),
