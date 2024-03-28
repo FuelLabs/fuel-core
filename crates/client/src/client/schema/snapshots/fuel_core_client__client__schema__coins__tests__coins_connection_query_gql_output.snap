@@ -9,6 +9,7 @@ query($filter: CoinFilterInput!, $after: String, $before: String, $first: Int, $
       node {
         amount
         blockCreated
+        txCreatedIdx
         assetId
         utxoId
         owner

@@ -120,7 +120,7 @@ type Coin {
 	"""
 	TxPointer - the index of the transaction that created this coin
 	"""
-	txCreatedIdx: U64!
+	txCreatedIdx: U16!
 }
 
 type CoinConnection {

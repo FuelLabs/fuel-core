@@ -33,6 +33,7 @@ use fuel_core_types::{
     fuel_tx::{
         field::{
             Policies,
+            ScriptGasLimit,
             Witnesses,
         },
         policies::PolicyType,
@@ -117,7 +118,7 @@ impl ConcreteStorage {
         let id = ID::from(id);
 
         let vm_database = Self::vm_database(storage)?;
-        let tx = Self::dummy_tx();
+        let tx = Self::dummy_tx(self.params.tx_params().max_gas_per_tx() / 2);
         let checked_tx = tx
             .into_checked_basic(vm_database.block_height()?, &self.params)
             .map_err(|e| anyhow::anyhow!("{:?}", e))?;
@@ -157,7 +158,7 @@ impl ConcreteStorage {
             .get(id)
             .and_then(|tx| tx.first())
             .cloned()
-            .unwrap_or(Self::dummy_tx());
+            .unwrap_or(Self::dummy_tx(self.params.tx_params().max_gas_per_tx() / 2));
 
         let checked_tx = tx
             .into_checked_basic(vm_database.block_height()?, &self.params)
@@ -206,9 +207,10 @@ impl ConcreteStorage {
         Ok(vm_database)
     }
 
-    fn dummy_tx() -> Script {
+    fn dummy_tx(gas_limit: u64) -> Script {
         // Create `Script` transaction with dummy coin
         let mut tx = Script::default();
+        *tx.script_gas_limit_mut() = gas_limit;
         tx.add_unsigned_coin_input(
             Default::default(),
             &Default::default(),

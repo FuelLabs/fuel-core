@@ -1,4 +1,5 @@
 use clap::Parser;
+use fuel_core_chain_config::ChainConfig;
 use std::{
     env,
     path::PathBuf,
@@ -13,7 +14,6 @@ use tracing_subscriber::{
 
 #[cfg(feature = "env")]
 use dotenvy::dotenv;
-use fuel_core_chain_config::ChainConfig;
 
 pub fn default_db_path() -> PathBuf {
     dirs::home_dir().unwrap().join(".fuel").join("db")

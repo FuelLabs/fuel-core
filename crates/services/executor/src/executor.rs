@@ -950,8 +950,8 @@ where
             InterpreterParams::new(gas_price, &self.consensus_params),
         );
 
-        let gas_costs = &self.consensus_params.gas_costs();
-        let fee_params = &self.consensus_params.fee_params();
+        let gas_costs = self.consensus_params.gas_costs();
+        let fee_params = self.consensus_params.fee_params();
 
         let ready_tx = checked_tx
             .clone()
