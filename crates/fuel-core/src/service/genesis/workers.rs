@@ -9,6 +9,7 @@ use super::{
     GenesisRunner,
 };
 use std::{
+    borrow::Cow,
     collections::HashMap,
     marker::PhantomData,
     sync::Arc,
@@ -26,12 +27,18 @@ use crate::{
         state::StateInitializer,
         Database,
     },
-    graphql_api::storage::{
-        blocks::FuelBlockIdsToHeights,
-        transactions::{
-            OwnedTransactions,
-            TransactionStatuses,
+    graphql_api::{
+        storage::{
+            blocks::FuelBlockIdsToHeights,
+            coins::OwnedCoins,
+            contracts::ContractsInfo,
+            messages::OwnedMessageIds,
+            transactions::{
+                OwnedTransactions,
+                TransactionStatuses,
+            },
         },
+        worker_service,
     },
 };
 use fuel_core_chain_config::{
@@ -58,6 +65,7 @@ use fuel_core_storage::{
 use fuel_core_types::{
     blockchain::primitives::DaBlockHeight,
     fuel_types::BlockHeight,
+    services::executor::Event,
 };
 use tokio::sync::Notify;
 use tokio_rayon::AsyncRayonHandle;
@@ -101,9 +109,13 @@ impl GenesisWorkers {
 
     pub async fn run_off_chain_imports(&mut self) -> anyhow::Result<()> {
         tokio::try_join!(
-            self.spawn_worker_off_chain::<TransactionStatuses>()?,
-            self.spawn_worker_off_chain::<OwnedTransactions>()?,
-            self.spawn_worker_off_chain::<FuelBlockIdsToHeights>()?
+            self.spawn_worker_off_chain::<TransactionStatuses, TransactionStatuses>()?,
+            self.spawn_worker_off_chain::<OwnedTransactions, OwnedTransactions>()?,
+            self.spawn_worker_off_chain::<FuelBlockIdsToHeights, FuelBlockIdsToHeights>(
+            )?,
+            self.spawn_worker_off_chain::<Messages, OwnedMessageIds>()?,
+            self.spawn_worker_off_chain::<Coins, OwnedCoins>()?,
+            self.spawn_worker_off_chain::<Transactions, ContractsInfo>()?
         )
         .map(|_| ())
     }
@@ -142,24 +154,23 @@ impl GenesisWorkers {
     }
 
     // TODO: serde bounds can be written shorter
-    pub fn spawn_worker_off_chain<T>(
+    pub fn spawn_worker_off_chain<Src, Dst>(
         &mut self,
     ) -> anyhow::Result<AsyncRayonHandle<anyhow::Result<()>>>
     where
-        T: TableWithBlueprint<Column = <OffChain as DatabaseDescription>::Column>
-            + Send
-            + 'static,
-        T::OwnedKey: serde::de::DeserializeOwned + Send,
-        T::OwnedValue: serde::de::DeserializeOwned + Send,
-        StateConfig: AsTable<T>,
-        Handler<T>: ProcessState<Table = T, DbDesc = OffChain>,
+        Src: TableWithBlueprint + Send + 'static,
+        Src::OwnedKey: serde::de::DeserializeOwned + Send,
+        Src::OwnedValue: serde::de::DeserializeOwned + Send,
+        StateConfig: AsTable<Src>,
+        Handler<Dst>: ProcessState<Table = Src, DbDesc = OffChain>,
+        Dst: Send + 'static,
     {
-        let groups = self.snapshot_reader.read::<T>()?;
-        let finished_signal = self.get_signal(T::column().name());
+        let groups = self.snapshot_reader.read::<Src>()?;
+        let finished_signal = self.get_signal(Src::column().name());
         let runner = GenesisRunner::new(
             Some(finished_signal),
             self.cancel_token.clone(),
-            Handler::new(self.block_height, self.da_block_height),
+            Handler::<Dst>::new(self.block_height, self.da_block_height),
             groups,
             self.db.off_chain().clone(),
         );
@@ -346,6 +357,55 @@ impl ProcessState for Handler<OwnedTransactions> {
             tx.storage::<OwnedTransactions>()
                 .insert(&entry.key, &entry.value)?;
         }
+        Ok(())
+    }
+}
+
+impl ProcessState for Handler<OwnedMessageIds> {
+    type Table = Messages;
+    type DbDesc = OffChain;
+
+    fn process(
+        &mut self,
+        group: Vec<TableEntry<Self::Table>>,
+        tx: &mut StorageTransaction<&mut Database<Self::DbDesc>>,
+    ) -> anyhow::Result<()> {
+        let events = group
+            .into_iter()
+            .map(|TableEntry { value, .. }| Cow::Owned(Event::MessageImported(value)));
+        worker_service::process_executor_events(events, tx)?;
+        Ok(())
+    }
+}
+
+impl ProcessState for Handler<OwnedCoins> {
+    type Table = Coins;
+    type DbDesc = OffChain;
+
+    fn process(
+        &mut self,
+        group: Vec<TableEntry<Self::Table>>,
+        tx: &mut StorageTransaction<&mut Database<Self::DbDesc>>,
+    ) -> anyhow::Result<()> {
+        let events = group.into_iter().map(|TableEntry { value, key }| {
+            Cow::Owned(Event::CoinCreated(value.uncompress(key)))
+        });
+        worker_service::process_executor_events(events, tx)?;
+        Ok(())
+    }
+}
+
+impl ProcessState for Handler<ContractsInfo> {
+    type Table = Transactions;
+    type DbDesc = OffChain;
+
+    fn process(
+        &mut self,
+        group: Vec<TableEntry<Self::Table>>,
+        tx: &mut StorageTransaction<&mut Database<Self::DbDesc>>,
+    ) -> anyhow::Result<()> {
+        let transactions = group.iter().map(|TableEntry { value, .. }| value);
+        worker_service::process_transactions(transactions, tx)?;
         Ok(())
     }
 }

@@ -96,51 +96,16 @@ where
 // TODO: The regenesis of the off-chain database should go in the same way as the on-chain database.
 //  https://github.com/FuelLabs/fuel-core/issues/1619
 pub async fn execute_genesis_block(
-    db: &CombinedDatabase,
+    db: CombinedDatabase,
     snapshot_reader: SnapshotReader,
 ) -> anyhow::Result<()> {
-    let mut workers = GenesisWorkers::new(db.clone(), snapshot_reader);
+    let mut workers = GenesisWorkers::new(db, snapshot_reader);
     if let Err(e) = workers.run_off_chain_imports().await {
         workers.shutdown();
         workers.finished().await;
 
         return Err(e);
     }
-
-    let on_chain_database = db.on_chain();
-    let mut off_chain_database = db.off_chain().clone();
-    derive_offchain_table::<Messages, OwnedMessageIds, _>(
-        on_chain_database,
-        &mut off_chain_database,
-        |tx, chunk| {
-            let events = chunk
-                .into_iter()
-                .map(|(_, message)| Cow::Owned(Event::MessageImported(message)));
-            worker_service::process_executor_events(events, tx)
-        },
-    )?;
-
-    derive_offchain_table::<Coins, OwnedCoins, _>(
-        on_chain_database,
-        &mut off_chain_database,
-        |tx, chunk| {
-            let events = chunk.into_iter().map(|(utxo_id, coin)| {
-                let coin = coin.uncompress(utxo_id);
-                Cow::Owned(Event::CoinCreated(coin))
-            });
-            worker_service::process_executor_events(events, tx)
-        },
-    )?;
-
-    derive_offchain_table::<Transactions, ContractsInfo, _>(
-        on_chain_database,
-        &mut off_chain_database,
-        |tx, chunk| {
-            let transactions = chunk.iter().map(|(_, tx)| tx);
-            worker_service::process_transactions(transactions, tx)?;
-            Ok(())
-        },
-    )?;
 
     Ok(())
 }

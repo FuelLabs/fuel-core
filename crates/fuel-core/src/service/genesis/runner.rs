@@ -49,6 +49,10 @@ pub trait ProcessState {
         group: Vec<TableEntry<Self::Table>>,
         tx: &mut StorageTransaction<&mut Database<Self::DbDesc>>,
     ) -> anyhow::Result<()>;
+
+    fn genesis_progress_key() -> &'static str {
+        Self::Table::column().name()
+    }
 }
 
 impl<Logic, GroupGenerator, DbDesc: DatabaseDescription>
@@ -78,7 +82,7 @@ where
     ) -> Self {
         let skip = match db
             .storage::<GenesisMetadata<DbDesc>>()
-            .get(Logic::Table::column().name())
+            .get(Logic::genesis_progress_key())
         {
             Ok(Some(idx_last_handled)) => {
                 usize::saturating_add(idx_last_handled.into_owned(), 1)
@@ -112,7 +116,7 @@ where
 
                 GenesisProgressMutate::<DbDesc>::update_genesis_progress(
                     &mut tx,
-                    Logic::Table::column().name(),
+                    Logic::genesis_progress_key(),
                     group_num,
                 )?;
                 tx.commit()?;
