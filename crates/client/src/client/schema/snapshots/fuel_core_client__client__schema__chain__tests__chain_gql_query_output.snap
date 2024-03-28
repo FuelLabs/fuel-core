@@ -40,7 +40,19 @@ query {
       }
     }
     consensusParameters {
+      version {
+        __typename
+        ... on Version {
+          value
+        }
+      }
       txParams {
+        version {
+          __typename
+          ... on Version {
+            value
+          }
+        }
         maxInputs
         maxOutputs
         maxWitnesses
@@ -48,26 +60,57 @@ query {
         maxSize
       }
       predicateParams {
+        version {
+          __typename
+          ... on Version {
+            value
+          }
+        }
         maxPredicateLength
         maxPredicateDataLength
         maxMessageDataLength
         maxGasPerPredicate
       }
       scriptParams {
+        version {
+          __typename
+          ... on Version {
+            value
+          }
+        }
         maxScriptLength
         maxScriptDataLength
       }
       contractParams {
+        version {
+          __typename
+          ... on Version {
+            value
+          }
+        }
         contractMaxSize
         maxStorageSlots
       }
       feeParams {
+        version {
+          __typename
+          ... on Version {
+            value
+          }
+        }
         gasPriceFactor
         gasPerByte
       }
       baseAssetId
+      blockGasLimit
       chainId
       gasCosts {
+        version {
+          __typename
+          ... on Version {
+            value
+          }
+        }
         add
         addi
         aloc
@@ -389,6 +432,7 @@ query {
         }
         newStoragePerByte
       }
+      privilegedAddress
     }
   }
 }

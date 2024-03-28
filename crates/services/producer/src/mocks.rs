@@ -122,7 +122,7 @@ fn to_block(component: &Components<Vec<ArcPoolTx>>) -> Block {
         .map(|tx| tx.as_ref().into())
         .collect();
     Block::new(
-        component.header_to_produce.clone(),
+        component.header_to_produce,
         transactions,
         &[],
         Default::default(),

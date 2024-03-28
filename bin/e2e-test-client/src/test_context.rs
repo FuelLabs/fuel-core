@@ -282,7 +282,7 @@ impl Wallet {
         let tx = self
             .transfer_tx(destination, transfer_amount, asset_id)
             .await?;
-        let tx_id = tx.id(&self.consensus_params.chain_id);
+        let tx_id = tx.id(&self.consensus_params.chain_id());
         println!("submitting tx... {:?}", tx_id);
         let status = self.client.submit_and_await_commit(&tx).await?;
 

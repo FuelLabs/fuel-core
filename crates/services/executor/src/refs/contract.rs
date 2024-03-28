@@ -156,7 +156,7 @@ where
             // `ContractId` already is based on contract's code and salt so we don't need it.
             .chain(contract_id.as_ref())
             .chain(utxo.tx_id().as_ref())
-            .chain([utxo.output_index()])
+            .chain(utxo.output_index().to_be_bytes())
             .chain(state_root.as_slice())
             .chain(balance_root.as_slice())
             .finalize();

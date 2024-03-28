@@ -76,6 +76,7 @@ pub struct Config {
     pub blacklist: BlackList,
 }
 
+#[cfg(feature = "test-helpers")]
 impl Default for Config {
     fn default() -> Self {
         let max_tx = 4064;

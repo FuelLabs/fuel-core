@@ -69,7 +69,7 @@ async fn setup(rng: &mut StdRng) -> TestContext {
     create_tx
         .precompute(&ChainId::default())
         .expect("tx should be valid");
-    let contract_id = create_tx.metadata().as_ref().unwrap().contract_id;
+    let contract_id = create_tx.metadata().as_ref().unwrap().body.contract_id;
 
     // Start up a node
     let mut config = Config::local_node();

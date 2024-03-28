@@ -155,7 +155,7 @@ async fn get_coins_forwards_backwards(
             owner,
             amount: i as Word,
             asset_id,
-            output_index: i as u8,
+            output_index: i as u16,
             ..Default::default()
         })
         .collect();

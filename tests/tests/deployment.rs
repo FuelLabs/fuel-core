@@ -21,7 +21,9 @@ fn test_deployment_chainconfig(path: impl AsRef<Path>) -> anyhow::Result<()> {
     // Deployment configuration should use gas costs from benchmarks.
     let benchmark_gas_costs =
         GasCosts::new(fuel_core_benches::default_gas_costs::default_gas_costs());
-    chain_config.consensus_parameters.gas_costs = benchmark_gas_costs;
+    chain_config
+        .consensus_parameters
+        .set_gas_costs(benchmark_gas_costs);
 
     let temp_dir = tempfile::tempdir()?;
     let generated_snapshot = SnapshotMetadata::write_json(temp_dir.path())?;

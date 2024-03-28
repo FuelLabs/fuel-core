@@ -1,150 +1,459 @@
 use crate::client::schema;
+use fuel_core_types::fuel_tx::Word;
 
-macro_rules! include_from_impls {
-    ($(#[$meta:meta])* $vis:vis struct $name:ident {
-        $($field_vis:vis $field_name:ident: $field_type:ty,)*
-    }) => {
-        $(#[$meta])*
-        $vis struct $name {
-            $($field_vis $field_name: $field_type,)*
-        }
+#[derive(Clone, Debug)]
+pub struct GasCosts(fuel_core_types::fuel_tx::GasCosts);
 
-        impl From<$name> for fuel_core_types::fuel_tx::GasCosts {
-           fn from(value: $name) -> Self {
-               let values = fuel_core_types::fuel_tx::GasCostsValues {
-                   $($field_name: value.$field_name.into(),)*
-               };
-               Self::new(values)
-           }
-        }
-
-        impl From<schema::chain::GasCosts> for $name {
-            fn from(value: schema::chain::GasCosts) -> Self {
-                Self {
-                    $($field_name: value.$field_name.into(),)*
-                }
-            }
-
-        }
+impl GasCosts {
+    pub fn new(gas_costs: fuel_core_types::fuel_tx::GasCosts) -> Self {
+        GasCosts(gas_costs)
     }
 }
 
-include_from_impls! {
-    #[derive(Copy, Clone, Debug)]
-    pub struct GasCosts {
-        pub add: u64,
-        pub addi: u64,
-        pub aloc: u64,
-        pub and: u64,
-        pub andi: u64,
-        pub bal: u64,
-        pub bhei: u64,
-        pub bhsh: u64,
-        pub burn: u64,
-        pub cb: u64,
-        pub cfei: u64,
-        pub cfsi: u64,
-        pub div: u64,
-        pub divi: u64,
-        pub eck1: u64,
-        pub ecr1: u64,
-        pub ed19: u64,
-        pub eq: u64,
-        pub exp: u64,
-        pub expi: u64,
-        pub flag: u64,
-        pub gm: u64,
-        pub gt: u64,
-        pub gtf: u64,
-        pub ji: u64,
-        pub jmp: u64,
-        pub jne: u64,
-        pub jnei: u64,
-        pub jnzi: u64,
-        pub jmpf: u64,
-        pub jmpb: u64,
-        pub jnzf: u64,
-        pub jnzb: u64,
-        pub jnef: u64,
-        pub jneb: u64,
-        pub lb: u64,
-        pub log: u64,
-        pub lt: u64,
-        pub lw: u64,
-        pub mint: u64,
-        pub mlog: u64,
-        pub mod_op: u64,
-        pub modi: u64,
-        pub move_op: u64,
-        pub movi: u64,
-        pub mroo: u64,
-        pub mul: u64,
-        pub muli: u64,
-        pub mldv: u64,
-        pub noop: u64,
-        pub not: u64,
-        pub or: u64,
-        pub ori: u64,
-        pub poph: u64,
-        pub popl: u64,
-        pub pshh: u64,
-        pub pshl: u64,
-        pub ret: u64,
-        pub rvrt: u64,
-        pub sb: u64,
-        pub sll: u64,
-        pub slli: u64,
-        pub srl: u64,
-        pub srli: u64,
-        pub srw: u64,
-        pub sub: u64,
-        pub subi: u64,
-        pub sw: u64,
-        pub sww: u64,
-        pub time: u64,
-        pub tr: u64,
-        pub tro: u64,
-        pub wdcm: u64,
-        pub wqcm: u64,
-        pub wdop: u64,
-        pub wqop: u64,
-        pub wdml: u64,
-        pub wqml: u64,
-        pub wddv: u64,
-        pub wqdv: u64,
-        pub wdmd: u64,
-        pub wqmd: u64,
-        pub wdam: u64,
-        pub wqam: u64,
-        pub wdmm: u64,
-        pub wqmm: u64,
-        pub xor: u64,
-        pub xori: u64,
+impl GasCosts {
+    pub fn add(&self) -> Word {
+        self.0.add()
+    }
 
-        pub call: DependentCost,
-        pub ccp: DependentCost,
-        pub csiz: DependentCost,
-        pub croo: DependentCost,
-        pub k256: DependentCost,
-        pub ldc: DependentCost,
-        pub logd: DependentCost,
-        pub mcl: DependentCost,
-        pub mcli: DependentCost,
-        pub mcp: DependentCost,
-        pub mcpi: DependentCost,
-        pub meq: DependentCost,
-        pub retd: DependentCost,
-        pub s256: DependentCost,
-        pub scwq: DependentCost,
-        pub smo: DependentCost,
-        pub srwq: DependentCost,
-        pub swwq: DependentCost,
+    pub fn addi(&self) -> Word {
+        self.0.addi()
+    }
 
-        // Non-opcode prices
-        pub contract_root: DependentCost,
-        pub state_root: DependentCost,
-        pub vm_initialization: DependentCost,
-        pub new_storage_per_byte: u64,
+    pub fn aloc(&self) -> Word {
+        self.0.aloc()
+    }
+
+    pub fn and(&self) -> Word {
+        self.0.and()
+    }
+
+    pub fn andi(&self) -> Word {
+        self.0.andi()
+    }
+
+    pub fn bal(&self) -> Word {
+        self.0.bal()
+    }
+
+    pub fn bhei(&self) -> Word {
+        self.0.bhei()
+    }
+
+    pub fn bhsh(&self) -> Word {
+        self.0.bhsh()
+    }
+
+    pub fn burn(&self) -> Word {
+        self.0.burn()
+    }
+
+    pub fn cb(&self) -> Word {
+        self.0.cb()
+    }
+
+    pub fn cfei(&self) -> Word {
+        self.0.cfei()
+    }
+
+    pub fn cfsi(&self) -> Word {
+        self.0.cfsi()
+    }
+
+    pub fn div(&self) -> Word {
+        self.0.div()
+    }
+
+    pub fn divi(&self) -> Word {
+        self.0.divi()
+    }
+
+    pub fn eck1(&self) -> Word {
+        self.0.eck1()
+    }
+
+    pub fn ecr1(&self) -> Word {
+        self.0.ecr1()
+    }
+
+    pub fn ed19(&self) -> Word {
+        self.0.ed19()
+    }
+
+    pub fn eq_(&self) -> Word {
+        self.0.eq_()
+    }
+
+    pub fn exp(&self) -> Word {
+        self.0.exp()
+    }
+
+    pub fn expi(&self) -> Word {
+        self.0.expi()
+    }
+
+    pub fn flag(&self) -> Word {
+        self.0.flag()
+    }
+
+    pub fn gm(&self) -> Word {
+        self.0.gm()
+    }
+
+    pub fn gt(&self) -> Word {
+        self.0.gt()
+    }
+
+    pub fn gtf(&self) -> Word {
+        self.0.gtf()
+    }
+
+    pub fn ji(&self) -> Word {
+        self.0.ji()
+    }
+
+    pub fn jmp(&self) -> Word {
+        self.0.jmp()
+    }
+
+    pub fn jne(&self) -> Word {
+        self.0.jne()
+    }
+
+    pub fn jnei(&self) -> Word {
+        self.0.jnei()
+    }
+
+    pub fn jnzi(&self) -> Word {
+        self.0.jnzi()
+    }
+
+    pub fn jmpf(&self) -> Word {
+        self.0.jmpf()
+    }
+
+    pub fn jmpb(&self) -> Word {
+        self.0.jmpb()
+    }
+
+    pub fn jnzf(&self) -> Word {
+        self.0.jnzf()
+    }
+
+    pub fn jnzb(&self) -> Word {
+        self.0.jnzb()
+    }
+
+    pub fn jnef(&self) -> Word {
+        self.0.jnef()
+    }
+
+    pub fn jneb(&self) -> Word {
+        self.0.jneb()
+    }
+
+    pub fn lb(&self) -> Word {
+        self.0.lb()
+    }
+
+    pub fn log(&self) -> Word {
+        self.0.log()
+    }
+
+    pub fn lt(&self) -> Word {
+        self.0.lt()
+    }
+
+    pub fn lw(&self) -> Word {
+        self.0.lw()
+    }
+
+    pub fn mint(&self) -> Word {
+        self.0.mint()
+    }
+
+    pub fn mlog(&self) -> Word {
+        self.0.mlog()
+    }
+
+    pub fn mod_op(&self) -> Word {
+        self.0.mod_op()
+    }
+
+    pub fn modi(&self) -> Word {
+        self.0.modi()
+    }
+
+    pub fn move_op(&self) -> Word {
+        self.0.move_op()
+    }
+
+    pub fn movi(&self) -> Word {
+        self.0.movi()
+    }
+
+    pub fn mroo(&self) -> Word {
+        self.0.mroo()
+    }
+
+    pub fn mul(&self) -> Word {
+        self.0.mul()
+    }
+
+    pub fn muli(&self) -> Word {
+        self.0.muli()
+    }
+
+    pub fn mldv(&self) -> Word {
+        self.0.mldv()
+    }
+
+    pub fn noop(&self) -> Word {
+        self.0.noop()
+    }
+
+    pub fn not(&self) -> Word {
+        self.0.not()
+    }
+
+    pub fn or(&self) -> Word {
+        self.0.or()
+    }
+
+    pub fn ori(&self) -> Word {
+        self.0.ori()
+    }
+
+    pub fn poph(&self) -> Word {
+        self.0.poph()
+    }
+
+    pub fn popl(&self) -> Word {
+        self.0.popl()
+    }
+
+    pub fn pshh(&self) -> Word {
+        self.0.pshh()
+    }
+
+    pub fn pshl(&self) -> Word {
+        self.0.pshl()
+    }
+
+    pub fn ret(&self) -> Word {
+        self.0.ret()
+    }
+
+    pub fn rvrt(&self) -> Word {
+        self.0.rvrt()
+    }
+
+    pub fn sb(&self) -> Word {
+        self.0.sb()
+    }
+
+    pub fn sll(&self) -> Word {
+        self.0.sll()
+    }
+
+    pub fn slli(&self) -> Word {
+        self.0.slli()
+    }
+
+    pub fn srl(&self) -> Word {
+        self.0.srl()
+    }
+
+    pub fn srli(&self) -> Word {
+        self.0.srli()
+    }
+
+    pub fn srw(&self) -> Word {
+        self.0.srw()
+    }
+
+    pub fn sub(&self) -> Word {
+        self.0.sub()
+    }
+
+    pub fn subi(&self) -> Word {
+        self.0.subi()
+    }
+
+    pub fn sw(&self) -> Word {
+        self.0.sw()
+    }
+
+    pub fn sww(&self) -> Word {
+        self.0.sww()
+    }
+
+    pub fn time(&self) -> Word {
+        self.0.time()
+    }
+
+    pub fn tr(&self) -> Word {
+        self.0.tr()
+    }
+
+    pub fn tro(&self) -> Word {
+        self.0.tro()
+    }
+
+    pub fn wdcm(&self) -> Word {
+        self.0.wdcm()
+    }
+
+    pub fn wqcm(&self) -> Word {
+        self.0.wqcm()
+    }
+    pub fn wdop(&self) -> Word {
+        self.0.wdop()
+    }
+
+    pub fn wqop(&self) -> Word {
+        self.0.wqop()
+    }
+
+    pub fn wdml(&self) -> Word {
+        self.0.wdml()
+    }
+
+    pub fn wqml(&self) -> Word {
+        self.0.wqml()
+    }
+
+    pub fn wddv(&self) -> Word {
+        self.0.wddv()
+    }
+
+    pub fn wqdv(&self) -> Word {
+        self.0.wqdv()
+    }
+
+    pub fn wdmd(&self) -> Word {
+        self.0.wdmd()
+    }
+
+    pub fn wqmd(&self) -> Word {
+        self.0.wqmd()
+    }
+
+    pub fn wdam(&self) -> Word {
+        self.0.wdam()
+    }
+
+    pub fn wqam(&self) -> Word {
+        self.0.wqam()
+    }
+
+    pub fn wdmm(&self) -> Word {
+        self.0.wdmm()
+    }
+
+    pub fn wqmm(&self) -> Word {
+        self.0.wqmm()
+    }
+
+    pub fn xor(&self) -> Word {
+        self.0.xor()
+    }
+
+    pub fn xori(&self) -> Word {
+        self.0.xori()
+    }
+
+    pub fn call(&self) -> DependentCost {
+        self.0.call().into()
+    }
+
+    pub fn ccp(&self) -> DependentCost {
+        self.0.ccp().into()
+    }
+
+    pub fn croo(&self) -> DependentCost {
+        self.0.croo().into()
+    }
+
+    pub fn csiz(&self) -> DependentCost {
+        self.0.csiz().into()
+    }
+
+    pub fn k256(&self) -> DependentCost {
+        self.0.k256().into()
+    }
+
+    pub fn ldc(&self) -> DependentCost {
+        self.0.ldc().into()
+    }
+
+    pub fn logd(&self) -> DependentCost {
+        self.0.logd().into()
+    }
+
+    pub fn mcl(&self) -> DependentCost {
+        self.0.mcl().into()
+    }
+
+    pub fn mcli(&self) -> DependentCost {
+        self.0.mcli().into()
+    }
+
+    pub fn mcp(&self) -> DependentCost {
+        self.0.mcp().into()
+    }
+
+    pub fn mcpi(&self) -> DependentCost {
+        self.0.mcpi().into()
+    }
+
+    pub fn meq(&self) -> DependentCost {
+        self.0.meq().into()
+    }
+
+    pub fn retd(&self) -> DependentCost {
+        self.0.retd().into()
+    }
+
+    pub fn s256(&self) -> DependentCost {
+        self.0.s256().into()
+    }
+
+    pub fn scwq(&self) -> DependentCost {
+        self.0.scwq().into()
+    }
+
+    pub fn smo(&self) -> DependentCost {
+        self.0.smo().into()
+    }
+
+    pub fn srwq(&self) -> DependentCost {
+        self.0.srwq().into()
+    }
+
+    pub fn swwq(&self) -> DependentCost {
+        self.0.swwq().into()
+    }
+
+    pub fn contract_root(&self) -> DependentCost {
+        self.0.contract_root().into()
+    }
+
+    pub fn state_root(&self) -> DependentCost {
+        self.0.state_root().into()
+    }
+
+    pub fn new_storage_per_byte(&self) -> Word {
+        self.0.new_storage_per_byte()
+    }
+
+    pub fn vm_initialization(&self) -> DependentCost {
+        self.0.vm_initialization().into()
+    }
+}
+
+impl From<GasCosts> for fuel_core_types::fuel_tx::GasCosts {
+    fn from(value: GasCosts) -> Self {
+        value.0
     }
 }
 
@@ -174,7 +483,25 @@ impl From<DependentCost> for fuel_core_types::fuel_tx::DependentCost {
     }
 }
 
-impl From<schema::chain::DependentCost> for DependentCost {
+impl From<fuel_core_types::fuel_tx::DependentCost> for DependentCost {
+    fn from(value: fuel_core_types::fuel_tx::DependentCost) -> Self {
+        match value {
+            fuel_core_types::fuel_tx::DependentCost::LightOperation {
+                base,
+                units_per_gas,
+            } => DependentCost::LightOperation {
+                base,
+                units_per_gas,
+            },
+            fuel_core_types::fuel_tx::DependentCost::HeavyOperation {
+                base,
+                gas_per_unit,
+            } => DependentCost::HeavyOperation { base, gas_per_unit },
+        }
+    }
+}
+
+impl From<schema::chain::DependentCost> for fuel_core_types::fuel_tx::DependentCost {
     fn from(value: schema::chain::DependentCost) -> Self {
         match value {
             schema::chain::DependentCost::LightOperation(
@@ -182,20 +509,29 @@ impl From<schema::chain::DependentCost> for DependentCost {
                     base,
                     units_per_gas,
                 },
-            ) => DependentCost::LightOperation {
+            ) => fuel_core_types::fuel_tx::DependentCost::LightOperation {
                 base: base.into(),
                 units_per_gas: units_per_gas.into(),
             },
             schema::chain::DependentCost::HeavyOperation(
                 schema::chain::HeavyOperation { base, gas_per_unit },
-            ) => DependentCost::HeavyOperation {
+            ) => fuel_core_types::fuel_tx::DependentCost::HeavyOperation {
                 base: base.into(),
                 gas_per_unit: gas_per_unit.into(),
             },
-            schema::chain::DependentCost::Unknown => DependentCost::HeavyOperation {
-                base: 0,
-                gas_per_unit: 0,
-            },
+            schema::chain::DependentCost::Unknown => {
+                fuel_core_types::fuel_tx::DependentCost::HeavyOperation {
+                    base: 0,
+                    gas_per_unit: 0,
+                }
+            }
         }
+    }
+}
+
+impl From<schema::chain::DependentCost> for DependentCost {
+    fn from(value: schema::chain::DependentCost) -> Self {
+        let vm_value: fuel_core_types::fuel_tx::DependentCost = value.into();
+        vm_value.into()
     }
 }

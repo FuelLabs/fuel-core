@@ -272,6 +272,7 @@ macro_rules! number_scalar {
 
 number_scalar!(U64, u64);
 number_scalar!(U32, u32);
+number_scalar!(U16, u16);
 number_scalar!(U8, u8);
 
 impl TryFrom<U64> for PanicInstruction {

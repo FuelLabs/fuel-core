@@ -112,8 +112,8 @@ fn dev_config() -> Config {
     assert!(
         chain_config
             .consensus_parameters
-            .contract_params
-            .max_storage_slots
+            .contract_params()
+            .max_storage_slots()
             >= 1 << 17 // 131072
     );
 

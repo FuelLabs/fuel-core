@@ -23,16 +23,13 @@ use crate::{
     },
 };
 use fuel_core_executor::executor::ExecutionInstance;
-use fuel_core_types::{
-    fuel_tx::ConsensusParameters,
-    services::{
-        block_producer::Components,
-        executor::{
-            Error as ExecutorError,
-            ExecutionResult,
-        },
-        Uncommitted,
+use fuel_core_types::services::{
+    block_producer::Components,
+    executor::{
+        Error as ExecutorError,
+        ExecutionResult,
     },
+    Uncommitted,
 };
 use fuel_core_wasm_executor as _;
 
@@ -56,27 +53,18 @@ pub extern "C" fn execute(component_len: u32, options_len: u32) -> u64 {
 pub fn execute_without_commit(component_len: u32, options_len: u32) -> ReturnType {
     let block = ext::input_component(component_len as usize)
         .map_err(|e| ExecutorError::Other(e.to_string()))?;
-    let mut options = ext::input_options(options_len as usize)
+    let options = ext::input_options(options_len as usize)
         .map_err(|e| ExecutorError::Other(e.to_string()))?;
-
-    let consensus_params = if let Some(consensus_params) = options.consensus_params.take()
-    {
-        consensus_params
-    } else {
-        ConsensusParameters::default()
-    };
 
     let instance = ExecutionInstance {
         relayer: WasmRelayer {},
         database: WasmStorage {},
-        consensus_params,
         options,
     };
 
     let block = block.map_p(|component| {
         let Components {
             header_to_produce,
-            gas_limit,
             gas_price,
             coinbase_recipient,
             ..
@@ -84,7 +72,6 @@ pub fn execute_without_commit(component_len: u32, options_len: u32) -> ReturnTyp
 
         Components {
             header_to_produce,
-            gas_limit,
             gas_price,
             transactions_source: WasmTxSource::new(),
             coinbase_recipient,

@@ -12,7 +12,6 @@ async fn clean_startup_shutdown_each_trigger() -> anyhow::Result<()> {
         let mut ctx_builder = TestContextBuilder::new();
         ctx_builder.with_config(Config {
             trigger,
-            block_gas_limit: 100_000,
             signing_key: Some(test_signing_key()),
             metrics: false,
             ..Default::default()
@@ -33,7 +32,6 @@ async fn never_trigger_never_produces_blocks() {
     let consensus_params = ConsensusParameters::default();
     ctx_builder.with_config(Config {
         trigger: Trigger::Never,
-        block_gas_limit: 100_000,
         signing_key: Some(test_signing_key()),
         metrics: false,
         consensus_params: consensus_params.clone(),
@@ -59,7 +57,7 @@ async fn never_trigger_never_produces_blocks() {
     ctx_builder.with_importer(importer);
     let ctx = ctx_builder.build();
     for tx in txs {
-        status_sender.send_replace(Some(tx.id(&consensus_params.chain_id)));
+        status_sender.send_replace(Some(tx.id(&consensus_params.chain_id())));
     }
 
     // Make sure enough time passes for the block to be produced
@@ -120,7 +118,6 @@ impl DefaultContext {
 async fn instant_trigger_produces_block_instantly() {
     let mut ctx = DefaultContext::new(Config {
         trigger: Trigger::Instant,
-        block_gas_limit: 100_000,
         signing_key: Some(test_signing_key()),
         metrics: false,
         ..Default::default()
@@ -140,7 +137,6 @@ async fn interval_trigger_produces_blocks_periodically() -> anyhow::Result<()> {
         trigger: Trigger::Interval {
             block_time: Duration::new(2, 0),
         },
-        block_gas_limit: 100_000,
         signing_key: Some(test_signing_key()),
         metrics: false,
         ..Default::default()
@@ -206,7 +202,6 @@ async fn interval_trigger_doesnt_react_to_full_txpool() -> anyhow::Result<()> {
         trigger: Trigger::Interval {
             block_time: Duration::new(2, 0),
         },
-        block_gas_limit: 100_000,
         signing_key: Some(test_signing_key()),
         metrics: false,
         ..Default::default()

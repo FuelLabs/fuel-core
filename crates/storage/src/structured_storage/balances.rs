@@ -6,8 +6,8 @@ use crate::{
         Sparse,
     },
     codec::{
-        manual::Manual,
         primitive::Primitive,
+        raw::Raw,
     },
     column::Column,
     structured_storage::TableWithBlueprint,
@@ -20,7 +20,6 @@ use crate::{
     },
     Mappable,
 };
-use fuel_core_types::fuel_vm::ContractsAssetKey;
 
 /// The key convertor used to convert the key from the `ContractsAssets` table
 /// to the key of the `ContractsAssetsMerkleMetadata` table.
@@ -37,7 +36,7 @@ impl PrimaryKey for KeyConverter {
 
 impl TableWithBlueprint for ContractsAssets {
     type Blueprint = Sparse<
-        Manual<ContractsAssetKey>,
+        Raw,
         Primitive<8>,
         ContractsAssetsMerkleMetadata,
         ContractsAssetsMerkleData,

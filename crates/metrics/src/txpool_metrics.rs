@@ -2,10 +2,7 @@ use prometheus_client::{
     metrics::histogram::Histogram,
     registry::Registry,
 };
-use std::{
-    default::Default,
-    sync::OnceLock,
-};
+use std::sync::OnceLock;
 
 pub struct TxPoolMetrics {
     // Attaches each Metric to the Registry

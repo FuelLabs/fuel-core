@@ -119,7 +119,7 @@ impl TestContextBuilder {
             let mut producer = MockBlockProducer::default();
             producer
                 .expect_produce_and_execute_block()
-                .returning(|_, _, _, _| {
+                .returning(|_, _, _| {
                     Ok(UncommittedResult::new(
                         ExecutionResult {
                             block: Default::default(),
@@ -249,7 +249,7 @@ impl MockTransactionPool {
 fn make_tx(rng: &mut StdRng) -> Script {
     TransactionBuilder::script(vec![], vec![])
         .max_fee_limit(0)
-        .script_gas_limit(rng.gen_range(1..TxParameters::DEFAULT.max_gas_per_tx))
+        .script_gas_limit(rng.gen_range(1..TxParameters::DEFAULT.max_gas_per_tx()))
         .finalize_without_signature()
 }
 
@@ -269,7 +269,7 @@ async fn remove_skipped_transactions() {
     block_producer
         .expect_produce_and_execute_block()
         .times(1)
-        .returning(move |_, _, _, _| {
+        .returning(move |_, _, _| {
             Ok(UncommittedResult::new(
                 ExecutionResult {
                     block: Default::default(),
@@ -325,7 +325,6 @@ async fn remove_skipped_transactions() {
 
     let config = Config {
         trigger: Trigger::Instant,
-        block_gas_limit: 1000000,
         signing_key: Some(Secret::new(secret_key.into())),
         metrics: false,
         ..Default::default()
@@ -356,7 +355,7 @@ async fn does_not_produce_when_txpool_empty_in_instant_mode() {
 
     block_producer
         .expect_produce_and_execute_block()
-        .returning(|_, _, _, _| panic!("Block production should not be called"));
+        .returning(|_, _, _| panic!("Block production should not be called"));
 
     let mut block_importer = MockBlockImporter::default();
 
@@ -373,7 +372,6 @@ async fn does_not_produce_when_txpool_empty_in_instant_mode() {
 
     let config = Config {
         trigger: Trigger::Instant,
-        block_gas_limit: 1000000,
         signing_key: Some(Secret::new(secret_key.into())),
         metrics: false,
         ..Default::default()

@@ -64,9 +64,12 @@ use fuel_core_types::{
     },
     fuel_tx::{
         ContractIdExt,
+        FeeParameters,
         GasCosts,
         Input,
         Output,
+        PredicateParameters,
+        TxParameters,
         TxPointer,
         UniqueIdentifier,
         UtxoId,
@@ -261,12 +264,31 @@ fn service_with_many_contracts(
         .unwrap();
     let _drop = rt.enter();
     let mut database = Database::rocksdb_temp();
+
     let mut config = Config::local_node();
+
+    config.chain_config.consensus_parameters.set_tx_params(
+        TxParameters::default().with_max_gas_per_tx(TARGET_BLOCK_GAS_LIMIT),
+    );
     config
         .chain_config
         .consensus_parameters
-        .tx_params
-        .max_gas_per_tx = TARGET_BLOCK_GAS_LIMIT;
+        .set_predicate_params(
+            PredicateParameters::default()
+                .with_max_gas_per_predicate(TARGET_BLOCK_GAS_LIMIT),
+        );
+    config
+        .chain_config
+        .consensus_parameters
+        .set_fee_params(FeeParameters::default().with_gas_per_byte(0));
+    config
+        .chain_config
+        .consensus_parameters
+        .set_block_gas_limit(TARGET_BLOCK_GAS_LIMIT);
+    config
+        .chain_config
+        .consensus_parameters
+        .set_gas_costs(GasCosts::new(default_gas_costs()));
 
     let contract_configs = contract_ids
         .iter()
@@ -281,19 +303,6 @@ fn service_with_many_contracts(
     };
     config.state_reader = StateReader::in_memory(state_config);
 
-    config
-        .chain_config
-        .consensus_parameters
-        .predicate_params
-        .max_gas_per_predicate = TARGET_BLOCK_GAS_LIMIT;
-    config.chain_config.block_gas_limit = TARGET_BLOCK_GAS_LIMIT;
-    config.chain_config.consensus_parameters.gas_costs =
-        GasCosts::new(default_gas_costs());
-    config
-        .chain_config
-        .consensus_parameters
-        .fee_params
-        .gas_per_byte = 0;
     config.utxo_validation = false;
     config.block_production = Trigger::Instant;
 
@@ -386,7 +395,7 @@ fn run_with_service_with_extra_inputs(
                     *contract_id,
                 );
                 let contract_output = Output::contract(
-                    input_count as u8,
+                    input_count as u16,
                     Bytes32::zeroed(),
                     Bytes32::zeroed(),
                 );
@@ -415,7 +424,7 @@ fn run_with_service_with_extra_inputs(
             .unwrap();
             async move {
                 let tx_id =
-                    tx.id(&shared.config.chain_config.consensus_parameters.chain_id);
+                    tx.id(&shared.config.chain_config.consensus_parameters.chain_id());
 
                 let mut sub = shared.block_importer.block_importer.subscribe();
                 shared

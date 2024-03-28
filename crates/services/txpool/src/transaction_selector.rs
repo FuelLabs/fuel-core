@@ -78,10 +78,9 @@ mod tests {
     fn make_txs_and_select(txs: &[TxGas], block_gas_limit: Word) -> Vec<TxGas> {
         let mut rng = thread_rng();
 
-        let fee_params = FeeParameters {
-            gas_price_factor: 1,
-            gas_per_byte: 0,
-        };
+        let fee_params = FeeParameters::default()
+            .with_gas_per_byte(0)
+            .with_gas_price_factor(1);
 
         let mut txs = txs
             .iter()

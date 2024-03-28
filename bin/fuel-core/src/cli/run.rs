@@ -245,7 +245,7 @@ impl Command {
 
         let (chain_conf, state_reader) = match snapshot.as_ref() {
             None => (
-                ChainConfig::local_testnet(),
+                crate::cli::local_testnet(),
                 StateReader::in_memory(StateConfig::local_testnet()),
             ),
             Some(path) => {

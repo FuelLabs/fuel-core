@@ -41,7 +41,6 @@ use fuel_core_types::{
         primitives::SecretKeyWrapper,
         SealedBlock,
     },
-    fuel_asm::Word,
     fuel_crypto::Signature,
     fuel_tx::{
         Transaction,
@@ -130,7 +129,6 @@ pub(crate) enum RequestType {
 }
 
 pub struct MainTask<T, B, I> {
-    block_gas_limit: Word,
     signing_key: Option<Secret<SecretKeyWrapper>>,
     block_producer: B,
     block_importer: I,
@@ -169,7 +167,6 @@ where
         let peer_connections_stream = p2p_port.reserved_peers_count();
 
         let Config {
-            block_gas_limit,
             signing_key,
             min_connected_reserved_peers,
             time_until_synced,
@@ -188,7 +185,6 @@ where
         let sync_task_handle = ServiceRunner::new(sync_task);
 
         Self {
-            block_gas_limit,
             signing_key,
             txpool,
             block_producer,
@@ -259,7 +255,7 @@ where
         source: TransactionsSource,
     ) -> anyhow::Result<UncommittedExecutionResult<Changes>> {
         self.block_producer
-            .produce_and_execute_block(height, block_time, source, self.block_gas_limit)
+            .produce_and_execute_block(height, block_time, source)
             .await
     }
 

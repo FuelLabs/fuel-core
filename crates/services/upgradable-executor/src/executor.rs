@@ -148,7 +148,6 @@ where
                 transactions_source: OnceTransactionsSource::new(block.transactions),
                 coinbase_recipient,
                 gas_price,
-                gas_limit: u64::MAX,
             }),
             ExecutionTypes::Validation(block) => ExecutionTypes::Validation(block),
         };
@@ -191,7 +190,6 @@ where
         let options = ExecutionOptions {
             utxo_validation,
             backtrace: self.config.backtrace,
-            consensus_params: Some(self.config.consensus_parameters.clone()),
         };
 
         let component = Components {
@@ -201,7 +199,6 @@ where
             ),
             coinbase_recipient: Default::default(),
             gas_price: component.gas_price,
-            gas_limit: component.gas_limit,
         };
 
         let ExecutionResult {
@@ -251,7 +248,6 @@ where
                 transactions_source,
                 coinbase_recipient,
                 gas_price,
-                gas_limit,
             } = component;
 
             source = Some(transactions_source);
@@ -261,7 +257,6 @@ where
                 transactions_source: (),
                 coinbase_recipient,
                 gas_price,
-                gas_limit,
             }
         });
 
@@ -281,22 +276,17 @@ where
     fn native_execute_inner<TxSource>(
         &self,
         block: ExecutionBlockWithSource<TxSource>,
-        mut options: ExecutionOptions,
+        options: ExecutionOptions,
     ) -> ExecutorResult<Uncommitted<ExecutionResult, Changes>>
     where
         TxSource: TransactionsSource + Send + Sync + 'static,
     {
         let storage = self.storage_view_provider.latest_view();
         let relayer = self.relayer_view_provider.latest_view();
-        let consensus_params = options
-            .consensus_params
-            .take()
-            .unwrap_or_else(|| self.config.consensus_parameters.clone());
 
         let instance = fuel_core_executor::executor::ExecutionInstance {
             relayer,
             database: storage,
-            consensus_params,
             options,
         };
         instance.execute_without_commit(block)

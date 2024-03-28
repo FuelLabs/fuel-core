@@ -81,6 +81,7 @@ macro_rules! number_scalar {
 
 number_scalar!(U64, u64, "U64");
 number_scalar!(U32, u32, "U32");
+number_scalar!(U16, u16, "U16");
 number_scalar!(U8, u8, "U8");
 
 impl From<BlockHeight> for U32 {

@@ -189,7 +189,8 @@ impl TxQuery {
                         .owned_transactions(owner, start, direction)
                         .map(|result| {
                             result.map(|(cursor, tx)| {
-                                let tx_id = tx.id(&config.consensus_parameters.chain_id);
+                                let tx_id =
+                                    tx.id(&config.consensus_parameters.chain_id());
                                 (cursor.into(), Transaction::from_tx(tx_id, tx))
                             })
                         });
@@ -216,7 +217,7 @@ impl TxQuery {
         .map_err(|err| anyhow::anyhow!("{:?}", err))?;
 
         Ok(Transaction::from_tx(
-            tx.id(&config.consensus_parameters.chain_id),
+            tx.id(&config.consensus_parameters.chain_id()),
             tx,
         ))
     }
@@ -254,7 +255,7 @@ impl TxMutation {
             .map(|tx| FuelTx::from_bytes(&tx.0))
             .collect::<Result<Vec<FuelTx>, _>>()?;
         for transaction in &mut transactions {
-            transaction.precompute(&config.consensus_parameters.chain_id)?;
+            transaction.precompute(&config.consensus_parameters.chain_id())?;
         }
 
         let tx_statuses = block_producer
@@ -285,7 +286,7 @@ impl TxMutation {
             .await
             .into_iter()
             .try_collect()?;
-        let id = tx.id(&config.consensus_parameters.chain_id);
+        let id = tx.id(&config.consensus_parameters.chain_id());
 
         let tx = Transaction(tx, id);
         Ok(tx)
@@ -344,7 +345,7 @@ impl TxStatusSubscription {
         let txpool = ctx.data_unchecked::<TxPool>();
         let config = ctx.data_unchecked::<Config>();
         let tx = FuelTx::from_bytes(&tx.0)?;
-        let tx_id = tx.id(&config.consensus_parameters.chain_id);
+        let tx_id = tx.id(&config.consensus_parameters.chain_id());
         let subscription = txpool.tx_update_subscribe(tx_id)?;
 
         let _: Vec<_> = txpool

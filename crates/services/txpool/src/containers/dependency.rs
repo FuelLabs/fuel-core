@@ -531,7 +531,7 @@ impl Dependency {
 
         // iterate over all outputs and insert them, marking them as available.
         for (index, output) in tx.outputs().iter().enumerate() {
-            let index = u8::try_from(index).map_err(|_| {
+            let index = u16::try_from(index).map_err(|_| {
                 Error::Other(format!(
                     "The number of outputs in `{}` is more than `u8::max`",
                     tx.id()
@@ -586,7 +586,7 @@ impl Dependency {
                     // no other transactions can depend on these types of outputs
                 }
                 Output::Coin { .. } | Output::Change { .. } | Output::Variable { .. } => {
-                    let index = u8::try_from(index)
+                    let index = u16::try_from(index)
                         .expect("The number of outputs is more than `u8::max`. \
                         But it should be impossible because we don't include transactions with so many outputs.");
                     // remove transactions that depend on this coin output

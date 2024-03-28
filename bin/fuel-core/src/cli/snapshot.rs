@@ -234,7 +234,7 @@ fn load_chain_config(
 ) -> Result<ChainConfig, anyhow::Error> {
     let chain_config = match chain_config {
         Some(file) => ChainConfig::load(file)?,
-        None => ChainConfig::local_testnet(),
+        None => crate::cli::local_testnet(),
     };
 
     Ok(chain_config)

@@ -1,6 +1,7 @@
 use super::*;
+use fuel_core_types::fuel_tx::consensus_parameters::gas::GasCostsValuesV1;
 pub fn default_gas_costs() -> GasCostsValues {
-    GasCostsValues {
+    GasCostsValuesV1 {
         add: 2,
         addi: 2,
         aloc: 1,
@@ -176,4 +177,5 @@ pub fn default_gas_costs() -> GasCostsValues {
             units_per_gas: 2,
         },
     }
+    .into()
 }

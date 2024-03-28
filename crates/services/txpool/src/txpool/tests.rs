@@ -40,7 +40,13 @@ use fuel_core_types::{
 };
 
 use crate::types::GasPrice;
-use fuel_core_types::fuel_tx::Finalizable;
+use fuel_core_chain_config::ChainConfig;
+use fuel_core_types::fuel_tx::{
+    ConsensusParameters,
+    Finalizable,
+    PredicateParameters,
+    TxParameters,
+};
 use std::{
     cmp::Reverse,
     collections::HashMap,
@@ -1180,17 +1186,23 @@ async fn predicates_with_incorrect_owner_fails() {
 #[tokio::test]
 async fn predicate_without_enough_gas_returns_out_of_gas() {
     let mut context = TextContext::default();
-    let mut config = Config::default();
-    config
-        .chain_config
-        .consensus_parameters
-        .predicate_params
-        .max_gas_per_predicate = 10000;
-    config
-        .chain_config
-        .consensus_parameters
-        .tx_params
-        .max_gas_per_tx = 10000;
+
+    let gas_limit = 10000;
+
+    let mut consensus_parameters = ConsensusParameters::default();
+    consensus_parameters
+        .set_tx_params(TxParameters::default().with_max_gas_per_tx(gas_limit));
+    consensus_parameters.set_predicate_params(
+        PredicateParameters::default().with_max_gas_per_predicate(gas_limit),
+    );
+    let config = Config {
+        chain_config: ChainConfig {
+            consensus_parameters,
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+
     let coin = context
         .custom_predicate(
             AssetId::BASE,

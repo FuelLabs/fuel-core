@@ -4,7 +4,6 @@ use fuel_core_types::{
     fuel_tx::{
         ConsensusParameters,
         GasCosts,
-        TxParameters,
     },
     fuel_types::AssetId,
 };
@@ -39,16 +38,15 @@ pub const CHAIN_CONFIG_FILENAME: &str = "chain_config.json";
 #[derive(Clone, Debug, Deserialize, Serialize, Eq, PartialEq)]
 pub struct ChainConfig {
     pub chain_name: String,
-    pub block_gas_limit: u64,
     pub consensus_parameters: ConsensusParameters,
     pub consensus: ConsensusConfig,
 }
 
+#[cfg(feature = "test-helpers")]
 impl Default for ChainConfig {
     fn default() -> Self {
         Self {
             chain_name: "local".into(),
-            block_gas_limit: TxParameters::DEFAULT.max_gas_per_tx * 10, /* TODO: Pick a sensible default */
             consensus_parameters: ConsensusParameters::default(),
             consensus: ConsensusConfig::default_poa(),
         }
@@ -89,6 +87,7 @@ impl ChainConfig {
         Ok(())
     }
 
+    #[cfg(feature = "test-helpers")]
     pub fn local_testnet() -> Self {
         Self {
             chain_name: LOCAL_TESTNET.to_string(),
@@ -104,7 +103,6 @@ impl GenesisCommitment for ChainConfig {
         // the field. Explicit fields help to prevent a bug of missing fields in the hash.
         let ChainConfig {
             chain_name,
-            block_gas_limit,
             consensus_parameters,
             consensus,
         } = self;
@@ -112,7 +110,6 @@ impl GenesisCommitment for ChainConfig {
         // TODO: Hash settlement configuration when it will be available.
         let config_hash = *Hasher::default()
             .chain(chain_name.as_bytes())
-            .chain(block_gas_limit.to_be_bytes())
             .chain(consensus_parameters.root()?)
             .chain(consensus.root()?)
             .finalize();

@@ -76,25 +76,26 @@ impl Decode<DaBlockHeight> for Primitive<8> {
 }
 
 /// Converts the `UtxoId` into an array of bytes.
-pub fn utxo_id_to_bytes(utxo_id: &UtxoId) -> [u8; TxId::LEN + 1] {
-    let mut default = [0; TxId::LEN + 1];
+pub fn utxo_id_to_bytes(utxo_id: &UtxoId) -> [u8; TxId::LEN + 2] {
+    let mut default = [0; TxId::LEN + 2];
     default[0..TxId::LEN].copy_from_slice(utxo_id.tx_id().as_ref());
-    default[TxId::LEN] = utxo_id.output_index();
+    default[TxId::LEN..].copy_from_slice(utxo_id.output_index().to_be_bytes().as_slice());
     default
 }
 
-impl Encode<UtxoId> for Primitive<{ TxId::LEN + 1 }> {
-    type Encoder<'a> = [u8; TxId::LEN + 1];
+impl Encode<UtxoId> for Primitive<{ TxId::LEN + 2 }> {
+    type Encoder<'a> = [u8; TxId::LEN + 2];
 
     fn encode(t: &UtxoId) -> Self::Encoder<'_> {
         utxo_id_to_bytes(t)
     }
 }
 
-impl Decode<UtxoId> for Primitive<{ TxId::LEN + 1 }> {
+impl Decode<UtxoId> for Primitive<{ TxId::LEN + 2 }> {
     fn decode(bytes: &[u8]) -> anyhow::Result<UtxoId> {
-        let bytes = <[u8; TxId::LEN + 1]>::try_from(bytes)?;
+        let bytes = <[u8; TxId::LEN + 2]>::try_from(bytes)?;
         let tx_id: [u8; TxId::LEN] = bytes[0..TxId::LEN].try_into()?;
-        Ok(UtxoId::new(TxId::from(tx_id), bytes[TxId::LEN]))
+        let output_index = u16::from_be_bytes(bytes[TxId::LEN..].try_into()?);
+        Ok(UtxoId::new(TxId::from(tx_id), output_index))
     }
 }

@@ -1,5 +1,5 @@
 use clap::Parser;
-use fuel_core_types::fuel_tx::GasCostsValues;
+use fuel_core_types::fuel_tx::consensus_parameters::gas::GasCostsValuesV1;
 use serde::{
     Deserialize,
     Serialize,
@@ -358,8 +358,8 @@ pub const GIT: &str = ""#,
     r#"";"#,
     r##"
 pub fn default_gas_costs() -> GasCostsValues {
-    GasCostsValues {"##,
-    r##"    }
+    GasCostsValuesV1 {"##,
+    r##"    }.into()
 }
 "##,
 ];
@@ -482,7 +482,7 @@ impl State {
         )
     }
 
-    fn to_gas_costs(&self) -> GasCostsValues {
+    fn to_gas_costs(&self) -> GasCostsValuesV1 {
         serde_yaml::from_value(self.to_yaml()).unwrap()
     }
 

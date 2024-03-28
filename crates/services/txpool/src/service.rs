@@ -232,7 +232,7 @@ where
 
             new_transaction = self.gossiped_tx_stream.next() => {
                 if let Some(GossipData { data: Some(tx), message_id, peer_id }) = new_transaction {
-                    let id = tx.id(&self.tx_pool_shared_state.consensus_params.chain_id);
+                    let id = tx.id(&self.tx_pool_shared_state.consensus_params.chain_id());
                     let current_height = *self.tx_pool_shared_state.current_height.lock();
 
                     // verify tx

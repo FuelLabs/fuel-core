@@ -7,6 +7,7 @@ use crate::schema::scalars::{
     Nonce,
     TxPointer,
     UtxoId,
+    U16,
     U64,
 };
 use async_graphql::{
@@ -28,7 +29,7 @@ pub struct InputCoin {
     amount: U64,
     asset_id: AssetId,
     tx_pointer: TxPointer,
-    witness_index: u8,
+    witness_index: u16,
     predicate_gas_used: U64,
     predicate: HexString,
     predicate_data: HexString,
@@ -56,7 +57,7 @@ impl InputCoin {
         self.tx_pointer
     }
 
-    async fn witness_index(&self) -> u8 {
+    async fn witness_index(&self) -> u16 {
         self.witness_index
     }
 
@@ -109,7 +110,7 @@ pub struct InputMessage {
     recipient: Address,
     amount: U64,
     nonce: Nonce,
-    witness_index: u8,
+    witness_index: u16,
     predicate_gas_used: U64,
     data: HexString,
     predicate: HexString,
@@ -134,8 +135,8 @@ impl InputMessage {
         self.nonce
     }
 
-    async fn witness_index(&self) -> u8 {
-        self.witness_index
+    async fn witness_index(&self) -> U16 {
+        self.witness_index.into()
     }
 
     async fn predicate_gas_used(&self) -> U64 {
