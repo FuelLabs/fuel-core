@@ -78,6 +78,8 @@ pub struct NotInitializedTask<P, D> {
     database: D,
     /// Configuration settings.
     config: Config,
+    /// Retry on error
+    retry_on_error: bool,
 }
 
 /// The actual relayer background task that syncs with the DA layer.
@@ -93,17 +95,20 @@ pub struct Task<P, D> {
     /// The watcher used to track the state of the service. If the service stops,
     /// the task will stop synchronization.
     shutdown: StateWatcher,
+    /// Retry on error
+    retry_on_error: bool,
 }
 
 impl<P, D> NotInitializedTask<P, D> {
     /// Create a new relayer task.
-    fn new(eth_node: P, database: D, config: Config) -> Self {
+    fn new(eth_node: P, database: D, config: Config, retry_on_error: bool) -> Self {
         let (synced, _) = watch::channel(None);
         Self {
             synced,
             eth_node,
             database,
             config,
+            retry_on_error,
         }
     }
 }
@@ -153,6 +158,7 @@ where
             self.config.log_page_size,
         );
         let logs = logs.take_until(self.shutdown.while_started());
+
         write_logs(&mut self.database, logs).await
     }
 
@@ -193,6 +199,7 @@ where
             eth_node,
             database,
             config,
+            retry_on_error,
         } = self;
         let mut task = Task {
             synced,
@@ -200,6 +207,7 @@ where
             database,
             config,
             shutdown,
+            retry_on_error,
         };
         task.set_deploy_height();
 
@@ -215,7 +223,6 @@ where
 {
     async fn run(&mut self, _: &mut StateWatcher) -> anyhow::Result<bool> {
         let now = tokio::time::Instant::now();
-        let should_continue = true;
 
         let result = run::run(self).await;
 
@@ -231,7 +238,18 @@ where
             .await;
         }
 
-        result.map(|_| should_continue)
+        if let Err(err) = result {
+            if !self.retry_on_error {
+                tracing::error!("Exiting due to Error in relayer task: {:?}", err);
+                let should_continue = false;
+                Ok(should_continue)
+            } else {
+                Err(err)
+            }
+        } else {
+            let should_continue = true;
+            Ok(should_continue)
+        }
     }
 
     async fn shutdown(self) -> anyhow::Result<()> {
@@ -331,7 +349,13 @@ where
     // TODO: Does this handle https?
     let http = Http::new(url);
     let eth_node = Provider::new(http);
-    Ok(new_service_internal(eth_node, database, config))
+    let retry_on_error = true;
+    Ok(new_service_internal(
+        eth_node,
+        database,
+        config,
+        retry_on_error,
+    ))
 }
 
 #[cfg(any(test, feature = "test-helpers"))]
@@ -345,19 +369,21 @@ where
     P: Middleware<Error = ProviderError> + 'static,
     D: RelayerDb + Clone + 'static,
 {
-    new_service_internal(eth_node, database, config)
+    let retry_on_fail = false;
+    new_service_internal(eth_node, database, config, retry_on_fail)
 }
 
 fn new_service_internal<P, D>(
     eth_node: P,
     database: D,
     config: Config,
+    retry_on_error: bool,
 ) -> CustomizableService<P, D>
 where
     P: Middleware<Error = ProviderError> + 'static,
     D: RelayerDb + Clone + 'static,
 {
-    let task = NotInitializedTask::new(eth_node, database, config);
+    let task = NotInitializedTask::new(eth_node, database, config, retry_on_error);
 
     CustomizableService::new(task)
 }

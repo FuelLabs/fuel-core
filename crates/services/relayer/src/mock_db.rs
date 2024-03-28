@@ -16,10 +16,7 @@ use fuel_core_types::{
     services::relayer::Event,
 };
 use std::{
-    collections::{
-        BTreeMap,
-        HashMap,
-    },
+    collections::BTreeMap,
     sync::{
         Arc,
         Mutex,
@@ -28,9 +25,9 @@ use std::{
 
 #[derive(Default)]
 pub struct Data {
-    pub messages: BTreeMap<DaBlockHeight, HashMap<Nonce, Message>>,
+    pub messages: BTreeMap<DaBlockHeight, Vec<(Nonce, Message)>>,
     pub transactions:
-        BTreeMap<DaBlockHeight, HashMap<RelayedTransactionId, RelayedTransaction>>,
+        BTreeMap<DaBlockHeight, Vec<(RelayedTransactionId, RelayedTransaction)>>,
     pub finalized_da_height: Option<DaBlockHeight>,
 }
 
@@ -44,13 +41,27 @@ pub struct MockDb {
 }
 
 impl MockDb {
-    pub fn get_message(&self, id: &Nonce) -> Option<Message> {
+    pub fn get_message(&self, nonce: &Nonce) -> Option<Message> {
         self.data
             .lock()
             .unwrap()
             .messages
             .iter()
-            .find_map(|(_, map)| map.get(id).cloned())
+            .find_map(|(_, map)| {
+                map.iter()
+                    .find(|(inner_nonce, _msg)| nonce == inner_nonce)
+                    .map(|(_, msg)| msg.clone())
+            })
+    }
+
+    pub fn get_messages_for_block(&self, da_block_height: DaBlockHeight) -> Vec<Message> {
+        self.data
+            .lock()
+            .unwrap()
+            .messages
+            .get(&da_block_height)
+            .map(|map| map.iter().map(|(_, msg)| msg).cloned().collect())
+            .unwrap_or_default()
     }
 
     pub fn get_transaction(
@@ -62,7 +73,24 @@ impl MockDb {
             .unwrap()
             .transactions
             .iter()
-            .find_map(|(_, map)| map.get(id).cloned())
+            .find_map(|(_, txs)| {
+                txs.iter()
+                    .find(|(inner_id, _tx)| id == inner_id)
+                    .map(|(_, tx)| tx.clone())
+            })
+    }
+
+    pub fn get_transactions_for_block(
+        &self,
+        da_block_height: DaBlockHeight,
+    ) -> Vec<RelayedTransaction> {
+        self.data
+            .lock()
+            .unwrap()
+            .transactions
+            .get(&da_block_height)
+            .map(|map| map.iter().map(|(_, tx)| tx).cloned().collect())
+            .unwrap_or_default()
     }
 }
 
@@ -79,13 +107,13 @@ impl RelayerDb for MockDb {
                     m.messages
                         .entry(message.da_height())
                         .or_default()
-                        .insert(*message.id(), message.clone());
+                        .push((*message.id(), message.clone()));
                 }
                 Event::Transaction(transaction) => {
                     m.transactions
                         .entry(transaction.da_height())
                         .or_default()
-                        .insert(transaction.id(), transaction.clone());
+                        .push((transaction.id(), transaction.clone()));
                 }
             }
         }
