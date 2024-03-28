@@ -12,6 +12,7 @@ use fuel_core_metrics::{
     },
 };
 use futures::FutureExt;
+use std::any::Any;
 use tokio::sync::watch;
 use tracing::Instrument;
 
@@ -174,7 +175,7 @@ where
         loop {
             let state = start.borrow().clone();
             if !state.starting() {
-                return Ok(state)
+                return Ok(state);
             }
             start.changed().await?;
         }
@@ -184,7 +185,7 @@ where
         loop {
             let state = stop.borrow().clone();
             if state.stopped() {
-                return Ok(state)
+                return Ok(state);
             }
             stop.changed().await?;
         }
@@ -332,7 +333,7 @@ async fn run<S>(
 
     // If the state after update is not `Starting` then return to stop the service.
     if !state.borrow().starting() {
-        return
+        return;
     }
 
     // We can panic here, because it is inside of the task.
@@ -351,6 +352,20 @@ async fn run<S>(
         }
     });
 
+    let got_panic = run_task(&mut task, state, &metric).await;
+
+    let got_panic = shutdown_task(S::NAME, task, got_panic).await;
+
+    if let Some(panic) = got_panic {
+        std::panic::resume_unwind(panic)
+    }
+}
+
+async fn run_task<S: RunnableTask>(
+    task: &mut S,
+    mut state: StateWatcher,
+    metric: &ServiceLifecycle,
+) -> Option<Box<dyn Any + Send>> {
     let mut got_panic = None;
 
     while state.borrow_and_update().started() {
@@ -361,7 +376,7 @@ async fn run<S>(
         if let Err(panic) = panic_result {
             tracing::debug!("got a panic");
             got_panic = Some(panic);
-            break
+            break;
         }
 
         let tracked_result = panic_result.expect("Checked the panic above");
@@ -382,7 +397,7 @@ async fn run<S>(
             Ok(should_continue) => {
                 if !should_continue {
                     tracing::debug!("stopping");
-                    break
+                    break;
                 }
                 tracing::debug!("run loop");
             }
@@ -392,8 +407,18 @@ async fn run<S>(
             }
         }
     }
+    got_panic
+}
 
-    tracing::info!("Shutting down {} service", S::NAME);
+async fn shutdown_task<S>(
+    name: &str,
+    task: S,
+    mut got_panic: Option<Box<dyn Any + Send>>,
+) -> Option<Box<dyn Any + Send>>
+where
+    S: RunnableTask,
+{
+    tracing::info!("Shutting down {} service", name);
     let shutdown = std::panic::AssertUnwindSafe(task.shutdown());
     match shutdown.catch_unwind().await {
         Ok(Ok(_)) => {}
@@ -412,10 +437,7 @@ async fn run<S>(
             }
         }
     }
-
-    if let Some(panic) = got_panic {
-        std::panic::resume_unwind(panic)
-    }
+    got_panic
 }
 
 impl<T> SharedMutex<T> {

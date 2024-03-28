@@ -36,11 +36,11 @@ fn messages(
     nonce
         .zip(block_number)
         .zip(contracts)
-        .map(|((n, b), c)| message(n, b, c))
+        .map(|((n, b), c)| message(n, b, c, 0))
         .collect()
 }
 
-fn message(nonce: u64, block_number: u64, contract_address: u32) -> Log {
+fn message(nonce: u64, block_number: u64, contract_address: u32, index: u64) -> Log {
     let message = MessageSentFilter {
         nonce: U256::from_dec_str(nonce.to_string().as_str())
             .expect("Should convert into U256"),
@@ -49,6 +49,7 @@ fn message(nonce: u64, block_number: u64, contract_address: u32) -> Log {
     let mut log = message.into_log();
     log.address = u32_to_contract(contract_address);
     log.block_number = Some(block_number.into());
+    log.log_index = Some(index.into());
     log
 }
 

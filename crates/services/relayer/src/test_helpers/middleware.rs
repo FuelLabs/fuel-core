@@ -162,6 +162,7 @@ impl Default for MockMiddleware {
         s
     }
 }
+
 #[derive(Error, Debug)]
 /// Thrown when an error happens at the Nonce Manager
 pub enum MockMiddlewareError {
@@ -261,31 +262,8 @@ impl Middleware for MockMiddleware {
     async fn get_logs(&self, filter: &Filter) -> Result<Vec<Log>, Self::Error> {
         tokio::task::yield_now().await;
         self.before_event(TriggerType::GetLogs(filter));
-        let r = self.update_data(|data| {
-            data.logs_batch
-                .iter()
-                .flat_map(|logs| {
-                    logs.iter().filter_map(|log| {
-                        let r = match filter.address.as_ref()? {
-                            ethers_core::types::ValueOrArray::Value(v) => {
-                                log.address == *v
-                            }
-                            ethers_core::types::ValueOrArray::Array(v) => {
-                                v.iter().any(|v| log.address == *v)
-                            }
-                        };
-                        let log_block_num = log.block_number?;
-                        let r = r
-                            && log_block_num
-                                >= filter.block_option.get_from_block()?.as_number()?
-                            && log_block_num
-                                <= filter.block_option.get_to_block()?.as_number()?;
-                        r.then_some(log)
-                    })
-                })
-                .cloned()
-                .collect()
-        });
+        let r =
+            self.update_data(|data| take_logs_based_on_filter(&data.logs_batch, filter));
         self.after_event(TriggerType::GetLogs(filter));
         Ok(r)
     }
@@ -302,4 +280,28 @@ impl Middleware for MockMiddleware {
         self.after_event(TriggerType::GetBlock(block_id));
         r
     }
+}
+
+fn take_logs_based_on_filter(logs_batch: &[Vec<Log>], filter: &Filter) -> Vec<Log> {
+    logs_batch
+        .iter()
+        .flat_map(|logs| {
+            logs.iter().filter_map(|log| {
+                let r = match filter.address.as_ref()? {
+                    ethers_core::types::ValueOrArray::Value(v) => log.address == *v,
+                    ethers_core::types::ValueOrArray::Array(v) => {
+                        v.iter().any(|v| log.address == *v)
+                    }
+                };
+                let log_block_num = log.block_number?;
+                let r = r
+                    && log_block_num
+                        >= filter.block_option.get_from_block()?.as_number()?
+                    && log_block_num
+                        <= filter.block_option.get_to_block()?.as_number()?;
+                r.then_some(log)
+            })
+        })
+        .cloned()
+        .collect()
 }
