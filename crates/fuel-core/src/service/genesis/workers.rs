@@ -95,6 +95,7 @@ impl GenesisWorkers {
     }
 
     pub async fn run_on_chain_imports(&mut self) -> anyhow::Result<()> {
+        tracing::info!("Running on-chain imports");
         tokio::try_join!(
             self.spawn_worker_on_chain::<Coins>()?,
             self.spawn_worker_on_chain::<Messages>()?,
@@ -108,11 +109,10 @@ impl GenesisWorkers {
     }
 
     pub async fn run_off_chain_imports(&mut self) -> anyhow::Result<()> {
+        tracing::info!("Running off-chain imports");
         tokio::try_join!(
             self.spawn_worker_off_chain::<TransactionStatuses, TransactionStatuses>()?,
             self.spawn_worker_off_chain::<OwnedTransactions, OwnedTransactions>()?,
-            self.spawn_worker_off_chain::<FuelBlockIdsToHeights, FuelBlockIdsToHeights>(
-            )?,
             self.spawn_worker_off_chain::<Messages, OwnedMessageIds>()?,
             self.spawn_worker_off_chain::<Coins, OwnedCoins>()?,
             self.spawn_worker_off_chain::<Transactions, ContractsInfo>()?
@@ -138,7 +138,7 @@ impl GenesisWorkers {
         T::OwnedKey: serde::de::DeserializeOwned + Send,
         T::OwnedValue: serde::de::DeserializeOwned + Send,
         StateConfig: AsTable<T>,
-        Handler<T>: ProcessState<Table = T, DbDesc = OnChain>,
+        Handler<T>: ProcessState<TableInSnapshot = T, DbDesc = OnChain>,
     {
         let groups = self.snapshot_reader.read::<T>()?;
         let finished_signal = self.get_signal(T::column().name());
@@ -162,7 +162,7 @@ impl GenesisWorkers {
         Src::OwnedKey: serde::de::DeserializeOwned + Send,
         Src::OwnedValue: serde::de::DeserializeOwned + Send,
         StateConfig: AsTable<Src>,
-        Handler<Dst>: ProcessState<Table = Src, DbDesc = OffChain>,
+        Handler<Dst>: ProcessState<TableInSnapshot = Src, DbDesc = OffChain>,
         Dst: Send + 'static,
     {
         let groups = self.snapshot_reader.read::<Src>()?;
@@ -203,12 +203,13 @@ impl<T> Handler<T> {
 }
 
 impl ProcessState for Handler<Coins> {
-    type Table = Coins;
+    type TableInSnapshot = Coins;
+    type TableBeingWritten = Coins;
     type DbDesc = OnChain;
 
     fn process(
         &mut self,
-        group: Vec<TableEntry<Self::Table>>,
+        group: Vec<TableEntry<Self::TableInSnapshot>>,
         tx: &mut StorageTransaction<&mut Database>,
     ) -> anyhow::Result<()> {
         group.into_iter().try_for_each(|coin| {
@@ -219,12 +220,13 @@ impl ProcessState for Handler<Coins> {
 }
 
 impl ProcessState for Handler<Messages> {
-    type Table = Messages;
+    type TableInSnapshot = Messages;
+    type TableBeingWritten = Messages;
     type DbDesc = OnChain;
 
     fn process(
         &mut self,
-        group: Vec<TableEntry<Self::Table>>,
+        group: Vec<TableEntry<Self::TableInSnapshot>>,
         tx: &mut StorageTransaction<&mut Database>,
     ) -> anyhow::Result<()> {
         group
@@ -234,12 +236,13 @@ impl ProcessState for Handler<Messages> {
 }
 
 impl ProcessState for Handler<ContractsRawCode> {
-    type Table = ContractsRawCode;
+    type TableInSnapshot = ContractsRawCode;
+    type TableBeingWritten = ContractsRawCode;
     type DbDesc = OnChain;
 
     fn process(
         &mut self,
-        group: Vec<TableEntry<Self::Table>>,
+        group: Vec<TableEntry<Self::TableInSnapshot>>,
         tx: &mut StorageTransaction<&mut Database>,
     ) -> anyhow::Result<()> {
         group.into_iter().try_for_each(|contract| {
@@ -250,12 +253,13 @@ impl ProcessState for Handler<ContractsRawCode> {
 }
 
 impl ProcessState for Handler<ContractsLatestUtxo> {
-    type Table = ContractsLatestUtxo;
+    type TableInSnapshot = ContractsLatestUtxo;
+    type TableBeingWritten = ContractsLatestUtxo;
     type DbDesc = OnChain;
 
     fn process(
         &mut self,
-        group: Vec<TableEntry<Self::Table>>,
+        group: Vec<TableEntry<Self::TableInSnapshot>>,
         tx: &mut StorageTransaction<&mut Database>,
     ) -> anyhow::Result<()> {
         group.into_iter().try_for_each(|contract| {
@@ -266,12 +270,13 @@ impl ProcessState for Handler<ContractsLatestUtxo> {
 }
 
 impl ProcessState for Handler<ContractsState> {
-    type Table = ContractsState;
+    type TableInSnapshot = ContractsState;
+    type TableBeingWritten = ContractsState;
     type DbDesc = OnChain;
 
     fn process(
         &mut self,
-        group: Vec<TableEntry<Self::Table>>,
+        group: Vec<TableEntry<Self::TableInSnapshot>>,
         tx: &mut StorageTransaction<&mut Database>,
     ) -> anyhow::Result<()> {
         tx.update_contract_states(group)?;
@@ -280,12 +285,13 @@ impl ProcessState for Handler<ContractsState> {
 }
 
 impl ProcessState for Handler<ContractsAssets> {
-    type Table = ContractsAssets;
+    type TableInSnapshot = ContractsAssets;
+    type TableBeingWritten = ContractsAssets;
     type DbDesc = OnChain;
 
     fn process(
         &mut self,
-        group: Vec<TableEntry<Self::Table>>,
+        group: Vec<TableEntry<Self::TableInSnapshot>>,
         tx: &mut StorageTransaction<&mut Database>,
     ) -> anyhow::Result<()> {
         tx.update_contract_balances(group)?;
@@ -294,12 +300,13 @@ impl ProcessState for Handler<ContractsAssets> {
 }
 
 impl ProcessState for Handler<Transactions> {
-    type Table = Transactions;
+    type TableInSnapshot = Transactions;
+    type TableBeingWritten = Transactions;
     type DbDesc = OnChain;
 
     fn process(
         &mut self,
-        group: Vec<TableEntry<Self::Table>>,
+        group: Vec<TableEntry<Self::TableInSnapshot>>,
         tx: &mut StorageTransaction<&mut Database<Self::DbDesc>>,
     ) -> anyhow::Result<()> {
         for transaction in &group {
@@ -311,16 +318,17 @@ impl ProcessState for Handler<Transactions> {
 }
 
 impl ProcessState for Handler<TransactionStatuses> {
-    type Table = TransactionStatuses;
+    type TableInSnapshot = TransactionStatuses;
+    type TableBeingWritten = TransactionStatuses;
     type DbDesc = OffChain;
 
     fn process(
         &mut self,
-        group: Vec<TableEntry<Self::Table>>,
+        group: Vec<TableEntry<Self::TableInSnapshot>>,
         tx: &mut StorageTransaction<&mut Database<Self::DbDesc>>,
     ) -> anyhow::Result<()> {
         for tx_status in group {
-            tx.storage::<Self::Table>()
+            tx.storage::<Self::TableInSnapshot>()
                 .insert(&tx_status.key, &tx_status.value)?;
         }
         Ok(())
@@ -328,16 +336,17 @@ impl ProcessState for Handler<TransactionStatuses> {
 }
 
 impl ProcessState for Handler<FuelBlockIdsToHeights> {
-    type Table = FuelBlockIdsToHeights;
+    type TableInSnapshot = FuelBlockIdsToHeights;
+    type TableBeingWritten = FuelBlockIdsToHeights;
     type DbDesc = OffChain;
 
     fn process(
         &mut self,
-        group: Vec<TableEntry<Self::Table>>,
+        group: Vec<TableEntry<Self::TableInSnapshot>>,
         tx: &mut StorageTransaction<&mut Database<Self::DbDesc>>,
     ) -> anyhow::Result<()> {
         for entry in group {
-            tx.storage::<Self::Table>()
+            tx.storage::<Self::TableInSnapshot>()
                 .insert(&entry.key, &entry.value)?;
         }
         Ok(())
@@ -345,12 +354,13 @@ impl ProcessState for Handler<FuelBlockIdsToHeights> {
 }
 
 impl ProcessState for Handler<OwnedTransactions> {
-    type Table = OwnedTransactions;
+    type TableInSnapshot = OwnedTransactions;
+    type TableBeingWritten = OwnedTransactions;
     type DbDesc = OffChain;
 
     fn process(
         &mut self,
-        group: Vec<TableEntry<Self::Table>>,
+        group: Vec<TableEntry<Self::TableInSnapshot>>,
         tx: &mut StorageTransaction<&mut Database<Self::DbDesc>>,
     ) -> anyhow::Result<()> {
         for entry in group {
@@ -362,12 +372,13 @@ impl ProcessState for Handler<OwnedTransactions> {
 }
 
 impl ProcessState for Handler<OwnedMessageIds> {
-    type Table = Messages;
+    type TableInSnapshot = Messages;
+    type TableBeingWritten = OwnedMessageIds;
     type DbDesc = OffChain;
 
     fn process(
         &mut self,
-        group: Vec<TableEntry<Self::Table>>,
+        group: Vec<TableEntry<Self::TableInSnapshot>>,
         tx: &mut StorageTransaction<&mut Database<Self::DbDesc>>,
     ) -> anyhow::Result<()> {
         let events = group
@@ -379,12 +390,13 @@ impl ProcessState for Handler<OwnedMessageIds> {
 }
 
 impl ProcessState for Handler<OwnedCoins> {
-    type Table = Coins;
+    type TableInSnapshot = Coins;
+    type TableBeingWritten = OwnedCoins;
     type DbDesc = OffChain;
 
     fn process(
         &mut self,
-        group: Vec<TableEntry<Self::Table>>,
+        group: Vec<TableEntry<Self::TableInSnapshot>>,
         tx: &mut StorageTransaction<&mut Database<Self::DbDesc>>,
     ) -> anyhow::Result<()> {
         let events = group.into_iter().map(|TableEntry { value, key }| {
@@ -396,12 +408,13 @@ impl ProcessState for Handler<OwnedCoins> {
 }
 
 impl ProcessState for Handler<ContractsInfo> {
-    type Table = Transactions;
+    type TableInSnapshot = Transactions;
+    type TableBeingWritten = ContractsInfo;
     type DbDesc = OffChain;
 
     fn process(
         &mut self,
-        group: Vec<TableEntry<Self::Table>>,
+        group: Vec<TableEntry<Self::TableInSnapshot>>,
         tx: &mut StorageTransaction<&mut Database<Self::DbDesc>>,
     ) -> anyhow::Result<()> {
         let transactions = group.iter().map(|TableEntry { value, .. }| value);

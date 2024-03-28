@@ -15,12 +15,9 @@ use fuel_core::{
         },
         Database,
     },
-    fuel_core_graphql_api::storage::{
-        blocks::FuelBlockIdsToHeights,
-        transactions::{
-            OwnedTransactions,
-            TransactionStatuses,
-        },
+    fuel_core_graphql_api::storage::transactions::{
+        OwnedTransactions,
+        TransactionStatuses,
     },
     types::fuel_types::ContractId,
 };
@@ -270,7 +267,6 @@ fn full_snapshot(
     let db = combined_db.off_chain();
     write::<TransactionStatuses, OffChain>(&db, group_size, &mut writer)?;
     write::<OwnedTransactions, OffChain>(&db, group_size, &mut writer)?;
-    write::<FuelBlockIdsToHeights, OffChain>(&db, group_size, &mut writer)?;
 
     let block = combined_db.on_chain().latest_block()?;
     writer.write_block_data(*block.header().height(), block.header().da_height)?;
@@ -377,7 +373,6 @@ mod tests {
         transactions: Vec<TableEntry<Transactions>>,
         transaction_statuses: Vec<TableEntry<TransactionStatuses>>,
         owned_transactions: Vec<TableEntry<OwnedTransactions>>,
-        fuel_block_ids_to_heights: Vec<TableEntry<FuelBlockIdsToHeights>>,
     }
 
     #[derive(Debug, PartialEq)]
@@ -607,19 +602,6 @@ mod tests {
             self.db
                 .off_chain_mut()
                 .storage_as_mut::<OwnedTransactions>()
-                .insert(&key, &value)
-                .unwrap();
-
-            TableEntry { key, value }
-        }
-
-        fn given_fuel_block_id_to_height(&mut self) -> TableEntry<FuelBlockIdsToHeights> {
-            let key = self.rng.gen();
-            let value = self.rng.gen();
-
-            self.db
-                .off_chain_mut()
-                .storage_as_mut::<FuelBlockIdsToHeights>()
                 .insert(&key, &value)
                 .unwrap();
 

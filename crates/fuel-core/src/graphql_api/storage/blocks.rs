@@ -41,18 +41,6 @@ impl TableWithBlueprint for FuelBlockIdsToHeights {
     }
 }
 
-impl AsTable<FuelBlockIdsToHeights> for StateConfig {
-    fn as_table(&self) -> Vec<TableEntry<FuelBlockIdsToHeights>> {
-        Vec::new() // Do not include these for now
-    }
-}
-
-impl AddTable<FuelBlockIdsToHeights> for StateConfigBuilder {
-    fn add(&mut self, _entries: Vec<TableEntry<FuelBlockIdsToHeights>>) {
-        // Do not include these for now
-    }
-}
-
 #[cfg(test)]
 fuel_core_storage::basic_storage_tests!(
     FuelBlockIdsToHeights,

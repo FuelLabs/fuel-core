@@ -41,25 +41,23 @@ pub struct GenesisRunner<Handler, Groups, DbDesc: DatabaseDescription> {
 }
 
 pub trait ProcessState {
-    type Table: TableWithBlueprint;
+    type TableInSnapshot: TableWithBlueprint;
+    type TableBeingWritten: TableWithBlueprint;
     type DbDesc: DatabaseDescription;
 
     fn process(
         &mut self,
-        group: Vec<TableEntry<Self::Table>>,
+        group: Vec<TableEntry<Self::TableInSnapshot>>,
         tx: &mut StorageTransaction<&mut Database<Self::DbDesc>>,
     ) -> anyhow::Result<()>;
-
-    fn genesis_progress_key() -> &'static str {
-        Self::Table::column().name()
-    }
 }
 
 impl<Logic, GroupGenerator, DbDesc: DatabaseDescription>
     GenesisRunner<Logic, GroupGenerator, DbDesc>
 where
     Logic: ProcessState<DbDesc = DbDesc>,
-    GroupGenerator: IntoIterator<Item = anyhow::Result<Group<TableEntry<Logic::Table>>>>,
+    GroupGenerator:
+        IntoIterator<Item = anyhow::Result<Group<TableEntry<Logic::TableInSnapshot>>>>,
     GenesisMetadata<DbDesc>: TableWithBlueprint<
         Column = DbDesc::Column,
         Key = str,
@@ -82,7 +80,7 @@ where
     ) -> Self {
         let skip = match db
             .storage::<GenesisMetadata<DbDesc>>()
-            .get(Logic::genesis_progress_key())
+            .get(Logic::TableBeingWritten::column().name())
         {
             Ok(Some(idx_last_handled)) => {
                 usize::saturating_add(idx_last_handled.into_owned(), 1)
@@ -101,6 +99,11 @@ where
     }
 
     pub fn run(mut self) -> anyhow::Result<()> {
+        tracing::info!(
+            "Starting genesis runner. Reading: {} writing into {}",
+            Logic::TableInSnapshot::column().name(),
+            Logic::TableBeingWritten::column().name()
+        );
         let mut db = self.db.clone();
         let result = self
             .groups
@@ -116,7 +119,7 @@ where
 
                 GenesisProgressMutate::<DbDesc>::update_genesis_progress(
                     &mut tx,
-                    Logic::genesis_progress_key(),
+                    Logic::TableBeingWritten::column().name(),
                     group_num,
                 )?;
                 tx.commit()?;
@@ -126,6 +129,12 @@ where
         if let Some(finished_signal) = &self.finished_signal {
             finished_signal.notify_one();
         }
+
+        tracing::info!(
+            "Finishing genesis runner. Read: {} wrote into {}",
+            Logic::TableInSnapshot::column().name(),
+            Logic::TableBeingWritten::column().name()
+        );
 
         result
     }
@@ -226,11 +235,11 @@ mod tests {
             &mut StorageTransaction<&mut Database>,
         ) -> anyhow::Result<()>,
     {
-        type Table = Coins;
+        type TableInSnapshot = Coins;
         type DbDesc = OnChain;
         fn process(
             &mut self,
-            group: Vec<TableEntry<Self::Table>>,
+            group: Vec<TableEntry<Self::TableInSnapshot>>,
             tx: &mut StorageTransaction<&mut Database>,
         ) -> anyhow::Result<()> {
             group

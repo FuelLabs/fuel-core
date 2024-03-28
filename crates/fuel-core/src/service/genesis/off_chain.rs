@@ -99,6 +99,7 @@ pub async fn execute_genesis_block(
     db: CombinedDatabase,
     snapshot_reader: SnapshotReader,
 ) -> anyhow::Result<()> {
+    // TODO: Should we insert a FuelBlockIdsToHeights entry for the genesis block?
     let mut workers = GenesisWorkers::new(db, snapshot_reader);
     if let Err(e) = workers.run_off_chain_imports().await {
         workers.shutdown();
