@@ -348,12 +348,18 @@ mod tests {
             },
         },
         fuel_tx::{
+            Receipt,
             TransactionBuilder,
             TxPointer,
             UniqueIdentifier,
             UtxoId,
         },
-        fuel_types::ChainId,
+        fuel_types::{
+            Bytes32,
+            ChainId,
+        },
+        services::txpool::TransactionStatus,
+        tai64::Tai64,
     };
     use rand::{
         rngs::StdRng,
@@ -373,9 +379,10 @@ mod tests {
     }
 
     #[derive(Debug, PartialEq)]
-    struct OnChainData {
+    struct SnapshotData {
         common: CommonData,
         transactions: Vec<TableEntry<Transactions>>,
+        transaction_statuses: Vec<TableEntry<TransactionStatuses>>,
     }
 
     #[derive(Debug, PartialEq)]
@@ -401,10 +408,11 @@ mod tests {
         }
     }
 
-    impl OnChainData {
-        fn sorted(mut self) -> OnChainData {
+    impl SnapshotData {
+        fn sorted(mut self) -> SnapshotData {
             self.common = self.common.sorted();
             self.transactions.sort_by_key(|e| e.key);
+            self.transaction_statuses.sort_by_key(|e| e.key);
             self
         }
 
@@ -468,6 +476,7 @@ mod tests {
                     block,
                 },
                 transactions: read(reader),
+                transaction_statuses: read(reader),
             }
         }
     }
@@ -480,7 +489,7 @@ mod tests {
         // Db will flush data upon being dropped. Important to do before snapshotting
         fn flush(self) {}
 
-        fn given_persisted_data(&mut self) -> OnChainData {
+        fn given_persisted_data(&mut self) -> SnapshotData {
             let amount = 10;
             let coins = repeat_with(|| self.given_coin()).take(amount).collect();
             let messages = repeat_with(|| self.given_message()).take(amount).collect();
@@ -522,9 +531,11 @@ mod tests {
 
             let transactions = vec![self.given_transaction()];
 
+            let transaction_statuses = vec![self.given_transaction_status()];
+
             let block = self.given_block();
 
-            OnChainData {
+            SnapshotData {
                 common: CommonData {
                     coins,
                     messages,
@@ -535,6 +546,7 @@ mod tests {
                     block,
                 },
                 transactions,
+                transaction_statuses,
             }
         }
 
@@ -554,6 +566,29 @@ mod tests {
                 .unwrap();
 
             TableEntry { key: id, value: tx }
+        }
+
+        fn given_transaction_status(&mut self) -> TableEntry<TransactionStatuses> {
+            let key = self.rng.gen();
+            let status = TransactionStatus::Success {
+                block_height: self.rng.gen(),
+                time: Tai64(self.rng.gen::<u32>().into()),
+                result: None,
+                receipts: vec![Receipt::Return {
+                    id: self.rng.gen(),
+                    val: self.rng.gen(),
+                    pc: self.rng.gen(),
+                    is: self.rng.gen(),
+                }],
+            };
+
+            self.db
+                .off_chain_mut()
+                .storage_as_mut::<TransactionStatuses>()
+                .insert(&key, &status)
+                .unwrap();
+
+            TableEntry { key, value: status }
         }
 
         fn given_block(&mut self) -> TableEntry<FuelBlocks> {
@@ -724,7 +759,7 @@ mod tests {
         // then
         let snapshot = SnapshotMetadata::read(&snapshot_dir)?;
 
-        let written_data = OnChainData::read_from_snapshot(snapshot);
+        let written_data = SnapshotData::read_from_snapshot(snapshot);
 
         assert_eq!(written_data.common.block, state.common.block);
 
