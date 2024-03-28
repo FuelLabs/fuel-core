@@ -223,7 +223,6 @@ where
 {
     async fn run(&mut self, _: &mut StateWatcher) -> anyhow::Result<bool> {
         let now = tokio::time::Instant::now();
-        let mut should_continue = true;
 
         let result = run::run(self).await;
 
@@ -242,11 +241,15 @@ where
         if let Err(err) = result {
             if !self.retry_on_error {
                 tracing::error!("Exiting due to Error in relayer task: {:?}", err);
-                should_continue = false;
+                let should_continue = false;
+                Ok(should_continue)
+            } else {
+                Err(err)
             }
+        } else {
+            let should_continue = true;
+            Ok(should_continue)
         }
-
-        Ok(should_continue)
     }
 
     async fn shutdown(self) -> anyhow::Result<()> {
