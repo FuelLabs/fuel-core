@@ -146,7 +146,7 @@ where
     #[cfg(feature = "rocksdb")]
     pub fn open_rocksdb(path: &Path, capacity: impl Into<Option<usize>>) -> Result<Self> {
         use anyhow::Context;
-        let db = RocksDb::<Description>::default_open(path, capacity.into()).map_err(Into::<anyhow::Error>::into).with_context(||format!("Failed to open rocksdb, you may need to wipe a pre-existing incompatible db e.g. `rm -rf {path:?}`"))?;
+        let db = RocksDb::<Description>::default_open(path, capacity.into()).map_err(Into::<anyhow::Error>::into).with_context(|| format!("Failed to open rocksdb, you may need to wipe a pre-existing incompatible db e.g. `rm -rf {path:?}`"))?;
 
         Ok(Database::new(Arc::new(db)))
     }
