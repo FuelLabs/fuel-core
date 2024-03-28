@@ -236,6 +236,7 @@ mod tests {
         ) -> anyhow::Result<()>,
     {
         type TableInSnapshot = Coins;
+        type TableBeingWritten = Coins;
         type DbDesc = OnChain;
         fn process(
             &mut self,

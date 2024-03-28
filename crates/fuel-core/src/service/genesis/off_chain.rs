@@ -8,14 +8,6 @@ use crate::{
         genesis_progress::GenesisMetadata,
         Database,
     },
-    graphql_api::{
-        storage::{
-            coins::OwnedCoins,
-            contracts::ContractsInfo,
-            messages::OwnedMessageIds,
-        },
-        worker_service,
-    },
 };
 use fuel_core_chain_config::SnapshotReader;
 use fuel_core_storage::{
@@ -26,11 +18,6 @@ use fuel_core_storage::{
         StructuredStorage,
         TableWithBlueprint,
     },
-    tables::{
-        Coins,
-        Messages,
-        Transactions,
-    },
     transactional::{
         InMemoryTransaction,
         WriteTransaction,
@@ -39,9 +26,7 @@ use fuel_core_storage::{
     StorageAsMut,
 };
 
-use fuel_core_types::services::executor::Event;
 use itertools::Itertools;
-use std::borrow::Cow;
 
 use super::workers::GenesisWorkers;
 

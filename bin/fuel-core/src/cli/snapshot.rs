@@ -404,7 +404,6 @@ mod tests {
             self.transactions.sort_by_key(|e| e.key);
             self.transaction_statuses.sort_by_key(|e| e.key);
             self.owned_transactions.sort_by_key(|e| e.key.clone());
-            self.fuel_block_ids_to_heights.sort_by_key(|e| e.key);
             self
         }
 
@@ -470,7 +469,6 @@ mod tests {
                 transactions: read(reader),
                 transaction_statuses: read(reader),
                 owned_transactions: read(reader),
-                fuel_block_ids_to_heights: read(reader),
             }
         }
     }
@@ -529,8 +527,6 @@ mod tests {
 
             let owned_transactions = vec![self.given_owned_transaction()];
 
-            let fuel_block_ids_to_heights = vec![self.given_fuel_block_id_to_height()];
-
             let block = self.given_block();
 
             SnapshotData {
@@ -546,7 +542,6 @@ mod tests {
                 transactions,
                 transaction_statuses,
                 owned_transactions,
-                fuel_block_ids_to_heights,
             }
         }
 

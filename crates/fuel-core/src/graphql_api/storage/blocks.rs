@@ -1,10 +1,3 @@
-use fuel_core_chain_config::{
-    AddTable,
-    AsTable,
-    StateConfig,
-    StateConfigBuilder,
-    TableEntry,
-};
 use fuel_core_storage::{
     blueprint::plain::Plain,
     codec::{

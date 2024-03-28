@@ -22,7 +22,6 @@ use crate::{
         database_description::{
             off_chain::OffChain,
             on_chain::OnChain,
-            DatabaseDescription,
         },
         state::StateInitializer,
         Database,
