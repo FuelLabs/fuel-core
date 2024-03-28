@@ -390,6 +390,7 @@ mod tests {
         transactions: Vec<TableEntry<Transactions>>,
         transaction_statuses: Vec<TableEntry<TransactionStatuses>>,
         owned_transactions: Vec<TableEntry<OwnedTransactions>>,
+        fuel_block_ids_to_heights: Vec<TableEntry<FuelBlockIdsToHeights>>,
     }
 
     #[derive(Debug, PartialEq)]
@@ -420,6 +421,8 @@ mod tests {
             self.common = self.common.sorted();
             self.transactions.sort_by_key(|e| e.key);
             self.transaction_statuses.sort_by_key(|e| e.key);
+            self.owned_transactions.sort_by_key(|e| e.key.clone());
+            self.fuel_block_ids_to_heights.sort_by_key(|e| e.key);
             self
         }
 
@@ -485,6 +488,7 @@ mod tests {
                 transactions: read(reader),
                 transaction_statuses: read(reader),
                 owned_transactions: read(reader),
+                fuel_block_ids_to_heights: read(reader),
             }
         }
     }
@@ -543,6 +547,8 @@ mod tests {
 
             let owned_transactions = vec![self.given_owned_transaction()];
 
+            let fuel_block_ids_to_heights = vec![self.given_fuel_block_id_to_height()];
+
             let block = self.given_block();
 
             SnapshotData {
@@ -558,6 +564,7 @@ mod tests {
                 transactions,
                 transaction_statuses,
                 owned_transactions,
+                fuel_block_ids_to_heights,
             }
         }
 
@@ -613,6 +620,19 @@ mod tests {
             self.db
                 .off_chain_mut()
                 .storage_as_mut::<OwnedTransactions>()
+                .insert(&key, &value)
+                .unwrap();
+
+            TableEntry { key, value }
+        }
+
+        fn given_fuel_block_id_to_height(&mut self) -> TableEntry<FuelBlockIdsToHeights> {
+            let key = self.rng.gen();
+            let value = self.rng.gen();
+
+            self.db
+                .off_chain_mut()
+                .storage_as_mut::<FuelBlockIdsToHeights>()
                 .insert(&key, &value)
                 .unwrap();
 

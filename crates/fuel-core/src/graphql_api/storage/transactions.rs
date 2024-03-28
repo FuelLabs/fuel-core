@@ -1,34 +1,18 @@
 use fuel_core_chain_config::{
-    AddTable,
-    AsTable,
-    StateConfig,
-    StateConfigBuilder,
-    TableEntry,
+    AddTable, AsTable, StateConfig, StateConfigBuilder, TableEntry,
 };
 use fuel_core_storage::{
     blueprint::plain::Plain,
-    codec::{
-        manual::Manual,
-        postcard::Postcard,
-        raw::Raw,
-        Decode,
-        Encode,
-    },
+    codec::{manual::Manual, postcard::Postcard, raw::Raw, Decode, Encode},
     structured_storage::TableWithBlueprint,
     Mappable,
 };
 use fuel_core_types::{
-    fuel_tx::{
-        Address,
-        Bytes32,
-    },
+    fuel_tx::{Address, Bytes32},
     fuel_types::BlockHeight,
     services::txpool::TransactionStatus,
 };
-use std::{
-    array::TryFromSliceError,
-    mem::size_of,
-};
+use std::{array::TryFromSliceError, mem::size_of};
 
 /// These tables allow iteration over all transactions owned by an address.
 pub struct OwnedTransactions;
@@ -115,7 +99,9 @@ fn owned_tx_index_key(
 
 pub type TransactionIndex = u16;
 
-#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[derive(
+    Debug, Clone, PartialEq, Eq, PartialOrd, Ord, serde::Serialize, serde::Deserialize,
+)]
 pub struct OwnedTransactionIndexKey {
     pub owner: Address,
     pub block_height: BlockHeight,
