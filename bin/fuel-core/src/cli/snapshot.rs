@@ -302,13 +302,7 @@ mod tests {
 
     use std::iter::repeat_with;
 
-    use fuel_core::{
-        database::Database,
-        fuel_core_graphql_api::storage::transactions::{
-            OwnedTransactionIndexKey,
-            TransactionIndex,
-        },
-    };
+    use fuel_core::fuel_core_graphql_api::storage::transactions::OwnedTransactionIndexKey;
     use fuel_core_chain_config::{
         AddTable,
         AsTable,
@@ -328,10 +322,6 @@ mod tests {
             ContractsState,
             FuelBlocks,
             Messages,
-        },
-        transactional::{
-            IntoTransaction,
-            StorageTransaction,
         },
         ContractsAssetKey,
         ContractsStateKey,
@@ -360,10 +350,7 @@ mod tests {
             UniqueIdentifier,
             UtxoId,
         },
-        fuel_types::{
-            Bytes32,
-            ChainId,
-        },
+        fuel_types::ChainId,
         services::txpool::TransactionStatus,
         tai64::Tai64,
     };
