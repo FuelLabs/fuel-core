@@ -48,8 +48,8 @@ async fn chain_info() {
     );
 
     assert_eq!(
-        chain_config.consensus_parameters.gas_costs,
-        chain_info.consensus_parameters.gas_costs
+        chain_config.consensus_parameters.gas_costs(),
+        chain_info.consensus_parameters.gas_costs()
     );
 }
 
@@ -76,7 +76,9 @@ async fn network_operates_with_non_zero_chain_id() {
 
     // Given
     let chain_id = ChainId::new(0xDEAD);
-    chain_config.consensus_parameters.chain_id = chain_id;
+    chain_config
+        .consensus_parameters
+        .set_chain_id(chain_id);
     let node_config = Config {
         debug: true,
         utxo_validation: true,
@@ -139,7 +141,9 @@ async fn network_operates_with_non_zero_base_asset_id() {
         ..Default::default()
     };
     let mut chain_config = ChainConfig::local_testnet();
-    chain_config.consensus_parameters.base_asset_id = new_base_asset_id;
+    chain_config
+        .consensus_parameters
+        .set_base_asset_id(new_base_asset_id);
     let node_config = Config {
         debug: true,
         utxo_validation: true,

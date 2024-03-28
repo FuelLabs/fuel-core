@@ -1,6 +1,6 @@
 use clap::ValueEnum;
 use fuel_core_chain_config::{
-    default_consensus_dev_key,
+    ChainConfig,
     SnapshotReader,
 };
 use fuel_core_types::{
@@ -8,10 +8,7 @@ use fuel_core_types::{
     secrecy::Secret,
 };
 use std::{
-    net::{
-        Ipv4Addr,
-        SocketAddr,
-    },
+    net::SocketAddr,
     time::Duration,
 };
 use strum_macros::{
@@ -72,6 +69,7 @@ pub struct Config {
 }
 
 impl Config {
+    #[cfg(feature = "test-helpers")]
     pub fn local_node() -> Self {
         let snapshot_reader = SnapshotReader::local_testnet();
         let chain_config = snapshot_reader.chain_config().clone();
@@ -91,7 +89,7 @@ impl Config {
         };
 
         Self {
-            addr: SocketAddr::new(Ipv4Addr::new(127, 0, 0, 1).into(), 0),
+            addr: SocketAddr::new(std::net::Ipv4Addr::new(127, 0, 0, 1).into(), 0),
             api_request_timeout: Duration::from_secs(60),
             combined_db_config,
             debug: true,
@@ -116,7 +114,9 @@ impl Config {
             p2p: Some(P2PConfig::<NotInitialized>::default("test_network")),
             #[cfg(feature = "p2p")]
             sync: fuel_core_sync::Config::default(),
-            consensus_key: Some(Secret::new(default_consensus_dev_key().into())),
+            consensus_key: Some(Secret::new(
+                fuel_core_chain_config::default_consensus_dev_key().into(),
+            )),
             name: String::default(),
             relayer_consensus_config: Default::default(),
             min_connected_reserved_peers: 0,
@@ -140,9 +140,9 @@ impl Config {
             self.txpool.chain_config = chain_config.clone();
         }
 
-        if self.block_importer.chain_id != chain_config.consensus_parameters.chain_id {
+        if self.block_importer.chain_id != chain_config.consensus_parameters.chain_id() {
             tracing::warn!("The `ChainConfig` of `BlockImporter` was inconsistent");
-            self.block_importer.chain_id = chain_config.consensus_parameters.chain_id
+            self.block_importer.chain_id = chain_config.consensus_parameters.chain_id()
         }
 
         if self.txpool.utxo_validation != self.utxo_validation {

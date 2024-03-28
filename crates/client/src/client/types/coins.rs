@@ -30,6 +30,7 @@ impl CoinType {
 pub struct Coin {
     pub amount: u64,
     pub block_created: u32,
+    pub tx_created_idx: u16,
     pub asset_id: AssetId,
     pub utxo_id: UtxoId,
     pub owner: Address,
@@ -63,6 +64,7 @@ impl From<schema::coins::Coin> for Coin {
         Self {
             amount: value.amount.into(),
             block_created: value.block_created.into(),
+            tx_created_idx: value.tx_created_idx.into(),
             asset_id: value.asset_id.into(),
             utxo_id: value.utxo_id.into(),
             owner: value.owner.into(),

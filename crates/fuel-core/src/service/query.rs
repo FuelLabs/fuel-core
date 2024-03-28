@@ -48,7 +48,7 @@ impl FuelService {
             .snapshot_reader
             .chain_config()
             .consensus_parameters
-            .chain_id);
+            .chain_id());
         let stream = self.transaction_status_change(id)?;
         self.submit(tx).await?;
         Ok(stream)
@@ -65,7 +65,7 @@ impl FuelService {
             .snapshot_reader
             .chain_config()
             .consensus_parameters
-            .chain_id);
+            .chain_id());
         let stream = self.transaction_status_change(id)?.filter(|status| {
             futures::future::ready(!matches!(status, Ok(TransactionStatus::Submitted(_))))
         });

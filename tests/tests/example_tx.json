@@ -1,123 +1,147 @@
 {
-    "Script": {
-        "script_gas_limit": 10000,
-        "script": [80,64,0,202,80,68,0,186,51,65,16,0,36,4,0,0],
-        "script_data": [],
-        "policies": {
-            "bits": "Maturity | MaxFee",
-            "values": [0, 0, 0, 0]
-        },
-        "inputs": [
-            {
-                "CoinSigned": {
-                    "utxo_id": {
-                        "tx_id": "c49d65de61cf04588a764b557d25cc6c6b4bc0d7429227e2a21e61c213b3a3e2",
-                        "output_index": 0
-                    },
-                    "owner": "f1e92c42b90934aa6372e30bc568a326f6e66a1a0288595e6e3fbd392a4f3e6e",
-                    "amount": 10599410012256088338,
-                    "asset_id": "2cafad611543e0265d89f1c2b60d9ebf5d56ad7e23d9827d6b522fd4d6e44bc3",
-                    "tx_pointer": {
-                        "block_height": 0,
-                        "tx_index": 0
-                    },
-                    "witness_index": 0,
-                    "predicate_gas_used": null,
-                    "predicate": null,
-                    "predicate_data": null
-                }
-            },
-            {
-                "CoinSigned": {
-                    "utxo_id": {
-                        "tx_id": "c49d65de61cf04588a764b557d25cc6c6b4bc0d7429227e2a21e61c213b3a3e2",
-                        "output_index": 1
-                    },
-                    "owner": "f1e92c42b90934aa6372e30bc568a326f6e66a1a0288595e6e3fbd392a4f3e6e",
-                    "amount": 10599410012256088338,
-                    "asset_id": "0000000000000000000000000000000000000000000000000000000000000000",
-                    "tx_pointer": {
-                        "block_height": 0,
-                        "tx_index": 0
-                    },
-                    "witness_index": 0,
-                    "predicate_gas_used": null,
-                    "predicate": null,
-                    "predicate_data": null
-                }
-            }
-        ],
-        "outputs": [],
-        "witnesses": [
-            {
-                "data": [
-                    197,
-                    10,
-                    72,
-                    106,
-                    127,
-                    15,
-                    86,
-                    133,
-                    15,
-                    73,
-                    201,
-                    126,
-                    197,
-                    108,
-                    170,
-                    75,
-                    13,
-                    99,
-                    107,
-                    130,
-                    75,
-                    103,
-                    171,
-                    186,
-                    150,
-                    79,
-                    200,
-                    53,
-                    108,
-                    122,
-                    156,
-                    188,
-                    75,
-                    130,
-                    96,
-                    253,
-                    0,
-                    70,
-                    27,
-                    125,
-                    159,
-                    151,
-                    158,
-                    55,
-                    196,
-                    51,
-                    204,
-                    229,
-                    59,
-                    148,
-                    136,
-                    63,
-                    187,
-                    14,
-                    209,
-                    167,
-                    123,
-                    97,
-                    90,
-                    197,
-                    16,
-                    143,
-                    242,
-                    103
-                ]
-            }
-        ],
-        "receipts_root": "0000000000000000000000000000000000000000000000000000000000000000"
-    }
+  "Script": {
+    "body": {
+      "script_gas_limit": 10000,
+      "script": [
+        80,
+        64,
+        0,
+        202,
+        80,
+        68,
+        0,
+        186,
+        51,
+        65,
+        16,
+        0,
+        36,
+        4,
+        0,
+        0
+      ],
+      "script_data": [],
+      "receipts_root": "0000000000000000000000000000000000000000000000000000000000000000"
+    },
+    "policies": {
+      "bits": "Maturity | MaxFee",
+      "values": [
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    "inputs": [
+      {
+        "CoinSigned": {
+          "utxo_id": {
+            "tx_id": "c49d65de61cf04588a764b557d25cc6c6b4bc0d7429227e2a21e61c213b3a3e2",
+            "output_index": 0
+          },
+          "owner": "f1e92c42b90934aa6372e30bc568a326f6e66a1a0288595e6e3fbd392a4f3e6e",
+          "amount": 10599410012256088338,
+          "asset_id": "2cafad611543e0265d89f1c2b60d9ebf5d56ad7e23d9827d6b522fd4d6e44bc3",
+          "tx_pointer": {
+            "block_height": 0,
+            "tx_index": 0
+          },
+          "witness_index": 0,
+          "predicate_gas_used": null,
+          "predicate": null,
+          "predicate_data": null
+        }
+      },
+      {
+        "CoinSigned": {
+          "utxo_id": {
+            "tx_id": "c49d65de61cf04588a764b557d25cc6c6b4bc0d7429227e2a21e61c213b3a3e2",
+            "output_index": 1
+          },
+          "owner": "f1e92c42b90934aa6372e30bc568a326f6e66a1a0288595e6e3fbd392a4f3e6e",
+          "amount": 10599410012256088338,
+          "asset_id": "0000000000000000000000000000000000000000000000000000000000000000",
+          "tx_pointer": {
+            "block_height": 0,
+            "tx_index": 0
+          },
+          "witness_index": 0,
+          "predicate_gas_used": null,
+          "predicate": null,
+          "predicate_data": null
+        }
+      }
+    ],
+    "outputs": [],
+    "witnesses": [
+      {
+        "data": [
+          197,
+          10,
+          72,
+          106,
+          127,
+          15,
+          86,
+          133,
+          15,
+          73,
+          201,
+          126,
+          197,
+          108,
+          170,
+          75,
+          13,
+          99,
+          107,
+          130,
+          75,
+          103,
+          171,
+          186,
+          150,
+          79,
+          200,
+          53,
+          108,
+          122,
+          156,
+          188,
+          75,
+          130,
+          96,
+          253,
+          0,
+          70,
+          27,
+          125,
+          159,
+          151,
+          158,
+          55,
+          196,
+          51,
+          204,
+          229,
+          59,
+          148,
+          136,
+          63,
+          187,
+          14,
+          209,
+          167,
+          123,
+          97,
+          90,
+          197,
+          16,
+          143,
+          242,
+          103
+        ]
+      }
+    ]
+  }
 }

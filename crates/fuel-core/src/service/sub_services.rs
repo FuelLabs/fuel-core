@@ -64,7 +64,6 @@ pub fn init_sub_services(
         database.on_chain().clone(),
         database.relayer().clone(),
         fuel_core_upgradable_executor::config::Config {
-            consensus_parameters: chain_config.consensus_parameters.clone(),
             backtrace: config.vm.backtrace,
             utxo_validation_default: config.utxo_validation,
         },
@@ -103,7 +102,7 @@ pub fn init_sub_services(
     let mut network = config.p2p.clone().map(|p2p_config| {
         let chain_config = config.snapshot_reader.chain_config();
         fuel_core_p2p::service::new_service(
-            chain_config.consensus_parameters.chain_id,
+            chain_config.consensus_parameters.chain_id(),
             p2p_config,
             database.on_chain().clone(),
             importer_adapter.clone(),
@@ -200,7 +199,7 @@ pub fn init_sub_services(
         tx_pool_adapter.clone(),
         importer_adapter.clone(),
         database.off_chain().clone(),
-        chain_config.consensus_parameters.chain_id,
+        chain_config.consensus_parameters.chain_id(),
     );
 
     let chain_config = config.snapshot_reader.chain_config();

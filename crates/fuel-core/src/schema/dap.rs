@@ -31,9 +31,12 @@ use fuel_core_types::{
         Word,
     },
     fuel_tx::{
-        field::Policies,
+        field::{
+            Policies,
+            ScriptGasLimit,
+            Witnesses,
+        },
         policies::PolicyType,
-        Buildable,
         ConsensusParameters,
         Executable,
         Script,
@@ -70,7 +73,7 @@ pub struct Config {
 
 type FrozenDatabase = VmStorage<StorageTransaction<Database<OnChain>>>;
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone)]
 pub struct ConcreteStorage {
     vm: HashMap<ID, Interpreter<FrozenDatabase, Script>>,
     tx: HashMap<ID, Vec<Script>>,
@@ -85,8 +88,9 @@ const GAS_PRICE: u64 = 0;
 impl ConcreteStorage {
     pub fn new(params: ConsensusParameters) -> Self {
         Self {
+            vm: Default::default(),
+            tx: Default::default(),
             params,
-            ..Default::default()
         }
     }
 
@@ -114,7 +118,7 @@ impl ConcreteStorage {
         let id = ID::from(id);
 
         let vm_database = Self::vm_database(storage)?;
-        let tx = Self::dummy_tx();
+        let tx = Self::dummy_tx(self.params.tx_params().max_gas_per_tx() / 2);
         let checked_tx = tx
             .into_checked_basic(vm_database.block_height()?, &self.params)
             .map_err(|e| anyhow::anyhow!("{:?}", e))?;
@@ -154,7 +158,7 @@ impl ConcreteStorage {
             .get(id)
             .and_then(|tx| tx.first())
             .cloned()
-            .unwrap_or(Self::dummy_tx());
+            .unwrap_or(Self::dummy_tx(self.params.tx_params().max_gas_per_tx() / 2));
 
         let checked_tx = tx
             .into_checked_basic(vm_database.block_height()?, &self.params)
@@ -203,9 +207,10 @@ impl ConcreteStorage {
         Ok(vm_database)
     }
 
-    fn dummy_tx() -> Script {
+    fn dummy_tx(gas_limit: u64) -> Script {
         // Create `Script` transaction with dummy coin
         let mut tx = Script::default();
+        *tx.script_gas_limit_mut() = gas_limit;
         tx.add_unsigned_coin_input(
             Default::default(),
             &Default::default(),
@@ -214,7 +219,7 @@ impl ConcreteStorage {
             Default::default(),
             Default::default(),
         );
-        tx.add_witness(vec![].into());
+        tx.witnesses_mut().push(vec![].into());
         tx.policies_mut().set(PolicyType::MaxFee, Some(0));
         tx
     }
