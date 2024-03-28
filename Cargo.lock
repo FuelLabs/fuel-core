@@ -2845,7 +2845,7 @@ dependencies = [
 [[package]]
 name = "fuel-asm"
 version = "0.47.1"
-source = "git+https://github.com/FuelLabs/fuel-vm/?branch=feature/expose-consensus-params#fb5222988af663406accc0c719e392d789e725c7"
+source = "git+https://github.com/FuelLabs/fuel-vm/?branch=feature/expose-consensus-params#fda65221347f6164e49e0b9062f47d94d67f5730"
 dependencies = [
  "bitflags 2.4.2",
  "fuel-types",
@@ -2963,6 +2963,7 @@ dependencies = [
  "pyroscope",
  "pyroscope_pprofrs",
  "rand",
+ "serde_json",
  "tempfile",
  "test-case",
  "tikv-jemallocator",
@@ -3193,6 +3194,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "fuel-core-chain-config",
+ "fuel-core-poa",
  "fuel-core-services",
  "fuel-core-storage",
  "fuel-core-types",
@@ -3425,7 +3427,7 @@ dependencies = [
 [[package]]
 name = "fuel-crypto"
 version = "0.47.1"
-source = "git+https://github.com/FuelLabs/fuel-vm/?branch=feature/expose-consensus-params#fb5222988af663406accc0c719e392d789e725c7"
+source = "git+https://github.com/FuelLabs/fuel-vm/?branch=feature/expose-consensus-params#fda65221347f6164e49e0b9062f47d94d67f5730"
 dependencies = [
  "coins-bip32",
  "coins-bip39",
@@ -3445,7 +3447,7 @@ dependencies = [
 [[package]]
 name = "fuel-derive"
 version = "0.47.1"
-source = "git+https://github.com/FuelLabs/fuel-vm/?branch=feature/expose-consensus-params#fb5222988af663406accc0c719e392d789e725c7"
+source = "git+https://github.com/FuelLabs/fuel-vm/?branch=feature/expose-consensus-params#fda65221347f6164e49e0b9062f47d94d67f5730"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -3456,7 +3458,7 @@ dependencies = [
 [[package]]
 name = "fuel-merkle"
 version = "0.47.1"
-source = "git+https://github.com/FuelLabs/fuel-vm/?branch=feature/expose-consensus-params#fb5222988af663406accc0c719e392d789e725c7"
+source = "git+https://github.com/FuelLabs/fuel-vm/?branch=feature/expose-consensus-params#fda65221347f6164e49e0b9062f47d94d67f5730"
 dependencies = [
  "derive_more",
  "digest 0.10.7",
@@ -3470,12 +3472,12 @@ dependencies = [
 [[package]]
 name = "fuel-storage"
 version = "0.47.1"
-source = "git+https://github.com/FuelLabs/fuel-vm/?branch=feature/expose-consensus-params#fb5222988af663406accc0c719e392d789e725c7"
+source = "git+https://github.com/FuelLabs/fuel-vm/?branch=feature/expose-consensus-params#fda65221347f6164e49e0b9062f47d94d67f5730"
 
 [[package]]
 name = "fuel-tx"
 version = "0.47.1"
-source = "git+https://github.com/FuelLabs/fuel-vm/?branch=feature/expose-consensus-params#fb5222988af663406accc0c719e392d789e725c7"
+source = "git+https://github.com/FuelLabs/fuel-vm/?branch=feature/expose-consensus-params#fda65221347f6164e49e0b9062f47d94d67f5730"
 dependencies = [
  "bitflags 2.4.2",
  "derivative",
@@ -3496,7 +3498,7 @@ dependencies = [
 [[package]]
 name = "fuel-types"
 version = "0.47.1"
-source = "git+https://github.com/FuelLabs/fuel-vm/?branch=feature/expose-consensus-params#fb5222988af663406accc0c719e392d789e725c7"
+source = "git+https://github.com/FuelLabs/fuel-vm/?branch=feature/expose-consensus-params#fda65221347f6164e49e0b9062f47d94d67f5730"
 dependencies = [
  "fuel-derive",
  "hex",
@@ -3507,7 +3509,7 @@ dependencies = [
 [[package]]
 name = "fuel-vm"
 version = "0.47.1"
-source = "git+https://github.com/FuelLabs/fuel-vm/?branch=feature/expose-consensus-params#fb5222988af663406accc0c719e392d789e725c7"
+source = "git+https://github.com/FuelLabs/fuel-vm/?branch=feature/expose-consensus-params#fda65221347f6164e49e0b9062f47d94d67f5730"
 dependencies = [
  "anyhow",
  "async-trait",

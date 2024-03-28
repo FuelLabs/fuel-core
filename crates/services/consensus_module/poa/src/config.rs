@@ -15,6 +15,7 @@ pub struct Config {
     pub time_until_synced: Duration,
 }
 
+#[cfg(feature = "test-helpers")]
 impl Default for Config {
     fn default() -> Self {
         Config {

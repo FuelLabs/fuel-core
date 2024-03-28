@@ -13,6 +13,7 @@ use tracing_subscriber::{
 
 #[cfg(feature = "env")]
 use dotenvy::dotenv;
+use fuel_core_chain_config::ChainConfig;
 
 pub fn default_db_path() -> PathBuf {
     dirs::home_dir().unwrap().join(".fuel").join("db")
@@ -128,6 +129,15 @@ pub async fn run_cli() -> anyhow::Result<()> {
             e.exit()
         }
     }
+}
+
+/// Returns the chain configuration for the local testnet.
+pub fn local_testnet() -> ChainConfig {
+    const TESTNET_CHAIN_CONFIG: &[u8] =
+        include_bytes!("../../../deployment/scripts/chainspec/testnet/chain_config.json");
+
+    let config: ChainConfig = serde_json::from_slice(TESTNET_CHAIN_CONFIG).unwrap();
+    config
 }
 
 #[cfg(any(feature = "rocksdb", feature = "rocksdb-production"))]

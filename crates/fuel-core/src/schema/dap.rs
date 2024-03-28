@@ -31,9 +31,11 @@ use fuel_core_types::{
         Word,
     },
     fuel_tx::{
-        field::Policies,
+        field::{
+            Policies,
+            Witnesses,
+        },
         policies::PolicyType,
-        Buildable,
         ConsensusParameters,
         Executable,
         Script,
@@ -70,7 +72,7 @@ pub struct Config {
 
 type FrozenDatabase = VmStorage<StorageTransaction<Database<OnChain>>>;
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone)]
 pub struct ConcreteStorage {
     vm: HashMap<ID, Interpreter<FrozenDatabase, Script>>,
     tx: HashMap<ID, Vec<Script>>,
@@ -85,8 +87,9 @@ const GAS_PRICE: u64 = 0;
 impl ConcreteStorage {
     pub fn new(params: ConsensusParameters) -> Self {
         Self {
+            vm: Default::default(),
+            tx: Default::default(),
             params,
-            ..Default::default()
         }
     }
 
@@ -214,7 +217,7 @@ impl ConcreteStorage {
             Default::default(),
             Default::default(),
         );
-        tx.add_witness(vec![].into());
+        tx.witnesses_mut().push(vec![].into());
         tx.policies_mut().set(PolicyType::MaxFee, Some(0));
         tx
     }

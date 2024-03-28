@@ -63,7 +63,6 @@ use fuel_core_types::{
         *,
     },
     fuel_tx::{
-        ConsensusParameters,
         ContractIdExt,
         FeeParameters,
         GasCosts,

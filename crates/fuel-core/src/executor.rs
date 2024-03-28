@@ -177,8 +177,21 @@ mod tests {
         }
     }
 
-    fn create_executor(
+    fn add_consensus_parameters(
         mut database: Database,
+        consensus_parameters: &ConsensusParameters,
+    ) -> Database {
+        // Set the consensus parameters for the executor.
+        let mut tx = database.write_transaction();
+        tx.storage_as_mut::<ConsensusParametersVersions>()
+            .insert(&0, consensus_parameters)
+            .unwrap();
+        tx.commit().unwrap();
+        database
+    }
+
+    fn create_executor(
+        database: Database,
         config: Config,
     ) -> Executor<Database, DisabledRelayer> {
         let executor_config = fuel_core_upgradable_executor::config::Config {
@@ -186,12 +199,7 @@ mod tests {
             utxo_validation_default: config.utxo_validation_default,
         };
 
-        // Set the consensus parameters for the executor.
-        let mut tx = database.write_transaction();
-        tx.storage_as_mut::<ConsensusParametersVersions>()
-            .insert(&0, &config.consensus_parameters)
-            .unwrap();
-        tx.commit().unwrap();
+        let database = add_consensus_parameters(database, &config.consensus_parameters);
 
         Executor::new(database, DisabledRelayer, executor_config)
     }
@@ -2820,7 +2828,10 @@ mod tests {
         };
 
         fn database_with_genesis_block(da_block_height: u64) -> Database<OnChain> {
-            let mut db = Database::default();
+            let mut db = add_consensus_parameters(
+                Database::default(),
+                &ConsensusParameters::default(),
+            );
             let mut block = Block::default();
             block.header_mut().set_da_height(da_block_height.into());
             block.header_mut().recalculate_metadata();
@@ -2927,7 +2938,10 @@ mod tests {
             let on_chain_db = if let Some(genesis_da_height) = input.genesis_da_height {
                 database_with_genesis_block(genesis_da_height)
             } else {
-                Database::default()
+                add_consensus_parameters(
+                    Database::default(),
+                    &ConsensusParameters::default(),
+                )
             };
             let mut relayer_db = Database::<Relayer>::default();
 
