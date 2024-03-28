@@ -223,7 +223,7 @@ async fn relayer__downloaded_message_logs_will_always_be_stored_in_block_index_o
 }
 
 #[tokio::test(start_paused = true)]
-async fn relayer__if_a_log_does_not_include_index_then_event_not_included() {
+async fn relayer__if_a_log_does_not_include_index_then_event_not_included_and_errors() {
     let mut ctx = TestContext::new();
     // given
     let block_height = 1;
@@ -231,11 +231,13 @@ async fn relayer__if_a_log_does_not_include_index_then_event_not_included() {
     log.log_index = None;
     ctx.given_logs(vec![log]);
     // when
-    let timeout_millis = 100;
-    let mock_db = ctx.when_relayer_tries_to_sync(timeout_millis).await;
-
+    let relayer = new_service_test(ctx.eth_node, ctx.mock_db.clone(), ctx.config);
+    relayer.start_and_await().await.unwrap();
+    let res = relayer.shared.await_synced().await;
     // then
-    assert!(mock_db
+    assert!(res.is_err());
+    assert!(ctx
+        .mock_db
         .get_messages_for_block(block_height.into())
         .is_empty());
 }
@@ -335,19 +337,6 @@ impl TestContext {
         relayer.start_and_await().await.unwrap();
 
         relayer.shared.await_synced().await.unwrap();
-
-        self.mock_db
-    }
-
-    async fn when_relayer_tries_to_sync(self, timeout_millis: u64) -> MockDb {
-        let relayer = new_service_test(self.eth_node, self.mock_db.clone(), self.config);
-        relayer.start_and_await().await.unwrap();
-
-        let run_fut = relayer.shared.await_synced();
-
-        tokio::time::timeout(std::time::Duration::from_millis(timeout_millis), run_fut)
-            .await
-            .expect_err("Should timeout");
 
         self.mock_db
     }
