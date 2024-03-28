@@ -115,7 +115,7 @@ fn owned_tx_index_key(
 
 pub type TransactionIndex = u16;
 
-#[derive(Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct OwnedTransactionIndexKey {
     pub owner: Address,
     pub block_height: BlockHeight,

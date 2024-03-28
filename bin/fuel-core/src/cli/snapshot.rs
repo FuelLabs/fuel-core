@@ -302,7 +302,13 @@ mod tests {
 
     use std::iter::repeat_with;
 
-    use fuel_core::database::Database;
+    use fuel_core::{
+        database::Database,
+        fuel_core_graphql_api::storage::transactions::{
+            OwnedTransactionIndexKey,
+            TransactionIndex,
+        },
+    };
     use fuel_core_chain_config::{
         AddTable,
         AsTable,
@@ -383,6 +389,7 @@ mod tests {
         common: CommonData,
         transactions: Vec<TableEntry<Transactions>>,
         transaction_statuses: Vec<TableEntry<TransactionStatuses>>,
+        owned_transactions: Vec<TableEntry<OwnedTransactions>>,
     }
 
     #[derive(Debug, PartialEq)]
@@ -477,6 +484,7 @@ mod tests {
                 },
                 transactions: read(reader),
                 transaction_statuses: read(reader),
+                owned_transactions: read(reader),
             }
         }
     }
@@ -533,6 +541,8 @@ mod tests {
 
             let transaction_statuses = vec![self.given_transaction_status()];
 
+            let owned_transactions = vec![self.given_owned_transaction()];
+
             let block = self.given_block();
 
             SnapshotData {
@@ -547,6 +557,7 @@ mod tests {
                 },
                 transactions,
                 transaction_statuses,
+                owned_transactions,
             }
         }
 
@@ -589,6 +600,23 @@ mod tests {
                 .unwrap();
 
             TableEntry { key, value: status }
+        }
+
+        fn given_owned_transaction(&mut self) -> TableEntry<OwnedTransactions> {
+            let key = OwnedTransactionIndexKey {
+                owner: self.rng.gen(),
+                block_height: self.rng.gen(),
+                tx_idx: self.rng.gen(),
+            };
+            let value = self.rng.gen();
+
+            self.db
+                .off_chain_mut()
+                .storage_as_mut::<OwnedTransactions>()
+                .insert(&key, &value)
+                .unwrap();
+
+            TableEntry { key, value }
         }
 
         fn given_block(&mut self) -> TableEntry<FuelBlocks> {
