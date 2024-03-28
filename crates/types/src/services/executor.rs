@@ -6,6 +6,7 @@ use crate::{
             Block,
             PartialFuelBlock,
         },
+        header::ConsensusParametersVersion,
         primitives::BlockId,
     },
     entities::{
@@ -355,6 +356,8 @@ pub enum Error {
     PreviousBlockIsNotFound,
     #[display(fmt = "The relayer gives incorrect messages for the requested da height")]
     RelayerGivesIncorrectMessages,
+    #[display(fmt = "Consensus parameters not found for version {_0}")]
+    ConsensusParametersNotFound(ConsensusParametersVersion),
     /// It is possible to occur untyped errors in the case of the upgrade.
     #[display(fmt = "Occurred untyped error: {_0}")]
     Other(String),

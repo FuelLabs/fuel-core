@@ -26,7 +26,7 @@ pub struct ContractConfig {
     #[serde_as(as = "HexIfHumanReadable")]
     pub code: Vec<u8>,
     pub tx_id: Bytes32,
-    pub output_index: u8,
+    pub output_index: u16,
     /// TxPointer: auto-generated if None
     /// used if contract is forked from another chain to preserve id & tx_pointer
     /// The block height that the contract was last used in

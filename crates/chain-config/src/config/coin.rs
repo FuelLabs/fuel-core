@@ -1,7 +1,7 @@
 use crate::GenesisCommitment;
 use fuel_core_storage::MerkleRoot;
 use fuel_core_types::{
-    entities::coins::coin::CompressedCoin,
+    entities::coins::coin::Coin,
     fuel_crypto::Hasher,
     fuel_tx::{
         TxPointer,
@@ -24,7 +24,7 @@ use serde::{
 pub struct CoinConfig {
     /// auto-generated if None
     pub tx_id: Bytes32,
-    pub output_index: u8,
+    pub output_index: u16,
     /// used if coin is forked from another chain to preserve id & tx_pointer
     pub tx_pointer_block_height: BlockHeight,
     /// used if coin is forked from another chain to preserve id & tx_pointer
@@ -95,12 +95,13 @@ impl crate::Randomize for CoinConfig {
     }
 }
 
-impl GenesisCommitment for CompressedCoin {
+impl GenesisCommitment for Coin {
     fn root(&self) -> anyhow::Result<MerkleRoot> {
-        let owner = self.owner();
-        let amount = self.amount();
-        let asset_id = self.asset_id();
-        let tx_pointer = self.tx_pointer();
+        let owner = self.owner;
+        let amount = self.amount;
+        let asset_id = self.asset_id;
+        let tx_pointer = self.tx_pointer;
+        let utxo_id = self.utxo_id;
 
         let coin_hash = *Hasher::default()
             .chain(owner)
@@ -108,6 +109,8 @@ impl GenesisCommitment for CompressedCoin {
             .chain(asset_id)
             .chain(tx_pointer.block_height().to_be_bytes())
             .chain(tx_pointer.tx_index().to_be_bytes())
+            .chain(utxo_id.tx_id())
+            .chain(utxo_id.output_index().to_be_bytes())
             .finalize();
 
         Ok(coin_hash)

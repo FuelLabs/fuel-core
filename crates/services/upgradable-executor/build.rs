@@ -1,3 +1,4 @@
+#[cfg(feature = "wasm-executor")]
 use std::{
     env,
     path::{
@@ -8,15 +9,15 @@ use std::{
 };
 
 fn main() {
-    let wasm_executor_enabled = env::var_os("CARGO_FEATURE_WASM_EXECUTOR").is_some();
-
     println!("cargo:rerun-if-changed=build.rs");
-    println!("cargo:rerun-if-changed=wasm-executor/src/*");
+    println!("cargo:rerun-if-changed=wasm-executor/src/main.rs");
 
-    if !wasm_executor_enabled {
-        return;
-    }
+    #[cfg(feature = "wasm-executor")]
+    build_wasm()
+}
 
+#[cfg(feature = "wasm-executor")]
+fn build_wasm() {
     let out_dir = env::var_os("OUT_DIR").unwrap();
     let dest_path = Path::new(&out_dir);
 
@@ -59,6 +60,7 @@ fn main() {
     }
 }
 
+#[cfg(feature = "wasm-executor")]
 fn project_root() -> PathBuf {
     Path::new(&env!("CARGO_MANIFEST_DIR"))
         .ancestors()

@@ -1,8 +1,6 @@
 use clap::ValueEnum;
 use fuel_core_chain_config::{
-    default_consensus_dev_key,
     ChainConfig,
-    StateConfig,
     StateReader,
 };
 use fuel_core_types::{
@@ -10,10 +8,7 @@ use fuel_core_types::{
     secrecy::Secret,
 };
 use std::{
-    net::{
-        Ipv4Addr,
-        SocketAddr,
-    },
+    net::SocketAddr,
     time::Duration,
 };
 use strum_macros::{
@@ -75,9 +70,10 @@ pub struct Config {
 }
 
 impl Config {
+    #[cfg(feature = "test-helpers")]
     pub fn local_node() -> Self {
         let chain_config = ChainConfig::local_testnet();
-        let state_config = StateConfig::local_testnet();
+        let state_config = fuel_core_chain_config::StateConfig::local_testnet();
         let block_importer = fuel_core_importer::Config::new(&chain_config);
         let state_reader = StateReader::in_memory(state_config.clone());
 
@@ -95,7 +91,7 @@ impl Config {
         };
 
         Self {
-            addr: SocketAddr::new(Ipv4Addr::new(127, 0, 0, 1).into(), 0),
+            addr: SocketAddr::new(std::net::Ipv4Addr::new(127, 0, 0, 1).into(), 0),
             api_request_timeout: Duration::from_secs(60),
             combined_db_config,
             debug: true,
@@ -121,7 +117,9 @@ impl Config {
             p2p: Some(P2PConfig::<NotInitialized>::default("test_network")),
             #[cfg(feature = "p2p")]
             sync: fuel_core_sync::Config::default(),
-            consensus_key: Some(Secret::new(default_consensus_dev_key().into())),
+            consensus_key: Some(Secret::new(
+                fuel_core_chain_config::default_consensus_dev_key().into(),
+            )),
             name: String::default(),
             relayer_consensus_config: Default::default(),
             min_connected_reserved_peers: 0,
@@ -144,10 +142,12 @@ impl Config {
             self.txpool.chain_config = self.chain_config.clone();
         }
 
-        if self.block_importer.chain_id != self.chain_config.consensus_parameters.chain_id
+        if self.block_importer.chain_id
+            != self.chain_config.consensus_parameters.chain_id()
         {
             tracing::warn!("The `ChainConfig` of `BlockImporter` was inconsistent");
-            self.block_importer.chain_id = self.chain_config.consensus_parameters.chain_id
+            self.block_importer.chain_id =
+                self.chain_config.consensus_parameters.chain_id()
         }
 
         if self.txpool.utxo_validation != self.utxo_validation {
@@ -167,7 +167,6 @@ impl From<&Config> for fuel_core_poa::Config {
     fn from(config: &Config) -> Self {
         fuel_core_poa::Config {
             trigger: config.block_production,
-            block_gas_limit: config.chain_config.block_gas_limit,
             signing_key: config.consensus_key.clone(),
             metrics: false,
             consensus_params: config.chain_config.consensus_parameters.clone(),

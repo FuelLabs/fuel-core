@@ -372,7 +372,10 @@ impl FuelClient {
 
     pub async fn chain_info(&self) -> io::Result<types::ChainInfo> {
         let query = schema::chain::ChainQuery::build(());
-        self.query(query).await.map(|r| r.chain.into())
+        self.query(query).await.and_then(|r| {
+            let result = r.chain.try_into()?;
+            Ok(result)
+        })
     }
 
     /// Default dry run, matching the exact configuration as the node

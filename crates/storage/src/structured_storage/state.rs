@@ -5,10 +5,7 @@ use crate::{
         PrimaryKey,
         Sparse,
     },
-    codec::{
-        manual::Manual,
-        raw::Raw,
-    },
+    codec::raw::Raw,
     column::Column,
     structured_storage::TableWithBlueprint,
     tables::{
@@ -20,7 +17,6 @@ use crate::{
     },
     Mappable,
 };
-use fuel_core_types::fuel_vm::ContractsStateKey;
 
 /// The key convertor used to convert the key from the `ContractsState` table
 /// to the key of the `ContractsStateMerkleMetadata` table.
@@ -37,7 +33,7 @@ impl PrimaryKey for KeyConverter {
 
 impl TableWithBlueprint for ContractsState {
     type Blueprint = Sparse<
-        Manual<ContractsStateKey>,
+        Raw,
         Raw,
         ContractsStateMerkleMetadata,
         ContractsStateMerkleData,

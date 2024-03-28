@@ -1,5 +1,8 @@
 #!/usr/bin/env bash
 
+#export FUEL_TRACE=1
+#export RUST_LOG=info
+
 # The script runs almost all CI checks locally.
 #
 # Requires installed:

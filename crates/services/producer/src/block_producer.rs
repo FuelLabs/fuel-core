@@ -21,7 +21,6 @@ use fuel_core_types::{
         },
         primitives::DaBlockHeight,
     },
-    fuel_asm::Word,
     fuel_tx::Transaction,
     fuel_types::{
         BlockHeight,
@@ -98,7 +97,6 @@ where
         height: BlockHeight,
         block_time: Tai64,
         tx_source: impl FnOnce(BlockHeight) -> TxSource,
-        max_gas: Word,
     ) -> anyhow::Result<UncommittedResult<Changes>>
     where
         Executor: ports::Executor<TxSource> + 'static,
@@ -128,7 +126,6 @@ where
             transactions_source: source,
             coinbase_recipient: self.config.coinbase_recipient.unwrap_or_default(),
             gas_price,
-            gas_limit: max_gas,
         };
 
         // Store the context string in case we error.
@@ -159,14 +156,10 @@ where
         &self,
         height: BlockHeight,
         block_time: Tai64,
-        max_gas: Word,
     ) -> anyhow::Result<UncommittedResult<Changes>> {
-        self.produce_and_execute(
-            height,
-            block_time,
-            |height| self.txpool.get_source(height),
-            max_gas,
-        )
+        self.produce_and_execute(height, block_time, |height| {
+            self.txpool.get_source(height)
+        })
         .await
     }
 }
@@ -185,9 +178,8 @@ where
         height: BlockHeight,
         block_time: Tai64,
         transactions: Vec<Transaction>,
-        max_gas: Word,
     ) -> anyhow::Result<UncommittedResult<Changes>> {
-        self.produce_and_execute(height, block_time, |_| transactions, max_gas)
+        self.produce_and_execute(height, block_time, |_| transactions)
             .await
     }
 }
@@ -234,7 +226,6 @@ where
             transactions_source: transactions.clone(),
             coinbase_recipient: self.config.coinbase_recipient.unwrap_or_default(),
             gas_price,
-            gas_limit: u64::MAX,
         };
 
         let executor = self.executor.clone();
