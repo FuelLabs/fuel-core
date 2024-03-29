@@ -1,8 +1,5 @@
 use crate::{
-    database::{
-        self,
-        Database,
-    },
+    database::Database,
     service::{
         adapters::{
             BlockProducerAdapter,
@@ -158,7 +155,7 @@ impl fuel_core_producer::ports::Relayer for MaybeRelayerAdapter {
 fn get_gas_cost_for_height(
     height: u64,
     sync: &fuel_core_relayer::SharedState<
-        Database<database::database_description::relayer::Relayer>,
+        Database<crate::database::database_description::relayer::Relayer>,
     >,
 ) -> anyhow::Result<(DaBlockHeight, u64)> {
     let da_height = DaBlockHeight(height);
