@@ -24,8 +24,8 @@ use fuel_core_storage::{
     },
     transactional::{
         Changes,
+        ReadTransaction,
         StorageTransaction,
-        WriteTransaction,
     },
     StorageAsMut,
 };
@@ -62,12 +62,12 @@ use fuel_core_types::{
         UncommittedResult as UncommittedImportResult,
     },
 };
+use itertools::Itertools;
 
 pub mod off_chain;
 mod runner;
 mod workers;
 
-use itertools::Itertools;
 pub use runner::{
     GenesisRunner,
     TransactionOpener,
@@ -101,8 +101,7 @@ pub async fn execute_genesis_block(
         consensus,
     };
 
-    let mut db = original_database.clone();
-    let mut database_transaction = db.write_transaction();
+    let mut database_transaction = original_database.read_transaction();
     // TODO: The chain config should be part of the snapshot state.
     //  https://github.com/FuelLabs/fuel-core/issues/1570
     database_transaction
@@ -154,7 +153,7 @@ async fn import_chain_state(mut workers: GenesisWorkers) -> anyhow::Result<()> {
 }
 
 fn cleanup_genesis_progress(
-    tx: &mut StorageTransaction<&mut Database<OnChain>>,
+    tx: &mut StorageTransaction<&Database<OnChain>>,
     genesis_progress: Vec<String>,
 ) -> anyhow::Result<()> {
     for key in genesis_progress {
