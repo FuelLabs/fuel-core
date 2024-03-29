@@ -264,7 +264,8 @@ where
         block_time: Tai64,
     ) -> anyhow::Result<PartialBlockHeader> {
         let mut block_header = self._new_header(height, block_time)?;
-        let new_da_height = self.select_new_da_height(block_header.da_height).await?;
+        let previous_da_height = block_header.da_height;
+        let new_da_height = self.select_new_da_height(previous_da_height).await?;
 
         block_header.application.da_height = new_da_height;
 
@@ -275,17 +276,26 @@ where
         &self,
         previous_da_height: DaBlockHeight,
     ) -> anyhow::Result<DaBlockHeight> {
-        let best_height = self.relayer.wait_for_at_least(&previous_da_height).await?;
-        if best_height < previous_da_height {
-            // If this happens, it could mean a block was erroneously imported
-            // without waiting for our relayer's da_height to catch up to imported da_height.
-            return Err(Error::InvalidDaFinalizationState {
-                best: best_height,
-                previous_block: previous_da_height,
+        let gas_limit = self.config.block_gas_limit;
+        let list = self.relayer.wait_for_at_least(&previous_da_height).await?;
+        let mut new_best = previous_da_height;
+        let mut total_cost = 0;
+        for (da_height, cost) in list.iter() {
+            if da_height < &previous_da_height {
+                return Err(Error::InvalidDaFinalizationState {
+                    best: *da_height,
+                    previous_block: previous_da_height,
+                }
+                .into())
             }
-            .into())
+            total_cost += cost;
+            if total_cost > gas_limit {
+                break;
+            } else {
+                new_best = *da_height;
+            }
         }
-        Ok(best_height)
+        Ok(new_best)
     }
 
     fn _new_header(

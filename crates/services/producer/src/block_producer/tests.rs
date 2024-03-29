@@ -294,7 +294,7 @@ mod produce_and_execute_block_txpool {
         let ctx = TestContext {
             relayer: MockRelayer {
                 // set our relayer best finalized height to less than previous
-                best_finalized_height: prev_da_height - 1u64.into(),
+                best_finalized_height: vec![(prev_da_height - 1u64.into(), 0)],
                 ..Default::default()
             },
             ..TestContext::default_from_db(db)
@@ -321,6 +321,12 @@ mod produce_and_execute_block_txpool {
             ),
             "unexpected err {err:?}"
         );
+    }
+
+    #[tokio::test]
+    async fn produce_and_execute_block__will_only_advance_da_height_if_enough_gas_remaining(
+    ) {
+        todo!()
     }
 
     #[tokio::test]

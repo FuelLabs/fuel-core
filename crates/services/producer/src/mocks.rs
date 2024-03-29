@@ -56,7 +56,7 @@ use std::{
 #[derive(Default, Clone)]
 pub struct MockRelayer {
     pub block_production_key: Address,
-    pub best_finalized_height: DaBlockHeight,
+    pub best_finalized_height: Vec<(DaBlockHeight, u64)>,
 }
 
 #[async_trait::async_trait]
@@ -65,8 +65,8 @@ impl Relayer for MockRelayer {
     async fn wait_for_at_least(
         &self,
         _: &DaBlockHeight,
-    ) -> anyhow::Result<DaBlockHeight> {
-        Ok(self.best_finalized_height)
+    ) -> anyhow::Result<Vec<(DaBlockHeight, u64)>> {
+        Ok(self.best_finalized_height.clone())
     }
 }
 

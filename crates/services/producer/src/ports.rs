@@ -61,12 +61,13 @@ pub trait TxPool: Send + Sync {
 
 #[async_trait::async_trait]
 pub trait Relayer: Send + Sync {
-    /// Wait for the relayer to reach at least this height and return the
-    /// latest height (which is guaranteed to be >= height).
+    /// Wait for the relayer to reach at least this height and return list of finalized heights with
+    /// their total Forced Transaction gas costs.
+    /// All heights in the list should be >= `height`.
     async fn wait_for_at_least(
         &self,
         height: &DaBlockHeight,
-    ) -> anyhow::Result<DaBlockHeight>;
+    ) -> anyhow::Result<Vec<(DaBlockHeight, u64)>>;
 }
 
 pub trait Executor<TxSource>: Send + Sync {
