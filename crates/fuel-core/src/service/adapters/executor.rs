@@ -69,13 +69,13 @@ impl fuel_core_executor::ports::RelayerPort for Database<Relayer> {
         }
     }
 
-    fn get_events(&self, _da_height: &DaBlockHeight) -> anyhow::Result<Vec<Event>> {
+    fn get_events(&self, da_height: &DaBlockHeight) -> anyhow::Result<Vec<Event>> {
         #[cfg(feature = "relayer")]
         {
             use fuel_core_storage::StorageAsRef;
             let events = self
                 .storage::<fuel_core_relayer::storage::EventsHistory>()
-                .get(_da_height)?
+                .get(da_height)?
                 .map(|cow| cow.into_owned())
                 .unwrap_or_default();
             Ok(events)

@@ -1,5 +1,8 @@
 use crate::{
-    database::Database,
+    database::{
+        database_description::relayer::Relayer,
+        Database,
+    },
     service::{
         adapters::{
             BlockProducerAdapter,
@@ -42,7 +45,7 @@ use fuel_core_types::{
             ConsensusParametersVersion,
             StateTransitionBytecodeVersion,
         },
-        primitives,
+        primitives::DaBlockHeight,
     },
     fuel_tx,
     fuel_tx::Transaction,
@@ -123,17 +126,25 @@ impl fuel_core_producer::ports::DryRunner for ExecutorAdapter {
 
 #[async_trait::async_trait]
 impl fuel_core_producer::ports::Relayer for MaybeRelayerAdapter {
-    async fn wait_for_at_least(
+    async fn get_latest_da_blocks_with_costs(
         &self,
-        height: &primitives::DaBlockHeight,
-    ) -> anyhow::Result<primitives::DaBlockHeight> {
+        starting_from: &DaBlockHeight,
+    ) -> anyhow::Result<Vec<(DaBlockHeight, u64)>> {
         #[cfg(feature = "relayer")]
         {
             if let Some(sync) = self.relayer_synced.as_ref() {
-                sync.await_at_least_synced(height).await?;
-                sync.get_finalized_da_height()
+                sync.await_at_least_synced(starting_from).await?;
+                let highest = sync.get_finalized_da_height()?;
+                let values = (starting_from.0..=highest.0)
+                    .map(|height| get_gas_cost_for_height(height, sync))
+                    .collect::<anyhow::Result<Vec<_>>>()?
+                    .into_iter()
+                    .take_while(|result| result.is_some())
+                    .flatten()
+                    .collect();
+                Ok(values)
             } else {
-                Ok(0u64.into())
+                Ok(Vec::new())
             }
         }
         #[cfg(not(feature = "relayer"))]
@@ -143,9 +154,24 @@ impl fuel_core_producer::ports::Relayer for MaybeRelayerAdapter {
                 "Cannot have a da height above zero without a relayer"
             );
             // If the relayer is not enabled, then all blocks are zero.
-            Ok(0u64.into())
+            Ok(Vec::new())
         }
     }
+}
+
+fn get_gas_cost_for_height(
+    height: u64,
+    sync: &fuel_core_relayer::SharedState<Database<Relayer>>,
+) -> anyhow::Result<Option<(DaBlockHeight, u64)>> {
+    let da_height = DaBlockHeight(height);
+    let values = sync
+        .database()
+        .storage::<fuel_core_relayer::storage::EventsHistory>()
+        .get(&da_height)?
+        .map(|cow| cow.into_owned())
+        .map(|events| events.iter().map(|event| event.cost()).sum())
+        .map(|cost| (da_height, cost));
+    Ok(values)
 }
 
 impl fuel_core_producer::ports::BlockProducerDatabase for Database {

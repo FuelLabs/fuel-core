@@ -36,6 +36,14 @@ impl Event {
             Event::Transaction(transaction) => transaction.id().into(),
         }
     }
+
+    /// Returns the cost of the event to execute.
+    pub fn cost(&self) -> u64 {
+        match self {
+            Event::Message(_message) => 0,
+            Event::Transaction(transaction) => transaction.max_gas(),
+        }
+    }
 }
 
 impl From<Message> for Event {

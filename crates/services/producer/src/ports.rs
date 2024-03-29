@@ -64,7 +64,7 @@ pub trait Relayer: Send + Sync {
     /// Wait for the relayer to reach at least this height and return list of finalized heights with
     /// their total Forced Transaction gas costs.
     /// All heights in the list should be >= `height`.
-    async fn wait_for_at_least(
+    async fn get_latest_da_blocks_with_costs(
         &self,
         height: &DaBlockHeight,
     ) -> anyhow::Result<Vec<(DaBlockHeight, u64)>>;

@@ -1,4 +1,5 @@
 #![allow(unused_variables)]
+
 use crate::{
     cli::{
         default_db_path,
@@ -86,18 +87,18 @@ pub struct Command {
 
     /// The maximum database cache size in bytes.
     #[arg(
-        long = "max-database-cache-size",
-        default_value_t = DEFAULT_DATABASE_CACHE_SIZE,
-        env
+    long = "max-database-cache-size",
+    default_value_t = DEFAULT_DATABASE_CACHE_SIZE,
+    env
     )]
     pub max_database_cache_size: usize,
 
     #[clap(
-        name = "DB_PATH",
-        long = "db-path",
-        value_parser,
-        default_value = default_db_path().into_os_string(),
-        env
+    name = "DB_PATH",
+    long = "db-path",
+    value_parser,
+    default_value = default_db_path().into_os_string(),
+    env
     )]
     pub database_path: PathBuf,
 
@@ -316,6 +317,7 @@ impl Command {
             tx_blacklist_messages,
             tx_blacklist_contracts,
         );
+        let block_gas_limit = chain_config.consensus_parameters.block_gas_limit();
 
         let config = Config {
             addr,
@@ -342,6 +344,7 @@ impl Command {
                 utxo_validation,
                 coinbase_recipient,
                 metrics,
+                block_gas_limit,
             },
             static_gas_price: min_gas_price,
             block_importer,

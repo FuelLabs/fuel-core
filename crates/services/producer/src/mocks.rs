@@ -62,7 +62,7 @@ pub struct MockRelayer {
 #[async_trait::async_trait]
 impl Relayer for MockRelayer {
     /// Get the best finalized height from the DA layer
-    async fn wait_for_at_least(
+    async fn get_latest_da_blocks_with_costs(
         &self,
         _: &DaBlockHeight,
     ) -> anyhow::Result<Vec<(DaBlockHeight, u64)>> {

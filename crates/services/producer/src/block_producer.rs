@@ -277,7 +277,10 @@ where
         previous_da_height: DaBlockHeight,
     ) -> anyhow::Result<DaBlockHeight> {
         let gas_limit = self.config.block_gas_limit;
-        let list = self.relayer.wait_for_at_least(&previous_da_height).await?;
+        let list = self
+            .relayer
+            .get_latest_da_blocks_with_costs(&previous_da_height)
+            .await?;
         let mut new_best = previous_da_height;
         let mut total_cost = 0;
         for (da_height, cost) in list.iter() {
@@ -286,7 +289,7 @@ where
                     best: *da_height,
                     previous_block: previous_da_height,
                 }
-                .into())
+                .into());
             }
             if da_height > &new_best {
                 total_cost += cost;
