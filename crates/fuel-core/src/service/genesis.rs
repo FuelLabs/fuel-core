@@ -10,10 +10,7 @@ pub use runner::GenesisRunner;
 use crate::{
     combined_database::CombinedDatabase,
     database::{
-        database_description::{
-            off_chain::OffChain,
-            on_chain::OnChain,
-        },
+        database_description::{off_chain::OffChain, on_chain::OnChain},
         genesis_progress::GenesisMetadata,
     },
     service::config::Config,
@@ -22,30 +19,18 @@ use crate::{
 use fuel_core_chain_config::GenesisCommitment;
 use fuel_core_storage::{
     iter::IteratorOverTable,
-    tables::{
-        ConsensusParametersVersions,
-        StateTransitionBytecodeVersions,
-    },
-    transactional::{
-        Changes,
-        WriteTransaction,
-    },
+    tables::{ConsensusParametersVersions, StateTransitionBytecodeVersions},
+    transactional::{Changes, WriteTransaction},
     StorageAsMut,
 };
 use fuel_core_types::{
     self,
     blockchain::{
         block::Block,
-        consensus::{
-            Consensus,
-            Genesis,
-        },
+        consensus::{Consensus, Genesis},
         header::{
-            ApplicationHeader,
-            ConsensusHeader,
-            ConsensusParametersVersion,
-            PartialBlockHeader,
-            StateTransitionBytecodeVersion,
+            ApplicationHeader, ConsensusHeader, ConsensusParametersVersion,
+            PartialBlockHeader, StateTransitionBytecodeVersion,
         },
         primitives::Empty,
         SealedBlock,
@@ -92,11 +77,17 @@ pub async fn execute_genesis_block(
         consensus,
     };
 
-    let mut on_chain = db.on_chain().clone();
-    let mut database_transaction_on_chain = on_chain.write_transaction();
     let mut off_chain = db.off_chain().clone();
     let mut database_transaction_off_chain = off_chain.write_transaction();
+    for key in genesis_progress_off_chain {
+        database_transaction_off_chain
+            .storage_as_mut::<GenesisMetadata<OffChain>>()
+            .remove(&key)?;
+    }
+    database_transaction_off_chain.commit()?;
 
+    let mut on_chain = db.on_chain().clone();
+    let mut database_transaction_on_chain = on_chain.write_transaction();
     // TODO: The chain config should be part of the snapshot state.
     //  https://github.com/FuelLabs/fuel-core/issues/1570
     database_transaction_on_chain
@@ -117,13 +108,6 @@ pub async fn execute_genesis_block(
             .storage_as_mut::<GenesisMetadata<OnChain>>()
             .remove(&key)?;
     }
-    for key in genesis_progress_off_chain {
-        database_transaction_off_chain
-            .storage_as_mut::<GenesisMetadata<OffChain>>()
-            .remove(&key)?;
-    }
-
-    // TODO: We must do atomic commit of both databases somehow
 
     let result = UncommittedImportResult::new(
         ImportResult::new_from_local(block, vec![], vec![]),
@@ -187,46 +171,24 @@ mod tests {
     use crate::{
         combined_database::CombinedDatabase,
         database::Database,
-        service::{
-            config::Config,
-            FuelService,
-            Task,
-        },
+        service::{config::Config, FuelService, Task},
     };
     use fuel_core_chain_config::{
-        CoinConfig,
-        ContractConfig,
-        MessageConfig,
-        Randomize,
-        SnapshotReader,
-        StateConfig,
+        CoinConfig, ContractConfig, MessageConfig, Randomize, SnapshotReader, StateConfig,
     };
     use fuel_core_services::RunnableService;
     use fuel_core_storage::{
-        tables::{
-            Coins,
-            ContractsAssets,
-            ContractsState,
-        },
+        tables::{Coins, ContractsAssets, ContractsState},
         StorageAsRef,
     };
     use fuel_core_types::{
         blockchain::primitives::DaBlockHeight,
         entities::coins::coin::Coin,
         fuel_tx::UtxoId,
-        fuel_types::{
-            Address,
-            AssetId,
-            BlockHeight,
-        },
+        fuel_types::{Address, AssetId, BlockHeight},
     };
     use itertools::Itertools;
-    use rand::{
-        rngs::StdRng,
-        Rng,
-        RngCore,
-        SeedableRng,
-    };
+    use rand::{rngs::StdRng, Rng, RngCore, SeedableRng};
     use std::vec;
 
     #[tokio::test]
