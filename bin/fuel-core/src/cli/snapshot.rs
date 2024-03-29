@@ -256,17 +256,17 @@ fn full_snapshot(
     let group_size = encoding.group_size().unwrap_or(MAX_GROUP_SIZE);
 
     let db = combined_db.on_chain();
-    write::<Coins, OnChain>(&db, group_size, &mut writer)?;
-    write::<Messages, OnChain>(&db, group_size, &mut writer)?;
-    write::<ContractsRawCode, OnChain>(&db, group_size, &mut writer)?;
-    write::<ContractsLatestUtxo, OnChain>(&db, group_size, &mut writer)?;
-    write::<ContractsState, OnChain>(&db, group_size, &mut writer)?;
-    write::<ContractsAssets, OnChain>(&db, group_size, &mut writer)?;
-    write::<Transactions, OnChain>(&db, group_size, &mut writer)?;
+    write::<Coins, OnChain>(db, group_size, &mut writer)?;
+    write::<Messages, OnChain>(db, group_size, &mut writer)?;
+    write::<ContractsRawCode, OnChain>(db, group_size, &mut writer)?;
+    write::<ContractsLatestUtxo, OnChain>(db, group_size, &mut writer)?;
+    write::<ContractsState, OnChain>(db, group_size, &mut writer)?;
+    write::<ContractsAssets, OnChain>(db, group_size, &mut writer)?;
+    write::<Transactions, OnChain>(db, group_size, &mut writer)?;
 
     let db = combined_db.off_chain();
-    write::<TransactionStatuses, OffChain>(&db, group_size, &mut writer)?;
-    write::<OwnedTransactions, OffChain>(&db, group_size, &mut writer)?;
+    write::<TransactionStatuses, OffChain>(db, group_size, &mut writer)?;
+    write::<OwnedTransactions, OffChain>(db, group_size, &mut writer)?;
 
     let block = combined_db.on_chain().latest_block()?;
     writer.write_block_data(*block.header().height(), block.header().da_height)?;
