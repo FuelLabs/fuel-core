@@ -1,48 +1,52 @@
-use super::workers::GenesisWorkers;
+use super::{
+    runner::ProcessState,
+    workers::{
+        GenesisWorkers,
+        Handler,
+    },
+};
 use crate::{
     combined_database::CombinedDatabase,
     database::{
-        database_description::{off_chain::OffChain, on_chain::OnChain},
-        genesis_progress::GenesisMetadata,
+        balances::BalancesInitializer,
+        database_description::on_chain::OnChain,
+        state::StateInitializer,
         Database,
     },
-    service::{config::Config, genesis::UncommittedImportResult},
 };
 use anyhow::anyhow;
-use fuel_core_chain_config::{GenesisCommitment, SnapshotReader, TableEntry};
+use fuel_core_chain_config::{
+    SnapshotReader,
+    TableEntry,
+};
 use fuel_core_storage::{
-    iter::IteratorOverTable,
     tables::{
-        Coins, ConsensusParametersVersions, ContractsLatestUtxo, ContractsRawCode,
-        Messages, StateTransitionBytecodeVersions,
+        Coins,
+        ContractsAssets,
+        ContractsLatestUtxo,
+        ContractsRawCode,
+        ContractsState,
+        Messages,
+        Transactions,
     },
-    transactional::{Changes, StorageTransaction, WriteTransaction},
+    transactional::StorageTransaction,
     StorageAsMut,
 };
 use fuel_core_types::{
     self,
-    blockchain::{
-        block::Block,
-        consensus::{Consensus, Genesis},
-        header::{
-            ApplicationHeader, ConsensusHeader, ConsensusParametersVersion,
-            PartialBlockHeader, StateTransitionBytecodeVersion,
-        },
-        primitives::{DaBlockHeight, Empty},
-        SealedBlock,
+    blockchain::primitives::DaBlockHeight,
+    entities::{
+        coins::coin::Coin,
+        Message,
     },
-    entities::{coins::coin::Coin, Message},
-    fuel_types::{BlockHeight, Bytes32},
-    services::block_importer::ImportResult,
+    fuel_types::BlockHeight,
 };
-
-use itertools::Itertools;
 
 pub(crate) async fn import_state(
     db: CombinedDatabase,
     snapshot_reader: SnapshotReader,
 ) -> anyhow::Result<()> {
-    let workers = GenesisWorkers::new(db, snapshot_reader);
+    let mut workers = GenesisWorkers::new(db, snapshot_reader);
     if let Err(e) = workers.run_on_chain_imports().await {
         workers.shutdown();
         workers.finished().await;
@@ -53,20 +57,119 @@ pub(crate) async fn import_state(
     Ok(())
 }
 
-#[cfg(feature = "test-helpers")]
-pub async fn execute_and_commit_genesis_block(
-    config: &Config,
-    db: &CombinedDatabase,
-) -> anyhow::Result<()> {
-    let result = import_state(db.clone(), config.snapshot_reader.clone()).await?;
-    let importer = fuel_core_importer::Importer::new(
-        config.block_importer.clone(),
-        db.on_chain().clone(),
-        (),
-        (),
-    );
-    importer.commit_result(result).await?;
-    Ok(())
+impl ProcessState for Handler<Coins> {
+    type TableInSnapshot = Coins;
+    type TableBeingWritten = Coins;
+    type DbDesc = OnChain;
+
+    fn process(
+        &mut self,
+        group: Vec<TableEntry<Self::TableInSnapshot>>,
+        tx: &mut StorageTransaction<&mut Database>,
+    ) -> anyhow::Result<()> {
+        group.into_iter().try_for_each(|coin| {
+            init_coin(tx, &coin, self.block_height)?;
+            Ok(())
+        })
+    }
+}
+
+impl ProcessState for Handler<Messages> {
+    type TableInSnapshot = Messages;
+    type TableBeingWritten = Messages;
+    type DbDesc = OnChain;
+
+    fn process(
+        &mut self,
+        group: Vec<TableEntry<Self::TableInSnapshot>>,
+        tx: &mut StorageTransaction<&mut Database>,
+    ) -> anyhow::Result<()> {
+        group
+            .into_iter()
+            .try_for_each(|message| init_da_message(tx, message, self.da_block_height))
+    }
+}
+
+impl ProcessState for Handler<ContractsRawCode> {
+    type TableInSnapshot = ContractsRawCode;
+    type TableBeingWritten = ContractsRawCode;
+    type DbDesc = OnChain;
+
+    fn process(
+        &mut self,
+        group: Vec<TableEntry<Self::TableInSnapshot>>,
+        tx: &mut StorageTransaction<&mut Database>,
+    ) -> anyhow::Result<()> {
+        group.into_iter().try_for_each(|contract| {
+            init_contract_raw_code(tx, &contract)?;
+            Ok::<(), anyhow::Error>(())
+        })
+    }
+}
+
+impl ProcessState for Handler<ContractsLatestUtxo> {
+    type TableInSnapshot = ContractsLatestUtxo;
+    type TableBeingWritten = ContractsLatestUtxo;
+    type DbDesc = OnChain;
+
+    fn process(
+        &mut self,
+        group: Vec<TableEntry<Self::TableInSnapshot>>,
+        tx: &mut StorageTransaction<&mut Database>,
+    ) -> anyhow::Result<()> {
+        group.into_iter().try_for_each(|contract| {
+            init_contract_latest_utxo(tx, &contract, self.block_height)?;
+            Ok::<(), anyhow::Error>(())
+        })
+    }
+}
+
+impl ProcessState for Handler<ContractsState> {
+    type TableInSnapshot = ContractsState;
+    type TableBeingWritten = ContractsState;
+    type DbDesc = OnChain;
+
+    fn process(
+        &mut self,
+        group: Vec<TableEntry<Self::TableInSnapshot>>,
+        tx: &mut StorageTransaction<&mut Database>,
+    ) -> anyhow::Result<()> {
+        tx.update_contract_states(group)?;
+        Ok(())
+    }
+}
+
+impl ProcessState for Handler<ContractsAssets> {
+    type TableInSnapshot = ContractsAssets;
+    type TableBeingWritten = ContractsAssets;
+    type DbDesc = OnChain;
+
+    fn process(
+        &mut self,
+        group: Vec<TableEntry<Self::TableInSnapshot>>,
+        tx: &mut StorageTransaction<&mut Database>,
+    ) -> anyhow::Result<()> {
+        tx.update_contract_balances(group)?;
+        Ok(())
+    }
+}
+
+impl ProcessState for Handler<Transactions> {
+    type TableInSnapshot = Transactions;
+    type TableBeingWritten = Transactions;
+    type DbDesc = OnChain;
+
+    fn process(
+        &mut self,
+        group: Vec<TableEntry<Self::TableInSnapshot>>,
+        tx: &mut StorageTransaction<&mut Database<Self::DbDesc>>,
+    ) -> anyhow::Result<()> {
+        for transaction in &group {
+            tx.storage::<Transactions>()
+                .insert(&transaction.key, &transaction.value)?;
+        }
+        Ok(())
+    }
 }
 
 pub(crate) fn init_coin(
@@ -169,406 +272,4 @@ pub(crate) fn init_da_message(
     }
 
     Ok(())
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    use crate::{
-        combined_database::CombinedDatabase,
-        service::{config::Config, FuelService, Task},
-    };
-    use fuel_core_chain_config::{
-        CoinConfig, ContractConfig, MessageConfig, Randomize, SnapshotReader, StateConfig,
-    };
-    use fuel_core_services::RunnableService;
-    use fuel_core_storage::{
-        tables::{Coins, ContractsAssets, ContractsState},
-        StorageAsRef,
-    };
-    use fuel_core_types::{
-        blockchain::primitives::DaBlockHeight,
-        entities::coins::coin::Coin,
-        fuel_tx::UtxoId,
-        fuel_types::{Address, AssetId, BlockHeight},
-    };
-    use itertools::Itertools;
-    use rand::{rngs::StdRng, Rng, RngCore, SeedableRng};
-    use std::vec;
-
-    #[tokio::test]
-    async fn config_initializes_block_height() {
-        let block_height = BlockHeight::from(99u32);
-        let snapshot_reader =
-            SnapshotReader::local_testnet().with_state_config(StateConfig {
-                block_height,
-                ..Default::default()
-            });
-        let service_config = Config {
-            snapshot_reader,
-            ..Config::local_node()
-        };
-
-        let db = Database::default();
-        FuelService::from_database(db.clone(), service_config)
-            .await
-            .unwrap();
-
-        assert_eq!(
-            block_height,
-            db.latest_height()
-                .unwrap()
-                .expect("Expected a block height to be set")
-        )
-    }
-
-    #[tokio::test]
-    async fn genesis_columns_are_cleared_after_import() {
-        let mut rng = StdRng::seed_from_u64(10);
-
-        let coins = std::iter::repeat_with(|| CoinConfig {
-            tx_pointer_block_height: 0.into(),
-            ..Randomize::randomize(&mut rng)
-        })
-        .take(1000)
-        .collect_vec();
-
-        let messages = std::iter::repeat_with(|| MessageConfig {
-            da_height: DaBlockHeight(0),
-            ..MessageConfig::randomize(&mut rng)
-        })
-        .take(1000)
-        .collect_vec();
-
-        let contracts = std::iter::repeat_with(|| given_contract_config(&mut rng))
-            .take(1000)
-            .collect_vec();
-
-        let state = StateConfig {
-            coins,
-            messages,
-            contracts,
-            block_height: BlockHeight::from(0u32),
-            da_block_height: Default::default(),
-        };
-        let snapshot_reader = SnapshotReader::local_testnet().with_state_config(state);
-
-        let service_config = Config {
-            snapshot_reader,
-            ..Config::local_node()
-        };
-
-        let db = Database::default();
-        FuelService::from_database(db.clone(), service_config)
-            .await
-            .unwrap();
-
-        let keys = db.iter_all::<GenesisMetadata<OnChain>>(None).count();
-        assert_eq!(keys, 0);
-    }
-
-    #[tokio::test]
-    async fn config_state_initializes_multiple_coins_with_different_owners_and_asset_ids()
-    {
-        let mut rng = StdRng::seed_from_u64(10);
-
-        // a coin with all options set
-        let alice: Address = rng.gen();
-        let asset_id_alice: AssetId = rng.gen();
-        let alice_value = rng.gen();
-        let alice_block_created: BlockHeight = rng.next_u32().into();
-        let alice_block_created_tx_idx = rng.gen();
-        let alice_tx_id = rng.gen();
-        let alice_output_index = rng.gen();
-        let alice_utxo_id = UtxoId::new(alice_tx_id, alice_output_index);
-
-        // a coin with minimal options set
-        let bob: Address = rng.gen();
-        let asset_id_bob: AssetId = rng.gen();
-        let bob_value = rng.gen();
-
-        let starting_height = {
-            let mut h: u32 = alice_block_created.into();
-            h = h.saturating_add(rng.next_u32());
-            h.into()
-        };
-        let state = StateConfig {
-            coins: vec![
-                CoinConfig {
-                    tx_id: alice_tx_id,
-                    output_index: alice_output_index,
-                    tx_pointer_block_height: alice_block_created,
-                    tx_pointer_tx_idx: alice_block_created_tx_idx,
-                    owner: alice,
-                    amount: alice_value,
-                    asset_id: asset_id_alice,
-                },
-                CoinConfig {
-                    owner: bob,
-                    amount: bob_value,
-                    asset_id: asset_id_bob,
-                    ..Default::default()
-                },
-            ],
-            block_height: starting_height,
-            ..Default::default()
-        };
-        let snapshot_reader = SnapshotReader::local_testnet().with_state_config(state);
-
-        let service_config = Config {
-            snapshot_reader,
-            ..Config::local_node()
-        };
-
-        let db = CombinedDatabase::default();
-        FuelService::from_combined_database(db.clone(), service_config)
-            .await
-            .unwrap();
-
-        let alice_coins = get_coins(&db, &alice);
-        let bob_coins = get_coins(&db, &bob);
-
-        assert!(matches!(
-            alice_coins.as_slice(),
-            &[Coin {
-                utxo_id,
-                owner,
-                amount,
-                asset_id,
-                tx_pointer,
-                ..
-            }] if utxo_id == alice_utxo_id
-            && owner == alice
-            && amount == alice_value
-            && asset_id == asset_id_alice
-            && tx_pointer.block_height() == alice_block_created
-        ));
-        assert!(matches!(
-            bob_coins.as_slice(),
-            &[Coin {
-                owner,
-                amount,
-                asset_id,
-                ..
-            }] if owner == bob
-            && amount == bob_value
-            && asset_id == asset_id_bob
-        ));
-    }
-
-    #[tokio::test]
-    async fn config_state_initializes_contract_state() {
-        // given
-        let mut rng = StdRng::seed_from_u64(10);
-
-        let contract = given_contract_config(&mut rng);
-        let contract_id = contract.contract_id;
-        let states = contract.states.clone();
-        let snapshot_reader =
-            SnapshotReader::local_testnet().with_state_config(StateConfig {
-                contracts: vec![contract],
-                ..Default::default()
-            });
-
-        let service_config = Config {
-            snapshot_reader,
-            ..Config::local_node()
-        };
-        let db = Database::default();
-
-        // when
-        FuelService::from_database(db.clone(), service_config)
-            .await
-            .unwrap();
-
-        // then
-        for state in states {
-            let ret = db
-                .storage::<ContractsState>()
-                .get(&(&contract_id, &state.key).into())
-                .unwrap()
-                .expect("Expect a state entry to exist")
-                .into_owned();
-            assert_eq!(state.value, ret.0)
-        }
-    }
-
-    #[cfg(feature = "test-helpers")]
-    #[tokio::test]
-    async fn tests_init_da_msgs() {
-        let mut rng = StdRng::seed_from_u64(32492);
-
-        let msg = MessageConfig {
-            sender: rng.gen(),
-            recipient: rng.gen(),
-            nonce: rng.gen(),
-            amount: rng.gen(),
-            data: vec![rng.gen()],
-            da_height: DaBlockHeight(0),
-        };
-
-        let state = StateConfig {
-            messages: vec![msg.clone()],
-            ..Default::default()
-        };
-        let snapshot_reader = SnapshotReader::local_testnet().with_state_config(state);
-
-        let config = Config {
-            snapshot_reader,
-            ..Config::local_node()
-        };
-
-        let db = CombinedDatabase::default();
-
-        super::execute_and_commit_genesis_block(&config, &db)
-            .await
-            .unwrap();
-
-        let expected_msg: Message = msg.into();
-
-        let ret_msg = db
-            .on_chain()
-            .storage::<Messages>()
-            .get(expected_msg.id())
-            .unwrap()
-            .unwrap()
-            .into_owned();
-
-        assert_eq!(expected_msg, ret_msg);
-    }
-
-    #[tokio::test]
-    async fn config_state_initializes_contract_balance() {
-        let mut rng = StdRng::seed_from_u64(10);
-
-        let contract = given_contract_config(&mut rng);
-        let contract_id = contract.contract_id;
-        let balances = contract.balances.clone();
-        let snapshot_reader =
-            SnapshotReader::local_testnet().with_state_config(StateConfig {
-                contracts: vec![contract],
-                ..Default::default()
-            });
-
-        let service_config = Config {
-            snapshot_reader,
-            ..Config::local_node()
-        };
-
-        let db = Database::default();
-        FuelService::from_database(db.clone(), service_config)
-            .await
-            .unwrap();
-
-        for balance in balances {
-            let ret = db
-                .storage::<ContractsAssets>()
-                .get(&(&contract_id, &balance.asset_id).into())
-                .unwrap()
-                .expect("Expected a balance to be present")
-                .into_owned();
-
-            assert_eq!(balance.amount, ret)
-        }
-    }
-
-    #[tokio::test]
-    async fn coin_tx_pointer_cant_exceed_genesis_height() {
-        let state = StateConfig {
-            coins: vec![CoinConfig {
-                // set txpointer height > genesis height
-                tx_pointer_block_height: BlockHeight::from(11u32),
-                amount: 10,
-                ..Default::default()
-            }],
-            block_height: BlockHeight::from(10u32),
-            ..Default::default()
-        };
-        let snapshot_reader = SnapshotReader::local_testnet().with_state_config(state);
-
-        let service_config = Config {
-            snapshot_reader,
-            ..Config::local_node()
-        };
-
-        let db = CombinedDatabase::default();
-        let task = Task::new(db, service_config).unwrap();
-        let init_result = task.into_task(&Default::default(), ()).await;
-
-        assert!(init_result.is_err())
-    }
-
-    #[tokio::test]
-    async fn contract_tx_pointer_cant_exceed_genesis_height() {
-        let mut rng = StdRng::seed_from_u64(10);
-
-        let state = StateConfig {
-            contracts: vec![ContractConfig {
-                // set txpointer height > genesis height
-                tx_pointer_block_height: BlockHeight::from(11u32),
-                ..given_contract_config(&mut rng)
-            }],
-            block_height: BlockHeight::from(10u32),
-            ..Default::default()
-        };
-        let snapshot_reader = SnapshotReader::local_testnet().with_state_config(state);
-
-        let service_config = Config {
-            snapshot_reader,
-            ..Config::local_node()
-        };
-
-        let db = CombinedDatabase::default();
-        let task = Task::new(db, service_config).unwrap();
-        let init_result = task.into_task(&Default::default(), ()).await;
-
-        assert!(init_result.is_err())
-    }
-
-    fn get_coins(db: &CombinedDatabase, owner: &Address) -> Vec<Coin> {
-        db.off_chain()
-            .owned_coins_ids(owner, None, None)
-            .map(|r| {
-                let coin_id = r.unwrap();
-                db.on_chain()
-                    .storage::<Coins>()
-                    .get(&coin_id)
-                    .map(|v| v.unwrap().into_owned().uncompress(coin_id))
-                    .unwrap()
-            })
-            .collect()
-    }
-
-    fn given_contract_config(rng: &mut StdRng) -> ContractConfig {
-        ContractConfig {
-            tx_pointer_block_height: 0.into(),
-            ..ContractConfig::randomize(rng)
-        }
-    }
-
-    #[tokio::test]
-    async fn config_state_initializes_contract() {
-        let mut rng = StdRng::seed_from_u64(10);
-
-        let initial_state = StateConfig {
-            contracts: vec![given_contract_config(&mut rng)],
-            ..Default::default()
-        };
-        let snapshot_reader =
-            SnapshotReader::local_testnet().with_state_config(initial_state.clone());
-
-        let service_config = Config {
-            snapshot_reader,
-            ..Config::local_node()
-        };
-
-        let db = CombinedDatabase::default();
-        FuelService::from_combined_database(db.clone(), service_config)
-            .await
-            .unwrap();
-
-        let stored_state = db.read_state_config().unwrap();
-        assert_eq!(initial_state, stored_state);
-    }
 }

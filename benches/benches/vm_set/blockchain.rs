@@ -105,7 +105,7 @@ impl BenchDb {
         )?;
         // Adds a genesis block to the database.
         let config = Config::local_node();
-        let block = fuel_core::service::genesis::on_chain::create_genesis_block(&config);
+        let block = fuel_core::service::genesis::create_genesis_block(&config);
         let chain_config = config.snapshot_reader.chain_config();
         database
             .storage::<FuelBlocks>()

@@ -1,15 +1,8 @@
 use super::{
-    on_chain::{
-        init_coin,
-        init_contract_latest_utxo,
-        init_contract_raw_code,
-        init_da_message,
-    },
     runner::ProcessState,
     GenesisRunner,
 };
 use std::{
-    borrow::Cow,
     collections::HashMap,
     marker::PhantomData,
     sync::Arc,
@@ -17,34 +10,24 @@ use std::{
 
 use crate::{
     combined_database::CombinedDatabase,
-    database::{
-        balances::BalancesInitializer,
-        database_description::{
-            off_chain::OffChain,
-            on_chain::OnChain,
-        },
-        state::StateInitializer,
-        Database,
+    database::database_description::{
+        off_chain::OffChain,
+        on_chain::OnChain,
     },
-    graphql_api::{
-        storage::{
-            blocks::FuelBlockIdsToHeights,
-            coins::OwnedCoins,
-            contracts::ContractsInfo,
-            messages::OwnedMessageIds,
-            transactions::{
-                OwnedTransactions,
-                TransactionStatuses,
-            },
+    graphql_api::storage::{
+        coins::OwnedCoins,
+        contracts::ContractsInfo,
+        messages::OwnedMessageIds,
+        transactions::{
+            OwnedTransactions,
+            TransactionStatuses,
         },
-        worker_service,
     },
 };
 use fuel_core_chain_config::{
     AsTable,
     SnapshotReader,
     StateConfig,
-    TableEntry,
 };
 use fuel_core_storage::{
     kv_store::StorageColumn,
@@ -58,13 +41,10 @@ use fuel_core_storage::{
         Messages,
         Transactions,
     },
-    transactional::StorageTransaction,
-    StorageAsMut,
 };
 use fuel_core_types::{
     blockchain::primitives::DaBlockHeight,
     fuel_types::BlockHeight,
-    services::executor::Event,
 };
 use tokio::sync::Notify;
 use tokio_rayon::AsyncRayonHandle;
@@ -186,9 +166,9 @@ impl GenesisWorkers {
 
 #[derive(Debug, Clone, Copy)]
 pub struct Handler<T> {
-    block_height: BlockHeight,
-    da_block_height: DaBlockHeight,
-    phaton_data: PhantomData<T>,
+    pub block_height: BlockHeight,
+    pub da_block_height: DaBlockHeight,
+    pub phaton_data: PhantomData<T>,
 }
 
 impl<T> Handler<T> {
@@ -198,226 +178,5 @@ impl<T> Handler<T> {
             da_block_height,
             phaton_data: PhantomData,
         }
-    }
-}
-
-impl ProcessState for Handler<Coins> {
-    type TableInSnapshot = Coins;
-    type TableBeingWritten = Coins;
-    type DbDesc = OnChain;
-
-    fn process(
-        &mut self,
-        group: Vec<TableEntry<Self::TableInSnapshot>>,
-        tx: &mut StorageTransaction<&mut Database>,
-    ) -> anyhow::Result<()> {
-        group.into_iter().try_for_each(|coin| {
-            init_coin(tx, &coin, self.block_height)?;
-            Ok(())
-        })
-    }
-}
-
-impl ProcessState for Handler<Messages> {
-    type TableInSnapshot = Messages;
-    type TableBeingWritten = Messages;
-    type DbDesc = OnChain;
-
-    fn process(
-        &mut self,
-        group: Vec<TableEntry<Self::TableInSnapshot>>,
-        tx: &mut StorageTransaction<&mut Database>,
-    ) -> anyhow::Result<()> {
-        group
-            .into_iter()
-            .try_for_each(|message| init_da_message(tx, message, self.da_block_height))
-    }
-}
-
-impl ProcessState for Handler<ContractsRawCode> {
-    type TableInSnapshot = ContractsRawCode;
-    type TableBeingWritten = ContractsRawCode;
-    type DbDesc = OnChain;
-
-    fn process(
-        &mut self,
-        group: Vec<TableEntry<Self::TableInSnapshot>>,
-        tx: &mut StorageTransaction<&mut Database>,
-    ) -> anyhow::Result<()> {
-        group.into_iter().try_for_each(|contract| {
-            init_contract_raw_code(tx, &contract)?;
-            Ok::<(), anyhow::Error>(())
-        })
-    }
-}
-
-impl ProcessState for Handler<ContractsLatestUtxo> {
-    type TableInSnapshot = ContractsLatestUtxo;
-    type TableBeingWritten = ContractsLatestUtxo;
-    type DbDesc = OnChain;
-
-    fn process(
-        &mut self,
-        group: Vec<TableEntry<Self::TableInSnapshot>>,
-        tx: &mut StorageTransaction<&mut Database>,
-    ) -> anyhow::Result<()> {
-        group.into_iter().try_for_each(|contract| {
-            init_contract_latest_utxo(tx, &contract, self.block_height)?;
-            Ok::<(), anyhow::Error>(())
-        })
-    }
-}
-
-impl ProcessState for Handler<ContractsState> {
-    type TableInSnapshot = ContractsState;
-    type TableBeingWritten = ContractsState;
-    type DbDesc = OnChain;
-
-    fn process(
-        &mut self,
-        group: Vec<TableEntry<Self::TableInSnapshot>>,
-        tx: &mut StorageTransaction<&mut Database>,
-    ) -> anyhow::Result<()> {
-        tx.update_contract_states(group)?;
-        Ok(())
-    }
-}
-
-impl ProcessState for Handler<ContractsAssets> {
-    type TableInSnapshot = ContractsAssets;
-    type TableBeingWritten = ContractsAssets;
-    type DbDesc = OnChain;
-
-    fn process(
-        &mut self,
-        group: Vec<TableEntry<Self::TableInSnapshot>>,
-        tx: &mut StorageTransaction<&mut Database>,
-    ) -> anyhow::Result<()> {
-        tx.update_contract_balances(group)?;
-        Ok(())
-    }
-}
-
-impl ProcessState for Handler<Transactions> {
-    type TableInSnapshot = Transactions;
-    type TableBeingWritten = Transactions;
-    type DbDesc = OnChain;
-
-    fn process(
-        &mut self,
-        group: Vec<TableEntry<Self::TableInSnapshot>>,
-        tx: &mut StorageTransaction<&mut Database<Self::DbDesc>>,
-    ) -> anyhow::Result<()> {
-        for transaction in &group {
-            tx.storage::<Transactions>()
-                .insert(&transaction.key, &transaction.value)?;
-        }
-        Ok(())
-    }
-}
-
-impl ProcessState for Handler<TransactionStatuses> {
-    type TableInSnapshot = TransactionStatuses;
-    type TableBeingWritten = TransactionStatuses;
-    type DbDesc = OffChain;
-
-    fn process(
-        &mut self,
-        group: Vec<TableEntry<Self::TableInSnapshot>>,
-        tx: &mut StorageTransaction<&mut Database<Self::DbDesc>>,
-    ) -> anyhow::Result<()> {
-        for tx_status in group {
-            tx.storage::<Self::TableInSnapshot>()
-                .insert(&tx_status.key, &tx_status.value)?;
-        }
-        Ok(())
-    }
-}
-
-impl ProcessState for Handler<FuelBlockIdsToHeights> {
-    type TableInSnapshot = FuelBlockIdsToHeights;
-    type TableBeingWritten = FuelBlockIdsToHeights;
-    type DbDesc = OffChain;
-
-    fn process(
-        &mut self,
-        group: Vec<TableEntry<Self::TableInSnapshot>>,
-        tx: &mut StorageTransaction<&mut Database<Self::DbDesc>>,
-    ) -> anyhow::Result<()> {
-        for entry in group {
-            tx.storage::<Self::TableInSnapshot>()
-                .insert(&entry.key, &entry.value)?;
-        }
-        Ok(())
-    }
-}
-
-impl ProcessState for Handler<OwnedTransactions> {
-    type TableInSnapshot = OwnedTransactions;
-    type TableBeingWritten = OwnedTransactions;
-    type DbDesc = OffChain;
-
-    fn process(
-        &mut self,
-        group: Vec<TableEntry<Self::TableInSnapshot>>,
-        tx: &mut StorageTransaction<&mut Database<Self::DbDesc>>,
-    ) -> anyhow::Result<()> {
-        for entry in group {
-            tx.storage::<OwnedTransactions>()
-                .insert(&entry.key, &entry.value)?;
-        }
-        Ok(())
-    }
-}
-
-impl ProcessState for Handler<OwnedMessageIds> {
-    type TableInSnapshot = Messages;
-    type TableBeingWritten = OwnedMessageIds;
-    type DbDesc = OffChain;
-
-    fn process(
-        &mut self,
-        group: Vec<TableEntry<Self::TableInSnapshot>>,
-        tx: &mut StorageTransaction<&mut Database<Self::DbDesc>>,
-    ) -> anyhow::Result<()> {
-        let events = group
-            .into_iter()
-            .map(|TableEntry { value, .. }| Cow::Owned(Event::MessageImported(value)));
-        worker_service::process_executor_events(events, tx)?;
-        Ok(())
-    }
-}
-
-impl ProcessState for Handler<OwnedCoins> {
-    type TableInSnapshot = Coins;
-    type TableBeingWritten = OwnedCoins;
-    type DbDesc = OffChain;
-
-    fn process(
-        &mut self,
-        group: Vec<TableEntry<Self::TableInSnapshot>>,
-        tx: &mut StorageTransaction<&mut Database<Self::DbDesc>>,
-    ) -> anyhow::Result<()> {
-        let events = group.into_iter().map(|TableEntry { value, key }| {
-            Cow::Owned(Event::CoinCreated(value.uncompress(key)))
-        });
-        worker_service::process_executor_events(events, tx)?;
-        Ok(())
-    }
-}
-
-impl ProcessState for Handler<ContractsInfo> {
-    type TableInSnapshot = Transactions;
-    type TableBeingWritten = ContractsInfo;
-    type DbDesc = OffChain;
-
-    fn process(
-        &mut self,
-        group: Vec<TableEntry<Self::TableInSnapshot>>,
-        tx: &mut StorageTransaction<&mut Database<Self::DbDesc>>,
-    ) -> anyhow::Result<()> {
-        let transactions = group.iter().map(|TableEntry { value, .. }| value);
-        worker_service::process_transactions(transactions, tx)?;
-        Ok(())
     }
 }
