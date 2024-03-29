@@ -48,7 +48,6 @@ pub async fn import_state(
     snapshot_reader: SnapshotReader,
 ) -> anyhow::Result<()> {
     let mut workers = GenesisWorkers::new(db, snapshot_reader);
-    // TODO: Should we insert a FuelBlockIdsToHeights entry for the genesis block?
     if let Err(e) = workers.run_off_chain_imports().await {
         workers.shutdown();
         workers.finished().await;

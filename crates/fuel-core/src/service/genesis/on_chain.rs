@@ -172,7 +172,7 @@ impl ProcessState for Handler<Transactions> {
     }
 }
 
-pub(crate) fn init_coin(
+fn init_coin(
     transaction: &mut StorageTransaction<&mut Database>,
     coin: &TableEntry<Coins>,
     height: BlockHeight,
@@ -207,7 +207,7 @@ pub(crate) fn init_coin(
     Ok(())
 }
 
-pub(crate) fn init_contract_latest_utxo(
+fn init_contract_latest_utxo(
     transaction: &mut StorageTransaction<&mut Database>,
     entry: &TableEntry<ContractsLatestUtxo>,
     height: BlockHeight,
@@ -231,7 +231,7 @@ pub(crate) fn init_contract_latest_utxo(
     Ok(())
 }
 
-pub(crate) fn init_contract_raw_code(
+fn init_contract_raw_code(
     transaction: &mut StorageTransaction<&mut Database>,
     entry: &TableEntry<ContractsRawCode>,
 ) -> anyhow::Result<()> {
@@ -250,7 +250,7 @@ pub(crate) fn init_contract_raw_code(
     Ok(())
 }
 
-pub(crate) fn init_da_message(
+fn init_da_message(
     transaction: &mut StorageTransaction<&mut Database>,
     msg: TableEntry<Messages>,
     da_height: DaBlockHeight,

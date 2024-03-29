@@ -15,16 +15,12 @@ use fuel_core_storage::{
     codec::postcard::Postcard,
     column::Column,
     iter::IteratorOverTable,
-    structured_storage::{
-        StructuredStorage,
-        TableWithBlueprint,
-    },
+    structured_storage::TableWithBlueprint,
     tables::{
         Coins,
         ContractsLatestUtxo,
         Messages,
     },
-    transactional::InMemoryTransaction,
     Error as StorageError,
     Mappable,
     MerkleRoot,
@@ -76,10 +72,6 @@ impl<S, DbDesc> GenesisProgressInspect<DbDesc> for S
 where
     S: StorageInspect<GenesisMetadata<DbDesc>, Error = StorageError>,
     DbDesc: DatabaseDescription,
-    for<'a> StructuredStorage<InMemoryTransaction<&'a mut Database<DbDesc>>>:
-        StorageMutate<GenesisMetadata<DbDesc>>,
-    for<'a> StructuredStorage<InMemoryTransaction<&'a mut Database<DbDesc>>>:
-        StorageInspect<GenesisMetadata<DbDesc>>,
 {
     fn genesis_progress(
         &self,

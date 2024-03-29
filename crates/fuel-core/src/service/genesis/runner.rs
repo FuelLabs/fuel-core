@@ -4,12 +4,8 @@ use fuel_core_chain_config::{
 };
 use fuel_core_storage::{
     kv_store::StorageColumn,
-    structured_storage::{
-        StructuredStorage,
-        TableWithBlueprint,
-    },
+    structured_storage::TableWithBlueprint,
     transactional::{
-        InMemoryTransaction,
         Modifiable,
         StorageTransaction,
         WriteTransaction,
@@ -31,7 +27,10 @@ use crate::database::{
     Database,
 };
 
-pub struct GenesisRunner<Handler, Groups, DbDesc: DatabaseDescription> {
+pub struct GenesisRunner<Handler, Groups, DbDesc>
+where
+    DbDesc: DatabaseDescription,
+{
     handler: Handler,
     skip: usize,
     groups: Groups,
@@ -52,24 +51,11 @@ pub trait ProcessState {
     ) -> anyhow::Result<()>;
 }
 
-impl<Logic, GroupGenerator, DbDesc: DatabaseDescription>
-    GenesisRunner<Logic, GroupGenerator, DbDesc>
+impl<Logic, GroupGenerator, DbDesc> GenesisRunner<Logic, GroupGenerator, DbDesc>
 where
+    DbDesc: DatabaseDescription,
     Logic: ProcessState<DbDesc = DbDesc>,
-    GroupGenerator:
-        IntoIterator<Item = anyhow::Result<Group<TableEntry<Logic::TableInSnapshot>>>>,
-    GenesisMetadata<DbDesc>: TableWithBlueprint<
-        Column = DbDesc::Column,
-        Key = str,
-        Value = usize,
-        OwnedValue = usize,
-    >,
-    Database<DbDesc>:
-        StorageInspect<GenesisMetadata<DbDesc>> + WriteTransaction + Modifiable,
-    for<'a> StructuredStorage<InMemoryTransaction<&'a mut Database<DbDesc>>>:
-        StorageMutate<GenesisMetadata<DbDesc>, Error = fuel_core_storage::Error>,
-    for<'a> StructuredStorage<InMemoryTransaction<&'a mut Database<DbDesc>>>:
-        StorageInspect<GenesisMetadata<DbDesc>>,
+    Database<DbDesc>: StorageInspect<GenesisMetadata<DbDesc>>,
 {
     pub fn new(
         finished_signal: Option<Arc<Notify>>,
@@ -97,7 +83,25 @@ where
             db,
         }
     }
+}
 
+impl<Logic, GroupGenerator, DbDesc> GenesisRunner<Logic, GroupGenerator, DbDesc>
+where
+    DbDesc: DatabaseDescription,
+    Logic: ProcessState<DbDesc = DbDesc>,
+    GroupGenerator:
+        IntoIterator<Item = anyhow::Result<Group<TableEntry<Logic::TableInSnapshot>>>>,
+    GenesisMetadata<DbDesc>: TableWithBlueprint<
+        Column = DbDesc::Column,
+        Key = str,
+        Value = usize,
+        OwnedValue = usize,
+    >,
+    Database<DbDesc>:
+        StorageInspect<GenesisMetadata<DbDesc>> + WriteTransaction + Modifiable,
+    for<'a> StorageTransaction<&'a mut Database<DbDesc>>:
+        StorageMutate<GenesisMetadata<DbDesc>, Error = fuel_core_storage::Error>,
+{
     pub fn run(mut self) -> anyhow::Result<()> {
         tracing::info!(
             "Starting genesis runner. Reading: {} writing into {}",

@@ -89,6 +89,7 @@ impl GenesisWorkers {
 
     pub async fn run_off_chain_imports(&mut self) -> anyhow::Result<()> {
         tracing::info!("Running off-chain imports");
+        // TODO: Should we insert a FuelBlockIdsToHeights entry for the genesis block?
         tokio::try_join!(
             self.spawn_worker_off_chain::<TransactionStatuses, TransactionStatuses>()?,
             self.spawn_worker_off_chain::<OwnedTransactions, OwnedTransactions>()?,

@@ -1,12 +1,3 @@
-use fuel_core_types::services::block_importer::UncommittedResult as UncommittedImportResult;
-
-pub mod off_chain;
-pub mod on_chain;
-mod runner;
-mod workers;
-
-pub use runner::GenesisRunner;
-
 use crate::{
     combined_database::CombinedDatabase,
     database::{
@@ -18,7 +9,6 @@ use crate::{
     },
     service::config::Config,
 };
-
 use fuel_core_chain_config::GenesisCommitment;
 use fuel_core_storage::{
     iter::IteratorOverTable,
@@ -52,9 +42,19 @@ use fuel_core_types::{
         SealedBlock,
     },
     fuel_types::Bytes32,
-    services::block_importer::ImportResult,
+    services::block_importer::{
+        ImportResult,
+        UncommittedResult as UncommittedImportResult,
+    },
 };
 use itertools::Itertools;
+
+pub mod off_chain;
+pub mod on_chain;
+mod runner;
+mod workers;
+
+pub use runner::GenesisRunner;
 
 /// Performs the importing of the genesis block from the snapshot.
 pub async fn execute_genesis_block(
