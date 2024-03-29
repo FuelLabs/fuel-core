@@ -775,6 +775,8 @@ mod tests {
 
         assert_eq!(written_data.common.block, state.common.block);
 
+        // Needed because of the way the test case macro works
+        #[allow(irrefutable_let_patterns)]
         if let Encoding::Json = encoding {
             assert_ne!(written_data.common, state.common);
             assert_eq!(written_data.common, state.common.sorted());
