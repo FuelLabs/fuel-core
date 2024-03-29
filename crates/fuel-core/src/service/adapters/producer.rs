@@ -145,7 +145,7 @@ impl fuel_core_producer::ports::Relayer for MaybeRelayerAdapter {
         #[cfg(not(feature = "relayer"))]
         {
             anyhow::ensure!(
-                **height == 0,
+                **starting_from == 0,
                 "Cannot have a da height above zero without a relayer"
             );
             // If the relayer is not enabled, then all blocks are zero.
@@ -154,6 +154,7 @@ impl fuel_core_producer::ports::Relayer for MaybeRelayerAdapter {
     }
 }
 
+#[cfg(feature = "relayer")]
 fn get_gas_cost_for_height(
     height: u64,
     sync: &fuel_core_relayer::SharedState<Database<Relayer>>,
