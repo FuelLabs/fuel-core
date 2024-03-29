@@ -275,7 +275,7 @@ mod produce_and_execute_block_txpool {
         let latest_da_blocks_with_costs = vec![(prev_da_height - 1u64.into(), 0)];
         let ctx = TestContextBuilder::new()
             .with_latest_blocks_with_gas_costs(latest_da_blocks_with_costs)
-            .with_prev_da_height(prev_da_height.into())
+            .with_prev_da_height(prev_da_height)
             .with_prev_height(prev_height)
             .build();
 
@@ -299,7 +299,7 @@ mod produce_and_execute_block_txpool {
                 Some(Error::InvalidDaFinalizationState {
                     previous_block,
                     best
-                }) if *previous_block == prev_da_height.into() && *best == prev_da_height - 1u64.into()
+                }) if *previous_block == prev_da_height && *best == prev_da_height - 1u64.into()
             ),
             "unexpected err {err:?}"
         );
@@ -542,7 +542,7 @@ impl TestContextBuilder {
     }
 
     fn build(&self) -> TestContext<MockExecutor> {
-        let da_height = self.prev_da_height.into();
+        let da_height = self.prev_da_height;
         let previous_block = PartialFuelBlock {
             header: PartialBlockHeader {
                 application: ApplicationHeader {
@@ -550,7 +550,7 @@ impl TestContextBuilder {
                     ..Default::default()
                 },
                 consensus: ConsensusHeader {
-                    height: self.prev_height.into(),
+                    height: self.prev_height,
                     ..Default::default()
                 },
             },
