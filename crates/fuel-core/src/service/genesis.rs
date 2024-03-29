@@ -28,7 +28,8 @@ use fuel_core_storage::{
     },
     transactional::{
         Changes,
-        WriteTransaction,
+        ReadTransaction,
+        StorageTransaction,
     },
     StorageAsMut,
 };
@@ -53,7 +54,6 @@ use fuel_core_types::{
     fuel_types::Bytes32,
     services::block_importer::ImportResult,
 };
-
 use itertools::Itertools;
 
 /// Performs the importing of the genesis block from the snapshot.
