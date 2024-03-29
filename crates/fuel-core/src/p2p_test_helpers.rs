@@ -5,6 +5,7 @@ use crate::{
         CoinConfig,
         CoinConfigGenerator,
     },
+    combined_database::CombinedDatabase,
     database::Database,
     p2p::Multiaddr,
     service::{
@@ -398,13 +399,13 @@ pub async fn make_node(node_config: Config, test_txs: Vec<Transaction>) -> Node 
 
 async fn extract_p2p_config(node_config: &Config) -> fuel_core_p2p::config::Config {
     let bootstrap_config = node_config.p2p.clone();
-    let db = Database::in_memory();
+    let db = CombinedDatabase::in_memory();
     crate::service::genesis::execute_and_commit_genesis_block(node_config, &db)
         .await
         .unwrap();
     bootstrap_config
         .unwrap()
-        .init(db.get_genesis().unwrap())
+        .init(db.on_chain().get_genesis().unwrap())
         .unwrap()
 }
 

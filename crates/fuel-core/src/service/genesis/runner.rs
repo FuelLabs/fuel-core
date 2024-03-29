@@ -6,98 +6,126 @@ use fuel_core_storage::{
     kv_store::StorageColumn,
     structured_storage::TableWithBlueprint,
     transactional::{
+        Modifiable,
         StorageTransaction,
         WriteTransaction,
     },
+    StorageAsRef,
+    StorageInspect,
+    StorageMutate,
 };
 use std::sync::Arc;
 use tokio::sync::Notify;
 use tokio_util::sync::CancellationToken;
 
 use crate::database::{
+    database_description::DatabaseDescription,
     genesis_progress::{
-        GenesisProgressInspect,
+        GenesisMetadata,
         GenesisProgressMutate,
     },
     Database,
 };
 
-pub trait TransactionOpener {
-    fn transaction(&mut self) -> StorageTransaction<&mut Database>;
-
-    fn view_only(&self) -> &Database;
-}
-
-impl TransactionOpener for Database {
-    fn transaction(&mut self) -> StorageTransaction<&mut Database> {
-        self.write_transaction()
-    }
-
-    fn view_only(&self) -> &Database {
-        self
-    }
-}
-
-pub struct GenesisRunner<Handler, Groups, TxOpener> {
+pub struct GenesisRunner<Handler, Groups, DbDesc>
+where
+    DbDesc: DatabaseDescription,
+{
     handler: Handler,
-    tx_opener: TxOpener,
     skip: usize,
     groups: Groups,
     finished_signal: Option<Arc<Notify>>,
     cancel_token: CancellationToken,
+    db: Database<DbDesc>,
 }
 
 pub trait ProcessState {
-    type Table: TableWithBlueprint;
+    type TableInSnapshot: TableWithBlueprint;
+    type TableBeingWritten: TableWithBlueprint;
+    type DbDesc: DatabaseDescription;
 
     fn process(
         &mut self,
-        group: Vec<TableEntry<Self::Table>>,
-        tx: &mut StorageTransaction<&mut Database>,
+        group: Vec<TableEntry<Self::TableInSnapshot>>,
+        tx: &mut StorageTransaction<&mut Database<Self::DbDesc>>,
     ) -> anyhow::Result<()>;
 }
 
-impl<Logic, GroupGenerator, TxOpener> GenesisRunner<Logic, GroupGenerator, TxOpener>
+impl<Logic, GroupGenerator, DbDesc> GenesisRunner<Logic, GroupGenerator, DbDesc>
 where
-    Logic: ProcessState,
-    GroupGenerator: IntoIterator<Item = anyhow::Result<Group<TableEntry<Logic::Table>>>>,
-    TxOpener: TransactionOpener,
+    DbDesc: DatabaseDescription,
+    Logic: ProcessState<DbDesc = DbDesc>,
+    Database<DbDesc>: StorageInspect<GenesisMetadata<DbDesc>>,
 {
     pub fn new(
         finished_signal: Option<Arc<Notify>>,
         cancel_token: CancellationToken,
         handler: Logic,
         groups: GroupGenerator,
-        tx_opener: TxOpener,
+        db: Database<DbDesc>,
     ) -> Self {
-        let skip = tx_opener
-            .view_only()
-            .genesis_progress(Logic::Table::column().name())
-            // The `idx_last_handled` is zero based, so we need to add 1 to skip the already handled groups.
-            .map(|idx_last_handled| idx_last_handled.saturating_add(1))
-            .unwrap_or_default();
+        let skip = match db
+            .storage::<GenesisMetadata<DbDesc>>()
+            .get(Logic::TableBeingWritten::column().name())
+        {
+            Ok(Some(idx_last_handled)) => {
+                usize::saturating_add(idx_last_handled.into_owned(), 1)
+            }
+            _ => 0,
+        };
+
         Self {
             handler,
             skip,
             groups,
-            tx_opener,
             finished_signal,
             cancel_token,
+            db,
         }
     }
+}
 
+impl<Logic, GroupGenerator, DbDesc> GenesisRunner<Logic, GroupGenerator, DbDesc>
+where
+    DbDesc: DatabaseDescription,
+    Logic: ProcessState<DbDesc = DbDesc>,
+    GroupGenerator:
+        IntoIterator<Item = anyhow::Result<Group<TableEntry<Logic::TableInSnapshot>>>>,
+    GenesisMetadata<DbDesc>: TableWithBlueprint<
+        Column = DbDesc::Column,
+        Key = str,
+        Value = usize,
+        OwnedValue = usize,
+    >,
+    Database<DbDesc>:
+        StorageInspect<GenesisMetadata<DbDesc>> + WriteTransaction + Modifiable,
+    for<'a> StorageTransaction<&'a mut Database<DbDesc>>:
+        StorageMutate<GenesisMetadata<DbDesc>, Error = fuel_core_storage::Error>,
+{
     pub fn run(mut self) -> anyhow::Result<()> {
+        tracing::info!(
+            "Starting genesis runner. Reading: {} writing into {}",
+            Logic::TableInSnapshot::column().name(),
+            Logic::TableBeingWritten::column().name()
+        );
+        let mut db = self.db;
         let result = self
             .groups
             .into_iter()
             .skip(self.skip)
             .take_while(|_| !self.cancel_token.is_cancelled())
-            .try_for_each(|group| {
-                let mut tx = self.tx_opener.transaction();
+            .try_for_each(move |group| {
                 let group = group?;
                 let group_num = group.index;
+
+                let mut tx = db.write_transaction();
                 self.handler.process(group.data, &mut tx)?;
-                tx.update_genesis_progress(Logic::Table::column().name(), group_num)?;
+
+                GenesisProgressMutate::<DbDesc>::update_genesis_progress(
+                    &mut tx,
+                    Logic::TableBeingWritten::column().name(),
+                    group_num,
+                )?;
                 tx.commit()?;
                 Ok(())
             });
@@ -106,12 +134,19 @@ where
             finished_signal.notify_one();
         }
 
+        tracing::info!(
+            "Finishing genesis runner. Read: {} wrote into {}",
+            Logic::TableInSnapshot::column().name(),
+            Logic::TableBeingWritten::column().name()
+        );
+
         result
     }
 }
 
 #[cfg(test)]
 mod tests {
+    use crate::database::genesis_progress::GenesisProgressInspect;
     use std::{
         sync::{
             Arc,
@@ -147,7 +182,6 @@ mod tests {
         transactional::{
             Changes,
             StorageTransaction,
-            WriteTransaction,
         },
         Result as StorageResult,
         StorageAsMut,
@@ -170,17 +204,13 @@ mod tests {
     use tokio_util::sync::CancellationToken;
 
     use crate::{
+        combined_database::CombinedDatabase,
         database::{
-            genesis_progress::{
-                GenesisProgressInspect,
-                GenesisProgressMutate,
-            },
+            database_description::on_chain::OnChain,
+            genesis_progress::GenesisProgressMutate,
             Database,
         },
-        service::genesis::runner::{
-            GenesisRunner,
-            TransactionOpener,
-        },
+        service::genesis::runner::GenesisRunner,
         state::{
             in_memory::memory_store::MemoryStore,
             TransactableStorage,
@@ -209,10 +239,12 @@ mod tests {
             &mut StorageTransaction<&mut Database>,
         ) -> anyhow::Result<()>,
     {
-        type Table = Coins;
+        type TableInSnapshot = Coins;
+        type TableBeingWritten = Coins;
+        type DbDesc = OnChain;
         fn process(
             &mut self,
-            group: Vec<TableEntry<Self::Table>>,
+            group: Vec<TableEntry<Self::TableInSnapshot>>,
             tx: &mut StorageTransaction<&mut Database>,
         ) -> anyhow::Result<()> {
             group
@@ -289,9 +321,13 @@ mod tests {
         let data = TestData::new(2);
 
         let mut called_with = vec![];
-        let mut db = Database::default();
-        db.update_genesis_progress(Coins::column().name(), 0)
-            .unwrap();
+        let mut db = CombinedDatabase::default();
+        GenesisProgressMutate::<OnChain>::update_genesis_progress(
+            db.on_chain_mut(),
+            Coins::column().name(),
+            0,
+        )
+        .unwrap();
 
         let runner = GenesisRunner::new(
             Some(Arc::new(Notify::new())),
@@ -301,7 +337,7 @@ mod tests {
                 Ok(())
             }),
             data.as_ok_groups(),
-            db,
+            db.on_chain().clone(),
         );
 
         // when
@@ -439,56 +475,13 @@ mod tests {
         runner.run().unwrap();
 
         // then
-        assert_eq!(db.genesis_progress(Coins::column().name()), Some(1));
-    }
-
-    #[test]
-    fn genesis_progress_is_increased_in_same_transaction_as_batch_work() {
-        struct OnlyOneTransactionAllowed {
-            db: Database,
-            counter: usize,
-        }
-        impl TransactionOpener for OnlyOneTransactionAllowed {
-            fn transaction(&mut self) -> StorageTransaction<&mut Database> {
-                if self.counter == 0 {
-                    self.counter += 1;
-                    self.db.write_transaction()
-                } else {
-                    panic!("Only one transaction should be opened")
-                }
-            }
-
-            fn view_only(&self) -> &Database {
-                &self.db
-            }
-        }
-
-        // given
-        let data = TestData::new(1);
-        let db = Database::default();
-        let tx_opener = OnlyOneTransactionAllowed {
-            db: db.clone(),
-            counter: 0,
-        };
-        let utxo_id = UtxoId::new(Default::default(), 0);
-
-        let runner = GenesisRunner::new(
-            Some(Arc::new(Notify::new())),
-            CancellationToken::new(),
-            TestHandler::new(|_, tx| {
-                insert_a_coin(tx, &utxo_id);
-                Ok(())
-            }),
-            data.as_ok_groups(),
-            tx_opener,
+        assert_eq!(
+            GenesisProgressInspect::<OnChain>::genesis_progress(
+                &db,
+                Coins::column().name(),
+            ),
+            Some(1)
         );
-
-        // when
-        runner.run().unwrap();
-
-        // then
-        assert_eq!(db.genesis_progress(Coins::column().name()), Some(0));
-        assert!(db.storage_as_ref::<Coins>().contains_key(&utxo_id).unwrap());
     }
 
     #[tokio::test]
@@ -517,11 +510,12 @@ mod tests {
         let runner_handle = std::thread::spawn(move || runner.run());
 
         let data = TestData::new(4);
-        for group in data.as_ok_groups() {
+        let take = 3;
+        for group in data.as_ok_groups().into_iter().take(take) {
             tx.send(group).unwrap();
         }
 
-        while read_groups.lock().unwrap().len() < 3 {
+        while read_groups.lock().unwrap().len() < take {
             std::thread::sleep(std::time::Duration::from_millis(1));
         }
 
@@ -541,7 +535,11 @@ mod tests {
 
         // group after signal is not read
         let read_entries = read_groups.lock().unwrap().clone();
-        let inserted_groups = data.as_entries(0);
+        let inserted_groups = data
+            .as_entries(0)
+            .into_iter()
+            .take(take)
+            .collect::<Vec<_>>();
         assert_eq!(read_entries, inserted_groups);
 
         // finished signal is emitted

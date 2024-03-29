@@ -102,14 +102,19 @@ impl Database<OnChain> {
             .map(|(_, block)| block)
             .ok_or_else(|| not_found!("FuelBlocks"))
     }
+}
 
+impl<DbDesc> Database<DbDesc>
+where
+    DbDesc: DatabaseDescription,
+{
     pub fn entries<'a, T>(
         &'a self,
         prefix: Option<&[u8]>,
         direction: IterDirection,
     ) -> impl Iterator<Item = StorageResult<TableEntry<T>>> + 'a
     where
-        T: TableWithBlueprint<Column = <OnChain as DatabaseDescription>::Column>,
+        T: TableWithBlueprint<Column = <DbDesc as DatabaseDescription>::Column>,
         T::OwnedValue: 'a,
         T::OwnedKey: 'a,
         T::Blueprint: BlueprintInspect<T, Self>,
@@ -141,7 +146,7 @@ where
     #[cfg(feature = "rocksdb")]
     pub fn open_rocksdb(path: &Path, capacity: impl Into<Option<usize>>) -> Result<Self> {
         use anyhow::Context;
-        let db = RocksDb::<Description>::default_open(path, capacity.into()).map_err(Into::<anyhow::Error>::into).context("Failed to open rocksdb, you may need to wipe a pre-existing incompatible db `rm -rf ~/.fuel/db`")?;
+        let db = RocksDb::<Description>::default_open(path, capacity.into()).map_err(Into::<anyhow::Error>::into).with_context(|| format!("Failed to open rocksdb, you may need to wipe a pre-existing incompatible db e.g. `rm -rf {path:?}`"))?;
 
         Ok(Database::new(Arc::new(db)))
     }

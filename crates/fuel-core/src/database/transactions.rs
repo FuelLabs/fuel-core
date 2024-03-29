@@ -10,6 +10,7 @@ use crate::{
         TransactionStatuses,
     },
 };
+
 use fuel_core_storage::{
     iter::{
         IterDirection,

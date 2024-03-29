@@ -1,118 +1,164 @@
+use std::borrow::Cow;
+
 use crate::{
+    combined_database::CombinedDatabase,
     database::{
-        database_description::{
-            off_chain::OffChain,
-            on_chain::OnChain,
-        },
+        database_description::off_chain::OffChain,
         Database,
     },
-    graphql_api::worker_service,
+    graphql_api::{
+        storage::{
+            blocks::FuelBlockIdsToHeights,
+            coins::OwnedCoins,
+            contracts::ContractsInfo,
+            messages::OwnedMessageIds,
+            transactions::{
+                OwnedTransactions,
+                TransactionStatuses,
+            },
+        },
+        worker_service,
+    },
+};
+use fuel_core_chain_config::{
+    SnapshotReader,
+    TableEntry,
 };
 use fuel_core_storage::{
-    iter::IteratorOverTable,
     tables::{
         Coins,
         Messages,
         Transactions,
     },
-    transactional::WriteTransaction,
+    transactional::StorageTransaction,
+    StorageAsMut,
 };
-use fuel_core_txpool::types::TxId;
-use fuel_core_types::{
-    entities::{
-        coins::coin::CompressedCoin,
-        Message,
+use fuel_core_types::services::executor::Event;
+
+use super::{
+    runner::ProcessState,
+    workers::{
+        GenesisWorkers,
+        Handler,
     },
-    fuel_tx::{
-        Transaction,
-        UtxoId,
-    },
-    fuel_types::Nonce,
-    services::executor::Event,
 };
-use itertools::Itertools;
-use std::borrow::Cow;
 
-fn process_messages(
-    original_database: &mut Database<OffChain>,
-    messages: Vec<(Nonce, Message)>,
+pub async fn import_state(
+    db: CombinedDatabase,
+    snapshot_reader: SnapshotReader,
 ) -> anyhow::Result<()> {
-    let mut database_transaction = original_database.write_transaction();
+    let mut workers = GenesisWorkers::new(db, snapshot_reader);
+    if let Err(e) = workers.run_off_chain_imports().await {
+        workers.shutdown();
+        workers.finished().await;
 
-    let message_events = messages
-        .into_iter()
-        .map(|(_, message)| Cow::Owned(Event::MessageImported(message)));
-
-    worker_service::process_executor_events(message_events, &mut database_transaction)?;
-
-    database_transaction.commit()?;
+        return Err(e);
+    }
     Ok(())
 }
 
-fn process_coins(
-    original_database: &mut Database<OffChain>,
-    coins: Vec<(UtxoId, CompressedCoin)>,
-) -> anyhow::Result<()> {
-    let mut database_transaction = original_database.write_transaction();
+impl ProcessState for Handler<TransactionStatuses> {
+    type TableInSnapshot = TransactionStatuses;
+    type TableBeingWritten = TransactionStatuses;
+    type DbDesc = OffChain;
 
-    let coin_events = coins.into_iter().map(|(utxo_id, coin)| {
-        let coin = coin.uncompress(utxo_id);
-        Cow::Owned(Event::CoinCreated(coin))
-    });
-
-    worker_service::process_executor_events(coin_events, &mut database_transaction)?;
-
-    database_transaction.commit()?;
-    Ok(())
+    fn process(
+        &mut self,
+        group: Vec<TableEntry<Self::TableInSnapshot>>,
+        tx: &mut StorageTransaction<&mut Database<Self::DbDesc>>,
+    ) -> anyhow::Result<()> {
+        for tx_status in group {
+            tx.storage::<Self::TableInSnapshot>()
+                .insert(&tx_status.key, &tx_status.value)?;
+        }
+        Ok(())
+    }
 }
 
-fn process_transactions(
-    original_database: &mut Database<OffChain>,
-    transactions: Vec<(TxId, Transaction)>,
-) -> anyhow::Result<()> {
-    let mut database_transaction = original_database.write_transaction();
+impl ProcessState for Handler<FuelBlockIdsToHeights> {
+    type TableInSnapshot = FuelBlockIdsToHeights;
+    type TableBeingWritten = FuelBlockIdsToHeights;
+    type DbDesc = OffChain;
 
-    let transactions = transactions.iter().map(|(_, tx)| tx);
-
-    worker_service::process_transactions(transactions, &mut database_transaction)?;
-
-    database_transaction.commit()?;
-    Ok(())
+    fn process(
+        &mut self,
+        group: Vec<TableEntry<Self::TableInSnapshot>>,
+        tx: &mut StorageTransaction<&mut Database<Self::DbDesc>>,
+    ) -> anyhow::Result<()> {
+        for entry in group {
+            tx.storage::<Self::TableInSnapshot>()
+                .insert(&entry.key, &entry.value)?;
+        }
+        Ok(())
+    }
 }
 
-/// Performs the importing of the genesis block from the snapshot.
-// TODO: The regenesis of the off-chain database should go in the same way as the on-chain database.
-//  https://github.com/FuelLabs/fuel-core/issues/1619
-pub fn execute_genesis_block(
-    on_chain_database: &Database<OnChain>,
-    off_chain_database: &mut Database<OffChain>,
-) -> anyhow::Result<()> {
-    for chunk in on_chain_database
-        .iter_all::<Messages>(None)
-        .chunks(1000)
-        .into_iter()
-    {
-        let chunk: Vec<_> = chunk.try_collect()?;
-        process_messages(off_chain_database, chunk)?;
-    }
+impl ProcessState for Handler<OwnedTransactions> {
+    type TableInSnapshot = OwnedTransactions;
+    type TableBeingWritten = OwnedTransactions;
+    type DbDesc = OffChain;
 
-    for chunk in on_chain_database
-        .iter_all::<Coins>(None)
-        .chunks(1000)
-        .into_iter()
-    {
-        let chunk: Vec<_> = chunk.try_collect()?;
-        process_coins(off_chain_database, chunk)?;
+    fn process(
+        &mut self,
+        group: Vec<TableEntry<Self::TableInSnapshot>>,
+        tx: &mut StorageTransaction<&mut Database<Self::DbDesc>>,
+    ) -> anyhow::Result<()> {
+        for entry in group {
+            tx.storage::<OwnedTransactions>()
+                .insert(&entry.key, &entry.value)?;
+        }
+        Ok(())
     }
+}
 
-    for chunk in on_chain_database
-        .iter_all::<Transactions>(None)
-        .chunks(1000)
-        .into_iter()
-    {
-        let chunk: Vec<_> = chunk.try_collect()?;
-        process_transactions(off_chain_database, chunk)?;
+impl ProcessState for Handler<OwnedMessageIds> {
+    type TableInSnapshot = Messages;
+    type TableBeingWritten = OwnedMessageIds;
+    type DbDesc = OffChain;
+
+    fn process(
+        &mut self,
+        group: Vec<TableEntry<Self::TableInSnapshot>>,
+        tx: &mut StorageTransaction<&mut Database<Self::DbDesc>>,
+    ) -> anyhow::Result<()> {
+        let events = group
+            .into_iter()
+            .map(|TableEntry { value, .. }| Cow::Owned(Event::MessageImported(value)));
+        worker_service::process_executor_events(events, tx)?;
+        Ok(())
     }
+}
 
-    Ok(())
+impl ProcessState for Handler<OwnedCoins> {
+    type TableInSnapshot = Coins;
+    type TableBeingWritten = OwnedCoins;
+    type DbDesc = OffChain;
+
+    fn process(
+        &mut self,
+        group: Vec<TableEntry<Self::TableInSnapshot>>,
+        tx: &mut StorageTransaction<&mut Database<Self::DbDesc>>,
+    ) -> anyhow::Result<()> {
+        let events = group.into_iter().map(|TableEntry { value, key }| {
+            Cow::Owned(Event::CoinCreated(value.uncompress(key)))
+        });
+        worker_service::process_executor_events(events, tx)?;
+        Ok(())
+    }
+}
+
+impl ProcessState for Handler<ContractsInfo> {
+    type TableInSnapshot = Transactions;
+    type TableBeingWritten = ContractsInfo;
+    type DbDesc = OffChain;
+
+    fn process(
+        &mut self,
+        group: Vec<TableEntry<Self::TableInSnapshot>>,
+        tx: &mut StorageTransaction<&mut Database<Self::DbDesc>>,
+    ) -> anyhow::Result<()> {
+        let transactions = group.iter().map(|TableEntry { value, .. }| value);
+        worker_service::process_transactions(transactions, tx)?;
+        Ok(())
+    }
 }
