@@ -510,11 +510,12 @@ mod tests {
         let runner_handle = std::thread::spawn(move || runner.run());
 
         let data = TestData::new(4);
-        for group in data.as_ok_groups() {
+        let take = 3;
+        for group in data.as_ok_groups().into_iter().take(take) {
             tx.send(group).unwrap();
         }
 
-        while read_groups.lock().unwrap().len() < 3 {
+        while read_groups.lock().unwrap().len() < take {
             std::thread::sleep(std::time::Duration::from_millis(1));
         }
 
@@ -534,7 +535,11 @@ mod tests {
 
         // group after signal is not read
         let read_entries = read_groups.lock().unwrap().clone();
-        let inserted_groups = data.as_entries(0);
+        let inserted_groups = data
+            .as_entries(0)
+            .into_iter()
+            .take(take)
+            .collect::<Vec<_>>();
         assert_eq!(read_entries, inserted_groups);
 
         // finished signal is emitted
