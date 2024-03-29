@@ -28,8 +28,8 @@ use fuel_core_storage::{
     },
     transactional::{
         Changes,
+        IntoTransaction,
         ReadTransaction,
-        StorageTransaction,
     },
     StorageAsMut,
 };
@@ -92,8 +92,7 @@ pub async fn execute_genesis_block(
         consensus,
     };
 
-    let mut off_chain = db.off_chain().clone();
-    let mut database_transaction_off_chain = off_chain.write_transaction();
+    let mut database_transaction_off_chain = db.off_chain().clone().into_transaction();
     for key in genesis_progress_off_chain {
         database_transaction_off_chain
             .storage_as_mut::<GenesisMetadata<OffChain>>()
@@ -101,8 +100,7 @@ pub async fn execute_genesis_block(
     }
     database_transaction_off_chain.commit()?;
 
-    let mut on_chain = db.on_chain().clone();
-    let mut database_transaction_on_chain = on_chain.write_transaction();
+    let mut database_transaction_on_chain = db.on_chain().read_transaction();
     // TODO: The chain config should be part of the snapshot state.
     //  https://github.com/FuelLabs/fuel-core/issues/1570
     database_transaction_on_chain
