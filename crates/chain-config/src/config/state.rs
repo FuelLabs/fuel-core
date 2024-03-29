@@ -17,6 +17,7 @@ use fuel_core_storage::{
         ContractsRawCode,
         ContractsState,
         Messages,
+        Transactions,
     },
     ContractsAssetKey,
     ContractsStateKey,
@@ -221,33 +222,13 @@ impl AddTable<Coins> for StateConfigBuilder {
     }
 }
 
-impl AddTable<Messages> for StateConfigBuilder {
-    fn add(&mut self, entries: Vec<TableEntry<Messages>>) {
-        self.messages.extend(entries);
-    }
-}
-
-impl AddTable<ContractsState> for StateConfigBuilder {
-    fn add(&mut self, entries: Vec<TableEntry<ContractsState>>) {
-        self.contract_state.extend(entries);
-    }
-}
-
-impl AddTable<ContractsAssets> for StateConfigBuilder {
-    fn add(&mut self, entries: Vec<TableEntry<ContractsAssets>>) {
-        self.contract_balance.extend(entries);
-    }
-}
-
-impl AddTable<ContractsRawCode> for StateConfigBuilder {
-    fn add(&mut self, entries: Vec<TableEntry<ContractsRawCode>>) {
-        self.contract_code.extend(entries);
-    }
-}
-
-impl AddTable<ContractsLatestUtxo> for StateConfigBuilder {
-    fn add(&mut self, entries: Vec<TableEntry<ContractsLatestUtxo>>) {
-        self.contract_utxo.extend(entries);
+impl AsTable<Coins> for StateConfig {
+    fn as_table(&self) -> Vec<TableEntry<Coins>> {
+        self.coins
+            .clone()
+            .into_iter()
+            .map(|coin| coin.into())
+            .collect()
     }
 }
 
@@ -281,16 +262,6 @@ where
     fn as_table(&self) -> Vec<TableEntry<T>>;
 }
 
-impl AsTable<Coins> for StateConfig {
-    fn as_table(&self) -> Vec<TableEntry<Coins>> {
-        self.coins
-            .clone()
-            .into_iter()
-            .map(|coin| coin.into())
-            .collect()
-    }
-}
-
 impl AsTable<Messages> for StateConfig {
     fn as_table(&self) -> Vec<TableEntry<Messages>> {
         self.messages
@@ -298,6 +269,12 @@ impl AsTable<Messages> for StateConfig {
             .into_iter()
             .map(|message| message.into())
             .collect()
+    }
+}
+
+impl AddTable<Messages> for StateConfigBuilder {
+    fn add(&mut self, entries: Vec<TableEntry<Messages>>) {
+        self.messages.extend(entries);
     }
 }
 
@@ -319,6 +296,13 @@ impl AsTable<ContractsState> for StateConfig {
             .collect()
     }
 }
+
+impl AddTable<ContractsState> for StateConfigBuilder {
+    fn add(&mut self, entries: Vec<TableEntry<ContractsState>>) {
+        self.contract_state.extend(entries);
+    }
+}
+
 impl AsTable<ContractsAssets> for StateConfig {
     fn as_table(&self) -> Vec<TableEntry<ContractsAssets>> {
         self.contracts
@@ -335,6 +319,12 @@ impl AsTable<ContractsAssets> for StateConfig {
     }
 }
 
+impl AddTable<ContractsAssets> for StateConfigBuilder {
+    fn add(&mut self, entries: Vec<TableEntry<ContractsAssets>>) {
+        self.contract_balance.extend(entries);
+    }
+}
+
 impl AsTable<ContractsRawCode> for StateConfig {
     fn as_table(&self) -> Vec<TableEntry<ContractsRawCode>> {
         self.contracts
@@ -346,6 +336,13 @@ impl AsTable<ContractsRawCode> for StateConfig {
             .collect()
     }
 }
+
+impl AddTable<ContractsRawCode> for StateConfigBuilder {
+    fn add(&mut self, entries: Vec<TableEntry<ContractsRawCode>>) {
+        self.contract_code.extend(entries);
+    }
+}
+
 impl AsTable<ContractsLatestUtxo> for StateConfig {
     fn as_table(&self) -> Vec<TableEntry<ContractsLatestUtxo>> {
         self.contracts
@@ -360,6 +357,24 @@ impl AsTable<ContractsLatestUtxo> for StateConfig {
                 ),
             })
             .collect()
+    }
+}
+
+impl AddTable<ContractsLatestUtxo> for StateConfigBuilder {
+    fn add(&mut self, entries: Vec<TableEntry<ContractsLatestUtxo>>) {
+        self.contract_utxo.extend(entries);
+    }
+}
+
+impl AsTable<Transactions> for StateConfig {
+    fn as_table(&self) -> Vec<TableEntry<Transactions>> {
+        Vec::new() // Do not include these for now
+    }
+}
+
+impl AddTable<Transactions> for StateConfigBuilder {
+    fn add(&mut self, _entries: Vec<TableEntry<Transactions>>) {
+        // Do not include these for now
     }
 }
 

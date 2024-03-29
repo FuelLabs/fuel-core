@@ -1,5 +1,8 @@
 #![allow(clippy::let_unit_value)]
-use super::adapters::P2PAdapter;
+use super::{
+    adapters::P2PAdapter,
+    genesis::create_genesis_block,
+};
 use crate::{
     combined_database::CombinedDatabase,
     database::Database,
@@ -16,7 +19,6 @@ use crate::{
             TxPoolAdapter,
             VerifierAdapter,
         },
-        genesis::create_genesis_block,
         Config,
         SharedState,
         SubServices,

@@ -2,12 +2,9 @@ use self::adapters::BlockImporterAdapter;
 use crate::{
     combined_database::CombinedDatabase,
     database::Database,
-    service::{
-        adapters::{
-            P2PAdapter,
-            PoAAdapter,
-        },
-        genesis::execute_genesis_block,
+    service::adapters::{
+        P2PAdapter,
+        PoAAdapter,
     },
 };
 use fuel_core_poa::ports::BlockImporter;
@@ -18,10 +15,7 @@ use fuel_core_services::{
     State,
     StateWatcher,
 };
-use fuel_core_storage::{
-    transactional::AtomicView,
-    IsNotFound,
-};
+use fuel_core_storage::IsNotFound;
 use std::net::SocketAddr;
 
 use crate::service::adapters::StaticGasPrice;
@@ -231,16 +225,16 @@ impl RunnableService for Task {
         _: &StateWatcher,
         _: Self::TaskParams,
     ) -> anyhow::Result<Self::Task> {
-        let on_view = self.shared.database.on_chain().latest_view();
-        let mut off_view = self.shared.database.off_chain().latest_view();
         // check if chain is initialized
-        if let Err(err) = on_view.get_genesis() {
+        if let Err(err) = self.shared.database.on_chain().get_genesis() {
             if err.is_not_found() {
-                let result = execute_genesis_block(&self.shared.config, &on_view).await?;
+                let result = genesis::execute_genesis_block(
+                    &self.shared.config,
+                    &self.shared.database,
+                )
+                .await?;
 
                 self.shared.block_importer.commit_result(result).await?;
-
-                genesis::off_chain::execute_genesis_block(&on_view, &mut off_view)?;
             }
         }
 

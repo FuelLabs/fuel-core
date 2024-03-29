@@ -9,10 +9,15 @@ use fuel_core::{
     combined_database::CombinedDatabase,
     database::{
         database_description::{
+            off_chain::OffChain,
             on_chain::OnChain,
             DatabaseDescription,
         },
         Database,
+    },
+    fuel_core_graphql_api::storage::transactions::{
+        OwnedTransactions,
+        TransactionStatuses,
     },
     types::fuel_types::ContractId,
 };
@@ -34,6 +39,7 @@ use fuel_core_storage::{
         ContractsRawCode,
         ContractsState,
         Messages,
+        Transactions,
     },
 };
 use itertools::Itertools;
@@ -215,7 +221,7 @@ fn full_snapshot(
     prev_chain_config: Option<PathBuf>,
     output_dir: &Path,
     encoding: Encoding,
-    db: CombinedDatabase,
+    combined_db: CombinedDatabase,
 ) -> Result<(), anyhow::Error> {
     std::fs::create_dir_all(output_dir)?;
 
@@ -230,33 +236,39 @@ fn full_snapshot(
     let prev_chain_config = load_chain_config(prev_chain_config)?;
     writer.write_chain_config(&prev_chain_config)?;
 
-    fn write<T>(
-        db: &CombinedDatabase,
+    fn write<T, DbDesc>(
+        db: &Database<DbDesc>,
         group_size: usize,
         writer: &mut SnapshotWriter,
     ) -> anyhow::Result<()>
     where
-        T: TableWithBlueprint<Column = <OnChain as DatabaseDescription>::Column>,
-        T::Blueprint: BlueprintInspect<T, Database>,
+        T: TableWithBlueprint<Column = <DbDesc as DatabaseDescription>::Column>,
+        T::Blueprint: BlueprintInspect<T, Database<DbDesc>>,
         TableEntry<T>: serde::Serialize,
         StateConfigBuilder: AddTable<T>,
+        DbDesc: DatabaseDescription,
     {
-        db.on_chain()
-            .entries::<T>(None, IterDirection::Forward)
+        db.entries::<T>(None, IterDirection::Forward)
             .chunks(group_size)
             .into_iter()
             .try_for_each(|chunk| writer.write(chunk.try_collect()?))
     }
     let group_size = encoding.group_size().unwrap_or(MAX_GROUP_SIZE);
 
-    write::<Coins>(&db, group_size, &mut writer)?;
-    write::<Messages>(&db, group_size, &mut writer)?;
-    write::<ContractsRawCode>(&db, group_size, &mut writer)?;
-    write::<ContractsLatestUtxo>(&db, group_size, &mut writer)?;
-    write::<ContractsState>(&db, group_size, &mut writer)?;
-    write::<ContractsAssets>(&db, group_size, &mut writer)?;
+    let db = combined_db.on_chain();
+    write::<Coins, OnChain>(db, group_size, &mut writer)?;
+    write::<Messages, OnChain>(db, group_size, &mut writer)?;
+    write::<ContractsRawCode, OnChain>(db, group_size, &mut writer)?;
+    write::<ContractsLatestUtxo, OnChain>(db, group_size, &mut writer)?;
+    write::<ContractsState, OnChain>(db, group_size, &mut writer)?;
+    write::<ContractsAssets, OnChain>(db, group_size, &mut writer)?;
+    write::<Transactions, OnChain>(db, group_size, &mut writer)?;
 
-    let block = db.on_chain().latest_block()?;
+    let db = combined_db.off_chain();
+    write::<TransactionStatuses, OffChain>(db, group_size, &mut writer)?;
+    write::<OwnedTransactions, OffChain>(db, group_size, &mut writer)?;
+
+    let block = combined_db.on_chain().latest_block()?;
     writer.write_block_data(*block.header().height(), block.header().da_height)?;
 
     writer.close()?;
@@ -286,7 +298,7 @@ mod tests {
 
     use std::iter::repeat_with;
 
-    use fuel_core::database::Database;
+    use fuel_core::fuel_core_graphql_api::storage::transactions::OwnedTransactionIndexKey;
     use fuel_core_chain_config::{
         AddTable,
         AsTable,
@@ -306,10 +318,6 @@ mod tests {
             ContractsState,
             FuelBlocks,
             Messages,
-        },
-        transactional::{
-            IntoTransaction,
-            StorageTransaction,
         },
         ContractsAssetKey,
         ContractsStateKey,
@@ -332,9 +340,15 @@ mod tests {
             },
         },
         fuel_tx::{
+            Receipt,
+            TransactionBuilder,
             TxPointer,
+            UniqueIdentifier,
             UtxoId,
         },
+        fuel_types::ChainId,
+        services::txpool::TransactionStatus,
+        tai64::Tai64,
     };
     use rand::{
         rngs::StdRng,
@@ -349,12 +363,20 @@ mod tests {
     use super::*;
 
     struct DbPopulator {
-        db: StorageTransaction<Database>,
+        db: CombinedDatabase,
         rng: StdRng,
     }
 
     #[derive(Debug, PartialEq)]
-    struct OnChainData {
+    struct SnapshotData {
+        common: CommonData,
+        transactions: Vec<TableEntry<Transactions>>,
+        transaction_statuses: Vec<TableEntry<TransactionStatuses>>,
+        owned_transactions: Vec<TableEntry<OwnedTransactions>>,
+    }
+
+    #[derive(Debug, PartialEq)]
+    struct CommonData {
         coins: Vec<TableEntry<Coins>>,
         messages: Vec<TableEntry<Messages>>,
         contract_code: Vec<TableEntry<ContractsRawCode>>,
@@ -364,8 +386,8 @@ mod tests {
         block: TableEntry<FuelBlocks>,
     }
 
-    impl OnChainData {
-        fn sorted(mut self) -> OnChainData {
+    impl CommonData {
+        fn sorted(mut self) -> CommonData {
             self.coins.sort_by_key(|e| e.key);
             self.messages.sort_by_key(|e| e.key);
             self.contract_code.sort_by_key(|e| e.key);
@@ -374,20 +396,30 @@ mod tests {
             self.contract_balance.sort_by_key(|e| e.key);
             self
         }
+    }
+
+    impl SnapshotData {
+        fn sorted(mut self) -> SnapshotData {
+            self.common = self.common.sorted();
+            self.transactions.sort_by_key(|e| e.key);
+            self.transaction_statuses.sort_by_key(|e| e.key);
+            self.owned_transactions.sort_by_key(|e| e.key.clone());
+            self
+        }
 
         fn into_state_config(self) -> StateConfig {
             let mut builder = StateConfigBuilder::default();
-            builder.add(self.coins);
-            builder.add(self.messages);
-            builder.add(self.contract_code);
-            builder.add(self.contract_utxo);
-            builder.add(self.contract_state);
-            builder.add(self.contract_balance);
+            builder.add(self.common.coins);
+            builder.add(self.common.messages);
+            builder.add(self.common.contract_code);
+            builder.add(self.common.contract_utxo);
+            builder.add(self.common.contract_state);
+            builder.add(self.common.contract_balance);
 
-            let height = self.block.value.header().height();
+            let height = self.common.block.value.header().height();
             builder.set_block_height(*height);
 
-            let da_height = self.block.value.header().application().da_height;
+            let da_height = self.common.block.value.header().application().da_height;
             builder.set_da_block_height(da_height);
 
             builder.build().unwrap()
@@ -425,47 +457,40 @@ mod tests {
             let reader = &mut reader;
 
             Self {
-                coins: read(reader),
-                messages: read(reader),
-                contract_code: read(reader),
-                contract_utxo: read(reader),
-                contract_state: read(reader),
-                contract_balance: read(reader),
-                block,
+                common: CommonData {
+                    coins: read(reader),
+                    messages: read(reader),
+                    contract_code: read(reader),
+                    contract_utxo: read(reader),
+                    contract_state: read(reader),
+                    contract_balance: read(reader),
+                    block,
+                },
+                transactions: read(reader),
+                transaction_statuses: read(reader),
+                owned_transactions: read(reader),
             }
         }
     }
 
     impl DbPopulator {
         fn new(db: CombinedDatabase, rng: StdRng) -> Self {
-            Self {
-                db: (db.on_chain().clone()).into_transaction(),
-                rng,
-            }
+            Self { db, rng }
         }
 
-        fn commit(self) {
-            self.db.commit().expect("failed to commit transaction");
-        }
+        // Db will flush data upon being dropped. Important to do before snapshotting
+        fn flush(self) {}
 
-        fn given_persisted_on_chain_data(
-            &mut self,
-            coins: usize,
-            messages: usize,
-            contracts: usize,
-            states_per_contract: usize,
-            balances_per_contract: usize,
-        ) -> OnChainData {
-            let coins = repeat_with(|| self.given_coin()).take(coins).collect();
-            let messages = repeat_with(|| self.given_message())
-                .take(messages)
-                .collect();
+        fn given_persisted_data(&mut self) -> SnapshotData {
+            let amount = 10;
+            let coins = repeat_with(|| self.given_coin()).take(amount).collect();
+            let messages = repeat_with(|| self.given_message()).take(amount).collect();
 
             let contract_ids = repeat_with(|| {
                 let contract_id: ContractId = self.rng.gen();
                 contract_id
             })
-            .take(contracts)
+            .take(amount)
             .collect_vec();
 
             let contract_code = contract_ids
@@ -482,7 +507,7 @@ mod tests {
                 .iter()
                 .flat_map(|id| {
                     repeat_with(|| self.given_contract_state(*id))
-                        .take(states_per_contract)
+                        .take(amount)
                         .collect_vec()
                 })
                 .collect();
@@ -491,21 +516,91 @@ mod tests {
                 .iter()
                 .flat_map(|id| {
                     repeat_with(|| self.given_contract_asset(*id))
-                        .take(balances_per_contract)
+                        .take(amount)
                         .collect_vec()
                 })
                 .collect();
 
+            let transactions = vec![self.given_transaction()];
+
+            let transaction_statuses = vec![self.given_transaction_status()];
+
+            let owned_transactions = vec![self.given_owned_transaction()];
+
             let block = self.given_block();
-            OnChainData {
-                coins,
-                messages,
-                contract_code,
-                contract_utxo,
-                contract_state,
-                contract_balance,
-                block,
+
+            SnapshotData {
+                common: CommonData {
+                    coins,
+                    messages,
+                    contract_code,
+                    contract_utxo,
+                    contract_state,
+                    contract_balance,
+                    block,
+                },
+                transactions,
+                transaction_statuses,
+                owned_transactions,
             }
+        }
+
+        fn given_transaction(&mut self) -> TableEntry<Transactions> {
+            let tx = TransactionBuilder::script(
+                self.generate_data(1000),
+                self.generate_data(1000),
+            )
+            .finalize_as_transaction();
+
+            let id = tx.id(&ChainId::new(self.rng.gen::<u64>()));
+
+            self.db
+                .on_chain_mut()
+                .storage_as_mut::<Transactions>()
+                .insert(&id, &tx)
+                .unwrap();
+
+            TableEntry { key: id, value: tx }
+        }
+
+        fn given_transaction_status(&mut self) -> TableEntry<TransactionStatuses> {
+            let key = self.rng.gen();
+            let status = TransactionStatus::Success {
+                block_height: self.rng.gen(),
+                time: Tai64(self.rng.gen::<u32>().into()),
+                result: None,
+                receipts: vec![Receipt::Return {
+                    id: self.rng.gen(),
+                    val: self.rng.gen(),
+                    pc: self.rng.gen(),
+                    is: self.rng.gen(),
+                }],
+            };
+
+            self.db
+                .off_chain_mut()
+                .storage_as_mut::<TransactionStatuses>()
+                .insert(&key, &status)
+                .unwrap();
+
+            TableEntry { key, value: status }
+        }
+
+        fn given_owned_transaction(&mut self) -> TableEntry<OwnedTransactions> {
+            let key = OwnedTransactionIndexKey {
+                owner: self.rng.gen(),
+                block_height: self.rng.gen(),
+                tx_idx: self.rng.gen(),
+            };
+            let value = self.rng.gen();
+
+            self.db
+                .off_chain_mut()
+                .storage_as_mut::<OwnedTransactions>()
+                .insert(&key, &value)
+                .unwrap();
+
+            TableEntry { key, value }
         }
 
         fn given_block(&mut self) -> TableEntry<FuelBlocks> {
@@ -515,6 +610,7 @@ mod tests {
             block.header_mut().set_block_height(height);
             let _ = self
                 .db
+                .on_chain_mut()
                 .storage_as_mut::<FuelBlocks>()
                 .insert(&height, &block);
 
@@ -535,6 +631,7 @@ mod tests {
             });
             let key = UtxoId::new(tx_id, output_index);
             self.db
+                .on_chain_mut()
                 .storage_as_mut::<Coins>()
                 .insert(&key, &coin)
                 .unwrap();
@@ -554,6 +651,7 @@ mod tests {
 
             let key = *message.nonce();
             self.db
+                .on_chain_mut()
                 .storage_as_mut::<Messages>()
                 .insert(&key, &message)
                 .unwrap();
@@ -572,6 +670,7 @@ mod tests {
 
             let code = self.generate_data(1000);
             self.db
+                .on_chain_mut()
                 .storage_as_mut::<ContractsRawCode>()
                 .insert(&key, code.as_ref())
                 .unwrap();
@@ -591,6 +690,7 @@ mod tests {
 
             let value = ContractUtxoInfo::V1((utxo_id, tx_pointer).into());
             self.db
+                .on_chain_mut()
                 .storage::<ContractsLatestUtxo>()
                 .insert(&contract_id, &value)
                 .unwrap();
@@ -609,6 +709,7 @@ mod tests {
             let key = ContractsStateKey::new(&contract_id, &state_key);
             let state_value = self.generate_data(100);
             self.db
+                .on_chain_mut()
                 .storage_as_mut::<ContractsState>()
                 .insert(&key, &state_value)
                 .unwrap();
@@ -626,6 +727,7 @@ mod tests {
             let key = ContractsAssetKey::new(&contract_id, &asset_id);
             let amount = self.rng.gen();
             self.db
+                .on_chain_mut()
                 .storage_as_mut::<ContractsAssets>()
                 .insert(&key, &amount)
                 .unwrap();
@@ -649,10 +751,11 @@ mod tests {
 
         let snapshot_dir = temp_dir.path().join("snapshot");
         let db_path = temp_dir.path().join("db");
-        let mut db = DbPopulator::new(open_db(&db_path, None)?, StdRng::seed_from_u64(2));
+        std::fs::create_dir(&db_path)?;
 
-        let state = db.given_persisted_on_chain_data(10, 10, 10, 10, 10);
-        db.commit();
+        let mut db = DbPopulator::new(open_db(&db_path, None)?, StdRng::seed_from_u64(2));
+        let state = db.given_persisted_data();
+        db.flush();
 
         // when
         exec(Command {
@@ -668,12 +771,19 @@ mod tests {
         // then
         let snapshot = SnapshotMetadata::read(&snapshot_dir)?;
 
-        let written_data = OnChainData::read_from_snapshot(snapshot);
+        let written_data = SnapshotData::read_from_snapshot(snapshot);
 
-        assert_eq!(written_data.block, state.block);
+        assert_eq!(written_data.common.block, state.common.block);
 
-        assert_ne!(written_data, state);
-        assert_eq!(written_data, state.sorted());
+        // Needed because of the way the test case macro works
+        #[allow(irrefutable_let_patterns)]
+        if let Encoding::Json = encoding {
+            assert_ne!(written_data.common, state.common);
+            assert_eq!(written_data.common, state.common.sorted());
+        } else {
+            assert_ne!(written_data, state);
+            assert_eq!(written_data, state.sorted());
+        }
 
         Ok(())
     }
@@ -691,8 +801,8 @@ mod tests {
         let db_path = temp_dir.path().join("db");
         let mut db = DbPopulator::new(open_db(&db_path, None)?, StdRng::seed_from_u64(2));
 
-        let state = db.given_persisted_on_chain_data(10, 10, 10, 10, 10);
-        db.commit();
+        let state = db.given_persisted_data();
+        db.flush();
 
         // when
         exec(Command {
@@ -715,7 +825,7 @@ mod tests {
         let mut reader = SnapshotReader::open(snapshot)?;
 
         let expected_state = state.sorted();
-        assert_groups_as_expected(group_size, expected_state.coins, &mut reader);
+        assert_groups_as_expected(group_size, expected_state.common.coins, &mut reader);
 
         Ok(())
     }
@@ -729,10 +839,7 @@ mod tests {
         let db_path = temp_dir.path().join("db");
         let mut db = DbPopulator::new(open_db(&db_path, None)?, StdRng::seed_from_u64(2));
 
-        let original_state = db
-            .given_persisted_on_chain_data(10, 10, 10, 10, 10)
-            .sorted()
-            .into_state_config();
+        let original_state = db.given_persisted_data().sorted().into_state_config();
 
         let randomly_chosen_contract = original_state
             .contracts
@@ -740,7 +847,7 @@ mod tests {
             .unwrap()
             .clone();
         let contract_id = randomly_chosen_contract.contract_id;
-        db.commit();
+        db.flush();
 
         // when
         exec(Command {

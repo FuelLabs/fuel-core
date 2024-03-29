@@ -1,5 +1,8 @@
+use crate::graphql_api::storage::Column as OffChainColumn;
+
 use super::{
     database_description::{
+        off_chain::OffChain,
         on_chain::OnChain,
         DatabaseDescription,
     },
@@ -45,6 +48,14 @@ impl TableWithBlueprint for GenesisMetadata<OnChain> {
     }
 }
 
+impl TableWithBlueprint for GenesisMetadata<OffChain> {
+    type Blueprint = Plain<Postcard, Postcard>;
+    type Column = <OffChain as DatabaseDescription>::Column;
+    fn column() -> Self::Column {
+        OffChainColumn::GenesisMetadata
+    }
+}
+
 pub trait GenesisProgressInspect<Description> {
     fn genesis_progress(&self, key: &str) -> Option<usize>;
 }
@@ -57,32 +68,33 @@ pub trait GenesisProgressMutate<Description> {
     ) -> Result<()>;
 }
 
-impl<S, Description> GenesisProgressInspect<Description> for S
+impl<S, DbDesc> GenesisProgressInspect<DbDesc> for S
 where
-    S: StorageInspect<GenesisMetadata<Description>, Error = StorageError>,
+    S: StorageInspect<GenesisMetadata<DbDesc>, Error = StorageError>,
+    DbDesc: DatabaseDescription,
 {
     fn genesis_progress(
         &self,
-        key: &<GenesisMetadata<Description> as Mappable>::Key,
+        key: &<GenesisMetadata<DbDesc> as Mappable>::Key,
     ) -> Option<usize> {
         Some(
-            StorageInspect::<GenesisMetadata<Description>>::get(self, key)
+            StorageInspect::<GenesisMetadata<DbDesc>>::get(self, key)
                 .ok()??
                 .into_owned(),
         )
     }
 }
 
-impl<S, Description> GenesisProgressMutate<Description> for S
+impl<S, DbDesc> GenesisProgressMutate<DbDesc> for S
 where
-    S: StorageMutate<GenesisMetadata<Description>, Error = StorageError>,
+    S: StorageMutate<GenesisMetadata<DbDesc>, Error = StorageError>,
 {
     fn update_genesis_progress(
         &mut self,
-        key: &<GenesisMetadata<Description> as Mappable>::Key,
+        key: &<GenesisMetadata<DbDesc> as Mappable>::Key,
         processed_group: usize,
     ) -> Result<()> {
-        self.storage_as_mut::<GenesisMetadata<Description>>()
+        self.storage_as_mut::<GenesisMetadata<DbDesc>>()
             .insert(key, &processed_group)?;
 
         Ok(())

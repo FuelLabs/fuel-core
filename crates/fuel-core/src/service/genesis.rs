@@ -1,35 +1,30 @@
-use self::workers::GenesisWorkers;
 use crate::{
+    combined_database::CombinedDatabase,
     database::{
-        database_description::on_chain::OnChain,
+        database_description::{
+            off_chain::OffChain,
+            on_chain::OnChain,
+        },
         genesis_progress::GenesisMetadata,
-        Database,
     },
     service::config::Config,
 };
-use anyhow::anyhow;
-use fuel_core_chain_config::{
-    GenesisCommitment,
-    TableEntry,
-};
+use fuel_core_chain_config::GenesisCommitment;
 use fuel_core_storage::{
     iter::IteratorOverTable,
     tables::{
-        Coins,
         ConsensusParametersVersions,
-        ContractsLatestUtxo,
-        ContractsRawCode,
-        Messages,
         StateTransitionBytecodeVersions,
     },
     transactional::{
         Changes,
+        IntoTransaction,
         ReadTransaction,
-        StorageTransaction,
     },
     StorageAsMut,
 };
 use fuel_core_types::{
+    self,
     blockchain::{
         block::Block,
         consensus::{
@@ -43,20 +38,10 @@ use fuel_core_types::{
             PartialBlockHeader,
             StateTransitionBytecodeVersion,
         },
-        primitives::{
-            DaBlockHeight,
-            Empty,
-        },
+        primitives::Empty,
         SealedBlock,
     },
-    entities::{
-        coins::coin::Coin,
-        Message,
-    },
-    fuel_types::{
-        BlockHeight,
-        Bytes32,
-    },
+    fuel_types::Bytes32,
     services::block_importer::{
         ImportResult,
         UncommittedResult as UncommittedImportResult,
@@ -65,33 +50,39 @@ use fuel_core_types::{
 use itertools::Itertools;
 
 pub mod off_chain;
+pub mod on_chain;
 mod runner;
 mod workers;
 
-pub use runner::{
-    GenesisRunner,
-    TransactionOpener,
-};
+pub use runner::GenesisRunner;
 
 /// Performs the importing of the genesis block from the snapshot.
 pub async fn execute_genesis_block(
     config: &Config,
-    original_database: &Database,
+    db: &CombinedDatabase,
 ) -> anyhow::Result<UncommittedImportResult<Changes>> {
-    let workers =
-        GenesisWorkers::new(original_database.clone(), config.snapshot_reader.clone());
+    on_chain::import_state(db.clone(), config.snapshot_reader.clone()).await?;
+    off_chain::import_state(db.clone(), config.snapshot_reader.clone()).await?;
 
-    import_chain_state(workers).await?;
-    let genesis_progress = fetch_genesis_progress(original_database)?;
+    let genesis_progress_on_chain: Vec<String> = db
+        .on_chain()
+        .iter_all::<GenesisMetadata<OnChain>>(None)
+        .map_ok(|(k, _)| k)
+        .try_collect()?;
+    let genesis_progress_off_chain: Vec<String> = db
+        .off_chain()
+        .iter_all::<GenesisMetadata<OffChain>>(None)
+        .map_ok(|(k, _)| k)
+        .try_collect()?;
 
     let chain_config = config.snapshot_reader.chain_config();
     let genesis = Genesis {
         // TODO: We can get the serialized consensus parameters from the database.
         //  https://github.com/FuelLabs/fuel-core/issues/1570
         chain_config_hash: chain_config.root()?.into(),
-        coins_root: original_database.genesis_coins_root()?.into(),
-        messages_root: original_database.genesis_messages_root()?.into(),
-        contracts_root: original_database.genesis_contracts_root()?.into(),
+        coins_root: db.on_chain().genesis_coins_root()?.into(),
+        messages_root: db.on_chain().genesis_messages_root()?.into(),
+        contracts_root: db.on_chain().genesis_contracts_root()?.into(),
     };
 
     let block = create_genesis_block(config);
@@ -101,10 +92,18 @@ pub async fn execute_genesis_block(
         consensus,
     };
 
-    let mut database_transaction = original_database.read_transaction();
+    let mut database_transaction_off_chain = db.off_chain().clone().into_transaction();
+    for key in genesis_progress_off_chain {
+        database_transaction_off_chain
+            .storage_as_mut::<GenesisMetadata<OffChain>>()
+            .remove(&key)?;
+    }
+    database_transaction_off_chain.commit()?;
+
+    let mut database_transaction_on_chain = db.on_chain().read_transaction();
     // TODO: The chain config should be part of the snapshot state.
     //  https://github.com/FuelLabs/fuel-core/issues/1570
-    database_transaction
+    database_transaction_on_chain
         .storage_as_mut::<ConsensusParametersVersions>()
         .insert(
             &ConsensusParametersVersion::MIN,
@@ -112,55 +111,38 @@ pub async fn execute_genesis_block(
         )?;
     // TODO: The bytecode of the state transition function should be part of the snapshot state.
     //  https://github.com/FuelLabs/fuel-core/issues/1570
-    database_transaction
+    database_transaction_on_chain
         .storage_as_mut::<StateTransitionBytecodeVersions>()
         .insert(&ConsensusParametersVersion::MIN, &[])?;
 
     // Needs to be given the progress because `iter_all` is not implemented on db transactions.
-    cleanup_genesis_progress(&mut database_transaction, genesis_progress)?;
+    for key in genesis_progress_on_chain {
+        database_transaction_on_chain
+            .storage_as_mut::<GenesisMetadata<OnChain>>()
+            .remove(&key)?;
+    }
 
     let result = UncommittedImportResult::new(
         ImportResult::new_from_local(block, vec![], vec![]),
-        database_transaction.into_changes(),
+        database_transaction_on_chain.into_changes(),
     );
 
     Ok(result)
 }
 
-fn fetch_genesis_progress(
-    original_database: &Database,
-) -> Result<Vec<String>, anyhow::Error> {
-    Ok(original_database
-        .iter_all::<GenesisMetadata<OnChain>>(None)
-        .map_ok(|(k, _)| k)
-        .try_collect()?)
-}
-
-async fn import_chain_state(mut workers: GenesisWorkers) -> anyhow::Result<()> {
-    if let Err(e) = workers.run_imports().await {
-        workers.shutdown();
-        tokio::select! {
-            _ = workers.finished() => {}
-            _ = tokio::time::sleep(tokio::time::Duration::from_secs(10)) => {
-                return Err(anyhow!("Timeout while importing genesis state"));
-            }
-        };
-
-        return Err(e);
-    }
-
-    Ok(())
-}
-
-fn cleanup_genesis_progress(
-    tx: &mut StorageTransaction<&Database<OnChain>>,
-    genesis_progress: Vec<String>,
+#[cfg(feature = "test-helpers")]
+pub async fn execute_and_commit_genesis_block(
+    config: &Config,
+    db: &CombinedDatabase,
 ) -> anyhow::Result<()> {
-    for key in genesis_progress {
-        tx.storage_as_mut::<GenesisMetadata<OnChain>>()
-            .remove(&key)?;
-    }
-
+    let result = execute_genesis_block(config, db).await?;
+    let importer = fuel_core_importer::Importer::new(
+        config.block_importer.clone(),
+        db.on_chain().clone(),
+        (),
+        (),
+    );
+    importer.commit_result(result).await?;
     Ok(())
 }
 
@@ -195,130 +177,13 @@ pub fn create_genesis_block(config: &Config) -> Block {
     )
 }
 
-#[cfg(feature = "test-helpers")]
-pub async fn execute_and_commit_genesis_block(
-    config: &Config,
-    original_database: &Database,
-) -> anyhow::Result<()> {
-    let result = execute_genesis_block(config, original_database).await?;
-    let importer = fuel_core_importer::Importer::new(
-        config.block_importer.clone(),
-        original_database.clone(),
-        (),
-        (),
-    );
-    importer.commit_result(result).await?;
-    Ok(())
-}
-
-fn init_coin(
-    transaction: &mut StorageTransaction<&mut Database>,
-    coin: &TableEntry<Coins>,
-    height: BlockHeight,
-) -> anyhow::Result<()> {
-    let utxo_id = coin.key;
-
-    let compressed_coin = Coin {
-        utxo_id,
-        owner: *coin.value.owner(),
-        amount: *coin.value.amount(),
-        asset_id: *coin.value.asset_id(),
-        tx_pointer: *coin.value.tx_pointer(),
-    }
-    .compress();
-
-    // ensure coin can't point to blocks in the future
-    let coin_height = coin.value.tx_pointer().block_height();
-    if coin_height > height {
-        return Err(anyhow!(
-            "coin tx_pointer height ({coin_height}) cannot be greater than genesis block ({height})"
-        ));
-    }
-
-    if transaction
-        .storage::<Coins>()
-        .insert(&utxo_id, &compressed_coin)?
-        .is_some()
-    {
-        return Err(anyhow!("Coin should not exist"));
-    }
-
-    Ok(())
-}
-
-fn init_contract_latest_utxo(
-    transaction: &mut StorageTransaction<&mut Database>,
-    entry: &TableEntry<ContractsLatestUtxo>,
-    height: BlockHeight,
-) -> anyhow::Result<()> {
-    let contract_id = entry.key;
-
-    if entry.value.tx_pointer().block_height() > height {
-        return Err(anyhow!(
-            "contract tx_pointer cannot be greater than genesis block"
-        ));
-    }
-
-    if transaction
-        .storage::<ContractsLatestUtxo>()
-        .insert(&contract_id, &entry.value)?
-        .is_some()
-    {
-        return Err(anyhow!("Contract utxo should not exist"));
-    }
-
-    Ok(())
-}
-
-fn init_contract_raw_code(
-    transaction: &mut StorageTransaction<&mut Database>,
-    entry: &TableEntry<ContractsRawCode>,
-) -> anyhow::Result<()> {
-    let contract = entry.value.as_ref();
-    let contract_id = entry.key;
-
-    // insert contract code
-    if transaction
-        .storage::<ContractsRawCode>()
-        .insert(&contract_id, contract)?
-        .is_some()
-    {
-        return Err(anyhow!("Contract code should not exist"));
-    }
-
-    Ok(())
-}
-
-fn init_da_message(
-    transaction: &mut StorageTransaction<&mut Database>,
-    msg: TableEntry<Messages>,
-    da_height: DaBlockHeight,
-) -> anyhow::Result<()> {
-    let message: Message = msg.value;
-
-    if message.da_height() > da_height {
-        return Err(anyhow!(
-            "message da_height cannot be greater than genesis da block height"
-        ));
-    }
-
-    if transaction
-        .storage::<Messages>()
-        .insert(message.id(), &message)?
-        .is_some()
-    {
-        return Err(anyhow!("Message should not exist"));
-    }
-
-    Ok(())
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
 
     use crate::{
         combined_database::CombinedDatabase,
+        database::Database,
         service::{
             config::Config,
             FuelService,
@@ -561,6 +426,8 @@ mod tests {
     #[cfg(feature = "test-helpers")]
     #[tokio::test]
     async fn tests_init_da_msgs() {
+        use fuel_core_storage::tables::Messages;
+
         let mut rng = StdRng::seed_from_u64(32492);
 
         let msg = MessageConfig {
@@ -583,15 +450,16 @@ mod tests {
             ..Config::local_node()
         };
 
-        let db = Database::default();
+        let db = CombinedDatabase::default();
 
-        execute_and_commit_genesis_block(&config, &db)
+        super::execute_and_commit_genesis_block(&config, &db)
             .await
             .unwrap();
 
-        let expected_msg: Message = msg.into();
+        let expected_msg: fuel_core_types::entities::Message = msg.into();
 
         let ret_msg = db
+            .on_chain()
             .storage::<Messages>()
             .get(expected_msg.id())
             .unwrap()
