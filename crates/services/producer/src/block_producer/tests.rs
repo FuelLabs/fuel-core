@@ -72,10 +72,7 @@ impl GasPriceProvider for MockProducerGasPrice {
 // Tests for the `produce_and_execute_block_txpool` method.
 mod produce_and_execute_block_txpool {
     use super::*;
-    use fuel_core_types::{
-        blockchain::primitives::DaBlockHeight,
-        fuel_types::BlockHeight,
-    };
+    use fuel_core_types::blockchain::primitives::DaBlockHeight;
 
     #[tokio::test]
     async fn cant_produce_at_genesis_height() {
