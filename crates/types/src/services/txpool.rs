@@ -197,7 +197,7 @@ pub enum TransactionStatus {
         /// Why this happened
         reason: String,
     },
-    /// Transaction was included in a block, but the exection was reverted
+    /// Transaction was included in a block, but the execution was reverted
     Failed {
         /// Included in this block
         block_height: BlockHeight,

@@ -11,7 +11,10 @@ use crate::{
     },
     entities::{
         coins::coin::Coin,
-        relayer::message::Message,
+        relayer::{
+            message::Message,
+            transaction::RelayedTransactionId,
+        },
     },
     fuel_tx::{
         Receipt,
@@ -20,6 +23,7 @@ use crate::{
         ValidityError,
     },
     fuel_types::{
+        BlockHeight,
         Bytes32,
         ContractId,
         Nonce,
@@ -30,6 +34,7 @@ use crate::{
     },
     services::Uncommitted,
 };
+use tai64::Tai64;
 
 /// The alias for executor result.
 pub type Result<T> = core::result::Result<T, Error>;
@@ -55,6 +60,7 @@ pub struct ExecutionResult {
 /// The event represents some internal state changes caused by the block execution.
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[non_exhaustive]
 pub enum Event {
     /// Imported a new spendable message from the relayer.
     MessageImported(Message),
@@ -64,6 +70,36 @@ pub enum Event {
     CoinCreated(Coin),
     /// The coin was consumed by the transaction.
     CoinConsumed(Coin),
+    /// Failed transaction inclusion
+    ForcedTransactionFailed {
+        /// The hash of the relayed transaction
+        id: RelayedTransactionId,
+        /// The height of the block that processed this transaction
+        block_height: BlockHeight,
+        /// The time of the block that processed this transaction
+        block_time: Tai64,
+        /// The actual failure reason for why the forced transaction was not included
+        failure: String,
+    },
+}
+
+/// Known failure modes for processing forced transactions
+#[derive(Debug, derive_more::Display)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[non_exhaustive]
+pub enum ForcedTransactionFailure {
+    /// Failed to decode transaction to a valid fuel_tx::Transaction
+    #[display(fmt = "Failed to decode transaction")]
+    CodecError,
+    /// Transaction failed basic checks
+    #[display(fmt = "Failed validity checks")]
+    CheckError(CheckError),
+    /// Invalid transaction type
+    #[display(fmt = "Transaction type is not accepted")]
+    InvalidTransactionType,
+    /// Execution error which failed to include
+    #[display(fmt = "Transaction inclusion failed {_0}")]
+    ExecutionError(Error),
 }
 
 /// The status of a transaction after it is executed.
@@ -358,6 +394,8 @@ pub enum Error {
     RelayerGivesIncorrectMessages,
     #[display(fmt = "Consensus parameters not found for version {_0}")]
     ConsensusParametersNotFound(ConsensusParametersVersion),
+    #[display(fmt = "Failed to execute relayed transaction {_0}")]
+    RelayedTransactionFailed(RelayedTransactionId, Box<Error>),
     /// It is possible to occur untyped errors in the case of the upgrade.
     #[display(fmt = "Occurred untyped error: {_0}")]
     Other(String),

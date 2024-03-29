@@ -48,6 +48,8 @@ use fuel_core_types::{
             CompressedCoinV1,
         },
         contract::ContractUtxoInfo,
+        relayer::transaction::RelayedTransactionId,
+        RelayedTransaction,
     },
     fuel_asm::{
         RegId,
@@ -95,6 +97,7 @@ use fuel_core_types::{
         UtxoId,
     },
     fuel_types::{
+        canonical::Deserialize,
         BlockHeight,
         ContractId,
         MessageId,
@@ -127,6 +130,7 @@ use fuel_core_types::{
             ExecutionResult,
             ExecutionType,
             ExecutionTypes,
+            ForcedTransactionFailure,
             Result as ExecutorResult,
             TransactionExecutionResult,
             TransactionExecutionStatus,
@@ -470,12 +474,13 @@ where
         let source = component.transactions_source;
         let gas_price = component.gas_price;
         let coinbase_contract_id = component.coinbase_contract_id;
-        let mut remaining_gas_limit = block_gas_limit;
         let block_height = *block.header.height();
 
-        if self.relayer.enabled() {
-            self.process_da(&block.header, execution_data)?;
-        }
+        let forced_transactions = if self.relayer.enabled() {
+            self.process_da(&block.header, execution_data)?
+        } else {
+            Vec::with_capacity(0)
+        };
 
         // The block level storage transaction that also contains data from the relayer.
         // Starting from this point, modifications from each thread should be independent
@@ -490,10 +495,11 @@ where
             .read_transaction()
             .with_policy(ConflictPolicy::Overwrite);
 
-        // ALl transactions should be in the `TxSource`.
-        // We use `block.transactions` to store executed transactions.
         debug_assert!(block.transactions.is_empty());
-        let mut iter = source.next(remaining_gas_limit).into_iter().peekable();
+        // initiate transaction stream with relayed (forced) transactions first,
+        // and pull the rest from the TxSource (txpool) if there is remaining blockspace available.
+        // We use `block.transactions` to store executed transactions.
+        let mut iter = forced_transactions.into_iter().peekable();
 
         let mut execute_transaction = |execution_data: &mut ExecutionData,
                                        tx: MaybeCheckedTransaction|
@@ -516,6 +522,20 @@ where
                 );
 
                 let tx = match result {
+                    Err(ExecutorError::RelayedTransactionFailed(id, err)) => {
+                        // if it was a relayed tx that failed, we need to record the reason
+                        // and all nodes should process this event the same way
+                        execution_data.events.push(
+                            ExecutorEvent::ForcedTransactionFailed {
+                                id,
+                                block_height,
+                                block_time: *block.header.time(),
+                                failure: ForcedTransactionFailure::ExecutionError(*err)
+                                    .to_string(),
+                            },
+                        );
+                        return Ok(())
+                    }
                     Err(err) => {
                         return match execution_kind {
                             ExecutionKind::Production => {
@@ -554,8 +574,11 @@ where
                 execute_transaction(&mut *execution_data, transaction)?;
             }
 
-            remaining_gas_limit = block_gas_limit.saturating_sub(execution_data.used_gas);
+            let remaining_gas_limit =
+                block_gas_limit.saturating_sub(execution_data.used_gas);
 
+            // L2 originated transactions should be in the `TxSource`. This will be triggered after
+            // all relayed transactions are processed.
             iter = source.next(remaining_gas_limit).into_iter().peekable();
         }
 
@@ -610,7 +633,7 @@ where
         &mut self,
         header: &PartialBlockHeader,
         execution_data: &mut ExecutionData,
-    ) -> ExecutorResult<()> {
+    ) -> ExecutorResult<Vec<MaybeCheckedTransaction>> {
         let block_height = *header.height();
         let prev_block_height = block_height
             .pred()
@@ -627,6 +650,8 @@ where
         };
 
         let mut root_calculator = MerkleRootCalculator::new();
+
+        let mut checked_forced_txs = vec![];
 
         for da_height in next_unprocessed_da_height..=header.da_height.0 {
             let da_height = da_height.into();
@@ -648,8 +673,30 @@ where
                             .events
                             .push(ExecutorEvent::MessageImported(message));
                     }
-                    Event::Transaction(_) => {
-                        // TODO: implement handling of forced transactions in a later PR
+                    Event::Transaction(relayed_tx) => {
+                        let id = relayed_tx.id();
+                        // perform basic checks
+                        let checked_tx_res = Self::validate_forced_tx(
+                            relayed_tx,
+                            header,
+                            &self.consensus_params,
+                        );
+                        // handle the result
+                        match checked_tx_res {
+                            Ok(checked_tx) => {
+                                checked_forced_txs.push(checked_tx);
+                            }
+                            Err(err) => {
+                                execution_data.events.push(
+                                    ExecutorEvent::ForcedTransactionFailed {
+                                        id,
+                                        block_height,
+                                        block_time: header.consensus.time,
+                                        failure: err.to_string(),
+                                    },
+                                );
+                            }
+                        }
                     }
                 }
             }
@@ -657,7 +704,41 @@ where
 
         execution_data.event_inbox_root = root_calculator.root().into();
 
-        Ok(())
+        Ok(checked_forced_txs)
+    }
+
+    /// Parse forced transaction payloads and perform basic checks
+    fn validate_forced_tx(
+        relayed_tx: RelayedTransaction,
+        header: &PartialBlockHeader,
+        consensus_params: &ConsensusParameters,
+    ) -> Result<MaybeCheckedTransaction, ForcedTransactionFailure> {
+        let parsed_tx = Transaction::from_bytes(relayed_tx.serialized_transaction())
+            .map_err(|_| ForcedTransactionFailure::CodecError)?;
+
+        let check_tx_res = parsed_tx
+            .into_checked(header.consensus.height, consensus_params)
+            .map_err(|check_error| ForcedTransactionFailure::CheckError(check_error))?;
+
+        let checked_tx = check_tx_res
+            .check_predicates(&CheckPredicateParams::from(consensus_params))
+            .map_err(|err| ForcedTransactionFailure::CheckError(err))?;
+
+        // Fail if transaction is not a script or create
+        // todo: Ideally we'd have a helper such as `.is_chargeable()` to be more future proof in
+        //       case new tx types are added in the future.
+        match checked_tx.transaction() {
+            Transaction::Script(_) => {}
+            Transaction::Create(_) => {}
+            Transaction::Mint(_) => {
+                return Err(ForcedTransactionFailure::InvalidTransactionType)
+            }
+        }
+
+        Ok(MaybeCheckedTransaction::RelayedCheckedTransaction(
+            relayed_tx.id(),
+            CheckedTransaction::from(checked_tx),
+        ))
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -688,14 +769,19 @@ where
         }
 
         let block_height = *header.height();
+        let mut relayed_tx: Option<RelayedTransactionId> = None;
         let checked_tx = match tx {
             MaybeCheckedTransaction::Transaction(tx) => tx
                 .into_checked_basic(block_height, &self.consensus_params)?
                 .into(),
             MaybeCheckedTransaction::CheckedTransaction(checked_tx) => checked_tx,
+            MaybeCheckedTransaction::RelayedCheckedTransaction(id, checked_tx) => {
+                relayed_tx = Some(id);
+                checked_tx
+            }
         };
 
-        match checked_tx {
+        let mut res = match checked_tx {
             CheckedTransaction::Script(script) => self.execute_create_or_script(
                 script,
                 header,
@@ -723,7 +809,15 @@ where
                 tx_st_transaction,
                 execution_kind,
             ),
+        };
+
+        // if it's a relayed tx, wrap the error for proper handling
+        if let Some(id) = &relayed_tx {
+            res = res.map_err(|err| {
+                ExecutorError::RelayedTransactionFailed(id.clone(), Box::new(err))
+            });
         }
+        res
     }
 
     #[allow(clippy::too_many_arguments)]

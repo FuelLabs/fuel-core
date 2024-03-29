@@ -165,6 +165,28 @@ where
                     .storage_as_mut::<OwnedCoins>()
                     .remove(&key)?;
             }
+            Event::ForcedTransactionFailed {
+                id: _,
+                block_height,
+                block_time,
+                failure: _,
+            } => {
+                let _status =
+                    fuel_core_types::services::txpool::TransactionStatus::Failed {
+                        block_height: *block_height,
+                        time: *block_time,
+                        result: None,
+                        receipts: vec![],
+                    };
+
+                // TODO: figure out how to report the failed relayed tx status
+                // block_st_transaction
+                //     .storage_as_mut::<TransactionStatuses>()
+                //     .insert(id.into(), &status)?;
+            }
+            _ => {
+                // unknown execution event (likely due to a runtime upgrade)
+            }
         }
     }
     Ok(())

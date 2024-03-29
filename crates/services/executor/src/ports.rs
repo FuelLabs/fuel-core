@@ -1,5 +1,6 @@
 use fuel_core_types::{
     blockchain::primitives::DaBlockHeight,
+    entities::relayer::transaction::RelayedTransactionId,
     fuel_tx,
     fuel_tx::{
         TxId,
@@ -14,6 +15,7 @@ use fuel_core_types::{
 pub enum MaybeCheckedTransaction {
     CheckedTransaction(CheckedTransaction),
     Transaction(fuel_tx::Transaction),
+    RelayedCheckedTransaction(RelayedTransactionId, CheckedTransaction),
 }
 
 impl MaybeCheckedTransaction {
@@ -29,6 +31,18 @@ impl MaybeCheckedTransaction {
                 tx.id()
             }
             MaybeCheckedTransaction::Transaction(tx) => tx.id(chain_id),
+            MaybeCheckedTransaction::RelayedCheckedTransaction(
+                _,
+                CheckedTransaction::Script(tx),
+            ) => tx.id(),
+            MaybeCheckedTransaction::RelayedCheckedTransaction(
+                _,
+                CheckedTransaction::Create(tx),
+            ) => tx.id(),
+            MaybeCheckedTransaction::RelayedCheckedTransaction(
+                _,
+                CheckedTransaction::Mint(tx),
+            ) => tx.id(),
         }
     }
 }
