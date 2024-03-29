@@ -55,9 +55,10 @@ fn process_coins(
 ) -> anyhow::Result<()> {
     let mut database_transaction = original_database.write_transaction();
 
-    let coin_events = coins
-        .into_iter()
-        .map(|(utxo_id, coin)| Cow::Owned(Event::CoinCreated(coin.uncompress(utxo_id))));
+    let coin_events = coins.into_iter().map(|(utxo_id, coin)| {
+        let coin = coin.uncompress(utxo_id);
+        Cow::Owned(Event::CoinCreated(coin))
+    });
 
     worker_service::process_executor_events(coin_events, &mut database_transaction)?;
 

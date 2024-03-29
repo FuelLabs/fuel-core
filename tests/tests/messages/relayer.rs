@@ -1,5 +1,5 @@
 use super::*;
-use fuel_core::chain_config::StateReader;
+use fuel_core::chain_config::SnapshotReader;
 use fuel_core_types::blockchain::primitives::DaBlockHeight;
 use rand::{
     rngs::StdRng,
@@ -38,7 +38,7 @@ async fn can_submit_genesis_message() {
         ..Default::default()
     };
     let node_config = Config {
-        state_reader: StateReader::in_memory(state),
+        snapshot_reader: SnapshotReader::local_testnet().with_state_config(state),
         utxo_validation: true,
         ..Config::local_node()
     };

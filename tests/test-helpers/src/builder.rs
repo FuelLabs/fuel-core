@@ -4,8 +4,8 @@ use fuel_core::{
         CoinConfig,
         ContractBalanceConfig,
         ContractConfig,
+        SnapshotReader,
         StateConfig,
-        StateReader,
     },
     service::{
         Config,
@@ -87,7 +87,6 @@ impl TestContext {
 pub struct TestSetupBuilder {
     pub rng: StdRng,
     pub contracts: HashMap<ContractId, ContractConfig>,
-    pub contract_balances: Vec<ContractBalanceConfig>,
     pub initial_coins: Vec<CoinConfig>,
     pub min_gas_price: u64,
     pub gas_limit: u64,
@@ -108,7 +107,7 @@ impl TestSetupBuilder {
     pub fn setup_contract(
         &mut self,
         code: Vec<u8>,
-        balances: Vec<(AssetId, u64)>,
+        balances: Vec<ContractBalanceConfig>,
         tx_pointer: Option<TxPointer>,
     ) -> (Salt, ContractId) {
         let contract = Contract::from(code.clone());
@@ -127,17 +126,10 @@ impl TestSetupBuilder {
                 output_index: utxo_id.output_index(),
                 tx_pointer_block_height: tx_pointer.block_height(),
                 tx_pointer_tx_idx: tx_pointer.tx_index(),
+                states: vec![],
+                balances,
             },
         );
-        let balances =
-            balances
-                .into_iter()
-                .map(|(asset_id, amount)| ContractBalanceConfig {
-                    contract_id,
-                    asset_id,
-                    amount,
-                });
-        self.contract_balances.extend(balances);
 
         (salt, contract_id)
     }
@@ -200,7 +192,6 @@ impl TestSetupBuilder {
         let state = StateConfig {
             coins: self.initial_coins.clone(),
             contracts: self.contracts.values().cloned().collect_vec(),
-            contract_balance: self.contract_balances.clone(),
             block_height: self.starting_block,
             ..StateConfig::default()
         };
@@ -211,8 +202,7 @@ impl TestSetupBuilder {
                 chain_config: chain_conf.clone(),
                 ..fuel_core_txpool::Config::default()
             },
-            chain_config: chain_conf,
-            state_reader: StateReader::in_memory(state),
+            snapshot_reader: SnapshotReader::new_in_memory(chain_conf, state),
             block_production: self.trigger,
             static_gas_price: self.min_gas_price,
             ..Config::local_node()
@@ -240,7 +230,6 @@ impl Default for TestSetupBuilder {
             starting_block: Default::default(),
             utxo_validation: true,
             trigger: Trigger::Instant,
-            contract_balances: vec![],
         }
     }
 }

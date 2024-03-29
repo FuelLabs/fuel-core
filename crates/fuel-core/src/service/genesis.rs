@@ -1,6 +1,7 @@
 use self::workers::GenesisWorkers;
 use crate::{
     database::{
+        database_description::on_chain::OnChain,
         genesis_progress::GenesisMetadata,
         Database,
     },
@@ -8,12 +9,11 @@ use crate::{
 };
 use anyhow::anyhow;
 use fuel_core_chain_config::{
-    CoinConfig,
-    ContractConfig,
     GenesisCommitment,
-    MessageConfig,
+    TableEntry,
 };
 use fuel_core_storage::{
+    iter::IteratorOverTable,
     tables::{
         Coins,
         ConsensusParametersVersions,
@@ -51,10 +51,8 @@ use fuel_core_types::{
     },
     entities::{
         coins::coin::Coin,
-        contract::ContractUtxoInfo,
-        relayer::message::Message,
+        Message,
     },
-    fuel_tx::Contract,
     fuel_types::{
         BlockHeight,
         Bytes32,
@@ -64,13 +62,12 @@ use fuel_core_types::{
         UncommittedResult as UncommittedImportResult,
     },
 };
-use strum::IntoEnumIterator;
+use itertools::Itertools;
 
 pub mod off_chain;
 mod runner;
 mod workers;
 
-use crate::database::genesis_progress::GenesisResource;
 pub use runner::{
     GenesisRunner,
     TransactionOpener,
@@ -82,14 +79,16 @@ pub async fn execute_genesis_block(
     original_database: &Database,
 ) -> anyhow::Result<UncommittedImportResult<Changes>> {
     let workers =
-        GenesisWorkers::new(original_database.clone(), config.state_reader.clone());
+        GenesisWorkers::new(original_database.clone(), config.snapshot_reader.clone());
 
     import_chain_state(workers).await?;
+    let genesis_progress = fetch_genesis_progress(original_database)?;
 
+    let chain_config = config.snapshot_reader.chain_config();
     let genesis = Genesis {
         // TODO: We can get the serialized consensus parameters from the database.
         //  https://github.com/FuelLabs/fuel-core/issues/1570
-        chain_config_hash: config.chain_config.root()?.into(),
+        chain_config_hash: chain_config.root()?.into(),
         coins_root: original_database.genesis_coins_root()?.into(),
         messages_root: original_database.genesis_messages_root()?.into(),
         contracts_root: original_database.genesis_contracts_root()?.into(),
@@ -109,7 +108,7 @@ pub async fn execute_genesis_block(
         .storage_as_mut::<ConsensusParametersVersions>()
         .insert(
             &ConsensusParametersVersion::MIN,
-            &config.chain_config.consensus_parameters,
+            &chain_config.consensus_parameters,
         )?;
     // TODO: The bytecode of the state transition function should be part of the snapshot state.
     //  https://github.com/FuelLabs/fuel-core/issues/1570
@@ -117,7 +116,8 @@ pub async fn execute_genesis_block(
         .storage_as_mut::<StateTransitionBytecodeVersions>()
         .insert(&ConsensusParametersVersion::MIN, &[])?;
 
-    cleanup_genesis_progress(&mut database_transaction)?;
+    // Needs to be given the progress because `iter_all` is not implemented on db transactions.
+    cleanup_genesis_progress(&mut database_transaction, genesis_progress)?;
 
     let result = UncommittedImportResult::new(
         ImportResult::new_from_local(block, vec![], vec![]),
@@ -127,7 +127,16 @@ pub async fn execute_genesis_block(
     Ok(result)
 }
 
-async fn import_chain_state(workers: GenesisWorkers) -> anyhow::Result<()> {
+fn fetch_genesis_progress(
+    original_database: &Database,
+) -> Result<Vec<String>, anyhow::Error> {
+    Ok(original_database
+        .iter_all::<GenesisMetadata<OnChain>>(None)
+        .map_ok(|(k, _)| k)
+        .try_collect()?)
+}
+
+async fn import_chain_state(mut workers: GenesisWorkers) -> anyhow::Result<()> {
     if let Err(e) = workers.run_imports().await {
         workers.shutdown();
         tokio::select! {
@@ -144,20 +153,20 @@ async fn import_chain_state(workers: GenesisWorkers) -> anyhow::Result<()> {
 }
 
 fn cleanup_genesis_progress(
-    transaction: &mut StorageTransaction<&Database>,
+    tx: &mut StorageTransaction<&Database<OnChain>>,
+    genesis_progress: Vec<String>,
 ) -> anyhow::Result<()> {
-    for resource in GenesisResource::iter() {
-        transaction
-            .storage_as_mut::<GenesisMetadata>()
-            .remove(&resource)
-            .map_err(|e| anyhow::anyhow!("{e}"))?;
+    for key in genesis_progress {
+        tx.storage_as_mut::<GenesisMetadata<OnChain>>()
+            .remove(&key)?;
     }
+
     Ok(())
 }
 
 pub fn create_genesis_block(config: &Config) -> Block {
-    let block_height = config.state_reader.block_height();
-    let da_block_height = config.state_reader.da_block_height();
+    let block_height = config.snapshot_reader.block_height();
+    let da_block_height = config.snapshot_reader.da_block_height();
     let transactions = vec![];
     let message_ids = &[];
     let events = Default::default();
@@ -204,22 +213,22 @@ pub async fn execute_and_commit_genesis_block(
 
 fn init_coin(
     transaction: &mut StorageTransaction<&mut Database>,
-    coin: &CoinConfig,
+    coin: &TableEntry<Coins>,
     height: BlockHeight,
 ) -> anyhow::Result<()> {
-    let utxo_id = coin.utxo_id();
+    let utxo_id = coin.key;
 
     let compressed_coin = Coin {
         utxo_id,
-        owner: coin.owner,
-        amount: coin.amount,
-        asset_id: coin.asset_id,
-        tx_pointer: coin.tx_pointer(),
+        owner: *coin.value.owner(),
+        amount: *coin.value.amount(),
+        asset_id: *coin.value.asset_id(),
+        tx_pointer: *coin.value.tx_pointer(),
     }
     .compress();
 
     // ensure coin can't point to blocks in the future
-    let coin_height = coin.tx_pointer().block_height();
+    let coin_height = coin.value.tx_pointer().block_height();
     if coin_height > height {
         return Err(anyhow!(
             "coin tx_pointer height ({coin_height}) cannot be greater than genesis block ({height})"
@@ -237,38 +246,22 @@ fn init_coin(
     Ok(())
 }
 
-fn init_contract(
+fn init_contract_latest_utxo(
     transaction: &mut StorageTransaction<&mut Database>,
-    contract_config: &ContractConfig,
+    entry: &TableEntry<ContractsLatestUtxo>,
     height: BlockHeight,
 ) -> anyhow::Result<()> {
-    let contract = Contract::from(contract_config.code.as_slice());
-    let contract_id = contract_config.contract_id;
-    #[allow(clippy::cast_possible_truncation)]
-    let utxo_id = contract_config.utxo_id();
+    let contract_id = entry.key;
 
-    let tx_pointer = contract_config.tx_pointer();
-    if tx_pointer.block_height() > height {
+    if entry.value.tx_pointer().block_height() > height {
         return Err(anyhow!(
             "contract tx_pointer cannot be greater than genesis block"
         ));
     }
 
-    // insert contract code
-    if transaction
-        .storage::<ContractsRawCode>()
-        .insert(&contract_id, contract.as_ref())?
-        .is_some()
-    {
-        return Err(anyhow!("Contract code should not exist"));
-    }
-
     if transaction
         .storage::<ContractsLatestUtxo>()
-        .insert(
-            &contract_id,
-            &ContractUtxoInfo::V1((utxo_id, tx_pointer).into()),
-        )?
+        .insert(&contract_id, &entry.value)?
         .is_some()
     {
         return Err(anyhow!("Contract utxo should not exist"));
@@ -277,12 +270,31 @@ fn init_contract(
     Ok(())
 }
 
+fn init_contract_raw_code(
+    transaction: &mut StorageTransaction<&mut Database>,
+    entry: &TableEntry<ContractsRawCode>,
+) -> anyhow::Result<()> {
+    let contract = entry.value.as_ref();
+    let contract_id = entry.key;
+
+    // insert contract code
+    if transaction
+        .storage::<ContractsRawCode>()
+        .insert(&contract_id, contract)?
+        .is_some()
+    {
+        return Err(anyhow!("Contract code should not exist"));
+    }
+
+    Ok(())
+}
+
 fn init_da_message(
     transaction: &mut StorageTransaction<&mut Database>,
-    msg: MessageConfig,
+    msg: TableEntry<Messages>,
     da_height: DaBlockHeight,
 ) -> anyhow::Result<()> {
-    let message: Message = msg.into();
+    let message: Message = msg.value;
 
     if message.da_height() > da_height {
         return Err(anyhow!(
@@ -307,10 +319,6 @@ mod tests {
 
     use crate::{
         combined_database::CombinedDatabase,
-        database::genesis_progress::{
-            GenesisProgressInspect,
-            GenesisResource,
-        },
         service::{
             config::Config,
             FuelService,
@@ -318,14 +326,12 @@ mod tests {
         },
     };
     use fuel_core_chain_config::{
-        ChainConfig,
         CoinConfig,
-        ContractBalanceConfig,
         ContractConfig,
-        ContractStateConfig,
         MessageConfig,
+        Randomize,
+        SnapshotReader,
         StateConfig,
-        StateReader,
     };
     use fuel_core_services::RunnableService;
     use fuel_core_storage::{
@@ -339,16 +345,12 @@ mod tests {
     use fuel_core_types::{
         blockchain::primitives::DaBlockHeight,
         entities::coins::coin::Coin,
-        fuel_asm::op,
         fuel_tx::UtxoId,
         fuel_types::{
             Address,
             AssetId,
             BlockHeight,
-            ContractId,
-            Salt,
         },
-        fuel_vm::Contract,
     };
     use itertools::Itertools;
     use rand::{
@@ -362,12 +364,13 @@ mod tests {
     #[tokio::test]
     async fn config_initializes_block_height() {
         let block_height = BlockHeight::from(99u32);
-        let state_reader = StateReader::in_memory(StateConfig {
-            block_height,
-            ..Default::default()
-        });
+        let snapshot_reader =
+            SnapshotReader::local_testnet().with_state_config(StateConfig {
+                block_height,
+                ..Default::default()
+            });
         let service_config = Config {
-            state_reader,
+            snapshot_reader,
             ..Config::local_node()
         };
 
@@ -388,58 +391,35 @@ mod tests {
     async fn genesis_columns_are_cleared_after_import() {
         let mut rng = StdRng::seed_from_u64(10);
 
-        let coins = (0..1000)
-            .map(|_| CoinConfig {
-                amount: 10,
-                tx_id: rng.gen(),
-                ..Default::default()
-            })
-            .collect_vec();
+        let coins = std::iter::repeat_with(|| CoinConfig {
+            tx_pointer_block_height: 0.into(),
+            ..Randomize::randomize(&mut rng)
+        })
+        .take(1000)
+        .collect_vec();
 
-        let messages = (0..1000)
-            .map(|_| MessageConfig {
-                sender: rng.gen(),
-                recipient: rng.gen(),
-                nonce: rng.gen(),
-                amount: rng.gen(),
-                data: vec![rng.gen()],
-                da_height: DaBlockHeight(0),
-            })
-            .collect_vec();
+        let messages = std::iter::repeat_with(|| MessageConfig {
+            da_height: DaBlockHeight(0),
+            ..MessageConfig::randomize(&mut rng)
+        })
+        .take(1000)
+        .collect_vec();
 
-        let contracts = (0..1000)
-            .map(|_| given_contract_config(&mut rng))
-            .collect_vec();
-
-        let contract_state = (0..1000)
-            .map(|_| ContractStateConfig {
-                contract_id: rng.gen(),
-                key: rng.gen(),
-                value: [1, 2, 3].to_vec(),
-            })
-            .collect_vec();
-
-        let contract_balance = (0..1000)
-            .map(|_| ContractBalanceConfig {
-                contract_id: rng.gen(),
-                asset_id: rng.gen(),
-                amount: rng.next_u64(),
-            })
+        let contracts = std::iter::repeat_with(|| given_contract_config(&mut rng))
+            .take(1000)
             .collect_vec();
 
         let state = StateConfig {
             coins,
             messages,
             contracts,
-            contract_state,
-            contract_balance,
             block_height: BlockHeight::from(0u32),
             da_block_height: Default::default(),
         };
-        let state_reader = StateReader::in_memory(state);
+        let snapshot_reader = SnapshotReader::local_testnet().with_state_config(state);
 
         let service_config = Config {
-            state_reader,
+            snapshot_reader,
             ..Config::local_node()
         };
 
@@ -448,10 +428,8 @@ mod tests {
             .await
             .unwrap();
 
-        use strum::IntoEnumIterator;
-        for key in GenesisResource::iter() {
-            assert!(db.genesis_progress(&key).is_none());
-        }
+        let keys = db.iter_all::<GenesisMetadata<OnChain>>(None).count();
+        assert_eq!(keys, 0);
     }
 
     #[tokio::test]
@@ -500,10 +478,10 @@ mod tests {
             block_height: starting_height,
             ..Default::default()
         };
-        let state_reader = StateReader::in_memory(state);
+        let snapshot_reader = SnapshotReader::local_testnet().with_state_config(state);
 
         let service_config = Config {
-            state_reader,
+            snapshot_reader,
             ..Config::local_node()
         };
 
@@ -545,54 +523,39 @@ mod tests {
 
     #[tokio::test]
     async fn config_state_initializes_contract_state() {
+        // given
         let mut rng = StdRng::seed_from_u64(10);
 
-        let salt: Salt = rng.gen();
-        let contract = Contract::from(op::ret(0x10).to_bytes().to_vec());
-        let root = contract.root();
-        let contract_id = contract.id(&salt, &root, &Contract::default_state_root());
-
-        let test_key = rng.gen();
-        let test_value = [1, 2, 3].to_vec();
-        let contract_state = ContractStateConfig {
-            contract_id,
-            key: test_key,
-            value: test_value.clone(),
-        };
-
-        let state = StateConfig {
-            contracts: vec![ContractConfig {
-                contract_id,
-                code: contract.into(),
-                tx_id: rng.gen(),
-                output_index: rng.gen(),
-                tx_pointer_block_height: 0.into(),
-                tx_pointer_tx_idx: rng.gen(),
-            }],
-            contract_state: vec![contract_state],
-            ..Default::default()
-        };
-        let state_reader = StateReader::in_memory(state);
+        let contract = given_contract_config(&mut rng);
+        let contract_id = contract.contract_id;
+        let states = contract.states.clone();
+        let snapshot_reader =
+            SnapshotReader::local_testnet().with_state_config(StateConfig {
+                contracts: vec![contract],
+                ..Default::default()
+            });
 
         let service_config = Config {
-            chain_config: ChainConfig::local_testnet(),
-            state_reader,
+            snapshot_reader,
             ..Config::local_node()
         };
-
         let db = Database::default();
+
+        // when
         FuelService::from_database(db.clone(), service_config)
             .await
             .unwrap();
 
-        let ret = db
-            .storage::<ContractsState>()
-            .get(&(&contract_id, &test_key).into())
-            .unwrap()
-            .expect("Expect a state entry to exist with test_key")
-            .into_owned();
-
-        assert_eq!(test_value.to_vec(), ret.0)
+        // then
+        for state in states {
+            let ret = db
+                .storage::<ContractsState>()
+                .get(&(&contract_id, &state.key).into())
+                .unwrap()
+                .expect("Expect a state entry to exist")
+                .into_owned();
+            assert_eq!(state.value, ret.0)
+        }
     }
 
     #[cfg(feature = "test-helpers")]
@@ -613,10 +576,10 @@ mod tests {
             messages: vec![msg.clone()],
             ..Default::default()
         };
-        let state_reader = StateReader::in_memory(state);
+        let snapshot_reader = SnapshotReader::local_testnet().with_state_config(state);
 
         let config = Config {
-            state_reader,
+            snapshot_reader,
             ..Config::local_node()
         };
 
@@ -642,33 +605,17 @@ mod tests {
     async fn config_state_initializes_contract_balance() {
         let mut rng = StdRng::seed_from_u64(10);
 
-        let salt: Salt = rng.gen();
-        let contract = Contract::from(op::ret(0x10).to_bytes().to_vec());
-        let root = contract.root();
-        let contract_id = contract.id(&salt, &root, &Contract::default_state_root());
-
-        let test_asset_id = rng.gen();
-        let test_balance = rng.next_u64();
-        let contract_balance = ContractBalanceConfig {
-            contract_id,
-            asset_id: test_asset_id,
-            amount: test_balance,
-        };
-
-        let state = StateConfig {
-            contracts: vec![ContractConfig {
-                contract_id,
-                code: contract.into(),
+        let contract = given_contract_config(&mut rng);
+        let contract_id = contract.contract_id;
+        let balances = contract.balances.clone();
+        let snapshot_reader =
+            SnapshotReader::local_testnet().with_state_config(StateConfig {
+                contracts: vec![contract],
                 ..Default::default()
-            }],
-            contract_balance: vec![contract_balance],
-            ..Default::default()
-        };
-        let state_reader = StateReader::in_memory(state);
+            });
 
         let service_config = Config {
-            chain_config: ChainConfig::local_testnet(),
-            state_reader,
+            snapshot_reader,
             ..Config::local_node()
         };
 
@@ -677,14 +624,16 @@ mod tests {
             .await
             .unwrap();
 
-        let ret = db
-            .storage::<ContractsAssets>()
-            .get(&(&contract_id, &test_asset_id).into())
-            .unwrap()
-            .expect("Expected a balance to be present")
-            .into_owned();
+        for balance in balances {
+            let ret = db
+                .storage::<ContractsAssets>()
+                .get(&(&contract_id, &balance.asset_id).into())
+                .unwrap()
+                .expect("Expected a balance to be present")
+                .into_owned();
 
-        assert_eq!(test_balance, ret)
+            assert_eq!(balance.amount, ret)
+        }
     }
 
     #[tokio::test]
@@ -699,10 +648,10 @@ mod tests {
             block_height: BlockHeight::from(10u32),
             ..Default::default()
         };
-        let state_reader = StateReader::in_memory(state);
+        let snapshot_reader = SnapshotReader::local_testnet().with_state_config(state);
 
         let service_config = Config {
-            state_reader,
+            snapshot_reader,
             ..Config::local_node()
         };
 
@@ -717,33 +666,19 @@ mod tests {
     async fn contract_tx_pointer_cant_exceed_genesis_height() {
         let mut rng = StdRng::seed_from_u64(10);
 
-        let test_asset_id: AssetId = rng.gen();
-        let test_balance: u64 = rng.next_u64();
-        let contract_id = Default::default();
-        let balances = vec![ContractBalanceConfig {
-            contract_id,
-            asset_id: test_asset_id,
-            amount: test_balance,
-        }];
-        let contract = Contract::from(op::ret(0x10).to_bytes().to_vec());
-
         let state = StateConfig {
             contracts: vec![ContractConfig {
-                contract_id: ContractId::from(*contract_id),
-                code: contract.into(),
                 // set txpointer height > genesis height
                 tx_pointer_block_height: BlockHeight::from(11u32),
-                tx_pointer_tx_idx: 0,
-                ..Default::default()
+                ..given_contract_config(&mut rng)
             }],
-            contract_balance: balances,
             block_height: BlockHeight::from(10u32),
             ..Default::default()
         };
-        let state_reader = StateReader::in_memory(state);
+        let snapshot_reader = SnapshotReader::local_testnet().with_state_config(state);
 
         let service_config = Config {
-            state_reader,
+            snapshot_reader,
             ..Config::local_node()
         };
 
@@ -769,52 +704,34 @@ mod tests {
     }
 
     fn given_contract_config(rng: &mut StdRng) -> ContractConfig {
-        let contract = Contract::from(op::ret(0x10).to_bytes().to_vec());
-        let salt = rng.gen();
-        let root = contract.root();
-        let contract_id = contract.id(&salt, &root, &Contract::default_state_root());
-
         ContractConfig {
-            contract_id,
-            code: contract.into(),
-            ..Default::default()
+            tx_pointer_block_height: 0.into(),
+            ..ContractConfig::randomize(rng)
         }
-    }
-
-    fn given_contract_config_with_tx(rng: &mut StdRng) -> ContractConfig {
-        let mut config = given_contract_config(rng);
-        config.tx_id = rng.gen();
-        config.output_index = rng.gen();
-        config.tx_pointer_block_height = 0.into();
-        config.tx_pointer_tx_idx = rng.gen();
-
-        config
     }
 
     #[tokio::test]
     async fn config_state_initializes_contract() {
         let mut rng = StdRng::seed_from_u64(10);
-        let config = given_contract_config_with_tx(&mut rng);
-        let contract_id = config.contract_id;
 
-        let state = StateConfig {
-            contracts: vec![config.clone()],
+        let initial_state = StateConfig {
+            contracts: vec![given_contract_config(&mut rng)],
             ..Default::default()
         };
-        let state_reader = StateReader::in_memory(state);
+        let snapshot_reader =
+            SnapshotReader::local_testnet().with_state_config(initial_state.clone());
 
         let service_config = Config {
-            state_reader,
+            snapshot_reader,
             ..Config::local_node()
         };
 
-        let db = Database::default();
-        FuelService::from_database(db.clone(), service_config)
+        let db = CombinedDatabase::default();
+        FuelService::from_combined_database(db.clone(), service_config)
             .await
             .unwrap();
 
-        let initialized_contract = db.get_contract_config(contract_id).unwrap();
-
-        assert_eq!(initialized_contract, config);
+        let stored_state = db.read_state_config().unwrap();
+        assert_eq!(initial_state, stored_state);
     }
 }

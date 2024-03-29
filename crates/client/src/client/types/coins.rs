@@ -9,7 +9,7 @@ use crate::client::{
     PaginatedResult,
 };
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum CoinType {
     Coin(Coin),
     MessageCoin(MessageCoin),
@@ -26,7 +26,7 @@ impl CoinType {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Coin {
     pub amount: u64,
     pub block_created: u32,
@@ -36,7 +36,7 @@ pub struct Coin {
     pub owner: Address,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct MessageCoin {
     pub amount: u64,
     pub sender: Address,

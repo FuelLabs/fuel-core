@@ -3,8 +3,8 @@ use fuel_core::{
     chain_config::{
         CoinConfig,
         MessageConfig,
+        SnapshotReader,
         StateConfig,
-        StateReader,
     },
     coins_query::CoinsQueryError,
     service::{
@@ -26,7 +26,7 @@ mod coin {
     use super::*;
     use fuel_core::chain_config::{
         CoinConfigGenerator,
-        StateReader,
+        SnapshotReader,
     };
     use fuel_core_client::client::types::CoinType;
     use fuel_core_types::fuel_crypto::SecretKey;
@@ -61,7 +61,7 @@ mod coin {
             ..Default::default()
         };
         let config = Config {
-            state_reader: StateReader::in_memory(state),
+            snapshot_reader: SnapshotReader::local_testnet().with_state_config(state),
             ..Config::local_node()
         };
 
@@ -283,7 +283,7 @@ mod coin {
 }
 
 mod message_coin {
-    use fuel_core::chain_config::StateReader;
+    use fuel_core::chain_config::SnapshotReader;
     use fuel_core_client::client::types::CoinType;
     use fuel_core_types::{
         blockchain::primitives::DaBlockHeight,
@@ -315,7 +315,7 @@ mod message_coin {
             ..Default::default()
         };
         let config = Config {
-            state_reader: StateReader::in_memory(state),
+            snapshot_reader: SnapshotReader::local_testnet().with_state_config(state),
             ..Config::local_node()
         };
 
@@ -492,7 +492,7 @@ mod message_coin {
 mod all_coins {
     use fuel_core::chain_config::{
         CoinConfigGenerator,
-        StateReader,
+        SnapshotReader,
     };
     use fuel_core_client::client::types::CoinType;
     use fuel_core_types::blockchain::primitives::DaBlockHeight;
@@ -535,7 +535,7 @@ mod all_coins {
             ..Default::default()
         };
         let config = Config {
-            state_reader: StateReader::in_memory(state),
+            snapshot_reader: SnapshotReader::local_testnet().with_state_config(state),
             ..Config::local_node()
         };
 
@@ -710,7 +710,8 @@ mod all_coins {
 async fn empty_setup() -> TestContext {
     // setup config
     let config = Config {
-        state_reader: StateReader::in_memory(StateConfig::default()),
+        snapshot_reader: SnapshotReader::local_testnet()
+            .with_state_config(StateConfig::default()),
         ..Config::local_node()
     };
 

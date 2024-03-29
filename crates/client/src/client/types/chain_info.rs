@@ -8,7 +8,7 @@ use fuel_core_types::{
     fuel_tx::ConsensusParameters,
 };
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ChainInfo {
     pub da_height: u64,
     pub name: String,

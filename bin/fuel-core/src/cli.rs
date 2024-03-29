@@ -1,5 +1,9 @@
 use clap::Parser;
-use fuel_core_chain_config::ChainConfig;
+use fuel_core_chain_config::{
+    ChainConfig,
+    SnapshotReader,
+    StateConfig,
+};
 use std::{
     env,
     path::PathBuf,
@@ -23,6 +27,8 @@ pub mod fee_contract;
 pub mod run;
 #[cfg(any(feature = "rocksdb", feature = "rocksdb-production"))]
 pub mod snapshot;
+// Default database cache is 1 GB
+pub const DEFAULT_DATABASE_CACHE_SIZE: usize = 1024 * 1024 * 1024;
 
 #[derive(Parser, Debug)]
 #[clap(
@@ -113,7 +119,7 @@ pub async fn run_cli() -> anyhow::Result<()> {
         let command = run::Command::try_parse();
         if let Ok(command) = command {
             tracing::warn!("This cli format for running `fuel-core` is deprecated and will be removed. Please use `fuel-core run` or use `--help` for more information");
-            return run::exec(command).await
+            return run::exec(command).await;
         }
     }
 
@@ -132,12 +138,22 @@ pub async fn run_cli() -> anyhow::Result<()> {
 }
 
 /// Returns the chain configuration for the local testnet.
-pub fn local_testnet() -> ChainConfig {
+pub fn local_testnet_chain_config() -> ChainConfig {
     const TESTNET_CHAIN_CONFIG: &[u8] =
         include_bytes!("../../../deployment/scripts/chainspec/testnet/chain_config.json");
 
     let config: ChainConfig = serde_json::from_slice(TESTNET_CHAIN_CONFIG).unwrap();
     config
+}
+
+/// Returns the chain configuration for the local testnet.
+pub fn local_testnet_reader() -> SnapshotReader {
+    const TESTNET_STATE_CONFIG: &[u8] =
+        include_bytes!("../../../deployment/scripts/chainspec/testnet/state_config.json");
+
+    let state_config: StateConfig = serde_json::from_slice(TESTNET_STATE_CONFIG).unwrap();
+
+    SnapshotReader::new_in_memory(local_testnet_chain_config(), state_config)
 }
 
 #[cfg(any(feature = "rocksdb", feature = "rocksdb-production"))]

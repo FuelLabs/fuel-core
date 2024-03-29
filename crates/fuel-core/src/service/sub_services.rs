@@ -99,8 +99,9 @@ pub fn init_sub_services(
 
     #[cfg(feature = "p2p")]
     let mut network = config.p2p.clone().map(|p2p_config| {
+        let chain_config = config.snapshot_reader.chain_config();
         fuel_core_p2p::service::new_service(
-            config.chain_config.consensus_parameters.chain_id(),
+            chain_config.consensus_parameters.chain_id(),
             p2p_config,
             database.on_chain().clone(),
             importer_adapter.clone(),
@@ -185,9 +186,10 @@ pub fn init_sub_services(
     )?;
 
     // TODO: Figure out on how to move it into `fuel-core-graphql-api`.
+    let chain_config = config.snapshot_reader.chain_config();
     let schema = crate::schema::dap::init(
         build_schema(),
-        config.chain_config.consensus_parameters.clone(),
+        chain_config.consensus_parameters.clone(),
         config.debug,
     )
     .data(database.on_chain().clone());
@@ -196,9 +198,10 @@ pub fn init_sub_services(
         tx_pool_adapter.clone(),
         importer_adapter.clone(),
         database.off_chain().clone(),
-        config.chain_config.consensus_parameters.chain_id(),
+        chain_config.consensus_parameters.chain_id(),
     );
 
+    let chain_config = config.snapshot_reader.chain_config();
     let graphql_config = GraphQLConfig {
         addr: config.addr,
         utxo_validation: config.utxo_validation,
@@ -206,8 +209,8 @@ pub fn init_sub_services(
         vm_backtrace: config.vm.backtrace,
         max_tx: config.txpool.max_tx,
         max_depth: config.txpool.max_depth,
-        chain_name: config.chain_config.chain_name.clone(),
-        consensus_parameters: config.chain_config.consensus_parameters.clone(),
+        chain_name: chain_config.chain_name.clone(),
+        consensus_parameters: chain_config.consensus_parameters.clone(),
         consensus_key: config.consensus_key.clone(),
     };
 

@@ -106,11 +106,12 @@ impl BenchDb {
         // Adds a genesis block to the database.
         let config = Config::local_node();
         let block = fuel_core::service::genesis::create_genesis_block(&config);
+        let chain_config = config.snapshot_reader.chain_config();
         database
             .storage::<FuelBlocks>()
             .insert(
                 &0u32.into(),
-                &block.compress(&config.chain_config.consensus_parameters.chain_id()),
+                &block.compress(&chain_config.consensus_parameters.chain_id()),
             )
             .unwrap();
 

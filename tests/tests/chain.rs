@@ -1,8 +1,9 @@
 use fuel_core::{
     chain_config::{
+        ChainConfig,
         CoinConfig,
+        SnapshotReader,
         StateConfig,
-        StateReader,
     },
     service::{
         Config,
@@ -39,14 +40,15 @@ async fn chain_info() {
     let chain_info = client.chain_info().await.unwrap();
 
     assert_eq!(0, chain_info.da_height);
-    assert_eq!(node_config.chain_config.chain_name, chain_info.name);
+    let chain_config = node_config.snapshot_reader.chain_config();
+    assert_eq!(chain_config.chain_name, chain_info.name);
     assert_eq!(
-        node_config.chain_config.consensus_parameters,
+        chain_config.consensus_parameters,
         chain_info.consensus_parameters.clone()
     );
 
     assert_eq!(
-        node_config.chain_config.consensus_parameters.gas_costs(),
+        chain_config.consensus_parameters.gas_costs(),
         chain_info.consensus_parameters.gas_costs()
     );
 }
@@ -70,20 +72,19 @@ async fn network_operates_with_non_zero_chain_id() {
         }],
         ..Default::default()
     };
-    let mut node_config = Config {
-        debug: true,
-        utxo_validation: true,
-        static_gas_price: 1,
-        state_reader: StateReader::in_memory(state_config),
-        ..Config::local_node()
-    };
+    let mut chain_config = ChainConfig::local_testnet();
 
     // Given
     let chain_id = ChainId::new(0xDEAD);
-    node_config
-        .chain_config
-        .consensus_parameters
-        .set_chain_id(chain_id);
+    chain_config.consensus_parameters.set_chain_id(chain_id);
+    let node_config = Config {
+        debug: true,
+        utxo_validation: true,
+        static_gas_price: 1,
+        snapshot_reader: SnapshotReader::new_in_memory(chain_config, state_config),
+        ..Config::local_node()
+    };
+
     let srv = FuelService::new_node(node_config.clone()).await.unwrap();
     let client = FuelClient::from(srv.bound_address);
     let script = TransactionBuilder::script(vec![], vec![])
@@ -135,18 +136,18 @@ async fn network_operates_with_non_zero_base_asset_id() {
         }],
         ..Default::default()
     };
-    let mut node_config = Config {
+    let mut chain_config = ChainConfig::local_testnet();
+    chain_config
+        .consensus_parameters
+        .set_base_asset_id(new_base_asset_id);
+    let node_config = Config {
         debug: true,
         utxo_validation: true,
         static_gas_price: 1,
-        state_reader: StateReader::in_memory(state_config),
+        snapshot_reader: SnapshotReader::new_in_memory(chain_config, state_config),
         ..Config::local_node()
     };
 
-    node_config
-        .chain_config
-        .consensus_parameters
-        .set_base_asset_id(new_base_asset_id);
     let srv = FuelService::new_node(node_config.clone()).await.unwrap();
     let client = FuelClient::from(srv.bound_address);
     let script = TransactionBuilder::script(vec![], vec![])

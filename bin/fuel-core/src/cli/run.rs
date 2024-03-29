@@ -12,15 +12,8 @@ use crate::{
 use anyhow::Context;
 use clap::Parser;
 use fuel_core::{
-    chain_config::{
-        default_consensus_dev_key,
-        ChainConfig,
-        StateConfig,
-    },
-    combined_database::{
-        CombinedDatabase,
-        CombinedDatabaseConfig,
-    },
+    chain_config::default_consensus_dev_key,
+    combined_database::CombinedDatabaseConfig,
     producer::Config as ProducerConfig,
     service::{
         config::Trigger,
@@ -43,7 +36,7 @@ use fuel_core::{
 };
 use fuel_core_chain_config::{
     SnapshotMetadata,
-    StateReader,
+    SnapshotReader,
 };
 use pyroscope::{
     pyroscope::PyroscopeAgentRunning,
@@ -65,9 +58,9 @@ use tracing::{
     warn,
 };
 
+use super::DEFAULT_DATABASE_CACHE_SIZE;
+
 pub const CONSENSUS_KEY_ENV: &str = "CONSENSUS_KEY_SECRET";
-// Default database cache is 1 GB
-const DEFAULT_DATABASE_CACHE_SIZE: usize = 1024 * 1024 * 1024;
 
 #[cfg(feature = "p2p")]
 mod p2p;
@@ -243,24 +236,20 @@ impl Command {
 
         let addr = net::SocketAddr::new(ip, port);
 
-        let (chain_conf, state_reader) = match snapshot.as_ref() {
-            None => (
-                crate::cli::local_testnet(),
-                StateReader::in_memory(StateConfig::local_testnet()),
-            ),
+        let snapshot_reader = match snapshot.as_ref() {
+            None => crate::cli::local_testnet_reader(),
             Some(path) => {
                 let metadata = SnapshotMetadata::read(path)?;
-                let chain_conf = ChainConfig::from_snapshot_metadata(&metadata)?;
-                let state_reader = StateReader::for_snapshot(metadata)?;
-                (chain_conf, state_reader)
+                SnapshotReader::open(metadata)?
             }
         };
+        let chain_config = snapshot_reader.chain_config().clone();
 
         #[cfg(feature = "relayer")]
         let relayer_cfg = relayer_args.into_config();
 
         #[cfg(feature = "p2p")]
-        let p2p_cfg = p2p_args.into_config(chain_conf.chain_name.clone(), metrics)?;
+        let p2p_cfg = p2p_args.into_config(chain_config.chain_name.clone(), metrics)?;
 
         let trigger: Trigger = poa_trigger.into();
 
@@ -308,7 +297,7 @@ impl Command {
         };
 
         let block_importer =
-            fuel_core::service::config::fuel_core_importer::Config::new(&chain_conf);
+            fuel_core::service::config::fuel_core_importer::Config::new(&chain_config);
 
         let TxPoolArgs {
             tx_pool_ttl,
@@ -332,8 +321,7 @@ impl Command {
             addr,
             api_request_timeout: api_request_timeout.into(),
             combined_db_config,
-            chain_config: chain_conf.clone(),
-            state_reader,
+            snapshot_reader,
             debug,
             utxo_validation,
             block_production: trigger,
@@ -343,7 +331,7 @@ impl Command {
             txpool: TxPoolConfig::new(
                 tx_max_number,
                 tx_max_depth,
-                chain_conf,
+                chain_config,
                 utxo_validation,
                 metrics,
                 tx_pool_ttl.into(),
@@ -375,8 +363,9 @@ impl Command {
 }
 
 pub async fn exec(command: Command) -> anyhow::Result<()> {
+    #[cfg(any(feature = "rocks-db", feature = "rocksdb-production"))]
     if command.db_prune && command.database_path.exists() {
-        CombinedDatabase::prune(&command.database_path)?;
+        fuel_core::combined_database::CombinedDatabase::prune(&command.database_path)?;
     }
 
     let profiling = command.profiling.clone();
@@ -431,11 +420,11 @@ fn start_pyroscope_agent(
         .pyroscope_url
         .as_ref()
         .map(|url| -> anyhow::Result<_> {
-            // Configure profiling backend
+            let chain_config = config.snapshot_reader.chain_config();
             let agent = PyroscopeAgent::builder(url, &"fuel-core".to_string())
                 .tags(vec![
                     ("service", config.name.as_str()),
-                    ("network", config.chain_config.chain_name.as_str()),
+                    ("network", chain_config.chain_name.as_str()),
                 ])
                 .backend(pprof_backend(
                     PprofConfig::new().sample_rate(profiling_args.pprof_sample_rate),
