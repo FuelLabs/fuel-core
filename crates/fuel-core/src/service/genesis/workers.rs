@@ -133,23 +133,24 @@ impl GenesisWorkers {
     }
 
     // TODO: serde bounds can be written shorter
-    pub fn spawn_worker_off_chain<Src, Dst>(
+    pub fn spawn_worker_off_chain<TableInSnapshot, TableBeingWritten>(
         &mut self,
     ) -> anyhow::Result<AsyncRayonHandle<anyhow::Result<()>>>
     where
-        Src: TableWithBlueprint + Send + 'static,
-        Src::OwnedKey: serde::de::DeserializeOwned + Send,
-        Src::OwnedValue: serde::de::DeserializeOwned + Send,
-        StateConfig: AsTable<Src>,
-        Handler<Dst>: ProcessState<TableInSnapshot = Src, DbDesc = OffChain>,
-        Dst: Send + 'static,
+        TableInSnapshot: TableWithBlueprint + Send + 'static,
+        TableInSnapshot::OwnedKey: serde::de::DeserializeOwned + Send,
+        TableInSnapshot::OwnedValue: serde::de::DeserializeOwned + Send,
+        StateConfig: AsTable<TableInSnapshot>,
+        Handler<TableBeingWritten>:
+            ProcessState<TableInSnapshot = TableInSnapshot, DbDesc = OffChain>,
+        TableBeingWritten: Send + 'static,
     {
-        let groups = self.snapshot_reader.read::<Src>()?;
-        let finished_signal = self.get_signal(Src::column().name());
+        let groups = self.snapshot_reader.read::<TableInSnapshot>()?;
+        let finished_signal = self.get_signal(TableInSnapshot::column().name());
         let runner = GenesisRunner::new(
             Some(finished_signal),
             self.cancel_token.clone(),
-            Handler::<Dst>::new(self.block_height, self.da_block_height),
+            Handler::<TableBeingWritten>::new(self.block_height, self.da_block_height),
             groups,
             self.db.off_chain().clone(),
         );

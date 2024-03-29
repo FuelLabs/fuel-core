@@ -10,7 +10,10 @@ pub use runner::GenesisRunner;
 use crate::{
     combined_database::CombinedDatabase,
     database::{
-        database_description::{off_chain::OffChain, on_chain::OnChain},
+        database_description::{
+            off_chain::OffChain,
+            on_chain::OnChain,
+        },
         genesis_progress::GenesisMetadata,
     },
     service::config::Config,
@@ -19,18 +22,30 @@ use crate::{
 use fuel_core_chain_config::GenesisCommitment;
 use fuel_core_storage::{
     iter::IteratorOverTable,
-    tables::{ConsensusParametersVersions, StateTransitionBytecodeVersions},
-    transactional::{Changes, WriteTransaction},
+    tables::{
+        ConsensusParametersVersions,
+        StateTransitionBytecodeVersions,
+    },
+    transactional::{
+        Changes,
+        WriteTransaction,
+    },
     StorageAsMut,
 };
 use fuel_core_types::{
     self,
     blockchain::{
         block::Block,
-        consensus::{Consensus, Genesis},
+        consensus::{
+            Consensus,
+            Genesis,
+        },
         header::{
-            ApplicationHeader, ConsensusHeader, ConsensusParametersVersion,
-            PartialBlockHeader, StateTransitionBytecodeVersion,
+            ApplicationHeader,
+            ConsensusHeader,
+            ConsensusParametersVersion,
+            PartialBlockHeader,
+            StateTransitionBytecodeVersion,
         },
         primitives::Empty,
         SealedBlock,
@@ -171,24 +186,46 @@ mod tests {
     use crate::{
         combined_database::CombinedDatabase,
         database::Database,
-        service::{config::Config, FuelService, Task},
+        service::{
+            config::Config,
+            FuelService,
+            Task,
+        },
     };
     use fuel_core_chain_config::{
-        CoinConfig, ContractConfig, MessageConfig, Randomize, SnapshotReader, StateConfig,
+        CoinConfig,
+        ContractConfig,
+        MessageConfig,
+        Randomize,
+        SnapshotReader,
+        StateConfig,
     };
     use fuel_core_services::RunnableService;
     use fuel_core_storage::{
-        tables::{Coins, ContractsAssets, ContractsState},
+        tables::{
+            Coins,
+            ContractsAssets,
+            ContractsState,
+        },
         StorageAsRef,
     };
     use fuel_core_types::{
         blockchain::primitives::DaBlockHeight,
         entities::coins::coin::Coin,
         fuel_tx::UtxoId,
-        fuel_types::{Address, AssetId, BlockHeight},
+        fuel_types::{
+            Address,
+            AssetId,
+            BlockHeight,
+        },
     };
     use itertools::Itertools;
-    use rand::{rngs::StdRng, Rng, RngCore, SeedableRng};
+    use rand::{
+        rngs::StdRng,
+        Rng,
+        RngCore,
+        SeedableRng,
+    };
     use std::vec;
 
     #[tokio::test]

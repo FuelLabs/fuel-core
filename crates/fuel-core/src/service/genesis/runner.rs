@@ -104,7 +104,7 @@ where
             Logic::TableInSnapshot::column().name(),
             Logic::TableBeingWritten::column().name()
         );
-        let mut db = self.db.clone();
+        let mut db = self.db;
         let result = self
             .groups
             .into_iter()
