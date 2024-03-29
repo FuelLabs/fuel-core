@@ -135,14 +135,9 @@ impl fuel_core_producer::ports::Relayer for MaybeRelayerAdapter {
             if let Some(sync) = self.relayer_synced.as_ref() {
                 sync.await_at_least_synced(starting_from).await?;
                 let highest = sync.get_finalized_da_height()?;
-                let values = (starting_from.0..=highest.0)
+                (starting_from.0..=highest.0)
                     .map(|height| get_gas_cost_for_height(height, sync))
-                    .collect::<anyhow::Result<Vec<_>>>()?
-                    .into_iter()
-                    .take_while(|result| result.is_some())
-                    .flatten()
-                    .collect();
-                Ok(values)
+                    .collect()
             } else {
                 Ok(Vec::new())
             }
@@ -162,16 +157,18 @@ impl fuel_core_producer::ports::Relayer for MaybeRelayerAdapter {
 fn get_gas_cost_for_height(
     height: u64,
     sync: &fuel_core_relayer::SharedState<Database<Relayer>>,
-) -> anyhow::Result<Option<(DaBlockHeight, u64)>> {
+) -> anyhow::Result<(DaBlockHeight, u64)> {
     let da_height = DaBlockHeight(height);
-    let values = sync
+    let cost = sync
         .database()
         .storage::<fuel_core_relayer::storage::EventsHistory>()
         .get(&da_height)?
         .map(|cow| cow.into_owned())
-        .map(|events| events.iter().map(|event| event.cost()).sum())
-        .map(|cost| (da_height, cost));
-    Ok(values)
+        .unwrap_or_default()
+        .iter()
+        .map(|event| event.cost())
+        .sum();
+    Ok((da_height, cost))
 }
 
 impl fuel_core_producer::ports::BlockProducerDatabase for Database {
