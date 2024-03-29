@@ -1,7 +1,14 @@
-use fuel_core_chain_config::Group;
-use fuel_core_storage::transactional::{
-    StorageTransaction,
-    WriteTransaction,
+use fuel_core_chain_config::{
+    Group,
+    TableEntry,
+};
+use fuel_core_storage::{
+    kv_store::StorageColumn,
+    structured_storage::TableWithBlueprint,
+    transactional::{
+        StorageTransaction,
+        WriteTransaction,
+    },
 };
 use std::sync::Arc;
 use tokio::sync::Notify;
@@ -11,7 +18,6 @@ use crate::database::{
     genesis_progress::{
         GenesisProgressInspect,
         GenesisProgressMutate,
-        GenesisResource,
     },
     Database,
 };
@@ -42,21 +48,19 @@ pub struct GenesisRunner<Handler, Groups, TxOpener> {
 }
 
 pub trait ProcessState {
-    type Item;
-
-    fn genesis_resource() -> GenesisResource;
+    type Table: TableWithBlueprint;
 
     fn process(
         &mut self,
-        group: Vec<Self::Item>,
+        group: Vec<TableEntry<Self::Table>>,
         tx: &mut StorageTransaction<&mut Database>,
     ) -> anyhow::Result<()>;
 }
 
-impl<Logic, GroupGenerator, TxOpener, Item> GenesisRunner<Logic, GroupGenerator, TxOpener>
+impl<Logic, GroupGenerator, TxOpener> GenesisRunner<Logic, GroupGenerator, TxOpener>
 where
-    Logic: ProcessState<Item = Item>,
-    GroupGenerator: IntoIterator<Item = anyhow::Result<Group<Item>>>,
+    Logic: ProcessState,
+    GroupGenerator: IntoIterator<Item = anyhow::Result<Group<TableEntry<Logic::Table>>>>,
     TxOpener: TransactionOpener,
 {
     pub fn new(
@@ -68,7 +72,7 @@ where
     ) -> Self {
         let skip = tx_opener
             .view_only()
-            .genesis_progress(&Logic::genesis_resource())
+            .genesis_progress(Logic::Table::column().name())
             // The `idx_last_handled` is zero based, so we need to add 1 to skip the already handled groups.
             .map(|idx_last_handled| idx_last_handled.saturating_add(1))
             .unwrap_or_default();
@@ -93,7 +97,7 @@ where
                 let group = group?;
                 let group_num = group.index;
                 self.handler.process(group.data, &mut tx)?;
-                tx.update_genesis_progress(Logic::genesis_resource(), group_num)?;
+                tx.update_genesis_progress(Logic::Table::column().name(), group_num)?;
                 tx.commit()?;
                 Ok(())
             });
@@ -120,7 +124,11 @@ mod tests {
         anyhow,
         bail,
     };
-    use fuel_core_chain_config::Group;
+    use fuel_core_chain_config::{
+        Group,
+        Randomize,
+        TableEntry,
+    };
     use fuel_core_storage::{
         column::Column,
         iter::{
@@ -131,8 +139,10 @@ mod tests {
         kv_store::{
             KVItem,
             KeyValueInspect,
+            StorageColumn,
             Value,
         },
+        structured_storage::TableWithBlueprint,
         tables::Coins,
         transactional::{
             Changes,
@@ -152,6 +162,10 @@ mod tests {
         fuel_tx::UtxoId,
         fuel_types::BlockHeight,
     };
+    use rand::{
+        rngs::StdRng,
+        SeedableRng,
+    };
     use tokio::sync::Notify;
     use tokio_util::sync::CancellationToken;
 
@@ -160,7 +174,6 @@ mod tests {
             genesis_progress::{
                 GenesisProgressInspect,
                 GenesisProgressMutate,
-                GenesisResource,
             },
             Database,
         },
@@ -176,63 +189,90 @@ mod tests {
 
     use super::ProcessState;
 
-    type TestHandler<'a, K> = Box<
-        dyn FnMut(K, &mut StorageTransaction<&mut Database>) -> anyhow::Result<()>
-            + Send
-            + 'a,
-    >;
-
-    fn to_handler<'a, K: 'a>(
-        closure: impl FnMut(K, &mut StorageTransaction<&mut Database>) -> anyhow::Result<()>
-            + Send
-            + 'a,
-    ) -> TestHandler<'a, K> {
-        Box::new(closure)
+    struct TestHandler<L> {
+        logic: L,
     }
 
-    impl<'a, K> ProcessState for TestHandler<'a, K> {
-        type Item = K;
-
-        fn genesis_resource() -> GenesisResource {
-            GenesisResource::Coins
+    impl<L> TestHandler<L>
+    where
+        TestHandler<L>: ProcessState,
+    {
+        pub fn new(logic: L) -> Self {
+            Self { logic }
         }
+    }
 
+    impl<L> ProcessState for TestHandler<L>
+    where
+        L: FnMut(
+            TableEntry<Coins>,
+            &mut StorageTransaction<&mut Database>,
+        ) -> anyhow::Result<()>,
+    {
+        type Table = Coins;
         fn process(
             &mut self,
-            group: Vec<Self::Item>,
+            group: Vec<TableEntry<Self::Table>>,
             tx: &mut StorageTransaction<&mut Database>,
         ) -> anyhow::Result<()> {
-            group.into_iter().try_for_each(|item| self(item, tx))
+            group
+                .into_iter()
+                .try_for_each(|item| (self.logic)(item, tx))
         }
     }
 
-    fn given_ok_groups(amount: usize) -> Vec<anyhow::Result<Group<usize>>> {
-        given_groups(amount).into_iter().map(Ok).collect()
+    struct TestData {
+        batches: Vec<Vec<TableEntry<Coins>>>,
     }
 
-    fn given_groups(amount: usize) -> Vec<Group<usize>> {
-        (0..amount)
-            .map(|i| Group {
-                index: i,
-                data: vec![i],
-            })
-            .collect()
+    impl TestData {
+        pub fn new(amount: usize) -> Self {
+            let mut rng = StdRng::seed_from_u64(0);
+            let batches = std::iter::repeat_with(|| TableEntry::randomize(&mut rng))
+                .take(amount)
+                .map(|el| vec![el])
+                .collect();
+            Self { batches }
+        }
+
+        pub fn as_entries(&self, skip_batches: usize) -> Vec<TableEntry<Coins>> {
+            self.batches
+                .iter()
+                .skip(skip_batches)
+                .flat_map(|batch| batch.clone())
+                .collect()
+        }
+
+        pub fn as_indexed_groups(&self) -> Vec<Group<TableEntry<Coins>>> {
+            self.batches
+                .iter()
+                .enumerate()
+                .map(|(index, data)| Group {
+                    index,
+                    data: data.clone(),
+                })
+                .collect()
+        }
+
+        pub fn as_ok_groups(&self) -> Vec<anyhow::Result<Group<TableEntry<Coins>>>> {
+            self.as_indexed_groups().into_iter().map(Ok).collect()
+        }
     }
 
     #[test]
     fn will_go_through_all_groups() {
         // given
-        let groups = given_ok_groups(3);
-        let mut called_with_groups = vec![];
+        let data = TestData::new(3);
 
+        let mut called_with = vec![];
         let runner = GenesisRunner::new(
             Some(Arc::new(Notify::new())),
             CancellationToken::new(),
-            to_handler(|group: usize, _: _| {
-                called_with_groups.push(group);
+            TestHandler::new(|group, _| {
+                called_with.push(group);
                 Ok(())
             }),
-            groups,
+            data.as_ok_groups(),
             Database::default(),
         );
 
@@ -240,26 +280,27 @@ mod tests {
         runner.run().unwrap();
 
         // then
-        assert_eq!(called_with_groups, vec![0, 1, 2]);
+        assert_eq!(called_with, data.as_entries(0));
     }
 
     #[test]
     fn will_skip_one_group() {
         // given
-        let groups: Vec<Result<Group<usize>, anyhow::Error>> = given_ok_groups(2);
+        let data = TestData::new(2);
+
         let mut called_with = vec![];
         let mut db = Database::default();
-        db.update_genesis_progress(GenesisResource::Coins, 0)
+        db.update_genesis_progress(Coins::column().name(), 0)
             .unwrap();
 
         let runner = GenesisRunner::new(
             Some(Arc::new(Notify::new())),
             CancellationToken::new(),
-            to_handler(|element, _: _| {
+            TestHandler::new(|element, _| {
                 called_with.push(element);
                 Ok(())
             }),
-            groups,
+            data.as_ok_groups(),
             db,
         );
 
@@ -267,20 +308,20 @@ mod tests {
         runner.run().unwrap();
 
         // then
-        assert_eq!(called_with, vec![1]);
+        assert_eq!(called_with, data.as_entries(1));
     }
 
     #[test]
     fn changes_to_db_by_handler_are_behind_a_transaction() {
         // given
-        let groups = given_ok_groups(1);
+        let groups = TestData::new(1);
         let outer_db = Database::default();
         let utxo_id = UtxoId::new(Default::default(), 0);
 
         let runner = GenesisRunner::new(
             Some(Arc::new(Notify::new())),
             CancellationToken::new(),
-            to_handler(|_, tx: _| {
+            TestHandler::new(|_, tx| {
                 insert_a_coin(tx, &utxo_id);
 
                 assert!(
@@ -298,7 +339,7 @@ mod tests {
 
                 Ok(())
             }),
-            groups,
+            groups.as_ok_groups(),
             outer_db.clone(),
         );
 
@@ -321,18 +362,18 @@ mod tests {
     #[test]
     fn tx_reverted_if_handler_fails() {
         // given
-        let groups = given_ok_groups(1);
+        let groups = TestData::new(1);
         let db = Database::default();
         let utxo_id = UtxoId::new(Default::default(), 0);
 
         let runner = GenesisRunner::new(
             Some(Arc::new(Notify::new())),
             CancellationToken::new(),
-            to_handler(|_, tx: _| {
+            TestHandler::new(|_, tx| {
                 insert_a_coin(tx, &utxo_id);
                 bail!("Some error")
             }),
-            groups,
+            groups.as_ok_groups(),
             db.clone(),
         );
 
@@ -346,12 +387,12 @@ mod tests {
     #[test]
     fn handler_failure_is_propagated() {
         // given
-        let groups = given_ok_groups(1);
+        let groups = TestData::new(1);
         let runner = GenesisRunner::new(
             Some(Arc::new(Notify::new())),
             CancellationToken::new(),
-            to_handler(|_, _: _| bail!("Some error")),
-            groups,
+            TestHandler::new(|_, _| bail!("Some error")),
+            groups.as_ok_groups(),
             Database::default(),
         );
 
@@ -369,7 +410,7 @@ mod tests {
         let runner = GenesisRunner::new(
             Some(Arc::new(Notify::new())),
             CancellationToken::new(),
-            to_handler(|_: (), _: _| Ok(())),
+            TestHandler::new(|_, _| Ok(())),
             groups,
             Database::default(),
         );
@@ -384,13 +425,13 @@ mod tests {
     #[test]
     fn succesfully_processed_batch_updates_the_genesis_progress() {
         // given
-        let groups = given_ok_groups(2);
+        let data = TestData::new(2);
         let db = Database::default();
         let runner = GenesisRunner::new(
             Some(Arc::new(Notify::new())),
             CancellationToken::new(),
-            to_handler(|_, _: _| Ok(())),
-            groups,
+            TestHandler::new(|_, _| Ok(())),
+            data.as_ok_groups(),
             db.clone(),
         );
 
@@ -398,7 +439,7 @@ mod tests {
         runner.run().unwrap();
 
         // then
-        assert_eq!(db.genesis_progress(&GenesisResource::Coins), Some(1));
+        assert_eq!(db.genesis_progress(Coins::column().name()), Some(1));
     }
 
     #[test]
@@ -423,7 +464,7 @@ mod tests {
         }
 
         // given
-        let groups = given_ok_groups(1);
+        let data = TestData::new(1);
         let db = Database::default();
         let tx_opener = OnlyOneTransactionAllowed {
             db: db.clone(),
@@ -434,11 +475,11 @@ mod tests {
         let runner = GenesisRunner::new(
             Some(Arc::new(Notify::new())),
             CancellationToken::new(),
-            to_handler(|_, tx: _| {
+            TestHandler::new(|_, tx| {
                 insert_a_coin(tx, &utxo_id);
                 Ok(())
             }),
-            groups,
+            data.as_ok_groups(),
             tx_opener,
         );
 
@@ -446,8 +487,8 @@ mod tests {
         runner.run().unwrap();
 
         // then
-        assert_eq!(db.genesis_progress(&GenesisResource::Coins), Some(0));
-        assert!(StorageInspect::<Coins>::contains_key(&db, &utxo_id).unwrap());
+        assert_eq!(db.genesis_progress(Coins::column().name()), Some(0));
+        assert!(db.storage_as_ref::<Coins>().contains_key(&utxo_id).unwrap());
     }
 
     #[tokio::test]
@@ -464,7 +505,7 @@ mod tests {
             GenesisRunner::new(
                 Some(Arc::clone(&finished_signal)),
                 cancel_token.clone(),
-                to_handler(move |el, _: _| {
+                TestHandler::new(move |el, _| {
                     read_groups.lock().unwrap().push(el);
                     Ok(())
                 }),
@@ -475,13 +516,11 @@ mod tests {
 
         let runner_handle = std::thread::spawn(move || runner.run());
 
-        for group_no in 0..3 {
-            tx.send(Ok(Group {
-                index: group_no,
-                data: vec![group_no],
-            }))
-            .unwrap();
+        let data = TestData::new(4);
+        for group in data.as_ok_groups() {
+            tx.send(group).unwrap();
         }
+
         while read_groups.lock().unwrap().len() < 3 {
             std::thread::sleep(std::time::Duration::from_millis(1));
         }
@@ -489,14 +528,9 @@ mod tests {
         cancel_token.cancel();
 
         // when
-        tx.send(Ok(Group {
-            index: 3,
-            data: vec![3],
-        }))
-        .unwrap();
+        tx.send(data.as_ok_groups().pop().unwrap()).unwrap();
 
         // then
-
         // runner should finish
         drop(tx);
         let runner_response = runner_handle.join().unwrap();
@@ -506,8 +540,9 @@ mod tests {
         );
 
         // group after signal is not read
-        let read_groups = read_groups.lock().unwrap().clone();
-        assert_eq!(read_groups, vec![0, 1, 2]);
+        let read_entries = read_groups.lock().unwrap().clone();
+        let inserted_groups = data.as_entries(0);
+        assert_eq!(read_entries, inserted_groups);
 
         // finished signal is emitted
         tokio::time::timeout(Duration::from_millis(10), finished_signal.notified())
@@ -523,8 +558,7 @@ mod tests {
         let runner = GenesisRunner::new(
             Some(Arc::clone(&finished_signal)),
             CancellationToken::new(),
-            Box::new(|_: (), _: &mut StorageTransaction<&mut Database>| Ok(()))
-                as TestHandler<()>,
+            TestHandler::new(|_, _| Ok(())),
             groups,
             Database::default(),
         );
@@ -585,14 +619,15 @@ mod tests {
     #[test]
     fn tx_commit_failure_is_propagated() {
         // given
-        let groups = given_ok_groups(1);
+        let groups = TestData::new(1);
         let runner = GenesisRunner::new(
             Some(Arc::new(Notify::new())),
             CancellationToken::new(),
-            to_handler(|_, _: _| Ok(())),
-            groups,
+            TestHandler::new(|_, _| Ok(())),
+            groups.as_ok_groups(),
             Database::new(Arc::new(BrokenTransactions::new())),
         );
+
         // when
         let result = runner.run();
 

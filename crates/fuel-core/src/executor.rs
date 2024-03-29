@@ -387,11 +387,17 @@ mod tests {
     }
 
     mod coinbase {
+        use crate::graphql_api::ports::DatabaseContracts;
+
         use super::*;
-        use fuel_core_storage::transactional::{
-            AtomicView,
-            Modifiable,
+        use fuel_core_storage::{
+            iter::IterDirection,
+            transactional::{
+                AtomicView,
+                Modifiable,
+            },
         };
+        use fuel_core_types::services::graphql_api::ContractBalance;
 
         #[test]
         fn executor_commits_transactions_with_non_zero_coinbase_generation() {
@@ -501,10 +507,12 @@ mod tests {
                 panic!("Invalid coinbase transaction");
             }
 
-            let (asset_id, amount) = producer
+            let ContractBalance {
+                asset_id, amount, ..
+            } = producer
                 .storage_view_provider
                 .latest_view()
-                .contract_balances(recipient, None, None)
+                .contract_balances(recipient, None, IterDirection::Forward)
                 .next()
                 .unwrap()
                 .unwrap();
@@ -593,10 +601,12 @@ mod tests {
             } else {
                 panic!("Invalid coinbase transaction");
             }
-            let (asset_id, amount) = producer
+            let ContractBalance {
+                asset_id, amount, ..
+            } = producer
                 .storage_view_provider
                 .latest_view()
-                .contract_balances(recipient, None, None)
+                .contract_balances(recipient, None, IterDirection::Forward)
                 .next()
                 .unwrap()
                 .unwrap();
@@ -709,10 +719,12 @@ mod tests {
                 .execute_and_commit(ExecutionBlock::Validation(produced_block))
                 .unwrap();
             assert_eq!(validated_block.transactions(), produced_txs);
-            let (asset_id, amount) = validator
+            let ContractBalance {
+                asset_id, amount, ..
+            } = validator
                 .storage_view_provider
                 .latest_view()
-                .contract_balances(recipient, None, None)
+                .contract_balances(recipient, None, IterDirection::Forward)
                 .next()
                 .unwrap()
                 .unwrap();

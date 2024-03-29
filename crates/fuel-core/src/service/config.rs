@@ -1,8 +1,5 @@
 use clap::ValueEnum;
-use fuel_core_chain_config::{
-    ChainConfig,
-    StateReader,
-};
+use fuel_core_chain_config::SnapshotReader;
 use fuel_core_types::{
     blockchain::primitives::SecretKeyWrapper,
     secrecy::Secret,
@@ -37,8 +34,7 @@ pub struct Config {
     pub addr: SocketAddr,
     pub api_request_timeout: Duration,
     pub combined_db_config: CombinedDatabaseConfig,
-    pub chain_config: ChainConfig,
-    pub state_reader: StateReader,
+    pub snapshot_reader: SnapshotReader,
     /// When `true`:
     /// - Enables manual block production.
     /// - Enables debugger endpoint.
@@ -72,10 +68,9 @@ pub struct Config {
 impl Config {
     #[cfg(feature = "test-helpers")]
     pub fn local_node() -> Self {
-        let chain_config = ChainConfig::local_testnet();
-        let state_config = fuel_core_chain_config::StateConfig::local_testnet();
+        let snapshot_reader = SnapshotReader::local_testnet();
+        let chain_config = snapshot_reader.chain_config().clone();
         let block_importer = fuel_core_importer::Config::new(&chain_config);
-        let state_reader = StateReader::in_memory(state_config.clone());
 
         let utxo_validation = false;
         let min_gas_price = 0;
@@ -95,8 +90,7 @@ impl Config {
             api_request_timeout: Duration::from_secs(60),
             combined_db_config,
             debug: true,
-            chain_config: chain_config.clone(),
-            state_reader,
+            snapshot_reader,
             block_production: Trigger::Instant,
             vm: Default::default(),
             utxo_validation,
@@ -137,17 +131,15 @@ impl Config {
             self.utxo_validation = true;
         }
 
-        if self.txpool.chain_config != self.chain_config {
+        let chain_config = self.snapshot_reader.chain_config();
+        if self.txpool.chain_config != *chain_config {
             tracing::warn!("The `ChainConfig` of `TxPool` was inconsistent");
-            self.txpool.chain_config = self.chain_config.clone();
+            self.txpool.chain_config = chain_config.clone();
         }
 
-        if self.block_importer.chain_id
-            != self.chain_config.consensus_parameters.chain_id()
-        {
+        if self.block_importer.chain_id != chain_config.consensus_parameters.chain_id() {
             tracing::warn!("The `ChainConfig` of `BlockImporter` was inconsistent");
-            self.block_importer.chain_id =
-                self.chain_config.consensus_parameters.chain_id()
+            self.block_importer.chain_id = chain_config.consensus_parameters.chain_id()
         }
 
         if self.txpool.utxo_validation != self.utxo_validation {
@@ -165,11 +157,12 @@ impl Config {
 
 impl From<&Config> for fuel_core_poa::Config {
     fn from(config: &Config) -> Self {
+        let chain_config = config.snapshot_reader.chain_config();
         fuel_core_poa::Config {
             trigger: config.block_production,
             signing_key: config.consensus_key.clone(),
             metrics: false,
-            consensus_params: config.chain_config.consensus_parameters.clone(),
+            consensus_params: chain_config.consensus_parameters.clone(),
             min_connected_reserved_peers: config.min_connected_reserved_peers,
             time_until_synced: config.time_until_synced,
         }

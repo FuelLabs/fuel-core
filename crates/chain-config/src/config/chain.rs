@@ -29,7 +29,6 @@ use crate::{
 use crate::SnapshotMetadata;
 
 pub const LOCAL_TESTNET: &str = "local_testnet";
-pub const CHAIN_CONFIG_FILENAME: &str = "chain_config.json";
 
 #[serde_as]
 // TODO: Remove not consensus/network fields from `ChainConfig` or create a new config only
@@ -72,16 +71,16 @@ impl ChainConfig {
     pub fn from_snapshot_metadata(
         snapshot_metadata: &SnapshotMetadata,
     ) -> anyhow::Result<Self> {
-        Self::load(snapshot_metadata.chain_config())
+        Self::load(&snapshot_metadata.chain_config)
     }
 
     #[cfg(feature = "std")]
     pub fn write(&self, path: impl AsRef<Path>) -> anyhow::Result<()> {
         use anyhow::Context;
 
-        let state_writer = File::create(path)?;
+        let file = File::create(path)?;
 
-        serde_json::to_writer_pretty(state_writer, self)
+        serde_json::to_writer_pretty(file, self)
             .context("failed to dump chain parameters snapshot to JSON")?;
 
         Ok(())

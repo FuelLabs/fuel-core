@@ -6,10 +6,8 @@ use fuel_core::service::{
 // Add methods on commands
 use fuel_core::txpool::types::ContractId;
 use fuel_core_chain_config::{
-    ChainConfig,
     SnapshotMetadata,
-    StateConfig,
-    StateReader,
+    SnapshotReader,
 };
 use fuel_core_e2e_client::config::SuiteConfig;
 use std::{
@@ -102,24 +100,21 @@ fn dev_config() -> Config {
     let snapshot =
         SnapshotMetadata::read("../../deployment/scripts/chainspec/dev-testnet")
             .expect("Should be able to open snapshot metadata");
-    let chain_config = ChainConfig::from_snapshot_metadata(&snapshot)
-        .expect("Should be able to load chain config");
-
-    let state_config = StateConfig::from_snapshot_metadata(snapshot)
-        .expect("Should be able to load and decode state config");
+    let reader =
+        SnapshotReader::open(snapshot).expect("Should be able to open snapshot reader");
 
     // The `run_contract_large_state` test creates a contract with a huge state
     assert!(
-        chain_config
+        reader
+            .chain_config()
             .consensus_parameters
             .contract_params()
             .max_storage_slots()
             >= 1 << 17 // 131072
     );
 
-    config.chain_config = chain_config;
     config.static_gas_price = 1;
-    config.state_reader = StateReader::in_memory(state_config);
+    config.snapshot_reader = reader;
 
     config.block_producer.coinbase_recipient = Some(
         ContractId::from_str(

@@ -1,4 +1,4 @@
-use fuel_core_chain_config::ContractStateConfig;
+use fuel_core_chain_config::TableEntry;
 use fuel_core_storage::{
     tables::{
         merkle::ContractsStateMerkleMetadata,
@@ -30,7 +30,7 @@ pub trait StateInitializer {
     /// Updates the state of multiple contracts based on provided state slots.
     fn update_contract_states(
         &mut self,
-        states: impl IntoIterator<Item = ContractStateConfig>,
+        states: impl IntoIterator<Item = TableEntry<ContractsState>>,
     ) -> Result<(), StorageError>;
 }
 
@@ -73,11 +73,11 @@ where
     /// On any error while accessing the database.
     fn update_contract_states(
         &mut self,
-        states: impl IntoIterator<Item = ContractStateConfig>,
+        states: impl IntoIterator<Item = TableEntry<ContractsState>>,
     ) -> Result<(), StorageError> {
         states
             .into_iter()
-            .group_by(|s| s.contract_id)
+            .group_by(|s| *s.key.contract_id())
             .into_iter()
             .try_for_each(|(contract_id, entries)| {
                 if self
@@ -85,29 +85,26 @@ where
                     .get(&contract_id)?
                     .is_some()
                 {
+                    // TODO: this collecting is unfortunate. We should try to avoid it.
                     let state_entries = entries
                         .into_iter()
                         .map(|state_entry| {
-                            let db_key = ContractsStateKey::new(
-                                &state_entry.contract_id,
-                                &state_entry.key,
-                            );
-                            (db_key, state_entry.value)
+                            (state_entry.key, Vec::<u8>::from(state_entry.value))
                         })
                         .collect_vec();
 
-                    let state_entries_iter = state_entries
-                        .iter()
-                        .map(|(key, value)| (key, value.as_slice()));
-
                     <_ as StorageBatchMutate<ContractsState>>::insert_batch(
                         self,
-                        state_entries_iter,
+                        state_entries
+                            .iter()
+                            .map(|entry| (&entry.0, entry.1.as_slice())),
                     )
                 } else {
                     self.init_contract_state(
                         &contract_id,
-                        entries.into_iter().map(|e| (e.key, e.value)),
+                        entries
+                            .into_iter()
+                            .map(|e| (*e.key.state_key(), e.value.into())),
                     )
                 }
             })?;
@@ -199,7 +196,8 @@ mod tests {
 
     mod update_contract_state {
         use core::iter::repeat_with;
-        use fuel_core_storage::iter::IteratorOverTable;
+        use fuel_core_chain_config::Randomize;
+
         use fuel_core_types::fuel_merkle::sparse::{
             self,
             MerkleTreeKey,
@@ -211,20 +209,17 @@ mod tests {
         use std::collections::HashSet;
 
         use super::*;
+        #[cfg(all(test, feature = "random", feature = "std"))]
         #[test]
         fn states_inserted_into_db() {
             // given
             let mut rng = StdRng::seed_from_u64(0);
-            let state_groups = repeat_with(|| ContractStateConfig {
-                contract_id: random_contract_id(&mut rng),
-                key: random_bytes32(&mut rng),
-                value: random_bytes32(&mut rng).to_vec(),
-            })
-            .chunks(100)
-            .into_iter()
-            .map(|chunk| chunk.collect_vec())
-            .take(10)
-            .collect_vec();
+            let state_groups = repeat_with(|| TableEntry::randomize(&mut rng))
+                .chunks(100)
+                .into_iter()
+                .map(|chunk| chunk.collect_vec())
+                .take(10)
+                .collect_vec();
 
             let database = &mut Database::<OnChain>::default();
 
@@ -262,9 +257,9 @@ mod tests {
             assert_eq!(states_in_db, original_state);
         }
 
-        fn merkalize(state: &[ContractStateConfig]) -> [u8; 32] {
+        fn merkalize(state: &[TableEntry<ContractsState>]) -> [u8; 32] {
             let state = state.iter().map(|s| {
-                let ckey = ContractsStateKey::new(&s.contract_id, &s.key);
+                let ckey = s.key;
                 (MerkleTreeKey::new(ckey), &s.value)
             });
             sparse::in_memory::MerkleTree::root_from_set(state.into_iter())
@@ -275,10 +270,12 @@ mod tests {
             // given
             let mut rng = StdRng::seed_from_u64(0);
             let contract_id = random_contract_id(&mut rng);
-            let state = repeat_with(|| ContractStateConfig {
-                contract_id,
-                key: random_bytes32(&mut rng),
-                value: random_bytes32(&mut rng).to_vec(),
+            let state = repeat_with(|| TableEntry {
+                key: ContractsStateKey::new(
+                    &contract_id,
+                    &Randomize::randomize(&mut rng),
+                ),
+                value: Randomize::randomize(&mut rng),
             })
             .take(100)
             .collect_vec();
@@ -309,10 +306,9 @@ mod tests {
             let state_per_contract = contract_ids
                 .iter()
                 .map(|id| {
-                    repeat_with(|| ContractStateConfig {
-                        contract_id: *id,
-                        key: random_bytes32(&mut rng),
-                        value: random_bytes32(&mut rng).to_vec(),
+                    repeat_with(|| TableEntry {
+                        key: ContractsStateKey::new(id, &Randomize::randomize(&mut rng)),
+                        value: Randomize::randomize(&mut rng),
                     })
                     .take(10)
                     .collect_vec()
@@ -354,17 +350,19 @@ mod tests {
             let mut rng = StdRng::seed_from_u64(0);
 
             let contract_ids = [[1; 32], [2; 32], [3; 32]].map(ContractId::from);
-            let mut random_state = |contract_id: ContractId| ContractStateConfig {
-                contract_id,
-                key: random_bytes32(&mut rng),
-                value: random_bytes32(&mut rng).to_vec(),
+            let mut random_state = |contract_id: ContractId| TableEntry {
+                key: ContractsStateKey::new(
+                    &contract_id,
+                    &Randomize::randomize(&mut rng),
+                ),
+                value: Randomize::randomize(&mut rng),
             };
             let state_per_contract = contract_ids
                 .iter()
                 .map(|id| {
                     repeat_with(|| random_state(*id))
                         .take(10)
-                        .sorted()
+                        .sorted_by_key(|e| e.key)
                         .collect_vec()
                 })
                 .collect_vec();

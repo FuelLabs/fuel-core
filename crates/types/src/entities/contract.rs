@@ -83,6 +83,12 @@ pub struct ContractsInfoTypeV1 {
     salt: Salt,
 }
 
+impl From<ContractsInfoTypeV1> for Salt {
+    fn from(value: ContractsInfoTypeV1) -> Self {
+        value.salt
+    }
+}
+
 impl From<Salt> for ContractsInfoTypeV1 {
     fn from(salt: Salt) -> Self {
         Self { salt }

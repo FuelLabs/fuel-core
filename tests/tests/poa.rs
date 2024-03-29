@@ -95,7 +95,10 @@ mod p2p {
         service::ServiceTrait,
     };
     use fuel_core_poa::Trigger;
-    use fuel_core_types::fuel_tx::Input;
+    use fuel_core_types::{
+        fuel_tx::Input,
+        fuel_types::Address,
+    };
     use std::time::Duration;
 
     // Starts first_producer which creates some blocks
@@ -114,9 +117,7 @@ mod p2p {
         let pub_key = Input::owner(&secret.public_key());
 
         let mut config = Config::local_node();
-        config.chain_config.consensus = ConsensusConfig::PoA {
-            signing_key: pub_key,
-        };
+        update_signing_key(&mut config, pub_key);
 
         let bootstrap_config = make_config("Bootstrap".to_string(), config.clone());
         let bootstrap = Bootstrap::new(&bootstrap_config).await;
@@ -183,5 +184,16 @@ mod p2p {
         )
         .await
         .expect("The first should reborn and sync with the second");
+    }
+
+    fn update_signing_key(config: &mut Config, key: Address) {
+        let snapshot_reader = &config.snapshot_reader;
+        let mut chain_config = snapshot_reader.chain_config().clone();
+        match &mut chain_config.consensus {
+            ConsensusConfig::PoA { signing_key } => {
+                *signing_key = key;
+            }
+        }
+        config.snapshot_reader = snapshot_reader.clone().with_chain_config(chain_config)
     }
 }

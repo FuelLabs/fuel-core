@@ -1,7 +1,14 @@
 use crate::GenesisCommitment;
-use fuel_core_storage::MerkleRoot;
+use fuel_core_storage::{
+    tables::Coins,
+    MerkleRoot,
+};
 use fuel_core_types::{
-    entities::coins::coin::Coin,
+    entities::coins::coin::{
+        Coin,
+        CompressedCoin,
+        CompressedCoinV1,
+    },
     fuel_crypto::Hasher,
     fuel_tx::{
         TxPointer,
@@ -20,6 +27,8 @@ use serde::{
     Serialize,
 };
 
+use super::table_entry::TableEntry;
+
 #[derive(Default, Clone, Debug, Deserialize, Serialize, Eq, PartialEq)]
 pub struct CoinConfig {
     /// auto-generated if None
@@ -33,6 +42,37 @@ pub struct CoinConfig {
     pub owner: Address,
     pub amount: u64,
     pub asset_id: AssetId,
+}
+
+impl From<TableEntry<Coins>> for CoinConfig {
+    fn from(value: TableEntry<Coins>) -> Self {
+        CoinConfig {
+            tx_id: *value.key.tx_id(),
+            output_index: value.key.output_index(),
+            tx_pointer_block_height: value.value.tx_pointer().block_height(),
+            tx_pointer_tx_idx: value.value.tx_pointer().tx_index(),
+            owner: *value.value.owner(),
+            amount: *value.value.amount(),
+            asset_id: *value.value.asset_id(),
+        }
+    }
+}
+
+impl From<CoinConfig> for TableEntry<Coins> {
+    fn from(config: CoinConfig) -> Self {
+        Self {
+            key: UtxoId::new(config.tx_id, config.output_index),
+            value: CompressedCoin::V1(CompressedCoinV1 {
+                owner: config.owner,
+                amount: config.amount,
+                asset_id: config.asset_id,
+                tx_pointer: TxPointer::new(
+                    config.tx_pointer_block_height,
+                    config.tx_pointer_tx_idx,
+                ),
+            }),
+        }
+    }
 }
 
 /// Generates a new coin config with a unique utxo id for testing
@@ -80,17 +120,17 @@ impl CoinConfig {
     }
 }
 
-#[cfg(all(test, feature = "random", feature = "std"))]
+#[cfg(feature = "test-helpers")]
 impl crate::Randomize for CoinConfig {
     fn randomize(mut rng: impl ::rand::Rng) -> Self {
         Self {
-            tx_id: super::random_bytes_32(&mut rng).into(),
+            tx_id: crate::Randomize::randomize(&mut rng),
             output_index: rng.gen(),
             tx_pointer_block_height: rng.gen(),
             tx_pointer_tx_idx: rng.gen(),
-            owner: Address::new(super::random_bytes_32(&mut rng)),
+            owner: crate::Randomize::randomize(&mut rng),
             amount: rng.gen(),
-            asset_id: AssetId::new(super::random_bytes_32(rng)),
+            asset_id: crate::Randomize::randomize(&mut rng),
         }
     }
 }

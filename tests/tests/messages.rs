@@ -3,8 +3,8 @@
 use fuel_core::{
     chain_config::{
         MessageConfig,
+        SnapshotReader,
         StateConfig,
-        StateReader,
     },
     service::{
         Config,
@@ -22,6 +22,7 @@ use fuel_core_client::client::{
     },
     FuelClient,
 };
+use fuel_core_storage::tables::Coins;
 use fuel_core_types::{
     fuel_asm::{
         op,
@@ -51,7 +52,7 @@ fn setup_config(messages: impl IntoIterator<Item = MessageConfig>) -> Config {
     };
 
     Config {
-        state_reader: StateReader::in_memory(state),
+        snapshot_reader: SnapshotReader::local_testnet().with_state_config(state),
         ..Config::local_node()
     }
 }
@@ -295,13 +296,14 @@ async fn can_get_message_proof() {
         let config = Config::local_node();
 
         let coin = config
-            .state_reader
-            .coins()
+            .snapshot_reader
+            .read::<Coins>()
             .unwrap()
             .next()
             .unwrap()
             .unwrap()
             .data[0]
+            .value
             .clone();
 
         struct MessageArgs {
@@ -405,7 +407,7 @@ async fn can_get_message_proof() {
             Default::default(),
             owner,
             1000,
-            coin.asset_id,
+            *coin.asset_id(),
             TxPointer::default(),
             Default::default(),
             predicate,
@@ -594,7 +596,8 @@ async fn can_get_message() {
         messages: vec![first_msg.clone()],
         ..Default::default()
     };
-    config.state_reader = StateReader::in_memory(state_config);
+    config.snapshot_reader =
+        SnapshotReader::local_testnet().with_state_config(state_config);
 
     // setup service and client
     let service = FuelService::new_node(config).await.unwrap();
@@ -611,7 +614,8 @@ async fn can_get_message() {
 #[tokio::test]
 async fn can_get_empty_message() {
     let mut config = Config::local_node();
-    config.state_reader = StateReader::in_memory(StateConfig::default());
+    config.snapshot_reader =
+        SnapshotReader::local_testnet().with_state_config(StateConfig::default());
 
     let service = FuelService::new_node(config).await.unwrap();
     let client = FuelClient::from(service.bound_address);

@@ -12,12 +12,11 @@ description = "Fuel Chain config types"
 
 [dependencies]
 anyhow = { workspace = true }
-bech32 = { version = "0.9.0", default-features = false }
+bech32 = { version = "0.9.0", default-features = false, optional = true }
 fuel-core-storage = { workspace = true }
 fuel-core-types = { workspace = true, default-features = false, features = [
   "serde",
 ] }
-impl-tools = { workspace = true }
 itertools = { workspace = true, features = ["use_alloc"] }
 parquet = { workspace = true, features = ["zstd"], optional = true }
 postcard = { workspace = true, features = ["alloc"] }
@@ -25,7 +24,7 @@ rand = { workspace = true, optional = true }
 serde = { workspace = true, features = ["derive", "rc"] }
 serde_json = { version = "1.0", features = ["raw_value"], optional = true }
 serde_with = { workspace = true, features = ["macros", "hex"] }
-tracing = { version = "0.1", default-features = false }
+tracing = { version = "0.1", default-features = false, optional = true }
 
 [dev-dependencies]
 bytes = { workspace = true }
@@ -47,10 +46,16 @@ std = [
   "serde_json/std",
   "fuel-core-types/std",
   "anyhow/std",
-  "tracing/std",
-  "bech32/std",
+  "tracing?/std",
+  "bech32?/std",
 ]
-default = ["std", "random"]
+default = ["std"]
 parquet = ["std", "dep:parquet", "postcard/use-std"]
 random = ["dep:rand", "fuel-core-types/random"]
-test-helpers = ["fuel-core-types/test-helpers"]
+test-helpers = [
+  "dep:bech32",
+  "dep:rand",
+  "dep:tracing",
+  "fuel-core-types/random",
+  "fuel-core-types/test-helpers",
+]

@@ -1,5 +1,6 @@
 use std::fmt::Debug;
 
+use fuel_core_storage::structured_storage::TableWithBlueprint;
 use fuel_core_types::{
     blockchain::primitives::DaBlockHeight,
     fuel_types::BlockHeight,
@@ -7,19 +8,14 @@ use fuel_core_types::{
 use itertools::Itertools;
 
 use crate::{
-    config::{
-        contract_balance::ContractBalanceConfig,
-        contract_state::ContractStateConfig,
-    },
-    CoinConfig,
-    ContractConfig,
+    config::table_entry::TableEntry,
+    AsTable,
+    ChainConfig,
     Group,
-    MessageConfig,
+    GroupResult,
     StateConfig,
     MAX_GROUP_SIZE,
 };
-
-use super::GroupResult;
 
 pub enum IntoIter<T> {
     InMemory {
@@ -27,21 +23,34 @@ pub enum IntoIter<T> {
     },
     #[cfg(feature = "parquet")]
     Parquet {
-        decoder: super::parquet::decode::PostcardDecoder<T>,
+        decoder: super::parquet::decode::Decoder<std::fs::File>,
     },
 }
 
 #[cfg(feature = "parquet")]
 impl<T> Iterator for IntoIter<T>
 where
-    super::parquet::decode::PostcardDecoder<T>: Iterator<Item = GroupResult<T>>,
+    T: serde::de::DeserializeOwned,
 {
     type Item = GroupResult<T>;
 
     fn next(&mut self) -> Option<Self::Item> {
         match self {
             IntoIter::InMemory { groups } => groups.next(),
-            IntoIter::Parquet { decoder } => decoder.next(),
+            IntoIter::Parquet { decoder } => {
+                let group = decoder.next()?.and_then(|bytes_group| {
+                    let decoded = bytes_group
+                        .data
+                        .into_iter()
+                        .map(|bytes| postcard::from_bytes(&bytes))
+                        .try_collect()?;
+                    Ok(Group {
+                        index: bytes_group.index,
+                        data: decoded,
+                    })
+                });
+                Some(group)
+            }
         }
     }
 }
@@ -61,7 +70,7 @@ impl<T> Iterator for IntoIter<T> {
 enum DataSource {
     #[cfg(feature = "parquet")]
     Parquet {
-        files: crate::ParquetFiles,
+        tables: std::collections::HashMap<String, std::path::PathBuf>,
         block_height: BlockHeight,
         da_block_height: DaBlockHeight,
     },
@@ -72,35 +81,15 @@ enum DataSource {
 }
 
 #[derive(Clone, Debug)]
-pub struct StateReader {
+pub struct SnapshotReader {
+    chain_config: ChainConfig,
     data_source: DataSource,
 }
 
-impl StateReader {
-    pub fn state_config(self) -> Option<StateConfig> {
-        match self.data_source {
-            DataSource::InMemory { state, .. } => Some(state),
-            #[cfg(feature = "parquet")]
-            DataSource::Parquet { .. } => None,
-        }
-    }
-
-    #[cfg(feature = "std")]
-    pub fn json(
-        path: impl AsRef<std::path::Path>,
-        group_size: usize,
-    ) -> anyhow::Result<Self> {
-        let mut file = std::fs::File::open(path)?;
-
-        let state = serde_json::from_reader(&mut file)?;
-
-        Ok(Self {
-            data_source: DataSource::InMemory { state, group_size },
-        })
-    }
-
-    pub fn in_memory(state: StateConfig) -> Self {
+impl SnapshotReader {
+    pub fn new_in_memory(chain_config: ChainConfig, state: StateConfig) -> Self {
         Self {
+            chain_config,
             data_source: DataSource::InMemory {
                 state,
                 group_size: MAX_GROUP_SIZE,
@@ -108,16 +97,72 @@ impl StateReader {
         }
     }
 
+    #[cfg(feature = "test-helpers")]
+    pub fn local_testnet() -> Self {
+        let state = StateConfig::local_testnet();
+        let chain_config = ChainConfig::local_testnet();
+        Self {
+            data_source: DataSource::InMemory {
+                state,
+                group_size: MAX_GROUP_SIZE,
+            },
+            chain_config,
+        }
+    }
+
+    pub fn with_chain_config(self, chain_config: ChainConfig) -> Self {
+        Self {
+            chain_config,
+            ..self
+        }
+    }
+
+    pub fn with_state_config(self, state_config: StateConfig) -> Self {
+        Self {
+            data_source: DataSource::InMemory {
+                state: state_config,
+                group_size: MAX_GROUP_SIZE,
+            },
+            ..self
+        }
+    }
+
+    #[cfg(feature = "std")]
+    fn json(
+        state_file: impl AsRef<std::path::Path>,
+        chain_config: ChainConfig,
+        group_size: usize,
+    ) -> anyhow::Result<Self> {
+        use anyhow::Context;
+        let state = {
+            let path = state_file.as_ref();
+            let mut file = std::fs::File::open(path)
+                .with_context(|| format!("Could not open snapshot file: {path:?}"))?;
+            serde_json::from_reader(&mut file)?
+        };
+
+        Ok(Self {
+            data_source: DataSource::InMemory { state, group_size },
+            chain_config,
+        })
+    }
+
     #[cfg(feature = "parquet")]
-    pub fn parquet(files: crate::ParquetFiles) -> anyhow::Result<Self> {
-        let block_height = Self::read_block_height(&files.block_height)?;
-        let da_block_height = Self::read_block_height(&files.da_block_height)?;
+    fn parquet(
+        tables: std::collections::HashMap<String, std::path::PathBuf>,
+        block_height: std::path::PathBuf,
+        da_block_height: std::path::PathBuf,
+        chain_config: ChainConfig,
+    ) -> anyhow::Result<Self> {
+        let block_height = Self::read_block_height(&block_height)?;
+        let da_block_height = Self::read_block_height(&da_block_height)?;
         Ok(Self {
             data_source: DataSource::Parquet {
-                files,
+                tables,
                 block_height,
                 da_block_height,
             },
+            chain_config,
         })
     }
 
@@ -126,8 +171,10 @@ impl StateReader {
     where
         Height: serde::de::DeserializeOwned,
     {
+        use super::parquet::decode::Decoder;
+
         let file = std::fs::File::open(path)?;
-        let group = super::parquet::decode::PostcardDecoder::new(file)?
+        let group = Decoder::new(file)?
             .next()
             .ok_or_else(|| anyhow::anyhow!("No block height found"))??
             .data;
@@ -135,60 +182,90 @@ impl StateReader {
             .into_iter()
             .next()
             .ok_or_else(|| anyhow::anyhow!("No block height found"))?;
-        Ok(block_height)
+        postcard::from_bytes(&block_height).map_err(Into::into)
     }
 
     #[cfg(feature = "std")]
-    pub fn for_snapshot(
+    pub fn open(
         snapshot_metadata: crate::config::SnapshotMetadata,
     ) -> anyhow::Result<Self> {
-        use crate::StateEncoding;
+        Self::open_w_config(snapshot_metadata, MAX_GROUP_SIZE)
+    }
 
-        match snapshot_metadata.take_state_encoding() {
-            StateEncoding::Json { filepath } => Self::json(filepath, MAX_GROUP_SIZE),
+    #[cfg(feature = "std")]
+    pub fn open_w_config(
+        snapshot_metadata: crate::config::SnapshotMetadata,
+        json_group_size: usize,
+    ) -> anyhow::Result<Self> {
+        use crate::TableEncoding;
+        use anyhow::Context;
+        let chain_config = {
+            let path = &snapshot_metadata.chain_config;
+            let mut file = std::fs::File::open(path)
+                .with_context(|| format!("Could not open chain config file: {path:?}"))?;
+            serde_json::from_reader(&mut file)?
+        };
+
+        match snapshot_metadata.table_encoding {
+            TableEncoding::Json { filepath } => {
+                Self::json(filepath, chain_config, json_group_size)
+            }
             #[cfg(feature = "parquet")]
-            StateEncoding::Parquet { filepaths, .. } => Self::parquet(filepaths),
+            TableEncoding::Parquet {
+                tables,
+                block_height,
+                da_block_height,
+                ..
+            } => Self::parquet(tables, block_height, da_block_height, chain_config),
         }
     }
 
-    pub fn coins(&self) -> anyhow::Result<IntoIter<CoinConfig>> {
-        self.create_iterator(
-            |state| &state.coins,
+    pub fn read<T>(&self) -> anyhow::Result<IntoIter<TableEntry<T>>>
+    where
+        T: TableWithBlueprint,
+        StateConfig: AsTable<T>,
+        TableEntry<T>: serde::de::DeserializeOwned,
+    {
+        match &self.data_source {
             #[cfg(feature = "parquet")]
-            |files| &files.coins,
-        )
+            DataSource::Parquet { tables, .. } => {
+                use anyhow::Context;
+                use fuel_core_storage::kv_store::StorageColumn;
+                let name = T::column().name();
+                let path = tables.get(name).ok_or_else(|| {
+                    anyhow::anyhow!("table '{name}' not found snapshot metadata.")
+                })?;
+                let file = std::fs::File::open(path).with_context(|| {
+                    format!("Could not open {path:?} in order to read table '{name}'")
+                })?;
+
+                Ok(IntoIter::Parquet {
+                    decoder: super::parquet::decode::Decoder::new(file)?,
+                })
+            }
+            DataSource::InMemory { state, group_size } => {
+                let collection = state
+                    .as_table()
+                    .into_iter()
+                    .chunks(*group_size)
+                    .into_iter()
+                    .enumerate()
+                    .map(|(index, vec_chunk)| {
+                        Ok(Group {
+                            data: vec_chunk.collect(),
+                            index,
+                        })
+                    })
+                    .collect_vec();
+                Ok(IntoIter::InMemory {
+                    groups: collection.into_iter(),
+                })
+            }
+        }
     }
 
-    pub fn messages(&self) -> anyhow::Result<IntoIter<MessageConfig>> {
-        self.create_iterator(
-            |state| &state.messages,
-            #[cfg(feature = "parquet")]
-            |files| &files.messages,
-        )
-    }
-
-    pub fn contracts(&self) -> anyhow::Result<IntoIter<ContractConfig>> {
-        self.create_iterator(
-            |state| &state.contracts,
-            #[cfg(feature = "parquet")]
-            |files| &files.contracts,
-        )
-    }
-
-    pub fn contract_state(&self) -> anyhow::Result<IntoIter<ContractStateConfig>> {
-        self.create_iterator(
-            |state| &state.contract_state,
-            #[cfg(feature = "parquet")]
-            |files| &files.contract_state,
-        )
-    }
-
-    pub fn contract_balance(&self) -> anyhow::Result<IntoIter<ContractBalanceConfig>> {
-        self.create_iterator(
-            |state| &state.contract_balance,
-            #[cfg(feature = "parquet")]
-            |files| &files.contract_balance,
-        )
+    pub fn chain_config(&self) -> &ChainConfig {
+        &self.chain_config
     }
 
     pub fn block_height(&self) -> BlockHeight {
@@ -207,47 +284,5 @@ impl StateReader {
                 da_block_height, ..
             } => *da_block_height,
         }
-    }
-
-    fn create_iterator<T: Clone>(
-        &self,
-        extractor: impl FnOnce(&StateConfig) -> &Vec<T>,
-        #[cfg(feature = "parquet")] file_picker: impl FnOnce(
-            &crate::ParquetFiles,
-        ) -> &std::path::Path,
-    ) -> anyhow::Result<IntoIter<T>> {
-        match &self.data_source {
-            DataSource::InMemory { state, group_size } => {
-                let groups = extractor(state).clone();
-                Ok(Self::in_memory_iter(groups, *group_size))
-            }
-            #[cfg(feature = "parquet")]
-            DataSource::Parquet { files, .. } => {
-                let path = file_picker(files);
-                let file = std::fs::File::open(path)?;
-                Ok(IntoIter::Parquet {
-                    decoder: super::parquet::decode::Decoder::new(file)?,
-                })
-            }
-        }
-    }
-
-    fn in_memory_iter<T>(items: Vec<T>, group_size: usize) -> IntoIter<T> {
-        let groups = items
-            .into_iter()
-            .chunks(group_size)
-            .into_iter()
-            .map(Itertools::collect_vec)
-            .enumerate()
-            .map(|(index, vec_chunk)| {
-                Ok(Group {
-                    data: vec_chunk,
-                    index,
-                })
-            })
-            .collect_vec()
-            .into_iter();
-
-        IntoIter::InMemory { groups }
     }
 }

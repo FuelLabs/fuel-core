@@ -30,6 +30,7 @@ humantime = "2.1"
 itertools = { workspace = true, optional = true }
 pyroscope = "0.5"
 pyroscope_pprofrs = "0.2"
+serde = { workspace = true }
 serde_json = { workspace = true }
 tikv-jemallocator = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
@@ -43,6 +44,7 @@ url = { version = "2.2", optional = true }
 
 [dev-dependencies]
 fuel-core-types = { workspace = true, features = ["test-helpers"] }
+pretty_assertions = { workspace = true }
 rand = { workspace = true }
 tempfile = { workspace = true }
 test-case = { workspace = true }
@@ -52,7 +54,7 @@ default = ["env", "relayer", "rocksdb"]
 env = ["dep:dotenvy"]
 p2p = ["fuel-core/p2p", "const_format"]
 relayer = ["fuel-core/relayer", "dep:url"]
-parquet = ["fuel-core-chain-config/parquet"]
+parquet = ["fuel-core-chain-config/parquet", "fuel-core-types/serde"]
 rocksdb = ["fuel-core/rocksdb", "dep:fuel-core-storage", "dep:itertools"]
 rocksdb-production = [
   "fuel-core/rocksdb-production",

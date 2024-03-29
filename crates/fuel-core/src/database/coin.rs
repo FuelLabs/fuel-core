@@ -8,7 +8,7 @@ use crate::{
         OwnedCoins,
     },
 };
-use fuel_core_chain_config::CoinConfig;
+use fuel_core_chain_config::TableEntry;
 use fuel_core_storage::{
     iter::{
         IterDirection,
@@ -27,6 +27,7 @@ use fuel_core_types::{
         UtxoId,
     },
 };
+use itertools::Itertools;
 
 impl Database<OffChain> {
     pub fn owned_coins_ids(
@@ -65,22 +66,10 @@ impl Database {
         Ok(coin)
     }
 
-    pub fn iter_coin_configs(
+    pub fn iter_coins(
         &self,
-    ) -> impl Iterator<Item = StorageResult<CoinConfig>> + '_ {
+    ) -> impl Iterator<Item = StorageResult<TableEntry<Coins>>> + '_ {
         self.iter_all::<Coins>(None)
-            .map(|raw_coin| -> StorageResult<CoinConfig> {
-                let (utxo_id, coin) = raw_coin?;
-
-                Ok(CoinConfig {
-                    tx_id: *utxo_id.tx_id(),
-                    output_index: utxo_id.output_index(),
-                    tx_pointer_block_height: coin.tx_pointer().block_height(),
-                    tx_pointer_tx_idx: coin.tx_pointer().tx_index(),
-                    owner: *coin.owner(),
-                    amount: *coin.amount(),
-                    asset_id: *coin.asset_id(),
-                })
-            })
+            .map_ok(|(key, value)| TableEntry { key, value })
     }
 }

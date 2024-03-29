@@ -30,7 +30,6 @@ use fuel_core_types::{
         Finalizable,
         Input,
         Output,
-        StorageSlot,
         Transaction,
         TransactionBuilder,
         TxId,
@@ -45,6 +44,7 @@ use fuel_core_types::{
     },
     fuel_vm::SecretKey,
 };
+use itertools::Itertools;
 
 use crate::config::{
     ClientConfig,
@@ -302,7 +302,6 @@ impl Wallet {
         &self,
         config: ContractConfig,
         salt: Salt,
-        slots: Vec<StorageSlot>,
     ) -> anyhow::Result<()> {
         let asset_id = AssetId::BASE;
         let total_amount = BASE_AMOUNT;
@@ -315,10 +314,17 @@ impl Wallet {
         let ContractConfig {
             contract_id,
             code: bytes,
+            states,
             ..
         } = config;
-        let state_root = Contract::initial_state_root(slots.iter());
-        let mut tx = TransactionBuilder::create(bytes.into(), salt, slots);
+
+        let state: Vec<_> = states
+            .into_iter()
+            .map(|entry| entry.try_into())
+            .try_collect()?;
+
+        let state_root = Contract::initial_state_root(state.iter());
+        let mut tx = TransactionBuilder::create(bytes.into(), salt, state);
 
         for coin in coins {
             if let CoinType::Coin(coin) = coin {
@@ -331,6 +337,7 @@ impl Wallet {
                 );
             }
         }
+
         tx.add_output(Output::ContractCreated {
             contract_id,
             state_root,

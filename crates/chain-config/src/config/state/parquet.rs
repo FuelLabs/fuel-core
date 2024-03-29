@@ -1,14 +1,9 @@
 pub mod decode;
 pub mod encode;
 
-#[cfg(feature = "random")]
 #[cfg(test)]
 mod tests {
-    use crate::{
-        CoinConfig,
-        Group,
-        Randomize,
-    };
+    use crate::Group;
     use bytes::Bytes;
     use itertools::Itertools;
     use parquet::{
@@ -20,6 +15,7 @@ mod tests {
     };
     use rand::{
         rngs::StdRng,
+        Rng,
         SeedableRng,
     };
     use std::{
@@ -109,19 +105,19 @@ mod tests {
     fn can_skip_groups_without_reading_whole_file() {
         // given
         let mut buffer = vec![];
-        let mut encoder = Encoder::<_, _, PostcardEncode>::new(
+        let mut encoder = Encoder::new(
             &mut buffer,
             parquet::basic::Compression::ZSTD(ZstdLevel::try_new(1).unwrap()),
         )
         .unwrap();
         let mut rng = StdRng::seed_from_u64(0);
 
-        let big_group = repeat_with(|| CoinConfig::randomize(&mut rng))
+        let big_group = repeat_with(|| rng.gen::<[u8; 32]>().to_vec())
             .take(1000)
             .collect_vec();
         encoder.write(big_group).unwrap();
 
-        let small_group = vec![CoinConfig::randomize(&mut rng)];
+        let small_group = vec![rng.gen::<[u8; 32]>().to_vec()];
         encoder.write(small_group).unwrap();
         encoder.close().unwrap();
         let total_size = buffer.len();
@@ -129,15 +125,15 @@ mod tests {
         let bytes = TrackingReader::new(buffer);
         let bytes_read = bytes.read_bytes.clone();
 
-        let mut decoder = Decoder::<_, _, PostcardDecode>::new(bytes).unwrap();
+        let mut decoder = Decoder::new(bytes).unwrap();
 
         // when
-        let _: Group<CoinConfig> = decoder.nth(1).unwrap().unwrap();
+        let _: Group<_> = decoder.nth(1).unwrap().unwrap();
 
         // then
         let actually_read = bytes_read.load(std::sync::atomic::Ordering::SeqCst);
 
-        assert_eq!(total_size, 123416);
-        assert_eq!(actually_read, 1094);
+        assert_eq!(total_size, 36930);
+        assert_eq!(actually_read, 509);
     }
 }
