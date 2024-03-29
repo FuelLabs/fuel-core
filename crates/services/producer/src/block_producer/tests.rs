@@ -294,7 +294,7 @@ mod produce_and_execute_block_txpool {
         let ctx = TestContext {
             relayer: MockRelayer {
                 // set our relayer best finalized height to less than previous
-                best_finalized_height: vec![(prev_da_height - 1u64.into(), 0)],
+                latest_blocks_with_gas_costs: vec![(prev_da_height - 1u64.into(), 0)],
                 ..Default::default()
             },
             ..TestContext::default_from_db(db)
@@ -324,9 +324,80 @@ mod produce_and_execute_block_txpool {
     }
 
     #[tokio::test]
-    async fn produce_and_execute_block__will_only_advance_da_height_if_enough_gas_remaining(
-    ) {
-        todo!()
+    async fn will_only_advance_da_height_if_enough_gas_remaining() {
+        let block_gas_limit = 1_000;
+        let prev_height = 1u32.into();
+        let prev_da_height = 100u64;
+        // 0 + 500 + 200 + 0 + 500 = 1_200
+        let latest_blocks_with_gas_costs = vec![
+            (prev_da_height, 0u64),
+            (prev_da_height + 1, 500),
+            (prev_da_height + 2, 200),
+            (prev_da_height + 3, 0),
+            (prev_da_height + 4, 500),
+        ]
+        .into_iter()
+        .map(|(height, gas_cost)| (height.into(), gas_cost))
+        .collect();
+        let da_height = prev_da_height.into();
+        let previous_block = PartialFuelBlock {
+            header: PartialBlockHeader {
+                application: ApplicationHeader {
+                    da_height,
+                    ..Default::default()
+                },
+                consensus: ConsensusHeader {
+                    height: prev_height,
+                    ..Default::default()
+                },
+            },
+            transactions: vec![],
+        }
+        .generate(&[], Default::default())
+        .compress(&Default::default());
+
+        let db = MockDb {
+            blocks: Arc::new(Mutex::new(
+                vec![(prev_height, previous_block)].into_iter().collect(),
+            )),
+            consensus_parameters_version: 0,
+            state_transition_bytecode_version: 0,
+        };
+
+        let mock_relayer = MockRelayer {
+            latest_blocks_with_gas_costs,
+            ..Default::default()
+        };
+
+        let config = Config {
+            block_gas_limit,
+            ..Default::default()
+        };
+
+        let ctx = TestContext {
+            config,
+            relayer: mock_relayer,
+            ..TestContext::default_from_db(db)
+        };
+
+        let producer = ctx.producer();
+        let next_height = prev_height
+            .succ()
+            .expect("The block height should be valid");
+        let res = producer
+            .produce_and_execute_block_txpool(next_height, Tai64::now())
+            .await
+            .unwrap();
+
+        let expected = prev_da_height + 3;
+        let actual: u64 = res
+            .into_result()
+            .block
+            .header()
+            .application()
+            .da_height
+            .into();
+        assert_eq!(expected, actual);
     }
 
     #[tokio::test]

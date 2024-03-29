@@ -288,11 +288,13 @@ where
                 }
                 .into())
             }
-            total_cost += cost;
-            if total_cost > gas_limit {
-                break;
-            } else {
-                new_best = *da_height;
+            if da_height > &new_best {
+                total_cost += cost;
+                if total_cost > gas_limit {
+                    break;
+                } else {
+                    new_best = *da_height;
+                }
             }
         }
         Ok(new_best)
