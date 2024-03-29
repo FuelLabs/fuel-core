@@ -82,6 +82,7 @@ impl fuel_core_executor::ports::RelayerPort for Database<Relayer> {
         }
         #[cfg(not(feature = "relayer"))]
         {
+            let _ = da_height;
             Ok(vec![])
         }
     }

@@ -1,6 +1,6 @@
 use crate::{
     database::{
-        database_description::relayer::Relayer,
+        self,
         Database,
     },
     service::{
@@ -157,7 +157,9 @@ impl fuel_core_producer::ports::Relayer for MaybeRelayerAdapter {
 #[cfg(feature = "relayer")]
 fn get_gas_cost_for_height(
     height: u64,
-    sync: &fuel_core_relayer::SharedState<Database<Relayer>>,
+    sync: &fuel_core_relayer::SharedState<
+        Database<database::database_description::relayer::Relayer>,
+    >,
 ) -> anyhow::Result<(DaBlockHeight, u64)> {
     let da_height = DaBlockHeight(height);
     let cost = sync
