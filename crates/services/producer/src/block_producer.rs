@@ -282,7 +282,7 @@ where
             .get_latest_da_blocks_with_costs(&previous_da_height)
             .await?;
         let mut new_best = previous_da_height;
-        let mut total_cost = 0;
+        let mut total_cost: u64 = 0;
         for (da_height, cost) in list.iter() {
             if da_height < &previous_da_height {
                 return Err(Error::InvalidDaFinalizationState {
@@ -292,7 +292,7 @@ where
                 .into());
             }
             if da_height > &new_best {
-                total_cost += cost;
+                total_cost = total_cost.saturating_add(*cost);
                 if total_cost > gas_limit {
                     break;
                 } else {
