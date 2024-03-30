@@ -166,8 +166,7 @@ fn get_gas_cost_for_height(
         .map(|cow| cow.into_owned())
         .unwrap_or_default()
         .iter()
-        .map(|event| event.cost())
-        .sum();
+        .fold(0u64, |acc, event| acc.saturating_add(event.cost()));
     Ok((da_height, cost))
 }
 
