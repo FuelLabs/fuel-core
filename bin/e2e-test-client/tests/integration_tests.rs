@@ -97,9 +97,8 @@ async fn execute_suite(config_path: String) {
 fn dev_config() -> Config {
     let mut config = Config::local_node();
 
-    let snapshot =
-        SnapshotMetadata::read("../../deployment/scripts/chainspec/dev-testnet")
-            .expect("Should be able to open snapshot metadata");
+    let snapshot = SnapshotMetadata::read("../../bin/fuel-core/chainspec/dev-testnet")
+        .expect("Should be able to open snapshot metadata");
     let reader =
         SnapshotReader::open(snapshot).expect("Should be able to open snapshot reader");
 
