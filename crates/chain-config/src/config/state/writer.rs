@@ -11,7 +11,10 @@ use fuel_core_types::{
     blockchain::primitives::DaBlockHeight,
     fuel_types::BlockHeight,
 };
-use std::path::PathBuf;
+use std::path::{
+    Path,
+    PathBuf,
+};
 
 #[cfg(feature = "parquet")]
 use super::parquet;
@@ -31,6 +34,7 @@ enum EncoderType {
 
 pub struct SnapshotWriter {
     dir: PathBuf,
+    chain_config: Option<ChainConfig>,
     encoder: EncoderType,
 }
 
@@ -154,6 +158,49 @@ impl From<ZstdCompressionLevel> for ::parquet::basic::Compression {
     }
 }
 
+enum FragmentData {
+    Json {
+        dir: PathBuf,
+        builder: StateConfigBuilder,
+    },
+}
+impl FragmentData {
+    fn merge(mut self, data: FragmentData) -> Self {
+        match (&mut self, data) {
+            (
+                FragmentData::Json { builder, .. },
+                FragmentData::Json {
+                    builder: other_builder,
+                    ..
+                },
+            ) => builder.merge(other_builder),
+        };
+        self
+    }
+}
+
+pub struct SnapshotFragment {
+    chain_config: Option<ChainConfig>,
+    data: FragmentData,
+}
+
+impl SnapshotFragment {
+    pub fn merge(mut self, fragment: Self) -> Self {
+        if let Some(chain_config) = fragment.chain_config {
+            self.chain_config = Some(chain_config);
+        }
+
+        self.data = self.data.merge(fragment.data);
+        self
+    }
+
+    pub fn finalize(self) -> anyhow::Result<SnapshotMetadata> {
+        let FragmentData::Json { dir, builder } = self.data;
+
+        SnapshotWriter::write_json(&dir, self.chain_config.as_ref(), builder)
+    }
+}
+
 impl SnapshotWriter {
     const CHAIN_CONFIG_FILENAME: &'static str = "chain_config.json";
     pub fn json(dir: impl Into<PathBuf>) -> Self {
@@ -162,6 +209,7 @@ impl SnapshotWriter {
                 builder: StateConfigBuilder::default(),
             },
             dir: dir.into(),
+            chain_config: None,
         }
     }
 
@@ -179,6 +227,7 @@ impl SnapshotWriter {
                 da_block_height: dir.join("da_block_height.parquet"),
             },
             dir,
+            chain_config: None,
         })
     }
 
@@ -212,7 +261,9 @@ impl SnapshotWriter {
         &mut self,
         chain_config: &ChainConfig,
     ) -> anyhow::Result<()> {
-        chain_config.write(self.dir.join(Self::CHAIN_CONFIG_FILENAME))
+        self.chain_config = Some(chain_config.clone());
+        // TODO: remove result
+        Ok(())
     }
 
     pub fn write<T>(&mut self, elements: Vec<TableEntry<T>>) -> anyhow::Result<()>
@@ -273,21 +324,29 @@ impl SnapshotWriter {
         encoder.close()
     }
 
+    fn write_json(
+        dir: &Path,
+        chain_config: Option<&ChainConfig>,
+        builder: StateConfigBuilder,
+    ) -> anyhow::Result<SnapshotMetadata> {
+        let state_config = builder.build()?;
+        let state_file_path = dir.join("state_config.json");
+        let file = std::fs::File::create(&state_file_path)?;
+        serde_json::to_writer_pretty(file, &state_config)?;
+
+        Self::write_chain_config_and_metadata(
+            &dir,
+            chain_config,
+            TableEncoding::Json {
+                filepath: state_file_path,
+            },
+        )
+    }
+
     pub fn close(self) -> anyhow::Result<SnapshotMetadata> {
         match self.encoder {
             EncoderType::Json { builder } => {
-                let state_config = builder.build()?;
-
-                let state_file_path = self.dir.join("state_config.json");
-                let file = std::fs::File::create(&state_file_path)?;
-                serde_json::to_writer_pretty(file, &state_config)?;
-
-                Self::write_metadata(
-                    &self.dir,
-                    TableEncoding::Json {
-                        filepath: state_file_path,
-                    },
-                )
+                Self::write_json(&self.dir, self.chain_config.as_ref(), builder)
             }
             #[cfg(feature = "parquet")]
             EncoderType::Parquet {
@@ -298,8 +357,9 @@ impl SnapshotWriter {
             } => {
                 let tables = table_encoders.close()?;
 
-                Self::write_metadata(
+                Self::write_chain_config_and_metadata(
                     &self.dir,
+                    self.chain_config.as_ref(),
                     TableEncoding::Parquet {
                         tables,
                         block_height,
@@ -311,16 +371,42 @@ impl SnapshotWriter {
         }
     }
 
-    fn write_metadata(
+    fn write_chain_config_and_metadata(
         dir: &std::path::Path,
+        chain_config: Option<&ChainConfig>,
         table_encoding: TableEncoding,
     ) -> anyhow::Result<SnapshotMetadata> {
+        let chain_config_path = dir.join(Self::CHAIN_CONFIG_FILENAME);
+        if let Some(chain_config) = chain_config {
+            chain_config.write(&chain_config_path)?;
+        } else {
+            anyhow::bail!("Chain config is missing")
+        }
+
         let metadata = SnapshotMetadata {
-            chain_config: dir.join(Self::CHAIN_CONFIG_FILENAME),
+            chain_config: chain_config_path,
             table_encoding,
         };
         metadata.clone().write(dir)?;
         Ok(metadata)
+    }
+
+    pub fn partial_close(self) -> anyhow::Result<SnapshotFragment> {
+        Ok(match self.encoder {
+            EncoderType::Json { builder } => SnapshotFragment {
+                chain_config: self.chain_config,
+                data: FragmentData::Json {
+                    dir: self.dir,
+                    builder,
+                },
+            },
+            EncoderType::Parquet {
+                compression,
+                table_encoders,
+                block_height,
+                da_block_height,
+            } => todo!(),
+        })
     }
 }
 
@@ -415,12 +501,17 @@ mod tests {
             Messages,
         },
     };
+    use itertools::Itertools;
     use rand::{
         rngs::StdRng,
         SeedableRng,
     };
 
-    use crate::StateConfig;
+    use crate::{
+        Randomize,
+        SnapshotReader,
+        StateConfig,
+    };
 
     use super::*;
 

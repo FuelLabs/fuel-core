@@ -106,6 +106,25 @@ impl StateConfigBuilder {
         self.da_block_height = Some(da_block_height);
     }
 
+    pub fn merge(&mut self, builder: Self) -> &mut Self {
+        self.coins.extend(builder.coins);
+        self.messages.extend(builder.messages);
+        self.contract_state.extend(builder.contract_state);
+        self.contract_balance.extend(builder.contract_balance);
+        self.contract_code.extend(builder.contract_code);
+        self.contract_utxo.extend(builder.contract_utxo);
+
+        if let Some(block_height) = builder.block_height {
+            self.block_height = Some(block_height);
+        }
+
+        if let Some(da_block_height) = builder.da_block_height {
+            self.da_block_height = Some(da_block_height);
+        }
+
+        self
+    }
+
     #[cfg(feature = "std")]
     pub fn build(self) -> anyhow::Result<StateConfig> {
         use std::collections::HashMap;
@@ -638,10 +657,18 @@ mod tests {
     mod json {
         use std::path::Path;
 
-        use fuel_core_storage::tables::{
-            Coins,
-            Messages,
+        use fuel_core_storage::{
+            structured_storage::TableWithBlueprint,
+            tables::{
+                Coins,
+                ContractsAssets,
+                ContractsLatestUtxo,
+                ContractsRawCode,
+                ContractsState,
+                Messages,
+            },
         };
+        use fuel_core_types::blockchain::primitives::DaBlockHeight;
         use itertools::Itertools;
         use rand::{
             rngs::StdRng,
@@ -649,6 +676,9 @@ mod tests {
         };
 
         use crate::{
+            config::state::writer::SnapshotFragment,
+            AddTable,
+            AsTable,
             ChainConfig,
             ContractConfig,
             Randomize,
@@ -656,6 +686,8 @@ mod tests {
             SnapshotReader,
             SnapshotWriter,
             StateConfig,
+            StateConfigBuilder,
+            TableEntry,
         };
 
         use super::{
@@ -710,6 +742,93 @@ mod tests {
             let read_state = StateConfig::from_reader(&reader).unwrap();
 
             pretty_assertions::assert_eq!(state, read_state);
+        }
+
+        #[test]
+        fn can_write_in_fragments() {
+            // given
+            let temp_dir = tempfile::tempdir().unwrap();
+            let path = temp_dir.path();
+
+            let mut rng = StdRng::from_seed([0; 32]);
+
+            let chain_config = ChainConfig::local_testnet();
+
+            fn write_as_fragments<T>(
+                dir: &Path,
+                state_config: &StateConfig,
+            ) -> Vec<SnapshotFragment>
+            where
+                StateConfigBuilder: AddTable<T>,
+                StateConfig: AsTable<T>,
+                T: TableWithBlueprint,
+                TableEntry<T>: serde::Serialize,
+            {
+                AsTable::<T>::as_table(state_config)
+                    .into_iter()
+                    .map(|entry| {
+                        let mut writer = SnapshotWriter::json(dir);
+                        writer.write(vec![entry]).unwrap();
+                        writer.partial_close().unwrap()
+                    })
+                    .collect()
+            }
+
+            let chain_config_fragment = {
+                let mut chain_config_writer = SnapshotWriter::json(&path);
+                chain_config_writer
+                    .write_chain_config(&chain_config)
+                    .unwrap();
+                chain_config_writer.partial_close().unwrap()
+            };
+
+            let state_config = StateConfig::randomize(&mut rng);
+            let coins_fragments = write_as_fragments::<Coins>(&path, &state_config);
+            let messages_fragments = write_as_fragments::<Messages>(&path, &state_config);
+            let contracts_state_fragments =
+                write_as_fragments::<ContractsState>(&path, &state_config);
+            let contracts_balance_fragments =
+                write_as_fragments::<ContractsAssets>(&path, &state_config);
+            let contracts_code_fragments =
+                write_as_fragments::<ContractsRawCode>(&path, &state_config);
+            let contracts_utxo_fragments =
+                write_as_fragments::<ContractsLatestUtxo>(&path, &state_config);
+
+            let block_height_fragment = {
+                let mut height_writer = SnapshotWriter::json(&path);
+                height_writer
+                    .write_block_data(
+                        state_config.block_height,
+                        state_config.da_block_height,
+                    )
+                    .unwrap();
+                height_writer.partial_close().unwrap()
+            };
+
+            // when
+            let fragment = [
+                vec![chain_config_fragment],
+                coins_fragments,
+                contracts_state_fragments,
+                contracts_code_fragments,
+                contracts_utxo_fragments,
+                messages_fragments,
+                vec![block_height_fragment],
+                contracts_balance_fragments,
+            ]
+            .into_iter()
+            .flatten()
+            .reduce(|a, b| a.merge(b))
+            .unwrap();
+
+            let snapshot = fragment.finalize().unwrap();
+
+            // then
+            let reader = SnapshotReader::open(snapshot).unwrap();
+            let read_state = StateConfig::from_reader(&reader).unwrap();
+
+            pretty_assertions::assert_eq!(state_config, read_state);
+            pretty_assertions::assert_eq!(&chain_config, reader.chain_config());
         }
     }
 
