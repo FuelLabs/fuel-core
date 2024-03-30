@@ -98,6 +98,14 @@ pub struct StateConfigBuilder {
 }
 
 impl StateConfigBuilder {
+    fn block_height(&self) -> Option<BlockHeight> {
+        self.block_height
+    }
+
+    fn da_block_height(&self) -> Option<DaBlockHeight> {
+        self.da_block_height
+    }
+
     pub fn set_block_height(&mut self, block_height: BlockHeight) {
         self.block_height = Some(block_height);
     }
@@ -579,11 +587,9 @@ mod tests {
 
     use crate::{
         ChainConfig,
-        Group,
         Randomize,
     };
 
-    use itertools::Itertools;
     use rand::{
         rngs::StdRng,
         SeedableRng,
@@ -603,6 +609,13 @@ mod tests {
                 ContractsRawCode,
                 ContractsState,
                 Messages,
+            },
+        };
+        use fuel_core_types::{
+            blockchain::primitives::DaBlockHeight,
+            fuel_types::{
+                BlockHeight,
+                ChainId,
             },
         };
         use pretty_assertions::assert_eq;
@@ -698,7 +711,7 @@ mod tests {
             let chain_config = ChainConfig::local_testnet();
             let chain_config_fragment = {
                 let mut chain_config_writer =
-                    SnapshotWriter::parquet(&path, writer::ZstdCompressionLevel::Level1)
+                    SnapshotWriter::parquet(path, writer::ZstdCompressionLevel::Level1)
                         .unwrap();
                 chain_config_writer
                     .write_chain_config(&chain_config)
@@ -706,19 +719,19 @@ mod tests {
                 chain_config_writer.partial_close().unwrap()
             };
             let state_config = StateConfig::randomize(&mut rng);
-            let coin_fragment = write_as_fragment::<Coins>(&path, &state_config);
-            let message_fragment = write_as_fragment::<Messages>(&path, &state_config);
+            let coin_fragment = write_as_fragment::<Coins>(path, &state_config);
+            let message_fragment = write_as_fragment::<Messages>(path, &state_config);
             let contracts_state_fragment =
-                write_as_fragment::<ContractsState>(&path, &state_config);
+                write_as_fragment::<ContractsState>(path, &state_config);
             let contracts_balance_fragment =
-                write_as_fragment::<ContractsAssets>(&path, &state_config);
+                write_as_fragment::<ContractsAssets>(path, &state_config);
             let contracts_code_fragment =
-                write_as_fragment::<ContractsRawCode>(&path, &state_config);
+                write_as_fragment::<ContractsRawCode>(path, &state_config);
             let contracts_utxo_fragment =
-                write_as_fragment::<ContractsLatestUtxo>(&path, &state_config);
+                write_as_fragment::<ContractsLatestUtxo>(path, &state_config);
             let block_height_fragment = {
                 let mut height_writer =
-                    SnapshotWriter::parquet(&path, writer::ZstdCompressionLevel::Level1)
+                    SnapshotWriter::parquet(path, writer::ZstdCompressionLevel::Level1)
                         .unwrap();
                 height_writer
                     .write_block_data(
@@ -741,7 +754,7 @@ mod tests {
                 block_height_fragment,
             ]
             .into_iter()
-            .reduce(|fragment, next_fragment| fragment.merge(next_fragment))
+            .reduce(|fragment, next_fragment| fragment.merge(next_fragment).unwrap())
             .unwrap()
             .finalize()
             .unwrap();
@@ -752,6 +765,221 @@ mod tests {
             let read_state_config = StateConfig::from_reader(&reader).unwrap();
             assert_eq!(read_state_config, state_config);
             assert_eq!(reader.chain_config(), &chain_config);
+        }
+
+        #[test]
+        fn fragments_override_chain_config() {
+            // given
+            let temp_dir = tempfile::tempdir().unwrap();
+            let path = temp_dir.path();
+            let original_chain_config = ChainConfig::local_testnet();
+            let original_chain_config_fragment = {
+                let mut chain_config_writer =
+                    SnapshotWriter::parquet(path, writer::ZstdCompressionLevel::Level1)
+                        .unwrap();
+                chain_config_writer
+                    .write_chain_config(&original_chain_config)
+                    .unwrap();
+                chain_config_writer.partial_close().unwrap()
+            };
+            let chain_config_override = {
+                let mut chain_config = ChainConfig::local_testnet();
+                chain_config
+                    .consensus_parameters
+                    .set_chain_id(ChainId::new(u64::MAX));
+                chain_config
+            };
+            let chain_config_override_fragment = {
+                let mut chain_config_writer =
+                    SnapshotWriter::parquet(path, writer::ZstdCompressionLevel::Level1)
+                        .unwrap();
+                chain_config_writer
+                    .write_chain_config(&chain_config_override)
+                    .unwrap();
+                chain_config_writer.partial_close().unwrap()
+            };
+            let block_height_fragment = {
+                let mut height_writer =
+                    SnapshotWriter::parquet(path, writer::ZstdCompressionLevel::Level1)
+                        .unwrap();
+                height_writer
+                    .write_block_data(BlockHeight::from(10), DaBlockHeight(11))
+                    .unwrap();
+                height_writer.partial_close().unwrap()
+            };
+
+            // when
+            let snapshot = [
+                block_height_fragment,
+                original_chain_config_fragment,
+                chain_config_override_fragment,
+            ]
+            .into_iter()
+            .reduce(|a, b| a.merge(b).unwrap())
+            .unwrap()
+            .finalize()
+            .unwrap();
+
+            // then
+            let reader = SnapshotReader::open(snapshot).unwrap();
+            assert_eq!(reader.chain_config(), &chain_config_override);
+        }
+
+        #[test]
+        fn frament_wont_unset_chain_config() {
+            // given
+            let temp_dir = tempfile::tempdir().unwrap();
+            let path = temp_dir.path();
+            let original_chain_config = ChainConfig::local_testnet();
+            let chain_config_fragment = {
+                let mut chain_config_writer =
+                    SnapshotWriter::parquet(path, writer::ZstdCompressionLevel::Level1)
+                        .unwrap();
+                chain_config_writer
+                    .write_chain_config(&original_chain_config)
+                    .unwrap();
+                chain_config_writer.partial_close().unwrap()
+            };
+
+            let block_height_fragment = {
+                let mut height_writer =
+                    SnapshotWriter::parquet(path, writer::ZstdCompressionLevel::Level1)
+                        .unwrap();
+                height_writer
+                    .write_block_data(BlockHeight::from(10), DaBlockHeight(11))
+                    .unwrap();
+                height_writer.partial_close().unwrap()
+            };
+            let no_chain_config_present_fragment = {
+                SnapshotWriter::parquet(path, writer::ZstdCompressionLevel::Level1)
+                    .unwrap()
+                    .partial_close()
+                    .unwrap()
+            };
+
+            // when
+            let snapshot = [
+                chain_config_fragment,
+                no_chain_config_present_fragment,
+                block_height_fragment,
+            ]
+            .into_iter()
+            .reduce(|a, b| a.merge(b).unwrap())
+            .unwrap()
+            .finalize()
+            .unwrap();
+
+            // then
+            let read_chain_config = SnapshotReader::open(snapshot)
+                .unwrap()
+                .chain_config()
+                .clone();
+            assert_eq!(read_chain_config, original_chain_config);
+        }
+
+        #[test]
+        fn fragments_override_block_heights() {
+            // given
+            let temp_dir = tempfile::tempdir().unwrap();
+            let path = temp_dir.path();
+            let original_block_height = BlockHeight::from(10);
+            let original_da_block_height = DaBlockHeight(11);
+            let block_height_fragment = {
+                let mut height_writer =
+                    SnapshotWriter::parquet(path, writer::ZstdCompressionLevel::Level1)
+                        .unwrap();
+                height_writer
+                    .write_block_data(original_block_height, original_da_block_height)
+                    .unwrap();
+                height_writer.partial_close().unwrap()
+            };
+            let block_height_override = BlockHeight::from(20);
+            let da_block_height_override = DaBlockHeight(21);
+            let block_height_override_fragment = {
+                let mut height_writer =
+                    SnapshotWriter::parquet(path, writer::ZstdCompressionLevel::Level1)
+                        .unwrap();
+                height_writer
+                    .write_block_data(block_height_override, da_block_height_override)
+                    .unwrap();
+                height_writer.partial_close().unwrap()
+            };
+            let chain_config_fragment = {
+                let mut chain_config_writer =
+                    SnapshotWriter::parquet(path, writer::ZstdCompressionLevel::Level1)
+                        .unwrap();
+                chain_config_writer
+                    .write_chain_config(&ChainConfig::local_testnet())
+                    .unwrap();
+                chain_config_writer.partial_close().unwrap()
+            };
+
+            // when
+            let snapshot = [
+                chain_config_fragment,
+                block_height_fragment,
+                block_height_override_fragment,
+            ]
+            .into_iter()
+            .reduce(|a, b| a.merge(b).unwrap())
+            .unwrap()
+            .finalize()
+            .unwrap();
+
+            // then
+            let reader = SnapshotReader::open(snapshot).unwrap();
+            assert_eq!(reader.block_height(), block_height_override);
+            assert_eq!(reader.da_block_height(), da_block_height_override);
+        }
+
+        #[test]
+        fn frament_wont_unset_block_heights() {
+            // given
+            let temp_dir = tempfile::tempdir().unwrap();
+            let path = temp_dir.path();
+            let original_block_height = BlockHeight::from(10);
+            let original_da_block_height = DaBlockHeight(11);
+            let block_height_fragment = {
+                let mut height_writer =
+                    SnapshotWriter::parquet(path, writer::ZstdCompressionLevel::Level1)
+                        .unwrap();
+                height_writer
+                    .write_block_data(original_block_height, original_da_block_height)
+                    .unwrap();
+                height_writer.partial_close().unwrap()
+            };
+            let no_block_height_present_fragment = {
+                SnapshotWriter::parquet(path, writer::ZstdCompressionLevel::Level1)
+                    .unwrap()
+                    .partial_close()
+                    .unwrap()
+            };
+            let chain_config_fragment = {
+                let mut chain_config_writer =
+                    SnapshotWriter::parquet(path, writer::ZstdCompressionLevel::Level1)
+                        .unwrap();
+                chain_config_writer
+                    .write_chain_config(&ChainConfig::local_testnet())
+                    .unwrap();
+                chain_config_writer.partial_close().unwrap()
+            };
+
+            // when
+            let snapshot = [
+                block_height_fragment,
+                no_block_height_present_fragment,
+                chain_config_fragment,
+            ]
+            .into_iter()
+            .reduce(|a, b| a.merge(b).unwrap())
+            .unwrap()
+            .finalize()
+            .unwrap();
+
+            // then
+            let reader = SnapshotReader::open(snapshot).unwrap();
+            assert_eq!(reader.block_height(), original_block_height);
+            assert_eq!(reader.da_block_height(), original_da_block_height);
         }
     }
 
@@ -925,7 +1153,7 @@ mod tests {
             ]
             .into_iter()
             .flatten()
-            .reduce(|a, b| a.merge(b))
+            .reduce(|a, b| a.merge(b).unwrap())
             .unwrap();
 
             let snapshot = fragment.finalize().unwrap();
@@ -984,7 +1212,7 @@ mod tests {
                 chain_config_override_fragment,
             ]
             .into_iter()
-            .reduce(|a, b| a.merge(b))
+            .reduce(|a, b| a.merge(b).unwrap())
             .unwrap()
             .finalize()
             .unwrap();
@@ -1002,7 +1230,7 @@ mod tests {
             let original_block_height = BlockHeight::from(10);
             let original_da_block_height = DaBlockHeight(11);
             let block_height_fragment = {
-                let mut height_writer = SnapshotWriter::json(&path);
+                let mut height_writer = SnapshotWriter::json(path);
                 height_writer
                     .write_block_data(original_block_height, original_da_block_height)
                     .unwrap();
@@ -1012,7 +1240,7 @@ mod tests {
             let block_height_override = BlockHeight::from(20);
             let da_block_height_override = DaBlockHeight(21);
             let block_height_override_fragment = {
-                let mut height_writer = SnapshotWriter::json(&path);
+                let mut height_writer = SnapshotWriter::json(path);
                 height_writer
                     .write_block_data(block_height_override, da_block_height_override)
                     .unwrap();
@@ -1020,7 +1248,7 @@ mod tests {
             };
 
             let chain_config_fragment = {
-                let mut chain_config_writer = SnapshotWriter::json(&path);
+                let mut chain_config_writer = SnapshotWriter::json(path);
                 chain_config_writer
                     .write_chain_config(&ChainConfig::local_testnet())
                     .unwrap();
@@ -1034,7 +1262,7 @@ mod tests {
                 block_height_override_fragment,
             ]
             .into_iter()
-            .reduce(|a, b| a.merge(b))
+            .reduce(|a, b| a.merge(b).unwrap())
             .unwrap()
             .finalize()
             .unwrap();
@@ -1044,6 +1272,91 @@ mod tests {
             pretty_assertions::assert_eq!(block_height_override, reader.block_height());
             pretty_assertions::assert_eq!(
                 da_block_height_override,
+                reader.da_block_height()
+            );
+        }
+
+        #[test]
+        fn frament_wont_unset_chain_config() {
+            // given
+            let temp_dir = tempfile::tempdir().unwrap();
+            let path = temp_dir.path();
+            let original_chain_config = ChainConfig::local_testnet();
+            let chain_config_fragment = {
+                let mut chain_config_writer = SnapshotWriter::json(path);
+                chain_config_writer
+                    .write_chain_config(&original_chain_config)
+                    .unwrap();
+                chain_config_writer.partial_close().unwrap()
+            };
+            let block_height_fragment = {
+                let mut height_writer = SnapshotWriter::json(path);
+                height_writer
+                    .write_block_data(BlockHeight::from(10), DaBlockHeight(11))
+                    .unwrap();
+                height_writer.partial_close().unwrap()
+            };
+            let no_chain_config_present_fragment =
+                { SnapshotWriter::json(path).partial_close().unwrap() };
+
+            // when
+            let snapshot = [
+                chain_config_fragment,
+                no_chain_config_present_fragment,
+                block_height_fragment,
+            ]
+            .into_iter()
+            .reduce(|a, b| a.merge(b).unwrap())
+            .unwrap()
+            .finalize()
+            .unwrap();
+
+            // then
+            let reader = SnapshotReader::open(snapshot).unwrap();
+            pretty_assertions::assert_eq!(&original_chain_config, reader.chain_config());
+        }
+
+        #[test]
+        fn frament_wont_unset_block_heights() {
+            // given
+            let temp_dir = tempfile::tempdir().unwrap();
+            let path = temp_dir.path();
+            let original_block_height = BlockHeight::from(10);
+            let original_da_block_height = DaBlockHeight(11);
+            let block_height_fragment = {
+                let mut height_writer = SnapshotWriter::json(path);
+                height_writer
+                    .write_block_data(original_block_height, original_da_block_height)
+                    .unwrap();
+                height_writer.partial_close().unwrap()
+            };
+            let no_block_height_present_fragment =
+                { SnapshotWriter::json(path).partial_close().unwrap() };
+            let chain_config_fragment = {
+                let mut chain_config_writer = SnapshotWriter::json(path);
+                chain_config_writer
+                    .write_chain_config(&ChainConfig::local_testnet())
+                    .unwrap();
+                chain_config_writer.partial_close().unwrap()
+            };
+
+            // when
+            let snapshot = [
+                block_height_fragment,
+                no_block_height_present_fragment,
+                chain_config_fragment,
+            ]
+            .into_iter()
+            .reduce(|a, b| a.merge(b).unwrap())
+            .unwrap()
+            .finalize()
+            .unwrap();
+
+            // then
+            let reader = SnapshotReader::open(snapshot).unwrap();
+            pretty_assertions::assert_eq!(original_block_height, reader.block_height());
+            pretty_assertions::assert_eq!(
+                original_da_block_height,
                 reader.da_block_height()
             );
         }
