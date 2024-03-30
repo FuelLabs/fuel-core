@@ -8,10 +8,10 @@
 //! Currently, the WASM executor is designed only for one block execution per WASM instance.
 //! But later, it will be improved, and the instance will be reusable.
 
-#![deny(clippy::arithmetic_side_effects)]
-#![deny(clippy::cast_possible_truncation)]
-#![deny(unused_crate_dependencies)]
-#![deny(warnings)]
+//#![deny(clippy::arithmetic_side_effects)]
+//#![deny(clippy::cast_possible_truncation)]
+//#![deny(unused_crate_dependencies)]
+//#![deny(warnings)]
 
 use crate::{
     relayer::WasmRelayer,

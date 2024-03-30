@@ -161,6 +161,7 @@ enum FragmentData {
     Json {
         builder: StateConfigBuilder,
     },
+    #[cfg(feature = "parquet")]
     Parquet {
         tables: std::collections::HashMap<String, PathBuf>,
         block_height: Option<PathBuf>,
@@ -179,6 +180,7 @@ impl FragmentData {
             ) => {
                 builder.merge(other_builder);
             }
+            #[cfg(feature = "parquet")]
             (
                 FragmentData::Parquet {
                     tables,
@@ -253,6 +255,7 @@ impl SnapshotFragment {
                     filepath: state_file_path,
                 }
             }
+            #[cfg(feature = "parquet")]
             FragmentData::Parquet {
                 tables,
                 block_height,
@@ -430,6 +433,7 @@ impl SnapshotWriter {
     pub fn partial_close(self) -> anyhow::Result<SnapshotFragment> {
         let data = match self.encoder {
             EncoderType::Json { builder } => FragmentData::Json { builder },
+            #[cfg(feature = "parquet")]
             EncoderType::Parquet {
                 table_encoders,
                 block_height,
