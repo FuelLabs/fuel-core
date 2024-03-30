@@ -27,8 +27,8 @@ enum EncoderType {
     Parquet {
         compression: ZstdCompressionLevel,
         table_encoders: TableEncoders,
-        block_height: PathBuf,
-        da_block_height: PathBuf,
+        block_height: Option<PathBuf>,
+        da_block_height: Option<PathBuf>,
     },
 }
 
@@ -160,8 +160,13 @@ impl From<ZstdCompressionLevel> for ::parquet::basic::Compression {
 
 enum FragmentData {
     Json {
-        dir: PathBuf,
         builder: StateConfigBuilder,
+    },
+    Parquet {
+        tables: std::collections::HashMap<String, PathBuf>,
+        block_height: Option<PathBuf>,
+        da_block_height: Option<PathBuf>,
+        compression: crate::ZstdCompressionLevel,
     },
 }
 impl FragmentData {
@@ -173,7 +178,33 @@ impl FragmentData {
                     builder: other_builder,
                     ..
                 },
-            ) => builder.merge(other_builder),
+            ) => {
+                builder.merge(other_builder);
+            }
+            (
+                FragmentData::Parquet {
+                    tables,
+                    block_height,
+                    da_block_height,
+                    compression,
+                },
+                FragmentData::Parquet {
+                    tables: their_tables,
+                    block_height: their_block_height,
+                    da_block_height: their_da_block_height,
+                    compression: their_compression,
+                },
+            ) => {
+                // TODO: handle compression not matching
+                tables.extend(their_tables);
+                if their_block_height.is_some() {
+                    *block_height = their_block_height;
+                }
+                if their_da_block_height.is_some() {
+                    *da_block_height = their_da_block_height;
+                }
+            }
+            _ => panic!("cannot merge"),
         };
         self
     }
@@ -181,6 +212,7 @@ impl FragmentData {
 
 pub struct SnapshotFragment {
     chain_config: Option<ChainConfig>,
+    dir: PathBuf,
     data: FragmentData,
 }
 
@@ -195,9 +227,30 @@ impl SnapshotFragment {
     }
 
     pub fn finalize(self) -> anyhow::Result<SnapshotMetadata> {
-        let FragmentData::Json { dir, builder } = self.data;
-
-        SnapshotWriter::write_json(&dir, self.chain_config.as_ref(), builder)
+        match self.data {
+            FragmentData::Json { builder } => {
+                SnapshotWriter::write_json(&self.dir, self.chain_config.as_ref(), builder)
+            }
+            FragmentData::Parquet {
+                tables,
+                block_height,
+                da_block_height,
+                compression,
+            } => {
+                let block_height = block_height.expect("block_height");
+                let da_block_height = da_block_height.expect("da_block_height");
+                SnapshotWriter::write_chain_config_and_metadata(
+                    &self.dir,
+                    self.chain_config.as_ref(),
+                    TableEncoding::Parquet {
+                        tables,
+                        block_height,
+                        da_block_height,
+                        compression,
+                    },
+                )
+            }
+        }
     }
 }
 
@@ -223,8 +276,8 @@ impl SnapshotWriter {
             encoder: EncoderType::Parquet {
                 table_encoders: TableEncoders::new(dir.clone(), compression_level),
                 compression: compression_level,
-                block_height: dir.join("block_height.parquet"),
-                da_block_height: dir.join("da_block_height.parquet"),
+                block_height: None,
+                da_block_height: None,
             },
             dir,
             chain_config: None,
@@ -302,8 +355,13 @@ impl SnapshotWriter {
                 compression,
                 ..
             } => {
-                Self::write_single_el_parquet(block_height, height, *compression)?;
-                Self::write_single_el_parquet(da_block_height, da_height, *compression)?;
+                let file = self.dir.join("block_height.parquet");
+                Self::write_single_el_parquet(&file, height, *compression)?;
+                *block_height = Some(file);
+
+                let file = self.dir.join("da_block_height.parquet");
+                Self::write_single_el_parquet(&file, da_height, *compression)?;
+                *da_block_height = Some(file);
 
                 Ok(())
             }
@@ -335,7 +393,7 @@ impl SnapshotWriter {
         serde_json::to_writer_pretty(file, &state_config)?;
 
         Self::write_chain_config_and_metadata(
-            &dir,
+            dir,
             chain_config,
             TableEncoding::Json {
                 filepath: state_file_path,
@@ -344,31 +402,7 @@ impl SnapshotWriter {
     }
 
     pub fn close(self) -> anyhow::Result<SnapshotMetadata> {
-        match self.encoder {
-            EncoderType::Json { builder } => {
-                Self::write_json(&self.dir, self.chain_config.as_ref(), builder)
-            }
-            #[cfg(feature = "parquet")]
-            EncoderType::Parquet {
-                table_encoders,
-                block_height,
-                da_block_height,
-                compression,
-            } => {
-                let tables = table_encoders.close()?;
-
-                Self::write_chain_config_and_metadata(
-                    &self.dir,
-                    self.chain_config.as_ref(),
-                    TableEncoding::Parquet {
-                        tables,
-                        block_height,
-                        da_block_height,
-                        compression,
-                    },
-                )
-            }
-        }
+        self.partial_close()?.finalize()
     }
 
     fn write_chain_config_and_metadata(
@@ -395,17 +429,27 @@ impl SnapshotWriter {
         Ok(match self.encoder {
             EncoderType::Json { builder } => SnapshotFragment {
                 chain_config: self.chain_config,
-                data: FragmentData::Json {
-                    dir: self.dir,
-                    builder,
-                },
+                dir: self.dir,
+                data: FragmentData::Json { builder },
             },
             EncoderType::Parquet {
                 compression,
                 table_encoders,
                 block_height,
                 da_block_height,
-            } => todo!(),
+            } => {
+                let tables = table_encoders.close()?;
+                SnapshotFragment {
+                    chain_config: self.chain_config,
+                    dir: self.dir,
+                    data: FragmentData::Parquet {
+                        tables,
+                        block_height,
+                        da_block_height,
+                        compression,
+                    },
+                }
+            }
         })
     }
 }
@@ -539,15 +583,22 @@ mod tests {
             use pretty_assertions::assert_eq;
 
             let dir = tempfile::tempdir().unwrap();
-            let mut encoder =
+            let mut writer =
                 SnapshotWriter::parquet(dir.path(), ZstdCompressionLevel::Uncompressed)
                     .unwrap();
+            writer
+                .write_chain_config(&ChainConfig::local_testnet())
+                .unwrap();
+            writer
+                .write_block_data(10.into(), DaBlockHeight(11))
+                .unwrap();
 
             // when
-            encoder.write::<T>(vec![]).unwrap();
-            let snapshot = encoder.close().unwrap();
+            writer.write::<T>(vec![]).unwrap();
+            let snapshot = writer.close().unwrap();
 
             // then
+            assert!(snapshot.chain_config.exists());
             let TableEncoding::Parquet { tables, .. } = snapshot.table_encoding else {
                 panic!("Expected parquet encoding")
             };
@@ -580,9 +631,12 @@ mod tests {
         // given
         use crate::Randomize;
         let dir = tempfile::tempdir().unwrap();
-        let writer = SnapshotWriter::json(dir.path());
+        let mut writer = SnapshotWriter::json(dir.path());
         let mut rng = StdRng::from_seed([0; 32]);
         let state = StateConfig::randomize(&mut rng);
+        writer
+            .write_chain_config(&ChainConfig::local_testnet())
+            .unwrap();
 
         // when
         let snapshot = writer.write_state_config(state).unwrap();
