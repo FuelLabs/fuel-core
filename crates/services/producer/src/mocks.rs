@@ -62,8 +62,6 @@ pub struct MockRelayer {
 
 #[async_trait::async_trait]
 impl Relayer for MockRelayer {
-
-
     async fn wait_for_at_least_height(
         &self,
         _height: &DaBlockHeight,
