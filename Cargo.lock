@@ -2990,6 +2990,7 @@ dependencies = [
  "strum 0.25.0",
  "tempfile",
  "tokio",
+ "tokio-rayon",
  "tokio-util",
  "tracing",
  "uuid 1.8.0",

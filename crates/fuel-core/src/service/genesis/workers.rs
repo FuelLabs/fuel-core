@@ -21,7 +21,6 @@ use fuel_core_storage::{
 };
 use fuel_core_types::{blockchain::primitives::DaBlockHeight, fuel_types::BlockHeight};
 
-
 use tokio_util::sync::CancellationToken;
 
 pub struct SnapshotImporter {
@@ -92,14 +91,16 @@ impl SnapshotImporter {
         let block_height = self.snapshot_reader.block_height();
         let da_block_height = self.snapshot_reader.da_block_height();
         let db = self.db.on_chain().clone();
-        self.task_manager.spawn(move |token| async move {
-            GenesisRunner::new(
-                token,
-                Handler::new(block_height, da_block_height),
-                groups,
-                db,
-            )
-            .run()
+        self.task_manager.spawn(move |token| {
+            tokio_rayon::spawn(move || {
+                GenesisRunner::new(
+                    token,
+                    Handler::new(block_height, da_block_height),
+                    groups,
+                    db,
+                )
+                .run()
+            })
         });
 
         Ok(())
@@ -123,14 +124,16 @@ impl SnapshotImporter {
         let da_block_height = self.snapshot_reader.da_block_height();
 
         let db = self.db.off_chain().clone();
-        self.task_manager.spawn(move |token| async move {
-            let runner = GenesisRunner::new(
-                token,
-                Handler::<TableBeingWritten>::new(block_height, da_block_height),
-                groups,
-                db,
-            );
-            runner.run()
+        self.task_manager.spawn(move |token| {
+            tokio_rayon::spawn(move || {
+                let runner = GenesisRunner::new(
+                    token,
+                    Handler::<TableBeingWritten>::new(block_height, da_block_height),
+                    groups,
+                    db,
+                );
+                runner.run()
+            })
         });
 
         Ok(())
