@@ -3008,7 +3008,7 @@ mod tests {
                 let mut message = Message::default();
                 message.set_da_height(da_height.into());
                 message.set_nonce(da_height.into());
-                root_calculator.push(message.id().as_ref());
+                root_calculator.push(message.message_id().as_ref());
                 // transaction
                 let mut transaction = RelayedTransaction::default();
                 transaction.set_nonce(da_height.into());

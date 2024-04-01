@@ -32,7 +32,7 @@ impl Event {
     /// Get hashed value of the event.
     pub fn hash(&self) -> Bytes32 {
         match self {
-            Event::Message(message) => (*message.id().deref()).into(),
+            Event::Message(message) => (*message.message_id().deref()).into(),
             Event::Transaction(transaction) => transaction.id().into(),
         }
     }
