@@ -137,9 +137,21 @@ impl fuel_core_producer::ports::Relayer for MaybeRelayerAdapter {
     }
 
     async fn get_cost_for_block(&self, height: &DaBlockHeight) -> anyhow::Result<u64> {
-        if let Some(sync) = self.relayer_synced.as_ref() {
-            get_gas_cost_for_height(**height, sync)
-        } else {
+        #[cfg(feature = "relayer")]
+        {
+            if let Some(sync) = self.relayer_synced.as_ref() {
+                get_gas_cost_for_height(**height, sync)
+            } else {
+                Ok(0)
+            }
+        }
+        #[cfg(not(feature = "relayer"))]
+        {
+            anyhow::ensure!(
+                **height == 0,
+                "Cannot have a da height above zero without a relayer"
+            );
+            // If the relayer is not enabled, then all blocks are zero.
             Ok(0)
         }
     }
