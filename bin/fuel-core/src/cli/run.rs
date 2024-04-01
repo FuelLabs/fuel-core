@@ -87,18 +87,18 @@ pub struct Command {
 
     /// The maximum database cache size in bytes.
     #[arg(
-    long = "max-database-cache-size",
-    default_value_t = DEFAULT_DATABASE_CACHE_SIZE,
-    env
+        long = "max-database-cache-size",
+        default_value_t = DEFAULT_DATABASE_CACHE_SIZE,
+        env
     )]
     pub max_database_cache_size: usize,
 
     #[clap(
-    name = "DB_PATH",
-    long = "db-path",
-    value_parser,
-    default_value = default_db_path().into_os_string(),
-    env
+        name = "DB_PATH",
+        long = "db-path",
+        value_parser,
+        default_value = default_db_path().into_os_string(),
+        env
     )]
     pub database_path: PathBuf,
 
