@@ -1,16 +1,15 @@
 use super::{
     runner::ProcessState,
-    workers::{Handler, SnapshotImporter},
+    workers::{Handler},
 };
 use crate::{
-    combined_database::CombinedDatabase,
     database::{
         balances::BalancesInitializer, database_description::on_chain::OnChain,
         state::StateInitializer, Database,
     },
 };
 use anyhow::anyhow;
-use fuel_core_chain_config::{SnapshotReader, TableEntry};
+use fuel_core_chain_config::{TableEntry};
 use fuel_core_storage::{
     tables::{
         Coins, ContractsAssets, ContractsLatestUtxo, ContractsRawCode, ContractsState,

@@ -556,7 +556,6 @@ mod tests {
 
     use crate::{
         Randomize,
-        SnapshotReader,
         StateConfig,
     };
 
@@ -654,14 +653,11 @@ mod tests {
     }
 
     mod parquet {
-        use fuel_core_storage::tables::Coins;
+        
         use fuel_core_types::blockchain::primitives::DaBlockHeight;
-        use rand::SeedableRng;
+        
 
-        use crate::{
-            Randomize,
-            TableEntry,
-        };
+        
 
         #[test]
         fn cannot_close_without_chain_config() {

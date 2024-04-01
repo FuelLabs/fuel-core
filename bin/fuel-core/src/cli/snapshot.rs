@@ -1,22 +1,8 @@
 use crate::cli::default_db_path;
 use anyhow::Context;
 use clap::{Parser, Subcommand};
-use fuel_core::{
-    combined_database::CombinedDatabase,
-    fuel_core_graphql_api::storage::transactions::{
-        OwnedTransactions, TransactionStatuses,
-    },
-    types::fuel_types::ContractId,
-};
-use fuel_core_chain_config::{AddTable, StateConfigBuilder, TableEntry};
-use fuel_core_storage::{
-    structured_storage::TableWithBlueprint,
-    tables::{
-        Coins, ContractsAssets, ContractsLatestUtxo, ContractsRawCode, ContractsState,
-        Messages, Transactions,
-    },
-};
-use itertools::{chain, Itertools};
+use fuel_core::{combined_database::CombinedDatabase, types::fuel_types::ContractId};
+
 use std::path::{Path, PathBuf};
 
 /// Print a snapshot of blockchain state to stdout.
@@ -158,16 +144,18 @@ mod tests {
 
     use std::iter::repeat_with;
 
-    use fuel_core::fuel_core_graphql_api::storage::transactions::OwnedTransactionIndexKey;
+    use fuel_core::fuel_core_graphql_api::storage::transactions::{
+        OwnedTransactionIndexKey, OwnedTransactions, TransactionStatuses,
+    };
     use fuel_core_chain_config::{
-        AsTable, SnapshotMetadata, SnapshotReader, StateConfig, StateConfigBuilder,
-        TableEntry,
+        AddTable, AsTable, SnapshotMetadata, SnapshotReader, StateConfig,
+        StateConfigBuilder, TableEntry,
     };
     use fuel_core_storage::{
         structured_storage::TableWithBlueprint,
         tables::{
             Coins, ContractsAssets, ContractsLatestUtxo, ContractsRawCode,
-            ContractsState, FuelBlocks, Messages,
+            ContractsState, FuelBlocks, Messages, Transactions,
         },
         ContractsAssetKey, ContractsStateKey, StorageAsMut,
     };
@@ -183,8 +171,10 @@ mod tests {
         services::txpool::TransactionStatus,
         tai64::Tai64,
     };
+    use itertools::Itertools;
     use rand::{rngs::StdRng, seq::SliceRandom, Rng, SeedableRng};
     use test_case::test_case;
+    use tokio::task::futures;
 
     use crate::cli::DEFAULT_DATABASE_CACHE_SIZE;
 
@@ -571,9 +561,7 @@ mod tests {
 
     #[cfg_attr(feature = "parquet", test_case(Encoding::Parquet { group_size: 2, compression: 1 }; "parquet"))]
     #[test_case(Encoding::Json; "json")]
-    async fn everything_snapshot_correct_and_sorted(
-        encoding: Encoding,
-    ) -> anyhow::Result<()> {
+    fn everything_snapshot_correct_and_sorted(encoding: Encoding) -> anyhow::Result<()> {
         use pretty_assertions::assert_eq;
 
         // given
@@ -588,7 +576,7 @@ mod tests {
         db.flush();
 
         // when
-        exec(Command {
+        let fut = exec(Command {
             database_path: db_path,
             max_database_cache_size: DEFAULT_DATABASE_CACHE_SIZE,
             output_dir: snapshot_dir.clone(),
@@ -596,8 +584,13 @@ mod tests {
                 chain_config: None,
                 encoding_command: Some(EncodingCommand::Encoding { encoding }),
             },
-        })
-        .await?;
+        });
+
+        // Because the test_case macro doesn't work with async tests
+        tokio::runtime::Runtime::new()
+            .unwrap()
+            .block_on(fut)
+            .unwrap();
 
         // then
         let snapshot = SnapshotMetadata::read(&snapshot_dir)?;
@@ -622,9 +615,7 @@ mod tests {
     #[cfg(feature = "parquet")]
     #[test_case(2; "parquet group_size=2")]
     #[test_case(5; "parquet group_size=5")]
-    async fn everything_snapshot_respects_group_size(
-        group_size: usize,
-    ) -> anyhow::Result<()> {
+    fn everything_snapshot_respects_group_size(group_size: usize) -> anyhow::Result<()> {
         use fuel_core_chain_config::SnapshotReader;
 
         // given
@@ -638,7 +629,7 @@ mod tests {
         db.flush();
 
         // when
-        exec(Command {
+        let fut = exec(Command {
             database_path: db_path,
             output_dir: snapshot_dir.clone(),
             max_database_cache_size: DEFAULT_DATABASE_CACHE_SIZE,
@@ -651,8 +642,12 @@ mod tests {
                     },
                 }),
             },
-        })
-        .await?;
+        });
+
+        tokio::runtime::Runtime::new()
+            .unwrap()
+            .block_on(fut)
+            .unwrap();
 
         // then
         let snapshot = SnapshotMetadata::read(&snapshot_dir)?;

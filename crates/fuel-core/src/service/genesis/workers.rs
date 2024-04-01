@@ -13,7 +13,6 @@ use crate::{
 };
 use fuel_core_chain_config::{AsTable, SnapshotReader, StateConfig, TaskManager};
 use fuel_core_storage::{
-    kv_store::StorageColumn,
     structured_storage::TableWithBlueprint,
     tables::{
         Coins, ContractsAssets, ContractsLatestUtxo, ContractsRawCode, ContractsState,
@@ -21,8 +20,8 @@ use fuel_core_storage::{
     },
 };
 use fuel_core_types::{blockchain::primitives::DaBlockHeight, fuel_types::BlockHeight};
-use tokio::sync::Notify;
-use tokio_rayon::AsyncRayonHandle;
+
+
 use tokio_util::sync::CancellationToken;
 
 pub struct SnapshotImporter {

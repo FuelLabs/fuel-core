@@ -1,7 +1,6 @@
 use std::borrow::Cow;
 
 use crate::{
-    combined_database::CombinedDatabase,
     database::{database_description::off_chain::OffChain, Database},
     graphql_api::{
         storage::{
@@ -14,7 +13,7 @@ use crate::{
         worker_service,
     },
 };
-use fuel_core_chain_config::{SnapshotReader, TableEntry};
+use fuel_core_chain_config::{TableEntry};
 use fuel_core_storage::{
     tables::{Coins, Messages, Transactions},
     transactional::StorageTransaction,
@@ -24,7 +23,7 @@ use fuel_core_types::services::executor::Event;
 
 use super::{
     runner::ProcessState,
-    workers::{Handler, SnapshotImporter},
+    workers::{Handler},
 };
 
 impl ProcessState for Handler<TransactionStatuses> {

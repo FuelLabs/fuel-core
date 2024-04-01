@@ -128,7 +128,6 @@ mod tests {
     use crate::database::genesis_progress::GenesisProgressInspect;
     use std::{
         sync::{Arc, Mutex},
-        time::Duration,
     };
 
     use anyhow::{anyhow, bail};
@@ -148,7 +147,7 @@ mod tests {
         fuel_types::BlockHeight,
     };
     use rand::{rngs::StdRng, SeedableRng};
-    use tokio::sync::Notify;
+    
     use tokio_util::sync::CancellationToken;
 
     use crate::{
