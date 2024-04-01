@@ -7,10 +7,12 @@ pub mod config;
 pub mod fee_collection_contract;
 mod genesis;
 mod serialization;
+mod workers;
 
 pub use config::*;
 use fuel_core_types::fuel_vm::SecretKey;
 pub use genesis::GenesisCommitment;
+pub use workers::*;
 
 /// A default secret key to use for testing purposes only
 pub fn default_consensus_dev_key() -> SecretKey {

@@ -2961,6 +2961,7 @@ dependencies = [
  "test-case",
  "tikv-jemallocator",
  "tokio",
+ "tokio-util",
  "tracing",
  "tracing-subscriber",
  "url",
@@ -2976,6 +2977,7 @@ dependencies = [
  "fuel-core-chain-config",
  "fuel-core-storage",
  "fuel-core-types",
+ "futures",
  "insta",
  "itertools 0.12.1",
  "parquet",
@@ -2987,7 +2989,10 @@ dependencies = [
  "serde_with",
  "strum 0.25.0",
  "tempfile",
+ "tokio",
+ "tokio-util",
  "tracing",
+ "uuid 1.8.0",
 ]
 
 [[package]]

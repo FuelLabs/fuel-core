@@ -1,20 +1,7 @@
 use clap::Parser;
-use fuel_core_chain_config::{
-    ChainConfig,
-    SnapshotReader,
-    StateConfig,
-};
-use std::{
-    env,
-    path::PathBuf,
-    str::FromStr,
-};
-use tracing_subscriber::{
-    filter::EnvFilter,
-    layer::SubscriberExt,
-    registry,
-    Layer,
-};
+use fuel_core_chain_config::{ChainConfig, SnapshotReader, StateConfig};
+use std::{env, path::PathBuf, str::FromStr};
+use tracing_subscriber::{filter::EnvFilter, layer::SubscriberExt, registry, Layer};
 
 #[cfg(feature = "env")]
 use dotenvy::dotenv;
@@ -127,7 +114,7 @@ pub async fn run_cli() -> anyhow::Result<()> {
         Ok(opt) => match opt.command {
             Fuel::Run(command) => run::exec(command).await,
             #[cfg(any(feature = "rocksdb", feature = "rocksdb-production"))]
-            Fuel::Snapshot(command) => snapshot::exec(command),
+            Fuel::Snapshot(command) => snapshot::exec(command).await,
             Fuel::GenerateFeeContract(command) => fee_contract::exec(command).await,
         },
         Err(e) => {
@@ -164,10 +151,7 @@ mod tests {
     use fuel_core_types::fuel_types::ContractId;
     use std::path::PathBuf;
 
-    use crate::cli::{
-        snapshot,
-        Fuel,
-    };
+    use crate::cli::{snapshot, Fuel};
 
     use super::Opt;
 

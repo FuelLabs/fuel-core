@@ -25,8 +25,13 @@ serde = { workspace = true, features = ["derive", "rc"] }
 serde_json = { version = "1.0", features = ["raw_value"], optional = true }
 serde_with = { workspace = true, features = ["macros", "hex"] }
 tracing = { version = "0.1", default-features = false, optional = true }
+uuid = { workspace = true }
+tokio = { workspace = true, features = ["time"] }
+tokio-util = { workspace = true }
+futures = { workspace = true }
 
 [dev-dependencies]
+tokio = { workspace = true, features = ["macros", "rt"] }
 bytes = { workspace = true }
 fuel-core-chain-config = { path = ".", features = ["parquet", "test-helpers"] }
 fuel-core-types = { workspace = true, default-features = false, features = [

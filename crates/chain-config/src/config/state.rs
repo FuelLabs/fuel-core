@@ -1,38 +1,22 @@
 use super::{
-    coin::CoinConfig,
-    contract::ContractConfig,
-    message::MessageConfig,
+    coin::CoinConfig, contract::ContractConfig, message::MessageConfig,
     table_entry::TableEntry,
 };
-use crate::{
-    ContractBalanceConfig,
-    ContractStateConfig,
-};
+use crate::{ContractBalanceConfig, ContractStateConfig};
 use fuel_core_storage::{
     structured_storage::TableWithBlueprint,
     tables::{
-        Coins,
-        ContractsAssets,
-        ContractsLatestUtxo,
-        ContractsRawCode,
-        ContractsState,
-        Messages,
-        Transactions,
+        Coins, ContractsAssets, ContractsLatestUtxo, ContractsRawCode, ContractsState,
+        Messages, Transactions,
     },
-    ContractsAssetKey,
-    ContractsStateKey,
-    Mappable,
+    ContractsAssetKey, ContractsStateKey, Mappable,
 };
 use fuel_core_types::{
-    blockchain::primitives::DaBlockHeight,
-    entities::contract::ContractUtxoInfo,
+    blockchain::primitives::DaBlockHeight, entities::contract::ContractUtxoInfo,
     fuel_types::BlockHeight,
 };
 use itertools::Itertools;
-use serde::{
-    Deserialize,
-    Serialize,
-};
+use serde::{Deserialize, Serialize};
 
 #[cfg(feature = "std")]
 use crate::SnapshotMetadata;
@@ -40,18 +24,11 @@ use crate::SnapshotMetadata;
 #[cfg(feature = "test-helpers")]
 use crate::CoinConfigGenerator;
 #[cfg(feature = "test-helpers")]
-use bech32::{
-    ToBase32,
-    Variant::Bech32m,
-};
+use bech32::{ToBase32, Variant::Bech32m};
 #[cfg(feature = "test-helpers")]
 use core::str::FromStr;
 #[cfg(feature = "test-helpers")]
-use fuel_core_types::{
-    fuel_types::Address,
-    fuel_types::Bytes32,
-    fuel_vm::SecretKey,
-};
+use fuel_core_types::{fuel_types::Address, fuel_types::Bytes32, fuel_vm::SecretKey};
 
 #[cfg(feature = "parquet")]
 mod parquet;
@@ -564,14 +541,11 @@ impl StateConfig {
     }
 }
 
-pub use reader::{
-    IntoIter,
-    SnapshotReader,
-};
-#[cfg(feature = "std")]
-pub use writer::SnapshotWriter;
+pub use reader::{IntoIter, SnapshotReader};
 #[cfg(feature = "parquet")]
 pub use writer::ZstdCompressionLevel;
+#[cfg(feature = "std")]
+pub use writer::{SnapshotFragment, SnapshotWriter};
 pub const MAX_GROUP_SIZE: usize = usize::MAX;
 
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -585,15 +559,9 @@ pub(crate) type GroupResult<T> = anyhow::Result<Group<T>>;
 mod tests {
     use std::path::Path;
 
-    use crate::{
-        ChainConfig,
-        Randomize,
-    };
+    use crate::{ChainConfig, Randomize};
 
-    use rand::{
-        rngs::StdRng,
-        SeedableRng,
-    };
+    use rand::{rngs::StdRng, SeedableRng};
 
     use super::*;
 
@@ -603,48 +571,24 @@ mod tests {
         use fuel_core_storage::{
             structured_storage::TableWithBlueprint,
             tables::{
-                Coins,
-                ContractsAssets,
-                ContractsLatestUtxo,
-                ContractsRawCode,
-                ContractsState,
-                Messages,
+                Coins, ContractsAssets, ContractsLatestUtxo, ContractsRawCode,
+                ContractsState, Messages,
             },
         };
         use fuel_core_types::{
             blockchain::primitives::DaBlockHeight,
-            fuel_types::{
-                BlockHeight,
-                ChainId,
-            },
+            fuel_types::{BlockHeight, ChainId},
         };
         use pretty_assertions::assert_eq;
-        use rand::{
-            rngs::StdRng,
-            SeedableRng,
-        };
+        use rand::{rngs::StdRng, SeedableRng};
 
         use crate::{
-            config::state::writer::{
-                self,
-                SnapshotFragment,
-            },
-            AddTable,
-            AsTable,
-            ChainConfig,
-            Randomize,
-            SnapshotMetadata,
-            SnapshotReader,
-            SnapshotWriter,
-            StateConfig,
-            StateConfigBuilder,
-            TableEntry,
+            config::state::writer::{self, SnapshotFragment},
+            AddTable, AsTable, ChainConfig, Randomize, SnapshotMetadata, SnapshotReader,
+            SnapshotWriter, StateConfig, StateConfigBuilder, TableEntry,
         };
 
-        use super::{
-            assert_roundtrip,
-            assert_roundtrip_block_heights,
-        };
+        use super::{assert_roundtrip, assert_roundtrip_block_heights};
 
         #[test]
         fn roundtrip() {
@@ -826,7 +770,7 @@ mod tests {
         }
 
         #[test]
-        fn frament_wont_unset_chain_config() {
+        fn fragment_wont_unset_chain_config() {
             // given
             let temp_dir = tempfile::tempdir().unwrap();
             let path = temp_dir.path();
@@ -933,7 +877,7 @@ mod tests {
         }
 
         #[test]
-        fn frament_wont_unset_block_heights() {
+        fn fragment_wont_unset_block_heights() {
             // given
             let temp_dir = tempfile::tempdir().unwrap();
             let path = temp_dir.path();
@@ -989,46 +933,24 @@ mod tests {
         use fuel_core_storage::{
             structured_storage::TableWithBlueprint,
             tables::{
-                Coins,
-                ContractsAssets,
-                ContractsLatestUtxo,
-                ContractsRawCode,
-                ContractsState,
-                Messages,
+                Coins, ContractsAssets, ContractsLatestUtxo, ContractsRawCode,
+                ContractsState, Messages,
             },
         };
         use fuel_core_types::{
             blockchain::primitives::DaBlockHeight,
-            fuel_types::{
-                BlockHeight,
-                ChainId,
-            },
+            fuel_types::{BlockHeight, ChainId},
         };
         use itertools::Itertools;
-        use rand::{
-            rngs::StdRng,
-            SeedableRng,
-        };
+        use rand::{rngs::StdRng, SeedableRng};
 
         use crate::{
-            config::state::writer::SnapshotFragment,
-            AddTable,
-            AsTable,
-            ChainConfig,
-            ContractConfig,
-            Randomize,
-            SnapshotMetadata,
-            SnapshotReader,
-            SnapshotWriter,
-            StateConfig,
-            StateConfigBuilder,
-            TableEntry,
+            config::state::writer::SnapshotFragment, AddTable, AsTable, ChainConfig,
+            ContractConfig, Randomize, SnapshotMetadata, SnapshotReader, SnapshotWriter,
+            StateConfig, StateConfigBuilder, TableEntry,
         };
 
-        use super::{
-            assert_roundtrip,
-            assert_roundtrip_block_heights,
-        };
+        use super::{assert_roundtrip, assert_roundtrip_block_heights};
 
         #[test]
         fn roundtrip() {
@@ -1277,7 +1199,7 @@ mod tests {
         }
 
         #[test]
-        fn frament_wont_unset_chain_config() {
+        fn fragment_wont_unset_chain_config() {
             // given
             let temp_dir = tempfile::tempdir().unwrap();
             let path = temp_dir.path();
@@ -1317,7 +1239,7 @@ mod tests {
         }
 
         #[test]
-        fn frament_wont_unset_block_heights() {
+        fn fragment_wont_unset_block_heights() {
             // given
             let temp_dir = tempfile::tempdir().unwrap();
             let path = temp_dir.path();

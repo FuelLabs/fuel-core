@@ -1,52 +1,36 @@
 use crate::cli::default_db_path;
 use anyhow::Context;
-use clap::{
-    Parser,
-    Subcommand,
-};
+use clap::{Parser, Subcommand};
 use fuel_core::{
     chain_config::ChainConfig,
     combined_database::CombinedDatabase,
     database::{
         database_description::{
-            off_chain::OffChain,
-            on_chain::OnChain,
-            DatabaseDescription,
+            off_chain::OffChain, on_chain::OnChain, DatabaseDescription,
         },
         Database,
     },
     fuel_core_graphql_api::storage::transactions::{
-        OwnedTransactions,
-        TransactionStatuses,
+        OwnedTransactions, TransactionStatuses,
     },
     types::fuel_types::ContractId,
 };
 use fuel_core_chain_config::{
-    AddTable,
-    SnapshotWriter,
-    StateConfigBuilder,
-    TableEntry,
-    MAX_GROUP_SIZE,
+    AddTable, SnapshotFragment, SnapshotWriter, StateConfigBuilder, TableEntry,
+    TaskManager, MAX_GROUP_SIZE,
 };
 use fuel_core_storage::{
     blueprint::BlueprintInspect,
     iter::IterDirection,
     structured_storage::TableWithBlueprint,
     tables::{
-        Coins,
-        ContractsAssets,
-        ContractsLatestUtxo,
-        ContractsRawCode,
-        ContractsState,
-        Messages,
-        Transactions,
+        Coins, ContractsAssets, ContractsLatestUtxo, ContractsRawCode, ContractsState,
+        Messages, Transactions,
     },
 };
-use itertools::Itertools;
-use std::path::{
-    Path,
-    PathBuf,
-};
+use itertools::{chain, Itertools};
+use std::path::{Path, PathBuf};
+use tokio_util::sync::CancellationToken;
 
 /// Print a snapshot of blockchain state to stdout.
 #[derive(Debug, Clone, Parser)]
@@ -144,7 +128,7 @@ pub enum SubCommands {
 }
 
 #[cfg(any(feature = "rocksdb", feature = "rocksdb-production"))]
-pub fn exec(command: Command) -> anyhow::Result<()> {
+pub async fn exec(command: Command) -> anyhow::Result<()> {
     let db = open_db(
         &command.database_path,
         Some(command.max_database_cache_size),
@@ -160,7 +144,14 @@ pub fn exec(command: Command) -> anyhow::Result<()> {
             let encoding = encoding_command
                 .map(|f| f.encoding())
                 .unwrap_or_else(|| Encoding::Json);
-            full_snapshot(chain_config, &output_dir, encoding, db)
+            Exporter {
+                db,
+                output_dir,
+                prev_chain_config: chain_config,
+                encoding,
+            }
+            .full_snapshot()
+            .await
         }
         SubCommands::Contract { contract_id } => {
             contract_snapshot(db, contract_id, &output_dir)
@@ -217,29 +208,29 @@ fn contract_snapshot(
     Ok(())
 }
 
-fn full_snapshot(
+struct Exporter {
+    db: CombinedDatabase,
+    output_dir: PathBuf,
     prev_chain_config: Option<PathBuf>,
-    output_dir: &Path,
     encoding: Encoding,
-    combined_db: CombinedDatabase,
-) -> Result<(), anyhow::Error> {
-    std::fs::create_dir_all(output_dir)?;
+}
 
-    let mut writer = match encoding {
-        Encoding::Json => SnapshotWriter::json(output_dir),
-        #[cfg(feature = "parquet")]
-        Encoding::Parquet { compression, .. } => {
-            SnapshotWriter::parquet(output_dir, compression.try_into()?)?
-        }
-    };
-
-    let prev_chain_config = load_chain_config(prev_chain_config)?;
-    writer.write_chain_config(&prev_chain_config)?;
+impl Exporter {
+    fn create_writer(&self) -> anyhow::Result<SnapshotWriter> {
+        let writer = match self.encoding {
+            Encoding::Json => SnapshotWriter::json(&self.output_dir),
+            #[cfg(feature = "parquet")]
+            Encoding::Parquet { compression, .. } => {
+                SnapshotWriter::parquet(&self.output_dir, compression.try_into()?)?
+            }
+        };
+        Ok(writer)
+    }
 
     fn write<T, DbDesc>(
-        db: &Database<DbDesc>,
-        group_size: usize,
-        writer: &mut SnapshotWriter,
+        &self,
+        task_manager: &mut TaskManager<SnapshotFragment>,
+        db: Database<DbDesc>,
     ) -> anyhow::Result<()>
     where
         T: TableWithBlueprint<Column = <DbDesc as DatabaseDescription>::Column>,
@@ -247,38 +238,73 @@ fn full_snapshot(
         TableEntry<T>: serde::Serialize,
         StateConfigBuilder: AddTable<T>,
         DbDesc: DatabaseDescription,
+        DbDesc::Height: Send,
     {
-        db.entries::<T>(None, IterDirection::Forward)
-            .chunks(group_size)
-            .into_iter()
-            .try_for_each(|chunk| writer.write(chunk.try_collect()?))
+        let mut writer = self.create_writer()?;
+        let group_size = self.encoding.group_size().unwrap_or(MAX_GROUP_SIZE);
+
+        task_manager.spawn(move |cancel| async move {
+            db.entries::<T>(None, IterDirection::Forward)
+                .chunks(group_size)
+                .into_iter()
+                .take_while(|_| !cancel.is_cancelled())
+                .try_for_each(|chunk| writer.write(chunk.try_collect()?))?;
+            writer.partial_close()
+        });
+
+        Ok(())
     }
-    let group_size = encoding.group_size().unwrap_or(MAX_GROUP_SIZE);
 
-    let db = combined_db.on_chain();
-    write::<Coins, OnChain>(db, group_size, &mut writer)?;
-    write::<Messages, OnChain>(db, group_size, &mut writer)?;
-    write::<ContractsRawCode, OnChain>(db, group_size, &mut writer)?;
-    write::<ContractsLatestUtxo, OnChain>(db, group_size, &mut writer)?;
-    write::<ContractsState, OnChain>(db, group_size, &mut writer)?;
-    write::<ContractsAssets, OnChain>(db, group_size, &mut writer)?;
-    write::<Transactions, OnChain>(db, group_size, &mut writer)?;
+    async fn full_snapshot(self) -> Result<(), anyhow::Error> {
+        std::fs::create_dir_all(&self.output_dir)?;
 
-    let db = combined_db.off_chain();
-    write::<TransactionStatuses, OffChain>(db, group_size, &mut writer)?;
-    write::<OwnedTransactions, OffChain>(db, group_size, &mut writer)?;
+        let mut task_manager: TaskManager<SnapshotFragment> =
+            TaskManager::new(CancellationToken::new());
 
-    let block = combined_db.on_chain().latest_block()?;
-    writer.write_block_data(*block.header().height(), block.header().da_height)?;
+        let db = self.db.on_chain();
+        self.write::<Coins, OnChain>(&mut task_manager, db.clone())?;
+        self.write::<Messages, OnChain>(&mut task_manager, db.clone())?;
+        self.write::<ContractsRawCode, OnChain>(&mut task_manager, db.clone())?;
+        self.write::<ContractsLatestUtxo, OnChain>(&mut task_manager, db.clone())?;
+        self.write::<ContractsState, OnChain>(&mut task_manager, db.clone())?;
+        self.write::<ContractsAssets, OnChain>(&mut task_manager, db.clone())?;
+        self.write::<Transactions, OnChain>(&mut task_manager, db.clone())?;
 
-    writer.close()?;
+        let db = self.db.off_chain();
+        self.write::<TransactionStatuses, OffChain>(&mut task_manager, db.clone())?;
+        self.write::<OwnedTransactions, OffChain>(&mut task_manager, db.clone())?;
 
-    Ok(())
+        let data_snapshot_fragments = task_manager.wait().await?;
+
+        let other_fragments =
+            self.write_chain_config()?.merge(self.write_block_data()?)?;
+
+        data_snapshot_fragments
+            .into_iter()
+            .try_fold(other_fragments, |fragment, next_fragment| {
+                fragment.merge(next_fragment)
+            })?
+            .finalize()?;
+
+        Ok(())
+    }
+
+    fn write_chain_config(&self) -> anyhow::Result<SnapshotFragment> {
+        let mut writer = self.create_writer()?;
+        let prev_chain_config = load_chain_config(self.prev_chain_config.as_deref())?;
+        writer.write_chain_config(&prev_chain_config)?;
+        writer.partial_close()
+    }
+
+    fn write_block_data(&self) -> anyhow::Result<SnapshotFragment> {
+        let mut writer = self.create_writer()?;
+        let block = self.db.on_chain().latest_block()?;
+        writer.write_block_data(*block.header().height(), block.header().da_height)?;
+        writer.partial_close()
+    }
 }
 
-fn load_chain_config(
-    chain_config: Option<PathBuf>,
-) -> Result<ChainConfig, anyhow::Error> {
+fn load_chain_config(chain_config: Option<&Path>) -> Result<ChainConfig, anyhow::Error> {
     let chain_config = match chain_config {
         Some(file) => ChainConfig::load(file)?,
         None => crate::cli::local_testnet_chain_config(),
@@ -300,62 +326,30 @@ mod tests {
 
     use fuel_core::fuel_core_graphql_api::storage::transactions::OwnedTransactionIndexKey;
     use fuel_core_chain_config::{
-        AddTable,
-        AsTable,
-        SnapshotMetadata,
-        SnapshotReader,
-        StateConfig,
-        StateConfigBuilder,
-        TableEntry,
+        AddTable, AsTable, SnapshotMetadata, SnapshotReader, StateConfig,
+        StateConfigBuilder, TableEntry,
     };
     use fuel_core_storage::{
         structured_storage::TableWithBlueprint,
         tables::{
-            Coins,
-            ContractsAssets,
-            ContractsLatestUtxo,
-            ContractsRawCode,
-            ContractsState,
-            FuelBlocks,
-            Messages,
+            Coins, ContractsAssets, ContractsLatestUtxo, ContractsRawCode,
+            ContractsState, FuelBlocks, Messages,
         },
-        ContractsAssetKey,
-        ContractsStateKey,
-        StorageAsMut,
+        ContractsAssetKey, ContractsStateKey, StorageAsMut,
     };
     use fuel_core_types::{
-        blockchain::{
-            block::CompressedBlock,
-            primitives::DaBlockHeight,
-        },
+        blockchain::{block::CompressedBlock, primitives::DaBlockHeight},
         entities::{
-            coins::coin::{
-                CompressedCoin,
-                CompressedCoinV1,
-            },
+            coins::coin::{CompressedCoin, CompressedCoinV1},
             contract::ContractUtxoInfo,
-            relayer::message::{
-                Message,
-                MessageV1,
-            },
+            relayer::message::{Message, MessageV1},
         },
-        fuel_tx::{
-            Receipt,
-            TransactionBuilder,
-            TxPointer,
-            UniqueIdentifier,
-            UtxoId,
-        },
+        fuel_tx::{Receipt, TransactionBuilder, TxPointer, UniqueIdentifier, UtxoId},
         fuel_types::ChainId,
         services::txpool::TransactionStatus,
         tai64::Tai64,
     };
-    use rand::{
-        rngs::StdRng,
-        seq::SliceRandom,
-        Rng,
-        SeedableRng,
-    };
+    use rand::{rngs::StdRng, seq::SliceRandom, Rng, SeedableRng};
     use test_case::test_case;
 
     use crate::cli::DEFAULT_DATABASE_CACHE_SIZE;
@@ -743,7 +737,9 @@ mod tests {
 
     #[cfg_attr(feature = "parquet", test_case(Encoding::Parquet { group_size: 2, compression: 1 }; "parquet"))]
     #[test_case(Encoding::Json; "json")]
-    fn everything_snapshot_correct_and_sorted(encoding: Encoding) -> anyhow::Result<()> {
+    async fn everything_snapshot_correct_and_sorted(
+        encoding: Encoding,
+    ) -> anyhow::Result<()> {
         use pretty_assertions::assert_eq;
 
         // given
@@ -766,7 +762,8 @@ mod tests {
                 chain_config: None,
                 encoding_command: Some(EncodingCommand::Encoding { encoding }),
             },
-        })?;
+        })
+        .await?;
 
         // then
         let snapshot = SnapshotMetadata::read(&snapshot_dir)?;
@@ -791,7 +788,9 @@ mod tests {
     #[cfg(feature = "parquet")]
     #[test_case(2; "parquet group_size=2")]
     #[test_case(5; "parquet group_size=5")]
-    fn everything_snapshot_respects_group_size(group_size: usize) -> anyhow::Result<()> {
+    async fn everything_snapshot_respects_group_size(
+        group_size: usize,
+    ) -> anyhow::Result<()> {
         use fuel_core_chain_config::SnapshotReader;
 
         // given
@@ -818,7 +817,8 @@ mod tests {
                     },
                 }),
             },
-        })?;
+        })
+        .await?;
 
         // then
         let snapshot = SnapshotMetadata::read(&snapshot_dir)?;
@@ -830,8 +830,8 @@ mod tests {
         Ok(())
     }
 
-    #[test]
-    fn contract_snapshot_isolates_contract_correctly() -> anyhow::Result<()> {
+    #[tokio::test]
+    async fn contract_snapshot_isolates_contract_correctly() -> anyhow::Result<()> {
         // given
         let temp_dir = tempfile::tempdir()?;
         let snapshot_dir = temp_dir.path().join("snapshot");
@@ -855,7 +855,8 @@ mod tests {
             output_dir: snapshot_dir.clone(),
             max_database_cache_size: DEFAULT_DATABASE_CACHE_SIZE,
             subcommand: SubCommands::Contract { contract_id },
-        })?;
+        })
+        .await?;
 
         // then
         let metadata = SnapshotMetadata::read(&snapshot_dir)?;
