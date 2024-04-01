@@ -42,9 +42,12 @@ use rand::{
     Rng,
     SeedableRng,
 };
-use std::sync::{
-    Arc,
-    Mutex,
+use std::{
+    collections::HashMap,
+    sync::{
+        Arc,
+        Mutex,
+    },
 };
 
 pub struct MockProducerGasPrice {
@@ -272,9 +275,8 @@ mod produce_and_execute_block_txpool {
         // given
         let prev_da_height = DaBlockHeight(100u64);
         let prev_height = 1u32.into();
-        let latest_da_blocks_with_costs = vec![(prev_da_height - 1u64.into(), 0)];
         let ctx = TestContextBuilder::new()
-            .with_latest_blocks_with_gas_costs(latest_da_blocks_with_costs)
+            .with_latest_block_height(prev_da_height - 1u64.into())
             .with_prev_da_height(prev_da_height)
             .with_prev_height(prev_height)
             .build();
@@ -320,10 +322,10 @@ mod produce_and_execute_block_txpool {
             (prev_da_height + 4, 500),
         ]
         .into_iter()
-        .map(|(height, gas_cost)| (height.into(), gas_cost))
-        .collect();
+        .map(|(height, gas_cost)| (DaBlockHeight(height), gas_cost));
 
         let ctx = TestContextBuilder::new()
+            .with_latest_block_height((prev_da_height + 4u64).into())
             .with_latest_blocks_with_gas_costs(latest_blocks_with_gas_costs)
             .with_prev_da_height(prev_da_height.into())
             .with_block_gas_limit(block_gas_limit)
@@ -502,7 +504,8 @@ impl<Executor> TestContext<Executor> {
 }
 
 struct TestContextBuilder {
-    latest_blocks_with_gas_costs: Vec<(DaBlockHeight, u64)>,
+    latest_block_height: DaBlockHeight,
+    blocks_with_gas_costs: HashMap<DaBlockHeight, u64>,
     prev_da_height: DaBlockHeight,
     block_gas_limit: Option<u64>,
     prev_height: BlockHeight,
@@ -511,18 +514,25 @@ struct TestContextBuilder {
 impl TestContextBuilder {
     fn new() -> Self {
         Self {
-            latest_blocks_with_gas_costs: vec![],
+            latest_block_height: 0u64.into(),
+            blocks_with_gas_costs: HashMap::new(),
             prev_da_height: 1u64.into(),
             block_gas_limit: None,
             prev_height: 0u32.into(),
         }
     }
 
+    fn with_latest_block_height(mut self, latest_block_height: DaBlockHeight) -> Self {
+        self.latest_block_height = latest_block_height;
+        self
+    }
+
     fn with_latest_blocks_with_gas_costs(
         mut self,
-        latest_blocks_with_gas_costs: Vec<(DaBlockHeight, u64)>,
+        latest_blocks_with_gas_costs: impl Iterator<Item = (DaBlockHeight, u64)>,
     ) -> Self {
-        self.latest_blocks_with_gas_costs = latest_blocks_with_gas_costs;
+        self.blocks_with_gas_costs
+            .extend(latest_blocks_with_gas_costs);
         self
     }
 
@@ -570,7 +580,8 @@ impl TestContextBuilder {
         };
 
         let mock_relayer = MockRelayer {
-            latest_da_blocks_with_costs: self.latest_blocks_with_gas_costs.clone(),
+            latest_block_height: self.latest_block_height,
+            latest_da_blocks_with_costs: self.blocks_with_gas_costs.clone(),
             ..Default::default()
         };
 

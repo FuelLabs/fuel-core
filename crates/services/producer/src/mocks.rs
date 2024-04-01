@@ -56,17 +56,29 @@ use std::{
 #[derive(Default, Clone)]
 pub struct MockRelayer {
     pub block_production_key: Address,
-    pub latest_da_blocks_with_costs: Vec<(DaBlockHeight, u64)>,
+    pub latest_block_height: DaBlockHeight,
+    pub latest_da_blocks_with_costs: HashMap<DaBlockHeight, u64>,
 }
 
 #[async_trait::async_trait]
 impl Relayer for MockRelayer {
-    /// Get the best finalized height from the DA layer
-    async fn get_latest_da_blocks_with_costs(
+
+
+    async fn wait_for_at_least_height(
         &self,
-        _: &DaBlockHeight,
-    ) -> anyhow::Result<Vec<(DaBlockHeight, u64)>> {
-        Ok(self.latest_da_blocks_with_costs.clone())
+        _height: &DaBlockHeight,
+    ) -> anyhow::Result<DaBlockHeight> {
+        let heighest = self.latest_block_height;
+        Ok(heighest)
+    }
+
+    async fn get_cost_for_block(&self, height: &DaBlockHeight) -> anyhow::Result<u64> {
+        let cost = self
+            .latest_da_blocks_with_costs
+            .get(height)
+            .cloned()
+            .unwrap_or_default();
+        Ok(cost)
     }
 }
 

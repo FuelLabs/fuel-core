@@ -277,27 +277,29 @@ where
         previous_da_height: DaBlockHeight,
     ) -> anyhow::Result<DaBlockHeight> {
         let gas_limit = self.config.block_gas_limit;
-        let list = self
-            .relayer
-            .get_latest_da_blocks_with_costs(&previous_da_height)
-            .await?;
         let mut new_best = previous_da_height;
         let mut total_cost: u64 = 0;
-        for (da_height, cost) in list.iter() {
-            if da_height < &previous_da_height {
-                return Err(Error::InvalidDaFinalizationState {
-                    best: *da_height,
-                    previous_block: previous_da_height,
-                }
-                .into());
+        let heighest = self
+            .relayer
+            .wait_for_at_least_height(&previous_da_height)
+            .await?;
+        if heighest < previous_da_height {
+            return Err(Error::InvalidDaFinalizationState {
+                best: heighest,
+                previous_block: previous_da_height,
             }
-            if da_height > &new_best {
-                total_cost = total_cost.saturating_add(*cost);
-                if total_cost > gas_limit {
-                    break;
-                } else {
-                    new_best = *da_height;
-                }
+            .into());
+        }
+        for height in previous_da_height.0..=heighest.0 {
+            let cost = self
+                .relayer
+                .get_cost_for_block(&DaBlockHeight(height))
+                .await?;
+            total_cost = total_cost.saturating_add(cost);
+            if total_cost > gas_limit {
+                break;
+            } else {
+                new_best = DaBlockHeight(height);
             }
         }
         Ok(new_best)
