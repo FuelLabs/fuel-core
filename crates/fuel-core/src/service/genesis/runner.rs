@@ -1,29 +1,15 @@
-use fuel_core_chain_config::{
-    Group,
-    TableEntry,
-};
+use fuel_core_chain_config::{Group, TableEntry};
 use fuel_core_storage::{
     kv_store::StorageColumn,
     structured_storage::TableWithBlueprint,
-    transactional::{
-        Modifiable,
-        StorageTransaction,
-        WriteTransaction,
-    },
-    StorageAsRef,
-    StorageInspect,
-    StorageMutate,
+    transactional::{Modifiable, StorageTransaction, WriteTransaction},
+    StorageAsRef, StorageInspect, StorageMutate,
 };
-use std::sync::Arc;
-use tokio::sync::Notify;
 use tokio_util::sync::CancellationToken;
 
 use crate::database::{
     database_description::DatabaseDescription,
-    genesis_progress::{
-        GenesisMetadata,
-        GenesisProgressMutate,
-    },
+    genesis_progress::{GenesisMetadata, GenesisProgressMutate},
     Database,
 };
 
@@ -34,7 +20,6 @@ where
     handler: Handler,
     skip: usize,
     groups: Groups,
-    finished_signal: Option<Arc<Notify>>,
     cancel_token: CancellationToken,
     db: Database<DbDesc>,
 }
@@ -58,7 +43,6 @@ where
     Database<DbDesc>: StorageInspect<GenesisMetadata<DbDesc>>,
 {
     pub fn new(
-        finished_signal: Option<Arc<Notify>>,
         cancel_token: CancellationToken,
         handler: Logic,
         groups: GroupGenerator,
@@ -78,7 +62,6 @@ where
             handler,
             skip,
             groups,
-            finished_signal,
             cancel_token,
             db,
         }
@@ -130,10 +113,6 @@ where
                 Ok(())
             });
 
-        if let Some(finished_signal) = &self.finished_signal {
-            finished_signal.notify_one();
-        }
-
         tracing::info!(
             "Finishing genesis runner. Read: {} wrote into {}",
             Logic::TableInSnapshot::column().name(),
@@ -148,58 +127,27 @@ where
 mod tests {
     use crate::database::genesis_progress::GenesisProgressInspect;
     use std::{
-        sync::{
-            Arc,
-            Mutex,
-        },
+        sync::{Arc, Mutex},
         time::Duration,
     };
 
-    use anyhow::{
-        anyhow,
-        bail,
-    };
-    use fuel_core_chain_config::{
-        Group,
-        Randomize,
-        TableEntry,
-    };
+    use anyhow::{anyhow, bail};
+    use fuel_core_chain_config::{Group, Randomize, TableEntry};
     use fuel_core_storage::{
         column::Column,
-        iter::{
-            BoxedIter,
-            IterDirection,
-            IterableStore,
-        },
-        kv_store::{
-            KVItem,
-            KeyValueInspect,
-            StorageColumn,
-            Value,
-        },
+        iter::{BoxedIter, IterDirection, IterableStore},
+        kv_store::{KVItem, KeyValueInspect, StorageColumn, Value},
         structured_storage::TableWithBlueprint,
         tables::Coins,
-        transactional::{
-            Changes,
-            StorageTransaction,
-        },
-        Result as StorageResult,
-        StorageAsMut,
-        StorageAsRef,
-        StorageInspect,
+        transactional::{Changes, StorageTransaction},
+        Result as StorageResult, StorageAsMut, StorageAsRef, StorageInspect,
     };
     use fuel_core_types::{
-        entities::coins::coin::{
-            CompressedCoin,
-            CompressedCoinV1,
-        },
+        entities::coins::coin::{CompressedCoin, CompressedCoinV1},
         fuel_tx::UtxoId,
         fuel_types::BlockHeight,
     };
-    use rand::{
-        rngs::StdRng,
-        SeedableRng,
-    };
+    use rand::{rngs::StdRng, SeedableRng};
     use tokio::sync::Notify;
     use tokio_util::sync::CancellationToken;
 
@@ -207,14 +155,10 @@ mod tests {
         combined_database::CombinedDatabase,
         database::{
             database_description::on_chain::OnChain,
-            genesis_progress::GenesisProgressMutate,
-            Database,
+            genesis_progress::GenesisProgressMutate, Database,
         },
         service::genesis::runner::GenesisRunner,
-        state::{
-            in_memory::memory_store::MemoryStore,
-            TransactableStorage,
-        },
+        state::{in_memory::memory_store::MemoryStore, TransactableStorage},
     };
 
     use super::ProcessState;
@@ -298,7 +242,6 @@ mod tests {
 
         let mut called_with = vec![];
         let runner = GenesisRunner::new(
-            Some(Arc::new(Notify::new())),
             CancellationToken::new(),
             TestHandler::new(|group, _| {
                 called_with.push(group);
@@ -330,7 +273,6 @@ mod tests {
         .unwrap();
 
         let runner = GenesisRunner::new(
-            Some(Arc::new(Notify::new())),
             CancellationToken::new(),
             TestHandler::new(|element, _| {
                 called_with.push(element);
@@ -355,7 +297,6 @@ mod tests {
         let utxo_id = UtxoId::new(Default::default(), 0);
 
         let runner = GenesisRunner::new(
-            Some(Arc::new(Notify::new())),
             CancellationToken::new(),
             TestHandler::new(|_, tx| {
                 insert_a_coin(tx, &utxo_id);
@@ -403,7 +344,6 @@ mod tests {
         let utxo_id = UtxoId::new(Default::default(), 0);
 
         let runner = GenesisRunner::new(
-            Some(Arc::new(Notify::new())),
             CancellationToken::new(),
             TestHandler::new(|_, tx| {
                 insert_a_coin(tx, &utxo_id);
@@ -425,7 +365,6 @@ mod tests {
         // given
         let groups = TestData::new(1);
         let runner = GenesisRunner::new(
-            Some(Arc::new(Notify::new())),
             CancellationToken::new(),
             TestHandler::new(|_, _| bail!("Some error")),
             groups.as_ok_groups(),
@@ -444,7 +383,6 @@ mod tests {
         // given
         let groups = [Err(anyhow!("Some error"))];
         let runner = GenesisRunner::new(
-            Some(Arc::new(Notify::new())),
             CancellationToken::new(),
             TestHandler::new(|_, _| Ok(())),
             groups,
@@ -464,7 +402,6 @@ mod tests {
         let data = TestData::new(2);
         let db = Database::default();
         let runner = GenesisRunner::new(
-            Some(Arc::new(Notify::new())),
             CancellationToken::new(),
             TestHandler::new(|_, _| Ok(())),
             data.as_ok_groups(),
@@ -487,7 +424,6 @@ mod tests {
     #[tokio::test]
     async fn processing_stops_when_cancelled() {
         // given
-        let finished_signal = Arc::new(Notify::new());
         let cancel_token = CancellationToken::new();
 
         let (tx, rx) = std::sync::mpsc::channel();
@@ -496,7 +432,6 @@ mod tests {
         let runner = {
             let read_groups = Arc::clone(&read_groups);
             GenesisRunner::new(
-                Some(Arc::clone(&finished_signal)),
                 cancel_token.clone(),
                 TestHandler::new(move |el, _| {
                     read_groups.lock().unwrap().push(el);
@@ -541,34 +476,6 @@ mod tests {
             .take(take)
             .collect::<Vec<_>>();
         assert_eq!(read_entries, inserted_groups);
-
-        // finished signal is emitted
-        tokio::time::timeout(Duration::from_millis(10), finished_signal.notified())
-            .await
-            .unwrap();
-    }
-
-    #[tokio::test]
-    async fn emits_finished_signal_on_error() {
-        // given
-        let finished_signal = Arc::new(Notify::new());
-        let groups = [Err(anyhow!("Some error"))];
-        let runner = GenesisRunner::new(
-            Some(Arc::clone(&finished_signal)),
-            CancellationToken::new(),
-            TestHandler::new(|_, _| Ok(())),
-            groups,
-            Database::default(),
-        );
-
-        // when
-        let result = runner.run();
-
-        // then
-        assert!(result.is_err());
-        tokio::time::timeout(Duration::from_millis(10), finished_signal.notified())
-            .await
-            .unwrap();
     }
 
     #[derive(Debug)]
@@ -619,7 +526,6 @@ mod tests {
         // given
         let groups = TestData::new(1);
         let runner = GenesisRunner::new(
-            Some(Arc::new(Notify::new())),
             CancellationToken::new(),
             TestHandler::new(|_, _| Ok(())),
             groups.as_ok_groups(),

@@ -2,34 +2,21 @@ use std::borrow::Cow;
 
 use crate::{
     combined_database::CombinedDatabase,
-    database::{
-        database_description::off_chain::OffChain,
-        Database,
-    },
+    database::{database_description::off_chain::OffChain, Database},
     graphql_api::{
         storage::{
             blocks::FuelBlockIdsToHeights,
             coins::OwnedCoins,
             contracts::ContractsInfo,
             messages::OwnedMessageIds,
-            transactions::{
-                OwnedTransactions,
-                TransactionStatuses,
-            },
+            transactions::{OwnedTransactions, TransactionStatuses},
         },
         worker_service,
     },
 };
-use fuel_core_chain_config::{
-    SnapshotReader,
-    TableEntry,
-};
+use fuel_core_chain_config::{SnapshotReader, TableEntry};
 use fuel_core_storage::{
-    tables::{
-        Coins,
-        Messages,
-        Transactions,
-    },
+    tables::{Coins, Messages, Transactions},
     transactional::StorageTransaction,
     StorageAsMut,
 };
@@ -37,25 +24,8 @@ use fuel_core_types::services::executor::Event;
 
 use super::{
     runner::ProcessState,
-    workers::{
-        GenesisWorkers,
-        Handler,
-    },
+    workers::{Handler, SnapshotImporter},
 };
-
-pub async fn import_state(
-    db: CombinedDatabase,
-    snapshot_reader: SnapshotReader,
-) -> anyhow::Result<()> {
-    let mut workers = GenesisWorkers::new(db, snapshot_reader);
-    if let Err(e) = workers.run_off_chain_imports().await {
-        workers.shutdown();
-        workers.finished().await;
-
-        return Err(e);
-    }
-    Ok(())
-}
 
 impl ProcessState for Handler<TransactionStatuses> {
     type TableInSnapshot = TransactionStatuses;

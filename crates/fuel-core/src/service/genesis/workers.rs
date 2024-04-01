@@ -1,118 +1,86 @@
-use super::{
-    runner::ProcessState,
-    GenesisRunner,
-};
-use std::{
-    collections::HashMap,
-    marker::PhantomData,
-    sync::Arc,
-};
+use super::{runner::ProcessState, GenesisRunner};
+use std::marker::PhantomData;
 
 use crate::{
     combined_database::CombinedDatabase,
-    database::database_description::{
-        off_chain::OffChain,
-        on_chain::OnChain,
-    },
+    database::database_description::{off_chain::OffChain, on_chain::OnChain},
     graphql_api::storage::{
         coins::OwnedCoins,
         contracts::ContractsInfo,
         messages::OwnedMessageIds,
-        transactions::{
-            OwnedTransactions,
-            TransactionStatuses,
-        },
+        transactions::{OwnedTransactions, TransactionStatuses},
     },
 };
-use fuel_core_chain_config::{
-    AsTable,
-    SnapshotReader,
-    StateConfig,
-};
+use fuel_core_chain_config::{AsTable, SnapshotReader, StateConfig, TaskManager};
 use fuel_core_storage::{
     kv_store::StorageColumn,
     structured_storage::TableWithBlueprint,
     tables::{
-        Coins,
-        ContractsAssets,
-        ContractsLatestUtxo,
-        ContractsRawCode,
-        ContractsState,
-        Messages,
-        Transactions,
+        Coins, ContractsAssets, ContractsLatestUtxo, ContractsRawCode, ContractsState,
+        Messages, Transactions,
     },
 };
-use fuel_core_types::{
-    blockchain::primitives::DaBlockHeight,
-    fuel_types::BlockHeight,
-};
+use fuel_core_types::{blockchain::primitives::DaBlockHeight, fuel_types::BlockHeight};
 use tokio::sync::Notify;
 use tokio_rayon::AsyncRayonHandle;
 use tokio_util::sync::CancellationToken;
 
-pub struct GenesisWorkers {
+pub struct SnapshotImporter {
     db: CombinedDatabase,
+    task_manager: TaskManager<()>,
     cancel_token: CancellationToken,
-    block_height: BlockHeight,
-    da_block_height: DaBlockHeight,
     snapshot_reader: SnapshotReader,
-    finished_signals: HashMap<String, Arc<Notify>>,
 }
 
-impl GenesisWorkers {
-    pub fn new(db: CombinedDatabase, snapshot_reader: SnapshotReader) -> Self {
-        let block_height = snapshot_reader.block_height();
-        let da_block_height = snapshot_reader.da_block_height();
+impl SnapshotImporter {
+    fn new(
+        db: CombinedDatabase,
+        snapshot_reader: SnapshotReader,
+        cancel_token: CancellationToken,
+    ) -> Self {
         Self {
             db,
-            cancel_token: CancellationToken::new(),
-            block_height,
-            da_block_height,
+            task_manager: TaskManager::new(cancel_token.clone()),
             snapshot_reader,
-            finished_signals: HashMap::default(),
+            cancel_token,
         }
     }
 
-    pub async fn run_on_chain_imports(&mut self) -> anyhow::Result<()> {
-        tracing::info!("Running on-chain imports");
-        tokio::try_join!(
-            self.spawn_worker_on_chain::<Coins>()?,
-            self.spawn_worker_on_chain::<Messages>()?,
-            self.spawn_worker_on_chain::<ContractsRawCode>()?,
-            self.spawn_worker_on_chain::<ContractsLatestUtxo>()?,
-            self.spawn_worker_on_chain::<ContractsState>()?,
-            self.spawn_worker_on_chain::<ContractsAssets>()?,
-            self.spawn_worker_on_chain::<Transactions>()?,
-        )
-        .map(|_| ())
+    pub async fn import(
+        db: CombinedDatabase,
+        snapshot_reader: SnapshotReader,
+        cancel_token: CancellationToken,
+    ) -> anyhow::Result<()> {
+        Self::new(db, snapshot_reader, cancel_token)
+            .run_workers()
+            .await
     }
 
-    pub async fn run_off_chain_imports(&mut self) -> anyhow::Result<()> {
-        tracing::info!("Running off-chain imports");
-        // TODO: Should we insert a FuelBlockIdsToHeights entry for the genesis block?
-        tokio::try_join!(
-            self.spawn_worker_off_chain::<TransactionStatuses, TransactionStatuses>()?,
-            self.spawn_worker_off_chain::<OwnedTransactions, OwnedTransactions>()?,
-            self.spawn_worker_off_chain::<Messages, OwnedMessageIds>()?,
-            self.spawn_worker_off_chain::<Coins, OwnedCoins>()?,
-            self.spawn_worker_off_chain::<Transactions, ContractsInfo>()?
-        )
-        .map(|_| ())
-    }
+    async fn run_workers(mut self) -> anyhow::Result<()> {
+        tracing::info!("Running imports");
+        self.spawn_worker_on_chain::<Coins>()?;
+        self.spawn_worker_on_chain::<Messages>()?;
+        self.spawn_worker_on_chain::<ContractsRawCode>()?;
+        self.spawn_worker_on_chain::<ContractsLatestUtxo>()?;
+        self.spawn_worker_on_chain::<ContractsState>()?;
+        self.spawn_worker_on_chain::<ContractsAssets>()?;
+        self.spawn_worker_on_chain::<Transactions>()?;
 
-    pub async fn finished(&self) {
-        for signal in self.finished_signals.values() {
-            signal.notified().await;
-        }
+        self.spawn_worker_off_chain::<TransactionStatuses, TransactionStatuses>()?;
+        self.spawn_worker_off_chain::<OwnedTransactions, OwnedTransactions>()?;
+        self.spawn_worker_off_chain::<Messages, OwnedMessageIds>()?;
+        self.spawn_worker_off_chain::<Coins, OwnedCoins>()?;
+        self.spawn_worker_off_chain::<Transactions, ContractsInfo>()?;
+
+        self.task_manager.wait().await?;
+        Ok(())
     }
 
     pub fn shutdown(&self) {
-        self.cancel_token.cancel()
+        self.cancel_token.cancel();
     }
 
-    pub fn spawn_worker_on_chain<T>(
-        &mut self,
-    ) -> anyhow::Result<AsyncRayonHandle<anyhow::Result<()>>>
+    pub fn spawn_worker_on_chain<T>(&mut self) -> anyhow::Result<()>
     where
         T: TableWithBlueprint + Send + 'static,
         T::OwnedKey: serde::de::DeserializeOwned + Send,
@@ -121,22 +89,27 @@ impl GenesisWorkers {
         Handler<T>: ProcessState<TableInSnapshot = T, DbDesc = OnChain>,
     {
         let groups = self.snapshot_reader.read::<T>()?;
-        let finished_signal = self.get_signal(T::column().name());
 
-        let runner = GenesisRunner::new(
-            Some(finished_signal),
-            self.cancel_token.clone(),
-            Handler::new(self.block_height, self.da_block_height),
-            groups,
-            self.db.on_chain().clone(),
-        );
-        Ok(tokio_rayon::spawn(move || runner.run()))
+        let block_height = self.snapshot_reader.block_height();
+        let da_block_height = self.snapshot_reader.da_block_height();
+        let db = self.db.on_chain().clone();
+        self.task_manager.spawn(move |token| async move {
+            GenesisRunner::new(
+                token,
+                Handler::new(block_height, da_block_height),
+                groups,
+                db,
+            )
+            .run()
+        });
+
+        Ok(())
     }
 
     // TODO: serde bounds can be written shorter
     pub fn spawn_worker_off_chain<TableInSnapshot, TableBeingWritten>(
         &mut self,
-    ) -> anyhow::Result<AsyncRayonHandle<anyhow::Result<()>>>
+    ) -> anyhow::Result<()>
     where
         TableInSnapshot: TableWithBlueprint + Send + 'static,
         TableInSnapshot::OwnedKey: serde::de::DeserializeOwned + Send,
@@ -147,22 +120,21 @@ impl GenesisWorkers {
         TableBeingWritten: Send + 'static,
     {
         let groups = self.snapshot_reader.read::<TableInSnapshot>()?;
-        let finished_signal = self.get_signal(TableInSnapshot::column().name());
-        let runner = GenesisRunner::new(
-            Some(finished_signal),
-            self.cancel_token.clone(),
-            Handler::<TableBeingWritten>::new(self.block_height, self.da_block_height),
-            groups,
-            self.db.off_chain().clone(),
-        );
-        Ok(tokio_rayon::spawn(move || runner.run()))
-    }
+        let block_height = self.snapshot_reader.block_height();
+        let da_block_height = self.snapshot_reader.da_block_height();
 
-    fn get_signal(&mut self, name: &str) -> Arc<Notify> {
-        self.finished_signals
-            .entry(name.to_string())
-            .or_insert_with(|| Arc::new(Notify::new()))
-            .clone()
+        let db = self.db.off_chain().clone();
+        self.task_manager.spawn(move |token| async move {
+            let runner = GenesisRunner::new(
+                token,
+                Handler::<TableBeingWritten>::new(block_height, da_block_height),
+                groups,
+                db,
+            );
+            runner.run()
+        });
+
+        Ok(())
     }
 }
 

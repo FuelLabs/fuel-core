@@ -1,33 +1,20 @@
 use super::{
     runner::ProcessState,
-    workers::{
-        GenesisWorkers,
-        Handler,
-    },
+    workers::{Handler, SnapshotImporter},
 };
 use crate::{
     combined_database::CombinedDatabase,
     database::{
-        balances::BalancesInitializer,
-        database_description::on_chain::OnChain,
-        state::StateInitializer,
-        Database,
+        balances::BalancesInitializer, database_description::on_chain::OnChain,
+        state::StateInitializer, Database,
     },
 };
 use anyhow::anyhow;
-use fuel_core_chain_config::{
-    SnapshotReader,
-    TableEntry,
-};
+use fuel_core_chain_config::{SnapshotReader, TableEntry};
 use fuel_core_storage::{
     tables::{
-        Coins,
-        ContractsAssets,
-        ContractsLatestUtxo,
-        ContractsRawCode,
-        ContractsState,
-        Messages,
-        Transactions,
+        Coins, ContractsAssets, ContractsLatestUtxo, ContractsRawCode, ContractsState,
+        Messages, Transactions,
     },
     transactional::StorageTransaction,
     StorageAsMut,
@@ -35,27 +22,9 @@ use fuel_core_storage::{
 use fuel_core_types::{
     self,
     blockchain::primitives::DaBlockHeight,
-    entities::{
-        coins::coin::Coin,
-        Message,
-    },
+    entities::{coins::coin::Coin, Message},
     fuel_types::BlockHeight,
 };
-
-pub(crate) async fn import_state(
-    db: CombinedDatabase,
-    snapshot_reader: SnapshotReader,
-) -> anyhow::Result<()> {
-    let mut workers = GenesisWorkers::new(db, snapshot_reader);
-    if let Err(e) = workers.run_on_chain_imports().await {
-        workers.shutdown();
-        workers.finished().await;
-
-        return Err(e);
-    }
-
-    Ok(())
-}
 
 impl ProcessState for Handler<Coins> {
     type TableInSnapshot = Coins;
