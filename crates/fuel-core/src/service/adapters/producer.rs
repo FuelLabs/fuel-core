@@ -127,12 +127,24 @@ impl fuel_core_producer::ports::Relayer for MaybeRelayerAdapter {
         &self,
         height: &DaBlockHeight,
     ) -> anyhow::Result<DaBlockHeight> {
-        if let Some(sync) = self.relayer_synced.as_ref() {
-            sync.await_at_least_synced(height).await?;
-            let highest = sync.get_finalized_da_height()?;
-            Ok(highest)
-        } else {
-            Ok(*height)
+        #[cfg(feature = "relayer")]
+        {
+            if let Some(sync) = self.relayer_synced.as_ref() {
+                sync.await_at_least_synced(height).await?;
+                let highest = sync.get_finalized_da_height()?;
+                Ok(highest)
+            } else {
+                Ok(*height)
+            }
+        }
+        #[cfg(not(feature = "relayer"))]
+        {
+            anyhow::ensure!(
+                **height == 0,
+                "Cannot have a da height above zero without a relayer"
+            );
+            // If the relayer is not enabled, then all blocks are zero.
+            Ok(0.into())
         }
     }
 
