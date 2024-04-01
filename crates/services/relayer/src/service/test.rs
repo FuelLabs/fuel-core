@@ -108,7 +108,6 @@ async fn update_sync__changes_latest_eth_state(
     task.update_synced(&eth_state);
 
     // then
-    // let expected = DaBlockHeight(eth_local_finalized);
     let expected = expected.map(DaBlockHeight);
     let actual = *shared.synced.borrow().deref();
     assert_eq!(expected, actual);
