@@ -3,7 +3,10 @@
 use crate::{
     blockchain::primitives::DaBlockHeight,
     fuel_crypto,
-    fuel_types::Bytes32,
+    fuel_types::{
+        Bytes32,
+        Nonce,
+    },
 };
 
 /// Transaction sent from the DA layer to fuel by the relayer
@@ -25,6 +28,8 @@ impl Default for RelayedTransaction {
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Default, Debug, Clone, PartialEq, Eq)]
 pub struct RelayedTransactionV1 {
+    /// Unique nonce for this FTI event
+    pub nonce: Nonce,
     /// The max gas that this transaction can consume
     pub max_gas: u64,
     /// The serialized transaction transmitted from the bridge
@@ -54,6 +59,23 @@ impl RelayedTransaction {
     pub fn id(&self) -> RelayedTransactionId {
         match &self {
             RelayedTransaction::V1(tx) => tx.id(),
+        }
+    }
+
+    /// The unique nonce associated with this relayed transaction
+    pub fn nonce(&self) -> Nonce {
+        match &self {
+            RelayedTransaction::V1(tx) => tx.nonce,
+        }
+    }
+
+    #[cfg(any(test, feature = "test-helpers"))]
+    /// Set the nonce
+    pub fn set_nonce(&mut self, nonce: Nonce) {
+        match self {
+            RelayedTransaction::V1(transaction) => {
+                transaction.nonce = nonce;
+            }
         }
     }
 
@@ -115,6 +137,7 @@ impl RelayedTransactionV1 {
     /// The hash of the relayed transaction (max_gas (big endian) || serialized_transaction)
     pub fn id(&self) -> RelayedTransactionId {
         let hasher = fuel_crypto::Hasher::default()
+            .chain(self.nonce.as_slice())
             .chain(self.max_gas.to_be_bytes())
             .chain(self.serialized_transaction.as_slice());
         RelayedTransactionId((*hasher.finalize()).into())
