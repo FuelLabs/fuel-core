@@ -718,9 +718,7 @@ mod tests {
                 let mut chain_config_writer =
                     SnapshotWriter::parquet(path, writer::ZstdCompressionLevel::Level1)
                         .unwrap();
-                chain_config_writer
-                    .write_chain_config(&chain_config)
-                    .unwrap();
+                chain_config_writer.write_chain_config(&chain_config);
                 chain_config_writer.partial_close().unwrap()
             };
             let state_config = StateConfig::randomize(&mut rng);
@@ -782,9 +780,7 @@ mod tests {
                 let mut chain_config_writer =
                     SnapshotWriter::parquet(path, writer::ZstdCompressionLevel::Level1)
                         .unwrap();
-                chain_config_writer
-                    .write_chain_config(&original_chain_config)
-                    .unwrap();
+                chain_config_writer.write_chain_config(&original_chain_config);
                 chain_config_writer.partial_close().unwrap()
             };
             let chain_config_override = {
@@ -798,9 +794,7 @@ mod tests {
                 let mut chain_config_writer =
                     SnapshotWriter::parquet(path, writer::ZstdCompressionLevel::Level1)
                         .unwrap();
-                chain_config_writer
-                    .write_chain_config(&chain_config_override)
-                    .unwrap();
+                chain_config_writer.write_chain_config(&chain_config_override);
                 chain_config_writer.partial_close().unwrap()
             };
             let block_height_fragment = {
@@ -840,9 +834,7 @@ mod tests {
                 let mut chain_config_writer =
                     SnapshotWriter::parquet(path, writer::ZstdCompressionLevel::Level1)
                         .unwrap();
-                chain_config_writer
-                    .write_chain_config(&original_chain_config)
-                    .unwrap();
+                chain_config_writer.write_chain_config(&original_chain_config);
                 chain_config_writer.partial_close().unwrap()
             };
 
@@ -913,9 +905,7 @@ mod tests {
                 let mut chain_config_writer =
                     SnapshotWriter::parquet(path, writer::ZstdCompressionLevel::Level1)
                         .unwrap();
-                chain_config_writer
-                    .write_chain_config(&ChainConfig::local_testnet())
-                    .unwrap();
+                chain_config_writer.write_chain_config(&ChainConfig::local_testnet());
                 chain_config_writer.partial_close().unwrap()
             };
 
@@ -963,9 +953,7 @@ mod tests {
                 let mut chain_config_writer =
                     SnapshotWriter::parquet(path, writer::ZstdCompressionLevel::Level1)
                         .unwrap();
-                chain_config_writer
-                    .write_chain_config(&ChainConfig::local_testnet())
-                    .unwrap();
+                chain_config_writer.write_chain_config(&ChainConfig::local_testnet());
                 chain_config_writer.partial_close().unwrap()
             };
 
@@ -1070,9 +1058,7 @@ mod tests {
                 contracts,
                 ..Default::default()
             };
-            writer
-                .write_chain_config(&ChainConfig::local_testnet())
-                .unwrap();
+            writer.write_chain_config(&ChainConfig::local_testnet());
 
             // when
             let snapshot = writer.write_state_config(state.clone()).unwrap();
@@ -1116,9 +1102,7 @@ mod tests {
 
             let chain_config_fragment = {
                 let mut chain_config_writer = SnapshotWriter::json(path);
-                chain_config_writer
-                    .write_chain_config(&chain_config)
-                    .unwrap();
+                chain_config_writer.write_chain_config(&chain_config);
                 chain_config_writer.partial_close().unwrap()
             };
 
@@ -1180,9 +1164,7 @@ mod tests {
             let original_chain_config = ChainConfig::local_testnet();
             let original_chain_config_fragment = {
                 let mut chain_config_writer = SnapshotWriter::json(path);
-                chain_config_writer
-                    .write_chain_config(&original_chain_config)
-                    .unwrap();
+                chain_config_writer.write_chain_config(&original_chain_config);
                 chain_config_writer.partial_close().unwrap()
             };
 
@@ -1196,9 +1178,7 @@ mod tests {
 
             let chain_config_override_fragment = {
                 let mut chain_config_writer = SnapshotWriter::json(path);
-                chain_config_writer
-                    .write_chain_config(&chain_config_override)
-                    .unwrap();
+                chain_config_writer.write_chain_config(&chain_config_override);
                 chain_config_writer.partial_close().unwrap()
             };
 
@@ -1254,9 +1234,7 @@ mod tests {
 
             let chain_config_fragment = {
                 let mut chain_config_writer = SnapshotWriter::json(path);
-                chain_config_writer
-                    .write_chain_config(&ChainConfig::local_testnet())
-                    .unwrap();
+                chain_config_writer.write_chain_config(&ChainConfig::local_testnet());
                 chain_config_writer.partial_close().unwrap()
             };
 
@@ -1289,9 +1267,7 @@ mod tests {
             let original_chain_config = ChainConfig::local_testnet();
             let chain_config_fragment = {
                 let mut chain_config_writer = SnapshotWriter::json(path);
-                chain_config_writer
-                    .write_chain_config(&original_chain_config)
-                    .unwrap();
+                chain_config_writer.write_chain_config(&original_chain_config);
                 chain_config_writer.partial_close().unwrap()
             };
             let block_height_fragment = {
@@ -1339,9 +1315,7 @@ mod tests {
                 { SnapshotWriter::json(path).partial_close().unwrap() };
             let chain_config_fragment = {
                 let mut chain_config_writer = SnapshotWriter::json(path);
-                chain_config_writer
-                    .write_chain_config(&ChainConfig::local_testnet())
-                    .unwrap();
+                chain_config_writer.write_chain_config(&ChainConfig::local_testnet());
                 chain_config_writer.partial_close().unwrap()
             };
 
@@ -1376,9 +1350,7 @@ mod tests {
         let block_height = 13u32.into();
         let da_block_height = 14u64.into();
         let mut writer = writer(temp_dir.path());
-        writer
-            .write_chain_config(&ChainConfig::local_testnet())
-            .unwrap();
+        writer.write_chain_config(&ChainConfig::local_testnet());
 
         // when
         writer
@@ -1424,9 +1396,7 @@ mod tests {
         let mut group_generator =
             GroupGenerator::new(StdRng::seed_from_u64(0), group_size, num_groups);
         let mut snapshot_writer = writer(temp_dir.path());
-        snapshot_writer
-            .write_chain_config(&ChainConfig::local_testnet())
-            .unwrap();
+        snapshot_writer.write_chain_config(&ChainConfig::local_testnet());
 
         // when
         let expected_groups = group_generator

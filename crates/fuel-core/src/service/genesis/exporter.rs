@@ -147,7 +147,7 @@ impl Exporter {
         writer.write(state)?;
         writer.write(balance)?;
         writer.write_block_data(*block.header().height(), block.header().da_height)?;
-        writer.write_chain_config(&self.prev_chain_config)?;
+        writer.write_chain_config(&self.prev_chain_config);
         writer.close()?;
         Ok(())
     }
@@ -186,7 +186,7 @@ impl Exporter {
 
     fn write_chain_config(&self) -> anyhow::Result<SnapshotFragment> {
         let mut writer = self.create_writer()?;
-        writer.write_chain_config(&self.prev_chain_config)?;
+        writer.write_chain_config(&self.prev_chain_config);
         writer.partial_close()
     }
 

@@ -336,13 +336,8 @@ impl SnapshotWriter {
         self.close()
     }
 
-    pub fn write_chain_config(
-        &mut self,
-        chain_config: &ChainConfig,
-    ) -> anyhow::Result<()> {
+    pub fn write_chain_config(&mut self, chain_config: &ChainConfig) {
         self.chain_config = Some(chain_config.clone());
-        // TODO: remove result
-        Ok(())
     }
 
     pub fn write<T>(&mut self, elements: Vec<TableEntry<T>>) -> anyhow::Result<()>
@@ -586,9 +581,7 @@ mod tests {
             let mut writer =
                 SnapshotWriter::parquet(dir.path(), ZstdCompressionLevel::Uncompressed)
                     .unwrap();
-            writer
-                .write_chain_config(&ChainConfig::local_testnet())
-                .unwrap();
+            writer.write_chain_config(&ChainConfig::local_testnet());
             writer
                 .write_block_data(10.into(), DaBlockHeight(11))
                 .unwrap();
@@ -634,9 +627,7 @@ mod tests {
         let mut writer = SnapshotWriter::json(dir.path());
         let mut rng = StdRng::from_seed([0; 32]);
         let state = StateConfig::randomize(&mut rng);
-        writer
-            .write_chain_config(&ChainConfig::local_testnet())
-            .unwrap();
+        writer.write_chain_config(&ChainConfig::local_testnet());
 
         // when
         let snapshot = writer.write_state_config(state).unwrap();
@@ -701,9 +692,7 @@ mod tests {
                 super::ZstdCompressionLevel::Uncompressed,
             )
             .unwrap();
-            writer
-                .write_chain_config(&super::ChainConfig::local_testnet())
-                .unwrap();
+            writer.write_chain_config(&super::ChainConfig::local_testnet());
 
             // when
             let result = writer.close();
@@ -739,9 +728,7 @@ mod tests {
             // given
             let dir = tempfile::tempdir().unwrap();
             let mut writer = super::SnapshotWriter::json(dir.path());
-            writer
-                .write_chain_config(&super::ChainConfig::local_testnet())
-                .unwrap();
+            writer.write_chain_config(&super::ChainConfig::local_testnet());
 
             // when
             let result = writer.close();
