@@ -642,8 +642,7 @@ mod tests {
     ) {
         // given
         let temp_dir = tempfile::tempdir().unwrap();
-        let path = temp_dir.path();
-        let create_writer = || writer(path);
+        let create_writer = || writer(temp_dir.path());
         let original_block_height = BlockHeight::from(10);
         let original_da_block_height = DaBlockHeight(11);
         let block_height_fragment = {
@@ -721,8 +720,7 @@ mod tests {
     fn writes_in_fragments_correctly(writer: impl Fn(&Path) -> SnapshotWriter + Copy) {
         // given
         let temp_dir = tempfile::tempdir().unwrap();
-        let path = temp_dir.path();
-        let create_writer = || writer(path);
+        let create_writer = || writer(temp_dir.path());
 
         let mut rng = StdRng::seed_from_u64(0);
         let state_config = StateConfig::randomize(&mut rng);
@@ -837,8 +835,7 @@ mod tests {
     ) {
         // given
         let temp_dir = tempfile::tempdir().unwrap();
-        let path = temp_dir.path();
-        let create_writer = || writer(path);
+        let create_writer = || writer(temp_dir.path());
         let original_chain_config = ChainConfig::local_testnet();
         let chain_config_fragment = {
             let mut chain_config_writer = create_writer();
@@ -908,8 +905,7 @@ mod tests {
     ) {
         // given
         let temp_dir = tempfile::tempdir().unwrap();
-        let path = temp_dir.path();
-        let create_writer = || writer(path);
+        let create_writer = || writer(temp_dir.path());
         let original_block_height = BlockHeight::from(10);
         let original_da_block_height = DaBlockHeight(11);
         let block_height_fragment = {
