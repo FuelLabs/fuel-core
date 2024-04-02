@@ -42,6 +42,8 @@ pub mod messages;
 pub mod statistic;
 pub mod transactions;
 
+pub mod layer_one_transactions;
+
 /// GraphQL database tables column ids to the corresponding [`fuel_core_storage::Mappable`] table.
 #[repr(u32)]
 #[derive(
@@ -74,6 +76,8 @@ pub enum Column {
     FuelBlockIdsToHeights = 7,
     /// See [`ContractsInfo`](contracts::ContractsInfo)
     ContractsInfo = 8,
+    /// ID for Layer 1 Transaction status
+    LayerOneTransactionStatus = 9,
 }
 
 impl Column {
