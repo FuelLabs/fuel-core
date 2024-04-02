@@ -680,7 +680,7 @@ mod tests {
             // given
             let dir = tempfile::tempdir().unwrap();
             let writer = super::SnapshotWriter::parquet(
-                &dir.path(),
+                dir.path(),
                 super::ZstdCompressionLevel::Uncompressed,
             )
             .unwrap();
@@ -755,7 +755,7 @@ mod tests {
         fn can_partially_close_without_chain_and_block_height() {
             // given
             let dir = tempfile::tempdir().unwrap();
-            let writer = super::SnapshotWriter::json(&dir.path());
+            let writer = super::SnapshotWriter::json(dir.path());
 
             // when
             let result = writer.partial_close();
@@ -769,9 +769,9 @@ mod tests {
     fn merging_json_and_parquet_fragments_fails() {
         // given
         let dir = tempfile::tempdir().unwrap();
-        let json_writer = super::SnapshotWriter::json(&dir.path());
+        let json_writer = super::SnapshotWriter::json(dir.path());
         let parquet_writer = super::SnapshotWriter::parquet(
-            &dir.path(),
+            dir.path(),
             super::ZstdCompressionLevel::Uncompressed,
         );
 

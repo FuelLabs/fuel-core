@@ -98,10 +98,12 @@ pub struct StateConfigBuilder {
 }
 
 impl StateConfigBuilder {
+    #[cfg(feature = "std")]
     fn block_height(&self) -> Option<BlockHeight> {
         self.block_height
     }
 
+    #[cfg(feature = "std")]
     fn da_block_height(&self) -> Option<DaBlockHeight> {
         self.da_block_height
     }
@@ -1113,7 +1115,7 @@ mod tests {
             }
 
             let chain_config_fragment = {
-                let mut chain_config_writer = SnapshotWriter::json(&path);
+                let mut chain_config_writer = SnapshotWriter::json(path);
                 chain_config_writer
                     .write_chain_config(&chain_config)
                     .unwrap();
@@ -1121,19 +1123,19 @@ mod tests {
             };
 
             let state_config = StateConfig::randomize(&mut rng);
-            let coins_fragments = write_as_fragments::<Coins>(&path, &state_config);
-            let messages_fragments = write_as_fragments::<Messages>(&path, &state_config);
+            let coins_fragments = write_as_fragments::<Coins>(path, &state_config);
+            let messages_fragments = write_as_fragments::<Messages>(path, &state_config);
             let contracts_state_fragments =
-                write_as_fragments::<ContractsState>(&path, &state_config);
+                write_as_fragments::<ContractsState>(path, &state_config);
             let contracts_balance_fragments =
-                write_as_fragments::<ContractsAssets>(&path, &state_config);
+                write_as_fragments::<ContractsAssets>(path, &state_config);
             let contracts_code_fragments =
-                write_as_fragments::<ContractsRawCode>(&path, &state_config);
+                write_as_fragments::<ContractsRawCode>(path, &state_config);
             let contracts_utxo_fragments =
-                write_as_fragments::<ContractsLatestUtxo>(&path, &state_config);
+                write_as_fragments::<ContractsLatestUtxo>(path, &state_config);
 
             let block_height_fragment = {
-                let mut height_writer = SnapshotWriter::json(&path);
+                let mut height_writer = SnapshotWriter::json(path);
                 height_writer
                     .write_block_data(
                         state_config.block_height,
@@ -1177,7 +1179,7 @@ mod tests {
 
             let original_chain_config = ChainConfig::local_testnet();
             let original_chain_config_fragment = {
-                let mut chain_config_writer = SnapshotWriter::json(&path);
+                let mut chain_config_writer = SnapshotWriter::json(path);
                 chain_config_writer
                     .write_chain_config(&original_chain_config)
                     .unwrap();
@@ -1193,7 +1195,7 @@ mod tests {
             };
 
             let chain_config_override_fragment = {
-                let mut chain_config_writer = SnapshotWriter::json(&path);
+                let mut chain_config_writer = SnapshotWriter::json(path);
                 chain_config_writer
                     .write_chain_config(&chain_config_override)
                     .unwrap();
@@ -1201,7 +1203,7 @@ mod tests {
             };
 
             let block_height_fragment = {
-                let mut height_writer = SnapshotWriter::json(&path);
+                let mut height_writer = SnapshotWriter::json(path);
                 height_writer
                     .write_block_data(BlockHeight::from(10), DaBlockHeight(11))
                     .unwrap();

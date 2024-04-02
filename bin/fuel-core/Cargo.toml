@@ -40,15 +40,15 @@ tracing-subscriber = { workspace = true, features = [
 url = { version = "2.2", optional = true }
 
 [dev-dependencies]
-itertools = { workspace = true }
-fuel-core-storage = { workspace = true }
 fuel-core = { workspace = true, features = ["test-helpers"] }
+fuel-core-storage = { workspace = true }
 fuel-core-types = { workspace = true, features = ["test-helpers"] }
+itertools = { workspace = true }
 pretty_assertions = { workspace = true }
 rand = { workspace = true }
+serde = { workspace = true }
 tempfile = { workspace = true }
 test-case = { workspace = true }
-serde = { workspace = true }
 
 [features]
 default = ["env", "relayer", "rocksdb"]

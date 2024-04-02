@@ -139,6 +139,7 @@ pub async fn exec(command: Command) -> anyhow::Result<()> {
             let group_size = encoding.group_size().unwrap_or(MAX_GROUP_SIZE);
             let writer = move || match encoding {
                 Encoding::Json => Ok(SnapshotWriter::json(output_dir.clone())),
+                #[cfg(feature = "parquet")]
                 Encoding::Parquet { compression, .. } => {
                     SnapshotWriter::parquet(output_dir.clone(), compression.try_into()?)
                 }
@@ -162,7 +163,7 @@ pub async fn exec(command: Command) -> anyhow::Result<()> {
 
 fn load_chain_config_or_use_testnet(path: Option<&Path>) -> anyhow::Result<ChainConfig> {
     if let Some(path) = path {
-        ChainConfig::load(&path)
+        ChainConfig::load(path)
     } else {
         Ok(local_testnet_chain_config())
     }
