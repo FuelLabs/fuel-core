@@ -533,6 +533,8 @@ impl TableEncoders {
 
 #[cfg(test)]
 mod tests {
+    use std::path::Path;
+
     use fuel_core_storage::{
         kv_store::StorageColumn,
         structured_storage::TableWithBlueprint,
@@ -641,115 +643,66 @@ mod tests {
         insta::assert_snapshot!(encoded_json);
     }
 
-    mod parquet {
-
-        use fuel_core_types::blockchain::primitives::DaBlockHeight;
-
-        #[test]
-        fn cannot_close_without_chain_config() {
-            // given
-            let dir = tempfile::tempdir().unwrap();
-            let mut writer = super::SnapshotWriter::parquet(
-                dir.path(),
-                super::ZstdCompressionLevel::Uncompressed,
-            )
-            .unwrap();
-            writer
-                .write_block_data(10.into(), DaBlockHeight(10))
-                .unwrap();
-
-            // when
-            let result = writer.close();
-
-            // then
-            let err = result.unwrap_err();
-            assert_eq!(err.to_string(), "Snapshot isn't valid without a chain config. Write it before closing the writer.");
-        }
-
-        #[test]
-        fn can_partially_close_without_chain_and_block_height() {
-            // given
-            let dir = tempfile::tempdir().unwrap();
-            let writer = super::SnapshotWriter::parquet(
-                dir.path(),
-                super::ZstdCompressionLevel::Uncompressed,
-            )
-            .unwrap();
-
-            // when
-            let result = writer.partial_close();
-
-            // then
-            assert!(result.is_ok());
-        }
-
-        #[test]
-        fn cannot_close_without_block_heights() {
-            // given
-            let dir = tempfile::tempdir().unwrap();
-            let mut writer = super::SnapshotWriter::parquet(
-                dir.path(),
-                super::ZstdCompressionLevel::Uncompressed,
-            )
-            .unwrap();
-            writer.write_chain_config(&super::ChainConfig::local_testnet());
-
-            // when
-            let result = writer.close();
-
-            // then
-            let err = result.unwrap_err();
-            assert_eq!(err.to_string(), "Snapshot must contain the block heights. Write them before closing the writer.");
-        }
+    fn given_parquet_writer(path: &Path) -> SnapshotWriter {
+        SnapshotWriter::parquet(path, ZstdCompressionLevel::Uncompressed).unwrap()
     }
 
-    mod json {
-        use fuel_core_types::blockchain::primitives::DaBlockHeight;
+    fn given_json_writer(path: &Path) -> SnapshotWriter {
+        SnapshotWriter::json(path)
+    }
 
-        #[test]
-        fn cannot_close_without_chain_config() {
-            // given
-            let dir = tempfile::tempdir().unwrap();
-            let mut writer = super::SnapshotWriter::json(dir.path());
-            writer
-                .write_block_data(10.into(), DaBlockHeight(11))
-                .unwrap();
+    #[test_case::test_case(given_parquet_writer)]
+    #[test_case::test_case(given_json_writer)]
+    fn cannot_close_without_chain_config(
+        writer: impl Fn(&Path) -> SnapshotWriter + Copy,
+    ) {
+        // given
+        let dir = tempfile::tempdir().unwrap();
+        let mut writer = writer(dir.path());
+        writer
+            .write_block_data(10.into(), DaBlockHeight(10))
+            .unwrap();
 
-            // when
-            let result = writer.close();
+        // when
+        let result = writer.close();
 
-            // then
-            let err = result.unwrap_err();
-            assert_eq!(err.to_string(), "Snapshot isn't valid without a chain config. Write it before closing the writer.");
-        }
+        // then
+        let err = result.unwrap_err();
+        assert_eq!(err.to_string(), "Snapshot isn't valid without a chain config. Write it before closing the writer.");
+    }
 
-        #[test]
-        fn cannot_close_without_block_heights() {
-            // given
-            let dir = tempfile::tempdir().unwrap();
-            let mut writer = super::SnapshotWriter::json(dir.path());
-            writer.write_chain_config(&super::ChainConfig::local_testnet());
+    #[test_case::test_case(given_parquet_writer)]
+    #[test_case::test_case(given_json_writer)]
+    fn can_partially_close_without_chain_and_block_height(
+        writer: impl Fn(&Path) -> SnapshotWriter + Copy,
+    ) {
+        // given
+        let dir = tempfile::tempdir().unwrap();
+        let writer = writer(dir.path());
 
-            // when
-            let result = writer.close();
+        // when
+        let result = writer.partial_close();
 
-            // then
-            let err = result.unwrap_err();
-            assert_eq!(err.to_string(), "Snapshot must contain the block heights. Write them before closing the writer.");
-        }
+        // then
+        assert!(result.is_ok());
+    }
 
-        #[test]
-        fn can_partially_close_without_chain_and_block_height() {
-            // given
-            let dir = tempfile::tempdir().unwrap();
-            let writer = super::SnapshotWriter::json(dir.path());
+    #[test_case::test_case(given_parquet_writer)]
+    #[test_case::test_case(given_json_writer)]
+    fn cannot_close_without_block_heights(
+        writer: impl Fn(&Path) -> SnapshotWriter + Copy,
+    ) {
+        // given
+        let dir = tempfile::tempdir().unwrap();
+        let mut writer = writer(dir.path());
+        writer.write_chain_config(&super::ChainConfig::local_testnet());
 
-            // when
-            let result = writer.partial_close();
+        // when
+        let result = writer.close();
 
-            // then
-            assert!(result.is_ok());
-        }
+        // then
+        let err = result.unwrap_err();
+        assert_eq!(err.to_string(), "Snapshot must contain the block heights. Write them before closing the writer.");
     }
 
     #[test]
