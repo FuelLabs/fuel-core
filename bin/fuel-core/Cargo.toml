@@ -26,14 +26,11 @@ fuel-core-chain-config = { workspace = true }
 fuel-core-types = { workspace = true }
 hex = "0.4"
 humantime = "2.1"
-itertools = { workspace = true, optional = true }
 pyroscope = "0.5"
 pyroscope_pprofrs = "0.2"
-serde = { workspace = true }
 serde_json = { workspace = true }
 tikv-jemallocator = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
-tokio-util = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true, features = [
   "ansi",
@@ -43,6 +40,7 @@ tracing-subscriber = { workspace = true, features = [
 url = { version = "2.2", optional = true }
 
 [dev-dependencies]
+itertools = { workspace = true }
 fuel-core-storage = { workspace = true }
 fuel-core = { workspace = true, features = ["test-helpers"] }
 fuel-core-types = { workspace = true, features = ["test-helpers"] }
@@ -50,6 +48,7 @@ pretty_assertions = { workspace = true }
 rand = { workspace = true }
 tempfile = { workspace = true }
 test-case = { workspace = true }
+serde = { workspace = true }
 
 [features]
 default = ["env", "relayer", "rocksdb"]
@@ -57,7 +56,7 @@ env = ["dep:dotenvy"]
 p2p = ["fuel-core/p2p", "const_format"]
 relayer = ["fuel-core/relayer", "dep:url"]
 parquet = ["fuel-core-chain-config/parquet", "fuel-core-types/serde"]
-rocksdb = ["fuel-core/rocksdb", "dep:itertools"]
-rocksdb-production = ["fuel-core/rocksdb-production", "dep:itertools"]
+rocksdb = ["fuel-core/rocksdb"]
+rocksdb-production = ["fuel-core/rocksdb-production"]
 # features to enable in production, but increase build times
 production = ["env", "relayer", "rocksdb-production", "p2p", "parquet"]

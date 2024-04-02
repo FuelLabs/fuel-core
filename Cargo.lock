@@ -2961,7 +2961,6 @@ dependencies = [
  "test-case",
  "tikv-jemallocator",
  "tokio",
- "tokio-util",
  "tracing",
  "tracing-subscriber",
  "url",

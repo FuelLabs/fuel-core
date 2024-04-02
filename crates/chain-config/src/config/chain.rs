@@ -1,17 +1,29 @@
 use fuel_core_storage::MerkleRoot;
 use fuel_core_types::{
     fuel_crypto::Hasher,
-    fuel_tx::{ConsensusParameters, GasCosts},
+    fuel_tx::{
+        ConsensusParameters,
+        GasCosts,
+    },
     fuel_types::AssetId,
 };
-use serde::{Deserialize, Serialize};
-use serde_with::{serde_as, skip_serializing_none};
+use serde::{
+    Deserialize,
+    Serialize,
+};
+use serde_with::{
+    serde_as,
+    skip_serializing_none,
+};
 #[cfg(feature = "std")]
 use std::fs::File;
 #[cfg(feature = "std")]
 use std::path::Path;
 
-use crate::{genesis::GenesisCommitment, ConsensusConfig};
+use crate::{
+    genesis::GenesisCommitment,
+    ConsensusConfig,
+};
 
 #[cfg(feature = "std")]
 use crate::SnapshotMetadata;

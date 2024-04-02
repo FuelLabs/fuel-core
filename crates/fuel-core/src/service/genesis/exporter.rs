@@ -2,16 +2,23 @@ use crate::{
     combined_database::CombinedDatabase,
     database::{
         database_description::{
-            off_chain::OffChain, on_chain::OnChain, DatabaseDescription,
+            off_chain::OffChain,
+            on_chain::OnChain,
+            DatabaseDescription,
         },
         Database,
     },
     fuel_core_graphql_api::storage::transactions::{
-        OwnedTransactions, TransactionStatuses,
+        OwnedTransactions,
+        TransactionStatuses,
     },
 };
 use fuel_core_chain_config::{
-    AddTable, ChainConfig, SnapshotFragment, SnapshotWriter, StateConfigBuilder,
+    AddTable,
+    ChainConfig,
+    SnapshotFragment,
+    SnapshotWriter,
+    StateConfigBuilder,
     TableEntry,
 };
 use fuel_core_storage::{
@@ -19,21 +26,25 @@ use fuel_core_storage::{
     iter::IterDirection,
     structured_storage::TableWithBlueprint,
     tables::{
-        Coins, ContractsAssets, ContractsLatestUtxo, ContractsRawCode, ContractsState,
-        Messages, Transactions,
+        Coins,
+        ContractsAssets,
+        ContractsLatestUtxo,
+        ContractsRawCode,
+        ContractsState,
+        Messages,
+        Transactions,
     },
 };
 use fuel_core_types::fuel_types::ContractId;
 use itertools::Itertools;
 
-use std::path::PathBuf;
 use tokio_util::sync::CancellationToken;
 
 use super::task_manager::TaskManager;
 
 pub struct Exporter {
     db: CombinedDatabase,
-    prev_chain_config: Option<PathBuf>,
+    prev_chain_config: ChainConfig,
     writer: Box<dyn Fn() -> anyhow::Result<SnapshotWriter>>,
     group_size: usize,
 }
@@ -41,7 +52,7 @@ pub struct Exporter {
 impl Exporter {
     pub fn new(
         db: CombinedDatabase,
-        prev_chain_config: Option<PathBuf>,
+        prev_chain_config: ChainConfig,
         writer: impl Fn() -> anyhow::Result<SnapshotWriter> + 'static,
         group_size: usize,
     ) -> Self {
@@ -136,7 +147,7 @@ impl Exporter {
         writer.write(state)?;
         writer.write(balance)?;
         writer.write_block_data(*block.header().height(), block.header().da_height)?;
-        writer.write_chain_config(&ChainConfig::local_testnet())?;
+        writer.write_chain_config(&self.prev_chain_config)?;
         writer.close()?;
         Ok(())
     }
@@ -173,19 +184,9 @@ impl Exporter {
         Ok(())
     }
 
-    fn load_chain_config(&self) -> anyhow::Result<ChainConfig> {
-        let chain_config = match &self.prev_chain_config {
-            Some(file) => ChainConfig::load(file)?,
-            None => ChainConfig::local_testnet(),
-        };
-
-        Ok(chain_config)
-    }
-
     fn write_chain_config(&self) -> anyhow::Result<SnapshotFragment> {
         let mut writer = self.create_writer()?;
-        let prev_chain_config = self.load_chain_config()?;
-        writer.write_chain_config(&prev_chain_config)?;
+        writer.write_chain_config(&self.prev_chain_config)?;
         writer.partial_close()
     }
 

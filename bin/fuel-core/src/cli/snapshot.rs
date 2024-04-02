@@ -8,11 +8,14 @@ use fuel_core::{
     combined_database::CombinedDatabase,
     types::fuel_types::ContractId,
 };
+use fuel_core_chain_config::ChainConfig;
 
 use std::path::{
     Path,
     PathBuf,
 };
+
+use super::local_testnet_chain_config;
 
 /// Print a snapshot of blockchain state to stdout.
 #[derive(Debug, Clone, Parser)]
@@ -136,16 +139,32 @@ pub async fn exec(command: Command) -> anyhow::Result<()> {
             let group_size = encoding.group_size().unwrap_or(MAX_GROUP_SIZE);
             let writer = move || match encoding {
                 Encoding::Json => Ok(SnapshotWriter::json(output_dir.clone())),
+                Encoding::Parquet { compression, .. } => {
+                    SnapshotWriter::parquet(output_dir.clone(), compression.try_into()?)
+                }
             };
-            Exporter::new(db, chain_config, writer, group_size)
-                .write_full_snapshot()
-                .await
+            Exporter::new(
+                db,
+                load_chain_config_or_use_testnet(chain_config.as_deref())?,
+                writer,
+                group_size,
+            )
+            .write_full_snapshot()
+            .await
         }
         SubCommands::Contract { contract_id } => {
             let writer = move || Ok(SnapshotWriter::json(output_dir.clone()));
-            Exporter::new(db, None, writer, MAX_GROUP_SIZE)
+            Exporter::new(db, local_testnet_chain_config(), writer, MAX_GROUP_SIZE)
                 .write_contract_snapshot(contract_id)
         }
+    }
+}
+
+fn load_chain_config_or_use_testnet(path: Option<&Path>) -> anyhow::Result<ChainConfig> {
+    if let Some(path) = path {
+        ChainConfig::load(&path)
+    } else {
+        Ok(local_testnet_chain_config())
     }
 }
 
@@ -225,7 +244,6 @@ mod tests {
         SeedableRng,
     };
     use test_case::test_case;
-    use tokio::task::futures;
 
     use crate::cli::DEFAULT_DATABASE_CACHE_SIZE;
 
