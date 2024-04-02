@@ -10,7 +10,7 @@ Description of the upcoming release here.
 
 ### Changed
 
-### Breaking
+#### Breaking
 - [#1798](https://github.com/FuelLabs/fuel-core/pull/1798): add nonce to relayed transactions and also hash full messages in the inbox root.
 
 ### Fixed
