@@ -1,6 +1,9 @@
 use std::future::Future;
 
-use futures::{StreamExt, TryStreamExt};
+use futures::{
+    StreamExt,
+    TryStreamExt,
+};
 use itertools::Itertools;
 use tokio::task::JoinSet;
 use tokio_util::sync::CancellationToken;

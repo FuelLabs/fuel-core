@@ -1,27 +1,40 @@
 use std::borrow::Cow;
 
 use crate::{
-    database::{database_description::off_chain::OffChain, Database},
+    database::{
+        database_description::off_chain::OffChain,
+        Database,
+    },
     graphql_api::{
         storage::{
             blocks::FuelBlockIdsToHeights,
             coins::OwnedCoins,
             contracts::ContractsInfo,
             messages::OwnedMessageIds,
-            transactions::{OwnedTransactions, TransactionStatuses},
+            transactions::{
+                OwnedTransactions,
+                TransactionStatuses,
+            },
         },
         worker_service,
     },
 };
 use fuel_core_chain_config::TableEntry;
 use fuel_core_storage::{
-    tables::{Coins, Messages, Transactions},
+    tables::{
+        Coins,
+        Messages,
+        Transactions,
+    },
     transactional::StorageTransaction,
     StorageAsMut,
 };
 use fuel_core_types::services::executor::Event;
 
-use super::{importer::Handler, runner::ProcessState};
+use super::{
+    importer::Handler,
+    runner::ProcessState,
+};
 
 impl ProcessState for Handler<TransactionStatuses> {
     type TableInSnapshot = TransactionStatuses;

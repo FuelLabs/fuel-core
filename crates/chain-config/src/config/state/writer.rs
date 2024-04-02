@@ -1,10 +1,16 @@
 use crate::{
-    config::table_entry::TableEntry, AddTable, ChainConfig, SnapshotMetadata,
-    StateConfigBuilder, TableEncoding,
+    config::table_entry::TableEntry,
+    AddTable,
+    ChainConfig,
+    SnapshotMetadata,
+    StateConfigBuilder,
+    TableEncoding,
 };
-use anyhow::bail;
 use fuel_core_storage::structured_storage::TableWithBlueprint;
-use fuel_core_types::{blockchain::primitives::DaBlockHeight, fuel_types::BlockHeight};
+use fuel_core_types::{
+    blockchain::primitives::DaBlockHeight,
+    fuel_types::BlockHeight,
+};
 use std::path::PathBuf;
 
 #[cfg(feature = "parquet")]
@@ -194,7 +200,8 @@ impl FragmentData {
                     *da_block_height = their_da_block_height;
                 }
             }
-            (a,b) => bail!("Fragments don't have the same encoding and cannot be merged. Fragments: {a:?} and {b:?}"),
+            #[cfg(feature="parquet")]
+            (a,b) => anyhow::bail!("Fragments don't have the same encoding and cannot be merged. Fragments: {a:?} and {b:?}"),
         };
 
         Ok(self)
@@ -309,8 +316,12 @@ impl SnapshotWriter {
         state_config: crate::StateConfig,
     ) -> anyhow::Result<SnapshotMetadata> {
         use fuel_core_storage::tables::{
-            Coins, ContractsAssets, ContractsLatestUtxo, ContractsRawCode,
-            ContractsState, Messages,
+            Coins,
+            ContractsAssets,
+            ContractsLatestUtxo,
+            ContractsRawCode,
+            ContractsState,
+            Messages,
         };
 
         use crate::AsTable;
@@ -531,14 +542,20 @@ mod tests {
         kv_store::StorageColumn,
         structured_storage::TableWithBlueprint,
         tables::{
-            Coins, ContractsAssets, ContractsLatestUtxo, ContractsRawCode,
-            ContractsState, Messages,
+            Coins,
+            ContractsAssets,
+            ContractsLatestUtxo,
+            ContractsRawCode,
+            ContractsState,
+            Messages,
         },
     };
-    use itertools::Itertools;
-    use rand::{rngs::StdRng, SeedableRng};
+    use rand::{
+        rngs::StdRng,
+        SeedableRng,
+    };
 
-    use crate::{Randomize, StateConfig};
+    use crate::StateConfig;
 
     use super::*;
 

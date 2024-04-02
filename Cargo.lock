@@ -2988,8 +2988,6 @@ dependencies = [
  "serde_with",
  "strum 0.25.0",
  "tempfile",
- "tokio",
- "tokio-rayon",
  "tracing",
 ]
 
