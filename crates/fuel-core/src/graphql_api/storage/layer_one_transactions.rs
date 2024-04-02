@@ -15,56 +15,23 @@ use fuel_core_storage::{
     Mappable,
 };
 use fuel_core_types::{
-    fuel_tx::{
-        Bytes32,
-        // Receipt,
+    entities::relayer::transaction::{
+        // RelayedTransactionId,
+        RelayedTransactionStatus,
     },
-    // fuel_types::BlockHeight,
-    // fuel_vm::ProgramState,
-    services::txpool::TransactionStatus,
-    // tai64::Tai64,
+    fuel_tx::Bytes32,
 };
 
-pub struct LayerOneTransactionStatuses;
+pub struct RelayedTransactionStatuses;
 
-// #[derive(Clone, Debug)]
-// pub struct LayerOneTransactionIdentifier(Bytes32);
-//
-// impl From<Bytes32> for LayerOneTransactionIdentifier {
-//     fn from(bytes: Bytes32) -> Self {
-//         Self(bytes)
-//     }
-// }
-//
-// impl From<LayerOneTransactionIdentifier> for Bytes32 {
-//     fn from(identifier: LayerOneTransactionIdentifier) -> Self {
-//         identifier.0
-//     }
-// }
-
-// #[derive(Clone, Debug, PartialEq, Eq)]
-// pub enum LayerOneTransactionStatus {
-//     /// Transaction was included in a block, but the execution was reverted
-//     Failed {
-//         /// Included in this block
-//         block_height: BlockHeight,
-//         /// Time when the block was generated
-//         time: Tai64,
-//         /// Result of executing the transaction for scripts
-//         result: Option<ProgramState>,
-//         /// The receipts generated during execution of the transaction.
-//         receipts: Vec<Receipt>,
-//     },
-// }
-
-impl Mappable for LayerOneTransactionStatuses {
+impl Mappable for RelayedTransactionStatuses {
     type Key = Bytes32;
     type OwnedKey = Self::Key;
-    type Value = TransactionStatus;
+    type Value = RelayedTransactionStatus;
     type OwnedValue = Self::Value;
 }
 
-impl TableWithBlueprint for LayerOneTransactionStatuses {
+impl TableWithBlueprint for RelayedTransactionStatuses {
     type Blueprint = Plain<Raw, Postcard>;
 
     type Column = super::Column;
@@ -74,14 +41,14 @@ impl TableWithBlueprint for LayerOneTransactionStatuses {
     }
 }
 
-impl AsTable<LayerOneTransactionStatuses> for StateConfig {
-    fn as_table(&self) -> Vec<TableEntry<LayerOneTransactionStatuses>> {
+impl AsTable<RelayedTransactionStatuses> for StateConfig {
+    fn as_table(&self) -> Vec<TableEntry<RelayedTransactionStatuses>> {
         Vec::new() // Do not include these for now
     }
 }
 
-impl AddTable<LayerOneTransactionStatuses> for StateConfigBuilder {
-    fn add(&mut self, _entries: Vec<TableEntry<LayerOneTransactionStatuses>>) {
+impl AddTable<RelayedTransactionStatuses> for StateConfigBuilder {
+    fn add(&mut self, _entries: Vec<TableEntry<RelayedTransactionStatuses>>) {
         // Do not include these for now
     }
 }
@@ -90,24 +57,17 @@ impl AddTable<LayerOneTransactionStatuses> for StateConfigBuilder {
 mod tests {
     use super::*;
     use fuel_core_types::{
-        services::txpool::TransactionStatus,
+        fuel_tx::Bytes32,
         tai64::Tai64,
     };
 
     fuel_core_storage::basic_storage_tests!(
-        LayerOneTransactionStatuses,
-        <LayerOneTransactionStatuses as Mappable>::Key::from(Bytes32::default()),
-        // LayerOneTransactionStatus::Failed {
-        //     block_height: 0.into(),
-        //     time: Tai64::UNIX_EPOCH,
-        //     result: None,
-        //     receipts: Vec::new(),
-        // }
-        TransactionStatus::Failed {
+        RelayedTransactionStatuses,
+        <RelayedTransactionStatuses as Mappable>::Key::from(Bytes32::default()),
+        RelayedTransactionStatus::Failed {
             block_height: 0.into(),
-            time: Tai64::UNIX_EPOCH,
-            result: None,
-            receipts: Vec::new(),
+            block_time: Tai64::UNIX_EPOCH,
+            failure: "Some reason".to_string(),
         }
     );
 }
