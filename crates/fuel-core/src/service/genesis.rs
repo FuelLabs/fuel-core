@@ -32,15 +32,18 @@ use fuel_core_types::{
 };
 use itertools::Itertools;
 
+mod exporter;
+mod importer;
 pub mod off_chain;
 pub mod on_chain;
 mod runner;
-mod workers;
+mod task_manager;
 
-pub use runner::GenesisRunner;
+pub use exporter::Exporter;
+use runner::GenesisRunner;
 use tokio_util::sync::CancellationToken;
 
-use self::workers::SnapshotImporter;
+use self::importer::SnapshotImporter;
 
 /// Performs the importing of the genesis block from the snapshot.
 pub async fn execute_genesis_block(

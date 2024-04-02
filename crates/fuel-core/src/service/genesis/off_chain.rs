@@ -13,7 +13,7 @@ use crate::{
         worker_service,
     },
 };
-use fuel_core_chain_config::{TableEntry};
+use fuel_core_chain_config::TableEntry;
 use fuel_core_storage::{
     tables::{Coins, Messages, Transactions},
     transactional::StorageTransaction,
@@ -21,10 +21,7 @@ use fuel_core_storage::{
 };
 use fuel_core_types::services::executor::Event;
 
-use super::{
-    runner::ProcessState,
-    workers::{Handler},
-};
+use super::{importer::Handler, runner::ProcessState};
 
 impl ProcessState for Handler<TransactionStatuses> {
     type TableInSnapshot = TransactionStatuses;

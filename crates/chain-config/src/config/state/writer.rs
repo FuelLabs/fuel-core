@@ -1,17 +1,10 @@
 use crate::{
-    config::table_entry::TableEntry,
-    AddTable,
-    ChainConfig,
-    SnapshotMetadata,
-    StateConfigBuilder,
-    TableEncoding,
+    config::table_entry::TableEntry, AddTable, ChainConfig, SnapshotMetadata,
+    StateConfigBuilder, TableEncoding,
 };
 use anyhow::bail;
 use fuel_core_storage::structured_storage::TableWithBlueprint;
-use fuel_core_types::{
-    blockchain::primitives::DaBlockHeight,
-    fuel_types::BlockHeight,
-};
+use fuel_core_types::{blockchain::primitives::DaBlockHeight, fuel_types::BlockHeight};
 use std::path::PathBuf;
 
 #[cfg(feature = "parquet")]
@@ -247,6 +240,7 @@ impl SnapshotFragment {
                     builder.da_block_height(),
                 )?;
                 let state_config = builder.build()?;
+                std::fs::create_dir_all(&self.dir)?;
                 let state_file_path = self.dir.join("state_config.json");
                 let file = std::fs::File::create(&state_file_path)?;
                 serde_json::to_writer_pretty(file, &state_config)?;
@@ -296,6 +290,7 @@ impl SnapshotWriter {
         compression_level: ZstdCompressionLevel,
     ) -> anyhow::Result<Self> {
         let dir = dir.into();
+        std::fs::create_dir_all(&dir)?;
         Ok(Self {
             encoder: EncoderType::Parquet {
                 table_encoders: TableEncoders::new(dir.clone(), compression_level),
@@ -314,12 +309,8 @@ impl SnapshotWriter {
         state_config: crate::StateConfig,
     ) -> anyhow::Result<SnapshotMetadata> {
         use fuel_core_storage::tables::{
-            Coins,
-            ContractsAssets,
-            ContractsLatestUtxo,
-            ContractsRawCode,
-            ContractsState,
-            Messages,
+            Coins, ContractsAssets, ContractsLatestUtxo, ContractsRawCode,
+            ContractsState, Messages,
         };
 
         use crate::AsTable;
@@ -540,24 +531,14 @@ mod tests {
         kv_store::StorageColumn,
         structured_storage::TableWithBlueprint,
         tables::{
-            Coins,
-            ContractsAssets,
-            ContractsLatestUtxo,
-            ContractsRawCode,
-            ContractsState,
-            Messages,
+            Coins, ContractsAssets, ContractsLatestUtxo, ContractsRawCode,
+            ContractsState, Messages,
         },
     };
     use itertools::Itertools;
-    use rand::{
-        rngs::StdRng,
-        SeedableRng,
-    };
+    use rand::{rngs::StdRng, SeedableRng};
 
-    use crate::{
-        Randomize,
-        StateConfig,
-    };
+    use crate::{Randomize, StateConfig};
 
     use super::*;
 
@@ -653,11 +634,8 @@ mod tests {
     }
 
     mod parquet {
-        
-        use fuel_core_types::blockchain::primitives::DaBlockHeight;
-        
 
-        
+        use fuel_core_types::blockchain::primitives::DaBlockHeight;
 
         #[test]
         fn cannot_close_without_chain_config() {

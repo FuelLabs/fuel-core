@@ -2977,7 +2977,6 @@ dependencies = [
  "fuel-core-chain-config",
  "fuel-core-storage",
  "fuel-core-types",
- "futures",
  "insta",
  "itertools 0.12.1",
  "parquet",
@@ -2991,9 +2990,7 @@ dependencies = [
  "tempfile",
  "tokio",
  "tokio-rayon",
- "tokio-util",
  "tracing",
- "uuid 1.8.0",
 ]
 
 [[package]]

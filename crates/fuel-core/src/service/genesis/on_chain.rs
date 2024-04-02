@@ -1,15 +1,10 @@
-use super::{
-    runner::ProcessState,
-    workers::{Handler},
-};
-use crate::{
-    database::{
-        balances::BalancesInitializer, database_description::on_chain::OnChain,
-        state::StateInitializer, Database,
-    },
+use super::{importer::Handler, runner::ProcessState};
+use crate::database::{
+    balances::BalancesInitializer, database_description::on_chain::OnChain,
+    state::StateInitializer, Database,
 };
 use anyhow::anyhow;
-use fuel_core_chain_config::{TableEntry};
+use fuel_core_chain_config::TableEntry;
 use fuel_core_storage::{
     tables::{
         Coins, ContractsAssets, ContractsLatestUtxo, ContractsRawCode, ContractsState,

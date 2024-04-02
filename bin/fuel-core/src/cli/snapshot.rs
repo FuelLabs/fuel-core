@@ -102,7 +102,8 @@ pub enum SubCommands {
 
 #[cfg(any(feature = "rocksdb", feature = "rocksdb-production"))]
 pub async fn exec(command: Command) -> anyhow::Result<()> {
-    use self::exporter::Exporter;
+    use fuel_core::service::genesis::Exporter;
+    use fuel_core_chain_config::{SnapshotWriter, MAX_GROUP_SIZE};
 
     let db = open_db(
         &command.database_path,
@@ -120,18 +121,21 @@ pub async fn exec(command: Command) -> anyhow::Result<()> {
                 .map(|f| f.encoding())
                 .unwrap_or_else(|| Encoding::Json);
 
-            Exporter::new(db, output_dir, chain_config, encoding)
+            let group_size = encoding.group_size().unwrap_or(MAX_GROUP_SIZE);
+            let writer = move || match encoding {
+                Encoding::Json => Ok(SnapshotWriter::json(output_dir.clone())),
+            };
+            Exporter::new(db, chain_config, writer, group_size)
                 .write_full_snapshot()
                 .await
         }
         SubCommands::Contract { contract_id } => {
-            Exporter::new(db, output_dir, None, Encoding::Json)
+            let writer = move || Ok(SnapshotWriter::json(output_dir.clone()));
+            Exporter::new(db, None, writer, MAX_GROUP_SIZE)
                 .write_contract_snapshot(contract_id)
         }
     }
 }
-
-mod exporter;
 
 fn open_db(path: &Path, capacity: Option<usize>) -> anyhow::Result<CombinedDatabase> {
     CombinedDatabase::open(path, capacity.unwrap_or(1024 * 1024 * 1024))

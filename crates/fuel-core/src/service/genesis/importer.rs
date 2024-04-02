@@ -1,4 +1,4 @@
-use super::{runner::ProcessState, GenesisRunner};
+use super::{runner::ProcessState, task_manager::TaskManager, GenesisRunner};
 use std::marker::PhantomData;
 
 use crate::{
@@ -11,7 +11,7 @@ use crate::{
         transactions::{OwnedTransactions, TransactionStatuses},
     },
 };
-use fuel_core_chain_config::{AsTable, SnapshotReader, StateConfig, TaskManager};
+use fuel_core_chain_config::{AsTable, SnapshotReader, StateConfig};
 use fuel_core_storage::{
     structured_storage::TableWithBlueprint,
     tables::{
