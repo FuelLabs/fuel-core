@@ -8,6 +8,11 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Description of the upcoming release here.
 
+### Changed
+
+#### Breaking
+- [#1798](https://github.com/FuelLabs/fuel-core/pull/1798): add nonce to relayed transactions and also hash full messages in the inbox root.
+
 ### Fixed
 
 - [#1795](https://github.com/FuelLabs/fuel-core/pull/1795): Fixed the building of the `fuel-core-wasm-executor` to work outside of the `fuel-core` context. The change uses the path to the manifest file of the `fuel-core-upgradable-executor` to build the `fuel-core-wasm-executor` instead of relying on the workspace.

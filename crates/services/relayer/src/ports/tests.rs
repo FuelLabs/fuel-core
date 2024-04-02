@@ -157,6 +157,7 @@ fn insert_fails_for_events_with_different_height() {
     // test with forced transactions
     inner_test(|i| {
         let mut transaction = RelayedTransaction::default();
+        transaction.set_nonce(i.into());
         transaction.set_da_height(i.into());
         transaction.set_max_gas(i);
         transaction.into()
@@ -198,6 +199,7 @@ fn insert_fails_for_events_same_height_but_on_different_height() {
     inner_test(
         |i| {
             let mut transaction = RelayedTransaction::default();
+            transaction.set_nonce(i.into());
             transaction.set_da_height(last_height.into());
             transaction.set_max_gas(i);
             transaction.into()
