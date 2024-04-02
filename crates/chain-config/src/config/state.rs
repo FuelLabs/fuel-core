@@ -605,16 +605,13 @@ mod tests {
     mod parquet {
         use std::path::Path;
 
-        use fuel_core_storage::{
-            structured_storage::TableWithBlueprint,
-            tables::{
-                Coins,
-                ContractsAssets,
-                ContractsLatestUtxo,
-                ContractsRawCode,
-                ContractsState,
-                Messages,
-            },
+        use fuel_core_storage::tables::{
+            Coins,
+            ContractsAssets,
+            ContractsLatestUtxo,
+            ContractsRawCode,
+            ContractsState,
+            Messages,
         };
         use fuel_core_types::{
             blockchain::primitives::DaBlockHeight,
@@ -624,31 +621,21 @@ mod tests {
             },
         };
         use pretty_assertions::assert_eq;
-        use rand::{
-            rngs::StdRng,
-            SeedableRng,
-        };
 
         use crate::{
             config::state::writer::{
                 self,
-                SnapshotFragment,
             },
-            AddTable,
-            AsTable,
             ChainConfig,
-            Randomize,
             SnapshotMetadata,
             SnapshotReader,
             SnapshotWriter,
-            StateConfig,
-            StateConfigBuilder,
-            TableEntry,
         };
 
         use super::{
             assert_roundtrip,
             assert_roundtrip_block_heights,
+            assert_writes_in_fragments_correctly,
         };
 
         #[test]
@@ -691,83 +678,10 @@ mod tests {
 
         #[test]
         fn can_write_in_fragments() {
-            // given
-            let temp_dir = tempfile::tempdir().unwrap();
-            let path = temp_dir.path();
-            let mut rng = StdRng::seed_from_u64(0);
-
-            fn write_as_fragment<T>(
-                dir: &Path,
-                state_config: &StateConfig,
-            ) -> SnapshotFragment
-            where
-                StateConfigBuilder: AddTable<T>,
-                T: TableWithBlueprint,
-                TableEntry<T>: serde::Serialize,
-                StateConfig: AsTable<T>,
-            {
-                let mut writer =
-                    SnapshotWriter::parquet(dir, writer::ZstdCompressionLevel::Level1)
-                        .unwrap();
-                writer.write(AsTable::<T>::as_table(state_config)).unwrap();
-                writer.partial_close().unwrap()
-            }
-
-            let chain_config = ChainConfig::local_testnet();
-            let chain_config_fragment = {
-                let mut chain_config_writer =
-                    SnapshotWriter::parquet(path, writer::ZstdCompressionLevel::Level1)
-                        .unwrap();
-                chain_config_writer.write_chain_config(&chain_config);
-                chain_config_writer.partial_close().unwrap()
-            };
-            let state_config = StateConfig::randomize(&mut rng);
-            let coin_fragment = write_as_fragment::<Coins>(path, &state_config);
-            let message_fragment = write_as_fragment::<Messages>(path, &state_config);
-            let contracts_state_fragment =
-                write_as_fragment::<ContractsState>(path, &state_config);
-            let contracts_balance_fragment =
-                write_as_fragment::<ContractsAssets>(path, &state_config);
-            let contracts_code_fragment =
-                write_as_fragment::<ContractsRawCode>(path, &state_config);
-            let contracts_utxo_fragment =
-                write_as_fragment::<ContractsLatestUtxo>(path, &state_config);
-            let block_height_fragment = {
-                let mut height_writer =
-                    SnapshotWriter::parquet(path, writer::ZstdCompressionLevel::Level1)
-                        .unwrap();
-                height_writer
-                    .write_block_data(
-                        state_config.block_height,
-                        state_config.da_block_height,
-                    )
-                    .unwrap();
-                height_writer.partial_close().unwrap()
-            };
-
-            // when
-            let snapshot = [
-                chain_config_fragment,
-                coin_fragment,
-                message_fragment,
-                contracts_state_fragment,
-                contracts_balance_fragment,
-                contracts_code_fragment,
-                contracts_utxo_fragment,
-                block_height_fragment,
-            ]
-            .into_iter()
-            .reduce(|fragment, next_fragment| fragment.merge(next_fragment).unwrap())
-            .unwrap()
-            .finalize()
-            .unwrap();
-
-            // then
-            let reader = SnapshotReader::open(snapshot).unwrap();
-
-            let read_state_config = StateConfig::from_reader(&reader).unwrap();
-            assert_eq!(read_state_config, state_config);
-            assert_eq!(reader.chain_config(), &chain_config);
+            assert_writes_in_fragments_correctly(|dir| {
+                SnapshotWriter::parquet(dir, writer::ZstdCompressionLevel::Level1)
+                    .unwrap()
+            })
         }
 
         #[test]
@@ -979,16 +893,9 @@ mod tests {
     mod json {
         use std::path::Path;
 
-        use fuel_core_storage::{
-            structured_storage::TableWithBlueprint,
-            tables::{
-                Coins,
-                ContractsAssets,
-                ContractsLatestUtxo,
-                ContractsRawCode,
-                ContractsState,
-                Messages,
-            },
+        use fuel_core_storage::tables::{
+            Coins,
+            Messages,
         };
         use fuel_core_types::{
             blockchain::primitives::DaBlockHeight,
@@ -1004,9 +911,6 @@ mod tests {
         };
 
         use crate::{
-            config::state::writer::SnapshotFragment,
-            AddTable,
-            AsTable,
             ChainConfig,
             ContractConfig,
             Randomize,
@@ -1014,13 +918,12 @@ mod tests {
             SnapshotReader,
             SnapshotWriter,
             StateConfig,
-            StateConfigBuilder,
-            TableEntry,
         };
 
         use super::{
             assert_roundtrip,
             assert_roundtrip_block_heights,
+            assert_writes_in_fragments_correctly,
         };
 
         #[test]
@@ -1072,87 +975,7 @@ mod tests {
 
         #[test]
         fn can_write_in_fragments() {
-            // given
-            let temp_dir = tempfile::tempdir().unwrap();
-            let path = temp_dir.path();
-
-            let mut rng = StdRng::from_seed([0; 32]);
-
-            let chain_config = ChainConfig::local_testnet();
-
-            fn write_as_fragments<T>(
-                dir: &Path,
-                state_config: &StateConfig,
-            ) -> Vec<SnapshotFragment>
-            where
-                StateConfigBuilder: AddTable<T>,
-                StateConfig: AsTable<T>,
-                T: TableWithBlueprint,
-                TableEntry<T>: serde::Serialize,
-            {
-                AsTable::<T>::as_table(state_config)
-                    .into_iter()
-                    .map(|entry| {
-                        let mut writer = SnapshotWriter::json(dir);
-                        writer.write(vec![entry]).unwrap();
-                        writer.partial_close().unwrap()
-                    })
-                    .collect()
-            }
-
-            let chain_config_fragment = {
-                let mut chain_config_writer = SnapshotWriter::json(path);
-                chain_config_writer.write_chain_config(&chain_config);
-                chain_config_writer.partial_close().unwrap()
-            };
-
-            let state_config = StateConfig::randomize(&mut rng);
-            let coins_fragments = write_as_fragments::<Coins>(path, &state_config);
-            let messages_fragments = write_as_fragments::<Messages>(path, &state_config);
-            let contracts_state_fragments =
-                write_as_fragments::<ContractsState>(path, &state_config);
-            let contracts_balance_fragments =
-                write_as_fragments::<ContractsAssets>(path, &state_config);
-            let contracts_code_fragments =
-                write_as_fragments::<ContractsRawCode>(path, &state_config);
-            let contracts_utxo_fragments =
-                write_as_fragments::<ContractsLatestUtxo>(path, &state_config);
-
-            let block_height_fragment = {
-                let mut height_writer = SnapshotWriter::json(path);
-                height_writer
-                    .write_block_data(
-                        state_config.block_height,
-                        state_config.da_block_height,
-                    )
-                    .unwrap();
-                height_writer.partial_close().unwrap()
-            };
-
-            // when
-            let fragment = [
-                vec![chain_config_fragment],
-                coins_fragments,
-                contracts_state_fragments,
-                contracts_code_fragments,
-                contracts_utxo_fragments,
-                messages_fragments,
-                vec![block_height_fragment],
-                contracts_balance_fragments,
-            ]
-            .into_iter()
-            .flatten()
-            .reduce(|a, b| a.merge(b).unwrap())
-            .unwrap();
-
-            let snapshot = fragment.finalize().unwrap();
-
-            // then
-            let reader = SnapshotReader::open(snapshot).unwrap();
-            let read_state = StateConfig::from_reader(&reader).unwrap();
-
-            pretty_assertions::assert_eq!(state_config, read_state);
-            pretty_assertions::assert_eq!(&chain_config, reader.chain_config());
+            assert_writes_in_fragments_correctly(|dir| SnapshotWriter::json(dir))
         }
 
         #[test]
@@ -1339,6 +1162,67 @@ mod tests {
                 reader.da_block_height()
             );
         }
+    }
+
+    fn assert_writes_in_fragments_correctly(
+        writer: impl Fn(&Path) -> SnapshotWriter + Copy,
+    ) {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let path = temp_dir.path();
+        let create_writer = || writer(path);
+
+        let mut rng = StdRng::seed_from_u64(0);
+        let state_config = StateConfig::randomize(&mut rng);
+
+        macro_rules! write_in_fragments {
+                ($($fragment_ty: ty,)*) => {
+                [
+                $({
+                    let mut writer = create_writer();
+                    writer
+                        .write(AsTable::<$fragment_ty>::as_table(&state_config))
+                        .unwrap();
+                    writer.partial_close().unwrap()
+
+                }),*
+                ]
+            }
+            }
+
+        let chain_config = ChainConfig::local_testnet();
+        let chain_and_height_fragment = {
+            let mut writer = create_writer();
+            writer
+                .write_block_data(state_config.block_height, state_config.da_block_height)
+                .unwrap();
+
+            writer.write_chain_config(&chain_config);
+            writer.partial_close().unwrap()
+        };
+        let fragments = write_in_fragments!(
+            Coins,
+            Messages,
+            ContractsState,
+            ContractsAssets,
+            ContractsRawCode,
+            ContractsLatestUtxo,
+        );
+
+        // when
+        let snapshot = fragments
+            .into_iter()
+            .chain([chain_and_height_fragment])
+            .reduce(|fragment, next_fragment| fragment.merge(next_fragment).unwrap())
+            .unwrap()
+            .finalize()
+            .unwrap();
+
+        // then
+        let reader = SnapshotReader::open(snapshot).unwrap();
+
+        let read_state_config = StateConfig::from_reader(&reader).unwrap();
+        assert_eq!(read_state_config, state_config);
+        assert_eq!(reader.chain_config(), &chain_config);
     }
 
     fn assert_roundtrip_block_heights(
