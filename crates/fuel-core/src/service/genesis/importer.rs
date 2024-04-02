@@ -1,54 +1,31 @@
-use super::{
-    runner::ProcessState,
-    task_manager::TaskManager,
-    GenesisRunner,
-};
+use super::{runner::ProcessState, task_manager::TaskManager, GenesisRunner};
 use std::marker::PhantomData;
 
 use crate::{
     combined_database::CombinedDatabase,
-    database::database_description::{
-        off_chain::OffChain,
-        on_chain::OnChain,
-    },
+    database::database_description::{off_chain::OffChain, on_chain::OnChain},
     graphql_api::storage::{
         coins::OwnedCoins,
         contracts::ContractsInfo,
         messages::OwnedMessageIds,
-        transactions::{
-            OwnedTransactions,
-            TransactionStatuses,
-        },
+        transactions::{OwnedTransactions, TransactionStatuses},
     },
 };
-use fuel_core_chain_config::{
-    AsTable,
-    SnapshotReader,
-    StateConfig,
-};
+use fuel_core_chain_config::{AsTable, SnapshotReader, StateConfig};
 use fuel_core_storage::{
     structured_storage::TableWithBlueprint,
     tables::{
-        Coins,
-        ContractsAssets,
-        ContractsLatestUtxo,
-        ContractsRawCode,
-        ContractsState,
-        Messages,
-        Transactions,
+        Coins, ContractsAssets, ContractsLatestUtxo, ContractsRawCode, ContractsState,
+        Messages, Transactions,
     },
 };
-use fuel_core_types::{
-    blockchain::primitives::DaBlockHeight,
-    fuel_types::BlockHeight,
-};
+use fuel_core_types::{blockchain::primitives::DaBlockHeight, fuel_types::BlockHeight};
 
 use tokio_util::sync::CancellationToken;
 
 pub struct SnapshotImporter {
     db: CombinedDatabase,
     task_manager: TaskManager<()>,
-    cancel_token: CancellationToken,
     snapshot_reader: SnapshotReader,
 }
 
@@ -60,9 +37,8 @@ impl SnapshotImporter {
     ) -> Self {
         Self {
             db,
-            task_manager: TaskManager::new(cancel_token.clone()),
+            task_manager: TaskManager::new(cancel_token),
             snapshot_reader,
-            cancel_token,
         }
     }
 
@@ -94,10 +70,6 @@ impl SnapshotImporter {
 
         self.task_manager.wait().await?;
         Ok(())
-    }
-
-    pub fn shutdown(&self) {
-        self.cancel_token.cancel();
     }
 
     pub fn spawn_worker_on_chain<T>(&mut self) -> anyhow::Result<()>

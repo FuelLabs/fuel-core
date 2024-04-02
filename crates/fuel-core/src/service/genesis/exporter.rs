@@ -2,47 +2,31 @@ use crate::{
     combined_database::CombinedDatabase,
     database::{
         database_description::{
-            off_chain::OffChain,
-            on_chain::OnChain,
-            DatabaseDescription,
+            off_chain::OffChain, on_chain::OnChain, DatabaseDescription,
         },
         Database,
     },
     fuel_core_graphql_api::storage::transactions::{
-        OwnedTransactions,
-        TransactionStatuses,
+        OwnedTransactions, TransactionStatuses,
     },
 };
 use fuel_core_chain_config::{
-    AddTable,
-    ChainConfig,
-    SnapshotFragment,
-    SnapshotWriter,
-    StateConfigBuilder,
+    AddTable, ChainConfig, SnapshotFragment, SnapshotWriter, StateConfigBuilder,
     TableEntry,
-    MAX_GROUP_SIZE,
 };
 use fuel_core_storage::{
     blueprint::BlueprintInspect,
     iter::IterDirection,
     structured_storage::TableWithBlueprint,
     tables::{
-        Coins,
-        ContractsAssets,
-        ContractsLatestUtxo,
-        ContractsRawCode,
-        ContractsState,
-        Messages,
-        Transactions,
+        Coins, ContractsAssets, ContractsLatestUtxo, ContractsRawCode, ContractsState,
+        Messages, Transactions,
     },
 };
 use fuel_core_types::fuel_types::ContractId;
 use itertools::Itertools;
 
-use std::path::{
-    Path,
-    PathBuf,
-};
+use std::path::PathBuf;
 use tokio_util::sync::CancellationToken;
 
 use super::task_manager::TaskManager;
