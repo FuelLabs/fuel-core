@@ -32,11 +32,11 @@ use fuel_core_storage::{
 use fuel_core_types::services::executor::Event;
 
 use super::{
-    importer::Handler,
-    runner::ProcessState,
+    import_task::ImportTable,
+    Handler,
 };
 
-impl ProcessState for Handler<TransactionStatuses> {
+impl ImportTable for Handler<TransactionStatuses> {
     type TableInSnapshot = TransactionStatuses;
     type TableBeingWritten = TransactionStatuses;
     type DbDesc = OffChain;
@@ -54,7 +54,7 @@ impl ProcessState for Handler<TransactionStatuses> {
     }
 }
 
-impl ProcessState for Handler<FuelBlockIdsToHeights> {
+impl ImportTable for Handler<FuelBlockIdsToHeights> {
     type TableInSnapshot = FuelBlockIdsToHeights;
     type TableBeingWritten = FuelBlockIdsToHeights;
     type DbDesc = OffChain;
@@ -72,7 +72,7 @@ impl ProcessState for Handler<FuelBlockIdsToHeights> {
     }
 }
 
-impl ProcessState for Handler<OwnedTransactions> {
+impl ImportTable for Handler<OwnedTransactions> {
     type TableInSnapshot = OwnedTransactions;
     type TableBeingWritten = OwnedTransactions;
     type DbDesc = OffChain;
@@ -90,7 +90,7 @@ impl ProcessState for Handler<OwnedTransactions> {
     }
 }
 
-impl ProcessState for Handler<OwnedMessageIds> {
+impl ImportTable for Handler<OwnedMessageIds> {
     type TableInSnapshot = Messages;
     type TableBeingWritten = OwnedMessageIds;
     type DbDesc = OffChain;
@@ -108,7 +108,7 @@ impl ProcessState for Handler<OwnedMessageIds> {
     }
 }
 
-impl ProcessState for Handler<OwnedCoins> {
+impl ImportTable for Handler<OwnedCoins> {
     type TableInSnapshot = Coins;
     type TableBeingWritten = OwnedCoins;
     type DbDesc = OffChain;
@@ -126,7 +126,7 @@ impl ProcessState for Handler<OwnedCoins> {
     }
 }
 
-impl ProcessState for Handler<ContractsInfo> {
+impl ImportTable for Handler<ContractsInfo> {
     type TableInSnapshot = Transactions;
     type TableBeingWritten = ContractsInfo;
     type DbDesc = OffChain;

@@ -25,7 +25,7 @@ use crate::database::{
     Database,
 };
 
-pub struct GenesisRunner<Handler, Groups, DbDesc>
+pub struct ImportTask<Handler, Groups, DbDesc>
 where
     DbDesc: DatabaseDescription,
 {
@@ -36,7 +36,7 @@ where
     db: Database<DbDesc>,
 }
 
-pub trait ProcessState {
+pub trait ImportTable {
     type TableInSnapshot: TableWithBlueprint;
     type TableBeingWritten: TableWithBlueprint;
     type DbDesc: DatabaseDescription;
@@ -48,10 +48,10 @@ pub trait ProcessState {
     ) -> anyhow::Result<()>;
 }
 
-impl<Logic, GroupGenerator, DbDesc> GenesisRunner<Logic, GroupGenerator, DbDesc>
+impl<Logic, GroupGenerator, DbDesc> ImportTask<Logic, GroupGenerator, DbDesc>
 where
     DbDesc: DatabaseDescription,
-    Logic: ProcessState<DbDesc = DbDesc>,
+    Logic: ImportTable<DbDesc = DbDesc>,
     Database<DbDesc>: StorageInspect<GenesisMetadata<DbDesc>>,
 {
     pub fn new(
@@ -80,10 +80,10 @@ where
     }
 }
 
-impl<Logic, GroupGenerator, DbDesc> GenesisRunner<Logic, GroupGenerator, DbDesc>
+impl<Logic, GroupGenerator, DbDesc> ImportTask<Logic, GroupGenerator, DbDesc>
 where
     DbDesc: DatabaseDescription,
-    Logic: ProcessState<DbDesc = DbDesc>,
+    Logic: ImportTable<DbDesc = DbDesc>,
     GroupGenerator:
         IntoIterator<Item = anyhow::Result<Group<TableEntry<Logic::TableInSnapshot>>>>,
     GenesisMetadata<DbDesc>: TableWithBlueprint<
@@ -137,7 +137,10 @@ where
 
 #[cfg(test)]
 mod tests {
-    use crate::database::genesis_progress::GenesisProgressInspect;
+    use crate::{
+        database::genesis_progress::GenesisProgressInspect,
+        service::genesis::importer::import_task::ImportTask,
+    };
     use std::sync::{
         Arc,
         Mutex,
@@ -198,14 +201,13 @@ mod tests {
             genesis_progress::GenesisProgressMutate,
             Database,
         },
-        service::genesis::runner::GenesisRunner,
         state::{
             in_memory::memory_store::MemoryStore,
             TransactableStorage,
         },
     };
 
-    use super::ProcessState;
+    use super::ImportTable;
 
     struct TestHandler<L> {
         logic: L,
@@ -213,14 +215,14 @@ mod tests {
 
     impl<L> TestHandler<L>
     where
-        TestHandler<L>: ProcessState,
+        TestHandler<L>: ImportTable,
     {
         pub fn new(logic: L) -> Self {
             Self { logic }
         }
     }
 
-    impl<L> ProcessState for TestHandler<L>
+    impl<L> ImportTable for TestHandler<L>
     where
         L: FnMut(
             TableEntry<Coins>,
@@ -285,7 +287,7 @@ mod tests {
         let data = TestData::new(3);
 
         let mut called_with = vec![];
-        let runner = GenesisRunner::new(
+        let runner = ImportTask::new(
             CancellationToken::new(),
             TestHandler::new(|group, _| {
                 called_with.push(group);
@@ -316,7 +318,7 @@ mod tests {
         )
         .unwrap();
 
-        let runner = GenesisRunner::new(
+        let runner = ImportTask::new(
             CancellationToken::new(),
             TestHandler::new(|element, _| {
                 called_with.push(element);
@@ -340,7 +342,7 @@ mod tests {
         let outer_db = Database::default();
         let utxo_id = UtxoId::new(Default::default(), 0);
 
-        let runner = GenesisRunner::new(
+        let runner = ImportTask::new(
             CancellationToken::new(),
             TestHandler::new(|_, tx| {
                 insert_a_coin(tx, &utxo_id);
@@ -387,7 +389,7 @@ mod tests {
         let db = Database::default();
         let utxo_id = UtxoId::new(Default::default(), 0);
 
-        let runner = GenesisRunner::new(
+        let runner = ImportTask::new(
             CancellationToken::new(),
             TestHandler::new(|_, tx| {
                 insert_a_coin(tx, &utxo_id);
@@ -408,7 +410,7 @@ mod tests {
     fn handler_failure_is_propagated() {
         // given
         let groups = TestData::new(1);
-        let runner = GenesisRunner::new(
+        let runner = ImportTask::new(
             CancellationToken::new(),
             TestHandler::new(|_, _| bail!("Some error")),
             groups.as_ok_groups(),
@@ -426,7 +428,7 @@ mod tests {
     fn seeing_an_invalid_group_propagates_the_error() {
         // given
         let groups = [Err(anyhow!("Some error"))];
-        let runner = GenesisRunner::new(
+        let runner = ImportTask::new(
             CancellationToken::new(),
             TestHandler::new(|_, _| Ok(())),
             groups,
@@ -445,7 +447,7 @@ mod tests {
         // given
         let data = TestData::new(2);
         let db = Database::default();
-        let runner = GenesisRunner::new(
+        let runner = ImportTask::new(
             CancellationToken::new(),
             TestHandler::new(|_, _| Ok(())),
             data.as_ok_groups(),
@@ -475,7 +477,7 @@ mod tests {
         let read_groups = Arc::new(Mutex::new(vec![]));
         let runner = {
             let read_groups = Arc::clone(&read_groups);
-            GenesisRunner::new(
+            ImportTask::new(
                 cancel_token.clone(),
                 TestHandler::new(move |el, _| {
                     read_groups.lock().unwrap().push(el);
@@ -569,7 +571,7 @@ mod tests {
     fn tx_commit_failure_is_propagated() {
         // given
         let groups = TestData::new(1);
-        let runner = GenesisRunner::new(
+        let runner = ImportTask::new(
             CancellationToken::new(),
             TestHandler::new(|_, _| Ok(())),
             groups.as_ok_groups(),

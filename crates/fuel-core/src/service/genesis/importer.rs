@@ -1,8 +1,12 @@
-use super::{
-    runner::ProcessState,
-    task_manager::TaskManager,
-    GenesisRunner,
+use self::import_task::{
+    ImportTable,
+    ImportTask,
 };
+
+use super::task_manager::TaskManager;
+mod import_task;
+mod off_chain;
+mod on_chain;
 use std::marker::PhantomData;
 
 use crate::{
@@ -100,7 +104,7 @@ impl SnapshotImporter {
         T::OwnedKey: serde::de::DeserializeOwned + Send,
         T::OwnedValue: serde::de::DeserializeOwned + Send,
         StateConfig: AsTable<T>,
-        Handler<T>: ProcessState<TableInSnapshot = T, DbDesc = OnChain>,
+        Handler<T>: ImportTable<TableInSnapshot = T, DbDesc = OnChain>,
     {
         let groups = self.snapshot_reader.read::<T>()?;
 
@@ -109,7 +113,7 @@ impl SnapshotImporter {
         let db = self.db.on_chain().clone();
         self.task_manager.spawn(move |token| {
             tokio_rayon::spawn(move || {
-                GenesisRunner::new(
+                ImportTask::new(
                     token,
                     Handler::new(block_height, da_block_height),
                     groups,
@@ -132,7 +136,7 @@ impl SnapshotImporter {
         TableInSnapshot::OwnedValue: serde::de::DeserializeOwned + Send,
         StateConfig: AsTable<TableInSnapshot>,
         Handler<TableBeingWritten>:
-            ProcessState<TableInSnapshot = TableInSnapshot, DbDesc = OffChain>,
+            ImportTable<TableInSnapshot = TableInSnapshot, DbDesc = OffChain>,
         TableBeingWritten: Send + 'static,
     {
         let groups = self.snapshot_reader.read::<TableInSnapshot>()?;
@@ -142,7 +146,7 @@ impl SnapshotImporter {
         let db = self.db.off_chain().clone();
         self.task_manager.spawn(move |token| {
             tokio_rayon::spawn(move || {
-                let runner = GenesisRunner::new(
+                let runner = ImportTask::new(
                     token,
                     Handler::<TableBeingWritten>::new(block_height, da_block_height),
                     groups,
