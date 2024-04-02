@@ -172,13 +172,15 @@ impl Exporter {
         let mut writer = self.create_writer()?;
         let group_size = self.group_size;
 
-        task_manager.spawn(move |cancel| async move {
-            db.entries::<T>(None, IterDirection::Forward)
-                .chunks(group_size)
-                .into_iter()
-                .take_while(|_| !cancel.is_cancelled())
-                .try_for_each(|chunk| writer.write(chunk.try_collect()?))?;
-            writer.partial_close()
+        task_manager.spawn(move |cancel| {
+            tokio_rayon::spawn(move || {
+                db.entries::<T>(None, IterDirection::Forward)
+                    .chunks(group_size)
+                    .into_iter()
+                    .take_while(|_| !cancel.is_cancelled())
+                    .try_for_each(|chunk| writer.write(chunk.try_collect()?))?;
+                writer.partial_close()
+            })
         });
 
         Ok(())
