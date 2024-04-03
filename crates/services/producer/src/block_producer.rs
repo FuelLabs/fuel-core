@@ -290,7 +290,8 @@ where
             }
             .into());
         }
-        for height in previous_da_height.0 + 1..=heighest.0 {
+        let next_da_height = previous_da_height.saturating_add(1);
+        for height in next_da_height..=heighest.0 {
             let cost = self
                 .relayer
                 .get_cost_for_block(&DaBlockHeight(height))
