@@ -73,6 +73,7 @@ impl StorageColumn for Column {
 
 /// Teh table to track the relayer's da height.
 pub struct DaHeightTable;
+
 impl Mappable for DaHeightTable {
     type Key = Self::OwnedKey;
     type OwnedKey = ();
@@ -137,7 +138,7 @@ where
 
         for event in events {
             if da_height != &event.da_height() {
-                return Err(anyhow::anyhow!("Invalid da height").into())
+                return Err(anyhow::anyhow!("Invalid da height").into());
             }
         }
 
