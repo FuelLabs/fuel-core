@@ -407,6 +407,42 @@ mod produce_and_execute_block_txpool {
     }
 
     #[tokio::test]
+    async fn if_cannot_proceed_to_next_block_throw_error() {
+        use crate::block_producer::NO_NEW_DA_HEIGHT_FOUND;
+        // given
+        let prev_da_height = 100;
+        let block_gas_limit = 1_000;
+        let prev_height = 1u32.into();
+        // next block cost is higher than block_gas_limit
+        let latest_blocks_with_gas_costs =
+            vec![(prev_da_height, 1_000u64), (prev_da_height + 1, 1_001)]
+                .into_iter()
+                .map(|(height, gas_cost)| (DaBlockHeight(height), gas_cost));
+
+        let ctx = TestContextBuilder::new()
+            .with_latest_block_height((prev_da_height + 1u64).into())
+            .with_latest_blocks_with_gas_costs(latest_blocks_with_gas_costs)
+            .with_prev_da_height(prev_da_height.into())
+            .with_block_gas_limit(block_gas_limit)
+            .with_prev_height(prev_height)
+            .build();
+
+        let producer = ctx.producer();
+        let next_height = prev_height
+            .succ()
+            .expect("The block height should be valid");
+
+        // when
+        let err = producer
+            .produce_and_execute_block_txpool(next_height, Tai64::now())
+            .await
+            .unwrap_err();
+
+        // then
+        assert_eq!(&err.to_string(), NO_NEW_DA_HEIGHT_FOUND);
+    }
+
+    #[tokio::test]
     async fn production_fails_on_execution_error() {
         let ctx = TestContext::default_from_executor(FailingMockExecutor(Mutex::new(
             Some(ExecutorError::TransactionIdCollision(Default::default())),

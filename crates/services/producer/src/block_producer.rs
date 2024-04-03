@@ -252,6 +252,8 @@ where
     }
 }
 
+pub const NO_NEW_DA_HEIGHT_FOUND: &str = "No new da_height found";
+
 impl<ViewProvider, TxPool, Executor, GP> Producer<ViewProvider, TxPool, Executor, GP>
 where
     ViewProvider: AtomicView<Height = BlockHeight> + 'static,
@@ -303,7 +305,11 @@ where
                 new_best = DaBlockHeight(height);
             }
         }
-        Ok(new_best)
+        if new_best == previous_da_height {
+            Err(anyhow!(NO_NEW_DA_HEIGHT_FOUND))
+        } else {
+            Ok(new_best)
+        }
     }
 
     fn _new_header(
