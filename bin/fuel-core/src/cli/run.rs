@@ -1,4 +1,5 @@
 #![allow(unused_variables)]
+
 use crate::{
     cli::{
         default_db_path,
@@ -316,6 +317,7 @@ impl Command {
             tx_blacklist_messages,
             tx_blacklist_contracts,
         );
+        let block_gas_limit = chain_config.consensus_parameters.block_gas_limit();
 
         let config = Config {
             addr,
@@ -342,6 +344,7 @@ impl Command {
                 utxo_validation,
                 coinbase_recipient,
                 metrics,
+                block_gas_limit,
             },
             static_gas_price: min_gas_price,
             block_importer,

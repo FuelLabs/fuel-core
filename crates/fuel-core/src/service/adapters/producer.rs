@@ -42,7 +42,7 @@ use fuel_core_types::{
             ConsensusParametersVersion,
             StateTransitionBytecodeVersion,
         },
-        primitives,
+        primitives::DaBlockHeight,
     },
     fuel_tx,
     fuel_tx::Transaction,
@@ -123,17 +123,18 @@ impl fuel_core_producer::ports::DryRunner for ExecutorAdapter {
 
 #[async_trait::async_trait]
 impl fuel_core_producer::ports::Relayer for MaybeRelayerAdapter {
-    async fn wait_for_at_least(
+    async fn wait_for_at_least_height(
         &self,
-        height: &primitives::DaBlockHeight,
-    ) -> anyhow::Result<primitives::DaBlockHeight> {
+        height: &DaBlockHeight,
+    ) -> anyhow::Result<DaBlockHeight> {
         #[cfg(feature = "relayer")]
         {
             if let Some(sync) = self.relayer_synced.as_ref() {
                 sync.await_at_least_synced(height).await?;
-                sync.get_finalized_da_height()
+                let highest = sync.get_finalized_da_height()?;
+                Ok(highest)
             } else {
-                Ok(0u64.into())
+                Ok(*height)
             }
         }
         #[cfg(not(feature = "relayer"))]
@@ -146,6 +147,44 @@ impl fuel_core_producer::ports::Relayer for MaybeRelayerAdapter {
             Ok(0u64.into())
         }
     }
+
+    async fn get_cost_for_block(&self, height: &DaBlockHeight) -> anyhow::Result<u64> {
+        #[cfg(feature = "relayer")]
+        {
+            if let Some(sync) = self.relayer_synced.as_ref() {
+                get_gas_cost_for_height(**height, sync)
+            } else {
+                Ok(0)
+            }
+        }
+        #[cfg(not(feature = "relayer"))]
+        {
+            anyhow::ensure!(
+                **height == 0,
+                "Cannot have a da height above zero without a relayer"
+            );
+            // If the relayer is not enabled, then all blocks are zero.
+            Ok(0)
+        }
+    }
+}
+
+#[cfg(feature = "relayer")]
+fn get_gas_cost_for_height(
+    height: u64,
+    sync: &fuel_core_relayer::SharedState<
+        Database<crate::database::database_description::relayer::Relayer>,
+    >,
+) -> anyhow::Result<u64> {
+    let da_height = DaBlockHeight(height);
+    let cost = sync
+        .database()
+        .storage::<fuel_core_relayer::storage::EventsHistory>()
+        .get(&da_height)?
+        .unwrap_or_default()
+        .iter()
+        .fold(0u64, |acc, event| acc.saturating_add(event.cost()));
+    Ok(cost)
 }
 
 impl fuel_core_producer::ports::BlockProducerDatabase for Database {

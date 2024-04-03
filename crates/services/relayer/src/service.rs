@@ -36,7 +36,6 @@ use std::{
     convert::TryInto,
     ops::Deref,
 };
-use synced::update_synced;
 use tokio::sync::watch;
 
 use self::{
@@ -47,7 +46,6 @@ use self::{
 mod get_logs;
 mod run;
 mod state;
-mod synced;
 mod syncing;
 
 #[cfg(test)]
@@ -163,7 +161,14 @@ where
     }
 
     fn update_synced(&self, state: &state::EthState) {
-        update_synced(&self.synced, state)
+        self.synced.send_if_modified(|last_state| {
+            if let Some(val) = state.is_synced_at() {
+                *last_state = Some(DaBlockHeight::from(val));
+                true
+            } else {
+                false
+            }
+        });
     }
 }
 
@@ -298,6 +303,11 @@ impl<D> SharedState<D> {
         D: RelayerDb + 'static,
     {
         self.database.get_finalized_da_height().map_err(Into::into)
+    }
+
+    /// Getter for database field
+    pub fn database(&self) -> &D {
+        &self.database
     }
 }
 
