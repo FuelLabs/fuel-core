@@ -6,11 +6,9 @@ use fuel_core::{
     },
 };
 use fuel_core_client::client::FuelClient;
-// use fuel_core_types::fuel_tx::Transaction;
 
 use fuel_core::combined_database::CombinedDatabase;
 use fuel_core_types::fuel_tx::Transaction;
-use tracing_test::traced_test;
 
 #[tokio::test]
 async fn health() {
@@ -47,12 +45,10 @@ async fn can_restart_node() {
     }
 }
 
-#[traced_test]
 #[tokio::test]
 async fn can_restart_node_with_data() {
     use fuel_core::service::ServiceTrait;
     use tempfile::TempDir;
-
     let tmp_dir = TempDir::new().unwrap();
 
     {
