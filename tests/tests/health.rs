@@ -4,6 +4,7 @@ use fuel_core::{
     service::{
         Config,
         FuelService,
+        ServiceTrait,
     },
     types::fuel_tx::Transaction,
 };
@@ -28,7 +29,6 @@ async fn can_restart_node() {
 
     // start node once
     {
-        use fuel_core::service::ServiceTrait;
         let database = Database::open_rocksdb(tmp_dir.path(), None).unwrap();
         let first_startup = FuelService::from_database(database, Config::local_node())
             .await
@@ -46,12 +46,11 @@ async fn can_restart_node() {
 
 #[tokio::test]
 async fn can_restart_node_with_transactions() {
-    use fuel_core::service::ServiceTrait;
-
     let capacity = 1024 * 1024;
     let tmp_dir = tempfile::TempDir::new().unwrap();
 
     {
+        // Given
         let database = CombinedDatabase::open(tmp_dir.path(), capacity).unwrap();
         let service = FuelService::from_combined_database(database, Config::local_node())
             .await
@@ -68,13 +67,15 @@ async fn can_restart_node_with_transactions() {
     }
 
     {
+        // When
         let database = CombinedDatabase::open(tmp_dir.path(), capacity).unwrap();
         let service = FuelService::from_combined_database(database, Config::local_node())
             .await
             .unwrap();
         let client = FuelClient::from(service.bound_address);
-        client.health().await.unwrap();
 
+        // Then
+        client.health().await.unwrap();
         service.stop_and_await().await.unwrap();
     }
 }
