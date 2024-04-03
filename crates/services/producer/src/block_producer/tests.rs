@@ -356,6 +356,57 @@ mod produce_and_execute_block_txpool {
     }
 
     #[tokio::test]
+    async fn if_each_block_is_full_then_only_advance_one_at_a_time() {
+        // given
+        let prev_da_height = 100;
+        let block_gas_limit = 1_000;
+        let prev_height = 1u32.into();
+        let latest_blocks_with_gas_costs = vec![
+            (prev_da_height, 1_000u64),
+            (prev_da_height + 1, 1_000),
+            (prev_da_height + 2, 1_000),
+            (prev_da_height + 3, 1_000),
+            (prev_da_height + 4, 1_000),
+        ]
+        .into_iter()
+        .map(|(height, gas_cost)| (DaBlockHeight(height), gas_cost));
+
+        let ctx = TestContextBuilder::new()
+            .with_latest_block_height((prev_da_height + 4u64).into())
+            .with_latest_blocks_with_gas_costs(latest_blocks_with_gas_costs)
+            .with_prev_da_height(prev_da_height.into())
+            .with_block_gas_limit(block_gas_limit)
+            .with_prev_height(prev_height)
+            .build();
+
+        let producer = ctx.producer();
+        let mut next_height = prev_height;
+
+        for i in 1..=4 {
+            next_height = next_height
+                .succ()
+                .expect("The block height should be valid");
+
+            // when
+            let res = producer
+                .produce_and_execute_block_txpool(next_height, Tai64::now())
+                .await
+                .unwrap();
+
+            // then
+            let expected = prev_da_height + i;
+            let actual: u64 = res
+                .into_result()
+                .block
+                .header()
+                .application()
+                .da_height
+                .into();
+            assert_eq!(expected, actual);
+        }
+    }
+
+    #[tokio::test]
     async fn production_fails_on_execution_error() {
         let ctx = TestContext::default_from_executor(FailingMockExecutor(Mutex::new(
             Some(ExecutorError::TransactionIdCollision(Default::default())),
