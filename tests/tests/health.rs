@@ -46,37 +46,36 @@ async fn can_restart_node() {
 }
 
 #[tokio::test]
-async fn can_restart_node_with_data() {
+async fn can_restart_node_with_transactions() {
     use fuel_core::service::ServiceTrait;
-    use tempfile::TempDir;
-    let tmp_dir = TempDir::new().unwrap();
+
+    let capacity = 1024 * 1024;
+    let tmp_dir = tempfile::TempDir::new().unwrap();
 
     {
-        let database = CombinedDatabase::open(tmp_dir.path(), 10 * 1024 * 1024).unwrap();
+        let database = CombinedDatabase::open(tmp_dir.path(), capacity).unwrap();
         let service = FuelService::from_combined_database(database, Config::local_node())
             .await
             .unwrap();
         let client = FuelClient::from(service.bound_address);
         client.health().await.unwrap();
 
-        let tx = Transaction::default_test_tx();
-        client.submit_and_await_commit(&tx).await.unwrap();
-        let tx = Transaction::default_test_tx();
-        client.submit_and_await_commit(&tx).await.unwrap();
-        let tx = Transaction::default_test_tx();
-        client.submit_and_await_commit(&tx).await.unwrap();
-        let tx = Transaction::default_test_tx();
-        client.submit_and_await_commit(&tx).await.unwrap();
+        for _ in 0..5 {
+            let tx = Transaction::default_test_tx();
+            client.submit_and_await_commit(&tx).await.unwrap();
+        }
 
         service.stop_and_await().await.unwrap();
     }
 
     {
-        let database = CombinedDatabase::open(tmp_dir.path(), 10 * 1024 * 1024).unwrap();
+        let database = CombinedDatabase::open(tmp_dir.path(), capacity).unwrap();
         let service = FuelService::from_combined_database(database, Config::local_node())
             .await
             .unwrap();
         let client = FuelClient::from(service.bound_address);
         client.health().await.unwrap();
+
+        service.stop_and_await().await.unwrap();
     }
 }
