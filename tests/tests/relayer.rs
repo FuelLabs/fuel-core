@@ -252,6 +252,20 @@ async fn messages_are_spendable_after_relayer_is_synced() {
     eth_node_handle.shutdown.send(()).unwrap();
 }
 
+#[tokio::test(flavor = "multi_thread")]
+async fn can_find_failed_relayed_tx() {
+    let db = Database::in_memory();
+    let srv = FuelService::from_database(db.clone(), Config::local_node())
+        .await
+        .unwrap();
+
+    let client = FuelClient::from(srv.bound_address);
+
+    let tx_id = [1; 32].into();
+    let query = client.relayed_transaction_status(&tx_id).await.unwrap();
+    assert!(query.is_some());
+}
+
 #[allow(clippy::too_many_arguments)]
 fn make_message_event(
     nonce: Nonce,

@@ -33,6 +33,8 @@ pub mod gas_price;
 pub mod scalars;
 pub mod tx;
 
+pub mod relayed_tx;
+
 #[derive(MergedObject, Default)]
 pub struct Query(
     dap::DapQuery,
