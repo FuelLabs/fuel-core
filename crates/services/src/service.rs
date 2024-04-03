@@ -338,12 +338,10 @@ async fn run<S>(
 
     // We can panic here, because it is inside of the task.
     tracing::info!("Starting {} service", S::NAME);
-    println!("Starting {} service... ", S::NAME);
     let mut task = service
         .into_task(&state, params)
         .await
         .expect("The initialization of the service failed.");
-    println!("Started {} service", S::NAME);
 
     sender.send_if_modified(|s| {
         if s.starting() {
