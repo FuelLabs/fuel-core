@@ -23,6 +23,7 @@ use fuel_core_storage::{
     Error as StorageError,
     Result as StorageResult,
     StorageAsMut,
+    StorageInspect,
     StorageMutate,
 };
 use fuel_core_types::{
@@ -139,6 +140,14 @@ where
         let new_tx_count = current_tx_count.saturating_add(new_txs_count);
         <_ as StorageMutate<StatisticTable<u64>>>::insert(self, TX_COUNT, &new_tx_count)?;
         Ok(new_tx_count)
+    }
+
+    fn get_tx_count(&self) -> StorageResult<u64> {
+        const TX_COUNT: &str = "total_tx_count";
+
+        let tx_count = *<_ as StorageInspect<StatisticTable<u64>>>::get(self, TX_COUNT)?
+            .unwrap_or_default();
+        Ok(tx_count)
     }
 
     fn commit(self) -> StorageResult<()> {

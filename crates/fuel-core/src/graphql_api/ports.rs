@@ -263,6 +263,9 @@ pub mod worker {
         /// Returns the total count after the update.
         fn increase_tx_count(&mut self, new_txs_count: u64) -> StorageResult<u64>;
 
+        /// Gets the total number of transactions on the chain from metadata.
+        fn get_tx_count(&self) -> StorageResult<u64>;
+
         /// Commits the underlying changes into the database.
         fn commit(self) -> StorageResult<()>;
     }
