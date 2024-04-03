@@ -1,3 +1,4 @@
+use crate::graphql_api::storage::relayed_transactions::RelayedTransactionStatuses;
 use crate::{
     fuel_core_graphql_api::{
         ports,
@@ -173,21 +174,20 @@ where
                     .remove(&key)?;
             }
             Event::ForcedTransactionFailed {
-                id: _,
+                id,
                 block_height,
                 block_time,
                 failure,
             } => {
-                let _status = RelayedTransactionStatus::Failed {
+                let status = RelayedTransactionStatus::Failed {
                     block_height: *block_height,
                     block_time: *block_time,
                     failure: failure.clone(),
                 };
 
-                todo!();
-                // block_st_transaction
-                //     .storage_as_mut::<RelayedTransactionStatuses>()
-                //     .insert(id.into(), &status)?;
+                block_st_transaction
+                    .storage_as_mut::<RelayedTransactionStatuses>()
+                    .insert(&Bytes32::from(id.to_owned()), &status)?;
             }
             _ => {
                 // unknown execution event (likely due to a runtime upgrade)

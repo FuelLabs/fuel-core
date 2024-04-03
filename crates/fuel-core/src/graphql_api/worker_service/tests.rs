@@ -34,8 +34,24 @@ impl ports::worker::TxPool for MockTxPool {
 
 #[tokio::test]
 async fn run__relayed_transaction_events_are_added_to_storage() {
+    let tx_id: Bytes32 = [1; 32].into();
+    let block_height = 8.into();
+    let block_time = Tai64::UNIX_EPOCH;
+    let failure = "peanut butter chocolate cake with Kool-Aid".to_string();
+    let event = Event::ForcedTransactionFailed {
+        id: tx_id.into(),
+        block_height,
+        block_time: Tai64::UNIX_EPOCH,
+        failure: failure.clone(),
+    };
     let tx_pool = MockTxPool;
-    let blocks: Vec<Arc<dyn Deref<Target = ImportResult> + Send + Sync>> = vec![];
+    let block = Arc::new(ImportResult {
+        sealed_block: Default::default(),
+        tx_status: vec![],
+        events: vec![event],
+        source: Default::default(),
+    });
+    let blocks: Vec<Arc<dyn Deref<Target = ImportResult> + Send + Sync>> = vec![block];
     let block_importer = tokio_stream::iter(blocks).into_boxed();
     let database = Database::in_memory();
     let chain_id = Default::default();
@@ -46,16 +62,7 @@ async fn run__relayed_transaction_events_are_added_to_storage() {
         chain_id,
     };
     // given
-    let tx_id: Bytes32 = [1; 32].into();
-    let block_height = 8.into();
-    let block_time = Tai64::UNIX_EPOCH;
-    let failure = "peanut butter chocolate cake with Kool-Aid".to_string();
-    let _event = Event::ForcedTransactionFailed {
-        id: tx_id.into(),
-        block_height,
-        block_time: Tai64::UNIX_EPOCH,
-        failure: failure.clone(),
-    };
+
     let expected = RelayedTransactionStatus::Failed {
         block_height,
         block_time,

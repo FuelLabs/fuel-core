@@ -207,10 +207,13 @@ pub trait GasPriceEstimate: Send + Sync {
 
 pub mod worker {
     use super::super::storage::blocks::FuelBlockIdsToHeights;
-    use crate::fuel_core_graphql_api::storage::{
-        coins::OwnedCoins,
-        contracts::ContractsInfo,
-        messages::OwnedMessageIds,
+    use crate::{
+        fuel_core_graphql_api::storage::{
+            coins::OwnedCoins,
+            contracts::ContractsInfo,
+            messages::OwnedMessageIds,
+        },
+        graphql_api::storage::relayed_transactions::RelayedTransactionStatuses,
     };
     use fuel_core_services::stream::BoxStream;
     use fuel_core_storage::{
@@ -244,6 +247,7 @@ pub mod worker {
         + StorageMutate<OwnedCoins, Error = StorageError>
         + StorageMutate<FuelBlockIdsToHeights, Error = StorageError>
         + StorageMutate<ContractsInfo, Error = StorageError>
+        + StorageMutate<RelayedTransactionStatuses, Error = StorageError>
     {
         fn record_tx_id_owner(
             &mut self,
