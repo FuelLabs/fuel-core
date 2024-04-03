@@ -43,6 +43,10 @@ pub mod messages;
 pub mod statistic;
 pub mod transactions;
 
+/// Tracks the total number of transactions written to the chain
+/// It's useful for analyzing TPS or other metrics.
+const TX_COUNT: &str = "total_tx_count";
+
 /// GraphQL database tables column ids to the corresponding [`fuel_core_storage::Mappable`] table.
 #[repr(u32)]
 #[derive(
@@ -126,16 +130,8 @@ where
     }
 
     fn increase_tx_count(&mut self, new_txs_count: u64) -> StorageResult<u64> {
-        /// Tracks the total number of transactions written to the chain
-        /// It's useful for analyzing TPS or other metrics.
-        const TX_COUNT: &str = "total_tx_count";
-
         // TODO: how should tx count be initialized after regenesis?
-        let current_tx_count: u64 = self
-            .storage::<StatisticTable<u64>>()
-            .get(TX_COUNT)?
-            .unwrap_or_default()
-            .into_owned();
+        let current_tx_count: u64 = self.get_tx_count()?;
         // Using saturating_add because this value doesn't significantly impact the correctness of execution.
         let new_tx_count = current_tx_count.saturating_add(new_txs_count);
         <_ as StorageMutate<StatisticTable<u64>>>::insert(self, TX_COUNT, &new_tx_count)?;
@@ -143,10 +139,9 @@ where
     }
 
     fn get_tx_count(&self) -> StorageResult<u64> {
-        const TX_COUNT: &str = "total_tx_count";
-
-        let tx_count = *<_ as StorageInspect<StatisticTable<u64>>>::get(self, TX_COUNT)?
-            .unwrap_or_default();
+        let tx_count = <_ as StorageInspect<StatisticTable<u64>>>::get(self, TX_COUNT)?
+            .unwrap_or_default()
+            .into_owned();
         Ok(tx_count)
     }
 
