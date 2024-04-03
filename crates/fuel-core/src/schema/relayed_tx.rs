@@ -1,8 +1,38 @@
+// TODO: Remove all these before merging
+#![allow(unused_imports)]
+#![allow(unreachable_code)]
+#![allow(unused_variables)]
+
+use crate::{
+    fuel_core_graphql_api::database::ReadView,
+    schema::scalars::{
+        Bytes32,
+        Nonce,
+    },
+};
 use async_graphql::{
+    Context,
     Enum,
     Object,
 };
 use fuel_core_types::entities;
+
+#[derive(Default)]
+pub struct RelayedTransactionQuery {}
+
+#[Object]
+impl RelayedTransactionQuery {
+    async fn status(
+        &self,
+        ctx: &Context<'_>,
+        #[graphql(desc = "The id of the relayed tx")] id: Bytes32,
+    ) -> async_graphql::Result<Option<RelayedTransactionStatus>> {
+        // let query: &ReadView = ctx.data_unchecked();
+        // let status = query.relayed_transaction_status(&id).into_api_result()?;
+        // Ok(status.into())
+        todo!()
+    }
+}
 
 pub struct RelayedTransactionStatus(
     pub(crate) entities::relayer::transaction::RelayedTransactionStatus,

@@ -1,13 +1,7 @@
 use crate::client::schema::{
     schema,
-    RelayedTransactionId,
+    Bytes32,
 };
-
-#[derive(cynic::QueryVariables, Debug)]
-pub struct RelayedTransactionStatusArgs {
-    /// Transaction id that contains the output message.
-    pub id: RelayedTransactionId,
-}
 
 #[derive(cynic::QueryFragment, Clone, Debug)]
 #[cynic(
@@ -16,8 +10,14 @@ pub struct RelayedTransactionStatusArgs {
     variables = "RelayedTransactionStatusArgs"
 )]
 pub struct RelayedTransactionStatusQuery {
-    #[arguments(id: $id)]
-    pub message_proof: Option<RelayedTransactionStatus>,
+    #[arguments(id: $ id)]
+    pub status: Option<RelayedTransactionStatus>,
+}
+
+#[derive(cynic::QueryVariables, Debug)]
+pub struct RelayedTransactionStatusArgs {
+    /// Transaction id that contains the output message.
+    pub id: Bytes32,
 }
 
 #[derive(cynic::QueryFragment, Clone, Debug)]

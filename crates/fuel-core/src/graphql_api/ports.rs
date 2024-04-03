@@ -1,3 +1,4 @@
+use crate::graphql_api::storage::relayed_transactions::RelayedTransactionStatuses;
 use async_trait::async_trait;
 use fuel_core_services::stream::BoxStream;
 use fuel_core_storage::{
@@ -27,11 +28,15 @@ use fuel_core_types::{
             DaBlockHeight,
         },
     },
-    entities::relayer::message::{
-        MerkleProof,
-        Message,
+    entities::relayer::{
+        message::{
+            MerkleProof,
+            Message,
+        },
+        transaction::RelayedTransactionStatus,
     },
     fuel_tx::{
+        Bytes32,
         Salt,
         Transaction,
         TxId,
@@ -126,6 +131,15 @@ pub trait DatabaseMessages: StorageInspect<Messages, Error = StorageError> {
     fn message_is_spent(&self, nonce: &Nonce) -> StorageResult<bool>;
 
     fn message_exists(&self, nonce: &Nonce) -> StorageResult<bool>;
+}
+
+pub trait DatabaseRelayedTransactions:
+    StorageInspect<RelayedTransactionStatuses, Error = StorageError>
+{
+    fn transaction_status(
+        &self,
+        id: Bytes32,
+    ) -> StorageResult<Option<RelayedTransactionStatus>>;
 }
 
 /// Trait that specifies all the getters required for contract.

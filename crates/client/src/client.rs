@@ -8,7 +8,10 @@ use crate::client::{
         contract::ContractBalanceQueryArgs,
         gas_price::EstimateGasPrice,
         message::MessageStatusArgs,
-        relayed_tx::RelayedTransactionStatusArgs,
+        relayed_tx::{
+            RelayedTransactionState,
+            RelayedTransactionStatusArgs,
+        },
         tx::DryRunArg,
         Tai64Timestamp,
         TransactionId,
@@ -37,7 +40,6 @@ use cynic::{
     QueryBuilder,
 };
 use fuel_core_types::{
-    entities::relayer::transaction::RelayedTransactionStatus,
     fuel_asm::{
         Instruction,
         Word,
@@ -975,13 +977,13 @@ impl FuelClient {
     pub async fn relayed_transaction_status(
         &self,
         id: &Bytes32,
-    ) -> io::Result<Option<RelayedTransactionStatus>> {
+    ) -> io::Result<Option<RelayedTransactionState>> {
         let query = schema::relayed_tx::RelayedTransactionStatusQuery::build(
             RelayedTransactionStatusArgs {
                 id: id.to_owned().into(),
             },
         );
-        let status = self.query(query).await?;
+        let status = self.query(query).await?.status.map(|inner| inner.state);
         Ok(status)
     }
 }
