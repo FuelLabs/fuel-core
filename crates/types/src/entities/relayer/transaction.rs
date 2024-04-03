@@ -116,7 +116,6 @@ impl RelayedTransaction {
         }
     }
 
-    #[cfg(any(test, feature = "test-helpers"))]
     /// Get the canonically serialized transaction
     pub fn serialized_transaction(&self) -> &[u8] {
         match self {

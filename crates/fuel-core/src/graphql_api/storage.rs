@@ -42,7 +42,7 @@ pub mod messages;
 pub mod statistic;
 pub mod transactions;
 
-pub mod layer_one_transactions;
+pub mod relayed_transactions;
 
 /// GraphQL database tables column ids to the corresponding [`fuel_core_storage::Mappable`] table.
 #[repr(u32)]
