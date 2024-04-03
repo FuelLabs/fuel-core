@@ -18,8 +18,16 @@ fn main() {
 
 #[cfg(feature = "wasm-executor")]
 fn build_wasm() {
-    let out_dir = env::var_os("OUT_DIR").unwrap();
+    let out_dir = env::var_os("OUT_DIR").expect("The output directory is not set");
     let dest_path = Path::new(&out_dir);
+    let manifest_dir =
+        env::var_os("CARGO_MANIFEST_DIR").expect("The manifest directory is not set");
+    let manifest_path = Path::new(&manifest_dir);
+    let wasm_executor_path = manifest_path
+        .join("wasm-executor")
+        .join("Cargo.toml")
+        .to_string_lossy()
+        .to_string();
 
     let cargo = env::var("CARGO").unwrap_or_else(|_| "cargo".to_string());
 
@@ -27,8 +35,8 @@ fn build_wasm() {
 
     let args = vec![
         "build".to_owned(),
-        "-p".to_owned(),
-        "fuel-core-wasm-executor".to_owned(),
+        "--manifest-path".to_owned(),
+        wasm_executor_path,
         "--target=wasm32-unknown-unknown".to_owned(),
         "--no-default-features".to_owned(),
         "--release".to_owned(),
@@ -48,14 +56,14 @@ fn build_wasm() {
     match output {
         Ok(output) => {
             if !output.status.success() {
-                println!(
-                    "cargo:warning=Got an error status during compiling WASM executor: {:?}",
+                panic!(
+                    "Got an error status during compiling WASM executor: \n{:#?}",
                     output
                 );
             }
         }
         Err(err) => {
-            println!("cargo:warning={:?}", err);
+            panic!("\n{:#?}", err);
         }
     }
 }
