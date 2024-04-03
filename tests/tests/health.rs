@@ -1,14 +1,13 @@
 use fuel_core::{
+    combined_database::CombinedDatabase,
     database::Database,
     service::{
         Config,
         FuelService,
     },
+    types::fuel_tx::Transaction,
 };
 use fuel_core_client::client::FuelClient;
-
-use fuel_core::combined_database::CombinedDatabase;
-use fuel_core_types::fuel_tx::Transaction;
 
 #[tokio::test]
 async fn health() {
