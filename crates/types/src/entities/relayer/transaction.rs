@@ -86,6 +86,13 @@ impl RelayedTransaction {
         }
     }
 
+    /// Get the max gas
+    pub fn max_gas(&self) -> u64 {
+        match self {
+            RelayedTransaction::V1(transaction) => transaction.max_gas,
+        }
+    }
+
     #[cfg(any(test, feature = "test-helpers"))]
     /// Set the da height
     pub fn set_da_height(&mut self, height: DaBlockHeight) {
@@ -93,14 +100,6 @@ impl RelayedTransaction {
             RelayedTransaction::V1(transaction) => {
                 transaction.da_height = height;
             }
-        }
-    }
-
-    #[cfg(any(test, feature = "test-helpers"))]
-    /// Get the max gas
-    pub fn max_gas(&self) -> u64 {
-        match self {
-            RelayedTransaction::V1(transaction) => transaction.max_gas,
         }
     }
 

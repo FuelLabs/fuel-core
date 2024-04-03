@@ -47,6 +47,7 @@ impl EthState {
         self.is_synced_at().is_some()
     }
 
+    /// If synced to the remote Ethereum node, return the block height.
     pub fn is_synced_at(&self) -> Option<u64> {
         self.local.filter(|local| *local >= self.remote)
     }
