@@ -281,19 +281,24 @@ where
         let gas_limit = self.config.block_gas_limit;
         let mut new_best = previous_da_height;
         let mut total_cost: u64 = 0;
-        let heighest = self
+        let highest = self
             .relayer
             .wait_for_at_least_height(&previous_da_height)
             .await?;
-        if heighest < previous_da_height {
+        if highest < previous_da_height {
             return Err(Error::InvalidDaFinalizationState {
-                best: heighest,
+                best: highest,
                 previous_block: previous_da_height,
             }
             .into());
         }
+
+        if highest == previous_da_height {
+            return Ok(highest);
+        }
+
         let next_da_height = previous_da_height.saturating_add(1);
-        for height in next_da_height..=heighest.0 {
+        for height in next_da_height..=highest.0 {
             let cost = self
                 .relayer
                 .get_cost_for_block(&DaBlockHeight(height))
