@@ -2837,6 +2837,7 @@ mod tests {
         use fuel_core_types::{
             entities::RelayedTransaction,
             fuel_merkle::binary::root_calculator::MerkleRootCalculator,
+            fuel_tx::output,
         };
 
         fn database_with_genesis_block(da_block_height: u64) -> Database<OnChain> {
@@ -3070,33 +3071,67 @@ mod tests {
             assert_eq!(txs.len(), 2);
         }
 
-        // #[test]
-        // fn execute_without_commit__relayed_mint_tx_not_included_in_block() {
-        //     let genesis_da_height = 3u64;
-        //     let on_chain_db = database_with_genesis_block(genesis_da_height);
-        //     let mut relayer_db = Database::<Relayer>::default();
-        //     // given
-        //     let block_height = 1u32;
-        //     let da_height = 10u64;
-        //     let relayed_tx = RelayedTransaction::default();
-        //     add_events_to_relayer(
-        //         &mut relayer_db,
-        //         da_height.into(),
-        //         &[relayed_tx.clone().into()],
-        //     );
-        //     let producer = create_relayer_executor(on_chain_db, relayer_db);
-        //     let block = test_block(block_height.into(), da_height.into(), 0);
-        //
-        //     // when
-        //     let (result, _) = producer
-        //         .execute_without_commit(ExecutionTypes::Production(block.into()))
-        //         .unwrap()
-        //         .into();
-        //
-        //     // then
-        //     let txs = result.block.transactions();
-        //     assert_eq!(txs.len(), 1);
-        // }
+        #[test]
+        fn execute_without_commit__relayed_mint_tx_not_included_in_block() {
+            let genesis_da_height = 3u64;
+            let on_chain_db = database_with_genesis_block(genesis_da_height);
+            let mut relayer_db = Database::<Relayer>::default();
+            // given
+            let block_height = 1u32;
+            let da_height = 10u64;
+            let mut relayed_tx = RelayedTransaction::default();
+            let base_asset_id = AssetId::BASE;
+            let tx_count = 0;
+            let mint = Transaction::mint(
+                TxPointer::new(block_height.into(), tx_count),
+                contract::Contract {
+                    utxo_id: UtxoId::new(Bytes32::zeroed(), 0),
+                    balance_root: Bytes32::zeroed(),
+                    state_root: Bytes32::zeroed(),
+                    tx_pointer: TxPointer::new(BlockHeight::new(0), 0),
+                    contract_id: ContractId::zeroed(),
+                },
+                output::contract::Contract {
+                    input_index: 0,
+                    balance_root: Bytes32::zeroed(),
+                    state_root: Bytes32::zeroed(),
+                },
+                0,
+                base_asset_id,
+                0,
+            );
+            let tx = Transaction::Mint(mint.into());
+            let tx_bytes = tx.to_bytes();
+            relayed_tx.set_serialized_transaction(tx_bytes);
+            add_events_to_relayer(
+                &mut relayer_db,
+                da_height.into(),
+                &[relayed_tx.clone().into()],
+            );
+            let producer = create_relayer_executor(on_chain_db, relayer_db);
+            let block =
+                test_block(block_height.into(), da_height.into(), tx_count as usize);
+
+            // when
+            let (result, _) = producer
+                .execute_without_commit(ExecutionTypes::Production(block.into()))
+                .unwrap()
+                .into();
+
+            // then
+            let txs = result.block.transactions();
+            assert_eq!(txs.len(), 1);
+            let events = result.events;
+            let fuel_core_types::services::executor::Event::ForcedTransactionFailed {
+                failure: actual,
+                ..
+            } = &events[0]
+            else {
+                panic!("Expected `ForcedTransactionFailed` event")
+            };
+            let expected = "Transaction type is not accepted";
+            assert_eq!(expected, actual);
+        }
 
         #[test]
         fn block_producer_does_not_take_messages_for_the_same_height() {
