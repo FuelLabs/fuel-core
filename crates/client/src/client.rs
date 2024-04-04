@@ -8,10 +8,7 @@ use crate::client::{
         contract::ContractBalanceQueryArgs,
         gas_price::EstimateGasPrice,
         message::MessageStatusArgs,
-        relayed_tx::{
-            RelayedTransactionState,
-            RelayedTransactionStatusArgs,
-        },
+        relayed_tx::RelayedTransactionStatusArgs,
         tx::DryRunArg,
         Tai64Timestamp,
         TransactionId,
@@ -26,6 +23,7 @@ use crate::client::{
             ContractId,
             UtxoId,
         },
+        RelayedTransactionStatus,
     },
 };
 use anyhow::Context;
@@ -977,13 +975,18 @@ impl FuelClient {
     pub async fn relayed_transaction_status(
         &self,
         id: &Bytes32,
-    ) -> io::Result<Option<RelayedTransactionState>> {
+    ) -> io::Result<Option<RelayedTransactionStatus>> {
         let query = schema::relayed_tx::RelayedTransactionStatusQuery::build(
             RelayedTransactionStatusArgs {
                 id: id.to_owned().into(),
             },
         );
-        let status = self.query(query).await?.status.map(|inner| inner.state);
+        let status = self
+            .query(query)
+            .await?
+            .status
+            .map(|status| status.try_into())
+            .transpose()?;
         Ok(status)
     }
 }

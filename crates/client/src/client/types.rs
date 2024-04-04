@@ -37,6 +37,7 @@ pub use message::{
 pub use node_info::NodeInfo;
 
 use crate::client::schema::{
+    relayed_tx::RelayedTransactionStatus as SchemaRelayedTransactionStatus,
     tx::{
         OpaqueTransaction,
         TransactionStatus as SchemaTxStatus,
@@ -145,7 +146,7 @@ impl TryFrom<SchemaTxStatus> for TransactionStatus {
                 TransactionStatus::SqueezedOut { reason: s.reason }
             }
             SchemaTxStatus::Unknown => {
-                return Err(Self::Error::UnknownVariant("SchemaTxStatus"))
+                return Err(Self::Error::UnknownVariant("SchemaTxStatus"));
             }
         })
     }
@@ -166,6 +167,36 @@ impl TryFrom<OpaqueTransaction> for TransactionResponse {
         Ok(Self {
             transaction: tx,
             status,
+        })
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum RelayedTransactionStatus {
+    Failed {
+        block_height: BlockHeight,
+        block_time: Tai64,
+        failure: String,
+    },
+}
+
+impl TryFrom<SchemaRelayedTransactionStatus> for RelayedTransactionStatus {
+    type Error = ConversionError;
+
+    fn try_from(status: SchemaRelayedTransactionStatus) -> Result<Self, Self::Error> {
+        Ok(match status {
+            SchemaRelayedTransactionStatus::Failed(s) => {
+                RelayedTransactionStatus::Failed {
+                    block_height: s.block_height.into(),
+                    block_time: s.block_time.0,
+                    failure: s.failure,
+                }
+            }
+            SchemaRelayedTransactionStatus::Unknown => {
+                return Err(Self::Error::UnknownVariant(
+                    "SchemaRelayedTransactionStatus",
+                ));
+            }
         })
     }
 }

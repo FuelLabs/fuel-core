@@ -22,8 +22,10 @@ use fuel_core_client::client::{
         PageDirection,
         PaginationRequest,
     },
-    schema::relayed_tx::RelayedTransactionState,
-    types::TransactionStatus,
+    types::{
+        RelayedTransactionStatus as ClientRelayedTransactionStatus,
+        TransactionStatus,
+    },
     FuelClient,
 };
 use fuel_core_poa::service::Mode;
@@ -41,11 +43,14 @@ use fuel_core_storage::{
     StorageAsRef,
 };
 use fuel_core_types::{
-    entities::relayer::transaction::RelayedTransactionStatus,
+    entities::relayer::transaction::RelayedTransactionStatus as FuelRelayedTransactionStatus,
     fuel_asm::*,
     fuel_crypto::*,
     fuel_tx::*,
-    fuel_types::Nonce,
+    fuel_types::{
+        BlockHeight,
+        Nonce,
+    },
     tai64::Tai64,
 };
 use hyper::{
@@ -262,10 +267,13 @@ async fn messages_are_spendable_after_relayer_is_synced() {
 async fn can_find_failed_relayed_tx() {
     let mut db = CombinedDatabase::in_memory();
     let id = [1; 32].into();
-    let status = RelayedTransactionStatus::Failed {
-        block_height: 999.into(),
-        block_time: Tai64::UNIX_EPOCH,
-        failure: "lolz".to_string(),
+    let block_height: BlockHeight = 999.into();
+    let block_time = Tai64::UNIX_EPOCH;
+    let failure = "lolz".to_string();
+    let status = FuelRelayedTransactionStatus::Failed {
+        block_height: block_height.clone(),
+        block_time: block_time.clone(),
+        failure: failure.clone(),
     };
     db.off_chain_mut()
         .storage_as_mut::<RelayedTransactionStatuses>()
@@ -278,7 +286,11 @@ async fn can_find_failed_relayed_tx() {
 
     let client = FuelClient::from(srv.bound_address);
 
-    let expected = Some(RelayedTransactionState::Failed);
+    let expected = Some(ClientRelayedTransactionStatus::Failed {
+        block_height,
+        block_time,
+        failure,
+    });
     let actual = client.relayed_transaction_status(&id).await.unwrap();
     assert_eq!(expected, actual);
 }

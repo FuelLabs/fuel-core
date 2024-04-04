@@ -1,6 +1,8 @@
 use crate::client::schema::{
     schema,
     Bytes32,
+    Tai64Timestamp,
+    U32,
 };
 
 #[derive(cynic::QueryFragment, Clone, Debug)]
@@ -20,15 +22,20 @@ pub struct RelayedTransactionStatusArgs {
     pub id: Bytes32,
 }
 
-#[derive(cynic::QueryFragment, Clone, Debug)]
+#[allow(clippy::enum_variant_names)]
+#[derive(cynic::InlineFragments, Clone, Debug)]
 #[cynic(schema_path = "./assets/schema.sdl")]
-pub struct RelayedTransactionStatus {
-    pub(crate) state: RelayedTransactionState,
+pub enum RelayedTransactionStatus {
+    /// Transaction was included in a block, but the execution was reverted
+    Failed(RelayedTransactionFailed),
+    #[cynic(fallback)]
+    Unknown,
 }
 
-#[derive(cynic::Enum, Copy, Clone, Debug, PartialEq, Eq)]
+#[derive(cynic::QueryFragment, Clone, Debug, PartialEq, Eq)]
 #[cynic(schema_path = "./assets/schema.sdl")]
-pub enum RelayedTransactionState {
-    /// Transaction was included in a block, but the execution was reverted
-    Failed,
+pub struct RelayedTransactionFailed {
+    pub block_height: U32,
+    pub block_time: Tai64Timestamp,
+    pub failure: String,
 }

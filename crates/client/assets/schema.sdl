@@ -903,13 +903,13 @@ enum ReceiptType {
 	BURN
 }
 
-enum RelayedTransactionState {
-	FAILED
+type RelayedTransactionFailed {
+	blockHeight: U32!
+	blockTime: Tai64Timestamp!
+	failure: String!
 }
 
-type RelayedTransactionStatus {
-	state: RelayedTransactionState!
-}
+union RelayedTransactionStatus = RelayedTransactionFailed
 
 enum ReturnType {
 	RETURN
