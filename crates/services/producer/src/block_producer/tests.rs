@@ -271,6 +271,32 @@ mod produce_and_execute_block_txpool {
     }
 
     #[tokio::test]
+    async fn can_produce_if_previous_block_da_height_not_changed() {
+        // Given
+        let da_height = DaBlockHeight(100u64);
+        let prev_height = 1u32.into();
+        let ctx = TestContextBuilder::new()
+            .with_latest_block_height(da_height)
+            .with_prev_da_height(da_height)
+            .with_prev_height(prev_height)
+            .build();
+        let producer = ctx.producer();
+
+        // When
+        let result = producer
+            .produce_and_execute_block_txpool(
+                prev_height
+                    .succ()
+                    .expect("The block height should be valid"),
+                Tai64::now(),
+            )
+            .await;
+
+        // Then
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
     async fn cant_produce_if_previous_block_da_height_too_high() {
         // given
         let prev_da_height = DaBlockHeight(100u64);
