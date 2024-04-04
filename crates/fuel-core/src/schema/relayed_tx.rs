@@ -27,10 +27,9 @@ impl RelayedTransactionQuery {
         ctx: &Context<'_>,
         #[graphql(desc = "The id of the relayed tx")] id: Bytes32,
     ) -> async_graphql::Result<Option<RelayedTransactionStatus>> {
-        // let query: &ReadView = ctx.data_unchecked();
-        // let status = query.relayed_transaction_status(&id).into_api_result()?;
-        // Ok(status.into())
-        todo!()
+        let query: &ReadView = ctx.data_unchecked();
+        let status = crate::query::relayed_tx_status(query, id.0)?;
+        Ok(status.into())
     }
 }
 

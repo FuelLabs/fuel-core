@@ -37,7 +37,7 @@ impl TableWithBlueprint for RelayedTransactionStatuses {
     type Column = super::Column;
 
     fn column() -> Self::Column {
-        Self::Column::LayerOneTransactionStatus
+        Self::Column::RelayedTransactionStatus
     }
 }
 

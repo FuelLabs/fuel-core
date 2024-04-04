@@ -1,4 +1,3 @@
-use crate::graphql_api::storage::relayed_transactions::RelayedTransactionStatuses;
 use async_trait::async_trait;
 use fuel_core_services::stream::BoxStream;
 use fuel_core_storage::{
@@ -90,6 +89,11 @@ pub trait OffChainDatabase: Send + Sync {
     ) -> BoxedIter<StorageResult<(TxPointer, TxId)>>;
 
     fn contract_salt(&self, contract_id: &ContractId) -> StorageResult<Salt>;
+
+    fn relayed_tx_status(
+        &self,
+        id: Bytes32,
+    ) -> StorageResult<Option<RelayedTransactionStatus>>;
 }
 
 /// The on chain database port expected by GraphQL API service.
@@ -133,9 +137,7 @@ pub trait DatabaseMessages: StorageInspect<Messages, Error = StorageError> {
     fn message_exists(&self, nonce: &Nonce) -> StorageResult<bool>;
 }
 
-pub trait DatabaseRelayedTransactions:
-    StorageInspect<RelayedTransactionStatuses, Error = StorageError>
-{
+pub trait DatabaseRelayedTransactions {
     fn transaction_status(
         &self,
         id: Bytes32,

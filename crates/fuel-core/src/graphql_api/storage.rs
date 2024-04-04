@@ -76,8 +76,8 @@ pub enum Column {
     FuelBlockIdsToHeights = 7,
     /// See [`ContractsInfo`](contracts::ContractsInfo)
     ContractsInfo = 8,
-    /// ID for Layer 1 Transaction status
-    LayerOneTransactionStatus = 9,
+    /// Relayed Tx ID to Layer 1 Relayed Transaction status
+    RelayedTransactionStatus = 9,
 }
 
 impl Column {
