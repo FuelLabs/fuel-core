@@ -3039,6 +3039,34 @@ mod tests {
         }
 
         #[test]
+        fn execute_without_commit__relayed_txs_included_in_block() {
+            let genesis_da_height = 3u64;
+            let on_chain_db = database_with_genesis_block(genesis_da_height);
+            let mut relayer_db = Database::<Relayer>::default();
+            // given
+            let block_height = 1u32;
+            let da_height = 10u64;
+            let relayed_tx = RelayedTransaction::default();
+            add_events_to_relayer(
+                &mut relayer_db,
+                da_height.into(),
+                &[relayed_tx.clone().into()],
+            );
+            let producer = create_relayer_executor(on_chain_db, relayer_db);
+            let block = test_block(block_height.into(), da_height.into(), 0);
+
+            // when
+            let (result, _) = producer
+                .execute_without_commit(ExecutionTypes::Production(block.into()))
+                .unwrap()
+                .into();
+
+            // then
+            let txs = result.block.transactions();
+            assert_eq!(txs.len(), 1);
+        }
+
+        #[test]
         fn block_producer_does_not_take_messages_for_the_same_height() {
             let genesis_da_height = 1u64;
             let on_chain_db = database_with_genesis_block(genesis_da_height);
