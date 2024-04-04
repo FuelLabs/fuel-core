@@ -1,17 +1,23 @@
 use crate::{
     combined_database::CombinedDatabase,
     database::{
-        database_description::{
-            off_chain::OffChain, on_chain::OnChain, DatabaseDescription,
-        },
-        Database, EntriesFilter,
+        database_description::DatabaseDescription,
+        Database,
+        IncludeAll,
+        KeyFilter,
     },
     fuel_core_graphql_api::storage::transactions::{
-        OwnedTransactions, TransactionStatuses,
+        OwnedTransactions,
+        TransactionStatuses,
     },
 };
 use fuel_core_chain_config::{
-    AddTable, ChainConfig, SnapshotFragment, SnapshotWriter, StateConfigBuilder,
+    AddTable,
+    ChainConfig,
+    SnapshotFragment,
+    SnapshotMetadata,
+    SnapshotWriter,
+    StateConfigBuilder,
     TableEntry,
 };
 use fuel_core_storage::{
@@ -19,23 +25,31 @@ use fuel_core_storage::{
     iter::IterDirection,
     structured_storage::TableWithBlueprint,
     tables::{
-        Coins, ContractsAssets, ContractsLatestUtxo, ContractsRawCode, ContractsState,
-        Messages, Transactions,
+        Coins,
+        ContractsAssets,
+        ContractsLatestUtxo,
+        ContractsRawCode,
+        ContractsState,
+        Messages,
+        Transactions,
     },
-    ContractsAssetKey, ContractsStateKey,
 };
 use fuel_core_types::fuel_types::ContractId;
 use itertools::Itertools;
 
 use tokio_util::sync::CancellationToken;
 
+use self::filter::ByContractId;
+
 use super::task_manager::TaskManager;
+mod filter;
 
 pub struct Exporter {
     db: CombinedDatabase,
     prev_chain_config: ChainConfig,
     writer: Box<dyn Fn() -> anyhow::Result<SnapshotWriter>>,
     group_size: usize,
+    task_manager: TaskManager<SnapshotFragment>,
 }
 
 impl Exporter {
@@ -50,131 +64,81 @@ impl Exporter {
             prev_chain_config,
             writer: Box::new(writer),
             group_size,
+            task_manager: TaskManager::new(CancellationToken::new()),
         }
     }
 
-    pub async fn write_full_snapshot(self) -> Result<(), anyhow::Error> {
-        let mut task_manager: TaskManager<SnapshotFragment> =
-            TaskManager::new(CancellationToken::new());
+    pub async fn write_full_snapshot(mut self) -> Result<(), anyhow::Error> {
+        macro_rules! export {
+            ($db: expr, $($table: ty),*) => {
+                $(self.spawn_task::<$table, _>(IncludeAll, $db)?;)*
+            };
+        }
 
-        let db = self.db.on_chain();
-        self.spawn_task::<Coins, OnChain>(
-            EntriesFilter::none(),
-            &mut task_manager,
-            db.clone(),
-        )?;
-        self.spawn_task::<Messages, OnChain>(
-            EntriesFilter::none(),
-            &mut task_manager,
-            db.clone(),
-        )?;
-        self.spawn_task::<ContractsRawCode, OnChain>(
-            EntriesFilter::none(),
-            &mut task_manager,
-            db.clone(),
-        )?;
-        self.spawn_task::<ContractsLatestUtxo, OnChain>(
-            EntriesFilter::none(),
-            &mut task_manager,
-            db.clone(),
-        )?;
-        self.spawn_task::<ContractsState, OnChain>(
-            EntriesFilter::none(),
-            &mut task_manager,
-            db.clone(),
-        )?;
-        self.spawn_task::<ContractsAssets, OnChain>(
-            EntriesFilter::none(),
-            &mut task_manager,
-            db.clone(),
-        )?;
-        self.spawn_task::<Transactions, OnChain>(
-            EntriesFilter::none(),
-            &mut task_manager,
-            db.clone(),
-        )?;
+        export!(
+            |ctx: &Self| ctx.db.on_chain(),
+            Coins,
+            Messages,
+            ContractsRawCode,
+            ContractsLatestUtxo,
+            ContractsState,
+            ContractsAssets,
+            Transactions
+        );
 
-        let db = self.db.off_chain();
-        self.spawn_task::<TransactionStatuses, OffChain>(
-            EntriesFilter::none(),
-            &mut task_manager,
-            db.clone(),
-        )?;
-        self.spawn_task::<OwnedTransactions, OffChain>(
-            EntriesFilter::none(),
-            &mut task_manager,
-            db.clone(),
-        )?;
+        export!(
+            |ctx: &Self| ctx.db.off_chain(),
+            TransactionStatuses,
+            OwnedTransactions
+        );
 
-        let data_snapshot_fragments = task_manager.wait().await?;
-
-        let other_fragments =
-            self.write_chain_config()?.merge(self.write_block_data()?)?;
-
-        data_snapshot_fragments
-            .into_iter()
-            .try_fold(other_fragments, |fragment, next_fragment| {
-                fragment.merge(next_fragment)
-            })?
-            .finalize()?;
+        self.finalize().await?;
 
         Ok(())
     }
 
     pub async fn write_contract_snapshot(
-        self,
+        mut self,
         contract_id: ContractId,
     ) -> Result<(), anyhow::Error> {
-        let mut task_manager: TaskManager<SnapshotFragment> =
-            TaskManager::new(CancellationToken::new());
-        let db = self.db.on_chain();
-        let prefix = contract_id.as_ref().to_vec();
-        self.spawn_task::<ContractsRawCode, OnChain>(
-            EntriesFilter::new(prefix.clone(), move |key| *key == contract_id),
-            &mut task_manager,
-            db.clone(),
-        )?;
+        macro_rules! export {
+            ($($table: ty),*) => {
+                let filter = ByContractId::new(contract_id);
+                $(self.spawn_task::<$table, _>(filter, |ctx: &Self| ctx.db.on_chain())?;)*
+            };
+        }
+        export!(
+            ContractsAssets,
+            ContractsState,
+            ContractsLatestUtxo,
+            ContractsRawCode
+        );
 
-        self.spawn_task::<ContractsLatestUtxo, OnChain>(
-            EntriesFilter::new(prefix.clone(), move |key| *key == contract_id),
-            &mut task_manager,
-            db.clone(),
-        )?;
-
-        self.spawn_task::<ContractsState, OnChain>(
-            EntriesFilter::new(prefix.clone(), move |key: &ContractsStateKey| {
-                *key.contract_id() == contract_id
-            }),
-            &mut task_manager,
-            db.clone(),
-        )?;
-
-        self.spawn_task::<ContractsAssets, OnChain>(
-            EntriesFilter::new(prefix.clone(), move |key: &ContractsAssetKey| {
-                *key.contract_id() == contract_id
-            }),
-            &mut task_manager,
-            db.clone(),
-        )?;
-
-        let block = self.db.on_chain().latest_block()?;
-
-        let mut writer = self.create_writer()?;
-        writer.write_block_data(*block.header().height(), block.header().da_height)?;
-        writer.write_chain_config(&self.prev_chain_config);
-
-        let chain_config_fragment = writer.partial_close()?;
-
-        let fragments = task_manager.wait().await?;
-
-        fragments
-            .into_iter()
-            .try_fold(chain_config_fragment, |fragment, next_fragment| {
-                fragment.merge(next_fragment)
-            })?
-            .finalize()?;
+        self.finalize().await?;
 
         Ok(())
+    }
+
+    async fn finalize(self) -> anyhow::Result<SnapshotMetadata> {
+        let remaining_fragment = self.write_block_and_chain_config()?;
+        self.task_manager
+            .wait()
+            .await?
+            .into_iter()
+            .try_fold(remaining_fragment, |fragment, next_fragment| {
+                fragment.merge(next_fragment)
+            })?
+            .finalize()
+    }
+
+    fn write_block_and_chain_config(&self) -> anyhow::Result<SnapshotFragment> {
+        let mut writer = self.create_writer()?;
+        writer.write_chain_config(&self.prev_chain_config);
+
+        let block = self.db.on_chain().latest_block()?;
+        writer.write_block_data(*block.header().height(), block.header().da_height)?;
+
+        writer.partial_close()
     }
 
     fn create_writer(&self) -> anyhow::Result<SnapshotWriter> {
@@ -182,23 +146,23 @@ impl Exporter {
     }
 
     fn spawn_task<T, DbDesc>(
-        &self,
-        filter: EntriesFilter<T>,
-        task_manager: &mut TaskManager<SnapshotFragment>,
-        db: Database<DbDesc>,
+        &mut self,
+        filter: impl KeyFilter<T::OwnedKey> + Send + 'static,
+        db_picker: impl FnOnce(&Self) -> &Database<DbDesc>,
     ) -> anyhow::Result<()>
     where
-        T: TableWithBlueprint<Column = <DbDesc as DatabaseDescription>::Column> + 'static,
+        T: TableWithBlueprint + 'static + Send + Sync,
         T::Blueprint: BlueprintInspect<T, Database<DbDesc>>,
         TableEntry<T>: serde::Serialize,
         StateConfigBuilder: AddTable<T>,
-        DbDesc: DatabaseDescription,
+        DbDesc: DatabaseDescription<Column = T::Column>,
         DbDesc::Height: Send,
     {
         let mut writer = self.create_writer()?;
         let group_size = self.group_size;
 
-        task_manager.spawn(move |cancel| {
+        let db = db_picker(self).clone();
+        self.task_manager.spawn(move |cancel| {
             tokio_rayon::spawn(move || {
                 db.entries::<T>(filter, IterDirection::Forward)
                     .chunks(group_size)
@@ -210,18 +174,5 @@ impl Exporter {
         });
 
         Ok(())
-    }
-
-    fn write_chain_config(&self) -> anyhow::Result<SnapshotFragment> {
-        let mut writer = self.create_writer()?;
-        writer.write_chain_config(&self.prev_chain_config);
-        writer.partial_close()
-    }
-
-    fn write_block_data(&self) -> anyhow::Result<SnapshotFragment> {
-        let mut writer = self.create_writer()?;
-        let block = self.db.on_chain().latest_block()?;
-        writer.write_block_data(*block.header().height(), block.header().da_height)?;
-        writer.partial_close()
     }
 }

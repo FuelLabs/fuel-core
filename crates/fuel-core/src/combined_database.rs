@@ -1,17 +1,27 @@
 use crate::{
     database::{
         database_description::{
-            off_chain::OffChain, on_chain::OnChain, relayer::Relayer,
+            off_chain::OffChain,
+            on_chain::OnChain,
+            relayer::Relayer,
         },
-        Database, Result as DatabaseResult,
+        Database,
+        Result as DatabaseResult,
     },
     service::DbType,
 };
 #[cfg(feature = "test-helpers")]
-use fuel_core_chain_config::{StateConfig, StateConfigBuilder};
+use fuel_core_chain_config::{
+    StateConfig,
+    StateConfigBuilder,
+};
 #[cfg(feature = "test-helpers")]
 use fuel_core_storage::tables::{
-    Coins, ContractsAssets, ContractsLatestUtxo, ContractsRawCode, ContractsState,
+    Coins,
+    ContractsAssets,
+    ContractsLatestUtxo,
+    ContractsRawCode,
+    ContractsState,
     Messages,
 };
 use fuel_core_storage::Result as StorageResult;
@@ -141,14 +151,14 @@ impl CombinedDatabase {
         use fuel_core_chain_config::AddTable;
         use itertools::Itertools;
         let mut builder = StateConfigBuilder::default();
-        use crate::database::EntriesFilter;
+        use crate::database::IncludeAll;
 
         macro_rules! add_tables {
             ($($table: ty),*) => {
                 $(
                     let table = self
                         .on_chain()
-                        .entries::<$table>(EntriesFilter::none(), fuel_core_storage::iter::IterDirection::Forward)
+                        .entries::<$table>(IncludeAll, fuel_core_storage::iter::IterDirection::Forward)
                         .try_collect()?;
                     builder.add(table);
                 )*
