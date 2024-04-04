@@ -284,25 +284,25 @@ mod tests {
         da_block_height: DaBlockHeight,
         num_txs: usize,
     ) -> Block {
-        let transactions = (1..num_txs + 1)
-            .map(|i| {
-                TxBuilder::new(2322u64)
-                    .script_gas_limit(10)
-                    .coin_input(AssetId::default(), (i as Word) * 100)
-                    .coin_output(AssetId::default(), (i as Word) * 50)
-                    .change_output(AssetId::default())
-                    .build()
-                    .transaction()
-                    .clone()
-                    .into()
-            })
-            .collect_vec();
+        let transactions = (1..num_txs + 1).map(script_tx_for_amount).collect_vec();
 
         let mut block = Block::default();
         block.header_mut().set_block_height(block_height);
         block.header_mut().set_da_height(da_block_height);
         *block.transactions_mut() = transactions;
         block
+    }
+
+    fn script_tx_for_amount(amount: usize) -> Transaction {
+        TxBuilder::new(2322u64)
+            .script_gas_limit(10)
+            .coin_input(AssetId::default(), (amount as Word) * 100)
+            .coin_output(AssetId::default(), (amount as Word) * 50)
+            .change_output(AssetId::default())
+            .build()
+            .transaction()
+            .to_owned()
+            .into()
     }
 
     pub(crate) fn create_contract<R: Rng>(
@@ -3039,14 +3039,17 @@ mod tests {
         }
 
         #[test]
-        fn execute_without_commit__relayed_txs_included_in_block() {
+        fn execute_without_commit__relayed_tx_included_in_block() {
             let genesis_da_height = 3u64;
             let on_chain_db = database_with_genesis_block(genesis_da_height);
             let mut relayer_db = Database::<Relayer>::default();
             // given
             let block_height = 1u32;
             let da_height = 10u64;
-            let relayed_tx = RelayedTransaction::default();
+            let mut relayed_tx = RelayedTransaction::default();
+            let tx = script_tx_for_amount(100);
+            let tx_bytes = tx.to_bytes();
+            relayed_tx.set_serialized_transaction(tx_bytes);
             add_events_to_relayer(
                 &mut relayer_db,
                 da_height.into(),
@@ -3063,8 +3066,37 @@ mod tests {
 
             // then
             let txs = result.block.transactions();
-            assert_eq!(txs.len(), 1);
+            dbg!(&txs);
+            assert_eq!(txs.len(), 2);
         }
+
+        // #[test]
+        // fn execute_without_commit__relayed_mint_tx_not_included_in_block() {
+        //     let genesis_da_height = 3u64;
+        //     let on_chain_db = database_with_genesis_block(genesis_da_height);
+        //     let mut relayer_db = Database::<Relayer>::default();
+        //     // given
+        //     let block_height = 1u32;
+        //     let da_height = 10u64;
+        //     let relayed_tx = RelayedTransaction::default();
+        //     add_events_to_relayer(
+        //         &mut relayer_db,
+        //         da_height.into(),
+        //         &[relayed_tx.clone().into()],
+        //     );
+        //     let producer = create_relayer_executor(on_chain_db, relayer_db);
+        //     let block = test_block(block_height.into(), da_height.into(), 0);
+        //
+        //     // when
+        //     let (result, _) = producer
+        //         .execute_without_commit(ExecutionTypes::Production(block.into()))
+        //         .unwrap()
+        //         .into();
+        //
+        //     // then
+        //     let txs = result.block.transactions();
+        //     assert_eq!(txs.len(), 1);
+        // }
 
         #[test]
         fn block_producer_does_not_take_messages_for_the_same_height() {
