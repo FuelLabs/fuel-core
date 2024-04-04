@@ -633,7 +633,7 @@ checksum = "1505bd5d3d116872e7271a6d4e16d81d0c8570876c8de68093a09ac269d8aac0"
 
 [[package]]
 name = "attohttpc"
-version = "0.24.1"
+version = "0.24.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8d9a9bf8b79a749ee0b911b91b671cc2b6c670bdbc7e3dfd537576ddc94bb2a2"
 dependencies = [
@@ -2846,7 +2846,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-core"
-version = "0.24.1"
+version = "0.24.2"
 dependencies = [
  "anyhow",
  "assert_matches",
@@ -2933,11 +2933,11 @@ dependencies = [
 
 [[package]]
 name = "fuel-core-bft"
-version = "0.24.1"
+version = "0.24.2"
 
 [[package]]
 name = "fuel-core-bin"
-version = "0.24.1"
+version = "0.24.2"
 dependencies = [
  "anyhow",
  "clap 4.5.4",
@@ -2968,7 +2968,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-core-chain-config"
-version = "0.24.1"
+version = "0.24.2"
 dependencies = [
  "anyhow",
  "bech32",
@@ -2992,7 +2992,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-core-client"
-version = "0.24.1"
+version = "0.24.2"
 dependencies = [
  "anyhow",
  "cynic",
@@ -3015,7 +3015,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-core-client-bin"
-version = "0.24.1"
+version = "0.24.2"
 dependencies = [
  "clap 4.5.4",
  "fuel-core-client",
@@ -3026,7 +3026,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-core-consensus-module"
-version = "0.24.1"
+version = "0.24.2"
 dependencies = [
  "anyhow",
  "fuel-core-chain-config",
@@ -3038,7 +3038,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-core-database"
-version = "0.24.1"
+version = "0.24.2"
 dependencies = [
  "anyhow",
  "derive_more",
@@ -3049,7 +3049,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-core-e2e-client"
-version = "0.24.1"
+version = "0.24.2"
 dependencies = [
  "anyhow",
  "assert_cmd",
@@ -3075,7 +3075,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-core-executor"
-version = "0.24.1"
+version = "0.24.2"
 dependencies = [
  "anyhow",
  "fuel-core-chain-config",
@@ -3090,7 +3090,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-core-importer"
-version = "0.24.1"
+version = "0.24.2"
 dependencies = [
  "anyhow",
  "derive_more",
@@ -3108,7 +3108,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-core-keygen"
-version = "0.24.1"
+version = "0.24.2"
 dependencies = [
  "anyhow",
  "clap 4.5.4",
@@ -3119,7 +3119,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-core-keygen-bin"
-version = "0.24.1"
+version = "0.24.2"
 dependencies = [
  "anyhow",
  "atty",
@@ -3132,7 +3132,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-core-metrics"
-version = "0.24.1"
+version = "0.24.2"
 dependencies = [
  "axum",
  "once_cell",
@@ -3145,7 +3145,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-core-p2p"
-version = "0.24.1"
+version = "0.24.2"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -3181,7 +3181,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-core-poa"
-version = "0.24.1"
+version = "0.24.2"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -3200,7 +3200,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-core-producer"
-version = "0.24.1"
+version = "0.24.2"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -3217,7 +3217,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-core-relayer"
-version = "0.24.1"
+version = "0.24.2"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -3249,7 +3249,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-core-services"
-version = "0.24.1"
+version = "0.24.2"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -3263,7 +3263,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-core-storage"
-version = "0.24.1"
+version = "0.24.2"
 dependencies = [
  "anyhow",
  "derive_more",
@@ -3287,7 +3287,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-core-sync"
-version = "0.24.1"
+version = "0.24.2"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -3340,7 +3340,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-core-trace"
-version = "0.24.1"
+version = "0.24.2"
 dependencies = [
  "ctor",
  "tracing",
@@ -3350,7 +3350,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-core-txpool"
-version = "0.24.1"
+version = "0.24.2"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -3376,7 +3376,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-core-types"
-version = "0.24.1"
+version = "0.24.2"
 dependencies = [
  "anyhow",
  "bs58",
@@ -3393,7 +3393,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-core-upgradable-executor"
-version = "0.24.1"
+version = "0.24.2"
 dependencies = [
  "anyhow",
  "fuel-core-executor",
@@ -3406,7 +3406,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-core-wasm-executor"
-version = "0.24.1"
+version = "0.24.2"
 dependencies = [
  "anyhow",
  "fuel-core-executor",
@@ -7844,7 +7844,7 @@ dependencies = [
 
 [[package]]
 name = "strum"
-version = "0.24.1"
+version = "0.24.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "063e6045c0e62079840579a7e47a355ae92f60eb74daaf156fb1e84ba164e63f"
 dependencies = [
@@ -8366,7 +8366,7 @@ dependencies = [
 
 [[package]]
 name = "tokio-rustls"
-version = "0.24.1"
+version = "0.24.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c28327cf380ac148141087fbfb9de9d7bd4e84ab5d2c28fbc911d753de8a7081"
 dependencies = [
