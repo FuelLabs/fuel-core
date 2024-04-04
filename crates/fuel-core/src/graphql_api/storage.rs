@@ -23,7 +23,7 @@ use fuel_core_storage::{
     Error as StorageError,
     Result as StorageResult,
     StorageAsMut,
-    StorageInspect,
+    StorageAsRef,
     StorageMutate,
 };
 use fuel_core_types::{
@@ -139,7 +139,9 @@ where
     }
 
     fn get_tx_count(&self) -> StorageResult<u64> {
-        let tx_count = <_ as StorageInspect<StatisticTable<u64>>>::get(self, TX_COUNT)?
+        let tx_count = self
+            .storage::<StatisticTable<u64>>()
+            .get(TX_COUNT)?
             .unwrap_or_default()
             .into_owned();
         Ok(tx_count)
