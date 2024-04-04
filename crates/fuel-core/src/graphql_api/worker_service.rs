@@ -1,4 +1,3 @@
-use crate::graphql_api::storage::relayed_transactions::RelayedTransactionStatuses;
 use crate::{
     fuel_core_graphql_api::{
         ports,
@@ -16,7 +15,7 @@ use crate::{
             },
         },
     },
-    // graphql_api::storage::layer_one_transactions::RelayedTransactionStatuses,
+    graphql_api::storage::relayed_transactions::RelayedTransactionStatuses,
 };
 use fuel_core_metrics::graphql_metrics::graphql_metrics;
 use fuel_core_services::{

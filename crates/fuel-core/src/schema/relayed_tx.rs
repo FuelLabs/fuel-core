@@ -1,36 +1,17 @@
-// TODO: Remove all these before merging
-#![allow(unused_imports)]
-#![allow(unreachable_code)]
-#![allow(unused_variables)]
-
 use crate::{
-    fuel_core_graphql_api::{
-        database::ReadView,
-        IntoApiResult,
-    },
-    schema::{
-        scalars::{
-            Bytes32,
-            Nonce,
-            Tai64Timestamp,
-            U32,
-        },
-        tx::types::{
-            FailureStatus,
-            SqueezedOutStatus,
-            SubmittedStatus,
-            SuccessStatus,
-        },
+    fuel_core_graphql_api::database::ReadView,
+    schema::scalars::{
+        Bytes32,
+        Tai64Timestamp,
+        U32,
     },
 };
 use async_graphql::{
     Context,
-    Enum,
     Object,
     Union,
 };
 use fuel_core_types::{
-    entities,
     entities::relayer::transaction::RelayedTransactionStatus as FuelRelayedTransactionStatus,
     fuel_types::BlockHeight,
     tai64::Tai64,
