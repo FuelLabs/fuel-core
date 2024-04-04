@@ -2,23 +2,16 @@ use crate::{
     combined_database::CombinedDatabase,
     database::{
         database_description::{
-            off_chain::OffChain,
-            on_chain::OnChain,
-            DatabaseDescription,
+            off_chain::OffChain, on_chain::OnChain, DatabaseDescription,
         },
-        Database,
+        Database, EntriesFilter,
     },
     fuel_core_graphql_api::storage::transactions::{
-        OwnedTransactions,
-        TransactionStatuses,
+        OwnedTransactions, TransactionStatuses,
     },
 };
 use fuel_core_chain_config::{
-    AddTable,
-    ChainConfig,
-    SnapshotFragment,
-    SnapshotWriter,
-    StateConfigBuilder,
+    AddTable, ChainConfig, SnapshotFragment, SnapshotWriter, StateConfigBuilder,
     TableEntry,
 };
 use fuel_core_storage::{
@@ -26,14 +19,10 @@ use fuel_core_storage::{
     iter::IterDirection,
     structured_storage::TableWithBlueprint,
     tables::{
-        Coins,
-        ContractsAssets,
-        ContractsLatestUtxo,
-        ContractsRawCode,
-        ContractsState,
-        Messages,
-        Transactions,
+        Coins, ContractsAssets, ContractsLatestUtxo, ContractsRawCode, ContractsState,
+        Messages, Transactions,
     },
+    ContractsAssetKey, ContractsStateKey,
 };
 use fuel_core_types::fuel_types::ContractId;
 use itertools::Itertools;
@@ -69,17 +58,53 @@ impl Exporter {
             TaskManager::new(CancellationToken::new());
 
         let db = self.db.on_chain();
-        self.write::<Coins, OnChain>(&mut task_manager, db.clone())?;
-        self.write::<Messages, OnChain>(&mut task_manager, db.clone())?;
-        self.write::<ContractsRawCode, OnChain>(&mut task_manager, db.clone())?;
-        self.write::<ContractsLatestUtxo, OnChain>(&mut task_manager, db.clone())?;
-        self.write::<ContractsState, OnChain>(&mut task_manager, db.clone())?;
-        self.write::<ContractsAssets, OnChain>(&mut task_manager, db.clone())?;
-        self.write::<Transactions, OnChain>(&mut task_manager, db.clone())?;
+        self.spawn_task::<Coins, OnChain>(
+            EntriesFilter::none(),
+            &mut task_manager,
+            db.clone(),
+        )?;
+        self.spawn_task::<Messages, OnChain>(
+            EntriesFilter::none(),
+            &mut task_manager,
+            db.clone(),
+        )?;
+        self.spawn_task::<ContractsRawCode, OnChain>(
+            EntriesFilter::none(),
+            &mut task_manager,
+            db.clone(),
+        )?;
+        self.spawn_task::<ContractsLatestUtxo, OnChain>(
+            EntriesFilter::none(),
+            &mut task_manager,
+            db.clone(),
+        )?;
+        self.spawn_task::<ContractsState, OnChain>(
+            EntriesFilter::none(),
+            &mut task_manager,
+            db.clone(),
+        )?;
+        self.spawn_task::<ContractsAssets, OnChain>(
+            EntriesFilter::none(),
+            &mut task_manager,
+            db.clone(),
+        )?;
+        self.spawn_task::<Transactions, OnChain>(
+            EntriesFilter::none(),
+            &mut task_manager,
+            db.clone(),
+        )?;
 
         let db = self.db.off_chain();
-        self.write::<TransactionStatuses, OffChain>(&mut task_manager, db.clone())?;
-        self.write::<OwnedTransactions, OffChain>(&mut task_manager, db.clone())?;
+        self.spawn_task::<TransactionStatuses, OffChain>(
+            EntriesFilter::none(),
+            &mut task_manager,
+            db.clone(),
+        )?;
+        self.spawn_task::<OwnedTransactions, OffChain>(
+            EntriesFilter::none(),
+            &mut task_manager,
+            db.clone(),
+        )?;
 
         let data_snapshot_fragments = task_manager.wait().await?;
 
@@ -96,59 +121,59 @@ impl Exporter {
         Ok(())
     }
 
-    pub fn write_contract_snapshot(
+    pub async fn write_contract_snapshot(
         self,
         contract_id: ContractId,
     ) -> Result<(), anyhow::Error> {
-        let code = self
-            .db
-            .on_chain()
-            .entries::<ContractsRawCode>(
-                Some(contract_id.as_ref()),
-                IterDirection::Forward,
-            )
-            .next()
-            .ok_or_else(|| {
-                anyhow::anyhow!("contract code not found! id: {:?}", contract_id)
-            })??;
+        let mut task_manager: TaskManager<SnapshotFragment> =
+            TaskManager::new(CancellationToken::new());
+        let db = self.db.on_chain();
+        let prefix = contract_id.as_ref().to_vec();
+        self.spawn_task::<ContractsRawCode, OnChain>(
+            EntriesFilter::new(prefix.clone(), move |key| *key == contract_id),
+            &mut task_manager,
+            db.clone(),
+        )?;
 
-        let utxo = self
-            .db
-            .on_chain()
-            .entries::<ContractsLatestUtxo>(
-                Some(contract_id.as_ref()),
-                IterDirection::Forward,
-            )
-            .next()
-            .ok_or_else(|| {
-                anyhow::anyhow!("contract utxo not found! id: {:?}", contract_id)
-            })??;
+        self.spawn_task::<ContractsLatestUtxo, OnChain>(
+            EntriesFilter::new(prefix.clone(), move |key| *key == contract_id),
+            &mut task_manager,
+            db.clone(),
+        )?;
 
-        let state = self
-            .db
-            .on_chain()
-            .entries::<ContractsState>(Some(contract_id.as_ref()), IterDirection::Forward)
-            .try_collect()?;
+        self.spawn_task::<ContractsState, OnChain>(
+            EntriesFilter::new(prefix.clone(), move |key: &ContractsStateKey| {
+                *key.contract_id() == contract_id
+            }),
+            &mut task_manager,
+            db.clone(),
+        )?;
 
-        let balance = self
-            .db
-            .on_chain()
-            .entries::<ContractsAssets>(
-                Some(contract_id.as_ref()),
-                IterDirection::Forward,
-            )
-            .try_collect()?;
+        self.spawn_task::<ContractsAssets, OnChain>(
+            EntriesFilter::new(prefix.clone(), move |key: &ContractsAssetKey| {
+                *key.contract_id() == contract_id
+            }),
+            &mut task_manager,
+            db.clone(),
+        )?;
 
         let block = self.db.on_chain().latest_block()?;
-        let mut writer = self.create_writer()?;
 
-        writer.write(vec![code])?;
-        writer.write(vec![utxo])?;
-        writer.write(state)?;
-        writer.write(balance)?;
+        let mut writer = self.create_writer()?;
         writer.write_block_data(*block.header().height(), block.header().da_height)?;
         writer.write_chain_config(&self.prev_chain_config);
-        writer.close()?;
+
+        let chain_config_fragment = writer.partial_close()?;
+
+        let fragments = task_manager.wait().await?;
+
+        fragments
+            .into_iter()
+            .try_fold(chain_config_fragment, |fragment, next_fragment| {
+                fragment.merge(next_fragment)
+            })?
+            .finalize()?;
+
         Ok(())
     }
 
@@ -156,13 +181,14 @@ impl Exporter {
         (self.writer)()
     }
 
-    fn write<T, DbDesc>(
+    fn spawn_task<T, DbDesc>(
         &self,
+        filter: EntriesFilter<T>,
         task_manager: &mut TaskManager<SnapshotFragment>,
         db: Database<DbDesc>,
     ) -> anyhow::Result<()>
     where
-        T: TableWithBlueprint<Column = <DbDesc as DatabaseDescription>::Column>,
+        T: TableWithBlueprint<Column = <DbDesc as DatabaseDescription>::Column> + 'static,
         T::Blueprint: BlueprintInspect<T, Database<DbDesc>>,
         TableEntry<T>: serde::Serialize,
         StateConfigBuilder: AddTable<T>,
@@ -174,7 +200,7 @@ impl Exporter {
 
         task_manager.spawn(move |cancel| {
             tokio_rayon::spawn(move || {
-                db.entries::<T>(None, IterDirection::Forward)
+                db.entries::<T>(filter, IterDirection::Forward)
                     .chunks(group_size)
                     .into_iter()
                     .take_while(|_| !cancel.is_cancelled())

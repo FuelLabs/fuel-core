@@ -1,19 +1,10 @@
 use crate::cli::default_db_path;
 use anyhow::Context;
-use clap::{
-    Parser,
-    Subcommand,
-};
-use fuel_core::{
-    combined_database::CombinedDatabase,
-    types::fuel_types::ContractId,
-};
+use clap::{Parser, Subcommand};
+use fuel_core::{combined_database::CombinedDatabase, types::fuel_types::ContractId};
 use fuel_core_chain_config::ChainConfig;
 
-use std::path::{
-    Path,
-    PathBuf,
-};
+use std::path::{Path, PathBuf};
 
 use super::local_testnet_chain_config;
 
@@ -115,10 +106,7 @@ pub enum SubCommands {
 #[cfg(any(feature = "rocksdb", feature = "rocksdb-production"))]
 pub async fn exec(command: Command) -> anyhow::Result<()> {
     use fuel_core::service::genesis::Exporter;
-    use fuel_core_chain_config::{
-        SnapshotWriter,
-        MAX_GROUP_SIZE,
-    };
+    use fuel_core_chain_config::{SnapshotWriter, MAX_GROUP_SIZE};
 
     let db = open_db(
         &command.database_path,
@@ -157,6 +145,7 @@ pub async fn exec(command: Command) -> anyhow::Result<()> {
             let writer = move || Ok(SnapshotWriter::json(output_dir.clone()));
             Exporter::new(db, local_testnet_chain_config(), writer, MAX_GROUP_SIZE)
                 .write_contract_snapshot(contract_id)
+                .await
         }
     }
 }
@@ -181,69 +170,34 @@ mod tests {
     use std::iter::repeat_with;
 
     use fuel_core::fuel_core_graphql_api::storage::transactions::{
-        OwnedTransactionIndexKey,
-        OwnedTransactions,
-        TransactionStatuses,
+        OwnedTransactionIndexKey, OwnedTransactions, TransactionStatuses,
     };
     use fuel_core_chain_config::{
-        AddTable,
-        AsTable,
-        SnapshotMetadata,
-        SnapshotReader,
-        StateConfig,
-        StateConfigBuilder,
-        TableEntry,
+        AddTable, AsTable, SnapshotMetadata, SnapshotReader, StateConfig,
+        StateConfigBuilder, TableEntry,
     };
     use fuel_core_storage::{
         structured_storage::TableWithBlueprint,
         tables::{
-            Coins,
-            ContractsAssets,
-            ContractsLatestUtxo,
-            ContractsRawCode,
-            ContractsState,
-            FuelBlocks,
-            Messages,
-            Transactions,
+            Coins, ContractsAssets, ContractsLatestUtxo, ContractsRawCode,
+            ContractsState, FuelBlocks, Messages, Transactions,
         },
-        ContractsAssetKey,
-        ContractsStateKey,
-        StorageAsMut,
+        ContractsAssetKey, ContractsStateKey, StorageAsMut,
     };
     use fuel_core_types::{
-        blockchain::{
-            block::CompressedBlock,
-            primitives::DaBlockHeight,
-        },
+        blockchain::{block::CompressedBlock, primitives::DaBlockHeight},
         entities::{
-            coins::coin::{
-                CompressedCoin,
-                CompressedCoinV1,
-            },
+            coins::coin::{CompressedCoin, CompressedCoinV1},
             contract::ContractUtxoInfo,
-            relayer::message::{
-                Message,
-                MessageV1,
-            },
+            relayer::message::{Message, MessageV1},
         },
-        fuel_tx::{
-            Receipt,
-            TransactionBuilder,
-            TxPointer,
-            UniqueIdentifier,
-            UtxoId,
-        },
+        fuel_tx::{Receipt, TransactionBuilder, TxPointer, UniqueIdentifier, UtxoId},
         fuel_types::ChainId,
         services::txpool::TransactionStatus,
         tai64::Tai64,
     };
     use itertools::Itertools;
-    use rand::{
-        rngs::StdRng,
-        seq::SliceRandom,
-        Rng,
-        SeedableRng,
-    };
+    use rand::{rngs::StdRng, seq::SliceRandom, Rng, SeedableRng};
     use test_case::test_case;
 
     use crate::cli::DEFAULT_DATABASE_CACHE_SIZE;
@@ -746,6 +700,7 @@ mod tests {
             .unwrap()
             .clone();
         let contract_id = randomly_chosen_contract.contract_id;
+        eprintln!("Randomly chosen contract: {:?}", contract_id);
         db.flush();
 
         // when
@@ -760,8 +715,9 @@ mod tests {
         // then
         let metadata = SnapshotMetadata::read(&snapshot_dir)?;
         let snapshot_state = StateConfig::from_snapshot_metadata(metadata)?;
+        eprintln!("Snapshot state: {:?}", snapshot_state);
 
-        assert_eq!(
+        pretty_assertions::assert_eq!(
             snapshot_state,
             StateConfig {
                 coins: vec![],

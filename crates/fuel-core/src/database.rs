@@ -1,66 +1,37 @@
 use crate::{
     database::{
         database_description::{
-            off_chain::OffChain,
-            on_chain::OnChain,
-            relayer::Relayer,
-            DatabaseDescription,
-            DatabaseMetadata,
+            off_chain::OffChain, on_chain::OnChain, relayer::Relayer,
+            DatabaseDescription, DatabaseMetadata,
         },
         metadata::MetadataTable,
         Error as DatabaseError,
     },
     graphql_api::storage::blocks::FuelBlockIdsToHeights,
-    state::{
-        in_memory::memory_store::MemoryStore,
-        ChangesIterator,
-        DataSource,
-    },
+    state::{in_memory::memory_store::MemoryStore, ChangesIterator, DataSource},
 };
 use fuel_core_chain_config::TableEntry;
 use fuel_core_services::SharedMutex;
 use fuel_core_storage::{
     self,
     blueprint::BlueprintInspect,
-    iter::{
-        BoxedIter,
-        IterDirection,
-        IterableStore,
-        IteratorOverTable,
-    },
-    kv_store::{
-        KVItem,
-        KeyValueInspect,
-        Value,
-    },
+    iter::{BoxedIter, IterDirection, IterableStore, IteratorOverTable},
+    kv_store::{KVItem, KeyValueInspect, Value},
     not_found,
     structured_storage::TableWithBlueprint,
     tables::FuelBlocks,
     transactional::{
-        AtomicView,
-        Changes,
-        ConflictPolicy,
-        Modifiable,
-        StorageTransaction,
+        AtomicView, Changes, ConflictPolicy, Modifiable, StorageTransaction,
     },
-    Error as StorageError,
-    Result as StorageResult,
-    StorageAsMut,
-    StorageInspect,
-    StorageMutate,
+    Error as StorageError, Mappable, Result as StorageResult, StorageAsMut,
+    StorageInspect, StorageMutate,
 };
 use fuel_core_types::{
-    blockchain::{
-        block::CompressedBlock,
-        primitives::DaBlockHeight,
-    },
+    blockchain::{block::CompressedBlock, primitives::DaBlockHeight},
     fuel_types::BlockHeight,
 };
 use itertools::Itertools;
-use std::{
-    fmt::Debug,
-    sync::Arc,
-};
+use std::{fmt::Debug, sync::Arc};
 
 pub use fuel_core_database::Error;
 pub type Result<T> = core::result::Result<T, Error>;
@@ -104,22 +75,64 @@ impl Database<OnChain> {
     }
 }
 
+pub struct EntriesFilter<T>
+where
+    T: Mappable,
+{
+    prefix: Option<Vec<u8>>,
+    predicate: Box<dyn Fn(&T::OwnedKey) -> bool + Send + Sync>,
+}
+
+impl<T> EntriesFilter<T>
+where
+    T: Mappable,
+{
+    pub fn none() -> Self {
+        Self {
+            prefix: None,
+            predicate: Box::new(|_: &T::OwnedKey| true),
+        }
+    }
+
+    pub fn new(
+        prefix: Vec<u8>,
+        predicate: impl Fn(&T::OwnedKey) -> bool + 'static + Send + Sync,
+    ) -> Self {
+        Self {
+            prefix: Some(prefix),
+            predicate: Box::new(predicate),
+        }
+    }
+
+    pub fn prefix(&self) -> Option<&[u8]> {
+        self.prefix.as_deref()
+    }
+
+    fn should_take(&self, entry: &T::OwnedKey) -> bool {
+        (self.predicate)(entry)
+    }
+}
+
 impl<DbDesc> Database<DbDesc>
 where
     DbDesc: DatabaseDescription,
 {
     pub fn entries<'a, T>(
         &'a self,
-        prefix: Option<&[u8]>,
+        filter: EntriesFilter<T>,
         direction: IterDirection,
     ) -> impl Iterator<Item = StorageResult<TableEntry<T>>> + 'a
     where
-        T: TableWithBlueprint<Column = <DbDesc as DatabaseDescription>::Column>,
-        T::OwnedValue: 'a,
-        T::OwnedKey: 'a,
+        T: TableWithBlueprint<Column = <DbDesc as DatabaseDescription>::Column> + 'a,
         T::Blueprint: BlueprintInspect<T, Self>,
     {
-        self.iter_all_filtered::<T, _>(prefix, None, Some(direction))
+        self.iter_all_filtered::<T, _>(filter.prefix(), None, Some(direction))
+            .take_while(move |result| {
+                let Ok((key, _)) = result.as_ref() else {
+                    return true;
+                };
+                filter.should_take(key)
+            })
             .map_ok(|(key, value)| TableEntry { key, value })
     }
 }
@@ -481,14 +494,8 @@ pub fn convert_to_rocksdb_direction(direction: IterDirection) -> rocksdb::Direct
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::database::{
-        database_description::DatabaseDescription,
-        Database,
-    };
-    use fuel_core_storage::{
-        tables::FuelBlocks,
-        StorageAsMut,
-    };
+    use crate::database::{database_description::DatabaseDescription, Database};
+    use fuel_core_storage::{tables::FuelBlocks, StorageAsMut};
 
     fn column_keys_not_exceed_count<Description>()
     where
@@ -504,17 +511,10 @@ mod tests {
 
     mod on_chain {
         use super::*;
-        use crate::database::{
-            database_description::on_chain::OnChain,
-            DatabaseHeight,
-        };
-        use fuel_core_storage::{
-            tables::Coins,
-            transactional::WriteTransaction,
-        };
+        use crate::database::{database_description::on_chain::OnChain, DatabaseHeight};
+        use fuel_core_storage::{tables::Coins, transactional::WriteTransaction};
         use fuel_core_types::{
-            blockchain::block::CompressedBlock,
-            entities::coins::coin::CompressedCoin,
+            blockchain::block::CompressedBlock, entities::coins::coin::CompressedCoin,
             fuel_tx::UtxoId,
         };
 
@@ -670,10 +670,7 @@ mod tests {
     mod off_chain {
         use super::*;
         use crate::{
-            database::{
-                database_description::off_chain::OffChain,
-                DatabaseHeight,
-            },
+            database::{database_description::off_chain::OffChain, DatabaseHeight},
             fuel_core_graphql_api::storage::messages::OwnedMessageKey,
             graphql_api::storage::messages::OwnedMessageIds,
         };
@@ -831,14 +828,8 @@ mod tests {
     #[cfg(feature = "relayer")]
     mod relayer {
         use super::*;
-        use crate::database::{
-            database_description::relayer::Relayer,
-            DatabaseHeight,
-        };
-        use fuel_core_relayer::storage::{
-            DaHeightTable,
-            EventsHistory,
-        };
+        use crate::database::{database_description::relayer::Relayer, DatabaseHeight};
+        use fuel_core_relayer::storage::{DaHeightTable, EventsHistory};
         use fuel_core_storage::transactional::WriteTransaction;
 
         #[test]
