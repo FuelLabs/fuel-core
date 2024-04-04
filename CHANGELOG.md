@@ -15,6 +15,7 @@ Description of the upcoming release here.
 
 ### Fixed
 
+- [#1802](https://github.com/FuelLabs/fuel-core/pull/1802): Fixed a runtime panic that occurred when restarting a node. The panic was caused by an invalid database commit while loading an existing off-chain database. The invalid commit is removed in this PR.
 - [#1803](https://github.com/FuelLabs/fuel-core/pull/1803): Produce block when da height haven't changed.
 - [#1795](https://github.com/FuelLabs/fuel-core/pull/1795): Fixed the building of the `fuel-core-wasm-executor` to work outside of the `fuel-core` context. The change uses the path to the manifest file of the `fuel-core-upgradable-executor` to build the `fuel-core-wasm-executor` instead of relying on the workspace.
 

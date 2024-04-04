@@ -323,10 +323,11 @@ where
         _: &StateWatcher,
         _: Self::TaskParams,
     ) -> anyhow::Result<Self::Task> {
-        let mut db_tx = self.database.transaction();
-        let total_tx_count = db_tx.increase_tx_count(0).unwrap_or_default();
-        db_tx.commit()?;
-        graphql_metrics().total_txs_count.set(total_tx_count as i64);
+        {
+            let db_tx = self.database.transaction();
+            let total_tx_count = db_tx.get_tx_count().unwrap_or_default();
+            graphql_metrics().total_txs_count.set(total_tx_count as i64);
+        }
 
         // TODO: It is possible that the node was shut down before we processed all imported blocks.
         //  It could lead to some missed blocks and the database's inconsistent state.
