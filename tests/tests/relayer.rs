@@ -7,7 +7,9 @@ use ethers::{
     },
 };
 use fuel_core::{
+    combined_database::CombinedDatabase,
     database::Database,
+    fuel_core_graphql_api::storage::relayed_transactions::RelayedTransactionStatuses,
     relayer,
     service::{
         Config,
@@ -20,6 +22,7 @@ use fuel_core_client::client::{
         PageDirection,
         PaginationRequest,
     },
+    schema::relayed_tx::RelayedTransactionState,
     types::TransactionStatus,
     FuelClient,
 };
@@ -34,13 +37,16 @@ use fuel_core_relayer::{
 };
 use fuel_core_storage::{
     tables::Messages,
+    StorageAsMut,
     StorageAsRef,
 };
 use fuel_core_types::{
+    entities::relayer::transaction::RelayedTransactionStatus,
     fuel_asm::*,
     fuel_crypto::*,
     fuel_tx::*,
     fuel_types::Nonce,
+    tai64::Tai64,
 };
 use hyper::{
     service::{
@@ -254,16 +260,27 @@ async fn messages_are_spendable_after_relayer_is_synced() {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn can_find_failed_relayed_tx() {
-    let db = Database::in_memory();
-    let srv = FuelService::from_database(db.clone(), Config::local_node())
+    let mut db = CombinedDatabase::in_memory();
+    let id = [1; 32].into();
+    let status = RelayedTransactionStatus::Failed {
+        block_height: 999.into(),
+        block_time: Tai64::UNIX_EPOCH,
+        failure: "lolz".to_string(),
+    };
+    db.off_chain_mut()
+        .storage_as_mut::<RelayedTransactionStatuses>()
+        .insert(&id, &status)
+        .unwrap();
+
+    let srv = FuelService::from_combined_database(db.clone(), Config::local_node())
         .await
         .unwrap();
 
     let client = FuelClient::from(srv.bound_address);
 
-    let tx_id = [1; 32].into();
-    let query = client.relayed_transaction_status(&tx_id).await.unwrap();
-    assert!(query.is_some());
+    let expected = Some(RelayedTransactionState::Failed);
+    let actual = client.relayed_transaction_status(&id).await.unwrap();
+    assert_eq!(expected, actual);
 }
 
 #[allow(clippy::too_many_arguments)]

@@ -26,7 +26,7 @@ pub struct RelayedTransactionStatus {
     pub(crate) state: RelayedTransactionState,
 }
 
-#[derive(cynic::Enum, Copy, Clone, Debug)]
+#[derive(cynic::Enum, Copy, Clone, Debug, PartialEq, Eq)]
 #[cynic(schema_path = "./assets/schema.sdl")]
 pub enum RelayedTransactionState {
     /// Transaction was included in a block, but the execution was reverted
