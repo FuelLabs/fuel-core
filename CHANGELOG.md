@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Description of the upcoming release here.
 
+## [Version 0.24.2]
+
 ### Changed
 
 #### Breaking
