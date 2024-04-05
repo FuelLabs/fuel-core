@@ -15,6 +15,8 @@ Description of the upcoming release here.
 
 ### Fixed
 
+- [#1802](https://github.com/FuelLabs/fuel-core/pull/1802): Fixed a runtime panic that occurred when restarting a node. The panic was caused by an invalid database commit while loading an existing off-chain database. The invalid commit is removed in this PR.
+- [#1803](https://github.com/FuelLabs/fuel-core/pull/1803): Produce block when da height haven't changed.
 - [#1795](https://github.com/FuelLabs/fuel-core/pull/1795): Fixed the building of the `fuel-core-wasm-executor` to work outside of the `fuel-core` context. The change uses the path to the manifest file of the `fuel-core-upgradable-executor` to build the `fuel-core-wasm-executor` instead of relying on the workspace.
 
 ## [Version 0.24.1]
@@ -37,6 +39,7 @@ Description of the upcoming release here.
 
 #### Breaking
 
+- [1785](https://github.com/FuelLabs/fuel-core/pull/1785): Producer will only include DA height if it has enough gas to include the associate forced transactions.
 - [#1771](https://github.com/FuelLabs/fuel-core/pull/1771): Contract 'states' and 'balances' brought back into `ContractConfig`. Parquet now writes a file per table.
 - [1779](https://github.com/FuelLabs/fuel-core/pull/1779): Modify Relayer service to order Events from L1 by block index
 - [#1783](https://github.com/FuelLabs/fuel-core/pull/1783): The PR upgrade `fuel-vm` to `0.48.0` release. Because of some breaking changes, we also adapted our codebase to follow them: 

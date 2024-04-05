@@ -5,4 +5,5 @@ pub struct Config {
     pub utxo_validation: bool,
     pub coinbase_recipient: Option<ContractId>,
     pub metrics: bool,
+    pub block_gas_limit: u64,
 }
