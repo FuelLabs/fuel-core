@@ -3072,6 +3072,39 @@ mod tests {
         }
 
         #[test]
+        fn execute_without_commit__duplicated_relayed_tx_not_included_in_block() {
+            let genesis_da_height = 3u64;
+            let on_chain_db = database_with_genesis_block(genesis_da_height);
+            let mut relayer_db = Database::<Relayer>::default();
+            // given
+            let block_height = 1u32;
+            let da_height = 10u64;
+            let mut relayed_tx = RelayedTransaction::default();
+            let tx = script_tx_for_amount(100);
+            let tx_bytes = tx.to_bytes();
+            relayed_tx.set_serialized_transaction(tx_bytes);
+            let duplicate_count = 10;
+            let events = std::iter::repeat(relayed_tx.clone().into())
+                .take(duplicate_count + 1)
+                .collect::<Vec<_>>();
+            add_events_to_relayer(&mut relayer_db, da_height.into(), &events);
+            let producer = create_relayer_executor(on_chain_db, relayer_db);
+            let block = test_block(block_height.into(), da_height.into(), 0);
+
+            // when
+            let (result, _) = producer
+                .execute_without_commit(ExecutionTypes::Production(block.into()))
+                .unwrap()
+                .into();
+
+            // then
+            let txs = result.block.transactions();
+            assert_eq!(txs.len(), 2);
+            let skipped_txs = result.skipped_transactions;
+            assert_eq!(skipped_txs.len(), duplicate_count);
+        }
+
+        #[test]
         fn execute_without_commit__relayed_mint_tx_not_included_in_block() {
             let genesis_da_height = 3u64;
             let on_chain_db = database_with_genesis_block(genesis_da_height);
