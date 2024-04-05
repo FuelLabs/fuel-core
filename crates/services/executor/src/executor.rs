@@ -499,7 +499,7 @@ where
         // initiate transaction stream with relayed (forced) transactions first,
         // and pull the rest from the TxSource (txpool) if there is remaining blockspace available.
         // We use `block.transactions` to store executed transactions.
-        let mut iter = forced_transactions.into_iter().peekable();
+        let relayed_tx_iter = forced_transactions.into_iter().peekable();
 
         let mut execute_transaction = |execution_data: &mut ExecutionData,
                                        tx: MaybeCheckedTransaction|
@@ -569,17 +569,24 @@ where
             Ok(())
         };
 
-        while iter.peek().is_some() {
-            for transaction in iter {
+        for transaction in relayed_tx_iter {
+            execute_transaction(&mut *execution_data, transaction)?;
+        }
+
+        let remaining_gas_limit = block_gas_limit.saturating_sub(execution_data.used_gas);
+
+        // L2 originated transactions should be in the `TxSource`. This will be triggered after
+        // all relayed transactions are processed.
+        let mut regular_tx_iter = source.next(remaining_gas_limit).into_iter().peekable();
+        while regular_tx_iter.peek().is_some() {
+            for transaction in regular_tx_iter {
                 execute_transaction(&mut *execution_data, transaction)?;
             }
 
-            let remaining_gas_limit =
+            let new_remaining_gas_limit =
                 block_gas_limit.saturating_sub(execution_data.used_gas);
 
-            // L2 originated transactions should be in the `TxSource`. This will be triggered after
-            // all relayed transactions are processed.
-            iter = source.next(remaining_gas_limit).into_iter().peekable();
+            regular_tx_iter = source.next(new_remaining_gas_limit).into_iter().peekable();
         }
 
         // After the execution of all transactions in production mode, we can set the final fee.

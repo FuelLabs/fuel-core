@@ -3148,6 +3148,55 @@ mod tests {
         }
 
         #[test]
+        fn execute_without_commit__validation__includes_status_of_failed_relayed_tx() {
+            let genesis_da_height = 3u64;
+            let producer_db = database_with_genesis_block(genesis_da_height);
+            let verifyer_db = database_with_genesis_block(genesis_da_height);
+            let mut producer_relayer_db = Database::<Relayer>::default();
+            let mut verifier_relayer_db = Database::<Relayer>::default();
+            // given
+            let block_height = 1u32;
+            let da_height = 10u64;
+            let mut invalid_relayed_tx = RelayedTransaction::default();
+            let mut tx = script_tx_for_amount(100);
+            tx.as_script_mut().unwrap().inputs_mut().drain(..); // Remove all the inputs :)
+            let tx_bytes = tx.to_bytes();
+            invalid_relayed_tx.set_serialized_transaction(tx_bytes);
+            let events = vec![invalid_relayed_tx.clone().into()];
+            add_events_to_relayer(&mut producer_relayer_db, da_height.into(), &events);
+            add_events_to_relayer(&mut verifier_relayer_db, da_height.into(), &events);
+
+            let producer = create_relayer_executor(producer_db, producer_relayer_db);
+            let verifier = create_relayer_executor(verifyer_db, verifier_relayer_db);
+            let block = test_block(block_height.into(), da_height.into(), 0);
+            let (produced_result, _) = producer
+                .execute_without_commit(ExecutionTypes::Production(block.into()))
+                .unwrap()
+                .into();
+            let produced_block = produced_result.block;
+
+            // when
+            let (result, _) = verifier
+                .execute_without_commit(ExecutionTypes::Validation(produced_block.into()))
+                .unwrap()
+                .into();
+
+            // then
+            let txs = result.block.transactions();
+            assert_eq!(txs.len(), 1);
+            let events = result.events;
+            let fuel_core_types::services::executor::Event::ForcedTransactionFailed {
+                failure: actual,
+                ..
+            } = &events[0]
+            else {
+                panic!("Expected `ForcedTransactionFailed` event")
+            };
+            let expected = "Failed validity checks";
+            assert_eq!(expected, actual);
+        }
+
+        #[test]
         fn execute_without_commit__relayed_mint_tx_not_included_in_block() {
             let genesis_da_height = 3u64;
             let on_chain_db = database_with_genesis_block(genesis_da_height);
