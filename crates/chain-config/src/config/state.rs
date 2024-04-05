@@ -368,7 +368,6 @@ impl AsTable<ContractsRawCode> for StateConfig {
 
 impl AddTable<ContractsRawCode> for StateConfigBuilder {
     fn add(&mut self, entries: Vec<TableEntry<ContractsRawCode>>) {
-        eprintln!("Adding contract code entries: {:?}", entries);
         self.contract_code.extend(entries);
     }
 }

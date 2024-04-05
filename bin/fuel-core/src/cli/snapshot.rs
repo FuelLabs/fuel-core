@@ -747,7 +747,6 @@ mod tests {
             .unwrap()
             .clone();
         let contract_id = randomly_chosen_contract.contract_id;
-        eprintln!("Randomly chosen contract: {:?}", contract_id);
         db.flush();
 
         // when
@@ -762,7 +761,6 @@ mod tests {
         // then
         let metadata = SnapshotMetadata::read(&snapshot_dir)?;
         let snapshot_state = StateConfig::from_snapshot_metadata(metadata)?;
-        eprintln!("Snapshot state: {:?}", snapshot_state);
 
         pretty_assertions::assert_eq!(
             snapshot_state,

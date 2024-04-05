@@ -29,6 +29,7 @@ use fuel_core_chain_config::{
     AsTable,
     SnapshotReader,
     StateConfig,
+    TableEntry,
 };
 use fuel_core_storage::{
     structured_storage::TableWithBlueprint,
@@ -100,9 +101,8 @@ impl SnapshotImporter {
 
     pub fn spawn_worker_on_chain<T>(&mut self) -> anyhow::Result<()>
     where
-        T: TableWithBlueprint + Send + 'static,
-        T::OwnedKey: serde::de::DeserializeOwned + Send,
-        T::OwnedValue: serde::de::DeserializeOwned + Send,
+        T: TableWithBlueprint + 'static,
+        TableEntry<T>: serde::de::DeserializeOwned + Send,
         StateConfig: AsTable<T>,
         Handler<T>: ImportTable<TableInSnapshot = T, DbDesc = OnChain>,
     {
@@ -126,14 +126,12 @@ impl SnapshotImporter {
         Ok(())
     }
 
-    // TODO: serde bounds can be written shorter
     pub fn spawn_worker_off_chain<TableInSnapshot, TableBeingWritten>(
         &mut self,
     ) -> anyhow::Result<()>
     where
-        TableInSnapshot: TableWithBlueprint + Send + 'static,
-        TableInSnapshot::OwnedKey: serde::de::DeserializeOwned + Send,
-        TableInSnapshot::OwnedValue: serde::de::DeserializeOwned + Send,
+        TableInSnapshot: TableWithBlueprint + 'static,
+        TableEntry<TableInSnapshot>: serde::de::DeserializeOwned + Send,
         StateConfig: AsTable<TableInSnapshot>,
         Handler<TableBeingWritten>:
             ImportTable<TableInSnapshot = TableInSnapshot, DbDesc = OffChain>,

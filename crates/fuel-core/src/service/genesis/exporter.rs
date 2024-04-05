@@ -44,25 +44,28 @@ use self::filter::ByContractId;
 use super::task_manager::TaskManager;
 mod filter;
 
-pub struct Exporter {
+pub struct Exporter<Fun> {
     db: CombinedDatabase,
     prev_chain_config: ChainConfig,
-    writer: Box<dyn Fn() -> anyhow::Result<SnapshotWriter>>,
+    writer: Fun,
     group_size: usize,
     task_manager: TaskManager<SnapshotFragment>,
 }
 
-impl Exporter {
+impl<Fun> Exporter<Fun>
+where
+    Fun: Fn() -> anyhow::Result<SnapshotWriter>,
+{
     pub fn new(
         db: CombinedDatabase,
         prev_chain_config: ChainConfig,
-        writer: impl Fn() -> anyhow::Result<SnapshotWriter> + 'static,
+        writer: Fun,
         group_size: usize,
     ) -> Self {
         Self {
             db,
             prev_chain_config,
-            writer: Box::new(writer),
+            writer,
             group_size,
             task_manager: TaskManager::new(CancellationToken::new()),
         }
