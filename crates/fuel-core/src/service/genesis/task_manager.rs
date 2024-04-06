@@ -17,10 +17,10 @@ impl<T> TaskManager<T>
 where
     T: Send + 'static,
 {
-    pub fn new(cancel_token: CancellationToken) -> Self {
+    pub fn new(cancel_token: &CancellationToken) -> Self {
         Self {
             set: JoinSet::new(),
-            cancel_token,
+            cancel_token: cancel_token.child_token(),
         }
     }
 
@@ -57,7 +57,7 @@ mod tests {
     #[tokio::test]
     async fn task_added_and_completed() {
         // given
-        let mut workers = TaskManager::new(CancellationToken::new());
+        let mut workers = TaskManager::new(&CancellationToken::new());
         workers.spawn(|_| async { Ok(8u8) });
 
         // when
@@ -70,7 +70,7 @@ mod tests {
     #[tokio::test]
     async fn returns_err_on_single_failure() {
         // given
-        let mut workers = TaskManager::new(CancellationToken::new());
+        let mut workers = TaskManager::new(&CancellationToken::new());
         workers.spawn(|_| async { Ok(10u8) });
         workers.spawn(|_| async { Err(anyhow::anyhow!("I fail")) });
 
@@ -85,7 +85,7 @@ mod tests {
     #[tokio::test]
     async fn signals_cancel_to_non_finished_tasks_on_failure() {
         // given
-        let mut workers = TaskManager::new(CancellationToken::new());
+        let mut workers = TaskManager::new(&CancellationToken::new());
         let (tx, rx) = tokio::sync::oneshot::channel();
         workers.spawn(move |token| async move {
             token.cancelled().await;
@@ -108,7 +108,7 @@ mod tests {
     async fn propagates_cancellation_from_outside() {
         // given
         let cancel_token = CancellationToken::new();
-        let mut workers = TaskManager::new(cancel_token.clone());
+        let mut workers = TaskManager::new(&cancel_token);
 
         workers.spawn(move |token| async move {
             token.cancelled().await;
@@ -125,5 +125,22 @@ mod tests {
             .unwrap();
 
         assert_eq!(result, vec![10]);
+    }
+
+    #[tokio::test]
+    async fn inner_cancellation_wont_propagate_outside() {
+        // given
+        let cancel_token = CancellationToken::new();
+        let mut workers = TaskManager::new(&cancel_token);
+        workers.spawn(move |token| async move {
+            token.cancel();
+            Ok(())
+        });
+
+        // when
+        workers.wait().await.unwrap();
+
+        // then
+        assert!(!cancel_token.is_cancelled());
     }
 }

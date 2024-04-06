@@ -52,7 +52,7 @@ use tokio_util::sync::CancellationToken;
 
 pub struct SnapshotImporter {
     db: CombinedDatabase,
-    task_manager: TaskManager<()>,
+    task_manager: TaskManager<bool>,
     snapshot_reader: SnapshotReader,
 }
 
@@ -60,11 +60,11 @@ impl SnapshotImporter {
     fn new(
         db: CombinedDatabase,
         snapshot_reader: SnapshotReader,
-        cancel_token: CancellationToken,
+        cancel_token: &CancellationToken,
     ) -> Self {
         Self {
             db,
-            task_manager: TaskManager::new(cancel_token),
+            task_manager: TaskManager::new(&cancel_token),
             snapshot_reader,
         }
     }
@@ -72,14 +72,14 @@ impl SnapshotImporter {
     pub async fn import(
         db: CombinedDatabase,
         snapshot_reader: SnapshotReader,
-        cancel_token: CancellationToken,
-    ) -> anyhow::Result<()> {
+        cancel_token: &CancellationToken,
+    ) -> anyhow::Result<bool> {
         Self::new(db, snapshot_reader, cancel_token)
             .run_workers()
             .await
     }
 
-    async fn run_workers(mut self) -> anyhow::Result<()> {
+    async fn run_workers(mut self) -> anyhow::Result<bool> {
         tracing::info!("Running imports");
         self.spawn_worker_on_chain::<Coins>()?;
         self.spawn_worker_on_chain::<Messages>()?;
@@ -95,8 +95,7 @@ impl SnapshotImporter {
         self.spawn_worker_off_chain::<Coins, OwnedCoins>()?;
         self.spawn_worker_off_chain::<Transactions, ContractsInfo>()?;
 
-        self.task_manager.wait().await?;
-        Ok(())
+        Ok(self.task_manager.wait().await?.into_iter().all(|e| e))
     }
 
     pub fn spawn_worker_on_chain<T>(&mut self) -> anyhow::Result<()>

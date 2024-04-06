@@ -67,7 +67,7 @@ where
             prev_chain_config,
             writer,
             group_size,
-            task_manager: TaskManager::new(CancellationToken::new()),
+            task_manager: TaskManager::new(&CancellationToken::new()),
         }
     }
 

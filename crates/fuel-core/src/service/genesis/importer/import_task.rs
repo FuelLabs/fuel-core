@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use fuel_core_chain_config::{
     Group,
     TableEntry,
@@ -97,19 +99,24 @@ where
     for<'a> StorageTransaction<&'a mut Database<DbDesc>>:
         StorageMutate<GenesisMetadata<DbDesc>, Error = fuel_core_storage::Error>,
 {
-    pub fn run(mut self) -> anyhow::Result<()> {
+    pub fn run(mut self) -> anyhow::Result<bool> {
         tracing::info!(
             "Starting genesis runner. Reading: {} writing into {}",
             Logic::TableInSnapshot::column().name(),
             Logic::TableBeingWritten::column().name()
         );
         let mut db = self.db;
-        let result = self
+        let mut is_cancelled = self.cancel_token.is_cancelled();
+        let result: anyhow::Result<_> = self
             .groups
             .into_iter()
             .skip(self.skip)
-            .take_while(|_| !self.cancel_token.is_cancelled())
+            .take_while(|_| {
+                is_cancelled = self.cancel_token.is_cancelled();
+                !is_cancelled
+            })
             .try_for_each(move |group| {
+                std::thread::sleep(Duration::from_millis(1000));
                 let group = group?;
                 let group_num = group.index;
 
@@ -131,7 +138,9 @@ where
             Logic::TableBeingWritten::column().name()
         );
 
-        result
+        result?;
+
+        Ok(!is_cancelled)
     }
 }
 

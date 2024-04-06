@@ -9,6 +9,7 @@ use crate::{
     },
     service::config::Config,
 };
+use anyhow::bail;
 use fuel_core_chain_config::GenesisCommitment;
 use fuel_core_storage::{
     iter::IteratorOverTable,
@@ -60,13 +61,17 @@ use self::importer::SnapshotImporter;
 
 /// Performs the importing of the genesis block from the snapshot.
 pub async fn execute_genesis_block(
+    cancel: CancellationToken,
     config: &Config,
     db: &CombinedDatabase,
 ) -> anyhow::Result<UncommittedImportResult<Changes>> {
-    // TODO: tie this with a SIGNAL for resumability
-    let cancel = CancellationToken::new();
-    SnapshotImporter::import(db.clone(), config.snapshot_reader.clone(), cancel.clone())
-        .await?;
+    let imported =
+        SnapshotImporter::import(db.clone(), config.snapshot_reader.clone(), &cancel)
+            .await?;
+
+    if !imported {
+        bail!("Import not finished");
+    }
 
     let genesis_progress_on_chain: Vec<String> = db
         .on_chain()
@@ -139,7 +144,7 @@ pub async fn execute_and_commit_genesis_block(
     config: &Config,
     db: &CombinedDatabase,
 ) -> anyhow::Result<()> {
-    let result = execute_genesis_block(config, db).await?;
+    let result = execute_genesis_block(CancellationToken::new(), config, db).await?;
     let importer = fuel_core_importer::Importer::new(
         config.block_importer.clone(),
         db.on_chain().clone(),
