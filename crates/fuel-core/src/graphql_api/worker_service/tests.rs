@@ -36,9 +36,9 @@ async fn run__relayed_transaction_events_are_added_to_storage() {
     let tx_id: Bytes32 = [1; 32].into();
     let block_height = 8.into();
     let block_time = Tai64(456);
-    let failure = "peanut butter chocolate cake with Kool-Aid".to_string();
+    let failure = "blah blah blah".to_string();
     let database = Database::in_memory();
-    let (_, receiver) = tokio::sync::watch::channel(State::Started);
+    let (_sender, receiver) = tokio::sync::watch::channel(State::Started);
     let mut state_watcher = receiver.into();
 
     // given
