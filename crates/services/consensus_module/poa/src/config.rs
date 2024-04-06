@@ -1,6 +1,5 @@
 use fuel_core_types::{
     blockchain::primitives::SecretKeyWrapper,
-    fuel_tx::ConsensusParameters,
     secrecy::Secret,
 };
 use tokio::time::Duration;
@@ -10,7 +9,6 @@ pub struct Config {
     pub trigger: Trigger,
     pub signing_key: Option<Secret<SecretKeyWrapper>>,
     pub metrics: bool,
-    pub consensus_params: ConsensusParameters,
     pub min_connected_reserved_peers: usize,
     pub time_until_synced: Duration,
 }
@@ -22,7 +20,6 @@ impl Default for Config {
             trigger: Trigger::default(),
             signing_key: None,
             metrics: false,
-            consensus_params: ConsensusParameters::default(),
             min_connected_reserved_peers: 0,
             time_until_synced: Duration::ZERO,
         }

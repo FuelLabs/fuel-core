@@ -35,9 +35,8 @@ impl VerifierAdapter {
     pub fn new(config: &Config, database: Database) -> Self {
         let block_height = config.snapshot_reader.block_height();
         let da_block_height = config.snapshot_reader.da_block_height();
-        let chain_config = config.snapshot_reader.chain_config();
-        let config =
-            VerifierConfig::new(chain_config.clone(), block_height, da_block_height);
+        let consensus = config.snapshot_reader.chain_config().consensus;
+        let config = VerifierConfig::new(consensus, block_height, da_block_height);
         Self {
             block_verifier: Arc::new(Verifier::new(config, database)),
         }
