@@ -34,7 +34,6 @@ use fuel_core_types::{
     fuel_types::{
         BlockHeight,
         Bytes32,
-        ChainId,
     },
     services::{
         block_importer::SharedImportResult,
@@ -124,7 +123,6 @@ pub struct SharedState<P2P, ViewProvider, GasPriceProvider, ConsensusProvider> {
     tx_status_sender: TxStatusChange,
     txpool: Arc<ParkingMutex<TxPool<ViewProvider>>>,
     p2p: Arc<P2P>,
-    chain_id: ChainId,
     utxo_validation: bool,
     current_height: Arc<ParkingMutex<BlockHeight>>,
     consensus_parameters_provider: Arc<ConsensusProvider>,
@@ -139,7 +137,6 @@ impl<P2P, ViewProvider, GasPriceProvider, ConsensusProvider> Clone
             tx_status_sender: self.tx_status_sender.clone(),
             txpool: self.txpool.clone(),
             p2p: self.p2p.clone(),
-            chain_id: self.chain_id,
             utxo_validation: self.utxo_validation,
             current_height: self.current_height.clone(),
             consensus_parameters_provider: self.consensus_parameters_provider.clone(),
@@ -236,7 +233,6 @@ where
 
             new_transaction = self.gossiped_tx_stream.next() => {
                 if let Some(GossipData { data: Some(tx), message_id, peer_id }) = new_transaction {
-                    let id = tx.id(&self.tx_pool_shared_state.chain_id);
                     let current_height = *self.tx_pool_shared_state.current_height.lock();
                     let params = self
                         .tx_pool_shared_state
@@ -254,6 +250,7 @@ where
 
                     let acceptance = match checked_tx {
                         Ok(tx) => {
+                            let id = tx.transaction().cached_id().expect("`Checked` tx should have cached id");
                             let txs = vec![tx];
 
                             // insert tx
@@ -504,9 +501,6 @@ where
     let committed_block_stream = importer.block_events();
     let mut ttl_timer = tokio::time::interval(config.transaction_ttl);
     ttl_timer.set_missed_tick_behavior(MissedTickBehavior::Skip);
-    let chain_id = consensus_parameters_provider
-        .latest_consensus_parameters()
-        .chain_id();
     let number_of_active_subscription = config.number_of_active_subscription;
     let txpool = Arc::new(ParkingMutex::new(TxPool::new(config.clone(), provider)));
     let task = Task {
@@ -523,7 +517,6 @@ where
             ),
             txpool,
             p2p,
-            chain_id,
             utxo_validation: config.utxo_validation,
             current_height: Arc::new(ParkingMutex::new(current_height)),
             consensus_parameters_provider: Arc::new(consensus_parameters_provider),
