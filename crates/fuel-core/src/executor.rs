@@ -3075,7 +3075,7 @@ mod tests {
             let tx_bytes = tx.to_bytes();
             relayed_tx.set_serialized_transaction(tx_bytes);
 
-            relayer_db_for_events(&[relayed_tx.clone().into()], da_height)
+            relayer_db_for_events(&[relayed_tx.into()], da_height)
         }
 
         #[test]
@@ -3121,7 +3121,7 @@ mod tests {
             let tx_bytes = tx.to_bytes();
             relayed_tx.set_serialized_transaction(tx_bytes);
 
-            relayer_db_for_events(&[relayed_tx.clone().into()], da_height)
+            relayer_db_for_events(&[relayed_tx.into()], da_height)
         }
 
         #[test]
@@ -3161,7 +3161,7 @@ mod tests {
             let tx = script_tx_for_amount_of_base_asset(100);
             let tx_bytes = tx.to_bytes();
             relayed_tx.set_serialized_transaction(tx_bytes);
-            let events = std::iter::repeat(relayed_tx.clone().into())
+            let events = std::iter::repeat(relayed_tx.into())
                 .take(duplicate_count + 1)
                 .collect::<Vec<_>>();
 
@@ -3259,8 +3259,7 @@ mod tests {
             da_height: u64,
         ) -> Block {
             let producer_db = database_with_genesis_block(genesis_da_height);
-            let events = vec![event];
-            let producer_relayer_db = relayer_db_for_events(&events, da_height);
+            let producer_relayer_db = relayer_db_for_events(&[event], da_height);
 
             let producer = create_relayer_executor(producer_db, producer_relayer_db);
             let block = test_block(block_height.into(), da_height.into(), 0);
