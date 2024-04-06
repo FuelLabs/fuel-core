@@ -39,6 +39,7 @@ async fn run__relayed_transaction_events_are_added_to_storage() {
     let failure = "peanut butter chocolate cake with Kool-Aid".to_string();
     let database = Database::in_memory();
     let (_, receiver) = tokio::sync::watch::channel(State::Started);
+    let mut state_watcher = receiver.into();
 
     // given
     let event = Event::ForcedTransactionFailed {
@@ -52,8 +53,8 @@ async fn run__relayed_transaction_events_are_added_to_storage() {
     // when
     let mut task =
         worker_task_with_block_importer_and_db(block_importer, database.clone());
-    let mut state_watcher = receiver.into();
     task.run(&mut state_watcher).await.unwrap();
+    tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
 
     // then
     let expected = RelayedTransactionStatus::Failed {
