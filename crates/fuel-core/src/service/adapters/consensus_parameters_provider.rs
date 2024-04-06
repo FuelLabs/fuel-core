@@ -31,9 +31,9 @@ use std::{
 
 #[derive(Clone, Debug)]
 pub struct SharedState {
-    latest_consensus_parameters_version: Arc<SharedMutex<ConsensusParametersVersion>>,
+    latest_consensus_parameters_version: SharedMutex<ConsensusParametersVersion>,
     consensus_parameters:
-        Arc<SharedMutex<HashMap<ConsensusParametersVersion, Arc<ConsensusParameters>>>>,
+        SharedMutex<HashMap<ConsensusParametersVersion, Arc<ConsensusParameters>>>,
     database: Database,
 }
 
@@ -46,9 +46,7 @@ impl SharedState {
     fn new(database: Database) -> StorageResult<Self> {
         let genesis_version = 0;
         let state = Self {
-            latest_consensus_parameters_version: Arc::new(SharedMutex::new(
-                genesis_version,
-            )),
+            latest_consensus_parameters_version: SharedMutex::new(genesis_version),
             consensus_parameters: Default::default(),
             database,
         };
