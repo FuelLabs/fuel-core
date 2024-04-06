@@ -273,8 +273,8 @@ async fn can_find_failed_relayed_tx() {
 
     // given
     let status = FuelRelayedTransactionStatus::Failed {
-        block_height: block_height.clone(),
-        block_time: block_time.clone(),
+        block_height,
+        block_time,
         failure: failure.clone(),
     };
     db.off_chain_mut()

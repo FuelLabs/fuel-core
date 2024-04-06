@@ -28,7 +28,6 @@ impl ports::worker::TxPool for MockTxPool {
         _status: TransactionStatus,
     ) {
         // Do nothing
-        ()
     }
 }
 

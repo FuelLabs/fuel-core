@@ -3231,7 +3231,7 @@ mod tests {
             add_events_to_relayer(&mut verifier_relayer_db, da_height.into(), &events);
             let verifier = create_relayer_executor(verifyer_db, verifier_relayer_db);
             let (result, _) = verifier
-                .execute_without_commit(ExecutionTypes::Validation(produced_block.into()))
+                .execute_without_commit(ExecutionTypes::Validation(produced_block))
                 .unwrap()
                 .into();
 
@@ -3342,7 +3342,7 @@ mod tests {
                 base_asset_id,
                 0,
             );
-            let tx = Transaction::Mint(mint.into());
+            let tx = Transaction::Mint(mint);
             let tx_bytes = tx.to_bytes();
             relayed_tx.set_serialized_transaction(tx_bytes);
             relayer_db_for_events(&[relayed_tx.into()], da_height)
