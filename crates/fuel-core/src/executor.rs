@@ -284,7 +284,9 @@ mod tests {
         da_block_height: DaBlockHeight,
         num_txs: usize,
     ) -> Block {
-        let transactions = (1..num_txs + 1).map(script_tx_for_amount).collect_vec();
+        let transactions = (1..num_txs + 1)
+            .map(script_tx_for_amount_of_base_asset)
+            .collect_vec();
 
         let mut block = Block::default();
         block.header_mut().set_block_height(block_height);
@@ -293,12 +295,17 @@ mod tests {
         block
     }
 
-    fn script_tx_for_amount(amount: usize) -> Transaction {
+    fn script_tx_for_amount_of_base_asset(amount: usize) -> Transaction {
+        let asset = AssetId::BASE;
+        script_tx_for_amount(amount, asset)
+    }
+
+    fn script_tx_for_amount(amount: usize, asset: AssetId) -> Transaction {
         TxBuilder::new(2322u64)
             .script_gas_limit(10)
-            .coin_input(AssetId::default(), (amount as Word) * 100)
-            .coin_output(AssetId::default(), (amount as Word) * 50)
-            .change_output(AssetId::default())
+            .coin_input(asset, (amount as Word) * 100)
+            .coin_output(asset, (amount as Word) * 50)
+            .change_output(asset)
             .build()
             .transaction()
             .to_owned()
@@ -761,7 +768,7 @@ mod tests {
                         // register `0x13`(1 - true, 0 - false).
                         op::meq(0x13, 0x10, 0x12, 0x11),
                         // Return the result of the comparison as a receipt.
-                        op::ret(0x13)
+                        op::ret(0x13),
                     ], expected_in_tx_coinbase.to_vec() /* pass expected address as script data */)
                     .coin_input(AssetId::BASE, 1000)
                     .variable_output(Default::default())
@@ -800,19 +807,19 @@ mod tests {
 
             assert!(compare_coinbase_addresses(
                 ContractId::from([1u8; 32]),
-                ContractId::from([1u8; 32])
+                ContractId::from([1u8; 32]),
             ));
             assert!(!compare_coinbase_addresses(
                 ContractId::from([9u8; 32]),
-                ContractId::from([1u8; 32])
+                ContractId::from([1u8; 32]),
             ));
             assert!(!compare_coinbase_addresses(
                 ContractId::from([1u8; 32]),
-                ContractId::from([9u8; 32])
+                ContractId::from([9u8; 32]),
             ));
             assert!(compare_coinbase_addresses(
                 ContractId::from([9u8; 32]),
-                ContractId::from([9u8; 32])
+                ContractId::from([9u8; 32]),
             ));
         }
 
@@ -2837,7 +2844,10 @@ mod tests {
         use fuel_core_types::{
             entities::RelayedTransaction,
             fuel_merkle::binary::root_calculator::MerkleRootCalculator,
-            fuel_tx::output,
+            fuel_tx::{
+                field::MintGasPrice,
+                output,
+            },
         };
 
         fn database_with_genesis_block(da_block_height: u64) -> Database<OnChain> {
@@ -2897,52 +2907,52 @@ mod tests {
         }
 
         #[test_case::test_case(
-            Input {
-                relayer_da_height: 10,
-                block_height: 1,
-                block_da_height: 10,
-                genesis_da_height: Some(0),
-            } => matches Ok(()) ; "block producer takes all 10 messages from the relayer"
+        Input {
+        relayer_da_height: 10,
+        block_height: 1,
+        block_da_height: 10,
+        genesis_da_height: Some(0),
+        } => matches Ok(()); "block producer takes all 10 messages from the relayer"
         )]
         #[test_case::test_case(
-            Input {
-                relayer_da_height: 10,
-                block_height: 1,
-                block_da_height: 5,
-                genesis_da_height: Some(0),
-            } => matches Ok(()) ; "block producer takes first 5 messages from the relayer"
+        Input {
+        relayer_da_height: 10,
+        block_height: 1,
+        block_da_height: 5,
+        genesis_da_height: Some(0),
+        } => matches Ok(()); "block producer takes first 5 messages from the relayer"
         )]
         #[test_case::test_case(
-            Input {
-                relayer_da_height: 10,
-                block_height: 1,
-                block_da_height: 10,
-                genesis_da_height: Some(5),
-            } => matches Ok(()) ; "block producer takes last 5 messages from the relayer"
+        Input {
+        relayer_da_height: 10,
+        block_height: 1,
+        block_da_height: 10,
+        genesis_da_height: Some(5),
+        } => matches Ok(()); "block producer takes last 5 messages from the relayer"
         )]
         #[test_case::test_case(
-            Input {
-                relayer_da_height: 10,
-                block_height: 1,
-                block_da_height: 10,
-                genesis_da_height: Some(u64::MAX),
-            } => matches Err(ExecutorError::DaHeightExceededItsLimit) ; "block producer fails when previous block exceeds `u64::MAX`"
+        Input {
+        relayer_da_height: 10,
+        block_height: 1,
+        block_da_height: 10,
+        genesis_da_height: Some(u64::MAX),
+        } => matches Err(ExecutorError::DaHeightExceededItsLimit); "block producer fails when previous block exceeds `u64::MAX`"
         )]
         #[test_case::test_case(
-            Input {
-                relayer_da_height: 10,
-                block_height: 1,
-                block_da_height: 10,
-                genesis_da_height: None,
-            } => matches Err(ExecutorError::PreviousBlockIsNotFound) ; "block producer fails when previous block doesn't exist"
+        Input {
+        relayer_da_height: 10,
+        block_height: 1,
+        block_da_height: 10,
+        genesis_da_height: None,
+        } => matches Err(ExecutorError::PreviousBlockIsNotFound); "block producer fails when previous block doesn't exist"
         )]
         #[test_case::test_case(
-            Input {
-                relayer_da_height: 10,
-                block_height: 0,
-                block_da_height: 10,
-                genesis_da_height: Some(0),
-            } => matches Err(ExecutorError::ExecutingGenesisBlock) ; "block producer fails when block height is zero"
+        Input {
+        relayer_da_height: 10,
+        block_height: 0,
+        block_da_height: 10,
+        genesis_da_height: Some(0),
+        } => matches Err(ExecutorError::ExecutingGenesisBlock); "block producer fails when block height is zero"
         )]
         fn block_producer_takes_messages_from_the_relayer(
             input: Input,
@@ -3048,7 +3058,7 @@ mod tests {
             let block_height = 1u32;
             let da_height = 10u64;
             let mut relayed_tx = RelayedTransaction::default();
-            let tx = script_tx_for_amount(100);
+            let tx = script_tx_for_amount_of_base_asset(100);
             let tx_bytes = tx.to_bytes();
             relayed_tx.set_serialized_transaction(tx_bytes);
             add_events_to_relayer(
@@ -3067,8 +3077,47 @@ mod tests {
 
             // then
             let txs = result.block.transactions();
-            dbg!(&txs);
             assert_eq!(txs.len(), 2);
+        }
+
+        #[test]
+        fn execute_without_commit_with_coinbase__relayed_tx_can_have_no_base_asset_and_mint_will_have_no_fees(
+        ) {
+            let genesis_da_height = 3u64;
+            let on_chain_db = database_with_genesis_block(genesis_da_height);
+            let mut relayer_db = Database::<Relayer>::default();
+            // given
+            let block_height = 1u32;
+            let da_height = 10u64;
+            let mut relayed_tx = RelayedTransaction::default();
+            let not_base_asset = AssetId::new([5; 32]);
+            let tx = script_tx_for_amount(100, not_base_asset);
+            let tx_bytes = tx.to_bytes();
+            relayed_tx.set_serialized_transaction(tx_bytes);
+            add_events_to_relayer(
+                &mut relayer_db,
+                da_height.into(),
+                &[relayed_tx.clone().into()],
+            );
+            let producer = create_relayer_executor(on_chain_db, relayer_db);
+            let block = test_block(block_height.into(), da_height.into(), 0);
+
+            // when
+            let gas_price = 1;
+            let (result, _) = producer
+                .execute_without_commit_with_coinbase(
+                    ExecutionTypes::Production(block.into()),
+                    Default::default(),
+                    gas_price,
+                )
+                .unwrap()
+                .into();
+
+            // then
+            let txs = result.block.transactions();
+            assert_eq!(txs.len(), 2);
+            let mint = txs[1].as_mint().unwrap();
+            assert_eq!(*mint.mint_amount(), 0);
         }
 
         #[test]
@@ -3080,7 +3129,7 @@ mod tests {
             let block_height = 1u32;
             let da_height = 10u64;
             let mut relayed_tx = RelayedTransaction::default();
-            let tx = script_tx_for_amount(100);
+            let tx = script_tx_for_amount_of_base_asset(100);
             let tx_bytes = tx.to_bytes();
             relayed_tx.set_serialized_transaction(tx_bytes);
             let duplicate_count = 10;
@@ -3114,7 +3163,7 @@ mod tests {
             let block_height = 1u32;
             let da_height = 10u64;
             let mut invalid_relayed_tx = RelayedTransaction::default();
-            let mut tx = script_tx_for_amount(100);
+            let mut tx = script_tx_for_amount_of_base_asset(100);
             tx.as_script_mut().unwrap().inputs_mut().drain(..); // Remove all the inputs :)
             let tx_bytes = tx.to_bytes();
             invalid_relayed_tx.set_serialized_transaction(tx_bytes);
@@ -3158,7 +3207,7 @@ mod tests {
             let block_height = 1u32;
             let da_height = 10u64;
             let mut invalid_relayed_tx = RelayedTransaction::default();
-            let mut tx = script_tx_for_amount(100);
+            let mut tx = script_tx_for_amount_of_base_asset(100);
             tx.as_script_mut().unwrap().inputs_mut().drain(..); // Remove all the inputs :)
             let tx_bytes = tx.to_bytes();
             invalid_relayed_tx.set_serialized_transaction(tx_bytes);

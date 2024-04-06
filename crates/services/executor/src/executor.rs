@@ -502,7 +502,8 @@ where
         let relayed_tx_iter = forced_transactions.into_iter().peekable();
 
         let mut execute_transaction = |execution_data: &mut ExecutionData,
-                                       tx: MaybeCheckedTransaction|
+                                       tx: MaybeCheckedTransaction,
+                                       gas_price: Word|
          -> ExecutorResult<()> {
             let tx_count = execution_data.tx_count;
             let tx = {
@@ -570,7 +571,8 @@ where
         };
 
         for transaction in relayed_tx_iter {
-            execute_transaction(&mut *execution_data, transaction)?;
+            const RELAYED_GAS_PRICE: Word = 0;
+            execute_transaction(&mut *execution_data, transaction, RELAYED_GAS_PRICE)?;
         }
 
         let remaining_gas_limit = block_gas_limit.saturating_sub(execution_data.used_gas);
@@ -580,7 +582,7 @@ where
         let mut regular_tx_iter = source.next(remaining_gas_limit).into_iter().peekable();
         while regular_tx_iter.peek().is_some() {
             for transaction in regular_tx_iter {
-                execute_transaction(&mut *execution_data, transaction)?;
+                execute_transaction(&mut *execution_data, transaction, gas_price)?;
             }
 
             let new_remaining_gas_limit =
@@ -619,6 +621,7 @@ where
             execute_transaction(
                 execution_data,
                 MaybeCheckedTransaction::Transaction(coinbase_tx.into()),
+                gas_price,
             )?;
         }
 
