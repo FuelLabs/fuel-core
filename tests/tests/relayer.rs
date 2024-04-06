@@ -270,6 +270,8 @@ async fn can_find_failed_relayed_tx() {
     let block_height: BlockHeight = 999.into();
     let block_time = Tai64::UNIX_EPOCH;
     let failure = "lolz".to_string();
+
+    // given
     let status = FuelRelayedTransactionStatus::Failed {
         block_height: block_height.clone(),
         block_time: block_time.clone(),
@@ -280,12 +282,13 @@ async fn can_find_failed_relayed_tx() {
         .insert(&id, &status)
         .unwrap();
 
+    // when
     let srv = FuelService::from_combined_database(db.clone(), Config::local_node())
         .await
         .unwrap();
-
     let client = FuelClient::from(srv.bound_address);
 
+    // then
     let expected = Some(ClientRelayedTransactionStatus::Failed {
         block_height,
         block_time,
