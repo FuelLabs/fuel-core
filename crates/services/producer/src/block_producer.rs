@@ -277,7 +277,13 @@ where
     ) -> anyhow::Result<PartialBlockHeader> {
         let mut block_header = self._new_header(height, block_time)?;
         let previous_da_height = block_header.da_height;
-        let new_da_height = self.select_new_da_height(previous_da_height).await?;
+        let gas_limit = self
+            .consensus_parameters_provider
+            .consensus_params_at_version(&block_header.consensus_parameters_version)
+            .block_gas_limit();
+        let new_da_height = self
+            .select_new_da_height(gas_limit, previous_da_height)
+            .await?;
 
         block_header.application.da_height = new_da_height;
 
@@ -286,12 +292,9 @@ where
 
     async fn select_new_da_height(
         &self,
+        gas_limit: u64,
         previous_da_height: DaBlockHeight,
     ) -> anyhow::Result<DaBlockHeight> {
-        let gas_limit = self
-            .consensus_parameters_provider
-            .latest_consensus_params()
-            .block_gas_limit();
         let mut new_best = previous_da_height;
         let mut total_cost: u64 = 0;
         let highest = self

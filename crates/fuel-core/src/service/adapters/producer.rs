@@ -233,7 +233,10 @@ impl GasPriceProvider for StaticGasPrice {
 }
 
 impl ConsensusParametersProviderTrait for ConsensusParametersProvider {
-    fn latest_consensus_params(&self) -> Arc<ConsensusParameters> {
+    fn consensus_params_at_version(
+        &self,
+        _: &ConsensusParametersVersion,
+    ) -> Arc<ConsensusParameters> {
         self.consensus_parameters.clone()
     }
 }

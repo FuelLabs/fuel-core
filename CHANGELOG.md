@@ -8,6 +8,9 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Description of the upcoming release here.
 
+### Changed
+- [#1808](https://github.com/FuelLabs/fuel-core/pull/1808): Fetch consensus parameters from the database.
+
 ## [Version 0.24.2]
 
 ### Changed

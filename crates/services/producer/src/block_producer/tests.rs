@@ -604,8 +604,8 @@ impl<Executor> TestContext<Executor> {
         let mut consensus_parameters_provider =
             MockConsensusParametersProvider::default();
         consensus_parameters_provider
-            .expect_latest_consensus_params()
-            .returning(move || consensus_params.clone());
+            .expect_consensus_params_at_version()
+            .returning(move |_| consensus_params.clone());
 
         Producer {
             config: self.config,

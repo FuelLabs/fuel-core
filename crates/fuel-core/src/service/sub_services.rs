@@ -78,7 +78,8 @@ pub fn init_sub_services(
         },
     );
 
-    let verifier = VerifierAdapter::new(config, database.on_chain().clone());
+    let verifier =
+        VerifierAdapter::new(&config.snapshot_reader, database.on_chain().clone());
 
     let importer_adapter = BlockImporterAdapter::new(
         chain_config.consensus_parameters.chain_id(),
