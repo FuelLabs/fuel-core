@@ -2844,10 +2844,7 @@ mod tests {
         use fuel_core_types::{
             entities::RelayedTransaction,
             fuel_merkle::binary::root_calculator::MerkleRootCalculator,
-            fuel_tx::{
-                field::MintGasPrice,
-                output,
-            },
+            fuel_tx::output,
         };
 
         fn database_with_genesis_block(da_block_height: u64) -> Database<OnChain> {
@@ -3052,24 +3049,16 @@ mod tests {
         #[test]
         fn execute_without_commit__relayed_tx_included_in_block() {
             let genesis_da_height = 3u64;
-            let on_chain_db = database_with_genesis_block(genesis_da_height);
-            let mut relayer_db = Database::<Relayer>::default();
-            // given
             let block_height = 1u32;
             let da_height = 10u64;
-            let mut relayed_tx = RelayedTransaction::default();
-            let tx = script_tx_for_amount_of_base_asset(100);
-            let tx_bytes = tx.to_bytes();
-            relayed_tx.set_serialized_transaction(tx_bytes);
-            add_events_to_relayer(
-                &mut relayer_db,
-                da_height.into(),
-                &[relayed_tx.clone().into()],
-            );
-            let producer = create_relayer_executor(on_chain_db, relayer_db);
-            let block = test_block(block_height.into(), da_height.into(), 0);
+
+            // given
+            let relayer_db = relayer_db_with_valid_relayed_txs(da_height);
 
             // when
+            let on_chain_db = database_with_genesis_block(genesis_da_height);
+            let producer = create_relayer_executor(on_chain_db, relayer_db);
+            let block = test_block(block_height.into(), da_height.into(), 0);
             let (result, _) = producer
                 .execute_without_commit(ExecutionTypes::Production(block.into()))
                 .unwrap()
@@ -3080,18 +3069,10 @@ mod tests {
             assert_eq!(txs.len(), 2);
         }
 
-        #[test]
-        fn execute_without_commit_with_coinbase__relayed_tx_can_have_no_base_asset_and_mint_will_have_no_fees(
-        ) {
-            let genesis_da_height = 3u64;
-            let on_chain_db = database_with_genesis_block(genesis_da_height);
+        fn relayer_db_with_valid_relayed_txs(da_height: u64) -> Database<Relayer> {
             let mut relayer_db = Database::<Relayer>::default();
-            // given
-            let block_height = 1u32;
-            let da_height = 10u64;
             let mut relayed_tx = RelayedTransaction::default();
-            let not_base_asset = AssetId::new([5; 32]);
-            let tx = script_tx_for_amount(100, not_base_asset);
+            let tx = script_tx_for_amount_of_base_asset(100);
             let tx_bytes = tx.to_bytes();
             relayed_tx.set_serialized_transaction(tx_bytes);
             add_events_to_relayer(
@@ -3099,11 +3080,25 @@ mod tests {
                 da_height.into(),
                 &[relayed_tx.clone().into()],
             );
-            let producer = create_relayer_executor(on_chain_db, relayer_db);
-            let block = test_block(block_height.into(), da_height.into(), 0);
+            relayer_db
+        }
+
+        #[test]
+        fn execute_without_commit_with_coinbase__relayed_tx_can_have_no_base_asset_and_mint_will_have_no_fees(
+        ) {
+            let genesis_da_height = 3u64;
+            let block_height = 1u32;
+            let da_height = 10u64;
+            let gas_price = 1;
+
+            // given
+            let relayer_db =
+                relayer_db_with_valid_relayed_tx_with_no_base_assets(da_height);
 
             // when
-            let gas_price = 1;
+            let on_chain_db = database_with_genesis_block(genesis_da_height);
+            let producer = create_relayer_executor(on_chain_db, relayer_db);
+            let block = test_block(block_height.into(), da_height.into(), 0);
             let (result, _) = producer
                 .execute_without_commit_with_coinbase(
                     ExecutionTypes::Production(block.into()),
@@ -3116,31 +3111,44 @@ mod tests {
             // then
             let txs = result.block.transactions();
             assert_eq!(txs.len(), 2);
+
+            // and
             let mint = txs[1].as_mint().unwrap();
             assert_eq!(*mint.mint_amount(), 0);
+        }
+
+        fn relayer_db_with_valid_relayed_tx_with_no_base_assets(
+            da_height: u64,
+        ) -> Database<Relayer> {
+            let mut relayer_db = Database::<Relayer>::default();
+            let mut relayed_tx = RelayedTransaction::default();
+            let not_base_asset = AssetId::new([5; 32]);
+            let tx = script_tx_for_amount(100, not_base_asset);
+            let tx_bytes = tx.to_bytes();
+            relayed_tx.set_serialized_transaction(tx_bytes);
+            add_events_to_relayer(
+                &mut relayer_db,
+                da_height.into(),
+                &[relayed_tx.clone().into()],
+            );
+            relayer_db
         }
 
         #[test]
         fn execute_without_commit__duplicated_relayed_tx_not_included_in_block() {
             let genesis_da_height = 3u64;
-            let on_chain_db = database_with_genesis_block(genesis_da_height);
-            let mut relayer_db = Database::<Relayer>::default();
-            // given
             let block_height = 1u32;
             let da_height = 10u64;
-            let mut relayed_tx = RelayedTransaction::default();
-            let tx = script_tx_for_amount_of_base_asset(100);
-            let tx_bytes = tx.to_bytes();
-            relayed_tx.set_serialized_transaction(tx_bytes);
             let duplicate_count = 10;
-            let events = std::iter::repeat(relayed_tx.clone().into())
-                .take(duplicate_count + 1)
-                .collect::<Vec<_>>();
-            add_events_to_relayer(&mut relayer_db, da_height.into(), &events);
-            let producer = create_relayer_executor(on_chain_db, relayer_db);
-            let block = test_block(block_height.into(), da_height.into(), 0);
+
+            // given
+            let relayer_db =
+                relayer_db_with_duplicate_valid_relayed_txs(da_height, duplicate_count);
 
             // when
+            let on_chain_db = database_with_genesis_block(genesis_da_height);
+            let producer = create_relayer_executor(on_chain_db, relayer_db);
+            let block = test_block(block_height.into(), da_height.into(), 0);
             let (result, _) = producer
                 .execute_without_commit(ExecutionTypes::Production(block.into()))
                 .unwrap()
@@ -3149,33 +3157,42 @@ mod tests {
             // then
             let txs = result.block.transactions();
             assert_eq!(txs.len(), 2);
+
+            // and
             let skipped_txs = result.skipped_transactions;
             assert_eq!(skipped_txs.len(), duplicate_count);
+        }
+
+        fn relayer_db_with_duplicate_valid_relayed_txs(
+            da_height: u64,
+            duplicate_count: usize,
+        ) -> Database<Relayer> {
+            let mut relayer_db = Database::<Relayer>::default();
+            let mut relayed_tx = RelayedTransaction::default();
+            let tx = script_tx_for_amount_of_base_asset(100);
+            let tx_bytes = tx.to_bytes();
+            relayed_tx.set_serialized_transaction(tx_bytes);
+            let events = std::iter::repeat(relayed_tx.clone().into())
+                .take(duplicate_count + 1)
+                .collect::<Vec<_>>();
+            add_events_to_relayer(&mut relayer_db, da_height.into(), &events);
+            relayer_db
         }
 
         #[test]
         fn execute_without_commit__invalid_relayed_txs_are_not_included_and_are_reported()
         {
             let genesis_da_height = 3u64;
-            let on_chain_db = database_with_genesis_block(genesis_da_height);
-            let mut relayer_db = Database::<Relayer>::default();
-            // given
             let block_height = 1u32;
             let da_height = 10u64;
-            let mut invalid_relayed_tx = RelayedTransaction::default();
-            let mut tx = script_tx_for_amount_of_base_asset(100);
-            tx.as_script_mut().unwrap().inputs_mut().drain(..); // Remove all the inputs :)
-            let tx_bytes = tx.to_bytes();
-            invalid_relayed_tx.set_serialized_transaction(tx_bytes);
-            add_events_to_relayer(
-                &mut relayer_db,
-                da_height.into(),
-                &[invalid_relayed_tx.clone().into()],
-            );
-            let producer = create_relayer_executor(on_chain_db, relayer_db);
-            let block = test_block(block_height.into(), da_height.into(), 0);
+
+            // given
+            let relayer_db = relayer_db_with_invalid_relayed_txs(da_height);
 
             // when
+            let on_chain_db = database_with_genesis_block(genesis_da_height);
+            let producer = create_relayer_executor(on_chain_db, relayer_db);
+            let block = test_block(block_height.into(), da_height.into(), 0);
             let (result, _) = producer
                 .execute_without_commit(ExecutionTypes::Production(block.into()))
                 .unwrap()
@@ -3184,6 +3201,8 @@ mod tests {
             // then
             let txs = result.block.transactions();
             assert_eq!(txs.len(), 1);
+
+            // and
             let events = result.events;
             let fuel_core_types::services::executor::Event::ForcedTransactionFailed {
                 failure: actual,
@@ -3194,6 +3213,21 @@ mod tests {
             };
             let expected = "Failed validity checks";
             assert_eq!(expected, actual);
+        }
+
+        fn relayer_db_with_invalid_relayed_txs(da_height: u64) -> Database<Relayer> {
+            let mut relayer_db = Database::<Relayer>::default();
+            let mut invalid_relayed_tx = RelayedTransaction::default();
+            let mut tx = script_tx_for_amount_of_base_asset(100);
+            tx.as_script_mut().unwrap().inputs_mut().drain(..); // Remove all the inputs :)
+            let tx_bytes = tx.to_bytes();
+            invalid_relayed_tx.set_serialized_transaction(tx_bytes);
+            add_events_to_relayer(
+                &mut relayer_db,
+                da_height.into(),
+                &[invalid_relayed_tx.clone().into()],
+            );
+            relayer_db
         }
 
         #[test]
