@@ -1,6 +1,6 @@
 use crate::client::schema::{
     schema,
-    Bytes32,
+    RelayedTransactionId,
     Tai64Timestamp,
     U32,
 };
@@ -19,7 +19,7 @@ pub struct RelayedTransactionStatusQuery {
 #[derive(cynic::QueryVariables, Debug)]
 pub struct RelayedTransactionStatusArgs {
     /// Transaction id that contains the output message.
-    pub id: Bytes32,
+    pub id: RelayedTransactionId,
 }
 
 #[allow(clippy::enum_variant_names)]

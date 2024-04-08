@@ -850,7 +850,7 @@ type Query {
 	messages(owner: Address, first: Int, after: String, last: Int, before: String): MessageConnection!
 	messageProof(transactionId: TransactionId!, nonce: Nonce!, commitBlockId: BlockId, commitBlockHeight: U32): MessageProof
 	messageStatus(nonce: Nonce!): MessageStatus!
-	status(id: Bytes32!): RelayedTransactionStatus
+	status(id: RelayedTransactionId!): RelayedTransactionStatus
 }
 
 type Receipt {
@@ -908,6 +908,8 @@ type RelayedTransactionFailed {
 	blockTime: Tai64Timestamp!
 	failure: String!
 }
+
+scalar RelayedTransactionId
 
 union RelayedTransactionStatus = RelayedTransactionFailed
 

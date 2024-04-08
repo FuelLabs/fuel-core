@@ -1,7 +1,7 @@
 use crate::{
     fuel_core_graphql_api::database::ReadView,
     schema::scalars::{
-        Bytes32,
+        RelayedTransactionId,
         Tai64Timestamp,
         U32,
     },
@@ -25,7 +25,7 @@ impl RelayedTransactionQuery {
     async fn status(
         &self,
         ctx: &Context<'_>,
-        #[graphql(desc = "The id of the relayed tx")] id: Bytes32,
+        #[graphql(desc = "The id of the relayed tx")] id: RelayedTransactionId,
     ) -> async_graphql::Result<Option<RelayedTransactionStatus>> {
         let query: &ReadView = ctx.data_unchecked();
         let status =
