@@ -2904,52 +2904,52 @@ mod tests {
         }
 
         #[test_case::test_case(
-        Input {
-        relayer_da_height: 10,
-        block_height: 1,
-        block_da_height: 10,
-        genesis_da_height: Some(0),
-        } => matches Ok(()); "block producer takes all 10 messages from the relayer"
+            Input {
+                relayer_da_height: 10,
+                block_height: 1,
+                block_da_height: 10,
+                genesis_da_height: Some(0),
+            } => matches Ok(()); "block producer takes all 10 messages from the relayer"
         )]
         #[test_case::test_case(
-        Input {
-        relayer_da_height: 10,
-        block_height: 1,
-        block_da_height: 5,
-        genesis_da_height: Some(0),
-        } => matches Ok(()); "block producer takes first 5 messages from the relayer"
+            Input {
+                relayer_da_height: 10,
+                block_height: 1,
+                block_da_height: 5,
+                genesis_da_height: Some(0),
+            } => matches Ok(()); "block producer takes first 5 messages from the relayer"
         )]
         #[test_case::test_case(
-        Input {
-        relayer_da_height: 10,
-        block_height: 1,
-        block_da_height: 10,
-        genesis_da_height: Some(5),
-        } => matches Ok(()); "block producer takes last 5 messages from the relayer"
+            Input {
+                relayer_da_height: 10,
+                block_height: 1,
+                block_da_height: 10,
+                genesis_da_height: Some(5),
+            } => matches Ok(()); "block producer takes last 5 messages from the relayer"
         )]
         #[test_case::test_case(
-        Input {
-        relayer_da_height: 10,
-        block_height: 1,
-        block_da_height: 10,
-        genesis_da_height: Some(u64::MAX),
-        } => matches Err(ExecutorError::DaHeightExceededItsLimit); "block producer fails when previous block exceeds `u64::MAX`"
+            Input {
+                relayer_da_height: 10,
+                block_height: 1,
+                block_da_height: 10,
+                genesis_da_height: Some(u64::MAX),
+            } => matches Err(ExecutorError::DaHeightExceededItsLimit); "block producer fails when previous block exceeds `u64::MAX`"
         )]
         #[test_case::test_case(
-        Input {
-        relayer_da_height: 10,
-        block_height: 1,
-        block_da_height: 10,
-        genesis_da_height: None,
-        } => matches Err(ExecutorError::PreviousBlockIsNotFound); "block producer fails when previous block doesn't exist"
+            Input {
+                relayer_da_height: 10,
+                block_height: 1,
+                block_da_height: 10,
+                genesis_da_height: None,
+            } => matches Err(ExecutorError::PreviousBlockIsNotFound); "block producer fails when previous block doesn't exist"
         )]
         #[test_case::test_case(
-        Input {
-        relayer_da_height: 10,
-        block_height: 0,
-        block_da_height: 10,
-        genesis_da_height: Some(0),
-        } => matches Err(ExecutorError::ExecutingGenesisBlock); "block producer fails when block height is zero"
+            Input {
+                relayer_da_height: 10,
+                block_height: 0,
+                block_da_height: 10,
+                genesis_da_height: Some(0),
+            } => matches Err(ExecutorError::ExecutingGenesisBlock); "block producer fails when block height is zero"
         )]
         fn block_producer_takes_messages_from_the_relayer(
             input: Input,
