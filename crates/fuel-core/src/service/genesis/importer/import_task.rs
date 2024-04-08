@@ -1,31 +1,21 @@
 use std::time::Duration;
 
-use fuel_core_chain_config::{
-    Group,
-    TableEntry,
-};
+use fuel_core_chain_config::{Group, TableEntry};
 use fuel_core_storage::{
     kv_store::StorageColumn,
     structured_storage::TableWithBlueprint,
-    transactional::{
-        Modifiable,
-        StorageTransaction,
-        WriteTransaction,
-    },
-    StorageAsRef,
-    StorageInspect,
-    StorageMutate,
+    transactional::{Modifiable, StorageTransaction, WriteTransaction},
+    StorageAsRef, StorageInspect, StorageMutate,
 };
 use tokio_util::sync::CancellationToken;
 
 use crate::database::{
     database_description::DatabaseDescription,
-    genesis_progress::{
-        GenesisMetadata,
-        GenesisProgressMutate,
-    },
+    genesis_progress::{GenesisMetadata, GenesisProgressMutate},
     Database,
 };
+
+use super::progress::ProgressReporter;
 
 pub struct ImportTask<Handler, Groups, DbDesc>
 where
@@ -36,6 +26,7 @@ where
     groups: Groups,
     cancel_token: CancellationToken,
     db: Database<DbDesc>,
+    reporter: ProgressReporter,
 }
 
 pub trait ImportTable {
@@ -61,6 +52,7 @@ where
         handler: Logic,
         groups: GroupGenerator,
         db: Database<DbDesc>,
+        reporter: ProgressReporter,
     ) -> Self {
         let skip = match db
             .storage::<GenesisMetadata<DbDesc>>()
@@ -78,6 +70,7 @@ where
             groups,
             cancel_token,
             db,
+            reporter,
         }
     }
 }
@@ -100,11 +93,6 @@ where
         StorageMutate<GenesisMetadata<DbDesc>, Error = fuel_core_storage::Error>,
 {
     pub fn run(mut self) -> anyhow::Result<bool> {
-        tracing::info!(
-            "Starting genesis runner. Reading: {} writing into {}",
-            Logic::TableInSnapshot::column().name(),
-            Logic::TableBeingWritten::column().name()
-        );
         let mut db = self.db;
         let mut is_cancelled = self.cancel_token.is_cancelled();
         let result: anyhow::Result<_> = self
@@ -129,14 +117,9 @@ where
                     group_num,
                 )?;
                 tx.commit()?;
+                self.reporter.set_progress(group_num as u64);
                 Ok(())
             });
-
-        tracing::info!(
-            "Finishing genesis runner. Read: {} wrote into {}",
-            Logic::TableInSnapshot::column().name(),
-            Logic::TableBeingWritten::column().name()
-        );
 
         result?;
 
@@ -148,58 +131,35 @@ where
 mod tests {
     use crate::{
         database::genesis_progress::GenesisProgressInspect,
-        service::genesis::importer::import_task::ImportTask,
+        service::genesis::importer::{
+            import_task::ImportTask, progress::ProgressReporter,
+        },
     };
-    use std::sync::{
-        Arc,
-        Mutex,
+    use std::{
+        cell::Cell,
+        rc::Rc,
+        sync::{Arc, Mutex},
+        time::{Duration, SystemTime},
     };
 
-    use anyhow::{
-        anyhow,
-        bail,
-    };
-    use fuel_core_chain_config::{
-        Group,
-        Randomize,
-        TableEntry,
-    };
+    use anyhow::{anyhow, bail};
+    use fuel_core_chain_config::{Group, Randomize, TableEntry};
     use fuel_core_storage::{
         column::Column,
-        iter::{
-            BoxedIter,
-            IterDirection,
-            IterableStore,
-        },
-        kv_store::{
-            KVItem,
-            KeyValueInspect,
-            StorageColumn,
-            Value,
-        },
+        iter::{BoxedIter, IterDirection, IterableStore},
+        kv_store::{KVItem, KeyValueInspect, StorageColumn, Value},
         structured_storage::TableWithBlueprint,
         tables::Coins,
-        transactional::{
-            Changes,
-            StorageTransaction,
-        },
-        Result as StorageResult,
-        StorageAsMut,
-        StorageAsRef,
-        StorageInspect,
+        transactional::{Changes, StorageTransaction},
+        Result as StorageResult, StorageAsMut, StorageAsRef, StorageInspect,
     };
     use fuel_core_types::{
-        entities::coins::coin::{
-            CompressedCoin,
-            CompressedCoinV1,
-        },
+        entities::coins::coin::{CompressedCoin, CompressedCoinV1},
         fuel_tx::UtxoId,
         fuel_types::BlockHeight,
     };
-    use rand::{
-        rngs::StdRng,
-        SeedableRng,
-    };
+    use itertools::Itertools;
+    use rand::{rngs::StdRng, SeedableRng};
 
     use tokio_util::sync::CancellationToken;
 
@@ -207,13 +167,9 @@ mod tests {
         combined_database::CombinedDatabase,
         database::{
             database_description::on_chain::OnChain,
-            genesis_progress::GenesisProgressMutate,
-            Database,
+            genesis_progress::GenesisProgressMutate, Database,
         },
-        state::{
-            in_memory::memory_store::MemoryStore,
-            TransactableStorage,
-        },
+        state::{in_memory::memory_store::MemoryStore, TransactableStorage},
     };
 
     use super::ImportTable;
@@ -304,6 +260,7 @@ mod tests {
             }),
             data.as_ok_groups(),
             Database::default(),
+            ProgressReporter::default(),
         );
 
         // when
@@ -335,6 +292,7 @@ mod tests {
             }),
             data.as_ok_groups(),
             db.on_chain().clone(),
+            ProgressReporter::default(),
         );
 
         // when
@@ -373,6 +331,7 @@ mod tests {
             }),
             groups.as_ok_groups(),
             outer_db.clone(),
+            ProgressReporter::default(),
         );
 
         // when
@@ -406,6 +365,7 @@ mod tests {
             }),
             groups.as_ok_groups(),
             db.clone(),
+            ProgressReporter::default(),
         );
 
         // when
@@ -424,6 +384,7 @@ mod tests {
             TestHandler::new(|_, _| bail!("Some error")),
             groups.as_ok_groups(),
             Database::default(),
+            ProgressReporter::default(),
         );
 
         // when
@@ -442,6 +403,7 @@ mod tests {
             TestHandler::new(|_, _| Ok(())),
             groups,
             Database::default(),
+            ProgressReporter::default(),
         );
 
         // when
@@ -461,6 +423,7 @@ mod tests {
             TestHandler::new(|_, _| Ok(())),
             data.as_ok_groups(),
             db.clone(),
+            ProgressReporter::default(),
         );
 
         // when
@@ -494,6 +457,7 @@ mod tests {
                 }),
                 rx,
                 Database::default(),
+                ProgressReporter::default(),
             )
         };
 
@@ -585,6 +549,7 @@ mod tests {
             TestHandler::new(|_, _| Ok(())),
             groups.as_ok_groups(),
             Database::new(Arc::new(BrokenTransactions::new())),
+            ProgressReporter::default(),
         );
 
         // when

@@ -1,20 +1,10 @@
 use fuel_core::{
-    chain_config::{
-        Randomize,
-        SnapshotReader,
-        StateConfig,
-    },
+    chain_config::{Randomize, SnapshotReader, StateConfig},
     combined_database::CombinedDatabase,
-    service::{
-        Config,
-        FuelService,
-    },
+    service::{Config, FuelService},
 };
 use fuel_core_types::blockchain::primitives::DaBlockHeight;
-use rand::{
-    rngs::StdRng,
-    SeedableRng,
-};
+use rand::{rngs::StdRng, SeedableRng};
 
 #[tokio::test]
 async fn loads_snapshot() {

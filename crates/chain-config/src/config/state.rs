@@ -1,38 +1,22 @@
 use super::{
-    coin::CoinConfig,
-    contract::ContractConfig,
-    message::MessageConfig,
+    coin::CoinConfig, contract::ContractConfig, message::MessageConfig,
     table_entry::TableEntry,
 };
-use crate::{
-    ContractBalanceConfig,
-    ContractStateConfig,
-};
+use crate::{ContractBalanceConfig, ContractStateConfig};
 use fuel_core_storage::{
     structured_storage::TableWithBlueprint,
     tables::{
-        Coins,
-        ContractsAssets,
-        ContractsLatestUtxo,
-        ContractsRawCode,
-        ContractsState,
-        Messages,
-        Transactions,
+        Coins, ContractsAssets, ContractsLatestUtxo, ContractsRawCode, ContractsState,
+        Messages, Transactions,
     },
-    ContractsAssetKey,
-    ContractsStateKey,
-    Mappable,
+    ContractsAssetKey, ContractsStateKey, Mappable,
 };
 use fuel_core_types::{
-    blockchain::primitives::DaBlockHeight,
-    entities::contract::ContractUtxoInfo,
+    blockchain::primitives::DaBlockHeight, entities::contract::ContractUtxoInfo,
     fuel_types::BlockHeight,
 };
 use itertools::Itertools;
-use serde::{
-    Deserialize,
-    Serialize,
-};
+use serde::{Deserialize, Serialize};
 
 #[cfg(feature = "std")]
 use crate::SnapshotMetadata;
@@ -40,18 +24,11 @@ use crate::SnapshotMetadata;
 #[cfg(feature = "test-helpers")]
 use crate::CoinConfigGenerator;
 #[cfg(feature = "test-helpers")]
-use bech32::{
-    ToBase32,
-    Variant::Bech32m,
-};
+use bech32::{ToBase32, Variant::Bech32m};
 #[cfg(feature = "test-helpers")]
 use core::str::FromStr;
 #[cfg(feature = "test-helpers")]
-use fuel_core_types::{
-    fuel_types::Address,
-    fuel_types::Bytes32,
-    fuel_vm::SecretKey,
-};
+use fuel_core_types::{fuel_types::Address, fuel_types::Bytes32, fuel_vm::SecretKey};
 
 #[cfg(feature = "parquet")]
 mod parquet;
@@ -450,6 +427,7 @@ impl StateConfig {
 
         let coins = reader
             .read::<Coins>()?
+            .into_iter()
             .map_ok(|batch| batch.data)
             .flatten_ok()
             .try_collect()?;
@@ -458,6 +436,7 @@ impl StateConfig {
 
         let messages = reader
             .read::<Messages>()?
+            .into_iter()
             .map_ok(|batch| batch.data)
             .flatten_ok()
             .try_collect()?;
@@ -466,6 +445,7 @@ impl StateConfig {
 
         let contract_state = reader
             .read::<ContractsState>()?
+            .into_iter()
             .map_ok(|batch| batch.data)
             .flatten_ok()
             .try_collect()?;
@@ -474,6 +454,7 @@ impl StateConfig {
 
         let contract_balance = reader
             .read::<ContractsAssets>()?
+            .into_iter()
             .map_ok(|batch| batch.data)
             .flatten_ok()
             .try_collect()?;
@@ -482,6 +463,7 @@ impl StateConfig {
 
         let contract_code = reader
             .read::<ContractsRawCode>()?
+            .into_iter()
             .map_ok(|batch| batch.data)
             .flatten_ok()
             .try_collect()?;
@@ -490,6 +472,7 @@ impl StateConfig {
 
         let contract_utxo = reader
             .read::<ContractsLatestUtxo>()?
+            .into_iter()
             .map_ok(|batch| batch.data)
             .flatten_ok()
             .try_collect()?;
@@ -566,17 +549,11 @@ impl StateConfig {
     }
 }
 
-pub use reader::{
-    IntoIter,
-    SnapshotReader,
-};
+pub use reader::{GroupIter, SnapshotReader};
 #[cfg(feature = "parquet")]
 pub use writer::ZstdCompressionLevel;
 #[cfg(feature = "std")]
-pub use writer::{
-    SnapshotFragment,
-    SnapshotWriter,
-};
+pub use writer::{SnapshotFragment, SnapshotWriter};
 pub const MAX_GROUP_SIZE: usize = usize::MAX;
 
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -590,16 +567,10 @@ pub(crate) type GroupResult<T> = anyhow::Result<Group<T>>;
 mod tests {
     use std::path::Path;
 
-    use crate::{
-        ChainConfig,
-        Randomize,
-    };
+    use crate::{ChainConfig, Randomize};
 
     use fuel_core_types::fuel_types::ChainId;
-    use rand::{
-        rngs::StdRng,
-        SeedableRng,
-    };
+    use rand::{rngs::StdRng, SeedableRng};
 
     use super::*;
 
@@ -990,7 +961,11 @@ mod tests {
             .unwrap();
         let snapshot = snapshot_writer.close().unwrap();
 
-        let actual_groups = reader(snapshot, group_size).read().unwrap().collect_vec();
+        let actual_groups = reader(snapshot, group_size)
+            .read()
+            .unwrap()
+            .into_iter()
+            .collect_vec();
 
         // then
         assert_groups_identical(&expected_groups, actual_groups, skip_n_groups);

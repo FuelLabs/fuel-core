@@ -1,39 +1,28 @@
-use anyhow::{
-    anyhow,
-    Context,
-};
+use anyhow::{anyhow, Context};
 use parquet::{
     data_type::AsBytes,
     file::{
-        reader::{
-            ChunkReader,
-            FileReader,
-        },
+        reader::{ChunkReader, FileReader},
         serialized_reader::SerializedFileReader,
     },
     record::RowAccessor,
 };
 
-use crate::config::state::{
-    Group,
-    GroupResult,
-};
+use crate::config::state::{Group, GroupResult};
 
 pub struct Decoder<R: ChunkReader> {
     data_source: SerializedFileReader<R>,
     group_index: usize,
 }
 
-pub trait Decode<T> {
-    fn decode(bytes: &[u8]) -> anyhow::Result<T>
-    where
-        Self: Sized;
-}
-
 impl<R> Decoder<R>
 where
     R: ChunkReader + 'static,
 {
+    pub fn num_groups(&self) -> usize {
+        self.data_source.num_row_groups()
+    }
+
     fn current_group(&self) -> anyhow::Result<Group<Vec<u8>>> {
         let data = self
             .data_source

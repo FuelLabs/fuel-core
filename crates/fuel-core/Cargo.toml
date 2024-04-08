@@ -39,6 +39,8 @@ fuel-core-upgradable-executor = { workspace = true }
 futures = { workspace = true }
 hex = { version = "0.4", features = ["serde"] }
 hyper = { workspace = true }
+indicatif = { workspace = true, default-features = true }
+humantime = { workspace = true }
 itertools = { workspace = true }
 num_cpus = { version = "1.16.0", optional = true }
 rand = { workspace = true }

@@ -1,23 +1,42 @@
 use std::fmt::Debug;
 
 use fuel_core_storage::structured_storage::TableWithBlueprint;
-use fuel_core_types::{
-    blockchain::primitives::DaBlockHeight,
-    fuel_types::BlockHeight,
-};
+use fuel_core_types::{blockchain::primitives::DaBlockHeight, fuel_types::BlockHeight};
 use itertools::Itertools;
 
 use crate::{
-    config::table_entry::TableEntry,
-    AsTable,
-    ChainConfig,
-    Group,
-    GroupResult,
-    StateConfig,
-    MAX_GROUP_SIZE,
+    config::table_entry::TableEntry, AsTable, ChainConfig, Group, GroupResult,
+    StateConfig, MAX_GROUP_SIZE,
 };
 
-pub enum IntoIter<T> {
+pub struct Groups<T> {
+    iter: GroupIter<T>,
+}
+
+impl<T> Groups<T> {
+    pub fn len(&self) -> usize {
+        match &self.iter {
+            GroupIter::InMemory { groups } => groups.len(),
+            #[cfg(feature = "parquet")]
+            GroupIter::Parquet { decoder } => decoder.num_groups(),
+        }
+    }
+}
+
+impl<T> IntoIterator for Groups<T>
+where
+    T: serde::de::DeserializeOwned,
+{
+    type Item = GroupResult<T>;
+
+    type IntoIter = GroupIter<T>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.iter
+    }
+}
+
+pub enum GroupIter<T> {
     InMemory {
         groups: std::vec::IntoIter<GroupResult<T>>,
     },
@@ -28,7 +47,7 @@ pub enum IntoIter<T> {
 }
 
 #[cfg(feature = "parquet")]
-impl<T> Iterator for IntoIter<T>
+impl<T> Iterator for GroupIter<T>
 where
     T: serde::de::DeserializeOwned,
 {
@@ -36,8 +55,8 @@ where
 
     fn next(&mut self) -> Option<Self::Item> {
         match self {
-            IntoIter::InMemory { groups } => groups.next(),
-            IntoIter::Parquet { decoder } => {
+            GroupIter::InMemory { groups } => groups.next(),
+            GroupIter::Parquet { decoder } => {
                 let group = decoder.next()?.and_then(|bytes_group| {
                     let decoded = bytes_group
                         .data
@@ -56,12 +75,12 @@ where
 }
 
 #[cfg(not(feature = "parquet"))]
-impl<T> Iterator for IntoIter<T> {
+impl<T> Iterator for GroupIter<T> {
     type Item = GroupResult<T>;
 
     fn next(&mut self) -> Option<Self::Item> {
         match self {
-            IntoIter::InMemory { groups } => groups.next(),
+            GroupIter::InMemory { groups } => groups.next(),
         }
     }
 }
@@ -189,7 +208,7 @@ impl SnapshotReader {
     pub fn open(
         snapshot_metadata: crate::config::SnapshotMetadata,
     ) -> anyhow::Result<Self> {
-        Self::open_w_config(snapshot_metadata, MAX_GROUP_SIZE)
+        Self::open_w_config(snapshot_metadata, 1)
     }
 
     #[cfg(feature = "std")]
@@ -220,13 +239,13 @@ impl SnapshotReader {
         }
     }
 
-    pub fn read<T>(&self) -> anyhow::Result<IntoIter<TableEntry<T>>>
+    pub fn read<T>(&self) -> anyhow::Result<Groups<TableEntry<T>>>
     where
         T: TableWithBlueprint,
         StateConfig: AsTable<T>,
         TableEntry<T>: serde::de::DeserializeOwned,
     {
-        match &self.data_source {
+        let iter = match &self.data_source {
             #[cfg(feature = "parquet")]
             DataSource::Parquet { tables, .. } => {
                 use anyhow::Context;
@@ -239,9 +258,9 @@ impl SnapshotReader {
                     format!("Could not open {path:?} in order to read table '{name}'")
                 })?;
 
-                Ok(IntoIter::Parquet {
+                GroupIter::Parquet {
                     decoder: super::parquet::decode::Decoder::new(file)?,
-                })
+                }
             }
             DataSource::InMemory { state, group_size } => {
                 let collection = state
@@ -257,11 +276,13 @@ impl SnapshotReader {
                         })
                     })
                     .collect_vec();
-                Ok(IntoIter::InMemory {
+                GroupIter::InMemory {
                     groups: collection.into_iter(),
-                })
+                }
             }
-        }
+        };
+
+        Ok(Groups { iter })
     }
 
     pub fn chain_config(&self) -> &ChainConfig {

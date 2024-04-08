@@ -1,59 +1,45 @@
-use self::import_task::{
-    ImportTable,
-    ImportTask,
+use self::{
+    import_task::{ImportTable, ImportTask},
+    progress::MultipleProgressReporter,
 };
 
 use super::task_manager::TaskManager;
 mod import_task;
 mod off_chain;
 mod on_chain;
+mod progress;
 use std::marker::PhantomData;
 
 use crate::{
     combined_database::CombinedDatabase,
-    database::database_description::{
-        off_chain::OffChain,
-        on_chain::OnChain,
-    },
+    database::database_description::{off_chain::OffChain, on_chain::OnChain},
     graphql_api::storage::{
         coins::OwnedCoins,
         contracts::ContractsInfo,
         messages::OwnedMessageIds,
-        transactions::{
-            OwnedTransactions,
-            TransactionStatuses,
-        },
+        transactions::{OwnedTransactions, TransactionStatuses},
     },
 };
-use fuel_core_chain_config::{
-    AsTable,
-    SnapshotReader,
-    StateConfig,
-    TableEntry,
-};
+use fuel_core_chain_config::{AsTable, SnapshotReader, StateConfig, TableEntry};
 use fuel_core_storage::{
+    kv_store::StorageColumn,
     structured_storage::TableWithBlueprint,
     tables::{
-        Coins,
-        ContractsAssets,
-        ContractsLatestUtxo,
-        ContractsRawCode,
-        ContractsState,
-        Messages,
-        Transactions,
+        Coins, ContractsAssets, ContractsLatestUtxo, ContractsRawCode, ContractsState,
+        Messages, Transactions,
     },
 };
-use fuel_core_types::{
-    blockchain::primitives::DaBlockHeight,
-    fuel_types::BlockHeight,
-};
+use fuel_core_types::{blockchain::primitives::DaBlockHeight, fuel_types::BlockHeight};
 
 use tokio_util::sync::CancellationToken;
+use tracing::{Level, Span};
 
 pub struct SnapshotImporter {
     db: CombinedDatabase,
     task_manager: TaskManager<bool>,
     snapshot_reader: SnapshotReader,
+    tracing_span: Span,
+    multi_progress_reporter: MultipleProgressReporter,
 }
 
 impl SnapshotImporter {
@@ -64,8 +50,10 @@ impl SnapshotImporter {
     ) -> Self {
         Self {
             db,
-            task_manager: TaskManager::new(&cancel_token),
+            task_manager: TaskManager::new(cancel_token),
             snapshot_reader,
+            tracing_span: tracing::info_span!("snapshot_importer"),
+            multi_progress_reporter: MultipleProgressReporter::new(),
         }
     }
 
@@ -106,19 +94,23 @@ impl SnapshotImporter {
         Handler<T>: ImportTable<TableInSnapshot = T, DbDesc = OnChain>,
     {
         let groups = self.snapshot_reader.read::<T>()?;
+        let num_groups = groups.len();
 
         let block_height = self.snapshot_reader.block_height();
         let da_block_height = self.snapshot_reader.da_block_height();
         let db = self.db.on_chain().clone();
+        let span = self.create_tracing_span::<T>();
+        let progress_reporter = self.multi_progress_reporter.reporter(num_groups);
         self.task_manager.spawn(move |token| {
             tokio_rayon::spawn(move || {
-                ImportTask::new(
+                let task = ImportTask::new(
                     token,
                     Handler::new(block_height, da_block_height),
                     groups,
                     db,
-                )
-                .run()
+                    progress_reporter,
+                );
+                span.in_scope(|| task.run())
             })
         });
 
@@ -134,13 +126,16 @@ impl SnapshotImporter {
         StateConfig: AsTable<TableInSnapshot>,
         Handler<TableBeingWritten>:
             ImportTable<TableInSnapshot = TableInSnapshot, DbDesc = OffChain>,
-        TableBeingWritten: Send + 'static,
+        TableBeingWritten: TableWithBlueprint + Send + 'static,
     {
         let groups = self.snapshot_reader.read::<TableInSnapshot>()?;
+        let num_groups = groups.len();
         let block_height = self.snapshot_reader.block_height();
         let da_block_height = self.snapshot_reader.da_block_height();
 
         let db = self.db.off_chain().clone();
+        let span = self.create_tracing_span::<TableBeingWritten>();
+        let progress_reporter = self.multi_progress_reporter.reporter(num_groups);
         self.task_manager.spawn(move |token| {
             tokio_rayon::spawn(move || {
                 let runner = ImportTask::new(
@@ -148,12 +143,23 @@ impl SnapshotImporter {
                     Handler::<TableBeingWritten>::new(block_height, da_block_height),
                     groups,
                     db,
+                    progress_reporter,
                 );
-                runner.run()
+
+                span.in_scope(|| runner.run())
             })
         });
 
         Ok(())
+    }
+
+    fn create_tracing_span<T: TableWithBlueprint>(&self) -> Span {
+        tracing::span!(
+            parent: &self.tracing_span,
+            Level::INFO,
+            "task",
+            table = T::column().name()
+        )
     }
 }
 
