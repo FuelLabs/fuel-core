@@ -53,6 +53,10 @@ impl DatabaseBlocks for Database {
             .transpose()
             .ok_or(not_found!("BlockHeight"))?
     }
+
+    fn first_height(&self) -> StorageResult<Option<BlockHeight>> {
+        self.first_block_height()
+    }
 }
 
 impl DatabaseMessages for Database {

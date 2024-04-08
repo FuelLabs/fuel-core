@@ -102,6 +102,14 @@ impl Database<OnChain> {
             .map(|(_, block)| block)
             .ok_or_else(|| not_found!("FuelBlocks"))
     }
+
+    pub fn first_block_height(&self) -> StorageResult<Option<BlockHeight>> {
+        Ok(self
+            .iter_all::<FuelBlocks>(Some(IterDirection::Forward))
+            .next()
+            .transpose()?
+            .map(|(height, _)| height))
+    }
 }
 
 impl<DbDesc> Database<DbDesc>

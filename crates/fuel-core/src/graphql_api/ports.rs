@@ -85,6 +85,12 @@ pub trait OffChainDatabase: Send + Sync {
     ) -> BoxedIter<StorageResult<(TxPointer, TxId)>>;
 
     fn contract_salt(&self, contract_id: &ContractId) -> StorageResult<Salt>;
+
+    fn old_blocks(
+        &self,
+        height: Option<BlockHeight>,
+        direction: IterDirection,
+    ) -> BoxedIter<'_, StorageResult<CompressedBlock>>;
 }
 
 /// The on chain database port expected by GraphQL API service.
@@ -113,6 +119,10 @@ pub trait DatabaseBlocks:
     ) -> BoxedIter<'_, StorageResult<CompressedBlock>>;
 
     fn latest_height(&self) -> StorageResult<BlockHeight>;
+
+    /// First (i.e. lowest) height stored,
+    /// In case of regenesis migration, this will Some(_), otherwise None.
+    fn first_height(&self) -> StorageResult<Option<BlockHeight>>;
 }
 
 /// Trait that specifies all the getters required for messages.
