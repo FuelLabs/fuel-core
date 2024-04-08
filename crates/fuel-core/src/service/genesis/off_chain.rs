@@ -12,6 +12,10 @@ use crate::{
             coins::OwnedCoins,
             contracts::ContractsInfo,
             messages::OwnedMessageIds,
+            old::{
+                OldFuelBlocks,
+                OldTransactions,
+            },
             transactions::{
                 OwnedTransactions,
                 TransactionStatuses,
@@ -27,6 +31,7 @@ use fuel_core_chain_config::{
 use fuel_core_storage::{
     tables::{
         Coins,
+        FuelBlocks,
         Messages,
         Transactions,
     },
@@ -159,6 +164,42 @@ impl ProcessState for Handler<ContractsInfo> {
     ) -> anyhow::Result<()> {
         let transactions = group.iter().map(|TableEntry { value, .. }| value);
         worker_service::process_transactions(transactions, tx)?;
+        Ok(())
+    }
+}
+
+impl ProcessState for Handler<OldFuelBlocks> {
+    type TableInSnapshot = FuelBlocks;
+    type TableBeingWritten = OldFuelBlocks;
+    type DbDesc = OffChain;
+
+    fn process(
+        &mut self,
+        group: Vec<TableEntry<Self::TableInSnapshot>>,
+        tx: &mut StorageTransaction<&mut Database<Self::DbDesc>>,
+    ) -> anyhow::Result<()> {
+        let blocks = group
+            .iter()
+            .map(|TableEntry { key, value, .. }| (key, value));
+        worker_service::copy_to_old_blocks(blocks, tx)?;
+        Ok(())
+    }
+}
+
+impl ProcessState for Handler<OldTransactions> {
+    type TableInSnapshot = Transactions;
+    type TableBeingWritten = OldTransactions;
+    type DbDesc = OffChain;
+
+    fn process(
+        &mut self,
+        group: Vec<TableEntry<Self::TableInSnapshot>>,
+        tx: &mut StorageTransaction<&mut Database<Self::DbDesc>>,
+    ) -> anyhow::Result<()> {
+        let transactions = group
+            .iter()
+            .map(|TableEntry { key, value, .. }| (key, value));
+        worker_service::copy_to_old_transactions(transactions, tx)?;
         Ok(())
     }
 }

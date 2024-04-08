@@ -27,8 +27,12 @@ use fuel_core_storage::{
     Result as StorageResult,
     StorageAsMut,
 };
+use fuel_core_txpool::types::TxId;
 use fuel_core_types::{
-    blockchain::block::Block,
+    blockchain::block::{
+        Block,
+        CompressedBlock,
+    },
     fuel_tx::{
         field::{
             Inputs,
@@ -68,6 +72,11 @@ use futures::{
 use std::{
     borrow::Cow,
     ops::Deref,
+};
+
+use super::storage::old::{
+    OldFuelBlocks,
+    OldTransactions,
 };
 
 /// The off-chain GraphQL API worker task processes the imported blocks
@@ -299,6 +308,31 @@ where
                 // Do nothing
             }
         }
+    }
+    Ok(())
+}
+
+pub fn copy_to_old_blocks<'a, I, T>(blocks: I, db: &mut T) -> StorageResult<()>
+where
+    I: Iterator<Item = (&'a BlockHeight, &'a CompressedBlock)>,
+    T: OffChainDatabase,
+{
+    for (height, block) in blocks {
+        db.storage::<OldFuelBlocks>().insert(height, block)?;
+    }
+    Ok(())
+}
+
+pub fn copy_to_old_transactions<'a, I, T>(
+    transactions: I,
+    db: &mut T,
+) -> StorageResult<()>
+where
+    I: Iterator<Item = (&'a TxId, &'a Transaction)>,
+    T: OffChainDatabase,
+{
+    for (id, tx) in transactions {
+        db.storage::<OldTransactions>().insert(&id, &tx)?;
     }
     Ok(())
 }

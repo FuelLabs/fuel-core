@@ -16,6 +16,7 @@ use fuel_core_storage::{
         ContractsLatestUtxo,
         ContractsRawCode,
         ContractsState,
+        FuelBlocks,
         Messages,
         Transactions,
     },
@@ -374,6 +375,18 @@ impl AsTable<Transactions> for StateConfig {
 
 impl AddTable<Transactions> for StateConfigBuilder {
     fn add(&mut self, _entries: Vec<TableEntry<Transactions>>) {
+        // Do not include these for now
+    }
+}
+
+impl AsTable<FuelBlocks> for StateConfig {
+    fn as_table(&self) -> Vec<TableEntry<FuelBlocks>> {
+        Vec::new() // Do not include these for now
+    }
+}
+
+impl AddTable<FuelBlocks> for StateConfigBuilder {
+    fn add(&mut self, _entries: Vec<TableEntry<FuelBlocks>>) {
         // Do not include these for now
     }
 }

@@ -18,6 +18,10 @@ use crate::{
         coins::OwnedCoins,
         contracts::ContractsInfo,
         messages::OwnedMessageIds,
+        old::{
+            OldFuelBlocks,
+            OldTransactions,
+        },
         transactions::{
             OwnedTransactions,
             TransactionStatuses,
@@ -38,6 +42,7 @@ use fuel_core_storage::{
         ContractsLatestUtxo,
         ContractsRawCode,
         ContractsState,
+        FuelBlocks,
         Messages,
         Transactions,
     },
@@ -95,7 +100,9 @@ impl GenesisWorkers {
             self.spawn_worker_off_chain::<OwnedTransactions, OwnedTransactions>()?,
             self.spawn_worker_off_chain::<Messages, OwnedMessageIds>()?,
             self.spawn_worker_off_chain::<Coins, OwnedCoins>()?,
-            self.spawn_worker_off_chain::<Transactions, ContractsInfo>()?
+            self.spawn_worker_off_chain::<Transactions, ContractsInfo>()?,
+            self.spawn_worker_off_chain::<FuelBlocks, OldFuelBlocks>()?,
+            self.spawn_worker_off_chain::<Transactions, OldTransactions>()?,
         )
         .map(|_| ())
     }
