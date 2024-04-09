@@ -189,7 +189,10 @@ where
                     .insert(&Bytes32::from(id.to_owned()), &status)?;
             }
             _ => {
-                // unknown execution event (likely due to a runtime upgrade)
+                tracing::error!(
+                    "Unknown executor event (possibly due to runtime upgrade): {:?}",
+                    event.deref()
+                );
             }
         }
     }
