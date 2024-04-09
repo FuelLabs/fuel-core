@@ -13,7 +13,8 @@ Description of the upcoming release here.
 =======
 ### Added
 
-- [#1799](https://github.com/FuelLabs/fuel-core/pull/1799) Snapshot creation is now concurrent.
+- [#1813](https://github.com/FuelLabs/fuel-core/pull/1813): Added back support for `/health` endpoint.
+- [#1799](https://github.com/FuelLabs/fuel-core/pull/1799): Snapshot creation is now concurrent.
 
 ### Changed
 
