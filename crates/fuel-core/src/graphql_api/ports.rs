@@ -120,9 +120,8 @@ pub trait DatabaseBlocks:
 
     fn latest_height(&self) -> StorageResult<BlockHeight>;
 
-    /// First (i.e. lowest) height stored,
-    /// In case of regenesis migration, this will Some(_), otherwise None.
-    fn first_height(&self) -> StorageResult<Option<BlockHeight>>;
+    /// First (i.e. lowest) height stored in this db.
+    fn first_height(&self) -> StorageResult<BlockHeight>;
 }
 
 /// Trait that specifies all the getters required for messages.

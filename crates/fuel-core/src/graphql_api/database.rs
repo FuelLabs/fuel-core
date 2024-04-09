@@ -118,7 +118,7 @@ impl DatabaseBlocks for ReadView {
 
         if let Some(height) = height {
             match self.on_chain.first_height() {
-                Ok(Some(onchain_start_height)) => {
+                Ok(onchain_start_height) => {
                     match (height >= onchain_start_height, direction) {
                         (true, IterDirection::Forward) => {
                             self.on_chain.blocks(Some(height), direction)
@@ -138,7 +138,6 @@ impl DatabaseBlocks for ReadView {
                         }
                     }
                 }
-                Ok(None) => self.off_chain.old_blocks(Some(height), direction),
                 Err(err) => core::iter::once(Err(err)).into_boxed(),
             }
         } else {
@@ -161,7 +160,7 @@ impl DatabaseBlocks for ReadView {
         self.on_chain.latest_height()
     }
 
-    fn first_height(&self) -> StorageResult<Option<BlockHeight>> {
+    fn first_height(&self) -> StorageResult<BlockHeight> {
         self.on_chain.first_height()
     }
 }
