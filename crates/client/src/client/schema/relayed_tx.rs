@@ -12,7 +12,7 @@ use crate::client::schema::{
     variables = "RelayedTransactionStatusArgs"
 )]
 pub struct RelayedTransactionStatusQuery {
-    #[arguments(id: $ id)]
+    #[arguments(id: $id)]
     pub status: Option<RelayedTransactionStatus>,
 }
 
