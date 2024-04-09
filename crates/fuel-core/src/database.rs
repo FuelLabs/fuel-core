@@ -104,22 +104,42 @@ impl Database<OnChain> {
     }
 }
 
+pub trait KeyFilter<K> {
+    fn start_at_prefix(&self) -> Option<&[u8]>;
+    fn should_stop(&self, key: &K) -> bool;
+}
+
+pub struct IncludeAll;
+impl<K> KeyFilter<K> for IncludeAll {
+    fn start_at_prefix(&self) -> Option<&[u8]> {
+        None
+    }
+
+    fn should_stop(&self, _: &K) -> bool {
+        false
+    }
+}
+
 impl<DbDesc> Database<DbDesc>
 where
     DbDesc: DatabaseDescription,
 {
     pub fn entries<'a, T>(
         &'a self,
-        prefix: Option<&[u8]>,
+        filter: impl KeyFilter<T::OwnedKey> + 'a,
         direction: IterDirection,
     ) -> impl Iterator<Item = StorageResult<TableEntry<T>>> + 'a
     where
-        T: TableWithBlueprint<Column = <DbDesc as DatabaseDescription>::Column>,
-        T::OwnedValue: 'a,
-        T::OwnedKey: 'a,
+        T: TableWithBlueprint<Column = <DbDesc as DatabaseDescription>::Column> + 'a,
         T::Blueprint: BlueprintInspect<T, Self>,
     {
-        self.iter_all_filtered::<T, _>(prefix, None, Some(direction))
+        self.iter_all_filtered::<T, _>(filter.start_at_prefix(), None, Some(direction))
+            .take_while(move |result| {
+                let Ok((key, _)) = result.as_ref() else {
+                    return true;
+                };
+                !filter.should_stop(key)
+            })
             .map_ok(|(key, value)| TableEntry { key, value })
     }
 }

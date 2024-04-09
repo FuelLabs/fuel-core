@@ -15,3 +15,15 @@ mod cli;
 async fn main() -> anyhow::Result<()> {
     cli::run_cli().await
 }
+
+#[cfg(test)]
+mod tests {
+    // No other way to explain that the following deps are used in tests only when snapshots are activated
+    // (that is when rocksdb or rocksdb-production is available).
+    use fuel_core_storage as _;
+    use itertools as _;
+    use pretty_assertions as _;
+    use rand as _;
+    use serde as _;
+    use tempfile as _;
+}
