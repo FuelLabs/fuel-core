@@ -8,12 +8,20 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Description of the upcoming release here.
 
+### Added
+
+- [#1799](https://github.com/FuelLabs/fuel-core/pull/1799) Snapshot creation is now concurrent.
+
+### Changed
+
+- [#1812](https://github.com/FuelLabs/fuel-core/pull/1812): Follow-up PR to simplify the logic around parallel snapshot creation.
+
 ## [Version 0.24.2]
 
 ### Changed
 
 #### Breaking
-- [#1798](https://github.com/FuelLabs/fuel-core/pull/1798): add nonce to relayed transactions and also hash full messages in the inbox root.
+- [#1798](https://github.com/FuelLabs/fuel-core/pull/1798): Add nonce to relayed transactions and also hash full messages in the inbox root.
 
 ### Fixed
 
@@ -25,7 +33,6 @@ Description of the upcoming release here.
 
 ### Added
 
-- [#1799](https://github.com/FuelLabs/fuel-core/pull/1799) Snapshot creation is now concurrent.
 - [#1786](https://github.com/FuelLabs/fuel-core/pull/1786): Regenesis now includes off-chain tables.
 - [#1716](https://github.com/FuelLabs/fuel-core/pull/1716): Added support of WASM state transition along with upgradable execution that works with native(std) and WASM(non-std) executors. The `fuel-core` now requires a `wasm32-unknown-unknown` target to build.
 - [#1770](https://github.com/FuelLabs/fuel-core/pull/1770): Add the new L1 event type for forced transactions.
