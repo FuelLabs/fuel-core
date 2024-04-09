@@ -98,12 +98,41 @@ pub struct StateConfigBuilder {
 }
 
 impl StateConfigBuilder {
+    #[cfg(feature = "std")]
+    fn block_height(&self) -> Option<BlockHeight> {
+        self.block_height
+    }
+
+    #[cfg(feature = "std")]
+    fn da_block_height(&self) -> Option<DaBlockHeight> {
+        self.da_block_height
+    }
+
     pub fn set_block_height(&mut self, block_height: BlockHeight) {
         self.block_height = Some(block_height);
     }
 
     pub fn set_da_block_height(&mut self, da_block_height: DaBlockHeight) {
         self.da_block_height = Some(da_block_height);
+    }
+
+    pub fn merge(&mut self, builder: Self) -> &mut Self {
+        self.coins.extend(builder.coins);
+        self.messages.extend(builder.messages);
+        self.contract_state.extend(builder.contract_state);
+        self.contract_balance.extend(builder.contract_balance);
+        self.contract_code.extend(builder.contract_code);
+        self.contract_utxo.extend(builder.contract_utxo);
+
+        if let Some(block_height) = builder.block_height {
+            self.block_height = Some(block_height);
+        }
+
+        if let Some(da_block_height) = builder.da_block_height {
+            self.da_block_height = Some(da_block_height);
+        }
+
+        self
     }
 
     #[cfg(feature = "std")]
@@ -541,10 +570,13 @@ pub use reader::{
     IntoIter,
     SnapshotReader,
 };
-#[cfg(feature = "std")]
-pub use writer::SnapshotWriter;
 #[cfg(feature = "parquet")]
 pub use writer::ZstdCompressionLevel;
+#[cfg(feature = "std")]
+pub use writer::{
+    SnapshotFragment,
+    SnapshotWriter,
+};
 pub const MAX_GROUP_SIZE: usize = usize::MAX;
 
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -560,11 +592,10 @@ mod tests {
 
     use crate::{
         ChainConfig,
-        Group,
         Randomize,
     };
 
-    use itertools::Itertools;
+    use fuel_core_types::fuel_types::ChainId;
     use rand::{
         rngs::StdRng,
         SeedableRng,
@@ -572,159 +603,284 @@ mod tests {
 
     use super::*;
 
-    mod parquet {
-        use std::path::Path;
+    #[test]
+    fn parquet_roundtrip() {
+        let writer = given_parquet_writer;
 
-        use fuel_core_storage::tables::{
-            Coins,
-            ContractsAssets,
-            ContractsLatestUtxo,
-            ContractsRawCode,
-            ContractsState,
-            Messages,
+        let reader = |metadata: SnapshotMetadata, _: usize| {
+            SnapshotReader::open(metadata).unwrap()
         };
 
-        use crate::{
-            config::state::writer,
-            SnapshotMetadata,
-            SnapshotReader,
-            SnapshotWriter,
-        };
-
-        use super::{
-            assert_roundtrip,
-            assert_roundtrip_block_heights,
-        };
-
-        #[test]
-        fn roundtrip() {
-            let writer = |temp_dir: &Path| {
-                SnapshotWriter::parquet(temp_dir, writer::ZstdCompressionLevel::Level1)
-                    .unwrap()
-            };
-
-            let reader = |metadata: SnapshotMetadata, _: usize| {
-                SnapshotReader::open(metadata).unwrap()
-            };
-
-            macro_rules! test_tables {
+        macro_rules! test_tables {
                 ($($table:ty),*) => {
                     $(assert_roundtrip::<$table>(writer, reader);)*
                 };
             }
 
-            test_tables!(
-                Coins,
-                ContractsAssets,
-                ContractsLatestUtxo,
-                ContractsRawCode,
-                ContractsState,
-                Messages
-            );
-        }
-
-        #[test]
-        fn roundtrip_block_heights() {
-            let writer = |temp_dir: &Path| {
-                SnapshotWriter::parquet(temp_dir, writer::ZstdCompressionLevel::Level1)
-                    .unwrap()
-            };
-            let reader =
-                |metadata: SnapshotMetadata| SnapshotReader::open(metadata).unwrap();
-            assert_roundtrip_block_heights(writer, reader)
-        }
+        test_tables!(
+            Coins,
+            ContractsAssets,
+            ContractsLatestUtxo,
+            ContractsRawCode,
+            ContractsState,
+            Messages
+        );
     }
 
-    mod json {
-        use std::path::Path;
+    fn given_parquet_writer(path: &Path) -> SnapshotWriter {
+        SnapshotWriter::parquet(path, writer::ZstdCompressionLevel::Level1).unwrap()
+    }
 
-        use fuel_core_storage::tables::{
-            Coins,
-            Messages,
+    fn given_json_writer(path: &Path) -> SnapshotWriter {
+        SnapshotWriter::json(path)
+    }
+
+    #[test_case::test_case(given_parquet_writer)]
+    #[test_case::test_case(given_json_writer)]
+    fn fragment_wont_unset_block_heights(
+        writer: impl Fn(&Path) -> SnapshotWriter + Copy,
+    ) {
+        // given
+        let temp_dir = tempfile::tempdir().unwrap();
+        let create_writer = || writer(temp_dir.path());
+        let original_block_height = BlockHeight::from(10);
+        let original_da_block_height = DaBlockHeight(11);
+        let block_height_fragment = {
+            let mut height_writer = create_writer();
+            height_writer
+                .write_block_data(original_block_height, original_da_block_height)
+                .unwrap();
+            height_writer.partial_close().unwrap()
         };
-        use itertools::Itertools;
-        use rand::{
-            rngs::StdRng,
-            SeedableRng,
+        let no_block_height_present_fragment = create_writer().partial_close().unwrap();
+        let chain_config_fragment = {
+            let mut chain_config_writer = create_writer();
+            chain_config_writer.write_chain_config(&ChainConfig::local_testnet());
+            chain_config_writer.partial_close().unwrap()
         };
 
-        use crate::{
-            ChainConfig,
-            ContractConfig,
-            Randomize,
-            SnapshotMetadata,
-            SnapshotReader,
-            SnapshotWriter,
-            StateConfig,
+        // when
+        let snapshot = [
+            block_height_fragment,
+            no_block_height_present_fragment,
+            chain_config_fragment,
+        ]
+        .into_iter()
+        .reduce(|a, b| a.merge(b).unwrap())
+        .unwrap()
+        .finalize()
+        .unwrap();
+
+        // then
+        let reader = SnapshotReader::open(snapshot).unwrap();
+        assert_eq!(reader.block_height(), original_block_height);
+        assert_eq!(reader.da_block_height(), original_da_block_height);
+    }
+
+    #[test]
+    fn json_roundtrip_coins_and_messages() {
+        let writer = |temp_dir: &Path| SnapshotWriter::json(temp_dir);
+        let reader = |metadata: SnapshotMetadata, group_size: usize| {
+            SnapshotReader::open_w_config(metadata, group_size).unwrap()
         };
 
-        use super::{
-            assert_roundtrip,
-            assert_roundtrip_block_heights,
+        assert_roundtrip::<Coins>(writer, reader);
+        assert_roundtrip::<Messages>(writer, reader);
+    }
+
+    #[test]
+    fn json_roundtrip_contract_related_tables() {
+        // given
+        let mut rng = StdRng::seed_from_u64(0);
+        let contracts = std::iter::repeat_with(|| ContractConfig::randomize(&mut rng))
+            .take(4)
+            .collect_vec();
+
+        let tmp_dir = tempfile::tempdir().unwrap();
+        let mut writer = SnapshotWriter::json(tmp_dir.path());
+
+        let state = StateConfig {
+            contracts,
+            ..Default::default()
         };
+        writer.write_chain_config(&ChainConfig::local_testnet());
 
-        #[test]
-        fn roundtrip() {
-            let writer = |temp_dir: &Path| SnapshotWriter::json(temp_dir);
-            let reader = |metadata: SnapshotMetadata, group_size: usize| {
-                SnapshotReader::open_w_config(metadata, group_size).unwrap()
-            };
+        // when
+        let snapshot = writer.write_state_config(state.clone()).unwrap();
 
-            assert_roundtrip::<Coins>(writer, reader);
-            assert_roundtrip::<Messages>(writer, reader);
-        }
+        // then
+        let reader = SnapshotReader::open(snapshot).unwrap();
+        let read_state = StateConfig::from_reader(&reader).unwrap();
 
-        #[test]
-        fn roundtrip_block_heights() {
-            let writer = |temp_dir: &Path| SnapshotWriter::json(temp_dir);
-            let reader =
-                |metadata: SnapshotMetadata| SnapshotReader::open(metadata).unwrap();
-            assert_roundtrip_block_heights(writer, reader);
-        }
+        pretty_assertions::assert_eq!(state, read_state);
+    }
 
-        #[test]
-        fn contract_related_tables_roundtrip() {
-            // given
-            let mut rng = StdRng::seed_from_u64(0);
-            let contracts =
-                std::iter::repeat_with(|| ContractConfig::randomize(&mut rng))
-                    .take(4)
-                    .collect_vec();
+    #[test_case::test_case(given_parquet_writer)]
+    #[test_case::test_case(given_json_writer)]
+    fn writes_in_fragments_correctly(writer: impl Fn(&Path) -> SnapshotWriter + Copy) {
+        // given
+        let temp_dir = tempfile::tempdir().unwrap();
+        let create_writer = || writer(temp_dir.path());
 
-            let tmp_dir = tempfile::tempdir().unwrap();
-            let mut writer = SnapshotWriter::json(tmp_dir.path());
+        let mut rng = StdRng::seed_from_u64(0);
+        let state_config = StateConfig::randomize(&mut rng);
 
-            let state = StateConfig {
-                contracts,
-                ..Default::default()
-            };
+        macro_rules! write_in_fragments {
+                ($($fragment_ty: ty,)*) => {
+                [
+                $({
+                    let mut writer = create_writer();
+                    writer
+                        .write(AsTable::<$fragment_ty>::as_table(&state_config))
+                        .unwrap();
+                    writer.partial_close().unwrap()
+
+                }),*
+                ]
+            }
+            }
+
+        let chain_config = ChainConfig::local_testnet();
+        let chain_and_height_fragment = {
+            let mut writer = create_writer();
             writer
-                .write_chain_config(&ChainConfig::local_testnet())
+                .write_block_data(state_config.block_height, state_config.da_block_height)
                 .unwrap();
 
-            // when
-            let snapshot = writer.write_state_config(state.clone()).unwrap();
+            writer.write_chain_config(&chain_config);
+            writer.partial_close().unwrap()
+        };
+        let fragments = write_in_fragments!(
+            Coins,
+            Messages,
+            ContractsState,
+            ContractsAssets,
+            ContractsRawCode,
+            ContractsLatestUtxo,
+        );
 
-            // then
-            let reader = SnapshotReader::open(snapshot).unwrap();
-            let read_state = StateConfig::from_reader(&reader).unwrap();
+        // when
+        let snapshot = fragments
+            .into_iter()
+            .chain([chain_and_height_fragment])
+            .reduce(|fragment, next_fragment| fragment.merge(next_fragment).unwrap())
+            .unwrap()
+            .finalize()
+            .unwrap();
 
-            pretty_assertions::assert_eq!(state, read_state);
-        }
+        // then
+        let reader = SnapshotReader::open(snapshot).unwrap();
+
+        let read_state_config = StateConfig::from_reader(&reader).unwrap();
+        assert_eq!(read_state_config, state_config);
+        assert_eq!(reader.chain_config(), &chain_config);
     }
 
-    fn assert_roundtrip_block_heights(
-        writer: impl FnOnce(&Path) -> SnapshotWriter,
-        reader: impl FnOnce(SnapshotMetadata) -> SnapshotReader,
+    #[test_case::test_case(given_parquet_writer)]
+    #[test_case::test_case(given_json_writer)]
+    fn chain_config_can_be_overridden_with_new_fragments(
+        writer: impl Fn(&Path) -> SnapshotWriter + Copy,
     ) {
+        // given
+        let temp_dir = tempfile::tempdir().unwrap();
+        let create_writer = || writer(temp_dir.path());
+
+        let original_chain_config = ChainConfig::local_testnet();
+        let original_chain_config_fragment = {
+            let mut chain_config_writer = create_writer();
+            chain_config_writer.write_chain_config(&original_chain_config);
+            chain_config_writer.partial_close().unwrap()
+        };
+        let chain_config_override = {
+            let mut chain_config = ChainConfig::local_testnet();
+            chain_config
+                .consensus_parameters
+                .set_chain_id(ChainId::new(u64::MAX));
+            chain_config
+        };
+        let chain_config_override_fragment = {
+            let mut chain_config_writer = create_writer();
+            chain_config_writer.write_chain_config(&chain_config_override);
+            chain_config_writer.partial_close().unwrap()
+        };
+        let block_height_fragment = {
+            let mut height_writer = create_writer();
+            height_writer
+                .write_block_data(BlockHeight::from(10), DaBlockHeight(11))
+                .unwrap();
+            height_writer.partial_close().unwrap()
+        };
+
+        // when
+        let snapshot = [
+            block_height_fragment,
+            original_chain_config_fragment,
+            chain_config_override_fragment,
+        ]
+        .into_iter()
+        .reduce(|a, b| a.merge(b).unwrap())
+        .unwrap()
+        .finalize()
+        .unwrap();
+
+        // then
+        let reader = SnapshotReader::open(snapshot).unwrap();
+        assert_eq!(reader.chain_config(), &chain_config_override);
+    }
+
+    #[test_case::test_case(given_parquet_writer)]
+    #[test_case::test_case(given_json_writer)]
+    fn empty_fragments_wont_unset_chain_config(
+        writer: impl Fn(&Path) -> SnapshotWriter + Copy,
+    ) {
+        // given
+        let temp_dir = tempfile::tempdir().unwrap();
+        let create_writer = || writer(temp_dir.path());
+        let original_chain_config = ChainConfig::local_testnet();
+        let chain_config_fragment = {
+            let mut chain_config_writer = create_writer();
+            chain_config_writer.write_chain_config(&original_chain_config);
+            chain_config_writer.partial_close().unwrap()
+        };
+
+        let block_height_fragment = {
+            let mut height_writer = create_writer();
+            height_writer
+                .write_block_data(BlockHeight::from(10), DaBlockHeight(11))
+                .unwrap();
+            height_writer.partial_close().unwrap()
+        };
+        let no_chain_config_present_fragment = create_writer().partial_close().unwrap();
+
+        // when
+        let snapshot = [
+            chain_config_fragment,
+            no_chain_config_present_fragment,
+            block_height_fragment,
+        ]
+        .into_iter()
+        .reduce(|a, b| a.merge(b).unwrap())
+        .unwrap()
+        .finalize()
+        .unwrap();
+
+        // then
+        let read_chain_config = SnapshotReader::open(snapshot)
+            .unwrap()
+            .chain_config()
+            .clone();
+        assert_eq!(read_chain_config, original_chain_config);
+    }
+
+    #[test_case::test_case(given_parquet_writer)]
+    #[test_case::test_case(given_json_writer)]
+    fn roundtrip_block_heights(writer: impl FnOnce(&Path) -> SnapshotWriter) {
         // given
         let temp_dir = tempfile::tempdir().unwrap();
         let block_height = 13u32.into();
         let da_block_height = 14u64.into();
         let mut writer = writer(temp_dir.path());
-        writer
-            .write_chain_config(&ChainConfig::local_testnet())
-            .unwrap();
+        writer.write_chain_config(&ChainConfig::local_testnet());
 
         // when
         writer
@@ -733,13 +889,65 @@ mod tests {
         let snapshot = writer.close().unwrap();
 
         // then
-        let reader = reader(snapshot);
+        let reader = SnapshotReader::open(snapshot).unwrap();
 
         let block_height_decoded = reader.block_height();
         pretty_assertions::assert_eq!(block_height, block_height_decoded);
 
         let da_block_height_decoded = reader.da_block_height();
         pretty_assertions::assert_eq!(da_block_height, da_block_height_decoded);
+    }
+
+    #[test_case::test_case(given_parquet_writer)]
+    #[test_case::test_case(given_json_writer)]
+    fn fragment_can_override_block_height(
+        writer: impl Fn(&Path) -> SnapshotWriter + Copy,
+    ) {
+        // given
+        let temp_dir = tempfile::tempdir().unwrap();
+        let create_writer = || writer(temp_dir.path());
+        let original_block_height = BlockHeight::from(10);
+        let original_da_block_height = DaBlockHeight(11);
+        let block_height_fragment = {
+            let mut height_writer = create_writer();
+            height_writer
+                .write_block_data(original_block_height, original_da_block_height)
+                .unwrap();
+            height_writer.partial_close().unwrap()
+        };
+
+        let block_height_override = BlockHeight::from(20);
+        let da_block_height_override = DaBlockHeight(21);
+        let block_height_override_fragment = {
+            let mut height_writer = create_writer();
+            height_writer
+                .write_block_data(block_height_override, da_block_height_override)
+                .unwrap();
+            height_writer.partial_close().unwrap()
+        };
+
+        let chain_config_fragment = {
+            let mut chain_config_writer = create_writer();
+            chain_config_writer.write_chain_config(&ChainConfig::local_testnet());
+            chain_config_writer.partial_close().unwrap()
+        };
+
+        // when
+        let snapshot = [
+            chain_config_fragment,
+            block_height_fragment,
+            block_height_override_fragment,
+        ]
+        .into_iter()
+        .reduce(|a, b| a.merge(b).unwrap())
+        .unwrap()
+        .finalize()
+        .unwrap();
+
+        // then
+        let reader = SnapshotReader::open(snapshot).unwrap();
+        pretty_assertions::assert_eq!(block_height_override, reader.block_height());
+        pretty_assertions::assert_eq!(da_block_height_override, reader.da_block_height());
     }
 
     fn assert_roundtrip<T>(
@@ -770,9 +978,7 @@ mod tests {
         let mut group_generator =
             GroupGenerator::new(StdRng::seed_from_u64(0), group_size, num_groups);
         let mut snapshot_writer = writer(temp_dir.path());
-        snapshot_writer
-            .write_chain_config(&ChainConfig::local_testnet())
-            .unwrap();
+        snapshot_writer.write_chain_config(&ChainConfig::local_testnet());
 
         // when
         let expected_groups = group_generator

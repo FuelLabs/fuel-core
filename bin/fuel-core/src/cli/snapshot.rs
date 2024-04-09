@@ -5,48 +5,17 @@ use clap::{
     Subcommand,
 };
 use fuel_core::{
-    chain_config::ChainConfig,
     combined_database::CombinedDatabase,
-    database::{
-        database_description::{
-            off_chain::OffChain,
-            on_chain::OnChain,
-            DatabaseDescription,
-        },
-        Database,
-    },
-    fuel_core_graphql_api::storage::transactions::{
-        OwnedTransactions,
-        TransactionStatuses,
-    },
     types::fuel_types::ContractId,
 };
-use fuel_core_chain_config::{
-    AddTable,
-    SnapshotWriter,
-    StateConfigBuilder,
-    TableEntry,
-    MAX_GROUP_SIZE,
-};
-use fuel_core_storage::{
-    blueprint::BlueprintInspect,
-    iter::IterDirection,
-    structured_storage::TableWithBlueprint,
-    tables::{
-        Coins,
-        ContractsAssets,
-        ContractsLatestUtxo,
-        ContractsRawCode,
-        ContractsState,
-        Messages,
-        Transactions,
-    },
-};
-use itertools::Itertools;
+use fuel_core_chain_config::ChainConfig;
+
 use std::path::{
     Path,
     PathBuf,
 };
+
+use super::local_testnet_chain_config;
 
 /// Print a snapshot of blockchain state to stdout.
 #[derive(Debug, Clone, Parser)]
@@ -144,7 +113,13 @@ pub enum SubCommands {
 }
 
 #[cfg(any(feature = "rocksdb", feature = "rocksdb-production"))]
-pub fn exec(command: Command) -> anyhow::Result<()> {
+pub async fn exec(command: Command) -> anyhow::Result<()> {
+    use fuel_core::service::genesis::Exporter;
+    use fuel_core_chain_config::{
+        SnapshotWriter,
+        MAX_GROUP_SIZE,
+    };
+
     let db = open_db(
         &command.database_path,
         Some(command.max_database_cache_size),
@@ -160,131 +135,39 @@ pub fn exec(command: Command) -> anyhow::Result<()> {
             let encoding = encoding_command
                 .map(|f| f.encoding())
                 .unwrap_or_else(|| Encoding::Json);
-            full_snapshot(chain_config, &output_dir, encoding, db)
+
+            let group_size = encoding.group_size().unwrap_or(MAX_GROUP_SIZE);
+            let writer = move || match encoding {
+                Encoding::Json => Ok(SnapshotWriter::json(output_dir.clone())),
+                #[cfg(feature = "parquet")]
+                Encoding::Parquet { compression, .. } => {
+                    SnapshotWriter::parquet(output_dir.clone(), compression.try_into()?)
+                }
+            };
+            Exporter::new(
+                db,
+                load_chain_config_or_use_testnet(chain_config.as_deref())?,
+                writer,
+                group_size,
+            )
+            .write_full_snapshot()
+            .await
         }
         SubCommands::Contract { contract_id } => {
-            contract_snapshot(db, contract_id, &output_dir)
+            let writer = move || Ok(SnapshotWriter::json(output_dir.clone()));
+            Exporter::new(db, local_testnet_chain_config(), writer, MAX_GROUP_SIZE)
+                .write_contract_snapshot(contract_id)
+                .await
         }
     }
 }
 
-fn contract_snapshot(
-    db: CombinedDatabase,
-    contract_id: ContractId,
-    output_dir: &Path,
-) -> Result<(), anyhow::Error> {
-    std::fs::create_dir_all(output_dir)?;
-
-    let code = db
-        .on_chain()
-        .entries::<ContractsRawCode>(Some(contract_id.as_ref()), IterDirection::Forward)
-        .next()
-        .ok_or_else(|| {
-            anyhow::anyhow!("contract code not found! id: {:?}", contract_id)
-        })??;
-
-    let utxo = db
-        .on_chain()
-        .entries::<ContractsLatestUtxo>(
-            Some(contract_id.as_ref()),
-            IterDirection::Forward,
-        )
-        .next()
-        .ok_or_else(|| {
-            anyhow::anyhow!("contract utxo not found! id: {:?}", contract_id)
-        })??;
-
-    let state = db
-        .on_chain()
-        .entries::<ContractsState>(Some(contract_id.as_ref()), IterDirection::Forward)
-        .try_collect()?;
-
-    let balance = db
-        .on_chain()
-        .entries::<ContractsAssets>(Some(contract_id.as_ref()), IterDirection::Forward)
-        .try_collect()?;
-
-    let block = db.on_chain().latest_block()?;
-    let mut writer = SnapshotWriter::json(output_dir);
-
-    writer.write(vec![code])?;
-    writer.write(vec![utxo])?;
-    writer.write(state)?;
-    writer.write(balance)?;
-    writer.write_block_data(*block.header().height(), block.header().da_height)?;
-    writer.write_chain_config(&crate::cli::local_testnet_chain_config())?;
-    writer.close()?;
-    Ok(())
-}
-
-fn full_snapshot(
-    prev_chain_config: Option<PathBuf>,
-    output_dir: &Path,
-    encoding: Encoding,
-    combined_db: CombinedDatabase,
-) -> Result<(), anyhow::Error> {
-    std::fs::create_dir_all(output_dir)?;
-
-    let mut writer = match encoding {
-        Encoding::Json => SnapshotWriter::json(output_dir),
-        #[cfg(feature = "parquet")]
-        Encoding::Parquet { compression, .. } => {
-            SnapshotWriter::parquet(output_dir, compression.try_into()?)?
-        }
-    };
-
-    let prev_chain_config = load_chain_config(prev_chain_config)?;
-    writer.write_chain_config(&prev_chain_config)?;
-
-    fn write<T, DbDesc>(
-        db: &Database<DbDesc>,
-        group_size: usize,
-        writer: &mut SnapshotWriter,
-    ) -> anyhow::Result<()>
-    where
-        T: TableWithBlueprint<Column = <DbDesc as DatabaseDescription>::Column>,
-        T::Blueprint: BlueprintInspect<T, Database<DbDesc>>,
-        TableEntry<T>: serde::Serialize,
-        StateConfigBuilder: AddTable<T>,
-        DbDesc: DatabaseDescription,
-    {
-        db.entries::<T>(None, IterDirection::Forward)
-            .chunks(group_size)
-            .into_iter()
-            .try_for_each(|chunk| writer.write(chunk.try_collect()?))
+fn load_chain_config_or_use_testnet(path: Option<&Path>) -> anyhow::Result<ChainConfig> {
+    if let Some(path) = path {
+        ChainConfig::load(path)
+    } else {
+        Ok(local_testnet_chain_config())
     }
-    let group_size = encoding.group_size().unwrap_or(MAX_GROUP_SIZE);
-
-    let db = combined_db.on_chain();
-    write::<Coins, OnChain>(db, group_size, &mut writer)?;
-    write::<Messages, OnChain>(db, group_size, &mut writer)?;
-    write::<ContractsRawCode, OnChain>(db, group_size, &mut writer)?;
-    write::<ContractsLatestUtxo, OnChain>(db, group_size, &mut writer)?;
-    write::<ContractsState, OnChain>(db, group_size, &mut writer)?;
-    write::<ContractsAssets, OnChain>(db, group_size, &mut writer)?;
-    write::<Transactions, OnChain>(db, group_size, &mut writer)?;
-
-    let db = combined_db.off_chain();
-    write::<TransactionStatuses, OffChain>(db, group_size, &mut writer)?;
-    write::<OwnedTransactions, OffChain>(db, group_size, &mut writer)?;
-
-    let block = combined_db.on_chain().latest_block()?;
-    writer.write_block_data(*block.header().height(), block.header().da_height)?;
-
-    writer.close()?;
-
-    Ok(())
-}
-
-fn load_chain_config(
-    chain_config: Option<PathBuf>,
-) -> Result<ChainConfig, anyhow::Error> {
-    let chain_config = match chain_config {
-        Some(file) => ChainConfig::load(file)?,
-        None => crate::cli::local_testnet_chain_config(),
-    };
-
-    Ok(chain_config)
 }
 
 fn open_db(path: &Path, capacity: Option<usize>) -> anyhow::Result<CombinedDatabase> {
@@ -298,7 +181,11 @@ mod tests {
 
     use std::iter::repeat_with;
 
-    use fuel_core::fuel_core_graphql_api::storage::transactions::OwnedTransactionIndexKey;
+    use fuel_core::fuel_core_graphql_api::storage::transactions::{
+        OwnedTransactionIndexKey,
+        OwnedTransactions,
+        TransactionStatuses,
+    };
     use fuel_core_chain_config::{
         AddTable,
         AsTable,
@@ -318,6 +205,7 @@ mod tests {
             ContractsState,
             FuelBlocks,
             Messages,
+            Transactions,
         },
         ContractsAssetKey,
         ContractsStateKey,
@@ -350,6 +238,7 @@ mod tests {
         services::txpool::TransactionStatus,
         tai64::Tai64,
     };
+    use itertools::Itertools;
     use rand::{
         rngs::StdRng,
         seq::SliceRandom,
@@ -758,7 +647,7 @@ mod tests {
         db.flush();
 
         // when
-        exec(Command {
+        let fut = exec(Command {
             database_path: db_path,
             max_database_cache_size: DEFAULT_DATABASE_CACHE_SIZE,
             output_dir: snapshot_dir.clone(),
@@ -766,7 +655,13 @@ mod tests {
                 chain_config: None,
                 encoding_command: Some(EncodingCommand::Encoding { encoding }),
             },
-        })?;
+        });
+
+        // Because the test_case macro doesn't work with async tests
+        tokio::runtime::Runtime::new()
+            .unwrap()
+            .block_on(fut)
+            .unwrap();
 
         // then
         let snapshot = SnapshotMetadata::read(&snapshot_dir)?;
@@ -805,7 +700,7 @@ mod tests {
         db.flush();
 
         // when
-        exec(Command {
+        let fut = exec(Command {
             database_path: db_path,
             output_dir: snapshot_dir.clone(),
             max_database_cache_size: DEFAULT_DATABASE_CACHE_SIZE,
@@ -818,7 +713,12 @@ mod tests {
                     },
                 }),
             },
-        })?;
+        });
+
+        tokio::runtime::Runtime::new()
+            .unwrap()
+            .block_on(fut)
+            .unwrap();
 
         // then
         let snapshot = SnapshotMetadata::read(&snapshot_dir)?;
@@ -830,8 +730,8 @@ mod tests {
         Ok(())
     }
 
-    #[test]
-    fn contract_snapshot_isolates_contract_correctly() -> anyhow::Result<()> {
+    #[tokio::test]
+    async fn contract_snapshot_isolates_contract_correctly() -> anyhow::Result<()> {
         // given
         let temp_dir = tempfile::tempdir()?;
         let snapshot_dir = temp_dir.path().join("snapshot");
@@ -855,13 +755,14 @@ mod tests {
             output_dir: snapshot_dir.clone(),
             max_database_cache_size: DEFAULT_DATABASE_CACHE_SIZE,
             subcommand: SubCommands::Contract { contract_id },
-        })?;
+        })
+        .await?;
 
         // then
         let metadata = SnapshotMetadata::read(&snapshot_dir)?;
         let snapshot_state = StateConfig::from_snapshot_metadata(metadata)?;
 
-        assert_eq!(
+        pretty_assertions::assert_eq!(
             snapshot_state,
             StateConfig {
                 coins: vec![],

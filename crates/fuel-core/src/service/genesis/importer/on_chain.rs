@@ -1,24 +1,15 @@
 use super::{
-    runner::ProcessState,
-    workers::{
-        GenesisWorkers,
-        Handler,
-    },
+    import_task::ImportTable,
+    Handler,
 };
-use crate::{
-    combined_database::CombinedDatabase,
-    database::{
-        balances::BalancesInitializer,
-        database_description::on_chain::OnChain,
-        state::StateInitializer,
-        Database,
-    },
+use crate::database::{
+    balances::BalancesInitializer,
+    database_description::on_chain::OnChain,
+    state::StateInitializer,
+    Database,
 };
 use anyhow::anyhow;
-use fuel_core_chain_config::{
-    SnapshotReader,
-    TableEntry,
-};
+use fuel_core_chain_config::TableEntry;
 use fuel_core_storage::{
     tables::{
         Coins,
@@ -42,22 +33,7 @@ use fuel_core_types::{
     fuel_types::BlockHeight,
 };
 
-pub(crate) async fn import_state(
-    db: CombinedDatabase,
-    snapshot_reader: SnapshotReader,
-) -> anyhow::Result<()> {
-    let mut workers = GenesisWorkers::new(db, snapshot_reader);
-    if let Err(e) = workers.run_on_chain_imports().await {
-        workers.shutdown();
-        workers.finished().await;
-
-        return Err(e);
-    }
-
-    Ok(())
-}
-
-impl ProcessState for Handler<Coins> {
+impl ImportTable for Handler<Coins> {
     type TableInSnapshot = Coins;
     type TableBeingWritten = Coins;
     type DbDesc = OnChain;
@@ -74,7 +50,7 @@ impl ProcessState for Handler<Coins> {
     }
 }
 
-impl ProcessState for Handler<Messages> {
+impl ImportTable for Handler<Messages> {
     type TableInSnapshot = Messages;
     type TableBeingWritten = Messages;
     type DbDesc = OnChain;
@@ -90,7 +66,7 @@ impl ProcessState for Handler<Messages> {
     }
 }
 
-impl ProcessState for Handler<ContractsRawCode> {
+impl ImportTable for Handler<ContractsRawCode> {
     type TableInSnapshot = ContractsRawCode;
     type TableBeingWritten = ContractsRawCode;
     type DbDesc = OnChain;
@@ -107,7 +83,7 @@ impl ProcessState for Handler<ContractsRawCode> {
     }
 }
 
-impl ProcessState for Handler<ContractsLatestUtxo> {
+impl ImportTable for Handler<ContractsLatestUtxo> {
     type TableInSnapshot = ContractsLatestUtxo;
     type TableBeingWritten = ContractsLatestUtxo;
     type DbDesc = OnChain;
@@ -124,7 +100,7 @@ impl ProcessState for Handler<ContractsLatestUtxo> {
     }
 }
 
-impl ProcessState for Handler<ContractsState> {
+impl ImportTable for Handler<ContractsState> {
     type TableInSnapshot = ContractsState;
     type TableBeingWritten = ContractsState;
     type DbDesc = OnChain;
@@ -139,7 +115,7 @@ impl ProcessState for Handler<ContractsState> {
     }
 }
 
-impl ProcessState for Handler<ContractsAssets> {
+impl ImportTable for Handler<ContractsAssets> {
     type TableInSnapshot = ContractsAssets;
     type TableBeingWritten = ContractsAssets;
     type DbDesc = OnChain;
@@ -154,7 +130,7 @@ impl ProcessState for Handler<ContractsAssets> {
     }
 }
 
-impl ProcessState for Handler<Transactions> {
+impl ImportTable for Handler<Transactions> {
     type TableInSnapshot = Transactions;
     type TableBeingWritten = Transactions;
     type DbDesc = OnChain;
