@@ -470,10 +470,22 @@ where
                         prefix,
                         convert_to_rocksdb_direction(direction),
                     );
+
+                    // Setting prefix on the RocksDB level to optimize iteration.
                     let mut opts = ReadOptions::default();
                     opts.set_prefix_same_as_start(true);
 
-                    self._iter_all(column, opts, iter_mode).into_boxed()
+                    let prefix = prefix.to_vec();
+                    self._iter_all(column, opts, iter_mode)
+                        // Not all tables has a prefix set, so we need to filter out the keys.
+                        .take_while(move |item| {
+                            if let Ok((key, _)) = item {
+                                key.starts_with(prefix.as_slice())
+                            } else {
+                                true
+                            }
+                        })
+                        .into_boxed()
                 }
             }
             (None, Some(start)) => {

@@ -104,42 +104,20 @@ impl Database<OnChain> {
     }
 }
 
-pub trait KeyFilter<K> {
-    fn start_at_prefix(&self) -> Option<&[u8]>;
-    fn should_stop(&self, key: &K) -> bool;
-}
-
-pub struct IncludeAll;
-impl<K> KeyFilter<K> for IncludeAll {
-    fn start_at_prefix(&self) -> Option<&[u8]> {
-        None
-    }
-
-    fn should_stop(&self, _: &K) -> bool {
-        false
-    }
-}
-
 impl<DbDesc> Database<DbDesc>
 where
     DbDesc: DatabaseDescription,
 {
     pub fn entries<'a, T>(
         &'a self,
-        filter: impl KeyFilter<T::OwnedKey> + 'a,
+        prefix: Option<Vec<u8>>,
         direction: IterDirection,
     ) -> impl Iterator<Item = StorageResult<TableEntry<T>>> + 'a
     where
         T: TableWithBlueprint<Column = <DbDesc as DatabaseDescription>::Column> + 'a,
         T::Blueprint: BlueprintInspect<T, Self>,
     {
-        self.iter_all_filtered::<T, _>(filter.start_at_prefix(), None, Some(direction))
-            .take_while(move |result| {
-                let Ok((key, _)) = result.as_ref() else {
-                    return true;
-                };
-                !filter.should_stop(key)
-            })
+        self.iter_all_filtered::<T, _>(prefix, None, Some(direction))
             .map_ok(|(key, value)| TableEntry { key, value })
     }
 }
@@ -1008,5 +986,49 @@ mod tests {
                 .to_string()
             );
         }
+    }
+
+    #[cfg(feature = "rocksdb")]
+    #[test]
+    fn database_iter_all_by_prefix_works() {
+        use fuel_core_storage::tables::ContractsRawCode;
+        use fuel_core_types::fuel_types::ContractId;
+        use std::str::FromStr;
+
+        let test = |mut db: Database<OnChain>| {
+            let contract_id_1 = ContractId::from_str(
+                "5962be5ebddc516cb4ed7d7e76365f59e0d231ac25b53f262119edf76564aab4",
+            )
+            .unwrap();
+
+            let mut insert_empty_code = |id| {
+                StorageMutate::<ContractsRawCode>::insert(&mut db, &id, &[]).unwrap()
+            };
+            insert_empty_code(contract_id_1);
+
+            let contract_id_2 = ContractId::from_str(
+                "5baf0dcae7c114f647f6e71f1723f59bcfc14ecb28071e74895d97b14873c5dc",
+            )
+            .unwrap();
+            insert_empty_code(contract_id_2);
+
+            let matched_keys: Vec<_> = db
+                .iter_all_by_prefix::<ContractsRawCode, _>(Some(contract_id_1))
+                .map_ok(|(k, _)| k)
+                .try_collect()
+                .unwrap();
+
+            assert_eq!(matched_keys, vec![contract_id_1]);
+        };
+
+        let temp_dir = tempfile::tempdir().unwrap();
+        let db = Database::<OnChain>::in_memory();
+        // in memory passes
+        test(db);
+
+        let db = Database::<OnChain>::open_rocksdb(temp_dir.path(), 1024 * 1024 * 1024)
+            .unwrap();
+        // rocks db fails
+        test(db);
     }
 }
