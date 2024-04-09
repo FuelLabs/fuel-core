@@ -16,7 +16,6 @@ use fuel_core_storage::{
 };
 use fuel_core_types::{
     entities::relayer::transaction::{
-        // RelayedTransactionId,
         RelayedTransactionStatus,
     },
     fuel_tx::Bytes32,
