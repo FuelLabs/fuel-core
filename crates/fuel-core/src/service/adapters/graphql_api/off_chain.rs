@@ -13,7 +13,10 @@ use crate::{
             transactions::OwnedTransactionIndexCursor,
         },
     },
-    graphql_api::storage::old::OldFuelBlocks,
+    graphql_api::storage::old::{
+        OldFuelBlocks,
+        OldTransactions,
+    },
 };
 use fuel_core_storage::{
     iter::{
@@ -43,6 +46,7 @@ use fuel_core_types::{
     fuel_tx::{
         Address,
         Salt,
+        Transaction,
         TxPointer,
         UtxoId,
     },
@@ -120,6 +124,12 @@ impl OffChainDatabase for Database<OffChain> {
         self.iter_all_by_start::<OldFuelBlocks>(height.as_ref(), Some(direction))
             .map(|r| r.map(|(_, block)| block))
             .into_boxed()
+    }
+
+    fn old_transaction(&self, id: &TxId) -> StorageResult<Option<Transaction>> {
+        self.storage_as_ref::<OldTransactions>()
+            .get(id)
+            .map(|tx| tx.map(|tx| tx.into_owned()))
     }
 }
 

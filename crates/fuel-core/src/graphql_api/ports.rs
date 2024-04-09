@@ -91,6 +91,8 @@ pub trait OffChainDatabase: Send + Sync {
         height: Option<BlockHeight>,
         direction: IterDirection,
     ) -> BoxedIter<'_, StorageResult<CompressedBlock>>;
+
+    fn old_transaction(&self, id: &TxId) -> StorageResult<Option<Transaction>>;
 }
 
 /// The on chain database port expected by GraphQL API service.

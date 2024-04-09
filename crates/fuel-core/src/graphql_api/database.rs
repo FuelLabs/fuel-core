@@ -279,4 +279,11 @@ impl OffChainDatabase for ReadView {
     ) -> BoxedIter<'_, StorageResult<CompressedBlock>> {
         self.off_chain.old_blocks(height, direction)
     }
+
+    fn old_transaction(
+        &self,
+        id: &TxId,
+    ) -> StorageResult<Option<fuel_core_types::fuel_tx::Transaction>> {
+        self.off_chain.old_transaction(id)
+    }
 }
