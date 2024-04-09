@@ -118,13 +118,11 @@ where
 {
     pub fn entries<'a, T>(
         &'a self,
-        prefix: Option<&[u8]>,
+        prefix: Option<Vec<u8>>,
         direction: IterDirection,
     ) -> impl Iterator<Item = StorageResult<TableEntry<T>>> + 'a
     where
-        T: TableWithBlueprint<Column = <DbDesc as DatabaseDescription>::Column>,
-        T::OwnedValue: 'a,
-        T::OwnedKey: 'a,
+        T: TableWithBlueprint<Column = <DbDesc as DatabaseDescription>::Column> + 'a,
         T::Blueprint: BlueprintInspect<T, Self>,
     {
         self.iter_all_filtered::<T, _>(prefix, None, Some(direction))
@@ -996,5 +994,49 @@ mod tests {
                 .to_string()
             );
         }
+    }
+
+    #[cfg(feature = "rocksdb")]
+    #[test]
+    fn database_iter_all_by_prefix_works() {
+        use fuel_core_storage::tables::ContractsRawCode;
+        use fuel_core_types::fuel_types::ContractId;
+        use std::str::FromStr;
+
+        let test = |mut db: Database<OnChain>| {
+            let contract_id_1 = ContractId::from_str(
+                "5962be5ebddc516cb4ed7d7e76365f59e0d231ac25b53f262119edf76564aab4",
+            )
+            .unwrap();
+
+            let mut insert_empty_code = |id| {
+                StorageMutate::<ContractsRawCode>::insert(&mut db, &id, &[]).unwrap()
+            };
+            insert_empty_code(contract_id_1);
+
+            let contract_id_2 = ContractId::from_str(
+                "5baf0dcae7c114f647f6e71f1723f59bcfc14ecb28071e74895d97b14873c5dc",
+            )
+            .unwrap();
+            insert_empty_code(contract_id_2);
+
+            let matched_keys: Vec<_> = db
+                .iter_all_by_prefix::<ContractsRawCode, _>(Some(contract_id_1))
+                .map_ok(|(k, _)| k)
+                .try_collect()
+                .unwrap();
+
+            assert_eq!(matched_keys, vec![contract_id_1]);
+        };
+
+        let temp_dir = tempfile::tempdir().unwrap();
+        let db = Database::<OnChain>::in_memory();
+        // in memory passes
+        test(db);
+
+        let db = Database::<OnChain>::open_rocksdb(temp_dir.path(), 1024 * 1024 * 1024)
+            .unwrap();
+        // rocks db fails
+        test(db);
     }
 }
