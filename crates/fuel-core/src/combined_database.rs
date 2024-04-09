@@ -1,5 +1,4 @@
 use crate::{
-    database,
     database::{
         database_description::{
             off_chain::OffChain,
@@ -57,7 +56,7 @@ impl CombinedDatabase {
     }
 
     #[cfg(feature = "rocksdb")]
-    pub fn prune(path: &std::path::Path) -> database::Result<()> {
+    pub fn prune(path: &std::path::Path) -> crate::database::Result<()> {
         crate::state::rocks_db::RocksDb::<OnChain>::prune(path)?;
         crate::state::rocks_db::RocksDb::<OffChain>::prune(path)?;
         crate::state::rocks_db::RocksDb::<Relayer>::prune(path)?;
@@ -175,10 +174,8 @@ impl CombinedDatabase {
         );
 
         let block = self.on_chain().latest_block()?;
-        builder.set_block_height(*block.header().height());
-        builder.set_da_block_height(block.header().da_height);
-
-        let state_config = builder.build()?;
+        let state_config =
+            builder.build(*block.header().height(), block.header().da_height)?;
 
         Ok(state_config)
     }

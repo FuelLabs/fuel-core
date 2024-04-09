@@ -13,7 +13,6 @@ pub enum TableEncoding {
         tables: std::collections::HashMap<String, PathBuf>,
         block_height: PathBuf,
         da_block_height: PathBuf,
-        compression: crate::ZstdCompressionLevel,
     },
 }
 impl TableEncoding {
@@ -186,7 +185,6 @@ mod tests {
                     )]),
                     block_height: "block_height.parquet".into(),
                     da_block_height: "da_block_height.parquet".into(),
-                    compression: crate::ZstdCompressionLevel::Level1,
                 },
             };
             serde_json::to_writer(
@@ -210,7 +208,6 @@ mod tests {
                         )]),
                         block_height: temp_dir.path().join("block_height.parquet"),
                         da_block_height: temp_dir.path().join("da_block_height.parquet"),
-                        compression: crate::ZstdCompressionLevel::Level1,
                     }
                 }
             );
@@ -230,7 +227,6 @@ mod tests {
                     )]),
                     block_height: dir.join("block_height.parquet"),
                     da_block_height: dir.join("da_block_height.parquet"),
-                    compression: crate::ZstdCompressionLevel::Level1,
                 },
             };
 
@@ -253,7 +249,6 @@ mod tests {
                         )]),
                         block_height: "block_height.parquet".into(),
                         da_block_height: "da_block_height.parquet".into(),
-                        compression: crate::ZstdCompressionLevel::Level1,
                     }
                 }
             );

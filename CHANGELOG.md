@@ -7,13 +7,25 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 ## [Unreleased]
 
 Description of the upcoming release here.
+### Fixed
+
+- [#1814](https://github.com/FuelLabs/fuel-core/pull/1814): Bugfix: the `iter_all_by_prefix` was not working for all tables. The change adds a `Rust` level filtering.
+=======
+### Added
+
+- [#1813](https://github.com/FuelLabs/fuel-core/pull/1813): Added back support for `/health` endpoint.
+- [#1799](https://github.com/FuelLabs/fuel-core/pull/1799): Snapshot creation is now concurrent.
+
+### Changed
+
+- [#1812](https://github.com/FuelLabs/fuel-core/pull/1812): Follow-up PR to simplify the logic around parallel snapshot creation.
 
 ## [Version 0.24.2]
 
 ### Changed
 
 #### Breaking
-- [#1798](https://github.com/FuelLabs/fuel-core/pull/1798): add nonce to relayed transactions and also hash full messages in the inbox root.
+- [#1798](https://github.com/FuelLabs/fuel-core/pull/1798): Add nonce to relayed transactions and also hash full messages in the inbox root.
 
 ### Fixed
 

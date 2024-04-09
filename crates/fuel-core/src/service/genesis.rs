@@ -49,20 +49,24 @@ use fuel_core_types::{
 };
 use itertools::Itertools;
 
-pub mod off_chain;
-pub mod on_chain;
-mod runner;
-mod workers;
+mod exporter;
+mod importer;
+mod task_manager;
 
-pub use runner::GenesisRunner;
+pub use exporter::Exporter;
+use tokio_util::sync::CancellationToken;
+
+use self::importer::SnapshotImporter;
 
 /// Performs the importing of the genesis block from the snapshot.
 pub async fn execute_genesis_block(
     config: &Config,
     db: &CombinedDatabase,
 ) -> anyhow::Result<UncommittedImportResult<Changes>> {
-    on_chain::import_state(db.clone(), config.snapshot_reader.clone()).await?;
-    off_chain::import_state(db.clone(), config.snapshot_reader.clone()).await?;
+    // TODO: tie this with a SIGNAL for resumability
+    let cancel = CancellationToken::new();
+    SnapshotImporter::import(db.clone(), config.snapshot_reader.clone(), cancel.clone())
+        .await?;
 
     let genesis_progress_on_chain: Vec<String> = db
         .on_chain()
