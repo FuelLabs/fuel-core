@@ -92,14 +92,6 @@ impl Database {
         )
         .map_ok(|(key, value)| TableEntry { key, value })
     }
-
-    pub fn filter_contract_states(
-        &self,
-        contract_id: ContractId,
-    ) -> impl Iterator<Item = StorageResult<TableEntry<ContractsState>>> + '_ {
-        self.iter_all_by_prefix::<ContractsState, _>(Some(contract_id))
-            .map_ok(|(key, value)| TableEntry { key, value })
-    }
 }
 
 #[cfg(test)]

@@ -151,14 +151,13 @@ impl CombinedDatabase {
         use fuel_core_chain_config::AddTable;
         use itertools::Itertools;
         let mut builder = StateConfigBuilder::default();
-        use crate::database::IncludeAll;
 
         macro_rules! add_tables {
             ($($table: ty),*) => {
                 $(
                     let table = self
                         .on_chain()
-                        .entries::<$table>(IncludeAll, fuel_core_storage::iter::IterDirection::Forward)
+                        .entries::<$table>(None, fuel_core_storage::iter::IterDirection::Forward)
                         .try_collect()?;
                     builder.add(table);
                 )*
@@ -175,10 +174,8 @@ impl CombinedDatabase {
         );
 
         let block = self.on_chain().latest_block()?;
-        builder.set_block_height(*block.header().height());
-        builder.set_da_block_height(block.header().da_height);
-
-        let state_config = builder.build()?;
+        let state_config =
+            builder.build(*block.header().height(), block.header().da_height)?;
 
         Ok(state_config)
     }
