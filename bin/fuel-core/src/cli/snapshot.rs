@@ -306,12 +306,9 @@ mod tests {
             builder.add(self.common.contract_balance);
 
             let height = self.common.block.value.header().height();
-            builder.set_block_height(*height);
-
             let da_height = self.common.block.value.header().application().da_height;
-            builder.set_da_block_height(da_height);
 
-            builder.build().unwrap()
+            builder.build(*height, da_height).unwrap()
         }
 
         fn read_from_snapshot(snapshot: SnapshotMetadata) -> Self {

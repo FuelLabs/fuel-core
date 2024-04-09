@@ -175,10 +175,8 @@ impl CombinedDatabase {
         );
 
         let block = self.on_chain().latest_block()?;
-        builder.set_block_height(*block.header().height());
-        builder.set_da_block_height(block.header().da_height);
-
-        let state_config = builder.build()?;
+        let state_config =
+            builder.build(*block.header().height(), block.header().da_height)?;
 
         Ok(state_config)
     }
