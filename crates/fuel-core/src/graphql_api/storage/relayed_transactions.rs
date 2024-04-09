@@ -15,9 +15,7 @@ use fuel_core_storage::{
     Mappable,
 };
 use fuel_core_types::{
-    entities::relayer::transaction::{
-        RelayedTransactionStatus,
-    },
+    entities::relayer::transaction::RelayedTransactionStatus,
     fuel_tx::Bytes32,
 };
 
