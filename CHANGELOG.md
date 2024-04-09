@@ -12,6 +12,8 @@ Description of the upcoming release here.
 
 ### Changed
 
+- [#1812](https://github.com/FuelLabs/fuel-core/pull/1812): Follow-up PR to simplify the logic around parallel snapshot creation.
+
 #### Breaking
 - [#1798](https://github.com/FuelLabs/fuel-core/pull/1798): add nonce to relayed transactions and also hash full messages in the inbox root.
 
