@@ -151,14 +151,13 @@ impl CombinedDatabase {
         use fuel_core_chain_config::AddTable;
         use itertools::Itertools;
         let mut builder = StateConfigBuilder::default();
-        use crate::database::IncludeAll;
 
         macro_rules! add_tables {
             ($($table: ty),*) => {
                 $(
                     let table = self
                         .on_chain()
-                        .entries::<$table>(IncludeAll, fuel_core_storage::iter::IterDirection::Forward)
+                        .entries::<$table>(None, fuel_core_storage::iter::IterDirection::Forward)
                         .try_collect()?;
                     builder.add(table);
                 )*
