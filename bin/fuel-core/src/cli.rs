@@ -127,7 +127,7 @@ pub async fn run_cli() -> anyhow::Result<()> {
         Ok(opt) => match opt.command {
             Fuel::Run(command) => run::exec(command).await,
             #[cfg(any(feature = "rocksdb", feature = "rocksdb-production"))]
-            Fuel::Snapshot(command) => snapshot::exec(command),
+            Fuel::Snapshot(command) => snapshot::exec(command).await,
             Fuel::GenerateFeeContract(command) => fee_contract::exec(command).await,
         },
         Err(e) => {

@@ -1,5 +1,4 @@
 use crate::{
-    database,
     database::{
         database_description::{
             off_chain::OffChain,
@@ -57,7 +56,7 @@ impl CombinedDatabase {
     }
 
     #[cfg(feature = "rocksdb")]
-    pub fn prune(path: &std::path::Path) -> database::Result<()> {
+    pub fn prune(path: &std::path::Path) -> crate::database::Result<()> {
         crate::state::rocks_db::RocksDb::<OnChain>::prune(path)?;
         crate::state::rocks_db::RocksDb::<OffChain>::prune(path)?;
         crate::state::rocks_db::RocksDb::<Relayer>::prune(path)?;
@@ -152,13 +151,14 @@ impl CombinedDatabase {
         use fuel_core_chain_config::AddTable;
         use itertools::Itertools;
         let mut builder = StateConfigBuilder::default();
+        use crate::database::IncludeAll;
 
         macro_rules! add_tables {
             ($($table: ty),*) => {
                 $(
                     let table = self
                         .on_chain()
-                        .entries::<$table>(None, fuel_core_storage::iter::IterDirection::Forward)
+                        .entries::<$table>(IncludeAll, fuel_core_storage::iter::IterDirection::Forward)
                         .try_collect()?;
                     builder.add(table);
                 )*
