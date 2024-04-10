@@ -1,5 +1,8 @@
 use crate::{
-    block_producer::gas_price::GasPriceProvider as GasPriceProviderConstraint,
+    block_producer::gas_price::{
+        ConsensusParametersProvider,
+        GasPriceProvider as GasPriceProviderConstraint,
+    },
     ports,
     ports::BlockProducerDatabase,
     Config,
@@ -72,7 +75,7 @@ impl From<Error> for anyhow::Error {
     }
 }
 
-pub struct Producer<ViewProvider, TxPool, Executor, GasPriceProvider> {
+pub struct Producer<ViewProvider, TxPool, Executor, GasPriceProvider, ConsensusProvider> {
     pub config: Config,
     pub view_provider: ViewProvider,
     pub txpool: TxPool,
@@ -82,14 +85,16 @@ pub struct Producer<ViewProvider, TxPool, Executor, GasPriceProvider> {
     // execution has completed (which may take a while).
     pub lock: Mutex<()>,
     pub gas_price_provider: GasPriceProvider,
+    pub consensus_parameters_provider: ConsensusProvider,
 }
 
-impl<ViewProvider, TxPool, Executor, GasPriceProvider>
-    Producer<ViewProvider, TxPool, Executor, GasPriceProvider>
+impl<ViewProvider, TxPool, Executor, GasPriceProvider, ConsensusProvider>
+    Producer<ViewProvider, TxPool, Executor, GasPriceProvider, ConsensusProvider>
 where
     ViewProvider: AtomicView<Height = BlockHeight> + 'static,
     ViewProvider::View: BlockProducerDatabase,
     GasPriceProvider: GasPriceProviderConstraint,
+    ConsensusProvider: ConsensusParametersProvider,
 {
     /// Produces and execute block for the specified height.
     async fn produce_and_execute<TxSource>(
@@ -142,14 +147,15 @@ where
     }
 }
 
-impl<ViewProvider, TxPool, Executor, TxSource, GasPriceProvider>
-    Producer<ViewProvider, TxPool, Executor, GasPriceProvider>
+impl<ViewProvider, TxPool, Executor, TxSource, GasPriceProvider, ConsensusProvider>
+    Producer<ViewProvider, TxPool, Executor, GasPriceProvider, ConsensusProvider>
 where
     ViewProvider: AtomicView<Height = BlockHeight> + 'static,
     ViewProvider::View: BlockProducerDatabase,
     TxPool: ports::TxPool<TxSource = TxSource> + 'static,
     Executor: ports::Executor<TxSource> + 'static,
     GasPriceProvider: GasPriceProviderConstraint,
+    ConsensusProvider: ConsensusParametersProvider,
 {
     /// Produces and execute block for the specified height with transactions from the `TxPool`.
     pub async fn produce_and_execute_block_txpool(
@@ -164,13 +170,14 @@ where
     }
 }
 
-impl<ViewProvider, TxPool, Executor, GasPriceProvider>
-    Producer<ViewProvider, TxPool, Executor, GasPriceProvider>
+impl<ViewProvider, TxPool, Executor, GasPriceProvider, ConsensusProvider>
+    Producer<ViewProvider, TxPool, Executor, GasPriceProvider, ConsensusProvider>
 where
     ViewProvider: AtomicView<Height = BlockHeight> + 'static,
     ViewProvider::View: BlockProducerDatabase,
     Executor: ports::Executor<Vec<Transaction>> + 'static,
     GasPriceProvider: GasPriceProviderConstraint,
+    ConsensusProvider: ConsensusParametersProvider,
 {
     /// Produces and execute block for the specified height with `transactions`.
     pub async fn produce_and_execute_block_transactions(
@@ -184,13 +191,14 @@ where
     }
 }
 
-impl<ViewProvider, TxPool, Executor, GasPriceProvider>
-    Producer<ViewProvider, TxPool, Executor, GasPriceProvider>
+impl<ViewProvider, TxPool, Executor, GasPriceProvider, ConsensusProvider>
+    Producer<ViewProvider, TxPool, Executor, GasPriceProvider, ConsensusProvider>
 where
     ViewProvider: AtomicView<Height = BlockHeight> + 'static,
     ViewProvider::View: BlockProducerDatabase,
     Executor: ports::DryRunner + 'static,
     GasPriceProvider: GasPriceProviderConstraint,
+    ConsensusProvider: ConsensusParametersProvider,
 {
     // TODO: Support custom `block_time` for `dry_run`.
     /// Simulates multiple transactions without altering any state. Does not acquire the production lock.
@@ -254,10 +262,12 @@ where
 
 pub const NO_NEW_DA_HEIGHT_FOUND: &str = "No new da_height found";
 
-impl<ViewProvider, TxPool, Executor, GP> Producer<ViewProvider, TxPool, Executor, GP>
+impl<ViewProvider, TxPool, Executor, GP, ConsensusProvider>
+    Producer<ViewProvider, TxPool, Executor, GP, ConsensusProvider>
 where
     ViewProvider: AtomicView<Height = BlockHeight> + 'static,
     ViewProvider::View: BlockProducerDatabase,
+    ConsensusProvider: ConsensusParametersProvider,
 {
     /// Create the header for a new block at the provided height
     async fn new_header(
@@ -267,7 +277,13 @@ where
     ) -> anyhow::Result<PartialBlockHeader> {
         let mut block_header = self._new_header(height, block_time)?;
         let previous_da_height = block_header.da_height;
-        let new_da_height = self.select_new_da_height(previous_da_height).await?;
+        let gas_limit = self
+            .consensus_parameters_provider
+            .consensus_params_at_version(&block_header.consensus_parameters_version)
+            .block_gas_limit();
+        let new_da_height = self
+            .select_new_da_height(gas_limit, previous_da_height)
+            .await?;
 
         block_header.application.da_height = new_da_height;
 
@@ -276,9 +292,9 @@ where
 
     async fn select_new_da_height(
         &self,
+        gas_limit: u64,
         previous_da_height: DaBlockHeight,
     ) -> anyhow::Result<DaBlockHeight> {
-        let gas_limit = self.config.block_gas_limit;
         let mut new_best = previous_da_height;
         let mut total_cost: u64 = 0;
         let highest = self

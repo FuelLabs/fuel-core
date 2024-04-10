@@ -3,6 +3,7 @@ use crate::{
         database_description::on_chain::OnChain,
         Database,
     },
+    fuel_core_graphql_api::api_service::ConsensusProvider,
     schema::scalars::{
         U32,
         U64,
@@ -59,6 +60,7 @@ use std::{
     collections::HashMap,
     io,
     sync,
+    sync::Arc,
 };
 use tracing::{
     debug,
@@ -73,11 +75,10 @@ pub struct Config {
 
 type FrozenDatabase = VmStorage<StorageTransaction<Database<OnChain>>>;
 
-#[derive(Debug, Clone)]
+#[derive(Default, Debug, Clone)]
 pub struct ConcreteStorage {
     vm: HashMap<ID, Interpreter<FrozenDatabase, Script>>,
     tx: HashMap<ID, Vec<Script>>,
-    params: ConsensusParameters,
 }
 
 /// The gas price used for transactions in the debugger. It is set to 0 because
@@ -86,12 +87,8 @@ pub struct ConcreteStorage {
 const GAS_PRICE: u64 = 0;
 
 impl ConcreteStorage {
-    pub fn new(params: ConsensusParameters) -> Self {
-        Self {
-            vm: Default::default(),
-            tx: Default::default(),
-            params,
-        }
+    pub fn new() -> Self {
+        Self::default()
     }
 
     pub fn register(&self, id: &ID, register: RegisterId) -> Option<Word> {
@@ -112,15 +109,16 @@ impl ConcreteStorage {
     pub fn init(
         &mut self,
         txs: &[Script],
+        params: Arc<ConsensusParameters>,
         storage: Database<OnChain>,
     ) -> anyhow::Result<ID> {
         let id = Uuid::new_v4();
         let id = ID::from(id);
 
         let vm_database = Self::vm_database(storage)?;
-        let tx = Self::dummy_tx(self.params.tx_params().max_gas_per_tx() / 2);
+        let tx = Self::dummy_tx(params.tx_params().max_gas_per_tx() / 2);
         let checked_tx = tx
-            .into_checked_basic(vm_database.block_height()?, &self.params)
+            .into_checked_basic(vm_database.block_height()?, &params)
             .map_err(|e| anyhow::anyhow!("{:?}", e))?;
         self.tx
             .get_mut(&id)
@@ -129,8 +127,8 @@ impl ConcreteStorage {
                 self.tx.insert(id.clone(), txs.to_owned());
             });
 
-        let gas_costs = self.params.gas_costs();
-        let fee_params = self.params.fee_params();
+        let gas_costs = params.gas_costs();
+        let fee_params = params.fee_params();
 
         let ready_tx = checked_tx
             .into_ready(GAS_PRICE, gas_costs, fee_params)
@@ -138,7 +136,7 @@ impl ConcreteStorage {
                 anyhow!("Failed to apply dynamic values to checked tx: {:?}", e)
             })?;
 
-        let interpreter_params = InterpreterParams::new(GAS_PRICE, &self.params);
+        let interpreter_params = InterpreterParams::new(GAS_PRICE, params.as_ref());
         let mut vm = Interpreter::with_storage(vm_database, interpreter_params);
         vm.transact(ready_tx).map_err(|e| anyhow::anyhow!(e))?;
         self.vm.insert(id.clone(), vm);
@@ -151,21 +149,26 @@ impl ConcreteStorage {
         self.vm.remove(id).is_some()
     }
 
-    pub fn reset(&mut self, id: &ID, storage: Database<OnChain>) -> anyhow::Result<()> {
+    pub fn reset(
+        &mut self,
+        id: &ID,
+        params: Arc<ConsensusParameters>,
+        storage: Database<OnChain>,
+    ) -> anyhow::Result<()> {
         let vm_database = Self::vm_database(storage)?;
         let tx = self
             .tx
             .get(id)
             .and_then(|tx| tx.first())
             .cloned()
-            .unwrap_or(Self::dummy_tx(self.params.tx_params().max_gas_per_tx() / 2));
+            .unwrap_or(Self::dummy_tx(params.tx_params().max_gas_per_tx() / 2));
 
         let checked_tx = tx
-            .into_checked_basic(vm_database.block_height()?, &self.params)
+            .into_checked_basic(vm_database.block_height()?, &params)
             .map_err(|e| anyhow::anyhow!("{:?}", e))?;
 
-        let gas_costs = self.params.gas_costs();
-        let fee_params = self.params.fee_params();
+        let gas_costs = params.gas_costs();
+        let fee_params = params.fee_params();
 
         let ready_tx = checked_tx
             .into_ready(GAS_PRICE, gas_costs, fee_params)
@@ -173,7 +176,7 @@ impl ConcreteStorage {
                 anyhow!("Failed to apply dynamic values to checked tx: {:?}", e)
             })?;
 
-        let interpreter_params = InterpreterParams::new(GAS_PRICE, &self.params);
+        let interpreter_params = InterpreterParams::new(GAS_PRICE, params.as_ref());
         let mut vm = Interpreter::with_storage(vm_database, interpreter_params);
         vm.transact(ready_tx).map_err(|e| anyhow::anyhow!(e))?;
         self.vm.insert(id.clone(), vm).ok_or_else(|| {
@@ -234,11 +237,10 @@ pub struct DapMutation;
 
 pub fn init<Q, M, S>(
     schema: SchemaBuilder<Q, M, S>,
-    params: ConsensusParameters,
     debug_enabled: bool,
 ) -> SchemaBuilder<Q, M, S> {
     schema
-        .data(GraphStorage::new(Mutex::new(ConcreteStorage::new(params))))
+        .data(GraphStorage::new(Mutex::new(ConcreteStorage::new())))
         .data(Config { debug_enabled })
 }
 
@@ -299,12 +301,15 @@ impl DapMutation {
         trace!("Initializing new interpreter");
 
         let db = ctx.data_unchecked::<Database>();
+        let params = ctx
+            .data_unchecked::<ConsensusProvider>()
+            .latest_consensus_params();
 
-        let id = ctx
-            .data_unchecked::<GraphStorage>()
-            .lock()
-            .await
-            .init(&[], db.clone())?;
+        let id = ctx.data_unchecked::<GraphStorage>().lock().await.init(
+            &[],
+            params,
+            db.clone(),
+        )?;
 
         debug!("Session {:?} initialized", id);
 
@@ -329,11 +334,15 @@ impl DapMutation {
     async fn reset(&self, ctx: &Context<'_>, id: ID) -> async_graphql::Result<bool> {
         require_debug(ctx)?;
         let db = ctx.data_unchecked::<Database>();
+        let params = ctx
+            .data_unchecked::<ConsensusProvider>()
+            .latest_consensus_params();
 
-        ctx.data_unchecked::<GraphStorage>()
-            .lock()
-            .await
-            .reset(&id, db.clone())?;
+        ctx.data_unchecked::<GraphStorage>().lock().await.reset(
+            &id,
+            params,
+            db.clone(),
+        )?;
 
         debug!("Session {:?} was reset", id);
 
@@ -417,7 +426,9 @@ impl DapMutation {
             .map_err(|_| async_graphql::Error::new("Invalid transaction JSON"))?;
 
         let mut locked = ctx.data_unchecked::<GraphStorage>().lock().await;
-        let params = locked.params.clone();
+        let params = ctx
+            .data_unchecked::<ConsensusProvider>()
+            .latest_consensus_params();
 
         let vm = locked
             .vm

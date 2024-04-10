@@ -5,6 +5,7 @@ use crate::{
         gas_price::{
             GasPriceParams,
             GasPriceProvider,
+            MockConsensusParametersProvider,
         },
         Error,
     },
@@ -33,6 +34,7 @@ use fuel_core_types::{
         },
         primitives::DaBlockHeight,
     },
+    fuel_tx::ConsensusParameters,
     fuel_types::BlockHeight,
     services::executor::Error as ExecutorError,
     tai64::Tai64,
@@ -55,14 +57,8 @@ pub struct MockProducerGasPrice {
 }
 
 impl MockProducerGasPrice {
-    pub fn new(gas_price: u64) -> Self {
-        Self {
-            gas_price: Some(gas_price),
-        }
-    }
-
-    pub fn new_none() -> Self {
-        Self { gas_price: None }
+    pub fn new(gas_price: Option<u64>) -> Self {
+        Self { gas_price }
     }
 }
 
@@ -496,11 +492,10 @@ mod produce_and_execute_block_txpool {
     async fn produce_and_execute_block_txpool__executor_receives_gas_price_provided() {
         // given
         let gas_price = 1_000;
-        let gas_price_provider = MockProducerGasPrice::new(gas_price);
         let executor = MockExecutorWithCapture::default();
         let ctx = TestContext::default_from_executor(executor.clone());
 
-        let producer = ctx.producer_with_gas_price_provider(gas_price_provider);
+        let producer = ctx.producer_with_gas_price(Some(gas_price));
 
         // when
         let _ = producer
@@ -522,9 +517,8 @@ mod produce_and_execute_block_txpool {
     async fn produce_and_execute_block_txpool__missing_gas_price_causes_block_production_to_fail(
     ) {
         // given
-        let gas_price_provider = MockProducerGasPrice::new_none();
         let ctx = TestContext::default();
-        let producer = ctx.producer_with_gas_price_provider(gas_price_provider);
+        let producer = ctx.producer_with_gas_price(None);
 
         // when
         let result = producer
@@ -542,7 +536,8 @@ struct TestContext<Executor> {
     relayer: MockRelayer,
     executor: Arc<Executor>,
     txpool: MockTxPool,
-    gas_price: u64,
+    gas_price: Option<u64>,
+    block_gas_limit: u64,
 }
 
 impl TestContext<MockExecutor> {
@@ -578,7 +573,7 @@ impl<Executor> TestContext<Executor> {
         let txpool = MockTxPool::default();
         let relayer = MockRelayer::default();
         let config = Config::default();
-        let gas_price = 0;
+        let gas_price = Some(0);
         Self {
             config,
             db,
@@ -586,24 +581,32 @@ impl<Executor> TestContext<Executor> {
             executor: Arc::new(executor),
             txpool,
             gas_price,
+            block_gas_limit: 0,
         }
     }
 
     pub fn producer(
         self,
-    ) -> Producer<MockDb, MockTxPool, Executor, MockProducerGasPrice> {
+    ) -> Producer<
+        MockDb,
+        MockTxPool,
+        Executor,
+        MockProducerGasPrice,
+        MockConsensusParametersProvider,
+    > {
         let gas_price = self.gas_price;
         let static_gas_price = MockProducerGasPrice::new(gas_price);
-        self.producer_with_gas_price_provider(static_gas_price)
-    }
 
-    pub fn producer_with_gas_price_provider<GasPrice>(
-        self,
-        gas_price_provider: GasPrice,
-    ) -> Producer<MockDb, MockTxPool, Executor, GasPrice>
-    where
-        GasPrice: GasPriceProvider,
-    {
+        let mut consensus_params = ConsensusParameters::default();
+        consensus_params.set_block_gas_limit(self.block_gas_limit);
+        let consensus_params = Arc::new(consensus_params);
+
+        let mut consensus_parameters_provider =
+            MockConsensusParametersProvider::default();
+        consensus_parameters_provider
+            .expect_consensus_params_at_version()
+            .returning(move |_| consensus_params.clone());
+
         Producer {
             config: self.config,
             view_provider: self.db,
@@ -611,8 +614,23 @@ impl<Executor> TestContext<Executor> {
             executor: self.executor,
             relayer: Box::new(self.relayer),
             lock: Default::default(),
-            gas_price_provider,
+            gas_price_provider: static_gas_price,
+            consensus_parameters_provider,
         }
+    }
+
+    pub fn producer_with_gas_price(
+        mut self,
+        gas_price: Option<u64>,
+    ) -> Producer<
+        MockDb,
+        MockTxPool,
+        Executor,
+        MockProducerGasPrice,
+        MockConsensusParametersProvider,
+    > {
+        self.gas_price = gas_price;
+        self.producer()
     }
 }
 
@@ -698,14 +716,9 @@ impl TestContextBuilder {
             ..Default::default()
         };
 
-        let config = Config {
-            block_gas_limit: self.block_gas_limit.unwrap_or_default(),
-            ..Default::default()
-        };
-
         TestContext {
-            config,
             relayer: mock_relayer,
+            block_gas_limit: self.block_gas_limit.unwrap_or_default(),
             ..TestContext::default_from_db(db)
         }
     }

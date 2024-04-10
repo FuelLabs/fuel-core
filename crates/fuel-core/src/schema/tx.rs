@@ -2,11 +2,11 @@ use crate::{
     fuel_core_graphql_api::{
         api_service::{
             BlockProducer,
+            ConsensusProvider,
             TxPool,
         },
         database::ReadView,
         ports::OffChainDatabase,
-        Config,
         IntoApiResult,
     },
     query::{
@@ -174,7 +174,9 @@ impl TxQuery {
     ) -> async_graphql::Result<Connection<TxPointer, Transaction, EmptyFields, EmptyFields>>
     {
         let query: &ReadView = ctx.data_unchecked();
-        let config = ctx.data_unchecked::<Config>();
+        let params = ctx
+            .data_unchecked::<ConsensusProvider>()
+            .latest_consensus_params();
         let owner = fuel_types::Address::from(owner);
 
         crate::schema::query_pagination(
@@ -189,8 +191,7 @@ impl TxQuery {
                         .owned_transactions(owner, start, direction)
                         .map(|result| {
                             result.map(|(cursor, tx)| {
-                                let tx_id =
-                                    tx.id(&config.consensus_parameters.chain_id());
+                                let tx_id = tx.id(&params.chain_id());
                                 (cursor.into(), Transaction::from_tx(tx_id, tx))
                             })
                         });
@@ -208,18 +209,17 @@ impl TxQuery {
     ) -> async_graphql::Result<Transaction> {
         let mut tx = FuelTx::from_bytes(&tx.0)?;
 
-        let config = ctx.data_unchecked::<Config>();
+        let params = ctx
+            .data_unchecked::<ConsensusProvider>()
+            .latest_consensus_params();
 
         tx.estimate_predicates_async::<TokioWithRayon>(&CheckPredicateParams::from(
-            &config.consensus_parameters,
+            params.as_ref(),
         ))
         .await
         .map_err(|err| anyhow::anyhow!("{:?}", err))?;
 
-        Ok(Transaction::from_tx(
-            tx.id(&config.consensus_parameters.chain_id()),
-            tx,
-        ))
+        Ok(Transaction::from_tx(tx.id(&params.chain_id()), tx))
     }
 
     #[cfg(feature = "test-helpers")]
@@ -248,14 +248,16 @@ impl TxMutation {
         utxo_validation: Option<bool>,
     ) -> async_graphql::Result<Vec<DryRunTransactionExecutionStatus>> {
         let block_producer = ctx.data_unchecked::<BlockProducer>();
-        let config = ctx.data_unchecked::<Config>();
+        let params = ctx
+            .data_unchecked::<ConsensusProvider>()
+            .latest_consensus_params();
 
         let mut transactions = txs
             .iter()
             .map(|tx| FuelTx::from_bytes(&tx.0))
             .collect::<Result<Vec<FuelTx>, _>>()?;
         for transaction in &mut transactions {
-            transaction.precompute(&config.consensus_parameters.chain_id())?;
+            transaction.precompute(&params.chain_id())?;
         }
 
         let tx_statuses = block_producer
@@ -278,7 +280,9 @@ impl TxMutation {
         tx: HexString,
     ) -> async_graphql::Result<Transaction> {
         let txpool = ctx.data_unchecked::<TxPool>();
-        let config = ctx.data_unchecked::<Config>();
+        let params = ctx
+            .data_unchecked::<ConsensusProvider>()
+            .latest_consensus_params();
         let tx = FuelTx::from_bytes(&tx.0)?;
 
         let _: Vec<_> = txpool
@@ -286,7 +290,7 @@ impl TxMutation {
             .await
             .into_iter()
             .try_collect()?;
-        let id = tx.id(&config.consensus_parameters.chain_id());
+        let id = tx.id(&params.chain_id());
 
         let tx = Transaction(tx, id);
         Ok(tx)
@@ -343,9 +347,11 @@ impl TxStatusSubscription {
         impl Stream<Item = async_graphql::Result<TransactionStatus>> + 'a,
     > {
         let txpool = ctx.data_unchecked::<TxPool>();
-        let config = ctx.data_unchecked::<Config>();
+        let params = ctx
+            .data_unchecked::<ConsensusProvider>()
+            .latest_consensus_params();
         let tx = FuelTx::from_bytes(&tx.0)?;
-        let tx_id = tx.id(&config.consensus_parameters.chain_id());
+        let tx_id = tx.id(&params.chain_id());
         let subscription = txpool.tx_update_subscribe(tx_id)?;
 
         let _: Vec<_> = txpool

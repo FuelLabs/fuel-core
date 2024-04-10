@@ -2,6 +2,7 @@ use crate::{
     database::Database,
     service::adapters::{
         BlockImporterAdapter,
+        ConsensusParametersProvider,
         P2PAdapter,
         StaticGasPrice,
     },
@@ -17,9 +18,10 @@ use fuel_core_storage::{
     Result as StorageResult,
     StorageAsRef,
 };
-use fuel_core_txpool::{
-    ports::BlockImporter,
-    txpool::GasPriceProvider,
+use fuel_core_txpool::ports::{
+    BlockImporter,
+    ConsensusParametersProvider as ConsensusParametersProviderTrait,
+    GasPriceProvider,
 };
 use fuel_core_types::{
     entities::{
@@ -27,6 +29,7 @@ use fuel_core_types::{
         relayer::message::Message,
     },
     fuel_tx::{
+        ConsensusParameters,
         Transaction,
         UtxoId,
     },
@@ -141,5 +144,11 @@ impl fuel_core_txpool::ports::TxPoolDb for Database {
 impl GasPriceProvider for StaticGasPrice {
     fn gas_price(&self, _block_height: BlockHeight) -> Option<u64> {
         Some(self.gas_price)
+    }
+}
+
+impl ConsensusParametersProviderTrait for ConsensusParametersProvider {
+    fn latest_consensus_parameters(&self) -> Arc<ConsensusParameters> {
+        self.consensus_parameters.clone()
     }
 }

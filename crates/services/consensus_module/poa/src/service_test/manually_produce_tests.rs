@@ -50,12 +50,10 @@ async fn can_manually_produce_block(
 ) {
     let mut rng = StdRng::seed_from_u64(1234u64);
     let mut ctx_builder = TestContextBuilder::new();
-    let consensus_params = ConsensusParameters::default();
     ctx_builder.with_config(Config {
         trigger,
         signing_key: Some(test_signing_key()),
         metrics: false,
-        consensus_params: consensus_params.clone(),
         ..Default::default()
     });
 
@@ -106,7 +104,7 @@ async fn can_manually_produce_block(
         .await
         .unwrap();
     for tx in txs {
-        status_sender.send_replace(Some(tx.id(&consensus_params.chain_id())));
+        status_sender.send_replace(Some(tx.id(&ChainId::default())));
     }
 
     for t in times.into_iter() {

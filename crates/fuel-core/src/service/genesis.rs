@@ -141,6 +141,11 @@ pub async fn execute_and_commit_genesis_block(
 ) -> anyhow::Result<()> {
     let result = execute_genesis_block(config, db).await?;
     let importer = fuel_core_importer::Importer::new(
+        config
+            .snapshot_reader
+            .chain_config()
+            .consensus_parameters
+            .chain_id(),
         config.block_importer.clone(),
         db.on_chain().clone(),
         (),

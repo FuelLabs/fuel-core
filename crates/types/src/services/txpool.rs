@@ -301,8 +301,6 @@ pub enum Error {
     NotInsertedIoContractOutput,
     #[error("Transaction is not inserted. Maximum depth of dependent transaction chain reached")]
     NotInsertedMaxDepth,
-    #[error("Transaction exceeds the max gas per block limit. Tx gas: {tx_gas}, block limit {block_limit}")]
-    NotInsertedMaxGasLimit { tx_gas: Word, block_limit: Word },
     // small todo for now it can pass but in future we should include better messages
     #[error("Transaction removed.")]
     Removed,
