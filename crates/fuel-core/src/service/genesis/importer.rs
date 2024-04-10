@@ -1,5 +1,8 @@
 use self::{
-    import_task::{ImportTable, ImportTask},
+    import_task::{
+        ImportTable,
+        ImportTask,
+    },
     progress::MultipleProgressReporter,
 };
 
@@ -12,33 +15,55 @@ use std::marker::PhantomData;
 
 use crate::{
     combined_database::CombinedDatabase,
-    database::database_description::{off_chain::OffChain, on_chain::OnChain},
+    database::database_description::{
+        off_chain::OffChain,
+        on_chain::OnChain,
+    },
     graphql_api::storage::{
         coins::OwnedCoins,
         contracts::ContractsInfo,
         messages::OwnedMessageIds,
-        transactions::{OwnedTransactions, TransactionStatuses},
+        transactions::{
+            OwnedTransactions,
+            TransactionStatuses,
+        },
     },
 };
-use fuel_core_chain_config::{AsTable, SnapshotReader, StateConfig, TableEntry};
+use fuel_core_chain_config::{
+    AsTable,
+    SnapshotReader,
+    StateConfig,
+    TableEntry,
+};
 use fuel_core_storage::{
     kv_store::StorageColumn,
     structured_storage::TableWithBlueprint,
     tables::{
-        Coins, ContractsAssets, ContractsLatestUtxo, ContractsRawCode, ContractsState,
-        Messages, Transactions,
+        Coins,
+        ContractsAssets,
+        ContractsLatestUtxo,
+        ContractsRawCode,
+        ContractsState,
+        Messages,
+        Transactions,
     },
 };
-use fuel_core_types::{blockchain::primitives::DaBlockHeight, fuel_types::BlockHeight};
+use fuel_core_types::{
+    blockchain::primitives::DaBlockHeight,
+    fuel_types::BlockHeight,
+};
 
 use tokio_util::sync::CancellationToken;
-use tracing::{Level, Span};
+use tracing::{
+    Level,
+    Span,
+};
 
 pub struct SnapshotImporter {
     db: CombinedDatabase,
     task_manager: TaskManager<bool>,
     snapshot_reader: SnapshotReader,
-    tracing_span: Span,
+    tracing_span: tracing::Span,
     multi_progress_reporter: MultipleProgressReporter,
 }
 

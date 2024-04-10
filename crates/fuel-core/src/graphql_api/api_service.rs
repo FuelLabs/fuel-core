@@ -211,6 +211,7 @@ where
         )
         .route("/v1/metrics", get(metrics))
         .route("/v1/health", get(health))
+        .route("/health", get(health))
         .layer(Extension(schema))
         .layer(TraceLayer::new_for_http())
         .layer(TimeoutLayer::new(request_timeout))

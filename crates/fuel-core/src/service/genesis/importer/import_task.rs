@@ -1,17 +1,29 @@
 use std::time::Duration;
 
-use fuel_core_chain_config::{Group, TableEntry};
+use fuel_core_chain_config::{
+    Group,
+    TableEntry,
+};
 use fuel_core_storage::{
     kv_store::StorageColumn,
     structured_storage::TableWithBlueprint,
-    transactional::{Modifiable, StorageTransaction, WriteTransaction},
-    StorageAsRef, StorageInspect, StorageMutate,
+    transactional::{
+        Modifiable,
+        StorageTransaction,
+        WriteTransaction,
+    },
+    StorageAsRef,
+    StorageInspect,
+    StorageMutate,
 };
 use tokio_util::sync::CancellationToken;
 
 use crate::database::{
     database_description::DatabaseDescription,
-    genesis_progress::{GenesisMetadata, GenesisProgressMutate},
+    genesis_progress::{
+        GenesisMetadata,
+        GenesisProgressMutate,
+    },
     Database,
 };
 
@@ -132,34 +144,69 @@ mod tests {
     use crate::{
         database::genesis_progress::GenesisProgressInspect,
         service::genesis::importer::{
-            import_task::ImportTask, progress::ProgressReporter,
+            import_task::ImportTask,
+            progress::ProgressReporter,
         },
     };
     use std::{
         cell::Cell,
         rc::Rc,
-        sync::{Arc, Mutex},
-        time::{Duration, SystemTime},
+        sync::{
+            Arc,
+            Mutex,
+        },
+        time::{
+            Duration,
+            SystemTime,
+        },
     };
 
-    use anyhow::{anyhow, bail};
-    use fuel_core_chain_config::{Group, Randomize, TableEntry};
+    use anyhow::{
+        anyhow,
+        bail,
+    };
+    use fuel_core_chain_config::{
+        Group,
+        Randomize,
+        TableEntry,
+    };
     use fuel_core_storage::{
         column::Column,
-        iter::{BoxedIter, IterDirection, IterableStore},
-        kv_store::{KVItem, KeyValueInspect, StorageColumn, Value},
+        iter::{
+            BoxedIter,
+            IterDirection,
+            IterableStore,
+        },
+        kv_store::{
+            KVItem,
+            KeyValueInspect,
+            StorageColumn,
+            Value,
+        },
         structured_storage::TableWithBlueprint,
         tables::Coins,
-        transactional::{Changes, StorageTransaction},
-        Result as StorageResult, StorageAsMut, StorageAsRef, StorageInspect,
+        transactional::{
+            Changes,
+            StorageTransaction,
+        },
+        Result as StorageResult,
+        StorageAsMut,
+        StorageAsRef,
+        StorageInspect,
     };
     use fuel_core_types::{
-        entities::coins::coin::{CompressedCoin, CompressedCoinV1},
+        entities::coins::coin::{
+            CompressedCoin,
+            CompressedCoinV1,
+        },
         fuel_tx::UtxoId,
         fuel_types::BlockHeight,
     };
     use itertools::Itertools;
-    use rand::{rngs::StdRng, SeedableRng};
+    use rand::{
+        rngs::StdRng,
+        SeedableRng,
+    };
 
     use tokio_util::sync::CancellationToken;
 
@@ -167,9 +214,13 @@ mod tests {
         combined_database::CombinedDatabase,
         database::{
             database_description::on_chain::OnChain,
-            genesis_progress::GenesisProgressMutate, Database,
+            genesis_progress::GenesisProgressMutate,
+            Database,
         },
-        state::{in_memory::memory_store::MemoryStore, TransactableStorage},
+        state::{
+            in_memory::memory_store::MemoryStore,
+            TransactableStorage,
+        },
     };
 
     use super::ImportTable;

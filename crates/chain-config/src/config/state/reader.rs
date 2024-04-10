@@ -1,12 +1,20 @@
 use std::fmt::Debug;
 
 use fuel_core_storage::structured_storage::TableWithBlueprint;
-use fuel_core_types::{blockchain::primitives::DaBlockHeight, fuel_types::BlockHeight};
+use fuel_core_types::{
+    blockchain::primitives::DaBlockHeight,
+    fuel_types::BlockHeight,
+};
 use itertools::Itertools;
 
 use crate::{
-    config::table_entry::TableEntry, AsTable, ChainConfig, Group, GroupResult,
-    StateConfig, MAX_GROUP_SIZE,
+    config::table_entry::TableEntry,
+    AsTable,
+    ChainConfig,
+    Group,
+    GroupResult,
+    StateConfig,
+    MAX_GROUP_SIZE,
 };
 
 pub struct Groups<T> {

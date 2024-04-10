@@ -3,8 +3,6 @@ use crate::{
     database::{
         database_description::DatabaseDescription,
         Database,
-        IncludeAll,
-        KeyFilter,
     },
     fuel_core_graphql_api::storage::transactions::{
         OwnedTransactions,
@@ -39,10 +37,7 @@ use itertools::Itertools;
 
 use tokio_util::sync::CancellationToken;
 
-use self::filter::ByContractId;
-
 use super::task_manager::TaskManager;
-mod filter;
 
 pub struct Exporter<Fun> {
     db: CombinedDatabase,
@@ -74,7 +69,7 @@ where
     pub async fn write_full_snapshot(mut self) -> Result<(), anyhow::Error> {
         macro_rules! export {
             ($db: expr, $($table: ty),*) => {
-                $(self.spawn_task::<$table, _>(IncludeAll, $db)?;)*
+                $(self.spawn_task::<$table, _>(None, $db)?;)*
             };
         }
 
@@ -106,8 +101,7 @@ where
     ) -> Result<(), anyhow::Error> {
         macro_rules! export {
             ($($table: ty),*) => {
-                let filter = ByContractId::new(contract_id);
-                $(self.spawn_task::<$table, _>(filter, |ctx: &Self| ctx.db.on_chain())?;)*
+                $(self.spawn_task::<$table, _>(Some(contract_id.as_ref()), |ctx: &Self| ctx.db.on_chain())?;)*
             };
         }
         export!(
@@ -123,25 +117,20 @@ where
     }
 
     async fn finalize(self) -> anyhow::Result<SnapshotMetadata> {
-        let remaining_fragment = self.write_block_and_chain_config()?;
+        let writer = self.create_writer()?;
+        let block = self.db.on_chain().latest_block()?;
+        let block_height = *block.header().height();
+        let da_block_height = block.header().da_height;
+
+        let writer_fragment = writer.partial_close()?;
         self.task_manager
             .wait()
             .await?
             .into_iter()
-            .try_fold(remaining_fragment, |fragment, next_fragment| {
+            .try_fold(writer_fragment, |fragment, next_fragment| {
                 fragment.merge(next_fragment)
             })?
-            .finalize()
-    }
-
-    fn write_block_and_chain_config(&self) -> anyhow::Result<SnapshotFragment> {
-        let mut writer = self.create_writer()?;
-        writer.write_chain_config(&self.prev_chain_config);
-
-        let block = self.db.on_chain().latest_block()?;
-        writer.write_block_data(*block.header().height(), block.header().da_height)?;
-
-        writer.partial_close()
+            .finalize(block_height, da_block_height, &self.prev_chain_config)
     }
 
     fn create_writer(&self) -> anyhow::Result<SnapshotWriter> {
@@ -150,7 +139,7 @@ where
 
     fn spawn_task<T, DbDesc>(
         &mut self,
-        filter: impl KeyFilter<T::OwnedKey> + Send + 'static,
+        prefix: Option<&[u8]>,
         db_picker: impl FnOnce(&Self) -> &Database<DbDesc>,
     ) -> anyhow::Result<()>
     where
@@ -165,9 +154,10 @@ where
         let group_size = self.group_size;
 
         let db = db_picker(self).clone();
+        let prefix = prefix.map(|p| p.to_vec());
         self.task_manager.spawn(move |cancel| {
             tokio_rayon::spawn(move || {
-                db.entries::<T>(filter, IterDirection::Forward)
+                db.entries::<T>(prefix, IterDirection::Forward)
                     .chunks(group_size)
                     .into_iter()
                     .take_while(|_| !cancel.is_cancelled())

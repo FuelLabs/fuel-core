@@ -1,6 +1,11 @@
 use std::io::IsTerminal;
 
-use indicatif::{MultiProgress, ProgressBar, ProgressDrawTarget, ProgressStyle};
+use indicatif::{
+    MultiProgress,
+    ProgressBar,
+    ProgressDrawTarget,
+    ProgressStyle,
+};
 
 #[derive(Clone)]
 pub struct ProgressReporter {
