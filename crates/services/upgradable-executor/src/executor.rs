@@ -49,7 +49,7 @@ use fuel_core_types::services::executor::UncommittedResult;
 
 #[cfg(feature = "wasm-executor")]
 enum ExecutionStrategy {
-    /// The executor used when the version matches.
+    /// The native executor used when the version matches.
     Native,
     /// The WASM executor used even when the version matches.
     Wasm {
