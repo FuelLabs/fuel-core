@@ -2,11 +2,6 @@ use fuel_core_storage::{
     Error as StorageError,
     IsNotFound,
 };
-use fuel_core_types::{
-    blockchain::primitives::SecretKeyWrapper,
-    fuel_tx::ConsensusParameters,
-    secrecy::Secret,
-};
 use std::net::SocketAddr;
 
 pub mod api_service;
@@ -26,8 +21,6 @@ pub struct Config {
     pub max_tx: usize,
     pub max_depth: usize,
     pub chain_name: String,
-    pub consensus_parameters: ConsensusParameters,
-    pub consensus_key: Option<Secret<SecretKeyWrapper>>,
 }
 
 pub trait IntoApiResult<T> {

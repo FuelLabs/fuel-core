@@ -1,3 +1,4 @@
+use crate::types::GasPrice;
 use fuel_core_services::stream::BoxStream;
 use fuel_core_storage::Result as StorageResult;
 use fuel_core_types::{
@@ -6,10 +7,12 @@ use fuel_core_types::{
         relayer::message::Message,
     },
     fuel_tx::{
+        ConsensusParameters,
         Transaction,
         UtxoId,
     },
     fuel_types::{
+        BlockHeight,
         ContractId,
         Nonce,
     },
@@ -22,7 +25,10 @@ use fuel_core_types::{
         },
     },
 };
-use std::sync::Arc;
+use std::{
+    ops::Deref,
+    sync::Arc,
+};
 
 pub trait PeerToPeer: Send + Sync {
     type GossipedTransaction: NetworkData<Transaction>;
@@ -54,4 +60,23 @@ pub trait TxPoolDb: Send + Sync {
     fn message(&self, message_id: &Nonce) -> StorageResult<Option<Message>>;
 
     fn is_message_spent(&self, message_id: &Nonce) -> StorageResult<bool>;
+}
+
+/// Trait for getting gas price for the Tx Pool code to look up the gas price for a given block height
+pub trait GasPriceProvider {
+    /// Get gas price for specific block height if it is known
+    fn gas_price(&self, block_height: BlockHeight) -> Option<GasPrice>;
+}
+
+/// Trait for getting the latest consensus parameters.
+#[cfg_attr(feature = "test-helpers", mockall::automock)]
+pub trait ConsensusParametersProvider {
+    /// Get latest consensus parameters.
+    fn latest_consensus_parameters(&self) -> Arc<ConsensusParameters>;
+}
+
+impl<T: GasPriceProvider> GasPriceProvider for Arc<T> {
+    fn gas_price(&self, block_height: BlockHeight) -> Option<GasPrice> {
+        self.deref().gas_price(block_height)
+    }
 }

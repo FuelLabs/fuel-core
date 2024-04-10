@@ -1,6 +1,7 @@
 use super::{
     BlockImporterAdapter,
     BlockProducerAdapter,
+    ConsensusParametersProvider,
     StaticGasPrice,
 };
 use crate::{
@@ -8,6 +9,7 @@ use crate::{
     fuel_core_graphql_api::ports::{
         worker,
         BlockProducerPort,
+        ConsensusProvider,
         DatabaseMessageProof,
         GasPriceEstimate,
         P2pPort,
@@ -29,6 +31,7 @@ use fuel_core_types::{
     entities::relayer::message::MerkleProof,
     fuel_tx::{
         Bytes32,
+        ConsensusParameters,
         Transaction,
     },
     fuel_types::BlockHeight,
@@ -168,5 +171,11 @@ impl worker::TxPool for TxPoolAdapter {
 impl GasPriceEstimate for StaticGasPrice {
     async fn worst_case_gas_price(&self, _height: BlockHeight) -> u64 {
         self.gas_price
+    }
+}
+
+impl ConsensusProvider for ConsensusParametersProvider {
+    fn latest_consensus_params(&self) -> Arc<ConsensusParameters> {
+        self.consensus_parameters.clone()
     }
 }

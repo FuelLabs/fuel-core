@@ -69,8 +69,7 @@ impl Config {
     #[cfg(feature = "test-helpers")]
     pub fn local_node() -> Self {
         let snapshot_reader = SnapshotReader::local_testnet();
-        let chain_config = snapshot_reader.chain_config().clone();
-        let block_importer = fuel_core_importer::Config::new(&chain_config);
+        let block_importer = fuel_core_importer::Config::new();
 
         let utxo_validation = false;
         let min_gas_price = 0;
@@ -95,7 +94,6 @@ impl Config {
             vm: Default::default(),
             utxo_validation,
             txpool: fuel_core_txpool::Config {
-                chain_config,
                 utxo_validation,
                 transaction_ttl: Duration::from_secs(60 * 100000000),
                 ..fuel_core_txpool::Config::default()
@@ -131,24 +129,9 @@ impl Config {
             self.utxo_validation = true;
         }
 
-        let chain_config = self.snapshot_reader.chain_config();
-        if self.txpool.chain_config != *chain_config {
-            tracing::warn!("The `ChainConfig` of `TxPool` was inconsistent");
-            self.txpool.chain_config = chain_config.clone();
-        }
-
-        if self.block_importer.chain_id != chain_config.consensus_parameters.chain_id() {
-            tracing::warn!("The `ChainConfig` of `BlockImporter` was inconsistent");
-            self.block_importer.chain_id = chain_config.consensus_parameters.chain_id()
-        }
-
         if self.txpool.utxo_validation != self.utxo_validation {
             tracing::warn!("The `utxo_validation` of `TxPool` was inconsistent");
             self.txpool.utxo_validation = self.utxo_validation;
-        }
-        if self.block_producer.utxo_validation != self.utxo_validation {
-            tracing::warn!("The `utxo_validation` of `BlockProducer` was inconsistent");
-            self.block_producer.utxo_validation = self.utxo_validation;
         }
 
         self
@@ -157,12 +140,10 @@ impl Config {
 
 impl From<&Config> for fuel_core_poa::Config {
     fn from(config: &Config) -> Self {
-        let chain_config = config.snapshot_reader.chain_config();
         fuel_core_poa::Config {
             trigger: config.block_production,
             signing_key: config.consensus_key.clone(),
             metrics: false,
-            consensus_params: chain_config.consensus_parameters.clone(),
             min_connected_reserved_peers: config.min_connected_reserved_peers,
             time_until_synced: config.time_until_synced,
         }

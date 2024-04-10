@@ -3,6 +3,7 @@ use crate::{
     service::{
         adapters::{
             BlockProducerAdapter,
+            ConsensusParametersProvider,
             ExecutorAdapter,
             MaybeRelayerAdapter,
             StaticGasPrice,
@@ -15,6 +16,7 @@ use crate::{
 use fuel_core_executor::executor::OnceTransactionsSource;
 use fuel_core_producer::{
     block_producer::gas_price::{
+        ConsensusParametersProvider as ConsensusParametersProviderTrait,
         GasPriceParams,
         GasPriceProvider,
     },
@@ -45,7 +47,10 @@ use fuel_core_types::{
         primitives::DaBlockHeight,
     },
     fuel_tx,
-    fuel_tx::Transaction,
+    fuel_tx::{
+        ConsensusParameters,
+        Transaction,
+    },
     fuel_types::{
         BlockHeight,
         Bytes32,
@@ -224,5 +229,14 @@ impl fuel_core_producer::ports::BlockProducerDatabase for Database {
 impl GasPriceProvider for StaticGasPrice {
     fn gas_price(&self, _block_height: GasPriceParams) -> Option<u64> {
         Some(self.gas_price)
+    }
+}
+
+impl ConsensusParametersProviderTrait for ConsensusParametersProvider {
+    fn consensus_params_at_version(
+        &self,
+        _: &ConsensusParametersVersion,
+    ) -> Arc<ConsensusParameters> {
+        self.consensus_parameters.clone()
     }
 }
