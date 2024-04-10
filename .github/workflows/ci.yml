@@ -344,8 +344,7 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v1
         with:
-          context: .
-          memory: 4g
+          memory: 48g
           memory-swap: -1
 
       - name: Log in to the ghcr.io registry
