@@ -3400,7 +3400,10 @@ dependencies = [
  "fuel-core-storage",
  "fuel-core-types",
  "fuel-core-wasm-executor",
+ "ntest",
+ "parking_lot",
  "postcard",
+ "tracing",
  "wasmtime",
 ]
 
@@ -5646,6 +5649,39 @@ name = "normalize-line-endings"
 version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "61807f77802ff30975e01f4f071c8ba10c022052f98b3294119f3e615d13e5be"
+
+[[package]]
+name = "ntest"
+version = "0.9.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "41cd16a2e6992865367e7ca50cd6953d09daaed93641421168733a1274afadd6"
+dependencies = [
+ "ntest_test_cases",
+ "ntest_timeout",
+]
+
+[[package]]
+name = "ntest_test_cases"
+version = "0.9.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "197eff6c12b80ff5de6173e438fa3c1340a9e708118c1626e690f65aee1e5332"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 1.0.109",
+]
+
+[[package]]
+name = "ntest_timeout"
+version = "0.9.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ef492b5cf80f90c050b287e747228a1fa6517e9d754f364b5a7e0e038e49a25f"
+dependencies = [
+ "proc-macro-crate 3.1.0",
+ "proc-macro2",
+ "quote",
+ "syn 1.0.109",
+]
 
 [[package]]
 name = "nu-ansi-term"
