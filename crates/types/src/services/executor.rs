@@ -60,7 +60,6 @@ pub struct ExecutionResult {
 /// The event represents some internal state changes caused by the block execution.
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[non_exhaustive]
 pub enum Event {
     /// Imported a new spendable message from the relayer.
     MessageImported(Message),

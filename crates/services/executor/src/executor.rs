@@ -496,10 +496,6 @@ where
             .with_policy(ConflictPolicy::Overwrite);
 
         debug_assert!(block.transactions.is_empty());
-        // initiate transaction stream with relayed (forced) transactions first,
-        // and pull the rest from the TxSource (txpool) if there is remaining blockspace available.
-        // We use `block.transactions` to store executed transactions.
-        let relayed_tx_iter = forced_transactions.into_iter().peekable();
 
         let mut execute_transaction = |execution_data: &mut ExecutionData,
                                        tx: MaybeCheckedTransaction,
@@ -570,6 +566,7 @@ where
             Ok(())
         };
 
+        let relayed_tx_iter = forced_transactions.into_iter();
         for transaction in relayed_tx_iter {
             const RELAYED_GAS_PRICE: Word = 0;
             execute_transaction(&mut *execution_data, transaction, RELAYED_GAS_PRICE)?;

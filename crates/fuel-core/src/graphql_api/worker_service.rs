@@ -188,12 +188,6 @@ where
                     .storage_as_mut::<RelayedTransactionStatuses>()
                     .insert(&Bytes32::from(id.to_owned()), &status)?;
             }
-            _ => {
-                tracing::error!(
-                    "Unknown executor event (possibly due to runtime upgrade): {:?}",
-                    event.deref()
-                );
-            }
         }
     }
     Ok(())
