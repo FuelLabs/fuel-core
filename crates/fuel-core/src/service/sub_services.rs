@@ -96,7 +96,7 @@ pub fn init_sub_services(
         consensus_parameters_provider::new_service(
             database.on_chain().clone(),
             &importer_adapter,
-        )?;
+        );
     let consensus_parameters_provider = ConsensusParametersProvider::new(
         consensus_parameters_provider_service.shared.clone(),
     );
