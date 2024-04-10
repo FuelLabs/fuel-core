@@ -633,7 +633,7 @@ mod test {
                 .map(|_| ());
 
             // Then
-            assert!(result.is_err());
+            result.expect_err("The validation should fail because of versions mismatch");
         }
     }
 
@@ -695,7 +695,7 @@ mod test {
                 .map(|_| ());
 
             // Then
-            assert!(result.is_err());
+            result.expect_err("The validation should fail because of versions mismatch");
         }
 
         #[test]
@@ -713,7 +713,7 @@ mod test {
                 .map(|_| ());
 
             // Then
-            assert!(result.is_err());
+            result.expect_err("The validation should fail because of versions mismatch");
         }
 
         fn storage_with_state_transition(

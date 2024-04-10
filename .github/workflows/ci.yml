@@ -21,6 +21,7 @@ env:
   RUSTFLAGS: -D warnings
   REGISTRY: ghcr.io
   SEGMENT_DOWNLOAD_TIMEOUT_MINS: 2
+  FUEL_ALWAYS_USE_WASM: true
 
 jobs:
   check-changelog:

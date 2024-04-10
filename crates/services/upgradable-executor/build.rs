@@ -49,6 +49,7 @@ fn build_wasm() {
     cargo.env("CARGO_PROFILE_RELEASE_CODEGEN_UNITS", "1");
     cargo.env("CARGO_PROFILE_RELEASE_OPT_LEVEL", "3");
     cargo.env("CARGO_PROFILE_RELEASE_STRIP", "symbols");
+    cargo.env("CARGO_PROFILE_RELEASE_DEBUG", "false");
     cargo.current_dir(project_root()).args(args);
 
     let output = cargo.output();
