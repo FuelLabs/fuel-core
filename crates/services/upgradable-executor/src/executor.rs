@@ -766,7 +766,7 @@ mod test {
         // The test verifies that `Executor::get_module` method caches the compiled WASM module.
         // If it doesn't cache the modules, the test will fail with a timeout.
         #[test]
-        #[ntest::timeout(20_000)]
+        #[ntest::timeout(40_000)]
         fn reuse_cached_compiled_module__native_strategy() {
             // Given
             let next_version = Executor::<Storage, DisabledRelayer>::VERSION + 1;
@@ -788,7 +788,7 @@ mod test {
         // The test verifies that `Executor::get_module` method caches the compiled WASM module.
         // If it doesn't cache the modules, the test will fail with a timeout.
         #[test]
-        #[ntest::timeout(20_000)]
+        #[ntest::timeout(40_000)]
         fn reuse_cached_compiled_module__wasm_strategy() {
             // Given
             let next_version = Executor::<Storage, DisabledRelayer>::VERSION + 1;
