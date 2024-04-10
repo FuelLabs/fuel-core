@@ -26,6 +26,7 @@ use fuel_core_types::{
 use futures::StreamExt;
 use std::{
     collections::HashMap,
+    fmt::Debug,
     sync::Arc,
 };
 
@@ -42,16 +43,22 @@ pub struct Task {
     shared_state: SharedState,
 }
 
+impl Debug for Task {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Task")
+            .field("shared_state", &self.shared_state)
+            .finish()
+    }
+}
+
 impl SharedState {
-    fn new(database: Database) -> StorageResult<Self> {
+    fn new(database: Database) -> Self {
         let genesis_version = 0;
-        let state = Self {
+        Self {
             latest_consensus_parameters_version: SharedMutex::new(genesis_version),
             consensus_parameters: Default::default(),
             database,
-        };
-
-        Ok(state)
+        }
     }
 
     fn cache_consensus_parameters(
@@ -98,6 +105,7 @@ impl RunnableTask for Task {
     async fn run(&mut self, watcher: &mut StateWatcher) -> anyhow::Result<bool> {
         let should_continue;
         tokio::select! {
+            biased;
 
             _ = watcher.while_started() => {
                 should_continue = false;
@@ -168,10 +176,184 @@ impl RunnableService for Task {
 pub fn new_service(
     database: Database,
     importer: &BlockImporterAdapter,
-) -> StorageResult<ServiceRunner<Task>> {
+) -> ServiceRunner<Task> {
     let blocks_events = importer.block_events();
-    Ok(ServiceRunner::new(Task {
+    ServiceRunner::new(Task {
         blocks_events,
-        shared_state: SharedState::new(database)?,
-    }))
+        shared_state: SharedState::new(database),
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::{
+        database::Database,
+        service::adapters::consensus_parameters_provider::{
+            SharedState,
+            Task,
+        },
+    };
+    use fuel_core_services::{
+        stream::IntoBoxStream,
+        RunnableService,
+        RunnableTask,
+        StateWatcher,
+    };
+    use fuel_core_storage::{
+        tables::ConsensusParametersVersions,
+        transactional::IntoTransaction,
+        StorageAsMut,
+    };
+    use fuel_core_types::{
+        blockchain::{
+            block::Block,
+            header::ConsensusParametersVersion,
+            SealedBlock,
+        },
+        fuel_tx::ConsensusParameters,
+        services::block_importer::{
+            ImportResult,
+            SharedImportResult,
+        },
+    };
+    use futures::stream;
+
+    fn add_consensus_parameters(
+        database: Database,
+        consensus_parameters_version: ConsensusParametersVersion,
+        consensus_parameters: &ConsensusParameters,
+    ) -> Database {
+        let mut database = database.into_transaction();
+        database
+            .storage_as_mut::<ConsensusParametersVersions>()
+            .insert(&consensus_parameters_version, consensus_parameters)
+            .unwrap();
+        database.commit().unwrap()
+    }
+
+    #[tokio::test]
+    async fn latest_consensus_parameters_works() {
+        let version = 0;
+        let consensus_parameters = Default::default();
+
+        // Given
+        let database =
+            add_consensus_parameters(Database::default(), version, &consensus_parameters);
+        let state = SharedState::new(database);
+
+        // When
+        let fetched_parameters = state.latest_consensus_parameters();
+
+        // Then
+        assert_eq!(fetched_parameters.as_ref(), &consensus_parameters);
+    }
+
+    #[tokio::test]
+    async fn into_task_works_with_non_empty_database() {
+        let version = 0;
+        let consensus_parameters = Default::default();
+
+        // Given
+        let non_empty_database =
+            add_consensus_parameters(Database::default(), version, &consensus_parameters);
+        let task = Task {
+            blocks_events: stream::empty().into_boxed(),
+            shared_state: SharedState::new(non_empty_database),
+        };
+
+        // When
+        let result = task.into_task(&Default::default(), ()).await;
+
+        // Then
+        result.expect("Initialization should succeed because database contains consensus parameters.");
+    }
+
+    #[tokio::test]
+    async fn into_task_fails_when_no_parameters() {
+        // Given
+        let empty_database = Database::default();
+        let task = Task {
+            blocks_events: stream::empty().into_boxed(),
+            shared_state: SharedState::new(empty_database),
+        };
+
+        // When
+        let result = task.into_task(&Default::default(), ()).await;
+
+        // Then
+        result.expect_err(
+            "Initialization should fails because of lack of consensus parameters",
+        );
+    }
+
+    fn result_with_new_version(
+        version: ConsensusParametersVersion,
+    ) -> SharedImportResult {
+        let mut block = Block::default();
+        block
+            .header_mut()
+            .application_mut()
+            .consensus_parameters_version = version;
+        let sealed_block = SealedBlock {
+            entity: block,
+            consensus: Default::default(),
+        };
+        std::sync::Arc::new(ImportResult::new_from_local(
+            sealed_block,
+            Default::default(),
+            Default::default(),
+        ))
+    }
+
+    #[tokio::test]
+    async fn run_updates_the_latest_consensus_parameters_from_imported_block() {
+        use futures::StreamExt;
+
+        let old_version = 0;
+        let new_version = 1234;
+        let old_consensus_parameters = ConsensusParameters::default();
+        let mut new_consensus_parameters = ConsensusParameters::default();
+        new_consensus_parameters.set_privileged_address([123; 32].into());
+        assert_ne!(old_consensus_parameters, new_consensus_parameters);
+
+        let (block_sender, block_receiver) =
+            tokio::sync::broadcast::channel::<SharedImportResult>(1);
+        let database_with_old_parameters = add_consensus_parameters(
+            Database::default(),
+            old_version,
+            &old_consensus_parameters,
+        );
+        let mut task = Task {
+            blocks_events: IntoBoxStream::into_boxed(
+                tokio_stream::wrappers::BroadcastStream::new(block_receiver)
+                    .filter_map(|r| futures::future::ready(r.ok())),
+            ),
+            shared_state: SharedState::new(database_with_old_parameters.clone()),
+        }
+        .into_task(&Default::default(), ())
+        .await
+        .unwrap();
+        assert_eq!(
+            task.shared_state.latest_consensus_parameters().as_ref(),
+            &old_consensus_parameters
+        );
+
+        // Given
+        add_consensus_parameters(
+            database_with_old_parameters,
+            new_version,
+            &new_consensus_parameters,
+        );
+
+        // When
+        let result_with_new_version = result_with_new_version(new_version);
+        let _ = block_sender.send(result_with_new_version);
+        task.run(&mut StateWatcher::started()).await.unwrap();
+
+        // Then
+        assert_eq!(
+            task.shared_state.latest_consensus_parameters().as_ref(),
+            &new_consensus_parameters
+        );
+    }
 }
