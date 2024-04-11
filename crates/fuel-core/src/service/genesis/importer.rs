@@ -6,6 +6,7 @@ use self::{
     progress::{
         MultipleProgressReporter,
         ProgressReporter,
+        Target,
     },
 };
 
@@ -14,7 +15,10 @@ mod import_task;
 mod off_chain;
 mod on_chain;
 mod progress;
-use std::marker::PhantomData;
+use std::{
+    io::IsTerminal,
+    marker::PhantomData,
+};
 
 use crate::{
     combined_database::CombinedDatabase,
@@ -57,10 +61,7 @@ use fuel_core_types::{
     fuel_types::BlockHeight,
 };
 
-use tracing::{
-    Level,
-    Span,
-};
+use tracing::Level;
 
 pub struct SnapshotImporter {
     db: CombinedDatabase,
@@ -81,7 +82,7 @@ impl SnapshotImporter {
             task_manager: TaskManager::new(watcher),
             snapshot_reader,
             tracing_span: tracing::info_span!("snapshot_importer"),
-            multi_progress_reporter: MultipleProgressReporter::new(),
+            multi_progress_reporter: Self::init_multi_progress_reporter(),
         }
     }
 
@@ -109,37 +110,37 @@ impl SnapshotImporter {
         self.spawn_worker_off_chain::<Coins, OwnedCoins>()?;
         self.spawn_worker_off_chain::<Transactions, ContractsInfo>()?;
 
-        Ok(self.task_manager.wait().await?.into_iter().all(|e| e))
+        let was_cancelled = self.task_manager.wait().await?.into_iter().all(|e| e);
+
+        Ok(was_cancelled)
     }
 
-    pub fn spawn_worker_on_chain<T>(&mut self) -> anyhow::Result<()>
+    pub fn spawn_worker_on_chain<TableBeingWritten>(&mut self) -> anyhow::Result<()>
     where
-        T: TableWithBlueprint + 'static,
-        TableEntry<T>: serde::de::DeserializeOwned + Send,
-        StateConfig: AsTable<T>,
-        Handler<T>: ImportTable<TableInSnapshot = T, DbDesc = OnChain>,
+        TableBeingWritten: TableWithBlueprint + 'static + Send,
+        TableEntry<TableBeingWritten>: serde::de::DeserializeOwned + Send,
+        StateConfig: AsTable<TableBeingWritten>,
+        Handler<TableBeingWritten>:
+            ImportTable<TableInSnapshot = TableBeingWritten, DbDesc = OnChain>,
     {
-        let groups = self.snapshot_reader.read::<T>()?;
+        let groups = self.snapshot_reader.read::<TableBeingWritten>()?;
         let num_groups = groups.len();
 
         let block_height = self.snapshot_reader.block_height();
         let da_block_height = self.snapshot_reader.da_block_height();
         let db = self.db.on_chain().clone();
 
-        let span = self.create_tracing_span::<T>();
-        let progress_reporter = self.progress_reporter(num_groups);
+        let progress_reporter = self.progress_reporter::<TableBeingWritten>(num_groups);
 
         self.task_manager.spawn(move |token| {
-            tokio_rayon::spawn(move || {
-                let task = ImportTask::new(
-                    token,
-                    Handler::new(block_height, da_block_height),
-                    groups,
-                    db,
-                    progress_reporter,
-                );
-                span.in_scope(|| task.run())
-            })
+            let task = ImportTask::new(
+                token,
+                Handler::new(block_height, da_block_height),
+                groups,
+                db,
+                progress_reporter,
+            );
+            tokio_rayon::spawn(move || task.run())
         });
 
         Ok(())
@@ -162,39 +163,53 @@ impl SnapshotImporter {
         let da_block_height = self.snapshot_reader.da_block_height();
 
         let db = self.db.off_chain().clone();
-        let span = self.create_tracing_span::<TableBeingWritten>();
 
-        let progress_reporter = self.progress_reporter(num_groups);
+        let progress_reporter = self.progress_reporter::<TableBeingWritten>(num_groups);
 
         self.task_manager.spawn(move |token| {
-            tokio_rayon::spawn(move || {
-                let runner = ImportTask::new(
-                    token,
-                    Handler::<TableBeingWritten>::new(block_height, da_block_height),
-                    groups,
-                    db,
-                    progress_reporter,
-                );
-
-                span.in_scope(|| runner.run())
-            })
+            let task = ImportTask::new(
+                token,
+                Handler::new(block_height, da_block_height),
+                groups,
+                db,
+                progress_reporter,
+            );
+            tokio_rayon::spawn(move || task.run())
         });
 
         Ok(())
     }
 
-    fn progress_reporter(&self, num_groups: usize) -> ProgressReporter {
-        self.multi_progress_reporter
-            .register(ProgressReporter::new_detect_output(num_groups))
+    fn init_multi_progress_reporter() -> MultipleProgressReporter {
+        if Self::should_display_bars() {
+            MultipleProgressReporter::new_sterr()
+        } else {
+            MultipleProgressReporter::new_hidden()
+        }
     }
 
-    fn create_tracing_span<T: TableWithBlueprint>(&self) -> Span {
-        tracing::span!(
-            parent: &self.tracing_span,
-            Level::INFO,
-            "task",
-            table = T::column().name()
-        )
+    fn should_display_bars() -> bool {
+        std::io::stderr().is_terminal() && !cfg!(test)
+    }
+
+    fn progress_reporter<T>(&self, num_groups: usize) -> ProgressReporter
+    where
+        T: TableWithBlueprint,
+    {
+        let target = if Self::should_display_bars() {
+            Target::Cli(T::column().name())
+        } else {
+            let span = tracing::span!(
+                parent: &self.tracing_span,
+                Level::INFO,
+                "task",
+                table = T::column().name()
+            );
+            Target::Logs(span)
+        };
+
+        let reporter = ProgressReporter::new(target, num_groups);
+        self.multi_progress_reporter.register(reporter)
     }
 }
 

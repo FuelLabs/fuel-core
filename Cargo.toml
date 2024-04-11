@@ -60,7 +60,6 @@ fuel-core-keygen-bin = { version = "0.24.2", path = "./bin/keygen" }
 fuel-core-chain-config = { version = "0.24.2", path = "./crates/chain-config", default-features = false }
 fuel-core-client = { version = "0.24.2", path = "./crates/client" }
 indicatif = { version = "0.17", default-features = false }
-humantime = { version = "2.1", default-features = false }
 fuel-core-database = { version = "0.24.2", path = "./crates/database" }
 fuel-core-metrics = { version = "0.24.2", path = "./crates/metrics" }
 fuel-core-services = { version = "0.24.2", path = "./crates/services" }

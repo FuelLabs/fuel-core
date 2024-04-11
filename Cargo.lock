@@ -2877,7 +2877,6 @@ dependencies = [
  "fuel-core-upgradable-executor",
  "futures",
  "hex",
- "humantime",
  "hyper",
  "indicatif",
  "itertools 0.12.1",
