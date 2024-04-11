@@ -33,6 +33,10 @@ where
             GroupIter::Parquet { decoder } => decoder.num_groups(),
         }
     }
+
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
 }
 
 impl<T> IntoIterator for Groups<T>
