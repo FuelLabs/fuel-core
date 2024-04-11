@@ -25,6 +25,7 @@ Description of the upcoming release here.
 
 #### Breaking
 
+- [#1822](https://github.com/FuelLabs/fuel-core/pull/1822): Removed support of `Create` transaction from debugger since it doesn't have any script to execute.
 - [#1822](https://github.com/FuelLabs/fuel-core/pull/1822): Use `fuel-vm 0.49.0` with new transactions types - `Upgrade` and `Upload`. Also added `max_bytecode_subsections` field to the `ConsensusParameters` to limit the number of bytecode subsections in the state transition bytecode. 
 - [#1816](https://github.com/FuelLabs/fuel-core/pull/1816): Updated the upgradable executor to fetch the state transition bytecode from the database when the version doesn't match a native one. This change enables the WASM executor in the "production" build and requires a `wasm32-unknown-unknown` target.
 
