@@ -107,12 +107,13 @@ use fuel_core_types::{
             CheckPredicateParams,
             CheckPredicates,
             Checked,
+            CheckedMetadata,
             CheckedTransaction,
             Checks,
             IntoChecked,
         },
         interpreter::{
-            CheckedMetadata,
+            CheckedMetadata as CheckedMetadataTrait,
             ExecutableTransaction,
             InterpreterParams,
         },
@@ -739,6 +740,22 @@ where
             .into_checked(header.consensus.height, consensus_params)
             .map_err(ForcedTransactionFailure::CheckError)?;
 
+        let claimed_max_gas = relayed_tx.max_gas();
+        let actual_max_gas = match check_tx_res.metadata() {
+            CheckedMetadata::Mint(_) => {
+                return Err(ForcedTransactionFailure::InvalidTransactionType);
+            }
+
+            CheckedMetadata::Script(script_metadata) => script_metadata.max_gas,
+            CheckedMetadata::Create(create_metadata) => create_metadata.max_gas,
+        };
+        if actual_max_gas > claimed_max_gas {
+            return Err(ForcedTransactionFailure::InsufficientMaxGas {
+                claimed_max_gas,
+                actual_max_gas,
+            });
+        }
+
         let checked_tx = check_tx_res
             .check_predicates(&CheckPredicateParams::from(consensus_params))
             .map_err(ForcedTransactionFailure::CheckError)?;
@@ -994,7 +1011,7 @@ where
     ) -> ExecutorResult<Transaction>
     where
         Tx: ExecutableTransaction + PartialEq + Cacheable + Send + Sync + 'static,
-        <Tx as IntoChecked>::Metadata: CheckedMetadata + Clone + Send + Sync,
+        <Tx as IntoChecked>::Metadata: CheckedMetadataTrait + Clone + Send + Sync,
         T: KeyValueInspect<Column = Column>,
     {
         let tx_id = checked_tx.id();

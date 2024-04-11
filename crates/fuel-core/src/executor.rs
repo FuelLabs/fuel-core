@@ -284,9 +284,7 @@ mod tests {
         da_block_height: DaBlockHeight,
         num_txs: usize,
     ) -> Block {
-        let transactions = (1..num_txs + 1)
-            .map(script_tx_for_amount_of_base_asset)
-            .collect_vec();
+        let transactions = (1..num_txs + 1).map(script_tx_for_amount).collect_vec();
 
         let mut block = Block::default();
         block.header_mut().set_block_height(block_height);
@@ -295,12 +293,8 @@ mod tests {
         block
     }
 
-    fn script_tx_for_amount_of_base_asset(amount: usize) -> Transaction {
+    fn script_tx_for_amount(amount: usize) -> Transaction {
         let asset = AssetId::BASE;
-        script_tx_for_amount(amount, asset)
-    }
-
-    fn script_tx_for_amount(amount: usize, asset: AssetId) -> Transaction {
         TxBuilder::new(2322u64)
             .script_gas_limit(10)
             .coin_input(asset, (amount as Word) * 100)
@@ -3051,9 +3045,11 @@ mod tests {
             let genesis_da_height = 3u64;
             let block_height = 1u32;
             let da_height = 10u64;
+            let arb_large_max_gas = 10_000;
 
             // given
-            let relayer_db = relayer_db_with_valid_relayed_txs(da_height);
+            let relayer_db =
+                relayer_db_with_valid_relayed_txs(da_height, arb_large_max_gas);
 
             // when
             let on_chain_db = database_with_genesis_block(genesis_da_height);
@@ -3069,26 +3065,30 @@ mod tests {
             assert_eq!(txs.len(), 2);
         }
 
-        fn relayer_db_with_valid_relayed_txs(da_height: u64) -> Database<Relayer> {
+        fn relayer_db_with_valid_relayed_txs(
+            da_height: u64,
+            max_gas: u64,
+        ) -> Database<Relayer> {
             let mut relayed_tx = RelayedTransaction::default();
-            let tx = script_tx_for_amount_of_base_asset(100);
+            let tx = script_tx_for_amount(100);
             let tx_bytes = tx.to_bytes();
             relayed_tx.set_serialized_transaction(tx_bytes);
+            relayed_tx.set_max_gas(max_gas);
 
             relayer_db_for_events(&[relayed_tx.into()], da_height)
         }
 
         #[test]
-        fn execute_without_commit_with_coinbase__relayed_tx_can_have_no_base_asset_and_mint_will_have_no_fees(
+        fn execute_without_commit_with_coinbase__relayed_tx_execute_and_mint_will_have_no_fees(
         ) {
             let genesis_da_height = 3u64;
             let block_height = 1u32;
             let da_height = 10u64;
             let gas_price = 1;
+            let arb_max_gas = 10_000;
 
             // given
-            let relayer_db =
-                relayer_db_with_valid_relayed_tx_with_no_base_assets(da_height);
+            let relayer_db = relayer_db_with_valid_relayed_txs(da_height, arb_max_gas);
 
             // when
             let on_chain_db = database_with_genesis_block(genesis_da_height);
@@ -3112,28 +3112,20 @@ mod tests {
             assert_eq!(*mint.mint_amount(), 0);
         }
 
-        fn relayer_db_with_valid_relayed_tx_with_no_base_assets(
-            da_height: u64,
-        ) -> Database<Relayer> {
-            let mut relayed_tx = RelayedTransaction::default();
-            let not_base_asset = AssetId::new([5; 32]);
-            let tx = script_tx_for_amount(100, not_base_asset);
-            let tx_bytes = tx.to_bytes();
-            relayed_tx.set_serialized_transaction(tx_bytes);
-
-            relayer_db_for_events(&[relayed_tx.into()], da_height)
-        }
-
         #[test]
         fn execute_without_commit__duplicated_relayed_tx_not_included_in_block() {
             let genesis_da_height = 3u64;
             let block_height = 1u32;
             let da_height = 10u64;
             let duplicate_count = 10;
+            let arb_large_max_gas = 10_000;
 
             // given
-            let relayer_db =
-                relayer_db_with_duplicate_valid_relayed_txs(da_height, duplicate_count);
+            let relayer_db = relayer_db_with_duplicate_valid_relayed_txs(
+                da_height,
+                duplicate_count,
+                arb_large_max_gas,
+            );
 
             // when
             let on_chain_db = database_with_genesis_block(genesis_da_height);
@@ -3156,11 +3148,13 @@ mod tests {
         fn relayer_db_with_duplicate_valid_relayed_txs(
             da_height: u64,
             duplicate_count: usize,
+            max_gas: u64,
         ) -> Database<Relayer> {
             let mut relayed_tx = RelayedTransaction::default();
-            let tx = script_tx_for_amount_of_base_asset(100);
+            let tx = script_tx_for_amount(100);
             let tx_bytes = tx.to_bytes();
             relayed_tx.set_serialized_transaction(tx_bytes);
+            relayed_tx.set_max_gas(max_gas);
             let events = std::iter::repeat(relayed_tx.into())
                 .take(duplicate_count + 1)
                 .collect::<Vec<_>>();
@@ -3210,15 +3204,64 @@ mod tests {
         }
 
         #[test]
-        fn execute_without_commit__relayed_tx_that_passes_checks_but_fails_execution_is_reported(
-        ) {
+        fn execute_without_commit__relayed_tx_with_low_max_gas_fails() {
             let genesis_da_height = 3u64;
             let block_height = 1u32;
             let da_height = 10u64;
 
             // given
-            let relayer_db =
-                relayer_db_with_tx_that_passes_checks_but_fails_exectution(da_height);
+            let relayer_db = relayer_db_with_relayed_tx_with_low_max_gas(da_height);
+
+            // when
+            let on_chain_db = database_with_genesis_block(genesis_da_height);
+            let producer = create_relayer_executor(on_chain_db, relayer_db);
+            let block = test_block(block_height.into(), da_height.into(), 0);
+            let (result, _) = producer
+                .execute_without_commit(ExecutionTypes::Production(block.into()))
+                .unwrap()
+                .into();
+
+            // then
+            let txs = result.block.transactions();
+            assert_eq!(txs.len(), 1);
+
+            // and
+            let events = result.events;
+            let fuel_core_types::services::executor::Event::ForcedTransactionFailed {
+                failure: actual,
+                ..
+            } = &events[0]
+            else {
+                panic!("Expected `ForcedTransactionFailed` event")
+            };
+            let expected = "Insufficient max gas.";
+            assert!(actual.starts_with(expected));
+        }
+
+        fn relayer_db_with_relayed_tx_with_low_max_gas(
+            da_height: u64,
+        ) -> Database<Relayer> {
+            let mut relayed_tx = RelayedTransaction::default();
+            let tx = script_tx_for_amount(100);
+            let tx_bytes = tx.to_bytes();
+            relayed_tx.set_serialized_transaction(tx_bytes);
+            relayed_tx.set_max_gas(0);
+            relayer_db_for_events(&[relayed_tx.into()], da_height)
+        }
+
+        #[test]
+        fn execute_without_commit__relayed_tx_that_passes_checks_but_fails_execution_is_reported(
+        ) {
+            let genesis_da_height = 3u64;
+            let block_height = 1u32;
+            let da_height = 10u64;
+            let arb_max_gas = 10_000;
+
+            // given
+            let relayer_db = relayer_db_with_tx_that_passes_checks_but_fails_execution(
+                da_height,
+                arb_max_gas,
+            );
 
             // when
             let on_chain_db = database_with_genesis_block(genesis_da_height);
@@ -3250,13 +3293,15 @@ mod tests {
             assert!(actual.starts_with(expected));
         }
 
-        fn relayer_db_with_tx_that_passes_checks_but_fails_exectution(
+        fn relayer_db_with_tx_that_passes_checks_but_fails_execution(
             da_height: u64,
+            max_gas: u64,
         ) -> Database<Relayer> {
             let mut relayed_tx = RelayedTransaction::default();
-            let tx = script_tx_for_amount_of_base_asset(100);
+            let tx = script_tx_for_amount(100);
             let tx_bytes = tx.to_bytes();
             relayed_tx.set_serialized_transaction(tx_bytes);
+            relayed_tx.set_max_gas(max_gas);
             let mut bad_relayed_tx = relayed_tx.clone();
             let new_nonce = [9; 32].into();
             bad_relayed_tx.set_nonce(new_nonce);
@@ -3328,7 +3373,7 @@ mod tests {
 
         fn arb_invalid_relayed_tx_event() -> Event {
             let mut invalid_relayed_tx = RelayedTransaction::default();
-            let mut tx = script_tx_for_amount_of_base_asset(100);
+            let mut tx = script_tx_for_amount(100);
             tx.as_script_mut().unwrap().inputs_mut().drain(..); // Remove all the inputs :)
             let tx_bytes = tx.to_bytes();
             invalid_relayed_tx.set_serialized_transaction(tx_bytes);

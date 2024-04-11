@@ -96,6 +96,16 @@ pub enum ForcedTransactionFailure {
     /// Execution error which failed to include
     #[display(fmt = "Transaction inclusion failed {_0}")]
     ExecutionError(Error),
+    /// Relayed Transaction didn't specify high enough max gas
+    #[display(
+        fmt = "Insufficient max gas. Expected: {claimed_max_gas:?}, Actual: {actual_max_gas:?}"
+    )]
+    InsufficientMaxGas {
+        /// The max gas claimed by the L1 transaction submitter
+        claimed_max_gas: u64,
+        /// The actual max gas used by the transaction
+        actual_max_gas: u64,
+    },
 }
 
 /// The status of a transaction after it is executed.
