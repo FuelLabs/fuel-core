@@ -419,7 +419,6 @@ impl StateConfig {
         let coins = reader
             .read::<Coins>()?
             .into_iter()
-            .map_ok(|batch| batch.data)
             .flatten_ok()
             .try_collect()?;
 
@@ -428,7 +427,6 @@ impl StateConfig {
         let messages = reader
             .read::<Messages>()?
             .into_iter()
-            .map_ok(|batch| batch.data)
             .flatten_ok()
             .try_collect()?;
 
@@ -437,7 +435,6 @@ impl StateConfig {
         let contract_state = reader
             .read::<ContractsState>()?
             .into_iter()
-            .map_ok(|batch| batch.data)
             .flatten_ok()
             .try_collect()?;
 
@@ -446,7 +443,6 @@ impl StateConfig {
         let contract_balance = reader
             .read::<ContractsAssets>()?
             .into_iter()
-            .map_ok(|batch| batch.data)
             .flatten_ok()
             .try_collect()?;
 
@@ -455,7 +451,6 @@ impl StateConfig {
         let contract_code = reader
             .read::<ContractsRawCode>()?
             .into_iter()
-            .map_ok(|batch| batch.data)
             .flatten_ok()
             .try_collect()?;
 
@@ -464,7 +459,6 @@ impl StateConfig {
         let contract_utxo = reader
             .read::<ContractsLatestUtxo>()?
             .into_iter()
-            .map_ok(|batch| batch.data)
             .flatten_ok()
             .try_collect()?;
 
@@ -549,13 +543,6 @@ pub use writer::{
     SnapshotWriter,
 };
 pub const MAX_GROUP_SIZE: usize = usize::MAX;
-
-#[derive(Debug, PartialEq, Eq, Clone)]
-pub struct Group<T> {
-    pub index: usize,
-    pub data: Vec<T>,
-}
-pub(crate) type GroupResult<T> = anyhow::Result<Group<T>>;
 
 #[cfg(test)]
 mod tests {
@@ -808,7 +795,7 @@ mod tests {
         fn write_groups<T>(
             &mut self,
             encoder: &mut SnapshotWriter,
-        ) -> Vec<Group<TableEntry<T>>>
+        ) -> Vec<Vec<TableEntry<T>>>
         where
             T: TableWithBlueprint,
             T::OwnedKey: serde::Serialize,
@@ -818,12 +805,12 @@ mod tests {
         {
             let groups = self.generate_groups();
             for group in &groups {
-                encoder.write(group.data.clone()).unwrap();
+                encoder.write(group.clone()).unwrap();
             }
             groups
         }
 
-        fn generate_groups<T>(&mut self) -> Vec<Group<T>>
+        fn generate_groups<T>(&mut self) -> Vec<Vec<T>>
         where
             T: Randomize,
         {
@@ -831,16 +818,14 @@ mod tests {
                 .chunks(self.group_size)
                 .into_iter()
                 .map(|chunk| chunk.collect_vec())
-                .enumerate()
-                .map(|(index, data)| Group { index, data })
                 .take(self.num_groups)
                 .collect()
         }
     }
 
     fn assert_groups_identical<T>(
-        original: &[Group<T>],
-        read: impl IntoIterator<Item = Result<Group<T>, anyhow::Error>>,
+        original: &[Vec<T>],
+        read: impl IntoIterator<Item = Result<Vec<T>, anyhow::Error>>,
         skip: usize,
     ) where
         Vec<T>: PartialEq,

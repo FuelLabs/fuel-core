@@ -14,11 +14,6 @@ use parquet::{
     record::RowAccessor,
 };
 
-use crate::config::state::{
-    Group,
-    GroupResult,
-};
-
 pub struct Decoder<R: ChunkReader> {
     data_source: SerializedFileReader<R>,
     group_index: usize,
@@ -32,7 +27,7 @@ where
         self.data_source.num_row_groups()
     }
 
-    fn current_group(&self) -> anyhow::Result<Group<Vec<u8>>> {
+    fn current_group(&self) -> anyhow::Result<Vec<Vec<u8>>> {
         let data = self
             .data_source
             .get_row_group(self.group_index)?
@@ -49,10 +44,7 @@ where
             })
             .collect::<Result<Vec<_>, _>>()?;
 
-        Ok(Group {
-            index: self.group_index,
-            data,
-        })
+        Ok(data)
     }
 }
 
@@ -60,7 +52,7 @@ impl<R> Iterator for Decoder<R>
 where
     R: ChunkReader + 'static,
 {
-    type Item = GroupResult<Vec<u8>>;
+    type Item = anyhow::Result<Vec<Vec<u8>>>;
 
     fn next(&mut self) -> Option<Self::Item> {
         if self.group_index >= self.data_source.metadata().num_row_groups() {

@@ -1,6 +1,10 @@
 use std::fmt::Debug;
 
-use fuel_core_storage::structured_storage::TableWithBlueprint;
+use anyhow::anyhow;
+use fuel_core_storage::{
+    structured_storage::TableWithBlueprint,
+    Mappable,
+};
 use fuel_core_types::{
     blockchain::primitives::DaBlockHeight,
     fuel_types::BlockHeight,
@@ -11,17 +15,18 @@ use crate::{
     config::table_entry::TableEntry,
     AsTable,
     ChainConfig,
-    Group,
-    GroupResult,
     StateConfig,
     MAX_GROUP_SIZE,
 };
 
-pub struct Groups<T> {
+pub struct Groups<T: Mappable> {
     iter: GroupIter<T>,
 }
 
-impl<T> Groups<T> {
+impl<T> Groups<T>
+where
+    T: Mappable,
+{
     pub fn len(&self) -> usize {
         match &self.iter {
             GroupIter::InMemory { groups } => groups.len(),
@@ -33,20 +38,23 @@ impl<T> Groups<T> {
 
 impl<T> IntoIterator for Groups<T>
 where
-    T: serde::de::DeserializeOwned,
+    T: Mappable,
+    GroupIter<T>: Iterator,
 {
-    type Item = GroupResult<T>;
-
     type IntoIter = GroupIter<T>;
+    type Item = <Self::IntoIter as Iterator>::Item;
 
     fn into_iter(self) -> Self::IntoIter {
         self.iter
     }
 }
 
-pub enum GroupIter<T> {
+pub enum GroupIter<T>
+where
+    T: Mappable,
+{
     InMemory {
-        groups: std::vec::IntoIter<GroupResult<T>>,
+        groups: std::vec::IntoIter<anyhow::Result<Vec<TableEntry<T>>>>,
     },
     #[cfg(feature = "parquet")]
     Parquet {
@@ -57,24 +65,20 @@ pub enum GroupIter<T> {
 #[cfg(feature = "parquet")]
 impl<T> Iterator for GroupIter<T>
 where
-    T: serde::de::DeserializeOwned,
+    T: Mappable,
+    TableEntry<T>: serde::de::DeserializeOwned,
 {
-    type Item = GroupResult<T>;
+    type Item = anyhow::Result<Vec<TableEntry<T>>>;
 
     fn next(&mut self) -> Option<Self::Item> {
         match self {
             GroupIter::InMemory { groups } => groups.next(),
             GroupIter::Parquet { decoder } => {
-                let group = decoder.next()?.and_then(|bytes_group| {
-                    let decoded = bytes_group
-                        .data
+                let group = decoder.next()?.and_then(|byte_group| {
+                    byte_group
                         .into_iter()
-                        .map(|bytes| postcard::from_bytes(&bytes))
-                        .try_collect()?;
-                    Ok(Group {
-                        index: bytes_group.index,
-                        data: decoded,
-                    })
+                        .map(|group| postcard::from_bytes(&group).map_err(|e| anyhow!(e)))
+                        .collect()
                 });
                 Some(group)
             }
@@ -203,8 +207,7 @@ impl SnapshotReader {
         let file = std::fs::File::open(path)?;
         let group = Decoder::new(file)?
             .next()
-            .ok_or_else(|| anyhow::anyhow!("No block height found"))??
-            .data;
+            .ok_or_else(|| anyhow::anyhow!("No block height found"))??;
         let block_height = group
             .into_iter()
             .next()
@@ -247,7 +250,7 @@ impl SnapshotReader {
         }
     }
 
-    pub fn read<T>(&self) -> anyhow::Result<Groups<TableEntry<T>>>
+    pub fn read<T>(&self) -> anyhow::Result<Groups<T>>
     where
         T: TableWithBlueprint,
         StateConfig: AsTable<T>,
@@ -280,13 +283,7 @@ impl SnapshotReader {
                     .into_iter()
                     .chunks(*group_size)
                     .into_iter()
-                    .enumerate()
-                    .map(|(index, vec_chunk)| {
-                        Ok(Group {
-                            data: vec_chunk.collect(),
-                            index,
-                        })
-                    })
+                    .map(|vec_chunk| Ok(vec_chunk.collect()))
                     .collect_vec();
                 GroupIter::InMemory {
                     groups: collection.into_iter(),

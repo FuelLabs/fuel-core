@@ -244,8 +244,7 @@ async fn can_get_message_proof() {
         .into_iter()
         .next()
         .unwrap()
-        .unwrap()
-        .data[0]
+        .unwrap()[0]
         .value
         .clone();
 

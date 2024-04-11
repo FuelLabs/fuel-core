@@ -1,9 +1,6 @@
 use std::time::Duration;
 
-use fuel_core_chain_config::{
-    Group,
-    TableEntry,
-};
+use fuel_core_chain_config::TableEntry;
 use fuel_core_storage::{
     kv_store::StorageColumn,
     structured_storage::TableWithBlueprint,
@@ -92,7 +89,7 @@ where
     DbDesc: DatabaseDescription,
     Logic: ImportTable<DbDesc = DbDesc>,
     GroupGenerator:
-        IntoIterator<Item = anyhow::Result<Group<TableEntry<Logic::TableInSnapshot>>>>,
+        IntoIterator<Item = anyhow::Result<Vec<TableEntry<Logic::TableInSnapshot>>>>,
     GenesisMetadata<DbDesc>: TableWithBlueprint<
         Column = DbDesc::Column,
         Key = str,
@@ -115,21 +112,21 @@ where
                 is_cancelled = self.cancel_token.is_cancelled();
                 !is_cancelled
             })
-            .try_for_each(move |group| {
+            .enumerate()
+            .map(|(index, group)| (index.saturating_add(self.skip), group))
+            .try_for_each(move |(index, group)| {
                 std::thread::sleep(Duration::from_millis(100));
                 let group = group?;
-                let group_num = group.index;
-
                 let mut tx = db.write_transaction();
-                self.handler.process(group.data, &mut tx)?;
+                self.handler.process(group, &mut tx)?;
 
                 GenesisProgressMutate::<DbDesc>::update_genesis_progress(
                     &mut tx,
                     Logic::TableBeingWritten::column().name(),
-                    group_num,
+                    index,
                 )?;
                 tx.commit()?;
-                self.reporter.set_progress(group_num as u64);
+                self.reporter.set_progress(index as u64);
                 Ok(())
             });
 
@@ -158,7 +155,6 @@ mod tests {
         bail,
     };
     use fuel_core_chain_config::{
-        Group,
         Randomize,
         TableEntry,
     };
@@ -272,19 +268,12 @@ mod tests {
                 .collect()
         }
 
-        pub fn as_indexed_groups(&self) -> Vec<Group<TableEntry<Coins>>> {
-            self.batches
-                .iter()
-                .enumerate()
-                .map(|(index, data)| Group {
-                    index,
-                    data: data.clone(),
-                })
-                .collect()
+        pub fn as_groups(&self) -> Vec<Vec<TableEntry<Coins>>> {
+            self.batches.clone()
         }
 
-        pub fn as_ok_groups(&self) -> Vec<anyhow::Result<Group<TableEntry<Coins>>>> {
-            self.as_indexed_groups().into_iter().map(Ok).collect()
+        pub fn as_ok_groups(&self) -> Vec<anyhow::Result<Vec<TableEntry<Coins>>>> {
+            self.as_groups().into_iter().map(Ok).collect()
         }
     }
 

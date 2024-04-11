@@ -3,7 +3,6 @@ pub mod encode;
 
 #[cfg(test)]
 mod tests {
-    use crate::Group;
     use bytes::Bytes;
     use itertools::Itertools;
     use parquet::{
@@ -128,7 +127,7 @@ mod tests {
         let mut decoder = Decoder::new(bytes).unwrap();
 
         // when
-        let _: Group<_> = decoder.nth(1).unwrap().unwrap();
+        let _: Vec<_> = decoder.nth(1).unwrap().unwrap();
 
         // then
         let actually_read = bytes_read.load(std::sync::atomic::Ordering::SeqCst);

@@ -324,7 +324,6 @@ mod tests {
                     .read::<T>()
                     .unwrap()
                     .into_iter()
-                    .map_ok(|group| group.data)
                     .flatten_ok()
                     .try_collect()
                     .unwrap()
@@ -785,12 +784,7 @@ mod tests {
         T::OwnedValue: serde::de::DeserializeOwned + core::fmt::Debug + PartialEq,
         StateConfig: AsTable<T>,
     {
-        let actual = reader
-            .read()
-            .unwrap()
-            .into_iter()
-            .map(|group| group.unwrap().data)
-            .collect_vec();
+        let actual: Vec<_> = reader.read().unwrap().into_iter().try_collect().unwrap();
 
         let expected = expected_data
             .into_iter()
