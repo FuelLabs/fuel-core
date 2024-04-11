@@ -323,6 +323,7 @@ mod tests {
                 reader
                     .read::<T>()
                     .unwrap()
+                    .into_iter()
                     .map_ok(|group| group.data)
                     .flatten_ok()
                     .try_collect()
@@ -787,6 +788,7 @@ mod tests {
         let actual = reader
             .read()
             .unwrap()
+            .into_iter()
             .map(|group| group.unwrap().data)
             .collect_vec();
 

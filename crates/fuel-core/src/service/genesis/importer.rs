@@ -3,7 +3,10 @@ use self::{
         ImportTable,
         ImportTask,
     },
-    progress::MultipleProgressReporter,
+    progress::{
+        MultipleProgressReporter,
+        ProgressReporter,
+    },
 };
 
 use super::task_manager::TaskManager;
@@ -125,7 +128,11 @@ impl SnapshotImporter {
         let da_block_height = self.snapshot_reader.da_block_height();
         let db = self.db.on_chain().clone();
         let span = self.create_tracing_span::<T>();
-        let progress_reporter = self.multi_progress_reporter.reporter(num_groups);
+
+        let progress_reporter = self
+            .multi_progress_reporter
+            .register(ProgressReporter::new_tty_aware(num_groups));
+
         self.task_manager.spawn(move |token| {
             tokio_rayon::spawn(move || {
                 let task = ImportTask::new(
@@ -160,7 +167,11 @@ impl SnapshotImporter {
 
         let db = self.db.off_chain().clone();
         let span = self.create_tracing_span::<TableBeingWritten>();
-        let progress_reporter = self.multi_progress_reporter.reporter(num_groups);
+
+        let progress_reporter = self
+            .multi_progress_reporter
+            .register(ProgressReporter::new_tty_aware(num_groups));
+
         self.task_manager.spawn(move |token| {
             tokio_rayon::spawn(move || {
                 let runner = ImportTask::new(

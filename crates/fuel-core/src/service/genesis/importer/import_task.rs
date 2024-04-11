@@ -116,7 +116,7 @@ where
                 !is_cancelled
             })
             .try_for_each(move |group| {
-                std::thread::sleep(Duration::from_millis(1000));
+                std::thread::sleep(Duration::from_millis(100));
                 let group = group?;
                 let group_num = group.index;
 
@@ -148,17 +148,9 @@ mod tests {
             progress::ProgressReporter,
         },
     };
-    use std::{
-        cell::Cell,
-        rc::Rc,
-        sync::{
-            Arc,
-            Mutex,
-        },
-        time::{
-            Duration,
-            SystemTime,
-        },
+    use std::sync::{
+        Arc,
+        Mutex,
     };
 
     use anyhow::{
@@ -202,7 +194,6 @@ mod tests {
         fuel_tx::UtxoId,
         fuel_types::BlockHeight,
     };
-    use itertools::Itertools;
     use rand::{
         rngs::StdRng,
         SeedableRng,

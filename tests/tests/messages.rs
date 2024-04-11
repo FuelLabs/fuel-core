@@ -299,6 +299,7 @@ async fn can_get_message_proof() {
             .snapshot_reader
             .read::<Coins>()
             .unwrap()
+            .into_iter()
             .next()
             .unwrap()
             .unwrap()
