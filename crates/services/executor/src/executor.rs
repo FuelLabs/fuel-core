@@ -520,22 +520,7 @@ where
 
                 let tx = match result {
                     Err(err) => {
-                        return match execution_kind {
-                            ExecutionKind::Production => {
-                                // If, during block production, we get an invalid transaction,
-                                // remove it from the block and continue block creation. An invalid
-                                // transaction means that the caller didn't validate it first, so
-                                // maybe something is wrong with validation rules in the `TxPool`
-                                // (or in another place that should validate it). Or we forgot to
-                                // clean up some dependent/conflict transactions. But it definitely
-                                // means that something went wrong, and we must fix it.
-                                execution_data
-                                    .skipped_transactions
-                                    .push((tx_id, err.clone()));
-                                Ok(Some(err))
-                            }
-                            ExecutionKind::DryRun | ExecutionKind::Validation => Err(err),
-                        };
+                        return Err(err);
                     }
                     Ok(tx) => tx,
                 };
@@ -593,7 +578,14 @@ where
         let mut regular_tx_iter = source.next(remaining_gas_limit).into_iter().peekable();
         while regular_tx_iter.peek().is_some() {
             for transaction in regular_tx_iter {
-                execute_transaction(&mut *execution_data, transaction, gas_price)?;
+                let tx_id = transaction.id(&self.consensus_params.chain_id());
+                if let Some(err) =
+                    execute_transaction(&mut *execution_data, transaction, gas_price)?
+                {
+                    execution_data
+                        .skipped_transactions
+                        .push((tx_id, err.clone()));
+                }
             }
 
             let new_remaining_gas_limit =

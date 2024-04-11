@@ -3141,8 +3141,14 @@ mod tests {
             assert_eq!(txs.len(), 2);
 
             // and
-            let skipped_txs = result.skipped_transactions;
-            assert_eq!(skipped_txs.len(), duplicate_count);
+            let events = result.events;
+            let count = events
+                .into_iter()
+                .filter(|event| {
+                    matches!(event, ExecutorEvent::ForcedTransactionFailed { .. })
+                })
+                .count();
+            assert_eq!(count, 10);
         }
 
         fn relayer_db_with_duplicate_valid_relayed_txs(
@@ -3275,10 +3281,6 @@ mod tests {
             // then
             let txs = result.block.transactions();
             assert_eq!(txs.len(), 2);
-
-            // and
-            let skipped_txs = result.skipped_transactions;
-            assert_eq!(skipped_txs.len(), 1);
 
             // and
             let events = result.events;
