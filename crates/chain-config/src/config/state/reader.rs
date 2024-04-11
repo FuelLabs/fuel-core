@@ -259,9 +259,13 @@ impl SnapshotReader {
                 use anyhow::Context;
                 use fuel_core_storage::kv_store::StorageColumn;
                 let name = T::column().name();
-                let path = tables.get(name).ok_or_else(|| {
-                    anyhow::anyhow!("table '{name}' not found in snapshot metadata.")
-                })?;
+                let Some(path) = tables.get(name) else {
+                    return Ok(Groups {
+                        iter: GroupIter::InMemory {
+                            groups: vec![].into_iter(),
+                        },
+                    });
+                };
                 let file = std::fs::File::open(path).with_context(|| {
                     format!("Could not open {path:?} in order to read table '{name}'")
                 })?;

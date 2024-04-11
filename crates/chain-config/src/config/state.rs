@@ -723,6 +723,25 @@ mod tests {
         pretty_assertions::assert_eq!(da_block_height, da_block_height_decoded);
     }
 
+    #[test_case::test_case(given_parquet_writer)]
+    #[test_case::test_case(given_json_writer)]
+    fn missing_tables_tolerated(writer: impl FnOnce(&Path) -> SnapshotWriter) {
+        // given
+        let temp_dir = tempfile::tempdir().unwrap();
+        let writer = writer(temp_dir.path());
+        let snapshot = writer
+            .close(13.into(), 14u64.into(), &ChainConfig::local_testnet())
+            .unwrap();
+
+        let reader = SnapshotReader::open(snapshot).unwrap();
+
+        // when
+        let coins = reader.read::<Coins>().unwrap();
+
+        // then
+        assert_eq!(coins.into_iter().count(), 0);
+    }
+
     fn assert_roundtrip<T>(
         writer: impl FnOnce(&Path) -> SnapshotWriter,
         reader: impl FnOnce(SnapshotMetadata, usize) -> SnapshotReader,
