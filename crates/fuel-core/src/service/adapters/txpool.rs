@@ -149,6 +149,6 @@ impl GasPriceProvider for StaticGasPrice {
 
 impl ConsensusParametersProviderTrait for ConsensusParametersProvider {
     fn latest_consensus_parameters(&self) -> Arc<ConsensusParameters> {
-        self.consensus_parameters.clone()
+        self.shared_state.latest_consensus_parameters()
     }
 }

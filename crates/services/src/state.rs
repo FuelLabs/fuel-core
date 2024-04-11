@@ -54,6 +54,17 @@ impl Default for StateWatcher {
     }
 }
 
+#[cfg(feature = "test-helpers")]
+impl StateWatcher {
+    /// Create a new `StateWatcher` with the `State::Started` state.
+    pub fn started() -> Self {
+        let (sender, receiver) = watch::channel(State::Started);
+        // This function is used only in tests, so for simplicity of the tests, we want to leak sender.
+        core::mem::forget(sender);
+        Self(receiver)
+    }
+}
+
 impl StateWatcher {
     /// See [`watch::Receiver::borrow`].
     pub fn borrow(&self) -> watch::Ref<'_, State> {
