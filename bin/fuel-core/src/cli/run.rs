@@ -247,7 +247,7 @@ impl Command {
                 SnapshotReader::open(metadata)?
             }
         };
-        let chain_config = snapshot_reader.chain_config().clone();
+        let chain_config = snapshot_reader.chain_config();
 
         #[cfg(feature = "relayer")]
         let relayer_cfg = relayer_args.into_config();
@@ -301,7 +301,7 @@ impl Command {
         };
 
         let block_importer =
-            fuel_core::service::config::fuel_core_importer::Config::new(&chain_config);
+            fuel_core::service::config::fuel_core_importer::Config::new();
 
         let TxPoolArgs {
             tx_pool_ttl,
@@ -320,7 +320,6 @@ impl Command {
             tx_blacklist_messages,
             tx_blacklist_contracts,
         );
-        let block_gas_limit = chain_config.consensus_parameters.block_gas_limit();
 
         let config = Config {
             addr,
@@ -336,7 +335,6 @@ impl Command {
             txpool: TxPoolConfig::new(
                 tx_max_number,
                 tx_max_depth,
-                chain_config,
                 utxo_validation,
                 metrics,
                 tx_pool_ttl.into(),
@@ -344,10 +342,8 @@ impl Command {
                 blacklist,
             ),
             block_producer: ProducerConfig {
-                utxo_validation,
                 coinbase_recipient,
                 metrics,
-                block_gas_limit,
             },
             static_gas_price: min_gas_price,
             block_importer,

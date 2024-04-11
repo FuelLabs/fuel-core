@@ -5,9 +5,11 @@ use super::{
 };
 use crate::{
     fuel_core_graphql_api::{
-        api_service::TxPool,
+        api_service::{
+            ConsensusProvider,
+            TxPool,
+        },
         database::ReadView,
-        Config,
         IntoApiResult,
     },
     query::{
@@ -342,8 +344,10 @@ impl Transaction {
     }
 
     async fn input_asset_ids(&self, ctx: &Context<'_>) -> Option<Vec<AssetId>> {
-        let config = ctx.data_unchecked::<Config>();
-        let base_asset_id = config.consensus_parameters.base_asset_id();
+        let params = ctx
+            .data_unchecked::<ConsensusProvider>()
+            .latest_consensus_params();
+        let base_asset_id = params.base_asset_id();
         match &self.0 {
             fuel_tx::Transaction::Script(script) => Some(
                 script

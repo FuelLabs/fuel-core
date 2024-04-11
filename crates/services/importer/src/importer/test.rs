@@ -358,7 +358,7 @@ async fn commit_result_assert(
         .expect_storage_transaction()
         .return_once(|_| db_transaction);
     let expected_to_broadcast = sealed_block.clone();
-    let importer = Importer::new(Default::default(), underlying_db, (), ());
+    let importer = Importer::default_config(underlying_db, (), ());
     let uncommitted_result = UncommittedResult::new(
         ImportResult::new_from_local(sealed_block, vec![], vec![]),
         Default::default(),
@@ -387,7 +387,7 @@ async fn execute_and_commit_assert(
     verifier: MockBlockVerifier,
 ) -> Result<(), Error> {
     let expected_to_broadcast = sealed_block.clone();
-    let importer = Importer::new(Default::default(), underlying_db, executor, verifier);
+    let importer = Importer::default_config(underlying_db, executor, verifier);
 
     let mut imported_blocks = importer.subscribe();
     let result = importer.execute_and_commit(sealed_block).await;
@@ -408,7 +408,7 @@ async fn execute_and_commit_assert(
 
 #[tokio::test]
 async fn commit_result_fail_when_locked() {
-    let importer = Importer::new(Default::default(), MockDatabase::default(), (), ());
+    let importer = Importer::default_config(MockDatabase::default(), (), ());
     let uncommitted_result =
         UncommittedResult::new(ImportResult::default(), Default::default());
 
@@ -421,8 +421,7 @@ async fn commit_result_fail_when_locked() {
 
 #[tokio::test]
 async fn execute_and_commit_fail_when_locked() {
-    let importer = Importer::new(
-        Default::default(),
+    let importer = Importer::default_config(
         MockDatabase::default(),
         MockExecutor::default(),
         MockBlockVerifier::default(),
@@ -437,8 +436,7 @@ async fn execute_and_commit_fail_when_locked() {
 
 #[test]
 fn one_lock_at_the_same_time() {
-    let importer = Importer::new(
-        Default::default(),
+    let importer = Importer::default_config(
         MockDatabase::default(),
         MockExecutor::default(),
         MockBlockVerifier::default(),
@@ -534,8 +532,7 @@ where
     P: Fn() -> ExecutorResult<MockExecutionResult> + Send + 'static,
     V: Fn() -> anyhow::Result<()> + Send + 'static,
 {
-    let importer = Importer::new(
-        Default::default(),
+    let importer = Importer::default_config(
         MockDatabase::default(),
         executor(block_after_execution),
         verifier(verifier_result),
@@ -546,8 +543,7 @@ where
 
 #[test]
 fn verify_and_execute_allowed_when_locked() {
-    let importer = Importer::new(
-        Default::default(),
+    let importer = Importer::default_config(
         MockDatabase::default(),
         executor(ok(ex_result(13, 0))),
         verifier(ok(())),

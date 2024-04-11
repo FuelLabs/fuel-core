@@ -127,18 +127,35 @@ pub struct Importer<D, E, V> {
 }
 
 impl<D, E, V> Importer<D, E, V> {
-    pub fn new(config: Config, database: D, executor: E, verifier: V) -> Self {
+    pub fn new(
+        chain_id: ChainId,
+        config: Config,
+        database: D,
+        executor: E,
+        verifier: V,
+    ) -> Self {
         let (broadcast, _) = broadcast::channel(config.max_block_notify_buffer);
 
         Self {
             database: Mutex::new(database),
             executor: Arc::new(executor),
             verifier: Arc::new(verifier),
-            chain_id: config.chain_id,
+            chain_id,
             broadcast,
             prev_block_process_result: Default::default(),
             guard: tokio::sync::Semaphore::new(1),
         }
+    }
+
+    #[cfg(test)]
+    pub fn default_config(database: D, executor: E, verifier: V) -> Self {
+        Self::new(
+            Default::default(),
+            Default::default(),
+            database,
+            executor,
+            verifier,
+        )
     }
 
     pub fn subscribe(&self) -> broadcast::Receiver<SharedImportResult> {

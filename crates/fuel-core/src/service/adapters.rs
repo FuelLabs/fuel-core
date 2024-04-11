@@ -3,17 +3,20 @@ use crate::{
         database_description::relayer::Relayer,
         Database,
     },
-    service::sub_services::BlockProducerService,
+    service::sub_services::{
+        BlockProducerService,
+        TxPoolSharedState,
+    },
 };
 use fuel_core_consensus_module::{
     block_verifier::Verifier,
     RelayerConsensusConfig,
 };
 use fuel_core_services::stream::BoxStream;
-use fuel_core_txpool::service::SharedState as TxPoolSharedState;
 #[cfg(feature = "p2p")]
 use fuel_core_types::services::p2p::peer_reputation::AppScore;
 use fuel_core_types::{
+    fuel_tx::ConsensusParameters,
     fuel_types::BlockHeight,
     services::block_importer::SharedImportResult,
 };
@@ -34,6 +37,19 @@ pub mod sync;
 pub mod txpool;
 
 #[derive(Debug, Clone)]
+pub struct ConsensusParametersProvider {
+    consensus_parameters: Arc<ConsensusParameters>,
+}
+
+impl ConsensusParametersProvider {
+    pub fn new(consensus_parameters: ConsensusParameters) -> Self {
+        Self {
+            consensus_parameters: Arc::new(consensus_parameters),
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
 pub struct StaticGasPrice {
     pub gas_price: u64,
 }
@@ -51,26 +67,23 @@ pub struct PoAAdapter {
 
 #[derive(Clone)]
 pub struct TxPoolAdapter {
-    service: TxPoolSharedState<P2PAdapter, Database, StaticGasPrice>,
+    service: TxPoolSharedState,
 }
 
 impl TxPoolAdapter {
-    pub fn new(service: TxPoolSharedState<P2PAdapter, Database, StaticGasPrice>) -> Self {
+    pub fn new(service: TxPoolSharedState) -> Self {
         Self { service }
     }
 }
 
 #[derive(Clone)]
 pub struct TransactionsSource {
-    txpool: TxPoolSharedState<P2PAdapter, Database, StaticGasPrice>,
+    txpool: TxPoolSharedState,
     _block_height: BlockHeight,
 }
 
 impl TransactionsSource {
-    pub fn new(
-        txpool: TxPoolSharedState<P2PAdapter, Database, StaticGasPrice>,
-        block_height: BlockHeight,
-    ) -> Self {
+    pub fn new(txpool: TxPoolSharedState, block_height: BlockHeight) -> Self {
         Self {
             txpool,
             _block_height: block_height,

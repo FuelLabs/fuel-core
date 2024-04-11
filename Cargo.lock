@@ -3098,7 +3098,6 @@ version = "0.24.2"
 dependencies = [
  "anyhow",
  "derive_more",
- "fuel-core-chain-config",
  "fuel-core-metrics",
  "fuel-core-storage",
  "fuel-core-trace",
@@ -3213,6 +3212,7 @@ dependencies = [
  "fuel-core-storage",
  "fuel-core-trace",
  "fuel-core-types",
+ "mockall",
  "rand",
  "tokio",
  "tokio-rayon",
@@ -3358,7 +3358,6 @@ version = "0.24.2"
 dependencies = [
  "anyhow",
  "async-trait",
- "fuel-core-chain-config",
  "fuel-core-metrics",
  "fuel-core-services",
  "fuel-core-storage",

@@ -1,6 +1,8 @@
 use crate::{
     ports::{
         BlockImporter,
+        ConsensusParametersProvider,
+        GasPriceProvider as GasPriceProviderConstraint,
         PeerToPeer,
         TxPoolDb,
     },
@@ -8,14 +10,13 @@ use crate::{
     txpool::{
         check_single_tx,
         check_transactions,
-        GasPriceProvider as GasPriceProviderConstraint,
     },
     Config,
     Error as TxPoolError,
     TxInfo,
     TxPool,
 };
-
+use anyhow::anyhow;
 use fuel_core_services::{
     stream::BoxStream,
     RunnableService,
@@ -23,9 +24,9 @@ use fuel_core_services::{
     ServiceRunner,
     StateWatcher,
 };
+use fuel_core_storage::transactional::AtomicView;
 use fuel_core_types::{
     fuel_tx::{
-        ConsensusParameters,
         Transaction,
         TxId,
         UniqueIdentifier,
@@ -33,8 +34,10 @@ use fuel_core_types::{
     fuel_types::{
         BlockHeight,
         Bytes32,
+        ChainId,
     },
     services::{
+        block_importer::SharedImportResult,
         p2p::{
             GossipData,
             GossipsubMessageAcceptance,
@@ -50,10 +53,6 @@ use fuel_core_types::{
     },
     tai64::Tai64,
 };
-
-use anyhow::anyhow;
-use fuel_core_storage::transactional::AtomicView;
-use fuel_core_types::services::block_importer::SharedImportResult;
 use parking_lot::Mutex as ParkingMutex;
 use std::{
     sync::Arc,
@@ -73,7 +72,7 @@ use self::update_sender::{
 
 mod update_sender;
 
-pub type Service<P2P, DB, GP> = ServiceRunner<Task<P2P, DB, GP>>;
+pub type Service<P2P, DB, GP, CP> = ServiceRunner<Task<P2P, DB, GP, CP>>;
 
 #[derive(Clone)]
 pub struct TxStatusChange {
@@ -121,52 +120,56 @@ impl TxStatusChange {
     }
 }
 
-pub struct SharedState<P2P, ViewProvider, GasPriceProvider> {
+pub struct SharedState<P2P, ViewProvider, GasPriceProvider, ConsensusProvider> {
     tx_status_sender: TxStatusChange,
     txpool: Arc<ParkingMutex<TxPool<ViewProvider>>>,
     p2p: Arc<P2P>,
-    consensus_params: ConsensusParameters,
+    chain_id: ChainId,
+    utxo_validation: bool,
     current_height: Arc<ParkingMutex<BlockHeight>>,
-    config: Config,
+    consensus_parameters_provider: Arc<ConsensusProvider>,
     gas_price_provider: Arc<GasPriceProvider>,
 }
 
-impl<P2P, ViewProvider, GasPriceProvider> Clone
-    for SharedState<P2P, ViewProvider, GasPriceProvider>
+impl<P2P, ViewProvider, GasPriceProvider, ConsensusProvider> Clone
+    for SharedState<P2P, ViewProvider, GasPriceProvider, ConsensusProvider>
 {
     fn clone(&self) -> Self {
         Self {
             tx_status_sender: self.tx_status_sender.clone(),
             txpool: self.txpool.clone(),
             p2p: self.p2p.clone(),
-            consensus_params: self.consensus_params.clone(),
+            chain_id: self.chain_id,
+            utxo_validation: self.utxo_validation,
             current_height: self.current_height.clone(),
-            config: self.config.clone(),
+            consensus_parameters_provider: self.consensus_parameters_provider.clone(),
             gas_price_provider: self.gas_price_provider.clone(),
         }
     }
 }
 
-pub struct Task<P2P, ViewProvider, GasPriceProvider> {
+pub struct Task<P2P, ViewProvider, GasPriceProvider, ConsensusProvider> {
     gossiped_tx_stream: BoxStream<TransactionGossipData>,
     committed_block_stream: BoxStream<SharedImportResult>,
-    tx_pool_shared_state: SharedState<P2P, ViewProvider, GasPriceProvider>,
+    tx_pool_shared_state:
+        SharedState<P2P, ViewProvider, GasPriceProvider, ConsensusProvider>,
     ttl_timer: tokio::time::Interval,
 }
 
 #[async_trait::async_trait]
-impl<P2P, ViewProvider, View, GasPriceProvider> RunnableService
-    for Task<P2P, ViewProvider, GasPriceProvider>
+impl<P2P, ViewProvider, View, GasPriceProvider, ConsensusProvider> RunnableService
+    for Task<P2P, ViewProvider, GasPriceProvider, ConsensusProvider>
 where
     P2P: PeerToPeer<GossipedTransaction = TransactionGossipData>,
     ViewProvider: AtomicView<View = View>,
     View: TxPoolDb,
-    GasPriceProvider: GasPriceProviderConstraint + Send + Sync + Clone,
+    GasPriceProvider: GasPriceProviderConstraint + Send + Sync,
+    ConsensusProvider: ConsensusParametersProvider + Send + Sync,
 {
     const NAME: &'static str = "TxPool";
 
-    type SharedData = SharedState<P2P, ViewProvider, GasPriceProvider>;
-    type Task = Task<P2P, ViewProvider, GasPriceProvider>;
+    type SharedData = SharedState<P2P, ViewProvider, GasPriceProvider, ConsensusProvider>;
+    type Task = Task<P2P, ViewProvider, GasPriceProvider, ConsensusProvider>;
     type TaskParams = ();
 
     fn shared_data(&self) -> Self::SharedData {
@@ -184,13 +187,14 @@ where
 }
 
 #[async_trait::async_trait]
-impl<P2P, ViewProvider, View, GasPriceProvider> RunnableTask
-    for Task<P2P, ViewProvider, GasPriceProvider>
+impl<P2P, ViewProvider, View, GasPriceProvider, ConsensusProvider> RunnableTask
+    for Task<P2P, ViewProvider, GasPriceProvider, ConsensusProvider>
 where
     P2P: PeerToPeer<GossipedTransaction = TransactionGossipData>,
     ViewProvider: AtomicView<View = View>,
     View: TxPoolDb,
     GasPriceProvider: GasPriceProviderConstraint + Send + Sync,
+    ConsensusProvider: ConsensusParametersProvider + Send + Sync,
 {
     async fn run(&mut self, watcher: &mut StateWatcher) -> anyhow::Result<bool> {
         let should_continue;
@@ -232,11 +236,21 @@ where
 
             new_transaction = self.gossiped_tx_stream.next() => {
                 if let Some(GossipData { data: Some(tx), message_id, peer_id }) = new_transaction {
-                    let id = tx.id(&self.tx_pool_shared_state.consensus_params.chain_id());
+                    let id = tx.id(&self.tx_pool_shared_state.chain_id);
                     let current_height = *self.tx_pool_shared_state.current_height.lock();
+                    let params = self
+                        .tx_pool_shared_state
+                        .consensus_parameters_provider
+                        .latest_consensus_parameters();
 
                     // verify tx
-                    let checked_tx = check_single_tx(tx, current_height, &self.tx_pool_shared_state.config, &self.tx_pool_shared_state.gas_price_provider).await;
+                    let checked_tx = check_single_tx(
+                        tx,
+                        current_height,
+                        self.tx_pool_shared_state.utxo_validation,
+                        params.as_ref(),
+                        &self.tx_pool_shared_state.gas_price_provider
+                    ).await;
 
                     let acceptance = match checked_tx {
                         Ok(tx) => {
@@ -298,8 +312,8 @@ where
 //  Instead, `fuel-core` can create a `DatabaseWithTxPool` that aggregates `TxPool` and
 //  storage `Database` together. GraphQL will retrieve data from this `DatabaseWithTxPool` via
 //  `StorageInspect` trait.
-impl<P2P, ViewProvider, GasPriceProvider>
-    SharedState<P2P, ViewProvider, GasPriceProvider>
+impl<P2P, ViewProvider, GasPriceProvider, ConsensusProvider>
+    SharedState<P2P, ViewProvider, GasPriceProvider, ConsensusProvider>
 {
     pub fn pending_number(&self) -> usize {
         self.txpool.lock().pending_number()
@@ -365,13 +379,14 @@ impl<P2P, ViewProvider, GasPriceProvider>
     }
 }
 
-impl<P2P, ViewProvider, GasPriceProvider, View>
-    SharedState<P2P, ViewProvider, GasPriceProvider>
+impl<P2P, ViewProvider, GasPriceProvider, ConsensusProvider, View>
+    SharedState<P2P, ViewProvider, GasPriceProvider, ConsensusProvider>
 where
     P2P: PeerToPeer<GossipedTransaction = TransactionGossipData>,
     ViewProvider: AtomicView<View = View>,
     View: TxPoolDb,
     GasPriceProvider: GasPriceProviderConstraint,
+    ConsensusProvider: ConsensusParametersProvider,
 {
     #[tracing::instrument(name = "insert_submitted_txn", skip_all)]
     pub async fn insert(
@@ -380,11 +395,15 @@ where
     ) -> Vec<Result<InsertionResult, Error>> {
         // verify txs
         let current_height = *self.current_height.lock();
+        let params = self
+            .consensus_parameters_provider
+            .latest_consensus_parameters();
 
         let checked_txs = check_transactions(
             &txs,
             current_height,
-            &self.config,
+            self.utxo_validation,
+            params.as_ref(),
             &self.gas_price_provider,
         )
         .await;
@@ -463,27 +482,31 @@ pub enum TxStatusMessage {
     FailedStatus,
 }
 
-pub fn new_service<P2P, Importer, ViewProvider, GasPriceProvider>(
+pub fn new_service<P2P, Importer, ViewProvider, GasPriceProvider, ConsensusProvider>(
     config: Config,
     provider: ViewProvider,
     importer: Importer,
     p2p: P2P,
     current_height: BlockHeight,
     gas_price_provider: GasPriceProvider,
-) -> Service<P2P, ViewProvider, GasPriceProvider>
+    consensus_parameters_provider: ConsensusProvider,
+) -> Service<P2P, ViewProvider, GasPriceProvider, ConsensusProvider>
 where
     Importer: BlockImporter,
     P2P: PeerToPeer<GossipedTransaction = TransactionGossipData> + 'static,
     ViewProvider: AtomicView,
     ViewProvider::View: TxPoolDb,
-    GasPriceProvider: GasPriceProviderConstraint + Send + Sync + Clone,
+    GasPriceProvider: GasPriceProviderConstraint + Send + Sync,
+    ConsensusProvider: ConsensusParametersProvider + Send + Sync,
 {
     let p2p = Arc::new(p2p);
     let gossiped_tx_stream = p2p.gossiped_transaction_events();
     let committed_block_stream = importer.block_events();
     let mut ttl_timer = tokio::time::interval(config.transaction_ttl);
     ttl_timer.set_missed_tick_behavior(MissedTickBehavior::Skip);
-    let consensus_params = config.chain_config.consensus_parameters.clone();
+    let chain_id = consensus_parameters_provider
+        .latest_consensus_parameters()
+        .chain_id();
     let number_of_active_subscription = config.number_of_active_subscription;
     let txpool = Arc::new(ParkingMutex::new(TxPool::new(config.clone(), provider)));
     let task = Task {
@@ -500,9 +523,10 @@ where
             ),
             txpool,
             p2p,
-            consensus_params,
+            chain_id,
+            utxo_validation: config.utxo_validation,
             current_height: Arc::new(ParkingMutex::new(current_height)),
-            config,
+            consensus_parameters_provider: Arc::new(consensus_parameters_provider),
             gas_price_provider: Arc::new(gas_price_provider),
         },
         ttl_timer,

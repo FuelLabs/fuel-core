@@ -1,7 +1,7 @@
 use crate::{
     fuel_core_graphql_api::{
+        api_service::ConsensusProvider,
         database::ReadView,
-        Config as GraphQLConfig,
     },
     graphql_api::Config,
     query::{
@@ -29,10 +29,13 @@ use fuel_core_types::{
     fuel_tx,
     fuel_tx::GasCostsValues,
 };
-use std::ops::Deref;
+use std::{
+    ops::Deref,
+    sync::Arc,
+};
 
 pub struct ChainInfo;
-pub struct ConsensusParameters(fuel_tx::ConsensusParameters);
+pub struct ConsensusParameters(Arc<fuel_tx::ConsensusParameters>);
 pub struct TxParameters(fuel_tx::TxParameters);
 pub struct PredicateParameters(fuel_tx::PredicateParameters);
 pub struct ScriptParameters(fuel_tx::ScriptParameters);
@@ -121,7 +124,7 @@ impl Version {
 #[Object]
 impl ConsensusParameters {
     async fn version(&self) -> ConsensusParametersVersion {
-        match self.0 {
+        match self.0.as_ref() {
             fuel_tx::ConsensusParameters::V1(_) => {
                 ConsensusParametersVersion::V1(Version(1))
             }
@@ -129,67 +132,71 @@ impl ConsensusParameters {
     }
 
     async fn tx_params(&self, ctx: &Context<'_>) -> async_graphql::Result<TxParameters> {
-        let config = ctx.data_unchecked::<GraphQLConfig>();
+        let params = ctx
+            .data_unchecked::<ConsensusProvider>()
+            .latest_consensus_params();
 
-        Ok(TxParameters(
-            config.consensus_parameters.tx_params().to_owned(),
-        ))
+        Ok(TxParameters(params.tx_params().to_owned()))
     }
 
     async fn predicate_params(
         &self,
         ctx: &Context<'_>,
     ) -> async_graphql::Result<PredicateParameters> {
-        let config = ctx.data_unchecked::<GraphQLConfig>();
+        let params = ctx
+            .data_unchecked::<ConsensusProvider>()
+            .latest_consensus_params();
 
-        Ok(PredicateParameters(
-            config.consensus_parameters.predicate_params().to_owned(),
-        ))
+        Ok(PredicateParameters(params.predicate_params().to_owned()))
     }
 
     async fn script_params(
         &self,
         ctx: &Context<'_>,
     ) -> async_graphql::Result<ScriptParameters> {
-        let config = ctx.data_unchecked::<GraphQLConfig>();
+        let params = ctx
+            .data_unchecked::<ConsensusProvider>()
+            .latest_consensus_params();
 
-        Ok(ScriptParameters(
-            config.consensus_parameters.script_params().to_owned(),
-        ))
+        Ok(ScriptParameters(params.script_params().to_owned()))
     }
 
     async fn contract_params(
         &self,
         ctx: &Context<'_>,
     ) -> async_graphql::Result<ContractParameters> {
-        let config = ctx.data_unchecked::<GraphQLConfig>();
+        let params = ctx
+            .data_unchecked::<ConsensusProvider>()
+            .latest_consensus_params();
 
-        Ok(ContractParameters(
-            config.consensus_parameters.contract_params().to_owned(),
-        ))
+        Ok(ContractParameters(params.contract_params().to_owned()))
     }
 
     async fn fee_params(
         &self,
         ctx: &Context<'_>,
     ) -> async_graphql::Result<FeeParameters> {
-        let config = ctx.data_unchecked::<GraphQLConfig>();
+        let params = ctx
+            .data_unchecked::<ConsensusProvider>()
+            .latest_consensus_params();
 
-        Ok(FeeParameters(
-            config.consensus_parameters.fee_params().to_owned(),
-        ))
+        Ok(FeeParameters(params.fee_params().to_owned()))
     }
 
     async fn base_asset_id(&self, ctx: &Context<'_>) -> async_graphql::Result<AssetId> {
-        let config = ctx.data_unchecked::<GraphQLConfig>();
+        let params = ctx
+            .data_unchecked::<ConsensusProvider>()
+            .latest_consensus_params();
 
-        Ok(AssetId(*config.consensus_parameters.base_asset_id()))
+        Ok(AssetId(*params.base_asset_id()))
     }
 
     async fn block_gas_limit(&self, ctx: &Context<'_>) -> async_graphql::Result<U64> {
-        let config = ctx.data_unchecked::<GraphQLConfig>();
+        let params = ctx
+            .data_unchecked::<ConsensusProvider>()
+            .latest_consensus_params();
 
-        Ok(config.consensus_parameters.block_gas_limit().into())
+        Ok(params.block_gas_limit().into())
     }
 
     async fn chain_id(&self) -> U64 {
@@ -197,18 +204,22 @@ impl ConsensusParameters {
     }
 
     async fn gas_costs(&self, ctx: &Context<'_>) -> async_graphql::Result<GasCosts> {
-        let config = ctx.data_unchecked::<GraphQLConfig>();
+        let params = ctx
+            .data_unchecked::<ConsensusProvider>()
+            .latest_consensus_params();
 
-        Ok(GasCosts(config.consensus_parameters.gas_costs().clone()))
+        Ok(GasCosts(params.gas_costs().clone()))
     }
 
     async fn privileged_address(
         &self,
         ctx: &Context<'_>,
     ) -> async_graphql::Result<Address> {
-        let config = ctx.data_unchecked::<GraphQLConfig>();
+        let params = ctx
+            .data_unchecked::<ConsensusProvider>()
+            .latest_consensus_params();
 
-        Ok(Address(*config.consensus_parameters.privileged_address()))
+        Ok(Address(*params.privileged_address()))
     }
 }
 
@@ -822,15 +833,19 @@ impl ChainInfo {
         &self,
         ctx: &Context<'_>,
     ) -> async_graphql::Result<ConsensusParameters> {
-        let config = ctx.data_unchecked::<GraphQLConfig>();
+        let params = ctx
+            .data_unchecked::<ConsensusProvider>()
+            .latest_consensus_params();
 
-        Ok(ConsensusParameters(config.consensus_parameters.clone()))
+        Ok(ConsensusParameters(params))
     }
 
     async fn gas_costs(&self, ctx: &Context<'_>) -> async_graphql::Result<GasCosts> {
-        let config = ctx.data_unchecked::<GraphQLConfig>();
+        let params = ctx
+            .data_unchecked::<ConsensusProvider>()
+            .latest_consensus_params();
 
-        Ok(GasCosts(config.consensus_parameters.gas_costs().clone()))
+        Ok(GasCosts(params.gas_costs().clone()))
     }
 }
 

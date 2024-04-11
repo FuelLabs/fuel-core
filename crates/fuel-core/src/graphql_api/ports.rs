@@ -32,6 +32,7 @@ use fuel_core_types::{
         Message,
     },
     fuel_tx::{
+        ConsensusParameters,
         Salt,
         Transaction,
         TxId,
@@ -284,4 +285,9 @@ pub mod worker {
             status: TransactionStatus,
         );
     }
+}
+
+pub trait ConsensusProvider: Send + Sync {
+    /// Returns latest consensus parameters.
+    fn latest_consensus_params(&self) -> Arc<ConsensusParameters>;
 }

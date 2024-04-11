@@ -5,9 +5,9 @@ use crate::{
     },
     fuel_core_graphql_api::{
         database::ReadView,
-        Config as GraphQLConfig,
         IntoApiResult,
     },
+    graphql_api::api_service::ConsensusProvider,
     query::{
         asset_query::AssetSpendTarget,
         CoinQueryData,
@@ -93,8 +93,11 @@ impl MessageCoin {
     }
 
     async fn asset_id(&self, ctx: &Context<'_>) -> AssetId {
-        let config = ctx.data_unchecked::<GraphQLConfig>();
-        let base_asset_id = *config.consensus_parameters.base_asset_id();
+        let params = ctx
+            .data_unchecked::<ConsensusProvider>()
+            .latest_consensus_params();
+
+        let base_asset_id = *params.base_asset_id();
         base_asset_id.into()
     }
 
@@ -208,7 +211,9 @@ impl CoinQuery {
             ExcludeInput,
         >,
     ) -> async_graphql::Result<Vec<Vec<CoinType>>> {
-        let config = ctx.data_unchecked::<GraphQLConfig>();
+        let params = ctx
+            .data_unchecked::<ConsensusProvider>()
+            .latest_consensus_params();
 
         let owner: fuel_tx::Address = owner.0;
         let query_per_asset = query_per_asset
@@ -233,7 +238,7 @@ impl CoinQuery {
             utxos.chain(messages).collect()
         });
 
-        let base_asset_id = config.consensus_parameters.base_asset_id();
+        let base_asset_id = params.base_asset_id();
         let spend_query =
             SpendQuery::new(owner, &query_per_asset, excluded_ids, *base_asset_id)?;
 

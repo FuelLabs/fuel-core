@@ -198,10 +198,7 @@ impl TestSetupBuilder {
 
         let config = Config {
             utxo_validation: self.utxo_validation,
-            txpool: fuel_core_txpool::Config {
-                chain_config: chain_conf.clone(),
-                ..fuel_core_txpool::Config::default()
-            },
+            txpool: fuel_core_txpool::Config::default(),
             snapshot_reader: SnapshotReader::new_in_memory(chain_conf, state),
             block_production: self.trigger,
             static_gas_price: self.min_gas_price,
