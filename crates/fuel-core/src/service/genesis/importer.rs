@@ -38,6 +38,7 @@ use fuel_core_chain_config::{
     StateConfig,
     TableEntry,
 };
+use fuel_core_services::StateWatcher;
 use fuel_core_storage::{
     kv_store::StorageColumn,
     structured_storage::TableWithBlueprint,
@@ -56,7 +57,6 @@ use fuel_core_types::{
     fuel_types::BlockHeight,
 };
 
-use tokio_util::sync::CancellationToken;
 use tracing::{
     Level,
     Span,
@@ -74,11 +74,11 @@ impl SnapshotImporter {
     fn new(
         db: CombinedDatabase,
         snapshot_reader: SnapshotReader,
-        cancel_token: &CancellationToken,
+        watcher: StateWatcher,
     ) -> Self {
         Self {
             db,
-            task_manager: TaskManager::new(cancel_token),
+            task_manager: TaskManager::new(watcher),
             snapshot_reader,
             tracing_span: tracing::info_span!("snapshot_importer"),
             multi_progress_reporter: MultipleProgressReporter::new(),
@@ -88,11 +88,9 @@ impl SnapshotImporter {
     pub async fn import(
         db: CombinedDatabase,
         snapshot_reader: SnapshotReader,
-        cancel_token: &CancellationToken,
+        watcher: StateWatcher,
     ) -> anyhow::Result<bool> {
-        Self::new(db, snapshot_reader, cancel_token)
-            .run_workers()
-            .await
+        Self::new(db, snapshot_reader, watcher).run_workers().await
     }
 
     async fn run_workers(mut self) -> anyhow::Result<bool> {
@@ -131,7 +129,7 @@ impl SnapshotImporter {
 
         let progress_reporter = self
             .multi_progress_reporter
-            .register(ProgressReporter::new_tty_aware(num_groups));
+            .register(ProgressReporter::new_detect_output(num_groups));
 
         self.task_manager.spawn(move |token| {
             tokio_rayon::spawn(move || {
@@ -170,7 +168,7 @@ impl SnapshotImporter {
 
         let progress_reporter = self
             .multi_progress_reporter
-            .register(ProgressReporter::new_tty_aware(num_groups));
+            .register(ProgressReporter::new_detect_output(num_groups));
 
         self.task_manager.spawn(move |token| {
             tokio_rayon::spawn(move || {

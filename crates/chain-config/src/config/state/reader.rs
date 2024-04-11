@@ -1,6 +1,5 @@
 use std::fmt::Debug;
 
-use anyhow::anyhow;
 use fuel_core_storage::{
     structured_storage::TableWithBlueprint,
     Mappable,
@@ -77,7 +76,9 @@ where
                 let group = decoder.next()?.and_then(|byte_group| {
                     byte_group
                         .into_iter()
-                        .map(|group| postcard::from_bytes(&group).map_err(|e| anyhow!(e)))
+                        .map(|group| {
+                            postcard::from_bytes(&group).map_err(|e| anyhow::anyhow!(e))
+                        })
                         .collect()
                 });
                 Some(group)
@@ -87,8 +88,11 @@ where
 }
 
 #[cfg(not(feature = "parquet"))]
-impl<T> Iterator for GroupIter<T> {
-    type Item = GroupResult<T>;
+impl<T> Iterator for GroupIter<T>
+where
+    T: Mappable,
+{
+    type Item = anyhow::Result<Vec<TableEntry<T>>>;
 
     fn next(&mut self) -> Option<Self::Item> {
         match self {

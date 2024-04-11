@@ -11,6 +11,7 @@ use crate::{
 };
 use anyhow::bail;
 use fuel_core_chain_config::GenesisCommitment;
+use fuel_core_services::StateWatcher;
 use fuel_core_storage::{
     iter::IteratorOverTable,
     tables::{
@@ -55,18 +56,17 @@ mod importer;
 mod task_manager;
 
 pub use exporter::Exporter;
-use tokio_util::sync::CancellationToken;
 
 use self::importer::SnapshotImporter;
 
 /// Performs the importing of the genesis block from the snapshot.
 pub async fn execute_genesis_block(
-    cancel: CancellationToken,
+    watcher: StateWatcher,
     config: &Config,
     db: &CombinedDatabase,
 ) -> anyhow::Result<UncommittedImportResult<Changes>> {
     let imported =
-        SnapshotImporter::import(db.clone(), config.snapshot_reader.clone(), &cancel)
+        SnapshotImporter::import(db.clone(), config.snapshot_reader.clone(), watcher)
             .await?;
 
     if !imported {
@@ -144,7 +144,7 @@ pub async fn execute_and_commit_genesis_block(
     config: &Config,
     db: &CombinedDatabase,
 ) -> anyhow::Result<()> {
-    let result = execute_genesis_block(CancellationToken::new(), config, db).await?;
+    let result = execute_genesis_block(StateWatcher::default(), config, db).await?;
     let importer = fuel_core_importer::Importer::new(
         config
             .snapshot_reader

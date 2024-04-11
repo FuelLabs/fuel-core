@@ -14,8 +14,6 @@ use fuel_core_services::{
 };
 use fuel_core_storage::IsNotFound;
 use std::net::SocketAddr;
-use tokio::sync::watch::error::RecvError;
-use tokio_util::sync::CancellationToken;
 
 use crate::service::sub_services::TxPoolSharedState;
 pub use config::{
@@ -226,24 +224,8 @@ impl RunnableService for Task {
         // check if chain is initialized
         if let Err(err) = self.shared.database.on_chain().get_genesis() {
             if err.is_not_found() {
-                let cancel = CancellationToken::new();
-                {
-                    let cancel = cancel.clone();
-                    let mut watcher = watcher.clone();
-                    tokio::spawn(async move {
-                        loop {
-                            let state = watcher.borrow().clone();
-                            if let State::Stopping = state {
-                                cancel.cancel();
-                                break;
-                            }
-                            watcher.changed().await?;
-                        }
-                        Result::<(), RecvError>::Ok(())
-                    });
-                }
                 let result = genesis::execute_genesis_block(
-                    cancel,
+                    watcher.clone(),
                     &self.shared.config,
                     &self.shared.database,
                 )

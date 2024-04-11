@@ -1,5 +1,3 @@
-use std::time::Duration;
-
 use fuel_core_chain_config::TableEntry;
 use fuel_core_storage::{
     kv_store::StorageColumn,
@@ -13,15 +11,17 @@ use fuel_core_storage::{
     StorageInspect,
     StorageMutate,
 };
-use tokio_util::sync::CancellationToken;
 
-use crate::database::{
-    database_description::DatabaseDescription,
-    genesis_progress::{
-        GenesisMetadata,
-        GenesisProgressMutate,
+use crate::{
+    database::{
+        database_description::DatabaseDescription,
+        genesis_progress::{
+            GenesisMetadata,
+            GenesisProgressMutate,
+        },
+        Database,
     },
-    Database,
+    service::genesis::task_manager::CancellationToken,
 };
 
 use super::progress::ProgressReporter;
@@ -115,7 +115,7 @@ where
             .enumerate()
             .map(|(index, group)| (index.saturating_add(self.skip), group))
             .try_for_each(move |(index, group)| {
-                std::thread::sleep(Duration::from_millis(100));
+                // std::thread::sleep(Duration::from_millis(100));
                 let group = group?;
                 let mut tx = db.write_transaction();
                 self.handler.process(group, &mut tx)?;
@@ -140,9 +140,12 @@ where
 mod tests {
     use crate::{
         database::genesis_progress::GenesisProgressInspect,
-        service::genesis::importer::{
-            import_task::ImportTask,
-            progress::ProgressReporter,
+        service::genesis::{
+            importer::{
+                import_task::ImportTask,
+                progress::ProgressReporter,
+            },
+            task_manager::CancellationToken,
         },
     };
     use std::sync::{
@@ -194,8 +197,6 @@ mod tests {
         rngs::StdRng,
         SeedableRng,
     };
-
-    use tokio_util::sync::CancellationToken;
 
     use crate::{
         combined_database::CombinedDatabase,
@@ -284,7 +285,7 @@ mod tests {
 
         let mut called_with = vec![];
         let runner = ImportTask::new(
-            CancellationToken::new(),
+            CancellationToken::default(),
             TestHandler::new(|group, _| {
                 called_with.push(group);
                 Ok(())
@@ -314,9 +315,8 @@ mod tests {
             0,
         )
         .unwrap();
-
         let runner = ImportTask::new(
-            CancellationToken::new(),
+            CancellationToken::default(),
             TestHandler::new(|element, _| {
                 called_with.push(element);
                 Ok(())
@@ -341,7 +341,7 @@ mod tests {
         let utxo_id = UtxoId::new(Default::default(), 0);
 
         let runner = ImportTask::new(
-            CancellationToken::new(),
+            CancellationToken::default(),
             TestHandler::new(|_, tx| {
                 insert_a_coin(tx, &utxo_id);
 
@@ -389,7 +389,7 @@ mod tests {
         let utxo_id = UtxoId::new(Default::default(), 0);
 
         let runner = ImportTask::new(
-            CancellationToken::new(),
+            CancellationToken::default(),
             TestHandler::new(|_, tx| {
                 insert_a_coin(tx, &utxo_id);
                 bail!("Some error")
@@ -411,7 +411,7 @@ mod tests {
         // given
         let groups = TestData::new(1);
         let runner = ImportTask::new(
-            CancellationToken::new(),
+            CancellationToken::default(),
             TestHandler::new(|_, _| bail!("Some error")),
             groups.as_ok_groups(),
             Database::default(),
@@ -430,7 +430,7 @@ mod tests {
         // given
         let groups = [Err(anyhow!("Some error"))];
         let runner = ImportTask::new(
-            CancellationToken::new(),
+            CancellationToken::default(),
             TestHandler::new(|_, _| Ok(())),
             groups,
             Database::default(),
@@ -450,7 +450,7 @@ mod tests {
         let data = TestData::new(2);
         let db = Database::default();
         let runner = ImportTask::new(
-            CancellationToken::new(),
+            CancellationToken::default(),
             TestHandler::new(|_, _| Ok(())),
             data.as_ok_groups(),
             db.clone(),
@@ -473,15 +473,14 @@ mod tests {
     #[tokio::test]
     async fn processing_stops_when_cancelled() {
         // given
-        let cancel_token = CancellationToken::new();
-
         let (tx, rx) = std::sync::mpsc::channel();
 
         let read_groups = Arc::new(Mutex::new(vec![]));
+        let cancel_token = tokio_util::sync::CancellationToken::new();
         let runner = {
             let read_groups = Arc::clone(&read_groups);
             ImportTask::new(
-                cancel_token.clone(),
+                cancel_token.clone().into(),
                 TestHandler::new(move |el, _| {
                     read_groups.lock().unwrap().push(el);
                     Ok(())
@@ -576,7 +575,7 @@ mod tests {
         // given
         let groups = TestData::new(1);
         let runner = ImportTask::new(
-            CancellationToken::new(),
+            CancellationToken::default(),
             TestHandler::new(|_, _| Ok(())),
             groups.as_ok_groups(),
             Database::new(Arc::new(BrokenTransactions::new())),

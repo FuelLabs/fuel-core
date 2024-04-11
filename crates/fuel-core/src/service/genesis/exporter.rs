@@ -18,6 +18,7 @@ use fuel_core_chain_config::{
     StateConfigBuilder,
     TableEntry,
 };
+use fuel_core_services::StateWatcher;
 use fuel_core_storage::{
     blueprint::BlueprintInspect,
     iter::IterDirection,
@@ -34,8 +35,6 @@ use fuel_core_storage::{
 };
 use fuel_core_types::fuel_types::ContractId;
 use itertools::Itertools;
-
-use tokio_util::sync::CancellationToken;
 
 use super::task_manager::TaskManager;
 
@@ -62,7 +61,7 @@ where
             prev_chain_config,
             writer,
             group_size,
-            task_manager: TaskManager::new(&CancellationToken::new()),
+            task_manager: TaskManager::new(StateWatcher::default()),
         }
     }
 

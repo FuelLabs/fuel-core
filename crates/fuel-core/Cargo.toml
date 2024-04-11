@@ -88,6 +88,7 @@ test-helpers = [
   "fuel-core-storage/test-helpers",
   "fuel-core-chain-config/test-helpers",
   "fuel-core-txpool/test-helpers",
+  "fuel-core-services/test-helpers",
 ]
 # features to enable in production, but increase build times
 rocksdb-production = ["rocksdb", "rocksdb/jemalloc"]

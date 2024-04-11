@@ -45,8 +45,8 @@ impl ProgressReporter {
         ProgressReporter { bar }
     }
 
-    pub fn new_tty_aware(max: usize) -> Self {
-        let target = if std::io::stderr().is_terminal() {
+    pub fn new_detect_output(max: usize) -> Self {
+        let target = if std::io::stderr().is_terminal() && !cfg!(test) {
             Target::Cli
         } else {
             Target::Logs
