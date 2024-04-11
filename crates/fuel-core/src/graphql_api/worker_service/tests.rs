@@ -36,8 +36,7 @@ async fn run__relayed_transaction_events_are_added_to_storage() {
     let block_height = 8.into();
     let failure = "blah blah blah".to_string();
     let database = Database::in_memory();
-    let (_sender, receiver) = tokio::sync::watch::channel(State::Started);
-    let mut state_watcher = receiver.into();
+    let state_watcher = StateWatcher::started();
 
     // given
     let event = Event::ForcedTransactionFailed {
