@@ -107,13 +107,12 @@ where
         let result: anyhow::Result<_> = self
             .groups
             .into_iter()
+            .enumerate()
             .skip(self.skip)
             .take_while(|_| {
                 is_cancelled = self.cancel_token.is_cancelled();
                 !is_cancelled
             })
-            .enumerate()
-            .map(|(index, group)| (index.saturating_add(self.skip), group))
             .try_for_each(|(index, group)| {
                 let group = group?;
                 let mut tx = db.write_transaction();
