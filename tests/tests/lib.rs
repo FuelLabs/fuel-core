@@ -29,5 +29,6 @@ mod tx;
 #[cfg(feature = "p2p")]
 mod tx_gossip;
 mod vm_storage;
+mod regenesis;
 
 fuel_core_trace::enable_tracing!();
