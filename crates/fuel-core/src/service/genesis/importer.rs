@@ -125,11 +125,9 @@ impl SnapshotImporter {
         let block_height = self.snapshot_reader.block_height();
         let da_block_height = self.snapshot_reader.da_block_height();
         let db = self.db.on_chain().clone();
-        let span = self.create_tracing_span::<T>();
 
-        let progress_reporter = self
-            .multi_progress_reporter
-            .register(ProgressReporter::new_detect_output(num_groups));
+        let span = self.create_tracing_span::<T>();
+        let progress_reporter = self.progress_reporter(num_groups);
 
         self.task_manager.spawn(move |token| {
             tokio_rayon::spawn(move || {
@@ -166,9 +164,7 @@ impl SnapshotImporter {
         let db = self.db.off_chain().clone();
         let span = self.create_tracing_span::<TableBeingWritten>();
 
-        let progress_reporter = self
-            .multi_progress_reporter
-            .register(ProgressReporter::new_detect_output(num_groups));
+        let progress_reporter = self.progress_reporter(num_groups);
 
         self.task_manager.spawn(move |token| {
             tokio_rayon::spawn(move || {
@@ -185,6 +181,11 @@ impl SnapshotImporter {
         });
 
         Ok(())
+    }
+
+    fn progress_reporter(&self, num_groups: usize) -> ProgressReporter {
+        self.multi_progress_reporter
+            .register(ProgressReporter::new_detect_output(num_groups))
     }
 
     fn create_tracing_span<T: TableWithBlueprint>(&self) -> Span {
