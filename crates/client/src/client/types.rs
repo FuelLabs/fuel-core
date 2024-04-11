@@ -175,7 +175,6 @@ impl TryFrom<OpaqueTransaction> for TransactionResponse {
 pub enum RelayedTransactionStatus {
     Failed {
         block_height: BlockHeight,
-        block_time: Tai64,
         failure: String,
     },
 }
@@ -188,7 +187,6 @@ impl TryFrom<SchemaRelayedTransactionStatus> for RelayedTransactionStatus {
             SchemaRelayedTransactionStatus::Failed(s) => {
                 RelayedTransactionStatus::Failed {
                     block_height: s.block_height.into(),
-                    block_time: s.block_time.0,
                     failure: s.failure,
                 }
             }

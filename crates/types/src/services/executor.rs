@@ -34,7 +34,6 @@ use crate::{
     },
     services::Uncommitted,
 };
-use tai64::Tai64;
 
 /// The alias for executor result.
 pub type Result<T> = core::result::Result<T, Error>;
@@ -75,8 +74,6 @@ pub enum Event {
         id: RelayedTransactionId,
         /// The height of the block that processed this transaction
         block_height: BlockHeight,
-        /// The time of the block that processed this transaction
-        block_time: Tai64,
         /// The actual failure reason for why the forced transaction was not included
         failure: String,
     },

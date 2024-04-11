@@ -2,7 +2,6 @@ use crate::{
     fuel_core_graphql_api::database::ReadView,
     schema::scalars::{
         RelayedTransactionId,
-        Tai64Timestamp,
         U32,
     },
 };
@@ -14,7 +13,6 @@ use async_graphql::{
 use fuel_core_types::{
     entities::relayer::transaction::RelayedTransactionStatus as FuelRelayedTransactionStatus,
     fuel_types::BlockHeight,
-    tai64::Tai64,
 };
 
 #[derive(Default)]
@@ -42,7 +40,6 @@ pub enum RelayedTransactionStatus {
 #[derive(Debug)]
 pub struct RelayedTransactionFailed {
     pub block_height: BlockHeight,
-    pub block_time: Tai64,
     pub failure: String,
 }
 
@@ -51,10 +48,6 @@ impl RelayedTransactionFailed {
     async fn block_height(&self) -> U32 {
         let as_u32: u32 = self.block_height.into();
         as_u32.into()
-    }
-
-    async fn block_time(&self) -> Tai64Timestamp {
-        self.block_time.into()
     }
 
     async fn failure(&self) -> String {
@@ -67,11 +60,9 @@ impl From<FuelRelayedTransactionStatus> for RelayedTransactionStatus {
         match status {
             FuelRelayedTransactionStatus::Failed {
                 block_height,
-                block_time,
                 failure,
             } => RelayedTransactionStatus::Failed(RelayedTransactionFailed {
                 block_height,
-                block_time,
                 failure,
             }),
         }

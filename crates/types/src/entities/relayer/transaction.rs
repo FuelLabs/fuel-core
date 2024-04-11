@@ -9,7 +9,6 @@ use crate::{
         Nonce,
     },
 };
-use tai64::Tai64;
 
 /// Transaction sent from the DA layer to fuel by the relayer
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -158,8 +157,6 @@ pub enum RelayedTransactionStatus {
     Failed {
         /// The height of the block that processed this transaction
         block_height: BlockHeight,
-        /// The time of the block that processed this transaction
-        block_time: Tai64,
         /// The actual failure reason for why the forced transaction was not included
         failure: String,
     },

@@ -905,7 +905,6 @@ enum ReceiptType {
 
 type RelayedTransactionFailed {
 	blockHeight: U32!
-	blockTime: Tai64Timestamp!
 	failure: String!
 }
 

@@ -526,7 +526,6 @@ where
                             ExecutorEvent::ForcedTransactionFailed {
                                 id,
                                 block_height,
-                                block_time: *block.header.time(),
                                 failure: ForcedTransactionFailure::ExecutionError(*err)
                                     .to_string(),
                             },
@@ -698,7 +697,6 @@ where
                                     ExecutorEvent::ForcedTransactionFailed {
                                         id,
                                         block_height,
-                                        block_time: header.consensus.time,
                                         failure: err.to_string(),
                                     },
                                 );

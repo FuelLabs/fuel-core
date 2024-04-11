@@ -1,7 +1,6 @@
 use crate::client::schema::{
     schema,
     RelayedTransactionId,
-    Tai64Timestamp,
     U32,
 };
 
@@ -36,6 +35,5 @@ pub enum RelayedTransactionStatus {
 #[cynic(schema_path = "./assets/schema.sdl")]
 pub struct RelayedTransactionFailed {
     pub block_height: U32,
-    pub block_time: Tai64Timestamp,
     pub failure: String,
 }

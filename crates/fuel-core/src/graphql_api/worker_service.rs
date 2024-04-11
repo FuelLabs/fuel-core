@@ -175,12 +175,10 @@ where
             Event::ForcedTransactionFailed {
                 id,
                 block_height,
-                block_time,
                 failure,
             } => {
                 let status = RelayedTransactionStatus::Failed {
                     block_height: *block_height,
-                    block_time: *block_time,
                     failure: failure.clone(),
                 };
 
