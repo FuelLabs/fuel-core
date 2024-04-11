@@ -29,7 +29,7 @@ impl ProgressReporter {
     pub fn new(target: Target, max: usize) -> Self {
         let max = u64::try_from(max).unwrap_or(u64::MAX);
         // Bars always hidden. Will be printed only if added to a `MultipleProgressReporter` that
-        // prints to stderr. This removes the flicker double rendering (once when the progress bar
+        // prints to stderr. This removes flicker from double rendering (once when the progress bar
         // is constructed and again when added to the `MultipleProgressReporter`)
         let bar = ProgressBar::with_draw_target(Some(max), ProgressDrawTarget::hidden());
         if let Target::Cli(message) = target {
