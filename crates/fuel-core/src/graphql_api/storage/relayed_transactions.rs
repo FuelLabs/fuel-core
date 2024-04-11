@@ -53,17 +53,13 @@ impl AddTable<RelayedTransactionStatuses> for StateConfigBuilder {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use fuel_core_types::{
-        fuel_tx::Bytes32,
-        tai64::Tai64,
-    };
+    use fuel_core_types::fuel_tx::Bytes32;
 
     fuel_core_storage::basic_storage_tests!(
         RelayedTransactionStatuses,
         <RelayedTransactionStatuses as Mappable>::Key::from(Bytes32::default()),
         RelayedTransactionStatus::Failed {
             block_height: 0.into(),
-            block_time: Tai64::UNIX_EPOCH,
             failure: "Some reason".to_string(),
         }
     );

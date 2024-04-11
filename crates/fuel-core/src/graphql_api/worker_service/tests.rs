@@ -14,7 +14,6 @@ use fuel_core_types::{
     fuel_tx::Bytes32,
     fuel_types::BlockHeight,
     services::txpool::TransactionStatus,
-    tai64::Tai64,
 };
 use std::sync::Arc;
 
@@ -35,7 +34,6 @@ impl ports::worker::TxPool for MockTxPool {
 async fn run__relayed_transaction_events_are_added_to_storage() {
     let tx_id: Bytes32 = [1; 32].into();
     let block_height = 8.into();
-    let block_time = Tai64(456);
     let failure = "blah blah blah".to_string();
     let database = Database::in_memory();
     let (_sender, receiver) = tokio::sync::watch::channel(State::Started);
@@ -45,7 +43,6 @@ async fn run__relayed_transaction_events_are_added_to_storage() {
     let event = Event::ForcedTransactionFailed {
         id: tx_id.into(),
         block_height,
-        block_time,
         failure: failure.clone(),
     };
     let block_importer = block_importer_for_event(event);
@@ -59,7 +56,6 @@ async fn run__relayed_transaction_events_are_added_to_storage() {
     // then
     let expected = RelayedTransactionStatus::Failed {
         block_height,
-        block_time,
         failure,
     };
     let storage = database.storage_as_ref::<RelayedTransactionStatuses>();

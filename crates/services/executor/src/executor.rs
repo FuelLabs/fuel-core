@@ -48,7 +48,6 @@ use fuel_core_types::{
             CompressedCoinV1,
         },
         contract::ContractUtxoInfo,
-        relayer::transaction::RelayedTransactionId,
         RelayedTransaction,
     },
     fuel_asm::{
@@ -519,19 +518,6 @@ where
                 );
 
                 let tx = match result {
-                    Err(ExecutorError::RelayedTransactionFailed(id, err)) => {
-                        // if it was a relayed tx that failed, we need to record the reason
-                        // and all nodes should process this event the same way
-                        execution_data.events.push(
-                            ExecutorEvent::ForcedTransactionFailed {
-                                id,
-                                block_height,
-                                failure: ForcedTransactionFailure::ExecutionError(*err)
-                                    .to_string(),
-                            },
-                        );
-                        return Ok(());
-                    }
                     Err(err) => {
                         return match execution_kind {
                             ExecutionKind::Production => {
@@ -568,6 +554,7 @@ where
         let relayed_tx_iter = forced_transactions.into_iter();
         for transaction in relayed_tx_iter {
             const RELAYED_GAS_PRICE: Word = 0;
+            let transaction = MaybeCheckedTransaction::CheckedTransaction(transaction);
             execute_transaction(&mut *execution_data, transaction, RELAYED_GAS_PRICE)?;
         }
 
@@ -639,7 +626,7 @@ where
         &mut self,
         header: &PartialBlockHeader,
         execution_data: &mut ExecutionData,
-    ) -> ExecutorResult<Vec<MaybeCheckedTransaction>> {
+    ) -> ExecutorResult<Vec<CheckedTransaction>> {
         let block_height = *header.height();
         let prev_block_height = block_height
             .pred()
@@ -717,7 +704,7 @@ where
         relayed_tx: RelayedTransaction,
         header: &PartialBlockHeader,
         consensus_params: &ConsensusParameters,
-    ) -> Result<MaybeCheckedTransaction, ForcedTransactionFailure> {
+    ) -> Result<CheckedTransaction, ForcedTransactionFailure> {
         let parsed_tx = Transaction::from_bytes(relayed_tx.serialized_transaction())
             .map_err(|_| ForcedTransactionFailure::CodecError)?;
 
@@ -740,10 +727,7 @@ where
             }
         }
 
-        Ok(MaybeCheckedTransaction::RelayedCheckedTransaction(
-            relayed_tx.id(),
-            CheckedTransaction::from(checked_tx),
-        ))
+        Ok(CheckedTransaction::from(checked_tx))
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -774,19 +758,14 @@ where
         }
 
         let block_height = *header.height();
-        let mut relayed_tx: Option<RelayedTransactionId> = None;
         let checked_tx = match tx {
             MaybeCheckedTransaction::Transaction(tx) => tx
                 .into_checked_basic(block_height, &self.consensus_params)?
                 .into(),
             MaybeCheckedTransaction::CheckedTransaction(checked_tx) => checked_tx,
-            MaybeCheckedTransaction::RelayedCheckedTransaction(id, checked_tx) => {
-                relayed_tx = Some(id);
-                checked_tx
-            }
         };
 
-        let mut res = match checked_tx {
+        let res = match checked_tx {
             CheckedTransaction::Script(script) => self.execute_create_or_script(
                 script,
                 header,
@@ -816,12 +795,6 @@ where
             ),
         };
 
-        // if it's a relayed tx, wrap the error for proper handling
-        if let Some(id) = &relayed_tx {
-            res = res.map_err(|err| {
-                ExecutorError::RelayedTransactionFailed(id.clone(), Box::new(err))
-            });
-        }
         res
     }
 
