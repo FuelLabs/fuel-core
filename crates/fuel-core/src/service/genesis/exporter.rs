@@ -18,7 +18,7 @@ use fuel_core_chain_config::{
     StateConfigBuilder,
     TableEntry,
 };
-use fuel_core_services::StateWatcher;
+use fuel_core_services::State;
 use fuel_core_storage::{
     blueprint::BlueprintInspect,
     iter::IterDirection,
@@ -35,6 +35,7 @@ use fuel_core_storage::{
 };
 use fuel_core_types::fuel_types::ContractId;
 use itertools::Itertools;
+use tokio::sync::watch;
 
 use super::task_manager::TaskManager;
 
@@ -56,12 +57,13 @@ where
         writer: Fun,
         group_size: usize,
     ) -> Self {
+        let (_, receiver) = watch::channel(State::Started);
         Self {
             db,
             prev_chain_config,
             writer,
             group_size,
-            task_manager: TaskManager::new(StateWatcher::default()),
+            task_manager: TaskManager::new(receiver.into()),
         }
     }
 

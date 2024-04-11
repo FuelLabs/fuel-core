@@ -13,12 +13,14 @@ pub struct TaskManager<T> {
     cancel: CancellationToken,
 }
 
-#[derive(Default, Clone)]
+#[cfg_attr(feature = "test-helpers", derive(Default))]
+#[derive(Clone)]
 pub struct CancellationToken {
     task_cancellator: tokio_util::sync::CancellationToken,
     state_watcher: StateWatcher,
 }
 
+#[cfg(feature = "test-helpers")]
 impl From<tokio_util::sync::CancellationToken> for CancellationToken {
     fn from(token: tokio_util::sync::CancellationToken) -> Self {
         Self {
