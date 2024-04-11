@@ -645,6 +645,8 @@ mod test {
             executor::Executor,
             WASM_BYTECODE,
         };
+        use fuel_core_storage::tables::UploadedBytecodes;
+        use fuel_core_types::fuel_vm::UploadedBytecode;
 
         #[test]
         fn can_validate_block__native_strategy() {
@@ -719,10 +721,18 @@ mod test {
         fn storage_with_state_transition(
             next_version: StateTransitionBytecodeVersion,
         ) -> Storage {
+            const BYTECODE_ROOT: Bytes32 = Bytes32::zeroed();
+
             let mut storage = storage();
             let mut tx = storage.write_transaction();
+            tx.storage_as_mut::<UploadedBytecodes>()
+                .insert(
+                    &BYTECODE_ROOT,
+                    &UploadedBytecode::Completed(WASM_BYTECODE.to_vec()),
+                )
+                .unwrap();
             tx.storage_as_mut::<StateTransitionBytecodeVersions>()
-                .insert(&next_version, WASM_BYTECODE)
+                .insert(&next_version, &BYTECODE_ROOT)
                 .unwrap();
             tx.commit().unwrap();
 

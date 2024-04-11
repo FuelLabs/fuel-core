@@ -696,8 +696,8 @@ where
         };
 
         match checked_tx {
-            CheckedTransaction::Script(script) => self.execute_create_or_script(
-                script,
+            CheckedTransaction::Script(tx) => self.execute_chargeable_transaction(
+                tx,
                 header,
                 coinbase_contract_id,
                 gas_price,
@@ -705,8 +705,8 @@ where
                 tx_st_transaction,
                 execution_kind,
             ),
-            CheckedTransaction::Create(create) => self.execute_create_or_script(
-                create,
+            CheckedTransaction::Create(tx) => self.execute_chargeable_transaction(
+                tx,
                 header,
                 coinbase_contract_id,
                 gas_price,
@@ -716,6 +716,24 @@ where
             ),
             CheckedTransaction::Mint(mint) => self.execute_mint(
                 mint,
+                header,
+                coinbase_contract_id,
+                gas_price,
+                execution_data,
+                tx_st_transaction,
+                execution_kind,
+            ),
+            CheckedTransaction::Upgrade(tx) => self.execute_chargeable_transaction(
+                tx,
+                header,
+                coinbase_contract_id,
+                gas_price,
+                execution_data,
+                tx_st_transaction,
+                execution_kind,
+            ),
+            CheckedTransaction::Upload(tx) => self.execute_chargeable_transaction(
+                tx,
                 header,
                 coinbase_contract_id,
                 gas_price,
@@ -818,6 +836,7 @@ where
             let mut vm_db = VmStorage::new(
                 &mut sub_block_db_commit,
                 &header.consensus,
+                &header.application,
                 coinbase_contract_id,
             );
 
@@ -883,7 +902,7 @@ where
     }
 
     #[allow(clippy::too_many_arguments)]
-    fn execute_create_or_script<Tx, T>(
+    fn execute_chargeable_transaction<Tx, T>(
         &self,
         mut checked_tx: Checked<Tx>,
         header: &PartialBlockHeader,
@@ -942,6 +961,7 @@ where
         let vm_db = VmStorage::new(
             &mut sub_block_db_commit,
             &header.consensus,
+            &header.application,
             coinbase_contract_id,
         );
 
@@ -1498,7 +1518,7 @@ where
                     backtrace.contract(),
                     backtrace.registers(),
                     backtrace.call_stack(),
-                    hex::encode(&backtrace.memory()[..sp]), // print stack
+                    hex::encode(backtrace.memory().read(0usize, sp).expect("`SP` always within stack")), // print stack
                 );
             }
         }

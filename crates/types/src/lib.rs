@@ -57,6 +57,7 @@ pub mod fuel_vm {
         state,
         storage::ContractsAssetKey,
         storage::ContractsStateKey,
+        storage::UploadedBytecode,
         util,
     };
 }

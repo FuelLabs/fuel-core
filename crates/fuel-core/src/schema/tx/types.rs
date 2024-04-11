@@ -34,6 +34,7 @@ use crate::{
         tx::{
             input,
             output,
+            upgrade_purpose::UpgradePurpose,
         },
     },
 };
@@ -48,6 +49,7 @@ use fuel_core_types::{
     fuel_tx::{
         self,
         field::{
+            BytecodeRoot,
             BytecodeWitnessIndex,
             InputContract,
             Inputs,
@@ -58,13 +60,17 @@ use fuel_core_types::{
             OutputContract,
             Outputs,
             Policies as PoliciesField,
+            ProofSet,
             ReceiptsRoot,
             Salt as SaltField,
             Script as ScriptField,
             ScriptData,
             ScriptGasLimit,
             StorageSlots,
+            SubsectionIndex,
+            SubsectionsNumber,
             TxPointer as TxPointerField,
+            UpgradePurpose as UpgradePurposeField,
             Witnesses,
         },
         policies::PolicyType,
@@ -349,19 +355,27 @@ impl Transaction {
             .latest_consensus_params();
         let base_asset_id = params.base_asset_id();
         match &self.0 {
-            fuel_tx::Transaction::Script(script) => Some(
-                script
-                    .input_asset_ids(base_asset_id)
+            fuel_tx::Transaction::Script(tx) => Some(
+                tx.input_asset_ids(base_asset_id)
                     .map(|c| AssetId(*c))
                     .collect(),
             ),
-            fuel_tx::Transaction::Create(create) => Some(
-                create
-                    .input_asset_ids(base_asset_id)
+            fuel_tx::Transaction::Create(tx) => Some(
+                tx.input_asset_ids(base_asset_id)
                     .map(|c| AssetId(*c))
                     .collect(),
             ),
             fuel_tx::Transaction::Mint(_) => None,
+            fuel_tx::Transaction::Upgrade(tx) => Some(
+                tx.input_asset_ids(base_asset_id)
+                    .map(|c| AssetId(*c))
+                    .collect(),
+            ),
+            fuel_tx::Transaction::Upload(tx) => Some(
+                tx.input_asset_ids(base_asset_id)
+                    .map(|c| AssetId(*c))
+                    .collect(),
+            ),
         }
     }
 
@@ -376,21 +390,32 @@ impl Transaction {
             fuel_tx::Transaction::Mint(mint) => {
                 Some(vec![mint.input_contract().contract_id.into()])
             }
+            fuel_tx::Transaction::Upgrade(tx) => {
+                Some(tx.input_contracts().map(|v| (*v).into()).collect())
+            }
+            fuel_tx::Transaction::Upload(tx) => {
+                Some(tx.input_contracts().map(|v| (*v).into()).collect())
+            }
         }
     }
 
     async fn input_contract(&self) -> Option<input::InputContract> {
         match &self.0 {
-            fuel_tx::Transaction::Script(_) | fuel_tx::Transaction::Create(_) => None,
+            fuel_tx::Transaction::Script(_)
+            | fuel_tx::Transaction::Create(_)
+            | fuel_tx::Transaction::Upgrade(_)
+            | fuel_tx::Transaction::Upload(_) => None,
             fuel_tx::Transaction::Mint(mint) => Some(mint.input_contract().into()),
         }
     }
 
     async fn policies(&self) -> Option<Policies> {
         match &self.0 {
-            fuel_tx::Transaction::Script(script) => Some((*script.policies()).into()),
-            fuel_tx::Transaction::Create(create) => Some((*create.policies()).into()),
+            fuel_tx::Transaction::Script(tx) => Some((*tx.policies()).into()),
+            fuel_tx::Transaction::Create(tx) => Some((*tx.policies()).into()),
             fuel_tx::Transaction::Mint(_) => None,
+            fuel_tx::Transaction::Upgrade(tx) => Some((*tx.policies()).into()),
+            fuel_tx::Transaction::Upload(tx) => Some((*tx.policies()).into()),
         }
     }
 
@@ -399,36 +424,49 @@ impl Transaction {
             fuel_tx::Transaction::Script(script) => {
                 Some((*script.script_gas_limit()).into())
             }
-            fuel_tx::Transaction::Create(_) => Some(0.into()),
-            fuel_tx::Transaction::Mint(_) => None,
+            fuel_tx::Transaction::Create(_)
+            | fuel_tx::Transaction::Mint(_)
+            | fuel_tx::Transaction::Upgrade(_)
+            | fuel_tx::Transaction::Upload(_) => None,
         }
     }
 
     async fn maturity(&self) -> Option<U32> {
         match &self.0 {
-            fuel_tx::Transaction::Script(script) => Some(script.maturity().into()),
-            fuel_tx::Transaction::Create(create) => Some(create.maturity().into()),
+            fuel_tx::Transaction::Script(tx) => Some(tx.maturity().into()),
+            fuel_tx::Transaction::Create(tx) => Some(tx.maturity().into()),
             fuel_tx::Transaction::Mint(_) => None,
+            fuel_tx::Transaction::Upgrade(tx) => Some(tx.maturity().into()),
+            fuel_tx::Transaction::Upload(tx) => Some(tx.maturity().into()),
         }
     }
 
     async fn mint_amount(&self) -> Option<U64> {
         match &self.0 {
-            fuel_tx::Transaction::Script(_) | fuel_tx::Transaction::Create(_) => None,
+            fuel_tx::Transaction::Script(_)
+            | fuel_tx::Transaction::Create(_)
+            | fuel_tx::Transaction::Upgrade(_)
+            | fuel_tx::Transaction::Upload(_) => None,
             fuel_tx::Transaction::Mint(mint) => Some((*mint.mint_amount()).into()),
         }
     }
 
     async fn mint_asset_id(&self) -> Option<AssetId> {
         match &self.0 {
-            fuel_tx::Transaction::Script(_) | fuel_tx::Transaction::Create(_) => None,
+            fuel_tx::Transaction::Script(_)
+            | fuel_tx::Transaction::Create(_)
+            | fuel_tx::Transaction::Upgrade(_)
+            | fuel_tx::Transaction::Upload(_) => None,
             fuel_tx::Transaction::Mint(mint) => Some((*mint.mint_asset_id()).into()),
         }
     }
 
     async fn mint_gas_price(&self) -> Option<U64> {
         match &self.0 {
-            fuel_tx::Transaction::Script(_) | fuel_tx::Transaction::Create(_) => None,
+            fuel_tx::Transaction::Script(_)
+            | fuel_tx::Transaction::Create(_)
+            | fuel_tx::Transaction::Upgrade(_)
+            | fuel_tx::Transaction::Upload(_) => None,
             fuel_tx::Transaction::Mint(mint) => Some((*mint.gas_price()).into()),
         }
     }
@@ -436,8 +474,10 @@ impl Transaction {
     // TODO: Maybe we need to do the same `Script` and `Create`
     async fn tx_pointer(&self) -> Option<TxPointer> {
         match &self.0 {
-            fuel_tx::Transaction::Script(_) => None,
-            fuel_tx::Transaction::Create(_) => None,
+            fuel_tx::Transaction::Script(_)
+            | fuel_tx::Transaction::Create(_)
+            | fuel_tx::Transaction::Upgrade(_)
+            | fuel_tx::Transaction::Upload(_) => None,
             fuel_tx::Transaction::Mint(mint) => Some((*mint.tx_pointer()).into()),
         }
     }
@@ -454,54 +494,87 @@ impl Transaction {
         self.0.is_mint()
     }
 
+    async fn is_upgrade(&self) -> bool {
+        self.0.is_upgrade()
+    }
+
+    async fn is_upload(&self) -> bool {
+        self.0.is_upload()
+    }
+
     async fn inputs(&self) -> Option<Vec<Input>> {
         match &self.0 {
-            fuel_tx::Transaction::Script(script) => {
-                Some(script.inputs().iter().map(Into::into).collect())
+            fuel_tx::Transaction::Script(tx) => {
+                Some(tx.inputs().iter().map(Into::into).collect())
             }
-            fuel_tx::Transaction::Create(create) => {
-                Some(create.inputs().iter().map(Into::into).collect())
+            fuel_tx::Transaction::Create(tx) => {
+                Some(tx.inputs().iter().map(Into::into).collect())
             }
             fuel_tx::Transaction::Mint(_) => None,
+            fuel_tx::Transaction::Upgrade(tx) => {
+                Some(tx.inputs().iter().map(Into::into).collect())
+            }
+            fuel_tx::Transaction::Upload(tx) => {
+                Some(tx.inputs().iter().map(Into::into).collect())
+            }
         }
     }
 
     async fn outputs(&self) -> Vec<Output> {
         match &self.0 {
-            fuel_tx::Transaction::Script(script) => {
-                script.outputs().iter().map(Into::into).collect()
+            fuel_tx::Transaction::Script(tx) => {
+                tx.outputs().iter().map(Into::into).collect()
             }
-            fuel_tx::Transaction::Create(create) => {
-                create.outputs().iter().map(Into::into).collect()
+            fuel_tx::Transaction::Create(tx) => {
+                tx.outputs().iter().map(Into::into).collect()
             }
             fuel_tx::Transaction::Mint(_) => vec![],
+            fuel_tx::Transaction::Upgrade(tx) => {
+                tx.outputs().iter().map(Into::into).collect()
+            }
+            fuel_tx::Transaction::Upload(tx) => {
+                tx.outputs().iter().map(Into::into).collect()
+            }
         }
     }
 
     async fn output_contract(&self) -> Option<output::ContractOutput> {
         match &self.0 {
-            fuel_tx::Transaction::Script(_) | fuel_tx::Transaction::Create(_) => None,
+            fuel_tx::Transaction::Script(_)
+            | fuel_tx::Transaction::Create(_)
+            | fuel_tx::Transaction::Upgrade(_)
+            | fuel_tx::Transaction::Upload(_) => None,
             fuel_tx::Transaction::Mint(mint) => Some(mint.output_contract().into()),
         }
     }
 
     async fn witnesses(&self) -> Option<Vec<HexString>> {
         match &self.0 {
-            fuel_tx::Transaction::Script(script) => Some(
-                script
-                    .witnesses()
+            fuel_tx::Transaction::Script(tx) => Some(
+                tx.witnesses()
                     .iter()
                     .map(|w| HexString(w.clone().into_inner()))
                     .collect(),
             ),
-            fuel_tx::Transaction::Create(create) => Some(
-                create
-                    .witnesses()
+            fuel_tx::Transaction::Create(tx) => Some(
+                tx.witnesses()
                     .iter()
                     .map(|w| HexString(w.clone().into_inner()))
                     .collect(),
             ),
             fuel_tx::Transaction::Mint(_) => None,
+            fuel_tx::Transaction::Upgrade(tx) => Some(
+                tx.witnesses()
+                    .iter()
+                    .map(|w| HexString(w.clone().into_inner()))
+                    .collect(),
+            ),
+            fuel_tx::Transaction::Upload(tx) => Some(
+                tx.witnesses()
+                    .iter()
+                    .map(|w| HexString(w.clone().into_inner()))
+                    .collect(),
+            ),
         }
     }
 
@@ -510,8 +583,10 @@ impl Transaction {
             fuel_tx::Transaction::Script(script) => {
                 Some((*script.receipts_root()).into())
             }
-            fuel_tx::Transaction::Create(_) => None,
-            fuel_tx::Transaction::Mint(_) => None,
+            fuel_tx::Transaction::Create(_)
+            | fuel_tx::Transaction::Mint(_)
+            | fuel_tx::Transaction::Upgrade(_)
+            | fuel_tx::Transaction::Upload(_) => None,
         }
     }
 
@@ -530,8 +605,10 @@ impl Transaction {
             fuel_tx::Transaction::Script(script) => {
                 Some(HexString(script.script().clone()))
             }
-            fuel_tx::Transaction::Create(_) => None,
-            fuel_tx::Transaction::Mint(_) => None,
+            fuel_tx::Transaction::Create(_)
+            | fuel_tx::Transaction::Mint(_)
+            | fuel_tx::Transaction::Upgrade(_)
+            | fuel_tx::Transaction::Upload(_) => None,
         }
     }
 
@@ -540,18 +617,24 @@ impl Transaction {
             fuel_tx::Transaction::Script(script) => {
                 Some(HexString(script.script_data().clone()))
             }
-            fuel_tx::Transaction::Create(_) => None,
-            fuel_tx::Transaction::Mint(_) => None,
+            fuel_tx::Transaction::Create(_)
+            | fuel_tx::Transaction::Mint(_)
+            | fuel_tx::Transaction::Upgrade(_)
+            | fuel_tx::Transaction::Upload(_) => None,
         }
     }
 
     async fn bytecode_witness_index(&self) -> Option<U16> {
         match &self.0 {
             fuel_tx::Transaction::Script(_) => None,
-            fuel_tx::Transaction::Create(create) => {
-                Some((*create.bytecode_witness_index()).into())
+            fuel_tx::Transaction::Create(tx) => {
+                Some((*tx.bytecode_witness_index()).into())
             }
             fuel_tx::Transaction::Mint(_) => None,
+            fuel_tx::Transaction::Upgrade(_) => None,
+            fuel_tx::Transaction::Upload(tx) => {
+                Some((*tx.bytecode_witness_index()).into())
+            }
         }
     }
 
@@ -560,6 +643,8 @@ impl Transaction {
             fuel_tx::Transaction::Script(_) => None,
             fuel_tx::Transaction::Create(create) => Some((*create.salt()).into()),
             fuel_tx::Transaction::Mint(_) => None,
+            fuel_tx::Transaction::Upgrade(_) => None,
+            fuel_tx::Transaction::Upload(_) => None,
         }
     }
 
@@ -583,6 +668,60 @@ impl Transaction {
                     .collect(),
             ),
             fuel_tx::Transaction::Mint(_) => None,
+            fuel_tx::Transaction::Upgrade(_) => None,
+            fuel_tx::Transaction::Upload(_) => None,
+        }
+    }
+
+    async fn bytecode_root(&self) -> Option<Bytes32> {
+        match &self.0 {
+            fuel_tx::Transaction::Script(_)
+            | fuel_tx::Transaction::Create(_)
+            | fuel_tx::Transaction::Mint(_)
+            | fuel_tx::Transaction::Upgrade(_) => None,
+            fuel_tx::Transaction::Upload(tx) => Some((*tx.bytecode_root()).into()),
+        }
+    }
+
+    async fn subsection_index(&self) -> Option<U16> {
+        match &self.0 {
+            fuel_tx::Transaction::Script(_)
+            | fuel_tx::Transaction::Create(_)
+            | fuel_tx::Transaction::Mint(_)
+            | fuel_tx::Transaction::Upgrade(_) => None,
+            fuel_tx::Transaction::Upload(tx) => Some((*tx.subsection_index()).into()),
+        }
+    }
+
+    async fn subsections_number(&self) -> Option<U16> {
+        match &self.0 {
+            fuel_tx::Transaction::Script(_)
+            | fuel_tx::Transaction::Create(_)
+            | fuel_tx::Transaction::Mint(_)
+            | fuel_tx::Transaction::Upgrade(_) => None,
+            fuel_tx::Transaction::Upload(tx) => Some((*tx.subsections_number()).into()),
+        }
+    }
+
+    async fn proof_set(&self) -> Option<Vec<Bytes32>> {
+        match &self.0 {
+            fuel_tx::Transaction::Script(_)
+            | fuel_tx::Transaction::Create(_)
+            | fuel_tx::Transaction::Mint(_)
+            | fuel_tx::Transaction::Upgrade(_) => None,
+            fuel_tx::Transaction::Upload(tx) => {
+                Some(tx.proof_set().iter().map(|proof| (*proof).into()).collect())
+            }
+        }
+    }
+
+    async fn upgrade_purpose(&self) -> Option<UpgradePurpose> {
+        match &self.0 {
+            fuel_tx::Transaction::Script(_)
+            | fuel_tx::Transaction::Create(_)
+            | fuel_tx::Transaction::Mint(_) => None,
+            fuel_tx::Transaction::Upgrade(tx) => Some((*tx.upgrade_purpose()).into()),
+            fuel_tx::Transaction::Upload(_) => None,
         }
     }
 
