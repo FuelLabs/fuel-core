@@ -223,7 +223,7 @@ impl SnapshotReader {
     pub fn open(
         snapshot_metadata: crate::config::SnapshotMetadata,
     ) -> anyhow::Result<Self> {
-        Self::open_w_config(snapshot_metadata, 1)
+        Self::open_w_config(snapshot_metadata, MAX_GROUP_SIZE)
     }
 
     #[cfg(feature = "std")]

@@ -115,7 +115,6 @@ where
             .enumerate()
             .map(|(index, group)| (index.saturating_add(self.skip), group))
             .try_for_each(|(index, group)| {
-                std::thread::sleep(std::time::Duration::from_secs(1));
                 let group = group?;
                 let mut tx = db.write_transaction();
                 self.handler.process(group, &mut tx)?;
