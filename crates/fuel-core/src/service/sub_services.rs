@@ -32,6 +32,7 @@ use tokio::sync::Mutex;
 
 #[cfg(feature = "relayer")]
 use crate::relayer::Config as RelayerConfig;
+use crate::service::adapters::consensus_parameters_provider;
 #[cfg(feature = "relayer")]
 use fuel_core_types::blockchain::primitives::DaBlockHeight;
 
@@ -68,6 +69,8 @@ pub fn init_sub_services(
         });
     let last_height = *last_block_header.height();
     let chain_config = config.snapshot_reader.chain_config();
+    let chain_id = chain_config.consensus_parameters.chain_id();
+    let chain_name = chain_config.chain_name.clone();
 
     let executor = ExecutorAdapter::new(
         database.on_chain().clone(),
@@ -82,11 +85,20 @@ pub fn init_sub_services(
         VerifierAdapter::new(&config.snapshot_reader, database.on_chain().clone());
 
     let importer_adapter = BlockImporterAdapter::new(
-        chain_config.consensus_parameters.chain_id(),
+        chain_id,
         config.block_importer.clone(),
         database.on_chain().clone(),
         executor.clone(),
         verifier.clone(),
+    );
+
+    let consensus_parameters_provider_service =
+        consensus_parameters_provider::new_service(
+            database.on_chain().clone(),
+            &importer_adapter,
+        );
+    let consensus_parameters_provider = ConsensusParametersProvider::new(
+        consensus_parameters_provider_service.shared.clone(),
     );
 
     #[cfg(feature = "relayer")]
@@ -112,7 +124,7 @@ pub fn init_sub_services(
     #[cfg(feature = "p2p")]
     let mut network = config.p2p.clone().map(|p2p_config| {
         fuel_core_p2p::service::new_service(
-            chain_config.consensus_parameters.chain_id(),
+            chain_id,
             p2p_config,
             database.on_chain().clone(),
             importer_adapter.clone(),
@@ -142,8 +154,6 @@ pub fn init_sub_services(
     let p2p_adapter = P2PAdapter::new();
 
     let gas_price_provider = StaticGasPrice::new(config.static_gas_price);
-    let consensus_parameters_provider =
-        ConsensusParametersProvider::new(chain_config.consensus_parameters.clone());
     let txpool = fuel_core_txpool::new_service(
         config.txpool.clone(),
         database.on_chain().clone(),
@@ -207,7 +217,7 @@ pub fn init_sub_services(
         tx_pool_adapter.clone(),
         importer_adapter.clone(),
         database.off_chain().clone(),
-        chain_config.consensus_parameters.chain_id(),
+        chain_id,
     );
 
     let graphql_config = GraphQLConfig {
@@ -217,7 +227,7 @@ pub fn init_sub_services(
         vm_backtrace: config.vm.backtrace,
         max_tx: config.txpool.max_tx,
         max_depth: config.txpool.max_depth,
-        chain_name: chain_config.chain_name.clone(),
+        chain_name,
     };
 
     let graph_ql = fuel_core_graphql_api::api_service::new_service(
@@ -254,6 +264,7 @@ pub fn init_sub_services(
         // GraphQL should be shutdown first, so let's start it first.
         Box::new(graph_ql),
         Box::new(txpool),
+        Box::new(consensus_parameters_provider_service),
     ];
 
     if let Some(poa) = poa {
