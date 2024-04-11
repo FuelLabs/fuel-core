@@ -7,7 +7,7 @@ mod message;
 mod randomize;
 #[cfg(feature = "std")]
 mod snapshot_metadata;
-mod state;
+pub mod state;
 mod table_entry;
 
 pub use chain::*;

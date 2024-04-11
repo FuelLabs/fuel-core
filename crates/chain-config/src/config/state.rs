@@ -57,7 +57,7 @@ use fuel_core_types::{
 mod parquet;
 mod reader;
 #[cfg(feature = "std")]
-mod writer;
+pub mod writer;
 
 // Fuel Network human-readable part for bech32 encoding
 pub const FUEL_BECH32_HRP: &str = "fuel";

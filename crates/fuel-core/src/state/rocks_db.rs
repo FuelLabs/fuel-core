@@ -228,7 +228,8 @@ where
         }
 
         let db = match DB::open_cf_descriptors(&opts, &path, cf_descriptors) {
-            Err(_) => {
+            Err(e) => {
+                println!("{:?}", e);
                 // setup cfs
                 match DB::open_cf(&opts, &path, &[] as &[&str]) {
                     Ok(db) => {

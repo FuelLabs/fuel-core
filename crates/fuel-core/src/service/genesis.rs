@@ -49,9 +49,9 @@ use fuel_core_types::{
 };
 use itertools::Itertools;
 
-mod exporter;
-mod importer;
-mod task_manager;
+pub mod exporter;
+pub mod importer;
+pub mod task_manager;
 
 pub use exporter::Exporter;
 use tokio_util::sync::CancellationToken;
