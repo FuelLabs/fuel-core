@@ -1,21 +1,11 @@
 use std::fmt::Debug;
 
-use fuel_core_storage::{
-    structured_storage::TableWithBlueprint,
-    Mappable,
-};
-use fuel_core_types::{
-    blockchain::primitives::DaBlockHeight,
-    fuel_types::BlockHeight,
-};
+use fuel_core_storage::{structured_storage::TableWithBlueprint, Mappable};
+use fuel_core_types::{blockchain::primitives::DaBlockHeight, fuel_types::BlockHeight};
 use itertools::Itertools;
 
 use crate::{
-    config::table_entry::TableEntry,
-    AsTable,
-    ChainConfig,
-    StateConfig,
-    MAX_GROUP_SIZE,
+    config::table_entry::TableEntry, AsTable, ChainConfig, StateConfig, MAX_GROUP_SIZE,
 };
 
 pub struct Groups<T: Mappable> {
@@ -26,6 +16,14 @@ impl<T> Groups<T>
 where
     T: Mappable,
 {
+    pub fn new(items: Vec<anyhow::Result<Vec<TableEntry<T>>>>) -> Self {
+        Self {
+            iter: GroupIter::InMemory {
+                groups: items.into_iter(),
+            },
+        }
+    }
+
     pub fn len(&self) -> usize {
         match &self.iter {
             GroupIter::InMemory { groups } => groups.len(),
