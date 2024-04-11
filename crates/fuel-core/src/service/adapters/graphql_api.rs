@@ -176,6 +176,6 @@ impl GasPriceEstimate for StaticGasPrice {
 
 impl ConsensusProvider for ConsensusParametersProvider {
     fn latest_consensus_params(&self) -> Arc<ConsensusParameters> {
-        self.consensus_parameters.clone()
+        self.shared_state.latest_consensus_parameters()
     }
 }

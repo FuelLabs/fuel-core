@@ -21,7 +21,8 @@ Description of the upcoming release here.
 - [#1812](https://github.com/FuelLabs/fuel-core/pull/1812): Follow-up PR to simplify the logic around parallel snapshot creation.
 
 ### Changed
-- [#1808](https://github.com/FuelLabs/fuel-core/pull/1808): Fetch consensus parameters from the database.
+- [#1809](https://github.com/FuelLabs/fuel-core/pull/1809): Fetch `ConsensusParameters` from the database
+- [#1808](https://github.com/FuelLabs/fuel-core/pull/1808): Fetch consensus parameters from the provider.
 
 ## [Version 0.24.2]
 

@@ -605,7 +605,7 @@ impl<Executor> TestContext<Executor> {
             MockConsensusParametersProvider::default();
         consensus_parameters_provider
             .expect_consensus_params_at_version()
-            .returning(move |_| consensus_params.clone());
+            .returning(move |_| Ok(consensus_params.clone()));
 
         Producer {
             config: self.config,
