@@ -26,7 +26,7 @@ async fn txs_max_script_gas_limit() {
     const MAX_GAS_LIMIT: u64 = 50_000_000;
     let mut rng = StdRng::seed_from_u64(2322);
     let mut test_builder = TestSetupBuilder::new(2322);
-    test_builder.gas_limit = MAX_GAS_LIMIT;
+    test_builder.gas_limit = Some(MAX_GAS_LIMIT);
     // initialize 10 random transactions that transfer coins
     let transactions = (1..=10)
         .map(|i| {

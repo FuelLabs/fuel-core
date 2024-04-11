@@ -3322,6 +3322,7 @@ dependencies = [
  "fuel-core-trace",
  "fuel-core-txpool",
  "fuel-core-types",
+ "fuel-core-upgradable-executor",
  "futures",
  "hyper",
  "insta",
