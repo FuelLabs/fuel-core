@@ -41,7 +41,10 @@ use std::sync::Arc;
 use fuel_core_storage::{
     not_found,
     structured_storage::StructuredStorage,
-    tables::StateTransitionBytecodeVersions,
+    tables::{
+        StateTransitionBytecodeVersions,
+        UploadedBytecodes,
+    },
     StorageAsRef,
 };
 #[cfg(any(test, feature = "test-helpers"))]
@@ -421,19 +424,30 @@ where
         drop(guard);
 
         let view = StructuredStorage::new(self.storage_view_provider.latest_view());
-        let bytecode = view
+        let bytecode_root = *view
             .storage::<StateTransitionBytecodeVersions>()
             .get(&version)?
             .ok_or(not_found!(StateTransitionBytecodeVersions))?;
+        let uploaded_bytecode = view
+            .storage::<UploadedBytecodes>()
+            .get(&bytecode_root)?
+            .ok_or(not_found!(UploadedBytecodes))?;
+
+        let fuel_core_types::fuel_vm::UploadedBytecode::Completed(bytecode) =
+            uploaded_bytecode.as_ref()
+        else {
+            return Err(ExecutorError::Other(format!(
+                "The bytecode under the bytecode_root(`{bytecode_root}`) is not completed",
+            )))
+        };
 
         // Compiles the module
-        let module =
-            wasmtime::Module::new(&self.engine, bytecode.as_ref()).map_err(|e| {
-                ExecutorError::Other(format!(
-                    "Failed to compile the module for the version `{}` with {e}",
-                    version,
-                ))
-            })?;
+        let module = wasmtime::Module::new(&self.engine, bytecode).map_err(|e| {
+            ExecutorError::Other(format!(
+                "Failed to compile the module for the version `{}` with {e}",
+                version,
+            ))
+        })?;
 
         self.cached_modules.lock().insert(version, module.clone());
         Ok(module)
@@ -725,14 +739,14 @@ mod test {
 
             let mut storage = storage();
             let mut tx = storage.write_transaction();
+            tx.storage_as_mut::<StateTransitionBytecodeVersions>()
+                .insert(&next_version, &BYTECODE_ROOT)
+                .unwrap();
             tx.storage_as_mut::<UploadedBytecodes>()
                 .insert(
                     &BYTECODE_ROOT,
                     &UploadedBytecode::Completed(WASM_BYTECODE.to_vec()),
                 )
-                .unwrap();
-            tx.storage_as_mut::<StateTransitionBytecodeVersions>()
-                .insert(&next_version, &BYTECODE_ROOT)
                 .unwrap();
             tx.commit().unwrap();
 
