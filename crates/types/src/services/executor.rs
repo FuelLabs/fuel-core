@@ -324,7 +324,7 @@ impl ExecutionKind {
 }
 
 #[allow(missing_docs)]
-#[derive(Debug, PartialEq, derive_more::Display, derive_more::From)]
+#[derive(Debug, Clone, PartialEq, derive_more::Display, derive_more::From)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[non_exhaustive]
 pub enum Error {
@@ -414,7 +414,7 @@ impl From<ValidityError> for Error {
 }
 
 #[allow(missing_docs)]
-#[derive(thiserror::Error, Debug, PartialEq)]
+#[derive(thiserror::Error, Debug, Clone, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[non_exhaustive]
 pub enum TransactionValidityError {

@@ -19,6 +19,9 @@ use fuel_core_types::{
     fuel_tx::Bytes32,
 };
 
+/// Tracks the status of transactions from the L1. These are tracked separately from tx-pool
+/// transactions because they might fail as part of the relay process, not just due
+/// to execution.
 pub struct RelayedTransactionStatuses;
 
 impl Mappable for RelayedTransactionStatuses {

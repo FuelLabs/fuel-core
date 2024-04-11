@@ -499,7 +499,7 @@ where
         let mut execute_transaction = |execution_data: &mut ExecutionData,
                                        tx: MaybeCheckedTransaction,
                                        gas_price: Word|
-         -> ExecutorResult<()> {
+         -> ExecutorResult<Option<ExecutorError>> {
             let tx_count = execution_data.tx_count;
             let tx = {
                 let mut tx_st_transaction = thread_block_transaction
@@ -528,8 +528,10 @@ where
                                 // (or in another place that should validate it). Or we forgot to
                                 // clean up some dependent/conflict transactions. But it definitely
                                 // means that something went wrong, and we must fix it.
-                                execution_data.skipped_transactions.push((tx_id, err));
-                                Ok(())
+                                execution_data
+                                    .skipped_transactions
+                                    .push((tx_id, err.clone()));
+                                Ok(Some(err))
                             }
                             ExecutionKind::DryRun | ExecutionKind::Validation => Err(err),
                         };
@@ -548,14 +550,39 @@ where
                 .checked_add(1)
                 .ok_or(ExecutorError::TooManyTransactions)?;
 
-            Ok(())
+            Ok(None)
         };
 
         let relayed_tx_iter = forced_transactions.into_iter();
         for transaction in relayed_tx_iter {
             const RELAYED_GAS_PRICE: Word = 0;
             let transaction = MaybeCheckedTransaction::CheckedTransaction(transaction);
-            execute_transaction(&mut *execution_data, transaction, RELAYED_GAS_PRICE)?;
+            let tx_id = transaction.id(&self.consensus_params.chain_id());
+            match execute_transaction(
+                &mut *execution_data,
+                transaction,
+                RELAYED_GAS_PRICE,
+            ) {
+                Ok(None) => {}
+                Ok(Some(err)) => {
+                    let id_bytes: Bytes32 = tx_id.into();
+                    let event = ExecutorEvent::ForcedTransactionFailed {
+                        id: id_bytes.into(),
+                        block_height,
+                        failure: err.to_string(),
+                    };
+                    execution_data.events.push(event);
+                }
+                Err(err) => {
+                    let id_bytes: Bytes32 = tx_id.into();
+                    let event = ExecutorEvent::ForcedTransactionFailed {
+                        id: id_bytes.into(),
+                        block_height,
+                        failure: err.to_string(),
+                    };
+                    execution_data.events.push(event);
+                }
+            }
         }
 
         let remaining_gas_limit = block_gas_limit.saturating_sub(execution_data.used_gas);

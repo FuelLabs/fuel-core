@@ -3210,6 +3210,62 @@ mod tests {
         }
 
         #[test]
+        fn execute_without_commit__relayed_tx_that_passes_checks_but_fails_execution_is_reported(
+        ) {
+            let genesis_da_height = 3u64;
+            let block_height = 1u32;
+            let da_height = 10u64;
+
+            // given
+            let relayer_db =
+                relayer_db_with_tx_that_passes_checks_but_fails_exectution(da_height);
+
+            // when
+            let on_chain_db = database_with_genesis_block(genesis_da_height);
+            let producer = create_relayer_executor(on_chain_db, relayer_db);
+            let block = test_block(block_height.into(), da_height.into(), 0);
+            let (result, _) = producer
+                .execute_without_commit(ExecutionTypes::Production(block.into()))
+                .unwrap()
+                .into();
+
+            // then
+            let txs = result.block.transactions();
+            assert_eq!(txs.len(), 2);
+
+            // and
+            let skipped_txs = result.skipped_transactions;
+            assert_eq!(skipped_txs.len(), 1);
+
+            // and
+            let events = result.events;
+            let fuel_core_types::services::executor::Event::ForcedTransactionFailed {
+                failure: actual,
+                ..
+            } = &events[3]
+            else {
+                panic!("Expected `ForcedTransactionFailed` event")
+            };
+            let expected = "Transaction id was already used: ";
+            assert!(actual.starts_with(expected));
+        }
+
+        fn relayer_db_with_tx_that_passes_checks_but_fails_exectution(
+            da_height: u64,
+        ) -> Database<Relayer> {
+            let mut relayed_tx = RelayedTransaction::default();
+            let tx = script_tx_for_amount_of_base_asset(100);
+            let tx_bytes = tx.to_bytes();
+            relayed_tx.set_serialized_transaction(tx_bytes);
+            let mut bad_relayed_tx = relayed_tx.clone();
+            let new_nonce = [9; 32].into();
+            bad_relayed_tx.set_nonce(new_nonce);
+            // let mut bad_tx = tx.clone();
+            // bad_relayed_tx.set_serialized_transaction(bad_tx_bytes);
+            relayer_db_for_events(&[relayed_tx.into(), bad_relayed_tx.into()], da_height)
+        }
+
+        #[test]
         fn execute_without_commit__validation__includes_status_of_failed_relayed_tx() {
             let genesis_da_height = 3u64;
             let block_height = 1u32;

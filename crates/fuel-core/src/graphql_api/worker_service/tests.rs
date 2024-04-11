@@ -5,10 +5,7 @@ use crate::{
     database::Database,
     graphql_api::storage::relayed_transactions::RelayedTransactionStatuses,
 };
-use fuel_core_services::{
-    stream::IntoBoxStream,
-    State,
-};
+use fuel_core_services::stream::IntoBoxStream;
 use fuel_core_storage::StorageAsRef;
 use fuel_core_types::{
     fuel_tx::Bytes32,
@@ -36,7 +33,7 @@ async fn run__relayed_transaction_events_are_added_to_storage() {
     let block_height = 8.into();
     let failure = "blah blah blah".to_string();
     let database = Database::in_memory();
-    let state_watcher = StateWatcher::started();
+    let mut state_watcher = StateWatcher::started();
 
     // given
     let event = Event::ForcedTransactionFailed {
