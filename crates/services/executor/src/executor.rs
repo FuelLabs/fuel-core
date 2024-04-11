@@ -500,14 +500,14 @@ where
         let mut execute_transaction = |execution_data: &mut ExecutionData,
                                        tx: MaybeCheckedTransaction,
                                        gas_price: Word|
-         -> ExecutorResult<Option<ExecutorError>> {
+         -> ExecutorResult<()> {
             let tx_count = execution_data.tx_count;
             let tx = {
                 let mut tx_st_transaction = thread_block_transaction
                     .write_transaction()
                     .with_policy(ConflictPolicy::Overwrite);
                 let tx_id = tx.id(&self.consensus_params.chain_id());
-                let result = self.execute_transaction(
+                let tx = self.execute_transaction(
                     tx,
                     &tx_id,
                     &block.header,
@@ -516,18 +516,8 @@ where
                     execution_data,
                     execution_kind,
                     &mut tx_st_transaction,
-                );
-
-                let tx = match result {
-                    Err(err) => {
-                        return Err(err);
-                    }
-                    Ok(tx) => tx,
-                };
-
-                if let Err(err) = tx_st_transaction.commit() {
-                    return Err(err.into());
-                }
+                )?;
+                tx_st_transaction.commit()?;
                 tx
             };
 
@@ -536,7 +526,7 @@ where
                 .checked_add(1)
                 .ok_or(ExecutorError::TooManyTransactions)?;
 
-            Ok(None)
+            Ok(())
         };
 
         let relayed_tx_iter = forced_transactions.into_iter();
@@ -549,16 +539,7 @@ where
                 transaction,
                 RELAYED_GAS_PRICE,
             ) {
-                Ok(None) => {}
-                Ok(Some(err)) => {
-                    let id_bytes: Bytes32 = tx_id.into();
-                    let event = ExecutorEvent::ForcedTransactionFailed {
-                        id: id_bytes.into(),
-                        block_height,
-                        failure: err.to_string(),
-                    };
-                    execution_data.events.push(event);
-                }
+                Ok(_) => {}
                 Err(err) => {
                     let id_bytes: Bytes32 = tx_id.into();
                     let event = ExecutorEvent::ForcedTransactionFailed {
@@ -579,12 +560,13 @@ where
         while regular_tx_iter.peek().is_some() {
             for transaction in regular_tx_iter {
                 let tx_id = transaction.id(&self.consensus_params.chain_id());
-                if let Some(err) =
-                    execute_transaction(&mut *execution_data, transaction, gas_price)?
-                {
-                    execution_data
-                        .skipped_transactions
-                        .push((tx_id, err.clone()));
+                match execute_transaction(&mut *execution_data, transaction, gas_price) {
+                    Ok(_) => {}
+                    Err(err) => {
+                        execution_data
+                            .skipped_transactions
+                            .push((tx_id, err.clone()));
+                    }
                 }
             }
 
