@@ -1,65 +1,35 @@
 use self::{
-    import_task::{
-        ImportTable,
-        ImportTask,
-    },
-    progress::{
-        MultipleProgressReporter,
-        ProgressReporter,
-        Target,
-    },
+    import_task::ImportTable,
+    progress::{MultipleProgressReporter, ProgressReporter, Target},
 };
 
 use super::task_manager::TaskManager;
 mod import_task;
-mod off_chain;
 mod on_chain;
 mod progress;
-use std::{
-    io::IsTerminal,
-    marker::PhantomData,
-};
+use std::{io::IsTerminal, marker::PhantomData};
 
 use crate::{
     combined_database::CombinedDatabase,
-    database::database_description::{
-        off_chain::OffChain,
-        on_chain::OnChain,
-    },
+    database::database_description::{off_chain::OffChain, on_chain::OnChain},
     graphql_api::storage::{
         coins::OwnedCoins,
         contracts::ContractsInfo,
         messages::OwnedMessageIds,
-        transactions::{
-            OwnedTransactions,
-            TransactionStatuses,
-        },
+        transactions::{OwnedTransactions, TransactionStatuses},
     },
 };
-use fuel_core_chain_config::{
-    AsTable,
-    SnapshotReader,
-    StateConfig,
-    TableEntry,
-};
+use fuel_core_chain_config::{AsTable, SnapshotReader, StateConfig, TableEntry};
 use fuel_core_services::StateWatcher;
 use fuel_core_storage::{
     kv_store::StorageColumn,
     structured_storage::TableWithBlueprint,
     tables::{
-        Coins,
-        ContractsAssets,
-        ContractsLatestUtxo,
-        ContractsRawCode,
-        ContractsState,
-        Messages,
-        Transactions,
+        Coins, ContractsAssets, ContractsLatestUtxo, ContractsRawCode, ContractsState,
+        Messages, Transactions,
     },
 };
-use fuel_core_types::{
-    blockchain::primitives::DaBlockHeight,
-    fuel_types::BlockHeight,
-};
+use fuel_core_types::{blockchain::primitives::DaBlockHeight, fuel_types::BlockHeight};
 
 use tracing::Level;
 
@@ -96,85 +66,49 @@ impl SnapshotImporter {
 
     async fn run_workers(mut self) -> anyhow::Result<bool> {
         tracing::info!("Running imports");
-        self.spawn_worker_on_chain::<Coins>()?;
-        self.spawn_worker_on_chain::<Messages>()?;
-        self.spawn_worker_on_chain::<ContractsRawCode>()?;
-        self.spawn_worker_on_chain::<ContractsLatestUtxo>()?;
-        self.spawn_worker_on_chain::<ContractsState>()?;
-        self.spawn_worker_on_chain::<ContractsAssets>()?;
-        self.spawn_worker_on_chain::<Transactions>()?;
-
-        self.spawn_worker_off_chain::<TransactionStatuses, TransactionStatuses>()?;
-        self.spawn_worker_off_chain::<OwnedTransactions, OwnedTransactions>()?;
-        self.spawn_worker_off_chain::<Messages, OwnedMessageIds>()?;
-        self.spawn_worker_off_chain::<Coins, OwnedCoins>()?;
-        self.spawn_worker_off_chain::<Transactions, ContractsInfo>()?;
+        self.spawn_worker::<Coins>()?;
+        self.spawn_worker::<Messages>()?;
+        self.spawn_worker::<ContractsRawCode>()?;
+        self.spawn_worker::<ContractsLatestUtxo>()?;
+        self.spawn_worker::<ContractsState>()?;
+        self.spawn_worker::<ContractsAssets>()?;
+        self.spawn_worker::<Transactions>()?;
+        self.spawn_worker::<TransactionStatuses>()?;
+        self.spawn_worker::<OwnedTransactions>()?;
 
         let was_cancelled = self.task_manager.wait().await?.into_iter().all(|e| e);
 
         Ok(was_cancelled)
     }
 
-    pub fn spawn_worker_on_chain<TableBeingWritten>(&mut self) -> anyhow::Result<()>
+    pub fn spawn_worker<T>(&mut self) -> anyhow::Result<()>
     where
-        TableBeingWritten: TableWithBlueprint + 'static + Send,
-        TableEntry<TableBeingWritten>: serde::de::DeserializeOwned + Send,
-        StateConfig: AsTable<TableBeingWritten>,
-        Handler<TableBeingWritten>:
-            ImportTable<TableInSnapshot = TableBeingWritten, DbDesc = OnChain>,
+        T: TableWithBlueprint + 'static + Send,
+        TableEntry<T>: serde::de::DeserializeOwned + Send,
+        StateConfig: AsTable<T>,
+        Handler: ImportTable<T>,
     {
-        let groups = self.snapshot_reader.read::<TableBeingWritten>()?;
+        let groups = self.snapshot_reader.read::<T>()?;
         let num_groups = groups.len();
 
         let block_height = self.snapshot_reader.block_height();
         let da_block_height = self.snapshot_reader.da_block_height();
-        let db = self.db.on_chain().clone();
+        let on_chain_db = self.db.on_chain().clone();
+        let off_chain_db = self.db.off_chain().clone();
 
-        let progress_reporter = self.progress_reporter::<TableBeingWritten>(num_groups);
-
-        self.task_manager.spawn(move |token| {
-            let task = ImportTask::new(
-                token,
-                Handler::new(block_height, da_block_height),
-                groups,
-                db,
-                progress_reporter,
-            );
-            tokio_rayon::spawn(move || task.run())
-        });
-
-        Ok(())
-    }
-
-    pub fn spawn_worker_off_chain<TableInSnapshot, TableBeingWritten>(
-        &mut self,
-    ) -> anyhow::Result<()>
-    where
-        TableInSnapshot: TableWithBlueprint + 'static,
-        TableEntry<TableInSnapshot>: serde::de::DeserializeOwned + Send,
-        StateConfig: AsTable<TableInSnapshot>,
-        Handler<TableBeingWritten>:
-            ImportTable<TableInSnapshot = TableInSnapshot, DbDesc = OffChain>,
-        TableBeingWritten: TableWithBlueprint + Send + 'static,
-    {
-        let groups = self.snapshot_reader.read::<TableInSnapshot>()?;
-        let num_groups = groups.len();
-        let block_height = self.snapshot_reader.block_height();
-        let da_block_height = self.snapshot_reader.da_block_height();
-
-        let db = self.db.off_chain().clone();
-
-        let progress_reporter = self.progress_reporter::<TableBeingWritten>(num_groups);
+        let progress_reporter = self.progress_reporter::<T>(num_groups);
 
         self.task_manager.spawn(move |token| {
-            let task = ImportTask::new(
-                token,
-                Handler::new(block_height, da_block_height),
-                groups,
-                db,
-                progress_reporter,
-            );
-            tokio_rayon::spawn(move || task.run())
+            tokio_rayon::spawn(move || {
+                import_task::import_entries(
+                    token,
+                    Handler::new(block_height, da_block_height),
+                    groups,
+                    on_chain_db,
+                    off_chain_db,
+                    progress_reporter,
+                )
+            })
         });
 
         Ok(())
@@ -214,18 +148,16 @@ impl SnapshotImporter {
 }
 
 #[derive(Debug, Clone, Copy)]
-pub struct Handler<T> {
+pub struct Handler {
     pub block_height: BlockHeight,
     pub da_block_height: DaBlockHeight,
-    pub phaton_data: PhantomData<T>,
 }
 
-impl<T> Handler<T> {
+impl Handler {
     pub fn new(block_height: BlockHeight, da_block_height: DaBlockHeight) -> Self {
         Self {
             block_height,
             da_block_height,
-            phaton_data: PhantomData,
         }
     }
 }

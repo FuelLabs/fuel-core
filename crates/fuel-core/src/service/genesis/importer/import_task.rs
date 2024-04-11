@@ -3,7 +3,7 @@ use fuel_core_storage::{
     kv_store::StorageColumn,
     structured_storage::TableWithBlueprint,
     transactional::{StorageTransaction, WriteTransaction},
-    StorageAsRef, StorageInspect, StorageMutate,
+    Mappable, StorageAsRef, StorageInspect, StorageMutate,
 };
 
 use crate::{
@@ -19,113 +19,90 @@ use crate::{
 
 use super::progress::ProgressReporter;
 
-pub struct ImportTask<Handler, Groups> {
-    handler: Handler,
-    skip: usize,
-    groups: Groups,
-    cancel_token: CancellationToken,
-    on_chain_db: Database<OnChain>,
-    off_chain_db: Database<OffChain>,
-    reporter: ProgressReporter,
-}
-
-pub trait ImportTable {
-    type TableInSnapshot: TableWithBlueprint;
-
-    fn process(
+pub trait ImportTable<T: Mappable> {
+    fn process_on_chain(
         &mut self,
-        group: Vec<TableEntry<Self::TableInSnapshot>>,
-        on_chain_tx: &mut StorageTransaction<&mut Database<OnChain>>,
-        off_chain_tx: &mut StorageTransaction<&mut Database<OffChain>>,
-    ) -> anyhow::Result<()>;
+        group: Vec<TableEntry<T>>,
+        tx: &mut StorageTransaction<&mut Database<OnChain>>,
+    ) -> anyhow::Result<()> {
+        Ok(())
+    }
+
+    fn process_off_chain(
+        &mut self,
+        group: Vec<TableEntry<T>>,
+        tx: &mut StorageTransaction<&mut Database<OffChain>>,
+    ) -> anyhow::Result<()> {
+        Ok(())
+    }
 }
 
-impl<Logic, Groups> ImportTask<Logic, Groups>
+pub fn import_entries<Groups, T>(
+    cancel_token: CancellationToken,
+    mut handler: impl ImportTable<T>,
+    groups: impl IntoIterator<Item = anyhow::Result<Vec<TableEntry<T>>>>,
+    mut on_chain_db: Database<OnChain>,
+    mut off_chain_db: Database<OffChain>,
+    reporter: ProgressReporter,
+) -> anyhow::Result<bool>
 where
-    Logic: ImportTable,
+    T: TableWithBlueprint,
 {
-    pub fn new(
-        cancel_token: CancellationToken,
-        handler: Logic,
-        groups: Groups,
-        on_chain_db: Database<OnChain>,
-        off_chain_db: Database<OffChain>,
-        reporter: ProgressReporter,
-    ) -> Self {
-        // TODO: the progress should be written to both tables
-        let skip = match on_chain_db
-            .storage::<GenesisMetadata<_>>()
-            .get(Logic::TableInSnapshot::column().name())
-        {
-            Ok(Some(idx_last_handled)) => {
-                usize::saturating_add(idx_last_handled.into_owned(), 1)
-            }
-            _ => 0,
-        };
-
-        Self {
-            handler,
-            skip,
-            groups,
-            cancel_token,
-            on_chain_db,
-            off_chain_db,
-            reporter,
+    // TODO: the progress should be written to both tables
+    let skip = match on_chain_db
+        .storage::<GenesisMetadata<OnChain>>()
+        .get(T::column().name())
+    {
+        Ok(Some(idx_last_handled)) => {
+            usize::saturating_add(idx_last_handled.into_owned(), 1)
         }
-    }
-}
+        _ => 0,
+    };
 
-impl<Logic, Groups> ImportTask<Logic, Groups>
-where
-    Logic: ImportTable,
-    Groups: IntoIterator<Item = anyhow::Result<Vec<TableEntry<Logic::TableInSnapshot>>>>,
-    // GroupGenerator:
-    //     IntoIterator<Item = anyhow::Result<Vec<TableEntry<Logic::TableInSnapshot>>>>,
-    // GenesisMetadata<DbDesc>: TableWithBlueprint<
-    //     Column = DbDesc::Column,
-    //     Key = str,
-    //     Value = usize,
-    //     OwnedValue = usize,
-    // >,
-    // Database<DbDesc>:
-    //     StorageInspect<GenesisMetadata<DbDesc>> + WriteTransaction + Modifiable,
-    // for<'a> StorageTransaction<&'a mut Database<DbDesc>>:
-    //     StorageMutate<GenesisMetadata<DbDesc>, Error = fuel_core_storage::Error>,
-{
-    pub fn run(mut self) -> anyhow::Result<bool> {
-        let mut is_cancelled = self.cancel_token.is_cancelled();
-        let result: anyhow::Result<_> = self
-            .groups
-            .into_iter()
-            .skip(self.skip)
-            .take_while(|_| {
-                is_cancelled = self.cancel_token.is_cancelled();
-                !is_cancelled
-            })
-            .enumerate()
-            .map(|(index, group)| (index.saturating_add(self.skip), group))
-            .try_for_each(|(index, group)| {
-                let group = group?;
-                let mut on_chain_tx = self.on_chain_db.write_transaction();
-                let mut off_chain_tx = self.off_chain_db.write_transaction();
-                self.handler
-                    .process(group, &mut on_chain_tx, &mut off_chain_tx)?;
+    let mut is_cancelled = cancel_token.is_cancelled();
+    let result: anyhow::Result<_> = groups
+        .into_iter()
+        .skip(skip)
+        .take_while(|_| {
+            is_cancelled = cancel_token.is_cancelled();
+            !is_cancelled
+        })
+        .enumerate()
+        .map(|(index, group)| (index.saturating_add(skip), group))
+        .try_for_each(|(index, group)| {
+            let group = group?;
 
-                GenesisProgressMutate::<OnChain>::update_genesis_progress(
-                    &mut on_chain_tx,
-                    <Logic::TableInSnapshot>::column().name(),
-                    index,
-                )?;
-                on_chain_tx.commit()?;
-                self.reporter.set_progress(index as u64);
+            let mut on_chain_tx = on_chain_db.write_transaction();
 
-                Ok(())
-            });
+            handler.process_on_chain(group, &mut on_chain_tx)?;
 
-        result?;
+            GenesisProgressMutate::<OnChain>::update_genesis_progress(
+                &mut on_chain_tx,
+                T::column().name(),
+                index,
+            )?;
+            on_chain_tx.commit()?;
 
-        Ok(!is_cancelled)
-    }
+            let mut off_chain_tx = off_chain_db.write_transaction();
+
+            handler.process_off_chain(group, &mut off_chain_tx)?;
+
+            GenesisProgressMutate::<OffChain>::update_genesis_progress(
+                &mut off_chain_tx,
+                T::column().name(),
+                index,
+            )?;
+
+            off_chain_tx.commit()?;
+
+            reporter.set_progress(index as u64);
+
+            Ok(())
+        });
+
+    result?;
+
+    Ok(!is_cancelled)
 }
 
 #[cfg(test)]
@@ -136,8 +113,7 @@ mod tests {
             genesis_progress::GenesisProgressInspect,
         },
         service::genesis::{
-            importer::{import_task::ImportTask, progress::ProgressReporter},
-            task_manager::CancellationToken,
+            importer::progress::ProgressReporter, task_manager::CancellationToken,
         },
     };
     use std::sync::{Arc, Mutex};

@@ -1,24 +1,27 @@
-use super::{
-    import_task::ImportTable,
-    Handler,
-};
-use crate::database::{
-    balances::BalancesInitializer,
-    database_description::on_chain::OnChain,
-    state::StateInitializer,
-    Database,
+use std::borrow::Cow;
+
+use super::{import_task::ImportTable, Handler};
+use crate::{
+    database::{
+        balances::BalancesInitializer,
+        database_description::{off_chain::OffChain, on_chain::OnChain},
+        state::StateInitializer,
+        Database,
+    },
+    graphql_api::{
+        storage::{
+            blocks::FuelBlockIdsToHeights,
+            transactions::{OwnedTransactions, TransactionStatuses},
+        },
+        worker_service,
+    },
 };
 use anyhow::anyhow;
 use fuel_core_chain_config::TableEntry;
 use fuel_core_storage::{
     tables::{
-        Coins,
-        ContractsAssets,
-        ContractsLatestUtxo,
-        ContractsRawCode,
-        ContractsState,
-        Messages,
-        Transactions,
+        Coins, ContractsAssets, ContractsLatestUtxo, ContractsRawCode, ContractsState,
+        Messages, Transactions,
     },
     transactional::StorageTransaction,
     StorageAsMut,
@@ -26,123 +29,169 @@ use fuel_core_storage::{
 use fuel_core_types::{
     self,
     blockchain::primitives::DaBlockHeight,
-    entities::{
-        coins::coin::Coin,
-        Message,
-    },
+    entities::{coins::coin::Coin, Message},
     fuel_types::BlockHeight,
+    services::executor::Event,
 };
 
-impl ImportTable for Handler<Coins> {
-    type TableInSnapshot = Coins;
-    type TableBeingWritten = Coins;
-    type DbDesc = OnChain;
-
-    fn process(
+impl ImportTable<Coins> for Handler {
+    fn process_on_chain(
         &mut self,
-        group: Vec<TableEntry<Self::TableInSnapshot>>,
-        tx: &mut StorageTransaction<&mut Database>,
+        group: Vec<TableEntry<Coins>>,
+        tx: &mut StorageTransaction<&mut Database<OnChain>>,
     ) -> anyhow::Result<()> {
-        group.into_iter().try_for_each(|coin| {
-            init_coin(tx, &coin, self.block_height)?;
-            Ok(())
-        })
+        for coin in &group {
+            init_coin(tx, coin, self.block_height)?;
+        }
+
+        Ok(())
+    }
+
+    fn process_off_chain(
+        &mut self,
+        group: Vec<TableEntry<Coins>>,
+        tx: &mut StorageTransaction<&mut Database<OffChain>>,
+    ) -> anyhow::Result<()> {
+        let events = group.into_iter().map(|TableEntry { value, key }| {
+            Cow::Owned(Event::CoinCreated(value.uncompress(key)))
+        });
+        worker_service::process_executor_events(events, tx)?;
+
+        Ok(())
     }
 }
 
-impl ImportTable for Handler<Messages> {
-    type TableInSnapshot = Messages;
-    type TableBeingWritten = Messages;
-    type DbDesc = OnChain;
-
-    fn process(
+impl ImportTable<Messages> for Handler {
+    fn process_on_chain(
         &mut self,
-        group: Vec<TableEntry<Self::TableInSnapshot>>,
-        tx: &mut StorageTransaction<&mut Database>,
+        group: Vec<TableEntry<Messages>>,
+        tx: &mut StorageTransaction<&mut Database<OnChain>>,
     ) -> anyhow::Result<()> {
         group
             .into_iter()
             .try_for_each(|message| init_da_message(tx, message, self.da_block_height))
     }
+
+    fn process_off_chain(
+        &mut self,
+        group: Vec<TableEntry<Messages>>,
+        tx: &mut StorageTransaction<&mut Database<OffChain>>,
+    ) -> anyhow::Result<()> {
+        let events = group
+            .into_iter()
+            .map(|TableEntry { value, .. }| Cow::Owned(Event::MessageImported(value)));
+        worker_service::process_executor_events(events, tx)
+    }
 }
 
-impl ImportTable for Handler<ContractsRawCode> {
-    type TableInSnapshot = ContractsRawCode;
-    type TableBeingWritten = ContractsRawCode;
-    type DbDesc = OnChain;
-
-    fn process(
+impl ImportTable<ContractsRawCode> for Handler {
+    fn process_on_chain(
         &mut self,
-        group: Vec<TableEntry<Self::TableInSnapshot>>,
-        tx: &mut StorageTransaction<&mut Database>,
+        group: Vec<TableEntry<ContractsRawCode>>,
+        tx: &mut StorageTransaction<&mut Database<OnChain>>,
+    ) -> anyhow::Result<()> {
+        group
+            .into_iter()
+            .try_for_each(|contract| init_contract_raw_code(tx, &contract))
+    }
+}
+
+impl ImportTable<ContractsLatestUtxo> for Handler {
+    fn process_on_chain(
+        &mut self,
+        group: Vec<TableEntry<ContractsLatestUtxo>>,
+        tx: &mut StorageTransaction<&mut Database<OnChain>>,
     ) -> anyhow::Result<()> {
         group.into_iter().try_for_each(|contract| {
-            init_contract_raw_code(tx, &contract)?;
-            Ok::<(), anyhow::Error>(())
+            init_contract_latest_utxo(tx, &contract, self.block_height)
         })
     }
 }
 
-impl ImportTable for Handler<ContractsLatestUtxo> {
-    type TableInSnapshot = ContractsLatestUtxo;
-    type TableBeingWritten = ContractsLatestUtxo;
-    type DbDesc = OnChain;
-
-    fn process(
+impl ImportTable<ContractsState> for Handler {
+    fn process_on_chain(
         &mut self,
-        group: Vec<TableEntry<Self::TableInSnapshot>>,
-        tx: &mut StorageTransaction<&mut Database>,
-    ) -> anyhow::Result<()> {
-        group.into_iter().try_for_each(|contract| {
-            init_contract_latest_utxo(tx, &contract, self.block_height)?;
-            Ok::<(), anyhow::Error>(())
-        })
-    }
-}
-
-impl ImportTable for Handler<ContractsState> {
-    type TableInSnapshot = ContractsState;
-    type TableBeingWritten = ContractsState;
-    type DbDesc = OnChain;
-
-    fn process(
-        &mut self,
-        group: Vec<TableEntry<Self::TableInSnapshot>>,
-        tx: &mut StorageTransaction<&mut Database>,
+        group: Vec<TableEntry<ContractsState>>,
+        tx: &mut StorageTransaction<&mut Database<OnChain>>,
     ) -> anyhow::Result<()> {
         tx.update_contract_states(group)?;
         Ok(())
     }
 }
 
-impl ImportTable for Handler<ContractsAssets> {
-    type TableInSnapshot = ContractsAssets;
-    type TableBeingWritten = ContractsAssets;
-    type DbDesc = OnChain;
-
-    fn process(
+impl ImportTable<ContractsAssets> for Handler {
+    fn process_on_chain(
         &mut self,
-        group: Vec<TableEntry<Self::TableInSnapshot>>,
-        tx: &mut StorageTransaction<&mut Database>,
+        group: Vec<TableEntry<ContractsAssets>>,
+        tx: &mut StorageTransaction<&mut Database<OnChain>>,
     ) -> anyhow::Result<()> {
         tx.update_contract_balances(group)?;
         Ok(())
     }
 }
 
-impl ImportTable for Handler<Transactions> {
-    type TableInSnapshot = Transactions;
-    type TableBeingWritten = Transactions;
-    type DbDesc = OnChain;
-
-    fn process(
+impl ImportTable<Transactions> for Handler {
+    fn process_on_chain(
         &mut self,
-        group: Vec<TableEntry<Self::TableInSnapshot>>,
-        tx: &mut StorageTransaction<&mut Database<Self::DbDesc>>,
+        group: Vec<TableEntry<Transactions>>,
+        tx: &mut StorageTransaction<&mut Database<OnChain>>,
     ) -> anyhow::Result<()> {
         for transaction in &group {
             tx.storage::<Transactions>()
                 .insert(&transaction.key, &transaction.value)?;
+        }
+
+        Ok(())
+    }
+
+    fn process_off_chain(
+        &mut self,
+        group: Vec<TableEntry<Transactions>>,
+        tx: &mut StorageTransaction<&mut Database<OffChain>>,
+    ) -> anyhow::Result<()> {
+        let transactions = group.iter().map(|TableEntry { value, .. }| value);
+        worker_service::process_transactions(transactions, tx)?;
+        Ok(())
+    }
+}
+
+impl ImportTable<TransactionStatuses> for Handler {
+    fn process_off_chain(
+        &mut self,
+        group: Vec<TableEntry<TransactionStatuses>>,
+        tx: &mut StorageTransaction<&mut Database<OffChain>>,
+    ) -> anyhow::Result<()> {
+        for tx_status in group {
+            tx.storage::<TransactionStatuses>()
+                .insert(&tx_status.key, &tx_status.value)?;
+        }
+        Ok(())
+    }
+}
+
+impl ImportTable<FuelBlockIdsToHeights> for Handler {
+    fn process_off_chain(
+        &mut self,
+        group: Vec<TableEntry<FuelBlockIdsToHeights>>,
+        tx: &mut StorageTransaction<&mut Database<OffChain>>,
+    ) -> anyhow::Result<()> {
+        for entry in group {
+            tx.storage::<FuelBlockIdsToHeights>()
+                .insert(&entry.key, &entry.value)?;
+        }
+        Ok(())
+    }
+}
+
+impl ImportTable<OwnedTransactions> for Handler {
+    fn process_off_chain(
+        &mut self,
+        group: Vec<TableEntry<OwnedTransactions>>,
+        tx: &mut StorageTransaction<&mut Database<OffChain>>,
+    ) -> anyhow::Result<()> {
+        for entry in group {
+            tx.storage::<OwnedTransactions>()
+                .insert(&entry.key, &entry.value)?;
         }
         Ok(())
     }
