@@ -1,38 +1,22 @@
 use super::{
-    coin::CoinConfig,
-    contract::ContractConfig,
-    message::MessageConfig,
+    coin::CoinConfig, contract::ContractConfig, message::MessageConfig,
     table_entry::TableEntry,
 };
-use crate::{
-    ContractBalanceConfig,
-    ContractStateConfig,
-};
+use crate::{ContractBalanceConfig, ContractStateConfig};
 use fuel_core_storage::{
     structured_storage::TableWithBlueprint,
     tables::{
-        Coins,
-        ContractsAssets,
-        ContractsLatestUtxo,
-        ContractsRawCode,
-        ContractsState,
-        Messages,
-        Transactions,
+        Coins, ContractsAssets, ContractsLatestUtxo, ContractsRawCode, ContractsState,
+        Messages, Transactions,
     },
-    ContractsAssetKey,
-    ContractsStateKey,
-    Mappable,
+    ContractsAssetKey, ContractsStateKey, Mappable,
 };
 use fuel_core_types::{
-    blockchain::primitives::DaBlockHeight,
-    entities::contract::ContractUtxoInfo,
+    blockchain::primitives::DaBlockHeight, entities::contract::ContractUtxoInfo,
     fuel_types::BlockHeight,
 };
 use itertools::Itertools;
-use serde::{
-    Deserialize,
-    Serialize,
-};
+use serde::{Deserialize, Serialize};
 
 #[cfg(feature = "std")]
 use crate::SnapshotMetadata;
@@ -40,18 +24,11 @@ use crate::SnapshotMetadata;
 #[cfg(feature = "test-helpers")]
 use crate::CoinConfigGenerator;
 #[cfg(feature = "test-helpers")]
-use bech32::{
-    ToBase32,
-    Variant::Bech32m,
-};
+use bech32::{ToBase32, Variant::Bech32m};
 #[cfg(feature = "test-helpers")]
 use core::str::FromStr;
 #[cfg(feature = "test-helpers")]
-use fuel_core_types::{
-    fuel_types::Address,
-    fuel_types::Bytes32,
-    fuel_vm::SecretKey,
-};
+use fuel_core_types::{fuel_types::Address, fuel_types::Bytes32, fuel_vm::SecretKey};
 
 #[cfg(feature = "parquet")]
 mod parquet;
@@ -531,32 +508,20 @@ impl StateConfig {
     }
 }
 
-pub use reader::{
-    GroupIter,
-    SnapshotReader,
-};
+pub use reader::{GroupIter, Groups, SnapshotReader};
 #[cfg(feature = "parquet")]
 pub use writer::ZstdCompressionLevel;
 #[cfg(feature = "std")]
-pub use writer::{
-    SnapshotFragment,
-    SnapshotWriter,
-};
+pub use writer::{SnapshotFragment, SnapshotWriter};
 pub const MAX_GROUP_SIZE: usize = usize::MAX;
 
 #[cfg(test)]
 mod tests {
     use std::path::Path;
 
-    use crate::{
-        ChainConfig,
-        Randomize,
-    };
+    use crate::{ChainConfig, Randomize};
 
-    use rand::{
-        rngs::StdRng,
-        SeedableRng,
-    };
+    use rand::{rngs::StdRng, SeedableRng};
 
     use super::*;
 
