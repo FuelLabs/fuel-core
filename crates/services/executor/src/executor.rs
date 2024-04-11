@@ -707,21 +707,56 @@ where
         header: &PartialBlockHeader,
         consensus_params: &ConsensusParameters,
     ) -> Result<CheckedTransaction, ForcedTransactionFailure> {
-        let parsed_tx = Transaction::from_bytes(relayed_tx.serialized_transaction())
+        let parsed_tx = Self::parse_tx_bytes(&relayed_tx)?;
+        let checked_tx =
+            Self::get_checked_tx(parsed_tx, *header.height(), consensus_params)?;
+        Self::tx_is_valid_variant(&checked_tx)?;
+        Self::relayed_tx_claimed_enough_max_gas(&checked_tx, &relayed_tx)?;
+        let predicate_checked_tx =
+            Self::predicates_on_tx_are_valid(checked_tx, consensus_params)?;
+        Ok(CheckedTransaction::from(predicate_checked_tx))
+    }
+
+    fn parse_tx_bytes(
+        relayed_transaction: &RelayedTransaction,
+    ) -> Result<Transaction, ForcedTransactionFailure> {
+        let tx_bytes = relayed_transaction.serialized_transaction();
+        let tx = Transaction::from_bytes(tx_bytes)
             .map_err(|_| ForcedTransactionFailure::CodecError)?;
+        Ok(tx)
+    }
 
-        let check_tx_res = parsed_tx
-            .into_checked(header.consensus.height, consensus_params)
+    fn get_checked_tx(
+        tx: Transaction,
+        height: BlockHeight,
+        consensus_params: &ConsensusParameters,
+    ) -> Result<Checked<Transaction>, ForcedTransactionFailure> {
+        let checked_tx = tx
+            .into_checked(height, consensus_params)
             .map_err(ForcedTransactionFailure::CheckError)?;
+        Ok(checked_tx)
+    }
 
+    fn tx_is_valid_variant(
+        tx: &Checked<Transaction>,
+    ) -> Result<(), ForcedTransactionFailure> {
+        match tx.transaction() {
+            Transaction::Mint(_) => Err(ForcedTransactionFailure::InvalidTransactionType),
+            Transaction::Script(_) | Transaction::Create(_) => Ok(()),
+        }
+    }
+
+    fn relayed_tx_claimed_enough_max_gas(
+        tx: &Checked<Transaction>,
+        relayed_tx: &RelayedTransaction,
+    ) -> Result<(), ForcedTransactionFailure> {
         let claimed_max_gas = relayed_tx.max_gas();
-        let actual_max_gas = match check_tx_res.metadata() {
+        let actual_max_gas = match tx.metadata() {
+            CheckedMetadata::Script(script_metadata) => script_metadata.max_gas,
+            CheckedMetadata::Create(create_metadata) => create_metadata.max_gas,
             CheckedMetadata::Mint(_) => {
                 return Err(ForcedTransactionFailure::InvalidTransactionType);
             }
-
-            CheckedMetadata::Script(script_metadata) => script_metadata.max_gas,
-            CheckedMetadata::Create(create_metadata) => create_metadata.max_gas,
         };
         if actual_max_gas > claimed_max_gas {
             return Err(ForcedTransactionFailure::InsufficientMaxGas {
@@ -729,23 +764,17 @@ where
                 actual_max_gas,
             });
         }
+        Ok(())
+    }
 
-        let checked_tx = check_tx_res
+    fn predicates_on_tx_are_valid(
+        tx: Checked<Transaction>,
+        consensus_params: &ConsensusParameters,
+    ) -> Result<Checked<Transaction>, ForcedTransactionFailure> {
+        let checked_tx = tx
             .check_predicates(&CheckPredicateParams::from(consensus_params))
             .map_err(ForcedTransactionFailure::CheckError)?;
-
-        // Fail if transaction is not a script or create
-        // todo: Ideally we'd have a helper such as `.is_chargeable()` to be more future proof in
-        //       case new tx types are added in the future.
-        match checked_tx.transaction() {
-            Transaction::Script(_) => {}
-            Transaction::Create(_) => {}
-            Transaction::Mint(_) => {
-                return Err(ForcedTransactionFailure::InvalidTransactionType);
-            }
-        }
-
-        Ok(CheckedTransaction::from(checked_tx))
+        Ok(checked_tx)
     }
 
     #[allow(clippy::too_many_arguments)]
