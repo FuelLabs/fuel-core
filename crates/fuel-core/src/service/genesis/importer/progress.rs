@@ -45,15 +45,16 @@ impl ProgressReporter {
         ProgressReporter { bar, target }
     }
 
-    pub fn set_progress(&self, progress: u64) {
-        self.bar.set_position(progress);
+    pub fn set_progress(&self, group_index: u64) {
+        let group_num = group_index.saturating_add(1);
+        self.bar.set_position(group_num);
         if let Target::Logs(span) = &self.target {
             span.in_scope(|| {
                 if let Some(len) = self.bar.length() {
                     let human_eta = HumanDuration(self.bar.eta());
-                    tracing::info!("Processing: {progress}/{len}. ({human_eta})");
+                    tracing::info!("Processing: {group_num}/{len}. ({human_eta})");
                 } else {
-                    tracing::info!("Processing: {}", progress);
+                    tracing::info!("Processing: {}", group_num);
                 }
             })
         }

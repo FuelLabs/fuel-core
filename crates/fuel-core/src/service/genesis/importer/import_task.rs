@@ -124,7 +124,8 @@ where
                     index,
                 )?;
                 tx.commit()?;
-                self.reporter.set_progress(index as u64);
+                self.reporter
+                    .set_progress(u64::try_from(index).unwrap_or(u64::MAX));
                 Ok(())
             });
 
