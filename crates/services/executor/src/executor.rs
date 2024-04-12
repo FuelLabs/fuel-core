@@ -507,7 +507,7 @@ where
                     .write_transaction()
                     .with_policy(ConflictPolicy::Overwrite);
                 let tx_id = tx.id(&self.consensus_params.chain_id());
-                let tx = self.execute_transaction(
+                let result = self.execute_transaction(
                     tx,
                     &tx_id,
                     &block.header,
@@ -516,8 +516,30 @@ where
                     execution_data,
                     execution_kind,
                     &mut tx_st_transaction,
-                )?;
-                tx_st_transaction.commit()?;
+                );
+                let tx = match result {
+                    Err(err) => {
+                        return match execution_kind {
+                            ExecutionKind::Production => {
+                                // If, during block production, we get an invalid transaction,
+                                // remove it from the block and continue block creation. An invalid
+                                // transaction means that the caller didn't validate it first, so
+                                // maybe something is wrong with validation rules in the `TxPool`
+                                // (or in another place that should validate it). Or we forgot to
+                                // clean up some dependent/conflict transactions. But it definitely
+                                // means that something went wrong, and we must fix it.
+                                execution_data.skipped_transactions.push((tx_id, err));
+                                Ok(())
+                            }
+                            ExecutionKind::DryRun | ExecutionKind::Validation => Err(err),
+                        }
+                    }
+                    Ok(tx) => tx,
+                };
+
+                if let Err(err) = tx_st_transaction.commit() {
+                    return Err(err.into())
+                }
                 tx
             };
 
@@ -558,15 +580,7 @@ where
         let mut regular_tx_iter = source.next(remaining_gas_limit).into_iter().peekable();
         while regular_tx_iter.peek().is_some() {
             for transaction in regular_tx_iter {
-                let tx_id = transaction.id(&self.consensus_params.chain_id());
-                match execute_transaction(&mut *execution_data, transaction, gas_price) {
-                    Ok(_) => {}
-                    Err(err) => {
-                        execution_data
-                            .skipped_transactions
-                            .push((tx_id, err.clone()));
-                    }
-                }
+                execute_transaction(&mut *execution_data, transaction, gas_price)?;
             }
 
             let new_remaining_gas_limit =
