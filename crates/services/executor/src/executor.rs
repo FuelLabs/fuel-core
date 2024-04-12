@@ -541,9 +541,8 @@ where
             ) {
                 Ok(_) => {}
                 Err(err) => {
-                    let id_bytes: Bytes32 = tx_id.into();
                     let event = ExecutorEvent::ForcedTransactionFailed {
-                        id: id_bytes.into(),
+                        id: tx_id.into(),
                         block_height,
                         failure: err.to_string(),
                     };
@@ -812,7 +811,7 @@ where
             MaybeCheckedTransaction::CheckedTransaction(checked_tx) => checked_tx,
         };
 
-        let res = match checked_tx {
+        match checked_tx {
             CheckedTransaction::Script(script) => self.execute_create_or_script(
                 script,
                 header,
@@ -840,9 +839,7 @@ where
                 tx_st_transaction,
                 execution_kind,
             ),
-        };
-
-        res
+        }
     }
 
     #[allow(clippy::too_many_arguments)]
