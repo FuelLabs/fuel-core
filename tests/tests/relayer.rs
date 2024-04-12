@@ -51,7 +51,6 @@ use fuel_core_types::{
         BlockHeight,
         Nonce,
     },
-    tai64::Tai64,
 };
 use hyper::{
     service::{
@@ -268,13 +267,11 @@ async fn can_find_failed_relayed_tx() {
     let mut db = CombinedDatabase::in_memory();
     let id = [1; 32].into();
     let block_height: BlockHeight = 999.into();
-    let block_time = Tai64::UNIX_EPOCH;
     let failure = "lolz".to_string();
 
     // given
     let status = FuelRelayedTransactionStatus::Failed {
         block_height,
-        block_time,
         failure: failure.clone(),
     };
     db.off_chain_mut()
@@ -291,7 +288,6 @@ async fn can_find_failed_relayed_tx() {
     // then
     let expected = Some(ClientRelayedTransactionStatus::Failed {
         block_height,
-        block_time,
         failure,
     });
     let actual = client.relayed_transaction_status(&id).await.unwrap();
