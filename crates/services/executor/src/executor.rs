@@ -713,7 +713,7 @@ where
         Self::relayed_tx_claimed_enough_max_gas(
             &parsed_tx,
             &relayed_tx,
-            &consensus_params,
+            consensus_params,
         )?;
         let checked_tx =
             Self::get_checked_tx(parsed_tx, *header.height(), consensus_params)?;
