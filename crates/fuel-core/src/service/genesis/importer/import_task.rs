@@ -1,3 +1,4 @@
+use anyhow::bail;
 use fuel_core_chain_config::TableEntry;
 use fuel_core_storage::{
     kv_store::StorageColumn,
@@ -101,11 +102,10 @@ where
     for<'a> StorageTransaction<&'a mut Database<DbDesc>>:
         StorageMutate<GenesisMetadata<DbDesc>, Error = fuel_core_storage::Error>,
 {
-    pub fn run(mut self) -> anyhow::Result<bool> {
+    pub fn run(mut self) -> anyhow::Result<()> {
         let mut db = self.db;
         let mut is_cancelled = self.cancel_token.is_cancelled();
-        let result: anyhow::Result<_> = self
-            .groups
+        self.groups
             .into_iter()
             .enumerate()
             .skip(self.skip)
@@ -126,12 +126,14 @@ where
                 tx.commit()?;
                 self.reporter
                     .set_progress(u64::try_from(index).unwrap_or(u64::MAX));
-                Ok(())
-            });
+                anyhow::Result::<_>::Ok(())
+            })?;
 
-        result?;
+        if is_cancelled {
+            bail!("Import cancelled")
+        }
 
-        Ok(!is_cancelled)
+        Ok(())
     }
 }
 
@@ -510,11 +512,10 @@ mod tests {
         // then
         // runner should finish
         drop(tx);
-        let runner_response = runner_handle.join().unwrap();
-        assert!(
-            runner_response.is_ok(),
-            "Stopping a runner should not be an error"
-        );
+        runner_handle
+            .join()
+            .unwrap()
+            .expect_err("Cancelling is an error");
 
         // group after signal is not read
         let read_entries = read_groups.lock().unwrap().clone();

@@ -65,7 +65,7 @@ use tracing::Level;
 
 pub struct SnapshotImporter {
     db: CombinedDatabase,
-    task_manager: TaskManager<bool>,
+    task_manager: TaskManager<()>,
     snapshot_reader: SnapshotReader,
     tracing_span: tracing::Span,
     multi_progress_reporter: MultipleProgressReporter,
@@ -90,11 +90,11 @@ impl SnapshotImporter {
         db: CombinedDatabase,
         snapshot_reader: SnapshotReader,
         watcher: StateWatcher,
-    ) -> anyhow::Result<bool> {
+    ) -> anyhow::Result<()> {
         Self::new(db, snapshot_reader, watcher).run_workers().await
     }
 
-    async fn run_workers(mut self) -> anyhow::Result<bool> {
+    async fn run_workers(mut self) -> anyhow::Result<()> {
         tracing::info!("Running imports");
         self.spawn_worker_on_chain::<Coins>()?;
         self.spawn_worker_on_chain::<Messages>()?;
@@ -110,9 +110,9 @@ impl SnapshotImporter {
         self.spawn_worker_off_chain::<Coins, OwnedCoins>()?;
         self.spawn_worker_off_chain::<Transactions, ContractsInfo>()?;
 
-        let was_cancelled = self.task_manager.wait().await?.into_iter().all(|e| e);
+        self.task_manager.wait().await?;
 
-        Ok(was_cancelled)
+        Ok(())
     }
 
     pub fn spawn_worker_on_chain<TableBeingWritten>(&mut self) -> anyhow::Result<()>
