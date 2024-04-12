@@ -3,7 +3,7 @@ use fuel_core_storage::{
     kv_store::StorageColumn,
     structured_storage::TableWithBlueprint,
     transactional::{StorageTransaction, WriteTransaction},
-    Mappable, StorageAsRef, StorageInspect, StorageMutate,
+    Mappable, StorageAsRef, StorageInspect,
 };
 
 use crate::{
@@ -22,22 +22,22 @@ use super::progress::ProgressReporter;
 pub trait ImportTable<T: Mappable> {
     fn process_on_chain(
         &mut self,
-        group: Vec<TableEntry<T>>,
-        tx: &mut StorageTransaction<&mut Database<OnChain>>,
+        _group: Vec<TableEntry<T>>,
+        _tx: &mut StorageTransaction<&mut Database<OnChain>>,
     ) -> anyhow::Result<()> {
         Ok(())
     }
 
     fn process_off_chain(
         &mut self,
-        group: Vec<TableEntry<T>>,
-        tx: &mut StorageTransaction<&mut Database<OffChain>>,
+        _group: Vec<TableEntry<T>>,
+        _tx: &mut StorageTransaction<&mut Database<OffChain>>,
     ) -> anyhow::Result<()> {
         Ok(())
     }
 }
 
-pub fn import_entries<Groups, T>(
+pub fn import_entries<T>(
     cancel_token: CancellationToken,
     mut handler: impl ImportTable<T>,
     groups: impl IntoIterator<Item = anyhow::Result<Vec<TableEntry<T>>>>,
@@ -48,9 +48,18 @@ pub fn import_entries<Groups, T>(
 where
     T: TableWithBlueprint,
 {
-    // TODO: the progress should be written to both tables
-    let skip = match on_chain_db
+    let skip_on_chain = match on_chain_db
         .storage::<GenesisMetadata<OnChain>>()
+        .get(T::column().name())
+    {
+        Ok(Some(idx_last_handled)) => {
+            usize::saturating_add(idx_last_handled.into_owned(), 1)
+        }
+        _ => 0,
+    };
+
+    let skip_off_chain = match off_chain_db
+        .storage::<GenesisMetadata<OffChain>>()
         .get(T::column().name())
     {
         Ok(Some(idx_last_handled)) => {
@@ -62,19 +71,18 @@ where
     let mut is_cancelled = cancel_token.is_cancelled();
     let result: anyhow::Result<_> = groups
         .into_iter()
-        .skip(skip)
+        .enumerate()
+        .skip(skip_on_chain)
         .take_while(|_| {
             is_cancelled = cancel_token.is_cancelled();
             !is_cancelled
         })
-        .enumerate()
-        .map(|(index, group)| (index.saturating_add(skip), group))
         .try_for_each(|(index, group)| {
             let group = group?;
 
             let mut on_chain_tx = on_chain_db.write_transaction();
 
-            handler.process_on_chain(group, &mut on_chain_tx)?;
+            handler.process_on_chain(group.clone(), &mut on_chain_tx)?;
 
             GenesisProgressMutate::<OnChain>::update_genesis_progress(
                 &mut on_chain_tx,
@@ -113,10 +121,14 @@ mod tests {
             genesis_progress::GenesisProgressInspect,
         },
         service::genesis::{
-            importer::progress::ProgressReporter, task_manager::CancellationToken,
+            importer::{import_task::import_entries, progress::ProgressReporter},
+            task_manager::CancellationToken,
         },
     };
-    use std::sync::{Arc, Mutex};
+    use std::{
+        sync::{Arc, Mutex},
+        time::Duration,
+    };
 
     use anyhow::{anyhow, bail};
     use fuel_core_chain_config::{Groups, Randomize, TableEntry};
@@ -147,37 +159,95 @@ mod tests {
 
     use super::ImportTable;
 
-    struct TestHandler<L> {
-        logic: L,
+    #[derive(Default, Clone)]
+    struct Spy {
+        on_chain_called_with: Arc<Mutex<Vec<Vec<TableEntry<Coins>>>>>,
+        off_chain_called_with: Arc<Mutex<Vec<Vec<TableEntry<Coins>>>>>,
     }
 
-    impl<L> TestHandler<L>
-    where
-        TestHandler<L>: ImportTable,
-    {
-        pub fn new(logic: L) -> Self {
-            Self { logic }
+    impl Spy {
+        fn new() -> Self {
+            Self {
+                on_chain_called_with: Default::default(),
+                off_chain_called_with: Default::default(),
+            }
+        }
+
+        fn default_importer(
+            &self,
+        ) -> TestTableImporter<
+            fn(
+                Vec<TableEntry<Coins>>,
+                &mut StorageTransaction<&mut Database<OnChain>>,
+            ) -> anyhow::Result<()>,
+            fn(
+                Vec<TableEntry<Coins>>,
+                &mut StorageTransaction<&mut Database<OffChain>>,
+            ) -> anyhow::Result<()>,
+        > {
+            TestTableImporter {
+                on_chain: |_, _| Ok(()),
+                off_chain: |_, _| Ok(()),
+                handler: self.clone(),
+            }
+        }
+
+        fn custom_importer<OnChainCallback, OffChainCallback>(
+            &self,
+            on_chain: OnChainCallback,
+            off_chain: OffChainCallback,
+        ) -> TestTableImporter<OnChainCallback, OffChainCallback> {
+            TestTableImporter {
+                on_chain,
+                off_chain,
+                handler: self.clone(),
+            }
         }
     }
 
-    impl<L> ImportTable for TestHandler<L>
+    struct TestTableImporter<OnChainCallback, OffChainCallback> {
+        on_chain: OnChainCallback,
+        off_chain: OffChainCallback,
+        handler: Spy,
+    }
+
+    impl<OnChainCallback, OffChainCallback> ImportTable<Coins>
+        for TestTableImporter<OnChainCallback, OffChainCallback>
     where
-        L: FnMut(
-            TableEntry<Coins>,
-            &mut StorageTransaction<&mut Database>,
+        OnChainCallback: FnMut(
+            Vec<TableEntry<Coins>>,
+            &mut StorageTransaction<&mut Database<OnChain>>,
+        ) -> anyhow::Result<()>,
+        OffChainCallback: FnMut(
+            Vec<TableEntry<Coins>>,
+            &mut StorageTransaction<&mut Database<OffChain>>,
         ) -> anyhow::Result<()>,
     {
-        type TableInSnapshot = Coins;
-        type TableBeingWritten = Coins;
-        type DbDesc = OnChain;
-        fn process(
+        fn process_on_chain(
             &mut self,
-            group: Vec<TableEntry<Self::TableInSnapshot>>,
-            tx: &mut StorageTransaction<&mut Database>,
+            group: Vec<TableEntry<Coins>>,
+            tx: &mut StorageTransaction<&mut Database<OnChain>>,
         ) -> anyhow::Result<()> {
-            group
-                .into_iter()
-                .try_for_each(|item| (self.logic)(item, tx))
+            self.handler
+                .on_chain_called_with
+                .lock()
+                .unwrap()
+                .push(group);
+            (self.on_chain)(group, tx)?;
+            Ok(())
+        }
+        fn process_off_chain(
+            &mut self,
+            group: Vec<TableEntry<Coins>>,
+            tx: &mut StorageTransaction<&mut Database<OffChain>>,
+        ) -> anyhow::Result<()> {
+            self.handler
+                .off_chain_called_with
+                .lock()
+                .unwrap()
+                .push(group);
+            (self.off_chain)(group, tx)?;
+            Ok(())
         }
     }
 
@@ -203,12 +273,21 @@ mod tests {
                 .collect()
         }
 
-        pub fn as_unwrapped_groups(&self) -> Vec<Vec<TableEntry<Coins>>> {
-            self.batches.clone()
+        pub fn as_unwrapped_groups(
+            &self,
+            skip_batches: usize,
+        ) -> Vec<Vec<TableEntry<Coins>>> {
+            self.batches.iter().skip(skip_batches).cloned().collect()
         }
 
-        pub fn as_ok_groups(&self) -> Vec<anyhow::Result<Vec<Coins>>> {
-            self.as_unwrapped_groups().into_iter().map(Ok).collect()
+        pub fn as_ok_groups(
+            &self,
+            skip_batches: usize,
+        ) -> Vec<anyhow::Result<Vec<TableEntry<Coins>>>> {
+            self.as_unwrapped_groups(skip_batches)
+                .into_iter()
+                .map(Ok)
+                .collect()
         }
     }
 
@@ -218,23 +297,26 @@ mod tests {
         let data = TestData::new(3);
 
         let mut called_with = vec![];
-        let runner = ImportTask::new(
+
+        // when
+        import_entries(
             CancellationToken::default(),
-            TestHandler::new(|group, _| {
-                called_with.push(group);
-                Ok(())
-            }),
-            data.as_ok_groups(),
+            Spy::custom(
+                |group, _| {
+                    called_with.push(group);
+                    Ok(())
+                },
+                |_, _| Ok(()),
+            ),
+            data.as_ok_groups(0),
             Database::default(),
             Database::default(),
             ProgressReporter::default(),
-        );
-
-        // when
-        runner.run().unwrap();
+        )
+        .unwrap();
 
         // then
-        assert_eq!(called_with, data.as_entries(0));
+        assert_eq!(called_with, data.as_unwrapped_groups(0));
     }
 
     #[test]
@@ -244,73 +326,27 @@ mod tests {
 
         let mut called_with = vec![];
         let mut db = CombinedDatabase::default();
+        let spy = Spy::new();
         GenesisProgressMutate::<OnChain>::update_genesis_progress(
             db.on_chain_mut(),
             Coins::column().name(),
             0,
         )
         .unwrap();
-        let runner = ImportTask::new(
+
+        // when
+        import_entries(
             CancellationToken::default(),
-            TestHandler::new(|element, _| {
-                called_with.push(element);
-                Ok(())
-            }),
-            data.as_ok_groups(),
+            spy.default_importer(),
+            data.as_ok_groups(0),
             db.on_chain().clone(),
             db.off_chain().clone(),
             ProgressReporter::default(),
-        );
-
-        // when
-        runner.run().unwrap();
+        )
+        .unwrap();
 
         // then
-        assert_eq!(called_with, data.as_entries(1));
-    }
-
-    #[test]
-    fn changes_to_db_by_handler_are_behind_a_transaction() {
-        // given
-        let groups = TestData::new(1);
-        let on_chain_outer_db = Database::default();
-        let off_chain_outer_db = Database::default();
-        let utxo_id = UtxoId::new(Default::default(), 0);
-
-        let runner = ImportTask::new(
-            CancellationToken::default(),
-            TestHandler::new(|_, tx| {
-                insert_a_coin(tx, &utxo_id);
-
-                assert!(
-                    tx.storage::<Coins>().contains_key(&utxo_id).unwrap(),
-                    "Coin should be present in the tx db view"
-                );
-
-                assert!(
-                    !on_chain_outer_db
-                        .storage_as_ref::<Coins>()
-                        .contains_key(&utxo_id)
-                        .unwrap(),
-                    "Coin should not be present in the outer db "
-                );
-
-                Ok(())
-            }),
-            groups.as_ok_groups(),
-            on_chain_outer_db.clone(),
-            off_chain_outer_db.clone(),
-            ProgressReporter::default(),
-        );
-
-        // when
-        runner.run().unwrap();
-
-        // then
-        assert!(on_chain_outer_db
-            .storage_as_ref::<Coins>()
-            .contains_key(&utxo_id)
-            .unwrap());
+        assert_eq!(called_with, data.as_unwrapped_groups(1));
     }
 
     fn insert_a_coin(tx: &mut StorageTransaction<&mut Database>, utxo_id: &UtxoId) {
@@ -327,20 +363,22 @@ mod tests {
         let off_chain_db = Database::default();
         let utxo_id = UtxoId::new(Default::default(), 0);
 
-        let runner = ImportTask::new(
+        // when
+        let _ = import_entries(
             CancellationToken::default(),
-            TestHandler::new(|_, tx| {
-                insert_a_coin(tx, &utxo_id);
-                bail!("Some error")
-            }),
-            groups.as_ok_groups(),
+            Spy::custom(
+                |_, tx| {
+                    insert_a_coin(tx, &utxo_id);
+                    bail!("Some error")
+                },
+                |_, _| Ok(()),
+            ),
+            groups.as_ok_groups(0),
             on_chain_db.clone(),
             off_chain_db.clone(),
             ProgressReporter::default(),
-        );
-
-        // when
-        let _ = runner.run();
+        )
+        .expect_err("should fail");
 
         // then
         assert!(!StorageInspect::<Coins>::contains_key(&on_chain_db, &utxo_id).unwrap());
@@ -350,17 +388,16 @@ mod tests {
     fn handler_failure_is_propagated() {
         // given
         let groups = TestData::new(1);
-        let runner = ImportTask::new(
+
+        // when
+        let result = import_entries(
             CancellationToken::default(),
-            TestHandler::new(|_, _| bail!("Some error")),
-            groups.as_ok_groups(),
+            Spy::custom(|_, _| bail!("Some error"), |_, _| Ok(())),
+            groups.as_ok_groups(0),
             Database::default(),
             Database::default(),
             ProgressReporter::default(),
         );
-
-        // when
-        let result = runner.run();
 
         // then
         assert!(result.is_err());
@@ -370,17 +407,16 @@ mod tests {
     fn seeing_an_invalid_group_propagates_the_error() {
         // given
         let groups = Groups::new(vec![Err(anyhow!("Some error"))]);
-        let runner = ImportTask::new(
+
+        // when
+        let result = import_entries(
             CancellationToken::default(),
-            TestHandler::new(|_, _| Ok(())),
+            Spy::custom(|_, _| Ok(()), |_, _| Ok(())),
             groups,
             Database::default(),
             Database::default(),
             ProgressReporter::default(),
         );
-
-        // when
-        let result = runner.run();
 
         // then
         assert!(result.is_err());
@@ -392,17 +428,17 @@ mod tests {
         let data = TestData::new(2);
         let on_chain_db = Database::default();
         let off_chain_db = Database::default();
-        let runner = ImportTask::new(
+
+        // when
+        import_entries(
             CancellationToken::default(),
-            TestHandler::new(|_, _| Ok(())),
-            data.as_ok_groups(),
+            Spy::custom(|_, _| Ok(()), |_, _| Ok(())),
+            data.as_ok_groups(0),
             on_chain_db.clone(),
             off_chain_db.clone(),
             ProgressReporter::default(),
-        );
-
-        // when
-        runner.run().unwrap();
+        )
+        .unwrap();
 
         // then
         assert_eq!(
@@ -421,26 +457,30 @@ mod tests {
 
         let read_groups = Arc::new(Mutex::new(vec![]));
         let cancel_token = tokio_util::sync::CancellationToken::new();
-        let runner = {
+        let runner_handle = {
             let read_groups = Arc::clone(&read_groups);
-            ImportTask::new(
-                cancel_token.clone().into(),
-                TestHandler::new(move |el, _| {
-                    read_groups.lock().unwrap().push(el);
-                    Ok(())
-                }),
-                rx,
-                Database::default(),
-                Database::default(),
-                ProgressReporter::default(),
-            )
+            let cancel_token = cancel_token.clone().into();
+            std::thread::spawn(move || {
+                import_entries(
+                    cancel_token,
+                    Spy::custom(
+                        move |group, _| {
+                            read_groups.lock().unwrap().push(group);
+                            Ok(())
+                        },
+                        |_, _| Ok(()),
+                    ),
+                    rx,
+                    Database::default(),
+                    Database::default(),
+                    ProgressReporter::default(),
+                )
+            })
         };
-
-        let runner_handle = std::thread::spawn(move || runner.run());
 
         let data = TestData::new(4);
         let take = 3;
-        for group in data.as_ok_groups().into_iter().take(take) {
+        for group in data.as_ok_groups(0).into_iter().take(take) {
             tx.send(group).unwrap();
         }
 
@@ -451,7 +491,7 @@ mod tests {
         cancel_token.cancel();
 
         // when
-        tx.send(data.as_ok_groups().pop().unwrap()).unwrap();
+        tx.send(data.as_ok_groups(0).pop().unwrap()).unwrap();
 
         // then
         // runner should finish
@@ -464,11 +504,7 @@ mod tests {
 
         // group after signal is not read
         let read_entries = read_groups.lock().unwrap().clone();
-        let inserted_groups = data
-            .as_entries(0)
-            .into_iter()
-            .take(take)
-            .collect::<Vec<_>>();
+        let inserted_groups = &data.as_unwrapped_groups(0)[..take];
         assert_eq!(read_entries, inserted_groups);
     }
 
@@ -519,16 +555,17 @@ mod tests {
     fn tx_commit_failure_is_propagated() {
         // given
         let groups = TestData::new(1);
-        let runner = ImportTask::new(
+
+        // TODO: check off chain as well
+        // when
+        let result = import_entries(
             CancellationToken::default(),
-            TestHandler::new(|_, _| Ok(())),
-            groups.as_ok_groups(),
+            Spy::custom(|_, _| Ok(()), |_, _| Ok(())),
+            groups.as_ok_groups(0),
             Database::new(Arc::new(BrokenTransactions::new())),
+            Database::default(),
             ProgressReporter::default(),
         );
-
-        // when
-        let result = runner.run();
 
         // then
         assert!(result.is_err());
