@@ -279,7 +279,7 @@ where
         let previous_da_height = block_header.da_height;
         let gas_limit = self
             .consensus_parameters_provider
-            .consensus_params_at_version(&block_header.consensus_parameters_version)
+            .consensus_params_at_version(&block_header.consensus_parameters_version)?
             .block_gas_limit();
         let new_da_height = self
             .select_new_da_height(gas_limit, previous_da_height)

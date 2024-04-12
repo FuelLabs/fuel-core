@@ -14,7 +14,7 @@ Description of the upcoming release here.
 =======
 ### Added
 
-- [#1821](https://github.com/FuelLabs/fuel-core/pull/1821): Shutdown signal propagated to (re)genesis. Progress indication added
+- [#1821](https://github.com/FuelLabs/fuel-core/pull/1821): Propagate shutdown signal to (re)genesis. Also add progress bar for (re)genesis.
 - [#1813](https://github.com/FuelLabs/fuel-core/pull/1813): Added back support for `/health` endpoint.
 - [#1799](https://github.com/FuelLabs/fuel-core/pull/1799): Snapshot creation is now concurrent.
 
@@ -23,7 +23,8 @@ Description of the upcoming release here.
 - [#1812](https://github.com/FuelLabs/fuel-core/pull/1812): Follow-up PR to simplify the logic around parallel snapshot creation.
 
 ### Changed
-- [#1808](https://github.com/FuelLabs/fuel-core/pull/1808): Fetch consensus parameters from the database.
+- [#1809](https://github.com/FuelLabs/fuel-core/pull/1809): Fetch `ConsensusParameters` from the database
+- [#1808](https://github.com/FuelLabs/fuel-core/pull/1808): Fetch consensus parameters from the provider.
 
 ## [Version 0.24.2]
 

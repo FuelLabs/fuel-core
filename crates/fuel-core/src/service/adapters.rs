@@ -16,7 +16,6 @@ use fuel_core_services::stream::BoxStream;
 #[cfg(feature = "p2p")]
 use fuel_core_types::services::p2p::peer_reputation::AppScore;
 use fuel_core_types::{
-    fuel_tx::ConsensusParameters,
     fuel_types::BlockHeight,
     services::block_importer::SharedImportResult,
 };
@@ -25,6 +24,7 @@ use std::sync::Arc;
 
 pub mod block_importer;
 pub mod consensus_module;
+pub mod consensus_parameters_provider;
 pub mod executor;
 pub mod graphql_api;
 #[cfg(feature = "p2p")]
@@ -38,14 +38,12 @@ pub mod txpool;
 
 #[derive(Debug, Clone)]
 pub struct ConsensusParametersProvider {
-    consensus_parameters: Arc<ConsensusParameters>,
+    shared_state: consensus_parameters_provider::SharedState,
 }
 
 impl ConsensusParametersProvider {
-    pub fn new(consensus_parameters: ConsensusParameters) -> Self {
-        Self {
-            consensus_parameters: Arc::new(consensus_parameters),
-        }
+    pub fn new(shared_state: consensus_parameters_provider::SharedState) -> Self {
+        Self { shared_state }
     }
 }
 
