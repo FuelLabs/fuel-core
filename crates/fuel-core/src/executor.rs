@@ -2818,6 +2818,9 @@ mod tests {
 
     #[cfg(feature = "relayer")]
     mod relayer {
+
+        use fuel_core_types::fuel_vm::checked_transaction::CheckedMetadata;
+
         use super::*;
         use crate::{
             database::database_description::{
@@ -2839,6 +2842,7 @@ mod tests {
             entities::RelayedTransaction,
             fuel_merkle::binary::root_calculator::MerkleRootCalculator,
             fuel_tx::output,
+            fuel_vm::checked_transaction::IntoChecked,
             services::executor::ForcedTransactionFailure,
         };
 
@@ -3223,9 +3227,16 @@ mod tests {
             let genesis_da_height = 3u64;
             let block_height = 1u32;
             let da_height = 10u64;
+            let zero_max_gas = 0;
 
             // given
-            let relayer_db = relayer_db_with_relayed_tx_with_low_max_gas(da_height);
+            let tx = script_tx_for_amount(100);
+
+            let relayer_db = relayer_db_with_specific_tx_for_relayed_tx(
+                da_height,
+                tx.clone(),
+                zero_max_gas,
+            );
 
             // when
             let on_chain_db = database_with_genesis_block(genesis_da_height);
@@ -3241,6 +3252,16 @@ mod tests {
             assert_eq!(txs.len(), 1);
 
             // and
+            let consensus_params = ConsensusParameters::default();
+            let actual_max_gas = if let CheckedMetadata::Script(metadata) = tx
+                .into_checked(block_height.into(), &consensus_params)
+                .unwrap()
+                .metadata()
+            {
+                metadata.max_gas
+            } else {
+                panic!("Expected `CheckedMetadata::Script`")
+            };
             let events = result.events;
             let fuel_core_types::services::executor::Event::ForcedTransactionFailed {
                 failure: actual,
@@ -3249,18 +3270,23 @@ mod tests {
             else {
                 panic!("Expected `ForcedTransactionFailed` event")
             };
-            let expected_start_of_message = "Insufficient max gas:";
-            assert!(actual.starts_with(expected_start_of_message));
+            let expected = &ForcedTransactionFailure::InsufficientMaxGas {
+                claimed_max_gas: zero_max_gas,
+                actual_max_gas,
+            }
+            .to_string();
+            assert_eq!(expected, actual);
         }
 
-        fn relayer_db_with_relayed_tx_with_low_max_gas(
+        fn relayer_db_with_specific_tx_for_relayed_tx(
             da_height: u64,
+            tx: Transaction,
+            max_gas: u64,
         ) -> Database<Relayer> {
             let mut relayed_tx = RelayedTransaction::default();
-            let tx = script_tx_for_amount(100);
             let tx_bytes = tx.to_bytes();
             relayed_tx.set_serialized_transaction(tx_bytes);
-            relayed_tx.set_max_gas(0);
+            relayed_tx.set_max_gas(max_gas);
             relayer_db_for_events(&[relayed_tx.into()], da_height)
         }
 
