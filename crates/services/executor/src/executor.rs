@@ -382,7 +382,7 @@ where
         if let Some(pre_exec_block_id) = pre_exec_block_id {
             // The block id comparison compares the whole blocks including all fields.
             if pre_exec_block_id != finalized_block_id {
-                return Err(ExecutorError::InvalidBlockId);
+                return Err(ExecutorError::InvalidBlockId)
             }
         }
 
@@ -617,7 +617,7 @@ where
             .commit_changes(block_with_relayer_data_transaction.into_changes())?;
 
         if execution_kind != ExecutionKind::DryRun && !data.found_mint {
-            return Err(ExecutorError::MintMissing);
+            return Err(ExecutorError::MintMissing)
         }
 
         data.changes = self.block_st_transaction.into_changes();
@@ -642,7 +642,7 @@ where
             .ok_or(ExecutorError::PreviousBlockIsNotFound)?;
         let previous_da_height = prev_block_header.header().da_height;
         let Some(next_unprocessed_da_height) = previous_da_height.0.checked_add(1) else {
-            return Err(ExecutorError::DaHeightExceededItsLimit);
+            return Err(ExecutorError::DaHeightExceededItsLimit)
         };
 
         let mut root_calculator = MerkleRootCalculator::new();
@@ -660,7 +660,7 @@ where
                 match event {
                     Event::Message(message) => {
                         if message.da_height() != da_height {
-                            return Err(ExecutorError::RelayerGivesIncorrectMessages);
+                            return Err(ExecutorError::RelayerGivesIncorrectMessages)
                         }
                         self.block_st_transaction
                             .storage_as_mut::<Messages>()
@@ -787,7 +787,7 @@ where
         T: KeyValueInspect<Column = Column>,
     {
         if execution_data.found_mint {
-            return Err(ExecutorError::MintIsNotLastTransaction);
+            return Err(ExecutorError::MintIsNotLastTransaction)
         }
 
         // Throw a clear error if the transaction id is a duplicate
@@ -795,7 +795,7 @@ where
             .storage::<ProcessedTransactions>()
             .contains_key(tx_id)?
         {
-            return Err(ExecutorError::TransactionIdCollision(*tx_id));
+            return Err(ExecutorError::TransactionIdCollision(*tx_id))
         }
 
         let block_height = *header.height();
@@ -854,7 +854,7 @@ where
         execution_data.found_mint = true;
 
         if checked_mint.transaction().tx_pointer().tx_index() != execution_data.tx_count {
-            return Err(ExecutorError::MintHasUnexpectedIndex);
+            return Err(ExecutorError::MintHasUnexpectedIndex)
         }
 
         let coinbase_id = checked_mint.id();
@@ -862,7 +862,7 @@ where
 
         fn verify_mint_for_empty_contract(mint: &Mint) -> ExecutorResult<()> {
             if *mint.mint_amount() != 0 {
-                return Err(ExecutorError::CoinbaseAmountMismatch);
+                return Err(ExecutorError::CoinbaseAmountMismatch)
             }
 
             let input = input::contract::Contract {
@@ -878,7 +878,7 @@ where
                 state_root: Bytes32::zeroed(),
             };
             if mint.input_contract() != &input || mint.output_contract() != &output {
-                return Err(ExecutorError::MintMismatch);
+                return Err(ExecutorError::MintMismatch)
             }
             Ok(())
         }
@@ -887,10 +887,10 @@ where
             verify_mint_for_empty_contract(&mint)?;
         } else {
             if *mint.mint_amount() != execution_data.coinbase {
-                return Err(ExecutorError::CoinbaseAmountMismatch);
+                return Err(ExecutorError::CoinbaseAmountMismatch)
             }
             if *mint.gas_price() != gas_price {
-                return Err(ExecutorError::CoinbaseGasPriceMismatch);
+                return Err(ExecutorError::CoinbaseGasPriceMismatch)
             }
 
             let block_height = *header.height();
@@ -965,7 +965,7 @@ where
 
             if execution_kind == ExecutionKind::Validation {
                 if mint.input_contract() != &input || mint.output_contract() != &output {
-                    return Err(ExecutorError::MintMismatch);
+                    return Err(ExecutorError::MintMismatch)
                 }
             } else {
                 *mint.input_contract_mut() = input;
@@ -988,7 +988,7 @@ where
             .insert(&coinbase_id, &())?
             .is_some()
         {
-            return Err(ExecutorError::TransactionIdCollision(coinbase_id));
+            return Err(ExecutorError::TransactionIdCollision(coinbase_id))
         }
         Ok(tx)
     }
@@ -1112,7 +1112,7 @@ where
                         or we added a new predicate inputs.");
                         return Err(ExecutorError::InvalidTransactionOutcome {
                             transaction_id: tx_id,
-                        });
+                        })
                     }
                 }
             }
@@ -1161,7 +1161,7 @@ where
         {
             return Err(ExecutorError::InvalidTransactionOutcome {
                 transaction_id: tx_id,
-            });
+            })
         }
 
         let final_tx = tx.into();
@@ -1223,12 +1223,12 @@ where
                         {
                             return Err(
                                 TransactionValidityError::CoinMismatch(*utxo_id).into()
-                            );
+                            )
                         }
                     } else {
                         return Err(
                             TransactionValidityError::CoinDoesNotExist(*utxo_id).into()
-                        );
+                        )
                     }
                 }
                 Input::Contract(contract) => {
@@ -1239,7 +1239,7 @@ where
                         return Err(TransactionValidityError::ContractDoesNotExist(
                             contract.contract_id,
                         )
-                        .into());
+                        .into())
                     }
                 }
                 Input::MessageCoinSigned(MessageCoinSigned { nonce, .. })
@@ -1257,7 +1257,7 @@ where
                             return Err(TransactionValidityError::MessageSpendTooEarly(
                                 *nonce,
                             )
-                            .into());
+                            .into())
                         }
 
                         if !message
@@ -1266,12 +1266,12 @@ where
                         {
                             return Err(
                                 TransactionValidityError::MessageMismatch(*nonce).into()
-                            );
+                            )
                         }
                     } else {
                         return Err(
                             TransactionValidityError::MessageDoesNotExist(*nonce).into()
-                        );
+                        )
                     }
                 }
             }
@@ -1329,7 +1329,7 @@ where
                     if reverted =>
                 {
                     // Don't spend the retryable messages if transaction is reverted
-                    continue;
+                    continue
                 }
                 Input::MessageCoinSigned(MessageCoinSigned { nonce, .. })
                 | Input::MessageCoinPredicate(MessageCoinPredicate { nonce, .. })
@@ -1341,7 +1341,7 @@ where
                         db.storage::<SpentMessages>().insert(nonce, &())?;
                     // ensure message wasn't already marked as spent
                     if was_already_spent.is_some() {
-                        return Err(ExecutorError::MessageAlreadySpent(*nonce));
+                        return Err(ExecutorError::MessageAlreadySpent(*nonce))
                     }
                     // cleanup message contents
                     let message = db
@@ -1369,7 +1369,7 @@ where
         for r in receipts {
             if let Receipt::ScriptResult { gas_used, .. } = r {
                 used_gas = *gas_used;
-                break;
+                break
             }
         }
 
@@ -1478,7 +1478,7 @@ where
                     if tx_pointer != coin.tx_pointer() {
                         return Err(ExecutorError::InvalidTransactionOutcome {
                             transaction_id: tx_id,
-                        });
+                        })
                     }
                 }
                 Input::Contract(Contract {
@@ -1498,17 +1498,17 @@ where
                     {
                         return Err(ExecutorError::InvalidTransactionOutcome {
                             transaction_id: tx_id,
-                        });
+                        })
                     }
                     if balance_root != &contract.balance_root()? {
                         return Err(ExecutorError::InvalidTransactionOutcome {
                             transaction_id: tx_id,
-                        });
+                        })
                     }
                     if state_root != &contract.state_root()? {
                         return Err(ExecutorError::InvalidTransactionOutcome {
                             transaction_id: tx_id,
-                        });
+                        })
                     }
                 }
                 _ => {}
@@ -1542,7 +1542,7 @@ where
                     } else {
                         return Err(ExecutorError::InvalidTransactionOutcome {
                             transaction_id: tx_id,
-                        });
+                        })
                     };
 
                 let contract = ContractRef::new(StructuredStorage::new(db), *contract_id);
@@ -1658,7 +1658,7 @@ where
                     } else {
                         return Err(ExecutorError::TransactionValidity(
                             TransactionValidityError::InvalidContractInputIndex(utxo_id),
-                        ));
+                        ))
                     }
                 }
                 Output::Change {
@@ -1724,7 +1724,7 @@ where
             .into();
 
             if db.storage::<Coins>().insert(&utxo_id, &coin)?.is_some() {
-                return Err(ExecutorError::OutputAlreadyExists);
+                return Err(ExecutorError::OutputAlreadyExists)
             }
             execution_data
                 .events
