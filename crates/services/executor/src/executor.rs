@@ -717,9 +717,7 @@ where
         )?;
         let checked_tx =
             Self::get_checked_tx(parsed_tx, *header.height(), consensus_params)?;
-        let predicate_checked_tx =
-            Self::predicates_on_tx_are_valid(checked_tx, consensus_params)?;
-        Ok(CheckedTransaction::from(predicate_checked_tx))
+        Ok(CheckedTransaction::from(checked_tx))
     }
 
     fn parse_tx_bytes(
@@ -771,16 +769,6 @@ where
             });
         }
         Ok(())
-    }
-
-    fn predicates_on_tx_are_valid(
-        tx: Checked<Transaction>,
-        consensus_params: &ConsensusParameters,
-    ) -> Result<Checked<Transaction>, ForcedTransactionFailure> {
-        let checked_tx = tx
-            .check_predicates(&CheckPredicateParams::from(consensus_params))
-            .map_err(ForcedTransactionFailure::CheckError)?;
-        Ok(checked_tx)
     }
 
     #[allow(clippy::too_many_arguments)]
