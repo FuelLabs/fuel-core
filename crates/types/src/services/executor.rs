@@ -98,7 +98,7 @@ pub enum ForcedTransactionFailure {
     ExecutionError(Error),
     /// Relayed Transaction didn't specify high enough max gas
     #[display(
-        fmt = "Insufficient max gas. Expected: {claimed_max_gas:?}, Actual: {actual_max_gas:?}"
+        fmt = "Insufficient max gas: Expected: {claimed_max_gas:?}, Actual: {actual_max_gas:?}"
     )]
     InsufficientMaxGas {
         /// The max gas claimed by the L1 transaction submitter

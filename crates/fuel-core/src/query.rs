@@ -7,8 +7,6 @@ mod message;
 mod subscriptions;
 mod tx;
 
-mod relayed_tx;
-
 // TODO: Remove reexporting of everything
 pub use balance::*;
 pub use block::*;

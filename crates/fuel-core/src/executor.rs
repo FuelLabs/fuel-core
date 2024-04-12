@@ -2839,6 +2839,7 @@ mod tests {
             entities::RelayedTransaction,
             fuel_merkle::binary::root_calculator::MerkleRootCalculator,
             fuel_tx::output,
+            services::executor::ForcedTransactionFailure,
         };
 
         fn database_with_genesis_block(da_block_height: u64) -> Database<OnChain> {
@@ -3174,9 +3175,11 @@ mod tests {
             let genesis_da_height = 3u64;
             let block_height = 1u32;
             let da_height = 10u64;
+            let arb_large_max_gas = 10_000;
 
             // given
-            let relayer_db = relayer_db_with_invalid_relayed_txs(da_height);
+            let relayer_db =
+                relayer_db_with_invalid_relayed_txs(da_height, arb_large_max_gas);
 
             // when
             let on_chain_db = database_with_genesis_block(genesis_da_height);
@@ -3204,8 +3207,11 @@ mod tests {
             assert_eq!(expected, actual);
         }
 
-        fn relayer_db_with_invalid_relayed_txs(da_height: u64) -> Database<Relayer> {
-            let event = arb_invalid_relayed_tx_event();
+        fn relayer_db_with_invalid_relayed_txs(
+            da_height: u64,
+            max_gas: u64,
+        ) -> Database<Relayer> {
+            let event = arb_invalid_relayed_tx_event(max_gas);
             relayer_db_for_events(&[event], da_height)
         }
 
@@ -3240,8 +3246,8 @@ mod tests {
             else {
                 panic!("Expected `ForcedTransactionFailed` event")
             };
-            let expected = "Insufficient max gas.";
-            assert!(actual.starts_with(expected));
+            let expected_start_of_message = "Insufficient max gas:";
+            assert!(actual.starts_with(expected_start_of_message));
         }
 
         fn relayer_db_with_relayed_tx_with_low_max_gas(
@@ -3291,8 +3297,8 @@ mod tests {
             else {
                 panic!("Expected `ForcedTransactionFailed` event")
             };
-            let expected = "Transaction id was already used: ";
-            assert!(actual.starts_with(expected));
+            let expected_start_of_message = "Transaction id was already used: ";
+            assert!(actual.starts_with(expected_start_of_message));
         }
 
         fn relayer_db_with_tx_that_passes_checks_but_fails_execution(
@@ -3307,8 +3313,6 @@ mod tests {
             let mut bad_relayed_tx = relayed_tx.clone();
             let new_nonce = [9; 32].into();
             bad_relayed_tx.set_nonce(new_nonce);
-            // let mut bad_tx = tx.clone();
-            // bad_relayed_tx.set_serialized_transaction(bad_tx_bytes);
             relayer_db_for_events(&[relayed_tx.into(), bad_relayed_tx.into()], da_height)
         }
 
@@ -3317,9 +3321,10 @@ mod tests {
             let genesis_da_height = 3u64;
             let block_height = 1u32;
             let da_height = 10u64;
+            let arb_large_max_gas = 10_000;
 
             // given
-            let event = arb_invalid_relayed_tx_event();
+            let event = arb_invalid_relayed_tx_event(arb_large_max_gas);
             let produced_block = produce_block_with_relayed_event(
                 event.clone(),
                 genesis_da_height,
@@ -3373,12 +3378,13 @@ mod tests {
             produced_result.block
         }
 
-        fn arb_invalid_relayed_tx_event() -> Event {
+        fn arb_invalid_relayed_tx_event(max_gas: u64) -> Event {
             let mut invalid_relayed_tx = RelayedTransaction::default();
             let mut tx = script_tx_for_amount(100);
             tx.as_script_mut().unwrap().inputs_mut().drain(..); // Remove all the inputs :)
             let tx_bytes = tx.to_bytes();
             invalid_relayed_tx.set_serialized_transaction(tx_bytes);
+            invalid_relayed_tx.set_max_gas(max_gas);
             invalid_relayed_tx.into()
         }
 
@@ -3416,7 +3422,7 @@ mod tests {
             else {
                 panic!("Expected `ForcedTransactionFailed` event")
             };
-            let expected = "Transaction type is not accepted";
+            let expected = &ForcedTransactionFailure::InvalidTransactionType.to_string();
             assert_eq!(expected, actual);
         }
 

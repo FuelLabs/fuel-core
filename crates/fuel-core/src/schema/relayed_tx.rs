@@ -23,7 +23,7 @@ pub struct RelayedTransactionQuery {}
 
 #[Object]
 impl RelayedTransactionQuery {
-    async fn status(
+    async fn relayed_transaction_status(
         &self,
         ctx: &Context<'_>,
         #[graphql(desc = "The id of the relayed tx")] id: RelayedTransactionId,

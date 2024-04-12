@@ -107,7 +107,6 @@ use fuel_core_types::{
             CheckPredicateParams,
             CheckPredicates,
             Checked,
-            CheckedMetadata,
             CheckedTransaction,
             Checks,
             IntoChecked,
@@ -507,7 +506,7 @@ where
                     .write_transaction()
                     .with_policy(ConflictPolicy::Overwrite);
                 let tx_id = tx.id(&self.consensus_params.chain_id());
-                let result = self.execute_transaction(
+                let tx = self.execute_transaction(
                     tx,
                     &tx_id,
                     &block.header,
@@ -516,30 +515,8 @@ where
                     execution_data,
                     execution_kind,
                     &mut tx_st_transaction,
-                );
-                let tx = match result {
-                    Err(err) => {
-                        return match execution_kind {
-                            ExecutionKind::Production => {
-                                // If, during block production, we get an invalid transaction,
-                                // remove it from the block and continue block creation. An invalid
-                                // transaction means that the caller didn't validate it first, so
-                                // maybe something is wrong with validation rules in the `TxPool`
-                                // (or in another place that should validate it). Or we forgot to
-                                // clean up some dependent/conflict transactions. But it definitely
-                                // means that something went wrong, and we must fix it.
-                                execution_data.skipped_transactions.push((tx_id, err));
-                                Ok(())
-                            }
-                            ExecutionKind::DryRun | ExecutionKind::Validation => Err(err),
-                        }
-                    }
-                    Ok(tx) => tx,
-                };
-
-                if let Err(err) = tx_st_transaction.commit() {
-                    return Err(err.into())
-                }
+                )?;
+                tx_st_transaction.commit()?;
                 tx
             };
 
@@ -580,7 +557,18 @@ where
         let mut regular_tx_iter = source.next(remaining_gas_limit).into_iter().peekable();
         while regular_tx_iter.peek().is_some() {
             for transaction in regular_tx_iter {
-                execute_transaction(&mut *execution_data, transaction, gas_price)?;
+                let tx_id = transaction.id(&self.consensus_params.chain_id());
+                match execute_transaction(&mut *execution_data, transaction, gas_price) {
+                    Ok(_) => {}
+                    Err(err) => match execution_kind {
+                        ExecutionKind::Production => {
+                            execution_data.skipped_transactions.push((tx_id, err));
+                        }
+                        ExecutionKind::DryRun | ExecutionKind::Validation => {
+                            return Err(err);
+                        }
+                    },
+                }
             }
 
             let new_remaining_gas_limit =
@@ -721,10 +709,14 @@ where
         consensus_params: &ConsensusParameters,
     ) -> Result<CheckedTransaction, ForcedTransactionFailure> {
         let parsed_tx = Self::parse_tx_bytes(&relayed_tx)?;
+        Self::tx_is_valid_variant(&parsed_tx)?;
+        Self::relayed_tx_claimed_enough_max_gas(
+            &parsed_tx,
+            &relayed_tx,
+            &consensus_params,
+        )?;
         let checked_tx =
             Self::get_checked_tx(parsed_tx, *header.height(), consensus_params)?;
-        Self::tx_is_valid_variant(&checked_tx)?;
-        Self::relayed_tx_claimed_enough_max_gas(&checked_tx, &relayed_tx)?;
         let predicate_checked_tx =
             Self::predicates_on_tx_are_valid(checked_tx, consensus_params)?;
         Ok(CheckedTransaction::from(predicate_checked_tx))
@@ -750,25 +742,26 @@ where
         Ok(checked_tx)
     }
 
-    fn tx_is_valid_variant(
-        tx: &Checked<Transaction>,
-    ) -> Result<(), ForcedTransactionFailure> {
-        match tx.transaction() {
+    fn tx_is_valid_variant(tx: &Transaction) -> Result<(), ForcedTransactionFailure> {
+        match tx {
             Transaction::Mint(_) => Err(ForcedTransactionFailure::InvalidTransactionType),
             Transaction::Script(_) | Transaction::Create(_) => Ok(()),
         }
     }
 
     fn relayed_tx_claimed_enough_max_gas(
-        tx: &Checked<Transaction>,
+        tx: &Transaction,
         relayed_tx: &RelayedTransaction,
+        consensus_params: &ConsensusParameters,
     ) -> Result<(), ForcedTransactionFailure> {
         let claimed_max_gas = relayed_tx.max_gas();
-        let actual_max_gas = match tx.metadata() {
-            CheckedMetadata::Script(script_metadata) => script_metadata.max_gas,
-            CheckedMetadata::Create(create_metadata) => create_metadata.max_gas,
-            CheckedMetadata::Mint(_) => {
-                return Err(ForcedTransactionFailure::InvalidTransactionType);
+        let gas_costs = consensus_params.gas_costs();
+        let fee_params = consensus_params.fee_params();
+        let actual_max_gas = match tx {
+            Transaction::Script(script) => script.max_gas(gas_costs, fee_params),
+            Transaction::Create(create) => create.max_gas(gas_costs, fee_params),
+            Transaction::Mint(_) => {
+                return Err(ForcedTransactionFailure::InvalidTransactionType)
             }
         };
         if actual_max_gas > claimed_max_gas {

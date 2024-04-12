@@ -984,7 +984,7 @@ impl FuelClient {
         let status = self
             .query(query)
             .await?
-            .status
+            .relayed_transaction_status
             .map(|status| status.try_into())
             .transpose()?;
         Ok(status)

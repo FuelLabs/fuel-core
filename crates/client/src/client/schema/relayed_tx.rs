@@ -12,7 +12,7 @@ use crate::client::schema::{
 )]
 pub struct RelayedTransactionStatusQuery {
     #[arguments(id: $id)]
-    pub status: Option<RelayedTransactionStatus>,
+    pub relayed_transaction_status: Option<RelayedTransactionStatus>,
 }
 
 #[derive(cynic::QueryVariables, Debug)]
