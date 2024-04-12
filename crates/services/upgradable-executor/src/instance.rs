@@ -166,11 +166,6 @@ impl Instance<Created> {
                         tx
                     }
                     MaybeCheckedTransaction::Transaction(tx) => tx,
-                    MaybeCheckedTransaction::RelayedCheckedTransaction(_, checked) => {
-                        let checked: Checked<Transaction> = checked.into();
-                        let (tx, _) = checked.into();
-                        tx
-                    }
                 })
                 .collect();
 

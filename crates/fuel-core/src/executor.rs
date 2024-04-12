@@ -3458,6 +3458,68 @@ mod tests {
         }
 
         #[test]
+        fn execute_without_commit__relayed_tx_can_spend_message_from_same_da_block() {
+            let genesis_da_height = 3u64;
+            let block_height = 1u32;
+            let da_height = 10u64;
+            let arb_max_gas = 10_000;
+
+            // given
+            let relayer_db =
+                relayer_db_with_relayed_tx_spending_message_from_same_da_block(
+                    da_height,
+                    arb_max_gas,
+                );
+
+            // when
+            let on_chain_db = database_with_genesis_block(genesis_da_height);
+            let producer = create_relayer_executor(on_chain_db, relayer_db);
+            let block = test_block(block_height.into(), da_height.into(), 0);
+            let (result, _) = producer
+                .execute_without_commit(ExecutionBlock::Production(block.into()))
+                .unwrap()
+                .into();
+
+            // then
+            let txs = result.block.transactions();
+            assert_eq!(txs.len(), 2);
+        }
+
+        fn relayer_db_with_relayed_tx_spending_message_from_same_da_block(
+            da_height: u64,
+            max_gas: u64,
+        ) -> Database<Relayer> {
+            let mut relayer_db = Database::<Relayer>::default();
+            let mut message = Message::default();
+            let nonce = 1.into();
+            message.set_da_height(da_height.into());
+            message.set_nonce(nonce);
+            let message_event = Event::Message(message);
+
+            let mut relayed_tx = RelayedTransaction::default();
+            let tx = TransactionBuilder::script(vec![], vec![])
+                .script_gas_limit(10)
+                .add_unsigned_message_input(
+                    SecretKey::random(&mut StdRng::seed_from_u64(2322)),
+                    Default::default(),
+                    nonce,
+                    Default::default(),
+                    vec![],
+                )
+                .finalize_as_transaction();
+            let tx_bytes = tx.to_bytes();
+            relayed_tx.set_serialized_transaction(tx_bytes);
+            relayed_tx.set_max_gas(max_gas);
+            let tx_event = Event::Transaction(relayed_tx);
+            add_events_to_relayer(
+                &mut relayer_db,
+                da_height.into(),
+                &[message_event, tx_event],
+            );
+            relayer_db
+        }
+
+        #[test]
         fn block_producer_does_not_take_messages_for_the_same_height() {
             let genesis_da_height = 1u64;
             let on_chain_db = database_with_genesis_block(genesis_da_height);
