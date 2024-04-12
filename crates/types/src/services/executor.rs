@@ -88,7 +88,7 @@ pub enum ForcedTransactionFailure {
     #[display(fmt = "Failed to decode transaction")]
     CodecError,
     /// Transaction failed basic checks
-    #[display(fmt = "Failed validity checks")]
+    #[display(fmt = "Failed validity checks: {_0:?}")]
     CheckError(CheckError),
     /// Invalid transaction type
     #[display(fmt = "Transaction type is not accepted")]

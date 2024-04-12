@@ -3203,7 +3203,10 @@ mod tests {
             else {
                 panic!("Expected `ForcedTransactionFailed` event")
             };
-            let expected = "Failed validity checks";
+            let expected = &ForcedTransactionFailure::CheckError(CheckError::Validity(
+                ValidityError::NoSpendableInput,
+            ))
+            .to_string();
             assert_eq!(expected, actual);
         }
 
@@ -3356,7 +3359,10 @@ mod tests {
             else {
                 panic!("Expected `ForcedTransactionFailed` event")
             };
-            let expected = "Failed validity checks";
+            let expected = &ForcedTransactionFailure::CheckError(CheckError::Validity(
+                ValidityError::NoSpendableInput,
+            ))
+            .to_string();
             assert_eq!(expected, actual);
         }
 
