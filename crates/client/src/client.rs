@@ -8,6 +8,7 @@ use crate::client::{
         contract::ContractBalanceQueryArgs,
         gas_price::EstimateGasPrice,
         message::MessageStatusArgs,
+        relayed_tx::RelayedTransactionStatusArgs,
         tx::DryRunArg,
         Tai64Timestamp,
         TransactionId,
@@ -22,6 +23,7 @@ use crate::client::{
             ContractId,
             UtxoId,
         },
+        RelayedTransactionStatus,
     },
 };
 use anyhow::Context;
@@ -41,6 +43,7 @@ use fuel_core_types::{
         Word,
     },
     fuel_tx::{
+        Bytes32,
         Receipt,
         Transaction,
         TxId,
@@ -967,6 +970,24 @@ impl FuelClient {
         let proof = self.query(query).await?.message_proof.map(Into::into);
 
         Ok(proof)
+    }
+
+    pub async fn relayed_transaction_status(
+        &self,
+        id: &Bytes32,
+    ) -> io::Result<Option<RelayedTransactionStatus>> {
+        let query = schema::relayed_tx::RelayedTransactionStatusQuery::build(
+            RelayedTransactionStatusArgs {
+                id: id.to_owned().into(),
+            },
+        );
+        let status = self
+            .query(query)
+            .await?
+            .relayed_transaction_status
+            .map(|status| status.try_into())
+            .transpose()?;
+        Ok(status)
     }
 }
 
