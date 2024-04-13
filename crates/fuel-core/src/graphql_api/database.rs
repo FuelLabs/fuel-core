@@ -6,6 +6,7 @@ use crate::fuel_core_graphql_api::{
         DatabaseContracts,
         DatabaseMessageProof,
         DatabaseMessages,
+        DatabaseRelayedTransactions,
         OffChainDatabase,
         OnChainDatabase,
     },
@@ -33,13 +34,17 @@ use fuel_core_types::{
             DaBlockHeight,
         },
     },
-    entities::relayer::message::{
-        MerkleProof,
-        Message,
+    entities::relayer::{
+        message::{
+            MerkleProof,
+            Message,
+        },
+        transaction::RelayedTransactionStatus,
     },
     fuel_tx::{
         Address,
         AssetId,
+        Bytes32,
         Salt,
         TxPointer,
         UtxoId,
@@ -154,6 +159,16 @@ impl DatabaseMessages for ReadView {
     }
 }
 
+impl DatabaseRelayedTransactions for ReadView {
+    fn transaction_status(
+        &self,
+        id: Bytes32,
+    ) -> StorageResult<Option<RelayedTransactionStatus>> {
+        let maybe_status = self.off_chain.relayed_tx_status(id)?;
+        Ok(maybe_status)
+    }
+}
+
 impl DatabaseContracts for ReadView {
     fn contract_balances(
         &self,
@@ -225,5 +240,12 @@ impl OffChainDatabase for ReadView {
 
     fn contract_salt(&self, contract_id: &ContractId) -> StorageResult<Salt> {
         self.off_chain.contract_salt(contract_id)
+    }
+
+    fn relayed_tx_status(
+        &self,
+        id: Bytes32,
+    ) -> StorageResult<Option<RelayedTransactionStatus>> {
+        self.off_chain.relayed_tx_status(id)
     }
 }
