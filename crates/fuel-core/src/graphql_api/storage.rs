@@ -43,6 +43,7 @@ pub mod messages;
 pub mod statistic;
 pub mod transactions;
 
+pub mod relayed_transactions;
 /// Tracks the total number of transactions written to the chain
 /// It's useful for analyzing TPS or other metrics.
 const TX_COUNT: &str = "total_tx_count";
@@ -79,6 +80,8 @@ pub enum Column {
     FuelBlockIdsToHeights = 7,
     /// See [`ContractsInfo`](contracts::ContractsInfo)
     ContractsInfo = 8,
+    /// Relayed Tx ID to Layer 1 Relayed Transaction status
+    RelayedTransactionStatus = 9,
 }
 
 impl Column {

@@ -1,18 +1,21 @@
-use crate::fuel_core_graphql_api::{
-    ports,
-    ports::worker::OffChainDatabase,
-    storage::{
-        blocks::FuelBlockIdsToHeights,
-        coins::{
-            owner_coin_id_key,
-            OwnedCoins,
-        },
-        contracts::ContractsInfo,
-        messages::{
-            OwnedMessageIds,
-            OwnedMessageKey,
+use crate::{
+    fuel_core_graphql_api::{
+        ports,
+        ports::worker::OffChainDatabase,
+        storage::{
+            blocks::FuelBlockIdsToHeights,
+            coins::{
+                owner_coin_id_key,
+                OwnedCoins,
+            },
+            contracts::ContractsInfo,
+            messages::{
+                OwnedMessageIds,
+                OwnedMessageKey,
+            },
         },
     },
+    graphql_api::storage::relayed_transactions::RelayedTransactionStatuses,
 };
 use fuel_core_metrics::graphql_metrics::graphql_metrics;
 use fuel_core_services::{
@@ -29,6 +32,7 @@ use fuel_core_storage::{
 };
 use fuel_core_types::{
     blockchain::block::Block,
+    entities::relayer::transaction::RelayedTransactionStatus,
     fuel_tx::{
         field::{
             Inputs,
@@ -69,6 +73,9 @@ use std::{
     borrow::Cow,
     ops::Deref,
 };
+
+#[cfg(test)]
+mod tests;
 
 /// The off-chain GraphQL API worker task processes the imported blocks
 /// and actualize the information used by the GraphQL service.
@@ -164,6 +171,20 @@ where
                 block_st_transaction
                     .storage_as_mut::<OwnedCoins>()
                     .remove(&key)?;
+            }
+            Event::ForcedTransactionFailed {
+                id,
+                block_height,
+                failure,
+            } => {
+                let status = RelayedTransactionStatus::Failed {
+                    block_height: *block_height,
+                    failure: failure.clone(),
+                };
+
+                block_st_transaction
+                    .storage_as_mut::<RelayedTransactionStatuses>()
+                    .insert(&Bytes32::from(id.to_owned()), &status)?;
             }
         }
     }
