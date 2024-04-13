@@ -3299,10 +3299,11 @@ mod tests {
             let arb_max_gas = 10_000;
 
             // given
-            let relayer_db = relayer_db_with_tx_that_passes_checks_but_fails_execution(
-                da_height,
-                arb_max_gas,
-            );
+            let (tx_id, relayer_db) =
+                relayer_db_with_tx_that_passes_checks_but_fails_execution(
+                    da_height,
+                    arb_max_gas,
+                );
 
             // when
             let on_chain_db = database_with_genesis_block(genesis_da_height);
@@ -3326,14 +3327,19 @@ mod tests {
             else {
                 panic!("Expected `ForcedTransactionFailed` event")
             };
-            let expected_start_of_message = "Transaction id was already used: ";
-            assert!(actual.starts_with(expected_start_of_message));
+            // let expected  = "Transaction id was already used: ";
+            let expected =
+                &fuel_core_types::services::executor::Error::TransactionIdCollision(
+                    tx_id,
+                )
+                .to_string();
+            assert_eq!(expected, actual);
         }
 
         fn relayer_db_with_tx_that_passes_checks_but_fails_execution(
             da_height: u64,
             max_gas: u64,
-        ) -> Database<Relayer> {
+        ) -> (Bytes32, Database<Relayer>) {
             let mut relayed_tx = RelayedTransaction::default();
             let tx = script_tx_for_amount(100);
             let tx_bytes = tx.to_bytes();
@@ -3342,7 +3348,11 @@ mod tests {
             let mut bad_relayed_tx = relayed_tx.clone();
             let new_nonce = [9; 32].into();
             bad_relayed_tx.set_nonce(new_nonce);
-            relayer_db_for_events(&[relayed_tx.into(), bad_relayed_tx.into()], da_height)
+            let relayer_db = relayer_db_for_events(
+                &[relayed_tx.into(), bad_relayed_tx.into()],
+                da_height,
+            );
+            (tx.id(&Default::default()), relayer_db)
         }
 
         #[test]
