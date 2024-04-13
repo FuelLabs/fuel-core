@@ -10,6 +10,7 @@ use crate::{
         },
         storage::{
             contracts::ContractsInfo,
+            relayed_transactions::RelayedTransactionStatuses,
             transactions::OwnedTransactionIndexCursor,
         },
     },
@@ -35,8 +36,10 @@ use fuel_core_txpool::types::{
 };
 use fuel_core_types::{
     blockchain::primitives::BlockId,
+    entities::relayer::transaction::RelayedTransactionStatus,
     fuel_tx::{
         Address,
+        Bytes32,
         Salt,
         TxPointer,
         UtxoId,
@@ -105,6 +108,18 @@ impl OffChainDatabase for Database<OffChain> {
             .salt();
 
         Ok(salt)
+    }
+
+    fn relayed_tx_status(
+        &self,
+        id: Bytes32,
+    ) -> StorageResult<Option<RelayedTransactionStatus>> {
+        let status = self
+            .storage_as_ref::<RelayedTransactionStatuses>()
+            .get(&id)
+            .map_err(StorageError::from)?
+            .map(|cow| cow.into_owned());
+        Ok(status)
     }
 }
 
