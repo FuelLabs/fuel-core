@@ -22,7 +22,10 @@ use crate::{
         },
         Database,
     },
-    service::genesis::task_manager::CancellationToken,
+    service::genesis::task_manager::{
+        MultiCancellationToken,
+        NotifyCancel,
+    },
 };
 
 use super::progress::ProgressReporter;
@@ -34,7 +37,7 @@ where
     handler: Handler,
     skip: usize,
     groups: Groups,
-    cancel_token: CancellationToken,
+    cancel_token: MultiCancellationToken,
     db: Database<DbDesc>,
     reporter: ProgressReporter,
 }
@@ -58,7 +61,7 @@ where
     Database<DbDesc>: StorageInspect<GenesisMetadata<DbDesc>>,
 {
     pub fn new(
-        cancel_token: CancellationToken,
+        cancel_token: MultiCancellationToken,
         handler: Logic,
         groups: GroupGenerator,
         db: Database<DbDesc>,
@@ -146,7 +149,7 @@ mod tests {
                 import_task::ImportTask,
                 progress::ProgressReporter,
             },
-            task_manager::CancellationToken,
+            task_manager::MultiCancellationToken,
         },
     };
     use std::sync::{
@@ -286,7 +289,7 @@ mod tests {
 
         let mut called_with = vec![];
         let runner = ImportTask::new(
-            CancellationToken::default(),
+            MultiCancellationToken::default(),
             TestHandler::new(|group, _| {
                 called_with.push(group);
                 Ok(())
@@ -317,7 +320,7 @@ mod tests {
         )
         .unwrap();
         let runner = ImportTask::new(
-            CancellationToken::default(),
+            MultiCancellationToken::default(),
             TestHandler::new(|element, _| {
                 called_with.push(element);
                 Ok(())
@@ -342,7 +345,7 @@ mod tests {
         let utxo_id = UtxoId::new(Default::default(), 0);
 
         let runner = ImportTask::new(
-            CancellationToken::default(),
+            MultiCancellationToken::default(),
             TestHandler::new(|_, tx| {
                 insert_a_coin(tx, &utxo_id);
 
@@ -390,7 +393,7 @@ mod tests {
         let utxo_id = UtxoId::new(Default::default(), 0);
 
         let runner = ImportTask::new(
-            CancellationToken::default(),
+            MultiCancellationToken::default(),
             TestHandler::new(|_, tx| {
                 insert_a_coin(tx, &utxo_id);
                 bail!("Some error")
@@ -412,7 +415,7 @@ mod tests {
         // given
         let groups = TestData::new(1);
         let runner = ImportTask::new(
-            CancellationToken::default(),
+            MultiCancellationToken::default(),
             TestHandler::new(|_, _| bail!("Some error")),
             groups.as_ok_groups(),
             Database::default(),
@@ -431,7 +434,7 @@ mod tests {
         // given
         let groups = [Err(anyhow!("Some error"))];
         let runner = ImportTask::new(
-            CancellationToken::default(),
+            MultiCancellationToken::default(),
             TestHandler::new(|_, _| Ok(())),
             groups,
             Database::default(),
@@ -451,7 +454,7 @@ mod tests {
         let data = TestData::new(2);
         let db = Database::default();
         let runner = ImportTask::new(
-            CancellationToken::default(),
+            MultiCancellationToken::default(),
             TestHandler::new(|_, _| Ok(())),
             data.as_ok_groups(),
             db.clone(),
@@ -575,7 +578,7 @@ mod tests {
         // given
         let groups = TestData::new(1);
         let runner = ImportTask::new(
-            CancellationToken::default(),
+            MultiCancellationToken::default(),
             TestHandler::new(|_, _| Ok(())),
             groups.as_ok_groups(),
             Database::new(Arc::new(BrokenTransactions::new())),
