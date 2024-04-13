@@ -2818,9 +2818,6 @@ mod tests {
 
     #[cfg(feature = "relayer")]
     mod relayer {
-
-        use fuel_core_types::fuel_vm::checked_transaction::CheckedMetadata;
-
         use super::*;
         use crate::{
             database::database_description::{
@@ -2841,8 +2838,10 @@ mod tests {
         use fuel_core_types::{
             entities::RelayedTransaction,
             fuel_merkle::binary::root_calculator::MerkleRootCalculator,
-            fuel_tx::output,
-            fuel_vm::checked_transaction::IntoChecked,
+            fuel_tx::{
+                output,
+                Chargeable,
+            },
             services::executor::ForcedTransactionFailure,
         };
 
@@ -3253,15 +3252,19 @@ mod tests {
 
             // and
             let consensus_params = ConsensusParameters::default();
-            let actual_max_gas = if let CheckedMetadata::Script(metadata) = tx
-                .into_checked(block_height.into(), &consensus_params)
+            // let actual_max_gas = if let CheckedMetadata::Script(metadata) = tx
+            //     .into_checked(block_height.into(), &consensus_params)
+            //     .unwrap()
+            //     .metadata()
+            // {
+            //     metadata.max_gas
+            // } else {
+            //     panic!("Expected `CheckedMetadata::Script`")
+            // };
+            let actual_max_gas = tx
+                .as_script()
                 .unwrap()
-                .metadata()
-            {
-                metadata.max_gas
-            } else {
-                panic!("Expected `CheckedMetadata::Script`")
-            };
+                .max_gas(consensus_params.gas_costs(), consensus_params.fee_params());
             let events = result.events;
             let fuel_core_types::services::executor::Event::ForcedTransactionFailed {
                 failure: actual,
