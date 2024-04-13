@@ -205,14 +205,10 @@ impl TestSetupBuilder {
             .consensus_parameters
             .set_privileged_address(self.privileged_address);
 
-        let latest_block = if let Some(starting_block) = self.starting_block {
-            Some(LastBlockConfig {
-                block_height: starting_block,
-                ..Default::default()
-            })
-        } else {
-            None
-        };
+        let latest_block = self.starting_block.map(|starting_block| LastBlockConfig {
+            block_height: starting_block,
+            ..Default::default()
+        });
 
         let state = StateConfig {
             coins: self.initial_coins.clone(),
