@@ -3300,7 +3300,7 @@ mod tests {
 
             // given
             let (tx_id, relayer_db) =
-                relayer_db_with_tx_that_passes_checks_but_fails_execution(
+                tx_id_and_relayer_db_with_tx_that_passes_checks_but_fails_execution(
                     da_height,
                     arb_max_gas,
                 );
@@ -3327,7 +3327,6 @@ mod tests {
             else {
                 panic!("Expected `ForcedTransactionFailed` event")
             };
-            // let expected  = "Transaction id was already used: ";
             let expected =
                 &fuel_core_types::services::executor::Error::TransactionIdCollision(
                     tx_id,
@@ -3336,7 +3335,7 @@ mod tests {
             assert_eq!(expected, actual);
         }
 
-        fn relayer_db_with_tx_that_passes_checks_but_fails_execution(
+        fn tx_id_and_relayer_db_with_tx_that_passes_checks_but_fails_execution(
             da_height: u64,
             max_gas: u64,
         ) -> (Bytes32, Database<Relayer>) {
