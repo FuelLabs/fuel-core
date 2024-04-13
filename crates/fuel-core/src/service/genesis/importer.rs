@@ -48,33 +48,38 @@ use fuel_core_types::{
     fuel_types::BlockHeight,
 };
 
+use fuel_core_types::blockchain::block::Block;
 use tokio_util::sync::CancellationToken;
 
 pub struct SnapshotImporter {
     db: CombinedDatabase,
     task_manager: TaskManager<()>,
+    genesis_block: Block,
     snapshot_reader: SnapshotReader,
 }
 
 impl SnapshotImporter {
     fn new(
         db: CombinedDatabase,
+        genesis_block: Block,
         snapshot_reader: SnapshotReader,
         cancel_token: CancellationToken,
     ) -> Self {
         Self {
             db,
             task_manager: TaskManager::new(cancel_token),
+            genesis_block,
             snapshot_reader,
         }
     }
 
     pub async fn import(
         db: CombinedDatabase,
+        genesis_block: Block,
         snapshot_reader: SnapshotReader,
         cancel_token: CancellationToken,
     ) -> anyhow::Result<()> {
-        Self::new(db, snapshot_reader, cancel_token)
+        Self::new(db, genesis_block, snapshot_reader, cancel_token)
             .run_workers()
             .await
     }
@@ -108,8 +113,8 @@ impl SnapshotImporter {
     {
         let groups = self.snapshot_reader.read::<T>()?;
 
-        let block_height = self.snapshot_reader.block_height();
-        let da_block_height = self.snapshot_reader.da_block_height();
+        let block_height = *self.genesis_block.header().height();
+        let da_block_height = self.genesis_block.header().da_height;
         let db = self.db.on_chain().clone();
         self.task_manager.spawn(move |token| {
             tokio_rayon::spawn(move || {
@@ -138,8 +143,8 @@ impl SnapshotImporter {
         TableBeingWritten: Send + 'static,
     {
         let groups = self.snapshot_reader.read::<TableInSnapshot>()?;
-        let block_height = self.snapshot_reader.block_height();
-        let da_block_height = self.snapshot_reader.da_block_height();
+        let block_height = *self.genesis_block.header().height();
+        let da_block_height = self.genesis_block.header().da_height;
 
         let db = self.db.off_chain().clone();
         self.task_manager.spawn(move |token| {

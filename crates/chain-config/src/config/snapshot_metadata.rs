@@ -11,8 +11,7 @@ pub enum TableEncoding {
     #[cfg(feature = "parquet")]
     Parquet {
         tables: std::collections::HashMap<String, PathBuf>,
-        block_height: PathBuf,
-        da_block_height: PathBuf,
+        latest_block_config: PathBuf,
     },
 }
 impl TableEncoding {
@@ -24,15 +23,13 @@ impl TableEncoding {
             #[cfg(feature = "parquet")]
             TableEncoding::Parquet {
                 tables,
-                block_height,
-                da_block_height,
+                latest_block_config,
                 ..
             } => {
                 for path in tables.values_mut() {
                     *path = path.strip_prefix(dir)?.to_owned();
                 }
-                *da_block_height = da_block_height.strip_prefix(dir)?.to_owned();
-                *block_height = block_height.strip_prefix(dir)?.to_owned();
+                *latest_block_config = latest_block_config.strip_prefix(dir)?.to_owned();
             }
         }
         Ok(())
@@ -46,15 +43,13 @@ impl TableEncoding {
             #[cfg(feature = "parquet")]
             TableEncoding::Parquet {
                 tables,
-                block_height,
-                da_block_height,
+                latest_block_config,
                 ..
             } => {
                 for path in tables.values_mut() {
                     *path = dir.join(&path);
                 }
-                *da_block_height = dir.join(&da_block_height);
-                *block_height = dir.join(&block_height);
+                *latest_block_config = dir.join(&latest_block_config);
             }
         }
     }
@@ -183,8 +178,7 @@ mod tests {
                         "coins".into(),
                         "coins.parquet".into(),
                     )]),
-                    block_height: "block_height.parquet".into(),
-                    da_block_height: "da_block_height.parquet".into(),
+                    latest_block_config: "latest_block_config.parquet".into(),
                 },
             };
             serde_json::to_writer(
@@ -206,8 +200,9 @@ mod tests {
                             "coins".into(),
                             temp_dir.path().join("coins.parquet")
                         )]),
-                        block_height: temp_dir.path().join("block_height.parquet"),
-                        da_block_height: temp_dir.path().join("da_block_height.parquet"),
+                        latest_block_config: temp_dir
+                            .path()
+                            .join("latest_block_config.parquet"),
                     }
                 }
             );
@@ -225,8 +220,7 @@ mod tests {
                         "coins".into(),
                         dir.join("coins.parquet"),
                     )]),
-                    block_height: dir.join("block_height.parquet"),
-                    da_block_height: dir.join("da_block_height.parquet"),
+                    latest_block_config: dir.join("latest_block_config.parquet"),
                 },
             };
 
@@ -247,8 +241,7 @@ mod tests {
                             "coins".into(),
                             "coins.parquet".into(),
                         )]),
-                        block_height: "block_height.parquet".into(),
-                        da_block_height: "da_block_height.parquet".into(),
+                        latest_block_config: "latest_block_config.parquet".into(),
                     }
                 }
             );

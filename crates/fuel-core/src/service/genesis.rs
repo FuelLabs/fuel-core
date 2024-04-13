@@ -54,6 +54,11 @@ mod importer;
 mod task_manager;
 
 pub use exporter::Exporter;
+use fuel_core_storage::tables::UploadedBytecodes;
+use fuel_core_types::{
+    fuel_crypto::Hasher,
+    fuel_vm::UploadedBytecode,
+};
 use tokio_util::sync::CancellationToken;
 
 use self::importer::SnapshotImporter;
@@ -63,10 +68,17 @@ pub async fn execute_genesis_block(
     config: &Config,
     db: &CombinedDatabase,
 ) -> anyhow::Result<UncommittedImportResult<Changes>> {
+    let genesis_block = create_genesis_block(config);
+
     // TODO: tie this with a SIGNAL for resumability
     let cancel = CancellationToken::new();
-    SnapshotImporter::import(db.clone(), config.snapshot_reader.clone(), cancel.clone())
-        .await?;
+    SnapshotImporter::import(
+        db.clone(),
+        genesis_block.clone(),
+        config.snapshot_reader.clone(),
+        cancel.clone(),
+    )
+    .await?;
 
     let genesis_progress_on_chain: Vec<String> = db
         .on_chain()
@@ -89,10 +101,9 @@ pub async fn execute_genesis_block(
         contracts_root: db.on_chain().genesis_contracts_root()?.into(),
     };
 
-    let block = create_genesis_block(config);
     let consensus = Consensus::Genesis(genesis);
     let block = SealedBlock {
-        entity: block,
+        entity: genesis_block.clone(),
         consensus,
     };
 
@@ -105,19 +116,26 @@ pub async fn execute_genesis_block(
     database_transaction_off_chain.commit()?;
 
     let mut database_transaction_on_chain = db.on_chain().read_transaction();
-    // TODO: The chain config should be part of the snapshot state.
-    //  https://github.com/FuelLabs/fuel-core/issues/1570
     database_transaction_on_chain
         .storage_as_mut::<ConsensusParametersVersions>()
         .insert(
-            &ConsensusParametersVersion::MIN,
+            &genesis_block.header().consensus_parameters_version,
             &chain_config.consensus_parameters,
         )?;
-    // TODO: The bytecode of the state transition function should be part of the snapshot state.
-    //  https://github.com/FuelLabs/fuel-core/issues/1570
+
+    let bytecode_root = Hasher::hash(chain_config.state_transition_bytecode.as_slice());
     database_transaction_on_chain
         .storage_as_mut::<StateTransitionBytecodeVersions>()
-        .insert(&ConsensusParametersVersion::MIN, &Default::default())?;
+        .insert(
+            &genesis_block.header().state_transition_bytecode_version,
+            &bytecode_root,
+        )?;
+    database_transaction_on_chain
+        .storage_as_mut::<UploadedBytecodes>()
+        .insert(
+            &bytecode_root,
+            &UploadedBytecode::Completed(chain_config.state_transition_bytecode.clone()),
+        )?;
 
     // Needs to be given the progress because `iter_all` is not implemented on db transactions.
     for key in genesis_progress_on_chain {
@@ -156,31 +174,67 @@ pub async fn execute_and_commit_genesis_block(
 }
 
 pub fn create_genesis_block(config: &Config) -> Block {
-    let block_height = config.snapshot_reader.block_height();
-    let da_block_height = config.snapshot_reader.da_block_height();
-    let transactions = vec![];
+    let height;
+    let da_height;
+    let consensus_parameters_version;
+    let state_transition_bytecode_version;
+
+    // If the rollup continues the old rollup, the height of the new block should
+    // be higher than that of the old chain by one to make it continuous.
+    // The same applies to the state transition functions and consensus
+    // parameters since it is a new chain.
+    if let Some(latest_block) = config.snapshot_reader.last_block_config() {
+        height = latest_block
+            .block_height
+            .succ()
+            .expect("Block height overflow");
+        consensus_parameters_version = latest_block
+            .consensus_parameters_version
+            .checked_add(1)
+            .expect("Consensus parameters version overflow");
+        state_transition_bytecode_version = latest_block
+            .state_transition_version
+            .checked_add(1)
+            .expect("State transition bytecode version overflow");
+
+        da_height = latest_block.da_block_height;
+    } else {
+        height = 0u32.into();
+        #[cfg(feature = "relayer")]
+        {
+            da_height = config
+                .relayer
+                .as_ref()
+                .map(|r| r.da_deploy_height)
+                .unwrap_or_default();
+        }
+        #[cfg(not(feature = "relayer"))]
+        {
+            da_height = 0u64.into();
+        }
+        consensus_parameters_version = ConsensusParametersVersion::MIN;
+        state_transition_bytecode_version = StateTransitionBytecodeVersion::MIN;
+    }
+
+    let transactions_ids = vec![];
     let message_ids = &[];
     let events = Default::default();
     Block::new(
         PartialBlockHeader {
             application: ApplicationHeader::<Empty> {
-                da_height: da_block_height,
-                // After regenesis, we don't need to support old consensus parameters,
-                // so we can start the versioning from the beginning.
-                consensus_parameters_version: ConsensusParametersVersion::MIN,
-                // After regenesis, we don't need to support old state transition functions,
-                // so we can start the versioning from the beginning.
-                state_transition_bytecode_version: StateTransitionBytecodeVersion::MIN,
+                da_height,
+                consensus_parameters_version,
+                state_transition_bytecode_version,
                 generated: Empty,
             },
             consensus: ConsensusHeader::<Empty> {
                 prev_root: Bytes32::zeroed(),
-                height: block_height,
+                height,
                 time: fuel_core_types::tai64::Tai64::UNIX_EPOCH,
                 generated: Empty,
             },
         },
-        transactions,
+        transactions_ids,
         message_ids,
         events,
     )
@@ -202,6 +256,7 @@ mod tests {
     use fuel_core_chain_config::{
         CoinConfig,
         ContractConfig,
+        LastBlockConfig,
         MessageConfig,
         Randomize,
         SnapshotReader,
@@ -236,11 +291,14 @@ mod tests {
     use std::vec;
 
     #[tokio::test]
-    async fn config_initializes_block_height() {
+    async fn config_initializes_block_height_of_genesic_block() {
         let block_height = BlockHeight::from(99u32);
         let snapshot_reader =
             SnapshotReader::local_testnet().with_state_config(StateConfig {
-                block_height,
+                latest_block: Some(LastBlockConfig {
+                    block_height,
+                    ..Default::default()
+                }),
                 ..Default::default()
             });
         let service_config = Config {
@@ -253,8 +311,10 @@ mod tests {
             .await
             .unwrap();
 
+        // The genesis block has next block height after the latest block of the previous network.
+        let genesis_block_height = block_height.succ().unwrap();
         assert_eq!(
-            block_height,
+            genesis_block_height,
             db.latest_height()
                 .unwrap()
                 .expect("Expected a block height to be set")
@@ -287,8 +347,10 @@ mod tests {
             coins,
             messages,
             contracts,
-            block_height: BlockHeight::from(0u32),
-            da_block_height: Default::default(),
+            latest_block: Some(LastBlockConfig {
+                block_height: BlockHeight::from(0u32),
+                ..Default::default()
+            }),
         };
         let snapshot_reader = SnapshotReader::local_testnet().with_state_config(state);
 
@@ -349,7 +411,10 @@ mod tests {
                     ..Default::default()
                 },
             ],
-            block_height: starting_height,
+            latest_block: Some(LastBlockConfig {
+                block_height: starting_height,
+                ..Default::default()
+            }),
             ..Default::default()
         };
         let snapshot_reader = SnapshotReader::local_testnet().with_state_config(state);
@@ -522,7 +587,10 @@ mod tests {
                 amount: 10,
                 ..Default::default()
             }],
-            block_height: BlockHeight::from(10u32),
+            latest_block: Some(LastBlockConfig {
+                block_height: BlockHeight::from(9u32),
+                ..Default::default()
+            }),
             ..Default::default()
         };
         let snapshot_reader = SnapshotReader::local_testnet().with_state_config(state);
@@ -549,7 +617,10 @@ mod tests {
                 tx_pointer_block_height: BlockHeight::from(11u32),
                 ..given_contract_config(&mut rng)
             }],
-            block_height: BlockHeight::from(10u32),
+            latest_block: Some(LastBlockConfig {
+                block_height: BlockHeight::from(9u32),
+                ..Default::default()
+            }),
             ..Default::default()
         };
         let snapshot_reader = SnapshotReader::local_testnet().with_state_config(state);
@@ -608,7 +679,9 @@ mod tests {
             .await
             .unwrap();
 
-        let stored_state = db.read_state_config().unwrap();
-        assert_eq!(initial_state, stored_state);
+        let actual_state = db.read_state_config().unwrap();
+        let mut expected_state = initial_state;
+        expected_state.latest_block = Some(Default::default());
+        assert_eq!(expected_state, actual_state);
     }
 }

@@ -88,6 +88,7 @@ anyhow = "1.0"
 async-trait = "0.1"
 cynic = { version = "2.2.1", features = ["http-reqwest"] }
 clap = "4.4"
+derivative = { version = "2" }
 derive_more = { version = "0.99" }
 enum-iterator = "1.2"
 hyper = { version = "0.14.26" }

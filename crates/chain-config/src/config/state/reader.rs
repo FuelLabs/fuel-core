@@ -1,10 +1,6 @@
 use std::fmt::Debug;
 
 use fuel_core_storage::structured_storage::TableWithBlueprint;
-use fuel_core_types::{
-    blockchain::primitives::DaBlockHeight,
-    fuel_types::BlockHeight,
-};
 use itertools::Itertools;
 
 use crate::{
@@ -13,6 +9,7 @@ use crate::{
     ChainConfig,
     Group,
     GroupResult,
+    LastBlockConfig,
     StateConfig,
     MAX_GROUP_SIZE,
 };
@@ -71,8 +68,7 @@ enum DataSource {
     #[cfg(feature = "parquet")]
     Parquet {
         tables: std::collections::HashMap<String, std::path::PathBuf>,
-        block_height: BlockHeight,
-        da_block_height: DaBlockHeight,
+        latest_block_config: Option<LastBlockConfig>,
     },
     InMemory {
         state: StateConfig,
@@ -150,39 +146,36 @@ impl SnapshotReader {
     #[cfg(feature = "parquet")]
     fn parquet(
         tables: std::collections::HashMap<String, std::path::PathBuf>,
-        block_height: std::path::PathBuf,
-        da_block_height: std::path::PathBuf,
+        latest_block_config: std::path::PathBuf,
         chain_config: ChainConfig,
     ) -> anyhow::Result<Self> {
-        let block_height = Self::read_block_height(&block_height)?;
-        let da_block_height = Self::read_block_height(&da_block_height)?;
+        let latest_block_config = Self::read_config(&latest_block_config)?;
         Ok(Self {
             data_source: DataSource::Parquet {
                 tables,
-                block_height,
-                da_block_height,
+                latest_block_config,
             },
             chain_config,
         })
     }
 
     #[cfg(feature = "parquet")]
-    fn read_block_height<Height>(path: &std::path::Path) -> anyhow::Result<Height>
+    fn read_config<Config>(path: &std::path::Path) -> anyhow::Result<Config>
     where
-        Height: serde::de::DeserializeOwned,
+        Config: serde::de::DeserializeOwned,
     {
         use super::parquet::decode::Decoder;
 
         let file = std::fs::File::open(path)?;
         let group = Decoder::new(file)?
             .next()
-            .ok_or_else(|| anyhow::anyhow!("No block height found"))??
+            .ok_or_else(|| anyhow::anyhow!("No data found for config"))??
             .data;
-        let block_height = group
+        let config = group
             .into_iter()
             .next()
-            .ok_or_else(|| anyhow::anyhow!("No block height found"))?;
-        postcard::from_bytes(&block_height).map_err(Into::into)
+            .ok_or_else(|| anyhow::anyhow!("No config found"))?;
+        postcard::from_bytes(&config).map_err(Into::into)
     }
 
     #[cfg(feature = "std")]
@@ -213,10 +206,9 @@ impl SnapshotReader {
             #[cfg(feature = "parquet")]
             TableEncoding::Parquet {
                 tables,
-                block_height,
-                da_block_height,
+                latest_block_config,
                 ..
-            } => Self::parquet(tables, block_height, da_block_height, chain_config),
+            } => Self::parquet(tables, latest_block_config, chain_config),
         }
     }
 
@@ -268,21 +260,14 @@ impl SnapshotReader {
         &self.chain_config
     }
 
-    pub fn block_height(&self) -> BlockHeight {
+    pub fn last_block_config(&self) -> Option<&LastBlockConfig> {
         match &self.data_source {
-            DataSource::InMemory { state, .. } => state.block_height,
-            #[cfg(feature = "parquet")]
-            DataSource::Parquet { block_height, .. } => *block_height,
-        }
-    }
-
-    pub fn da_block_height(&self) -> DaBlockHeight {
-        match &self.data_source {
-            DataSource::InMemory { state, .. } => state.da_block_height,
+            DataSource::InMemory { state, .. } => state.latest_block.as_ref(),
             #[cfg(feature = "parquet")]
             DataSource::Parquet {
-                da_block_height, ..
-            } => *da_block_height,
+                latest_block_config: block,
+                ..
+            } => block.as_ref(),
         }
     }
 }

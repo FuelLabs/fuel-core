@@ -1,5 +1,6 @@
 use fuel_core::{
     chain_config::{
+        LastBlockConfig,
         SnapshotReader,
         StateConfig,
     },
@@ -77,24 +78,27 @@ async fn block() {
 
 #[tokio::test]
 async fn get_genesis_block() {
+    // Given
     let config = Config {
         snapshot_reader: SnapshotReader::local_testnet().with_state_config(StateConfig {
-            block_height: 13u32.into(),
+            latest_block: Some(LastBlockConfig {
+                block_height: 13u32.into(),
+                ..Default::default()
+            }),
             ..StateConfig::local_testnet()
         }),
         ..Config::local_node()
     };
 
+    // When
     let srv = FuelService::from_database(Database::default(), config)
         .await
         .unwrap();
 
+    // Then
     let client = FuelClient::from(srv.bound_address);
-    let tx = Transaction::default_test_tx();
-    client.submit_and_await_commit(&tx).await.unwrap();
-
-    let block = client.block_by_height(13.into()).await.unwrap().unwrap();
-    assert_eq!(block.header.height, 13);
+    let block = client.block_by_height(14.into()).await.unwrap().unwrap();
+    assert_eq!(block.header.height, 14);
     assert!(matches!(
         block.consensus,
         fuel_core_client::client::types::Consensus::Genesis(_)

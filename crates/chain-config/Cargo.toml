@@ -13,6 +13,7 @@ description = "Fuel Chain config types"
 [dependencies]
 anyhow = { workspace = true }
 bech32 = { version = "0.9.0", default-features = false, optional = true }
+derivative = { workspace = true }
 fuel-core-storage = { workspace = true }
 fuel-core-types = { workspace = true, default-features = false, features = [
   "serde",

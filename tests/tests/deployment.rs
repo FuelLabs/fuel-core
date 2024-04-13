@@ -1,4 +1,7 @@
-use std::path::Path;
+use std::{
+    env,
+    path::Path,
+};
 
 use fuel_core::chain_config::{
     ChainConfig,
@@ -8,6 +11,7 @@ use fuel_core::chain_config::{
     TableEncoding,
 };
 use fuel_core_types::fuel_tx::GasCosts;
+use fuel_core_upgradable_executor::WASM_BYTECODE;
 
 #[allow(irrefutable_let_patterns)]
 #[test_case::test_case( "./../bin/fuel-core/chainspec/testnet" ; "Beta chainconfig" )]
@@ -21,9 +25,15 @@ fn test_deployment_chainconfig(path: impl AsRef<Path>) -> anyhow::Result<()> {
     // Deployment configuration should use gas costs from benchmarks.
     let benchmark_gas_costs =
         GasCosts::new(fuel_core_benches::default_gas_costs::default_gas_costs());
+    chain_config.state_transition_bytecode = WASM_BYTECODE.to_vec();
     chain_config
         .consensus_parameters
         .set_gas_costs(benchmark_gas_costs);
+
+    if env::var_os("OVERRIDE_CHAIN_CONFIGS").is_some() {
+        std::fs::remove_file(&stored_snapshot.chain_config)?;
+        chain_config.write(&stored_snapshot.chain_config)?;
+    }
 
     let temp_dir = tempfile::tempdir()?;
     let writer = SnapshotWriter::json(temp_dir.path());

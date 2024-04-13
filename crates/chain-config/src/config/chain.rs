@@ -1,19 +1,16 @@
+use crate::serialization::HexIfHumanReadable;
 use fuel_core_storage::MerkleRoot;
 use fuel_core_types::{
     fuel_crypto::Hasher,
-    fuel_tx::{
-        ConsensusParameters,
-        GasCosts,
+    fuel_tx::ConsensusParameters,
+    fuel_types::{
+        fmt_truncated_hex,
+        AssetId,
     },
-    fuel_types::AssetId,
 };
 use serde::{
     Deserialize,
     Serialize,
-};
-use serde_with::{
-    serde_as,
-    skip_serializing_none,
 };
 #[cfg(feature = "std")]
 use std::fs::File;
@@ -30,14 +27,15 @@ use crate::SnapshotMetadata;
 
 pub const LOCAL_TESTNET: &str = "local_testnet";
 
-#[serde_as]
-// TODO: Remove not consensus/network fields from `ChainConfig` or create a new config only
-//  for consensus/network fields.
-#[skip_serializing_none]
-#[derive(Clone, Debug, Deserialize, Serialize, Eq, PartialEq)]
+#[serde_with::serde_as]
+#[derive(Clone, derivative::Derivative, Deserialize, Serialize, Eq, PartialEq)]
+#[derivative(Debug)]
 pub struct ChainConfig {
     pub chain_name: String,
     pub consensus_parameters: ConsensusParameters,
+    #[serde_as(as = "HexIfHumanReadable")]
+    #[derivative(Debug(format_with = "fmt_truncated_hex::<16>"))]
+    pub state_transition_bytecode: Vec<u8>,
     pub consensus: ConsensusConfig,
 }
 
@@ -47,6 +45,8 @@ impl Default for ChainConfig {
         Self {
             chain_name: "local".into(),
             consensus_parameters: ConsensusParameters::default(),
+            // Note: It is invalid bytecode.
+            state_transition_bytecode: vec![],
             consensus: ConsensusConfig::default_poa(),
         }
     }
@@ -97,53 +97,10 @@ impl ChainConfig {
 
 impl GenesisCommitment for ChainConfig {
     fn root(&self) -> anyhow::Result<MerkleRoot> {
-        // # Dev-note: If `ChainConfig` got a new field, maybe we need to hash it too.
-        // Avoid using the `..` in the code below. Use `_` instead if you don't need to hash
-        // the field. Explicit fields help to prevent a bug of missing fields in the hash.
-        let ChainConfig {
-            chain_name,
-            consensus_parameters,
-            consensus,
-        } = self;
-
-        // TODO: Hash settlement configuration when it will be available.
-        let config_hash = *Hasher::default()
-            .chain(chain_name.as_bytes())
-            .chain(consensus_parameters.root()?)
-            .chain(consensus.root()?)
-            .finalize();
-
-        Ok(config_hash)
-    }
-}
-
-impl GenesisCommitment for ConsensusParameters {
-    fn root(&self) -> anyhow::Result<MerkleRoot> {
-        // TODO: Define hash algorithm for `ConsensusParameters`
         let bytes = postcard::to_allocvec(&self).map_err(anyhow::Error::msg)?;
-        let params_hash = Hasher::default().chain(bytes).finalize();
+        let config_hash = Hasher::default().chain(bytes).finalize();
 
-        Ok(params_hash.into())
-    }
-}
-
-impl GenesisCommitment for GasCosts {
-    fn root(&self) -> anyhow::Result<MerkleRoot> {
-        // TODO: Define hash algorithm for `GasCosts`
-        let bytes = postcard::to_allocvec(&self).map_err(anyhow::Error::msg)?;
-        let hash = Hasher::default().chain(bytes).finalize();
-
-        Ok(hash.into())
-    }
-}
-
-impl GenesisCommitment for ConsensusConfig {
-    fn root(&self) -> anyhow::Result<MerkleRoot> {
-        // TODO: Define hash algorithm for `ConsensusConfig`
-        let bytes = postcard::to_allocvec(&self).map_err(anyhow::Error::msg)?;
-        let hash = Hasher::default().chain(bytes).finalize();
-
-        Ok(hash.into())
+        Ok(config_hash.into())
     }
 }
 

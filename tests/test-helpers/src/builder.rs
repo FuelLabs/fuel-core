@@ -4,6 +4,7 @@ use fuel_core::{
         CoinConfig,
         ContractBalanceConfig,
         ContractConfig,
+        LastBlockConfig,
         SnapshotMetadata,
         SnapshotReader,
         StateConfig,
@@ -91,7 +92,7 @@ pub struct TestSetupBuilder {
     pub initial_coins: Vec<CoinConfig>,
     pub min_gas_price: u64,
     pub gas_limit: Option<u64>,
-    pub starting_block: BlockHeight,
+    pub starting_block: Option<BlockHeight>,
     pub utxo_validation: bool,
     pub privileged_address: Address,
     pub trigger: Trigger,
@@ -204,10 +205,19 @@ impl TestSetupBuilder {
             .consensus_parameters
             .set_privileged_address(self.privileged_address);
 
+        let latest_block = if let Some(starting_block) = self.starting_block {
+            Some(LastBlockConfig {
+                block_height: starting_block,
+                ..Default::default()
+            })
+        } else {
+            None
+        };
+
         let state = StateConfig {
             coins: self.initial_coins.clone(),
             contracts: self.contracts.values().cloned().collect_vec(),
-            block_height: self.starting_block,
+            latest_block,
             ..StateConfig::default()
         };
 
@@ -239,7 +249,7 @@ impl Default for TestSetupBuilder {
             initial_coins: vec![],
             min_gas_price: 0,
             gas_limit: None,
-            starting_block: Default::default(),
+            starting_block: None,
             utxo_validation: true,
             privileged_address: Default::default(),
             trigger: Trigger::Instant,
