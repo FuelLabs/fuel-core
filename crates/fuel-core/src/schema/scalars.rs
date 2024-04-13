@@ -299,6 +299,7 @@ fuel_type_scalar!("AssetId", AssetId, AssetId, 32);
 fuel_type_scalar!("ContractId", ContractId, ContractId, 32);
 fuel_type_scalar!("Salt", Salt, Salt, 32);
 fuel_type_scalar!("TransactionId", TransactionId, Bytes32, 32);
+fuel_type_scalar!("RelayedTransactionId", RelayedTransactionId, Bytes32, 32);
 fuel_type_scalar!("MessageId", MessageId, MessageId, 32);
 fuel_type_scalar!("Nonce", Nonce, Nonce, 32);
 fuel_type_scalar!("Signature", Signature, Bytes64, 64);

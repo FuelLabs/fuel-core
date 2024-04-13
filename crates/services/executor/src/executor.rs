@@ -48,6 +48,7 @@ use fuel_core_types::{
             CompressedCoinV1,
         },
         contract::ContractUtxoInfo,
+        RelayedTransaction,
     },
     fuel_asm::{
         RegId,
@@ -95,6 +96,7 @@ use fuel_core_types::{
         UtxoId,
     },
     fuel_types::{
+        canonical::Deserialize,
         BlockHeight,
         ContractId,
         MessageId,
@@ -110,7 +112,7 @@ use fuel_core_types::{
             IntoChecked,
         },
         interpreter::{
-            CheckedMetadata,
+            CheckedMetadata as CheckedMetadataTrait,
             ExecutableTransaction,
             InterpreterParams,
         },
@@ -127,6 +129,7 @@ use fuel_core_types::{
             ExecutionResult,
             ExecutionType,
             ExecutionTypes,
+            ForcedTransactionFailure,
             Result as ExecutorResult,
             TransactionExecutionResult,
             TransactionExecutionStatus,
@@ -470,19 +473,20 @@ where
         let source = component.transactions_source;
         let gas_price = component.gas_price;
         let coinbase_contract_id = component.coinbase_contract_id;
-        let mut remaining_gas_limit = block_gas_limit;
         let block_height = *block.header.height();
 
-        if self.relayer.enabled() {
-            self.process_da(&block.header, execution_data)?;
-        }
+        let forced_transactions = if self.relayer.enabled() {
+            self.process_da(&block.header, execution_data)?
+        } else {
+            Vec::with_capacity(0)
+        };
 
         // The block level storage transaction that also contains data from the relayer.
         // Starting from this point, modifications from each thread should be independent
         // and shouldn't touch the same data.
         let mut block_with_relayer_data_transaction = self.block_st_transaction.read_transaction()
-                // Enforces independent changes from each thread.
-                .with_policy(ConflictPolicy::Fail);
+            // Enforces independent changes from each thread.
+            .with_policy(ConflictPolicy::Fail);
 
         // We execute transactions in a single thread right now, but later,
         // we will execute them in parallel with a separate independent storage transaction per thread.
@@ -490,13 +494,11 @@ where
             .read_transaction()
             .with_policy(ConflictPolicy::Overwrite);
 
-        // ALl transactions should be in the `TxSource`.
-        // We use `block.transactions` to store executed transactions.
         debug_assert!(block.transactions.is_empty());
-        let mut iter = source.next(remaining_gas_limit).into_iter().peekable();
 
         let mut execute_transaction = |execution_data: &mut ExecutionData,
-                                       tx: MaybeCheckedTransaction|
+                                       tx: MaybeCheckedTransaction,
+                                       gas_price: Word|
          -> ExecutorResult<()> {
             let tx_count = execution_data.tx_count;
             let tx = {
@@ -504,7 +506,7 @@ where
                     .write_transaction()
                     .with_policy(ConflictPolicy::Overwrite);
                 let tx_id = tx.id(&self.consensus_params.chain_id());
-                let result = self.execute_transaction(
+                let tx = self.execute_transaction(
                     tx,
                     &tx_id,
                     &block.header,
@@ -513,31 +515,8 @@ where
                     execution_data,
                     execution_kind,
                     &mut tx_st_transaction,
-                );
-
-                let tx = match result {
-                    Err(err) => {
-                        return match execution_kind {
-                            ExecutionKind::Production => {
-                                // If, during block production, we get an invalid transaction,
-                                // remove it from the block and continue block creation. An invalid
-                                // transaction means that the caller didn't validate it first, so
-                                // maybe something is wrong with validation rules in the `TxPool`
-                                // (or in another place that should validate it). Or we forgot to
-                                // clean up some dependent/conflict transactions. But it definitely
-                                // means that something went wrong, and we must fix it.
-                                execution_data.skipped_transactions.push((tx_id, err));
-                                Ok(())
-                            }
-                            ExecutionKind::DryRun | ExecutionKind::Validation => Err(err),
-                        }
-                    }
-                    Ok(tx) => tx,
-                };
-
-                if let Err(err) = tx_st_transaction.commit() {
-                    return Err(err.into())
-                }
+                )?;
+                tx_st_transaction.commit()?;
                 tx
             };
 
@@ -549,14 +528,53 @@ where
             Ok(())
         };
 
-        while iter.peek().is_some() {
-            for transaction in iter {
-                execute_transaction(&mut *execution_data, transaction)?;
+        let relayed_tx_iter = forced_transactions.into_iter();
+        for transaction in relayed_tx_iter {
+            const RELAYED_GAS_PRICE: Word = 0;
+            let transaction = MaybeCheckedTransaction::CheckedTransaction(transaction);
+            let tx_id = transaction.id(&self.consensus_params.chain_id());
+            match execute_transaction(
+                &mut *execution_data,
+                transaction,
+                RELAYED_GAS_PRICE,
+            ) {
+                Ok(_) => {}
+                Err(err) => {
+                    let event = ExecutorEvent::ForcedTransactionFailed {
+                        id: tx_id.into(),
+                        block_height,
+                        failure: err.to_string(),
+                    };
+                    execution_data.events.push(event);
+                }
+            }
+        }
+
+        let remaining_gas_limit = block_gas_limit.saturating_sub(execution_data.used_gas);
+
+        // L2 originated transactions should be in the `TxSource`. This will be triggered after
+        // all relayed transactions are processed.
+        let mut regular_tx_iter = source.next(remaining_gas_limit).into_iter().peekable();
+        while regular_tx_iter.peek().is_some() {
+            for transaction in regular_tx_iter {
+                let tx_id = transaction.id(&self.consensus_params.chain_id());
+                match execute_transaction(&mut *execution_data, transaction, gas_price) {
+                    Ok(_) => {}
+                    Err(err) => match execution_kind {
+                        ExecutionKind::Production => {
+                            execution_data.skipped_transactions.push((tx_id, err));
+                        }
+                        ExecutionKind::DryRun | ExecutionKind::Validation => {
+                            return Err(err);
+                        }
+                    },
+                }
             }
 
-            remaining_gas_limit = block_gas_limit.saturating_sub(execution_data.used_gas);
+            let new_remaining_gas_limit =
+                block_gas_limit.saturating_sub(execution_data.used_gas);
 
-            iter = source.next(remaining_gas_limit).into_iter().peekable();
+            regular_tx_iter = source.next(new_remaining_gas_limit).into_iter().peekable();
         }
 
         // After the execution of all transactions in production mode, we can set the final fee.
@@ -589,6 +607,7 @@ where
             execute_transaction(
                 execution_data,
                 MaybeCheckedTransaction::Transaction(coinbase_tx.into()),
+                gas_price,
             )?;
         }
 
@@ -610,7 +629,7 @@ where
         &mut self,
         header: &PartialBlockHeader,
         execution_data: &mut ExecutionData,
-    ) -> ExecutorResult<()> {
+    ) -> ExecutorResult<Vec<CheckedTransaction>> {
         let block_height = *header.height();
         let prev_block_height = block_height
             .pred()
@@ -627,6 +646,8 @@ where
         };
 
         let mut root_calculator = MerkleRootCalculator::new();
+
+        let mut checked_forced_txs = vec![];
 
         for da_height in next_unprocessed_da_height..=header.da_height.0 {
             let da_height = da_height.into();
@@ -648,8 +669,29 @@ where
                             .events
                             .push(ExecutorEvent::MessageImported(message));
                     }
-                    Event::Transaction(_) => {
-                        // TODO: implement handling of forced transactions in a later PR
+                    Event::Transaction(relayed_tx) => {
+                        let id = relayed_tx.id();
+                        // perform basic checks
+                        let checked_tx_res = Self::validate_forced_tx(
+                            relayed_tx,
+                            header,
+                            &self.consensus_params,
+                        );
+                        // handle the result
+                        match checked_tx_res {
+                            Ok(checked_tx) => {
+                                checked_forced_txs.push(checked_tx);
+                            }
+                            Err(err) => {
+                                execution_data.events.push(
+                                    ExecutorEvent::ForcedTransactionFailed {
+                                        id,
+                                        block_height,
+                                        failure: err.to_string(),
+                                    },
+                                );
+                            }
+                        }
                     }
                 }
             }
@@ -657,6 +699,75 @@ where
 
         execution_data.event_inbox_root = root_calculator.root().into();
 
+        Ok(checked_forced_txs)
+    }
+
+    /// Parse forced transaction payloads and perform basic checks
+    fn validate_forced_tx(
+        relayed_tx: RelayedTransaction,
+        header: &PartialBlockHeader,
+        consensus_params: &ConsensusParameters,
+    ) -> Result<CheckedTransaction, ForcedTransactionFailure> {
+        let parsed_tx = Self::parse_tx_bytes(&relayed_tx)?;
+        Self::tx_is_valid_variant(&parsed_tx)?;
+        Self::relayed_tx_claimed_enough_max_gas(
+            &parsed_tx,
+            &relayed_tx,
+            consensus_params,
+        )?;
+        let checked_tx =
+            Self::get_checked_tx(parsed_tx, *header.height(), consensus_params)?;
+        Ok(CheckedTransaction::from(checked_tx))
+    }
+
+    fn parse_tx_bytes(
+        relayed_transaction: &RelayedTransaction,
+    ) -> Result<Transaction, ForcedTransactionFailure> {
+        let tx_bytes = relayed_transaction.serialized_transaction();
+        let tx = Transaction::from_bytes(tx_bytes)
+            .map_err(|_| ForcedTransactionFailure::CodecError)?;
+        Ok(tx)
+    }
+
+    fn get_checked_tx(
+        tx: Transaction,
+        height: BlockHeight,
+        consensus_params: &ConsensusParameters,
+    ) -> Result<Checked<Transaction>, ForcedTransactionFailure> {
+        let checked_tx = tx
+            .into_checked(height, consensus_params)
+            .map_err(ForcedTransactionFailure::CheckError)?;
+        Ok(checked_tx)
+    }
+
+    fn tx_is_valid_variant(tx: &Transaction) -> Result<(), ForcedTransactionFailure> {
+        match tx {
+            Transaction::Mint(_) => Err(ForcedTransactionFailure::InvalidTransactionType),
+            Transaction::Script(_) | Transaction::Create(_) => Ok(()),
+        }
+    }
+
+    fn relayed_tx_claimed_enough_max_gas(
+        tx: &Transaction,
+        relayed_tx: &RelayedTransaction,
+        consensus_params: &ConsensusParameters,
+    ) -> Result<(), ForcedTransactionFailure> {
+        let claimed_max_gas = relayed_tx.max_gas();
+        let gas_costs = consensus_params.gas_costs();
+        let fee_params = consensus_params.fee_params();
+        let actual_max_gas = match tx {
+            Transaction::Script(script) => script.max_gas(gas_costs, fee_params),
+            Transaction::Create(create) => create.max_gas(gas_costs, fee_params),
+            Transaction::Mint(_) => {
+                return Err(ForcedTransactionFailure::InvalidTransactionType)
+            }
+        };
+        if actual_max_gas > claimed_max_gas {
+            return Err(ForcedTransactionFailure::InsufficientMaxGas {
+                claimed_max_gas,
+                actual_max_gas,
+            });
+        }
         Ok(())
     }
 
@@ -895,7 +1006,7 @@ where
     ) -> ExecutorResult<Transaction>
     where
         Tx: ExecutableTransaction + PartialEq + Cacheable + Send + Sync + 'static,
-        <Tx as IntoChecked>::Metadata: CheckedMetadata + Clone + Send + Sync,
+        <Tx as IntoChecked>::Metadata: CheckedMetadataTrait + Clone + Send + Sync,
         T: KeyValueInspect<Column = Column>,
     {
         let tx_id = checked_tx.id();
@@ -1139,7 +1250,7 @@ where
                     if db.storage::<SpentMessages>().contains_key(nonce)? {
                         return Err(
                             TransactionValidityError::MessageAlreadySpent(*nonce).into()
-                        )
+                        );
                     }
                     if let Some(message) = db.storage::<Messages>().get(nonce)? {
                         if message.da_height() > block_da_height {
