@@ -25,12 +25,12 @@ fn test_deployment_chainconfig(path: impl AsRef<Path>) -> anyhow::Result<()> {
     // Deployment configuration should use gas costs from benchmarks.
     let benchmark_gas_costs =
         GasCosts::new(fuel_core_benches::default_gas_costs::default_gas_costs());
-    chain_config.state_transition_bytecode = WASM_BYTECODE.to_vec();
     chain_config
         .consensus_parameters
         .set_gas_costs(benchmark_gas_costs);
 
     if env::var_os("OVERRIDE_CHAIN_CONFIGS").is_some() {
+        chain_config.state_transition_bytecode = WASM_BYTECODE.to_vec();
         std::fs::remove_file(&stored_snapshot.chain_config)?;
         chain_config.write(&stored_snapshot.chain_config)?;
     }
@@ -45,9 +45,8 @@ fn test_deployment_chainconfig(path: impl AsRef<Path>) -> anyhow::Result<()> {
     let stored_chain_config = std::fs::read_to_string(stored_snapshot.chain_config)?
         .trim()
         .to_string();
-    pretty_assertions::assert_eq!(
-        chain_config,
-        stored_chain_config,
+    assert_eq!(
+        chain_config, stored_chain_config,
         "Chain config should match the one in the deployment directory"
     );
 
@@ -69,9 +68,8 @@ fn test_deployment_chainconfig(path: impl AsRef<Path>) -> anyhow::Result<()> {
         };
         std::fs::read_to_string(generated_state)?.trim().to_string()
     };
-    pretty_assertions::assert_eq!(
-        stored_state_config,
-        generated_state_config,
+    assert_eq!(
+        stored_state_config, generated_state_config,
         "State config should match the one in the deployment directory"
     );
 
