@@ -9,10 +9,8 @@ use std::{
 };
 
 fn main() {
+    // It only forces a rerun of the build when `build.rs` is changed.
     println!("cargo:rerun-if-changed=build.rs");
-    println!("cargo:rerun-if-changed=wasm-executor/src/main.rs");
-    println!("cargo:rerun-if-changed=src/executor.rs");
-
     #[cfg(feature = "wasm-executor")]
     build_wasm()
 }
@@ -26,21 +24,20 @@ fn build_wasm() {
     let manifest_path = Path::new(&manifest_dir);
     let wasm_executor_path = manifest_path
         .join("wasm-executor")
-        .join("Cargo.toml")
         .to_string_lossy()
         .to_string();
 
     let cargo = env::var("CARGO").unwrap_or_else(|_| "cargo".to_string());
 
-    let target_dir = format!("--target-dir={}", dest_path.to_string_lossy());
+    let target_dir = format!("--root={}", dest_path.to_string_lossy());
 
     let args = vec![
-        "build".to_owned(),
-        "--manifest-path".to_owned(),
+        "install".to_owned(),
+        "--path".to_owned(),
         wasm_executor_path,
         "--target=wasm32-unknown-unknown".to_owned(),
         "--no-default-features".to_owned(),
-        "--release".to_owned(),
+        "--locked".to_owned(),
         target_dir,
     ];
 

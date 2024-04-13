@@ -57,9 +57,11 @@ impl ChainConfig {
 
     #[cfg(feature = "std")]
     pub fn load(path: impl AsRef<Path>) -> anyhow::Result<Self> {
+        use std::io::Read;
         let path = path.as_ref();
-        let file = std::fs::File::open(path)?;
-        serde_json::from_reader(&file).map_err(|e| {
+        let mut json = String::new();
+        std::fs::File::open(path)?.read_to_string(&mut json)?;
+        serde_json::from_str(json.as_str()).map_err(|e| {
             anyhow::Error::new(e).context(format!(
                 "an error occurred while loading the chain state file: {:?}",
                 path.to_str()

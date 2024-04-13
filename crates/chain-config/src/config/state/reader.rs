@@ -130,11 +130,14 @@ impl SnapshotReader {
         group_size: usize,
     ) -> anyhow::Result<Self> {
         use anyhow::Context;
+        use std::io::Read;
         let state = {
             let path = state_file.as_ref();
-            let mut file = std::fs::File::open(path)
-                .with_context(|| format!("Could not open snapshot file: {path:?}"))?;
-            serde_json::from_reader(&mut file)?
+            let mut json = String::new();
+            std::fs::File::open(path)
+                .with_context(|| format!("Could not open snapshot file: {path:?}"))?
+                .read_to_string(&mut json)?;
+            serde_json::from_str(json.as_str())?
         };
 
         Ok(Self {
@@ -192,11 +195,14 @@ impl SnapshotReader {
     ) -> anyhow::Result<Self> {
         use crate::TableEncoding;
         use anyhow::Context;
+        use std::io::Read;
         let chain_config = {
             let path = &snapshot_metadata.chain_config;
-            let mut file = std::fs::File::open(path)
-                .with_context(|| format!("Could not open chain config file: {path:?}"))?;
-            serde_json::from_reader(&mut file)?
+            let mut json = String::new();
+            std::fs::File::open(path)
+                .with_context(|| format!("Could not open snapshot file: {path:?}"))?
+                .read_to_string(&mut json)?;
+            serde_json::from_str(json.as_str())?
         };
 
         match snapshot_metadata.table_encoding {

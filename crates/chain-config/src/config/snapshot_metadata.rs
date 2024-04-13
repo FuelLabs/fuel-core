@@ -1,6 +1,10 @@
-use std::path::{
-    Path,
-    PathBuf,
+use anyhow::Context;
+use std::{
+    io::Read,
+    path::{
+        Path,
+        PathBuf,
+    },
 };
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq)]
@@ -65,8 +69,11 @@ impl SnapshotMetadata {
     const METADATA_FILENAME: &'static str = "metadata.json";
     pub fn read(dir: impl AsRef<Path>) -> anyhow::Result<Self> {
         let path = dir.as_ref().join(Self::METADATA_FILENAME);
-        let file = std::fs::File::open(path)?;
-        let mut snapshot: Self = serde_json::from_reader(&file)?;
+        let mut json = String::new();
+        std::fs::File::open(&path)
+            .with_context(|| format!("Could not open snapshot file: {path:?}"))?
+            .read_to_string(&mut json)?;
+        let mut snapshot: Self = serde_json::from_str(json.as_str())?;
         snapshot.prepend_path(dir.as_ref());
 
         Ok(snapshot)
