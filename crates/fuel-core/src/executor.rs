@@ -3252,15 +3252,6 @@ mod tests {
 
             // and
             let consensus_params = ConsensusParameters::default();
-            // let actual_max_gas = if let CheckedMetadata::Script(metadata) = tx
-            //     .into_checked(block_height.into(), &consensus_params)
-            //     .unwrap()
-            //     .metadata()
-            // {
-            //     metadata.max_gas
-            // } else {
-            //     panic!("Expected `CheckedMetadata::Script`")
-            // };
             let actual_max_gas = tx
                 .as_script()
                 .unwrap()
