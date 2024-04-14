@@ -19,6 +19,18 @@ fn main() {
 fn build_wasm() {
     let out_dir = env::var_os("OUT_DIR").expect("The output directory is not set");
     let dest_path = Path::new(&out_dir);
+    let bin_dir = format!("--root={}", dest_path.to_string_lossy());
+
+    // Set the own sub-target directory to prevent a cargo deadlock (cargo locks
+    // a target dir exclusive). This directory is also used as a cache directory
+    // to avoid building the same WASM binary each time. Also, caching reuses
+    // the artifacts from the previous build in the case if the executor is changed.
+    let mut cache_dir: std::path::PathBuf = out_dir.clone().into();
+    cache_dir.pop();
+    cache_dir.pop();
+    cache_dir.push("fuel-core-upgradable-executor-cache");
+    let target_dir = format!("--target-dir={}", cache_dir.to_string_lossy());
+
     let manifest_dir =
         env::var_os("CARGO_MANIFEST_DIR").expect("The manifest directory is not set");
     let manifest_path = Path::new(&manifest_dir);
@@ -29,8 +41,6 @@ fn build_wasm() {
 
     let cargo = env::var("CARGO").unwrap_or_else(|_| "cargo".to_string());
 
-    let target_dir = format!("--root={}", dest_path.to_string_lossy());
-
     let args = vec![
         "install".to_owned(),
         "--path".to_owned(),
@@ -39,6 +49,7 @@ fn build_wasm() {
         "--no-default-features".to_owned(),
         "--locked".to_owned(),
         target_dir,
+        bin_dir,
     ];
 
     let mut cargo = Command::new(cargo);
