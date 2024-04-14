@@ -77,7 +77,7 @@ fuel-core-trace = { version = "0.24.2", path = "./crates/trace" }
 fuel-core-types = { version = "0.24.2", path = "./crates/types", default-features = false }
 fuel-core-tests = { version = "0.0.0", path = "./tests" }
 fuel-core-upgradable-executor = { version = "0.24.2", path = "./crates/services/upgradable-executor" }
-fuel-core-wasm-executor = { version = "0.24.2", path = "./crates/services/upgradable-executor/wasm-executor" }
+fuel-core-wasm-executor = { version = "0.24.2", path = "./crates/services/upgradable-executor/wasm-executor", default-features = false }
 fuel-core-xtask = { version = "0.0.0", path = "./xtask" }
 
 # Fuel dependencies
