@@ -1282,6 +1282,7 @@ dependencies = [
  "encode_unicode",
  "lazy_static",
  "libc",
+ "unicode-width",
  "windows-sys 0.52.0",
 ]
 
@@ -2835,7 +2836,7 @@ dependencies = [
 [[package]]
 name = "fuel-asm"
 version = "0.48.0"
-source = "git+https://github.com/FuelLabs/fuel-vm/?branch=feature/process-upload-transaction-within-interpreter#e778a9564f621b493694d05ed481d0493353b025"
+source = "git+https://github.com/FuelLabs/fuel-vm/?branch=master#0fba60dc9a3055745dc78c427dff7e34748ab23f"
 dependencies = [
  "bitflags 2.5.0",
  "fuel-types",
@@ -2876,6 +2877,7 @@ dependencies = [
  "futures",
  "hex",
  "hyper",
+ "indicatif",
  "itertools 0.12.1",
  "mockall",
  "num_cpus",
@@ -3422,7 +3424,7 @@ dependencies = [
 [[package]]
 name = "fuel-crypto"
 version = "0.48.0"
-source = "git+https://github.com/FuelLabs/fuel-vm/?branch=feature/process-upload-transaction-within-interpreter#e778a9564f621b493694d05ed481d0493353b025"
+source = "git+https://github.com/FuelLabs/fuel-vm/?branch=master#0fba60dc9a3055745dc78c427dff7e34748ab23f"
 dependencies = [
  "coins-bip32",
  "coins-bip39",
@@ -3442,7 +3444,7 @@ dependencies = [
 [[package]]
 name = "fuel-derive"
 version = "0.48.0"
-source = "git+https://github.com/FuelLabs/fuel-vm/?branch=feature/process-upload-transaction-within-interpreter#e778a9564f621b493694d05ed481d0493353b025"
+source = "git+https://github.com/FuelLabs/fuel-vm/?branch=master#0fba60dc9a3055745dc78c427dff7e34748ab23f"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -3453,7 +3455,7 @@ dependencies = [
 [[package]]
 name = "fuel-merkle"
 version = "0.48.0"
-source = "git+https://github.com/FuelLabs/fuel-vm/?branch=feature/process-upload-transaction-within-interpreter#e778a9564f621b493694d05ed481d0493353b025"
+source = "git+https://github.com/FuelLabs/fuel-vm/?branch=master#0fba60dc9a3055745dc78c427dff7e34748ab23f"
 dependencies = [
  "derive_more",
  "digest 0.10.7",
@@ -3467,12 +3469,12 @@ dependencies = [
 [[package]]
 name = "fuel-storage"
 version = "0.48.0"
-source = "git+https://github.com/FuelLabs/fuel-vm/?branch=feature/process-upload-transaction-within-interpreter#e778a9564f621b493694d05ed481d0493353b025"
+source = "git+https://github.com/FuelLabs/fuel-vm/?branch=master#0fba60dc9a3055745dc78c427dff7e34748ab23f"
 
 [[package]]
 name = "fuel-tx"
 version = "0.48.0"
-source = "git+https://github.com/FuelLabs/fuel-vm/?branch=feature/process-upload-transaction-within-interpreter#e778a9564f621b493694d05ed481d0493353b025"
+source = "git+https://github.com/FuelLabs/fuel-vm/?branch=master#0fba60dc9a3055745dc78c427dff7e34748ab23f"
 dependencies = [
  "bitflags 2.5.0",
  "derivative",
@@ -3494,7 +3496,7 @@ dependencies = [
 [[package]]
 name = "fuel-types"
 version = "0.48.0"
-source = "git+https://github.com/FuelLabs/fuel-vm/?branch=feature/process-upload-transaction-within-interpreter#e778a9564f621b493694d05ed481d0493353b025"
+source = "git+https://github.com/FuelLabs/fuel-vm/?branch=master#0fba60dc9a3055745dc78c427dff7e34748ab23f"
 dependencies = [
  "fuel-derive",
  "hex",
@@ -3505,7 +3507,7 @@ dependencies = [
 [[package]]
 name = "fuel-vm"
 version = "0.48.0"
-source = "git+https://github.com/FuelLabs/fuel-vm/?branch=feature/process-upload-transaction-within-interpreter#e778a9564f621b493694d05ed481d0493353b025"
+source = "git+https://github.com/FuelLabs/fuel-vm/?branch=master#0fba60dc9a3055745dc78c427dff7e34748ab23f"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -4357,6 +4359,19 @@ dependencies = [
  "equivalent",
  "hashbrown 0.14.3",
  "serde",
+]
+
+[[package]]
+name = "indicatif"
+version = "0.17.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "763a5a8f45087d6bcea4222e7b72c291a054edf80e4ef6efd2a4979878c7bea3"
+dependencies = [
+ "console",
+ "instant",
+ "number_prefix",
+ "portable-atomic",
+ "unicode-width",
 ]
 
 [[package]]
@@ -5799,6 +5814,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "number_prefix"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "830b246a0e5f20af87141b25c173cd1b609bd7779a4617d6ec582abaf90870f3"
+
+[[package]]
 name = "numtoa"
 version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6291,6 +6312,12 @@ dependencies = [
  "opaque-debug",
  "universal-hash",
 ]
+
+[[package]]
+name = "portable-atomic"
+version = "1.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7170ef9988bc169ba16dd36a7fa041e5c4cbeb6a35b76d4c03daded371eae7c0"
 
 [[package]]
 name = "postcard"
@@ -8754,6 +8781,12 @@ checksum = "a56d1686db2308d901306f92a263857ef59ea39678a5458e7cb17f01415101f5"
 dependencies = [
  "tinyvec",
 ]
+
+[[package]]
+name = "unicode-width"
+version = "0.1.11"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e51733f11c9c4f72aa0c160008246859e340b00807569a0da0e7a1079b27ba85"
 
 [[package]]
 name = "unicode-xid"

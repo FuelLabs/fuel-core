@@ -10,6 +10,7 @@ use crate::{
     service::config::Config,
 };
 use fuel_core_chain_config::GenesisCommitment;
+use fuel_core_services::StateWatcher;
 use fuel_core_storage::{
     iter::IteratorOverTable,
     tables::{
@@ -48,35 +49,33 @@ use fuel_core_types::{
     },
 };
 use itertools::Itertools;
+use fuel_core_storage::tables::UploadedBytecodes;
+use fuel_core_types::{
+    fuel_crypto::Hasher,
+    fuel_vm::UploadedBytecode,
+};
 
 mod exporter;
 mod importer;
 mod task_manager;
 
 pub use exporter::Exporter;
-use fuel_core_storage::tables::UploadedBytecodes;
-use fuel_core_types::{
-    fuel_crypto::Hasher,
-    fuel_vm::UploadedBytecode,
-};
-use tokio_util::sync::CancellationToken;
 
 use self::importer::SnapshotImporter;
 
 /// Performs the importing of the genesis block from the snapshot.
 pub async fn execute_genesis_block(
+    watcher: StateWatcher,
     config: &Config,
     db: &CombinedDatabase,
 ) -> anyhow::Result<UncommittedImportResult<Changes>> {
     let genesis_block = create_genesis_block(config);
 
-    // TODO: tie this with a SIGNAL for resumability
-    let cancel = CancellationToken::new();
     SnapshotImporter::import(
         db.clone(),
         genesis_block.clone(),
         config.snapshot_reader.clone(),
-        cancel.clone(),
+        watcher,
     )
     .await?;
 
@@ -157,7 +156,7 @@ pub async fn execute_and_commit_genesis_block(
     config: &Config,
     db: &CombinedDatabase,
 ) -> anyhow::Result<()> {
-    let result = execute_genesis_block(config, db).await?;
+    let result = execute_genesis_block(StateWatcher::default(), config, db).await?;
     let importer = fuel_core_importer::Importer::new(
         config
             .snapshot_reader

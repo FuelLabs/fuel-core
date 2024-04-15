@@ -128,10 +128,11 @@ pin-project-lite = "0.2"
 axum = "0.5"
 once_cell = "1.16"
 prometheus-client = "0.22.0"
+indicatif = { version = "0.17", default-features = false }
 itertools = { version = "0.12", default-features = false }
 insta = "1.8"
 tempfile = "3.4"
 tikv-jemallocator = "0.5"
 
 [patch.crates-io]
-fuel-vm = { git = "https://github.com/FuelLabs/fuel-vm/", branch = "feature/process-upload-transaction-within-interpreter" }
+fuel-vm = { git = "https://github.com/FuelLabs/fuel-vm/", branch = "master" }
