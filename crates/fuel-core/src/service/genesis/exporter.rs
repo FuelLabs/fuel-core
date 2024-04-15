@@ -57,6 +57,8 @@ where
         writer: Fun,
         group_size: usize,
     ) -> Self {
+        // TODO: Support graceful shutdown during the exporting of the snapshot.
+        //  https://github.com/FuelLabs/fuel-core/issues/1828
         let (_, receiver) = watch::channel(State::Started);
         Self {
             db,
