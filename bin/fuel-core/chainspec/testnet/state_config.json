@@ -13,6 +13,9 @@
       "balances": []
     }
   ],
+  "blocks": [],
+  "block_consensus": [],
+  "transactions": [],
   "block_height": 0,
   "da_block_height": 0
 }

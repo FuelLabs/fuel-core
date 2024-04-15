@@ -214,7 +214,10 @@ mod tests {
     use fuel_core_types::{
         blockchain::primitives::DaBlockHeight,
         entities::coins::coin::Coin,
-        fuel_tx::UtxoId,
+        fuel_tx::{
+            Transaction,
+            UtxoId,
+        },
         fuel_types::{
             Address,
             AssetId,
@@ -278,10 +281,26 @@ mod tests {
             .take(1000)
             .collect_vec();
 
+        let blocks = std::iter::repeat_with(|| Block::randomize(&mut rng))
+            .take(1000)
+            .collect_vec();
+
+        let block_consensus =
+            std::iter::repeat_with(|| <(BlockHeight, Consensus)>::randomize(&mut rng))
+                .take(1000)
+                .collect_vec();
+
+        let transactions = std::iter::repeat_with(|| Transaction::randomize(&mut rng))
+            .take(1000)
+            .collect_vec();
+
         let state = StateConfig {
             coins,
             messages,
             contracts,
+            blocks,
+            block_consensus,
+            transactions,
             block_height: BlockHeight::from(0u32),
             da_block_height: Default::default(),
         };

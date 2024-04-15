@@ -19,6 +19,7 @@ mod messages;
 mod metrics;
 mod node_info;
 mod poa;
+mod regenesis;
 #[cfg(feature = "relayer")]
 mod relayer;
 mod snapshot;
@@ -29,6 +30,5 @@ mod tx;
 #[cfg(feature = "p2p")]
 mod tx_gossip;
 mod vm_storage;
-mod regenesis;
 
 fuel_core_trace::enable_tracing!();

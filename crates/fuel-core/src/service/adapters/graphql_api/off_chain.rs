@@ -14,6 +14,7 @@ use crate::{
         },
     },
     graphql_api::storage::old::{
+        OldFuelBlockConsensus,
         OldFuelBlocks,
         OldTransactions,
     },
@@ -41,6 +42,7 @@ use fuel_core_txpool::types::{
 use fuel_core_types::{
     blockchain::{
         block::CompressedBlock,
+        consensus::Consensus,
         primitives::BlockId,
     },
     fuel_tx::{
@@ -124,6 +126,14 @@ impl OffChainDatabase for Database<OffChain> {
         self.iter_all_by_start::<OldFuelBlocks>(height.as_ref(), Some(direction))
             .map(|r| r.map(|(_, block)| block))
             .into_boxed()
+    }
+
+    fn old_block_consensus(&self, height: BlockHeight) -> StorageResult<Consensus> {
+        Ok(self
+            .storage_as_ref::<OldFuelBlockConsensus>()
+            .get(&height)?
+            .ok_or(not_found!(OldFuelBlockConsensus))?
+            .into_owned())
     }
 
     fn old_transaction(&self, id: &TxId) -> StorageResult<Option<Transaction>> {

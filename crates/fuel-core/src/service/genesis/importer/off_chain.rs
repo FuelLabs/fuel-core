@@ -12,6 +12,7 @@ use crate::{
             contracts::ContractsInfo,
             messages::OwnedMessageIds,
             old::{
+                OldFuelBlockConsensus,
                 OldFuelBlocks,
                 OldTransactions,
             },
@@ -29,6 +30,7 @@ use fuel_core_storage::{
         Coins,
         FuelBlocks,
         Messages,
+        SealedBlockConsensus,
         Transactions,
     },
     transactional::StorageTransaction,
@@ -161,6 +163,24 @@ impl ImportTable for Handler<OldFuelBlocks> {
             .iter()
             .map(|TableEntry { key, value, .. }| (key, value));
         worker_service::copy_to_old_blocks(blocks, tx)?;
+        Ok(())
+    }
+}
+
+impl ImportTable for Handler<OldFuelBlockConsensus> {
+    type TableInSnapshot = SealedBlockConsensus;
+    type TableBeingWritten = OldFuelBlockConsensus;
+    type DbDesc = OffChain;
+
+    fn process(
+        &mut self,
+        group: Vec<TableEntry<Self::TableInSnapshot>>,
+        tx: &mut StorageTransaction<&mut Database<Self::DbDesc>>,
+    ) -> anyhow::Result<()> {
+        let blocks = group
+            .iter()
+            .map(|TableEntry { key, value, .. }| (key, value));
+        worker_service::copy_to_old_block_consensus(blocks, tx)?;
         Ok(())
     }
 }

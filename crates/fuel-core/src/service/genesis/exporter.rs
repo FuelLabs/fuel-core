@@ -28,7 +28,9 @@ use fuel_core_storage::{
         ContractsLatestUtxo,
         ContractsRawCode,
         ContractsState,
+        FuelBlocks,
         Messages,
+        SealedBlockConsensus,
         Transactions,
     },
 };
@@ -81,7 +83,9 @@ where
             ContractsLatestUtxo,
             ContractsState,
             ContractsAssets,
-            Transactions
+            Transactions,
+            FuelBlocks,
+            SealedBlockConsensus
         );
 
         export!(

@@ -126,9 +126,10 @@ where
             });
 
         tracing::info!(
-            "Finishing genesis runner. Read: {} wrote into {}",
+            "Finishing genesis runner. Read: {} wrote into {}. Result: {:?}",
             Logic::TableInSnapshot::column().name(),
-            Logic::TableBeingWritten::column().name()
+            Logic::TableBeingWritten::column().name(),
+            result
         );
 
         result

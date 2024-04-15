@@ -20,6 +20,7 @@ use crate::{
         contracts::ContractsInfo,
         messages::OwnedMessageIds,
         old::{
+            OldFuelBlockConsensus,
             OldFuelBlocks,
             OldTransactions,
         },
@@ -45,6 +46,7 @@ use fuel_core_storage::{
         ContractsState,
         FuelBlocks,
         Messages,
+        SealedBlockConsensus,
         Transactions,
     },
 };
@@ -100,6 +102,7 @@ impl SnapshotImporter {
         self.spawn_worker_off_chain::<Coins, OwnedCoins>()?;
         self.spawn_worker_off_chain::<Transactions, ContractsInfo>()?;
         self.spawn_worker_off_chain::<FuelBlocks, OldFuelBlocks>()?;
+        self.spawn_worker_off_chain::<SealedBlockConsensus, OldFuelBlockConsensus>()?;
         self.spawn_worker_off_chain::<Transactions, OldTransactions>()?;
 
         self.task_manager.wait().await?;

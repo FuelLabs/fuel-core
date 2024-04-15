@@ -82,8 +82,10 @@ pub enum Column {
     ContractsInfo = 8,
     /// See [`OldFuelBlocks`](old::OldFuelBlocks)
     OldFuelBlocks = 9,
+    /// See [`OldFuelBlockConsensus`](old::OldFuelBlockConsensus)
+    OldFuelBlockConsensus = 10,
     /// See [`OldTransactions`](old::OldTransactions)
-    OldTransactions = 10,
+    OldTransactions = 11,
 }
 
 impl Column {

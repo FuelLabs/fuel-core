@@ -29,9 +29,12 @@ use fuel_core_storage::{
 };
 use fuel_core_txpool::types::TxId;
 use fuel_core_types::{
-    blockchain::block::{
-        Block,
-        CompressedBlock,
+    blockchain::{
+        block::{
+            Block,
+            CompressedBlock,
+        },
+        consensus::Consensus,
     },
     fuel_tx::{
         field::{
@@ -75,6 +78,7 @@ use std::{
 };
 
 use super::storage::old::{
+    OldFuelBlockConsensus,
     OldFuelBlocks,
     OldTransactions,
 };
@@ -319,6 +323,18 @@ where
 {
     for (height, block) in blocks {
         db.storage::<OldFuelBlocks>().insert(height, block)?;
+    }
+    Ok(())
+}
+
+pub fn copy_to_old_block_consensus<'a, I, T>(blocks: I, db: &mut T) -> StorageResult<()>
+where
+    I: Iterator<Item = (&'a BlockHeight, &'a Consensus)>,
+    T: OffChainDatabase,
+{
+    for (height, block) in blocks {
+        db.storage::<OldFuelBlockConsensus>()
+            .insert(height, block)?;
     }
     Ok(())
 }

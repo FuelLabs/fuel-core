@@ -9,7 +9,10 @@ use fuel_core_storage::{
 };
 use fuel_core_txpool::types::TxId;
 use fuel_core_types::{
-    blockchain::block::CompressedBlock,
+    blockchain::{
+        block::CompressedBlock,
+        consensus::Consensus,
+    },
     fuel_tx::Transaction,
     fuel_types::BlockHeight,
 };
@@ -39,6 +42,33 @@ fuel_core_storage::basic_storage_tests!(
     OldFuelBlocks,
     <OldFuelBlocks as Mappable>::Key::default(),
     <OldFuelBlocks as Mappable>::Value::default()
+);
+
+/// Old blocks from before regenesis.
+/// Has same form as [`SealedBlockConsensus`](fuel_core_storage::tables::SealedBlockConsensus).
+pub struct OldFuelBlockConsensus;
+
+impl Mappable for OldFuelBlockConsensus {
+    type Key = Self::OwnedKey;
+    type OwnedKey = BlockHeight;
+    type Value = Self::OwnedValue;
+    type OwnedValue = Consensus;
+}
+
+impl TableWithBlueprint for OldFuelBlockConsensus {
+    type Blueprint = Plain<Postcard, Postcard>;
+    type Column = super::Column;
+
+    fn column() -> Self::Column {
+        Self::Column::OldFuelBlockConsensus
+    }
+}
+
+#[cfg(test)]
+fuel_core_storage::basic_storage_tests!(
+    OldFuelBlockConsensus,
+    <OldFuelBlockConsensus as Mappable>::Key::default(),
+    <OldFuelBlockConsensus as Mappable>::Value::default()
 );
 
 /// Old transactions from before regenesis.

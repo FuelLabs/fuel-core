@@ -29,6 +29,7 @@ use fuel_core_txpool::types::{
 use fuel_core_types::{
     blockchain::{
         block::CompressedBlock,
+        consensus::Consensus,
         primitives::{
             BlockId,
             DaBlockHeight,
@@ -278,6 +279,10 @@ impl OffChainDatabase for ReadView {
         direction: IterDirection,
     ) -> BoxedIter<'_, StorageResult<CompressedBlock>> {
         self.off_chain.old_blocks(height, direction)
+    }
+
+    fn old_block_consensus(&self, height: BlockHeight) -> StorageResult<Consensus> {
+        self.off_chain.old_block_consensus(height)
     }
 
     fn old_transaction(

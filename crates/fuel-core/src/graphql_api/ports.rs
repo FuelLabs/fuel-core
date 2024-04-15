@@ -22,6 +22,7 @@ use fuel_core_txpool::service::TxStatusMessage;
 use fuel_core_types::{
     blockchain::{
         block::CompressedBlock,
+        consensus::Consensus,
         primitives::{
             BlockId,
             DaBlockHeight,
@@ -91,6 +92,8 @@ pub trait OffChainDatabase: Send + Sync {
         height: Option<BlockHeight>,
         direction: IterDirection,
     ) -> BoxedIter<'_, StorageResult<CompressedBlock>>;
+
+    fn old_block_consensus(&self, height: BlockHeight) -> StorageResult<Consensus>;
 
     fn old_transaction(&self, id: &TxId) -> StorageResult<Option<Transaction>>;
 }
@@ -225,6 +228,7 @@ pub mod worker {
             messages::OwnedMessageIds,
         },
         graphql_api::storage::old::{
+            OldFuelBlockConsensus,
             OldFuelBlocks,
             OldTransactions,
         },
@@ -262,6 +266,7 @@ pub mod worker {
         + StorageMutate<FuelBlockIdsToHeights, Error = StorageError>
         + StorageMutate<ContractsInfo, Error = StorageError>
         + StorageMutate<OldFuelBlocks, Error = StorageError>
+        + StorageMutate<OldFuelBlockConsensus, Error = StorageError>
         + StorageMutate<OldTransactions, Error = StorageError>
     {
         fn record_tx_id_owner(

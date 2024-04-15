@@ -244,8 +244,9 @@ impl SnapshotReader {
                 })
             }
             DataSource::InMemory { state, group_size } => {
+                let chain_id = self.chain_config.consensus_parameters.chain_id();
                 let collection = state
-                    .as_table()
+                    .as_table(&chain_id)
                     .into_iter()
                     .chunks(*group_size)
                     .into_iter()
