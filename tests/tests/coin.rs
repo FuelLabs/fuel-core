@@ -2,7 +2,6 @@ use fuel_core::{
     chain_config::{
         CoinConfig,
         CoinConfigGenerator,
-        SnapshotReader,
         StateConfig,
     },
     database::Database,
@@ -34,11 +33,7 @@ async fn setup_service(configs: Vec<CoinConfig>) -> FuelService {
         coins: configs,
         ..Default::default()
     };
-
-    let config = Config {
-        snapshot_reader: SnapshotReader::local_testnet().with_state_config(state),
-        ..Config::local_node()
-    };
+    let config = Config::local_node_with_state_config(state);
 
     FuelService::from_database(Database::default(), config)
         .await

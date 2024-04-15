@@ -301,7 +301,7 @@ impl SnapshotWriter {
         self.write::<ContractsLatestUtxo>(state_config.as_table())?;
         self.write::<ContractsState>(state_config.as_table())?;
         self.write::<ContractsAssets>(state_config.as_table())?;
-        self.close(state_config.latest_block, chain_config)
+        self.close(state_config.last_block, chain_config)
     }
 
     pub fn write<T>(&mut self, elements: Vec<TableEntry<T>>) -> anyhow::Result<()>

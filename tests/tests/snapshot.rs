@@ -2,7 +2,6 @@ use fuel_core::{
     chain_config::{
         LastBlockConfig,
         Randomize,
-        SnapshotReader,
         StateConfig,
     },
     combined_database::CombinedDatabase,
@@ -24,7 +23,7 @@ async fn loads_snapshot() {
 
     // setup config
     let starting_state = StateConfig {
-        latest_block: Some(LastBlockConfig {
+        last_block: Some(LastBlockConfig {
             block_height: (u32::MAX - 1).into(),
             da_block_height: DaBlockHeight(u64::MAX),
             consensus_parameters_version: u32::MAX - 1,
@@ -32,11 +31,7 @@ async fn loads_snapshot() {
         }),
         ..StateConfig::randomize(&mut rng)
     };
-    let config = Config {
-        snapshot_reader: SnapshotReader::local_testnet()
-            .with_state_config(starting_state.clone()),
-        ..Config::local_node()
-    };
+    let config = Config::local_node_with_state_config(starting_state.clone());
 
     // setup server & client
     let _ = FuelService::from_combined_database(db.clone(), config)
@@ -45,7 +40,7 @@ async fn loads_snapshot() {
 
     let actual_state = db.read_state_config().unwrap();
     let mut expected = starting_state.sorted();
-    expected.latest_block = Some(LastBlockConfig {
+    expected.last_block = Some(LastBlockConfig {
         block_height: u32::MAX.into(),
         da_block_height: DaBlockHeight(u64::MAX),
         consensus_parameters_version: u32::MAX,

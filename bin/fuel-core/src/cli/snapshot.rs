@@ -768,7 +768,7 @@ mod tests {
                 coins: vec![],
                 messages: vec![],
                 contracts: vec![randomly_chosen_contract],
-                latest_block: original_state.latest_block,
+                last_block: original_state.last_block,
             }
         );
 

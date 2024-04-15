@@ -259,7 +259,6 @@ mod tests {
         LastBlockConfig,
         MessageConfig,
         Randomize,
-        SnapshotReader,
         StateConfig,
     };
     use fuel_core_services::RunnableService;
@@ -293,18 +292,14 @@ mod tests {
     #[tokio::test]
     async fn config_initializes_block_height_of_genesic_block() {
         let block_height = BlockHeight::from(99u32);
-        let snapshot_reader =
-            SnapshotReader::local_testnet().with_state_config(StateConfig {
-                latest_block: Some(LastBlockConfig {
-                    block_height,
-                    ..Default::default()
-                }),
+        let service_config = Config::local_node_with_state_config(StateConfig {
+            last_block: Some(LastBlockConfig {
+                block_height,
+                state_transition_version: 0,
                 ..Default::default()
-            });
-        let service_config = Config {
-            snapshot_reader,
-            ..Config::local_node()
-        };
+            }),
+            ..Default::default()
+        });
 
         let db = Database::default();
         FuelService::from_database(db.clone(), service_config)
@@ -347,17 +342,14 @@ mod tests {
             coins,
             messages,
             contracts,
-            latest_block: Some(LastBlockConfig {
+            last_block: Some(LastBlockConfig {
                 block_height: BlockHeight::from(0u32),
+                state_transition_version: 0,
                 ..Default::default()
             }),
         };
-        let snapshot_reader = SnapshotReader::local_testnet().with_state_config(state);
 
-        let service_config = Config {
-            snapshot_reader,
-            ..Config::local_node()
-        };
+        let service_config = Config::local_node_with_state_config(state);
 
         let db = Database::default();
         FuelService::from_database(db.clone(), service_config)
@@ -411,18 +403,15 @@ mod tests {
                     ..Default::default()
                 },
             ],
-            latest_block: Some(LastBlockConfig {
+            last_block: Some(LastBlockConfig {
                 block_height: starting_height,
+                state_transition_version: 0,
                 ..Default::default()
             }),
             ..Default::default()
         };
-        let snapshot_reader = SnapshotReader::local_testnet().with_state_config(state);
 
-        let service_config = Config {
-            snapshot_reader,
-            ..Config::local_node()
-        };
+        let service_config = Config::local_node_with_state_config(state);
 
         let db = CombinedDatabase::default();
         FuelService::from_combined_database(db.clone(), service_config)
@@ -468,16 +457,11 @@ mod tests {
         let contract = given_contract_config(&mut rng);
         let contract_id = contract.contract_id;
         let states = contract.states.clone();
-        let snapshot_reader =
-            SnapshotReader::local_testnet().with_state_config(StateConfig {
-                contracts: vec![contract],
-                ..Default::default()
-            });
 
-        let service_config = Config {
-            snapshot_reader,
-            ..Config::local_node()
-        };
+        let service_config = Config::local_node_with_state_config(StateConfig {
+            contracts: vec![contract],
+            ..Default::default()
+        });
         let db = Database::default();
 
         // when
@@ -517,12 +501,7 @@ mod tests {
             messages: vec![msg.clone()],
             ..Default::default()
         };
-        let snapshot_reader = SnapshotReader::local_testnet().with_state_config(state);
-
-        let config = Config {
-            snapshot_reader,
-            ..Config::local_node()
-        };
+        let config = Config::local_node_with_state_config(state);
 
         let db = CombinedDatabase::default();
 
@@ -550,16 +529,10 @@ mod tests {
         let contract = given_contract_config(&mut rng);
         let contract_id = contract.contract_id;
         let balances = contract.balances.clone();
-        let snapshot_reader =
-            SnapshotReader::local_testnet().with_state_config(StateConfig {
-                contracts: vec![contract],
-                ..Default::default()
-            });
-
-        let service_config = Config {
-            snapshot_reader,
-            ..Config::local_node()
-        };
+        let service_config = Config::local_node_with_state_config(StateConfig {
+            contracts: vec![contract],
+            ..Default::default()
+        });
 
         let db = Database::default();
         FuelService::from_database(db.clone(), service_config)
@@ -587,18 +560,14 @@ mod tests {
                 amount: 10,
                 ..Default::default()
             }],
-            latest_block: Some(LastBlockConfig {
+            last_block: Some(LastBlockConfig {
                 block_height: BlockHeight::from(9u32),
+                state_transition_version: 0,
                 ..Default::default()
             }),
             ..Default::default()
         };
-        let snapshot_reader = SnapshotReader::local_testnet().with_state_config(state);
-
-        let service_config = Config {
-            snapshot_reader,
-            ..Config::local_node()
-        };
+        let service_config = Config::local_node_with_state_config(state);
 
         let db = CombinedDatabase::default();
         let task = Task::new(db, service_config).unwrap();
@@ -617,18 +586,14 @@ mod tests {
                 tx_pointer_block_height: BlockHeight::from(11u32),
                 ..given_contract_config(&mut rng)
             }],
-            latest_block: Some(LastBlockConfig {
+            last_block: Some(LastBlockConfig {
                 block_height: BlockHeight::from(9u32),
+                state_transition_version: 0,
                 ..Default::default()
             }),
             ..Default::default()
         };
-        let snapshot_reader = SnapshotReader::local_testnet().with_state_config(state);
-
-        let service_config = Config {
-            snapshot_reader,
-            ..Config::local_node()
-        };
+        let service_config = Config::local_node_with_state_config(state);
 
         let db = CombinedDatabase::default();
         let task = Task::new(db, service_config).unwrap();
@@ -666,13 +631,7 @@ mod tests {
             contracts: vec![given_contract_config(&mut rng)],
             ..Default::default()
         };
-        let snapshot_reader =
-            SnapshotReader::local_testnet().with_state_config(initial_state.clone());
-
-        let service_config = Config {
-            snapshot_reader,
-            ..Config::local_node()
-        };
+        let service_config = Config::local_node_with_state_config(initial_state.clone());
 
         let db = CombinedDatabase::default();
         FuelService::from_combined_database(db.clone(), service_config)
@@ -681,7 +640,7 @@ mod tests {
 
         let actual_state = db.read_state_config().unwrap();
         let mut expected_state = initial_state;
-        expected_state.latest_block = Some(Default::default());
+        expected_state.last_block = Some(Default::default());
         assert_eq!(expected_state, actual_state);
     }
 }

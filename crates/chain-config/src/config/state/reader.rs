@@ -97,13 +97,7 @@ impl SnapshotReader {
     pub fn local_testnet() -> Self {
         let state = StateConfig::local_testnet();
         let chain_config = ChainConfig::local_testnet();
-        Self {
-            data_source: DataSource::InMemory {
-                state,
-                group_size: MAX_GROUP_SIZE,
-            },
-            chain_config,
-        }
+        Self::new_in_memory(chain_config, state)
     }
 
     pub fn with_chain_config(self, chain_config: ChainConfig) -> Self {
@@ -194,16 +188,7 @@ impl SnapshotReader {
         json_group_size: usize,
     ) -> anyhow::Result<Self> {
         use crate::TableEncoding;
-        use anyhow::Context;
-        use std::io::Read;
-        let chain_config = {
-            let path = &snapshot_metadata.chain_config;
-            let mut json = String::new();
-            std::fs::File::open(path)
-                .with_context(|| format!("Could not open snapshot file: {path:?}"))?
-                .read_to_string(&mut json)?;
-            serde_json::from_str(json.as_str())?
-        };
+        let chain_config = ChainConfig::from_snapshot_metadata(&snapshot_metadata)?;
 
         match snapshot_metadata.table_encoding {
             TableEncoding::Json { filepath } => {
@@ -268,7 +253,7 @@ impl SnapshotReader {
 
     pub fn last_block_config(&self) -> Option<&LastBlockConfig> {
         match &self.data_source {
-            DataSource::InMemory { state, .. } => state.latest_block.as_ref(),
+            DataSource::InMemory { state, .. } => state.last_block.as_ref(),
             #[cfg(feature = "parquet")]
             DataSource::Parquet {
                 latest_block_config: block,

@@ -6,7 +6,6 @@ use fuel_core::{
         ContractConfig,
         LastBlockConfig,
         SnapshotMetadata,
-        SnapshotReader,
         StateConfig,
     },
     service::{
@@ -207,23 +206,23 @@ impl TestSetupBuilder {
 
         let latest_block = self.starting_block.map(|starting_block| LastBlockConfig {
             block_height: starting_block,
+            state_transition_version: 0,
             ..Default::default()
         });
 
         let state = StateConfig {
             coins: self.initial_coins.clone(),
             contracts: self.contracts.values().cloned().collect_vec(),
-            latest_block,
+            last_block: latest_block,
             ..StateConfig::default()
         };
 
         let config = Config {
             utxo_validation: self.utxo_validation,
             txpool: fuel_core_txpool::Config::default(),
-            snapshot_reader: SnapshotReader::new_in_memory(chain_conf, state),
             block_production: self.trigger,
             static_gas_price: self.min_gas_price,
-            ..Config::local_node()
+            ..Config::local_node_with_configs(chain_conf, state)
         };
 
         let srv = FuelService::new_node(config).await.unwrap();

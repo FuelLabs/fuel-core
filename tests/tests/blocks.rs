@@ -1,7 +1,6 @@
 use fuel_core::{
     chain_config::{
         LastBlockConfig,
-        SnapshotReader,
         StateConfig,
     },
     database::Database,
@@ -79,16 +78,14 @@ async fn block() {
 #[tokio::test]
 async fn get_genesis_block() {
     // Given
-    let config = Config {
-        snapshot_reader: SnapshotReader::local_testnet().with_state_config(StateConfig {
-            latest_block: Some(LastBlockConfig {
-                block_height: 13u32.into(),
-                ..Default::default()
-            }),
-            ..StateConfig::local_testnet()
+    let config = Config::local_node_with_state_config(StateConfig {
+        last_block: Some(LastBlockConfig {
+            block_height: 13u32.into(),
+            state_transition_version: 0,
+            ..Default::default()
         }),
-        ..Config::local_node()
-    };
+        ..StateConfig::local_testnet()
+    });
 
     // When
     let srv = FuelService::from_database(Database::default(), config)

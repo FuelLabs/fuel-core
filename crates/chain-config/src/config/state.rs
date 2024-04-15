@@ -118,7 +118,7 @@ pub struct StateConfig {
     /// Contracts
     pub contracts: Vec<ContractConfig>,
     /// Last block config.
-    pub latest_block: Option<LastBlockConfig>,
+    pub last_block: Option<LastBlockConfig>,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -235,7 +235,7 @@ impl StateConfigBuilder {
             coins,
             messages,
             contracts,
-            latest_block,
+            last_block: latest_block,
         })
     }
 }
@@ -280,7 +280,7 @@ impl crate::Randomize for StateConfig {
             coins: rand_collection(&mut rng, amount),
             messages: rand_collection(&mut rng, amount),
             contracts: rand_collection(&mut rng, amount),
-            latest_block: Some(LastBlockConfig {
+            last_block: Some(LastBlockConfig {
                 block_height: rng.gen(),
                 da_block_height: rng.gen(),
                 consensus_parameters_version: rng.gen(),
@@ -713,7 +713,7 @@ mod tests {
             .into_iter()
             .reduce(|fragment, next_fragment| fragment.merge(next_fragment).unwrap())
             .unwrap()
-            .finalize(state_config.latest_block, &chain_config)
+            .finalize(state_config.last_block, &chain_config)
             .unwrap();
 
         // then

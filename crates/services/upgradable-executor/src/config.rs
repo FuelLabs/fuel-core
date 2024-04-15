@@ -1,4 +1,5 @@
 use fuel_core_executor::executor::ExecutionOptions;
+use fuel_core_types::blockchain::header::StateTransitionBytecodeVersion;
 
 #[derive(Clone, Debug, Default)]
 pub struct Config {
@@ -6,6 +7,8 @@ pub struct Config {
     pub backtrace: bool,
     /// Default mode for utxo_validation
     pub utxo_validation_default: bool,
+    /// The version of the native executor to determine usage of native vs WASM executor.
+    pub native_executor_version: Option<StateTransitionBytecodeVersion>,
 }
 
 impl From<&Config> for ExecutionOptions {

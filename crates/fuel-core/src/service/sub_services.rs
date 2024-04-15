@@ -81,6 +81,7 @@ pub fn init_sub_services(
         fuel_core_upgradable_executor::config::Config {
             backtrace: config.vm.backtrace,
             utxo_validation_default: config.utxo_validation,
+            native_executor_version: config.native_executor_version,
         },
     );
 

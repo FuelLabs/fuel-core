@@ -1,4 +1,3 @@
-use crate::serialization::HexIfHumanReadable;
 use fuel_core_storage::MerkleRoot;
 use fuel_core_types::{
     fuel_crypto::Hasher,
@@ -26,14 +25,16 @@ use crate::{
 use crate::SnapshotMetadata;
 
 pub const LOCAL_TESTNET: &str = "local_testnet";
+pub const BYTECODE_NAME: &str = "state_transition_bytecode.wasm";
 
-#[serde_with::serde_as]
 #[derive(Clone, derivative::Derivative, Deserialize, Serialize, Eq, PartialEq)]
 #[derivative(Debug)]
 pub struct ChainConfig {
     pub chain_name: String,
     pub consensus_parameters: ConsensusParameters,
-    #[serde_as(as = "HexIfHumanReadable")]
+    /// Note: The state transition bytecode is stored in a separate file
+    /// under the `BYTECODE NAME` name in serialization form.
+    #[serde(skip)]
     #[derivative(Debug(format_with = "fmt_truncated_hex::<16>"))]
     pub state_transition_bytecode: Vec<u8>,
     pub consensus: ConsensusConfig,
@@ -46,7 +47,7 @@ impl Default for ChainConfig {
             chain_name: "local".into(),
             consensus_parameters: ConsensusParameters::default(),
             // Note: It is invalid bytecode.
-            state_transition_bytecode: vec![],
+            state_transition_bytecode: vec![123; 1024],
             consensus: ConsensusConfig::default_poa(),
         }
     }
@@ -61,12 +62,25 @@ impl ChainConfig {
         let path = path.as_ref();
         let mut json = String::new();
         std::fs::File::open(path)?.read_to_string(&mut json)?;
-        serde_json::from_str(json.as_str()).map_err(|e| {
+        let mut chain_config: ChainConfig =
+            serde_json::from_str(json.as_str()).map_err(|e| {
+                anyhow::Error::new(e).context(format!(
+                    "an error occurred while loading the chain state file: {:?}",
+                    path.to_str()
+                ))
+            })?;
+
+        let bytecode_path = path.with_file_name(BYTECODE_NAME);
+        let bytecode = std::fs::read(bytecode_path).map_err(|e| {
             anyhow::Error::new(e).context(format!(
-                "an error occurred while loading the chain state file: {:?}",
+                "an error occurred while loading the state transition bytecode: {:?}",
                 path.to_str()
             ))
-        })
+        })?;
+
+        chain_config.state_transition_bytecode = bytecode;
+
+        Ok(chain_config)
     }
 
     #[cfg(feature = "std")]
@@ -80,10 +94,13 @@ impl ChainConfig {
     pub fn write(&self, path: impl AsRef<Path>) -> anyhow::Result<()> {
         use anyhow::Context;
 
-        let file = File::create(path)?;
+        let bytecode_path = path.as_ref().with_file_name(BYTECODE_NAME);
+        let chain_config_file = File::create(path)?;
 
-        serde_json::to_writer_pretty(file, self)
+        serde_json::to_writer_pretty(chain_config_file, self)
             .context("failed to dump chain parameters snapshot to JSON")?;
+        std::fs::write(bytecode_path, &self.state_transition_bytecode)
+            .context("failed to write state transition bytecode")?;
 
         Ok(())
     }
@@ -99,10 +116,14 @@ impl ChainConfig {
 
 impl GenesisCommitment for ChainConfig {
     fn root(&self) -> anyhow::Result<MerkleRoot> {
-        let bytes = postcard::to_allocvec(&self).map_err(anyhow::Error::msg)?;
-        let config_hash = Hasher::default().chain(bytes).finalize();
+        let chain_config_bytes =
+            postcard::to_allocvec(&self).map_err(anyhow::Error::msg)?;
+        let config_hash = *Hasher::default()
+            .chain(chain_config_bytes.as_slice())
+            .chain(self.state_transition_bytecode.as_slice())
+            .finalize();
 
-        Ok(config_hash.into())
+        Ok(config_hash)
     }
 }
 
@@ -132,14 +153,5 @@ mod tests {
         let config = ChainConfig::local_testnet();
         let json = serde_json::to_string_pretty(&config).unwrap();
         insta::assert_snapshot!(json);
-    }
-
-    #[test]
-    fn can_roundtrip_serialize_local_testnet_config() {
-        let config = ChainConfig::local_testnet();
-        let json = serde_json::to_string(&config).unwrap();
-        let deserialized_config: ChainConfig =
-            serde_json::from_str(json.as_str()).unwrap();
-        assert_eq!(config, deserialized_config);
     }
 }

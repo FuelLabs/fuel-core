@@ -25,7 +25,10 @@ fn build_wasm() {
     // a target dir exclusive). This directory is also used as a cache directory
     // to avoid building the same WASM binary each time. Also, caching reuses
     // the artifacts from the previous build in the case if the executor is changed.
+    //
+    // The cache dir is: "target/{debug/release/other}/fuel-core-upgradable-executor-cache"
     let mut cache_dir: std::path::PathBuf = out_dir.clone().into();
+    cache_dir.pop();
     cache_dir.pop();
     cache_dir.pop();
     cache_dir.push("fuel-core-upgradable-executor-cache");

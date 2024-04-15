@@ -47,6 +47,7 @@ use fuel_core_storage::{
     },
     StorageAsRef,
 };
+use fuel_core_types::blockchain::header::StateTransitionBytecodeVersion;
 #[cfg(any(test, feature = "test-helpers"))]
 use fuel_core_types::services::executor::UncommittedResult;
 
@@ -131,6 +132,10 @@ impl<S, R> Executor<S, R> {
         {
             Self::native(storage_view_provider, relayer_view_provider, config)
         }
+    }
+
+    pub fn native_executor_version(&self) -> StateTransitionBytecodeVersion {
+        self.config.native_executor_version.unwrap_or(Self::VERSION)
     }
 
     pub fn native(
@@ -311,7 +316,8 @@ where
         TxSource: TransactionsSource + Send + Sync + 'static,
     {
         let block_version = block.state_transition_version();
-        if block_version == Self::VERSION {
+        let native_executor_version = self.native_executor_version();
+        if block_version == native_executor_version {
             match &self.execution_strategy {
                 ExecutionStrategy::Native => self.native_execute_inner(block, options),
                 ExecutionStrategy::Wasm { module } => {
@@ -338,7 +344,8 @@ where
         TxSource: TransactionsSource + Send + Sync + 'static,
     {
         let block_version = block.state_transition_version();
-        if block_version == Self::VERSION {
+        let native_executor_version = self.native_executor_version();
+        if block_version == native_executor_version {
             self.native_execute_inner(block, options)
         } else {
             Err(ExecutorError::Other(format!(
