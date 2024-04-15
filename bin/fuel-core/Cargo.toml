@@ -21,7 +21,7 @@ clap = { workspace = true, features = ["derive", "env", "string"] }
 const_format = { version = "0.2", optional = true }
 dirs = "4.0"
 dotenvy = { version = "0.15", optional = true }
-fuel-core = { workspace = true }
+fuel-core = { workspace = true, features = ["wasm-executor"] }
 fuel-core-chain-config = { workspace = true }
 fuel-core-types = { workspace = true }
 hex = "0.4"
