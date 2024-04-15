@@ -1,4 +1,3 @@
-#![warn(warnings)]
 use std::{
     ffi::OsStr,
     net::Ipv4Addr,
