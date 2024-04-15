@@ -57,10 +57,12 @@ use fuel_core_storage::{
     },
 };
 use fuel_core_types::{
-    blockchain::primitives::DaBlockHeight,
+    blockchain::{
+        block::Block,
+        primitives::DaBlockHeight,
+    },
     fuel_types::BlockHeight,
 };
-use fuel_core_types::blockchain::block::Block;
 use tracing::Level;
 
 pub struct SnapshotImporter {

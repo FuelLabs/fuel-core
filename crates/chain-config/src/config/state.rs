@@ -753,9 +753,7 @@ mod tests {
         // given
         let temp_dir = tempfile::tempdir().unwrap();
         let writer = writer(temp_dir.path());
-        let snapshot = writer
-            .close(13.into(), 14u64.into(), &ChainConfig::local_testnet())
-            .unwrap();
+        let snapshot = writer.close(None, &ChainConfig::local_testnet()).unwrap();
 
         let reader = SnapshotReader::open(snapshot).unwrap();
 

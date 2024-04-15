@@ -16,6 +16,7 @@ use fuel_core_storage::{
     tables::{
         ConsensusParametersVersions,
         StateTransitionBytecodeVersions,
+        UploadedBytecodes,
     },
     transactional::{
         Changes,
@@ -42,18 +43,15 @@ use fuel_core_types::{
         primitives::Empty,
         SealedBlock,
     },
+    fuel_crypto::Hasher,
     fuel_types::Bytes32,
+    fuel_vm::UploadedBytecode,
     services::block_importer::{
         ImportResult,
         UncommittedResult as UncommittedImportResult,
     },
 };
 use itertools::Itertools;
-use fuel_core_storage::tables::UploadedBytecodes;
-use fuel_core_types::{
-    fuel_crypto::Hasher,
-    fuel_vm::UploadedBytecode,
-};
 
 mod exporter;
 mod importer;

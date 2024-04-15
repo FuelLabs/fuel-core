@@ -10,6 +10,7 @@ use crate::{
     config::table_entry::TableEntry,
     AsTable,
     ChainConfig,
+    LastBlockConfig,
     StateConfig,
     MAX_GROUP_SIZE,
 };
