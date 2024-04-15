@@ -129,12 +129,6 @@ where
                 anyhow::Result::<_>::Ok(())
             })?;
 
-        tracing::info!(
-            "Finishing genesis runner. Read: {} wrote into {}",
-            Logic::TableInSnapshot::column().name(),
-            Logic::TableBeingWritten::column().name(),
-        );
-
         if is_cancelled {
             bail!("Import cancelled")
         }
