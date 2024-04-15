@@ -14,7 +14,10 @@ use anyhow::Context;
 use clap::Parser;
 use fuel_core::{
     chain_config::default_consensus_dev_key,
-    combined_database::CombinedDatabaseConfig,
+    combined_database::{
+        CombinedDatabase,
+        CombinedDatabaseConfig,
+    },
     producer::Config as ProducerConfig,
     service::{
         config::Trigger,
@@ -377,16 +380,30 @@ pub async fn exec(command: Command) -> anyhow::Result<()> {
     info!("Fuel Core version v{}", env!("CARGO_PKG_VERSION"));
     trace!("Initializing in TRACE mode.");
     // initialize the server
-    let server = FuelService::new_node(config).await?;
+    let combined_database = CombinedDatabase::from_config(&config.combined_db_config)?;
+
+    let service = FuelService::new(combined_database, config)?;
+
+    // Genesis could take a long time depending on the snapshot size. Start needs to be
+    // interruptible by the shutdown_signal
+    tokio::select! {
+        result = service.start_and_await() => {
+            result?;
+        }
+        _ = shutdown_signal() => {
+            service.stop();
+        }
+    }
+
     // pause the main task while service is running
     tokio::select! {
-        result = server.await_stop() => {
+        result = service.await_stop() => {
             result?;
         }
         _ = shutdown_signal() => {}
     }
 
-    server.stop_and_await().await?;
+    service.stop_and_await().await?;
 
     Ok(())
 }

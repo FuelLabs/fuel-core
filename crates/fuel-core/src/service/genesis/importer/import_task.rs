@@ -1,7 +1,5 @@
-use fuel_core_chain_config::{
-    Group,
-    TableEntry,
-};
+use anyhow::bail;
+use fuel_core_chain_config::TableEntry;
 use fuel_core_storage::{
     kv_store::StorageColumn,
     structured_storage::TableWithBlueprint,
@@ -14,16 +12,20 @@ use fuel_core_storage::{
     StorageInspect,
     StorageMutate,
 };
-use tokio_util::sync::CancellationToken;
 
-use crate::database::{
-    database_description::DatabaseDescription,
-    genesis_progress::{
-        GenesisMetadata,
-        GenesisProgressMutate,
+use crate::{
+    database::{
+        database_description::DatabaseDescription,
+        genesis_progress::{
+            GenesisMetadata,
+            GenesisProgressMutate,
+        },
+        Database,
     },
-    Database,
+    service::genesis::task_manager::CancellationToken,
 };
+
+use super::progress::ProgressReporter;
 
 pub struct ImportTask<Handler, Groups, DbDesc>
 where
@@ -34,6 +36,7 @@ where
     groups: Groups,
     cancel_token: CancellationToken,
     db: Database<DbDesc>,
+    reporter: ProgressReporter,
 }
 
 pub trait ImportTable {
@@ -59,6 +62,7 @@ where
         handler: Logic,
         groups: GroupGenerator,
         db: Database<DbDesc>,
+        reporter: ProgressReporter,
     ) -> Self {
         let skip = match db
             .storage::<GenesisMetadata<DbDesc>>()
@@ -76,6 +80,7 @@ where
             groups,
             cancel_token,
             db,
+            reporter,
         }
     }
 }
@@ -85,7 +90,7 @@ where
     DbDesc: DatabaseDescription,
     Logic: ImportTable<DbDesc = DbDesc>,
     GroupGenerator:
-        IntoIterator<Item = anyhow::Result<Group<TableEntry<Logic::TableInSnapshot>>>>,
+        IntoIterator<Item = anyhow::Result<Vec<TableEntry<Logic::TableInSnapshot>>>>,
     GenesisMetadata<DbDesc>: TableWithBlueprint<
         Column = DbDesc::Column,
         Key = str,
@@ -98,40 +103,37 @@ where
         StorageMutate<GenesisMetadata<DbDesc>, Error = fuel_core_storage::Error>,
 {
     pub fn run(mut self) -> anyhow::Result<()> {
-        tracing::info!(
-            "Starting genesis runner. Reading: {} writing into {}",
-            Logic::TableInSnapshot::column().name(),
-            Logic::TableBeingWritten::column().name()
-        );
         let mut db = self.db;
-        let result = self
-            .groups
+        let mut is_cancelled = self.cancel_token.is_cancelled();
+        self.groups
             .into_iter()
+            .enumerate()
             .skip(self.skip)
-            .take_while(|_| !self.cancel_token.is_cancelled())
-            .try_for_each(move |group| {
+            .take_while(|_| {
+                is_cancelled = self.cancel_token.is_cancelled();
+                !is_cancelled
+            })
+            .try_for_each(|(index, group)| {
                 let group = group?;
-                let group_num = group.index;
-
                 let mut tx = db.write_transaction();
-                self.handler.process(group.data, &mut tx)?;
+                self.handler.process(group, &mut tx)?;
 
                 GenesisProgressMutate::<DbDesc>::update_genesis_progress(
                     &mut tx,
                     Logic::TableBeingWritten::column().name(),
-                    group_num,
+                    index,
                 )?;
                 tx.commit()?;
-                Ok(())
-            });
+                self.reporter
+                    .set_progress(u64::try_from(index).unwrap_or(u64::MAX));
+                anyhow::Result::<_>::Ok(())
+            })?;
 
-        tracing::info!(
-            "Finishing genesis runner. Read: {} wrote into {}",
-            Logic::TableInSnapshot::column().name(),
-            Logic::TableBeingWritten::column().name()
-        );
+        if is_cancelled {
+            bail!("Import cancelled")
+        }
 
-        result
+        Ok(())
     }
 }
 
@@ -139,7 +141,13 @@ where
 mod tests {
     use crate::{
         database::genesis_progress::GenesisProgressInspect,
-        service::genesis::importer::import_task::ImportTask,
+        service::genesis::{
+            importer::{
+                import_task::ImportTask,
+                progress::ProgressReporter,
+            },
+            task_manager::CancellationToken,
+        },
     };
     use std::sync::{
         Arc,
@@ -151,7 +159,6 @@ mod tests {
         bail,
     };
     use fuel_core_chain_config::{
-        Group,
         Randomize,
         TableEntry,
     };
@@ -191,8 +198,6 @@ mod tests {
         rngs::StdRng,
         SeedableRng,
     };
-
-    use tokio_util::sync::CancellationToken;
 
     use crate::{
         combined_database::CombinedDatabase,
@@ -265,19 +270,12 @@ mod tests {
                 .collect()
         }
 
-        pub fn as_indexed_groups(&self) -> Vec<Group<TableEntry<Coins>>> {
-            self.batches
-                .iter()
-                .enumerate()
-                .map(|(index, data)| Group {
-                    index,
-                    data: data.clone(),
-                })
-                .collect()
+        pub fn as_groups(&self) -> Vec<Vec<TableEntry<Coins>>> {
+            self.batches.clone()
         }
 
-        pub fn as_ok_groups(&self) -> Vec<anyhow::Result<Group<TableEntry<Coins>>>> {
-            self.as_indexed_groups().into_iter().map(Ok).collect()
+        pub fn as_ok_groups(&self) -> Vec<anyhow::Result<Vec<TableEntry<Coins>>>> {
+            self.as_groups().into_iter().map(Ok).collect()
         }
     }
 
@@ -288,13 +286,14 @@ mod tests {
 
         let mut called_with = vec![];
         let runner = ImportTask::new(
-            CancellationToken::new(),
+            CancellationToken::default(),
             TestHandler::new(|group, _| {
                 called_with.push(group);
                 Ok(())
             }),
             data.as_ok_groups(),
             Database::default(),
+            ProgressReporter::default(),
         );
 
         // when
@@ -317,15 +316,15 @@ mod tests {
             0,
         )
         .unwrap();
-
         let runner = ImportTask::new(
-            CancellationToken::new(),
+            CancellationToken::default(),
             TestHandler::new(|element, _| {
                 called_with.push(element);
                 Ok(())
             }),
             data.as_ok_groups(),
             db.on_chain().clone(),
+            ProgressReporter::default(),
         );
 
         // when
@@ -343,7 +342,7 @@ mod tests {
         let utxo_id = UtxoId::new(Default::default(), 0);
 
         let runner = ImportTask::new(
-            CancellationToken::new(),
+            CancellationToken::default(),
             TestHandler::new(|_, tx| {
                 insert_a_coin(tx, &utxo_id);
 
@@ -364,6 +363,7 @@ mod tests {
             }),
             groups.as_ok_groups(),
             outer_db.clone(),
+            ProgressReporter::default(),
         );
 
         // when
@@ -390,13 +390,14 @@ mod tests {
         let utxo_id = UtxoId::new(Default::default(), 0);
 
         let runner = ImportTask::new(
-            CancellationToken::new(),
+            CancellationToken::default(),
             TestHandler::new(|_, tx| {
                 insert_a_coin(tx, &utxo_id);
                 bail!("Some error")
             }),
             groups.as_ok_groups(),
             db.clone(),
+            ProgressReporter::default(),
         );
 
         // when
@@ -411,10 +412,11 @@ mod tests {
         // given
         let groups = TestData::new(1);
         let runner = ImportTask::new(
-            CancellationToken::new(),
+            CancellationToken::default(),
             TestHandler::new(|_, _| bail!("Some error")),
             groups.as_ok_groups(),
             Database::default(),
+            ProgressReporter::default(),
         );
 
         // when
@@ -429,10 +431,11 @@ mod tests {
         // given
         let groups = [Err(anyhow!("Some error"))];
         let runner = ImportTask::new(
-            CancellationToken::new(),
+            CancellationToken::default(),
             TestHandler::new(|_, _| Ok(())),
             groups,
             Database::default(),
+            ProgressReporter::default(),
         );
 
         // when
@@ -448,10 +451,11 @@ mod tests {
         let data = TestData::new(2);
         let db = Database::default();
         let runner = ImportTask::new(
-            CancellationToken::new(),
+            CancellationToken::default(),
             TestHandler::new(|_, _| Ok(())),
             data.as_ok_groups(),
             db.clone(),
+            ProgressReporter::default(),
         );
 
         // when
@@ -470,21 +474,21 @@ mod tests {
     #[tokio::test]
     async fn processing_stops_when_cancelled() {
         // given
-        let cancel_token = CancellationToken::new();
-
         let (tx, rx) = std::sync::mpsc::channel();
 
         let read_groups = Arc::new(Mutex::new(vec![]));
+        let cancel_token = tokio_util::sync::CancellationToken::new();
         let runner = {
             let read_groups = Arc::clone(&read_groups);
             ImportTask::new(
-                cancel_token.clone(),
+                cancel_token.clone().into(),
                 TestHandler::new(move |el, _| {
                     read_groups.lock().unwrap().push(el);
                     Ok(())
                 }),
                 rx,
                 Database::default(),
+                ProgressReporter::default(),
             )
         };
 
@@ -508,11 +512,10 @@ mod tests {
         // then
         // runner should finish
         drop(tx);
-        let runner_response = runner_handle.join().unwrap();
-        assert!(
-            runner_response.is_ok(),
-            "Stopping a runner should not be an error"
-        );
+        runner_handle
+            .join()
+            .unwrap()
+            .expect_err("Cancelling is an error");
 
         // group after signal is not read
         let read_entries = read_groups.lock().unwrap().clone();
@@ -572,10 +575,11 @@ mod tests {
         // given
         let groups = TestData::new(1);
         let runner = ImportTask::new(
-            CancellationToken::new(),
+            CancellationToken::default(),
             TestHandler::new(|_, _| Ok(())),
             groups.as_ok_groups(),
             Database::new(Arc::new(BrokenTransactions::new())),
+            ProgressReporter::default(),
         );
 
         // when
