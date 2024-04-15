@@ -2836,7 +2836,7 @@ dependencies = [
 [[package]]
 name = "fuel-asm"
 version = "0.48.0"
-source = "git+https://github.com/FuelLabs/fuel-vm/?branch=feature/process-upload-transaction-within-interpreter#e778a9564f621b493694d05ed481d0493353b025"
+source = "git+https://github.com/FuelLabs/fuel-vm/?branch=master#0fba60dc9a3055745dc78c427dff7e34748ab23f"
 dependencies = [
  "bitflags 2.5.0",
  "fuel-types",
@@ -3424,7 +3424,7 @@ dependencies = [
 [[package]]
 name = "fuel-crypto"
 version = "0.48.0"
-source = "git+https://github.com/FuelLabs/fuel-vm/?branch=feature/process-upload-transaction-within-interpreter#e778a9564f621b493694d05ed481d0493353b025"
+source = "git+https://github.com/FuelLabs/fuel-vm/?branch=master#0fba60dc9a3055745dc78c427dff7e34748ab23f"
 dependencies = [
  "coins-bip32",
  "coins-bip39",
@@ -3444,7 +3444,7 @@ dependencies = [
 [[package]]
 name = "fuel-derive"
 version = "0.48.0"
-source = "git+https://github.com/FuelLabs/fuel-vm/?branch=feature/process-upload-transaction-within-interpreter#e778a9564f621b493694d05ed481d0493353b025"
+source = "git+https://github.com/FuelLabs/fuel-vm/?branch=master#0fba60dc9a3055745dc78c427dff7e34748ab23f"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -3455,7 +3455,7 @@ dependencies = [
 [[package]]
 name = "fuel-merkle"
 version = "0.48.0"
-source = "git+https://github.com/FuelLabs/fuel-vm/?branch=feature/process-upload-transaction-within-interpreter#e778a9564f621b493694d05ed481d0493353b025"
+source = "git+https://github.com/FuelLabs/fuel-vm/?branch=master#0fba60dc9a3055745dc78c427dff7e34748ab23f"
 dependencies = [
  "derive_more",
  "digest 0.10.7",
@@ -3469,12 +3469,12 @@ dependencies = [
 [[package]]
 name = "fuel-storage"
 version = "0.48.0"
-source = "git+https://github.com/FuelLabs/fuel-vm/?branch=feature/process-upload-transaction-within-interpreter#e778a9564f621b493694d05ed481d0493353b025"
+source = "git+https://github.com/FuelLabs/fuel-vm/?branch=master#0fba60dc9a3055745dc78c427dff7e34748ab23f"
 
 [[package]]
 name = "fuel-tx"
 version = "0.48.0"
-source = "git+https://github.com/FuelLabs/fuel-vm/?branch=feature/process-upload-transaction-within-interpreter#e778a9564f621b493694d05ed481d0493353b025"
+source = "git+https://github.com/FuelLabs/fuel-vm/?branch=master#0fba60dc9a3055745dc78c427dff7e34748ab23f"
 dependencies = [
  "bitflags 2.5.0",
  "derivative",
@@ -3496,7 +3496,7 @@ dependencies = [
 [[package]]
 name = "fuel-types"
 version = "0.48.0"
-source = "git+https://github.com/FuelLabs/fuel-vm/?branch=feature/process-upload-transaction-within-interpreter#e778a9564f621b493694d05ed481d0493353b025"
+source = "git+https://github.com/FuelLabs/fuel-vm/?branch=master#0fba60dc9a3055745dc78c427dff7e34748ab23f"
 dependencies = [
  "fuel-derive",
  "hex",
@@ -3507,7 +3507,7 @@ dependencies = [
 [[package]]
 name = "fuel-vm"
 version = "0.48.0"
-source = "git+https://github.com/FuelLabs/fuel-vm/?branch=feature/process-upload-transaction-within-interpreter#e778a9564f621b493694d05ed481d0493353b025"
+source = "git+https://github.com/FuelLabs/fuel-vm/?branch=master#0fba60dc9a3055745dc78c427dff7e34748ab23f"
 dependencies = [
  "anyhow",
  "async-trait",
