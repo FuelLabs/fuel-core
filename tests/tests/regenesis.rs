@@ -118,7 +118,7 @@ impl FuelCoreDriver {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_regenesis() -> anyhow::Result<()> {
+async fn test_regenesis_old_blocks_are_preserved() -> anyhow::Result<()> {
     let mut rng = rand::rngs::StdRng::seed_from_u64(1234);
     let snapshot_dir = tempdir().expect("Failed to create temp dir");
 
