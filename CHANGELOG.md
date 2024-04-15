@@ -10,10 +10,12 @@ Description of the upcoming release here.
 
 ### Fixed
 
+- [#1821](https://github.com/FuelLabs/fuel-core/pull/1821): Can handle missing tables in snapshot.
 - [#1814](https://github.com/FuelLabs/fuel-core/pull/1814): Bugfix: the `iter_all_by_prefix` was not working for all tables. The change adds a `Rust` level filtering.
 
 ### Added
 
+- [#1821](https://github.com/FuelLabs/fuel-core/pull/1821): Propagate shutdown signal to (re)genesis. Also add progress bar for (re)genesis.
 - [#1813](https://github.com/FuelLabs/fuel-core/pull/1813): Added back support for `/health` endpoint.
 - [#1799](https://github.com/FuelLabs/fuel-core/pull/1799): Snapshot creation is now concurrent.
 

@@ -418,7 +418,7 @@ impl StateConfig {
 
         let coins = reader
             .read::<Coins>()?
-            .map_ok(|batch| batch.data)
+            .into_iter()
             .flatten_ok()
             .try_collect()?;
 
@@ -426,7 +426,7 @@ impl StateConfig {
 
         let messages = reader
             .read::<Messages>()?
-            .map_ok(|batch| batch.data)
+            .into_iter()
             .flatten_ok()
             .try_collect()?;
 
@@ -434,7 +434,7 @@ impl StateConfig {
 
         let contract_state = reader
             .read::<ContractsState>()?
-            .map_ok(|batch| batch.data)
+            .into_iter()
             .flatten_ok()
             .try_collect()?;
 
@@ -442,7 +442,7 @@ impl StateConfig {
 
         let contract_balance = reader
             .read::<ContractsAssets>()?
-            .map_ok(|batch| batch.data)
+            .into_iter()
             .flatten_ok()
             .try_collect()?;
 
@@ -450,7 +450,7 @@ impl StateConfig {
 
         let contract_code = reader
             .read::<ContractsRawCode>()?
-            .map_ok(|batch| batch.data)
+            .into_iter()
             .flatten_ok()
             .try_collect()?;
 
@@ -458,7 +458,7 @@ impl StateConfig {
 
         let contract_utxo = reader
             .read::<ContractsLatestUtxo>()?
-            .map_ok(|batch| batch.data)
+            .into_iter()
             .flatten_ok()
             .try_collect()?;
 
@@ -532,7 +532,8 @@ impl StateConfig {
 }
 
 pub use reader::{
-    IntoIter,
+    GroupIter,
+    Groups,
     SnapshotReader,
 };
 #[cfg(feature = "parquet")]
@@ -543,13 +544,6 @@ pub use writer::{
     SnapshotWriter,
 };
 pub const MAX_GROUP_SIZE: usize = usize::MAX;
-
-#[derive(Debug, PartialEq, Eq, Clone)]
-pub struct Group<T> {
-    pub index: usize,
-    pub data: Vec<T>,
-}
-pub(crate) type GroupResult<T> = anyhow::Result<Group<T>>;
 
 #[cfg(test)]
 mod tests {
@@ -717,6 +711,25 @@ mod tests {
         pretty_assertions::assert_eq!(da_block_height, da_block_height_decoded);
     }
 
+    #[test_case::test_case(given_parquet_writer)]
+    #[test_case::test_case(given_json_writer)]
+    fn missing_tables_tolerated(writer: impl FnOnce(&Path) -> SnapshotWriter) {
+        // given
+        let temp_dir = tempfile::tempdir().unwrap();
+        let writer = writer(temp_dir.path());
+        let snapshot = writer
+            .close(13.into(), 14u64.into(), &ChainConfig::local_testnet())
+            .unwrap();
+
+        let reader = SnapshotReader::open(snapshot).unwrap();
+
+        // when
+        let coins = reader.read::<Coins>().unwrap();
+
+        // then
+        assert_eq!(coins.into_iter().count(), 0);
+    }
+
     fn assert_roundtrip<T>(
         writer: impl FnOnce(&Path) -> SnapshotWriter,
         reader: impl FnOnce(SnapshotMetadata, usize) -> SnapshotReader,
@@ -755,7 +768,11 @@ mod tests {
             .close(10.into(), DaBlockHeight(11), &ChainConfig::local_testnet())
             .unwrap();
 
-        let actual_groups = reader(snapshot, group_size).read().unwrap().collect_vec();
+        let actual_groups = reader(snapshot, group_size)
+            .read()
+            .unwrap()
+            .into_iter()
+            .collect_vec();
 
         // then
         assert_groups_identical(&expected_groups, actual_groups, skip_n_groups);
@@ -779,7 +796,7 @@ mod tests {
         fn write_groups<T>(
             &mut self,
             encoder: &mut SnapshotWriter,
-        ) -> Vec<Group<TableEntry<T>>>
+        ) -> Vec<Vec<TableEntry<T>>>
         where
             T: TableWithBlueprint,
             T::OwnedKey: serde::Serialize,
@@ -789,12 +806,12 @@ mod tests {
         {
             let groups = self.generate_groups();
             for group in &groups {
-                encoder.write(group.data.clone()).unwrap();
+                encoder.write(group.clone()).unwrap();
             }
             groups
         }
 
-        fn generate_groups<T>(&mut self) -> Vec<Group<T>>
+        fn generate_groups<T>(&mut self) -> Vec<Vec<T>>
         where
             T: Randomize,
         {
@@ -802,16 +819,14 @@ mod tests {
                 .chunks(self.group_size)
                 .into_iter()
                 .map(|chunk| chunk.collect_vec())
-                .enumerate()
-                .map(|(index, data)| Group { index, data })
                 .take(self.num_groups)
                 .collect()
         }
     }
 
     fn assert_groups_identical<T>(
-        original: &[Group<T>],
-        read: impl IntoIterator<Item = Result<Group<T>, anyhow::Error>>,
+        original: &[Vec<T>],
+        read: impl IntoIterator<Item = Result<Vec<T>, anyhow::Error>>,
         skip: usize,
     ) where
         Vec<T>: PartialEq,

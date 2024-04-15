@@ -1,6 +1,9 @@
 use std::fmt::Debug;
 
-use fuel_core_storage::structured_storage::TableWithBlueprint;
+use fuel_core_storage::{
+    structured_storage::TableWithBlueprint,
+    Mappable,
+};
 use fuel_core_types::{
     blockchain::primitives::DaBlockHeight,
     fuel_types::BlockHeight,
@@ -11,15 +14,50 @@ use crate::{
     config::table_entry::TableEntry,
     AsTable,
     ChainConfig,
-    Group,
-    GroupResult,
     StateConfig,
     MAX_GROUP_SIZE,
 };
 
-pub enum IntoIter<T> {
+pub struct Groups<T: Mappable> {
+    iter: GroupIter<T>,
+}
+
+impl<T> Groups<T>
+where
+    T: Mappable,
+{
+    pub fn len(&self) -> usize {
+        match &self.iter {
+            GroupIter::InMemory { groups } => groups.len(),
+            #[cfg(feature = "parquet")]
+            GroupIter::Parquet { decoder } => decoder.num_groups(),
+        }
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+}
+
+impl<T> IntoIterator for Groups<T>
+where
+    T: Mappable,
+    GroupIter<T>: Iterator,
+{
+    type IntoIter = GroupIter<T>;
+    type Item = <Self::IntoIter as Iterator>::Item;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.iter
+    }
+}
+
+pub enum GroupIter<T>
+where
+    T: Mappable,
+{
     InMemory {
-        groups: std::vec::IntoIter<GroupResult<T>>,
+        groups: std::vec::IntoIter<anyhow::Result<Vec<TableEntry<T>>>>,
     },
     #[cfg(feature = "parquet")]
     Parquet {
@@ -28,26 +66,24 @@ pub enum IntoIter<T> {
 }
 
 #[cfg(feature = "parquet")]
-impl<T> Iterator for IntoIter<T>
+impl<T> Iterator for GroupIter<T>
 where
-    T: serde::de::DeserializeOwned,
+    T: Mappable,
+    TableEntry<T>: serde::de::DeserializeOwned,
 {
-    type Item = GroupResult<T>;
+    type Item = anyhow::Result<Vec<TableEntry<T>>>;
 
     fn next(&mut self) -> Option<Self::Item> {
         match self {
-            IntoIter::InMemory { groups } => groups.next(),
-            IntoIter::Parquet { decoder } => {
-                let group = decoder.next()?.and_then(|bytes_group| {
-                    let decoded = bytes_group
-                        .data
+            GroupIter::InMemory { groups } => groups.next(),
+            GroupIter::Parquet { decoder } => {
+                let group = decoder.next()?.and_then(|byte_group| {
+                    byte_group
                         .into_iter()
-                        .map(|bytes| postcard::from_bytes(&bytes))
-                        .try_collect()?;
-                    Ok(Group {
-                        index: bytes_group.index,
-                        data: decoded,
-                    })
+                        .map(|group| {
+                            postcard::from_bytes(&group).map_err(|e| anyhow::anyhow!(e))
+                        })
+                        .collect()
                 });
                 Some(group)
             }
@@ -56,12 +92,15 @@ where
 }
 
 #[cfg(not(feature = "parquet"))]
-impl<T> Iterator for IntoIter<T> {
-    type Item = GroupResult<T>;
+impl<T> Iterator for GroupIter<T>
+where
+    T: Mappable,
+{
+    type Item = anyhow::Result<Vec<TableEntry<T>>>;
 
     fn next(&mut self) -> Option<Self::Item> {
         match self {
-            IntoIter::InMemory { groups } => groups.next(),
+            GroupIter::InMemory { groups } => groups.next(),
         }
     }
 }
@@ -176,8 +215,7 @@ impl SnapshotReader {
         let file = std::fs::File::open(path)?;
         let group = Decoder::new(file)?
             .next()
-            .ok_or_else(|| anyhow::anyhow!("No block height found"))??
-            .data;
+            .ok_or_else(|| anyhow::anyhow!("No block height found"))??;
         let block_height = group
             .into_iter()
             .next()
@@ -220,28 +258,32 @@ impl SnapshotReader {
         }
     }
 
-    pub fn read<T>(&self) -> anyhow::Result<IntoIter<TableEntry<T>>>
+    pub fn read<T>(&self) -> anyhow::Result<Groups<T>>
     where
         T: TableWithBlueprint,
         StateConfig: AsTable<T>,
         TableEntry<T>: serde::de::DeserializeOwned,
     {
-        match &self.data_source {
+        let iter = match &self.data_source {
             #[cfg(feature = "parquet")]
             DataSource::Parquet { tables, .. } => {
                 use anyhow::Context;
                 use fuel_core_storage::kv_store::StorageColumn;
                 let name = T::column().name();
-                let path = tables.get(name).ok_or_else(|| {
-                    anyhow::anyhow!("table '{name}' not found in snapshot metadata.")
-                })?;
+                let Some(path) = tables.get(name) else {
+                    return Ok(Groups {
+                        iter: GroupIter::InMemory {
+                            groups: vec![].into_iter(),
+                        },
+                    });
+                };
                 let file = std::fs::File::open(path).with_context(|| {
                     format!("Could not open {path:?} in order to read table '{name}'")
                 })?;
 
-                Ok(IntoIter::Parquet {
+                GroupIter::Parquet {
                     decoder: super::parquet::decode::Decoder::new(file)?,
-                })
+                }
             }
             DataSource::InMemory { state, group_size } => {
                 let collection = state
@@ -249,19 +291,15 @@ impl SnapshotReader {
                     .into_iter()
                     .chunks(*group_size)
                     .into_iter()
-                    .enumerate()
-                    .map(|(index, vec_chunk)| {
-                        Ok(Group {
-                            data: vec_chunk.collect(),
-                            index,
-                        })
-                    })
+                    .map(|vec_chunk| Ok(vec_chunk.collect()))
                     .collect_vec();
-                Ok(IntoIter::InMemory {
+                GroupIter::InMemory {
                     groups: collection.into_iter(),
-                })
+                }
             }
-        }
+        };
+
+        Ok(Groups { iter })
     }
 
     pub fn chain_config(&self) -> &ChainConfig {
