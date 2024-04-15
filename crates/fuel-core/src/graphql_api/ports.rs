@@ -28,11 +28,16 @@ use fuel_core_types::{
             DaBlockHeight,
         },
     },
-    entities::relayer::message::{
-        MerkleProof,
-        Message,
+    entities::relayer::{
+        message::{
+            MerkleProof,
+            Message,
+        },
+        transaction::RelayedTransactionStatus,
     },
     fuel_tx::{
+        Bytes32,
+        ConsensusParameters,
         Salt,
         Transaction,
         TxId,
@@ -96,6 +101,11 @@ pub trait OffChainDatabase: Send + Sync {
     fn old_block_consensus(&self, height: BlockHeight) -> StorageResult<Consensus>;
 
     fn old_transaction(&self, id: &TxId) -> StorageResult<Option<Transaction>>;
+
+    fn relayed_tx_status(
+        &self,
+        id: Bytes32,
+    ) -> StorageResult<Option<RelayedTransactionStatus>>;
 }
 
 /// The on chain database port expected by GraphQL API service.
@@ -140,6 +150,13 @@ pub trait DatabaseMessages: StorageInspect<Messages, Error = StorageError> {
     fn message_is_spent(&self, nonce: &Nonce) -> StorageResult<bool>;
 
     fn message_exists(&self, nonce: &Nonce) -> StorageResult<bool>;
+}
+
+pub trait DatabaseRelayedTransactions {
+    fn transaction_status(
+        &self,
+        id: Bytes32,
+    ) -> StorageResult<Option<RelayedTransactionStatus>>;
 }
 
 /// Trait that specifies all the getters required for contract.
@@ -227,10 +244,13 @@ pub mod worker {
             contracts::ContractsInfo,
             messages::OwnedMessageIds,
         },
-        graphql_api::storage::old::{
-            OldFuelBlockConsensus,
-            OldFuelBlocks,
-            OldTransactions,
+        graphql_api::storage::{
+            old::{
+                OldFuelBlockConsensus,
+                OldFuelBlocks,
+                OldTransactions,
+            },
+            relayed_transactions::RelayedTransactionStatuses,
         },
     };
     use fuel_core_services::stream::BoxStream;
@@ -268,6 +288,7 @@ pub mod worker {
         + StorageMutate<OldFuelBlocks, Error = StorageError>
         + StorageMutate<OldFuelBlockConsensus, Error = StorageError>
         + StorageMutate<OldTransactions, Error = StorageError>
+        + StorageMutate<RelayedTransactionStatuses, Error = StorageError>
     {
         fn record_tx_id_owner(
             &mut self,
@@ -308,4 +329,9 @@ pub mod worker {
             status: TransactionStatus,
         );
     }
+}
+
+pub trait ConsensusProvider: Send + Sync {
+    /// Returns latest consensus parameters.
+    fn latest_consensus_params(&self) -> Arc<ConsensusParameters>;
 }

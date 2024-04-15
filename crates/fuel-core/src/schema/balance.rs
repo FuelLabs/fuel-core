@@ -1,7 +1,7 @@
 use crate::{
     fuel_core_graphql_api::{
+        api_service::ConsensusProvider,
         database::ReadView,
-        Config,
     },
     query::BalanceQueryData,
     schema::scalars::{
@@ -58,8 +58,8 @@ impl BalanceQuery {
     ) -> async_graphql::Result<Balance> {
         let query: &ReadView = ctx.data_unchecked();
         let base_asset_id = *ctx
-            .data_unchecked::<Config>()
-            .consensus_parameters
+            .data_unchecked::<ConsensusProvider>()
+            .latest_consensus_params()
             .base_asset_id();
         let balance = query.balance(owner.0, asset_id.0, base_asset_id)?.into();
         Ok(balance)
@@ -86,8 +86,8 @@ impl BalanceQuery {
         crate::schema::query_pagination(after, before, first, last, |_, direction| {
             let owner = filter.owner.into();
             let base_asset_id = *ctx
-                .data_unchecked::<Config>()
-                .consensus_parameters
+                .data_unchecked::<ConsensusProvider>()
+                .latest_consensus_params()
                 .base_asset_id();
             Ok(query
                 .balances(owner, direction, base_asset_id)

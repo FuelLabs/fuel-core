@@ -3,14 +3,16 @@ use crate::{
         database_description::relayer::Relayer,
         Database,
     },
-    service::sub_services::BlockProducerService,
+    service::sub_services::{
+        BlockProducerService,
+        TxPoolSharedState,
+    },
 };
 use fuel_core_consensus_module::{
     block_verifier::Verifier,
     RelayerConsensusConfig,
 };
 use fuel_core_services::stream::BoxStream;
-use fuel_core_txpool::service::SharedState as TxPoolSharedState;
 #[cfg(feature = "p2p")]
 use fuel_core_types::services::p2p::peer_reputation::AppScore;
 use fuel_core_types::{
@@ -22,6 +24,7 @@ use std::sync::Arc;
 
 pub mod block_importer;
 pub mod consensus_module;
+pub mod consensus_parameters_provider;
 pub mod executor;
 pub mod graphql_api;
 #[cfg(feature = "p2p")]
@@ -32,6 +35,17 @@ pub mod relayer;
 #[cfg(feature = "p2p")]
 pub mod sync;
 pub mod txpool;
+
+#[derive(Debug, Clone)]
+pub struct ConsensusParametersProvider {
+    shared_state: consensus_parameters_provider::SharedState,
+}
+
+impl ConsensusParametersProvider {
+    pub fn new(shared_state: consensus_parameters_provider::SharedState) -> Self {
+        Self { shared_state }
+    }
+}
 
 #[derive(Debug, Clone)]
 pub struct StaticGasPrice {
@@ -51,26 +65,23 @@ pub struct PoAAdapter {
 
 #[derive(Clone)]
 pub struct TxPoolAdapter {
-    service: TxPoolSharedState<P2PAdapter, Database, StaticGasPrice>,
+    service: TxPoolSharedState,
 }
 
 impl TxPoolAdapter {
-    pub fn new(service: TxPoolSharedState<P2PAdapter, Database, StaticGasPrice>) -> Self {
+    pub fn new(service: TxPoolSharedState) -> Self {
         Self { service }
     }
 }
 
 #[derive(Clone)]
 pub struct TransactionsSource {
-    txpool: TxPoolSharedState<P2PAdapter, Database, StaticGasPrice>,
+    txpool: TxPoolSharedState,
     _block_height: BlockHeight,
 }
 
 impl TransactionsSource {
-    pub fn new(
-        txpool: TxPoolSharedState<P2PAdapter, Database, StaticGasPrice>,
-        block_height: BlockHeight,
-    ) -> Self {
+    pub fn new(txpool: TxPoolSharedState, block_height: BlockHeight) -> Self {
         Self {
             txpool,
             _block_height: block_height,

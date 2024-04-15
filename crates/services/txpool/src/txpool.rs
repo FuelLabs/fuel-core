@@ -32,6 +32,7 @@ use fuel_core_types::{
     tai64::Tai64,
 };
 
+use crate::ports::GasPriceProvider;
 use fuel_core_metrics::txpool_metrics::txpool_metrics;
 use fuel_core_storage::transactional::AtomicView;
 use fuel_core_types::{
@@ -48,6 +49,7 @@ use fuel_core_types::{
                 MessageDataSigned,
             },
         },
+        ConsensusParameters,
         Input,
     },
     fuel_vm::checked_transaction::CheckPredicateParams,
@@ -74,18 +76,6 @@ pub struct TxPool<ViewProvider> {
     by_dependency: Dependency,
     config: Config,
     database: ViewProvider,
-}
-
-/// Trait for getting gas price for the Tx Pool code to look up the gas price for a given block height
-pub trait GasPriceProvider {
-    /// Get gas price for specific block height if it is known
-    fn gas_price(&self, block_height: BlockHeight) -> Option<GasPrice>;
-}
-
-impl<T: GasPriceProvider> GasPriceProvider for Arc<T> {
-    fn gas_price(&self, block_height: BlockHeight) -> Option<GasPrice> {
-        self.deref().gas_price(block_height)
-    }
 }
 
 impl<ViewProvider> TxPool<ViewProvider> {
@@ -371,19 +361,6 @@ where
             return Err(Error::NoMetadata)
         }
 
-        // verify max gas is less than block limit
-        let block_gas_limit = self
-            .config
-            .chain_config
-            .consensus_parameters
-            .block_gas_limit();
-        if tx.max_gas() > block_gas_limit {
-            return Err(Error::NotInsertedMaxGasLimit {
-                tx_gas: tx.max_gas(),
-                block_limit: block_gas_limit,
-            })
-        }
-
         if self.by_hash.contains_key(&tx.id()) {
             return Err(Error::NotInsertedTxKnown)
         }
@@ -483,7 +460,8 @@ where
 pub async fn check_transactions<Provider>(
     txs: &[Arc<Transaction>],
     current_height: BlockHeight,
-    config: &Config,
+    utxp_validation: bool,
+    consensus_params: &ConsensusParameters,
     gas_price_provider: &Provider,
 ) -> Vec<Result<Checked<Transaction>, Error>>
 where
@@ -496,7 +474,8 @@ where
             check_single_tx(
                 tx.deref().clone(),
                 current_height,
-                config,
+                utxp_validation,
+                consensus_params,
                 gas_price_provider,
             )
             .await,
@@ -509,16 +488,15 @@ where
 pub async fn check_single_tx<GasPrice: GasPriceProvider>(
     tx: Transaction,
     current_height: BlockHeight,
-    config: &Config,
+    utxo_validation: bool,
+    consensus_params: &ConsensusParameters,
     gas_price_provider: &GasPrice,
 ) -> Result<Checked<Transaction>, Error> {
     if tx.is_mint() {
         return Err(Error::NotSupportedTransactionType)
     }
 
-    let tx: Checked<Transaction> = if config.utxo_validation {
-        let consensus_params = &config.chain_config.consensus_parameters;
-
+    let tx: Checked<Transaction> = if utxo_validation {
         let tx = tx
             .into_checked_basic(current_height, consensus_params)?
             .check_signatures(&consensus_params.chain_id())?;
@@ -533,26 +511,26 @@ pub async fn check_single_tx<GasPrice: GasPriceProvider>(
 
         tx
     } else {
-        tx.into_checked_basic(current_height, &config.chain_config.consensus_parameters)?
+        tx.into_checked_basic(current_height, consensus_params)?
     };
 
     let gas_price = gas_price_provider
         .gas_price(current_height)
         .ok_or(Error::GasPriceNotFound(current_height))?;
 
-    let tx = verify_tx_min_gas_price(tx, config, gas_price)?;
+    let tx = verify_tx_min_gas_price(tx, consensus_params, gas_price)?;
 
     Ok(tx)
 }
 
 fn verify_tx_min_gas_price(
     tx: Checked<Transaction>,
-    config: &Config,
+    consensus_params: &ConsensusParameters,
     gas_price: GasPrice,
 ) -> Result<Checked<Transaction>, Error> {
     let tx: CheckedTransaction = tx.into();
-    let gas_costs = config.chain_config.consensus_parameters.gas_costs();
-    let fee_parameters = config.chain_config.consensus_parameters.fee_params();
+    let gas_costs = consensus_params.gas_costs();
+    let fee_parameters = consensus_params.fee_params();
     let read = match tx {
         CheckedTransaction::Script(script) => {
             let ready = script.into_ready(gas_price, gas_costs, fee_parameters)?;

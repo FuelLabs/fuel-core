@@ -19,14 +19,14 @@ cargo clippy -p fuel-core-wasm-executor --target wasm32-unknown-unknown --no-def
 cargo clippy --all-targets --all-features &&
 cargo doc --all-features --workspace --no-deps &&
 cargo make check --locked &&
-cargo make check --all-features --locked &&
+FUEL_ALWAYS_USE_WASM=true cargo make check --all-features --locked &&
 cargo check -p fuel-core-types --target wasm32-unknown-unknown --no-default-features &&
 cargo check -p fuel-core-storage --target wasm32-unknown-unknown --no-default-features &&
 cargo check -p fuel-core-client --target wasm32-unknown-unknown --no-default-features &&
 cargo check -p fuel-core-chain-config --target wasm32-unknown-unknown --no-default-features &&
 cargo check -p fuel-core-executor --target wasm32-unknown-unknown --no-default-features &&
 cargo test --workspace &&
-cargo test --all-features --workspace &&
+FUEL_ALWAYS_USE_WASM=true cargo test --all-features --workspace &&
 cargo test -p fuel-core --no-default-features &&
 cargo test -p fuel-core-client --no-default-features &&
 cargo test -p fuel-core-chain-config --no-default-features &&

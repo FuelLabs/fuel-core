@@ -2,10 +2,7 @@ use self::adapters::BlockImporterAdapter;
 use crate::{
     combined_database::CombinedDatabase,
     database::Database,
-    service::adapters::{
-        P2PAdapter,
-        PoAAdapter,
-    },
+    service::adapters::PoAAdapter,
 };
 use fuel_core_poa::ports::BlockImporter;
 use fuel_core_services::{
@@ -18,7 +15,7 @@ use fuel_core_services::{
 use fuel_core_storage::IsNotFound;
 use std::net::SocketAddr;
 
-use crate::service::adapters::StaticGasPrice;
+use crate::service::sub_services::TxPoolSharedState;
 pub use config::{
     Config,
     DbType,
@@ -39,8 +36,7 @@ pub struct SharedState {
     /// The PoA adaptor around the shared state of the consensus module.
     pub poa_adapter: PoAAdapter,
     /// The transaction pool shared state.
-    pub txpool_shared_state:
-        fuel_core_txpool::service::SharedState<P2PAdapter, Database, StaticGasPrice>,
+    pub txpool_shared_state: TxPoolSharedState,
     /// The P2P network shared state.
     #[cfg(feature = "p2p")]
     pub network: Option<fuel_core_p2p::service::SharedState>,
@@ -222,13 +218,14 @@ impl RunnableService for Task {
 
     async fn into_task(
         self,
-        _: &StateWatcher,
+        watcher: &StateWatcher,
         _: Self::TaskParams,
     ) -> anyhow::Result<Self::Task> {
         // check if chain is initialized
         if let Err(err) = self.shared.database.on_chain().get_genesis() {
             if err.is_not_found() {
                 let result = genesis::execute_genesis_block(
+                    watcher.clone(),
                     &self.shared.config,
                     &self.shared.database,
                 )
@@ -323,7 +320,7 @@ mod tests {
 
         // current services: graphql, graphql worker, txpool, PoA
         #[allow(unused_mut)]
-        let mut expected_services = 4;
+        let mut expected_services = 5;
 
         // Relayer service is disabled with `Config::local_node`.
         // #[cfg(feature = "relayer")]
