@@ -18,7 +18,6 @@ use fuel_core_chain_config::{
     StateConfigBuilder,
     TableEntry,
 };
-use fuel_core_services::State;
 use fuel_core_storage::{
     blueprint::BlueprintInspect,
     iter::IterDirection,
@@ -35,7 +34,6 @@ use fuel_core_storage::{
 };
 use fuel_core_types::fuel_types::ContractId;
 use itertools::Itertools;
-use tokio_util::sync::CancellationToken;
 
 use super::task_manager::{
     NotifyCancel,
@@ -59,16 +57,14 @@ where
         prev_chain_config: ChainConfig,
         writer: Fun,
         group_size: usize,
+        cancel_token: impl NotifyCancel + Send + Sync + 'static,
     ) -> Self {
-        // TODO: Support graceful shutdown during the exporting of the snapshot.
-        //  https://github.com/FuelLabs/fuel-core/issues/1828
-        let (_, receiver) = watch::channel(State::Started);
         Self {
             db,
             prev_chain_config,
             writer,
             group_size,
-            task_manager: TaskManager::new(receiver.into()),
+            task_manager: TaskManager::new(cancel_token),
         }
     }
 

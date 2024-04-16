@@ -55,6 +55,7 @@ mod importer;
 mod task_manager;
 
 pub use exporter::Exporter;
+pub use task_manager::NotifyCancel;
 
 use self::importer::SnapshotImporter;
 

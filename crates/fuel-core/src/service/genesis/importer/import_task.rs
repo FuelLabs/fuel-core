@@ -484,7 +484,7 @@ mod tests {
         let runner = {
             let read_groups = Arc::clone(&read_groups);
             ImportTask::new(
-                cancel_token.clone().into(),
+                MultiCancellationToken::from_single(cancel_token.clone()),
                 TestHandler::new(move |el, _| {
                     read_groups.lock().unwrap().push(el);
                     Ok(())

@@ -120,11 +120,14 @@ pub async fn exec(command: Command) -> anyhow::Result<()> {
         MAX_GROUP_SIZE,
     };
 
+    use crate::cli::ShutdownListener;
+
     let db = open_db(
         &command.database_path,
         Some(command.max_database_cache_size),
     )?;
     let output_dir = command.output_dir;
+    let shutdown_listener = ShutdownListener::spawn();
 
     match command.subcommand {
         SubCommands::Everything {
@@ -149,15 +152,22 @@ pub async fn exec(command: Command) -> anyhow::Result<()> {
                 load_chain_config_or_use_testnet(chain_config.as_deref())?,
                 writer,
                 group_size,
+                shutdown_listener,
             )
             .write_full_snapshot()
             .await
         }
         SubCommands::Contract { contract_id } => {
             let writer = move || Ok(SnapshotWriter::json(output_dir.clone()));
-            Exporter::new(db, local_testnet_chain_config(), writer, MAX_GROUP_SIZE)
-                .write_contract_snapshot(contract_id)
-                .await
+            Exporter::new(
+                db,
+                local_testnet_chain_config(),
+                writer,
+                MAX_GROUP_SIZE,
+                shutdown_listener,
+            )
+            .write_contract_snapshot(contract_id)
+            .await
         }
     }
 }

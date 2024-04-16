@@ -11,11 +11,12 @@ use futures::{
 };
 use itertools::Itertools;
 use tokio::task::JoinSet;
+use tokio_util::sync::CancellationToken;
 
 pub struct TaskManager<T> {
     set: JoinSet<anyhow::Result<T>>,
-    task_cancel: CancellationToken,
-    cancel: MultiCancellationToken,
+    outside_cancel_listener: MultiCancellationToken,
+    cancel_tasks: CancellationToken,
 }
 
 #[async_trait::async_trait]
@@ -58,6 +59,12 @@ pub struct MultiCancellationToken {
 }
 
 impl MultiCancellationToken {
+    pub fn from_single(source: impl NotifyCancel + Send + Sync + 'static) -> Self {
+        let mut token = Self::default();
+        token.insert(source);
+        token
+    }
+
     /// Note: Adding a new source to the token will not affect already running futures.
     pub fn insert(&mut self, source: impl NotifyCancel + Send + Sync + 'static) {
         self.sources.push(Arc::new(source));
@@ -85,22 +92,6 @@ impl NotifyCancel for MultiCancellationToken {
     }
 }
 
-impl From<StateWatcher> for MultiCancellationToken {
-    fn from(watcher: StateWatcher) -> Self {
-        let mut cancel = Self::default();
-        cancel.insert(watcher);
-        cancel
-    }
-}
-
-impl From<CancellationToken> for MultiCancellationToken {
-    fn from(token: CancellationToken) -> Self {
-        let mut cancel = Self::default();
-        cancel.insert(token);
-        cancel
-    }
-}
-
 impl<T> Default for TaskManager<T> {
     fn default() -> Self {
         Self::new(CancellationToken::new())
@@ -108,15 +99,14 @@ impl<T> Default for TaskManager<T> {
 }
 
 impl<T> TaskManager<T> {
-    pub fn new(cancel_token: impl Into<MultiCancellationToken>) -> Self {
-        let mut cancel_token = cancel_token.into();
+    pub fn new(cancel_token: impl NotifyCancel + Send + Sync + 'static) -> Self {
         let task_cancel = CancellationToken::new();
-        cancel_token.insert(task_cancel.clone());
-
+        let mut multi_cancel = MultiCancellationToken::from_single(cancel_token);
+        multi_cancel.insert(task_cancel.child_token());
         Self {
             set: JoinSet::new(),
-            cancel: cancel_token,
-            task_cancel,
+            outside_cancel_listener: multi_cancel,
+            cancel_tasks: task_cancel,
         }
     }
 }
@@ -130,7 +120,7 @@ where
         F: FnOnce(MultiCancellationToken) -> Fut,
         Fut: Future<Output = anyhow::Result<T>> + Send + 'static,
     {
-        self.set.spawn(arg(self.cancel.clone()));
+        self.set.spawn(arg(self.outside_cancel_listener.clone()));
     }
 
     pub async fn wait(self) -> anyhow::Result<Vec<T>> {
@@ -139,7 +129,7 @@ where
             Some((res, set))
         })
         .map(|result| result.map_err(Into::into).and_then(|r| r))
-        .inspect_err(|_| self.task_cancel.cancel())
+        .inspect_err(|_| self.cancel_tasks.cancel())
         .collect::<Vec<_>>()
         .await;
 
