@@ -765,9 +765,6 @@ mod tests {
                 coins: vec![],
                 messages: vec![],
                 contracts: vec![randomly_chosen_contract],
-                blocks: vec![],
-                block_consensus: vec![],
-                transactions: vec![],
                 block_height: original_state.block_height,
                 da_block_height: original_state.da_block_height,
             }

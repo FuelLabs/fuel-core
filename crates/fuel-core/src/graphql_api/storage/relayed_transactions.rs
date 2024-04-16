@@ -17,7 +17,6 @@ use fuel_core_storage::{
 use fuel_core_types::{
     entities::relayer::transaction::RelayedTransactionStatus,
     fuel_tx::Bytes32,
-    fuel_types::ChainId,
 };
 
 /// Tracks the status of transactions from the L1. These are tracked separately from tx-pool
@@ -43,10 +42,7 @@ impl TableWithBlueprint for RelayedTransactionStatuses {
 }
 
 impl AsTable<RelayedTransactionStatuses> for StateConfig {
-    fn as_table(
-        &self,
-        _chain_id: &ChainId,
-    ) -> Vec<TableEntry<RelayedTransactionStatuses>> {
+    fn as_table(&self) -> Vec<TableEntry<RelayedTransactionStatuses>> {
         Vec::new() // Do not include these for now
     }
 }

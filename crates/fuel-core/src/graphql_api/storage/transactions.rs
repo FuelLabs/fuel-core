@@ -22,10 +22,7 @@ use fuel_core_types::{
         Address,
         Bytes32,
     },
-    fuel_types::{
-        BlockHeight,
-        ChainId,
-    },
+    fuel_types::BlockHeight,
     services::txpool::TransactionStatus,
 };
 use std::{
@@ -53,7 +50,7 @@ impl TableWithBlueprint for OwnedTransactions {
 }
 
 impl AsTable<OwnedTransactions> for StateConfig {
-    fn as_table(&self, _chain_id: &ChainId) -> Vec<TableEntry<OwnedTransactions>> {
+    fn as_table(&self) -> Vec<TableEntry<OwnedTransactions>> {
         Vec::new() // Do not include these for now
     }
 }
@@ -84,7 +81,7 @@ impl TableWithBlueprint for TransactionStatuses {
 }
 
 impl AsTable<TransactionStatuses> for StateConfig {
-    fn as_table(&self, _chain_id: &ChainId) -> Vec<TableEntry<TransactionStatuses>> {
+    fn as_table(&self) -> Vec<TableEntry<TransactionStatuses>> {
         Vec::new() // Do not include these for now
     }
 }

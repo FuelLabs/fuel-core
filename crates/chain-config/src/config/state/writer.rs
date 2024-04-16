@@ -306,14 +306,12 @@ impl SnapshotWriter {
 
         use crate::AsTable;
 
-        let chain_id = chain_config.consensus_parameters.chain_id();
-
-        self.write::<Coins>(state_config.as_table(&chain_id))?;
-        self.write::<Messages>(state_config.as_table(&chain_id))?;
-        self.write::<ContractsRawCode>(state_config.as_table(&chain_id))?;
-        self.write::<ContractsLatestUtxo>(state_config.as_table(&chain_id))?;
-        self.write::<ContractsState>(state_config.as_table(&chain_id))?;
-        self.write::<ContractsAssets>(state_config.as_table(&chain_id))?;
+        self.write::<Coins>(state_config.as_table())?;
+        self.write::<Messages>(state_config.as_table())?;
+        self.write::<ContractsRawCode>(state_config.as_table())?;
+        self.write::<ContractsLatestUtxo>(state_config.as_table())?;
+        self.write::<ContractsState>(state_config.as_table())?;
+        self.write::<ContractsAssets>(state_config.as_table())?;
         self.close(
             state_config.block_height,
             state_config.da_block_height,

@@ -26,20 +26,9 @@ use fuel_core_storage::{
     Mappable,
 };
 use fuel_core_types::{
-    blockchain::{
-        block::CompressedBlock,
-        consensus::Consensus,
-        primitives::DaBlockHeight,
-    },
+    blockchain::primitives::DaBlockHeight,
     entities::contract::ContractUtxoInfo,
-    fuel_tx::{
-        Transaction,
-        UniqueIdentifier,
-    },
-    fuel_types::{
-        BlockHeight,
-        ChainId,
-    },
+    fuel_types::BlockHeight,
 };
 use itertools::Itertools;
 use serde::{
@@ -92,12 +81,6 @@ pub struct StateConfig {
     pub messages: Vec<MessageConfig>,
     /// Contracts
     pub contracts: Vec<ContractConfig>,
-    /// Blocks
-    pub blocks: Vec<CompressedBlock>,
-    /// Consensus metadata for each block
-    pub block_consensus: Vec<(BlockHeight, Consensus)>,
-    /// Transactions
-    pub transactions: Vec<Transaction>,
     /// Block height
     pub block_height: BlockHeight,
     /// Da block height
@@ -112,9 +95,6 @@ pub struct StateConfigBuilder {
     contract_balance: Vec<TableEntry<ContractsAssets>>,
     contract_code: Vec<TableEntry<ContractsRawCode>>,
     contract_utxo: Vec<TableEntry<ContractsLatestUtxo>>,
-    blocks: Vec<TableEntry<FuelBlocks>>,
-    block_consensus: Vec<TableEntry<SealedBlockConsensus>>,
-    transactions: Vec<TableEntry<Transactions>>,
 }
 
 impl StateConfigBuilder {
@@ -125,9 +105,6 @@ impl StateConfigBuilder {
         self.contract_balance.extend(builder.contract_balance);
         self.contract_code.extend(builder.contract_code);
         self.contract_utxo.extend(builder.contract_utxo);
-        self.blocks.extend(builder.blocks);
-        self.block_consensus.extend(builder.block_consensus);
-        self.transactions.extend(builder.transactions);
 
         self
     }
@@ -221,26 +198,10 @@ impl StateConfigBuilder {
             })
             .try_collect()?;
 
-        let blocks = self.blocks.into_iter().map(|entry| entry.value).collect();
-        let block_consensus = self
-            .block_consensus
-            .into_iter()
-            .map(|entry| (entry.key, entry.value))
-            .collect();
-
-        let transactions = self
-            .transactions
-            .into_iter()
-            .map(|entry| entry.value)
-            .collect();
-
         Ok(StateConfig {
             coins,
             messages,
             contracts,
-            blocks,
-            block_consensus,
-            transactions,
             block_height,
             da_block_height,
         })
@@ -261,7 +222,7 @@ impl AddTable<Coins> for StateConfigBuilder {
 }
 
 impl AsTable<Coins> for StateConfig {
-    fn as_table(&self, _chain_id: &ChainId) -> Vec<TableEntry<Coins>> {
+    fn as_table(&self) -> Vec<TableEntry<Coins>> {
         self.coins
             .clone()
             .into_iter()
@@ -287,9 +248,6 @@ impl crate::Randomize for StateConfig {
             coins: rand_collection(&mut rng, amount),
             messages: rand_collection(&mut rng, amount),
             contracts: rand_collection(&mut rng, amount),
-            blocks: rand_collection(&mut rng, amount),
-            block_consensus: rand_collection(&mut rng, amount),
-            transactions: rand_collection(&mut rng, amount),
             block_height: rng.gen(),
             da_block_height: rng.gen(),
         }
@@ -300,11 +258,11 @@ pub trait AsTable<T>
 where
     T: TableWithBlueprint,
 {
-    fn as_table(&self, chain_id: &ChainId) -> Vec<TableEntry<T>>;
+    fn as_table(&self) -> Vec<TableEntry<T>>;
 }
 
 impl AsTable<Messages> for StateConfig {
-    fn as_table(&self, _chain_id: &ChainId) -> Vec<TableEntry<Messages>> {
+    fn as_table(&self) -> Vec<TableEntry<Messages>> {
         self.messages
             .clone()
             .into_iter()
@@ -320,7 +278,7 @@ impl AddTable<Messages> for StateConfigBuilder {
 }
 
 impl AsTable<ContractsState> for StateConfig {
-    fn as_table(&self, _chain_id: &ChainId) -> Vec<TableEntry<ContractsState>> {
+    fn as_table(&self) -> Vec<TableEntry<ContractsState>> {
         self.contracts
             .iter()
             .flat_map(|contract| {
@@ -345,7 +303,7 @@ impl AddTable<ContractsState> for StateConfigBuilder {
 }
 
 impl AsTable<ContractsAssets> for StateConfig {
-    fn as_table(&self, _chain_id: &ChainId) -> Vec<TableEntry<ContractsAssets>> {
+    fn as_table(&self) -> Vec<TableEntry<ContractsAssets>> {
         self.contracts
             .iter()
             .flat_map(|contract| {
@@ -367,7 +325,7 @@ impl AddTable<ContractsAssets> for StateConfigBuilder {
 }
 
 impl AsTable<ContractsRawCode> for StateConfig {
-    fn as_table(&self, _chain_id: &ChainId) -> Vec<TableEntry<ContractsRawCode>> {
+    fn as_table(&self) -> Vec<TableEntry<ContractsRawCode>> {
         self.contracts
             .iter()
             .map(|config| TableEntry {
@@ -385,7 +343,7 @@ impl AddTable<ContractsRawCode> for StateConfigBuilder {
 }
 
 impl AsTable<ContractsLatestUtxo> for StateConfig {
-    fn as_table(&self, _chain_id: &ChainId) -> Vec<TableEntry<ContractsLatestUtxo>> {
+    fn as_table(&self) -> Vec<TableEntry<ContractsLatestUtxo>> {
         self.contracts
             .iter()
             .map(|config| TableEntry {
@@ -408,57 +366,33 @@ impl AddTable<ContractsLatestUtxo> for StateConfigBuilder {
 }
 
 impl AsTable<Transactions> for StateConfig {
-    fn as_table(&self, chain_id: &ChainId) -> Vec<TableEntry<Transactions>> {
-        self.transactions
-            .iter()
-            .map(|tx| TableEntry {
-                key: tx.id(chain_id),
-                value: tx.clone().into(),
-            })
-            .collect()
+    fn as_table(&self) -> Vec<TableEntry<Transactions>> {
+        Vec::new() // Do not include these for now
     }
 }
 
 impl AddTable<Transactions> for StateConfigBuilder {
-    fn add(&mut self, entries: Vec<TableEntry<Transactions>>) {
-        self.transactions.extend(entries);
-    }
+    fn add(&mut self, _entries: Vec<TableEntry<Transactions>>) {}
 }
 
 impl AsTable<FuelBlocks> for StateConfig {
-    fn as_table(&self, _chain_id: &ChainId) -> Vec<TableEntry<FuelBlocks>> {
-        self.blocks
-            .iter()
-            .map(|block| TableEntry {
-                key: *block.header().height(),
-                value: block.clone().into(),
-            })
-            .collect()
+    fn as_table(&self) -> Vec<TableEntry<FuelBlocks>> {
+        Vec::new() // Do not include these for now
     }
 }
 
 impl AddTable<FuelBlocks> for StateConfigBuilder {
-    fn add(&mut self, entries: Vec<TableEntry<FuelBlocks>>) {
-        self.blocks.extend(entries);
-    }
+    fn add(&mut self, _entries: Vec<TableEntry<FuelBlocks>>) {}
 }
 
 impl AsTable<SealedBlockConsensus> for StateConfig {
-    fn as_table(&self, _chain_id: &ChainId) -> Vec<TableEntry<SealedBlockConsensus>> {
-        self.block_consensus
-            .iter()
-            .map(|block| TableEntry {
-                key: block.0,
-                value: block.1.clone(),
-            })
-            .collect()
+    fn as_table(&self) -> Vec<TableEntry<SealedBlockConsensus>> {
+        Vec::new() // Do not include these for now
     }
 }
 
 impl AddTable<SealedBlockConsensus> for StateConfigBuilder {
-    fn add(&mut self, entries: Vec<TableEntry<SealedBlockConsensus>>) {
-        self.block_consensus.extend(entries);
-    }
+    fn add(&mut self, _entries: Vec<TableEntry<SealedBlockConsensus>>) {}
 }
 
 impl StateConfig {
@@ -729,7 +663,6 @@ mod tests {
         let state_config = StateConfig::randomize(&mut rng);
 
         let chain_config = ChainConfig::local_testnet();
-        let chain_id = chain_config.consensus_parameters.chain_id();
 
         macro_rules! write_in_fragments {
                 ($($fragment_ty: ty,)*) => {
@@ -737,7 +670,7 @@ mod tests {
                 $({
                     let mut writer = create_writer();
                     writer
-                        .write(AsTable::<$fragment_ty>::as_table(&state_config, &chain_id))
+                        .write(AsTable::<$fragment_ty>::as_table(&state_config))
                         .unwrap();
                     writer.partial_close().unwrap()
 
