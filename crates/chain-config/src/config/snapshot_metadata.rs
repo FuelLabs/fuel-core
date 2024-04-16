@@ -15,7 +15,7 @@ pub enum TableEncoding {
     #[cfg(feature = "parquet")]
     Parquet {
         tables: std::collections::HashMap<String, PathBuf>,
-        latest_block_config: PathBuf,
+        latest_block_config_path: PathBuf,
     },
 }
 impl TableEncoding {
@@ -27,13 +27,14 @@ impl TableEncoding {
             #[cfg(feature = "parquet")]
             TableEncoding::Parquet {
                 tables,
-                latest_block_config,
+                latest_block_config_path,
                 ..
             } => {
                 for path in tables.values_mut() {
                     *path = path.strip_prefix(dir)?.to_owned();
                 }
-                *latest_block_config = latest_block_config.strip_prefix(dir)?.to_owned();
+                *latest_block_config_path =
+                    latest_block_config_path.strip_prefix(dir)?.to_owned();
             }
         }
         Ok(())
@@ -47,13 +48,13 @@ impl TableEncoding {
             #[cfg(feature = "parquet")]
             TableEncoding::Parquet {
                 tables,
-                latest_block_config,
+                latest_block_config_path,
                 ..
             } => {
                 for path in tables.values_mut() {
                     *path = dir.join(&path);
                 }
-                *latest_block_config = dir.join(&latest_block_config);
+                *latest_block_config_path = dir.join(&latest_block_config_path);
             }
         }
     }
@@ -185,7 +186,7 @@ mod tests {
                         "coins".into(),
                         "coins.parquet".into(),
                     )]),
-                    latest_block_config: "latest_block_config.parquet".into(),
+                    latest_block_config_path: "latest_block_config.parquet".into(),
                 },
             };
             serde_json::to_writer(
@@ -207,7 +208,7 @@ mod tests {
                             "coins".into(),
                             temp_dir.path().join("coins.parquet")
                         )]),
-                        latest_block_config: temp_dir
+                        latest_block_config_path: temp_dir
                             .path()
                             .join("latest_block_config.parquet"),
                     }
@@ -227,7 +228,7 @@ mod tests {
                         "coins".into(),
                         dir.join("coins.parquet"),
                     )]),
-                    latest_block_config: dir.join("latest_block_config.parquet"),
+                    latest_block_config_path: dir.join("latest_block_config.parquet"),
                 },
             };
 
@@ -248,7 +249,7 @@ mod tests {
                             "coins".into(),
                             "coins.parquet".into(),
                         )]),
-                        latest_block_config: "latest_block_config.parquet".into(),
+                        latest_block_config_path: "latest_block_config.parquet".into(),
                     }
                 }
             );

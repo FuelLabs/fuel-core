@@ -130,10 +130,12 @@ async fn tx_pointer_set_from_previous_block() {
         srv: _dont_drop,
         ..
     } = test_builder.finalize().await;
+    let new_genesis_block_height = previous_block_height + 1;
 
     // submit tx1
     let tx1 = tx1.into();
     client.submit_and_await_commit(&tx1).await.unwrap();
+    let next_block_height_after_genesis = new_genesis_block_height + 1;
     let ret_tx1 = client
         .transaction(&tx1.id(&Default::default()))
         .await
@@ -163,7 +165,7 @@ async fn tx_pointer_set_from_previous_block() {
     let ret_tx2 = ret_tx2.as_script().unwrap();
 
     // verify coin tx_pointer is correctly set
-    let expected_tx_pointer = TxPointer::new((previous_block_height + 2u32).into(), 0);
+    let expected_tx_pointer = TxPointer::new(next_block_height_after_genesis.into(), 0);
     assert_eq!(
         *ret_tx2.inputs()[0].tx_pointer().unwrap(),
         expected_tx_pointer

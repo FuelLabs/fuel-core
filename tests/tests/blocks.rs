@@ -76,11 +76,12 @@ async fn block() {
 }
 
 #[tokio::test]
-async fn get_genesis_block() {
+async fn block_by_height_returns_genesis_block() {
     // Given
+    let block_height_of_last_block_before_regenesis = 13u32.into();
     let config = Config::local_node_with_state_config(StateConfig {
         last_block: Some(LastBlockConfig {
-            block_height: 13u32.into(),
+            block_height: block_height_of_last_block_before_regenesis,
             state_transition_version: 0,
             ..Default::default()
         }),
@@ -94,7 +95,13 @@ async fn get_genesis_block() {
 
     // Then
     let client = FuelClient::from(srv.bound_address);
-    let block = client.block_by_height(14.into()).await.unwrap().unwrap();
+    let block_height_of_new_genesis_block =
+        block_height_of_last_block_before_regenesis.succ().unwrap();
+    let block = client
+        .block_by_height(block_height_of_new_genesis_block)
+        .await
+        .unwrap()
+        .unwrap();
     assert_eq!(block.header.height, 14);
     assert!(matches!(
         block.consensus,

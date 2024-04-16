@@ -146,7 +146,7 @@ impl StateConfigBuilder {
     #[cfg(feature = "std")]
     pub fn build(
         self,
-        latest_block: Option<LastBlockConfig>,
+        latest_block_config: Option<LastBlockConfig>,
     ) -> anyhow::Result<StateConfig> {
         use std::collections::HashMap;
 
@@ -235,7 +235,7 @@ impl StateConfigBuilder {
             coins,
             messages,
             contracts,
-            last_block: latest_block,
+            last_block: latest_block_config,
         })
     }
 }

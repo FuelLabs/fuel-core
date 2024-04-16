@@ -235,9 +235,9 @@ impl SnapshotReader {
             #[cfg(feature = "parquet")]
             TableEncoding::Parquet {
                 tables,
-                latest_block_config,
+                latest_block_config_path,
                 ..
-            } => Self::parquet(tables, latest_block_config, chain_config),
+            } => Self::parquet(tables, latest_block_config_path, chain_config),
         }
     }
 

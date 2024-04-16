@@ -87,7 +87,7 @@ pub fn init_sub_services(
 
     let verifier = VerifierAdapter::new(
         &genesis_block,
-        config.snapshot_reader.chain_config().consensus,
+        chain_config.consensus,
         database.on_chain().clone(),
     );
 

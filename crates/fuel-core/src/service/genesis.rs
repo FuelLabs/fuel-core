@@ -68,6 +68,7 @@ pub async fn execute_genesis_block(
     db: &CombinedDatabase,
 ) -> anyhow::Result<UncommittedImportResult<Changes>> {
     let genesis_block = create_genesis_block(config);
+    tracing::info!("Genesis block created: {:?}", genesis_block.header());
 
     SnapshotImporter::import(
         db.clone(),
@@ -90,8 +91,6 @@ pub async fn execute_genesis_block(
 
     let chain_config = config.snapshot_reader.chain_config();
     let genesis = Genesis {
-        // TODO: We can get the serialized consensus parameters from the database.
-        //  https://github.com/FuelLabs/fuel-core/issues/1570
         chain_config_hash: chain_config.root()?.into(),
         coins_root: db.on_chain().genesis_coins_root()?.into(),
         messages_root: db.on_chain().genesis_messages_root()?.into(),

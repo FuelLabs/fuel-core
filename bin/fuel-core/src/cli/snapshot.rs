@@ -330,15 +330,17 @@ mod tests {
 
             let block = {
                 let mut block = CompressedBlock::default();
-                let latest_block =
-                    reader.last_block_config().cloned().unwrap_or_default();
+                let last_block_config = reader
+                    .last_block_config()
+                    .cloned()
+                    .expect("Expects the last block config to be set");
                 block.header_mut().application_mut().da_height =
-                    latest_block.da_block_height;
+                    last_block_config.da_block_height;
                 block
                     .header_mut()
-                    .set_block_height(latest_block.block_height);
+                    .set_block_height(last_block_config.block_height);
                 TableEntry {
-                    key: latest_block.block_height,
+                    key: last_block_config.block_height,
                     value: block,
                 }
             };

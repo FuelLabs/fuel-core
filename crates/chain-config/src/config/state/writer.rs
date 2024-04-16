@@ -208,12 +208,12 @@ impl SnapshotFragment {
 
     pub fn finalize(
         self,
-        latest_block: Option<LastBlockConfig>,
+        latest_block_config: Option<LastBlockConfig>,
         chain_config: &ChainConfig,
     ) -> anyhow::Result<SnapshotMetadata> {
         let table_encoding = match self.data {
             FragmentData::Json { builder } => {
-                let state_config = builder.build(latest_block)?;
+                let state_config = builder.build(latest_block_config)?;
                 std::fs::create_dir_all(&self.dir)?;
                 let state_file_path = self.dir.join("state_config.json");
                 let file = std::fs::File::create(&state_file_path)?;
@@ -228,17 +228,17 @@ impl SnapshotFragment {
                 tables,
                 compression,
             } => {
-                let latest_block_config_file =
+                let latest_block_config_path =
                     self.dir.join("latest_block_config.parquet");
                 SnapshotWriter::write_single_el_parquet(
-                    &latest_block_config_file,
-                    latest_block,
+                    &latest_block_config_path,
+                    latest_block_config,
                     compression,
                 )?;
 
                 TableEncoding::Parquet {
                     tables,
-                    latest_block_config: latest_block_config_file,
+                    latest_block_config_path,
                 }
             }
         };
@@ -338,10 +338,11 @@ impl SnapshotWriter {
 
     pub fn close(
         self,
-        latest_block: Option<LastBlockConfig>,
+        latest_block_config: Option<LastBlockConfig>,
         chain_config: &ChainConfig,
     ) -> anyhow::Result<SnapshotMetadata> {
-        self.partial_close()?.finalize(latest_block, chain_config)
+        self.partial_close()?
+            .finalize(latest_block_config, chain_config)
     }
 
     fn write_chain_config_and_metadata(
