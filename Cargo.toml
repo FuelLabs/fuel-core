@@ -81,7 +81,7 @@ fuel-core-wasm-executor = { version = "0.24.2", path = "./crates/services/upgrad
 fuel-core-xtask = { version = "0.0.0", path = "./xtask" }
 
 # Fuel dependencies
-fuel-vm-private = { version = "0.48.0", package = "fuel-vm", default-features = false }
+fuel-vm-private = { version = "0.49.0", package = "fuel-vm", default-features = false }
 
 # Common dependencies
 anyhow = "1.0"

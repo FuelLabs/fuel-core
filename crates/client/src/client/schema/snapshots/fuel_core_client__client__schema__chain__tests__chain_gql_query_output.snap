@@ -58,6 +58,7 @@ query {
         maxWitnesses
         maxGasPerTx
         maxSize
+        maxBytecodeSubsections
       }
       predicateParams {
         version {

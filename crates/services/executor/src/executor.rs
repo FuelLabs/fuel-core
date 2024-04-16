@@ -743,7 +743,10 @@ where
     fn tx_is_valid_variant(tx: &Transaction) -> Result<(), ForcedTransactionFailure> {
         match tx {
             Transaction::Mint(_) => Err(ForcedTransactionFailure::InvalidTransactionType),
-            Transaction::Script(_) | Transaction::Create(_) => Ok(()),
+            Transaction::Script(_)
+            | Transaction::Create(_)
+            | Transaction::Upgrade(_)
+            | Transaction::Upload(_) => Ok(()),
         }
     }
 
@@ -756,11 +759,13 @@ where
         let gas_costs = consensus_params.gas_costs();
         let fee_params = consensus_params.fee_params();
         let actual_max_gas = match tx {
-            Transaction::Script(script) => script.max_gas(gas_costs, fee_params),
-            Transaction::Create(create) => create.max_gas(gas_costs, fee_params),
+            Transaction::Script(tx) => tx.max_gas(gas_costs, fee_params),
+            Transaction::Create(tx) => tx.max_gas(gas_costs, fee_params),
             Transaction::Mint(_) => {
                 return Err(ForcedTransactionFailure::InvalidTransactionType)
             }
+            Transaction::Upgrade(tx) => tx.max_gas(gas_costs, fee_params),
+            Transaction::Upload(tx) => tx.max_gas(gas_costs, fee_params),
         };
         if actual_max_gas > claimed_max_gas {
             return Err(ForcedTransactionFailure::InsufficientMaxGas {
@@ -807,8 +812,8 @@ where
         };
 
         match checked_tx {
-            CheckedTransaction::Script(script) => self.execute_create_or_script(
-                script,
+            CheckedTransaction::Script(tx) => self.execute_chargeable_transaction(
+                tx,
                 header,
                 coinbase_contract_id,
                 gas_price,
@@ -816,8 +821,8 @@ where
                 tx_st_transaction,
                 execution_kind,
             ),
-            CheckedTransaction::Create(create) => self.execute_create_or_script(
-                create,
+            CheckedTransaction::Create(tx) => self.execute_chargeable_transaction(
+                tx,
                 header,
                 coinbase_contract_id,
                 gas_price,
@@ -827,6 +832,24 @@ where
             ),
             CheckedTransaction::Mint(mint) => self.execute_mint(
                 mint,
+                header,
+                coinbase_contract_id,
+                gas_price,
+                execution_data,
+                tx_st_transaction,
+                execution_kind,
+            ),
+            CheckedTransaction::Upgrade(tx) => self.execute_chargeable_transaction(
+                tx,
+                header,
+                coinbase_contract_id,
+                gas_price,
+                execution_data,
+                tx_st_transaction,
+                execution_kind,
+            ),
+            CheckedTransaction::Upload(tx) => self.execute_chargeable_transaction(
+                tx,
                 header,
                 coinbase_contract_id,
                 gas_price,
@@ -929,6 +952,7 @@ where
             let mut vm_db = VmStorage::new(
                 &mut sub_block_db_commit,
                 &header.consensus,
+                &header.application,
                 coinbase_contract_id,
             );
 
@@ -994,7 +1018,7 @@ where
     }
 
     #[allow(clippy::too_many_arguments)]
-    fn execute_create_or_script<Tx, T>(
+    fn execute_chargeable_transaction<Tx, T>(
         &self,
         mut checked_tx: Checked<Tx>,
         header: &PartialBlockHeader,
@@ -1053,6 +1077,7 @@ where
         let vm_db = VmStorage::new(
             &mut sub_block_db_commit,
             &header.consensus,
+            &header.application,
             coinbase_contract_id,
         );
 
@@ -1609,7 +1634,7 @@ where
                     backtrace.contract(),
                     backtrace.registers(),
                     backtrace.call_stack(),
-                    hex::encode(&backtrace.memory()[..sp]), // print stack
+                    hex::encode(backtrace.memory().read(0usize, sp).expect("`SP` always within stack")), // print stack
                 );
             }
         }

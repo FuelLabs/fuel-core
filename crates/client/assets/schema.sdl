@@ -190,6 +190,11 @@ type ConsensusParameters {
 	privilegedAddress: Address!
 }
 
+type ConsensusParametersPurpose {
+	witnessIndex: U16!
+	checksum: Bytes32!
+}
+
 union ConsensusParametersVersion = Version
 
 type Contract {
@@ -960,6 +965,10 @@ type SqueezedOutStatus {
 	reason: String!
 }
 
+type StateTransitionPurpose {
+	root: Bytes32!
+}
+
 
 type SubmittedStatus {
 	time: Tai64Timestamp!
@@ -1012,6 +1021,8 @@ type Transaction {
 	isScript: Boolean!
 	isCreate: Boolean!
 	isMint: Boolean!
+	isUpgrade: Boolean!
+	isUpload: Boolean!
 	inputs: [Input!]
 	outputs: [Output!]!
 	outputContract: ContractOutput
@@ -1023,6 +1034,11 @@ type Transaction {
 	bytecodeWitnessIndex: U16
 	salt: Salt
 	storageSlots: [HexString!]
+	bytecodeRoot: Bytes32
+	subsectionIndex: U16
+	subsectionsNumber: U16
+	proofSet: [Bytes32!]
+	upgradePurpose: UpgradePurpose
 	"""
 	Return the transaction bytes using canonical encoding
 	"""
@@ -1069,6 +1085,7 @@ type TxParameters {
 	maxWitnesses: U32!
 	maxGasPerTx: U64!
 	maxSize: U64!
+	maxBytecodeSubsections: U16!
 }
 
 union TxParametersVersion = Version
@@ -1082,6 +1099,8 @@ scalar U32
 scalar U64
 
 scalar U8
+
+union UpgradePurpose = ConsensusParametersPurpose | StateTransitionPurpose
 
 scalar UtxoId
 

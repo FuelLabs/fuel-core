@@ -11,6 +11,7 @@ use std::{
 fn main() {
     println!("cargo:rerun-if-changed=build.rs");
     println!("cargo:rerun-if-changed=wasm-executor/src/main.rs");
+    println!("cargo:rerun-if-changed=src/executor.rs");
 
     #[cfg(feature = "wasm-executor")]
     build_wasm()

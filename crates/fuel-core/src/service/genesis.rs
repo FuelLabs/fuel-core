@@ -115,7 +115,7 @@ pub async fn execute_genesis_block(
     //  https://github.com/FuelLabs/fuel-core/issues/1570
     database_transaction_on_chain
         .storage_as_mut::<StateTransitionBytecodeVersions>()
-        .insert(&ConsensusParametersVersion::MIN, &[])?;
+        .insert(&ConsensusParametersVersion::MIN, &Default::default())?;
 
     // Needs to be given the progress because `iter_all` is not implemented on db transactions.
     for key in genesis_progress_on_chain {
