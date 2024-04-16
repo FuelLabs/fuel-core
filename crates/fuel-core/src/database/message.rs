@@ -14,10 +14,7 @@ use fuel_core_storage::{
         IterDirection,
         IteratorOverTable,
     },
-    tables::{
-        Messages,
-        SpentMessages,
-    },
+    tables::Messages,
     Error as StorageError,
     Result as StorageResult,
 };
@@ -63,22 +60,13 @@ impl Database {
     ) -> impl Iterator<Item = StorageResult<TableEntry<Messages>>> + '_ {
         self.iter_all_by_start::<Messages>(None, None)
             .filter_map(|msg| {
-                // Return only unspent messages
                 if let Ok(msg) = msg {
-                    match self.message_is_spent(msg.1.id()) {
-                        Ok(false) => Some(Ok(msg)),
-                        Ok(true) => None,
-                        Err(e) => Some(Err(e)),
-                    }
+                    Some(Ok(msg))
                 } else {
                     Some(msg.map_err(StorageError::from))
                 }
             })
             .map_ok(|(key, value)| TableEntry { key, value })
-    }
-
-    pub fn message_is_spent(&self, id: &Nonce) -> StorageResult<bool> {
-        fuel_core_storage::StorageAsRef::storage::<SpentMessages>(&self).contains_key(id)
     }
 
     pub fn message_exists(&self, id: &Nonce) -> StorageResult<bool> {

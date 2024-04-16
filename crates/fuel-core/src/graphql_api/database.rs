@@ -196,10 +196,6 @@ impl DatabaseMessages for ReadView {
         self.on_chain.all_messages(start_message_id, direction)
     }
 
-    fn message_is_spent(&self, nonce: &Nonce) -> StorageResult<bool> {
-        self.on_chain.message_is_spent(nonce)
-    }
-
     fn message_exists(&self, nonce: &Nonce) -> StorageResult<bool> {
         self.on_chain.message_exists(nonce)
     }

@@ -273,40 +273,9 @@ impl MessageProof {
 }
 
 /// Represents the status of a message
-pub struct MessageStatus {
-    /// The message state
-    pub state: MessageState,
-}
-
-impl MessageStatus {
-    /// Constructor for `MessageStatus` that fills with `Unspent` state
-    pub fn unspent() -> Self {
-        Self {
-            state: MessageState::Unspent,
-        }
-    }
-
-    /// Constructor for `MessageStatus` that fills with `Spent` state
-    pub fn spent() -> Self {
-        Self {
-            state: MessageState::Spent,
-        }
-    }
-
-    /// Constructor for `MessageStatus` that fills with `Unknown` state
-    pub fn not_found() -> Self {
-        Self {
-            state: MessageState::NotFound,
-        }
-    }
-}
-
-/// The possible states a Message can be in
-pub enum MessageState {
-    /// Message is still unspent
+pub enum MessageStatus {
+    /// The message is unspent
     Unspent,
-    /// Message has already been spent
-    Spent,
-    /// There is no record of this Message
-    NotFound,
+    /// The message is either already spent, or does not exist
+    SpentOrNonExistent,
 }

@@ -285,11 +285,9 @@ pub fn message_status<T: DatabaseMessages + ?Sized>(
     database: &T,
     message_nonce: Nonce,
 ) -> StorageResult<MessageStatus> {
-    if database.message_is_spent(&message_nonce)? {
-        Ok(MessageStatus::spent())
-    } else if database.message_exists(&message_nonce)? {
-        Ok(MessageStatus::unspent())
+    if database.message_exists(&message_nonce)? {
+        Ok(MessageStatus::Unspent)
     } else {
-        Ok(MessageStatus::not_found())
+        Ok(MessageStatus::SpentOrNonExistent)
     }
 }

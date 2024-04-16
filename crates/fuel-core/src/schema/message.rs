@@ -234,17 +234,17 @@ pub struct MessageStatus(pub(crate) entities::relayer::message::MessageStatus);
 #[derive(Enum, Copy, Clone, Eq, PartialEq)]
 enum MessageState {
     Unspent,
-    Spent,
-    NotFound,
+    SpentOrNonExistent,
 }
 
 #[Object]
 impl MessageStatus {
     async fn state(&self) -> MessageState {
-        match self.0.state {
-            entities::relayer::message::MessageState::Unspent => MessageState::Unspent,
-            entities::relayer::message::MessageState::Spent => MessageState::Spent,
-            entities::relayer::message::MessageState::NotFound => MessageState::NotFound,
+        match self.0 {
+            entities::relayer::message::MessageStatus::Unspent => MessageState::Unspent,
+            entities::relayer::message::MessageStatus::SpentOrNonExistent => {
+                MessageState::SpentOrNonExistent
+            }
         }
     }
 }
