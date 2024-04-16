@@ -38,6 +38,8 @@ pub mod gas_price;
 pub mod primitives;
 pub mod tx;
 
+pub mod relayed_tx;
+
 #[derive(cynic::QueryFragment, Clone, Debug)]
 #[cynic(schema_path = "./assets/schema.sdl", graphql_type = "Query")]
 pub struct Health {

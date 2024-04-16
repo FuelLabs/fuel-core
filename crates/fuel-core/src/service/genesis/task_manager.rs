@@ -11,7 +11,6 @@ use futures::{
 };
 use itertools::Itertools;
 use tokio::task::JoinSet;
-use tokio_util::sync::CancellationToken;
 
 pub struct TaskManager<T> {
     set: JoinSet<anyhow::Result<T>>,

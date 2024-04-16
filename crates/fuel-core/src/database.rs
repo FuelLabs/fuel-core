@@ -593,7 +593,6 @@ mod tests {
                 .insert(&prev_height, &CompressedBlock::default());
 
             // Then
-            assert!(result.is_err());
             assert_eq!(
                 result.unwrap_err().to_string(),
                 StorageError::from(DatabaseError::HeightsAreNotLinked {

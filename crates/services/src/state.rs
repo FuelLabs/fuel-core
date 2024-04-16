@@ -110,6 +110,15 @@ impl StateWatcher {
             self.changed().await?;
         }
     }
+
+    /// Future that resolves once the state is `State::Stopped`.
+    pub async fn wait_stopping_or_stopped(&mut self) -> anyhow::Result<()> {
+        let state = self.borrow().clone();
+        while !(state.stopped() || state.stopping()) {
+            self.changed().await?;
+        }
+        Ok(())
+    }
 }
 
 impl From<watch::Receiver<State>> for StateWatcher {

@@ -11,7 +11,10 @@ use crate::{
     },
     entities::{
         coins::coin::Coin,
-        relayer::message::Message,
+        relayer::{
+            message::Message,
+            transaction::RelayedTransactionId,
+        },
     },
     fuel_tx::{
         Receipt,
@@ -20,6 +23,7 @@ use crate::{
         ValidityError,
     },
     fuel_types::{
+        BlockHeight,
         Bytes32,
         ContractId,
         Nonce,
@@ -64,6 +68,44 @@ pub enum Event {
     CoinCreated(Coin),
     /// The coin was consumed by the transaction.
     CoinConsumed(Coin),
+    /// Failed transaction inclusion
+    ForcedTransactionFailed {
+        /// The hash of the relayed transaction
+        id: RelayedTransactionId,
+        /// The height of the block that processed this transaction
+        block_height: BlockHeight,
+        /// The actual failure reason for why the forced transaction was not included
+        failure: String,
+    },
+}
+
+/// Known failure modes for processing forced transactions
+#[derive(Debug, derive_more::Display)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[non_exhaustive]
+pub enum ForcedTransactionFailure {
+    /// Failed to decode transaction to a valid fuel_tx::Transaction
+    #[display(fmt = "Failed to decode transaction")]
+    CodecError,
+    /// Transaction failed basic checks
+    #[display(fmt = "Failed validity checks: {_0:?}")]
+    CheckError(CheckError),
+    /// Invalid transaction type
+    #[display(fmt = "Transaction type is not accepted")]
+    InvalidTransactionType,
+    /// Execution error which failed to include
+    #[display(fmt = "Transaction inclusion failed {_0}")]
+    ExecutionError(Error),
+    /// Relayed Transaction didn't specify high enough max gas
+    #[display(
+        fmt = "Insufficient max gas: Expected: {claimed_max_gas:?}, Actual: {actual_max_gas:?}"
+    )]
+    InsufficientMaxGas {
+        /// The max gas claimed by the L1 transaction submitter
+        claimed_max_gas: u64,
+        /// The actual max gas used by the transaction
+        actual_max_gas: u64,
+    },
 }
 
 /// The status of a transaction after it is executed.
@@ -292,7 +334,7 @@ impl ExecutionKind {
 }
 
 #[allow(missing_docs)]
-#[derive(Debug, PartialEq, derive_more::Display, derive_more::From)]
+#[derive(Debug, Clone, PartialEq, derive_more::Display, derive_more::From)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[non_exhaustive]
 pub enum Error {
@@ -382,7 +424,7 @@ impl From<ValidityError> for Error {
 }
 
 #[allow(missing_docs)]
-#[derive(thiserror::Error, Debug, PartialEq)]
+#[derive(thiserror::Error, Debug, Clone, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[non_exhaustive]
 pub enum TransactionValidityError {
