@@ -7,7 +7,9 @@ use ethers::{
     },
 };
 use fuel_core::{
+    combined_database::CombinedDatabase,
     database::Database,
+    fuel_core_graphql_api::storage::relayed_transactions::RelayedTransactionStatuses,
     relayer,
     service::{
         Config,
@@ -20,7 +22,10 @@ use fuel_core_client::client::{
         PageDirection,
         PaginationRequest,
     },
-    types::TransactionStatus,
+    types::{
+        RelayedTransactionStatus as ClientRelayedTransactionStatus,
+        TransactionStatus,
+    },
     FuelClient,
 };
 use fuel_core_poa::service::Mode;
@@ -34,13 +39,18 @@ use fuel_core_relayer::{
 };
 use fuel_core_storage::{
     tables::Messages,
+    StorageAsMut,
     StorageAsRef,
 };
 use fuel_core_types::{
+    entities::relayer::transaction::RelayedTransactionStatus as FuelRelayedTransactionStatus,
     fuel_asm::*,
     fuel_crypto::*,
     fuel_tx::*,
-    fuel_types::Nonce,
+    fuel_types::{
+        BlockHeight,
+        Nonce,
+    },
 };
 use hyper::{
     service::{
@@ -250,6 +260,38 @@ async fn messages_are_spendable_after_relayer_is_synced() {
 
     srv.stop_and_await().await.unwrap();
     eth_node_handle.shutdown.send(()).unwrap();
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn can_find_failed_relayed_tx() {
+    let mut db = CombinedDatabase::in_memory();
+    let id = [1; 32].into();
+    let block_height: BlockHeight = 999.into();
+    let failure = "lolz".to_string();
+
+    // given
+    let status = FuelRelayedTransactionStatus::Failed {
+        block_height,
+        failure: failure.clone(),
+    };
+    db.off_chain_mut()
+        .storage_as_mut::<RelayedTransactionStatuses>()
+        .insert(&id, &status)
+        .unwrap();
+
+    // when
+    let srv = FuelService::from_combined_database(db.clone(), Config::local_node())
+        .await
+        .unwrap();
+    let client = FuelClient::from(srv.bound_address);
+
+    // then
+    let expected = Some(ClientRelayedTransactionStatus::Failed {
+        block_height,
+        failure,
+    });
+    let actual = client.relayed_transaction_status(&id).await.unwrap();
+    assert_eq!(expected, actual);
 }
 
 #[allow(clippy::too_many_arguments)]

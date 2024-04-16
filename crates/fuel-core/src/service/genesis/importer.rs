@@ -61,7 +61,7 @@ use tracing::Level;
 
 pub struct SnapshotImporter {
     db: CombinedDatabase,
-    task_manager: TaskManager<bool>,
+    task_manager: TaskManager<()>,
     snapshot_reader: SnapshotReader,
     tracing_span: tracing::Span,
     multi_progress_reporter: MultipleProgressReporter,
@@ -86,11 +86,11 @@ impl SnapshotImporter {
         db: CombinedDatabase,
         snapshot_reader: SnapshotReader,
         watcher: StateWatcher,
-    ) -> anyhow::Result<bool> {
+    ) -> anyhow::Result<()> {
         Self::new(db, snapshot_reader, watcher).run_workers().await
     }
 
-    async fn run_workers(mut self) -> anyhow::Result<bool> {
+    async fn run_workers(mut self) -> anyhow::Result<()> {
         tracing::info!("Running imports");
         self.spawn_worker::<Coins>()?;
         self.spawn_worker::<Messages>()?;
@@ -102,19 +102,19 @@ impl SnapshotImporter {
         self.spawn_worker::<TransactionStatuses>()?;
         self.spawn_worker::<OwnedTransactions>()?;
 
-        let was_cancelled = self.task_manager.wait().await?.into_iter().all(|e| e);
+        self.task_manager.wait().await?;
 
-        Ok(was_cancelled)
+        Ok(())
     }
 
-    pub fn spawn_worker<T>(&mut self) -> anyhow::Result<()>
+    pub fn spawn_worker<TableInSnapshot>(&mut self) -> anyhow::Result<()>
     where
-        T: TableWithBlueprint + 'static + Send,
-        TableEntry<T>: serde::de::DeserializeOwned + Send,
-        StateConfig: AsTable<T>,
-        Handler: ImportTable<T>,
+        TableInSnapshot: TableWithBlueprint + 'static + Send,
+        TableEntry<TableInSnapshot>: serde::de::DeserializeOwned + Send,
+        StateConfig: AsTable<TableInSnapshot>,
+        Handler: ImportTable<TableInSnapshot>,
     {
-        let groups = self.snapshot_reader.read::<T>()?;
+        let groups = self.snapshot_reader.read::<TableInSnapshot>()?;
         let num_groups = groups.len();
 
         let block_height = self.snapshot_reader.block_height();
@@ -122,7 +122,7 @@ impl SnapshotImporter {
         let on_chain_db = self.db.on_chain().clone();
         let off_chain_db = self.db.off_chain().clone();
 
-        let progress_reporter = self.progress_reporter::<T>(num_groups);
+        let progress_reporter = self.progress_reporter::<TableInSnapshot>(num_groups);
 
         self.task_manager.spawn(move |token| {
             tokio_rayon::spawn(move || {
@@ -138,14 +138,6 @@ impl SnapshotImporter {
         });
 
         Ok(())
-    }
-
-    fn init_multi_progress_reporter() -> MultipleProgressReporter {
-        if Self::should_display_bars() {
-            MultipleProgressReporter::new_sterr()
-        } else {
-            MultipleProgressReporter::new_hidden()
-        }
     }
 
     fn should_display_bars() -> bool {
@@ -170,6 +162,14 @@ impl SnapshotImporter {
 
         let reporter = ProgressReporter::new(target, num_groups);
         self.multi_progress_reporter.register(reporter)
+    }
+
+    fn init_multi_progress_reporter() -> MultipleProgressReporter {
+        if Self::should_display_bars() {
+            MultipleProgressReporter::new_sterr()
+        } else {
+            MultipleProgressReporter::new_hidden()
+        }
     }
 }
 

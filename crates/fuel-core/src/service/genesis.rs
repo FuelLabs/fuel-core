@@ -65,13 +65,7 @@ pub async fn execute_genesis_block(
     config: &Config,
     db: &CombinedDatabase,
 ) -> anyhow::Result<UncommittedImportResult<Changes>> {
-    let imported =
-        SnapshotImporter::import(db.clone(), config.snapshot_reader.clone(), watcher)
-            .await?;
-
-    if !imported {
-        bail!("Import not finished");
-    }
+    SnapshotImporter::import(db.clone(), config.snapshot_reader.clone(), watcher).await?;
 
     let genesis_progress_on_chain: Vec<String> = db
         .on_chain()
