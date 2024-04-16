@@ -51,6 +51,8 @@ query($id: TransactionId!) {
     isScript
     isCreate
     isMint
+    isUpgrade
+    isUpload
     outputs {
       __typename
       ... on CoinOutput {
@@ -191,5 +193,19 @@ query($id: TransactionId!) {
     salt
     storageSlots
     bytecodeWitnessIndex
+    bytecodeRoot
+    subsectionIndex
+    subsectionsNumber
+    proofSet
+    upgradePurpose {
+      __typename
+      ... on ConsensusParametersPurpose {
+        witnessIndex
+        checksum
+      }
+      ... on StateTransitionPurpose {
+        root
+      }
+    }
   }
 }

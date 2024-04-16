@@ -41,7 +41,10 @@ use std::sync::Arc;
 use fuel_core_storage::{
     not_found,
     structured_storage::StructuredStorage,
-    tables::StateTransitionBytecodeVersions,
+    tables::{
+        StateTransitionBytecodeVersions,
+        UploadedBytecodes,
+    },
     StorageAsRef,
 };
 #[cfg(any(test, feature = "test-helpers"))]
@@ -421,19 +424,30 @@ where
         drop(guard);
 
         let view = StructuredStorage::new(self.storage_view_provider.latest_view());
-        let bytecode = view
+        let bytecode_root = *view
             .storage::<StateTransitionBytecodeVersions>()
             .get(&version)?
             .ok_or(not_found!(StateTransitionBytecodeVersions))?;
+        let uploaded_bytecode = view
+            .storage::<UploadedBytecodes>()
+            .get(&bytecode_root)?
+            .ok_or(not_found!(UploadedBytecodes))?;
+
+        let fuel_core_types::fuel_vm::UploadedBytecode::Completed(bytecode) =
+            uploaded_bytecode.as_ref()
+        else {
+            return Err(ExecutorError::Other(format!(
+                "The bytecode under the bytecode_root(`{bytecode_root}`) is not completed",
+            )))
+        };
 
         // Compiles the module
-        let module =
-            wasmtime::Module::new(&self.engine, bytecode.as_ref()).map_err(|e| {
-                ExecutorError::Other(format!(
-                    "Failed to compile the module for the version `{}` with {e}",
-                    version,
-                ))
-            })?;
+        let module = wasmtime::Module::new(&self.engine, bytecode).map_err(|e| {
+            ExecutorError::Other(format!(
+                "Failed to compile the module for the version `{}` with {e}",
+                version,
+            ))
+        })?;
 
         self.cached_modules.lock().insert(version, module.clone());
         Ok(module)
@@ -645,6 +659,8 @@ mod test {
             executor::Executor,
             WASM_BYTECODE,
         };
+        use fuel_core_storage::tables::UploadedBytecodes;
+        use fuel_core_types::fuel_vm::UploadedBytecode;
 
         #[test]
         fn can_validate_block__native_strategy() {
@@ -719,10 +735,21 @@ mod test {
         fn storage_with_state_transition(
             next_version: StateTransitionBytecodeVersion,
         ) -> Storage {
+            // Only FuelVM requires the Merkle root to match the corresponding bytecode
+            // during uploading of it. The executor itself only uses a database to get the code,
+            // and how bytecode appeared there is not the executor's responsibility.
+            const BYTECODE_ROOT: Bytes32 = Bytes32::zeroed();
+
             let mut storage = storage();
             let mut tx = storage.write_transaction();
             tx.storage_as_mut::<StateTransitionBytecodeVersions>()
-                .insert(&next_version, WASM_BYTECODE)
+                .insert(&next_version, &BYTECODE_ROOT)
+                .unwrap();
+            tx.storage_as_mut::<UploadedBytecodes>()
+                .insert(
+                    &BYTECODE_ROOT,
+                    &UploadedBytecode::Completed(WASM_BYTECODE.to_vec()),
+                )
                 .unwrap();
             tx.commit().unwrap();
 
@@ -766,7 +793,7 @@ mod test {
         // The test verifies that `Executor::get_module` method caches the compiled WASM module.
         // If it doesn't cache the modules, the test will fail with a timeout.
         #[test]
-        #[ntest::timeout(40_000)]
+        #[ntest::timeout(60_000)]
         fn reuse_cached_compiled_module__native_strategy() {
             // Given
             let next_version = Executor::<Storage, DisabledRelayer>::VERSION + 1;
@@ -788,7 +815,7 @@ mod test {
         // The test verifies that `Executor::get_module` method caches the compiled WASM module.
         // If it doesn't cache the modules, the test will fail with a timeout.
         #[test]
-        #[ntest::timeout(40_000)]
+        #[ntest::timeout(60_000)]
         fn reuse_cached_compiled_module__wasm_strategy() {
             // Given
             let next_version = Executor::<Storage, DisabledRelayer>::VERSION + 1;

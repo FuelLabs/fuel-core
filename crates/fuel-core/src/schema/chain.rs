@@ -250,6 +250,10 @@ impl TxParameters {
     async fn max_size(&self) -> U64 {
         self.0.max_size().into()
     }
+
+    async fn max_bytecode_subsections(&self) -> U16 {
+        self.0.max_bytecode_subsections().into()
+    }
 }
 
 #[Object]

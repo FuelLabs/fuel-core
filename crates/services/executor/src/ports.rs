@@ -28,6 +28,12 @@ impl MaybeCheckedTransaction {
             MaybeCheckedTransaction::CheckedTransaction(CheckedTransaction::Mint(tx)) => {
                 tx.id()
             }
+            MaybeCheckedTransaction::CheckedTransaction(CheckedTransaction::Upgrade(
+                tx,
+            )) => tx.id(),
+            MaybeCheckedTransaction::CheckedTransaction(CheckedTransaction::Upload(
+                tx,
+            )) => tx.id(),
             MaybeCheckedTransaction::Transaction(tx) => tx.id(chain_id),
         }
     }
