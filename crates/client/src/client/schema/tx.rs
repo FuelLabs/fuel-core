@@ -183,6 +183,8 @@ pub struct SuccessStatus {
     pub time: Tai64Timestamp,
     pub program_state: Option<ProgramState>,
     pub receipts: Vec<Receipt>,
+    pub total_gas: U64,
+    pub total_fee: U64,
 }
 
 #[derive(cynic::QueryFragment, Clone, Debug)]
@@ -194,6 +196,8 @@ pub struct FailureStatus {
     pub reason: String,
     pub program_state: Option<ProgramState>,
     pub receipts: Vec<Receipt>,
+    pub total_gas: U64,
+    pub total_fee: U64,
 }
 
 #[derive(cynic::QueryFragment, Clone, Debug)]
