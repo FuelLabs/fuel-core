@@ -2,6 +2,7 @@ use fuel_core_storage::{
     blueprint::plain::Plain,
     codec::{
         postcard::Postcard,
+        primitive::Primitive,
         raw::Raw,
     },
     structured_storage::TableWithBlueprint,
@@ -56,7 +57,7 @@ impl Mappable for OldFuelBlockConsensus {
 }
 
 impl TableWithBlueprint for OldFuelBlockConsensus {
-    type Blueprint = Plain<Postcard, Postcard>;
+    type Blueprint = Plain<Primitive<4>, Postcard>;
     type Column = super::Column;
 
     fn column() -> Self::Column {

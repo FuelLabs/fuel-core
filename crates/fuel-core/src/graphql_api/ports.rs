@@ -136,7 +136,7 @@ pub trait DatabaseBlocks:
     fn latest_height(&self) -> StorageResult<BlockHeight>;
 
     /// First (i.e. lowest) height stored in this db.
-    fn first_height(&self) -> StorageResult<BlockHeight>;
+    fn latest_genesis_height(&self) -> StorageResult<BlockHeight>;
 }
 
 /// Trait that specifies all the getters required for messages.

@@ -123,7 +123,7 @@ impl DatabaseBlocks for ReadView {
         // The blocks in off-chain db, if any, are from time before regenesis
 
         if let Some(height) = height {
-            match self.on_chain.first_height() {
+            match self.on_chain.latest_genesis_height() {
                 Ok(onchain_start_height) => {
                     match (height >= onchain_start_height, direction) {
                         (true, IterDirection::Forward) => {
@@ -150,13 +150,13 @@ impl DatabaseBlocks for ReadView {
             match direction {
                 IterDirection::Forward => self
                     .off_chain
-                    .old_blocks(height, direction)
-                    .chain(self.on_chain.blocks(height, direction))
+                    .old_blocks(None, direction)
+                    .chain(self.on_chain.blocks(None, direction))
                     .into_boxed(),
                 IterDirection::Reverse => self
                     .on_chain
-                    .blocks(height, direction)
-                    .chain(self.off_chain.old_blocks(height, direction))
+                    .blocks(None, direction)
+                    .chain(self.off_chain.old_blocks(None, direction))
                     .into_boxed(),
             }
         }
@@ -166,8 +166,8 @@ impl DatabaseBlocks for ReadView {
         self.on_chain.latest_height()
     }
 
-    fn first_height(&self) -> StorageResult<BlockHeight> {
-        self.on_chain.first_height()
+    fn latest_genesis_height(&self) -> StorageResult<BlockHeight> {
+        self.on_chain.latest_genesis_height()
     }
 }
 
