@@ -53,6 +53,8 @@ query($after: String, $before: String, $first: Int, $last: Int) {
               contractId
               subId
             }
+            totalGas
+            totalFee
           }
           ... on SqueezedOutStatus {
             reason
@@ -98,6 +100,8 @@ query($after: String, $before: String, $first: Int, $last: Int) {
               contractId
               subId
             }
+            totalGas
+            totalFee
           }
         }
       }
@@ -110,5 +114,3 @@ query($after: String, $before: String, $first: Int, $last: Int) {
     }
   }
 }
-
-
