@@ -386,7 +386,11 @@ where
             .add_relayer(relayer)?
             .add_input_data(block, options)?;
 
-        instance.run(module)
+        let output = instance.run(module)?;
+
+        match output {
+            fuel_core_wasm_executor::utils::ReturnType::V1(result) => result,
+        }
     }
 
     fn native_execute_inner<TxSource>(

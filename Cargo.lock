@@ -3420,6 +3420,7 @@ dependencies = [
  "fuel-core-types",
  "postcard",
  "proptest",
+ "serde",
 ]
 
 [[package]]
