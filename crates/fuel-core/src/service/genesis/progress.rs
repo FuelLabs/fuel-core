@@ -60,14 +60,6 @@ impl ProgressReporter {
         ProgressStyle::with_template(template).expect("hard coded templates to be valid")
     }
 
-    pub fn set_max(&self, max: usize) {
-        self.bar.set_style(Self::style(true));
-
-        let max = u64::try_from(max).unwrap_or(u64::MAX);
-
-        self.bar.set_length(max);
-    }
-
     pub fn set_progress(&self, group_index: usize) {
         let group_num = u64::try_from(group_index)
             .unwrap_or(u64::MAX)

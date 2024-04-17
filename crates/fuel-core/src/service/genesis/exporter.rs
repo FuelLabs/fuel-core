@@ -167,14 +167,9 @@ where
         let progress_tracker = self.multi_progress.table_reporter::<T>(None);
         self.task_manager.spawn(move |cancel| {
             tokio_rayon::spawn(move || {
-                let chunks = db
-                    .entries::<T>(prefix, IterDirection::Forward)
-                    .chunks(group_size);
-                let iterator = chunks.into_iter();
-                if let Some(max) = iterator.size_hint().1 {
-                    progress_tracker.set_max(max);
-                }
-                iterator
+                db.entries::<T>(prefix, IterDirection::Forward)
+                    .chunks(group_size)
+                    .into_iter()
                     .take_while(|_| !cancel.is_cancelled())
                     .enumerate()
                     .try_for_each(|(index, chunk)| {
