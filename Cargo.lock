@@ -3332,7 +3332,6 @@ dependencies = [
  "hyper",
  "insta",
  "itertools 0.12.1",
- "portpicker",
  "pretty_assertions",
  "primitive-types",
  "rand",
@@ -6330,15 +6329,6 @@ name = "portable-atomic"
 version = "1.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7170ef9988bc169ba16dd36a7fa041e5c4cbeb6a35b76d4c03daded371eae7c0"
-
-[[package]]
-name = "portpicker"
-version = "0.1.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "be97d76faf1bfab666e1375477b23fde79eccf0276e9b63b92a39d676a889ba9"
-dependencies = [
- "rand",
-]
 
 [[package]]
 name = "postcard"

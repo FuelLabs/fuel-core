@@ -49,7 +49,6 @@ futures = "0.3"
 hyper = { workspace = true, features = ["server"] }
 insta = { workspace = true }
 itertools = { workspace = true }
-portpicker = "0.1"
 primitive-types = { workspace = true, default-features = false }
 rand = { workspace = true }
 reqwest = { workspace = true }

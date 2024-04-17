@@ -1,10 +1,18 @@
-use std::net::Ipv4Addr;
+use std::path::Path;
 
 use clap::Parser;
-use fuel_core_bin::cli::{
-    run,
-    snapshot,
+use fuel_core::{
+    chain_config::{
+        SnapshotMetadata,
+        SnapshotReader,
+    },
+    service::{
+        Config,
+        FuelService,
+        ServiceTrait,
+    },
 };
+use fuel_core_bin::cli::snapshot;
 use fuel_core_client::client::{
     pagination::{
         PageDirection,
@@ -12,6 +20,7 @@ use fuel_core_client::client::{
     },
     FuelClient,
 };
+use fuel_core_poa::Trigger;
 use fuel_core_types::{
     fuel_tx::*,
     fuel_vm::{
@@ -24,41 +33,40 @@ use tempfile::{
     tempdir,
     TempDir,
 };
-use tokio::task::{
-    self,
-    JoinHandle,
-};
 
 pub struct FuelCoreDriver {
-    pub port: u16,
     /// This must be before the db_dir as the drop order matters here
-    pub process: JoinHandle<anyhow::Result<()>>,
+    pub node: FuelService,
     pub db_dir: TempDir,
     pub client: FuelClient,
 }
 impl FuelCoreDriver {
-    pub async fn spawn(extra_args: &[&str]) -> Self {
+    pub async fn spawn(from_snapshot: Option<&Path>) -> anyhow::Result<Self> {
         // Generate temp params
-        let db_dir = tempdir().expect("Failed to create temp dir");
-        let port = portpicker::pick_unused_port().expect("Failed to pick unused port");
+        let db_dir = tempdir()?;
 
-        let port_str = port.to_string();
-        let mut args = vec![
-            "_IGNORED_",
-            "--port",
-            &port_str,
-            "--db-path",
-            db_dir.path().to_str().unwrap(),
-        ];
-        args.extend(extra_args);
+        let mut config = Config::local_node();
+        config.debug = true;
+        config.block_production = Trigger::Instant;
+        config.combined_db_config.database_path = db_dir.path().to_path_buf();
 
-        let process = task::spawn(run::exec(run::Command::parse_from(args)));
+        if let Some(path) = from_snapshot {
+            let metadata = SnapshotMetadata::read(path)?;
+            config.snapshot_reader = SnapshotReader::open(metadata)?;
+        }
+
+        let node = FuelService::new_node(config)
+            .await
+            .expect("Failed to start the node");
 
         // Wait for the process to open API port
         let mut health_ok = false;
         for _ in 0..100 {
-            if let Ok(health) =
-                reqwest::get(format!("http://localhost:{port}/health")).await
+            if let Ok(health) = reqwest::get(format!(
+                "http://{}/health",
+                node.shared.graph_ql.bound_address
+            ))
+            .await
             {
                 assert_eq!(health.status(), 200);
                 health_ok = true;
@@ -71,18 +79,21 @@ impl FuelCoreDriver {
             panic!("Node failed to open http port");
         }
 
-        Self {
-            port,
-            process,
+        let client = FuelClient::from(node.shared.graph_ql.bound_address);
+        Ok(Self {
+            node,
             db_dir,
-            client: FuelClient::from((Ipv4Addr::LOCALHOST, port)),
-        }
+            client,
+        })
     }
 
     /// Stops the node, returning the db only
     /// Ignoring the return value drops the db as well.
     pub async fn kill(self) -> TempDir {
-        self.process.abort();
+        self.node
+            .stop_and_await()
+            .await
+            .expect("Failed to stop the node");
         self.db_dir
     }
 }
@@ -92,7 +103,7 @@ async fn test_regenesis_old_blocks_are_preserved() -> anyhow::Result<()> {
     let mut rng = rand::rngs::StdRng::seed_from_u64(1234);
     let snapshot_dir = tempdir().expect("Failed to create temp dir");
 
-    let core = FuelCoreDriver::spawn(&["--debug", "--poa-instant", "true"]).await;
+    let core = FuelCoreDriver::spawn(None).await?;
 
     // Add some blocks
     let secret = SecretKey::random(&mut rng);
@@ -183,14 +194,7 @@ async fn test_regenesis_old_blocks_are_preserved() -> anyhow::Result<()> {
     drop(db_dir);
 
     // Start a new node with the snapshot
-    let core = FuelCoreDriver::spawn(&[
-        "--debug",
-        "--poa-instant",
-        "true",
-        "--snapshot",
-        snapshot_dir.path().to_str().unwrap(),
-    ])
-    .await;
+    let core = FuelCoreDriver::spawn(Some(snapshot_dir.path())).await?;
 
     let regenesis_blocks = core
         .client
