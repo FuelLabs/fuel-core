@@ -144,8 +144,6 @@ impl ImportTable for Handler<Transactions> {
         for transaction in &group {
             tx.storage::<Transactions>()
                 .insert(&transaction.key, &transaction.value)?;
-            tx.storage::<ProcessedTransactions>()
-                .insert(&transaction.key, &())?;
         }
         Ok(())
     }
