@@ -36,7 +36,7 @@ pub trait ImportTable<T>
 where
     T: TableWithBlueprint,
 {
-    fn process_on_chain(
+    fn on_chain(
         &mut self,
         _group: Vec<TableEntry<T>>,
         _tx: &mut StorageTransaction<&mut Database<OnChain>>,
@@ -44,7 +44,7 @@ where
         Ok(())
     }
 
-    fn process_off_chain(
+    fn off_chain(
         &mut self,
         _group: Vec<TableEntry<T>>,
         _tx: &mut StorageTransaction<&mut Database<OffChain>>,
@@ -91,7 +91,7 @@ where
 
         if Some(index) > on_chain_last_idx {
             let mut on_chain_tx = on_chain_db.write_transaction();
-            handler.process_on_chain(group.clone(), &mut on_chain_tx)?;
+            handler.on_chain(group.clone(), &mut on_chain_tx)?;
 
             GenesisProgressMutate::<OnChain>::update_genesis_progress(
                 &mut on_chain_tx,
@@ -103,7 +103,7 @@ where
 
         if Some(index) > off_chain_last_idx {
             let mut off_chain_tx = off_chain_db.write_transaction();
-            handler.process_off_chain(group, &mut off_chain_tx)?;
+            handler.off_chain(group, &mut off_chain_tx)?;
             GenesisProgressMutate::<OffChain>::update_genesis_progress(
                 &mut off_chain_tx,
                 T::column().name(),
@@ -298,7 +298,7 @@ mod tests {
             &mut StorageTransaction<&mut Database<OffChain>>,
         ) -> anyhow::Result<()>,
     {
-        fn process_on_chain(
+        fn on_chain(
             &mut self,
             group: Vec<TableEntry<Coins>>,
             tx: &mut StorageTransaction<&mut Database<OnChain>>,
@@ -311,7 +311,7 @@ mod tests {
             (self.on_chain)(group, tx)?;
             Ok(())
         }
-        fn process_off_chain(
+        fn off_chain(
             &mut self,
             group: Vec<TableEntry<Coins>>,
             tx: &mut StorageTransaction<&mut Database<OffChain>>,

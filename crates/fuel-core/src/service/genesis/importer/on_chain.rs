@@ -52,7 +52,7 @@ use fuel_core_types::{
 };
 
 impl ImportTable<Coins> for Handler {
-    fn process_on_chain(
+    fn on_chain(
         &mut self,
         group: Vec<TableEntry<Coins>>,
         tx: &mut StorageTransaction<&mut Database<OnChain>>,
@@ -64,7 +64,7 @@ impl ImportTable<Coins> for Handler {
         Ok(())
     }
 
-    fn process_off_chain(
+    fn off_chain(
         &mut self,
         group: Vec<TableEntry<Coins>>,
         tx: &mut StorageTransaction<&mut Database<OffChain>>,
@@ -79,7 +79,7 @@ impl ImportTable<Coins> for Handler {
 }
 
 impl ImportTable<Messages> for Handler {
-    fn process_on_chain(
+    fn on_chain(
         &mut self,
         group: Vec<TableEntry<Messages>>,
         tx: &mut StorageTransaction<&mut Database<OnChain>>,
@@ -89,7 +89,7 @@ impl ImportTable<Messages> for Handler {
             .try_for_each(|message| init_da_message(tx, message, self.da_block_height))
     }
 
-    fn process_off_chain(
+    fn off_chain(
         &mut self,
         group: Vec<TableEntry<Messages>>,
         tx: &mut StorageTransaction<&mut Database<OffChain>>,
@@ -102,7 +102,7 @@ impl ImportTable<Messages> for Handler {
 }
 
 impl ImportTable<ContractsRawCode> for Handler {
-    fn process_on_chain(
+    fn on_chain(
         &mut self,
         group: Vec<TableEntry<ContractsRawCode>>,
         tx: &mut StorageTransaction<&mut Database<OnChain>>,
@@ -114,7 +114,7 @@ impl ImportTable<ContractsRawCode> for Handler {
 }
 
 impl ImportTable<ContractsLatestUtxo> for Handler {
-    fn process_on_chain(
+    fn on_chain(
         &mut self,
         group: Vec<TableEntry<ContractsLatestUtxo>>,
         tx: &mut StorageTransaction<&mut Database<OnChain>>,
@@ -126,7 +126,7 @@ impl ImportTable<ContractsLatestUtxo> for Handler {
 }
 
 impl ImportTable<ContractsState> for Handler {
-    fn process_on_chain(
+    fn on_chain(
         &mut self,
         group: Vec<TableEntry<ContractsState>>,
         tx: &mut StorageTransaction<&mut Database<OnChain>>,
@@ -137,7 +137,7 @@ impl ImportTable<ContractsState> for Handler {
 }
 
 impl ImportTable<ContractsAssets> for Handler {
-    fn process_on_chain(
+    fn on_chain(
         &mut self,
         group: Vec<TableEntry<ContractsAssets>>,
         tx: &mut StorageTransaction<&mut Database<OnChain>>,
@@ -148,7 +148,7 @@ impl ImportTable<ContractsAssets> for Handler {
 }
 
 impl ImportTable<Transactions> for Handler {
-    fn process_on_chain(
+    fn on_chain(
         &mut self,
         group: Vec<TableEntry<Transactions>>,
         tx: &mut StorageTransaction<&mut Database<OnChain>>,
@@ -161,7 +161,7 @@ impl ImportTable<Transactions> for Handler {
         Ok(())
     }
 
-    fn process_off_chain(
+    fn off_chain(
         &mut self,
         group: Vec<TableEntry<Transactions>>,
         tx: &mut StorageTransaction<&mut Database<OffChain>>,
@@ -173,7 +173,7 @@ impl ImportTable<Transactions> for Handler {
 }
 
 impl ImportTable<TransactionStatuses> for Handler {
-    fn process_off_chain(
+    fn off_chain(
         &mut self,
         group: Vec<TableEntry<TransactionStatuses>>,
         tx: &mut StorageTransaction<&mut Database<OffChain>>,
@@ -187,7 +187,7 @@ impl ImportTable<TransactionStatuses> for Handler {
 }
 
 impl ImportTable<FuelBlockIdsToHeights> for Handler {
-    fn process_off_chain(
+    fn off_chain(
         &mut self,
         group: Vec<TableEntry<FuelBlockIdsToHeights>>,
         tx: &mut StorageTransaction<&mut Database<OffChain>>,
@@ -201,7 +201,7 @@ impl ImportTable<FuelBlockIdsToHeights> for Handler {
 }
 
 impl ImportTable<OwnedTransactions> for Handler {
-    fn process_off_chain(
+    fn off_chain(
         &mut self,
         group: Vec<TableEntry<OwnedTransactions>>,
         tx: &mut StorageTransaction<&mut Database<OffChain>>,
