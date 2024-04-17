@@ -22,13 +22,14 @@ use crate::{
         },
         Database,
     },
-    service::genesis::task_manager::{
-        MultiCancellationToken,
-        NotifyCancel,
+    service::genesis::{
+        progress::ProgressReporter,
+        task_manager::{
+            MultiCancellationToken,
+            NotifyCancel,
+        },
     },
 };
-
-use super::progress::ProgressReporter;
 
 pub struct ImportTask<Handler, Groups, DbDesc>
 where
@@ -127,8 +128,7 @@ where
                     index,
                 )?;
                 tx.commit()?;
-                self.reporter
-                    .set_progress(u64::try_from(index).unwrap_or(u64::MAX));
+                self.reporter.set_progress(index);
                 anyhow::Result::<_>::Ok(())
             })?;
 
@@ -145,10 +145,8 @@ mod tests {
     use crate::{
         database::genesis_progress::GenesisProgressInspect,
         service::genesis::{
-            importer::{
-                import_task::ImportTask,
-                progress::ProgressReporter,
-            },
+            importer::import_task::ImportTask,
+            progress::ProgressReporter,
             task_manager::MultiCancellationToken,
         },
     };

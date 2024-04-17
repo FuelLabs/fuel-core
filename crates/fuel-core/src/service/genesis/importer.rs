@@ -1,20 +1,19 @@
-use self::{
-    import_task::{
-        ImportTable,
-        ImportTask,
-    },
+use self::import_task::{
+    ImportTable,
+    ImportTask,
+};
+
+use super::{
     progress::{
         MultipleProgressReporter,
         ProgressReporter,
         Target,
     },
+    task_manager::TaskManager,
 };
-
-use super::task_manager::TaskManager;
 mod import_task;
 mod off_chain;
 mod on_chain;
-mod progress;
 use std::{
     io::IsTerminal,
     marker::PhantomData,
@@ -67,7 +66,6 @@ pub struct SnapshotImporter {
     db: CombinedDatabase,
     task_manager: TaskManager<()>,
     snapshot_reader: SnapshotReader,
-    tracing_span: tracing::Span,
     multi_progress_reporter: MultipleProgressReporter,
 }
 
@@ -81,8 +79,9 @@ impl SnapshotImporter {
             db,
             task_manager: TaskManager::new(watcher),
             snapshot_reader,
-            tracing_span: tracing::info_span!("snapshot_importer"),
-            multi_progress_reporter: Self::init_multi_progress_reporter(),
+            multi_progress_reporter: MultipleProgressReporter::new(tracing::info_span!(
+                "snapshot_importer"
+            )),
         }
     }
 
@@ -130,7 +129,9 @@ impl SnapshotImporter {
         let da_block_height = self.snapshot_reader.da_block_height();
         let db = self.db.on_chain().clone();
 
-        let progress_reporter = self.progress_reporter::<TableBeingWritten>(num_groups);
+        let progress_reporter = self
+            .multi_progress_reporter
+            .table_reporter::<TableBeingWritten>(Some(num_groups));
 
         self.task_manager.spawn(move |token| {
             let task = ImportTask::new(
@@ -164,7 +165,9 @@ impl SnapshotImporter {
 
         let db = self.db.off_chain().clone();
 
-        let progress_reporter = self.progress_reporter::<TableBeingWritten>(num_groups);
+        let progress_reporter = self
+            .multi_progress_reporter
+            .table_reporter::<TableBeingWritten>(Some(num_groups));
 
         self.task_manager.spawn(move |token| {
             let task = ImportTask::new(
@@ -178,38 +181,6 @@ impl SnapshotImporter {
         });
 
         Ok(())
-    }
-
-    fn init_multi_progress_reporter() -> MultipleProgressReporter {
-        if Self::should_display_bars() {
-            MultipleProgressReporter::new_sterr()
-        } else {
-            MultipleProgressReporter::new_hidden()
-        }
-    }
-
-    fn should_display_bars() -> bool {
-        std::io::stderr().is_terminal() && !cfg!(test)
-    }
-
-    fn progress_reporter<T>(&self, num_groups: usize) -> ProgressReporter
-    where
-        T: TableWithBlueprint,
-    {
-        let target = if Self::should_display_bars() {
-            Target::Cli(T::column().name())
-        } else {
-            let span = tracing::span!(
-                parent: &self.tracing_span,
-                Level::INFO,
-                "task",
-                table = T::column().name()
-            );
-            Target::Logs(span)
-        };
-
-        let reporter = ProgressReporter::new(target, num_groups);
-        self.multi_progress_reporter.register(reporter)
     }
 }
 

@@ -52,6 +52,7 @@ use itertools::Itertools;
 
 mod exporter;
 mod importer;
+mod progress;
 mod task_manager;
 
 pub use exporter::Exporter;
