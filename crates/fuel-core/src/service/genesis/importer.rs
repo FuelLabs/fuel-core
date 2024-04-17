@@ -9,23 +9,14 @@ use self::{
         Target,
     },
 };
-
 use super::task_manager::TaskManager;
-mod import_task;
-mod off_chain;
-mod on_chain;
-mod progress;
-use std::{
-    io::IsTerminal,
-    marker::PhantomData,
-};
-
 use crate::{
     combined_database::CombinedDatabase,
     database::database_description::{
         off_chain::OffChain,
         on_chain::OnChain,
     },
+    fuel_core_graphql_api::storage::messages::SpentMessages,
     graphql_api::storage::{
         coins::OwnedCoins,
         contracts::ContractsInfo,
@@ -67,8 +58,18 @@ use fuel_core_types::{
     blockchain::primitives::DaBlockHeight,
     fuel_types::BlockHeight,
 };
+use std::{
+    io::IsTerminal,
+    marker::PhantomData,
+};
 
+use fuel_core_storage::tables::ProcessedTransactions;
 use tracing::Level;
+
+mod import_task;
+mod off_chain;
+mod on_chain;
+mod progress;
 
 pub struct SnapshotImporter {
     db: CombinedDatabase,
@@ -109,7 +110,7 @@ impl SnapshotImporter {
         self.spawn_worker_on_chain::<ContractsLatestUtxo>()?;
         self.spawn_worker_on_chain::<ContractsState>()?;
         self.spawn_worker_on_chain::<ContractsAssets>()?;
-        self.spawn_worker_on_chain::<Transactions>()?;
+        self.spawn_worker_on_chain::<ProcessedTransactions>()?;
 
         self.spawn_worker_off_chain::<TransactionStatuses, TransactionStatuses>()?;
         self.spawn_worker_off_chain::<OwnedTransactions, OwnedTransactions>()?;
@@ -119,6 +120,7 @@ impl SnapshotImporter {
         self.spawn_worker_off_chain::<FuelBlocks, OldFuelBlocks>()?;
         self.spawn_worker_off_chain::<SealedBlockConsensus, OldFuelBlockConsensus>()?;
         self.spawn_worker_off_chain::<Transactions, OldTransactions>()?;
+        self.spawn_worker_off_chain::<SpentMessages, SpentMessages>()?;
 
         self.task_manager.wait().await?;
 

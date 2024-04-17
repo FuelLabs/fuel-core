@@ -89,6 +89,10 @@ pub enum Column {
     OldTransactions = 11,
     /// Relayed Tx ID to Layer 1 Relayed Transaction status
     RelayedTransactionStatus = 12,
+    /// Messages that have been spent.
+    /// Existence of a key in this column means that the message has been spent.
+    /// See [`SpentMessages`](messages::SpentMessages)
+    SpentMessages = 13,
 }
 
 impl Column {

@@ -2372,8 +2372,8 @@ mod tests {
 
         let mut exec = make_executor(&messages);
         let view = exec.storage_view_provider.latest_view();
-        assert!(!view.message_is_spent(message_coin.nonce()).unwrap());
-        assert!(!view.message_is_spent(message_data.nonce()).unwrap());
+        assert!(view.message_exists(message_coin.nonce()).unwrap());
+        assert!(view.message_exists(message_data.nonce()).unwrap());
 
         let ExecutionResult {
             skipped_transactions,
@@ -2385,8 +2385,8 @@ mod tests {
 
         // Successful execution consumes `message_coin` and `message_data`.
         let view = exec.storage_view_provider.latest_view();
-        assert!(view.message_is_spent(message_coin.nonce()).unwrap());
-        assert!(view.message_is_spent(message_data.nonce()).unwrap());
+        assert!(!view.message_exists(message_coin.nonce()).unwrap());
+        assert!(!view.message_exists(message_data.nonce()).unwrap());
         assert_eq!(
             *view.coin(&UtxoId::new(tx_id, 0)).unwrap().amount(),
             amount + amount
@@ -2421,8 +2421,8 @@ mod tests {
 
         let mut exec = make_executor(&messages);
         let view = exec.storage_view_provider.latest_view();
-        assert!(!view.message_is_spent(message_coin.nonce()).unwrap());
-        assert!(!view.message_is_spent(message_data.nonce()).unwrap());
+        assert!(view.message_exists(message_coin.nonce()).unwrap());
+        assert!(view.message_exists(message_data.nonce()).unwrap());
 
         let ExecutionResult {
             skipped_transactions,
@@ -2434,8 +2434,8 @@ mod tests {
 
         // We should spend only `message_coin`. The `message_data` should be unspent.
         let view = exec.storage_view_provider.latest_view();
-        assert!(view.message_is_spent(message_coin.nonce()).unwrap());
-        assert!(!view.message_is_spent(message_data.nonce()).unwrap());
+        assert!(!view.message_exists(message_coin.nonce()).unwrap());
+        assert!(view.message_exists(message_data.nonce()).unwrap());
         assert_eq!(*view.coin(&UtxoId::new(tx_id, 0)).unwrap().amount(), amount);
     }
 
@@ -2579,10 +2579,11 @@ mod tests {
         // One of two transactions is skipped.
         assert_eq!(skipped_transactions.len(), 1);
         let err = &skipped_transactions[0].1;
+        dbg!(err);
         assert!(matches!(
             err,
             &ExecutorError::TransactionValidity(
-                TransactionValidityError::MessageAlreadySpent(_)
+                TransactionValidityError::MessageDoesNotExist(_)
             )
         ));
 
@@ -2601,7 +2602,7 @@ mod tests {
         assert!(matches!(
             res,
             Err(ExecutorError::TransactionValidity(
-                TransactionValidityError::MessageAlreadySpent(_)
+                TransactionValidityError::MessageDoesNotExist(_)
             ))
         ));
     }
@@ -2829,10 +2830,7 @@ mod tests {
         use fuel_core_relayer::storage::EventsHistory;
         use fuel_core_storage::{
             iter::IteratorOverTable,
-            tables::{
-                FuelBlocks,
-                SpentMessages,
-            },
+            tables::FuelBlocks,
             StorageAsMut,
         };
         use fuel_core_types::{
@@ -3603,7 +3601,6 @@ mod tests {
 
             // Given
             assert_eq!(on_chain_db.iter_all::<Messages>(None).count(), 0);
-            assert_eq!(on_chain_db.iter_all::<SpentMessages>(None).count(), 0);
             let tx = TransactionBuilder::script(vec![], vec![])
                 .script_gas_limit(10)
                 .add_unsigned_message_input(
@@ -3628,8 +3625,6 @@ mod tests {
             let view = ChangesIterator::<OnChain>::new(&changes);
             assert!(result.skipped_transactions.is_empty());
             assert_eq!(view.iter_all::<Messages>(None).count() as u64, 0);
-            // Message added during this block immediately became spent.
-            assert_eq!(view.iter_all::<SpentMessages>(None).count(), 1);
             assert_eq!(result.events.len(), 2);
             assert!(matches!(
                 result.events[0],

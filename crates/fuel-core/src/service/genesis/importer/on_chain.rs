@@ -18,7 +18,7 @@ use fuel_core_storage::{
         ContractsRawCode,
         ContractsState,
         Messages,
-        Transactions,
+        ProcessedTransactions,
     },
     transactional::StorageTransaction,
     StorageAsMut,
@@ -63,6 +63,25 @@ impl ImportTable for Handler<Messages> {
         group
             .into_iter()
             .try_for_each(|message| init_da_message(tx, message, self.da_block_height))
+    }
+}
+
+impl ImportTable for Handler<ProcessedTransactions> {
+    type TableInSnapshot = ProcessedTransactions;
+    type TableBeingWritten = ProcessedTransactions;
+    type DbDesc = OnChain;
+
+    fn process(
+        &mut self,
+        group: Vec<TableEntry<Self::TableInSnapshot>>,
+        tx: &mut StorageTransaction<&mut Database>,
+    ) -> anyhow::Result<()> {
+        group.into_iter().try_for_each(|transaction| {
+            tx.storage_as_mut::<ProcessedTransactions>()
+                .insert(&transaction.key, &transaction.value)
+                .map(|_| ())
+        })?;
+        Ok(())
     }
 }
 
@@ -126,24 +145,6 @@ impl ImportTable for Handler<ContractsAssets> {
         tx: &mut StorageTransaction<&mut Database>,
     ) -> anyhow::Result<()> {
         tx.update_contract_balances(group)?;
-        Ok(())
-    }
-}
-
-impl ImportTable for Handler<Transactions> {
-    type TableInSnapshot = Transactions;
-    type TableBeingWritten = Transactions;
-    type DbDesc = OnChain;
-
-    fn process(
-        &mut self,
-        group: Vec<TableEntry<Self::TableInSnapshot>>,
-        tx: &mut StorageTransaction<&mut Database<Self::DbDesc>>,
-    ) -> anyhow::Result<()> {
-        for transaction in &group {
-            tx.storage::<Transactions>()
-                .insert(&transaction.key, &transaction.value)?;
-        }
         Ok(())
     }
 }
