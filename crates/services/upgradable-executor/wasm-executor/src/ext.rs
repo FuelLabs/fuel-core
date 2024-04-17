@@ -3,10 +3,7 @@ use crate::utils::{
     InputType,
 };
 use core::marker::PhantomData;
-use fuel_core_executor::{
-    executor::ExecutionOptions,
-    ports::MaybeCheckedTransaction,
-};
+use fuel_core_executor::ports::MaybeCheckedTransaction;
 use fuel_core_types::{
     blockchain::primitives::DaBlockHeight,
     fuel_tx::Transaction,
@@ -82,11 +79,8 @@ mod host {
     extern "C" {
         // Initialization API
 
-        /// Returns the encoded component as an input to the executor.
-        pub(crate) fn input_component(output_ptr: Ptr32Mut<[u8]>, output_size: u32);
-
-        /// Returns the encoded execution options as an input to the executor.
-        pub(crate) fn input_options(output_ptr: Ptr32Mut<[u8]>, output_size: u32);
+        /// Returns the encoded input for the executor.
+        pub(crate) fn input(output_ptr: Ptr32Mut<[u8]>, output_size: u32);
 
         // TxSource API
 
@@ -137,11 +131,11 @@ mod host {
 pub struct ReturnResult(u16);
 
 /// Gets the `InputType` by using the host function. The `size` is the size of the encoded input.
-pub fn input_component(size: usize) -> anyhow::Result<InputType> {
+pub fn input(size: usize) -> anyhow::Result<InputType> {
     let mut encoded_block = vec![0u8; size];
     let size = encoded_block.len();
     unsafe {
-        host::input_component(
+        host::input(
             Ptr32Mut::from_slice(encoded_block.as_mut_slice()),
             u32::try_from(size).expect("We only support wasm32 target; qed"),
         )
@@ -149,24 +143,6 @@ pub fn input_component(size: usize) -> anyhow::Result<InputType> {
 
     let input: InputType = postcard::from_bytes(&encoded_block)
         .map_err(|e| anyhow::anyhow!("Failed to decode the block: {:?}", e))?;
-
-    Ok(input)
-}
-
-/// Gets the `ExecutionOptions` by using the host function. The `size` is the size of the encoded input.
-pub fn input_options(size: usize) -> anyhow::Result<ExecutionOptions> {
-    let mut encoded_block = vec![0u8; size];
-    let size = encoded_block.len();
-    unsafe {
-        host::input_options(
-            Ptr32Mut::from_slice(encoded_block.as_mut_slice()),
-            u32::try_from(size).expect("We only support wasm32 target; qed"),
-        )
-    };
-
-    let input: ExecutionOptions = postcard::from_bytes(&encoded_block).map_err(|e| {
-        anyhow::anyhow!("Failed to decode the execution options: {:?}", e)
-    })?;
 
     Ok(input)
 }
