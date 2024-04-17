@@ -30,7 +30,7 @@ impl Mappable for OldFuelBlocks {
 }
 
 impl TableWithBlueprint for OldFuelBlocks {
-    type Blueprint = Plain<Postcard, Postcard>;
+    type Blueprint = Plain<Primitive<4>, Postcard>;
     type Column = super::Column;
 
     fn column() -> Self::Column {

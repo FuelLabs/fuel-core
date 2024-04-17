@@ -164,6 +164,7 @@ async fn test_regenesis_old_blocks_are_preserved() -> anyhow::Result<()> {
     // Stop the node, keep the db
     tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
     let db_dir = core.kill().await;
+    tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
 
     // Take snapshot
     snapshot::exec(snapshot::Command::parse_from([
