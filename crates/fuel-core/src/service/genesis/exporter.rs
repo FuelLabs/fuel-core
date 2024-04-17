@@ -34,7 +34,6 @@ use fuel_core_storage::{
 };
 use fuel_core_types::fuel_types::ContractId;
 use itertools::Itertools;
-use tracing::Span;
 
 use super::{
     progress::MultipleProgressReporter,

@@ -4,20 +4,13 @@ use self::import_task::{
 };
 
 use super::{
-    progress::{
-        MultipleProgressReporter,
-        ProgressReporter,
-        Target,
-    },
+    progress::MultipleProgressReporter,
     task_manager::TaskManager,
 };
 mod import_task;
 mod off_chain;
 mod on_chain;
-use std::{
-    io::IsTerminal,
-    marker::PhantomData,
-};
+use std::marker::PhantomData;
 
 use crate::{
     combined_database::CombinedDatabase,
@@ -43,7 +36,6 @@ use fuel_core_chain_config::{
 };
 use fuel_core_services::StateWatcher;
 use fuel_core_storage::{
-    kv_store::StorageColumn,
     structured_storage::TableWithBlueprint,
     tables::{
         Coins,
@@ -59,8 +51,6 @@ use fuel_core_types::{
     blockchain::primitives::DaBlockHeight,
     fuel_types::BlockHeight,
 };
-
-use tracing::Level;
 
 pub struct SnapshotImporter {
     db: CombinedDatabase,
