@@ -134,6 +134,8 @@ query($id: TransactionId!) {
           contractId
           subId
         }
+        totalGas
+        totalFee
       }
       ... on SqueezedOutStatus {
         reason
@@ -179,6 +181,8 @@ query($id: TransactionId!) {
           contractId
           subId
         }
+        totalGas
+        totalFee
       }
     }
     witnesses

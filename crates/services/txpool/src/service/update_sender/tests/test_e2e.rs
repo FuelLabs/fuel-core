@@ -47,6 +47,8 @@ fn test_update_sender_reg() {
                 time: Tai64(0),
                 result: None,
                 receipts: vec![],
+                total_gas: 0,
+                total_fee: 0,
             }),
         ),
         Recv(0),
