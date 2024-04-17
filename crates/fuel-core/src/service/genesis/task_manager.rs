@@ -1,10 +1,9 @@
 use std::future::Future;
 
 use fuel_core_services::StateWatcher;
-use tokio::task::JoinHandle;
 
 pub struct TaskManager<T> {
-    set: Vec<JoinHandle<anyhow::Result<T>>>,
+    set: Vec<Box<dyn Future<Output = anyhow::Result<T>>>>,
     cancel: CancellationToken,
 }
 
@@ -59,13 +58,13 @@ where
         F: FnOnce(CancellationToken) -> Fut,
         Fut: Future<Output = anyhow::Result<T>> + Send + 'static,
     {
-        self.set.push(tokio::spawn(arg(self.cancel.clone())));
+        self.set.push(Box::new(arg(self.cancel.clone())));
     }
 
     pub async fn wait(self) -> anyhow::Result<Vec<T>> {
         let mut result = vec![];
         for task in self.set {
-            let res = task.await??;
+            let res = task.await?;
             result.push(res);
         }
         Ok(result)

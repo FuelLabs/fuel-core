@@ -174,7 +174,24 @@ async fn test_regenesis_old_blocks_are_preserved() -> anyhow::Result<()> {
     // Start a new node with the snapshot
     let core = FuelCoreDriver::spawn(Some(snapshot_dir.path())).await?;
 
-    core.client.produce_blocks(1, None).await.unwrap();
+    let contract_tx = TransactionBuilder::script(vec![], vec![])
+        .add_unsigned_coin_input(
+            secret,
+            UtxoId::new([1; 32].into(), 1),
+            1111,
+            Default::default(),
+            Default::default(),
+        )
+        .add_output(Output::change(
+            Default::default(),
+            Default::default(),
+            Default::default(),
+        ))
+        .finalize_as_transaction();
+    core.client
+        .submit_and_await_commit(&contract_tx)
+        .await
+        .unwrap();
     let regenesis_blocks = core
         .client
         .blocks(PaginationRequest {
@@ -215,7 +232,24 @@ async fn test_regenesis_old_blocks_are_preserved() -> anyhow::Result<()> {
 
     println!("Getting blocks");
 
-    core.client.produce_blocks(1, None).await.unwrap();
+    let contract_tx = TransactionBuilder::script(vec![], vec![])
+        .add_unsigned_coin_input(
+            secret,
+            UtxoId::new([1; 32].into(), 1),
+            4321,
+            Default::default(),
+            Default::default(),
+        )
+        .add_output(Output::change(
+            Default::default(),
+            Default::default(),
+            Default::default(),
+        ))
+        .finalize_as_transaction();
+    core.client
+        .submit_and_await_commit(&contract_tx)
+        .await
+        .unwrap();
     let regenesis_blocks = core
         .client
         .blocks(PaginationRequest {
