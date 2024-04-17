@@ -13,25 +13,28 @@
 #![deny(unused_crate_dependencies)]
 #![deny(warnings)]
 
-use crate::{
-    relayer::WasmRelayer,
-    storage::WasmStorage,
-    tx_source::WasmTxSource,
-    utils::{
-        pack_ptr_and_len,
-        ReturnType,
-    },
-};
+use crate as fuel_core_wasm_executor;
 use fuel_core_executor::executor::ExecutionInstance;
+use fuel_core_storage::transactional::Changes;
 use fuel_core_types::services::{
     block_producer::Components,
     executor::{
         Error as ExecutorError,
         ExecutionResult,
+        Result as ExecutorResult,
     },
     Uncommitted,
 };
-use fuel_core_wasm_executor as _;
+use fuel_core_wasm_executor::{
+    relayer::WasmRelayer,
+    storage::WasmStorage,
+    tx_source::WasmTxSource,
+    utils::{
+        pack_ptr_and_len,
+        InputType,
+        ReturnType,
+    },
+};
 
 mod ext;
 mod relayer;
@@ -40,9 +43,10 @@ mod tx_source;
 pub mod utils;
 
 #[no_mangle]
-pub extern "C" fn execute(component_len: u32, options_len: u32) -> u64 {
-    let result = execute_without_commit(component_len, options_len);
-    let encoded = postcard::to_allocvec(&result).expect("Failed to encode the result");
+pub extern "C" fn execute(input_len: u32) -> u64 {
+    let result = execute_without_commit(input_len);
+    let output = ReturnType::V1(result);
+    let encoded = postcard::to_allocvec(&output).expect("Failed to encode the output");
     let static_slice = encoded.leak();
     pack_ptr_and_len(
         static_slice.as_ptr() as u32,
@@ -50,33 +54,39 @@ pub extern "C" fn execute(component_len: u32, options_len: u32) -> u64 {
     )
 }
 
-pub fn execute_without_commit(component_len: u32, options_len: u32) -> ReturnType {
-    let block = ext::input_component(component_len as usize)
+pub fn execute_without_commit(
+    input_len: u32,
+) -> ExecutorResult<Uncommitted<ExecutionResult, Changes>> {
+    let input = ext::input(input_len as usize)
         .map_err(|e| ExecutorError::Other(e.to_string()))?;
-    let options = ext::input_options(options_len as usize)
-        .map_err(|e| ExecutorError::Other(e.to_string()))?;
+
+    let (block, options) = match input {
+        InputType::V1 { block, options } => {
+            let block = block.map_p(|component| {
+                let Components {
+                    header_to_produce,
+                    gas_price,
+                    coinbase_recipient,
+                    ..
+                } = component;
+
+                Components {
+                    header_to_produce,
+                    gas_price,
+                    transactions_source: WasmTxSource::new(),
+                    coinbase_recipient,
+                }
+            });
+
+            (block, options)
+        }
+    };
 
     let instance = ExecutionInstance {
         relayer: WasmRelayer {},
         database: WasmStorage {},
         options,
     };
-
-    let block = block.map_p(|component| {
-        let Components {
-            header_to_produce,
-            gas_price,
-            coinbase_recipient,
-            ..
-        } = component;
-
-        Components {
-            header_to_produce,
-            gas_price,
-            transactions_source: WasmTxSource::new(),
-            coinbase_recipient,
-        }
-    });
 
     let (
         ExecutionResult {

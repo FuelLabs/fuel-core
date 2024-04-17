@@ -100,6 +100,8 @@ pub enum TransactionStatus {
         time: Tai64,
         program_state: Option<ProgramState>,
         receipts: Vec<Receipt>,
+        total_gas: u64,
+        total_fee: u64,
     },
     SqueezedOut {
         reason: String,
@@ -110,6 +112,8 @@ pub enum TransactionStatus {
         reason: String,
         program_state: Option<ProgramState>,
         receipts: Vec<Receipt>,
+        total_gas: u64,
+        total_fee: u64,
     },
 }
 
@@ -130,6 +134,8 @@ impl TryFrom<SchemaTxStatus> for TransactionStatus {
                     .into_iter()
                     .map(TryInto::try_into)
                     .collect::<Result<Vec<_>, _>>()?,
+                total_gas: s.total_gas.0,
+                total_fee: s.total_fee.0,
             },
             SchemaTxStatus::FailureStatus(s) => TransactionStatus::Failure {
                 block_height: s.block.height.into(),
@@ -141,6 +147,8 @@ impl TryFrom<SchemaTxStatus> for TransactionStatus {
                     .into_iter()
                     .map(TryInto::try_into)
                     .collect::<Result<Vec<_>, _>>()?,
+                total_gas: s.total_gas.0,
+                total_fee: s.total_fee.0,
             },
             SchemaTxStatus::SqueezedOutStatus(s) => {
                 TransactionStatus::SqueezedOut { reason: s.reason }

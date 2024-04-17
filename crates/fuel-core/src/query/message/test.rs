@@ -184,6 +184,8 @@ async fn can_build_message_proof() {
                 time: Tai64::UNIX_EPOCH,
                 result: None,
                 receipts: vec![],
+                total_gas: 0,
+                total_fee: 0,
             })
         });
 

@@ -56,6 +56,8 @@ fn success() -> TransactionStatus {
         time: Tai64(0),
         result: None,
         receipts: vec![],
+        total_gas: 0,
+        total_fee: 0,
     }
 }
 
@@ -66,6 +68,8 @@ fn failed() -> TransactionStatus {
         time: Tai64(0),
         result: None,
         receipts: vec![],
+        total_gas: 0,
+        total_fee: 0,
     }
 }
 

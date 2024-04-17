@@ -8,12 +8,16 @@ pub fn transaction_status_strategy() -> impl Strategy<Value = TransactionStatus>
             time: Tai64(0),
             result: None,
             receipts: vec![],
+            total_gas: 0,
+            total_fee: 0,
         }),
         Just(TransactionStatus::Failed {
             block_height: Default::default(),
             time: Tai64(0),
             result: None,
             receipts: vec![],
+            total_gas: 0,
+            total_fee: 0,
         }),
         Just(TransactionStatus::SqueezedOut {
             reason: Default::default(),
