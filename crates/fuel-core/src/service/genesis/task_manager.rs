@@ -1,9 +1,12 @@
-use std::future::Future;
+use std::{
+    future::Future,
+    pin::Pin,
+};
 
 use fuel_core_services::StateWatcher;
 
 pub struct TaskManager<T> {
-    set: Vec<Box<dyn Future<Output = anyhow::Result<T>>>>,
+    set: Vec<Pin<Box<dyn Future<Output = anyhow::Result<T>> + Send>>>,
     cancel: CancellationToken,
 }
 
@@ -58,7 +61,7 @@ where
         F: FnOnce(CancellationToken) -> Fut,
         Fut: Future<Output = anyhow::Result<T>> + Send + 'static,
     {
-        self.set.push(Box::new(arg(self.cancel.clone())));
+        self.set.push(Box::pin(arg(self.cancel.clone())));
     }
 
     pub async fn wait(self) -> anyhow::Result<Vec<T>> {
