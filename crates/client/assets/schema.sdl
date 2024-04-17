@@ -460,6 +460,10 @@ type Genesis {
 	The Binary Merkle Tree root of all genesis messages.
 	"""
 	messagesRoot: Bytes32!
+	"""
+	The Binary Merkle Tree root of all processed transaction ids.
+	"""
+	transactionsRoot: Bytes32!
 }
 
 type Header {
