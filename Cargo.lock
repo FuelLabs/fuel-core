@@ -3312,10 +3312,12 @@ version = "0.0.0"
 dependencies = [
  "anyhow",
  "async-trait",
+ "clap 4.5.4",
  "cynic",
  "ethers",
  "fuel-core",
  "fuel-core-benches",
+ "fuel-core-bin",
  "fuel-core-client",
  "fuel-core-executor",
  "fuel-core-p2p",

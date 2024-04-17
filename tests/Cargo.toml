@@ -19,12 +19,14 @@ path = "tests/lib.rs"
 [dependencies]
 anyhow = { workspace = true }
 async-trait = { workspace = true }
+clap = { workspace = true }
 cynic = { workspace = true }
 ethers = "2"
 fuel-core = { path = "../crates/fuel-core", default-features = false, features = [
   "test-helpers",
 ] }
 fuel-core-benches = { path = "../benches" }
+fuel-core-bin = { path = "../bin/fuel-core", features = ["parquet"]}
 fuel-core-client = { path = "../crates/client", features = ["test-helpers"] }
 fuel-core-executor = { workspace = true }
 fuel-core-p2p = { path = "../crates/services/p2p", features = [
