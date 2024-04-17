@@ -59,26 +59,6 @@ impl FuelCoreDriver {
             .await
             .expect("Failed to start the node");
 
-        // Wait for the process to open API port
-        let mut health_ok = false;
-        for _ in 0..100 {
-            if let Ok(health) = reqwest::get(format!(
-                "http://{}/health",
-                node.shared.graph_ql.bound_address
-            ))
-            .await
-            {
-                assert_eq!(health.status(), 200);
-                health_ok = true;
-                break;
-            } else {
-                tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
-            }
-        }
-        if !health_ok {
-            panic!("Node failed to open http port");
-        }
-
         let client = FuelClient::from(node.shared.graph_ql.bound_address);
         Ok(Self {
             node,
@@ -173,73 +153,28 @@ async fn test_regenesis_old_blocks_are_preserved() -> anyhow::Result<()> {
         .expect("Failed to get blocks")
         .results;
 
-    // Stop the node, keep the db
-    tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
-    let db_dir = core.kill().await;
-    tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
+    {
+        // Stop the node, keep the db
+        let db_dir = core.kill().await;
 
-    // Take a snapshot
-    snapshot::exec(snapshot::Command::parse_from([
-        "_IGNORED_",
-        "--db-path",
-        db_dir.path().to_str().unwrap(),
-        "--output-directory",
-        snapshot_dir.path().to_str().unwrap(),
-        "everything",
-        "encoding",
-        "parquet",
-    ]))
-    .await?;
-
-    // Drop the old db, and create an empty to restore into
-    drop(db_dir);
+        // Take a snapshot
+        snapshot::exec(snapshot::Command::parse_from([
+            "_IGNORED_",
+            "--db-path",
+            db_dir.path().to_str().unwrap(),
+            "--output-directory",
+            snapshot_dir.path().to_str().unwrap(),
+            "everything",
+            "encoding",
+            "parquet",
+        ]))
+        .await?;
+    }
 
     // Start a new node with the snapshot
     let core = FuelCoreDriver::spawn(Some(snapshot_dir.path())).await?;
 
-    let regenesis_blocks = core
-        .client
-        .blocks(PaginationRequest {
-            cursor: None,
-            results: 100,
-            direction: PageDirection::Forward,
-        })
-        .await
-        .expect("Failed to get blocks")
-        .results;
-
-    // We should have generated one new block, but the old ones should be the same
-    assert_eq!(original_blocks.len() + 1, regenesis_blocks.len());
-    assert_eq!(original_blocks[0], regenesis_blocks[0]);
-    assert_eq!(original_blocks[1], regenesis_blocks[1]);
-
-    // Stop the node, keep the db
-    tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
-    let db_dir = core.kill().await;
-    tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
-
-    // Take a snapshot again
-    snapshot::exec(snapshot::Command::parse_from([
-        "_IGNORED_",
-        "--db-path",
-        db_dir.path().to_str().unwrap(),
-        "--output-directory",
-        snapshot_dir.path().to_str().unwrap(),
-        "everything",
-        "encoding",
-        "parquet",
-    ]))
-    .await?;
-
-    // Drop the old db, and create an empty to restore into
-    drop(db_dir);
-
-    // Make sure the old blocks persited through the second regenesis
-    let core = FuelCoreDriver::spawn(Some(snapshot_dir.path())).await?;
-
-    tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
-    println!("Getting blocks");
-
+    core.client.produce_blocks(1, None).await.unwrap();
     let regenesis_blocks = core
         .client
         .blocks(PaginationRequest {
@@ -253,6 +188,47 @@ async fn test_regenesis_old_blocks_are_preserved() -> anyhow::Result<()> {
 
     // We should have generated one new block, but the old ones should be the same
     assert_eq!(original_blocks.len() + 2, regenesis_blocks.len());
+    assert_eq!(original_blocks[0], regenesis_blocks[0]);
+    assert_eq!(original_blocks[1], regenesis_blocks[1]);
+
+    let snapshot_dir = tempdir().unwrap();
+    // Stop the node, keep the db
+    {
+        let db_dir = core.kill().await;
+
+        // Take a snapshot again
+        snapshot::exec(snapshot::Command::parse_from([
+            "_IGNORED_",
+            "--db-path",
+            db_dir.path().to_str().unwrap(),
+            "--output-directory",
+            snapshot_dir.path().to_str().unwrap(),
+            "everything",
+            "encoding",
+            "parquet",
+        ]))
+        .await?;
+    }
+
+    // Make sure the old blocks persited through the second regenesis
+    let core = FuelCoreDriver::spawn(Some(snapshot_dir.path())).await?;
+
+    println!("Getting blocks");
+
+    core.client.produce_blocks(1, None).await.unwrap();
+    let regenesis_blocks = core
+        .client
+        .blocks(PaginationRequest {
+            cursor: None,
+            results: 100,
+            direction: PageDirection::Forward,
+        })
+        .await
+        .expect("Failed to get blocks")
+        .results;
+
+    // We should have generated one new block, but the old ones should be the same
+    assert_eq!(original_blocks.len() + 3, regenesis_blocks.len());
     assert_eq!(original_blocks[0], regenesis_blocks[0]);
     assert_eq!(original_blocks[1], regenesis_blocks[1]);
 

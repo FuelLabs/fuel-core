@@ -1,15 +1,10 @@
 use std::future::Future;
 
 use fuel_core_services::StateWatcher;
-use futures::{
-    StreamExt,
-    TryStreamExt,
-};
-use itertools::Itertools;
-use tokio::task::JoinSet;
+use tokio::task::JoinHandle;
 
 pub struct TaskManager<T> {
-    set: JoinSet<anyhow::Result<T>>,
+    set: Vec<JoinHandle<anyhow::Result<T>>>,
     cancel: CancellationToken,
 }
 
@@ -39,10 +34,6 @@ impl CancellationToken {
         }
     }
 
-    fn cancel_tasks(&self) {
-        self.task_cancellator.cancel();
-    }
-
     pub fn is_cancelled(&self) -> bool {
         let state = self.state_watcher.borrow();
         self.task_cancellator.is_cancelled() || state.stopped() || state.stopping()
@@ -55,7 +46,7 @@ where
 {
     pub fn new(watcher: StateWatcher) -> Self {
         Self {
-            set: JoinSet::new(),
+            set: Default::default(),
             cancel: CancellationToken {
                 task_cancellator: tokio_util::sync::CancellationToken::new(),
                 state_watcher: watcher,
@@ -68,20 +59,16 @@ where
         F: FnOnce(CancellationToken) -> Fut,
         Fut: Future<Output = anyhow::Result<T>> + Send + 'static,
     {
-        self.set.spawn(arg(self.cancel.clone()));
+        self.set.push(tokio::spawn(arg(self.cancel.clone())));
     }
 
     pub async fn wait(self) -> anyhow::Result<Vec<T>> {
-        let results = futures::stream::unfold(self.set, |mut set| async move {
-            let res = set.join_next().await?;
-            Some((res, set))
-        })
-        .map(|result| result.map_err(Into::into).and_then(|r| r))
-        .inspect_err(|_| self.cancel.cancel_tasks())
-        .collect::<Vec<_>>()
-        .await;
-
-        results.into_iter().try_collect()
+        let mut result = vec![];
+        for task in self.set {
+            let res = task.await??;
+            result.push(res);
+        }
+        Ok(result)
     }
 }
 
