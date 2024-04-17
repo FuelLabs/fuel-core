@@ -1,9 +1,9 @@
 //! Common traits and logic for managing the lifecycle of services
-//#![deny(clippy::arithmetic_side_effects)]
-//#![deny(clippy::cast_possible_truncation)]
-//#![deny(unused_crate_dependencies)]
-//#![deny(missing_docs)]
-//#![deny(warnings)]
+#![deny(clippy::arithmetic_side_effects)]
+#![deny(clippy::cast_possible_truncation)]
+#![deny(unused_crate_dependencies)]
+#![deny(missing_docs)]
+#![deny(warnings)]
 
 use core::time::Duration;
 use fuel_core_types::blockchain::primitives::DaBlockHeight;

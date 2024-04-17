@@ -1,11 +1,11 @@
 //! # Fuel Relayer
 
-//#![deny(clippy::arithmetic_side_effects)]
-//#![deny(clippy::cast_possible_truncation)]
-//#![deny(unused_crate_dependencies)]
+#![deny(clippy::arithmetic_side_effects)]
+#![deny(clippy::cast_possible_truncation)]
+#![deny(unused_crate_dependencies)]
 #![forbid(unsafe_code)]
-//#![deny(missing_docs)]
-//#![deny(warnings)]
+#![deny(missing_docs)]
+#![deny(warnings)]
 
 pub(crate) mod abi;
 pub(crate) mod config;
