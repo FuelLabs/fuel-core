@@ -90,6 +90,7 @@ impl FuelCoreDriver {
     /// Stops the node, returning the db only
     /// Ignoring the return value drops the db as well.
     pub async fn kill(self) -> TempDir {
+        println!("Stopping fuel service");
         self.node
             .stop_and_await()
             .await
@@ -177,7 +178,7 @@ async fn test_regenesis_old_blocks_are_preserved() -> anyhow::Result<()> {
     let db_dir = core.kill().await;
     tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
 
-    // Take snapshot
+    // Take a snapshot
     snapshot::exec(snapshot::Command::parse_from([
         "_IGNORED_",
         "--db-path",
@@ -209,6 +210,49 @@ async fn test_regenesis_old_blocks_are_preserved() -> anyhow::Result<()> {
 
     // We should have generated one new block, but the old ones should be the same
     assert_eq!(original_blocks.len() + 1, regenesis_blocks.len());
+    assert_eq!(original_blocks[0], regenesis_blocks[0]);
+    assert_eq!(original_blocks[1], regenesis_blocks[1]);
+
+    // Stop the node, keep the db
+    tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
+    let db_dir = core.kill().await;
+    tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
+
+    // Take a snapshot again
+    snapshot::exec(snapshot::Command::parse_from([
+        "_IGNORED_",
+        "--db-path",
+        db_dir.path().to_str().unwrap(),
+        "--output-directory",
+        snapshot_dir.path().to_str().unwrap(),
+        "everything",
+        "encoding",
+        "parquet",
+    ]))
+    .await?;
+
+    // Drop the old db, and create an empty to restore into
+    drop(db_dir);
+
+    // Make sure the old blocks persited through the second regenesis
+    let core = FuelCoreDriver::spawn(Some(snapshot_dir.path())).await?;
+
+    tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
+    println!("Getting blocks");
+
+    let regenesis_blocks = core
+        .client
+        .blocks(PaginationRequest {
+            cursor: None,
+            results: 100,
+            direction: PageDirection::Forward,
+        })
+        .await
+        .expect("Failed to get blocks")
+        .results;
+
+    // We should have generated one new block, but the old ones should be the same
+    assert_eq!(original_blocks.len() + 2, regenesis_blocks.len());
     assert_eq!(original_blocks[0], regenesis_blocks[0]);
     assert_eq!(original_blocks[1], regenesis_blocks[1]);
 

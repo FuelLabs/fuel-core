@@ -8,6 +8,11 @@ use crate::{
         OwnedTransactions,
         TransactionStatuses,
     },
+    graphql_api::storage::old::{
+        OldFuelBlockConsensus,
+        OldFuelBlocks,
+        OldTransactions,
+    },
 };
 use fuel_core_chain_config::{
     AddTable,
@@ -94,7 +99,10 @@ where
         export!(
             |ctx: &Self| ctx.db.off_chain(),
             TransactionStatuses,
-            OwnedTransactions
+            OwnedTransactions,
+            OldFuelBlocks,
+            OldFuelBlockConsensus,
+            OldTransactions
         );
 
         self.finalize().await?;

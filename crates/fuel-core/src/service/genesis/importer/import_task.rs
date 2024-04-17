@@ -105,6 +105,11 @@ where
     pub fn run(mut self) -> anyhow::Result<()> {
         let mut db = self.db;
         let mut is_cancelled = self.cancel_token.is_cancelled();
+        println!(
+            "import_task: Importing table {:?} into {:?} ",
+            Logic::TableInSnapshot::column(),
+            Logic::TableBeingWritten::column()
+        );
         self.groups
             .into_iter()
             .enumerate()
@@ -116,7 +121,17 @@ where
             .try_for_each(|(index, group)| {
                 let group = group?;
                 let mut tx = db.write_transaction();
+                println!(
+                    "import_task: Importing table {:?} into {:?}: calling handler",
+                    Logic::TableInSnapshot::column(),
+                    Logic::TableBeingWritten::column(),
+                );
                 self.handler.process(group, &mut tx)?;
+                println!(
+                    "import_task: Importing table {:?} into {:?}: handler done",
+                    Logic::TableInSnapshot::column(),
+                    Logic::TableBeingWritten::column()
+                );
 
                 GenesisProgressMutate::<DbDesc>::update_genesis_progress(
                     &mut tx,
