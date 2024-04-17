@@ -555,6 +555,7 @@ jobs:
           mkdir -pv "$ARTIFACT"
           cp "target/${{ matrix.job.target }}/release/fuel-core" "$ARTIFACT"
           cp "target/${{ matrix.job.target }}/release/fuel-core-keygen" "$ARTIFACT"
+          cp "target/${{ matrix.job.target }}/release/fuel-core-upgradable-executor-cache/wasm32-unknown-unknown/release/fuel-core-wasm-executor.wasm" "$ARTIFACT"
           tar -czvf "$ZIP_FILE_NAME" "$ARTIFACT"
 
       - name: Upload Binary Artifact

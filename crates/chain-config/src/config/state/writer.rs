@@ -2,15 +2,12 @@ use crate::{
     config::table_entry::TableEntry,
     AddTable,
     ChainConfig,
+    LastBlockConfig,
     SnapshotMetadata,
     StateConfigBuilder,
     TableEncoding,
 };
 use fuel_core_storage::structured_storage::TableWithBlueprint;
-use fuel_core_types::{
-    blockchain::primitives::DaBlockHeight,
-    fuel_types::BlockHeight,
-};
 use std::path::PathBuf;
 
 #[cfg(feature = "parquet")]
@@ -211,13 +208,12 @@ impl SnapshotFragment {
 
     pub fn finalize(
         self,
-        block_height: BlockHeight,
-        da_block_height: DaBlockHeight,
+        latest_block_config: Option<LastBlockConfig>,
         chain_config: &ChainConfig,
     ) -> anyhow::Result<SnapshotMetadata> {
         let table_encoding = match self.data {
             FragmentData::Json { builder } => {
-                let state_config = builder.build(block_height, da_block_height)?;
+                let state_config = builder.build(latest_block_config)?;
                 std::fs::create_dir_all(&self.dir)?;
                 let state_file_path = self.dir.join("state_config.json");
                 let file = std::fs::File::create(&state_file_path)?;
@@ -232,24 +228,17 @@ impl SnapshotFragment {
                 tables,
                 compression,
             } => {
-                let block_height_file = self.dir.join("block_height.parquet");
+                let latest_block_config_path =
+                    self.dir.join("latest_block_config.parquet");
                 SnapshotWriter::write_single_el_parquet(
-                    &block_height_file,
-                    block_height,
-                    compression,
-                )?;
-
-                let da_block_height_file = self.dir.join("da_block_height.parquet");
-                SnapshotWriter::write_single_el_parquet(
-                    &da_block_height_file,
-                    da_block_height,
+                    &latest_block_config_path,
+                    latest_block_config,
                     compression,
                 )?;
 
                 TableEncoding::Parquet {
                     tables,
-                    block_height: block_height_file,
-                    da_block_height: da_block_height_file,
+                    latest_block_config_path,
                 }
             }
         };
@@ -312,11 +301,7 @@ impl SnapshotWriter {
         self.write::<ContractsLatestUtxo>(state_config.as_table())?;
         self.write::<ContractsState>(state_config.as_table())?;
         self.write::<ContractsAssets>(state_config.as_table())?;
-        self.close(
-            state_config.block_height,
-            state_config.da_block_height,
-            chain_config,
-        )
+        self.close(state_config.last_block, chain_config)
     }
 
     pub fn write<T>(&mut self, elements: Vec<TableEntry<T>>) -> anyhow::Result<()>
@@ -353,12 +338,11 @@ impl SnapshotWriter {
 
     pub fn close(
         self,
-        block_height: BlockHeight,
-        da_block_height: DaBlockHeight,
+        latest_block_config: Option<LastBlockConfig>,
         chain_config: &ChainConfig,
     ) -> anyhow::Result<SnapshotMetadata> {
         self.partial_close()?
-            .finalize(block_height, da_block_height, chain_config)
+            .finalize(latest_block_config, chain_config)
     }
 
     fn write_chain_config_and_metadata(
@@ -533,9 +517,7 @@ mod tests {
 
             // when
             writer.write::<T>(vec![]).unwrap();
-            let snapshot = writer
-                .close(10.into(), DaBlockHeight(11), &ChainConfig::local_testnet())
-                .unwrap();
+            let snapshot = writer.close(None, &ChainConfig::local_testnet()).unwrap();
 
             // then
             assert!(snapshot.chain_config.exists());

@@ -95,8 +95,6 @@ async fn execute_suite(config_path: String) {
 }
 
 fn dev_config() -> Config {
-    let mut config = Config::local_node();
-
     let snapshot = SnapshotMetadata::read("../../bin/fuel-core/chainspec/dev-testnet")
         .expect("Should be able to open snapshot metadata");
     let reader =
@@ -112,9 +110,8 @@ fn dev_config() -> Config {
             >= 1 << 17 // 131072
     );
 
+    let mut config = Config::local_node_with_reader(reader);
     config.static_gas_price = 1;
-    config.snapshot_reader = reader;
-
     config.block_producer.coinbase_recipient = Some(
         ContractId::from_str(
             "0x7777777777777777777777777777777777777777777777777777777777777777",

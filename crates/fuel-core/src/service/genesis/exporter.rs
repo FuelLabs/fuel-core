@@ -121,9 +121,7 @@ where
 
     async fn finalize(self) -> anyhow::Result<SnapshotMetadata> {
         let writer = self.create_writer()?;
-        let block = self.db.on_chain().latest_block()?;
-        let block_height = *block.header().height();
-        let da_block_height = block.header().da_height;
+        let latest_block = self.db.on_chain().latest_block()?;
 
         let writer_fragment = writer.partial_close()?;
         self.task_manager
@@ -133,7 +131,7 @@ where
             .try_fold(writer_fragment, |fragment, next_fragment| {
                 fragment.merge(next_fragment)
             })?
-            .finalize(block_height, da_block_height, &self.prev_chain_config)
+            .finalize(Some(latest_block.header().into()), &self.prev_chain_config)
     }
 
     fn create_writer(&self) -> anyhow::Result<SnapshotWriter> {
