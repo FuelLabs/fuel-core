@@ -22,6 +22,7 @@ fuel-core-executor = { workspace = true, default-features = false }
 fuel-core-storage = { workspace = true, default-features = false }
 fuel-core-types = { workspace = true, default-features = false }
 postcard = { workspace = true }
+serde = { workspace = true }
 
 [dev-dependencies]
 proptest = { workspace = true }

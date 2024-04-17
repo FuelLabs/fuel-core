@@ -14,6 +14,7 @@ use crate::{
         StateTransitionBytecodeVersions,
     },
 };
+use fuel_vm_private::storage::UploadedBytecodes;
 
 impl TableWithBlueprint for ConsensusParametersVersions {
     type Blueprint = Plain<Primitive<4>, Postcard>;
@@ -30,6 +31,15 @@ impl TableWithBlueprint for StateTransitionBytecodeVersions {
 
     fn column() -> Column {
         Column::StateTransitionBytecodeVersions
+    }
+}
+
+impl TableWithBlueprint for UploadedBytecodes {
+    type Blueprint = Plain<Raw, Postcard>;
+    type Column = Column;
+
+    fn column() -> Self::Column {
+        Column::UploadedBytecodes
     }
 }
 
@@ -52,11 +62,15 @@ mod test {
 
     crate::basic_storage_tests!(
         StateTransitionBytecodeVersions,
-        <StateTransitionBytecodeVersions as crate::Mappable>::Key::default(),
-        vec![32u8],
-        <StateTransitionBytecodeVersions as crate::Mappable>::OwnedValue::from(vec![
-            32u8
-        ]),
+        0u32,
+        <StateTransitionBytecodeVersions as crate::Mappable>::OwnedValue::from([123; 32]),
+        <StateTransitionBytecodeVersions as crate::Mappable>::OwnedValue::from([123; 32]),
         generate_key
+    );
+
+    crate::basic_storage_tests!(
+        UploadedBytecodes,
+        <UploadedBytecodes as crate::Mappable>::Key::default(),
+        <UploadedBytecodes as crate::Mappable>::OwnedValue::Completed(vec![123; 2048])
     );
 }

@@ -218,6 +218,14 @@ where
                 outputs = tx.outputs().as_slice();
             }
             Transaction::Mint(_) => continue,
+            Transaction::Upgrade(tx) => {
+                inputs = tx.inputs().as_slice();
+                outputs = tx.outputs().as_slice();
+            }
+            Transaction::Upload(tx) => {
+                inputs = tx.inputs().as_slice();
+                outputs = tx.outputs().as_slice();
+            }
         }
         persist_owners_index(
             block_height,
@@ -316,7 +324,10 @@ where
                 db.storage::<ContractsInfo>()
                     .insert(&contract_id, &(salt.into()))?;
             }
-            Transaction::Script(_) | Transaction::Mint(_) => {
+            Transaction::Script(_)
+            | Transaction::Mint(_)
+            | Transaction::Upgrade(_)
+            | Transaction::Upload(_) => {
                 // Do nothing
             }
         }

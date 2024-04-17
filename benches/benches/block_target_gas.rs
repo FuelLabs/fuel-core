@@ -430,8 +430,9 @@ fn run_with_service_with_extra_inputs(
                 assert_eq!(res.sealed_block.entity.transactions().len(), 2);
                 assert_eq!(res.tx_status[0].id, tx_id);
 
-                let TransactionExecutionResult::Failed { result, receipts } =
-                    &res.tx_status[0].result
+                let TransactionExecutionResult::Failed {
+                    result, receipts, ..
+                } = &res.tx_status[0].result
                 else {
                     panic!("The execution should fails with out of gas")
                 };

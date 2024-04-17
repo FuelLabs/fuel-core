@@ -77,6 +77,7 @@ pub mod input;
 pub mod output;
 pub mod receipt;
 pub mod types;
+pub mod upgrade_purpose;
 
 #[derive(Default)]
 pub struct TxQuery;

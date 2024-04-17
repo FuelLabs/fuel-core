@@ -61,10 +61,12 @@ pub enum Column {
     ConsensusParametersVersions = 18,
     /// See [`StateTransitionBytecodeVersions`](crate::tables::StateTransitionBytecodeVersions)
     StateTransitionBytecodeVersions = 19,
+    /// See [`UploadedBytecodes`](crate::tables::UploadedBytecodes)
+    UploadedBytecodes = 20,
 
     // TODO: Remove this column and use `Metadata` column instead.
     /// Table for genesis state import progress tracking.
-    GenesisMetadata = 20,
+    GenesisMetadata = 21,
 }
 
 impl Column {

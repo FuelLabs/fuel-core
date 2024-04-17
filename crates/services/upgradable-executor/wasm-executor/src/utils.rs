@@ -1,4 +1,7 @@
-use fuel_core_executor::executor::ExecutionBlockWithSource;
+use fuel_core_executor::executor::{
+    ExecutionBlockWithSource,
+    ExecutionOptions,
+};
 use fuel_core_storage::transactional::Changes;
 use fuel_core_types::services::{
     executor::{
@@ -38,9 +41,22 @@ pub fn unpack_exists_size_result(val: u64) -> (bool, u32, u16) {
     (exists, size, result)
 }
 
-pub type InputType = ExecutionBlockWithSource<()>;
+/// The input type for the WASM executor. Enum allows handling different
+/// versions of the input without introducing new host functions.
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
+pub enum InputType {
+    V1 {
+        block: ExecutionBlockWithSource<()>,
+        options: ExecutionOptions,
+    },
+}
 
-pub type ReturnType = ExecutorResult<Uncommitted<ExecutionResult, Changes>>;
+/// The return type for the WASM executor. Enum allows handling different
+/// versions of the return without introducing new host functions.
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
+pub enum ReturnType {
+    V1(ExecutorResult<Uncommitted<ExecutionResult, Changes>>),
+}
 
 #[cfg(test)]
 mod tests {

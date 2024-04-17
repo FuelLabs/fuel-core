@@ -49,19 +49,27 @@ async fn transaction_with_valid_predicate_is_executed() {
             .script_gas_limit(limit)
             .finalize();
 
-    assert_eq!(predicate_tx.inputs()[0].predicate_gas_used().unwrap(), 0);
-
-    predicate_tx
-        .estimate_predicates(&CheckPredicateParams::default())
-        .expect("Predicate check failed");
-
-    assert_ne!(predicate_tx.inputs()[0].predicate_gas_used().unwrap(), 0);
-
     // create test context with predicates disabled
     let context = TestSetupBuilder::default()
         .config_coin_inputs_from_transactions(&[&predicate_tx])
         .finalize()
         .await;
+
+    assert_eq!(predicate_tx.inputs()[0].predicate_gas_used().unwrap(), 0);
+
+    predicate_tx
+        .estimate_predicates(&CheckPredicateParams::from(
+            &context
+                .srv
+                .shared
+                .config
+                .snapshot_reader
+                .chain_config()
+                .consensus_parameters,
+        ))
+        .expect("Predicate check failed");
+
+    assert_ne!(predicate_tx.inputs()[0].predicate_gas_used().unwrap(), 0);
 
     let predicate_tx = predicate_tx.into();
     context

@@ -1,51 +1,113 @@
-use std::future::Future;
+use std::{
+    future::Future,
+    sync::Arc,
+};
 
 use fuel_core_services::StateWatcher;
 use futures::{
+    stream::FuturesUnordered,
     StreamExt,
     TryStreamExt,
 };
 use itertools::Itertools;
 use tokio::task::JoinSet;
+use tokio_util::sync::CancellationToken;
 
 pub struct TaskManager<T> {
     set: JoinSet<anyhow::Result<T>>,
-    cancel: CancellationToken,
+    outside_cancel_listener: MultiCancellationToken,
+    cancel_tasks: CancellationToken,
 }
 
-#[cfg_attr(feature = "test-helpers", derive(Default))]
-#[derive(Clone)]
-pub struct CancellationToken {
-    task_cancellator: tokio_util::sync::CancellationToken,
-    state_watcher: StateWatcher,
+#[async_trait::async_trait]
+pub trait NotifyCancel {
+    async fn wait_until_cancelled(&self) -> anyhow::Result<()>;
+    fn is_cancelled(&self) -> bool;
 }
 
-#[cfg(feature = "test-helpers")]
-impl From<tokio_util::sync::CancellationToken> for CancellationToken {
-    fn from(token: tokio_util::sync::CancellationToken) -> Self {
+#[async_trait::async_trait]
+impl NotifyCancel for CancellationToken {
+    async fn wait_until_cancelled(&self) -> anyhow::Result<()> {
+        self.cancelled().await;
+        Ok(())
+    }
+    fn is_cancelled(&self) -> bool {
+        self.is_cancelled()
+    }
+}
+
+#[async_trait::async_trait]
+impl NotifyCancel for StateWatcher {
+    async fn wait_until_cancelled(&self) -> anyhow::Result<()> {
+        while !self.is_cancelled() {
+            self.clone().changed().await?;
+        }
+
+        Ok(())
+    }
+
+    fn is_cancelled(&self) -> bool {
+        let state = self.borrow();
+        state.stopping() || state.stopped()
+    }
+}
+
+/// A token that can be used to monitor multiple cancellation sources.
+#[derive(Default, Clone)]
+pub struct MultiCancellationToken {
+    sources: Vec<Arc<dyn NotifyCancel + Send + Sync>>,
+}
+
+impl MultiCancellationToken {
+    pub fn from_single(source: impl NotifyCancel + Send + Sync + 'static) -> Self {
+        let mut token = Self::default();
+        token.insert(source);
+        token
+    }
+
+    /// Note: Adding a new source to the token will not affect already running futures.
+    pub fn insert(&mut self, source: impl NotifyCancel + Send + Sync + 'static) {
+        self.sources.push(Arc::new(source));
+    }
+}
+
+#[async_trait::async_trait]
+impl NotifyCancel for MultiCancellationToken {
+    async fn wait_until_cancelled(&self) -> anyhow::Result<()> {
+        if self.sources.is_empty() {
+            futures::future::pending::<()>().await;
+            Ok(())
+        } else {
+            FuturesUnordered::from_iter(
+                self.sources.iter().map(|s| s.wait_until_cancelled()),
+            )
+            .next()
+            .await
+            .expect("At least one source should be available")
+        }
+    }
+
+    fn is_cancelled(&self) -> bool {
+        self.sources.iter().any(|s| s.is_cancelled())
+    }
+}
+
+impl<T> Default for TaskManager<T> {
+    fn default() -> Self {
+        Self::new(CancellationToken::new())
+    }
+}
+
+impl<T> TaskManager<T> {
+    pub fn new(cancel_token: impl NotifyCancel + Send + Sync + 'static) -> Self {
+        let task_cancel = CancellationToken::new();
+        let mut multi_cancel = MultiCancellationToken::from_single(cancel_token);
+        multi_cancel.insert(task_cancel.child_token());
         Self {
-            task_cancellator: token,
-            ..Default::default()
+            set: JoinSet::new(),
+            outside_cancel_listener: multi_cancel,
+            cancel_tasks: task_cancel,
         }
-    }
-}
-
-impl CancellationToken {
-    #[cfg(test)]
-    pub async fn cancelled(mut self) -> anyhow::Result<()> {
-        tokio::select! {
-            _ = self.task_cancellator.cancelled() => Ok(()),
-            result = self.state_watcher.wait_stopping_or_stopped() => result
-        }
-    }
-
-    fn cancel_tasks(&self) {
-        self.task_cancellator.cancel();
-    }
-
-    pub fn is_cancelled(&self) -> bool {
-        let state = self.state_watcher.borrow();
-        self.task_cancellator.is_cancelled() || state.stopped() || state.stopping()
     }
 }
 
@@ -53,22 +115,12 @@ impl<T> TaskManager<T>
 where
     T: Send + 'static,
 {
-    pub fn new(watcher: StateWatcher) -> Self {
-        Self {
-            set: JoinSet::new(),
-            cancel: CancellationToken {
-                task_cancellator: tokio_util::sync::CancellationToken::new(),
-                state_watcher: watcher,
-            },
-        }
-    }
-
     pub fn spawn<F, Fut>(&mut self, arg: F)
     where
-        F: FnOnce(CancellationToken) -> Fut,
+        F: FnOnce(MultiCancellationToken) -> Fut,
         Fut: Future<Output = anyhow::Result<T>> + Send + 'static,
     {
-        self.set.spawn(arg(self.cancel.clone()));
+        self.set.spawn(arg(self.outside_cancel_listener.clone()));
     }
 
     pub async fn wait(self) -> anyhow::Result<Vec<T>> {
@@ -77,7 +129,7 @@ where
             Some((res, set))
         })
         .map(|result| result.map_err(Into::into).and_then(|r| r))
-        .inspect_err(|_| self.cancel.cancel_tasks())
+        .inspect_err(|_| self.cancel_tasks.cancel())
         .collect::<Vec<_>>()
         .await;
 
@@ -87,86 +139,151 @@ where
 
 #[cfg(test)]
 mod tests {
-    use std::time::Duration;
+    mod cancel_token {
+        use std::time::Duration;
 
-    use anyhow::bail;
-    use fuel_core_services::State;
-    use tokio::sync::watch;
+        use tokio::sync::watch;
+        use tokio_util::sync::CancellationToken;
 
-    use super::*;
+        use crate::service::genesis::task_manager::{
+            MultiCancellationToken,
+            NotifyCancel,
+        };
 
-    #[tokio::test]
-    async fn task_added_and_completed() {
-        // given
-        let mut workers = TaskManager::new(StateWatcher::default());
-        workers.spawn(|_| async { Ok(8u8) });
+        #[tokio::test]
+        async fn reacts_on_tokio_token_being_cancelled() {
+            // given
+            let mut multi_token = MultiCancellationToken::default();
 
-        // when
-        let results = workers.wait().await.unwrap();
+            let dud_token = CancellationToken::new();
+            multi_token.insert(dud_token);
 
-        // then
-        assert_eq!(results, vec![8]);
-    }
+            let active_token = CancellationToken::new();
+            multi_token.insert(active_token.clone());
 
-    #[tokio::test]
-    async fn returns_err_on_single_failure() {
-        // given
-        let mut workers = TaskManager::new(StateWatcher::default());
-        workers.spawn(|_| async { Ok(10u8) });
-        workers.spawn(|_| async { Err(anyhow::anyhow!("I fail")) });
+            // when
+            active_token.cancel();
 
-        // when
-        let results = workers.wait().await;
-
-        // then
-        let err = results.unwrap_err();
-        assert_eq!(err.to_string(), "I fail");
-    }
-
-    #[tokio::test]
-    async fn signals_cancel_to_non_finished_tasks_on_failure() {
-        // given
-        let (_sender, recv) = watch::channel(State::Started);
-        let watcher = recv.into();
-        let mut workers = TaskManager::new(watcher);
-        let (tx, rx) = tokio::sync::oneshot::channel();
-        workers.spawn(move |token| async move {
-            token.cancelled().await.unwrap();
-            tx.send(()).unwrap();
-            Ok(())
-        });
-
-        // when
-        workers.spawn(|_| async { bail!("I fail") });
-
-        // then
-        let _ = workers.wait().await;
-        tokio::time::timeout(Duration::from_secs(2), rx)
+            // then
+            tokio::time::timeout(
+                Duration::from_secs(1),
+                multi_token.wait_until_cancelled(),
+            )
             .await
-            .expect("Cancellation should have been signaled")
+            .expect("Cancel future should have resolved")
             .unwrap();
-    }
+            assert!(multi_token.is_cancelled());
+        }
 
-    #[tokio::test]
-    async fn reacts_when_state_changes_to_stopping() {
-        // given
-        let (sender, receiver) = watch::channel(State::Started);
-        let mut workers = TaskManager::new(receiver.into());
+        #[tokio::test]
+        async fn reacts_on_state_watcher_stopping() {
+            // given
+            use fuel_core_services::StateWatcher;
+            let mut multi_token = MultiCancellationToken::default();
 
-        workers.spawn(move |token| async move {
-            token.cancelled().await.unwrap();
-            Ok(10u8)
-        });
+            let dud_token = CancellationToken::new();
+            multi_token.insert(dud_token);
 
-        // when
-        sender.send(State::Stopping).unwrap();
+            let (tx, rx) = watch::channel(fuel_core_services::State::NotStarted);
+            let active_token: StateWatcher = rx.into();
+            multi_token.insert(active_token);
 
-        // then
-        let result = tokio::time::timeout(Duration::from_secs(2), workers.wait())
+            // when
+            tx.send(fuel_core_services::State::Stopping).unwrap();
+
+            // then
+            assert!(multi_token.is_cancelled());
+            tokio::time::timeout(
+                Duration::from_secs(1),
+                multi_token.wait_until_cancelled(),
+            )
             .await
-            .expect("Cancellation should have been signaled")
+            .expect("Cancel future should have resolved")
             .unwrap();
+        }
+    }
+    mod state_watcher {
+        use std::time::Duration;
 
-        assert_eq!(result, vec![10]);
+        use anyhow::bail;
+        use tokio_util::sync::CancellationToken;
+
+        use crate::service::genesis::task_manager::{
+            NotifyCancel,
+            TaskManager,
+        };
+
+        #[tokio::test]
+        async fn task_added_and_completed() {
+            // given
+            let mut workers = TaskManager::default();
+            workers.spawn(|_| async { Ok(8u8) });
+
+            // when
+            let results = workers.wait().await.unwrap();
+
+            // then
+            assert_eq!(results, vec![8]);
+        }
+
+        #[tokio::test]
+        async fn returns_err_on_single_failure() {
+            // given
+            let mut workers = TaskManager::default();
+            workers.spawn(|_| async { Ok(10u8) });
+            workers.spawn(|_| async { Err(anyhow::anyhow!("I fail")) });
+
+            // when
+            let results = workers.wait().await;
+
+            // then
+            let err = results.unwrap_err();
+            assert_eq!(err.to_string(), "I fail");
+        }
+
+        #[tokio::test]
+        async fn signals_cancel_to_non_finished_tasks_on_failure() {
+            // given
+            let mut workers = TaskManager::default();
+            let (tx, rx) = tokio::sync::oneshot::channel();
+            workers.spawn(move |token| async move {
+                token.wait_until_cancelled().await.unwrap();
+                tx.send(()).unwrap();
+                Ok(())
+            });
+
+            // when
+            workers.spawn(|_| async { bail!("I fail") });
+
+            // then
+            let _ = workers.wait().await;
+            tokio::time::timeout(Duration::from_secs(2), rx)
+                .await
+                .expect("Cancellation should have been signaled")
+                .unwrap();
+        }
+
+        #[tokio::test]
+        async fn stops_on_cancellation() {
+            // given
+            let cancel = CancellationToken::new();
+            let mut workers = TaskManager::new(cancel.clone());
+
+            workers.spawn(move |token| async move {
+                token.wait_until_cancelled().await.unwrap();
+                Ok(10u8)
+            });
+
+            // when
+            cancel.cancel();
+
+            // then
+            let result = tokio::time::timeout(Duration::from_secs(2), workers.wait())
+                .await
+                .expect("Cancellation should have been signaled")
+                .unwrap();
+
+            assert_eq!(result, vec![10]);
+        }
     }
 }

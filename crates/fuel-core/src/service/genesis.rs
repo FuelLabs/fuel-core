@@ -9,7 +9,6 @@ use crate::{
     },
     service::config::Config,
 };
-use anyhow::bail;
 use fuel_core_chain_config::GenesisCommitment;
 use fuel_core_services::StateWatcher;
 use fuel_core_storage::{
@@ -53,9 +52,11 @@ use itertools::Itertools;
 
 mod exporter;
 mod importer;
+mod progress;
 mod task_manager;
 
 pub use exporter::Exporter;
+pub use task_manager::NotifyCancel;
 
 use self::importer::SnapshotImporter;
 
@@ -116,7 +117,7 @@ pub async fn execute_genesis_block(
     //  https://github.com/FuelLabs/fuel-core/issues/1570
     database_transaction_on_chain
         .storage_as_mut::<StateTransitionBytecodeVersions>()
-        .insert(&ConsensusParametersVersion::MIN, &[])?;
+        .insert(&ConsensusParametersVersion::MIN, &Default::default())?;
 
     // Needs to be given the progress because `iter_all` is not implemented on db transactions.
     for key in genesis_progress_on_chain {

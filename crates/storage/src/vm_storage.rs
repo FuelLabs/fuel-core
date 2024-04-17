@@ -3,10 +3,12 @@
 use crate::{
     not_found,
     tables::{
+        ConsensusParametersVersions,
         ContractsAssets,
         ContractsRawCode,
         ContractsState,
         FuelBlocks,
+        StateTransitionBytecodeVersions,
     },
     ContractsAssetsStorage,
     ContractsStateKey,
@@ -24,10 +26,16 @@ use crate::{
 use anyhow::anyhow;
 use fuel_core_types::{
     blockchain::{
-        header::ConsensusHeader,
+        header::{
+            ApplicationHeader,
+            ConsensusHeader,
+            ConsensusParametersVersion,
+            StateTransitionBytecodeVersion,
+        },
         primitives::BlockId,
     },
     fuel_tx::{
+        ConsensusParameters,
         Contract,
         StorageSlot,
     },
@@ -42,7 +50,10 @@ use fuel_core_types::{
 };
 use fuel_vm_private::{
     fuel_storage::StorageWrite,
-    storage::ContractsStateData,
+    storage::{
+        ContractsStateData,
+        UploadedBytecodes,
+    },
 };
 use itertools::Itertools;
 use primitive_types::U256;
@@ -51,6 +62,8 @@ use std::borrow::Cow;
 /// Used to store metadata relevant during the execution of a transaction.
 #[derive(Clone, Debug)]
 pub struct VmStorage<D> {
+    consensus_parameters_version: ConsensusParametersVersion,
+    state_transition_version: StateTransitionBytecodeVersion,
     current_block_height: BlockHeight,
     current_timestamp: Tai64,
     coinbase: ContractId,
@@ -77,6 +90,8 @@ impl IncreaseStorageKey for U256 {
 impl<D: Default> Default for VmStorage<D> {
     fn default() -> Self {
         Self {
+            consensus_parameters_version: Default::default(),
+            state_transition_version: Default::default(),
             current_block_height: Default::default(),
             current_timestamp: Tai64::now(),
             coinbase: Default::default(),
@@ -87,14 +102,17 @@ impl<D: Default> Default for VmStorage<D> {
 
 impl<D> VmStorage<D> {
     /// Create and instance of the VM storage around the `header` and `coinbase` contract id.
-    pub fn new<T>(
+    pub fn new<C, A>(
         database: D,
-        header: &ConsensusHeader<T>,
+        consensus: &ConsensusHeader<C>,
+        application: &ApplicationHeader<A>,
         coinbase: ContractId,
     ) -> Self {
         Self {
-            current_block_height: header.height,
-            current_timestamp: header.time,
+            consensus_parameters_version: application.consensus_parameters_version,
+            state_transition_version: application.state_transition_bytecode_version,
+            current_block_height: consensus.height,
+            current_timestamp: consensus.time,
             coinbase,
             database,
         }
@@ -208,12 +226,23 @@ where
         + StorageWrite<ContractsState, Error = StorageError>
         + StorageSize<ContractsState, Error = StorageError>
         + StorageRead<ContractsState, Error = StorageError>
+        + StorageMutate<ConsensusParametersVersions, Error = StorageError>
+        + StorageMutate<StateTransitionBytecodeVersions, Error = StorageError>
+        + StorageMutate<UploadedBytecodes, Error = StorageError>
         + VmStorageRequirements<Error = StorageError>,
 {
     type DataError = StorageError;
 
     fn block_height(&self) -> Result<BlockHeight, Self::DataError> {
         Ok(self.current_block_height)
+    }
+
+    fn consensus_parameters_version(&self) -> Result<u32, Self::DataError> {
+        Ok(self.consensus_parameters_version)
+    }
+
+    fn state_transition_version(&self) -> Result<u32, Self::DataError> {
+        Ok(self.state_transition_version)
     }
 
     fn timestamp(&self, height: BlockHeight) -> Result<Word, Self::DataError> {
@@ -245,6 +274,26 @@ where
 
     fn coinbase(&self) -> Result<ContractId, Self::DataError> {
         Ok(self.coinbase)
+    }
+
+    fn set_consensus_parameters(
+        &mut self,
+        version: u32,
+        consensus_parameters: &ConsensusParameters,
+    ) -> Result<Option<ConsensusParameters>, Self::DataError> {
+        self.database
+            .storage_as_mut::<ConsensusParametersVersions>()
+            .insert(&version, consensus_parameters)
+    }
+
+    fn set_state_transition_bytecode(
+        &mut self,
+        version: u32,
+        hash: &Bytes32,
+    ) -> Result<Option<Bytes32>, Self::DataError> {
+        self.database
+            .storage_as_mut::<StateTransitionBytecodeVersions>()
+            .insert(&version, hash)
     }
 
     fn deploy_contract_with_id(
