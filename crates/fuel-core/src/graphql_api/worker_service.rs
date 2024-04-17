@@ -380,7 +380,7 @@ where
     T: OffChainDatabase,
 {
     for (id, tx) in transactions {
-        db.storage::<OldTransactions>().insert(&id, &tx)?;
+        db.storage::<OldTransactions>().insert(id, tx)?;
     }
     Ok(())
 }
