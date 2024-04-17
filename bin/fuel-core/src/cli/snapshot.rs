@@ -461,6 +461,8 @@ mod tests {
                     pc: self.rng.gen(),
                     is: self.rng.gen(),
                 }],
+                total_gas: self.rng.gen(),
+                total_fee: self.rng.gen(),
             };
 
             self.db

@@ -272,11 +272,15 @@ type DryRunFailureStatus {
 	programState: ProgramState
 	reason: String!
 	receipts: [Receipt!]!
+	totalGas: U64!
+	totalFee: U64!
 }
 
 type DryRunSuccessStatus {
 	programState: ProgramState
 	receipts: [Receipt!]!
+	totalGas: U64!
+	totalFee: U64!
 }
 
 type DryRunTransactionExecutionStatus {
@@ -309,6 +313,8 @@ type FailureStatus {
 	reason: String!
 	programState: ProgramState
 	receipts: [Receipt!]!
+	totalGas: U64!
+	totalFee: U64!
 }
 
 type FeeParameters {
@@ -1002,6 +1008,8 @@ type SuccessStatus {
 	time: Tai64Timestamp!
 	programState: ProgramState
 	receipts: [Receipt!]!
+	totalGas: U64!
+	totalFee: U64!
 }
 
 scalar Tai64Timestamp

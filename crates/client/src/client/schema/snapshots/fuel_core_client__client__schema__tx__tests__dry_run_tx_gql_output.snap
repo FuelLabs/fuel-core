@@ -42,6 +42,8 @@ mutation($txs: [HexString!]!, $utxoValidation: Boolean) {
           contractId
           subId
         }
+        totalGas
+        totalFee
       }
       ... on DryRunFailureStatus {
         programState {
@@ -78,9 +80,9 @@ mutation($txs: [HexString!]!, $utxoValidation: Boolean) {
           contractId
           subId
         }
+        totalGas
+        totalFee
       }
     }
   }
 }
-
-

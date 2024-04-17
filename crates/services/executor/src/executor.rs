@@ -109,7 +109,11 @@ use fuel_core_types::{
             Checked,
             CheckedTransaction,
             Checks,
+            CreateCheckedMetadata,
             IntoChecked,
+            ScriptCheckedMetadata,
+            UpgradeCheckedMetadata,
+            UploadCheckedMetadata,
         },
         interpreter::{
             CheckedMetadata as CheckedMetadataTrait,
@@ -1004,6 +1008,8 @@ where
             result: TransactionExecutionResult::Success {
                 result: None,
                 receipts: vec![],
+                total_gas: 0,
+                total_fee: 0,
             },
         });
 
@@ -1030,10 +1036,11 @@ where
     ) -> ExecutorResult<Transaction>
     where
         Tx: ExecutableTransaction + PartialEq + Cacheable + Send + Sync + 'static,
-        <Tx as IntoChecked>::Metadata: CheckedMetadataTrait + Clone + Send + Sync,
+        <Tx as IntoChecked>::Metadata: CheckedMetadata,
         T: KeyValueInspect<Column = Column>,
     {
         let tx_id = checked_tx.id();
+        let min_gas = checked_tx.metadata().min_gas();
         let max_fee = checked_tx.transaction().max_fee_limit();
 
         if self.options.utxo_validation {
@@ -1156,7 +1163,7 @@ where
 
         // update block commitment
         let (used_gas, tx_fee) =
-            self.total_fee_paid(&tx, max_fee, &receipts, gas_price)?;
+            self.total_fee_paid(&tx, min_gas, max_fee, &receipts, gas_price)?;
 
         // change the spent status of the tx inputs
         self.spend_input_utxos(tx.inputs(), tx_st_transaction, reverted, execution_data)?;
@@ -1201,7 +1208,10 @@ where
             .coinbase
             .checked_add(tx_fee)
             .ok_or(ExecutorError::FeeOverflow)?;
-        execution_data.used_gas = execution_data.used_gas.saturating_add(used_gas);
+        execution_data.used_gas = execution_data
+            .used_gas
+            .checked_add(used_gas)
+            .ok_or(ExecutorError::GasOverflow)?;
         execution_data
             .message_ids
             .extend(receipts.iter().filter_map(|r| r.message_id()));
@@ -1210,12 +1220,16 @@ where
             TransactionExecutionResult::Failed {
                 result: Some(state),
                 receipts,
+                total_gas: used_gas,
+                total_fee: tx_fee,
             }
         } else {
             // else tx was a success
             TransactionExecutionResult::Success {
                 result: Some(state),
                 receipts,
+                total_gas: used_gas,
+                total_fee: tx_fee,
             }
         };
 
@@ -1386,6 +1400,7 @@ where
     fn total_fee_paid<Tx: Chargeable>(
         &self,
         tx: &Tx,
+        min_gas: Word,
         max_fee: Word,
         receipts: &[Receipt],
         gas_price: Word,
@@ -1406,9 +1421,12 @@ where
                 gas_price,
             )
             .ok_or(ExecutorError::FeeOverflow)?;
+        let total_used_gas = min_gas
+            .checked_add(used_gas)
+            .ok_or(ExecutorError::GasOverflow)?;
         // if there's no script result (i.e. create) then fee == base amount
         Ok((
-            used_gas,
+            total_used_gas,
             max_fee
                 .checked_sub(fee)
                 .expect("Refunded fee can't be more than `max_fee`."),
@@ -1757,5 +1775,33 @@ where
         }
 
         Ok(())
+    }
+}
+
+trait CheckedMetadata: CheckedMetadataTrait + Clone + Send + Sync {
+    fn min_gas(&self) -> u64;
+}
+
+impl CheckedMetadata for ScriptCheckedMetadata {
+    fn min_gas(&self) -> u64 {
+        self.min_gas
+    }
+}
+
+impl CheckedMetadata for CreateCheckedMetadata {
+    fn min_gas(&self) -> u64 {
+        self.min_gas
+    }
+}
+
+impl CheckedMetadata for UpgradeCheckedMetadata {
+    fn min_gas(&self) -> u64 {
+        self.min_gas
+    }
+}
+
+impl CheckedMetadata for UploadCheckedMetadata {
+    fn min_gas(&self) -> u64 {
+        self.min_gas
     }
 }

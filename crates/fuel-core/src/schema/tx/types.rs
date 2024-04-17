@@ -160,6 +160,8 @@ pub struct SuccessStatus {
     time: Tai64,
     result: Option<VmProgramState>,
     receipts: Vec<fuel_tx::Receipt>,
+    total_gas: u64,
+    total_fee: u64,
 }
 
 #[Object]
@@ -185,6 +187,14 @@ impl SuccessStatus {
     async fn receipts(&self) -> async_graphql::Result<Vec<Receipt>> {
         Ok(self.receipts.iter().map(Into::into).collect())
     }
+
+    async fn total_gas(&self) -> U64 {
+        self.total_gas.into()
+    }
+
+    async fn total_fee(&self) -> U64 {
+        self.total_fee.into()
+    }
 }
 
 #[derive(Debug)]
@@ -194,6 +204,8 @@ pub struct FailureStatus {
     time: Tai64,
     state: Option<VmProgramState>,
     receipts: Vec<fuel_tx::Receipt>,
+    total_gas: u64,
+    total_fee: u64,
 }
 
 #[Object]
@@ -223,6 +235,14 @@ impl FailureStatus {
     async fn receipts(&self) -> async_graphql::Result<Vec<Receipt>> {
         Ok(self.receipts.iter().map(Into::into).collect())
     }
+
+    async fn total_gas(&self) -> U64 {
+        self.total_gas.into()
+    }
+
+    async fn total_fee(&self) -> U64 {
+        self.total_fee.into()
+    }
 }
 
 #[derive(Debug)]
@@ -248,12 +268,16 @@ impl TransactionStatus {
                 result,
                 time,
                 receipts,
+                total_gas,
+                total_fee,
             } => TransactionStatus::Success(SuccessStatus {
                 tx_id,
                 block_height,
                 result,
                 time,
                 receipts,
+                total_gas,
+                total_fee,
             }),
             TxStatus::SqueezedOut { reason } => {
                 TransactionStatus::SqueezedOut(SqueezedOutStatus { reason })
@@ -263,12 +287,16 @@ impl TransactionStatus {
                 time,
                 result,
                 receipts,
+                total_gas,
+                total_fee,
             } => TransactionStatus::Failed(FailureStatus {
                 tx_id,
                 block_height,
                 time,
                 state: result,
                 receipts,
+                total_gas,
+                total_fee,
             }),
         }
     }
@@ -285,12 +313,16 @@ impl From<TransactionStatus> for TxStatus {
                 result,
                 time,
                 receipts,
+                total_gas,
+                total_fee,
                 ..
             }) => TxStatus::Success {
                 block_height,
                 result,
                 time,
                 receipts,
+                total_gas,
+                total_fee,
             },
             TransactionStatus::SqueezedOut(SqueezedOutStatus { reason }) => {
                 TxStatus::SqueezedOut { reason }
@@ -300,12 +332,16 @@ impl From<TransactionStatus> for TxStatus {
                 time,
                 state: result,
                 receipts,
+                total_gas,
+                total_fee,
                 ..
             }) => TxStatus::Failed {
                 block_height,
                 time,
                 result,
                 receipts,
+                total_gas,
+                total_fee,
             },
         }
     }
@@ -740,12 +776,28 @@ pub enum DryRunTransactionStatus {
 impl DryRunTransactionStatus {
     pub fn new(tx_status: TransactionExecutionResult) -> Self {
         match tx_status {
-            TransactionExecutionResult::Success { result, receipts } => {
-                DryRunTransactionStatus::Success(DryRunSuccessStatus { result, receipts })
-            }
-            TransactionExecutionResult::Failed { result, receipts } => {
-                DryRunTransactionStatus::Failed(DryRunFailureStatus { result, receipts })
-            }
+            TransactionExecutionResult::Success {
+                result,
+                receipts,
+                total_gas,
+                total_fee,
+            } => DryRunTransactionStatus::Success(DryRunSuccessStatus {
+                result,
+                receipts,
+                total_gas,
+                total_fee,
+            }),
+            TransactionExecutionResult::Failed {
+                result,
+                receipts,
+                total_gas,
+                total_fee,
+            } => DryRunTransactionStatus::Failed(DryRunFailureStatus {
+                result,
+                receipts,
+                total_gas,
+                total_fee,
+            }),
         }
     }
 }
@@ -754,6 +806,8 @@ impl DryRunTransactionStatus {
 pub struct DryRunSuccessStatus {
     result: Option<VmProgramState>,
     receipts: Vec<fuel_tx::Receipt>,
+    total_gas: u64,
+    total_fee: u64,
 }
 
 #[Object]
@@ -765,12 +819,22 @@ impl DryRunSuccessStatus {
     async fn receipts(&self) -> Vec<Receipt> {
         self.receipts.iter().map(Into::into).collect()
     }
+
+    async fn total_gas(&self) -> U64 {
+        self.total_gas.into()
+    }
+
+    async fn total_fee(&self) -> U64 {
+        self.total_fee.into()
+    }
 }
 
 #[derive(Debug)]
 pub struct DryRunFailureStatus {
     result: Option<VmProgramState>,
     receipts: Vec<fuel_tx::Receipt>,
+    total_gas: u64,
+    total_fee: u64,
 }
 
 #[Object]
@@ -785,6 +849,14 @@ impl DryRunFailureStatus {
 
     async fn receipts(&self) -> Vec<Receipt> {
         self.receipts.iter().map(Into::into).collect()
+    }
+
+    async fn total_gas(&self) -> U64 {
+        self.total_gas.into()
+    }
+
+    async fn total_fee(&self) -> U64 {
+        self.total_fee.into()
     }
 }
 

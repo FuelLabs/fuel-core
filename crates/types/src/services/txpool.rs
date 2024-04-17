@@ -215,6 +215,10 @@ pub enum TransactionStatus {
         result: Option<ProgramState>,
         /// The receipts generated during execution of the transaction.
         receipts: Vec<Receipt>,
+        /// The total gas used by the transaction.
+        total_gas: u64,
+        /// The total fee paid by the transaction.
+        total_fee: u64,
     },
     /// Transaction was squeezed of the txpool
     SqueezedOut {
@@ -231,6 +235,10 @@ pub enum TransactionStatus {
         result: Option<ProgramState>,
         /// The receipts generated during execution of the transaction.
         receipts: Vec<Receipt>,
+        /// The total gas used by the transaction.
+        total_gas: u64,
+        /// The total fee paid by the transaction.
+        total_fee: u64,
     },
 }
 
@@ -242,22 +250,32 @@ pub fn from_executor_to_status(
     let time = block.header().time();
     let block_height = *block.header().height();
     match result {
-        TransactionExecutionResult::Success { result, receipts } => {
-            TransactionStatus::Success {
-                block_height,
-                time,
-                result,
-                receipts,
-            }
-        }
-        TransactionExecutionResult::Failed { result, receipts } => {
-            TransactionStatus::Failed {
-                block_height,
-                time,
-                result,
-                receipts,
-            }
-        }
+        TransactionExecutionResult::Success {
+            result,
+            receipts,
+            total_gas,
+            total_fee,
+        } => TransactionStatus::Success {
+            block_height,
+            time,
+            result,
+            receipts,
+            total_gas,
+            total_fee,
+        },
+        TransactionExecutionResult::Failed {
+            result,
+            receipts,
+            total_gas,
+            total_fee,
+        } => TransactionStatus::Failed {
+            block_height,
+            time,
+            result,
+            receipts,
+            total_gas,
+            total_fee,
+        },
     }
 }
 
