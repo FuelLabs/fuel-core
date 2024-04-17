@@ -35,10 +35,7 @@ use fuel_core_storage::{
 };
 use fuel_core_types::{
     blockchain::{
-        block::{
-            Block,
-            PartialFuelBlock,
-        },
+        block::PartialFuelBlock,
         header::PartialBlockHeader,
         primitives::DaBlockHeight,
     },
@@ -150,7 +147,7 @@ use tracing::{
     warn,
 };
 
-pub type ExecutionBlockWithSource<TxSource> = ExecutionTypes<Components<TxSource>, Block>;
+pub type ExecutionBlockWithSource<TxSource> = ExecutionTypes<Components<TxSource>>;
 
 pub struct OnceTransactionsSource {
     transactions: ParkingMutex<Vec<MaybeCheckedTransaction>>,
@@ -295,10 +292,6 @@ where
         // Compute the block id before execution if there is one.
         let pre_exec_block_id = block.id();
 
-        // If there is full fuel block for validation then map it into
-        // a partial header.
-        let block = block.map_v(PartialFuelBlock::from);
-
         let (block, execution_data) = match block {
             ExecutionTypes::DryRun(component) => {
                 let mut block =
@@ -341,20 +334,19 @@ where
                     block_executor.execute_block(ExecutionType::Production(component))?;
 
                 (block, execution_data)
-            }
-            ExecutionTypes::Validation(mut block) => {
-                let block_executor = BlockExecutor::new(
-                    self.relayer,
-                    self.database,
-                    self.options,
-                    &block,
-                )?;
-
-                let component = PartialBlockComponent::from_partial_block(&mut block);
-                let execution_data =
-                    block_executor.execute_block(ExecutionType::Validation(component))?;
-                (block, execution_data)
-            }
+            } /* ExecutionTypes::Validation(mut block) => {
+               *     let block_executor = BlockExecutor::new(
+               *         self.relayer,
+               *         self.database,
+               *         self.options,
+               *         &block,
+               *     )?;
+               *
+               *     let component = PartialBlockComponent::from_partial_block(&mut block);
+               *     let execution_data =
+               *         block_executor.execute_block(ExecutionType::Validation(component))?;
+               *     (block, execution_data)
+               * } */
         };
 
         let ExecutionData {
