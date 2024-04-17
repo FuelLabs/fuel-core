@@ -8,7 +8,6 @@ use fuel_core_storage::{
         WriteTransaction,
     },
     StorageAsRef,
-    StorageInspect,
 };
 
 use crate::{
@@ -65,40 +64,33 @@ pub fn import_entries<T>(
 where
     T: TableWithBlueprint,
 {
-    let skip_on_chain = match on_chain_db
+    let on_chain_last_idx = on_chain_db
         .storage::<GenesisMetadata<OnChain>>()
-        .get(T::column().name())
-    {
-        Ok(Some(idx_last_handled)) => {
-            usize::saturating_add(idx_last_handled.into_owned(), 1)
-        }
-        _ => 0,
-    };
+        .get(T::column().name())?
+        .map(|x| x.into_owned());
 
-    let skip_off_chain = match off_chain_db
+    let off_chain_last_idx = off_chain_db
         .storage::<GenesisMetadata<OffChain>>()
-        .get(T::column().name())
-    {
-        Ok(Some(idx_last_handled)) => {
-            usize::saturating_add(idx_last_handled.into_owned(), 1)
-        }
-        _ => 0,
-    };
+        .get(T::column().name())?
+        .map(|x| x.into_owned());
 
-    let mut is_cancelled = cancel_token.is_cancelled();
-    let result: anyhow::Result<_> = groups
+    let num_groups_handled_by_all_dbs = on_chain_last_idx
+        .min(off_chain_last_idx)
+        .map(|x| x.saturating_add(1))
+        .unwrap_or(0);
+
+    for (index, group) in groups
         .into_iter()
         .enumerate()
-        .skip(skip_on_chain)
-        .take_while(|_| {
-            is_cancelled = cancel_token.is_cancelled();
-            !is_cancelled
-        })
-        .try_for_each(|(index, group)| {
-            let group = group?;
+        .skip(num_groups_handled_by_all_dbs)
+    {
+        if cancel_token.is_cancelled() {
+            bail!("Import cancelled");
+        }
+        let group = group?;
 
+        if Some(index) > on_chain_last_idx {
             let mut on_chain_tx = on_chain_db.write_transaction();
-
             handler.process_on_chain(group.clone(), &mut on_chain_tx)?;
 
             GenesisProgressMutate::<OnChain>::update_genesis_progress(
@@ -107,28 +99,20 @@ where
                 index,
             )?;
             on_chain_tx.commit()?;
+        }
 
+        if Some(index) > off_chain_last_idx {
             let mut off_chain_tx = off_chain_db.write_transaction();
-
             handler.process_off_chain(group, &mut off_chain_tx)?;
-
             GenesisProgressMutate::<OffChain>::update_genesis_progress(
                 &mut off_chain_tx,
                 T::column().name(),
                 index,
             )?;
-
             off_chain_tx.commit()?;
+        }
 
-            reporter.set_progress(index);
-
-            Ok(())
-        });
-
-    result?;
-
-    if is_cancelled {
-        bail!("Import cancelled");
+        reporter.set_progress(index);
     }
 
     Ok(())
@@ -142,7 +126,10 @@ mod tests {
                 off_chain::OffChain,
                 DatabaseDescription,
             },
-            genesis_progress::GenesisProgressInspect,
+            genesis_progress::{
+                GenesisMetadata,
+                GenesisProgressInspect,
+            },
         },
         graphql_api::storage::{
             blocks::FuelBlockIdsToHeights,
@@ -198,12 +185,14 @@ mod tests {
         StorageAsMut,
         StorageAsRef,
         StorageInspect,
+        StorageMutate,
     };
     use fuel_core_types::{
         entities::coins::coin::{
             CompressedCoin,
             CompressedCoinV1,
         },
+        fuel_crypto::coins_bip32::prelude::k256::elliptic_curve::PrimeField,
         fuel_tx::UtxoId,
         fuel_types::BlockHeight,
     };
@@ -413,6 +402,12 @@ mod tests {
             0,
         )
         .unwrap();
+        GenesisProgressMutate::<OffChain>::update_genesis_progress(
+            db.off_chain_mut(),
+            Coins::column().name(),
+            0,
+        )
+        .unwrap();
 
         // when
         import_entries(
@@ -584,7 +579,7 @@ mod tests {
         }
 
         while spy.on_chain_called_with().len() < take {
-            std::thread::sleep(std::time::Duration::from_millis(1));
+            std::thread::sleep(std::time::Duration::from_millis(200));
         }
 
         cancel_token.cancel();
@@ -691,5 +686,66 @@ mod tests {
 
         // then
         assert!(result.is_err());
+    }
+
+    #[test_case::test_case(None, Some(0) ; "on chain reverted at start")]
+    #[test_case::test_case(Some(0), None; "off chain reverted at start")]
+    #[test_case::test_case(Some(0), Some(1); "on chain reverted")]
+    #[test_case::test_case(Some(1), Some(0); "off chain reverted")]
+    #[test_case::test_case(Some(3), Some(1); "off chain reverted multiple times")]
+    #[test_case::test_case(Some(1), Some(3); "on chain reverted multiple times")]
+    fn can_recover_when_both_tx_dont_succeed_together(
+        last_on_chain: Option<usize>,
+        last_off_chain: Option<usize>,
+    ) {
+        // given
+        // Currently the difference is never going to be more than 1, but if we ever change that
+        // `import_entries` should be able to handle it.
+        let mut on_chain = Database::<OnChain>::default();
+        if let Some(last_on_chain_group_processed) = last_on_chain {
+            StorageMutate::<GenesisMetadata<OnChain>>::insert(
+                &mut on_chain,
+                "Coins",
+                &last_on_chain_group_processed,
+            )
+            .unwrap();
+        }
+
+        let mut off_chain = Database::<OffChain>::default();
+        if let Some(last_off_chain_group_processed) = last_off_chain {
+            StorageMutate::<GenesisMetadata<OffChain>>::insert(
+                &mut off_chain,
+                "Coins",
+                &last_off_chain_group_processed,
+            )
+            .unwrap();
+        }
+
+        let spy = Spy::default();
+        let groups = TestData::new(5);
+
+        // when
+        import_entries(
+            MultiCancellationToken::default(),
+            spy.default_importer(),
+            groups.as_ok_groups(0),
+            on_chain,
+            off_chain,
+            ProgressReporter::default(),
+        )
+        .unwrap();
+
+        // then
+        let on_chain_imports = spy.on_chain_called_with();
+        assert_eq!(
+            on_chain_imports,
+            groups.as_unwrapped_groups(last_on_chain.map(|x| x + 1).unwrap_or(0))
+        );
+
+        let off_chain_imports = spy.off_chain_called_with();
+        assert_eq!(
+            off_chain_imports,
+            groups.as_unwrapped_groups(last_off_chain.map(|x| x + 1).unwrap_or(0))
+        );
     }
 }
