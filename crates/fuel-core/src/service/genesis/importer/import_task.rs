@@ -1,21 +1,35 @@
+use std::borrow::Cow;
+
 use anyhow::bail;
 use fuel_core_chain_config::TableEntry;
 use fuel_core_storage::{
     kv_store::StorageColumn,
     structured_storage::TableWithBlueprint,
-    transactional::{StorageTransaction, WriteTransaction},
+    transactional::{
+        StorageTransaction,
+        WriteTransaction,
+    },
     StorageAsRef,
 };
 
 use crate::{
     database::{
-        database_description::{off_chain::OffChain, on_chain::OnChain},
-        genesis_progress::{GenesisMetadata, GenesisProgressMutate},
+        database_description::{
+            off_chain::OffChain,
+            on_chain::OnChain,
+        },
+        genesis_progress::{
+            GenesisMetadata,
+            GenesisProgressMutate,
+        },
         Database,
     },
     service::genesis::{
         progress::ProgressReporter,
-        task_manager::{MultiCancellationToken, NotifyCancel},
+        task_manager::{
+            MultiCancellationToken,
+            NotifyCancel,
+        },
     },
 };
 
@@ -25,7 +39,7 @@ where
 {
     fn on_chain(
         &mut self,
-        _group: Vec<TableEntry<T>>,
+        _group: Cow<Vec<TableEntry<T>>>,
         _tx: &mut StorageTransaction<&mut Database<OnChain>>,
     ) -> anyhow::Result<()> {
         Ok(())
@@ -33,7 +47,7 @@ where
 
     fn off_chain(
         &mut self,
-        _group: Vec<TableEntry<T>>,
+        _group: Cow<Vec<TableEntry<T>>>,
         _tx: &mut StorageTransaction<&mut Database<OffChain>>,
     ) -> anyhow::Result<()> {
         Ok(())
@@ -78,7 +92,7 @@ where
 
         if Some(index) > on_chain_last_idx {
             let mut on_chain_tx = on_chain_db.write_transaction();
-            handler.on_chain(group.clone(), &mut on_chain_tx)?;
+            handler.on_chain(Cow::Borrowed(&group), &mut on_chain_tx)?;
 
             GenesisProgressMutate::<OnChain>::update_genesis_progress(
                 &mut on_chain_tx,
@@ -90,7 +104,7 @@ where
 
         if Some(index) > off_chain_last_idx {
             let mut off_chain_tx = off_chain_db.write_transaction();
-            handler.off_chain(group, &mut off_chain_tx)?;
+            handler.off_chain(Cow::Owned(group), &mut off_chain_tx)?;
             GenesisProgressMutate::<OffChain>::update_genesis_progress(
                 &mut off_chain_tx,
                 T::column().name(),
@@ -109,40 +123,88 @@ where
 mod tests {
     use crate::{
         database::{
-            database_description::{off_chain::OffChain, DatabaseDescription},
-            genesis_progress::{GenesisMetadata, GenesisProgressInspect},
+            database_description::{
+                off_chain::OffChain,
+                DatabaseDescription,
+            },
+            genesis_progress::{
+                GenesisMetadata,
+                GenesisProgressInspect,
+            },
         },
-        graphql_api::storage::coins::{OwnedCoinKey, OwnedCoins},
+        graphql_api::storage::coins::{
+            OwnedCoinKey,
+            OwnedCoins,
+        },
         service::genesis::{
-            importer::import_task::import_entries, progress::ProgressReporter,
+            importer::import_task::import_entries,
+            progress::ProgressReporter,
             task_manager::MultiCancellationToken,
         },
     };
-    use std::sync::{Arc, Mutex};
+    use std::{
+        borrow::Cow,
+        sync::{
+            Arc,
+            Mutex,
+        },
+    };
 
-    use anyhow::{anyhow, bail};
-    use fuel_core_chain_config::{Groups, Randomize, TableEntry};
+    use anyhow::{
+        anyhow,
+        bail,
+    };
+    use fuel_core_chain_config::{
+        Groups,
+        Randomize,
+        TableEntry,
+    };
     use fuel_core_storage::{
-        iter::{BoxedIter, IterDirection, IterableStore},
-        kv_store::{KVItem, KeyValueInspect, StorageColumn, Value},
+        iter::{
+            BoxedIter,
+            IterDirection,
+            IterableStore,
+        },
+        kv_store::{
+            KVItem,
+            KeyValueInspect,
+            StorageColumn,
+            Value,
+        },
         structured_storage::TableWithBlueprint,
         tables::Coins,
-        transactional::{Changes, StorageTransaction},
-        Result as StorageResult, StorageAsMut, StorageInspect, StorageMutate,
+        transactional::{
+            Changes,
+            StorageTransaction,
+        },
+        Result as StorageResult,
+        StorageAsMut,
+        StorageInspect,
+        StorageMutate,
     };
     use fuel_core_types::{
-        entities::coins::coin::{CompressedCoin, CompressedCoinV1},
+        entities::coins::coin::{
+            CompressedCoin,
+            CompressedCoinV1,
+        },
         fuel_tx::UtxoId,
     };
-    use rand::{rngs::StdRng, SeedableRng};
+    use rand::{
+        rngs::StdRng,
+        SeedableRng,
+    };
 
     use crate::{
         combined_database::CombinedDatabase,
         database::{
             database_description::on_chain::OnChain,
-            genesis_progress::GenesisProgressMutate, Database,
+            genesis_progress::GenesisProgressMutate,
+            Database,
         },
-        state::{in_memory::memory_store::MemoryStore, TransactableStorage},
+        state::{
+            in_memory::memory_store::MemoryStore,
+            TransactableStorage,
+        },
     };
 
     use super::ImportTable;
@@ -231,9 +293,10 @@ mod tests {
     {
         fn on_chain(
             &mut self,
-            group: Vec<TableEntry<Coins>>,
+            group: Cow<Vec<TableEntry<Coins>>>,
             tx: &mut StorageTransaction<&mut Database<OnChain>>,
         ) -> anyhow::Result<()> {
+            let group = group.into_owned();
             self.handler
                 .on_chain_called_with
                 .lock()
@@ -242,11 +305,13 @@ mod tests {
             (self.on_chain)(group, tx)?;
             Ok(())
         }
+
         fn off_chain(
             &mut self,
-            group: Vec<TableEntry<Coins>>,
+            group: Cow<Vec<TableEntry<Coins>>>,
             tx: &mut StorageTransaction<&mut Database<OffChain>>,
         ) -> anyhow::Result<()> {
+            let group = group.into_owned();
             self.handler
                 .off_chain_called_with
                 .lock()

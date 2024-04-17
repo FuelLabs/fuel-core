@@ -43,10 +43,7 @@ use fuel_core_storage::{
 use fuel_core_types::{
     self,
     blockchain::primitives::DaBlockHeight,
-    entities::{
-        coins::coin::Coin,
-        Message,
-    },
+    entities::coins::coin::Coin,
     fuel_types::BlockHeight,
     services::executor::Event,
 };
@@ -54,10 +51,10 @@ use fuel_core_types::{
 impl ImportTable<Coins> for Handler {
     fn on_chain(
         &mut self,
-        group: Vec<TableEntry<Coins>>,
+        group: Cow<Vec<TableEntry<Coins>>>,
         tx: &mut StorageTransaction<&mut Database<OnChain>>,
     ) -> anyhow::Result<()> {
-        for coin in &group {
+        for coin in group.as_ref() {
             init_coin(tx, coin, self.block_height)?;
         }
 
@@ -66,12 +63,15 @@ impl ImportTable<Coins> for Handler {
 
     fn off_chain(
         &mut self,
-        group: Vec<TableEntry<Coins>>,
+        group: Cow<Vec<TableEntry<Coins>>>,
         tx: &mut StorageTransaction<&mut Database<OffChain>>,
     ) -> anyhow::Result<()> {
-        let events = group.into_iter().map(|TableEntry { value, key }| {
-            Cow::Owned(Event::CoinCreated(value.uncompress(key)))
-        });
+        let events = group
+            .into_owned()
+            .into_iter()
+            .map(|TableEntry { value, key }| {
+                Cow::Owned(Event::CoinCreated(value.uncompress(key)))
+            });
         worker_service::process_executor_events(events, tx)?;
 
         Ok(())
@@ -81,20 +81,22 @@ impl ImportTable<Coins> for Handler {
 impl ImportTable<Messages> for Handler {
     fn on_chain(
         &mut self,
-        group: Vec<TableEntry<Messages>>,
+        group: Cow<Vec<TableEntry<Messages>>>,
         tx: &mut StorageTransaction<&mut Database<OnChain>>,
     ) -> anyhow::Result<()> {
-        group
-            .into_iter()
-            .try_for_each(|message| init_da_message(tx, message, self.da_block_height))
+        for message in group.as_ref() {
+            init_da_message(tx, message, self.da_block_height)?;
+        }
+        Ok(())
     }
 
     fn off_chain(
         &mut self,
-        group: Vec<TableEntry<Messages>>,
+        group: Cow<Vec<TableEntry<Messages>>>,
         tx: &mut StorageTransaction<&mut Database<OffChain>>,
     ) -> anyhow::Result<()> {
         let events = group
+            .into_owned()
             .into_iter()
             .map(|TableEntry { value, .. }| Cow::Owned(Event::MessageImported(value)));
         worker_service::process_executor_events(events, tx)
@@ -104,34 +106,36 @@ impl ImportTable<Messages> for Handler {
 impl ImportTable<ContractsRawCode> for Handler {
     fn on_chain(
         &mut self,
-        group: Vec<TableEntry<ContractsRawCode>>,
+        group: Cow<Vec<TableEntry<ContractsRawCode>>>,
         tx: &mut StorageTransaction<&mut Database<OnChain>>,
     ) -> anyhow::Result<()> {
-        group
-            .into_iter()
-            .try_for_each(|contract| init_contract_raw_code(tx, &contract))
+        for contract in group.as_ref() {
+            init_contract_raw_code(tx, &contract)?;
+        }
+        Ok(())
     }
 }
 
 impl ImportTable<ContractsLatestUtxo> for Handler {
     fn on_chain(
         &mut self,
-        group: Vec<TableEntry<ContractsLatestUtxo>>,
+        group: Cow<Vec<TableEntry<ContractsLatestUtxo>>>,
         tx: &mut StorageTransaction<&mut Database<OnChain>>,
     ) -> anyhow::Result<()> {
-        group.into_iter().try_for_each(|contract| {
-            init_contract_latest_utxo(tx, &contract, self.block_height)
-        })
+        for utxo in group.as_ref() {
+            init_contract_latest_utxo(tx, utxo, self.block_height)?;
+        }
+        Ok(())
     }
 }
 
 impl ImportTable<ContractsState> for Handler {
     fn on_chain(
         &mut self,
-        group: Vec<TableEntry<ContractsState>>,
+        group: Cow<Vec<TableEntry<ContractsState>>>,
         tx: &mut StorageTransaction<&mut Database<OnChain>>,
     ) -> anyhow::Result<()> {
-        tx.update_contract_states(group)?;
+        tx.update_contract_states(group.into_owned())?;
         Ok(())
     }
 }
@@ -139,10 +143,10 @@ impl ImportTable<ContractsState> for Handler {
 impl ImportTable<ContractsAssets> for Handler {
     fn on_chain(
         &mut self,
-        group: Vec<TableEntry<ContractsAssets>>,
+        group: Cow<Vec<TableEntry<ContractsAssets>>>,
         tx: &mut StorageTransaction<&mut Database<OnChain>>,
     ) -> anyhow::Result<()> {
-        tx.update_contract_balances(group)?;
+        tx.update_contract_balances(group.into_owned())?;
         Ok(())
     }
 }
@@ -150,10 +154,10 @@ impl ImportTable<ContractsAssets> for Handler {
 impl ImportTable<Transactions> for Handler {
     fn on_chain(
         &mut self,
-        group: Vec<TableEntry<Transactions>>,
+        group: Cow<Vec<TableEntry<Transactions>>>,
         tx: &mut StorageTransaction<&mut Database<OnChain>>,
     ) -> anyhow::Result<()> {
-        for transaction in &group {
+        for transaction in group.as_ref() {
             tx.storage::<Transactions>()
                 .insert(&transaction.key, &transaction.value)?;
         }
@@ -163,7 +167,7 @@ impl ImportTable<Transactions> for Handler {
 
     fn off_chain(
         &mut self,
-        group: Vec<TableEntry<Transactions>>,
+        group: Cow<Vec<TableEntry<Transactions>>>,
         tx: &mut StorageTransaction<&mut Database<OffChain>>,
     ) -> anyhow::Result<()> {
         let transactions = group.iter().map(|TableEntry { value, .. }| value);
@@ -175,10 +179,10 @@ impl ImportTable<Transactions> for Handler {
 impl ImportTable<TransactionStatuses> for Handler {
     fn off_chain(
         &mut self,
-        group: Vec<TableEntry<TransactionStatuses>>,
+        group: Cow<Vec<TableEntry<TransactionStatuses>>>,
         tx: &mut StorageTransaction<&mut Database<OffChain>>,
     ) -> anyhow::Result<()> {
-        for tx_status in group {
+        for tx_status in group.as_ref() {
             tx.storage::<TransactionStatuses>()
                 .insert(&tx_status.key, &tx_status.value)?;
         }
@@ -189,10 +193,10 @@ impl ImportTable<TransactionStatuses> for Handler {
 impl ImportTable<FuelBlockIdsToHeights> for Handler {
     fn off_chain(
         &mut self,
-        group: Vec<TableEntry<FuelBlockIdsToHeights>>,
+        group: Cow<Vec<TableEntry<FuelBlockIdsToHeights>>>,
         tx: &mut StorageTransaction<&mut Database<OffChain>>,
     ) -> anyhow::Result<()> {
-        for entry in group {
+        for entry in group.as_ref() {
             tx.storage::<FuelBlockIdsToHeights>()
                 .insert(&entry.key, &entry.value)?;
         }
@@ -203,10 +207,10 @@ impl ImportTable<FuelBlockIdsToHeights> for Handler {
 impl ImportTable<OwnedTransactions> for Handler {
     fn off_chain(
         &mut self,
-        group: Vec<TableEntry<OwnedTransactions>>,
+        group: Cow<Vec<TableEntry<OwnedTransactions>>>,
         tx: &mut StorageTransaction<&mut Database<OffChain>>,
     ) -> anyhow::Result<()> {
-        for entry in group {
+        for entry in group.as_ref() {
             tx.storage::<OwnedTransactions>()
                 .insert(&entry.key, &entry.value)?;
         }
@@ -294,10 +298,10 @@ fn init_contract_raw_code(
 
 fn init_da_message(
     transaction: &mut StorageTransaction<&mut Database>,
-    msg: TableEntry<Messages>,
+    msg: &TableEntry<Messages>,
     da_height: DaBlockHeight,
 ) -> anyhow::Result<()> {
-    let message: Message = msg.value;
+    let message = &msg.value;
 
     if message.da_height() > da_height {
         return Err(anyhow!(
@@ -307,7 +311,7 @@ fn init_da_message(
 
     if transaction
         .storage::<Messages>()
-        .insert(message.id(), &message)?
+        .insert(message.id(), message)?
         .is_some()
     {
         return Err(anyhow!("Message should not exist"));
