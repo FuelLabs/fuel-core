@@ -6,22 +6,12 @@ use super::{
 };
 mod import_task;
 mod on_chain;
-use std::marker::PhantomData;
 
 use crate::{
     combined_database::CombinedDatabase,
-    database::database_description::{
-        off_chain::OffChain,
-        on_chain::OnChain,
-    },
-    graphql_api::storage::{
-        coins::OwnedCoins,
-        contracts::ContractsInfo,
-        messages::OwnedMessageIds,
-        transactions::{
-            OwnedTransactions,
-            TransactionStatuses,
-        },
+    graphql_api::storage::transactions::{
+        OwnedTransactions,
+        TransactionStatuses,
     },
 };
 use fuel_core_chain_config::{

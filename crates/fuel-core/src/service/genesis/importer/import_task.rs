@@ -3,32 +3,19 @@ use fuel_core_chain_config::TableEntry;
 use fuel_core_storage::{
     kv_store::StorageColumn,
     structured_storage::TableWithBlueprint,
-    transactional::{
-        StorageTransaction,
-        WriteTransaction,
-    },
+    transactional::{StorageTransaction, WriteTransaction},
     StorageAsRef,
 };
 
 use crate::{
     database::{
-        database_description::{
-            off_chain::OffChain,
-            on_chain::OnChain,
-            DatabaseDescription,
-        },
-        genesis_progress::{
-            GenesisMetadata,
-            GenesisProgressMutate,
-        },
+        database_description::{off_chain::OffChain, on_chain::OnChain},
+        genesis_progress::{GenesisMetadata, GenesisProgressMutate},
         Database,
     },
     service::genesis::{
         progress::ProgressReporter,
-        task_manager::{
-            MultiCancellationToken,
-            NotifyCancel,
-        },
+        task_manager::{MultiCancellationToken, NotifyCancel},
     },
 };
 
@@ -122,96 +109,40 @@ where
 mod tests {
     use crate::{
         database::{
-            database_description::{
-                off_chain::OffChain,
-                DatabaseDescription,
-            },
-            genesis_progress::{
-                GenesisMetadata,
-                GenesisProgressInspect,
-            },
+            database_description::{off_chain::OffChain, DatabaseDescription},
+            genesis_progress::{GenesisMetadata, GenesisProgressInspect},
         },
-        graphql_api::storage::{
-            blocks::FuelBlockIdsToHeights,
-            coins::{
-                OwnedCoinKey,
-                OwnedCoins,
-            },
-        },
+        graphql_api::storage::coins::{OwnedCoinKey, OwnedCoins},
         service::genesis::{
-            importer::import_task::import_entries,
-            progress::ProgressReporter,
+            importer::import_task::import_entries, progress::ProgressReporter,
             task_manager::MultiCancellationToken,
         },
     };
-    use std::{
-        marker::PhantomData,
-        sync::{
-            Arc,
-            Mutex,
-        },
-        time::Duration,
-    };
+    use std::sync::{Arc, Mutex};
 
-    use anyhow::{
-        anyhow,
-        bail,
-    };
-    use fuel_core_chain_config::{
-        Groups,
-        Randomize,
-        TableEntry,
-    };
+    use anyhow::{anyhow, bail};
+    use fuel_core_chain_config::{Groups, Randomize, TableEntry};
     use fuel_core_storage::{
-        column::Column,
-        iter::{
-            BoxedIter,
-            IterDirection,
-            IterableStore,
-        },
-        kv_store::{
-            KVItem,
-            KeyValueInspect,
-            StorageColumn,
-            Value,
-        },
+        iter::{BoxedIter, IterDirection, IterableStore},
+        kv_store::{KVItem, KeyValueInspect, StorageColumn, Value},
         structured_storage::TableWithBlueprint,
         tables::Coins,
-        transactional::{
-            Changes,
-            StorageTransaction,
-        },
-        Result as StorageResult,
-        StorageAsMut,
-        StorageAsRef,
-        StorageInspect,
-        StorageMutate,
+        transactional::{Changes, StorageTransaction},
+        Result as StorageResult, StorageAsMut, StorageInspect, StorageMutate,
     };
     use fuel_core_types::{
-        entities::coins::coin::{
-            CompressedCoin,
-            CompressedCoinV1,
-        },
-        fuel_crypto::coins_bip32::prelude::k256::elliptic_curve::PrimeField,
+        entities::coins::coin::{CompressedCoin, CompressedCoinV1},
         fuel_tx::UtxoId,
-        fuel_types::BlockHeight,
     };
-    use rand::{
-        rngs::StdRng,
-        SeedableRng,
-    };
+    use rand::{rngs::StdRng, SeedableRng};
 
     use crate::{
         combined_database::CombinedDatabase,
         database::{
             database_description::on_chain::OnChain,
-            genesis_progress::GenesisProgressMutate,
-            Database,
+            genesis_progress::GenesisProgressMutate, Database,
         },
-        state::{
-            in_memory::memory_store::MemoryStore,
-            TransactableStorage,
-        },
+        state::{in_memory::memory_store::MemoryStore, TransactableStorage},
     };
 
     use super::ImportTable;
@@ -338,14 +269,6 @@ mod tests {
                 .map(|el| vec![el])
                 .collect();
             Self { batches }
-        }
-
-        pub fn as_entries(&self, skip_batches: usize) -> Vec<TableEntry<Coins>> {
-            self.batches
-                .iter()
-                .skip(skip_batches)
-                .flat_map(|batch| batch.clone())
-                .collect()
         }
 
         pub fn as_unwrapped_groups(
