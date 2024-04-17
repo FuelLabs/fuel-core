@@ -8,7 +8,8 @@
           "max_outputs": 255,
           "max_witnesses": 255,
           "max_gas_per_tx": 30000000,
-          "max_size": 112640
+          "max_size": 112640,
+          "max_bytecode_subsections": 256
         }
       },
       "predicate_params": {

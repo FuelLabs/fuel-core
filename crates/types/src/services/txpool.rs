@@ -19,6 +19,8 @@ use crate::{
         Script,
         Transaction,
         TxId,
+        Upgrade,
+        Upload,
         UtxoId,
     },
     fuel_types::{
@@ -58,30 +60,40 @@ pub enum PoolTransaction {
     Script(Checked<Script>),
     /// Create
     Create(Checked<Create>),
+    /// Upgrade
+    Upgrade(Checked<Upgrade>),
+    /// Upload
+    Upload(Checked<Upload>),
 }
 
 impl PoolTransaction {
     /// Used for accounting purposes when charging byte based fees.
     pub fn metered_bytes_size(&self) -> usize {
         match self {
-            PoolTransaction::Script(script) => script.transaction().metered_bytes_size(),
-            PoolTransaction::Create(create) => create.transaction().metered_bytes_size(),
+            PoolTransaction::Script(tx) => tx.transaction().metered_bytes_size(),
+            PoolTransaction::Create(tx) => tx.transaction().metered_bytes_size(),
+            PoolTransaction::Upgrade(tx) => tx.transaction().metered_bytes_size(),
+            PoolTransaction::Upload(tx) => tx.transaction().metered_bytes_size(),
         }
     }
 
     /// Returns the transaction ID
     pub fn id(&self) -> TxId {
         match self {
-            PoolTransaction::Script(script) => script.id(),
-            PoolTransaction::Create(create) => create.id(),
+            PoolTransaction::Script(tx) => tx.id(),
+            PoolTransaction::Create(tx) => tx.id(),
+            PoolTransaction::Upgrade(tx) => tx.id(),
+            PoolTransaction::Upload(tx) => tx.id(),
         }
     }
 
     /// Returns the maximum amount of gas that the transaction can consume.
     pub fn max_gas(&self) -> Word {
         match self {
-            PoolTransaction::Script(script) => script.metadata().max_gas,
-            PoolTransaction::Create(create) => create.metadata().max_gas,
+            PoolTransaction::Script(tx) => tx.metadata().max_gas,
+            PoolTransaction::Create(tx) => tx.metadata().max_gas,
+            PoolTransaction::Upgrade(tx) => tx.metadata().max_gas,
+            PoolTransaction::Upload(tx) => tx.metadata().max_gas,
         }
     }
 }
@@ -94,34 +106,44 @@ impl PoolTransaction {
                 Some(*script.transaction().script_gas_limit())
             }
             PoolTransaction::Create(_) => None,
+            PoolTransaction::Upgrade(_) => None,
+            PoolTransaction::Upload(_) => None,
         }
     }
 
     pub fn tip(&self) -> Word {
         match self {
-            Self::Script(script) => script.transaction().tip(),
-            Self::Create(create) => create.transaction().tip(),
+            Self::Script(tx) => tx.transaction().tip(),
+            Self::Create(tx) => tx.transaction().tip(),
+            Self::Upload(tx) => tx.transaction().tip(),
+            Self::Upgrade(tx) => tx.transaction().tip(),
         }
     }
 
     pub fn is_computed(&self) -> bool {
         match self {
-            PoolTransaction::Script(script) => script.transaction().is_computed(),
-            PoolTransaction::Create(create) => create.transaction().is_computed(),
+            PoolTransaction::Script(tx) => tx.transaction().is_computed(),
+            PoolTransaction::Create(tx) => tx.transaction().is_computed(),
+            PoolTransaction::Upgrade(tx) => tx.transaction().is_computed(),
+            PoolTransaction::Upload(tx) => tx.transaction().is_computed(),
         }
     }
 
     pub fn inputs(&self) -> &Vec<Input> {
         match self {
-            PoolTransaction::Script(script) => script.transaction().inputs(),
-            PoolTransaction::Create(create) => create.transaction().inputs(),
+            PoolTransaction::Script(tx) => tx.transaction().inputs(),
+            PoolTransaction::Create(tx) => tx.transaction().inputs(),
+            PoolTransaction::Upgrade(tx) => tx.transaction().inputs(),
+            PoolTransaction::Upload(tx) => tx.transaction().inputs(),
         }
     }
 
     pub fn outputs(&self) -> &Vec<Output> {
         match self {
-            PoolTransaction::Script(script) => script.transaction().outputs(),
-            PoolTransaction::Create(create) => create.transaction().outputs(),
+            PoolTransaction::Script(tx) => tx.transaction().outputs(),
+            PoolTransaction::Create(tx) => tx.transaction().outputs(),
+            PoolTransaction::Upgrade(tx) => tx.transaction().outputs(),
+            PoolTransaction::Upload(tx) => tx.transaction().outputs(),
         }
     }
 }
@@ -129,12 +151,12 @@ impl PoolTransaction {
 impl From<&PoolTransaction> for Transaction {
     fn from(tx: &PoolTransaction) -> Self {
         match tx {
-            PoolTransaction::Script(script) => {
-                Transaction::Script(script.transaction().clone())
+            PoolTransaction::Script(tx) => Transaction::Script(tx.transaction().clone()),
+            PoolTransaction::Create(tx) => Transaction::Create(tx.transaction().clone()),
+            PoolTransaction::Upgrade(tx) => {
+                Transaction::Upgrade(tx.transaction().clone())
             }
-            PoolTransaction::Create(create) => {
-                Transaction::Create(create.transaction().clone())
-            }
+            PoolTransaction::Upload(tx) => Transaction::Upload(tx.transaction().clone()),
         }
     }
 }
@@ -142,8 +164,10 @@ impl From<&PoolTransaction> for Transaction {
 impl From<&PoolTransaction> for CheckedTransaction {
     fn from(tx: &PoolTransaction) -> Self {
         match tx {
-            PoolTransaction::Script(script) => CheckedTransaction::Script(script.clone()),
-            PoolTransaction::Create(create) => CheckedTransaction::Create(create.clone()),
+            PoolTransaction::Script(tx) => CheckedTransaction::Script(tx.clone()),
+            PoolTransaction::Create(tx) => CheckedTransaction::Create(tx.clone()),
+            PoolTransaction::Upgrade(tx) => CheckedTransaction::Upgrade(tx.clone()),
+            PoolTransaction::Upload(tx) => CheckedTransaction::Upload(tx.clone()),
         }
     }
 }
@@ -191,6 +215,10 @@ pub enum TransactionStatus {
         result: Option<ProgramState>,
         /// The receipts generated during execution of the transaction.
         receipts: Vec<Receipt>,
+        /// The total gas used by the transaction.
+        total_gas: u64,
+        /// The total fee paid by the transaction.
+        total_fee: u64,
     },
     /// Transaction was squeezed of the txpool
     SqueezedOut {
@@ -207,6 +235,10 @@ pub enum TransactionStatus {
         result: Option<ProgramState>,
         /// The receipts generated during execution of the transaction.
         receipts: Vec<Receipt>,
+        /// The total gas used by the transaction.
+        total_gas: u64,
+        /// The total fee paid by the transaction.
+        total_fee: u64,
     },
 }
 
@@ -218,22 +250,32 @@ pub fn from_executor_to_status(
     let time = block.header().time();
     let block_height = *block.header().height();
     match result {
-        TransactionExecutionResult::Success { result, receipts } => {
-            TransactionStatus::Success {
-                block_height,
-                time,
-                result,
-                receipts,
-            }
-        }
-        TransactionExecutionResult::Failed { result, receipts } => {
-            TransactionStatus::Failed {
-                block_height,
-                time,
-                result,
-                receipts,
-            }
-        }
+        TransactionExecutionResult::Success {
+            result,
+            receipts,
+            total_gas,
+            total_fee,
+        } => TransactionStatus::Success {
+            block_height,
+            time,
+            result,
+            receipts,
+            total_gas,
+            total_fee,
+        },
+        TransactionExecutionResult::Failed {
+            result,
+            receipts,
+            total_gas,
+            total_fee,
+        } => TransactionStatus::Failed {
+            block_height,
+            time,
+            result,
+            receipts,
+            total_gas,
+            total_fee,
+        },
     }
 }
 

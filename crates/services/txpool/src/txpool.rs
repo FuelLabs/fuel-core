@@ -350,9 +350,11 @@ where
         let tx: CheckedTransaction = tx.into();
 
         let tx = Arc::new(match tx {
-            CheckedTransaction::Script(script) => PoolTransaction::Script(script),
-            CheckedTransaction::Create(create) => PoolTransaction::Create(create),
+            CheckedTransaction::Script(tx) => PoolTransaction::Script(tx),
+            CheckedTransaction::Create(tx) => PoolTransaction::Create(tx),
             CheckedTransaction::Mint(_) => return Err(Error::MintIsDisallowed),
+            CheckedTransaction::Upgrade(tx) => PoolTransaction::Upgrade(tx),
+            CheckedTransaction::Upload(tx) => PoolTransaction::Upload(tx),
         });
 
         self.check_blacklisting(tx.as_ref())?;
@@ -541,6 +543,16 @@ fn verify_tx_min_gas_price(
             let ready = create.into_ready(gas_price, gas_costs, fee_parameters)?;
             let (_, checked) = ready.decompose();
             CheckedTransaction::Create(checked)
+        }
+        CheckedTransaction::Upgrade(tx) => {
+            let ready = tx.into_ready(gas_price, gas_costs, fee_parameters)?;
+            let (_, checked) = ready.decompose();
+            CheckedTransaction::Upgrade(checked)
+        }
+        CheckedTransaction::Upload(tx) => {
+            let ready = tx.into_ready(gas_price, gas_costs, fee_parameters)?;
+            let (_, checked) = ready.decompose();
+            CheckedTransaction::Upload(checked)
         }
         CheckedTransaction::Mint(_) => return Err(Error::MintIsDisallowed),
     };

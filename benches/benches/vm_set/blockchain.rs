@@ -37,7 +37,10 @@ use fuel_core_storage::{
     StorageAsMut,
 };
 use fuel_core_types::{
-    blockchain::header::ConsensusHeader,
+    blockchain::header::{
+        ApplicationHeader,
+        ConsensusHeader,
+    },
     fuel_asm::{
         op,
         GTFArgs,
@@ -123,15 +126,22 @@ impl BenchDb {
 
     /// Creates a `VmDatabase` instance.
     fn to_vm_database(&self) -> VmStorage<StorageTransaction<Database>> {
-        let header = ConsensusHeader {
+        let consensus = ConsensusHeader {
             prev_root: Default::default(),
             height: 1.into(),
             time: Tai64::UNIX_EPOCH,
             generated: (),
         };
+        let application = ApplicationHeader {
+            da_height: Default::default(),
+            consensus_parameters_version: 0,
+            generated: (),
+            state_transition_bytecode_version: 0,
+        };
         VmStorage::new(
             self.db.clone().into_transaction(),
-            &header,
+            &consensus,
+            &application,
             ContractId::zeroed(),
         )
     }

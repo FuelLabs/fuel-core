@@ -33,6 +33,7 @@ mod predicates;
 mod tx_pointer;
 mod txn_status_subscription;
 mod txpool;
+mod upgrade;
 mod utxo_validation;
 
 #[test]
