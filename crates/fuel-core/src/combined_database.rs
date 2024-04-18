@@ -173,9 +173,8 @@ impl CombinedDatabase {
             ContractsLatestUtxo
         );
 
-        let block = self.on_chain().latest_block()?;
-        let state_config =
-            builder.build(*block.header().height(), block.header().da_height)?;
+        let latest_block = self.on_chain().latest_block()?;
+        let state_config = builder.build(Some(latest_block.header().into()))?;
 
         Ok(state_config)
     }

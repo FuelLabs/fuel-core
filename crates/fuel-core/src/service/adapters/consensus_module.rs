@@ -5,7 +5,7 @@ use crate::{
         VerifierAdapter,
     },
 };
-use fuel_core_chain_config::SnapshotReader;
+use fuel_core_chain_config::ConsensusConfig;
 use fuel_core_consensus_module::block_verifier::{
     config::Config as VerifierConfig,
     Verifier,
@@ -19,6 +19,7 @@ use fuel_core_storage::{
 };
 use fuel_core_types::{
     blockchain::{
+        block::CompressedBlock,
         header::BlockHeader,
         primitives::DaBlockHeight,
     },
@@ -30,10 +31,13 @@ use std::sync::Arc;
 pub mod poa;
 
 impl VerifierAdapter {
-    pub fn new(snapshot_reader: &SnapshotReader, database: Database) -> Self {
-        let block_height = snapshot_reader.block_height();
-        let da_block_height = snapshot_reader.da_block_height();
-        let consensus = snapshot_reader.chain_config().consensus;
+    pub fn new(
+        genesis_block: &CompressedBlock,
+        consensus: ConsensusConfig,
+        database: Database,
+    ) -> Self {
+        let block_height = *genesis_block.header().height();
+        let da_block_height = genesis_block.header().da_height;
         let config = VerifierConfig::new(consensus, block_height, da_block_height);
         Self {
             block_verifier: Arc::new(Verifier::new(config, database)),

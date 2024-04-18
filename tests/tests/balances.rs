@@ -3,7 +3,6 @@ use fuel_core::{
         CoinConfig,
         CoinConfigGenerator,
         MessageConfig,
-        SnapshotReader,
         StateConfig,
     },
     service::{
@@ -70,10 +69,7 @@ async fn balance() {
             .collect(),
         ..Default::default()
     };
-    let config = Config {
-        snapshot_reader: SnapshotReader::local_testnet().with_state_config(state_config),
-        ..Config::local_node()
-    };
+    let config = Config::local_node_with_state_config(state_config);
 
     // setup server & client
     let srv = FuelService::new_node(config).await.unwrap();
@@ -201,10 +197,7 @@ async fn first_5_balances() {
         messages,
         ..Default::default()
     };
-    let config = Config {
-        snapshot_reader: SnapshotReader::local_testnet().with_state_config(state_config),
-        ..Config::local_node()
-    };
+    let config = Config::local_node_with_state_config(state_config);
 
     // setup server & client
     let srv = FuelService::new_node(config).await.unwrap();

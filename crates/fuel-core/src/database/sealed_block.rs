@@ -14,6 +14,7 @@ use fuel_core_storage::{
 };
 use fuel_core_types::{
     blockchain::{
+        block::CompressedBlock,
         consensus::{
             Consensus,
             Genesis,
@@ -48,6 +49,14 @@ impl Database {
         } else {
             Ok(None)
         }
+    }
+
+    pub fn genesis_block(&self) -> StorageResult<Option<CompressedBlock>> {
+        Ok(self
+            .iter_all::<FuelBlocks>(Some(IterDirection::Forward))
+            .next()
+            .transpose()?
+            .map(|(_, block)| block))
     }
 
     pub fn get_genesis(&self) -> StorageResult<Genesis> {
