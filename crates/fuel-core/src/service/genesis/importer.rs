@@ -5,7 +5,7 @@ use super::{
     task_manager::TaskManager,
 };
 mod import_task;
-mod on_chain;
+mod logic;
 
 use crate::{
     combined_database::CombinedDatabase,

@@ -66,12 +66,10 @@ impl ImportTable<Coins> for Handler {
         group: Cow<Vec<TableEntry<Coins>>>,
         tx: &mut StorageTransaction<&mut Database<OffChain>>,
     ) -> anyhow::Result<()> {
-        let events = group
-            .into_owned()
-            .into_iter()
-            .map(|TableEntry { value, key }| {
-                Cow::Owned(Event::CoinCreated(value.uncompress(key)))
-            });
+        let group = group.into_owned();
+        let events = group.into_iter().map(|TableEntry { value, key }| {
+            Cow::Owned(Event::CoinCreated(value.uncompress(key)))
+        });
         worker_service::process_executor_events(events, tx)?;
 
         Ok(())
@@ -95,8 +93,8 @@ impl ImportTable<Messages> for Handler {
         group: Cow<Vec<TableEntry<Messages>>>,
         tx: &mut StorageTransaction<&mut Database<OffChain>>,
     ) -> anyhow::Result<()> {
+        let group = group.into_owned();
         let events = group
-            .into_owned()
             .into_iter()
             .map(|TableEntry { value, .. }| Cow::Owned(Event::MessageImported(value)));
         worker_service::process_executor_events(events, tx)
@@ -110,7 +108,7 @@ impl ImportTable<ContractsRawCode> for Handler {
         tx: &mut StorageTransaction<&mut Database<OnChain>>,
     ) -> anyhow::Result<()> {
         for contract in group.as_ref() {
-            init_contract_raw_code(tx, &contract)?;
+            init_contract_raw_code(tx, contract)?;
         }
         Ok(())
     }
