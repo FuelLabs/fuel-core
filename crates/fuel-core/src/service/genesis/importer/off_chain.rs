@@ -274,7 +274,7 @@ impl ImportTable for Handler<OldTransactions, OldTransactions> {
     }
 }
 
-impl ImportTable for Handler<SpentMessages> {
+impl ImportTable for Handler<SpentMessages, SpentMessages> {
     type TableInSnapshot = SpentMessages;
     type TableBeingWritten = SpentMessages;
     type DbDesc = OffChain;

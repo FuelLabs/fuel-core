@@ -66,7 +66,7 @@ impl ImportTable for Handler<Messages, Messages> {
     }
 }
 
-impl ImportTable for Handler<ProcessedTransactions> {
+impl ImportTable for Handler<ProcessedTransactions, ProcessedTransactions> {
     type TableInSnapshot = ProcessedTransactions;
     type TableBeingWritten = ProcessedTransactions;
     type DbDesc = OnChain;

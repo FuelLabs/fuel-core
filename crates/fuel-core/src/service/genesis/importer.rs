@@ -32,6 +32,7 @@ use crate::{
         },
     },
 };
+use core::marker::PhantomData;
 use fuel_core_chain_config::{
     AsTable,
     SnapshotReader,
@@ -50,6 +51,7 @@ use fuel_core_storage::{
         ContractsState,
         FuelBlocks,
         Messages,
+        ProcessedTransactions,
         SealedBlockConsensus,
         Transactions,
     },
@@ -61,7 +63,7 @@ use fuel_core_types::{
     },
     fuel_types::BlockHeight,
 };
-use fuel_core_storage::tables::ProcessedTransactions;
+use std::io::IsTerminal;
 use tracing::Level;
 
 mod import_task;
