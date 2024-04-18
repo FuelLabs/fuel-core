@@ -332,9 +332,10 @@ where
 
     pub fn validate(
         &self,
-        _block: Block,
+        block: Block,
     ) -> ExecutorResult<Uncommitted<ExecutionResult, Changes>> {
-        todo!()
+        let options = self.config.as_ref().into();
+        self.validate_inner(block, options)
     }
 
     #[cfg(feature = "wasm-executor")]
