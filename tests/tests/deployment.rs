@@ -1,4 +1,7 @@
-use std::path::Path;
+use std::{
+    env,
+    path::Path,
+};
 
 use fuel_core::chain_config::{
     ChainConfig,
@@ -8,6 +11,7 @@ use fuel_core::chain_config::{
     TableEncoding,
 };
 use fuel_core_types::fuel_tx::GasCosts;
+use fuel_core_upgradable_executor::WASM_BYTECODE;
 
 #[allow(irrefutable_let_patterns)]
 #[test_case::test_case( "./../bin/fuel-core/chainspec/testnet" ; "Beta chainconfig" )]
@@ -25,6 +29,12 @@ fn test_deployment_chainconfig(path: impl AsRef<Path>) -> anyhow::Result<()> {
         .consensus_parameters
         .set_gas_costs(benchmark_gas_costs);
 
+    if env::var_os("OVERRIDE_CHAIN_CONFIGS").is_some() {
+        chain_config.state_transition_bytecode = WASM_BYTECODE.to_vec();
+        std::fs::remove_file(&stored_snapshot.chain_config)?;
+        chain_config.write(&stored_snapshot.chain_config)?;
+    }
+
     let temp_dir = tempfile::tempdir()?;
     let writer = SnapshotWriter::json(temp_dir.path());
     let generated_snapshot = writer.write_state_config(state_config, &chain_config)?;
@@ -35,9 +45,8 @@ fn test_deployment_chainconfig(path: impl AsRef<Path>) -> anyhow::Result<()> {
     let stored_chain_config = std::fs::read_to_string(stored_snapshot.chain_config)?
         .trim()
         .to_string();
-    pretty_assertions::assert_eq!(
-        chain_config,
-        stored_chain_config,
+    assert_eq!(
+        chain_config, stored_chain_config,
         "Chain config should match the one in the deployment directory"
     );
 
@@ -59,9 +68,8 @@ fn test_deployment_chainconfig(path: impl AsRef<Path>) -> anyhow::Result<()> {
         };
         std::fs::read_to_string(generated_state)?.trim().to_string()
     };
-    pretty_assertions::assert_eq!(
-        stored_state_config,
-        generated_state_config,
+    assert_eq!(
+        stored_state_config, generated_state_config,
         "State config should match the one in the deployment directory"
     );
 

@@ -9,10 +9,8 @@ use std::{
 };
 
 fn main() {
+    // It only forces a rerun of the build when `build.rs` is changed.
     println!("cargo:rerun-if-changed=build.rs");
-    println!("cargo:rerun-if-changed=wasm-executor/src/main.rs");
-    println!("cargo:rerun-if-changed=src/executor.rs");
-
     #[cfg(feature = "wasm-executor")]
     build_wasm()
 }
@@ -21,27 +19,40 @@ fn main() {
 fn build_wasm() {
     let out_dir = env::var_os("OUT_DIR").expect("The output directory is not set");
     let dest_path = Path::new(&out_dir);
+    let bin_dir = format!("--root={}", dest_path.to_string_lossy());
+
+    // Set the own sub-target directory to prevent a cargo deadlock (cargo locks
+    // a target dir exclusive). This directory is also used as a cache directory
+    // to avoid building the same WASM binary each time. Also, caching reuses
+    // the artifacts from the previous build in the case if the executor is changed.
+    //
+    // The cache dir is: "target/{debug/release/other}/fuel-core-upgradable-executor-cache"
+    let mut cache_dir: std::path::PathBuf = out_dir.clone().into();
+    cache_dir.pop();
+    cache_dir.pop();
+    cache_dir.pop();
+    cache_dir.push("fuel-core-upgradable-executor-cache");
+    let target_dir = format!("--target-dir={}", cache_dir.to_string_lossy());
+
     let manifest_dir =
         env::var_os("CARGO_MANIFEST_DIR").expect("The manifest directory is not set");
     let manifest_path = Path::new(&manifest_dir);
     let wasm_executor_path = manifest_path
         .join("wasm-executor")
-        .join("Cargo.toml")
         .to_string_lossy()
         .to_string();
 
     let cargo = env::var("CARGO").unwrap_or_else(|_| "cargo".to_string());
 
-    let target_dir = format!("--target-dir={}", dest_path.to_string_lossy());
-
     let args = vec![
-        "build".to_owned(),
-        "--manifest-path".to_owned(),
+        "install".to_owned(),
+        "--path".to_owned(),
         wasm_executor_path,
         "--target=wasm32-unknown-unknown".to_owned(),
         "--no-default-features".to_owned(),
-        "--release".to_owned(),
+        "--locked".to_owned(),
         target_dir,
+        bin_dir,
     ];
 
     let mut cargo = Command::new(cargo);

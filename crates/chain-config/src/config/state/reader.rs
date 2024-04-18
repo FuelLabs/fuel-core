@@ -4,16 +4,13 @@ use fuel_core_storage::{
     structured_storage::TableWithBlueprint,
     Mappable,
 };
-use fuel_core_types::{
-    blockchain::primitives::DaBlockHeight,
-    fuel_types::BlockHeight,
-};
 use itertools::Itertools;
 
 use crate::{
     config::table_entry::TableEntry,
     AsTable,
     ChainConfig,
+    LastBlockConfig,
     StateConfig,
     MAX_GROUP_SIZE,
 };
@@ -110,8 +107,7 @@ enum DataSource {
     #[cfg(feature = "parquet")]
     Parquet {
         tables: std::collections::HashMap<String, std::path::PathBuf>,
-        block_height: BlockHeight,
-        da_block_height: DaBlockHeight,
+        latest_block_config: Option<LastBlockConfig>,
     },
     InMemory {
         state: StateConfig,
@@ -140,13 +136,7 @@ impl SnapshotReader {
     pub fn local_testnet() -> Self {
         let state = StateConfig::local_testnet();
         let chain_config = ChainConfig::local_testnet();
-        Self {
-            data_source: DataSource::InMemory {
-                state,
-                group_size: MAX_GROUP_SIZE,
-            },
-            chain_config,
-        }
+        Self::new_in_memory(chain_config, state)
     }
 
     pub fn with_chain_config(self, chain_config: ChainConfig) -> Self {
@@ -173,11 +163,14 @@ impl SnapshotReader {
         group_size: usize,
     ) -> anyhow::Result<Self> {
         use anyhow::Context;
+        use std::io::Read;
         let state = {
             let path = state_file.as_ref();
-            let mut file = std::fs::File::open(path)
-                .with_context(|| format!("Could not open snapshot file: {path:?}"))?;
-            serde_json::from_reader(&mut file)?
+            let mut json = String::new();
+            std::fs::File::open(path)
+                .with_context(|| format!("Could not open snapshot file: {path:?}"))?
+                .read_to_string(&mut json)?;
+            serde_json::from_str(json.as_str())?
         };
 
         Ok(Self {
@@ -189,26 +182,23 @@ impl SnapshotReader {
     #[cfg(feature = "parquet")]
     fn parquet(
         tables: std::collections::HashMap<String, std::path::PathBuf>,
-        block_height: std::path::PathBuf,
-        da_block_height: std::path::PathBuf,
+        latest_block_config: std::path::PathBuf,
         chain_config: ChainConfig,
     ) -> anyhow::Result<Self> {
-        let block_height = Self::read_block_height(&block_height)?;
-        let da_block_height = Self::read_block_height(&da_block_height)?;
+        let latest_block_config = Self::read_config(&latest_block_config)?;
         Ok(Self {
             data_source: DataSource::Parquet {
                 tables,
-                block_height,
-                da_block_height,
+                latest_block_config,
             },
             chain_config,
         })
     }
 
     #[cfg(feature = "parquet")]
-    fn read_block_height<Height>(path: &std::path::Path) -> anyhow::Result<Height>
+    fn read_config<Config>(path: &std::path::Path) -> anyhow::Result<Config>
     where
-        Height: serde::de::DeserializeOwned,
+        Config: serde::de::DeserializeOwned,
     {
         use super::parquet::decode::Decoder;
 
@@ -216,11 +206,11 @@ impl SnapshotReader {
         let group = Decoder::new(file)?
             .next()
             .ok_or_else(|| anyhow::anyhow!("No block height found"))??;
-        let block_height = group
+        let config = group
             .into_iter()
             .next()
-            .ok_or_else(|| anyhow::anyhow!("No block height found"))?;
-        postcard::from_bytes(&block_height).map_err(Into::into)
+            .ok_or_else(|| anyhow::anyhow!("No config found"))?;
+        postcard::from_bytes(&config).map_err(Into::into)
     }
 
     #[cfg(feature = "std")]
@@ -236,13 +226,7 @@ impl SnapshotReader {
         json_group_size: usize,
     ) -> anyhow::Result<Self> {
         use crate::TableEncoding;
-        use anyhow::Context;
-        let chain_config = {
-            let path = &snapshot_metadata.chain_config;
-            let mut file = std::fs::File::open(path)
-                .with_context(|| format!("Could not open chain config file: {path:?}"))?;
-            serde_json::from_reader(&mut file)?
-        };
+        let chain_config = ChainConfig::from_snapshot_metadata(&snapshot_metadata)?;
 
         match snapshot_metadata.table_encoding {
             TableEncoding::Json { filepath } => {
@@ -251,10 +235,9 @@ impl SnapshotReader {
             #[cfg(feature = "parquet")]
             TableEncoding::Parquet {
                 tables,
-                block_height,
-                da_block_height,
+                latest_block_config_path,
                 ..
-            } => Self::parquet(tables, block_height, da_block_height, chain_config),
+            } => Self::parquet(tables, latest_block_config_path, chain_config),
         }
     }
 
@@ -306,21 +289,14 @@ impl SnapshotReader {
         &self.chain_config
     }
 
-    pub fn block_height(&self) -> BlockHeight {
+    pub fn last_block_config(&self) -> Option<&LastBlockConfig> {
         match &self.data_source {
-            DataSource::InMemory { state, .. } => state.block_height,
-            #[cfg(feature = "parquet")]
-            DataSource::Parquet { block_height, .. } => *block_height,
-        }
-    }
-
-    pub fn da_block_height(&self) -> DaBlockHeight {
-        match &self.data_source {
-            DataSource::InMemory { state, .. } => state.da_block_height,
+            DataSource::InMemory { state, .. } => state.last_block.as_ref(),
             #[cfg(feature = "parquet")]
             DataSource::Parquet {
-                da_block_height, ..
-            } => *da_block_height,
+                latest_block_config: block,
+                ..
+            } => block.as_ref(),
         }
     }
 }

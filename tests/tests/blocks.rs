@@ -1,6 +1,6 @@
 use fuel_core::{
     chain_config::{
-        SnapshotReader,
+        LastBlockConfig,
         StateConfig,
     },
     database::Database,
@@ -76,25 +76,33 @@ async fn block() {
 }
 
 #[tokio::test]
-async fn get_genesis_block() {
-    let config = Config {
-        snapshot_reader: SnapshotReader::local_testnet().with_state_config(StateConfig {
-            block_height: 13u32.into(),
-            ..StateConfig::local_testnet()
+async fn block_by_height_returns_genesis_block() {
+    // Given
+    let block_height_of_last_block_before_regenesis = 13u32.into();
+    let config = Config::local_node_with_state_config(StateConfig {
+        last_block: Some(LastBlockConfig {
+            block_height: block_height_of_last_block_before_regenesis,
+            state_transition_version: 0,
+            ..Default::default()
         }),
-        ..Config::local_node()
-    };
+        ..StateConfig::local_testnet()
+    });
 
+    // When
     let srv = FuelService::from_database(Database::default(), config)
         .await
         .unwrap();
 
+    // Then
     let client = FuelClient::from(srv.bound_address);
-    let tx = Transaction::default_test_tx();
-    client.submit_and_await_commit(&tx).await.unwrap();
-
-    let block = client.block_by_height(13.into()).await.unwrap().unwrap();
-    assert_eq!(block.header.height, 13);
+    let block_height_of_new_genesis_block =
+        block_height_of_last_block_before_regenesis.succ().unwrap();
+    let block = client
+        .block_by_height(block_height_of_new_genesis_block)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(block.header.height, 14);
     assert!(matches!(
         block.consensus,
         fuel_core_client::client::types::Consensus::Genesis(_)

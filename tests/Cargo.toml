@@ -26,7 +26,7 @@ fuel-core = { path = "../crates/fuel-core", default-features = false, features =
   "test-helpers",
 ] }
 fuel-core-benches = { path = "../benches" }
-fuel-core-bin = { path = "../bin/fuel-core", features = ["parquet"] }
+fuel-core-bin = { path = "../bin/fuel-core", features = ["parquet", "p2p"] }
 fuel-core-client = { path = "../crates/client", features = ["test-helpers"] }
 fuel-core-executor = { workspace = true }
 fuel-core-p2p = { path = "../crates/services/p2p", features = [
@@ -49,7 +49,6 @@ futures = "0.3"
 hyper = { workspace = true, features = ["server"] }
 insta = { workspace = true }
 itertools = { workspace = true }
-portpicker = "0.1"
 primitive-types = { workspace = true, default-features = false }
 rand = { workspace = true }
 reqwest = { workspace = true }

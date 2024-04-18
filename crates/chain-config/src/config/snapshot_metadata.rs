@@ -1,6 +1,10 @@
-use std::path::{
-    Path,
-    PathBuf,
+use anyhow::Context;
+use std::{
+    io::Read,
+    path::{
+        Path,
+        PathBuf,
+    },
 };
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq)]
@@ -11,8 +15,7 @@ pub enum TableEncoding {
     #[cfg(feature = "parquet")]
     Parquet {
         tables: std::collections::HashMap<String, PathBuf>,
-        block_height: PathBuf,
-        da_block_height: PathBuf,
+        latest_block_config_path: PathBuf,
     },
 }
 impl TableEncoding {
@@ -24,15 +27,14 @@ impl TableEncoding {
             #[cfg(feature = "parquet")]
             TableEncoding::Parquet {
                 tables,
-                block_height,
-                da_block_height,
+                latest_block_config_path,
                 ..
             } => {
                 for path in tables.values_mut() {
                     *path = path.strip_prefix(dir)?.to_owned();
                 }
-                *da_block_height = da_block_height.strip_prefix(dir)?.to_owned();
-                *block_height = block_height.strip_prefix(dir)?.to_owned();
+                *latest_block_config_path =
+                    latest_block_config_path.strip_prefix(dir)?.to_owned();
             }
         }
         Ok(())
@@ -46,15 +48,13 @@ impl TableEncoding {
             #[cfg(feature = "parquet")]
             TableEncoding::Parquet {
                 tables,
-                block_height,
-                da_block_height,
+                latest_block_config_path,
                 ..
             } => {
                 for path in tables.values_mut() {
                     *path = dir.join(&path);
                 }
-                *da_block_height = dir.join(&da_block_height);
-                *block_height = dir.join(&block_height);
+                *latest_block_config_path = dir.join(&latest_block_config_path);
             }
         }
     }
@@ -70,8 +70,11 @@ impl SnapshotMetadata {
     const METADATA_FILENAME: &'static str = "metadata.json";
     pub fn read(dir: impl AsRef<Path>) -> anyhow::Result<Self> {
         let path = dir.as_ref().join(Self::METADATA_FILENAME);
-        let file = std::fs::File::open(path)?;
-        let mut snapshot: Self = serde_json::from_reader(&file)?;
+        let mut json = String::new();
+        std::fs::File::open(&path)
+            .with_context(|| format!("Could not open snapshot file: {path:?}"))?
+            .read_to_string(&mut json)?;
+        let mut snapshot: Self = serde_json::from_str(json.as_str())?;
         snapshot.prepend_path(dir.as_ref());
 
         Ok(snapshot)
@@ -183,8 +186,7 @@ mod tests {
                         "coins".into(),
                         "coins.parquet".into(),
                     )]),
-                    block_height: "block_height.parquet".into(),
-                    da_block_height: "da_block_height.parquet".into(),
+                    latest_block_config_path: "latest_block_config.parquet".into(),
                 },
             };
             serde_json::to_writer(
@@ -206,8 +208,9 @@ mod tests {
                             "coins".into(),
                             temp_dir.path().join("coins.parquet")
                         )]),
-                        block_height: temp_dir.path().join("block_height.parquet"),
-                        da_block_height: temp_dir.path().join("da_block_height.parquet"),
+                        latest_block_config_path: temp_dir
+                            .path()
+                            .join("latest_block_config.parquet"),
                     }
                 }
             );
@@ -225,8 +228,7 @@ mod tests {
                         "coins".into(),
                         dir.join("coins.parquet"),
                     )]),
-                    block_height: dir.join("block_height.parquet"),
-                    da_block_height: dir.join("da_block_height.parquet"),
+                    latest_block_config_path: dir.join("latest_block_config.parquet"),
                 },
             };
 
@@ -247,8 +249,7 @@ mod tests {
                             "coins".into(),
                             "coins.parquet".into(),
                         )]),
-                        block_height: "block_height.parquet".into(),
-                        da_block_height: "da_block_height.parquet".into(),
+                        latest_block_config_path: "latest_block_config.parquet".into(),
                     }
                 }
             );

@@ -16,10 +16,7 @@ use rand::{
     Rng,
     SeedableRng,
 };
-use std::{
-    sync::Arc,
-    time::Duration,
-};
+use std::sync::Arc;
 
 #[tokio::test]
 async fn txs_max_script_gas_limit() {
@@ -64,8 +61,6 @@ async fn txs_max_script_gas_limit() {
         .map(|script| Arc::new(fuel_tx::Transaction::from(script)))
         .collect::<Vec<_>>();
     srv.shared.txpool_shared_state.insert(txs).await;
-
-    tokio::time::sleep(Duration::from_secs(1)).await;
 
     let block = client.block_by_height(1.into()).await.unwrap().unwrap();
     assert_eq!(

@@ -141,8 +141,11 @@ pub async fn run_cli() -> anyhow::Result<()> {
 pub fn local_testnet_chain_config() -> ChainConfig {
     const TESTNET_CHAIN_CONFIG: &[u8] =
         include_bytes!("../chainspec/testnet/chain_config.json");
+    const TESTNET_CHAIN_CONFIG_STATE_BYTECODE: &[u8] =
+        include_bytes!("../chainspec/testnet/state_transition_bytecode.wasm");
 
-    let config: ChainConfig = serde_json::from_slice(TESTNET_CHAIN_CONFIG).unwrap();
+    let mut config: ChainConfig = serde_json::from_slice(TESTNET_CHAIN_CONFIG).unwrap();
+    config.state_transition_bytecode = TESTNET_CHAIN_CONFIG_STATE_BYTECODE.to_vec();
     config
 }
 

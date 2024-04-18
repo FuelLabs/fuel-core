@@ -197,6 +197,7 @@ mod tests {
         let executor_config = fuel_core_upgradable_executor::config::Config {
             backtrace: config.backtrace,
             utxo_validation_default: config.utxo_validation_default,
+            native_executor_version: None,
         };
 
         let database = add_consensus_parameters(database, &config.consensus_parameters);

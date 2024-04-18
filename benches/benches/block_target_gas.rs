@@ -35,7 +35,6 @@ use fuel_core_benches::{
 use fuel_core_chain_config::{
     ChainConfig,
     ContractConfig,
-    SnapshotReader,
     StateConfig,
 };
 use fuel_core_services::Service;
@@ -296,10 +295,7 @@ fn service_with_many_contracts(
         contracts: contract_configs,
         ..Default::default()
     };
-    let mut config = Config {
-        snapshot_reader: SnapshotReader::new_in_memory(chain_config, state_config),
-        ..Config::local_node()
-    };
+    let mut config = Config::local_node_with_configs(chain_config, state_config);
     config.utxo_validation = false;
     config.block_production = Trigger::Instant;
 
