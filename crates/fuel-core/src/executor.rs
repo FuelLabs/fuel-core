@@ -3354,7 +3354,7 @@ mod tests {
             add_events_to_relayer(&mut verifier_relayer_db, da_height.into(), &events);
             let verifier = create_relayer_executor(verifyer_db, verifier_relayer_db);
             let (result, _) = verifier
-                .execute_without_commit(ExecutionTypes::Validation(produced_block))
+                .validate_without_commit(produced_block)
                 .unwrap()
                 .into();
 

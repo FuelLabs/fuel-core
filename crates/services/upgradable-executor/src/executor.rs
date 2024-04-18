@@ -899,9 +899,7 @@ mod test {
 
             // When
             for _ in 0..1000 {
-                let result = executor
-                    .execute_without_commit(ExecutionTypes::Validation(block.clone()))
-                    .map(|_| ());
+                let result = executor.validate_without_commit(block.clone()).map(|_| ());
 
                 // Then
                 assert_eq!(Ok(()), result);
@@ -921,9 +919,7 @@ mod test {
 
             // When
             for _ in 0..1000 {
-                let result = executor
-                    .execute_without_commit(ExecutionTypes::Validation(block.clone()))
-                    .map(|_| ());
+                let result = executor.validate_without_commit(block.clone()).map(|_| ());
 
                 // Then
                 assert_eq!(Ok(()), result);
