@@ -1,7 +1,6 @@
 use anyhow::bail;
 use fuel_core_chain_config::TableEntry;
 use fuel_core_storage::{
-    kv_store::StorageColumn,
     structured_storage::TableWithBlueprint,
     transactional::{
         Modifiable,
@@ -22,7 +21,10 @@ use crate::{
         },
         Database,
     },
-    service::genesis::task_manager::CancellationToken,
+    service::genesis::{
+        importer::migration_name,
+        task_manager::CancellationToken,
+    },
 };
 
 use super::progress::ProgressReporter;
@@ -64,9 +66,11 @@ where
         db: Database<DbDesc>,
         reporter: ProgressReporter,
     ) -> Self {
+        let progress_name =
+            migration_name::<Logic::TableInSnapshot, Logic::TableBeingWritten>();
         let skip = match db
             .storage::<GenesisMetadata<DbDesc>>()
-            .get(Logic::TableBeingWritten::column().name())
+            .get(progress_name.as_str())
         {
             Ok(Some(idx_last_handled)) => {
                 usize::saturating_add(idx_last_handled.into_owned(), 1)
@@ -118,9 +122,12 @@ where
                 let mut tx = db.write_transaction();
                 self.handler.process(group, &mut tx)?;
 
+                let progress_name =
+                    migration_name::<Logic::TableInSnapshot, Logic::TableBeingWritten>();
+
                 GenesisProgressMutate::<DbDesc>::update_genesis_progress(
                     &mut tx,
-                    Logic::TableBeingWritten::column().name(),
+                    progress_name.as_str(),
                     index,
                 )?;
                 tx.commit()?;
@@ -172,10 +179,8 @@ mod tests {
         kv_store::{
             KVItem,
             KeyValueInspect,
-            StorageColumn,
             Value,
         },
-        structured_storage::TableWithBlueprint,
         tables::Coins,
         transactional::{
             Changes,
@@ -206,6 +211,7 @@ mod tests {
             genesis_progress::GenesisProgressMutate,
             Database,
         },
+        service::genesis::importer::migration_name,
         state::{
             in_memory::memory_store::MemoryStore,
             TransactableStorage,
@@ -312,7 +318,7 @@ mod tests {
         let mut db = CombinedDatabase::default();
         GenesisProgressMutate::<OnChain>::update_genesis_progress(
             db.on_chain_mut(),
-            Coins::column().name(),
+            migration_name::<Coins, Coins>().as_str(),
             0,
         )
         .unwrap();
@@ -465,7 +471,7 @@ mod tests {
         assert_eq!(
             GenesisProgressInspect::<OnChain>::genesis_progress(
                 &db,
-                Coins::column().name(),
+                migration_name::<Coins, Coins>().as_str(),
             ),
             Some(1)
         );

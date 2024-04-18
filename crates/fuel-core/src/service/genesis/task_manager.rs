@@ -1,12 +1,15 @@
-use std::{
-    future::Future,
-    pin::Pin,
-};
+use std::future::Future;
 
 use fuel_core_services::StateWatcher;
+use futures::{
+    StreamExt,
+    TryStreamExt,
+};
+use itertools::Itertools;
+use tokio::task::JoinSet;
 
 pub struct TaskManager<T> {
-    set: Vec<Pin<Box<dyn Future<Output = anyhow::Result<T>> + Send>>>,
+    set: JoinSet<anyhow::Result<T>>,
     cancel: CancellationToken,
 }
 
@@ -36,6 +39,10 @@ impl CancellationToken {
         }
     }
 
+    fn cancel_tasks(&self) {
+        self.task_cancellator.cancel();
+    }
+
     pub fn is_cancelled(&self) -> bool {
         let state = self.state_watcher.borrow();
         self.task_cancellator.is_cancelled() || state.stopped() || state.stopping()
@@ -48,7 +55,7 @@ where
 {
     pub fn new(watcher: StateWatcher) -> Self {
         Self {
-            set: Default::default(),
+            set: JoinSet::new(),
             cancel: CancellationToken {
                 task_cancellator: tokio_util::sync::CancellationToken::new(),
                 state_watcher: watcher,
@@ -61,16 +68,21 @@ where
         F: FnOnce(CancellationToken) -> Fut,
         Fut: Future<Output = anyhow::Result<T>> + Send + 'static,
     {
-        self.set.push(Box::pin(arg(self.cancel.clone())));
+        self.set.spawn(arg(self.cancel.clone()));
     }
 
-    pub async fn wait(self) -> anyhow::Result<Vec<T>> {
-        let mut result = vec![];
-        for task in self.set {
-            let res = task.await?;
-            result.push(res);
-        }
-        Ok(result)
+    pub async fn wait(&mut self) -> anyhow::Result<Vec<T>> {
+        let set = core::mem::take(&mut self.set);
+        let results = futures::stream::unfold(set, |mut set| async move {
+            let res = set.join_next().await?;
+            Some((res, set))
+        })
+        .map(|result| result.map_err(Into::into).and_then(|r| r))
+        .inspect_err(|_| self.cancel.cancel_tasks())
+        .collect::<Vec<_>>()
+        .await;
+
+        results.into_iter().try_collect()
     }
 }
 

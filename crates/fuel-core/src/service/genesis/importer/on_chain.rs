@@ -18,7 +18,6 @@ use fuel_core_storage::{
         ContractsRawCode,
         ContractsState,
         Messages,
-        Transactions,
     },
     transactional::StorageTransaction,
     StorageAsMut,
@@ -126,24 +125,6 @@ impl ImportTable for Handler<ContractsAssets, ContractsAssets> {
         tx: &mut StorageTransaction<&mut Database>,
     ) -> anyhow::Result<()> {
         tx.update_contract_balances(group)?;
-        Ok(())
-    }
-}
-
-impl ImportTable for Handler<Transactions, Transactions> {
-    type TableInSnapshot = Transactions;
-    type TableBeingWritten = Transactions;
-    type DbDesc = OnChain;
-
-    fn process(
-        &mut self,
-        group: Vec<TableEntry<Self::TableInSnapshot>>,
-        tx: &mut StorageTransaction<&mut Database<Self::DbDesc>>,
-    ) -> anyhow::Result<()> {
-        for transaction in &group {
-            tx.storage::<Transactions>()
-                .insert(&transaction.key, &transaction.value)?;
-        }
         Ok(())
     }
 }

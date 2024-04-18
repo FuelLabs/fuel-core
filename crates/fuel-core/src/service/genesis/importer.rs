@@ -117,16 +117,19 @@ impl SnapshotImporter {
         self.spawn_worker_on_chain::<ContractsLatestUtxo>()?;
         self.spawn_worker_on_chain::<ContractsState>()?;
         self.spawn_worker_on_chain::<ContractsAssets>()?;
-        self.spawn_worker_on_chain::<Transactions>()?;
 
         self.spawn_worker_off_chain::<TransactionStatuses, TransactionStatuses>()?;
         self.spawn_worker_off_chain::<OwnedTransactions, OwnedTransactions>()?;
         self.spawn_worker_off_chain::<Messages, OwnedMessageIds>()?;
         self.spawn_worker_off_chain::<Coins, OwnedCoins>()?;
-        self.spawn_worker_off_chain::<Transactions, ContractsInfo>()?;
         self.spawn_worker_off_chain::<FuelBlocks, OldFuelBlocks>()?;
-        self.spawn_worker_off_chain::<SealedBlockConsensus, OldFuelBlockConsensus>()?;
         self.spawn_worker_off_chain::<Transactions, OldTransactions>()?;
+        self.spawn_worker_off_chain::<SealedBlockConsensus, OldFuelBlockConsensus>()?;
+        self.spawn_worker_off_chain::<Transactions, ContractsInfo>()?;
+        self.spawn_worker_off_chain::<OldTransactions, ContractsInfo>()?;
+
+        self.task_manager.wait().await?;
+
         self.spawn_worker_off_chain::<OldFuelBlocks, OldFuelBlocks>()?;
         self.spawn_worker_off_chain::<OldFuelBlockConsensus, OldFuelBlockConsensus>()?;
         self.spawn_worker_off_chain::<OldTransactions, OldTransactions>()?;
@@ -151,7 +154,9 @@ impl SnapshotImporter {
         let da_block_height = self.genesis_block.header().da_height;
         let db = self.db.on_chain().clone();
 
-        let progress_reporter = self.progress_reporter::<TableBeingWritten>(num_groups);
+        let progress_name = migration_name::<TableBeingWritten, TableBeingWritten>();
+
+        let progress_reporter = self.progress_reporter(progress_name, num_groups);
 
         self.task_manager.spawn(move |token| {
             let task = ImportTask::new(
@@ -185,7 +190,10 @@ impl SnapshotImporter {
 
         let db = self.db.off_chain().clone();
 
-        let progress_reporter = self.progress_reporter::<TableBeingWritten>(num_groups);
+        let progress_reporter = self.progress_reporter(
+            migration_name::<TableInSnapshot, TableBeingWritten>(),
+            num_groups,
+        );
 
         self.task_manager.spawn(move |token| {
             let task = ImportTask::new(
@@ -213,18 +221,15 @@ impl SnapshotImporter {
         std::io::stderr().is_terminal() && !cfg!(test)
     }
 
-    fn progress_reporter<T>(&self, num_groups: usize) -> ProgressReporter
-    where
-        T: TableWithBlueprint,
-    {
+    fn progress_reporter(&self, name: String, num_groups: usize) -> ProgressReporter {
         let target = if Self::should_display_bars() {
-            Target::Cli(T::column().name())
+            Target::Cli(name)
         } else {
             let span = tracing::span!(
                 parent: &self.tracing_span,
                 Level::INFO,
                 "task",
-                table = T::column().name()
+                table = name
             );
             Target::Logs(span)
         };
@@ -251,4 +256,16 @@ impl<A, B> Handler<A, B> {
             _table_in_snapshot: PhantomData,
         }
     }
+}
+
+fn migration_name<TableInSnapshot, TableBeingWritten>() -> String
+where
+    TableInSnapshot: TableWithBlueprint,
+    TableBeingWritten: TableWithBlueprint,
+{
+    format!(
+        "{} -> {}",
+        TableInSnapshot::column().name(),
+        TableBeingWritten::column().name()
+    )
 }

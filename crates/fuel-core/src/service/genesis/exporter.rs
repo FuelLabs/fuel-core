@@ -131,7 +131,7 @@ where
         Ok(())
     }
 
-    async fn finalize(self) -> anyhow::Result<SnapshotMetadata> {
+    async fn finalize(mut self) -> anyhow::Result<SnapshotMetadata> {
         let writer = self.create_writer()?;
         let latest_block = self.db.on_chain().latest_block()?;
 

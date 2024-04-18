@@ -371,7 +371,7 @@ impl Command {
     }
 }
 
-pub async fn exec(command: Command) -> anyhow::Result<()> {
+pub fn get_service(command: Command) -> anyhow::Result<FuelService> {
     #[cfg(any(feature = "rocks-db", feature = "rocksdb-production"))]
     if command.db_prune && command.database_path.exists() {
         fuel_core::combined_database::CombinedDatabase::prune(&command.database_path)?;
@@ -389,7 +389,11 @@ pub async fn exec(command: Command) -> anyhow::Result<()> {
     // initialize the server
     let combined_database = CombinedDatabase::from_config(&config.combined_db_config)?;
 
-    let service = FuelService::new(combined_database, config)?;
+    FuelService::new(combined_database, config)
+}
+
+pub async fn exec(command: Command) -> anyhow::Result<()> {
+    let service = get_service(command)?;
 
     // Genesis could take a long time depending on the snapshot size. Start needs to be
     // interruptible by the shutdown_signal

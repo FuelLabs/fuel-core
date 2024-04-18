@@ -149,6 +149,22 @@ impl ImportTable for Handler<ContractsInfo, Transactions> {
     }
 }
 
+impl ImportTable for Handler<ContractsInfo, OldTransactions> {
+    type TableInSnapshot = OldTransactions;
+    type TableBeingWritten = ContractsInfo;
+    type DbDesc = OffChain;
+
+    fn process(
+        &mut self,
+        group: Vec<TableEntry<Self::TableInSnapshot>>,
+        tx: &mut StorageTransaction<&mut Database<Self::DbDesc>>,
+    ) -> anyhow::Result<()> {
+        let transactions = group.iter().map(|TableEntry { value, .. }| value);
+        worker_service::process_transactions(transactions, tx)?;
+        Ok(())
+    }
+}
+
 impl ImportTable for Handler<OldFuelBlocks, FuelBlocks> {
     type TableInSnapshot = FuelBlocks;
     type TableBeingWritten = OldFuelBlocks;
