@@ -39,34 +39,30 @@ pub enum Column {
     FuelBlockMerkleData = 8,
     /// See [`FuelBlockMerkleMetadata`](crate::tables::merkle::FuelBlockMerkleMetadata)
     FuelBlockMerkleMetadata = 9,
-    /// Messages that have been spent.
-    /// Existence of a key in this column means that the message has been spent.
-    /// See [`SpentMessages`](crate::tables::SpentMessages)
-    SpentMessages = 10,
     /// See [`ContractsAssetsMerkleData`](crate::tables::merkle::ContractsAssetsMerkleData)
-    ContractsAssetsMerkleData = 11,
+    ContractsAssetsMerkleData = 10,
     /// See [`ContractsAssetsMerkleMetadata`](crate::tables::merkle::ContractsAssetsMerkleMetadata)
-    ContractsAssetsMerkleMetadata = 12,
+    ContractsAssetsMerkleMetadata = 11,
     /// See [`ContractsStateMerkleData`](crate::tables::merkle::ContractsStateMerkleData)
-    ContractsStateMerkleData = 13,
+    ContractsStateMerkleData = 12,
     /// See [`ContractsStateMerkleMetadata`](crate::tables::merkle::ContractsStateMerkleMetadata)
-    ContractsStateMerkleMetadata = 14,
+    ContractsStateMerkleMetadata = 13,
     /// See [`Messages`](crate::tables::Messages)
-    Messages = 15,
+    Messages = 14,
     /// See [`ProcessedTransactions`](crate::tables::ProcessedTransactions)
-    ProcessedTransactions = 16,
+    ProcessedTransactions = 15,
     /// See [`SealedBlockConsensus`](crate::tables::SealedBlockConsensus)
-    FuelBlockConsensus = 17,
+    FuelBlockConsensus = 16,
     /// See [`ConsensusParametersVersions`](crate::tables::ConsensusParametersVersions)
-    ConsensusParametersVersions = 18,
+    ConsensusParametersVersions = 17,
     /// See [`StateTransitionBytecodeVersions`](crate::tables::StateTransitionBytecodeVersions)
-    StateTransitionBytecodeVersions = 19,
+    StateTransitionBytecodeVersions = 18,
     /// See [`UploadedBytecodes`](crate::tables::UploadedBytecodes)
-    UploadedBytecodes = 20,
+    UploadedBytecodes = 19,
 
     // TODO: Remove this column and use `Metadata` column instead.
     /// Table for genesis state import progress tracking.
-    GenesisMetadata = 21,
+    GenesisMetadata = 20,
 }
 
 impl Column {

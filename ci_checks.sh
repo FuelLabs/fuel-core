@@ -25,7 +25,8 @@ cargo check -p fuel-core-storage --target wasm32-unknown-unknown --no-default-fe
 cargo check -p fuel-core-client --target wasm32-unknown-unknown --no-default-features &&
 cargo check -p fuel-core-chain-config --target wasm32-unknown-unknown --no-default-features &&
 cargo check -p fuel-core-executor --target wasm32-unknown-unknown --no-default-features &&
-OVERRIDE_CHAIN_CONFIGS=true cargo test --workspace &&
+OVERRIDE_CHAIN_CONFIGS=true cargo test --test integration_tests deployment &&
+cargo test --workspace &&
 FUEL_ALWAYS_USE_WASM=true cargo test --all-features --workspace &&
 cargo test -p fuel-core --no-default-features &&
 cargo test -p fuel-core-client --no-default-features &&

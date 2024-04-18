@@ -95,6 +95,7 @@ pub async fn execute_genesis_block(
         coins_root: db.on_chain().genesis_coins_root()?.into(),
         messages_root: db.on_chain().genesis_messages_root()?.into(),
         contracts_root: db.on_chain().genesis_contracts_root()?.into(),
+        transactions_root: db.on_chain().processed_transactions_root()?.into(),
     };
 
     let consensus = Consensus::Genesis(genesis);

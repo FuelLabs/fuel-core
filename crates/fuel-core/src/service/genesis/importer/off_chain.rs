@@ -5,6 +5,7 @@ use crate::{
         database_description::off_chain::OffChain,
         Database,
     },
+    fuel_core_graphql_api::storage::messages::SpentMessages,
     graphql_api::{
         storage::{
             blocks::FuelBlockIdsToHeights,
@@ -269,6 +270,24 @@ impl ImportTable for Handler<OldTransactions, OldTransactions> {
             .iter()
             .map(|TableEntry { key, value, .. }| (key, value));
         worker_service::copy_to_old_transactions(transactions, tx)?;
+        Ok(())
+    }
+}
+
+impl ImportTable for Handler<SpentMessages, SpentMessages> {
+    type TableInSnapshot = SpentMessages;
+    type TableBeingWritten = SpentMessages;
+    type DbDesc = OffChain;
+
+    fn process(
+        &mut self,
+        group: Vec<TableEntry<Self::TableInSnapshot>>,
+        tx: &mut StorageTransaction<&mut Database<Self::DbDesc>>,
+    ) -> anyhow::Result<()> {
+        for entry in group {
+            tx.storage_as_mut::<SpentMessages>()
+                .insert(&entry.key, &entry.value)?;
+        }
         Ok(())
     }
 }

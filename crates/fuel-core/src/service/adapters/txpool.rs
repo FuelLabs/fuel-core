@@ -13,7 +13,6 @@ use fuel_core_storage::{
         Coins,
         ContractsRawCode,
         Messages,
-        SpentMessages,
     },
     Result as StorageResult,
     StorageAsRef,
@@ -134,10 +133,6 @@ impl fuel_core_txpool::ports::TxPoolDb for Database {
         self.storage::<Messages>()
             .get(id)
             .map(|t| t.map(|t| t.as_ref().clone()))
-    }
-
-    fn is_message_spent(&self, id: &Nonce) -> StorageResult<bool> {
-        self.storage::<SpentMessages>().contains_key(id)
     }
 }
 

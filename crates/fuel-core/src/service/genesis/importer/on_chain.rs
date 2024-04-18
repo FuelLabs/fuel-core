@@ -18,6 +18,7 @@ use fuel_core_storage::{
         ContractsRawCode,
         ContractsState,
         Messages,
+        ProcessedTransactions,
     },
     transactional::StorageTransaction,
     StorageAsMut,
@@ -62,6 +63,25 @@ impl ImportTable for Handler<Messages, Messages> {
         group
             .into_iter()
             .try_for_each(|message| init_da_message(tx, message, self.da_block_height))
+    }
+}
+
+impl ImportTable for Handler<ProcessedTransactions, ProcessedTransactions> {
+    type TableInSnapshot = ProcessedTransactions;
+    type TableBeingWritten = ProcessedTransactions;
+    type DbDesc = OnChain;
+
+    fn process(
+        &mut self,
+        group: Vec<TableEntry<Self::TableInSnapshot>>,
+        tx: &mut StorageTransaction<&mut Database>,
+    ) -> anyhow::Result<()> {
+        group.into_iter().try_for_each(|transaction| {
+            tx.storage_as_mut::<ProcessedTransactions>()
+                .insert(&transaction.key, &transaction.value)
+                .map(|_| ())
+        })?;
+        Ok(())
     }
 }
 

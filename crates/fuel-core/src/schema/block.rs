@@ -78,6 +78,8 @@ pub struct Genesis {
     pub contracts_root: Bytes32,
     /// The Binary Merkle Tree root of all genesis messages.
     pub messages_root: Bytes32,
+    /// The Binary Merkle Tree root of all processed transaction ids.
+    pub transactions_root: Bytes32,
 }
 
 pub struct PoAConsensus {
@@ -365,6 +367,7 @@ impl From<CoreGenesis> for Genesis {
             coins_root: genesis.coins_root.into(),
             contracts_root: genesis.contracts_root.into(),
             messages_root: genesis.messages_root.into(),
+            transactions_root: genesis.transactions_root.into(),
         }
     }
 }

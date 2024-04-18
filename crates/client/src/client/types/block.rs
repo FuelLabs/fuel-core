@@ -57,6 +57,7 @@ pub struct Genesis {
     pub coins_root: MerkleRoot,
     pub contracts_root: MerkleRoot,
     pub messages_root: MerkleRoot,
+    pub transactions_root: MerkleRoot,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -109,6 +110,7 @@ impl From<schema::block::Genesis> for Genesis {
             coins_root: value.coins_root.into(),
             contracts_root: value.contracts_root.into(),
             messages_root: value.messages_root.into(),
+            transactions_root: value.transactions_root.into(),
         }
     }
 }

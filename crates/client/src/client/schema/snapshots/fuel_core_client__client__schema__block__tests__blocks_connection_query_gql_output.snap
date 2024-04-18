@@ -30,6 +30,7 @@ query($after: String, $before: String, $first: Int, $last: Int) {
             coinsRoot
             contractsRoot
             messagesRoot
+            transactionsRoot
           }
           ... on PoAConsensus {
             signature

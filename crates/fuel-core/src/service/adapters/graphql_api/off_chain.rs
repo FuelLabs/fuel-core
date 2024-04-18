@@ -156,6 +156,10 @@ impl OffChainDatabase for Database<OffChain> {
             .map(|cow| cow.into_owned());
         Ok(status)
     }
+
+    fn message_is_spent(&self, nonce: &Nonce) -> StorageResult<bool> {
+        self.message_is_spent(nonce)
+    }
 }
 
 impl Transactional for Database<OffChain> {
