@@ -466,7 +466,7 @@ where
             .add_source(source)?
             .add_storage(storage)?
             .add_relayer(relayer)?
-            .add_input_data(block, options)?;
+            .add_execution_input_data(block, options)?;
 
         let output = instance.run(module)?;
 
@@ -478,11 +478,24 @@ where
     #[cfg(feature = "wasm-executor")]
     fn wasm_validate_inner(
         &self,
-        _module: &wasmtime::Module,
-        _block: Block,
-        _options: ExecutionOptions,
+        module: &wasmtime::Module,
+        block: Block,
+        options: ExecutionOptions,
     ) -> ExecutorResult<Uncommitted<ExecutionResult, Changes>> {
-        todo!()
+        let storage = self.storage_view_provider.latest_view();
+        let relayer = self.relayer_view_provider.latest_view();
+
+        let instance = crate::instance::Instance::new(&self.engine)
+            .no_source()?
+            .add_storage(storage)?
+            .add_relayer(relayer)?
+            .add_validation_input_data(block, options)?;
+
+        let output = instance.run(module)?;
+
+        match output {
+            fuel_core_wasm_executor::utils::ReturnType::V1(result) => result,
+        }
     }
 
     fn native_execute_inner<TxSource>(
