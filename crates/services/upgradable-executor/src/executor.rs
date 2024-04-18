@@ -505,10 +505,18 @@ where
 
     fn native_validate_inner(
         &self,
-        _block: Block,
-        _options: ExecutionOptions,
+        block: Block,
+        options: ExecutionOptions,
     ) -> ExecutorResult<Uncommitted<ExecutionResult, Changes>> {
-        todo!()
+        let storage = self.storage_view_provider.latest_view();
+        let relayer = self.relayer_view_provider.latest_view();
+
+        let instance = fuel_core_executor::executor::ExecutionInstance {
+            relayer,
+            database: storage,
+            options,
+        };
+        instance.validate_without_commit(block)
     }
 
     /// Returns the compiled WASM module of the state transition function.

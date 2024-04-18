@@ -35,7 +35,10 @@ use fuel_core_storage::{
 };
 use fuel_core_types::{
     blockchain::{
-        block::PartialFuelBlock,
+        block::{
+            Block,
+            PartialFuelBlock,
+        },
         header::PartialBlockHeader,
         primitives::DaBlockHeight,
     },
@@ -222,6 +225,13 @@ where
     {
         self.execute_inner(block)
     }
+
+    pub fn validate_without_commit(
+        self,
+        block: Block,
+    ) -> ExecutorResult<UncommittedResult<Changes>> {
+        self.validate_inner(block)
+    }
 }
 
 // TODO: Make this module private after moving unit tests from `fuel-core` here.
@@ -334,19 +344,7 @@ where
                     block_executor.execute_block(ExecutionType::Production(component))?;
 
                 (block, execution_data)
-            } /* ExecutionTypes::Validation(mut block) => {
-               *     let block_executor = BlockExecutor::new(
-               *         self.relayer,
-               *         self.database,
-               *         self.options,
-               *         &block,
-               *     )?;
-               *
-               *     let component = PartialBlockComponent::from_partial_block(&mut block);
-               *     let execution_data =
-               *         block_executor.execute_block(ExecutionType::Validation(component))?;
-               *     (block, execution_data)
-               * } */
+            }
         };
 
         let ExecutionData {
@@ -380,6 +378,63 @@ where
             if pre_exec_block_id != finalized_block_id {
                 return Err(ExecutorError::InvalidBlockId)
             }
+        }
+
+        let result = ExecutionResult {
+            block,
+            skipped_transactions,
+            tx_status,
+            events,
+        };
+
+        // Get the complete fuel block.
+        Ok(UncommittedResult::new(result, changes))
+    }
+
+    fn validate_inner(self, block: Block) -> ExecutorResult<UncommittedResult<Changes>> {
+        // Compute the block id before execution if there is one.
+        let pre_exec_block_id = block.id();
+
+        let (block, execution_data) = {
+            let mut partial_block = block.into();
+            let block_executor = BlockExecutor::new(
+                self.relayer,
+                self.database,
+                self.options,
+                &partial_block,
+            )?;
+
+            let component = PartialBlockComponent::from_partial_block(&mut partial_block);
+            let execution_data = block_executor.validate_block(component)?;
+            (partial_block, execution_data)
+        };
+
+        let ExecutionData {
+            coinbase,
+            used_gas,
+            message_ids,
+            tx_status,
+            skipped_transactions,
+            events,
+            changes,
+            event_inbox_root,
+            ..
+        } = execution_data;
+
+        // Now that the transactions have been executed, generate the full header.
+
+        let block = block.generate(&message_ids[..], event_inbox_root);
+
+        let finalized_block_id = block.id();
+
+        debug!(
+            "Block {:#x} fees: {} gas: {}",
+            pre_exec_block_id, coinbase, used_gas
+        );
+
+        // check if block id doesn't match proposed block id
+        if pre_exec_block_id != finalized_block_id {
+            return Err(ExecutorError::InvalidBlockId)
         }
 
         let result = ExecutionResult {
@@ -617,7 +672,137 @@ where
         }
 
         data.changes = self.block_st_transaction.into_changes();
+        Ok(data)
+    }
 
+    #[tracing::instrument(skip_all)]
+    fn validate_block(
+        mut self,
+        component: PartialBlockComponent<OnceTransactionsSource>,
+    ) -> ExecutorResult<ExecutionData> {
+        let block_gas_limit = self.consensus_params.block_gas_limit();
+        let mut data = ExecutionData {
+            coinbase: 0,
+            used_gas: 0,
+            tx_count: 0,
+            found_mint: false,
+            message_ids: Vec::new(),
+            tx_status: Vec::new(),
+            events: Vec::new(),
+            changes: Default::default(),
+            skipped_transactions: Vec::new(),
+            event_inbox_root: Default::default(),
+        };
+        let execution_data = &mut data;
+
+        // Split out the execution kind and partial block.
+        let block = component.empty_block;
+        let source = component.transactions_source;
+        let gas_price = component.gas_price;
+        let coinbase_contract_id = component.coinbase_contract_id;
+        let block_height = *block.header.height();
+
+        let forced_transactions = if self.relayer.enabled() {
+            self.process_da(&block.header, execution_data)?
+        } else {
+            Vec::with_capacity(0)
+        };
+
+        // The block level storage transaction that also contains data from the relayer.
+        // Starting from this point, modifications from each thread should be independent
+        // and shouldn't touch the same data.
+        let mut block_with_relayer_data_transaction = self.block_st_transaction.read_transaction()
+            // Enforces independent changes from each thread.
+            .with_policy(ConflictPolicy::Fail);
+
+        // We execute transactions in a single thread right now, but later,
+        // we will execute them in parallel with a separate independent storage transaction per thread.
+        let mut thread_block_transaction = block_with_relayer_data_transaction
+            .read_transaction()
+            .with_policy(ConflictPolicy::Overwrite);
+
+        debug_assert!(block.transactions.is_empty());
+
+        let mut execute_transaction = |execution_data: &mut ExecutionData,
+                                       tx: MaybeCheckedTransaction,
+                                       gas_price: Word|
+         -> ExecutorResult<()> {
+            let tx_count = execution_data.tx_count;
+            let tx = {
+                let mut tx_st_transaction = thread_block_transaction
+                    .write_transaction()
+                    .with_policy(ConflictPolicy::Overwrite);
+                let tx_id = tx.id(&self.consensus_params.chain_id());
+                let tx = self.execute_transaction(
+                    tx,
+                    &tx_id,
+                    &block.header,
+                    coinbase_contract_id,
+                    gas_price,
+                    execution_data,
+                    ExecutionKind::Validation,
+                    &mut tx_st_transaction,
+                )?;
+                tx_st_transaction.commit()?;
+                tx
+            };
+
+            block.transactions.push(tx);
+            execution_data.tx_count = tx_count
+                .checked_add(1)
+                .ok_or(ExecutorError::TooManyTransactions)?;
+
+            Ok(())
+        };
+
+        let relayed_tx_iter = forced_transactions.into_iter();
+        for transaction in relayed_tx_iter {
+            const RELAYED_GAS_PRICE: Word = 0;
+            let transaction = MaybeCheckedTransaction::CheckedTransaction(transaction);
+            let tx_id = transaction.id(&self.consensus_params.chain_id());
+            match execute_transaction(
+                &mut *execution_data,
+                transaction,
+                RELAYED_GAS_PRICE,
+            ) {
+                Ok(_) => {}
+                Err(err) => {
+                    let event = ExecutorEvent::ForcedTransactionFailed {
+                        id: tx_id.into(),
+                        block_height,
+                        failure: err.to_string(),
+                    };
+                    execution_data.events.push(event);
+                }
+            }
+        }
+
+        let remaining_gas_limit = block_gas_limit.saturating_sub(execution_data.used_gas);
+
+        // L2 originated transactions should be in the `TxSource`. This will be triggered after
+        // all relayed transactions are processed.
+        let mut regular_tx_iter = source.next(remaining_gas_limit).into_iter().peekable();
+        while regular_tx_iter.peek().is_some() {
+            for transaction in regular_tx_iter {
+                execute_transaction(&mut *execution_data, transaction, gas_price)?;
+            }
+
+            let new_remaining_gas_limit =
+                block_gas_limit.saturating_sub(execution_data.used_gas);
+
+            regular_tx_iter = source.next(new_remaining_gas_limit).into_iter().peekable();
+        }
+
+        let changes_from_thread = thread_block_transaction.into_changes();
+        block_with_relayer_data_transaction.commit_changes(changes_from_thread)?;
+        self.block_st_transaction
+            .commit_changes(block_with_relayer_data_transaction.into_changes())?;
+
+        if !data.found_mint {
+            return Err(ExecutorError::MintMissing)
+        }
+
+        data.changes = self.block_st_transaction.into_changes();
         Ok(data)
     }
 
