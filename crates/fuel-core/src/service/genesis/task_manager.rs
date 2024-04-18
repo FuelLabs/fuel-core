@@ -71,9 +71,8 @@ where
         self.set.spawn(arg(self.cancel.clone()));
     }
 
-    pub async fn wait(&mut self) -> anyhow::Result<Vec<T>> {
-        let set = core::mem::take(&mut self.set);
-        let results = futures::stream::unfold(set, |mut set| async move {
+    pub async fn wait(self) -> anyhow::Result<Vec<T>> {
+        let results = futures::stream::unfold(self.set, |mut set| async move {
             let res = set.join_next().await?;
             Some((res, set))
         })
