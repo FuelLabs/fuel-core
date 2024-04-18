@@ -1,7 +1,10 @@
 use clap::ValueEnum;
 use fuel_core_chain_config::SnapshotReader;
 use fuel_core_types::{
-    blockchain::primitives::SecretKeyWrapper,
+    blockchain::{
+        header::StateTransitionBytecodeVersion,
+        primitives::SecretKeyWrapper,
+    },
     secrecy::Secret,
 };
 use std::{
@@ -23,6 +26,12 @@ use fuel_core_p2p::config::{
 #[cfg(feature = "relayer")]
 use fuel_core_relayer::Config as RelayerConfig;
 
+#[cfg(feature = "test-helpers")]
+use fuel_core_chain_config::{
+    ChainConfig,
+    StateConfig,
+};
+
 pub use fuel_core_consensus_module::RelayerConsensusConfig;
 pub use fuel_core_importer;
 pub use fuel_core_poa::Trigger;
@@ -42,6 +51,7 @@ pub struct Config {
     pub debug: bool,
     // default to false until downstream consumers stabilize
     pub utxo_validation: bool,
+    pub native_executor_version: Option<StateTransitionBytecodeVersion>,
     pub block_production: Trigger,
     pub vm: VMConfig,
     pub txpool: fuel_core_txpool::Config,
@@ -68,8 +78,33 @@ pub struct Config {
 impl Config {
     #[cfg(feature = "test-helpers")]
     pub fn local_node() -> Self {
-        let snapshot_reader = SnapshotReader::local_testnet();
+        Self::local_node_with_state_config(StateConfig::local_testnet())
+    }
+
+    #[cfg(feature = "test-helpers")]
+    pub fn local_node_with_state_config(state_config: StateConfig) -> Self {
+        Self::local_node_with_configs(ChainConfig::local_testnet(), state_config)
+    }
+
+    #[cfg(feature = "test-helpers")]
+    pub fn local_node_with_configs(
+        chain_config: ChainConfig,
+        state_config: StateConfig,
+    ) -> Self {
+        Self::local_node_with_reader(SnapshotReader::new_in_memory(
+            chain_config,
+            state_config,
+        ))
+    }
+
+    #[cfg(feature = "test-helpers")]
+    pub fn local_node_with_reader(snapshot_reader: SnapshotReader) -> Self {
         let block_importer = fuel_core_importer::Config::new();
+        let latest_block = snapshot_reader.last_block_config();
+        // In tests, we always want to use the native executor as a default configuration.
+        let native_executor_version = latest_block
+            .map(|last_block| last_block.state_transition_version.saturating_add(1))
+            .unwrap_or(StateTransitionBytecodeVersion::MIN);
 
         let utxo_validation = false;
         let min_gas_price = 0;
@@ -89,10 +124,11 @@ impl Config {
             api_request_timeout: Duration::from_secs(60),
             combined_db_config,
             debug: true,
+            utxo_validation,
+            native_executor_version: Some(native_executor_version),
             snapshot_reader,
             block_production: Trigger::Instant,
             vm: Default::default(),
-            utxo_validation,
             txpool: fuel_core_txpool::Config {
                 utxo_validation,
                 transaction_ttl: Duration::from_secs(60 * 100000000),

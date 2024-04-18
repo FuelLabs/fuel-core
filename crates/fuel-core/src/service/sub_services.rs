@@ -59,18 +59,21 @@ pub fn init_sub_services(
     config: &Config,
     database: CombinedDatabase,
 ) -> anyhow::Result<(SubServices, SharedState)> {
+    let chain_config = config.snapshot_reader.chain_config();
+    let chain_id = chain_config.consensus_parameters.chain_id();
+    let chain_name = chain_config.chain_name.clone();
+
+    let genesis_block = database
+        .on_chain()
+        .genesis_block()?
+        .unwrap_or(create_genesis_block(config).compress(&chain_id));
     let last_block_header = database
         .on_chain()
         .get_current_block()?
         .map(|block| block.header().clone())
-        .unwrap_or({
-            let block = create_genesis_block(config);
-            block.header().clone()
-        });
+        .unwrap_or(genesis_block.header().clone());
+
     let last_height = *last_block_header.height();
-    let chain_config = config.snapshot_reader.chain_config();
-    let chain_id = chain_config.consensus_parameters.chain_id();
-    let chain_name = chain_config.chain_name.clone();
 
     let executor = ExecutorAdapter::new(
         database.on_chain().clone(),
@@ -78,11 +81,15 @@ pub fn init_sub_services(
         fuel_core_upgradable_executor::config::Config {
             backtrace: config.vm.backtrace,
             utxo_validation_default: config.utxo_validation,
+            native_executor_version: config.native_executor_version,
         },
     );
 
-    let verifier =
-        VerifierAdapter::new(&config.snapshot_reader, database.on_chain().clone());
+    let verifier = VerifierAdapter::new(
+        &genesis_block,
+        chain_config.consensus,
+        database.on_chain().clone(),
+    );
 
     let importer_adapter = BlockImporterAdapter::new(
         chain_id,

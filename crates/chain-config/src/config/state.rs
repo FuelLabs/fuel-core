@@ -46,6 +46,11 @@ use bech32::{
 };
 #[cfg(feature = "test-helpers")]
 use core::str::FromStr;
+use fuel_core_types::blockchain::header::{
+    BlockHeader,
+    ConsensusParametersVersion,
+    StateTransitionBytecodeVersion,
+};
 #[cfg(feature = "test-helpers")]
 use fuel_core_types::{
     fuel_types::Address,
@@ -71,6 +76,39 @@ pub const TESTNET_WALLET_SECRETS: [&str; 5] = [
     "0x7f8a325504e7315eda997db7861c9447f5c3eff26333b20180475d94443a10c6",
 ];
 
+#[derive(Default, Copy, Clone, Debug, Deserialize, Serialize, Eq, PartialEq)]
+pub struct LastBlockConfig {
+    /// The block height of the last block.
+    pub block_height: BlockHeight,
+    /// The da height used in the last block.
+    pub da_block_height: DaBlockHeight,
+    /// The version of consensus parameters used to produce last block.
+    pub consensus_parameters_version: ConsensusParametersVersion,
+    /// The version of state transition function used to produce last block.
+    pub state_transition_version: StateTransitionBytecodeVersion,
+}
+
+impl From<BlockHeader> for LastBlockConfig {
+    fn from(header: BlockHeader) -> Self {
+        Self::from(&header)
+    }
+}
+
+impl From<&BlockHeader> for LastBlockConfig {
+    fn from(header: &BlockHeader) -> Self {
+        Self {
+            block_height: *header.height(),
+            da_block_height: header.application().da_height,
+            consensus_parameters_version: header
+                .application()
+                .consensus_parameters_version,
+            state_transition_version: header
+                .application()
+                .state_transition_bytecode_version,
+        }
+    }
+}
+
 #[derive(Default, Clone, Debug, Deserialize, Serialize, Eq, PartialEq)]
 pub struct StateConfig {
     /// Spendable coins
@@ -79,10 +117,8 @@ pub struct StateConfig {
     pub messages: Vec<MessageConfig>,
     /// Contracts
     pub contracts: Vec<ContractConfig>,
-    /// Block height
-    pub block_height: BlockHeight,
-    /// Da block height
-    pub da_block_height: DaBlockHeight,
+    /// Last block config.
+    pub last_block: Option<LastBlockConfig>,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -110,8 +146,7 @@ impl StateConfigBuilder {
     #[cfg(feature = "std")]
     pub fn build(
         self,
-        block_height: BlockHeight,
-        da_block_height: DaBlockHeight,
+        latest_block_config: Option<LastBlockConfig>,
     ) -> anyhow::Result<StateConfig> {
         use std::collections::HashMap;
 
@@ -200,8 +235,7 @@ impl StateConfigBuilder {
             coins,
             messages,
             contracts,
-            block_height,
-            da_block_height,
+            last_block: latest_block_config,
         })
     }
 }
@@ -246,8 +280,12 @@ impl crate::Randomize for StateConfig {
             coins: rand_collection(&mut rng, amount),
             messages: rand_collection(&mut rng, amount),
             contracts: rand_collection(&mut rng, amount),
-            block_height: rng.gen(),
-            da_block_height: rng.gen(),
+            last_block: Some(LastBlockConfig {
+                block_height: rng.gen(),
+                da_block_height: rng.gen(),
+                consensus_parameters_version: rng.gen(),
+                state_transition_version: rng.gen(),
+            }),
         }
     }
 }
@@ -464,10 +502,7 @@ impl StateConfig {
 
         builder.add(contract_utxo);
 
-        let block_height = reader.block_height();
-        let da_block_height = reader.da_block_height();
-
-        builder.build(block_height, da_block_height)
+        builder.build(reader.last_block_config().cloned())
     }
 
     #[cfg(feature = "test-helpers")]
@@ -672,11 +707,7 @@ mod tests {
             .into_iter()
             .reduce(|fragment, next_fragment| fragment.merge(next_fragment).unwrap())
             .unwrap()
-            .finalize(
-                state_config.block_height,
-                state_config.da_block_height,
-                &chain_config,
-            )
+            .finalize(state_config.last_block, &chain_config)
             .unwrap();
 
         // then
@@ -694,21 +725,26 @@ mod tests {
         let temp_dir = tempfile::tempdir().unwrap();
         let block_height = 13u32.into();
         let da_block_height = 14u64.into();
+        let consensus_parameters_version = 321u32;
+        let state_transition_version = 123u32;
+        let block_config = LastBlockConfig {
+            block_height,
+            da_block_height,
+            consensus_parameters_version,
+            state_transition_version,
+        };
         let writer = writer(temp_dir.path());
 
         // when
         let snapshot = writer
-            .close(block_height, da_block_height, &ChainConfig::local_testnet())
+            .close(Some(block_config), &ChainConfig::local_testnet())
             .unwrap();
 
         // then
         let reader = SnapshotReader::open(snapshot).unwrap();
 
-        let block_height_decoded = reader.block_height();
-        pretty_assertions::assert_eq!(block_height, block_height_decoded);
-
-        let da_block_height_decoded = reader.da_block_height();
-        pretty_assertions::assert_eq!(da_block_height, da_block_height_decoded);
+        let block_config_decoded = reader.last_block_config().cloned();
+        pretty_assertions::assert_eq!(Some(block_config), block_config_decoded);
     }
 
     #[test_case::test_case(given_parquet_writer)]
@@ -717,9 +753,7 @@ mod tests {
         // given
         let temp_dir = tempfile::tempdir().unwrap();
         let writer = writer(temp_dir.path());
-        let snapshot = writer
-            .close(13.into(), 14u64.into(), &ChainConfig::local_testnet())
-            .unwrap();
+        let snapshot = writer.close(None, &ChainConfig::local_testnet()).unwrap();
 
         let reader = SnapshotReader::open(snapshot).unwrap();
 
@@ -765,7 +799,7 @@ mod tests {
             .into_iter()
             .collect_vec();
         let snapshot = snapshot_writer
-            .close(10.into(), DaBlockHeight(11), &ChainConfig::local_testnet())
+            .close(None, &ChainConfig::local_testnet())
             .unwrap();
 
         let actual_groups = reader(snapshot, group_size)
