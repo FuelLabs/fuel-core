@@ -71,6 +71,8 @@ mod off_chain;
 mod on_chain;
 mod progress;
 
+const GROUPS_NUMBER_FOR_PARALLELIZATION: usize = 10;
+
 pub struct SnapshotImporter {
     db: CombinedDatabase,
     task_manager: TaskManager<()>,
@@ -148,6 +150,10 @@ impl SnapshotImporter {
         let groups = self.snapshot_reader.read::<TableBeingWritten>()?;
         let num_groups = groups.len();
 
+        if num_groups == 0 {
+            return Ok(());
+        }
+
         let block_height = *self.genesis_block.header().height();
         let da_block_height = self.genesis_block.header().da_height;
         let db = self.db.on_chain().clone();
@@ -164,7 +170,14 @@ impl SnapshotImporter {
                 db,
                 progress_reporter,
             );
-            tokio_rayon::spawn(move || task.run())
+            async move {
+                if num_groups >= GROUPS_NUMBER_FOR_PARALLELIZATION {
+                    tokio_rayon::spawn(move || task.run()).await?;
+                } else {
+                    task.run()?;
+                }
+                Ok(())
+            }
         });
 
         Ok(())
@@ -183,6 +196,11 @@ impl SnapshotImporter {
     {
         let groups = self.snapshot_reader.read::<TableInSnapshot>()?;
         let num_groups = groups.len();
+
+        if num_groups == 0 {
+            return Ok(());
+        }
+
         let block_height = *self.genesis_block.header().height();
         let da_block_height = self.genesis_block.header().da_height;
 
@@ -201,7 +219,14 @@ impl SnapshotImporter {
                 db,
                 progress_reporter,
             );
-            tokio_rayon::spawn(move || task.run())
+            async move {
+                if num_groups >= GROUPS_NUMBER_FOR_PARALLELIZATION {
+                    tokio_rayon::spawn(move || task.run()).await?;
+                } else {
+                    task.run()?;
+                }
+                Ok(())
+            }
         });
 
         Ok(())

@@ -459,23 +459,34 @@ where
 {
     async fn run(&mut self, watcher: &mut StateWatcher) -> anyhow::Result<bool> {
         let should_continue;
+        let mut state = self.sync_task_handle.shared.clone();
         // make sure we're synced first
-        while *self.sync_task_handle.shared.borrow() == SyncState::NotSynced {
+        while *state.borrow_and_update() == SyncState::NotSynced {
             tokio::select! {
                 biased;
                 result = watcher.while_started() => {
                     should_continue = result?.started();
                     return Ok(should_continue);
                 }
-                _ = self.sync_task_handle.shared.changed() => {
-                    if let SyncState::Synced(block_header) = &*self.sync_task_handle.shared.borrow() {
-                        let (last_height, last_timestamp, last_block_created) =
-                            Self::extract_block_info(block_header);
-                        self.last_height = last_height;
-                        self.last_timestamp = last_timestamp;
-                        self.last_block_created = last_block_created;
-                    }
+                _ = state.changed() => {
+                    break;
                 }
+                _ = self.tx_status_update_stream.next() => {
+                    // ignore txpool events while syncing
+                }
+                _ = self.timer.wait() => {
+                    // ignore timer events while syncing
+                }
+            }
+        }
+
+        if let SyncState::Synced(block_header) = &*state.borrow_and_update() {
+            let (last_height, last_timestamp, last_block_created) =
+                Self::extract_block_info(block_header);
+            if last_height > self.last_height {
+                self.last_height = last_height;
+                self.last_timestamp = last_timestamp;
+                self.last_block_created = last_block_created;
             }
         }
 

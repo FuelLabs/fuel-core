@@ -136,6 +136,7 @@ impl RunnableTask for SyncTask {
         let mut should_continue = true;
 
         tokio::select! {
+            biased;
             _ = watcher.while_started() => {
                 should_continue = false;
             }
@@ -174,9 +175,10 @@ impl RunnableTask for SyncTask {
                     InnerSyncState::Synced { block_header, has_sufficient_peers } if new_block_height > block_header.height() => {
                         if block_info.is_locally_produced() {
                             self.inner_state = InnerSyncState::Synced {
-                                block_header: block_info.block_header,
+                                block_header: block_info.block_header.clone(),
                                 has_sufficient_peers: *has_sufficient_peers
                             };
+                            self.update_sync_state(SyncState::Synced(Arc::new(block_info.block_header)));
                         } else {
                             // we considered to be synced but we're obviously not!
                             if *has_sufficient_peers {
