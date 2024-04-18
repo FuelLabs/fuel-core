@@ -53,6 +53,12 @@ impl DatabaseBlocks for Database {
             .transpose()
             .ok_or(not_found!("BlockHeight"))?
     }
+
+    fn latest_genesis_height(&self) -> StorageResult<BlockHeight> {
+        self.genesis_block()?
+            .map(|block| *block.header().height())
+            .ok_or(not_found!("BlockHeight"))
+    }
 }
 
 impl DatabaseMessages for Database {

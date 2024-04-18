@@ -19,6 +19,7 @@ mod messages;
 mod metrics;
 mod node_info;
 mod poa;
+mod regenesis;
 #[cfg(feature = "relayer")]
 mod relayer;
 mod snapshot;

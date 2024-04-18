@@ -14,6 +14,7 @@ use crate::fuel_core_graphql_api::{
 use fuel_core_storage::{
     iter::{
         BoxedIter,
+        IntoBoxedIter,
         IterDirection,
     },
     transactional::AtomicView,
@@ -29,6 +30,7 @@ use fuel_core_txpool::types::{
 use fuel_core_types::{
     blockchain::{
         block::CompressedBlock,
+        consensus::Consensus,
         primitives::{
             BlockId,
             DaBlockHeight,
@@ -117,11 +119,55 @@ impl DatabaseBlocks for ReadView {
         height: Option<BlockHeight>,
         direction: IterDirection,
     ) -> BoxedIter<'_, StorageResult<CompressedBlock>> {
-        self.on_chain.blocks(height, direction)
+        // Chain together blocks from the off-chain db and the on-chain db
+        // The blocks in off-chain db, if any, are from time before regenesis
+
+        if let Some(height) = height {
+            match self.on_chain.latest_genesis_height() {
+                Ok(onchain_start_height) => {
+                    match (height >= onchain_start_height, direction) {
+                        (true, IterDirection::Forward) => {
+                            self.on_chain.blocks(Some(height), direction)
+                        }
+                        (true, IterDirection::Reverse) => self
+                            .on_chain
+                            .blocks(Some(height), direction)
+                            .chain(self.off_chain.old_blocks(None, direction))
+                            .into_boxed(),
+                        (false, IterDirection::Forward) => self
+                            .off_chain
+                            .old_blocks(Some(height), direction)
+                            .chain(self.on_chain.blocks(None, direction))
+                            .into_boxed(),
+                        (false, IterDirection::Reverse) => {
+                            self.off_chain.old_blocks(Some(height), direction)
+                        }
+                    }
+                }
+                Err(err) => core::iter::once(Err(err)).into_boxed(),
+            }
+        } else {
+            match direction {
+                IterDirection::Forward => self
+                    .off_chain
+                    .old_blocks(None, direction)
+                    .chain(self.on_chain.blocks(None, direction))
+                    .into_boxed(),
+                IterDirection::Reverse => self
+                    .on_chain
+                    .blocks(None, direction)
+                    .chain(self.off_chain.old_blocks(None, direction))
+                    .into_boxed(),
+            }
+        }
     }
 
     fn latest_height(&self) -> StorageResult<BlockHeight> {
         self.on_chain.latest_height()
+    }
+
+    fn latest_genesis_height(&self) -> StorageResult<BlockHeight> {
+        self.on_chain.latest_genesis_height()
     }
 }
 
@@ -240,6 +286,25 @@ impl OffChainDatabase for ReadView {
 
     fn contract_salt(&self, contract_id: &ContractId) -> StorageResult<Salt> {
         self.off_chain.contract_salt(contract_id)
+    }
+
+    fn old_blocks(
+        &self,
+        height: Option<BlockHeight>,
+        direction: IterDirection,
+    ) -> BoxedIter<'_, StorageResult<CompressedBlock>> {
+        self.off_chain.old_blocks(height, direction)
+    }
+
+    fn old_block_consensus(&self, height: BlockHeight) -> StorageResult<Consensus> {
+        self.off_chain.old_block_consensus(height)
+    }
+
+    fn old_transaction(
+        &self,
+        id: &TxId,
+    ) -> StorageResult<Option<fuel_core_types::fuel_tx::Transaction>> {
+        self.off_chain.old_transaction(id)
     }
 
     fn relayed_tx_status(

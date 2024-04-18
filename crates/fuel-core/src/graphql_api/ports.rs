@@ -22,6 +22,7 @@ use fuel_core_txpool::service::TxStatusMessage;
 use fuel_core_types::{
     blockchain::{
         block::CompressedBlock,
+        consensus::Consensus,
         primitives::{
             BlockId,
             DaBlockHeight,
@@ -91,6 +92,16 @@ pub trait OffChainDatabase: Send + Sync {
 
     fn contract_salt(&self, contract_id: &ContractId) -> StorageResult<Salt>;
 
+    fn old_blocks(
+        &self,
+        height: Option<BlockHeight>,
+        direction: IterDirection,
+    ) -> BoxedIter<'_, StorageResult<CompressedBlock>>;
+
+    fn old_block_consensus(&self, height: BlockHeight) -> StorageResult<Consensus>;
+
+    fn old_transaction(&self, id: &TxId) -> StorageResult<Option<Transaction>>;
+
     fn relayed_tx_status(
         &self,
         id: Bytes32,
@@ -123,6 +134,9 @@ pub trait DatabaseBlocks:
     ) -> BoxedIter<'_, StorageResult<CompressedBlock>>;
 
     fn latest_height(&self) -> StorageResult<BlockHeight>;
+
+    /// First (i.e. lowest) height stored in this db.
+    fn latest_genesis_height(&self) -> StorageResult<BlockHeight>;
 }
 
 /// Trait that specifies all the getters required for messages.
@@ -230,7 +244,14 @@ pub mod worker {
             contracts::ContractsInfo,
             messages::OwnedMessageIds,
         },
-        graphql_api::storage::relayed_transactions::RelayedTransactionStatuses,
+        graphql_api::storage::{
+            old::{
+                OldFuelBlockConsensus,
+                OldFuelBlocks,
+                OldTransactions,
+            },
+            relayed_transactions::RelayedTransactionStatuses,
+        },
     };
     use fuel_core_services::stream::BoxStream;
     use fuel_core_storage::{
@@ -264,6 +285,9 @@ pub mod worker {
         + StorageMutate<OwnedCoins, Error = StorageError>
         + StorageMutate<FuelBlockIdsToHeights, Error = StorageError>
         + StorageMutate<ContractsInfo, Error = StorageError>
+        + StorageMutate<OldFuelBlocks, Error = StorageError>
+        + StorageMutate<OldFuelBlockConsensus, Error = StorageError>
+        + StorageMutate<OldTransactions, Error = StorageError>
         + StorageMutate<RelayedTransactionStatuses, Error = StorageError>
     {
         fn record_tx_id_owner(

@@ -103,10 +103,14 @@ impl Block {
     async fn consensus(&self, ctx: &Context<'_>) -> async_graphql::Result<Consensus> {
         let query: &ReadView = ctx.data_unchecked();
         let height = self.0.header().height();
-        let core_consensus = query.consensus(height)?;
-
-        let my_consensus = core_consensus.try_into()?;
-        Ok(my_consensus)
+        match query.consensus(height) {
+            Ok(consensus) => Ok(consensus.try_into()?),
+            Err(err) => {
+                // Fallback to pre-regenesis data
+                let consensus = query.old_block_consensus(*height).map_err(|_| err)?;
+                Ok(consensus.try_into()?)
+            }
+        }
     }
 
     async fn transactions(

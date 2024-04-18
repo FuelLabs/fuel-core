@@ -30,8 +30,15 @@ use fuel_core_storage::{
     Result as StorageResult,
     StorageAsMut,
 };
+use fuel_core_txpool::types::TxId;
 use fuel_core_types::{
-    blockchain::block::Block,
+    blockchain::{
+        block::{
+            Block,
+            CompressedBlock,
+        },
+        consensus::Consensus,
+    },
     entities::relayer::transaction::RelayedTransactionStatus,
     fuel_tx::{
         field::{
@@ -72,6 +79,12 @@ use futures::{
 use std::{
     borrow::Cow,
     ops::Deref,
+};
+
+use super::storage::old::{
+    OldFuelBlockConsensus,
+    OldFuelBlocks,
+    OldTransactions,
 };
 
 #[cfg(test)]
@@ -331,6 +344,43 @@ where
                 // Do nothing
             }
         }
+    }
+    Ok(())
+}
+
+pub fn copy_to_old_blocks<'a, I, T>(blocks: I, db: &mut T) -> StorageResult<()>
+where
+    I: Iterator<Item = (&'a BlockHeight, &'a CompressedBlock)>,
+    T: OffChainDatabase,
+{
+    for (height, block) in blocks {
+        db.storage::<OldFuelBlocks>().insert(height, block)?;
+    }
+    Ok(())
+}
+
+pub fn copy_to_old_block_consensus<'a, I, T>(blocks: I, db: &mut T) -> StorageResult<()>
+where
+    I: Iterator<Item = (&'a BlockHeight, &'a Consensus)>,
+    T: OffChainDatabase,
+{
+    for (height, block) in blocks {
+        db.storage::<OldFuelBlockConsensus>()
+            .insert(height, block)?;
+    }
+    Ok(())
+}
+
+pub fn copy_to_old_transactions<'a, I, T>(
+    transactions: I,
+    db: &mut T,
+) -> StorageResult<()>
+where
+    I: Iterator<Item = (&'a TxId, &'a Transaction)>,
+    T: OffChainDatabase,
+{
+    for (id, tx) in transactions {
+        db.storage::<OldTransactions>().insert(id, tx)?;
     }
     Ok(())
 }

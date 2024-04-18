@@ -107,7 +107,7 @@ mod p2p {
     // after the first_producer stops, second_producer should start producing blocks
     #[tokio::test(flavor = "multi_thread")]
     async fn test_poa_multiple_producers() {
-        const INTERVAL: u64 = 1;
+        const INTERVAL: u64 = 2;
         const TIMEOUT: u64 = 5 * INTERVAL;
 
         let mut rng = StdRng::seed_from_u64(2222);
