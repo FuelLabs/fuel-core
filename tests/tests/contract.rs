@@ -3,7 +3,6 @@ use crate::helpers::{
     TestSetupBuilder,
 };
 use fuel_core::{
-    chain_config::SnapshotReader,
     database::{
         database_description::on_chain::OnChain,
         Database,
@@ -74,8 +73,7 @@ async fn calling_the_contract_with_enabled_utxo_validation_is_successful() {
     let config = Config {
         debug: true,
         utxo_validation: true,
-        snapshot_reader: SnapshotReader::local_testnet().with_state_config(state_config),
-        ..Config::local_node()
+        ..Config::local_node_with_state_config(state_config)
     };
 
     let node = FuelService::from_database(Database::<OnChain>::in_memory(), config)

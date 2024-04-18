@@ -2975,6 +2975,7 @@ dependencies = [
  "anyhow",
  "bech32",
  "bytes",
+ "derivative",
  "fuel-core-chain-config",
  "fuel-core-storage",
  "fuel-core-types",
@@ -3081,7 +3082,6 @@ name = "fuel-core-executor"
 version = "0.24.2"
 dependencies = [
  "anyhow",
- "fuel-core-chain-config",
  "fuel-core-storage",
  "fuel-core-trace",
  "fuel-core-types",

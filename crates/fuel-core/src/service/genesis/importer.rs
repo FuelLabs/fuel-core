@@ -64,15 +64,18 @@ use fuel_core_storage::{
     },
 };
 use fuel_core_types::{
-    blockchain::primitives::DaBlockHeight,
+    blockchain::{
+        block::Block,
+        primitives::DaBlockHeight,
+    },
     fuel_types::BlockHeight,
 };
-
 use tracing::Level;
 
 pub struct SnapshotImporter {
     db: CombinedDatabase,
     task_manager: TaskManager<()>,
+    genesis_block: Block,
     snapshot_reader: SnapshotReader,
     tracing_span: tracing::Span,
     multi_progress_reporter: MultipleProgressReporter,
@@ -81,6 +84,7 @@ pub struct SnapshotImporter {
 impl SnapshotImporter {
     fn new(
         db: CombinedDatabase,
+        genesis_block: Block,
         snapshot_reader: SnapshotReader,
         watcher: StateWatcher,
     ) -> Self {
@@ -88,6 +92,7 @@ impl SnapshotImporter {
             db,
             task_manager: TaskManager::new(watcher),
             snapshot_reader,
+            genesis_block,
             tracing_span: tracing::info_span!("snapshot_importer"),
             multi_progress_reporter: Self::init_multi_progress_reporter(),
         }
@@ -95,10 +100,13 @@ impl SnapshotImporter {
 
     pub async fn import(
         db: CombinedDatabase,
+        genesis_block: Block,
         snapshot_reader: SnapshotReader,
         watcher: StateWatcher,
     ) -> anyhow::Result<()> {
-        Self::new(db, snapshot_reader, watcher).run_workers().await
+        Self::new(db, genesis_block, snapshot_reader, watcher)
+            .run_workers()
+            .await
     }
 
     async fn run_workers(mut self) -> anyhow::Result<()> {
@@ -139,8 +147,8 @@ impl SnapshotImporter {
         let groups = self.snapshot_reader.read::<TableBeingWritten>()?;
         let num_groups = groups.len();
 
-        let block_height = self.snapshot_reader.block_height();
-        let da_block_height = self.snapshot_reader.da_block_height();
+        let block_height = *self.genesis_block.header().height();
+        let da_block_height = self.genesis_block.header().da_height;
         let db = self.db.on_chain().clone();
 
         let progress_reporter = self.progress_reporter::<TableBeingWritten>(num_groups);
@@ -172,8 +180,8 @@ impl SnapshotImporter {
     {
         let groups = self.snapshot_reader.read::<TableInSnapshot>()?;
         let num_groups = groups.len();
-        let block_height = self.snapshot_reader.block_height();
-        let da_block_height = self.snapshot_reader.da_block_height();
+        let block_height = *self.genesis_block.header().height();
+        let da_block_height = self.genesis_block.header().da_height;
 
         println!(
             "Importing table {:?} into {:?} ({num_groups})",

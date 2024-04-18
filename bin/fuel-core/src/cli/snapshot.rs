@@ -305,10 +305,9 @@ mod tests {
             builder.add(self.common.contract_state);
             builder.add(self.common.contract_balance);
 
-            let height = self.common.block.value.header().height();
-            let da_height = self.common.block.value.header().application().da_height;
-
-            builder.build(*height, da_height).unwrap()
+            builder
+                .build(Some(self.common.block.value.header().into()))
+                .unwrap()
         }
 
         fn read_from_snapshot(snapshot: SnapshotMetadata) -> Self {
@@ -331,11 +330,17 @@ mod tests {
 
             let block = {
                 let mut block = CompressedBlock::default();
-                let height = reader.block_height();
-                block.header_mut().application_mut().da_height = reader.da_block_height();
-                block.header_mut().set_block_height(height);
+                let last_block_config = reader
+                    .last_block_config()
+                    .cloned()
+                    .expect("Expects the last block config to be set");
+                block.header_mut().application_mut().da_height =
+                    last_block_config.da_block_height;
+                block
+                    .header_mut()
+                    .set_block_height(last_block_config.block_height);
                 TableEntry {
-                    key: height,
+                    key: last_block_config.block_height,
                     value: block,
                 }
             };
@@ -767,8 +772,7 @@ mod tests {
                 coins: vec![],
                 messages: vec![],
                 contracts: vec![randomly_chosen_contract],
-                block_height: original_state.block_height,
-                da_block_height: original_state.da_block_height,
+                last_block: original_state.last_block,
             }
         );
 

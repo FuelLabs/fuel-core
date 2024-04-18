@@ -1,5 +1,4 @@
 use core::fmt;
-use fuel_core_chain_config::GenesisCommitment;
 use fuel_core_storage::{
     not_found,
     tables::{
@@ -127,12 +126,13 @@ where
     type InnerError = StorageError;
 }
 
-impl<'a, Database> GenesisCommitment for ContractRef<&'a Database>
+impl<'a, Database> ContractRef<&'a Database>
 where
     Database: ContractStorageTrait,
     anyhow::Error: From<Database::InnerError>,
 {
-    fn root(&self) -> anyhow::Result<MerkleRoot> {
+    /// Returns the state root of the whole contract.
+    pub fn root(&self) -> anyhow::Result<MerkleRoot> {
         let contract_id = *self.contract_id();
         let utxo = *self
             .database()

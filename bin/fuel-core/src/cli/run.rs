@@ -42,6 +42,7 @@ use fuel_core_chain_config::{
     SnapshotMetadata,
     SnapshotReader,
 };
+use fuel_core_types::blockchain::header::StateTransitionBytecodeVersion;
 use pyroscope::{
     pyroscope::PyroscopeAgentRunning,
     PyroscopeAgent,
@@ -139,6 +140,10 @@ pub struct Command {
     #[arg(long = "utxo-validation", env)]
     pub utxo_validation: bool,
 
+    /// Overrides the version of the native executor.
+    #[arg(long = "native-executor-version", env)]
+    pub native_executor_version: Option<StateTransitionBytecodeVersion>,
+
     /// The minimum allowed gas price
     #[arg(long = "min-gas-price", default_value = "0", env)]
     pub min_gas_price: u64,
@@ -217,6 +222,7 @@ impl Command {
             vm_backtrace,
             debug,
             utxo_validation,
+            native_executor_version,
             min_gas_price,
             consensus_key,
             poa_trigger,
@@ -327,6 +333,7 @@ impl Command {
             combined_db_config,
             snapshot_reader,
             debug,
+            native_executor_version,
             utxo_validation,
             block_production: trigger,
             vm: VMConfig {
