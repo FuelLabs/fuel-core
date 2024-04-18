@@ -55,7 +55,9 @@ impl DatabaseBlocks for Database {
     }
 
     fn latest_genesis_height(&self) -> StorageResult<BlockHeight> {
-        self.first_block_height()
+        self.genesis_block()?
+            .map(|block| *block.header().height())
+            .ok_or(not_found!("BlockHeight"))
     }
 }
 
