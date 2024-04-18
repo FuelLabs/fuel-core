@@ -211,7 +211,10 @@ where
         &mut self,
         _block: Block,
     ) -> fuel_core_types::services::executor::Result<ExecutionResult> {
-        todo!()
+        let (result, changes) = self.validate_without_commit(_block)?.into();
+
+        self.storage_view_provider.commit_changes(changes)?;
+        Ok(result)
     }
 }
 
@@ -235,9 +238,10 @@ where
     /// Executes the block and returns the result of the execution with storage changes.
     pub fn validate_without_commit(
         &self,
-        _block: Block,
+        block: Block,
     ) -> fuel_core_types::services::executor::Result<UncommittedResult<Changes>> {
-        todo!()
+        let options = self.config.as_ref().into();
+        self.validate_inner(block, options)
     }
 
     #[cfg(any(test, feature = "test-helpers"))]
@@ -261,8 +265,8 @@ where
             }),
         };
 
-        let option = self.config.as_ref().into();
-        self.execute_inner(component, option)
+        let options = self.config.as_ref().into();
+        self.execute_inner(component, options)
     }
 }
 
@@ -383,6 +387,49 @@ where
     }
 
     #[cfg(feature = "wasm-executor")]
+    fn validate_inner(
+        &self,
+        block: Block,
+        options: ExecutionOptions,
+    ) -> ExecutorResult<Uncommitted<ExecutionResult, Changes>> {
+        let block_version = block.header().state_transition_bytecode_version;
+        let native_executor_version = self.native_executor_version();
+        if block_version == native_executor_version {
+            match &self.execution_strategy {
+                ExecutionStrategy::Native => self.native_validate_inner(block, options),
+                ExecutionStrategy::Wasm { module } => {
+                    self.wasm_validate_inner(module, block, options)
+                }
+            }
+        } else {
+            let module = self.get_module(block_version)?;
+            tracing::warn!(
+                "The block version({}) is different from the native executor version({}). \
+                The WASM executor will be used.", block_version, Self::VERSION
+            );
+            self.wasm_validate_inner(&module, block, self.config.as_ref().into())
+        }
+    }
+
+    #[cfg(not(feature = "wasm-executor"))]
+    fn validate_inner(
+        &self,
+        block: Block,
+        options: ExecutionOptions,
+    ) -> ExecutorResult<Uncommitted<ExecutionResult, Changes>> {
+        let block_version = block.header().state_transition_bytecode_version;
+        let native_executor_version = self.native_executor_version();
+        if block_version == native_executor_version {
+            self.native_validate_inner(block, options)
+        } else {
+            Err(ExecutorError::Other(format!(
+                "Not supported version `{block_version}`. Expected version is `{}`",
+                Self::VERSION
+            )))
+        }
+    }
+
+    #[cfg(feature = "wasm-executor")]
     fn wasm_execute_inner<TxSource>(
         &self,
         module: &wasmtime::Module,
@@ -427,6 +474,16 @@ where
         }
     }
 
+    #[cfg(feature = "wasm-executor")]
+    fn wasm_validate_inner(
+        &self,
+        _module: &wasmtime::Module,
+        _block: Block,
+        _options: ExecutionOptions,
+    ) -> ExecutorResult<Uncommitted<ExecutionResult, Changes>> {
+        todo!()
+    }
+
     fn native_execute_inner<TxSource>(
         &self,
         block: ExecutionBlockWithSource<TxSource>,
@@ -444,6 +501,14 @@ where
             options,
         };
         instance.execute_without_commit(block)
+    }
+
+    fn native_validate_inner(
+        &self,
+        _block: Block,
+        _options: ExecutionOptions,
+    ) -> ExecutorResult<Uncommitted<ExecutionResult, Changes>> {
+        todo!()
     }
 
     /// Returns the compiled WASM module of the state transition function.
