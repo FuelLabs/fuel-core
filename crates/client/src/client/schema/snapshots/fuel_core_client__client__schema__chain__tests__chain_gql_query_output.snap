@@ -30,6 +30,7 @@ query {
           coinsRoot
           contractsRoot
           messagesRoot
+          transactionsRoot
         }
         ... on PoAConsensus {
           signature

@@ -72,10 +72,6 @@ impl DatabaseMessages for Database {
             .into_boxed()
     }
 
-    fn message_is_spent(&self, nonce: &Nonce) -> StorageResult<bool> {
-        self.message_is_spent(nonce)
-    }
-
     fn message_exists(&self, nonce: &Nonce) -> StorageResult<bool> {
         self.message_exists(nonce)
     }

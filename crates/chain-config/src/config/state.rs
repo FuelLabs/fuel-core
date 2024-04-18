@@ -18,6 +18,7 @@ use fuel_core_storage::{
         ContractsState,
         FuelBlocks,
         Messages,
+        ProcessedTransactions,
         SealedBlockConsensus,
         Transactions,
     },
@@ -431,6 +432,16 @@ impl AsTable<SealedBlockConsensus> for StateConfig {
 
 impl AddTable<SealedBlockConsensus> for StateConfigBuilder {
     fn add(&mut self, _entries: Vec<TableEntry<SealedBlockConsensus>>) {}
+}
+
+impl AddTable<ProcessedTransactions> for StateConfigBuilder {
+    fn add(&mut self, _: Vec<TableEntry<ProcessedTransactions>>) {}
+}
+
+impl AsTable<ProcessedTransactions> for StateConfig {
+    fn as_table(&self) -> Vec<TableEntry<ProcessedTransactions>> {
+        Vec::new() // Do not include these for now
+    }
 }
 
 impl StateConfig {

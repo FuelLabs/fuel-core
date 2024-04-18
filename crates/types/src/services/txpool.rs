@@ -317,8 +317,6 @@ pub enum Error {
     NotInsertedInputUtxoIdNotDoesNotExist(UtxoId),
     #[error("Transaction is not inserted. UTXO is spent: {0:#x}")]
     NotInsertedInputUtxoIdSpent(UtxoId),
-    #[error("Transaction is not inserted. Message is spent: {0:#x}")]
-    NotInsertedInputMessageSpent(Nonce),
     #[error("Transaction is not inserted. Message id {0:#x} does not match any received message from the DA layer.")]
     NotInsertedInputMessageUnknown(Nonce),
     #[error(

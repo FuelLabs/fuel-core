@@ -148,6 +148,7 @@ pub struct Genesis {
     pub coins_root: Bytes32,
     pub contracts_root: Bytes32,
     pub messages_root: Bytes32,
+    pub transactions_root: Bytes32,
 }
 
 #[derive(cynic::QueryFragment, Clone, Debug)]

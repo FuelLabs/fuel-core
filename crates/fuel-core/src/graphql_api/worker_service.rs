@@ -12,6 +12,7 @@ use crate::{
             messages::{
                 OwnedMessageIds,
                 OwnedMessageKey,
+                SpentMessages,
             },
         },
     },
@@ -172,6 +173,9 @@ where
                         message.recipient(),
                         message.nonce(),
                     ))?;
+                block_st_transaction
+                    .storage::<SpentMessages>()
+                    .insert(message.nonce(), &())?;
             }
             Event::CoinCreated(coin) => {
                 let coin_by_owner = owner_coin_id_key(&coin.owner, &coin.utxo_id);

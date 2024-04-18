@@ -106,6 +106,8 @@ pub trait OffChainDatabase: Send + Sync {
         &self,
         id: Bytes32,
     ) -> StorageResult<Option<RelayedTransactionStatus>>;
+
+    fn message_is_spent(&self, nonce: &Nonce) -> StorageResult<bool>;
 }
 
 /// The on chain database port expected by GraphQL API service.
@@ -146,8 +148,6 @@ pub trait DatabaseMessages: StorageInspect<Messages, Error = StorageError> {
         start_message_id: Option<Nonce>,
         direction: IterDirection,
     ) -> BoxedIter<'_, StorageResult<Message>>;
-
-    fn message_is_spent(&self, nonce: &Nonce) -> StorageResult<bool>;
 
     fn message_exists(&self, nonce: &Nonce) -> StorageResult<bool>;
 }
@@ -242,7 +242,10 @@ pub mod worker {
         fuel_core_graphql_api::storage::{
             coins::OwnedCoins,
             contracts::ContractsInfo,
-            messages::OwnedMessageIds,
+            messages::{
+                OwnedMessageIds,
+                SpentMessages,
+            },
         },
         graphql_api::storage::{
             old::{
@@ -288,6 +291,7 @@ pub mod worker {
         + StorageMutate<OldFuelBlocks, Error = StorageError>
         + StorageMutate<OldFuelBlockConsensus, Error = StorageError>
         + StorageMutate<OldTransactions, Error = StorageError>
+        + StorageMutate<SpentMessages, Error = StorageError>
         + StorageMutate<RelayedTransactionStatuses, Error = StorageError>
     {
         fn record_tx_id_owner(

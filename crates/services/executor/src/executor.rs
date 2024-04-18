@@ -18,7 +18,6 @@ use fuel_core_storage::{
         FuelBlocks,
         Messages,
         ProcessedTransactions,
-        SpentMessages,
     },
     transactional::{
         Changes,
@@ -1285,12 +1284,6 @@ where
                 | Input::MessageCoinPredicate(MessageCoinPredicate { nonce, .. })
                 | Input::MessageDataSigned(MessageDataSigned { nonce, .. })
                 | Input::MessageDataPredicate(MessageDataPredicate { nonce, .. }) => {
-                    // Eagerly return already spent if status is known.
-                    if db.storage::<SpentMessages>().contains_key(nonce)? {
-                        return Err(
-                            TransactionValidityError::MessageAlreadySpent(*nonce).into()
-                        );
-                    }
                     if let Some(message) = db.storage::<Messages>().get(nonce)? {
                         if message.da_height() > block_da_height {
                             return Err(TransactionValidityError::MessageSpendTooEarly(
@@ -1374,19 +1367,12 @@ where
                 | Input::MessageCoinPredicate(MessageCoinPredicate { nonce, .. })
                 | Input::MessageDataSigned(MessageDataSigned { nonce, .. })
                 | Input::MessageDataPredicate(MessageDataPredicate { nonce, .. }) => {
-                    // `MessageDataSigned` and `MessageDataPredicate` are spent only if tx is not reverted
-                    // mark message id as spent
-                    let was_already_spent =
-                        db.storage::<SpentMessages>().insert(nonce, &())?;
-                    // ensure message wasn't already marked as spent
-                    if was_already_spent.is_some() {
-                        return Err(ExecutorError::MessageAlreadySpent(*nonce))
-                    }
-                    // cleanup message contents
+                    // ensure message wasn't already marked as spent,
+                    // and cleanup message contents
                     let message = db
                         .storage::<Messages>()
                         .remove(nonce)?
-                        .ok_or(ExecutorError::MessageAlreadySpent(*nonce))?;
+                        .ok_or(ExecutorError::MessageDoesNotExist(*nonce))?;
                     execution_data
                         .events
                         .push(ExecutorEvent::MessageConsumed(message));
