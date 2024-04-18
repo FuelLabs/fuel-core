@@ -230,8 +230,6 @@ async fn test_regenesis_old_blocks_are_preserved() -> anyhow::Result<()> {
     // Make sure the old blocks persited through the second regenesis
     let core = FuelCoreDriver::spawn(Some(snapshot_dir.path())).await?;
 
-    println!("Getting blocks");
-
     let contract_tx = TransactionBuilder::script(vec![], vec![])
         .add_unsigned_coin_input(
             secret,

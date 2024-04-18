@@ -177,10 +177,6 @@ impl ImportTable for Handler<OldFuelBlocks, OldFuelBlocks> {
         group: Vec<TableEntry<Self::TableInSnapshot>>,
         tx: &mut StorageTransaction<&mut Database<Self::DbDesc>>,
     ) -> anyhow::Result<()> {
-        println!(
-            "!! Re-importing old fuel blocks !! {}",
-            group.iter().count()
-        );
         let blocks = group
             .iter()
             .map(|TableEntry { key, value, .. }| (key, value));
@@ -217,10 +213,6 @@ impl ImportTable for Handler<OldFuelBlockConsensus, OldFuelBlockConsensus> {
         group: Vec<TableEntry<Self::TableInSnapshot>>,
         tx: &mut StorageTransaction<&mut Database<Self::DbDesc>>,
     ) -> anyhow::Result<()> {
-        println!(
-            "!! Re-importing old fuel block consensus !! {}",
-            group.iter().count()
-        );
         let blocks = group
             .iter()
             .map(|TableEntry { key, value, .. }| (key, value));

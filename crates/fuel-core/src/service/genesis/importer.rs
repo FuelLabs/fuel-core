@@ -183,12 +183,6 @@ impl SnapshotImporter {
         let block_height = *self.genesis_block.header().height();
         let da_block_height = self.genesis_block.header().da_height;
 
-        println!(
-            "Importing table {:?} into {:?} ({num_groups})",
-            TableInSnapshot::column(),
-            TableBeingWritten::column()
-        );
-
         let db = self.db.off_chain().clone();
 
         let progress_reporter = self.progress_reporter::<TableBeingWritten>(num_groups);
