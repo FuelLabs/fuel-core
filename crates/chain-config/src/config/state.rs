@@ -16,7 +16,9 @@ use fuel_core_storage::{
         ContractsLatestUtxo,
         ContractsRawCode,
         ContractsState,
+        FuelBlocks,
         Messages,
+        SealedBlockConsensus,
         Transactions,
     },
     ContractsAssetKey,
@@ -408,9 +410,27 @@ impl AsTable<Transactions> for StateConfig {
 }
 
 impl AddTable<Transactions> for StateConfigBuilder {
-    fn add(&mut self, _entries: Vec<TableEntry<Transactions>>) {
-        // Do not include these for now
+    fn add(&mut self, _entries: Vec<TableEntry<Transactions>>) {}
+}
+
+impl AsTable<FuelBlocks> for StateConfig {
+    fn as_table(&self) -> Vec<TableEntry<FuelBlocks>> {
+        Vec::new() // Do not include these for now
     }
+}
+
+impl AddTable<FuelBlocks> for StateConfigBuilder {
+    fn add(&mut self, _entries: Vec<TableEntry<FuelBlocks>>) {}
+}
+
+impl AsTable<SealedBlockConsensus> for StateConfig {
+    fn as_table(&self) -> Vec<TableEntry<SealedBlockConsensus>> {
+        Vec::new() // Do not include these for now
+    }
+}
+
+impl AddTable<SealedBlockConsensus> for StateConfigBuilder {
+    fn add(&mut self, _entries: Vec<TableEntry<SealedBlockConsensus>>) {}
 }
 
 impl StateConfig {
@@ -677,6 +697,8 @@ mod tests {
         let mut rng = StdRng::seed_from_u64(0);
         let state_config = StateConfig::randomize(&mut rng);
 
+        let chain_config = ChainConfig::local_testnet();
+
         macro_rules! write_in_fragments {
                 ($($fragment_ty: ty,)*) => {
                 [
@@ -692,7 +714,6 @@ mod tests {
             }
             }
 
-        let chain_config = ChainConfig::local_testnet();
         let fragments = write_in_fragments!(
             Coins,
             Messages,

@@ -8,6 +8,11 @@ use crate::{
         OwnedTransactions,
         TransactionStatuses,
     },
+    graphql_api::storage::old::{
+        OldFuelBlockConsensus,
+        OldFuelBlocks,
+        OldTransactions,
+    },
 };
 use fuel_core_chain_config::{
     AddTable,
@@ -29,7 +34,9 @@ use fuel_core_storage::{
         ContractsLatestUtxo,
         ContractsRawCode,
         ContractsState,
+        FuelBlocks,
         Messages,
+        SealedBlockConsensus,
         Transactions,
     },
 };
@@ -84,13 +91,18 @@ where
             ContractsLatestUtxo,
             ContractsState,
             ContractsAssets,
-            Transactions
+            Transactions,
+            FuelBlocks,
+            SealedBlockConsensus
         );
 
         export!(
             |ctx: &Self| ctx.db.off_chain(),
             TransactionStatuses,
-            OwnedTransactions
+            OwnedTransactions,
+            OldFuelBlocks,
+            OldFuelBlockConsensus,
+            OldTransactions
         );
 
         self.finalize().await?;

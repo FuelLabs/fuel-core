@@ -14,12 +14,18 @@ use crate::{
             transactions::OwnedTransactionIndexCursor,
         },
     },
+    graphql_api::storage::old::{
+        OldFuelBlockConsensus,
+        OldFuelBlocks,
+        OldTransactions,
+    },
 };
 use fuel_core_storage::{
     iter::{
         BoxedIter,
         IntoBoxedIter,
         IterDirection,
+        IteratorOverTable,
     },
     not_found,
     transactional::{
@@ -35,12 +41,17 @@ use fuel_core_txpool::types::{
     TxId,
 };
 use fuel_core_types::{
-    blockchain::primitives::BlockId,
+    blockchain::{
+        block::CompressedBlock,
+        consensus::Consensus,
+        primitives::BlockId,
+    },
     entities::relayer::transaction::RelayedTransactionStatus,
     fuel_tx::{
         Address,
         Bytes32,
         Salt,
+        Transaction,
         TxPointer,
         UtxoId,
     },
@@ -108,6 +119,30 @@ impl OffChainDatabase for Database<OffChain> {
             .salt();
 
         Ok(salt)
+    }
+
+    fn old_blocks(
+        &self,
+        height: Option<BlockHeight>,
+        direction: IterDirection,
+    ) -> BoxedIter<'_, StorageResult<CompressedBlock>> {
+        self.iter_all_by_start::<OldFuelBlocks>(height.as_ref(), Some(direction))
+            .map(|r| r.map(|(_, block)| block))
+            .into_boxed()
+    }
+
+    fn old_block_consensus(&self, height: BlockHeight) -> StorageResult<Consensus> {
+        Ok(self
+            .storage_as_ref::<OldFuelBlockConsensus>()
+            .get(&height)?
+            .ok_or(not_found!(OldFuelBlockConsensus))?
+            .into_owned())
+    }
+
+    fn old_transaction(&self, id: &TxId) -> StorageResult<Option<Transaction>> {
+        self.storage_as_ref::<OldTransactions>()
+            .get(id)
+            .map(|tx| tx.map(|tx| tx.into_owned()))
     }
 
     fn relayed_tx_status(

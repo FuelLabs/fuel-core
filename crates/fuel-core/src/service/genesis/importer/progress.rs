@@ -21,7 +21,7 @@ impl Default for ProgressReporter {
 
 #[derive(Clone)]
 pub enum Target {
-    Cli(&'static str),
+    Cli(String),
     Logs(Span),
 }
 
@@ -32,8 +32,8 @@ impl ProgressReporter {
         // prints to stderr. This removes flicker from double rendering (once when the progress bar
         // is constructed and again when added to the `MultipleProgressReporter`)
         let bar = ProgressBar::with_draw_target(Some(max), ProgressDrawTarget::hidden());
-        if let Target::Cli(message) = target {
-            bar.set_message(message);
+        if let Target::Cli(message) = &target {
+            bar.set_message(message.clone());
             let style = ProgressStyle::with_template(
                 "[{elapsed_precise}] {bar:.64.on_black} {pos:>7}/{len:7} {msg} {eta}",
             )

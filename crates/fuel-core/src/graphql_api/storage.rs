@@ -40,6 +40,7 @@ pub mod blocks;
 pub mod coins;
 pub mod contracts;
 pub mod messages;
+pub mod old;
 pub mod statistic;
 pub mod transactions;
 
@@ -80,8 +81,14 @@ pub enum Column {
     FuelBlockIdsToHeights = 7,
     /// See [`ContractsInfo`](contracts::ContractsInfo)
     ContractsInfo = 8,
+    /// See [`OldFuelBlocks`](old::OldFuelBlocks)
+    OldFuelBlocks = 9,
+    /// See [`OldFuelBlockConsensus`](old::OldFuelBlockConsensus)
+    OldFuelBlockConsensus = 10,
+    /// See [`OldTransactions`](old::OldTransactions)
+    OldTransactions = 11,
     /// Relayed Tx ID to Layer 1 Relayed Transaction status
-    RelayedTransactionStatus = 9,
+    RelayedTransactionStatus = 12,
 }
 
 impl Column {
