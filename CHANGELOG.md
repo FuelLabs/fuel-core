@@ -8,6 +8,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Description of the upcoming release here.
 
+### Fixed
+
+- [#1840](https://github.com/FuelLabs/fuel-core/pull/1840): Fixed the publishing of the `fuel-core 0.25.0` release.
+
 ## [Version 0.25.0]
 
 ### Fixed
