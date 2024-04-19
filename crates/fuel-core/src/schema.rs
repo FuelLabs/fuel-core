@@ -9,6 +9,7 @@ use async_graphql::{
     },
     MergedObject,
     MergedSubscription,
+    Object,
     OutputType,
     Schema,
     SchemaBuilder,
@@ -34,6 +35,15 @@ pub mod scalars;
 pub mod tx;
 
 pub mod relayed_tx;
+
+pub struct Version(u8);
+
+#[Object]
+impl Version {
+    async fn value(&self) -> scalars::U8 {
+        self.0.into()
+    }
+}
 
 #[derive(MergedObject, Default)]
 pub struct Query(

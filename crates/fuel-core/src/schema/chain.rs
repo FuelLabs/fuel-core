@@ -16,8 +16,8 @@ use crate::{
             U16,
             U32,
             U64,
-            U8,
         },
+        Version,
     },
 };
 use async_graphql::{
@@ -43,8 +43,6 @@ pub struct ContractParameters(fuel_tx::ContractParameters);
 pub struct FeeParameters(fuel_tx::FeeParameters);
 
 pub struct GasCosts(fuel_tx::GasCosts);
-
-pub struct Version(u8);
 
 #[derive(Union)]
 pub enum GasCostsVersion {
@@ -111,13 +109,6 @@ impl From<fuel_tx::DependentCost> for DependentCost {
                 DependentCost::HeavyOperation(HeavyOperation { base, gas_per_unit })
             }
         }
-    }
-}
-
-#[Object]
-impl Version {
-    async fn value(&self) -> U8 {
-        self.0.into()
     }
 }
 
