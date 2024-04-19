@@ -38,7 +38,10 @@ use fuel_core_types::{
             Block,
             PartialFuelBlock,
         },
-        header::PartialBlockHeader,
+        header::{
+            ConsensusParametersVersion,
+            PartialBlockHeader,
+        },
         primitives::DaBlockHeight,
     },
     entities::{
@@ -322,11 +325,12 @@ where
             ExecutionTypes::DryRun(component) => {
                 let mut block =
                     PartialFuelBlock::new(component.header_to_produce, vec![]);
+                let consensus_params_version = block.header.consensus_parameters_version;
                 let block_executor = BlockExecutor::new(
                     self.relayer,
                     self.database,
                     self.options,
-                    &block,
+                    consensus_params_version,
                 )?;
                 let component = PartialBlockComponent::from_component(
                     &mut block,
@@ -342,11 +346,12 @@ where
             ExecutionTypes::Production(component) => {
                 let mut block =
                     PartialFuelBlock::new(component.header_to_produce, vec![]);
+                let consensus_params_version = block.header.consensus_parameters_version;
                 let block_executor = BlockExecutor::new(
                     self.relayer,
                     self.database,
                     self.options,
-                    &block,
+                    consensus_params_version,
                 )?;
 
                 let component = PartialBlockComponent::from_component(
@@ -411,12 +416,12 @@ where
         let pre_exec_block_id = block.id();
 
         let execution_data = {
-            let partial_block = block.clone().into();
+            let consensus_params_version = block.header().consensus_parameters_version;
             let block_executor = BlockExecutor::new(
                 self.relayer,
                 self.database,
                 self.options,
-                &partial_block,
+                consensus_params_version,
             )?;
 
             let execution_data = block_executor.validate_block(&block)?;
@@ -465,10 +470,11 @@ where
         relayer: R,
         database: D,
         options: ExecutionOptions,
-        // TODO: We don't need the whole block, just the param version
-        block: &PartialFuelBlock,
+        // // TODO: We don't need the whole block, just the param version
+        // block: &PartialFuelBlock,
+        consensus_params_version: ConsensusParametersVersion,
     ) -> ExecutorResult<Self> {
-        let consensus_params_version = block.header.consensus_parameters_version;
+        // let consensus_params_version = block.header.consensus_parameters_version;
 
         let block_st_transaction = database
             .into_transaction()
