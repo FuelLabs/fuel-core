@@ -859,7 +859,7 @@ mod tests {
             let tx = Transaction::default_test_tx();
 
             let mut block = Block::default();
-            *block.transactions_mut() = vec![mint.into(), tx];
+            *block.transactions_mut() = vec![mint.clone().into(), tx, mint.into()];
             block.header_mut().recalculate_metadata();
 
             let mut validator = create_executor(Default::default(), Default::default());
