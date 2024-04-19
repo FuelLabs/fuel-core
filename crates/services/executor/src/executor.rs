@@ -513,8 +513,8 @@ where
         let gas_price = component.gas_price;
         let coinbase_contract_id = component.coinbase_contract_id;
         let block_height = *block.header.height();
-
-        let forced_transactions = self.get_relayed_txs(&block.header, &mut data)?;
+        let block_header = block.header;
+        let forced_transactions = self.get_relayed_txs(&block_header, &mut data)?;
 
         // The block level storage transaction that also contains data from the relayer.
         // Starting from this point, modifications from each thread should be independent
@@ -531,31 +531,40 @@ where
 
         debug_assert!(block.transactions.is_empty());
 
-        let relayed_tx_iter = forced_transactions.into_iter();
-        for transaction in relayed_tx_iter {
-            const RELAYED_GAS_PRICE: Word = 0;
-            let transaction = MaybeCheckedTransaction::CheckedTransaction(transaction);
-            let tx_id = transaction.id(&self.consensus_params.chain_id());
-            match self.execute_transaction_and_commit(
-                block,
-                &mut thread_block_transaction,
-                &mut data,
-                transaction,
-                RELAYED_GAS_PRICE,
-                coinbase_contract_id,
-                execution_kind,
-            ) {
-                Ok(_) => {}
-                Err(err) => {
-                    let event = ExecutorEvent::ForcedTransactionFailed {
-                        id: tx_id.into(),
-                        block_height,
-                        failure: err.to_string(),
-                    };
-                    data.events.push(event);
-                }
-            }
-        }
+        // let forced_transactions = self.get_relayed_txs(&block.header, &mut data)?;
+        // let relayed_tx_iter = forced_transactions.into_iter();
+        // for transaction in relayed_tx_iter {
+        //     const RELAYED_GAS_PRICE: Word = 0;
+        //     let transaction = MaybeCheckedTransaction::CheckedTransaction(transaction);
+        //     let tx_id = transaction.id(&self.consensus_params.chain_id());
+        //     match self.execute_transaction_and_commit(
+        //         block,
+        //         &mut thread_block_transaction,
+        //         &mut data,
+        //         transaction,
+        //         RELAYED_GAS_PRICE,
+        //         coinbase_contract_id,
+        //         execution_kind,
+        //     ) {
+        //         Ok(_) => {}
+        //         Err(err) => {
+        //             let event = ExecutorEvent::ForcedTransactionFailed {
+        //                 id: tx_id.into(),
+        //                 block_height,
+        //                 failure: err.to_string(),
+        //             };
+        //             data.events.push(event);
+        //         }
+        //     }
+        // }
+        self.process_relayed_txs(
+            forced_transactions,
+            block,
+            &mut thread_block_transaction,
+            &mut data,
+            coinbase_contract_id,
+            execution_kind,
+        )?;
 
         let remaining_gas_limit = block_gas_limit.saturating_sub(data.used_gas);
 
@@ -690,8 +699,6 @@ where
 
         let mut partial_block = PartialFuelBlock::from(block.clone());
         let transactions = core::mem::take(&mut partial_block.transactions);
-        let block_header = partial_block.header;
-        let block_height = block_header.height();
         let execution_kind = ExecutionKind::Validation;
 
         let (gas_price, coinbase_contract_id) =
@@ -701,6 +708,7 @@ where
                 return Err(ExecutorError::MintMissing)
             };
 
+        let block_header = partial_block.header;
         let forced_transactions = self.get_relayed_txs(&block_header, &mut data)?;
 
         // The block level storage transaction that also contains data from the relayer.
@@ -718,31 +726,40 @@ where
 
         debug_assert!(partial_block.transactions.is_empty());
 
-        let relayed_tx_iter = forced_transactions.into_iter();
-        for transaction in relayed_tx_iter {
-            const RELAYED_GAS_PRICE: Word = 0;
-            let transaction = MaybeCheckedTransaction::CheckedTransaction(transaction);
-            let tx_id = transaction.id(&self.consensus_params.chain_id());
-            match self.execute_transaction_and_commit(
-                &mut partial_block,
-                &mut thread_block_transaction,
-                &mut data,
-                transaction,
-                RELAYED_GAS_PRICE,
-                coinbase_contract_id,
-                execution_kind,
-            ) {
-                Ok(_) => {}
-                Err(err) => {
-                    let event = ExecutorEvent::ForcedTransactionFailed {
-                        id: tx_id.into(),
-                        block_height: *block_height,
-                        failure: err.to_string(),
-                    };
-                    data.events.push(event);
-                }
-            }
-        }
+        // let forced_transactions = self.get_relayed_txs(&block_header, &mut data)?;
+        // let relayed_tx_iter = forced_transactions.into_iter();
+        // for transaction in relayed_tx_iter {
+        //     const RELAYED_GAS_PRICE: Word = 0;
+        //     let transaction = MaybeCheckedTransaction::CheckedTransaction(transaction);
+        //     let tx_id = transaction.id(&self.consensus_params.chain_id());
+        //     match self.execute_transaction_and_commit(
+        //         &mut partial_block,
+        //         &mut thread_block_transaction,
+        //         &mut data,
+        //         transaction,
+        //         RELAYED_GAS_PRICE,
+        //         coinbase_contract_id,
+        //         execution_kind,
+        //     ) {
+        //         Ok(_) => {}
+        //         Err(err) => {
+        //             let event = ExecutorEvent::ForcedTransactionFailed {
+        //                 id: tx_id.into(),
+        //                 block_height: *block_height,
+        //                 failure: err.to_string(),
+        //             };
+        //             data.events.push(event);
+        //         }
+        //     }
+        // }
+        self.process_relayed_txs(
+            forced_transactions,
+            &mut partial_block,
+            &mut thread_block_transaction,
+            &mut data,
+            coinbase_contract_id,
+            execution_kind,
+        )?;
 
         for transaction in transactions {
             let maybe_checked_tx =
@@ -771,6 +788,48 @@ where
 
         data.changes = self.block_st_transaction.into_changes();
         Ok(data)
+    }
+
+    fn process_relayed_txs(
+        &self,
+        forced_transactions: Vec<CheckedTransaction>,
+        partial_block: &mut PartialFuelBlock,
+        thread_block_transaction: &mut StorageTransaction<
+            &StorageTransaction<&StorageTransaction<D>>,
+        >,
+        data: &mut ExecutionData,
+        coinbase_contract_id: ContractId,
+        execution_kind: ExecutionKind,
+    ) -> ExecutorResult<()> {
+        const RELAYED_GAS_PRICE: Word = 0;
+
+        let block_header = partial_block.header;
+        let block_height = block_header.height();
+        let relayed_tx_iter = forced_transactions.into_iter();
+        for transaction in relayed_tx_iter {
+            let transaction = MaybeCheckedTransaction::CheckedTransaction(transaction);
+            let tx_id = transaction.id(&self.consensus_params.chain_id());
+            match self.execute_transaction_and_commit(
+                partial_block,
+                thread_block_transaction,
+                data,
+                transaction,
+                RELAYED_GAS_PRICE,
+                coinbase_contract_id,
+                execution_kind,
+            ) {
+                Ok(_) => {}
+                Err(err) => {
+                    let event = ExecutorEvent::ForcedTransactionFailed {
+                        id: tx_id.into(),
+                        block_height: *block_height,
+                        failure: err.to_string(),
+                    };
+                    data.events.push(event);
+                }
+            }
+        }
+        Ok(())
     }
 
     fn get_relayed_txs(
