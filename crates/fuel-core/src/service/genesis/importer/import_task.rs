@@ -24,10 +24,8 @@ use crate::{
     },
     service::genesis::{
         progress::ProgressReporter,
-        task_manager::{
-            MultiCancellationToken,
-            NotifyCancel,
-        },
+        task_manager::MultiCancellationToken,
+        NotifyCancel,
     },
 };
 
@@ -70,7 +68,7 @@ where
     ) -> Self {
         let skip = match db
             .storage::<GenesisMetadata<DbDesc>>()
-            .get(Logic::TableBeingWritten::column().name())
+            .get(<Logic::TableBeingWritten>::column().name())
         {
             Ok(Some(idx_last_handled)) => {
                 usize::saturating_add(idx_last_handled.into_owned(), 1)
@@ -124,7 +122,7 @@ where
 
                 GenesisProgressMutate::<DbDesc>::update_genesis_progress(
                     &mut tx,
-                    Logic::TableBeingWritten::column().name(),
+                    <Logic::TableBeingWritten>::column().name(),
                     index,
                 )?;
                 tx.commit()?;

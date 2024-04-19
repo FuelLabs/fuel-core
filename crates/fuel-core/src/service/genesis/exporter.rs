@@ -4,9 +4,17 @@ use crate::{
         database_description::DatabaseDescription,
         Database,
     },
-    fuel_core_graphql_api::storage::transactions::{
-        OwnedTransactions,
-        TransactionStatuses,
+    fuel_core_graphql_api::storage::{
+        messages::SpentMessages,
+        transactions::{
+            OwnedTransactions,
+            TransactionStatuses,
+        },
+    },
+    graphql_api::storage::old::{
+        OldFuelBlockConsensus,
+        OldFuelBlocks,
+        OldTransactions,
     },
 };
 use fuel_core_chain_config::{
@@ -28,7 +36,10 @@ use fuel_core_storage::{
         ContractsLatestUtxo,
         ContractsRawCode,
         ContractsState,
+        FuelBlocks,
         Messages,
+        ProcessedTransactions,
+        SealedBlockConsensus,
         Transactions,
     },
 };
@@ -90,13 +101,20 @@ where
             ContractsLatestUtxo,
             ContractsState,
             ContractsAssets,
-            Transactions
+            FuelBlocks,
+            Transactions,
+            SealedBlockConsensus,
+            ProcessedTransactions
         );
 
         export!(
             |ctx: &Self| ctx.db.off_chain(),
             TransactionStatuses,
-            OwnedTransactions
+            OwnedTransactions,
+            OldFuelBlocks,
+            OldFuelBlockConsensus,
+            OldTransactions,
+            SpentMessages
         );
 
         self.finalize().await?;

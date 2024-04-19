@@ -18,10 +18,16 @@ use crate::{
         off_chain::OffChain,
         on_chain::OnChain,
     },
+    fuel_core_graphql_api::storage::messages::SpentMessages,
     graphql_api::storage::{
         coins::OwnedCoins,
         contracts::ContractsInfo,
         messages::OwnedMessageIds,
+        old::{
+            OldFuelBlockConsensus,
+            OldFuelBlocks,
+            OldTransactions,
+        },
         transactions::{
             OwnedTransactions,
             TransactionStatuses,
@@ -43,7 +49,10 @@ use fuel_core_storage::{
         ContractsLatestUtxo,
         ContractsRawCode,
         ContractsState,
+        FuelBlocks,
         Messages,
+        ProcessedTransactions,
+        SealedBlockConsensus,
         Transactions,
     },
 };
@@ -100,13 +109,21 @@ impl SnapshotImporter {
         self.spawn_worker_on_chain::<ContractsLatestUtxo>()?;
         self.spawn_worker_on_chain::<ContractsState>()?;
         self.spawn_worker_on_chain::<ContractsAssets>()?;
-        self.spawn_worker_on_chain::<Transactions>()?;
+        self.spawn_worker_on_chain::<ProcessedTransactions>()?;
 
         self.spawn_worker_off_chain::<TransactionStatuses, TransactionStatuses>()?;
         self.spawn_worker_off_chain::<OwnedTransactions, OwnedTransactions>()?;
+        self.spawn_worker_off_chain::<SpentMessages, SpentMessages>()?;
         self.spawn_worker_off_chain::<Messages, OwnedMessageIds>()?;
         self.spawn_worker_off_chain::<Coins, OwnedCoins>()?;
+        self.spawn_worker_off_chain::<FuelBlocks, OldFuelBlocks>()?;
+        self.spawn_worker_off_chain::<Transactions, OldTransactions>()?;
+        self.spawn_worker_off_chain::<SealedBlockConsensus, OldFuelBlockConsensus>()?;
         self.spawn_worker_off_chain::<Transactions, ContractsInfo>()?;
+        self.spawn_worker_off_chain::<OldTransactions, ContractsInfo>()?;
+        self.spawn_worker_off_chain::<OldFuelBlocks, OldFuelBlocks>()?;
+        self.spawn_worker_off_chain::<OldFuelBlockConsensus, OldFuelBlockConsensus>()?;
+        self.spawn_worker_off_chain::<OldTransactions, OldTransactions>()?;
 
         self.task_manager.wait().await?;
 
@@ -118,11 +135,15 @@ impl SnapshotImporter {
         TableBeingWritten: TableWithBlueprint + 'static + Send,
         TableEntry<TableBeingWritten>: serde::de::DeserializeOwned + Send,
         StateConfig: AsTable<TableBeingWritten>,
-        Handler<TableBeingWritten>:
+        Handler<TableBeingWritten, TableBeingWritten>:
             ImportTable<TableInSnapshot = TableBeingWritten, DbDesc = OnChain>,
     {
         let groups = self.snapshot_reader.read::<TableBeingWritten>()?;
         let num_groups = groups.len();
+
+        if num_groups == 0 {
+            return Ok(());
+        }
 
         let block_height = *self.genesis_block.header().height();
         let da_block_height = self.genesis_block.header().da_height;
@@ -140,7 +161,10 @@ impl SnapshotImporter {
                 db,
                 progress_reporter,
             );
-            tokio_rayon::spawn(move || task.run())
+            async move {
+                tokio_rayon::spawn(move || task.run()).await?;
+                Ok(())
+            }
         });
 
         Ok(())
@@ -150,15 +174,16 @@ impl SnapshotImporter {
         &mut self,
     ) -> anyhow::Result<()>
     where
-        TableInSnapshot: TableWithBlueprint + 'static,
+        TableInSnapshot: TableWithBlueprint + Send + 'static,
         TableEntry<TableInSnapshot>: serde::de::DeserializeOwned + Send,
         StateConfig: AsTable<TableInSnapshot>,
-        Handler<TableBeingWritten>:
+        Handler<TableBeingWritten, TableInSnapshot>:
             ImportTable<TableInSnapshot = TableInSnapshot, DbDesc = OffChain>,
         TableBeingWritten: TableWithBlueprint + Send + 'static,
     {
         let groups = self.snapshot_reader.read::<TableInSnapshot>()?;
         let num_groups = groups.len();
+
         let block_height = *self.genesis_block.header().height();
         let da_block_height = self.genesis_block.header().da_height;
 
@@ -184,18 +209,20 @@ impl SnapshotImporter {
 }
 
 #[derive(Debug, Clone, Copy)]
-pub struct Handler<T> {
+pub struct Handler<TableBeingWritten, TableInSnapshot> {
     pub block_height: BlockHeight,
     pub da_block_height: DaBlockHeight,
-    pub phaton_data: PhantomData<T>,
+    _table_being_written: PhantomData<TableBeingWritten>,
+    _table_in_snapshot: PhantomData<TableInSnapshot>,
 }
 
-impl<T> Handler<T> {
+impl<A, B> Handler<A, B> {
     pub fn new(block_height: BlockHeight, da_block_height: DaBlockHeight) -> Self {
         Self {
             block_height,
             da_block_height,
-            phaton_data: PhantomData,
+            _table_being_written: PhantomData,
+            _table_in_snapshot: PhantomData,
         }
     }
 }

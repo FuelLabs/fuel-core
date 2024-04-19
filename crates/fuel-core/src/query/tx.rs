@@ -37,9 +37,13 @@ where
     D: OnChainDatabase + OffChainDatabase + ?Sized,
 {
     fn transaction(&self, tx_id: &TxId) -> StorageResult<Transaction> {
-        self.storage::<Transactions>()
-            .get(tx_id)
-            .and_then(|v| v.ok_or(not_found!(Transactions)).map(|tx| tx.into_owned()))
+        if let Some(tx) = self.storage::<Transactions>().get(tx_id)? {
+            Ok(tx.into_owned())
+        } else if let Some(tx) = self.old_transaction(tx_id)? {
+            Ok(tx)
+        } else {
+            Err(not_found!(Transactions))
+        }
     }
 
     fn receipts(&self, tx_id: &TxId) -> StorageResult<Vec<Receipt>> {

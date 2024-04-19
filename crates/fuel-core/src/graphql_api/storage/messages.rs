@@ -1,3 +1,10 @@
+use fuel_core_chain_config::{
+    AddTable,
+    AsTable,
+    StateConfig,
+    StateConfigBuilder,
+    TableEntry,
+};
 use fuel_core_storage::{
     blueprint::plain::Plain,
     codec::{
@@ -55,4 +62,42 @@ fuel_core_storage::basic_storage_tests!(
     OwnedMessageIds,
     <OwnedMessageIds as Mappable>::Key::default(),
     <OwnedMessageIds as Mappable>::Value::default()
+);
+
+/// The storage table that indicates if the message is spent or not.
+pub struct SpentMessages;
+
+impl Mappable for SpentMessages {
+    type Key = Self::OwnedKey;
+    type OwnedKey = Nonce;
+    type Value = Self::OwnedValue;
+    type OwnedValue = ();
+}
+
+impl TableWithBlueprint for SpentMessages {
+    type Blueprint = Plain<Raw, Postcard>;
+    type Column = super::Column;
+
+    fn column() -> Self::Column {
+        Self::Column::SpentMessages
+    }
+}
+
+impl AsTable<SpentMessages> for StateConfig {
+    fn as_table(&self) -> Vec<TableEntry<SpentMessages>> {
+        Vec::new() // Do not include these for now
+    }
+}
+
+impl AddTable<SpentMessages> for StateConfigBuilder {
+    fn add(&mut self, _entries: Vec<TableEntry<SpentMessages>>) {
+        // Do not include these for now
+    }
+}
+
+#[cfg(test)]
+fuel_core_storage::basic_storage_tests!(
+    SpentMessages,
+    <SpentMessages as Mappable>::Key::default(),
+    <SpentMessages as Mappable>::Value::default()
 );

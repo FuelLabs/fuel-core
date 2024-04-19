@@ -27,6 +27,7 @@ query($id: BlockId) {
         coinsRoot
         contractsRoot
         messagesRoot
+        transactionsRoot
       }
       ... on PoAConsensus {
         signature

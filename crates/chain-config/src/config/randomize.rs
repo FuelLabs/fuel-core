@@ -16,7 +16,15 @@ use fuel_core_storage::{
     ContractsStateKey,
 };
 use fuel_core_types::{
-    blockchain::primitives::DaBlockHeight,
+    blockchain::{
+        block::CompressedBlock,
+        consensus::{
+            poa::PoAConsensus,
+            Consensus,
+        },
+        header::PartialBlockHeader,
+        primitives::DaBlockHeight,
+    },
     entities::{
         coins::coin::{
             CompressedCoin,
@@ -29,8 +37,15 @@ use fuel_core_types::{
         relayer::message::MessageV1,
         Message,
     },
+    fuel_asm::{
+        op,
+        RegId,
+    },
     fuel_tx::{
         ContractId,
+        Transaction,
+        TransactionBuilder,
+        UniqueIdentifier,
         UtxoId,
     },
     fuel_types::{
@@ -38,9 +53,13 @@ use fuel_core_types::{
         AssetId,
         BlockHeight,
         Bytes32,
+        ChainId,
         Nonce,
     },
-    fuel_vm::Salt,
+    fuel_vm::{
+        Salt,
+        Signature,
+    },
 };
 
 use crate::TableEntry;
@@ -169,5 +188,41 @@ impl Randomize for ContractsStateKey {
         let contract_id: ContractId = rng.gen();
         let state_key: Bytes32 = rng.gen();
         Self::new(&contract_id, &state_key)
+    }
+}
+
+impl Randomize for CompressedBlock {
+    fn randomize(mut rng: impl rand::Rng) -> Self {
+        let tx1: Transaction = Randomize::randomize(&mut rng);
+        let tx2: Transaction = Randomize::randomize(&mut rng);
+
+        let tx_ids = vec![tx1.id(&ChainId::default()), tx2.id(&ChainId::default())];
+
+        Self::test(
+            PartialBlockHeader::default().generate(&[tx1, tx2], &[], rng.gen()),
+            tx_ids,
+        )
+    }
+}
+
+impl Randomize for (BlockHeight, Consensus) {
+    fn randomize(mut rng: impl rand::Rng) -> Self {
+        (
+            rng.gen::<u32>().into(),
+            Consensus::PoA(PoAConsensus::new(Signature::from_bytes([rng.gen(); 64]))),
+        )
+    }
+}
+
+impl Randomize for Transaction {
+    fn randomize(mut rng: impl rand::Rng) -> Self {
+        let program: Vec<u8> = [op::ret(RegId::ONE)].into_iter().collect();
+        match rng.gen_range(0..2) {
+            0 => TransactionBuilder::create(program.into(), rng.gen(), vec![rng.gen()])
+                .finalize_as_transaction(),
+            1 => TransactionBuilder::script(program, vec![rng.gen(), rng.gen()])
+                .finalize_as_transaction(),
+            _ => unreachable!(),
+        }
     }
 }

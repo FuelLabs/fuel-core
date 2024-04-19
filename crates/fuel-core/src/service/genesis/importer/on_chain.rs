@@ -18,7 +18,7 @@ use fuel_core_storage::{
         ContractsRawCode,
         ContractsState,
         Messages,
-        Transactions,
+        ProcessedTransactions,
     },
     transactional::StorageTransaction,
     StorageAsMut,
@@ -33,7 +33,7 @@ use fuel_core_types::{
     fuel_types::BlockHeight,
 };
 
-impl ImportTable for Handler<Coins> {
+impl ImportTable for Handler<Coins, Coins> {
     type TableInSnapshot = Coins;
     type TableBeingWritten = Coins;
     type DbDesc = OnChain;
@@ -50,7 +50,7 @@ impl ImportTable for Handler<Coins> {
     }
 }
 
-impl ImportTable for Handler<Messages> {
+impl ImportTable for Handler<Messages, Messages> {
     type TableInSnapshot = Messages;
     type TableBeingWritten = Messages;
     type DbDesc = OnChain;
@@ -66,7 +66,26 @@ impl ImportTable for Handler<Messages> {
     }
 }
 
-impl ImportTable for Handler<ContractsRawCode> {
+impl ImportTable for Handler<ProcessedTransactions, ProcessedTransactions> {
+    type TableInSnapshot = ProcessedTransactions;
+    type TableBeingWritten = ProcessedTransactions;
+    type DbDesc = OnChain;
+
+    fn process(
+        &mut self,
+        group: Vec<TableEntry<Self::TableInSnapshot>>,
+        tx: &mut StorageTransaction<&mut Database>,
+    ) -> anyhow::Result<()> {
+        group.into_iter().try_for_each(|transaction| {
+            tx.storage_as_mut::<ProcessedTransactions>()
+                .insert(&transaction.key, &transaction.value)
+                .map(|_| ())
+        })?;
+        Ok(())
+    }
+}
+
+impl ImportTable for Handler<ContractsRawCode, ContractsRawCode> {
     type TableInSnapshot = ContractsRawCode;
     type TableBeingWritten = ContractsRawCode;
     type DbDesc = OnChain;
@@ -83,7 +102,7 @@ impl ImportTable for Handler<ContractsRawCode> {
     }
 }
 
-impl ImportTable for Handler<ContractsLatestUtxo> {
+impl ImportTable for Handler<ContractsLatestUtxo, ContractsLatestUtxo> {
     type TableInSnapshot = ContractsLatestUtxo;
     type TableBeingWritten = ContractsLatestUtxo;
     type DbDesc = OnChain;
@@ -100,7 +119,7 @@ impl ImportTable for Handler<ContractsLatestUtxo> {
     }
 }
 
-impl ImportTable for Handler<ContractsState> {
+impl ImportTable for Handler<ContractsState, ContractsState> {
     type TableInSnapshot = ContractsState;
     type TableBeingWritten = ContractsState;
     type DbDesc = OnChain;
@@ -115,7 +134,7 @@ impl ImportTable for Handler<ContractsState> {
     }
 }
 
-impl ImportTable for Handler<ContractsAssets> {
+impl ImportTable for Handler<ContractsAssets, ContractsAssets> {
     type TableInSnapshot = ContractsAssets;
     type TableBeingWritten = ContractsAssets;
     type DbDesc = OnChain;
@@ -126,24 +145,6 @@ impl ImportTable for Handler<ContractsAssets> {
         tx: &mut StorageTransaction<&mut Database>,
     ) -> anyhow::Result<()> {
         tx.update_contract_balances(group)?;
-        Ok(())
-    }
-}
-
-impl ImportTable for Handler<Transactions> {
-    type TableInSnapshot = Transactions;
-    type TableBeingWritten = Transactions;
-    type DbDesc = OnChain;
-
-    fn process(
-        &mut self,
-        group: Vec<TableEntry<Self::TableInSnapshot>>,
-        tx: &mut StorageTransaction<&mut Database<Self::DbDesc>>,
-    ) -> anyhow::Result<()> {
-        for transaction in &group {
-            tx.storage::<Transactions>()
-                .insert(&transaction.key, &transaction.value)?;
-        }
         Ok(())
     }
 }

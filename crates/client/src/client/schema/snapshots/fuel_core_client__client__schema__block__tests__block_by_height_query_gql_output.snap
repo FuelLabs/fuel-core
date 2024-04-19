@@ -27,6 +27,7 @@ query($height: U32) {
         coinsRoot
         contractsRoot
         messagesRoot
+        transactionsRoot
       }
       ... on PoAConsensus {
         signature
