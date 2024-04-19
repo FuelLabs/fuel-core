@@ -38,7 +38,10 @@ use fuel_core_types::{
             Block,
             PartialFuelBlock,
         },
-        header::PartialBlockHeader,
+        header::{
+            ConsensusParametersVersion,
+            PartialBlockHeader,
+        },
         primitives::DaBlockHeight,
     },
     entities::{
@@ -92,6 +95,7 @@ use fuel_core_types::{
         Transaction,
         TxId,
         TxPointer,
+        UniqueIdentifier,
         UtxoId,
     },
     fuel_types::{
@@ -265,9 +269,9 @@ pub mod block_component {
 
     impl<'a> PartialBlockComponent<'a, OnceTransactionsSource> {
         pub fn from_partial_block(block: &'a mut PartialFuelBlock) -> Self {
-            let transaction = core::mem::take(&mut block.transactions);
+            let transactions = core::mem::take(&mut block.transactions);
             let (gas_price, coinbase_contract_id) =
-                if let Some(Transaction::Mint(mint)) = transaction.last() {
+                if let Some(Transaction::Mint(mint)) = transactions.last() {
                     (*mint.gas_price(), mint.input_contract().contract_id)
                 } else {
                     (0, Default::default())
@@ -275,7 +279,7 @@ pub mod block_component {
 
             Self {
                 empty_block: block,
-                transactions_source: OnceTransactionsSource::new(transaction),
+                transactions_source: OnceTransactionsSource::new(transactions),
                 coinbase_contract_id,
                 gas_price,
                 _marker: Default::default(),
@@ -322,11 +326,15 @@ where
             ExecutionTypes::DryRun(component) => {
                 let mut block =
                     PartialFuelBlock::new(component.header_to_produce, vec![]);
+                let consensus_param_version = component
+                    .header_to_produce
+                    .application
+                    .consensus_parameters_version;
                 let block_executor = BlockExecutor::new(
                     self.relayer,
                     self.database,
                     self.options,
-                    &block,
+                    &consensus_param_version,
                 )?;
                 let component = PartialBlockComponent::from_component(
                     &mut block,
@@ -342,11 +350,15 @@ where
             ExecutionTypes::Production(component) => {
                 let mut block =
                     PartialFuelBlock::new(component.header_to_produce, vec![]);
+                let consensus_param_version = component
+                    .header_to_produce
+                    .application
+                    .consensus_parameters_version;
                 let block_executor = BlockExecutor::new(
                     self.relayer,
                     self.database,
                     self.options,
-                    &block,
+                    &consensus_param_version,
                 )?;
 
                 let component = PartialBlockComponent::from_component(
@@ -410,19 +422,19 @@ where
     fn validate_inner(self, block: Block) -> ExecutorResult<UncommittedResult<Changes>> {
         // Compute the block id before execution if there is one.
         let pre_exec_block_id = block.id();
+        let consensus_param_version =
+            block.header().application().consensus_parameters_version;
 
         let (block, execution_data) = {
-            let mut partial_block = block.into();
             let block_executor = BlockExecutor::new(
                 self.relayer,
                 self.database,
                 self.options,
-                &partial_block,
+                &consensus_param_version,
             )?;
 
-            let component = PartialBlockComponent::from_partial_block(&mut partial_block);
-            let execution_data = block_executor.validate_block(component)?;
-            (partial_block, execution_data)
+            let execution_data = block_executor.validate_block(block.clone())?;
+            (block, execution_data)
         };
 
         let ExecutionData {
@@ -436,10 +448,6 @@ where
             event_inbox_root,
             ..
         } = execution_data;
-
-        // Now that the transactions have been executed, generate the full header.
-
-        let block = block.generate(&message_ids[..], event_inbox_root);
 
         let finalized_block_id = block.id();
 
@@ -481,18 +489,16 @@ where
         relayer: R,
         database: D,
         options: ExecutionOptions,
-        block: &PartialFuelBlock,
+        consensus_params_version: &ConsensusParametersVersion,
     ) -> ExecutorResult<Self> {
-        let consensus_params_version = block.header.consensus_parameters_version;
-
         let block_st_transaction = database
             .into_transaction()
             .with_policy(ConflictPolicy::Overwrite);
         let consensus_params = block_st_transaction
             .storage::<ConsensusParametersVersions>()
-            .get(&consensus_params_version)?
+            .get(consensus_params_version)?
             .ok_or(ExecutorError::ConsensusParametersNotFound(
-                consensus_params_version,
+                consensus_params_version.to_owned(),
             ))?
             .into_owned();
 
@@ -705,15 +711,16 @@ where
     #[tracing::instrument(skip_all)]
     fn validate_block(
         mut self,
-        component: PartialBlockComponent<OnceTransactionsSource>,
+        // component: PartialBlockComponent<OnceTransactionsSource>,
+        block: Block,
     ) -> ExecutorResult<ExecutionData> {
         let block_gas_limit = self.consensus_params.block_gas_limit();
-        let mut data = ExecutionData::new();
+        let mut execution_data = ExecutionData::new();
 
-        let block = component.empty_block;
-        let source = component.transactions_source;
-        let gas_price = component.gas_price;
-        let coinbase_contract_id = component.coinbase_contract_id;
+        // let block = component.empty_block;
+        // let source = component.transactions_source;
+        // let gas_price = component.gas_price;
+        // let coinbase_contract_id = component.coinbase_contract_id;
 
         // The block level storage transaction that also contains data from the relayer.
         // Starting from this point, modifications from each thread should be independent
@@ -728,28 +735,41 @@ where
             .read_transaction()
             .with_policy(ConflictPolicy::Overwrite);
 
-        debug_assert!(block.transactions.is_empty());
-
+        let transactions = block.transactions().to_owned();
+        let header = block.header();
         let execution_kind = ExecutionKind::Validation;
-        // L2 originated transactions should be in the `TxSource`. This will be triggered after
-        // all relayed transactions are processed.
-        let mut regular_tx_iter = source.next(block_gas_limit).into_iter().peekable();
-        while regular_tx_iter.peek().is_some() {
-            for transaction in regular_tx_iter {
-                self.foobar(
-                    block,
-                    &mut thread_block_transaction,
-                    &mut data,
-                    transaction,
-                    gas_price,
+
+        let (gas_price, coinbase_contract_id) =
+            if let Some(Transaction::Mint(mint)) = transactions.last() {
+                (*mint.gas_price(), mint.input_contract().contract_id)
+            } else {
+                return Err(ExecutorError::MintMissing)
+            };
+
+        for transaction in transactions {
+            let tx_count = execution_data.tx_count;
+            {
+                let mut tx_st_transaction = thread_block_transaction
+                    .write_transaction()
+                    .with_policy(ConflictPolicy::Overwrite);
+                let tx_id = transaction.id(&self.consensus_params.chain_id());
+                let maybe_checked_tx = MaybeCheckedTransaction::Transaction(transaction);
+                self.execute_transaction(
+                    maybe_checked_tx,
+                    &tx_id,
+                    &header,
                     coinbase_contract_id,
+                    gas_price,
+                    &mut execution_data,
                     execution_kind,
+                    &mut tx_st_transaction,
                 )?;
-            }
+                tx_st_transaction.commit()?;
+            };
 
-            let new_remaining_gas_limit = block_gas_limit.saturating_sub(data.used_gas);
-
-            regular_tx_iter = source.next(new_remaining_gas_limit).into_iter().peekable();
+            execution_data.tx_count = tx_count
+                .checked_add(1)
+                .ok_or(ExecutorError::TooManyTransactions)?;
         }
 
         let changes_from_thread = thread_block_transaction.into_changes();
@@ -757,12 +777,8 @@ where
         self.block_st_transaction
             .commit_changes(block_with_relayer_data_transaction.into_changes())?;
 
-        if !data.found_mint {
-            return Err(ExecutorError::MintMissing)
-        }
-
-        data.changes = self.block_st_transaction.into_changes();
-        Ok(data)
+        execution_data.changes = self.block_st_transaction.into_changes();
+        Ok(execution_data)
     }
 
     fn process_da(
