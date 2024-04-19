@@ -415,18 +415,15 @@ where
     fn validate_inner(self, block: Block) -> ExecutorResult<UncommittedResult<Changes>> {
         let pre_exec_block_id = block.id();
 
-        let execution_data = {
-            let consensus_params_version = block.header().consensus_parameters_version;
-            let block_executor = BlockExecutor::new(
-                self.relayer,
-                self.database,
-                self.options,
-                consensus_params_version,
-            )?;
+        let consensus_params_version = block.header().consensus_parameters_version;
+        let block_executor = BlockExecutor::new(
+            self.relayer,
+            self.database,
+            self.options,
+            consensus_params_version,
+        )?;
 
-            let execution_data = block_executor.validate_block(&block)?;
-            execution_data
-        };
+        let execution_data = block_executor.validate_block(&block)?;
 
         let ExecutionData {
             coinbase,
@@ -470,12 +467,8 @@ where
         relayer: R,
         database: D,
         options: ExecutionOptions,
-        // // TODO: We don't need the whole block, just the param version
-        // block: &PartialFuelBlock,
         consensus_params_version: ConsensusParametersVersion,
     ) -> ExecutorResult<Self> {
-        // let consensus_params_version = block.header.consensus_parameters_version;
-
         let block_st_transaction = database
             .into_transaction()
             .with_policy(ConflictPolicy::Overwrite);
@@ -521,11 +514,7 @@ where
         let coinbase_contract_id = component.coinbase_contract_id;
         let block_height = *block.header.height();
 
-        let forced_transactions = if self.relayer.enabled() {
-            self.process_da(&block.header, &mut data)?
-        } else {
-            Vec::with_capacity(0)
-        };
+        let forced_transactions = self.get_relayed_txs(&block.header, &mut data)?;
 
         // The block level storage transaction that also contains data from the relayer.
         // Starting from this point, modifications from each thread should be independent
@@ -712,11 +701,7 @@ where
                 return Err(ExecutorError::MintMissing)
             };
 
-        let forced_transactions = if self.relayer.enabled() {
-            self.process_da(&block_header, &mut data)?
-        } else {
-            Vec::with_capacity(0)
-        };
+        let forced_transactions = self.get_relayed_txs(&block_header, &mut data)?;
 
         // The block level storage transaction that also contains data from the relayer.
         // Starting from this point, modifications from each thread should be independent
@@ -786,6 +771,19 @@ where
 
         data.changes = self.block_st_transaction.into_changes();
         Ok(data)
+    }
+
+    fn get_relayed_txs(
+        &mut self,
+        block_header: &PartialBlockHeader,
+        data: &mut ExecutionData,
+    ) -> ExecutorResult<Vec<CheckedTransaction>> {
+        let forced_transactions = if self.relayer.enabled() {
+            self.process_da(&block_header, data)?
+        } else {
+            Vec::with_capacity(0)
+        };
+        Ok(forced_transactions)
     }
 
     fn check_new_block_id(
