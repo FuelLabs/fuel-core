@@ -65,6 +65,7 @@ fn build_wasm() {
             // We can use the offline mode because it was already downloaded
             // by the `build.rs` dependencies requirements.
             "--offline".to_string(),
+            "fuel-core-wasm-executor".to_string(),
         ]);
     }
 
