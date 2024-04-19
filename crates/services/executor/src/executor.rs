@@ -190,6 +190,23 @@ pub struct ExecutionData {
     event_inbox_root: Bytes32,
 }
 
+impl ExecutionData {
+    pub fn new() -> Self {
+        ExecutionData {
+            coinbase: 0,
+            used_gas: 0,
+            tx_count: 0,
+            found_mint: false,
+            message_ids: Vec::new(),
+            tx_status: Vec::new(),
+            events: Vec::new(),
+            changes: Default::default(),
+            skipped_transactions: Vec::new(),
+            event_inbox_root: Default::default(),
+        }
+    }
+}
+
 /// Per-block execution options
 #[derive(serde::Serialize, serde::Deserialize, Clone, Default, Debug)]
 pub struct ExecutionOptions {
@@ -503,19 +520,7 @@ where
         TxSource: TransactionsSource,
     {
         let block_gas_limit = self.consensus_params.block_gas_limit();
-        let mut data = ExecutionData {
-            coinbase: 0,
-            used_gas: 0,
-            tx_count: 0,
-            found_mint: false,
-            message_ids: Vec::new(),
-            tx_status: Vec::new(),
-            events: Vec::new(),
-            changes: Default::default(),
-            skipped_transactions: Vec::new(),
-            event_inbox_root: Default::default(),
-        };
-        let execution_data = &mut data;
+        let mut data = ExecutionData::new();
 
         // Split out the execution kind and partial block.
         let (execution_kind, component) = block.split();
@@ -526,7 +531,7 @@ where
         let block_height = *block.header.height();
 
         let forced_transactions = if self.relayer.enabled() {
-            self.process_da(&block.header, execution_data)?
+            self.process_da(&block.header, &mut data)?
         } else {
             Vec::with_capacity(0)
         };
@@ -546,47 +551,19 @@ where
 
         debug_assert!(block.transactions.is_empty());
 
-        let mut execute_transaction = |execution_data: &mut ExecutionData,
-                                       tx: MaybeCheckedTransaction,
-                                       gas_price: Word|
-         -> ExecutorResult<()> {
-            let tx_count = execution_data.tx_count;
-            let tx = {
-                let mut tx_st_transaction = thread_block_transaction
-                    .write_transaction()
-                    .with_policy(ConflictPolicy::Overwrite);
-                let tx_id = tx.id(&self.consensus_params.chain_id());
-                let tx = self.execute_transaction(
-                    tx,
-                    &tx_id,
-                    &block.header,
-                    coinbase_contract_id,
-                    gas_price,
-                    execution_data,
-                    execution_kind,
-                    &mut tx_st_transaction,
-                )?;
-                tx_st_transaction.commit()?;
-                tx
-            };
-
-            block.transactions.push(tx);
-            execution_data.tx_count = tx_count
-                .checked_add(1)
-                .ok_or(ExecutorError::TooManyTransactions)?;
-
-            Ok(())
-        };
-
         let relayed_tx_iter = forced_transactions.into_iter();
         for transaction in relayed_tx_iter {
             const RELAYED_GAS_PRICE: Word = 0;
             let transaction = MaybeCheckedTransaction::CheckedTransaction(transaction);
             let tx_id = transaction.id(&self.consensus_params.chain_id());
-            match execute_transaction(
-                &mut *execution_data,
+            match self.foobar(
+                block,
+                &mut thread_block_transaction,
+                &mut data,
                 transaction,
                 RELAYED_GAS_PRICE,
+                coinbase_contract_id,
+                execution_kind,
             ) {
                 Ok(_) => {}
                 Err(err) => {
@@ -595,12 +572,12 @@ where
                         block_height,
                         failure: err.to_string(),
                     };
-                    execution_data.events.push(event);
+                    data.events.push(event);
                 }
             }
         }
 
-        let remaining_gas_limit = block_gas_limit.saturating_sub(execution_data.used_gas);
+        let remaining_gas_limit = block_gas_limit.saturating_sub(data.used_gas);
 
         // L2 originated transactions should be in the `TxSource`. This will be triggered after
         // all relayed transactions are processed.
@@ -608,11 +585,19 @@ where
         while regular_tx_iter.peek().is_some() {
             for transaction in regular_tx_iter {
                 let tx_id = transaction.id(&self.consensus_params.chain_id());
-                match execute_transaction(&mut *execution_data, transaction, gas_price) {
+                match self.foobar(
+                    block,
+                    &mut thread_block_transaction,
+                    &mut data,
+                    transaction,
+                    gas_price,
+                    coinbase_contract_id,
+                    execution_kind,
+                ) {
                     Ok(_) => {}
                     Err(err) => match execution_kind {
                         ExecutionKind::Production => {
-                            execution_data.skipped_transactions.push((tx_id, err));
+                            data.skipped_transactions.push((tx_id, err));
                         }
                         ExecutionKind::DryRun | ExecutionKind::Validation => {
                             return Err(err);
@@ -621,8 +606,7 @@ where
                 }
             }
 
-            let new_remaining_gas_limit =
-                block_gas_limit.saturating_sub(execution_data.used_gas);
+            let new_remaining_gas_limit = block_gas_limit.saturating_sub(data.used_gas);
 
             regular_tx_iter = source.next(new_remaining_gas_limit).into_iter().peekable();
         }
@@ -630,13 +614,13 @@ where
         // After the execution of all transactions in production mode, we can set the final fee.
         if execution_kind == ExecutionKind::Production {
             let amount_to_mint = if coinbase_contract_id != ContractId::zeroed() {
-                execution_data.coinbase
+                data.coinbase
             } else {
                 0
             };
 
             let coinbase_tx = Transaction::mint(
-                TxPointer::new(block_height, execution_data.tx_count),
+                TxPointer::new(block_height, data.tx_count),
                 input::contract::Contract {
                     utxo_id: UtxoId::new(Bytes32::zeroed(), 0),
                     balance_root: Bytes32::zeroed(),
@@ -654,10 +638,14 @@ where
                 gas_price,
             );
 
-            execute_transaction(
-                execution_data,
+            self.foobar(
+                block,
+                &mut thread_block_transaction,
+                &mut data,
                 MaybeCheckedTransaction::Transaction(coinbase_tx.into()),
                 gas_price,
+                coinbase_contract_id,
+                execution_kind,
             )?;
         }
 
@@ -674,38 +662,58 @@ where
         Ok(data)
     }
 
+    fn foobar(
+        &self,
+        block: &mut PartialFuelBlock,
+        thread_block_transaction: &mut StorageTransaction<
+            &StorageTransaction<&StorageTransaction<D>>,
+        >,
+        execution_data: &mut ExecutionData,
+        tx: MaybeCheckedTransaction,
+        gas_price: Word,
+        coinbase_contract_id: ContractId,
+        execution_kind: ExecutionKind,
+    ) -> ExecutorResult<()> {
+        let tx_count = execution_data.tx_count;
+        let tx = {
+            let mut tx_st_transaction = thread_block_transaction
+                .write_transaction()
+                .with_policy(ConflictPolicy::Overwrite);
+            let tx_id = tx.id(&self.consensus_params.chain_id());
+            let tx = self.execute_transaction(
+                tx,
+                &tx_id,
+                &block.header,
+                coinbase_contract_id,
+                gas_price,
+                execution_data,
+                execution_kind,
+                &mut tx_st_transaction,
+            )?;
+            tx_st_transaction.commit()?;
+            tx
+        };
+
+        block.transactions.push(tx);
+        execution_data.tx_count = tx_count
+            .checked_add(1)
+            .ok_or(ExecutorError::TooManyTransactions)?;
+
+        Ok(())
+    }
+
     #[tracing::instrument(skip_all)]
     fn validate_block(
         mut self,
         component: PartialBlockComponent<OnceTransactionsSource>,
     ) -> ExecutorResult<ExecutionData> {
         let block_gas_limit = self.consensus_params.block_gas_limit();
-        let mut data = ExecutionData {
-            coinbase: 0,
-            used_gas: 0,
-            tx_count: 0,
-            found_mint: false,
-            message_ids: Vec::new(),
-            tx_status: Vec::new(),
-            events: Vec::new(),
-            changes: Default::default(),
-            skipped_transactions: Vec::new(),
-            event_inbox_root: Default::default(),
-        };
-        let execution_data = &mut data;
+        let mut data = ExecutionData::new();
 
-        // Split out the execution kind and partial block.
         let block = component.empty_block;
         let source = component.transactions_source;
         let gas_price = component.gas_price;
         let coinbase_contract_id = component.coinbase_contract_id;
-        let block_height = *block.header.height();
-
-        let forced_transactions = if self.relayer.enabled() {
-            self.process_da(&block.header, execution_data)?
-        } else {
-            Vec::with_capacity(0)
-        };
 
         // The block level storage transaction that also contains data from the relayer.
         // Starting from this point, modifications from each thread should be independent
@@ -722,72 +730,24 @@ where
 
         debug_assert!(block.transactions.is_empty());
 
-        let mut execute_transaction = |execution_data: &mut ExecutionData,
-                                       tx: MaybeCheckedTransaction,
-                                       gas_price: Word|
-         -> ExecutorResult<()> {
-            let tx_count = execution_data.tx_count;
-            let tx = {
-                let mut tx_st_transaction = thread_block_transaction
-                    .write_transaction()
-                    .with_policy(ConflictPolicy::Overwrite);
-                let tx_id = tx.id(&self.consensus_params.chain_id());
-                let tx = self.execute_transaction(
-                    tx,
-                    &tx_id,
-                    &block.header,
-                    coinbase_contract_id,
-                    gas_price,
-                    execution_data,
-                    ExecutionKind::Validation,
-                    &mut tx_st_transaction,
-                )?;
-                tx_st_transaction.commit()?;
-                tx
-            };
-
-            block.transactions.push(tx);
-            execution_data.tx_count = tx_count
-                .checked_add(1)
-                .ok_or(ExecutorError::TooManyTransactions)?;
-
-            Ok(())
-        };
-
-        let relayed_tx_iter = forced_transactions.into_iter();
-        for transaction in relayed_tx_iter {
-            const RELAYED_GAS_PRICE: Word = 0;
-            let transaction = MaybeCheckedTransaction::CheckedTransaction(transaction);
-            let tx_id = transaction.id(&self.consensus_params.chain_id());
-            match execute_transaction(
-                &mut *execution_data,
-                transaction,
-                RELAYED_GAS_PRICE,
-            ) {
-                Ok(_) => {}
-                Err(err) => {
-                    let event = ExecutorEvent::ForcedTransactionFailed {
-                        id: tx_id.into(),
-                        block_height,
-                        failure: err.to_string(),
-                    };
-                    execution_data.events.push(event);
-                }
-            }
-        }
-
-        let remaining_gas_limit = block_gas_limit.saturating_sub(execution_data.used_gas);
-
+        let execution_kind = ExecutionKind::Validation;
         // L2 originated transactions should be in the `TxSource`. This will be triggered after
         // all relayed transactions are processed.
-        let mut regular_tx_iter = source.next(remaining_gas_limit).into_iter().peekable();
+        let mut regular_tx_iter = source.next(block_gas_limit).into_iter().peekable();
         while regular_tx_iter.peek().is_some() {
             for transaction in regular_tx_iter {
-                execute_transaction(&mut *execution_data, transaction, gas_price)?;
+                self.foobar(
+                    block,
+                    &mut thread_block_transaction,
+                    &mut data,
+                    transaction,
+                    gas_price,
+                    coinbase_contract_id,
+                    execution_kind,
+                )?;
             }
 
-            let new_remaining_gas_limit =
-                block_gas_limit.saturating_sub(execution_data.used_gas);
+            let new_remaining_gas_limit = block_gas_limit.saturating_sub(data.used_gas);
 
             regular_tx_iter = source.next(new_remaining_gas_limit).into_iter().peekable();
         }
