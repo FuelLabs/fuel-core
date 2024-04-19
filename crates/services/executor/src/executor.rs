@@ -408,7 +408,6 @@ where
     }
 
     fn validate_inner(self, block: Block) -> ExecutorResult<UncommittedResult<Changes>> {
-        // Compute the block id before execution if there is one.
         let pre_exec_block_id = block.id();
 
         let execution_data = {
@@ -427,26 +426,17 @@ where
         let ExecutionData {
             coinbase,
             used_gas,
-            message_ids: _,
             tx_status,
             skipped_transactions,
             events,
             changes,
-            event_inbox_root: _,
             ..
         } = execution_data;
-
-        let finalized_block_id = block.id();
 
         debug!(
             "Block {:#x} fees: {} gas: {}",
             pre_exec_block_id, coinbase, used_gas
         );
-
-        // check if block id doesn't match proposed block id
-        if pre_exec_block_id != finalized_block_id {
-            return Err(ExecutorError::InvalidBlockId)
-        }
 
         let result = ExecutionResult {
             block,
@@ -455,7 +445,6 @@ where
             events,
         };
 
-        // Get the complete fuel block.
         Ok(UncommittedResult::new(result, changes))
     }
 }
@@ -701,17 +690,9 @@ where
     }
 
     #[tracing::instrument(skip_all)]
-    fn validate_block(
-        mut self,
-        // component: PartialBlockComponent<OnceTransactionsSource>,
-        block: &Block,
-    ) -> ExecutorResult<ExecutionData> {
+    fn validate_block(mut self, block: &Block) -> ExecutorResult<ExecutionData> {
         let mut data = ExecutionData::new();
 
-        // let block = component.empty_block;
-        // let source = component.transactions_source;
-        // let gas_price = component.gas_price;
-        // let coinbase_contract_id = component.coinbase_contract_id;
         let mut partial_block = PartialFuelBlock::from(block.clone());
         let transactions = core::mem::take(&mut partial_block.transactions);
         let block_header = partial_block.header;
@@ -772,8 +753,6 @@ where
             }
         }
 
-        // L2 originated transactions should be in the `TxSource`. This will be triggered after
-        // all relayed transactions are processed.
         for transaction in transactions {
             let maybe_checked_tx =
                 MaybeCheckedTransaction::Transaction(transaction.clone());
@@ -788,18 +767,7 @@ where
             )?;
         }
 
-        let ExecutionData {
-            message_ids,
-            event_inbox_root,
-            ..
-        } = &data;
-
-        let new_block = partial_block.generate(&message_ids[..], *event_inbox_root);
-        let new_id = new_block.id();
-        let old_id = block.id();
-        if new_id != old_id {
-            return Err(ExecutorError::InvalidBlockId)
-        }
+        Self::check_new_block_id(partial_block, block, &data)?;
 
         let changes_from_thread = thread_block_transaction.into_changes();
         block_with_relayer_data_transaction.commit_changes(changes_from_thread)?;
@@ -812,6 +780,26 @@ where
 
         data.changes = self.block_st_transaction.into_changes();
         Ok(data)
+    }
+
+    fn check_new_block_id(
+        new_partial_block: PartialFuelBlock,
+        old_block: &Block,
+        data: &ExecutionData,
+    ) -> ExecutorResult<()> {
+        let ExecutionData {
+            message_ids,
+            event_inbox_root,
+            ..
+        } = &data;
+
+        let new_block = new_partial_block.generate(&message_ids[..], *event_inbox_root);
+        let new_id = new_block.id();
+        let old_id = old_block.id();
+        if new_id != old_id {
+            return Err(ExecutorError::InvalidBlockId)
+        }
+        Ok(())
     }
 
     fn process_da(
