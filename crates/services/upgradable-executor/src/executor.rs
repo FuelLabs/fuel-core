@@ -113,7 +113,7 @@ impl<S, R> Executor<S, R> {
     /// This constant is used along with the `version_check` test.
     /// To avoid automatic bumping during release, the constant uses `-` instead of `.`.
     #[cfg(test)]
-    pub const CRATE_VERSION: &'static str = "0-25-0";
+    pub const CRATE_VERSION: &'static str = "0-25-1";
 
     pub fn new(
         storage_view_provider: S,
