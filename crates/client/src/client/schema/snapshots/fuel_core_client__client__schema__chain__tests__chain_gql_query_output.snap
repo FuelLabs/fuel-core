@@ -7,8 +7,20 @@ query {
     daHeight
     name
     latestBlock {
+      version {
+        __typename
+        ... on Version {
+          value
+        }
+      }
       id
       header {
+        version {
+          __typename
+          ... on Version {
+            value
+          }
+        }
         id
         daHeight
         consensusParametersVersion
