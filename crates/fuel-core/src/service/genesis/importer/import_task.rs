@@ -1,7 +1,6 @@
 use anyhow::bail;
 use fuel_core_chain_config::TableEntry;
 use fuel_core_storage::{
-    kv_store::StorageColumn,
     structured_storage::TableWithBlueprint,
     transactional::{
         Modifiable,
@@ -28,6 +27,8 @@ use crate::{
         NotifyCancel,
     },
 };
+
+use super::migration_name;
 
 pub struct ImportTask<Handler, Groups, DbDesc>
 where
@@ -68,8 +69,10 @@ where
     ) -> Self {
         let skip = match db
             .storage::<GenesisMetadata<DbDesc>>()
-            .get(<Logic::TableBeingWritten>::column().name())
-        {
+            .get(&migration_name::<
+                Logic::TableInSnapshot,
+                Logic::TableBeingWritten,
+            >()) {
             Ok(Some(idx_last_handled)) => {
                 usize::saturating_add(idx_last_handled.into_owned(), 1)
             }
@@ -122,7 +125,7 @@ where
 
                 GenesisProgressMutate::<DbDesc>::update_genesis_progress(
                     &mut tx,
-                    <Logic::TableBeingWritten>::column().name(),
+                    &migration_name::<Logic::TableInSnapshot, Logic::TableBeingWritten>(),
                     index,
                 )?;
                 tx.commit()?;
@@ -143,7 +146,10 @@ mod tests {
     use crate::{
         database::genesis_progress::GenesisProgressInspect,
         service::genesis::{
-            importer::import_task::ImportTask,
+            importer::{
+                import_task::ImportTask,
+                migration_name,
+            },
             progress::ProgressReporter,
             task_manager::MultiCancellationToken,
         },
@@ -171,10 +177,8 @@ mod tests {
         kv_store::{
             KVItem,
             KeyValueInspect,
-            StorageColumn,
             Value,
         },
-        structured_storage::TableWithBlueprint,
         tables::Coins,
         transactional::{
             Changes,
@@ -311,7 +315,7 @@ mod tests {
         let mut db = CombinedDatabase::default();
         GenesisProgressMutate::<OnChain>::update_genesis_progress(
             db.on_chain_mut(),
-            Coins::column().name(),
+            &migration_name::<Coins, Coins>(),
             0,
         )
         .unwrap();
@@ -464,7 +468,7 @@ mod tests {
         assert_eq!(
             GenesisProgressInspect::<OnChain>::genesis_progress(
                 &db,
-                Coins::column().name(),
+                &migration_name::<Coins, Coins>(),
             ),
             Some(1)
         );

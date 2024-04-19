@@ -42,6 +42,7 @@ use fuel_core_chain_config::{
 };
 use fuel_core_services::StateWatcher;
 use fuel_core_storage::{
+    kv_store::StorageColumn,
     structured_storage::TableWithBlueprint,
     tables::{
         Coins,
@@ -149,9 +150,10 @@ impl SnapshotImporter {
         let da_block_height = self.genesis_block.header().da_height;
         let db = self.db.on_chain().clone();
 
+        let migration_name = migration_name::<TableBeingWritten, TableBeingWritten>();
         let progress_reporter = self
             .multi_progress_reporter
-            .table_reporter::<TableBeingWritten>(Some(num_groups));
+            .table_reporter(Some(num_groups), migration_name);
 
         self.task_manager.spawn(move |token| {
             let task = ImportTask::new(
@@ -189,9 +191,10 @@ impl SnapshotImporter {
 
         let db = self.db.off_chain().clone();
 
+        let migration_name = migration_name::<TableInSnapshot, TableBeingWritten>();
         let progress_reporter = self
             .multi_progress_reporter
-            .table_reporter::<TableBeingWritten>(Some(num_groups));
+            .table_reporter(Some(num_groups), migration_name);
 
         self.task_manager.spawn(move |token| {
             let task = ImportTask::new(
@@ -225,4 +228,16 @@ impl<A, B> Handler<A, B> {
             _table_in_snapshot: PhantomData,
         }
     }
+}
+
+pub fn migration_name<TableInSnapshot, TableBeingWritten>() -> String
+where
+    TableInSnapshot: TableWithBlueprint,
+    TableBeingWritten: TableWithBlueprint,
+{
+    format!(
+        "{} -> {}",
+        TableInSnapshot::column().name(),
+        TableBeingWritten::column().name()
+    )
 }

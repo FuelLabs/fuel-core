@@ -1,9 +1,8 @@
-use std::io::IsTerminal;
-
-use fuel_core_storage::{
-    kv_store::StorageColumn,
-    structured_storage::TableWithBlueprint,
+use std::{
+    borrow::Cow,
+    io::IsTerminal,
 };
+
 use indicatif::{
     HumanDuration,
     MultiProgress,
@@ -30,7 +29,7 @@ impl Default for ProgressReporter {
 
 #[derive(Clone)]
 pub enum Target {
-    Cli(&'static str),
+    Cli(String),
     Logs(Span),
 }
 
@@ -41,8 +40,8 @@ impl ProgressReporter {
         // prints to stderr. This removes flicker from double rendering (once when the progress bar
         // is constructed and again when added to the `MultipleProgressReporter`)
         let bar = ProgressBar::with_draw_target(max, ProgressDrawTarget::hidden());
-        if let Target::Cli(message) = target {
-            bar.set_message(message);
+        if let Target::Cli(message) = &target {
+            bar.set_message(message.clone());
 
             bar.set_style(Self::style(max.is_some()));
         }
@@ -96,18 +95,20 @@ impl MultipleProgressReporter {
         }
     }
 
-    pub fn table_reporter<T>(&self, num_groups: Option<usize>) -> ProgressReporter
-    where
-        T: TableWithBlueprint,
-    {
+    pub fn table_reporter(
+        &self,
+        num_groups: Option<usize>,
+        desc: impl Into<Cow<'static, str>>,
+    ) -> ProgressReporter {
         let target = if Self::should_display_bars() {
-            Target::Cli(T::column().name())
+            Target::Cli(desc.into().into_owned())
         } else {
             let span = tracing::span!(
                 parent: &self.span,
                 Level::INFO,
                 "task",
-                table = T::column().name()
+                migration = desc.into().as_ref()
+
             );
             Target::Logs(span)
         };
