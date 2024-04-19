@@ -498,7 +498,7 @@ jobs:
         uses: dtolnay/rust-toolchain@master
         with:
           toolchain: ${{ env.RUST_VERSION }}
-          target: ${{ matrix.job.target }}
+          target: ${{ matrix.job.target }},wasm32-unknown-unknown
 
       - name: Install cross
         uses: baptiste0928/cargo-install@v1
