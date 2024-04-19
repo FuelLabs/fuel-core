@@ -556,7 +556,7 @@ where
             const RELAYED_GAS_PRICE: Word = 0;
             let transaction = MaybeCheckedTransaction::CheckedTransaction(transaction);
             let tx_id = transaction.id(&self.consensus_params.chain_id());
-            match self.foobar(
+            match self.execute_transaction_and_commit(
                 block,
                 &mut thread_block_transaction,
                 &mut data,
@@ -585,7 +585,7 @@ where
         while regular_tx_iter.peek().is_some() {
             for transaction in regular_tx_iter {
                 let tx_id = transaction.id(&self.consensus_params.chain_id());
-                match self.foobar(
+                match self.execute_transaction_and_commit(
                     block,
                     &mut thread_block_transaction,
                     &mut data,
@@ -638,7 +638,7 @@ where
                 gas_price,
             );
 
-            self.foobar(
+            self.execute_transaction_and_commit(
                 block,
                 &mut thread_block_transaction,
                 &mut data,
@@ -662,7 +662,9 @@ where
         Ok(data)
     }
 
-    fn foobar(
+    // TODO: Refactor this function to reduce the number of arguments.
+    #[allow(clippy::too_many_arguments)]
+    fn execute_transaction_and_commit(
         &self,
         block: &mut PartialFuelBlock,
         thread_block_transaction: &mut StorageTransaction<
@@ -736,7 +738,7 @@ where
         let mut regular_tx_iter = source.next(block_gas_limit).into_iter().peekable();
         while regular_tx_iter.peek().is_some() {
             for transaction in regular_tx_iter {
-                self.foobar(
+                self.execute_transaction_and_commit(
                     block,
                     &mut thread_block_transaction,
                     &mut data,
