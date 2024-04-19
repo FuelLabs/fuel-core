@@ -10,6 +10,7 @@ Description of the upcoming release here.
 
 ### Fixed
 
+- [#1844](https://github.com/FuelLabs/fuel-core/pull/1844): Fixed the publishing of the `fuel-core 0.25.1` release.
 - [1842](https://github.com/FuelLabs/fuel-core/pull/1842): Ignore RUSTSEC-2024-0336: `rustls::ConnectionCommon::complete_io` could fall into an infinite loop based on network
 
 ## [Version 0.25.1]
