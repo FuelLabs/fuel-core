@@ -531,32 +531,6 @@ where
 
         debug_assert!(block.transactions.is_empty());
 
-        // let forced_transactions = self.get_relayed_txs(&block.header, &mut data)?;
-        // let relayed_tx_iter = forced_transactions.into_iter();
-        // for transaction in relayed_tx_iter {
-        //     const RELAYED_GAS_PRICE: Word = 0;
-        //     let transaction = MaybeCheckedTransaction::CheckedTransaction(transaction);
-        //     let tx_id = transaction.id(&self.consensus_params.chain_id());
-        //     match self.execute_transaction_and_commit(
-        //         block,
-        //         &mut thread_block_transaction,
-        //         &mut data,
-        //         transaction,
-        //         RELAYED_GAS_PRICE,
-        //         coinbase_contract_id,
-        //         execution_kind,
-        //     ) {
-        //         Ok(_) => {}
-        //         Err(err) => {
-        //             let event = ExecutorEvent::ForcedTransactionFailed {
-        //                 id: tx_id.into(),
-        //                 block_height,
-        //                 failure: err.to_string(),
-        //             };
-        //             data.events.push(event);
-        //         }
-        //     }
-        // }
         self.process_relayed_txs(
             forced_transactions,
             block,
@@ -702,11 +676,7 @@ where
         let execution_kind = ExecutionKind::Validation;
 
         let (gas_price, coinbase_contract_id) =
-            if let Some(Transaction::Mint(mint)) = transactions.last() {
-                (*mint.gas_price(), mint.input_contract().contract_id)
-            } else {
-                return Err(ExecutorError::MintMissing)
-            };
+            Self::get_coinbase_info_from_mint_tx(&transactions)?;
 
         let block_header = partial_block.header;
         let forced_transactions = self.get_relayed_txs(&block_header, &mut data)?;
@@ -726,32 +696,6 @@ where
 
         debug_assert!(partial_block.transactions.is_empty());
 
-        // let forced_transactions = self.get_relayed_txs(&block_header, &mut data)?;
-        // let relayed_tx_iter = forced_transactions.into_iter();
-        // for transaction in relayed_tx_iter {
-        //     const RELAYED_GAS_PRICE: Word = 0;
-        //     let transaction = MaybeCheckedTransaction::CheckedTransaction(transaction);
-        //     let tx_id = transaction.id(&self.consensus_params.chain_id());
-        //     match self.execute_transaction_and_commit(
-        //         &mut partial_block,
-        //         &mut thread_block_transaction,
-        //         &mut data,
-        //         transaction,
-        //         RELAYED_GAS_PRICE,
-        //         coinbase_contract_id,
-        //         execution_kind,
-        //     ) {
-        //         Ok(_) => {}
-        //         Err(err) => {
-        //             let event = ExecutorEvent::ForcedTransactionFailed {
-        //                 id: tx_id.into(),
-        //                 block_height: *block_height,
-        //                 failure: err.to_string(),
-        //             };
-        //             data.events.push(event);
-        //         }
-        //     }
-        // }
         self.process_relayed_txs(
             forced_transactions,
             &mut partial_block,
@@ -782,12 +726,18 @@ where
         self.block_st_transaction
             .commit_changes(block_with_relayer_data_transaction.into_changes())?;
 
-        if !data.found_mint {
-            return Err(ExecutorError::MintMissing)
-        }
-
         data.changes = self.block_st_transaction.into_changes();
         Ok(data)
+    }
+
+    fn get_coinbase_info_from_mint_tx(
+        transactions: &[Transaction],
+    ) -> ExecutorResult<(u64, ContractId)> {
+        if let Some(Transaction::Mint(mint)) = transactions.last() {
+            Ok((*mint.gas_price(), mint.input_contract().contract_id))
+        } else {
+            Err(ExecutorError::MintMissing)
+        }
     }
 
     fn process_relayed_txs(
