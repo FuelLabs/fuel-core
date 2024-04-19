@@ -7,8 +7,20 @@ query($after: String, $before: String, $first: Int, $last: Int) {
     edges {
       cursor
       node {
+        version {
+          __typename
+          ... on Version {
+            value
+          }
+        }
         id
         header {
+          version {
+            __typename
+            ... on Version {
+              value
+            }
+          }
           id
           daHeight
           consensusParametersVersion

@@ -4,8 +4,20 @@ expression: operation.query
 ---
 query($id: BlockId) {
   block(id: $id) {
+    version {
+      __typename
+      ... on Version {
+        value
+      }
+    }
     id
     header {
+      version {
+        __typename
+        ... on Version {
+          value
+        }
+      }
       id
       daHeight
       consensusParametersVersion
