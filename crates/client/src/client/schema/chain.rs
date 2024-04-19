@@ -4,17 +4,11 @@ use crate::client::schema::{
     Address,
     AssetId,
     ConversionError,
+    Version,
     U16,
     U32,
     U64,
-    U8,
 };
-
-#[derive(cynic::QueryFragment, Clone, Debug)]
-#[cynic(schema_path = "./assets/schema.sdl")]
-pub struct Version {
-    pub value: U8,
-}
 
 #[derive(cynic::QueryFragment, Clone, Debug)]
 #[cynic(schema_path = "./assets/schema.sdl")]

@@ -328,3 +328,9 @@ impl From<TryFromSliceError> for ConversionError {
         ConversionError::BytesLength
     }
 }
+
+#[derive(cynic::QueryFragment, Clone, Debug, Eq, PartialEq)]
+#[cynic(schema_path = "./assets/schema.sdl")]
+pub struct Version {
+    pub value: U8,
+}
