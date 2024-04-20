@@ -144,6 +144,7 @@ pub fn run_crypto(group: &mut BenchmarkGroup<WallTime>) {
                 op::movi(0x11, 32),
                 op::aloc(0x11),
                 op::movi(0x10, i),
+                op::cfe(0x10),
                 op::s256(RegId::HP, RegId::ZERO, 0x10),
                 op::jmpb(RegId::ZERO, 0),
             ]
@@ -161,6 +162,7 @@ pub fn run_crypto(group: &mut BenchmarkGroup<WallTime>) {
                 op::movi(0x11, 32),
                 op::aloc(0x11),
                 op::movi(0x10, i),
+                op::cfe(0x10),
                 op::k256(RegId::HP, RegId::ZERO, 0x10),
                 op::jmpb(RegId::ZERO, 0),
             ]

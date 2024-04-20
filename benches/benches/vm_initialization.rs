@@ -85,6 +85,9 @@ pub fn vm_initialization(c: &mut Criterion) {
         if size as u64 > consensus_params.script_params().max_script_data_length() {
             break
         }
+        if 2 * size as u64 > consensus_params.tx_params().max_size() {
+            break
+        }
         let script = vec![op::ret(1); size / Instruction::SIZE]
             .into_iter()
             .collect();
