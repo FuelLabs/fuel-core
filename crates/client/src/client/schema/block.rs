@@ -76,7 +76,7 @@ pub struct BlockEdge {
     pub node: Block,
 }
 
-#[derive(cynic::InlineFragments, Clone, Debug, PartialEq, Eq)]
+#[derive(cynic::InlineFragments, Clone, Debug)]
 #[cynic(schema_path = "./assets/schema.sdl")]
 pub enum BlockVersion {
     V1(Version),
