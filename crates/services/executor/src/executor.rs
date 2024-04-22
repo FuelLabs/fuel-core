@@ -1197,9 +1197,7 @@ where
     {
         execution_data.found_mint = true;
 
-        if checked_mint.transaction().tx_pointer().tx_index() != execution_data.tx_count {
-            return Err(ExecutorError::MintHasUnexpectedIndex)
-        }
+        Self::check_mint_has_expected_index(&checked_mint, execution_data)?;
 
         let coinbase_id = checked_mint.id();
         let (mut mint, _) = checked_mint.into();
@@ -1221,26 +1219,7 @@ where
             *mint.output_contract_mut() = output;
         }
 
-        let tx = mint.into();
-
-        execution_data.tx_status.push(TransactionExecutionStatus {
-            id: coinbase_id,
-            result: TransactionExecutionResult::Success {
-                result: None,
-                receipts: vec![],
-                total_gas: 0,
-                total_fee: 0,
-            },
-        });
-
-        if block_st_transaction
-            .storage::<ProcessedTransactions>()
-            .insert(&coinbase_id, &())?
-            .is_some()
-        {
-            return Err(ExecutorError::TransactionIdCollision(coinbase_id))
-        }
-        Ok(tx)
+        Self::store_mint_tx(mint, execution_data, coinbase_id, block_st_transaction)
     }
 
     fn validate_mint<T>(
@@ -1257,9 +1236,7 @@ where
     {
         execution_data.found_mint = true;
 
-        if checked_mint.transaction().tx_pointer().tx_index() != execution_data.tx_count {
-            return Err(ExecutorError::MintHasUnexpectedIndex)
-        }
+        Self::check_mint_has_expected_index(&checked_mint, execution_data)?;
 
         let coinbase_id = checked_mint.id();
         let (mint, _) = checked_mint.into();
@@ -1282,26 +1259,17 @@ where
             }
         }
 
-        let tx = mint.into();
+        Self::store_mint_tx(mint, execution_data, coinbase_id, block_st_transaction)
+    }
 
-        execution_data.tx_status.push(TransactionExecutionStatus {
-            id: coinbase_id,
-            result: TransactionExecutionResult::Success {
-                result: None,
-                receipts: vec![],
-                total_gas: 0,
-                total_fee: 0,
-            },
-        });
-
-        if block_st_transaction
-            .storage::<ProcessedTransactions>()
-            .insert(&coinbase_id, &())?
-            .is_some()
-        {
-            return Err(ExecutorError::TransactionIdCollision(coinbase_id))
+    fn check_mint_has_expected_index(
+        checked_mint: &Checked<Mint>,
+        execution_data: &ExecutionData,
+    ) -> ExecutorResult<()> {
+        if checked_mint.transaction().tx_pointer().tx_index() != execution_data.tx_count {
+            return Err(ExecutorError::MintHasUnexpectedIndex)
         }
-        Ok(tx)
+        Ok(())
     }
 
     fn verify_mint_for_empty_contract(mint: &Mint) -> ExecutorResult<()> {
@@ -1325,6 +1293,37 @@ where
             return Err(ExecutorError::MintMismatch)
         }
         Ok(())
+    }
+
+    fn store_mint_tx<T>(
+        mint: Mint,
+        execution_data: &mut ExecutionData,
+        coinbase_id: TxId,
+        block_st_transaction: &mut StorageTransaction<T>,
+    ) -> ExecutorResult<Transaction>
+    where
+        T: KeyValueInspect<Column = Column>,
+    {
+        let tx = mint.into();
+
+        execution_data.tx_status.push(TransactionExecutionStatus {
+            id: coinbase_id,
+            result: TransactionExecutionResult::Success {
+                result: None,
+                receipts: vec![],
+                total_gas: 0,
+                total_fee: 0,
+            },
+        });
+
+        if block_st_transaction
+            .storage::<ProcessedTransactions>()
+            .insert(&coinbase_id, &())?
+            .is_some()
+        {
+            return Err(ExecutorError::TransactionIdCollision(coinbase_id))
+        }
+        Ok(tx)
     }
 
     // TODO: Refactor this function to reduce the number of arguments
