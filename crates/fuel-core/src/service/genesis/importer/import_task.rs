@@ -229,18 +229,7 @@ mod tests {
             self.off_chain_called_with.lock().unwrap().clone()
         }
 
-        fn default_importer(
-            &self,
-        ) -> TestTableImporter<
-            fn(
-                Vec<TableEntry<Coins>>,
-                &mut StorageTransaction<&mut Database<OnChain>>,
-            ) -> anyhow::Result<()>,
-            fn(
-                Vec<TableEntry<Coins>>,
-                &mut StorageTransaction<&mut Database<OffChain>>,
-            ) -> anyhow::Result<()>,
-        > {
+        fn default_importer(&self) -> DefaultImporter {
             TestTableImporter {
                 on_chain: |_, _| Ok(()),
                 off_chain: |_, _| Ok(()),
@@ -276,6 +265,16 @@ mod tests {
         off_chain: OffChainCallback,
         handler: Spy,
     }
+    type DefaultImporter = TestTableImporter<
+        fn(
+            Vec<TableEntry<Coins>>,
+            &mut StorageTransaction<&mut Database<OnChain>>,
+        ) -> anyhow::Result<()>,
+        fn(
+            Vec<TableEntry<Coins>>,
+            &mut StorageTransaction<&mut Database<OffChain>>,
+        ) -> anyhow::Result<()>,
+    >;
 
     impl<OnChainCallback, OffChainCallback> ImportTable<Coins>
         for TestTableImporter<OnChainCallback, OffChainCallback>
@@ -384,7 +383,7 @@ mod tests {
         let spy = Spy::new();
         GenesisProgressMutate::<OnChain>::update_genesis_progress(
             db.on_chain_mut(),
-            &Coins::column().name(),
+            Coins::column().name(),
             0,
         )
         .unwrap();
@@ -725,13 +724,17 @@ mod tests {
         let on_chain_imports = spy.on_chain_called_with();
         assert_eq!(
             on_chain_imports,
-            groups.as_unwrapped_groups(last_on_chain.map(|x| x + 1).unwrap_or(0))
+            groups.as_unwrapped_groups(
+                last_on_chain.map(|x| x.saturating_add(1)).unwrap_or(0)
+            )
         );
 
         let off_chain_imports = spy.off_chain_called_with();
         assert_eq!(
             off_chain_imports,
-            groups.as_unwrapped_groups(last_off_chain.map(|x| x + 1).unwrap_or(0))
+            groups.as_unwrapped_groups(
+                last_off_chain.map(|x| x.saturating_add(1)).unwrap_or(0)
+            )
         );
     }
 }
