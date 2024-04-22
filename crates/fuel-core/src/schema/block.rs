@@ -92,7 +92,6 @@ impl Block {
     async fn version(&self) -> Version {
         match self.0 {
             CompressedBlock::V1(_) => Version(1),
-            _ => Version(255),
         }
     }
 
