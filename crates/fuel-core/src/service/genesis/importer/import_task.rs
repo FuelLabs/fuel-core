@@ -3,19 +3,31 @@ use std::borrow::Cow;
 use anyhow::bail;
 use fuel_core_chain_config::TableEntry;
 use fuel_core_storage::{
+    kv_store::StorageColumn,
     structured_storage::TableWithBlueprint,
-    transactional::{StorageTransaction, WriteTransaction},
+    transactional::{
+        StorageTransaction,
+        WriteTransaction,
+    },
     StorageAsRef,
 };
 
 use crate::{
     database::{
-        database_description::{off_chain::OffChain, on_chain::OnChain},
-        genesis_progress::{GenesisMetadata, GenesisProgressMutate},
+        database_description::{
+            off_chain::OffChain,
+            on_chain::OnChain,
+        },
+        genesis_progress::{
+            GenesisMetadata,
+            GenesisProgressMutate,
+        },
         Database,
     },
     service::genesis::{
-        progress::ProgressReporter, task_manager::MultiCancellationToken, NotifyCancel,
+        progress::ProgressReporter,
+        task_manager::MultiCancellationToken,
+        NotifyCancel,
     },
 };
 
@@ -109,42 +121,88 @@ where
 mod tests {
     use crate::{
         database::{
-            database_description::{off_chain::OffChain, DatabaseDescription},
-            genesis_progress::{GenesisMetadata, GenesisProgressInspect},
+            database_description::{
+                off_chain::OffChain,
+                DatabaseDescription,
+            },
+            genesis_progress::{
+                GenesisMetadata,
+                GenesisProgressInspect,
+            },
         },
-        graphql_api::storage::coins::{OwnedCoinKey, OwnedCoins},
+        graphql_api::storage::coins::{
+            OwnedCoinKey,
+            OwnedCoins,
+        },
         service::genesis::{
-            importer::import_task::import_entries, progress::ProgressReporter,
+            importer::import_task::import_entries,
+            progress::ProgressReporter,
             task_manager::MultiCancellationToken,
         },
     };
     use std::{
         borrow::Cow,
-        sync::{Arc, Mutex},
+        sync::{
+            Arc,
+            Mutex,
+        },
     };
 
-    use anyhow::{anyhow, bail};
-    use fuel_core_chain_config::{Groups, Randomize, TableEntry};
+    use anyhow::{
+        anyhow,
+        bail,
+    };
+    use fuel_core_chain_config::{
+        Groups,
+        Randomize,
+        TableEntry,
+    };
     use fuel_core_storage::{
-        iter::{BoxedIter, IterDirection, IterableStore},
-        kv_store::{KVItem, KeyValueInspect, Value},
+        iter::{
+            BoxedIter,
+            IterDirection,
+            IterableStore,
+        },
+        kv_store::{
+            KVItem,
+            KeyValueInspect,
+            StorageColumn,
+            Value,
+        },
+        structured_storage::TableWithBlueprint,
         tables::Coins,
-        transactional::{Changes, StorageTransaction},
-        Result as StorageResult, StorageAsMut, StorageInspect, StorageMutate,
+        transactional::{
+            Changes,
+            StorageTransaction,
+        },
+        Result as StorageResult,
+        StorageAsMut,
+        StorageInspect,
+        StorageMutate,
     };
     use fuel_core_types::{
-        entities::coins::coin::{CompressedCoin, CompressedCoinV1},
+        entities::coins::coin::{
+            CompressedCoin,
+            CompressedCoinV1,
+        },
         fuel_tx::UtxoId,
     };
-    use rand::{rngs::StdRng, SeedableRng};
+    use rand::{
+        rngs::StdRng,
+        SeedableRng,
+    };
 
     use crate::{
         combined_database::CombinedDatabase,
         database::{
             database_description::on_chain::OnChain,
-            genesis_progress::GenesisProgressMutate, Database,
+            genesis_progress::GenesisProgressMutate,
+            Database,
         },
-        state::{in_memory::memory_store::MemoryStore, TransactableStorage},
+        state::{
+            in_memory::memory_store::MemoryStore,
+            TransactableStorage,
+        },
     };
 
     use super::ImportTable;
@@ -326,7 +384,7 @@ mod tests {
         let spy = Spy::new();
         GenesisProgressMutate::<OnChain>::update_genesis_progress(
             db.on_chain_mut(),
-            &migration_name::<Coins, Coins>(),
+            &Coins::column().name(),
             0,
         )
         .unwrap();

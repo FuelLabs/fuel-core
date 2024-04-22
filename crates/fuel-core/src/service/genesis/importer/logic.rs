@@ -17,6 +17,12 @@ use crate::{
     graphql_api::{
         storage::{
             blocks::FuelBlockIdsToHeights,
+            messages::SpentMessages,
+            old::{
+                OldFuelBlockConsensus,
+                OldFuelBlocks,
+                OldTransactions,
+            },
             transactions::{
                 OwnedTransactions,
                 TransactionStatuses,
@@ -34,7 +40,10 @@ use fuel_core_storage::{
         ContractsLatestUtxo,
         ContractsRawCode,
         ContractsState,
+        FuelBlocks,
         Messages,
+        ProcessedTransactions,
+        SealedBlockConsensus,
         Transactions,
     },
     transactional::StorageTransaction,
@@ -72,6 +81,20 @@ impl ImportTable<Coins> for Handler {
         });
         worker_service::process_executor_events(events, tx)?;
 
+        Ok(())
+    }
+}
+
+impl ImportTable<ProcessedTransactions> for Handler {
+    fn on_chain(
+        &mut self,
+        group: Cow<Vec<TableEntry<ProcessedTransactions>>>,
+        tx: &mut StorageTransaction<&mut Database<OnChain>>,
+    ) -> anyhow::Result<()> {
+        for transaction in group.as_ref() {
+            tx.storage::<ProcessedTransactions>()
+                .insert(&transaction.key, &transaction.value)?;
+        }
         Ok(())
     }
 }
@@ -170,6 +193,98 @@ impl ImportTable<Transactions> for Handler {
     ) -> anyhow::Result<()> {
         let transactions = group.iter().map(|TableEntry { value, .. }| value);
         worker_service::process_transactions(transactions, tx)?;
+
+        let transactions = group
+            .iter()
+            .map(|TableEntry { key, value, .. }| (key, value));
+        worker_service::copy_to_old_transactions(transactions, tx)?;
+        Ok(())
+    }
+}
+
+impl ImportTable<SpentMessages> for Handler {
+    fn off_chain(
+        &mut self,
+        group: Cow<Vec<TableEntry<SpentMessages>>>,
+        tx: &mut StorageTransaction<&mut Database<OffChain>>,
+    ) -> anyhow::Result<()> {
+        for entry in group.as_ref() {
+            tx.storage_as_mut::<SpentMessages>()
+                .insert(&entry.key, &entry.value)?;
+        }
+        Ok(())
+    }
+}
+
+impl ImportTable<OldTransactions> for Handler {
+    fn off_chain(
+        &mut self,
+        group: Cow<Vec<TableEntry<OldTransactions>>>,
+        tx: &mut StorageTransaction<&mut Database<OffChain>>,
+    ) -> anyhow::Result<()> {
+        let transactions = group.iter().map(|TableEntry { value, .. }| value);
+        worker_service::process_transactions(transactions, tx)?;
+
+        let transactions = group
+            .iter()
+            .map(|TableEntry { key, value, .. }| (key, value));
+        worker_service::copy_to_old_transactions(transactions, tx)?;
+        Ok(())
+    }
+}
+
+impl ImportTable<FuelBlocks> for Handler {
+    fn off_chain(
+        &mut self,
+        group: Cow<Vec<TableEntry<FuelBlocks>>>,
+        tx: &mut StorageTransaction<&mut Database<OffChain>>,
+    ) -> anyhow::Result<()> {
+        let blocks = group
+            .iter()
+            .map(|TableEntry { key, value, .. }| (key, value));
+        worker_service::copy_to_old_blocks(blocks, tx)?;
+        Ok(())
+    }
+}
+
+impl ImportTable<OldFuelBlocks> for Handler {
+    fn off_chain(
+        &mut self,
+        group: Cow<Vec<TableEntry<OldFuelBlocks>>>,
+        tx: &mut StorageTransaction<&mut Database<OffChain>>,
+    ) -> anyhow::Result<()> {
+        let blocks = group
+            .iter()
+            .map(|TableEntry { key, value, .. }| (key, value));
+        worker_service::copy_to_old_blocks(blocks, tx)?;
+        Ok(())
+    }
+}
+
+impl ImportTable<SealedBlockConsensus> for Handler {
+    fn off_chain(
+        &mut self,
+        group: Cow<Vec<TableEntry<SealedBlockConsensus>>>,
+        tx: &mut StorageTransaction<&mut Database<OffChain>>,
+    ) -> anyhow::Result<()> {
+        let blocks = group
+            .iter()
+            .map(|TableEntry { key, value, .. }| (key, value));
+        worker_service::copy_to_old_block_consensus(blocks, tx)?;
+        Ok(())
+    }
+}
+
+impl ImportTable<OldFuelBlockConsensus> for Handler {
+    fn off_chain(
+        &mut self,
+        group: Cow<Vec<TableEntry<OldFuelBlockConsensus>>>,
+        tx: &mut StorageTransaction<&mut Database<OffChain>>,
+    ) -> anyhow::Result<()> {
+        let blocks = group
+            .iter()
+            .map(|TableEntry { key, value, .. }| (key, value));
+        worker_service::copy_to_old_block_consensus(blocks, tx)?;
         Ok(())
     }
 }
@@ -309,7 +424,7 @@ fn init_da_message(
 
     if transaction
         .storage::<Messages>()
-        .insert(message.id(), message)?
+        .insert(message.id(), &message)?
         .is_some()
     {
         return Err(anyhow!("Message should not exist"));

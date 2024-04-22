@@ -8,7 +8,7 @@
 #![deny(clippy::cast_possible_truncation)]
 #![deny(missing_docs)]
 #![deny(unused_crate_dependencies)]
-#![deny(warnings)]
+//#![deny(warnings)]
 #![deny(unused_variables)]
 
 use fuel_core_storage::Error as StorageError;

@@ -1,33 +1,62 @@
 use self::import_task::ImportTable;
 
-use super::{progress::MultipleProgressReporter, task_manager::TaskManager};
+use super::{
+    progress::MultipleProgressReporter,
+    task_manager::TaskManager,
+};
 mod import_task;
 mod logic;
+mod on_chain;
 
 use crate::{
     combined_database::CombinedDatabase,
-    database::database_description::{off_chain::OffChain, on_chain::OnChain},
+    database::database_description::{
+        off_chain::OffChain,
+        on_chain::OnChain,
+    },
     fuel_core_graphql_api::storage::messages::SpentMessages,
     graphql_api::storage::{
         coins::OwnedCoins,
         contracts::ContractsInfo,
         messages::OwnedMessageIds,
-        old::{OldFuelBlockConsensus, OldFuelBlocks, OldTransactions},
-        transactions::{OwnedTransactions, TransactionStatuses},
+        old::{
+            OldFuelBlockConsensus,
+            OldFuelBlocks,
+            OldTransactions,
+        },
+        transactions::{
+            OwnedTransactions,
+            TransactionStatuses,
+        },
     },
 };
-use fuel_core_chain_config::{AsTable, SnapshotReader, StateConfig, TableEntry};
+use fuel_core_chain_config::{
+    AsTable,
+    SnapshotReader,
+    StateConfig,
+    TableEntry,
+};
 use fuel_core_services::StateWatcher;
 use fuel_core_storage::{
-    kv_store::StorageColumn,
     structured_storage::TableWithBlueprint,
     tables::{
-        Coins, ContractsAssets, ContractsLatestUtxo, ContractsRawCode, ContractsState,
-        FuelBlocks, Messages, ProcessedTransactions, SealedBlockConsensus, Transactions,
+        Coins,
+        ContractsAssets,
+        ContractsLatestUtxo,
+        ContractsRawCode,
+        ContractsState,
+        FuelBlocks,
+        Messages,
+        ProcessedTransactions,
+        SealedBlockConsensus,
+        Transactions,
     },
 };
 use fuel_core_types::{
-    blockchain::{block::Block, primitives::DaBlockHeight},
+    blockchain::{
+        block::Block,
+        primitives::DaBlockHeight,
+    },
     fuel_types::BlockHeight,
 };
 
@@ -70,22 +99,29 @@ impl SnapshotImporter {
 
     async fn run_workers(mut self) -> anyhow::Result<()> {
         tracing::info!("Running imports");
-        self.spawn_worker::<Coins>()?;
-        self.spawn_worker::<ContractsAssets>()?;
-        self.spawn_worker::<ContractsLatestUtxo>()?;
-        self.spawn_worker::<ContractsRawCode>()?;
-        self.spawn_worker::<ContractsState>()?;
-        self.spawn_worker::<FuelBlocks>()?;
-        self.spawn_worker::<Messages>()?;
-        self.spawn_worker::<OldFuelBlockConsensus>()?;
-        self.spawn_worker::<OldFuelBlocks>()?;
-        self.spawn_worker::<OldTransactions>()?;
-        self.spawn_worker::<OwnedTransactions>()?;
-        self.spawn_worker::<ProcessedTransactions>()?;
-        self.spawn_worker::<SealedBlockConsensus>()?;
-        self.spawn_worker::<SpentMessages>()?;
-        self.spawn_worker::<TransactionStatuses>()?;
-        self.spawn_worker::<Transactions>()?;
+        macro_rules! spawn_workers {
+            ($($table:ty),*) => {
+                $(self.spawn_worker::<$table>()?;)*
+            };
+        }
+        spawn_workers!(
+            Coins,
+            ContractsAssets,
+            ContractsLatestUtxo,
+            ContractsRawCode,
+            ContractsState,
+            FuelBlocks,
+            Messages,
+            OldFuelBlockConsensus,
+            OldFuelBlocks,
+            OldTransactions,
+            OwnedTransactions,
+            ProcessedTransactions,
+            SealedBlockConsensus,
+            SpentMessages,
+            TransactionStatuses,
+            Transactions
+        );
 
         self.task_manager.wait().await?;
 

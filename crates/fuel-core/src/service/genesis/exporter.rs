@@ -181,8 +181,7 @@ where
 
         let db = db_picker(self).clone();
         let prefix = prefix.map(|p| p.to_vec());
-        let progress_tracker =
-            self.multi_progress.table_reporter(None, T::column().name());
+        let progress_tracker = self.multi_progress.table_reporter::<T>(None);
         self.task_manager.spawn(move |cancel| {
             tokio_rayon::spawn(move || {
                 db.entries::<T>(prefix, IterDirection::Forward)

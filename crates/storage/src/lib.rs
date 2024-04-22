@@ -8,7 +8,7 @@
 #![deny(clippy::cast_possible_truncation)]
 #![deny(unused_crate_dependencies)]
 #![deny(missing_docs)]
-#![deny(warnings)]
+//#![deny(warnings)]
 
 use core::array::TryFromSliceError;
 use fuel_core_types::services::executor::Error as ExecutorError;

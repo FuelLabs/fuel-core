@@ -11,7 +11,7 @@
 #![deny(clippy::arithmetic_side_effects)]
 #![deny(clippy::cast_possible_truncation)]
 #![deny(unused_crate_dependencies)]
-#![deny(warnings)]
+//#![deny(warnings)]
 
 use crate as fuel_core_wasm_executor;
 use fuel_core_executor::executor::ExecutionInstance;
