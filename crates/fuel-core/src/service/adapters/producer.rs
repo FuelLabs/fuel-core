@@ -92,7 +92,8 @@ impl fuel_core_producer::ports::Executor<TransactionsSource> for ExecutorAdapter
         &self,
         component: Components<TransactionsSource>,
     ) -> ExecutorResult<UncommittedResult<Changes>> {
-        self._execute_without_commit(ExecutionTypes::Production(component))
+        self.executor
+            .execute_without_commit_with_source(ExecutionTypes::Production(component))
     }
 }
 
@@ -101,18 +102,17 @@ impl fuel_core_producer::ports::Executor<Vec<Transaction>> for ExecutorAdapter {
         &self,
         component: Components<Vec<Transaction>>,
     ) -> ExecutorResult<UncommittedResult<Changes>> {
-        let Components {
-            header_to_produce,
-            transactions_source,
-            gas_price,
-            coinbase_recipient,
-        } = component;
-        self._execute_without_commit(ExecutionTypes::Production(Components {
-            header_to_produce,
-            transactions_source: OnceTransactionsSource::new(transactions_source),
-            gas_price,
-            coinbase_recipient,
-        }))
+        let new_components = Components {
+            header_to_produce: component.header_to_produce,
+            transactions_source: OnceTransactionsSource::new(
+                component.transactions_source,
+            ),
+            gas_price: component.gas_price,
+            coinbase_recipient: component.coinbase_recipient,
+        };
+        let block = ExecutionTypes::Production(new_components);
+
+        self.executor.execute_without_commit_with_source(block)
     }
 }
 
@@ -122,7 +122,7 @@ impl fuel_core_producer::ports::DryRunner for ExecutorAdapter {
         block: Components<Vec<fuel_tx::Transaction>>,
         utxo_validation: Option<bool>,
     ) -> ExecutorResult<Vec<TransactionExecutionStatus>> {
-        self._dry_run(block, utxo_validation)
+        self.executor.dry_run(block, utxo_validation)
     }
 }
 

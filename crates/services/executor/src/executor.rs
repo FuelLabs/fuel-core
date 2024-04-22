@@ -664,12 +664,12 @@ where
 
     // TODO: Refactor this function to reduce the number of arguments.
     #[allow(clippy::too_many_arguments)]
-    fn execute_transaction_and_commit(
+    fn execute_transaction_and_commit<
+        W: WriteTransaction + KeyValueInspect<Column = Column> + Modifiable,
+    >(
         &self,
         block: &mut PartialFuelBlock,
-        thread_block_transaction: &mut StorageTransaction<
-            &StorageTransaction<&StorageTransaction<D>>,
-        >,
+        thread_block_transaction: &mut W,
         execution_data: &mut ExecutionData,
         tx: MaybeCheckedTransaction,
         gas_price: Word,

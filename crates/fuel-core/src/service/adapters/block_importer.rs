@@ -105,6 +105,6 @@ impl Validator for ExecutorAdapter {
         &self,
         block: Block,
     ) -> ExecutorResult<UncommittedExecutionResult<Changes>> {
-        self._validate_block(block)
+        self.executor.validate(block)
     }
 }
