@@ -14,16 +14,23 @@
 #![deny(warnings)]
 
 use crate as fuel_core_wasm_executor;
-use fuel_core_executor::executor::ExecutionInstance;
+use crate::utils::WasmExecutionBlockTypes;
+use fuel_core_executor::executor::{
+    ExecutionBlockWithSource,
+    ExecutionInstance,
+};
 use fuel_core_storage::transactional::Changes;
-use fuel_core_types::services::{
-    block_producer::Components,
-    executor::{
-        Error as ExecutorError,
-        ExecutionResult,
-        Result as ExecutorResult,
+use fuel_core_types::{
+    blockchain::block::Block,
+    services::{
+        block_producer::Components,
+        executor::{
+            Error as ExecutorError,
+            ExecutionResult,
+            Result as ExecutorResult,
+        },
+        Uncommitted,
     },
-    Uncommitted,
 };
 use fuel_core_wasm_executor::{
     relayer::WasmRelayer,
@@ -62,21 +69,17 @@ pub fn execute_without_commit(
 
     let (block, options) = match input {
         InputType::V1 { block, options } => {
-            let block = block.map_p(|component| {
-                let Components {
-                    header_to_produce,
-                    gas_price,
-                    coinbase_recipient,
-                    ..
-                } = component;
-
-                Components {
-                    header_to_produce,
-                    gas_price,
-                    transactions_source: WasmTxSource::new(),
-                    coinbase_recipient,
+            let block = match block {
+                WasmExecutionBlockTypes::DryRun(c) => {
+                    WasmExecutionBlockTypes::DryRun(use_wasm_tx_source(c))
                 }
-            });
+                WasmExecutionBlockTypes::Production(c) => {
+                    WasmExecutionBlockTypes::Production(use_wasm_tx_source(c))
+                }
+                WasmExecutionBlockTypes::Validation(c) => {
+                    WasmExecutionBlockTypes::Validation(c)
+                }
+            };
 
             (block, options)
         }
@@ -88,6 +91,33 @@ pub fn execute_without_commit(
         options,
     };
 
+    match block {
+        WasmExecutionBlockTypes::DryRun(c) => execute_dry_run(instance, c),
+        WasmExecutionBlockTypes::Production(c) => execute_production(instance, c),
+        WasmExecutionBlockTypes::Validation(c) => execute_validation(instance, c),
+    }
+}
+
+fn execute_dry_run(
+    instance: ExecutionInstance<WasmRelayer, WasmStorage>,
+    block: Components<WasmTxSource>,
+) -> ExecutorResult<Uncommitted<ExecutionResult, Changes>> {
+    let block = ExecutionBlockWithSource::DryRun(block);
+    instance.execute_without_commit(block)
+}
+
+fn execute_production(
+    instance: ExecutionInstance<WasmRelayer, WasmStorage>,
+    block: Components<WasmTxSource>,
+) -> ExecutorResult<Uncommitted<ExecutionResult, Changes>> {
+    let block = ExecutionBlockWithSource::Production(block);
+    instance.execute_without_commit(block)
+}
+
+fn execute_validation(
+    instance: ExecutionInstance<WasmRelayer, WasmStorage>,
+    block: Block,
+) -> ExecutorResult<Uncommitted<ExecutionResult, Changes>> {
     let (
         ExecutionResult {
             block,
@@ -96,7 +126,7 @@ pub fn execute_without_commit(
             events,
         },
         changes,
-    ) = instance.execute_without_commit(block)?.into();
+    ) = instance.validate_without_commit(block)?.into();
 
     Ok(Uncommitted::new(
         ExecutionResult {
@@ -107,6 +137,22 @@ pub fn execute_without_commit(
         },
         changes,
     ))
+}
+
+fn use_wasm_tx_source(component: Components<()>) -> Components<WasmTxSource> {
+    let Components {
+        header_to_produce,
+        gas_price,
+        coinbase_recipient,
+        ..
+    } = component;
+
+    Components {
+        header_to_produce,
+        gas_price,
+        transactions_source: WasmTxSource::new(),
+        coinbase_recipient,
+    }
 }
 
 // It is not used. It was added to make clippy happy.
