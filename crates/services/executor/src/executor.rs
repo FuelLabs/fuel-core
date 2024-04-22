@@ -613,7 +613,7 @@ where
     }
 
     fn execute_transaction_and_commit<
-        W: WriteTransaction + KeyValueInspect<Column = Column> + Modifiable,
+        W: KeyValueInspect<Column = Column> + Modifiable,
     >(
         &self,
         block: &mut PartialFuelBlock,
@@ -651,7 +651,7 @@ where
     }
 
     fn validate_transaction_and_commit<
-        W: WriteTransaction + KeyValueInspect<Column = Column> + Modifiable,
+        W: KeyValueInspect<Column = Column> + Modifiable,
     >(
         &self,
         block: &mut PartialFuelBlock,
