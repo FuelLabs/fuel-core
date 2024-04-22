@@ -412,63 +412,6 @@ where
     }
 
     fn validate_inner(self, block: Block) -> ExecutorResult<UncommittedResult<Changes>> {
-        // Compute the block id before execution if there is one.
-        let pre_exec_block_id = block.id();
-
-        let (block, execution_data) = {
-            let mut partial_block = block.into();
-            let block_executor = BlockExecutor::new(
-                self.relayer,
-                self.database,
-                self.options,
-                &partial_block,
-            )?;
-
-            let component = PartialBlockComponent::from_partial_block(&mut partial_block);
-            let execution_data = block_executor.validate_block(component)?;
-            (partial_block, execution_data)
-        };
-
-        let ExecutionData {
-            coinbase,
-            used_gas,
-            message_ids,
-            tx_status,
-            skipped_transactions,
-            events,
-            changes,
-            event_inbox_root,
-            ..
-        } = execution_data;
-
-        // Now that the transactions have been executed, generate the full header.
-
-        let block = block.generate(&message_ids[..], event_inbox_root);
-
-        let finalized_block_id = block.id();
-
-        debug!(
-            "Block {:#x} fees: {} gas: {}",
-            pre_exec_block_id, coinbase, used_gas
-        );
-
-        // check if block id doesn't match proposed block id
-        if pre_exec_block_id != finalized_block_id {
-            return Err(ExecutorError::InvalidBlockId)
-        }
-
-        let result = ExecutionResult {
-            block,
-            skipped_transactions,
-            tx_status,
-            events,
-        };
-
-        // Get the complete fuel block.
-        Ok(UncommittedResult::new(result, changes))
-    }
-
-    fn validate_inner(self, block: Block) -> ExecutorResult<UncommittedResult<Changes>> {
         let consensus_params_version = block.header().consensus_parameters_version;
         let block_executor = BlockExecutor::new(
             self.relayer,
