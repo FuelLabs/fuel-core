@@ -87,16 +87,12 @@ pub struct PoAConsensus {
     signature: Signature,
 }
 
-#[derive(Union)]
-pub enum BlockVersion {
-    V1(Version),
-}
-
 #[Object]
 impl Block {
-    async fn version(&self) -> BlockVersion {
+    async fn version(&self) -> Version {
         match self.0 {
-            CompressedBlock::V1(_) => BlockVersion::V1(Version(1)),
+            CompressedBlock::V1(_) => Version(1),
+            _ => Version(255),
         }
     }
 
@@ -143,17 +139,12 @@ impl Block {
     }
 }
 
-#[derive(Union)]
-pub enum HeaderVersion {
-    V1(Version),
-}
-
 #[Object]
 impl Header {
     /// Version of the header
-    async fn version(&self) -> HeaderVersion {
+    async fn version(&self) -> Version {
         match self.0 {
-            BlockHeader::V1(_) => HeaderVersion::V1(Version(1)),
+            BlockHeader::V1(_) => Version(1),
         }
     }
 

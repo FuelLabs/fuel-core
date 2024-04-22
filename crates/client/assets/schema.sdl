@@ -45,7 +45,7 @@ input BalanceFilterInput {
 }
 
 type Block {
-	version: BlockVersion!
+	version: Version!
 	id: BlockId!
 	height: U32!
 	header: Header!
@@ -83,8 +83,6 @@ type BlockEdge {
 }
 
 scalar BlockId
-
-union BlockVersion = Version
 
 
 """
@@ -473,7 +471,7 @@ type Header {
 	"""
 	Version of the header
 	"""
-	version: HeaderVersion!
+	version: Version!
 	"""
 	Hash of the header
 	"""
@@ -527,8 +525,6 @@ type Header {
 	"""
 	applicationHash: Bytes32!
 }
-
-union HeaderVersion = Version
 
 type HeavyOperation {
 	base: U64!

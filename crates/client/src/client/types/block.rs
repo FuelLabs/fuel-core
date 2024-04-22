@@ -1,12 +1,6 @@
 use crate::client::{
     schema,
-    schema::{
-        block::{
-            BlockVersion,
-            HeaderVersion,
-        },
-        ConversionError,
-    },
+    schema::ConversionError,
     types::primitives::{
         BlockId,
         Hash,
@@ -17,6 +11,7 @@ use crate::client::{
     },
     PaginatedResult,
 };
+
 use tai64::Tai64;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -78,8 +73,8 @@ impl TryFrom<schema::block::Header> for Header {
     type Error = ConversionError;
 
     fn try_from(value: schema::block::Header) -> Result<Self, Self::Error> {
-        match value.version {
-            HeaderVersion::V1(_) => Ok(Self {
+        match *value.version {
+            1 => Ok(Self {
                 id: value.id.into(),
                 da_height: value.da_height.into(),
                 consensus_parameters_version: value.consensus_parameters_version.into(),
@@ -96,9 +91,7 @@ impl TryFrom<schema::block::Header> for Header {
                 time: value.time.0,
                 application_hash: value.application_hash.into(),
             }),
-            HeaderVersion::Unknown => {
-                Err(ConversionError::UnknownVariant("HeaderVersion"))
-            }
+            _ => Err(ConversionError::UnknownVariant("HeaderVersion")),
         }
     }
 }
@@ -142,8 +135,8 @@ impl TryFrom<schema::block::Block> for Block {
     type Error = ConversionError;
 
     fn try_from(value: schema::block::Block) -> Result<Self, Self::Error> {
-        match value.version {
-            BlockVersion::V1(_) => {
+        match *value.version {
+            1 => {
                 let transactions = value
                     .transactions
                     .iter()
@@ -159,7 +152,7 @@ impl TryFrom<schema::block::Block> for Block {
                     block_producer,
                 })
             }
-            BlockVersion::Unknown => Err(ConversionError::UnknownVariant("BlockVersion")),
+            _ => Err(ConversionError::UnknownVariant("BlockVersion")),
         }
     }
 }
@@ -176,7 +169,7 @@ impl TryFrom<schema::block::BlockConnection> for PaginatedResult<Block, String> 
                 .edges
                 .into_iter()
                 .map(|e| e.node.try_into())
-                .collect::<Result<Vec<_>, _>>()?,
+                .collect::<Result<_, _>>()?,
         })
     }
 }
