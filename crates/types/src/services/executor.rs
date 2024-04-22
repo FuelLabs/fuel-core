@@ -301,8 +301,6 @@ pub enum ExecutionKind {
     DryRun,
     /// Producing a block.
     Production,
-    /// Validating a block.
-    Validation,
 }
 
 #[allow(missing_docs)]

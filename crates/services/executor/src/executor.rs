@@ -537,7 +537,6 @@ where
             &mut thread_block_transaction,
             &mut data,
             coinbase_contract_id,
-            execution_kind,
         )?;
 
         let remaining_gas_limit = block_gas_limit.saturating_sub(data.used_gas);
@@ -555,14 +554,13 @@ where
                     transaction,
                     gas_price,
                     coinbase_contract_id,
-                    execution_kind,
                 ) {
                     Ok(_) => {}
                     Err(err) => match execution_kind {
                         ExecutionKind::Production => {
                             data.skipped_transactions.push((tx_id, err));
                         }
-                        ExecutionKind::DryRun | ExecutionKind::Validation => {
+                        ExecutionKind::DryRun => {
                             return Err(err);
                         }
                     },
@@ -608,7 +606,6 @@ where
                 MaybeCheckedTransaction::Transaction(coinbase_tx.into()),
                 gas_price,
                 coinbase_contract_id,
-                execution_kind,
             )?;
         }
 
@@ -625,8 +622,6 @@ where
         Ok(data)
     }
 
-    // TODO: Refactor this function to reduce the number of arguments.
-    #[allow(clippy::too_many_arguments)]
     fn execute_transaction_and_commit<
         W: WriteTransaction + KeyValueInspect<Column = Column> + Modifiable,
     >(
@@ -637,7 +632,6 @@ where
         tx: MaybeCheckedTransaction,
         gas_price: Word,
         coinbase_contract_id: ContractId,
-        execution_kind: ExecutionKind,
     ) -> ExecutorResult<()> {
         let tx_count = execution_data.tx_count;
         let tx = {
@@ -652,7 +646,44 @@ where
                 coinbase_contract_id,
                 gas_price,
                 execution_data,
-                execution_kind,
+                &mut tx_st_transaction,
+            )?;
+            tx_st_transaction.commit()?;
+            tx
+        };
+
+        block.transactions.push(tx);
+        execution_data.tx_count = tx_count
+            .checked_add(1)
+            .ok_or(ExecutorError::TooManyTransactions)?;
+
+        Ok(())
+    }
+
+    fn validate_transaction_and_commit<
+        W: WriteTransaction + KeyValueInspect<Column = Column> + Modifiable,
+    >(
+        &self,
+        block: &mut PartialFuelBlock,
+        thread_block_transaction: &mut W,
+        execution_data: &mut ExecutionData,
+        tx: MaybeCheckedTransaction,
+        gas_price: Word,
+        coinbase_contract_id: ContractId,
+    ) -> ExecutorResult<()> {
+        let tx_count = execution_data.tx_count;
+        let tx = {
+            let mut tx_st_transaction = thread_block_transaction
+                .write_transaction()
+                .with_policy(ConflictPolicy::Overwrite);
+            let tx_id = tx.id(&self.consensus_params.chain_id());
+            let tx = self.validate_transaction(
+                tx,
+                &tx_id,
+                &block.header,
+                coinbase_contract_id,
+                gas_price,
+                execution_data,
                 &mut tx_st_transaction,
             )?;
             tx_st_transaction.commit()?;
@@ -673,7 +704,6 @@ where
 
         let mut partial_block = PartialFuelBlock::from(block.clone());
         let transactions = core::mem::take(&mut partial_block.transactions);
-        let execution_kind = ExecutionKind::Validation;
 
         let (gas_price, coinbase_contract_id) =
             Self::get_coinbase_info_from_mint_tx(&transactions)?;
@@ -696,26 +726,24 @@ where
 
         debug_assert!(partial_block.transactions.is_empty());
 
-        self.process_relayed_txs(
+        self.validate_relayed_txs(
             forced_transactions,
             &mut partial_block,
             &mut thread_block_transaction,
             &mut data,
             coinbase_contract_id,
-            execution_kind,
         )?;
 
         for transaction in transactions {
             let maybe_checked_tx =
                 MaybeCheckedTransaction::Transaction(transaction.clone());
-            self.execute_transaction_and_commit(
+            self.validate_transaction_and_commit(
                 &mut partial_block,
                 &mut thread_block_transaction,
                 &mut data,
                 maybe_checked_tx,
                 gas_price,
                 coinbase_contract_id,
-                execution_kind,
             )?;
         }
 
@@ -749,7 +777,6 @@ where
         >,
         data: &mut ExecutionData,
         coinbase_contract_id: ContractId,
-        execution_kind: ExecutionKind,
     ) -> ExecutorResult<()> {
         const RELAYED_GAS_PRICE: Word = 0;
 
@@ -766,7 +793,46 @@ where
                 transaction,
                 RELAYED_GAS_PRICE,
                 coinbase_contract_id,
-                execution_kind,
+            ) {
+                Ok(_) => {}
+                Err(err) => {
+                    let event = ExecutorEvent::ForcedTransactionFailed {
+                        id: tx_id.into(),
+                        block_height: *block_height,
+                        failure: err.to_string(),
+                    };
+                    data.events.push(event);
+                }
+            }
+        }
+        Ok(())
+    }
+
+    fn validate_relayed_txs(
+        &self,
+        forced_transactions: Vec<CheckedTransaction>,
+        partial_block: &mut PartialFuelBlock,
+        thread_block_transaction: &mut StorageTransaction<
+            &StorageTransaction<&StorageTransaction<D>>,
+        >,
+        data: &mut ExecutionData,
+        coinbase_contract_id: ContractId,
+    ) -> ExecutorResult<()> {
+        const RELAYED_GAS_PRICE: Word = 0;
+
+        let block_header = partial_block.header;
+        let block_height = block_header.height();
+        let relayed_tx_iter = forced_transactions.into_iter();
+        for transaction in relayed_tx_iter {
+            let transaction = MaybeCheckedTransaction::CheckedTransaction(transaction);
+            let tx_id = transaction.id(&self.consensus_params.chain_id());
+            match self.validate_transaction_and_commit(
+                partial_block,
+                thread_block_transaction,
+                data,
+                transaction,
+                RELAYED_GAS_PRICE,
+                coinbase_contract_id,
             ) {
                 Ok(_) => {}
                 Err(err) => {
@@ -975,7 +1041,6 @@ where
         coinbase_contract_id: ContractId,
         gas_price: Word,
         execution_data: &mut ExecutionData,
-        execution_kind: ExecutionKind,
         tx_st_transaction: &mut StorageTransaction<T>,
     ) -> ExecutorResult<Transaction>
     where
@@ -1009,7 +1074,6 @@ where
                 gas_price,
                 execution_data,
                 tx_st_transaction,
-                execution_kind,
             ),
             CheckedTransaction::Create(tx) => self.execute_chargeable_transaction(
                 tx,
@@ -1018,7 +1082,6 @@ where
                 gas_price,
                 execution_data,
                 tx_st_transaction,
-                execution_kind,
             ),
             CheckedTransaction::Mint(mint) => self.execute_mint(
                 mint,
@@ -1027,7 +1090,6 @@ where
                 gas_price,
                 execution_data,
                 tx_st_transaction,
-                execution_kind,
             ),
             CheckedTransaction::Upgrade(tx) => self.execute_chargeable_transaction(
                 tx,
@@ -1036,7 +1098,6 @@ where
                 gas_price,
                 execution_data,
                 tx_st_transaction,
-                execution_kind,
             ),
             CheckedTransaction::Upload(tx) => self.execute_chargeable_transaction(
                 tx,
@@ -1045,7 +1106,84 @@ where
                 gas_price,
                 execution_data,
                 tx_st_transaction,
-                execution_kind,
+            ),
+        }
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn validate_transaction<T>(
+        &self,
+        tx: MaybeCheckedTransaction,
+        tx_id: &TxId,
+        header: &PartialBlockHeader,
+        coinbase_contract_id: ContractId,
+        gas_price: Word,
+        execution_data: &mut ExecutionData,
+        tx_st_transaction: &mut StorageTransaction<T>,
+    ) -> ExecutorResult<Transaction>
+    where
+        T: KeyValueInspect<Column = Column>,
+    {
+        if execution_data.found_mint {
+            return Err(ExecutorError::MintIsNotLastTransaction)
+        }
+
+        // Throw a clear error if the transaction id is a duplicate
+        if tx_st_transaction
+            .storage::<ProcessedTransactions>()
+            .contains_key(tx_id)?
+        {
+            return Err(ExecutorError::TransactionIdCollision(*tx_id))
+        }
+
+        let block_height = *header.height();
+        let checked_tx = match tx {
+            MaybeCheckedTransaction::Transaction(tx) => tx
+                .into_checked_basic(block_height, &self.consensus_params)?
+                .into(),
+            MaybeCheckedTransaction::CheckedTransaction(checked_tx) => checked_tx,
+        };
+
+        match checked_tx {
+            CheckedTransaction::Script(tx) => self.validate_chargeable_transaction(
+                tx,
+                header,
+                coinbase_contract_id,
+                gas_price,
+                execution_data,
+                tx_st_transaction,
+            ),
+            CheckedTransaction::Create(tx) => self.validate_chargeable_transaction(
+                tx,
+                header,
+                coinbase_contract_id,
+                gas_price,
+                execution_data,
+                tx_st_transaction,
+            ),
+            CheckedTransaction::Mint(mint) => self.validate_mint(
+                mint,
+                header,
+                coinbase_contract_id,
+                gas_price,
+                execution_data,
+                tx_st_transaction,
+            ),
+            CheckedTransaction::Upgrade(tx) => self.validate_chargeable_transaction(
+                tx,
+                header,
+                coinbase_contract_id,
+                gas_price,
+                execution_data,
+                tx_st_transaction,
+            ),
+            CheckedTransaction::Upload(tx) => self.validate_chargeable_transaction(
+                tx,
+                header,
+                coinbase_contract_id,
+                gas_price,
+                execution_data,
+                tx_st_transaction,
             ),
         }
     }
@@ -1059,7 +1197,6 @@ where
         gas_price: Word,
         execution_data: &mut ExecutionData,
         block_st_transaction: &mut StorageTransaction<T>,
-        execution_kind: ExecutionKind,
     ) -> ExecutorResult<Transaction>
     where
         T: KeyValueInspect<Column = Column>,
@@ -1122,18 +1259,7 @@ where
                 )?;
             }
 
-            match execution_kind {
-                ExecutionKind::DryRun | ExecutionKind::Production => {
-                    self.compute_inputs(inputs.as_mut_slice(), block_st_transaction)?;
-                }
-                ExecutionKind::Validation => {
-                    self.validate_inputs_state(
-                        inputs.as_mut_slice(),
-                        coinbase_id,
-                        block_st_transaction,
-                    )?;
-                }
-            }
+            self.compute_inputs(inputs.as_mut_slice(), block_st_transaction)?;
 
             let mut sub_block_db_commit = block_st_transaction
                 .write_transaction()
@@ -1177,13 +1303,152 @@ where
                 unreachable!()
             };
 
-            if execution_kind == ExecutionKind::Validation {
-                if mint.input_contract() != &input || mint.output_contract() != &output {
-                    return Err(ExecutorError::MintMismatch)
-                }
-            } else {
-                *mint.input_contract_mut() = input;
-                *mint.output_contract_mut() = output;
+            *mint.input_contract_mut() = input;
+            *mint.output_contract_mut() = output;
+        }
+
+        let tx = mint.into();
+
+        execution_data.tx_status.push(TransactionExecutionStatus {
+            id: coinbase_id,
+            result: TransactionExecutionResult::Success {
+                result: None,
+                receipts: vec![],
+                total_gas: 0,
+                total_fee: 0,
+            },
+        });
+
+        if block_st_transaction
+            .storage::<ProcessedTransactions>()
+            .insert(&coinbase_id, &())?
+            .is_some()
+        {
+            return Err(ExecutorError::TransactionIdCollision(coinbase_id))
+        }
+        Ok(tx)
+    }
+
+    fn validate_mint<T>(
+        &self,
+        checked_mint: Checked<Mint>,
+        header: &PartialBlockHeader,
+        coinbase_contract_id: ContractId,
+        gas_price: Word,
+        execution_data: &mut ExecutionData,
+        block_st_transaction: &mut StorageTransaction<T>,
+    ) -> ExecutorResult<Transaction>
+    where
+        T: KeyValueInspect<Column = Column>,
+    {
+        execution_data.found_mint = true;
+
+        if checked_mint.transaction().tx_pointer().tx_index() != execution_data.tx_count {
+            return Err(ExecutorError::MintHasUnexpectedIndex)
+        }
+
+        let coinbase_id = checked_mint.id();
+        let (mint, _) = checked_mint.into();
+
+        fn verify_mint_for_empty_contract(mint: &Mint) -> ExecutorResult<()> {
+            if *mint.mint_amount() != 0 {
+                return Err(ExecutorError::CoinbaseAmountMismatch)
+            }
+
+            let input = input::contract::Contract {
+                utxo_id: UtxoId::new(Bytes32::zeroed(), 0),
+                balance_root: Bytes32::zeroed(),
+                state_root: Bytes32::zeroed(),
+                tx_pointer: TxPointer::new(BlockHeight::new(0), 0),
+                contract_id: ContractId::zeroed(),
+            };
+            let output = output::contract::Contract {
+                input_index: 0,
+                balance_root: Bytes32::zeroed(),
+                state_root: Bytes32::zeroed(),
+            };
+            if mint.input_contract() != &input || mint.output_contract() != &output {
+                return Err(ExecutorError::MintMismatch)
+            }
+            Ok(())
+        }
+
+        if mint.input_contract().contract_id == ContractId::zeroed() {
+            verify_mint_for_empty_contract(&mint)?;
+        } else {
+            if *mint.mint_amount() != execution_data.coinbase {
+                return Err(ExecutorError::CoinbaseAmountMismatch)
+            }
+            if *mint.gas_price() != gas_price {
+                return Err(ExecutorError::CoinbaseGasPriceMismatch)
+            }
+
+            let block_height = *header.height();
+
+            let input = mint.input_contract().clone();
+            let output = *mint.output_contract();
+            let mut inputs = [Input::Contract(input)];
+            let mut outputs = [Output::Contract(output)];
+
+            if self.options.utxo_validation {
+                // validate utxos exist
+                self.verify_input_state(
+                    block_st_transaction,
+                    inputs.as_mut_slice(),
+                    header.da_height,
+                )?;
+            }
+
+            self.validate_inputs_state(
+                inputs.as_mut_slice(),
+                coinbase_id,
+                block_st_transaction,
+            )?;
+
+            let mut sub_block_db_commit = block_st_transaction
+                .write_transaction()
+                .with_policy(ConflictPolicy::Overwrite);
+
+            let mut vm_db = VmStorage::new(
+                &mut sub_block_db_commit,
+                &header.consensus,
+                &header.application,
+                coinbase_contract_id,
+            );
+
+            fuel_vm::interpreter::contract::balance_increase(
+                &mut vm_db,
+                &mint.input_contract().contract_id,
+                mint.mint_asset_id(),
+                *mint.mint_amount(),
+            )
+            .map_err(|e| format!("{e}"))
+            .map_err(ExecutorError::CoinbaseCannotIncreaseBalance)?;
+            sub_block_db_commit.commit()?;
+
+            self.persist_output_utxos(
+                block_height,
+                execution_data,
+                &coinbase_id,
+                block_st_transaction,
+                inputs.as_slice(),
+                outputs.as_slice(),
+            )?;
+            self.compute_state_of_not_utxo_outputs(
+                outputs.as_mut_slice(),
+                inputs.as_slice(),
+                coinbase_id,
+                block_st_transaction,
+            )?;
+            let Input::Contract(input) = core::mem::take(&mut inputs[0]) else {
+                unreachable!()
+            };
+            let Output::Contract(output) = outputs[0] else {
+                unreachable!()
+            };
+
+            if mint.input_contract() != &input || mint.output_contract() != &output {
+                return Err(ExecutorError::MintMismatch)
             }
         }
 
@@ -1218,7 +1483,6 @@ where
         gas_price: Word,
         execution_data: &mut ExecutionData,
         tx_st_transaction: &mut StorageTransaction<T>,
-        execution_kind: ExecutionKind,
     ) -> ExecutorResult<Transaction>
     where
         Tx: ExecutableTransaction + PartialEq + Cacheable + Send + Sync + 'static,
@@ -1250,14 +1514,6 @@ where
                 .check_signatures(&self.consensus_params.chain_id())
                 .map_err(TransactionValidityError::from)?;
             debug_assert!(checked_tx.checks().contains(Checks::Signatures));
-        }
-
-        if execution_kind == ExecutionKind::Validation {
-            self.validate_inputs_state(
-                checked_tx.transaction().inputs(),
-                tx_id,
-                tx_st_transaction,
-            )?;
         }
 
         // execute transaction
@@ -1374,9 +1630,216 @@ where
         )?;
         *tx.outputs_mut() = outputs;
 
-        // The validator ensures that the generated transaction by him is the same as provided by the block producer.
-        if execution_kind == ExecutionKind::Validation && &tx != checked_tx.transaction()
+        let final_tx = tx.into();
+
+        // Store tx into the block db transaction
+        tx_st_transaction
+            .storage::<ProcessedTransactions>()
+            .insert(&tx_id, &())?;
+
+        // Update `execution_data` data only after all steps.
+        execution_data.coinbase = execution_data
+            .coinbase
+            .checked_add(tx_fee)
+            .ok_or(ExecutorError::FeeOverflow)?;
+        execution_data.used_gas = execution_data
+            .used_gas
+            .checked_add(used_gas)
+            .ok_or(ExecutorError::GasOverflow)?;
+        execution_data
+            .message_ids
+            .extend(receipts.iter().filter_map(|r| r.message_id()));
+
+        let status = if reverted {
+            TransactionExecutionResult::Failed {
+                result: Some(state),
+                receipts,
+                total_gas: used_gas,
+                total_fee: tx_fee,
+            }
+        } else {
+            // else tx was a success
+            TransactionExecutionResult::Success {
+                result: Some(state),
+                receipts,
+                total_gas: used_gas,
+                total_fee: tx_fee,
+            }
+        };
+
+        // queue up status for this tx to be stored once block id is finalized.
+        execution_data.tx_status.push(TransactionExecutionStatus {
+            id: tx_id,
+            result: status,
+        });
+
+        Ok(final_tx)
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn validate_chargeable_transaction<Tx, T>(
+        &self,
+        mut checked_tx: Checked<Tx>,
+        header: &PartialBlockHeader,
+        coinbase_contract_id: ContractId,
+        gas_price: Word,
+        execution_data: &mut ExecutionData,
+        tx_st_transaction: &mut StorageTransaction<T>,
+    ) -> ExecutorResult<Transaction>
+    where
+        Tx: ExecutableTransaction + PartialEq + Cacheable + Send + Sync + 'static,
+        <Tx as IntoChecked>::Metadata: CheckedMetadata,
+        T: KeyValueInspect<Column = Column>,
+    {
+        let tx_id = checked_tx.id();
+        let min_gas = checked_tx.metadata().min_gas();
+        let max_fee = checked_tx.transaction().max_fee_limit();
+
+        if self.options.utxo_validation {
+            checked_tx = checked_tx
+                .check_predicates(&CheckPredicateParams::from(&self.consensus_params))
+                .map_err(|e| {
+                    ExecutorError::TransactionValidity(
+                        TransactionValidityError::Validation(e),
+                    )
+                })?;
+            debug_assert!(checked_tx.checks().contains(Checks::Predicates));
+
+            // validate utxos exist and maturity is properly set
+            self.verify_input_state(
+                tx_st_transaction,
+                checked_tx.transaction().inputs(),
+                header.da_height,
+            )?;
+            // validate transaction signature
+            checked_tx = checked_tx
+                .check_signatures(&self.consensus_params.chain_id())
+                .map_err(TransactionValidityError::from)?;
+            debug_assert!(checked_tx.checks().contains(Checks::Signatures));
+        }
+
+        self.validate_inputs_state(
+            checked_tx.transaction().inputs(),
+            tx_id,
+            tx_st_transaction,
+        )?;
+
+        // execute transaction
+        // setup database view that only lives for the duration of vm execution
+        let mut sub_block_db_commit = tx_st_transaction
+            .read_transaction()
+            .with_policy(ConflictPolicy::Overwrite);
+
+        // execution vm
+        let vm_db = VmStorage::new(
+            &mut sub_block_db_commit,
+            &header.consensus,
+            &header.application,
+            coinbase_contract_id,
+        );
+
+        let mut vm = Interpreter::with_storage(
+            vm_db,
+            InterpreterParams::new(gas_price, &self.consensus_params),
+        );
+
+        let gas_costs = self.consensus_params.gas_costs();
+        let fee_params = self.consensus_params.fee_params();
+
+        let ready_tx = checked_tx
+            .clone()
+            .into_ready(gas_price, gas_costs, fee_params)?;
+
+        let vm_result: StateTransition<_> = vm
+            .transact(ready_tx)
+            .map_err(|error| ExecutorError::VmExecution {
+                error: error.to_string(),
+                transaction_id: tx_id,
+            })?
+            .into();
+        let reverted = vm_result.should_revert();
+
+        let (state, mut tx, receipts): (_, Tx, _) = vm_result.into_inner();
+        #[cfg(debug_assertions)]
         {
+            tx.precompute(&self.consensus_params.chain_id())?;
+            debug_assert_eq!(tx.id(&self.consensus_params.chain_id()), tx_id);
+        }
+
+        for (original_input, produced_input) in checked_tx
+            .transaction()
+            .inputs()
+            .iter()
+            .zip(tx.inputs_mut())
+        {
+            let predicate_gas_used = original_input.predicate_gas_used();
+
+            if let Some(gas_used) = predicate_gas_used {
+                match produced_input {
+                    Input::CoinPredicate(CoinPredicate {
+                        predicate_gas_used, ..
+                    })
+                    | Input::MessageCoinPredicate(MessageCoinPredicate {
+                        predicate_gas_used,
+                        ..
+                    })
+                    | Input::MessageDataPredicate(MessageDataPredicate {
+                        predicate_gas_used,
+                        ..
+                    }) => {
+                        *predicate_gas_used = gas_used;
+                    }
+                    _ => {
+                        debug_assert!(false, "This error is not possible unless VM changes the order of inputs, \
+                        or we added a new predicate inputs.");
+                        return Err(ExecutorError::InvalidTransactionOutcome {
+                            transaction_id: tx_id,
+                        })
+                    }
+                }
+            }
+        }
+
+        // We always need to update inputs with storage state before execution,
+        // because VM zeroes malleable fields during the execution.
+        self.compute_inputs(tx.inputs_mut(), tx_st_transaction)?;
+
+        // only commit state changes if execution was a success
+        if !reverted {
+            self.log_backtrace(&vm, &receipts);
+            let changes = sub_block_db_commit.into_changes();
+            tx_st_transaction.commit_changes(changes)?;
+        }
+
+        // update block commitment
+        let (used_gas, tx_fee) =
+            self.total_fee_paid(&tx, min_gas, max_fee, &receipts, gas_price)?;
+
+        // change the spent status of the tx inputs
+        self.spend_input_utxos(tx.inputs(), tx_st_transaction, reverted, execution_data)?;
+
+        // Persist utxos first and after calculate the not utxo outputs
+        self.persist_output_utxos(
+            *header.height(),
+            execution_data,
+            &tx_id,
+            tx_st_transaction,
+            tx.inputs(),
+            tx.outputs(),
+        )?;
+
+        // We always need to update outputs with storage state after execution.
+        let mut outputs = core::mem::take(tx.outputs_mut());
+        self.compute_state_of_not_utxo_outputs(
+            &mut outputs,
+            tx.inputs(),
+            tx_id,
+            tx_st_transaction,
+        )?;
+        *tx.outputs_mut() = outputs;
+
+        // The validator ensures that the generated transaction by him is the same as provided by the block producer.
+        if &tx != checked_tx.transaction() {
             return Err(ExecutorError::InvalidTransactionOutcome {
                 transaction_id: tx_id,
             })
