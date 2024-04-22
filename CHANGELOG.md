@@ -6,6 +6,9 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+- [#1838](https://github.com/FuelLabs/fuel-core/pull/1838): Snapshot files are now read only once.
+
 Description of the upcoming release here.
 
 ## [Version 0.25.2]
