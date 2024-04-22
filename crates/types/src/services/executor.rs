@@ -397,7 +397,7 @@ pub enum Error {
     #[display(fmt = "No matching utxo for contract id ${_0:#x}")]
     ContractUtxoMissing(ContractId),
     #[display(fmt = "message already spent {_0:#x}")]
-    MessageAlreadySpent(Nonce),
+    MessageDoesNotExist(Nonce),
     #[display(fmt = "Expected input of type {_0}")]
     InputTypeMismatch(String),
     #[display(fmt = "Executing of the genesis block is not allowed")]
@@ -444,13 +444,11 @@ pub enum TransactionValidityError {
     CoinMismatch(UtxoId),
     #[error("The specified coin({0:#x}) doesn't exist")]
     CoinDoesNotExist(UtxoId),
-    #[error("The specified message({0:#x}) was already spent")]
-    MessageAlreadySpent(Nonce),
     #[error(
         "Message({0:#x}) is not yet spendable, as it's DA height is newer than this block allows"
     )]
     MessageSpendTooEarly(Nonce),
-    #[error("The specified message({0:#x}) doesn't exist")]
+    #[error("The specified message({0:#x}) doesn't exist, possibly because it was already spent")]
     MessageDoesNotExist(Nonce),
     #[error("The input message({0:#x}) doesn't match the relayer message")]
     MessageMismatch(Nonce),

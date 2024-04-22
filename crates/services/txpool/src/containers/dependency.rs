@@ -372,13 +372,6 @@ impl Dependency {
                             {
                                 return Err(Error::NotInsertedIoMessageMismatch)
                             }
-                            // return an error if spent block is set
-                            if db
-                                .is_message_spent(nonce)
-                                .map_err(|e| Error::Database(format!("{:?}", e)))?
-                            {
-                                return Err(Error::NotInsertedInputMessageSpent(*nonce))
-                            }
                         } else {
                             return Err(Error::NotInsertedInputMessageUnknown(*nonce))
                         }

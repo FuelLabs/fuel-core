@@ -53,6 +53,12 @@ impl DatabaseBlocks for Database {
             .transpose()
             .ok_or(not_found!("BlockHeight"))?
     }
+
+    fn latest_genesis_height(&self) -> StorageResult<BlockHeight> {
+        self.genesis_block()?
+            .map(|block| *block.header().height())
+            .ok_or(not_found!("BlockHeight"))
+    }
 }
 
 impl DatabaseMessages for Database {
@@ -64,10 +70,6 @@ impl DatabaseMessages for Database {
         self.all_messages(start_message_id, Some(direction))
             .map(|result| result.map_err(StorageError::from))
             .into_boxed()
-    }
-
-    fn message_is_spent(&self, nonce: &Nonce) -> StorageResult<bool> {
-        self.message_is_spent(nonce)
     }
 
     fn message_exists(&self, nonce: &Nonce) -> StorageResult<bool> {

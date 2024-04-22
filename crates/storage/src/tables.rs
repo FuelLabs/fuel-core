@@ -92,16 +92,6 @@ impl Mappable for Messages {
     type OwnedValue = Message;
 }
 
-/// The storage table that indicates if the message is spent or not.
-pub struct SpentMessages;
-
-impl Mappable for SpentMessages {
-    type Key = Self::OwnedKey;
-    type OwnedKey = Nonce;
-    type Value = Self::OwnedValue;
-    type OwnedValue = ();
-}
-
 /// The storage table of confirmed transactions.
 pub struct Transactions;
 

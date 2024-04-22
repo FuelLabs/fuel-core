@@ -4,9 +4,17 @@ use crate::{
         database_description::DatabaseDescription,
         Database,
     },
-    fuel_core_graphql_api::storage::transactions::{
-        OwnedTransactions,
-        TransactionStatuses,
+    fuel_core_graphql_api::storage::{
+        messages::SpentMessages,
+        transactions::{
+            OwnedTransactions,
+            TransactionStatuses,
+        },
+    },
+    graphql_api::storage::old::{
+        OldFuelBlockConsensus,
+        OldFuelBlocks,
+        OldTransactions,
     },
 };
 use fuel_core_chain_config::{
@@ -21,6 +29,7 @@ use fuel_core_chain_config::{
 use fuel_core_storage::{
     blueprint::BlueprintInspect,
     iter::IterDirection,
+    kv_store::StorageColumn,
     structured_storage::TableWithBlueprint,
     tables::{
         Coins,
@@ -28,7 +37,10 @@ use fuel_core_storage::{
         ContractsLatestUtxo,
         ContractsRawCode,
         ContractsState,
+        FuelBlocks,
         Messages,
+        ProcessedTransactions,
+        SealedBlockConsensus,
         Transactions,
     },
 };
@@ -90,13 +102,20 @@ where
             ContractsLatestUtxo,
             ContractsState,
             ContractsAssets,
-            Transactions
+            FuelBlocks,
+            Transactions,
+            SealedBlockConsensus,
+            ProcessedTransactions
         );
 
         export!(
             |ctx: &Self| ctx.db.off_chain(),
             TransactionStatuses,
-            OwnedTransactions
+            OwnedTransactions,
+            OldFuelBlocks,
+            OldFuelBlockConsensus,
+            OldTransactions,
+            SpentMessages
         );
 
         self.finalize().await?;
@@ -162,7 +181,8 @@ where
 
         let db = db_picker(self).clone();
         let prefix = prefix.map(|p| p.to_vec());
-        let progress_tracker = self.multi_progress.table_reporter::<T>(None);
+        let progress_tracker =
+            self.multi_progress.table_reporter(None, T::column().name());
         self.task_manager.spawn(move |cancel| {
             tokio_rayon::spawn(move || {
                 db.entries::<T>(prefix, IterDirection::Forward)

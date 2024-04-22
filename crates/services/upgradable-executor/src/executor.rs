@@ -109,11 +109,11 @@ impl<S, R> Executor<S, R> {
     /// we need to use a native executor or WASM. If the version is the same as
     /// on the block, native execution is used. If the version is not the same
     /// as in the block, then the WASM executor is used.
-    pub const VERSION: u32 = 0;
+    pub const VERSION: u32 = StateTransitionBytecodeVersion::MIN;
     /// This constant is used along with the `version_check` test.
     /// To avoid automatic bumping during release, the constant uses `-` instead of `.`.
     #[cfg(test)]
-    pub const CRATE_VERSION: &'static str = "0-24-2";
+    pub const CRATE_VERSION: &'static str = "0-25-0";
 
     pub fn new(
         storage_view_provider: S,
