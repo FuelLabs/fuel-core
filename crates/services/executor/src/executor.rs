@@ -413,8 +413,6 @@ where
     }
 
     fn validate_inner(self, block: Block) -> ExecutorResult<UncommittedResult<Changes>> {
-        let pre_exec_block_id = block.id();
-
         let consensus_params_version = block.header().consensus_parameters_version;
         let block_executor = BlockExecutor::new(
             self.relayer,
@@ -426,19 +424,12 @@ where
         let execution_data = block_executor.validate_block(&block)?;
 
         let ExecutionData {
-            coinbase,
-            used_gas,
             tx_status,
             skipped_transactions,
             events,
             changes,
             ..
         } = execution_data;
-
-        debug!(
-            "Block {:#x} fees: {} gas: {}",
-            pre_exec_block_id, coinbase, used_gas
-        );
 
         let result = ExecutionResult {
             block,
