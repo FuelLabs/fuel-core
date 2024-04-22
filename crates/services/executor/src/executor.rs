@@ -759,6 +759,8 @@ where
         }
     }
 
+    const RELAYED_GAS_PRICE: Word = 0;
+
     fn process_relayed_txs(
         &self,
         forced_transactions: Vec<CheckedTransaction>,
@@ -769,8 +771,6 @@ where
         data: &mut ExecutionData,
         coinbase_contract_id: ContractId,
     ) -> ExecutorResult<()> {
-        const RELAYED_GAS_PRICE: Word = 0;
-
         let block_header = partial_block.header;
         let block_height = block_header.height();
         let relayed_tx_iter = forced_transactions.into_iter();
@@ -782,7 +782,7 @@ where
                 thread_block_transaction,
                 data,
                 transaction,
-                RELAYED_GAS_PRICE,
+                Self::RELAYED_GAS_PRICE,
                 coinbase_contract_id,
             ) {
                 Ok(_) => {}
@@ -809,8 +809,6 @@ where
         data: &mut ExecutionData,
         coinbase_contract_id: ContractId,
     ) -> ExecutorResult<()> {
-        const RELAYED_GAS_PRICE: Word = 0;
-
         let block_header = partial_block.header;
         let block_height = block_header.height();
         let relayed_tx_iter = forced_transactions.into_iter();
@@ -822,7 +820,7 @@ where
                 thread_block_transaction,
                 data,
                 transaction,
-                RELAYED_GAS_PRICE,
+                Self::RELAYED_GAS_PRICE,
                 coinbase_contract_id,
             ) {
                 Ok(_) => {}
@@ -1037,25 +1035,9 @@ where
     where
         T: KeyValueInspect<Column = Column>,
     {
-        if execution_data.found_mint {
-            return Err(ExecutorError::MintIsNotLastTransaction)
-        }
-
-        // Throw a clear error if the transaction id is a duplicate
-        if tx_st_transaction
-            .storage::<ProcessedTransactions>()
-            .contains_key(tx_id)?
-        {
-            return Err(ExecutorError::TransactionIdCollision(*tx_id))
-        }
-
-        let block_height = *header.height();
-        let checked_tx = match tx {
-            MaybeCheckedTransaction::Transaction(tx) => tx
-                .into_checked_basic(block_height, &self.consensus_params)?
-                .into(),
-            MaybeCheckedTransaction::CheckedTransaction(checked_tx) => checked_tx,
-        };
+        Self::check_mint_is_not_found(execution_data)?;
+        Self::check_tx_is_not_duplicate(tx_id, tx_st_transaction)?;
+        let checked_tx = self.convert_maybe_checked_tx_to_checked_tx(tx, header)?;
 
         match checked_tx {
             CheckedTransaction::Script(tx) => self.execute_chargeable_transaction(
@@ -1115,25 +1097,9 @@ where
     where
         T: KeyValueInspect<Column = Column>,
     {
-        if execution_data.found_mint {
-            return Err(ExecutorError::MintIsNotLastTransaction)
-        }
-
-        // Throw a clear error if the transaction id is a duplicate
-        if tx_st_transaction
-            .storage::<ProcessedTransactions>()
-            .contains_key(tx_id)?
-        {
-            return Err(ExecutorError::TransactionIdCollision(*tx_id))
-        }
-
-        let block_height = *header.height();
-        let checked_tx = match tx {
-            MaybeCheckedTransaction::Transaction(tx) => tx
-                .into_checked_basic(block_height, &self.consensus_params)?
-                .into(),
-            MaybeCheckedTransaction::CheckedTransaction(checked_tx) => checked_tx,
-        };
+        Self::check_mint_is_not_found(execution_data)?;
+        Self::check_tx_is_not_duplicate(tx_id, tx_st_transaction)?;
+        let checked_tx = self.convert_maybe_checked_tx_to_checked_tx(tx, header)?;
 
         match checked_tx {
             CheckedTransaction::Script(tx) => self.validate_chargeable_transaction(
@@ -1177,6 +1143,44 @@ where
                 tx_st_transaction,
             ),
         }
+    }
+
+    fn check_mint_is_not_found(execution_data: &ExecutionData) -> ExecutorResult<()> {
+        if execution_data.found_mint {
+            return Err(ExecutorError::MintIsNotLastTransaction)
+        }
+        Ok(())
+    }
+
+    fn check_tx_is_not_duplicate<T>(
+        tx_id: &TxId,
+        tx_st_transaction: &StorageTransaction<T>,
+    ) -> ExecutorResult<()>
+    where
+        T: KeyValueInspect<Column = Column>,
+    {
+        if tx_st_transaction
+            .storage::<ProcessedTransactions>()
+            .contains_key(tx_id)?
+        {
+            return Err(ExecutorError::TransactionIdCollision(*tx_id))
+        }
+        Ok(())
+    }
+
+    fn convert_maybe_checked_tx_to_checked_tx(
+        &self,
+        tx: MaybeCheckedTransaction,
+        header: &PartialBlockHeader,
+    ) -> ExecutorResult<CheckedTransaction> {
+        let block_height = *header.height();
+        let checked_tx = match tx {
+            MaybeCheckedTransaction::Transaction(tx) => tx
+                .into_checked_basic(block_height, &self.consensus_params)?
+                .into(),
+            MaybeCheckedTransaction::CheckedTransaction(checked_tx) => checked_tx,
+        };
+        Ok(checked_tx)
     }
 
     #[allow(clippy::too_many_arguments)]
