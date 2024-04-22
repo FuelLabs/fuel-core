@@ -10,6 +10,7 @@ Description of the upcoming release here.
 
 ### Changed
 
+- [#1847](https://github.com/FuelLabs/fuel-core/pull/1847): Simplify the validation interface to use `Block`. Remove `Validation` variant of `ExecutionKind`.
 - [#1837](https://github.com/FuelLabs/fuel-core/pull/1837): Refactor the executor and separate validation from the other use cases
 
 ## [Version 0.25.2]
@@ -20,7 +21,6 @@ Description of the upcoming release here.
 - [1842](https://github.com/FuelLabs/fuel-core/pull/1842): Ignore RUSTSEC-2024-0336: `rustls::ConnectionCommon::complete_io` could fall into an infinite loop based on network
 
 ### Changed
-- [#1847](https://github.com/FuelLabs/fuel-core/pull/1847): Simplify the validation interface to use `Block`
 - [#1837](https://github.com/FuelLabs/fuel-core/pull/1837): Refactor the executor and separate validation from the other use cases
 
 ## [Version 0.25.1]
