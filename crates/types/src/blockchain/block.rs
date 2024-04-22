@@ -33,6 +33,8 @@ use crate::{
 pub enum Block<TransactionRepresentation = Transaction> {
     /// V1 Block
     V1(BlockV1<TransactionRepresentation>),
+    /// VUnknown
+    VUnknown(BlockV1<TransactionRepresentation>),
 }
 
 #[cfg(any(test, feature = "test-helpers"))]
@@ -125,6 +127,18 @@ impl Block<Transaction> {
                 };
                 Block::V1(new_inner)
             }
+            Block::VUnknown(inner) => {
+                let transactions = inner
+                    .transactions
+                    .iter()
+                    .map(|tx| tx.id(chain_id))
+                    .collect();
+                let new_inner = BlockV1 {
+                    header: inner.header.clone(),
+                    transactions,
+                };
+                Block::VUnknown(new_inner)
+            }
         }
     }
 }
@@ -134,6 +148,10 @@ impl<T> Block<T> {
     pub fn into_inner(self) -> (BlockHeader, Vec<T>) {
         match self {
             Block::V1(BlockV1 {
+                header,
+                transactions,
+            }) => (header, transactions),
+            Block::VUnknown(BlockV1 {
                 header,
                 transactions,
             }) => (header, transactions),
@@ -148,6 +166,10 @@ impl CompressedBlock {
         //  txs match the expected ones in the block?
         match self {
             Block::V1(inner) => Block::V1(BlockV1 {
+                header: inner.header,
+                transactions,
+            }),
+            Block::VUnknown(inner) => Block::VUnknown(BlockV1 {
                 header: inner.header,
                 transactions,
             }),
@@ -171,6 +193,7 @@ impl<TransactionRepresentation> Block<TransactionRepresentation> {
     pub fn transactions(&self) -> &[TransactionRepresentation] {
         match self {
             Block::V1(inner) => &inner.transactions,
+            Block::VUnknown(inner) => &inner.transactions,
         }
     }
 
@@ -178,6 +201,7 @@ impl<TransactionRepresentation> Block<TransactionRepresentation> {
     pub fn header(&self) -> &BlockHeader {
         match self {
             Block::V1(inner) => &inner.header,
+            Block::VUnknown(inner) => &inner.header,
         }
     }
 
@@ -191,6 +215,7 @@ impl<TransactionRepresentation> Block<TransactionRepresentation> {
     pub fn transactions_mut(&mut self) -> &mut Vec<TransactionRepresentation> {
         match self {
             Block::V1(inner) => &mut inner.transactions,
+            Block::VUnknown(inner) => &mut inner.transactions,
         }
     }
 
@@ -199,6 +224,7 @@ impl<TransactionRepresentation> Block<TransactionRepresentation> {
     pub fn header_mut(&mut self) -> &mut BlockHeader {
         match self {
             Block::V1(inner) => &mut inner.header,
+            Block::VUnknown(inner) => &mut inner.header,
         }
     }
 }
@@ -237,6 +263,43 @@ impl From<Block> for PartialFuelBlock {
     fn from(block: Block) -> Self {
         match block {
             Block::V1(BlockV1 {
+                header:
+                    BlockHeader::V1(BlockHeaderV1 {
+                        application:
+                            ApplicationHeader {
+                                da_height,
+                                consensus_parameters_version,
+                                state_transition_bytecode_version,
+                                ..
+                            },
+                        consensus:
+                            ConsensusHeader {
+                                prev_root,
+                                height,
+                                time,
+                                ..
+                            },
+                        ..
+                    }),
+                transactions,
+            }) => Self {
+                header: PartialBlockHeader {
+                    application: ApplicationHeader {
+                        da_height,
+                        consensus_parameters_version,
+                        state_transition_bytecode_version,
+                        generated: Empty {},
+                    },
+                    consensus: ConsensusHeader {
+                        prev_root,
+                        height,
+                        time,
+                        generated: Empty {},
+                    },
+                },
+                transactions,
+            },
+            Block::VUnknown(BlockV1 {
                 header:
                     BlockHeader::V1(BlockHeaderV1 {
                         application:

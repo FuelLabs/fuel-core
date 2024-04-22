@@ -29,7 +29,10 @@ use fuel_core_storage::{
 };
 use fuel_core_types::{
     blockchain::{
-        block::CompressedBlock,
+        block::{
+            BlockV1,
+            CompressedBlock,
+        },
         consensus::Consensus,
     },
     fuel_tx::*,
@@ -107,6 +110,34 @@ async fn block_by_height_returns_genesis_block() {
         block.consensus,
         fuel_core_client::client::types::Consensus::Genesis(_)
     ));
+}
+
+#[tokio::test]
+async fn block_by_height_returns_block_with_expected_values() {
+    let mut block = CompressedBlock::VUnknown(BlockV1::default());
+    let height = 1.into();
+    block.header_mut().set_block_height(height);
+    let mut db = Database::default();
+    let srv = FuelService::from_database(db.clone(), Config::local_node())
+        .await
+        .unwrap();
+    let client = FuelClient::from(srv.bound_address);
+
+    let mut transaction = db.write_transaction();
+    transaction
+        .storage::<FuelBlocks>()
+        .insert(&height, &block)
+        .unwrap();
+    transaction
+        .storage::<SealedBlockConsensus>()
+        .insert(&height, &Consensus::PoA(Default::default()))
+        .unwrap();
+    transaction.commit().unwrap();
+
+    client
+        .block_by_height(height)
+        .await
+        .expect_err("Block version expected to be invalid");
 }
 
 #[tokio::test]
