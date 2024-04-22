@@ -8,18 +8,12 @@ query($after: String, $before: String, $first: Int, $last: Int) {
       cursor
       node {
         version {
-          __typename
-          ... on Version {
-            value
-          }
+          value
         }
         id
         header {
           version {
-            __typename
-            ... on Version {
-              value
-            }
+            value
           }
           id
           daHeight
