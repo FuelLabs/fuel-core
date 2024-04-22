@@ -1430,26 +1430,7 @@ where
         let max_fee = checked_tx.transaction().max_fee_limit();
 
         if self.options.utxo_validation {
-            checked_tx = checked_tx
-                .check_predicates(&CheckPredicateParams::from(&self.consensus_params))
-                .map_err(|e| {
-                    ExecutorError::TransactionValidity(
-                        TransactionValidityError::Validation(e),
-                    )
-                })?;
-            debug_assert!(checked_tx.checks().contains(Checks::Predicates));
-
-            // validate utxos exist and maturity is properly set
-            self.verify_input_state(
-                tx_st_transaction,
-                checked_tx.transaction().inputs(),
-                header.da_height,
-            )?;
-            // validate transaction signature
-            checked_tx = checked_tx
-                .check_signatures(&self.consensus_params.chain_id())
-                .map_err(TransactionValidityError::from)?;
-            debug_assert!(checked_tx.checks().contains(Checks::Signatures));
+            checked_tx = self.validate_utxos(checked_tx, header, tx_st_transaction)?;
         }
 
         // execute transaction
@@ -1494,39 +1475,7 @@ where
             debug_assert_eq!(tx.id(&self.consensus_params.chain_id()), tx_id);
         }
 
-        for (original_input, produced_input) in checked_tx
-            .transaction()
-            .inputs()
-            .iter()
-            .zip(tx.inputs_mut())
-        {
-            let predicate_gas_used = original_input.predicate_gas_used();
-
-            if let Some(gas_used) = predicate_gas_used {
-                match produced_input {
-                    Input::CoinPredicate(CoinPredicate {
-                        predicate_gas_used, ..
-                    })
-                    | Input::MessageCoinPredicate(MessageCoinPredicate {
-                        predicate_gas_used,
-                        ..
-                    })
-                    | Input::MessageDataPredicate(MessageDataPredicate {
-                        predicate_gas_used,
-                        ..
-                    }) => {
-                        *predicate_gas_used = gas_used;
-                    }
-                    _ => {
-                        debug_assert!(false, "This error is not possible unless VM changes the order of inputs, \
-                        or we added a new predicate inputs.");
-                        return Err(ExecutorError::InvalidTransactionOutcome {
-                            transaction_id: tx_id,
-                        })
-                    }
-                }
-            }
-        }
+        Self::update_input_used_gas(&mut checked_tx, tx_id, &mut tx)?;
 
         // We always need to update inputs with storage state before execution,
         // because VM zeroes malleable fields during the execution.
@@ -1612,6 +1561,84 @@ where
         Ok(final_tx)
     }
 
+    fn update_input_used_gas<Tx>(
+        checked_tx: &mut Checked<Tx>,
+        tx_id: TxId,
+        tx: &mut Tx,
+    ) -> ExecutorResult<()>
+    where
+        Tx: ExecutableTransaction + PartialEq + Cacheable + Send + Sync + 'static,
+    {
+        for (original_input, produced_input) in checked_tx
+            .transaction()
+            .inputs()
+            .iter()
+            .zip(tx.inputs_mut())
+        {
+            let predicate_gas_used = original_input.predicate_gas_used();
+
+            if let Some(gas_used) = predicate_gas_used {
+                match produced_input {
+                    Input::CoinPredicate(CoinPredicate {
+                        predicate_gas_used, ..
+                    })
+                    | Input::MessageCoinPredicate(MessageCoinPredicate {
+                        predicate_gas_used,
+                        ..
+                    })
+                    | Input::MessageDataPredicate(MessageDataPredicate {
+                        predicate_gas_used,
+                        ..
+                    }) => {
+                        *predicate_gas_used = gas_used;
+                    }
+                    _ => {
+                        debug_assert!(false, "This error is not possible unless VM changes the order of inputs, \
+                        or we added a new predicate inputs.");
+                        return Err(ExecutorError::InvalidTransactionOutcome {
+                            transaction_id: tx_id,
+                        })
+                    }
+                }
+            }
+        }
+        Ok(())
+    }
+
+    fn validate_utxos<Tx, T>(
+        &self,
+        mut checked_tx: Checked<Tx>,
+        header: &PartialBlockHeader,
+        tx_st_transaction: &mut StorageTransaction<T>,
+    ) -> ExecutorResult<Checked<Tx>>
+    where
+        Tx: ExecutableTransaction + PartialEq + Cacheable + Send + Sync + 'static,
+        <Tx as IntoChecked>::Metadata: CheckedMetadata,
+        T: KeyValueInspect<Column = Column>,
+    {
+        checked_tx = checked_tx
+            .check_predicates(&CheckPredicateParams::from(&self.consensus_params))
+            .map_err(|e| {
+                ExecutorError::TransactionValidity(TransactionValidityError::Validation(
+                    e,
+                ))
+            })?;
+        debug_assert!(checked_tx.checks().contains(Checks::Predicates));
+
+        // validate utxos exist and maturity is properly set
+        self.verify_input_state(
+            tx_st_transaction,
+            checked_tx.transaction().inputs(),
+            header.da_height,
+        )?;
+        // validate transaction signature
+        checked_tx = checked_tx
+            .check_signatures(&self.consensus_params.chain_id())
+            .map_err(TransactionValidityError::from)?;
+        debug_assert!(checked_tx.checks().contains(Checks::Signatures));
+        Ok(checked_tx)
+    }
+
     #[allow(clippy::too_many_arguments)]
     fn validate_chargeable_transaction<Tx, T>(
         &self,
@@ -1632,26 +1659,7 @@ where
         let max_fee = checked_tx.transaction().max_fee_limit();
 
         if self.options.utxo_validation {
-            checked_tx = checked_tx
-                .check_predicates(&CheckPredicateParams::from(&self.consensus_params))
-                .map_err(|e| {
-                    ExecutorError::TransactionValidity(
-                        TransactionValidityError::Validation(e),
-                    )
-                })?;
-            debug_assert!(checked_tx.checks().contains(Checks::Predicates));
-
-            // validate utxos exist and maturity is properly set
-            self.verify_input_state(
-                tx_st_transaction,
-                checked_tx.transaction().inputs(),
-                header.da_height,
-            )?;
-            // validate transaction signature
-            checked_tx = checked_tx
-                .check_signatures(&self.consensus_params.chain_id())
-                .map_err(TransactionValidityError::from)?;
-            debug_assert!(checked_tx.checks().contains(Checks::Signatures));
+            checked_tx = self.validate_utxos(checked_tx, header, tx_st_transaction)?;
         }
 
         self.validate_inputs_state(
@@ -1702,39 +1710,7 @@ where
             debug_assert_eq!(tx.id(&self.consensus_params.chain_id()), tx_id);
         }
 
-        for (original_input, produced_input) in checked_tx
-            .transaction()
-            .inputs()
-            .iter()
-            .zip(tx.inputs_mut())
-        {
-            let predicate_gas_used = original_input.predicate_gas_used();
-
-            if let Some(gas_used) = predicate_gas_used {
-                match produced_input {
-                    Input::CoinPredicate(CoinPredicate {
-                        predicate_gas_used, ..
-                    })
-                    | Input::MessageCoinPredicate(MessageCoinPredicate {
-                        predicate_gas_used,
-                        ..
-                    })
-                    | Input::MessageDataPredicate(MessageDataPredicate {
-                        predicate_gas_used,
-                        ..
-                    }) => {
-                        *predicate_gas_used = gas_used;
-                    }
-                    _ => {
-                        debug_assert!(false, "This error is not possible unless VM changes the order of inputs, \
-                        or we added a new predicate inputs.");
-                        return Err(ExecutorError::InvalidTransactionOutcome {
-                            transaction_id: tx_id,
-                        })
-                    }
-                }
-            }
-        }
+        Self::update_input_used_gas(&mut checked_tx, tx_id, &mut tx)?;
 
         // We always need to update inputs with storage state before execution,
         // because VM zeroes malleable fields during the execution.
