@@ -854,7 +854,7 @@ where
         data: &mut ExecutionData,
     ) -> ExecutorResult<Vec<CheckedTransaction>> {
         let forced_transactions = if self.relayer.enabled() {
-            self.process_da(&block_header, data)?
+            self.process_da(block_header, data)?
         } else {
             Vec::with_capacity(0)
         };
