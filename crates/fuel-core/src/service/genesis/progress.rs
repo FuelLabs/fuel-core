@@ -1,7 +1,4 @@
-use std::{
-    borrow::Cow,
-    io::IsTerminal,
-};
+use std::io::IsTerminal;
 
 use fuel_core_storage::{
     kv_store::StorageColumn,

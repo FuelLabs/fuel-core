@@ -29,7 +29,6 @@ use fuel_core_chain_config::{
 use fuel_core_storage::{
     blueprint::BlueprintInspect,
     iter::IterDirection,
-    kv_store::StorageColumn,
     structured_storage::TableWithBlueprint,
     tables::{
         Coins,

@@ -6,19 +6,11 @@ use super::{
 };
 mod import_task;
 mod logic;
-mod on_chain;
 
 use crate::{
     combined_database::CombinedDatabase,
-    database::database_description::{
-        off_chain::OffChain,
-        on_chain::OnChain,
-    },
     fuel_core_graphql_api::storage::messages::SpentMessages,
     graphql_api::storage::{
-        coins::OwnedCoins,
-        contracts::ContractsInfo,
-        messages::OwnedMessageIds,
         old::{
             OldFuelBlockConsensus,
             OldFuelBlocks,
