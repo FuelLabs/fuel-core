@@ -5,18 +5,12 @@ expression: operation.query
 query($height: U32) {
   block(height: $height) {
     version {
-      __typename
-      ... on Version {
-        value
-      }
+      value
     }
     id
     header {
       version {
-        __typename
-        ... on Version {
-          value
-        }
+        value
       }
       id
       daHeight

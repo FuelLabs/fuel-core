@@ -8,18 +8,12 @@ query {
     name
     latestBlock {
       version {
-        __typename
-        ... on Version {
-          value
-        }
+        value
       }
       id
       header {
         version {
-          __typename
-          ... on Version {
-            value
-          }
+          value
         }
         id
         daHeight
