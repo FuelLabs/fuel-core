@@ -103,25 +103,7 @@ fn execute_dry_run(
     block: Components<WasmTxSource>,
 ) -> ExecutorResult<Uncommitted<ExecutionResult, Changes>> {
     let block = ExecutionBlockWithSource::DryRun(block);
-    let (
-        ExecutionResult {
-            block,
-            skipped_transactions,
-            tx_status,
-            events,
-        },
-        changes,
-    ) = instance.execute_without_commit(block)?.into();
-
-    Ok(Uncommitted::new(
-        ExecutionResult {
-            block,
-            skipped_transactions,
-            tx_status,
-            events,
-        },
-        changes,
-    ))
+    instance.execute_without_commit(block)
 }
 
 fn execute_production(
@@ -129,25 +111,7 @@ fn execute_production(
     block: Components<WasmTxSource>,
 ) -> ExecutorResult<Uncommitted<ExecutionResult, Changes>> {
     let block = ExecutionBlockWithSource::Production(block);
-    let (
-        ExecutionResult {
-            block,
-            skipped_transactions,
-            tx_status,
-            events,
-        },
-        changes,
-    ) = instance.execute_without_commit(block)?.into();
-
-    Ok(Uncommitted::new(
-        ExecutionResult {
-            block,
-            skipped_transactions,
-            tx_status,
-            events,
-        },
-        changes,
-    ))
+    instance.execute_without_commit(block)
 }
 
 fn execute_validation(

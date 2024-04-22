@@ -305,17 +305,6 @@ pub enum ExecutionKind {
     Validation,
 }
 
-impl ExecutionKind {
-    /// Wrap a type in this execution kind.
-    pub fn wrap<T>(self, t: T) -> ExecutionType<T> {
-        match self {
-            ExecutionKind::DryRun => ExecutionTypes::DryRun(t),
-            ExecutionKind::Production => ExecutionTypes::Production(t),
-            ExecutionKind::Validation => todo!("remove this variant"),
-        }
-    }
-}
-
 #[allow(missing_docs)]
 #[derive(Debug, Clone, PartialEq, derive_more::Display, derive_more::From)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]

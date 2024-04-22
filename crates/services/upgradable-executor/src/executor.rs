@@ -116,7 +116,7 @@ impl<S, R> Executor<S, R> {
     /// This constant is used along with the `version_check` test.
     /// To avoid automatic bumping during release, the constant uses `-` instead of `.`.
     #[cfg(test)]
-    pub const CRATE_VERSION: &'static str = "0-25-1";
+    pub const CRATE_VERSION: &'static str = "0-25-2";
 
     pub fn new(
         storage_view_provider: S,
@@ -209,9 +209,9 @@ where
     /// Executes the block and commits the result of the execution into the inner `Database`.
     pub fn validate_and_commit(
         &mut self,
-        _block: Block,
+        block: Block,
     ) -> fuel_core_types::services::executor::Result<ExecutionResult> {
-        let (result, changes) = self.validate_without_commit(_block)?.into();
+        let (result, changes) = self.validate_without_commit(block)?.into();
 
         self.storage_view_provider.commit_changes(changes)?;
         Ok(result)
