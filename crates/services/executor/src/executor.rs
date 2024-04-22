@@ -124,6 +124,7 @@ use fuel_core_types::{
         state::StateTransition,
         Backtrace as FuelBacktrace,
         Interpreter,
+        ProgramState,
     },
     services::{
         block_producer::Components,
@@ -1523,6 +1524,28 @@ where
             .insert(&tx_id, &())?;
 
         // Update `execution_data` data only after all steps.
+        Self::update_execution_data(
+            execution_data,
+            receipts,
+            used_gas,
+            tx_fee,
+            reverted,
+            state,
+            tx_id,
+        )?;
+
+        Ok(final_tx)
+    }
+
+    fn update_execution_data(
+        execution_data: &mut ExecutionData,
+        receipts: Vec<Receipt>,
+        used_gas: Word,
+        tx_fee: Word,
+        reverted: bool,
+        state: ProgramState,
+        tx_id: TxId,
+    ) -> ExecutorResult<()> {
         execution_data.coinbase = execution_data
             .coinbase
             .checked_add(tx_fee)
@@ -1534,7 +1557,6 @@ where
         execution_data
             .message_ids
             .extend(receipts.iter().filter_map(|r| r.message_id()));
-
         let status = if reverted {
             TransactionExecutionResult::Failed {
                 result: Some(state),
@@ -1557,8 +1579,7 @@ where
             id: tx_id,
             result: status,
         });
-
-        Ok(final_tx)
+        Ok(())
     }
 
     fn update_input_used_gas<Tx>(
@@ -1765,40 +1786,15 @@ where
             .insert(&tx_id, &())?;
 
         // Update `execution_data` data only after all steps.
-        execution_data.coinbase = execution_data
-            .coinbase
-            .checked_add(tx_fee)
-            .ok_or(ExecutorError::FeeOverflow)?;
-        execution_data.used_gas = execution_data
-            .used_gas
-            .checked_add(used_gas)
-            .ok_or(ExecutorError::GasOverflow)?;
-        execution_data
-            .message_ids
-            .extend(receipts.iter().filter_map(|r| r.message_id()));
-
-        let status = if reverted {
-            TransactionExecutionResult::Failed {
-                result: Some(state),
-                receipts,
-                total_gas: used_gas,
-                total_fee: tx_fee,
-            }
-        } else {
-            // else tx was a success
-            TransactionExecutionResult::Success {
-                result: Some(state),
-                receipts,
-                total_gas: used_gas,
-                total_fee: tx_fee,
-            }
-        };
-
-        // queue up status for this tx to be stored once block id is finalized.
-        execution_data.tx_status.push(TransactionExecutionStatus {
-            id: tx_id,
-            result: status,
-        });
+        Self::update_execution_data(
+            execution_data,
+            receipts,
+            used_gas,
+            tx_fee,
+            reverted,
+            state,
+            tx_id,
+        )?;
 
         Ok(final_tx)
     }
