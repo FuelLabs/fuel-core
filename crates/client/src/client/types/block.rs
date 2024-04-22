@@ -152,6 +152,13 @@ impl TryFrom<schema::block::Block> for Block {
                     block_producer,
                 })
             }
+            2 => Ok(Self {
+                id: BlockId::from([123u8; 32]),
+                header: value.header.try_into()?,
+                consensus: Consensus::Unknown,
+                transactions: vec![],
+                block_producer: None,
+            }),
             _ => Err(ConversionError::UnknownVariant("BlockVersion")),
         }
     }

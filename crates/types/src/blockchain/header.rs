@@ -164,7 +164,8 @@ pub type StateTransitionBytecodeVersion = u32;
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[cfg_attr(any(test, feature = "test-helpers"), derive(Default))]
+// #[cfg_attr(any(test, feature = "test-helpers"), derive(Default))]
+#[derive(Default)]
 /// The fuel block application header.
 /// Contains everything except consensus related data.
 pub struct ApplicationHeader<Generated> {
@@ -185,7 +186,8 @@ pub struct ApplicationHeader<Generated> {
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[cfg_attr(any(test, feature = "test-helpers"), derive(Default))]
+// #[cfg_attr(any(test, feature = "test-helpers"), derive(Default))]
+#[derive(Default)]
 /// Concrete generated application header fields.
 /// These are generated once the full block has been run.
 pub struct GeneratedApplicationFields {
@@ -219,7 +221,8 @@ pub struct ConsensusHeader<Generated> {
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[cfg_attr(any(test, feature = "test-helpers"), derive(Default))]
+// #[cfg_attr(any(test, feature = "test-helpers"), derive(Default))]
+#[derive(Default)]
 /// Concrete generated consensus header fields.
 /// These are generated once the full block has been run.
 pub struct GeneratedConsensusFields {
@@ -235,7 +238,7 @@ pub struct BlockHeaderMetadata {
     id: BlockId,
 }
 
-#[cfg(any(test, feature = "test-helpers"))]
+// #[cfg(any(test, feature = "test-helpers"))]
 impl Default for BlockHeader {
     fn default() -> Self {
         let mut default: BlockHeader = BlockHeaderV1 {
@@ -459,7 +462,7 @@ impl ConsensusHeader<GeneratedConsensusFields> {
     }
 }
 
-#[cfg(any(test, feature = "test-helpers"))]
+// #[cfg(any(test, feature = "test-helpers"))]
 impl<T> Default for ConsensusHeader<T>
 where
     T: Default,

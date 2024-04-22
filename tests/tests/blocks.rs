@@ -14,7 +14,10 @@ use fuel_core_client::client::{
         PageDirection,
         PaginationRequest,
     },
-    types::TransactionStatus,
+    types::{
+        primitives::BlockId,
+        TransactionStatus,
+    },
     FuelClient,
 };
 use fuel_core_poa::Trigger;
@@ -34,6 +37,7 @@ use fuel_core_types::{
             CompressedBlock,
         },
         consensus::Consensus,
+        header::BlockHeader,
     },
     fuel_tx::*,
     secrecy::ExposeSecret,
@@ -114,6 +118,36 @@ async fn block_by_height_returns_genesis_block() {
 
 #[tokio::test]
 async fn block_by_height_returns_block_with_expected_values() {
+    let mut block = CompressedBlock::V2((BlockHeader::default(), vec![]));
+    let height = 1.into();
+    block.header_mut().set_block_height(height);
+    let mut db = Database::default();
+    let srv = FuelService::from_database(db.clone(), Config::local_node())
+        .await
+        .unwrap();
+    let client = FuelClient::from(srv.bound_address);
+
+    let mut transaction = db.write_transaction();
+    transaction
+        .storage::<FuelBlocks>()
+        .insert(&height, &block)
+        .unwrap();
+    transaction
+        .storage::<SealedBlockConsensus>()
+        .insert(&height, &Consensus::PoA(Default::default()))
+        .unwrap();
+    transaction.commit().unwrap();
+
+    let b = client
+        .block_by_height(height)
+        .await
+        .expect("Unable to get block")
+        .expect("Expected block");
+    assert_eq!(b.id, BlockId::from([123u8; 32]));
+}
+
+#[tokio::test]
+async fn block_by_height_returns_err_unknown_version() {
     let mut block = CompressedBlock::VUnknown(BlockV1::default());
     let height = 1.into();
     block.header_mut().set_block_height(height);

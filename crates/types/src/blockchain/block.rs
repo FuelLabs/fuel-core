@@ -33,6 +33,8 @@ use crate::{
 pub enum Block<TransactionRepresentation = Transaction> {
     /// V1 Block
     V1(BlockV1<TransactionRepresentation>),
+    /// V2 Block
+    V2((BlockHeader, Vec<TransactionRepresentation>)),
     /// VUnknown
     VUnknown(BlockV1<TransactionRepresentation>),
 }
@@ -127,6 +129,10 @@ impl Block<Transaction> {
                 };
                 Block::V1(new_inner)
             }
+            Block::V2((header, txs)) => {
+                let txs = txs.iter().map(|tx| tx.id(chain_id)).collect();
+                Block::V2((header.clone(), txs))
+            }
             Block::VUnknown(inner) => {
                 let transactions = inner
                     .transactions
@@ -151,6 +157,7 @@ impl<T> Block<T> {
                 header,
                 transactions,
             }) => (header, transactions),
+            Block::V2((header, txs)) => (header, txs),
             Block::VUnknown(BlockV1 {
                 header,
                 transactions,
@@ -169,6 +176,7 @@ impl CompressedBlock {
                 header: inner.header,
                 transactions,
             }),
+            Block::V2((header, _txs)) => Block::V2((header, transactions)),
             Block::VUnknown(inner) => Block::VUnknown(BlockV1 {
                 header: inner.header,
                 transactions,
@@ -193,6 +201,7 @@ impl<TransactionRepresentation> Block<TransactionRepresentation> {
     pub fn transactions(&self) -> &[TransactionRepresentation] {
         match self {
             Block::V1(inner) => &inner.transactions,
+            Block::V2(_) => &[],
             Block::VUnknown(inner) => &inner.transactions,
         }
     }
@@ -201,6 +210,7 @@ impl<TransactionRepresentation> Block<TransactionRepresentation> {
     pub fn header(&self) -> &BlockHeader {
         match self {
             Block::V1(inner) => &inner.header,
+            Block::V2((header, _)) => header,
             Block::VUnknown(inner) => &inner.header,
         }
     }
@@ -215,6 +225,7 @@ impl<TransactionRepresentation> Block<TransactionRepresentation> {
     pub fn transactions_mut(&mut self) -> &mut Vec<TransactionRepresentation> {
         match self {
             Block::V1(inner) => &mut inner.transactions,
+            Block::V2((_, txs)) => txs,
             Block::VUnknown(inner) => &mut inner.transactions,
         }
     }
@@ -224,6 +235,7 @@ impl<TransactionRepresentation> Block<TransactionRepresentation> {
     pub fn header_mut(&mut self) -> &mut BlockHeader {
         match self {
             Block::V1(inner) => &mut inner.header,
+            Block::V2((header, _)) => header,
             Block::VUnknown(inner) => &mut inner.header,
         }
     }
@@ -298,6 +310,13 @@ impl From<Block> for PartialFuelBlock {
                     },
                 },
                 transactions,
+            },
+            Block::V2((_header, txs)) => Self {
+                header: PartialBlockHeader {
+                    application: Default::default(),
+                    consensus: Default::default(),
+                },
+                transactions: txs,
             },
             Block::VUnknown(BlockV1 {
                 header:
