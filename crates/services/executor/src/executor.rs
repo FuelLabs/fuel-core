@@ -148,10 +148,7 @@ use fuel_core_types::{
 };
 use parking_lot::Mutex as ParkingMutex;
 use std::borrow::Cow;
-use tracing::{
-    debug,
-    warn,
-};
+use tracing::warn;
 
 pub type ExecutionBlockWithSource<TxSource> = ExecutionTypes<Components<TxSource>>;
 
@@ -319,9 +316,6 @@ where
     where
         TxSource: TransactionsSource,
     {
-        // Compute the block id before execution if there is one.
-        let pre_exec_block_id = block.id();
-
         let (block, execution_data) = match block {
             ExecutionTypes::DryRun(component) => {
                 let mut block =
@@ -370,8 +364,6 @@ where
         };
 
         let ExecutionData {
-            coinbase,
-            used_gas,
             message_ids,
             tx_status,
             skipped_transactions,
@@ -384,23 +376,6 @@ where
         // Now that the transactions have been executed, generate the full header.
 
         let block = block.generate(&message_ids[..], event_inbox_root);
-
-        let finalized_block_id = block.id();
-
-        debug!(
-            "Block {:#x} fees: {} gas: {}",
-            pre_exec_block_id.unwrap_or(finalized_block_id),
-            coinbase,
-            used_gas
-        );
-
-        // check if block id doesn't match proposed block id
-        if let Some(pre_exec_block_id) = pre_exec_block_id {
-            // The block id comparison compares the whole blocks including all fields.
-            if pre_exec_block_id != finalized_block_id {
-                return Err(ExecutorError::InvalidBlockId)
-            }
-        }
 
         let result = ExecutionResult {
             block,
@@ -614,9 +589,7 @@ where
         Ok(data)
     }
 
-    fn execute_transaction_and_commit<
-        W: KeyValueInspect<Column = Column> + Modifiable,
-    >(
+    fn execute_transaction_and_commit<W>(
         &self,
         block: &mut PartialFuelBlock,
         thread_block_transaction: &mut W,
@@ -624,7 +597,10 @@ where
         tx: MaybeCheckedTransaction,
         gas_price: Word,
         coinbase_contract_id: ContractId,
-    ) -> ExecutorResult<()> {
+    ) -> ExecutorResult<()>
+    where
+        W: KeyValueInspect<Column = Column> + Modifiable,
+    {
         let tx_count = execution_data.tx_count;
         let tx = {
             let mut tx_st_transaction = thread_block_transaction
@@ -652,9 +628,7 @@ where
         Ok(())
     }
 
-    fn validate_transaction_and_commit<
-        W: KeyValueInspect<Column = Column> + Modifiable,
-    >(
+    fn validate_transaction_and_commit<W>(
         &self,
         block: &mut PartialFuelBlock,
         thread_block_transaction: &mut W,
@@ -662,7 +636,10 @@ where
         tx: MaybeCheckedTransaction,
         gas_price: Word,
         coinbase_contract_id: ContractId,
-    ) -> ExecutorResult<()> {
+    ) -> ExecutorResult<()>
+    where
+        W: KeyValueInspect<Column = Column> + Modifiable,
+    {
         let tx_count = execution_data.tx_count;
         let tx = {
             let mut tx_st_transaction = thread_block_transaction
@@ -1461,14 +1438,12 @@ where
         }
 
         let (reverted, state, mut tx, receipts) = self.attempt_tx_execution_with_vm(
-            &mut checked_tx,
+            &checked_tx,
             &header,
             coinbase_contract_id,
             gas_price,
             tx_st_transaction,
         )?;
-
-        let (used_gas, tx_fee) = self.total_fee_paid(&tx, &receipts, gas_price)?;
 
         self.spend_input_utxos(tx.inputs(), tx_st_transaction, reverted, execution_data)?;
 
@@ -1487,11 +1462,11 @@ where
             .storage::<ProcessedTransactions>()
             .insert(&tx_id, &())?;
 
-        Self::update_execution_data(
+        self.update_execution_data(
+            &tx,
             execution_data,
             receipts,
-            used_gas,
-            tx_fee,
+            gas_price,
             reverted,
             state,
             tx_id,
@@ -1528,14 +1503,12 @@ where
         )?;
 
         let (reverted, state, mut tx, receipts) = self.attempt_tx_execution_with_vm(
-            &mut checked_tx,
+            &checked_tx,
             &header,
             coinbase_contract_id,
             gas_price,
             tx_st_transaction,
         )?;
-
-        let (used_gas, tx_fee) = self.total_fee_paid(&tx, &receipts, gas_price)?;
 
         self.spend_input_utxos(tx.inputs(), tx_st_transaction, reverted, execution_data)?;
 
@@ -1556,11 +1529,11 @@ where
             .storage::<ProcessedTransactions>()
             .insert(&tx_id, &())?;
 
-        Self::update_execution_data(
+        self.update_execution_data(
+            &tx,
             execution_data,
             receipts,
-            used_gas,
-            tx_fee,
+            gas_price,
             reverted,
             state,
             tx_id,
@@ -1603,15 +1576,18 @@ where
         Ok(())
     }
 
-    fn update_execution_data(
+    #[allow(clippy::too_many_arguments)]
+    fn update_execution_data<Tx: Chargeable>(
+        &self,
+        tx: &Tx,
         execution_data: &mut ExecutionData,
         receipts: Vec<Receipt>,
-        used_gas: Word,
-        tx_fee: Word,
+        gas_price: Word,
         reverted: bool,
         state: ProgramState,
         tx_id: TxId,
     ) -> ExecutorResult<()> {
+        let (used_gas, tx_fee) = self.total_fee_paid(tx, &receipts, gas_price)?;
         execution_data.coinbase = execution_data
             .coinbase
             .checked_add(tx_fee)
@@ -1649,7 +1625,7 @@ where
     }
 
     fn update_input_used_gas<Tx>(
-        checked_tx: &mut Checked<Tx>,
+        checked_tx: &Checked<Tx>,
         tx_id: TxId,
         tx: &mut Tx,
     ) -> ExecutorResult<()>
@@ -1699,7 +1675,7 @@ where
         tx_st_transaction: &mut StorageTransaction<T>,
     ) -> ExecutorResult<Checked<Tx>>
     where
-        Tx: ExecutableTransaction + PartialEq + Cacheable + Send + Sync + 'static,
+        Tx: ExecutableTransaction + Send + Sync + 'static,
         <Tx as IntoChecked>::Metadata: CheckedMetadata,
         T: KeyValueInspect<Column = Column>,
     {
@@ -1728,7 +1704,7 @@ where
 
     fn attempt_tx_execution_with_vm<Tx, T>(
         &self,
-        checked_tx: &mut Checked<Tx>,
+        checked_tx: &Checked<Tx>,
         header: &&PartialBlockHeader,
         coinbase_contract_id: ContractId,
         gas_price: Word,
