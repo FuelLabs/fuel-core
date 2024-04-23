@@ -142,6 +142,9 @@ impl SnapshotImporter {
         let groups = self.snapshot_reader.read::<TableBeingWritten>()?;
         let num_groups = groups.len();
 
+        // Even though genesis is expected to last orders of magnitude longer than an empty task
+        // might take to execute, this optimization is placed regardless to speed up
+        // unit/integration tests that will feel the impact more than actual regenesis.
         if num_groups == 0 {
             return Ok(());
         }
@@ -185,6 +188,13 @@ impl SnapshotImporter {
     {
         let groups = self.snapshot_reader.read::<TableInSnapshot>()?;
         let num_groups = groups.len();
+
+        // Even though genesis is expected to last orders of magnitude longer than an empty task
+        // might take to execute, this optimization is placed regardless to speed up
+        // unit/integration tests that will feel the impact more than actual regenesis.
+        if num_groups == 0 {
+            return Ok(());
+        }
 
         let block_height = *self.genesis_block.header().height();
         let da_block_height = self.genesis_block.header().da_height;
