@@ -1434,60 +1434,14 @@ where
             checked_tx = self.validate_utxos(checked_tx, header, tx_st_transaction)?;
         }
 
-        // execute transaction
-        // setup database view that only lives for the duration of vm execution
-        let mut sub_block_db_commit = tx_st_transaction
-            .read_transaction()
-            .with_policy(ConflictPolicy::Overwrite);
-
-        // execution vm
-        let vm_db = VmStorage::new(
-            &mut sub_block_db_commit,
-            &header.consensus,
-            &header.application,
+        let (reverted, state, mut tx, receipts) = self.execute_tx_with_vm(
+            &mut checked_tx,
+            &header,
             coinbase_contract_id,
-        );
-
-        let mut vm = Interpreter::with_storage(
-            vm_db,
-            InterpreterParams::new(gas_price, &self.consensus_params),
-        );
-
-        let gas_costs = self.consensus_params.gas_costs();
-        let fee_params = self.consensus_params.fee_params();
-
-        let ready_tx = checked_tx
-            .clone()
-            .into_ready(gas_price, gas_costs, fee_params)?;
-
-        let vm_result: StateTransition<_> = vm
-            .transact(ready_tx)
-            .map_err(|error| ExecutorError::VmExecution {
-                error: error.to_string(),
-                transaction_id: tx_id,
-            })?
-            .into();
-        let reverted = vm_result.should_revert();
-
-        let (state, mut tx, receipts): (_, Tx, _) = vm_result.into_inner();
-        #[cfg(debug_assertions)]
-        {
-            tx.precompute(&self.consensus_params.chain_id())?;
-            debug_assert_eq!(tx.id(&self.consensus_params.chain_id()), tx_id);
-        }
-
-        Self::update_input_used_gas(&mut checked_tx, tx_id, &mut tx)?;
-
-        // We always need to update inputs with storage state before execution,
-        // because VM zeroes malleable fields during the execution.
-        self.compute_inputs(tx.inputs_mut(), tx_st_transaction)?;
-
-        // only commit state changes if execution was a success
-        if !reverted {
-            self.log_backtrace(&vm, &receipts);
-            let changes = sub_block_db_commit.into_changes();
-            tx_st_transaction.commit_changes(changes)?;
-        }
+            gas_price,
+            tx_st_transaction,
+            tx_id,
+        )?;
 
         // update block commitment
         let (used_gas, tx_fee) =
@@ -1507,14 +1461,7 @@ where
         )?;
 
         // We always need to update outputs with storage state after execution.
-        let mut outputs = core::mem::take(tx.outputs_mut());
-        self.compute_state_of_not_utxo_outputs(
-            &mut outputs,
-            tx.inputs(),
-            tx_id,
-            tx_st_transaction,
-        )?;
-        *tx.outputs_mut() = outputs;
+        self.update_tx_outputs(tx_st_transaction, tx_id, &mut tx)?;
 
         let final_tx = tx.into();
 
@@ -1535,6 +1482,28 @@ where
         )?;
 
         Ok(final_tx)
+    }
+
+    fn update_tx_outputs<Tx, T>(
+        &self,
+        tx_st_transaction: &mut StorageTransaction<T>,
+        tx_id: TxId,
+        tx: &mut Tx,
+    ) -> ExecutorResult<()>
+    where
+        Tx: ExecutableTransaction + PartialEq + Cacheable + Send + Sync + 'static,
+        <Tx as IntoChecked>::Metadata: CheckedMetadata,
+        T: KeyValueInspect<Column = Column>,
+    {
+        let mut outputs = core::mem::take(tx.outputs_mut());
+        self.compute_state_of_not_utxo_outputs(
+            &mut outputs,
+            tx.inputs(),
+            tx_id,
+            tx_st_transaction,
+        )?;
+        *tx.outputs_mut() = outputs;
+        Ok(())
     }
 
     fn update_execution_data(
@@ -1683,12 +1652,85 @@ where
             checked_tx = self.validate_utxos(checked_tx, header, tx_st_transaction)?;
         }
 
+        // ***********************
         self.validate_inputs_state(
             checked_tx.transaction().inputs(),
             tx_id,
             tx_st_transaction,
         )?;
 
+        let (reverted, state, mut tx, receipts) = self.execute_tx_with_vm(
+            &mut checked_tx,
+            &header,
+            coinbase_contract_id,
+            gas_price,
+            tx_st_transaction,
+            tx_id,
+        )?;
+
+        // update block commitment
+        let (used_gas, tx_fee) =
+            self.total_fee_paid(&tx, min_gas, max_fee, &receipts, gas_price)?;
+
+        // change the spent status of the tx inputs
+        self.spend_input_utxos(tx.inputs(), tx_st_transaction, reverted, execution_data)?;
+
+        // Persist utxos first and after calculate the not utxo outputs
+        self.persist_output_utxos(
+            *header.height(),
+            execution_data,
+            &tx_id,
+            tx_st_transaction,
+            tx.inputs(),
+            tx.outputs(),
+        )?;
+
+        // We always need to update outputs with storage state after execution.
+        self.update_tx_outputs(tx_st_transaction, tx_id, &mut tx)?;
+
+        // *********************
+        // The validator ensures that the generated transaction by him is the same as provided by the block producer.
+        if &tx != checked_tx.transaction() {
+            return Err(ExecutorError::InvalidTransactionOutcome {
+                transaction_id: tx_id,
+            })
+        }
+
+        let final_tx = tx.into();
+
+        // Store tx into the block db transaction
+        tx_st_transaction
+            .storage::<ProcessedTransactions>()
+            .insert(&tx_id, &())?;
+
+        // Update `execution_data` data only after all steps.
+        Self::update_execution_data(
+            execution_data,
+            receipts,
+            used_gas,
+            tx_fee,
+            reverted,
+            state,
+            tx_id,
+        )?;
+
+        Ok(final_tx)
+    }
+
+    fn execute_tx_with_vm<Tx, T>(
+        &self,
+        mut checked_tx: &mut Checked<Tx>,
+        header: &&PartialBlockHeader,
+        coinbase_contract_id: ContractId,
+        gas_price: Word,
+        tx_st_transaction: &mut StorageTransaction<T>,
+        tx_id: TxId,
+    ) -> ExecutorResult<(bool, ProgramState, Tx, Vec<Receipt>)>
+    where
+        Tx: ExecutableTransaction + PartialEq + Cacheable + Send + Sync + 'static,
+        <Tx as IntoChecked>::Metadata: CheckedMetadata,
+        T: KeyValueInspect<Column = Column>,
+    {
         // execute transaction
         // setup database view that only lives for the duration of vm execution
         let mut sub_block_db_commit = tx_st_transaction
@@ -1743,60 +1785,7 @@ where
             let changes = sub_block_db_commit.into_changes();
             tx_st_transaction.commit_changes(changes)?;
         }
-
-        // update block commitment
-        let (used_gas, tx_fee) =
-            self.total_fee_paid(&tx, min_gas, max_fee, &receipts, gas_price)?;
-
-        // change the spent status of the tx inputs
-        self.spend_input_utxos(tx.inputs(), tx_st_transaction, reverted, execution_data)?;
-
-        // Persist utxos first and after calculate the not utxo outputs
-        self.persist_output_utxos(
-            *header.height(),
-            execution_data,
-            &tx_id,
-            tx_st_transaction,
-            tx.inputs(),
-            tx.outputs(),
-        )?;
-
-        // We always need to update outputs with storage state after execution.
-        let mut outputs = core::mem::take(tx.outputs_mut());
-        self.compute_state_of_not_utxo_outputs(
-            &mut outputs,
-            tx.inputs(),
-            tx_id,
-            tx_st_transaction,
-        )?;
-        *tx.outputs_mut() = outputs;
-
-        // The validator ensures that the generated transaction by him is the same as provided by the block producer.
-        if &tx != checked_tx.transaction() {
-            return Err(ExecutorError::InvalidTransactionOutcome {
-                transaction_id: tx_id,
-            })
-        }
-
-        let final_tx = tx.into();
-
-        // Store tx into the block db transaction
-        tx_st_transaction
-            .storage::<ProcessedTransactions>()
-            .insert(&tx_id, &())?;
-
-        // Update `execution_data` data only after all steps.
-        Self::update_execution_data(
-            execution_data,
-            receipts,
-            used_gas,
-            tx_fee,
-            reverted,
-            state,
-            tx_id,
-        )?;
-
-        Ok(final_tx)
+        Ok((reverted, state, tx, receipts))
     }
 
     fn verify_input_state<T>(
