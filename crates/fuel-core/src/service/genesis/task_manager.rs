@@ -1,7 +1,4 @@
-use std::{
-    future::Future,
-    sync::Arc,
-};
+use std::sync::Arc;
 
 use fuel_core_services::StateWatcher;
 use futures::{
@@ -15,7 +12,7 @@ use tokio_util::sync::CancellationToken;
 
 pub struct TaskManager<T> {
     set: JoinSet<anyhow::Result<T>>,
-    outside_cancel_listener: MultiCancellationToken,
+    cancel_listener: MultiCancellationToken,
     cancel_tasks: CancellationToken,
 }
 
@@ -39,8 +36,9 @@ impl NotifyCancel for CancellationToken {
 #[async_trait::async_trait]
 impl NotifyCancel for StateWatcher {
     async fn wait_until_cancelled(&self) -> anyhow::Result<()> {
-        while !self.is_cancelled() {
-            self.clone().changed().await?;
+        let mut state = self.clone();
+        while !state.is_cancelled() {
+            state.changed().await?;
         }
 
         Ok(())
@@ -105,9 +103,15 @@ impl<T> TaskManager<T> {
         multi_cancel.insert(task_cancel.child_token());
         Self {
             set: JoinSet::new(),
-            outside_cancel_listener: multi_cancel,
+            cancel_listener: multi_cancel,
             cancel_tasks: task_cancel,
         }
+    }
+
+    /// A `MultiCancellationToken` that will signal when the task manager will start cancelling
+    /// tasks.
+    pub fn cancel_token(&self) -> &MultiCancellationToken {
+        &self.cancel_listener
     }
 }
 
@@ -115,12 +119,22 @@ impl<T> TaskManager<T>
 where
     T: Send + 'static,
 {
+    #[cfg(test)]
     pub fn spawn<F, Fut>(&mut self, arg: F)
     where
         F: FnOnce(MultiCancellationToken) -> Fut,
-        Fut: Future<Output = anyhow::Result<T>> + Send + 'static,
+        Fut: futures::Future<Output = anyhow::Result<T>> + Send + 'static,
     {
-        self.set.spawn(arg(self.outside_cancel_listener.clone()));
+        let token = self.cancel_listener.clone();
+        self.set.spawn(arg(token));
+    }
+
+    pub fn spawn_blocking<F>(&mut self, arg: F)
+    where
+        F: FnOnce(MultiCancellationToken) -> anyhow::Result<T> + Send + 'static,
+    {
+        let token = self.cancel_listener.clone();
+        self.set.spawn_blocking(move || arg(token));
     }
 
     pub async fn wait(self) -> anyhow::Result<Vec<T>> {
@@ -217,7 +231,7 @@ mod tests {
         async fn task_added_and_completed() {
             // given
             let mut workers = TaskManager::default();
-            workers.spawn(|_| async { Ok(8u8) });
+            workers.spawn_blocking(|_| Ok(8u8));
 
             // when
             let results = workers.wait().await.unwrap();
@@ -230,8 +244,8 @@ mod tests {
         async fn returns_err_on_single_failure() {
             // given
             let mut workers = TaskManager::default();
-            workers.spawn(|_| async { Ok(10u8) });
-            workers.spawn(|_| async { Err(anyhow::anyhow!("I fail")) });
+            workers.spawn_blocking(|_| Ok(10u8));
+            workers.spawn_blocking(|_| Err(anyhow::anyhow!("I fail")));
 
             // when
             let results = workers.wait().await;
@@ -253,7 +267,7 @@ mod tests {
             });
 
             // when
-            workers.spawn(|_| async { bail!("I fail") });
+            workers.spawn_blocking(|_| bail!("I fail"));
 
             // then
             let _ = workers.wait().await;

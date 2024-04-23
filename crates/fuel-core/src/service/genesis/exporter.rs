@@ -181,20 +181,18 @@ where
         let db = db_picker(self).clone();
         let prefix = prefix.map(|p| p.to_vec());
         let progress_tracker = self.multi_progress.table_reporter::<T>(None);
-        self.task_manager.spawn(move |cancel| {
-            tokio_rayon::spawn(move || {
-                db.entries::<T>(prefix, IterDirection::Forward)
-                    .chunks(group_size)
-                    .into_iter()
-                    .take_while(|_| !cancel.is_cancelled())
-                    .enumerate()
-                    .try_for_each(|(index, chunk)| {
-                        progress_tracker.set_progress(index);
+        self.task_manager.spawn_blocking(move |cancel| {
+            db.entries::<T>(prefix, IterDirection::Forward)
+                .chunks(group_size)
+                .into_iter()
+                .take_while(|_| !cancel.is_cancelled())
+                .enumerate()
+                .try_for_each(|(index, chunk)| {
+                    progress_tracker.set_index(index);
 
-                        writer.write(chunk.try_collect()?)
-                    })?;
-                writer.partial_close()
-            })
+                    writer.write(chunk.try_collect()?)
+                })?;
+            writer.partial_close()
         });
 
         Ok(())

@@ -183,19 +183,17 @@ impl ShutdownListener {
                 tokio::select! {
                     _ = sigterm.recv() => {
                         tracing::info!("Received SIGTERM");
-                        token.cancel();
                     }
                     _ = sigint.recv() => {
                         tracing::info!("Received SIGINT");
-                        token.cancel();
                     }
                 }
                 #[cfg(not(unix))]
                 {
                     tokio::signal::ctrl_c().await?;
                     tracing::info!("Received ctrl_c");
-                    token.cancel();
                 }
+                token.cancel();
                 tokio::io::Result::Ok(())
             });
         }

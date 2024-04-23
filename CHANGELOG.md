@@ -11,12 +11,21 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Description of the upcoming release here.
 
+### Changed
+
+- [#1832](https://github.com/FuelLabs/fuel-core/pull/1832): Snapshot generation can be cancelled. Progress is also reported.
+- [#1837](https://github.com/FuelLabs/fuel-core/pull/1837): Refactor the executor and separate validation from the other use cases
+
 ## [Version 0.25.2]
 
 ### Fixed
 
 - [#1844](https://github.com/FuelLabs/fuel-core/pull/1844): Fixed the publishing of the `fuel-core 0.25.1` release.
 - [1842](https://github.com/FuelLabs/fuel-core/pull/1842): Ignore RUSTSEC-2024-0336: `rustls::ConnectionCommon::complete_io` could fall into an infinite loop based on network
+
+### Changed
+
+- [#1837](https://github.com/FuelLabs/fuel-core/pull/1837): Refactor the executor and separate validation from the other use cases
 
 ## [Version 0.25.1]
 
@@ -33,7 +42,6 @@ Description of the upcoming release here.
 
 ### Added
 
-- [#1832](https://github.com/FuelLabs/fuel-core/pull/1832): Snapshot generation can be cancelled. Progress is also reported.
 - [#1831](https://github.com/FuelLabs/fuel-core/pull/1831): Included the total gas and fee used by transaction into `TransactionStatus`.
 - [#1821](https://github.com/FuelLabs/fuel-core/pull/1821): Propagate shutdown signal to (re)genesis. Also add progress bar for (re)genesis.
 - [#1813](https://github.com/FuelLabs/fuel-core/pull/1813): Added back support for `/health` endpoint.
@@ -42,6 +50,7 @@ Description of the upcoming release here.
 
 ### Changed
 
+- [#1837](https://github.com/FuelLabs/fuel-core/pull/1837): Refactor the executor and separate validation from the other use cases
 - [#1833](https://github.com/FuelLabs/fuel-core/pull/1833): Regenesis of `SpentMessages` and `ProcessedTransactions`.
 - [#1830](https://github.com/FuelLabs/fuel-core/pull/1830): Use versioning enum for WASM executor input and output.
 - [#1816](https://github.com/FuelLabs/fuel-core/pull/1816): Updated the upgradable executor to fetch the state transition bytecode from the database when the version doesn't match a native one. This change enables the WASM executor in the "production" build and requires a `wasm32-unknown-unknown` target.

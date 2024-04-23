@@ -1,14 +1,15 @@
-use fuel_core_executor::executor::{
-    ExecutionBlockWithSource,
-    ExecutionOptions,
-};
+use fuel_core_executor::executor::ExecutionOptions;
 use fuel_core_storage::transactional::Changes;
-use fuel_core_types::services::{
-    executor::{
-        ExecutionResult,
-        Result as ExecutorResult,
+use fuel_core_types::{
+    blockchain::block::Block,
+    services::{
+        block_producer::Components,
+        executor::{
+            ExecutionResult,
+            Result as ExecutorResult,
+        },
+        Uncommitted,
     },
-    Uncommitted,
 };
 
 /// Pack a pointer and length into an `u64`.
@@ -46,9 +47,19 @@ pub fn unpack_exists_size_result(val: u64) -> (bool, u32, u16) {
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 pub enum InputType {
     V1 {
-        block: ExecutionBlockWithSource<()>,
+        block: WasmExecutionBlockTypes<()>,
         options: ExecutionOptions,
     },
+}
+
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
+pub enum WasmExecutionBlockTypes<TxSource> {
+    /// DryRun mode where P is being produced.
+    DryRun(Components<TxSource>),
+    /// Production mode where P is being produced.
+    Production(Components<TxSource>),
+    /// Validation of a produced block.
+    Validation(Block),
 }
 
 /// The return type for the WASM executor. Enum allows handling different

@@ -7,6 +7,7 @@ use super::{
 mod import_task;
 mod logic;
 
+const GROUPS_NUMBER_FOR_PARALLELIZATION: usize = 10;
 use crate::{
     combined_database::CombinedDatabase,
     fuel_core_graphql_api::storage::messages::SpentMessages,
@@ -130,6 +131,13 @@ impl SnapshotImporter {
         let groups = self.snapshot_reader.read::<TableInSnapshot>()?;
         let num_groups = groups.len();
 
+        // Even though genesis is expected to last orders of magnitude longer than an empty task
+        // might take to execute, this optimization is placed regardless to speed up
+        // unit/integration tests that will feel the impact more than actual regenesis.
+        if num_groups == 0 {
+            return Ok(());
+        }
+
         let block_height = *self.genesis_block.header().height();
         let da_block_height = self.genesis_block.header().da_height;
 
@@ -140,18 +148,21 @@ impl SnapshotImporter {
             .multi_progress_reporter
             .table_reporter::<TableInSnapshot>(Some(num_groups));
 
-        self.task_manager.spawn(move |token| {
-            tokio_rayon::spawn(move || {
-                import_task::import_entries(
-                    token,
-                    Handler::new(block_height, da_block_height),
-                    groups,
-                    on_chain_db,
-                    off_chain_db,
-                    progress_reporter,
-                )
-            })
-        });
+        let import = move |token| {
+            import_task::import_entries(
+                token,
+                Handler::new(block_height, da_block_height),
+                groups,
+                on_chain_db,
+                off_chain_db,
+                progress_reporter,
+            )
+        };
+        if num_groups < GROUPS_NUMBER_FOR_PARALLELIZATION {
+            import(self.task_manager.cancel_token().clone())?;
+        } else {
+            self.task_manager.spawn_blocking(import);
+        }
 
         Ok(())
     }

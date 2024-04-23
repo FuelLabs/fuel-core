@@ -4,7 +4,7 @@ use crate::{
         ImporterDatabase,
         MockBlockVerifier,
         MockDatabaseTransaction,
-        MockExecutor,
+        MockValidator,
         Transactional,
     },
     Importer,
@@ -160,28 +160,26 @@ fn execution_failure_error() -> Error {
     Error::FailedExecution(ExecutorError::InvalidBlockId)
 }
 
-fn executor<R>(result: R) -> MockExecutor
+fn executor<R>(result: R) -> MockValidator
 where
     R: Fn() -> ExecutorResult<MockExecutionResult> + Send + 'static,
 {
-    let mut executor = MockExecutor::default();
-    executor
-        .expect_execute_without_commit()
-        .return_once(move |_| {
-            let mock_result = result()?;
-            let skipped_transactions: Vec<_> = (0..mock_result.skipped_transactions)
-                .map(|_| (TxId::zeroed(), ExecutorError::InvalidBlockId))
-                .collect();
-            Ok(Uncommitted::new(
-                ExecutionResult {
-                    block: mock_result.block.entity,
-                    skipped_transactions,
-                    tx_status: vec![],
-                    events: vec![],
-                },
-                Default::default(),
-            ))
-        });
+    let mut executor = MockValidator::default();
+    executor.expect_validate().return_once(move |_| {
+        let mock_result = result()?;
+        let skipped_transactions: Vec<_> = (0..mock_result.skipped_transactions)
+            .map(|_| (TxId::zeroed(), ExecutorError::InvalidBlockId))
+            .collect();
+        Ok(Uncommitted::new(
+            ExecutionResult {
+                block: mock_result.block.entity,
+                skipped_transactions,
+                tx_status: vec![],
+                events: vec![],
+            },
+            Default::default(),
+        ))
+    });
 
     executor
 }
@@ -383,7 +381,7 @@ async fn commit_result_assert(
 async fn execute_and_commit_assert(
     sealed_block: SealedBlock,
     underlying_db: MockDatabase,
-    executor: MockExecutor,
+    executor: MockValidator,
     verifier: MockBlockVerifier,
 ) -> Result<(), Error> {
     let expected_to_broadcast = sealed_block.clone();
@@ -423,7 +421,7 @@ async fn commit_result_fail_when_locked() {
 async fn execute_and_commit_fail_when_locked() {
     let importer = Importer::default_config(
         MockDatabase::default(),
-        MockExecutor::default(),
+        MockValidator::default(),
         MockBlockVerifier::default(),
     );
 
@@ -438,7 +436,7 @@ async fn execute_and_commit_fail_when_locked() {
 fn one_lock_at_the_same_time() {
     let importer = Importer::default_config(
         MockDatabase::default(),
-        MockExecutor::default(),
+        MockValidator::default(),
         MockBlockVerifier::default(),
     );
 

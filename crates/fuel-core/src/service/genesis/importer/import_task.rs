@@ -111,7 +111,7 @@ where
             off_chain_tx.commit()?;
         }
 
-        reporter.set_progress(index);
+        reporter.set_index(index);
     }
 
     Ok(())

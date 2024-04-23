@@ -329,7 +329,7 @@ mod tests {
     #[test]
     fn executor_validates_correctly_produced_block() {
         let mut producer = create_executor(Default::default(), Default::default());
-        let mut verifier = create_executor(Default::default(), Default::default());
+        let verifier = create_executor(Default::default(), Default::default());
         let block = test_block(1u32.into(), 0u64.into(), 10);
 
         let ExecutionResult {
@@ -340,8 +340,7 @@ mod tests {
             .execute_and_commit(ExecutionTypes::Production(block.into()))
             .unwrap();
 
-        let validation_result =
-            verifier.execute_and_commit(ExecutionTypes::Validation(block));
+        let validation_result = verifier.validate(block);
         assert!(validation_result.is_ok());
         assert!(skipped_transactions.is_empty());
     }
@@ -717,9 +716,7 @@ mod tests {
             let ExecutionResult {
                 block: validated_block,
                 ..
-            } = validator
-                .execute_and_commit(ExecutionBlock::Validation(produced_block))
-                .unwrap();
+            } = validator.validate_and_commit(produced_block).unwrap();
             assert_eq!(validated_block.transactions(), produced_txs);
             let ContractBalance {
                 asset_id, amount, ..
@@ -841,7 +838,7 @@ mod tests {
                 },
             );
             let validation_err = validator
-                .execute_and_commit(ExecutionBlock::Validation(block))
+                .validate_and_commit(block)
                 .expect_err("Expected error because coinbase if invalid");
             assert!(matches!(
                 validation_err,
@@ -867,7 +864,7 @@ mod tests {
 
             let mut validator = create_executor(Default::default(), Default::default());
             let validation_err = validator
-                .execute_and_commit(ExecutionBlock::Validation(block))
+                .validate_and_commit(block)
                 .expect_err("Expected error because coinbase if invalid");
             assert!(matches!(
                 validation_err,
@@ -881,7 +878,7 @@ mod tests {
 
             let mut validator = create_executor(Default::default(), Default::default());
             let validation_err = validator
-                .execute_and_commit(ExecutionBlock::Validation(block))
+                .validate_and_commit(block)
                 .expect_err("Expected error because coinbase is missing");
             assert!(matches!(validation_err, ExecutorError::MintMissing));
         }
@@ -903,7 +900,7 @@ mod tests {
 
             let mut validator = create_executor(Default::default(), Default::default());
             let validation_err = validator
-                .execute_and_commit(ExecutionBlock::Validation(block))
+                .validate_and_commit(block)
                 .expect_err("Expected error because coinbase if invalid");
 
             assert!(matches!(
@@ -938,7 +935,7 @@ mod tests {
             };
             let mut validator = create_executor(Default::default(), config);
             let validation_err = validator
-                .execute_and_commit(ExecutionBlock::Validation(block))
+                .validate_and_commit(block)
                 .expect_err("Expected error because coinbase if invalid");
 
             assert!(matches!(
@@ -966,7 +963,7 @@ mod tests {
 
             let mut validator = create_executor(Default::default(), Default::default());
             let validation_err = validator
-                .execute_and_commit(ExecutionBlock::Validation(block))
+                .validate_and_commit(block)
                 .expect_err("Expected error because coinbase if invalid");
             assert!(matches!(
                 validation_err,
@@ -1028,15 +1025,14 @@ mod tests {
 
         // Produced block is valid
         let ExecutionResult { mut block, .. } = verifier
-            .execute_without_commit(ExecutionTypes::Validation(block))
+            .validate_without_commit(block)
             .unwrap()
             .into_result();
 
         // Invalidate the block with Insufficient tx
         let len = block.transactions().len();
         block.transactions_mut().insert(len - 1, tx);
-        let verify_result =
-            verifier.execute_without_commit(ExecutionTypes::Validation(block));
+        let verify_result = verifier.validate_without_commit(block);
         assert!(matches!(
             verify_result,
             Err(ExecutorError::InvalidTransaction(
@@ -1077,7 +1073,7 @@ mod tests {
 
         // Produced block is valid
         let ExecutionResult { mut block, .. } = verifier
-            .execute_without_commit(ExecutionTypes::Validation(block))
+            .validate_without_commit(block)
             .unwrap()
             .into_result();
 
@@ -1086,8 +1082,7 @@ mod tests {
         block
             .transactions_mut()
             .insert(len - 1, Transaction::default_test_tx());
-        let verify_result =
-            verifier.execute_without_commit(ExecutionTypes::Validation(block));
+        let verify_result = verifier.validate_without_commit(block);
         assert!(matches!(
             verify_result,
             Err(ExecutorError::TransactionIdCollision(_))
@@ -1150,15 +1145,14 @@ mod tests {
 
         // Produced block is valid
         let ExecutionResult { mut block, .. } = verifier
-            .execute_without_commit(ExecutionTypes::Validation(block))
+            .validate_without_commit(block)
             .unwrap()
             .into_result();
 
         // Invalidate block by adding transaction with not existing coin
         let len = block.transactions().len();
         block.transactions_mut().insert(len - 1, tx);
-        let verify_result =
-            verifier.execute_without_commit(ExecutionTypes::Validation(block));
+        let verify_result = verifier.validate_without_commit(block);
         assert!(matches!(
             verify_result,
             Err(ExecutorError::TransactionValidity(
@@ -1203,8 +1197,7 @@ mod tests {
             }
         }
 
-        let verify_result =
-            verifier.execute_and_commit(ExecutionBlock::Validation(block));
+        let verify_result = verifier.validate_and_commit(block);
         assert!(matches!(
             verify_result,
             Err(ExecutorError::InvalidTransactionOutcome { transaction_id }) if transaction_id == tx_id
@@ -1240,8 +1233,7 @@ mod tests {
         block.header_mut().set_transaction_root(rng.gen());
         block.header_mut().recalculate_metadata();
 
-        let verify_result =
-            verifier.execute_and_commit(ExecutionBlock::Validation(block));
+        let verify_result = verifier.validate_and_commit(block);
 
         assert!(matches!(verify_result, Err(ExecutorError::InvalidBlockId)))
     }
@@ -1914,9 +1906,7 @@ mod tests {
         assert_eq!(tx.inputs()[0].state_root(), state_root);
 
         let _ = executor
-            .execute_without_commit_with_source::<OnceTransactionsSource>(
-                ExecutionTypes::Validation(block),
-            )
+            .validate(block)
             .expect("Validation of block should be successful");
     }
 
@@ -2110,8 +2100,7 @@ mod tests {
         assert!(skipped_transactions.is_empty());
 
         let verifier = create_executor(db, Default::default());
-        let verify_result =
-            verifier.execute_without_commit(ExecutionBlock::Validation(second_block));
+        let verify_result = verifier.validate_without_commit(second_block);
         assert!(verify_result.is_ok());
     }
 
@@ -2188,8 +2177,7 @@ mod tests {
         }
 
         let verifier = create_executor(db, Default::default());
-        let verify_result =
-            verifier.execute_without_commit(ExecutionBlock::Validation(second_block));
+        let verify_result = verifier.validate_without_commit(second_block);
 
         assert!(matches!(
             verify_result,
@@ -2343,7 +2331,7 @@ mod tests {
             .expect("block execution failed unexpectedly");
 
         make_executor(&[&message])
-            .execute_and_commit(ExecutionBlock::Validation(block))
+            .validate_and_commit(block)
             .expect("block validation failed unexpectedly");
     }
 
@@ -2468,14 +2456,14 @@ mod tests {
 
         // Produced block is valid
         make_executor(&[]) // No messages in the db
-            .execute_and_commit(ExecutionBlock::Validation(block.clone()))
+            .validate_and_commit(block.clone())
             .unwrap();
 
         // Invalidate block by returning back `tx` with not existing message
         let index = block.transactions().len() - 1;
         block.transactions_mut().insert(index, tx);
         let res = make_executor(&[]) // No messages in the db
-            .execute_and_commit(ExecutionBlock::Validation(block));
+            .validate_and_commit(block);
         assert!(matches!(
             res,
             Err(ExecutorError::TransactionValidity(
@@ -2510,14 +2498,13 @@ mod tests {
 
         // Produced block is valid
         make_executor(&[&message])
-            .execute_and_commit(ExecutionBlock::Validation(block.clone()))
+            .validate_and_commit(block.clone())
             .unwrap();
 
         // Invalidate block by return back `tx` with not ready message.
         let index = block.transactions().len() - 1;
         block.transactions_mut().insert(index, tx);
-        let res = make_executor(&[&message])
-            .execute_and_commit(ExecutionBlock::Validation(block));
+        let res = make_executor(&[&message]).validate_and_commit(block);
         assert!(matches!(
             res,
             Err(ExecutorError::TransactionValidity(
@@ -2590,16 +2577,14 @@ mod tests {
 
         // Produced block is valid
         let exec = make_executor(&[&message]);
-        let ExecutionResult { mut block, .. } = exec
-            .execute_without_commit(ExecutionTypes::Validation(block))
-            .unwrap()
-            .into_result();
+        let ExecutionResult { mut block, .. } =
+            exec.validate_without_commit(block).unwrap().into_result();
 
         // Invalidate block by return back `tx2` transaction skipped during production.
         let len = block.transactions().len();
         block.transactions_mut().insert(len - 1, tx2);
         let exec = make_executor(&[&message]);
-        let res = exec.execute_without_commit(ExecutionTypes::Validation(block));
+        let res = exec.validate_without_commit(block);
         assert!(matches!(
             res,
             Err(ExecutorError::TransactionValidity(
@@ -2811,10 +2796,7 @@ mod tests {
         assert!(skipped_transactions.is_empty());
 
         let validator = create_executor(db.clone(), config);
-        let result = validator
-            .execute_without_commit_with_source::<OnceTransactionsSource>(
-                ExecutionTypes::Validation(block),
-            );
+        let result = validator.validate(block);
         assert!(result.is_ok(), "{result:?}")
     }
 
@@ -3370,7 +3352,7 @@ mod tests {
             add_events_to_relayer(&mut verifier_relayer_db, da_height.into(), &events);
             let verifier = create_relayer_executor(verifyer_db, verifier_relayer_db);
             let (result, _) = verifier
-                .execute_without_commit(ExecutionTypes::Validation(produced_block))
+                .validate_without_commit(produced_block)
                 .unwrap()
                 .into();
 

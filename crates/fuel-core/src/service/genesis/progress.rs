@@ -19,29 +19,32 @@ use tracing::{
 #[derive(Clone)]
 pub struct ProgressReporter {
     bar: ProgressBar,
-    target: Target,
+    target: ReportMethod,
 }
 
 impl Default for ProgressReporter {
     fn default() -> Self {
-        Self::new(Target::Logs(tracing::info_span!("default")), None)
+        Self::new(ReportMethod::Logs(tracing::info_span!("default")), None)
     }
 }
 
+/// Defines the method of reporting the progress of a [`ProgressReporter`].
 #[derive(Clone)]
-pub enum Target {
-    Cli(String),
+pub enum ReportMethod {
+    /// Progress is to be reported on stderr visualized as a progress bar.
+    VisualBar(String),
+    /// Progress is to be reported via log messages.
     Logs(Span),
 }
 
 impl ProgressReporter {
-    pub fn new(target: Target, max: Option<usize>) -> Self {
+    pub fn new(target: ReportMethod, max: Option<usize>) -> Self {
         let max = max.map(|max| u64::try_from(max).unwrap_or(u64::MAX));
         // Bars always hidden. Will be printed only if added to a `MultipleProgressReporter` that
         // prints to stderr. This removes flicker from double rendering (once when the progress bar
         // is constructed and again when added to the `MultipleProgressReporter`)
         let bar = ProgressBar::with_draw_target(max, ProgressDrawTarget::hidden());
-        if let Target::Cli(message) = &target {
+        if let ReportMethod::VisualBar(message) = &target {
             bar.set_message(message.clone());
 
             bar.set_style(Self::style(max.is_some()));
@@ -50,8 +53,8 @@ impl ProgressReporter {
         ProgressReporter { bar, target }
     }
 
-    fn style(lenght_known: bool) -> ProgressStyle {
-        let template = if lenght_known {
+    fn style(length_known: bool) -> ProgressStyle {
+        let template = if length_known {
             "[{elapsed_precise}] {bar:.64.on_black} {pos:>7}/{len:7} {msg} {eta}"
         } else {
             "[{elapsed_precise}] {pos:>7} {msg}"
@@ -60,18 +63,18 @@ impl ProgressReporter {
         ProgressStyle::with_template(template).expect("hard coded templates to be valid")
     }
 
-    pub fn set_progress(&self, group_index: usize) {
-        let group_num = u64::try_from(group_index)
-            .unwrap_or(u64::MAX)
-            .saturating_add(1);
-        self.bar.set_position(group_num);
-        if let Target::Logs(span) = &self.target {
+    /// Sets the index of the last element handled.
+    pub fn set_index(&self, index: usize) {
+        // So that the last element shows up as, e.g., 100/100 and not 99/100.
+        let display_index = u64::try_from(index).unwrap_or(u64::MAX).saturating_add(1);
+        self.bar.set_position(display_index);
+        if let ReportMethod::Logs(span) = &self.target {
             span.in_scope(|| {
                 if let Some(len) = self.bar.length() {
                     let human_eta = HumanDuration(self.bar.eta());
-                    tracing::info!("Processing: {group_num}/{len}. ({human_eta})");
+                    tracing::info!("Processing: {display_index}/{len}. ({human_eta})");
                 } else {
-                    tracing::info!("Processing: {}", group_num);
+                    tracing::info!("Processing: {}", display_index);
                 }
             })
         }
@@ -102,7 +105,7 @@ impl MultipleProgressReporter {
     {
         let desc = T::column().name();
         let target = if Self::should_display_bars() {
-            Target::Cli(desc.to_owned())
+            ReportMethod::VisualBar(desc.to_owned())
         } else {
             let span = tracing::span!(
                 parent: &self.span,
@@ -111,7 +114,7 @@ impl MultipleProgressReporter {
                 migration = desc
 
             );
-            Target::Logs(span)
+            ReportMethod::Logs(span)
         };
 
         self.register(ProgressReporter::new(target, num_groups))
