@@ -1224,7 +1224,7 @@ where
             self.compute_inputs(inputs.as_mut_slice(), block_st_transaction)?;
 
             let (input, output) = self.execute_mint_with_vm(
-                &header,
+                header,
                 coinbase_contract_id,
                 execution_data,
                 block_st_transaction,
@@ -1283,7 +1283,7 @@ where
             )?;
 
             let (input, output) = self.execute_mint_with_vm(
-                &header,
+                header,
                 coinbase_contract_id,
                 execution_data,
                 block_st_transaction,
@@ -1300,6 +1300,7 @@ where
         Self::store_mint_tx(mint, execution_data, coinbase_id, block_st_transaction)
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn execute_mint_with_vm<T>(
         &self,
         header: &PartialBlockHeader,
@@ -1340,7 +1341,7 @@ where
         self.persist_output_utxos(
             block_height,
             execution_data,
-            &coinbase_id,
+            coinbase_id,
             block_st_transaction,
             inputs,
             outputs.as_slice(),
