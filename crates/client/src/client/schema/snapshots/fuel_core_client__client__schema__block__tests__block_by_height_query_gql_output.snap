@@ -4,14 +4,10 @@ expression: operation.query
 ---
 query($height: U32) {
   block(height: $height) {
-    version {
-      value
-    }
+    version
     id
     header {
-      version {
-        value
-      }
+      version
       id
       daHeight
       consensusParametersVersion
