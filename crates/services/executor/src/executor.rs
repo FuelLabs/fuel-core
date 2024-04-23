@@ -1207,14 +1207,30 @@ where
         if mint.input_contract().contract_id == ContractId::zeroed() {
             Self::verify_mint_for_empty_contract(&mint)?;
         } else {
-            let (input, output) = self.verify_mint_for_contract(
-                &mint,
-                execution_data,
-                gas_price,
-                header,
-                block_st_transaction,
+            Self::check_mint_amount(&mint, execution_data.coinbase)?;
+            Self::check_gas_price(&mint, gas_price)?;
+
+            let input = mint.input_contract().clone();
+            let mut inputs = [Input::Contract(input)];
+
+            if self.options.utxo_validation {
+                self.verify_inputs_exist(
+                    block_st_transaction,
+                    inputs.as_mut_slice(),
+                    header.da_height,
+                )?;
+            }
+
+            self.compute_inputs(inputs.as_mut_slice(), block_st_transaction)?;
+
+            let (input, output) = self.execute_mint_with_vm(
+                &header,
                 coinbase_contract_id,
-                coinbase_id,
+                execution_data,
+                block_st_transaction,
+                &coinbase_id,
+                &mut mint,
+                &mut inputs,
             )?;
 
             *mint.input_contract_mut() = input;
@@ -1241,19 +1257,39 @@ where
         Self::check_mint_has_expected_index(&checked_mint, execution_data)?;
 
         let coinbase_id = checked_mint.id();
-        let (mint, _) = checked_mint.into();
+        let (mut mint, _) = checked_mint.into();
 
         if mint.input_contract().contract_id == ContractId::zeroed() {
             Self::verify_mint_for_empty_contract(&mint)?;
         } else {
-            let (input, output) = self.verify_mint_for_contract(
-                &mint,
-                execution_data,
-                gas_price,
-                header,
-                block_st_transaction,
-                coinbase_contract_id,
+            Self::check_mint_amount(&mint, execution_data.coinbase)?;
+            Self::check_gas_price(&mint, gas_price)?;
+
+            let input = mint.input_contract().clone();
+            let mut inputs = [Input::Contract(input)];
+
+            if self.options.utxo_validation {
+                self.verify_inputs_exist(
+                    block_st_transaction,
+                    inputs.as_mut_slice(),
+                    header.da_height,
+                )?;
+            }
+
+            self.validate_inputs_state(
+                inputs.as_mut_slice(),
                 coinbase_id,
+                block_st_transaction,
+            )?;
+
+            let (input, output) = self.execute_mint_with_vm(
+                &header,
+                coinbase_contract_id,
+                execution_data,
+                block_st_transaction,
+                &coinbase_id,
+                &mut mint,
+                &mut inputs,
             )?;
 
             if mint.input_contract() != &input || mint.output_contract() != &output {
@@ -1262,6 +1298,80 @@ where
         }
 
         Self::store_mint_tx(mint, execution_data, coinbase_id, block_st_transaction)
+    }
+
+    fn execute_mint_with_vm<T>(
+        &self,
+        header: &PartialBlockHeader,
+        coinbase_contract_id: ContractId,
+        execution_data: &mut ExecutionData,
+        block_st_transaction: &mut StorageTransaction<T>,
+        coinbase_id: &TxId,
+        mint: &mut Mint,
+        inputs: &mut [Input],
+    ) -> ExecutorResult<(input::contract::Contract, output::contract::Contract)>
+    where
+        T: KeyValueInspect<Column = Column>,
+    {
+        let mut sub_block_db_commit = block_st_transaction
+            .write_transaction()
+            .with_policy(ConflictPolicy::Overwrite);
+
+        let mut vm_db = VmStorage::new(
+            &mut sub_block_db_commit,
+            &header.consensus,
+            &header.application,
+            coinbase_contract_id,
+        );
+
+        fuel_vm::interpreter::contract::balance_increase(
+            &mut vm_db,
+            &mint.input_contract().contract_id,
+            mint.mint_asset_id(),
+            *mint.mint_amount(),
+        )
+        .map_err(|e| format!("{e}"))
+        .map_err(ExecutorError::CoinbaseCannotIncreaseBalance)?;
+        sub_block_db_commit.commit()?;
+
+        let block_height = *header.height();
+        let output = *mint.output_contract();
+        let mut outputs = [Output::Contract(output)];
+        self.persist_output_utxos(
+            block_height,
+            execution_data,
+            &coinbase_id,
+            block_st_transaction,
+            inputs,
+            outputs.as_slice(),
+        )?;
+        self.compute_state_of_not_utxo_outputs(
+            outputs.as_mut_slice(),
+            inputs,
+            *coinbase_id,
+            block_st_transaction,
+        )?;
+        let Input::Contract(input) = core::mem::take(&mut inputs[0]) else {
+            unreachable!()
+        };
+        let Output::Contract(output) = outputs[0] else {
+            unreachable!()
+        };
+        Ok((input, output))
+    }
+
+    fn check_mint_amount(mint: &Mint, expected_amount: u64) -> ExecutorResult<()> {
+        if *mint.mint_amount() != expected_amount {
+            return Err(ExecutorError::CoinbaseAmountMismatch)
+        }
+        Ok(())
+    }
+
+    fn check_gas_price(mint: &Mint, expected_gas_price: Word) -> ExecutorResult<()> {
+        if *mint.gas_price() != expected_gas_price {
+            return Err(ExecutorError::CoinbaseGasPriceMismatch)
+        }
+        Ok(())
     }
 
     fn check_mint_has_expected_index(
@@ -1326,90 +1436,6 @@ where
             return Err(ExecutorError::TransactionIdCollision(coinbase_id))
         }
         Ok(tx)
-    }
-
-    // TODO: Refactor this function to reduce the number of arguments
-    #[allow(clippy::too_many_arguments)]
-    fn verify_mint_for_contract<T>(
-        &self,
-        mint: &Mint,
-        execution_data: &mut ExecutionData,
-        gas_price: Word,
-        header: &PartialBlockHeader,
-        block_st_transaction: &mut StorageTransaction<T>,
-        coinbase_contract_id: ContractId,
-        coinbase_id: TxId,
-    ) -> ExecutorResult<(input::contract::Contract, output::contract::Contract)>
-    where
-        T: KeyValueInspect<Column = Column>,
-    {
-        if *mint.mint_amount() != execution_data.coinbase {
-            return Err(ExecutorError::CoinbaseAmountMismatch)
-        }
-        if *mint.gas_price() != gas_price {
-            return Err(ExecutorError::CoinbaseGasPriceMismatch)
-        }
-
-        let block_height = *header.height();
-
-        let input = mint.input_contract().clone();
-        let output = *mint.output_contract();
-        let mut inputs = [Input::Contract(input)];
-        let mut outputs = [Output::Contract(output)];
-
-        if self.options.utxo_validation {
-            // validate utxos exist
-            self.verify_input_state(
-                block_st_transaction,
-                inputs.as_mut_slice(),
-                header.da_height,
-            )?;
-        }
-
-        self.compute_inputs(inputs.as_mut_slice(), block_st_transaction)?;
-
-        let mut sub_block_db_commit = block_st_transaction
-            .write_transaction()
-            .with_policy(ConflictPolicy::Overwrite);
-
-        let mut vm_db = VmStorage::new(
-            &mut sub_block_db_commit,
-            &header.consensus,
-            &header.application,
-            coinbase_contract_id,
-        );
-
-        fuel_vm::interpreter::contract::balance_increase(
-            &mut vm_db,
-            &mint.input_contract().contract_id,
-            mint.mint_asset_id(),
-            *mint.mint_amount(),
-        )
-        .map_err(|e| format!("{e}"))
-        .map_err(ExecutorError::CoinbaseCannotIncreaseBalance)?;
-        sub_block_db_commit.commit()?;
-
-        self.persist_output_utxos(
-            block_height,
-            execution_data,
-            &coinbase_id,
-            block_st_transaction,
-            inputs.as_slice(),
-            outputs.as_slice(),
-        )?;
-        self.compute_state_of_not_utxo_outputs(
-            outputs.as_mut_slice(),
-            inputs.as_slice(),
-            coinbase_id,
-            block_st_transaction,
-        )?;
-        let Input::Contract(input) = core::mem::take(&mut inputs[0]) else {
-            unreachable!()
-        };
-        let Output::Contract(output) = outputs[0] else {
-            unreachable!()
-        };
-        Ok((input, output))
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -1686,7 +1712,7 @@ where
         debug_assert!(checked_tx.checks().contains(Checks::Predicates));
 
         // validate utxos exist and maturity is properly set
-        self.verify_input_state(
+        self.verify_inputs_exist(
             tx_st_transaction,
             checked_tx.transaction().inputs(),
             header.da_height,
@@ -1713,13 +1739,11 @@ where
         T: KeyValueInspect<Column = Column>,
     {
         let tx_id = checked_tx.id();
-        // execute transaction
-        // setup database view that only lives for the duration of vm execution
+
         let mut sub_block_db_commit = tx_st_transaction
             .read_transaction()
             .with_policy(ConflictPolicy::Overwrite);
 
-        // execution vm
         let vm_db = VmStorage::new(
             &mut sub_block_db_commit,
             &header.consensus,
@@ -1770,7 +1794,7 @@ where
         Ok((reverted, state, tx, receipts))
     }
 
-    fn verify_input_state<T>(
+    fn verify_inputs_exist<T>(
         &self,
         db: &StorageTransaction<T>,
         inputs: &[Input],
@@ -1952,8 +1976,6 @@ where
     }
 
     /// Computes all zeroed or variable inputs.
-    /// In production mode, updates the inputs with computed values.
-    /// In validation mode, compares the inputs with computed inputs.
     fn compute_inputs<T>(
         &self,
         inputs: &mut [Input],

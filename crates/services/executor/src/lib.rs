@@ -3,6 +3,8 @@
 #![deny(unused_crate_dependencies)]
 #![deny(warnings)]
 
+extern crate core;
+
 pub mod executor;
 pub mod ports;
 pub mod refs;
