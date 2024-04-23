@@ -12,6 +12,10 @@ use crate::client::{
     PaginatedResult,
 };
 
+use crate::client::schema::block::{
+    BlockVersion,
+    HeaderVersion,
+};
 use tai64::Tai64;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -73,8 +77,8 @@ impl TryFrom<schema::block::Header> for Header {
     type Error = ConversionError;
 
     fn try_from(value: schema::block::Header) -> Result<Self, Self::Error> {
-        match *value.version {
-            1 => Ok(Self {
+        match value.version {
+            HeaderVersion::V1 => Ok(Self {
                 id: value.id.into(),
                 da_height: value.da_height.into(),
                 consensus_parameters_version: value.consensus_parameters_version.into(),
@@ -91,7 +95,6 @@ impl TryFrom<schema::block::Header> for Header {
                 time: value.time.0,
                 application_hash: value.application_hash.into(),
             }),
-            _ => Err(ConversionError::UnknownVariant("HeaderVersion")),
         }
     }
 }
@@ -135,8 +138,8 @@ impl TryFrom<schema::block::Block> for Block {
     type Error = ConversionError;
 
     fn try_from(value: schema::block::Block) -> Result<Self, Self::Error> {
-        match *value.version {
-            1 => {
+        match value.version {
+            BlockVersion::V1 => {
                 let transactions = value
                     .transactions
                     .iter()
@@ -152,7 +155,6 @@ impl TryFrom<schema::block::Block> for Block {
                     block_producer,
                 })
             }
-            _ => Err(ConversionError::UnknownVariant("BlockVersion")),
         }
     }
 }
