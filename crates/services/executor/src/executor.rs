@@ -94,6 +94,7 @@ use fuel_core_types::{
         Transaction,
         TxId,
         TxPointer,
+        UniqueIdentifier,
         UtxoId,
     },
     fuel_types::{
@@ -1427,30 +1428,23 @@ where
         T: KeyValueInspect<Column = Column>,
     {
         let tx_id = checked_tx.id();
-        let min_gas = checked_tx.metadata().min_gas();
-        let max_fee = checked_tx.transaction().max_fee_limit();
 
         if self.options.utxo_validation {
             checked_tx = self.validate_utxos(checked_tx, header, tx_st_transaction)?;
         }
 
-        let (reverted, state, mut tx, receipts) = self.execute_tx_with_vm(
+        let (reverted, state, mut tx, receipts) = self.attempt_tx_execution_with_vm(
             &mut checked_tx,
             &header,
             coinbase_contract_id,
             gas_price,
             tx_st_transaction,
-            tx_id,
         )?;
 
-        // update block commitment
-        let (used_gas, tx_fee) =
-            self.total_fee_paid(&tx, min_gas, max_fee, &receipts, gas_price)?;
+        let (used_gas, tx_fee) = self.total_fee_paid(&tx, &receipts, gas_price)?;
 
-        // change the spent status of the tx inputs
         self.spend_input_utxos(tx.inputs(), tx_st_transaction, reverted, execution_data)?;
 
-        // Persist utxos first and after calculate the not utxo outputs
         self.persist_output_utxos(
             *header.height(),
             execution_data,
@@ -1460,17 +1454,12 @@ where
             tx.outputs(),
         )?;
 
-        // We always need to update outputs with storage state after execution.
         self.update_tx_outputs(tx_st_transaction, tx_id, &mut tx)?;
 
-        let final_tx = tx.into();
-
-        // Store tx into the block db transaction
         tx_st_transaction
             .storage::<ProcessedTransactions>()
             .insert(&tx_id, &())?;
 
-        // Update `execution_data` data only after all steps.
         Self::update_execution_data(
             execution_data,
             receipts,
@@ -1481,7 +1470,88 @@ where
             tx_id,
         )?;
 
-        Ok(final_tx)
+        Ok(tx.into())
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn validate_chargeable_transaction<Tx, T>(
+        &self,
+        mut checked_tx: Checked<Tx>,
+        header: &PartialBlockHeader,
+        coinbase_contract_id: ContractId,
+        gas_price: Word,
+        execution_data: &mut ExecutionData,
+        tx_st_transaction: &mut StorageTransaction<T>,
+    ) -> ExecutorResult<Transaction>
+    where
+        Tx: ExecutableTransaction + PartialEq + Cacheable + Send + Sync + 'static,
+        <Tx as IntoChecked>::Metadata: CheckedMetadata,
+        T: KeyValueInspect<Column = Column>,
+    {
+        let tx_id = checked_tx.id();
+
+        if self.options.utxo_validation {
+            checked_tx = self.validate_utxos(checked_tx, header, tx_st_transaction)?;
+        }
+
+        self.validate_inputs_state(
+            checked_tx.transaction().inputs(),
+            tx_id,
+            tx_st_transaction,
+        )?;
+
+        let (reverted, state, mut tx, receipts) = self.attempt_tx_execution_with_vm(
+            &mut checked_tx,
+            &header,
+            coinbase_contract_id,
+            gas_price,
+            tx_st_transaction,
+        )?;
+
+        let (used_gas, tx_fee) = self.total_fee_paid(&tx, &receipts, gas_price)?;
+
+        self.spend_input_utxos(tx.inputs(), tx_st_transaction, reverted, execution_data)?;
+
+        self.persist_output_utxos(
+            *header.height(),
+            execution_data,
+            &tx_id,
+            tx_st_transaction,
+            tx.inputs(),
+            tx.outputs(),
+        )?;
+
+        self.update_tx_outputs(tx_st_transaction, tx_id, &mut tx)?;
+
+        Self::validate_tx_outcome(&tx, &checked_tx)?;
+
+        tx_st_transaction
+            .storage::<ProcessedTransactions>()
+            .insert(&tx_id, &())?;
+
+        Self::update_execution_data(
+            execution_data,
+            receipts,
+            used_gas,
+            tx_fee,
+            reverted,
+            state,
+            tx_id,
+        )?;
+
+        Ok(tx.into())
+    }
+
+    fn validate_tx_outcome<Tx: PartialEq + IntoChecked + UniqueIdentifier>(
+        tx: &Tx,
+        checked_tx: &Checked<Tx>,
+    ) -> ExecutorResult<()> {
+        if tx != checked_tx.transaction() {
+            return Err(ExecutorError::InvalidTransactionOutcome {
+                transaction_id: checked_tx.id(),
+            })
+        }
+        Ok(())
     }
 
     fn update_tx_outputs<Tx, T>(
@@ -1629,108 +1699,20 @@ where
         Ok(checked_tx)
     }
 
-    #[allow(clippy::too_many_arguments)]
-    fn validate_chargeable_transaction<Tx, T>(
-        &self,
-        mut checked_tx: Checked<Tx>,
-        header: &PartialBlockHeader,
-        coinbase_contract_id: ContractId,
-        gas_price: Word,
-        execution_data: &mut ExecutionData,
-        tx_st_transaction: &mut StorageTransaction<T>,
-    ) -> ExecutorResult<Transaction>
-    where
-        Tx: ExecutableTransaction + PartialEq + Cacheable + Send + Sync + 'static,
-        <Tx as IntoChecked>::Metadata: CheckedMetadata,
-        T: KeyValueInspect<Column = Column>,
-    {
-        let tx_id = checked_tx.id();
-        let min_gas = checked_tx.metadata().min_gas();
-        let max_fee = checked_tx.transaction().max_fee_limit();
-
-        if self.options.utxo_validation {
-            checked_tx = self.validate_utxos(checked_tx, header, tx_st_transaction)?;
-        }
-
-        // ***********************
-        self.validate_inputs_state(
-            checked_tx.transaction().inputs(),
-            tx_id,
-            tx_st_transaction,
-        )?;
-
-        let (reverted, state, mut tx, receipts) = self.execute_tx_with_vm(
-            &mut checked_tx,
-            &header,
-            coinbase_contract_id,
-            gas_price,
-            tx_st_transaction,
-            tx_id,
-        )?;
-
-        // update block commitment
-        let (used_gas, tx_fee) =
-            self.total_fee_paid(&tx, min_gas, max_fee, &receipts, gas_price)?;
-
-        // change the spent status of the tx inputs
-        self.spend_input_utxos(tx.inputs(), tx_st_transaction, reverted, execution_data)?;
-
-        // Persist utxos first and after calculate the not utxo outputs
-        self.persist_output_utxos(
-            *header.height(),
-            execution_data,
-            &tx_id,
-            tx_st_transaction,
-            tx.inputs(),
-            tx.outputs(),
-        )?;
-
-        // We always need to update outputs with storage state after execution.
-        self.update_tx_outputs(tx_st_transaction, tx_id, &mut tx)?;
-
-        // *********************
-        // The validator ensures that the generated transaction by him is the same as provided by the block producer.
-        if &tx != checked_tx.transaction() {
-            return Err(ExecutorError::InvalidTransactionOutcome {
-                transaction_id: tx_id,
-            })
-        }
-
-        let final_tx = tx.into();
-
-        // Store tx into the block db transaction
-        tx_st_transaction
-            .storage::<ProcessedTransactions>()
-            .insert(&tx_id, &())?;
-
-        // Update `execution_data` data only after all steps.
-        Self::update_execution_data(
-            execution_data,
-            receipts,
-            used_gas,
-            tx_fee,
-            reverted,
-            state,
-            tx_id,
-        )?;
-
-        Ok(final_tx)
-    }
-
-    fn execute_tx_with_vm<Tx, T>(
+    fn attempt_tx_execution_with_vm<Tx, T>(
         &self,
         mut checked_tx: &mut Checked<Tx>,
         header: &&PartialBlockHeader,
         coinbase_contract_id: ContractId,
         gas_price: Word,
         tx_st_transaction: &mut StorageTransaction<T>,
-        tx_id: TxId,
     ) -> ExecutorResult<(bool, ProgramState, Tx, Vec<Receipt>)>
     where
         Tx: ExecutableTransaction + PartialEq + Cacheable + Send + Sync + 'static,
         <Tx as IntoChecked>::Metadata: CheckedMetadata,
         T: KeyValueInspect<Column = Column>,
     {
+        let tx_id = checked_tx.id();
         // execute transaction
         // setup database view that only lives for the duration of vm execution
         let mut sub_block_db_commit = tx_st_transaction
@@ -1933,11 +1915,14 @@ where
     fn total_fee_paid<Tx: Chargeable>(
         &self,
         tx: &Tx,
-        min_gas: Word,
-        max_fee: Word,
         receipts: &[Receipt],
         gas_price: Word,
     ) -> ExecutorResult<(Word, Word)> {
+        let min_gas = tx.min_gas(
+            self.consensus_params.gas_costs(),
+            self.consensus_params.fee_params(),
+        );
+        let max_fee = tx.max_fee_limit();
         let mut used_gas = 0;
         for r in receipts {
             if let Receipt::ScriptResult { gas_used, .. } = r {
