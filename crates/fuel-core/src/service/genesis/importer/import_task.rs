@@ -24,7 +24,6 @@ use crate::{
     service::genesis::{
         progress::ProgressReporter,
         task_manager::CancellationToken,
-        NotifyCancel,
     },
 };
 

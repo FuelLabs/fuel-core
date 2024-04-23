@@ -68,16 +68,8 @@ impl CancellationToken {
     }
 }
 
-#[async_trait::async_trait]
-impl NotifyCancel for CancellationToken {
-    async fn wait_until_cancelled(&self) -> anyhow::Result<()> {
-        tokio::select! {
-            res = self.inner_signal.wait_until_cancelled() => res,
-            res = self.outside_signal.wait_until_cancelled() => res
-        }
-    }
-
-    fn is_cancelled(&self) -> bool {
+impl CancellationToken {
+    pub fn is_cancelled(&self) -> bool {
         self.inner_signal.is_cancelled() || self.outside_signal.is_cancelled()
     }
 }
@@ -136,62 +128,6 @@ where
 
 #[cfg(test)]
 mod tests {
-    mod cancel_token {
-        use std::time::Duration;
-
-        use tokio::sync::watch;
-
-        use crate::service::genesis::{
-            task_manager::CancellationToken,
-            NotifyCancel,
-        };
-
-        use tokio_util::sync::CancellationToken as TokioCancelToken;
-
-        #[tokio::test]
-        async fn reacts_on_inner_signal_being_cancelled() {
-            // given
-
-            let dud_token = TokioCancelToken::new();
-            let multi_token = CancellationToken::new(dud_token);
-
-            // when
-            multi_token.cancel();
-
-            // then
-            tokio::time::timeout(
-                Duration::from_secs(1),
-                multi_token.wait_until_cancelled(),
-            )
-            .await
-            .expect("Cancel future should have resolved")
-            .unwrap();
-            assert!(multi_token.is_cancelled());
-        }
-
-        #[tokio::test]
-        async fn reacts_on_state_watcher_stopping() {
-            // given
-            use fuel_core_services::StateWatcher;
-
-            let (tx, rx) = watch::channel(fuel_core_services::State::NotStarted);
-            let active_token: StateWatcher = rx.into();
-            let multi_token = CancellationToken::new(active_token);
-
-            // when
-            tx.send(fuel_core_services::State::Stopping).unwrap();
-
-            // then
-            assert!(multi_token.is_cancelled());
-            tokio::time::timeout(
-                Duration::from_secs(1),
-                multi_token.wait_until_cancelled(),
-            )
-            .await
-            .expect("Cancel future should have resolved")
-            .unwrap();
-        }
-    }
     mod state_watcher {
         use std::time::Duration;
 
@@ -237,7 +173,7 @@ mod tests {
             let mut workers = TaskManager::new(TokioCancelToken::new());
             let (tx, rx) = tokio::sync::oneshot::channel();
             workers.spawn(move |token| async move {
-                token.wait_until_cancelled().await.unwrap();
+                token.inner_signal.wait_until_cancelled().await.unwrap();
                 tx.send(()).unwrap();
                 Ok(())
             });
@@ -260,7 +196,7 @@ mod tests {
             let mut workers = TaskManager::new(cancel.clone());
 
             workers.spawn(move |token| async move {
-                token.wait_until_cancelled().await.unwrap();
+                token.outside_signal.wait_until_cancelled().await.unwrap();
                 Ok(10u8)
             });
 
