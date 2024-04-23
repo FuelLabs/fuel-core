@@ -166,11 +166,11 @@ impl SnapshotImporter {
             progress_reporter,
         );
 
+        let import = |token| task.run(token);
         if num_groups < GROUPS_NUMBER_FOR_PARALLELIZATION {
-            task.run(self.task_manager.cancel_token().clone())?;
+            self.task_manager.run(import)?;
         } else {
-            self.task_manager
-                .spawn_blocking(move |token| task.run(token));
+            self.task_manager.spawn_blocking(import);
         }
 
         Ok(())
@@ -213,11 +213,11 @@ impl SnapshotImporter {
             db,
             progress_reporter,
         );
+        let import = |token| task.run(token);
         if num_groups < GROUPS_NUMBER_FOR_PARALLELIZATION {
-            task.run(self.task_manager.cancel_token().clone())?;
+            self.task_manager.run(import)?;
         } else {
-            self.task_manager
-                .spawn_blocking(move |token| task.run(token));
+            self.task_manager.spawn_blocking(import);
         }
 
         Ok(())

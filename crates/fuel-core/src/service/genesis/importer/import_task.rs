@@ -23,7 +23,7 @@ use crate::{
     },
     service::genesis::{
         progress::ProgressReporter,
-        task_manager::MultiCancellationToken,
+        task_manager::CancellationToken,
         NotifyCancel,
     },
 };
@@ -101,7 +101,7 @@ where
     for<'a> StorageTransaction<&'a mut Database<DbDesc>>:
         StorageMutate<GenesisMetadata<DbDesc>, Error = fuel_core_storage::Error>,
 {
-    pub fn run(mut self, cancel_token: MultiCancellationToken) -> anyhow::Result<()> {
+    pub fn run(mut self, cancel_token: CancellationToken) -> anyhow::Result<()> {
         let mut db = self.db;
         let mut is_cancelled = cancel_token.is_cancelled();
         self.groups
@@ -145,7 +145,7 @@ mod tests {
                 migration_name,
             },
             progress::ProgressReporter,
-            task_manager::MultiCancellationToken,
+            task_manager::CancellationToken,
         },
     };
     use std::sync::{
@@ -293,7 +293,7 @@ mod tests {
         );
 
         // when
-        runner.run(Default::default()).unwrap();
+        runner.run(never_cancel()).unwrap();
 
         // then
         assert_eq!(called_with, data.as_entries(0));
@@ -323,7 +323,7 @@ mod tests {
         );
 
         // when
-        runner.run(Default::default()).unwrap();
+        runner.run(never_cancel()).unwrap();
 
         // then
         assert_eq!(called_with, data.as_entries(1));
@@ -361,7 +361,7 @@ mod tests {
         );
 
         // when
-        runner.run(Default::default()).unwrap();
+        runner.run(never_cancel()).unwrap();
 
         // then
         assert!(outer_db
@@ -394,7 +394,7 @@ mod tests {
         );
 
         // when
-        let _ = runner.run(Default::default());
+        let _ = runner.run(never_cancel());
 
         // then
         assert!(!StorageInspect::<Coins>::contains_key(&db, &utxo_id).unwrap());
@@ -412,7 +412,7 @@ mod tests {
         );
 
         // when
-        let result = runner.run(Default::default());
+        let result = runner.run(never_cancel());
 
         // then
         assert!(result.is_err());
@@ -430,7 +430,7 @@ mod tests {
         );
 
         // when
-        let result = runner.run(Default::default());
+        let result = runner.run(never_cancel());
 
         // then
         assert!(result.is_err());
@@ -449,7 +449,7 @@ mod tests {
         );
 
         // when
-        runner.run(Default::default()).unwrap();
+        runner.run(never_cancel()).unwrap();
 
         // then
         assert_eq!(
@@ -481,7 +481,7 @@ mod tests {
             )
         };
 
-        let token = MultiCancellationToken::from_single(cancel_token.clone());
+        let token = CancellationToken::new(cancel_token.clone());
         let runner_handle = std::thread::spawn(move || runner.run(token));
 
         let data = TestData::new(4);
@@ -572,9 +572,13 @@ mod tests {
         );
 
         // when
-        let result = runner.run(Default::default());
+        let result = runner.run(never_cancel());
 
         // then
         assert!(result.is_err());
+    }
+
+    fn never_cancel() -> CancellationToken {
+        CancellationToken::new(tokio_util::sync::CancellationToken::new())
     }
 }
