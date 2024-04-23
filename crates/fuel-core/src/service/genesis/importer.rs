@@ -158,18 +158,15 @@ impl SnapshotImporter {
             .multi_progress_reporter
             .table_reporter(Some(num_groups), migration_name);
 
-        self.task_manager.spawn(move |token| {
-            let task = ImportTask::new(
+        self.task_manager.spawn_blocking(move |token| {
+            ImportTask::new(
                 token,
                 Handler::new(block_height, da_block_height),
                 groups,
                 db,
                 progress_reporter,
-            );
-            async move {
-                tokio_rayon::spawn(move || task.run()).await?;
-                Ok(())
-            }
+            )
+            .run()
         });
 
         Ok(())
@@ -206,15 +203,15 @@ impl SnapshotImporter {
             .multi_progress_reporter
             .table_reporter(Some(num_groups), migration_name);
 
-        self.task_manager.spawn(move |token| {
-            let task = ImportTask::new(
+        self.task_manager.spawn_blocking(move |token| {
+            ImportTask::new(
                 token,
                 Handler::new(block_height, da_block_height),
                 groups,
                 db,
                 progress_reporter,
-            );
-            tokio_rayon::spawn(move || task.run())
+            )
+            .run()
         });
 
         Ok(())

@@ -126,7 +126,7 @@ where
                     index,
                 )?;
                 tx.commit()?;
-                self.reporter.set_progress(index);
+                self.reporter.set_index(index);
                 anyhow::Result::<_>::Ok(())
             })?;
 

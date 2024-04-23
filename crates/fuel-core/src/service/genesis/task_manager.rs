@@ -1,7 +1,4 @@
-use std::{
-    future::Future,
-    sync::Arc,
-};
+use std::sync::Arc;
 
 use fuel_core_services::StateWatcher;
 use futures::{
@@ -15,7 +12,7 @@ use tokio_util::sync::CancellationToken;
 
 pub struct TaskManager<T> {
     set: JoinSet<anyhow::Result<T>>,
-    outside_cancel_listener: MultiCancellationToken,
+    cancel_listener: MultiCancellationToken,
     cancel_tasks: CancellationToken,
 }
 
@@ -106,7 +103,7 @@ impl<T> TaskManager<T> {
         multi_cancel.insert(task_cancel.child_token());
         Self {
             set: JoinSet::new(),
-            outside_cancel_listener: multi_cancel,
+            cancel_listener: multi_cancel,
             cancel_tasks: task_cancel,
         }
     }
@@ -116,12 +113,12 @@ impl<T> TaskManager<T>
 where
     T: Send + 'static,
 {
-    pub fn spawn<F, Fut>(&mut self, arg: F)
+    pub fn spawn_blocking<F>(&mut self, arg: F)
     where
-        F: FnOnce(MultiCancellationToken) -> Fut,
-        Fut: Future<Output = anyhow::Result<T>> + Send + 'static,
+        F: FnOnce(MultiCancellationToken) -> anyhow::Result<T> + Send + 'static,
     {
-        self.set.spawn(arg(self.outside_cancel_listener.clone()));
+        let token = self.cancel_listener.clone();
+        self.set.spawn_blocking(move || arg(token));
     }
 
     pub async fn wait(self) -> anyhow::Result<Vec<T>> {
