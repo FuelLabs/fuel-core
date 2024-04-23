@@ -128,88 +128,86 @@ where
 
 #[cfg(test)]
 mod tests {
-    mod state_watcher {
-        use std::time::Duration;
+    use std::time::Duration;
 
-        use anyhow::bail;
-        use tokio_util::sync::CancellationToken as TokioCancelToken;
+    use anyhow::bail;
+    use tokio_util::sync::CancellationToken as TokioCancelToken;
 
-        use crate::service::genesis::task_manager::{
-            NotifyCancel,
-            TaskManager,
-        };
+    use crate::service::genesis::task_manager::{
+        NotifyCancel,
+        TaskManager,
+    };
 
-        #[tokio::test]
-        async fn task_added_and_completed() {
-            // given
-            let mut workers = TaskManager::new(TokioCancelToken::new());
-            workers.spawn_blocking(|_| Ok(8u8));
+    #[tokio::test]
+    async fn task_added_and_completed() {
+        // given
+        let mut workers = TaskManager::new(TokioCancelToken::new());
+        workers.spawn_blocking(|_| Ok(8u8));
 
-            // when
-            let results = workers.wait().await.unwrap();
+        // when
+        let results = workers.wait().await.unwrap();
 
-            // then
-            assert_eq!(results, vec![8]);
-        }
+        // then
+        assert_eq!(results, vec![8]);
+    }
 
-        #[tokio::test]
-        async fn returns_err_on_single_failure() {
-            // given
-            let mut workers = TaskManager::new(TokioCancelToken::new());
-            workers.spawn_blocking(|_| Ok(10u8));
-            workers.spawn_blocking(|_| Err(anyhow::anyhow!("I fail")));
+    #[tokio::test]
+    async fn returns_err_on_single_failure() {
+        // given
+        let mut workers = TaskManager::new(TokioCancelToken::new());
+        workers.spawn_blocking(|_| Ok(10u8));
+        workers.spawn_blocking(|_| Err(anyhow::anyhow!("I fail")));
 
-            // when
-            let results = workers.wait().await;
+        // when
+        let results = workers.wait().await;
 
-            // then
-            let err = results.unwrap_err();
-            assert_eq!(err.to_string(), "I fail");
-        }
+        // then
+        let err = results.unwrap_err();
+        assert_eq!(err.to_string(), "I fail");
+    }
 
-        #[tokio::test]
-        async fn signals_cancel_to_non_finished_tasks_on_failure() {
-            // given
-            let mut workers = TaskManager::new(TokioCancelToken::new());
-            let (tx, rx) = tokio::sync::oneshot::channel();
-            workers.spawn(move |token| async move {
-                token.inner_signal.wait_until_cancelled().await.unwrap();
-                tx.send(()).unwrap();
-                Ok(())
-            });
+    #[tokio::test]
+    async fn signals_cancel_to_non_finished_tasks_on_failure() {
+        // given
+        let mut workers = TaskManager::new(TokioCancelToken::new());
+        let (tx, rx) = tokio::sync::oneshot::channel();
+        workers.spawn(move |token| async move {
+            token.inner_signal.wait_until_cancelled().await.unwrap();
+            tx.send(()).unwrap();
+            Ok(())
+        });
 
-            // when
-            workers.spawn_blocking(|_| bail!("I fail"));
+        // when
+        workers.spawn_blocking(|_| bail!("I fail"));
 
-            // then
-            let _ = workers.wait().await;
-            tokio::time::timeout(Duration::from_secs(2), rx)
-                .await
-                .expect("Cancellation should have been signaled")
-                .unwrap();
-        }
+        // then
+        let _ = workers.wait().await;
+        tokio::time::timeout(Duration::from_secs(2), rx)
+            .await
+            .expect("Cancellation should have been signaled")
+            .unwrap();
+    }
 
-        #[tokio::test]
-        async fn stops_on_cancellation() {
-            // given
-            let cancel = TokioCancelToken::new();
-            let mut workers = TaskManager::new(cancel.clone());
+    #[tokio::test]
+    async fn stops_on_cancellation() {
+        // given
+        let cancel = TokioCancelToken::new();
+        let mut workers = TaskManager::new(cancel.clone());
 
-            workers.spawn(move |token| async move {
-                token.outside_signal.wait_until_cancelled().await.unwrap();
-                Ok(10u8)
-            });
+        workers.spawn(move |token| async move {
+            token.outside_signal.wait_until_cancelled().await.unwrap();
+            Ok(10u8)
+        });
 
-            // when
-            cancel.cancel();
+        // when
+        cancel.cancel();
 
-            // then
-            let result = tokio::time::timeout(Duration::from_secs(2), workers.wait())
-                .await
-                .expect("Cancellation should have been signaled")
-                .unwrap();
+        // then
+        let result = tokio::time::timeout(Duration::from_secs(2), workers.wait())
+            .await
+            .expect("Cancellation should have been signaled")
+            .unwrap();
 
-            assert_eq!(result, vec![10]);
-        }
+        assert_eq!(result, vec![10]);
     }
 }

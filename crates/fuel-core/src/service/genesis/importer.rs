@@ -1,14 +1,7 @@
-use self::import_task::{
-    ImportTable,
-    ImportTask,
-};
-
 use super::{
     progress::MultipleProgressReporter,
     task_manager::TaskManager,
 };
-use std::marker::PhantomData;
-
 use crate::{
     combined_database::CombinedDatabase,
     database::database_description::{
@@ -31,6 +24,7 @@ use crate::{
         },
     },
 };
+use core::marker::PhantomData;
 use fuel_core_chain_config::{
     AsTable,
     SnapshotReader,
@@ -61,10 +55,15 @@ use fuel_core_types::{
     },
     fuel_types::BlockHeight,
 };
+use import_task::{
+    ImportTable,
+    ImportTask,
+};
 
 mod import_task;
 mod off_chain;
 mod on_chain;
+
 const GROUPS_NUMBER_FOR_PARALLELIZATION: usize = 10;
 
 pub struct SnapshotImporter {
