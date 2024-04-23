@@ -179,6 +179,9 @@ where
 
         let db = db_picker(self).clone();
         let prefix = prefix.map(|p| p.to_vec());
+        // TODO:
+        // [1857](https://github.com/FuelLabs/fuel-core/issues/1857)
+        // RocksDb can provide an estimate for the number of items.
         let progress_tracker =
             self.multi_progress.table_reporter(None, T::column().name());
         self.task_manager.spawn_blocking(move |cancel| {
