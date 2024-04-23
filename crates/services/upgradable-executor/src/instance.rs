@@ -17,7 +17,10 @@ use fuel_core_storage::{
     },
 };
 use fuel_core_types::{
-    blockchain::primitives::DaBlockHeight,
+    blockchain::{
+        block::Block,
+        primitives::DaBlockHeight,
+    },
     fuel_tx::Transaction,
     fuel_vm::checked_transaction::Checked,
     services::executor::{
@@ -30,6 +33,7 @@ use fuel_core_wasm_executor::utils::{
     unpack_ptr_and_len,
     InputType,
     ReturnType,
+    WasmExecutionBlockTypes,
 };
 use std::{
     collections::HashMap,
@@ -146,6 +150,20 @@ impl Instance<Created> {
         })
     }
 
+    pub fn no_source(mut self) -> ExecutorResult<Instance<Source>> {
+        let peek_next_txs_size = self.no_source_peek_next_txs_size();
+        self.add_method("peek_next_txs_size", peek_next_txs_size)?;
+
+        let consume_next_txs = self.consume_next_txs();
+        self.add_method("consume_next_txs", consume_next_txs)?;
+
+        Ok(Instance {
+            store: self.store,
+            linker: self.linker,
+            stage: Source {},
+        })
+    }
+
     fn peek_next_txs_size<TxSource>(&mut self, source: Option<Arc<TxSource>>) -> Func
     where
         TxSource: TransactionsSource + Send + Sync + 'static,
@@ -191,6 +209,13 @@ impl Instance<Created> {
                 .push(encoded_txs);
             Ok(encoded_size)
         };
+
+        Func::wrap(&mut self.store, closure)
+    }
+
+    fn no_source_peek_next_txs_size(&mut self) -> Func {
+        let closure =
+            move |_: Caller<'_, ExecutionState>, _: u64| -> anyhow::Result<u32> { Ok(0) };
 
         Func::wrap(&mut self.store, closure)
     }
@@ -429,12 +454,39 @@ pub struct InputData {
 
 impl Instance<Relayer> {
     /// Adds getters for the `block` and `options`.
-    pub fn add_input_data(
-        mut self,
+    pub fn add_execution_input_data(
+        self,
         block: ExecutionBlockWithSource<()>,
         options: ExecutionOptions,
     ) -> ExecutorResult<Instance<InputData>> {
-        let input = InputType::V1 { block, options };
+        let wasm_block = match block {
+            ExecutionBlockWithSource::DryRun(inner) => {
+                WasmExecutionBlockTypes::DryRun(inner)
+            }
+            ExecutionBlockWithSource::Production(inner) => {
+                WasmExecutionBlockTypes::Production(inner)
+            }
+        };
+        let input = InputType::V1 {
+            block: wasm_block,
+            options,
+        };
+        self.add_input_data(input)
+    }
+
+    pub fn add_validation_input_data(
+        self,
+        block: Block,
+        options: ExecutionOptions,
+    ) -> ExecutorResult<Instance<InputData>> {
+        let input = InputType::V1 {
+            block: WasmExecutionBlockTypes::Validation(block),
+            options,
+        };
+        self.add_input_data(input)
+    }
+
+    fn add_input_data(mut self, input: InputType) -> ExecutorResult<Instance<InputData>> {
         let encoded_input = postcard::to_allocvec(&input).map_err(|e| {
             ExecutorError::Other(format!(
                 "Failed encoding of the input for `input` function: {}",

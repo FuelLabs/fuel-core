@@ -2,8 +2,8 @@ use crate::{
     ports::{
         BlockVerifier,
         DatabaseTransaction,
-        Executor,
         ImporterDatabase,
+        Validator,
     },
     Config,
 };
@@ -354,7 +354,7 @@ where
 
 impl<IDatabase, E, V> Importer<IDatabase, E, V>
 where
-    E: Executor,
+    E: Validator,
     V: BlockVerifier,
 {
     /// Performs all checks required to commit the block, it includes the execution of
@@ -410,7 +410,7 @@ where
             },
             changes,
         ) = executor
-            .execute_without_commit(block)
+            .validate(block)
             .map_err(Error::FailedExecution)?
             .into();
 
@@ -440,7 +440,7 @@ where
 impl<IDatabase, E, V> Importer<IDatabase, E, V>
 where
     IDatabase: ImporterDatabase + 'static,
-    E: Executor + 'static,
+    E: Validator + 'static,
     V: BlockVerifier + 'static,
 {
     /// The method validates the `Block` fields and commits the `SealedBlock`.
