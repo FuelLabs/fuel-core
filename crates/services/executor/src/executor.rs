@@ -1701,7 +1701,7 @@ where
 
     fn attempt_tx_execution_with_vm<Tx, T>(
         &self,
-        mut checked_tx: &mut Checked<Tx>,
+        checked_tx: &mut Checked<Tx>,
         header: &&PartialBlockHeader,
         coinbase_contract_id: ContractId,
         gas_price: Word,
@@ -1755,7 +1755,7 @@ where
             debug_assert_eq!(tx.id(&self.consensus_params.chain_id()), tx_id);
         }
 
-        Self::update_input_used_gas(&mut checked_tx, tx_id, &mut tx)?;
+        Self::update_input_used_gas(checked_tx, tx_id, &mut tx)?;
 
         // We always need to update inputs with storage state before execution,
         // because VM zeroes malleable fields during the execution.
