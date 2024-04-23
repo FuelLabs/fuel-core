@@ -39,8 +39,9 @@ impl NotifyCancel for CancellationToken {
 #[async_trait::async_trait]
 impl NotifyCancel for StateWatcher {
     async fn wait_until_cancelled(&self) -> anyhow::Result<()> {
-        while !self.is_cancelled() {
-            self.clone().changed().await?;
+        let mut state = self.clone();
+        while !state.is_cancelled() {
+            state.changed().await?;
         }
 
         Ok(())

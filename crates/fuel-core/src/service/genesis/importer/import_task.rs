@@ -67,12 +67,9 @@ where
         db: Database<DbDesc>,
         reporter: ProgressReporter,
     ) -> Self {
-        let skip = match db
-            .storage::<GenesisMetadata<DbDesc>>()
-            .get(&migration_name::<
-                Logic::TableInSnapshot,
-                Logic::TableBeingWritten,
-            >()) {
+        let progress_name =
+            migration_name::<Logic::TableInSnapshot, Logic::TableBeingWritten>();
+        let skip = match db.storage::<GenesisMetadata<DbDesc>>().get(&progress_name) {
             Ok(Some(idx_last_handled)) => {
                 usize::saturating_add(idx_last_handled.into_owned(), 1)
             }

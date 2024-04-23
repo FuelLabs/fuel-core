@@ -191,7 +191,7 @@ where
                     .take_while(|_| !cancel.is_cancelled())
                     .enumerate()
                     .try_for_each(|(index, chunk)| {
-                        progress_tracker.set_progress(index);
+                        progress_tracker.set_index(index);
 
                         writer.write(chunk.try_collect()?)
                     })?;

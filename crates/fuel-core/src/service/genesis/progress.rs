@@ -62,18 +62,18 @@ impl ProgressReporter {
         ProgressStyle::with_template(template).expect("hard coded templates to be valid")
     }
 
-    pub fn set_progress(&self, group_index: usize) {
-        let group_num = u64::try_from(group_index)
-            .unwrap_or(u64::MAX)
-            .saturating_add(1);
-        self.bar.set_position(group_num);
+    /// Sets the index of the last element handled.
+    pub fn set_index(&self, index: usize) {
+        // So that the last element shows up as, e.g., 100/100 and not 99/100.
+        let display_index = u64::try_from(index).unwrap_or(u64::MAX).saturating_add(1);
+        self.bar.set_position(display_index);
         if let ReportMethod::Logs(span) = &self.target {
             span.in_scope(|| {
                 if let Some(len) = self.bar.length() {
                     let human_eta = HumanDuration(self.bar.eta());
-                    tracing::info!("Processing: {group_num}/{len}. ({human_eta})");
+                    tracing::info!("Processing: {display_index}/{len}. ({human_eta})");
                 } else {
-                    tracing::info!("Processing: {}", group_num);
+                    tracing::info!("Processing: {}", display_index);
                 }
             })
         }
