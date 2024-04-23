@@ -113,6 +113,16 @@ impl<T> TaskManager<T>
 where
     T: Send + 'static,
 {
+    #[cfg(test)]
+    pub fn spawn<F, Fut>(&mut self, arg: F)
+    where
+        F: FnOnce(MultiCancellationToken) -> Fut,
+        Fut: futures::Future<Output = anyhow::Result<T>> + Send + 'static,
+    {
+        let token = self.cancel_listener.clone();
+        self.set.spawn(arg(token));
+    }
+
     pub fn spawn_blocking<F>(&mut self, arg: F)
     where
         F: FnOnce(MultiCancellationToken) -> anyhow::Result<T> + Send + 'static,
@@ -215,7 +225,7 @@ mod tests {
         async fn task_added_and_completed() {
             // given
             let mut workers = TaskManager::default();
-            workers.spawn(|_| async { Ok(8u8) });
+            workers.spawn_blocking(|_| Ok(8u8));
 
             // when
             let results = workers.wait().await.unwrap();
@@ -228,8 +238,8 @@ mod tests {
         async fn returns_err_on_single_failure() {
             // given
             let mut workers = TaskManager::default();
-            workers.spawn(|_| async { Ok(10u8) });
-            workers.spawn(|_| async { Err(anyhow::anyhow!("I fail")) });
+            workers.spawn_blocking(|_| Ok(10u8));
+            workers.spawn_blocking(|_| Err(anyhow::anyhow!("I fail")));
 
             // when
             let results = workers.wait().await;
@@ -251,7 +261,7 @@ mod tests {
             });
 
             // when
-            workers.spawn(|_| async { bail!("I fail") });
+            workers.spawn_blocking(|_| bail!("I fail"));
 
             // then
             let _ = workers.wait().await;
