@@ -26,7 +26,6 @@ use crate::{
     },
     service::genesis::{
         progress::ProgressReporter,
-        task_manager::MultiCancellationToken,
         NotifyCancel,
     },
 };
@@ -53,7 +52,7 @@ where
 }
 
 pub fn import_entries<T>(
-    cancel_token: MultiCancellationToken,
+    cancel_token: impl NotifyCancel + Send + Sync + 'static,
     mut handler: impl ImportTable<T>,
     groups: impl IntoIterator<Item = anyhow::Result<Vec<TableEntry<T>>>>,
     mut on_chain_db: Database<OnChain>,
@@ -137,7 +136,7 @@ mod tests {
         service::genesis::{
             importer::import_task::import_entries,
             progress::ProgressReporter,
-            task_manager::MultiCancellationToken,
+            task_manager::CancellationToken,
         },
     };
     use std::{
@@ -360,7 +359,7 @@ mod tests {
 
         // when
         import_entries(
-            MultiCancellationToken::default(),
+            never_cancel(),
             spy.default_importer(),
             data.as_ok_groups(0),
             Database::default(),
@@ -396,7 +395,7 @@ mod tests {
 
         // when
         import_entries(
-            MultiCancellationToken::default(),
+            never_cancel(),
             spy.default_importer(),
             data.as_ok_groups(0),
             db.on_chain().clone(),
@@ -432,7 +431,7 @@ mod tests {
 
         // when
         let _ = import_entries(
-            MultiCancellationToken::default(),
+            never_cancel(),
             Spy::default().custom_importer(
                 move |_, tx| {
                     insert_a_coin(tx, &utxo_id);
@@ -460,7 +459,7 @@ mod tests {
 
         // when
         let _ = import_entries(
-            MultiCancellationToken::default(),
+            never_cancel(),
             Spy::default().custom_importer(
                 |_, _| Ok(()),
                 move |_, tx| {
@@ -488,7 +487,7 @@ mod tests {
 
         // when
         let result = import_entries(
-            MultiCancellationToken::default(),
+            never_cancel(),
             Spy::default().default_importer(),
             groups,
             Database::default(),
@@ -509,7 +508,7 @@ mod tests {
 
         // when
         import_entries(
-            MultiCancellationToken::default(),
+            never_cancel(),
             Spy::default().default_importer(),
             data.as_ok_groups(0),
             on_chain_db.clone(),
@@ -543,7 +542,7 @@ mod tests {
         let cancel_token = tokio_util::sync::CancellationToken::new();
         let spy = Spy::default();
         let runner_handle = {
-            let cancel_token = MultiCancellationToken::from_single(cancel_token.clone());
+            let cancel_token = CancellationToken::new(cancel_token.clone());
             let importer = spy.default_importer();
             std::thread::spawn(move || {
                 import_entries(
@@ -661,7 +660,7 @@ mod tests {
         // TODO: check off chain as well
         // when
         let result = import_entries(
-            MultiCancellationToken::default(),
+            never_cancel(),
             Spy::default().default_importer(),
             groups.as_ok_groups(0),
             on_chain,
@@ -711,7 +710,7 @@ mod tests {
 
         // when
         import_entries(
-            MultiCancellationToken::default(),
+            never_cancel(),
             spy.default_importer(),
             groups.as_ok_groups(0),
             on_chain,
@@ -736,5 +735,9 @@ mod tests {
                 last_off_chain.map(|x| x.saturating_add(1)).unwrap_or(0)
             )
         );
+    }
+
+    fn never_cancel() -> CancellationToken {
+        CancellationToken::new(tokio_util::sync::CancellationToken::new())
     }
 }

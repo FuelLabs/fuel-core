@@ -48,10 +48,8 @@ use itertools::Itertools;
 
 use super::{
     progress::MultipleProgressReporter,
-    task_manager::{
-        NotifyCancel,
-        TaskManager,
-    },
+    task_manager::TaskManager,
+    NotifyCancel,
 };
 
 pub struct Exporter<Fun> {

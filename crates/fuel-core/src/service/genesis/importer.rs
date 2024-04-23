@@ -159,7 +159,7 @@ impl SnapshotImporter {
             )
         };
         if num_groups < GROUPS_NUMBER_FOR_PARALLELIZATION {
-            import(self.task_manager.cancel_token().clone())?;
+            self.task_manager.run(import)?;
         } else {
             self.task_manager.spawn_blocking(import);
         }
