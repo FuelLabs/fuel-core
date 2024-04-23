@@ -49,7 +49,7 @@ impl ProgressReporter {
         ProgressReporter { bar, target }
     }
 
-    fn style(lenght_known: bool) -> ProgressStyle {
+    fn style(length_known: bool) -> ProgressStyle {
         let template = if lenght_known {
             "[{elapsed_precise}] {bar:.64.on_black} {pos:>7}/{len:7} {msg} {eta}"
         } else {
