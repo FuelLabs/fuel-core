@@ -283,7 +283,6 @@ mod tests {
 
         let mut called_with = vec![];
         let runner = ImportTask::new(
-            MultiCancellationToken::default(),
             TestHandler::new(|group, _| {
                 called_with.push(group);
                 Ok(())
@@ -294,7 +293,7 @@ mod tests {
         );
 
         // when
-        runner.run().unwrap();
+        runner.run(Default::default()).unwrap();
 
         // then
         assert_eq!(called_with, data.as_entries(0));
@@ -314,7 +313,6 @@ mod tests {
         )
         .unwrap();
         let runner = ImportTask::new(
-            MultiCancellationToken::default(),
             TestHandler::new(|element, _| {
                 called_with.push(element);
                 Ok(())
@@ -325,7 +323,7 @@ mod tests {
         );
 
         // when
-        runner.run().unwrap();
+        runner.run(Default::default()).unwrap();
 
         // then
         assert_eq!(called_with, data.as_entries(1));
@@ -339,7 +337,6 @@ mod tests {
         let utxo_id = UtxoId::new(Default::default(), 0);
 
         let runner = ImportTask::new(
-            MultiCancellationToken::default(),
             TestHandler::new(|_, tx| {
                 insert_a_coin(tx, &utxo_id);
 
@@ -364,7 +361,7 @@ mod tests {
         );
 
         // when
-        runner.run().unwrap();
+        runner.run(Default::default()).unwrap();
 
         // then
         assert!(outer_db
@@ -387,7 +384,6 @@ mod tests {
         let utxo_id = UtxoId::new(Default::default(), 0);
 
         let runner = ImportTask::new(
-            MultiCancellationToken::default(),
             TestHandler::new(|_, tx| {
                 insert_a_coin(tx, &utxo_id);
                 bail!("Some error")
@@ -398,7 +394,7 @@ mod tests {
         );
 
         // when
-        let _ = runner.run();
+        let _ = runner.run(Default::default());
 
         // then
         assert!(!StorageInspect::<Coins>::contains_key(&db, &utxo_id).unwrap());
@@ -409,7 +405,6 @@ mod tests {
         // given
         let groups = TestData::new(1);
         let runner = ImportTask::new(
-            MultiCancellationToken::default(),
             TestHandler::new(|_, _| bail!("Some error")),
             groups.as_ok_groups(),
             Database::default(),
@@ -417,7 +412,7 @@ mod tests {
         );
 
         // when
-        let result = runner.run();
+        let result = runner.run(Default::default());
 
         // then
         assert!(result.is_err());
@@ -428,7 +423,6 @@ mod tests {
         // given
         let groups = [Err(anyhow!("Some error"))];
         let runner = ImportTask::new(
-            MultiCancellationToken::default(),
             TestHandler::new(|_, _| Ok(())),
             groups,
             Database::default(),
@@ -436,7 +430,7 @@ mod tests {
         );
 
         // when
-        let result = runner.run();
+        let result = runner.run(Default::default());
 
         // then
         assert!(result.is_err());
@@ -448,7 +442,6 @@ mod tests {
         let data = TestData::new(2);
         let db = Database::default();
         let runner = ImportTask::new(
-            MultiCancellationToken::default(),
             TestHandler::new(|_, _| Ok(())),
             data.as_ok_groups(),
             db.clone(),
@@ -456,7 +449,7 @@ mod tests {
         );
 
         // when
-        runner.run().unwrap();
+        runner.run(Default::default()).unwrap();
 
         // then
         assert_eq!(
@@ -478,7 +471,6 @@ mod tests {
         let runner = {
             let read_groups = Arc::clone(&read_groups);
             ImportTask::new(
-                MultiCancellationToken::from_single(cancel_token.clone()),
                 TestHandler::new(move |el, _| {
                     read_groups.lock().unwrap().push(el);
                     Ok(())
@@ -489,7 +481,8 @@ mod tests {
             )
         };
 
-        let runner_handle = std::thread::spawn(move || runner.run());
+        let token = MultiCancellationToken::from_single(cancel_token.clone());
+        let runner_handle = std::thread::spawn(move || runner.run(token));
 
         let data = TestData::new(4);
         let take = 3;
@@ -572,7 +565,6 @@ mod tests {
         // given
         let groups = TestData::new(1);
         let runner = ImportTask::new(
-            MultiCancellationToken::default(),
             TestHandler::new(|_, _| Ok(())),
             groups.as_ok_groups(),
             Database::new(Arc::new(BrokenTransactions::new())),
@@ -580,7 +572,7 @@ mod tests {
         );
 
         // when
-        let result = runner.run();
+        let result = runner.run(Default::default());
 
         // then
         assert!(result.is_err());
