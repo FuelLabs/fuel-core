@@ -12,6 +12,7 @@ mod off_chain;
 mod on_chain;
 use std::marker::PhantomData;
 
+const GROUPS_NUMBER_FOR_PARALLELIZATION: usize = 10;
 use crate::{
     combined_database::CombinedDatabase,
     database::database_description::{
@@ -158,16 +159,19 @@ impl SnapshotImporter {
             .multi_progress_reporter
             .table_reporter(Some(num_groups), migration_name);
 
-        self.task_manager.spawn_blocking(move |token| {
-            ImportTask::new(
-                token,
-                Handler::new(block_height, da_block_height),
-                groups,
-                db,
-                progress_reporter,
-            )
-            .run()
-        });
+        let task = ImportTask::new(
+            Handler::new(block_height, da_block_height),
+            groups,
+            db,
+            progress_reporter,
+        );
+
+        if num_groups < GROUPS_NUMBER_FOR_PARALLELIZATION {
+            task.run(self.task_manager.cancel_token().clone())?;
+        } else {
+            self.task_manager
+                .spawn_blocking(move |token| task.run(token));
+        }
 
         Ok(())
     }
@@ -203,16 +207,18 @@ impl SnapshotImporter {
             .multi_progress_reporter
             .table_reporter(Some(num_groups), migration_name);
 
-        self.task_manager.spawn_blocking(move |token| {
-            ImportTask::new(
-                token,
-                Handler::new(block_height, da_block_height),
-                groups,
-                db,
-                progress_reporter,
-            )
-            .run()
-        });
+        let task = ImportTask::new(
+            Handler::new(block_height, da_block_height),
+            groups,
+            db,
+            progress_reporter,
+        );
+        if num_groups < GROUPS_NUMBER_FOR_PARALLELIZATION {
+            task.run(self.task_manager.cancel_token().clone())?;
+        } else {
+            self.task_manager
+                .spawn_blocking(move |token| task.run(token));
+        }
 
         Ok(())
     }

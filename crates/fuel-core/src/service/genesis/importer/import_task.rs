@@ -37,7 +37,6 @@ where
     handler: Handler,
     skip: usize,
     groups: Groups,
-    cancel_token: MultiCancellationToken,
     db: Database<DbDesc>,
     reporter: ProgressReporter,
 }
@@ -61,7 +60,6 @@ where
     Database<DbDesc>: StorageInspect<GenesisMetadata<DbDesc>>,
 {
     pub fn new(
-        cancel_token: MultiCancellationToken,
         handler: Logic,
         groups: GroupGenerator,
         db: Database<DbDesc>,
@@ -80,7 +78,6 @@ where
             handler,
             skip,
             groups,
-            cancel_token,
             db,
             reporter,
         }
@@ -104,15 +101,15 @@ where
     for<'a> StorageTransaction<&'a mut Database<DbDesc>>:
         StorageMutate<GenesisMetadata<DbDesc>, Error = fuel_core_storage::Error>,
 {
-    pub fn run(mut self) -> anyhow::Result<()> {
+    pub fn run(mut self, cancel_token: MultiCancellationToken) -> anyhow::Result<()> {
         let mut db = self.db;
-        let mut is_cancelled = self.cancel_token.is_cancelled();
+        let mut is_cancelled = cancel_token.is_cancelled();
         self.groups
             .into_iter()
             .enumerate()
             .skip(self.skip)
             .take_while(|_| {
-                is_cancelled = self.cancel_token.is_cancelled();
+                is_cancelled = cancel_token.is_cancelled();
                 !is_cancelled
             })
             .try_for_each(|(index, group)| {

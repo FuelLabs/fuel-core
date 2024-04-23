@@ -107,6 +107,12 @@ impl<T> TaskManager<T> {
             cancel_tasks: task_cancel,
         }
     }
+
+    /// A `MultiCancellationToken` that will signal when the task manager will start cancelling
+    /// tasks.
+    pub fn cancel_token(&self) -> &MultiCancellationToken {
+        &self.cancel_listener
+    }
 }
 
 impl<T> TaskManager<T>
