@@ -18,29 +18,32 @@ use tracing::{
 #[derive(Clone)]
 pub struct ProgressReporter {
     bar: ProgressBar,
-    target: Target,
+    target: ReportMethod,
 }
 
 impl Default for ProgressReporter {
     fn default() -> Self {
-        Self::new(Target::Logs(tracing::info_span!("default")), None)
+        Self::new(ReportMethod::Logs(tracing::info_span!("default")), None)
     }
 }
 
+/// Defines the method of reporting the progress of a [`ProgressReporter`].
 #[derive(Clone)]
-pub enum Target {
-    Cli(String),
+pub enum ReportMethod {
+    /// Progress is to be reported on stderr visualized as a progress bar.
+    VisualBar(String),
+    /// Progress is to be reported via log messages.
     Logs(Span),
 }
 
 impl ProgressReporter {
-    pub fn new(target: Target, max: Option<usize>) -> Self {
+    pub fn new(target: ReportMethod, max: Option<usize>) -> Self {
         let max = max.map(|max| u64::try_from(max).unwrap_or(u64::MAX));
         // Bars always hidden. Will be printed only if added to a `MultipleProgressReporter` that
         // prints to stderr. This removes flicker from double rendering (once when the progress bar
         // is constructed and again when added to the `MultipleProgressReporter`)
         let bar = ProgressBar::with_draw_target(max, ProgressDrawTarget::hidden());
-        if let Target::Cli(message) = &target {
+        if let ReportMethod::VisualBar(message) = &target {
             bar.set_message(message.clone());
 
             bar.set_style(Self::style(max.is_some()));
@@ -64,7 +67,7 @@ impl ProgressReporter {
             .unwrap_or(u64::MAX)
             .saturating_add(1);
         self.bar.set_position(group_num);
-        if let Target::Logs(span) = &self.target {
+        if let ReportMethod::Logs(span) = &self.target {
             span.in_scope(|| {
                 if let Some(len) = self.bar.length() {
                     let human_eta = HumanDuration(self.bar.eta());
@@ -101,7 +104,7 @@ impl MultipleProgressReporter {
         desc: impl Into<Cow<'static, str>>,
     ) -> ProgressReporter {
         let target = if Self::should_display_bars() {
-            Target::Cli(desc.into().into_owned())
+            ReportMethod::VisualBar(desc.into().into_owned())
         } else {
             let span = tracing::span!(
                 parent: &self.span,
@@ -110,7 +113,7 @@ impl MultipleProgressReporter {
                 migration = desc.into().as_ref()
 
             );
-            Target::Logs(span)
+            ReportMethod::Logs(span)
         };
 
         self.register(ProgressReporter::new(target, num_groups))
