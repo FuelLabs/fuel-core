@@ -706,16 +706,17 @@ where
 
     const RELAYED_GAS_PRICE: Word = 0;
 
-    fn process_relayed_txs(
+    fn process_relayed_txs<T>(
         &self,
         forced_transactions: Vec<CheckedTransaction>,
         partial_block: &mut PartialFuelBlock,
-        thread_block_transaction: &mut StorageTransaction<
-            &StorageTransaction<&StorageTransaction<D>>,
-        >,
+        thread_block_transaction: &mut T,
         data: &mut ExecutionData,
         coinbase_contract_id: ContractId,
-    ) -> ExecutorResult<()> {
+    ) -> ExecutorResult<()>
+    where
+        T: KeyValueInspect<Column = Column> + Modifiable,
+    {
         let block_header = partial_block.header;
         let block_height = block_header.height();
         let relayed_tx_iter = forced_transactions.into_iter();
