@@ -18,6 +18,7 @@ use crate::{
     },
     fuel_core_graphql_api::storage::messages::SpentMessages,
     graphql_api::storage::{
+        blocks::FuelBlockIdsToHeights,
         coins::OwnedCoins,
         contracts::ContractsInfo,
         messages::OwnedMessageIds,
@@ -133,6 +134,8 @@ impl SnapshotImporter {
         self.spawn_worker_off_chain::<OldFuelBlocks, OldFuelBlocks>()?;
         self.spawn_worker_off_chain::<OldFuelBlockConsensus, OldFuelBlockConsensus>()?;
         self.spawn_worker_off_chain::<OldTransactions, OldTransactions>()?;
+        self.spawn_worker_off_chain::<FuelBlocks, FuelBlockIdsToHeights>()?;
+        self.spawn_worker_off_chain::<OldFuelBlocks, FuelBlockIdsToHeights>()?;
 
         self.task_manager.wait().await?;
 

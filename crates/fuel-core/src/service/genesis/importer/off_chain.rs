@@ -291,3 +291,39 @@ impl ImportTable for Handler<SpentMessages, SpentMessages> {
         Ok(())
     }
 }
+
+impl ImportTable for Handler<FuelBlockIdsToHeights, FuelBlocks> {
+    type TableInSnapshot = FuelBlocks;
+    type TableBeingWritten = FuelBlockIdsToHeights;
+    type DbDesc = OffChain;
+
+    fn process(
+        &mut self,
+        group: Vec<TableEntry<Self::TableInSnapshot>>,
+        tx: &mut StorageTransaction<&mut Database<Self::DbDesc>>,
+    ) -> anyhow::Result<()> {
+        for entry in group {
+            tx.storage_as_mut::<FuelBlockIdsToHeights>()
+                .insert(&entry.value.id(), &entry.key)?;
+        }
+        Ok(())
+    }
+}
+
+impl ImportTable for Handler<FuelBlockIdsToHeights, OldFuelBlocks> {
+    type TableInSnapshot = OldFuelBlocks;
+    type TableBeingWritten = FuelBlockIdsToHeights;
+    type DbDesc = OffChain;
+
+    fn process(
+        &mut self,
+        group: Vec<TableEntry<Self::TableInSnapshot>>,
+        tx: &mut StorageTransaction<&mut Database<Self::DbDesc>>,
+    ) -> anyhow::Result<()> {
+        for entry in group {
+            tx.storage_as_mut::<FuelBlockIdsToHeights>()
+                .insert(&entry.value.id(), &entry.key)?;
+        }
+        Ok(())
+    }
+}

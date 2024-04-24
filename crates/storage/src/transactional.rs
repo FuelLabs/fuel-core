@@ -118,6 +118,7 @@ pub trait Modifiable {
 }
 
 /// The type describing the list of changes to the storage.
+/// ColumnId -> (Key -> Operation)
 pub type Changes = HashMap<u32, BTreeMap<Vec<u8>, WriteOperation>>;
 
 impl<Storage> From<StorageTransaction<Storage>> for Changes {
@@ -188,7 +189,7 @@ where
     Storage: Modifiable,
 {
     /// Commits the changes into the storage.
-    pub fn commit(mut self) -> StorageResult<Storage> {
+    pub fn commit(mut self, _x: bool) -> StorageResult<Storage> {
         let changes = core::mem::take(&mut self.inner.changes);
         self.inner.storage.commit_changes(changes)?;
         Ok(self.inner.storage)
