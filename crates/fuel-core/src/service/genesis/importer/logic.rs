@@ -173,19 +173,6 @@ impl ImportTable<ContractsAssets> for Handler {
 }
 
 impl ImportTable<Transactions> for Handler {
-    fn on_chain(
-        &mut self,
-        group: Cow<Vec<TableEntry<Transactions>>>,
-        tx: &mut StorageTransaction<&mut Database<OnChain>>,
-    ) -> anyhow::Result<()> {
-        for transaction in group.as_ref() {
-            tx.storage::<Transactions>()
-                .insert(&transaction.key, &transaction.value)?;
-        }
-
-        Ok(())
-    }
-
     fn off_chain(
         &mut self,
         group: Cow<Vec<TableEntry<Transactions>>>,
