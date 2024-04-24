@@ -597,7 +597,7 @@ where
         tx: MaybeCheckedTransaction,
         gas_price: Word,
         coinbase_contract_id: ContractId,
-    ) -> ExecutorResult<()>
+    ) -> ExecutorResult<Transaction>
     where
         W: KeyValueInspect<Column = Column> + Modifiable,
     {
@@ -620,12 +620,12 @@ where
             tx
         };
 
-        block.transactions.push(tx);
+        block.transactions.push(tx.clone());
         execution_data.tx_count = tx_count
             .checked_add(1)
             .ok_or(ExecutorError::TooManyTransactions)?;
 
-        Ok(())
+        Ok(tx)
     }
 
     fn validate_transaction_and_commit<W>(
@@ -706,7 +706,7 @@ where
         for transaction in transactions {
             let maybe_checked_tx =
                 MaybeCheckedTransaction::Transaction(transaction.clone());
-            self.validate_transaction_and_commit(
+            let _new_transaction = self.execute_transaction_and_commit(
                 &mut partial_block,
                 &mut thread_block_transaction,
                 &mut data,
@@ -714,9 +714,10 @@ where
                 gas_price,
                 coinbase_contract_id,
             )?;
+            // self.processed_tx_matches_original(transaction, new_transaction)?;
         }
 
-        Self::check_new_block_id(partial_block, block, &data)?;
+        Self::check_block_matches(partial_block, block, &data)?;
 
         let changes_from_thread = thread_block_transaction.into_changes();
         block_with_relayer_data_transaction.commit_changes(changes_from_thread)?;
@@ -726,6 +727,21 @@ where
         data.changes = self.block_st_transaction.into_changes();
         Ok(data)
     }
+
+    // fn processed_tx_matches_original(
+    //     &self,
+    //     original_tx: Transaction,
+    //     processed_tx: Transaction,
+    // ) -> ExecutorResult<()> {
+    //     if original_tx != processed_tx {
+    //         let chain_id = self.consensus_params.chain_id();
+    //         Err(ExecutorError::InvalidTransactionOutcome {
+    //             transaction_id: original_tx.id(&chain_id),
+    //         })
+    //     } else {
+    //         Ok(())
+    //     }
+    // }
 
     fn get_coinbase_info_from_mint_tx(
         transactions: &[Transaction],
@@ -753,13 +769,14 @@ where
         let block_height = block_header.height();
         let relayed_tx_iter = forced_transactions.into_iter();
         for transaction in relayed_tx_iter {
-            let transaction = MaybeCheckedTransaction::CheckedTransaction(transaction);
-            let tx_id = transaction.id(&self.consensus_params.chain_id());
+            let maybe_checked_transaction =
+                MaybeCheckedTransaction::CheckedTransaction(transaction);
+            let tx_id = maybe_checked_transaction.id(&self.consensus_params.chain_id());
             match self.execute_transaction_and_commit(
                 partial_block,
                 thread_block_transaction,
                 data,
-                transaction,
+                maybe_checked_transaction,
                 Self::RELAYED_GAS_PRICE,
                 coinbase_contract_id,
             ) {
@@ -828,7 +845,7 @@ where
         Ok(forced_transactions)
     }
 
-    fn check_new_block_id(
+    fn check_block_matches(
         new_partial_block: PartialFuelBlock,
         old_block: &Block,
         data: &ExecutionData,
@@ -840,12 +857,11 @@ where
         } = &data;
 
         let new_block = new_partial_block.generate(&message_ids[..], *event_inbox_root);
-        let new_id = new_block.id();
-        let old_id = old_block.id();
-        if new_id != old_id {
-            return Err(ExecutorError::InvalidBlockId)
+        if new_block != *old_block {
+            Err(ExecutorError::BlockMismatch)
+        } else {
+            Ok(())
         }
-        Ok(())
     }
 
     fn process_da(
