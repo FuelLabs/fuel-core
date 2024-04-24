@@ -721,20 +721,12 @@ mod tests {
 
         // then
         let on_chain_imports = spy.on_chain_called_with();
-        assert_eq!(
-            on_chain_imports,
-            groups.as_unwrapped_groups(
-                last_on_chain.map(|x| x.saturating_add(1)).unwrap_or(0)
-            )
-        );
+        let skip = last_on_chain.map(|x| x.saturating_add(1)).unwrap_or(0);
+        assert_eq!(on_chain_imports, groups.as_unwrapped_groups(skip));
 
         let off_chain_imports = spy.off_chain_called_with();
-        assert_eq!(
-            off_chain_imports,
-            groups.as_unwrapped_groups(
-                last_off_chain.map(|x| x.saturating_add(1)).unwrap_or(0)
-            )
-        );
+        let skip = last_off_chain.map(|x| x.saturating_add(1)).unwrap_or(0);
+        assert_eq!(off_chain_imports, groups.as_unwrapped_groups(skip));
     }
 
     fn never_cancel() -> CancellationToken {
