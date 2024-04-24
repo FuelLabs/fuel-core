@@ -1059,7 +1059,7 @@ where
             let mut inputs = [Input::Contract(input)];
 
             if self.options.utxo_validation {
-                self.verify_inputs_exist(
+                self.verify_inputs_exist_and_values_match(
                     block_st_transaction,
                     inputs.as_mut_slice(),
                     header.da_height,
@@ -1418,7 +1418,7 @@ where
         debug_assert!(checked_tx.checks().contains(Checks::Predicates));
 
         // validate utxos exist and maturity is properly set
-        self.verify_inputs_exist(
+        self.verify_inputs_exist_and_values_match(
             tx_st_transaction,
             checked_tx.transaction().inputs(),
             header.da_height,
@@ -1500,7 +1500,7 @@ where
         Ok((reverted, state, tx, receipts))
     }
 
-    fn verify_inputs_exist<T>(
+    fn verify_inputs_exist_and_values_match<T>(
         &self,
         db: &StorageTransaction<T>,
         inputs: &[Input],
