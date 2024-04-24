@@ -1,15 +1,7 @@
-use self::{
-    import_task::{
-        ImportTable,
-        ImportTask,
-    },
-    progress::{
-        MultipleProgressReporter,
-        ProgressReporter,
-        Target,
-    },
+use super::{
+    progress::MultipleProgressReporter,
+    task_manager::TaskManager,
 };
-use super::task_manager::TaskManager;
 use crate::{
     combined_database::CombinedDatabase,
     database::database_description::{
@@ -63,13 +55,14 @@ use fuel_core_types::{
     },
     fuel_types::BlockHeight,
 };
-use std::io::IsTerminal;
-use tracing::Level;
+use import_task::{
+    ImportTable,
+    ImportTask,
+};
 
 mod import_task;
 mod off_chain;
 mod on_chain;
-mod progress;
 
 const GROUPS_NUMBER_FOR_PARALLELIZATION: usize = 10;
 
@@ -78,7 +71,6 @@ pub struct SnapshotImporter {
     task_manager: TaskManager<()>,
     genesis_block: Block,
     snapshot_reader: SnapshotReader,
-    tracing_span: tracing::Span,
     multi_progress_reporter: MultipleProgressReporter,
 }
 
@@ -91,11 +83,12 @@ impl SnapshotImporter {
     ) -> Self {
         Self {
             db,
+            genesis_block,
             task_manager: TaskManager::new(watcher),
             snapshot_reader,
-            genesis_block,
-            tracing_span: tracing::info_span!("snapshot_importer"),
-            multi_progress_reporter: Self::init_multi_progress_reporter(),
+            multi_progress_reporter: MultipleProgressReporter::new(tracing::info_span!(
+                "snapshot_importer"
+            )),
         }
     }
 
@@ -150,6 +143,9 @@ impl SnapshotImporter {
         let groups = self.snapshot_reader.read::<TableBeingWritten>()?;
         let num_groups = groups.len();
 
+        // Even though genesis is expected to last orders of magnitude longer than an empty task
+        // might take to execute, this optimization is placed regardless to speed up
+        // unit/integration tests that will feel the impact more than actual regenesis.
         if num_groups == 0 {
             return Ok(());
         }
@@ -158,27 +154,24 @@ impl SnapshotImporter {
         let da_block_height = self.genesis_block.header().da_height;
         let db = self.db.on_chain().clone();
 
-        let progress_name = migration_name::<TableBeingWritten, TableBeingWritten>();
+        let migration_name = migration_name::<TableBeingWritten, TableBeingWritten>();
+        let progress_reporter = self
+            .multi_progress_reporter
+            .table_reporter(Some(num_groups), migration_name);
 
-        let progress_reporter = self.progress_reporter(progress_name, num_groups);
+        let task = ImportTask::new(
+            Handler::new(block_height, da_block_height),
+            groups,
+            db,
+            progress_reporter,
+        );
 
-        self.task_manager.spawn(move |token| {
-            let task = ImportTask::new(
-                token,
-                Handler::new(block_height, da_block_height),
-                groups,
-                db,
-                progress_reporter,
-            );
-            async move {
-                if num_groups >= GROUPS_NUMBER_FOR_PARALLELIZATION {
-                    tokio_rayon::spawn(move || task.run()).await?;
-                } else {
-                    task.run()?;
-                }
-                Ok(())
-            }
-        });
+        let import = |token| task.run(token);
+        if num_groups < GROUPS_NUMBER_FOR_PARALLELIZATION {
+            self.task_manager.run(import)?;
+        } else {
+            self.task_manager.spawn_blocking(import);
+        }
 
         Ok(())
     }
@@ -197,6 +190,9 @@ impl SnapshotImporter {
         let groups = self.snapshot_reader.read::<TableInSnapshot>()?;
         let num_groups = groups.len();
 
+        // Even though genesis is expected to last orders of magnitude longer than an empty task
+        // might take to execute, this optimization is placed regardless to speed up
+        // unit/integration tests that will feel the impact more than actual regenesis.
         if num_groups == 0 {
             return Ok(());
         }
@@ -206,59 +202,25 @@ impl SnapshotImporter {
 
         let db = self.db.off_chain().clone();
 
-        let progress_reporter = self.progress_reporter(
-            migration_name::<TableInSnapshot, TableBeingWritten>(),
-            num_groups,
-        );
+        let migration_name = migration_name::<TableInSnapshot, TableBeingWritten>();
+        let progress_reporter = self
+            .multi_progress_reporter
+            .table_reporter(Some(num_groups), migration_name);
 
-        self.task_manager.spawn(move |token| {
-            let task = ImportTask::new(
-                token,
-                Handler::new(block_height, da_block_height),
-                groups,
-                db,
-                progress_reporter,
-            );
-            async move {
-                if num_groups >= GROUPS_NUMBER_FOR_PARALLELIZATION {
-                    tokio_rayon::spawn(move || task.run()).await?;
-                } else {
-                    task.run()?;
-                }
-                Ok(())
-            }
-        });
+        let task = ImportTask::new(
+            Handler::new(block_height, da_block_height),
+            groups,
+            db,
+            progress_reporter,
+        );
+        let import = |token| task.run(token);
+        if num_groups < GROUPS_NUMBER_FOR_PARALLELIZATION {
+            self.task_manager.run(import)?;
+        } else {
+            self.task_manager.spawn_blocking(import);
+        }
 
         Ok(())
-    }
-
-    fn init_multi_progress_reporter() -> MultipleProgressReporter {
-        if Self::should_display_bars() {
-            MultipleProgressReporter::new_sterr()
-        } else {
-            MultipleProgressReporter::new_hidden()
-        }
-    }
-
-    fn should_display_bars() -> bool {
-        std::io::stderr().is_terminal() && !cfg!(test)
-    }
-
-    fn progress_reporter(&self, name: String, num_groups: usize) -> ProgressReporter {
-        let target = if Self::should_display_bars() {
-            Target::Cli(name)
-        } else {
-            let span = tracing::span!(
-                parent: &self.tracing_span,
-                Level::INFO,
-                "task",
-                table = name
-            );
-            Target::Logs(span)
-        };
-
-        let reporter = ProgressReporter::new(target, num_groups);
-        self.multi_progress_reporter.register(reporter)
     }
 }
 
@@ -281,7 +243,7 @@ impl<A, B> Handler<A, B> {
     }
 }
 
-fn migration_name<TableInSnapshot, TableBeingWritten>() -> String
+pub fn migration_name<TableInSnapshot, TableBeingWritten>() -> String
 where
     TableInSnapshot: TableWithBlueprint,
     TableBeingWritten: TableWithBlueprint,
