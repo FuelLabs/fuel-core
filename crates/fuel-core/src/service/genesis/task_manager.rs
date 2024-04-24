@@ -68,15 +68,7 @@ impl CancellationToken {
     }
 }
 
-#[async_trait::async_trait]
-impl NotifyCancel for CancellationToken {
-    async fn wait_until_cancelled(&self) -> anyhow::Result<()> {
-        tokio::select! {
-            res = self.inner_signal.wait_until_cancelled() => res,
-            res = self.outside_signal.wait_until_cancelled() => res
-        }
-    }
-
+impl CancellationToken {
     fn is_cancelled(&self) -> bool {
         self.inner_signal.is_cancelled() || self.outside_signal.is_cancelled()
     }
@@ -147,50 +139,6 @@ mod tests {
         };
 
         use tokio_util::sync::CancellationToken as TokioCancelToken;
-
-        #[tokio::test]
-        async fn reacts_on_inner_signal_being_cancelled() {
-            // given
-
-            let dud_token = TokioCancelToken::new();
-            let multi_token = CancellationToken::new(dud_token);
-
-            // when
-            multi_token.cancel();
-
-            // then
-            tokio::time::timeout(
-                Duration::from_secs(1),
-                multi_token.wait_until_cancelled(),
-            )
-            .await
-            .expect("Cancel future should have resolved")
-            .unwrap();
-            assert!(multi_token.is_cancelled());
-        }
-
-        #[tokio::test]
-        async fn reacts_on_state_watcher_stopping() {
-            // given
-            use fuel_core_services::StateWatcher;
-
-            let (tx, rx) = watch::channel(fuel_core_services::State::NotStarted);
-            let active_token: StateWatcher = rx.into();
-            let multi_token = CancellationToken::new(active_token);
-
-            // when
-            tx.send(fuel_core_services::State::Stopping).unwrap();
-
-            // then
-            assert!(multi_token.is_cancelled());
-            tokio::time::timeout(
-                Duration::from_secs(1),
-                multi_token.wait_until_cancelled(),
-            )
-            .await
-            .expect("Cancel future should have resolved")
-            .unwrap();
-        }
     }
     mod state_watcher {
         use std::time::Duration;
