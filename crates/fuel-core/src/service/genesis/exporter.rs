@@ -29,7 +29,6 @@ use fuel_core_chain_config::{
 use fuel_core_storage::{
     blueprint::BlueprintInspect,
     iter::IterDirection,
-    kv_store::StorageColumn,
     structured_storage::TableWithBlueprint,
     tables::{
         Coins,
@@ -182,8 +181,7 @@ where
         // TODO:
         // [1857](https://github.com/FuelLabs/fuel-core/issues/1857)
         // RocksDb can provide an estimate for the number of items.
-        let progress_tracker =
-            self.multi_progress.table_reporter(None, T::column().name());
+        let progress_tracker = self.multi_progress.table_reporter::<T>(None);
         self.task_manager.spawn_blocking(move |cancel| {
             db.entries::<T>(prefix, IterDirection::Forward)
                 .chunks(group_size)
