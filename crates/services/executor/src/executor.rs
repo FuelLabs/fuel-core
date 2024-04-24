@@ -147,11 +147,9 @@ use fuel_core_types::{
 };
 use parking_lot::Mutex as ParkingMutex;
 use std::borrow::Cow;
-use tracing::{
-    error,
-    warn,
-};
-
+#[cfg(debug_assertions)]
+use tracing::error;
+use tracing::warn;
 pub type ExecutionBlockWithSource<TxSource> = ExecutionTypes<Components<TxSource>>;
 
 pub struct OnceTransactionsSource {
@@ -669,7 +667,7 @@ where
         for transaction in transactions {
             let maybe_checked_tx =
                 MaybeCheckedTransaction::Transaction(transaction.clone());
-            let new_transaction = self.execute_transaction_and_commit(
+            let _new_transaction = self.execute_transaction_and_commit(
                 &mut partial_block,
                 &mut thread_block_transaction,
                 &mut data,
@@ -678,7 +676,7 @@ where
                 coinbase_contract_id,
             )?;
             #[cfg(debug_assertions)]
-            if new_transaction != transaction {
+            if _new_transaction != transaction {
                 error!("Provided transaction does not match the transaction built by the executor");
             }
         }
