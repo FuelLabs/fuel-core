@@ -26,7 +26,7 @@ use crate::{
     },
     service::genesis::{
         progress::ProgressReporter,
-        NotifyCancel,
+        task_manager::CancellationToken,
     },
 };
 
@@ -52,7 +52,7 @@ where
 }
 
 pub fn import_entries<T>(
-    cancel_token: impl NotifyCancel + Send + Sync + 'static,
+    cancel_token: CancellationToken,
     mut handler: impl ImportTable<T>,
     groups: impl IntoIterator<Item = anyhow::Result<Vec<TableEntry<T>>>>,
     mut on_chain_db: Database<OnChain>,

@@ -4,10 +4,6 @@ use super::{
     progress::MultipleProgressReporter,
     task_manager::TaskManager,
 };
-mod import_task;
-mod logic;
-
-const GROUPS_NUMBER_FOR_PARALLELIZATION: usize = 10;
 use crate::{
     combined_database::CombinedDatabase,
     fuel_core_graphql_api::storage::messages::SpentMessages,
@@ -54,6 +50,11 @@ use fuel_core_types::{
 };
 use itertools::Itertools;
 
+mod import_task;
+mod logic;
+
+const GROUPS_NUMBER_FOR_PARALLELIZATION: usize = 10;
+
 pub struct SnapshotImporter {
     db: CombinedDatabase,
     task_manager: TaskManager<()>,
@@ -93,7 +94,7 @@ impl SnapshotImporter {
 
     async fn run_workers(mut self) -> anyhow::Result<()> {
         tracing::info!("Running imports");
-        macro_rules! spawn_workers {
+        macro_rules! start_imports {
             ($($table:ty),*) => {
                 let names_unique = [
                     $(
@@ -105,10 +106,10 @@ impl SnapshotImporter {
                     panic!("Tables must have unique column names because they are used as keys to track the genesis progress both in on-chain and off-chain tables.");
                 }
 
-                $(self.spawn_worker::<$table>()?;)*
+                $(self.start_import::<$table>()?;)*
             };
         }
-        spawn_workers!(
+        start_imports!(
             Coins,
             ContractsAssets,
             ContractsLatestUtxo,
@@ -132,7 +133,7 @@ impl SnapshotImporter {
         Ok(())
     }
 
-    pub fn spawn_worker<TableInSnapshot>(&mut self) -> anyhow::Result<()>
+    pub fn start_import<TableInSnapshot>(&mut self) -> anyhow::Result<()>
     where
         TableInSnapshot: TableWithBlueprint + 'static + Send,
         TableEntry<TableInSnapshot>: serde::de::DeserializeOwned + Send,

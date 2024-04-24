@@ -63,14 +63,20 @@ impl CancellationToken {
         }
     }
 
-    pub fn cancel(&self) {
+    fn cancel(&self) {
         self.inner_signal.cancel()
     }
-}
 
-impl CancellationToken {
-    fn is_cancelled(&self) -> bool {
+    pub fn is_cancelled(&self) -> bool {
         self.inner_signal.is_cancelled() || self.outside_signal.is_cancelled()
+    }
+
+    #[cfg(test)]
+    pub async fn wait_until_cancelled(&self) -> anyhow::Result<()> {
+        tokio::select! {
+            _ = self.inner_signal.cancelled() => Ok(()),
+            res = self.outside_signal.wait_until_cancelled() => res
+        }
     }
 }
 
@@ -128,28 +134,13 @@ where
 
 #[cfg(test)]
 mod tests {
-    mod cancel_token {
-        use std::time::Duration;
-
-        use tokio::sync::watch;
-
-        use crate::service::genesis::{
-            task_manager::CancellationToken,
-            NotifyCancel,
-        };
-
-        use tokio_util::sync::CancellationToken as TokioCancelToken;
-    }
     mod state_watcher {
         use std::time::Duration;
 
         use anyhow::bail;
         use tokio_util::sync::CancellationToken as TokioCancelToken;
 
-        use crate::service::genesis::task_manager::{
-            NotifyCancel,
-            TaskManager,
-        };
+        use crate::service::genesis::task_manager::TaskManager;
 
         #[tokio::test]
         async fn task_added_and_completed() {
