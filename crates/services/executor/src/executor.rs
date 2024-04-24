@@ -94,7 +94,6 @@ use fuel_core_types::{
         Transaction,
         TxId,
         TxPointer,
-        UniqueIdentifier,
         UtxoId,
     },
     fuel_types::{
@@ -148,7 +147,10 @@ use fuel_core_types::{
 };
 use parking_lot::Mutex as ParkingMutex;
 use std::borrow::Cow;
-use tracing::warn;
+use tracing::{
+    error,
+    warn,
+};
 
 pub type ExecutionBlockWithSource<TxSource> = ExecutionTypes<Components<TxSource>>;
 
@@ -628,45 +630,6 @@ where
         Ok(tx)
     }
 
-    fn validate_transaction_and_commit<W>(
-        &self,
-        block: &mut PartialFuelBlock,
-        thread_block_transaction: &mut W,
-        execution_data: &mut ExecutionData,
-        tx: MaybeCheckedTransaction,
-        gas_price: Word,
-        coinbase_contract_id: ContractId,
-    ) -> ExecutorResult<()>
-    where
-        W: KeyValueInspect<Column = Column> + Modifiable,
-    {
-        let tx_count = execution_data.tx_count;
-        let tx = {
-            let mut tx_st_transaction = thread_block_transaction
-                .write_transaction()
-                .with_policy(ConflictPolicy::Overwrite);
-            let tx_id = tx.id(&self.consensus_params.chain_id());
-            let tx = self.validate_transaction(
-                tx,
-                &tx_id,
-                &block.header,
-                coinbase_contract_id,
-                gas_price,
-                execution_data,
-                &mut tx_st_transaction,
-            )?;
-            tx_st_transaction.commit()?;
-            tx
-        };
-
-        block.transactions.push(tx);
-        execution_data.tx_count = tx_count
-            .checked_add(1)
-            .ok_or(ExecutorError::TooManyTransactions)?;
-
-        Ok(())
-    }
-
     #[tracing::instrument(skip_all)]
     fn validate_block(mut self, block: &Block) -> ExecutorResult<ExecutionData> {
         let mut data = ExecutionData::new();
@@ -695,7 +658,7 @@ where
 
         debug_assert!(partial_block.transactions.is_empty());
 
-        self.validate_relayed_txs(
+        self.process_relayed_txs(
             forced_transactions,
             &mut partial_block,
             &mut thread_block_transaction,
@@ -706,7 +669,7 @@ where
         for transaction in transactions {
             let maybe_checked_tx =
                 MaybeCheckedTransaction::Transaction(transaction.clone());
-            let _new_transaction = self.execute_transaction_and_commit(
+            let new_transaction = self.execute_transaction_and_commit(
                 &mut partial_block,
                 &mut thread_block_transaction,
                 &mut data,
@@ -714,7 +677,10 @@ where
                 gas_price,
                 coinbase_contract_id,
             )?;
-            // self.processed_tx_matches_original(transaction, new_transaction)?;
+            #[cfg(debug_assertions)]
+            if new_transaction != transaction {
+                error!("Provided transaction does not match the transaction built by the executor");
+            }
         }
 
         Self::check_block_matches(partial_block, block, &data)?;
@@ -727,21 +693,6 @@ where
         data.changes = self.block_st_transaction.into_changes();
         Ok(data)
     }
-
-    // fn processed_tx_matches_original(
-    //     &self,
-    //     original_tx: Transaction,
-    //     processed_tx: Transaction,
-    // ) -> ExecutorResult<()> {
-    //     if original_tx != processed_tx {
-    //         let chain_id = self.consensus_params.chain_id();
-    //         Err(ExecutorError::InvalidTransactionOutcome {
-    //             transaction_id: original_tx.id(&chain_id),
-    //         })
-    //     } else {
-    //         Ok(())
-    //     }
-    // }
 
     fn get_coinbase_info_from_mint_tx(
         transactions: &[Transaction],
@@ -777,44 +728,6 @@ where
                 thread_block_transaction,
                 data,
                 maybe_checked_transaction,
-                Self::RELAYED_GAS_PRICE,
-                coinbase_contract_id,
-            ) {
-                Ok(_) => {}
-                Err(err) => {
-                    let event = ExecutorEvent::ForcedTransactionFailed {
-                        id: tx_id.into(),
-                        block_height: *block_height,
-                        failure: err.to_string(),
-                    };
-                    data.events.push(event);
-                }
-            }
-        }
-        Ok(())
-    }
-
-    fn validate_relayed_txs(
-        &self,
-        forced_transactions: Vec<CheckedTransaction>,
-        partial_block: &mut PartialFuelBlock,
-        thread_block_transaction: &mut StorageTransaction<
-            &StorageTransaction<&StorageTransaction<D>>,
-        >,
-        data: &mut ExecutionData,
-        coinbase_contract_id: ContractId,
-    ) -> ExecutorResult<()> {
-        let block_header = partial_block.header;
-        let block_height = block_header.height();
-        let relayed_tx_iter = forced_transactions.into_iter();
-        for transaction in relayed_tx_iter {
-            let transaction = MaybeCheckedTransaction::CheckedTransaction(transaction);
-            let tx_id = transaction.id(&self.consensus_params.chain_id());
-            match self.validate_transaction_and_commit(
-                partial_block,
-                thread_block_transaction,
-                data,
-                transaction,
                 Self::RELAYED_GAS_PRICE,
                 coinbase_contract_id,
             ) {
@@ -1077,68 +990,6 @@ where
         }
     }
 
-    #[allow(clippy::too_many_arguments)]
-    fn validate_transaction<T>(
-        &self,
-        tx: MaybeCheckedTransaction,
-        tx_id: &TxId,
-        header: &PartialBlockHeader,
-        coinbase_contract_id: ContractId,
-        gas_price: Word,
-        execution_data: &mut ExecutionData,
-        tx_st_transaction: &mut StorageTransaction<T>,
-    ) -> ExecutorResult<Transaction>
-    where
-        T: KeyValueInspect<Column = Column>,
-    {
-        Self::check_mint_is_not_found(execution_data)?;
-        Self::check_tx_is_not_duplicate(tx_id, tx_st_transaction)?;
-        let checked_tx = self.convert_maybe_checked_tx_to_checked_tx(tx, header)?;
-
-        match checked_tx {
-            CheckedTransaction::Script(tx) => self.validate_chargeable_transaction(
-                tx,
-                header,
-                coinbase_contract_id,
-                gas_price,
-                execution_data,
-                tx_st_transaction,
-            ),
-            CheckedTransaction::Create(tx) => self.validate_chargeable_transaction(
-                tx,
-                header,
-                coinbase_contract_id,
-                gas_price,
-                execution_data,
-                tx_st_transaction,
-            ),
-            CheckedTransaction::Mint(mint) => self.validate_mint(
-                mint,
-                header,
-                coinbase_contract_id,
-                gas_price,
-                execution_data,
-                tx_st_transaction,
-            ),
-            CheckedTransaction::Upgrade(tx) => self.validate_chargeable_transaction(
-                tx,
-                header,
-                coinbase_contract_id,
-                gas_price,
-                execution_data,
-                tx_st_transaction,
-            ),
-            CheckedTransaction::Upload(tx) => self.validate_chargeable_transaction(
-                tx,
-                header,
-                coinbase_contract_id,
-                gas_price,
-                execution_data,
-                tx_st_transaction,
-            ),
-        }
-    }
-
     fn check_mint_is_not_found(execution_data: &ExecutionData) -> ExecutorResult<()> {
         if execution_data.found_mint {
             return Err(ExecutorError::MintIsNotLastTransaction)
@@ -1228,66 +1079,6 @@ where
 
             *mint.input_contract_mut() = input;
             *mint.output_contract_mut() = output;
-        }
-
-        Self::store_mint_tx(mint, execution_data, coinbase_id, block_st_transaction)
-    }
-
-    fn validate_mint<T>(
-        &self,
-        checked_mint: Checked<Mint>,
-        header: &PartialBlockHeader,
-        coinbase_contract_id: ContractId,
-        gas_price: Word,
-        execution_data: &mut ExecutionData,
-        block_st_transaction: &mut StorageTransaction<T>,
-    ) -> ExecutorResult<Transaction>
-    where
-        T: KeyValueInspect<Column = Column>,
-    {
-        execution_data.found_mint = true;
-
-        Self::check_mint_has_expected_index(&checked_mint, execution_data)?;
-
-        let coinbase_id = checked_mint.id();
-        let (mut mint, _) = checked_mint.into();
-
-        if mint.input_contract().contract_id == ContractId::zeroed() {
-            Self::verify_mint_for_empty_contract(&mint)?;
-        } else {
-            Self::check_mint_amount(&mint, execution_data.coinbase)?;
-            Self::check_gas_price(&mint, gas_price)?;
-
-            let input = mint.input_contract().clone();
-            let mut inputs = [Input::Contract(input)];
-
-            if self.options.utxo_validation {
-                self.verify_inputs_exist(
-                    block_st_transaction,
-                    inputs.as_mut_slice(),
-                    header.da_height,
-                )?;
-            }
-
-            self.validate_inputs_state(
-                inputs.as_mut_slice(),
-                coinbase_id,
-                block_st_transaction,
-            )?;
-
-            let (input, output) = self.execute_mint_with_vm(
-                header,
-                coinbase_contract_id,
-                execution_data,
-                block_st_transaction,
-                &coinbase_id,
-                &mut mint,
-                &mut inputs,
-            )?;
-
-            if mint.input_contract() != &input || mint.output_contract() != &output {
-                return Err(ExecutorError::MintMismatch)
-            }
         }
 
         Self::store_mint_tx(mint, execution_data, coinbase_id, block_st_transaction)
@@ -1489,85 +1280,6 @@ where
         )?;
 
         Ok(tx.into())
-    }
-
-    #[allow(clippy::too_many_arguments)]
-    fn validate_chargeable_transaction<Tx, T>(
-        &self,
-        mut checked_tx: Checked<Tx>,
-        header: &PartialBlockHeader,
-        coinbase_contract_id: ContractId,
-        gas_price: Word,
-        execution_data: &mut ExecutionData,
-        tx_st_transaction: &mut StorageTransaction<T>,
-    ) -> ExecutorResult<Transaction>
-    where
-        Tx: ExecutableTransaction + PartialEq + Cacheable + Send + Sync + 'static,
-        <Tx as IntoChecked>::Metadata: CheckedMetadata,
-        T: KeyValueInspect<Column = Column>,
-    {
-        let tx_id = checked_tx.id();
-
-        if self.options.utxo_validation {
-            checked_tx = self.validate_utxos(checked_tx, header, tx_st_transaction)?;
-        }
-
-        self.validate_inputs_state(
-            checked_tx.transaction().inputs(),
-            tx_id,
-            tx_st_transaction,
-        )?;
-
-        let (reverted, state, mut tx, receipts) = self.attempt_tx_execution_with_vm(
-            &checked_tx,
-            &header,
-            coinbase_contract_id,
-            gas_price,
-            tx_st_transaction,
-        )?;
-
-        self.spend_input_utxos(tx.inputs(), tx_st_transaction, reverted, execution_data)?;
-
-        self.persist_output_utxos(
-            *header.height(),
-            execution_data,
-            &tx_id,
-            tx_st_transaction,
-            tx.inputs(),
-            tx.outputs(),
-        )?;
-
-        self.update_tx_outputs(tx_st_transaction, tx_id, &mut tx)?;
-
-        Self::validate_tx_outcome(&tx, &checked_tx)?;
-
-        tx_st_transaction
-            .storage::<ProcessedTransactions>()
-            .insert(&tx_id, &())?;
-
-        self.update_execution_data(
-            &tx,
-            execution_data,
-            receipts,
-            gas_price,
-            reverted,
-            state,
-            tx_id,
-        )?;
-
-        Ok(tx.into())
-    }
-
-    fn validate_tx_outcome<Tx: PartialEq + IntoChecked + UniqueIdentifier>(
-        tx: &Tx,
-        checked_tx: &Checked<Tx>,
-    ) -> ExecutorResult<()> {
-        if tx != checked_tx.transaction() {
-            return Err(ExecutorError::InvalidTransactionOutcome {
-                transaction_id: checked_tx.id(),
-            })
-        }
-        Ok(())
     }
 
     fn update_tx_outputs<Tx, T>(
@@ -2015,77 +1727,6 @@ where
                     *tx_pointer = utxo_info.tx_pointer();
                     *balance_root = contract.balance_root()?;
                     *state_root = contract.state_root()?;
-                }
-                _ => {}
-            }
-        }
-        Ok(())
-    }
-
-    fn validate_inputs_state<T>(
-        &self,
-        inputs: &[Input],
-        tx_id: TxId,
-        db: &StorageTransaction<T>,
-    ) -> ExecutorResult<()>
-    where
-        T: KeyValueInspect<Column = Column>,
-    {
-        for input in inputs {
-            match input {
-                Input::CoinSigned(CoinSigned {
-                    tx_pointer,
-                    utxo_id,
-                    owner,
-                    amount,
-                    asset_id,
-                    ..
-                })
-                | Input::CoinPredicate(CoinPredicate {
-                    tx_pointer,
-                    utxo_id,
-                    owner,
-                    amount,
-                    asset_id,
-                    ..
-                }) => {
-                    let coin = self
-                        .get_coin_or_default(db, *utxo_id, *owner, *amount, *asset_id)?;
-                    if tx_pointer != coin.tx_pointer() {
-                        return Err(ExecutorError::InvalidTransactionOutcome {
-                            transaction_id: tx_id,
-                        })
-                    }
-                }
-                Input::Contract(input::contract::Contract {
-                    utxo_id,
-                    balance_root,
-                    state_root,
-                    contract_id,
-                    tx_pointer,
-                    ..
-                }) => {
-                    let contract =
-                        ContractRef::new(StructuredStorage::new(db), *contract_id);
-                    let provided_info =
-                        ContractUtxoInfo::V1((*utxo_id, *tx_pointer).into());
-                    if provided_info
-                        != contract.validated_utxo(self.options.utxo_validation)?
-                    {
-                        return Err(ExecutorError::InvalidTransactionOutcome {
-                            transaction_id: tx_id,
-                        })
-                    }
-                    if balance_root != &contract.balance_root()? {
-                        return Err(ExecutorError::InvalidTransactionOutcome {
-                            transaction_id: tx_id,
-                        })
-                    }
-                    if state_root != &contract.state_root()? {
-                        return Err(ExecutorError::InvalidTransactionOutcome {
-                            transaction_id: tx_id,
-                        })
-                    }
                 }
                 _ => {}
             }
